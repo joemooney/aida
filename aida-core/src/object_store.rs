@@ -327,6 +327,17 @@ pub fn object_exists(objects_root: &Path, spec_id: &str) -> Result<bool> {
 /// Returns (spec_id, path) pairs.
 #[cfg(feature = "native")]
 pub fn list_objects(objects_root: &Path) -> Result<Vec<(String, PathBuf)>> {
+    list_objects_until(objects_root, None)
+}
+
+/// Read-only inventory that can stop between directory entries. A partial
+/// inventory supplies locators only, never evidence that an object is absent.
+// trace:BUG-2466 | ai:codex
+#[cfg(feature = "native")]
+pub(crate) fn list_objects_until(
+    objects_root: &Path,
+    deadline: Option<std::time::Instant>,
+) -> Result<Vec<(String, PathBuf)>> {
     #[cfg(test)]
     OBJECT_LIST_COUNT.with(|c| c.set(c.get() + 1));
     let mut results = Vec::new();
@@ -337,16 +348,25 @@ pub fn list_objects(objects_root: &Path) -> Result<Vec<(String, PathBuf)>> {
 
     // Walk: objects_root / TYPE / SHARD / FILE.yaml
     for type_entry in std::fs::read_dir(objects_root)? {
+        if deadline.is_some_and(|d| std::time::Instant::now() >= d) {
+            return Ok(results);
+        }
         let type_entry = type_entry?;
         if !type_entry.file_type()?.is_dir() {
             continue;
         }
         for shard_entry in std::fs::read_dir(type_entry.path())? {
+            if deadline.is_some_and(|d| std::time::Instant::now() >= d) {
+                return Ok(results);
+            }
             let shard_entry = shard_entry?;
             if !shard_entry.file_type()?.is_dir() {
                 continue;
             }
             for file_entry in std::fs::read_dir(shard_entry.path())? {
+                if deadline.is_some_and(|d| std::time::Instant::now() >= d) {
+                    return Ok(results);
+                }
                 let file_entry = file_entry?;
                 let path = file_entry.path();
                 if path.extension().and_then(|e| e.to_str()) == Some("yaml") {

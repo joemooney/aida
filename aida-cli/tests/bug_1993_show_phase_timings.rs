@@ -48,7 +48,9 @@ fn run_ok(cmd: &mut Command) -> String {
     let out = cmd.output().expect("run aida");
     assert!(
         out.status.success(),
-        "aida failed: {}",
+        "aida failed ({}): stdout={} stderr={}",
+        out.status,
+        String::from_utf8_lossy(&out.stdout),
         String::from_utf8_lossy(&out.stderr)
     );
     String::from_utf8_lossy(&out.stdout).into_owned()
@@ -119,6 +121,14 @@ fn fixture() -> (
     git(&repo, &["init", "-q", "-b", "main"]);
     // trace:BUG-2017 | ai:codex — explicit positive global-ID fixture.
     test_git::enroll_synthetic_home(&repo);
+    // The trusted fixture must remain private under a group-writable lane umask.
+    // trace:BUG-2466 | ai:codex
+    use std::os::unix::fs::PermissionsExt;
+    std::fs::set_permissions(
+        repo.join(".git/aida-allocation.toml"),
+        std::fs::Permissions::from_mode(0o600),
+    )
+    .unwrap();
     git(&repo, &["config", "user.email", "t@t.t"]);
     git(&repo, &["config", "user.name", "t"]);
     git(&repo, &["commit", "-q", "--allow-empty", "-m", "init"]);
@@ -148,12 +158,13 @@ fn fixture() -> (
 fn show_usage_event_records_phase_timings() {
     let (_base, repo, home, spec) = fixture();
 
-    // Every render surface times the same phases, linkage included.
+    // Explicit full/JSON surfaces include linkage; ordinary reads omit it.
+    // trace:BUG-2466 | ai:codex
     for args in [
-        vec!["show", spec.as_str()],
+        vec!["show", spec.as_str(), "--full"],
         vec!["show", spec.as_str(), "--json"],
-        vec!["show", spec.as_str(), "--format", "toon"],
-        vec!["show", spec.as_str(), "--card"],
+        vec!["show", spec.as_str(), "--format", "toon", "--full"],
+        vec!["show", spec.as_str(), "--card", "--full"],
     ] {
         let record = usage_record_of(&repo, &home, &args);
         assert_eq!(record["cmd"], "show", "{record}");
@@ -369,7 +380,7 @@ fn show_open_lookup_and_notice_degrade_under_a_held_writer_lock() {
     );
     assert!(
         !marker_written,
-        "the notice must skip itself behind the writer, not record a check"
+        "stale projection must not record an up-to-date notice check"
     );
     let text = std::fs::read_to_string(&log).expect("usage.jsonl written");
     let record: serde_json::Value = serde_json::from_str(
@@ -391,26 +402,10 @@ fn show_open_lookup_and_notice_degrade_under_a_held_writer_lock() {
     }
 }
 
-/// BUG-b6b1278890774ef993d2ebc327862470-008 (b), the shape with nothing to
-/// degrade to: the cache file has no schema yet and a writer holds its lock,
-/// so the open must write before any row can be read. The open's schema
-/// write rides show's fast-fail ladder and refuses with the usual
-/// lock-holder guidance instead of the full retry ladder (stretched here so
-/// a single uncapped sleep would blow the ceiling; the live binary took
-/// ~16 s on the unstretched ladder).
-///
-/// Failing fast IS the ADR-53 outcome here, not a missed degrade: every
-/// degrade path `show` has (the committed snapshot, the targeted object
-/// read) runs on an open cache, and opening one means writing its schema —
-/// the very write the writer blocks. With no schema there is no snapshot to
-/// serve, so the bounded outcome is a prompt refusal naming the lock and
-/// its remedy. The test pins the refusal inside ADR-53's 5 s ceiling (plus
-/// a margin for process start-up on a loaded CI runner), so a 6-59 s
-/// regression fails instead of passing under a loose watchdog.
-// trace:BUG-b6b1278890774ef993d2ebc327862470-008 | ai:claude
-// trace:TASK-b6b1278890774ef993d2ebc327862470-030 | ai:claude
+/// A cold cache is optional on show: a held writer must not prevent reading
+/// canonical YAML or force a schema write. trace:BUG-2466 | ai:codex
 #[test]
-fn show_open_refuses_fast_when_a_writer_blocks_the_first_schema_write() {
+fn show_reads_canonical_when_a_writer_blocks_the_first_schema_write() {
     const ADR_53_CEILING: std::time::Duration = std::time::Duration::from_secs(5);
     const SPAWN_MARGIN: std::time::Duration = std::time::Duration::from_secs(1);
     let (_base, repo, home, spec) = fixture();
@@ -449,11 +444,19 @@ fn show_open_refuses_fast_when_a_writer_blocks_the_first_schema_write() {
     conn.execute_batch("ROLLBACK").unwrap();
 
     let stdout = String::from_utf8_lossy(&out.stdout);
-    assert!(!out.status.success(), "no schema, no rows: {stdout}");
     assert!(
-        stdout.contains("database is locked"),
-        "the refusal names the lock and its remedy:\n{stdout}"
+        out.status.success(),
+        "{stdout}\n{}",
+        String::from_utf8_lossy(&out.stderr)
     );
+    assert!(stdout.contains("phase timing fixture"), "{stdout}");
+    assert!(!conn
+        .query_row(
+            "SELECT EXISTS(SELECT 1 FROM sqlite_master WHERE name='cache_meta')",
+            [],
+            |r| r.get::<_, bool>(0)
+        )
+        .unwrap());
 }
 
 /// TASK-b6b1278890774ef993d2ebc327862470-031: acceptance (a) of

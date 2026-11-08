@@ -41,6 +41,12 @@ pub struct CacheRebuildOutcome {
 pub struct CachedGitBackend {
     inner: GitBackend,
     cache: Cache,
+    // trace:BUG-2466 | ai:codex
+    snapshot_only: bool,
+    // One fallback inventory and deadline for the entire snapshot operation,
+    // including UUID tree reads and ID resolution. trace:BUG-2466 | ai:codex
+    snapshot_deadline: Option<std::time::Instant>,
+    snapshot_paths: std::sync::OnceLock<Result<(std::collections::HashMap<Uuid, PathBuf>, bool)>>,
 }
 
 impl CachedGitBackend {
@@ -88,7 +94,13 @@ impl CachedGitBackend {
     /// `cache_path` and brought through the single-flight reader protocol.
     pub fn with_inner(inner: GitBackend, cache_path: &Path) -> Result<Self> {
         let cache = Cache::open(cache_path)?;
-        let backend = CachedGitBackend { inner, cache };
+        let backend = CachedGitBackend {
+            inner,
+            cache,
+            snapshot_only: false,
+            snapshot_deadline: None,
+            snapshot_paths: Default::default(),
+        };
         // trace:TASK-1526 | ai:codex
         // Constructors share the tolerant protocol; mutations recheck strictly.
         backend.ensure_cache_fresh_for_read_with_schema_retry()?;
@@ -106,7 +118,31 @@ impl CachedGitBackend {
     // trace:BUG-1569 | ai:codex
     pub fn with_inner_cache_snapshot(inner: GitBackend, cache_path: &Path) -> Result<Self> {
         let cache = Cache::open(cache_path)?;
-        Ok(CachedGitBackend { inner, cache })
+        Ok(CachedGitBackend {
+            inner,
+            cache,
+            snapshot_only: false,
+            snapshot_deadline: None,
+            snapshot_paths: Default::default(),
+        })
+    }
+
+    /// Single-spec show reads a pinned projection without refresh work, even
+    /// when the cache is cold, behind, or another refresher is failing.
+    // trace:BUG-2466 | ai:codex
+    pub fn with_inner_stale_snapshot(inner: GitBackend, cache_path: &Path) -> Result<Self> {
+        // Reserve time for explicit linkage (1.2 s) and rendering within the
+        // 5 s ceiling; opening the snapshot also consumes this shared allowance.
+        let deadline = std::time::Instant::now()
+            + super::cache::read_fallback_scan_budget().min(std::time::Duration::from_secs(3));
+        let cache = Cache::open_stale_snapshot(cache_path)?;
+        Ok(Self {
+            inner,
+            cache,
+            snapshot_only: true,
+            snapshot_deadline: Some(deadline),
+            snapshot_paths: Default::default(),
+        })
     }
 
     /// Whether the unrefreshed cache snapshot differs from canonical HEAD.
@@ -251,8 +287,26 @@ impl CachedGitBackend {
     // trace:BUG-1535 trace:BUG-1670 | ai:claude
     fn resolve_unambiguous(&self, id: &str, strict: bool) -> Result<Option<Requirement>> {
         // trace:STORY-B6B1278890774EF993D2EBC327862470-078 | ai:claude
-        crate::node_alias::resolve_literal_first(id, |id| {
+        let resolved = crate::node_alias::resolve_literal_first(id, |id| {
             self.resolve_unambiguous_exact(id, strict)
+        })?;
+        // Try both literal and expanded object/index lookups before paying for
+        // an agreed-ID scan. A current projection already answers agreed IDs.
+        // trace:BUG-2466 | ai:codex
+        if resolved.is_some()
+            || strict
+            || !self.snapshot_only
+            || !self.cache_snapshot_is_stale().unwrap_or(true)
+        {
+            return Ok(resolved);
+        }
+        let deadline = self.fallback_deadline();
+        crate::node_alias::resolve_literal_first(id, |id| {
+            self.resolve_by_bounded_scan(
+                id,
+                deadline,
+                &anyhow::anyhow!("ID absent from stale read-only cache snapshot"),
+            )
         })
     }
 
@@ -280,8 +334,7 @@ impl CachedGitBackend {
                 super::cache_refresh::test_count("lookup_targeted_fallback");
                 // trace:TASK-b6b1278890774ef993d2ebc327862470-029 | ai:claude
                 // trace:TASK-b6b1278890774ef993d2ebc327862470-037 | ai:claude
-                let deadline =
-                    std::time::Instant::now() + super::cache::read_fallback_scan_budget();
+                let deadline = self.fallback_deadline();
                 return self.resolve_by_bounded_scan(id, deadline, &e);
             }
             Err(_) => {
@@ -407,6 +460,8 @@ impl CachedGitBackend {
             // BUG-97: a file that exists but will not parse is the real error.
             found.push(crate::object_store::read_object(&objects_root, &canonical)?);
         }
+        #[cfg(test)]
+        super::cache_refresh::test_count("read_id_store_scan");
         let (matches, complete) =
             crate::object_store::scan_id_matches_until(&objects_root, &canonical, deadline)?;
         found.extend(matches);
@@ -459,43 +514,95 @@ impl CachedGitBackend {
 
     /// Create a reader for one read operation (for example, rendering a spec's
     /// relationships and blockers). Cache misses share a lazy UUID-to-path index,
-    /// so even an empty or unreadable cache costs at most one full-store parse.
+    /// so even an empty or unreadable cache costs at most one store scan.
+    /// Snapshot-only readers stop parsing when the read fallback budget expires;
+    /// targets not reached remain unknown to the caller.
     /// Each result is read from canonical YAML and its UUID checked. Create a new
-    /// reader after writes: the fallback file inventory is scoped to this reader.
+    /// reader after writes: ordinary fallback inventories are scoped to the reader;
+    /// pinned snapshot readers share one backend inventory and deadline.
     // trace:BUG-1678 | ai:codex
     pub fn requirement_reader(&self) -> impl Fn(&Uuid) -> Result<Option<Requirement>> + '_ {
-        use std::collections::HashMap;
-        use std::sync::OnceLock;
+        let local = std::sync::OnceLock::new();
+        move |id| self.read_with_inventory(id, &local, self.snapshot_deadline)
+    }
 
-        let paths: OnceLock<Result<HashMap<Uuid, PathBuf>>> = OnceLock::new();
+    fn fallback_deadline(&self) -> std::time::Instant {
+        self.snapshot_deadline.unwrap_or_else(|| {
+            std::time::Instant::now() + super::cache::read_fallback_scan_budget()
+        })
+    }
+
+    /// A missing target is unknown only when the shared inventory was cut short.
+    // trace:BUG-2466 | ai:codex
+    pub fn relationship_missing_label(&self) -> &'static str {
+        match self.snapshot_paths.get() {
+            Some(Ok((_, true))) => "missing",
+            Some(_) => "unknown",
+            None => "missing",
+        }
+    }
+
+    #[cfg(test)]
+    fn requirement_reader_with_budget(
+        &self,
+        budget: Option<std::time::Duration>,
+    ) -> impl Fn(&Uuid) -> Result<Option<Requirement>> + '_ {
+        let paths = std::sync::OnceLock::new();
+        let deadline = budget.map(|b| std::time::Instant::now() + b);
+        move |id| self.read_with_inventory_local(id, &paths, deadline)
+    }
+
+    fn read_with_inventory(
+        &self,
+        id: &Uuid,
+        local: &std::sync::OnceLock<Result<(std::collections::HashMap<Uuid, PathBuf>, bool)>>,
+        deadline: Option<std::time::Instant>,
+    ) -> Result<Option<Requirement>> {
+        let paths = if self.snapshot_only {
+            &self.snapshot_paths
+        } else {
+            local
+        };
+        self.read_with_inventory_local(id, paths, deadline)
+    }
+
+    fn read_with_inventory_local(
+        &self,
+        id: &Uuid,
+        paths: &std::sync::OnceLock<Result<(std::collections::HashMap<Uuid, PathBuf>, bool)>>,
+        deadline: Option<std::time::Instant>,
+    ) -> Result<Option<Requirement>> {
         let objects_root = self.inner.path().join("objects");
-        move |id| {
-            if let Ok(Some(spec_id)) = self.cache.spec_id_for_uuid(id) {
-                // A missing filename must not trigger the agreed-id full scan.
-                if let Ok(req) = crate::object_store::read_object(&objects_root, &spec_id) {
-                    if req.id == *id {
-                        return Ok(Some(req));
-                    }
+        if let Ok(Some(spec_id)) = self.cache.spec_id_for_uuid(id) {
+            if let Ok(req) = crate::object_store::read_object(&objects_root, &spec_id) {
+                if req.id == *id {
+                    return Ok(Some(req));
                 }
             }
-            let indexed = paths.get_or_init(|| {
-                let mut indexed = HashMap::new();
-                for (_, path) in crate::object_store::list_objects(&objects_root)? {
-                    // Match find_by_uuid's tolerance for unreadable objects and
-                    // its deterministic first-match behavior for duplicate UUIDs.
-                    if let Ok(req) = crate::object_store::read_object_from_path(&path) {
-                        indexed.entry(req.id).or_insert(path);
-                    }
-                }
-                Ok(indexed)
-            });
-            let indexed = indexed.as_ref().map_err(|e| anyhow::anyhow!("{e:#}"))?;
-            Ok(indexed.get(id).and_then(|path| {
-                crate::object_store::read_object_from_path(path)
-                    .ok()
-                    .filter(|req| req.id == *id)
-            }))
         }
+        let indexed = paths.get_or_init(|| {
+            #[cfg(test)]
+            super::cache_refresh::test_count("snapshot_inventory_scan");
+            let mut indexed = std::collections::HashMap::new();
+            for (_, path) in crate::object_store::list_objects_until(&objects_root, deadline)? {
+                if deadline.is_some_and(|d| std::time::Instant::now() >= d) {
+                    break;
+                }
+                if let Ok(req) = crate::object_store::read_object_from_path(&path) {
+                    indexed.entry(req.id).or_insert(path);
+                }
+            }
+            Ok((
+                indexed,
+                !deadline.is_some_and(|d| std::time::Instant::now() >= d),
+            ))
+        });
+        let (indexed, _) = indexed.as_ref().map_err(|e| anyhow::anyhow!("{e:#}"))?;
+        Ok(indexed.get(id).and_then(|path| {
+            crate::object_store::read_object_from_path(path)
+                .ok()
+                .filter(|req| req.id == *id)
+        }))
     }
 
     /// The STORED status of `id`, from one targeted object read: the cache maps
@@ -893,6 +1000,26 @@ impl CachedGitBackend {
         mut read: impl FnMut(&Cache) -> Result<T>,
     ) -> Result<T> {
         use super::cache_refresh::{self, StaleServe};
+        // No refresh election, hint lock, worker spawn, schema retry or Git
+        // diff belongs on show's read path. Metadata and rows share the
+        // transaction pinned by open_stale_snapshot.
+        // trace:BUG-2466 | ai:codex
+        if self.snapshot_only {
+            let head = self.current_head_sha();
+            let cache_head = self.cache.source_head_sha()?;
+            let built_at = self.cache.built_at()?;
+            let value = read(&self.cache)?;
+            let stale = cache_head.as_deref() != Some(head.as_str())
+                || !self.redo_generation_matches().unwrap_or(false);
+            cache_refresh::record_read(stale.then(|| StaleServe {
+                stale: true,
+                cache_head: cache_head.filter(|s| !s.is_empty()),
+                store_head: head,
+                built_at: built_at.filter(|s| !s.is_empty()),
+                refreshing: cache_refresh::RefreshState::Deferred,
+            }));
+            return Ok(value);
+        }
         let mut schema_retries = 0;
         // A busy store can keep moving HEAD between refresh and pin. Wait only
         // for the normal read budget, then serve the pinned rows with a stale
@@ -1065,7 +1192,7 @@ impl CachedGitBackend {
         let tag = |err| super::cache::tag_cache_corruption(self.cache.path(), err);
         match f() {
             Ok(value) => Ok(value),
-            Err(err) if is_cache_schema_drift_error(&err) => {
+            Err(err) if !self.snapshot_only && is_cache_schema_drift_error(&err) => {
                 eprintln!(
                     "warning: cache schema drift while trying to {action}; rebuilding cache and retrying once: {err}"
                 );
@@ -4411,6 +4538,305 @@ mod tests {
             backend.add_requirement(sample_req(id, title)).unwrap();
         }
         (backend, store_root, cache_path)
+    }
+
+    // trace:BUG-2466 | ai:codex
+    #[test]
+    fn show_snapshot_stays_pinned_without_refresh_or_disk_writes() {
+        let dir = tempdir().unwrap();
+        let (backend, store_root, cache_path) = task_1515_backend(dir.path());
+        drop(backend);
+        task_1515_external_retitle(&store_root, "gen1");
+        let raw = rusqlite::Connection::open(&cache_path).unwrap();
+        let old_head: String = raw
+            .query_row(
+                "SELECT value FROM cache_meta WHERE key='source_head_sha'",
+                [],
+                |r| r.get(0),
+            )
+            .unwrap();
+        let scope = super::super::cache_refresh::CacheReadScope::new();
+        let reader = CachedGitBackend::with_inner_stale_snapshot(
+            GitBackend::new(&store_root).unwrap(),
+            &cache_path,
+        )
+        .unwrap();
+        let rows = reader.list_summaries(&ListFilter::default()).unwrap();
+        assert!(rows.iter().any(|r| r.title == "gen0"));
+        assert!(scope.stale().is_some());
+        // Concurrent commits can replace the projection; this show retains
+        // both its rows and their metadata from the original transaction.
+        raw.execute("UPDATE requirements_cache SET title='new projection'", [])
+            .unwrap();
+        raw.execute(
+            "UPDATE cache_meta SET value='new-head' WHERE key='source_head_sha'",
+            [],
+        )
+        .unwrap();
+        assert_eq!(
+            reader.cache.source_head_sha().unwrap().as_deref(),
+            Some(old_head.as_str())
+        );
+        assert!(reader
+            .list_summaries(&ListFilter::default())
+            .unwrap()
+            .iter()
+            .any(|r| r.title == "gen0"));
+        assert_eq!(
+            reader
+                .get_requirement_unambiguous_for_read("FR-1-001")
+                .unwrap()
+                .unwrap()
+                .title,
+            "gen1"
+        );
+        assert!(!PathBuf::from(format!("{}.refresh-request", cache_path.display())).exists());
+        assert!(reader.cache.is_read_only());
+    }
+
+    // trace:BUG-2466 | ai:codex
+    #[test]
+    fn show_snapshot_missing_or_corrupt_cache_preserves_disk_and_reads_objects() {
+        let dir = tempdir().unwrap();
+        let (backend, store_root, _) = task_1515_backend(dir.path());
+        drop(backend);
+        let cache_path = dir.path().join("cold/cache.db");
+        for corrupt in [false, true] {
+            if corrupt {
+                std::fs::create_dir_all(cache_path.parent().unwrap()).unwrap();
+                std::fs::write(&cache_path, b"not a sqlite cache").unwrap();
+            }
+            let scope = super::super::cache_refresh::CacheReadScope::new();
+            let reader = CachedGitBackend::with_inner_stale_snapshot(
+                GitBackend::new(&store_root).unwrap(),
+                &cache_path,
+            )
+            .unwrap();
+            assert!(reader
+                .list_summaries(&ListFilter::default())
+                .unwrap()
+                .is_empty());
+            assert!(scope.stale().is_some());
+            assert_eq!(
+                reader
+                    .get_requirement_unambiguous_for_read("FR-1-001")
+                    .unwrap()
+                    .unwrap()
+                    .title,
+                "gen0"
+            );
+            if corrupt {
+                assert_eq!(std::fs::read(&cache_path).unwrap(), b"not a sqlite cache");
+            } else {
+                assert!(!cache_path.parent().unwrap().exists());
+            }
+        }
+    }
+
+    // trace:BUG-2466 | ai:codex
+    #[test]
+    fn show_snapshot_alias_and_fresh_miss_skip_store_scans() {
+        use super::super::cache_refresh::test_counts;
+        const NODE: &str = "b6b1278890774ef993d2ebc327862470";
+        let dir = tempdir().unwrap();
+        let (backend, store_root, cache_path) = task_1515_backend(dir.path());
+        let req = backend
+            .add_requirement(sample_req(&format!("BUG-{NODE}-018"), "Aliased"))
+            .unwrap();
+        drop(backend);
+        let mut aliases = crate::node_alias::NodeAliasMap::default();
+        aliases.set("HOME", NODE).unwrap();
+        let _guard = crate::node_alias::install_for_thread(aliases);
+        for stale in [false, true] {
+            if stale {
+                task_1515_external_retitle(&store_root, "gen1");
+            }
+            let reader = CachedGitBackend::with_inner_stale_snapshot(
+                GitBackend::new(&store_root).unwrap(),
+                &cache_path,
+            )
+            .unwrap();
+            assert_eq!(reader.cache_snapshot_is_stale().unwrap(), stale);
+            test_counts();
+            assert_eq!(
+                reader
+                    .get_requirement_unambiguous_for_read("BUG-HOME-018")
+                    .unwrap()
+                    .unwrap()
+                    .id,
+                req.id
+            );
+            if !stale {
+                assert!(reader
+                    .get_requirement_unambiguous_for_read("BUG-HOME-404")
+                    .unwrap()
+                    .is_none());
+            }
+            let counts = test_counts();
+            assert_eq!(counts.get("read_id_store_scan"), None, "{counts:?}");
+            assert_eq!(counts.get("agreed_id_store_scan"), None, "{counts:?}");
+        }
+    }
+
+    // trace:BUG-2466 | ai:codex
+    #[test]
+    fn show_snapshot_unreadable_generation_falls_back_to_objects() {
+        let dir = tempdir().unwrap();
+        let (backend, store_root, cache_path) = task_1515_backend(dir.path());
+        let mut req = backend
+            .get_requirement_unambiguous("FR-1-001")
+            .unwrap()
+            .unwrap();
+        drop(backend);
+        let reader = CachedGitBackend::with_inner_stale_snapshot(
+            GitBackend::new(&store_root).unwrap(),
+            &cache_path,
+        )
+        .unwrap();
+        req.agreed_id = Some("FR-9002".into());
+        crate::object_store::write_object(&store_root.join("objects"), &req).unwrap();
+        let marker = store_root.join(".aida/redo/cache-dirty");
+        std::fs::create_dir_all(marker.parent().unwrap()).unwrap();
+        if marker.exists() {
+            std::fs::remove_file(&marker).unwrap();
+        }
+        std::fs::create_dir(&marker).unwrap();
+        assert!(reader.cache_snapshot_is_stale().is_err());
+        assert_eq!(
+            reader
+                .get_requirement_unambiguous_for_read("FR-9002")
+                .unwrap()
+                .unwrap()
+                .id,
+            req.id
+        );
+    }
+
+    // trace:BUG-2466 | ai:codex
+    #[test]
+    fn show_snapshot_relationship_scan_exhaustion_keeps_cached_targets() {
+        let dir = tempdir().unwrap();
+        let (backend, store_root, cache_path) = task_1515_backend(dir.path());
+        let cached = backend
+            .get_requirement_unambiguous("FR-1-001")
+            .unwrap()
+            .unwrap();
+        drop(backend);
+        let target = sample_req("TASK-9002", "Uncached target");
+        crate::object_store::write_object(&store_root.join("objects"), &target).unwrap();
+        let reader = CachedGitBackend::with_inner_stale_snapshot(
+            GitBackend::new(&store_root).unwrap(),
+            &cache_path,
+        )
+        .unwrap();
+        let read = reader.requirement_reader_with_budget(Some(std::time::Duration::ZERO));
+        assert!(read(&target.id).unwrap().is_none());
+        assert_eq!(read(&cached.id).unwrap().unwrap().id, cached.id);
+        assert!(read(&target.id).unwrap().is_none());
+        let control = reader.requirement_reader_with_budget(None);
+        assert_eq!(control(&target.id).unwrap().unwrap().id, target.id);
+    }
+
+    // Tree traversal uses get_requirement once per child. Even separate readers
+    // on an empty projection must share the backend inventory. trace:BUG-2466 | ai:codex
+    #[test]
+    fn show_snapshot_tree_children_share_one_scan() {
+        use super::super::cache_refresh::test_counts;
+        let dir = tempdir().unwrap();
+        let (backend, store_root, _) = task_1515_backend(dir.path());
+        let children = backend.inner.load().unwrap().requirements;
+        drop(backend);
+        let reader = CachedGitBackend::with_inner_stale_snapshot(
+            GitBackend::new(&store_root).unwrap(),
+            &dir.path().join("missing.db"),
+        )
+        .unwrap();
+        test_counts();
+        for child in &children {
+            assert_eq!(
+                reader.get_requirement(&child.id).unwrap().unwrap().id,
+                child.id
+            );
+        }
+        assert_eq!(test_counts().get("snapshot_inventory_scan"), Some(&1));
+        assert_eq!(reader.relationship_missing_label(), "missing");
+        assert!(reader.get_requirement(&Uuid::new_v4()).unwrap().is_none());
+        assert_eq!(reader.relationship_missing_label(), "missing");
+    }
+
+    // Exhaustion is invocation-wide, including newly created readers; cached
+    // positive targets remain readable. trace:BUG-2466 | ai:codex
+    #[test]
+    fn show_snapshot_shared_deadline_labels_partial_targets_unknown() {
+        let dir = tempdir().unwrap();
+        let (backend, store_root, cache_path) = task_1515_backend(dir.path());
+        let cached = backend
+            .get_requirement_unambiguous("FR-1-001")
+            .unwrap()
+            .unwrap();
+        drop(backend);
+        let target = sample_req("TASK-9002", "Uncached target");
+        crate::object_store::write_object(&store_root.join("objects"), &target).unwrap();
+        let mut reader = CachedGitBackend::with_inner_stale_snapshot(
+            GitBackend::new(&store_root).unwrap(),
+            &cache_path,
+        )
+        .unwrap();
+        reader.snapshot_deadline = Some(std::time::Instant::now());
+        assert!(reader.requirement_reader()(&target.id).unwrap().is_none());
+        assert_eq!(reader.relationship_missing_label(), "unknown");
+        assert!(reader.get_requirement(&target.id).unwrap().is_none());
+        assert_eq!(
+            reader.get_requirement(&cached.id).unwrap().unwrap().id,
+            cached.id
+        );
+        assert_eq!(
+            reader.fallback_deadline(),
+            reader.snapshot_deadline.unwrap()
+        );
+    }
+
+    // trace:BUG-2466 | ai:codex
+    #[test]
+    fn show_snapshot_resolves_agreed_id_missing_from_projection() {
+        let dir = tempdir().unwrap();
+        let (backend, store_root, stale_cache) = task_1515_backend(dir.path());
+        let mut req = backend
+            .get_requirement_unambiguous("FR-1-001")
+            .unwrap()
+            .unwrap();
+        drop(backend);
+        // Assign after the projection was stamped, preserving the origin filename.
+        req.agreed_id = Some("FR-9001".into());
+        crate::object_store::write_object(&store_root.join("objects"), &req).unwrap();
+        crate::git_ops::add_all(&store_root, "objects").unwrap();
+        crate::git_ops::commit(&store_root, "assign agreed ID").unwrap();
+        let missing = dir.path().join("missing/cache.db");
+        let corrupt = dir.path().join("corrupt.db");
+        std::fs::write(&corrupt, b"not sqlite").unwrap();
+        for cache_path in [&missing, &corrupt, &stale_cache] {
+            let before = std::fs::read(cache_path).ok();
+            let reader = CachedGitBackend::with_inner_stale_snapshot(
+                GitBackend::new(&store_root).unwrap(),
+                cache_path,
+            )
+            .unwrap();
+            super::super::cache_refresh::test_counts();
+            let found = reader
+                .get_requirement_unambiguous_for_read("FR-9001")
+                .unwrap()
+                .expect("agreed ID must resolve without a current projection");
+            assert_eq!(
+                super::super::cache_refresh::test_counts().get("read_id_store_scan"),
+                Some(&1)
+            );
+            assert_eq!(found.id, req.id);
+            assert_eq!(found.spec_id, req.spec_id);
+            assert_eq!(found.agreed_id, req.agreed_id);
+            assert!(reader.cache.is_read_only());
+            assert_eq!(std::fs::read(cache_path).ok(), before);
+            assert!(!PathBuf::from(format!("{}.refresh-request", cache_path.display())).exists());
+        }
     }
 
     // trace:BUG-1752 | ai:codex

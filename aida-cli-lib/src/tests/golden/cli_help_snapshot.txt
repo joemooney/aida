@@ -1065,8 +1065,8 @@ Options:
           Pull from `origin/aida-store` before reading the requirement. See `aida list --sync`
 
       --no-git
-          Skip the git-linkage section (commits / files traced / branch / PR). Faster for read-only
-          contexts that only need the requirement fields
+          Suppress git linkage in full, verbose and JSON views. Default detail views already skip
+          linkage
 
   -v, --verbose
           Expand the git-linkage section: every referencing commit (not just the most recent 5) plus
@@ -1075,8 +1075,8 @@ Options:
       --card
           Render a compact, boxed "spec card" instead of the linear detail view: a header rule, an
           ID/type/priority/status one-liner, key fields, a truncated description, the acceptance
-          criteria, and the git-linkage summary. The /aida-pickup skill renders this at session
-          start so the spec's contract stays in terminal scrollback
+          criteria, and (with --full) the git-linkage summary. The /aida-pickup skill renders this
+          at session start so the spec's contract stays in terminal scrollback
 
       --format <FORMAT>
           Pin the output format regardless of whether stdout is a terminal: human = tables, toon =
@@ -32401,7 +32401,7 @@ Working on aida itself
       {
         "name": "card",
         "takes_value": false,
-        "help": "Render a compact, boxed \"spec card\" instead of the linear detail view: a header rule, an ID/type/priority/status one-liner, key fields, a truncated description, the acceptance criteria, and the git-linkage summary. The /aida-pickup skill renders this at session start so the spec's contract stays in terminal scrollback"
+        "help": "Render a compact, boxed \"spec card\" instead of the linear detail view: a header rule, an ID/type/priority/status one-liner, key fields, a truncated description, the acceptance criteria, and (with --full) the git-linkage summary. The /aida-pickup skill renders this at session start so the spec's contract stays in terminal scrollback"
       },
       {
         "name": "comments",
@@ -32441,7 +32441,7 @@ Working on aida itself
       {
         "name": "no-git",
         "takes_value": false,
-        "help": "Skip the git-linkage section (commits / files traced / branch / PR). Faster for read-only contexts that only need the requirement fields"
+        "help": "Suppress git linkage in full, verbose and JSON views. Default detail views already skip linkage"
       },
       {
         "name": "origin-prompt",
