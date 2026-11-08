@@ -21,7 +21,7 @@ A rework brief preserves a review finding across a cold session. It is not
    sandboxed lane job; it never executes seat-written scripts unsandboxed.
    Native lanes get one fix round before host publication. Self-pushing lanes
    get one queued rework round before review dispatch. Results carry
-   `fast_gate=pass|fail|skipped(no-sandbox)` independently of `untested=true`.
+   `fast_gate=pass|fail|skipped(<reason>)` independently of `untested=true`.
    `make test-touched` and
    `make check-ci-compile` only when the change touches shared test infra
    (`test_env`, `test_git`, ratchet baselines) or more than 10 files. A brief

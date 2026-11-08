@@ -719,6 +719,23 @@ impl LaneJobs {
                 env.insert(k.clone(), v.clone());
             }
         }
+        // Gates run arbitrary fixtures, which must not write the host HOME or
+        // inherit a launcher/test temporary directory hidden by the namespace.
+        // Keep toolchains explicitly located before replacing HOME.
+        // trace:STORY-2640 | ai:codex
+        if fast_gate_job(job) {
+            if let Some(home) = env.get("HOME").cloned() {
+                env.entry("CARGO_HOME".into())
+                    .or_insert_with(|| format!("{home}/.cargo"));
+                env.entry("RUSTUP_HOME".into())
+                    .or_insert_with(|| format!("{home}/.rustup"));
+            }
+            env.insert(
+                "HOME".into(),
+                fast_gate_home(&self.seat).display().to_string(),
+            );
+            env.insert("TMPDIR".into(), "/tmp".into());
+        }
         env.insert(
             crate::headless_background::LANE_MARKER_ENV.to_string(),
             self.lease_id.clone(),
@@ -1403,7 +1420,7 @@ fn run_one_timed(
                     // trace:STORY-2640 | ai:codex — Cargo's offline flag alone
                     // cannot keep a Makefile's arbitrary children offline.
                     if fast_gate_job(&job) {
-                        args = fast_gate_namespaces(args);
+                        args = fast_gate_namespaces(args, &lane.seat);
                     }
                     match overlay_wrapped(seed, program, args) {
                         Ok((program, args, how)) => (program, args, how),
@@ -1451,6 +1468,28 @@ fn run_one_timed(
     {
         use std::os::unix::process::CommandExt;
         cmd.process_group(0);
+        if fast_gate_job(&job) {
+            // A headless harness can ignore or block terminal interrupts.
+            // Do not leak that process state into the gate's PTY fixtures.
+            // This affects only the sandbox child, never the host launcher.
+            // trace:STORY-2640 | ai:codex
+            unsafe {
+                cmd.pre_exec(|| {
+                    let mut signals: libc::sigset_t = std::mem::zeroed();
+                    libc::sigemptyset(&mut signals);
+                    for signal in [libc::SIGINT, libc::SIGQUIT] {
+                        if libc::signal(signal, libc::SIG_DFL) == libc::SIG_ERR {
+                            return Err(std::io::Error::last_os_error());
+                        }
+                        libc::sigaddset(&mut signals, signal);
+                    }
+                    if libc::sigprocmask(libc::SIG_UNBLOCK, &signals, std::ptr::null_mut()) != 0 {
+                        return Err(std::io::Error::last_os_error());
+                    }
+                    Ok(())
+                });
+            }
+        }
     }
     let timeout = timeout(&job, seed.cold);
     lane.log(&format!(
@@ -1812,9 +1851,87 @@ pub(crate) fn run_fast_gate(
     Ok(Some((rc, tail(&output, 100))))
 }
 
+#[cfg(unix)]
 #[cfg(test)]
 mod fast_gate_job_tests {
     use super::*;
+
+    // Runs the actual committed main target through the production sandbox,
+    // with host-only results. Explicit because warming a fresh private target
+    // can take several bounded runs before the measured five-minute gate.
+    // trace:STORY-2640 | ai:codex
+    #[test]
+    #[ignore = "requires bubblewrap and the real fast-tier tools; run explicitly"]
+    fn fast_gate_real_main_target_passes_in_sandbox() {
+        assert_eq!(
+            crate::session::bwrap_availability(),
+            crate::session::BwrapAvailability::Ok
+        );
+        let source = Path::new(env!("CARGO_MANIFEST_DIR")).parent().unwrap();
+        // Native conformance fixtures deliberately reject /tmp and /dev/shm
+        // as durable output roots. Model a real lane under its workspace.
+        let fixtures = source.join(".aida/fast-gate-validation");
+        std::fs::create_dir_all(&fixtures).unwrap();
+        let tmp = tempfile::Builder::new()
+            .prefix("main-")
+            .tempdir_in(fixtures)
+            .unwrap();
+        let seat = tmp.path().join("seat");
+        let git = |args: &[&std::ffi::OsStr]| {
+            let out = crate::test_git::git_command().args(args).output().unwrap();
+            assert!(
+                out.status.success(),
+                "{}",
+                String::from_utf8_lossy(&out.stderr)
+            );
+            String::from_utf8(out.stdout).unwrap().trim().to_string()
+        };
+        let head = git(&[
+            "-C".as_ref(),
+            source.as_os_str(),
+            "rev-parse".as_ref(),
+            "origin/main".as_ref(),
+        ]);
+        git(&[
+            "clone".as_ref(),
+            "--local".as_ref(),
+            "--no-hardlinks".as_ref(),
+            "--no-checkout".as_ref(),
+            source.as_os_str(),
+            seat.as_os_str(),
+        ]);
+        git(&[
+            "-C".as_ref(),
+            seat.as_os_str(),
+            "checkout".as_ref(),
+            "--detach".as_ref(),
+            head.as_ref(),
+        ]);
+        // Fixture preparation only: CI's fast tier includes cargo check, and
+        // this fresh clone has none of a production lane's target artifacts.
+        // Warm that private target using the SAME sandbox and real target.
+        // Only a timeout may retry; an actual gate failure fails immediately.
+        // These warmups do not change production's one-repair policy.
+        for warmup in 1..=4 {
+            let (rc, output) = run_fast_gate(&tmp.path().join("host"), &seat, "real-main")
+                .unwrap()
+                .expect("sandbox required for fixture warmup");
+            eprintln!("sandbox target warmup={warmup} head={head} rc={rc}\n{output}");
+            if rc != TIMEOUT_RC {
+                assert_eq!(rc, 0, "{output}");
+                break;
+            }
+            assert!(
+                warmup < 4,
+                "private target still cold after four bounded runs: {output}"
+            );
+        }
+        let (rc, output) = run_fast_gate(&tmp.path().join("host"), &seat, "real-main")
+            .unwrap()
+            .expect("sandbox required; no skip counts as evidence");
+        eprintln!("real sandbox fast gate head={head} rc={rc}\n{output}");
+        assert_eq!(rc, 0, "{output}");
+    }
 
     // The unwrapped fixture is test-only. Production run_fast_gate always
     // selects BwrapDefaultOn before calling the same execution engine.
@@ -1839,6 +1956,8 @@ mod fast_gate_job_tests {
             host_env: vec![
                 ("PATH".into(), bin.display().to_string()),
                 ("GH_TOKEN".into(), "must-be-dropped".into()),
+                ("HOME".into(), "/host/home".into()),
+                ("CARGO_HOME".into(), "/tools/cargo".into()),
             ],
             program: "cargo".into(),
             sandbox: Sandbox::TestUnwrapped,
@@ -1849,13 +1968,16 @@ mod fast_gate_job_tests {
         unsafe_lane.results = unsafe_lane.seat.join("host-results");
         std::fs::create_dir_all(&unsafe_lane.results).unwrap();
         assert!(check_fast_gate_results(&unsafe_lane).is_err());
-        let flags = fast_gate_namespaces(crate::session::lane_job_bwrap_argv(
+        let flags = fast_gate_namespaces(
+            crate::session::lane_job_bwrap_argv(
+                &lane.seat,
+                &[],
+                &[],
+                "make",
+                vec!["check-ci-fast".into()],
+            ),
             &lane.seat,
-            &[],
-            &[],
-            "make",
-            vec!["check-ci-fast".into()],
-        ));
+        );
         for flag in ["--unshare-net", "--unshare-ipc", "--unshare-pid"] {
             assert!(flags.iter().any(|arg| arg == flag));
         }
@@ -1864,6 +1986,16 @@ mod fast_gate_job_tests {
             env: BTreeMap::new(),
         };
         assert!(!lane.job_env(&job).contains_key("GH_TOKEN"));
+        assert_eq!(
+            lane.job_env(&job)["HOME"],
+            fast_gate_home(&lane.seat).display().to_string()
+        );
+        assert_eq!(lane.job_env(&job)["TMPDIR"], "/tmp");
+        assert_eq!(lane.job_env(&job)["CARGO_HOME"], "/tools/cargo");
+        assert_eq!(lane.job_env(&job)["RUSTUP_HOME"], "/host/home/.rustup");
+        assert!(flags
+            .windows(2)
+            .any(|pair| pair[0] == "--dir" && pair[1] == lane.job_env(&job)["HOME"]));
         let tally = Tally::default();
         let start = Instant::now();
         run_one_timed(
@@ -1905,7 +2037,19 @@ mod fast_gate_job_tests {
 }
 
 // trace:STORY-2640 | ai:codex
-fn fast_gate_namespaces(mut args: Vec<String>) -> Vec<String> {
+fn fast_gate_home(seat: &Path) -> PathBuf {
+    seat.join(INBOX_RELATIVE).join("fast-gate-home")
+}
+
+fn fast_gate_namespaces(mut args: Vec<String>, seat: &Path) -> Vec<String> {
+    // This helper is only used for the exact two-argument make job. Create
+    // HOME after mounts, inside bubblewrap, so seat symlinks cannot induce a
+    // host-side mkdir outside the write boundary.
+    let command = args.len() - 2;
+    args.splice(
+        command..command,
+        ["--dir".into(), fast_gate_home(seat).display().to_string()],
+    );
     args.splice(
         0..0,
         ["--unshare-net", "--unshare-ipc", "--unshare-pid"].map(String::from),

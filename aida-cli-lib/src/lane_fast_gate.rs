@@ -12,6 +12,8 @@ struct Receipt {
     repair_used: bool,
     #[serde(default)]
     native_ready: bool,
+    #[serde(default)]
+    repair_queue: Option<aida_core::QueueEntry>,
 }
 
 fn path(main: &Path, branch: &str) -> PathBuf {
@@ -42,6 +44,7 @@ pub(crate) fn begin(main: &Path, branch: &str) -> Result<()> {
         pending: true,
         repair_used: false,
         native_ready: false,
+        repair_queue: None,
     });
     if !receipt.pending {
         receipt.repair_used = false;
@@ -49,6 +52,7 @@ pub(crate) fn begin(main: &Path, branch: &str) -> Result<()> {
     receipt.pending = true;
     receipt.native_ready = false;
     receipt.head = None;
+    receipt.repair_queue = None;
     receipt.marker = "skipped(pending)".into();
     write(main, &receipt)
 }
@@ -103,11 +107,14 @@ impl Drop for Reservation {
 /// Infrastructure trouble is visible but must not bypass lane reporting/cleanup.
 // trace:STORY-2640 | ai:codex
 pub(crate) fn infrastructure(main: &Path, branch: &str, lease: &str, error: &anyhow::Error) {
-    eprintln!("fast_gate=skipped(infrastructure): {error:#}");
     let result = (|| -> Result<()> {
-        record_marker(main, lease, "skipped(infrastructure)")?;
+        let marker = read(main, branch)?
+            .filter(|r| r.marker == "fail" || r.repair_used)
+            .map_or("skipped(infrastructure)", |_| "fail");
+        eprintln!("fast_gate={marker}: {error:#}");
+        record_marker(main, lease, marker)?;
         if let Some(mut r) = read(main, branch)? {
-            r.marker = "skipped(infrastructure)".into();
+            r.marker = marker.into();
             write(main, &r)?;
         }
         Ok(())
@@ -122,9 +129,55 @@ pub(crate) fn result_line(main: &Path, branch: &str, line: &str) -> String {
 }
 
 /// An absent receipt is an ordinary non-lane PR. Corrupt state fails closed.
-pub(crate) fn blocks_review(main: &Path, branch: &str, head: &str) -> Result<bool> {
-    Ok(read(main, branch)?
-        .is_some_and(|r| r.pending || r.head.as_deref().is_some_and(|bound| bound != head)))
+pub(crate) fn blocks_review(main: &Path, branch: &str, _head: &str) -> Result<bool> {
+    let Some(r) = read(main, branch)? else {
+        return Ok(false);
+    };
+    if !r.pending {
+        return Ok(false);
+    }
+    if let Some(entry) = &r.repair_queue {
+        let storage = crate::Storage::new(
+            crate::detect_distributed_store_from(main)
+                .context("fast gate rework store unavailable")?,
+        );
+        return repair_queue_live(&storage, entry);
+    }
+    Ok(true)
+}
+
+// Only the exact queued repair owns this review hold. A removed/replaced row,
+// terminal spec or parked spec releases it; unreadable evidence still refuses.
+// trace:STORY-2640 | ai:codex
+fn repair_queue_live(storage: &crate::Storage, entry: &aida_core::QueueEntry) -> Result<bool> {
+    let store = storage.load()?;
+    let Some(req) = store
+        .requirements
+        .iter()
+        .find(|r| r.id == entry.requirement_id)
+    else {
+        return Ok(false);
+    };
+    if req.archived
+        || req.deferred
+        || !matches!(
+            req.status,
+            aida_core::RequirementStatus::Approved
+                | aida_core::RequirementStatus::Planned
+                | aida_core::RequirementStatus::InProgress
+        )
+    {
+        return Ok(false);
+    }
+    Ok(storage
+        .queue_list(&entry.user_id, true)?
+        .iter()
+        .any(|live| {
+            live.requirement_id == entry.requirement_id
+                && live.added_at == entry.added_at
+                && live.added_by == entry.added_by
+                && live.for_role == entry.for_role
+        }))
 }
 
 pub(crate) fn marker(main: &Path, branch: &str) -> String {
@@ -217,22 +270,31 @@ pub(crate) fn native(
 ) -> Result<bool> {
     match native_inner(main, tree, spec, lease, branch, clean, &mut repair) {
         Ok(ready) => Ok(ready),
-        Err(error) => {
-            infrastructure(main, branch, lease, &error);
-            // Only a clean, inspectable committed seat can still be published.
-            // Never mint stale/pass evidence after a failed attempt.
-            let ready = (|| -> Result<bool> {
-                let head = snapshot(main, tree, branch)?;
-                let mut r = read(main, branch)?.context("fast gate receipt missing")?;
-                r.head = Some(head);
-                r.native_ready = true;
-                r.marker = "skipped(infrastructure)".into();
-                write(main, &r)?;
-                Ok(true)
-            })();
-            Ok(ready.unwrap_or(false))
-        }
+        Err(error) => Ok(native_error(main, branch, lease, &error, || {
+            snapshot(main, tree, branch)
+        })),
     }
+}
+
+// Only a clean, inspectable committed seat can still be published. Keep known
+// red evidence when repair startup or a subsequent head check fails.
+// trace:STORY-2640 | ai:codex
+fn native_error(
+    main: &Path,
+    branch: &str,
+    lease: &str,
+    error: &anyhow::Error,
+    snapshot: impl FnOnce() -> Result<String>,
+) -> bool {
+    infrastructure(main, branch, lease, error);
+    let ready = (|| -> Result<()> {
+        let head = snapshot()?;
+        let mut r = read(main, branch)?.context("fast gate receipt missing")?;
+        r.head = Some(head);
+        r.native_ready = true;
+        write(main, &r)
+    })();
+    ready.is_ok()
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -363,11 +425,7 @@ fn pushed_inner(
         Ok(result) => result,
         Err(error) => {
             infrastructure(main, branch, lease, &error);
-            (
-                String::new(),
-                "skipped(infrastructure)".into(),
-                String::new(),
-            )
+            (String::new(), marker(main, branch), String::new())
         }
     };
     if head.is_empty() {
@@ -441,7 +499,7 @@ fn pushed_inner(
                     storage.queue_remove_for_role(&user, &req.id, Some("implementer"))?;
                 }
             }
-            storage.queue_add(aida_core::QueueEntry {
+            let entry = aida_core::QueueEntry {
                 user_id: "role:implementer".into(),
                 requirement_id: req.id,
                 position: 0,
@@ -452,8 +510,9 @@ fn pushed_inner(
                 for_scope: None,
                 for_session: None,
                 added_by_machine: None,
-            })?;
-            Ok(())
+            };
+            storage.queue_add(entry.clone())?;
+            Ok(Some(entry))
         },
     )
 }
@@ -465,7 +524,7 @@ fn pushed_round(
     head: &str,
     result: &str,
     annotate: impl FnOnce() -> Result<()>,
-    queue_repair: impl FnOnce() -> Result<()>,
+    queue_repair: impl FnOnce() -> Result<Option<aida_core::QueueEntry>>,
 ) -> Result<bool> {
     let mut receipt = read(main, branch)?.context("fast gate was not reserved")?;
     receipt.head = Some(head.into());
@@ -474,8 +533,10 @@ fn pushed_round(
     receipt.pending = true;
     write(main, &receipt)?;
     if let Err(error) = annotate() {
-        eprintln!("fast_gate=skipped(annotation): {error:#}");
-        receipt.marker = "skipped(annotation)".into();
+        if receipt.marker != "fail" {
+            receipt.marker = "skipped(annotation)".into();
+        }
+        eprintln!("fast_gate={}: annotation failed: {error:#}", receipt.marker);
         if !queue {
             // An unpushed seat head may differ from the PR. A skipped gate
             // must not leave an obsolete head fence after the lane exits.
@@ -484,7 +545,7 @@ fn pushed_round(
         write(main, &receipt)?;
     }
     if queue {
-        queue_repair()?;
+        receipt.repair_queue = queue_repair()?;
         receipt.repair_used = true;
         write(main, &receipt)?;
     } else {
@@ -558,7 +619,7 @@ mod tests {
         assert!(blocks_review(root, "lane", "fixed").unwrap());
         published(root, "lane").unwrap();
         assert!(!blocks_review(root, "lane", "fixed").unwrap());
-        assert!(blocks_review(root, "lane", "old").unwrap());
+        assert!(!blocks_review(root, "lane", "later-merge-head").unwrap());
     }
 
     // trace:STORY-b6b1278890774ef993d2ebc327862470-563.acb1c30b | ai:codex
@@ -583,6 +644,131 @@ mod tests {
             assert!(read(root, "lane").unwrap().unwrap().native_ready);
         }
         assert_eq!(repairs, 1);
+    }
+
+    // trace:STORY-2640 | ai:codex
+    #[test]
+    fn fast_gate_native_errors_preserve_first_red() {
+        for fail_repair in [true, false] {
+            let tmp = tempfile::tempdir().unwrap();
+            begin(tmp.path(), "lane").unwrap();
+            let mut attempts = 0;
+            let error = native_rounds(
+                tmp.path(),
+                "lane",
+                || {
+                    attempts += 1;
+                    if attempts == 2 {
+                        anyhow::bail!("seat changed during fast gate");
+                    }
+                    Ok(Some(("old".into(), "fail".into(), "red".into())))
+                },
+                |_| {
+                    if fail_repair {
+                        anyhow::bail!("vendor spawn failed");
+                    }
+                    Ok(())
+                },
+            )
+            .unwrap_err();
+            assert!(native_error(tmp.path(), "lane", "lease", &error, || Ok(
+                "new".into()
+            )));
+            assert_eq!(marker(tmp.path(), "lane"), "fail");
+            assert_eq!(
+                std::fs::read_to_string(
+                    crate::lane_job::results_dir(tmp.path(), "lease").join("fast-gate-marker")
+                )
+                .unwrap(),
+                "fail"
+            );
+            assert!(read(tmp.path(), "lane").unwrap().unwrap().native_ready);
+            assert!(result_line(tmp.path(), "lane", "implementer:").contains("fast_gate=fail"));
+            finish_publication(tmp.path(), "lane", || anyhow::bail!("forge unavailable")).unwrap();
+            assert_eq!(marker(tmp.path(), "lane"), "fail");
+            assert!(!blocks_review(tmp.path(), "lane", "new").unwrap());
+        }
+    }
+
+    // trace:STORY-2640 | ai:codex
+    #[test]
+    fn fast_gate_self_published_green_allows_later_head() {
+        let tmp = tempfile::tempdir().unwrap();
+        begin(tmp.path(), "lane").unwrap();
+        pushed_round(
+            tmp.path(),
+            "lane",
+            "published",
+            "pass",
+            || Ok(()),
+            || panic!("green needs no repair"),
+        )
+        .unwrap();
+        assert!(!blocks_review(tmp.path(), "lane", "merge-from-main").unwrap());
+    }
+
+    // trace:STORY-2640 | ai:codex
+    #[test]
+    fn fast_gate_queued_repair_releases_when_removed_replaced_or_parked() {
+        use aida_core::db::DatabaseBackend as _;
+        let tmp = tempfile::tempdir().unwrap();
+        let backend =
+            crate::test_env::home_fixture_backend(&tmp.path().join(".aida-store")).unwrap();
+        std::fs::create_dir_all(tmp.path().join(".aida")).unwrap();
+        std::fs::write(
+            tmp.path().join(".aida/config.toml"),
+            "store_path = \".aida-store\"\n",
+        )
+        .unwrap();
+        let storage = crate::Storage::new(tmp.path().join(".aida-store"));
+        let mut req = aida_core::Requirement::new("Repair".into(), String::new());
+        req.status = aida_core::RequirementStatus::InProgress;
+        let req = backend.add_requirement(req).unwrap();
+        let entry = aida_core::QueueEntry {
+            user_id: "role:implementer".into(),
+            requirement_id: req.id,
+            position: 0,
+            added_by: "fast-gate".into(),
+            note: None,
+            added_at: chrono::Utc::now(),
+            for_role: Some("implementer".into()),
+            for_scope: None,
+            for_session: None,
+            added_by_machine: None,
+        };
+        begin(tmp.path(), "lane").unwrap();
+        pushed_round(
+            tmp.path(),
+            "lane",
+            "published",
+            "fail",
+            || Ok(()),
+            || {
+                storage.queue_add(entry.clone())?;
+                Ok(Some(entry.clone()))
+            },
+        )
+        .unwrap();
+        assert!(blocks_review(tmp.path(), "lane", "published").unwrap());
+        storage.queue_remove(&entry.user_id, &req.id).unwrap();
+        assert!(!blocks_review(tmp.path(), "lane", "published").unwrap());
+        let mut replacement = entry.clone();
+        replacement.added_at += chrono::Duration::seconds(1);
+        storage.queue_add(replacement).unwrap();
+        assert!(!blocks_review(tmp.path(), "lane", "published").unwrap());
+        storage.queue_remove(&entry.user_id, &req.id).unwrap();
+        storage.queue_add(entry).unwrap();
+        for (status, deferred) in [
+            (aida_core::RequirementStatus::Superseded, false),
+            (aida_core::RequirementStatus::NeedsAttention, false),
+            (aida_core::RequirementStatus::InProgress, true),
+        ] {
+            let mut store = backend.load().unwrap();
+            store.requirements[0].status = status;
+            store.requirements[0].deferred = deferred;
+            backend.save(&store).unwrap();
+            assert!(!blocks_review(tmp.path(), "lane", "published").unwrap());
+        }
     }
 
     #[test]
@@ -681,7 +867,7 @@ mod tests {
             || {
                 queued += 1;
                 assert!(blocks_review(root, "lane", "first")?);
-                Ok(())
+                Ok(None)
             },
         )
         .unwrap();
@@ -696,7 +882,7 @@ mod tests {
             || Ok(()),
             || {
                 queued += 1;
-                Ok(())
+                Ok(None)
             }
         )
         .unwrap());
@@ -721,14 +907,21 @@ mod tests {
                     || anyhow::bail!("forge unavailable"),
                     || {
                         queued = true;
-                        Ok(())
+                        Ok(None)
                     },
                 )
                 .unwrap(),
                 result == "fail"
             );
             assert_eq!(queued, result == "fail");
-            assert_eq!(marker(tmp.path(), result), "skipped(annotation)");
+            assert_eq!(
+                marker(tmp.path(), result),
+                if result == "fail" {
+                    "fail"
+                } else {
+                    "skipped(annotation)"
+                }
+            );
             drop(guard);
             assert_eq!(blocks_review(tmp.path(), result, "head").unwrap(), queued);
         }
@@ -870,9 +1063,11 @@ pub(crate) fn finish_publication(
     annotate: impl FnOnce() -> Result<()>,
 ) -> Result<()> {
     if let Err(error) = annotate() {
-        eprintln!("fast_gate=skipped(annotation): {error:#}");
         let mut r = read(main, branch)?.context("fast gate receipt disappeared")?;
-        r.marker = "skipped(annotation)".into();
+        if r.marker != "fail" {
+            r.marker = "skipped(annotation)".into();
+        }
+        eprintln!("fast_gate={}: annotation failed: {error:#}", r.marker);
         r.head = None;
         write(main, &r)?;
     }
