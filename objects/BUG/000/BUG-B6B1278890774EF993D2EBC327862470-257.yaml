@@ -1,0 +1,35 @@
+id: 01a1b90c-ed35-72f3-96f9-9af73d67f23c
+spec_id: BUG-b6b1278890774ef993d2ebc327862470-257
+agreed_id: BUG-2492
+title: merge-hold-gate reports a held PR as a FAILED run, so every push to a supervised PR emails the operator 'PR run failed'; block with a pending status instead
+description: |
+  merge-hold-gate (.github/workflows/merge-hold-gate.yml, BUG-1167 / ADR-37 layer 2) blocks a held PR by FAILING. It reruns on every synchronize/labeled/unlabeled/edited event, so every rework push to a supervised PR produces a failed Actions run and a "PR run failed: merge-hold-gate" email to the operator. On 2026-11-07, about 8 lanes pushing reworks to held PRs sent a steady stream of these emails, and the operator asked why. A by-design hold that reads as a CI failure trains everyone to ignore failure mail and buries real failures.
+
+  Fix shape: the hold must still block the merge (a required check that has not passed), but it must not report a failure. Options for the implementer: publish a commit status / check run with state `pending` (or `action_required`) and a description naming the hold, using the workflow's token, and set it to success once the hold is cleared. Keep the job deliberately trivial (label inspection only). The status context name stays `merge-hold-gate` so branch protection is unchanged.
+
+  Acceptance:
+  1. A PR carrying aida:merge-hold shows merge-hold-gate as pending/action-required (not failure), and GitHub still refuses to merge it, including via raw `gh pr merge` and the web UI.
+  2. Clearing the hold (aida merge-hold clear / the recorded-cleared label pair) turns the check green with no new push.
+  3. The BUG-1693 label rules (recorded vs cleared, train members' labels) behave exactly as today: same pass/block outcome for every label combination (table test over the existing check_labels cases).
+  4. A push to a held PR sends no "run failed" notification for this check.
+  5. A genuinely malformed label state (clearance with no recorded hold) still FAILS, since that is a real error.
+status: Draft
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-11-08T02:46:34.549817284Z
+modified_at: 2026-11-08T02:46:34.549817284Z
+req_type: Bug
+tags:
+- area:ci
+- area:merge-hold
+- operator-noise
+filed_at:
+  code_sha: dc41ee8da2f44f88178936fc1a8e6cb7168a3de7
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: dc41ee8da2f
+  vendor: claude
+  session: 01a1b8be-8170-7fb2-89ab-ecb4c6eee98c
+  harness_version: 2.1.319 (Claude Code)
