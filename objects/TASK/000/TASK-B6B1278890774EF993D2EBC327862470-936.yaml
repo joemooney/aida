@@ -3,12 +3,12 @@ spec_id: TASK-b6b1278890774ef993d2ebc327862470-936
 agreed_id: TASK-3368
 title: 'STORY-2537 S6: broker-attested ProcIdentity (separately signed slice)'
 description: 'Per sketch docs/plans/2026-11-05-story-2537-proc-identity.md (~305): the broker slice needs its own sketch and advisor signoff before implementation. Mode guided: write the sketch first.'
-status: Approved
+status: InProgress
 priority: Low
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-07T10:46:47.827833836Z
-modified_at: 2026-11-07T23:42:36.187564062Z
+modified_at: 2026-11-08T03:04:45.780580085Z
 req_type: Task
 relationships:
 - rel_type: Child
@@ -146,6 +146,13 @@ history:
   - field_name: status
     old_value: NeedsAttention
     new_value: Approved
+- id: 01a1b91d-93d4-7312-a942-3c6819630faa
+  author: aida-session-start
+  timestamp: 2026-11-08T03:04:45.780576835Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: InProgress
 filed_at:
   code_sha: 4803b66ade90fa4f6ccbcfb20f3af84d4aaf7886
   branch: main
