@@ -13,12 +13,12 @@ description: |
   3. The BUG-1693 label rules (recorded vs cleared, train members' labels) behave exactly as today: same pass/block outcome for every label combination (table test over the existing check_labels cases).
   4. A push to a held PR sends no "run failed" notification for this check.
   5. A genuinely malformed label state (clearance with no recorded hold) still FAILS, since that is a real error.
-status: InProgress
+status: NeedsAttention
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-08T02:46:34.549817Z
-modified_at: 2026-11-08T19:50:55.752568727Z
+modified_at: 2026-11-08T19:51:43.591986270Z
 req_type: Bug
 tags:
 - area:ci
@@ -730,6 +730,21 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a1bcb7-0eed-7643-9f5b-04a98722f9e3
+  author: dirtlab
+  timestamp: 2026-11-08T19:51:15.949211748Z
+  session_id: 01a1bcb6b9e9
+  harness_version: codex-cli 0.167.0
+  changes: []
+- id: 01a1bcb7-7ae7-7112-9d31-0dba1eece1a2
+  author: dirtlab
+  timestamp: 2026-11-08T19:51:43.591993732Z
+  session_id: 01a1bcb6b9e9
+  harness_version: codex-cli 0.167.0
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: NeedsAttention
 filed_at:
   code_sha: dc41ee8da2f44f88178936fc1a8e6cb7168a3de7
   branch: main
@@ -739,3 +754,8 @@ filed_at:
   vendor: claude
   session: 01a1b8be-8170-7fb2-89ab-ecb4c6eee98c
   harness_version: 2.1.319 (Claude Code)
+attention_reason:
+  category: blocked-dependency
+  detail: Latest review at ca90cc0ffbf6 requires exact-head green CI and operator canary evidence for AC1/AC2/AC4; neither is resolvable by native implementer code changes. Operator must execute docs/internal/testing/bug-2492-status-cutover.md and attach raw gh/web refusal, unchanged-SHA label-only clearance and notification observations. Corrected the non-blocking upgrade_release.rs diagnostic so hold/red-CI refusals are not called forge read failures; edit remains uncommitted. Shell fixtures passed (8 label states x 2 gates, 36 train cases, 1 projection test); bash syntax and git diff --check passed. No Rust test run for this message-only change. Keep spec open and retain Refs BUG-2492 title; this punt vetoes automatic publication pending host/operator resolution.
+  raised_by: implementer
+  raised_at: 2026-11-08T19:51:43.591986270Z
