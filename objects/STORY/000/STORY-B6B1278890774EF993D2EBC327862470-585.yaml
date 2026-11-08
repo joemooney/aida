@@ -17,7 +17,7 @@ priority: Low
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-08T02:58:18.689963065Z
-modified_at: 2026-11-08T14:51:06.800553814Z
+modified_at: 2026-11-08T14:55:21.257466228Z
 req_type: Story
 tags:
 - area:handoff
@@ -216,6 +216,13 @@ comments:
   created_at: 2026-11-08T13:42:34.566504631Z
   modified_at: 2026-11-08T13:42:34.566504631Z
   session_id: 01a1bb60ef7b
+  harness_version: codex-cli 0.167.0
+- id: 01a1bba8-24a9-7c91-86d7-579ba7ce3a4c
+  author: dirtlab
+  content: 'Native-seat timeout hardening complete; edits remain uncommitted for host publication. Changed aida-core/templates/hooks/aida-precompact-handoff.sh to classify a probe that closes stdout but does not exit before its deadline as unknown, preserving packet generation. Added regression in tests/test_precompact_handoff_hook.py using a real child process that closes stdout and hangs. Validation: 25 Python hook tests passed; lane job j20261108T145143018-2-0 passed precompact_handoff_cli_round_trip (1 executed test); git diff --check passed; managed hook symlink points to source template. Claude-only scope retained; Codex awaits trusted-hook test. No live Claude compaction or full CI performed. Codegraph unavailable; doctor check returned total: 0, so source navigation used rg. untested=false. No implementation blockers; host owns commit, publication and queue completion.'
+  created_at: 2026-11-08T14:55:21.257466228Z
+  modified_at: 2026-11-08T14:55:21.257466228Z
+  session_id: 01a1bba43cba
   harness_version: codex-cli 0.167.0
 history:
 - id: 01a1b9c5-3252-7530-8b0b-bbe2c3ac5581
