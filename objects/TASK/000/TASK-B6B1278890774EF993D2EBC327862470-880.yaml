@@ -8,7 +8,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-06T13:39:53.442026096Z
-modified_at: 2026-11-08T11:39:55.647341458Z
+modified_at: 2026-11-08T11:40:06.764181163Z
 req_type: Task
 tags:
 - architecture
@@ -720,6 +720,26 @@ comments:
   content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: Head 6c2eeeeb2895 fixes most prior findings (edit/delete verbs removed, client positive route test, role, pipe, option refusal), but agreed-ID resolution still refuses every lowercase origin-keyed spec including TASK-3223 itself, routing acceptance (comment 34) is unmet, and CI is not finished at this head.. No triage reason was given.'
   created_at: 2026-11-08T11:39:55.647335305Z
   modified_at: 2026-11-08T11:39:55.647335305Z
+  session_id: 01a1b9af-8230-75d2-82f8-667491cc010a
+  harness_version: 2.1.319 (Claude Code)
+- id: 01a1baf5-647f-7ba0-8622-cfa47b8b11e1
+  author: joe
+  content: |-
+    REVIEW FINDINGS TO ADDRESS (PR #3661):
+    Verdict: CHANGES REQUESTED
+    Reviewed commit: 6c2eeeeb2895
+    Recorded: 2026-11-08T11:38:32.779698516+00:00
+    Findings:
+    1. MAJOR, functional, NEW in 6c2eeeeb2895 (prior agreed-ID finding only partly fixed): store_mutation_client.rs:150 compares row.spec_id == sid case-sensitively, but sid is the uppercased file stem from list_objects_strict and the YAML keeps lowercase hex. Live store: 1678 of 7396 objects differ from their stem by case only, e.g. TASK-B6B1278890774EF993D2EBC327862470-880.yaml has spec_id TASK-b6b1278890774ef993d2ebc327862470-880. So 'aida comment add TASK-3223' under the mediated profile refuses with 'Conflict: canonical identity mismatch', for agreed and origin IDs alike, on exactly the origin-keyed specs the fix targets. The host has the same comparison at aida-core/src/db/git_backend.rs:2728 with the uppercased wire sid, so relaxing only the client moves the Conflict to the host. Compare with same_id or send the object's own spec_id consistently on both sides. The test canonical_preimages_route_agreed_and_origin_ids_over_seqpacket (store_mutation_client_tests.rs:287) misses this because its fixture stores an uppercase origin ID; add a lowercase-hex fixture and a host-side mutate_canonical case.
+    2. BLOCKING acceptance gap (advisor ruling, TASK-3223 comment 34), unfixed: (a) writer inventory cannot report zero unrouted: scripts/store-writers.toml has 3159 blocked and 1 read_only writer rows and 293 of 293 operations blocked, and mediated_blockers in scripts/check-store-writers.py counts every operation row as unresolved regardless of disposition, so --profile mediated refuses by construction. (b) No contained-lane test proves a raw .aida-store object write is denied while a mediated comment_add succeeds, and containment/mod.rs:260-261 still refuses raw-write runtimes while the mediated profile stays gated. (c) make check-ci-fast is not shown green at this head. The PR must stay Refs-only and TASK-3223 must stay open.
+    3. Test gap, description acceptance: concurrent-mutation, stale-base and failure-after-persist exist only at the backend (redo/tests.rs:135, :282, :335, :369). No test drives them through the client and service route, and the only client positive at store_mutation_client_tests.rs:282 uses a synthetic host reply that cannot observe Conflict or replay after a lost reply.
+    4. CI and gates at 6c2eeeeb2895: CI run 42476410226 is pending and merge-hold-gate run 42476410131 is queued, so there is no green evidence at this head and mergeStateStatus is BLOCKED. Prior red lanes (lib-1 at c2d12195813d, lib-0 at 2b3a8a9f1c36) were never shown resolved; the redo fixture change in aida-core/src/db/redo/tests.rs may address them, but only a completed run can confirm that. The aida:merge-hold label remains and needs advisor or operator release.
+    5. PR metadata, unfixed: the title still says 'report unresolved mediated routing evidence' while the diff adds early dispatch in main_entry, a SEQPACKET client and a mediated MCP server, and the body is only the seat-publication line. Rewrite both to describe staged, gated routing, state Refs-only with no launch authority, and say TASK-3223 stays open. Commit 30eb320657c's subject claims full routing and boundary denial, so the squash must use the corrected title with an empty body.
+    6. MINOR, per-mutation cost: canonical_preimage (store_mutation_client.rs:140-155) reads and YAML-parses every object for each mutation, about 7400 files today, including for origin IDs that have a direct path, and any one malformed or unexpected object refuses every mediated mutation. Try the direct object path first and scan only for agreed IDs, or use a bounded read-only index.
+    7. COSMETIC: validate_result's request_status branch (store_mutation_client.rs:171) is now reachable only from tests because Client::status was removed; delete the branch and its assertions at store_mutation_client_tests.rs:198-200 or restore a caller.
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
+  created_at: 2026-11-08T11:40:06.655824364Z
+  modified_at: 2026-11-08T11:40:06.655824364Z
   session_id: 01a1b9af-8230-75d2-82f8-667491cc010a
   harness_version: 2.1.319 (Claude Code)
 history:
