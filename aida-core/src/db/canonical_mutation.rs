@@ -16,17 +16,6 @@ pub enum CanonicalOperation {
         expected_revision: String,
         content: String,
     },
-    CommentEdit {
-        spec_id: String,
-        expected_revision: String,
-        comment_id: uuid::Uuid,
-        content: String,
-    },
-    CommentDelete {
-        spec_id: String,
-        expected_revision: String,
-        comment_id: uuid::Uuid,
-    },
     SpecEdit {
         spec_id: String,
         expected_revision: String,
@@ -62,16 +51,6 @@ impl CanonicalOperation {
                 expected_revision,
                 ..
             }
-            | Self::CommentEdit {
-                spec_id,
-                expected_revision,
-                ..
-            }
-            | Self::CommentDelete {
-                spec_id,
-                expected_revision,
-                ..
-            }
             | Self::SpecEdit {
                 spec_id,
                 expected_revision,
@@ -96,10 +75,9 @@ impl CanonicalOperation {
                 && !s.chars().any(|c| c.is_control() && c != '\n' && c != '\t')
         };
         match self {
-            Self::CommentAdd { content, .. } | Self::CommentEdit { content, .. } => {
+            Self::CommentAdd { content, .. } => {
                 anyhow::ensure!(text(content), "InvalidRequest")
             }
-            Self::CommentDelete { .. } => {}
             Self::SpecEdit { fields, .. } => {
                 anyhow::ensure!(
                     fields.title.is_some() || fields.description.is_some(),

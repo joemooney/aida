@@ -3,6 +3,15 @@ use super::*;
 use crate::db::{canonical_mutation::CanonicalOperation, with_store_write_lock, GitBackend};
 
 fn fixture(root: &Path) -> (Decision, CanonicalOperation) {
+    // Provision authority through the private-file writer so a group-writable
+    // runner umask cannot invalidate the fixture before transaction tests run.
+    crate::git_ops::init(root).unwrap();
+    crate::allocation_authority::write_mode(
+        root,
+        crate::allocation_authority::AllocationRole::Root,
+        None,
+    )
+    .unwrap();
     crate::allocation_authority::home_fixture_backend(root).unwrap();
     fs::create_dir_all(root.join("objects")).unwrap();
     let mut row = crate::Requirement::new("before".into(), "description".into());
@@ -52,87 +61,6 @@ fn fixture(root: &Path) -> (Decision, CanonicalOperation) {
     )
 }
 
-#[test]
-fn canonical_existing_comment_changes_are_revision_bound_and_deduplicated() {
-    let tmp = tempfile::tempdir().unwrap();
-    let root = tmp.path();
-    // Provision authority with its private-file writer rather than inheriting
-    // the runner's umask through the legacy fixture's generic atomic writer.
-    crate::git_ops::init(root).unwrap();
-    crate::allocation_authority::write_mode(
-        root,
-        crate::allocation_authority::AllocationRole::Root,
-        None,
-    )
-    .unwrap();
-    fixture(root);
-    let mut row = crate::object_store::read_object(&root.join("objects"), "TASK-1").unwrap();
-    let mut parent = crate::models::Comment::new("original author".into(), "parent".into());
-    let reply = crate::models::Comment::new("reply author".into(), "before".into());
-    let comment_id = reply.id;
-    parent.add_reply(reply);
-    row.add_comment(parent);
-    crate::object_store::write_object(&root.join("objects"), &row).unwrap();
-    let revision = hash(&object_bytes(root, "TASK-1").unwrap());
-    let edit = CanonicalOperation::CommentEdit {
-        spec_id: "TASK-1".into(),
-        expected_revision: revision,
-        comment_id,
-        content: "after".into(),
-    };
-    let epoch = uuid::Uuid::new_v4();
-    let id = uuid::Uuid::new_v4();
-    let backend = GitBackend::new(root).unwrap();
-    let before_edit = object_bytes(root, "TASK-1").unwrap();
-    assert!(backend
-        .mutate_canonical("fixed", epoch, id, "bound author", &edit, || anyhow::bail!(
-            "Revoked"
-        ))
-        .unwrap_err()
-        .to_string()
-        .contains("Revoked"));
-    assert_eq!(object_bytes(root, "TASK-1").unwrap(), before_edit);
-    let apply = |request, op: &CanonicalOperation| {
-        backend.mutate_canonical("fixed", epoch, request, "bound author", op, || Ok(()))
-    };
-    let result = apply(id, &edit).unwrap();
-    assert_eq!(result["comment_id"], comment_id.to_string());
-    let after_edit = object_bytes(root, "TASK-1").unwrap();
-    assert_eq!(apply(id, &edit).unwrap(), result);
-    assert_eq!(object_bytes(root, "TASK-1").unwrap(), after_edit);
-    let mut updated: crate::Requirement = serde_yaml::from_slice(&after_edit).unwrap();
-    let comment = updated.find_comment_mut(&comment_id).unwrap();
-    assert_eq!(comment.content, "after");
-    assert_eq!(comment.author, "reply author");
-    assert!(apply(uuid::Uuid::new_v4(), &edit)
-        .unwrap_err()
-        .to_string()
-        .contains("Conflict"));
-    let delete = CanonicalOperation::CommentDelete {
-        spec_id: "TASK-1".into(),
-        expected_revision: hash(&after_edit),
-        comment_id,
-    };
-    let delete_id = uuid::Uuid::new_v4();
-    let result = apply(delete_id, &delete).unwrap();
-    let after_delete = object_bytes(root, "TASK-1").unwrap();
-    assert_eq!(apply(delete_id, &delete).unwrap(), result);
-    assert_eq!(object_bytes(root, "TASK-1").unwrap(), after_delete);
-    let mut updated: crate::Requirement = serde_yaml::from_slice(&after_delete).unwrap();
-    assert!(updated.find_comment_mut(&comment_id).is_none());
-    assert_eq!(updated.comments.len(), 1);
-    assert_eq!(updated.comments[0].content, "parent");
-    let missing = CanonicalOperation::CommentDelete {
-        spec_id: "TASK-1".into(),
-        expected_revision: hash(&after_delete),
-        comment_id,
-    };
-    assert!(apply(uuid::Uuid::new_v4(), &missing)
-        .unwrap_err()
-        .to_string()
-        .contains("Conflict"));
-    assert_eq!(object_bytes(root, "TASK-1").unwrap(), after_delete);
-}
 fn child(root: &Path, checkpoint: &str) -> std::process::ExitStatus {
     let mut command = std::process::Command::new(std::env::current_exe().unwrap());
     command
@@ -351,7 +279,7 @@ fn corrupt_decision_and_unknown_format_refuse_before_writer() {
     }
 }
 #[test]
-fn canonical_comment_edit_stale_and_concurrent_requests() {
+fn canonical_comment_add_and_spec_edit_are_revision_bound() {
     let tmp = tempfile::tempdir().unwrap();
     let root = tmp.path();
     let (_, op) = fixture(root);

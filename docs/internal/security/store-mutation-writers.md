@@ -21,26 +21,36 @@ The canonical redo transaction design was subsequently approved in
 
 `store_mutation_entry.rs` selects an explicit mediated profile before CLI
 identity, telemetry, aliases, extension dispatch and cache setup. The bounded
-Rust SEQPACKET client supports inline or `--body-file` `comment add` and
-title/description-only `edit`. Its separate MCP loop translates `add_comment` and `update_requirement`
-without backend setup, agent-registry writes, mail acknowledgements or respawn.
-It retains MCP profile and stakeholder restrictions, narrows advertised input
-properties, and refuses extra fields rather than silently dropping semantics.
+Rust SEQPACKET client supports inline, `--body-file` or bounded `--stdin`
+`comment add` and title/description-only `edit`. Its separate MCP loop translates
+`add_comment` and `update_requirement` without backend setup, agent-registry
+writes, mail acknowledgements or respawn. It retains MCP profile and stakeholder
+restrictions, narrows advertised input properties, and refuses extra fields
+rather than silently dropping semantics. Non-Unicode session roles refuse.
 Comment body files are opened read-only without following symlinks and with
-nonblocking I/O; only regular UTF-8 files up to 16 KiB are accepted. The lane
-sends their literal text, never a path, to the host. Stdin, editor, author, relay
-and parent semantics remain unsupported.
-The staged CLI also translates `comment edit --req-id ... --comment-id ...`
-with `--content` or `--body-file`, and `comment delete`. Comment UUID prefixes
-resolve against the canonical preimage used for the expected revision; the host
-accepts only the resolved UUID and refuses a stale revision or missing comment.
-Edits preserve the original comment author and support nested replies, using
-the same model helpers as ordinary CLI persistence. Replays of the same typed
-delete request return its durable result even after the comment is gone; a new
-CLI invocation does not replay an earlier request. Interactive and stdin edits
-refuse before ordinary dispatch. These verbs remain disabled at both production
-service gates; this staging does not change the unresolved inventory counts or
-authorize profile cutover. MCP advertisement is unchanged.
+nonblocking I/O; only regular UTF-8 files up to 16 KiB are accepted. Stdin has
+the same size, UTF-8 and nonempty-content checks. The lane sends literal text,
+never a path, to the host. Editor, author, relay and parent semantics remain
+unsupported. Top-level `--file`, output-format, verbose and canonical-ID options
+refuse rather than silently changing their ordinary meaning. Store discovery
+walks cwd ancestors read-only; it never constructs a backend or shared cache.
+
+Before hashing a preimage, the client resolves native and agreed IDs from
+canonical objects. Incomplete enumeration, unreadable or malformed objects,
+identity mismatches and ambiguous matches refuse. The wire request names the
+origin-keyed canonical object and hashes the exact bounded no-follow read; the
+host independently revalidates its revision and owned UUID under the writer
+lock. Client SEQPACKET fixtures cover agreed and origin IDs through comment-add,
+spec-edit and MCP translation. These fixtures use a synthetic host reply, not
+production admission or contained-lane evidence.
+
+Mediated comment edit/delete are unsupported: rewriting an existing comment
+requires an advisor-approved ownership policy. Their closed schemas and host
+handlers are absent; ordinary compatibility commands are unchanged. Each
+invocation uses a new request UUID, included in transport error context for host
+recovery. There is no client status/retry command, and uncertain delivery is
+never automatically retried. A closed stdout consumer does not turn a committed
+mutation into an output panic.
 Unsupported commands/tools refuse before ordinary dispatch. Neither transport
 falls back to direct persistence or retries uncertain delivery with a new UUID.
 

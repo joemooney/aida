@@ -38,15 +38,12 @@ fn explicit_fields(
     Ok(())
 }
 
-fn root(matches: &clap::ArgMatches, cwd: &Path) -> Result<PathBuf> {
-    let root = match matches.get_one::<String>("file") {
-        Some(path) => cwd.join(path),
-        None => cwd
-            .ancestors()
-            .map(|p| p.join(".aida-store"))
-            .find(|p| p.join("objects").is_dir())
-            .context("mediated operations require an existing canonical store")?,
-    };
+fn root(cwd: &Path) -> Result<PathBuf> {
+    let root = cwd
+        .ancestors()
+        .map(|p| p.join(".aida-store"))
+        .find(|p| p.join("objects").is_dir())
+        .context("mediated operations require an existing canonical store")?;
     ensure!(
         root.join("objects").is_dir(),
         "mediated operations require an existing canonical store"
@@ -70,45 +67,38 @@ fn run(client: &Client, env: &Environment, argv: &[String], cwd: &Path) -> Resul
         Err(error) => return Err(error.into()),
     };
     // No alternate project/server, recording, or other early side-effect flags.
-    explicit_fields(
-        &matches,
-        &["file", "format", "verbose", "canonical_ids"],
-        &command,
-    )?;
+    explicit_fields(&matches, &[], &command)?;
     let (name, args) = matches.subcommand().context("UnsupportedOperation")?;
     if name == "mcp-serve" {
-        return crate::mcp::run_mediated_mcp_server(client, env, &root(&matches, cwd)?);
+        return crate::mcp::run_mediated_mcp_server(client, env, &root(cwd)?);
     }
     let (tool, payload) = translate(name, args, cwd)?;
-    let action = if matches!(tool, "add_comment" | "edit_comment" | "delete_comment") {
+    let action = if tool == "add_comment" {
         crate::StakeholderAction::Comment
     } else {
         crate::StakeholderAction::EditRequirement
     };
-    if let Ok(role) = env.var("AIDA_SESSION_ROLE") {
+    if let Some(role) = crate::store_mutation_client::session_role(env)? {
         ensure!(
-            crate::stakeholder_action_allowed(&crate::canonical_role_name(role.trim()), action),
+            crate::stakeholder_action_allowed(&role, action),
             "UnsupportedOperation"
         );
     }
-    let store = root(&matches, cwd)?;
-    let result = if matches!(tool, "edit_comment" | "delete_comment") {
-        let content = if tool == "edit_comment" {
-            Some(payload["text"].as_str().context("InvalidRequest")?)
-        } else {
-            None
-        };
-        client.change_comment(
-            &store,
-            payload["id"].as_str().context("InvalidRequest")?,
-            payload["comment_id"].as_str().context("InvalidRequest")?,
-            content,
-        )?
-    } else {
-        client.mcp(&store, tool, &payload)?
-    };
-    println!("{}", serde_json::to_string(&result)?);
+    let store = root(cwd)?;
+    let result = client.mcp(&store, tool, &payload)?;
+    // A committed mutation stays successful when a downstream consumer closes
+    // stdout. Other I/O failures are returned without a println! panic.
+    write_result(&mut std::io::stdout().lock(), &result)
+        .context("mutation committed; output failed; do not repeat the mutation")?;
     Ok(())
+}
+
+// trace:TASK-3223 | ai:codex
+fn write_result(output: &mut impl std::io::Write, result: &Value) -> Result<()> {
+    match writeln!(output, "{}", serde_json::to_string(result)?) {
+        Err(error) if error.kind() == std::io::ErrorKind::BrokenPipe => Ok(()),
+        result => Ok(result?),
+    }
 }
 
 /// The lane sends text, never a pathname, to the host. Open nonblocking first
@@ -161,33 +151,6 @@ fn translate_with_reader(
     match name {
         "comment" => {
             let (name, args) = args.subcommand().context("UnsupportedOperation")?;
-            if matches!(name, "edit" | "delete") {
-                explicit_fields(
-                    args,
-                    &["req_id", "comment_id", "content", "body_file", "stdin"],
-                    command
-                        .find_subcommand(name)
-                        .context("UnsupportedOperation")?,
-                )?;
-                let id = args.get_one::<String>("req_id").context("InvalidRequest")?;
-                let comment = args
-                    .get_one::<String>("comment_id")
-                    .context("InvalidRequest")?;
-                let mut payload = json!({"id":id,"comment_id":comment});
-                if name == "delete" {
-                    return Ok(("delete_comment", payload));
-                }
-                let text = match args.get_one::<PathBuf>("body_file") {
-                    Some(path) => comment_file(&cwd.join(path))?,
-                    None if args.get_flag("stdin") => comment_text(stdin)?,
-                    None => args
-                        .get_one::<String>("content")
-                        .context("UnsupportedOperation: provide --content, --body-file or --stdin")?
-                        .clone(),
-                };
-                payload["text"] = json!(text);
-                return Ok(("edit_comment", payload));
-            }
             ensure!(name == "add", "UnsupportedOperation");
             explicit_fields(
                 args,
@@ -230,6 +193,62 @@ fn translate_with_reader(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn root_discovery_is_read_only_and_global_semantics_never_drop() {
+        let tmp = tempfile::tempdir().unwrap();
+        let store = tmp.path().join(".aida-store");
+        std::fs::create_dir_all(store.join("objects")).unwrap();
+        let nested = tmp.path().join("src/nested");
+        std::fs::create_dir_all(&nested).unwrap();
+        assert_eq!(root(&nested).unwrap(), store);
+        assert!(!store.join("metadata.yaml").exists());
+        assert!(!store.join(".git").exists());
+        let environment = Environment::from_pairs([
+            ("AIDA_STORE_MUTATION_PROFILE".into(), "mediated".into()),
+            (
+                "AIDA_STORE_MUTATION_ENDPOINT".into(),
+                format!("/run/aida-mutation/{}/service", uuid::Uuid::new_v4()).into(),
+            ),
+        ]);
+        for flags in [
+            vec!["--file", "/unreadable"],
+            vec!["--format", "json"],
+            vec!["--canonical-ids"],
+        ] {
+            let mut argv = vec!["aida"];
+            argv.extend(flags);
+            argv.extend(["comment", "add", "TASK-1", "hello"]);
+            let argv = argv.into_iter().map(str::to_owned).collect::<Vec<_>>();
+            let error = entry(&environment, &argv, Some(&nested))
+                .unwrap()
+                .unwrap_err();
+            assert!(
+                error.to_string().contains("UnsupportedOperation"),
+                "{error}"
+            );
+        }
+        assert!(root(Path::new("/nonexistent-store-cwd")).is_err());
+    }
+
+    #[test]
+    fn committed_result_output_tolerates_closed_consumers_without_a_panic() {
+        struct Failing(std::io::ErrorKind);
+        impl std::io::Write for Failing {
+            fn write(&mut self, _: &[u8]) -> std::io::Result<usize> {
+                Err(self.0.into())
+            }
+            fn flush(&mut self) -> std::io::Result<()> {
+                Ok(())
+            }
+        }
+        let result = json!({"spec_id":"TASK-1"});
+        write_result(&mut Failing(std::io::ErrorKind::BrokenPipe), &result).unwrap();
+        assert!(write_result(&mut Failing(std::io::ErrorKind::PermissionDenied), &result).is_err());
+        let mut bytes = Vec::new();
+        write_result(&mut bytes, &result).unwrap();
+        assert_eq!(bytes, b"{\"spec_id\":\"TASK-1\"}\n");
+    }
 
     #[test]
     fn selected_profile_never_returns_to_ordinary_dispatch() {
@@ -339,26 +358,10 @@ mod tests {
 
     #[test]
     fn streamed_comments_preserve_literal_text_and_bound_input_before_transport() {
-        let comment = uuid::Uuid::new_v4().to_string();
-        for (argv, expected) in [
-            (
-                vec!["aida", "comment", "add", "TASK-1", "--stdin"],
-                "add_comment",
-            ),
-            (
-                vec![
-                    "aida",
-                    "comment",
-                    "edit",
-                    "--req-id",
-                    "TASK-1",
-                    "--comment-id",
-                    &comment,
-                    "--stdin",
-                ],
-                "edit_comment",
-            ),
-        ] {
+        for (argv, expected) in [(
+            vec!["aida", "comment", "add", "TASK-1", "--stdin"],
+            "add_comment",
+        )] {
             let matches = crate::command_registry::built_command()
                 .try_get_matches_from(argv)
                 .unwrap();
@@ -422,17 +425,13 @@ mod tests {
     }
 
     #[test]
-    fn existing_comment_translation_never_drops_interactive_or_stdin_semantics() {
+    fn existing_comment_mutations_refuse_without_an_approved_ownership_policy() {
         let id = uuid::Uuid::new_v4().to_string();
-        for (verb, extra, expected) in [
-            (
-                "edit",
-                vec!["--content", "replacement"],
-                Some("edit_comment"),
-            ),
-            ("delete", vec![], Some("delete_comment")),
-            ("edit", vec!["--interactive"], None),
-            ("edit", vec![], None),
+        for (verb, extra) in [
+            ("edit", vec!["--content", "replacement"]),
+            ("delete", vec![]),
+            ("edit", vec!["--interactive"]),
+            ("edit", vec![]),
         ] {
             let mut argv = vec![
                 "aida",
@@ -448,18 +447,10 @@ mod tests {
                 .try_get_matches_from(argv)
                 .unwrap();
             let (name, args) = matches.subcommand().unwrap();
-            match expected {
-                Some(tool) => {
-                    let (actual, payload) = translate(name, args, Path::new("/missing")).unwrap();
-                    assert_eq!(actual, tool);
-                    assert_eq!(payload["id"], "TASK-1");
-                    assert_eq!(payload["comment_id"], id);
-                    if verb == "edit" {
-                        assert_eq!(payload["text"], "replacement");
-                    }
-                }
-                None => assert!(translate(name, args, Path::new("/missing")).is_err()),
-            }
+            assert!(translate(name, args, Path::new("/missing"))
+                .unwrap_err()
+                .to_string()
+                .contains("UnsupportedOperation"));
         }
     }
 }

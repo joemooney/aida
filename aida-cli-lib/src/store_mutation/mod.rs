@@ -31,17 +31,6 @@ enum HostOperation {
         expected_revision: String,
         content: String,
     },
-    CommentEdit {
-        spec_id: String,
-        expected_revision: String,
-        comment_id: uuid::Uuid,
-        content: String,
-    },
-    CommentDelete {
-        spec_id: String,
-        expected_revision: String,
-        comment_id: uuid::Uuid,
-    },
     SpecEdit {
         spec_id: String,
         expected_revision: String,
@@ -96,26 +85,6 @@ fn host_operation(
             spec_id,
             expected_revision,
             content,
-        },
-        HostOperation::CommentEdit {
-            spec_id,
-            expected_revision,
-            comment_id,
-            content,
-        } => Op::CommentEdit {
-            spec_id,
-            expected_revision,
-            comment_id,
-            content,
-        },
-        HostOperation::CommentDelete {
-            spec_id,
-            expected_revision,
-            comment_id,
-        } => Op::CommentDelete {
-            spec_id,
-            expected_revision,
-            comment_id,
         },
         HostOperation::SpecEdit {
             spec_id,

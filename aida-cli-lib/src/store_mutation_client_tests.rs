@@ -17,7 +17,7 @@ fn mediated_selection_never_falls_back_when_endpoint_is_missing_or_invalid() {
     );
     for endpoint in [
         None,
-        Some("/tmp/socket"),
+        Some("/invalid-service-endpoint"),
         Some("/run/aida-mutation/../service"),
         Some("/run/aida-mutation/00000000000000000000000000000000/service"),
     ] {
@@ -274,4 +274,170 @@ fn ancillary_rights_are_closed_and_never_accepted_as_a_reply() {
         unsafe { libc::read(reader.as_raw_fd(), byte.as_mut_ptr().cast(), 1) },
         0
     );
+}
+
+/// The only synthetic part is the host reply; each route reads a real canonical
+/// preimage and sends its complete production request over a SEQPACKET listener.
+#[test]
+fn canonical_preimages_route_agreed_and_origin_ids_over_seqpacket() {
+    use std::os::unix::ffi::OsStrExt;
+    let tmp = tempfile::tempdir().unwrap();
+    let store = tmp.path().join("store");
+    let mut row = aida_core::Requirement::new("before".into(), "description".into());
+    let origin = "TASK-B6B1278890774EF993D2EBC327862470-880";
+    row.spec_id = Some(origin.into());
+    row.agreed_id = Some("TASK-3223".into());
+    aida_core::object_store::write_object(&store.join("objects"), &row).unwrap();
+    let bytes = aida_core::db::redo::object_bytes(&store, origin).unwrap();
+    let revision = aida_core::db::redo::hash(&bytes);
+    let path = tmp.path().join("service");
+    let fd = unsafe { libc::socket(libc::AF_UNIX, libc::SOCK_SEQPACKET | libc::SOCK_CLOEXEC, 0) };
+    assert!(fd >= 0);
+    let listener = unsafe { OwnedFd::from_raw_fd(fd) };
+    let mut addr: libc::sockaddr_un = unsafe { std::mem::zeroed() };
+    addr.sun_family = libc::AF_UNIX as libc::sa_family_t;
+    for (out, byte) in addr.sun_path.iter_mut().zip(path.as_os_str().as_bytes()) {
+        *out = *byte as libc::c_char;
+    }
+    assert_eq!(
+        unsafe {
+            libc::bind(
+                listener.as_raw_fd(),
+                (&addr as *const libc::sockaddr_un).cast(),
+                std::mem::size_of_val(&addr) as libc::socklen_t,
+            )
+        },
+        0
+    );
+    assert_eq!(unsafe { libc::listen(listener.as_raw_fd(), 8) }, 0);
+    let epoch = Uuid::new_v4();
+    let expected_revision = revision.clone();
+    let peer = std::thread::spawn(move || {
+        let mut ids = std::collections::HashSet::new();
+        for index in 0..8 {
+            ready(
+                &listener,
+                libc::POLLIN,
+                Instant::now() + Duration::from_secs(5),
+            )
+            .unwrap();
+            let fd = unsafe {
+                libc::accept4(
+                    listener.as_raw_fd(),
+                    std::ptr::null_mut(),
+                    std::ptr::null_mut(),
+                    libc::SOCK_CLOEXEC,
+                )
+            };
+            assert!(fd >= 0);
+            let channel = unsafe { UnixDatagram::from_raw_fd(fd) };
+            channel
+                .set_read_timeout(Some(Duration::from_secs(2)))
+                .unwrap();
+            let mut raw = [0; LIMIT];
+            let n = channel.recv(&mut raw).unwrap();
+            let request: Value = serde_json::from_slice(&raw[..n]).unwrap();
+            let id = Uuid::parse_str(request["request_id"].as_str().unwrap()).unwrap();
+            assert!(ids.insert(id), "each invocation has its own request ID");
+            let (op, data) = if index % 4 == 0 || index % 4 == 2 {
+                (
+                    "comment_add",
+                    json!({"spec_id":origin,"expected_revision":expected_revision,"content":"literal `text` $(text)\nsecond"}),
+                )
+            } else {
+                (
+                    "spec_edit",
+                    json!({"spec_id":origin,"expected_revision":expected_revision,"fields":{"title":"new title","description":""}}),
+                )
+            };
+            assert_eq!(
+                request,
+                json!({"version":1,"launch_epoch":epoch,"request_id":id,"op":op,"data":data})
+            );
+            let result = json!({"spec_id":origin,"revision":"b".repeat(64),"comment_id": if op == "comment_add" { json!(Uuid::new_v4()) } else { Value::Null }});
+            channel.send(&serde_json::to_vec(&json!({"version":1,"launch_epoch":epoch,"request_id":id,"outcome":"success","result":result})).unwrap()).unwrap();
+        }
+    });
+    let client = Client {
+        endpoint: path.to_str().unwrap().into(),
+        epoch,
+    };
+    for id in ["task-3223", origin] {
+        assert_eq!(
+            client
+                .comment(&store, id, "literal `text` $(text)\nsecond")
+                .unwrap()["spec_id"],
+            origin
+        );
+        let fields = || aida_core::db::canonical_mutation::EditFields {
+            title: Some("new title".into()),
+            description: Some("".into()),
+        };
+        client.edit(&store, id, fields()).unwrap();
+        client
+            .mcp(
+                &store,
+                "add_comment",
+                &json!({"id":id,"text":"literal `text` $(text)\nsecond"}),
+            )
+            .unwrap();
+        client
+            .mcp(
+                &store,
+                "update_requirement",
+                &json!({"id":id,"title":"new title","description":""}),
+            )
+            .unwrap();
+    }
+    peer.join().unwrap();
+    assert_eq!(
+        aida_core::db::redo::object_bytes(&store, origin).unwrap(),
+        bytes,
+        "client never writes its preimage"
+    );
+    assert!(!store.join("metadata.yaml").exists(), "no backend setup");
+    assert!(!store.join(".git").exists(), "no Git setup");
+}
+
+#[test]
+fn canonical_resolution_refuses_ambiguous_corrupt_and_linked_objects() {
+    let tmp = tempfile::tempdir().unwrap();
+    let mut row = aida_core::Requirement::new("before".into(), "description".into());
+    row.spec_id = Some("TASK-1-1".into());
+    row.agreed_id = Some("TASK-3223".into());
+    aida_core::object_store::write_object(&tmp.path().join("objects"), &row).unwrap();
+    assert_eq!(
+        canonical_preimage(tmp.path(), "TASK-3223").unwrap().0,
+        "TASK-1-1"
+    );
+    row.spec_id = Some("TASK-2-1".into());
+    aida_core::object_store::write_object(&tmp.path().join("objects"), &row).unwrap();
+    assert!(canonical_preimage(tmp.path(), "TASK-3223")
+        .unwrap_err()
+        .to_string()
+        .contains("ambiguous"));
+    let path =
+        aida_core::object_store::object_path(&tmp.path().join("objects"), "TASK-2-1").unwrap();
+    std::fs::write(&path, "malformed: [").unwrap();
+    assert!(canonical_preimage(tmp.path(), "TASK-3223").is_err());
+    std::fs::remove_file(&path).unwrap();
+    let target =
+        aida_core::object_store::object_path(&tmp.path().join("objects"), "TASK-1-1").unwrap();
+    std::os::unix::fs::symlink(target, &path).unwrap();
+    assert!(canonical_preimage(tmp.path(), "TASK-3223").is_err());
+}
+
+#[test]
+fn invalid_session_role_is_not_treated_as_an_unrestricted_missing_role() {
+    use std::os::unix::ffi::OsStringExt;
+    assert_eq!(session_role(&Environment::default()).unwrap(), None);
+    assert_eq!(
+        session_role(&inputs(&[("AIDA_SESSION_ROLE", " guest ")])).unwrap(),
+        Some("guest".into())
+    );
+    let env = Environment::from_pairs([(
+        "AIDA_SESSION_ROLE".into(),
+        std::ffi::OsString::from_vec(vec![0xff]),
+    )]);
+    assert!(session_role(&env).is_err());
 }

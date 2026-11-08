@@ -151,8 +151,6 @@ class StoreMutationTests(unittest.TestCase):
     # trace:TASK-3223 | ai:codex
     def test_canonical_schemas_are_closed_and_cannot_select_authority(self):
         for op, extra in [('comment_add', {'content': 'hello'}),
-                          ('comment_edit', {'comment_id': str(uuid.uuid4()), 'content': 'changed'}),
-                          ('comment_delete', {'comment_id': str(uuid.uuid4())}),
                           ('spec_edit', {'fields': {'title': 'updated'}})]:
             data = dict(spec_id='TASK-1', expected_revision='a' * 64, **extra)
             self.assertEqual(parse(self.wire(self.request(op, data)))['data'], data)
@@ -165,19 +163,12 @@ class StoreMutationTests(unittest.TestCase):
         self.refuses('InvalidRequest', self.request('comment_add', dict(spec_id='TASK-1', expected_revision='stale', content='hi')))
         self.refuses('InvalidRequest', self.request('comment_add', dict(spec_id='TASK-1', expected_revision='A' * 64, content='hi')))
         for op in ('comment_edit', 'comment_delete'):
-            data = dict(spec_id='TASK-1', expected_revision='a' * 64, comment_id=str(uuid.uuid4()))
-            if op == 'comment_edit':
-                data['content'] = 'replacement'
-            for invalid in ('prefix', '', None, 42):
-                self.refuses('InvalidRequest', self.request(op, dict(data, comment_id=invalid)))
-            self.refuses('InvalidRequest', self.request(op, dict(data, fields={'title': 'wrong verb'})))
-        self.refuses('InvalidRequest', self.request('comment_edit', dict(
-            spec_id='TASK-1', expected_revision='a' * 64, comment_id=str(uuid.uuid4()), content='')))
+            self.refuses('UnsupportedOperation', self.request(op, dict(
+                spec_id='TASK-1', expected_revision='a' * 64,
+                comment_id=str(uuid.uuid4()), content='replacement')))
 
     def test_staged_canonical_verbs_refuse_without_calling_host(self):
         for op, extra in [('comment_add', {'content': 'hello'}),
-                          ('comment_edit', {'comment_id': str(uuid.uuid4()), 'content': 'changed'}),
-                          ('comment_delete', {'comment_id': str(uuid.uuid4())}),
                           ('spec_edit', {'fields': {'description': 'text'}}),
                           ('own_claim', {}), ('queue_done', {})]:
             self.refuses('UnsupportedOperation', self.request(op, dict(spec_id='TASK-1', expected_revision='a' * 64, **extra)))
@@ -188,7 +179,6 @@ class StoreMutationTests(unittest.TestCase):
     def test_multiline_canonical_schemas_reject_only_other_controls(self):
         for text in ('first\n\tsecond', 'bad\r', 'bad\x00', 'bad\x7f', 'bad\x85'):
             for op, extra in [('comment_add', {'content': text}),
-                              ('comment_edit', {'comment_id': str(uuid.uuid4()), 'content': text}),
                               ('spec_edit', {'fields': {'description': text}})]:
                 request = self.request(op, dict(spec_id='TASK-1', expected_revision='a' * 64, **extra))
                 if text.startswith('first'):

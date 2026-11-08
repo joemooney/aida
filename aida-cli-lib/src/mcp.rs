@@ -9087,10 +9087,7 @@ pub(crate) fn run_mediated_mcp_server(
         Some(value) => McpProfile::from_token(value).context("invalid MCP profile")?,
         None => McpProfile::Full,
     };
-    let role = env
-        .var("AIDA_SESSION_ROLE")
-        .ok()
-        .map(|role| crate::canonical_role_name(role.trim()));
+    let role = crate::store_mutation_client::session_role(env)?;
     let stdin = io::stdin();
     let mut input = stdin.lock();
     let stdout = io::stdout();

@@ -94,3 +94,18 @@ fn mediated_mcp_initialization_and_notifications_have_no_registry_or_backend_set
     notification.id = None;
     assert!(mediated_mcp_response(&client, store, McpProfile::Full, None, &notification).is_none());
 }
+
+#[test]
+fn mediated_mcp_invalid_role_refuses_before_reading_stdio() {
+    use std::os::unix::ffi::OsStringExt;
+    let environment = aida_core::exec_context::Environment::from_pairs([
+        ("AIDA_MCP_PROFILE".into(), "full".into()),
+        (
+            "AIDA_SESSION_ROLE".into(),
+            std::ffi::OsString::from_vec(vec![0xff]),
+        ),
+    ]);
+    let error = run_mediated_mcp_server(&client(), &environment, Path::new("/missing-mcp-store"))
+        .unwrap_err();
+    assert_eq!(error.to_string(), "invalid session role");
+}

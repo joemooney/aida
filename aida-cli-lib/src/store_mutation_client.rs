@@ -47,42 +47,11 @@ impl Client {
     /// Read only the canonical preimage; never construct a cached backend. The
     /// host independently verifies identity, ownership and this exact revision.
     pub(crate) fn comment(&self, root: &std::path::Path, id: &str, content: &str) -> Result<Value> {
-        let sid = aida_core::object_store::canonical_spec_id(id);
-        let bytes = aida_core::db::redo::object_bytes(root, &sid)?;
+        let (sid, bytes) = canonical_preimage(root, id)?;
         let operation = CanonicalOperation::CommentAdd {
             spec_id: sid,
             expected_revision: aida_core::db::redo::hash(&bytes),
             content: content.into(),
-        };
-        self.mutate(Uuid::new_v4(), &operation)
-    }
-
-    /// Resolve comment prefixes against the exact revision sent to the host.
-    /// The host applies the UUID only after its revision compare succeeds.
-    pub(crate) fn change_comment(
-        &self,
-        root: &std::path::Path,
-        id: &str,
-        query: &str,
-        content: Option<&str>,
-    ) -> Result<Value> {
-        let sid = aida_core::object_store::canonical_spec_id(id);
-        let bytes = aida_core::db::redo::object_bytes(root, &sid)?;
-        let row = serde_yaml::from_slice(&bytes)?;
-        let comment_id = crate::rel_cards::resolve_comment_uuid(&row, query)?;
-        let expected_revision = aida_core::db::redo::hash(&bytes);
-        let operation = match content {
-            Some(content) => CanonicalOperation::CommentEdit {
-                spec_id: sid,
-                expected_revision,
-                comment_id,
-                content: content.into(),
-            },
-            None => CanonicalOperation::CommentDelete {
-                spec_id: sid,
-                expected_revision,
-                comment_id,
-            },
         };
         self.mutate(Uuid::new_v4(), &operation)
     }
@@ -93,8 +62,7 @@ impl Client {
         id: &str,
         fields: aida_core::db::canonical_mutation::EditFields,
     ) -> Result<Value> {
-        let sid = aida_core::object_store::canonical_spec_id(id);
-        let bytes = aida_core::db::redo::object_bytes(root, &sid)?;
+        let (sid, bytes) = canonical_preimage(root, id)?;
         self.mutate(
             Uuid::new_v4(),
             &CanonicalOperation::SpecEdit {
@@ -133,20 +101,12 @@ impl Client {
         }
     }
 
-    /// A caller retains this UUID after uncertain delivery. Retrying uses the
-    /// same serialized operation and UUID; it must never generate a fresh one.
+    /// Errors include the request UUID for host recovery. This client does not
+    /// retry uncertain delivery; a new invocation is a distinct mutation.
     pub(crate) fn mutate(&self, request_id: Uuid, operation: &CanonicalOperation) -> Result<Value> {
         operation.validate()?;
         let op = serde_json::to_value(operation)?;
         self.request(request_id, op["op"].as_str().unwrap(), op["data"].clone())
-    }
-
-    pub(crate) fn status(&self, request_id: Uuid) -> Result<Value> {
-        self.request(
-            Uuid::new_v4(),
-            "request_status",
-            json!({"request_id":request_id}),
-        )
     }
 
     fn request(&self, request_id: Uuid, op: &str, data: Value) -> Result<Value> {
@@ -164,6 +124,45 @@ impl Client {
         result.with_context(|| {
             format!("store service request {request_id}; do not repeat with a new request ID")
         })
+    }
+}
+
+/// Resolve the user-visible agreed ID without a backend or derived cache. Read
+/// candidate objects through redo's bounded, no-follow reader; the host
+/// compares these exact bytes under its writer lock. Never skip unreadable or
+/// ambiguous candidates and guess a target for a mutation.
+// trace:TASK-3223 | ai:codex
+fn canonical_preimage(root: &std::path::Path, id: &str) -> Result<(String, Vec<u8>)> {
+    use aida_core::{db::redo, object_store};
+    let requested = object_store::canonical_spec_id(id);
+    object_store::relative_object_path(&requested)?;
+    let mut selected = None;
+    for (sid, _) in object_store::list_objects_strict(&root.join("objects"))? {
+        let bytes = redo::object_bytes(root, &sid)?;
+        let row: aida_core::Requirement = serde_yaml::from_slice(&bytes)?;
+        let matches = [row.spec_id.as_deref(), row.agreed_id.as_deref()]
+            .into_iter()
+            .flatten()
+            .any(|value| aida_core::id_identity::same_id(value, &requested));
+        if matches {
+            ensure!(selected.is_none(), "Conflict: ambiguous canonical ID");
+            ensure!(
+                row.spec_id.as_deref() == Some(sid.as_str()),
+                "Conflict: canonical identity mismatch"
+            );
+            selected = Some((sid, bytes));
+        }
+    }
+    selected.context("canonical requirement not found")
+}
+
+/// Stakeholder filtering must distinguish a missing role from an invalid one.
+// trace:TASK-3223 | ai:codex
+pub(crate) fn session_role(env: &Environment) -> Result<Option<String>> {
+    match env.var("AIDA_SESSION_ROLE") {
+        Ok(role) => Ok(Some(crate::canonical_role_name(role.trim()))),
+        Err(aida_core::exec_context::EnvLookupError::Missing) => Ok(None),
+        Err(_) => anyhow::bail!("invalid session role"),
     }
 }
 
@@ -189,7 +188,7 @@ fn validate_result(op: &str, data: &Value, result: &Value) -> Result<()> {
                     .all(|b| b.is_ascii_digit() || (b'a'..=b'f').contains(&b)),
             "OutcomeUnknown"
         );
-        if matches!(op, "comment_add" | "comment_edit" | "comment_delete") {
+        if op == "comment_add" {
             ensure!(
                 result["comment_id"]
                     .as_str()
@@ -197,9 +196,6 @@ fn validate_result(op: &str, data: &Value, result: &Value) -> Result<()> {
                     .is_some(),
                 "OutcomeUnknown"
             );
-            if op != "comment_add" {
-                ensure!(result["comment_id"] == data["comment_id"], "OutcomeUnknown");
-            }
         } else {
             ensure!(
                 op == "spec_edit" && result["comment_id"].is_null(),
