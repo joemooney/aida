@@ -8,7 +8,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-07T22:12:32.196595160Z
-modified_at: 2026-11-08T16:25:20.650487013Z
+modified_at: 2026-11-08T16:33:15.922467176Z
 req_type: Task
 relationships:
 - rel_type: Child
@@ -41,6 +41,11 @@ comments:
   content: 'Implementation in the native TASK-3426 lane is complete pending lane-runner Rust validation. Split queue_cmd.rs into queue_cmd/mod.rs plus subcommand modules (including the Work arm and handle_queue_work under the binding ruling); existing queue_cmd item paths remain through re-exports. Added scripts/relocate-paths.py, conserved environment/liveness/glob budgets, relocated config/store/vendor inventories, and updated source-pinning tests. Token comparisons confirm all 218 non-dispatch function bodies and all 16 match-arm bodies are unchanged. Formatting, whitespace, relocation/planner/store-writer fixtures pass. Of 45 fast gates: 40 passed, 3 Cargo-backed steps deferred to host/launcher, 2 index-only scanners refuse untracked split modules in this read-only-Git seat; supplying the new source paths to those exact scanners passes both exact-ledger and HEAD-growth checks. No commit, push, PR, ship, review record or queue completion performed. Rust jobs: j20261108T161532510-2056159-0 (queue filter) running; j20261108T162414142-2111540-0 (source guards) queued.'
   created_at: 2026-11-08T16:25:20.650469571Z
   modified_at: 2026-11-08T16:25:20.650469571Z
+- id: 01a1bc01-c892-7b23-b400-a96c2a44af32
+  author: mcp
+  content: 'Final native validation blocker: corrected queue test job j20261108T161532510-2056159-0 exited 124 after 900 seconds, with no executed-test result. Runner additionally reported: seed: overlay-stale (the primary rewrote a file of generation agent-6c47403a3de099f9 in place; only this seat''s build is affected). Source-guard job j20261108T162414142-2111540-0 has started using that same generation and remains running; its result cannot yet be credited. untested=true for Rust. Host must refresh/reseed the lane build and rerun targeted queue/source-guard tests and full check-ci-fast after staging. Work match arm and handle_queue_work body were additionally checked byte-for-byte against HEAD and are identical. Latest relocation/glob/planner fixtures: 63 tests pass; store-writer fixtures: 42 pass. All source edits remain uncommitted; no code publication or queue completion performed. Refs publication subject declared through native aida ship as instructed for an incomplete acceptance handoff.'
+  created_at: 2026-11-08T16:33:15.922398662Z
+  modified_at: 2026-11-08T16:33:15.922398662Z
 history:
 - id: 01a1b812-66e1-7502-809a-7f261ca63ac4
   author: joe
