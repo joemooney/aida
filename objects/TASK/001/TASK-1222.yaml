@@ -28,7 +28,7 @@ priority: Low
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-09-13T22:07:45.944235Z
-modified_at: 2026-11-08T13:13:22.513434004Z
+modified_at: 2026-11-08T13:14:19.312757413Z
 req_type: Task
 tags:
 - cleanup
@@ -328,6 +328,13 @@ comments:
   modified_at: 2026-11-08T13:11:29.239971838Z
   session_id: 01a1b9af-8230-75d2-82f8-667491cc010a
   harness_version: 2.1.319 (Claude Code)
+- id: 01a1bb4b-a530-7832-a0de-601f5eabca78
+  author: dirtlab
+  content: 'Native pickup checkpoint at head 6bb37c076dc314d32a8b69ed623c09d8c004ba0a: latest reviewer explicitly requests no rework unless CI goes red. Verified run 42481511288 covers this exact head: lib-0 and cli-0 in progress; lib-1, cli-1, rest and gates queued; contracts passed. PR-3647 merge-hold-gate remains failed and requires separate authorized clearance. No terminal CI code failure is available to diagnose. Per HEADLESS WAITING RULE, exiting with this recorded wait state rather than waiting for a callback. Changed files: none; worktree clean. No new local tests executed (untested=true for this pickup); prior executed-test evidence remains in the preceding handoff. Host should request independent review once CI is terminal, or route concrete CI failures back for repair. Optional minor findings 2/3 remain non-blocking and unchanged per the review instruction. No commit, publication, cleanup, queue completion, hold clearance or review record performed.'
+  created_at: 2026-11-08T13:14:19.312757413Z
+  modified_at: 2026-11-08T13:14:19.312757413Z
+  session_id: 01a1bb4aba92
+  harness_version: codex-cli 0.167.0
 history:
 - id: 01a1b7cd-7751-7262-8ad1-f0f9d2ef6d4d
   author: joe
@@ -584,3 +591,9 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a1bb4b-2af4-7b80-93d8-8cdc9966ee3d
+  author: dirtlab
+  timestamp: 2026-11-08T13:13:48.020233876Z
+  session_id: 01a1bb4aba92
+  harness_version: codex-cli 0.167.0
+  changes: []
