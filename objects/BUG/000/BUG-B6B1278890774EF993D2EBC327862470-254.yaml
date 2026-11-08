@@ -8,12 +8,12 @@ description: |-
   Fix: order advisor direction by created_at. The newest advisor comment (brief or ruling) is THE task. An older ruling or brief is shown only as labelled background ('earlier direction, superseded by the newer one above'), or omitted. Keep the existing verdict-vs-brief standing logic.
 
   Acceptance: a unit test where an older ruling and a newer brief yield a prompt whose authoritative block is the brief, with the ruling marked superseded; a newer ruling over an older brief does the reverse; the existing BUG-057 tests still pass. LIGHT gate.
-status: InProgress
+status: Completed
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-07T22:15:44.102546116Z
-modified_at: 2026-11-07T22:42:09.534075920Z
+modified_at: 2026-11-08T05:39:11.377415644Z
 req_type: Bug
 comments:
 - id: 01a1b824-e456-76c0-bdf5-eb3cb2e21387
@@ -41,6 +41,20 @@ history:
   timestamp: 2026-11-07T22:25:45.653979138Z
   session_id: 01a1b81d53c1
   changes: []
+- id: 01a1b9aa-f549-7cd0-bbce-f6484a22143d
+  author: aida-auto-bump
+  timestamp: 2026-11-08T05:39:11.305660202Z
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Completed
+processing_record:
+- id: 01a1b9aa-f591-7882-b7ee-7a8d0af1ea18
+  timestamp: 2026-11-08T05:39:11.377410861Z
+  agent: aida
+  commit_sha: dd90f009f6168ebf48d8d5830920ae8e192cfdae
+  summary: 'All BUG-2489 acceptance met: lead_rework_prompt orders brief vs ruling by created_at, only the newest is binding, older direction labelled superseded; standing logic unchanged; all 7 CI test lanes green at f1c2aec; bug protocol (touches test file) met.'
+  review_verdict: approved
 filed_at:
   code_sha: 77bc9e4e4d38b978afaaf602dd8300419c320ea7
   branch: main
@@ -50,3 +64,7 @@ filed_at:
   vendor: claude
   session: 01a1b76b-2fe7-7dd2-88d0-356fc8d96d04
   harness_version: 2.1.319 (Claude Code)
+implementation_info:
+  implemented: false
+  completed_at: 2026-11-08T05:39:11.305653093Z
+  completion_sha: dd90f009f6168ebf48d8d5830920ae8e192cfdae
