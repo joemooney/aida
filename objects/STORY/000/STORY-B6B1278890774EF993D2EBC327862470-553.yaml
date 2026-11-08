@@ -8,7 +8,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-07T15:34:33.363448208Z
-modified_at: 2026-11-08T07:51:36.712341870Z
+modified_at: 2026-11-08T07:51:55.655811853Z
 req_type: Story
 comments:
 - id: 01a1b6a6-52e1-70a0-a9c1-d32888979ca5
@@ -494,6 +494,52 @@ comments:
   modified_at: 2026-11-08T07:48:38.427198315Z
   session_id: 01a1b8be-8170-7fb2-89ab-ecb4c6eee98c
   harness_version: 2.1.319 (Claude Code)
+- id: 01a1ba24-7c07-71e3-88f9-cb1e618ec918
+  author: dirtlab
+  content: |
+    Rework deployment guidance for the host-query proxy (Refs STORY-2630).
+
+    Against origin/main 08cbf8a3fe: AC1 primary-index link routing is present, but
+    selection of the proxy client remains a host deployment task. AC3 template
+    master/shared navigation guidance is present. AC4 missing/stale/unreachable
+    findings are present; this branch adds proxy snapshot age reporting. AC2 and
+    AC5 remain OPEN: this is a Refs slice, not a completing implementation.
+
+    This revision corrects the README to native-sandbox scope, uses the explicit
+    host-owned client for both existing and new seats, and records the missing
+    AIDA-contained filesystem admission. No index write grant is added.
+
+    Exact native-seat observations, 2026-11-08:
+    $ codegraph callers primary_index_link --json
+    /bin/bash: line 10: codegraph: command not found
+    $ aida doctor --lane-host --json
+    error: unexpected argument '--lane-host' found
+
+    Usage: aida doctor [OPTIONS] [COMMAND]
+
+    For more information, try '--help'.
+
+    Neither .codegraph nor /home/dirtlab/ai/aida/.codegraph exists. No successful
+    callers result or live read-only grant verification can be claimed here.
+    The seat's primary checkout is outside its writable roots, but that alone is
+    not AC2 evidence for an absent index or an AIDA-contained mount.
+
+    Host operator Joe owns: provisioning/indexing on the primary; installing the
+    reviewed host proxy outside seat write roots; delivering its absolute client
+    path to lanes (bare codegraph is still not routed); read-only admission for
+    client/descriptor/socket in AIDA-contained posture; running the contained-seat
+    callers query and candidate doctor --lane-host; pasting their exact successful
+    output and actual grant evidence into the PR body before re-review/completion.
+    Do not run index/init/sync inside the lane. Do not complete STORY-2630.
+
+    Review finding 5 remains open: serialized queries/backups can exceed doctor's
+    250ms probe deadline. Host-proxy follow-up must make status responsive under
+    load before final acceptance. This handoff does not claim to fix that finding.
+    CI at the new head is a host publication/review requirement, not a local claim.
+  created_at: 2026-11-08T07:51:55.655811853Z
+  modified_at: 2026-11-08T07:51:55.655811853Z
+  session_id: 01a1ba22e773
+  harness_version: codex-cli 0.167.0
 history:
 - id: 01a1b6a6-1e2f-7932-a527-6de38b6d8545
   author: joe
