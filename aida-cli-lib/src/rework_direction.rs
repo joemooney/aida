@@ -4,10 +4,10 @@
 //! (`Advisor ruling …`, BUG-021) and briefs (`ADVISOR BRIEF …`,
 //! `ADVISOR REWORK BRIEF round N …` /
 //! `REWORK BRIEF …`). The newest brief written after the last review verdict
-//! is the current task, whatever rulings came before or after it. The prompt
-//! puts it first and marks the older verdict's findings as superseded
-//! context. A brief recorded before the last verdict is shown as context
-//! that defers to the newer findings. Before this, a lane re-ran the old
+//! supersedes the older verdict's findings. The newest advisor brief or
+//! ruling leads; earlier advisor direction is labelled superseded background.
+//! A brief recorded before the last verdict is shown as context that defers
+//! to the newer findings. Before this, a lane re-ran the old
 //! verdict's work and skipped the merge-only brief. A rework PR that
 //! conflicts with main gets a "resolve conflicts first" task above
 //! everything else.
@@ -114,8 +114,9 @@ pub(crate) enum BriefStanding {
 }
 
 /// The advisor direction a rework pickup leads with: the newest brief and
-/// the newest ruling, chosen independently, so a ruling recorded after a
-/// post-verdict brief does not hide the brief.
+/// the newest ruling. Their timestamps determine which leads; the older
+/// comment remains visible only as superseded background. Brief standing
+/// against review findings is resolved independently of advisor ordering.
 #[derive(Debug, Clone, Copy, Default)]
 pub(crate) struct AdvisorDirection<'a> {
     pub brief: Option<(&'a aida_core::Comment, BriefStanding)>,
@@ -259,23 +260,34 @@ fn ruling_block(ruling: &aida_core::Comment) -> String {
     )
 }
 
+/// Earlier advisor direction retains its history without granting it task authority.
+// trace:BUG-2489 | ai:codex
+fn superseded_direction_block(label: &str, comment: &aida_core::Comment) -> String {
+    comment_block(
+        label,
+        comment,
+        "EARLIER DIRECTION, superseded by the newer advisor direction above. Background \
+         only; do not act on it where it differs from that direction",
+    )
+}
+
 /// Older review findings, shown for context only.
 fn superseded_block(findings: &str) -> String {
     format!(
-        "SUPERSEDED CONTEXT — older review verdict, recorded before the advisor brief above. \
-         Do not act on it where it differs from the brief:\n{}",
+        "SUPERSEDED CONTEXT — older review verdict, superseded by a later advisor brief. \
+         Follow the current advisor direction above where it differs from these findings:\n{}",
         findings.trim()
     )
 }
 
-/// Lead a pickup prompt with what the lane must do first: a conflict with
-/// main; then a post-verdict (or binding) brief; then the newest ruling;
-/// then, when a brief supersedes the verdict, the old findings as
-/// superseded context; then the pickup prompt. A pre-verdict brief is not a
-/// lead: it goes after the pickup prompt's authoritative findings, as older
-/// context, just above the final skill line, which stays last.
+/// Lead with a conflict with main, then the newest advisor direction.
+/// Older advisor direction is superseded background below the pickup body.
+/// A pre-verdict brief still defers to the findings and follows the body;
+/// a post-verdict brief still supersedes the findings even if a later ruling
+/// supersedes that brief. The final skill line stays last.
 /// Agent gates have a stricter verdict contract and get the prompt as-is.
 // trace:BUG-B6B1278890774EF993D2EBC327862470-057 | ai:claude
+// trace:BUG-2489 | ai:codex
 pub(crate) fn lead_rework_prompt(
     prompt: String,
     direction: &AdvisorDirection<'_>,
@@ -289,24 +301,38 @@ pub(crate) fn lead_rework_prompt(
     if let Some(c) = conflict {
         blocks.push(conflict_task(c));
     }
-    let leading_brief = direction
-        .brief
-        .filter(|(_, s)| *s != BriefStanding::PredatesVerdict);
-    if let Some((b, s)) = leading_brief {
-        blocks.push(brief_block(b, s));
+    let mut background = Vec::new();
+    // Equal timestamps prefer the ruling deterministically; never emit two
+    // binding advisor blocks for one pickup.
+    let ruling_leads = match (direction.brief, direction.ruling) {
+        (Some((brief, _)), Some(ruling)) => ruling.created_at >= brief.created_at,
+        (None, Some(_)) => true,
+        _ => false,
+    };
+    if ruling_leads {
+        blocks.push(ruling_block(direction.ruling.unwrap()));
     }
-    if let Some(r) = direction.ruling {
-        blocks.push(ruling_block(r));
+    if let Some((brief, standing)) = direction.brief {
+        if ruling_leads {
+            background.push(superseded_direction_block("ADVISOR BRIEF", brief));
+        } else if standing == BriefStanding::PredatesVerdict {
+            background.push(brief_block(brief, standing));
+        } else {
+            blocks.push(brief_block(brief, standing));
+        }
+    }
+    if !ruling_leads {
+        if let Some(ruling) = direction.ruling {
+            background.push(superseded_direction_block("ADVISOR RULING", ruling));
+        }
     }
     if let Some(f) = superseded_findings.filter(|_| direction.supersedes_verdict()) {
         blocks.push(superseded_block(f));
     }
-    let prompt = match direction.brief {
-        Some((b, s @ BriefStanding::PredatesVerdict)) => {
-            append_before_skill_line(prompt, &brief_block(b, s))
-        }
-        _ => prompt,
-    };
+    let mut prompt = prompt;
+    for block in background {
+        prompt = append_before_skill_line(prompt, &block);
+    }
     if blocks.is_empty() {
         return prompt;
     }
