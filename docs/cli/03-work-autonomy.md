@@ -167,11 +167,13 @@ The host merges any newer remote PR head before pushing, aborts on conflicts,
 and retains Refs trailers for a Refs PR. The live-owner check still applies.
 Other children must stop once their PR is open. Inside every standalone child,
 `aida pr ship` and `aida review record` refuse (the child carries
-`AIDA_STANDALONE_IMPLEMENTER`). Standalone implementers share a host-wide cap, defaulting to
+`AIDA_STANDALONE_IMPLEMENTER`). Standalone implementers share a host-wide cap,
+defaulting to
 `max(1, floor(nproc/2))`. Set `[queue] standalone_implementer_cap` in
-`~/.aida/host.toml` to override the project `.aida/config.toml` cap. A launch past the cap exits 34
-without creating a lease, worktree, queue row or status change. Do not `aida claim` the
-spec yourself before launching: the pickup refuses a spec whose lease is held.
+`~/.aida/host.toml` to override the project `.aida/config.toml` cap. A launch past
+the cap exits 34
+without creating a lease, worktree, queue row or status change. Do not
+`aida claim` the spec yourself before launching: the pickup refuses a spec whose lease is held.
 <!-- trace:STORY-1662 | ai:claude -->
 <!-- trace:TASK-2879 | ai:codex -->
 

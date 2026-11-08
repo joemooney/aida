@@ -656,7 +656,7 @@ fn write_slot(dir: &std::path::Path, pid: u32, spec: &str) {
     std::fs::create_dir_all(dir).unwrap();
     std::fs::write(
         dir.join(format!("{pid}.json")),
-        format!(r#"{{"pid":{pid},"start":"t","spec":"{spec}"}}"#),
+        serde_json::json!({"pid":pid,"start":"t","spec":spec,"pid_namespace":aida_core::pid_observer::current_pid_namespace()}).to_string(),
     )
     .unwrap();
 }
@@ -717,7 +717,7 @@ fn cap_ignores_a_launcher_whose_child_logged_its_final_result() {
     let slot_with_log = |pid: u32, spec: &str, log: &std::path::Path| {
         std::fs::write(
             dir.join(format!("{pid}.json")),
-            serde_json::json!({"pid": pid, "start": "t", "spec": spec, "log": log}).to_string(),
+            serde_json::json!({"pid": pid, "start": "t", "spec": spec, "log": log, "pid_namespace":aida_core::pid_observer::current_pid_namespace()}).to_string(),
         )
         .unwrap();
     };

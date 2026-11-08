@@ -827,15 +827,19 @@ configuration refuses admission. A zero project cap retains its default behavior
 a zero host override is an error. Lowering the cap prevents new starts and does
 not terminate existing lanes.
 
-`aida doctor --lane-host --json` reports version-1 local capacity data: cap,
+Capacity uses the distinct `--lane-capacity` flag; `--lane-host` is reserved
+for host readiness checks (STORY-2642).
+`aida doctor --lane-capacity --json` reports version-1 local capacity data: cap,
 source (`host`, `project`, or `cpu`), nproc, slot scope, occupied/free counts and
 reservation states. Without `--json` it prints the same observation for humans.
 It observes the standalone launcher's host-wide `~/.aida/standalone-implementers/`
 slot lock and records, shared across participating clones for the same host user;
 it neither initializes nor reaps slots. A busy writer or unreadable reservation
-returns an error rather than a false free-slot count. The printed slot scope
-identifies the shared state. This is a capacity
-observation, not readiness certification. Stop old launchers in every clone before
+returns an error rather than a false free-slot count. Reservations from an
+unobservable PID namespace (including unstamped legacy records in isolated seats) remain
+`unknown` and occupy capacity; admission never prunes them. The printed slot scope
+identifies the shared state. This is a capacity observation, not readiness
+certification. Stop old launchers in every clone before
 cutover: older binaries use checkout-local slots and cannot see the new shared
 state. The new binary refuses while a live legacy slot remains in the current
 project; it never removes that slot or terminates its owner.

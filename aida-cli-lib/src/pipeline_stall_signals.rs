@@ -95,11 +95,11 @@ pub(super) fn observe(
         details.push(format!("Implementer capacity unknown: {error:#}"));
     }
     let cap = cap.ok();
-    details.push(format!("Implementers: {count:?}, cap {cap:?}; queued work: {queued:?}; inspect aida queue list --for implementer; dispatch: aida queue work <SPEC>"));
+    details.push(format!("Project-local implementers: {count:?}, host-wide cap {cap:?}; queued work: {queued:?}; inspect aida queue list --for implementer; dispatch: aida queue work <SPEC>"));
     let under = Alarm::new(
         "under-cap",
         and(&[count.zip(cap).map(|(n, cap)| n < cap), queued]),
-        String::new(),
+        "Project-local count compared with host-wide cap; other clones may hold slots".into(),
     );
     let merge = last_merge(root).map(|time| (time.to_string(), time));
     let no_merge = aged("no-merge-90m", merge, now, 90 * 60_000, details);

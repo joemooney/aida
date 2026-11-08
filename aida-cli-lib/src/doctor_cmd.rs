@@ -10426,21 +10426,27 @@ mod story_462_doctor_tests {
     // trace:STORY-2660 | ai:codex
     #[test]
     fn host_capacity_doctor_flags_parse_and_refuse_mutation() {
-        let cli =
-            crate::command_registry::try_parse_from(["aida", "doctor", "--lane-host", "--json"])
-                .unwrap();
+        let cli = crate::command_registry::try_parse_from([
+            "aida",
+            "doctor",
+            "--lane-capacity",
+            "--json",
+        ])
+        .unwrap();
         let DoctorArgs {
-            lane_host, json, ..
+            lane_capacity,
+            json,
+            ..
         } = cli.command.registered::<DoctorArgs>()
         else {
             panic!("doctor args")
         };
-        assert!(lane_host && json);
+        assert!(lane_capacity && json);
         for flag in ["--heal", "--fix-sandbox", "--contradictions"] {
             assert!(crate::command_registry::try_parse_from([
                 "aida",
                 "doctor",
-                "--lane-host",
+                "--lane-capacity",
                 flag
             ])
             .is_err());
@@ -16137,7 +16143,7 @@ pub(crate) struct DoctorArgs {
     /// Read-only typed local lane capacity and reservations (not readiness admission).
     // trace:STORY-2660 | ai:codex
     #[clap(long, conflicts_with_all = ["heal", "fix", "fix_sandbox", "contradictions", "category"])]
-    pub lane_host: bool,
+    pub lane_capacity: bool,
 
     /// Permit riskier destructive fixes such as branch deletion.
     #[clap(long)]
@@ -16253,14 +16259,14 @@ fn run_doctor(
         contradictions,
         contradictions_limit,
         contradictions_offset,
-        lane_host,
+        lane_capacity,
         cmd,
     } = &args;
     // trace:STORY-2660 | ai:codex
-    if *lane_host {
+    if *lane_capacity {
         anyhow::ensure!(
             cmd.is_none(),
-            "--lane-host cannot be combined with a doctor subcommand"
+            "--lane-capacity cannot be combined with a doctor subcommand"
         );
         return crate::standalone_implementer::doctor_host_status(&find_project_root()?, *json);
     }

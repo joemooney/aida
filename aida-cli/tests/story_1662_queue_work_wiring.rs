@@ -307,7 +307,7 @@ fn host_capacity_doctor_reads_real_host_and_project_config() {
     let fx = fixture("exit 97", "[queue]\nstandalone_implementer_cap = 4\n");
     let observe = || {
         let out = aida(&fx.repo, &fx.home, &fx.bin)
-            .args(["doctor", "--lane-host", "--json"])
+            .args(["doctor", "--lane-capacity", "--json"])
             .output()
             .unwrap();
         assert!(out.status.success(), "{out:?}");
