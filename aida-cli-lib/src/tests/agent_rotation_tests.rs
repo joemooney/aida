@@ -558,3 +558,229 @@ fn the_supervisor_and_the_handoff_commands_share_one_seat() {
     );
     assert!(resolve_handoff_seat_from(None, None, None).is_err());
 }
+
+// trace:STORY-2653 | ai:codex
+#[test]
+fn turn_monitor_requires_notice_fresh_own_handoff_and_stop_boundary() {
+    use crate::seat_rotation::{write_handoff_by, HandoffWriter};
+    let dir = tempfile::tempdir().unwrap();
+    let mut child = std::process::Command::new("/bin/sleep")
+        .arg("20")
+        .spawn()
+        .unwrap();
+    let started = Utc::now();
+    let monitor = TurnMonitor::start(
+        dir.path().into(),
+        "advisor".into(),
+        "codex-advisor-1".into(),
+        1,
+        started,
+        child.id(),
+        Some("own".into()),
+    );
+    let writer = HandoffWriter {
+        handle: Some("codex-advisor-1".into()),
+        native_session_id: Some("own".into()),
+        generation: Some(1),
+        final_: false,
+    };
+    let payload = |event: &str, session: &str| {
+        serde_json::json!({"session_id":session,"hook_event_name":event}).to_string()
+    };
+    let alive = |child: &mut std::process::Child| {
+        std::thread::sleep(std::time::Duration::from_millis(100));
+        assert!(child.try_wait().unwrap().is_none());
+    };
+    // A notice without any handoff cannot end the session.
+    hook_turn(
+        dir.path(),
+        "advisor",
+        &payload("UserPromptSubmit", "own"),
+        true,
+        &writer,
+    )
+    .unwrap();
+    hook_turn(
+        dir.path(),
+        "advisor",
+        &payload("Stop", "own"),
+        false,
+        &writer,
+    )
+    .unwrap();
+    alive(&mut child);
+    hook_turn(
+        dir.path(),
+        "advisor",
+        &payload("UserPromptSubmit", "own"),
+        false,
+        &writer,
+    )
+    .unwrap();
+    // A Stop with no notice cannot initiate rotation, even with a handoff.
+    write_handoff_by(dir.path(), "advisor", "old", Utc::now(), &writer).unwrap();
+    hook_turn(
+        dir.path(),
+        "advisor",
+        &payload("Stop", "own"),
+        true,
+        &writer,
+    )
+    .unwrap();
+    alive(&mut child);
+    hook_turn(
+        dir.path(),
+        "advisor",
+        &payload("UserPromptSubmit", "own"),
+        true,
+        &writer,
+    )
+    .unwrap();
+    hook_turn(
+        dir.path(),
+        "advisor",
+        &payload("Stop", "own"),
+        false,
+        &writer,
+    )
+    .unwrap();
+    alive(&mut child); // Handoff predates notice.
+    let sibling = HandoffWriter {
+        native_session_id: Some("sibling".into()),
+        ..writer.clone()
+    };
+    write_handoff_by(dir.path(), "advisor", "sibling", Utc::now(), &sibling).unwrap();
+    hook_turn(
+        dir.path(),
+        "advisor",
+        &payload("Stop", "own"),
+        false,
+        &writer,
+    )
+    .unwrap();
+    alive(&mut child);
+    // Compaction disarms the notice; a later handoff alone still cannot rotate.
+    hook_turn(
+        dir.path(),
+        "advisor",
+        &payload("UserPromptSubmit", "own"),
+        false,
+        &writer,
+    )
+    .unwrap();
+    write_handoff_by(dir.path(), "advisor", "compacted", Utc::now(), &writer).unwrap();
+    hook_turn(
+        dir.path(),
+        "advisor",
+        &payload("Stop", "own"),
+        false,
+        &writer,
+    )
+    .unwrap();
+    alive(&mut child);
+    hook_turn(
+        dir.path(),
+        "advisor",
+        &payload("UserPromptSubmit", "own"),
+        true,
+        &writer,
+    )
+    .unwrap();
+    write_handoff_by(dir.path(), "advisor", "fresh", Utc::now(), &writer).unwrap();
+    alive(&mut child); // No Stop boundary since the fresh write.
+    hook_turn(
+        dir.path(),
+        "advisor",
+        &payload("Stop", "own"),
+        false,
+        &writer,
+    )
+    .unwrap();
+    let deadline = std::time::Instant::now() + std::time::Duration::from_secs(5);
+    let status = loop {
+        if let Some(status) = child.try_wait().unwrap() {
+            break status;
+        }
+        if std::time::Instant::now() >= deadline {
+            let _ = child.kill();
+            let _ = child.wait();
+            panic!("monitor failed to end fake vendor child");
+        }
+        std::thread::sleep(std::time::Duration::from_millis(20));
+    };
+    drop(monitor);
+    assert!(!status.success());
+    let records = read_handoff_log(dir.path(), "advisor");
+    let handoff = std::fs::read_to_string(dir.path().join(&records.last().unwrap().path)).unwrap();
+    assert!(handoff.contains("automatic rotation context"));
+    assert!(handoff.contains("Goal state unknown"));
+}
+
+// trace:STORY-2653 | ai:codex
+#[test]
+fn automatic_rotation_context_reports_goal_and_grant_process_without_environment_secrets() {
+    let dir = tempfile::tempdir().unwrap();
+    let transcript = dir.path().join("transcript.jsonl");
+    std::fs::write(&transcript, concat!(
+        "{\"type\":\"response_item\",\"payload\":{\"type\":\"function_call\",\"name\":\"functions.create_goal\",\"arguments\":\"ship the queue\"}}\n",
+        "{\"message\":{\"content\":[{\"type\":\"tool_use\",\"name\":\"update_goal\",\"input\":{\"status\":\"active\"}}]}}\n"
+    )).unwrap();
+    let mut child = std::process::Command::new("/bin/sleep")
+        .arg("20")
+        .env(
+            crate::gate::seat_authority::GRANT_ENV,
+            "rotation-test-grant",
+        )
+        .env("ROTATION_PRIVATE_SECRET", "must-not-appear")
+        .spawn()
+        .unwrap();
+    let context = rotation_context(
+        &serde_json::json!({"transcript_path":transcript}),
+        Some("rotation-test-grant"),
+    );
+    let _ = child.kill();
+    let _ = child.wait();
+    assert!(context.contains("ship the queue"), "{context}");
+    assert!(context.contains("update_goal"), "{context}");
+    assert!(
+        context.contains(&format!("PID {}", child.id())),
+        "{context}"
+    );
+    assert!(!context.contains("must-not-appear"));
+    assert!(!context.contains("rotation-test-grant"));
+}
+
+// trace:STORY-2653 | ai:codex
+#[test]
+fn rotation_evidence_refuses_fifo_symlinks_and_oversize_without_blocking() {
+    use std::os::unix::fs::symlink;
+    let dir = tempfile::tempdir().unwrap();
+    let target = dir.path().join("file");
+    std::fs::write(&target, "data").unwrap();
+    let link = dir.path().join("link");
+    symlink(&target, &link).unwrap();
+    assert!(bounded_rotation_file(&link, 100).is_err());
+    assert!(bounded_rotation_file(&target, 3).is_err());
+    let fifo = dir.path().join("fifo");
+    let name = std::ffi::CString::new(fifo.as_os_str().as_encoded_bytes()).unwrap();
+    assert_eq!(unsafe { libc::mkfifo(name.as_ptr(), 0o600) }, 0);
+    // A delayed writer releases a regressed blocking open, so failure is
+    // bounded and cannot wedge the test runner.
+    let writer = std::thread::spawn(move || {
+        use std::os::unix::fs::OpenOptionsExt;
+        std::thread::sleep(std::time::Duration::from_millis(300));
+        let _ = std::fs::OpenOptions::new()
+            .write(true)
+            .custom_flags(libc::O_NONBLOCK)
+            .open(fifo);
+    });
+    let started = std::time::Instant::now();
+    let refused = bounded_rotation_file(&dir.path().join("fifo"), 100).is_err();
+    let elapsed = started.elapsed();
+    writer.join().unwrap();
+    assert!(refused);
+    assert!(
+        elapsed < std::time::Duration::from_millis(250),
+        "blocking FIFO open: {elapsed:?}"
+    );
+}

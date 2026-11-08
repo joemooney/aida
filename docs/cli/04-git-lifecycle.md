@@ -541,7 +541,7 @@ process death from wall-clock age or a numeric PID absent in another view.
 **Key options (rationale only).**
 - `--reason` — capture *why* it's being reworked as a comment at rework time. Do this; future-you will want the audit trail.
 - `--ruling` — record an advisor ruling on the spec. The next `aida queue work` pickup prompt leads with the latest ruling (one you passed here, or a comment whose first line starts with `Advisor ruling` or `Ruling`), so a relaunched lane works from it instead of from the description alone.
-- `--work` (+ `--resume`, `--steal`, `--permission-mode`) — also launch (or resume) a session immediately, so rework-and-pickup is one step. The pass-through flags only matter with `--work`.
+- `--work` (+ `--resume`, `--permission-mode`) — also launch (or resume) a session immediately, so rework-and-pickup is one step. The pass-through flags only matter with `--work`. The retired `--steal` flag refuses explicitly; proven-dead owners are reclaimed automatically under ownership and session-end safeguards.
 - `--force` — bypass the terminal-status / already-in-progress guards. The escape hatch for "yes, I really am reopening this." It does not override another session's live claim on the spec: end that session first (`aida session end <id>`).
 
 **Gotchas.** `--no-pull` and the session flags are no-ops without `--work` — they only apply to the launched session.

@@ -134,7 +134,7 @@ pub(crate) fn check_pr_lease(main: &Path, lease: &SessionLease, pr_branch: &str)
         Ok(Some(record)) => record,
         Ok(None) => {
             return PrLeaseCheck::NotProvable(
-                "ownership record missing; migrate or rebind the session".into(),
+                "ownership record missing; on the host run `aida own migrate --dry-run`, then `aida own migrate --execute`".into(),
             )
         }
         Err(e) => {
@@ -170,9 +170,10 @@ pub(crate) fn check_pr_lease(main: &Path, lease: &SessionLease, pr_branch: &str)
         crate::ownership::OwnerVerdict::Dead { .. } => {}
     }
     let seat = read_seat(main, lease, pr_branch);
+    let mut remotely_covered = false;
     if matches!(&seat, SeatReading::Read { dirty, .. } if dirty.is_empty()) {
         match crate::session_end::remote_missing_commits_for_lease(main, lease) {
-            Ok(0) => {}
+            Ok(0) => remotely_covered = true,
             Ok(n) => {
                 return PrLeaseCheck::Refuse(format!(
                     "its seat has {n} commit(s) that no remote has"
@@ -192,6 +193,18 @@ pub(crate) fn check_pr_lease(main: &Path, lease: &SessionLease, pr_branch: &str)
         } if dirty.is_empty() && unpushed.is_empty() => pr_head_on_origin(main, pr_branch),
         _ => None,
     };
+    // Only non-PR implementer lanes may use all-remote coverage in place
+    // of a PR head. The ownership judge still decides tree safety.
+    // trace:STORY-2325 | ai:codex
+    let covered_without_pr = remotely_covered
+        && !lease.review_verb
+        && record
+            .holder
+            .as_ref()
+            .is_some_and(|h| h.role == crate::ownership::Role::Implementer)
+        && !lease.scope.to_ascii_lowercase().starts_with("pr-")
+        && !lease.scope.to_ascii_lowercase().starts_with("mr-")
+        && matches!(&record.phase, crate::ownership::Phase::Leased);
     let tree = match seat {
         SeatReading::Missing => crate::ownership::TreeReading::Missing,
         SeatReading::Unreadable(why) => crate::ownership::TreeReading::Unreadable(why),
@@ -206,9 +219,12 @@ pub(crate) fn check_pr_lease(main: &Path, lease: &SessionLease, pr_branch: &str)
         },
     };
     // The owner was judged above; the shared reclaim rule protects the tree.
-    match crate::ownership::reclaim_dead_tree(&tree, pr_head.as_deref(), &|a, b| {
-        is_ancestor(main, a, b)
-    }) {
+    match crate::ownership::reclaim_dead_tree(
+        &tree,
+        pr_head.as_deref(),
+        covered_without_pr,
+        &|a, b| is_ancestor(main, a, b),
+    ) {
         crate::ownership::Reclaim::EndBySafeRule => PrLeaseCheck::SafeToEnd,
         crate::ownership::Reclaim::Refuse(why) => PrLeaseCheck::Refuse(why),
         crate::ownership::Reclaim::Keep(why) => PrLeaseCheck::NotProvable(why),
@@ -242,10 +258,10 @@ pub(crate) fn end_action(
             LeaseEndAction::Bail(refusal_message(lease, pr_branch, reason))
         }
         PrLeaseCheck::Live => {
-            LeaseEndAction::Bail("ownership holder is alive; wait for voluntary handoff".into())
+            LeaseEndAction::Bail(format!("ownership holder is alive; wait for voluntary handoff or have its owner run `aida session end {}`", lease.id))
         }
         PrLeaseCheck::NotProvable(why) => {
-            LeaseEndAction::Bail(format!("ownership retained: {why}"))
+            LeaseEndAction::Bail(format!("ownership retained: {why}; inspect `aida session end {}`", lease.id))
         }
     }
 }
@@ -259,7 +275,23 @@ pub(crate) fn plan_lease_end(
     pr_branch: Option<&str>,
 ) -> LeaseEndAction {
     match pr_branch {
-        Some(pr_branch) => end_action(lease, pr_branch, &check_pr_lease(main, lease, pr_branch)),
+        Some(pr_branch) => {
+            let check = check_pr_lease(main, lease, pr_branch);
+            let action = end_action(lease, pr_branch, &check);
+            match action {
+                LeaseEndAction::Bail(mut message) if matches!(check, PrLeaseCheck::Refuse(_)) => {
+                    message.push_str(&crate::queue_cmd::scope_conflict_resume_hint(
+                        &lease.scope,
+                        &lease.id,
+                        crate::leases::lease_adoption_refusal(main, lease),
+                        None,
+                        lease.tree_kind == crate::seat_clone::TreeKind::Clone,
+                    ));
+                    LeaseEndAction::Bail(message)
+                }
+                action => action,
+            }
+        }
         None => LeaseEndAction::Bail("PR branch unknown; ownership retained".into()),
     }
 }
@@ -290,7 +322,7 @@ pub(crate) fn refusal_message(lease: &SessionLease, pr_branch: &str, reason: &st
     };
     format!(
         "lease {} ({}, seat {}) holds branch `{}`{} and its session has exited, but it was not \
-         ended automatically: {}. Commit and push the work to the PR, or discard it with \
+         ended automatically: {}. Commit and push the work on its branch, or discard it with \
          `aida session end {} --force --discard-unpushed`, then retry",
         lease.id,
         lease.role.as_deref().unwrap_or("(unset)"),
