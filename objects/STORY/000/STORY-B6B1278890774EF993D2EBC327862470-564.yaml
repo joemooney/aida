@@ -23,7 +23,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-07T19:59:26.079479Z
-modified_at: 2026-11-08T11:11:33.150965047Z
+modified_at: 2026-11-08T11:11:39.221251161Z
 req_type: Story
 comments:
 - id: 01a1b798-f0d4-73b1-93d5-f84581f2d190
@@ -169,6 +169,24 @@ comments:
   content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: Round 4 fixes check out and AC0/AC2/AC3/AC4 are met in code, but AC1 (lane-job cache hits on primary and dell1) still has no evidence or amendment; the advisor''s 02:18 server-isolation requirement is unproven, and CARGO_INCREMENTAL=0 reverses the agent profile''s measured incremental decision. Code CI at head is still pending.. It was punted on: blocked-dependency: Round-4 finding 1 is agreed and remains unresolved: AC1 requires two consecutive lane Cargo jobs with final sccache statistics and second-job Rust hits > 0 on both primary and dell1, or a recorded advisor amendment. This seat cannot obtain both-host evidence. Local findings 2 and 3 are fixed: reject relative sccache wrapper paths with regression cases and document the writable lane cache. Targeted resource-env and sccache tests each pass 3 executed tests. make check-ci-fast failed at its first Cargo gate because sccache could not write dep-info to the lane target (read-only filesystem). Preserve the publication veto and existing merge hold; host/operator action is required.. No triage reason was given.'
   created_at: 2026-11-08T11:11:33.150963656Z
   modified_at: 2026-11-08T11:11:33.150963656Z
+  session_id: 01a1b9af-8230-75d2-82f8-667491cc010a
+  harness_version: 2.1.319 (Claude Code)
+- id: 01a1badb-566a-7783-8e89-55760b73b648
+  author: joe
+  content: |-
+    REVIEW FINDINGS TO ADDRESS (PR #3657):
+    Verdict: CHANGES REQUESTED
+    Reviewed commit: 6e24a441e371
+    Recorded: 2026-11-08T09:41:48.436266919+00:00
+    Review comment: https://github.com/joemooney/aida/pull/3657#issuecomment-6719938983
+    Findings:
+    1. major/acceptance: AC1 is unverified at 6e24a441e371. It requires a second lane job on the same dependency set to show sccache hits (stats delta > 0) on the primary AND on dell1. STORY-2641 has only a direct-rustc smoke on host imac, and round 4's handoff confirms AC1 is open with no advisor amendment. A code change cannot close this. Fix: with a launcher built from this branch, run two consecutive 'aida lane job run' cargo jobs on each host and record both logs' 'lane sccache: final job statistics' output (second job Rust hits > 0) on the spec, or have the advisor record an amendment of AC1. Needs host/operator action; a contained seat cannot produce it.
+    2. major/acceptance: the advisor's 2026-11-08 02:18 requirement (a server started by a sandboxed lane is never reused by an unsandboxed build, and vice versa) is not proven and has a code path left open. Lane jobs look isolated (private /tmp UDS, SCCACHE_SERVER_PORT=0, asserted in story_2641_sccache_job_env_and_binds_are_opt_in_and_lane_only), but launch/resources.rs SandboxResources::for_seat returns Ok(None) for any seat without a recorded clone or cargo target, and spawn.rs then applies no RUSTC_WRAPPER. Cargo in that sandboxed seat still reads the host ~/.cargo/config.toml wrapper and can start or reuse the shared TCP server, which is the dell1 'Failed to write dep-info' mechanism. Round 4's seat hit the same error in make check-ci-fast (Read-only file system under the lane target). This also contradicts the resources.rs header 'Agent seats keep sccache off'. Fix: have the no-target path still declare the wrapper off (set RUSTC_WRAPPER='' with no target override) and add a test for it, plus a test or recorded evidence for lane/unsandboxed separation. If the advisor rules seat launches out of scope, record that on the spec and correct the header comment.
+    3. major/performance: resources.rs Sccache::env sets CARGO_INCREMENTAL=0 for every lane job on an opted-in host. That reverses Cargo.toml [profile.agent] incremental = true, whose comment records the measured cost (median 25s vs 159s for a one-line aida-cli-lib edit) and explicitly accepts that only third-party dependencies stay cached. Lane jobs are the seats' edit-and-retest path, so each retest in a lane can recompile aida-cli-lib from scratch; the changed profile setting is also likely to invalidate workspace-crate fingerprints from an incrementally built seed. Neither the spec nor OVERVIEW.md mentions this trade-off, and AC1 does not need it because dependencies are never incremental. Fix: remove CARGO_INCREMENTAL from Sccache::env, BUILD_ENV_ALLOWED and the launch_policy.rs list and update the test assertion; or keep it with measured two-job edit/retest timings on the spec and a sentence in OVERVIEW.md.
+    4. cosmetic/correctness: lane_job.rs lane_sccache_env reads config.toml first and falls back to config, but Cargo uses the extensionless config when both exist (with a warning). A host with both files and different wrappers opts in from the file Cargo ignores. Fix: read config first, then config.toml, matching Cargo.
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
+  created_at: 2026-11-08T11:11:39.114902078Z
+  modified_at: 2026-11-08T11:11:39.114902078Z
   session_id: 01a1b9af-8230-75d2-82f8-667491cc010a
   harness_version: 2.1.319 (Claude Code)
 history:
