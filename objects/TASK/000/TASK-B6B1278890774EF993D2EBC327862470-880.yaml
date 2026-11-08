@@ -8,7 +8,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-06T13:39:53.442026Z
-modified_at: 2026-11-08T16:15:42.018617079Z
+modified_at: 2026-11-08T16:24:37.645578437Z
 req_type: Task
 tags:
 - architecture
@@ -1152,6 +1152,15 @@ comments:
     Remaining blockers: advisor operation-policy ruling or explicitly authorized staged partial/follow-up ownership (finding 1); host aggregate check and human/advisor merge-hold clearance (2); advisor publication authorization/enforcement resolution (3). Full acceptance is unmet; TASK-3223 must stay open. Host must not publish simply because this turn contains code edits.
   created_at: 2026-11-08T16:15:42.018617079Z
   modified_at: 2026-11-08T16:15:42.018617079Z
+  session_id: 01a1bbe9ff10
+- id: 01a1bbf9-e00d-70d0-b801-a71556432313
+  author: joe
+  content: |
+    Round 22 terminal validation and host handoff: launcher job j20261108T160922891-2028088-0 exited 124 after its 900-second timeout while compiling aida-core/aida-cli-lib/aida-tui. No tests executed. untested=true for final-source Rust; no runtime-test pass is claimed. Full output: /home/joe/ai/aida/.aida/lane-jobs/01a1bbe9ff10/j20261108T160922891-2028088-0.out. The job is terminal, not awaiting a future notification. Static checks and PR metadata correction are recorded in the preceding round-22 checkpoint.
+
+    Final working-tree changes remain the four named files, uncommitted; final git diff --check passed. TASK-3223 remains Needs Attention under the explicit round-22 design-fork punt. No finding is disputed. Operation-policy/zero-unrouted acceptance, publication-under-punt authorization/enforcement, successful mediated resume admission, host make check-ci-fast, final-source Rust execution, current-head CI and human/advisor merge-hold clearance remain outstanding. Reviewed-head 4387ae4fad6e CI success is not a pass for these edits. The resume regression covers refusal while gated, not successful resumed-session containment. Keep production selection closed and TASK-3223 open. Do not auto-commit/push/publish these edits over the punt or hold. No aida ship declaration, commit, push, PR opening, queue done, review record or hold clearance was performed. PR #3661 metadata was corrected as explicitly requested; eventual squash body must be empty. Turn ended with a concrete reviewable patch and explicit blockers for the host/advisor.
+  created_at: 2026-11-08T16:24:37.645578437Z
+  modified_at: 2026-11-08T16:24:37.645578437Z
   session_id: 01a1bbe9ff10
 history:
 - id: 01a1b116-742d-73c0-9064-1933f11e4c38
