@@ -8,7 +8,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-07T15:34:33.363448208Z
-modified_at: 2026-11-08T00:30:58.058214176Z
+modified_at: 2026-11-08T00:32:21.945656489Z
 req_type: Story
 comments:
 - id: 01a1b6a6-52e1-70a0-a9c1-d32888979ca5
@@ -200,6 +200,55 @@ comments:
   modified_at: 2026-11-07T22:13:48.173922058Z
   session_id: 01a1b646-c67d-7b43-98ff-3604a53f5d1f
   harness_version: 2.1.319 (Claude Code)
+- id: 01a1b892-0db9-7812-becb-61e9733a85fd
+  author: joe
+  content: |
+    Round 6 rework for PR #3632. Per-change notes and prepared PR-body replacement follow. The native-seat contract prohibits PR mutation here; the host must apply the body before review. Findings 1 and 4 retain host publication/current-head CI steps; no finding is disputed.
+
+    This Refs slice gates codegraph doctor diagnostics on project intent and suppresses duplicate setup findings. Round 6 removes stale seat/publication handoff state from the tracked blocker note and records remaining acceptance ownership here and on STORY-2630.
+
+    Acceptance against locally available origin/main 2782389cd8ad9240672ea95d0f2209c7f193700b:
+
+    - AC1: routing is on main in codegraph::primary_index_link and worktree_gc::link_worktree_runtime_state. It links the primary index without copying it. Successful runtime use from a seat remains unverified; routing is not a read-only boundary.
+    - AC2: NOT MET. No codegraph-specific containment read grant was found in main's containment/launch code. The read-only client/WAL compatibility decision remains unresolved. This PR adds no grant.
+    - AC3: already on main: AGENTS.md template and shared lane navigation guidance, with prompt/template coverage.
+    - AC4: this PR requires an explicit .codegraph ignore rule in the invoking or primary checkout before doctor emits codegraph findings. Missing tool plus absent index yields one setup finding. Missing, >1h stale and unreachable probes remain covered.
+    - AC5: OPEN. No successful seat query is claimed.
+
+    AC2 and AC5 stay open under Refs STORY-2630. STORY-2630 owns the further slice: host provisioning, a supported WAL-safe read-only client, containment read admission and successful seat-call evidence. Do not use a completing trailer for this PR.
+
+    Seat evidence:
+
+    The prior attempt at f9293ad4c2c2, reported in review, was:
+
+    ```console
+    $ codegraph callers primary_index_link
+    /bin/bash: line 1: codegraph: command not found
+    ```
+
+    Round 6 reran from the native implementer seat at e4c245318625a15432f348643f177a2c1beca9ee with installed codegraph 1.6.0:
+
+    ```console
+    $ codegraph callers primary_index_link
+    ✗ callers failed: unable to open database file
+    $ aida doctor check codegraph
+    codegraph / unreachable: codegraph index unreachable from the seat: unable to open database file: Error code 14: Unable to open the database file
+    ```
+
+    The doctor line above abbreviates the seat path from the structured output; it reports one unreachable finding. The executable is now available, but the failed call does not satisfy AC5. The durable blocker note documents the client's writable-open/WAL behavior and why merely routing the index cannot satisfy AC2.
+
+    Validation and review gate:
+
+    - Round 6 changes documentation only; git diff --check passed. No new Rust test run is claimed.
+    - Prior round launcher job j20261108T000943538-2-0 executed cargo test --profile agent -p aida-cli-lib --lib -- codegraph::tests: 8 passed, 0 failed. This is prior-head unit evidence, not AC2/AC5 evidence or current-head CI.
+    - Prior full make sync-templates and make check-templates attempts did not pass: recursive Make attempted local Cargo and failed in sccache (exit 254). Direct template-hook, rustfmt and whitespace checks passed in that round. Host still needs both full template targets and the required fast gate.
+    - The round-6 read of PR #3632 at e4c245318625 showed only a QUEUED merge-hold-gate in run 42430109096. At reviewed f9293ad4c2c2, run 42429115078 was queued and merge-hold-gate failed for the supervised hold. Neither observation proves green CI.
+    - After publishing the new round-6 commit, the next reviewer must verify required CI is green at that exact new head before approving. The existing merge hold must follow its authorized clearance path; no hold or punt was cleared by this rework.
+
+    Native host handoff: commit the edited blocker note with the declared Refs subject, refresh/reconcile the branch as needed, publish, and replace this PR body using gh pr edit 3632 --body-file /tmp/story-2630-round6-pr-body.md. Confirm the saved PR body contains the acceptance status and seat evidence before requesting review. This seat leaves edits uncommitted and performs no PR mutation or queue completion.
+  created_at: 2026-11-08T00:32:21.945656489Z
+  modified_at: 2026-11-08T00:32:21.945656489Z
+  session_id: 01a1b89092af
 history:
 - id: 01a1b6a6-1e2f-7932-a527-6de38b6d8545
   author: joe
