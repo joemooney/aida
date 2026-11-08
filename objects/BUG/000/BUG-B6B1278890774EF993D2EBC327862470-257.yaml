@@ -13,12 +13,12 @@ description: |
   3. The BUG-1693 label rules (recorded vs cleared, train members' labels) behave exactly as today: same pass/block outcome for every label combination (table test over the existing check_labels cases).
   4. A push to a held PR sends no "run failed" notification for this check.
   5. A genuinely malformed label state (clearance with no recorded hold) still FAILS, since that is a real error.
-status: InProgress
+status: NeedsAttention
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-08T02:46:34.549817Z
-modified_at: 2026-11-08T20:19:02.772993317Z
+modified_at: 2026-11-08T20:21:59.348112663Z
 req_type: Bug
 tags:
 - area:ci
@@ -790,6 +790,14 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a1bcd3-2fb4-7c33-a39d-5b5b0d45c420
+  author: joe
+  timestamp: 2026-11-08T20:21:59.348130381Z
+  session_id: 01a1bcd062a8
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: NeedsAttention
 filed_at:
   code_sha: dc41ee8da2f44f88178936fc1a8e6cb7168a3de7
   branch: main
@@ -799,3 +807,8 @@ filed_at:
   vendor: claude
   session: 01a1b8be-8170-7fb2-89ab-ecb4c6eee98c
   harness_version: 2.1.319 (Claude Code)
+attention_reason:
+  category: blocked-dependency
+  detail: 'Round 11 findings 1 and 2 remain manual gates: exact-head CI run 42517183273 at 667022894549 is unfinished (one lane in progress, six queued); publisher run 42517183256 succeeded and posted merge-hold-gate=pending. AC1/ac798dd7, AC2/accb2afb and AC4/ac4d9581 still require Joe to run the pre-merge canary in docs/internal/testing/bug-2492-status-cutover.md: raw gh/web refusal with other gates settled, unchanged-SHA label-only pending-to-success and notification observations. Native implementer cannot perform experimental merges or human clearance. Finding 3 is fixed locally: hold_gate_state now requires every same-named row to pass, with both-order regression coverage and updated AGENTS.md/OVERVIEW.md. Edits remain uncommitted for the host; do not mark Completed. Publication declaration is Refs BUG-2492; this manual-gate punt remains a publication veto pending host/operator resolution.'
+  raised_by: implementer
+  raised_at: 2026-11-08T20:21:59.348112663Z
