@@ -14,13 +14,21 @@ priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-11-08T05:39:36.124981604Z
-modified_at: 2026-11-08T05:39:36.124981604Z
+modified_at: 2026-11-08T19:22:47.345876252Z
 req_type: Task
 tags:
 - carried-from:BUG-2489
 - finding-hash:2b4135e2
 - from-review:PR-3655
 - kind:carried-forward
+comments:
+- id: 01a1bc9c-fcb1-7c22-92d8-439a380b908e
+  author: joe
+  content: 'Advisor ruling: duplicate of TASK-3007 (finding-hash 2b4135e2), accepted there.'
+  created_at: 2026-11-08T19:22:47.345876252Z
+  modified_at: 2026-11-08T19:22:47.345876252Z
+  session_id: 01a1bc93-77a0-7740-8b03-df4e3e8d1df5
+  harness_version: 2.1.319 (Claude Code)
 history:
 - id: 01a1b9bb-4136-7610-9166-a094f31a6748
   author: joe
