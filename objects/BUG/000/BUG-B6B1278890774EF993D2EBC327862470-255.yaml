@@ -8,7 +8,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-08T00:02:55.282155Z
-modified_at: 2026-11-08T18:37:01.141141640Z
+modified_at: 2026-11-08T19:27:57.705260268Z
 req_type: Bug
 relationships:
 - rel_type:
@@ -594,6 +594,13 @@ comments:
   created_at: 2026-11-08T18:28:15.573277190Z
   modified_at: 2026-11-08T18:28:15.573277190Z
   session_id: 01a1b9af-8230-75d2-82f8-667491cc010a
+  harness_version: 2.1.319 (Claude Code)
+- id: 01a1bca1-b909-7152-ae46-69af97a20355
+  author: joe
+  content: 'Advisor ruling (TASK-3039 / review finding 1): the operator''s added scope (semantic merge, failed pull stops writes) and the retry-site finding are split to BUG-2501, as the reviewer offered. Advisor brief for #3652 (head 97247b86d4): fix CI lib-1 gate::mandate_gates::story_1888_gate_paths_tests::gate_orchestrators_reach_outside_only_through_their_frozen_inventory; merge current main; remove the per-change notes from AGENTS.md and OVERVIEW.md and put them in the PR body. Doctor double-parse accepted, doctor-only cost. LIGHT gate: that test plus make check-ci-fast.'
+  created_at: 2026-11-08T19:27:57.705260268Z
+  modified_at: 2026-11-08T19:27:57.705260268Z
+  session_id: 01a1bc93-77a0-7740-8b03-df4e3e8d1df5
   harness_version: 2.1.319 (Claude Code)
 history:
 - id: 01a1b923-982d-7512-93a5-cd08923b4f98
