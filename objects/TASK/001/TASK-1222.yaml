@@ -28,7 +28,7 @@ priority: Low
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-09-13T22:07:45.944235607Z
-modified_at: 2026-11-08T00:29:53.795963530Z
+modified_at: 2026-11-08T00:32:00.691339062Z
 req_type: Task
 tags:
 - cleanup
@@ -105,6 +105,12 @@ comments:
     No host worktrees/branches were cleaned up, and this seat performed no commit, push, PR creation, review record, ship or queue completion. Host publication/queue completion and the operator's reviewed --apply follow after exit/landing. Cache-overlay warnings recurred on successful final jobs; the preceding comment preserves the follow-up because draft-finding ID allocation was refused by read-only metadata. All completed test jobs exited 0 after executing their reported tests.
   created_at: 2026-11-08T00:29:53.795963530Z
   modified_at: 2026-11-08T00:29:53.795963530Z
+  session_id: 01a1b8210422
+- id: 01a1b891-bab3-7c70-8771-b4b635a65829
+  author: joe
+  content: 'Validation qualification: the initial j20261107T223320684-2-0 attempt exited 124 before executing tests; it is untested and is not included in the pass claims. Later executed-test jobs passed, culminating in the final 14/14 run j20261108T000755879-2-0. The interrupted indirect TUI check and Cargo-stub-blocked metadata fixture run are deferred, not passed. The 39-gate result is explicitly the non-Cargo subset; full make check-ci-fast and conditional post-commit checks remain for the host. Final inventory diff is exactly three new read_only records; existing records and operation mappings are unchanged.'
+  created_at: 2026-11-08T00:32:00.691339062Z
+  modified_at: 2026-11-08T00:32:00.691339062Z
   session_id: 01a1b8210422
 history:
 - id: 01a1b7cd-7751-7262-8ad1-f0f9d2ef6d4d
