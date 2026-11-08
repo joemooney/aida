@@ -12,7 +12,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-08T01:27:02.365575412Z
-modified_at: 2026-11-08T03:16:38.408073109Z
+modified_at: 2026-11-08T04:02:36.260623928Z
 req_type: Task
 tags:
 - carried-from:BUG-2487
@@ -27,6 +27,12 @@ comments:
   modified_at: 2026-11-08T03:05:59.444386597Z
   session_id: 01a1b8be-8170-7fb2-89ab-ecb4c6eee98c
   harness_version: 2.1.319 (Claude Code)
+- id: 01a1b952-8864-77d1-a1e0-08c235dad15e
+  author: joe
+  content: 'Implementation is prepared in the native seat, uncommitted: unpinned contained Codex argv now probes the selected native binary for version, root help, exec help and sandbox help, checks the value-taking -c/--config surface and generated flags, and refuses with path/version context. The verified ChatGPT pin retains fixture-only validation. Added a fake-binary regression covering missing root/exec flags, live exec flag refusal, cleared credentials/grants and pinned probe bypass; updated docs/cli/07-project-setup.md. Validation remains pending: the first two lane jobs timed out during compilation after 900 seconds and reported overlay-stale; the already queued rerun is compiling, and job j20261108T034926263-2-0 is queued with an explicit 1800-second timeout. No test has executed yet.'
+  created_at: 2026-11-08T04:02:36.260623928Z
+  modified_at: 2026-11-08T04:02:36.260623928Z
+  session_id: 01a1b9286562
 history:
 - id: 01a1b8dd-4eb0-7041-ba95-ef546f9a6965
   author: joe
