@@ -3,12 +3,12 @@ spec_id: BUG-b6b1278890774ef993d2ebc327862470-256
 agreed_id: BUG-2491
 title: Force-claim treats a dead lane's local slice-* tags as unpushed work, so every rework of a finished contained lane refuses until the seat is ended by hand
 description: 'Observed 4 times on 2026-11-07 (dell1: TASK-3424, TASK-3425, TASK-1214 seats; BUG-2488 a variant). ''aida queue work SPEC --force-claim'' refuses: ''retained lease L and private clone P: its tree has commits origin lacks: 1 commit(s) on refs/tags/slice-00-r1 ... (+46 more). Diff stat: no tracked changes.'' The branch HEAD is an ancestor of (or equal to) origin''s PR head; the only ''unpushed'' refs are the lane''s own slice-NN-rN checkpoint tags. The advisor must run ''aida session end L --force --discard-unpushed'' and relaunch each time; auto-rework cannot proceed unattended. Acceptance: (1) the unpushed-work check ignores refs/tags/slice-* (lane checkpoint tags) when every tagged commit is reachable from the pushed branch head or is the branch''s own history; tags pointing at commits NOT reachable from origin still count; (2) when the remaining evidence is clean, force-claim ends the retained finished lease itself and proceeds; (3) regression test with a seat clone carrying slice tags and a clean pushed branch. LIGHT gate.'
-status: InProgress
+status: NeedsAttention
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-08T00:05:07.175003336Z
-modified_at: 2026-11-08T03:01:29.164607619Z
+modified_at: 2026-11-08T03:08:54.230393121Z
 req_type: Bug
 comments:
 - id: 01a1b879-aeab-7d60-b2eb-2aee3e5a94bb
@@ -18,6 +18,20 @@ comments:
   modified_at: 2026-11-08T00:05:44.747163556Z
   session_id: 01a1b848-940b-7bd2-8acd-52e428b182b8
   harness_version: 2.1.319 (Claude Code)
+- id: 01a1b920-028f-7ac3-8ad2-1a224c9c069e
+  author: dirtlab
+  content: Added a live-sandbox regression for lightweight and annotated slice checkpoint tags on published branch history, with a stale clone tracking ref and clone HEAD behind origin. It also checks that an unpublished tag-only side history retains the clone, then removal of that tag permits guarded teardown. The first targeted lane test passed; final-source rerun is pending. Current shared reachability and force-claim retirement code appear to already cover the reported condition; no production behavior has been changed. A retained failing clone or exact ref/commit graph is needed if the refusal persists.
+  created_at: 2026-11-08T03:07:25.199103555Z
+  modified_at: 2026-11-08T03:07:25.199103555Z
+  session_id: 01a1b91a8e35
+  harness_version: codex-cli 0.167.0
+- id: 01a1b921-5e56-7740-ba08-7c1347dcbde6
+  author: dirtlab
+  content: 'Final-source validation completed: aida lane job j20261108T030656483-2-0 ran cargo test --profile agent -p aida-cli-lib --lib -- bug_2491: 1 passed, 0 failed, live sandbox test executed. git diff --check passed. Changes are a reachability-rule comment in seat_clone.rs and the slice-tag probe/guarded-teardown regression in tests/task_2053_seat_clone_lifecycle_tests.rs. No production behavior change, commits or publication. BUG-2491 remains punted for missing failing graph/deployed revision. IMPORTANT: aida punt saved Needs Attention but reported that its punt signal file could not be written (read-only filesystem); host must preserve the persisted punt as publication veto.'
+  created_at: 2026-11-08T03:08:54.230393121Z
+  modified_at: 2026-11-08T03:08:54.230393121Z
+  session_id: 01a1b91a8e35
+  harness_version: codex-cli 0.167.0
 history:
 - id: 01a1b91a-93cc-7372-8d80-82eb4086793e
   author: aida-session-start
@@ -26,6 +40,15 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a1b920-c857-71e3-8491-3bbbd104bb49
+  author: dirtlab
+  timestamp: 2026-11-08T03:08:15.831235727Z
+  session_id: 01a1b91a8e35
+  harness_version: codex-cli 0.167.0
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: NeedsAttention
 filed_at:
   code_sha: 2a7fe186bdcd718fa356e5e4d028a3b2ff13769d
   branch: main
@@ -35,3 +58,9 @@ filed_at:
   vendor: claude
   session: 01a1b848-940b-7bd2-8acd-52e428b182b8
   harness_version: 2.1.319 (Claude Code)
+attention_reason:
+  category: missing-context
+  detail: The described reachable slice-tag condition passes a live sandbox regression on this checkout; shared probe and force-claim retirement already implement that path. No production behavior change is justified without a retained failing clone or its exact peeled tag OIDs, branch/origin ancestry and deployed binary revision. Regression edits are retained uncommitted; final-source test rerun is pending.
+  lean: Compare the failing tag commits with the actual origin branch ancestry and verify the deployed binary revision before changing teardown safety.
+  raised_by: implementer
+  raised_at: 2026-11-08T03:08:15.831215732Z
