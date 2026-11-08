@@ -3,12 +3,12 @@ spec_id: TASK-b6b1278890774ef993d2ebc327862470-961
 agreed_id: TASK-3429
 title: 'Crate-split PR12: extract aida-mcp crate (mcp.rs + schema) above aida-cli-lib, handler injected into REGISTRY from the bin'
 description: 'Per SPIKE-713 section 7 row 12 and advisor ruling 1 (aida-mcp is the first crate). Acceptance: (1) new aida-mcp crate holds mcp.rs and its schema; widened cli-lib items (~99) are pub with re-exports keeping paths; (2) aida mcp handler registered from the binary into command_registry::REGISTRY; (3) MCP surface byte-identical: tools/list golden tests pass unchanged and the 72 tool names are unchanged; (4) the respawn identity check (mcp.rs:201-267) still reads the same binary; (5) measured on dell1: clean build no slower than run-to-run spread (ruling 2), with the cargo --timings numbers on the spec.'
-status: NeedsAttention
+status: Approved
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-07T23:40:15.306412624Z
-modified_at: 2026-11-08T18:51:31.034425224Z
+modified_at: 2026-11-08T19:04:43.038662312Z
 req_type: Task
 relationships:
 - rel_type: BlockedBy
@@ -341,6 +341,13 @@ comments:
   modified_at: 2026-11-08T18:42:43.693451323Z
   session_id: 01a1bc645291
   harness_version: codex-cli 0.167.0
+- id: 01a1bc8c-711e-7701-a6f1-968403eb2e42
+  author: joe
+  content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: Extraction is faithful and prior guard findings are fixed, but AC5 timings and the AC3 72-vs-58 ruling are still open, the completion trailer remains, CI has not finished at head, and the gate-drift ratchet lost the moved code.. It was punted on: ambiguous-spec: Review findings 1 and 2 remain unresolved: AC3 names 72 tools but the unchanged descriptor surface has 58 and no advisor correction is recorded; AC5 requires dell1 clean-build comparison/timings, while this host is disrad-dvp98b3puw. Findings 4 and 6 source-guard/documentation fixes are implemented and targeted launcher tests are underway. Finding 3: do not use a completion trailer or publish until acceptance triage; Git metadata is read-only here. Preserve existing publication vetoes.. No triage reason was given.'
+  created_at: 2026-11-08T19:04:43.038660963Z
+  modified_at: 2026-11-08T19:04:43.038660963Z
+  session_id: 01a1b9af-8230-75d2-82f8-667491cc010a
+  harness_version: 2.1.319 (Claude Code)
 history:
 - id: 01a1b862-7fc0-7e63-899e-5179ac0131ed
   author: joe
@@ -493,6 +500,15 @@ history:
   session_id: 01a1bc7cfd79
   harness_version: 2.1.319 (Claude Code)
   changes: []
+- id: 01a1bc8c-711e-7701-a6f1-9673d52e5d74
+  author: joe
+  timestamp: 2026-11-08T19:04:43.038649693Z
+  session_id: 01a1b9af-8230-75d2-82f8-667491cc010a
+  harness_version: 2.1.319 (Claude Code)
+  changes:
+  - field_name: status
+    old_value: NeedsAttention
+    new_value: Approved
 filed_at:
   code_sha: 2a7fe186bdcd718fa356e5e4d028a3b2ff13769d
   branch: main
@@ -502,16 +518,3 @@ filed_at:
   vendor: claude
   session: 01a1b848-940b-7bd2-8acd-52e428b182b8
   harness_version: 2.1.319 (Claude Code)
-attention_reason:
-  category: ambiguous-spec
-  detail: 'Review findings 1 and 2 remain unresolved: AC3 names 72 tools but the unchanged descriptor surface has 58 and no advisor correction is recorded; AC5 requires dell1 clean-build comparison/timings, while this host is disrad-dvp98b3puw. Findings 4 and 6 source-guard/documentation fixes are implemented and targeted launcher tests are underway. Finding 3: do not use a completion trailer or publish until acceptance triage; Git metadata is read-only here. Preserve existing publication vetoes.'
-  raised_by: implementer
-  raised_at: 2026-11-08T18:24:19.720797435Z
-failure_reason:
-  phase: reviewer
-  phase_index: 3
-  kind: verdict:request-changes
-  detail: Extraction is faithful and prior guard findings are fixed, but AC5 timings and the AC3 72-vs-58 ruling are still open, the completion trailer remains, CI has not finished at head, and the gate-drift ratchet lost the moved code.
-  recovery_hint: address the review findings, move TASK-3429 back to In Progress, and clear the PR hold only after approval
-  shelved_by: reviewer
-  shelved_at: 2026-11-08T18:51:31.034425224Z
