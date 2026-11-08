@@ -1,0 +1,29 @@
+id: 01a1bb7d-6f59-7900-8ff4-da3c3252b765
+spec_id: TASK-b6b1278890774ef993d2ebc327862470-999
+title: 'Non-blocking (docs): OVERVIEW.md:1688-1691 adds a per-change note (fixture refr…'
+description: |-
+  Non-blocking finding carried forward from an APPROVED review verdict on TASK-3463, which has since completed — recorded here so it keeps a queryable home once the verdict record stops being read.
+
+  Non-blocking (docs): OVERVIEW.md:1688-1691 adds a per-change note (fixture refreshed; operator must rerun conformance) that CLAUDE.md routes to the PR body or spec comment, and its conformance-codex-aida job name appears nowhere else in the tree; keep only the supported version and upgrade step.
+
+  PR: #3676
+  Reviewed sha: dab675d3e77985e34714a0f4f133aadc38e55957
+status: Draft
+priority: Medium
+owner: joe
+feature: Uncategorized
+created_at: 2026-11-08T14:08:42.329402111Z
+modified_at: 2026-11-08T14:08:42.329402111Z
+req_type: Task
+tags:
+- carried-from:TASK-3463
+- finding-hash:6c87fefd
+- from-review:PR-3676
+- kind:carried-forward
+filed_at:
+  code_sha: f6dec017d966720a692d3764f622f1ced5dba0b8
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: d68eb4ec071
+  vendor: claude
