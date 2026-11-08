@@ -8,7 +8,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-08T18:38:43.709546225Z
-modified_at: 2026-11-08T22:09:43.074543617Z
+modified_at: 2026-11-08T22:15:51.108472018Z
 req_type: Bug
 comments:
 - id: 01a1bc8c-5761-7180-b3a9-aa9efdae2409
@@ -110,6 +110,13 @@ comments:
   created_at: 2026-11-08T21:17:37.595968074Z
   modified_at: 2026-11-08T21:17:37.595968074Z
   session_id: 01a1bcfbcbfb
+  harness_version: codex-cli 0.167.0
+- id: 01a1bd3b-6e44-7683-8183-5616924db48f
+  author: dirtlab
+  content: 'Validated the current branch after its main merge: the BUG-2498 implementation and latest reviewer-requested revisions are already present. Added regression coverage for a malformed captured review-lease snapshot: confirmed process exit still transitions to Superseded, clears the snapshot and releases capacity, logs receipt refusal, and grants no checkout cleanup evidence. Changed file: aida-cli-lib/src/tests/task_1993_review_watch_tests.rs. Lane runner executed seat_clone::review_repickup_tests (2 passed), finished_lease_tests (11 passed), and bug2450_observed_setup_refusals_retry_without_consuming_a_review (1 passed). rustfmt and git diff --check pass. Initial invocation against aida-cli had no library target; corrected to aida-cli-lib and executed all tests above. Codegraph unavailable, confirmed by doctor; used rg. No implementation blockers. New edit remains uncommitted for host publication; queue completion remains with host.'
+  created_at: 2026-11-08T22:15:51.108472018Z
+  modified_at: 2026-11-08T22:15:51.108472018Z
+  session_id: 01a1bd3563f3
   harness_version: codex-cli 0.167.0
 history:
 - id: 01a1bc76-cd85-7f81-93f5-51ee03fadbe7
