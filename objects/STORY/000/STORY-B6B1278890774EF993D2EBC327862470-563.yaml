@@ -20,12 +20,12 @@ description: |
   3. A lane that passes behaves exactly as today, plus the marker.
   4. Tests cover: a gate fail followed by a fixed round, a fail that persists (publishes with fast_gate=fail), a timeout, and the Codex native-publication path.
   5. Advisor docs (rework-brief-craft step 6) say lanes are fast-gated by the host.
-status: NeedsAttention
+status: Approved
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-07T19:45:35.836129088Z
-modified_at: 2026-11-08T21:43:23.606497142Z
+modified_at: 2026-11-08T21:48:27.573249816Z
 req_type: Story
 tags:
 - docs:impacted
@@ -522,6 +522,12 @@ comments:
   modified_at: 2026-11-08T21:33:18.427602949Z
   session_id: 01a1bd0ca085
   harness_version: codex-cli 0.167.0
+- id: 01a1bd22-5a35-7b90-bbbe-804fe87610d4
+  author: joe
+  content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: AC2-AC5 verified from source and last round''s drain, marker and OVERVIEW findings are fixed, but the PR fails check-ci-fast''s help-golden guard (CI red), and a queued repair in a batch drain is retried as a transient error, so AC1''s fix round is not assured. PR CI pending; source review only.. It was punted on: blocked-dependency: Review finding 2 remains blocked: installed host runner refuses make check-ci-fast as Cargo-only. Host must update runner, validate a seeded committed head under bubblewrap with host-only results, and record marker/elapsed time including investigation of prior containment-conformance timeout. Findings 1, 3 and 4 fixed in uncommitted edits; 42 targeted fast-gate and 259 orchestrator tests passed. untested=true for required full gate; no unsandboxed fallback or publication authorized.. No triage reason was given.'
+  created_at: 2026-11-08T21:48:27.573247236Z
+  modified_at: 2026-11-08T21:48:27.573247236Z
+  session_id: 20abb7c3-8f9b-4a5e-b326-404921f3b450
 history:
 - id: 01a1b78d-2628-7313-92de-8804ac5f8f71
   author: aida-session-start
@@ -820,6 +826,14 @@ history:
   session_id: 01a1bd197482
   harness_version: 2.1.319 (Claude Code)
   changes: []
+- id: 01a1bd22-5a35-7b90-bbbe-8036407c6074
+  author: joe
+  timestamp: 2026-11-08T21:48:27.573237843Z
+  session_id: 20abb7c3-8f9b-4a5e-b326-404921f3b450
+  changes:
+  - field_name: status
+    old_value: NeedsAttention
+    new_value: Approved
 filed_at:
   code_sha: 7a18c0d52a6a4e0822befd4c810cfed16b04b74c
   branch: main
@@ -829,16 +843,3 @@ filed_at:
   vendor: claude
   session: 01a1b76b-2fe7-7dd2-88d0-356fc8d96d04
   harness_version: 2.1.319 (Claude Code)
-attention_reason:
-  category: blocked-dependency
-  detail: 'Review finding 2 remains blocked: installed host runner refuses make check-ci-fast as Cargo-only. Host must update runner, validate a seeded committed head under bubblewrap with host-only results, and record marker/elapsed time including investigation of prior containment-conformance timeout. Findings 1, 3 and 4 fixed in uncommitted edits; 42 targeted fast-gate and 259 orchestrator tests passed. untested=true for required full gate; no unsandboxed fallback or publication authorized.'
-  raised_by: implementer
-  raised_at: 2026-11-08T21:33:20.480217754Z
-failure_reason:
-  phase: reviewer
-  phase_index: 3
-  kind: verdict:request-changes
-  detail: AC2-AC5 verified from source and last round's drain, marker and OVERVIEW findings are fixed, but the PR fails check-ci-fast's help-golden guard (CI red), and a queued repair in a batch drain is retried as a transient error, so AC1's fix round is not assured. PR CI pending; source review only.
-  recovery_hint: address the review findings, move STORY-2640 back to In Progress, and clear the PR hold only after approval
-  shelved_by: reviewer
-  shelved_at: 2026-11-08T21:43:23.606497142Z
