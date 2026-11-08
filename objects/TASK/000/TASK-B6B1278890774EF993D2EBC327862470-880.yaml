@@ -8,7 +8,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-06T13:39:53.442026Z
-modified_at: 2026-11-08T18:51:44.146447859Z
+modified_at: 2026-11-08T18:51:50.955288423Z
 req_type: Task
 tags:
 - architecture
@@ -1244,6 +1244,24 @@ comments:
   content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: The two carried minors are fixed, no new code defect was found and CI is green apart from the merge hold, but zero-unrouted acceptance is still unmet and needs an advisor ruling; the merge hold and a repeat publication over a punt also remain.. It was punted on: design-fork: Review comment 85 finding 1 remains unresolved: binding zero-unrouted acceptance is unmet (3171 writer sites and 293 operations). Existing broker supports only comment_add and title/description/priority spec_edit; inventory v2 counts all operation rows as unresolved by construction. Need advisor operation policy: route remaining supported writers with approved typed host semantics, identify excluded host/private writers and TASK-3326 participants, or explicitly authorize refusal dispositions/staged scope. I do not dispute zero-unrouted acceptance and have not weakened the guard or enabled the profile. Fixed findings 5 and 6 in uncommitted docs/MCP description plus regression assertion; validation underway. Findings 3 and 4 need operator/advisor hold and publication-veto investigation; this seat cannot clear them. Do not publish over punt or existing holds. No publication declaration, commit, push, PR mutation or queue completion.. No triage reason was given.'
   created_at: 2026-11-08T18:51:44.146444652Z
   modified_at: 2026-11-08T18:51:44.146444652Z
+  session_id: 01a1b9af-8230-75d2-82f8-667491cc010a
+  harness_version: 2.1.319 (Claude Code)
+- id: 01a1bc80-a72f-7370-b184-312bd10da5ab
+  author: joe
+  content: |-
+    REVIEW FINDINGS TO ADDRESS (PR #3661):
+    Verdict: CHANGES REQUESTED
+    Reviewed commit: 114ee1f3865b
+    Recorded: 2026-11-08T18:40:23.570028930+00:00
+    Review comment: https://github.com/joemooney/aida/pull/3661#issuecomment-6725490737
+    Findings:
+    1. BLOCKING, needs an advisor ruling rather than more code (spec 'route every inventoried in-lane writer'; TASK-3223 comment 34 'zero unrouted writers for the mediated profile'). At 114ee1f3865b, python3 scripts/check-store-writers.py --profile mediated exits 1 with 3171 writers and 293 operations unresolved; mediated_blockers counts every operation row, so it cannot reach zero by construction. Only comment add and title/description/priority edit route; reads are refused, durable Git/event publication is outstanding, and mediated resume is only refusal-tested. The advisor must authorize this as a staged partial with named follow-up owners or define the operation policy, including whether an explicit early UnsupportedOperation counts as reconciled. selected_store_profile (launch/contained.rs:796) correctly stays closed.
+    2. BLOCKING until cleared by advisor or operator: aida:merge-hold is on this PR and merge-hold-gate fails at this head. This is the only failing check; all other CI jobs pass in run 42507182557. The reviewer cannot clear it.
+    3. PROCESS, needs advisor attention: TASK-3223 was punted to needs-attention at 10:52 -07:00 (latest spec comment), saying not to commit or publish over the veto and reporting 'could not write punt signal file: Read-only file system', yet 114ee1f3865b was committed at 10:53:03 -07:00 and is on the PR. publication_veto (aida-cli-lib/src/ship_from_seat.rs:567) reads only the signal and hold files, not the persisted NeedsAttention status, so a failed signal write fails open. This code is outside this PR's diff. Confirm whether this publication was authorized and repair the veto.
+    4. COSMETIC, carried: the PR body still says 'comment_add and title/description spec_edit'; this branch also routes priority. Update it before any publication.
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
+  created_at: 2026-11-08T18:51:50.447448043Z
+  modified_at: 2026-11-08T18:51:50.447448043Z
   session_id: 01a1b9af-8230-75d2-82f8-667491cc010a
   harness_version: 2.1.319 (Claude Code)
 history:
