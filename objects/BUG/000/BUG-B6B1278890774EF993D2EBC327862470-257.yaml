@@ -18,7 +18,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-08T02:46:34.549817Z
-modified_at: 2026-11-08T20:16:49.620610876Z
+modified_at: 2026-11-08T20:16:56.540661732Z
 req_type: Bug
 tags:
 - area:ci
@@ -374,6 +374,22 @@ comments:
   content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: No code change requested and no new merge-safety defect; last round''s release-message finding is fixed, but no CI has run at this head and AC1/AC2/AC4 still have no live evidence.. It was punted on: blocked-dependency: Latest review at ca90cc0ffbf6 requires exact-head green CI and operator canary evidence for AC1/AC2/AC4; neither is resolvable by native implementer code changes. Operator must execute docs/internal/testing/bug-2492-status-cutover.md and attach raw gh/web refusal, unchanged-SHA label-only clearance and notification observations. Corrected the non-blocking upgrade_release.rs diagnostic so hold/red-CI refusals are not called forge read failures; edit remains uncommitted. Shell fixtures passed (8 label states x 2 gates, 36 train cases, 1 projection test); bash syntax and git diff --check passed. No Rust test run for this message-only change. Keep spec open and retain Refs BUG-2492 title; this punt vetoes automatic publication pending host/operator resolution.. No triage reason was given.'
   created_at: 2026-11-08T20:16:49.620607102Z
   modified_at: 2026-11-08T20:16:49.620607102Z
+  session_id: 01a1bc93-77a0-7740-8b03-df4e3e8d1df5
+  harness_version: 2.1.319 (Claude Code)
+- id: 01a1bcce-9060-7152-943b-15282742c364
+  author: joe
+  content: |-
+    REVIEW FINDINGS TO ADDRESS (PR #3651):
+    Verdict: CHANGES REQUESTED
+    Reviewed commit: 667022894549
+    Recorded: 2026-11-08T20:01:06.299121964+00:00
+    Findings:
+    1. Blocker, wait state, no code change: at head 667022894549, CI run 42517183273 is pending with 0 jobs started and merge-hold-gate run 42517183256 (publish-merge-hold-status) is queued; the head has no merge-hold-gate commit status yet. No Rust test, shell fixture or publisher has executed at this head. The last green CI was 42484553858 at 0df36483bb9b, before two later head changes. Approval needs green CI at the exact head.
+    2. Blocker, operator action, no code change: AC1 (ac798dd7), AC2 (accb2afb) and AC4 (ac4d9581) are unverified. BUG-2492 has no raw 'gh pr merge' or web-UI refusal with other gates settled, no unchanged-SHA label-only pending-to-success, and no observation that failure mail stopped. docs/internal/testing/bug-2492-status-cutover.md step 2 requires the canary check before merging the implementation. Run the canary steps and attach the outputs to BUG-2492.
+    3. Minor, non-blocking, transitional, from source only: aida-cli-lib/src/ci_gate.rs:600 hold_gate_state takes the first row named merge-hold-gate. On a head carrying both a legacy check run and the new commit status, a legacy success row listed first reads as Green while the status is still pending, so the post-release wait ends early. GitHub still refuses the merge, so this is a confusing ship failure, not a bypass. Only pre-cutover heads are affected. Fix option: require every same-named row to pass.
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
+  created_at: 2026-11-08T20:16:56.416441712Z
+  modified_at: 2026-11-08T20:16:56.416441712Z
   session_id: 01a1bc93-77a0-7740-8b03-df4e3e8d1df5
   harness_version: 2.1.319 (Claude Code)
 history:
