@@ -8,7 +8,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-07T23:40:15.306412624Z
-modified_at: 2026-11-08T18:06:30.686610032Z
+modified_at: 2026-11-08T18:12:36.331149309Z
 req_type: Task
 relationships:
 - rel_type: BlockedBy
@@ -364,6 +364,12 @@ history:
   - field_name: status
     old_value: InProgress
     new_value: NeedsAttention
+- id: 01a1bc5c-bbbd-74f1-9462-04a7c845a37d
+  author: joe
+  timestamp: 2026-11-08T18:12:36.413860253Z
+  session_id: 01a1bc595755
+  harness_version: 2.1.319 (Claude Code)
+  changes: []
 filed_at:
   code_sha: 2a7fe186bdcd718fa356e5e4d028a3b2ff13769d
   branch: main
@@ -378,3 +384,11 @@ attention_reason:
   detail: 'Review findings 1 and 2 remain acceptance blockers: AC3 requires 72 unchanged MCP tools but the preserved shared descriptor surface contains 58 and no advisor ruling confirms the count; AC5 requires clean-build comparison and cargo --timings evidence on dell1, but this lane host is disrad-dvp98b3puw. Review remediation for findings 4-11 is implemented and targeted validation is underway. Do not publish or complete TASK-3429 until the count ruling and dell1 measurements are supplied; preserve all existing punt and hold vetoes.'
   raised_by: implementer
   raised_at: 2026-11-08T17:57:00.860299473Z
+failure_reason:
+  phase: reviewer
+  phase_index: 3
+  kind: verdict:request-changes
+  detail: Extraction is faithful and earlier ratchet findings are fixed, but AC5 timings and the AC3 72-vs-58 ruling are open, the completion trailer remains, seven source guards lost the moved MCP code, and CI has not run at head.
+  recovery_hint: address the review findings, move TASK-3429 back to In Progress, and clear the PR hold only after approval
+  shelved_by: reviewer
+  shelved_at: 2026-11-08T18:12:36.331149309Z
