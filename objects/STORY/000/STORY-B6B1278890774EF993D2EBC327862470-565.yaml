@@ -28,7 +28,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-07T19:59:40.192574Z
-modified_at: 2026-11-08T06:40:15.958060613Z
+modified_at: 2026-11-08T06:47:56.270148939Z
 req_type: Story
 comments:
 - id: 01a1b86c-54fb-76f0-b04b-0ed1c7c07cfb
@@ -163,6 +163,20 @@ comments:
   modified_at: 2026-11-08T06:38:49.629457694Z
   session_id: 01a1b8be-8170-7fb2-89ab-ecb4c6eee98c
   harness_version: 2.1.319 (Claude Code)
+- id: 01a1b9e9-e66e-7f13-8ae0-aa8e97442294
+  author: dirtlab
+  content: |
+    Advisor-scoped final CI repair: inspected completed CI run 42451876563 at ee2020bb8766e7d20becf72e4a79b1436a88611f. lib-0, cli-0, cli-1, rest, contracts and gates passed. lib-1 ran 7963 tests: 7962 passed and only story_2539_vendor_literal_ratchet failed, reporting handle_queue_work typed:HeadlessVendor measured 13 versus ledger 12. The aggregate Build failed accordingly.
+
+    Changed only aida-cli-lib/src/queue_cmd.rs: remove the redundant resume_target type annotation and let the existing recorded_resume assignment infer its type. Added the owning story trace. This restores the existing vendor-reference limit without changing the ledger, production preflight coverage, fixture policy or per-vendor preflight reuse.
+
+    Validation: lane job j20261108T064123912-2-0 exited 0; all 3 story_2539_vendor_literal_ratchet tests executed and passed. rustfmt --edition 2021 --check aida-cli-lib/src/queue_cmd.rs and git diff --check passed. untested=false.
+
+    Native publication declaration recorded: [AI:codex] fix(lane-host): remove redundant vendor type debt (Refs STORY-2642). Edits remain uncommitted. No commit, push, PR creation, queue completion, review recording or merge performed. Blocker: host must publish this fix and obtain four green test shards at the new head before re-review; current-head CI is not all green. Existing holds remain in force. No additional source changes are requested by the latest review.
+  created_at: 2026-11-08T06:47:56.270148939Z
+  modified_at: 2026-11-08T06:47:56.270148939Z
+  session_id: 01a1b9e2da0c
+  harness_version: codex-cli 0.167.0
 history:
 - id: 01a1b85d-3f02-70c2-a82d-cefccf97dc04
   author: aida-session-start
