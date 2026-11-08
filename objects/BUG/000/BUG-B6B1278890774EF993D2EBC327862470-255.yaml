@@ -8,7 +8,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-08T00:02:55.282155934Z
-modified_at: 2026-11-08T04:50:30.781757526Z
+modified_at: 2026-11-08T05:06:22.154247540Z
 req_type: Bug
 comments:
 - id: 01a1b91d-d20d-7930-ae4c-256520578a3d
@@ -42,6 +42,12 @@ comments:
   modified_at: 2026-11-08T04:16:05.606920720Z
   session_id: 01a1b8be-8170-7fb2-89ab-ecb4c6eee98c
   harness_version: 2.1.319 (Claude Code)
+- id: 01a1b98c-e94a-73e2-9bc1-c36d8d496be2
+  author: joe
+  content: 'Round 2 local patch (uncommitted native seat): findings 1/4 remove full-store commit scans, validate selected commit_paths worktree matches and staged blobs, use dirty porcelain paths for pending sync, and read staged blobs through one cat-file --batch process. Finding 2 adds report-only store-objects doctor findings with path/remediation and unit/CLI regressions; other categories retain tolerant loading. Updated invalid commit fixtures in child_store_commit, real_phase_driver_wiring_tests, roster sync, scaffolding, publication wrappers, and protocol CLI cleanup. Core bug_2490 run executed 4 tests: all passed (including 512-object batch with newline/bracket filenames). rustfmt and git diff --check passed. Additional targeted CI regression jobs are queued behind CLI-library compilation. Finding 3 remains explicitly punted for advisor policy approval or an advisor-authorized linked follow-up; no completion or publication is claimed.'
+  created_at: 2026-11-08T05:06:22.154247540Z
+  modified_at: 2026-11-08T05:06:22.154247540Z
+  session_id: 01a1b977c304
 history:
 - id: 01a1b923-982d-7512-93a5-cd08923b4f98
   author: aida-session-start
