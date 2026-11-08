@@ -9,12 +9,12 @@ description: |-
 
   PR: #3672
   Reviewed sha: e0ccdac2422d8f24d8a506059cd3ada37dd10203
-status: InProgress
+status: NeedsAttention
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-08T08:58:22.319212958Z
-modified_at: 2026-11-08T18:35:01.568459992Z
+modified_at: 2026-11-08T18:40:21.527152035Z
 req_type: Task
 tags:
 - carried-from:BUG-2495
@@ -72,6 +72,15 @@ history:
   session_id: 01a1bc6748b4
   harness_version: codex-cli 0.167.0
   changes: []
+- id: 01a1bc76-2417-78b0-a511-9f2c684dbaba
+  author: aida-orchestrator
+  timestamp: 2026-11-08T18:40:21.527175050Z
+  session_id: 01a1bc742220
+  harness_version: 2.1.319 (Claude Code)
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: NeedsAttention
 filed_at:
   code_sha: 5cbe14e5fc6be0d87709049b48f3b7eaeab77808
   branch: main
@@ -79,3 +88,11 @@ filed_at:
   aida_version: 0.16.0
   aida_build_sha: 08cbf8a3fe7
   vendor: claude
+failure_reason:
+  phase: reviewer
+  phase_index: 3
+  kind: verdict:request-changes
+  detail: Contained Codex posture-key refusal is bypassed by the attached -c=key=value form; generated default_permissions is also still replaceable
+  recovery_hint: address the review findings, move TASK-3015 back to In Progress, and clear the PR hold only after approval
+  shelved_by: reviewer
+  shelved_at: 2026-11-08T18:40:21.527152035Z
