@@ -436,7 +436,11 @@ class WorkCiTests(unittest.TestCase):
     def test_warm_history_bounds_new_inventory_and_exact_old_read(self):
         self.check_history_bounds(warm=True)
 
-    def check_history_bounds(self, warm):
+    # trace:TASK-3452 | ai:codex
+    def test_33_attempts_report_unverified_latest_result(self):
+        self.check_history_bounds(warm=False, total=33)
+
+    def check_history_bounds(self, warm, total=35):
         f = self.f
         f.poll()
         original = f.receipt()
@@ -445,12 +449,12 @@ class WorkCiTests(unittest.TestCase):
             f.cli(fresh, "pull")
         shas = {1: f.sha}
         values = []
-        for n in range(2, 36):
+        for n in range(2, total + 1):
             f.git(f.source, "commit", "--allow-empty", "-qm", f"source {n}")
             sha = f.git(f.source, "rev-parse", "HEAD").stdout.strip()
             shas[n] = sha
             value = dict(original, sha=sha, attempt=n)
-            if n == 2:
+            if n == 2 and total == 35:
                 value["jobs"] = [dict(original["jobs"][0], name="not-in-home")]
             value["digest"] = hashlib.sha256(json.dumps({k: v for k, v in value.items() if k != "digest"}, separators=(",", ":")).encode()).hexdigest()
             values.append(value)
@@ -473,16 +477,16 @@ class WorkCiTests(unittest.TestCase):
         start = time.monotonic()
         pulled = f.cli(fresh, "pull")
         self.assertLess(time.monotonic() - start, 30)
-        unverified = 2 if warm else 3
+        unverified = total - 32 - int(warm)
         self.assertIn(f"{unverified} unverified-history", pulled.stderr)
-        self.assertEqual(set(source_fetches()), set(shas[n] for n in range(4, 36)))
+        self.assertEqual(set(source_fetches()), set(shas[n] for n in range(total - 31, total + 1)))
         self.assertEqual(len(source_fetches()), 32)
         checkpoint = f.private(fresh) / "validated-tip"
         self.assertTrue(checkpoint.exists())
         state = json.loads(checkpoint.read_text())
         tip = f.git(f.private(fresh) / "worktree", "rev-parse", "HEAD").stdout.strip()
         self.assertEqual(state["tip"], tip)
-        self.assertEqual(state["verified_ci"].count("1"), 35 - unverified)
+        self.assertEqual(state["verified_ci"].count("1"), total - unverified)
         log.write_text("")
         rows = json.loads(f.cli(fresh, "ci", "read", "--json").stdout)
         self.assertEqual(sum(row["verification"] == "unverified-history" for row in rows), unverified)
@@ -490,17 +494,34 @@ class WorkCiTests(unittest.TestCase):
         # Even when all recent statuses are already handled, processing must
         # never promote old audit bytes into receipt authority implicitly.
         for value in [original, *values]:
-            if value["attempt"] >= 4 or (warm and value["attempt"] == 1):
+            if value["attempt"] >= total - 31 or (warm and value["attempt"] == 1):
                 marker = f.private(fresh) / f"ci-status-{value['attempt']}.json"
                 marker.write_text(value["digest"])
                 marker.chmod(0o600)
-        f.cli(fresh, "ci", "process")
+        # trace:TASK-3452 | ai:codex
+        processed = f.cli(fresh, "ci", "process")
+        reason = "outside the 32-attempt revalidation window"
+        command = f"aida intent ci read --attempt 1 --sha {shas[1]}"
+        if not warm:
+            self.assertIn(reason, processed.stdout)
+            self.assertIn(command, processed.stdout)
+        reported = json.loads(f.cli(fresh, "ci", "process", "--json").stdout)
+        self.assertEqual(len(reported["skipped"]), unverified)
+        cached = [row for index in range(json.loads((f.private(fresh) / "ci-skipped-results.json").read_text()))
+                  for row in json.loads((f.private(fresh) / f"ci-skipped-results-{index}.json").read_text())]
+        self.assertEqual(cached, reported["skipped"])
+        for row in reported["skipped"]:
+            self.assertEqual(row["reason"], reason)
+            self.assertEqual(row["command"], f"aida intent ci read --attempt {row['attempt']} --sha {row['sha']}")
         self.assertFalse(source_fetches())
         self.assertFalse(f.statuses)
         # Exact read revalidates only this old identity and persists its proof.
         old_attempt = 3 if warm else 1
         rows = json.loads(f.cli(fresh, "ci", "read", "--attempt", str(old_attempt), "--sha", shas[old_attempt], "--json").stdout)
         self.assertEqual([row["verification"] for row in rows], ["verified"])
+        cached = [row for index in range(json.loads((f.private(fresh) / "ci-skipped-results.json").read_text()))
+                  for row in json.loads((f.private(fresh) / f"ci-skipped-results-{index}.json").read_text())]
+        self.assertNotIn(old_attempt, [row["attempt"] for row in cached])
         self.assertEqual(source_fetches(), [shas[old_attempt]])
         log.write_text("")
         f.cli(fresh, "ci", "read", "--attempt", str(old_attempt), "--sha", shas[old_attempt])
@@ -511,12 +532,14 @@ class WorkCiTests(unittest.TestCase):
         state["validator"] = "different compiled validators"
         checkpoint.write_text(json.dumps(state))
         pulled = f.cli(fresh, "pull")
-        self.assertIn("3 unverified-history", pulled.stderr)
+        self.assertIn(f"{total - 32} unverified-history", pulled.stderr)
         self.assertEqual(len(source_fetches()), 32)
         log.write_text("")
         f.cli(fresh, "pull")
         self.assertFalse(source_fetches())
         self.assertFalse(f.statuses)
+        if total == 33:
+            return
         refused = f.cli(fresh, "ci", "read", "--attempt", "2", "--sha", shas[2], ok=False)
         self.assertNotEqual(refused.returncode, 0)
         self.assertNotIn("not-in-home", refused.stderr)

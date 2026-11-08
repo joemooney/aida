@@ -900,6 +900,10 @@ impl Intake {
                 }
             }
         }
+        // trace:TASK-3452 | ai:codex
+        if let Some(snapshot) = self.ci_snapshot.borrow().as_ref() {
+            crate::ci_relay::record_skipped(self, &files, &snapshot.requests)?;
+        }
         Ok(files)
     }
 

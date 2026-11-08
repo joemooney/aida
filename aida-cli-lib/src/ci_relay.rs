@@ -812,6 +812,101 @@ fn status_observed(e: &Endpoint, r: &Receipt) -> Result<bool> {
     }
     Ok(!matching.is_empty())
 }
+// Display-only evidence; this never grants receipt or publication authority.
+// trace:TASK-3452 | ai:codex
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub(crate) struct SkippedAttempt {
+    pub sha: String,
+    pub attempt: u32,
+    pub reason: String,
+    pub command: String,
+}
+impl SkippedAttempt {
+    pub(crate) fn message(&self) -> String {
+        format!(
+            "CI SHA {} attempt {}: {}; run `{}`",
+            self.sha, self.attempt, self.reason, self.command
+        )
+    }
+}
+const SKIPPED: &str = "ci-skipped-results.json";
+
+// Refresh alongside the validated local inventory, including exact reads.
+pub(super) fn record_skipped(
+    intake: &Intake,
+    files: &BTreeMap<String, Vec<u8>>,
+    requests: &BTreeMap<u32, String>,
+) -> Result<Vec<SkippedAttempt>> {
+    let mut latest = BTreeMap::new();
+    for (n, sha) in requests {
+        latest.insert(sha, n);
+    }
+    let mut skipped = Vec::new();
+    for (path, bytes) in files
+        .iter()
+        .filter(|(path, _)| path.starts_with("ci-results/"))
+    {
+        let r: Receipt = serde_json::from_slice(bytes)?;
+        if !intake.ci_verified(path) && latest.get(&r.sha) == Some(&&r.attempt) {
+            skipped.push(SkippedAttempt {
+                command: format!(
+                    "aida intent ci read --attempt {} --sha {}",
+                    r.attempt, r.sha
+                ),
+                sha: r.sha,
+                attempt: r.attempt,
+                reason: "outside the 32-attempt revalidation window".into(),
+            });
+        }
+    }
+    // Keep each display-cache file below Private's 64-KiB bound even
+    // when a long retained history has many distinct pending SHAs.
+    let old_parts: usize = intake
+        .private
+        .read(SKIPPED)?
+        .and_then(|bytes| serde_json::from_slice(&bytes).ok())
+        .unwrap_or(0);
+    let parts = skipped.len().div_ceil(100);
+    for (index, rows) in skipped.chunks(100).enumerate() {
+        intake.private.write(
+            &format!("ci-skipped-results-{index}.json"),
+            &serde_json::to_vec(rows)?,
+        )?;
+    }
+    intake
+        .private
+        .write(SKIPPED, &serde_json::to_vec(&parts)?)?;
+    for index in parts..old_parts.min(82) {
+        intake
+            .private
+            .remove(&format!("ci-skipped-results-{index}.json"))?;
+    }
+    Ok(skipped)
+}
+
+pub(crate) fn awaiting_skipped(root: &Path) -> Vec<SkippedAttempt> {
+    let read = || -> Result<Vec<SkippedAttempt>> {
+        let path = aida_core::allocation_authority::common_dir(root)?
+            .join("aida-intake")
+            .join(SKIPPED);
+        let bytes = crate::observation_envelope::read_bounded(&path, 65536)?;
+        let parts: usize = serde_json::from_slice(&bytes)?;
+        if parts > 82 {
+            bail!("Invalid CI display cache size");
+        }
+        let mut rows = Vec::new();
+        for index in 0..parts {
+            let bytes = crate::observation_envelope::read_bounded(
+                &path.with_file_name(format!("ci-skipped-results-{index}.json")),
+                65536,
+            )?;
+            rows.extend(serde_json::from_slice::<Vec<SkippedAttempt>>(&bytes)?);
+        }
+        Ok(rows)
+    };
+    read().unwrap_or_default()
+}
+
 fn process(intake: &Intake, p: &Profile, json_format: bool) -> Result<()> {
     intake.sync()?;
     let files = intake.files()?;
@@ -823,6 +918,17 @@ fn process(intake: &Intake, p: &Profile, json_format: bool) -> Result<()> {
             .and_modify(|old| *old = (*old).max(*n))
             .or_insert(*n);
     }
+    let skipped = record_skipped(intake, &files, &snapshot.requests)?;
+    let report = |message: String| {
+        if json_format {
+            println!("{}", json!({"message": message, "skipped": skipped}));
+        } else {
+            for item in &skipped {
+                println!("{}", item.message());
+            }
+            println!("{message}");
+        }
+    };
     for (path, bytes) in files
         .iter()
         .filter(|(path, _)| path.starts_with("ci-results/"))
@@ -856,10 +962,10 @@ fn process(intake: &Intake, p: &Profile, json_format: bool) -> Result<()> {
         if status_observed(endpoint, &r)? {
             intake.private.write(&marker, r.digest.as_bytes())?;
             intake.private.remove(&pending)?;
-            output(
-                json_format,
-                format!("CI attempt {}: native status reconciled", r.attempt),
-            );
+            report(format!(
+                "CI attempt {}: native status reconciled",
+                r.attempt
+            ));
             return Ok(());
         }
         if intake.private.read(&pending)?.is_some() {
@@ -887,16 +993,10 @@ fn process(intake: &Intake, p: &Profile, json_format: bool) -> Result<()> {
         )?;
         intake.private.write(&marker, r.digest.as_bytes())?;
         intake.private.remove(&pending)?;
-        output(
-            json_format,
-            format!("CI attempt {}: native status published", r.attempt),
-        );
+        report(format!("CI attempt {}: native status published", r.attempt));
         return Ok(());
     }
-    output(
-        json_format,
-        "CI intake: no unprocessed current results".to_string(),
-    );
+    report("CI intake: no unprocessed current results".to_string());
     Ok(())
 }
 fn probe(intake: &Intake, root: &Path, sha: &str) -> Result<()> {
@@ -1024,6 +1124,8 @@ pub(crate) fn run(intake: &Intake, command: &CiCommand, json_format: bool) -> Re
                     .get(path)
                     .context("No result for requested attempt/SHA")?;
                 intake.verify_ci_read(path, bytes)?;
+                let snapshot = Snapshot::load(intake)?;
+                record_skipped(intake, &files, &snapshot.requests)?;
             }
             let rows: Vec<_> = files.iter().filter(|(path, _)| path.starts_with("ci-results/")
                 && requested.as_ref().is_none_or(|p| p == *path))
@@ -1052,6 +1154,40 @@ pub(crate) fn run(intake: &Intake, command: &CiCommand, json_format: bool) -> Re
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    // trace:TASK-3452 | ai:codex
+    #[test]
+    fn task3452_history_window_reports_skipped_attempts() {
+        let executable = std::env::current_exe().unwrap();
+        let binary = executable.parent().unwrap().parent().unwrap().join("aida");
+        assert!(
+            binary.is_file(),
+            "build the CLI in this profile before running this regression"
+        );
+        let script = Path::new(env!("CARGO_MANIFEST_DIR")).join("../tests/test_work_ci_relay.py");
+        let mut command = std::process::Command::new("python3");
+        command
+            .arg(script)
+            .args([
+                "WorkCiTests.test_33_attempts_report_unverified_latest_result",
+                "WorkCiTests.test_cold_history_bounds_inventory_and_exact_old_read",
+                "WorkCiTests.test_warm_history_bounds_new_inventory_and_exact_old_read",
+            ])
+            .env("AIDA_TEST_BIN", binary);
+        let (status, stdout, stderr) = aida_core::transport_policy::bounded_with_stderr(
+            command,
+            &[],
+            1024 * 1024,
+            std::time::Instant::now() + Duration::from_secs(480),
+        )
+        .unwrap();
+        assert!(
+            status.success(),
+            "{}\n{}",
+            String::from_utf8_lossy(&stdout),
+            String::from_utf8_lossy(&stderr)
+        );
+    }
     fn repository(yaml: &str, path: &str) -> (tempfile::TempDir, String) {
         let temp = tempfile::tempdir().unwrap();
         git(temp.path(), &["init", "-q", "--template=", "-b", "main"]).unwrap();
