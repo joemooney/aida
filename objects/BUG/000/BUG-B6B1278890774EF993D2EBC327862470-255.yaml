@@ -2,455 +2,597 @@ id: 01a1b877-18b2-7291-8b2d-abf906cc89d3
 spec_id: BUG-b6b1278890774ef993d2ebc327862470-255
 agreed_id: BUG-2490
 title: 'Store commit path commits git conflict markers: an autostash re-apply conflict in .aida-store is committed by the contained-session store commit, breaking every command that loads the object'
-description: 'Observed 2026-11-07 17:00 MST: local .aida-store commit 7124c0f (''reviewer: commit 2 store changes from the contained session'') contained ''<<<<<<< Updated upstream / ======= / >>>>>>> Stashed changes'' in objects/STORY/000/STORY-B6B1278890774EF993D2EBC327862470-565.yaml (modified_at only). Every store load then failed: ''Failed to parse .../STORY-...-565.yaml'' (aida queue rework, aida push). The advisor hand-fixed it in c02902bd108 before it reached origin. Cause: the store worktree inherits the operator''s global rebase.autoStash=true / merge.autoStash=true; a pull over a dirty store tree re-applied the autostash with a conflict (the stash stays in the list as stash@{0} autostash), and the contained-session store commit then staged and committed the markered file. Acceptance: (1) every git invocation on the store worktree passes -c rebase.autoStash=false -c merge.autoStash=false (or the store worktree config pins them false), so no autostash ever touches the store; (2) the store commit path refuses to commit any object that does not parse, or that contains conflict markers, naming the file; unmerged paths also refuse; (3) a regression test reproduces the autostash-conflict sequence and asserts refusal; (4) aida doctor flags a store object with conflict markers. LIGHT gate.'
+description: 'Observed 2026-11-07 17:00 MST: local .aida-store commit 7124c0f (''reviewer: commit 2 store changes from the contained session'') contained ''<<<<<<< Updated upstream / ======= / >>>>>>> Stashed changes'' in objects/STORY/000/STORY-B6B1278890774EF993D2EBC327862470-565.yaml (modified_at only). Every store load then failed: ''Failed to parse .../STORY-...-565.yaml'' (aida queue rework, aida push). The advisor hand-fixed it in c02902bd108 before it reached origin. Cause: the store worktree inherits the operator''s global rebase.autoStash=true / merge.autoStash=true; a pull over a dirty store tree re-applied the autostash with a conflict (the stash stays in the list as stash@{0} autostash), and the contained-session store commit then staged and committed the markered file. Acceptance: (1) every git invocation on the store worktree passes -c rebase.autoStash=false -c merge.autoStash=false (or the store worktree config pins them false), so no autostash ever touches the store; (2)
+  the store commit path refuses to commit any object that does not parse, or that contains conflict markers, naming the file; unmerged paths also refuse; (3) a regression test reproduces the autostash-conflict sequence and asserts refusal; (4) aida doctor flags a store object with conflict markers. LIGHT gate.'
 status: NeedsAttention
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
-created_at: 2026-11-08T00:02:55.282155934Z
-modified_at: 2026-11-08T15:08:05.158772048Z
+created_at: 2026-11-08 00:02:55.282155+00:00
+modified_at: 2026-11-08 15:08:05.158772+00:00
 req_type: Bug
 relationships:
 - rel_type:
     custom: implemented-by
   target_id: 01a1b990-2990-7a23-8f29-266f8aa13d44
-  created_at: 2026-11-08T05:10:57.072407006Z
+  created_at: 2026-11-08 05:10:57.072407+00:00
   created_by: joe
 comments:
 - id: 01a1b91d-d20d-7930-ae4c-256520578a3d
   author: joe
   content: 'Same root cause seen on dell1 2026-11-07 20:01: dell1''s store had 8 unpushed commits (lane comments/status on STORY-2642, TASK-3048, TASK-3428, STORY-2571, FAQ-151) and was 246 behind; every ''aida db sync --pull'' failed with ''could not apply eccd89bb1d'' (status/modified_at/history hunks), and lanes printed ''proceeding with local view'', so dell1 lanes worked from a stale store for ~2.5h and their store writes never reached origin. The advisor resolved it by hand with a semantic 3-way merge of each conflicted object (scalars: upstream; comments/history: union by id, sorted by timestamp; script at dell1:~/store-resolve.py), then pushed. Fix scope for this bug should include: a semantic merge for store objects (git merge driver or in-process merge on pull) so concurrent edits to one spec from two nodes never conflict, and a pull failure must stop store writes instead of proceeding on a local view.'
-  created_at: 2026-11-08T03:05:01.709434088Z
-  modified_at: 2026-11-08T03:05:01.709434088Z
+  created_at: 2026-11-08 03:05:01.709434+00:00
+  modified_at: 2026-11-08 03:05:01.709434+00:00
   session_id: 01a1b8be-8170-7fb2-89ab-ecb4c6eee98c
   harness_version: 2.1.319 (Claude Code)
 - id: 01a1b95e-d3ed-7c50-aea2-c0eef5790dda
   author: joe
   content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: Autostash pin, staged/unmerged refusal and regression test are sound, but every store commit now parses the whole store, doctor aborts instead of flagging, and the operator-added scope (semantic store merge; pull failure must stop store writes) is unaddressed. CI still running at review time.. No triage reason was given.'
-  created_at: 2026-11-08T04:16:02.029909765Z
-  modified_at: 2026-11-08T04:16:02.029909765Z
+  created_at: 2026-11-08 04:16:02.029909+00:00
+  modified_at: 2026-11-08 04:16:02.029909+00:00
   session_id: 01a1b8be-8170-7fb2-89ab-ecb4c6eee98c
   harness_version: 2.1.319 (Claude Code)
 - id: 01a1b95e-e1e6-7491-979a-988abc81ccd3
   author: joe
-  content: |-
-    REVIEW FINDINGS TO ADDRESS (BUG-2490):
+  content: 'REVIEW FINDINGS TO ADDRESS (BUG-2490):
+
     Verdict: CHANGES REQUESTED
+
     Reviewed commit: c284061569e0
+
     Recorded: 2026-11-08T03:21:49.682951599+00:00
+
     Findings:
+
     1. [major][perf] aida-core/src/git_ops.rs:1551 commit_with_lock_recovery now runs validate_store_objects on every store commit, which reads and serde_yaml-parses EVERY object in the worktree (7365 objects / 52 MB in the live store). That puts a full-store scan back on every targeted write (git_backend auto_commit_paths -> git_ops::commit), which TASK-1626 deliberately removed (see git_backend.rs comment near line 968). commit_pending_store_changes_on_host (git_ops.rs:2418) runs it twice (directly, then again inside commit). Side effect: one unrelated corrupt or untracked object anywhere in the tree blocks every targeted write. Fix: validate only the paths being committed, i.e. the staged blobs (validate_store_index already does this), the worktree copies of explicit commit_paths pathspecs, and dirty/untracked object paths from git status --porcelain -z for the add_all/pending path. Keep the full scan for doctor only.
+
     2. [major][acceptance-4] aida-cli-lib/src/doctor_cmd.rs:793 calls validate_store_objects(&store_path)? before Storage::load, so a single markered object makes the whole doctor run (every category, --fix heals, the post-ship quiet GC run) fail with an error instead of flagging it. Before this change the tolerant loader warned and doctor continued. Acceptance (4) says doctor *flags* a markered object. Emit it as a doctor finding (category, file path, remediation) and continue, or at least keep the other categories running. No test covers acceptance (4): add one that plants a conflict-markered object and asserts doctor reports it with the file name.
-    3. [major][scope] Operator comment on BUG-2490 (2026-11-08T03:05Z) adds required scope that this PR does not touch: (a) a semantic merge for store objects (git merge driver or in-process merge on pull: scalars from upstream, comments/history unioned by id) so concurrent edits to one spec from two nodes do not conflict; (b) a failed store pull must stop store writes instead of printing 'proceeding with local view'. Either implement both, or have the advisor split them into a linked follow-up spec and record that on BUG-2490 before this ships as the full fix.
+
+    3. [major][scope] Operator comment on BUG-2490 (2026-11-08T03:05Z) adds required scope that this PR does not touch: (a) a semantic merge for store objects (git merge driver or in-process merge on pull: scalars from upstream, comments/history unioned by id) so concurrent edits to one spec from two nodes do not conflict; (b) a failed store pull must stop store writes instead of printing ''proceeding with local view''. Either implement both, or have the advisor split them into a linked follow-up spec and record that on BUG-2490 before this ships as the full fix.
+
     4. [minor][perf] aida-core/src/git_ops.rs validate_store_index spawns one git show :<path> per staged object. A bulk commit (migration, agreed-id assignment over thousands of objects) forks thousands of git processes. Read all staged blobs in one git cat-file --batch call (or ls-files -s plus cat-file --batch) instead.
-    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
-  created_at: 2026-11-08T04:16:05.606920720Z
-  modified_at: 2026-11-08T04:16:05.606920720Z
+
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.'
+  created_at: 2026-11-08 04:16:05.606920+00:00
+  modified_at: 2026-11-08 04:16:05.606920+00:00
   session_id: 01a1b8be-8170-7fb2-89ab-ecb4c6eee98c
   harness_version: 2.1.319 (Claude Code)
 - id: 01a1b98c-e94a-73e2-9bc1-c36d8d496be2
   author: joe
   content: 'Round 2 local patch (uncommitted native seat): findings 1/4 remove full-store commit scans, validate selected commit_paths worktree matches and staged blobs, use dirty porcelain paths for pending sync, and read staged blobs through one cat-file --batch process. Finding 2 adds report-only store-objects doctor findings with path/remediation and unit/CLI regressions; other categories retain tolerant loading. Updated invalid commit fixtures in child_store_commit, real_phase_driver_wiring_tests, roster sync, scaffolding, publication wrappers, and protocol CLI cleanup. Core bug_2490 run executed 4 tests: all passed (including 512-object batch with newline/bracket filenames). rustfmt and git diff --check passed. Additional targeted CI regression jobs are queued behind CLI-library compilation. Finding 3 remains explicitly punted for advisor policy approval or an advisor-authorized linked follow-up; no completion or publication is claimed.'
-  created_at: 2026-11-08T05:06:22.154247540Z
-  modified_at: 2026-11-08T05:06:22.154247540Z
+  created_at: 2026-11-08 05:06:22.154247+00:00
+  modified_at: 2026-11-08 05:06:22.154247+00:00
   session_id: 01a1b977c304
 - id: 01a1b98f-0acc-7792-8610-d57c59309661
   author: joe
   content: 'Validation update: CLI-library doctor unit-test job j20261108T044736725-1642311-0 timed out after 900 seconds during compilation (exit 124), before any tests executed; this is not a passing test result. Core job j20261108T044619201-2-0 executed all 4 BUG-2490 regressions successfully. Remaining CLI/CI regression jobs have not yet produced executed-test results. CLI validation untested=true. Formatting and git diff --check are clean. Native edits remain uncommitted and finding 3 remains a publication-vetoing design-fork punt; host/advisor must authorize the policy/scope resolution and rerun incomplete CLI checks (a longer AIDA_CARGO_TIMEOUT may be needed).'
-  created_at: 2026-11-08T05:08:41.804297664Z
-  modified_at: 2026-11-08T05:08:41.804297664Z
+  created_at: 2026-11-08 05:08:41.804297+00:00
+  modified_at: 2026-11-08 05:08:41.804297+00:00
   session_id: 01a1b977c304
 - id: 01a1b995-8519-7921-9829-f588eced337f
   author: joe
-  content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: Head 81b80189 is c284061 plus a merge of main; diff vs the previously reviewed c284061 is empty in all 4 PR files, so all 4 round-1 findings remain unaddressed. AC1 (autostash pinned) and AC2/AC3 (refusal + regression test) are covered by bug_2490_autostash_conflict_refuses_store_commit. AC4 (doctor flags) is only partly met: doctor aborts instead of flagging, and no test covers it. Protocol: touches a test file - met. CI build jobs were still pending at review; merge-hold-gate fails on the supervised hold only.. It was punted on: design-fork: Round 2 finding 3 remains unresolved: operator requires upstream-wins semantic store merging plus failed-pull write blocking, or an advisor-authorized linked split. Existing resolve_spec_conflict/merge_spec_three_way already unions comments/history by id but intentionally applies field-level LWW, terminal-status protection and hypothesis evidence preservation. Replacing that policy is an architecture decision; this implementer cannot authorize the requested advisor split. Findings 1, 2 and 4 have local edits and targeted lane tests are running. Do not publish this as the complete BUG-2490 fix.. No triage reason was given.'
-  created_at: 2026-11-08T05:15:46.329913312Z
-  modified_at: 2026-11-08T05:15:46.329913312Z
+  content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: Head 81b80189 is c284061 plus a merge of main; diff vs the previously reviewed c284061 is empty in all 4 PR files, so all 4 round-1 findings remain unaddressed. AC1 (autostash pinned) and AC2/AC3 (refusal + regression test) are covered by bug_2490_autostash_conflict_refuses_store_commit. AC4 (doctor flags) is only partly met: doctor aborts instead of flagging, and no test covers it. Protocol: touches a test file - met. CI build jobs were still pending at review; merge-hold-gate fails on the supervised hold only.. It was punted on: design-fork: Round 2 finding 3 remains unresolved: operator requires upstream-wins semantic store merging plus failed-pull write blocking, or an advisor-authorized linked split. Existing resolve_spec_conflict/merge_spec_three_way already unions comments/history by id but intentionally applies field-level LWW, terminal-status protection
+    and hypothesis evidence preservation. Replacing that policy is an architecture decision; this implementer cannot authorize the requested advisor split. Findings 1, 2 and 4 have local edits and targeted lane tests are running. Do not publish this as the complete BUG-2490 fix.. No triage reason was given.'
+  created_at: 2026-11-08 05:15:46.329913+00:00
+  modified_at: 2026-11-08 05:15:46.329913+00:00
   session_id: 01a1b8be-8170-7fb2-89ab-ecb4c6eee98c
   harness_version: 2.1.319 (Claude Code)
 - id: 01a1b995-91d7-7c62-8408-d35505e44735
   author: joe
-  content: |-
-    REVIEW FINDINGS TO ADDRESS (BUG-2490):
+  content: 'REVIEW FINDINGS TO ADDRESS (BUG-2490):
+
     Verdict: CHANGES REQUESTED
+
     Reviewed commit: 81b80189fe6c
+
     Recorded: 2026-11-08T04:46:38.814773641+00:00
+
     Findings:
+
     1. [major][perf] aida-core/src/git_ops.rs:1551 commit_with_lock_recovery calls validate_store_objects (reads and serde_yaml-parses every object in the store) on every store commit, which brings back the full-store scan on targeted writes that TASK-1626 removed. commit_pending_store_changes_on_host (git_ops.rs:2418) runs it twice: once directly, then again via commit() -> commit_with_lock_recovery. One unrelated corrupt or untracked object then blocks every targeted write. Fix: validate only the paths being committed (the staged blobs, the worktree copies of the commit_paths pathspecs, and the dirty/untracked object paths for the add_all path). Keep the full scan for doctor.
+
     2. [major][acceptance-4] aida-cli-lib/src/doctor_cmd.rs:793 runs validate_store_objects(&store_path)? before Storage::load, so a single markered object fails the whole doctor run (every category, --fix, the post-ship GC) instead of flagging it. Report it as a doctor finding that names the file and gives a remediation, then keep the other categories running. Add a test that plants a conflict-markered object and asserts doctor reports it with the file name (there is none today).
-    3. [major][scope] The operator comment on BUG-2490 (2026-11-08T03:05Z) adds scope this PR leaves untouched: (a) a semantic merge for store objects (merge driver or in-process merge on pull) so concurrent edits to one spec do not conflict; (b) a failed store pull must stop store writes instead of 'proceeding with local view' (still printed at aida-cli-lib/src/queue_cmd.rs:13635). Implement both, or have the advisor split them into a linked follow-up spec recorded on BUG-2490. No such spec exists yet.
-    4. [minor][perf] aida-core/src/git_ops.rs validate_store_index spawns one 'git show :<path>' per staged object, so a bulk commit (migration, agreed-id assignment) forks thousands of git processes. Read the staged blobs in one 'git cat-file --batch' call instead.
-    5. [process] The rework round produced no commit addressing the findings and no explicit punt naming a disputed finding: head 81b80189 only merges main. That breaks the rework contract ('produce at least one commit, or punt explicitly').
-    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
-  created_at: 2026-11-08T05:15:49.591458200Z
-  modified_at: 2026-11-08T05:15:49.591458200Z
+
+    3. [major][scope] The operator comment on BUG-2490 (2026-11-08T03:05Z) adds scope this PR leaves untouched: (a) a semantic merge for store objects (merge driver or in-process merge on pull) so concurrent edits to one spec do not conflict; (b) a failed store pull must stop store writes instead of ''proceeding with local view'' (still printed at aida-cli-lib/src/queue_cmd.rs:13635). Implement both, or have the advisor split them into a linked follow-up spec recorded on BUG-2490. No such spec exists yet.
+
+    4. [minor][perf] aida-core/src/git_ops.rs validate_store_index spawns one ''git show :<path>'' per staged object, so a bulk commit (migration, agreed-id assignment) forks thousands of git processes. Read the staged blobs in one ''git cat-file --batch'' call instead.
+
+    5. [process] The rework round produced no commit addressing the findings and no explicit punt naming a disputed finding: head 81b80189 only merges main. That breaks the rework contract (''produce at least one commit, or punt explicitly'').
+
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.'
+  created_at: 2026-11-08 05:15:49.591458+00:00
+  modified_at: 2026-11-08 05:15:49.591458+00:00
   session_id: 01a1b8be-8170-7fb2-89ab-ecb4c6eee98c
   harness_version: 2.1.319 (Claude Code)
 - id: 01a1b99f-af1e-7223-b530-475f5d7976f2
   author: joe
   content: 'Stopgap in place 2026-11-07 21:50: dell1:~/store-sync.sh (rebase + semantic resolve via ~/store-resolve.py: objects upstream-scalars + union comments/history; per-user list files take the local owner''s version; modify/delete keeps upstream) runs before and after every dell1 lane (dell1:~/lane-run.sh). It recurs every few hours without it. Remove both when this bug lands.'
-  created_at: 2026-11-08T05:26:52.446136059Z
-  modified_at: 2026-11-08T05:26:52.446136059Z
+  created_at: 2026-11-08 05:26:52.446136+00:00
+  modified_at: 2026-11-08 05:26:52.446136+00:00
   session_id: 01a1b8be-8170-7fb2-89ab-ecb4c6eee98c
   harness_version: 2.1.319 (Claude Code)
 - id: 01a1b9b4-792d-7100-81d4-a9571b6f0cc6
   author: joe
-  content: 'Round 3 native-seat handoff: uncommitted edits in aida-core/src/git_ops/tests/store_hook_tests.rs add maintenance.auto=false/gc.auto=0 to both flagged raw Git sites; the baseline is unchanged. aida-cli-lib/src/doctor_cmd.rs removes the fixture whole-store save (unrelated metadata allocation authority); tolerant loading and store-objects assertions remain. aida-cli-lib/src/queue_cmd.rs now propagates the pre-pickup pull error before session setup; aida-cli/tests/queue_work_dry_run.rs adds a missing-local-remote regression asserting failure, unchanged Approved status/spec diff, leases and sibling worktrees. OVERVIEW.md now describes doctor reporting bad objects while continuing other checks. Validation: maintenance ratchet executed 8 tests, all passed; rustfmt --check and git diff --check passed. Rust validation untested=true: job j20261108T054315002-2648465-0 remains compiling aida-cli-lib; core job j20261108T054443947-2-0 and CLI job j20261108T054456983-2654691-0 were queued at handoff; none has an executed-test result yet. Finding 2 explicitly punted as design-fork: semantic merge policy and comprehensive failed-pull write fencing remain unresolved; this queue-path change is partial. Finding 4 considered but deferred because sharing loader diagnostics changes the loader/report API. No advisor split is claimed. No commit, push, PR action, queue completion, hold clearance or publication declaration was performed; preserve the punt/publication veto. The host must collect or rerun Rust results before treating these fixes as validated.'
-  created_at: 2026-11-08T05:49:34.893093020Z
-  modified_at: 2026-11-08T05:49:34.893093020Z
+  content: 'Round 3 native-seat handoff: uncommitted edits in aida-core/src/git_ops/tests/store_hook_tests.rs add maintenance.auto=false/gc.auto=0 to both flagged raw Git sites; the baseline is unchanged. aida-cli-lib/src/doctor_cmd.rs removes the fixture whole-store save (unrelated metadata allocation authority); tolerant loading and store-objects assertions remain. aida-cli-lib/src/queue_cmd.rs now propagates the pre-pickup pull error before session setup; aida-cli/tests/queue_work_dry_run.rs adds a missing-local-remote regression asserting failure, unchanged Approved status/spec diff, leases and sibling worktrees. OVERVIEW.md now describes doctor reporting bad objects while continuing other checks. Validation: maintenance ratchet executed 8 tests, all passed; rustfmt --check and git diff --check passed. Rust validation untested=true: job j20261108T054315002-2648465-0 remains compiling aida-cli-lib; core job j20261108T054443947-2-0 and CLI job j20261108T054456983-2654691-0 were queued
+    at handoff; none has an executed-test result yet. Finding 2 explicitly punted as design-fork: semantic merge policy and comprehensive failed-pull write fencing remain unresolved; this queue-path change is partial. Finding 4 considered but deferred because sharing loader diagnostics changes the loader/report API. No advisor split is claimed. No commit, push, PR action, queue completion, hold clearance or publication declaration was performed; preserve the punt/publication veto. The host must collect or rerun Rust results before treating these fixes as validated.'
+  created_at: 2026-11-08 05:49:34.893093+00:00
+  modified_at: 2026-11-08 05:49:34.893093+00:00
   session_id: 01a1b9ad9f09
 - id: 01a1ba0e-93df-79c2-ba02-88b34ca03741
   author: joe
-  content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was punted on: design-fork: Round 3 finding 2 remains unresolved in full: the operator requests upstream-wins semantic object merging (including removal of the dell1 stopgap), while the existing merge_spec_three_way resolver enforces convergent field-level LWW, terminal-status protection and hypothesis evidence preservation; ordinary db sync still calls plain pull_rebase. This seat disputes treating a policy replacement or an implementer-filed split as authorized advisor approval. Advisor must choose and authorize the merge policy or file and link the follow-up before BUG-2490 can ship as complete. Local Round 3 edits fix finding 1, the doctor CI fixture, finding 3, and the specific queue pickup continuation in finding 2(b); they do not claim comprehensive failed-pull write fencing. Finding 4 was considered and remains a non-blocking full-doctor double scan. Preserve the merge hold and publication veto.. No triage reason was given.'
-  created_at: 2026-11-08T07:27:59.967607485Z
-  modified_at: 2026-11-08T07:27:59.967607485Z
+  content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was punted on: design-fork: Round 3 finding 2 remains unresolved in full: the operator requests upstream-wins semantic object merging (including removal of the dell1 stopgap), while the existing merge_spec_three_way resolver enforces convergent field-level LWW, terminal-status protection and hypothesis evidence preservation; ordinary db sync still calls plain pull_rebase. This seat disputes treating a policy replacement or an implementer-filed split as authorized advisor approval. Advisor must choose and authorize the merge policy or file and link the follow-up before BUG-2490 can ship as complete. Local Round 3 edits fix finding 1, the doctor CI fixture, finding 3, and the specific queue pickup continuation in finding 2(b); they do not claim comprehensive failed-pull write fencing. Finding 4 was considered and remains a non-blocking full-doctor double scan. Preserve the merge hold and publication veto.. No
+    triage reason was given.'
+  created_at: 2026-11-08 07:27:59.967607+00:00
+  modified_at: 2026-11-08 07:27:59.967607+00:00
   session_id: 01a1b8be-8170-7fb2-89ab-ecb4c6eee98c
   harness_version: 2.1.319 (Claude Code)
 - id: 01a1ba0e-9de8-73f1-b6be-373493a59f06
   author: joe
-  content: |-
-    REVIEW FINDINGS TO ADDRESS (BUG-2490):
+  content: 'REVIEW FINDINGS TO ADDRESS (BUG-2490):
+
     Verdict: CHANGES REQUESTED
+
     Reviewed commit: bf24faf3bfa0
+
     Recorded: 2026-11-08T05:33:41.304844335+00:00
+
     Findings:
-    1. [major][ci] CI (gates) fails at bf24faf3 on step 'Test git auto-maintenance ratchet' (main is green). aida-core/src/git_ops/tests/store_hook_tests.rs adds unguarded write-class git sites beyond its baseline of 3 (scripts/git-maintenance-baseline.txt:19): the raw closure in bug_2490_autostash_conflict_refuses_store_commit runs commit and merge with only core.hooksPath set, and bug_2490_pending_checks_only_dirty_objects_and_names_invalid_path runs host_git_command(...).args(["commit", ...]). Add -c maintenance.auto=false -c gc.auto=0 (or use the crate test_git helper) to those sites. Do not raise the baseline.
-    2. [major][scope] Round-1/2 finding 3 is still open. The operator comment on BUG-2490 (2026-11-08T03:05Z, and the 05:26Z stopgap note 'remove both when this bug lands') requires (a) a semantic merge for store objects on pull so concurrent edits to one spec from two nodes do not conflict, and (b) a failed store pull must stop store writes; aida-cli-lib/src/queue_cmd.rs:13635 still prints 'pre-pickup pull failed; proceeding with local view'. The implementer punted this as a design-fork, but no advisor split exists: BUG-2490 has no linked follow-up spec (only implemented-by STORY-2671). Either implement both, or have the advisor file a linked follow-up spec, record the split on BUG-2490, and re-request review.
-    3. [minor][docs] OVERVIEW.md:491-492 says 'aida doctor checks object integrity before loading the store', which is wrong: doctor_cmd.rs:834 runs scan_store_objects after the tolerant Storage::load and the other categories keep running. Fix the wording. Per the repo CLAUDE.md, per-change notes belong in the PR body and an aida comment; keep this paragraph only if it states a lasting store invariant.
-    4. [minor][perf] A full 'aida doctor' run with no category filter now parses every store object twice: once in the tolerant Storage::load and again in git_ops::store_object_findings (doctor_cmd.rs:834; about 7.4k objects / 52 MB in the live store, including the post-ship quiet doctor run). Consider getting the skipped/bad-object list from the loader instead of a second full read. Non-blocking.
-    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
-  created_at: 2026-11-08T07:28:02.536221502Z
-  modified_at: 2026-11-08T07:28:02.536221502Z
+
+    1. [major][ci] CI (gates) fails at bf24faf3 on step ''Test git auto-maintenance ratchet'' (main is green). aida-core/src/git_ops/tests/store_hook_tests.rs adds unguarded write-class git sites beyond its baseline of 3 (scripts/git-maintenance-baseline.txt:19): the raw closure in bug_2490_autostash_conflict_refuses_store_commit runs commit and merge with only core.hooksPath set, and bug_2490_pending_checks_only_dirty_objects_and_names_invalid_path runs host_git_command(...).args(["commit", ...]). Add -c maintenance.auto=false -c gc.auto=0 (or use the crate test_git helper) to those sites. Do not raise the baseline.
+
+    2. [major][scope] Round-1/2 finding 3 is still open. The operator comment on BUG-2490 (2026-11-08T03:05Z, and the 05:26Z stopgap note ''remove both when this bug lands'') requires (a) a semantic merge for store objects on pull so concurrent edits to one spec from two nodes do not conflict, and (b) a failed store pull must stop store writes; aida-cli-lib/src/queue_cmd.rs:13635 still prints ''pre-pickup pull failed; proceeding with local view''. The implementer punted this as a design-fork, but no advisor split exists: BUG-2490 has no linked follow-up spec (only implemented-by STORY-2671). Either implement both, or have the advisor file a linked follow-up spec, record the split on BUG-2490, and re-request review.
+
+    3. [minor][docs] OVERVIEW.md:491-492 says ''aida doctor checks object integrity before loading the store'', which is wrong: doctor_cmd.rs:834 runs scan_store_objects after the tolerant Storage::load and the other categories keep running. Fix the wording. Per the repo CLAUDE.md, per-change notes belong in the PR body and an aida comment; keep this paragraph only if it states a lasting store invariant.
+
+    4. [minor][perf] A full ''aida doctor'' run with no category filter now parses every store object twice: once in the tolerant Storage::load and again in git_ops::store_object_findings (doctor_cmd.rs:834; about 7.4k objects / 52 MB in the live store, including the post-ship quiet doctor run). Consider getting the skipped/bad-object list from the loader instead of a second full read. Non-blocking.
+
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.'
+  created_at: 2026-11-08 07:28:02.536221+00:00
+  modified_at: 2026-11-08 07:28:02.536221+00:00
   session_id: 01a1b8be-8170-7fb2-89ab-ecb4c6eee98c
   harness_version: 2.1.319 (Claude Code)
 - id: 01a1ba11-a09a-7290-af61-423bfad1cf1b
   author: dirtlab
   content: 'Native-seat handoff: added bug_2490_schema_invalid_objects_refuse_without_advancing_head in aida-core/src/git_ops/tests/store_hook_tests.rs. It checks malformed YAML and schema-invalid valid YAML through explicit worktree and staged commits, including repaired worktree versus invalid index, with named-file errors and unchanged HEAD. Lane job j20261108T072948265-2-0 executed the 4 existing BUG-2490 tests, all passed. Job j20261108T073035815-2-0 executed the new regression, passed. rustfmt and git diff --check passed. Edits remain uncommitted. BUG-2490 was explicitly punted to Needs Attention for unresolved round-3 finding 2 (semantic policy, comprehensive failed-pull fencing and dell1 stopgap removal); preserve the publication veto. Punt store update succeeded but its local signal file write failed with read-only filesystem, so the host must honor the persisted punt/status and this handoff. No publication or completion authorized. Codegraph unavailable; rg used for call-site confirmation.'
-  created_at: 2026-11-08T07:31:19.834662009Z
-  modified_at: 2026-11-08T07:31:19.834662009Z
+  created_at: 2026-11-08 07:31:19.834662+00:00
+  modified_at: 2026-11-08 07:31:19.834662+00:00
   session_id: 01a1ba0fa198
   harness_version: codex-cli 0.167.0
 - id: 01a1ba5d-d549-7f10-93a1-b20a5b621616
   author: joe
-  content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: Round-3 findings 1/3 fixed and AC1-AC4 hold in source, but two CI failures are caused by this PR (cli-0 failed-pull regression; gates store-writer ratchet) and the operator''s semantic-merge/failed-pull scope is neither done nor split. AC1 verified git_ops.rs:476-478 + override assertion; AC2 verified validate_object_text/index/worktree/pending + bug_2490 tests; AC3 verified bug_2490_autostash_conflict_refuses_store_commit; AC4 verified bug_2490_doctor_reports_conflict_file_without_aborting; operator (a) absent; operator (b) partial. CI lib-0 still running at review.. It was punted on: design-fork: Round 3 review finding 2 remains unresolved: the requested upstream-scalars semantic pull policy differs from the existing field-level LWW, terminal-status and hypothesis-preservation resolver. CLAUDE.md requires advisor signoff for architecture changes; no advisor-approved policy or linked split is recorded. Comprehensive failed-pull write fencing and removal of the dell1 stopgap also remain incomplete. This round adds a schema-invalid commit refusal regression only. Preserve the existing merge hold and publication veto; do not publish as a complete fix.. No triage reason was given.'
-  created_at: 2026-11-08T08:54:34.057870442Z
-  modified_at: 2026-11-08T08:54:34.057870442Z
+  content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: Round-3 findings 1/3 fixed and AC1-AC4 hold in source, but two CI failures are caused by this PR (cli-0 failed-pull regression; gates store-writer ratchet) and the operator''s semantic-merge/failed-pull scope is neither done nor split. AC1 verified git_ops.rs:476-478 + override assertion; AC2 verified validate_object_text/index/worktree/pending + bug_2490 tests; AC3 verified bug_2490_autostash_conflict_refuses_store_commit; AC4 verified bug_2490_doctor_reports_conflict_file_without_aborting; operator (a) absent; operator (b) partial. CI lib-0 still running at review.. It was punted on: design-fork: Round 3 review finding 2 remains unresolved: the requested upstream-scalars semantic pull policy differs from the existing field-level LWW, terminal-status and hypothesis-preservation resolver. CLAUDE.md requires advisor signoff for architecture changes; no advisor-approved
+    policy or linked split is recorded. Comprehensive failed-pull write fencing and removal of the dell1 stopgap also remain incomplete. This round adds a schema-invalid commit refusal regression only. Preserve the existing merge hold and publication veto; do not publish as a complete fix.. No triage reason was given.'
+  created_at: 2026-11-08 08:54:34.057870+00:00
+  modified_at: 2026-11-08 08:54:34.057870+00:00
   session_id: 01a1b8be-8170-7fb2-89ab-ecb4c6eee98c
   harness_version: 2.1.319 (Claude Code)
 - id: 01a1ba5d-e446-7fb3-82a3-76dd03cbd310
   author: joe
-  content: |-
-    REVIEW FINDINGS TO ADDRESS (BUG-2490):
+  content: 'REVIEW FINDINGS TO ADDRESS (BUG-2490):
+
     Verdict: CHANGES REQUESTED
+
     Reviewed commit: 1a83194161c4
+
     Recorded: 2026-11-08T08:46:56.901282128+00:00
+
     Findings:
-    1. [major][ci][correctness] CI (cli-0) fails on bug_2490_failed_pull_stops_pickup_before_session_and_spec_writes (queue_work_dry_run.rs:1452, 'preflight must not persist auto-queue synthesis'), and the test is right. handle_queue_work persists the synthesized queue row at aida-cli-lib/src/queue_cmd.rs:12607 (with record_role_activity), about 740 lines before the pull at queue_cmd.rs:13346. A failed pull therefore leaves a queue row behind while the error says 'pickup stopped before session setup and store writes'. Move the pull ahead of the queue_add/role-activity persistence, or defer persistence until after it succeeds; do not weaken the assertion.
-    2. [major][ci] CI (gates) fails on step 'Store writer inventory ratchet' (scripts/check-store-writers.py); main is green. The 'lane_fixture_fails' lines quoted for this job are a deliberate fixture, not the failure. Likely cause, inferred from source because the job log was not readable from this sandbox: the new production write_all in validate_store_index_paths (aida-core/src/git_ops.rs, cat-file --batch stdin writer) matches the ratchet's sink seed, and scripts/store-writers.toml is unchanged and has no entry for it. Confirm with python3 scripts/check-store-writers.py, regenerate the inventory as the script header directs, and review the disposition.
-    3. [major][scope] Round-1/2/3 scope finding remains open. The operator comment on BUG-2490 (2026-11-08T03:05Z, plus the 05:26Z note to remove the dell1 stopgap when this bug lands) requires (a) semantic merge of store objects on pull and (b) a failed store pull stopping store writes. (a) is absent. (b) is partial: only the queue-work pickup path changed; store_sync.rs:1768 still continues with 'Falling back to local view' and there is no general write fence. BUG-2490 is still Needs Attention with only implemented-by STORY-2671 linked, and the implementer's punt asks the advisor to choose the merge policy. Implement both, or have the advisor file a linked follow-up and record the split on BUG-2490, then re-request review.
+
+    1. [major][ci][correctness] CI (cli-0) fails on bug_2490_failed_pull_stops_pickup_before_session_and_spec_writes (queue_work_dry_run.rs:1452, ''preflight must not persist auto-queue synthesis''), and the test is right. handle_queue_work persists the synthesized queue row at aida-cli-lib/src/queue_cmd.rs:12607 (with record_role_activity), about 740 lines before the pull at queue_cmd.rs:13346. A failed pull therefore leaves a queue row behind while the error says ''pickup stopped before session setup and store writes''. Move the pull ahead of the queue_add/role-activity persistence, or defer persistence until after it succeeds; do not weaken the assertion.
+
+    2. [major][ci] CI (gates) fails on step ''Store writer inventory ratchet'' (scripts/check-store-writers.py); main is green. The ''lane_fixture_fails'' lines quoted for this job are a deliberate fixture, not the failure. Likely cause, inferred from source because the job log was not readable from this sandbox: the new production write_all in validate_store_index_paths (aida-core/src/git_ops.rs, cat-file --batch stdin writer) matches the ratchet''s sink seed, and scripts/store-writers.toml is unchanged and has no entry for it. Confirm with python3 scripts/check-store-writers.py, regenerate the inventory as the script header directs, and review the disposition.
+
+    3. [major][scope] Round-1/2/3 scope finding remains open. The operator comment on BUG-2490 (2026-11-08T03:05Z, plus the 05:26Z note to remove the dell1 stopgap when this bug lands) requires (a) semantic merge of store objects on pull and (b) a failed store pull stopping store writes. (a) is absent. (b) is partial: only the queue-work pickup path changed; store_sync.rs:1768 still continues with ''Falling back to local view'' and there is no general write fence. BUG-2490 is still Needs Attention with only implemented-by STORY-2671 linked, and the implementer''s punt asks the advisor to choose the merge policy. Implement both, or have the advisor file a linked follow-up and record the split on BUG-2490, then re-request review.
+
     4. [minor][correctness] Store commits made while concluding a conflict bypass the new validation: rebase --continue at aida-core/src/git_ops.rs:2155 and 2217, and commit --no-edit at git_ops.rs:2823, call git directly rather than commit_with_lock_recovery. AC2 says the store commit path refuses any object that does not parse or holds markers. Validate the index before each of these, or state why the resolver output cannot be invalid and pin that with a test.
-    5. [minor][robustness] validate_store_index_paths passes every staged object path as argv to 'git ls-files --stage' (aida-core/src/git_ops.rs, the --literal-pathspecs call), so a bulk commit scales with argv size and fails with E2BIG once it exceeds ARG_MAX; the bulk test covers only 512 objects. Run ls-files --stage -z without paths and filter in memory, or feed --stdin.
+
+    5. [minor][robustness] validate_store_index_paths passes every staged object path as argv to ''git ls-files --stage'' (aida-core/src/git_ops.rs, the --literal-pathspecs call), so a bulk commit scales with argv size and fails with E2BIG once it exceeds ARG_MAX; the bulk test covers only 512 objects. Run ls-files --stage -z without paths and filter in memory, or feed --stdin.
+
     6. [minor][cleanup] pub fn validate_store_objects (aida-core/src/git_ops.rs:7357) has no production caller after the scoped-validation rework; only store_hook_tests.rs uses it. Remove it or make it test-only, since its doc comment implies a diagnostic surface that does not use it.
+
     7. [minor][perf] Carried, non-blocking: a full aida doctor run parses every store object twice, once in the tolerant Storage::load and again in scan_store_objects (doctor_cmd.rs:835-836). Take the bad-object list from the loader if practical.
-    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
-  created_at: 2026-11-08T08:54:37.894327986Z
-  modified_at: 2026-11-08T08:54:37.894327986Z
+
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.'
+  created_at: 2026-11-08 08:54:37.894327+00:00
+  modified_at: 2026-11-08 08:54:37.894327+00:00
   session_id: 01a1b8be-8170-7fb2-89ab-ecb4c6eee98c
   harness_version: 2.1.319 (Claude Code)
 - id: 01a1ba69-5627-7c53-8174-81c512d325af
   author: dirtlab
-  content: |
-    Native-seat rework handoff for latest review (1a83194161c4): findings 1/2/4/5/6 addressed in uncommitted edits. queue_cmd.rs moves pull and its pre-pull status snapshot before implicit queue persistence, calibration and session setup; the existing regression assertion is retained. git_ops.rs validates staged objects before both rebase continuations and the union-merge commit, lists the index without expanding staged paths into argv, filters selected paths in memory, and makes the unused full-store validation wrapper test-only. store_hook_tests.rs adds a real paused-rebase regression: an invalid staged manual resolution refuses with the filename, preserves HEAD and leaves recovery possible. scripts/store-writers.toml adds the regenerated cat-file stdin sink, reviewed as read_only (object IDs written to a child pipe only). queue_work_dry_run.rs preserves init stdout/status diagnostics; support/test_git.rs creates synthetic allocation settings as mode 0600 so shared-write umasks do not make the fixture untrusted.
+  content: 'Native-seat rework handoff for latest review (1a83194161c4): findings 1/2/4/5/6 addressed in uncommitted edits. queue_cmd.rs moves pull and its pre-pull status snapshot before implicit queue persistence, calibration and session setup; the existing regression assertion is retained. git_ops.rs validates staged objects before both rebase continuations and the union-merge commit, lists the index without expanding staged paths into argv, filters selected paths in memory, and makes the unused full-store validation wrapper test-only. store_hook_tests.rs adds a real paused-rebase regression: an invalid staged manual resolution refuses with the filename, preserves HEAD and leaves recovery possible. scripts/store-writers.toml adds the regenerated cat-file stdin sink, reviewed as read_only (object IDs written to a child pipe only). queue_work_dry_run.rs preserves init stdout/status diagnostics; support/test_git.rs creates synthetic allocation settings as mode 0600 so shared-write umasks
+    do not make the fixture untrusted.
+
     Validation: lane job j20261108T090017034-2-0 executed all 6 core BUG-2490 tests, passed. CLI job j20261108T090622978-2-0 executed bug_2490_failed_pull_stops_pickup_before_session_and_spec_writes, passed. Two earlier CLI attempts failed during fixture init on allocation-setting trust, resolved by the mode fix. Inventory checker passed (3369 sinks/293 mappings), inventory unit tests 42 passed, maintenance ratchet 8 passed, rustfmt --check and git diff --check passed. Codegraph executable unavailable; rg used for caller confirmation.
+
     Latest finding 3 remains publication-vetoing: upstream-scalar semantic merge policy, comprehensive failed-pull write fencing and dell1 stopgap removal are unresolved; CLAUDE.md requires advisor architecture signoff and no approved split is recorded. Finding 7 remains the explicitly non-blocking doctor double scan. BUG-2490 was punted to Needs Attention; persisted update succeeded, but the local punt signal file write failed read-only. Host must honor persisted punt and existing hold; no completion or publication is authorized. Changed files: aida-cli-lib/src/queue_cmd.rs; aida-core/src/git_ops.rs; aida-core/src/git_ops/tests/store_hook_tests.rs; scripts/store-writers.toml; aida-cli/tests/queue_work_dry_run.rs; aida-cli/tests/support/test_git.rs. No commit, push, PR creation, queue completion, ship or review recording performed.
-  created_at: 2026-11-08T09:07:07.943887650Z
-  modified_at: 2026-11-08T09:07:07.943887650Z
+
+    '
+  created_at: 2026-11-08 09:07:07.943887+00:00
+  modified_at: 2026-11-08 09:07:07.943887+00:00
   session_id: 01a1ba5f23ab
   harness_version: codex-cli 0.167.0
 - id: 01a1ba88-b1dd-78e0-87cc-8f172807db9b
   author: joe
-  content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: Round-4 findings 1/2/4/5/6 are fixed in source and AC1-AC4 hold by source and named tests (CI still queued at this head, so no test pass is claimed). Blocked by the unresolved operator scope, a new outage risk from fatal pickup pull over plain pull_rebase, and refusals that strand a paused rebase/merge.. It was punted on: design-fork: Latest review finding 3 remains unresolved: upstream-scalar semantic pull merging conflicts with the existing field-level LWW, terminal-status and hypothesis-preservation policy. CLAUDE.md requires advisor signoff for architecture changes; no advisor-approved policy or linked scope split is recorded. Comprehensive failed-pull write fencing and dell1 stopgap removal also remain incomplete. This round fixes findings 1, 2, 4, 5 and 6 only; preserve the existing merge hold and publication veto, and do not ship as a complete fix.. No triage reason was given.'
-  created_at: 2026-11-08T09:41:23.037366859Z
-  modified_at: 2026-11-08T09:41:23.037366859Z
+  content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: Round-4 findings 1/2/4/5/6 are fixed in source and AC1-AC4 hold by source and named tests (CI still queued at this head, so no test pass is claimed). Blocked by the unresolved operator scope, a new outage risk from fatal pickup pull over plain pull_rebase, and refusals that strand a paused rebase/merge.. It was punted on: design-fork: Latest review finding 3 remains unresolved: upstream-scalar semantic pull merging conflicts with the existing field-level LWW, terminal-status and hypothesis-preservation policy. CLAUDE.md requires advisor signoff for architecture changes; no advisor-approved policy or linked scope split is recorded. Comprehensive failed-pull write fencing and dell1 stopgap removal also remain incomplete. This round fixes findings 1, 2, 4, 5 and 6 only; preserve the existing merge hold and publication veto, and do not ship as a complete fix.. No
+    triage reason was given.'
+  created_at: 2026-11-08 09:41:23.037366+00:00
+  modified_at: 2026-11-08 09:41:23.037366+00:00
   session_id: 01a1b8be-8170-7fb2-89ab-ecb4c6eee98c
   harness_version: 2.1.319 (Claude Code)
 - id: 01a1ba88-ba86-7ab0-bcf7-01791b668792
   author: joe
-  content: |-
-    REVIEW FINDINGS TO ADDRESS (BUG-2490):
+  content: 'REVIEW FINDINGS TO ADDRESS (BUG-2490):
+
     Verdict: CHANGES REQUESTED
+
     Reviewed commit: 03fe53e556ba
+
     Recorded: 2026-11-08T09:16:41.119327858+00:00
+
     Findings:
-    1. [major][scope][advisor-action] Operator scope on BUG-2490 (2026-11-08T03:05Z; 05:26Z note to remove the dell1 stopgap) is still neither done nor split: (a) no semantic store-object merge on pull; (b) failed-pull write fencing covers only queue pickup (aida-cli-lib/src/store_sync.rs:1768 still prints 'Falling back to local view'). The implementer has punted this as a design-fork in every round, correctly saying it cannot choose the merge policy, so another implementer round cannot clear it. The advisor must choose the policy or file a linked follow-up and record the split on BUG-2490, then re-request review.
-    2. [major][correctness] Making the pickup pull fatal (aida-cli-lib/src/queue_cmd.rs:12510) without semantic merge turns a recurring degraded state into a pickup outage. run_aida_db_sync_pull runs 'aida db sync --pull', which uses plain pull_rebase (aida-cli-lib/src/git_backend_cmd.rs:1360) and fails on any textual conflict, unlike 'aida pull', which uses pull_rebase_auto_merge (store_push_pull.rs:2480). Two nodes editing one spec, the dell1 case the operator reports recurring every few hours, now makes every 'aida queue work' without --no-pull exit before pickup, where it previously warned and continued. Fix: use pull_rebase_auto_merge in db_sync_local_window (the existing resolver, keeping its current policy), with a regression test that a same-spec two-node conflict does not stop pickup; or land the fatal pull only together with finding 1.
-    3. [major][correctness] The new refusals strand the store mid-operation: validate_store_index(repo)? at aida-core/src/git_ops.rs:2156 and 2220 (rebase) and 2828 (merge_union_onto) return without aborting, unlike every other failure arm in those functions. That contradicts the SAFETY contract at git_ops.rs:2109-2113 (any failure aborts the rebase) and BUG-1229 (git_ops.rs:2068-2070, never leave the managed store on a detached rebase HEAD). It is reachable: validate_store_index checks every staged object, so a sibling object in the replayed commit that holds markers or legacy-invalid YAML (such as an unpushed commit like the 7124c0f incident) triggers it even when the structured resolver succeeded. A retry re-enters the same refusal. The merge path leaves MERGE_HEAD with no abort, no recovery hint (store_pull_failure_hint covers rebase only) and no test. Fix: abort before returning, as the other arms do, keep the named-file error, update bug_2490_rebase_continuation_refuses_invalid_resolved_index (it asserts the paused state), and add a merge_union_auto refusal test.
-    4. [minor][ux] The fatal pickup error at aida-cli-lib/src/queue_cmd.rs:12511 tells the operator only to retry 'aida db sync --pull'. An offline user is not told about --no-pull, the documented option for that case (queue_cmd_args.rs:645-648). Name it in the message.
-    5. [minor][perf] Carried, non-blocking: a full 'aida doctor' run parses every store object twice, in the tolerant Storage::load and again in scan_store_objects (aida-cli-lib/src/doctor_cmd.rs:835). Take the bad-object list from the loader if practical.
-    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
-  created_at: 2026-11-08T09:41:25.254243328Z
-  modified_at: 2026-11-08T09:41:25.254243328Z
+
+    1. [major][scope][advisor-action] Operator scope on BUG-2490 (2026-11-08T03:05Z; 05:26Z note to remove the dell1 stopgap) is still neither done nor split: (a) no semantic store-object merge on pull; (b) failed-pull write fencing covers only queue pickup (aida-cli-lib/src/store_sync.rs:1768 still prints ''Falling back to local view''). The implementer has punted this as a design-fork in every round, correctly saying it cannot choose the merge policy, so another implementer round cannot clear it. The advisor must choose the policy or file a linked follow-up and record the split on BUG-2490, then re-request review.
+
+    2. [major][correctness] Making the pickup pull fatal (aida-cli-lib/src/queue_cmd.rs:12510) without semantic merge turns a recurring degraded state into a pickup outage. run_aida_db_sync_pull runs ''aida db sync --pull'', which uses plain pull_rebase (aida-cli-lib/src/git_backend_cmd.rs:1360) and fails on any textual conflict, unlike ''aida pull'', which uses pull_rebase_auto_merge (store_push_pull.rs:2480). Two nodes editing one spec, the dell1 case the operator reports recurring every few hours, now makes every ''aida queue work'' without --no-pull exit before pickup, where it previously warned and continued. Fix: use pull_rebase_auto_merge in db_sync_local_window (the existing resolver, keeping its current policy), with a regression test that a same-spec two-node conflict does not stop pickup; or land the fatal pull only together with finding 1.
+
+    3. [major][correctness] The new refusals strand the store mid-operation: validate_store_index(repo)? at aida-core/src/git_ops.rs:2156 and 2220 (rebase) and 2828 (merge_union_onto) return without aborting, unlike every other failure arm in those functions. That contradicts the SAFETY contract at git_ops.rs:2109-2113 (any failure aborts the rebase) and BUG-1229 (git_ops.rs:2068-2070, never leave the managed store on a detached rebase HEAD). It is reachable: validate_store_index checks every staged object, so a sibling object in the replayed commit that holds markers or legacy-invalid YAML (such as an unpushed commit like the 7124c0f incident) triggers it even when the structured resolver succeeded. A retry re-enters the same refusal. The merge path leaves MERGE_HEAD with no abort, no recovery hint (store_pull_failure_hint covers rebase only) and no test. Fix: abort before returning, as the other arms do, keep the named-file error, update bug_2490_rebase_continuation_refuses_invalid_resolved_index
+    (it asserts the paused state), and add a merge_union_auto refusal test.
+
+    4. [minor][ux] The fatal pickup error at aida-cli-lib/src/queue_cmd.rs:12511 tells the operator only to retry ''aida db sync --pull''. An offline user is not told about --no-pull, the documented option for that case (queue_cmd_args.rs:645-648). Name it in the message.
+
+    5. [minor][perf] Carried, non-blocking: a full ''aida doctor'' run parses every store object twice, in the tolerant Storage::load and again in scan_store_objects (aida-cli-lib/src/doctor_cmd.rs:835). Take the bad-object list from the loader if practical.
+
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.'
+  created_at: 2026-11-08 09:41:25.254243+00:00
+  modified_at: 2026-11-08 09:41:25.254243+00:00
   session_id: 01a1b8be-8170-7fb2-89ab-ecb4c6eee98c
   harness_version: 2.1.319 (Claude Code)
 - id: 01a1ba92-88c8-7872-bc21-f9da4b2bd82c
   author: dirtlab
-  content: |
-    Native-seat rework handoff for review 03fe53e556ba: findings 2/3/4 addressed in uncommitted edits. db_sync_local_window now uses pull_rebase_auto_merge with the established merge policy; a two-node same-spec conflict regression proves queue pickup completes. Both rebase continuation guards and the union merge guard abort before returning a named-file validation error; the rebase regression asserts original HEAD and attached branch restoration, and the union regression exercises the post-resolution guard and verifies MERGE_HEAD cleanup. Pickup failure guidance names --no-pull for intentional offline pickup. Writer inventory regenerated/reviewed: two renamed sync sink rows retain their previous blocked dispositions.
+  content: 'Native-seat rework handoff for review 03fe53e556ba: findings 2/3/4 addressed in uncommitted edits. db_sync_local_window now uses pull_rebase_auto_merge with the established merge policy; a two-node same-spec conflict regression proves queue pickup completes. Both rebase continuation guards and the union merge guard abort before returning a named-file validation error; the rebase regression asserts original HEAD and attached branch restoration, and the union regression exercises the post-resolution guard and verifies MERGE_HEAD cleanup. Pickup failure guidance names --no-pull for intentional offline pickup. Writer inventory regenerated/reviewed: two renamed sync sink rows retain their previous blocked dispositions.
+
 
     Changed files: aida-cli-lib/src/git_backend_cmd.rs; aida-cli-lib/src/queue_cmd.rs; aida-cli/tests/queue_work_dry_run.rs; aida-core/src/git_ops.rs; aida-core/src/git_ops/tests/store_hook_tests.rs; scripts/store-writers.toml.
 
+
     Validation: lane job j20261108T094647272-2-0 executed all 7 core BUG-2490 regressions, passed. CLI job j20261108T095145166-2-0 executed both BUG-2490 pickup regressions, passed. Earlier runs exposed a merge-fixture preflight interception and a status-rendering assertion mismatch; both corrected before the passing reruns. Store-writer inventory passed (3369 sinks/293 mappings); all 8 maintenance ratchet tests passed; rustfmt --check and git diff --check passed. Codegraph executable unavailable; rg used.
 
+
     Finding 1 remains explicitly punted for advisor action under CLAUDE.md architecture signoff: upstream-scalar semantic policy, comprehensive failed-pull write fencing and dell1 stopgap removal are not completed or split. Finding 5 remains the non-blocking doctor double scan. Persisted Needs Attention punt succeeded; local punt signal file failed read-only. Preserve persisted punt, merge hold and publication veto. No commit, push, PR creation, queue completion, ship declaration or review recording performed. Do not publish as a complete BUG-2490 fix.
-  created_at: 2026-11-08T09:52:07.880301033Z
-  modified_at: 2026-11-08T09:52:07.880301033Z
+
+    '
+  created_at: 2026-11-08 09:52:07.880301+00:00
+  modified_at: 2026-11-08 09:52:07.880301+00:00
   session_id: 01a1ba8ace16
   harness_version: codex-cli 0.167.0
 - id: 01a1badd-6aa9-79e3-b779-39f421f03277
   author: joe
   content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: Round-5 findings 2/3/4 are fixed in source and AC1-AC4 hold by source and named tests (CI still pending at this head, so no test pass is claimed). Blocked only by operator scope: resolver now covers db sync --pull, but --sync and burndown still pull plainly and continue on failure, with no advisor ruling or split recorded.. It was punted on: design-fork: Latest review finding 1 requires advisor action: upstream-scalar semantic merge policy, comprehensive failed-pull write fencing and removal of the dell1 stopgap remain unresolved. CLAUDE.md requires advisor signoff for architecture changes; no approved policy or linked split is recorded. This round addresses findings 2, 3 and 4 with the existing resolver, managed-operation aborts and offline guidance. Preserve the merge hold and publication veto; do not publish as a complete fix.. No triage reason was given.'
-  created_at: 2026-11-08T11:13:55.369420608Z
-  modified_at: 2026-11-08T11:13:55.369420608Z
+  created_at: 2026-11-08 11:13:55.369420+00:00
+  modified_at: 2026-11-08 11:13:55.369420+00:00
   session_id: 01a1b9af-8230-75d2-82f8-667491cc010a
   harness_version: 2.1.319 (Claude Code)
 - id: 01a1badd-73aa-7f30-b32a-5577a20c8357
   author: joe
-  content: |-
-    REVIEW FINDINGS TO ADDRESS (BUG-2490):
+  content: 'REVIEW FINDINGS TO ADDRESS (BUG-2490):
+
     Verdict: CHANGES REQUESTED
+
     Reviewed commit: 4e6248977f5b
+
     Recorded: 2026-11-08T10:02:45.935649109+00:00
+
     Findings:
-    1. [major][scope][advisor-action] Operator scope on BUG-2490 (comment 2026-11-08T03:05Z) is narrowed but still neither finished nor split. Done at this head: 'aida db sync --pull' uses pull_rebase_auto_merge (git_backend_cmd.rs:1362) and queue pickup stops on a failed pull (queue_cmd.rs:12509). Open: (a) maybe_sync_pull still uses plain pull_rebase (store_sync.rs:1719), so a same-spec two-node conflict still fails on --sync and burndown; (b) maybe_sync_pull prints 'Falling back to local view' (store_sync.rs:1768) and burndown ignores the result (burndown_run.rs:367, 748) and goes on to compute and drain on the stale view, the dell1 failure mode; (c) resolve_spec_conflict bails on delete/modify (git_ops.rs:2618), which the dell1 stopgap handles by keeping upstream, and that case now makes pickup exit; so the stopgap cannot be removed yet. Reading of the policy dispute: the operator's comment asks for a semantic merge so concurrent edits do not conflict, and describes upstream-scalars as what the hand fix did, so the existing LWW resolver appears to satisfy it, but that is the advisor's call. Action: the advisor records that ruling on BUG-2490 and either requires (a)-(c) here or files a linked follow-up for them, then re-requests review. Another implementer round cannot clear this alone.
-    2. [minor][correctness] The fatal pre-pickup pull at queue_cmd.rs:12509 now runs before the delegation and keyring preflights at queue_cmd.rs:12532-12590 (BUG-1808, BUG-2428), which exist so that a refused launch leaves nothing behind. 'aida db sync --pull' commits all pending store edits ('chore: sync pending changes', git_backend_cmd.rs:1329-1332) and rebases, so a seat without delegation now mutates the store before being refused, and when offline it sees a pull error instead of the delegation refusal. Move the pull after those read-only preflights and before the first write (retire_idle_review_worktree, standalone slot, queue row), keeping bug_2490_failed_pull_stops_pickup_before_session_and_spec_writes green.
-    3. [minor][ux] db_sync_local_window discards StorePullOutcome::AutoMerged notes (git_backend_cmd.rs:1362 matches only Err), while 'aida pull' prints each one (store_push_pull.rs:2491-2495). A resolver run that picks one side's scalars by LWW during pickup is therefore silent. Print the notes as store_push_pull.rs does.
-    4. [minor][perf] Carried, non-blocking: a full 'aida doctor' run parses every store object twice, in the tolerant Storage::load and again in scan_store_objects (doctor_cmd.rs:835). Take the bad-object list from the loader if practical.
-    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
-  created_at: 2026-11-08T11:13:57.674341222Z
-  modified_at: 2026-11-08T11:13:57.674341222Z
+
+    1. [major][scope][advisor-action] Operator scope on BUG-2490 (comment 2026-11-08T03:05Z) is narrowed but still neither finished nor split. Done at this head: ''aida db sync --pull'' uses pull_rebase_auto_merge (git_backend_cmd.rs:1362) and queue pickup stops on a failed pull (queue_cmd.rs:12509). Open: (a) maybe_sync_pull still uses plain pull_rebase (store_sync.rs:1719), so a same-spec two-node conflict still fails on --sync and burndown; (b) maybe_sync_pull prints ''Falling back to local view'' (store_sync.rs:1768) and burndown ignores the result (burndown_run.rs:367, 748) and goes on to compute and drain on the stale view, the dell1 failure mode; (c) resolve_spec_conflict bails on delete/modify (git_ops.rs:2618), which the dell1 stopgap handles by keeping upstream, and that case now makes pickup exit; so the stopgap cannot be removed yet. Reading of the policy dispute: the operator''s comment asks for a semantic merge so concurrent edits do not conflict, and describes upstream-scalars
+    as what the hand fix did, so the existing LWW resolver appears to satisfy it, but that is the advisor''s call. Action: the advisor records that ruling on BUG-2490 and either requires (a)-(c) here or files a linked follow-up for them, then re-requests review. Another implementer round cannot clear this alone.
+
+    2. [minor][correctness] The fatal pre-pickup pull at queue_cmd.rs:12509 now runs before the delegation and keyring preflights at queue_cmd.rs:12532-12590 (BUG-1808, BUG-2428), which exist so that a refused launch leaves nothing behind. ''aida db sync --pull'' commits all pending store edits (''chore: sync pending changes'', git_backend_cmd.rs:1329-1332) and rebases, so a seat without delegation now mutates the store before being refused, and when offline it sees a pull error instead of the delegation refusal. Move the pull after those read-only preflights and before the first write (retire_idle_review_worktree, standalone slot, queue row), keeping bug_2490_failed_pull_stops_pickup_before_session_and_spec_writes green.
+
+    3. [minor][ux] db_sync_local_window discards StorePullOutcome::AutoMerged notes (git_backend_cmd.rs:1362 matches only Err), while ''aida pull'' prints each one (store_push_pull.rs:2491-2495). A resolver run that picks one side''s scalars by LWW during pickup is therefore silent. Print the notes as store_push_pull.rs does.
+
+    4. [minor][perf] Carried, non-blocking: a full ''aida doctor'' run parses every store object twice, in the tolerant Storage::load and again in scan_store_objects (doctor_cmd.rs:835). Take the bad-object list from the loader if practical.
+
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.'
+  created_at: 2026-11-08 11:13:57.674341+00:00
+  modified_at: 2026-11-08 11:13:57.674341+00:00
   session_id: 01a1b9af-8230-75d2-82f8-667491cc010a
   harness_version: 2.1.319 (Claude Code)
 - id: 01a1bae7-1f28-7970-8cd1-33784aea9420
   author: dirtlab
-  content: |
-    Native-seat rework handoff for review 4e6248977f5b: findings 2 and 3 addressed in uncommitted edits. queue_cmd moves the fatal pickup pull after the read-only delegation and keyring checks and before standalone slot acquisition or pickup mutations. git_backend_cmd prints StorePullOutcome::AutoMerged notes during db sync, matching ordinary store pull. queue_work_dry_run strengthens the delegation regression with an unreachable local origin and removes --no-pull, and asserts semantic merge notes appear during same-spec pickup.
+  content: 'Native-seat rework handoff for review 4e6248977f5b: findings 2 and 3 addressed in uncommitted edits. queue_cmd moves the fatal pickup pull after the read-only delegation and keyring checks and before standalone slot acquisition or pickup mutations. git_backend_cmd prints StorePullOutcome::AutoMerged notes during db sync, matching ordinary store pull. queue_work_dry_run strengthens the delegation regression with an unreachable local origin and removes --no-pull, and asserts semantic merge notes appear during same-spec pickup.
+
 
     Changed files: aida-cli-lib/src/queue_cmd.rs; aida-cli-lib/src/git_backend_cmd.rs; aida-cli/tests/queue_work_dry_run.rs.
 
+
     Validation: lane job j20261108T111633881-2-0 executed both BUG-2490 pickup tests, 2 passed; j20261108T111642386-2-0 executed task_1337_delegation_refuses_before_any_pickup_mutation, 1 passed. Writer inventory passed (3369 sinks/293 mappings), rustfmt --check and git diff --check passed. Codegraph executable unavailable; rg used for caller confirmation.
 
+
     Finding 1 remains explicitly punted for advisor action: rule on the existing LWW semantic policy and authorize remaining maybe_sync_pull/burndown failed-pull fencing and delete/modify handling here or record a linked split. CLAUDE.md requires advisor architecture signoff; no ruling or split is recorded. Finding 4 remains the carried non-blocking doctor double scan. Persisted Needs Attention punt succeeded; local punt signal failed read-only. Preserve persisted punt, merge hold and publication veto. No commit, push, PR creation, queue completion, ship declaration or review recording performed. Do not publish as a complete BUG-2490 fix.
-  created_at: 2026-11-08T11:24:31.400670959Z
-  modified_at: 2026-11-08T11:24:31.400670959Z
+
+    '
+  created_at: 2026-11-08 11:24:31.400670+00:00
+  modified_at: 2026-11-08 11:24:31.400670+00:00
   session_id: 01a1baded6ca
   harness_version: codex-cli 0.167.0
 - id: 01a1baf9-3e44-7072-8839-cfd96b4c68f3
   author: joe
-  content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: AC1-AC4 hold by source and named tests, and round-5 findings 2/3 are fixed; CI is still queued at this head so no test pass is claimed. Blocked on operator scope with no advisor ruling or linked split on BUG-2490. AC1 verified git_ops.rs:477-478 + store_hook_tests.rs:1290; AC2 verified validate_* + bug_2490 schema/pending tests; AC3 verified bug_2490_autostash_conflict_refuses_store_commit; AC4 verified bug_2490_doctor_reports_conflict_file_without_aborting; operator (a) semantic merge partial; operator (b) failed-pull fencing partial.. It was punted on: design-fork: Latest review finding 1 requires advisor action: rule on whether the existing LWW semantic merge policy satisfies the operator request, and authorize the remaining maybe_sync_pull/burndown failed-pull fencing and delete/modify policy here or record a linked split. CLAUDE.md requires advisor signoff for architecture changes; no ruling or split is recorded. This round fixes findings 2 and 3 only (launch preflights before pickup pull; visible sync merge notes). Preserve the existing merge hold and publication veto; do not publish as a complete fix.. No triage reason was given.'
-  created_at: 2026-11-08T11:44:19.012387208Z
-  modified_at: 2026-11-08T11:44:19.012387208Z
+  content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: AC1-AC4 hold by source and named tests, and round-5 findings 2/3 are fixed; CI is still queued at this head so no test pass is claimed. Blocked on operator scope with no advisor ruling or linked split on BUG-2490. AC1 verified git_ops.rs:477-478 + store_hook_tests.rs:1290; AC2 verified validate_* + bug_2490 schema/pending tests; AC3 verified bug_2490_autostash_conflict_refuses_store_commit; AC4 verified bug_2490_doctor_reports_conflict_file_without_aborting; operator (a) semantic merge partial; operator (b) failed-pull fencing partial.. It was punted on: design-fork: Latest review finding 1 requires advisor action: rule on whether the existing LWW semantic merge policy satisfies the operator request, and authorize the remaining maybe_sync_pull/burndown failed-pull fencing and delete/modify policy here or record a linked split. CLAUDE.md requires advisor signoff
+    for architecture changes; no ruling or split is recorded. This round fixes findings 2 and 3 only (launch preflights before pickup pull; visible sync merge notes). Preserve the existing merge hold and publication veto; do not publish as a complete fix.. No triage reason was given.'
+  created_at: 2026-11-08 11:44:19.012387+00:00
+  modified_at: 2026-11-08 11:44:19.012387+00:00
   session_id: 01a1b9af-8230-75d2-82f8-667491cc010a
   harness_version: 2.1.319 (Claude Code)
 - id: 01a1baf9-46c2-7630-a78b-04e328c7f4ef
   author: joe
-  content: |-
-    REVIEW FINDINGS TO ADDRESS (BUG-2490):
+  content: 'REVIEW FINDINGS TO ADDRESS (BUG-2490):
+
     Verdict: CHANGES REQUESTED
+
     Reviewed commit: 0df9e76f5643
+
     Recorded: 2026-11-08T11:43:14.850914227+00:00
+
     Findings:
-    1. [major][scope][advisor-action] Operator scope on BUG-2490 (comment 2026-11-08T03:05Z, and the 05:26Z note to remove the dell1 stopgap when this lands) is still neither finished nor split, and BUG-2490 still links only STORY-2671. Open at this head: (a) maybe_sync_pull uses plain pull_rebase (aida-cli-lib/src/store_sync.rs:1719), so a same-spec two-node conflict still fails on --sync and burndown; (b) maybe_sync_pull prints 'Falling back to local view' (store_sync.rs:1768) and burndown ignores its result (burndown_run.rs:367, 748), then computes and drains on the stale view; (c) resolve_spec_conflict bails on delete/modify (aida-core/src/git_ops.rs:2618), which the dell1 stopgap resolves by keeping upstream, and that now makes pickup exit. The implementer has punted this for advisor action in every round and cannot clear it. Action: the advisor records the merge-policy ruling on BUG-2490 and either requires (a)-(c) here or files a linked follow-up, then re-requests review.
-    2. [cosmetic][docs] aida-cli-lib/src/queue_cmd.rs:13201-13203 still says the dry-run return sits before 'the pre-pickup pull'. This PR moved that pull to queue_cmd.rs:12585, ahead of this block and guarded by !dry_run, so the comment now misdescribes the order.
-    3. [minor][perf] Carried, non-blocking: a full 'aida doctor' run parses every store object twice, in the tolerant Storage::load and again in scan_store_objects (aida-cli-lib/src/doctor_cmd.rs:835). Take the bad-object list from the loader if practical.
-    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
-  created_at: 2026-11-08T11:44:21.186335381Z
-  modified_at: 2026-11-08T11:44:21.186335381Z
+
+    1. [major][scope][advisor-action] Operator scope on BUG-2490 (comment 2026-11-08T03:05Z, and the 05:26Z note to remove the dell1 stopgap when this lands) is still neither finished nor split, and BUG-2490 still links only STORY-2671. Open at this head: (a) maybe_sync_pull uses plain pull_rebase (aida-cli-lib/src/store_sync.rs:1719), so a same-spec two-node conflict still fails on --sync and burndown; (b) maybe_sync_pull prints ''Falling back to local view'' (store_sync.rs:1768) and burndown ignores its result (burndown_run.rs:367, 748), then computes and drains on the stale view; (c) resolve_spec_conflict bails on delete/modify (aida-core/src/git_ops.rs:2618), which the dell1 stopgap resolves by keeping upstream, and that now makes pickup exit. The implementer has punted this for advisor action in every round and cannot clear it. Action: the advisor records the merge-policy ruling on BUG-2490 and either requires (a)-(c) here or files a linked follow-up, then re-requests review.
+
+    2. [cosmetic][docs] aida-cli-lib/src/queue_cmd.rs:13201-13203 still says the dry-run return sits before ''the pre-pickup pull''. This PR moved that pull to queue_cmd.rs:12585, ahead of this block and guarded by !dry_run, so the comment now misdescribes the order.
+
+    3. [minor][perf] Carried, non-blocking: a full ''aida doctor'' run parses every store object twice, in the tolerant Storage::load and again in scan_store_objects (aida-cli-lib/src/doctor_cmd.rs:835). Take the bad-object list from the loader if practical.
+
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.'
+  created_at: 2026-11-08 11:44:21.186335+00:00
+  modified_at: 2026-11-08 11:44:21.186335+00:00
   session_id: 01a1b9af-8230-75d2-82f8-667491cc010a
   harness_version: 2.1.319 (Claude Code)
 - id: 01a1bb07-3dfe-7fa2-8331-8e10b306839a
   author: joe
-  content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: AC1-AC4 hold by source and named tests and the dry-run comment is fixed, but CI has not run at this head and operator scope has no advisor ruling or linked split. AC1 verified git_ops.rs:477-478 + store_hook_tests.rs:1290; AC2 verified validate_* + bug_2490 schema/pending tests; AC3 verified bug_2490_autostash_conflict_refuses_store_commit; AC4 verified bug_2490_doctor_reports_conflict_file_without_aborting; operator (a) semantic merge partial; operator (b) failed-pull fencing partial; stopgap removal unverified.. It was punted on: design-fork: Latest review of 0df9e76f5643 finding 1 explicitly requires advisor action: rule on the semantic merge policy and authorize remaining maybe_sync_pull/burndown failed-pull fencing and delete/modify handling here, or file and link a scope split. CLAUDE.md:19 requires advisor signoff for architecture changes; no ruling or linked split is recorded. This round fixes only finding 2, the stale dry-run ordering comment. Finding 3 remains the carried non-blocking doctor double scan. Preserve the merge hold and publication veto; do not publish as a complete BUG-2490 fix.. No triage reason was given.'
-  created_at: 2026-11-08T11:59:36.446275703Z
-  modified_at: 2026-11-08T11:59:36.446275703Z
+  content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: AC1-AC4 hold by source and named tests and the dry-run comment is fixed, but CI has not run at this head and operator scope has no advisor ruling or linked split. AC1 verified git_ops.rs:477-478 + store_hook_tests.rs:1290; AC2 verified validate_* + bug_2490 schema/pending tests; AC3 verified bug_2490_autostash_conflict_refuses_store_commit; AC4 verified bug_2490_doctor_reports_conflict_file_without_aborting; operator (a) semantic merge partial; operator (b) failed-pull fencing partial; stopgap removal unverified.. It was punted on: design-fork: Latest review of 0df9e76f5643 finding 1 explicitly requires advisor action: rule on the semantic merge policy and authorize remaining maybe_sync_pull/burndown failed-pull fencing and delete/modify handling here, or file and link a scope split. CLAUDE.md:19 requires advisor signoff for architecture changes; no ruling or
+    linked split is recorded. This round fixes only finding 2, the stale dry-run ordering comment. Finding 3 remains the carried non-blocking doctor double scan. Preserve the merge hold and publication veto; do not publish as a complete BUG-2490 fix.. No triage reason was given.'
+  created_at: 2026-11-08 11:59:36.446275+00:00
+  modified_at: 2026-11-08 11:59:36.446275+00:00
   session_id: 01a1b9af-8230-75d2-82f8-667491cc010a
   harness_version: 2.1.319 (Claude Code)
 - id: 01a1bb07-47cd-7223-ad3f-51057429e2db
   author: joe
-  content: |-
-    REVIEW FINDINGS TO ADDRESS (BUG-2490):
+  content: 'REVIEW FINDINGS TO ADDRESS (BUG-2490):
+
     Verdict: CHANGES REQUESTED
+
     Reviewed commit: 0c0318f8c610
+
     Recorded: 2026-11-08T11:52:54.981479061+00:00
+
     Findings:
-    1. [major][scope][advisor-action] Operator scope on BUG-2490 (comment 2026-11-08T03:05Z, and the 05:26Z note to remove the dell1 stopgap when this lands) is still neither finished nor split; BUG-2490 still links only STORY-2671 and no ruling has been recorded. Open at this head: (a) maybe_sync_pull uses plain pull_rebase (aida-cli-lib/src/store_sync.rs:1719), so a same-spec two-node conflict still fails on --sync and burndown; (b) maybe_sync_pull prints 'Falling back to local view' (store_sync.rs:1768) and burndown ignores its result (burndown_run.rs:367, 748), then drains on the stale view; (c) resolve_spec_conflict bails on delete/modify (aida-core/src/git_ops.rs:2618), which the stopgap resolves by keeping upstream, and that now makes pickup exit. Another implementer round cannot clear this. Action: the advisor records the merge-policy ruling on BUG-2490 and either requires (a)-(c) here or files a linked follow-up, then re-requests review.
+
+    1. [major][scope][advisor-action] Operator scope on BUG-2490 (comment 2026-11-08T03:05Z, and the 05:26Z note to remove the dell1 stopgap when this lands) is still neither finished nor split; BUG-2490 still links only STORY-2671 and no ruling has been recorded. Open at this head: (a) maybe_sync_pull uses plain pull_rebase (aida-cli-lib/src/store_sync.rs:1719), so a same-spec two-node conflict still fails on --sync and burndown; (b) maybe_sync_pull prints ''Falling back to local view'' (store_sync.rs:1768) and burndown ignores its result (burndown_run.rs:367, 748), then drains on the stale view; (c) resolve_spec_conflict bails on delete/modify (aida-core/src/git_ops.rs:2618), which the stopgap resolves by keeping upstream, and that now makes pickup exit. Another implementer round cannot clear this. Action: the advisor records the merge-policy ruling on BUG-2490 and either requires (a)-(c) here or files a linked follow-up, then re-requests review.
+
     2. [major][ci] No CI evidence at the reviewed head: CI run 42477311530 is pending with no jobs, and the runs at the three previous heads were queued or cancelled, so this rework has no CI pass (merge-hold-gate fails only on the supervised hold, which is expected). Approval needs a green CI run at the final head; no code change is requested.
+
     3. [minor][correctness][plausible] The now-fatal pre-pickup pull (aida-cli-lib/src/queue_cmd.rs:12585) has no push-to-create tolerance. db_sync_local_window skips only when origin is absent (git_backend_cmd.rs:1344), but fetch_rebase_target fails when origin exists and has no store branch yet (git_ops.rs:1994-2005), a state git_ops.rs:4950 names and init_cmd.rs:5962 can create by adding origin without pushing. That pickup warned and continued before; it now exits until the operator pushes or passes --no-pull. Inferred from source, not reproduced. Skip the pull when the remote branch does not exist (git_ops::remote_branch_exists), with a regression test.
-    4. [minor][perf] Carried, non-blocking: a full 'aida doctor' run parses every store object twice, in the tolerant Storage::load and again in scan_store_objects (aida-cli-lib/src/doctor_cmd.rs:835). Take the bad-object list from the loader if practical.
-    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
-  created_at: 2026-11-08T11:59:38.957387934Z
-  modified_at: 2026-11-08T11:59:38.957387934Z
+
+    4. [minor][perf] Carried, non-blocking: a full ''aida doctor'' run parses every store object twice, in the tolerant Storage::load and again in scan_store_objects (aida-cli-lib/src/doctor_cmd.rs:835). Take the bad-object list from the loader if practical.
+
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.'
+  created_at: 2026-11-08 11:59:38.957387+00:00
+  modified_at: 2026-11-08 11:59:38.957387+00:00
   session_id: 01a1b9af-8230-75d2-82f8-667491cc010a
   harness_version: 2.1.319 (Claude Code)
 - id: 01a1bb0e-044f-7a41-b8a3-1c598c5654fe
   author: dirtlab
-  content: |
-    Native-seat rework handoff for review 0c0318f8c610: finding 3 addressed in uncommitted edits. db_sync_local_window skips pull only when a successful remote query confirms the current store branch is absent. Added fallible git_ops::probe_remote_branch because remote_branch_exists conflates absent and unreachable; unreachable origins still refuse before pickup. CLI regression covers both an empty origin and an origin containing main but no store branch.
+  content: 'Native-seat rework handoff for review 0c0318f8c610: finding 3 addressed in uncommitted edits. db_sync_local_window skips pull only when a successful remote query confirms the current store branch is absent. Added fallible git_ops::probe_remote_branch because remote_branch_exists conflates absent and unreachable; unreachable origins still refuse before pickup. CLI regression covers both an empty origin and an origin containing main but no store branch.
+
 
     Changed files: aida-core/src/git_ops.rs; aida-cli-lib/src/git_backend_cmd.rs; aida-cli/tests/queue_work_dry_run.rs.
 
+
     Validation: core lane job j20261108T120150507-2-0 executed all 7 existing BUG-2490 regressions, passed. CLI job j20261108T120319512-2-0 executed all 3 BUG-2490 pickup regressions against final edits, passed; j20261108T120223679-2-0 also executed the same 3 and passed. Tests cover confirmed missing branch, unreachable remote refusal without pickup mutation, and same-spec semantic merge pickup. Writer inventory passed (3370 sinks/293 mappings); 8 maintenance ratchet tests passed; rustfmt --check and git diff --check passed. Codegraph unavailable; rg used.
 
+
     Finding 1 explicitly punted: advisor must rule on semantic merge policy and require remaining maybe_sync_pull/burndown failed-pull fencing and delete/modify handling here, or file a linked split. No ruling or split is recorded. Finding 2 requires host CI at the final published head. Finding 4 remains non-blocking doctor double scan. Persisted Needs Attention punt succeeded; local punt signal could not be written (read-only filesystem). Preserve persisted punt, merge hold and publication veto. No commit, push, PR creation, queue completion, ship declaration or review recording performed. Do not publish as a complete BUG-2490 fix.
-  created_at: 2026-11-08T12:07:00.431672983Z
-  modified_at: 2026-11-08T12:07:00.431672983Z
+
+    '
+  created_at: 2026-11-08 12:07:00.431672+00:00
+  modified_at: 2026-11-08 12:07:00.431672+00:00
   session_id: 01a1bb088418
   harness_version: codex-cli 0.167.0
 - id: 01a1bb32-fdff-7a81-900b-f584c5a96874
   author: joe
-  content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: AC1, AC3 and AC4 hold by source and named tests, but CI cli-0 is red at this head, db sync''s add -A bypasses the unmerged-path refusal, and the operator scope has no advisor ruling or linked split.. It was punted on: design-fork: Latest review of 0c0318f8c610 finding 1 requires advisor action: rule on the semantic merge policy and require remaining maybe_sync_pull/burndown failed-pull fencing and delete/modify handling here, or file and link a scope split. CLAUDE.md requires advisor signoff for architecture changes; no ruling or linked split is recorded. This round fixes finding 3 with confirmed-missing remote store branch tolerance, preserving refusal for unreachable remotes. Finding 2 needs host CI at the final head; finding 4 remains non-blocking. Preserve the merge hold and publication veto; do not publish as a complete BUG-2490 fix.. No triage reason was given.'
-  created_at: 2026-11-08T12:47:23.647210156Z
-  modified_at: 2026-11-08T12:47:23.647210156Z
+  content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: AC1, AC3 and AC4 hold by source and named tests, but CI cli-0 is red at this head, db sync''s add -A bypasses the unmerged-path refusal, and the operator scope has no advisor ruling or linked split.. It was punted on: design-fork: Latest review of 0c0318f8c610 finding 1 requires advisor action: rule on the semantic merge policy and require remaining maybe_sync_pull/burndown failed-pull fencing and delete/modify handling here, or file and link a scope split. CLAUDE.md requires advisor signoff for architecture changes; no ruling or linked split is recorded. This round fixes finding 3 with confirmed-missing remote store branch tolerance, preserving refusal for unreachable remotes. Finding 2 needs host CI at the final head; finding 4 remains non-blocking. Preserve the merge hold and publication veto; do not publish as a complete BUG-2490 fix.. No triage reason was
+    given.'
+  created_at: 2026-11-08 12:47:23.647210+00:00
+  modified_at: 2026-11-08 12:47:23.647210+00:00
   session_id: 01a1b9af-8230-75d2-82f8-667491cc010a
   harness_version: 2.1.319 (Claude Code)
 - id: 01a1bb33-07bd-70a2-bf05-19f18d160548
   author: joe
-  content: |-
-    REVIEW FINDINGS TO ADDRESS (BUG-2490):
+  content: 'REVIEW FINDINGS TO ADDRESS (BUG-2490):
+
     Verdict: CHANGES REQUESTED
+
     Reviewed commit: 8ad379ae3152
+
     Recorded: 2026-11-08T12:39:26.290258736+00:00
+
     Findings:
-    1. [major][ci] CI (cli-0) failed at 8ad379ae3152, step 'Run tests' (run 42478761171, job 128726546706). The failing test could not be identified: the job log is on a blob host this reviewer sandbox denies, and the check-run annotations carry only 'exit code 1'. Cause is undetermined, so treat it as PR-caused until shown otherwise: read the log and fix it, or show it fails independently of this PR. This is the first CI at any recent head to reach results: runs at the prior seven heads were cancelled. lib-0, lib-1, gates and contracts were still queued at review, so their outcome is unknown. merge-hold-gate fails only on the supervised hold, as expected.
-    2. [major][correctness][AC2] 'Unmerged paths also refuse' is bypassed on the db sync path. db_sync_local_window runs add_all(store_path, ".") at aida-cli-lib/src/git_backend_cmd.rs:1330 before commit() at :1331, and 'git add -A' clears the unmerged stages, so the unmerged check in validate_store_index_paths (aida-core/src/git_ops.rs) sees none. Marker-bearing spec objects are still caught by the staged-blob check, but two cases commit: an unmerged non-object path such as oplog.yaml or registry/queues/*.yaml with markers (is_spec_object_path excludes them), and a modify/delete conflict on an object, which has no markers. db sync runs on every pickup. commit_pending_store_changes_on_host avoids this by validating before staging (git_ops.rs:2435-2436); do the same here, check the other whole-tree add_all caller at aida-cli-lib/src/store_push_pull.rs:572, and add a regression with an unmerged non-object path. Found by source reading; not executed.
-    3. [major][scope][advisor-action] Operator scope on BUG-2490 (comment 2026-11-08T03:05Z and the 05:26Z note to remove the dell1 stopgap when this lands) is still neither finished nor split; BUG-2490 links only STORY-2671, and no ruling is recorded. Open at this head: (a) maybe_sync_pull uses plain pull_rebase (aida-cli-lib/src/store_sync.rs:1719), so a same-spec two-node conflict still fails on --sync and burndown; (b) maybe_sync_pull prints 'Falling back to local view' (store_sync.rs:1768) and burndown ignores its result (burndown_run.rs:367, 748); (c) resolve_spec_conflict bails on delete/modify (aida-core/src/git_ops.rs:2618), which the stopgap resolves by keeping upstream, and that now makes pickup exit. Another implementer round cannot clear this. The advisor must record the merge-policy ruling and either require (a)-(c) here or file a linked follow-up, then re-request review.
-    4. [minor][perf] Carried, non-blocking: doctor_multi_agent loads the whole store through Storage::load and then store_object_findings reads and parses every object again (aida-cli-lib/src/doctor_cmd.rs:828-836, 7365 objects in the live store). Doctor-only cost; sharing the loader's diagnostics would remove the second parse.
-    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
-  created_at: 2026-11-08T12:47:26.141230801Z
-  modified_at: 2026-11-08T12:47:26.141230801Z
+
+    1. [major][ci] CI (cli-0) failed at 8ad379ae3152, step ''Run tests'' (run 42478761171, job 128726546706). The failing test could not be identified: the job log is on a blob host this reviewer sandbox denies, and the check-run annotations carry only ''exit code 1''. Cause is undetermined, so treat it as PR-caused until shown otherwise: read the log and fix it, or show it fails independently of this PR. This is the first CI at any recent head to reach results: runs at the prior seven heads were cancelled. lib-0, lib-1, gates and contracts were still queued at review, so their outcome is unknown. merge-hold-gate fails only on the supervised hold, as expected.
+
+    2. [major][correctness][AC2] ''Unmerged paths also refuse'' is bypassed on the db sync path. db_sync_local_window runs add_all(store_path, ".") at aida-cli-lib/src/git_backend_cmd.rs:1330 before commit() at :1331, and ''git add -A'' clears the unmerged stages, so the unmerged check in validate_store_index_paths (aida-core/src/git_ops.rs) sees none. Marker-bearing spec objects are still caught by the staged-blob check, but two cases commit: an unmerged non-object path such as oplog.yaml or registry/queues/*.yaml with markers (is_spec_object_path excludes them), and a modify/delete conflict on an object, which has no markers. db sync runs on every pickup. commit_pending_store_changes_on_host avoids this by validating before staging (git_ops.rs:2435-2436); do the same here, check the other whole-tree add_all caller at aida-cli-lib/src/store_push_pull.rs:572, and add a regression with an unmerged non-object path. Found by source reading; not executed.
+
+    3. [major][scope][advisor-action] Operator scope on BUG-2490 (comment 2026-11-08T03:05Z and the 05:26Z note to remove the dell1 stopgap when this lands) is still neither finished nor split; BUG-2490 links only STORY-2671, and no ruling is recorded. Open at this head: (a) maybe_sync_pull uses plain pull_rebase (aida-cli-lib/src/store_sync.rs:1719), so a same-spec two-node conflict still fails on --sync and burndown; (b) maybe_sync_pull prints ''Falling back to local view'' (store_sync.rs:1768) and burndown ignores its result (burndown_run.rs:367, 748); (c) resolve_spec_conflict bails on delete/modify (aida-core/src/git_ops.rs:2618), which the stopgap resolves by keeping upstream, and that now makes pickup exit. Another implementer round cannot clear this. The advisor must record the merge-policy ruling and either require (a)-(c) here or file a linked follow-up, then re-request review.
+
+    4. [minor][perf] Carried, non-blocking: doctor_multi_agent loads the whole store through Storage::load and then store_object_findings reads and parses every object again (aida-cli-lib/src/doctor_cmd.rs:828-836, 7365 objects in the live store). Doctor-only cost; sharing the loader''s diagnostics would remove the second parse.
+
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.'
+  created_at: 2026-11-08 12:47:26.141230+00:00
+  modified_at: 2026-11-08 12:47:26.141230+00:00
   session_id: 01a1b9af-8230-75d2-82f8-667491cc010a
   harness_version: 2.1.319 (Claude Code)
 - id: 01a1bb41-ade3-75f1-b7f7-250eda727ec4
   author: joe
-  content: |
-    Round 10 native-seat handoff against reviewed 8ad379ae3152:
+  content: 'Round 10 native-seat handoff against reviewed 8ad379ae3152:
+
 
     Finding 1 addressed: reproduced owned_rebase_abort_failure_is_reported_and_preserved failing in lane job j20261108T125037043-1189804-0. The structured rebase path discarded the failed abort diagnostic after db sync migrated from plain rebase. A shared abort-error helper now retains the original failure and automatic-abort failure at each existing structured-rebase abort site. Strengthened the regression to require the conflicting path and T1717-ABORT-BLOCKED detail. Final job j20261108T125500297-1205282-0 executed the test: 1 passed.
 
+
     Finding 2 addressed: validate_pending_store_commit shares the host pending-commit preflight with db_sync_local_window and auto_push_store_best_effort, under their existing store writer locks and before whole-tree staging can erase unmerged stages. New CLI regressions create real conflicts, clear the merge operation while retaining unmerged stages (autostash-like state), and assert unchanged HEAD/index/files on refusal. They cover a non-object queue registry conflict and a marker-free object modify/delete conflict; explicit registry resolution supplies a positive sync control. Final job j20261108T125217335-2-0 executed both tests: 2 passed.
 
+
     Changed files (uncommitted, native seat): aida-core/src/git_ops.rs; aida-cli-lib/src/git_backend_cmd.rs; aida-cli-lib/src/store_push_pull.rs; aida-cli/tests/task_1717_store_writer_lock.rs.
+
     Additional validation: writer inventory passed (3372 sinks/293 mappings); all 42 inventory fixture tests passed; all 10 git-maintenance/ownership-liveness tests passed; portability ratchet, rustfmt --check and git diff --check passed. Codegraph could not open its database; source navigation used rg. Full CI at the next head remains host work; no claim of a full CI pass.
+
 
     Finding 3 remains blocked on the explicitly requested advisor action: record the semantic merge-policy ruling and either require the remaining maybe_sync_pull/burndown failed-pull fencing and delete/modify policy here, or file and link a follow-up. No ruling or linked split exists in the current spec. CLAUDE.md requires advisor signoff for architecture changes. This implementer does not supply that authority. Preserve the merge hold and publication veto; do not publish as a complete BUG-2490 fix. Finding 4 remains carried/non-blocking: doctor still parses objects twice; the loader does not expose reusable per-object diagnostics, and no loader API expansion is included in this correctness repair.
 
+
     No commit, push, PR creation, queue completion, ship declaration, hold clearance or review recording performed. Host owns Git publication, subject to the unresolved punt and hold.
-  created_at: 2026-11-08T13:03:26.179469336Z
-  modified_at: 2026-11-08T13:03:26.179469336Z
+
+    '
+  created_at: 2026-11-08 13:03:26.179469+00:00
+  modified_at: 2026-11-08 13:03:26.179469+00:00
   session_id: 01a1bb34f948
 - id: 01a1bb4d-7409-7a23-a471-ee0a9e93fae5
   author: joe
   content: 'Advisor evidence 2026-11-08 06:10 (primary host): local .aida-store diverged 44 ahead / 43 behind origin; ''aida db sync --pull'' failed at ''Rebasing (1/43) could not apply ... chore: sync pending changes'', and every ''aida push'' was rejected, so local advisor writes (rulings, comments) silently stayed local. 13 conflicted files (objects/*.yaml + timings/*.json). Resolved with the dell1 stopgap ported to the primary host: ~/.local/share/aida/ops/advisor-scripts/store-sync-local.sh + store-resolve.py (upstream scalars win, comments/history union by id); backup branch advisor-store-backup-0610 = 4a56476dc96. Recurred within 15 minutes, so the fix must handle concurrent writers (auto-rework queue writes) on the same host, not only cross-host.'
-  created_at: 2026-11-08T13:16:17.801060410Z
-  modified_at: 2026-11-08T13:16:17.801060410Z
+  created_at: 2026-11-08 13:16:17.801060+00:00
+  modified_at: 2026-11-08 13:16:17.801060+00:00
   session_id: 01a1b9af-8230-75d2-82f8-667491cc010a
   harness_version: 2.1.319 (Claude Code)
 - id: 01a1bb87-ce6d-75a1-a6e7-5f5949c36d48
   author: joe
   content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: AC1-AC4 hold by source and named tests and round-10 findings 1-2 are fixed, but the operator''s pull-failure and delete/modify scope has no advisor ruling or linked split, and CI is still pending at this head.. It was punted on: design-fork: Round 10 finding 3 explicitly requires advisor action: record the semantic merge-policy ruling and require remaining maybe_sync_pull/burndown failed-pull fencing and delete/modify handling here, or file and link a scope split. No ruling or linked split is recorded; CLAUDE.md requires advisor signoff for architecture changes. Findings 1 and 2 are repaired in uncommitted edits with all three targeted tests passing. Finding 4 remains carried and non-blocking. Preserve the merge hold and publication veto; do not publish as a complete BUG-2490 fix.. No triage reason was given.'
-  created_at: 2026-11-08T14:20:02.029816139Z
-  modified_at: 2026-11-08T14:20:02.029816139Z
+  created_at: 2026-11-08 14:20:02.029816+00:00
+  modified_at: 2026-11-08 14:20:02.029816+00:00
   session_id: 01a1b9af-8230-75d2-82f8-667491cc010a
   harness_version: 2.1.319 (Claude Code)
 - id: 01a1bb87-d7cb-7232-8d54-e87b5b85446f
   author: joe
-  content: |-
-    REVIEW FINDINGS TO ADDRESS (BUG-2490):
+  content: 'REVIEW FINDINGS TO ADDRESS (BUG-2490):
+
     Verdict: CHANGES REQUESTED
+
     Reviewed commit: b3b3a379f1c6
+
     Recorded: 2026-11-08T14:16:13.784127896+00:00
+
     Findings:
-    1. [major][scope][advisor-action] Operator scope on BUG-2490 (comment 2026-11-08T03:05Z, stopgap note 05:26Z, advisor evidence 06:10 MST) is still neither finished nor split; BUG-2490 links only STORY-2671 and no ruling is recorded. Open at b3b3a379f1c6: (a) maybe_sync_pull still uses plain pull_rebase (aida-cli-lib/src/store_sync.rs:1719), so a same-spec conflict fails on --sync and burndown; (b) it prints 'Falling back to local view' (store_sync.rs:1768) and burndown discards its result with 'let _ =' (burndown_run.rs:367, 748), so a failed pull does not stop burndown's writes; (c) resolve_spec_conflict still bails on delete/modify (aida-core/src/git_ops.rs:2635), which the stopgap resolves by keeping upstream, and because pre-pickup pull is now fatal (queue_cmd.rs:12585) one such conflict stops every pickup without --no-pull. Another implementer round cannot clear this: the advisor must record the merge-policy ruling and either require (a)-(c) here or file a linked follow-up, then re-request review.
+
+    1. [major][scope][advisor-action] Operator scope on BUG-2490 (comment 2026-11-08T03:05Z, stopgap note 05:26Z, advisor evidence 06:10 MST) is still neither finished nor split; BUG-2490 links only STORY-2671 and no ruling is recorded. Open at b3b3a379f1c6: (a) maybe_sync_pull still uses plain pull_rebase (aida-cli-lib/src/store_sync.rs:1719), so a same-spec conflict fails on --sync and burndown; (b) it prints ''Falling back to local view'' (store_sync.rs:1768) and burndown discards its result with ''let _ ='' (burndown_run.rs:367, 748), so a failed pull does not stop burndown''s writes; (c) resolve_spec_conflict still bails on delete/modify (aida-core/src/git_ops.rs:2635), which the stopgap resolves by keeping upstream, and because pre-pickup pull is now fatal (queue_cmd.rs:12585) one such conflict stops every pickup without --no-pull. Another implementer round cannot clear this: the advisor must record the merge-policy ruling and either require (a)-(c) here or file a linked follow-up,
+    then re-request review.
+
     2. [major][ci][gate-state] All 8 checks at b3b3a379f1c6 (run 42488431776: cli-0, cli-1, lib-0, lib-1, gates, contracts, rest; merge-hold-gate) were still pending when this verdict was recorded, so no test named here has CI evidence at this head. Round-10 finding 1 (cli-0 red at 8ad379ae3152) is fixed by source reading only: abort_failed_store_rebase keeps both diagnostics and owned_rebase_abort_failure_is_reported_and_preserved was strengthened. Confirm green CI before any approval.
-    3. [minor][diagnostics] merge_union_onto discards a failed abort at the new validation refusal: 'let _ = git(repo, &["merge", "--abort"])' (aida-core/src/git_ops.rs:2852), and the same at :2857. Round 10 added abort_failed_store_rebase to preserve this diagnostic on the rebase path only, so a failed merge abort leaves the store mid-merge with no report. Non-blocking.
+
+    3. [minor][diagnostics] merge_union_onto discards a failed abort at the new validation refusal: ''let _ = git(repo, &["merge", "--abort"])'' (aida-core/src/git_ops.rs:2852), and the same at :2857. Round 10 added abort_failed_store_rebase to preserve this diagnostic on the rebase path only, so a failed merge abort leaves the store mid-merge with no report. Non-blocking.
+
     4. [minor][perf] Carried, non-blocking: doctor_multi_agent loads the whole store through Storage::load, then store_object_findings reads and parses every object again (aida-cli-lib/src/doctor_cmd.rs:828-836; about 7365 objects live). Doctor-only cost.
+
     5. [cosmetic][docs] OVERVIEW.md:496-504 adds a per-change BUG-2490 paragraph, which the repository CLAUDE.md reserves for real architecture changes because each added paragraph conflicts with open PRs. docs/cli/07-project-setup.md already documents the doctor category; move the rest to the PR body or spec comment. Non-blocking.
-    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
-  created_at: 2026-11-08T14:20:04.427282095Z
-  modified_at: 2026-11-08T14:20:04.427282095Z
+
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.'
+  created_at: 2026-11-08 14:20:04.427282+00:00
+  modified_at: 2026-11-08 14:20:04.427282+00:00
   session_id: 01a1b9af-8230-75d2-82f8-667491cc010a
   harness_version: 2.1.319 (Claude Code)
 - id: 01a1bb8e-9c27-7821-8366-0950a44dac9b
   author: dirtlab
-  content: 'Native-seat rework against b3b3a379f1c6: addressed review findings 3 and 5. Uncommitted files: aida-core/src/git_ops.rs shares abort-error reporting between rebase and all four existing union-merge abort sites, retaining original and recovery diagnostics; aida-core/src/git_ops/tests/store_hook_tests.rs adds a real merge refusal with a reference-transaction hook blocking abort, plus the existing successful-recovery control; OVERVIEW.md removes the per-change paragraph as requested. Final lane job j20261108T142655476-2-0 executed all 8 BUG-2490 core tests: passed. Earlier attempts exposed and corrected a compile typo and test-fixture hook/branch issues; final run is green. Writer inventory passed (3372 sinks/293 mappings); final rustfmt --check and git diff --check passed. Codegraph unavailable; rg used. Finding 1 remains explicitly punted for advisor merge-policy ruling or linked split; finding 2 requires host CI at final head; finding 4 remains non-blocking doctor double parsing. Needs Attention persisted successfully; punt signal file was read-only. Preserve existing hold and publication veto. No commit, push, PR, queue completion, ship declaration or review recording performed.'
-  created_at: 2026-11-08T14:27:27.911074421Z
-  modified_at: 2026-11-08T14:27:27.911074421Z
+  content: 'Native-seat rework against b3b3a379f1c6: addressed review findings 3 and 5. Uncommitted files: aida-core/src/git_ops.rs shares abort-error reporting between rebase and all four existing union-merge abort sites, retaining original and recovery diagnostics; aida-core/src/git_ops/tests/store_hook_tests.rs adds a real merge refusal with a reference-transaction hook blocking abort, plus the existing successful-recovery control; OVERVIEW.md removes the per-change paragraph as requested. Final lane job j20261108T142655476-2-0 executed all 8 BUG-2490 core tests: passed. Earlier attempts exposed and corrected a compile typo and test-fixture hook/branch issues; final run is green. Writer inventory passed (3372 sinks/293 mappings); final rustfmt --check and git diff --check passed. Codegraph unavailable; rg used. Finding 1 remains explicitly punted for advisor merge-policy ruling or linked split; finding 2 requires host CI at final head; finding 4 remains non-blocking doctor double parsing.
+    Needs Attention persisted successfully; punt signal file was read-only. Preserve existing hold and publication veto. No commit, push, PR, queue completion, ship declaration or review recording performed.'
+  created_at: 2026-11-08 14:27:27.911074+00:00
+  modified_at: 2026-11-08 14:27:27.911074+00:00
   session_id: 01a1bb89800e
   harness_version: codex-cli 0.167.0
 - id: 01a1bb9c-5261-7251-bac7-ec21f4dbbc1c
   author: joe
-  content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: AC1, AC3, AC4 and the marker/parse half of AC2 hold by source, and round-11 findings 3 and 5 are fixed. AC2''s unmerged-path refusal is bypassed on the contained-session commit path; operator scope still has no advisor ruling or linked split; CI is queued at this head so no test pass is claimed.. It was punted on: design-fork: Latest review of b3b3a379f1c6 finding 1 explicitly requires advisor action: record the semantic merge-policy ruling and require maybe_sync_pull/burndown failed-pull fencing and delete/modify handling here, or file and link a follow-up. No ruling or linked split is recorded. CLAUDE.md requires advisor signoff for architecture changes. This round addresses findings 3 and 5 (merge-abort diagnostics and OVERVIEW cleanup); it does not supply advisor authority. Preserve existing merge hold and publication veto. Finding 2 requires host CI at the final head; finding 4 remains non-blocking.. No triage reason was given.'
-  created_at: 2026-11-08T14:42:26.529870811Z
-  modified_at: 2026-11-08T14:42:26.529870811Z
+  content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: AC1, AC3, AC4 and the marker/parse half of AC2 hold by source, and round-11 findings 3 and 5 are fixed. AC2''s unmerged-path refusal is bypassed on the contained-session commit path; operator scope still has no advisor ruling or linked split; CI is queued at this head so no test pass is claimed.. It was punted on: design-fork: Latest review of b3b3a379f1c6 finding 1 explicitly requires advisor action: record the semantic merge-policy ruling and require maybe_sync_pull/burndown failed-pull fencing and delete/modify handling here, or file and link a follow-up. No ruling or linked split is recorded. CLAUDE.md requires advisor signoff for architecture changes. This round addresses findings 3 and 5 (merge-abort diagnostics and OVERVIEW cleanup); it does not supply advisor authority. Preserve existing merge hold and publication veto. Finding 2 requires host CI at the
+    final head; finding 4 remains non-blocking.. No triage reason was given.'
+  created_at: 2026-11-08 14:42:26.529870+00:00
+  modified_at: 2026-11-08 14:42:26.529870+00:00
   session_id: 01a1b9af-8230-75d2-82f8-667491cc010a
   harness_version: 2.1.319 (Claude Code)
 - id: 01a1bb9c-5c5f-7fa1-836d-a55913d7a6ed
   author: joe
-  content: |-
-    REVIEW FINDINGS TO ADDRESS (BUG-2490):
+  content: 'REVIEW FINDINGS TO ADDRESS (BUG-2490):
+
     Verdict: CHANGES REQUESTED
+
     Reviewed commit: f381713b2018
+
     Recorded: 2026-11-08T14:33:15.698409797+00:00
+
     Findings:
-    1. [major][correctness][AC2] 'unmerged paths also refuse' is not met on the store commit path this bug names. commit_store_writes_since (aida-cli-lib/src/child_store_commit.rs:161) runs add_all (git add -A) on every changed path, and changed_paths_since deliberately includes unmerged records (:319,:336). git add -A erases the unmerged stages before commit_paths runs validate_store_index_paths, so the guard sees a clean index. Failures: a conflicted non-object store file (registry/queues/*.yaml, timings/*.json; timings conflicted in the 06:10 advisor evidence) is committed with its markers, because only is_spec_object_path files are content-checked; a modify/delete object with valid YAML silently resolves to the worktree side; a markered object is refused only after its stages are destroyed. The same order exists at aida-core/src/db/git_backend.rs:927 and :983 and other add_all callers. Round 10 fixed this pattern only for the three whole-tree sites via validate_pending_store_commit. Fix: refuse unmerged paths before staging at this choke point (for example a store-tree check inside add_all for the given pathspec, leaving the rebase/merge resolvers on their own staging), and add a regression through commit_store_writes_since asserting refusal with stages preserved for both a non-object file and a modify/delete object.
-    2. [major][scope][advisor-action] Carried and re-verified at f381713b2018: operator scope on BUG-2490 (comment 2026-11-08T03:05Z, stopgap note 05:26Z, advisor evidence 06:10 MST) is neither finished nor split; BUG-2490 links only STORY-2671 and no ruling is recorded. Open: (a) maybe_sync_pull still uses plain pull_rebase (aida-cli-lib/src/store_sync.rs:1719), so a same-spec conflict fails on --sync and burndown; (b) it prints 'Falling back to local view' (store_sync.rs:1768) and burndown discards its result with 'let _ =' (burndown_run.rs:367, 748), so a failed pull does not stop burndown's writes; (c) resolve_spec_conflict bails on delete/modify (aida-core/src/git_ops.rs:2644), and since pre-pickup pull is now fatal (queue_cmd.rs:12585) one such conflict stops every pickup without --no-pull. The implementer has correctly punted this every round; another implementer round cannot clear it. The advisor must record the merge-policy ruling and either require (a)-(c) here or file a linked follow-up, then re-request review.
+
+    1. [major][correctness][AC2] ''unmerged paths also refuse'' is not met on the store commit path this bug names. commit_store_writes_since (aida-cli-lib/src/child_store_commit.rs:161) runs add_all (git add -A) on every changed path, and changed_paths_since deliberately includes unmerged records (:319,:336). git add -A erases the unmerged stages before commit_paths runs validate_store_index_paths, so the guard sees a clean index. Failures: a conflicted non-object store file (registry/queues/*.yaml, timings/*.json; timings conflicted in the 06:10 advisor evidence) is committed with its markers, because only is_spec_object_path files are content-checked; a modify/delete object with valid YAML silently resolves to the worktree side; a markered object is refused only after its stages are destroyed. The same order exists at aida-core/src/db/git_backend.rs:927 and :983 and other add_all callers. Round 10 fixed this pattern only for the three whole-tree sites via validate_pending_store_commit.
+    Fix: refuse unmerged paths before staging at this choke point (for example a store-tree check inside add_all for the given pathspec, leaving the rebase/merge resolvers on their own staging), and add a regression through commit_store_writes_since asserting refusal with stages preserved for both a non-object file and a modify/delete object.
+
+    2. [major][scope][advisor-action] Carried and re-verified at f381713b2018: operator scope on BUG-2490 (comment 2026-11-08T03:05Z, stopgap note 05:26Z, advisor evidence 06:10 MST) is neither finished nor split; BUG-2490 links only STORY-2671 and no ruling is recorded. Open: (a) maybe_sync_pull still uses plain pull_rebase (aida-cli-lib/src/store_sync.rs:1719), so a same-spec conflict fails on --sync and burndown; (b) it prints ''Falling back to local view'' (store_sync.rs:1768) and burndown discards its result with ''let _ ='' (burndown_run.rs:367, 748), so a failed pull does not stop burndown''s writes; (c) resolve_spec_conflict bails on delete/modify (aida-core/src/git_ops.rs:2644), and since pre-pickup pull is now fatal (queue_cmd.rs:12585) one such conflict stops every pickup without --no-pull. The implementer has correctly punted this every round; another implementer round cannot clear it. The advisor must record the merge-policy ruling and either require (a)-(c) here or file a linked
+    follow-up, then re-request review.
+
     3. [major][ci][gate-state] CI run 42489951574 at f381713b2018 is still queued (7 jobs, none started) when this verdict was recorded, so no test named here has CI evidence at this head. The last green CI was at the earlier head 06ed31ae0d80. merge-hold-gate fails only on the supervised hold, as expected. Confirm green CI before any approval.
+
     4. [minor][perf] Carried, non-blocking: doctor_multi_agent loads the whole store through Storage::load, then store_object_findings reads and parses every object again (aida-cli-lib/src/doctor_cmd.rs:828-836; about 7365 objects live). Doctor-only cost.
-    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
-  created_at: 2026-11-08T14:42:29.087997709Z
-  modified_at: 2026-11-08T14:42:29.087997709Z
+
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.'
+  created_at: 2026-11-08 14:42:29.087997+00:00
+  modified_at: 2026-11-08 14:42:29.087997+00:00
   session_id: 01a1b9af-8230-75d2-82f8-667491cc010a
   harness_version: 2.1.319 (Claude Code)
 - id: 01a1bbae-44a1-70e2-82a3-1c40e7a8f6ea
   author: joe
   content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: The contained-session unmerged bypass is fixed at child_store_commit.rs:162, and AC1, AC3, AC4 and the marker/parse half of AC2 hold by source. Unmerged refusal is still bypassed at the ordinary store commit sites, operator scope still has no advisor ruling or linked split, and CI is queued at this head so no test pass is claimed.. No triage reason was given.'
-  created_at: 2026-11-08T15:02:02.657934561Z
-  modified_at: 2026-11-08T15:02:02.657934561Z
+  created_at: 2026-11-08 15:02:02.657934+00:00
+  modified_at: 2026-11-08 15:02:02.657934+00:00
   session_id: 01a1b9af-8230-75d2-82f8-667491cc010a
   harness_version: 2.1.319 (Claude Code)
 - id: 01a1bbae-532c-7a50-a122-61f0f6305c6f
   author: joe
-  content: |-
-    REVIEW FINDINGS TO ADDRESS (BUG-2490):
+  content: 'REVIEW FINDINGS TO ADDRESS (BUG-2490):
+
     Verdict: CHANGES REQUESTED
+
     Reviewed commit: 3094ee8179fb
+
     Recorded: 2026-11-08T14:58:07.885661657+00:00
+
     Findings:
-    1. [major][correctness][AC2] 'unmerged paths also refuse' is met on commit_store_writes_since (child_store_commit.rs:162) and the three whole-tree sites, but not on the ordinary store commit paths. GitBackend auto-commit runs add_all/add before commit (aida-core/src/db/git_backend.rs:927, 933, 939, 983), and timing_record.rs:214 runs add_all before commit_paths, so 'git add' erases the unmerged stages before validate_store_index_paths runs. Result if an unmerged index survives (failed rebase/merge abort, killed process, or a manual resolution in progress): a conflicted oplog.yaml, metadata.yaml or timings/*.json commits with its markers, because only is_spec_object_path files are content-checked, and a modify/delete object with valid YAML resolves silently to the worktree side. Found by reading the source; not executed. The other add_all callers listed by 'rg add_all\(' need the same check. Fix: refuse unmerged paths inside add/add_all for store trees (exempting the rebase/merge resolvers, which stage on their own path), or call validate_store_index before staging at each site, and add a regression through a GitBackend save and through timing_record.
-    2. [major][scope][advisor-action] Carried and re-verified at 3094ee8179fb: operator scope on BUG-2490 (comment 2026-11-08T03:05Z, stopgap note 05:26Z, advisor evidence 13:16Z) is neither finished nor split. BUG-2490 links only STORY-2671 and no ruling is recorded. Open: (a) maybe_sync_pull still uses plain pull_rebase (aida-cli-lib/src/store_sync.rs:1719), so a same-spec conflict fails on --sync and burndown; (b) it prints 'Falling back to local view' (store_sync.rs:1768) and burndown discards the result with 'let _ =' (burndown_run.rs:367, 748), so a failed pull does not stop burndown's writes; (c) resolve_spec_conflict bails on delete/modify (aida-core/src/git_ops.rs:2644), and since pre-pickup pull is now fatal (queue_cmd.rs:12585) one such conflict stops every pickup without --no-pull. Another implementer round cannot clear this: the advisor must record the merge-policy ruling and either require (a)-(c) here or file a linked follow-up, then re-request review.
+
+    1. [major][correctness][AC2] ''unmerged paths also refuse'' is met on commit_store_writes_since (child_store_commit.rs:162) and the three whole-tree sites, but not on the ordinary store commit paths. GitBackend auto-commit runs add_all/add before commit (aida-core/src/db/git_backend.rs:927, 933, 939, 983), and timing_record.rs:214 runs add_all before commit_paths, so ''git add'' erases the unmerged stages before validate_store_index_paths runs. Result if an unmerged index survives (failed rebase/merge abort, killed process, or a manual resolution in progress): a conflicted oplog.yaml, metadata.yaml or timings/*.json commits with its markers, because only is_spec_object_path files are content-checked, and a modify/delete object with valid YAML resolves silently to the worktree side. Found by reading the source; not executed. The other add_all callers listed by ''rg add_all\('' need the same check. Fix: refuse unmerged paths inside add/add_all for store trees (exempting the rebase/merge
+    resolvers, which stage on their own path), or call validate_store_index before staging at each site, and add a regression through a GitBackend save and through timing_record.
+
+    2. [major][scope][advisor-action] Carried and re-verified at 3094ee8179fb: operator scope on BUG-2490 (comment 2026-11-08T03:05Z, stopgap note 05:26Z, advisor evidence 13:16Z) is neither finished nor split. BUG-2490 links only STORY-2671 and no ruling is recorded. Open: (a) maybe_sync_pull still uses plain pull_rebase (aida-cli-lib/src/store_sync.rs:1719), so a same-spec conflict fails on --sync and burndown; (b) it prints ''Falling back to local view'' (store_sync.rs:1768) and burndown discards the result with ''let _ ='' (burndown_run.rs:367, 748), so a failed pull does not stop burndown''s writes; (c) resolve_spec_conflict bails on delete/modify (aida-core/src/git_ops.rs:2644), and since pre-pickup pull is now fatal (queue_cmd.rs:12585) one such conflict stops every pickup without --no-pull. Another implementer round cannot clear this: the advisor must record the merge-policy ruling and either require (a)-(c) here or file a linked follow-up, then re-request review.
+
     3. [major][ci][gate-state] CI run 42492112996 at 3094ee8179fb was still queued (7 jobs, none started) when this verdict was recorded, so no test named here has CI evidence at this head. merge-hold-gate fails only on the supervised hold, as expected. Confirm green CI before any approval.
-    4. [minor][test-coverage] bug_2490_child_commit_preserves_unmerged_index_after_text_repair (child_store_commit.rs:424) covers only a content conflict on an object. The prior round asked for a non-object file and a modify/delete object too. The check is path-agnostic ('ls-files --unmerged'), so those cases are covered by construction, but no regression pins them.
+
+    4. [minor][test-coverage] bug_2490_child_commit_preserves_unmerged_index_after_text_repair (child_store_commit.rs:424) covers only a content conflict on an object. The prior round asked for a non-object file and a modify/delete object too. The check is path-agnostic (''ls-files --unmerged''), so those cases are covered by construction, but no regression pins them.
+
     5. [minor][perf] Carried, non-blocking: doctor_multi_agent loads the whole store through Storage::load, then store_object_findings reads and parses every object again (aida-cli-lib/src/doctor_cmd.rs:828-836). Doctor-only cost.
-    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
-  created_at: 2026-11-08T15:02:06.380653024Z
-  modified_at: 2026-11-08T15:02:06.380653024Z
+
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.'
+  created_at: 2026-11-08 15:02:06.380653+00:00
+  modified_at: 2026-11-08 15:02:06.380653+00:00
   session_id: 01a1b9af-8230-75d2-82f8-667491cc010a
   harness_version: 2.1.319 (Claude Code)
 history:
 - id: 01a1b923-982d-7512-93a5-cd08923b4f98
   author: aida-session-start
-  timestamp: 2026-11-08T03:11:20.109935614Z
+  timestamp: 2026-11-08 03:11:20.109935+00:00
   changes:
   - field_name: status
     old_value: Approved
     new_value: InProgress
 - id: 01a1b923-e529-7c62-9c9f-7066a10a4867
   author: dirtlab
-  timestamp: 2026-11-08T03:11:39.817990417Z
+  timestamp: 2026-11-08 03:11:39.817990+00:00
   session_id: 01a1b923927d
   harness_version: codex-cli 0.167.0
   changes: []
 - id: 01a1b92d-3651-7811-933c-eff54861ca07
   author: aida-orchestrator
-  timestamp: 2026-11-08T03:21:50.417644438Z
+  timestamp: 2026-11-08 03:21:50.417644+00:00
   session_id: 01a1b92b5a16
   harness_version: 2.1.319 (Claude Code)
   changes:
@@ -459,7 +601,7 @@ history:
     new_value: NeedsAttention
 - id: 01a1b95e-d3ed-7c50-aea2-c0d5c0851090
   author: joe
-  timestamp: 2026-11-08T04:16:02.029896899Z
+  timestamp: 2026-11-08 04:16:02.029896+00:00
   session_id: 01a1b8be-8170-7fb2-89ab-ecb4c6eee98c
   harness_version: 2.1.319 (Claude Code)
   changes:
@@ -468,14 +610,14 @@ history:
     new_value: Approved
 - id: 01a1b977-d465-7421-905f-00e7592e8cd5
   author: aida-session-start
-  timestamp: 2026-11-08T04:43:20.549070080Z
+  timestamp: 2026-11-08 04:43:20.549070+00:00
   changes:
   - field_name: status
     old_value: Approved
     new_value: InProgress
 - id: 01a1b97a-de6a-7283-8c18-faa645a46088
   author: aida-orchestrator
-  timestamp: 2026-11-08T04:46:39.722954775Z
+  timestamp: 2026-11-08 04:46:39.722954+00:00
   session_id: 01a1b979f268
   harness_version: 2.1.319 (Claude Code)
   changes:
@@ -484,17 +626,17 @@ history:
     new_value: NeedsAttention
 - id: 01a1b97e-6575-71f3-b0f0-c92268d89c50
   author: joe
-  timestamp: 2026-11-08T04:50:30.901806296Z
+  timestamp: 2026-11-08 04:50:30.901806+00:00
   session_id: 01a1b977c304
   changes: []
 - id: 01a1b991-47db-77c1-8977-dd6068e9bb36
   author: joe
-  timestamp: 2026-11-08T05:11:08.507404429Z
+  timestamp: 2026-11-08 05:11:08.507404+00:00
   session_id: 01a1b977c304
   changes: []
 - id: 01a1b995-8519-7921-9829-f57a459a218a
   author: joe
-  timestamp: 2026-11-08T05:15:46.329891666Z
+  timestamp: 2026-11-08 05:15:46.329891+00:00
   session_id: 01a1b8be-8170-7fb2-89ab-ecb4c6eee98c
   harness_version: 2.1.319 (Claude Code)
   changes:
@@ -503,14 +645,14 @@ history:
     new_value: Approved
 - id: 01a1b996-fd22-7380-8553-1d955fa77190
   author: aida-pr-open
-  timestamp: 2026-11-08T05:17:22.594038271Z
+  timestamp: 2026-11-08 05:17:22.594038+00:00
   changes:
   - field_name: status
     old_value: Approved
     new_value: InProgress
 - id: 01a1b9b1-c4b0-7d13-a833-e31834691c3e
   author: joe
-  timestamp: 2026-11-08T05:46:37.616061666Z
+  timestamp: 2026-11-08 05:46:37.616061+00:00
   session_id: 01a1b9ad9f09
   changes:
   - field_name: status
@@ -518,7 +660,7 @@ history:
     new_value: NeedsAttention
 - id: 01a1ba0e-93df-79c2-ba02-88a461eff3d0
   author: joe
-  timestamp: 2026-11-08T07:27:59.967594907Z
+  timestamp: 2026-11-08 07:27:59.967594+00:00
   session_id: 01a1b8be-8170-7fb2-89ab-ecb4c6eee98c
   harness_version: 2.1.319 (Claude Code)
   changes:
@@ -527,20 +669,20 @@ history:
     new_value: Approved
 - id: 01a1ba0f-a778-78a1-b706-35363669bb1f
   author: aida-session-start
-  timestamp: 2026-11-08T07:29:10.520165405Z
+  timestamp: 2026-11-08 07:29:10.520165+00:00
   changes:
   - field_name: status
     old_value: Approved
     new_value: InProgress
 - id: 01a1ba10-0161-7402-9d93-6c08f6bd5f06
   author: dirtlab
-  timestamp: 2026-11-08T07:29:33.537487160Z
+  timestamp: 2026-11-08 07:29:33.537487+00:00
   session_id: 01a1ba0fa198
   harness_version: codex-cli 0.167.0
   changes: []
 - id: 01a1ba11-45b8-7493-aaf4-2dae1b3a2331
   author: dirtlab
-  timestamp: 2026-11-08T07:30:56.568711046Z
+  timestamp: 2026-11-08 07:30:56.568711+00:00
   session_id: 01a1ba0fa198
   harness_version: codex-cli 0.167.0
   changes:
@@ -549,13 +691,13 @@ history:
     new_value: NeedsAttention
 - id: 01a1ba56-f728-7d20-9cb8-fd070ffd22b2
   author: joe
-  timestamp: 2026-11-08T08:47:03.976059621Z
+  timestamp: 2026-11-08 08:47:03.976059+00:00
   session_id: 01a1ba5427e1
   harness_version: 2.1.319 (Claude Code)
   changes: []
 - id: 01a1ba5d-d549-7f10-93a1-b1f9fbc9708a
   author: joe
-  timestamp: 2026-11-08T08:54:34.057857515Z
+  timestamp: 2026-11-08 08:54:34.057857+00:00
   session_id: 01a1b8be-8170-7fb2-89ab-ecb4c6eee98c
   harness_version: 2.1.319 (Claude Code)
   changes:
@@ -564,20 +706,20 @@ history:
     new_value: Approved
 - id: 01a1ba5f-2ebe-7643-9026-7b9158d8b2af
   author: aida-session-start
-  timestamp: 2026-11-08T08:56:02.494525384Z
+  timestamp: 2026-11-08 08:56:02.494525+00:00
   changes:
   - field_name: status
     old_value: Approved
     new_value: InProgress
 - id: 01a1ba5f-8590-7823-b31e-35246c5b7658
   author: dirtlab
-  timestamp: 2026-11-08T08:56:24.720597119Z
+  timestamp: 2026-11-08 08:56:24.720597+00:00
   session_id: 01a1ba5f23ab
   harness_version: codex-cli 0.167.0
   changes: []
 - id: 01a1ba62-a16a-7562-a523-fa856cef7489
   author: dirtlab
-  timestamp: 2026-11-08T08:59:48.458768496Z
+  timestamp: 2026-11-08 08:59:48.458768+00:00
   session_id: 01a1ba5f23ab
   harness_version: codex-cli 0.167.0
   changes:
@@ -586,13 +728,13 @@ history:
     new_value: NeedsAttention
 - id: 01a1ba72-176e-7da1-9d39-504644fe39c2
   author: joe
-  timestamp: 2026-11-08T09:16:41.710737646Z
+  timestamp: 2026-11-08 09:16:41.710737+00:00
   session_id: 01a1ba6e82fe
   harness_version: 2.1.319 (Claude Code)
   changes: []
 - id: 01a1ba88-b1dd-78e0-87cc-8f0111250da4
   author: joe
-  timestamp: 2026-11-08T09:41:23.037350739Z
+  timestamp: 2026-11-08 09:41:23.037350+00:00
   session_id: 01a1b8be-8170-7fb2-89ab-ecb4c6eee98c
   harness_version: 2.1.319 (Claude Code)
   changes:
@@ -601,20 +743,20 @@ history:
     new_value: Approved
 - id: 01a1ba8a-da1c-7263-af0e-c1a9cd266947
   author: aida-session-start
-  timestamp: 2026-11-08T09:43:44.412742865Z
+  timestamp: 2026-11-08 09:43:44.412742+00:00
   changes:
   - field_name: status
     old_value: Approved
     new_value: InProgress
 - id: 01a1ba8b-5061-7a83-bd16-9a61f9ce45c9
   author: dirtlab
-  timestamp: 2026-11-08T09:44:14.689953709Z
+  timestamp: 2026-11-08 09:44:14.689953+00:00
   session_id: 01a1ba8ace16
   harness_version: codex-cli 0.167.0
   changes: []
 - id: 01a1ba8f-1cac-7f32-9713-d93b3438da24
   author: dirtlab
-  timestamp: 2026-11-08T09:48:23.596839402Z
+  timestamp: 2026-11-08 09:48:23.596839+00:00
   session_id: 01a1ba8ace16
   harness_version: codex-cli 0.167.0
   changes:
@@ -623,13 +765,13 @@ history:
     new_value: NeedsAttention
 - id: 01a1ba9c-477b-77e0-8a86-6626c548eab3
   author: joe
-  timestamp: 2026-11-08T10:02:46.523159229Z
+  timestamp: 2026-11-08 10:02:46.523159+00:00
   session_id: 01a1ba993020
   harness_version: 2.1.319 (Claude Code)
   changes: []
 - id: 01a1badd-6aa9-79e3-b779-39e359fe17cc
   author: joe
-  timestamp: 2026-11-08T11:13:55.369406678Z
+  timestamp: 2026-11-08 11:13:55.369406+00:00
   session_id: 01a1b9af-8230-75d2-82f8-667491cc010a
   harness_version: 2.1.319 (Claude Code)
   changes:
@@ -638,20 +780,20 @@ history:
     new_value: Approved
 - id: 01a1bade-dd0e-7562-87da-19400da7d8f2
   author: aida-session-start
-  timestamp: 2026-11-08T11:15:30.190717688Z
+  timestamp: 2026-11-08 11:15:30.190717+00:00
   changes:
   - field_name: status
     old_value: Approved
     new_value: InProgress
 - id: 01a1badf-3c63-7872-91c7-231b5410afa6
   author: dirtlab
-  timestamp: 2026-11-08T11:15:54.595862515Z
+  timestamp: 2026-11-08 11:15:54.595862+00:00
   session_id: 01a1baded6ca
   harness_version: codex-cli 0.167.0
   changes: []
 - id: 01a1bae1-1b7a-7d23-a854-3315ed20735e
   author: dirtlab
-  timestamp: 2026-11-08T11:17:57.242162720Z
+  timestamp: 2026-11-08 11:17:57.242162+00:00
   session_id: 01a1baded6ca
   harness_version: codex-cli 0.167.0
   changes:
@@ -660,13 +802,13 @@ history:
     new_value: NeedsAttention
 - id: 01a1baf8-4603-7691-a6f5-0b8e70375e15
   author: joe
-  timestamp: 2026-11-08T11:43:15.459194971Z
+  timestamp: 2026-11-08 11:43:15.459194+00:00
   session_id: 01a1baf5dddf
   harness_version: 2.1.319 (Claude Code)
   changes: []
 - id: 01a1baf9-3e44-7072-8839-cfca0cd521be
   author: joe
-  timestamp: 2026-11-08T11:44:19.012372229Z
+  timestamp: 2026-11-08 11:44:19.012372+00:00
   session_id: 01a1b9af-8230-75d2-82f8-667491cc010a
   harness_version: 2.1.319 (Claude Code)
   changes:
@@ -675,20 +817,20 @@ history:
     new_value: Approved
 - id: 01a1bafb-0097-74d1-aa6a-6bfab1a944f6
   author: aida-session-start
-  timestamp: 2026-11-08T11:46:14.295412928Z
+  timestamp: 2026-11-08 11:46:14.295412+00:00
   changes:
   - field_name: status
     old_value: Approved
     new_value: InProgress
 - id: 01a1bafb-6935-7883-9e67-4af649d10046
   author: dirtlab
-  timestamp: 2026-11-08T11:46:41.077143218Z
+  timestamp: 2026-11-08 11:46:41.077143+00:00
   session_id: 01a1bafaf4b6
   harness_version: codex-cli 0.167.0
   changes: []
 - id: 01a1bafb-efec-7bf1-8eb5-e9ee264c9b06
   author: dirtlab
-  timestamp: 2026-11-08T11:47:15.564160015Z
+  timestamp: 2026-11-08 11:47:15.564160+00:00
   session_id: 01a1bafaf4b6
   harness_version: codex-cli 0.167.0
   changes:
@@ -697,13 +839,13 @@ history:
     new_value: NeedsAttention
 - id: 01a1bb01-203b-74f2-9714-e1af3aa879a2
   author: joe
-  timestamp: 2026-11-08T11:52:55.611284352Z
+  timestamp: 2026-11-08 11:52:55.611284+00:00
   session_id: 01a1bafea85b
   harness_version: 2.1.319 (Claude Code)
   changes: []
 - id: 01a1bb07-3dfe-7fa2-8331-8e02b3a5d31d
   author: joe
-  timestamp: 2026-11-08T11:59:36.446262454Z
+  timestamp: 2026-11-08 11:59:36.446262+00:00
   session_id: 01a1b9af-8230-75d2-82f8-667491cc010a
   harness_version: 2.1.319 (Claude Code)
   changes:
@@ -712,20 +854,20 @@ history:
     new_value: Approved
 - id: 01a1bb08-8a50-76d2-949b-2a420db83585
   author: aida-session-start
-  timestamp: 2026-11-08T12:01:01.520640212Z
+  timestamp: 2026-11-08 12:01:01.520640+00:00
   changes:
   - field_name: status
     old_value: Approved
     new_value: InProgress
 - id: 01a1bb09-0306-7b43-80da-0926e44f70cf
   author: dirtlab
-  timestamp: 2026-11-08T12:01:32.422877411Z
+  timestamp: 2026-11-08 12:01:32.422877+00:00
   session_id: 01a1bb088418
   harness_version: codex-cli 0.167.0
   changes: []
 - id: 01a1bb0b-9a45-7b91-9585-bb59f3548d45
   author: dirtlab
-  timestamp: 2026-11-08T12:04:22.213712385Z
+  timestamp: 2026-11-08 12:04:22.213712+00:00
   session_id: 01a1bb088418
   harness_version: codex-cli 0.167.0
   changes:
@@ -734,13 +876,13 @@ history:
     new_value: NeedsAttention
 - id: 01a1bb2b-b7a1-7273-afb4-40660f984108
   author: joe
-  timestamp: 2026-11-08T12:39:26.881944499Z
+  timestamp: 2026-11-08 12:39:26.881944+00:00
   session_id: 01a1bb28e9d5
   harness_version: 2.1.319 (Claude Code)
   changes: []
 - id: 01a1bb32-fdff-7a81-900b-f5742565a8f1
   author: joe
-  timestamp: 2026-11-08T12:47:23.647198462Z
+  timestamp: 2026-11-08 12:47:23.647198+00:00
   session_id: 01a1b9af-8230-75d2-82f8-667491cc010a
   harness_version: 2.1.319 (Claude Code)
   changes:
@@ -749,14 +891,14 @@ history:
     new_value: Approved
 - id: 01a1bb35-027d-7ae3-8957-77282b6d7257
   author: aida-session-start
-  timestamp: 2026-11-08T12:49:35.869312605Z
+  timestamp: 2026-11-08 12:49:35.869312+00:00
   changes:
   - field_name: status
     old_value: Approved
     new_value: InProgress
 - id: 01a1bb41-c692-7ad2-aad1-a612f8914583
   author: joe
-  timestamp: 2026-11-08T13:03:32.498283078Z
+  timestamp: 2026-11-08 13:03:32.498283+00:00
   session_id: 01a1bb34f948
   changes:
   - field_name: status
@@ -764,13 +906,13 @@ history:
     new_value: NeedsAttention
 - id: 01a1bb84-5535-7263-9228-fafa4a85b5a6
   author: joe
-  timestamp: 2026-11-08T14:16:14.389874089Z
+  timestamp: 2026-11-08 14:16:14.389874+00:00
   session_id: 01a1bb810739
   harness_version: 2.1.319 (Claude Code)
   changes: []
 - id: 01a1bb87-ce6d-75a1-a6e7-5f4c13d118af
   author: joe
-  timestamp: 2026-11-08T14:20:02.029806246Z
+  timestamp: 2026-11-08 14:20:02.029806+00:00
   session_id: 01a1b9af-8230-75d2-82f8-667491cc010a
   harness_version: 2.1.319 (Claude Code)
   changes:
@@ -779,20 +921,20 @@ history:
     new_value: Approved
 - id: 01a1bb89-887e-77d2-9858-996f9243ebab
   author: aida-session-start
-  timestamp: 2026-11-08T14:21:55.198754371Z
+  timestamp: 2026-11-08 14:21:55.198754+00:00
   changes:
   - field_name: status
     old_value: Approved
     new_value: InProgress
 - id: 01a1bb8a-0894-78a0-8ab3-3d21983a8ccc
   author: dirtlab
-  timestamp: 2026-11-08T14:22:27.988455424Z
+  timestamp: 2026-11-08 14:22:27.988455+00:00
   session_id: 01a1bb89800e
   harness_version: codex-cli 0.167.0
   changes: []
 - id: 01a1bb8b-dcc6-7da3-9b44-dbaa2b687fb0
   author: dirtlab
-  timestamp: 2026-11-08T14:24:27.846859505Z
+  timestamp: 2026-11-08 14:24:27.846859+00:00
   session_id: 01a1bb89800e
   harness_version: codex-cli 0.167.0
   changes:
@@ -801,13 +943,13 @@ history:
     new_value: NeedsAttention
 - id: 01a1bb93-ed12-79d2-91e6-a1d52accba77
   author: joe
-  timestamp: 2026-11-08T14:33:16.306709040Z
+  timestamp: 2026-11-08 14:33:16.306709+00:00
   session_id: 01a1bb90af82
   harness_version: 2.1.319 (Claude Code)
   changes: []
 - id: 01a1bb9c-5261-7251-bac7-ec15dca7aae4
   author: joe
-  timestamp: 2026-11-08T14:42:26.529857235Z
+  timestamp: 2026-11-08 14:42:26.529857+00:00
   session_id: 01a1b9af-8230-75d2-82f8-667491cc010a
   harness_version: 2.1.319 (Claude Code)
   changes:
@@ -816,20 +958,20 @@ history:
     new_value: Approved
 - id: 01a1bb9d-aa18-7791-8d0d-8954522ffaef
   author: aida-session-start
-  timestamp: 2026-11-08T14:43:54.520793775Z
+  timestamp: 2026-11-08 14:43:54.520793+00:00
   changes:
   - field_name: status
     old_value: Approved
     new_value: InProgress
 - id: 01a1bb9e-133b-74f1-9829-7c22a58d343e
   author: dirtlab
-  timestamp: 2026-11-08T14:44:21.435612413Z
+  timestamp: 2026-11-08 14:44:21.435612+00:00
   session_id: 01a1bb9d9e52
   harness_version: codex-cli 0.167.0
   changes: []
 - id: 01a1bbaa-b191-78a1-b6fd-a76a498c97f3
   author: aida-orchestrator
-  timestamp: 2026-11-08T14:58:08.401774814Z
+  timestamp: 2026-11-08 14:58:08.401774+00:00
   session_id: 01a1bba90b30
   harness_version: 2.1.319 (Claude Code)
   changes:
@@ -838,7 +980,7 @@ history:
     new_value: NeedsAttention
 - id: 01a1bbae-44a1-70e2-82a3-1c30bfe7e394
   author: joe
-  timestamp: 2026-11-08T15:02:02.657927471Z
+  timestamp: 2026-11-08 15:02:02.657927+00:00
   session_id: 01a1b9af-8230-75d2-82f8-667491cc010a
   harness_version: 2.1.319 (Claude Code)
   changes:
@@ -847,20 +989,29 @@ history:
     new_value: Approved
 - id: 01a1bbaf-3871-7f70-addb-283c9a224ea2
   author: aida-session-start
-  timestamp: 2026-11-08T15:03:05.073725034Z
+  timestamp: 2026-11-08 15:03:05.073725+00:00
   changes:
   - field_name: status
     old_value: Approved
     new_value: InProgress
 - id: 01a1bbaf-9463-7921-ba8f-055b972717c7
   author: dirtlab
-  timestamp: 2026-11-08T15:03:28.611015867Z
+  timestamp: 2026-11-08 15:03:28.611015+00:00
   session_id: 01a1bbaf2d9e
   harness_version: codex-cli 0.167.0
   changes: []
+- id: 01a1bbb2-6aa8-7ec0-9fae-133fb8e455f1
+  author: dirtlab
+  timestamp: 2026-11-08 15:06:34.536262+00:00
+  session_id: 01a1bbaf2d9e
+  harness_version: codex-cli 0.167.0
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: NeedsAttention
 - id: 01a1bbb3-cca6-7360-9b6c-2b07bf1e6da6
   author: aida-orchestrator
-  timestamp: 2026-11-08T15:08:05.158799892Z
+  timestamp: 2026-11-08 15:08:05.158799+00:00
   session_id: 01a1bbb0b65c
   harness_version: 2.1.319 (Claude Code)
   changes:
@@ -883,4 +1034,9 @@ failure_reason:
   detail: 'Head is round 13 plus a merge of main, so no finding was addressed: AC1, AC3, AC4 and the marker/parse half of AC2 hold by source, unmerged refusal is still bypassed at ordinary store commit sites, operator scope has no advisor ruling or split, one new diagnostics regression was found, and CI has not finished at this head so no test pass is claimed.'
   recovery_hint: address the review findings, move BUG-2490 back to In Progress, and clear the PR hold only after approval
   shelved_by: reviewer
-  shelved_at: 2026-11-08T15:08:05.158772048Z
+  shelved_at: 2026-11-08 15:08:05.158772+00:00
+attention_reason:
+  category: design-fork
+  detail: 'Latest review finding 2 requires advisor action: record the semantic merge-policy ruling for maybe_sync_pull/burndown failed-pull fencing and delete/modify handling, or file and link a follow-up. No ruling or linked split is recorded; CLAUDE.md requires advisor signoff for architecture changes. This round repairs finding 1 staging guards and finding 4 regression coverage only. Preserve the existing merge hold and publication veto; do not publish as a complete BUG-2490 fix. Finding 3 still requires host CI at the final head.'
+  raised_by: implementer
+  raised_at: 2026-11-08 15:06:34.536240+00:00
