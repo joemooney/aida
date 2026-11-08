@@ -13,12 +13,12 @@ description: |
   3. Works for Claude, Codex and AGY through their headless resume commands; one adapter test per vendor using a recorded fixture.
   4. A wait whose seat or session has been lost surfaces as an escalation, never a silent drop.
   Ref: docs/plans/2026-11-07-infinity-agent-architecture-deep-dive.md section 3.3 and the SPIKE-711 results table.
-status: InProgress
+status: NeedsAttention
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-08T02:58:08.667753563Z
-modified_at: 2026-11-08T08:18:37.167461926Z
+modified_at: 2026-11-08T08:20:07.327796043Z
 req_type: Story
 tags:
 - area:human-wait
@@ -271,6 +271,14 @@ comments:
   modified_at: 2026-11-08T08:17:29.585881063Z
   session_id: 01a1b8be-8170-7fb2-89ab-ecb4c6eee98c
   harness_version: 2.1.319 (Claude Code)
+- id: 01a1ba3e-43f9-79f2-8881-ca8d6b700667
+  author: dirtlab
+  content: |
+    Revised docs/plans/2026-11-08-story-2661-park-resume-sketch.md for review of 12ea0f7b294c. R7: pending/post-submission failure requires stop; late acceptance starts the deadline at host acceptance, with generation-bound completion markers, fallback and restart budget preservation. R8: original park_requested slots and managed resumes disable final-result discounting until verified exit; acceptance requires checked waiting-flag persistence, not merely the existing void helper. R9: manual recovery and awaiting guidance explicitly require --delegate-seat for the wait's owner_role, with guarded shell role setup. R10: replace registration refusal with parking/awaiting while the optional observer is stopped. Added corresponding verification cases. No findings disputed. R1 remains host/advisor-only: retitle PR #3666 exactly to [AI:codex] docs(plans): sketch park-on-ask resume-on-answer (Refs STORY-2661); another seat commit cannot clear it. Recorded that exact native publication subject. Validation: git diff --check passed; docs only, runtime tests not run. Codegraph unavailable; slot/role definitions checked with rg. Edits uncommitted; no implementation or publication performed. Advisor signoff remains required before code; manual-only initial scope leaves AC2 open and AIDA-contained Codex remains excluded until PR2.
+  created_at: 2026-11-08T08:20:05.241347621Z
+  modified_at: 2026-11-08T08:20:05.241347621Z
+  session_id: 01a1ba3ce5f8
+  harness_version: codex-cli 0.167.0
 history:
 - id: 01a1b9c5-1aa6-78e3-9355-9af12a0ce44c
   author: joe
@@ -381,6 +389,15 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a1ba3e-4c1f-7860-94af-1021cd03f1db
+  author: dirtlab
+  timestamp: 2026-11-08T08:20:07.327805308Z
+  session_id: 01a1ba3ce5f8
+  harness_version: codex-cli 0.167.0
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: NeedsAttention
 filed_at:
   code_sha: dc41ee8da2f44f88178936fc1a8e6cb7168a3de7
   branch: main
@@ -390,3 +407,8 @@ filed_at:
   vendor: claude
   session: 01a1b8be-8170-7fb2-89ab-ecb4c6eee98c
   harness_version: 2.1.319 (Claude Code)
+attention_reason:
+  category: design-fork
+  detail: 'Sketch revised for R7-R10 at docs/plans/2026-11-08-story-2661-park-resume-sketch.md; no findings disputed. Binding ruling requires advisor signoff before code, including manual-only initial scope, park deadline and slot retention. R1 remains blocked on host/advisor retitling PR #3666 exactly to [AI:codex] docs(plans): sketch park-on-ask resume-on-answer (Refs STORY-2661); further seat commits cannot fix PR metadata. Native edits remain uncommitted; git diff --check passed. Publication veto must remain until advisor decision and metadata repair.'
+  raised_by: implementer
+  raised_at: 2026-11-08T08:20:07.327796043Z
