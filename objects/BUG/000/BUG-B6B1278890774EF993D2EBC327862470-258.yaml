@@ -15,7 +15,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-08T03:09:42.520017Z
-modified_at: 2026-11-08T19:07:04.286591371Z
+modified_at: 2026-11-08T19:07:06.795692138Z
 req_type: Bug
 tags:
 - area:lanes
@@ -194,6 +194,23 @@ comments:
   content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: AC1-AC4 are met and tested (read, not run), but the one-line git-maintenance ratchet blocker is still unfixed: this head only merges main over 7a98ebd9f44, so the test file is byte-identical to the head that was blocked. AC status: ac1d8a45 verified by bug_2493_declared_body_survives_host_commit_and_refs_downgrade and the task_2712 raw-object assert; ac581f10 verified by task_2902_native_ship_message_records_only_and_dry_run_does_not_write and bug_2493_body_file_errors_validate_usage_before_reading_and_name_path; ac76636a verified by the bug_2493 fixture running check-help-golden-cochange.sh; acc3c05a verified by bug_2493_native_prompts_name_safe_body_file_surface. CI at this head was pending at record time; merge-hold-gate is the supervised hold.. No triage reason was given.'
   created_at: 2026-11-08T19:07:04.286589927Z
   modified_at: 2026-11-08T19:07:04.286589927Z
+  session_id: 01a1b9af-8230-75d2-82f8-667491cc010a
+  harness_version: 2.1.319 (Claude Code)
+- id: 01a1bc8e-a212-7590-a224-361a83a0b794
+  author: joe
+  content: |-
+    REVIEW FINDINGS TO ADDRESS (BUG-2493):
+    Verdict: CHANGES REQUESTED
+    Reviewed commit: 187967c18a4e
+    Recorded: 2026-11-08T18:56:22.426464073+00:00
+    Findings:
+    1. BLOCKING: aida-cli-lib/src/tests/bug_home_038_seat_publish_tests.rs:648-649 still spawns std::process::Command::new("git").args(["cat-file", "commit", "HEAD"]) in task_2712_native_codex_seat_commit_ships_from_seat_without_seat_hooks. tests/test_git_maintenance_ratchet.py file_sites matches the literal "commit" against WRITE_CLASS on a gitish, unguarded statement, regardless of it being the object type for cat-file, and scripts/git-maintenance-baseline.txt has no entry for this file, so the count is 1 > baseline 0. CI (gates) at 48f833136b failed with this line present; git diff 7a98ebd9f44..187967c18a4e leaves this file unchanged, so the gate will fail again. The ratchet was traced from source and not run; the CI log itself was unreadable from this sandbox. Fix: replace std::process::Command::new("git") with crate::test_git::git_command(), exactly as bug_2493_declared_body_survives_host_commit_and_refs_downgrade does at line ~2350. Do not raise the baseline. Steps after that ratchet were skipped on the red run, so check the remaining gates after the fix (make check-ci-fast).
+    2. Non-blocking (minor, new): native_publication::declare splits on the first blank line, so a native 'aida ship -m $'subject\n\nbody'' with no --commit-body-file is now accepted and published with that body. validate_subject used to refuse any multi-line -m; ship_messages only enforces a single-line subject when a body file is present. This creates an untested second body path outside the documented surface. Either enforce a single-line -m in ship_messages unconditionally or pass subject and body to declare separately, and add a refusal test.
+    3. Non-blocking (cosmetic, new): aida-cli-lib/src/standalone_implementer.rs NATIVE_STOP_CONTRACT now shows --commit-body-file in both the partial and completing forms and says 'with the required body', which reads as mandatory, although the flag is optional and only needed for required trailers. Show the forms without the flag, or say 'optionally'.
+    4. Non-blocking (minor, carried forward, still present): AGENTS.md:34-38 and OVERVIEW.md:1601-1613 add BUG-2493 per-change notes. CLAUDE.md reserves those files for real architecture changes, and docs/cli/04-git-lifecycle.md already has this detail. Revert both hunks.
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
+  created_at: 2026-11-08T19:07:06.642573355Z
+  modified_at: 2026-11-08T19:07:06.642573355Z
   session_id: 01a1b9af-8230-75d2-82f8-667491cc010a
   harness_version: 2.1.319 (Claude Code)
 history:
