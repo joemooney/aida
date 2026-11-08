@@ -17,13 +17,21 @@ priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-08T02:58:18.689963065Z
-modified_at: 2026-11-08T02:58:18.689963065Z
+modified_at: 2026-11-08T06:07:47.871900382Z
 req_type: Story
 tags:
 - area:handoff
 - area:lanes
 - from:SPIKE-711
 - vendor:claude
+comments:
+- id: 01a1b9c5-269f-72f0-b810-88b6d8a03c56
+  author: joe
+  content: 'Advisor ruling 2026-11-07 23:08: APPROVED at low priority, Claude PreCompact only in this story; Codex waits for its trusted-hook test. Packet must stay bounded and go through aida session handoff, not a new store.'
+  created_at: 2026-11-08T06:07:47.871900382Z
+  modified_at: 2026-11-08T06:07:47.871900382Z
+  session_id: 01a1b9af-8230-75d2-82f8-667491cc010a
+  harness_version: 2.1.319 (Claude Code)
 filed_at:
   code_sha: dc41ee8da2f44f88178936fc1a8e6cb7168a3de7
   branch: main
