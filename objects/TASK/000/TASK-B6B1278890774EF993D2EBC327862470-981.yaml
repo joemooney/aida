@@ -9,12 +9,12 @@ description: |-
 
   PR: #3672
   Reviewed sha: e0ccdac2422d8f24d8a506059cd3ada37dd10203
-status: Approved
+status: InProgress
 priority: Medium
-owner: joe
+owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-08T08:58:22.319212958Z
-modified_at: 2026-11-08T15:27:45.946600728Z
+modified_at: 2026-11-08T18:24:09.384258969Z
 req_type: Task
 tags:
 - carried-from:BUG-2495
@@ -45,6 +45,13 @@ history:
   - field_name: status
     old_value: Draft
     new_value: Approved
+- id: 01a1bc67-4ea8-7842-b119-182883d030aa
+  author: aida-session-start
+  timestamp: 2026-11-08T18:24:09.384256218Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: InProgress
 filed_at:
   code_sha: 5cbe14e5fc6be0d87709049b48f3b7eaeab77808
   branch: main
