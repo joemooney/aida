@@ -1,8 +1,8 @@
 //! STORY-1646: `aida dev build` / `aida dev rollback` pipeline tests.
 //!
 //! Every test runs against temp dirs (target, live, link) and fake
-//! [`BuildSteps`]; nothing here runs a cargo build, touches the host's live
-//! binaries, or signals MCP servers.
+//! [`BuildSteps`]; the stamp regression builds a tiny throwaway crate. Nothing
+//! here touches the host's live binaries or signals MCP servers.
 // trace:STORY-1646 | ai:claude
 
 use super::*;
@@ -749,6 +749,86 @@ fn clean_full_runs_cargo_clean_then_the_normal_pipeline() {
     );
     let pos = |s: &str| steps.calls.iter().position(|c| c == s).unwrap();
     assert!(pos("clean_full") < pos("build") && pos("build") < pos("smoke"));
+}
+
+// A real Cargo build exercises the shared CLI/server stamp helper and its
+// cached output, rather than merely checking command arguments.
+// trace:BUG-2499 | ai:codex
+#[test]
+fn dev_build_restamps_after_fast_forward_with_cached_git_watches() {
+    let f = fixture();
+    write(
+        &f.layout.repo.join("Cargo.toml"),
+        "[package]\nname = \"stamp-probe\"\nversion = \"0.1.0\"\nedition = \"2021\"\n\n\
+         [workspace]\n[profile.agent]\ninherits = \"dev\"\n",
+    );
+    write(&f.layout.repo.join(".gitignore"), "/target/\n");
+    write(
+        &f.layout.repo.join("build_git_stamp.rs"),
+        include_str!("../../build_git_stamp.rs"),
+    );
+    write(
+        &f.layout.repo.join("build.rs"),
+        "include!(\"build_git_stamp.rs\");\nfn main() { emit_git_stamps(); }\n",
+    );
+    write(
+        &f.layout.repo.join("src/main.rs"),
+        "fn main() { println!(\"{}\", env!(\"AIDA_BUILD_GIT_SHA\")); }\n",
+    );
+    git(&f.layout.repo, &["init", "-q", "-b", "main"]);
+    git(&f.layout.repo, &["add", "."]);
+    git(&f.layout.repo, &["commit", "-qm", "initial"]);
+    let build = || {
+        let output = dev_build_command(&f.layout)
+            .arg("--verbose")
+            .output()
+            .unwrap();
+        assert!(
+            output.status.success(),
+            "{}",
+            String::from_utf8_lossy(&output.stderr)
+        );
+        let actual = Command::new(f.layout.target_dir.join("agent/stamp-probe"))
+            .output()
+            .unwrap();
+        assert!(actual.status.success());
+        assert_eq!(
+            String::from_utf8_lossy(&actual.stdout).trim(),
+            git_out(&f.layout.repo, &["rev-parse", "--short", "HEAD"]).unwrap()
+        );
+        String::from_utf8_lossy(&output.stderr).into_owned()
+    };
+    build();
+    assert!(build().contains("Fresh stamp-probe"));
+
+    for clean in [false, true] {
+        git(&f.layout.repo, &["checkout", "-qb", "advance"]);
+        write(
+            &f.layout.repo.join("note"),
+            if clean { "two" } else { "one" },
+        );
+        git(&f.layout.repo, &["add", "note"]);
+        git(&f.layout.repo, &["commit", "-qm", "advance"]);
+        git(&f.layout.repo, &["checkout", "-q", "main"]);
+        git(&f.layout.repo, &["merge", "--ff-only", "advance"]);
+        git(&f.layout.repo, &["branch", "-D", "advance"]);
+        // Make every Git watch older than Cargo's cached build-script output.
+        // The revision input must invalidate it even if metadata mtimes miss
+        // the move (for example with a restored/reused target cache).
+        for path in ["HEAD", "index", "logs/HEAD", "refs/heads/main"] {
+            let status = Command::new("touch")
+                .args(["-d", "@1"])
+                .arg(f.layout.repo.join(".git").join(path))
+                .status()
+                .unwrap();
+            assert!(status.success());
+        }
+        if clean {
+            clean_incremental(&f.layout).unwrap();
+        }
+        assert!(build().contains("Compiling stamp-probe"));
+        assert!(build().contains("Fresh stamp-probe"));
+    }
 }
 
 #[test]

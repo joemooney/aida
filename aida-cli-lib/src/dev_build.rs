@@ -732,6 +732,25 @@ pub(crate) fn clean_incremental(layout: &DevLayout) -> Result<bool> {
     Ok(true)
 }
 
+/// Supply HEAD as a Cargo fingerprint input, independently of cached Git
+/// metadata watches. Keep it stable for warm builds of the same revision.
+/// Both build scripts watch this value but obtain their actual stamp from Git.
+// trace:BUG-2499 | ai:codex
+pub(crate) fn dev_build_command(layout: &DevLayout) -> Command {
+    let head = git_out(&layout.repo, &["rev-parse", "--verify", "HEAD"])
+        .filter(|h| !h.is_empty())
+        .unwrap_or_else(|| "unknown".to_owned());
+    let mut cmd = Command::new("cargo");
+    cmd.current_dir(&layout.repo)
+        .env("RUSTC_WRAPPER", "")
+        .env("CARGO_INCREMENTAL", "1")
+        .env("AIDA_DEV_BUILD_HEAD", head)
+        .args(["build", "--workspace", "--profile", PROFILE])
+        .arg("--target-dir")
+        .arg(&layout.target_dir);
+    cmd
+}
+
 /// The `cargo clean --profile agent` command `--clean=full` runs, scoped to
 /// `layout`'s manifest and target dir.
 pub(crate) fn full_clean_command(layout: &DevLayout) -> Command {
@@ -1737,11 +1756,7 @@ impl BuildSteps for RealSteps {
                 .status();
         }
         run_checked(
-            Command::new("cargo")
-                .current_dir(&layout.repo)
-                .env("RUSTC_WRAPPER", "")
-                .env("CARGO_INCREMENTAL", "1")
-                .args(["build", "--workspace", "--profile", PROFILE]),
+            &mut dev_build_command(layout),
             "cargo build --workspace --profile agent",
         )
     }
