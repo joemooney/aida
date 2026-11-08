@@ -8,7 +8,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-08T00:05:07.175003336Z
-modified_at: 2026-11-08T05:51:09.786577970Z
+modified_at: 2026-11-08T06:02:46.603749061Z
 req_type: Bug
 comments:
 - id: 01a1b879-aeab-7d60-b2eb-2aee3e5a94bb
@@ -86,6 +86,18 @@ comments:
   modified_at: 2026-11-08T05:47:04.988770298Z
   session_id: 01a1b8be-8170-7fb2-89ab-ecb4c6eee98c
   harness_version: 2.1.319 (Claude Code)
+- id: 01a1b9c0-8dcb-7712-8356-bdfea7503094
+  author: dirtlab
+  content: |
+    Addressed the latest review findings. UNPUSHED_COUNT_SCRIPT filters blank revision lines before rev-list and refuses filtering errors, so an unborn HEAD cannot hide private branch refs. Added a live-sandbox regression proving that an unborn HEAD with a private non-slice branch counts the commit and retains the clone (existing salvage conservatively refuses unborn HEAD). The test push now uses the maintenance-disabled seat_git helper. Teardown counts unpublished checkpoint history against origin/base/shipped heads before requesting salvage; published checkpoints no longer cause needless salvage. Added a published-checkpoint teardown regression proving no salvage artifact is created.
+
+    Final-source validation: lane job j20261108T055245370-2-0 ran bug_2491: 4 passed; j20261108T055913981-2-0 ran bug_2455: 7 passed. Python tests/test_git_maintenance_ratchet.py: 8 passed. git diff --check passed. Initial intermediate run failed an overly strict unborn-HEAD bundle assertion; corrected the test to require safe retention and the final run passed. Codegraph unavailable; source navigation used rg after diagnostic.
+
+    Changed files: aida-cli-lib/src/seat_clone.rs; aida-cli-lib/src/tests/task_2053_seat_clone_lifecycle_tests.rs. No implementation blockers. Edits remain uncommitted for native host publication. No commit, push, PR creation, queue completion, ship or review-record command issued.
+  created_at: 2026-11-08T06:02:46.603749061Z
+  modified_at: 2026-11-08T06:02:46.603749061Z
+  session_id: 01a1b9b59853
+  harness_version: codex-cli 0.167.0
 history:
 - id: 01a1b91a-93cc-7372-8d80-82eb4086793e
   author: aida-session-start
