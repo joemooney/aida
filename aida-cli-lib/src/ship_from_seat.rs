@@ -383,8 +383,11 @@ pub(crate) fn post_exit_commit(
         .is_some_and(|lookup| post_exit_completion_allowed(&lookup));
     if let Some(mut message) = declared {
         if !clean_exit || !completing {
-            let prefix = message.rsplit_once('(').expect("validated trailer").0;
-            message = format!("{prefix}(Refs {spec})");
+            // trace:BUG-2493 | ai:codex
+            let (subject, body) = crate::native_publication::split_message(&message);
+            let prefix = subject.rsplit_once('(').expect("validated trailer").0;
+            message =
+                crate::native_publication::join_message(&format!("{prefix}(Refs {spec})"), body);
         }
         return match commit_seat_pending(&main, tree, Some(spec), &message, commit) {
             Ok(Some(tip)) => PostExitCommit::Committed(tip),
