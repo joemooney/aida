@@ -126,8 +126,17 @@ impl Client {
             validate_result(op, &request["data"], &result)?;
             Ok(result)
         })();
-        result.with_context(|| {
-            format!("store service request {request_id}; do not repeat with a new request ID")
+        result.map_err(|error| {
+            if error
+                .chain()
+                .any(|cause| cause.to_string() == "OutcomeUnknown")
+            {
+                error.context(format!(
+                    "store service request {request_id}; do not repeat with a new request ID"
+                ))
+            } else {
+                error.context(format!("store service request {request_id}"))
+            }
         })
     }
 }

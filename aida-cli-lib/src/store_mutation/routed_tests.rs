@@ -6,17 +6,24 @@ use aida_core::db::{canonical_mutation::CanonicalOperation, redo};
 use std::io::BufRead;
 use std::process::{Child, Command, Stdio};
 
-struct Route {
+pub(crate) struct Route {
     tmp: tempfile::TempDir,
     child: Child,
     host: Option<std::thread::JoinHandle<()>>,
     epoch: uuid::Uuid,
-    origin: String,
+    pub(crate) origin: String,
+    root: PathBuf,
 }
 impl Route {
     fn new(drop_reply: bool) -> Self {
         let tmp = tempfile::tempdir().unwrap();
         let root = tmp.path().join("store");
+        Self::at_root(tmp, root, drop_reply)
+    }
+    pub(crate) fn at(root: PathBuf) -> Self {
+        Self::at_root(tempfile::tempdir().unwrap(), root, false)
+    }
+    fn at_root(tmp: tempfile::TempDir, root: PathBuf, drop_reply: bool) -> Self {
         aida_core::git_ops::init(&root).unwrap();
         aida_core::allocation_authority::write_mode(
             &root,
@@ -36,6 +43,7 @@ impl Route {
         host.set_write_timeout(Some(Duration::from_secs(5)))
             .unwrap();
         let scopes = vec![row.id.to_string()];
+        let host_root = root.clone();
         let worker = std::thread::spawn(move || loop {
             let mut byte = [0];
             match host.read_exact(&mut byte) {
@@ -58,7 +66,7 @@ impl Route {
             let result = host_operation(
                 &HostContext {
                     profile: crate::contained_boundary::StoreWriteProfile::Mediated,
-                    root: &root,
+                    root: &host_root,
                     binding: "fixed",
                     epoch,
                     specs: &scopes,
@@ -84,6 +92,20 @@ channel = socket.socket(fileno=0)
 authority = ns['MutationAuthority'](channel)
 identity = Identity()
 identity.allowed.add(os.getppid())
+# Synthetic launch ancestry, not a production grant or namespace attestation.
+# SO_CREDENTIALS supplies the host PID even for the bwrap PID namespace.
+original_check = identity.check
+def fixture_descendant(pid, uid, gid, sender_fd=None):
+    if uid != os.getuid() or gid != os.getgid(): return False
+    for _ in range(64):
+        if original_check(pid, uid, gid, sender_fd=sender_fd): return True
+        try:
+            with open('/proc/%d/status' % pid) as status:
+                pid = next(int(line.split()[1]) for line in status if line.startswith('PPid:'))
+        except (OSError, StopIteration, ValueError): return False
+        if pid <= 1: return False
+    return False
+identity.check = fixture_descendant
 service = Service(dict(epoch=sys.argv[2], specs=[], role='implementer', store_profile='mediated'), identity, authority)
 listener = socket.socket(socket.AF_UNIX, socket.SOCK_SEQPACKET)
 listener.setsockopt(socket.SOL_SOCKET, socket.SO_PASSCRED, 1)
@@ -132,6 +154,7 @@ channel.close()
             host: Some(worker),
             epoch,
             origin,
+            root,
         };
         let stdout = route.child.stdout.take().unwrap();
         let mut poll = libc::pollfd {
@@ -157,10 +180,16 @@ channel.close()
             self.epoch,
         )
     }
-    fn root(&self) -> PathBuf {
-        self.tmp.path().join("store")
+    pub(crate) fn root(&self) -> PathBuf {
+        self.root.clone()
     }
-    fn row(&self) -> aida_core::Requirement {
+    pub(crate) fn endpoint(&self) -> PathBuf {
+        self.tmp.path().join("service")
+    }
+    pub(crate) fn epoch(&self) -> uuid::Uuid {
+        self.epoch
+    }
+    pub(crate) fn row(&self) -> aida_core::Requirement {
         serde_yaml::from_slice(&redo::object_bytes(&self.root(), &self.origin).unwrap()).unwrap()
     }
     fn operation(&self) -> CanonicalOperation {
@@ -188,6 +217,7 @@ fn client_broker_host_retry_after_lost_reply_and_stale_revision() {
     let id = uuid::Uuid::new_v4();
     let error = route.client().mutate(id, &op).unwrap_err();
     assert!(format!("{error:#}").contains("OutcomeUnknown"), "{error:#}");
+    assert!(format!("{error:#}").contains("do not repeat with a new request ID"));
     assert_eq!(
         route.row().comments.len(),
         1,
@@ -201,6 +231,7 @@ fn client_broker_host_retry_after_lost_reply_and_stale_revision() {
         .mutate(uuid::Uuid::new_v4(), &op)
         .unwrap_err();
     assert!(format!("{error:#}").ends_with("Conflict"), "{error:#}");
+    assert!(!format!("{error:#}").contains("do not repeat"));
     assert_eq!(route.row().comments.len(), 1);
     // Public agreed-ID translation also traverses the real broker and host.
     route

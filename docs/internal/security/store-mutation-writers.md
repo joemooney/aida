@@ -26,7 +26,8 @@ Rust SEQPACKET client supports inline, `--body-file` or bounded `--stdin`
 `add_comment` and `update_requirement` without backend setup, agent-registry
 writes, mail acknowledgements or respawn. It retains MCP profile and stakeholder
 restrictions, narrows advertised input properties, and refuses extra fields
-rather than silently dropping semantics. Non-Unicode session roles refuse.
+rather than silently dropping semantics. Non-Unicode session roles and CLI
+arguments refuse; explicitly configured non-string MCP profiles also refuse.
 Comment body files are opened read-only without following symlinks and with
 nonblocking I/O; only regular UTF-8 files up to 16 KiB are accepted. Stdin has
 the same size, UTF-8 and nonempty-content checks. The lane sends literal text,
@@ -36,19 +37,24 @@ refuse rather than silently changing their ordinary meaning. Store discovery
 walks cwd ancestors read-only; it never constructs a backend or shared cache.
 
 Before hashing a preimage, the client resolves native and agreed IDs from
-canonical objects. Incomplete enumeration, unreadable or malformed objects,
+canonical objects. Origin IDs first use their direct object path, without
+scanning unrelated objects or checking agreed-ID collisions. Agreed IDs require
+strict enumeration: incomplete enumeration, unreadable or malformed objects,
 identity mismatches and ambiguous matches refuse. The wire request names the
 origin-keyed canonical object and hashes the exact bounded no-follow read; the
 host independently revalidates its revision and owned UUID under the writer
 lock. Client SEQPACKET fixtures cover agreed and origin IDs through comment-add,
-spec-edit and MCP translation. These fixtures use a synthetic host reply, not
-production admission or contained-lane evidence.
+spec-edit and MCP translation with synthetic replies. Separate routed tests use
+the production client, broker and host handler with synthetic launch identity;
+they cover stale revisions, competing mutations and replay after a lost reply.
+Neither fixture establishes production admission.
 
 Mediated comment edit/delete are unsupported: rewriting an existing comment
 requires an advisor-approved ownership policy. Their closed schemas and host
 handlers are absent; ordinary compatibility commands are unchanged. Each
 invocation uses a new request UUID, included in transport error context for host
-recovery. There is no client status/retry command, and uncertain delivery is
+recovery. Only uncertain outcomes carry no-repeat guidance; definite refusals
+retain the request identity without that warning. There is no client status/retry command, and uncertain delivery is
 never automatically retried. A closed stdout consumer does not turn a committed
 mutation into an output panic.
 Unsupported commands/tools refuse before ordinary dispatch. Neither transport
@@ -61,8 +67,18 @@ layers. Staged mediated sessions route `comment_add` and `spec_edit` to the
 canonical redo handler; neither packet fields nor child environment assignments
 can widen a compatibility session. Broker probes advertise that session's verbs.
 Host routing tests cover owned-comment persistence, exact replay, changed-payload
-conflicts and revocation before replay. These are synthetic host tests; they do
-not establish the live same-lane acceptance test or Git/oplog publication.
+conflicts and revocation before replay. The client/broker/host routed tests also exercise
+concurrent writes, stale bases and lost replies with synthetic launch identity.
+They do not establish Git/oplog publication or production admission.
+
+The filesystem boundary fixture also submits a `comment_add` packet through the
+production Python broker, Rust host handler and redo persistence from the same
+bwrap process that was denied a raw canonical-object overwrite. It checks the
+reply correlation and installed revision, and the parent verifies the single
+comment and host-bound author. Both primary-checkout and linked-store layouts
+retain the raw create/append/rename negatives and writable private-cache control.
+This fixture supplies synthetic launch ancestry and authority; it does not run
+the production launch admission or establish real-vendor containment evidence.
 
 This is staged routing, **not production admission or completed S2a evidence**.
 The production launcher remains gated before session preparation. The inventory still requires

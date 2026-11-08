@@ -109,3 +109,24 @@ fn mediated_mcp_invalid_role_refuses_before_reading_stdio() {
         .unwrap_err();
     assert_eq!(error.to_string(), "invalid session role");
 }
+
+#[test]
+fn mediated_mcp_non_string_config_profile_refuses_before_stdio() {
+    let tmp = tempfile::tempdir().unwrap();
+    std::fs::create_dir(tmp.path().join(".aida")).unwrap();
+    let store = tmp.path().join(".aida-store");
+    for value in ["3", "true", "[]", "{ nested = 'full' }", "'unknown'"] {
+        std::fs::write(
+            tmp.path().join(".aida/config.toml"),
+            format!("[mcp]\nprofile = {value}\n"),
+        )
+        .unwrap();
+        let error = run_mediated_mcp_server(
+            &client(),
+            &aida_core::exec_context::Environment::default(),
+            &store,
+        )
+        .unwrap_err();
+        assert_eq!(error.to_string(), "invalid MCP profile", "{value}");
+    }
+}

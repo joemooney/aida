@@ -214,7 +214,7 @@ pub fn main_entry() {
     // setup or any ordinary dispatcher can write. Inputs confer no authority.
     // trace:TASK-3223 | ai:codex
     let environment = aida_core::exec_context::Environment::capture();
-    let argv: Vec<String> = std::env::args().collect();
+    let argv: Vec<std::ffi::OsString> = std::env::args_os().collect();
     let entry_cwd = std::env::current_dir().ok();
     if let Some(result) =
         crate::store_mutation_entry::entry(&environment, &argv, entry_cwd.as_deref())

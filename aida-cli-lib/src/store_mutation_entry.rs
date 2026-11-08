@@ -10,13 +10,27 @@ use std::io::Read;
 use std::os::unix::fs::OpenOptionsExt;
 use std::path::{Path, PathBuf};
 
-pub(crate) fn entry(env: &Environment, argv: &[String], cwd: Option<&Path>) -> Option<Result<()>> {
+pub(crate) fn entry(
+    env: &Environment,
+    argv: &[std::ffi::OsString],
+    cwd: Option<&Path>,
+) -> Option<Result<()>> {
     match Client::from_environment(env) {
         Ok(None) => None,
         Err(error) => Some(Err(error)),
         Ok(Some(client)) => Some(
             cwd.context("mediated store cwd unavailable")
-                .and_then(|cwd| run(&client, env, argv, cwd)),
+                .and_then(|cwd| {
+                    let argv = argv
+                        .iter()
+                        .map(|arg| {
+                            arg.to_str()
+                                .map(str::to_owned)
+                                .context("InvalidRequest: non-Unicode argument")
+                        })
+                        .collect::<Result<Vec<_>>>()?;
+                    run(&client, env, &argv, cwd)
+                }),
         ),
     }
 }
@@ -219,7 +233,10 @@ mod tests {
             let mut argv = vec!["aida"];
             argv.extend(flags);
             argv.extend(["comment", "add", "TASK-1", "hello"]);
-            let argv = argv.into_iter().map(str::to_owned).collect::<Vec<_>>();
+            let argv = argv
+                .into_iter()
+                .map(std::ffi::OsString::from)
+                .collect::<Vec<_>>();
             let error = entry(&environment, &argv, Some(&nested))
                 .unwrap()
                 .unwrap_err();
@@ -229,6 +246,28 @@ mod tests {
             );
         }
         assert!(root(Path::new("/nonexistent-store-cwd")).is_err());
+    }
+
+    #[test]
+    fn non_unicode_mediated_arguments_refuse_without_dispatch_or_panic() {
+        use std::os::unix::ffi::OsStringExt;
+        let environment = Environment::from_pairs([
+            ("AIDA_STORE_MUTATION_PROFILE".into(), "mediated".into()),
+            (
+                "AIDA_STORE_MUTATION_ENDPOINT".into(),
+                format!("/run/aida-mutation/{}/service", uuid::Uuid::new_v4()).into(),
+            ),
+        ]);
+        let mut argv: Vec<std::ffi::OsString> = ["aida", "comment", "add", "TASK-1", "--body-file"]
+            .into_iter()
+            .map(Into::into)
+            .collect();
+        argv.push(std::ffi::OsString::from_vec(vec![0xff]));
+        let error = entry(&environment, &argv, Some(Path::new("/missing")))
+            .unwrap()
+            .unwrap_err();
+        assert_eq!(error.to_string(), "InvalidRequest: non-Unicode argument");
+        assert!(entry(&Environment::default(), &argv, None).is_none());
     }
 
     #[test]

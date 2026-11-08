@@ -9072,11 +9072,19 @@ pub(crate) fn run_mediated_mcp_server(
                 .context("invalid store root")?
                 .join(".aida/config.toml");
             match std::fs::read_to_string(path) {
-                Ok(text) => toml::from_str::<toml::Value>(&text)?
-                    .get("mcp")
-                    .and_then(|m| m.get("profile"))
-                    .and_then(toml::Value::as_str)
-                    .map(str::to_owned),
+                Ok(text) => {
+                    let config = toml::from_str::<toml::Value>(&text)?;
+                    config
+                        .get("mcp")
+                        .and_then(|m| m.get("profile"))
+                        .map(|profile| {
+                            profile
+                                .as_str()
+                                .map(str::to_owned)
+                                .context("invalid MCP profile")
+                        })
+                        .transpose()?
+                }
                 Err(e) if e.kind() == io::ErrorKind::NotFound => None,
                 Err(e) => return Err(e.into()),
             }

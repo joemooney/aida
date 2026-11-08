@@ -502,3 +502,18 @@ fn invalid_session_role_is_not_treated_as_an_unrestricted_missing_role() {
     )]);
     assert!(session_role(&env).is_err());
 }
+
+#[test]
+fn connect_refusal_keeps_request_identity_without_uncertain_outcome_guidance() {
+    let tmp = tempfile::tempdir().unwrap();
+    let client = Client::fixture(
+        tmp.path().join("absent").to_str().unwrap().into(),
+        Uuid::new_v4(),
+    );
+    let id = Uuid::new_v4();
+    let error = client.request(id, "comment_add", json!({})).unwrap_err();
+    let diagnostic = format!("{error:#}");
+    assert!(diagnostic.contains(&id.to_string()));
+    assert!(diagnostic.ends_with("Unavailable"));
+    assert!(!diagnostic.contains("do not repeat"));
+}

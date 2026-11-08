@@ -159,10 +159,21 @@ fn mediated_profile_pins_linked_gitdir_and_refuses_unreadable_binding() {
 }
 
 fn run_in_profile(profile: &WriteProfile, cwd: &Path, script: &str) -> std::process::Output {
+    run_in_profile_with_service(profile, cwd, script, None)
+}
+
+fn run_in_profile_with_service(
+    profile: &WriteProfile,
+    cwd: &Path,
+    script: &str,
+    service: Option<(&Path, &str)>,
+) -> std::process::Output {
     let mut command = Command::new("/usr/bin/bwrap");
-    command
-        .args(profile.args(cwd))
-        .args(["--", "/usr/bin/python3", "-I", "-S", "-c", script]);
+    command.args(profile.args(cwd));
+    if let Some((source, destination)) = service {
+        command.arg("--ro-bind").arg(source).arg(destination);
+    }
+    command.args(["--", "/usr/bin/python3", "-I", "-S", "-c", script]);
     let fds: Vec<_> = profile.mounts.iter().map(|m| m.file.as_raw_fd()).collect();
     unsafe {
         command.pre_exec(move || {
@@ -352,11 +363,17 @@ fn mediated_profile_live_raw_create_append_rename_denied_and_private_cache_writa
     }
     for linked in [false, true] {
         let f = Fixture::new(linked);
+        let route = super::store_mutation::routed_tests::Route::at(f.main.join(".aida-store"));
+        let object =
+            aida_core::object_store::object_path(&route.root().join("objects"), &route.origin)
+                .unwrap();
+        let before = std::fs::read(&object).unwrap();
+        let endpoint = format!("/run/aida-mutation/{}/service", route.epoch());
         let (profile, cache) = f.profile();
         let paths = serde_json::to_string(&f.protected).unwrap();
         let script = format!(
             r#"
-import errno, json, os, sqlite3
+import errno, hashlib, json, os, socket, sqlite3, uuid
 from pathlib import Path
 paths=json.loads({paths:?})
 source=Path({lane:?})/'rename-source'
@@ -384,12 +401,52 @@ db.execute("insert into derived values ('private')")
 db.commit()
 assert db.execute('select value from derived').fetchone()==('private',)
 db.close()
-print('raw writes denied; private cache writable')
+# The same sandboxed process must fail to modify the actual canonical object
+# and then succeed via the production broker/host route, without leaving it.
+obj=Path({object:?})
+before=obj.read_bytes()
+try:
+    obj.write_bytes(b'raw overwrite')
+except OSError as e:
+    assert e.errno in (errno.EROFS,errno.EACCES),e
+else: raise AssertionError('raw canonical object write allowed')
+assert obj.read_bytes()==before
+request=dict(version=1,launch_epoch={epoch:?},request_id=str(uuid.uuid4()),
+             op='comment_add',data=dict(spec_id={origin:?},
+             expected_revision=hashlib.sha256(before).hexdigest(),content='same lane mediated comment'))
+with socket.socket(socket.AF_UNIX,socket.SOCK_SEQPACKET) as channel:
+    channel.settimeout(5)
+    channel.connect({endpoint:?})
+    wire=json.dumps(request).encode()
+    assert os.write(channel.fileno(),wire)==len(wire)
+    reply=json.loads(channel.recv(65536))
+assert reply['outcome']=='success',reply
+assert reply['launch_epoch']==request['launch_epoch']
+assert reply['request_id']==request['request_id']
+assert reply['result']['spec_id']==request['data']['spec_id']
+assert str(uuid.UUID(reply['result']['comment_id']))==reply['result']['comment_id']
+assert reply['result']['revision']==hashlib.sha256(obj.read_bytes()).hexdigest()
+print('raw writes denied; private cache writable; mediated comment committed')
 "#,
             lane = f.lane.to_str().unwrap(),
-            cache = cache.to_str().unwrap()
+            cache = cache.to_str().unwrap(),
+            object = object.to_str().unwrap(),
+            epoch = route.epoch().to_string(),
+            origin = route.origin,
+            endpoint = endpoint,
         );
-        let out = run_in_profile(&profile, &f.lane, &script);
+        let out = run_in_profile_with_service(
+            &profile,
+            &f.lane,
+            &script,
+            Some((&route.endpoint(), &endpoint)),
+        );
+        let installed = route.row();
+        assert_ne!(std::fs::read(&object).unwrap(), before);
+        assert_eq!(installed.comments.len(), 1);
+        assert_eq!(installed.comments[0].content, "same lane mediated comment");
+        assert_eq!(installed.comments[0].author, "bound author");
+        assert!(String::from_utf8_lossy(&out.stdout).contains("mediated comment committed"));
         assert!(String::from_utf8_lossy(&out.stdout).contains("raw writes denied"));
         host_primitive_positives(&f, &profile);
         // Parent observations, not assertions made solely by the lane.

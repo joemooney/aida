@@ -727,4 +727,4 @@ channel.close()
 
 #[cfg(test)]
 #[path = "routed_tests.rs"]
-mod routed_tests;
+pub(crate) mod routed_tests;
