@@ -100,7 +100,7 @@ fn upgrade_running_binary(
 
     if check {
         println!(
-            "\n{}: an upgrade is available. Run `aida upgrade` (without --check) to install.",
+            "\n{}: an upgrade is available. Run `aida upgrade` to install.",
             "INFO".blue()
         );
         return Ok(());
@@ -166,7 +166,7 @@ fn upgrade_specific_binary(
 
     if check {
         println!(
-            "\n{}: upgrade available for {}. Re-run without --check to install.",
+            "\n{}: upgrade available for {}. Run `aida upgrade` to install.",
             "INFO".blue(),
             target_path.display()
         );
@@ -264,7 +264,7 @@ pub(crate) fn upgrade_dev_mode_sibling_scan(
             print_unreleased_dev_hint(&exe, &target_tag, diff);
         } else {
             println!(
-                "{}: {} sibling install(s) are stale. Re-run without --check to upgrade.",
+                "{}: {} sibling install(s) are stale. Run `aida upgrade` to upgrade.",
                 "INFO".blue(),
                 stale.len()
             );
@@ -435,8 +435,8 @@ fn print_unreleased_dev_hint(exe: &std::path::Path, target_tag: &str, with_diff:
         println!();
     } else {
         println!(
-            "      Pass {} to see the unreleased commits before shipping.",
-            "--diff".cyan()
+            "      Run {} to see the unreleased commits before shipping.",
+            "aida upgrade diff".cyan()
         );
     }
 

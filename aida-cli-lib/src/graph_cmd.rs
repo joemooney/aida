@@ -1,5 +1,5 @@
 //! `aida graph` command handlers — STORY-489 cross-spec transitive queries
-//! (`--blocked-by` / `--blocks` chains, `--tree` epic rollup, `--impact` reverse
+//! (`blocked-by` / `blocks` chains, `tree` epic rollup, `impact` reverse
 //! closure, `--json`). Extracted verbatim from `main.rs` (SPIKE-78, pure
 //! movement — no behavior change).
 

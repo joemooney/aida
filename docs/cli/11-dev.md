@@ -73,11 +73,11 @@ The promote holds an exclusive lock on `live/.lock` from staging to the final re
 
 **Mental model.** `upgrade` detects *how* aida was installed (cargo vs pre-built binary) and uses the matching strategy. From a developer build, with no `--target`, it also scans common install locations and offers to upgrade any **stale sibling installs** — handy when aida is on PATH in several places.
 
-**Reach for it when** — a new release is out and you want this machine on it; `--check` first to compare current/sibling versions against the latest *without* installing.
+**Reach for it when** — a new release is out and you want this machine on it; `aida upgrade check` first to compare current/sibling versions against the latest *without* installing.
 
 **Don't reach for it when** — you're on an in-repo dev build you're actively changing (don't overwrite your own build — use the `aida dev` activation flow). `upgrade` is for *installed* aida, not the one you're hacking on.
 
-**Chains with** — the counterpart to `aida release`; `--check` pairs with the statusline's version-staleness hint.
+**Chains with** — the counterpart to `aida release`; `aida upgrade check` pairs with the statusline's version-staleness hint.
 
 ---
 

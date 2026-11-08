@@ -1,9 +1,9 @@
 //! `aida usage` command cluster (STORY-122 / STORY-709 / TASK-266 / TASK-872 /
 //! STORY-530 / EPIC-36).
 //!
-//! The usage-telemetry query surface: the top-N default view, `--errors`,
-//! `--unused`, `--slowest` + `--events` (the performance lens), `--read-write`
-//! (the trace-read-rate audit), and `--auto-complete` (orchestrator telemetry
+//! The usage-telemetry query surface: the top-N default view, `errors`,
+//! `unused`, `slowest` + `events` (the performance lens), `--read-write`
+//! (the trace-read-rate audit), and `auto-complete` (orchestrator telemetry
 //! views). Reads the per-command usage log (`~/.aida/usage.jsonl`) and the
 //! orchestrator log (`~/.aida/auto-complete.jsonl`); never writes them.
 //! Extracted verbatim from `main.rs` (SPIKE-78); no behavior change.
@@ -964,12 +964,13 @@ pub(crate) fn handle_usage_command(
         return Ok(());
     }
 
-    // --unused: show commands present in `events` but with no record
+    // trace:TASK-1214 | ai:codex
+    // unused: show commands present in `events` but with no record
     // since the cutoff. (A "command not in events at all" is invisible
     // here — we can only report what we've seen.)
     if let Some(raw) = unused_raw {
         // trace:TASK-1509 | ai:claude
-        let cutoff_window = crate::queue_cmd::parse_lookback(raw, "--unused")?;
+        let cutoff_window = crate::queue_cmd::parse_lookback(raw, "usage unused <DURATION>")?;
         let cutoff = now - cutoff_window;
         let mut last_seen: std::collections::HashMap<String, chrono::DateTime<chrono::Utc>> =
             std::collections::HashMap::new();
