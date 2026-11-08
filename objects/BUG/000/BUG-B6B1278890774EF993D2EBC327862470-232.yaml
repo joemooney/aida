@@ -21,7 +21,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-06T17:06:21.254759647Z
-modified_at: 2026-11-08T06:37:54.557600875Z
+modified_at: 2026-11-08T06:41:17.983959032Z
 req_type: Bug
 comments:
 - id: 01a1b1ff-81bd-7b80-8ed5-ea84e52557a5
@@ -199,6 +199,13 @@ comments:
   modified_at: 2026-11-08T06:36:31.553453817Z
   session_id: 01a1b8be-8170-7fb2-89ab-ecb4c6eee98c
   harness_version: 2.1.319 (Claude Code)
+- id: 01a1b9e3-d29f-7ac3-9a9f-962b28cd31b2
+  author: dirtlab
+  content: 'Rework for PR #3658: moved snapshot-only agreed-ID fallback after literal and node-alias lookups, and only scan when the pinned snapshot is stale/unavailable. Fresh snapshot missing IDs and resolved aliases now avoid store-wide scans. Added fresh/stale alias and fresh missing-ID assertions with an actual bounded-scan counter; stale/missing/corrupt agreed-ID positive controls retain scanning. Moved latency documentation below Key options, corrected TOON linkage opt-in wording, removed doubled blank line. Validation: lane job j20261108T063928566-2-0 ran 4 show_snapshot tests, all passed; j20261108T064007775-2-0 ran 3 read_fallback tests, all passed. Static manual check and live checks for both edited chapters passed; rustfmt and git diff --check passed. Full manual validation still in progress. Initial stale_snapshot filter matched zero tests and is not counted as validation. Publication declaration recorded with Refs BUG-2466; edits remain uncommitted for host publication. CI at the future rework head and unchanged post-deploy 24-hour production guard window remain unverified.'
+  created_at: 2026-11-08T06:41:17.983959032Z
+  modified_at: 2026-11-08T06:41:17.983959032Z
+  session_id: 01a1b9e0b22c
+  harness_version: codex-cli 0.167.0
 history:
 - id: 01a1b1f4-7697-7833-aec1-9ed69cd01b42
   author: aida-session-start
