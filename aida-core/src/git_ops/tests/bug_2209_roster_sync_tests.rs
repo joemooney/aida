@@ -52,7 +52,16 @@ fn bug_2209_sync_commit_refuses_a_roster_that_drops_advisors() {
         "[members]\nbug-1618-hermetic-test-user = [\"implementer\"]\n",
     )
     .unwrap();
-    std::fs::write(store.join("objects/spec.yaml"), "id: X\n").unwrap();
+    // trace:BUG-2490 | ai:codex — committed fixtures use valid requirement YAML.
+    std::fs::write(
+        store.join("objects/spec.yaml"),
+        serde_yaml::to_string(&crate::models::Requirement::new(
+            "fixture".into(),
+            String::new(),
+        ))
+        .unwrap(),
+    )
+    .unwrap();
 
     assert!(commit_pending_store_changes_on_host(&store).unwrap());
 

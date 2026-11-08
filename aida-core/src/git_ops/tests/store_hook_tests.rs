@@ -1286,3 +1286,100 @@ fn bug_2490_autostash_conflict_refuses_store_commit() {
         assert_eq!(value.stdout.trim(), "false");
     }
 }
+
+// trace:BUG-2490 | ai:codex
+#[test]
+fn bug_2490_targeted_commit_ignores_unrelated_corruption() {
+    let dir = tempfile::tempdir().unwrap();
+    let (_main, store) = bug_1929_main_with_store(dir.path());
+    let path = "objects/STORY/000/STORY-good.yaml";
+    std::fs::create_dir_all(store.join("objects/STORY/000")).unwrap();
+    let mut req = crate::models::Requirement::new("base".into(), String::new());
+    std::fs::write(store.join(path), serde_yaml::to_string(&req).unwrap()).unwrap();
+    add(&store, &[path]).unwrap();
+    commit(&store, "base").unwrap();
+    // Dirty corrupt worktree bytes outside the index cannot block an ordinary
+    // commit of a different object.
+    std::fs::write(store.join("objects/STORY/000/unrelated.yaml"), "broken: [").unwrap();
+    req.title = "staged".into();
+    std::fs::write(store.join(path), serde_yaml::to_string(&req).unwrap()).unwrap();
+    add(&store, &[path]).unwrap();
+    commit(&store, "targeted index").unwrap();
+    // An explicit pathspec must also leave unrelated staged corruption alone.
+    add(&store, &["objects/STORY/000/unrelated.yaml"]).unwrap();
+    req.title = "worktree".into();
+    std::fs::write(store.join(path), serde_yaml::to_string(&req).unwrap()).unwrap();
+    commit_paths(&store, "explicit path", &[path]).unwrap();
+    let staged = git(&store, &["diff", "--cached", "--name-only"]).unwrap();
+    assert!(staged.stdout.contains("unrelated.yaml"));
+    // But a directory pathspec that includes that corruption must refuse.
+    assert!(commit_paths(&store, "bad directory", &["objects/STORY"]).is_err());
+    assert!(commit_pending_store_changes_on_host(&store).is_err());
+}
+
+// trace:BUG-2490 | ai:codex
+#[test]
+fn bug_2490_pending_checks_only_dirty_objects_and_names_invalid_path() {
+    let dir = tempfile::tempdir().unwrap();
+    let (_main, store) = bug_1929_main_with_store(dir.path());
+    std::fs::create_dir_all(store.join("objects/STORY/000")).unwrap();
+    let bad = "objects/STORY/000/legacy.yaml";
+    std::fs::write(store.join(bad), "<<<<<<< old\n=======\n>>>>>>> other\n").unwrap();
+    // A foreign writer's already-committed corruption belongs in doctor;
+    // it must not prevent unrelated writes or sync of valid pending objects.
+    let raw = host_git_command(&store)
+        .args(["add", "."])
+        .output()
+        .unwrap();
+    assert!(raw.status.success());
+    let raw = host_git_command(&store)
+        .args(["commit", "-qm", "legacy corruption"])
+        .output()
+        .unwrap();
+    assert!(raw.status.success());
+    let good = "objects/STORY/000/new.yaml";
+    let req = crate::models::Requirement::new("valid".into(), String::new());
+    std::fs::write(store.join(good), serde_yaml::to_string(&req).unwrap()).unwrap();
+    assert!(commit_pending_store_changes_on_host(&store).unwrap());
+    std::fs::write(store.join(bad), "<<<<<<< dirty\n=======\n>>>>>>> other\n").unwrap();
+    let head = head_sha(&store).unwrap();
+    let error = commit_pending_store_changes_on_host(&store)
+        .unwrap_err()
+        .to_string();
+    assert!(
+        error.contains(bad) && error.contains("conflict markers"),
+        "{error}"
+    );
+    assert_eq!(head_sha(&store).unwrap(), head);
+    assert!(git(&store, &["diff", "--cached", "--name-only"])
+        .unwrap()
+        .stdout
+        .is_empty());
+}
+
+// trace:BUG-2490 | ai:codex
+#[test]
+fn bug_2490_bulk_staged_objects_support_batch_and_unusual_names() {
+    let dir = tempfile::tempdir().unwrap();
+    let (_main, store) = bug_1929_main_with_store(dir.path());
+    std::fs::create_dir_all(store.join("objects/STORY/000")).unwrap();
+    // Enough input and output to exceed pipe buffers in both directions.
+    for i in 0..512 {
+        let path = format!("objects/STORY/000/object {i}\n[bracket].yaml");
+        let req = crate::models::Requirement::new(format!("object {i}"), "x".repeat(1024));
+        std::fs::write(store.join(path), serde_yaml::to_string(&req).unwrap()).unwrap();
+    }
+    add_all(&store, ".").unwrap();
+    assert!(commit(&store, "bulk").unwrap());
+    // Staged corruption still refuses even if the worktree is repaired.
+    let path = "objects/STORY/000/object 0\n[bracket].yaml";
+    let repaired = std::fs::read(store.join(path)).unwrap();
+    std::fs::write(store.join(path), "broken: [").unwrap();
+    add_all(&store, ".").unwrap();
+    std::fs::write(store.join(path), repaired).unwrap();
+    let error = commit(&store, "bad staged bytes").unwrap_err().to_string();
+    assert!(
+        error.contains(path) && error.contains("does not parse"),
+        "{error}"
+    );
+}

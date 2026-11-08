@@ -2403,7 +2403,16 @@ mod task_1981_publication_tests {
         let seeded = fixture.advance("seed.txt");
         assert!(git_ops::push(&fixture.store, "origin", "main").unwrap());
         assert_eq!(fixture.remote_head(), seeded);
-        std::fs::write(fixture.store.join("objects/pending.yaml"), "pending").unwrap();
+        // trace:BUG-2490 | ai:codex — committed fixtures use valid requirement YAML.
+        std::fs::write(
+            fixture.store.join("objects/pending.yaml"),
+            serde_yaml::to_string(&aida_core::Requirement::new(
+                "pending".into(),
+                String::new(),
+            ))
+            .unwrap(),
+        )
+        .unwrap();
         seeded
     }
 

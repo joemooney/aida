@@ -1507,7 +1507,7 @@ pub fn commit(repo: &Path, message: &str) -> Result<bool> {
     let redact = commit_redaction_args(public_email.as_deref());
     let mut argv: Vec<&str> = redact.iter().map(String::as_str).collect();
     argv.extend_from_slice(&["commit", "-m", message]);
-    let result = commit_with_lock_recovery(repo, &argv)?;
+    let result = commit_with_lock_recovery(repo, &argv, None)?;
     if result.success {
         Ok(true)
     } else if crate::external_tool_output::contains_any_case_insensitive(
@@ -1536,7 +1536,10 @@ pub fn commit_paths(repo: &Path, message: &str, paths: &[&str]) -> Result<()> {
     let mut argv: Vec<&str> = redact.iter().map(String::as_str).collect();
     argv.extend_from_slice(&["commit", "-q", "-m", message, "--"]);
     argv.extend_from_slice(paths);
-    let result = commit_with_lock_recovery(repo, &argv)?;
+    if is_store_tree(repo) {
+        validate_store_worktree_paths(repo, paths)?;
+    }
+    let result = commit_with_lock_recovery(repo, &argv, Some(paths))?;
     if !result.success {
         return Err(commit_failure::error(&result)); // trace:BUG-034 | ai:claude
     }
@@ -1547,10 +1550,13 @@ pub fn commit_paths(repo: &Path, message: &str, paths: &[&str]) -> Result<()> {
 /// git process holds) and clearing it again before each lock-contention
 /// retry, so an abandoned lock cannot fail every later store commit.
 // trace:BUG-034 | ai:claude
-fn commit_with_lock_recovery(repo: &Path, argv: &[&str]) -> Result<GitResult> {
+fn commit_with_lock_recovery(
+    repo: &Path,
+    argv: &[&str],
+    paths: Option<&[&str]>,
+) -> Result<GitResult> {
     if is_store_tree(repo) {
-        validate_store_objects(repo)?;
-        validate_store_index(repo)?;
+        validate_store_index_paths(repo, paths)?;
     }
     ensure_index_lock_clear_for_write(repo, 10, 100)?;
     commit_failure::with_lock_backoff(
@@ -2415,8 +2421,8 @@ pub fn commit_pending_store_changes_on_host(store_path: &Path) -> Result<bool> {
         if !has_changes_checked(store_path)? {
             return Ok(false);
         }
-        validate_store_objects(store_path)?;
         validate_store_index(store_path)?;
+        validate_pending_store_objects(store_path)?;
         add_all(store_path, ".")?;
         commit(store_path, "chore: sync pending changes")
     })
@@ -7323,17 +7329,98 @@ fn validate_object_text(path: &str, text: &str) -> Result<()> {
     Ok(())
 }
 
-/// Read-only integrity preflight, also usable before doctor loads the store.
+/// Full inventory for explicit diagnostics only. Hot commit paths validate
+/// their selected blobs instead of parsing the whole store.
 // trace:BUG-2490 | ai:codex
-pub fn validate_store_objects(repo: &Path) -> Result<()> {
+pub fn store_object_findings(repo: &Path) -> Vec<(PathBuf, String)> {
     let objects = repo.join("objects");
     if !objects.exists() {
-        return Ok(());
+        return Vec::new();
     }
-    for (_, path) in crate::object_store::list_objects_strict(&objects)? {
-        let text = std::fs::read_to_string(&path)
-            .with_context(|| format!("cannot read store object {}", path.display()))?;
-        validate_object_text(&path.display().to_string(), &text)?;
+    let paths = match crate::object_store::list_objects_strict(&objects) {
+        Ok(paths) => paths,
+        Err(e) => return vec![(objects, format!("{e:#}"))],
+    };
+    paths
+        .into_iter()
+        .filter_map(|(_, path)| {
+            let result = std::fs::read_to_string(&path)
+                .with_context(|| format!("cannot read store object {}", path.display()))
+                .and_then(|text| validate_object_text(&path.display().to_string(), &text));
+            result.err().map(|e| (path, format!("{e:#}")))
+        })
+        .collect()
+}
+
+/// Read-only strict integrity check for explicit diagnostics.
+// trace:BUG-2490 | ai:codex
+pub fn validate_store_objects(repo: &Path) -> Result<()> {
+    if let Some((_, error)) = store_object_findings(repo).into_iter().next() {
+        anyhow::bail!(error);
+    }
+    Ok(())
+}
+
+// Pending sync stages all dirty/untracked files. --no-renames makes every
+// record one path, including rename destinations, without quoted-name parsing.
+// trace:BUG-2490 | ai:codex
+fn validate_pending_store_objects(repo: &Path) -> Result<()> {
+    let output = host_git_command(repo)
+        .args([
+            "status",
+            "--porcelain=v1",
+            "-z",
+            "--untracked-files=all",
+            "--no-renames",
+        ])
+        .output()?;
+    anyhow::ensure!(
+        output.status.success(),
+        "cannot inspect pending store objects"
+    );
+    for row in std::str::from_utf8(&output.stdout)?
+        .split('\0')
+        .filter(|r| !r.is_empty())
+    {
+        let path = row.get(3..).context("invalid store status record")?;
+        if is_spec_object_path(path) {
+            match std::fs::read_to_string(repo.join(path)) {
+                Ok(text) => validate_object_text(path, &text)?,
+                Err(e) if e.kind() == std::io::ErrorKind::NotFound => {}
+                Err(e) => {
+                    return Err(e).with_context(|| format!("cannot read store object {path}"))
+                }
+            }
+        }
+    }
+    Ok(())
+}
+
+// git commit -- <pathspec> uses worktree copies, including directory and glob
+// pathspecs. Inspect only their tracked/untracked matches; deletions are valid.
+// trace:BUG-2490 | ai:codex
+fn validate_store_worktree_paths(repo: &Path, paths: &[&str]) -> Result<()> {
+    let output = host_git_command(repo)
+        .args([
+            "ls-files",
+            "--cached",
+            "--others",
+            "--exclude-standard",
+            "-z",
+            "--",
+        ])
+        .args(paths)
+        .output()?;
+    anyhow::ensure!(output.status.success(), "cannot inspect store commit paths");
+    for path in std::str::from_utf8(&output.stdout)?
+        .split('\0')
+        .filter(|p| is_spec_object_path(p))
+    {
+        match std::fs::read_to_string(repo.join(path)) {
+            Ok(text) => validate_object_text(path, &text)?,
+            Err(e) if e.kind() == std::io::ErrorKind::NotFound => {}
+            Err(e) => return Err(e).with_context(|| format!("cannot read store object {path}")),
+        }
     }
     Ok(())
 }
@@ -7342,6 +7429,10 @@ pub fn validate_store_objects(repo: &Path) -> Result<()> {
 // corrupt staged object. Unmerged entries refuse before any commit attempt.
 // trace:BUG-2490 | ai:codex
 fn validate_store_index(repo: &Path) -> Result<()> {
+    validate_store_index_paths(repo, None)
+}
+
+fn validate_store_index_paths(repo: &Path, paths: Option<&[&str]>) -> Result<()> {
     let unmerged = git(repo, &["ls-files", "--unmerged"])?;
     anyhow::ensure!(
         unmerged.success,
@@ -7353,15 +7444,19 @@ fn validate_store_index(repo: &Path) -> Result<()> {
         "unmerged store paths; resolve before committing: {}",
         unmerged.stdout
     );
-    let output = host_git_command(repo)
-        .args([
-            "diff",
-            "--cached",
-            "--name-only",
-            "--diff-filter=ACMRT",
-            "-z",
-        ])
-        .output()?;
+    let mut command = host_git_command(repo);
+    command.args([
+        "diff",
+        "--cached",
+        "--name-only",
+        "--diff-filter=ACMRT",
+        "-z",
+        "--",
+    ]);
+    if let Some(paths) = paths {
+        command.args(paths);
+    }
+    let output = command.output()?;
     if !output.status.success() {
         anyhow::bail!(
             "cannot inspect store index: {}",
@@ -7369,20 +7464,82 @@ fn validate_store_index(repo: &Path) -> Result<()> {
         );
     }
     let listing = std::str::from_utf8(&output.stdout)?;
-    for path in listing.split('\0').filter(|s| !s.is_empty()) {
-        if is_spec_object_path(path) {
-            let blob = host_git_command(repo)
-                .args(["show", &format!(":{path}")])
-                .output()?;
-            if !blob.status.success() {
-                anyhow::bail!("cannot read staged store object {path}");
-            }
-            validate_object_text(
-                path,
-                std::str::from_utf8(&blob.stdout)
-                    .with_context(|| format!("store object {path} is not UTF-8"))?,
-            )?;
-        }
+    let paths: Vec<_> = listing
+        .split('\0')
+        .filter(|p| is_spec_object_path(p))
+        .collect();
+    if paths.is_empty() {
+        return Ok(());
+    }
+    // Resolve index OIDs once, then read all blobs in one process. OIDs rather
+    // than :path requests also support filenames containing newlines.
+    // trace:BUG-2490 | ai:codex
+    let mut command = host_git_command(repo);
+    command
+        .args(["--literal-pathspecs", "ls-files", "--stage", "-z", "--"])
+        .args(&paths);
+    let index = command.output()?;
+    anyhow::ensure!(index.status.success(), "cannot list staged store objects");
+    let entries: Vec<_> = std::str::from_utf8(&index.stdout)?
+        .split('\0')
+        .filter(|row| !row.is_empty())
+        .map(|row| -> Result<_> {
+            let (meta, path) = row.split_once('\t').context("invalid index entry")?;
+            let oid = meta
+                .split_whitespace()
+                .nth(1)
+                .context("missing index OID")?;
+            Ok((oid, path))
+        })
+        .collect::<Result<_>>()?;
+    use std::io::{BufRead, Read, Write};
+    use std::process::Stdio;
+    let mut child = host_git_command(repo)
+        .args(["cat-file", "--batch"])
+        .stdin(Stdio::piped())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .spawn()?;
+    let mut input = child.stdin.take().context("missing batch stdin")?;
+    let requests = entries
+        .iter()
+        .map(|(oid, _)| format!("{oid}\n"))
+        .collect::<String>();
+    // Drain stdout while sending requests so a bulk commit cannot fill both
+    // pipes and deadlock. Closing stdin also makes empty/failed batches exit.
+    let output = std::thread::scope(|scope| -> Result<_> {
+        let writer = scope.spawn(move || input.write_all(requests.as_bytes()));
+        let output = child.wait_with_output()?;
+        writer
+            .join()
+            .map_err(|_| anyhow::anyhow!("batch input writer panicked"))??;
+        Ok(output)
+    })?;
+    anyhow::ensure!(
+        output.status.success(),
+        "cannot read staged store blobs: {}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    let mut blobs = std::io::Cursor::new(output.stdout);
+    for (_, path) in entries {
+        let mut header = String::new();
+        blobs.read_line(&mut header)?;
+        let fields: Vec<_> = header.split_whitespace().collect();
+        anyhow::ensure!(
+            fields.len() == 3 && fields[1] == "blob",
+            "cannot read staged store object {path}"
+        );
+        let size: usize = fields[2].parse()?;
+        let mut bytes = vec![0; size];
+        blobs.read_exact(&mut bytes)?;
+        let mut newline = [0];
+        blobs.read_exact(&mut newline)?;
+        anyhow::ensure!(newline == [b'\n'], "invalid batch delimiter for {path}");
+        validate_object_text(
+            path,
+            std::str::from_utf8(&bytes)
+                .with_context(|| format!("store object {path} is not UTF-8"))?,
+        )?;
     }
     Ok(())
 }

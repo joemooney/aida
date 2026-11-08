@@ -6181,10 +6181,15 @@ mod tests {
         std::fs::write(store_root.join("metadata.yaml"), "name: test\n").unwrap();
         let objects = store_root.join("objects").join("TASK").join("000");
         std::fs::create_dir_all(&objects).unwrap();
+        // trace:BUG-2490 | ai:codex — committed fixtures use valid requirement YAML.
         for i in 0..12 {
             std::fs::write(
                 objects.join(format!("TASK-{i}.yaml")),
-                format!("id: TASK-{i}\n"),
+                serde_yaml::to_string(&crate::models::Requirement::new(
+                    format!("TASK-{i}"),
+                    String::new(),
+                ))
+                .unwrap(),
             )
             .unwrap();
         }

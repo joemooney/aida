@@ -382,13 +382,18 @@ fn changed_paths_since(store: &Path, baseline: &StoreBaseline) -> anyhow::Result
 mod tests {
     use super::*;
 
+    // trace:BUG-2490 | ai:codex — committed objects must satisfy the schema.
+    fn object(title: &str) -> String {
+        serde_yaml::to_string(&aida_core::Requirement::new(title.into(), String::new())).unwrap()
+    }
+
     fn store_fixture() -> (tempfile::TempDir, std::path::PathBuf) {
         let tmp = tempfile::tempdir().unwrap();
         let store = tmp.path().join(".aida-store");
         std::fs::create_dir_all(store.join("objects")).unwrap();
         aida_core::git_ops::init(&store).unwrap();
         aida_core::git_ops::configure_user(&store, "fixture", "fixture@localhost").unwrap();
-        std::fs::write(store.join("objects/old.yaml"), "a: 1\n").unwrap();
+        std::fs::write(store.join("objects/old.yaml"), object("a: 1")).unwrap();
         aida_core::git_ops::add(&store, &["objects/old.yaml"]).unwrap();
         aida_core::git_ops::commit(&store, "fixture").unwrap();
         (tmp, store)
@@ -417,12 +422,12 @@ mod tests {
     #[test]
     fn bug_2185_commits_only_paths_changed_since_the_baseline() {
         let (_g, store) = store_fixture();
-        std::fs::write(store.join("objects/stale.yaml"), "s: 1\n").unwrap();
-        std::fs::write(store.join("objects/touched.yaml"), "t: 1\n").unwrap();
+        std::fs::write(store.join("objects/stale.yaml"), object("s: 1")).unwrap();
+        std::fs::write(store.join("objects/touched.yaml"), object("t: 1")).unwrap();
         let baseline = StoreBaseline::capture(&store);
-        std::fs::write(store.join("objects/old.yaml"), "a: 2\n").unwrap();
-        std::fs::write(store.join("objects/new.yaml"), "n: 1\n").unwrap();
-        std::fs::write(store.join("objects/touched.yaml"), "t: 2\n").unwrap();
+        std::fs::write(store.join("objects/old.yaml"), object("a: 2")).unwrap();
+        std::fs::write(store.join("objects/new.yaml"), object("n: 1")).unwrap();
+        std::fs::write(store.join("objects/touched.yaml"), object("t: 2")).unwrap();
 
         let committed = commit_store_writes_since(&store, &baseline, "reviewer").unwrap();
         assert_eq!(
@@ -480,13 +485,13 @@ mod tests {
     #[test]
     fn task_2009_a_host_staged_path_the_child_deleted_does_not_abort_the_commit() {
         let (_g, store) = store_fixture();
-        std::fs::write(store.join("objects/staged.yaml"), "s: 1\n").unwrap();
+        std::fs::write(store.join("objects/staged.yaml"), object("s: 1")).unwrap();
         git(&store, &["add", "objects/staged.yaml"]);
         git(&store, &["mv", "objects/old.yaml", "objects/renamed.yaml"]);
         let baseline = StoreBaseline::capture(&store);
         std::fs::remove_file(store.join("objects/staged.yaml")).unwrap();
         std::fs::remove_file(store.join("objects/renamed.yaml")).unwrap();
-        std::fs::write(store.join("objects/new.yaml"), "n: 1\n").unwrap();
+        std::fs::write(store.join("objects/new.yaml"), object("n: 1")).unwrap();
 
         let committed = commit_store_writes_since(&store, &baseline, "reviewer").unwrap();
         assert!(
@@ -523,7 +528,7 @@ mod tests {
         let store = tmp.path().join(".aida-store");
         std::fs::create_dir_all(store.join("objects")).unwrap();
         aida_core::git_ops::init(&store).unwrap();
-        std::fs::write(store.join("objects/a.yaml"), "a: 1\n").unwrap();
+        std::fs::write(store.join("objects/a.yaml"), object("a: 1")).unwrap();
         git(&store, &["add", "objects/a.yaml"]);
         let paths = vec![
             "objects/a.yaml".to_string(),

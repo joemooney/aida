@@ -755,6 +755,42 @@ pub(super) fn bug_1745_test_envelope() -> String {
     serde_json::to_string_pretty(&bug_1745_test_report()).unwrap()
 }
 
+// trace:BUG-2490 | ai:codex
+fn scan_store_objects(store_path: &std::path::Path) -> Vec<DoctorFinding> {
+    aida_core::git_ops::store_object_findings(store_path).into_iter().map(|(path, error)| DoctorFinding {
+        category: "store-objects".to_string(),
+        id: path.display().to_string(),
+        summary: error,
+        action: format!("resolve conflict markers or restore valid requirement YAML in {}; then rerun doctor", path.display()),
+        safe_heal: false,
+    }).collect()
+}
+
+#[cfg(test)]
+mod bug_2490_tests {
+    use super::*;
+
+    #[test]
+    fn bug_2490_doctor_flags_markered_object_and_continues_loading() {
+        let dir = tempfile::tempdir().unwrap();
+        let backend = aida_core::GitBackend::new(dir.path()).unwrap();
+        aida_core::DatabaseBackend::save(&backend, &aida_core::RequirementsStore::new()).unwrap();
+        let path = dir.path().join("objects/STORY/000/STORY-bad.yaml");
+        std::fs::create_dir_all(path.parent().unwrap()).unwrap();
+        std::fs::write(&path, "<<<<<<< Updated upstream\ntitle: conflict\n=======\ntitle: other\n>>>>>>> Stashed changes\n").unwrap();
+        // The same tolerant load used by doctor still succeeds.
+        Storage::new(dir.path()).load().unwrap();
+        let findings = scan_store_objects(dir.path());
+        assert_eq!(findings.len(), 1);
+        assert_eq!(findings[0].category, "store-objects");
+        assert!(findings[0].summary.contains("conflict markers"));
+        assert!(findings[0].id.contains("STORY-bad.yaml"));
+        assert!(findings[0].action.contains("STORY-bad.yaml"));
+        assert!(!findings[0].safe_heal);
+        assert!(doctor_category_selected(Some("store-objects"), "store-objects").unwrap());
+    }
+}
+
 fn is_zero_usize(n: &usize) -> bool {
     *n == 0
 }
@@ -788,13 +824,16 @@ fn doctor_multi_agent(opts: DoctorRunOptions) -> Result<()> {
         return doctor_stale_locks_bounded(&project_root, &opts);
     }
     let store_path = project_root.join(".aida-store");
-    // Diagnose markered objects before the normal loader obscures the cause.
-    // trace:BUG-2490 | ai:codex
-    aida_core::git_ops::validate_store_objects(&store_path)?;
     let store = Storage::new(&store_path)
         .load()
         .with_context(|| format!("loading AIDA store at {}", store_path.display()))?;
     let mut findings = collect_doctor_findings(&project_root, &store, opts.category.as_deref())?;
+    // The tolerant loader leaves bad objects out; report each one separately
+    // while retaining the other categories and safe heals.
+    // trace:BUG-2490 | ai:codex
+    if doctor_category_selected(opts.category.as_deref(), "store-objects")? {
+        findings.extend(scan_store_objects(&store_path));
+    }
     // Main owns the store, but navigation must be reachable from this seat.
     // trace:STORY-2630 | ai:codex
     if invoking_root != project_root
