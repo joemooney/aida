@@ -8,7 +8,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-07T22:12:32.196595160Z
-modified_at: 2026-11-08T17:20:04.556403015Z
+modified_at: 2026-11-08T17:20:12.244150618Z
 req_type: Task
 relationships:
 - rel_type: Child
@@ -88,6 +88,25 @@ comments:
   content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: Split itself is a faithful move with correct dispatch, but head 887b75c only merges main: all five round-1 findings remain unaddressed, including a compile blocker in bug_1683_live_drain_lock; check-ci-fast and queue tests are unproven (CI queued).. No triage reason was given.'
   created_at: 2026-11-08T17:20:04.556398469Z
   modified_at: 2026-11-08T17:20:04.556398469Z
+  session_id: 01a1b9af-8230-75d2-82f8-667491cc010a
+  harness_version: 2.1.319 (Claude Code)
+- id: 01a1bc2c-c021-7fd0-a5db-b419b329994c
+  author: joe
+  content: |-
+    REVIEW FINDINGS TO ADDRESS (PR #3685):
+    Verdict: CHANGES REQUESTED
+    Reviewed commit: 887b75cbbdac
+    Recorded: 2026-11-08T17:02:48.745999624+00:00
+    Findings:
+    1. BLOCKER (compile, unaddressed from prior round): aida-cli/tests/bug_1683_live_drain_lock.rs:369 still has include_str!("../../aida-cli-lib/src/queue_cmd.rs"), a file this PR deletes; the target is cfg(target_os = "linux") so it cannot compile on CI. Point it at ../../aida-cli-lib/src/queue_cmd/work.rs, where the body() anchors live.
+    2. Source guards narrowed by the move (unaddressed): bug_1627_session_env_hardening_tests.rs:150, bug_home_045_reviewer_verdict_tests.rs:308 and :330, and headless_hint_tests.rs:158-160 and :191 covered all of queue_cmd.rs but now read only queue_cmd/work.rs, so advance.rs, rework.rs, integrate.rs, done.rs and recover.rs sit outside these negative guards. Scan every queue_cmd/*.rs production file, as task_2032 now does.
+    3. Raw-git ratchet narrowed by the move (new this round): task_2143_clone_git_ratchet_tests.rs only counts a file that names worktree_path unless it is in ALWAYS_SCANNED. queue_cmd.rs named it, so all queue code was counted; after the split only recover.rs and work.rs name it and only done.rs was added to ALWAYS_SCANNED (:54-58). A new raw Command::new("git") in rework.rs, integrate.rs, next.rs or any other queue_cmd module passes silently. Add every queue_cmd/*.rs production file to the scan.
+    4. Not a pure move (unaddressed): comment blocks above the match arms were dropped rather than moved, namely the Prune/Gc rationale (TASK-1052, BUG-1512, TASK-537), the STORY-42, TASK-232, TASK-218 and STORY-384 summaries, the TASK-1063 trace, and arm-level trace comments (EPIC-1-001 x2, STORY-566). The old-vs-new line multiset shows them in no new file. Restore each above its handler match arm.
+    5. scripts/relocate-paths.py does not cover path-keyed ledgers the plan lists (unaddressed): scripts/portability-allowlist.txt, scripts/doc-path-exceptions.json, scripts/git-maintenance-baseline.txt, scripts/ci-gate-tiers.toml, src/tests/fixtures/proc_identity_legacy_baseline.json. No queue_cmd entries exist there, so this PR is unaffected, but a later move leaves them stale with no error. Re-key them or refuse when OLD appears in an unhandled ledger.
+    6. Cosmetic: docs/internal/architecture/roles-seats-and-personas.md:44 still places role_is_stakeholder_only in aida-cli-lib/src/queue_cmd.rs (now queue_cmd/add.rs), and aida-cli-lib/src/criteria_gate.rs:17 still names queue_cmd.rs for the Done handler (now queue_cmd/done.rs).
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
+  created_at: 2026-11-08T17:20:11.809618925Z
+  modified_at: 2026-11-08T17:20:11.809618925Z
   session_id: 01a1b9af-8230-75d2-82f8-667491cc010a
   harness_version: 2.1.319 (Claude Code)
 history:
