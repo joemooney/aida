@@ -643,6 +643,8 @@ fn bug_2490_same_spec_conflict_does_not_stop_pickup() {
     );
     assert!(out.status.success(), "{message}");
     assert!(!message.contains("pre-pickup pull failed"), "{message}");
+    // trace:BUG-2490 | ai:codex — pickup must surface semantic resolution notes.
+    assert!(message.contains("auto-merged"), "{message}");
     let show = aida(&repo, &home)
         .args(["show", &spec, "--format", "json"])
         .output()
@@ -1547,12 +1549,22 @@ fn assert_pickup_unstarted(repo: &Path, home: &Path, spec: &str) {
 fn task_1337_delegation_refuses_before_any_pickup_mutation() {
     let base = tempfile::tempdir().unwrap();
     let (repo, home, spec) = init_codex_only_project(base.path());
+    // trace:BUG-2490 | ai:codex — delegation must refuse before even an offline pull.
+    git(
+        &repo.join(".aida-store"),
+        &[
+            "remote",
+            "add",
+            "origin",
+            base.path().join("missing.git").to_str().unwrap(),
+        ],
+    );
     let grant = support::grant_seat(&home, &repo, "implementer", &[]);
     let output = aida(&repo, &home)
         .env("AIDA_HOME", &home)
         .env("AIDA_SESSION_ROLE", "implementer")
         .env("AIDA_SESSION_GRANT", grant)
-        .args(["queue", "work", &spec, "--guided", "--fresh", "--no-pull"])
+        .args(["queue", "work", &spec, "--guided", "--fresh"])
         .output()
         .unwrap();
     let text = format!(

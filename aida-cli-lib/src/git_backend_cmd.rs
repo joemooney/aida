@@ -1359,19 +1359,29 @@ pub(crate) fn db_sync_local_window(
         println!("Pulling from origin/{}...", branch);
         // Use the established structured resolver, as in the ordinary store pull.
         // trace:BUG-2490 | ai:codex
-        if let Err(e) = aida_core::git_ops::pull_rebase_auto_merge(store_path, "origin", &branch) {
-            // A failed rebase leaves the repo in a partial
-            // state — but only advise `git rebase --abort`
-            // when a rebase is actually in progress; a
-            // transient failure (e.g. a network 502) with no
-            // rebase in flight is a different situation.
-            // Reuses the same check as `aida pull`'s
-            // store-leg hint so both emission sites agree.
-            // trace:BUG-1500 | ai:claude
-            anyhow::bail!(
-                "Pull failed: {}",
-                crate::store_pull_failure_hint(store_path, &e.to_string())
-            );
+        let outcome =
+            match aida_core::git_ops::pull_rebase_auto_merge(store_path, "origin", &branch) {
+                Ok(outcome) => outcome,
+                Err(e) => {
+                    // A failed rebase leaves the repo in a partial
+                    // state — but only advise `git rebase --abort`
+                    // when a rebase is actually in progress; a
+                    // transient failure (e.g. a network 502) with no
+                    // rebase in flight is a different situation.
+                    // Reuses the same check as `aida pull`'s
+                    // store-leg hint so both emission sites agree.
+                    // trace:BUG-1500 | ai:claude
+                    anyhow::bail!(
+                        "Pull failed: {}",
+                        crate::store_pull_failure_hint(store_path, &e.to_string())
+                    );
+                }
+            };
+        // trace:BUG-2490 | ai:codex — expose scalar resolution decisions during sync.
+        if let aida_core::git_ops::StorePullOutcome::AutoMerged { notes } = &outcome {
+            for note in notes {
+                println!("  {} {}", "auto-merged".cyan().bold(), note);
+            }
         }
         println!("  Pull complete.");
         let mut remote = RequirementsStore::default();

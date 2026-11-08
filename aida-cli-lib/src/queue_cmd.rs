@@ -12504,15 +12504,6 @@ pub(crate) fn handle_queue_work(
             .map(|r| r.status.clone())
     });
 
-    // Pull before session setup or store writes. A stale local view cannot
-    // authorize pickup after a failed synchronization. trace:BUG-2490 | ai:codex
-    if !no_pull && !list_sessions && !dry_run {
-        run_aida_db_sync_pull(storage.path()).context(
-            "pre-pickup pull failed; pickup stopped before session setup and store writes; \
-             resolve the store sync failure and retry `aida db sync --pull`, or use `--no-pull` for an intentional offline pickup",
-        )?;
-    }
-
     let mut _standalone_slot = None;
     if !list_sessions {
         eprintln!("  pickup role: {role} ({role_origin}); --role overrides queue routing, then scope default");
@@ -12588,6 +12579,16 @@ pub(crate) fn handle_queue_work(
                     crate::gate::seat_authority::preflight_sandboxed_child_key(&child_seat)?;
                 }
             }
+            // Pull after read-only launch preflights and before session setup
+            // or store writes. A stale view cannot authorize pickup after failure.
+            // trace:BUG-2490 | ai:codex
+            if !no_pull {
+                run_aida_db_sync_pull(storage.path()).context(
+                    "pre-pickup pull failed; pickup stopped before session setup and store writes; \
+                     resolve the store sync failure and retry `aida db sync --pull`, or use `--no-pull` for an intentional offline pickup",
+                )?;
+            }
+
             // trace:STORY-1662 | ai:claude
             if standalone_implementer {
                 _standalone_slot = Some(crate::standalone_implementer::acquire_slot(
