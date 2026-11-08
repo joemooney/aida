@@ -19,12 +19,12 @@ description: |
   - Generate a structured review prompt with `aida review prompt --pr 3643` and verify each spec's acceptance criteria.
   - Approve and merge, or request changes by spec id.
   - Mark this story `completed` once the PR is merged.
-status: Approved
+status: InProgress
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-08T02:17:06.737550883Z
-modified_at: 2026-11-08T02:17:22.140615837Z
+modified_at: 2026-11-08T21:41:59.931109991Z
 req_type: Story
 relationships:
 - rel_type:
@@ -38,6 +38,15 @@ history:
   timestamp: 2026-11-08T02:17:23.465172329Z
   session_id: 01a1b8c792b8
   changes: []
+- id: 01a1bd1c-6ffb-7cf2-b829-d90e91f8ca66
+  author: joe
+  timestamp: 2026-11-08T21:41:59.931106555Z
+  session_id: 01a1bd18929f
+  harness_version: 2.1.319 (Claude Code)
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: InProgress
 filed_at:
   code_sha: dc41ee8da2f44f88178936fc1a8e6cb7168a3de7
   branch: main
