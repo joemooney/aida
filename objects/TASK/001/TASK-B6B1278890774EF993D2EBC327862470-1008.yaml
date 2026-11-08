@@ -1,0 +1,39 @@
+id: 01a1bc97-aa98-7ad3-9c76-f8a55b07cf93
+spec_id: TASK-b6b1278890774ef993d2ebc327862470-1008
+title: 'Repeated unchanged review findings: TASK-1222'
+description: |-
+  Identical reviewer findings recurred twice for TASK-1222; do not requeue a third implementer round until an advisor chooses a different implementer/seat or resolves the dispute.
+
+  REVIEW FINDINGS TO ADDRESS (TASK-1222):
+  Verdict: CHANGES REQUESTED
+  Reviewed commit: 6891d1d82dc0
+  Recorded: 2026-11-08T18:40:31.311558509+00:00
+  Findings:
+  1. WAIT STATE, not a code change: CI run 42510498051 at 6891d1d82dc0 is still queued/in progress (lib-0, lib-1, contracts running; cli-0, cli-1, gates, rest queued). Do not rework, push or merge main for this finding: each new head restarts a roughly 73-minute run. Re-run an independent reviewer when CI is terminal.
+  2. Not a code change: merge-hold-gate failed at this head (job 128822299487) on the aida:merge-hold label. It needs separate authorized clearance through aida merge-hold.
+  3. Cosmetic, AC2 (non-blocking): is_runtime_noise_entry (aida-cli-lib/src/seat_clone.rs:2100-2103) identifies a lease only by a direct regular file named *.toml, so an operator note such as .aida/sessions/notes.toml in a real sessions directory reads as disposable. The normal layout is a symlink, so exposure is narrow. Optional: parse it as a lease before excusing it.
+  4. Cosmetic, docs (non-blocking): OVERVIEW.md:188-190 still says 'routes failures' and 'forced cleanup' while AGENTS.md:444-445 says 'routes findings and partial scans' and 'cleanup' for the same weekly job.
+  Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
+status: Draft
+priority: Medium
+owner: joe
+feature: Uncategorized
+created_at: 2026-11-08T19:16:58.648927397Z
+modified_at: 2026-11-08T19:16:58.648927397Z
+req_type: Task
+tags:
+- from-advisor:TASK-1222
+- kind:observation
+- linked:TASK-1222
+- loop-guard
+- review-recurrence
+- severity:major
+filed_at:
+  code_sha: eeec474c545cbc8a354d386c8cb6d81460da7b9f
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: eeec474c545
+  vendor: claude
+  session: 01a1bc93-77a0-7740-8b03-df4e3e8d1df5
+  harness_version: 2.1.319 (Claude Code)
