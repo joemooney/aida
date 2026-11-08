@@ -5816,7 +5816,12 @@ pub(crate) fn handle_queue_command(
             let no_human = &drain_resolution.no_human;
             // trace:STORY-2642 | ai:codex
             // Check before queue/lease/worktree mutations, including drain routes.
-            if no_human.is_some() && !*dry_run && !*no_launch && !*list_sessions && resume.is_none()
+            if crate::lane_host::needs_preflight(
+                no_human.is_some(),
+                *dry_run,
+                *no_launch,
+                *list_sessions,
+            ) && resume.is_none()
             {
                 let root = main_worktree_root_from(&find_project_root()?);
                 let lane_vendor = session::resolve_enabled_headless_vendor(&root)?;
@@ -12352,7 +12357,7 @@ pub(crate) fn handle_queue_work(
         .transpose()?
         .unwrap_or(false);
     // trace:STORY-2642 | ai:codex — a resume uses its recorded vendor.
-    if no_human && resume.is_some() && !no_launch && !list_sessions && !dry_run {
+    if crate::lane_host::needs_preflight(no_human, dry_run, no_launch, list_sessions) {
         let root = project_root_for_config
             .as_deref()
             .context("cannot resolve lane host root")?;
@@ -13921,6 +13926,12 @@ pub(crate) fn handle_queue_work(
                     },
                 )?;
             }
+        }
+        // Rework may select another vendor after the early host gate. Recheck
+        // its actual policy before spawning; ordinary cleanup retains the lease
+        // recovery path if this late check refuses. trace:STORY-2642 | ai:codex
+        if crate::lane_host::needs_preflight(no_human, dry_run, no_launch, list_sessions) {
+            crate::lane_host::preflight(&project_root, launch_vendor.as_str())?;
         }
         let headless_vendor = no_human.then_some(launch_vendor);
 

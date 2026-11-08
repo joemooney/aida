@@ -27,6 +27,15 @@ pub(crate) fn codex_config_check(body: Option<&str>) -> Check {
 
 pub(crate) fn auth_check(vendor: &str, home: Option<&Path>, env: &Environment) -> Check {
     // Metadata only. Presence does not establish validity, refreshability or admission.
+    if !matches!(vendor, "codex" | "claude") {
+        return crate::lane_host::advisory(check(
+            &format!("auth-{vendor}"),
+            false,
+            false,
+            "unverifiable: this vendor has no supported credential-source probe",
+            "log in with the vendor CLI and verify authentication manually",
+        ));
+    }
     let (key, file, login) = match vendor {
         "codex" => ("OPENAI_API_KEY", ".codex/auth.json", "codex login"),
         "claude" => (
@@ -40,7 +49,9 @@ pub(crate) fn auth_check(vendor: &str, home: Option<&Path>, env: &Environment) -
             "log in with the vendor CLI and verify its supported auth transport",
         ),
     };
-    let override_home = (vendor == "codex").then(|| env.get("CODEX_HOME")).flatten();
+    let override_home = (vendor == "codex")
+        .then(|| env.get("CODEX_HOME").filter(|p| !p.is_empty()))
+        .flatten();
     let credential = override_home
         .map(|p| std::path::PathBuf::from(p).join("auth.json"))
         .or_else(|| home.map(|h| h.join(file)));
@@ -61,11 +72,21 @@ pub(crate) fn auth_check(vendor: &str, home: Option<&Path>, env: &Environment) -
     )
 }
 
+// Shared by credential/config diagnostics and the user-scope preset writer.
+// Empty CODEX_HOME follows the ordinary default, matching Codex launch reads.
+pub(crate) fn codex_home(home: &Path, env: &Environment) -> std::path::PathBuf {
+    env.get("CODEX_HOME")
+        .filter(|p| !p.is_empty())
+        .map(std::path::PathBuf::from)
+        .unwrap_or_else(|| home.join(".codex"))
+}
+
 pub(crate) fn user_preset_matches(home: &Path) -> bool {
     let agents = std::fs::read_to_string(home.join(".aida/agents.toml"))
         .ok()
         .and_then(|s| s.parse::<toml::Value>().ok());
-    let codex = std::fs::read_to_string(home.join(".codex/config.toml")).ok();
+    let codex =
+        std::fs::read_to_string(codex_home(home, &Environment::capture()).join("config.toml")).ok();
     agents
         .as_ref()
         .and_then(|d| d.get("agents"))
@@ -91,7 +112,8 @@ pub(crate) fn workspace_check(vendor: &str) -> Option<Check> {
     if vendor != "codex" {
         return None;
     }
-    let body = crate::aida_home_dir()
-        .and_then(|h| std::fs::read_to_string(h.join(".codex/config.toml")).ok());
+    let body = crate::aida_home_dir().and_then(|h| {
+        std::fs::read_to_string(codex_home(&h, &Environment::capture()).join("config.toml")).ok()
+    });
     Some(codex_config_check(body.as_deref()))
 }

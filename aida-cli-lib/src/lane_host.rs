@@ -11,6 +11,7 @@ pub(crate) struct Check {
     id: String,
     pub(crate) pass: bool,
     containment: bool,
+    required: bool,
     detail: String,
     fix: String,
 }
@@ -26,6 +27,7 @@ pub(crate) fn check(
         id: id.into(),
         pass,
         containment,
+        required: true,
         detail: detail.into(),
         fix: fix.into(),
     }
@@ -97,10 +99,60 @@ fn posture_check(posture: Result<crate::session::ContainmentPosture>) -> Check {
         "aida doctor --lane-host --fix; configure trusted [contained.vendors] for non-Claude vendors")
 }
 
-fn cache_check() -> Check {
-    check("build-cache", false, false,
-        "lane-job cache reachability unverified; host installation alone is insufficient",
-        "install sccache and configure [build] rustc-wrapper in ~/.cargo/config.toml; lane cache transport and its in-sandbox probe are still required")
+// Advisory evidence remains explicit in text/JSON without making readiness
+// permanently fail for a capability the doctor cannot yet verify.
+pub(crate) fn advisory(mut check: Check) -> Check {
+    check.required = false;
+    check
+}
+
+fn cache_check(home: Option<&Path>, env: &Environment) -> Check {
+    use std::os::unix::fs::PermissionsExt;
+    let wrapper = home.and_then(|home| {
+        let legacy = home.join(".cargo/config");
+        let path = if legacy.exists() {
+            legacy
+        } else {
+            home.join(".cargo/config.toml")
+        };
+        let body = std::fs::read_to_string(path).ok()?;
+        let doc = body.parse::<toml::Value>().ok()?;
+        let wrapper = doc.get("build")?.get("rustc-wrapper")?.as_str()?;
+        if wrapper.is_empty() {
+            return None;
+        }
+        let path = Path::new(wrapper);
+        if path.is_absolute() {
+            Some(path.to_path_buf())
+        } else if path.components().count() == 1 {
+            env.get("PATH").and_then(|paths| {
+                std::env::split_paths(paths)
+                    .map(|dir| dir.join(path))
+                    .find(|candidate| {
+                        std::fs::metadata(candidate)
+                            .is_ok_and(|m| m.is_file() && m.permissions().mode() & 0o111 != 0)
+                    })
+            })
+        } else {
+            None // Relative paths depend on the launch cwd; not host evidence.
+        }
+    });
+    let pass = wrapper.is_some_and(|p| {
+        std::fs::metadata(p).is_ok_and(|m| m.is_file() && m.permissions().mode() & 0o111 != 0)
+    });
+    check("build-cache", pass, false,
+        "user Cargo build.rustc-wrapper configuration and executable presence (not lane reachability)",
+        "install sccache and configure [build] rustc-wrapper in ~/.cargo/config.toml; aida doctor --lane-host --fix configures an installed ~/.cargo/bin/sccache")
+}
+
+fn cache_reachability_note() -> Check {
+    advisory(check(
+        "lane-cache-reachability",
+        false,
+        false,
+        "unverified: host wrapper configuration does not prove in-sandbox cache reachability",
+        "verify cache transport with a lane job; the doctor has no in-sandbox cache probe yet",
+    ))
 }
 
 pub(crate) fn containment_checks(root: &Path, vendor: &str) -> Vec<Check> {
@@ -117,10 +169,35 @@ pub(crate) fn containment_checks(root: &Path, vendor: &str) -> Vec<Check> {
     checks
 }
 
+pub(crate) fn needs_preflight(
+    no_human: bool,
+    dry_run: bool,
+    no_launch: bool,
+    list_sessions: bool,
+) -> bool {
+    no_human && !dry_run && !no_launch && !list_sessions
+}
+
 pub(crate) fn preflight(root: &Path, vendor: &str) -> Result<()> {
-    let checks = containment_checks(root, vendor);
+    crate::session::aida_contained_env()?;
+    preflight_with(crate::session::process_contained(), || {
+        containment_checks(root, vendor)
+    })
+}
+
+fn preflight_with(contained_parent: bool, inspect: impl FnOnce() -> Vec<Check>) -> Result<()> {
+    // A contained parent has already crossed host admission. Its filesystem
+    // view and nested bwrap probe cannot establish host readiness. Ordinary
+    // child admission still enforces monotonic containment and vendor policy.
+    if contained_parent {
+        return Ok(());
+    }
+    validate_containment(&inspect())
+}
+
+fn validate_containment(checks: &[Check]) -> Result<()> {
     if checks.iter().any(|c| c.containment && !c.pass) {
-        render(&checks);
+        render(checks);
         anyhow::bail!("lane host containment checks failed; run `aida doctor --lane-host --fix` on the host before retrying");
     }
     Ok(())
@@ -130,7 +207,13 @@ fn render(checks: &[Check]) {
     for c in checks {
         println!(
             "{} {}: {}",
-            if c.pass { "PASS" } else { "FAIL" },
+            if !c.required {
+                "NOTE"
+            } else if c.pass {
+                "PASS"
+            } else {
+                "FAIL"
+            },
             c.id,
             c.detail
         );
@@ -140,7 +223,7 @@ fn render(checks: &[Check]) {
     }
 }
 
-pub(crate) fn inspect(root: &Path) -> Vec<Check> {
+fn inspect(root: &Path, live_store: bool) -> Vec<Check> {
     let vendors = crate::init_cmd::read_enabled_agent_selection(root)
         .map(crate::session::enabled_headless_vendors)
         .unwrap_or_else(|| vec![crate::session::resolve_headless_vendor(root)]);
@@ -175,26 +258,33 @@ pub(crate) fn inspect(root: &Path) -> Vec<Check> {
         "fetch the project default branch, then run `aida dev build` from current clean main; release installs: `aida upgrade`"));
     let store = root.join(".aida-store");
     let head = git(&store, &["rev-parse", "HEAD"]);
-    let remote = git(
-        &store,
-        &[
-            "ls-remote",
-            "--exit-code",
-            "origin",
-            "refs/heads/aida-store",
-        ],
-    )
-    .and_then(|s| s.split_whitespace().next().map(str::to_string));
-    checks.push(check(
-        "store-remote",
-        matching_store(head.as_deref(), remote.as_deref()),
-        false,
-        "store HEAD compared with live origin aida-store (bounded read-only probe)",
-        "run `aida pull` and resolve any store divergence; verify origin connectivity",
-    ));
+    let remote = live_store
+        .then(|| {
+            git(
+                &store,
+                &[
+                    "ls-remote",
+                    "--exit-code",
+                    "origin",
+                    "refs/heads/aida-store",
+                ],
+            )
+        })
+        .flatten()
+        .and_then(|s| s.split_whitespace().next().map(str::to_string));
+    if live_store {
+        checks.push(check(
+            "store-remote",
+            matching_store(head.as_deref(), remote.as_deref()),
+            false,
+            "store HEAD compared with live origin aida-store (bounded read-only probe)",
+            "run `aida pull` and resolve any store divergence; verify origin connectivity",
+        ));
+    }
     // The separate lane cache transport must provide real in-sandbox evidence.
     // Host config or a successful host-side `sccache --show-stats` cannot prove it.
-    checks.push(cache_check());
+    checks.push(cache_check(home.as_deref(), &env));
+    checks.push(cache_reachability_note());
     checks
 }
 
@@ -241,7 +331,7 @@ fn fix_cargo_cache(home: &Path) -> Result<()> {
 }
 
 pub(crate) fn report(root: &Path) {
-    render(&inspect(root));
+    render(&inspect(root, false));
 }
 
 pub(crate) fn run(root: &Path, fix: bool, json: bool) -> Result<()> {
@@ -257,13 +347,13 @@ pub(crate) fn run(root: &Path, fix: bool, json: bool) -> Result<()> {
     if fix {
         fix_cargo_cache(&home)?;
     }
-    let checks = inspect(root);
+    let checks = inspect(root, true);
     if json {
         println!("{}", serde_json::to_string_pretty(&checks)?);
     } else {
         render(&checks);
     }
-    if checks.iter().any(|c| !c.pass) {
+    if checks.iter().any(|c| c.required && !c.pass) {
         if json {
             return Err(crate::TypedPayloadEmitted.into());
         }
@@ -288,7 +378,8 @@ mod tests {
     }
     #[test]
     fn cache_never_claims_host_installation_proves_lane_reachability() {
-        let check = cache_check();
+        let check = cache_reachability_note();
+        assert!(!check.required);
         assert!(!check.pass);
         assert!(!check.containment);
         assert!(check.detail.contains("unverified"));
@@ -401,5 +492,271 @@ mod tests {
         ])
         .unwrap();
         assert_eq!(args.fix.as_deref(), Some("id-collisions"));
+    }
+    #[test]
+    fn configured_cache_can_pass_without_claiming_lane_reachability() {
+        use std::os::unix::fs::PermissionsExt;
+        let home = tempfile::tempdir().unwrap();
+        let env = Environment::default();
+        assert!(!cache_check(Some(home.path()), &env).pass);
+        std::fs::create_dir_all(home.path().join(".cargo/bin")).unwrap();
+        let wrapper = home.path().join(".cargo/bin/sccache");
+        std::fs::write(&wrapper, "fixture").unwrap();
+        let config = home.path().join(".cargo/config.toml");
+        std::fs::write(
+            &config,
+            format!("[build]\nrustc-wrapper = {:?}\n", wrapper.to_str().unwrap()),
+        )
+        .unwrap();
+        assert!(!cache_check(Some(home.path()), &env).pass);
+        std::fs::set_permissions(&wrapper, std::fs::Permissions::from_mode(0o700)).unwrap();
+        assert!(cache_check(Some(home.path()), &env).pass);
+        std::fs::write(
+            home.path().join(".cargo/config"),
+            "[build]\nrustc-wrapper = '/missing'\n",
+        )
+        .unwrap();
+        assert!(
+            !cache_check(Some(home.path()), &env).pass,
+            "Cargo's legacy config wins"
+        );
+        assert!(!cache_reachability_note().required);
+    }
+
+    #[test]
+    fn unsupported_auth_is_explicitly_advisory() {
+        let check = auth_check("agy", None, &Environment::default());
+        assert!(!check.pass);
+        assert!(!check.required);
+        assert!(check.detail.contains("unverifiable"));
+    }
+
+    #[test]
+    fn containment_refusals_stop_before_following_mutation() {
+        use crate::session::{BwrapAvailability, ContainmentPosture};
+        for failed in [
+            posture_check(Ok(ContainmentPosture::None)),
+            wrap_check(Some(false)),
+            bwrap_check(BwrapAvailability::NotInstalled),
+            codex_config_check(None),
+        ] {
+            let mut mutated = false;
+            let result = (|| -> Result<()> {
+                preflight_with(false, || vec![failed])?;
+                mutated = true;
+                Ok(())
+            })();
+            assert!(!mutated);
+            assert!(result
+                .unwrap_err()
+                .to_string()
+                .contains("aida doctor --lane-host --fix"));
+        }
+        assert!(
+            preflight_with(false, || vec![posture_check(Ok(ContainmentPosture::Aida))]).is_ok()
+        );
+    }
+
+    #[test]
+    fn previews_skip_host_gate_and_contained_parent_skips_host_probes() {
+        assert!(needs_preflight(true, false, false, false));
+        for (headless, dry, no_launch, list) in [
+            (false, false, false, false),
+            (true, true, false, false),
+            (true, false, true, false),
+            (true, false, false, true),
+        ] {
+            assert!(!needs_preflight(headless, dry, no_launch, list));
+        }
+        preflight_with(true, || {
+            panic!("nested launches must not probe host files or bwrap")
+        })
+        .unwrap();
+    }
+
+    #[test]
+    fn lane_host_rejects_ignored_doctor_options() {
+        use clap::Parser;
+        for flag in [
+            "--yes",
+            "--force",
+            "--all",
+            "--heal",
+            "--fix-sandbox",
+            "--contradictions",
+        ] {
+            assert!(
+                crate::doctor_cmd::DoctorArgs::try_parse_from(["doctor", "--lane-host", flag])
+                    .is_err(),
+                "{flag}"
+            );
+        }
+        assert!(crate::doctor_cmd::DoctorArgs::try_parse_from([
+            "doctor",
+            "--lane-host",
+            "--category",
+            "foo"
+        ])
+        .is_err());
+    }
+    #[test]
+    fn relocated_codex_home_is_checked_and_fixed_consistently() {
+        let home = tempfile::tempdir().unwrap();
+        let relocated = tempfile::tempdir().unwrap();
+        let project = tempfile::tempdir().unwrap();
+        let _env = crate::test_env::EnvVarsGuard::set(&[
+            ("AIDA_HOME", home.path().to_str().unwrap()),
+            ("CODEX_HOME", relocated.path().to_str().unwrap()),
+        ]);
+        use crate::vendors::host_diagnostics::{codex_home, user_preset_matches, workspace_check};
+        assert!(!workspace_check("codex").unwrap().pass);
+        crate::config_cmd::apply_permission_posture(
+            project.path(),
+            crate::cli::ConfigPermissionTier::Contained,
+            crate::config_cmd::PermissionPostureScope::User,
+        )
+        .unwrap();
+        assert!(relocated.path().join("config.toml").is_file());
+        assert!(!home.path().join(".codex/config.toml").exists());
+        assert!(workspace_check("codex").unwrap().pass);
+        assert!(user_preset_matches(home.path()));
+        let once = std::fs::read(relocated.path().join("config.toml")).unwrap();
+        // The same predicate used by --fix now sees the effective config.
+        assert!(user_preset_matches(home.path()));
+        assert_eq!(
+            once,
+            std::fs::read(relocated.path().join("config.toml")).unwrap()
+        );
+        std::fs::write(relocated.path().join("auth.json"), "fixture").unwrap();
+        assert!(auth_check("codex", Some(home.path()), &Environment::capture()).pass);
+        assert_eq!(
+            codex_home(
+                home.path(),
+                &Environment::from_pairs([("CODEX_HOME".into(), "".into())])
+            ),
+            home.path().join(".codex")
+        );
+    }
+
+    #[test]
+    fn real_preflight_refuses_missing_policy_and_nested_parent_defers_to_child_admission() {
+        let root = tempfile::tempdir().unwrap();
+        let home = tempfile::tempdir().unwrap();
+        let mut env = crate::test_env::EnvVarsGuard::set(&[
+            ("AIDA_HOME", home.path().to_str().unwrap()),
+            ("AIDA_CONTAINED", "0"),
+        ]);
+        let result = preflight(root.path(), "claude");
+        assert!(result
+            .unwrap_err()
+            .to_string()
+            .contains("aida doctor --lane-host --fix"));
+        assert_eq!(std::fs::read_dir(root.path()).unwrap().count(), 0);
+        assert_eq!(std::fs::read_dir(home.path()).unwrap().count(), 0);
+        env.set_key("AIDA_CONTAINED", "1");
+        preflight(root.path(), "claude").unwrap();
+        env.set_key("AIDA_CONTAINED", "typo");
+        assert!(preflight(root.path(), "claude").is_err());
+    }
+    #[test]
+    fn queue_work_no_human_refuses_before_queue_lease_or_worktree_writes() {
+        if let Some(output) = crate::test_env::run_path_isolated_test_output() {
+            let stdout = String::from_utf8_lossy(&output.stdout);
+            assert!(stdout.contains("FAIL agent-containment"), "{stdout}");
+            assert!(stdout.contains("FAIL os-wrap"), "{stdout}");
+            assert!(
+                stdout.contains("Fix: aida doctor --lane-host --fix"),
+                "{stdout}"
+            );
+            return;
+        }
+        let root = tempfile::tempdir().unwrap();
+        let home = tempfile::tempdir().unwrap();
+        let _ambient = crate::test_env::AmbientGuard::hermetic_and(
+            root.path(),
+            None,
+            &[
+                ("AIDA_HOME", Some(home.path().to_str().unwrap())),
+                ("HOME", Some(home.path().to_str().unwrap())),
+                ("AIDA_CONTAINED", Some("0")),
+                ("AIDA_HEADLESS_VENDOR", Some("claude")),
+                ("AIDA_OS_WRAP", Some("0")),
+            ],
+        );
+        let output = crate::test_git::git_command()
+            .current_dir(root.path())
+            .args(["init", "-q"])
+            .output()
+            .unwrap();
+        assert!(output.status.success());
+        let storage = aida_core::Storage::new(root.path().join(".aida-store"));
+        // Deliberately no queued spec: the host gate must win even over queue
+        // lookup and implicit insertion, and it must leave the fixture untouched.
+        fn snapshot(root: &Path) -> Vec<(std::path::PathBuf, Vec<u8>)> {
+            fn walk(root: &Path, path: &Path, out: &mut Vec<(std::path::PathBuf, Vec<u8>)>) {
+                for entry in std::fs::read_dir(path).unwrap() {
+                    let path = entry.unwrap().path();
+                    if path.is_dir() {
+                        walk(root, &path, out);
+                    } else {
+                        out.push((
+                            path.strip_prefix(root).unwrap().into(),
+                            std::fs::read(path).unwrap(),
+                        ));
+                    }
+                }
+            }
+            let mut out = vec![];
+            walk(root, root, &mut out);
+            out.sort();
+            out
+        }
+        let before = snapshot(root.path());
+        for route in [
+            vec!["TASK-2642", "--no-human"],
+            vec!["--drain", "--no-human"],
+        ] {
+            let mut argv = vec!["aida", "queue", "work"];
+            argv.extend(route);
+            let cli = crate::command_registry::try_parse_from(argv).unwrap();
+            let args = cli.command.registered::<crate::queue_cmd::QueueArgs>();
+            let err = crate::queue_cmd::handle_queue_command(
+                &args.inner,
+                &storage,
+                &root.path().join(".aida-store"),
+            )
+            .unwrap_err();
+            assert!(
+                err.to_string()
+                    .contains("lane host containment checks failed"),
+                "{err:#}"
+            );
+            assert_eq!(before, snapshot(root.path()));
+            assert!(!root.path().join(".aida").exists());
+            assert!(!root.path().join(".aida-store").exists());
+        }
+        for preview in ["--dry-run", "--no-launch", "--list-sessions"] {
+            let cli = crate::command_registry::try_parse_from([
+                "aida",
+                "queue",
+                "work",
+                "TASK-2642",
+                "--no-human",
+                preview,
+            ])
+            .unwrap();
+            let args = cli.command.registered::<crate::queue_cmd::QueueArgs>();
+            if let Err(err) = crate::queue_cmd::handle_queue_command(
+                &args.inner,
+                &storage,
+                &root.path().join(".aida-store"),
+            ) {
+                assert!(
+                    !err.to_string()
+                        .contains("lane host containment checks failed"),
+                    "{preview}: {err:#}"
+                );
+            }
+        }
     }
 }

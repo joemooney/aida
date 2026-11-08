@@ -1282,10 +1282,15 @@ fn permission_posture_paths(
             codex: project_root.join(".codex/config.toml"),
         }),
         PermissionPostureScope::User => {
+            // trace:STORY-2642 | ai:codex — write the same config Codex reads.
             let home = aida_home_dir().context("cannot resolve home directory")?;
             Ok(PermissionPosturePaths {
                 agents: home.join(".aida/agents.toml"),
-                codex: home.join(".codex/config.toml"),
+                codex: crate::vendors::host_diagnostics::codex_home(
+                    &home,
+                    &aida_core::exec_context::Environment::capture(),
+                )
+                .join("config.toml"),
             })
         }
     }
@@ -5710,6 +5715,7 @@ mod bug_1667_bypass_gate_tests {
         );
         for (name, source) in [
             ("doctor_cmd.rs", include_str!("doctor_cmd.rs")),
+            ("lane_host.rs", include_str!("lane_host.rs")),
             ("lib.rs", lib_src.as_str()),
         ] {
             let mut rest = source;

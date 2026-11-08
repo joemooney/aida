@@ -803,11 +803,13 @@ tokens, both unfiltered and under `--category permission-posture`.
 <!-- trace:STORY-2642 | ai:codex -->
 Run `aida doctor --lane-host` on a machine before starting automated lanes.
 It prints PASS/FAIL rows and a fix hint for each failure; `--json` emits the
-same checks as one array. A failure or unverified requirement exits nonzero.
-`aida init` also prints this report without blocking project setup.
+same checks as one array. Required failures exit nonzero. Advisory NOTE rows
+carry `required: false` in JSON and do not fail the command.
+`aida init` prints local checks without a live store-network probe or blocking setup.
 
 `aida doctor --lane-host --fix` applies the existing contained permission
-preset to the **user** agents and Codex config files. It clears old extra
+preset to the **user** agents and Codex config files, honoring `CODEX_HOME`
+for both config checks and writes (default `~/.codex`). It clears old extra
 Codex writable roots. It also configures Cargo to use an already installed
 `~/.cargo/bin/sccache` when no rustc wrapper is configured; custom wrappers
 and the legacy `~/.cargo/config` are left for manual review. Repeating the fix
@@ -817,18 +819,26 @@ setup instructions and run any sudo commands yourself.
 
 Real `queue work --no-human` launches check containment before queue,
 lease or worktree changes, including drain routes. Dry-run previews remain
-read-only previews. The existing vendor admission checks still apply. A trusted
+read-only previews; `--no-launch` and `--list-sessions` also skip the gate.
+Contained parents skip host-file and nested bubblewrap probes; ordinary child
+admission still enforces inherited containment and vendor policy. Rework vendor
+rerouting is checked again before vendor spawn; a refusal at that later point
+may retain an allocated lease for recovery. The early check covers the selected
+vendor, not every future orchestrator phase; those phases retain their ordinary
+launch admission checks. The existing vendor admission checks still apply. A trusted
 native Codex opt-in is reported as “native sandbox, not AIDA-contained”.
 
 The report checks every enabled lane vendor (or the selected headless vendor
 when no enabled list is configured). Auth rows establish
-credential-source presence only. Binary comparison uses the locally known
+credential-source presence only. Vendors without a supported credential probe
+(including AGY) emit an explicit advisory unverifiable note; log in manually. Binary comparison uses the locally known
 origin default-branch SHA; release freshness is unverified. Store connectivity
 uses a bounded read-only probe against origin's `aida-store` branch.
-Lane-job cache reachability is reported as unverified until the separate cache
-transport supplies an in-sandbox probe; a host sccache installation cannot make
-that check pass. These limitations mean the command cannot yet certify full
-host readiness.
+The cache check requires an executable user Cargo `build.rustc-wrapper`;
+legacy `~/.cargo/config` takes precedence over `config.toml`. Lane-job cache
+reachability is a separate advisory note until an in-sandbox probe is available.
+A passing host report does not certify cache transport, token validity or every
+future orchestrator phase.
 
 Manual setup remains: configure SSH access and any required host/DNS entries,
 clone the project, put AIDA on the login-shell PATH, and log in to the selected
