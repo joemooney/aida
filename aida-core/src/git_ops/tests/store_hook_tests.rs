@@ -39,9 +39,12 @@ fn bug_2490_store_retry_preserves_pending_changes_and_explains_refusal() {
         }
         let status = git(&store, &["status", "--porcelain"]).unwrap().stdout;
         // No such remote: the dirty guard must refuse before even fetching.
-        let error = pull_rebase_store_retry(&store, "missing-remote", "aida-store")
-            .unwrap_err()
-            .to_string();
+        // CAS callers already hold the writer lock when retrying publication.
+        let error = crate::db::with_store_write_lock(&store, || {
+            pull_rebase_store_retry(&store, "missing-remote", "aida-store")
+        })
+        .unwrap_err()
+        .to_string();
         assert!(error.contains("store publication retry refused"), "{error}");
         assert!(error.contains("Automatic stashing is disabled"), "{error}");
         assert!(error.contains("on the host"), "{error}");
@@ -58,7 +61,10 @@ fn bug_2490_store_retry_preserves_pending_changes_and_explains_refusal() {
         assert!(git(&store, &["stash", "list"]).unwrap().stdout.is_empty());
     }
     commit(&store, "finish pending write").unwrap();
-    pull_rebase_store_retry(&store, ".", "aida-store").unwrap();
+    crate::db::with_store_write_lock(&store, || {
+        pull_rebase_store_retry(&store, ".", "aida-store")
+    })
+    .unwrap();
     assert!(!has_changes_checked(&store).unwrap());
 }
 
