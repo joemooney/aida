@@ -8,7 +8,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-07T22:12:10.371157002Z
-modified_at: 2026-11-08T02:44:02.247067450Z
+modified_at: 2026-11-08T03:09:25.387971731Z
 req_type: Task
 relationships:
 - rel_type: Child
@@ -129,6 +129,13 @@ comments:
   created_at: 2026-11-08T02:40:01.829125832Z
   modified_at: 2026-11-08T02:40:01.829125832Z
   session_id: 01a1b8f57985
+- id: 01a1b921-d80b-7381-936a-13d1e349d122
+  author: joe
+  content: 'ADVISOR RULING 2026-11-07 20:20 (PR-3635, verdict 7): the acceptance contradicted itself (no caller edits vs. a 29-module SCC cut that needs caller edits, per the lane''s measurement). TASK-3425''s SCC criterion moves to TASK-3448 (consumer imports off command_registry). TASK-3425 is complete when PR-3635 merges with: the cmdkit extraction, check-ci-fast green, registry ratchet green. Host commit 0f0c2bc07ff added the ''Help-Golden: unchanged'' trailer the native lane could not author and corrected the stale doc paragraph. Reviewers: do not re-raise the SCC criterion on PR-3635.'
+  created_at: 2026-11-08T03:09:25.387971731Z
+  modified_at: 2026-11-08T03:09:25.387971731Z
+  session_id: 01a1b8be-8170-7fb2-89ab-ecb4c6eee98c
+  harness_version: 2.1.319 (Claude Code)
 history:
 - id: 01a1b811-df16-79c0-9152-0fbdcca89083
   author: joe
