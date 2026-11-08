@@ -1,5 +1,6 @@
 id: 01a1bb2d-c1e8-79c0-b692-a3fb7e0ad011
 spec_id: TASK-b6b1278890774ef993d2ebc327862470-992
+agreed_id: TASK-3027
 title: 'NON-BLOCKING, unmet CHANGE item: TASK-3472 calls for a Help-Golden trailer; nei…'
 description: |-
   Non-blocking finding carried forward from an APPROVED review verdict on TASK-3472, which has since completed — recorded here so it keeps a queryable home once the verdict record stops being read.
@@ -20,6 +21,11 @@ tags:
 - finding-hash:63fab18c
 - from-review:PR-3674
 - kind:carried-forward
+history:
+- id: 01a1bb7d-168b-7e12-85fc-94ea2b0889c9
+  author: joe
+  timestamp: 2026-11-08T14:08:19.595384743Z
+  changes: []
 filed_at:
   code_sha: d68eb4ec071092cbe9a36eb356d033c613633453
   branch: main
