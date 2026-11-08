@@ -127,8 +127,16 @@ fn comment_file(path: &Path) -> Result<String> {
         metadata.is_file() && metadata.len() <= LIMIT,
         "InvalidRequest: comment body must be a regular file of at most 16384 bytes"
     );
+    comment_text(file)
+}
+
+/// Bound every text source before sending it to the host. No ordinary comment
+/// handler, editor, backend or cache setup runs for streamed input.
+// trace:TASK-3223 | ai:codex
+fn comment_text(reader: impl Read) -> Result<String> {
+    const LIMIT: u64 = 16384;
     let mut text = String::new();
-    file.take(LIMIT + 1).read_to_string(&mut text)?;
+    reader.take(LIMIT + 1).read_to_string(&mut text)?;
     ensure!(
         text.len() <= LIMIT as usize && !text.trim().is_empty(),
         "InvalidRequest: comment body is empty or too large"
@@ -137,6 +145,15 @@ fn comment_file(path: &Path) -> Result<String> {
 }
 
 fn translate(name: &str, args: &clap::ArgMatches, cwd: &Path) -> Result<(&'static str, Value)> {
+    translate_with_reader(name, args, cwd, &mut std::io::stdin().lock())
+}
+
+fn translate_with_reader(
+    name: &str,
+    args: &clap::ArgMatches,
+    cwd: &Path,
+    stdin: &mut impl Read,
+) -> Result<(&'static str, Value)> {
     let command = crate::command_registry::built_command();
     let command = command
         .find_subcommand(name)
@@ -147,7 +164,7 @@ fn translate(name: &str, args: &clap::ArgMatches, cwd: &Path) -> Result<(&'stati
             if matches!(name, "edit" | "delete") {
                 explicit_fields(
                     args,
-                    &["req_id", "comment_id", "content", "body_file"],
+                    &["req_id", "comment_id", "content", "body_file", "stdin"],
                     command
                         .find_subcommand(name)
                         .context("UnsupportedOperation")?,
@@ -162,9 +179,10 @@ fn translate(name: &str, args: &clap::ArgMatches, cwd: &Path) -> Result<(&'stati
                 }
                 let text = match args.get_one::<PathBuf>("body_file") {
                     Some(path) => comment_file(&cwd.join(path))?,
+                    None if args.get_flag("stdin") => comment_text(stdin)?,
                     None => args
                         .get_one::<String>("content")
-                        .context("UnsupportedOperation: provide --content or --body-file")?
+                        .context("UnsupportedOperation: provide --content, --body-file or --stdin")?
                         .clone(),
                 };
                 payload["text"] = json!(text);
@@ -173,7 +191,7 @@ fn translate(name: &str, args: &clap::ArgMatches, cwd: &Path) -> Result<(&'stati
             ensure!(name == "add", "UnsupportedOperation");
             explicit_fields(
                 args,
-                &["id", "content", "content_positional", "body_file"],
+                &["id", "content", "content_positional", "body_file", "stdin"],
                 command
                     .find_subcommand("add")
                     .context("UnsupportedOperation")?,
@@ -181,10 +199,11 @@ fn translate(name: &str, args: &clap::ArgMatches, cwd: &Path) -> Result<(&'stati
             let id = args.get_one::<String>("id").context("InvalidRequest")?;
             let text = match args.get_one::<PathBuf>("body_file") {
                 Some(path) => comment_file(&cwd.join(path))?,
+                None if args.get_flag("stdin") => comment_text(stdin)?,
                 None => args
                     .get_one::<String>("content")
                     .or_else(|| args.get_one::<String>("content_positional"))
-                    .context("UnsupportedOperation: provide inline comment content or --body-file")?
+                    .context("UnsupportedOperation: provide inline comment content, --body-file or --stdin")?
                     .clone(),
             };
             Ok(("add_comment", json!({"id":id,"text":text})))
@@ -319,6 +338,90 @@ mod tests {
     }
 
     #[test]
+    fn streamed_comments_preserve_literal_text_and_bound_input_before_transport() {
+        let comment = uuid::Uuid::new_v4().to_string();
+        for (argv, expected) in [
+            (
+                vec!["aida", "comment", "add", "TASK-1", "--stdin"],
+                "add_comment",
+            ),
+            (
+                vec![
+                    "aida",
+                    "comment",
+                    "edit",
+                    "--req-id",
+                    "TASK-1",
+                    "--comment-id",
+                    &comment,
+                    "--stdin",
+                ],
+                "edit_comment",
+            ),
+        ] {
+            let matches = crate::command_registry::built_command()
+                .try_get_matches_from(argv)
+                .unwrap();
+            let (name, args) = matches.subcommand().unwrap();
+            let text = "literal `command` $(command)\n\tsecond line";
+            let (tool, payload) =
+                translate_with_reader(name, args, Path::new("/missing"), &mut text.as_bytes())
+                    .unwrap();
+            assert_eq!(tool, expected);
+            assert_eq!(payload["text"], text);
+            for bytes in [vec![], vec![b' '; 20], vec![0xff], vec![b'x'; 16385]] {
+                assert!(translate_with_reader(
+                    name,
+                    args,
+                    Path::new("/missing"),
+                    &mut bytes.as_slice()
+                )
+                .is_err());
+            }
+            // A hostile stream is consumed only up to limit + one byte.
+            let bytes = vec![b'x'; 32768];
+            let mut reader = std::io::Cursor::new(bytes);
+            assert!(translate_with_reader(name, args, Path::new("/missing"), &mut reader).is_err());
+            assert_eq!(reader.position(), 16385);
+            let bytes = vec![b'x'; 16384];
+            assert_eq!(
+                translate_with_reader(name, args, Path::new("/missing"), &mut bytes.as_slice())
+                    .unwrap()
+                    .1["text"]
+                    .as_str()
+                    .unwrap()
+                    .len(),
+                16384
+            );
+        }
+    }
+
+    #[test]
+    fn unsupported_comment_authority_fields_refuse_before_consuming_stdin() {
+        struct Unreadable;
+        impl Read for Unreadable {
+            fn read(&mut self, _: &mut [u8]) -> std::io::Result<usize> {
+                panic!("unsupported operation consumed stdin");
+            }
+        }
+        for extra in [
+            vec!["--author", "other"],
+            vec!["--relayed-from", "advisor"],
+            vec!["--parent", "parent"],
+        ] {
+            let mut argv = vec!["aida", "comment", "add", "TASK-1", "--stdin"];
+            argv.extend(extra);
+            let matches = crate::command_registry::built_command()
+                .try_get_matches_from(argv)
+                .unwrap();
+            let (name, args) = matches.subcommand().unwrap();
+            let error = translate_with_reader(name, args, Path::new("/missing"), &mut Unreadable)
+                .unwrap_err();
+            assert!(error.to_string().contains("UnsupportedOperation"));
+        }
+    }
+
+    #[test]
     fn existing_comment_translation_never_drops_interactive_or_stdin_semantics() {
         let id = uuid::Uuid::new_v4().to_string();
         for (verb, extra, expected) in [
@@ -328,7 +431,6 @@ mod tests {
                 Some("edit_comment"),
             ),
             ("delete", vec![], Some("delete_comment")),
-            ("edit", vec!["--stdin"], None),
             ("edit", vec!["--interactive"], None),
             ("edit", vec![], None),
         ] {
