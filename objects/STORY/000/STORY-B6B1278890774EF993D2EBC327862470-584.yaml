@@ -18,7 +18,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-08T02:58:08.667753563Z
-modified_at: 2026-11-08T09:05:55.311164114Z
+modified_at: 2026-11-08T09:05:57.769773331Z
 req_type: Story
 tags:
 - area:human-wait
@@ -315,6 +315,24 @@ comments:
   content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was punted on: design-fork: Sketch revised for R11-R13; no findings disputed. Advisor signoff required before code on manual-only initial scope, explicit per-vendor capture limits (fresh AGY cannot park before completed-output capture), and final exit intent barrier. R1 remains host/advisor metadata action: retitle PR #3666 exactly to [AI:codex] docs(plans): sketch park-on-ask resume-on-answer (Refs STORY-2661). Seat edits cannot repair PR title; retain publication veto pending signoff and metadata repair.. No triage reason was given.'
   created_at: 2026-11-08T09:05:55.311162826Z
   modified_at: 2026-11-08T09:05:55.311162826Z
+  session_id: 01a1b8be-8170-7fb2-89ab-ecb4c6eee98c
+  harness_version: 2.1.319 (Claude Code)
+- id: 01a1ba68-438a-7602-84ee-40d74a7fe37b
+  author: joe
+  content: |-
+    REVIEW FINDINGS TO ADDRESS (STORY-2661):
+    Verdict: CHANGES REQUESTED
+    Reviewed commit: f625a6d6c222
+    Recorded: 2026-11-08T08:49:36.040353211+00:00
+    Findings:
+    1. R1 BLOCKER (open since round 1): at head f625a6d6c222 PR #3666 is still titled '[AI:codex] feat: Park on ask, resume on answer... (STORY-2661)'. aida-cli-lib/src/pr_ship.rs:339-372 short-circuits only on a trailing '(Refs ...)' and otherwise takes completion ids from the title, and db_reconcile.rs auto-bump treats NeedsAttention as merge-eligible, so a squash merge completes the story with AC1-4 unimplemented, contradicting sketch:9. Fix: retitle to exactly '[AI:codex] docs(plans): sketch park-on-ask resume-on-answer (Refs STORY-2661)'. This needs host or advisor metadata action; no seat commit clears it.
+    2. R14 A consumed park intent vetoes publication of the resumed run. sketch:119 writes <seat>/.aida/park-intent.json in the retained seat, and nothing removes it. sketch:121-122 rejects stale generations, while sketch:136-138 and 200-202 suppress publication on any present intent, including rejected ones. After a park and manual resume, the exit barrier of the resumed launch finds the old intent and vetoes publication, so every parked lane strands at its first clean finish. The precedent clears this per launch: native_publication.rs:129-142 removes the prior declaration in prepare(). Fix: define when the host consumes or archives the intent, receipt and completion marker, and clear them under the wait lock before each new launch generation, failing closed if the clear fails. Keep the veto for intents of the current generation. Add a test: park, resume, clean exit, publication proceeds.
+    3. R15 AGY parking has no reachable entry path, but the sketch presents one. sketch:94 refuses a fresh AGY lane and says a later admitted resumed launch can park using a prior captured id. Parking is the only new way to reach a resume, and spawn_vendor_headless_resume_granted refuses AGY today (session.rs:8224), so no AGY lane can ever get the prior id the rule needs. sketch:357-358 and the 'subsequent exact-ID resume' test at :393 therefore describe a path production never takes, and any AGY lane that calls --park is refused at sketch:86-88 with its intent kept as a publication veto, stranding it. Fix: either name the launch path that produces a resumed AGY run before a park, or state plainly that AGY cannot park in this slice, refuse --park before intent submission for AGY so publication is not vetoed, and say AC3's AGY adapter is unreachable until mid-turn capture exists. Add the refusal-before-submission test.
+    4. R16 No owner is named for phases after a manual resume. sketch:341 says the host follows normal phase and publication rules for the resumed child, but the original launcher has exited by then (sketch:243), and sketch:261-263 scopes aida lane resume to acquiring a slot and supervising until vendor exit. Nothing says which process runs publication, phase completion, reviewer handoff and lease cleanup, or how they behave when the operator's foreground command is interrupted after the vendor exits. The existing resume at queue_cmd.rs:14714 runs inside its launcher's flow, so it does not settle this. Fix: state that aida lane resume owns the post-exit pipeline through the same exit barrier, or name the alternative, and define crash recovery between vendor exit and publication. Add a test that resume reaches publication and that interruption after vendor exit is recoverable.
+    5. R17 cosmetic: sketch:142-144 says the lane ask creates the canonical question and returns a stop-now receipt, but sketch:124-130 has the host write the canonical question and the ask may return pending or failure guidance. Align step 1 with the transport section.
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
+  created_at: 2026-11-08T09:05:57.642895470Z
+  modified_at: 2026-11-08T09:05:57.642895470Z
   session_id: 01a1b8be-8170-7fb2-89ab-ecb4c6eee98c
   harness_version: 2.1.319 (Claude Code)
 history:
