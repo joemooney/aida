@@ -938,8 +938,7 @@ fn run_tail(
     matches: &clap::ArgMatches,
     _ctx: &crate::command_registry::DispatchCtx,
 ) -> anyhow::Result<()> {
-    // trace:TASK-3428 | ai:codex — explicit command adapter dependencies.
-    use crate::handle_tail_cli;
+    use crate::*;
     let args = <TailArgs as clap::FromArgMatches>::from_arg_matches(matches)?;
     let TailArgs {
         target,

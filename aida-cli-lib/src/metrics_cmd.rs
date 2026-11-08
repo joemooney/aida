@@ -553,8 +553,7 @@ fn run_metrics(
     matches: &clap::ArgMatches,
     ctx: &crate::command_registry::DispatchCtx,
 ) -> anyhow::Result<crate::command_registry::Flow> {
-    // trace:TASK-3428 | ai:codex
-    use crate::{history, metrics_cycle_time};
+    use crate::*;
     let args = <MetricsArgs as clap::FromArgMatches>::from_arg_matches(matches)?;
     match &ctx.store {
         None => Ok(crate::command_registry::Flow::Continue),

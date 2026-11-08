@@ -750,7 +750,7 @@ fn run_commands(
     matches: &clap::ArgMatches,
     _ctx: &crate::command_registry::DispatchCtx,
 ) -> anyhow::Result<()> {
-    // trace:TASK-3428 | ai:codex — dispatch uses only local or qualified bindings.
+    use crate::*;
     let args = <CommandsArgs as clap::FromArgMatches>::from_arg_matches(matches)?;
     let CommandsArgs {
         flags,

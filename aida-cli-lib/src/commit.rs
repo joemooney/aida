@@ -549,7 +549,7 @@ fn run_commit(
     matches: &clap::ArgMatches,
     _ctx: &crate::command_registry::DispatchCtx,
 ) -> anyhow::Result<()> {
-    // trace:TASK-3428 | ai:codex — dispatch uses only local or qualified bindings.
+    use crate::*;
     let args = <CommitCmdArgs as clap::FromArgMatches>::from_arg_matches(matches)?;
     let CommitCmdArgs {
         commit_type,

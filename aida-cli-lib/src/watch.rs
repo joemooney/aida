@@ -1223,8 +1223,7 @@ fn run_watch(
     matches: &clap::ArgMatches,
     _ctx: &crate::command_registry::DispatchCtx,
 ) -> anyhow::Result<()> {
-    // trace:TASK-3428 | ai:codex
-    use crate::{kernel::find_project_root, notify, output_format::output_format_is_json, watch};
+    use crate::*;
     let args = <WatchArgs as clap::FromArgMatches>::from_arg_matches(matches)?;
     let WatchArgs {
         emit_wakes: _,

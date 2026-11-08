@@ -1785,9 +1785,7 @@ fn run_usage(
     matches: &clap::ArgMatches,
     ctx: &crate::command_registry::DispatchCtx,
 ) -> anyhow::Result<crate::command_registry::Flow> {
-    // trace:TASK-3428 | ai:codex — explicit command adapter dependencies.
-    use crate::{cli::UsageCommand, normalize_usage_mode, output_format_is_json, token_ledger};
-    use aida_core::DatabaseBackend;
+    use crate::*;
     let args = <UsageArgs as clap::FromArgMatches>::from_arg_matches(matches)?;
     match &ctx.store {
         None => Ok(crate::command_registry::Flow::Continue),

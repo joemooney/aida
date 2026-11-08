@@ -9,7 +9,6 @@
 //! Records live under the MAIN checkout, like session leases, so a driver
 //! registered from a linked worktree is seen from every checkout.
 // trace:STORY-1653 | ai:claude
-// trace:TASK-3428 | ai:codex
 
 use anyhow::{Context, Result};
 use chrono::Utc;
@@ -283,6 +282,7 @@ fn run_driver(
     matches: &clap::ArgMatches,
     _ctx: &crate::command_registry::DispatchCtx,
 ) -> anyhow::Result<()> {
+    use crate::*;
     let args = <DriverArgs as clap::FromArgMatches>::from_arg_matches(matches)?;
     let cmd = &args.inner;
     return self::handle_driver_command(cmd);

@@ -1,11 +1,7 @@
 //! Shared usage-telemetry aggregation and MCP server launch/publish helpers (STORY-1488 slice 1)
 // trace:STORY-1488 | ai:claude
 
-// trace:TASK-3428 | ai:codex
-use crate::status_awaiting::is_aida_repo;
-use crate::usage;
-use aida_core::RequirementsStore;
-use anyhow::{Context, Result};
+use crate::*;
 
 /// Find the aida-store path for a given repo, if configured.
 pub(crate) fn detect_store_path(repo: &std::path::Path) -> Option<std::path::PathBuf> {
