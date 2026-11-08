@@ -14,7 +14,7 @@ HOOK = ROOT / 'aida-core/templates/hooks/aida-precompact-handoff.sh'
 
 
 class PrecompactHandoff(unittest.TestCase):
-    def fixture(self, event='PreCompact', extra=None, fail=False, large=False, slow=False, missing=False, rotated=False, slow_findings=False, pr_fail=False, branch="story-2662", scope="STORY-2662", slow_pr=False, saturated=False, empty_pr=False, findings_response=None):
+    def fixture(self, event='PreCompact', extra=None, fail=False, large=False, slow=False, missing=False, rotated=False, slow_findings=False, pr_fail=False, branch="story-2662", scope="STORY-2662", slow_pr=False, saturated=False, empty_pr=False, findings_response=None, pr_response=None):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
             for flag, enabled in [('slow-findings', slow_findings), ('pr-fail', pr_fail), ('slow-pr', slow_pr), ('saturated', saturated), ('empty-pr', empty_pr)]:
@@ -42,6 +42,9 @@ elif 'verdict' in args:
 elif 'pr' in args:
     if (p/'slow-pr').exists(): time.sleep(1.97)
     if (p/'pr-fail').exists(): sys.exit(1)
+    if 'PR_RESPONSE' in os.environ:
+        print(os.environ['PR_RESPONSE'])
+        sys.exit(0)
     print(__import__('json').dumps([{'headRefName': os.environ['FIXTURE_BRANCH'], 'number': 3655}] * (0 if (p/'empty-pr').exists() else 100 if (p/'saturated').exists() else 1)))
 elif 'findings' in args:
     if (p/'slow-findings').exists(): time.sleep(5.4)
@@ -62,6 +65,8 @@ elif 'findings' in args:
                        MISSING=str(int(missing)), AIDA_ROTATION_HANDOFF='matched.md' if rotated else '')
             if findings_response is not None:
                 env['FINDINGS_RESPONSE'] = json.dumps(findings_response)
+            if pr_response is not None:
+                env['PR_RESPONSE'] = json.dumps(pr_response)
             payload = dict(hook_event_name=event, cwd=directory, session_id='fixture', trigger='auto')
             payload.update(extra or {})
             result = subprocess.run([str(HOOK)], input=json.dumps(payload), text=True,
@@ -133,6 +138,20 @@ elif 'findings' in args:
     def test_empty_branch_lookup_stays_unknown(self):
         _, packet, _ = self.fixture(empty_pr=True)
         self.assertIn('Review findings unknown', packet)
+
+    def test_malformed_pr_rows_never_supply_partial_or_coerced_origins(self):
+        valid = {'headRefName': 'story-2662', 'number': 3655}
+        for row in [None, [], {'headRefName': None, 'number': 3655},
+                    {'headRefName': 'story-2662', 'number': True},
+                    {'headRefName': 'story-2662', 'number': '3655'},
+                    {'headRefName': 'story-2662', 'number': 3655.5},
+                    {'headRefName': 'story-2662', 'number': 0}]:
+            with self.subTest(row=row):
+                result, packet, _ = self.fixture(pr_response=[valid, row])
+                self.assertEqual(result.returncode, 0)
+                self.assertIn('Review findings unknown', packet)
+                self.assertIn('parser mismatch', packet)
+                self.assertNotIn('review regression', packet)
 
     def test_review_branch_retains_pr_origin_without_head_match(self):
         _, packet, _ = self.fixture(branch='pr-3655', empty_pr=True)

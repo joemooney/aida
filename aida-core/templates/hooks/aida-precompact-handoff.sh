@@ -117,9 +117,16 @@ def main():
         entries = json.loads(prs)
         if not isinstance(entries, list):
             raise ValueError('invalid PR list')
+        # Validate the entire response before accepting any origin. JSON booleans,
+        # strings and fractional numbers must not be coerced into PR identifiers.
+        if any(not isinstance(entry, dict)
+               or not isinstance(entry.get('headRefName'), str)
+               or type(entry.get('number')) is not int or entry['number'] <= 0
+               for entry in entries):
+            raise ValueError('invalid PR row')
         for entry in entries:
             if entry['headRefName'] == branch:
-                origins.add('PR-' + str(int(entry['number'])))
+                origins.add('PR-' + str(entry['number']))
         pr_known = bool(origins - {spec.upper()}) and len(entries) < 100
     except (ValueError, KeyError, TypeError):
         pass
