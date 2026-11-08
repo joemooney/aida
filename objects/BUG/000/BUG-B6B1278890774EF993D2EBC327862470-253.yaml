@@ -20,7 +20,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-07T20:18:53.564500330Z
-modified_at: 2026-11-08T04:17:21.926167785Z
+modified_at: 2026-11-08T04:17:28.909037903Z
 req_type: Bug
 relationships:
 - rel_type:
@@ -111,6 +111,23 @@ comments:
   content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: Rework addresses all six round-1 findings and both acceptance paths have real tests; but the tests carry no criterion-ID traces (aida criteria still reports both criteria untested), the mirrored punt ledger can re-open resolved punts, and PR CI at the head is still queued.. No triage reason was given.'
   created_at: 2026-11-08T04:17:21.926166168Z
   modified_at: 2026-11-08T04:17:21.926166168Z
+  session_id: 01a1b8be-8170-7fb2-89ab-ecb4c6eee98c
+  harness_version: 2.1.319 (Claude Code)
+- id: 01a1b960-2691-7711-8800-fa61267f7db5
+  author: joe
+  content: |-
+    REVIEW FINDINGS TO ADDRESS (BUG-2488):
+    Verdict: CHANGES REQUESTED
+    Reviewed commit: 6b14f3762f36
+    Recorded: 2026-11-08T03:19:48.308864484+00:00
+    Findings:
+    1. MINOR (acceptance traceability, criteria acc03424 + acf66e50): the tests exist (bug_home_038_seat_publish_tests.rs: bug_2488_native_signals_reach_host_and_unchanged_seat_never_bundles; bug_2436_finished_lane_lease_tests.rs: bug_2488_no_change_ends_only_a_readable_clean_seat) but carry only trace:BUG-2488, so 'aida criteria BUG-2488' reports both criteria 'untraced, no traced tests' and lists them under Untested criteria. Add trace:BUG-b6b1278890774ef993d2ebc327862470-253.acc03424 and .acf66e50 comments to the tests (repo convention, e.g. store_local.rs:363), then confirm aida criteria shows them traced.
+    2. MINOR (correctness, standalone_implementer.rs reconcile_signals ~L683-691): ledger mirroring dedups with full-record equality (existing.contains(&record)). close_open_records (punt.rs:650) rewrites the main record on resolution (resolution_path, decision, resolved_at), but the seat's .aida/punts.jsonl keeps the original open record, and provision_signals clears only the signal files, never the seat ledger. Any later reconcile from the same seat (resumed or re-launched lane, or drain publish_queue_exit) no longer matches, so it appends the open record again (and append_to_ledger emits another PuntFiled wake), re-opening a resolved punt for the advisor. The spec filter is also case-sensitive (r.spec == spec), unlike close_open_records' eq_ignore_ascii_case. Fix: dedup on identity (spec case-insensitive + timestamp + category), or truncate or mark the seat ledger after mirroring. Test: reconcile, close_open_records on main, reconcile again; assert there is no new open record.
+    3. MINOR (stale seat vetoes, ship_from_seat.rs publish_queue_exit ~L509-512): only standalone run() clears the seat-local punt/hold files (provision_signals). The drain (session.rs:6741) and queue resume (queue_cmd.rs:9066) exit paths now call reconcile_signals, which copies any punt/hold file left in a reused seat by an earlier attempt back into main and silently vetoes that run's publication (returns Ok, no advisor notice). Either clear the seat signals when those paths provision, or mirror only signals newer than the launch.
+    4. CI GATE: PR CI run 42441426173 at 6b14f3762f36 was still queued at review time. The previous head 8b2b70a8d59 failed CI on the portability-ratchet gate (allowlist growth). The rework comment says the ratchet now passes locally, but there is no green CI evidence at this head. merge-hold-gate failing is the expected supervised hold, not a code defect.
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
+  created_at: 2026-11-08T04:17:28.721571557Z
+  modified_at: 2026-11-08T04:17:28.721571557Z
   session_id: 01a1b8be-8170-7fb2-89ab-ecb4c6eee98c
   harness_version: 2.1.319 (Claude Code)
 history:
