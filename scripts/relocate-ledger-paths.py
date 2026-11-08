@@ -32,6 +32,19 @@ def rewrite(text, old, new, json_format=False):
                    for line in text.splitlines(keepends=True))
 
 
+def assert_relocated(text, old, json_format=False):
+    """Refuse stale path keys, while allowing old paths in evidence or comments."""
+    if json_format:
+        data = json.loads(text)
+        stale = any(key == old or key.startswith(old + ':')
+                    for key in data.get('sites', data))
+    else:
+        stale = any('\t' + old + ':' in line for line in text.splitlines()
+                    if not line.startswith('#'))
+    if stale:
+        raise ValueError(f'stale path remains after relocation: {old}')
+
+
 def relocate(root, old, new, base):
     for name in (old, new):
         path = PurePosixPath(name)
@@ -46,6 +59,8 @@ def relocate(root, old, new, base):
     for name in ('scripts/portability-allowlist.txt', 'scripts/exec-context-legacy.json', 'scripts/crate-globs-legacy.json'):
         path = root / name
         updates[path] = rewrite(path.read_text(), old, new, path.suffix == '.json')
+        # Validate every result before publishing any ledger update.
+        assert_relocated(updates[path], old, path.suffix == '.json')
     for path, text in updates.items():
         path.write_text(text)
 

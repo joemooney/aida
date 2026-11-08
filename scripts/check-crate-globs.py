@@ -49,7 +49,8 @@ def main():
             files = subprocess.check_output(['git', 'ls-tree', '--name-only', args.base, LEDGER], cwd=ROOT)
             if files.strip():
                 raise ValueError('cannot read base glob ledger')
-        elif Counter(expected) - Counter(json.loads(old.stdout)):
+        # Paths may change during a split; only the total import budget ratchets.
+        elif sum(expected.values()) > sum(json.loads(old.stdout).values()):
             raise ValueError('crate glob baseline may only shrink relative to base')
     print(f'Crate glob ratchet: {sum(expected.values())} remaining imports; zero additions')
 

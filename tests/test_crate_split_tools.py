@@ -1,11 +1,14 @@
 """Crate split guard and pure-move ledger fixtures."""
 # trace:TASK-3428 | ai:codex
 import importlib.util
+import contextlib
+import io
 import json
 from pathlib import Path
 import subprocess
 import tempfile
 import unittest
+from unittest import mock
 
 ROOT = Path(__file__).resolve().parents[1]
 
@@ -22,6 +25,105 @@ MOVE = load('relocate-ledger-paths')
 
 
 class CrateSplitTools(unittest.TestCase):
+    def git(self, root, *args):
+        return subprocess.run(['git', *args], cwd=root, check=True, capture_output=True, text=True)
+
+    def repository(self, ledger=True):
+        directory = tempfile.TemporaryDirectory()
+        self.addCleanup(directory.cleanup)
+        root = Path(directory.name)
+        self.git(root, 'init', '-q')
+        (root / 'old.rs').write_text('use crate::*;\nuse crate::*;\n')
+        (root / 'scripts').mkdir()
+        (root / 'scripts/portability-allowlist.txt').write_text('r\told.rs:source\n')
+        (root / 'scripts/exec-context-legacy.json').write_text(json.dumps({'sites': {'old.rs:f:var:abc': 2}}))
+        if ledger:
+            self.write_globs(root, {'old.rs': 2})
+        self.git(root, 'add', '.')
+        self.git(root, '-c', 'user.name=fixture', '-c', 'user.email=fixture@example.com', 'commit', '-qm', 'base')
+        return root
+
+    def write_globs(self, root, values):
+        (root / GLOB.LEDGER).write_text(json.dumps(values))
+
+    def run_globs(self, root, base='HEAD'):
+        with mock.patch.object(GLOB, 'ROOT', root), mock.patch('sys.argv', ['check-crate-globs.py', '--base', base]):
+            with contextlib.redirect_stdout(io.StringIO()):
+                GLOB.main()
+
+    def test_base_allows_shrink(self):
+        root = self.repository()
+        (root / 'old.rs').write_text('use crate::*;\n')
+        self.write_globs(root, {'old.rs': 1})
+        self.run_globs(root)
+
+    def test_base_refuses_growth(self):
+        root = self.repository()
+        (root / 'old.rs').write_text('use crate::*;\n' * 3)
+        self.write_globs(root, {'old.rs': 3})
+        with self.assertRaisesRegex(ValueError, 'may only shrink'):
+            self.run_globs(root)
+
+    def test_base_allows_bootstrap(self):
+        root = self.repository(ledger=False)
+        self.write_globs(root, {'old.rs': 2})
+        self.run_globs(root)
+
+    def test_base_allows_pure_relocation_but_refuses_growth_after_move(self):
+        root = self.repository()
+        (root / 'old.rs').rename(root / 'new.rs')
+        self.git(root, 'add', '-A')
+        MOVE.relocate(root, 'old.rs', 'new.rs', 'HEAD')
+        self.run_globs(root)
+        (root / 'new.rs').write_text('use crate::*;\n' * 3)
+        self.write_globs(root, {'new.rs': 3})
+        with self.assertRaisesRegex(ValueError, 'may only shrink'):
+            self.run_globs(root)
+
+    def test_base_read_failure_does_not_bootstrap_existing_ledger(self):
+        root = self.repository()
+        run = subprocess.run
+
+        def unreadable_show(args, **kwargs):
+            if args[:2] == ['git', 'show']:
+                return subprocess.CompletedProcess(args, 1, '', 'fixture read failure')
+            return run(args, **kwargs)
+
+        with mock.patch.object(GLOB.subprocess, 'run', side_effect=unreadable_show):
+            with self.assertRaisesRegex(ValueError, 'cannot read base glob ledger'):
+                self.run_globs(root)
+
+    def test_invalid_base_does_not_bootstrap(self):
+        root = self.repository()
+        with self.assertRaises(subprocess.CalledProcessError):
+            self.run_globs(root, 'missing-base-ref')
+
+    def test_malformed_base_ledger_refuses(self):
+        root = self.repository()
+        (root / GLOB.LEDGER).write_text('invalid json')
+        self.git(root, 'add', GLOB.LEDGER)
+        self.git(root, '-c', 'user.name=fixture', '-c', 'user.email=fixture@example.com', 'commit', '-qm', 'malformed ledger')
+        self.write_globs(root, {'old.rs': 2})
+        with self.assertRaises(json.JSONDecodeError):
+            self.run_globs(root)
+
+    def test_stale_path_in_each_ledger_refuses_before_any_write(self):
+        for ledger in ('portability-allowlist.txt', 'exec-context-legacy.json', 'crate-globs-legacy.json'):
+            with self.subTest(ledger=ledger):
+                root = self.repository()
+                (root / 'old.rs').rename(root / 'new.rs')
+                before = {path: path.read_text() for path in (root / 'scripts').iterdir()}
+                stale = before[root / 'scripts' / ledger]
+                rewrite = MOVE.rewrite
+
+                def incomplete_rewrite(text, *args):
+                    return text if text == stale else rewrite(text, *args)
+
+                with mock.patch.object(MOVE, 'rewrite', side_effect=incomplete_rewrite):
+                    with self.assertRaisesRegex(ValueError, 'stale path remains'):
+                        MOVE.relocate(root, 'old.rs', 'new.rs', 'HEAD')
+                self.assertEqual({path: path.read_text() for path in before}, before)
+
     def test_glob_syntax_and_literals(self):
         self.assertEqual(GLOB.count('use crate::*; use crate::{foo, *}; use ::crate :: *;'), 3)
         self.assertEqual(GLOB.count('/* use crate::*; */ const S: &str = r#"use crate::*;"#; use crate::child::*; use super::*;'), 0)
