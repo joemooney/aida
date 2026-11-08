@@ -8,7 +8,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-07T15:34:33.363448Z
-modified_at: 2026-11-08T19:22:11.132103842Z
+modified_at: 2026-11-08T19:23:05.798175921Z
 req_type: Story
 comments:
 - id: 01a1b6a6-52e1-70a0-a9c1-d32888979ca5
@@ -1022,6 +1022,13 @@ comments:
   created_at: 2026-11-08T17:41:40.377078931Z
   modified_at: 2026-11-08T17:41:40.377078931Z
   session_id: 01a1bc329b36
+- id: 01a1bc9d-44c6-7680-82a0-aa77281ca9b8
+  author: joe
+  content: 'Advisor ruling (TASK-3025 finding 4): #3662 ships as a Refs slice. AC2/AC5 stay open on STORY-2630 and are owned by a later completing slice with contained-seat evidence; this PR must not complete the story. Findings 1, 3, 5, 6 still need the implementer; finding 2 needs the PR body.'
+  created_at: 2026-11-08T19:23:05.798175921Z
+  modified_at: 2026-11-08T19:23:05.798175921Z
+  session_id: 01a1bc93-77a0-7740-8b03-df4e3e8d1df5
+  harness_version: 2.1.319 (Claude Code)
 history:
 - id: 01a1b6a6-1e2f-7932-a527-6de38b6d8545
   author: joe
