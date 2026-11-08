@@ -15,7 +15,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-08T03:09:42.520017343Z
-modified_at: 2026-11-08T08:42:51.830205369Z
+modified_at: 2026-11-08T08:48:48.923019132Z
 req_type: Bug
 tags:
 - area:lanes
@@ -60,6 +60,13 @@ comments:
   modified_at: 2026-11-08T07:11:13.517939394Z
   session_id: 01a1b8be-8170-7fb2-89ab-ecb4c6eee98c
   harness_version: 2.1.319 (Claude Code)
+- id: 01a1ba58-911b-7261-ad0a-e00017830eb6
+  author: dirtlab
+  content: 'Revalidated the existing implementation and review fixes. Strengthened the sandboxed host-publication regression to read the raw commit object and verify body bytes, including trailing spaces and a final blank line; the prior assertion trimmed whitespace. Validation via lane jobs: BUG-2493 filter 2 passed; sandboxed host-commit filter 1 passed; full seat_clone::seat_publish_tests 51 passed (job j20261108T084837318-2-0). Help-golden shell fixtures and git diff --check passed. One test file remains uncommitted for host publication; no implementation blockers. Codegraph executable unavailable, so callers were confirmed with source searches.'
+  created_at: 2026-11-08T08:48:48.923019132Z
+  modified_at: 2026-11-08T08:48:48.923019132Z
+  session_id: 01a1ba52c266
+  harness_version: codex-cli 0.167.0
 history:
 - id: 01a1b9c3-7cea-7270-b22c-10e229024e5a
   author: aida-session-start
