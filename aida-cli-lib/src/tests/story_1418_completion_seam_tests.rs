@@ -666,7 +666,8 @@ fn the_scan_sees_the_routed_paths() {
                 .any(|(k, v)| k.starts_with("aida-cli-lib/lib_part") && v.contains(transition))
             || files["aida-cli-lib/punt_done.rs"].contains(transition)
     );
-    assert!(files["aida-cli-lib/queue_cmd/done.rs"].contains(transition));
+    // trace:TASK-3426 | ai:codex
+    assert!(files["aida-cli-lib/queue_cmd/advance.rs"].contains(transition));
     // trace:STORY-1728 | ai:claude — the edit handler moved to its module.
     assert!(files["aida-cli-lib/requirements_cli.rs"].contains(stamp));
     assert!(files.contains_key("aida-core/models.rs"));
