@@ -8,7 +8,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-07T23:39:41.575597Z
-modified_at: 2026-11-08T23:18:37.687138196Z
+modified_at: 2026-11-08T23:22:54.698099166Z
 req_type: Task
 relationships:
 - rel_type: Child
@@ -418,8 +418,8 @@ comments:
 - id: 01a1bd6c-053e-78e0-9825-4567231bdb45
   author: joe
   content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: Import diff is sound at ff07b72 (imports/comments only, ledger 158 matches source), but AC5 is unverified because CI is still queued and the PR is 63 files against the advisor <=50-file cap with no waiver.. No triage reason was given.'
-  created_at: 2026-11-08T23:08:55.486612Z
-  modified_at: 2026-11-08T23:08:55.486612Z
+  created_at: 2026-11-08T23:08:55.486612584Z
+  modified_at: 2026-11-08T23:08:55.486612584Z
   session_id: 20abb7c3-8f9b-4a5e-b326-404921f3b450
 - id: 01a1bd6c-1e31-75d0-acd0-5f1b15268261
   author: joe
@@ -436,8 +436,8 @@ comments:
     4. COSMETIC: the PR title says '34 command modules' but the head changes 60 modules, 2 test files and the ledger (220 to 158 imports). Correct the title before squash; a title edit needs no push.
     5. COSMETIC: body-scope markers such as commit.rs:552 'trace:TASK-3428 — dispatch uses only local or qualified bindings' (also exposition, help_catalog, mandate, monitor_contract, regen, shift, wiki, report_cmd) trace a removed import rather than implementation code. Move them to module headers if these files are touched again.
     Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
-  created_at: 2026-11-08T23:09:01.873926Z
-  modified_at: 2026-11-08T23:09:01.873926Z
+  created_at: 2026-11-08T23:09:01.873926806Z
+  modified_at: 2026-11-08T23:09:01.873926806Z
   session_id: 20abb7c3-8f9b-4a5e-b326-404921f3b450
 - id: 01a1bd71-4b6a-7a70-88df-a6ef5f5fa807
   author: dirtlab
@@ -815,13 +815,13 @@ history:
   changes: []
 - id: 01a1bd4b-a8c9-7f31-8404-a3411f36610d
   author: joe
-  timestamp: 2026-11-08T22:33:34.665079Z
+  timestamp: 2026-11-08T22:33:34.665079978Z
   session_id: 01a1bd489614
   harness_version: 2.1.319 (Claude Code)
   changes: []
 - id: 01a1bd6c-053e-78e0-9825-455878ba702a
   author: joe
-  timestamp: 2026-11-08T23:08:55.486606Z
+  timestamp: 2026-11-08T23:08:55.486606426Z
   session_id: 20abb7c3-8f9b-4a5e-b326-404921f3b450
   changes:
   - field_name: status
@@ -829,20 +829,20 @@ history:
     new_value: Approved
 - id: 01a1bd6d-9ada-7be0-aaf2-5c56fd4d6cd2
   author: aida-session-start
-  timestamp: 2026-11-08T23:10:39.322689Z
+  timestamp: 2026-11-08T23:10:39.322689704Z
   changes:
   - field_name: status
     old_value: Approved
     new_value: InProgress
 - id: 01a1bd6d-fa8f-7261-b7cd-7182c5b27b87
   author: dirtlab
-  timestamp: 2026-11-08T23:11:03.823519Z
+  timestamp: 2026-11-08T23:11:03.823519363Z
   session_id: 01a1bd6d94d5
   harness_version: codex-cli 0.167.0
   changes: []
 - id: 01a1bd71-a92f-7e33-8597-48dec5ab23a4
   author: aida-orchestrator
-  timestamp: 2026-11-08T23:15:05.135591Z
+  timestamp: 2026-11-08T23:15:05.135591976Z
   session_id: 01a1bd6f9505
   harness_version: 2.1.319 (Claude Code)
   changes:
@@ -855,8 +855,14 @@ history:
   session_id: 01a1bd6d94d5
   harness_version: codex-cli 0.167.0
   changes: []
-test_coverage_notes: 'Launcher cargo test --profile agent -p aida-cli-lib --lib -- command_registry passed: 32 executed tests, zero failures, full library test binary compiled (j20261108T231146749-2-0). Launcher cargo check --profile agent -p aida-cli --no-default-features passed (j20261108T231207043-2-0). All 17 crate-split Python tests pass. Glob ratchet against origin/main passes at 181; ExecContext 1239 sites, store-writer 3400 sinks / 293 mappings, portability guard, all 84 CI gate classifications, retained-file rustfmt and git diff --check pass. All 23 deferred files exactly match base; deferred patch applies cleanly. Retained non-import Rust tokens match base apart from the already-reviewed lease_state_for qualification. Full make check-ci-fast and current-head CI remain unverified: direct Cargo is prohibited in this seat, so Cargo checks used the launcher. Codegraph unavailable, doctor confirmed. Edits uncommitted; host must publish the split and update PR title. Detailed file list and recovery notes: /tmp/task-3428-handoff.md.'
-implementation_summary: 'Round-12 scope rework for PR #3695 reduces the prospective PR from 63 files to 40: 37 explicit-import modules, two existing test files, and the glob ledger. Restored 23 adapters byte-for-byte to merge-base d0e3cb3eb33d, including the 15-adapter and six-adapter follow-on batches, driver_cmd and overlapping usage_mcp_helpers. Ledger now has 181 remaining imports. Deferred changes are preserved in branch history and /tmp/task-3428-deferred-imports.patch for a separate PR. Native Refs publication declaration recorded with an accurate 37-module subject. Remaining AC1 batches and AC3 lib_part dissolution stay outstanding; TASK-3428 remains In Progress.'
+- id: 01a1bd78-d3b8-7683-947a-72f2a3f2ab76
+  author: joe
+  timestamp: 2026-11-08T23:22:54.776925040Z
+  session_id: 01a1bd76c8f3
+  harness_version: 2.1.319 (Claude Code)
+  changes: []
+test_coverage_notes: 'Launcher cargo test --profile agent -p aida-cli-lib --lib -- command_registry passed: 32 executed tests, zero failures (j20261108T210750606-2-0). Launcher cargo check --profile agent -p aida-cli --no-default-features passed (j20261108T211040978-2-0). Initial test compilation found two missing module imports; corrected before the passing run. 15 crate-split Python fixtures pass. Glob ratchet against HEAD passes at 164; ExecContext 1239 sites, store-writer 3387 sinks / 293 mappings, portability guard, and all 84 CI gate classifications pass. All 15 adapters preserve every non-import Rust token; touched-file rustfmt and git diff --check pass. Full make check-ci-fast not run because gates invoke Cargo outside this seat’s required launcher; host validation remains. Codegraph unavailable (doctor confirmed), used rg/source inspection. Edits uncommitted for host publication.'
+implementation_summary: 'Tooling slice landed in PR #3644; prior 34-command import batch is open as #3695. This subsequent Refs slice removes 15 remaining root crate globs from command adapters outside current open-PR footprints: commit, criteria, exposition, harvest, help_catalog, mandate, metrics_cmd, monitor_contract, notify, reconstitute, regen, shift, user_alias, watch and wiki. Required bindings now use explicit imports (including DatabaseBackend traits); unused globs are removed. Baseline shrinks from 179 to 164. All non-import Rust tokens match HEAD. Remaining import batches and lib_part1..6 dissolution remain outstanding; TASK-3428 stays In Progress.'
 filed_at:
   code_sha: 2a7fe186bdcd718fa356e5e4d028a3b2ff13769d
   branch: main
@@ -870,7 +876,7 @@ failure_reason:
   phase: reviewer
   phase_index: 3
   kind: verdict:request-changes
-  detail: Import diff is sound at e27dfa2 (imports/comments plus one qualified call; ledger 158 matches source; no block-glob rebind), but CI has not finished at this head (AC5 unverified) and the PR is 63 files against the advisor <=50-file cap with no waiver.
+  detail: 'Wait state only, no code defect: CI run 42534582737 is still queued at 1fc1cd5 so AC5 is unverified. The earlier file-cap finding is resolved (40 files). The 37-module import slice is byte-identical to ff07b72, which passed full CI.'
   recovery_hint: address the review findings, move TASK-3428 back to In Progress, and clear the PR hold only after approval
   shelved_by: reviewer
-  shelved_at: 2026-11-08T23:15:05.135568Z
+  shelved_at: 2026-11-08T23:22:54.698099166Z
