@@ -8,7 +8,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-08T00:02:55.282155Z
-modified_at: 2026-11-08T15:53:00.173338266Z
+modified_at: 2026-11-08T15:58:12.504449345Z
 req_type: Bug
 relationships:
 - rel_type:
@@ -534,6 +534,21 @@ comments:
   modified_at: 2026-11-08T15:47:22.269472268Z
   session_id: 01a1b9af-8230-75d2-82f8-667491cc010a
   harness_version: 2.1.319 (Claude Code)
+- id: 01a1bbe1-b018-7481-a35c-288325b1640c
+  author: joe
+  content: |-
+    Round 16 native-seat handoff (uncommitted): finding 3 fixed at all six named sites: node_alias::mutate_cas; team::{set_allowed_seats_cas, update_seats_cas, unset_role_cas}; allocation_lineage::{enroll_root, record_pools}. Publication retries now call pull_rebase_store_retry under the existing writer lock. Extended the pending-change regression to exercise the already-held caller lock for both staged/unstaged refusals and a clean successful retry.
+
+    Investigated actual cli-0 failure at 058ee2d704e9: job 128777376052 ran 323 tests, all passed; its subsequent timing gate failed because bug_2490_missing_remote_store_branch_does_not_stop_pickup took 11.182s without a budget. Added 25s following measured time x2 rounded up to 5s, retaining both empty-origin and code-only-origin coverage. Replayed the timing gate against the actual downloaded test-run.log and JUnit artifact: passes all 323 rows. Updated the writer inventory for nine renamed retry callers (including previous-round sites), preserving every prior policy, plus three new blocked helper sites; operation mappings unchanged.
+
+    Validation: cargo test --profile agent -p aida-core --lib -- bug_2490 executed 12 tests, all passed (lane job j20261108T155205738-1915314-0, exit 0). Store writer inventory guard passed (3383 sink sites / 293 operation mappings); its 42 tests passed. All 8 git maintenance ratchet tests and 52 timing/shard tooling tests passed. rustfmt --check on changed Rust files and git diff --check passed. untested=false for the targeted core suite; this is not published-head green CI.
+
+    Finding 1 explicitly punted with aida punt to Needs Attention: advisor must rule on semantic scalar/modify-delete policy and require maybe_sync_pull/burndown failure fencing here or file a linked follow-up. This implementer disputes treating an implementer policy change or split as advisor approval. Finding 2 remains open: green CI at the next published head required; supervised merge hold stays active. Last observed lib-0, cli-1, rest and contracts passed; lib-1/gates pending; cli-0 failed the now-addressed timing budget and merge-hold-gate failed the expected supervised hold. Finding 4 considered and deferred as non-blocking: eliminating doctor double parsing requires loader/report interface work. Preserve punt/publication veto. No commit, push, PR mutation, queue completion, ship declaration or review record performed.
+
+    Changed files: aida-core/src/node_alias.rs; aida-core/src/team.rs; aida-core/src/allocation_lineage.rs; aida-core/src/git_ops/tests/store_hook_tests.rs; scripts/store-writers.toml; scripts/test-time-budget.toml. All edits remain uncommitted for host collection subject to the punt/publication veto.
+  created_at: 2026-11-08T15:58:12.504449345Z
+  modified_at: 2026-11-08T15:58:12.504449345Z
+  session_id: 01a1bbda7289
 history:
 - id: 01a1b923-982d-7512-93a5-cd08923b4f98
   author: aida-session-start
