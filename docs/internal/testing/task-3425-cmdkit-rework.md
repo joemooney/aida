@@ -60,16 +60,14 @@ The round-3 documentation edits remove the per-change AGENTS.md paragraph and
 retain only the durable cmdkit architecture sentence in OVERVIEW.md. No Rust
 implementation or golden snapshot changes are needed for this round.
 
-The host must add a new commit on the same branch with this exact message:
+The host (advisor seat) added the commit that carries the standalone
+`Help-Golden: unchanged` body line, because the native declaration API accepts
+only a subject line. That is the commit whose subject ends
+`docs(cmdkit): correct review evidence and retain open SCC acceptance (Refs TASK-3425)`;
+`scripts/check-help-golden-cochange.sh origin/main` exits 0 on it. The help
+surface is in fact unchanged: the help snapshot test passed in the CI lib shards
+at `67139bfb2d2`.
 
-```text
-[AI:codex] docs(cmdkit): correct review evidence and retain open SCC acceptance (Refs TASK-3425)
-
-Help-Golden: unchanged
-```
-
-The native declaration API accepts only one subject line, so it cannot carry
-the standalone help trailer. The host must preserve the body above explicitly.
 The PR title was changed to `Refs TASK-3425` in round 3, and the native
 publication declaration records the subject above. The eventual squash message
 must retain `Refs TASK-3425`; the earlier completing commit subject must not
@@ -102,8 +100,8 @@ Round-3 validation:
 - `rustfmt --edition 2021 --check` on the five changed Rust source files passed.
 - `bash tests/test_check_help_golden_cochange.sh` passed; the actual
   `bash scripts/check-help-golden-cochange.sh origin/main` still exits 1
-  because committed history lacks the trailer. It must be rerun after the
-  host commit, along with the full `make check-ci-fast` gate.
+  because committed history lacked the trailer. After the host commit it exits 0;
+  CI (gates) at the new head is the full fast-gate run.
 - `git diff --check` passed. The measurement script reproduced the table above.
 - At published head `67139bfb2d2`, all six test shards passed in
   [CI run 42438168743](https://github.com/joemooney/aida/actions/runs/42438168743).
