@@ -8,7 +8,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-06T13:39:53.442026096Z
-modified_at: 2026-11-08T13:04:09.023130477Z
+modified_at: 2026-11-08T13:04:20.044483038Z
 req_type: Task
 tags:
 - architecture
@@ -776,6 +776,27 @@ comments:
   content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: Head 3c5fdf80d73e fixes refusal correlation, origin-ID case, whitespace and adds real client-broker-host stale/concurrent/lost-reply routes, but the comment 34 routing acceptance is still unmet and CI has not finished.. No triage reason was given.'
   created_at: 2026-11-08T13:04:09.023128375Z
   modified_at: 2026-11-08T13:04:09.023128375Z
+  session_id: 01a1b9af-8230-75d2-82f8-667491cc010a
+  harness_version: 2.1.319 (Claude Code)
+- id: 01a1bb42-6db3-7e81-80de-46573c4edcca
+  author: joe
+  content: |-
+    REVIEW FINDINGS TO ADDRESS (PR #3661):
+    Verdict: CHANGES REQUESTED
+    Reviewed commit: 3c5fdf80d73e
+    Recorded: 2026-11-08T13:02:32.698324782+00:00
+    Review comment: https://github.com/joemooney/aida/pull/3661#issuecomment-6721830692
+    Findings:
+    1. BLOCKING acceptance gap (spec description and advisor ruling, TASK-3223 comment 34), unfixed. (a) 'python3 scripts/check-store-writers.py --profile mediated' exits 1 at this head with 3163 writers and 293 of 293 operations unresolved; mediated_blockers (scripts/check-store-writers.py:627) counts every operation row by construction, so it cannot reach zero without the reviewed operation policy and evidence the ruling needs. Only comment add and title/description edit are routed. (b) No contained-lane test pairs raw .aida-store object write denial with a successful mediated comment_add: mediated_store_tests.rs proves denial only, routed_tests.rs uses synthetic launch identity and no sandbox, and selected_store_profile (launch/contained.rs:801) still refuses mediated. (c) 'make check-ci-fast' is not shown green at this head. TASK-3223 must stay open and this PR Refs-only until these are met, or the advisor must explicitly re-scope this PR as a staged partial.
+    2. CI at 3c5fdf80d73e: all seven CI jobs (lib-0, lib-1, cli-0, cli-1, rest, gates, contracts) were still pending when this verdict was recorded, so none of the new tests, including client_broker_host_retry_after_lost_reply_and_stale_revision, has green evidence at this head. merge-hold-gate fails only because aida:merge-hold is set; that needs advisor or operator release and is not a code defect.
+    3. MINOR, functional remnant of the prior refusal finding: Client::request (aida-cli-lib/src/store_mutation_client.rs:129-131) wraps every failure with 'store service request <id>; do not repeat with a new request ID', including definite refusals. Decoding is now right, but a stale-base Conflict, Unauthorized, Revoked, Busy, InvalidRequest, or connect-time Unavailable (nothing sent) still tells the caller not to retry, though re-reading and retrying is correct for Conflict. routed_tests.rs:203 only asserts ends_with(Conflict), so it does not catch this. Apply the no-repeat context only to OutcomeUnknown and assert its absence on Conflict.
+    4. PR metadata, unfixed: the title still says 'report unresolved mediated routing evidence' while the diff adds early dispatch in main_entry, a SEQPACKET client, a mediated MCP server, host routing of comment_add/spec_edit and refusal correlation; the body is only the seat-publication line. Rewrite both to describe staged, gated routing with no launch authority. Commit 30eb320657c's subject claims full routing and boundary denial, so the squash must use the corrected title with an empty body.
+    5. MINOR, profile fail-open against its own comment: run_mediated_mcp_server (aida-cli-lib/src/mcp.rs:9077-9100) says unknown explicit profiles fail closed, but a non-string [mcp] profile (e.g. profile = 3) makes as_str return None and resolves to McpProfile::Full. Refuse a present non-string value and add a test; the existing test covers only the environment and role paths.
+    6. MINOR, non-Unicode argv: main_entry calls std::env::args() at aida-cli-lib/src/lib_part1.rs:217 before dispatch, and that panics on a non-Unicode argument, so mediated 'comment add --body-file <non-UTF-8 path>' exits with a panic instead of a typed refusal. Nothing is written, so this fails closed. Use args_os for the mediated route and refuse non-Unicode input.
+    7. COSMETIC, doc drift in docs/internal/security/store-mutation-writers.md (Staged lane routing): it says the client resolves IDs where incomplete enumeration and ambiguous matches refuse, but canonical_preimage now returns on a direct object hit without enumerating, so no ambiguity check runs there (0 collisions in the live store today). It also still says only synthetic replies and synthetic host tests exist; routed_tests.rs now drives the real client, broker and host_operation with synthetic launch identity. Update both statements.
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
+  created_at: 2026-11-08T13:04:15.283589710Z
+  modified_at: 2026-11-08T13:04:15.283589710Z
   session_id: 01a1b9af-8230-75d2-82f8-667491cc010a
   harness_version: 2.1.319 (Claude Code)
 history:
