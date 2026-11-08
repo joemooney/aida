@@ -8,7 +8,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-08T00:02:55.282155934Z
-modified_at: 2026-11-08T09:41:23.037368159Z
+modified_at: 2026-11-08T09:41:25.387171406Z
 req_type: Bug
 relationships:
 - rel_type:
@@ -171,6 +171,24 @@ comments:
   content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: Round-4 findings 1/2/4/5/6 are fixed in source and AC1-AC4 hold by source and named tests (CI still queued at this head, so no test pass is claimed). Blocked by the unresolved operator scope, a new outage risk from fatal pickup pull over plain pull_rebase, and refusals that strand a paused rebase/merge.. It was punted on: design-fork: Latest review finding 3 remains unresolved: upstream-scalar semantic pull merging conflicts with the existing field-level LWW, terminal-status and hypothesis-preservation policy. CLAUDE.md requires advisor signoff for architecture changes; no advisor-approved policy or linked scope split is recorded. Comprehensive failed-pull write fencing and dell1 stopgap removal also remain incomplete. This round fixes findings 1, 2, 4, 5 and 6 only; preserve the existing merge hold and publication veto, and do not ship as a complete fix.. No triage reason was given.'
   created_at: 2026-11-08T09:41:23.037366859Z
   modified_at: 2026-11-08T09:41:23.037366859Z
+  session_id: 01a1b8be-8170-7fb2-89ab-ecb4c6eee98c
+  harness_version: 2.1.319 (Claude Code)
+- id: 01a1ba88-ba86-7ab0-bcf7-01791b668792
+  author: joe
+  content: |-
+    REVIEW FINDINGS TO ADDRESS (BUG-2490):
+    Verdict: CHANGES REQUESTED
+    Reviewed commit: 03fe53e556ba
+    Recorded: 2026-11-08T09:16:41.119327858+00:00
+    Findings:
+    1. [major][scope][advisor-action] Operator scope on BUG-2490 (2026-11-08T03:05Z; 05:26Z note to remove the dell1 stopgap) is still neither done nor split: (a) no semantic store-object merge on pull; (b) failed-pull write fencing covers only queue pickup (aida-cli-lib/src/store_sync.rs:1768 still prints 'Falling back to local view'). The implementer has punted this as a design-fork in every round, correctly saying it cannot choose the merge policy, so another implementer round cannot clear it. The advisor must choose the policy or file a linked follow-up and record the split on BUG-2490, then re-request review.
+    2. [major][correctness] Making the pickup pull fatal (aida-cli-lib/src/queue_cmd.rs:12510) without semantic merge turns a recurring degraded state into a pickup outage. run_aida_db_sync_pull runs 'aida db sync --pull', which uses plain pull_rebase (aida-cli-lib/src/git_backend_cmd.rs:1360) and fails on any textual conflict, unlike 'aida pull', which uses pull_rebase_auto_merge (store_push_pull.rs:2480). Two nodes editing one spec, the dell1 case the operator reports recurring every few hours, now makes every 'aida queue work' without --no-pull exit before pickup, where it previously warned and continued. Fix: use pull_rebase_auto_merge in db_sync_local_window (the existing resolver, keeping its current policy), with a regression test that a same-spec two-node conflict does not stop pickup; or land the fatal pull only together with finding 1.
+    3. [major][correctness] The new refusals strand the store mid-operation: validate_store_index(repo)? at aida-core/src/git_ops.rs:2156 and 2220 (rebase) and 2828 (merge_union_onto) return without aborting, unlike every other failure arm in those functions. That contradicts the SAFETY contract at git_ops.rs:2109-2113 (any failure aborts the rebase) and BUG-1229 (git_ops.rs:2068-2070, never leave the managed store on a detached rebase HEAD). It is reachable: validate_store_index checks every staged object, so a sibling object in the replayed commit that holds markers or legacy-invalid YAML (such as an unpushed commit like the 7124c0f incident) triggers it even when the structured resolver succeeded. A retry re-enters the same refusal. The merge path leaves MERGE_HEAD with no abort, no recovery hint (store_pull_failure_hint covers rebase only) and no test. Fix: abort before returning, as the other arms do, keep the named-file error, update bug_2490_rebase_continuation_refuses_invalid_resolved_index (it asserts the paused state), and add a merge_union_auto refusal test.
+    4. [minor][ux] The fatal pickup error at aida-cli-lib/src/queue_cmd.rs:12511 tells the operator only to retry 'aida db sync --pull'. An offline user is not told about --no-pull, the documented option for that case (queue_cmd_args.rs:645-648). Name it in the message.
+    5. [minor][perf] Carried, non-blocking: a full 'aida doctor' run parses every store object twice, in the tolerant Storage::load and again in scan_store_objects (aida-cli-lib/src/doctor_cmd.rs:835). Take the bad-object list from the loader if practical.
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
+  created_at: 2026-11-08T09:41:25.254243328Z
+  modified_at: 2026-11-08T09:41:25.254243328Z
   session_id: 01a1b8be-8170-7fb2-89ab-ecb4c6eee98c
   harness_version: 2.1.319 (Claude Code)
 history:
