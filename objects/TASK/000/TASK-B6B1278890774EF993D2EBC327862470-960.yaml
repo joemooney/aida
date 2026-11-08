@@ -8,7 +8,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-07T23:39:41.575597Z
-modified_at: 2026-11-08T06:23:52.717938683Z
+modified_at: 2026-11-08T06:26:09.317296112Z
 req_type: Task
 relationships:
 - rel_type: Child
@@ -139,6 +139,12 @@ comments:
   modified_at: 2026-11-08T05:57:28.426767450Z
   session_id: 01a1b8be-8170-7fb2-89ab-ecb4c6eee98c
   harness_version: 2.1.319 (Claude Code)
+- id: 01a1b9d5-f525-7232-8873-a29790e9b34e
+  author: joe
+  content: 'Round 5 PR #3644: regenerated scripts/store-writers.toml with python3 scripts/check-store-writers.py --regenerate. Reviewed exactly two additions for relocate-ledger-paths.py (relocate/write_text and rewrite/replace): both blocked, same policy fields as check-exec-context.py/main/write_text; all pre-existing writer rows and operation mappings unchanged. Standalone store-writer ratchet passes: 3370 sinks and 293 operation mappings. Validation: 67 writer-inventory/crate-split/Git-maintenance/ownership fixture tests and 19 ExecContext fixture tests passed; repository glob ratchet (220 imports, zero additions), ExecContext ratchet (1239 sites, zero additions), portability ratchet, portability-growth shell fixtures, 81-gate classification audit and git diff --check passed. Inventory-only change, no Rust changes or Cargo tests run. AC5 remains unverified until host commits/publishes and obtains green CI at the reworked head; full make check-ci-fast includes direct Cargo calls prohibited by this native seat runner-only rule. Expected supervised merge hold retained. Edits remain uncommitted for host publication per seat instructions; AC1/AC3 remain later slices.'
+  created_at: 2026-11-08T06:26:09.317296112Z
+  modified_at: 2026-11-08T06:26:09.317296112Z
+  session_id: 01a1b9d3d486
 history:
 - id: 01a1b862-2e0b-7a50-a4d0-25097c707b57
   author: joe
