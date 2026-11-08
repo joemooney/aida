@@ -8,7 +8,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-06T13:28:15.158321967Z
-modified_at: 2026-11-07T23:29:09.455455409Z
+modified_at: 2026-11-08T00:08:12.806497510Z
 req_type: Task
 tags:
 - architecture
@@ -412,6 +412,12 @@ comments:
   content: 'PR #3628 round 4 edits: fix the no-prompt fixture to disable auto-prompt; check CLI safety refusals on both stdout and stderr; reduce the existing vendor literal ledger entry from 2 to 1. Preserve the launch refusal when supervisor cleanup also fails. Escape control/non-ASCII bytes for terminal log output, preserve redirected bytes, and cover logs/attach with a real PTY. Add native agent_new_claude --bg preview coverage with wrapper opt-in absent (plain and sandbox). Restore helper docs. The seven inventory entries added by 31a4e2b9713 are already reflected on origin/main despite the original commit not being an ancestor. Non-Cargo fast checks passed in segmented runs. Cold lane Cargo build and targeted tests are still running/queued; no executed-test result claimed yet. Native seat leaves edits uncommitted for host publication.'
   created_at: 2026-11-07T23:29:09.455455409Z
   modified_at: 2026-11-07T23:29:09.455455409Z
+  session_id: 01a1b83f4946
+- id: 01a1b87b-f106-7272-b5ea-38c9fafa5440
+  author: joe
+  content: 'Round 4 final validation: targeted library batch j20261107T231441707-4-0 executed 10 passing tests with 0 failures (2 ignored re-exec helper entrypoints). This includes supervisor cancellation/protocol, original-refusal preservation, terminal byte escaping, background entry/attach argv and vendor literal ratchet coverage. Live regression count: 1 passed, task_3219_live_claude_background_supervisor, with no skip. CLI batch j20261107T231442735-2-0 executed 2 passing tests: logs/attach including real PTY and redirected byte identity, and native agent_new_claude --bg with opt-in unset under plain/sandbox postures. make check-ci-fast passed all 43 gates; its Cargo checks ran through the lane runner on profile agent via a temporary adapter. Formatting and git diff --check passed. Native publication declaration recorded: [AI:codex] fix(launch): preserve background refusals and escape terminal logs (Refs TASK-3219). Six source/test/doc files remain uncommitted for host publication; no commit, push, queue completion, review record or merge action from this seat.'
+  created_at: 2026-11-08T00:08:12.806497510Z
+  modified_at: 2026-11-08T00:08:12.806497510Z
   session_id: 01a1b83f4946
 history:
 - id: 01a1b10b-ebd9-7db3-bc79-b89eb0de54f2
