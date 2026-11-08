@@ -1,0 +1,135 @@
+id: 01a1b895-1196-7de1-a3dc-8f1d3df6ea4d
+spec_id: STORY-b6b1278890774ef993d2ebc327862470-575
+agreed_id: STORY-2652
+title: 'Per-node orphan intake: aida-intent/<producer-node-id> for envelopes and aida-intent-receipts/<processor-node-id> for receipts, so the work node can send reports home and see their outcomes'
+description: |
+  ## Problem
+
+  Operators need to send reviewed observations, questions, and feature requests
+  from independent clones without writing to the canonical requirement store.
+  The current optional intake transport uses one shared aida-intent branch for
+  both envelopes and processing receipts. This makes independent writers share
+  one history and ties producers to processor-side updates. Intake should remain
+  usable even when the product branch and requirement store are read-only.
+
+  ## Requested Behavior
+
+  Use separately configured, independent orphan histories:
+
+  - aida-intent/<producer-node-id> contains immutable observation envelopes
+    published exclusively by that producer.
+  - aida-intent-receipts/<processor-node-id> contains processing receipts
+    published exclusively by that processor.
+
+  The stable node ID identifies the writer, not the destination forge or host.
+  Human-friendly labels may be displayed separately. Branch names alone do not
+  prove writer identity or enforce exclusive access.
+
+  ## Acceptance Criteria
+
+  1. Enrollment explicitly pins the remote, stable writer identity, producer
+     branch, authorized processor identities and receipt branches in clone-local
+     metadata. It changes no tracked product file or requirement-store object.
+  2. Preserve the existing version-1 observation JSON format: version, kind,
+     category, title, body and checksum. Categories remain observation, question
+     and request. Markdown lives in body. Native generation and validation remain
+     store-independent; the full digest identifies content, not authenticated
+     authorship. Do not silently add fields or change the existing hash contract.
+  3. Producer histories contain only observations/<full-checksum>.json. Receipt
+     histories contain only versioned receipts under their documented schema.
+     Both histories start without parents and admit only additive, linear,
+     validated commits. No product code, attachments or requirement objects are
+     imported into these branches.
+  4. Publishing requires explicit content review and the configured deny policy.
+     It pushes only the enrolled producer branch, by fast-forward or guarded
+     initial creation. It never commits, pushes, reconciles, allocates IDs or
+     promotes statuses in aida-store, and never pushes product branches or fans
+     out to other remotes. Ordinary workspace synchronization does not publish
+     intake as a side effect.
+  5. Producer-side pull, list and status can read explicitly authorized receipt
+     branches without writing them or requiring a writable requirement store.
+     Machine-readable output reports exact refs, full envelope digests, writer
+     identities, validation failures and known versus unknown processing state.
+  6. A receipt identifies the full envelope digest, producer identity, processor
+     identity, processing operation, disposition and any destination requirement
+     using an unambiguous store namespace and stable identity. Distinguish
+     transport acceptance from review, dismissal and successful store creation
+     or comment. A display spec ID alone is not a cross-store identity.
+  7. Only an explicitly invoked, authorized processor may create or comment on a
+     destination requirement. Receipt publication follows durable operation
+     evidence. Failed publication retains a recoverable journal; retry must not
+     create a duplicate requirement or comment. Preserve existing processing
+     safety guarantees when separating the two histories.
+  8. Specify processing authority and duplicate-handling scope explicitly.
+     Do not infer global exactly-once processing from independent receipt
+     branches. Concurrent or inconsistent processor outcomes remain visible;
+     retries by one processor are idempotent, and unauthorized receipts cannot
+     suppress legitimate work.
+  9. Unknown identity, mismatched enrollment, malformed history, content
+     replacement, unexpected paths, non-fast-forward updates and conflicting
+     ownership refuse before publication. Writer exclusivity requires an
+     explicit authorization policy and, where supported, forge branch protection;
+     a naming convention is insufficient. Report unenforced protection honestly.
+  10. Existing flat intake enrollment remains explicit and backward-compatible.
+      Provide a deliberate migration procedure: archive the old branch, verify
+      its processed outcomes and remove the conflicting flat ref before creating
+      namespaced branches. Never rewrite or silently migrate old histories.
+
+  ## Bootstrap and Tests
+
+  An initial reviewed envelope may be committed using Git before native per-node
+  transport exists. Document how a home processor fetches that precise branch,
+  validates the envelope and handles it manually without merging it into main or
+  aida-store. Define explicit admission for bootstrap history; never widen the
+  validator implicitly or automatically execute imported prose.
+
+  Test two independent producers and one processor against isolated Git remotes.
+  Publishing and receipt polling must leave product and store refs unchanged.
+  Cover malformed history, writer mismatch, publication races, retry after a
+  store write but failed receipt push, unavailable receipt branches, contradictory
+  receipts and legacy flat-ref migration. Include JSON status and CLI guidance.
+
+  ## Non-goals
+
+  Whole-store merging, synchronization of private source code, automatic spec
+  creation during fetch, global allocation changes, automatic trust enrollment,
+  or executing instructions supplied by an envelope. Envelopes communicate
+  reviewed intent; they grant no approval or execution authority.
+
+
+  ## Provenance
+  Operator intake envelope INTENT-c1b2dccada8c (SHA-256 c1b2dccada8cd5af444ddffca24bb4fd918457ff44f184557ff220736547e48e), from work node a65b4bf5902d469995f816efd3a27661 on gitlab ref aida-feedback/a65b4bf5902d469995f816efd3a27661 (commit 9b92d3de2b5). Validated at home with `aida intent validate` and processed by hand per the plan's Bootstrap section on 2026-11-07. The text above is the operator's verbatim request.
+
+  ## Advisor rulings (2026-11-07, after an independent architecture review)
+  R1 ACCEPT the per-writer orphan split: one ref per writer is the only unit a forge can protect. Exclusivity comes from forge protection (GitLab protected wildcard aida-intent/* writable only by the work key; GitHub rulesets) plus an enrollment probe, as ci_relay::probe (aida-cli-lib/src/ci_relay.rs:902-933) already does. Commit signing is deferred, since the validator pins a fixed synthetic author (intent_intake.rs:499).
+  R2 Writer identity: enrollment takes --writer-id, defaulting to the WORK binding node id (aida-core/src/work_candidate.rs:336) when present, else a generated uuid-simple stored in the clone-local profile. Intake must not require `aida node acquire`. The id is a label, not a credential.
+  R3 Receipt branches validate STANDALONE: the "receipt without observation refused" rule (intent_intake.rs:632-636) becomes a reported state ("receipt for unknown observation"), not a refusal.
+  R4 Add the own-branch foreign-write rule: on the producer's own branch, a remote tip ahead of what this clone published refuses (today sync() fast-forwards it, intent_intake.rs:903-912).
+  R5 AC10 reduced: the legacy flat branch uses an incompatible schema and is already archived, so there is nothing to migrate. Rule: never reuse the flat aida-intent name on a remote where namespaced branches exist.
+  R6 Bootstrap admission: do NOT widen the validator. Bootstrap commits are re-created with `git commit-tree` using the fixed intake author and message (no Aida-Store trailer; work_commit.rs:187 adds one, which the validator at intent_intake.rs:502 refuses). Document the procedure.
+  R7 STORY-2480 relay conflict: the relay is a producer, so ci-results move to the relay's own aida-intent/<work-node> branch, and scripts/ci-relay/pre-receive.py:112's `return` rule becomes per-principal. The STORY-2480 plan gets an addendum in slice S4.
+  R8 Real deployment is 1 work node + 1 home node. AC6 store namespace, AC8 multi-processor semantics and multi-producer fixtures are deferred to S5 and are not acceptance for S1-S4.
+
+  ## Slices
+  S0 (docs): the manual bootstrap round trip and the commit-tree re-commit procedure (docs/cli/02-specs.md ~512-575).
+  S1 (first native round trip): profile v2 {remote, deny_patterns, writer_id, role, producer_branch, receipt_branches[]}; per-branch refs replace the BRANCH/INCOMING consts (intent_intake.rs:16-17); per-role path allowlist; files() unions histories; process() appends to the receipt branch; R3. Tests in aida-cli/tests/task_3096_intake_transport.rs.
+  S2 (exclusivity): R4 plus the enrollment protection probe; `enroll --json` reports protection: verified|unverified honestly.
+  S3: Receipt v2 (producer, processor, store namespace); `list --json` reports refs, writer ids, and unknown when a receipt branch is unavailable.
+  S4: relay alignment (R7).
+  S5 (optional): AC8 and multi-producer fixtures.
+status: Approved
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-11-08T00:35:39.542243859Z
+modified_at: 2026-11-08T00:35:39.542243859Z
+req_type: Story
+filed_at:
+  code_sha: 2782389cd8ad9240672ea95d0f2209c7f193700b
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 2a7fe186bdc
+  vendor: claude
+  session: 01a1b848-940b-7bd2-8acd-52e428b182b8
+  harness_version: 2.1.319 (Claude Code)
