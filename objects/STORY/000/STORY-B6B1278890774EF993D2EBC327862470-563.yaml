@@ -25,7 +25,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-07T19:45:35.836129088Z
-modified_at: 2026-11-08T20:50:23.102217991Z
+modified_at: 2026-11-08T20:51:18.475142887Z
 req_type: Story
 tags:
 - docs:impacted
@@ -454,6 +454,13 @@ comments:
   modified_at: 2026-11-08T20:47:42.887148492Z
   session_id: 01a1bc93-77a0-7740-8b03-df4e3e8d1df5
   harness_version: 2.1.319 (Claude Code)
+- id: 01a1bcee-074b-7f23-904e-671edd26f77b
+  author: dirtlab
+  content: 'Pickup rechecked the remaining host-validation blocker: aida lane job run -- make check-ci-fast is still refused as Cargo-only. No source files changed; worktree is clean and prior implementation/review fixes are present. Punted blocked-dependency; store state updated, but local punt signal write reported read-only filesystem, so host must honor Needs Attention and this explicit publication veto. Fresh targeted regression job j20261108T205002288-2-0 is still compiling; no executed-test result yet, untested=true for this pickup. Required seeded full-gate pass remains unproven; update the host runner and run against a genuinely seeded committed head under bubblewrap with host-only results. No unsandboxed fallback or publication performed.'
+  created_at: 2026-11-08T20:51:18.475142887Z
+  modified_at: 2026-11-08T20:51:18.475142887Z
+  session_id: 01a1bcec69f2
+  harness_version: codex-cli 0.167.0
 history:
 - id: 01a1b78d-2628-7313-92de-8804ac5f8f71
   author: aida-session-start
