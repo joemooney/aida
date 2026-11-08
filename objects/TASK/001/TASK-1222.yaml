@@ -23,12 +23,12 @@ description: |
   Deliberate sweep: for each stale branch/worktree, check the spec status — if Completed/merged-elsewhere, delete the branch + remove the worktree; if it holds genuine uncommitted work, salvage-commit or discard per a per-item decision. aida session reap already handles the finished+merged+exited class safely; this task is the long-tail the reap conservatively leaves (unfinished-spec or uncommitted-work worktrees, and pure branch cruft). Consider an aida worktree gc --older-than / --stale sweep if one doesn't cover it.
 
   Immediate: STORY-1006 + STORY-993 (both Completed) have uncommitted worktree changes — operator decision: salvage or discard, then remove those two worktrees.
-status: InProgress
+status: NeedsAttention
 priority: Low
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-09-13T22:07:45.944235Z
-modified_at: 2026-11-08T21:09:23.583756654Z
+modified_at: 2026-11-08T21:10:23.388172689Z
 req_type: Task
 tags:
 - cleanup
@@ -1212,3 +1212,23 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a1bcff-1a30-7ae3-9d2d-5fe5e481793a
+  author: dirtlab
+  timestamp: 2026-11-08T21:09:57.424937786Z
+  session_id: 01a1bcfe895d
+  harness_version: codex-cli 0.167.0
+  changes: []
+- id: 01a1bcff-7f9c-7921-90b5-3720db854758
+  author: dirtlab
+  timestamp: 2026-11-08T21:10:23.388189555Z
+  session_id: 01a1bcfe895d
+  harness_version: codex-cli 0.167.0
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: NeedsAttention
+attention_reason:
+  category: blocked-dependency
+  detail: 'Latest review finding 1 explicitly requests no code change, push, main merge or commit-producing rework until terminal CI and fresh independent review. Verified current HEAD 1725311184d4ad1677755195fe9ec1b9ff291f6f and its CI run 42521473017 remains queued. Preserve the current head and queue position; obtain terminal CI then fresh independent review, with separate authorized clearance of the existing supervised hold. Changed files: none; working tree clean. No tests executed this turn (untested=true); no publication, queue completion or host cleanup performed.'
+  raised_by: implementer
+  raised_at: 2026-11-08T21:10:23.388172689Z
