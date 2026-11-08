@@ -2,23 +2,31 @@ id: 01a1b90c-ed35-72f3-96f9-9af73d67f23c
 spec_id: BUG-b6b1278890774ef993d2ebc327862470-257
 agreed_id: BUG-2492
 title: merge-hold-gate reports a held PR as a FAILED run, so every push to a supervised PR emails the operator 'PR run failed'; block with a pending status instead
-description: |
-  merge-hold-gate (.github/workflows/merge-hold-gate.yml, BUG-1167 / ADR-37 layer 2) blocks a held PR by FAILING. It reruns on every synchronize/labeled/unlabeled/edited event, so every rework push to a supervised PR produces a failed Actions run and a "PR run failed: merge-hold-gate" email to the operator. On 2026-11-07, about 8 lanes pushing reworks to held PRs sent a steady stream of these emails, and the operator asked why. A by-design hold that reads as a CI failure trains everyone to ignore failure mail and buries real failures.
+description: 'merge-hold-gate (.github/workflows/merge-hold-gate.yml, BUG-1167 / ADR-37 layer 2) blocks a held PR by FAILING. It reruns on every synchronize/labeled/unlabeled/edited event, so every rework push to a supervised PR produces a failed Actions run and a "PR run failed: merge-hold-gate" email to the operator. On 2026-11-07, about 8 lanes pushing reworks to held PRs sent a steady stream of these emails, and the operator asked why. A by-design hold that reads as a CI failure trains everyone to ignore failure mail and buries real failures.
 
-  Fix shape: the hold must still block the merge (a required check that has not passed), but it must not report a failure. Options for the implementer: publish a commit status / check run with state `pending` (or `action_required`) and a description naming the hold, using the workflow's token, and set it to success once the hold is cleared. Keep the job deliberately trivial (label inspection only). The status context name stays `merge-hold-gate` so branch protection is unchanged.
+
+  Fix shape: the hold must still block the merge (a required check that has not passed), but it must not report a failure. Options for the implementer: publish a commit status / check run with state `pending` (or `action_required`) and a description naming the hold, using the workflow''s token, and set it to success once the hold is cleared. Keep the job deliberately trivial (label inspection only). The status context name stays `merge-hold-gate` so branch protection is unchanged.
+
 
   Acceptance:
+
   1. A PR carrying aida:merge-hold shows merge-hold-gate as pending/action-required (not failure), and GitHub still refuses to merge it, including via raw `gh pr merge` and the web UI.
+
   2. Clearing the hold (aida merge-hold clear / the recorded-cleared label pair) turns the check green with no new push.
-  3. The BUG-1693 label rules (recorded vs cleared, train members' labels) behave exactly as today: same pass/block outcome for every label combination (table test over the existing check_labels cases).
+
+  3. The BUG-1693 label rules (recorded vs cleared, train members'' labels) behave exactly as today: same pass/block outcome for every label combination (table test over the existing check_labels cases).
+
   4. A push to a held PR sends no "run failed" notification for this check.
+
   5. A genuinely malformed label state (clearance with no recorded hold) still FAILS, since that is a real error.
+
+  '
 status: NeedsAttention
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
-created_at: 2026-11-08T02:46:34.549817284Z
-modified_at: 2026-11-08T12:55:29.277903787Z
+created_at: 2026-11-08 02:46:34.549817+00:00
+modified_at: 2026-11-08 12:55:29.277903+00:00
 req_type: Bug
 tags:
 - area:ci
@@ -28,226 +36,285 @@ relationships:
 - rel_type:
     custom: implemented-by
   target_id: 01a1b982-c781-7830-8918-85e22d86e620
-  created_at: 2026-11-08T04:55:41.998936818Z
+  created_at: 2026-11-08 04:55:41.998936+00:00
   created_by: joe
 - rel_type: Blocks
   target_id: 01a1b9b5-6245-7623-a0d8-818706092c85
-  created_at: 2026-11-08T05:51:37.726559691Z
+  created_at: 2026-11-08 05:51:37.726559+00:00
   created_by: joe
 comments:
 - id: 01a1b95e-fa59-7b52-8e34-317f0145b909
   author: joe
   content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: Gate logic and fixtures are correct (AC3/AC4/AC5 verified by tests/test_merge_hold_gate.sh), but switching to pull_request_target + a commit status leaves this PR with no merge-hold-gate status at all (required, enforce_admins on) and has no transition plan for legacy check runs; AC1 server-side behaviour unproven; CI still queued at review.. No triage reason was given.'
-  created_at: 2026-11-08T04:16:11.865392981Z
-  modified_at: 2026-11-08T04:16:11.865392981Z
+  created_at: 2026-11-08 04:16:11.865392+00:00
+  modified_at: 2026-11-08 04:16:11.865392+00:00
   session_id: 01a1b8be-8170-7fb2-89ab-ecb4c6eee98c
   harness_version: 2.1.319 (Claude Code)
 - id: 01a1b95f-05c7-7ca0-b590-36e2eaa10d2c
   author: joe
-  content: |-
-    REVIEW FINDINGS TO ADDRESS (BUG-2492):
+  content: 'REVIEW FINDINGS TO ADDRESS (BUG-2492):
+
     Verdict: CHANGES REQUESTED
+
     Reviewed commit: f81f2ac9639a
+
     Recorded: 2026-11-08T03:28:52.161931166+00:00
+
     Findings:
-    1. BLOCKER bootstrap: this PR's head f81f2ac has zero commit statuses and no merge-hold-gate check run. The PR's workflow only declares pull_request_target (which runs main's copy, which only declares pull_request), so neither version runs. merge-hold-gate is a required check (app_id 15368) with enforce_admins=true, so the PR cannot merge without changing branch protection. Add a transition plan, either in the PR body or as a one-time operator step (for example, keep a pull_request trigger for one release, or post the status by hand), and say who runs it.
+
+    1. BLOCKER bootstrap: this PR''s head f81f2ac has zero commit statuses and no merge-hold-gate check run. The PR''s workflow only declares pull_request_target (which runs main''s copy, which only declares pull_request), so neither version runs. merge-hold-gate is a required check (app_id 15368) with enforce_admins=true, so the PR cannot merge without changing branch protection. Add a transition plan, either in the PR body or as a one-time operator step (for example, keep a pull_request trigger for one release, or post the status by hand), and say who runs it.
+
     2. Transition fail-open risk: open PRs already carry legacy merge-hold-gate CHECK RUNS (job name, GitHub Actions app) at their head SHAs. After merge, a label-only event (aida applies aida:merge-hold, no push) publishes only a commit STATUS named merge-hold-gate. A stale successful legacy check run on the same SHA may still satisfy the app-pinned required check, so a newly held PR could merge. Document and verify how GitHub resolves a check run and a status with the same name, or re-run / invalidate the legacy runs during the cutover.
+
     3. AC1 unverified: no evidence that a commit status written with GITHUB_TOKEN satisfies a required check pinned to app_id 15368 (GitHub Actions), or that state=pending blocks raw gh pr merge or the web UI under that pin. Add evidence from a live held PR after cutover (gh api .../commits/<sha>/status plus a refused merge), or a documented operator verification step.
+
     4. Test gap (minor): train-mode cases (expect_train) go through github_gate without WANT_STATE, so a held train member (should be pending: no failure mail) and malformed train evidence (should be failure) both collapse to exit 1. Set WANT_STATE per train case so the pending-vs-failure split is asserted for train mode too (AC3/AC4/AC5 in train mode).
+
     5. AC2 partially verified: fixtures show that cleared label pairs publish success, and labeled/unlabeled stay in the triggers. No test or evidence shows that a label-only event reruns the pull_request_target publisher and flips an existing pending status to success on the same SHA. Cover this in the cutover verification above.
-    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
-  created_at: 2026-11-08T04:16:14.791276904Z
-  modified_at: 2026-11-08T04:16:14.791276904Z
+
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.'
+  created_at: 2026-11-08 04:16:14.791276+00:00
+  modified_at: 2026-11-08 04:16:14.791276+00:00
   session_id: 01a1b8be-8170-7fb2-89ab-ecb4c6eee98c
   harness_version: 2.1.319 (Claude Code)
 - id: 01a1b980-8a1e-7123-929e-98f847020db2
   author: joe
   content: 'Round 2 approach: address bootstrap with a temporary same-repository pull_request publisher alongside trusted pull_request_target, with explicit operator removal steps. Document GitHub same-name check/status conjunction and an operator cutover procedure verifying app_id 15368 with enforce_admins retained: legacy successful check plus pending status blocks raw merge and UI; label-only clearance succeeds on unchanged SHA; fresh SHA passes without a legacy check. Assert explicit success/pending/failure states in every train fixture and shared parser case. Expected files: .github/workflows/merge-hold-gate.yml, tests/test_merge_hold_gate.sh, docs/cli/08-reporting.md and a focused cutover runbook. Live GitHub verification is operator work after publication; local fixtures cannot establish app-pinned server behavior. Native seat will leave edits uncommitted for host publication.'
-  created_at: 2026-11-08T04:52:51.358303138Z
-  modified_at: 2026-11-08T04:52:51.358303138Z
+  created_at: 2026-11-08 04:52:51.358303+00:00
+  modified_at: 2026-11-08 04:52:51.358303+00:00
   session_id: 01a1b97f6957
 - id: 01a1b982-32df-71e3-8f7e-219f23116a5b
   author: joe
-  content: 'Round 2 implementation ready for host commit: temporary same-repo pull_request bootstrap added alongside pull_request_target; docs/internal/testing/bug-2492-status-cutover.md assigns Joe the bootstrap, legacy collision, app_id 15368/enforce_admins checks, raw gh/UI refusal, unchanged-SHA label-only clearance, fresh-head status-only acceptance, evidence capture and bootstrap removal. GitHub official documentation requires both same-name check and status to pass; runbook links source and explicitly distinguishes docs from live evidence. Every train fixture now asserts success/pending/failure (including shared member parser cases). Validation passed: bash tests/test_merge_hold_gate.sh (8 label states x 2 gates, 36 train cases), bash -n, git diff --check. actionlint unavailable; no Rust changes or Cargo run needed. Shared codegraph index unreachable (doctor confirmed); rg verified shell call sites. Live operator verification remains outstanding by design; no protection changes or merge attempts made from seat. Four files changed, edits uncommitted per native-seat contract.'
-  created_at: 2026-11-08T04:54:40.095222713Z
-  modified_at: 2026-11-08T04:54:40.095222713Z
+  content: 'Round 2 implementation ready for host commit: temporary same-repo pull_request bootstrap added alongside pull_request_target; docs/internal/testing/bug-2492-status-cutover.md assigns Joe the bootstrap, legacy collision, app_id 15368/enforce_admins checks, raw gh/UI refusal, unchanged-SHA label-only clearance, fresh-head status-only acceptance, evidence capture and bootstrap removal. GitHub official documentation requires both same-name check and status to pass; runbook links source and explicitly distinguishes docs from live evidence. Every train fixture now asserts success/pending/failure (including shared member parser cases). Validation passed: bash tests/test_merge_hold_gate.sh (8 label states x 2 gates, 36 train cases), bash -n, git diff --check. actionlint unavailable; no Rust changes or Cargo run needed. Shared codegraph index unreachable (doctor confirmed); rg verified shell call sites. Live operator verification remains outstanding by design; no protection changes or
+    merge attempts made from seat. Four files changed, edits uncommitted per native-seat contract.'
+  created_at: 2026-11-08 04:54:40.095222+00:00
+  modified_at: 2026-11-08 04:54:40.095222+00:00
   session_id: 01a1b97f6957
 - id: 01a1b9ae-2fb7-7fb3-a8ad-f52d0cb1bfd1
   author: joe
   content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: Round 2 fixes the workflow side: live, the bootstrap publishes merge-hold-gate=pending on this held PR and the job succeeds; fixtures assert pending/failure/success for every label and train case. But AIDA''s own Rust consumers still treat the hold as a RED merge-hold-gate, so a pending gate now reads as CI-still-pending and breaks aida pr ship / drain CI on every held PR.. No triage reason was given.'
-  created_at: 2026-11-08T05:42:42.871362501Z
-  modified_at: 2026-11-08T05:42:42.871362501Z
+  created_at: 2026-11-08 05:42:42.871362+00:00
+  modified_at: 2026-11-08 05:42:42.871362+00:00
   session_id: 01a1b8be-8170-7fb2-89ab-ecb4c6eee98c
   harness_version: 2.1.319 (Claude Code)
 - id: 01a1b9ae-3a72-7f51-bf3b-15f1162c5b16
   author: joe
-  content: |-
-    REVIEW FINDINGS TO ADDRESS (BUG-2492):
+  content: 'REVIEW FINDINGS TO ADDRESS (BUG-2492):
+
     Verdict: CHANGES REQUESTED
+
     Reviewed commit: 71d1bbb84088
+
     Recorded: 2026-11-08T05:01:11.708017953+00:00
+
     Findings:
-    1. BLOCKER regression (AIDA consumers not migrated): aida-cli-lib/src/ci_gate.rs:241-246 classify_red puts any pending row, including merge-hold-gate, into out.pending before the HOLD_GATE_CHECK branch at :250, and only a red (fail/cancel) gate counts as the hold. GitHub check_rows (forge.rs:2084, gh pr checks) also returns commit statuses, so a held PR's merge-hold-gate is now bucket=pending. Effects: pr_cmd.rs:3281 wait_for_ship_ci (aida pr ship step 2) polls until CiTimeout ('still pending: merge-hold-gate'), or forever with no budget, and never reaches the hold release at pr_cmd.rs:3926. dispatch_flow.rs:337 behaves the same. phase_driver_trait.rs:1447 refine_red shelves the drain as CiTimeout after 20 min. pr_list.rs:330 github_rollup_ci_status_for shows held PRs as 'Pending' CI. pipeline_stall.rs:1010 hold_gate_failed only recognises FAILURE/ERROR/... so a held PR is no longer seen as held. lane_liveness.rs rollup docs/logic assume 'red at every head while held'. Fix: when a hold marker or label is present, treat a pending merge-hold-gate as the hold (hold_gate_is_the_hold) in classify_red, and update pipeline_stall/lane_liveness/pr_list. Add unit tests with a pending merge-hold-gate row next to the existing 'fail' fixtures (ci_gate.rs:764-855, pipeline_stall.rs:1538/1645, status_prs/pr_list fixtures). Update the stale 'red while held' comments (ci_gate.rs:7-15,30, lane_liveness.rs:1212).
-    2. AC1/AC2 live merge refusal still operator-only: live evidence at 71d1bbb shows merge-hold-gate=pending ('Merge held: awaiting recorded clearance') with publish-merge-hold-status=success and mergeStateStatus BLOCKED. That verifies pending-not-failure and that the bootstrap works. Raw gh pr merge / web-UI refusal under app pin 15368, and label-only pending->success on an unchanged SHA, depend on docs/internal/testing/bug-2492-status-cutover.md. Acceptable only if the operator runbook is the agreed evidence route; record its outputs on the spec before Completed.
-    3. Minor: the temporary pull_request trigger has no tracked removal spec. merge-hold-gate.yml:44-49 and the runbook step 4 rely on Joe remembering a follow-up PR. Also, while the trigger exists, a same-repo PR's own copy of the workflow runs with statuses:write and could post merge-hold-gate=success. The old check-run model had the same class of risk, but this keeps it open until removal. File a follow-up spec (blocked-by this PR) for removing the trigger and its fixture asserts (tests/test_merge_hold_gate.sh:327-328).
-    4. Minor docs: docs/cli/08-reporting.md:153 is end-user CLI reference prose. It names a specific person ('Joe Mooney runs...') and links an internal deployment runbook. Use role wording ('the repository operator') and keep the cutover detail in docs/internal.
-    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
-  created_at: 2026-11-08T05:42:45.618352279Z
-  modified_at: 2026-11-08T05:42:45.618352279Z
+
+    1. BLOCKER regression (AIDA consumers not migrated): aida-cli-lib/src/ci_gate.rs:241-246 classify_red puts any pending row, including merge-hold-gate, into out.pending before the HOLD_GATE_CHECK branch at :250, and only a red (fail/cancel) gate counts as the hold. GitHub check_rows (forge.rs:2084, gh pr checks) also returns commit statuses, so a held PR''s merge-hold-gate is now bucket=pending. Effects: pr_cmd.rs:3281 wait_for_ship_ci (aida pr ship step 2) polls until CiTimeout (''still pending: merge-hold-gate''), or forever with no budget, and never reaches the hold release at pr_cmd.rs:3926. dispatch_flow.rs:337 behaves the same. phase_driver_trait.rs:1447 refine_red shelves the drain as CiTimeout after 20 min. pr_list.rs:330 github_rollup_ci_status_for shows held PRs as ''Pending'' CI. pipeline_stall.rs:1010 hold_gate_failed only recognises FAILURE/ERROR/... so a held PR is no longer seen as held. lane_liveness.rs rollup docs/logic assume ''red at every head while held''. Fix: when
+    a hold marker or label is present, treat a pending merge-hold-gate as the hold (hold_gate_is_the_hold) in classify_red, and update pipeline_stall/lane_liveness/pr_list. Add unit tests with a pending merge-hold-gate row next to the existing ''fail'' fixtures (ci_gate.rs:764-855, pipeline_stall.rs:1538/1645, status_prs/pr_list fixtures). Update the stale ''red while held'' comments (ci_gate.rs:7-15,30, lane_liveness.rs:1212).
+
+    2. AC1/AC2 live merge refusal still operator-only: live evidence at 71d1bbb shows merge-hold-gate=pending (''Merge held: awaiting recorded clearance'') with publish-merge-hold-status=success and mergeStateStatus BLOCKED. That verifies pending-not-failure and that the bootstrap works. Raw gh pr merge / web-UI refusal under app pin 15368, and label-only pending->success on an unchanged SHA, depend on docs/internal/testing/bug-2492-status-cutover.md. Acceptable only if the operator runbook is the agreed evidence route; record its outputs on the spec before Completed.
+
+    3. Minor: the temporary pull_request trigger has no tracked removal spec. merge-hold-gate.yml:44-49 and the runbook step 4 rely on Joe remembering a follow-up PR. Also, while the trigger exists, a same-repo PR''s own copy of the workflow runs with statuses:write and could post merge-hold-gate=success. The old check-run model had the same class of risk, but this keeps it open until removal. File a follow-up spec (blocked-by this PR) for removing the trigger and its fixture asserts (tests/test_merge_hold_gate.sh:327-328).
+
+    4. Minor docs: docs/cli/08-reporting.md:153 is end-user CLI reference prose. It names a specific person (''Joe Mooney runs...'') and links an internal deployment runbook. Use role wording (''the repository operator'') and keep the cutover detail in docs/internal.
+
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.'
+  created_at: 2026-11-08 05:42:45.618352+00:00
+  modified_at: 2026-11-08 05:42:45.618352+00:00
   session_id: 01a1b8be-8170-7fb2-89ab-ecb4c6eee98c
   harness_version: 2.1.319 (Claude Code)
 - id: 01a1b9b6-6abc-71b0-b6ac-e353cd966f84
   author: joe
   content: 'Round 3: operator runbook remains the agreed live-evidence route. Reviewer observation at 71d1bbb84088 establishes bootstrap publishing pending with successful publisher and BLOCKED merge state; it does not establish raw gh/web refusal under app 15368 or label-only clearance on unchanged SHA. Updated internal runbook requires attaching all outputs on this spec before Completed. Follow-up TASK-b6b1278890774ef993d2ebc327862470-978 tracks removing temporary pull_request trigger, same-repo condition, and fixture assertions after cutover; draft filed through AIDA MCP after CLI ID allocation refused read-only Git metadata. Rust pending-hold consumer corrections and targeted tests are in progress.'
-  created_at: 2026-11-08T05:51:42.268277612Z
-  modified_at: 2026-11-08T05:51:42.268277612Z
+  created_at: 2026-11-08 05:51:42.268277+00:00
+  modified_at: 2026-11-08 05:51:42.268277+00:00
   session_id: 01a1b9b177e2
 - id: 01a1b9c3-d3b4-7e50-85f5-c058f79c24f2
   author: joe
   content: 'Round 3 also migrates the coarse ci_probe path: a pending merge-hold-gate routes to existing Red refinement only after ordinary CI settles, so drain polling cannot wait forever before reaching classify_red. The refiner still requires marker or confirmed label evidence, and other pending/failing checks remain blockers. New regressions cover coarse probe, ship/refine waits, classifier evidence matrix, PR-list label-aware rollup, pipeline readiness/log exclusion, and lane StatusContext readiness. First launcher Rust run j20261108T054956507-2683506-0 timed out at 900s during compilation without executing tests; further targeted jobs remain queued/running. Shell fixtures, rustfmt checks and diff hygiene pass. Native Refs publication subject recorded; no Completed transition is claimed.'
-  created_at: 2026-11-08T06:06:21.108990578Z
-  modified_at: 2026-11-08T06:06:21.108990578Z
+  created_at: 2026-11-08 06:06:21.108990+00:00
+  modified_at: 2026-11-08 06:06:21.108990+00:00
   session_id: 01a1b9b177e2
 - id: 01a1b9d0-a587-76f2-9ad6-a1cdff7d095f
   author: joe
-  content: 'Round 3 native handoff: implementation and regression fixtures are ready, left uncommitted for host publication. Changed .github/workflows/merge-hold-gate.yml (cleanup tracking comment); aida-cli-lib/src/ci_gate.rs, ci_probe.rs, lane_liveness.rs, pipeline_stall.rs, pr_list.rs; src/tests/ci_action_tests.rs and story_1688_lane_liveness_tests.rs; docs/cli/08-reporting.md and docs/internal/testing/bug-2492-status-cutover.md. Validation passed: bash tests/test_merge_hold_gate.sh (8 label states x 2 gates, 36 train cases), bash -n, rustfmt --check for all touched Rust files, git diff --check. untested=true: launcher jobs j20261108T054956507-2683506-0 (bug2492) and j20261108T055327498-2726863-0 (ci_gate::tests::) each timed out at 900 seconds during compilation, with no executed-test result and no reported compiler error. Remaining requested filters are pipeline_stall::tests::, pr_list::tests::, bug2492 and ci_action_tests::; host needs a sufficient compile budget to establish Rust validation. Follow-up TASK-b6b1278890774ef993d2ebc327862470-978 is filed and blocked by BUG-2492. AC1/AC2 live raw merge/UI refusal and unchanged-SHA label clearance remain operator evidence required on this spec before Completed. Recorded native publication declaration: [AI:codex] fix(ci): recognize pending merge holds across consumers (Refs BUG-2492). No completion, ship, merge or review verdict claimed.'
-  created_at: 2026-11-08T06:20:21.255728124Z
-  modified_at: 2026-11-08T06:20:21.255728124Z
+  content: 'Round 3 native handoff: implementation and regression fixtures are ready, left uncommitted for host publication. Changed .github/workflows/merge-hold-gate.yml (cleanup tracking comment); aida-cli-lib/src/ci_gate.rs, ci_probe.rs, lane_liveness.rs, pipeline_stall.rs, pr_list.rs; src/tests/ci_action_tests.rs and story_1688_lane_liveness_tests.rs; docs/cli/08-reporting.md and docs/internal/testing/bug-2492-status-cutover.md. Validation passed: bash tests/test_merge_hold_gate.sh (8 label states x 2 gates, 36 train cases), bash -n, rustfmt --check for all touched Rust files, git diff --check. untested=true: launcher jobs j20261108T054956507-2683506-0 (bug2492) and j20261108T055327498-2726863-0 (ci_gate::tests::) each timed out at 900 seconds during compilation, with no executed-test result and no reported compiler error. Remaining requested filters are pipeline_stall::tests::, pr_list::tests::, bug2492 and ci_action_tests::; host needs a sufficient compile budget to establish Rust
+    validation. Follow-up TASK-b6b1278890774ef993d2ebc327862470-978 is filed and blocked by BUG-2492. AC1/AC2 live raw merge/UI refusal and unchanged-SHA label clearance remain operator evidence required on this spec before Completed. Recorded native publication declaration: [AI:codex] fix(ci): recognize pending merge holds across consumers (Refs BUG-2492). No completion, ship, merge or review verdict claimed.'
+  created_at: 2026-11-08 06:20:21.255728+00:00
+  modified_at: 2026-11-08 06:20:21.255728+00:00
   session_id: 01a1b9b177e2
 - id: 01a1ba6e-03b8-7e93-afdf-1fbdb10d570e
   author: joe
   content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: Round 3 fixes the consumers named in round 2 and the workflow gate is sound (CI green, live pending + BLOCKED), but status_prs::summarize_status_check_rollup was not migrated: the new StatusContext makes every PR''s ci_rollup ''?'', so aida integrate treats a held or malformed-gate PR as mergeable instead of parking it.. No triage reason was given.'
-  created_at: 2026-11-08T09:12:14.520026792Z
-  modified_at: 2026-11-08T09:12:14.520026792Z
+  created_at: 2026-11-08 09:12:14.520026+00:00
+  modified_at: 2026-11-08 09:12:14.520026+00:00
   session_id: 01a1b8be-8170-7fb2-89ab-ecb4c6eee98c
   harness_version: 2.1.319 (Claude Code)
 - id: 01a1ba6e-0c8e-7e70-a8a0-7856c3960456
   author: joe
-  content: |-
-    REVIEW FINDINGS TO ADDRESS (BUG-2492):
+  content: 'REVIEW FINDINGS TO ADDRESS (BUG-2492):
+
     Verdict: CHANGES REQUESTED
+
     Reviewed commit: 26bbb12610d4
+
     Recorded: 2026-11-08T09:05:02.283425742+00:00
+
     Findings:
-    1. BLOCKER regression: aida-cli-lib/src/status_prs.rs:1907 summarize_status_check_rollup reads only status/conclusion. merge-hold-gate is now a StatusContext on every PR (live row at 26bbb12: __typename StatusContext, state PENDING, no status/conclusion), so it counts toward total but never passed/pending/fail, and the rollup becomes '?' whatever the gate state. Effects after cutover: (a) held PR with green CI was 'fail' -> Park(CiRed); now '?' -> queue_cmd.rs probe_pr_integration_state '_ => CiState::None' -> integrate.rs:328 IntegrationAction::Merge, so aida integrate --run drives a held PR at the merge instead of parking it (branch protection should still refuse; the classification is wrong). (b) A malformed gate (state FAILURE, AC5) also reads '?' rather than 'fail', the same Merge classification. (c) Unheld/cleared green PRs go 'pass' -> '?': status_prs.rs:1170 green=false, so the orphaned-review sweep never claims any PR; aida status shows '?'. Fix: read StatusContext state in the summary (SUCCESS/FAILURE|ERROR/PENDING|EXPECTED) and decide how a held pending gate maps so it parks rather than merges. Add status_prs tests with StatusContext rows for all three gate states and an integrate classification test for a held PR. status_prs.rs is untouched by this PR.
+
+    1. BLOCKER regression: aida-cli-lib/src/status_prs.rs:1907 summarize_status_check_rollup reads only status/conclusion. merge-hold-gate is now a StatusContext on every PR (live row at 26bbb12: __typename StatusContext, state PENDING, no status/conclusion), so it counts toward total but never passed/pending/fail, and the rollup becomes ''?'' whatever the gate state. Effects after cutover: (a) held PR with green CI was ''fail'' -> Park(CiRed); now ''?'' -> queue_cmd.rs probe_pr_integration_state ''_ => CiState::None'' -> integrate.rs:328 IntegrationAction::Merge, so aida integrate --run drives a held PR at the merge instead of parking it (branch protection should still refuse; the classification is wrong). (b) A malformed gate (state FAILURE, AC5) also reads ''?'' rather than ''fail'', the same Merge classification. (c) Unheld/cleared green PRs go ''pass'' -> ''?'': status_prs.rs:1170 green=false, so the orphaned-review sweep never claims any PR; aida status shows ''?''. Fix: read StatusContext
+    state in the summary (SUCCESS/FAILURE|ERROR/PENDING|EXPECTED) and decide how a held pending gate maps so it parks rather than merges. Add status_prs tests with StatusContext rows for all three gate states and an integrate classification test for a held PR. status_prs.rs is untouched by this PR.
+
     2. Regression (no-evidence hold): ci_gate.rs classify_red now sends a pending gate with no marker and no aida:merge-hold label to out.pending, but the workflow publishes pending for aida:merge-hold-recorded without aida:merge-hold-cleared (label removed by hand, BUG-1693). merge_hold.rs:944 hold_label checks only HOLD_LABEL, so that PR has no evidence. Before, the red gate hit the hold_gate_label_lingering path and aida pr ship refused at once with CiRed; now wait_for_ship_ci (ci_gate.rs:409) polls to the budget, or forever when timeout is None, and the drain shelves CiTimeout after 20 min. pr_list.rs:410 already treats recorded-without-cleared as held, so the consumers disagree. The bug2492 classifier test only covers no labels. Fix: surface recorded-without-cleared to the caller as its own refusal (not a CI wait), and add a test.
+
     3. Minor: aida-cli-lib/src/idle_eligible.rs:49 seeds ci_completed_at only when every rollup row has completedAt. A StatusContext has startedAt only, so after cutover ci_completed_at is None for every GitHub PR and idle eligibility always starts at first observation (idle_eligible.rs:271-281). Exclude the hold-gate status or read its startedAt, with a test.
-    4. Minor: ci_probe.rs parse_ci_probe routes any pending merge-hold-gate to Red without hold evidence, and the new doc comment says the caller confirms via refine_red. Only the drain does. burndown_run.rs:866 and queue_cmd.rs ci_state_from_terminal_probe map Red straight to Failing, and ci_probe.rs:231 reports 'CI RED'. An unheld PR with settled CI whose gate re-runs on a label/body edit is reported red during the transient 'Inspecting' pending window. Treat a pending gate as Red only for callers that refine, or keep it InProgress for the rest.
-    5. Cosmetic: stale 'fails' wording remains in operator-visible text: merge_hold.rs:351 label description ('merge-hold-gate fails while present'), merge_hold_cmd.rs:237 error ('keeps failing until it is'), merge_hold_cmd.rs:201 doc comment, and the pr_train.rs:2170/2657 and pr_ship_batch.rs:381 'red' comments.
+
+    4. Minor: ci_probe.rs parse_ci_probe routes any pending merge-hold-gate to Red without hold evidence, and the new doc comment says the caller confirms via refine_red. Only the drain does. burndown_run.rs:866 and queue_cmd.rs ci_state_from_terminal_probe map Red straight to Failing, and ci_probe.rs:231 reports ''CI RED''. An unheld PR with settled CI whose gate re-runs on a label/body edit is reported red during the transient ''Inspecting'' pending window. Treat a pending gate as Red only for callers that refine, or keep it InProgress for the rest.
+
+    5. Cosmetic: stale ''fails'' wording remains in operator-visible text: merge_hold.rs:351 label description (''merge-hold-gate fails while present''), merge_hold_cmd.rs:237 error (''keeps failing until it is''), merge_hold_cmd.rs:201 doc comment, and the pr_train.rs:2170/2657 and pr_ship_batch.rs:381 ''red'' comments.
+
     6. Not a code defect, must stay open: AC1 raw gh pr merge / web-UI refusal and AC2 label-only pending-to-success on an unchanged SHA have no live evidence at 26bbb12 (only one run, no label event). Attach the docs/internal/testing/bug-2492-status-cutover.md outputs to BUG-2492 before Completed, as the round 2 ruling requires.
-    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
-  created_at: 2026-11-08T09:12:16.782277977Z
-  modified_at: 2026-11-08T09:12:16.782277977Z
+
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.'
+  created_at: 2026-11-08 09:12:16.782277+00:00
+  modified_at: 2026-11-08 09:12:16.782277+00:00
   session_id: 01a1b8be-8170-7fb2-89ab-ecb4c6eee98c
   harness_version: 2.1.319 (Claude Code)
 - id: 01a1ba77-60b1-7e43-bba3-ae988688d993
   author: dirtlab
   content: 'Round 4 addresses the latest review: status_prs now summarizes StatusContext SUCCESS/FAILURE/ERROR/PENDING/EXPECTED; integrate parks a pending active or uncleared recorded hold, while malformed gate statuses remain failing. Pending gate rows without local marker or confirmed active-label release authority refuse immediately instead of waiting indefinitely. Idle evidence reads successful status startedAt; coarse probes fetch labels and report transient unheld pending inspections as InProgress. Updated stale hold wording and added bug2492 regressions for rollup, integration, timestamps, probe evidence and unbounded ship refusal. Shell gate fixtures, shell syntax, rustfmt and diff hygiene pass. Launcher Rust jobs j20261108T091530867-2-0 and j20261108T091648905-2-0 are running/queued; executed-test results not yet available. AC1/AC2 live operator cutover evidence remains required before Completed.'
-  created_at: 2026-11-08T09:22:28.145752631Z
-  modified_at: 2026-11-08T09:22:28.145752631Z
+  created_at: 2026-11-08 09:22:28.145752+00:00
+  modified_at: 2026-11-08 09:22:28.145752+00:00
   session_id: 01a1ba6ef7fd
   harness_version: codex-cli 0.167.0
 - id: 01a1ba7b-42a1-7da1-b11c-df13294520c0
   author: dirtlab
-  content: 'Round 4 final native handoff: edits are uncommitted for host publication. Changed aida-cli-lib/src/{ci_gate.rs,ci_probe.rs,forge.rs,idle_eligible.rs,merge_hold.rs,merge_hold_cmd.rs,pr_list.rs,pr_train.rs,queue_cmd.rs,status_prs.rs,tests/ci_action_tests.rs}. Initial bug2492 runs caught a PR-list display regression from the stricter ship classifier; fixed by preserving unconfirmed pending inspections as Pending in the read-only listing. Final launcher results all pass: bug2492 11 tests (j20261108T092255218-2-0), ci_gate::tests:: 22 (j20261108T092307799-2-0), ci_action_tests:: 35 (j20261108T092329882-2-0), pr_list::tests:: 15 (j20261108T092331073-2-0). Shell gate fixtures pass: 8 label combinations x 2 gates and 36 train cases. Shell syntax, rustfmt and git diff --check pass. untested=false for targeted implementation validation; live GitHub AC1/AC2 operator cutover evidence is still outstanding, so keep BUG-2492 open. Native publication subject: [AI:codex] fix(ci): finish pending merge-hold consumer handling (Refs BUG-2492). No commit, push, PR creation, merge, review verdict or queue completion performed in this seat.'
-  created_at: 2026-11-08T09:26:42.593617317Z
-  modified_at: 2026-11-08T09:26:42.593617317Z
+  content: 'Round 4 final native handoff: edits are uncommitted for host publication. Changed aida-cli-lib/src/{ci_gate.rs,ci_probe.rs,forge.rs,idle_eligible.rs,merge_hold.rs,merge_hold_cmd.rs,pr_list.rs,pr_train.rs,queue_cmd.rs,status_prs.rs,tests/ci_action_tests.rs}. Initial bug2492 runs caught a PR-list display regression from the stricter ship classifier; fixed by preserving unconfirmed pending inspections as Pending in the read-only listing. Final launcher results all pass: bug2492 11 tests (j20261108T092255218-2-0), ci_gate::tests:: 22 (j20261108T092307799-2-0), ci_action_tests:: 35 (j20261108T092329882-2-0), pr_list::tests:: 15 (j20261108T092331073-2-0). Shell gate fixtures pass: 8 label combinations x 2 gates and 36 train cases. Shell syntax, rustfmt and git diff --check pass. untested=false for targeted implementation validation; live GitHub AC1/AC2 operator cutover evidence is still outstanding, so keep BUG-2492 open. Native publication subject: [AI:codex] fix(ci): finish pending
+    merge-hold consumer handling (Refs BUG-2492). No commit, push, PR creation, merge, review verdict or queue completion performed in this seat.'
+  created_at: 2026-11-08 09:26:42.593617+00:00
+  modified_at: 2026-11-08 09:26:42.593617+00:00
   session_id: 01a1ba6ef7fd
   harness_version: codex-cli 0.167.0
 - id: 01a1badf-61e5-7970-bbb1-ef5d48e77f74
   author: joe
   content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: Round 4 migrates the named consumers and the gate fixtures are sound, but any unconfirmed pending gate now refuses as CI red, so a just-cleared or unheld PR fails ship and a clean train takes the red path; two more consumers regress and AC1/AC2 live evidence is outstanding. CI incomplete at review.. No triage reason was given.'
-  created_at: 2026-11-08T11:16:04.197188071Z
-  modified_at: 2026-11-08T11:16:04.197188071Z
+  created_at: 2026-11-08 11:16:04.197188+00:00
+  modified_at: 2026-11-08 11:16:04.197188+00:00
   session_id: 01a1b9af-8230-75d2-82f8-667491cc010a
   harness_version: 2.1.319 (Claude Code)
 - id: 01a1badf-6b18-7031-a88d-0e316e06797c
   author: joe
-  content: |-
-    REVIEW FINDINGS TO ADDRESS (BUG-2492):
+  content: 'REVIEW FINDINGS TO ADDRESS (BUG-2492):
+
     Verdict: CHANGES REQUESTED
+
     Reviewed commit: 3447fd6b966a
+
     Recorded: 2026-11-08T10:14:43.035679301+00:00
+
     Findings:
-    1. BLOCKER regression: aida-cli-lib/src/ci_gate.rs:251-256 classify_red treats EVERY pending merge-hold-gate without marker/active label as real, including a cleared or never-held PR. The publisher posts pending "Inspecting..." at the start of every run (opened/synchronize/labeled/unlabeled/edited), and after `aida merge-hold clear` the old pending status remains until the rerun finishes. Effects: (a) `aida merge-hold clear N` then `aida pr ship N` within that window returns ShipRefusal::CiRed "CI is red" at ci_gate.rs:~455 instead of waiting; legacy showed an in-progress job row and waited. (b) An unheld PR hits the same refusal during any inspection window. (c) pr_train.rs:2441 train_ci_readiness (10s polls, tolerate_hold=false when no member is admitted) maps this to TrainCiReadiness::Red "failing checks: merge-hold-gate", i.e. the genuine-red rebuild/bisect path, for a train with no holds, including after the train body edit that reruns the gate. Round 3 finding 2 asked only for recorded-without-cleared to refuse. Fix: pass recorded/cleared label state to classify_red so only recorded-without-cleared refuses; no-label and recorded+cleared pending stays in out.pending. Tests: bug2492_pending_hold_needs_evidence_and_preserves_other_ci and bug2492_recorded_hold_without_active_label_refuses_without_wait pin no-evidence=real using no labels at all; replace them with no-label/cleared -> waits, recorded-only -> refuses, and a train_ci_readiness pending-inspection case.
+
+    1. BLOCKER regression: aida-cli-lib/src/ci_gate.rs:251-256 classify_red treats EVERY pending merge-hold-gate without marker/active label as real, including a cleared or never-held PR. The publisher posts pending "Inspecting..." at the start of every run (opened/synchronize/labeled/unlabeled/edited), and after `aida merge-hold clear` the old pending status remains until the rerun finishes. Effects: (a) `aida merge-hold clear N` then `aida pr ship N` within that window returns ShipRefusal::CiRed "CI is red" at ci_gate.rs:~455 instead of waiting; legacy showed an in-progress job row and waited. (b) An unheld PR hits the same refusal during any inspection window. (c) pr_train.rs:2441 train_ci_readiness (10s polls, tolerate_hold=false when no member is admitted) maps this to TrainCiReadiness::Red "failing checks: merge-hold-gate", i.e. the genuine-red rebuild/bisect path, for a train with no holds, including after the train body edit that reruns the gate. Round 3 finding 2 asked only for
+    recorded-without-cleared to refuse. Fix: pass recorded/cleared label state to classify_red so only recorded-without-cleared refuses; no-label and recorded+cleared pending stays in out.pending. Tests: bug2492_pending_hold_needs_evidence_and_preserves_other_ci and bug2492_recorded_hold_without_active_label_refuses_without_wait pin no-evidence=real using no labels at all; replace them with no-label/cleared -> waits, recorded-only -> refuses, and a train_ci_readiness pending-inspection case.
+
     2. Regression, unbounded wait: aida-cli-lib/src/upgrade_release.rs:1651 (--after-pr) calls forge.watch_ci, which is `gh pr checks <n> --watch` (forge.rs:2567-2573). A held PR formerly exited non-zero and bailed "checks did not pass"; a permanent pending status now means --watch never exits, so the release command hangs on a held PR with no bound. Fix: bound it or use the hold-aware wait_for_ship_ci/refusal path, and add a test.
+
     3. Regression, unmigrated rollup reader: aida-cli-lib/src/status_sections.rs:2157 jq reads only .conclusion. merge-hold-gate is now a StatusContext on every PR, with no conclusion. `[null,"SUCCESS"]|unique|join(",")` yields ",SUCCESS" (reproduced with jq), so the exact-match arms at status_sections.rs:2603 and :3096 stop matching and a green PR no longer shows SUCCESS/ci-check; a StatusContext FAILURE or PENDING state is also invisible to the contains() checks. Fix: use (.conclusion // .state) in the projection and add a StatusContext test.
+
     4. Completion contradiction: the PR title ends "(BUG-2492)", which completes the spec at merge (pr_ship.rs title trailer handling, BUG-2203), but docs/internal/testing/bug-2492-status-cutover.md:336-338 says BUG-2492 must not be marked Completed until live outputs are attached, and part of that procedure runs only after merge (runbook step 4, target-event tests). The latest commits already use (Refs BUG-2492). Fix: retitle the PR to end "(Refs BUG-2492)" or change the runbook/spec so merge completion is the intended route.
+
     5. AC1/AC2 live evidence absent: head 3447fd6b966a shows merge-hold-gate=PENDING and publish-merge-hold-status=SUCCESS, but BLOCKED is not discriminating while CI is unfinished. No raw gh pr merge refusal, web-UI refusal under app pin 15368, or unchanged-SHA label-only pending->success output is on the spec. The agreed route is the operator runbook; those outputs are still outstanding.
+
     6. AC traceability: `aida criteria` lists all five BUG-2492 criteria (ac798dd7, accb2afb, ac4be33b, ac4d9581, ac24a24e) as untraced. tests/test_merge_hold_gate.sh and the bug2492_* Rust tests carry spec-level trace comments only. Anchor the fixtures that cover AC3/AC4/AC5 and the available AC1/AC2 fixture parts to their criterion ids.
+
     7. Minor doc overclaim: docs/internal/testing/bug-2492-status-cutover.md:221-222 says removing the temporary pull_request trigger "closes that exposure". A same-repository PR could still add its own pull_request workflow requesting statuses: write and post merge-hold-gate=success with GITHUB_TOKEN, which carries the same Actions app identity. This predates the PR in equivalent form (a same-repo PR could already supply a passing job), so correct the claim or state the residual limit.
-    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
-  created_at: 2026-11-08T11:16:06.552236458Z
-  modified_at: 2026-11-08T11:16:06.552236458Z
+
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.'
+  created_at: 2026-11-08 11:16:06.552236+00:00
+  modified_at: 2026-11-08 11:16:06.552236+00:00
   session_id: 01a1b9af-8230-75d2-82f8-667491cc010a
   harness_version: 2.1.319 (Claude Code)
 - id: 01a1bae4-242b-7e01-853d-62ca95c36731
   author: dirtlab
   content: 'Round 5 implementation: transient no-label/cleared pending inspections wait; only confirmed recorded-without-cleared pending evidence refuses without release authority. Ship/refinement fetch pinned label state when needed. Release --after-pr now uses a 300-second snapshot wait instead of unbounded forge.watch_ci. Status display jq reads conclusion or StatusContext state. Added train inspection, bounded release, label classification and shipped jq projection regressions; gate fixtures carry criterion anchors with live-evidence limitations. Corrected bootstrap residual trust wording. Host requirement: retitle existing PR #3651 to end (Refs BUG-2492), matching the native publication declaration; this seat cannot publish PR metadata. AC1/AC2 operator live cutover evidence remains outstanding; keep spec open. Rust launcher validation running.'
-  created_at: 2026-11-08T11:21:16.075646158Z
-  modified_at: 2026-11-08T11:21:16.075646158Z
+  created_at: 2026-11-08 11:21:16.075646+00:00
+  modified_at: 2026-11-08 11:21:16.075646+00:00
   session_id: 01a1bae08abc
   harness_version: codex-cli 0.167.0
 - id: 01a1baf0-05c2-7bd0-afcd-f0d8d8b378f7
   author: dirtlab
-  content: 'Round 5 final native handoff: eight changed files left uncommitted: aida-cli-lib/src/{ci_gate.rs,forge.rs,status_sections.rs,upgrade_release.rs,tests/story_1690_train_tests.rs}, docs/internal/testing/bug-2492-status-cutover.md, tests/test_merge_hold_gate.sh, tests/test_merge_hold_status_rollup.py. Final validation passed: bug2492 13 executed tests (launcher j20261108T112342368-2-0); ci_gate::tests:: 23 executed tests (j20261108T112545963-2-0); shell fixtures 8 label combinations x 2 gates and 36 train cases; shipped jq projection test covers SUCCESS/PENDING/FAILURE/ERROR; bash syntax, rustfmt --check and git diff --check pass. Initial earlier-source run had one release fixture failure due to an unmapped pinned-origin read; the final forge-method mock and label-state integration tests pass. untested=false for targeted local validation. Codegraph unavailable (command not found); used rg. Native Refs subject recorded: [AI:codex] fix(ci): distinguish pending inspections from recorded holds (Refs BUG-2492). Host must retitle existing PR #3651 to end (Refs BUG-2492). AC1/AC2 raw merge/UI enforcement and unchanged-SHA label-only clearance remain operator cutover work: do not mark Completed until live evidence is attached. No commit, push, PR creation, merge, review verdict or queue completion performed.'
-  created_at: 2026-11-08T11:34:14.722622952Z
-  modified_at: 2026-11-08T11:34:14.722622952Z
+  content: 'Round 5 final native handoff: eight changed files left uncommitted: aida-cli-lib/src/{ci_gate.rs,forge.rs,status_sections.rs,upgrade_release.rs,tests/story_1690_train_tests.rs}, docs/internal/testing/bug-2492-status-cutover.md, tests/test_merge_hold_gate.sh, tests/test_merge_hold_status_rollup.py. Final validation passed: bug2492 13 executed tests (launcher j20261108T112342368-2-0); ci_gate::tests:: 23 executed tests (j20261108T112545963-2-0); shell fixtures 8 label combinations x 2 gates and 36 train cases; shipped jq projection test covers SUCCESS/PENDING/FAILURE/ERROR; bash syntax, rustfmt --check and git diff --check pass. Initial earlier-source run had one release fixture failure due to an unmapped pinned-origin read; the final forge-method mock and label-state integration tests pass. untested=false for targeted local validation. Codegraph unavailable (command not found); used rg. Native Refs subject recorded: [AI:codex] fix(ci): distinguish pending inspections from recorded
+    holds (Refs BUG-2492). Host must retitle existing PR #3651 to end (Refs BUG-2492). AC1/AC2 raw merge/UI enforcement and unchanged-SHA label-only clearance remain operator cutover work: do not mark Completed until live evidence is attached. No commit, push, PR creation, merge, review verdict or queue completion performed.'
+  created_at: 2026-11-08 11:34:14.722622+00:00
+  modified_at: 2026-11-08 11:34:14.722622+00:00
   session_id: 01a1bae08abc
   harness_version: codex-cli 0.167.0
 - id: 01a1bafb-9312-70f3-b98b-acfa2dc0e21d
   author: joe
   content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: Round 5''s classifier, status jq and doc findings are fixed, but release --after-pr now aborts at 300s on normal CI, the PR title still completes the spec at merge, criterion anchors are not recognized, shipped skill watchers never exit on a held PR, and CI at this head has not finished.. No triage reason was given.'
-  created_at: 2026-11-08T11:46:51.794489297Z
-  modified_at: 2026-11-08T11:46:51.794489297Z
+  created_at: 2026-11-08 11:46:51.794489+00:00
+  modified_at: 2026-11-08 11:46:51.794489+00:00
   session_id: 01a1b9af-8230-75d2-82f8-667491cc010a
   harness_version: 2.1.319 (Claude Code)
 - id: 01a1bafb-a392-72d3-b16e-4ce03cc4f181
   author: joe
-  content: |-
-    REVIEW FINDINGS TO ADDRESS (BUG-2492):
+  content: 'REVIEW FINDINGS TO ADDRESS (BUG-2492):
+
     Verdict: CHANGES REQUESTED
+
     Reviewed commit: 5f8bfa8650f1
+
     Recorded: 2026-11-08T11:44:26.924185593+00:00
+
     Findings:
-    1. Regression: aida-cli-lib/src/upgrade_release.rs:1672-1677 gives release --after-pr a fixed 300-second CI budget. The previous wait lasted until checks finished, and docs/cli/11-dev.md:62 still promises to wait for the PR's checks. This repo's PR CI runs far longer (run 42467241644: created 09:27, updated 11:03 UTC, including queueing), so a normal --after-pr call on a PR with CI running now fails with a CiTimeout error. Fix: use crate::ci_idle_timeout::ci_absolute_ceiling_secs(&merge_root), as the train wait does at pr_train.rs:2604, which keeps the bound. bug2492_release_after_pr_pending_wait_is_bounded only exercises Duration::ZERO; assert the budget actually passed.
-    2. Completion contradiction still open (round 5 finding 4): the PR title still ends '(BUG-2492)', which completes the spec at merge, while docs/internal/testing/bug-2492-status-cutover.md requires a trailing '(Refs BUG-2492)' and forbids Completed until live outputs are attached. The implementer handed this to the host and it has not happened. Fix: retitle PR #3651 before merge.
-    3. AC traceability still open (round 5 finding 6): aida criteria run in this worktree still lists all five criteria as untraced. The anchors in tests/test_merge_hold_gate.sh sit above the helper github_gate(), but scan_shell_test_file (aida-cli-lib/src/criteria.rs:565) only attributes traces to 'Test <n>:' info/echo sections or test_*() functions, and this script has neither. Fix: put the criterion anchors in recognized sections or on bug2492_* tests, and anchor only what each test covers. AC1, AC2 and AC4 fixtures prove only the status/exit split, per the comment at that block.
-    4. Regression in shipped skill watchers: aida-core/templates/skills/aida-fire.md:296 runs 'gh pr checks N --watch --fail-fast' as a background wait with no timeout. A held PR used to exit promptly on the red gate; with a permanent pending status the watcher never exits and the fire session is never notified. aida-core/templates/skills/aida-orchestrate.md:373 has the same shape (--required --watch --fail-fast, no timeout), and its line 387 stop rule keys on red. skills-portable already uses 'timeout 540' and re-runs. Fix: bound these watchers or check hold labels first, and update the stop rule to cover pending.
-    5. Minor: aida-cli-lib/src/pipeline_stall.rs:1010 hold_gate_blocking treats any pending merge-hold-gate as a hold without checking labels, unlike ci_probe.rs and pr_list.rs in this PR. pipeline_stall.rs:1141 then tells the operator 'merge hold; aida merge-hold auto-release/clear' for an unheld PR during the transient Inspecting window. bug2492_pending_hold_status_blocks_readiness_without_red_ci_or_logs pins this with labels:[]. Fix: use the same label evidence for the blocker text and keep readiness false.
-    6. Cosmetic: stale wording that the hold gate is red or fails remains at aida-cli-lib/src/gate/pr_ship_batch.rs:381 (named in round 3 finding 5) and in the pr_train.rs hold_release_admitted doc and train_ci_snapshot comment ('the hold gate fails within seconds').
+
+    1. Regression: aida-cli-lib/src/upgrade_release.rs:1672-1677 gives release --after-pr a fixed 300-second CI budget. The previous wait lasted until checks finished, and docs/cli/11-dev.md:62 still promises to wait for the PR''s checks. This repo''s PR CI runs far longer (run 42467241644: created 09:27, updated 11:03 UTC, including queueing), so a normal --after-pr call on a PR with CI running now fails with a CiTimeout error. Fix: use crate::ci_idle_timeout::ci_absolute_ceiling_secs(&merge_root), as the train wait does at pr_train.rs:2604, which keeps the bound. bug2492_release_after_pr_pending_wait_is_bounded only exercises Duration::ZERO; assert the budget actually passed.
+
+    2. Completion contradiction still open (round 5 finding 4): the PR title still ends ''(BUG-2492)'', which completes the spec at merge, while docs/internal/testing/bug-2492-status-cutover.md requires a trailing ''(Refs BUG-2492)'' and forbids Completed until live outputs are attached. The implementer handed this to the host and it has not happened. Fix: retitle PR #3651 before merge.
+
+    3. AC traceability still open (round 5 finding 6): aida criteria run in this worktree still lists all five criteria as untraced. The anchors in tests/test_merge_hold_gate.sh sit above the helper github_gate(), but scan_shell_test_file (aida-cli-lib/src/criteria.rs:565) only attributes traces to ''Test <n>:'' info/echo sections or test_*() functions, and this script has neither. Fix: put the criterion anchors in recognized sections or on bug2492_* tests, and anchor only what each test covers. AC1, AC2 and AC4 fixtures prove only the status/exit split, per the comment at that block.
+
+    4. Regression in shipped skill watchers: aida-core/templates/skills/aida-fire.md:296 runs ''gh pr checks N --watch --fail-fast'' as a background wait with no timeout. A held PR used to exit promptly on the red gate; with a permanent pending status the watcher never exits and the fire session is never notified. aida-core/templates/skills/aida-orchestrate.md:373 has the same shape (--required --watch --fail-fast, no timeout), and its line 387 stop rule keys on red. skills-portable already uses ''timeout 540'' and re-runs. Fix: bound these watchers or check hold labels first, and update the stop rule to cover pending.
+
+    5. Minor: aida-cli-lib/src/pipeline_stall.rs:1010 hold_gate_blocking treats any pending merge-hold-gate as a hold without checking labels, unlike ci_probe.rs and pr_list.rs in this PR. pipeline_stall.rs:1141 then tells the operator ''merge hold; aida merge-hold auto-release/clear'' for an unheld PR during the transient Inspecting window. bug2492_pending_hold_status_blocks_readiness_without_red_ci_or_logs pins this with labels:[]. Fix: use the same label evidence for the blocker text and keep readiness false.
+
+    6. Cosmetic: stale wording that the hold gate is red or fails remains at aida-cli-lib/src/gate/pr_ship_batch.rs:381 (named in round 3 finding 5) and in the pr_train.rs hold_release_admitted doc and train_ci_snapshot comment (''the hold gate fails within seconds'').
+
     7. AC1/AC2/AC4 live evidence is still outstanding, as an operator action rather than a code defect: no raw gh pr merge refusal, web-UI refusal under app pin 15368, unchanged-SHA label-only pending-to-success, or failure-mail observation is on the spec. Keep BUG-2492 open until the runbook outputs are attached.
+
     8. CI incomplete at the reviewed head: at 2026-11-08T11:42Z, run 42476368761 (CI) was queued with cli-0 in progress, merge-hold-gate run 42476368880 was pending with no jobs, and 5f8bfa8 had no commit statuses or check runs. The last completed green CI was at 3447fd6. The next approval needs green CI at its exact head.
-    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
-  created_at: 2026-11-08T11:46:56.018645339Z
-  modified_at: 2026-11-08T11:46:56.018645339Z
+
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.'
+  created_at: 2026-11-08 11:46:56.018645+00:00
+  modified_at: 2026-11-08 11:46:56.018645+00:00
   session_id: 01a1b9af-8230-75d2-82f8-667491cc010a
   harness_version: 2.1.319 (Claude Code)
 - id: 01a1bb00-9f80-7a50-80bb-e0561c6104cb
   author: dirtlab
-  content: 'Round 6 rework: release --after-pr now uses the configured ci_absolute_ceiling_secs budget instead of 300 seconds; regression checks the production budget helper for default and configured roots. Shipped fire/orchestrate skill watchers are bounded at 540 seconds and distinguish pending holds from ordinary CI at timeout. Pipeline readiness still blocks on a pending gate, but clearance guidance now requires active/recorded-uncleared label evidence; fixtures cover empty, active, recorded-only and cleared labels. Criterion anchors now sit on a recognized shell Test 1 section (aida criteria recognizes all five); fixture evidence still does not establish live enforcement or mail delivery. Stale red/failing-hold comments corrected. Native Refs publication declaration recorded. Host MUST retitle PR #3651 to end (Refs BUG-2492), retain spec open for operator cutover evidence and wait for green CI at published head. Rust lane validation is running; shell fixtures, syntax, rustfmt and diff checks pass.'
-  created_at: 2026-11-08T11:52:22.656080611Z
-  modified_at: 2026-11-08T11:52:22.656080611Z
+  content: 'Round 6 rework: release --after-pr now uses the configured ci_absolute_ceiling_secs budget instead of 300 seconds; regression checks the production budget helper for default and configured roots. Shipped fire/orchestrate skill watchers are bounded at 540 seconds and distinguish pending holds from ordinary CI at timeout. Pipeline readiness still blocks on a pending gate, but clearance guidance now requires active/recorded-uncleared label evidence; fixtures cover empty, active, recorded-only and cleared labels. Criterion anchors now sit on a recognized shell Test 1 section (aida criteria recognizes all five); fixture evidence still does not establish live enforcement or mail delivery. Stale red/failing-hold comments corrected. Native Refs publication declaration recorded. Host MUST retitle PR #3651 to end (Refs BUG-2492), retain spec open for operator cutover evidence and wait for green CI at published head. Rust lane validation is running; shell fixtures, syntax, rustfmt and diff
+    checks pass.'
+  created_at: 2026-11-08 11:52:22.656080+00:00
+  modified_at: 2026-11-08 11:52:22.656080+00:00
   session_id: 01a1bafd1c50
   harness_version: codex-cli 0.167.0
 - id: 01a1bb07-be33-7751-8351-8b509a62979f
   author: dirtlab
-  content: 'Round 6 final native handoff: 8 files changed and left uncommitted: aida-cli-lib/src/ci_gate.rs, gate/pr_ship_batch.rs, pipeline_stall.rs, pr_train.rs, upgrade_release.rs; aida-core/templates/skills/aida-fire.md and aida-orchestrate.md; tests/test_merge_hold_gate.sh. Validation PASS: launcher j20261108T115051383-2-0 ran 13 bug2492 tests, all passed (8m51s compilation, 0.02s executed tests); shell fixtures passed 8 label states x 2 shipped gates and 36 train cases plus shipped jq projection; bash syntax, rustfmt and git diff --check pass; aida criteria recognizes all 5 criterion anchors, with live-evidence limits retained. untested=false. Initial job j20261108T115031591-2-0 used aida-cli --lib and refused because that package has no library; corrected aida-cli-lib job above succeeded. Runner reported overlay-stale after successful completion. Native publication declaration: [AI:codex] fix(ci): bound hold watchers and preserve release CI budget (Refs BUG-2492). Host must retitle PR #3651 with trailing (Refs BUG-2492), publish and obtain green CI at that exact head. Operator still owes raw gh/web merge refusal, unchanged-SHA label-only clearance and notification observations per the cutover runbook; keep BUG-2492 open. No commit, push, PR metadata mutation, merge, review verdict or queue completion performed.'
-  created_at: 2026-11-08T12:00:09.267955920Z
-  modified_at: 2026-11-08T12:00:09.267955920Z
+  content: 'Round 6 final native handoff: 8 files changed and left uncommitted: aida-cli-lib/src/ci_gate.rs, gate/pr_ship_batch.rs, pipeline_stall.rs, pr_train.rs, upgrade_release.rs; aida-core/templates/skills/aida-fire.md and aida-orchestrate.md; tests/test_merge_hold_gate.sh. Validation PASS: launcher j20261108T115051383-2-0 ran 13 bug2492 tests, all passed (8m51s compilation, 0.02s executed tests); shell fixtures passed 8 label states x 2 shipped gates and 36 train cases plus shipped jq projection; bash syntax, rustfmt and git diff --check pass; aida criteria recognizes all 5 criterion anchors, with live-evidence limits retained. untested=false. Initial job j20261108T115031591-2-0 used aida-cli --lib and refused because that package has no library; corrected aida-cli-lib job above succeeded. Runner reported overlay-stale after successful completion. Native publication declaration: [AI:codex] fix(ci): bound hold watchers and preserve release CI budget (Refs BUG-2492). Host must retitle
+    PR #3651 with trailing (Refs BUG-2492), publish and obtain green CI at that exact head. Operator still owes raw gh/web merge refusal, unchanged-SHA label-only clearance and notification observations per the cutover runbook; keep BUG-2492 open. No commit, push, PR metadata mutation, merge, review verdict or queue completion performed.'
+  created_at: 2026-11-08 12:00:09.267955+00:00
+  modified_at: 2026-11-08 12:00:09.267955+00:00
   session_id: 01a1bafd1c50
   harness_version: codex-cli 0.167.0
 - id: 01a1bb3a-66fd-70b1-bcda-5c75a371980d
   author: dirtlab
   content: 'Pickup audit: clean worktree at d6f1d3186b already includes round 6 implementation 5f57df7893; no newer review findings or source changes. Revalidated shell gate fixtures (8 label states x 2 gates, 36 train cases), shipped jq projection test, bash syntax and git diff --check: PASS. aida criteria recognizes all five anchors, with live acceptance still unverified. Rust rerun j20261108T125318134-2-0 remains running with no executed-test result yet (untested=true for this rerun). Punted to Needs Attention for host PR #3651 Refs retitle/exact-head CI and operator cutover evidence. Punt spec update succeeded, but separate punt signal write refused read-only filesystem; host must honor the persisted Needs Attention reason as publication veto. No source files changed; no commit/publication/completion performed.'
-  created_at: 2026-11-08T12:55:29.277903787Z
-  modified_at: 2026-11-08T12:55:29.277903787Z
+  created_at: 2026-11-08 12:55:29.277903+00:00
+  modified_at: 2026-11-08 12:55:29.277903+00:00
   session_id: 01a1bb379f1d
   harness_version: codex-cli 0.167.0
 history:
 - id: 01a1b90d-4bec-7bd0-9af1-86f501692f64
   author: joe
-  timestamp: 2026-11-08T02:46:58.796887631Z
+  timestamp: 2026-11-08 02:46:58.796887+00:00
   session_id: 01a1b8be-8170-7fb2-89ab-ecb4c6eee98c
   harness_version: 2.1.319 (Claude Code)
   changes:
@@ -256,20 +323,20 @@ history:
     new_value: Approved
 - id: 01a1b924-a44b-7832-a513-87c567b14ae1
   author: aida-session-start
-  timestamp: 2026-11-08T03:12:28.747738556Z
+  timestamp: 2026-11-08 03:12:28.747738+00:00
   changes:
   - field_name: status
     old_value: Approved
     new_value: InProgress
 - id: 01a1b924-eaba-78b2-a276-c584d6efd0cf
   author: dirtlab
-  timestamp: 2026-11-08T03:12:46.778152018Z
+  timestamp: 2026-11-08 03:12:46.778152+00:00
   session_id: 01a1b9249e89
   harness_version: codex-cli 0.167.0
   changes: []
 - id: 01a1b933-a849-7672-a6cf-f867b7644a4c
   author: aida-orchestrator
-  timestamp: 2026-11-08T03:28:52.809755895Z
+  timestamp: 2026-11-08 03:28:52.809755+00:00
   session_id: 01a1b931d790
   harness_version: 2.1.319 (Claude Code)
   changes:
@@ -278,7 +345,7 @@ history:
     new_value: NeedsAttention
 - id: 01a1b95e-fa59-7b52-8e34-316e5afd9541
   author: joe
-  timestamp: 2026-11-08T04:16:11.865376476Z
+  timestamp: 2026-11-08 04:16:11.865376+00:00
   session_id: 01a1b8be-8170-7fb2-89ab-ecb4c6eee98c
   harness_version: 2.1.319 (Claude Code)
   changes:
@@ -287,14 +354,14 @@ history:
     new_value: Approved
 - id: 01a1b97f-765a-79b3-927f-608dafe288ab
   author: aida-session-start
-  timestamp: 2026-11-08T04:51:40.762443462Z
+  timestamp: 2026-11-08 04:51:40.762443+00:00
   changes:
   - field_name: status
     old_value: Approved
     new_value: InProgress
 - id: 01a1b982-1403-7ee3-80dc-ef608840d4eb
   author: aida-orchestrator
-  timestamp: 2026-11-08T04:54:32.195052871Z
+  timestamp: 2026-11-08 04:54:32.195052+00:00
   session_id: 01a1b980b84f
   harness_version: 2.1.319 (Claude Code)
   changes:
@@ -303,18 +370,18 @@ history:
     new_value: NeedsAttention
 - id: 01a1b983-2b0e-7610-b306-dad687b6e51b
   author: joe
-  timestamp: 2026-11-08T04:55:43.630523464Z
+  timestamp: 2026-11-08 04:55:43.630523+00:00
   session_id: 01a1b97f6957
   changes: []
 - id: 01a1b988-3231-7aa1-95f4-c05a465ba2fe
   author: joe
-  timestamp: 2026-11-08T05:01:13.137709440Z
+  timestamp: 2026-11-08 05:01:13.137709+00:00
   session_id: 01a1b9844e6c
   harness_version: 2.1.319 (Claude Code)
   changes: []
 - id: 01a1b9ae-2fb7-7fb3-a8ad-f5196a1c53c6
   author: joe
-  timestamp: 2026-11-08T05:42:42.871350529Z
+  timestamp: 2026-11-08 05:42:42.871350+00:00
   session_id: 01a1b8be-8170-7fb2-89ab-ecb4c6eee98c
   harness_version: 2.1.319 (Claude Code)
   changes:
@@ -323,26 +390,26 @@ history:
     new_value: Approved
 - id: 01a1b9af-d49b-7932-9c80-5a5936a5bac4
   author: aida-pr-open
-  timestamp: 2026-11-08T05:44:30.619288767Z
+  timestamp: 2026-11-08 05:44:30.619288+00:00
   changes:
   - field_name: status
     old_value: Approved
     new_value: InProgress
 - id: 01a1b9b1-8d01-7a12-a918-f1ef732ac5f8
   author: aida-session-start
-  timestamp: 2026-11-08T05:46:23.361232823Z
+  timestamp: 2026-11-08 05:46:23.361232+00:00
   changes:
   - field_name: status
     old_value: Approved
     new_value: InProgress
 - id: 01a1b9b6-627c-7c01-ba43-b93d17344e09
   author: joe
-  timestamp: 2026-11-08T05:51:40.156376349Z
+  timestamp: 2026-11-08 05:51:40.156376+00:00
   session_id: 01a1b9b177e2
   changes: []
 - id: 01a1ba67-6d39-7382-81eb-61374d6f157c
   author: aida-orchestrator
-  timestamp: 2026-11-08T09:05:02.777828515Z
+  timestamp: 2026-11-08 09:05:02.777828+00:00
   session_id: 01a1ba64004e
   harness_version: 2.1.319 (Claude Code)
   changes:
@@ -351,7 +418,7 @@ history:
     new_value: NeedsAttention
 - id: 01a1ba6e-03b8-7e93-afdf-1faf3e6afb8b
   author: joe
-  timestamp: 2026-11-08T09:12:14.520012875Z
+  timestamp: 2026-11-08 09:12:14.520012+00:00
   session_id: 01a1b8be-8170-7fb2-89ab-ecb4c6eee98c
   harness_version: 2.1.319 (Claude Code)
   changes:
@@ -360,20 +427,20 @@ history:
     new_value: Approved
 - id: 01a1ba6f-0494-7322-861e-8606f4f68a07
   author: aida-session-start
-  timestamp: 2026-11-08T09:13:20.276855669Z
+  timestamp: 2026-11-08 09:13:20.276855+00:00
   changes:
   - field_name: status
     old_value: Approved
     new_value: InProgress
 - id: 01a1ba6f-88f3-75c1-bb23-d4f7d8b4df64
   author: dirtlab
-  timestamp: 2026-11-08T09:13:54.163252771Z
+  timestamp: 2026-11-08 09:13:54.163252+00:00
   session_id: 01a1ba6ef7fd
   harness_version: codex-cli 0.167.0
   changes: []
 - id: 01a1baa7-38a7-73d1-bd6f-1b47825160a9
   author: aida-orchestrator
-  timestamp: 2026-11-08T10:14:43.623086500Z
+  timestamp: 2026-11-08 10:14:43.623086+00:00
   session_id: 01a1baa43304
   harness_version: 2.1.319 (Claude Code)
   changes:
@@ -382,7 +449,7 @@ history:
     new_value: NeedsAttention
 - id: 01a1badf-61e5-7970-bbb1-ef49f2cb9aed
   author: joe
-  timestamp: 2026-11-08T11:16:04.197174055Z
+  timestamp: 2026-11-08 11:16:04.197174+00:00
   session_id: 01a1b9af-8230-75d2-82f8-667491cc010a
   harness_version: 2.1.319 (Claude Code)
   changes:
@@ -391,20 +458,20 @@ history:
     new_value: Approved
 - id: 01a1bae0-96df-7451-87f3-6d482df93d58
   author: aida-session-start
-  timestamp: 2026-11-08T11:17:23.295700547Z
+  timestamp: 2026-11-08 11:17:23.295700+00:00
   changes:
   - field_name: status
     old_value: Approved
     new_value: InProgress
 - id: 01a1bae1-17b4-7e93-a902-6ace6981a2d9
   author: dirtlab
-  timestamp: 2026-11-08T11:17:56.276782438Z
+  timestamp: 2026-11-08 11:17:56.276782+00:00
   session_id: 01a1bae08abc
   harness_version: codex-cli 0.167.0
   changes: []
 - id: 01a1baf9-5f3a-78a1-9b98-8e634a5c755c
   author: aida-orchestrator
-  timestamp: 2026-11-08T11:44:27.450978925Z
+  timestamp: 2026-11-08 11:44:27.450978+00:00
   session_id: 01a1baf61525
   harness_version: 2.1.319 (Claude Code)
   changes:
@@ -413,7 +480,7 @@ history:
     new_value: NeedsAttention
 - id: 01a1bafb-9312-70f3-b98b-acef1c5e3c80
   author: joe
-  timestamp: 2026-11-08T11:46:51.794477986Z
+  timestamp: 2026-11-08 11:46:51.794477+00:00
   session_id: 01a1b9af-8230-75d2-82f8-667491cc010a
   harness_version: 2.1.319 (Claude Code)
   changes:
@@ -422,26 +489,35 @@ history:
     new_value: Approved
 - id: 01a1bafd-2291-71b2-89a2-7d8fd4e3c6f8
   author: aida-session-start
-  timestamp: 2026-11-08T11:48:34.065487645Z
+  timestamp: 2026-11-08 11:48:34.065487+00:00
   changes:
   - field_name: status
     old_value: Approved
     new_value: InProgress
 - id: 01a1bafd-885f-79e2-9c5e-341da7228737
   author: dirtlab
-  timestamp: 2026-11-08T11:49:00.127275111Z
+  timestamp: 2026-11-08 11:49:00.127275+00:00
   session_id: 01a1bafd1c50
   harness_version: codex-cli 0.167.0
   changes: []
+- id: 01a1bb2c-a641-77a1-8cc7-f4962e9885a4
+  author: aida-orchestrator
+  timestamp: 2026-11-08 12:40:27.969792+00:00
+  session_id: 01a1bb289c4c
+  harness_version: 2.1.319 (Claude Code)
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: NeedsAttention
 - id: 01a1bb38-1996-7863-a80a-0ead883fd994
   author: dirtlab
-  timestamp: 2026-11-08T12:52:58.390537001Z
+  timestamp: 2026-11-08 12:52:58.390537+00:00
   session_id: 01a1bb379f1d
   harness_version: codex-cli 0.167.0
   changes: []
 - id: 01a1bb39-53c4-73e2-b33d-a1d222be4194
   author: dirtlab
-  timestamp: 2026-11-08T12:54:18.820436770Z
+  timestamp: 2026-11-08 12:54:18.820436+00:00
   session_id: 01a1bb379f1d
   harness_version: codex-cli 0.167.0
   changes:
@@ -461,4 +537,12 @@ attention_reason:
   category: blocked-dependency
   detail: 'Round 6 implementation is already present at 5f57df7893, with no newer review findings and no new source changes needed. Manual cutover gate remains: host must retitle PR #3651 with trailing (Refs BUG-2492) and obtain green CI at its exact published head; repository operator must attach raw gh/web merge-refusal, unchanged-SHA label-only pending-to-success, app-pin/protection and notification evidence per docs/internal/testing/bug-2492-status-cutover.md before completion. Native seat cannot perform publication or human-gated cutover. Shell and jq regression fixtures pass; Rust revalidation job j20261108T125318134-2-0 is running.'
   raised_by: implementer
-  raised_at: 2026-11-08T12:54:18.820421070Z
+  raised_at: 2026-11-08 12:54:18.820421+00:00
+failure_reason:
+  phase: reviewer
+  phase_index: 3
+  kind: verdict:request-changes
+  detail: Round 6's code findings are fixed and no merge-safety defect was found, but the PR title still completes the spec at merge against the cutover runbook, CI is unfinished at this head, AC1/AC2 live evidence is outstanding, and three minor items remain.
+  recovery_hint: address the review findings, move BUG-2492 back to In Progress, and clear the PR hold only after approval
+  shelved_by: reviewer
+  shelved_at: 2026-11-08 12:40:27.969765+00:00
