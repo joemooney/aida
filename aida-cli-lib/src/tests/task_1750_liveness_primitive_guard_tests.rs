@@ -103,8 +103,10 @@ fn raw_probes(source: &str) -> Vec<(usize, String)> {
 
 // trace:STORY-2537 trace:BUG-2458 | ai:codex
 // Enumerated temporary compatibility sites. These consumers retain their own
-// policy until slices 2-5; counts may fall, never rise. The primitive files
-// themselves are explicit exclusions. This inventory grants no owner authority.
+// policy until their migration slice; counts may fall, never rise. Registry
+// row, strict mail-wake and explicit-bind capture sites migrated in S4.
+// trace:TASK-3366 | ai:codex
+// The primitive files themselves are explicit exclusions. This inventory grants no owner authority.
 const IDENTITY_PATTERN: &str = r"\b(?:pid_is_alive|process_identity_is_alive|process_identity_matches_strict|process_provably_dead|process_start_identity(?:_exact)?|parse_proc_stat_starttime|parse_start_identity|pid_namespace|recorded_lease_owner)\s*\(|\.start_time\s*\(|\.probe\s*\(";
 
 #[test]
