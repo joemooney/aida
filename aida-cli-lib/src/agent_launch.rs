@@ -2737,7 +2737,8 @@ pub(crate) fn agent_new_claude(
         role.as_deref(),
         flag_options.declared_git_read_only,
         noexec,
-        verbose && !show_prompt && !context.show,
+        verbose,
+        show_prompt || context.show,
     );
     // SPIKE-34: when `--bg` is set, append it to the argv so `claude --bg`
     // dispatches the session to the background supervisor instead of
@@ -2885,7 +2886,8 @@ pub(crate) fn agent_new_codex_wake(
         role.as_deref(),
         flag_options.declared_git_read_only,
         noexec,
-        verbose && !show_prompt && !context.show,
+        verbose,
+        show_prompt || context.show,
     );
     // BUG-2007: a codex TUI attached to the shared app-server daemon runs its
     // hooks (and tools) with the daemon's environment, i.e. whichever shell
@@ -2981,7 +2983,8 @@ pub(crate) fn agent_new_antigravity(
         role.as_deref(),
         flag_options.declared_git_read_only,
         noexec,
-        verbose && !show_prompt && !context.show,
+        verbose,
+        show_prompt || context.show,
     );
     let mut default_args = Vec::new();
     if bypass_sandbox {

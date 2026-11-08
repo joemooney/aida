@@ -585,6 +585,7 @@ pub(crate) fn agent_new_codex_bg(mut req: CodexBgRequest) -> Result<()> {
             req.flag_options.declared_git_read_only,
             true,
             req.verbose,
+            false,
         );
         let mut preview = config.clone();
         preview.default_args = exec_args(&config.default_args, &[]);
@@ -613,6 +614,7 @@ pub(crate) fn agent_new_codex_bg(mut req: CodexBgRequest) -> Result<()> {
         req.flag_options.declared_git_read_only,
         false,
         req.verbose,
+        false,
     );
     preflight_agent_new_delegation(&project_root, Some(&expected_role))?;
     crate::gate::seat_authority::validate_launch_delegable_seats(

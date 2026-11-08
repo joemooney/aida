@@ -35,7 +35,11 @@ pub(crate) fn parse_trace_id_token(line: &str) -> Option<String> {
         let suffix = &suffix_rest[..suffix_end];
         // A dotted filename must not become a truncated criterion label.
         // trace:STORY-1486 | ai:codex
-        if !suffix_rest[suffix_end..].starts_with('.') && criterion_trace_suffix(suffix) {
+        if !suffix_rest[suffix_end..]
+            .strip_prefix('.')
+            .is_some_and(|tail| tail.starts_with(|c: char| c.is_ascii_alphanumeric()))
+            && criterion_trace_suffix(suffix)
+        {
             return Some(format!("{spec}.{suffix}").to_ascii_uppercase());
         }
     }

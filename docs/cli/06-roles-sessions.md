@@ -242,7 +242,7 @@ including when the child requests a development seat. Explicit-vendor
 `--no-exec` previews are reads available to stakeholder seats; actual agent
 launches retain the existing stakeholder write gate.
 `aida agent new <vendor> --git-read-only` explicitly downgrades the declaration.
-With `--verbose`, launches print the mode and reason to stderr; `--no-exec`
+With `--verbose` or explicit `--git-read-only`, launches print the mode and reason to stderr; `--no-exec`
 previews print them to stdout. `--show-prompt` and `--show-context` omit these
 diagnostics. These are declarations, **not enforced Git or filesystem restrictions** on current
 adapters, and they grant no seat, delegation or publication authority. This

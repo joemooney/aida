@@ -236,6 +236,27 @@ fn noexec_verbose_prints_stakeholder_and_explicit_git_downgrades() {
             vec!["--show-context", "--verbose"],
             "# DRY PREVIEW — no session was started.",
         ),
+        (
+            vec!["--show-prompt", "--git-read-only"],
+            "# AIDA agent launch preview — initial prompt only;",
+        ),
+        (
+            vec!["--show-prompt", "--verbose", "--git-read-only", "--no-exec"],
+            "# AIDA agent launch preview — initial prompt only;",
+        ),
+        (
+            vec!["--show-context", "--git-read-only"],
+            "# DRY PREVIEW — no session was started.",
+        ),
+        (
+            vec![
+                "--show-context",
+                "--verbose",
+                "--git-read-only",
+                "--no-exec",
+            ],
+            "# DRY PREVIEW — no session was started.",
+        ),
     ] {
         let mut args = vec!["agent", "new", "claude"];
         args.extend(extra);

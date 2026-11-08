@@ -40,7 +40,11 @@ pub(crate) fn print_git_policy(
     downgrade: Option<bool>,
     noexec: bool,
     visible: bool,
+    suppress_preview: bool,
 ) {
+    if suppress_preview {
+        return;
+    }
     if let Some(downgrade) = downgrade.filter(|explicit| visible || *explicit) {
         let parent = crate::stakeholder_role::active_stakeholder_role()
             .or_else(|| crate::gate::seat_authority::current_seat(root));
@@ -206,11 +210,17 @@ pub(crate) fn render_roots(project: &Path, executable: &Path) -> Result<String> 
             executables.push(aida.join("target").join(profile).join("aida"));
         }
     }
-    let overlaps = read_only.iter().any(|read| {
-        writable
-            .iter()
-            .any(|(_, write)| read.starts_with(write) || write.starts_with(read))
-    });
+    let mut overlap_notes = String::new();
+    for read in &read_only {
+        for (kind, write) in &writable {
+            if read.starts_with(write) || write.starts_with(read) {
+                overlap_notes.push_str(&format!(
+                    "overlap: writable and read-only roots overlap: {kind} ({}) and read-only ({}); shared Git metadata may overlap an AIDA checkout; current adapters do not enforce precedence\n",
+                    write.display(), read.display()
+                ));
+            }
+        }
+    }
     let mut out = format!("launch_profile: declared roots, not applied confinement ({note})\n");
     out.push_str(&diagnostics);
     out.push_str("writable_roots:\n");
@@ -221,9 +231,7 @@ pub(crate) fn render_roots(project: &Path, executable: &Path) -> Result<String> 
     for path in read_only {
         out.push_str(&format!("  {}\n", path.display()));
     }
-    if overlaps {
-        out.push_str("  overlap: writable and read-only roots overlap in this declaration; current adapters do not enforce precedence\n");
-    }
+    out.push_str(&overlap_notes);
     out.push_str("executable_locations (ordinary approval rules apply):\n");
     for path in executables {
         out.push_str(&format!("  {}\n", path.display()));
@@ -453,7 +461,7 @@ mod tests {
         let output = render_roots(&consumer, &exe).unwrap();
         assert!(output.contains("consumer repository"), "{output}");
         assert!(
-            output.contains("writable and read-only roots overlap"),
+            output.contains("\noverlap: writable and read-only roots overlap: project ("),
             "{output}"
         );
     }

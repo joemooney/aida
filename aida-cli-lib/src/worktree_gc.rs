@@ -3828,6 +3828,10 @@ mod criterion_suffix_regressions {
                 Some("STORY-1".into())
             );
         }
+        assert_eq!(
+            crate::parse_trace_id_token("trace:STORY-1.ac12345."),
+            Some("STORY-1.AC12345".into())
+        );
         assert!(super::criterion_trace_suffix("Vendor-neutral"));
         for suffix in ["", "_label", "1label", "label/path", "label.name"] {
             assert!(!super::criterion_trace_suffix(suffix), "{suffix}");
