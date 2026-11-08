@@ -12613,6 +12613,9 @@ Options:
       --json
           Emit machine-readable JSON
 
+      --lane-capacity
+          Read-only typed local lane capacity and reservations (not readiness admission)
+
       --force
           Permit riskier destructive fixes such as branch deletion
 
@@ -12629,16 +12632,16 @@ Options:
           - toon:  Token-efficient TOON — the compact agent default when piped/captured
           - json:  Machine JSON, for commands that support a JSON projection
 
+      --canonical-ids
+          Show node-local spec IDs in their canonical form instead of the node's friendly label (for
+          scripts). Also settable via AIDA_CANONICAL_IDS=1
+
       --since <DATE_OR_REF>
           Exempt specs completed before this point from the completed-without-commit integrity
           check: a relative duration (`30d`, `2w`, `24 hours ago`), an ISO date (local midnight), a
           zone-less ISO datetime (local time), RFC3339, or else a git ref/tag whose commit date is
           the cutoff. An invalid value is an error. Quiets noise on legacy history predating trace
           conventions. Falls back to the AIDA_DOCTOR_COMPLETED_SINCE env var
-
-      --canonical-ids
-          Show node-local spec IDs in their canonical form instead of the node's friendly label (for
-          scripts). Also settable via AIDA_CANONICAL_IDS=1
 
       --fix-sandbox
           Print the guided, copy-pasteable steps to bring the OS sandbox (bubblewrap
@@ -44206,6 +44209,11 @@ Working on aida itself
         "name": "json",
         "takes_value": false,
         "help": "Emit machine-readable JSON"
+      },
+      {
+        "name": "lane-capacity",
+        "takes_value": false,
+        "help": "Read-only typed local lane capacity and reservations (not readiness admission)"
       },
       {
         "name": "lane-host",
