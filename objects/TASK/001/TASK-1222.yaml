@@ -23,12 +23,12 @@ description: |
   Deliberate sweep: for each stale branch/worktree, check the spec status — if Completed/merged-elsewhere, delete the branch + remove the worktree; if it holds genuine uncommitted work, salvage-commit or discard per a per-item decision. aida session reap already handles the finished+merged+exited class safely; this task is the long-tail the reap conservatively leaves (unfinished-spec or uncommitted-work worktrees, and pure branch cruft). Consider an aida worktree gc --older-than / --stale sweep if one doesn't cover it.
 
   Immediate: STORY-1006 + STORY-993 (both Completed) have uncommitted worktree changes — operator decision: salvage or discard, then remove those two worktrees.
-status: InProgress
+status: NeedsAttention
 priority: Low
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-09-13T22:07:45.944235607Z
-modified_at: 2026-11-08T00:35:21.366658850Z
+modified_at: 2026-11-08T01:52:55.882029755Z
 req_type: Task
 tags:
 - cleanup
@@ -184,3 +184,20 @@ history:
   timestamp: 2026-11-08T00:35:22.582885048Z
   session_id: 01a1b8210422
   changes: []
+- id: 01a1b8db-d04a-7c31-baeb-f59ab9fbc8a7
+  author: aida-orchestrator
+  timestamp: 2026-11-08T01:52:55.882061339Z
+  session_id: 01a1b8d9855a
+  harness_version: 2.1.319 (Claude Code)
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: NeedsAttention
+failure_reason:
+  phase: reviewer
+  phase_index: 3
+  kind: verdict:request-changes
+  detail: Lifecycle GC logic and fixtures are solid (AC1/AC2/AC4 largely verified), but the weekly job will likely time out on the target host instead of routing counts (AC3), the --yes --force repoint orphans the TASK-1596 guard remedy, and the --apply refusal gates are untested. CI was still pending at review time.
+  recovery_hint: address the review findings, move TASK-1222 back to In Progress, and clear the PR hold only after approval
+  shelved_by: reviewer
+  shelved_at: 2026-11-08T01:52:55.882029755Z
