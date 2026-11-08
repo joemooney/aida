@@ -23,7 +23,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-09-26T18:30:26.622729865Z
-modified_at: 2026-11-08T11:04:30.226814483Z
+modified_at: 2026-11-08T11:13:37.043997614Z
 req_type: Story
 tags:
 - agent-launch
@@ -833,14 +833,20 @@ history:
   - field_name: status
     old_value: InProgress
     new_value: NeedsAttention
+- id: 01a1badd-2367-70a0-a3c6-e1a1a851d299
+  author: joe
+  timestamp: 2026-11-08T11:13:37.127289302Z
+  session_id: 01a1bad95af1
+  harness_version: 2.1.319 (Claude Code)
+  changes: []
 failure_reason:
   phase: reviewer
   phase_index: 3
   kind: verdict:request-changes
-  detail: 'STORY-1486 PARTIAL: source and tests match all five ACs, and guest --no-exec paths (including --bg) do not launch, but this head only merges main over a commit with four failed CI jobs. The help golden and policy golden are stale for this PR''s flag and authority change, CI at this head is pending, and the round-5 docs finding is unfixed. No cargo run, by policy.'
+  detail: 'STORY-1486 PARTIAL: all five ACs have matching tests by source and every prior finding is fixed, but CI run 42474150272 had assigned no jobs at this head, so no test result confirms them. No blocking code defect found. Re-review once CI finishes. No cargo run, by policy.'
   recovery_hint: address the review findings, move STORY-1486 back to In Progress, and clear the PR hold only after approval
   shelved_by: reviewer
-  shelved_at: 2026-11-08T10:58:53.304983047Z
+  shelved_at: 2026-11-08T11:13:37.043997614Z
 decision_request:
   question: The portability and session-seat prerequisites have landed. Should the launch permission profile now include approval-prompt exemptions, exclude exemptions, or remain on hold?
   choices:
