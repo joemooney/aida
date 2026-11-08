@@ -18,12 +18,12 @@ description: |
   The ratchet baseline must shrink to zero entries for these paths.
 
   LIGHT gate. Parts A and B may be separate PRs (Refs this task; the last one completes it).
-status: NeedsAttention
+status: Approved
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-07T20:45:16.684639200Z
-modified_at: 2026-11-08T07:17:13.429181153Z
+modified_at: 2026-11-08T07:24:26.972611941Z
 req_type: Task
 relationships:
 - rel_type: Child
@@ -84,6 +84,13 @@ comments:
   modified_at: 2026-11-08T07:09:38.287549199Z
   session_id: 01a1b9f63136
   harness_version: codex-cli 0.167.0
+- id: 01a1ba0b-53dc-7d90-83c2-3f23d8f4d879
+  author: joe
+  content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: Part B routes all four named probes through ownership::reader and the ratchet entries are gone, and the hot-path filter from finding 4 landed for the two scope matchers. But prior blockers 1-3 are unchanged at this head: lease_retained holds every Unknown, and aida own show --compare shows 22/22 holder-bearing leased/reviewing records Unknown, 0 Dead. The advisor ruling the implementer punted for is not on the spec. CI still queued; Part A is out of scope for this Refs slice.. It was punted on: design-fork: PR #3670 findings 1 and 2 require a crash-release path for legacy unadmitted leases. ownership::judge_witness explicitly requires cooperative admission (STORY-2537/BUG-2458); missing, refused and replacement bindings are Unknown, while lease_state_for retains a separate PID/worktree/TTL legacy release policy. Restoring that fallback in the ownership reader would choose a new authority policy and contradict its fail-closed contract. Request advisor ruling on whether legacy advisory/pickup observations may use that established policy, or require cooperative rebind/migration of production writers. Findings 3 and 5 and Part A remain outstanding; finding 4 has a local targeted performance fix under validation. Partial edits remain uncommitted; do not publish as completed rework.. No triage reason was given.'
+  created_at: 2026-11-08T07:24:26.972610677Z
+  modified_at: 2026-11-08T07:24:26.972610677Z
+  session_id: 01a1b8be-8170-7fb2-89ab-ecb4c6eee98c
+  harness_version: 2.1.319 (Claude Code)
 history:
 - id: 01a1b7c2-6b69-7b02-bd8c-8f40aee2972d
   author: joe
@@ -150,6 +157,15 @@ history:
   session_id: 01a1ba02c754
   harness_version: 2.1.319 (Claude Code)
   changes: []
+- id: 01a1ba0b-53dc-7d90-83c2-3f175c3b123d
+  author: joe
+  timestamp: 2026-11-08T07:24:26.972597770Z
+  session_id: 01a1b8be-8170-7fb2-89ab-ecb4c6eee98c
+  harness_version: 2.1.319 (Claude Code)
+  changes:
+  - field_name: status
+    old_value: NeedsAttention
+    new_value: Approved
 filed_at:
   code_sha: e278eeb1d8f95dadba5f6e9d8bfd41d10eac52c3
   branch: main
@@ -159,17 +175,3 @@ filed_at:
   vendor: claude
   session: 01a1b76b-2fe7-7dd2-88d0-356fc8d96d04
   harness_version: 2.1.319 (Claude Code)
-attention_reason:
-  category: design-fork
-  detail: 'PR #3670 findings 1 and 2 require a crash-release path for legacy unadmitted leases. ownership::judge_witness explicitly requires cooperative admission (STORY-2537/BUG-2458); missing, refused and replacement bindings are Unknown, while lease_state_for retains a separate PID/worktree/TTL legacy release policy. Restoring that fallback in the ownership reader would choose a new authority policy and contradict its fail-closed contract. Request advisor ruling on whether legacy advisory/pickup observations may use that established policy, or require cooperative rebind/migration of production writers. Findings 3 and 5 and Part A remain outstanding; finding 4 has a local targeted performance fix under validation. Partial edits remain uncommitted; do not publish as completed rework.'
-  lean: Allow explicitly scoped legacy observation policy in the shared reader, while keeping destructive reclaim and admitted/refused generation handling fail closed.
-  raised_by: implementer
-  raised_at: 2026-11-08T07:03:38.472381885Z
-failure_reason:
-  phase: reviewer
-  phase_index: 3
-  kind: verdict:request-changes
-  detail: 'Part B routes all four named probes through ownership::reader and the ratchet entries are gone, and the hot-path filter from finding 4 landed for the two scope matchers. But prior blockers 1-3 are unchanged at this head: lease_retained holds every Unknown, and aida own show --compare shows 22/22 holder-bearing leased/reviewing records Unknown, 0 Dead. The advisor ruling the implementer punted for is not on the spec. CI still queued; Part A is out of scope for this Refs slice.'
-  recovery_hint: address the review findings, move TASK-3420 back to In Progress, and clear the PR hold only after approval
-  shelved_by: reviewer
-  shelved_at: 2026-11-08T07:17:13.429181153Z
