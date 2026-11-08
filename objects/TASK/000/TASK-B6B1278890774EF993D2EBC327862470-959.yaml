@@ -8,7 +8,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-07T22:12:32.196595160Z
-modified_at: 2026-11-08T18:23:14.947449792Z
+modified_at: 2026-11-08T18:33:06.772470495Z
 req_type: Task
 relationships:
 - rel_type: Child
@@ -181,6 +181,20 @@ comments:
   modified_at: 2026-11-08T18:21:32.651224029Z
   session_id: 01a1b9af-8230-75d2-82f8-667491cc010a
   harness_version: 2.1.319 (Claude Code)
+- id: 01a1bc6f-81d4-7493-a147-b4d28cae73f1
+  author: dirtlab
+  content: |
+    Native rework addresses all three latest PR #3685 findings (reviewed 58d0c52fe26d). The intent-preserving adapter guard reads queue_cmd/rework.rs and requires both handler and end-marker boundaries using split_once/expect. The completion scan pins queue_cmd/advance.rs. The BUG-1470 gate comment now names queue_cmd/rework.rs. No production behavior changed.
+
+    Changed files: aida-cli-lib/src/tests/bug_2149_2150_standalone_reviewer_tests.rs; aida-cli-lib/src/tests/story_1418_completion_seam_tests.rs; aida-cli-lib/src/tests/queue_rework_tests.rs.
+
+    Validation: lane job j20261108T182348731-2-0 executed rework_work_dispatch_uses_intent_preserving_adapter: 1 passed; lane job j20261108T182355251-2-0 executed the_scan_sees_the_routed_paths: 1 passed. Both finished exit 0. Changed-file rustfmt, git diff --check, and standard help golden co-change guard passed. Non-Cargo fast-gate diagnostic: 40 passed, 1 failed (Codex mail wake fixtures: 4 failures/17 errors from owned/no-shared-writes directory refusals). Four Cargo-containing gates deferred under lane instructions (no-default-features, TUI seam, cargo-timeout hook fixtures, formatting); changed-file formatting checked independently. Full make check-ci-fast remains unverified. Diagnostic log: /tmp/task3426-latest-fast-gates.log. Codegraph unavailable, confirmed by doctor; source locations checked with rg.
+
+    Edits remain uncommitted under the native read-only Git instruction. All submitted lane jobs finished. Host must commit and publish these changes, then complete remaining acceptance checks. No commit, push, PR creation, queue completion, review record or merge performed. Refs publication declaration reflects the remaining acceptance limitation.
+  created_at: 2026-11-08T18:33:06.772470495Z
+  modified_at: 2026-11-08T18:33:06.772470495Z
+  session_id: 01a1bc6673f5
+  harness_version: codex-cli 0.167.0
 history:
 - id: 01a1b812-66e1-7502-809a-7f261ca63ac4
   author: joe
