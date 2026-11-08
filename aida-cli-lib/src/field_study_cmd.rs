@@ -6,6 +6,7 @@
 //! breaks observed in real drains. Pure I/O + formatting over the
 //! `field_study` and `rule_violation` domain modules. Extracted verbatim from
 //! `main.rs` (SPIKE-78); no behavior change.
+// trace:TASK-3428 | ai:codex
 
 use anyhow::Result;
 use colored::Colorize;
@@ -341,7 +342,6 @@ fn run_field_study(
     matches: &clap::ArgMatches,
     ctx: &crate::command_registry::DispatchCtx,
 ) -> anyhow::Result<crate::command_registry::Flow> {
-    // trace:TASK-3428 | ai:codex
     let args = <FieldStudyArgs as clap::FromArgMatches>::from_arg_matches(matches)?;
     match &ctx.store {
         None => Ok(crate::command_registry::Flow::Continue),

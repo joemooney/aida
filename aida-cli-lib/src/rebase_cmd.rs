@@ -8,6 +8,7 @@
 //! (`rebase_report`). Extracted verbatim from `main.rs` (SPIKE-78); no
 //! behavior change. The shared two-leg git-mirror leg helpers (code/store
 //! runners used by fetch/pull/push) stay in `main.rs`.
+// trace:TASK-3428 | ai:codex
 
 use anyhow::Result;
 use colored::Colorize;
@@ -519,7 +520,6 @@ fn run_rebase(
     matches: &clap::ArgMatches,
     ctx: &crate::command_registry::DispatchCtx,
 ) -> anyhow::Result<crate::command_registry::Flow> {
-    // trace:TASK-3428 | ai:codex
     let args = <RebaseArgs as clap::FromArgMatches>::from_arg_matches(matches)?;
     match &ctx.store {
         None => Ok(crate::command_registry::Flow::Continue),

@@ -3,6 +3,7 @@
 //! `main.rs` (SPIKE-78); no behavior change. The actual server lives in the
 //! `aida-server` crate; this handler just dispatches remote-client calls
 //! (reached via `crate::client`).
+// trace:TASK-3428 | ai:codex
 
 use crate::cli::ServerCommand;
 
@@ -76,7 +77,6 @@ fn run_server(
     matches: &clap::ArgMatches,
     ctx: &crate::command_registry::DispatchCtx,
 ) -> anyhow::Result<crate::command_registry::Flow> {
-    // trace:TASK-3428 | ai:codex
     let args = <ServerArgs as clap::FromArgMatches>::from_arg_matches(matches)?;
     match &ctx.store {
         None => Ok(crate::command_registry::Flow::Continue),

@@ -4,11 +4,11 @@
 //! state machine itself lives in `aida_core::lifecycle`; this module is only the
 //! CLI handler plus its render helpers exclusive to `aida lifecycle`.
 
-use anyhow::Context;
+use anyhow::{Context, Result};
 use colored::Colorize;
 
 // trace:TASK-3428 | ai:codex
-use crate::{find_project_root, load_store_for_lookup, Result};
+use crate::{find_project_root, load_store_for_lookup};
 
 /// `aida lifecycle --diagram [--check [--write]] [--doc <FILE>]` — Phase 1 of
 /// SPIKE-56 (TASK-737), generate-only. The spec-state transition model lives in

@@ -4,10 +4,11 @@
 // trace:STORY-771 | ai:claude
 
 use crate::process_retry::RetryEtxtbsy;
+use anyhow::Result;
 use colored::Colorize;
 
 // trace:TASK-3428 | ai:codex
-use crate::{find_project_root, presence, resolve_aida_exe, solo_lock, Result, SoloAction};
+use crate::{find_project_root, presence, resolve_aida_exe, solo_lock, SoloAction};
 
 // trace:STORY-1728 | ai:claude
 #[path = "solo_cmd_args.rs"]

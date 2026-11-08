@@ -6,6 +6,7 @@
 //! per day). Extracted verbatim from `main.rs` (SPIKE-78, pure movement) —
 //! the display/config layer only. The `AutonomyMode` enum + drain-shared
 //! resolution logic (ADR-10) stays near the drain machinery.
+// trace:TASK-3428 | ai:codex
 
 use anyhow::Result;
 use colored::Colorize;
@@ -265,7 +266,6 @@ fn run_autonomy(
     matches: &clap::ArgMatches,
     _ctx: &crate::command_registry::DispatchCtx,
 ) -> anyhow::Result<()> {
-    // trace:TASK-3428 | ai:codex
     let args = <AutonomyArgs as clap::FromArgMatches>::from_arg_matches(matches)?;
     let AutonomyArgs { command } = &args;
     return self::handle_autonomy_command(command.as_ref());
