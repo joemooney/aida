@@ -9059,8 +9059,7 @@ pub(crate) fn run_mediated_mcp_server(
     env: &aida_core::exec_context::Environment,
     store: &Path,
 ) -> Result<()> {
-    use anyhow::{ensure, Context};
-    use std::io::Read;
+    use anyhow::Context;
     let configured = match env.var("AIDA_MCP_PROFILE") {
         Ok(value) => Some(value.to_owned()),
         Err(aida_core::exec_context::EnvLookupError::NonUnicode) => {
@@ -9100,18 +9099,64 @@ pub(crate) fn run_mediated_mcp_server(
     let mut input = stdin.lock();
     let stdout = io::stdout();
     let mut output = stdout.lock();
+    mediated_mcp_stream(
+        client,
+        store,
+        profile,
+        role.as_deref(),
+        &mut input,
+        &mut output,
+    )
+}
+
+// trace:TASK-3223 | ai:codex
+fn mediated_mcp_stream(
+    client: &crate::store_mutation_client::Client,
+    store: &Path,
+    profile: McpProfile,
+    role: Option<&str>,
+    input: &mut impl io::BufRead,
+    output: &mut impl io::Write,
+) -> Result<()> {
+    use std::io::Read;
     loop {
         let mut line = Vec::new();
-        let n = (&mut input).take(65537).read_until(b'\n', &mut line)?;
+        let n = (&mut *input).take(65537).read_until(b'\n', &mut line)?;
         if n == 0 {
             return Ok(());
         }
-        ensure!(n <= 65536, "oversized mediated MCP request");
+        if n > 65536 {
+            // Drain without growing the request buffer. The limit may have
+            // consumed the newline already; never discard the next request.
+            if line.last() != Some(&b'\n') {
+                loop {
+                    let available = input.fill_buf()?;
+                    if available.is_empty() {
+                        break;
+                    }
+                    let newline = available.iter().position(|byte| *byte == b'\n');
+                    let consumed = newline.map_or(available.len(), |index| index + 1);
+                    input.consume(consumed);
+                    if newline.is_some() {
+                        break;
+                    }
+                }
+            }
+            deliver(
+                output,
+                JsonRpcResponse::error(
+                    Value::Null,
+                    -32600,
+                    "Oversized mediated MCP request".into(),
+                ),
+            )?;
+            continue;
+        }
         if line.iter().all(u8::is_ascii_whitespace) {
             continue;
         }
         let response = match serde_json::from_slice::<JsonRpcRequest>(&line) {
-            Ok(request) => mediated_mcp_response(client, store, profile, role.as_deref(), &request),
+            Ok(request) => mediated_mcp_response(client, store, profile, role, &request),
             Err(_) => Some(JsonRpcResponse::error(
                 Value::Null,
                 -32700,
@@ -9119,7 +9164,7 @@ pub(crate) fn run_mediated_mcp_server(
             )),
         };
         if let Some(response) = response {
-            deliver(&mut output, response)?;
+            deliver(output, response)?;
         }
     }
 }

@@ -41,6 +41,16 @@ never a path, to the host. Editor, author, relay and parent semantics remain
 unsupported. Top-level `--file`, output-format, verbose and canonical-ID options
 refuse rather than silently changing their ordinary meaning. Store discovery
 walks cwd ancestors read-only; it never constructs a backend or shared cache.
+This staged dispatcher requires a literal `.aida-store/objects` directory (or
+`.aida-store` symlink) at or above cwd. It does not yet use the ordinary
+`store_path` configuration or main-worktree fallback. A custom store location
+or plain linked worktree without that link refuses with “mediated operations
+require an existing canonical store”; no store is created. The host still
+revalidates the resolved path against its launch-bound store identity.
+
+MCP request lines are limited to 64 KiB including the newline. An oversized
+line is drained through its newline with bounded memory, receives JSON-RPC
+error -32600 with a null ID, and the server continues with the next request.
 
 Before hashing a preimage, the client resolves native and agreed IDs from
 canonical objects. Origin IDs first use their direct object path, without

@@ -174,7 +174,8 @@ fn run_in_profile_with_service(
         command.arg("--ro-bind").arg(source).arg(destination);
         command
             .arg("--ro-bind")
-            .arg(std::env::current_exe().unwrap())
+            // trace:TASK-3223 | ai:codex
+            .arg(crate::kernel::resolve_aida_exe())
             .arg("/run/aida-test-client");
     }
     command.args(["--", "/usr/bin/python3", "-I", "-S", "-c", script]);

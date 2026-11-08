@@ -52,6 +52,8 @@ fn explicit_fields(
     Ok(())
 }
 
+// Staged restriction: literal store link/directory only; no config or Git fallback.
+// trace:TASK-3223 | ai:codex
 fn root(cwd: &Path) -> Result<PathBuf> {
     let root = cwd
         .ancestors()
@@ -207,6 +209,42 @@ fn translate_with_reader(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    // trace:TASK-3223 | ai:codex
+    #[test]
+    fn staged_root_refuses_custom_store_and_linked_worktree_without_store_link() {
+        let tmp = tempfile::tempdir().unwrap();
+        let project = tmp.path().join("project");
+        std::fs::create_dir_all(project.join(".aida")).unwrap();
+        std::fs::create_dir_all(project.join("custom-store/objects")).unwrap();
+        std::fs::write(
+            project.join(".aida/config.toml"),
+            "[deployment]\nstore_path = 'custom-store'\n",
+        )
+        .unwrap();
+        let before = std::fs::read(project.join(".aida/config.toml")).unwrap();
+        let error = root(&project).unwrap_err();
+        assert!(error.to_string().contains("existing canonical store"));
+        assert_eq!(
+            std::fs::read(project.join(".aida/config.toml")).unwrap(),
+            before
+        );
+        assert!(!project.join(".aida-store").exists());
+
+        // Model a linked worktree's read-only .git pointer. Staged discovery
+        // must not consult or modify it, or implicitly adopt the main store.
+        let linked = tmp.path().join("linked");
+        std::fs::create_dir_all(&linked).unwrap();
+        std::fs::write(
+            linked.join(".git"),
+            "gitdir: ../project/.git/worktrees/linked\n",
+        )
+        .unwrap();
+        assert!(root(&linked).is_err());
+        std::os::unix::fs::symlink(project.join("custom-store"), linked.join(".aida-store"))
+            .unwrap();
+        assert_eq!(root(&linked).unwrap(), linked.join(".aida-store"));
+    }
 
     #[test]
     fn root_discovery_is_read_only_and_global_semantics_never_drop() {

@@ -110,6 +110,7 @@ fn mediated_mcp_invalid_role_refuses_before_reading_stdio() {
     assert_eq!(error.to_string(), "invalid session role");
 }
 
+#[cfg(test)] // Explicit test boundary for the config trust source guard.
 #[test]
 fn mediated_mcp_non_string_config_profile_refuses_before_stdio() {
     let tmp = tempfile::tempdir().unwrap();
@@ -128,5 +129,49 @@ fn mediated_mcp_non_string_config_profile_refuses_before_stdio() {
         )
         .unwrap_err();
         assert_eq!(error.to_string(), "invalid MCP profile", "{value}");
+    }
+}
+
+// trace:TASK-3223 | ai:codex
+#[test]
+fn mediated_mcp_oversized_lines_error_and_preserve_the_next_request() {
+    // Exercise newline at the limit read, beyond it, and missing at EOF.
+    // Small BufReader capacity forces drainage across multiple input chunks.
+    for (size, terminated) in [
+        (65536, true),
+        (65537, true),
+        (200000, true),
+        (200000, false),
+    ] {
+        let mut bytes = vec![b'x'; size];
+        if terminated {
+            bytes.push(b'\n');
+            bytes.extend_from_slice(
+                b"{\"jsonrpc\":\"2.0\",\"id\":7,\"method\":\"initialize\",\"params\":{}}\n",
+            );
+        }
+        let mut input = std::io::BufReader::with_capacity(127, bytes.as_slice());
+        let mut output = Vec::new();
+        mediated_mcp_stream(
+            &client(),
+            Path::new("/missing-mcp-store"),
+            McpProfile::Full,
+            None,
+            &mut input,
+            &mut output,
+        )
+        .unwrap();
+        let responses: Vec<Value> = output
+            .split(|byte| *byte == b'\n')
+            .filter(|line| !line.is_empty())
+            .map(|line| serde_json::from_slice(line).unwrap())
+            .collect();
+        assert_eq!(responses.len(), if terminated { 2 } else { 1 });
+        assert_eq!(responses[0]["id"], Value::Null);
+        assert_eq!(responses[0]["error"]["code"], -32600);
+        if terminated {
+            assert_eq!(responses[1]["id"], 7);
+            assert_eq!(responses[1]["result"]["serverInfo"]["name"], "aida");
+        }
     }
 }
