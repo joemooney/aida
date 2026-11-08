@@ -28,13 +28,19 @@ priority: Low
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-09-13T22:07:45.944235607Z
-modified_at: 2026-11-08T00:32:00.691339062Z
+modified_at: 2026-11-08T00:35:21.366658850Z
 req_type: Task
 tags:
 - cleanup
 - cruft
 - hygiene
 - worktree
+relationships:
+- rel_type:
+    custom: implemented-by
+  target_id: 01a1b894-9371-76a0-b5bd-fafa756dd159
+  created_at: 2026-11-08T00:35:21.366655969Z
+  created_by: joe
 comments:
 - id: 01a1b7b1-394f-7ce1-94e8-b54cacaf7665
   author: aida:defer-migration
@@ -171,5 +177,10 @@ history:
 - id: 01a1b849-abf4-7ba1-807b-d7bad8608a3c
   author: joe
   timestamp: 2026-11-07T23:13:18.324618703Z
+  session_id: 01a1b8210422
+  changes: []
+- id: 01a1b894-cf56-7eb1-adeb-3f251eca011d
+  author: joe
+  timestamp: 2026-11-08T00:35:22.582885048Z
   session_id: 01a1b8210422
   changes: []
