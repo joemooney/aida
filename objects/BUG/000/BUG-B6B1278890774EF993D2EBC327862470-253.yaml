@@ -20,7 +20,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-07T20:18:53.564500330Z
-modified_at: 2026-11-08T00:11:21.129117049Z
+modified_at: 2026-11-08T00:16:18.448413503Z
 req_type: Bug
 comments:
 - id: 01a1b7af-5b2f-7c41-b302-d8aeec3784ae
@@ -80,6 +80,13 @@ comments:
   modified_at: 2026-11-07T21:08:31.808950712Z
   session_id: 01a1b76b-2fe7-7dd2-88d0-356fc8d96d04
   harness_version: 2.1.319 (Claude Code)
+- id: 01a1b883-5a10-7cb2-b4c7-b28519059d19
+  author: dirtlab
+  content: 'Rework addressed all six review findings plus the no-change lease report. Host exit reconciliation mirrors seat punt/hold markers and spec punt-ledger records before publication/cleanup; held resume retains its main-root marker and fresh attempts clear old vetoes. Failed unchanged exits retain advisor requests. No-change mapping is factored and tested; punt suppression now injects panicking commit/probe/publication effects. Direct publication uses its already validated seat/branch for the base comparison. Clean no-change standalone outcomes end their lease; known untracked handshake runtime is excluded from work, while tracked changes and unknown paths remain protected. Changed files: OVERVIEW.md; aida-cli-lib/src/seat_clone.rs, ship_from_seat.rs, standalone_implementer.rs, tests/bug_2436_finished_lane_lease_tests.rs, tests/bug_home_038_seat_publish_tests.rs. Lane-runner validation: BUG-2488 regressions 5 passed; seat_publish_tests 53 passed; finished-lane lease suite 5 passed; queue_exit_tests 6 passed. Final rustfmt check and git diff --check pass. No blockers; untested=false. Edits remain uncommitted for host publication per native-seat instructions; no commit, push, PR creation, ship or queue completion attempted.'
+  created_at: 2026-11-08T00:16:18.448413503Z
+  modified_at: 2026-11-08T00:16:18.448413503Z
+  session_id: 01a1b878d54d
+  harness_version: codex-cli 0.167.0
 history:
 - id: 01a1b7ad-9096-7320-bbe8-fc34c8e11c09
   author: aida-session-start
@@ -143,11 +150,3 @@ filed_at:
   vendor: claude
   session: 01a1b76b-2fe7-7dd2-88d0-356fc8d96d04
   harness_version: 2.1.319 (Claude Code)
-failure_reason:
-  phase: reviewer
-  phase_index: 3
-  kind: verdict:request-changes
-  detail: Head is the previously reviewed b3387d9 plus a main merge; no rework landed. run_from no-change guard is sound, but the seat-local hold signal breaks main-root hold readers, both acceptance tests are weak, and no-change leaves the lease orphaned. CI pending at review.
-  recovery_hint: address the review findings, move BUG-2488 back to In Progress, and clear the PR hold only after approval
-  shelved_by: reviewer
-  shelved_at: 2026-11-08T00:11:21.129117049Z
