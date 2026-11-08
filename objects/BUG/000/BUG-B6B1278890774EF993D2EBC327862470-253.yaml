@@ -15,12 +15,12 @@ description: |
   ## Acceptance
   - A test for the native-seat punt that reaches the host and suppresses publication.
   - A test for a no-commit seat that yields `no-change` without invoking bundle.
-status: Approved
+status: InProgress
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-07T20:18:53.564500330Z
-modified_at: 2026-11-08T04:17:28.909037903Z
+modified_at: 2026-11-08T04:58:17.040114282Z
 req_type: Bug
 relationships:
 - rel_type:
@@ -229,6 +229,13 @@ history:
   - field_name: status
     old_value: NeedsAttention
     new_value: Approved
+- id: 01a1b985-8250-7192-88ce-17ec782006ee
+  author: aida-pr-open
+  timestamp: 2026-11-08T04:58:17.040113562Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: InProgress
 filed_at:
   code_sha: 7a18c0d52a6a4e0822befd4c810cfed16b04b74c
   branch: main
