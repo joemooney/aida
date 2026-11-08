@@ -22,12 +22,12 @@ description: |
   6. Evidence run: an advisor session under --permission-mode auto completes one full sweep (rebind loops, dispatch, host-merge, ship) with zero permission prompts and no bypass. Record the prompts it did hit.
 
   Non-goals: no new authority for the advisor, no waiving gates, no generic shell deputy beyond the existing script-deputy contract.
-status: InProgress
+status: NeedsAttention
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-06T16:51:02.535818Z
-modified_at: 2026-11-08T17:34:25.829563721Z
+modified_at: 2026-11-08T17:35:53.754079230Z
 req_type: Story
 tags:
 - area:advisor
@@ -923,6 +923,15 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a1bc3b-1f9a-75c2-8ebe-0a822773fb12
+  author: dirtlab
+  timestamp: 2026-11-08T17:35:53.754107345Z
+  session_id: 01a1bc39c1c6
+  harness_version: codex-cli 0.167.0
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: NeedsAttention
 execution_mode: drain
 filed_at:
   code_sha: 8dcb86ca85da4826cec197aeb85269210e910403
@@ -932,3 +941,8 @@ filed_at:
   aida_build_sha: 8dcb86ca85d
   vendor: claude
   session: b0a84e34-277c-4df6-b53c-43f4bbe2e84d
+attention_reason:
+  category: ambiguous-spec
+  detail: 'Binding advisor ruling 2026-11-08 03:10 UTC limits PR-3640 to the round-4 controller-restart major and requires parking on a new review blocker. That restart fix and its crash-window regressions are already in this checkout. The latest spec comments (2026-11-08 17:32 UTC, round 6, reviewed e0b079e8d113) request a different fix: immediate retired-controller key invalidation can strand an orphan dispatcher before it mints its reviewer child. Removing invalidation and changing key-retention tests would address that new blocker but exceeds the binding final-round scope. Subsequent rework has no triage clarification overriding the ruling. Parking for explicit advisor scope clarification; no code edits or publication declaration.'
+  raised_by: implementer
+  raised_at: 2026-11-08T17:35:53.754079230Z
