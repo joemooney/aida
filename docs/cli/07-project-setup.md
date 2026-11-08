@@ -698,6 +698,26 @@ credentials or grants, with a five-second and 128 KiB per-stream limit per call.
 The SHA-256-pinned ChatGPT path retains its recorded-help validation.
 <!-- trace:TASK-3000 | ai:codex -->
 
+#### AGY runtime policy and live conformance
+
+`aida config permissions runtime-policy --vendor agy` prints the validated
+runtime descriptor embedded in the running AIDA binary as JSON, without opening
+the requirement store or starting a vendor. The host conformance fixture uses
+this descriptor for its auth host policy; a missing or malformed descriptor
+refuses setup instead of falling back to the script checkout. This inventory
+is candidate configuration, not measured refresh evidence or launch admission.
+<!-- trace:TASK-3048 | ai:codex -->
+
+The host-only AGY conformance harness uses the hidden
+`aida config permissions conformance-launch --fixture-root <run> --credential <leaf>`
+entry to measure the candidate through the shared AIDA wrapper. It accepts only
+the closed fixture prompt and retains normal child-grant, trusted-host and
+receipt checks. It does not open production AGY admission. The credential leaf
+is mounted read-only without inheriting the original `.gemini` configuration;
+MCP, URL and browser actions carry explicit deny controls. See the
+[conformance procedure](../internal/testing/containment-conformance.md#agy-outer-only-follow-up-2026-11-07-ruling).
+<!-- trace:TASK-3048 | ai:codex -->
+
 #### Model-free containment tracer
 
 `aida config permissions probe --vendor codex --json` runs a closed Linux
