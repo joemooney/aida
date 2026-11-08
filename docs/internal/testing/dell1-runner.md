@@ -9,7 +9,7 @@ merging this preparation. Registration and before/after measurements remain
 operator acceptance work.
 
 The four heavy shards use `[self-hosted, Linux, X64, aida-dell1]` only when the
-variable is exactly `true` and the event is a push or a same-repository PR.
+variable is `true` (case-insensitive) and the event is a push or a same-repository PR.
 Fork PRs (even approved ones), merge groups and other events select hosted
 Ubuntu. Other shards and the required aggregate check remain hosted. A missing
 or offline runner does **not** trigger automatic hosted failover: unset the
@@ -31,7 +31,7 @@ at a time; measure whether this actually improves train wait before expanding.
    SSH keys, Codex auth or AIDA grants outside it. Never copy these into CI.
 3. Install systemd, build-essential, git, curl, python3, pkg-config,
    protobuf-compiler, libxcb-render0-dev, libxcb-shape0-dev, libxcb-xfixes0-dev,
-   libxkbcommon-dev, libssl-dev, libgtk-3-dev, bubblewrap, ripgrep, zstd, jq, openssh-client and zsh.
+   libxkbcommon-dev, libssl-dev, libgtk-3-dev, bubblewrap, ripgrep, zstd, jq, openssh-client, dbus-daemon and zsh.
    Install the runner distribution's .NET runtime prerequisites as needed.
    CI installs Rust into the disposable job HOME. Ensure at least eight CPUs
    numbered 0–7 are available; change the reviewed cpuset if dell1 differs.

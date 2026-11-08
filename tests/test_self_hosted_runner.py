@@ -21,15 +21,15 @@ class Routing(unittest.TestCase):
         # non-empty arrays in this expression have the same Actions truthiness.
         cases = []
         for enabled, event, same, shard in itertools.product(
-                ('', 'false', 'true'),
+                ('', 'false', 'true', 'TRUE', 'True'),
                 ('push', 'pull_request', 'merge_group', 'workflow_dispatch', 'pull_request_target'),
                 (False, True), build['strategy']['matrix']['shard']):
-            context = dict(vars=dict(AIDA_DELL1_CI=enabled),
+            context = dict(vars=dict(AIDA_DELL1_CI=enabled.lower()),
                            github=dict(event_name=event, repository='joemooney/aida',
                                        event=dict(pull_request=dict(head=dict(repo=dict(
                                            full_name='joemooney/aida' if same else 'fork/aida'))))),
                            matrix=dict(shard=shard, os='ubuntu-latest'))
-            expected = (enabled == 'true' and
+            expected = (enabled.lower() == 'true' and
                         (event == 'push' or (event == 'pull_request' and same)) and
                         shard in ('lib-0', 'lib-1', 'cli-0', 'cli-1'))
             cases.append([context, expected])
@@ -45,7 +45,6 @@ class Routing(unittest.TestCase):
             self.assertEqual(actual, wanted, context)
 
     def test_live_bwrap_export_requires_successful_self_hosted_probe(self):
-        import os
         import subprocess
         import tempfile
         build = yaml.safe_load((ROOT / '.github/workflows/ci.yml').read_text())['jobs']['build']
@@ -60,7 +59,7 @@ class Routing(unittest.TestCase):
                 exported = root / 'env'
                 command = step['run'].replace('scripts/runner/check-prerequisites.sh', str(probe))
                 result = subprocess.run(['bash', '-e', '-c', command],
-                                        env={**os.environ, 'GITHUB_ENV': str(exported)}, timeout=5)
+                                        env={'PATH': '/usr/bin:/bin', 'GITHUB_ENV': str(exported)}, timeout=5)
                 self.assertEqual(result.returncode, status)
                 self.assertEqual(exported.read_text() if exported.exists() else '',
                                  'AIDA_REQUIRE_BWRAP_LIVE=1\n' if status == 0 else '')
@@ -114,7 +113,7 @@ class LauncherRefusals(unittest.TestCase):
                 path.chmod(0o755)
             return subprocess.run(['bash', '-c', script], input=jit, text=True,
                                   capture_output=True, timeout=5,
-                                  env={**os.environ, 'PATH': f'{commands}:/usr/bin:/bin'})
+                                  env={'PATH': f'{commands}:/usr/bin:/bin'})
 
     def test_refuses_nonroot_operator(self):
         result = self.run_launcher(invoking_uid='1001')
@@ -143,10 +142,9 @@ class LauncherRefusals(unittest.TestCase):
             self.assertNotIn('REACHED_INSTALL', result.stderr)
 
     def test_prerequisite_refusals(self):
-        import os
         import subprocess
         import tempfile
-        for failure in ('root', 'sudo', 'home', 'auth', 'zstd', 'jq', 'ssh-keygen'):
+        for failure in ('root', 'sudo', 'home', 'auth', 'zstd', 'jq', 'ssh-keygen', 'dbus-run-session'):
             with self.subTest(failure=failure), tempfile.TemporaryDirectory() as directory:
                 root = Path(directory)
                 home = root / 'operator'
@@ -156,28 +154,28 @@ class LauncherRefusals(unittest.TestCase):
                 script = (ROOT / 'scripts/runner/check-prerequisites.sh').read_text()
                 script = script.replace('/home/dirtlab/.codex/auth.json', str(auth) if failure == 'auth' else str(root / 'absent'))
                 script = script.replace('/home/dirtlab', str(home) if failure == 'home' else str(root / 'absent'))
-                for name in ('cc', 'git', 'curl', 'python3', 'pkg-config', 'protoc', 'zsh', 'rg', 'bwrap', 'zstd', 'jq', 'ssh-keygen', 'sudo', 'id'):
+                for name in ('cc', 'git', 'curl', 'python3', 'pkg-config', 'protoc', 'zsh', 'rg', 'bwrap', 'zstd', 'jq', 'ssh-keygen', 'dbus-run-session', 'sudo', 'id'):
                     body = 'exit 0'
                     if name == 'id':
                         body = 'echo ' + ('0' if failure == 'root' else '1001')
                     if name == 'sudo':
                         body = 'exit ' + ('0' if failure == 'sudo' else '1')
-                    if name == failure and failure in ('zstd', 'jq', 'ssh-keygen'):
+                    if name == failure and failure in ('zstd', 'jq', 'ssh-keygen', 'dbus-run-session'):
                         continue
                     path = root / name
                     path.write_text('#!/bin/sh\n' + body + '\n')
                     path.chmod(0o755)
                 result = subprocess.run(['/bin/bash', '-c', script], capture_output=True,
-                                        text=True, timeout=5, env={**os.environ, 'PATH': str(root)})
+                                        text=True, timeout=5, env={'PATH': str(root)})
                 self.assertNotEqual(result.returncode, 0)
                 expected = {'root': 'unprivileged', 'sudo': 'sudo access',
                             'home': 'home is traversable', 'auth': 'auth is readable',
                             'zstd': 'missing tool: zstd', 'jq': 'missing tool: jq',
-                            'ssh-keygen': 'missing tool: ssh-keygen'}[failure]
+                            'ssh-keygen': 'missing tool: ssh-keygen',
+                            'dbus-run-session': 'missing tool: dbus-run-session'}[failure]
                 self.assertIn(expected, result.stderr)
 
     def test_rearm_generates_fresh_configs_and_stops_on_failure(self):
-        import os
         import subprocess
         import tempfile
         with tempfile.TemporaryDirectory() as directory:
@@ -196,7 +194,7 @@ class LauncherRefusals(unittest.TestCase):
             script = (ROOT / 'scripts/runner/rearm.sh').read_text().replace('"$EUID"', '"1001"')
             result = subprocess.run(['bash', '-c', script], capture_output=True,
                                     text=True, timeout=5,
-                                    env={**os.environ, 'PATH': f'{root}:/usr/bin:/bin'})
+                                    env={'PATH': f'{root}:/usr/bin:/bin'})
             self.assertNotEqual(result.returncode, 0)
             self.assertEqual(count.read_text().splitlines(), ['fresh-jit'] * 2)
             self.assertEqual(received.read_text().splitlines(), ['fresh-jit'] * 2)
@@ -208,7 +206,7 @@ class LauncherRefusals(unittest.TestCase):
         self.assertIn('HOME="$state/home"', launcher)
         self.assertIn('WorkingDirectory="$state"', launcher)
         lock = launcher.index('flock -n 9')
-        prepare = launcher.index('systemctl stop "$unit.service" || {')
+        prepare = launcher.index('stop_error=$(systemctl stop "$unit.service" 2>&1) || {')
         wipe = launcher.index('rm -rf -- "$state"', prepare)
         create = launcher.index('install -d -m 0700 "$state"')
         copy = launcher.index('cp -a "$runner_source/." "$state/"')
@@ -241,7 +239,7 @@ class LauncherRefusals(unittest.TestCase):
                     'id': 'echo 1001',
                     'flock': 'exit 0',
                     'chown': 'exit 0',
-                    'systemctl': f'[ "$1" != stop ] || exit {stop_status}',
+                    'systemctl': f'[ "$1" != stop ] || {{ echo stop-diagnostic >&2; exit {stop_status}; }}',
                     'systemd-run': f'[ ! -e "{state}/old-job" ] || exit 92; '
                                    f'[ -f "{state}/run.sh" ] || exit 93; '
                                    f'[ -d "{state}/home" ] || exit 94; '
@@ -260,14 +258,16 @@ class LauncherRefusals(unittest.TestCase):
                 for attempt in range(2):
                     result = subprocess.run(['bash', '-c', script], input='fresh-config\n',
                                             capture_output=True, text=True, timeout=5,
-                                            env={**os.environ, 'PATH': f'{commands}:/usr/bin:/bin'})
+                                            env={'PATH': f'{commands}:/usr/bin:/bin'})
                     if stop_status == 1:
                         self.assertNotEqual(result.returncode, 0)
                         self.assertIn('cannot stop previous job unit', result.stderr)
+                        self.assertIn('stop-diagnostic', result.stderr)
                         self.assertTrue((state / 'old-job').exists())
                         self.assertFalse(log.exists())
                     else:
                         self.assertEqual(result.returncode, 0, result.stderr)
+                        self.assertNotIn('stop-diagnostic', result.stderr)
                         self.assertFalse(state.exists(), 'job content must be removed on exit')
                         self.assertEqual(log.read_text().splitlines(), ['fresh-config'] * (attempt + 1))
 

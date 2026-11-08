@@ -32,10 +32,13 @@ cleanup() {
 }
 # Reconcile a service left by an interrupted launcher before reusing its path.
 # A failed stop must refuse reuse rather than delete a possibly live workspace.
-systemctl stop "$unit.service" || {
+stop_error=$(systemctl stop "$unit.service" 2>&1) || {
     status=$?
     # systemctl uses 5 for a unit that has never been loaded.
-    [ "$status" -eq 5 ] || refuse "cannot stop previous job unit (exit $status)"
+    if [ "$status" -ne 5 ]; then
+        printf '%s\n' "$stop_error" >&2
+        refuse "cannot stop previous job unit (exit $status)"
+    fi
 }
 trap cleanup EXIT
 trap 'exit 130' INT
