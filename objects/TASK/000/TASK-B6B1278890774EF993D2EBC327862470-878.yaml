@@ -8,7 +8,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-06T13:28:15.158321967Z
-modified_at: 2026-11-08T11:28:43.565228243Z
+modified_at: 2026-11-08T11:28:49.642031297Z
 req_type: Task
 tags:
 - architecture
@@ -468,6 +468,22 @@ comments:
   content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: S3 supervised contained Claude --bg matches the signed sketch and all PR CI is green at 497e5cb, but the supervisor runs with default SIGPIPE, so writing to a closed handoff socket kills it before teardown, defeating the documented cancellation unwind.. No triage reason was given.'
   created_at: 2026-11-08T11:28:43.565224404Z
   modified_at: 2026-11-08T11:28:43.565224404Z
+  session_id: 01a1b9af-8230-75d2-82f8-667491cc010a
+  harness_version: 2.1.319 (Claude Code)
+- id: 01a1baeb-0f83-73e1-9972-6814fce82e4d
+  author: joe
+  content: |-
+    REVIEW FINDINGS TO ADDRESS (PR #3628):
+    Verdict: CHANGES REQUESTED
+    Reviewed commit: 497e5cbd8e9b
+    Recorded: 2026-11-08T10:08:15.846950661+00:00
+    Findings:
+    1. BLOCKING (correctness, teardown): the Claude background supervisor never ignores SIGPIPE. run_cli calls install_sigpipe_handler (lib_part1.rs:232, SIG_DFL) and handle_internal_command reaches agent_claude_background::supervise_main (agent_claude_background.rs:275), which unlike the Codex sibling (agent_codex_background.rs:1253-1257, whose comment states 'a write to its closed channel must fail, not kill the owner of the attempt') sets no SIG_IGN. send() uses UnixStream write_all (lines 34-39), which raises SIGPIPE on a closed peer. Scenario A: prepare outlasts the dispatcher's 45s TIMEOUT, cancel_supervisor calls parent.shutdown(Both) (line 232), and the supervisor's send 'ready' in before_release (line 266) kills it instantly, contradicting the comment at lines 230-231 that the owner 'can unwind and revoke its grant'. Scenario B: the dispatcher dies or times out after 'release', and send 'accepted' (line 321) kills the supervisor after run.release(), so bwrap --die-with-parent (contained.rs:298) kills the just-released worker. Either way IssuedLaunchGrant rollback, RegistryEnd and the 'ended' marker never run: the child grant stays unrevoked until expiry (its process binding is dead, so this is teardown loss, not a live authority escape), the registry row stays open, and attach reports no terminal result. cancel_supervisor sees a prompt exit and treats it as graceful (retain not called). The dispatcher has the same exposure: send(parent, init) or send(parent, 'release') at lines 176/186 to an already-dead supervisor kills the launcher, losing the refusal diagnostic and the handle_guard/setup_receipt cleanup on the first send. Fix: send with MSG_NOSIGNAL, or set SIG_IGN at supervise_main entry and across the dispatcher handshake, so these become Err and take the existing unwind.
+    2. BLOCKING (test coverage, strict-tier refusal path): nothing exercises the finding above. supervisor_child_entry and supervisor_dispatcher_entry run under libtest, which retains Rust's SIGPIPE ignore and does not pass through run_cli, so task_3219_live_claude_background_supervisor and supervisor_cancellation_closes_socket_and_reaps_before_cleanup (a /bin/sh helper) cannot observe it. Add a regression that proves a closed handoff socket yields Err and a completed unwind (grant revoked, registry ended, 'ended' written) under the production SIGPIPE disposition, for example by setting SIG_DFL in the re-exec entry.
+    3. minor (correctness): logs() follow can falsely report failure at exit. At agent_claude_background.rs:384-402 it checks 'ended', then checks me.is_live(). If the supervisor writes 'ended' and exits between those two checks, attach returns 'background supervisor exited without a terminal result' for a clean run, and any pending partial UTF-8 is lost through the early return. Fix: when the supervisor is not live, re-check 'ended' and take the final-drain path before erroring.
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
+  created_at: 2026-11-08T11:28:49.539268568Z
+  modified_at: 2026-11-08T11:28:49.539268568Z
   session_id: 01a1b9af-8230-75d2-82f8-667491cc010a
   harness_version: 2.1.319 (Claude Code)
 history:
