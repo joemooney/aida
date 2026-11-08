@@ -3,12 +3,12 @@ spec_id: TASK-b6b1278890774ef993d2ebc327862470-880
 agreed_id: TASK-3223
 title: 'STORY-2561 S2: route CLI/MCP store writes through the mediation service and deny raw store writes in the shared boundary'
 description: 'Slice 2 of STORY-2561. Route every inventoried in-lane writer through the S1 service. In the shared AIDA bwrap boundary, make store objects, authority-bearing metadata and the shared derived cache read-only (ancestor grants, symlinks, primary-checkout launches and resume included), with lane-private or read-only derived caches where readers need them. The mediated profile is gated; Codex-native compatibility and its labels stay unchanged. Concurrency tests: stale base, concurrent mutation, and host failure after persist but before reply. Claude behavior is preserved.'
-status: InProgress
+status: NeedsAttention
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-06T13:39:53.442026Z
-modified_at: 2026-11-08T23:47:42.218198417Z
+modified_at: 2026-11-08T23:48:42.135958677Z
 req_type: Task
 tags:
 - architecture
@@ -2634,6 +2634,15 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a1bd90-7017-7d30-afd3-1304ee06568f
+  author: dirtlab
+  timestamp: 2026-11-08T23:48:42.135971775Z
+  session_id: 01a1bd8f7fce
+  harness_version: codex-cli 0.167.0
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: NeedsAttention
 execution_mode: drive
 filed_at:
   code_sha: 50ce509da3f7edbd12ff6636fe996c9c3a65c68f
@@ -2643,3 +2652,8 @@ filed_at:
   aida_build_sha: dd852f74c3b
   vendor: claude
   session: b0a84e34-277c-4df6-b53c-43f4bbe2e84d
+attention_reason:
+  category: design-fork
+  detail: 'PR #3661 latest review (5122542f63ac, findings 1-2) explicitly requires advisor operation-policy resolution; no finding disputed. Verified current checkout: python3 scripts/check-store-writers.py --profile mediated refuses with 3186 writer sites and 293 operations unresolved, four partial routes. Inventory v2 requires blocked operation dispositions; existing typed routes cover only comment_add and title/description/priority spec_edit. The supplied ruling requires all inventoried writers before contained Codex cutover, but does not resolve the review-requested classification of unsupported operations: implement every remaining typed semantic, or explicitly authorize named host-only/lane-private/refused exclusions or a staged partial. Do not relabel blanket refusals as routing or enable admission to manufacture zero. Durable Git/oplog publication and production/resume validation remain outstanding; own_claim/queue_done stay TASK-3326. No source changes, commit, push, PR mutation, queue completion or publication declaration. Preserve this punt and persisted NeedsAttention as publication vetoes even if signal persistence fails. Advisor must resolve the operation-policy gate before another unchanged rework cycle.'
+  raised_by: implementer
+  raised_at: 2026-11-08T23:48:42.135958677Z
