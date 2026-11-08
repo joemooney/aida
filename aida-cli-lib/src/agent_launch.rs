@@ -6240,6 +6240,9 @@ pub(crate) fn render_agent_launch_noexec(
         .join(aida_core::scaffolding::launch_profile::PROFILE_PATH)
         .exists()
     {
+        if plan.current_spec.is_some() {
+            out.push_str("launch_profile_scope: primary checkout until launch; the spec's dedicated worktree and Git administrative roots are resolved during actual launch\n");
+        }
         out.push_str(&crate::launch_permission_profile::render_roots(
             &plan.launch_cwd,
             &aida.path,

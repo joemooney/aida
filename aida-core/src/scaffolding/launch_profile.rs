@@ -15,13 +15,23 @@ mod tests {
     #[cfg(target_os = "linux")]
     #[test]
     fn generated_profile_preserves_approval_prompts() {
-        let value: toml::Value = toml::from_str(RECIPE).unwrap();
+        use crate::scaffolding::{ScaffoldConfig, Scaffolder};
+        let root = tempfile::tempdir().unwrap();
+        let preview = Scaffolder::new(root.path().into(), ScaffoldConfig::default())
+            .preview(&crate::RequirementsStore::new());
+        let content = &preview
+            .artifacts
+            .iter()
+            .find(|artifact| artifact.path == std::path::Path::new(PROFILE_PATH))
+            .unwrap()
+            .content;
+        let value: toml::Value = toml::from_str(content).unwrap();
         assert_eq!(value["approvals"].as_str(), Some("preserve"));
         for forbidden in ["allow", "no-ask", "bypass", "never", "/home/", "/tmp/"] {
-            assert!(!RECIPE.contains(forbidden), "{forbidden}");
+            assert!(!content.contains(forbidden), "{forbidden}");
         }
-        assert!(RECIPE.contains("target/debug/aida"));
-        assert!(RECIPE.contains("target/release/aida"));
+        assert!(content.contains("target/debug/aida"));
+        assert!(content.contains("target/release/aida"));
     }
     // trace:STORY-1486.acc62716 | ai:codex
     #[test]
