@@ -8,7 +8,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-08T00:02:55.282155934Z
-modified_at: 2026-11-08T15:02:02.657938460Z
+modified_at: 2026-11-08T15:02:06.491523042Z
 req_type: Bug
 relationships:
 - rel_type:
@@ -414,6 +414,24 @@ comments:
   content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: The contained-session unmerged bypass is fixed at child_store_commit.rs:162, and AC1, AC3, AC4 and the marker/parse half of AC2 hold by source. Unmerged refusal is still bypassed at the ordinary store commit sites, operator scope still has no advisor ruling or linked split, and CI is queued at this head so no test pass is claimed.. No triage reason was given.'
   created_at: 2026-11-08T15:02:02.657934561Z
   modified_at: 2026-11-08T15:02:02.657934561Z
+  session_id: 01a1b9af-8230-75d2-82f8-667491cc010a
+  harness_version: 2.1.319 (Claude Code)
+- id: 01a1bbae-532c-7a50-a122-61f0f6305c6f
+  author: joe
+  content: |-
+    REVIEW FINDINGS TO ADDRESS (BUG-2490):
+    Verdict: CHANGES REQUESTED
+    Reviewed commit: 3094ee8179fb
+    Recorded: 2026-11-08T14:58:07.885661657+00:00
+    Findings:
+    1. [major][correctness][AC2] 'unmerged paths also refuse' is met on commit_store_writes_since (child_store_commit.rs:162) and the three whole-tree sites, but not on the ordinary store commit paths. GitBackend auto-commit runs add_all/add before commit (aida-core/src/db/git_backend.rs:927, 933, 939, 983), and timing_record.rs:214 runs add_all before commit_paths, so 'git add' erases the unmerged stages before validate_store_index_paths runs. Result if an unmerged index survives (failed rebase/merge abort, killed process, or a manual resolution in progress): a conflicted oplog.yaml, metadata.yaml or timings/*.json commits with its markers, because only is_spec_object_path files are content-checked, and a modify/delete object with valid YAML resolves silently to the worktree side. Found by reading the source; not executed. The other add_all callers listed by 'rg add_all\(' need the same check. Fix: refuse unmerged paths inside add/add_all for store trees (exempting the rebase/merge resolvers, which stage on their own path), or call validate_store_index before staging at each site, and add a regression through a GitBackend save and through timing_record.
+    2. [major][scope][advisor-action] Carried and re-verified at 3094ee8179fb: operator scope on BUG-2490 (comment 2026-11-08T03:05Z, stopgap note 05:26Z, advisor evidence 13:16Z) is neither finished nor split. BUG-2490 links only STORY-2671 and no ruling is recorded. Open: (a) maybe_sync_pull still uses plain pull_rebase (aida-cli-lib/src/store_sync.rs:1719), so a same-spec conflict fails on --sync and burndown; (b) it prints 'Falling back to local view' (store_sync.rs:1768) and burndown discards the result with 'let _ =' (burndown_run.rs:367, 748), so a failed pull does not stop burndown's writes; (c) resolve_spec_conflict bails on delete/modify (aida-core/src/git_ops.rs:2644), and since pre-pickup pull is now fatal (queue_cmd.rs:12585) one such conflict stops every pickup without --no-pull. Another implementer round cannot clear this: the advisor must record the merge-policy ruling and either require (a)-(c) here or file a linked follow-up, then re-request review.
+    3. [major][ci][gate-state] CI run 42492112996 at 3094ee8179fb was still queued (7 jobs, none started) when this verdict was recorded, so no test named here has CI evidence at this head. merge-hold-gate fails only on the supervised hold, as expected. Confirm green CI before any approval.
+    4. [minor][test-coverage] bug_2490_child_commit_preserves_unmerged_index_after_text_repair (child_store_commit.rs:424) covers only a content conflict on an object. The prior round asked for a non-object file and a modify/delete object too. The check is path-agnostic ('ls-files --unmerged'), so those cases are covered by construction, but no regression pins them.
+    5. [minor][perf] Carried, non-blocking: doctor_multi_agent loads the whole store through Storage::load, then store_object_findings reads and parses every object again (aida-cli-lib/src/doctor_cmd.rs:828-836). Doctor-only cost.
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
+  created_at: 2026-11-08T15:02:06.380653024Z
+  modified_at: 2026-11-08T15:02:06.380653024Z
   session_id: 01a1b9af-8230-75d2-82f8-667491cc010a
   harness_version: 2.1.319 (Claude Code)
 history:
