@@ -522,46 +522,73 @@ pub(crate) fn publish_queue_exit(
     lane: &str,
     clean_exit: bool,
 ) -> Result<QueueExitOutcome> {
-    let main = crate::main_worktree_root_from(main);
-    let publish = || {
-        run_at(
-            &main,
-            FromSeatOptions {
-                clone: tree.to_path_buf(),
-                // trace:TASK-2902 | ai:codex — match the canonical post-exit trailer.
-                spec: Some(crate::native_publication::resolve_scope(&main, spec)?),
-                no_pr: false,
-                dry_run: false,
-                commit_pending: None,
-            },
-        )
-    };
-    let receipt = no_change_path(&main, lane);
-    match std::fs::remove_file(&receipt) {
-        Ok(()) => {}
-        Err(e) if e.kind() == std::io::ErrorKind::NotFound => {}
-        Err(e) => return Err(e.into()),
-    }
-    let outcome = publish_queue_exit_with(
-        &main,
-        spec,
-        || post_exit_commit_reported(&main, tree, spec, lane, clean_exit),
-        || crate::seat_clone::probe(&main, tree),
-        publish,
-        || {
-            advisor_request(
+    publish_queue_exit_recorded(main, tree, spec, lane, clean_exit, false)
+}
+
+// Only drain callers need a durable handoff to lease discovery.
+// trace:TASK-3608 | ai:codex
+pub(crate) fn publish_queue_exit_recorded(
+    main: &Path,
+    tree: &Path,
+    spec: &str,
+    lane: &str,
+    clean_exit: bool,
+    record: bool,
+) -> Result<QueueExitOutcome> {
+    record_queue_exit(main, lane, clean_exit, record, || {
+        let main = crate::main_worktree_root_from(main);
+        let publish = || {
+            run_at(
                 &main,
-                "Queue-work lane exited without changes",
-                &format!(
+                FromSeatOptions {
+                    clone: tree.to_path_buf(),
+                    // trace:TASK-2902 | ai:codex — match the canonical post-exit trailer.
+                    spec: Some(crate::native_publication::resolve_scope(&main, spec)?),
+                    no_pr: false,
+                    dry_run: false,
+                    commit_pending: None,
+                },
+            )
+        };
+        publish_queue_exit_with(
+            &main,
+            spec,
+            || post_exit_commit_reported(&main, tree, spec, lane, clean_exit),
+            || crate::seat_clone::probe(&main, tree),
+            publish,
+            || {
+                advisor_request(
+                    &main,
+                    "Queue-work lane exited without changes",
+                    &format!(
                     "Codex queue-work lane {lane} for {spec} exited with no pending changes in {} \
                  (clean_exit={clean_exit}). Check its existing PR and failing checks; a still-red \
                  PR needs a new rework assignment.",
                     tree.display()
                 ),
-            )
-        },
-    )?;
-    if clean_exit && outcome == QueueExitOutcome::NoChange {
+                )
+            },
+        )
+    })
+}
+
+// Share the real writer/reader key and failure cleanup with boundary tests.
+// trace:TASK-3608 | ai:codex
+pub(crate) fn record_queue_exit(
+    main: &Path,
+    lane: &str,
+    clean_exit: bool,
+    record: bool,
+    publish: impl FnOnce() -> Result<QueueExitOutcome>,
+) -> Result<QueueExitOutcome> {
+    let receipt = no_change_path(main, lane);
+    match std::fs::remove_file(&receipt) {
+        Ok(()) => {}
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => {}
+        Err(e) => return Err(e.into()),
+    }
+    let outcome = publish()?;
+    if record && clean_exit && outcome == QueueExitOutcome::NoChange {
         std::fs::create_dir_all(receipt.parent().unwrap())?;
         std::fs::write(receipt, b"no-change")?;
     }
@@ -883,6 +910,67 @@ mod queue_exit_tests {
             // Also cover the public boundary with actual on-disk signals.
             publish_queue_exit(main, &main.join("missing-seat"), spec, "lane", true).unwrap();
         }
+    }
+
+    // trace:TASK-3608 | ai:codex
+    #[test]
+    fn task_3608_receipt_writer_and_dirty_probe() {
+        use crate::seat_clone::{Probe, ProbeFacts};
+        let tmp = tempfile::tempdir().unwrap();
+        for clean in [false, true] {
+            for drain in [false, true] {
+                let outcome =
+                    record_queue_exit(tmp.path(), "lease/with spaces", clean, drain, || {
+                        publish_queue_exit_with(
+                            tmp.path(),
+                            "TASK-3608",
+                            || PostExitCommit::Clean,
+                            || Probe::Known(ProbeFacts::default()),
+                            || panic!("no bundle for clean no-change"),
+                            || Ok(()),
+                        )
+                    })
+                    .unwrap();
+                assert_eq!(
+                    outcome,
+                    if clean {
+                        QueueExitOutcome::NoChange
+                    } else {
+                        QueueExitOutcome::Continue
+                    }
+                );
+                assert_eq!(
+                    take_no_change(tmp.path(), "lease/with spaces"),
+                    clean && drain
+                );
+                assert!(!take_no_change(tmp.path(), "lease/with spaces"));
+            }
+        }
+        record_queue_exit(tmp.path(), "lane", true, true, || {
+            Ok(QueueExitOutcome::NoChange)
+        })
+        .unwrap();
+        let error = record_queue_exit(tmp.path(), "lane", true, true, || {
+            publish_queue_exit_with(
+                tmp.path(),
+                "TASK-3608",
+                || PostExitCommit::Clean,
+                || {
+                    Probe::Known(ProbeFacts {
+                        dirty: vec!["? pending".into()],
+                        ..Default::default()
+                    })
+                },
+                || panic!("dirty probe must refuse"),
+                || panic!("dirty must not notify"),
+            )
+        })
+        .unwrap_err();
+        assert!(error.to_string().contains("pending file changes"));
+        assert!(
+            !take_no_change(tmp.path(), "lane"),
+            "failed publication clears stale evidence"
+        );
     }
 
     // trace:STORY-2475 | ai:codex

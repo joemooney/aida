@@ -167,12 +167,16 @@ display ID, never a friendly node alias.
 <!-- trace:TASK-2902 | ai:codex -->
 
 A successful native implementer exit with no pending files or unpublished commits
-records a host-side, lease-scoped no-change receipt. Fresh and resumed drains
+records a host-side, lease-scoped no-change receipt when launched by a drain.
+Standalone launches and explicit queue resumes do not retain receipts. Fresh and resumed drains
 classify it after checking punt/hold signals. An existing open PR continues through
 ordinary gates; otherwise the drain reports `no-change`, exits 0 and pauses with
 no shipped credit or NeedsAttention shelving. No bundle is created for no-change.
 Failed exits cannot produce a no-change receipt. Pipelined child sidecars preserve
-this outcome for batch reporting.
+this outcome for batch reporting. Confirmed no-change ends the implementer
+session immediately; punt, hold and inconclusive outcomes retain it for recovery.
+Resume publication failures are ordinary phase failures, not spawn failures.
+A failed or unreachable PR lookup cannot confirm no-change.
 <!-- trace:TASK-3608 | ai:codex -->
 
 ---

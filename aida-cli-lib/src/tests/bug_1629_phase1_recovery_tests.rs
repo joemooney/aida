@@ -1018,10 +1018,10 @@ fn task_3608_host_no_change_survives_lease_discovery() {
     let temp = tempfile::tempdir().unwrap();
     let root = git_project(&temp);
     let lane = "native-lease";
-    let key: String = lane.as_bytes().iter().map(|b| format!("{b:02x}")).collect();
-    let receipt = root.join(".aida/native-no-change").join(key);
-    std::fs::create_dir_all(receipt.parent().unwrap()).unwrap();
-    std::fs::write(&receipt, "no-change").unwrap();
+    crate::ship_from_seat::record_queue_exit(&root, lane, true, true, || {
+        Ok(crate::ship_from_seat::QueueExitOutcome::NoChange)
+    })
+    .unwrap();
     let script = r#"cat > .aida/sessions/native-lease.toml <<EOF
 id = "native-lease"
 scope = "$spec"
@@ -1057,7 +1057,141 @@ exit 0"#;
     assert!(result.shelved_reason.is_none());
     assert!(result.shipped_spec_id.is_none());
     assert!(
-        !receipt.exists(),
+        !crate::ship_from_seat::take_no_change(&root, lane),
         "the lease-scoped evidence is consumed once"
+    );
+    assert!(list_leases(&root).is_empty(), "no-change releases the seat");
+}
+
+// trace:TASK-3608 | ai:codex
+#[test]
+fn task_3608_fresh_receipt_keeps_existing_pr() {
+    let temp = tempfile::tempdir().unwrap();
+    let root = git_project(&temp);
+    crate::ship_from_seat::record_queue_exit(&root, "native-lease", true, true, || {
+        Ok(crate::ship_from_seat::QueueExitOutcome::NoChange)
+    })
+    .unwrap();
+    let script = r#"cat > .aida/sessions/native-lease.toml <<EOF
+id = "native-lease"
+scope = "$spec"
+slug = "main"
+owner = "test"
+worktree_path = "$PWD"
+branch = "main"
+started_at = "2026-09-24T00:00:00Z"
+hostname = "test"
+EOF
+cat > .aida/sessions/native-lease.manifest.toml <<EOF
+session_id = "native-lease"
+planned_at = "2026-09-24T00:00:00Z"
+plan_source = "queue work"
+claude_session_id = "$sid"
+items = []
+EOF
+exit 0"#;
+    let exe = stub(&root, script, script);
+    let mut forge = crate::forge::fake::RecordingForge::new();
+    forge.open_for_branch = crate::forge::ChangeLookup::Found(crate::forge::ChangeRef {
+        id: 4242,
+        url: "https://example.invalid/4242".into(),
+        branch: "main".into(),
+        base: "main".into(),
+        title: None,
+    });
+    let mut d = driver(&root, "NFR-56", exe);
+    d.forge_factory = Some(forge.factory());
+    d.lifecycle_skip.no_preflight = true;
+    use crate::auto_complete as ac;
+    struct ThroughCi<'a>(&'a mut RealPhaseDriver);
+    impl PhaseDriver for ThroughCi<'_> {
+        fn run_implementer(&mut self) -> Result<ImplementerOutcome, ac::PhaseFailure> {
+            self.0.run_implementer()
+        }
+        fn finish_ci(&mut self) -> Result<(), ac::PhaseFailure> {
+            Ok(())
+        }
+        fn run_reviewer(&mut self) -> Result<ac::ReviewerOutcome, ac::PhaseFailure> {
+            panic!("through-CI only")
+        }
+        fn merge(&mut self) -> Result<(), ac::PhaseFailure> {
+            panic!("through-CI only")
+        }
+        fn pull(&mut self) -> Result<(), ac::PhaseFailure> {
+            panic!("through-CI only")
+        }
+        fn build(&mut self) -> Result<(), ac::PhaseFailure> {
+            panic!("through-CI only")
+        }
+        fn hint_context(&self) -> ac::HintContext {
+            self.0.hint_context()
+        }
+    }
+    let result = ac::orchestrate(
+        &mut ThroughCi(&mut d),
+        "NFR-56",
+        ac::AutoCompleteVariant::ThroughCi,
+        true,
+        ac::EscalateMode::Blocks,
+    );
+    assert_eq!(result.exit_code, 0, "{result:?}");
+    assert!(
+        !result.no_change,
+        "the existing PR proceeds to CI: {result:?}"
+    );
+    assert!(result.failure.is_none(), "{result:?}");
+    assert_eq!(d.pr_number, Some(4242));
+}
+
+// A real watchdog termination must not turn an older receipt into success.
+// trace:TASK-3608 | ai:codex
+#[cfg(unix)]
+#[test]
+fn task_3608_receipt_cannot_override_watchdog() {
+    let temp = tempfile::tempdir().unwrap();
+    let root = git_project(&temp);
+    let origin = temp.path().join("empty-origin.git");
+    git(&root, &["init", "--bare", "-q", origin.to_str().unwrap()]);
+    git(
+        &root,
+        &["remote", "add", "origin", origin.to_str().unwrap()],
+    );
+    crate::ship_from_seat::record_queue_exit(&root, "native-lease", true, true, || {
+        Ok(crate::ship_from_seat::QueueExitOutcome::NoChange)
+    })
+    .unwrap();
+    let script = r#"cat > .aida/sessions/native-lease.toml <<EOF
+id = "native-lease"
+scope = "$spec"
+slug = "main"
+owner = "test"
+worktree_path = "$PWD"
+branch = "main"
+started_at = "2026-09-24T00:00:00Z"
+hostname = "test"
+EOF
+cat > .aida/sessions/native-lease.manifest.toml <<EOF
+session_id = "native-lease"
+planned_at = "2026-09-24T00:00:00Z"
+plan_source = "queue work"
+claude_session_id = "$sid"
+items = []
+EOF
+exit 0"#;
+    let script = script.replace("exit 0", "sleep 90");
+    let exe = stub(&root, &script, &script);
+    let mut d = driver(&root, "NFR-56", exe);
+    d.drain_tuning.ceiling = std::time::Duration::from_millis(1);
+    d.lifecycle_skip.no_preflight = true;
+    d.forge_factory = Some(crate::forge::fake::RecordingForge::new().factory());
+    let failure = d.run_implementer().unwrap_err();
+    assert_eq!(failure.kind, FailureKind::Watchdog, "{failure:?}");
+    assert!(!crate::ship_from_seat::take_no_change(
+        &root,
+        "native-lease"
+    ));
+    assert!(
+        d.implementer_lease.is_some(),
+        "failed seat is retained for recovery"
     );
 }
