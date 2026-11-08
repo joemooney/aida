@@ -488,7 +488,7 @@ def operations(root, scanned=None):
         "comment delete": ("comment_cmd", "delete_comment"),
         "comment add": ("comment_cmd", "add_comment_cli_relayed"),
         "findings add": ("findings_gate", "handle_findings_add"),
-        "session handoff": ("seat_rotation", "write_handoff_by"),
+        "session handoff": ("seat_rotation", "write_handoff_kind"),  # trace:STORY-2662 | ai:codex
         "session handoff standing-orders add": ("seat_rotation", "add_standing_order"),
         "mailbox send": ("mailbox_store", "write_message_with_deliveries"),
         "mailbox digest": ("mailbox_store", "digest_snapshot_to_canonical"),
@@ -496,6 +496,11 @@ def operations(root, scanned=None):
     for selector, (module, function) in explicit.items():
         if (root / f"aida-cli-lib/src/{module}.rs").exists():
             resolve("cli", selector, [f"aida_cli_lib::{module}::{function}"])
+    # trace:STORY-2662 | ai:codex
+    if "aida-cli-lib/src/seat_rotation.rs" in files:
+        resolve("cli", "session handoff", [
+            "aida_cli_lib::seat_rotation::write_handoff_kind",
+        ], "Reviewed session_handoff_seat snapshot branch writes worktree-local reusable slots; host writer authority remains a cutover blocker.")
     # trace:TASK-3222 | ai:codex
     # Reviewed bare-name edge: defer_resurface::run calls sweep. Do not infer
     # other bare calls globally, where unrelated names can collide.

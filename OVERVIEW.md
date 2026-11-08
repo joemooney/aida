@@ -416,6 +416,19 @@ create/comment operations to recover confirmed writes without replay. See [the w
 <!-- trace:STORY-2479 trace:TASK-3096 | ai:codex -->
 <!-- trace:TASK-3114 | ai:codex -->
 
+### Pre-compaction recovery
+
+Claude's optional `PreCompact` hook writes a bounded recovery packet through
+`aida session handoff`, retaining pointers to work, verdicts, findings and the
+next step. One reusable slot per worktree and role stays inside the lane's
+write boundary and disappears with the worktree. Ordinary handoff reads expose
+the snapshot to relaunches; compact SessionStart injects it as potentially stale
+context. Deliberate rotation handoffs remain separate in the primary checkout.
+Unavailable evidence stays unknown and snapshot failures do not block work.
+Snapshots grant no completion, review or publication authority. Codex remains
+disabled pending its trusted-hook test.
+<!-- trace:STORY-2662 | ai:codex -->
+
 ### Agent launch migration
 
 `aida-cli-lib/src/launch/` resolves launch policy into `LaunchContext` and

@@ -219,6 +219,8 @@ pub(crate) struct HandoffWriter {
     pub generation: Option<u64>,
     /// `--final`: the handoff is recorded, but the session ends for real.
     pub final_: bool,
+    // trace:STORY-2662 | ai:codex
+    pub snapshot_owner: Option<(std::path::PathBuf, String)>,
 }
 
 impl HandoffWriter {
@@ -237,6 +239,7 @@ impl HandoffWriter {
             native_session_id: crate::agent_handle::current_native_session_id(),
             generation: var(crate::agent_rotation::GENERATION_ENV).and_then(|g| g.parse().ok()),
             final_,
+            snapshot_owner: None,
         }
     }
 }
@@ -249,6 +252,27 @@ pub(crate) fn write_handoff_by(
     body: &str,
     now: chrono::DateTime<chrono::Utc>,
     writer: &HandoffWriter,
+) -> Result<HandoffWritten> {
+    write_handoff_kind(project_root, seat, body, now, writer, "handoff")
+}
+
+// One slot per worktree and role, independent of native session generations.
+// This keeps relaunch discovery local and avoids directories per compaction/session.
+// trace:STORY-2662 | ai:codex
+pub(crate) fn compact_snapshot_seat(cwd: &Path, seat: &str) -> String {
+    use sha2::{Digest, Sha256};
+    let digest = Sha256::digest(format!("{}\0{seat}", cwd.display()).as_bytes());
+    format!("compact-{:x}", digest)[..48].to_string()
+}
+
+// trace:STORY-2662 | ai:codex
+pub(crate) fn write_handoff_kind(
+    project_root: &Path,
+    seat: &str,
+    body: &str,
+    now: chrono::DateTime<chrono::Utc>,
+    writer: &HandoffWriter,
+    event: &str,
 ) -> Result<HandoffWritten> {
     let seat = sanitize_seat(seat)?;
     let body = body.trim();
@@ -280,7 +304,14 @@ pub(crate) fn write_handoff_by(
         "<!-- seat handoff: seat={seat} written={}{stamp} -->\n{body}\n",
         now.to_rfc3339()
     );
-    let path = dir.join(format!("{}.md", now.format("%Y%m%dT%H%M%SZ")));
+    // Snapshot slots retain only the current packet and one diagnostic log row.
+    // Deliberate rotation handoffs retain their ordinary history.
+    let is_snapshot = event == "compact-snapshot";
+    let path = if is_snapshot {
+        dir.join("snapshot.md")
+    } else {
+        dir.join(format!("{}.md", now.format("%Y%m%dT%H%M%SZ")))
+    };
     std::fs::write(&path, &content).with_context(|| format!("writing {}", path.display()))?;
     let latest = dir.join("latest.md");
     let tmp = dir.join(".latest.md.tmp");
@@ -289,11 +320,17 @@ pub(crate) fn write_handoff_by(
     let mut record = serde_json::json!({
         "ts": now.to_rfc3339(),
         "seat": seat,
-        "event": "handoff",
+        "event": event,
         "path": path.strip_prefix(project_root).unwrap_or(&path).display().to_string(),
         "bytes": body.len(),
         "approx_tokens": body.len() / 4,
     });
+    // Snapshot ownership is diagnostic retention metadata, never launch authority.
+    // trace:STORY-2662 | ai:codex
+    if let Some((worktree, role)) = &writer.snapshot_owner {
+        record["worktree"] = serde_json::json!(worktree);
+        record["role"] = serde_json::json!(role);
+    }
     if let Some(handle) = &writer.handle {
         record["handle"] = serde_json::json!(handle);
     }
@@ -308,7 +345,9 @@ pub(crate) fn write_handoff_by(
     }
     let mut log = std::fs::OpenOptions::new()
         .create(true)
-        .append(true)
+        .append(!is_snapshot)
+        .write(true)
+        .truncate(is_snapshot)
         .open(dir.join("log.jsonl"))?;
     writeln!(log, "{record}")?;
     Ok(HandoffWritten {

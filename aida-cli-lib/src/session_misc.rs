@@ -985,9 +985,26 @@ pub(crate) fn session_handoff_seat(
     seat: Option<&str>,
     final_: bool,
     rotated: bool,
+    snapshot: bool,
+    body_only: bool,
 ) -> Result<()> {
-    let seat = resolve_handoff_seat(seat)?;
-    let project_root = main_worktree_root_from(&find_project_root()?);
+    let role_seat = resolve_handoff_seat(seat)?;
+    // trace:STORY-2662 | ai:codex
+    let cwd = find_project_root()?.canonicalize()?;
+    let snapshot_seat = seat_rotation::compact_snapshot_seat(&cwd, &role_seat);
+    let seat = if snapshot {
+        snapshot_seat.clone()
+    } else {
+        role_seat.clone()
+    };
+    // Recovery writes stay inside the lane's existing writable worktree. Deliberate
+    // rotation handoffs and standing orders retain their shared primary root.
+    // trace:STORY-2662 | ai:codex
+    let project_root = if snapshot {
+        cwd.clone()
+    } else {
+        main_worktree_root_from(&cwd)
+    };
     if let Some(src) = write {
         let body = if src == "-" {
             let mut s = String::new();
@@ -997,12 +1014,21 @@ pub(crate) fn session_handoff_seat(
             std::fs::read_to_string(src).with_context(|| format!("reading {src}"))?
         };
         // trace:STORY-B6B1278890774EF993D2EBC327862470-101 | ai:claude
-        let written = seat_rotation::write_handoff_by(
+        let mut writer = seat_rotation::HandoffWriter::from_env(final_);
+        if snapshot {
+            writer.snapshot_owner = Some((cwd.clone(), role_seat.clone()));
+        }
+        let written = seat_rotation::write_handoff_kind(
             &project_root,
             &seat,
             &body,
             chrono::Utc::now(),
-            &seat_rotation::HandoffWriter::from_env(final_),
+            &writer,
+            if snapshot {
+                "compact-snapshot"
+            } else {
+                "handoff"
+            },
         )?;
         println!(
             "Handoff written: {} ({} bytes)",
@@ -1013,7 +1039,11 @@ pub(crate) fn session_handoff_seat(
         if final_ {
             println!("Final handoff: a rotation supervisor will not relaunch this session.");
         }
-        println!("Next session: aida session handoff --seat {seat} --show");
+        if snapshot {
+            println!("Next session: aida session handoff --seat {role_seat} --snapshot --show");
+        } else {
+            println!("Next session: aida session handoff --seat {seat} --show");
+        }
         return Ok(());
     }
     // A rotated generation loads exactly the handoff its supervisor matched
@@ -1036,6 +1066,33 @@ pub(crate) fn session_handoff_seat(
     } else {
         seat_rotation::read_latest_handoff(&project_root, &seat)?
     };
+    // Ordinary reads advertise this worktree's recovery packet to relaunches.
+    // Explicit body-only and rotated reads retain their exact-note semantics.
+    // trace:STORY-2662 | ai:codex
+    let handoff = if !snapshot && !rotated && !body_only {
+        let recovery = match seat_rotation::read_latest_handoff(&cwd, &snapshot_seat) {
+            Ok(recovery) => recovery,
+            Err(error) => {
+                eprintln!("Warning: recovery snapshot unavailable: {error:#}");
+                None
+            }
+        };
+        match recovery {
+            Some(text) => Some(format!(
+                "{}\nRecovery snapshot (may be stale; revalidate):\n{text}",
+                handoff.unwrap_or_default()
+            )),
+            None => handoff,
+        }
+    } else {
+        handoff
+    };
+    if body_only {
+        if let Some(text) = handoff {
+            print!("{text}");
+        }
+        return Ok(());
+    }
     // trace:STORY-1693 | ai:claude
     let standing = seat_rotation::render_standing_orders(&project_root, &seat)?;
     // STORY-1700: the active mandate, read live, prints first.
