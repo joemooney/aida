@@ -3,12 +3,12 @@ spec_id: TASK-b6b1278890774ef993d2ebc327862470-880
 agreed_id: TASK-3223
 title: 'STORY-2561 S2: route CLI/MCP store writes through the mediation service and deny raw store writes in the shared boundary'
 description: 'Slice 2 of STORY-2561. Route every inventoried in-lane writer through the S1 service. In the shared AIDA bwrap boundary, make store objects, authority-bearing metadata and the shared derived cache read-only (ancestor grants, symlinks, primary-checkout launches and resume included), with lane-private or read-only derived caches where readers need them. The mediated profile is gated; Codex-native compatibility and its labels stay unchanged. Concurrency tests: stale base, concurrent mutation, and host failure after persist but before reply. Claude behavior is preserved.'
-status: NeedsAttention
+status: Approved
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-06T13:39:53.442026Z
-modified_at: 2026-11-08T21:35:37.441515831Z
+modified_at: 2026-11-08T22:20:12.923344792Z
 req_type: Task
 tags:
 - architecture
@@ -1361,6 +1361,12 @@ comments:
   modified_at: 2026-11-08T21:20:18.857529273Z
   session_id: 01a1bc93-77a0-7740-8b03-df4e3e8d1df5
   harness_version: 2.1.319 (Claude Code)
+- id: 01a1bd3f-6cfb-74c1-94f9-89ca0ed6b061
+  author: joe
+  content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: Merge-only head adds no code defect, but zero-unrouted acceptance is unmet with no advisor ruling, CI is pending at this head, and the merge hold is on.. It was punted on: design-fork: PR #3661 review finding 1 remains unresolved; no finding disputed. Reverified current tree: python3 scripts/check-store-writers.py --profile mediated exits 1 with 3173 writer sites and 293 operations unresolved. The supplied 2026-11-08 ruling sets zero-unrouted acceptance and requires all writers before enabling contained Codex admission, but does not define remaining operation policy or authorize a partial. Existing typed routes support comment_add and title/description/priority spec_edit only. Need advisor decision identifying supported typed semantics and authority for remaining lifecycle/bulk/metadata/backend operations, or explicitly defining which host-only/lane-private/refused operations count as reconciled. own_claim/queue_done remain TASK-3326. Do not relabel blocked evidence or enable selected_store_profile to manufacture acceptance. No source edits, commit, push, PR mutation, queue completion or publication declaration. Preserve this punt as publication veto.. No triage reason was given.'
+  created_at: 2026-11-08T22:20:12.923342340Z
+  modified_at: 2026-11-08T22:20:12.923342340Z
+  session_id: 20abb7c3-8f9b-4a5e-b326-404921f3b450
 history:
 - id: 01a1b116-742d-73c0-9064-1933f11e4c38
   author: joe
@@ -2478,6 +2484,14 @@ history:
   session_id: 01a1bd120471
   harness_version: 2.1.319 (Claude Code)
   changes: []
+- id: 01a1bd3f-6cfb-74c1-94f9-89b69ffaf9a2
+  author: joe
+  timestamp: 2026-11-08T22:20:12.923327963Z
+  session_id: 20abb7c3-8f9b-4a5e-b326-404921f3b450
+  changes:
+  - field_name: status
+    old_value: NeedsAttention
+    new_value: Approved
 execution_mode: drive
 filed_at:
   code_sha: 50ce509da3f7edbd12ff6636fe996c9c3a65c68f
@@ -2487,17 +2501,3 @@ filed_at:
   aida_build_sha: dd852f74c3b
   vendor: claude
   session: b0a84e34-277c-4df6-b53c-43f4bbe2e84d
-attention_reason:
-  category: design-fork
-  detail: 'PR #3661 review finding 1 remains unresolved; no finding disputed. Reverified current tree: python3 scripts/check-store-writers.py --profile mediated exits 1 with 3173 writer sites and 293 operations unresolved. The supplied 2026-11-08 ruling sets zero-unrouted acceptance and requires all writers before enabling contained Codex admission, but does not define remaining operation policy or authorize a partial. Existing typed routes support comment_add and title/description/priority spec_edit only. Need advisor decision identifying supported typed semantics and authority for remaining lifecycle/bulk/metadata/backend operations, or explicitly defining which host-only/lane-private/refused operations count as reconciled. own_claim/queue_done remain TASK-3326. Do not relabel blocked evidence or enable selected_store_profile to manufacture acceptance. No source edits, commit, push, PR mutation, queue completion or publication declaration. Preserve this punt as publication veto.'
-  lean: Keep mediated admission gated until the advisor defines operation reconciliation policy; retain existing staged routes without claiming completion.
-  raised_by: implementer
-  raised_at: 2026-11-08T21:23:08.907966071Z
-failure_reason:
-  phase: reviewer
-  phase_index: 3
-  kind: verdict:request-changes
-  detail: Merge-only head adds no code defect, but zero-unrouted acceptance is unmet with no advisor ruling, CI is pending at this head, and the merge hold is on.
-  recovery_hint: address the review findings, move TASK-3223 back to In Progress, and clear the PR hold only after approval
-  shelved_by: reviewer
-  shelved_at: 2026-11-08T21:35:37.441515831Z
