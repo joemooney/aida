@@ -15,12 +15,12 @@ description: |
   Acceptance (draft): with dell1 registered at 6 slots and the primary at 4, a burst of 8 queued reworks lands 6 on dell1 and 2 locally with no advisor script; `aida session leases` and the "lane running" check show the dell1 lanes; an unreachable pool host is skipped with a visible reason, never counted as free; vendor pins (e.g. BUG-2487 Codex 0.166) are checked per host before placement.
 
   Related: STORY-2571 (operator plumbing into AIDA), STORY-2642 (lane-host readiness), FAQ-151.
-status: Approved
+status: InProgress
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-08T02:56:36.206726Z
-modified_at: 2026-11-08T15:08:18.455244611Z
+modified_at: 2026-11-08T15:16:00.733854287Z
 req_type: Story
 tags:
 - architecture
@@ -366,6 +366,13 @@ history:
   - field_name: status
     old_value: NeedsAttention
     new_value: Approved
+- id: 01a1bbbb-0e5d-7ea3-a4f8-7b6ddd184c24
+  author: aida-session-start
+  timestamp: 2026-11-08T15:16:00.733853404Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: InProgress
 filed_at:
   code_sha: dc41ee8da2f44f88178936fc1a8e6cb7168a3de7
   branch: main
