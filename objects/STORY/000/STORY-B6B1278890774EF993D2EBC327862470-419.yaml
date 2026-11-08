@@ -8,7 +8,7 @@ priority: Low
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-05T04:41:25.538710401Z
-modified_at: 2026-11-08T08:44:41.970093325Z
+modified_at: 2026-11-08T08:44:44.474340758Z
 req_type: Story
 comments:
 - id: 01a1aa03-51be-7480-baec-91ac74908e0b
@@ -129,6 +129,22 @@ comments:
   content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: F2-F7 are fixed, but the PR title still completes the unimplemented STORY-2493 at merge, and the sketch''s same-head and superseded release paths can unblock merge while a finding is open.. It was punted on: design-fork: F6/F7 sketch fixes are ready as uncommitted documentation. F1 remains unresolved: host/advisor must retitle PR-3665 with (Refs STORY-2493) or add aida: no-complete to its body; another code push cannot repair the completing PR title. CLAUDE.md requires advisor architecture signoff before implementation. Reviewer/session attestation, home verification and authenticated supersession/disposition authority still need approval. Preserve publication veto; design-only changes do not complete this story.. No triage reason was given.'
   created_at: 2026-11-08T08:44:41.970092035Z
   modified_at: 2026-11-08T08:44:41.970092035Z
+  session_id: 01a1b8be-8170-7fb2-89ab-ecb4c6eee98c
+  harness_version: 2.1.319 (Claude Code)
+- id: 01a1ba54-d5b8-7c41-8814-60bf7e22d9ab
+  author: joe
+  content: |-
+    REVIEW FINDINGS TO ADDRESS (STORY-2493):
+    Verdict: CHANGES REQUESTED
+    Reviewed commit: 6c5ff0c71cc4
+    Recorded: 2026-11-08T08:35:05.727967067+00:00
+    Findings:
+    1. F1 (blocking, carried over, fourth round): the PR title at 6c5ff0c71cc4 is still '[AI:codex] feat: Cross-machine review from an untrusted (work) node: verdict and finding envelopes over the aida-intent channel (STORY-2493)' and the body has no non-completing marker. derive_squash_trailer (aida-cli-lib/src/pr_ship.rs:314-355) takes completing IDs from a title with no (Refs ...) ending, so merging this docs/plans-only PR would complete STORY-2493 with no envelope, transport, home-processing or merge-block behaviour implemented. Fix: retitle to '[AI:codex] docs(plans): untrusted-node review return channel sketch (Refs STORY-2493)', or add an 'aida: no-complete' line to the PR body (NO_COMPLETE_BODY_MARKERS, pr_ship.rs:227). The implementer seat cannot edit forge metadata, so the advisor or host must do this; another rework round cannot fix it.
+    2. F8 (minor, design gap): docs/plans/2026-11-07-story-2493-untrusted-review.md:79-83 is the same-head release path, but the limits that stop omission from releasing an open digest apply only to inherited digests (plan:71, plan:76). As written, a superseding verdict at the same head can omit a digest that is still open or unprocessed at home and merge unblocks, contrary to the spec's 'Merge stays blocked while a blocking digest is unprocessed or open'. The paragraph also opens as a general rule ('To release a false positive or superseded finding, require ... exact head') right after plan:77 says no same-head successor is required at head B. Fix: scope plan:79 to the same-head case, require the digest's home status to be Rejected or Superseded with audit evidence, and add a Verification case for a same-head successor omitting an open or unprocessed digest (plan:112 covers only the successful false-positive release).
+    3. F9 (minor, design gap): docs/plans/2026-11-07-story-2493-untrusted-review.md:62 says Superseded must not clear a digest because a replacement may still be open, but the release paths at plan:73-76 and plan:79-83 only require a disposition and replacement audit evidence. A superseded digest is not itself open or unprocessed, so the plan:76 exclusion does not catch it, and it can be released while its replacement is still open. Merge then unblocks with the underlying blocker unresolved. Fix: require the replacement finding to be Done or Completed, or carry the obligation over to the replacement's digest, and add a Verification case for a superseded finding whose replacement is open.
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
+  created_at: 2026-11-08T08:44:44.344021469Z
+  modified_at: 2026-11-08T08:44:44.344021469Z
   session_id: 01a1b8be-8170-7fb2-89ab-ecb4c6eee98c
   harness_version: 2.1.319 (Claude Code)
 history:
