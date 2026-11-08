@@ -15,12 +15,12 @@ description: |
   ## Acceptance
   - A test for the native-seat punt that reaches the host and suppresses publication.
   - A test for a no-commit seat that yields `no-change` without invoking bundle.
-status: InProgress
+status: Approved
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-07T20:18:53.564500Z
-modified_at: 2026-11-08T13:02:47.631884Z
+modified_at: 2026-11-08T15:58:33.597216185Z
 req_type: Bug
 relationships:
 - rel_type:
@@ -378,6 +378,15 @@ history:
   session_id: 01a1bb3a66c0
   harness_version: codex-cli 0.167.0
   changes: []
+- id: 01a1bbe2-0506-7a31-8ee9-e396e000a9aa
+  author: joe
+  timestamp: 2026-11-08T15:58:34.246827924Z
+  session_id: 01a1bbab-762f-7cd2-8a36-4ea9f209afce
+  harness_version: 2.1.319 (Claude Code)
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Approved
 filed_at:
   code_sha: 7a18c0d52a6a4e0822befd4c810cfed16b04b74c
   branch: main
