@@ -977,3 +977,8 @@ codex_min_grant_secs = "policy"
 [readers."aida-cli-lib/src/launch/codex_auth.rs"]
 channels = ["write"]
 sites = 1
+
+# STORY-2641: host Cargo config selects the lane wrapper; never seat config.
+[readers."aida-cli-lib/src/lane_job.rs"]
+channels = ["other-file"]
+sites = 1

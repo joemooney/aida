@@ -1820,13 +1820,19 @@ decisions. See the signed
 Lane test jobs opt into sccache when the host Cargo home's `config.toml`
 (or legacy `config`) selects `build.rustc-wrapper = "sccache"` or an absolute
 path ending in `sccache`. Jobs use `~/.cache/aida/lane-sccache`, never the
-operator's cache, with a Unix-domain server socket in each job's private `/tmp` and a
-60-second server idle timeout. The server starts inside the job sandbox;
-jobs share cached artifacts but have separate servers. Cargo home
-remains read-only and Cargo stays offline. One lane can poison another lane's
+operator's cache. Each job starts a foreground server inside its sandbox with a
+Unix-domain socket in private `/tmp`. The job prints final `sccache --show-stats`, requests
+`--stop-server`, and waits for the server process before sandbox teardown so
+pending local cache writes can drain. Shutdown/statistics failures fail an
+otherwise successful job; Cargo failures retain their exit code. Timeouts and
+forced lane stops can still interrupt cache writes. Jobs share cached artifacts
+but have separate servers. Cargo home remains read-only and Cargo stays offline. One lane can poison another lane's
 cache; this is accepted for contained, CI-gated lanes, and grants no access to
 operator builds. Host sccache statistics do not measure these separate servers;
 cache-hit acceptance must inspect the lane server's statistics on each host.
 Agent children receive their host-recorded seat target and disabled wrapper
 through declared launch resources rather than parent build-environment values.
-The lane job runner alone opts into the lane cache.
+The lane job runner alone opts into the lane cache. Recorded clones without a
+cargo target (including fresh/non-Rust seats and targets removed by host clean)
+launch without resource overrides. AC1 still requires measured hits from two
+consecutive jobs on both primary and dell1; unit fixtures do not establish it.

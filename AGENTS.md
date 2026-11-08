@@ -1,3 +1,9 @@
+Lane sccache jobs print server statistics and wait for foreground server shutdown
+before sandbox teardown; interrupted jobs may lose pending cache puts. Missing
+recorded cargo targets no longer block agent launches. Two-host cache-hit
+acceptance remains outstanding. See OVERVIEW.md.
+<!-- trace:STORY-2641 | ai:codex -->
+
 Review-watch records retained fast-exiting children before reaping. Incomplete
 legacy receipts use the existing reboot/TTL backstop. Caller capture requires
 verified local procfs and fails closed with host-retry guidance. See OVERVIEW.md.

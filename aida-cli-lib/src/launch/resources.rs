@@ -75,10 +75,11 @@ impl SandboxResources {
         let Some(clone) = crate::seat_clone::recorded_clone_for(host, seat) else {
             return Ok(None);
         };
-        let target = clone
-            .cargo_target_dir
-            .as_deref()
-            .ok_or_else(|| anyhow::anyhow!("recorded seat has no private cargo target"))?;
+        // Fresh/non-Rust clones and targets removed by host cargo clean have
+        // no build resources to override. Their ordinary launches still work.
+        let Some(target) = clone.cargo_target_dir.as_deref() else {
+            return Ok(None);
+        };
         let host =
             host.ok_or_else(|| anyhow::anyhow!("seat resources require a pinned host root"))?;
         Ok(Some(Self {

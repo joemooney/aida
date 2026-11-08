@@ -1832,3 +1832,64 @@ fn story_2326_resource_env_spawn_uses_host_recorded_seat() {
         );
     }
 }
+
+// trace:STORY-2641 | ai:codex
+#[test]
+fn story_2326_resource_env_spawn_without_recorded_target() {
+    let tmp = tempfile::tempdir().unwrap();
+    let host = tmp.path().join("host");
+    let seat = tmp.path().join("aida-seat-no-target");
+    for dir in [
+        host.join(".git/objects"),
+        host.join(".aida/sessions"),
+        seat.join(".git/objects/info"),
+        seat.join(".aida"),
+    ] {
+        std::fs::create_dir_all(dir).unwrap();
+    }
+    let marker = crate::seat_clone::SeatCloneMarker {
+        main: host.clone(),
+        branch: "seat-no-target".into(),
+        base_sha: "fixture".into(),
+        origin_url: "fixture".into(),
+        pin: "fixture".into(),
+    };
+    std::fs::write(
+        seat.join(crate::seat_clone::MARKER_RELATIVE),
+        toml::to_string(&marker).unwrap(),
+    )
+    .unwrap();
+    std::fs::write(
+        seat.join(".git/objects/info/alternates"),
+        host.join(".git/objects").display().to_string(),
+    )
+    .unwrap();
+    // Exercise both an absent declaration and a stale declaration after clean.
+    for target_line in [
+        String::new(),
+        format!(
+            "cargo_target_dir = {}\n",
+            aida_core::toml_quote::toml_string(
+                &host.join("target/worktrees/missing").display().to_string()
+            )
+        ),
+    ] {
+        std::fs::write(crate::lease_path(&host, "c0ffee2642"), format!(
+            "id = 'c0ffee2642'\nscope = 'STORY-2641'\nslug = 'no-target'\nowner = 'test'\nworktree_path = {}\nbranch = 'seat-no-target'\nstarted_at = '2026-11-07T00:00:00Z'\nhostname = 'test'\ntree_kind = 'clone'\n{}",
+            aida_core::toml_quote::toml_string(&seat.display().to_string()), target_line)).unwrap();
+        let clone = crate::seat_clone::host_recorded_clone(&host, &seat).unwrap();
+        assert!(clone.cargo_target_dir.is_none());
+        for vendor in [LaunchVendor::Claude, LaunchVendor::Codex, LaunchVendor::Agy] {
+            let mut req = request(ContainmentPosture::None, LaunchKind::Fresh, &[]);
+            req.vendor = vendor;
+            req.program = "/bin/true".into();
+            req.args.clear();
+            req.set_cwd = true;
+            req.cwd = seat.clone();
+            req.host_main = Some(host.clone());
+            let ctx = LaunchContext::resolve_under(req, false).unwrap();
+            let mut cmd = spawn_agent(&ctx).unwrap();
+            assert!(cmd.status().unwrap().success());
+        }
+    }
+}

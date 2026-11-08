@@ -1827,3 +1827,97 @@ fn story_2641_sccache_job_env_and_binds_are_opt_in_and_lane_only() {
         .windows(3)
         .any(|args| args[0] == "--bind-try" && args[1] == cache.display().to_string()));
 }
+
+// trace:STORY-2641 | ai:codex
+#[test]
+fn story_2641_sccache_existing_cache_diagnostic_names_path_and_remedy() {
+    use std::os::unix::fs::DirBuilderExt;
+    let tmp = tempfile::tempdir().unwrap();
+    let mut lane = fixture_lane(tmp.path());
+    let cache = tmp.path().join("cache with spaces");
+    std::fs::DirBuilder::new()
+        .mode(0o700)
+        .create(&cache)
+        .unwrap();
+    let private_permissions = std::fs::metadata(&cache).unwrap().permissions();
+    let mut read_only = private_permissions.clone();
+    read_only.set_readonly(true);
+    std::fs::set_permissions(&cache, read_only).unwrap();
+    lane.build_env
+        .push(("SCCACHE_DIR".into(), cache.display().to_string()));
+    let error = lane.prepare().unwrap_err().to_string();
+    assert!(error.contains(&cache.display().to_string()), "{error}");
+    assert!(error.contains("chmod 700"), "{error}");
+    std::fs::set_permissions(&cache, private_permissions).unwrap();
+    lane.prepare().unwrap();
+}
+
+// A fake server delays its final disk put until after stop-server returns:
+// returning from the job before wait(server) would lose the final artifact.
+// trace:STORY-2641 | ai:codex
+#[test]
+fn story_2641_sccache_lifecycle_waits_for_writes_and_preserves_cargo_exit() {
+    let tmp = tempfile::tempdir().unwrap();
+    let wrapper = tmp.path().join("sccache fixture");
+    crate::test_exec::write_executable(
+        &wrapper,
+        r#"#!/usr/bin/python3
+import os, socket, sys, time
+from pathlib import Path
+root = Path(os.environ['SCCACHE_DIR'])
+if os.environ.get('SCCACHE_START_SERVER') == '1':
+    sock = socket.socket(socket.AF_UNIX)
+    sock.bind(os.environ['SCCACHE_SERVER_UDS'])
+    while not (root / 'stop').exists():
+        time.sleep(0.01)
+    time.sleep(0.2)
+    (root / 'persisted').write_text('final cache put')
+    sys.exit(0)
+if sys.argv[1] == '--show-stats':
+    print('Cache hits 1')
+elif sys.argv[1] == '--stop-server':
+    (root / 'stop').touch()
+else:
+    sys.exit(99)
+"#,
+    );
+    let mut env = BTreeMap::from([
+        ("RUSTC_WRAPPER".into(), wrapper.display().to_string()),
+        ("SCCACHE_DIR".into(), tmp.path().display().to_string()),
+        (
+            "SCCACHE_SERVER_UDS".into(),
+            tmp.path().join("server.sock").display().to_string(),
+        ),
+    ]);
+    // Shell-looking text is an argv value, never executable source.
+    let args = vec![
+        "-c".into(),
+        "[ \"$1\" = '$(exit 99)' ] || exit 98; exit 7".into(),
+        "cargo-fixture".into(),
+        "$(exit 99)".into(),
+    ];
+    let (program, args) = cargo_with_cache_lifecycle(Path::new("/bin/sh"), args, &env);
+    let output = std::process::Command::new(program)
+        .args(args)
+        .env_clear()
+        .env("PATH", "/usr/bin:/bin")
+        .envs(&env)
+        .output()
+        .unwrap();
+    assert_eq!(output.status.code(), Some(7), "{output:?}");
+    assert_eq!(
+        std::fs::read_to_string(tmp.path().join("persisted")).unwrap(),
+        "final cache put"
+    );
+    let stdout = String::from_utf8(output.stdout).unwrap();
+    assert!(stdout.contains("Cache hits 1"), "{stdout}");
+    assert!(
+        stdout.contains("server exited before sandbox teardown"),
+        "{stdout}"
+    );
+    env.clear();
+    assert_eq!(
+        cargo_with_cache_lifecycle(Path::new("cargo"), vec!["test".into()], &env),
+        ("cargo".into(), vec!["test".into()])
+    );
+}
