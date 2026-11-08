@@ -161,6 +161,38 @@ cancel a wait. Refusal preserves InProgress, the question/binding, wait, dirty
 seat and existing queue state; it never manufactures a status-mismatch block
 for an otherwise eligible bound resume.
 
+### Closed inventory of reclaim doors (R22)
+
+Retained ownership is a separate gate from PID lease liveness, status
+preflight and force flags. All of the following doors must consult the same
+canonical-binding/host-wait probe under the common ownership/store lock order
+at their final mutation or claim boundary:
+
+| Door | Protected boundary |
+|---|---|
+| CLI metadata-only `aida queue rework` | Before status changes, queue insertion or routing. |
+| MCP `queue_rework` (`mcp.rs::tool_queue_rework_inner`) | Before status changes or queue writes, including explicit status overrides and `force: true`. |
+| CLI `aida queue rework --work` | Before queue/status writes and again before claiming or launching fresh work, even when status remains InProgress. |
+| Ordinary pickup and direct `session_start` | Before lease/seat claim, status bump, adoption or fresh child launch. |
+| Explicit `--force-claim` | The same claim boundary; forced status preflight cannot bypass retained ownership. |
+| Orchestrator-corroborated auto-claim | The same claim boundary, including parent phase registration; corroboration does not supersede a parked owner. |
+| Orphan adoption (`session_start` and `leases.rs` adoption path) | Before adopting/rebinding the lease or seat; a dead lease with an open wait is retained work, not an adoptable orphan. |
+| `persist_unclaim_status`, doctor status-drift heal, orphan detection, pickup and worktree/branch cleanup | The ownership/status/cleanup boundaries described above. |
+
+This is the closed reclaim inventory for implementation review; trace each
+entry to its final writer/claim helper and test it before enabling park. Share
+one gate rather than duplicating a live-lease-only check in each surface.
+Retained ownership refuses **even with `--force`, `force: true`, or
+`--force-claim`**. An unchanged InProgress status is not an exemption: creating a
+second session or queue route also violates ownership. Unreadable, conflicting
+or partially persisted evidence refuses without mutation. Refusal directs the
+caller to bound `aida lane resume` or explicit checked cancellation; it must not
+recommend a force flag as a recovery bypass. Only checked cancellation/completion
+releasing ownership allows ordinary reclaim. Bound resume itself verifies the
+exact wait/generation and uses its dedicated continuation admission; it is not
+an exemption available to fresh sessions. Explicit `aida edit --status` retains
+the already specified visible status-mismatch behavior.
+
 ## Park and exit handshake
 
 ### Seat-to-host transport (new surfaces, R4)
@@ -594,6 +626,19 @@ conflicting ownership evidence, and checked cancellation. Only checked
 ownership release permits ordinary rework to Approved and queue insertion.
 These are required future implementation tests, not executed regressions in
 this sketch-only revision.
+
+R22 regressions must exercise every reclaim door in the inventory separately:
+MCP `queue_rework` with `force: true` and a status override; CLI rework with
+`--work` (including `--force`); ordinary pickup/direct session start; explicit
+`--force-claim`; orchestrator-corroborated auto-claim; and orphan adoption via
+both session-start and lease adoption entry points. Use a parked InProgress spec
+with dirty edits, a dead/reaped lease and no PR. Each refuses before status,
+queue, lease, seat or child mutation and preserves the exact wait/binding and
+resume eligibility. For each door repeat with park acceptance racing its earlier
+preflight, unreadable/conflicting evidence, and checked cancellation: only the
+last permits ordinary reclaim. Verify refusal guidance names bound resume or
+checked cancellation, never force as a bypass. These are required future
+implementation tests; this sketch does not claim they have run.
 
 Publication metadata gate (R1): host/advisor must retitle PR #3666 exactly
 `[AI:codex] docs(plans): sketch park-on-ask resume-on-answer (Refs STORY-2661)`.
