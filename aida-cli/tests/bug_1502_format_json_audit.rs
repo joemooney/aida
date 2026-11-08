@@ -908,3 +908,223 @@ fn story2402_s3_migration_global_json_matches_dedicated_json() {
     assert_eq!(global["specs_written"], 0);
     assert!(global["specs"].is_array());
 }
+
+// Real CLI dispatch: exercise the default-new rewrite as well as log safety.
+// trace:TASK-3219 | ai:codex
+#[test]
+fn task_3219_background_logs_and_attach_commands() {
+    use std::io::Write;
+    use std::os::unix::fs::{DirBuilderExt, OpenOptionsExt, PermissionsExt};
+    let (_tmp, repo, home, _) = fixture();
+    let id = "12345678-1234-4234-8234-123456789abc";
+    let base = repo.join(".aida/claude-background");
+    std::fs::DirBuilder::new()
+        .mode(0o700)
+        .create(&base)
+        .unwrap();
+    let dir = base.join(id);
+    std::fs::DirBuilder::new().mode(0o700).create(&dir).unwrap();
+    let write = |name: &str, body: &[u8]| {
+        std::fs::OpenOptions::new()
+            .write(true)
+            .create_new(true)
+            .mode(0o600)
+            .open(dir.join(name))
+            .unwrap()
+            .write_all(body)
+            .unwrap();
+    };
+    write("output.log", b"first line\n");
+    write("ended", b"done");
+    for verb in ["logs", "attach"] {
+        let out = aida(&repo, &home, &["agent", verb, id]);
+        assert!(out.status.success(), "{out:?}");
+        assert_eq!(out.stdout, b"first line\n");
+        for bad in [
+            "../escape",
+            "12345678-1234-4234-8234-123456789ABC",
+            "00000000-0000-4000-8000-000000000000",
+        ] {
+            assert!(!aida(&repo, &home, &["agent", verb, bad]).status.success());
+        }
+        std::fs::set_permissions(&dir, std::fs::Permissions::from_mode(0o750)).unwrap();
+        let out = aida(&repo, &home, &["agent", verb, id]);
+        assert!(!out.status.success());
+        // Non-TTY agent-mode errors are emitted on stdout; human errors
+        // use stderr. Assert the refusal independently of the output format.
+        let diagnostic = format!(
+            "{}{}",
+            String::from_utf8_lossy(&out.stdout),
+            String::from_utf8_lossy(&out.stderr)
+        );
+        assert!(
+            diagnostic.contains("unsafe background directory"),
+            "{out:?}"
+        );
+        std::fs::set_permissions(&dir, std::fs::Permissions::from_mode(0o700)).unwrap();
+        let saved = base.join("saved");
+        std::fs::rename(&dir, &saved).unwrap();
+        std::os::unix::fs::symlink(&saved, &dir).unwrap();
+        assert!(!aida(&repo, &home, &["agent", verb, id]).status.success());
+        std::fs::remove_file(&dir).unwrap();
+        std::fs::rename(saved, &dir).unwrap();
+    }
+    std::fs::remove_file(dir.join("ended")).unwrap();
+    let me = serde_json::json!({"pid": std::process::id(),
+        "start": aida_core::liveness::process_start_identity(std::process::id()).unwrap()});
+    write(
+        "supervisor.json",
+        &serde_json::to_vec(&[me.clone(), me]).unwrap(),
+    );
+    let mut child = aida_command(&repo, &home)
+        .args(["agent", "attach", id])
+        .stdout(std::process::Stdio::piped())
+        .stderr(std::process::Stdio::piped())
+        .spawn()
+        .unwrap();
+    // Seeing the initial line proves attach opened the log before the append.
+    use std::io::{BufRead, BufReader, Read};
+    let mut stdout = BufReader::new(child.stdout.take().unwrap());
+    let mut first = String::new();
+    stdout.read_line(&mut first).unwrap();
+    assert_eq!(first, "first line\n");
+    std::fs::OpenOptions::new()
+        .append(true)
+        .open(dir.join("output.log"))
+        .unwrap()
+        .write_all(b"final result\n")
+        .unwrap();
+    write("ended", b"done");
+    let deadline = std::time::Instant::now() + std::time::Duration::from_secs(5);
+    while child.try_wait().unwrap().is_none() {
+        if std::time::Instant::now() >= deadline {
+            child.kill().unwrap();
+            panic!("attach did not terminate");
+        }
+        std::thread::sleep(std::time::Duration::from_millis(20));
+    }
+    let mut tail = String::new();
+    stdout.read_to_string(&mut tail).unwrap();
+    assert_eq!(tail, "final result\n");
+    assert!(child.wait().unwrap().success());
+    // Both commands preserve bytes through pipes but neutralize terminal
+    // commands (including OSC 52 clipboard writes) at an actual PTY.
+    let payload = "first line — ✓ 日本語\n".as_bytes();
+    let payload = [payload, b"\x1b]52;c;clipboard\x07\x1b[2J\r\x9b"].concat();
+    std::fs::write(dir.join("output.log"), &payload).unwrap();
+    for verb in ["logs", "attach"] {
+        let piped = aida(&repo, &home, &["agent", verb, id]);
+        assert!(piped.status.success(), "{piped:?}");
+        assert_eq!(piped.stdout, payload);
+        use std::os::fd::FromRawFd;
+        let (mut master, mut slave) = (-1, -1);
+        // SAFETY: openpty initializes two owned descriptors; each is wrapped
+        // exactly once. The default termios and window size are sufficient.
+        assert_eq!(
+            unsafe {
+                libc::openpty(
+                    &mut master,
+                    &mut slave,
+                    std::ptr::null_mut(),
+                    std::ptr::null(),
+                    std::ptr::null(),
+                )
+            },
+            0
+        );
+        let mut master = unsafe { std::fs::File::from_raw_fd(master) };
+        let slave = unsafe { std::fs::File::from_raw_fd(slave) };
+        let out = aida_command(&repo, &home)
+            .args(["agent", verb, id])
+            .stdout(slave)
+            .output()
+            .unwrap();
+        assert!(out.status.success(), "{out:?}");
+        let mut terminal = Vec::new();
+        let mut buf = [0; 4096];
+        loop {
+            match master.read(&mut buf) {
+                Ok(0) => break,
+                Ok(n) => terminal.extend_from_slice(&buf[..n]),
+                Err(error) if error.raw_os_error() == Some(libc::EIO) => break,
+                Err(error) => panic!("reading terminal: {error}"),
+            }
+        }
+        // PTY output processing converts the allowed newline to CRLF.
+        assert_eq!(
+            terminal,
+            "first line — ✓ 日本語\r\n\\x1b]52;c;clipboard\\x07\\x1b[2J\\x0d\\x9b".as_bytes()
+        );
+    }
+    std::fs::write(dir.join("output.log"), b"first line\nfinal result\n").unwrap();
+    std::fs::remove_file(dir.join("ended")).unwrap();
+    std::fs::remove_file(dir.join("supervisor.json")).unwrap();
+    let dead = serde_json::json!({"pid": 4294967295u32, "start": "gone"});
+    write(
+        "supervisor.json",
+        &serde_json::to_vec(&[dead.clone(), dead]).unwrap(),
+    );
+    let out = aida(&repo, &home, &["agent", "attach", id]);
+    assert!(!out.status.success());
+    let diagnostic = format!(
+        "{}{}",
+        String::from_utf8_lossy(&out.stdout),
+        String::from_utf8_lossy(&out.stderr)
+    );
+    assert!(diagnostic.contains("supervisor exited"), "{out:?}");
+    assert!(
+        out.stdout.starts_with(b"first line\nfinal result\n"),
+        "{out:?}"
+    );
+}
+
+// Exercise agent_new_claude's actual composition scope and --bg guard with
+// the trusted wrapper opt-in absent, rather than supplying prebuilt argv.
+// trace:TASK-3219 | ai:codex
+#[test]
+fn task_3219_native_background_entry_keeps_bg_without_wrapper_opt_in() {
+    use std::os::unix::fs::PermissionsExt;
+    let (_tmp, repo, home, _) = fixture();
+    let bin = home.join("bin");
+    std::fs::create_dir(&bin).unwrap();
+    let claude = bin.join("claude");
+    std::fs::write(&claude, "#!/bin/sh\nexit 97\n").unwrap();
+    std::fs::set_permissions(&claude, std::fs::Permissions::from_mode(0o700)).unwrap();
+    // Explicit fixture inputs; do not add an ambient PATH reader.
+    let path = std::env::join_paths([bin, "/usr/bin".into(), "/bin".into()]).unwrap();
+    for sandbox in [false, true] {
+        let mut command = aida_command(&repo, &home);
+        command
+            .env("PATH", &path)
+            .env_remove("AIDA_CONTAINED")
+            .env("AIDA_OS_WRAP", "0")
+            .args([
+                "agent",
+                "new",
+                "claude",
+                "--bg",
+                "--no-exec",
+                "--no-default-flags",
+                "--role",
+                "implementer",
+                "--prompt",
+                "native prompt with spaces",
+            ]);
+        if sandbox {
+            command.arg("--sandbox");
+        }
+        let out = command.output().unwrap();
+        assert!(out.status.success(), "sandbox={sandbox}: {out:?}");
+        let preview = String::from_utf8(out.stdout).unwrap();
+        let command = preview
+            .lines()
+            .find(|line| line.starts_with("command: "))
+            .expect(&preview);
+        assert!(
+            command.split_whitespace().any(|arg| arg == "--bg"),
+            "sandbox={sandbox}: {preview}"
+        );
+        assert!(preview.contains("native prompt with spaces"), "{preview}");
+        assert!(!preview.contains("claude-bg-supervise"), "{preview}");
+    }
+}
