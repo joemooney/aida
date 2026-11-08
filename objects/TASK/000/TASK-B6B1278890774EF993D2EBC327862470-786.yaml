@@ -8,7 +8,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-04T17:54:51.353376Z
-modified_at: 2026-11-08T21:22:21.358523058Z
+modified_at: 2026-11-08T22:33:03.792379094Z
 req_type: Task
 tags:
 - area:containment
@@ -1490,6 +1490,12 @@ history:
   - field_name: status
     old_value: InProgress
     new_value: NeedsAttention
+- id: 01a1bd4b-308e-7671-a83c-6771736613b4
+  author: joe
+  timestamp: 2026-11-08T22:33:03.886089837Z
+  session_id: 01a1bd485000
+  harness_version: 2.1.319 (Claude Code)
+  changes: []
 filed_at:
   code_sha: 6a331a8a5c91ca7485b695a076af44bdf9be3894
   branch: main
@@ -1502,7 +1508,7 @@ failure_reason:
   phase: reviewer
   phase_index: 3
   kind: verdict:request-changes
-  detail: 'Round 12 at b2c4fd3 (0 commits behind main; merge-base diff; Refs-only slice under the 2026-11-07 16:40 ruling). No code defect found by inspection of the merge-base diff across all 19 files. The round-11 defect is fixed: .claude/settings.local.json is untracked at this head and absent from the merge-base diff. Not approved only because no CI result exists at this head: run 42524191389 is pending with zero jobs started, behind 13 queued CI runs. No test was run by this reviewer; every ''verified by'' line is from reading test source. AC: R1 run_aida accepts agy through the shared boundary: verified by task_3048_diagnostic_prepare_uses_common_wrapper_and_keeps_production_closed and test_agy_queue_vendor_and_diagnostic_selection. R1 bypass only with applied receipt: verified by task_3048_outer_only_candidate_requires_live_accepted_receipt. R1 no --sandbox, options before final -p: verified by task_3048_runtime_argv_accepts_only_the_site_prompt. R1 no native permissions file: verified by advisor ruling of 2026-11-08 19:26 (deny-only --settings complies) and validate() at containment/mod.rs. R1 private runtime, read-only token and settings: verified by task_3048_live_private_runtime_preserves_read_only_credential and task_3048_private_runtime_pins_settings_and_credential_leaves. R1 no ~/.gemini inheritance: verified by task_3048_runtime_descriptor_masks_host_state_for_every_vendor. R1 MCP/browser/URL off: configuration verified by contained.rs runtime_tool_settings and RuntimePolicy::validate; AGY honouring the denies is unverified and assigned by the advisor to the live run. R2 auth hosts as data feeding the relay: verified by task_3048_diagnostic_hosts_do_not_open_production_admission and test_agy_fixture_uses_shipped_auth_hosts_and_aida_posture. R2 unknown host fails closed with named reason: verified by task_3048_unlisted_host_is_named_before_dns. R2 measured list on spec: partly verified; daily-cloudcode-pa measured, oauth2 candidate only and auth_inventory_complete=false, refresh measurement is advisor-owned. R3 native diagnostic gets no credit, only AIDA boundary flips whole_lane_pass: verified by test_host_egress_never_trusts_vendor_stderr neighbours in tests/test_containment_conformance.py:367-377 and test_late_refusal_withdraws_aggregate_credit_with_valid_receipt. R4 require_conformance still refuses: verified by agy_adapter_keeps_unmeasured_policy_closed and task_3048_runtime_descriptor_command_is_read_only. Child-grant refusal: verified by task_3048_diagnostic_without_parent_grant_never_spawns. Spec-level ''conformance harness passes for agy'': not-applicable-because this Refs-only PR must not complete TASK-3048; the live C0-C4 run is a separate advisor step.'
+  detail: 'Round 13 at 48180bc: CI wait state only. No code defect found across the 19-file merge-base diff (0 commits behind main; the merge of main is clean). Evidence is source inspection; CI run 42530356460 is still running. Criteria: private runtime, verified by task_3048_live_private_runtime_preserves_read_only_credential; auth hosts as data with named refusal, verified by task_3048_diagnostic_hosts_do_not_open_production_admission and task_3048_unlisted_host_is_named_before_dns; options before final -p, verified by task_3048_runtime_argv_accepts_only_the_site_prompt; bypass only with applied receipt, verified by task_3048_outer_only_candidate_requires_live_accepted_receipt; no ~/.gemini inheritance, verified by task_3048_diagnostic_prepare_uses_common_wrapper_and_keeps_production_closed; MCP/browser/URL off, configuration verified by task_3048_runtime_policy_fails_closed_before_launch, AGY enforcement unverified (TASK-3049 live run); trusted origin/main posture only, verified by the untrusted-posture loop in the diagnostic prepare test; native diagnostic retired, whole-lane credit only from AIDA boundary, verified by test_only_complete_aida_evidence_can_flip_whole_lane and test_late_refusal_withdraws_aggregate_credit_with_valid_receipt; require_conformance still refuses, verified by agy_adapter_keeps_unmeasured_policy_closed; measured refresh host list unverified (oauth2.googleapis.com is candidate only, auth_inventory_complete=false, advisor live run); conformance harness passes for agy not-applicable-because this is the Refs-only slice under the 2026-11-07 16:40 ruling.'
   recovery_hint: address the review findings, move TASK-3048 back to In Progress, and clear the PR hold only after approval
   shelved_by: reviewer
-  shelved_at: 2026-11-08T21:22:21.358523058Z
+  shelved_at: 2026-11-08T22:33:03.792379094Z
