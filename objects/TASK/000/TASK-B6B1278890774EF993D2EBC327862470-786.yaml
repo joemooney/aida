@@ -8,7 +8,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-04T17:54:51.353376Z
-modified_at: 2026-11-08T17:13:59.518621063Z
+modified_at: 2026-11-08T19:26:34.323223617Z
 req_type: Task
 tags:
 - area:containment
@@ -796,6 +796,13 @@ comments:
   modified_at: 2026-11-08T17:13:59.518621063Z
   session_id: 01a1bc22f789
   harness_version: codex-cli 0.167.0
+- id: 01a1bca0-7353-7d33-869c-a0f17d81fb78
+  author: joe
+  content: 'Advisor ruling (#3641 review finding 2): the permissions.deny-only --settings in contained.rs:516-521 complies with the 2026-11-07 16:40 ruling, since it grants nothing and carries no sandbox profile. The live run (TASK-3049) must still show AGY honours these denies alongside --dangerously-skip-permissions. Advisor brief: the earlier no-new-commit instruction no longer applies because the PR now conflicts with main. Merge current main, resolve scripts/containment/conformance.py keeping both sides'' checks, and push. No other code change. This PR blocks crate-split PR2b. LIGHT gate: tests/test_containment_conformance.py plus make check-ci-fast.'
+  created_at: 2026-11-08T19:26:34.323223617Z
+  modified_at: 2026-11-08T19:26:34.323223617Z
+  session_id: 01a1bc93-77a0-7740-8b03-df4e3e8d1df5
+  harness_version: 2.1.319 (Claude Code)
 history:
 - id: 01a1a7b3-3699-7713-8ae7-69568c287956
   author: joe
