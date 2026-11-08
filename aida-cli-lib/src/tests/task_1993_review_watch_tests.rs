@@ -870,7 +870,7 @@ exit 3
         let args = ReviewWatchArgs {
             once: true,
             interval: 1,
-            max_concurrent: 2,
+            max_concurrent: Some(2),
             vendor: None,
             release: None,
             launch_reservation: None,
@@ -946,13 +946,13 @@ fn task1993_review_subcommand_parser_enforces_bounded_settings() {
         panic!("watch was not routed through the review registry")
     };
     assert!(args.once);
-    assert_eq!(args.max_concurrent, 2);
+    assert_eq!(args.max_concurrent, None);
     assert_eq!(args.vendor.as_deref(), Some("claude"));
     assert!(crate::review_cmd::ReviewArgs::try_parse_from([
         "review",
         "watch",
         "--max-concurrent",
-        "3"
+        "9"
     ])
     .is_err());
     assert!(
@@ -2699,4 +2699,68 @@ fn task_3365_fast_exiting_worker_is_recorded_and_releases_capacity() {
     assert!(!recorded.unrecorded_descendant());
     assert!(!active(recorded));
     dispatch(select(&store, &change(2, 2, false), None, 1).unwrap());
+}
+
+// trace:TASK-3472 | ai:codex
+#[test]
+fn review_watch_configurable_concurrency() {
+    use clap::Parser;
+    #[derive(Parser)]
+    struct Cli {
+        #[command(flatten)]
+        watch: ReviewWatchArgs,
+    }
+    let temp = tempfile::tempdir().unwrap();
+    let absent = Cli::try_parse_from(["watch"]).unwrap().watch;
+    assert_eq!(absent.max_concurrent, None);
+    assert_eq!(
+        resolve_max_concurrent(temp.path(), absent.max_concurrent).unwrap(),
+        2
+    );
+    std::fs::create_dir(temp.path().join(".aida")).unwrap();
+    let path = temp.path().join(".aida/config.toml");
+    std::fs::write(&path, "[review_watch]\nmax_concurrent = 4\n").unwrap();
+    assert_eq!(
+        resolve_max_concurrent(temp.path(), absent.max_concurrent).unwrap(),
+        4
+    );
+    let explicit = Cli::try_parse_from(["watch", "--max-concurrent", "4"])
+        .unwrap()
+        .watch;
+    assert_eq!(explicit.max_concurrent, Some(4));
+    assert_eq!(resolve_max_concurrent(temp.path(), Some(8)).unwrap(), 8);
+    assert!(Cli::try_parse_from(["watch", "--max-concurrent", "9"]).is_err());
+    assert!(Cli::try_parse_from(["watch", "--max-concurrent", "0"]).is_err());
+    for invalid in ["0", "9", "\"4\""] {
+        std::fs::write(
+            &path,
+            format!("[review_watch]\nmax_concurrent = {invalid}\n"),
+        )
+        .unwrap();
+        assert!(resolve_max_concurrent(temp.path(), None).is_err());
+    }
+    let (_temp, store) = fixture();
+    for max in [1, 2, 4, 8] {
+        let mut state = store.load().unwrap();
+        state.max_concurrent = max;
+        validate_state(&state, &state.repository).unwrap();
+        state.max_concurrent = 9;
+        assert!(validate_state(&state, &state.repository).is_err());
+    }
+}
+
+// trace:TASK-3472 | ai:codex
+#[test]
+fn review_watch_four_reviews_share_persisted_capacity() {
+    let (_temp, store) = fixture();
+    for id in 1..=4 {
+        dispatch(select(&store, &change(id, id, false), None, 4).unwrap());
+    }
+    let state = store.load().unwrap();
+    assert_eq!(state.max_concurrent, 4);
+    validate_state(&state, &state.repository).unwrap();
+    assert!(matches!(
+        select(&store, &change(5, 5, false), None, 4).unwrap(),
+        Action::Skip(reason) if reason.contains("global reviewer capacity (4)")
+    ));
 }

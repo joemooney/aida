@@ -21592,7 +21592,7 @@ Options:
           Seconds between discovery passes (default 10)
 
       --max-concurrent <MAX_CONCURRENT>
-          Maximum watcher-launched reviews across instances: one or two (default two)
+          Maximum watcher-launched reviews across instances: 1–8 (config default, otherwise 2)
 
       --vendor <VENDOR>
           Vendor: claude, codex, or agy; omit for ordinary queue-work selection
@@ -53354,7 +53354,7 @@ Working on aida itself
       {
         "name": "max-concurrent",
         "takes_value": true,
-        "help": "Maximum watcher-launched reviews across instances: one or two (default two)"
+        "help": "Maximum watcher-launched reviews across instances: 1–8 (config default, otherwise 2)"
       },
       {
         "name": "once",
