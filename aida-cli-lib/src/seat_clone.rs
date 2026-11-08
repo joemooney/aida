@@ -2067,13 +2067,21 @@ pub(crate) fn is_mirrored_handshake_entry(main: &Path, clone: &Path, line: &str)
     }
     // Keep cleanup probes bounded even if a seat swaps a FIFO or symlink.
     let read = aida_core::seat_clone_detect::read_regular_file;
-    let Some(text) = read(&clone.join(path)) else {
+    let Ok(Some(text)) = crate::punt::seat_handshake_text(clone, &clone.join(path)) else {
         return false;
     };
     if path.starts_with(".aida/punt-signals/") || path.starts_with(".aida/pr-holds/") {
-        return read(&main.join(path)).is_some_and(|host| host == text);
+        let Some(spec) = Path::new(path).file_stem().and_then(|s| s.to_str()) else {
+            return false;
+        };
+        let host = if path.starts_with(".aida/punt-signals/") {
+            crate::punt::signal_path(main, spec)
+        } else {
+            crate::punt::hold_signal_path(main, spec)
+        };
+        return read(&host).is_some_and(|host| host == text);
     }
-    let Some(host) = read(&crate::punt::ledger_path(main)) else {
+    let Ok(host) = std::fs::read_to_string(crate::punt::ledger_path(main)) else {
         return text.is_empty();
     };
     let existing: Vec<crate::punt::PuntRecord> = host

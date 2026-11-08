@@ -6717,20 +6717,12 @@ pub(crate) fn run_vendor_headless_to_exit(
 ) -> Result<std::process::ExitStatus> {
     let drain_lane = drain_resume_lane(vendor, seat, lease_id, lane_tree);
     // trace:TASK-2902 | ai:codex
-    if let Some((lease, (tree, _))) = implementer_job_lane(seat, lease_id, lane_tree) {
-        // Admission has checked any persisted hold. Consume prior-attempt
-        // handshakes before this attempt creates its own.
-        // trace:BUG-2488 | ai:codex
+    if let Some((_, (tree, _))) = implementer_job_lane(seat, lease_id, lane_tree) {
         let main = crate::main_worktree_root_from(&headless_worktree_root());
-        let scope = crate::list_leases(&main)
-            .into_iter()
-            .find(|l| l.id == lease)
-            .context("publication lease disappeared")?
-            .scope;
-        crate::standalone_implementer::provision_attempt_signals(&main, tree, &scope)?;
         if vendor == HeadlessVendor::Codex {
             crate::native_publication::prepare(&main, tree)?;
         }
+        // Prior-attempt signals remain until the final spawn boundary below.
     }
 
     // BUG-2383: the drain's phase-1 implementer gets the standalone launch's
@@ -6763,6 +6755,23 @@ pub(crate) fn run_vendor_headless_to_exit(
                         child_grant.env_value(),
                         &HeadlessChildHooks {
                             customize: Some(apply_lane_env),
+                            before_spawn: Some(&|| {
+                                if !resume {
+                                    if let Some((lease, (tree, _))) =
+                                        implementer_job_lane(seat, lease_id, lane_tree)
+                                    {
+                                        let scope = crate::list_leases(&main_root)
+                                            .into_iter()
+                                            .find(|l| l.id == lease)
+                                            .context("publication lease disappeared")?
+                                            .scope;
+                                        crate::standalone_implementer::provision_attempt_signals(
+                                            &main_root, tree, &scope,
+                                        )?;
+                                    }
+                                }
+                                Ok(())
+                            }),
                             resume,
                             hold_reap: hold,
                             ..HeadlessChildHooks::default()
@@ -7168,6 +7177,8 @@ pub(crate) fn scrub_launcher_session_env(cmd: &mut std::process::Command) {
 pub(crate) struct HeadlessChildHooks<'a> {
     pub(crate) customize: Option<&'a dyn Fn(&mut std::process::Command)>,
     pub(crate) on_spawn: Option<&'a dyn Fn(u32)>,
+    /// Consume prior-attempt markers only after command policy/prepare succeeds.
+    pub(crate) before_spawn: Option<&'a dyn Fn() -> Result<()>>,
     /// BUG-044: `--resume` the existing `session_id` instead of starting it
     /// (Claude only; the launcher never asks another vendor to resume).
     pub(crate) resume: bool,
@@ -7366,12 +7377,15 @@ fn run_vendor_headless_child(
         // a dropped ContainedChild kills the wrapper.
         let mut registered = false;
         let result = (|| -> Result<std::process::ExitStatus> {
-            let mut run = crate::containment::launch::PreparedLaunch::prepare(
+            let prepared = crate::containment::launch::PreparedLaunch::prepare(
                 &mut child_cmd,
                 &headless_worktree_root(),
                 host_main,
-            )?
-            .spawn(Stdio::from(log))?;
+            )?;
+            if let Some(before_spawn) = hooks.before_spawn {
+                before_spawn()?;
+            }
+            let mut run = prepared.spawn(Stdio::from(log))?;
             anyhow::ensure!(
                 containment_applied(vendor, true, Some(run.receipt())),
                 "missing applied receipt"
@@ -7419,6 +7433,12 @@ fn run_vendor_headless_child(
     // trace:STORY-2537 trace:BUG-2458 | ai:codex
     #[cfg(target_os = "linux")]
     let holder_capture = aida_core::proc_identity::prepare_command(&mut child_cmd)?;
+    if let Some(before_spawn) = hooks.before_spawn {
+        if let Err(error) = before_spawn() {
+            tee.stop();
+            return Err(error);
+        }
+    }
     let mut child = child_cmd
         .stdout(Stdio::from(log))
         .spawn_retrying_etxtbsy()
@@ -8368,6 +8388,20 @@ pub(crate) fn spawn_vendor_headless_resume_granted(
         tee.stop();
         revoke_headless_child_grant(&child_grant.id);
         return Err(error);
+    }
+    // A refused resume must retain the persisted hold so admission can retry.
+    // trace:BUG-2488 | ai:codex
+    if let Some(scope) = signal_scope.as_deref() {
+        let main = host_main
+            .map(Path::to_path_buf)
+            .unwrap_or_else(|| crate::main_worktree_root_from(cwd));
+        if let Err(error) =
+            crate::standalone_implementer::provision_attempt_signals(&main, cwd, scope)
+        {
+            tee.stop();
+            revoke_headless_child_grant(&child_grant.id);
+            return Err(error);
+        }
     }
     let status = reviewer_status_with_handle_guard(cmd.stdout(Stdio::from(log)), &mut handle_guard)
         .context("failed to spawn codex")?;

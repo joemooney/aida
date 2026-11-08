@@ -1,3 +1,10 @@
+Native seat handshake reads pin non-symlink directories and refuse unsafe or
+oversized files before publication. Prior hold/punt markers survive launch
+preflight refusals; admitted attempts consume them at the spawn boundary.
+Drain no-change outcome propagation is tracked separately in TASK-3608.
+See OVERVIEW.md.
+<!-- trace:BUG-2488 | ai:codex -->
+
 Review-watch records retained fast-exiting children before reaping. Incomplete
 legacy receipts use the existing reboot/TTL backstop. Caller capture requires
 verified local procfs and fails closed with host-retry guidance. See OVERVIEW.md.

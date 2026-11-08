@@ -356,7 +356,11 @@ pub(crate) fn post_exit_commit(
     }
     // trace:TASK-2902 | ai:codex
     // Every exit path honors vetoes before resolving or inspecting intent.
-    if publication_veto(&main, spec) || publication_veto(tree, spec) {
+    let seat_veto = match seat_publication_veto(tree, spec) {
+        Ok(veto) => veto,
+        Err(e) => return PostExitCommit::Failed(format!("{e:#}")),
+    };
+    if publication_veto(&main, spec) || seat_veto {
         eprintln!("Native publication vetoed for {spec} by punt/hold; pending work remains uncommitted in {}", tree.display());
         return PostExitCommit::Clean;
     }
@@ -504,7 +508,7 @@ pub(crate) fn publish_queue_exit(
     let main = crate::main_worktree_root_from(main);
     // trace:BUG-2488 | ai:codex
     crate::standalone_implementer::reconcile_signals(&main, tree, spec)?;
-    if publication_veto(&main, spec) || publication_veto(tree, spec) {
+    if publication_veto(&main, spec) || seat_publication_veto(tree, spec)? {
         return Ok(());
     }
     let no_change =
@@ -593,6 +597,14 @@ pub(crate) fn publish_queue_exit_with(
         }
         notify()
     })
+}
+
+// trace:BUG-2488 | ai:codex
+fn seat_publication_veto(tree: &Path, spec: &str) -> Result<bool> {
+    // Read both even if the first veto is present, so unsafe evidence refuses.
+    let punt = crate::punt::read_seat_signal(tree, spec)?;
+    let hold = crate::punt::read_seat_hold_signal(tree, spec)?;
+    Ok(punt.is_some() || hold.is_some())
 }
 
 // trace:TASK-2902 | ai:codex

@@ -2588,7 +2588,7 @@ fn task_2902_rotation_retains_intent_and_lease_release_cleans_binding() {
 // trace:TASK-2902 | ai:codex
 // trace:BUG-2488 | ai:codex
 #[test]
-fn task_2902_launch_paths_clear_and_provision_before_spawn() {
+fn task_2902_launch_paths_preserve_signals_on_refused_spawn() {
     if crate::test_env::run_path_isolated_test() {
         return;
     }
@@ -2669,11 +2669,26 @@ fn task_2902_launch_paths_clear_and_provision_before_spawn() {
         let stale_signals = [
             crate::punt::signal_path(&clone, "BUG-1"),
             crate::punt::hold_signal_path(&clone, "BUG-1"),
+            crate::punt::signal_path(&fx.main, "BUG-1"),
+            crate::punt::hold_signal_path(&fx.main, "BUG-1"),
         ];
         if matches!(path, "standalone" | "drain" | "queue-resume") {
             for signal in &stale_signals {
                 std::fs::create_dir_all(signal.parent().unwrap()).unwrap();
-                std::fs::write(signal, "stale signal").unwrap();
+                if signal.parent().unwrap().ends_with("pr-holds") {
+                    crate::punt::write_hold_signal(
+                        signal,
+                        &crate::punt::HoldSignal {
+                            spec: "BUG-1".into(),
+                            branch: "launches".into(),
+                            reason: Some("persisted manual gate".into()),
+                            spec_key: None,
+                        },
+                    )
+                    .unwrap();
+                } else {
+                    std::fs::write(signal, "stale signal").unwrap();
+                }
             }
         }
         let error = match path {
@@ -2763,18 +2778,50 @@ fn task_2902_launch_paths_clear_and_provision_before_spawn() {
         let error = error.unwrap_or_else(|| panic!("{path} should refuse a binding write failure"));
         if matches!(path, "standalone" | "drain" | "queue-resume") {
             for signal in &stale_signals {
-                assert!(!signal.exists(), "{path} retained {}", signal.display());
+                assert!(
+                    signal.exists(),
+                    "{path} consumed {} before spawn",
+                    signal.display()
+                );
             }
         }
         if path == "queue-resume" {
             // This clone has no trusted native policy of its own. Admission
-            // must clear its old signals even when policy preflight refuses
+            // must retain its old signals when policy preflight refuses
             // before publication binding setup or vendor spawn.
             assert!(
                 format!("{error:#}").contains("cannot run an AIDA-contained session"),
                 "{error:#}"
             );
             assert!(declaration.exists());
+            let marker = crate::punt::hold_signal_path(&fx.main, "BUG-1");
+            assert!(crate::queue_cmd::held_resume_reentry_allowed(
+                true,
+                &aida_core::RequirementStatus::Done,
+                crate::punt::read_hold_signal(&marker).is_some()
+            ));
+            // The same held resume remains admissible after another refusal.
+            let retry = crate::queue_cmd::run_queue_resume_to_exit(
+                Some(&fx.main),
+                &crate::session::HeadlessResume {
+                    vendor: HeadlessVendor::Codex,
+                    session_id: "test",
+                    resume_id: "test",
+                },
+                "go",
+                &fx.root.join("log"),
+                &clone,
+                &tee,
+                true,
+                "implementer",
+                (&fx.main, "BUG-1", lease),
+            );
+            assert!(retry.is_err());
+            assert!(crate::queue_cmd::held_resume_reentry_allowed(
+                true,
+                &aida_core::RequirementStatus::Done,
+                crate::punt::read_hold_signal(&marker).is_some()
+            ));
             continue;
         }
         assert_eq!(
@@ -3211,4 +3258,181 @@ fn bug_2488_resume_admission_consumes_host_veto_and_routes_fresh_signals() {
             .detail,
         "fresh resume decision"
     );
+}
+
+// trace:BUG-2488 | ai:codex
+#[test]
+#[cfg(unix)]
+fn bug_2488_seat_handshakes_refuse_fifo_symlink_and_oversize() {
+    // A regression must fail this test, not block the entire test process.
+    let name = std::thread::current().name().unwrap().replace(
+        "bug_2488_seat_handshakes_refuse_fifo_symlink_and_oversize",
+        "bug_2488_seat_handshake_refusals_child",
+    );
+    let mut child = std::process::Command::new(std::env::current_exe().unwrap())
+        .args(["--exact", &name, "--ignored", "--nocapture"])
+        .spawn()
+        .unwrap();
+    let deadline = std::time::Instant::now() + std::time::Duration::from_secs(10);
+    loop {
+        if let Some(status) = child.try_wait().unwrap() {
+            assert!(status.success(), "handshake refusal child failed: {status}");
+            break;
+        }
+        if std::time::Instant::now() >= deadline {
+            let _ = child.kill();
+            let _ = child.wait();
+            panic!("seat handshake read blocked on unsafe evidence");
+        }
+        std::thread::sleep(std::time::Duration::from_millis(20));
+    }
+}
+
+// trace:BUG-2488 | ai:codex
+#[test]
+#[cfg(unix)]
+#[ignore = "runs in the watchdog-controlled parent test"]
+fn bug_2488_seat_handshake_refusals_child() {
+    use std::os::unix::ffi::OsStrExt;
+    use std::os::unix::fs::symlink;
+    let main = tempfile::tempdir().unwrap();
+    let tree = tempfile::tempdir().unwrap();
+    let spec = "BUG-2488";
+    let regular_target = tempfile::NamedTempFile::new().unwrap();
+    std::fs::write(regular_target.path(), "bounded regular-file contents").unwrap();
+    for relative in [
+        ".aida/punt-signals/BUG-2488.json",
+        ".aida/pr-holds/BUG-2488.json",
+        ".aida/punts.jsonl",
+    ] {
+        let path = tree.path().join(relative);
+        std::fs::create_dir_all(path.parent().unwrap()).unwrap();
+        for kind in ["fifo", "symlink", "regular-symlink", "oversize"] {
+            match kind {
+                "fifo" => {
+                    let name = std::ffi::CString::new(path.as_os_str().as_bytes()).unwrap();
+                    assert_eq!(unsafe { libc::mkfifo(name.as_ptr(), 0o600) }, 0);
+                }
+                "symlink" => symlink("/dev/zero", &path).unwrap(),
+                "regular-symlink" => symlink(regular_target.path(), &path).unwrap(),
+                _ => std::fs::write(&path, vec![b'x'; 65537]).unwrap(),
+            }
+            assert!(
+                crate::punt::seat_handshake_text(tree.path(), &path).is_err(),
+                "{relative} {kind}"
+            );
+            assert!(
+                crate::standalone_implementer::reconcile_signals(main.path(), tree.path(), spec)
+                    .is_err(),
+                "{relative} {kind}"
+            );
+            assert!(!crate::seat_clone::is_mirrored_handshake_entry(
+                main.path(),
+                tree.path(),
+                &format!("? {relative}")
+            ));
+            std::fs::remove_file(&path).unwrap();
+        }
+    }
+    // A host-owned alias of the lease root remains supported. Links inside
+    // that root are still refused (covered by the linked-parent regression).
+    let aliases = tempfile::tempdir().unwrap();
+    let alias = aliases.path().join("seat-alias");
+    symlink(tree.path(), &alias).unwrap();
+    let signal = crate::punt::PuntSignal {
+        spec: spec.into(),
+        category: aida_core::PuntCategory::DesignFork,
+        detail: "root alias".into(),
+        lean: None,
+    };
+    let path = crate::punt::signal_path(tree.path(), spec);
+    crate::punt::write_signal(&path, &signal).unwrap();
+    assert_eq!(
+        crate::punt::read_seat_signal(&alias, spec).unwrap(),
+        Some(signal)
+    );
+    std::fs::remove_file(path).unwrap();
+    // Normal bounded evidence still reads; absent is not a refusal.
+    assert_eq!(
+        crate::punt::read_seat_signal(tree.path(), spec).unwrap(),
+        None
+    );
+    assert!(crate::punt::read_seat_ledger(tree.path())
+        .unwrap()
+        .is_empty());
+}
+
+// trace:BUG-2488 | ai:codex
+#[test]
+#[cfg(unix)]
+fn bug_2488_provision_refuses_linked_parents_without_unlinking_host_marker() {
+    use std::os::unix::fs::symlink;
+    for directory in [".aida", ".aida/punt-signals", ".aida/pr-holds"] {
+        let main = tempfile::tempdir().unwrap();
+        let tree = tempfile::tempdir().unwrap();
+        let spec = "BUG-2488";
+        let (punt, hold) =
+            crate::standalone_implementer::provision_signals(main.path(), spec).unwrap();
+        std::fs::write(&punt, "host punt").unwrap();
+        std::fs::write(&hold, "host hold").unwrap();
+        let link = tree.path().join(directory);
+        std::fs::create_dir_all(link.parent().unwrap()).unwrap();
+        symlink(main.path().join(directory), &link).unwrap();
+        assert!(crate::standalone_implementer::provision_attempt_signals(
+            main.path(),
+            tree.path(),
+            spec
+        )
+        .is_err());
+        assert_eq!(std::fs::read_to_string(&punt).unwrap(), "host punt");
+        assert_eq!(std::fs::read_to_string(&hold).unwrap(), "host hold");
+        assert!(
+            crate::standalone_implementer::reconcile_signals(main.path(), tree.path(), spec)
+                .is_err()
+        );
+    }
+}
+
+// trace:BUG-2488 | ai:codex
+#[test]
+fn bug_2488_mirroring_accepts_large_host_ledger_and_case_variant_signals() {
+    let main = tempfile::tempdir().unwrap();
+    let tree = tempfile::tempdir().unwrap();
+    let record: crate::punt::PuntRecord = serde_json::from_value(serde_json::json!({
+        "timestamp": "2026-11-07T20:00:00Z", "spec": "bug-2488",
+        "category": "design-fork", "detail": "choose design", "resolution_path": "punted"
+    }))
+    .unwrap();
+    for root in [main.path(), tree.path()] {
+        std::fs::create_dir_all(root.join(".aida")).unwrap();
+    }
+    let row = format!("{}\n", serde_json::to_string(&record).unwrap());
+    std::fs::write(crate::punt::ledger_path(main.path()), row.repeat(2000)).unwrap();
+    std::fs::write(crate::punt::ledger_path(tree.path()), row).unwrap();
+    assert!(
+        std::fs::metadata(crate::punt::ledger_path(main.path()))
+            .unwrap()
+            .len()
+            > 65536
+    );
+    assert!(crate::seat_clone::is_mirrored_handshake_entry(
+        main.path(),
+        tree.path(),
+        "? .aida/punts.jsonl"
+    ));
+    for directory in ["punt-signals", "pr-holds"] {
+        for (root, filename) in [
+            (main.path(), "BUG-2488.json"),
+            (tree.path(), "bug-2488.json"),
+        ] {
+            let path = root.join(".aida").join(directory).join(filename);
+            std::fs::create_dir_all(path.parent().unwrap()).unwrap();
+            std::fs::write(path, "identical signal").unwrap();
+        }
+        assert!(crate::seat_clone::is_mirrored_handshake_entry(
+            main.path(),
+            tree.path(),
+            &format!("? .aida/{directory}/bug-2488.json")
+        ));
+    }
 }

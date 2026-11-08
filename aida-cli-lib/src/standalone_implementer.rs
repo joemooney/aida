@@ -979,33 +979,56 @@ pub(crate) fn record_child_authority(
     crate::gate::review_authority::record_launch_authority(project_root, lease_id, launch);
 }
 
-/// Put the handshakes inside the leased seat's writable runtime directory.
+/// Pin every handshake parent before consuming any prior-attempt marker.
 // trace:BUG-2488 | ai:codex
-pub(crate) fn provision_signals(worktree: &Path, spec: &str) -> Result<(PathBuf, PathBuf)> {
+fn prepare_signal_paths(worktree: &Path, spec: &str) -> Result<[(PathBuf, std::fs::File); 2]> {
     let punt = crate::punt::signal_path(worktree, spec);
     let hold = crate::punt::hold_signal_path(worktree, spec);
-    for path in [&punt, &hold] {
-        if let Some(parent) = path.parent() {
-            std::fs::create_dir_all(parent)?;
-        }
-        match std::fs::remove_file(path) {
+    let punt_parent = crate::punt::seat_handshake_parent(worktree, &punt, true)?
+        .context("missing punt directory")?;
+    let hold_parent = crate::punt::seat_handshake_parent(worktree, &hold, true)?
+        .context("missing hold directory")?;
+    Ok([(punt, punt_parent), (hold, hold_parent)])
+}
+
+// trace:BUG-2488 | ai:codex
+fn clear_signal_paths(paths: &[(PathBuf, std::fs::File)]) -> Result<()> {
+    use std::os::fd::AsRawFd;
+    for (path, parent) in paths {
+        let pinned = PathBuf::from(format!("/proc/self/fd/{}", parent.as_raw_fd()))
+            .join(path.file_name().context("invalid signal filename")?);
+        match std::fs::remove_file(pinned) {
             Ok(()) => {}
             Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
             Err(error) => return Err(error.into()),
         }
     }
-    Ok((punt, hold))
+    Ok(())
 }
 
-/// Start a new admitted attempt after held-resume policy has been checked.
+/// Put the handshakes inside the leased seat's writable runtime directory.
+// trace:BUG-2488 | ai:codex
+#[cfg(test)]
+pub(crate) fn provision_signals(worktree: &Path, spec: &str) -> Result<(PathBuf, PathBuf)> {
+    let paths = prepare_signal_paths(worktree, spec)?;
+    clear_signal_paths(&paths)?;
+    Ok((paths[0].0.clone(), paths[1].0.clone()))
+}
+
+/// Start a new attempt after held-resume policy and command preflight succeed.
 // trace:BUG-2488 | ai:codex
 pub(crate) fn provision_attempt_signals(
     main: &Path,
     tree: &Path,
     spec: &str,
 ) -> Result<(PathBuf, PathBuf)> {
-    provision_signals(main, spec)?;
-    provision_signals(tree, spec)
+    // Retain the same pinned parents through cleanup: re-opening the seat
+    // after consuming host markers could introduce a second refusal/race.
+    let seat = prepare_signal_paths(tree, spec)?;
+    let host = prepare_signal_paths(main, spec)?;
+    clear_signal_paths(&seat)?;
+    clear_signal_paths(&host)?;
+    Ok((seat[0].0.clone(), seat[1].0.clone()))
 }
 
 /// Install explicit seat paths rather than inheriting a host-only handshake.
@@ -1031,15 +1054,14 @@ pub(crate) fn reconcile_signals(main: &Path, tree: &Path, spec: &str) -> Result<
     {
         return Ok(());
     }
-    if let Some(signal) = crate::punt::read_signal(&crate::punt::signal_path(tree, spec)) {
+    if let Some(signal) = crate::punt::read_seat_signal(tree, spec)? {
         crate::punt::write_signal(&crate::punt::signal_path(main, spec), &signal)?;
     }
-    if let Some(signal) = crate::punt::read_hold_signal(&crate::punt::hold_signal_path(tree, spec))
-    {
+    if let Some(signal) = crate::punt::read_seat_hold_signal(tree, spec)? {
         crate::punt::write_hold_signal(&crate::punt::hold_signal_path(main, spec), &signal)?;
     }
     let mut existing = crate::punt::read_ledger(main);
-    for record in crate::punt::read_ledger(tree)
+    for record in crate::punt::read_seat_ledger(tree)?
         .into_iter()
         .filter(|r| r.spec.eq_ignore_ascii_case(spec))
     {
@@ -1077,10 +1099,11 @@ pub(crate) fn run(launch: Launch<'_>) -> Result<()> {
     let main_root = crate::main_worktree_root_from(launch.project_root);
     claim_spec(launch.project_root, launch.spec);
     let worktree = lease_worktree(launch.project_root, launch.lease_id);
-    // A resumed/new attempt must not inherit the prior host-side veto.
-    // Held-resume policy has already checked the persisted hold marker.
+    // Resolve transport now, but retain the prior veto until command policy
+    // and preparation have succeeded at the final spawn boundary.
     // trace:BUG-2488 | ai:codex
-    let (punt_signal, hold_signal) = provision_attempt_signals(&main_root, &worktree, launch.spec)?;
+    let punt_signal = crate::punt::signal_path(&worktree, launch.spec);
+    let hold_signal = crate::punt::hold_signal_path(&worktree, launch.spec);
     // BUG-2383: the lane job runner, so the seat can run its tests here,
     // outside its 60-second tool-call cap. trace:BUG-2383 | ai:claude
     // trace:TASK-2902 | ai:codex
@@ -1218,15 +1241,25 @@ pub(crate) fn run(launch: Launch<'_>) -> Result<()> {
                     on_spawn: Some(&on_spawn),
                     resume,
                     hold_reap: Some(hold),
+                    before_spawn: Some(&|| {
+                        if !resume {
+                            provision_attempt_signals(&main_root, &worktree, launch.spec)?;
+                        }
+                        Ok(())
+                    }),
                 },
             )
         },
         || {
-            let outcome = classify(
-                crate::punt::read_signal(&punt_signal),
-                crate::punt::read_hold_signal(&hold_signal),
-                || lookup_pr(launch.project_root, launch.branch),
-            );
+            let (Ok(punt), Ok(hold)) = (
+                crate::punt::read_seat_signal(&worktree, launch.spec),
+                crate::punt::read_seat_hold_signal(&worktree, launch.spec),
+            ) else {
+                // Stop resuming on unsafe evidence. The mandatory reconciliation
+                // below returns its error before any publication or lease cleanup.
+                return (Outcome::NoPr, true);
+            };
+            let outcome = classify(punt, hold, || lookup_pr(launch.project_root, launch.branch));
             let done = match &outcome {
                 Outcome::NoPr => false,
                 Outcome::NoChange => true,
