@@ -18,12 +18,12 @@ description: |
   3. The effective seat Git policy (write / read-only, and why) is printed by --no-exec --verbose before the agent starts, for a normal seat, a guest seat and a --git-read-only seat (test). The output states that the policy is declared, not enforced, on adapters that cannot enforce it.
   4. Both target/debug and target/release are authorized; switching between them needs no scaffold rerun (test).
   5. No generated file contains a machine-specific absolute path (inherits TASK-1499's rule).
-status: Approved
+status: InProgress
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-09-26T18:30:26.622729Z
-modified_at: 2026-11-08T17:37:18.950021959Z
+modified_at: 2026-11-08T17:38:02.464547435Z
 req_type: Story
 tags:
 - agent-launch
@@ -1296,6 +1296,14 @@ history:
   session_id: 01a1bc2ff79f
   harness_version: codex-cli 0.167.0
   changes: []
+- id: 01a1bc3d-1660-79b3-9d0d-7e6dde8d73a1
+  author: aida-pr-open
+  timestamp: 2026-11-08T17:38:02.464546405Z
+  session_id: 01a1bc2ff79f
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: InProgress
 decision_request:
   question: The portability and session-seat prerequisites have landed. Should the launch permission profile now include approval-prompt exemptions, exclude exemptions, or remain on hold?
   choices:
