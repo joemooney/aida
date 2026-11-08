@@ -308,7 +308,9 @@ class StoreMutationSession:
         response = dict(version=1, launch_epoch=self.epoch, request_id=key, outcome='success', result=result)
         wire = json.dumps(response, separators=(',', ':')).encode()
         if len(wire) > MUTATION_LIMIT:
-            raise MutationRefusal('Unavailable')
+            # The host operation has already returned and may have committed.
+            # A reply we cannot deliver is not a definite pre-write refusal.
+            raise MutationRefusal('OutcomeUnknown')
         self.accepted[key] = (digest, wire)
         return wire
 

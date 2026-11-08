@@ -637,6 +637,28 @@ fn multiline_comment_and_description_preserve_tabs_and_reject_other_controls() {
 }
 
 #[test]
+fn pending_collision_is_typed_unknown_and_preserves_evidence() {
+    let tmp = tempfile::tempdir().unwrap();
+    let root = tmp.path();
+    let (d, _) = fixture(root);
+    with_store_write_lock(root, || {
+        // Inject after lock-entry recovery: commit must never overwrite an
+        // unexpected decision, or classify its outcome as safe to repeat.
+        let path = journal(root)?.join(format!("{}.pending", name(&d)));
+        let evidence = encode(&d)?;
+        fs::write(&path, &evidence)?;
+        let error = commit(root, d.clone()).unwrap_err();
+        assert_eq!(error.downcast_ref::<OutcomeUnknown>().unwrap().0, path);
+        assert_eq!(fs::read(&path)?, evidence);
+        for image in &d.images {
+            assert_eq!(hash(&object_bytes(root, &image.spec_id)?), image.before);
+        }
+        Ok(())
+    })
+    .unwrap();
+}
+
+#[test]
 fn operator_repaired_preconditions_can_requeue_a_quarantined_decision() {
     let tmp = tempfile::tempdir().unwrap();
     let root = tmp.path();

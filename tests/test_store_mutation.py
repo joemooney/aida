@@ -209,6 +209,28 @@ class StoreMutationTests(unittest.TestCase):
                         parse(self.wire(request))
 
     # trace:TASK-3223 | ai:codex
+    def test_oversized_post_operation_reply_is_unknown_not_unavailable(self):
+        class Authority:
+            def __init__(self):
+                self.operations = []
+
+            def __call__(self):
+                return None
+
+            def operation(self, request):
+                self.operations.append(request)
+                return {'committed': 'x' * 65536}
+
+        authority = Authority()
+        self.service = Service(dict(self.binding, store_profile='mediated'), self.identity, authority)
+        self.addCleanup(self.service.close)
+        request = self.request('comment_add', dict(
+            spec_id='TASK-1', expected_revision='a' * 64, content='one comment'))
+        self.refuses('OutcomeUnknown', request)
+        self.assertEqual(authority.operations, [request])
+        self.assertNotIn(request['request_id'], self.service.accepted)
+
+    # trace:TASK-3223 | ai:codex
     def test_mutations_use_correlated_framed_host_rpc_and_do_not_replay_locally(self):
         helper, host = socket.socketpair()
         authority = ns['MutationAuthority'](helper)
