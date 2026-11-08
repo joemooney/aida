@@ -28,7 +28,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-07T19:59:40.192574Z
-modified_at: 2026-11-08T03:49:13.781895062Z
+modified_at: 2026-11-08T05:40:15.295726640Z
 req_type: Story
 comments:
 - id: 01a1b86c-54fb-76f0-b04b-0ed1c7c07cfb
@@ -136,6 +136,12 @@ comments:
   modified_at: 2026-11-08T03:42:08.201726951Z
   session_id: 01a1b8be-8170-7fb2-89ab-ecb4c6eee98c
   harness_version: 2.1.319 (Claude Code)
+- id: 01a1b9ab-ef3f-7ac0-a3ab-665bbbbd3a70
+  author: joe
+  content: 'Final advisor-scoped rework: retained the widened production no-human host gate; dispatch and pickup now reuse the checked vendor, with a fresh check only after a rework vendor change. Migrated five failing integration fixtures to synthetic contained hosts with fake bwrap and committed reviewer policy where needed; added an external probe-count assertion. Updated four unit callers, the config-trust inventory, and the canonical doctor help snapshot. Validation: all 17 tests in the five affected CLI files passed (job j20261108T043731315-2-0); isolated lane_host tests 18 passed; inventory guard 1 passed; normal help snapshot verification 1 passed; rustfmt and git diff checks passed. Full CI remains unverified: broad library runs timed out, the last waiting on two init tests with other process/cwd failures, and the runner reported an overlay-stale generation. Existing merge hold retained. Native seat leaves edits uncommitted for host publication and four-shard CI verification before re-review.'
+  created_at: 2026-11-08T05:40:15.295726640Z
+  modified_at: 2026-11-08T05:40:15.295726640Z
+  session_id: 01a1b9463f9a
 history:
 - id: 01a1b85d-3f02-70c2-a82d-cefccf97dc04
   author: aida-session-start
