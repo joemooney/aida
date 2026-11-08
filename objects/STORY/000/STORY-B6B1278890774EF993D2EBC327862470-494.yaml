@@ -27,7 +27,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-06T16:51:02.535818766Z
-modified_at: 2026-11-08T01:42:02.972386324Z
+modified_at: 2026-11-08T02:07:17.899533562Z
 req_type: Story
 tags:
 - area:advisor
@@ -465,6 +465,13 @@ comments:
   created_at: 2026-11-08T01:42:02.972386324Z
   modified_at: 2026-11-08T01:42:02.972386324Z
   session_id: 01a1b8ced5dc
+- id: 01a1b8e8-f78b-7a53-a10a-632719a277ab
+  author: joe
+  content: 'Evidence 2026-11-07 (advisor-106 #2): two helper loops failed silently while still ''running''. (1) auto-rework.sh kept its launch-time grant; once that grant lost dispatch authority, every ''queue rework'' failed and every spec was SKIPped as needs-triage for hours, so nothing reworked. (2) auto-train.sh exited at its HOURS deadline (18:18) and approved PRs stopped landing until it was restarted by hand. Both need what this story describes: AIDA-owned loops that renew their grant from the live seat and surface a dead or erroring loop in ''aida awaiting''. The relaunched advisor kept the same launcher pid (aida agent new), so the review watcher''s grant stayed valid across the rotation; restarting it at rotation is NOT required.'
+  created_at: 2026-11-08T02:07:17.899533562Z
+  modified_at: 2026-11-08T02:07:17.899533562Z
+  session_id: 01a1b8be-8170-7fb2-89ab-ecb4c6eee98c
+  harness_version: 2.1.319 (Claude Code)
 history:
 - id: 01a1b1c5-af09-7d01-81e9-eaaac083f223
   author: joe
