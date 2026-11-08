@@ -23,7 +23,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-07T19:59:26.079479533Z
-modified_at: 2026-11-08T05:16:18.469739060Z
+modified_at: 2026-11-08T05:22:18.908860866Z
 req_type: Story
 comments:
 - id: 01a1b798-f0d4-73b1-93d5-f84581f2d190
@@ -63,6 +63,19 @@ comments:
   modified_at: 2026-11-08T04:15:53.467470245Z
   session_id: 01a1b8be-8170-7fb2-89ab-ecb4c6eee98c
   harness_version: 2.1.319 (Claude Code)
+- id: 01a1b99b-829c-7090-bdcf-22c13b39f06a
+  author: joe
+  content: |
+    Round 2 implementation evidence (Codex, 2026-11-08):
+    - Finding 1: missing recorded cargo target returns Ok(None). Regression executes /bin/true through spawn_agent for Claude/Codex/Agy with both an absent target declaration and a declared target removed by host clean. Existing resource-override test remains.
+    - Finding 3: refusal includes the cache path, required uid/mode, shell-quoted chmod 700 remedy and owner-repair guidance. Regression checks refusal and successful retry after chmod.
+    - CI failure: inventory the host Cargo config.toml read in lane_job.rs as other-file (one production site), not worktree policy.
+    - Finding 2 durability: lane jobs now own a foreground sccache server, print final --show-stats inside the sandbox, request --stop-server, and wait for actual server exit before the sandbox ends. A delayed-write fixture checks that waiting outlives the shutdown response. Cargo failures keep their code; statistics/shutdown failures fail an otherwise successful job. Forced stops/timeouts still can interrupt cache writes.
+    - Measured real sccache 0.18.0 smoke on this seat's host (hostname imac): ran the production shell lifecycle twice with independent foreground servers, a shared private temporary disk cache, identical direct rustc --crate-type rlib --emit=link inputs and removed compiler outputs between runs. Run 1: 1 request executed, 1 Rust miss, 0 hits, 0 cache write errors, one cache file retained after server exit. Run 2: 1 request executed, 1 Rust hit, 0 misses, 0 cache write errors. Both exited 0 and printed server-exited-before-teardown. This establishes local disk persistence across actual server exits, NOT two lane cargo jobs or the two-host AC1.
+    AC1 remains open: no measurements from two consecutive lane Cargo jobs on primary AND dell1 are available in this native seat. No advisor amendment is claimed. Required follow-up: run the revised host launcher on both hosts with fresh build outputs and identical dependency inputs, retain each job's final stats, verify second-job Rust hits > 0 on each, and confirm cache survives bwrap exit. Existing merge hold stays in force.
+  created_at: 2026-11-08T05:22:18.908860866Z
+  modified_at: 2026-11-08T05:22:18.908860866Z
+  session_id: 01a1b994e1cb
 history:
 - id: 01a1b929-7921-7980-8202-36c2cc4f3845
   author: aida-session-start
