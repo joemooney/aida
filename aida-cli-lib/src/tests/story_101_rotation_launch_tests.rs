@@ -604,3 +604,42 @@ exit 0
         assert_eq!(grant.parent_grant_id.as_deref(), Some(parent.as_str()));
     }
 }
+
+// trace:STORY-2653 | ai:codex
+#[test]
+fn launcher_ends_fake_vendor_at_stop_and_relaunches_despite_term_ignoring_goal() {
+    let fx = fixture(
+        r#"
+if [ "$AIDA_ROTATION_GENERATION" = 1 ]; then
+  d="$AIDA_PROJECT_ROOT/.aida/handoff/$AIDA_ROTATION_SEAT"
+  mkdir -p "$d"
+  notice=$(date -u +%Y-%m-%dT%H:%M:%S.%NZ)
+  sleep 0.02
+  ts=$(date -u +%Y-%m-%dT%H:%M:%S.%NZ)
+  f=gen1.md
+  printf '<!-- seat handoff: seat=%s written=%s -->\nactive goal: ship queue\n' "$AIDA_ROTATION_SEAT" "$ts" > "$d/$f"
+  printf '{"ts":"%s","seat":"%s","event":"handoff","path":".aida/handoff/%s/%s","handle":"%s","native_session_id":"%s"}\n' "$ts" "$AIDA_ROTATION_SEAT" "$AIDA_ROTATION_SEAT" "$f" "$AIDA_AGENT_NAME" "$sid" >> "$d/log.jsonl"
+  boundary=$(date -u +%Y-%m-%dT%H:%M:%S.%NZ)
+  printf '{"session":"%s","notice":"%s","boundary":"%s"}' "$sid" "$notice" "$boundary" > "$d/.rotation-$AIDA_AGENT_NAME-$AIDA_ROTATION_GENERATION.json"
+  # Simulate a goal hook that refuses to let the vendor end its session.
+  trap '' TERM
+  for i in $(seq 1 100); do sleep 0.1; done
+  exit 99
+fi
+exit 0
+"#,
+    );
+    let before = std::time::Instant::now();
+    let outcome = supervise(&fx, plan(&fx.project, None, None), quick(), &mut |_| {});
+    assert!(matches!(outcome, RotationOutcome::Exited(s) if s.success()));
+    assert!(before.elapsed() < std::time::Duration::from_secs(8));
+    let lines = generations(&fx);
+    assert_eq!(lines.len(), 2, "{lines:?}");
+    assert_eq!(field(&lines[0], "name"), field(&lines[1], "name"));
+    let loaded = crate::agent_rotation::matched_handoff(
+        field(&lines[1], "handoff"),
+        field(&lines[1], "stamp"),
+    )
+    .unwrap();
+    assert!(loaded.contains("active goal: ship queue"));
+}
