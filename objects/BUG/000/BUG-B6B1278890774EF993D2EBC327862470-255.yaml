@@ -3,12 +3,12 @@ spec_id: BUG-b6b1278890774ef993d2ebc327862470-255
 agreed_id: BUG-2490
 title: 'Store commit path commits git conflict markers: an autostash re-apply conflict in .aida-store is committed by the contained-session store commit, breaking every command that loads the object'
 description: 'Observed 2026-11-07 17:00 MST: local .aida-store commit 7124c0f (''reviewer: commit 2 store changes from the contained session'') contained ''<<<<<<< Updated upstream / ======= / >>>>>>> Stashed changes'' in objects/STORY/000/STORY-B6B1278890774EF993D2EBC327862470-565.yaml (modified_at only). Every store load then failed: ''Failed to parse .../STORY-...-565.yaml'' (aida queue rework, aida push). The advisor hand-fixed it in c02902bd108 before it reached origin. Cause: the store worktree inherits the operator''s global rebase.autoStash=true / merge.autoStash=true; a pull over a dirty store tree re-applied the autostash with a conflict (the stash stays in the list as stash@{0} autostash), and the contained-session store commit then staged and committed the markered file. Acceptance: (1) every git invocation on the store worktree passes -c rebase.autoStash=false -c merge.autoStash=false (or the store worktree config pins them false), so no autostash ever touches the store; (2) the store commit path refuses to commit any object that does not parse, or that contains conflict markers, naming the file; unmerged paths also refuse; (3) a regression test reproduces the autostash-conflict sequence and asserts refusal; (4) aida doctor flags a store object with conflict markers. LIGHT gate.'
-status: InProgress
+status: NeedsAttention
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-08T00:02:55.282155934Z
-modified_at: 2026-11-08T08:56:23.949969584Z
+modified_at: 2026-11-08T08:59:48.458744783Z
 req_type: Bug
 relationships:
 - rel_type:
@@ -297,6 +297,15 @@ history:
   session_id: 01a1ba5f23ab
   harness_version: codex-cli 0.167.0
   changes: []
+- id: 01a1ba62-a16a-7562-a523-fa856cef7489
+  author: dirtlab
+  timestamp: 2026-11-08T08:59:48.458768496Z
+  session_id: 01a1ba5f23ab
+  harness_version: codex-cli 0.167.0
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: NeedsAttention
 filed_at:
   code_sha: 2a7fe186bdcd718fa356e5e4d028a3b2ff13769d
   branch: main
@@ -306,3 +315,8 @@ filed_at:
   vendor: claude
   session: 01a1b848-940b-7bd2-8acd-52e428b182b8
   harness_version: 2.1.319 (Claude Code)
+attention_reason:
+  category: design-fork
+  detail: 'Latest review finding 3 remains unresolved: upstream-scalar semantic pull merging conflicts with the existing field-level LWW, terminal-status and hypothesis-preservation policy. CLAUDE.md requires advisor signoff for architecture changes; no advisor-approved policy or linked scope split is recorded. Comprehensive failed-pull write fencing and dell1 stopgap removal also remain incomplete. This round fixes findings 1, 2, 4, 5 and 6 only; preserve the existing merge hold and publication veto, and do not ship as a complete fix.'
+  raised_by: implementer
+  raised_at: 2026-11-08T08:59:48.458744783Z
