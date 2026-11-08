@@ -20,7 +20,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-07T20:18:53.564500Z
-modified_at: 2026-11-08T18:02:56.140485220Z
+modified_at: 2026-11-08T18:07:52.268179322Z
 req_type: Bug
 relationships:
 - rel_type:
@@ -254,6 +254,12 @@ comments:
   content: 'Round 6 approach. Acceptance criteria as tests: run the native-seat punt/publication suppression fixture and no-commit/no-bundle fixture (command-level), plus FIFO/symlink/oversize refusal, linked-parent unlink protection, retained markers on refused launch, large host ledger and case-variant mirroring tests. Expected files: punt.rs, standalone_implementer.rs, session.rs, queue_cmd.rs, seat_clone.rs, ship_from_seat.rs, their fixture tests, scripts/store-writers.toml and orientation docs. Ambiguities / conflicts as questions: Expected 2 currently promises punt exit 0 although the established lane contract uses 32; preserve that contract and correct the wording. Trace drain no-change classification and either implement it or record an explicit follow-up as requested.'
   created_at: 2026-11-08T17:57:53.657703060Z
   modified_at: 2026-11-08T17:57:53.657703060Z
+  session_id: 01a1bc4dcf8e
+- id: 01a1bc58-65cc-7a31-bda8-18999cd38340
+  author: joe
+  content: 'Round-6 scope update: findings 1-3 are implemented with pinned-parent, bounded no-follow seat reads/unlinks and spawn-boundary marker consumption; finding 5 comments are restored. Finding 4 is explicitly tracked as draft child TASK-3608 for advisor triage under the review-permitted follow-up option; no drain outcome implementation is claimed. Expected 2 now distinguishes no-change exit 0 from the established standalone punt exit 32. Validation is in progress via lane job j20261108T180017880-2-0; Rust has not yet executed tests. The writer inventory guard, its 42 Python tests, rustfmt check, portability guard and git diff --check pass.'
+  created_at: 2026-11-08T18:07:52.268179322Z
+  modified_at: 2026-11-08T18:07:52.268179322Z
   session_id: 01a1bc4dcf8e
 history:
 - id: 01a1b7ad-9096-7320-bbe8-fc34c8e11c09
