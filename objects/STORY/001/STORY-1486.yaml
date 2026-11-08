@@ -23,7 +23,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-09-26T18:30:26.622729865Z
-modified_at: 2026-11-08T09:28:25.723783672Z
+modified_at: 2026-11-08T09:28:45.455979083Z
 req_type: Story
 tags:
 - agent-launch
@@ -741,6 +741,12 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a1ba7d-2590-7163-b216-d68f99932e85
+  author: dirtlab
+  timestamp: 2026-11-08T09:28:46.224249369Z
+  session_id: 01a1ba7ccf7b
+  harness_version: codex-cli 0.167.0
+  changes: []
 decision_request:
   question: The portability and session-seat prerequisites have landed. Should the launch permission profile now include approval-prompt exemptions, exclude exemptions, or remain on hold?
   choices:
