@@ -8,7 +8,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-08T00:02:55.282155934Z
-modified_at: 2026-11-08T08:59:48.458744783Z
+modified_at: 2026-11-08T09:07:07.943887650Z
 req_type: Bug
 relationships:
 - rel_type:
@@ -156,6 +156,16 @@ comments:
   modified_at: 2026-11-08T08:54:37.894327986Z
   session_id: 01a1b8be-8170-7fb2-89ab-ecb4c6eee98c
   harness_version: 2.1.319 (Claude Code)
+- id: 01a1ba69-5627-7c53-8174-81c512d325af
+  author: dirtlab
+  content: |
+    Native-seat rework handoff for latest review (1a83194161c4): findings 1/2/4/5/6 addressed in uncommitted edits. queue_cmd.rs moves pull and its pre-pull status snapshot before implicit queue persistence, calibration and session setup; the existing regression assertion is retained. git_ops.rs validates staged objects before both rebase continuations and the union-merge commit, lists the index without expanding staged paths into argv, filters selected paths in memory, and makes the unused full-store validation wrapper test-only. store_hook_tests.rs adds a real paused-rebase regression: an invalid staged manual resolution refuses with the filename, preserves HEAD and leaves recovery possible. scripts/store-writers.toml adds the regenerated cat-file stdin sink, reviewed as read_only (object IDs written to a child pipe only). queue_work_dry_run.rs preserves init stdout/status diagnostics; support/test_git.rs creates synthetic allocation settings as mode 0600 so shared-write umasks do not make the fixture untrusted.
+    Validation: lane job j20261108T090017034-2-0 executed all 6 core BUG-2490 tests, passed. CLI job j20261108T090622978-2-0 executed bug_2490_failed_pull_stops_pickup_before_session_and_spec_writes, passed. Two earlier CLI attempts failed during fixture init on allocation-setting trust, resolved by the mode fix. Inventory checker passed (3369 sinks/293 mappings), inventory unit tests 42 passed, maintenance ratchet 8 passed, rustfmt --check and git diff --check passed. Codegraph executable unavailable; rg used for caller confirmation.
+    Latest finding 3 remains publication-vetoing: upstream-scalar semantic merge policy, comprehensive failed-pull write fencing and dell1 stopgap removal are unresolved; CLAUDE.md requires advisor architecture signoff and no approved split is recorded. Finding 7 remains the explicitly non-blocking doctor double scan. BUG-2490 was punted to Needs Attention; persisted update succeeded, but the local punt signal file write failed read-only. Host must honor persisted punt and existing hold; no completion or publication is authorized. Changed files: aida-cli-lib/src/queue_cmd.rs; aida-core/src/git_ops.rs; aida-core/src/git_ops/tests/store_hook_tests.rs; scripts/store-writers.toml; aida-cli/tests/queue_work_dry_run.rs; aida-cli/tests/support/test_git.rs. No commit, push, PR creation, queue completion, ship or review recording performed.
+  created_at: 2026-11-08T09:07:07.943887650Z
+  modified_at: 2026-11-08T09:07:07.943887650Z
+  session_id: 01a1ba5f23ab
+  harness_version: codex-cli 0.167.0
 history:
 - id: 01a1b923-982d-7512-93a5-cd08923b4f98
   author: aida-session-start
