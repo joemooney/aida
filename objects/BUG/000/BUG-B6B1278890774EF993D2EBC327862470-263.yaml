@@ -8,7 +8,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-08T18:38:43.709546225Z
-modified_at: 2026-11-08T20:06:12.691108280Z
+modified_at: 2026-11-08T20:06:17.106453734Z
 req_type: Bug
 comments:
 - id: 01a1bc8c-5761-7180-b3a9-aa9efdae2409
@@ -54,6 +54,23 @@ comments:
   content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: AC1 still unmet for the observed stall: the completion receipt is written only after a collected verdict, but all four sampled stalled heads have no verdict on the ledger, so they stay refused. AC2 holds; AC3 and AC4 pass only via a fixture state not seen in production. CI pending at review.. No triage reason was given.'
   created_at: 2026-11-08T20:06:12.691105254Z
   modified_at: 2026-11-08T20:06:12.691105254Z
+  session_id: 01a1bc93-77a0-7740-8b03-df4e3e8d1df5
+  harness_version: 2.1.319 (Claude Code)
+- id: 01a1bcc4-ce85-7a80-82d8-c348cf22c436
+  author: joe
+  content: |-
+    REVIEW FINDINGS TO ADDRESS (BUG-2498):
+    Verdict: CHANGES REQUESTED
+    Reviewed commit: e380100988b6
+    Recorded: 2026-11-08T19:50:15.057338034+00:00
+    Findings:
+    1. AC1 unmet (blocking), aida-cli-lib/src/queue_cmd.rs:14441-14451 and 15028: review_finished runs only inside end_finished_review when verdict_collected is true AND reap_finished_review failed. The stalled reviews never had a collected verdict. Evidence: PR-3667 @7986e62e4c10, PR-3671 @3e06b52ac09e, PR-3652 @6f22e5b3 and PR-3661 @604105fe each have 0 rows in .aida/gate-ledger/PR-N.jsonl and only an ownership acquire before the stall (the last two were released by hand at 18:31 with note 'session ended'). The live leases for 3667/3671 have active_pid=None, holder_record=None, and a Reviewing record with 0 witnesses, so review_lease_ended returns false and the next head gets the same 'held by worktree' refusal. Likely cause (inferred, attempt history is pruned): the head moved and the watcher superseded the review, which kills the supervisor before line 15028; a supersede cannot reach this hook, and review_watch.rs has no lease release at Phase::Superseded (lines 1621, 2450, 2476). Fix: record bound end-of-review evidence on every terminal path where the reviewer is provably gone, at minimum when confirm() succeeds for Superseded, plus the no-verdict exit if AC1 is meant to cover it. AC1 is stated for any clean, pushed, processless reviewer, not only one with a verdict.
+    2. AC1 coverage is narrow even on the path it does handle, session_reap.rs:1697-1735 with queue_cmd.rs:14446: a clean tree with a collected verdict is normally reaped outright, so the receipt only applies when reap fails on a clean tree (for example a transient WorktreeInUse). The mail-retention refusal rewrites the lease first (keep_ending_retained), so review_finished then fails its toml equality check and writes no receipt. No test or log shows a clean finished tree reaching this branch; the fixture reaches it by adding a dirty 'pending' file and deleting it afterwards. Add a case that matches an observed production state once finding 1 is fixed.
+    3. AC3 partial, aida-cli-lib/src/tests/bug_2457_review_repickup_tests.rs:471-540: the test now starts from Reviewing with zero witnesses and uses the real end_finished_review (round-1 finding 2 improved), but always with verdict_collected=true for the success path. The state that stalled production (Reviewing, no witnesses, no collected verdict, supervisor gone) is asserted only as refused (line ~473, the false case), which pins the bug as expected behaviour. Drive two consecutive heads from that state, and cover the superseded case.
+    4. AC4 unproven in production, aida-cli-lib/src/review_watch.rs:2965-2968 (only production-file change is a cfg(test) re-export): the one retry is the existing BUG-2450 logic, and it runs on the next watcher pass with nothing releasing the old lease between attempts. Live state confirms this: PR-3667 @5f64ea6609 and PR-3671 @ad74c5720c show setup_retry=true, phase=exited, 'not relaunched'. The test inserts the release by closure between attempts. Once finding 1 is fixed, show the release happening before the retry through a real path, or have the watcher perform it.
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
+  created_at: 2026-11-08T20:06:16.965141127Z
+  modified_at: 2026-11-08T20:06:16.965141127Z
   session_id: 01a1bc93-77a0-7740-8b03-df4e3e8d1df5
   harness_version: 2.1.319 (Claude Code)
 history:
