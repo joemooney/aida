@@ -8,7 +8,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-08T00:02:55.282155934Z
-modified_at: 2026-11-08T08:54:34.057871653Z
+modified_at: 2026-11-08T08:54:37.999734529Z
 req_type: Bug
 relationships:
 - rel_type:
@@ -134,6 +134,26 @@ comments:
   content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: Round-3 findings 1/3 fixed and AC1-AC4 hold in source, but two CI failures are caused by this PR (cli-0 failed-pull regression; gates store-writer ratchet) and the operator''s semantic-merge/failed-pull scope is neither done nor split. AC1 verified git_ops.rs:476-478 + override assertion; AC2 verified validate_object_text/index/worktree/pending + bug_2490 tests; AC3 verified bug_2490_autostash_conflict_refuses_store_commit; AC4 verified bug_2490_doctor_reports_conflict_file_without_aborting; operator (a) absent; operator (b) partial. CI lib-0 still running at review.. It was punted on: design-fork: Round 3 review finding 2 remains unresolved: the requested upstream-scalars semantic pull policy differs from the existing field-level LWW, terminal-status and hypothesis-preservation resolver. CLAUDE.md requires advisor signoff for architecture changes; no advisor-approved policy or linked split is recorded. Comprehensive failed-pull write fencing and removal of the dell1 stopgap also remain incomplete. This round adds a schema-invalid commit refusal regression only. Preserve the existing merge hold and publication veto; do not publish as a complete fix.. No triage reason was given.'
   created_at: 2026-11-08T08:54:34.057870442Z
   modified_at: 2026-11-08T08:54:34.057870442Z
+  session_id: 01a1b8be-8170-7fb2-89ab-ecb4c6eee98c
+  harness_version: 2.1.319 (Claude Code)
+- id: 01a1ba5d-e446-7fb3-82a3-76dd03cbd310
+  author: joe
+  content: |-
+    REVIEW FINDINGS TO ADDRESS (BUG-2490):
+    Verdict: CHANGES REQUESTED
+    Reviewed commit: 1a83194161c4
+    Recorded: 2026-11-08T08:46:56.901282128+00:00
+    Findings:
+    1. [major][ci][correctness] CI (cli-0) fails on bug_2490_failed_pull_stops_pickup_before_session_and_spec_writes (queue_work_dry_run.rs:1452, 'preflight must not persist auto-queue synthesis'), and the test is right. handle_queue_work persists the synthesized queue row at aida-cli-lib/src/queue_cmd.rs:12607 (with record_role_activity), about 740 lines before the pull at queue_cmd.rs:13346. A failed pull therefore leaves a queue row behind while the error says 'pickup stopped before session setup and store writes'. Move the pull ahead of the queue_add/role-activity persistence, or defer persistence until after it succeeds; do not weaken the assertion.
+    2. [major][ci] CI (gates) fails on step 'Store writer inventory ratchet' (scripts/check-store-writers.py); main is green. The 'lane_fixture_fails' lines quoted for this job are a deliberate fixture, not the failure. Likely cause, inferred from source because the job log was not readable from this sandbox: the new production write_all in validate_store_index_paths (aida-core/src/git_ops.rs, cat-file --batch stdin writer) matches the ratchet's sink seed, and scripts/store-writers.toml is unchanged and has no entry for it. Confirm with python3 scripts/check-store-writers.py, regenerate the inventory as the script header directs, and review the disposition.
+    3. [major][scope] Round-1/2/3 scope finding remains open. The operator comment on BUG-2490 (2026-11-08T03:05Z, plus the 05:26Z note to remove the dell1 stopgap when this bug lands) requires (a) semantic merge of store objects on pull and (b) a failed store pull stopping store writes. (a) is absent. (b) is partial: only the queue-work pickup path changed; store_sync.rs:1768 still continues with 'Falling back to local view' and there is no general write fence. BUG-2490 is still Needs Attention with only implemented-by STORY-2671 linked, and the implementer's punt asks the advisor to choose the merge policy. Implement both, or have the advisor file a linked follow-up and record the split on BUG-2490, then re-request review.
+    4. [minor][correctness] Store commits made while concluding a conflict bypass the new validation: rebase --continue at aida-core/src/git_ops.rs:2155 and 2217, and commit --no-edit at git_ops.rs:2823, call git directly rather than commit_with_lock_recovery. AC2 says the store commit path refuses any object that does not parse or holds markers. Validate the index before each of these, or state why the resolver output cannot be invalid and pin that with a test.
+    5. [minor][robustness] validate_store_index_paths passes every staged object path as argv to 'git ls-files --stage' (aida-core/src/git_ops.rs, the --literal-pathspecs call), so a bulk commit scales with argv size and fails with E2BIG once it exceeds ARG_MAX; the bulk test covers only 512 objects. Run ls-files --stage -z without paths and filter in memory, or feed --stdin.
+    6. [minor][cleanup] pub fn validate_store_objects (aida-core/src/git_ops.rs:7357) has no production caller after the scoped-validation rework; only store_hook_tests.rs uses it. Remove it or make it test-only, since its doc comment implies a diagnostic surface that does not use it.
+    7. [minor][perf] Carried, non-blocking: a full aida doctor run parses every store object twice, once in the tolerant Storage::load and again in scan_store_objects (doctor_cmd.rs:835-836). Take the bad-object list from the loader if practical.
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
+  created_at: 2026-11-08T08:54:37.894327986Z
+  modified_at: 2026-11-08T08:54:37.894327986Z
   session_id: 01a1b8be-8170-7fb2-89ab-ecb4c6eee98c
   harness_version: 2.1.319 (Claude Code)
 history:
