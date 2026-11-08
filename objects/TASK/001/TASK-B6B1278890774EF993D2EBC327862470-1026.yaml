@@ -1,0 +1,29 @@
+id: 01a1bd58-16e7-7de0-bfb2-bb0f34c6f3b0
+spec_id: TASK-b6b1278890774ef993d2ebc327862470-1026
+title: 'Non-blocking (minor, carried forward): a native-lane body line ending in a diff…'
+description: |-
+  Non-blocking finding carried forward from an APPROVED review verdict on BUG-2493, which has since completed — recorded here so it keeps a queryable home once the verdict record stops being read.
+
+  Non-blocking (minor, carried forward): a native-lane body line ending in a different spec, e.g. 'done (BUG-7)', is credited on a (#N) squash that bypasses aida pr ship (trailer_coverage.rs:34 commit_completion_ids); aida pr ship neutralizes it and the docs warn against it, but the host does not validate declared bodies. Ordinary lanes share this exposure, so a guard can follow separately.
+
+  PR: #3667
+  Reviewed sha: 5f64ea6609498dae663d8c205ce7ae62db056839
+status: Draft
+priority: Medium
+owner: joe
+feature: Uncategorized
+created_at: 2026-11-08T22:47:09.287328042Z
+modified_at: 2026-11-08T22:47:09.287328042Z
+req_type: Task
+tags:
+- carried-from:BUG-2493
+- finding-hash:9c590adf
+- from-review:PR-3667
+- kind:carried-forward
+filed_at:
+  code_sha: d0e3cb3eb33d2718f823c4fe504696a1f9c8f1e8
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 65d5a89946c
+  vendor: claude
