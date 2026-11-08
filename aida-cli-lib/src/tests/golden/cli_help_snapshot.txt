@@ -12598,6 +12598,9 @@ Commands:
   help                      Print this message or the help of the given subcommand(s)
 
 Options:
+      --lane-host
+          Report the host codegraph snapshot age as seen from this lane
+
       --heal
           Apply safe fixes after scanning. Without this, doctor is read-only
 
@@ -12629,16 +12632,16 @@ Options:
           - toon:  Token-efficient TOON — the compact agent default when piped/captured
           - json:  Machine JSON, for commands that support a JSON projection
 
+      --canonical-ids
+          Show node-local spec IDs in their canonical form instead of the node's friendly label (for
+          scripts). Also settable via AIDA_CANONICAL_IDS=1
+
       --since <DATE_OR_REF>
           Exempt specs completed before this point from the completed-without-commit integrity
           check: a relative duration (`30d`, `2w`, `24 hours ago`), an ISO date (local midnight), a
           zone-less ISO datetime (local time), RFC3339, or else a git ref/tag whose commit date is
           the cutoff. An invalid value is an error. Quiets noise on legacy history predating trace
           conventions. Falls back to the AIDA_DOCTOR_COMPLETED_SINCE env var
-
-      --canonical-ids
-          Show node-local spec IDs in their canonical form instead of the node's friendly label (for
-          scripts). Also settable via AIDA_CANONICAL_IDS=1
 
       --fix-sandbox
           Print the guided, copy-pasteable steps to bring the OS sandbox (bubblewrap
@@ -15940,6 +15943,10 @@ Options:
       --canonical-ids
           Show node-local spec IDs in their canonical form instead of the node's friendly label (for
           scripts). Also settable via AIDA_CANONICAL_IDS=1
+
+      --commit-body-file <FILE>
+          Read a UTF-8 commit body verbatim from this file. Use with native -m declarations or
+          --from-seat --commit-pending
 
   -h, --help
           Print help (see a summary with '-h')
@@ -44225,6 +44232,11 @@ Working on aida itself
         "help": "Read-only typed local lane capacity and reservations (not readiness admission)"
       },
       {
+        "name": "lane-host",
+        "takes_value": false,
+        "help": "Report the host codegraph snapshot age as seen from this lane"
+      },
+      {
         "name": "mapping",
         "takes_value": true,
         "help": "With --fix id-collisions: the old -> new mapping file. With --dry-run a missing file is created from the plan; otherwise the file's mapping is applied exactly as written"
@@ -47517,6 +47529,11 @@ Working on aida itself
         "name": "canonical-ids",
         "takes_value": false,
         "help": "Show node-local spec IDs in their canonical form instead of the node's friendly label (for scripts). Also settable via AIDA_CANONICAL_IDS=1"
+      },
+      {
+        "name": "commit-body-file",
+        "takes_value": true,
+        "help": "Read a UTF-8 commit body verbatim from this file. Use with native -m declarations or --from-seat --commit-pending"
       },
       {
         "name": "commit-pending",

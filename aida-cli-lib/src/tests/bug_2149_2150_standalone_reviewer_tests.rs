@@ -1093,12 +1093,14 @@ fn bug2187_granted_reviewer_resume_sets_identity() {
 // trace:TASK-1801 | ai:codex
 #[test]
 fn rework_work_dispatch_uses_intent_preserving_adapter() {
-    let source = include_str!("../queue_cmd.rs");
-    let handler = source
-        .split("pub(crate) fn handle_queue_rework(")
-        .nth(1)
-        .unwrap();
-    let body = handler.split("/// Keep route inheritance").next().unwrap();
+    // trace:TASK-3426 | ai:codex
+    let source = include_str!("../queue_cmd/rework.rs");
+    let (_, handler) = source
+        .split_once("pub(crate) fn handle_queue_rework(")
+        .expect("the rework module must contain its handler");
+    let (body, _) = handler
+        .split_once("/// Top-level alias for `aida queue rework SPEC`")
+        .expect("the rework handler must end before the top-level alias");
     assert!(body.contains("rework_role_input(for_role, for_role_resolved.as_deref())"));
     assert!(!body.contains("QueueWorkRoleInput::direct("));
 }
