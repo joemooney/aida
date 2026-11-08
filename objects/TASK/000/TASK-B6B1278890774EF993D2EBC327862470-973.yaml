@@ -1,5 +1,6 @@
 id: 01a1b9ab-7b01-7bc2-b4ab-03e9d1189e73
 spec_id: TASK-b6b1278890774ef993d2ebc327862470-973
+agreed_id: TASK-3003
 title: 'minor: rotation_context (agent_rotation.rs ~L428-455) lists every PID carrying …'
 description: |-
   Non-blocking finding carried forward from an APPROVED review verdict on STORY-2653, which has since completed — recorded here so it keeps a queryable home once the verdict record stops being read.
@@ -20,6 +21,13 @@ tags:
 - finding-hash:c0c96e7a
 - from-review:PR-3656
 - kind:carried-forward
+history:
+- id: 01a1b9bb-3de6-7093-b0af-eed05094dd14
+  author: joe
+  timestamp: 2026-11-08T05:56:58.470176951Z
+  session_id: 01a1b9af-8230-75d2-82f8-667491cc010a
+  harness_version: 2.1.319 (Claude Code)
+  changes: []
 filed_at:
   code_sha: 08cbf8a3fe7e5cef1171627f2b6edb446abc6539
   branch: main
