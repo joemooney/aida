@@ -13,12 +13,12 @@ description: |
   3. Works for Claude, Codex and AGY through their headless resume commands; one adapter test per vendor using a recorded fixture.
   4. A wait whose seat or session has been lost surfaces as an escalation, never a silent drop.
   Ref: docs/plans/2026-11-07-infinity-agent-architecture-deep-dive.md section 3.3 and the SPIKE-711 results table.
-status: NeedsAttention
+status: Approved
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-08T02:58:08.667753563Z
-modified_at: 2026-11-08T07:10:37.356950168Z
+modified_at: 2026-11-08T07:13:28.017196595Z
 req_type: Story
 tags:
 - area:human-wait
@@ -185,6 +185,13 @@ comments:
   modified_at: 2026-11-08T06:18:25.910551645Z
   session_id: 01a1b9cd2f1f
   harness_version: codex-cli 0.167.0
+- id: 01a1ba01-45d1-7bc0-b271-142722a16a5b
+  author: joe
+  content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: Sketch-only PR carries a completing (STORY-2661) trailer that would close the story at merge with AC1-4 unimplemented and no advisor signoff; the sketch also leaves the resume consumer, grant source and question identity undefined.. It was punted on: design-fork: Sketch ready at docs/plans/2026-11-08-story-2661-park-resume-sketch.md and recorded on the spec. Binding advisor ruling requires signoff before code. Please approve host-owned park/outbox protocol, retained exclusive seat with released running slot, and initial vendor admission limits: Codex without AIDA containment only until PR2; shared-wrapper contained Claude also remains refused; AGY needs its verified adapter integrated.. No triage reason was given.'
+  created_at: 2026-11-08T07:13:28.017194007Z
+  modified_at: 2026-11-08T07:13:28.017194007Z
+  session_id: 01a1b8be-8170-7fb2-89ab-ecb4c6eee98c
+  harness_version: 2.1.319 (Claude Code)
 history:
 - id: 01a1b9c5-1aa6-78e3-9355-9af12a0ce44c
   author: joe
@@ -217,6 +224,15 @@ history:
   session_id: 01a1b9fb239b
   harness_version: 2.1.319 (Claude Code)
   changes: []
+- id: 01a1ba01-45d1-7bc0-b271-1410c652fb59
+  author: joe
+  timestamp: 2026-11-08T07:13:28.017175617Z
+  session_id: 01a1b8be-8170-7fb2-89ab-ecb4c6eee98c
+  harness_version: 2.1.319 (Claude Code)
+  changes:
+  - field_name: status
+    old_value: NeedsAttention
+    new_value: Approved
 filed_at:
   code_sha: dc41ee8da2f44f88178936fc1a8e6cb7168a3de7
   branch: main
@@ -226,17 +242,3 @@ filed_at:
   vendor: claude
   session: 01a1b8be-8170-7fb2-89ab-ecb4c6eee98c
   harness_version: 2.1.319 (Claude Code)
-attention_reason:
-  category: design-fork
-  detail: 'Sketch ready at docs/plans/2026-11-08-story-2661-park-resume-sketch.md and recorded on the spec. Binding advisor ruling requires signoff before code. Please approve host-owned park/outbox protocol, retained exclusive seat with released running slot, and initial vendor admission limits: Codex without AIDA containment only until PR2; shared-wrapper contained Claude also remains refused; AGY needs its verified adapter integrated.'
-  lean: Approve the sketch and admission limits, then implement with crash-recovery and per-vendor fixture coverage.
-  raised_by: implementer
-  raised_at: 2026-11-08T06:18:28.050795702Z
-failure_reason:
-  phase: reviewer
-  phase_index: 3
-  kind: verdict:request-changes
-  detail: Sketch-only PR carries a completing (STORY-2661) trailer that would close the story at merge with AC1-4 unimplemented and no advisor signoff; the sketch also leaves the resume consumer, grant source and question identity undefined.
-  recovery_hint: address the review findings, move STORY-2661 back to In Progress, and clear the PR hold only after approval
-  shelved_by: reviewer
-  shelved_at: 2026-11-08T07:10:37.356950168Z
