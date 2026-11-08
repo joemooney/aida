@@ -41,6 +41,12 @@ name: merge-hold-gate
 # against this file rather than against a copy of it. Keep the gate logic here.
 
 on:
+  # trace:BUG-2492 | ai:codex
+  # One-release bootstrap: main still has only pull_request, so target events
+  # cannot run this publisher until it lands. Remove this trigger after the
+  # operator completes docs/internal/testing/bug-2492-status-cutover.md.
+  pull_request:
+    types: [opened, reopened, synchronize, labeled, unlabeled, edited]
   pull_request_target:
     types: [opened, reopened, synchronize, labeled, unlabeled, edited]
 
@@ -59,6 +65,10 @@ permissions:
 
 jobs:
   publish-merge-hold-status:
+    # The temporary PR trigger can write statuses only for same-repo branches.
+    # Forks use trusted pull_request_target after installation on main; until
+    # then their missing required status fails closed. Never check out PR code.
+    if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
     runs-on: ubuntu-latest
     steps:
       - name: Require recorded clearance for every previously held PR

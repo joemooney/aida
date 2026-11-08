@@ -61,6 +61,8 @@ PY
 
 # The publisher must not emit a successful check with the required status name,
 # and fork events must execute only trusted base workflow code.
+grep -Fq '  pull_request:' "$github_workflow" || fail 'transition bootstrap trigger missing'
+grep -Fq "github.event.pull_request.head.repo.full_name == github.repository" "$github_workflow" || fail 'bootstrap must exclude fork PR events'
 grep -Fq '  pull_request_target:' "$github_workflow" || fail 'fork status token unavailable'
 grep -Fq '  statuses: write' "$github_workflow" || fail 'status permission missing'
 grep -Fq '  cancel-in-progress: false' "$github_workflow" || fail 'publisher can be cancelled mid-write'
@@ -189,6 +191,7 @@ fi
 # trace:STORY-1690 | ai:claude
 grep -Fq 'aida-train-members:' "$work/github-gate.sh" || fail "extracted GitHub gate has no train mode"
 
+# trace:BUG-2492 | ai:codex — assert status state as well as pass/block in train mode.
 # $1 = head ref, $2 = PR body, then MEMBER_LABELS_<n>=... assignments.
 train_gate() {
   local ref=$1 body=$2
@@ -207,31 +210,31 @@ two="Train.
 aida-train-members: 11@$a40,12@$b40"
 train_cases=0
 expect_train() {
-  local want=$1 desc=$2
-  shift 2
+  local want=$1 WANT_STATE=$2 desc=$3
+  shift 3
   local got=0
   train_gate "$@" || got=$?
   [ "$got" = "$want" ] || fail "train gate: expected exit $want, got $got ($desc)"
   train_cases=$((train_cases + 1))
 }
-expect_train 0 'two clear members pass' train/x "$two" MEMBER_LABELS_11= MEMBER_LABELS_12=
-expect_train 0 'a member with a recorded clearance passes' train/x "$two" \
+expect_train 0 success 'two clear members pass' train/x "$two" MEMBER_LABELS_11= MEMBER_LABELS_12=
+expect_train 0 success 'a member with a recorded clearance passes' train/x "$two" \
   MEMBER_LABELS_11=aida:merge-hold-recorded,aida:merge-hold-cleared MEMBER_LABELS_12=
-expect_train 1 'a held member fails the train' train/x "$two" \
+expect_train 1 pending 'a held member keeps the train pending' train/x "$two" \
   MEMBER_LABELS_11= MEMBER_LABELS_12=aida:merge-hold,aida:merge-hold-recorded
-expect_train 1 'a member held before without clearance fails the train' train/x "$two" \
+expect_train 1 pending 'a member held before without clearance keeps the train pending' train/x "$two" \
   MEMBER_LABELS_11=aida:merge-hold-recorded MEMBER_LABELS_12=
-expect_train 1 'a member with a forged clearance fails the train' train/x "$two" \
+expect_train 1 failure 'a member with a forged clearance fails the train' train/x "$two" \
   MEMBER_LABELS_11=aida:merge-hold-cleared MEMBER_LABELS_12=
-expect_train 1 'an unreadable member fails closed' train/x "$two" MEMBER_LABELS_11=
-expect_train 1 'a train PR with no members line fails' train/x 'no members here'
-expect_train 1 'a malformed member entry fails' train/x "aida-train-members: x@$a40"
-expect_train 1 'a member entry with no @sha fails' train/x "aida-train-members: 11" MEMBER_LABELS_11=
-expect_train 1 'a member entry with a non-hex sha fails' train/x "aida-train-members: 11@zzzzzzz" MEMBER_LABELS_11=
-expect_train 1 'a member entry with a sha under 7 chars fails' train/x "aida-train-members: 11@abc12" MEMBER_LABELS_11=
-expect_train 0 'a 7-char hex sha passes' train/x "aida-train-members: 11@abc1234" MEMBER_LABELS_11=
-expect_train 0 'a non-train PR ignores a members line' feature/x "$two"
-expect_train 0 'a CRLF body (a web edit) still parses' train/x \
+expect_train 1 failure 'an unreadable member fails closed' train/x "$two" MEMBER_LABELS_11=
+expect_train 1 failure 'a train PR with no members line fails' train/x 'no members here'
+expect_train 1 failure 'a malformed member entry fails' train/x "aida-train-members: x@$a40"
+expect_train 1 failure 'a member entry with no @sha fails' train/x "aida-train-members: 11" MEMBER_LABELS_11=
+expect_train 1 failure 'a member entry with a non-hex sha fails' train/x "aida-train-members: 11@zzzzzzz" MEMBER_LABELS_11=
+expect_train 1 failure 'a member entry with a sha under 7 chars fails' train/x "aida-train-members: 11@abc12" MEMBER_LABELS_11=
+expect_train 0 success 'a 7-char hex sha passes' train/x "aida-train-members: 11@abc1234" MEMBER_LABELS_11=
+expect_train 0 success 'a non-train PR ignores a members line' feature/x "$two"
+expect_train 0 success 'a CRLF body (a web edit) still parses' train/x \
   "$(printf 'Train.\r\n\r\naida-train-members: 11@%s\r\n' "$a40")" MEMBER_LABELS_11=
 
 # The members-line cases shared with the Rust parser (pr_train
@@ -241,7 +244,9 @@ shared_cases=0
 while IFS=$'\t' read -r want value; do
   case "$want" in '' | '#'*) continue ;; esac
   value=${value//<CR>/$'\r'}
-  expect_train "$want" "shared members line '$value'" train/x "Train.
+  state=success
+  [ "$want" = 0 ] || state=failure
+  expect_train "$want" "$state" "shared members line '$value'" train/x "Train.
 
 aida-train-members: $value" MEMBER_LABELS_11= MEMBER_LABELS_12=
   shared_cases=$((shared_cases + 1))
