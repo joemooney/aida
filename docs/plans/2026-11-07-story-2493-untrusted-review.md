@@ -62,14 +62,20 @@ if scoped remote attestation is unsuitable.
    mean remediation, and a replacement may still be open. Missing, pending,
    corrupt or conflicting mappings also cannot clear it. Reopening a resolved
    finding blocks again. Out-of-order verdict/finding arrival stays pending.
-   Blocking digest obligations are scoped to the verdict's repository, PR and
-   exact head, not globally to the PR. At head B, a verdict for head A grants
-   neither approval credit nor blocking digest obligations; it remains audit
-   evidence. Missing an authenticated review for B still blocks merge. A fresh
-   authorized independent verdict for B must assess B and enumerate its current
-   blocking digests. It may omit a false positive rejected at A, retaining the
-   home dismissal audit trail; no same-head successor for A is required to
-   review B. If B includes the old digest, its unresolved status blocks B.
+   Approval credit is scoped to the verdict's repository, PR and exact head.
+   Blocking digest obligations persist for that repository and PR across head
+   changes until resolved by status or an authenticated disposition. At head B,
+   a verdict for head A grants no approval credit, but its unprocessed or open
+   digests still block. Missing an authenticated review for B also blocks merge.
+   A fresh authorized independent verdict for B must assess B and enumerate its
+   current blocking digests. Omission alone never releases an inherited digest.
+   For a false positive rejected at A or a superseded finding, B's verdict must
+   explicitly disposition the inherited digest, bind the originating verdict and
+   authenticated predecessor chain, and reference the home dismissal/replacement
+   audit evidence. Only a checked authorized independent disposition releases
+   that obligation; open or unprocessed findings cannot use this exception.
+   No same-head successor for A is required to review B. If B retains the old
+   digest without a valid disposition, its unresolved status still blocks B.
    To release a false positive or superseded finding, require a new authenticated
    verdict for the same PR and exact head from the authorized independent
    reviewer, explicitly superseding the previous verdict and omitting that
@@ -104,10 +110,14 @@ points. Cover approved exact-head review; request-changes with a blocking digest
 verdict arriving first; digest-to-origin-ID retry recovery; open/closed/reopened
 findings; dismissed (`Rejected`) and `Superseded` findings remaining blocked;
 authenticated same-head supersession releasing a false positive; replayed,
+forked and concurrent successors;
 head A with a rejected blocking finding followed by head B (no review blocks,
-fresh approved B verdict omitting that digest releases, including it blocks,
-and replaying A cannot change B's result);
-forked and concurrent successors; stale head; cross-node self-review; unknown or revoked signer;
+omission alone blocks, an authenticated B disposition with home dismissal evidence
+releases, retaining the digest without disposition blocks, and replaying A cannot
+change B's result); an open or unprocessed digest at A omitted by an approved B
+verdict still blocking B, including an attempted false-positive disposition;
+resolved inherited findings reopening and blocking again; stale head;
+cross-node self-review; unknown or revoked signer;
 tampering; unknown fields; sensitive paths/text; duplicate/conflicting receipts;
 and concurrent publication. Assert work operations never mutate canonical store
 refs, free-text publication requires review, and unresolved evidence never grants
