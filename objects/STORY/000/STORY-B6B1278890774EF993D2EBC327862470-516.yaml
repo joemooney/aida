@@ -13,7 +13,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-06T21:41:03.638236900Z
-modified_at: 2026-11-07T18:05:32.480084892Z
+modified_at: 2026-11-08T15:11:11.713568917Z
 req_type: Story
 relationships:
 - rel_type: Child
@@ -510,6 +510,13 @@ comments:
   created_at: 2026-11-07T18:05:32.480084892Z
   modified_at: 2026-11-07T18:05:32.480084892Z
   session_id: 01a1b646-c67d-7b43-98ff-3604a53f5d1f
+  harness_version: 2.1.319 (Claude Code)
+- id: 01a1bbb6-a561-7d11-9d09-41ec26bd4543
+  author: joe
+  content: 'Conformance rerun 2026-11-08 invalid, not a failure: harness fixture omitted chatgpt.com so no turn ran (BUG-2497). Rerun after BUG-2497 lands.'
+  created_at: 2026-11-08T15:11:11.713568917Z
+  modified_at: 2026-11-08T15:11:11.713568917Z
+  session_id: 01a1bbab-762f-7cd2-8a36-4ea9f209afce
   harness_version: 2.1.319 (Claude Code)
 history:
 - id: 01a1b2ce-ffb8-7b00-8132-2b4699577351
