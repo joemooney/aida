@@ -28,7 +28,7 @@ priority: Low
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-09-13T22:07:45.944235Z
-modified_at: 2026-11-08T20:40:30.012044848Z
+modified_at: 2026-11-08T20:40:32.285387513Z
 req_type: Task
 tags:
 - cleanup
@@ -576,6 +576,23 @@ comments:
   content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: No blocking code defect in a full read of the merge-base diff; both prior minor findings are fixed. Not approvable because CI run 42518333153 at this head has not started, so the new Rust is unproven. Re-run a reviewer when CI is terminal; do not push.. No triage reason was given.'
   created_at: 2026-11-08T20:40:30.012037655Z
   modified_at: 2026-11-08T20:40:30.012037655Z
+  session_id: 01a1bc93-77a0-7740-8b03-df4e3e8d1df5
+  harness_version: 2.1.319 (Claude Code)
+- id: 01a1bce4-2a9c-7ee3-b5e8-23175c992345
+  author: joe
+  content: |-
+    REVIEW FINDINGS TO ADDRESS (TASK-1222):
+    Verdict: CHANGES REQUESTED
+    Reviewed commit: 6d34424d54b0
+    Recorded: 2026-11-08T20:13:14.228410024+00:00
+    Findings:
+    1. WAIT STATE, blocking, no code change requested: CI run 42518333153 at 6d34424d54b0 is pending with no jobs started (16 runs queued repo-wide at 2026-11-08 13:12 -07:00). No CI has passed the current code: the last terminal run, 42510498051 at 6891d1d82dc0, failed gates (store-writer ratchet) and Build, and the store-writer fix plus the rework commit 6d34424d54b are unproven. Do NOT dispatch a commit-producing rework, push, or merge main for this finding, because a new push restarts the queue (the push of 6d34424d54b replaced the queued run at 61023b1cda49). Re-run a reviewer once run 42518333153 is terminal. The merge-hold-gate result is the expected supervised hold, not a code defect.
+    2. COSMETIC, non-blocking: docs/what-is-aida.md:188 and docs/what-is-aida.html:799 still list merged-agent-worktrees --fail-on-findings among guards the scheduled jobs use, but this PR removes that command from the schedule allow-list (aida-cli-lib/src/maintenance_schedule.rs:3656). The doctor check still works by hand. Update when next touching those docs.
+    3. Prior findings closed at this head. Short-ref gap: fixed by linked_branch using the full symbolic ref at worktree_lifecycle_gc.rs:39, at both the inspect and teardown recheck reads, with no --short left in the file; task_1222_branch_tag_collision_preserves_branch_identity. Terminal budget gap: fixed by scan_requires_budget at worktree_lifecycle_gc.rs:650; task_1222_scheduled_terminal_scan_has_budget.
+    4. Criterion status at 6d34424d54b0 (full merge-base diff read; no tests executed by the reviewer and no CI at this head; the implementer reports 25 TASK-1222 tests passing in lane job j20261108T200313815-2-0, which is not CI evidence). ac683e0c: code verified, traced by task_1222_ended_clone_requires_origin_coverage_and_closed_pr, task_1222_byte_budget_does_not_veto_eligibility, task_1222_gc_cli_defaults_to_preview_and_rejects_apply_guard_combo; execution unverified. acfbfd06: code verified, traced by task_1222_branch_tag_collision_preserves_branch_identity, task_1222_linked_preview_and_removal_revalidate_dirty_and_locks, task_1222_linked_closed_pr_and_unknown_or_reopened_pr, task_1222_ownership_unknown_and_locks_keep_linked_tree, task_1222_live_holder_retains_linked_tree; linked mailbox retention via retire_checkout in teardown_worktree_path (aida-core/src/worktree_pool_destroy.rs:410) has no dedicated test; execution unverified. ac14b158: code verified, traced by task_1222_weekly_gc_reports_to_advisor_without_apply and each_new_guard_job_trips_and_routes_on_failure_and_is_silent_when_clean; execution unverified. ac5418e8: fixture repositories present in worktree_lifecycle_gc.rs tests; execution unverified until CI is terminal. The supplied untraced list is stale: these tests carry trace:TASK-1222.<ac> comments.
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
+  created_at: 2026-11-08T20:40:32.156244375Z
+  modified_at: 2026-11-08T20:40:32.156244375Z
   session_id: 01a1bc93-77a0-7740-8b03-df4e3e8d1df5
   harness_version: 2.1.319 (Claude Code)
 history:
