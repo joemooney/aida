@@ -739,6 +739,8 @@ mod workflow_hints;
 mod worktree;
 // trace:TASK-634 | ai:claude — pure WorktreeCreate/Remove payload → lease record.
 mod worktree_lease;
+// trace:TASK-1222 | ai:codex — dry-run-first seat/worktree lifecycle GC.
+mod worktree_lifecycle_gc;
 // trace:TASK-1562 | ai:claude — `aida worktree reclaim`: stale target/ cache reclaim.
 mod worktree_reclaim;
 // trace:TASK-2325 | ai:claude — agent scratch outside target/ (job tmp, session scratch, build caches).

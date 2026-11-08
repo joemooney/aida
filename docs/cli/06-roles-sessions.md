@@ -183,6 +183,36 @@ An inherited reviewer route, an unrelated anchor, or unavailable change metadata
 does not authorize coexistence.
 <!-- trace:TASK-1801 | ai:codex -->
 
+<!-- trace:TASK-1222 | ai:codex -->
+`aida worktree gc` previews lifecycle cleanup across linked worktrees and private
+`aida-seat-*` clones in the configured worktree parent. `--json` reports per-item
+reasons, candidate/retained counts, and estimated logical bytes reclaimable or
+freed. It does not delete by default. After reviewing the preview, an operator
+can run `aida worktree gc --apply` at an interactive host terminal; scheduled
+and unattended contexts refuse removal. The legacy `--yes --force` combination
+also requests removal through the same gate.
+
+A candidate must have no remaining session lease (even a dead-process lease
+must first be ended/reaped), no operator or Git worktree lock, no uncommitted
+or untracked work, and no live filesystem holders. Main, default/store branches,
+detached checkouts, submodules, and unreadable evidence stay protected. Linked
+worktrees qualify when their HEAD is an ancestor of the default branch or an
+exact same-repository merged/closed PR head. Seat clones additionally require a
+matching host base pin and object-store binding, an exact merged/closed PR head,
+and **all local branches, tags, HEAD and stash entries covered by host-verified
+origin evidence**; a secondary remote, a seat-written tracking ref or a host-only
+branch cannot excuse unpushed commits. Origin-advertised PR/MR head refs can
+cover a published head after a squash merge deletes its source branch. An open
+PR on a reused branch prevents the PR-based cleanup proof. Missing forge evidence
+retains the tree.
+
+Before removal, GC rechecks identity, HEAD, branch, ownership and eligibility,
+then uses the existing mailbox-retention and process-holder teardown guards.
+Linked local branch refs are compare-deleted only if unchanged and no longer
+checked out. The weekly `worktree-lifecycle-gc` scheduled job runs only the
+preview (`--fail-on-findings`), routing counts and byte estimates to the advisor
+when candidates need operator review; it never applies cleanup.
+
 **Chains with** — `aida queue work` ([Chapter 3](03-work-autonomy.md)) leases under the hood; `aida session start --launch` is the manual equivalent. After review + merge, `aida session end` tears the worktree down. Cross-reference `aida agent new` for the multi-process launcher.
 
 ---

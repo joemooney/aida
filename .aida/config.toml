@@ -575,3 +575,17 @@ mode = "report"
 max_files = 20
 # The glossary source is a template master; its .aida/ mirror is regenerated.
 regenerate = ["make sync-templates"]
+
+# trace:TASK-1222 | ai:codex — weekly report; removal remains operator-only.
+[[schedule.jobs]]
+name = "worktree-lifecycle-gc"
+command = "worktree gc --fail-on-findings"
+every = "7d"
+enabled = true
+
+[[schedule.jobs]]
+name = "worktree-lifecycle-gc-route"
+seats = ["advisor"]
+on = ["CronJobFailed:worktree-lifecycle-gc"]
+prompt = "Review the weekly lifecycle GC counts and bytes in the routed dry-run evidence. Run aida worktree gc --json for current per-item reasons; eligible means no session lease or lock, a clean idle checkout, and either linked ancestry or a matching merged/closed PR head (seat clones also need all local commits on origin). The operator reviews the dry-run and runs aida worktree gc --apply at an interactive terminal. Never auto-apply or discard retained work."
+enabled = true

@@ -89,16 +89,25 @@ pub enum WorktreeCommand {
         json: bool,
     },
 
-    /// Prune verified merged agent worktrees using the same safety checks as
-    /// `aida doctor --heal --category merged-agent-worktrees`.
+    /// Report ended seat clones and clean linked worktrees with merged/closed
+    /// PRs or merged branches. Dry run by default; --apply requires an operator terminal.
     // trace:TASK-1145 | ai:codex
+    // trace:TASK-1222 | ai:codex
     Gc {
-        /// Skip confirmation prompts.
+        /// Remove eligible trees after revalidation (operator terminal only).
+        #[clap(long)]
+        apply: bool,
+
+        /// Exit nonzero when candidates await operator review (read-only guard).
+        #[clap(long, conflicts_with_all = ["apply", "force"])]
+        fail_on_findings: bool,
+
+        /// Legacy companion to --force; together they request removal.
         #[clap(long, short = 'y')]
         yes: bool,
 
-        /// Permit destructive cleanup: remove verified merged worktrees and
-        /// delete their local branches. Still refused in unattended contexts.
+        /// Legacy removal opt-in together with --yes. Uses the same operator-only
+        /// gate and eligible candidate set as --apply.
         #[clap(long)]
         force: bool,
 

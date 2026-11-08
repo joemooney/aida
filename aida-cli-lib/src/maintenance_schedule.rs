@@ -3651,6 +3651,15 @@ fn command_table() -> &'static [(&'static [&'static str], ScheduledCommand)] {
                 hook_allowed: false,
             },
         ),
+        // trace:TASK-1222 | ai:codex — dry-run only; never allow --apply.
+        (
+            &["worktree gc --fail-on-findings"],
+            ScheduledCommand {
+                display: "worktree gc --fail-on-findings",
+                args: &["worktree", "gc", "--json", "--fail-on-findings"],
+                hook_allowed: false,
+            },
+        ),
         // Read-only monthly guard; forced cleanup stays with the operator.
         // trace:TASK-1596 | ai:codex
         (
@@ -4509,6 +4518,40 @@ mod tests {
             Some(raw) => build_config(raw, JobSource::Project),
             None => Ok(None),
         }
+    }
+
+    // trace:TASK-1222 | ai:codex
+    #[test]
+    fn task_1222_weekly_gc_reports_to_advisor_without_apply() {
+        let repo_root = Path::new(env!("CARGO_MANIFEST_DIR")).parent().unwrap();
+        let registry = load_config(repo_root).unwrap().unwrap();
+        let guard = registry
+            .tasks
+            .iter()
+            .find(|t| t.name == "worktree-lifecycle-gc")
+            .unwrap();
+        assert!(guard.enabled);
+        assert_eq!(guard.interval, Some(Duration::days(7)));
+        let command = guard.command.as_ref().unwrap();
+        assert_eq!(
+            command.args,
+            &["worktree", "gc", "--json", "--fail-on-findings"]
+        );
+        assert!(!command.hook_allowed);
+        assert!(parse_scheduled_command("worktree gc --apply").is_err());
+        assert!(parse_scheduled_command("worktree gc --yes --force").is_err());
+        let route = registry
+            .tasks
+            .iter()
+            .find(|t| t.name == "worktree-lifecycle-gc-route")
+            .unwrap();
+        assert!(route.enabled);
+        assert_eq!(route.seats, vec!["advisor"]);
+        assert_eq!(
+            route.on.iter().map(ToString::to_string).collect::<Vec<_>>(),
+            vec!["CronJobFailed:worktree-lifecycle-gc"]
+        );
+        assert!(route.command.is_none());
     }
 
     // trace:TASK-1596 | ai:codex

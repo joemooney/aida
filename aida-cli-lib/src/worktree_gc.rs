@@ -2205,8 +2205,15 @@ pub(crate) fn handle_worktree_command(cmd: &WorktreeCommand) -> Result<()> {
         } => handle_worktree_enter(target, path.as_deref(), branch.as_deref()),
         WorktreeCommand::Exit => handle_worktree_exit(),
         WorktreeCommand::List { json } => handle_worktree_list(*json),
-        WorktreeCommand::Gc { yes, force, json } => {
-            doctor_cmd::run_merged_agent_worktree_gc(*yes, *force, *json)
+        WorktreeCommand::Gc {
+            yes,
+            force,
+            json,
+            apply,
+            fail_on_findings,
+        } => {
+            // trace:TASK-1222 | ai:codex — legacy flags remain an explicit apply.
+            worktree_lifecycle_gc::run(*apply || (*yes && *force), *json, *fail_on_findings)
         }
         WorktreeCommand::Dismiss { path, category } => {
             worktree_dismiss::handle_dismiss(path.as_deref(), category.as_deref())

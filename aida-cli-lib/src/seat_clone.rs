@@ -1533,6 +1533,23 @@ pub(crate) fn remote_missing_commits_with_review_head(
         !is_clone || review_head.is_none(),
         "review coverage requires a linked worktree"
     );
+    remote_missing_commits_via(main, seat, is_clone, lease_branch, review_head, "--remotes")
+}
+
+/// GC requires origin coverage, rather than a secondary backup remote.
+// trace:TASK-1222 | ai:codex
+pub(crate) fn origin_missing_commits(main: &Path, seat: &Path, branch: &str) -> Result<u64> {
+    remote_missing_commits_via(main, seat, true, branch, None, "--remotes=origin")
+}
+
+fn remote_missing_commits_via(
+    main: &Path,
+    seat: &Path,
+    is_clone: bool,
+    lease_branch: &str,
+    review_head: Option<&str>,
+    remotes: &str,
+) -> Result<u64> {
     let deadline = Some(std::time::Instant::now() + std::time::Duration::from_secs(30));
     // A remote tip absent from the clone cannot excuse anything there. Git
     // failures (including a broken HEAD) refuse rather than guessing zero.
@@ -1554,6 +1571,22 @@ if [ "$#" -gt 0 ]; then
 fi
 printf '%s\n' "$negative" | git rev-list --stdin --count $head --branches --not --remotes
 "#;
+    let script = if remotes == "--remotes=origin" {
+        // Preserve local tags and every stash entry too. Host-only refs and
+        // secondary remotes never grant origin coverage to GC.
+        format!(
+            "set -eu\n{}\n{}",
+            GC_STASH_ENTRIES,
+            script
+                .replace("--branches", "--all $s")
+                // Clone tracking refs are seat-writable. Only the negative
+                // OIDs corroborated through host origin refs/advertisement
+                // above may excuse a commit in the GC path.
+                .replace("--not --remotes", "")
+        )
+    } else {
+        script.to_string()
+    };
     let output = if is_clone {
         let out = run_sandboxed_until(
             seat,
@@ -1566,12 +1599,8 @@ printf '%s\n' "$negative" | git rev-list --stdin --count $head --branches --not 
         .map_err(|error| anyhow::anyhow!("{error}"))?;
         let out = String::from_utf8_lossy(&out);
         let (tips, candidates) = split_tips(&out);
-        let remote_tips = main_reachable_commits_via(
-            main,
-            tips.into_iter().chain(candidates),
-            deadline,
-            "--remotes",
-        );
+        let remote_tips =
+            main_reachable_commits_via(main, tips.into_iter().chain(candidates), deadline, remotes);
         let count_with = |tips: &[String]| -> Result<String> {
             let mut args: Vec<&std::ffi::OsStr> = vec![
                 "-c".as_ref(),
@@ -1594,7 +1623,12 @@ printf '%s\n' "$negative" | git rev-list --stdin --count $head --branches --not 
             let remaining = deadline
                 .unwrap()
                 .saturating_duration_since(std::time::Instant::now());
-            let heads = origin_head_oids(main, (remaining / 2).min(ORIGIN_REFRESH_CAP));
+            let timeout = (remaining / 2).min(ORIGIN_REFRESH_CAP);
+            let heads = if remotes == "--remotes=origin" {
+                origin_gc_oids(main, timeout)
+            } else {
+                origin_head_oids(main, timeout)
+            };
             if heads.is_empty() {
                 first
             } else {
@@ -1644,7 +1678,7 @@ printf '%s\n' "$negative" | git rev-list --stdin --count $head --branches --not 
         if has_head {
             cmd.arg("HEAD");
         }
-        cmd.args(["--not", "--remotes"]);
+        cmd.args(["--not", remotes]);
         if let Some(head) = review_head {
             cmd.arg(head);
         }
@@ -2136,6 +2170,40 @@ const ORIGIN_HEADS_CAP: usize = 5_000;
 /// more than [`ORIGIN_HEADS_CAP`] branches.
 // trace:BUG-2415 | ai:claude
 pub(crate) fn origin_head_oids(main: &Path, timeout: std::time::Duration) -> Vec<String> {
+    origin_oids(
+        main,
+        timeout,
+        &["ls-remote", "--heads", "origin"],
+        ORIGIN_HEADS_CAP,
+    )
+}
+
+/// GC may corroborate a published source head through origin's PR/MR refs
+/// after squash-merge branch deletion. These are host-observed advertisements,
+/// never clone-written tracking refs; the separate lifecycle gate still applies.
+// trace:TASK-1222 | ai:codex
+fn origin_gc_oids(main: &Path, timeout: std::time::Duration) -> Vec<String> {
+    origin_oids(
+        main,
+        timeout,
+        &[
+            "ls-remote",
+            "--refs",
+            "origin",
+            "refs/heads/*",
+            "refs/pull/*/head",
+            "refs/merge-requests/*/head",
+        ],
+        50_000,
+    )
+}
+
+fn origin_oids(
+    main: &Path,
+    timeout: std::time::Duration,
+    args: &[&str],
+    cap: usize,
+) -> Vec<String> {
     if timeout.is_zero() {
         return Vec::new();
     }
@@ -2147,7 +2215,7 @@ pub(crate) fn origin_head_oids(main: &Path, timeout: std::time::Duration) -> Vec
             crate::forge::batch_mode_ssh_command(main),
         )
         .stdin(std::process::Stdio::null())
-        .args(["ls-remote", "--heads", "origin"]);
+        .args(args);
     let Some(out) = crate::command_output_with_timeout(cmd, timeout) else {
         return Vec::new();
     };
@@ -2162,7 +2230,7 @@ pub(crate) fn origin_head_oids(main: &Path, timeout: std::time::Duration) -> Vec
         .collect();
     oids.sort_unstable();
     oids.dedup();
-    if oids.len() > ORIGIN_HEADS_CAP {
+    if oids.len() > cap {
         return Vec::new();
     }
     oids
@@ -2381,6 +2449,9 @@ const REF_TIPS_SCRIPT: &str = concat!(
 /// The line [`REF_TIPS_SCRIPT`] prints between the ref tips and the
 /// candidate commits.
 const TIPS_SEPARATOR: &str = "--";
+
+// trace:TASK-1222 | ai:codex
+const GC_STASH_ENTRIES: &str = stash_entries_sh!();
 
 /// Inside the probe sandbox: how many commits the clone holds that origin
 /// does not: reachable from ANY ref (every branch, tag, HEAD) or stash entry,

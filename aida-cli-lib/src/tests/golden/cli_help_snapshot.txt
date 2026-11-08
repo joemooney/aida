@@ -10952,8 +10952,8 @@ Commands:
            session (you cd'd out, or the session was ended from another shell) still clears the env
            and the prompt segment — minus the cd. Only a shell carrying nothing is a no-op
   list     List AIDA-managed worktrees, each annotated with its `.aida/focus`
-  gc       Prune verified merged agent worktrees using the same safety checks as `aida doctor --heal
-           --category merged-agent-worktrees`
+  gc       Report ended seat clones and clean linked worktrees with merged/closed PRs or merged
+           branches. Dry run by default; --apply requires an operator terminal
   dismiss  Disposition a worktree whose content is undecidable (e.g. batched integration). Archives
            the branch tip under refs/archive/, removes the worktree and branch, and ledgers the
            operator decision
@@ -11128,18 +11128,24 @@ Options:
   -h, --help
           Print help (see a summary with '-h')
 ===== aida worktree gc
-Prune verified merged agent worktrees using the same safety checks as `aida doctor --heal --category
-merged-agent-worktrees`
+Report ended seat clones and clean linked worktrees with merged/closed PRs or merged branches. Dry
+run by default; --apply requires an operator terminal
 
 Usage: aida worktree gc [OPTIONS]
 
 Options:
+      --apply
+          Remove eligible trees after revalidation (operator terminal only)
+
+      --fail-on-findings
+          Exit nonzero when candidates await operator review (read-only guard)
+
   -y, --yes
-          Skip confirmation prompts
+          Legacy companion to --force; together they request removal
 
       --force
-          Permit destructive cleanup: remove verified merged worktrees and delete their local
-          branches. Still refused in unattended contexts
+          Legacy removal opt-in together with --yes. Uses the same operator-only gate and eligible
+          candidate set as --apply
 
       --json
           Emit machine-readable JSON
@@ -42569,17 +42575,27 @@ Working on aida itself
       "worktree",
       "gc"
     ],
-    "about": "Prune verified merged agent worktrees using the same safety checks as `aida doctor --heal --category merged-agent-worktrees`",
+    "about": "Report ended seat clones and clean linked worktrees with merged/closed PRs or merged branches. Dry run by default; --apply requires an operator terminal",
     "flags": [
+      {
+        "name": "apply",
+        "takes_value": false,
+        "help": "Remove eligible trees after revalidation (operator terminal only)"
+      },
       {
         "name": "canonical-ids",
         "takes_value": false,
         "help": "Show node-local spec IDs in their canonical form instead of the node's friendly label (for scripts). Also settable via AIDA_CANONICAL_IDS=1"
       },
       {
+        "name": "fail-on-findings",
+        "takes_value": false,
+        "help": "Exit nonzero when candidates await operator review (read-only guard)"
+      },
+      {
         "name": "force",
         "takes_value": false,
-        "help": "Permit destructive cleanup: remove verified merged worktrees and delete their local branches. Still refused in unattended contexts"
+        "help": "Legacy removal opt-in together with --yes. Uses the same operator-only gate and eligible candidate set as --apply"
       },
       {
         "name": "format",
@@ -42599,7 +42615,7 @@ Working on aida itself
       {
         "name": "yes",
         "takes_value": false,
-        "help": "Skip confirmation prompts"
+        "help": "Legacy companion to --force; together they request removal"
       }
     ],
     "hidden": false
