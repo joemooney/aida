@@ -3,12 +3,12 @@ spec_id: TASK-b6b1278890774ef993d2ebc327862470-960
 agreed_id: TASK-3428
 title: 'Crate-split PR4: explicit imports instead of use crate::* in non-in-flight files, a glob-import ratchet, dissolve lib_part1..6.rs, and relocate-ledger-paths.py'
 description: 'Per SPIKE-713 deep dive section 7 row 4 and advisor rulings 3 and 8 (2026-11-07). Acceptance: (1) replace use crate::*; with explicit imports in every file not owned by an in-flight spec (section 7 list; about 85 of 104), no behavior change; (2) a ratchet (same shape as scripts/check-exec-context.py) forbids new glob crate imports, wired into make check-ci-fast and CI gates; (3) lib_part1..6.rs (lib.rs:772-777) dissolved into real modules, closing the TASK-1538 condition; (4) scripts/relocate-ledger-paths.py rewrites path-keyed ledgers (including scripts/portability-allowlist.txt and exec-context-legacy.json) for pure moves, with a test; (5) make check-ci-fast green. Split into two PRs if over ~40 files.'
-status: Approved
+status: InProgress
 priority: Medium
-owner: ''
+owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-07T23:39:41.575597710Z
-modified_at: 2026-11-07T23:51:53.722930848Z
+modified_at: 2026-11-08T00:00:29.501492452Z
 req_type: Task
 relationships:
 - rel_type: Child
@@ -29,6 +29,13 @@ history:
   session_id: 01a1b848-940b-7bd2-8acd-52e428b182b8
   harness_version: 2.1.319 (Claude Code)
   changes: []
+- id: 01a1b874-df3d-71f2-9b04-29b442e402a9
+  author: aida-session-start
+  timestamp: 2026-11-08T00:00:29.501490537Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: InProgress
 filed_at:
   code_sha: 2a7fe186bdcd718fa356e5e4d028a3b2ff13769d
   branch: main
