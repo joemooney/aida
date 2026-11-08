@@ -27,7 +27,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-06T16:51:02.535818Z
-modified_at: 2026-11-08T05:59:00.198027788Z
+modified_at: 2026-11-08T06:03:51.137795261Z
 req_type: Story
 tags:
 - area:advisor
@@ -513,6 +513,12 @@ comments:
   modified_at: 2026-11-08T04:06:32.513420446Z
   session_id: 01a1b8be-8170-7fb2-89ab-ecb4c6eee98c
   harness_version: 2.1.319 (Claude Code)
+- id: 01a1b9c1-89e1-7183-91b0-44fcfd535b28
+  author: joe
+  content: 'Final advisor-authorized round, scoped to PR-3640 round-4 major: decoupling confirmed controller exit/restart from grant revocation with persisted retired_grants. Replacement uses normal backoff while unresolved attempts retain their reservations and old reviewer grant ancestry. Restart reconciliation uses the existing complete process/group proof to finish Superseding attempts; a Reserved attempt with no dispatcher remains ambiguous (it may hide an unpinned spawned dispatcher), but no longer prevents replacement. Status names retaining PR/attempt/phase evidence. Added production-spawn regression for both crash windows and delayed revocation. Targeted story2571 tests running through lane job j20261108T060148364-2-0; final evidence follows. No change to merge holds, the reported lane-fixture CI failure, or other runtime loops.'
+  created_at: 2026-11-08T06:03:51.137795261Z
+  modified_at: 2026-11-08T06:03:51.137795261Z
+  session_id: 01a1b9bd094f
 history:
 - id: 01a1b1c5-af09-7d01-81e9-eaaac083f223
   author: joe
