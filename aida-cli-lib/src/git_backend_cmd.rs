@@ -1327,6 +1327,8 @@ pub(crate) fn db_sync_local_window(
     let has_changes = aida_core::git_ops::has_changes_checked(store_path)?;
     if has_changes {
         let msg = message.unwrap_or("chore: sync pending changes");
+        // trace:BUG-2490 | ai:codex — staging must not resolve conflicts implicitly.
+        aida_core::git_ops::validate_pending_store_commit(store_path)?;
         aida_core::git_ops::add_all(store_path, ".")?;
         if aida_core::git_ops::commit(store_path, msg)? {
             println!("Committed: {}", msg);

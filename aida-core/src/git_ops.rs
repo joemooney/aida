@@ -2083,6 +2083,21 @@ fn rebase_onto(repo: &Path, target: &str) -> Result<()> {
     Ok(())
 }
 
+/// Preserve both the original failure and failed automatic recovery diagnostics.
+// trace:BUG-2490 | ai:codex
+fn abort_failed_store_rebase(repo: &Path, error: anyhow::Error) -> anyhow::Error {
+    match git(repo, &["rebase", "--abort"]) {
+        Ok(abort) if abort.success => error,
+        Ok(abort) => anyhow::anyhow!(
+            "{error:#}; automatic `git rebase --abort` also failed: {}",
+            abort.stderr
+        ),
+        Err(abort) => {
+            anyhow::anyhow!("{error:#}; automatic `git rebase --abort` also failed: {abort:#}")
+        }
+    }
+}
+
 /// Outcome of an auto-merging store-leg pull.
 #[derive(Debug, Clone)]
 pub enum StorePullOutcome {
@@ -2154,8 +2169,7 @@ fn rebase_auto_merge_onto(repo: &Path, target: &str) -> Result<StorePullOutcome>
             // No conflicts right now but still mid-rebase — let git advance.
             // trace:BUG-2490 | ai:codex — continuation can create a store commit.
             if let Err(error) = validate_store_index(repo) {
-                let _ = git(repo, &["rebase", "--abort"]);
-                return Err(error);
+                return Err(abort_failed_store_rebase(repo, error));
             }
             let cont = git(repo, &["-c", "core.editor=true", "rebase", "--continue"])?;
             if !rebase_in_progress(repo) {
@@ -2166,8 +2180,10 @@ fn rebase_auto_merge_onto(repo: &Path, target: &str) -> Result<StorePullOutcome>
                         StorePullOutcome::AutoMerged { notes }
                     });
                 }
-                let _ = git(repo, &["rebase", "--abort"]);
-                anyhow::bail!("git rebase --continue failed: {}", cont.stderr);
+                return Err(abort_failed_store_rebase(
+                    repo,
+                    anyhow::anyhow!("git rebase --continue failed: {}", cont.stderr),
+                ));
             }
             continue;
         }
@@ -2185,10 +2201,9 @@ fn rebase_auto_merge_onto(repo: &Path, target: &str) -> Result<StorePullOutcome>
                 && !is_queue_registry_path(path)
                 && !is_schedule_ledger_path(path)
             {
-                let _ = git(repo, &["rebase", "--abort"]);
-                anyhow::bail!(
+                return Err(abort_failed_store_rebase(repo, anyhow::anyhow!(
                     "conflict in non-mergeable path `{path}` — cannot auto-merge; falling back to manual resolution"
-                );
+                )));
             }
         }
 
@@ -2210,8 +2225,10 @@ fn rebase_auto_merge_onto(repo: &Path, target: &str) -> Result<StorePullOutcome>
                     notes.push(note);
                 }
                 Err(e) => {
-                    let _ = git(repo, &["rebase", "--abort"]);
-                    anyhow::bail!("structured merge of `{path}` failed: {e}");
+                    return Err(abort_failed_store_rebase(
+                        repo,
+                        e.context(format!("structured merge of `{path}` failed")),
+                    ));
                 }
             }
         }
@@ -2221,16 +2238,17 @@ fn rebase_auto_merge_onto(repo: &Path, target: &str) -> Result<StorePullOutcome>
         // message on a TTY-less drain.
         // trace:BUG-2490 | ai:codex
         if let Err(error) = validate_store_index(repo) {
-            let _ = git(repo, &["rebase", "--abort"]);
-            return Err(error);
+            return Err(abort_failed_store_rebase(repo, error));
         }
         let cont = git(repo, &["-c", "core.editor=true", "rebase", "--continue"])?;
         if !rebase_in_progress(repo) {
             if cont.success || rebase_completed_ok(repo) {
                 return Ok(StorePullOutcome::AutoMerged { notes });
             }
-            let _ = git(repo, &["rebase", "--abort"]);
-            anyhow::bail!("git rebase --continue failed: {}", cont.stderr);
+            return Err(abort_failed_store_rebase(
+                repo,
+                anyhow::anyhow!("git rebase --continue failed: {}", cont.stderr),
+            ));
         }
         // else: another conflicted commit ahead — loop and resolve it too.
     }
@@ -2431,8 +2449,7 @@ pub fn commit_pending_store_changes_on_host(store_path: &Path) -> Result<bool> {
         if !has_changes_checked(store_path)? {
             return Ok(false);
         }
-        validate_store_index(store_path)?;
-        validate_pending_store_objects(store_path)?;
+        validate_pending_store_commit(store_path)?;
         add_all(store_path, ".")?;
         commit(store_path, "chore: sync pending changes")
     })
@@ -7398,6 +7415,14 @@ fn validate_store_objects(repo: &Path) -> Result<()> {
         anyhow::bail!(error);
     }
     Ok(())
+}
+
+/// Validate before whole-tree staging can erase unmerged index stages.
+/// Call under the store writer lock, immediately before staging.
+// trace:BUG-2490 | ai:codex
+pub fn validate_pending_store_commit(repo: &Path) -> Result<()> {
+    validate_store_index(repo)?;
+    validate_pending_store_objects(repo)
 }
 
 // Pending sync stages all dirty/untracked files. --no-renames makes every
