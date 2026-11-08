@@ -21,7 +21,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-06T17:06:21.254759647Z
-modified_at: 2026-11-08T05:09:48.815607882Z
+modified_at: 2026-11-08T05:10:05.227545386Z
 req_type: Bug
 comments:
 - id: 01a1b1ff-81bd-7b80-8ed5-ea84e52557a5
@@ -140,6 +140,25 @@ comments:
   content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: Snapshot-only show removes refresh/linkage waits (AC2 direction correct) but an empty or stale projection makes ''aida show <agreed-id>'' report not-found, and CI contracts fails on the new docs paragraph.. No triage reason was given.'
   created_at: 2026-11-08T05:09:48.815606221Z
   modified_at: 2026-11-08T05:09:48.815606221Z
+  session_id: 01a1b8be-8170-7fb2-89ab-ecb4c6eee98c
+  harness_version: 2.1.319 (Claude Code)
+- id: 01a1b990-2f75-71f1-ae0b-c76cf233f022
+  author: joe
+  content: |-
+    REVIEW FINDINGS TO ADDRESS (PR #3658):
+    Verdict: CHANGES REQUESTED
+    Reviewed commit: b1b9b5b62973
+    Recorded: 2026-11-08T04:23:29.019301509+00:00
+    Review comment: https://github.com/joemooney/aida/pull/3658#issuecomment-6717194517
+    Findings:
+    1. MAJOR correctness: with_inner_stale_snapshot (aida-core/src/db/cache.rs open_stale_snapshot) falls back to an EMPTY in-memory index for a missing/corrupt/structurally-drifted cache, and never refreshes a stale one. resolve_unambiguous_exact (cached_git_backend.rs:283-330) then finds no candidates and calls inner.get_requirement_by_object_file(id), which only reads the file named by the id (git_backend.rs:557-600) and does no agreed-id scan. Agreed IDs are not file names here (BUG-2466 lives in objects/BUG/000/BUG-B6B1278890774EF993D2EBC327862470-232.yaml), so on a fresh clone, after deleting the cache, after a schema-drifting binary upgrade, or for any spec whose agreed id was assigned after the last cache stamp, 'aida show BUG-2466' returns 'Requirement not found'. Previously show built or refreshed the cache first. Fix: when snapshot_only and the cache misses (or the index is the empty fallback), resolve via the bounded agreed-id scan (resolve_by_bounded_scan or equivalent) before declaring not-found.
+    2. TEST GAP for the above: show_snapshot_missing_or_corrupt_cache_preserves_disk_and_reads_objects and show_reads_canonical_when_a_writer_blocks_the_first_schema_write only show specs whose id equals the object file name (FR-1-001 / the fixture spec). Add a regression that shows a spec by an agreed_id that differs from its origin/file id, against (a) a missing cache, (b) a corrupt cache and (c) a stale cache stamped before the agreed id was assigned.
+    3. CI RED: CI (contracts) fails at b1b9b5b6 in step 'CLI-manual drift-guard (every command documented)' (docs/cli/verify-manual.py); main's base 049e5206 passes that job. The likely cause is the new paragraph in docs/cli/02-specs.md:235-247. It sits under the '### aida trace' section, so the bare flag citations --full, --verbose, --json and --no-git resolve against the trace subtree (flag_accuracy_misses) and fail. Move the show-behaviour paragraph under the 'aida show' entry, or cite flags as full 'aida show <ID> --full' commands, then confirm with make check-ci-fast or the verifier.
+    4. DOC ACCURACY: docs/cli/02-specs.md:239-240 says missing/incompatible/unreadable caches still return the requested spec from canonical YAML. That is false for agreed IDs (finding 1). Correct the docs together with the fix.
+    5. MINOR test fragility: tests/test_show_latency.py new default-show loop calls calls.read_text() after calls.unlink(). If a future show invokes no git subprocess at all (the goal of this change), the shim never creates the file and the test fails with FileNotFoundError instead of passing. Use calls.read_text() if calls.exists() else ''.
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
+  created_at: 2026-11-08T05:09:56.725536175Z
+  modified_at: 2026-11-08T05:09:56.725536175Z
   session_id: 01a1b8be-8170-7fb2-89ab-ecb4c6eee98c
   harness_version: 2.1.319 (Claude Code)
 history:
