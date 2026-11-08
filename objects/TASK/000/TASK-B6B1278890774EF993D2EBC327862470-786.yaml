@@ -3,12 +3,12 @@ spec_id: TASK-b6b1278890774ef993d2ebc327862470-786
 agreed_id: TASK-3048
 title: 'STORY-2460 S2: agy adapter in the posture S1 selects (private runtime, auth hosts, argv order, all-tool confinement)'
 description: 'Per signoff Q3 and Q6, blocked on S1''s posture decision. Private writable agy runtime dir; exact auth host inventory; options placed before the final -p <prompt>; no blanket --dangerously-skip-permissions inside a claimed boundary; browser, URL and MCP tools disabled unless confined. Accept agy=<posture> only from trusted origin/main config, and fail closed otherwise. Acceptance: the conformance harness passes for agy.'
-status: Approved
+status: InProgress
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-04T17:54:51.353376Z
-modified_at: 2026-11-08T09:44:48.143410268Z
+modified_at: 2026-11-08T09:46:45.798511626Z
 req_type: Task
 tags:
 - area:containment
@@ -1019,6 +1019,13 @@ history:
   - field_name: status
     old_value: NeedsAttention
     new_value: Approved
+- id: 01a1ba8d-9ea6-7ff0-9aaf-88caff90012d
+  author: aida-session-start
+  timestamp: 2026-11-08T09:46:45.798495504Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: InProgress
 filed_at:
   code_sha: 6a331a8a5c91ca7485b695a076af44bdf9be3894
   branch: main
