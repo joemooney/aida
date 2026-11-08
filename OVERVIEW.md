@@ -479,6 +479,15 @@ See [transport configuration](docs/cli/07-project-setup.md#aida-config-transport
 
 The orphan branch `aida-store` is the writer of record. Each requirement is one YAML file at `objects/<TYPE>/000/<SPEC-ID>.yaml`, committed to that branch. Writes go to git first, then to a local SQLite cache (`.aida/cache.db`, gitignored, rebuildable).
 
+Store Git commands override `rebase.autoStash` and `merge.autoStash` to `false`,
+so operator Git preferences cannot stash dirty store writes during sync. Store
+commits refuse unmerged paths, conflict-markered objects, and objects that fail
+requirement parsing, including staged bytes. The host's deferred-session commit
+checks before staging; `aida doctor` checks object integrity before loading the
+store and names the offending file. Resolve the conflict or restore valid object
+content before retrying; these checks do not repair or discard edits.
+<!-- trace:BUG-2490 | ai:codex -->
+
 - **Live worktree:** `.aida-store/` (gitignored on the main branch; populated by `aida init`)
 - **Branch:** `aida-store` on origin
 - **Cache:** `.aida/cache.db` — read projection for fast `list / search / filter`; ordinary reads use the [bounded cache-read contract](#bounded-cache-reads) when freshness differs

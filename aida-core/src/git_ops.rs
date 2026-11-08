@@ -473,6 +473,9 @@ fn host_git_hardening_with(
     }
     for setting in [
         "diff.ignoreSubmodules=all",
+        // trace:BUG-2490 | ai:codex
+        "rebase.autoStash=false",
+        "merge.autoStash=false",
         "submodule.recurse=false",
         "fetch.recurseSubmodules=false",
     ] {
@@ -1545,6 +1548,10 @@ pub fn commit_paths(repo: &Path, message: &str, paths: &[&str]) -> Result<()> {
 /// retry, so an abandoned lock cannot fail every later store commit.
 // trace:BUG-034 | ai:claude
 fn commit_with_lock_recovery(repo: &Path, argv: &[&str]) -> Result<GitResult> {
+    if is_store_tree(repo) {
+        validate_store_objects(repo)?;
+        validate_store_index(repo)?;
+    }
     ensure_index_lock_clear_for_write(repo, 10, 100)?;
     commit_failure::with_lock_backoff(
         || git(repo, argv),
@@ -2408,6 +2415,8 @@ pub fn commit_pending_store_changes_on_host(store_path: &Path) -> Result<bool> {
         if !has_changes_checked(store_path)? {
             return Ok(false);
         }
+        validate_store_objects(store_path)?;
+        validate_store_index(store_path)?;
         add_all(store_path, ".")?;
         commit(store_path, "chore: sync pending changes")
     })
@@ -7298,6 +7307,84 @@ pub fn load_requirements_strict(store: &Path) -> Result<Vec<crate::models::Requi
         .into_iter()
         .map(|(_, path)| crate::object_store::read_object_from_path(&path))
         .collect()
+}
+
+// trace:BUG-2490 | ai:codex
+fn validate_object_text(path: &str, text: &str) -> Result<()> {
+    if text.lines().any(|line| {
+        ["<<<<<<<", "=======", ">>>>>>>", "|||||||"]
+            .iter()
+            .any(|marker| line == *marker || line.starts_with(&format!("{marker} ")))
+    }) {
+        anyhow::bail!("store object {path} contains Git conflict markers; resolve the conflict before committing");
+    }
+    serde_yaml::from_str::<crate::models::Requirement>(text)
+        .with_context(|| format!("store object {path} does not parse"))?;
+    Ok(())
+}
+
+/// Read-only integrity preflight, also usable before doctor loads the store.
+// trace:BUG-2490 | ai:codex
+pub fn validate_store_objects(repo: &Path) -> Result<()> {
+    let objects = repo.join("objects");
+    if !objects.exists() {
+        return Ok(());
+    }
+    for (_, path) in crate::object_store::list_objects_strict(&objects)? {
+        let text = std::fs::read_to_string(&path)
+            .with_context(|| format!("cannot read store object {}", path.display()))?;
+        validate_object_text(&path.display().to_string(), &text)?;
+    }
+    Ok(())
+}
+
+// Validate the actual staged bytes too: a clean worktree copy must not mask a
+// corrupt staged object. Unmerged entries refuse before any commit attempt.
+// trace:BUG-2490 | ai:codex
+fn validate_store_index(repo: &Path) -> Result<()> {
+    let unmerged = git(repo, &["ls-files", "--unmerged"])?;
+    anyhow::ensure!(
+        unmerged.success,
+        "cannot inspect unmerged store paths: {}",
+        unmerged.stderr
+    );
+    anyhow::ensure!(
+        unmerged.stdout.is_empty(),
+        "unmerged store paths; resolve before committing: {}",
+        unmerged.stdout
+    );
+    let output = host_git_command(repo)
+        .args([
+            "diff",
+            "--cached",
+            "--name-only",
+            "--diff-filter=ACMRT",
+            "-z",
+        ])
+        .output()?;
+    if !output.status.success() {
+        anyhow::bail!(
+            "cannot inspect store index: {}",
+            String::from_utf8_lossy(&output.stderr)
+        );
+    }
+    let listing = std::str::from_utf8(&output.stdout)?;
+    for path in listing.split('\0').filter(|s| !s.is_empty()) {
+        if is_spec_object_path(path) {
+            let blob = host_git_command(repo)
+                .args(["show", &format!(":{path}")])
+                .output()?;
+            if !blob.status.success() {
+                anyhow::bail!("cannot read staged store object {path}");
+            }
+            validate_object_text(
+                path,
+                std::str::from_utf8(&blob.stdout)
+                    .with_context(|| format!("store object {path} is not UTF-8"))?,
+            )?;
+        }
+    }
+    Ok(())
 }
 
 /// Assign agreed ids to every object that lacks one, and commit the result.

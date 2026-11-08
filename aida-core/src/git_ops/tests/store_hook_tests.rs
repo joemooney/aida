@@ -1197,3 +1197,92 @@ fn task_2125_primary_gid_walk_finds_local_accounts() {
     }
     assert_eq!(crate::store_hooks::accounts_with_primary_gid(gid), found);
 }
+
+// trace:BUG-2490 | ai:codex
+#[test]
+fn bug_2490_autostash_conflict_refuses_store_commit() {
+    let dir = tempfile::tempdir().unwrap();
+    let (_main, store) = bug_1929_main_with_store(dir.path());
+    let raw = |args: &[&str]| {
+        std::process::Command::new("git")
+            .current_dir(&store)
+            .args(["-c", "core.hooksPath=/dev/null"])
+            .args(args)
+            .output()
+            .unwrap()
+    };
+    let path = "objects/STORY/000/STORY-test.yaml";
+    std::fs::create_dir_all(store.join("objects/STORY/000")).unwrap();
+    let valid = serde_yaml::to_string(&crate::models::Requirement::new(
+        "base".into(),
+        String::new(),
+    ))
+    .unwrap();
+    std::fs::write(store.join(path), &valid).unwrap();
+    assert!(raw(&["add", "."]).status.success());
+    assert!(raw(&["commit", "-qm", "base"]).status.success());
+    assert!(raw(&["checkout", "-qb", "incoming"]).status.success());
+    std::fs::write(
+        store.join(path),
+        valid.replace("title: base", "title: upstream"),
+    )
+    .unwrap();
+    assert!(raw(&["add", "."]).status.success());
+    assert!(raw(&["commit", "-qm", "upstream"]).status.success());
+    let head = raw(&["rev-parse", "HEAD"]).stdout;
+    assert!(raw(&["checkout", "-q", "aida-store"]).status.success());
+    std::fs::write(
+        store.join(path),
+        valid.replace("title: base", "title: local"),
+    )
+    .unwrap();
+    // Reproduce the operator's historical unguarded fast-forward. Git exits
+    // successfully even though reapplying its autostash leaves a conflict.
+    assert!(raw(&[
+        "-c",
+        "merge.autoStash=true",
+        "merge",
+        "--ff-only",
+        "incoming"
+    ])
+    .status
+    .success());
+    assert!(String::from_utf8_lossy(&raw(&["stash", "list"]).stdout).contains("autostash"));
+    assert!(validate_store_index(&store)
+        .unwrap_err()
+        .to_string()
+        .contains(path));
+    let error = validate_store_objects(&store).unwrap_err().to_string();
+    assert!(
+        error.contains(path) && error.contains("conflict markers"),
+        "{error}"
+    );
+    assert!(commit_pending_store_changes_on_host(&store).is_err());
+    assert!(raw(&["add", "."]).status.success());
+    assert!(commit(&store, "must refuse").is_err());
+    assert!(commit_paths(&store, "must refuse", &[path]).is_err());
+    assert_eq!(head, raw(&["rev-parse", "HEAD"]).stdout);
+    // A repaired worktree must not hide corrupt staged bytes.
+    std::fs::write(store.join(path), &valid).unwrap();
+    validate_store_objects(&store).unwrap();
+    assert!(commit(&store, "must refuse staged markers").is_err());
+    assert!(validate_store_index(&store)
+        .unwrap_err()
+        .to_string()
+        .contains("conflict markers"));
+    std::fs::write(store.join(path), "not: [valid yaml").unwrap();
+    assert!(validate_store_objects(&store)
+        .unwrap_err()
+        .to_string()
+        .contains("does not parse"));
+    std::fs::write(store.join(path), &valid).unwrap();
+    add(&store, &[path]).unwrap();
+    assert!(commit(&store, "chore: repaired object").unwrap());
+    // Repository config simulates inherited operator settings; command-line
+    // overrides must win without rewriting those settings.
+    for key in ["rebase.autoStash", "merge.autoStash"] {
+        assert!(raw(&["config", key, "true"]).status.success());
+        let value = git(&store, &["config", "--get", key]).unwrap();
+        assert_eq!(value.stdout.trim(), "false");
+    }
+}

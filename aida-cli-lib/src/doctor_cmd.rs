@@ -788,6 +788,9 @@ fn doctor_multi_agent(opts: DoctorRunOptions) -> Result<()> {
         return doctor_stale_locks_bounded(&project_root, &opts);
     }
     let store_path = project_root.join(".aida-store");
+    // Diagnose markered objects before the normal loader obscures the cause.
+    // trace:BUG-2490 | ai:codex
+    aida_core::git_ops::validate_store_objects(&store_path)?;
     let store = Storage::new(&store_path)
         .load()
         .with_context(|| format!("loading AIDA store at {}", store_path.display()))?;
