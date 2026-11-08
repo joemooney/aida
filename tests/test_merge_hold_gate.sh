@@ -112,6 +112,13 @@ export HEAD_SHA=abc123456789
 export GITHUB_SERVER_URL=https://github.com GITHUB_RUN_ID=123
 export STATUS_LOG="$work/statuses"
 
+# Fixture evidence only: live merge enforcement, label-event scheduling and mail
+# observation still require the operator cutover procedure.
+# trace:BUG-b6b1278890774ef993d2ebc327862470-257.ac798dd7 | ai:codex
+# trace:BUG-b6b1278890774ef993d2ebc327862470-257.accb2afb | ai:codex
+# trace:BUG-b6b1278890774ef993d2ebc327862470-257.ac4be33b | ai:codex
+# trace:BUG-b6b1278890774ef993d2ebc327862470-257.ac4d9581 | ai:codex
+# trace:BUG-b6b1278890774ef993d2ebc327862470-257.ac24a24e | ai:codex
 # Pending holds succeed as Actions jobs but continue to block required status.
 # Translate the final commit status into the existing pass/block fixture result.
 github_gate() {
@@ -254,3 +261,6 @@ done <"$members_fixture"
 [ "$shared_cases" -ge 10 ] || fail "shared members-line fixture read only $shared_cases cases"
 
 echo "merge-hold gate fixtures passed (${#cases[@]} label states x 2 shipped gates, $train_cases train-mode cases)"
+
+# trace:BUG-2492 | ai:codex — also exercise the status display projection.
+python3 "$repo_root/tests/test_merge_hold_status_rollup.py"

@@ -11,6 +11,12 @@ implementation PR and on BUG-2492 before declaring the cutover verified or
 marking the spec Completed. The operator runbook is the evidence route; the
 implementation and its local tests do not satisfy the live acceptance checks.
 
+The host must publish or retitle the implementation PR with a trailing
+`(Refs BUG-2492)`, including the existing PR #3651. A completing `(BUG-2492)`
+trailer would close the spec before the post-merge evidence can be gathered.
+The native implementer records this subject with `aida ship -m`; the host owns
+PR metadata changes and must verify the final title before publication.
+
 ## Bootstrap without changing protection
 
 The previous default-branch workflow has only `pull_request`; this PR originally
@@ -42,7 +48,10 @@ job is named `publish-merge-hold-status`, never `merge-hold-gate`.
    verify that its own label event uses the trusted default-branch publisher.
    Record the removal PR link here and on BUG-2492. Until removal, a
    same-repository PR owns its bootstrap workflow and has `statuses:write`;
-   its copy could publish success. Removing the PR trigger closes that exposure.
+   its copy could publish success. Removing the PR trigger removes this bootstrap path. Same-repository PRs
+   can still introduce a workflow requesting `statuses: write` and publish the
+   same Actions-app status; this pre-existing trust limit requires review of
+   workflow changes and is not closed by this cutover.
 
 ## Legacy checks and statuses with the same name
 

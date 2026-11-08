@@ -1542,6 +1542,24 @@ pub(crate) fn preview_next_version(current: &str, bump: &str) -> Option<String> 
     })
 }
 
+// trace:BUG-2492 | ai:codex
+pub(crate) fn wait_after_pr_ci(
+    root: &std::path::Path,
+    forge: &dyn crate::forge::Forge,
+    change: &crate::forge::ChangeRef,
+    budget: std::time::Duration,
+) -> anyhow::Result<crate::gate::dispatch_types::CiState> {
+    crate::ci_gate::wait_for_ship_ci(
+        root,
+        forge,
+        change,
+        false,
+        false,
+        Some(budget),
+        std::time::Duration::from_secs(2),
+    )
+}
+
 pub(crate) fn handle_release(
     patch: bool,
     minor: bool,
@@ -1648,7 +1666,13 @@ pub(crate) fn handle_release(
             "{} waiting for {change_noun} #{n}'s checks…",
             crate::glyph(crate::glyphs::Glyph::Arrow).cyan().bold()
         );
-        match forge.watch_ci(&change_ref) {
+        // trace:BUG-2492 | ai:codex — a held status never settles by itself.
+        match wait_after_pr_ci(
+            &merge_root,
+            forge.as_ref(),
+            &change_ref,
+            std::time::Duration::from_secs(300),
+        ) {
             Ok(
                 crate::gate::dispatch_types::CiState::Success
                 | crate::gate::dispatch_types::CiState::None,

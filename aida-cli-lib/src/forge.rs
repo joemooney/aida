@@ -897,6 +897,18 @@ pub trait Forge {
     /// `gh pr view` status (state + mergeable + review + head sha).
     fn change_status(&self, c: &ChangeRef) -> Result<ChangeStatus>;
 
+    /// Recorded/cleared label evidence for pending merge-hold classification.
+    /// Reuse the pinned repository reader; failed reads never mean no hold.
+    // trace:BUG-2492 | ai:codex
+    fn recorded_hold_labels(&self, project_root: &Path, c: &ChangeRef) -> Result<(bool, bool)> {
+        Ok(
+            crate::merge_hold::fetch_pinned_change(project_root, self.kind(), c.id)
+                .map_err(anyhow::Error::msg)?
+                .map(|change| (change.recorded_label, change.cleared_label))
+                .unwrap_or((false, false)),
+        )
+    }
+
     /// STORY-621 Slice 2: the change's scalar metadata (state / title / refs /
     /// head SHA / draft / cross-repo) in one read — the consolidation point for
     /// the drain-reconcile and reviewer pre-flight `gh pr view --json` sites.
