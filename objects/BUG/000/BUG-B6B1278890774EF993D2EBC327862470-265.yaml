@@ -8,7 +8,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-08T19:02:09.839960883Z
-modified_at: 2026-11-08T20:27:08.273109995Z
+modified_at: 2026-11-08T20:39:22.885154044Z
 req_type: Bug
 relationships:
 - rel_type:
@@ -147,6 +147,12 @@ history:
   timestamp: 2026-11-08T20:27:09.773704780Z
   session_id: 01a1bcd53ee4
   changes: []
+- id: 01a1bce3-1dd6-74f1-9037-6328f49fcea3
+  author: joe
+  timestamp: 2026-11-08T20:39:23.350630482Z
+  session_id: 01a1bce1b62e
+  harness_version: 2.1.319 (Claude Code)
+  changes: []
 filed_at:
   code_sha: eeec474c545cbc8a354d386c8cb6d81460da7b9f
   branch: main
@@ -162,3 +168,11 @@ attention_reason:
   lean: Use one canonical waiting verdict with dependency/actor/resume summary; block merge and completion, suppress implementer rework and recurrence, resume only through fresh review.
   raised_by: implementer
   raised_at: 2026-11-08T20:26:05.668617823Z
+failure_reason:
+  phase: reviewer
+  phase_index: 3
+  kind: verdict:rejected
+  detail: 'Docs-only sketch shipped as the BUG-2500 fix: no behaviour changed, design sign-off is still open, and merging would auto-complete the bug.'
+  recovery_hint: address the review findings, move BUG-2500 back to In Progress, and clear the PR hold only after approval
+  shelved_by: reviewer
+  shelved_at: 2026-11-08T20:39:22.885154044Z
