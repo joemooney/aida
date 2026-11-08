@@ -86,7 +86,7 @@ fn run_contract(
     matches: &clap::ArgMatches,
     _ctx: &crate::command_registry::DispatchCtx,
 ) -> anyhow::Result<()> {
-    use crate::*;
+    // trace:TASK-3428 | ai:codex — dispatch uses only local or qualified bindings.
     let args = <ContractArgs as clap::FromArgMatches>::from_arg_matches(matches)?;
     let ContractArgs { json: _ } = &args;
     return self::print_json();

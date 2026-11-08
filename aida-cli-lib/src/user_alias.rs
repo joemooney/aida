@@ -702,7 +702,8 @@ fn run_alias(
     matches: &clap::ArgMatches,
     _ctx: &crate::command_registry::DispatchCtx,
 ) -> anyhow::Result<()> {
-    use crate::*;
+    // trace:TASK-3428 | ai:codex
+    use crate::alias;
     let args = <AliasArgs as clap::FromArgMatches>::from_arg_matches(matches)?;
     let AliasArgs { json, command } = &args;
     match command {

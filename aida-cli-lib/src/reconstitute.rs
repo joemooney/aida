@@ -2111,7 +2111,9 @@ fn run_reconstitute(
     matches: &clap::ArgMatches,
     ctx: &crate::command_registry::DispatchCtx,
 ) -> anyhow::Result<crate::command_registry::Flow> {
-    use crate::*;
+    // trace:TASK-3428 | ai:codex
+    use crate::{kernel::find_project_root, reconstitute};
+    use aida_core::DatabaseBackend;
     let args = <ReconstituteArgs as clap::FromArgMatches>::from_arg_matches(matches)?;
     match &ctx.store {
         None => Ok(crate::command_registry::Flow::Continue),
