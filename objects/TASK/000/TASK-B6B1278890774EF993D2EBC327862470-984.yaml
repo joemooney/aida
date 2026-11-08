@@ -1,0 +1,36 @@
+id: 01a1bad5-a558-7a80-bb46-43406ce5c34e
+spec_id: TASK-b6b1278890774ef993d2ebc327862470-984
+title: 'Repeated unchanged review findings: STORY-2493'
+description: |-
+  Identical reviewer findings recurred twice for STORY-2493; do not requeue a third implementer round until an advisor chooses a different implementer/seat or resolves the dispute.
+
+  REVIEW FINDINGS TO ADDRESS (STORY-2493):
+  Verdict: CHANGES REQUESTED
+  Reviewed commit: 8290289631c7
+  Recorded: 2026-11-08T09:26:29.196187076+00:00
+  Findings:
+  1. F1 (blocking, carried over, sixth round): the PR title at 8290289631c7 is still '[AI:codex] feat: Cross-machine review from an untrusted (work) node: verdict and finding envelopes over the aida-intent channel (STORY-2493)' and the PR body has no non-completing marker. derive_squash_trailer (aida-cli-lib/src/pr_ship.rs:314-355) takes completing IDs from a title with no trailing (Refs ...), so merging this docs/plans-only PR would complete STORY-2493 with no envelope, transport, home-processing or merge-block behaviour implemented. Fix: retitle to '[AI:codex] docs(plans): untrusted-node review return channel sketch (Refs STORY-2493)', or add an 'aida: no-complete' line to the PR body (NO_COMPLETE_BODY_MARKERS, pr_ship.rs:227). The only change since the last round is a merge from main; no branch commit can fix this and the implementer seat cannot edit forge metadata, so route it to the advisor or host, not another rework round.
+  Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
+status: Draft
+priority: Medium
+owner: joe
+feature: Uncategorized
+created_at: 2026-11-08T11:05:26.104788450Z
+modified_at: 2026-11-08T11:05:26.104788450Z
+req_type: Task
+tags:
+- from-advisor:STORY-2493
+- kind:observation
+- linked:STORY-2493
+- loop-guard
+- review-recurrence
+- severity:major
+filed_at:
+  code_sha: 92e7eb3544665f922dabf96cf10439b5dcf736db
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 5cbe14e5fc6
+  vendor: claude
+  session: 01a1b9af-8230-75d2-82f8-667491cc010a
+  harness_version: 2.1.319 (Claude Code)
