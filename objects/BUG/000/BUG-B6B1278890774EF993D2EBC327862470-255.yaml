@@ -8,7 +8,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-08T00:02:55.282155934Z
-modified_at: 2026-11-08T11:17:57.242140225Z
+modified_at: 2026-11-08T11:24:31.400670959Z
 req_type: Bug
 relationships:
 - rel_type:
@@ -229,6 +229,20 @@ comments:
   modified_at: 2026-11-08T11:13:57.674341222Z
   session_id: 01a1b9af-8230-75d2-82f8-667491cc010a
   harness_version: 2.1.319 (Claude Code)
+- id: 01a1bae7-1f28-7970-8cd1-33784aea9420
+  author: dirtlab
+  content: |
+    Native-seat rework handoff for review 4e6248977f5b: findings 2 and 3 addressed in uncommitted edits. queue_cmd moves the fatal pickup pull after the read-only delegation and keyring checks and before standalone slot acquisition or pickup mutations. git_backend_cmd prints StorePullOutcome::AutoMerged notes during db sync, matching ordinary store pull. queue_work_dry_run strengthens the delegation regression with an unreachable local origin and removes --no-pull, and asserts semantic merge notes appear during same-spec pickup.
+
+    Changed files: aida-cli-lib/src/queue_cmd.rs; aida-cli-lib/src/git_backend_cmd.rs; aida-cli/tests/queue_work_dry_run.rs.
+
+    Validation: lane job j20261108T111633881-2-0 executed both BUG-2490 pickup tests, 2 passed; j20261108T111642386-2-0 executed task_1337_delegation_refuses_before_any_pickup_mutation, 1 passed. Writer inventory passed (3369 sinks/293 mappings), rustfmt --check and git diff --check passed. Codegraph executable unavailable; rg used for caller confirmation.
+
+    Finding 1 remains explicitly punted for advisor action: rule on the existing LWW semantic policy and authorize remaining maybe_sync_pull/burndown failed-pull fencing and delete/modify handling here or record a linked split. CLAUDE.md requires advisor architecture signoff; no ruling or split is recorded. Finding 4 remains the carried non-blocking doctor double scan. Persisted Needs Attention punt succeeded; local punt signal failed read-only. Preserve persisted punt, merge hold and publication veto. No commit, push, PR creation, queue completion, ship declaration or review recording performed. Do not publish as a complete BUG-2490 fix.
+  created_at: 2026-11-08T11:24:31.400670959Z
+  modified_at: 2026-11-08T11:24:31.400670959Z
+  session_id: 01a1baded6ca
+  harness_version: codex-cli 0.167.0
 history:
 - id: 01a1b923-982d-7512-93a5-cd08923b4f98
   author: aida-session-start
