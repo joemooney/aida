@@ -1,0 +1,36 @@
+id: 01a1b8df-0c1d-7423-abda-013014f7b2b3
+spec_id: STORY-b6b1278890774ef993d2ebc327862470-578
+agreed_id: STORY-2655
+title: 'Review PR-3645: [AI:codex] refactor(vendors): centralize hook layouts and backends (Refs STORY-2539)'
+description: |
+  Auto-filed by `aida pr auto-queue-review` (typically from /aida-pr) (session `01a1b8c3`) for branch `story-2539-d1705`.
+
+  - PR: <https://github.com/joemooney/aida/pull/3645>
+  - Branch: `story-2539-d1705` → `main`
+
+  ## Slice of (Refs only — not completed by this PR)
+
+  Commit subjects carry `(Refs SPEC-ID)`: this PR is one slice of a spec that a later PR completes. Review this slice against that spec's acceptance criteria.
+
+  - STORY-2539
+
+  ## Acceptance
+
+  - Generate a structured review prompt with `aida review prompt --pr 3645` and verify each spec's acceptance criteria.
+  - Approve and merge, or request changes by spec id.
+  - Mark this story `completed` once the PR is merged.
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-11-08T01:56:27.805830016Z
+modified_at: 2026-11-08T01:56:27.805830016Z
+req_type: Story
+filed_at:
+  code_sha: dc41ee8da2f44f88178936fc1a8e6cb7168a3de7
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 2782389cd8a
+  vendor: claude
+  session: 01a1b8c3c89e
