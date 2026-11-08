@@ -62,6 +62,18 @@ fn queue_work(storage: &crate::Storage) -> anyhow::Result<()> {
 }
 
 fn review_story(main: &std::path::Path) -> (crate::Storage, impl Fn(aida_core::RequirementStatus)) {
+    // Keep the trusted fixture setting private even under a shared-write
+    // runner umask; the allocation reader correctly rejects mode 0664.
+    // trace:BUG-2498 | ai:codex
+    use std::os::unix::fs::PermissionsExt;
+    let store_root = main.join(".aida-store");
+    crate::test_env::home_fixture_backend(&store_root).unwrap();
+    let common = aida_core::allocation_authority::common_dir(&store_root).unwrap();
+    std::fs::set_permissions(
+        common.join(aida_core::allocation_authority::CONFIG_FILE),
+        std::fs::Permissions::from_mode(0o600),
+    )
+    .unwrap();
     let (storage, status) = super::orphan_reentry_tests::queued_scope(main, "STORY-2457");
     std::fs::write(
         main.join(".aida-store/registry/team.toml"),
@@ -428,6 +440,37 @@ fn bug_2469_dead_review_reclaimed_only_when_new_head_covers_recorded_and_actual_
     assert!(queue_work(&storage).is_err());
     assert!(lease_file.exists() && duplicate_file.exists());
     std::fs::remove_file(duplicate_file).unwrap();
+    // A finished review releases authoritative ownership before its old
+    // checkout/lease is cleaned up. This is not a dead-holder record.
+    // trace:BUG-2498 | ai:codex
+    crate::ownership::dual::enable_for_test();
+    crate::ownership::dual::lease_released(&fx.main, &lease.id, "review completed");
+    assert!(matches!(
+        crate::ownership::reader::lease_owner(&fx.main, &lease),
+        crate::ownership::OwnerVerdict::Unknown { .. }
+    ));
+    assert!(crate::ownership::reader::review_lease_ended(
+        &fx.main, &lease
+    ));
+    assert!(crate::ownership::reader::journal_reclaim(&fx.main, &lease).is_err());
+    std::fs::write(tree.join("pending"), "keep completed review notes").unwrap();
+    assert!(queue_work(&storage).is_err());
+    assert!(lease_file.exists());
+    std::fs::remove_file(tree.join("pending")).unwrap();
+    let mut holder = std::process::Command::new("sleep")
+        .arg("30")
+        .current_dir(&tree)
+        .spawn()
+        .unwrap();
+    let result = queue_work(&storage);
+    holder.kill().unwrap();
+    holder.wait().unwrap();
+    assert!(result.is_err());
+    std::fs::write(tree.join("local"), "unpublished completed review fix").unwrap();
+    git_ok(&tree, &["add", "local"]);
+    git_ok(&tree, &["commit", "-qm", "completed review local commit"]);
+    assert_retained_refusal("review checkout has unpublished commits");
+    git_ok(&tree, &["reset", "--hard", &first_head]);
     let markers = tree.join(".aida/merge-holds");
     std::fs::create_dir_all(&markers).unwrap();
     std::fs::write(markers.join("PR-2457"), "review crashed with hold\n").unwrap();

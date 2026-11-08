@@ -1183,6 +1183,11 @@ fn bug2450_observed_setup_refusals_retry_without_consuming_a_review() {
             4,
             "review-watch head changed before reviewer launch; no review started",
         ),
+        // trace:BUG-2498 | ai:codex
+        (
+            5,
+            "branch `pr-5` is held by worktree /tmp/aida-pr-5 before pickup setup",
+        ),
     ] {
         let (_temp, store) = fixture();
         let c = change(id, 1, false);
@@ -1222,6 +1227,36 @@ fn bug2450_observed_setup_refusals_retry_without_consuming_a_review() {
         // ...and a later head of the refused change dispatches.
         dispatch(select(&store, &change(id, 2, false), None, 1).unwrap());
     }
+}
+
+// A released old checkout must not leave the current head parked after its
+// first setup refusal. The ordinary single retry can start its reviewer.
+// trace:BUG-2498 | ai:codex
+#[test]
+fn bug2498_review_worktree_release_allows_one_watch_setup_retry() {
+    let (_temp, store) = fixture();
+    let c = change(2498, 1, false);
+    let first = dispatch(select(&store, &c, None, 1).unwrap());
+    execute_reservation(
+        &store,
+        &c.key(),
+        &first.token,
+        |_| Ok(()),
+        |_| {
+            anyhow::bail!(
+                "branch `pr-2498` is held by worktree /tmp/aida-pr-2498 before pickup setup"
+            )
+        },
+    )
+    .unwrap_err();
+    let retry = dispatch(select(&store, &c, None, 1).unwrap());
+    assert!(retry.setup_retry);
+    assert_ne!(first.token, retry.token);
+    complete(&store, &c, &retry);
+    assert!(matches!(
+        select(&store, &c, None, 1).unwrap(),
+        Action::Skip(_)
+    ));
 }
 
 // trace:TASK-1993.ac55aab8 | ai:claude

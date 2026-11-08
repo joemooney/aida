@@ -112,6 +112,44 @@ pub(crate) fn lease_owner(root: &Path, lease: &crate::SessionLease) -> OwnerVerd
     }
 }
 
+/// Review cleanup also accepts an explicitly released review record. Closed
+/// records have no holder, so `lease_owner` intentionally cannot prove death.
+/// The caller must still guard the disposable tree and all its live holders.
+// trace:BUG-2498 | ai:codex
+pub(crate) fn review_lease_ended(root: &Path, lease: &crate::SessionLease) -> bool {
+    if crate::pr_lease_takeover::reviewer_target(lease).is_none() {
+        return false;
+    }
+    if let Ok(Some(record)) = lease_record(root, lease) {
+        if matches!(record.key, WorkKey::Review { .. })
+            && matches!(record.phase, Phase::Closed { .. })
+            && record.holder.is_none()
+        {
+            return true;
+        }
+    }
+    matches!(lease_owner(root, lease), OwnerVerdict::Dead { .. })
+}
+
+/// Journal cleanup of a disposable review tree, accepting an explicit release
+/// as well as the ordinary positive death proof.
+// trace:BUG-2498 | ai:codex
+pub(crate) fn journal_review_reclaim(root: &Path, lease: &crate::SessionLease) -> Result<()> {
+    let record = lease_record(root, lease)?
+        .ok_or_else(|| anyhow::anyhow!("ownership record missing; reclaim refused"))?;
+    // Explicitly closed review ownership already records its release. It
+    // needs no death journal entry; tree safety remains the caller's job.
+    // trace:BUG-2498 | ai:codex
+    if matches!(record.key, WorkKey::Review { .. })
+        && matches!(record.phase, Phase::Closed { .. })
+        && record.holder.is_none()
+        && crate::pr_lease_takeover::reviewer_target(lease).is_some()
+    {
+        return Ok(());
+    }
+    journal_reclaim(root, lease)
+}
+
 /// Record a reclaim attempt with positive death proof before guarded retirement. CAS refuses a
 /// replacement during preflight; the holder remains until session_end succeeds.
 /// This journal entry grants no permission to discard a tree or pending mail.
