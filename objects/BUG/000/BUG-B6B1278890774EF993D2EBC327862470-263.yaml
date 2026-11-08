@@ -3,12 +3,12 @@ spec_id: BUG-b6b1278890774ef993d2ebc327862470-263
 agreed_id: BUG-2498
 title: 'Review repickup still refused by a completed review''s aida-pr-N worktree: ''branch pr-N is held by worktree before pickup setup'', and review watch does not retry'
 description: 'BUG-2457, BUG-2469 and BUG-2428 are completed, but on 2026-11-08 the same stall hit PR-3662, 3669, 3652, 3661 and 3667 on the live binary. Each prior reviewer had finished: worktree clean, nothing unpushed, no process with its cwd there, lease still present. The next-head launch then fails with ''branch pr-N is held by worktree ... before pickup setup'' (e.g. .aida/review-watch/logs/PR-3667-e2b56895-cff6-42cb-8b23-624676627d0d.log) and review watch records ''not relaunched'', leaving that head unreviewed until an advisor ends the lease by hand. Acceptance: (1) a reviewer whose worktree is clean, fully pushed and has no live process no longer blocks the next head of that PR; the pre-pickup check releases it, preserving any merge-holds marker (BUG-2176); (2) dirty, unpushed or live worktrees are still refused; (3) a regression test drives two consecutive heads of one PR through the pickup path; (4) review watch retries once after such a release instead of parking the head.'
-status: NeedsAttention
+status: Approved
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-08T18:38:43.709546225Z
-modified_at: 2026-11-08T19:50:15.589817112Z
+modified_at: 2026-11-08T20:06:12.691108280Z
 req_type: Bug
 comments:
 - id: 01a1bc8c-5761-7180-b3a9-aa9efdae2409
@@ -49,6 +49,13 @@ comments:
   modified_at: 2026-11-08T19:41:38.950548718Z
   session_id: 01a1bc992adf
   harness_version: codex-cli 0.167.0
+- id: 01a1bcc4-bdd3-7d42-8814-17b3327529e7
+  author: joe
+  content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: AC1 still unmet for the observed stall: the completion receipt is written only after a collected verdict, but all four sampled stalled heads have no verdict on the ledger, so they stay refused. AC2 holds; AC3 and AC4 pass only via a fixture state not seen in production. CI pending at review.. No triage reason was given.'
+  created_at: 2026-11-08T20:06:12.691105254Z
+  modified_at: 2026-11-08T20:06:12.691105254Z
+  session_id: 01a1bc93-77a0-7740-8b03-df4e3e8d1df5
+  harness_version: 2.1.319 (Claude Code)
 history:
 - id: 01a1bc76-cd85-7f81-93f5-51ee03fadbe7
   author: aida-session-start
@@ -103,6 +110,15 @@ history:
   - field_name: status
     old_value: InProgress
     new_value: NeedsAttention
+- id: 01a1bcc4-bdd3-7d42-8814-17a804f37673
+  author: joe
+  timestamp: 2026-11-08T20:06:12.691088531Z
+  session_id: 01a1bc93-77a0-7740-8b03-df4e3e8d1df5
+  harness_version: 2.1.319 (Claude Code)
+  changes:
+  - field_name: status
+    old_value: NeedsAttention
+    new_value: Approved
 filed_at:
   code_sha: eeec474c545cbc8a354d386c8cb6d81460da7b9f
   branch: main
@@ -112,11 +128,3 @@ filed_at:
   vendor: claude
   session: 01a1bbab-762f-7cd2-8a36-4ea9f209afce
   harness_version: 2.1.319 (Claude Code)
-failure_reason:
-  phase: reviewer
-  phase_index: 3
-  kind: verdict:request-changes
-  detail: 'AC1 still unmet for the observed stall: the completion receipt is written only after a collected verdict, but all four sampled stalled heads have no verdict on the ledger, so they stay refused. AC2 holds; AC3 and AC4 pass only via a fixture state not seen in production. CI pending at review.'
-  recovery_hint: address the review findings, move BUG-2498 back to In Progress, and clear the PR hold only after approval
-  shelved_by: reviewer
-  shelved_at: 2026-11-08T19:50:15.589817112Z
