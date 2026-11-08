@@ -286,7 +286,7 @@ fn bug_045_uncontained_reviewer_is_not_probed() {
 // trace:BUG-b6b1278890774ef993d2ebc327862470-045.ace2889c | ai:claude
 #[test]
 fn bug_045_contained_refusal_precedes_the_verdict_reset() {
-    let source = include_str!("../queue_cmd.rs");
+    let source = include_str!("../queue_cmd/work.rs");
     let refuse = source
         .find("refuse_unpresentable_contained_reviewer(contained)?;")
         .expect("contained refusal in handle_queue_work");
@@ -305,7 +305,7 @@ fn bug_045_contained_refusal_precedes_the_verdict_reset() {
 fn bug_045_launch_paths_mint_through_the_containment_aware_issuer() {
     for (file, source) in [
         ("session.rs", include_str!("../session.rs")),
-        ("queue_cmd.rs", include_str!("../queue_cmd.rs")),
+        ("queue_cmd/work.rs", include_str!("../queue_cmd/work.rs")),
         ("agent_launch.rs", include_str!("../agent_launch.rs")),
     ] {
         assert!(
@@ -327,7 +327,7 @@ fn bug_045_launch_paths_mint_through_the_containment_aware_issuer() {
 fn task_144_headless_child_launches_pass_their_containment() {
     let mut calls = 0;
     for (file, source) in [
-        ("queue_cmd.rs", include_str!("../queue_cmd.rs")),
+        ("queue_cmd/work.rs", include_str!("../queue_cmd/work.rs")),
         ("burndown_run.rs", include_str!("../burndown_run.rs")),
         (
             "phase_driver_trait.rs",

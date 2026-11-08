@@ -1093,7 +1093,7 @@ fn bug2187_granted_reviewer_resume_sets_identity() {
 // trace:TASK-1801 | ai:codex
 #[test]
 fn rework_work_dispatch_uses_intent_preserving_adapter() {
-    let source = include_str!("../queue_cmd.rs");
+    let source = include_str!("../queue_cmd/work.rs");
     let handler = source
         .split("pub(crate) fn handle_queue_rework(")
         .nth(1)

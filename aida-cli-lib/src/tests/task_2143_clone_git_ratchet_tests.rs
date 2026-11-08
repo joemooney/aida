@@ -25,7 +25,9 @@ const RAW_GIT_ALLOWLIST: &[(&str, usize)] = &[
     ("aida-cli-lib/src/orchestrator_leases.rs", 5),
     ("aida-cli-lib/src/phase_driver.rs", 1),
     ("aida-cli-lib/src/pr_cmd.rs", 47),
-    ("aida-cli-lib/src/queue_cmd.rs", 4),
+    ("aida-cli-lib/src/queue_cmd/done.rs", 1),
+    ("aida-cli-lib/src/queue_cmd/recover.rs", 2),
+    ("aida-cli-lib/src/queue_cmd/work.rs", 1),
     ("aida-cli-lib/src/seat_clone.rs", 2),
     ("aida-cli-lib/src/session_end.rs", 0),
     ("aida-cli-lib/src/session_reap.rs", 7),
@@ -49,7 +51,11 @@ const RAW_GIT_ALLOWLIST: &[(&str, usize)] = &[
 /// `ship.rs` runs step 1's commit in the ship root, a seat clone when ship
 /// runs in one (TASK-2359).
 // trace:TASK-2359 | ai:claude
-const ALWAYS_SCANNED: &[&str] = &["aida-cli-lib/src/ship.rs"];
+const ALWAYS_SCANNED: &[&str] = &[
+    "aida-cli-lib/src/ship.rs",
+    // Keep the moved commit-evidence builder covered after the split.
+    "aida-cli-lib/src/queue_cmd/done.rs",
+];
 
 /// Lexical state across lines: braces inside Rust literals and comments do
 /// not close a test module. Raw strings close only with their full delimiter.

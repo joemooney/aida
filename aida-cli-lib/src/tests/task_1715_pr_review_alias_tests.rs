@@ -144,7 +144,7 @@ fn alias_reuses_the_queue_dispatch_rather_than_a_second_pipeline() {
     for forbidden in ["handle_queue_command", "Command::new", "--force"] {
         assert!(!body.contains(forbidden), "run_pr must not use {forbidden}");
     }
-    let queue = include_str!("../queue_cmd.rs");
+    let queue = include_str!("../queue_cmd/work.rs");
     let start = queue.find("\nfn run_queue(").expect("run_queue");
     let body = &queue[start..start + queue[start..].find("\n}\n").unwrap()];
     assert!(body.contains("dispatch_queue_args(&args, ctx)"));

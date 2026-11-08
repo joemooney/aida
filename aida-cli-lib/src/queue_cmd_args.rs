@@ -1,4 +1,4 @@
-//! `aida queue_cmd` clap types, owned by `queue_cmd.rs` and re-exported from
+//! `aida queue_cmd` clap types, owned by `queue_cmd/mod.rs` and re-exported from
 //! `cli.rs`. trace:STORY-1728 | ai:claude
 
 use clap::{ArgGroup, Parser, Subcommand, ValueEnum};
