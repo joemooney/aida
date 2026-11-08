@@ -235,14 +235,18 @@ class LauncherRefusals(unittest.TestCase):
                 commands = root / 'bin'
                 commands.mkdir()
                 log = root / 'launches'
+                arguments = root / 'unit-arguments'
+                controls = root / 'unit-controls'
                 mocks = {
                     'id': 'echo 1001',
                     'flock': 'exit 0',
                     'chown': 'exit 0',
-                    'systemctl': f'[ "$1" != stop ] || {{ echo stop-diagnostic >&2; exit {stop_status}; }}',
+                    'systemctl': f'printf "%s\\n" "$*" >> "{controls}"; '
+                                 f'[ "$1" != stop ] || {{ echo stop-diagnostic >&2; exit {stop_status}; }}',
                     'systemd-run': f'[ ! -e "{state}/old-job" ] || exit 92; '
                                    f'[ -f "{state}/run.sh" ] || exit 93; '
                                    f'[ -d "{state}/home" ] || exit 94; '
+                                   f'printf "%s\\n" "$@" > "{arguments}"; '
                                    f'cat >> "{log}"',
                 }
                 for name, body in mocks.items():
@@ -270,6 +274,21 @@ class LauncherRefusals(unittest.TestCase):
                         self.assertNotIn('stop-diagnostic', result.stderr)
                         self.assertFalse(state.exists(), 'job content must be removed on exit')
                         self.assertEqual(log.read_text().splitlines(), ['fresh-config'] * (attempt + 1))
+                        unit_args = arguments.read_text().splitlines()
+                        # Check the actual launch boundary, including secret
+                        # transport through stdin rather than process argv.
+                        for setting in ('User=aida-ci', 'Group=aida-ci',
+                                        'ProtectHome=yes', 'ProtectSystem=strict',
+                                        'PrivateTmp=yes', 'PrivateIPC=yes',
+                                        'NoNewPrivileges=yes', 'KillMode=control-group',
+                                        f'ReadWritePaths={state}'):
+                            self.assertIn(setting, unit_args)
+                        self.assertIn('/usr/bin/env', unit_args)
+                        self.assertIn('-i', unit_args)
+                        self.assertIn(f'HOME={state}/home', unit_args)
+                        self.assertNotIn('fresh-config', arguments.read_text())
+                        self.assertIn('set-property --runtime aida-ci.slice CPUQuota=800% AllowedCPUs=0-7',
+                                      controls.read_text().splitlines())
 
     def test_idle_wait_does_not_consume_job_execution_budget(self):
         launcher = (ROOT / 'scripts/runner/one-job.sh').read_text()
