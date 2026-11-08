@@ -117,12 +117,12 @@ description: |
   S3: Receipt v2 (producer, processor, store namespace); `list --json` reports refs, writer ids, and unknown when a receipt branch is unavailable.
   S4: relay alignment (R7).
   S5 (optional): AC8 and multi-producer fixtures.
-status: Approved
+status: InProgress
 priority: High
-owner: ''
+owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-08T00:35:39.542243859Z
-modified_at: 2026-11-08T00:36:05.781119956Z
+modified_at: 2026-11-08T03:18:49.619736873Z
 req_type: Story
 comments:
 - id: 01a1b895-7815-78d0-ba38-bbf9fe9f1533
@@ -132,6 +132,14 @@ comments:
   modified_at: 2026-11-08T00:36:05.781119956Z
   session_id: 01a1b848-940b-7bd2-8acd-52e428b182b8
   harness_version: 2.1.319 (Claude Code)
+history:
+- id: 01a1b92a-7413-7ed3-b4ef-34036b0ecfba
+  author: aida-session-start
+  timestamp: 2026-11-08T03:18:49.619735741Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: InProgress
 filed_at:
   code_sha: 2782389cd8ad9240672ea95d0f2209c7f193700b
   branch: main
