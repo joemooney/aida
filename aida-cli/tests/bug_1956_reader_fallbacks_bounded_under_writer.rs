@@ -81,6 +81,17 @@ fn init_fixture() -> Fixture {
     assert!(git(&repo, &["init", "-q", "-b", "main"]).status.success());
     // trace:BUG-2017 | ai:codex — explicit positive global-ID fixture.
     test_git::enroll_synthetic_home(&repo);
+    // Explicit trust evidence must stay private under the lane's umask 0002.
+    // trace:BUG-2466 | ai:codex
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        std::fs::set_permissions(
+            repo.join(".git/aida-allocation.toml"),
+            std::fs::Permissions::from_mode(0o600),
+        )
+        .unwrap();
+    }
     assert!(git(&repo, &["config", "user.email", "test@example.com"])
         .status
         .success());
@@ -279,14 +290,28 @@ fn read_bounded_and_labelled(
         "{context}: the read must still serve the spec\n{stdout}"
     );
     assert!(
-        stderr.contains("the cache write lock was busy"),
+        if args.first() == Some(&"show") {
+            stderr.contains("note: showing results cached at")
+                && !stderr.contains("the cache write lock was busy")
+        } else {
+            stderr.contains("the cache write lock was busy")
+        },
         "{context}: missing the writer-busy stale note on stderr\n{stderr}"
     );
     stdout
 }
 
-/// Once the writer is gone, the next show brings the cache current.
+/// Show stays stale after release; an explicit refresh brings the cache current.
 fn show_refreshes(fixture: &Fixture, envs: &[(&str, &str)], context: &str) {
+    let stale = aida_env(fixture, &["show", "TASK-1"], envs);
+    assert!(stale.status.success());
+    assert!(String::from_utf8_lossy(&stale.stderr).contains("note: showing results cached at"));
+    let refresh = aida_env(fixture, &["cache", "refresh"], envs);
+    assert!(
+        refresh.status.success(),
+        "{}",
+        String::from_utf8_lossy(&refresh.stderr)
+    );
     let out = aida_env(fixture, &["show", "TASK-1"], envs);
     let stdout = String::from_utf8_lossy(&out.stdout).to_string();
     let stderr = String::from_utf8_lossy(&out.stderr).to_string();
