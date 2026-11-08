@@ -8,7 +8,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-06T13:39:53.442026Z
-modified_at: 2026-11-08T16:11:47.725801749Z
+modified_at: 2026-11-08T16:15:42.018617079Z
 req_type: Task
 tags:
 - architecture
@@ -1128,6 +1128,31 @@ comments:
   modified_at: 2026-11-08T15:59:38.350311293Z
   session_id: 01a1b9af-8230-75d2-82f8-667491cc010a
   harness_version: 2.1.319 (Claude Code)
+- id: 01a1bbf1-b3c2-7041-8f82-4ac6db5ac293
+  author: joe
+  content: |
+    Round 22 checkpoint — findings accepted; none disputed. Native-seat edits are uncommitted. No ship declaration, commit, push, PR opening, queue completion, review record or merge-hold clearance was performed. Existing punt/hold remain publication vetoes. TASK-3223 is Needs Attention after this round's explicit design-fork punt; do not auto-publish this handoff over that state.
+
+    Changed files:
+    - aida-cli-lib/src/mcp.rs: exact closed wire-error mapping through anyhow request context; stable non-recoverable outcome_unknown code, permission_denied for Unauthorized/Expired/Revoked, invalid_arg for InvalidRequest/UnsupportedVersion/UnsupportedOperation, conflict for Conflict/Busy and io_error for Unavailable. Preserve request identity and recovery guidance.
+    - aida-cli-lib/src/store_mutation_mcp_tests.rs: assert all ten wire tokens, context preservation, recoverability and exact-token matching.
+    - aida-cli-lib/src/containment/tests/mediated_store_tests.rs: use aida_bin::current_executable_path for libtest re-exec; exercise gated Codex exec resume/fork through PreparedLaunch::prepare in primary and linked/symlinked layouts, verifying refusal and unchanged protected sentinels. This proves refusal only; successful mediated resume remains unavailable.
+    - docs/internal/security/store-mutation-writers.md: document resume refusal and typed MCP errors.
+
+    Finding 4: applied and re-read PR #3661 title/body from comment 74. Title: [AI:codex] fix(store-mutation): stage gated CLI and MCP routing without launch authority (Refs TASK-3223). Body describes staged behavior, unresolved routing, policy/CI/manual gates and explicitly empty eventual squash body. This metadata edit grants no code publication or merge authority.
+
+    Finding 2 update: GitHub CI run 42496043147 at reviewed commit 4387ae4fad6e737bc493789e7cf92b0a3130cd28 has completed successfully: lib-0, lib-1, cli-0, cli-1, rest, gates, contracts and aggregate Build all green. The separate merge-hold remains expected. The current PR head is 4194b4e38df0d1074047970c6e1c46bbc1c043c9 after a main merge, so reviewed-head success does not cover it or this round's working tree. Aggregate make check-ci-fast still requires a host run; lane instructions forbid directly running cargo here and the launcher job accepts cargo commands only.
+
+    Static validation passed: 52 inventory fixture tests; seven executable-fixture tests; normal store-writer ratchet (3386 sink sites reconciled; 293 explicit cutover blockers); doc links (1503 paths, zero missing); all 83 CI gates classified; trace-header check; rustfmt and git diff --check. The mediated-profile audit still refuses with 3171 unresolved writer sites and 293 operations. Do not recategorize early refusals as completed routing without a ruling. Keep selected_store_profile closed; own_claim/queue_done remain TASK-3326.
+
+    Final-source Rust validation is pending in launcher job j20261108T160922891-2028088-0: cargo test --profile agent -p aida-cli-lib --lib mediated_. Its output is /home/joe/ai/aida/.aida/lane-jobs/01a1bbe9ff10/j20261108T160922891-2028088-0.out. No executed-test result yet; a follow-up will record its terminal result.
+
+    Finding 3 investigation: punt_done.rs writes a signal only when AIDA_PUNT_SIGNAL_FILE is set/nonempty. ship_from_seat::publication_veto checks only signal/hold files; punt::read_signal treats absence/malformed content as None. It does not consult persisted NeedsAttention. This seat has AIDA_PUNT_SIGNAL_FILE unset, and neither friendly nor canonical main-checkout punt signal exists. This confirms the missing-signal failure mode in the source, not authorization for any of the four past publications. standalone_implementer::apply_standalone_child_env intends to provide signal paths, so host launch/projection also needs investigation. Advisor must establish authorization and repair enforcement; no unrelated host-publication code was changed in this routing slice. Codegraph callers could not open the shared database; rg confirmed call sites; no index was initialized or synced.
+
+    Remaining blockers: advisor operation-policy ruling or explicitly authorized staged partial/follow-up ownership (finding 1); host aggregate check and human/advisor merge-hold clearance (2); advisor publication authorization/enforcement resolution (3). Full acceptance is unmet; TASK-3223 must stay open. Host must not publish simply because this turn contains code edits.
+  created_at: 2026-11-08T16:15:42.018617079Z
+  modified_at: 2026-11-08T16:15:42.018617079Z
+  session_id: 01a1bbe9ff10
 history:
 - id: 01a1b116-742d-73c0-9064-1933f11e4c38
   author: joe
