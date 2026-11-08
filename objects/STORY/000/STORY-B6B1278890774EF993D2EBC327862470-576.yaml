@@ -3,12 +3,12 @@ spec_id: STORY-b6b1278890774ef993d2ebc327862470-576
 agreed_id: STORY-2653
 title: 'Seat rotation ends the session itself: once a seat past its context ceiling writes a fresh handoff, the launcher ends that session at the next turn boundary and relaunches, with no operator exit or Ct'
 description: 'Operator 2026-11-07 18:14: ''I miss the relay logic we had working that would kill the session and automatically relaunch it if the handoff file existed.'' Today (claude-advisor-106) the rotation hook says ''write a handoff, then exit'', the model writes .aida/handoff/advisor/latest.md, but the session stays open: an assistant cannot exit itself, and a goal Stop hook kept re-prompting it for 10+ turns after the handoff. The operator had to exit manually. STORY-2141''s relaunch-on-exit works; the missing half is ending the session. Acceptance: (1) when the rotation notice is active (context above the seat ceiling) and a handoff for that seat is written by this session AFTER the notice, the aida agent new launcher ends the vendor session at the next turn boundary (Claude: Stop hook returns end / SIGTERM to the child after the turn completes; Codex: equivalent) and relaunches under the same handle with the handoff loaded; (2) a session-scoped goal or other Stop hook cannot block that rotation exit; the goal carries over to the relaunched session or is reported in the handoff; (3) background processes started by the old session that hold its grant are listed in the handoff automatically (or rebound), so watchers do not silently die (today''s review watcher outage at 16:13 had this cause); (4) no rotation when the handoff predates the notice, or when no handoff was written; (5) regression test with a fake vendor child. Related: STORY-2141, STORY-1464, BUG-1659.'
-status: InProgress
+status: Completed
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-08T01:14:39.669105479Z
-modified_at: 2026-11-08T03:20:14.906859387Z
+modified_at: 2026-11-08T05:39:21.093591783Z
 req_type: Story
 comments:
 - id: 01a1b8bd-fa86-7aa0-96aa-e1abc3b02394
@@ -32,6 +32,20 @@ history:
   session_id: 01a1b92b748f
   harness_version: codex-cli 0.167.0
   changes: []
+- id: 01a1b9ab-1b4d-7132-80e1-9be8f99cf085
+  author: aida-auto-bump
+  timestamp: 2026-11-08T05:39:21.037493484Z
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Completed
+processing_record:
+- id: 01a1b9ab-1b85-79a1-b24e-945d3a81780f
+  timestamp: 2026-11-08T05:39:21.093587149Z
+  agent: aida
+  commit_sha: 6a18925115432a0f62792891ab078a0b0542a345
+  summary: 'STORY-2653 AC1-5 met: Stop relay stamps a turn boundary after a post-notice own-session handoff; pidfd-pinned TurnMonitor TERM->KILLs only its own child; supervisor relaunches same handle with matched handoff; goal evidence + grant-sharing PIDs appended. All 7 CI lanes green at ef8fe471 (Build aggregator queued, lane-result only).'
+  review_verdict: approved
 filed_at:
   code_sha: 2782389cd8ad9240672ea95d0f2209c7f193700b
   branch: main
@@ -41,3 +55,7 @@ filed_at:
   vendor: claude
   session: 01a1b848-940b-7bd2-8acd-52e428b182b8
   harness_version: 2.1.319 (Claude Code)
+implementation_info:
+  implemented: false
+  completed_at: 2026-11-08T05:39:21.037486172Z
+  completion_sha: 6a18925115432a0f62792891ab078a0b0542a345
