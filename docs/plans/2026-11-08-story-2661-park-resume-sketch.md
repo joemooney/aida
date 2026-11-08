@@ -51,6 +51,8 @@ its retained seat. Proposed fields:
 | stop_boundary, stop_deadline, completion outcome, launch generation | Durable stop budget and generation-bound command completion evidence |
 | answer revision/hash, answer event reference | Durable delivery key; answer content stays in canonical evidence |
 | attempt_id, child receipt, acknowledgement | Recover dispatch without assuming successful delivery |
+| transport archive generation/digests, preparation state | Recover consumption and clearing of per-launch seat files |
+| post_exit_stage, publication declaration/digest, publication receipt, cleanup checkpoint | Recover post-exit processing without replaying the vendor or assuming publication |
 | error/recovery reason | Visible escalation or admission block |
 
 ### Canonical question identity (new schema)
@@ -91,14 +93,16 @@ and show `session_identity_unavailable` with manual recovery guidance.
 |---|---|---|
 | Claude | Host-minted UUID passed as `--session-id` before fresh exec; for a resumed launch, the exact admitted `--resume` ID. Bind it to the launch receipt and verify the exact transcript before parking. | Never substitute a model-supplied ID or locate another transcript. |
 | Codex | Validated vendor-session lease stamp bound to this launch, or `thread_id` from this child's captured `codex exec --json` `thread.started` event, persisted as it arrives before ask acceptance. Conflicting evidence refuses. | Use only these two sources; do not call `resolve_thread_id` unchanged, since its unique-rollout fallback is forbidden here. |
-| AGY | SPIKE-711's verified `agy --print=... --output-format json` result field `conversation_id`, captured from this child's completed output and persisted by the host. An admitted resumed launch can use the exact prior captured ID passed to `--conversation`. | The result is completion-time evidence, not a demonstrated mid-turn source. A fresh AGY lane cannot park during its first run unless a separately verified earlier headless capture is implemented. Prior completed-run capture makes later resumed AGY runs eligible, subject to adapter admission. |
+| AGY | SPIKE-711's verified `agy --print=... --output-format json` result field `conversation_id`, captured from this child's completed output and persisted by the host. This is research evidence only. | AGY cannot park in this slice: there is no admitted bootstrap into a prior-ID resumed lane, and no verified mid-turn capture. Refuse `--park` before intent submission, canonical question creation or a stop instruction. Ordinary completion/publication remains available. |
 
 AGY hook `conversationId` is not accepted as headless capture evidence in this
 slice. Do not guess an event contract or scan transcripts. The host spike proves
-resume, not first-turn park eligibility; that remaining AC3 limitation requires
-advisor acceptance. Fixtures must cover missing identity refusal for each vendor,
-Codex conflicting/stale stamps, AGY result capture after exit and exact-ID reuse
-on a subsequent admitted launch.
+resume, not integrated park eligibility. AC3’s AGY park/resume adapter is
+unreachable until verified mid-turn capture and normal resume admission exist;
+these are deferred prerequisites, not a path enabled by this sketch. This scope
+limit requires advisor acceptance. Fixtures cover missing identity for eligible
+vendors, Codex conflicting/stale stamps, and AGY refusal before submission with
+no intent, question, stop instruction or publication veto.
 
 The parked lane retains exclusive ownership of its seat/worktree and branch,
 including dirty edits. It holds **no running concurrency slot**, no child process,
@@ -111,6 +115,9 @@ ownership and refuse reuse/removal until explicit cancellation or recovery.
 ### Seat-to-host transport (new surfaces, R4)
 
 Propose `aida questions ask <SPEC> --park` using the existing question inputs.
+Check vendor/posture eligibility before submitting an intent. In particular, AGY
+returns an unsupported-mode refusal without creating transport files or a bound
+question, and without instructing the lane to stop; ordinary questions remain available.
 Before launch the host writes a private expected binding under
 `<main>/.aida/park-bindings/<lease-id>.json`, and supplies a read-only copy at
 `<seat>/.aida/park-binding.json`. The closed binding contains version, random
@@ -139,9 +146,12 @@ intents. Both canonical and runtime
 state must reconcile before acceptance; crashes after either write are visible.
 The receipt is host evidence, never accepted back as authority from the seat.
 
-1. An explicit blocking lane ask creates the canonical question and a durable
-   park intent; do not infer blocking asks from arbitrary model prose. The CLI
-   returns a stop-now receipt and the lane ends its current turn.
+1. An eligible explicit blocking lane ask submits the durable seat intent; the
+   host writes the canonical question and binding as described above. Do not
+   infer blocking asks from arbitrary model prose. After submission the lane
+   stops work and ends its current turn whether the CLI returns an accepted
+   stop-now receipt, pending guidance or an uncertain failure. A definitive
+   pre-submission refusal creates no stop obligation.
 2. The host binds and accepts the intent before publication, phase completion,
    ordinary background-work resume, or lease cleanup. A park is neither a
    successful implementation nor a failed phase to retry from scratch.
@@ -215,6 +225,31 @@ only on verified group exit. No answer or late receipt can bypass this barrier.
 A crash during the barrier leaves an unresolved launch reservation for host
 reconciliation, never inferred publication authority.
 
+### Consuming transport between launch generations
+
+After the exit barrier has durably reconciled an accepted park, the host archives
+that generation's intent, receipt and command-completion marker in its private
+wait history, recording their identities/digests under the wait lock. The original
+barrier still vetoes publication for that parked run. Rejected or unsafe files
+remain a recovery block; never erase them just to make a launch succeed.
+
+Before every new launch generation (including manual resume), hold the wait and
+seat locks, verify the previous child/group has exited, and complete an
+idempotent prepare transaction: persist the prior accepted transport archive,
+remove the consumed intent, receipt and completion marker from the seat, verify
+all three are absent, then persist the fresh generation/token binding. No child
+may spawn until preparation is durable. Any archive, read, clear or binding error
+fails closed with `transport_prepare_blocked`. A crash resumes preparation from
+its checkpoint under the same locks; it cannot authorize publication or discard
+unresolved evidence. This follows the per-launch clearing principle in
+`native_publication.rs::prepare`, extended to these three park artifacts.
+
+The resumed run's exit barrier inspects its current generation's transport paths.
+A new intent (including a mismatched or unsafe one) still vetoes publication; the
+archived consumed intent does not. A resume that finishes cleanly without a new
+ask can therefore proceed through ordinary publication gates. Retain host history
+through cancellation/completion; transport removal is not history deletion.
+
 Canonical and runtime writes cannot be one transaction. Use the immutable wait
 ID on both sides; host reconciliation repairs an interrupted handshake and
 reports unmatched questions/intents. Never claim a parked receipt before both
@@ -260,7 +295,7 @@ shows `manual_resume_required`, and shows stale scan/sync evidence separately.
 
 `aida lane resume <wait-id>` is a foreground host supervisor, one process per
 wait. It acquires its own PID/start-identity slot via `acquire_slot`, before
-launching the vendor, and holds its guard through vendor exit/reaping; it never
+launching the vendor, and holds its guard through vendor exit/reaping and the final intent barrier; it never
 uses the observer PID for child slots. Observer restart cannot release these
 slots or kill these processes, which are outside the observer unit cgroup.
 Existing final-result-based slot discounting must be disabled for both the
@@ -337,8 +372,8 @@ complete free-text `DecisionRequest.note` (including an explicit absent note), w
 their provenance and wait ID. Pass it as an argv element or existing supported
 stdin transport, never shell interpolation. Launch the exact session in the
 retained seat. The first successful resumed receipt acknowledges the wait;
-subsequent questions use new wait IDs. The host then follows normal phase and
-publication rules for the resumed child.
+subsequent questions use new wait IDs. The foreground `aida lane resume`
+supervisor owns the entire post-exit pipeline described below.
 
 Compare/update under the wait lock and a single attempt ID prevent duplicate
 answer events from spawning duplicate children. Persist launch reservation before
@@ -349,13 +384,41 @@ an answer. Failed admission stays visibly blocked and retryable without changing
 the durable answer. Missing seats or transcripts become escalations, not fresh
 sessions. Cancellation retains history and requires explicit ownership release.
 
+### Post-exit owner and interrupted completion
+
+The foreground `aida lane resume` process owns output collection, verified group
+exit, final intent drain, publication gates/declaration handling, phase completion,
+reviewer handoff and lease cleanup through terminal success or a durable block.
+It invokes the same checked pipeline as the original launcher; the exited original
+launcher and observer service have no completion responsibilities. A new park
+branches back to retained ownership and suppresses publication as above.
+
+Under the wait lock, persist a `post_exit_pending` checkpoint with the child exit
+receipt, generation, result/declaration digest and intended next stage before
+publication. Record each external publication receipt before advancing to phase
+completion, reviewer handoff and cleanup. Each stage uses a stable attempt key
+and rechecks ordinary authority, hold/punt and publication gates. Release running
+capacity only after verified group exit and the exit barrier; retain seat ownership
+until the pipeline has durably completed or been explicitly recovered.
+
+If the foreground supervisor is interrupted after vendor exit, the observer only
+reports `post_exit_recovery_required`; it never publishes. A fresh authorized
+`aida lane resume <wait-id>` detects the checkpoint and continues post-exit
+processing without relaunching the vendor or redelivering the answer. It verifies
+the same seat/result and existing publication/handoff receipts before each stage.
+An ambiguous external side effect must be reconciled against host/forge evidence;
+if it cannot be proved, block for operator recovery rather than repeat it. Cleanup
+cannot erase unresolved checkpoints, dirty edits or ownership. Interruption before
+the first post-exit checkpoint uses the persisted launch reservation and child
+receipt to establish exit/result evidence, otherwise escalates without publication.
+
 ## Vendor contract and initial scope
 
 | Vendor | Headless resume argv shape | Admission proposal |
 |---|---|---|
 | Claude | `claude -p --resume <session_id> <answer_prompt>` | Legacy contained headless path only, with retained verified transcript as specified below; shared-wrapper private-state resume is excluded. |
 | Codex | `codex exec resume <session_id> <answer_prompt>` | Initially only paths without AIDA containment that already admit resume, including trusted native workspace-write posture where admitted. Native is reported as native sandbox, not AIDA-contained. |
-| AGY | `agy --conversation <session_id> --print=<answer_prompt>` | Implement the verified headless adapter and validate its normal launch admission before enabling park; no blanket removal of the existing refusal. |
+| AGY | `agy --conversation <session_id> --print=<answer_prompt>` | Deferred, unreachable in this slice. Refuse park before intent submission; verified mid-turn identity capture and integrated resume admission are prerequisites. |
 
 ### Claude path decision (R5)
 
@@ -388,9 +451,16 @@ handling and seat retention, then the common answer outbox and vendor adapters.
 Reuse store locks, launch admission, injected execution context and environment
 projection; do not create another ambient-reader or allowlist mechanism.
 
-Recorded fake-harness tests must exercise one resume per vendor with exact ID,
-answer and cwd; per-vendor missing-session-ID refusal before question acceptance;
-AGY completion-only capture and subsequent exact-ID resume;
+Recorded fake-harness tests must exercise each eligible vendor resume with exact
+ID, answer and cwd; missing-session-ID refusal before question acceptance;
+AGY refusal before intent submission with ordinary clean publication still allowed;
+future AGY adapter fixtures are required when its deferred prerequisites are met;
+park, archive/clear transport, resume and clean exit reaching publication;
+preparation failures and restart at every archive/clear/binding boundary;
+new-generation malformed intent still vetoing publication;
+manual resume reaching phase completion, reviewer handoff and cleanup;
+interruption after vendor exit and around each publication/checkpoint boundary,
+recovering without vendor relaunch, duplicate publication or lost ownership;
 exit within the poll interval followed by final intent drain; rejected intent
 after a stop (bad token, oversize and reservation failure), with no publication;
 valid late intent accepted after verified exit without a live-child waiting mark;
@@ -423,5 +493,6 @@ Review decision requested: approve the durable host-owned park/outbox protocol,
 exclusive retained seat with a released running slot, and the initial admission
 limits above, including manual-only initial scope (AC2 open), observer-only
 resume-watch, per-child slot reservations, bound seat transport, explicit overnight authority
-recovery, canonical schema additions and bounded supervisor stop policy. No implementation
+recovery, canonical schema additions, per-generation transport consumption,
+post-exit recovery ownership, deferred AGY eligibility and bounded supervisor stop policy. No implementation
 should start until the advisor records signoff.
