@@ -17,7 +17,7 @@ priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-11-08T19:17:11.501030454Z
-modified_at: 2026-11-08T19:17:11.501030454Z
+modified_at: 2026-11-08T19:23:01.294383668Z
 req_type: Task
 tags:
 - from-advisor:STORY-1486
@@ -26,6 +26,14 @@ tags:
 - loop-guard
 - review-recurrence
 - severity:major
+comments:
+- id: 01a1bc9d-332e-7d43-9ae5-00ce3a48b144
+  author: joe
+  content: 'Advisor ruling: finding 1 was CI-wait; CI has since finished red on the store-writer inventory, routed to STORY-1486 rework. Finding 2 accepted: vendor-loop coverage only if other code changes.'
+  created_at: 2026-11-08T19:23:01.294383668Z
+  modified_at: 2026-11-08T19:23:01.294383668Z
+  session_id: 01a1bc93-77a0-7740-8b03-df4e3e8d1df5
+  harness_version: 2.1.319 (Claude Code)
 filed_at:
   code_sha: eeec474c545cbc8a354d386c8cb6d81460da7b9f
   branch: main
