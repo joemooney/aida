@@ -19,7 +19,7 @@ priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-11-08T15:57:56.822925046Z
-modified_at: 2026-11-08T15:57:56.822925046Z
+modified_at: 2026-11-08T16:03:30.500711987Z
 req_type: Task
 tags:
 - from-advisor:BUG-2492
@@ -28,6 +28,14 @@ tags:
 - loop-guard
 - review-recurrence
 - severity:major
+comments:
+- id: 01a1bbe6-8a44-7ad0-90e7-306031fcb7f2
+  author: joe
+  content: 'Advisor 2026-11-08: F1 resolved by retitling PR-3651 to (Refs BUG-2492). F2 is CI waiting and F3 is the agreed cutover runbook; neither needs a code round. No implementer requeue.'
+  created_at: 2026-11-08T16:03:30.500711987Z
+  modified_at: 2026-11-08T16:03:30.500711987Z
+  session_id: 01a1bbab-762f-7cd2-8a36-4ea9f209afce
+  harness_version: 2.1.319 (Claude Code)
 history:
 - id: 01a1bbe4-5fb3-7230-adcc-0d700b1681c3
   author: joe
