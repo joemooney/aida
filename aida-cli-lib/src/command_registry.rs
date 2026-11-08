@@ -414,3 +414,16 @@ pub(crate) fn run_mcp_handler(
         .ok_or_else(|| anyhow::anyhow!("MCP transport not registered by binary"))?;
     handler(matches, ctx)
 }
+
+// trace:TASK-3429 | ai:codex
+#[cfg(test)]
+#[test]
+fn mcp_handler_refuses_without_binary_registration() {
+    let matches = clap::Command::new("mcp-serve").get_matches_from(["mcp-serve"]);
+    let ctx = DispatchCtx {
+        globals: None,
+        store: None,
+    };
+    let error = run_mcp_handler(&matches, &ctx).err().expect("must refuse");
+    assert!(error.to_string().contains("MCP transport not registered by binary"));
+}

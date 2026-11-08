@@ -6,7 +6,7 @@ pub fn run_mcp_serve(
     matches: &clap::ArgMatches,
     ctx: &aida_cli_lib::command_registry::DispatchCtx,
 ) -> anyhow::Result<aida_cli_lib::command_registry::Flow> {
-    use aida_cli_lib::*;
+    use aida_cli_lib::find_project_root;
     let args = <McpServeArgs as clap::FromArgMatches>::from_arg_matches(matches)?;
     match &ctx.store {
         None => Ok(aida_cli_lib::command_registry::Flow::Continue),
@@ -57,5 +57,25 @@ pub fn run_mcp_serve(
             }
             Ok(aida_cli_lib::command_registry::Flow::Continue)
         }
+    }
+}
+
+// trace:TASK-3429 | ai:codex
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use clap::CommandFactory;
+
+    #[test]
+    fn serve_without_store_continues() {
+        let matches = McpServeArgs::command().get_matches_from(["mcp-serve"]);
+        let ctx = aida_cli_lib::command_registry::DispatchCtx {
+            globals: None,
+            store: None,
+        };
+        assert!(matches!(
+            run_mcp_serve(&matches, &ctx).unwrap(),
+            aida_cli_lib::command_registry::Flow::Continue
+        ));
     }
 }

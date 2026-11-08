@@ -6,6 +6,7 @@
 //! in `aida_core::git_ops::host_git_command`, and a raw builder skips it.
 //! trace:TASK-2143 | trace:TASK-2053 | ai:claude
 
+// trace:TASK-3429 | ai:codex
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 
@@ -21,7 +22,7 @@ const RAW_GIT_ALLOWLIST: &[(&str, usize)] = &[
     ("aida-cli-lib/src/doctor_root.rs", 4),
     ("aida-cli-lib/src/leases.rs", 1),
     ("aida-cli-lib/src/lib_part5.rs", 6),
-    ("aida-cli-lib/src/mcp.rs", 1),
+    ("aida-mcp/src/mcp.rs", 1),
     ("aida-cli-lib/src/orchestrator_leases.rs", 5),
     ("aida-cli-lib/src/phase_driver.rs", 1),
     ("aida-cli-lib/src/pr_cmd.rs", 47),

@@ -5,9 +5,11 @@
 //! watchdogs drift apart again. This guard scans every crate's production source.
 // trace:TASK-1750 | ai:claude
 
+// trace:TASK-3429 | ai:codex
 use std::path::{Path, PathBuf};
 
 const CRATES: &[&str] = &[
+    "aida-mcp",
     "aida-core",
     "aida-cli-lib",
     "aida-cli",

@@ -7664,3 +7664,29 @@ fn mcp_mail_entry(m: &aida_core::mailbox::Message) -> Value {
     }
     entry
 }
+
+// trace:TASK-3429 | ai:codex
+#[cfg(test)]
+mod extracted_transport_tests {
+    use super::*;
+
+    #[test]
+    fn tools_list_uses_shared_descriptors_in_shipping_crate() {
+        // tools/list is read-only and does not need an initialized store.
+        let storage = Storage::new(Path::new("/unused-mcp-tools-list"));
+        let server = McpServer::with_profile(&storage, PathBuf::new(), McpProfile::Full);
+        let request = serde_json::from_value(json!({
+            "jsonrpc": "2.0", "id": 17, "method": "tools/list"
+        }))
+        .unwrap();
+        let response = serde_json::to_value(server.handle_request(&request).unwrap()).unwrap();
+        assert_eq!(response["id"], 17);
+        let mut tools = response["result"]["tools"].clone();
+        for tool in tools.as_array_mut().unwrap() {
+            assert!(tool["profile"].is_string());
+            tool.as_object_mut().unwrap().remove("profile");
+        }
+        assert_eq!(tools, tool_descriptors());
+        assert!(response.get("error").is_none());
+    }
+}

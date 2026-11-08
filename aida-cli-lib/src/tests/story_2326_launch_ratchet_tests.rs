@@ -6,10 +6,11 @@
 //! when the last slice lands. A new site, in any crate, fails here.
 // trace:STORY-2326 | ai:claude
 
+// trace:TASK-3429 | ai:codex
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 
-const CRATES: &[&str] = &["aida-core", "aida-cli-lib", "aida-tui"];
+const CRATES: &[&str] = &["aida-mcp", "aida-core", "aida-cli-lib", "aida-tui"];
 
 /// Modules that are the launcher itself.
 const LAUNCHER: &[&str] = &["aida-cli-lib/src/launch/", "aida-core/src/launch_policy.rs"];
@@ -50,7 +51,7 @@ const LEDGER: &[(&str, usize, &str)] = &[
     ("aida-cli-lib/src/mailbox_wake_run.rs", 1, "slice C: Codex thread submit"),
     ("aida-cli-lib/src/mandate_drive.rs", 1, "generic helper: scrubbed_command"),
     ("aida-cli-lib/src/manual.rs", 1, "not a vendor child: pager"),
-    ("aida-cli-lib/src/mcp.rs", 1, "not a vendor child: exec of the aida MCP server"),
+    ("aida-mcp/src/mcp.rs", 1, "not a vendor child: exec of the aida MCP server"),
     ("aida-cli-lib/src/merge_hold.rs", 3, "not a vendor child: forge CLI"),
     ("aida-cli-lib/src/pane_host.rs", 1, "not a vendor child: pane host argv"),
     ("aida-cli-lib/src/phase_driver.rs", 4, "slice C: phase advisor and auto-punt control child"),
