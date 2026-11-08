@@ -18,7 +18,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-08T02:46:34.549817284Z
-modified_at: 2026-11-08T05:51:42.268277612Z
+modified_at: 2026-11-08T06:06:21.108990578Z
 req_type: Bug
 tags:
 - area:ci
@@ -101,6 +101,12 @@ comments:
   content: 'Round 3: operator runbook remains the agreed live-evidence route. Reviewer observation at 71d1bbb84088 establishes bootstrap publishing pending with successful publisher and BLOCKED merge state; it does not establish raw gh/web refusal under app 15368 or label-only clearance on unchanged SHA. Updated internal runbook requires attaching all outputs on this spec before Completed. Follow-up TASK-b6b1278890774ef993d2ebc327862470-978 tracks removing temporary pull_request trigger, same-repo condition, and fixture assertions after cutover; draft filed through AIDA MCP after CLI ID allocation refused read-only Git metadata. Rust pending-hold consumer corrections and targeted tests are in progress.'
   created_at: 2026-11-08T05:51:42.268277612Z
   modified_at: 2026-11-08T05:51:42.268277612Z
+  session_id: 01a1b9b177e2
+- id: 01a1b9c3-d3b4-7e50-85f5-c058f79c24f2
+  author: joe
+  content: 'Round 3 also migrates the coarse ci_probe path: a pending merge-hold-gate routes to existing Red refinement only after ordinary CI settles, so drain polling cannot wait forever before reaching classify_red. The refiner still requires marker or confirmed label evidence, and other pending/failing checks remain blockers. New regressions cover coarse probe, ship/refine waits, classifier evidence matrix, PR-list label-aware rollup, pipeline readiness/log exclusion, and lane StatusContext readiness. First launcher Rust run j20261108T054956507-2683506-0 timed out at 900s during compilation without executing tests; further targeted jobs remain queued/running. Shell fixtures, rustfmt checks and diff hygiene pass. Native Refs publication subject recorded; no Completed transition is claimed.'
+  created_at: 2026-11-08T06:06:21.108990578Z
+  modified_at: 2026-11-08T06:06:21.108990578Z
   session_id: 01a1b9b177e2
 history:
 - id: 01a1b90d-4bec-7bd0-9af1-86f501692f64
