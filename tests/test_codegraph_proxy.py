@@ -238,7 +238,7 @@ with sqlite3.connect(p / '.codegraph/codegraph.db') as db:
     def test_status_and_heartbeat_stay_responsive_during_query_and_stalled_peer(self):
         marker = self.state / "query-started"
         self.upstream.write_text("#!/usr/bin/python3\nimport pathlib,time\npathlib.Path(" +
-                                 repr(str(marker)) + ").touch()\ntime.sleep(1)\nprint('{}')\n")
+                                 repr(str(marker)) + ").touch()\ntime.sleep(5)\nprint('{}')\n")
         server = subprocess.Popen([str(SCRIPT), "serve", "--primary", str(self.primary),
                                    "--state", str(self.state), "--upstream", str(self.upstream)],
                                   stdout=subprocess.PIPE, stderr=subprocess.PIPE)
@@ -268,12 +268,18 @@ with sqlite3.connect(p / '.codegraph/codegraph.db') as db:
                 time.sleep(0.01)
             descriptor_path = self.primary / ".codegraph" / proxy.DESCRIPTOR
             initial_observation = json.loads(descriptor_path.read_text())["observed_at"]
-            for _ in range(3):
+            heartbeat_deadline = time.monotonic() + 4.5
+            while True:
                 started = time.monotonic()
                 self.assertEqual(proxy.client({"op": "status"}, path)["rc"], 0)
                 self.assertLess(time.monotonic() - started, 0.25)
                 descriptor = json.loads((self.primary / ".codegraph" / proxy.DESCRIPTOR).read_text())
-                self.assertEqual(descriptor["observed_at"], initial_observation)
+                self.assertLess(time.time() - descriptor["observed_at"], 4.5)
+                if descriptor["observed_at"] > initial_observation:
+                    self.assertTrue(query.is_alive(), "heartbeat must advance during the query")
+                    break
+                self.assertLess(time.monotonic(), heartbeat_deadline,
+                                "heartbeat did not advance during the query")
                 time.sleep(0.1)
             query.join(5)
             self.assertFalse(query.is_alive())
