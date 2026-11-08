@@ -18,7 +18,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-08T02:46:34.549817Z
-modified_at: 2026-11-08T13:42:42.546875318Z
+modified_at: 2026-11-08T13:42:45.107418384Z
 req_type: Bug
 tags:
 - area:ci
@@ -310,6 +310,22 @@ comments:
   content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: Round 7 code findings are fixed and no new code defect was found, but the PR title still completes the spec at merge, CI has not started at this head, and AC1/AC2/AC4 live evidence is outstanding.. No triage reason was given.'
   created_at: 2026-11-08T13:42:42.546872700Z
   modified_at: 2026-11-08T13:42:42.546872700Z
+  session_id: 01a1b9af-8230-75d2-82f8-667491cc010a
+  harness_version: 2.1.319 (Claude Code)
+- id: 01a1bb65-abfa-7d03-8da9-fb8745423303
+  author: joe
+  content: |-
+    REVIEW FINDINGS TO ADDRESS (BUG-2492):
+    Verdict: CHANGES REQUESTED
+    Reviewed commit: 0df36483bb9b
+    Recorded: 2026-11-08T13:25:38.564214377+00:00
+    Findings:
+    1. 1. Blocker, unresolved since round 5: PR #3651's title still ends '(BUG-2492)' (re-read live at head 0df36483bb9b). The squash subject takes the PR title first (pr_ship.rs derive_squash_subject_with_trailer), so merging completes the spec, while docs/internal/testing/bug-2492-status-cutover.md requires a trailing '(Refs BUG-2492)' and forbids Completed until live outputs are attached. No code change fixes this. The host must retitle PR #3651 to end '(Refs BUG-2492)' before merge.
+    2. 2. Blocker: CI has not run at reviewed head 0df36483bb9b. CI run 42484553858 is pending with 0 jobs started, publish-merge-hold-status (run 42484553851) is queued, and the head has no merge-hold-gate commit status. No Rust test, shell fixture or publisher has executed at this head in CI. Approval needs green CI at the exact head; no code change is requested.
+    3. 3. Open, operator action rather than a code defect: AC1 (ac798dd7), AC2 (accb2afb) and AC4 (ac4d9581) remain unverified. The spec has no raw 'gh pr merge' refusal, web-UI refusal under app pin 15368, unchanged-SHA label-only pending-to-success, or notification observation. The agreed route is the cutover runbook; keep BUG-2492 open until its outputs are attached.
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
+  created_at: 2026-11-08T13:42:44.986171542Z
+  modified_at: 2026-11-08T13:42:44.986171542Z
   session_id: 01a1b9af-8230-75d2-82f8-667491cc010a
   harness_version: 2.1.319 (Claude Code)
 history:
