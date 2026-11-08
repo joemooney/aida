@@ -2,45 +2,33 @@ id: 01a09ccf-e718-7233-a46c-99209bcadfbb
 spec_id: TASK-1222
 agreed_id: TASK-1222
 title: Extend worktree GC to ended seat clones and add a weekly dry-run report
-description: '## Current approved scope
+description: |
+  ## Current approved scope
 
-
-  The advisor''s 2026-11-07 14:55 rescope replaces the destructive sweep in this implementer seat with a code change. The advisor/operator will review and apply cleanup on the host after it lands. Do not delete host worktrees or branches from the seat.
-
+  The advisor's 2026-11-07 14:55 rescope replaces the destructive sweep in this implementer seat with a code change. The advisor/operator will review and apply cleanup on the host after it lands. Do not delete host worktrees or branches from the seat.
 
   ## Acceptance
 
-
   1. Extend `aida worktree gc` to private `aida-seat-*` clones. A clone is eligible only after its lease has ended, with no commits missing from origin (reuse the salvage/remote-coverage checks), and with a merged or closed PR. Default to a dry run; add `--apply` for operator removal and report bytes reclaimed.
-
   2. Also make clean linked worktrees eligible when their branch is merged into the default branch or their exact PR head is merged/closed. Preserve existing ownership, lock, live-process and mailbox-retention safeguards; uncertain evidence must retain work.
-
   3. Register a weekly read-only dry-run job and route its counts to the advisor. Never auto-apply cleanup.
-
   4. Validate with fixture repositories. LIGHT gate; host application follows publication.
-
 
   ## Historical cleanup request
 
-
-  aida session reap --dry-run (2026-09-13) surfaced 226 ''unshipped work'' branches, most 1000+ commits ahead and 74-101 days old (abandoned worktree branches from months ago whose specs almost certainly completed via other branches). Plus ~43 on-disk git worktrees and ~68 /home/joe/ai/aida-* sibling dirs accumulated over the alpha cycle.
-
+  aida session reap --dry-run (2026-09-13) surfaced 226 'unshipped work' branches, most 1000+ commits ahead and 74-101 days old (abandoned worktree branches from months ago whose specs almost certainly completed via other branches). Plus ~43 on-disk git worktrees and ~68 /home/joe/ai/aida-* sibling dirs accumulated over the alpha cycle.
 
   NOT a blind batch-delete (clean git status != no work; some worktrees hold uncommitted work — e.g. STORY-1006 and STORY-993 are Completed but their worktrees carry uncommitted changes the reap correctly refused to remove).
 
-
-  Deliberate sweep: for each stale branch/worktree, check the spec status — if Completed/merged-elsewhere, delete the branch + remove the worktree; if it holds genuine uncommitted work, salvage-commit or discard per a per-item decision. aida session reap already handles the finished+merged+exited class safely; this task is the long-tail the reap conservatively leaves (unfinished-spec or uncommitted-work worktrees, and pure branch cruft). Consider an aida worktree gc --older-than / --stale sweep if one doesn''t cover it.
-
+  Deliberate sweep: for each stale branch/worktree, check the spec status — if Completed/merged-elsewhere, delete the branch + remove the worktree; if it holds genuine uncommitted work, salvage-commit or discard per a per-item decision. aida session reap already handles the finished+merged+exited class safely; this task is the long-tail the reap conservatively leaves (unfinished-spec or uncommitted-work worktrees, and pure branch cruft). Consider an aida worktree gc --older-than / --stale sweep if one doesn't cover it.
 
   Immediate: STORY-1006 + STORY-993 (both Completed) have uncommitted worktree changes — operator decision: salvage or discard, then remove those two worktrees.
-
-  '
-status: Approved
+status: InProgress
 priority: Low
 owner: joe.mooney@gmail.com
 feature: Uncategorized
-created_at: 2026-09-13 22:07:45.944235+00:00
-modified_at: 2026-11-08 04:28:34.749980+00:00
+created_at: 2026-09-13T22:07:45.944235Z
+modified_at: 2026-11-08T05:47:11.547580412Z
 req_type: Task
 tags:
 - cleanup
@@ -51,169 +39,154 @@ relationships:
 - rel_type:
     custom: implemented-by
   target_id: 01a1b894-9371-76a0-b5bd-fafa756dd159
-  created_at: 2026-11-08 00:35:21.366655+00:00
+  created_at: 2026-11-08T00:35:21.366655Z
   created_by: joe
 comments:
 - id: 01a1b7b1-394f-7ce1-94e8-b54cacaf7665
   author: aida:defer-migration
-  content: '[aida:defer-migration]
-
+  content: |-
+    [aida:defer-migration]
     {"deferred":true,"deferred_at":"2026-09-14T03:40:44.133970260Z","deferred_until":"branch/worktree cruft actually impedes work, or a scheduled batch-review session (the merged-safe worktrees are already reaped; the remaining ~226 are UNMERGED origin branches needing a per-branch human glance — not a blind delete)","legacy_tags":[]}
-
-    Migrated condition: manual:operator'
-  created_at: 2026-11-07 20:26:47.503733+00:00
-  modified_at: 2026-11-07 20:26:47.503733+00:00
+    Migrated condition: manual:operator
+  created_at: 2026-11-07T20:26:47.503733Z
+  modified_at: 2026-11-07T20:26:47.503733Z
   session_id: 01a1b76b-2fe7-7dd2-88d0-356fc8d96d04
   harness_version: 2.1.319 (Claude Code)
 - id: 01a1b7cd-7b75-7d21-951d-155b5d37c9da
   author: joe
   content: 'ADVISOR 2026-11-07 14:20, regroup triage: ACTIVATED. Trigger fired: 3474 remote branches, 236 worktrees, 147 aida-* sibling dirs. Do it as a per-item lifecycle sweep (merged/closed PR branches, landed seat clones), never a blind delete. Add a recurring gc job so it doesn''t regrow.'
-  created_at: 2026-11-07 20:57:39.445416+00:00
-  modified_at: 2026-11-07 20:57:39.445416+00:00
+  created_at: 2026-11-07T20:57:39.445416Z
+  modified_at: 2026-11-07T20:57:39.445416Z
   session_id: 01a1b76b-2fe7-7dd2-88d0-356fc8d96d04
   harness_version: 2.1.319 (Claude Code)
 - id: 01a1b807-5f90-72f3-a643-a88b2ed7c110
   author: joe
-  content: 'ADVISOR RESCOPE 2026-11-07 14:55 (after the dell1 lane''s punt: a contained seat cannot see this host''s inventory, and destructive gc must not run from a seat). Host facts on the primary: 238 linked worktrees, 34 aida-seat-* private clones, 70G in ../aida-worktrees, disk 84% full; ''aida worktree gc'' finds 0 candidates because seat dirs are private clones, not linked worktrees; ''aida pr gc'' worked (advisor applied it: 456 pr-N branches deleted). NEW SCOPE = code: (1) ''aida worktree gc'' also covers seat clones (aida-seat-*): eligible only when the lease has ended AND the branch has no commits missing from origin (reuse the salvage check) AND its PR is merged or closed. Dry-run by default, --apply to delete, and it reports bytes freed. (2) Linked worktrees whose branch is merged into main or whose PR is merged/closed, with a clean tree, become eligible as well. (3) Register a weekly due job that runs the dry-run and routes counts to the advisor (never auto-apply). Tests with
-    fixture repos. LIGHT gate. The advisor runs --apply on the host after it lands.'
-  created_at: 2026-11-07 22:00:53.392537+00:00
-  modified_at: 2026-11-07 22:00:53.392537+00:00
+  content: 'ADVISOR RESCOPE 2026-11-07 14:55 (after the dell1 lane''s punt: a contained seat cannot see this host''s inventory, and destructive gc must not run from a seat). Host facts on the primary: 238 linked worktrees, 34 aida-seat-* private clones, 70G in ../aida-worktrees, disk 84% full; ''aida worktree gc'' finds 0 candidates because seat dirs are private clones, not linked worktrees; ''aida pr gc'' worked (advisor applied it: 456 pr-N branches deleted). NEW SCOPE = code: (1) ''aida worktree gc'' also covers seat clones (aida-seat-*): eligible only when the lease has ended AND the branch has no commits missing from origin (reuse the salvage check) AND its PR is merged or closed. Dry-run by default, --apply to delete, and it reports bytes freed. (2) Linked worktrees whose branch is merged into main or whose PR is merged/closed, with a clean tree, become eligible as well. (3) Register a weekly due job that runs the dry-run and routes counts to the advisor (never auto-apply). Tests with fixture repos. LIGHT gate. The advisor runs --apply on the host after it lands.'
+  created_at: 2026-11-07T22:00:53.392537Z
+  modified_at: 2026-11-07T22:00:53.392537Z
   session_id: 01a1b76b-2fe7-7dd2-88d0-356fc8d96d04
   harness_version: 2.1.319 (Claude Code)
 - id: 01a1b807-738e-72a1-819e-030bbc7170a1
   author: joe
   content: 'Returned from NeedsAttention to Approved via `aida edit --status`. It was punted on: missing-context: Native headless seat cannot reach the cleanup inventory: task advisor comment reports 3474 remote branches, 236 worktrees and 147 sibling directories; this isolated seat has only main/task-1222 and one worktree, local host clone lists four worktrees, and /home/joe/ai is absent. Git metadata is read-only. Per-item salvage/discard and destructive GC require operator review; OVERVIEW.md TASK-1596 requires a human TTY for worktree gc --yes --force. Recurring read-only guard already documented at 30 days; adding destructive recurring cleanup conflicts with that policy. No branches/worktrees deleted and no source edits made.. No triage reason was given.'
-  created_at: 2026-11-07 22:00:58.510198+00:00
-  modified_at: 2026-11-07 22:00:58.510198+00:00
+  created_at: 2026-11-07T22:00:58.510198Z
+  modified_at: 2026-11-07T22:00:58.510198Z
   session_id: 01a1b76b-2fe7-7dd2-88d0-356fc8d96d04
   harness_version: 2.1.319 (Claude Code)
 - id: 01a1b82c-a16e-7b43-a209-9e9faaae197a
   author: joe
   content: Implementation follows the advisor 2026-11-07 14:55 code rescope (not the historical destructive sweep). Added dry-run-first lifecycle GC for host-pinned ended seat clones and clean landed/closed-PR linked worktrees, operator-only --apply (legacy --yes --force preserved), exact PR head evidence, origin-only coverage including tags/stashes, mailbox/process teardown guards, and weekly read-only advisor routing. Remaining lease files deliberately retain even dead-process seats until session end/reap. Fixture/CLI/forge/schedule tests are added; launcher compilation is in progress. No host worktrees or branches have been deleted.
-  created_at: 2026-11-07 22:41:35.086456+00:00
-  modified_at: 2026-11-07 22:41:35.086456+00:00
+  created_at: 2026-11-07T22:41:35.086456Z
+  modified_at: 2026-11-07T22:41:35.086456Z
   session_id: 01a1b8210422
 - id: 01a1b83e-a919-7d21-a4da-78cce373255d
   author: joe
   content: 'Validation checkpoint: launcher job j20261107T223320684-2-0 timed out after 900s before executing tests. Retrying the final TASK-1222 fixture/forge/CLI/schedule suite with AIDA_CARGO_TIMEOUT=3600 in job j20261107T224828734-2-0; it has acquired a cargo slot and is compiling aida-cli-lib. No executed test result yet. Formatting, git diff --check, and schedule TOML parsing pass. CLI help golden regeneration and existing remote-coverage regression remain pending after this build. Source edits remain uncommitted for the host launcher; no host cleanup performed.'
-  created_at: 2026-11-07 23:01:16.697531+00:00
-  modified_at: 2026-11-07 23:01:16.697531+00:00
+  created_at: 2026-11-07T23:01:16.697531Z
+  modified_at: 2026-11-07T23:01:16.697531Z
   session_id: 01a1b8210422
 - id: 01a1b85f-a9eb-7b91-9d8c-8ef7ea447754
   author: joe
   content: 'Validation checkpoint: the initial TASK-1222 suite executed and passed all 10 tests (j20261107T224828734-2-0), and initial help regeneration passed (j20261107T231059494-2-0). Final review added origin-advertised PR/MR-ref coverage for squash-merged source branches that have been deleted, carried the origin-proven pinned HEAD into guarded teardown, and added a real squash/deleted-branch fixture with stash and side-branch preservation. Final source and help wording are now frozen. Combined job j20261107T232859754-2-0 is compiling the expanded TASK-1222 tests, existing bug2450 remote-coverage regression, and final help regeneration. A normal (non-update) help snapshot verification remains after it. No host cleanup or publication performed.'
-  created_at: 2026-11-07 23:37:19.595790+00:00
-  modified_at: 2026-11-07 23:37:19.595790+00:00
+  created_at: 2026-11-07T23:37:19.595790Z
+  modified_at: 2026-11-07T23:37:19.595790Z
   session_id: 01a1b8210422
 - id: 01a1b873-286e-77e1-9e13-e05bf44a2226
   author: joe
   content: 'Host follow-up: draft finding allocation was refused with requirement ID allocation failed: Read-only file system (os error 30); no metadata or object was written. Preserve/file this observation after exit: three successful lane jobs (j20261107T224828734-2-0, j20261107T231059494-2-0, j20261107T232859754-2-0) reported seed: overlay-stale, saying the primary rewrote a file of generation agent-a05f34e45f942f7e in place. Cargo reported builds of 19m58s, 13m49s and 14m39s; executed suites passed 10, 1 and 12 tests respectively. Logs are .aida/lane-jobs/01a1b8210422/<job-id>.out on the primary. Root cause remains unknown. Check seed immutability versus false-positive detection, separately from STORY-2641 sccache access. Suggested minor observation linked to BUG-2383, STORY-2641 and TASK-1222. This is an infrastructure follow-up, not a lifecycle-GC publication hold.'
-  created_at: 2026-11-07 23:58:37.166887+00:00
-  modified_at: 2026-11-07 23:58:37.166887+00:00
+  created_at: 2026-11-07T23:58:37.166887Z
+  modified_at: 2026-11-07T23:58:37.166887Z
   session_id: 01a1b8210422
 - id: 01a1b88f-cb03-7351-a810-57acf87f4764
   author: joe
-  content: 'Native handoff ready; edits remain uncommitted for the host launcher. Implemented the approved code scope: dry-run-first lifecycle GC for ended, host-pinned seat clones and clean linked worktrees; exact closed/merged PR head checks; origin-verified coverage including advertised PR/MR refs after squash/source-branch deletion; lock/lease/process/mailbox preservation; operator-only --apply and legacy --yes --force; byte estimates; global JSON/TOON/human output; weekly read-only advisor routing.
-
+  content: |-
+    Native handoff ready; edits remain uncommitted for the host launcher. Implemented the approved code scope: dry-run-first lifecycle GC for ended, host-pinned seat clones and clean linked worktrees; exact closed/merged PR head checks; origin-verified coverage including advertised PR/MR refs after squash/source-branch deletion; lock/lease/process/mailbox preservation; operator-only --apply and legacy --yes --force; byte estimates; global JSON/TOON/human output; weekly read-only advisor routing.
 
     Final validation: j20261108T000755879-2-0 executed 14 tests, all passed (12 TASK-1222 tests, help_surface_matches_golden_snapshot without update mode, and bug2450_bwrap_remote_coverage_protects_host_only_side_branches). This includes real squash/deleted-source-branch fixture coverage, dangling ownership-directory retention, dirty/locked/replaced trees, unpublished side branches/stashes, forged tracking refs, CLI defaults, forge parsing, schedule routing and TOON serialization. Changed Rust files plus lib_part*.rs pass direct rustfmt checks; git diff --check is clean. All 39 non-Cargo fast-tier gates passed using the checked-in gate runner and CI bodies. Three new inventory helper-call sites were reviewed as read_only; existing writer records and all 293 operation mappings are semantically unchanged.
 
-
     Host validation remains: full make check-ci-fast after committing, plus conditional compile/touched checks for the >10-file change under repository policy. The native seat excludes direct Cargo invocations; the no-default-features check, TUI check, Cargo-metadata-dependent speed-tool fixtures and Cargo fmt portions were deferred. An accidental indirect TUI Cargo check was interrupted; source files were unchanged by it. Native checks use Cargo/aida stubs to refuse further indirect commands. Some commit-range guards reported read-only FETCH_HEAD, so host rerun after commit is necessary.
-
 
     Changed files: .aida/config.toml; aida-cli-lib/src/{worktree_lifecycle_gc.rs,worktree_gc.rs,worktree_gc_args.rs,seat_clone.rs,forge.rs,doctor_cmd.rs,lib.rs,maintenance_schedule.rs,tests/golden/cli_help_snapshot.txt}; scripts/store-writers.toml; docs/cli/06-roles-sessions.md. The TASK-1222 title and acceptance text now reflect the approved rescope, preserving the historical request.
 
-
-    No host worktrees/branches were cleaned up, and this seat performed no commit, push, PR creation, review record, ship or queue completion. Host publication/queue completion and the operator''s reviewed --apply follow after exit/landing. Cache-overlay warnings recurred on successful final jobs; the preceding comment preserves the follow-up because draft-finding ID allocation was refused by read-only metadata. All completed test jobs exited 0 after executing their reported tests.'
-  created_at: 2026-11-08 00:29:53.795963+00:00
-  modified_at: 2026-11-08 00:29:53.795963+00:00
+    No host worktrees/branches were cleaned up, and this seat performed no commit, push, PR creation, review record, ship or queue completion. Host publication/queue completion and the operator's reviewed --apply follow after exit/landing. Cache-overlay warnings recurred on successful final jobs; the preceding comment preserves the follow-up because draft-finding ID allocation was refused by read-only metadata. All completed test jobs exited 0 after executing their reported tests.
+  created_at: 2026-11-08T00:29:53.795963Z
+  modified_at: 2026-11-08T00:29:53.795963Z
   session_id: 01a1b8210422
 - id: 01a1b891-bab3-7c70-8771-b4b635a65829
   author: joe
   content: 'Validation qualification: the initial j20261107T223320684-2-0 attempt exited 124 before executing tests; it is untested and is not included in the pass claims. Later executed-test jobs passed, culminating in the final 14/14 run j20261108T000755879-2-0. The interrupted indirect TUI check and Cargo-stub-blocked metadata fixture run are deferred, not passed. The 39-gate result is explicitly the non-Cargo subset; full make check-ci-fast and conditional post-commit checks remain for the host. Final inventory diff is exactly three new read_only records; existing records and operation mappings are unchanged.'
-  created_at: 2026-11-08 00:32:00.691339+00:00
-  modified_at: 2026-11-08 00:32:00.691339+00:00
+  created_at: 2026-11-08T00:32:00.691339Z
+  modified_at: 2026-11-08T00:32:00.691339Z
   session_id: 01a1b8210422
 - id: 01a1b929-48e2-7fd2-9d39-834713a463d9
   author: joe
   content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: Lifecycle GC logic and fixtures are solid (AC1/AC2/AC4 largely verified), but the weekly job will likely time out on the target host instead of routing counts (AC3), the --yes --force repoint orphans the TASK-1596 guard remedy, and the --apply refusal gates are untested. CI was still pending at review time.. No triage reason was given.'
-  created_at: 2026-11-08 03:17:33.026380+00:00
-  modified_at: 2026-11-08 03:17:33.026380+00:00
+  created_at: 2026-11-08T03:17:33.026380Z
+  modified_at: 2026-11-08T03:17:33.026380Z
   session_id: 01a1b8be-8170-7fb2-89ab-ecb4c6eee98c
   harness_version: 2.1.319 (Claude Code)
 - id: 01a1b929-57d5-7432-8863-aecf7d856b1d
   author: joe
-  content: 'REVIEW FINDINGS TO ADDRESS (TASK-1222):
-
+  content: |-
+    REVIEW FINDINGS TO ADDRESS (TASK-1222):
     Verdict: CHANGES REQUESTED
-
     Reviewed commit: 1799cf44dbfb
-
     Recorded: 2026-11-08T01:52:55.686069147+00:00
-
     Findings:
-
-    1. MAJOR (AC3 ac14b158): the weekly job runs under SCHEDULED_COMMAND_TIMEOUT=120s (maintenance_schedule.rs:3853). run() (worktree_lifecycle_gc.rs:505) has no budget. For every tree it runs git status --untracked-files=all, a gh/glab lookup with a 15s timeout for non-ancestors, a sandboxed seat probe with a 30s deadline, origin ls-remote, and a recursive bytes() walk. On the host this PR targets (238 linked worktrees, 34 seat clones, 70G) the run will very likely exceed 120s. It would then route ''exit 124: timed out'' instead of counts, and the job never reports the backlog that motivated it. Fix: add a soft budget that reports partial counts (like session_hygiene''s SOFT_BUDGET), or a longer ceiling like HYGIENE_COMMAND_TIMEOUT, plus a test.
-
-    2. MAJOR (regression, AC2 ''preserve existing safeguards''): worktree_gc.rs:550 sends ''aida worktree gc --yes --force'' to the new lifecycle GC and deletes run_merged_agent_worktree_gc. But the TASK-1596 monthly guard still detects candidates with ''doctor check merged-agent-worktrees'' (squash/landing-trailer aware, TASK-1534 batch-landed). Its route prompt (.aida/config.toml:328), AGENTS.md:444-446 and OVERVIEW.md:185-187 still tell the operator to run ''aida worktree gc --yes --force''. That command now applies a different candidate set: ancestry or exact PR head only, and no lease of any kind. So a guard trip recommends a remedy that leaves the flagged worktrees in place. Fix: update the guard, prompt and docs to the new semantics (or retire the monthly guard in favour of the weekly one), or keep a path that applies the doctor healer.
-
-    3. MINOR (Probe 5 authority gate, AC1 ''--apply for operator removal''): no test covers the --apply refusal paths in run(). Untested: refusal inside a seat clone (worktree_lifecycle_gc.rs:497), refusal in autonomous/non-TTY/orchestrated contexts via doctor_running_autonomously (:500), and the legacy ''--yes --force'' => apply mapping (worktree_gc.rs:550). Only the scheduler''s string allowlist is tested. Add tests proving that a headless/scheduled context with --apply (and with --yes --force) is refused before any removal.
-
-    4. MINOR: in the apply loop, ''row.removed = !row.path.try_exists()?'' (worktree_lifecycle_gc.rs:526) uses ''?''. A stat error after a partial teardown aborts run() midway. Rows already removed are then never reported (no JSON or human report, no failures count), so the operator loses the record of what was deleted. Treat the stat error as removed=false with a reason, and keep going.
-
-    5. MINOR (AC2 ''uncertain evidence must retain work''): the linked-worktree cleanliness check is ''git status --porcelain --untracked-files=all'' (worktree_lifecycle_gc.rs:192-203 and :398-407), which excludes gitignored files. Ignored but non-regenerable local state is therefore deleted without evidence it is disposable: .aida/ local state such as merge-hold markers (BUG-2176), review-verdict or prompt files, local .env and notes. Either check ''--ignored'' for non-regenerable paths (target/ excepted) or document the exclusion explicitly in docs/cli/06-roles-sessions.md.
-
+    1. MAJOR (AC3 ac14b158): the weekly job runs under SCHEDULED_COMMAND_TIMEOUT=120s (maintenance_schedule.rs:3853). run() (worktree_lifecycle_gc.rs:505) has no budget. For every tree it runs git status --untracked-files=all, a gh/glab lookup with a 15s timeout for non-ancestors, a sandboxed seat probe with a 30s deadline, origin ls-remote, and a recursive bytes() walk. On the host this PR targets (238 linked worktrees, 34 seat clones, 70G) the run will very likely exceed 120s. It would then route 'exit 124: timed out' instead of counts, and the job never reports the backlog that motivated it. Fix: add a soft budget that reports partial counts (like session_hygiene's SOFT_BUDGET), or a longer ceiling like HYGIENE_COMMAND_TIMEOUT, plus a test.
+    2. MAJOR (regression, AC2 'preserve existing safeguards'): worktree_gc.rs:550 sends 'aida worktree gc --yes --force' to the new lifecycle GC and deletes run_merged_agent_worktree_gc. But the TASK-1596 monthly guard still detects candidates with 'doctor check merged-agent-worktrees' (squash/landing-trailer aware, TASK-1534 batch-landed). Its route prompt (.aida/config.toml:328), AGENTS.md:444-446 and OVERVIEW.md:185-187 still tell the operator to run 'aida worktree gc --yes --force'. That command now applies a different candidate set: ancestry or exact PR head only, and no lease of any kind. So a guard trip recommends a remedy that leaves the flagged worktrees in place. Fix: update the guard, prompt and docs to the new semantics (or retire the monthly guard in favour of the weekly one), or keep a path that applies the doctor healer.
+    3. MINOR (Probe 5 authority gate, AC1 '--apply for operator removal'): no test covers the --apply refusal paths in run(). Untested: refusal inside a seat clone (worktree_lifecycle_gc.rs:497), refusal in autonomous/non-TTY/orchestrated contexts via doctor_running_autonomously (:500), and the legacy '--yes --force' => apply mapping (worktree_gc.rs:550). Only the scheduler's string allowlist is tested. Add tests proving that a headless/scheduled context with --apply (and with --yes --force) is refused before any removal.
+    4. MINOR: in the apply loop, 'row.removed = !row.path.try_exists()?' (worktree_lifecycle_gc.rs:526) uses '?'. A stat error after a partial teardown aborts run() midway. Rows already removed are then never reported (no JSON or human report, no failures count), so the operator loses the record of what was deleted. Treat the stat error as removed=false with a reason, and keep going.
+    5. MINOR (AC2 'uncertain evidence must retain work'): the linked-worktree cleanliness check is 'git status --porcelain --untracked-files=all' (worktree_lifecycle_gc.rs:192-203 and :398-407), which excludes gitignored files. Ignored but non-regenerable local state is therefore deleted without evidence it is disposable: .aida/ local state such as merge-hold markers (BUG-2176), review-verdict or prompt files, local .env and notes. Either check '--ignored' for non-regenerable paths (target/ excepted) or document the exclusion explicitly in docs/cli/06-roles-sessions.md.
     6. MINOR (AC2/AC4 test coverage): the live-process-holder refusal (check_worktree_removal, worktree_lifecycle_gc.rs:249) and the mailbox-retention refusal or reopen path (retire_clone_checkout / reopen_quietly, :346-362) are never exercised by the new fixtures. AC2 requires that these safeguards are preserved for the new callers. Add at least one fixture where the GC must retain the tree: a held process, or a retention refusal that reopens mail.
-
-    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.'
-  created_at: 2026-11-08 03:17:36.853128+00:00
-  modified_at: 2026-11-08 03:17:36.853128+00:00
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
+  created_at: 2026-11-08T03:17:36.853128Z
+  modified_at: 2026-11-08T03:17:36.853128Z
   session_id: 01a1b8be-8170-7fb2-89ab-ecb4c6eee98c
   harness_version: 2.1.319 (Claude Code)
 - id: 01a1b937-7c36-7a53-b25d-6b45acfe4903
   author: dirtlab
   content: 'Rework source changes address all six review findings: lifecycle scans stop admitting entries after a 60s soft budget and report partial/remaining counts, byte walks have a 5s deadline, and scheduled GC receives the 300s hygiene ceiling; monthly guard detection now uses lifecycle GC with the same operator remedy; explicit and legacy apply share tested authority checks; teardown stat failures preserve prior results and annotate uncertainty; ignored local state is retained except ignored target build outputs (tracked target modifications still refuse); a live-process-holder fixture exercises retention. Changes remain uncommitted for native host publication. Formatting, TOML parsing and diff whitespace checks pass. Lane jobs are compiling/queued; no new executed-test result yet.'
-  created_at: 2026-11-08 03:33:03.670217+00:00
-  modified_at: 2026-11-08 03:33:03.670217+00:00
+  created_at: 2026-11-08T03:33:03.670217Z
+  modified_at: 2026-11-08T03:33:03.670217Z
   session_id: 01a1b93062cf
   harness_version: codex-cli 0.167.0
 - id: 01a1b93c-87d6-7282-b74c-5fef4be1fb9c
   author: dirtlab
   content: 'Native rework handoff: all six review findings addressed. Final launcher jobs j20261108T032803134-2-0 (15 TASK-1222 tests) and j20261108T032810649-2-0 (1 monthly-guard regression) executed and passed, exit 0. Earlier two TASK-1222 runs also executed 15/15 successfully. Direct rustfmt checks for all four changed Rust files, git diff --check and schedule TOML parsing pass. Changed files: .aida/config.toml; OVERVIEW.md; aida-cli-lib/src/maintenance_schedule.rs; aida-cli-lib/src/tests/maintenance_schedule_tests.rs; aida-cli-lib/src/worktree_gc.rs; aida-cli-lib/src/worktree_lifecycle_gc.rs; docs/cli/06-roles-sessions.md. No implementation blockers. Full CI/prepublication checks remain for the host. Source edits are uncommitted under the native-seat contract; no commit, push, PR creation, queue completion, review record or host cleanup was performed. Host publication and queue completion follow exit; operator application remains separate.'
-  created_at: 2026-11-08 03:38:34.326347+00:00
-  modified_at: 2026-11-08 03:38:34.326347+00:00
+  created_at: 2026-11-08T03:38:34.326347Z
+  modified_at: 2026-11-08T03:38:34.326347Z
   session_id: 01a1b93062cf
   harness_version: codex-cli 0.167.0
 history:
 - id: 01a1b7cd-7751-7262-8ad1-f0f9d2ef6d4d
   author: joe
-  timestamp: 2026-11-07 20:57:38.385408+00:00
+  timestamp: 2026-11-07T20:57:38.385408Z
   session_id: 01a1b76b-2fe7-7dd2-88d0-356fc8d96d04
   harness_version: 2.1.319 (Claude Code)
   changes: []
 - id: 01a1b7cd-8154-71d3-8027-52be1c60db54
   author: joe
-  timestamp: 2026-11-07 20:57:40.948718+00:00
+  timestamp: 2026-11-07T20:57:40.948718Z
   session_id: 01a1b76b-2fe7-7dd2-88d0-356fc8d96d04
   harness_version: 2.1.319 (Claude Code)
   changes: []
 - id: 01a1b7d6-a9f8-7ec0-9f9c-6bd20fb24958
   author: aida-session-start
-  timestamp: 2026-11-07 21:07:41.176710+00:00
+  timestamp: 2026-11-07T21:07:41.176710Z
   changes:
   - field_name: status
     old_value: Approved
     new_value: InProgress
 - id: 01a1b7d6-ef50-7892-aa6f-7b4d9a4bfd8a
   author: dirtlab
-  timestamp: 2026-11-07 21:07:58.928719+00:00
+  timestamp: 2026-11-07T21:07:58.928719Z
   session_id: 01a1b7d6a3ff
   harness_version: codex-cli 0.167.0
   changes: []
 - id: 01a1b7d7-7e0a-7f02-88c4-79215286f0ea
   author: dirtlab
-  timestamp: 2026-11-07 21:08:35.466143+00:00
+  timestamp: 2026-11-07T21:08:35.466143Z
   session_id: 01a1b7d6a3ff
   harness_version: codex-cli 0.167.0
   changes:
@@ -222,7 +195,7 @@ history:
     new_value: NeedsAttention
 - id: 01a1b807-738e-72a1-819e-02fe3c7afdeb
   author: joe
-  timestamp: 2026-11-07 22:00:58.510167+00:00
+  timestamp: 2026-11-07T22:00:58.510167Z
   session_id: 01a1b76b-2fe7-7dd2-88d0-356fc8d96d04
   harness_version: 2.1.319 (Claude Code)
   changes:
@@ -231,29 +204,29 @@ history:
     new_value: Approved
 - id: 01a1b821-0fd7-72c3-9d42-54482b9ea44d
   author: aida-session-start
-  timestamp: 2026-11-07 22:28:56.919668+00:00
+  timestamp: 2026-11-07T22:28:56.919668Z
   changes:
   - field_name: status
     old_value: Approved
     new_value: InProgress
 - id: 01a1b821-6c59-7391-baab-0b620b115024
   author: joe
-  timestamp: 2026-11-07 22:29:20.601655+00:00
+  timestamp: 2026-11-07T22:29:20.601655Z
   session_id: 01a1b8210422
   changes: []
 - id: 01a1b849-abf4-7ba1-807b-d7bad8608a3c
   author: joe
-  timestamp: 2026-11-07 23:13:18.324618+00:00
+  timestamp: 2026-11-07T23:13:18.324618Z
   session_id: 01a1b8210422
   changes: []
 - id: 01a1b894-cf56-7eb1-adeb-3f251eca011d
   author: joe
-  timestamp: 2026-11-08 00:35:22.582885+00:00
+  timestamp: 2026-11-08T00:35:22.582885Z
   session_id: 01a1b8210422
   changes: []
 - id: 01a1b8db-d04a-7c31-baeb-f59ab9fbc8a7
   author: aida-orchestrator
-  timestamp: 2026-11-08 01:52:55.882061+00:00
+  timestamp: 2026-11-08T01:52:55.882061Z
   session_id: 01a1b8d9855a
   harness_version: 2.1.319 (Claude Code)
   changes:
@@ -262,7 +235,7 @@ history:
     new_value: NeedsAttention
 - id: 01a1b929-48e2-7fd2-9d39-8334b41311c5
   author: joe
-  timestamp: 2026-11-08 03:17:33.026366+00:00
+  timestamp: 2026-11-08T03:17:33.026366Z
   session_id: 01a1b8be-8170-7fb2-89ab-ecb4c6eee98c
   harness_version: 2.1.319 (Claude Code)
   changes:
@@ -271,29 +244,36 @@ history:
     new_value: Approved
 - id: 01a1b930-68cc-7ca0-bf12-58ece457c40d
   author: aida-session-start
-  timestamp: 2026-11-08 03:25:19.948455+00:00
+  timestamp: 2026-11-08T03:25:19.948455Z
   changes:
   - field_name: status
     old_value: Approved
     new_value: InProgress
 - id: 01a1b930-c535-75d1-8207-433a17280173
   author: dirtlab
-  timestamp: 2026-11-08 03:25:43.605558+00:00
+  timestamp: 2026-11-08T03:25:43.605558Z
   session_id: 01a1b93062cf
   harness_version: codex-cli 0.167.0
   changes: []
 - id: 01a1b937-52b4-78a1-8b55-c24a2a039f5c
   author: joe
-  timestamp: 2026-11-08 03:32:53.044743+00:00
+  timestamp: 2026-11-08T03:32:53.044743Z
   session_id: 01a1b9360b11
   harness_version: 2.1.319 (Claude Code)
   changes: []
 - id: 01a1b96a-50a6-7cf2-9241-4fd98deba9a9
   author: joe
-  timestamp: 2026-11-08 04:28:34.854874+00:00
+  timestamp: 2026-11-08T04:28:34.854874Z
   session_id: 01a1b96844df
   harness_version: 2.1.319 (Claude Code)
   changes: []
+- id: 01a1b9b2-493b-7593-8ba4-6c99594e4920
+  author: aida-pr-open
+  timestamp: 2026-11-08T05:47:11.547579795Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: InProgress
 failure_reason:
   phase: reviewer
   phase_index: 3
@@ -301,4 +281,4 @@ failure_reason:
   detail: Design meets AC1-AC4 in fixtures, but CI is red at head (lib-1 launch ratchet caused by forge.rs; gates + contracts also red vs green base 049e520), criteria are not trace-anchored, and there is a duplicate monthly guard plus byte-walk-gated eligibility.
   recovery_hint: address the review findings, move TASK-1222 back to In Progress, and clear the PR hold only after approval
   shelved_by: reviewer
-  shelved_at: 2026-11-08 04:28:34.749980+00:00
+  shelved_at: 2026-11-08T04:28:34.749980Z
