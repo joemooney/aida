@@ -13,7 +13,7 @@ use super::launch_refused_before_agent;
 use crate::gate::seat_authority::{preflight_sandboxed_child_key, ChildGrantRefused};
 
 fn handle_queue_work_source() -> &'static str {
-    include_str!("../queue_cmd.rs")
+    include_str!("../queue_cmd/work.rs")
         .split_once("pub(crate) fn handle_queue_work(")
         .expect("handle_queue_work exists")
         .1
@@ -136,7 +136,7 @@ fn every_spawning_launch_is_marked_and_no_exec_is() {
     );
     // The publication wrapper must leave counting to the actual spawn.
     // trace:STORY-2475 TASK-2807 | ai:codex
-    let resume_wrapper = include_str!("../queue_cmd.rs")
+    let resume_wrapper = include_str!("../queue_cmd/work.rs")
         .split_once("pub(crate) fn run_queue_resume_to_exit(")
         .expect("resume publication wrapper exists")
         .1
@@ -148,7 +148,7 @@ fn every_spawning_launch_is_marked_and_no_exec_is() {
         !resume_wrapper.contains("agent.starting()"),
         "the resume wrapper must leave counting to the spawn"
     );
-    let reviewer = include_str!("../queue_cmd.rs")
+    let reviewer = include_str!("../queue_cmd/work.rs")
         .split_once("pub(crate) fn run_standalone_reviewer(")
         .expect("run_standalone_reviewer exists")
         .1

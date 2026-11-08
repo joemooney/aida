@@ -16129,6 +16129,11 @@ pub(crate) struct DoctorArgs {
     #[clap(long, conflicts_with_all = ["lane_capacity", "heal", "fix_sandbox", "contradictions", "yes", "category", "force", "all", "since", "dry_run", "mapping", "tree_only", "preserve", "contradictions_limit", "contradictions_offset"])]
     pub lane_host: bool,
 
+    /// Report the host codegraph snapshot age as seen from this lane.
+    // trace:STORY-2630 | ai:claude
+    #[clap(long, conflicts_with_all = ["lane_host", "heal", "fix", "fix_sandbox", "contradictions"])]
+    pub lane_codegraph: bool,
+
     /// Apply safe fixes after scanning. Without this, doctor is read-only.
     #[clap(long)]
     pub heal: bool,
@@ -16249,6 +16254,7 @@ fn run_doctor(
     let args = <DoctorArgs as clap::FromArgMatches>::from_arg_matches(matches)?;
     let DoctorArgs {
         lane_host,
+        lane_codegraph,
         heal,
         yes,
         category,
@@ -16278,6 +16284,34 @@ fn run_doctor(
     }
     if fix.as_deref() == Some("lane-host") {
         anyhow::bail!("bare --fix requires --lane-host; store repairs require a category");
+    }
+    // No store refresh, host mutation or arbitrary subprocess for this report.
+    // trace:STORY-2630 | ai:codex
+    if *lane_codegraph {
+        anyhow::ensure!(
+            cmd.is_none() && category.is_none(),
+            "--lane-codegraph is a standalone report"
+        );
+        let root = crate::find_project_root()?;
+        let report = crate::codegraph::lane_host_report(&root)?;
+        if *json {
+            println!("{}", serde_json::to_string_pretty(&report)?);
+        } else {
+            println!(
+                "codegraph host snapshot: {}s old; captured {}s ago; host observation {}s ago; {}",
+                report["snapshot_age_seconds"],
+                report["snapshot_captured_age_seconds"],
+                report["host_observation_age_seconds"],
+                report["index_access"].as_str().unwrap_or("unknown")
+            );
+            if !report["refresh_error"].is_null() {
+                println!("snapshot refresh error: {}", report["refresh_error"]);
+            }
+            if !report["query_error"].is_null() {
+                println!("query service unreachable: {}", report["query_error"]);
+            }
+        }
+        return Ok(());
     }
     // trace:STORY-2660 | ai:codex
     if *lane_capacity {

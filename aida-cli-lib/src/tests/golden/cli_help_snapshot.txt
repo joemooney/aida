@@ -12601,6 +12601,9 @@ Options:
       --lane-host
           Check this machine before running automated lanes
 
+      --lane-codegraph
+          Report the host codegraph snapshot age as seen from this lane
+
       --heal
           Apply safe fixes after scanning. Without this, doctor is read-only
 
@@ -12619,9 +12622,6 @@ Options:
       --force
           Permit riskier destructive fixes such as branch deletion
 
-      --all
-          Show older completed-without-commit findings individually
-
       --format <FORMAT>
           Pin the output format regardless of whether stdout is a terminal: human = tables, toon =
           compact agent output, json = machine JSON. Default (unset) is human at a TTY, toon when
@@ -12631,6 +12631,9 @@ Options:
           - human: Human-readable tables / emoji (the interactive default at a TTY)
           - toon:  Token-efficient TOON — the compact agent default when piped/captured
           - json:  Machine JSON, for commands that support a JSON projection
+
+      --all
+          Show older completed-without-commit findings individually
 
       --canonical-ids
           Show node-local spec IDs in their canonical form instead of the node's friendly label (for
@@ -15943,6 +15946,10 @@ Options:
       --canonical-ids
           Show node-local spec IDs in their canonical form instead of the node's friendly label (for
           scripts). Also settable via AIDA_CANONICAL_IDS=1
+
+      --commit-body-file <FILE>
+          Read a UTF-8 commit body verbatim from this file. Use with native -m declarations or
+          --from-seat --commit-pending
 
   -h, --help
           Print help (see a summary with '-h')
@@ -44228,6 +44235,11 @@ Working on aida itself
         "help": "Read-only typed local lane capacity and reservations (not readiness admission)"
       },
       {
+        "name": "lane-codegraph",
+        "takes_value": false,
+        "help": "Report the host codegraph snapshot age as seen from this lane"
+      },
+      {
         "name": "lane-host",
         "takes_value": false,
         "help": "Check this machine before running automated lanes"
@@ -47525,6 +47537,11 @@ Working on aida itself
         "name": "canonical-ids",
         "takes_value": false,
         "help": "Show node-local spec IDs in their canonical form instead of the node's friendly label (for scripts). Also settable via AIDA_CANONICAL_IDS=1"
+      },
+      {
+        "name": "commit-body-file",
+        "takes_value": true,
+        "help": "Read a UTF-8 commit body verbatim from this file. Use with native -m declarations or --from-seat --commit-pending"
       },
       {
         "name": "commit-pending",

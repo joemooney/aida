@@ -371,7 +371,7 @@ fn launch_aliases_delegate_to_the_tested_lock_boundaries() {
     lib.push_str(include_str!("../../aida-cli-lib/src/zen_drive_root.rs"));
     lib.push_str(include_str!("../../aida-cli-lib/src/ps_integrate.rs"));
     let lib = &lib;
-    let queue = include_str!("../../aida-cli-lib/src/queue_cmd.rs");
+    let queue = include_str!("../../aida-cli-lib/src/queue_cmd/work.rs");
     let drain = include_str!("../../aida-cli-lib/src/drain_cmd.rs");
     let auto = include_str!("../../aida-cli-lib/src/autoprogress.rs");
     let shift = include_str!("../../aida-cli-lib/src/shift.rs");
