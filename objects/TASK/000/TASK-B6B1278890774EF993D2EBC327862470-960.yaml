@@ -8,7 +8,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-07T23:39:41.575597710Z
-modified_at: 2026-11-08T01:28:41.352761751Z
+modified_at: 2026-11-08T01:34:05.197585446Z
 req_type: Task
 relationships:
 - rel_type: Child
@@ -75,6 +75,12 @@ comments:
   modified_at: 2026-11-08T01:27:20.306963482Z
   session_id: 01a1b8be-8170-7fb2-89ab-ecb4c6eee98c
   harness_version: 2.1.319 (Claude Code)
+- id: 01a1b8ca-8f8d-7912-922a-e471f08d63f7
+  author: joe
+  content: 'Round 3 PR #3644 rework prepared for host publication: portability growth now matches added and retired rows by (rule, exact content), ignoring only path and preserving multiplicity; glob growth now requires a same-count Git-detected rename for new path keys, with per-path shrink checks for retained keys. Added unrelated swap/borrow refusal and relocated-portability growth fixtures; helper documents staging and base-pinned verifier rollout. Validation: 15 crate-split Python tests pass; portability growth shell suite passes; all 81 CI gates classified; git diff --check passes. Partial fast run passed GitLab smoke, classifier inventory, planner, mail-wake, containment conformance, store mutation gates, then stopped because test-speed fixtures invoke cargo metadata blocked by native-seat guard. Direct TUI seam Cargo invocation was discovered and interrupted; no pass claimed. Full make check-ci-fast and reworked-head CI remain unverified; merge hold retained. No Rust source changed. Lane check submitted as j20261108T013049596-6643-0 (cargo check --profile agent -p aida-cli --no-default-features); result pending at note time. Native publication declaration recorded: [AI:codex] fix(ratchets): validate ledger moves without admitting new debt (Refs TASK-3428). Edits remain uncommitted for the host; AC1/AC3 remain later slices.'
+  created_at: 2026-11-08T01:34:05.197585446Z
+  modified_at: 2026-11-08T01:34:05.197585446Z
+  session_id: 01a1b8c5953a
 history:
 - id: 01a1b862-2e0b-7a50-a4d0-25097c707b57
   author: joe
