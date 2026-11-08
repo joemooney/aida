@@ -21,6 +21,43 @@ c = importlib.util.module_from_spec(SPEC)
 SPEC.loader.exec_module(c)
 
 
+# trace:BUG-2497 | ai:codex
+class RunCompletionTests(unittest.TestCase):
+    def test_completed_turn_required_and_observations_preserved(self):
+        for event, completed in (({"type": "turn.completed"}, True),
+                                 ({"type": "turn.failed"}, False),
+                                 ({"message": "turn.completed"}, False),
+                                 ({"type": "item.completed"}, False)):
+            with self.subTest(event=event), tempfile.TemporaryDirectory() as directory:
+                root = Path(directory)
+                log = root / "stdout.jsonl"
+                log.write_text("not json\n[]\n" + json.dumps(event) + "\n")
+                report = {"vendor": "codex", "verified_terminal_receipt": False,
+                          "production_launcher_credit": True,
+                          "checks": {"C1": {"status": "fail"}}}
+                with contextlib.redirect_stdout(io.StringIO()):
+                    if completed:
+                        c.finish_run(root, report, [log])
+                    else:
+                        with self.assertRaisesRegex(ValueError, "invalid-run"):
+                            c.finish_run(root, report, [log])
+                saved = json.loads((root / "report.json").read_text())
+                self.assertEqual(saved["run_status"], "completed" if completed else "invalid-run")
+                self.assertEqual(saved["checks"]["C1"]["status"], "fail")
+                if not completed:
+                    self.assertFalse(saved["production_launcher_credit"])
+                    self.assertEqual(saved["invalid_run_reason"], "vendor-turn-not-completed")
+
+    def test_invalid_run_exits_nonzero(self):
+        with mock.patch.object(c.sys, "argv", ["conformance", "--vendor", "codex",
+                                               "--output", "/unused"]), \
+                mock.patch.object(c, "run", side_effect=ValueError("invalid-run: vendor-turn-not-completed")), \
+                contextlib.redirect_stderr(io.StringIO()):
+            with self.assertRaises(SystemExit) as result:
+                c.main()
+        self.assertEqual(result.exception.code, 2)
+
+
 # trace:TASK-3114 | ai:codex
 class PolicyRevisionTests(unittest.TestCase):
     def test_policy_resolves_in_script_repository_from_outside_cwd(self):
@@ -92,7 +129,7 @@ items = [{name = "preserved", enabled = true}]
             self.assertEqual(merged["agents"],
                              {"contained": True, "vendor": "codex", "model": "retained"})
             self.assertEqual(merged["contained"], {
-                "allowed_hosts": ["api.openai.com", "allow.fixture.test"],
+                "allowed_hosts": ["api.openai.com", "chatgpt.com", "allow.fixture.test"],
                 "extra": True, "vendors": {"codex": "aida", "claude": "aida"}})
             self.assertEqual(merged["unrelated"], before["unrelated"])
             self.assertEqual(merged["title"], before["title"])
@@ -1016,7 +1053,8 @@ else:
                 return False
             return real_relative(path, other)
         with mock.patch.object(Path, "is_relative_to", relative), mock.patch.object(c.shutil, "which", return_value="/bin/true"), mock.patch.object(c.os, "open", side_effect=open_fixture), mock.patch.object(c, "bounded_launch", side_effect=launch), mock.patch.object(c, "trusted_policy_sha", return_value="policy-tip"), contextlib.redirect_stdout(io.StringIO()):
-            c.run(args)
+            with self.assertRaisesRegex(ValueError, "invalid-run: vendor-turn-not-completed"):
+                c.run(args)
         report = json.loads((args.output / "report.json").read_text())
         self.assertFalse(report["whole_lane_pass"])
         self.assertFalse(report["production_launcher_credit"])
@@ -1061,7 +1099,8 @@ else:
                 return False
             return real_relative(path, other)
         with mock.patch.object(Path, "is_relative_to", relative), mock.patch.object(c.shutil, "which", return_value="/bin/true"), mock.patch.object(c.os, "open", side_effect=open_fixture), mock.patch.object(c, "bounded_launch", side_effect=launch), mock.patch.object(c, "trusted_policy_sha", return_value="policy-tip"), contextlib.redirect_stdout(io.StringIO()):
-            c.run(args)
+            with self.assertRaisesRegex(ValueError, "invalid-run: vendor-turn-not-completed"):
+                c.run(args)
         report = json.loads((args.output / "report.json").read_text())
         self.assertTrue(report["fixture_integrity"])
         self.assertFalse(report["verified_terminal_receipt"])
