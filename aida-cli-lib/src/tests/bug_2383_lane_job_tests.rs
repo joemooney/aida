@@ -1847,7 +1847,7 @@ fn story_2641_sccache_job_env_and_binds_are_opt_in_and_lane_only() {
     assert!(!rw.contains(&PathBuf::from("/operator/cache")));
     let args = crate::session::lane_job_bwrap_argv(&lane.seat, &rw, &[], "cargo", vec![]);
     assert!(args.windows(2).any(|args| args == ["--tmpfs", "/tmp"]));
-    assert!(args.iter().any(|arg| arg == "--unshare-pid"));
+    assert!(!args.iter().any(|arg| arg == "--unshare-pid"));
     assert!(args
         .windows(3)
         .any(|args| args[0] == "--bind-try" && args[1] == cache.display().to_string()));
@@ -1952,14 +1952,12 @@ else:
     );
 }
 
-// A foreign sccache client can have a TMPDIR invisible in the job's /tmp.
-// The host wrapper must not see it and restart the job-owned cache server.
+// Host Cargo queue tickets must retain host PID identity, with or without cache.
 // trace:STORY-2641 | ai:codex
 #[test]
 #[cfg(target_os = "linux")]
-fn story_2641_sccache_foreign_dead_tmpdir_is_hidden() {
-    use std::io::BufRead;
-    use std::process::{Command, Stdio};
+fn story_2641_sccache_host_queue_ticket_stays_live() {
+    use std::process::Command;
     if !bwrap_usable() {
         assert!(aida_core::exec_context::Environment::capture()
             .get("AIDA_REQUIRE_BWRAP_LIVE")
@@ -1967,65 +1965,42 @@ fn story_2641_sccache_foreign_dead_tmpdir_is_hidden() {
         eprintln!("SKIP (bwrap unavailable)");
         return;
     }
-    struct Foreign(std::process::Child);
-    impl Drop for Foreign {
-        fn drop(&mut self) {
-            let _ = self.0.kill();
-            let _ = self.0.wait();
-        }
-    }
     let tmp = tempfile::tempdir().unwrap();
-    let dead_tmp = tmp.path().join("absent-foreign-tmp");
-    let mut foreign = Foreign(
-        Command::new("/usr/bin/python3")
-            .args(["-c", "import ctypes,time; ctypes.CDLL(None).prctl(15,b'sccache',0,0,0); print('ready',flush=True); time.sleep(30)"])
-            .env("TMPDIR", &dead_tmp)
-            .stdout(Stdio::piped())
-            .spawn()
-            .unwrap(),
-    );
-    let mut ready = String::new();
-    std::io::BufReader::new(foreign.0.stdout.take().unwrap())
-        .read_line(&mut ready)
-        .unwrap();
-    assert_eq!(ready.trim(), "ready");
-    // Positive control: the wrapper's host /proc scan can find this process.
-    let proc = PathBuf::from(format!("/proc/{}", foreign.0.id()));
-    assert_eq!(
-        std::fs::read_to_string(proc.join("comm")).unwrap().trim(),
-        "sccache"
-    );
-    let marker = format!("TMPDIR={}", dead_tmp.display());
-    assert!(std::fs::read(proc.join("environ"))
-        .unwrap()
-        .split(|b| *b == 0)
-        .any(|value| value == marker.as_bytes()));
-    assert!(!dead_tmp.exists());
-    let scan = r#"import os
-from pathlib import Path
-marker = os.environ['FOREIGN_TMP_MARKER'].encode()
-assert Path('/proc/self/environ').is_file()
-for proc in Path('/proc').iterdir():
-    if not proc.name.isdigit():
-        continue
-    try:
-        if (proc / 'comm').read_text().strip() == 'sccache':
-            assert marker not in (proc / 'environ').read_bytes().split(b'\0'), 'foreign sccache visible'
-    except (FileNotFoundError, ProcessLookupError):
-        pass
-print('foreign sccache hidden')
+    // This test process is a live host queue owner throughout both sandboxes.
+    let pid = std::process::id();
+    let ticket = tmp.path().join(format!("wait.0.{pid}"));
+    for cached in [false, true] {
+        std::fs::write(&ticket, "host ticket").unwrap();
+        let script = r#"
+# The host wrapper uses the same kill -0 sweep for wait and acq tickets.
+kill -0 "$1" 2>/dev/null || rm "$2"
+test -f "$2"
+# A child must also publish its real host PID, not a namespace-local alias.
+test "$(readlink /proc/self/ns/pid)" = "$3"
 "#;
-    let output = Command::new("bwrap")
-        .args(crate::session::lane_job_bwrap_argv(
+        let namespace = std::fs::read_link("/proc/self/ns/pid").unwrap();
+        let args = crate::session::lane_job_bwrap_argv(
             tmp.path(),
+            &[tmp.path().to_path_buf()],
             &[],
-            &[],
-            "/usr/bin/python3",
-            vec!["-c".into(), scan.into()],
-        ))
-        .env("FOREIGN_TMP_MARKER", marker)
-        .output()
-        .unwrap();
-    assert!(output.status.success(), "{output:?}");
-    assert!(String::from_utf8_lossy(&output.stdout).contains("foreign sccache hidden"));
+            "/bin/sh",
+            vec![
+                "-c".into(),
+                script.into(),
+                "ticket-check".into(),
+                pid.to_string(),
+                ticket.display().to_string(),
+                namespace.to_string_lossy().into_owned(),
+            ],
+        );
+        assert!(!args.iter().any(|arg| arg == "--unshare-pid"));
+        let mut cmd = Command::new("bwrap");
+        cmd.args(args).env_remove("SCCACHE_SERVER_UDS");
+        if cached {
+            cmd.env("SCCACHE_SERVER_UDS", "/tmp/aida-lane-sccache.sock");
+        }
+        let output = cmd.output().unwrap();
+        assert!(output.status.success(), "cached={cached}: {output:?}");
+        assert_eq!(std::fs::read_to_string(&ticket).unwrap(), "host ticket");
+    }
 }

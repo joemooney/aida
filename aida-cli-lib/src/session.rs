@@ -6110,11 +6110,9 @@ pub(crate) fn lane_job_bwrap_argv(
     args: Vec<String>,
 ) -> Vec<String> {
     let mut full = bwrap_confinement_args_inner(seat, rw, read_allowlist);
-    // The host Cargo wrapper inspects sccache processes through /proc. Hide
-    // other builds so their private/dead TMPDIR cannot trigger a restart of
-    // this job's foreground server and detach its pending cache writes.
+    // Keep host PID identity: the shared Cargo slot queue checks ticket
+    // liveness with kill -0 and names tickets using the wrapper's PID.
     // trace:STORY-2641 | ai:codex
-    full.push("--unshare-pid".into());
     full.push(program.to_string());
     full.extend(args);
     full
