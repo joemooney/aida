@@ -1,22 +1,47 @@
-//! Declared launch resources. Sccache is always off. PR-B adds fail-closed
+//! Declared launch resources. Agent seats keep sccache off; lane test jobs
+//! may declare a separate cache and Unix socket. PR-B adds fail-closed
 //! slot, target and generated-settings validation; backend renderers in the
 //! following slice consume these checks. No helper creates or widens a slot.
 // trace:STORY-2326 | ai:claude
 
 use std::path::PathBuf;
 
-/// The compile cache a lane may use. There is one value: off.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+/// The compile cache declaration; lane caches never select the operator server.
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) enum Sccache {
     Off,
+    // trace:STORY-2641 | ai:codex
+    Lane {
+        wrapper: String,
+        cache: PathBuf,
+        socket: PathBuf,
+    },
 }
 
 impl Sccache {
     /// The `RUSTC_WRAPPER` value that enforces it.
-    pub(crate) fn rustc_wrapper(self) -> &'static str {
+    pub(crate) fn rustc_wrapper(&self) -> &str {
         match self {
             Self::Off => "",
+            Self::Lane { wrapper, .. } => wrapper,
         }
+    }
+
+    // trace:STORY-2641 | ai:codex
+    pub(crate) fn env(&self) -> Vec<(&'static str, std::ffi::OsString)> {
+        let mut env = vec![("RUSTC_WRAPPER", self.rustc_wrapper().into())];
+        if let Self::Lane { cache, socket, .. } = self {
+            env.extend([
+                ("SCCACHE_DIR", cache.as_os_str().to_owned()),
+                ("SCCACHE_SERVER_UDS", socket.as_os_str().to_owned()),
+                // Unsupported UDS clients must never fall back to the operator's TCP server.
+                ("SCCACHE_SERVER_PORT", "0".into()),
+                ("SCCACHE_IDLE_TIMEOUT", "60".into()),
+                // sccache cannot cache incremental Rust compilations.
+                ("CARGO_INCREMENTAL", "0".into()),
+            ]);
+        }
+        env
     }
 }
 
@@ -41,6 +66,29 @@ pub(crate) struct SandboxResources {
 }
 
 impl SandboxResources {
+    /// Resolve the seat declaration from host evidence, never forwarded build env.
+    // trace:STORY-2641 | ai:codex
+    pub(crate) fn for_seat(
+        host: Option<&std::path::Path>,
+        seat: &std::path::Path,
+    ) -> anyhow::Result<Option<Self>> {
+        let Some(clone) = crate::seat_clone::recorded_clone_for(host, seat) else {
+            return Ok(None);
+        };
+        let target = clone
+            .cargo_target_dir
+            .as_deref()
+            .ok_or_else(|| anyhow::anyhow!("recorded seat has no private cargo target"))?;
+        let host =
+            host.ok_or_else(|| anyhow::anyhow!("seat resources require a pinned host root"))?;
+        Ok(Some(Self {
+            write_roots: crate::seat_clone::seat_extra_write_paths(&clone),
+            store_paths: vec![],
+            deny: vec![],
+            cargo: CargoResources::resolve(host, seat, target)?,
+        }))
+    }
+
     /// Project declared cargo overrides through the same complete environment
     /// policy as vendor launches, rather than ambient inheritance.
     // trace:STORY-2326 | ai:codex
@@ -58,16 +106,15 @@ impl SandboxResources {
         )
     }
 
-    /// The cargo env every renderer applies: the cache is off and builds land
-    /// in the seat's own target directory.
-    pub(crate) fn cargo_env(&self) -> [(&'static str, std::ffi::OsString); 2] {
-        [
-            ("RUSTC_WRAPPER", self.cargo.sccache.rustc_wrapper().into()),
-            (
-                "CARGO_TARGET_DIR",
-                self.cargo.target_dir.clone().into_os_string(),
-            ),
-        ]
+    /// Every renderer applies the declared cache and seat-private target.
+    // trace:STORY-2641 | ai:codex
+    pub(crate) fn cargo_env(&self) -> Vec<(&'static str, std::ffi::OsString)> {
+        let mut env = self.cargo.sccache.env();
+        env.push((
+            "CARGO_TARGET_DIR",
+            self.cargo.target_dir.clone().into_os_string(),
+        ));
+        env
     }
 }
 

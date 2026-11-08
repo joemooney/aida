@@ -224,7 +224,59 @@ pub(crate) const HOST_ENV_ALLOWED: &[&str] = &[
 
 /// The seat build-environment variables a job gets (from
 /// [`crate::seat_clone::seat_build_env`]).
-pub(crate) const BUILD_ENV_ALLOWED: &[&str] = &["CARGO_TARGET_DIR", "RUSTC_WRAPPER"];
+pub(crate) const BUILD_ENV_ALLOWED: &[&str] = &[
+    "CARGO_TARGET_DIR",
+    "RUSTC_WRAPPER",
+    "SCCACHE_DIR",
+    "SCCACHE_SERVER_UDS",
+    "SCCACHE_SERVER_PORT",
+    "SCCACHE_IDLE_TIMEOUT",
+    "CARGO_INCREMENTAL",
+];
+
+/// Host cargo config opts jobs into a lane-only cache. Never inherit the
+/// operator's wrapper/cache/server environment or consult seat cargo config.
+// trace:STORY-2641 | ai:codex
+fn lane_sccache_env(parent: &aida_core::exec_context::Environment) -> Vec<(String, String)> {
+    let Some(home) = parent.get("HOME").map(PathBuf::from) else {
+        return vec![];
+    };
+    let cargo = parent
+        .get("CARGO_HOME")
+        .map(PathBuf::from)
+        .unwrap_or_else(|| home.join(".cargo"));
+    let config = std::fs::read_to_string(cargo.join("config.toml"))
+        .or_else(|_| std::fs::read_to_string(cargo.join("config")));
+    let Some(wrapper) = config
+        .ok()
+        .and_then(|text| text.parse::<toml::Value>().ok())
+        .and_then(|config| {
+            config
+                .get("build")?
+                .get("rustc-wrapper")?
+                .as_str()
+                .map(str::to_owned)
+        })
+    else {
+        return vec![];
+    };
+    if Path::new(&wrapper).file_name().and_then(|s| s.to_str()) != Some("sccache") {
+        return vec![];
+    }
+    let cache = home.join(".cache/aida/lane-sccache");
+    // Each job's bubblewrap mounts a fresh private /tmp. Keep the socket
+    // outside the shared writable cache, avoiding stale or lane-planted endpoints.
+    let socket = PathBuf::from("/tmp/aida-lane-sccache.sock");
+    crate::launch::resources::Sccache::Lane {
+        wrapper,
+        cache,
+        socket,
+    }
+    .env()
+    .into_iter()
+    .map(|(key, value)| (key.to_owned(), value.to_string_lossy().into_owned()))
+    .collect()
+}
 
 /// Whether the launcher's `key` reaches a job.
 pub(crate) fn host_key_allowed(key: &str) -> bool {
@@ -657,7 +709,7 @@ impl LaneJobs {
     /// `main_root`. The seat's build environment comes from its host-recorded
     /// clone record, else from the lease's cargo target directory.
     pub(crate) fn for_lease(main_root: &Path, seat: &Path, lease_id: &str) -> Self {
-        let build_env: Vec<(String, String)> =
+        let mut build_env: Vec<(String, String)> =
             if let Some(clone) = crate::seat_clone::host_recorded_clone(main_root, seat) {
                 crate::seat_clone::seat_build_env(&clone)
                     .into_iter()
@@ -671,6 +723,12 @@ impl LaneJobs {
                     .map(|dir| vec![("CARGO_TARGET_DIR".to_string(), dir.display().to_string())])
                     .unwrap_or_default()
             };
+        // trace:STORY-2641 | ai:codex
+        let parent = aida_core::exec_context::Environment::capture();
+        for (key, value) in lane_sccache_env(&parent) {
+            build_env.retain(|(existing, _)| existing != &key);
+            build_env.push((key, value));
+        }
         Self {
             seat: seat.to_path_buf(),
             inbox: seat.join(INBOX_RELATIVE),
@@ -736,6 +794,10 @@ impl LaneJobs {
         if let Some(target) = self.target_dir() {
             rw.push(target);
         }
+        // trace:STORY-2641 | ai:codex
+        if let Some(cache) = env.get("SCCACHE_DIR") {
+            rw.push(PathBuf::from(cache));
+        }
         let home = env.get("HOME").map(PathBuf::from);
         let runtime = env
             .get("XDG_RUNTIME_DIR")
@@ -774,6 +836,20 @@ impl LaneJobs {
         }
         std::fs::create_dir_all(&self.inbox)
             .with_context(|| format!("create {}", self.inbox.display()))?;
+        // Only the host-selected lane cache is made writable; cargo home stays read-only.
+        // trace:STORY-2641 | ai:codex
+        if let Some((_, cache)) = self.build_env.iter().find(|(key, _)| key == "SCCACHE_DIR") {
+            use std::os::unix::fs::{DirBuilderExt, MetadataExt};
+            let mut builder = std::fs::DirBuilder::new();
+            builder.recursive(true).mode(0o700).create(cache)?;
+            let metadata = std::fs::symlink_metadata(cache)?;
+            anyhow::ensure!(
+                metadata.is_dir()
+                    && metadata.uid() == current_uid()
+                    && metadata.mode() & 0o7777 == 0o700,
+                "lane sccache must be an owned private directory"
+            );
+        }
         std::fs::create_dir_all(&self.results)
             .with_context(|| format!("create {}", self.results.display()))?;
         Ok(())

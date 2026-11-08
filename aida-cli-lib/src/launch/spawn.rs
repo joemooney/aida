@@ -35,10 +35,23 @@ pub(crate) fn spawn_agent(ctx: &LaunchContext) -> Result<Command> {
     // override keeps integration harness inputs, never contained launches.
     // trace:STORY-2326 | ai:codex
     let profile = super::profile::VendorProfile::for_vendor(ctx.vendor());
+    // trace:STORY-2641 | ai:codex
+    let resources = if ctx.fixture_override() || ctx.wrapper_environment() {
+        None
+    } else {
+        super::resources::SandboxResources::for_seat(ctx.host_main(), ctx.cwd())?
+    };
     if profile.clears_environment() && !ctx.fixture_override() && !ctx.wrapper_environment() {
         let parent = aida_core::exec_context::Environment::capture();
-        let env = profile.child_env(ctx.kind(), &parent, None)?;
+        let env = profile.child_env(ctx.kind(), &parent, resources.as_ref())?;
         cmd.env_clear().envs(env.pairs());
+    }
+    // Vendors that retain parent env still receive the seat-owned build values.
+    // trace:STORY-2641 | ai:codex
+    if !profile.clears_environment() {
+        if let Some(resources) = &resources {
+            cmd.envs(resources.cargo_env());
+        }
     }
     cmd.args(ctx.argv());
     if ctx.sets_cwd() {

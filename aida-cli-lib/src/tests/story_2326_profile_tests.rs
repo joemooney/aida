@@ -80,4 +80,22 @@ fn story_2326_resource_env_uses_vendor_projection() {
         Some(std::ffi::OsStr::new("/seat/target"))
     );
     assert!(env.get("UNLISTED_SECRET").is_none());
+    // trace:STORY-2641 | ai:codex
+    let mut cached = resources;
+    cached.cargo.sccache = Sccache::Lane {
+        wrapper: "/host/bin/sccache".into(),
+        cache: "/lane/cache".into(),
+        socket: "/lane/cache/server.sock".into(),
+    };
+    let env = VendorProfile::for_vendor(LaunchVendor::Claude)
+        .child_env(LaunchKind::Fresh, &parent, Some(&cached))
+        .unwrap();
+    assert_eq!(
+        env.get("SCCACHE_DIR"),
+        Some(std::ffi::OsStr::new("/lane/cache"))
+    );
+    assert_eq!(
+        env.get("CARGO_INCREMENTAL"),
+        Some(std::ffi::OsStr::new("0"))
+    );
 }

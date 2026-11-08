@@ -545,7 +545,8 @@ impl EnvPolicy {
     /// `decisions` are already validated launcher inputs, never ambient values.
     /// Omitted Decided keys are absent, including when present in the parent.
     /// Forwarded owned keys may also be explicitly replaced or removed.
-    /// Declared cargo resources may override only the two fixed cargo keys.
+    /// Declared cargo resources may override only the fixed build/cache keys.
+    // trace:STORY-2641 | ai:codex
     pub fn project(
         &self,
         parent: &crate::exec_context::Environment,
@@ -561,9 +562,17 @@ impl EnvPolicy {
         for (key, value) in decisions {
             self.check_key(&key)?;
             if !(OWNED_KEYS.iter().any(|(k, _)| key == *k)
-                || ["RUSTC_WRAPPER", "CARGO_TARGET_DIR"]
-                    .iter()
-                    .any(|k| key == *k))
+                || [
+                    "RUSTC_WRAPPER",
+                    "CARGO_TARGET_DIR",
+                    "SCCACHE_DIR",
+                    "SCCACHE_SERVER_UDS",
+                    "SCCACHE_SERVER_PORT",
+                    "SCCACHE_IDLE_TIMEOUT",
+                    "CARGO_INCREMENTAL",
+                ]
+                .iter()
+                .any(|k| key == *k))
                 || !seen.insert(key.clone())
             {
                 return Err(EnvPolicyRefusal);

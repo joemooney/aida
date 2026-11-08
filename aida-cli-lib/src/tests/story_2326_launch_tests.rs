@@ -1771,3 +1771,64 @@ fn story_2326_cleared_claude_compete_has_no_parent_seat() {
         );
     }
 }
+
+// trace:STORY-2641 | ai:codex
+#[test]
+fn story_2326_resource_env_spawn_uses_host_recorded_seat() {
+    let tmp = tempfile::tempdir().unwrap();
+    let host = tmp.path().join("host");
+    let seat = tmp.path().join("aida-seat-resources");
+    let target = host.join("target/worktrees/aida-seat-resources");
+    for dir in [
+        host.join(".git/objects"),
+        host.join(".aida/sessions"),
+        seat.join(".git/objects/info"),
+        seat.join(".aida"),
+        target.clone(),
+    ] {
+        std::fs::create_dir_all(dir).unwrap();
+    }
+    let marker = crate::seat_clone::SeatCloneMarker {
+        main: host.clone(),
+        branch: "seat-resources".into(),
+        base_sha: "fixture".into(),
+        origin_url: "fixture".into(),
+        pin: "fixture".into(),
+    };
+    std::fs::write(
+        seat.join(crate::seat_clone::MARKER_RELATIVE),
+        toml::to_string(&marker).unwrap(),
+    )
+    .unwrap();
+    std::fs::write(
+        seat.join(".git/objects/info/alternates"),
+        host.join(".git/objects").display().to_string(),
+    )
+    .unwrap();
+    std::fs::write(crate::lease_path(&host, "c0ffee2641"), format!(
+        "id = 'c0ffee2641'\nscope = 'STORY-2641'\nslug = 'resources'\nowner = 'test'\nworktree_path = {}\nbranch = 'seat-resources'\nstarted_at = '2026-11-07T00:00:00Z'\nhostname = 'test'\ntree_kind = 'clone'\ncargo_target_dir = {}\n",
+        aida_core::toml_quote::toml_string(&seat.display().to_string()),
+        aida_core::toml_quote::toml_string(&target.display().to_string()),
+    )).unwrap();
+    let _env = crate::test_env::EnvVarsGuard::apply(&[
+        ("CARGO_TARGET_DIR", Some("/parent/target")),
+        ("RUSTC_WRAPPER", Some("/parent/sccache")),
+    ]);
+    for vendor in [LaunchVendor::Claude, LaunchVendor::Codex, LaunchVendor::Agy] {
+        let mut req = request(ContainmentPosture::None, LaunchKind::Fresh, &[]);
+        req.vendor = vendor;
+        req.cwd = seat.clone();
+        req.host_main = Some(host.clone());
+        let ctx = LaunchContext::resolve_under(req, false).unwrap();
+        let cmd = spawn_agent(&ctx).unwrap();
+        let env: BTreeMap<_, _> = cmd.get_envs().collect();
+        assert_eq!(
+            env.get(OsStr::new("CARGO_TARGET_DIR")),
+            Some(&Some(target.as_os_str()))
+        );
+        assert_eq!(
+            env.get(OsStr::new("RUSTC_WRAPPER")),
+            Some(&Some(OsStr::new("")))
+        );
+    }
+}

@@ -1811,3 +1811,18 @@ The TASK-1750 ratchet inventories compatibility consumers in
 `proc_identity_legacy_baseline.json` and prevents new private PID/start
 decisions. See the signed
 [process identity sketch](docs/plans/2026-11-05-story-2537-proc-identity.md).
+
+<!-- trace:STORY-2641 | ai:codex -->
+Lane test jobs opt into sccache when the host Cargo home's `config.toml`
+(or legacy `config`) selects `build.rustc-wrapper = "sccache"` or an absolute
+path ending in `sccache`. Jobs use `~/.cache/aida/lane-sccache`, never the
+operator's cache, with a Unix-domain server socket in each job's private `/tmp` and a
+60-second server idle timeout. The server starts inside the job sandbox;
+jobs share cached artifacts but have separate servers. Cargo home
+remains read-only and Cargo stays offline. One lane can poison another lane's
+cache; this is accepted for contained, CI-gated lanes, and grants no access to
+operator builds. Host sccache statistics do not measure these separate servers;
+cache-hit acceptance must inspect the lane server's statistics on each host.
+Agent children receive their host-recorded seat target and disabled wrapper
+through declared launch resources rather than parent build-environment values.
+The lane job runner alone opts into the lane cache.

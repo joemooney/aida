@@ -1780,3 +1780,50 @@ fn update_lease_branch_keeps_the_lane_jobs_record() {
         "update_lease_branch dropped the runner record:\n{body}"
     );
 }
+
+// trace:STORY-2641 | ai:codex
+#[test]
+#[cfg(target_os = "linux")]
+fn story_2641_sccache_job_env_and_binds_are_opt_in_and_lane_only() {
+    use aida_core::exec_context::Environment;
+    let tmp = tempfile::tempdir().unwrap();
+    let cargo = tmp.path().join(".cargo");
+    std::fs::create_dir(&cargo).unwrap();
+    let parent = Environment::from_pairs([
+        ("HOME".into(), tmp.path().as_os_str().to_owned()),
+        ("SCCACHE_DIR".into(), "/operator/cache".into()),
+        ("SCCACHE_SERVER_UDS".into(), "/operator/server".into()),
+    ]);
+    assert!(lane_sccache_env(&parent).is_empty());
+    std::fs::write(
+        cargo.join("config.toml"),
+        "[build]\nrustc-wrapper = 'other-wrapper'\n",
+    )
+    .unwrap();
+    assert!(lane_sccache_env(&parent).is_empty());
+    std::fs::write(
+        cargo.join("config.toml"),
+        "[build]\nrustc-wrapper = '/host/bin/sccache'\n",
+    )
+    .unwrap();
+    let mut lane = fixture_lane(tmp.path());
+    lane.build_env.extend(lane_sccache_env(&parent));
+    lane.prepare().unwrap();
+    let env = lane.job_env(&job(&["cargo", "test", "--profile", "agent"]));
+    let cache = tmp.path().join(".cache/aida/lane-sccache");
+    assert_eq!(env["SCCACHE_DIR"], cache.display().to_string());
+    assert_eq!(env["RUSTC_WRAPPER"], "/host/bin/sccache");
+    assert_eq!(env["CARGO_NET_OFFLINE"], "true");
+    assert_eq!(env["CARGO_INCREMENTAL"], "0");
+    assert_eq!(env["SCCACHE_SERVER_PORT"], "0");
+    assert_eq!(env["SCCACHE_SERVER_UDS"], "/tmp/aida-lane-sccache.sock");
+    let rw = lane.sandbox_rw_paths(&env);
+    assert!(rw.contains(&cache));
+    assert!(!rw.contains(&cargo));
+    assert!(!rw.contains(&PathBuf::from("/operator/cache")));
+    let args = crate::session::lane_job_bwrap_argv(&lane.seat, &rw, &[], "cargo", vec![]);
+    assert!(args.windows(2).any(|args| args == ["--tmpfs", "/tmp"]));
+    assert!(args
+        .windows(3)
+        .any(|args| args[0] == "--bind-try" && args[1] == cache.display().to_string()));
+}
