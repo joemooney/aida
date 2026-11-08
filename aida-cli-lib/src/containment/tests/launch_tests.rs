@@ -3438,7 +3438,14 @@ fn bug_2487_pinned_help_checks_production_argv_and_scopes() {
             "",
             Some("fixture-model"),
             Some("high"),
-            Some(vec!["--sandbox".into(), "workspace-write".into()]),
+            // trace:BUG-2495 | ai:codex — pair the real site posture with
+            // the pinned exec help, including its top-level approval flag.
+            Some(
+                crate::codex_native_sandbox::CODEX_NATIVE_POSTURE
+                    .into_iter()
+                    .map(String::from)
+                    .collect(),
+            ),
         )
         .unwrap();
     let (args, preflight) = codex_argv(
@@ -3557,6 +3564,77 @@ fn task_3000_unpinned_codex_checks_its_own_help_before_launch() {
     assert!(error.contains(&program.display().to_string()), "{error}");
     codex_argv(&program, &env, &original, true).unwrap();
     assert!(!calls.exists());
+}
+
+#[test]
+// trace:BUG-2495 | ai:codex
+fn bug_2495_codex_approval_flags_use_exec_config() {
+    for approval in [
+        vec!["--ask-for-approval", "never"],
+        vec!["--ask-for-approval=never"],
+        vec!["-a", "never"],
+    ] {
+        let original: Vec<String> = ["exec", "--sandbox", "workspace-write"]
+            .into_iter()
+            .chain(approval)
+            .chain(["prompt containing --ask-for-approval on-request"])
+            .map(String::from)
+            .collect();
+        let (args, preflight) = codex_argv(
+            Path::new("/fixture/codex"),
+            &bug_2487_codex_env(),
+            &original,
+            true,
+        )
+        .unwrap();
+        assert!(args
+            .windows(2)
+            .any(|v| v == ["-c", "approval_policy=\"never\""]));
+        assert!(!args.iter().any(|v| v == "-a"
+            || v == "--ask-for-approval"
+            || v.starts_with("--ask-for-approval=")));
+        assert_eq!(args.last(), original.last());
+        validate_codex_flags(&args, "exec").unwrap();
+        validate_codex_flags(&preflight[1..preflight.len() - 1], "sandbox").unwrap();
+    }
+}
+
+#[test]
+// trace:BUG-2495 | ai:codex
+fn bug_2495_codex_approval_flags_refuse_other_or_missing_values() {
+    for value in ["on-request", "untrusted", "on-failure", "", "unknown"] {
+        for approval in [
+            vec!["--ask-for-approval".into(), value.into()],
+            vec![format!("--ask-for-approval={value}")],
+            vec!["-a".into(), value.into()],
+        ] {
+            let original = ["exec".into()]
+                .into_iter()
+                .chain(approval)
+                .chain(["prompt".into()])
+                .collect::<Vec<String>>();
+            let error = codex_argv(
+                Path::new("/fixture/codex"),
+                &bug_2487_codex_env(),
+                &original,
+                true,
+            )
+            .unwrap_err()
+            .to_string();
+            assert!(error.contains("approval policy must be never"), "{error}");
+        }
+    }
+    for flag in ["--ask-for-approval", "-a"] {
+        let error = codex_argv(
+            Path::new("/fixture/codex"),
+            &bug_2487_codex_env(),
+            &["exec".into(), flag.into()],
+            true,
+        )
+        .unwrap_err()
+        .to_string();
+        assert!(error.contains("approval flag requires a value"), "{error}");
+    }
 }
 
 #[test]
