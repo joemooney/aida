@@ -66,8 +66,11 @@ systemctl --user enable --now codegraph-query-aida.service
 Keep the existing primary `codegraph-sync-aida.timer` and its original upstream
 executable. Do not replace `~/.local/bin/codegraph`: unrelated projects and host
 index maintenance keep using upstream. The host-owned `proxy-state/bin`
-query wrapper must be selected explicitly inside the seat shell, in both native
-and AIDA-contained postures. Launch finalization never derives executable PATH
+query wrapper must be selected explicitly inside a native sandbox seat shell.
+The AIDA-contained posture is not supported by this slice: its tmpfs root has
+no mount for the host client, descriptor or socket. A host operator must supply
+a separately reviewed read-only admission and contained-seat acceptance before
+claiming that posture works. Launch finalization never derives executable PATH
 entries from a seat-controlled `.codegraph` link. The host should provide the
 reviewed absolute client path; existing and new seats use the same command:
 
@@ -100,12 +103,15 @@ query service or heartbeat. Before proxy deployment it retains the
 existing direct-index diagnostic. The descriptor is read with a bounded
 non-following regular-file handle.
 
-After deploying, use a candidate AIDA binary containing the new doctor flag
-and launch a **new contained Codex seat**. For an already-open seat, prefix PATH
-as above. This permits acceptance evidence before the candidate is merged. Run:
+For native-sandbox diagnostics after deployment, use a candidate AIDA binary
+containing the new doctor flag. Existing and new seats both need the explicit
+host-owned client path below (replace the host home with the actual deployment
+path). Bare `codegraph` is not routed by launch setup. These diagnostics do not
+satisfy the required AIDA-contained acceptance: the host operator must first
+implement and validate its read-only client/descriptor/socket admission. Run:
 
 ```sh
-codegraph callers primary_index_link --json
+/home/joe/ai/aida/.codegraph/proxy-state/bin/codegraph callers primary_index_link --json
 aida doctor --lane-host --json
 ```
 
@@ -115,6 +121,17 @@ Paste exact command/output into the PR body. Confirm callers includes
 `proxy-state` remain outside all seat writable roots; use the actual seat
 sandbox evidence, not symlink routing, as the grant evidence. If socket IPC is
 denied by the deployed sandbox, do not widen index writes or claim AC5.
+Host operator Joe owns deployment, delivery of the reviewed absolute client
+path to lane prompts, and the remaining contained-seat AC2/AC5 run. The current
+shared navigation prompt describes query selection but does not install or
+select this client. Do not treat a native run as AIDA-contained evidence.
+
+Known diagnostic limitation: the server serializes refresh and queries with
+acceptance of status connections. A busy server can exceed doctor's 250ms
+probe deadline and produce a false unreachable finding. Fixing status
+responsiveness under concurrent queries remains part of the host-proxy
+follow-up before final acceptance, rather than evidence of a missing index.
+
 The service must be deployed and that live query must pass before a completing
 STORY-2630 trailer is appropriate.
 
