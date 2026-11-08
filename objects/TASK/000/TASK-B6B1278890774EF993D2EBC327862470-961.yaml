@@ -3,12 +3,12 @@ spec_id: TASK-b6b1278890774ef993d2ebc327862470-961
 agreed_id: TASK-3429
 title: 'Crate-split PR12: extract aida-mcp crate (mcp.rs + schema) above aida-cli-lib, handler injected into REGISTRY from the bin'
 description: 'Per SPIKE-713 section 7 row 12 and advisor ruling 1 (aida-mcp is the first crate). Acceptance: (1) new aida-mcp crate holds mcp.rs and its schema; widened cli-lib items (~99) are pub with re-exports keeping paths; (2) aida mcp handler registered from the binary into command_registry::REGISTRY; (3) MCP surface byte-identical: tools/list golden tests pass unchanged and the 72 tool names are unchanged; (4) the respawn identity check (mcp.rs:201-267) still reads the same binary; (5) measured on dell1: clean build no slower than run-to-run spread (ruling 2), with the cargo --timings numbers on the spec.'
-status: InProgress
+status: NeedsAttention
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-07T23:40:15.306412624Z
-modified_at: 2026-11-08T20:32:56.540835655Z
+modified_at: 2026-11-08T20:34:11.692987505Z
 req_type: Task
 relationships:
 - rel_type: BlockedBy
@@ -494,6 +494,25 @@ comments:
   modified_at: 2026-11-08T20:27:43.043365810Z
   session_id: 01a1bc93-77a0-7740-8b03-df4e3e8d1df5
   harness_version: 2.1.319 (Claude Code)
+- id: 01a1bcde-5c6c-79f0-adde-977b19c05579
+  author: joe
+  content: |-
+    Round 7 final native-seat handoff. All four review findings are accepted, none disputed; punt succeeded and TASK-3429 is Needs Attention. No code edits are warranted by these remaining manual/evidence gates. Changed workspace files: none. No commit, push, PR mutation, queue done, pr ship, review record or ship publication declaration was performed. Git metadata is read-only by explicit seat instruction. The punt reported the store change queued for host commit; preserve that change and all publication vetoes.
+
+    Evidence: HEAD 488164b2b3b3975d2875749fd09abe9033073282; hostname imac. Descriptor scan: 58 literal names, 58 unique. git diff --check passed; workspace clean. untested=true for this round: no newly executed cargo-test result. Prior round broad surface result remains 110 passed/1 failed (missing CLI fixture), not a green suite. All seven prior jobs were polled with --wait 1 and returned exit 75, still running: j20261108T194813867-3135888-0, j20261108T194815028-3135969-0, j20261108T194923223-3141697-0, j20261108T194924385-3141763-0, j20261108T194925549-3141869-0, j20261108T200234909-3210534-0, j20261108T200236053-3210583-0. No duplicate cargo work submitted.
+
+    Read-only forge observation at this head: CI (cli-0) and CI (rest) SUCCESS; CI (cli-1) IN_PROGRESS; CI (lib-0), CI (lib-1), CI (gates), CI (contracts) QUEUED; merge-hold-gate FAILURE. Final-head green CI remains required. No CI wait remains active in this turn.
+
+    Host/advisor actions required:
+    1. Supply dell1 clean-build comparison with cargo --timings on the spec, or explicitly amend AC5.
+    2. Correct AC3 via recorded advisor ruling (current preserved surface: 58; criterion: 72), then require green tools/list and descriptor tests at final head.
+    3. Only if triage permits partial publication, change PR title/publication subject to: [AI:codex] refactor(mcp): extract transport with binary-injected handler (Refs TASK-3429). Do not rewrite existing commits from this seat. Proposed PR body: Extract MCP transport and the store handler into aida-mcp, inject the handler from the binary, and keep shared descriptors and claim naming below the crate boundary. This is a partial implementation and does not complete TASK-3429: AC3 awaits advisor resolution of 72 required versus 58 existing tool names; AC5 awaits dell1 clean-build timing evidence or amendment. Local validation is incomplete, including the previously reported missing CLI fixture failure and seven unfinished launcher jobs. Final-head CI and recorded merge-hold clearance remain outstanding. Publication remains vetoed pending triage.
+    4. Obtain green final-head CI and eligible recorded merge-hold clearance through the authorized reviewer/human path. No code change or repeated requeue substitutes for clearance.
+
+    Do not automatically publish another completion-trailer commit or mark this spec complete. This round exits explicitly punted rather than silently passing through.
+  created_at: 2026-11-08T20:34:11.692987505Z
+  modified_at: 2026-11-08T20:34:11.692987505Z
+  session_id: 01a1bcdd2831
 history:
 - id: 01a1b862-7fc0-7e63-899e-5179ac0131ed
   author: joe
@@ -740,6 +759,14 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a1bcde-1429-7923-b0eb-05d38cdfd779
+  author: joe
+  timestamp: 2026-11-08T20:33:53.193535903Z
+  session_id: 01a1bcdd2831
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: NeedsAttention
 filed_at:
   code_sha: 2a7fe186bdcd718fa356e5e4d028a3b2ff13769d
   branch: main
@@ -749,3 +776,8 @@ filed_at:
   vendor: claude
   session: 01a1b848-940b-7bd2-8acd-52e428b182b8
   harness_version: 2.1.319 (Claude Code)
+attention_reason:
+  category: ambiguous-spec
+  detail: 'Round 7 explicitly accepts review findings 1-4; none is disputed. Finding 1 / AC5 requires dell1 clean-build comparisons and cargo --timings evidence or advisor amendment; current host is imac and no dell1 evidence is available. Finding 2 / AC3 still says 72 names while preserved schema has 58 unique literal names; advisor correction and final-head green descriptor/tools-list CI remain required. Finding 3 requires the host to change the PR title/publication subject to (Refs TASK-3429) and disclose partial scope if triage authorizes publication; Git metadata is read-only and this seat is forbidden PR mutation. Finding 4 remains open: at 488164b2b3b3 cli-0 and rest CI shards succeeded, cli-1 is in progress, lib-0/lib-1/gates/contracts queued, and merge-hold-gate failed. All seven prior local launcher jobs still return exit 75, so no new executed-test success is claimed. Do not complete or publish TASK-3429 until advisor triage and recorded hold clearance. Requeue without a ruling does not amend AC3/AC5 or revoke existing publication vetoes.'
+  raised_by: implementer
+  raised_at: 2026-11-08T20:33:53.193518789Z
