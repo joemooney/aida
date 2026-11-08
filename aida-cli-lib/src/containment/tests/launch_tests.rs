@@ -3445,6 +3445,7 @@ fn bug_2487_pinned_help_checks_production_argv_and_scopes() {
         Path::new("/fixture/codex"),
         &bug_2487_codex_env(),
         &original,
+        true,
     )
     .unwrap();
     assert!(args
@@ -3468,11 +3469,94 @@ fn bug_2487_pinned_help_checks_production_argv_and_scopes() {
         Path::new("/fixture/codex"),
         &bug_2487_codex_env(),
         &["exec".into(), "--future-unknown".into(), "prompt".into()],
+        true,
     )
     .unwrap_err()
     .to_string();
     assert!(error.contains("--future-unknown"), "{error}");
     assert!(validate_codex_flags(&["sandbox".into(), "--json".into()], "sandbox").is_err());
+}
+
+#[test]
+// trace:TASK-3000 | ai:codex
+fn task_3000_unpinned_codex_checks_its_own_help_before_launch() {
+    let dir = tempfile::tempdir().unwrap();
+    let program = dir.path().join("codex");
+    let calls = dir.path().join("codex.calls");
+    let fixture: serde_json::Value =
+        serde_json::from_str(include_str!("../../launch/codex_0166_help.json")).unwrap();
+    let root = dir.path().join("root.help");
+    let exec = dir.path().join("exec.help");
+    let sandbox = dir.path().join("sandbox.help");
+    std::fs::write(&root, "Options:\n  -c, --config <key=value>\n").unwrap();
+    std::fs::write(&exec, fixture["exec"].as_str().unwrap()).unwrap();
+    std::fs::write(&sandbox, fixture["sandbox"].as_str().unwrap()).unwrap();
+    std::fs::write(
+        &program,
+        format!(
+            "#!/bin/sh\n\
+             echo \"$*\" >> \"$0.calls\"\n\
+             test -z \"$OPENAI_API_KEY$AIDA_SESSION_GRANT\" || exit 91\n\
+             case \"$*\" in\n\
+             --version) echo 'codex-cli 0.167.0';;\n\
+             --help) /bin/cat {root:?};;\n\
+             'exec --help') /bin/cat {exec:?};;\n\
+             'sandbox --help') /bin/cat {sandbox:?};;\n\
+             *) exit 92;;\nesac\n"
+        ),
+    )
+    .unwrap();
+    std::fs::set_permissions(&program, std::fs::Permissions::from_mode(0o700)).unwrap();
+    let mut env = bug_2487_codex_env();
+    env.insert("OPENAI_API_KEY".into(), "must-not-reach-host-probe".into());
+    env.insert(
+        "AIDA_SESSION_GRANT".into(),
+        "11111111-1111-4111-8111-111111111111".into(),
+    );
+    let original = vec!["exec".into(), "--json".into(), "prompt".into()];
+    codex_argv(&program, &env, &original, false).unwrap();
+    assert_eq!(
+        std::fs::read_to_string(&calls).unwrap(),
+        "--version\n--help\nexec --help\nsandbox --help\n"
+    );
+    for missing in [&root, &exec] {
+        let saved = std::fs::read(missing).unwrap();
+        // Mentioning -c in prose must not count as an option declaration.
+        std::fs::write(
+            missing,
+            "Options:\n  -h, --help\nExample: -c default_permissions=aida\n",
+        )
+        .unwrap();
+        let error = format!(
+            "{:#}",
+            codex_argv(&program, &env, &original, false).unwrap_err()
+        );
+        assert!(error.contains(&program.display().to_string()), "{error}");
+        assert!(error.contains("codex-cli 0.167.0"), "{error}");
+        assert!(error.contains("default_permissions"), "{error}");
+        assert!(error.contains("help lacks -c"), "{error}");
+        std::fs::write(missing, saved).unwrap();
+    }
+    // Exec-only unsupported flags are checked against the live help as well.
+    std::fs::write(&exec, "Options:\n  -c, --config <key=value>\n").unwrap();
+    let error = format!(
+        "{:#}",
+        codex_argv(&program, &env, &original, false).unwrap_err()
+    );
+    assert!(error.contains("--json"), "{error}");
+    assert!(error.contains("0.167.0"), "{error}");
+
+    // Pinned callers retain fixture-only validation, with no vendor execution.
+    std::fs::remove_file(&calls).unwrap();
+    std::fs::write(&program, "#!/bin/sh\nexit 93\n").unwrap();
+    let error = format!(
+        "{:#}",
+        codex_argv(&program, &env, &original, false).unwrap_err()
+    );
+    assert!(error.contains("version unavailable"), "{error}");
+    assert!(error.contains(&program.display().to_string()), "{error}");
+    codex_argv(&program, &env, &original, true).unwrap();
+    assert!(!calls.exists());
 }
 
 #[test]
@@ -3506,6 +3590,7 @@ fn bug_2487_installed_exec_honours_builder_profile() {
             "workspace-write".into(),
             "Run the fixture tool call.".into(),
         ],
+        true,
     )
     .unwrap();
     let output = Command::new("/usr/bin/python3")
