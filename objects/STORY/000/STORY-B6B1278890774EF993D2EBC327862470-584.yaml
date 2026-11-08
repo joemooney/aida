@@ -18,7 +18,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-08T02:58:08.667753563Z
-modified_at: 2026-11-08T12:27:36.706239922Z
+modified_at: 2026-11-08T12:27:39.211610346Z
 req_type: Story
 tags:
 - area:human-wait
@@ -473,6 +473,20 @@ comments:
   content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: R23 is fixed and a fresh sweep of status, claim and cleanup writers found no new sketch defect, but the PR title still completes STORY-2661 at squash merge with AC1-4 unimplemented (R1). AC1: unverified, not implemented by this sketch-only PR. AC2: unverified, not implemented; manual resume only. AC3: unverified, not implemented; AGY and AIDA-contained Codex deferred. AC4: unverified, not implemented; escalation designed only. Advisor sketch signoff not recorded. CI run 42479275587 pending at this head; merge-hold-gate failure is the expected active hold, not a PR defect.. It was punted on: design-fork: R23 addressed in docs/plans/2026-11-08-story-2661-park-resume-sketch.md: CLI claim and MCP claim_task refuse retained ownership at final lease/status/owner boundaries; added regressions per verb, races, uncertainty, cancellation and legacy conflicting live-claim recovery for bound resume. No findings disputed. Binding advisor ruling requires sketch signoff before implementation. R1 remains host/advisor metadata action: retitle PR #3666 exactly [AI:codex] docs(plans): sketch park-on-ask resume-on-answer (Refs STORY-2661). Retain publication veto until signoff and title repair. Validation: git diff --check passed; documentation only, runtime regressions untested=true. Codegraph unavailable; inspected claim and MCP source directly. Native non-completing Refs declaration recorded; edits left uncommitted.. No triage reason was given.'
   created_at: 2026-11-08T12:27:36.706236544Z
   modified_at: 2026-11-08T12:27:36.706236544Z
+  session_id: 01a1b9af-8230-75d2-82f8-667491cc010a
+  harness_version: 2.1.319 (Claude Code)
+- id: 01a1bb20-eaca-7123-a3dc-6e35c47d47cc
+  author: joe
+  content: |-
+    REVIEW FINDINGS TO ADDRESS (STORY-2661):
+    Verdict: CHANGES REQUESTED
+    Reviewed commit: 3131cc27b3a3
+    Recorded: 2026-11-08T12:23:10.104323951+00:00
+    Findings:
+    1. R1 BLOCKER (open since round 1): at head 3131cc27b3a3 PR #3666 is still titled '[AI:codex] feat: Park on ask, resume on answer... (STORY-2661)'. aida-cli-lib/src/pr_ship.rs:339-372 short-circuits only on a trailing '(Refs ...)' and otherwise takes completion ids from the title, so a squash merge completes the story with AC1-4 unimplemented, contradicting sketch:9 and sketch:13 and the sketch's own publication gate at sketch:677-681. Fix: retitle to exactly '[AI:codex] docs(plans): sketch park-on-ask resume-on-answer (Refs STORY-2661)'. This needs host or advisor metadata action; no seat commit clears it, so do not send this back to the seat for another revision.
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
+  created_at: 2026-11-08T12:27:39.082465127Z
+  modified_at: 2026-11-08T12:27:39.082465127Z
   session_id: 01a1b9af-8230-75d2-82f8-667491cc010a
   harness_version: 2.1.319 (Claude Code)
 history:
