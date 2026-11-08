@@ -10,7 +10,7 @@ use std::collections::BTreeMap;
 use std::fs::File;
 use std::io::{Read, Write};
 use std::os::fd::{AsRawFd, FromRawFd};
-use std::os::unix::fs::{FileExt, MetadataExt, OpenOptionsExt, PermissionsExt};
+use std::os::unix::fs::{DirBuilderExt, FileExt, MetadataExt, OpenOptionsExt, PermissionsExt};
 use std::os::unix::process::CommandExt;
 use std::path::{Path, PathBuf};
 use std::process::{Child, Command, Stdio};
@@ -55,6 +55,7 @@ const ENV: &[&str] = &[
     "AIDA_AGENT_TYPE",
     "AIDA_SESSION_ID",
     "AIDA_SESSION_SCOPE",
+    "AIDA_REVIEW_VERDICT_FILE",
     "AIDA_PROJECT_ROOT",
     "AIDA_AGENT_CONTEXT_FILE",
     "AIDA_CONTAINMENT_POSTURE",
@@ -249,7 +250,9 @@ impl WriteProfile {
             self.add(&path, false)?;
         }
         let cache = state.join("derived-cache");
-        std::fs::create_dir(&cache)?;
+        // This is launch-private even when the caller's state directory or
+        // umask is permissive. Never adopt a previous launch's cache.
+        std::fs::DirBuilder::new().mode(0o700).create(&cache)?;
         self.add(&cache, true)?;
         Ok(cache.join(aida_core::db::CACHE_FILE_NAME))
     }
@@ -825,11 +828,15 @@ impl PreparedLaunch {
     /// `host_main` is the launcher's main checkout, resolved once at the
     /// launch entry point (TASK-2032); `None` recognises no seat clone.
     // trace:TASK-2708 TASK-2032 | ai:claude
-    pub(crate) fn prepare(child: &Command, root: &Path, host_main: Option<&Path>) -> Result<Self> {
+    pub(crate) fn prepare(
+        child: &mut Command,
+        root: &Path,
+        host_main: Option<&Path>,
+    ) -> Result<Self> {
         Self::prepare_for_owner(child, root, host_main, unsafe { libc::getuid() })
     }
     fn prepare_for_owner(
-        child: &Command,
+        child: &mut Command,
         root: &Path,
         host_main: Option<&Path>,
         credential_owner: u32,
@@ -844,7 +851,7 @@ impl PreparedLaunch {
         )
     }
     pub(crate) fn prepare_interactive(
-        child: &Command,
+        child: &mut Command,
         root: &Path,
         host_main: Option<&Path>,
     ) -> Result<Self> {
@@ -860,13 +867,21 @@ impl PreparedLaunch {
     // trace:STORY-2593 | ai:codex — inject the binary pin while keeping
     // ambient reads under their existing ExecContext ledger owner.
     fn prepare_with_io(
-        child: &Command,
+        child: &mut Command,
         root: &Path,
         host_main: Option<&Path>,
         credential_owner: u32,
         io: LaunchIo,
         codex_sha256: &str,
     ) -> Result<Self> {
+        // Projection turns ambient values into explicit pairs, which this
+        // wrapper would mistake for site decisions. All wrapper entrypoints
+        // must receive an unprojected command, including future launch sites.
+        // trace:STORY-2326 | ai:codex
+        anyhow::ensure!(
+            !super::profile::environment_is_cleared(child),
+            "contained wrapper requires an unprojected command environment"
+        );
         let store_profile = selected_store_profile(child)?;
         // trace:TASK-2708 | ai:claude — the vendor is data selected by the
         // child's program; everything below is the one shared boundary.
@@ -974,7 +989,7 @@ impl PreparedLaunch {
             .unwrap_or_else(|| host_home.join(".claude"));
         let grant = explicit(child, crate::gate::seat_authority::GRANT_ENV)
             .context("contained child requires explicit grant decision")?;
-        let ttl = if grant.is_empty() {
+        let mut ttl = if grant.is_empty() {
             0
         } else {
             (crate::gate::seat_authority::read_grant(&grant)?.expires_at - chrono::Utc::now())
@@ -996,7 +1011,19 @@ impl PreparedLaunch {
                         let program = codex_auth::resolve_native_program(&program)?;
                         codex_auth::require_program(&program, codex_sha256)?;
                         pinned_program = Some(program);
-                        let auth = codex_auth::prepare(&codex_home, credential_owner, ttl)?;
+                        // trace:BUG-2486 | ai:codex — pinned trusted policy only.
+                        let floor = codex_auth::minimum_grant(&policy)?;
+                        let auth = codex_auth::prepare(&codex_home, credential_owner, ttl, floor)?;
+                        if !grant.is_empty() {
+                            crate::gate::seat_authority::cap_launch_child_expiry(
+                                &grant,
+                                auth.expires_at.saturating_sub(codex_auth::MARGIN),
+                            )?;
+                        }
+                        let (effective, diagnostic) =
+                            auth.launch_lifetime(ttl, chrono::Utc::now().timestamp());
+                        eprintln!("{diagnostic}");
+                        ttl = effective;
                         codex_auth::exclude_oauth_hosts(&mut allowed);
                         Auth::ChatGpt(auth)
                     }
@@ -1385,7 +1412,7 @@ fn runtime_argv(
     wrapped_outer_only_argv(policy, runtime, &original[1])
 }
 
-/// Codex's argv: the tool-env and native-profile overrides, then the site's
+/// Codex's argv: the tool-env and exec-compatible profile config, then the site's
 /// argv minus anything that would replace the generated profile. Its seat
 /// probe runs through Codex's own sandbox as well (`codex sandbox ... --`).
 // trace:TASK-2707 TASK-2708 | ai:claude
@@ -1415,7 +1442,8 @@ fn codex_argv(
             ),
         ]);
     }
-    args.extend(["-P".into(), "aida".into()]);
+    // trace:BUG-2487 | ai:codex — -P belongs only to `codex sandbox`.
+    args.extend(["-c".into(), "default_permissions=\"aida\"".into()]);
     if let Some(at) = original.iter().position(|a| a == "exec") {
         anyhow::ensure!(
             !original
@@ -1442,15 +1470,98 @@ fn codex_argv(
                     | "-P"
                     | "--permission-profile"
             ),
-            "contained Codex cannot override its generated native profile"
+            "contained Codex cannot override its generated native profile with {}",
+            original[i]
         );
         args.push(original[i].clone());
         i += 1;
     }
+    validate_codex_flags(&args, "exec")?;
+    let mut sandbox = crate::codex_tool_env::sandbox_args_for_contained(&args)?;
+    // The model-free seat preflight retains the same explicit profile.
+    sandbox.extend([
+        "-P".into(),
+        "aida".into(),
+        "--include-managed-config".into(),
+    ]);
+    validate_codex_flags(&sandbox, "sandbox")?;
     let mut preflight = vec![program.to_string_lossy().into_owned()];
-    preflight.extend(crate::codex_tool_env::sandbox_args_for_contained(&args)?);
+    preflight.extend(sandbox);
     preflight.push("--".into());
     Ok((args, preflight))
+}
+
+/// Validate against recorded help from the exact auth pin, without executing
+/// lane-selected vendor code on the host. Parse option declarations only;
+/// option values and text within the terminal prompt are opaque. The recorded
+/// help lives beside this production consumer, not under a tests directory.
+// trace:BUG-2487 | ai:codex
+fn validate_codex_flags(args: &[String], scope: &str) -> Result<()> {
+    let fixture: serde_json::Value = serde_json::from_str(include_str!("codex_0166_help.json"))?;
+    anyhow::ensure!(
+        fixture["sha256"] == codex_auth::PROGRAM_SHA256,
+        "contained Codex help fixture differs from executable pin; re-record help before launch"
+    );
+    let help = fixture[scope]
+        .as_str()
+        .context("missing pinned Codex help")?;
+    let mut options = BTreeMap::new();
+    for line in help
+        .lines()
+        .map(str::trim)
+        .filter(|line| line.starts_with('-'))
+    {
+        let declaration = line.split("  ").next().unwrap();
+        let takes_value = declaration.contains('<');
+        for flag in declaration
+            .split_whitespace()
+            .take_while(|word| !word.starts_with('<'))
+        {
+            options.insert(flag.trim_end_matches(','), takes_value);
+        }
+    }
+    let mut command_seen = false;
+    let mut i = 0;
+    while i < args.len() {
+        let arg = &args[i];
+        if arg == "--" {
+            break;
+        }
+        if arg == scope && !command_seen {
+            command_seen = true;
+            i += 1;
+            continue;
+        }
+        if !arg.starts_with('-') {
+            anyhow::ensure!(
+                command_seen && scope == "exec" && i + 1 == args.len(),
+                "contained Codex requires a fresh exec with one terminal prompt"
+            );
+            break;
+        }
+        let (flag, inline) = arg
+            .split_once('=')
+            .map_or((arg.as_str(), false), |(f, _)| (f, true));
+        let takes_value = options.get(flag).with_context(|| {
+            format!(
+                "contained Codex {scope} flag {flag} is unsupported by pinned codex-cli 0.166.0"
+            )
+        })?;
+        anyhow::ensure!(
+            !inline || *takes_value,
+            "contained Codex {scope} flag {flag} takes no value"
+        );
+        if *takes_value && !inline {
+            anyhow::ensure!(
+                i + 1 < args.len(),
+                "contained Codex {scope} flag {flag} requires a value"
+            );
+            i += 1;
+        }
+        i += 1;
+    }
+    anyhow::ensure!(command_seen, "contained Codex requires {scope}");
+    Ok(())
 }
 
 /// Claude's argv: the site's argv with its one generated `--settings`

@@ -1867,6 +1867,7 @@ fn task1993_orphaned_reviewer_keeps_its_slot_until_it_exits() {
 // Queue work records the reviewer it launches through the production spawn
 // helper; outside a watch launch the helper is the ordinary blocking run.
 // trace:TASK-1993.ac55aab8 | ai:claude
+#[cfg(target_os = "linux")]
 #[test]
 fn task1993_queue_work_records_the_reviewer_it_launches() {
     let (temp, store) = fixture();
@@ -1895,7 +1896,38 @@ fn task1993_queue_work_records_the_reviewer_it_launches() {
             c.head.clone(),
         ))
     });
-    let status = reviewer_status(&mut exit());
+    // Delay capture until the immediately-exiting reviewer is an unreaped
+    // zombie, exercising startup refusal receipts rather than avoiding them.
+    // trace:TASK-3365 | ai:codex
+    let pid_file = temp.path().join("reviewer-pid");
+    let mut cmd = Command::new("/bin/sh");
+    cmd.args(["-c", "echo $$ > \"$1\"; exit 0", "reviewer"])
+        .arg(&pid_file);
+    let status = reviewer_status_on_spawn(&mut cmd, || {
+        let deadline = std::time::Instant::now() + std::time::Duration::from_secs(5);
+        loop {
+            let zombie = std::fs::read_to_string(&pid_file)
+                .ok()
+                .and_then(|pid| {
+                    let pid = pid.trim().parse::<u32>().ok()?;
+                    std::fs::read_to_string(format!("/proc/{pid}/stat")).ok()
+                })
+                .is_some_and(|stat| {
+                    stat[stat.rfind(')').unwrap() + 1..]
+                        .split_whitespace()
+                        .next()
+                        == Some("Z")
+                });
+            if zombie {
+                break;
+            }
+            assert!(
+                std::time::Instant::now() < deadline,
+                "reviewer did not exit"
+            );
+            std::thread::sleep(std::time::Duration::from_millis(5));
+        }
+    });
     LAUNCH.with(|l| *l.borrow_mut() = None);
     assert!(status.unwrap().success());
     let attempt = &store.load().unwrap().entries["PR-1"].attempts[0];
@@ -2613,4 +2645,49 @@ fn bug2471_unusable_state_stops_before_admitting_another_change() {
     .unwrap_err();
     assert!(stops_watcher(&error));
     assert_eq!(visited, ["PR-1"]);
+}
+
+// trace:TASK-3365 | ai:codex
+#[cfg(target_os = "linux")]
+#[test]
+fn task_3365_fast_exiting_worker_is_recorded_and_releases_capacity() {
+    let (_temp, store) = fixture();
+    let c = change(1, 1, false);
+    let attempt = dispatch(select(&store, &c, None, 1).unwrap());
+    execute_reservation(
+        &store,
+        &c.key(),
+        &attempt.token,
+        |_| Ok(()),
+        |_| {
+            store.record_worker(&c.key(), &attempt.token, None)?;
+            let mut child = Command::new("/bin/true").spawn()?;
+            let deadline = std::time::Instant::now() + std::time::Duration::from_secs(5);
+            loop {
+                let stat = std::fs::read_to_string(format!("/proc/{}/stat", child.id()))?;
+                if stat[stat.rfind(')').unwrap() + 1..]
+                    .split_whitespace()
+                    .next()
+                    == Some("Z")
+                {
+                    break;
+                }
+                assert!(std::time::Instant::now() < deadline, "worker did not exit");
+                std::thread::sleep(std::time::Duration::from_millis(5));
+            }
+            let identity = Identity::child(&child)?;
+            store.record_worker(&c.key(), &attempt.token, Some(identity.clone()))?;
+            child.wait()?;
+            assert!(!identity.alive());
+            assert!(store.load()?.entries[&c.key()].attempts[0].worker.is_some());
+            Ok(())
+        },
+    )
+    .unwrap();
+    let state = store.load().unwrap();
+    let recorded = &state.entries[&c.key()].attempts[0];
+    assert_eq!(recorded.phase, Phase::Completed);
+    assert!(!recorded.unrecorded_descendant());
+    assert!(!active(recorded));
+    dispatch(select(&store, &change(2, 2, false), None, 1).unwrap());
 }

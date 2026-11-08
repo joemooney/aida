@@ -21,7 +21,7 @@ fn host_auth(home: &Path, exp: i64) -> serde_json::Value {
     value
 }
 fn prepare_auth(home: &Path, ttl: i64) -> Result<codex_auth::Credential> {
-    codex_auth::prepare(home, unsafe { libc::getuid() }, ttl)
+    codex_auth::prepare(home, unsafe { libc::getuid() }, ttl, 1800)
 }
 fn error(home: &Path) -> String {
     match prepare_auth(home, 3600) {
@@ -155,9 +155,11 @@ fn story_2593_reduced_sealed_leaf_and_lifetime() {
         before,
         std::fs::read(home.path().join("auth.json")).unwrap()
     );
-    assert!(prepare_auth(home.path(), 7200).is_err());
+    assert!(
+        prepare_auth(home.path(), 7200).unwrap().deadline <= chrono::Utc::now().timestamp() + 6900
+    );
     assert!(prepare_auth(home.path(), i64::MAX).is_err());
-    for exp in [0, chrono::Utc::now().timestamp() + 3601] {
+    for exp in [0, chrono::Utc::now().timestamp() + 1800] {
         host_auth(home.path(), exp);
         assert!(error(home.path()).contains("relaunch"));
     }
@@ -168,9 +170,13 @@ fn story_2593_credential_identity_schema_and_redaction() {
     let path = home.path().join("auth.json");
     assert!(error(home.path()).contains("keyring"));
     host_auth(home.path(), chrono::Utc::now().timestamp() + 7200);
-    assert!(
-        codex_auth::prepare(home.path(), unsafe { libc::getuid() }.wrapping_add(1), 3600).is_err()
-    );
+    assert!(codex_auth::prepare(
+        home.path(),
+        unsafe { libc::getuid() }.wrapping_add(1),
+        3600,
+        1800
+    )
+    .is_err());
     std::fs::set_permissions(&path, std::fs::Permissions::from_mode(0o644)).unwrap();
     assert!(error(home.path()).contains("permissions"));
     std::fs::set_permissions(&path, std::fs::Permissions::from_mode(0o600)).unwrap();
@@ -564,7 +570,7 @@ fn story_2593_production_prepare_uses_private_chatgpt_leaf() {
     use sha2::{Digest, Sha256};
     let pin = format!("{:x}", Sha256::digest(std::fs::read(&program).unwrap()));
     let plan = PreparedLaunch::prepare_with_io(
-        &child,
+        &mut child,
         root.path(),
         None,
         unsafe { libc::getuid() },
@@ -590,7 +596,7 @@ fn story_2593_production_prepare_uses_private_chatgpt_leaf() {
         .mounts
         .iter()
         .any(|m| m.path == private.join("auth.json") && !m.writable));
-    for path in [home.join(".codex"), relocated] {
+    for path in [home.join(".codex"), relocated.clone()] {
         let mount = plan.profile.mounts.iter().find(|m| m.path == path).unwrap();
         assert!(!mount.writable);
         assert!(
@@ -623,8 +629,64 @@ fn story_2593_production_prepare_uses_private_chatgpt_leaf() {
         assert!(!diagnostic.contains(secret));
     }
     drop(plan);
+    // trace:BUG-2486 | ai:codex — production preparation persists the cap and
+    // refuses a below-floor token before changing the delegated grant.
+    use crate::gate::seat_authority as authority;
+    let parent_id = authority::test_support::mint_grant_for(
+        root.path(),
+        "credential-fixture",
+        "advisor",
+        &["reviewer"],
+    );
+    let parent = authority::read_grant(&parent_id).unwrap();
+    let mut delegated = parent.clone();
+    delegated.id = uuid::Uuid::new_v4().to_string();
+    delegated.parent_grant_id = Some(parent_id.clone());
+    let path = authority::grant_dir()
+        .unwrap()
+        .join(format!("{}.json", delegated.id));
+    std::fs::write(&path, serde_json::to_vec(&delegated).unwrap()).unwrap();
+    child.env("AIDA_SESSION_GRANT", &delegated.id);
+    let exp = codex_auth::token_expiry(&relocated, unsafe { libc::getuid() }).unwrap();
+    let capped = PreparedLaunch::prepare_with_io(
+        &mut child,
+        root.path(),
+        None,
+        unsafe { libc::getuid() },
+        LaunchIo::Headless,
+        &pin,
+    )
+    .unwrap();
+    assert_eq!(capped.chatgpt_deadline, Some(exp - 300));
+    assert_eq!(
+        authority::read_grant(&delegated.id)
+            .unwrap()
+            .expires_at
+            .timestamp(),
+        exp - 300
+    );
+    assert_eq!(
+        authority::read_grant(&parent_id).unwrap().expires_at,
+        parent.expires_at
+    );
+    drop(capped);
+    let before = std::fs::read(&path).unwrap();
+    host_auth(&relocated, chrono::Utc::now().timestamp() + 1900);
+    let refused = PreparedLaunch::prepare_with_io(
+        &mut child,
+        root.path(),
+        None,
+        unsafe { libc::getuid() },
+        LaunchIo::Headless,
+        &pin,
+    );
+    assert!(match refused {
+        Ok(_) => false,
+        Err(e) => e.to_string().contains("codex login"),
+    });
+    assert_eq!(std::fs::read(&path).unwrap(), before);
     std::fs::write(&program, "#!/bin/sh\necho 'codex-cli 0.166.1'\n").unwrap();
-    let result = PreparedLaunch::prepare(&child, root.path(), None);
+    let result = PreparedLaunch::prepare(&mut child, root.path(), None);
     assert!(match result {
         Ok(_) => false,
         Err(e) => format!("{e:#}").contains("re-probe this codex binary"),
@@ -694,5 +756,94 @@ fn story_2593_fifo_refusal_has_watchdog() {
             panic!("FIFO credential open blocked");
         }
         std::thread::sleep(Duration::from_millis(10));
+    }
+}
+
+// trace:BUG-2486 | ai:codex
+#[test]
+fn bug_2486_capped_floor_and_ample_lifetimes() {
+    let now = 1_800_000_000;
+    assert_eq!(
+        codex_auth::grant_deadline(now, now + 10 * 3600, 86400, 1800).unwrap(),
+        now + 10 * 3600 - 300
+    );
+    assert_eq!(
+        codex_auth::grant_deadline(now, now + 90000, 86400, 1800).unwrap(),
+        now + 86400
+    );
+    assert_eq!(
+        codex_auth::grant_deadline(now, now + 2100, 86400, 1800).unwrap(),
+        now + 1800
+    );
+    for exp in [0, now - 1, now + 2099] {
+        let error = codex_auth::grant_deadline(now, exp, 86400, 1800)
+            .unwrap_err()
+            .to_string();
+        assert!(error.contains(&exp.to_string()) && error.contains("codex login"));
+    }
+    assert!(codex_auth::grant_deadline(now, now + 4000, 86400, 4000).is_err());
+    assert!(codex_auth::grant_deadline(now, now + 4000, 86400, 0).is_err());
+    assert_eq!(
+        codex_auth::grant_deadline(now, now + 7200, 0, 1800).unwrap(),
+        now + 3600
+    );
+    // A short inherited grant is allowed when the token does not shorten it,
+    // including equality at the token's safe deadline.
+    for exp in [now + 86400, now + 900] {
+        assert_eq!(
+            codex_auth::grant_deadline(now, exp, 600, 1800).unwrap(),
+            now + 600
+        );
+    }
+    let home = tempfile::tempdir().unwrap();
+    let exp = chrono::Utc::now().timestamp() + 36000;
+    host_auth(home.path(), exp);
+    assert_eq!(
+        codex_auth::token_expiry(home.path(), unsafe { libc::getuid() }).unwrap(),
+        exp
+    );
+    assert_eq!(
+        prepare_auth(home.path(), 86400).unwrap().deadline,
+        exp - 300
+    );
+}
+
+// trace:BUG-2486 | ai:codex
+#[test]
+fn bug_2486_trusted_floor_policy_and_launch_diagnostic() {
+    let default: toml::Value = toml::from_str("").unwrap();
+    assert_eq!(codex_auth::minimum_grant(&default).unwrap(), 1800);
+    let policy: toml::Value = toml::from_str("[contained]\ncodex_min_grant_secs = 600").unwrap();
+    let floor = codex_auth::minimum_grant(&policy).unwrap();
+    assert_eq!(floor, 600);
+    let home = tempfile::tempdir().unwrap();
+    let exp = chrono::Utc::now().timestamp() + 1200;
+    host_auth(home.path(), exp);
+    assert!(prepare_auth(home.path(), 86400).is_err());
+    let auth = codex_auth::prepare(home.path(), unsafe { libc::getuid() }, 86400, floor).unwrap();
+    assert_eq!(auth.deadline, exp - 300);
+    let now = chrono::Utc::now().timestamp();
+    let (effective, diagnostic) = auth.launch_lifetime(86400, now);
+    assert!(effective > 600 && effective <= 900);
+    assert_eq!(effective, auth.deadline - now);
+    assert_eq!(diagnostic,
+        format!("contained Codex ChatGPT grant: requested 86400s, effective {effective}s, deadline {} (Unix seconds), token expiry {exp} (300s margin)", exp - 300));
+    // Exercise the same argument computation PreparedLaunch uses when the token
+    // is ample: the diagnostic deadline must be the grant's, not the token cap.
+    let exp = now + 90000;
+    host_auth(home.path(), exp);
+    let auth = codex_auth::prepare(home.path(), unsafe { libc::getuid() }, 3600, floor).unwrap();
+    let (effective, diagnostic) = auth.launch_lifetime(3600, now);
+    assert_eq!(effective, auth.deadline - now);
+    assert!(auth.deadline < exp - codex_auth::MARGIN);
+    assert_eq!(diagnostic,
+        format!("contained Codex ChatGPT grant: requested 3600s, effective {effective}s, deadline {} (Unix seconds), token expiry {exp} (300s margin)", auth.deadline));
+    for value in ["0", "-1", "1.5", "\"600\"", "true"] {
+        let policy: toml::Value =
+            toml::from_str(&format!("[contained]\ncodex_min_grant_secs = {value}")).unwrap();
+        assert_eq!(
+            codex_auth::minimum_grant(&policy).unwrap_err().to_string(),
+            crate::vendors::codex_auth_hints::MIN_GRANT_INVALID
+        );
     }
 }

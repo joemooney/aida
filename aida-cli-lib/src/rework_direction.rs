@@ -382,14 +382,22 @@ pub(crate) fn assemble_pickup_prompt(inputs: &PickupInputs<'_>) -> String {
         Some(section) => format!("{}\n\n{prompt}", section.trim_end()),
         None => prompt,
     };
-    if !implementer_item {
-        return prompt;
-    }
-    lead_rework_prompt(
-        prompt,
-        &direction,
-        inputs.review_findings.filter(|_| supersedes),
-        inputs.conflict,
+    let prompt = if implementer_item {
+        lead_rework_prompt(
+            prompt,
+            &direction,
+            inputs.review_findings.filter(|_| supersedes),
+            inputs.conflict,
+        )
+    } else {
+        prompt
+    };
+    // Preserve leading slash invocations for native expansion and skill inlining.
+    // Append after assembly so existing rework context ordering is unchanged.
+    // trace:STORY-2630 | ai:codex
+    format!(
+        "{prompt}\n\n{}",
+        include_str!("../../aida-core/templates/dispatch/code-navigation.md").trim()
     )
 }
 

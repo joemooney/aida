@@ -1831,3 +1831,41 @@ fn seat_clone_origin_callers_never_read_a_refusal_as_no_origin() {
         .to_string();
     assert!(err.contains("remote get-url origin"), "{err}");
 }
+
+// trace:STORY-2630 | ai:codex
+#[cfg(unix)]
+#[test]
+fn codegraph_runtime_link_is_clean_on_an_older_clone_base() {
+    let fx = fixture();
+    // The historical directory-only pattern does not ignore a symlink.
+    std::fs::write(fx.main.join(".gitignore"), ".codegraph/\n").unwrap();
+    git_ok(&fx.main, &["add", ".gitignore"]);
+    git_ok(&fx.main, &["commit", "-qm", "old ignore"]);
+    std::fs::create_dir(fx.main.join(".codegraph")).unwrap();
+    std::fs::write(fx.main.join(".codegraph/codegraph.db"), "index").unwrap();
+    let dest = fx.root.join("seats/aida-seat-aida-codegraph");
+    create(&fx.main, &dest, "feat", "HEAD").unwrap();
+    // Reproduce a clone created before the symlink-safe runtime exclude.
+    let exclude = dest.join(".git/info/exclude");
+    std::fs::write(&exclude, "# old seat\n/.aida/*\n.aida-store\n").unwrap();
+    let refused = aida_core::git_ops::host_git_command(&dest)
+        .args(["rev-parse", "--git-path", "info/exclude"])
+        .output()
+        .unwrap();
+    assert!(
+        !refused.status.success(),
+        "host Git must still refuse a seat clone"
+    );
+    for _ in 0..2 {
+        crate::worktree_gc::link_worktree_runtime_state(&fx.main, &dest).unwrap();
+        assert!(dest.join(".codegraph").is_symlink());
+        assert_eq!(git_ok(&dest, &["status", "--porcelain"]), "");
+    }
+    let body = std::fs::read_to_string(exclude).unwrap();
+    assert!(body.starts_with("# old seat\n"), "{body}");
+    assert_eq!(body.lines().filter(|line| *line == ".codegraph").count(), 1);
+    assert_eq!(
+        std::fs::read_to_string(dest.join(".gitignore")).unwrap(),
+        ".codegraph/\n"
+    );
+}

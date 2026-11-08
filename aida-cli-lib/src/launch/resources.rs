@@ -41,6 +41,23 @@ pub(crate) struct SandboxResources {
 }
 
 impl SandboxResources {
+    /// Project declared cargo overrides through the same complete environment
+    /// policy as vendor launches, rather than ambient inheritance.
+    // trace:STORY-2326 | ai:codex
+    pub(crate) fn child_env(
+        &self,
+        policy: &aida_core::launch_policy::EnvPolicy,
+        parent: &aida_core::exec_context::Environment,
+    ) -> Result<aida_core::launch_policy::ChildEnv, aida_core::launch_policy::EnvPolicyRefusal>
+    {
+        policy.project(
+            parent,
+            self.cargo_env()
+                .into_iter()
+                .map(|(key, value)| (key.into(), Some(value))),
+        )
+    }
+
     /// The cargo env every renderer applies: the cache is off and builds land
     /// in the seat's own target directory.
     pub(crate) fn cargo_env(&self) -> [(&'static str, std::ffi::OsString); 2] {
