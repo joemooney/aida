@@ -8,7 +8,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-07T15:34:33.363448208Z
-modified_at: 2026-11-08T07:48:32.617438798Z
+modified_at: 2026-11-08T07:48:38.531234740Z
 req_type: Story
 comments:
 - id: 01a1b6a6-52e1-70a0-a9c1-d32888979ca5
@@ -472,6 +472,26 @@ comments:
   content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: Refs slice for AC2+AC5 (host query proxy). The seat-controlled PATH blocker is fixed, with a refusal test. AC1 partial: routing on main, but after deployment bare codegraph in a lane still does not reach the proxy. AC2 partial: native-seat read-only observation only; aida-contained posture has no index mount. AC3 present but points lanes at the bare command. AC4 implemented, tests pending CI (proxy_reports_source_age_and_rejects_stale_or_invalid_heartbeats, doctor_proxy_round_trip_and_stalled_peer_are_bounded). AC5 unverified: no live seat evidence. Upstream 1.6.0 --path/--limit/--depth/--json flags confirmed via --help. All build/test CI jobs pending at 30c73ca6bade; merge-hold-gate red is the expected supervised-spec hold, not a code failure.. It was punted on: blocked-dependency: PR-3662 rework removes the blocking seat-controlled PATH injection and adds redirected-graph regression coverage. Host deployment is still a manual gate: this environment has no codegraph executable, primary .codegraph index, proxy service, or candidate doctor --lane-host binary. AC2 live read-only grant evidence and AC5 correct non-empty contained-seat query remain unavailable. Host operator must deploy the reviewed proxy per scripts/codegraph/README.md and capture acceptance output before completing publication. Minor finding 4 (busy serialized proxy versus short doctor probe) remains documented. Uncommitted changes and exact failed commands are in .aida/story-2630-handoff.txt and .aida/story-2630-pr-body.txt; do not complete STORY-2630 or widen index writes.. No triage reason was given.'
   created_at: 2026-11-08T07:48:32.617437341Z
   modified_at: 2026-11-08T07:48:32.617437341Z
+  session_id: 01a1b8be-8170-7fb2-89ab-ecb4c6eee98c
+  harness_version: 2.1.319 (Claude Code)
+- id: 01a1ba21-799b-7201-8996-0aaabcbf3e28
+  author: joe
+  content: |-
+    REVIEW FINDINGS TO ADDRESS (PR #3662):
+    Verdict: CHANGES REQUESTED
+    Reviewed commit: 30c73ca6bade
+    Recorded: 2026-11-08T07:46:03.178162614+00:00
+    Review comment: https://github.com/joemooney/aida/pull/3662#issuecomment-6718899293
+    Findings:
+    1. MAJOR (AC1/AC3, new consequence of the rework): nothing connects lanes to the proxy client. AGENTS.md:482 and aida-core/templates/dispatch/code-navigation.md:1 tell every lane to run bare 'codegraph callers <symbol>', but commit 30c73ca6bad removed the only PATH route and scripts/codegraph/README.md:67-77 says not to replace ~/.local/bin/codegraph and to prefix PATH manually inside the seat shell. After full deployment, a lane following its prompt still gets 'command not found' or the upstream client that fails with 'unable to open database file'. The README says 'the host should provide the reviewed absolute client path' but no mechanism or guidance delivers it. Fix: add a fixed, host-resolved client path that is never derived from the seat's .codegraph (for example, launch config naming a host-owned directory outside seat write roots, with a refusal test), or update the template master and sync so lanes are told the exact command. Otherwise name in the PR body and on the spec who owns this.
+    2. MAJOR (AC2/AC5, repeat of the prior path finding): scripts/codegraph/README.md:69-70 claims the client works 'in both native and AIDA-contained postures', and :104 directs AC5 to a contained Codex seat, but the aida containment posture cannot reach it. aida-cli-lib/src/containment/filesystem.rs:40-72 mounts only workspace/store/cache/state under /lane on a tmpfs root (:109-111) and contains no codegraph mount. In that posture the absolute /home/joe/ai/aida/.codegraph/proxy-state/bin path does not exist, the seat's .codegraph link dangles, and the socket is unreachable. The 2026-11-07 ruling requires a contained seat. Either add a read-only admission for the descriptor, socket and client with a test, or correct the README to native-posture only and state that aida-contained remains open.
+    3. MAJOR (process, third occurrence: PR-3632 finding 2, previous round finding 3, 2026-11-07 ruling): the PR body at this head is still only the 'Published from seat' ship boilerplate. It must state AC1-AC5 status against origin/main, and either paste the AC5 live-seat command and output ('codegraph callers primary_index_link --json' and 'aida doctor --lane-host --json') or say explicitly that this is a Refs slice with deployment and AC2/AC5 deferred and name who completes them. The rework's text exists only as an uncommitted seat draft (.aida/story-2630-pr-body) and spec comments. If the seat cannot edit the body, the host must apply it before re-review.
+    4. MINOR (docs): scripts/codegraph/README.md:103-110 is stale after the PATH-routing removal. It says 'launch a new contained Codex seat' and that only 'an already-open seat' needs the PATH prefix, then gives unprefixed acceptance commands; lines 72-77 say existing and new seats use the same prefixed command. Followed as written, the AC5 command fails with command not found. Drop the new-seat distinction and prefix (or use the absolute client in) the acceptance commands.
+    5. MINOR (false unreachable, AC4; carried from the previous round, implementer acknowledged it as unfixed): the single-threaded serve loop in scripts/codegraph/codegraph:218-244 runs refresh (up to 15 s backup) and queries (up to 15 s plus a 2 s receive window) inline, while probe_proxy (aida-cli-lib/src/codegraph.rs:121) allows 250 ms and assess_proxy reports 'unreachable' on any probe failure. Doctor therefore reports a healthy proxy as unreachable whenever a query or snapshot refresh is in flight, and one stalled peer delays all lanes for 2 s per connection. Use a longer probe deadline, a threaded accept loop, or answer status off the query path; if deferring, file a follow-up and name it in the PR body.
+    6. CI/EVIDENCE: no build/test CI result exists yet at 30c73ca6bade (lib-0/lib-1/cli-0/cli-1/rest/gates/contracts in progress or queued), so AC4 test evidence is unconfirmed. test_installed_codegraph_returns_real_edges_from_host_snapshot skips without codegraph on PATH (tests/test_codegraph_proxy.py:235-238), so the real-upstream query against a snapshot has no CI coverage and depends on the AC5 live run. The next reviewer must see green CI at the exact new head.
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
+  created_at: 2026-11-08T07:48:38.427198315Z
+  modified_at: 2026-11-08T07:48:38.427198315Z
   session_id: 01a1b8be-8170-7fb2-89ab-ecb4c6eee98c
   harness_version: 2.1.319 (Claude Code)
 history:
