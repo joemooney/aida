@@ -8,7 +8,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-07T10:45:58.443413275Z
-modified_at: 2026-11-08T02:21:33.785602072Z
+modified_at: 2026-11-08T02:21:40.381538831Z
 req_type: Task
 relationships:
 - rel_type: Child
@@ -144,6 +144,25 @@ comments:
   content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: Round 2 rework addresses the round-1 findings in source, but CI is red at 77a69c38 (lib-0, lib-1, rest; main is green). The failures come from this PR: rows that are legacy or missing pid_start/namespace now read ForeignUnknown (treated as live) instead of dead, so GC, handles, doctor reap, capacity and mail binding regress. A gate-kernel ratchet and a vendor-literal ratchet are also broken. LIGHT gate unmet.. No triage reason was given.'
   created_at: 2026-11-08T02:21:33.785600654Z
   modified_at: 2026-11-08T02:21:33.785600654Z
+  session_id: 01a1b8be-8170-7fb2-89ab-ecb4c6eee98c
+  harness_version: 2.1.319 (Claude Code)
+- id: 01a1b8f6-1feb-7a02-81ed-aa22d05dece2
+  author: joe
+  content: |-
+    REVIEW FINDINGS TO ADDRESS (PR #3634):
+    Verdict: CHANGES REQUESTED
+    Reviewed commit: 77a69c382351
+    Recorded: 2026-11-08T01:26:03.540920368+00:00
+    Findings:
+    1. [major] aida-cli-lib/src/agent_registry.rs:2765-2771 (entry_process_verdict): a row without a full ProcIdentity tuple (pid_start None, a legacy linux-starttime/linux:boot:ticks start with no pid_namespace) now maps to ForeignUnknown(MissingIdentity). entry_process_alive() treats that as alive, so a row whose PID no longer exists is never dead. On main, process_identity_is_alive(pid,start) proved these dead. Regressed CI tests: bug_151 gc_ends_a_dead_row_at_its_last_heartbeat_not_its_start (heartbeat_tests.rs:229), doctor_detects_and_reaps_dead_agent_registry_entry (doctor_cmd.rs:11403), agent_handle a_stale_row_with_a_dead_pid_lends_no_handle (:2440), agy_session_start_ends_a_dead_agy_row_without_manual_gc (status_awaiting.rs:4050), sandboxed_role_send_refuses_after_host_gc_ends_dead_resumable_reader (mailbox_resolver.rs:800), bug_2148_agent_stop_never_signals_unconfirmed_identity_and_keeps_entry (:166), pipeline_stall capacity_counts_verified_process_once... (pipeline_stall_signals.rs:332), story_2254 bg supervisor end-to-end (:409). In production, every pre-upgrade row of a session that has since died stays live forever: phantom aida ps rows, inflated lane capacity, mail routed to dead readers. Fix: a missing tuple may stay Unknown for the purpose of AUTHORIZING something, but a PID with no /proc entry (or a start mismatch under the legacy scheme) must still read Dead for GC and listing. Keep the existing tests unchanged as the regression proof.
+    2. [major] aida-core/src/mailbox_identity.rs:330-336 (SessionBindingFacts::verify) and :488 (registry_process_live): ProcIdentity::from_registry needs a non-zero pid_namespace and a boot-qualified start. A self or ancestor row written with liveness::process_start_identity and no pid_namespace (the existing fixture shape, and any row written before the upgrade that has not yet been re-registered) is now refused NotLive. CI: aida-core mailbox_lifecycle::action::tests::ended_session_binding_cannot_commit_prepared_response (tests.rs:523) and aida-tui redesign::mail::tests::mail_items_for_a_bound_session_ignores_the_inherited_parent_identity (mail.rs:676). Either positively recapture the local PID for a self/ancestor match (the observer IS the process, so that is positive proof), or update these fixtures deliberately and document that a running session loses its private inbox until its next heartbeat after upgrade.
+    3. [major] aida-cli-lib/src/gate/seat_authority.rs (pid_binding_token, probe_bind_target, issue_direct): the gate decision kernel now names aida_core::proc_identity::{ProcIdentity::capture, observe, Verdict} directly. None of these is in gate::dispatch_deps::FACADE_EXTERNAL_LEAVES, so story_1888_gate_paths_tests::gate_kernels_reach_outside_only_through_listed_leaves fails (story_1888_gate_paths_tests.rs:3660). Re-export them through gate/dispatch_deps.rs with a 'feeds authority' leaf entry (as was done for liveness::process_identity_matches_strict), or move them onto the gate floor.
+    4. [minor] aida-cli-lib/src/tests/story_2539_vendor_literal_ratchet_tests.rs:318 fails. The likely cause: SessionBindingFacts::verify's body moved into verify_with, so the ledger key 'aida-core/src/mailbox_identity.rs|impl(SessionBindingFacts:)::verify|literal:claude' no longer matches the measured key. Re-key story_2539_vendor_literals.tsv to the new function and check that no count grew. Check the mailbox_wake_run.rs watch_row entry too.
+    5. [minor] aida-core/src/mailbox_identity.rs:337-342: the sandbox private-inbox exception needs last_active_at <=300s. Per agent_registry.rs UNOBSERVED_HEARTBEAT_TTL_SECS docs, rows heartbeat only at SessionStart/status hooks. So a sandboxed shell loses its private inbox once its row is more than 5 minutes past its last heartbeat (e.g. long tool-heavy turns). Tie the window to the actual heartbeat cadence, or prove the heartbeat runs often enough, with a test that ages the row past 300s under a namespace-mismatch observer.
+    6. [minor] LIGHT gate / round-1 finding 6 still open: no executed Rust test result was reported by the seat (its jobs timed out), and PR CI run 42423100947 is red on lib-0, lib-1 and rest (Build fails as their aggregate). Provide a green CI run at the reworked head; do not weaken or rewrite the regressed tests listed above to get there.
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
+  created_at: 2026-11-08T02:21:40.203220046Z
+  modified_at: 2026-11-08T02:21:40.203220046Z
   session_id: 01a1b8be-8170-7fb2-89ab-ecb4c6eee98c
   harness_version: 2.1.319 (Claude Code)
 history:
