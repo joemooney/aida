@@ -13,7 +13,7 @@ use std::path::{Path, PathBuf};
 use std::process::Command;
 use std::time::{Duration, Instant};
 
-const BRANCH: &str = "refs/heads/aida-intent";
+const LEGACY_BRANCH: &str = "refs/heads/aida-intent";
 const INCOMING: &str = "refs/intake/incoming";
 const PROFILE: &str = "profile.json";
 const REPO_CONFIG: &[u8] = b"[core]\n\trepositoryformatversion = 0\n\tfilemode = true\n\tbare = false\n\tlogallrefupdates = true\n";
@@ -48,6 +48,18 @@ pub(crate) enum IntakeCommand {
         /// Explicit absolute local path, HTTPS URL, or SSH URL.
         #[clap(long)]
         remote: String,
+        /// Opt into per-writer histories (omitting this preserves legacy enrollment).
+        #[clap(long, value_enum)]
+        role: Option<IntakeRole>,
+        /// Stable opaque writer ID; defaults to WORK binding or a clone-local UUID.
+        #[clap(long, requires = "role")]
+        writer_id: Option<String>,
+        /// Producer to read; required for a processor, otherwise the writer itself.
+        #[clap(long, requires = "role")]
+        producer_id: Option<String>,
+        /// Authorized receipt writer to read (repeatable; currently one processor).
+        #[clap(long, requires = "role")]
+        receipt_writer: Vec<String>,
         /// Confirm review of the destination and policy, including an empty policy.
         #[clap(long, required = true)]
         reviewed: bool,
@@ -58,7 +70,7 @@ pub(crate) enum IntakeCommand {
         #[clap(long)]
         json: bool,
     },
-    /// Commit a reviewed envelope and push only aida-intent; never force.
+    /// Commit a reviewed envelope and push only the enrolled producer branch.
     Publish {
         /// Exact envelope JSON; omit to publish retained commits and receipts.
         #[clap(long)]
@@ -113,12 +125,112 @@ pub(crate) enum Action {
     Comment,
 }
 
+// trace:STORY-2652 | ai:codex
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, ValueEnum)]
+#[serde(rename_all = "kebab-case")]
+pub(crate) enum IntakeRole {
+    Producer,
+    Processor,
+}
+
 #[derive(Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 struct Profile {
     version: u32,
     remote: String,
     deny_patterns: Vec<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    writer_id: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    role: Option<IntakeRole>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    producer_branch: Option<String>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    receipt_branches: Vec<String>,
+}
+
+// IDs label writers; neither the ID nor a branch name authenticates a writer.
+// trace:STORY-2652 | ai:codex
+fn writer_id_valid(id: &str) -> bool {
+    id.len() == 32
+        && id
+            .bytes()
+            .all(|b| b.is_ascii_digit() || (b'a'..=b'f').contains(&b))
+}
+
+impl Profile {
+    fn branch(&self) -> &str {
+        match self.role {
+            None => LEGACY_BRANCH,
+            Some(IntakeRole::Producer) => self.producer_branch.as_deref().unwrap(),
+            Some(IntakeRole::Processor) => &self.receipt_branches[0],
+        }
+    }
+
+    fn output_branch(&self) -> &str {
+        if self.version == 1 {
+            "aida-intent"
+        } else {
+            self.branch()
+        }
+    }
+
+    fn branches(&self) -> Vec<&str> {
+        if self.version == 1 {
+            vec![LEGACY_BRANCH]
+        } else {
+            std::iter::once(self.producer_branch.as_deref().unwrap())
+                .chain(self.receipt_branches.iter().map(String::as_str))
+                .collect()
+        }
+    }
+
+    fn validate(&self) -> Result<()> {
+        if self.version == 1 {
+            if self.role.is_some()
+                || self.writer_id.is_some()
+                || self.producer_branch.is_some()
+                || !self.receipt_branches.is_empty()
+            {
+                bail!("Legacy enrollment cannot contain per-writer routing");
+            }
+            return Ok(());
+        }
+        if self.version != 2
+            || self.role.is_none()
+            || !self.writer_id.as_deref().is_some_and(writer_id_valid)
+        {
+            bail!("Unsupported or invalid intake writer profile");
+        }
+        let producer = self
+            .producer_branch
+            .as_deref()
+            .context("Missing producer branch")?;
+        if !producer
+            .strip_prefix("refs/heads/aida-feedback-")
+            .is_some_and(writer_id_valid)
+            || self.receipt_branches.len() > 1
+            || self.receipt_branches.iter().any(|b| {
+                !b.strip_prefix("refs/heads/aida-feedback-receipts-")
+                    .is_some_and(writer_id_valid)
+            })
+        {
+            bail!("Invalid per-writer branches; this enrollment supports one authorized processor");
+        }
+        let writer = self.writer_id.as_deref().unwrap();
+        match self.role.unwrap() {
+            IntakeRole::Producer if producer != format!("refs/heads/aida-feedback-{writer}") => {
+                bail!("Producer branch does not match enrolled writer")
+            }
+            IntakeRole::Processor
+                if self.receipt_branches
+                    != vec![format!("refs/heads/aida-feedback-receipts-{writer}")] =>
+            {
+                bail!("Processor must enroll its own receipt branch")
+            }
+            _ => Ok(()),
+        }
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -280,6 +392,10 @@ impl Intake {
             remote,
             reviewed,
             deny_pattern,
+            role,
+            writer_id,
+            producer_id,
+            receipt_writer,
             ..
         } = command
         {
@@ -288,11 +404,63 @@ impl Intake {
             }
             validate_remote(remote)?;
             envelope::check_patterns("", "", deny_pattern)?;
+            let old_profile = private
+                .read(PROFILE)?
+                .map(|b| serde_json::from_slice::<Profile>(&b))
+                .transpose()?;
+            let writer = if role.is_some() {
+                Some(match writer_id {
+                    Some(id) => id.clone(),
+                    None => match old_profile.as_ref().and_then(|p| p.writer_id.clone()) {
+                        Some(id) => id,
+                        None => aida_core::work_binding::load(&cwd)?
+                            .map(|b| b.node_id.to_ascii_lowercase())
+                            .unwrap_or_else(|| uuid::Uuid::new_v4().simple().to_string()),
+                    },
+                })
+            } else {
+                None
+            };
+            if writer.as_deref().is_some_and(|id| !writer_id_valid(id)) {
+                bail!("Invalid writer identity");
+            }
+            let producer_branch = if let Some(role) = role {
+                let producer = match role {
+                    IntakeRole::Producer => producer_id.as_ref().or(writer.as_ref()).unwrap(),
+                    IntakeRole::Processor => producer_id
+                        .as_ref()
+                        .context("Processor enrollment requires --producer-id")?,
+                };
+                if !writer_id_valid(producer) {
+                    bail!("Invalid producer identity");
+                }
+                Some(format!("refs/heads/aida-feedback-{producer}"))
+            } else {
+                None
+            };
+            let mut receipts = receipt_writer.clone();
+            if *role == Some(IntakeRole::Processor) {
+                if !receipts.is_empty() && receipts != vec![writer.clone().unwrap()] {
+                    bail!("Processor may enroll only its own receipt branch");
+                }
+                receipts = vec![writer.clone().unwrap()];
+            }
+            if receipts.iter().any(|id| !writer_id_valid(id)) {
+                bail!("Invalid receipt writer identity");
+            }
             let proposed = Profile {
-                version: 1,
+                version: if role.is_some() { 2 } else { 1 },
                 remote: remote.clone(),
                 deny_patterns: deny_pattern.clone(),
+                writer_id: writer,
+                role: *role,
+                producer_branch,
+                receipt_branches: receipts
+                    .iter()
+                    .map(|id| format!("refs/heads/aida-feedback-receipts-{id}"))
+                    .collect(),
             };
+            proposed.validate()?;
             if let Some(old) = private.read(PROFILE)? {
                 if old != serde_json::to_vec(&proposed)? {
                     bail!("Intake already enrolled; destination/policy changes require a separate clone");
@@ -306,9 +474,7 @@ impl Intake {
             )?)?
         };
         validate_remote(&profile.remote)?;
-        if profile.version != 1 {
-            bail!("Unsupported intake policy version");
-        }
+        profile.validate()?;
         envelope::check_patterns("", "", &profile.deny_patterns)?;
         let worktree = root.join("worktree");
         if !worktree.exists() {
@@ -397,7 +563,11 @@ impl Intake {
     }
 
     fn tip(&self) -> Result<Option<String>> {
-        let (ok, bytes) = git_result(&self.worktree, &["rev-parse", "--verify", BRANCH], &[], 128)?;
+        self.branch_tip(self.profile.branch())
+    }
+
+    fn branch_tip(&self, branch: &str) -> Result<Option<String>> {
+        let (ok, bytes) = git_result(&self.worktree, &["rev-parse", "--verify", branch], &[], 128)?;
         if ok {
             Ok(Some(text(bytes)?))
         } else {
@@ -429,6 +599,12 @@ impl Intake {
     /// Validate every reachable commit, including intermediate trees. Linear,
     /// additive history only; exact immutable bytes for observations/receipts.
     fn history(&self, tip: &str) -> Result<BTreeMap<String, Vec<u8>>> {
+        self.branch_history(tip, self.profile.branch())
+    }
+
+    // Each orphan history is validated independently, before unioning views.
+    // trace:STORY-2652 | ai:codex
+    fn branch_history(&self, tip: &str, branch: &str) -> Result<BTreeMap<String, Vec<u8>>> {
         let commits = text(git(
             &self.worktree,
             &["rev-list", "--reverse", "--topo-order", "--parents", tip],
@@ -441,7 +617,8 @@ impl Intake {
             .read("validated-tip")?
             .and_then(|bytes| serde_json::from_slice::<Checkpoint>(&bytes).ok())
             .filter(|c| {
-                c.validator == validator_prefix()
+                self.profile.version == 1
+                    && c.validator == validator_prefix()
                     && c.verified_ci.len() <= 8192
                     && c.verified_ci.bytes().all(|b| matches!(b, b'0' | b'1'))
                     && commits
@@ -516,6 +693,16 @@ impl Intake {
                 let entry = std::str::from_utf8(entry).context("Invalid intake tree")?;
                 let (header, path) = entry.split_once('\t').context("Invalid intake entry")?;
                 let parts: Vec<_> = header.split_whitespace().collect();
+                if self.profile.version == 2 {
+                    let allowed = if branch.starts_with("refs/heads/aida-feedback-receipts-") {
+                        "receipts"
+                    } else {
+                        "observations"
+                    };
+                    if path != allowed && !path.starts_with(&format!("{allowed}/")) {
+                        bail!("Path is forbidden for this intake branch role");
+                    }
+                }
                 if parts.len() == 3
                     && parts[0] == "040000"
                     && parts[1] == "tree"
@@ -621,6 +808,9 @@ impl Intake {
                     bail!("Intake tree exceeds file limit");
                 }
             }
+            if self.profile.version == 2 && parent.is_some() && current.len() <= previous.len() {
+                bail!("Per-writer commits must add immutable files");
+            }
             if current.is_empty() {
                 bail!("Empty intake commits refuse");
             }
@@ -630,7 +820,9 @@ impl Intake {
                 }
             }
             for path in current.keys().filter(|p| p.starts_with("receipts/")) {
-                if !current.contains_key(&path.replacen("receipts/", "observations/", 1)) {
+                if self.profile.version == 1
+                    && !current.contains_key(&path.replacen("receipts/", "observations/", 1))
+                {
                     bail!("Receipt without observation refused");
                 }
             }
@@ -695,14 +887,20 @@ impl Intake {
     }
 
     pub(super) fn files(&self) -> Result<BTreeMap<String, Vec<u8>>> {
-        match self.tip()? {
-            Some(tip) => {
-                let files = self.history(&tip)?;
-                self.checkpoint(&tip)?;
-                Ok(files)
+        let mut files = BTreeMap::new();
+        for branch in self.profile.branches() {
+            if let Some(tip) = self.branch_tip(branch)? {
+                for (path, bytes) in self.branch_history(&tip, branch)? {
+                    if files.insert(path, bytes).is_some() {
+                        bail!("Conflicting intake paths across enrolled histories");
+                    }
+                }
+                if self.profile.version == 1 {
+                    self.checkpoint(&tip)?;
+                }
             }
-            None => Ok(BTreeMap::new()),
         }
+        Ok(files)
     }
 
     /// Append one immutable file and publish it before the accepted branch
@@ -727,7 +925,12 @@ impl Intake {
             if self.push_commit(&commit, tip.as_deref())? {
                 git(
                     &self.worktree,
-                    &["update-ref", BRANCH, &commit, tip.as_deref().unwrap_or("")],
+                    &[
+                        "update-ref",
+                        self.profile.branch(),
+                        &commit,
+                        tip.as_deref().unwrap_or(""),
+                    ],
                     &[],
                 )?;
                 self.checkpoint(&commit)?;
@@ -784,7 +987,7 @@ impl Intake {
     /// Retry only a confirmed remote-tip race; preserve other push diagnostics.
     // trace:TASK-3096 | ai:codex
     fn push_commit(&self, commit: &str, base: Option<&str>) -> Result<bool> {
-        let refspec = format!("{commit}:{BRANCH}");
+        let refspec = format!("{commit}:{}", self.profile.branch());
         let mut cmd = git_command(&self.worktree);
         // remote-creds-ok(TASK-2001): separately enrolled URL; ambient product credentials/config are intentionally excluded.
         cmd.args([
@@ -817,16 +1020,20 @@ impl Intake {
     }
 
     fn remote_tip(&self) -> Result<Option<String>> {
+        self.remote_branch_tip(self.profile.branch())
+    }
+
+    fn remote_branch_tip(&self, branch: &str) -> Result<Option<String>> {
         // remote-creds-ok(TASK-2001): independently pinned intake URL, never product remote credential routing.
         let advertised = text(git(
             &self.worktree,
-            &["ls-remote", "--", &self.profile.remote, BRANCH],
+            &["ls-remote", "--", &self.profile.remote, branch],
             &[],
         )?)?;
         Ok(advertised.lines().find_map(|line| {
             let mut fields = line.split_whitespace();
             let tip = fields.next()?;
-            (fields.next() == Some(BRANCH)).then(|| tip.to_owned())
+            (fields.next() == Some(branch)).then(|| tip.to_owned())
         }))
     }
 
@@ -857,12 +1064,20 @@ impl Intake {
     /// fast-forward. Returns `false` when the remote has no intake branch yet.
     // trace:TASK-3096 | ai:claude
     pub(super) fn sync(&self) -> Result<bool> {
+        let mut found = false;
+        for branch in self.profile.branches() {
+            found |= self.sync_branch(branch)?;
+        }
+        Ok(found)
+    }
+
+    fn sync_branch(&self, branch: &str) -> Result<bool> {
         // Clear rejected quarantine evidence before fetching, never the accepted ref.
         git(&self.worktree, &["update-ref", "-d", INCOMING], &[])?;
-        if self.remote_tip()?.is_none() {
+        if self.remote_branch_tip(branch)?.is_none() {
             return Ok(false);
         }
-        let refspec = format!("{BRANCH}:{INCOMING}");
+        let refspec = format!("{branch}:{INCOMING}");
         // remote-creds-ok(TASK-2001): independently pinned intake URL, never product remote credential routing.
         git(
             &self.worktree,
@@ -882,8 +1097,8 @@ impl Intake {
             &["rev-parse", "--verify", INCOMING],
             &[],
         )?)?;
-        self.history(&incoming)?;
-        let old = self.tip()?;
+        self.branch_history(&incoming, branch)?;
+        let old = self.branch_tip(branch)?;
         if let Some(old) = &old {
             if *old == incoming {
                 self.checkpoint(&incoming)?;
@@ -904,7 +1119,7 @@ impl Intake {
             &self.worktree,
             &[
                 "update-ref",
-                BRANCH,
+                branch,
                 &incoming,
                 old.as_deref().unwrap_or(""),
             ],
@@ -965,6 +1180,9 @@ fn process(
     reconcile: bool,
     json: bool,
 ) -> Result<()> {
+    if intake.profile.role == Some(IntakeRole::Producer) {
+        bail!("Only an enrolled processor may process observations");
+    }
     if !digest(checksum) {
         bail!("Supply the full lowercase SHA-256 digest");
     }
@@ -1253,18 +1471,29 @@ pub(crate) fn run(command: &IntakeCommand, json_format: bool) -> Result<()> {
             | IntakeCommand::Process { json, .. } => *json,
         };
     match command {
-        IntakeCommand::Ci { command, .. } => crate::ci_relay::run(&intake, command, json)?,
+        IntakeCommand::Ci { command, .. } => {
+            if intake.profile.version == 2 {
+                bail!("CI relay requires legacy enrollment");
+            }
+            crate::ci_relay::run(&intake, command, json)?;
+        }
         IntakeCommand::Enroll { .. } => {
             if json {
                 println!(
                     "{}",
-                    serde_json::json!({"enrolled": true, "branch": "aida-intent", "store_required": false})
+                    serde_json::json!({"enrolled": true, "branch": intake.profile.output_branch(), "profile": intake.profile, "protection": "unverified", "store_required": false})
                 );
             } else {
                 println!("Enrolled independent intake destination.");
+                if intake.profile.version == 2 {
+                    println!("Writer protection is unverified; verify remote branch restrictions independently.");
+                }
             }
         }
         IntakeCommand::Publish { file, reviewed, .. } => {
+            if intake.profile.role == Some(IntakeRole::Processor) {
+                bail!("Only an enrolled producer may publish observations; processors use process");
+            }
             if let Some(file) = file {
                 if !reviewed {
                     bail!("Publication requires explicit --reviewed confirmation");
@@ -1279,7 +1508,7 @@ pub(crate) fn run(command: &IntakeCommand, json_format: bool) -> Result<()> {
             if json {
                 println!(
                     "{}",
-                    serde_json::json!({"published": true, "branch": "aida-intent"})
+                    serde_json::json!({"published": true, "branch": intake.profile.output_branch()})
                 );
             } else {
                 println!("Published intake observations and receipts.");
@@ -1287,13 +1516,31 @@ pub(crate) fn run(command: &IntakeCommand, json_format: bool) -> Result<()> {
         }
         IntakeCommand::Pull { .. } => {
             let found = intake.sync()?;
+            let files = intake.files()?;
+            let unknown: Vec<_> = files
+                .keys()
+                .filter(|path| {
+                    path.starts_with("receipts/")
+                        && !files.contains_key(&path.replacen("receipts/", "observations/", 1))
+                })
+                .map(|path| {
+                    path.trim_start_matches("receipts/")
+                        .trim_end_matches(".json")
+                })
+                .collect();
             if json {
                 println!(
                     "{}",
-                    serde_json::json!({"pulled": true, "branch": "aida-intent", "remote_empty": !found})
+                    serde_json::json!({"pulled": true, "branch": intake.profile.output_branch(), "remote_empty": !found, "receipts_for_unknown_observations": unknown})
                 );
             } else if found {
                 println!("Pulled validated intake history.");
+                if !unknown.is_empty() {
+                    println!(
+                        "{} receipt(s) for unknown observations (audit only).",
+                        unknown.len()
+                    );
+                }
             } else {
                 println!("Pulled: the intake destination has no history yet.");
             }
