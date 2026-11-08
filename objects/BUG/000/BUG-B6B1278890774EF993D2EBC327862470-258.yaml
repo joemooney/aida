@@ -15,7 +15,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-08T03:09:42.520017Z
-modified_at: 2026-11-08T16:41:30.141120548Z
+modified_at: 2026-11-08T16:41:34.405976033Z
 req_type: Bug
 tags:
 - area:lanes
@@ -122,6 +122,22 @@ comments:
   content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: AC1-AC4 are met but the portability blocker from the prior round is unfixed: head 7d2181f070 only merges main over 086c9cce2a, which failed CI (gates) at ''Check Rust test portability ratchet'' on one new test line. AC status: ac1d8a45 verified by bug_2493_declared_body_survives_host_commit_and_refs_downgrade and the task_2712 raw-object assert; ac581f10 verified by task_2902_native_ship_message_records_only_and_dry_run_does_not_write via ship_messages, single-subject path unchanged; ac76636a verified by the bug_2493 fixture running check-help-golden-cochange.sh; acc3c05a verified by bug_2493_native_prompts_name_safe_body_file_surface. Bug protocol ''touches a test file'': met. Those tests were read, not run (no local cargo per review policy). CI at this head was still queued/running at record time; merge-hold-gate red is the supervised hold.. No triage reason was given.'
   created_at: 2026-11-08T16:41:30.141118702Z
   modified_at: 2026-11-08T16:41:30.141118702Z
+  session_id: 01a1b9af-8230-75d2-82f8-667491cc010a
+  harness_version: 2.1.319 (Claude Code)
+- id: 01a1bc09-635b-79f2-85f8-63db2d9346df
+  author: joe
+  content: |-
+    REVIEW FINDINGS TO ADDRESS (BUG-2493):
+    Verdict: CHANGES REQUESTED
+    Reviewed commit: 7d2181f070e0
+    Recorded: 2026-11-08T16:07:49.428656722+00:00
+    Findings:
+    1. BLOCKING: aida-cli-lib/src/tests/bug_home_038_seat_publish_tests.rs:2370 adds std::process::Command::new("bash") (rule shell-command). CI run 42481499513 at 086c9cce2a failed 'Check Rust test portability ratchet' with exactly this one new finding; 7d2181f070 changes neither this file nor scripts/portability-allowlist.txt or the rules, so the gate will fail again. The prior round's rework landed no commit. Fix: put #[cfg(unix)] on bug_2493_declared_body_survives_host_commit_and_refs_downgrade, or stop invoking bash by that literal; do not grow the allowlist. Correction to the prior round: the /tmp assertion at story_1662_standalone_implementer_tests.rs:1120 was NOT reported by the ratchet and needs no change for this gate.
+    2. Non-blocking (minor, carried forward, still present): aida-cli-lib/src/standalone_implementer.rs NATIVE_STOP_CONTRACT shows aida ship -m only for a partial (Refs SPEC-ID) slice, then says to add --commit-body-file to 'the declaration'. A completing lane, the PR-3635 case, gets no completing-subject form from this contract, which overrides the ordinary pickup shipping unit. State that a completing lane declares '(SPEC-ID)' with the body file.
+    3. Non-blocking (cosmetic, carried forward, still present): aida-cli-lib/src/pr_cmd.rs ship_messages reads --commit-body-file with a bare read_to_string before the flag-combination check, so a missing file reports only the OS error (no path or flag) and masks the usage error. Add with_context and validate the combination first.
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
+  created_at: 2026-11-08T16:41:34.299841144Z
+  modified_at: 2026-11-08T16:41:34.299841144Z
   session_id: 01a1b9af-8230-75d2-82f8-667491cc010a
   harness_version: 2.1.319 (Claude Code)
 history:
