@@ -8,7 +8,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-07T15:34:33.363448Z
-modified_at: 2026-11-08T19:29:33.588449482Z
+modified_at: 2026-11-08T19:33:40.501701209Z
 req_type: Story
 comments:
 - id: 01a1b6a6-52e1-70a0-a9c1-d32888979ca5
@@ -1058,6 +1058,38 @@ comments:
   modified_at: 2026-11-08T19:27:17.968573746Z
   session_id: 01a1bc93-77a0-7740-8b03-df4e3e8d1df5
   harness_version: 2.1.319 (Claude Code)
+- id: 01a1bca6-f415-79f3-baf4-06deb40a451b
+  author: dirtlab
+  content: |
+    This is a Refs slice for STORY-2630 under Joe’s binding 2026-11-08 19:23 UTC ruling. It must not complete the story. Joe (host operator/advisor) owns deployment and the later completing slice for AC2/AC5, with integrated AIDA-contained Codex read-only grant and non-empty primary-index caller evidence.
+
+    The host query proxy uses disposable SQLite snapshots without granting writes to the primary index. Shared lane guidance now selects the reviewed fixed absolute host client, rather than bare upstream codegraph. No executable is derived from a seat-controlled link. AF_UNIX-denied seats and AIDA-contained client/descriptor/socket admission remain unsupported pending the later slice.
+
+    Acceptance status, checked against locally available origin/main (no fetch or rebase from this read-only Git seat):
+
+    | AC | Status |
+    | --- | --- |
+    | AC1 | Partial: primary-index linking is on main; proxy implementation is in this branch. Host deployment and a live primary query remain outstanding. |
+    | AC2 | Open on STORY-2630: later completing slice owned by Joe requires integrated contained-seat read-only admission evidence. |
+    | AC3 | Guidance on main; this revision selects /home/joe/ai/aida/.codegraph/proxy-state/bin/codegraph in the template master, shared lane prompt and AGENTS.md. Host must deploy that reviewed path. |
+    | AC4 | Baseline doctor on main; branch adds bounded proxy status/freshness/client-routing diagnostics and missing-descriptor host recovery. |
+    | AC5 | Open on STORY-2630: Joe’s later completing slice must supply exact contained Codex primary-index query output and grant evidence. No synthetic or native-sandbox run is claimed as AC5. |
+
+    TASK-3025 findings: formatter fix already present and rustfmt check passes; session handoff file already absent; heartbeat test already asserts freshness and advancement during a five-second query and passes here. Removed the newer per-change AGENTS.md note and doctor-behavior prose in OVERVIEW.md; retained only proxy architecture. Fixed absolute client selection addresses the remaining template defect.
+
+    Current validation:
+    - python3 -m unittest discover -s tests -p test_codegraph_proxy.py -v: 21 tests, 20 passed, 1 skipped (CodeGraph 1.6.0 absent). Host must rerun the real-upstream test; no live primary-index query evidence from this seat, which has neither codegraph nor .codegraph.
+    - rustfmt --edition 2021 --check aida-cli-lib/src/codegraph.rs: passed.
+    - git diff --check: passed.
+    - Rust lane job j20261108T193035928-2-0: pending; result to be appended.
+    - make check-templates: passed. make sync-templates: links updated, then portable-pack generation refused with Read-only file system (os error 30) at protected .agents; host rerun required. These make targets invoke cargo run internally. Shared template/root guidance equality also checked directly.
+    - Native Refs publication declaration recorded successfully: [AI:codex] fix(codegraph): select reviewed host client in lane guidance (Refs STORY-2630).
+
+    Host publication: apply this body to #3662, commit/publish the uncommitted edits with a Refs trailer, and obtain final-head CI. Existing holds/punts remain vetoes until resolved through their authorized path. This native seat performs no commit, push, PR mutation, queue completion, merge or verdict recording.
+  created_at: 2026-11-08T19:33:40.501701209Z
+  modified_at: 2026-11-08T19:33:40.501701209Z
+  session_id: 01a1bca3236e
+  harness_version: codex-cli 0.167.0
 history:
 - id: 01a1b6a6-1e2f-7932-a527-6de38b6d8545
   author: joe
