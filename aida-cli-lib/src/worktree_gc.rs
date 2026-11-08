@@ -3822,7 +3822,7 @@ mod criterion_suffix_regressions {
             ),
             Some("STORY-1486.GENERATED_PROFILE_PRESERVES_APPROVAL_PROMPTS".into())
         );
-        for suffix in ["rs", "TXT"] {
+        for suffix in ["rs", "TXT", "my_module.rs", "label.name"] {
             assert_eq!(
                 crate::parse_trace_id_token(&format!("trace:STORY-1.{suffix}")),
                 Some("STORY-1".into())

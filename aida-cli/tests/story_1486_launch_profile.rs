@@ -170,7 +170,9 @@ fn noexec_verbose_prints_stakeholder_and_explicit_git_downgrades() {
     let path = format!(
         "{}:{}",
         bin.display(),
-        std::env::var("PATH").unwrap_or_default()
+        aida_core::exec_context::Environment::capture()
+            .var("PATH")
+            .unwrap_or_default()
     );
 
     git(&repo, &["init", "-q", "-b", "main"]);
@@ -250,6 +252,32 @@ fn noexec_verbose_prints_stakeholder_and_explicit_git_downgrades() {
         assert!(!stderr.contains("git_policy:"), "{stderr}");
         assert!(!stderr.contains("unexpected-agent-execution"), "{stderr}");
     }
+    // Explicit downgrades stay visible even without verbose output.
+    // trace:STORY-1486 | ai:codex
+    let out = aida(
+        &repo,
+        &home,
+        &path,
+        &[
+            "agent",
+            "new",
+            "claude",
+            "--role",
+            "implementer",
+            "--no-exec",
+            "--git-read-only",
+        ],
+    );
+    let stdout = String::from_utf8_lossy(&out.stdout);
+    assert!(
+        out.status.success(),
+        "{stdout}\n{}",
+        String::from_utf8_lossy(&out.stderr)
+    );
+    assert!(
+        stdout.contains("git_policy: read-only (explicit --git-read-only downgrade"),
+        "{stdout}"
+    );
     let roles = aida(&repo, &home, &path, &["role", "scaffold"]);
     assert!(
         roles.status.success(),

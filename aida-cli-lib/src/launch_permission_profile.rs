@@ -41,7 +41,7 @@ pub(crate) fn print_git_policy(
     noexec: bool,
     visible: bool,
 ) {
-    if let Some(downgrade) = downgrade.filter(|_| visible) {
+    if let Some(downgrade) = downgrade.filter(|explicit| visible || *explicit) {
         let parent = crate::stakeholder_role::active_stakeholder_role()
             .or_else(|| crate::gate::seat_authority::current_seat(root));
         let policy = git_policy(role, parent.as_deref(), downgrade);
@@ -195,7 +195,9 @@ pub(crate) fn render_roots(project: &Path, executable: &Path) -> Result<String> 
         } else {
             "consumer repository"
         };
-        if same_repo {
+        // Shared Git identity does not make another worktree writable.
+        // trace:STORY-1486 | ai:codex
+        if same_repo && aida == project {
             writable.push(("aida-checkout", aida.clone()));
         } else {
             read_only.push(aida.clone());
@@ -516,6 +518,8 @@ mod tests {
         git(&["worktree", "add", "--detach", linked.to_str().unwrap()]);
         let output = render_roots(&linked, &exe).unwrap();
         assert!(output.contains("verified AIDA repository identity"));
+        assert!(!output.contains(&format!("aida-checkout: {}", root.display())));
+        assert!(output.contains(&format!("read_only_roots:\n  {}", root.display())));
         assert!(output.contains("git-common-dir (shared across linked worktrees)"));
         assert!(output.contains(&format!(
             "git-dir: {}",
