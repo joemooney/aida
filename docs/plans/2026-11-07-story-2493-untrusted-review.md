@@ -55,36 +55,59 @@ if scoped remote attestation is unsuitable.
    remains data, never instructions.
 6. Add one checked projection consumed by ship, train and readiness. Resolve all
    blocking digests against authenticated home receipts and current canonical
-   finding status. Missing, pending, dismissed-without-resolution, corrupt or
-   conflicting mappings cannot clear a blocking digest. Closed findings may
-   clear it; reopened findings block again. Out-of-order verdict/finding arrival
-   stays pending. A stale-head verdict grants no credit.
+   finding status. Only canonical `Done` or `Completed` clears a digest by
+   status. `Draft`, `Approved`, `InProgress`, `NeedsAttention` and
+   `Planned` continue blocking. `Rejected` (including `aida findings dismiss`)
+   and `Superseded` do not clear a digest by status alone: rejection need not
+   mean remediation, and a replacement may still be open. Missing, pending,
+   corrupt or conflicting mappings also cannot clear it. Reopening a resolved
+   finding blocks again. Out-of-order verdict/finding arrival stays pending.
+   A stale-head verdict grants no credit.
+   To release a false positive or superseded finding, require a new authenticated
+   verdict for the same PR and exact head from the authorized independent
+   reviewer, explicitly superseding the previous verdict and omitting that
+   digest. Retain both verdicts and the home dismissal/replacement audit trail;
+   neither a receipt rewrite nor dismissal alone releases the blocker.
 7. Preserve current merge holds, reviewer independence and refusal precedence.
    Do not silently upgrade these envelopes into trusted host publications.
-   Define replay, key revocation and concurrent verdict supersession in the
-   approved authority contract before enabling approval consumption.
+   Define replay, key revocation and authenticated verdict supersession in the
+   approved authority contract before enabling approval consumption. The
+   superseding verdict must bind its predecessor digest; reject forks and
+   concurrent successors as conflicting evidence until explicitly resolved.
+   Arrival order must never select the authoritative verdict.
 
-## Existing owners
+## Critical Files
 
-- `observation_envelope.rs`: strict observation schema, canonical checksum,
+- `aida-cli-lib/src/observation_envelope.rs`: strict observation schema, canonical checksum,
   sensitive patterns and store-independent generation.
-- `intent_intake.rs`: isolated transport, history validation/checkpoints,
+- `aida-cli-lib/src/intent_intake.rs`: isolated transport, history validation/checkpoints,
   publication, receipt and journal-based processing.
-- `ci_relay.rs`: fixed-field return-channel precedent, with home-derived
+- `aida-cli-lib/src/ci_relay.rs`: fixed-field return-channel precedent, with home-derived
   inventory validation; not an authorization mechanism for reviewers.
-- `gate/review_publication.rs`: enrolled trusted-node signatures and checked
+- `aida-cli-lib/src/gate/review_publication.rs`: enrolled trusted-node signatures and checked
   synced review evidence; its trust scope must remain separate.
-- `gate/ledger/mod.rs` and `gate/review_verdict.rs`: recorder/collector boundary;
+- `aida-cli-lib/src/gate/ledger/mod.rs` and `aida-cli-lib/src/gate/review_verdict.rs`: recorder/collector boundary;
   unsigned imports must not bypass existing recorder authority checks.
 
-## Required validation after approval
+## Verification
 
 Use two isolated clones and a bare intake hub with fake forge transport. Exercise
 actual generation, publish, quarantine pull, home processing and gate entry
 points. Cover approved exact-head review; request-changes with a blocking digest;
 verdict arriving first; digest-to-origin-ID retry recovery; open/closed/reopened
-findings; stale head; cross-node self-review; unknown or revoked signer;
+findings; dismissed (`Rejected`) and `Superseded` findings remaining blocked;
+authenticated same-head supersession releasing a false positive; replayed,
+forked and concurrent successors; stale head; cross-node self-review; unknown or revoked signer;
 tampering; unknown fields; sensitive paths/text; duplicate/conflicting receipts;
 and concurrent publication. Assert work operations never mutate canonical store
 refs, free-text publication requires review, and unresolved evidence never grants
 merge credit. Run executed Rust tests through the lane job runner.
+
+## Followups
+
+Obtain advisor signoff on reviewer/session attestation, home verification and
+the supersession contract before implementing this proposal. This document
+provides no review authority and does not complete the owning requirement.
+The host must use the declared `docs(plans)` subject with a non-completing
+Refs trailer for this design-only change; the existing completing `feat`
+subject must not become the squash title.
