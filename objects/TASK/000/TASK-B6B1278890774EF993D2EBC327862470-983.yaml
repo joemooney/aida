@@ -1,0 +1,42 @@
+id: 01a1bacb-4512-7741-8dc9-c38a10161cb2
+spec_id: TASK-b6b1278890774ef993d2ebc327862470-983
+title: 'Repeated unchanged review findings: TASK-3420'
+description: |-
+  Identical reviewer findings recurred twice for TASK-3420; do not requeue a third implementer round until an advisor chooses a different implementer/seat or resolves the dispute.
+
+  REVIEW FINDINGS TO ADDRESS (PR #3670):
+  Verdict: CHANGES REQUESTED
+  Reviewed commit: 7dfdb9e8601d
+  Recorded: 2026-11-08T07:17:10.626209837+00:00
+  Findings:
+  1. [major][blocker] TASK-1665 regression still present: review_lease_running (lane_liveness.rs:1268-1270) is lease_retained (reader.rs:215), true unless the verdict is Dead. Production reviewer holders carry no usable witness: holder_for_lease (dual.rs:220) builds witnesses only from lease_holder_record, and this review's own record reads '0 witness(es), unknown: the holder records no witness'. A crashed reviewer at the PR head therefore suppresses unpicked-ready-pr indefinitely. task_3420_review_lease_uses_recorded_ownership and reviewer_lease_uses_ownership_instead_of_registry_cwd pass only because seed_lease_heartbeat (cfg(test), reader.rs:182) writes a Heartbeat witness no production writer produces, and the TASK-2120 crashed-reviewer test was replaced by them. Fix: give reviewer leases an admitted witness or keep a provable crashed path, and test with the witness shape production writes.
+  2. [major][blocker] BUG-637 crash-deadlock is still back in queue next/fill and session-start claims (queue_cmd.rs:4664-4668, session_start.rs:2478-2482, 2686). The old gate released LeaseState::Stale; lease_retained holds every Unknown. aida own show --compare at review time: 13 'holder records no witness', 5 'holder admission unavailable', 4 NamespaceMismatch, 0 Dead, and it reports 16 leases where today's rule reads dead and the judge abstains. Those specs stay hidden from pickup until someone ends the lease by hand. The contract at leases.rs:2380-2385 ('a crashed/stale agent's lease must NOT permanently lock its spec', 'Callers pass lease_is_live') is now false. Fix: define a reachable release path for crashed unadmitted holders, or record the advisor ruling that pickup retains them and update those contracts.
+  3. [major][blocker] The --resume offer and the adoption gate still use different judges. orphan_lease_to_adopt (session_start.rs:999-1009) requires an ownership Dead verdict, while lease_adoption_refusal (leases.rs:4781) and adoptable_orphan_lease, which drive queue work --resume (queue_cmd.rs:12309) and scope_conflict_resume_hint (queue_cmd.rs:12041), still use stale_lease_recovery_for_lease. A StaleDirty lease with Unknown ownership is offered --resume, then session start bails 'cannot re-enter' (session_start.rs:2145). This breaks the invariant documented at leases.rs:4770-4773 ('a hint never offers a re-entry that refuses'). Fix: route lease_adoption_refusal through the same owner verdict and add a test that hint and adoption agree.
+  4. [minor] Prior finding 4 is only partly fixed. Lazy store resolution and scope-first filtering landed for live_spec_claim_by_other and lease_owning_spec, but the queue-list stale-base loop (queue_cmd.rs:3092-3098) calls lease_retained for every lease, before the cheap branch-empty/main check, and each spec-scoped lease does its own full load_store_for_lookup (GitBackend::load) because the OnceCell lives per lease_record call. The block comment at queue_cmd.rs:3082-3084 still calls this path cheap. Fix: move the branch filter first and share one store or memo across the batch.
+  5. [minor] Coverage gap unchanged: the new tests exercise lease_retained, orphan_lease_to_adopt and closure-injected scope matchers, but none drives the migrated decisions in session_start_with_receipt (claim gate, reviewer conflict is_live, adopted-orphan sweep) or the queue next filter with ownership records. Refusal paths for Part B items (b) and (c) are unproven at their call sites.
+  6. [minor] CI unverified: all seven CI jobs and merge-hold-gate were still queued at 7dfdb9e8601d when this verdict was recorded. Confirm green at the rework head.
+  7. [process] This head shipped while its own handoff said not to: the TASK-3420 comment of 2026-11-08T07:09 says 'Do not publish these edits while the punt is active', and the spec is still Needs Attention. No advisor ruling on crash-release of unadmitted holders appears on TASK-3420 or STORY-2325. Findings 1 and 2 need that ruling before another implementation round.
+  Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
+status: Draft
+priority: Medium
+owner: joe
+feature: Uncategorized
+created_at: 2026-11-08T10:54:06.098558048Z
+modified_at: 2026-11-08T10:54:06.098558048Z
+req_type: Task
+tags:
+- from-advisor:TASK-3420
+- kind:observation
+- linked:TASK-3420
+- loop-guard
+- review-recurrence
+- severity:major
+filed_at:
+  code_sha: 92e7eb3544665f922dabf96cf10439b5dcf736db
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 5cbe14e5fc6
+  vendor: claude
+  session: 01a1b9af-8230-75d2-82f8-667491cc010a
+  harness_version: 2.1.319 (Claude Code)
