@@ -8,7 +8,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-09-12T03:06:57.441067647Z
-modified_at: 2026-11-08T04:45:32.297151676Z
+modified_at: 2026-11-08T05:04:56.027432372Z
 req_type: Task
 tags:
 - cli
@@ -116,6 +116,12 @@ comments:
   modified_at: 2026-11-08T04:43:25.928241001Z
   session_id: 01a1b8be-8170-7fb2-89ab-ecb4c6eee98c
   harness_version: 2.1.319 (Claude Code)
+- id: 01a1b98b-98db-7e02-8fb4-cf0b205be706
+  author: joe
+  content: 'Round 4 edits: removed the dangling events argument from HistoryArgs::timeline conflicts; audited conflicts_with/requires across usage, graph, release, focus, drain, upgrade, statusline and history with no other stale references found. Removed the per-change notes from AGENTS.md and OVERVIEW.md. rustfmt check, git diff --check and tests/test_check_removed_flags.sh pass. Initial cli::tests:: lane job j20261108T044627711-1614043-0 timed out after 900 seconds during compilation after waiting for a build slot, with no executed tests. Graph/help/parity jobs and a 3600-second CLI retry remain pending; validation is not yet complete. Native seat edits remain uncommitted for host publication.'
+  created_at: 2026-11-08T05:04:56.027432372Z
+  modified_at: 2026-11-08T05:04:56.027432372Z
+  session_id: 01a1b979cc33
 history:
 - id: 01a1b7cd-863a-7761-9489-0e4071138ab5
   author: joe
