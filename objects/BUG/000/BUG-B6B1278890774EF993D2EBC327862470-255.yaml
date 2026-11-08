@@ -8,7 +8,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-08T00:02:55.282155934Z
-modified_at: 2026-11-08T11:13:55.369422153Z
+modified_at: 2026-11-08T11:13:57.799642119Z
 req_type: Bug
 relationships:
 - rel_type:
@@ -210,6 +210,23 @@ comments:
   content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: Round-5 findings 2/3/4 are fixed in source and AC1-AC4 hold by source and named tests (CI still pending at this head, so no test pass is claimed). Blocked only by operator scope: resolver now covers db sync --pull, but --sync and burndown still pull plainly and continue on failure, with no advisor ruling or split recorded.. It was punted on: design-fork: Latest review finding 1 requires advisor action: upstream-scalar semantic merge policy, comprehensive failed-pull write fencing and removal of the dell1 stopgap remain unresolved. CLAUDE.md requires advisor signoff for architecture changes; no approved policy or linked split is recorded. This round addresses findings 2, 3 and 4 with the existing resolver, managed-operation aborts and offline guidance. Preserve the merge hold and publication veto; do not publish as a complete fix.. No triage reason was given.'
   created_at: 2026-11-08T11:13:55.369420608Z
   modified_at: 2026-11-08T11:13:55.369420608Z
+  session_id: 01a1b9af-8230-75d2-82f8-667491cc010a
+  harness_version: 2.1.319 (Claude Code)
+- id: 01a1badd-73aa-7f30-b32a-5577a20c8357
+  author: joe
+  content: |-
+    REVIEW FINDINGS TO ADDRESS (BUG-2490):
+    Verdict: CHANGES REQUESTED
+    Reviewed commit: 4e6248977f5b
+    Recorded: 2026-11-08T10:02:45.935649109+00:00
+    Findings:
+    1. [major][scope][advisor-action] Operator scope on BUG-2490 (comment 2026-11-08T03:05Z) is narrowed but still neither finished nor split. Done at this head: 'aida db sync --pull' uses pull_rebase_auto_merge (git_backend_cmd.rs:1362) and queue pickup stops on a failed pull (queue_cmd.rs:12509). Open: (a) maybe_sync_pull still uses plain pull_rebase (store_sync.rs:1719), so a same-spec two-node conflict still fails on --sync and burndown; (b) maybe_sync_pull prints 'Falling back to local view' (store_sync.rs:1768) and burndown ignores the result (burndown_run.rs:367, 748) and goes on to compute and drain on the stale view, the dell1 failure mode; (c) resolve_spec_conflict bails on delete/modify (git_ops.rs:2618), which the dell1 stopgap handles by keeping upstream, and that case now makes pickup exit; so the stopgap cannot be removed yet. Reading of the policy dispute: the operator's comment asks for a semantic merge so concurrent edits do not conflict, and describes upstream-scalars as what the hand fix did, so the existing LWW resolver appears to satisfy it, but that is the advisor's call. Action: the advisor records that ruling on BUG-2490 and either requires (a)-(c) here or files a linked follow-up for them, then re-requests review. Another implementer round cannot clear this alone.
+    2. [minor][correctness] The fatal pre-pickup pull at queue_cmd.rs:12509 now runs before the delegation and keyring preflights at queue_cmd.rs:12532-12590 (BUG-1808, BUG-2428), which exist so that a refused launch leaves nothing behind. 'aida db sync --pull' commits all pending store edits ('chore: sync pending changes', git_backend_cmd.rs:1329-1332) and rebases, so a seat without delegation now mutates the store before being refused, and when offline it sees a pull error instead of the delegation refusal. Move the pull after those read-only preflights and before the first write (retire_idle_review_worktree, standalone slot, queue row), keeping bug_2490_failed_pull_stops_pickup_before_session_and_spec_writes green.
+    3. [minor][ux] db_sync_local_window discards StorePullOutcome::AutoMerged notes (git_backend_cmd.rs:1362 matches only Err), while 'aida pull' prints each one (store_push_pull.rs:2491-2495). A resolver run that picks one side's scalars by LWW during pickup is therefore silent. Print the notes as store_push_pull.rs does.
+    4. [minor][perf] Carried, non-blocking: a full 'aida doctor' run parses every store object twice, in the tolerant Storage::load and again in scan_store_objects (doctor_cmd.rs:835). Take the bad-object list from the loader if practical.
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
+  created_at: 2026-11-08T11:13:57.674341222Z
+  modified_at: 2026-11-08T11:13:57.674341222Z
   session_id: 01a1b9af-8230-75d2-82f8-667491cc010a
   harness_version: 2.1.319 (Claude Code)
 history:
