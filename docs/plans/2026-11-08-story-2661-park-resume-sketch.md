@@ -144,6 +144,23 @@ and the wait, with recovery uncertainty reported. This applies even if park
 acceptance races the earlier lease/forge lookup. Only checked cancellation or
 completion releasing retained ownership restores ordinary unclaim behavior.
 
+Metadata-only `aida queue rework` must consult the same retained-ownership
+evidence at its locked status-write boundary (R21). Today,
+`queue_cmd.rs::rework_target_for_mode` selects Approved for InProgress when no
+work is launched, while `requeue_lease_gate` protects live leases; a parked
+lane's dead/reaped lease is insufficient protection. Before applying that
+status flip or inserting/re-routing a queue row, recheck the exact canonical
+binding and host wait under the common ownership/store lock order. Refuse
+rework while retained ownership exists, including with `--force`; require
+explicit checked cancellation/completion releasing that ownership first.
+Unreadable, conflicting or partially persisted ownership evidence also refuses
+without mutation and reports recovery uncertainty. Recheck at the write
+boundary even if the earlier lease check passed, so concurrent park acceptance
+cannot be overwritten. A rework reason, dead lease or missing PR does not
+cancel a wait. Refusal preserves InProgress, the question/binding, wait, dirty
+seat and existing queue state; it never manufactures a status-mismatch block
+for an otherwise eligible bound resume.
+
 ## Park and exit handshake
 
 ### Seat-to-host transport (new surfaces, R4)
@@ -566,6 +583,17 @@ released, status stays InProgress, and the wait, binding and retained seat remai
 intact. Repeat with park acceptance racing the pre-write lookup, unreadable or
 conflicting ownership evidence, and checked cancellation; only the last case
 permits the ordinary return to Approved after ownership is released.
+
+R21 regressions must invoke metadata-only `aida queue rework` (without `--work`)
+on an InProgress parked spec with dirty edits, a dead/reaped lane lease and no
+open PR. Assert refusal leaves status InProgress, the active wait and canonical
+binding intact, the seat unchanged and no queue row inserted or re-routed;
+answering must still permit the ordinary checked bound-resume path. Repeat
+with `--force`, park acceptance racing the earlier lease check, unreadable or
+conflicting ownership evidence, and checked cancellation. Only checked
+ownership release permits ordinary rework to Approved and queue insertion.
+These are required future implementation tests, not executed regressions in
+this sketch-only revision.
 
 Publication metadata gate (R1): host/advisor must retitle PR #3666 exactly
 `[AI:codex] docs(plans): sketch park-on-ask resume-on-answer (Refs STORY-2661)`.
