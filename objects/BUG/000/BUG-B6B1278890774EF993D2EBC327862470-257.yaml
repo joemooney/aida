@@ -13,12 +13,12 @@ description: |
   3. The BUG-1693 label rules (recorded vs cleared, train members' labels) behave exactly as today: same pass/block outcome for every label combination (table test over the existing check_labels cases).
   4. A push to a held PR sends no "run failed" notification for this check.
   5. A genuinely malformed label state (clearance with no recorded hold) still FAILS, since that is a real error.
-status: NeedsAttention
+status: Approved
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-08T02:46:34.549817284Z
-modified_at: 2026-11-08T05:01:12.962744947Z
+modified_at: 2026-11-08T05:42:42.871363867Z
 req_type: Bug
 tags:
 - area:ci
@@ -68,6 +68,13 @@ comments:
   created_at: 2026-11-08T04:54:40.095222713Z
   modified_at: 2026-11-08T04:54:40.095222713Z
   session_id: 01a1b97f6957
+- id: 01a1b9ae-2fb7-7fb3-a8ad-f52d0cb1bfd1
+  author: joe
+  content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: Round 2 fixes the workflow side: live, the bootstrap publishes merge-hold-gate=pending on this held PR and the job succeeds; fixtures assert pending/failure/success for every label and train case. But AIDA''s own Rust consumers still treat the hold as a RED merge-hold-gate, so a pending gate now reads as CI-still-pending and breaks aida pr ship / drain CI on every held PR.. No triage reason was given.'
+  created_at: 2026-11-08T05:42:42.871362501Z
+  modified_at: 2026-11-08T05:42:42.871362501Z
+  session_id: 01a1b8be-8170-7fb2-89ab-ecb4c6eee98c
+  harness_version: 2.1.319 (Claude Code)
 history:
 - id: 01a1b90d-4bec-7bd0-9af1-86f501692f64
   author: joe
@@ -136,6 +143,15 @@ history:
   session_id: 01a1b9844e6c
   harness_version: 2.1.319 (Claude Code)
   changes: []
+- id: 01a1b9ae-2fb7-7fb3-a8ad-f5196a1c53c6
+  author: joe
+  timestamp: 2026-11-08T05:42:42.871350529Z
+  session_id: 01a1b8be-8170-7fb2-89ab-ecb4c6eee98c
+  harness_version: 2.1.319 (Claude Code)
+  changes:
+  - field_name: status
+    old_value: NeedsAttention
+    new_value: Approved
 filed_at:
   code_sha: dc41ee8da2f44f88178936fc1a8e6cb7168a3de7
   branch: main
@@ -145,11 +161,3 @@ filed_at:
   vendor: claude
   session: 01a1b8be-8170-7fb2-89ab-ecb4c6eee98c
   harness_version: 2.1.319 (Claude Code)
-failure_reason:
-  phase: reviewer
-  phase_index: 3
-  kind: verdict:request-changes
-  detail: 'Round 2 fixes the workflow side: live, the bootstrap publishes merge-hold-gate=pending on this held PR and the job succeeds; fixtures assert pending/failure/success for every label and train case. But AIDA''s own Rust consumers still treat the hold as a RED merge-hold-gate, so a pending gate now reads as CI-still-pending and breaks aida pr ship / drain CI on every held PR.'
-  recovery_hint: address the review findings, move BUG-2492 back to In Progress, and clear the PR hold only after approval
-  shelved_by: reviewer
-  shelved_at: 2026-11-08T05:01:12.962744947Z
