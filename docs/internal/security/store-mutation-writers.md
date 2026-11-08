@@ -71,6 +71,18 @@ for row in rows:
 PY
 ```
 
+For the TASK-3223 routing slice, run
+`python3 scripts/check-store-writers.py --profile mediated`. It first checks
+source reconciliation, then prints JSON listing unresolved writer sites and
+operation IDs and exits nonzero while any remain. The default compatibility
+check still validates inventory reconciliation only. Neither result grants
+launch authority. Version 2 requires every operation mapping to remain blocked;
+the routing implementation must introduce reviewed operation policy and evidence
+before this profile check can certify zero unresolved mappings. This diagnostic
+does not implement routing, prove runtime coverage, or exempt TASK-3326 writers
+from their existing blockers.
+<!-- trace:TASK-3223 | ai:codex -->
+
 ## Source-checked boundary families
 
 These are entry seams for review, not new authorization rules. The older

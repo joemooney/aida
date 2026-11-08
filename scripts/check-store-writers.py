@@ -623,11 +623,30 @@ def regenerate(root):
     return scanned
 
 
+# trace:TASK-3223 | ai:codex
+def mediated_blockers(data):
+    """Report unresolved review evidence, never infer routing from a sink map.
+
+    The v2 operation schema deliberately requires blocked dispositions. A
+    reconciled inventory therefore cannot certify mediated-profile readiness;
+    routing needs reviewed operation policy and evidence before this can pass.
+    Keep host-only and lane-private sites distinct from unresolved sites.
+    """
+    return {
+        kind: sorted(row["id"] for row in data.get(kind, [])
+                     if row.get("disposition") == "blocked")
+        for kind in ("writer", "operation")
+    }
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--root", type=Path, default=ROOT)
     parser.add_argument("--candidates", action="store_true", help="print sink-site discovery evidence")
     parser.add_argument("--regenerate", action="store_true", help="reconcile sites after merging main; new sites remain blocked; review diff")
+    parser.add_argument("--profile", choices=("compatibility", "mediated"),
+                        default="compatibility",
+                        help="mediated additionally refuses unresolved routing evidence; never grants launch authority")
     args = parser.parse_args()
     try:
         if args.candidates:
@@ -640,6 +659,15 @@ def main() -> int:
                   "\nAfter merging current main, run python3 scripts/check-store-writers.py --regenerate; review additions and delete stale rows in the inventory diff.", file=sys.stderr)
             return 1
         data = tomllib.loads((args.root / INVENTORY).read_text())
+        if args.profile == "mediated":
+            blockers = mediated_blockers(data)
+            print(json.dumps(dict(profile="mediated", unresolved=blockers,
+                                  counts={kind: len(rows) for kind, rows in blockers.items()}),
+                             sort_keys=True))
+            if any(blockers.values()):
+                print("mediated profile refused: reconciled inventory still has unresolved routing evidence; "
+                      "keep production admission gated", file=sys.stderr)
+                return 1
         print(f"store-writers: {len(data['writer'])} sink sites reconciled; {len(data.get('operation', []))} operation mappings with explicit S2 cutover blockers; no runtime authority granted")
         return 0
     except (OSError, ValueError, TypeError, KeyError, SyntaxError) as error:

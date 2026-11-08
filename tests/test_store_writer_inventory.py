@@ -54,6 +54,38 @@ class WriterInventoryTests(unittest.TestCase):
     def test_unchanged_evidence_passes(self):
         self.assertEqual([], guard.check(self.root))
 
+    # trace:TASK-3223 | ai:codex
+    def test_reconciled_inventory_does_not_mean_mediated_routing(self):
+        import subprocess
+        import sys
+        self.put("aida-cli-lib/src/mcp.rs", '''
+            impl Server {
+                fn dispatch() { match tool_name {
+                    "unknown" => self.tool_unknown(args),
+                } }
+                fn tool_unknown() { opaque.call(); }
+            }
+        ''')
+        guard.regenerate(self.root)
+        self.assertEqual([], guard.check(self.root))
+        result = subprocess.run(
+            [sys.executable, str(Path(guard.__file__)), "--root", str(self.root),
+             "--profile", "mediated"], capture_output=True, text=True, timeout=30)
+        self.assertEqual(1, result.returncode, result.stderr)
+        report = json.loads(result.stdout)
+        self.assertGreater(report["counts"]["writer"], 0)
+        # An empty lexical sink mapping must still block cutover.
+        self.assertIn("mcp:unknown", report["unresolved"]["operation"])
+        self.assertIn("keep production admission gated", result.stderr)
+
+    def test_mediated_blockers_do_not_reclassify_host_only_sites(self):
+        report = guard.mediated_blockers(dict(writer=[
+            dict(id="host", disposition="host_only"),
+            dict(id="cache", disposition="lane_private"),
+            dict(id="raw", disposition="blocked"),
+        ], operation=[dict(id="cli:edit", disposition="blocked")]))
+        self.assertEqual(dict(writer=["raw"], operation=["cli:edit"]), report)
+
     def test_raw_fs_writer_mutant(self):
         self.put("aida-cli-lib/src/new_raw.rs", '''
             fn raw(path: &Path) { std::fs::write(path, "raw").unwrap(); }
