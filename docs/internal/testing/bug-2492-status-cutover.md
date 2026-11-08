@@ -7,7 +7,9 @@ terminal, including the merge attempts and human-gated clearance. The host
 launcher publishes the implementation PR; it does not perform this cutover.
 This is a deployment verification procedure, **not recorded live evidence**.
 Keep its command outputs, run URLs, timestamps and UI screenshots in the
-implementation PR before declaring the cutover verified.
+implementation PR and on BUG-2492 before declaring the cutover verified or
+marking the spec Completed. The operator runbook is the evidence route; the
+implementation and its local tests do not satisfy the live acceptance checks.
 
 ## Bootstrap without changing protection
 
@@ -32,12 +34,15 @@ job is named `publish-merge-hold-status`, never `merge-hold-gate`.
    required checks. Keep `merge-hold-gate` pinned to app **15368** and keep
    `enforce_admins=true`. A refusal is a failed verification, not permission to
    remove the pin, disable protection or use an admin bypass.
-4. Once merged, execute the target-event tests below. Then Joe opens a follow-up
-   PR removing only the temporary `pull_request` trigger, its same-repo job
+4. Once merged, execute the target-event tests below. The tracked follow-up
+   **TASK-b6b1278890774ef993d2ebc327862470-978** (blocked by BUG-2492) requires a PR
+   removing only the temporary `pull_request` trigger, its same-repo job
    condition, and the corresponding bootstrap fixture assertions. Retain
    `pull_request_target` and all its event types. Before merging that cleanup,
    verify that its own label event uses the trusted default-branch publisher.
-   Record the removal PR link here or in the implementation PR.
+   Record the removal PR link here and on BUG-2492. Until removal, a
+   same-repository PR owns its bootstrap workflow and has `statuses:write`;
+   its copy could publish success. Removing the PR trigger closes that exposure.
 
 ## Legacy checks and statuses with the same name
 
@@ -134,3 +139,23 @@ Repair or revert the publisher through a reviewed PR; do not silently change
 branch protection. Existing PR holds and human clearance requirements still
 apply throughout. There is no claim in this change that the live checks have
 already been performed.
+
+## Evidence record required before completion
+
+Round 3 review reported the bootstrap at commit `71d1bbb84088` publishing
+`merge-hold-gate=pending` ("Merge held: awaiting recorded clearance"), a successful
+`publish-merge-hold-status` job, and `mergeStateStatus=BLOCKED`. This is reviewer
+observation, not an independent rerun or evidence that the raw merge and UI
+checks passed. It establishes bootstrap/pending behavior only.
+
+The repository operator must attach the procedure's outputs to BUG-2492:
+
+- Canary PR/head and run URLs, unchanged app pin 15368/admin enforcement snapshots.
+- Raw merge exit/output and UI refusal with unrelated gates settled, for the
+  legacy-success collision and status-only fresh-head cases.
+- Label-event run and pending-to-success status history on the unchanged SHA,
+  plus cleared-canary merge acceptance and held-run notification observation.
+
+Until those outputs are recorded, AC1/AC2 live enforcement remains unverified
+and BUG-2492 must not be marked Completed. No protection weakening or merge
+attempt is authorized from an implementer seat by this runbook.

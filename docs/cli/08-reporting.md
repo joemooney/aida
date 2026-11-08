@@ -78,13 +78,9 @@ Label changes rerun the publisher without a push. Malformed evidence (including
 a clearance without a recorded hold) still publishes failure and fails the job.
 GitLab retains its failing-job gate.
 
-For installation, Joe Mooney runs the [status cutover procedure](../internal/testing/bug-2492-status-cutover.md).
-A temporary same-repository `pull_request` trigger bootstraps the implementation
-PR before the trusted `pull_request_target` publisher lands on main. The
-procedure preserves app pin 15368 and admin enforcement, verifies legacy
-check/status collisions and label-only release on the same SHA, and removes
-the temporary trigger in a follow-up PR. Live app-pinned enforcement remains
-operator verification; local fixtures establish only publisher behavior.
+The repository operator verifies required-check enforcement during installation.
+AIDA CI summaries treat a confirmed hold's pending gate as the hold itself;
+other pending checks still wait for completion.
 <!-- trace:BUG-2492 | ai:codex -->
 
 A persistent `aida:merge-hold-recorded` label

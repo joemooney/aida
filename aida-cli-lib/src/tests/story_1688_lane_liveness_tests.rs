@@ -1600,3 +1600,27 @@ fn linked_worktree_hold_waits_from_the_primary_placement_event() {
         .expect("the linked worktree sees the primary's hold");
     assert_eq!(hold.waiting_since, placed_at);
 }
+
+// trace:BUG-2492 | ai:codex
+#[test]
+fn bug2492_readiness_skips_pending_status_context_only_for_a_hold() {
+    let now = Utc::now();
+    let green_at = now - Duration::minutes(30);
+    let pr = gh_pr(1, HEAD_A, Some(green_at), false);
+    let mut rollup = pr["statusCheckRollup"].as_array().unwrap().clone();
+    rollup.push(serde_json::json!({"__typename":"StatusContext", "context":"merge-hold-gate", "state":"PENDING"}));
+    let required = ["Build".into(), "merge-hold-gate".into()];
+    for required in [None, Some(required.as_slice())] {
+        assert_eq!(rollup_green_at(&rollup, false, required), None);
+        assert_eq!(
+            rollup_green_at(&rollup, true, required)
+                .unwrap()
+                .timestamp(),
+            green_at.timestamp()
+        );
+    }
+    rollup.push(
+        serde_json::json!({"__typename":"StatusContext", "context":"Other", "state":"PENDING"}),
+    );
+    assert_eq!(rollup_green_at(&rollup, true, None), None);
+}

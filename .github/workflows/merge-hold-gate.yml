@@ -45,6 +45,7 @@ on:
   # One-release bootstrap: main still has only pull_request, so target events
   # cannot run this publisher until it lands. Remove this trigger after the
   # operator completes docs/internal/testing/bug-2492-status-cutover.md.
+  # Removal: TASK-b6b1278890774ef993d2ebc327862470-978 (blocked by BUG-2492).
   pull_request:
     types: [opened, reopened, synchronize, labeled, unlabeled, edited]
   pull_request_target:
