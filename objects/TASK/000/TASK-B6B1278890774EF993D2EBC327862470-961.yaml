@@ -8,7 +8,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-07T23:40:15.306412624Z
-modified_at: 2026-11-08T17:02:17.350137404Z
+modified_at: 2026-11-08T17:03:32.485754443Z
 req_type: Task
 relationships:
 - rel_type: BlockedBy
@@ -26,6 +26,14 @@ comments:
   modified_at: 2026-11-07T23:51:59.631224972Z
   session_id: 01a1b848-940b-7bd2-8acd-52e428b182b8
   harness_version: 2.1.319 (Claude Code)
+- id: 01a1bc1d-8085-7633-98de-316450eafe5f
+  author: dirtlab
+  content: |
+    TASK-3429 is punted as ambiguous-spec: acceptance names 72 unchanged MCP tools, but the committed descriptor block has 58 literal tool names and tools/list only filters it. Preserve the current surface unless advisor identifies missing tools. The advisor-mandated prerequisite extraction is left uncommitted. aida punt persisted Needs Attention and its reason, but reported it could not write the punt signal file because the path is read-only; the host must retain the publication veto and must not publish or complete this item before triage.
+  created_at: 2026-11-08T17:03:32.485754443Z
+  modified_at: 2026-11-08T17:03:32.485754443Z
+  session_id: 01a1bc17e151
+  harness_version: codex-cli 0.167.0
 history:
 - id: 01a1b862-7fc0-7e63-899e-5179ac0131ed
   author: joe
