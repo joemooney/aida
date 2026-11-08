@@ -139,10 +139,10 @@ denied by the deployed sandbox, do not widen index writes or claim AC5.
 In particular, Claude seats that deny creation of AF_UNIX sockets cannot use
 this transport. Their admission or an alternative transport requires an advisor
 decision; the presence of a descriptor does not establish support.
-Host operator Joe owns deployment, delivery of the reviewed absolute client
-path to lane prompts, and the remaining contained-seat AC2/AC5 run. The current
-shared navigation prompt describes query selection but does not install or
-select this client. Do not treat a native run as AIDA-contained evidence.
+Host operator Joe owns deployment and the later completing slice for
+contained-seat AC2/AC5 on STORY-2630. The shared navigation prompt selects the
+fixed reviewed absolute client path above; it does not install the client.
+This PR is a Refs slice under the 2026-11-08 advisor ruling. Do not treat a native run as AIDA-contained evidence.
 
 Status requests bypass the query/backup lock. Up to sixteen bounded request
 workers isolate stalled peers, with a two-second request deadline. Status bypasses

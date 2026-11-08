@@ -1,10 +1,7 @@
 Codegraph lane queries use a host proxy against a disposable SQLite backup;
 the primary index stays outside seat writable roots. The proxy requires host
 deployment, delivery of the reviewed absolute client path, and socket admission.
-Contained-seat acceptance remains outstanding. Doctor directs a lane with a
-proxy descriptor but no PATH client to the host client rather than upstream
-installation. `doctor --lane-host` names the descriptor and host deployment
-action when it cannot open that descriptor. See the
+Contained-seat acceptance remains outstanding. See the
 [deployment and acceptance guide](scripts/codegraph/README.md).
 <!-- trace:STORY-2630 | ai:codex -->
 
