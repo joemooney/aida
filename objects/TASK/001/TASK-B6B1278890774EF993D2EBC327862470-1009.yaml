@@ -12,12 +12,12 @@ description: |-
   1. WAIT STATE, no code change needed: CI run 42508327623 at 3bbb2988b3c8 had all 7 jobs queued at 18:13 UTC behind a runner backlog (9 runs queued). The last completed run on this PR, 42486514383 at 4649d63143c, failed CI (gates), and later runs were cancelled, so no completed CI run confirms the fixes since then. merge-hold-gate fails by design until the hold is released. Re-review at this head when CI finishes; do not push a filler commit, which would restart CI.
   2. NON-BLOCKING, test gap: the end-to-end git_policy assertions in aida-cli/tests/story_1486_launch_profile.rs only launch claude. The print sites for foreground codex and antigravity (aida-cli-lib/src/agent_launch.rs:2883, 2980) and codex --bg (agent_codex_background.rs:582, 611) have parse coverage only, so a dropped print on those vendors would pass. Add a vendor loop only if another code change is needed anyway; do not push for this alone.
   Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
-status: Draft
+status: Rejected
 priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-11-08T19:17:11.501030454Z
-modified_at: 2026-11-08T19:23:01.294383668Z
+modified_at: 2026-11-08T19:23:03.759717874Z
 req_type: Task
 tags:
 - from-advisor:STORY-1486
@@ -34,6 +34,16 @@ comments:
   modified_at: 2026-11-08T19:23:01.294383668Z
   session_id: 01a1bc93-77a0-7740-8b03-df4e3e8d1df5
   harness_version: 2.1.319 (Claude Code)
+history:
+- id: 01a1bc9d-3ccf-7523-96b5-ff91f6bcf5cf
+  author: joe
+  timestamp: 2026-11-08T19:23:03.759711811Z
+  session_id: 01a1bc93-77a0-7740-8b03-df4e3e8d1df5
+  harness_version: 2.1.319 (Claude Code)
+  changes:
+  - field_name: status
+    old_value: Draft
+    new_value: Rejected
 filed_at:
   code_sha: eeec474c545cbc8a354d386c8cb6d81460da7b9f
   branch: main
