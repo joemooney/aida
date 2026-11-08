@@ -14,7 +14,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-08T08:58:22.319212958Z
-modified_at: 2026-11-08T18:26:36.771954958Z
+modified_at: 2026-11-08T18:35:01.568459992Z
 req_type: Task
 tags:
 - carried-from:BUG-2495
@@ -34,6 +34,13 @@ comments:
   content: Implemented contained Codex config-key refusal matching the background posture guard, including split and attached config forms. Added protected-key rejection and ordinary model-config regression tests. Targeted lane validation is in progress; edits remain uncommitted for host publication.
   created_at: 2026-11-08T18:26:36.771954958Z
   modified_at: 2026-11-08T18:26:36.771954958Z
+  session_id: 01a1bc6748b4
+  harness_version: codex-cli 0.167.0
+- id: 01a1bc71-4240-71f0-a35a-d899a1c59e3b
+  author: dirtlab
+  content: 'Validation complete: lane cargo test --profile agent -p aida-cli-lib --lib -- task_3015 executed 2 tests, both passed; -- bug_2495 executed 2 existing tests, both passed. rustfmt --check and git diff --check passed. Changed aida-cli-lib/src/launch/contained.rs and aida-cli-lib/src/containment/tests/launch_tests.rs. No implementation blockers; codegraph unavailable (doctor confirms missing PATH tool). Edits left uncommitted for native host publication; queue completion deferred to host after publication.'
+  created_at: 2026-11-08T18:35:01.568459992Z
+  modified_at: 2026-11-08T18:35:01.568459992Z
   session_id: 01a1bc6748b4
   harness_version: codex-cli 0.167.0
 history:
