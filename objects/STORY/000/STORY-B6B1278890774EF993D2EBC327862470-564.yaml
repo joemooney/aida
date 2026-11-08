@@ -23,7 +23,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-07T19:59:26.079479Z
-modified_at: 2026-11-08T13:07:31.591337919Z
+modified_at: 2026-11-08T13:07:41.084846145Z
 req_type: Story
 comments:
 - id: 01a1b798-f0d4-73b1-93d5-f84581f2d190
@@ -287,6 +287,22 @@ comments:
   content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: Round 7''s server-restart race is closed, but the unconditional --unshare-pid that closes it corrupts the host cargo wrapper''s PID-keyed build queue and breaks AC2; AC1 still has no two-host evidence or amendment. CI had no conclusion at record time; no local cargo run.. It was punted on: blocked-dependency: Round-7 review finding 1 is agreed and remains unresolved: AC1 requires two consecutive lane Cargo jobs using a launcher built from this branch, with final statistics and second-job Rust hits greater than zero on BOTH primary and dell1, or a recorded advisor amendment. This native seat cannot obtain both-host evidence. Finding 2 is addressed locally by a private PID namespace for lane jobs, preventing the host Cargo wrapper from observing foreign sccache processes and restarting the job-owned server; regression and required validation are running. Preserve the publication veto and existing merge hold; code changes do not close AC1.. No triage reason was given.'
   created_at: 2026-11-08T13:07:31.591333354Z
   modified_at: 2026-11-08T13:07:31.591333354Z
+  session_id: 01a1b9af-8230-75d2-82f8-667491cc010a
+  harness_version: 2.1.319 (Claude Code)
+- id: 01a1bb45-9125-7c20-b870-3bcf57549ebb
+  author: joe
+  content: |-
+    REVIEW FINDINGS TO ADDRESS (PR #3657):
+    Verdict: CHANGES REQUESTED
+    Reviewed commit: 959072edb30c
+    Recorded: 2026-11-08T12:58:51.203681033+00:00
+    Findings:
+    1. major/acceptance: AC1 is unverified at 959072edb30c. It requires a second lane job on the same dependency set to show sccache hits (stats delta > 0) on the primary AND on dell1. The spec has no lane-job statistics from either host and no advisor amendment. A code change cannot close this. Fix: with a launcher built from this branch, run two consecutive 'aida lane job run' cargo jobs on each host and record both logs' 'lane sccache: final job statistics' output (second job Rust hits > 0) on the spec, or have the advisor record an amendment of AC1. Needs host/operator action.
+    2. major/correctness: the new --unshare-pid (aida-cli-lib/src/session.rs:6117) breaks the host cargo wrapper's shared build queue. Lane jobs bind the live cargo-slots directory writable (lane_job.rs sandbox_rw_paths), and the wrapper's is_queue_head (aida-host/bin/cargo:1290-1345) sweeps wait.*, .wait.* and acq.* tickets by PID with kill -0. Inside the namespace every host PID looks dead, so a job's wrapper deletes the tickets of waiting and running host builds and then counts itself queue head, bypassing priority and FIFO. Host wrappers likewise see the job's namespace-local PID (for example 3) as dead or as an unrelated process and delete its ticket. Two concurrent jobs can also get the same $$, so wait.*.<pid> and acq.<pid> collide: line 719 removes another job's acq file and the $wpid != $$ check treats its ticket as its own. flock still bounds the slot count, so the damage is queue order and acq visibility, not slot exclusion. Found by reading the wrapper, not reproduced at runtime; the new test only proves the foreign process is hidden. Fix: drop --unshare-pid and make the wrapper skip its sccache restart branch when SCCACHE_SERVER_UDS is set, or keep the namespace and give job wrappers namespace-safe ticket identity. Add a regression test that a job cannot sweep a live host ticket. (Round 7's finding offered --unshare-pid as one option without this side effect in view.)
+    3. major/acceptance: AC2 (without sccache configured, behaviour is unchanged) regressed at this head. lane_job_bwrap_argv adds --unshare-pid unconditionally (aida-cli-lib/src/session.rs:6117), so every lane job on a host with no sccache now runs in a private PID namespace and takes the queue damage in the other finding, although the sccache restart race it guards against cannot occur there. story_2641_sccache_job_env_and_binds_are_opt_in_and_lane_only asserts the flag but no test covers the no-sccache argv. Fix: removing the flag closes this; if a namespace stays, apply it only when the job env carries SCCACHE_SERVER_UDS and test the no-sccache argv.
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
+  created_at: 2026-11-08T13:07:40.965328834Z
+  modified_at: 2026-11-08T13:07:40.965328834Z
   session_id: 01a1b9af-8230-75d2-82f8-667491cc010a
   harness_version: 2.1.319 (Claude Code)
 history:
