@@ -1009,12 +1009,24 @@ pub(crate) fn session_handoff_seat(
                 || anyhow::anyhow!("conditional handoffs require the canonical store"),
             )?;
             let backend = crate::queue_cmd::advance_backend(&path)?;
-            let combined = format!("{body}\n\nRevisit {spec} when {condition}.\n");
+            let row = backend
+                .get_requirement_unambiguous(spec)?
+                .ok_or_else(|| anyhow::anyhow!("unknown handoff spec: {spec}"))?;
+            let display_id = row.spec_id.as_deref().unwrap_or(spec);
+            let combined = format!("{body}\n\nRevisit {display_id} when {condition}.\n");
             anyhow::ensure!(
                 combined.trim().len() <= seat_rotation::HANDOFF_MAX_BYTES,
                 "conditional handoff exceeds the handoff size cap"
             );
             crate::defer_cmd::defer_single(spec, Some(&condition), reason, &backend, &path)?;
+            // Early handlers skip post-dispatch auto-push. Push the saved
+            // deferral before note I/O so a note failure still syncs it.
+            // trace:STORY-2402 | ai:codex
+            crate::maybe_auto_push_store(
+                &path,
+                crate::StoreAutoPushMode::PerWrite,
+                "conditional session handoff",
+            );
             combined
         } else {
             body

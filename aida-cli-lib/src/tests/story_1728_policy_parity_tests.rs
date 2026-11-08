@@ -14,8 +14,6 @@
 //! - `session leases --prune-stale`: Read → Session. It releases stale
 //!   leases, including other clones' claims (TASK-1939).
 //! - Conditional session handoffs auto-push their spec deferral (STORY-2402).
-//!   AIDA_UPDATE_SNAPSHOTS=1 updates only the explicitly listed S5 invocations,
-//!   retaining the legacy baseline for every other command.
 // trace:STORY-1728 | ai:claude
 
 use super::*;
@@ -171,28 +169,6 @@ fn registered_policy_matches_mains_legacy_tables_for_every_verb() {
         text.push('\n');
         std::fs::write(fixture_path(), text).unwrap();
         return;
-    }
-    // S5 flags require companion arguments, so single-flag synthesis cannot
-    // probe every invocation. Pin them explicitly without recapturing unrelated
-    // legacy policies from this branch. trace:STORY-2402 | ai:codex
-    if std::env::var_os("AIDA_UPDATE_SNAPSHOTS").is_some() {
-        let mut rows: std::collections::BTreeMap<String, String> =
-            std::fs::read_to_string(fixture_path())
-                .unwrap()
-                .lines()
-                .map(|line| {
-                    let (argv, answer) = line.split_once('\t').unwrap();
-                    (argv.to_string(), answer.to_string())
-                })
-                .collect();
-        for argv in S5_POLICY_INVOCATIONS {
-            rows.insert((*argv).to_string(), answers(argv));
-        }
-        let text = rows
-            .into_iter()
-            .map(|(argv, answer)| format!("{argv}\t{answer}\n"))
-            .collect::<String>();
-        std::fs::write(fixture_path(), text).unwrap();
     }
     let want: std::collections::BTreeMap<String, String> = std::fs::read_to_string(fixture_path())
         .expect("main policy fixture exists")

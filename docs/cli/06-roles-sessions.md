@@ -1122,7 +1122,6 @@ both HEAD and the branch still equal the recorded PR head and Git permits the
 checkout. A moved branch or another session's handoff refuses recovery.
 <!-- trace:STORY-2325 | ai:codex -->
 
-
 Conditional relay/seat handoffs use
 `aida session handoff --seat advisor --write handoff.md --spec <spec-id> --until 'pr:42=merged'`.
 This parks the named spec using the same typed condition and hold policy as

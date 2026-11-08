@@ -113,7 +113,7 @@ pub(crate) fn defer_single(
 }
 
 /// Validate only explicitly supplied triggers. Bare re-deferral retains existing
-/// evidence, including legacy text pending the separate migration slice.
+/// evidence; the one-time legacy trigger migration is complete.
 // trace:STORY-2402 | ai:codex
 fn canonical_defer_condition(until: Option<&str>, reason: Option<&str>) -> Result<Option<String>> {
     crate::condition_cmd::canonical_condition(until, reason)

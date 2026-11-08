@@ -833,11 +833,22 @@ pub(crate) fn maybe_digest_mailbox_best_effort(store_path: &std::path::Path, rea
 #[path = "tests/mailbox_digest_autotrigger_tests.rs"]
 mod mailbox_digest_autotrigger_tests;
 
+// Observe actual handler calls without invoking a remote in unit fixtures.
+// trace:STORY-2402 | ai:codex
+#[cfg(test)]
+thread_local! {
+    pub(crate) static HANDOFF_PUSH_CALLS: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
+}
+
 pub(crate) fn maybe_auto_push_store(
     store_path: &std::path::Path,
     mode: StoreAutoPushMode,
     reason: &str,
 ) {
+    #[cfg(test)]
+    if reason == "conditional session handoff" && mode == StoreAutoPushMode::PerWrite {
+        HANDOFF_PUSH_CALLS.with(|calls| calls.set(calls.get() + 1));
+    }
     let project_root = store_path
         .parent()
         .map(|p| p.to_path_buf())

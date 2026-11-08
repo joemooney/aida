@@ -838,7 +838,7 @@ must be migrated first.
 Deferral writes, conditional relay/seat handoffs, and `findings recur --until`
 require this language. The hourly `defer resurface` job evaluates their stored
 conditions (see above). Human decisions use `manual:<who>` with a non-empty
-`--reason` and retain the same hold policy as `aida defer`.
+reason and retain the same hold policy as `aida defer`.
 <!-- trace:STORY-2402 | ai:codex -->
 
 

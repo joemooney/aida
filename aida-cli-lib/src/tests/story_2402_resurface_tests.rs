@@ -480,6 +480,7 @@ fn story2402_s5_recur_conditions_resurface_and_manual_routes() {
     let handoff_dir = dir.path().join(".aida/handoff/advisor");
     std::fs::create_dir_all(handoff_dir.parent().unwrap()).unwrap();
     std::fs::write(&handoff_dir, "block directory creation").unwrap();
+    let push_calls = crate::store_push_pull::HANDOFF_PUSH_CALLS.with(|calls| calls.get());
     let error = crate::session_misc::session_handoff_seat(
         Some(note.to_str().unwrap()),
         false,
@@ -491,6 +492,11 @@ fn story2402_s5_recur_conditions_resurface_and_manual_routes() {
         None,
     )
     .unwrap_err();
+    assert_eq!(
+        crate::store_push_pull::HANDOFF_PUSH_CALLS.with(|calls| calls.get()),
+        push_calls + 1,
+        "saved deferral must reach auto-push even when note I/O fails"
+    );
     let message = format!("{error:#}");
     assert!(message.contains(id), "{message}");
     assert!(message.contains("date:2026-01-01"), "{message}");
@@ -508,6 +514,11 @@ fn story2402_s5_recur_conditions_resurface_and_manual_routes() {
         None,
     )
     .unwrap();
+    assert_eq!(
+        crate::store_push_pull::HANDOFF_PUSH_CALLS.with(|calls| calls.get()),
+        push_calls + 2,
+        "successful handoff must also reach auto-push"
+    );
     let handoff = crate::seat_rotation::read_latest_handoff(dir.path(), "advisor")
         .unwrap()
         .unwrap();
@@ -628,4 +639,71 @@ fn story2402_s5_conditional_handoff_auto_pushes() {
             expected
         );
     }
+}
+
+// Both typed writers must refuse holds before changing a row or handoff.
+// trace:STORY-2402 | ai:codex
+#[test]
+fn story2402_s5_implementer_cannot_set_holds() {
+    if crate::test_env::run_path_isolated_test() {
+        return;
+    }
+    unsafe {
+        libc::umask(0o077);
+    }
+    let dir = tempfile::tempdir().unwrap();
+    let init = crate::test_exec::output(
+        crate::test_git::git_command()
+            .current_dir(dir.path())
+            .args(["init", "--initial-branch=main", "--quiet"]),
+    )
+    .unwrap();
+    assert!(init.status.success());
+    let _ambient =
+        crate::test_env::AmbientGuard::hermetic_with_seat(dir.path(), "implementer", &[]);
+    let path = dir.path().join(".aida-store");
+    std::fs::create_dir_all(&path).unwrap();
+    aida_core::work_binding::bootstrap(&path).unwrap().unwrap();
+    let backend = CachedGitBackend::open(&path, &dir.path().join("cache.db")).unwrap();
+    let mut row = Requirement::new("finding".into(), "".into());
+    row.tags.insert("from-advisor:STORY-1".into());
+    let row = backend.add_requirement(row).unwrap();
+    let id = row.spec_id.as_deref().unwrap();
+    let note = dir.path().join("note.md");
+    std::fs::write(&note, "Revisit after human review.").unwrap();
+    let before = serde_yaml::to_value(&row).unwrap();
+    for result in [
+        crate::findings_gate::handle_findings_recur(
+            &backend,
+            &path,
+            id,
+            None,
+            Some("manual:joe"),
+            Some("review required"),
+        ),
+        crate::session_misc::session_handoff_seat(
+            Some(note.to_str().unwrap()),
+            false,
+            Some("implementer"),
+            false,
+            false,
+            Some("manual:joe"),
+            Some(id),
+            Some("review required"),
+        ),
+    ] {
+        assert!(format!("{:#}", result.unwrap_err()).contains("may set an operator hold"));
+        assert_eq!(
+            serde_yaml::to_value(backend.get_requirement(&row.id).unwrap().unwrap()).unwrap(),
+            before
+        );
+    }
+    assert!(!dir
+        .path()
+        .join(".aida/handoff/implementer/latest.md")
+        .exists());
+    assert_eq!(
+        crate::store_push_pull::HANDOFF_PUSH_CALLS.with(|calls| calls.get()),
+        0
+    );
 }

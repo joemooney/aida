@@ -1368,7 +1368,8 @@ pub(crate) fn handle_findings_recur(
 ) -> Result<()> {
     // Admission precedes both the recurrence bump and parking.
     // trace:STORY-2402 | ai:codex
-    crate::condition_cmd::canonical_condition(until, reason)?;
+    let condition = crate::condition_cmd::canonical_condition(until, reason)?;
+    let until = condition.as_deref();
     let mut req = backend
         .get_requirement_unambiguous(id)? // trace:TASK-1468 | ai:claude
         .ok_or_else(|| not_found::requirement_not_found(id, Some(store_path)))?;

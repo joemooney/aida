@@ -206,10 +206,6 @@ pub(crate) static CONDITION: crate::command_registry::CommandReg =
         run: crate::command_registry::Handler::Early(run_condition),
     };
 
-#[cfg(test)]
-#[path = "tests/story_2402_condition_cmd_tests.rs"]
-mod tests;
-
 // Shared admission for deferrals, handoff triggers and recurrence.
 // trace:STORY-2402 | ai:codex
 pub(crate) fn canonical_condition(
@@ -230,3 +226,7 @@ pub(crate) fn canonical_condition(
     }
     Ok(Some(condition.to_string()))
 }
+
+#[cfg(test)]
+#[path = "tests/story_2402_condition_cmd_tests.rs"]
+mod tests;
