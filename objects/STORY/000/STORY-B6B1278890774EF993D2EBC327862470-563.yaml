@@ -25,7 +25,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-07T19:45:35.836129088Z
-modified_at: 2026-11-08T02:54:49.580272381Z
+modified_at: 2026-11-08T03:12:43.978791675Z
 req_type: Story
 tags:
 - docs:impacted
@@ -261,6 +261,12 @@ comments:
   content: 'Round 4 scope check: extended the existing native bundle/publication fixture in tests/bug_home_038_seat_publish_tests.rs to exercise a real refused bundle after a passing gate through the production error wrapper, then successful retry. This is the requested publication-failure regression, not a new surface. Source edits complete; sandboxed targeted tests are compiling. Eight pending findings await advisor triage (pickup status). Codegraph lookup failed to open its shared database; doctor check reports no codegraph findings, navigation confirmed with rg.'
   created_at: 2026-11-08T02:54:49.580272381Z
   modified_at: 2026-11-08T02:54:49.580272381Z
+  session_id: 01a1b90eb553
+- id: 01a1b924-dfca-7f43-8aa8-c7f5733f9357
+  author: joe
+  content: 'Round 4 implementation complete: owner identity plus 24h legacy-compatible expiry and lane fast-gate-release recovery; failed repair queue insertion settles red; all three native publication callers propagate errors while settling/printing original gate evidence; native commit failures remain errors; unchanged lanes always attempt advisor notification with gate refusal details; timeout skips without repair; per-change AGENTS note removed and OVERVIEW trimmed. rustfmt on touched Rust files and git diff --check pass. Validation job j20261108T025215731-2-0 timed out at 900s during compilation (no executed tests). Broader final-source fast_gate job j20261108T025426569-584687-0 is compiling aida-cli-lib; existing publication regression job j20261108T030013961-601961-0 is queued. Tests are not yet claimed passed.'
+  created_at: 2026-11-08T03:12:43.978791675Z
+  modified_at: 2026-11-08T03:12:43.978791675Z
   session_id: 01a1b90eb553
 history:
 - id: 01a1b78d-2628-7313-92de-8804ac5f8f71
