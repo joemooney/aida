@@ -27,7 +27,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-06T16:51:02.535818766Z
-modified_at: 2026-11-08T02:07:17.899533562Z
+modified_at: 2026-11-08T02:17:34.440382064Z
 req_type: Story
 tags:
 - area:advisor
@@ -472,6 +472,12 @@ comments:
   modified_at: 2026-11-08T02:07:17.899533562Z
   session_id: 01a1b8be-8170-7fb2-89ab-ecb4c6eee98c
   harness_version: 2.1.319 (Claude Code)
+- id: 01a1b8f2-5fe8-79d2-997e-593d0592ed57
+  author: joe
+  content: 'Round 6 handoff: all four review findings addressed in review_watch_service.rs, docs/cli/06-roles-sessions.md, AGENTS.md and OVERVIEW.md. Controller grants/receipts survive confirmed exit while any active reservation or live/ambiguous review descendant remains; actual reviewer-child full-chain authority is tested after reaping, confirmed death, rotation and crash recovery. Unused-service launches without a running default deputy skip silently (including a connection race); bound-service errors and answered refusals remain visible. Sub-advisor descendants cannot replace an already bound advisor session; operator bootstrap and subsequent full-delegation rotation are tested. Removed the per-change root-document notes. Validation: both lane jobs j20261108T014145808-2-0 and j20261108T014344343-2-0 executed 13 story2571 tests, all passed, including socket authentication, stale successors and per-PR refusal isolation. ExecContext ratchet: 19 passed; trace-header fixtures: 9 passed; rustfmt, diff whitespace, trace headers, doc links/paths, static CLI manual, store writer inventory and CI gate audit passed. Full make check-ci-fast remains incomplete: its direct Cargo check and indirect TUI Cargo check were stopped under this seat instruction to use the lane runner for Cargo; host must run the full fast gate/CI. Codegraph was unreachable (doctor confirmed); no lane index was created. untested=false. Native publication declaration recorded: [AI:codex] fix(review-watch): preserve in-flight review grants and rotation bindings (Refs STORY-2571). Changes intentionally left uncommitted for host publication; no queue completion, review recording or merge/hold clearance performed.'
+  created_at: 2026-11-08T02:17:34.440382064Z
+  modified_at: 2026-11-08T02:17:34.440382064Z
+  session_id: 01a1b8ced5dc
 history:
 - id: 01a1b1c5-af09-7d01-81e9-eaaac083f223
   author: joe
