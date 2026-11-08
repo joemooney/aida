@@ -8,7 +8,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-06T13:39:53.442026Z
-modified_at: 2026-11-08T15:33:07.186393618Z
+modified_at: 2026-11-08T15:40:16.091728667Z
 req_type: Task
 tags:
 - architecture
@@ -1076,6 +1076,29 @@ comments:
   content: 'Round 21 finding 3 diagnostic: aida punt succeeded and show confirms NeedsAttention, but both /home/joe/ai/aida/.aida/punt-signals/TASK-3223.json and the TASK-b6b1278890774ef993d2ebc327862470-880.json path are absent (same in the seat). ship_from_seat.rs publication_veto reads signal/hold files; punt_done.rs emits a punt signal only to AIDA_PUNT_SIGNAL_FILE when that environment entry exists. This is a concrete host investigation lead, not authorization to publish: durable saved punt and holds remain vetoes by the binding session instruction. Host must reconcile persisted punt state, configured signal transport and publication-path evidence before publishing. No publication declaration issued.'
   created_at: 2026-11-08T15:33:07.186393618Z
   modified_at: 2026-11-08T15:33:07.186393618Z
+  session_id: 01a1bbc13bf1
+- id: 01a1bbd1-435b-7490-88d8-a2228e5faa13
+  author: joe
+  content: |-
+    Round 21 final native-seat handoff. Findings 1-6 accepted; none disputed. TASK-3223 remains NeedsAttention under the saved design-fork punt; all existing punt/hold publication vetoes remain. No ship declaration, commit, push, PR mutation, queue completion or review recording performed.
+
+    Six uncommitted files:
+    - aida-cli-lib/src/mcp.rs: bounded stream helper drains oversized request lines with bounded memory, returns JSON-RPC -32600/null ID, and continues to the next request.
+    - aida-cli-lib/src/store_mutation_mcp_tests.rs: regression covers newline at initial read boundary, beyond it, long input and EOF; valid following initialize request still succeeds. Explicit cfg(test) on the config-fixture function lets the existing trust scanner exclude test-only access.
+    - aida-cli-lib/src/store_mutation_entry.rs: documents staged literal-store discovery and tests refusal for custom store_path / linked-worktree pointer without a .aida-store link, then successful link discovery.
+    - docs/internal/security/store-mutation-writers.md: documents the staged locator restriction and MCP size/recovery behavior.
+    - scripts/config-trust.toml: inventories both ordinary and staged MCP profile policy reads (2 sites; no new authority keys).
+    - aida-cli-lib/src/containment/tests/mediated_store_tests.rs: child fixture uses kernel::resolve_aida_exe rather than a forbidden raw executable lookup.
+
+    CI evidence at 4769cc5d759a: lib-1 job 128771598193 executed 7402 tests (7400 pass, 2 fail). Both failed guards identified above are fixed in this working tree but require final-source Rust execution. Both CLI shards, rest and contracts passed; lib-0 and gates were still running at the last observation. Merge-hold remains failed and requires human/advisor clearance.
+
+    Local validation: 52 writer-inventory Python tests and 30 store-mutation Python tests passed. Final compatibility inventory passes with 3380 reconciled sink sites and 293 operation mappings. Final mediated inventory correctly fails with 3171 unresolved writer sites, 293 operations and four partial routes. Final rustfmt --check, git diff --check and 81-gate classification audit pass. Inventory was not weakened; production admission remains gated.
+
+    untested=true for final-source Rust. Lane job j20261108T152442583-1783306-0 (cargo test --profile agent -p aida-cli-lib --lib -- store_mutation) timed out after 900s with no executed-test result (exit 124). Runner additionally reported overlay-stale: primary rewrote a file of seed generation agent-bc7679adf58842ec in place. Earlier attempt using package aida-cli refused with no library target and is not test evidence. Host must repair/reseed the lane and execute store_mutation tests, the two failed guards, and the live mediated raw-write-denial/comment-positive boundary fixture on final source. Aggregate make check-ci-fast remains required on host, never claimed green here.
+
+    Remaining gates: advisor operation-policy ruling / explicit staged re-scope and follow-up ownership (finding 1); fresh Rust, aggregate and CI evidence plus human/advisor hold clearance (2); publication-under-saved-punt investigation and authorization decision, noting unset AIDA_PUNT_SIGNAL_FILE and absent main punt signal files despite persisted NeedsAttention (3); host PR title/body correction from preceding metadata comment and explicitly empty squash body (4). Do not infer publication permission from these edits or the proposed subject. own_claim/queue_done remain TASK-3326. Full TASK-3223 acceptance is unmet and must not auto-complete.
+  created_at: 2026-11-08T15:40:16.091728667Z
+  modified_at: 2026-11-08T15:40:16.091728667Z
   session_id: 01a1bbc13bf1
 history:
 - id: 01a1b116-742d-73c0-9064-1933f11e4c38
