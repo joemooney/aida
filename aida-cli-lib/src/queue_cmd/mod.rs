@@ -3,6 +3,9 @@
 //! queue-local helpers, extracted from `lib.rs` (SPIKE-78 / STORY-771;
 //! pure movement, no behavior change). Shared queue/store helpers stay in
 //! `lib.rs`, reached via `crate::`.
+//! Clap types live in `queue_cmd_args.rs`, re-exported from `cli.rs`; their
+//! owning command module is now `queue_cmd/mod.rs`.
+// trace:TASK-3426 | ai:codex
 // trace:STORY-771 | ai:claude
 
 use crate::process_retry::RetryEtxtbsy;
