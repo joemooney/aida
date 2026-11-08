@@ -2,6 +2,7 @@
 """Validate portability allowlist growth against a base revision."""
 
 import argparse
+from collections import Counter
 import json
 from pathlib import Path
 import sys
@@ -42,9 +43,23 @@ def main() -> int:
         return 1
 
     new_rule_ids = current_rules - base_rules
-    rejected = sorted(
-        entry for entry in current_entries - base_entries if entry[0] not in new_rule_ids
-    )
+    # trace:TASK-3428 | ai:codex
+    # Only retired rows can fund relocation; retained rows cannot excuse copies.
+    # Keep the rule and exact source content, dropping only the path prefix.
+    def fingerprint(entry):
+        rule, record = entry
+        return rule, record.split(":", 1)[-1]
+
+    retired = Counter(fingerprint(entry) for entry in base_entries - current_entries)
+    rejected = []
+    for entry in sorted(current_entries - base_entries):
+        if entry[0] in new_rule_ids:
+            continue
+        key = fingerprint(entry)
+        if retired[key]:
+            retired[key] -= 1
+        else:
+            rejected.append(entry)
     if not rejected:
         return 0
 

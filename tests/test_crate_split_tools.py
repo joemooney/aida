@@ -64,6 +64,47 @@ class CrateSplitTools(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, 'may only shrink'):
             self.run_globs(root)
 
+    def test_base_refuses_same_count_swap_without_a_rename(self):
+        root = self.repository()
+        (root / 'old.rs').write_text('fn retired() {}\n')
+        (root / 'new.rs').write_text('use crate::*;\n' * 2)
+        self.git(root, 'add', '-A')
+        self.write_globs(root, {'new.rs': 2})
+        with self.assertRaisesRegex(ValueError, 'may only shrink'):
+            self.run_globs(root)
+
+    def test_base_refuses_borrowing_from_retained_path(self):
+        root = self.repository()
+        (root / 'old.rs').write_text('use crate::*;\n')
+        (root / 'new.rs').write_text('use crate::*;\n')
+        self.git(root, 'add', '-A')
+        self.write_globs(root, {'old.rs': 1, 'new.rs': 1})
+        with self.assertRaisesRegex(ValueError, 'may only shrink'):
+            self.run_globs(root)
+
+    def test_relocated_portability_allowlist_passes_but_growth_refuses(self):
+        root = self.repository()
+        (root / 'old.rs').rename(root / 'new.rs')
+        MOVE.relocate(root, 'old.rs', 'new.rs', 'HEAD')
+        base = root / 'base-allowlist'
+        base.write_text('r\told.rs:source\n')
+        rules = root / 'rules.json'
+        rules.write_text('[{"id": "r"}]')
+        current = root / 'scripts/portability-allowlist.txt'
+
+        def run():
+            return subprocess.run(
+                ['python3', str(ROOT / 'scripts/check-portability-growth.py'),
+                 str(base), str(rules), str(current), str(rules)],
+                capture_output=True, text=True)
+
+        self.assertEqual(run().returncode, 0)
+        # One retired row cannot fund two copies of the same content.
+        current.write_text(current.read_text() + 'r\tcopy.rs:source\n')
+        result = run()
+        self.assertEqual(result.returncode, 1)
+        self.assertIn('rules are unchanged', result.stderr)
+
     def test_base_allows_bootstrap(self):
         root = self.repository(ledger=False)
         self.write_globs(root, {'old.rs': 2})

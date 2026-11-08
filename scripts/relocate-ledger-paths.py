@@ -3,6 +3,9 @@
 
 Usage: relocate-ledger-paths.py OLD NEW [--base REF]. The old path must be
 absent and the destination must exactly match the committed old blob.
+Stage the move before running the glob ratchet so Git can detect its rename.
+CI pins the portability growth verifier from the base revision; bases predating
+relocation support still refuse moved portability rows until that support merges.
 """
 # trace:TASK-3428 | ai:codex
 import argparse

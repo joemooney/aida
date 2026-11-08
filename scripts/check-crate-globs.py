@@ -35,6 +35,34 @@ def check(actual, expected):
         raise ValueError(f'crate glob baseline mismatch: new={dict(Counter(actual) - Counter(expected))}; prune={dict(Counter(expected) - Counter(actual))}')
 
 
+def check_growth(expected, previous, base):
+    # trace:TASK-3428 | ai:codex
+    # A retired import budget transfers only through an actual Git rename.
+    changes = subprocess.check_output(
+        ['git', 'diff', '--name-status', '-z', '-M', base, '--', '*.rs'], cwd=ROOT
+    ).decode().split('\0')
+    renamed = {}
+    i = 0
+    while i < len(changes) and changes[i]:
+        status = changes[i]
+        i += 1
+        if status.startswith(('R', 'C')):
+            old, new = changes[i:i + 2]
+            i += 2
+            if status.startswith('R'):
+                renamed[new] = old
+        else:
+            i += 1
+    for path, count in expected.items():
+        if path in previous:
+            allowed = count <= previous[path]
+        else:
+            old = renamed.get(path)
+            allowed = old in previous and old not in expected and count == previous[old]
+        if not allowed:
+            raise ValueError('crate glob baseline may only shrink or follow same-count Git renames relative to base')
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--base')
@@ -49,9 +77,8 @@ def main():
             files = subprocess.check_output(['git', 'ls-tree', '--name-only', args.base, LEDGER], cwd=ROOT)
             if files.strip():
                 raise ValueError('cannot read base glob ledger')
-        # Paths may change during a split; only the total import budget ratchets.
-        elif sum(expected.values()) > sum(json.loads(old.stdout).values()):
-            raise ValueError('crate glob baseline may only shrink relative to base')
+        else:
+            check_growth(expected, json.loads(old.stdout), args.base)
     print(f'Crate glob ratchet: {sum(expected.values())} remaining imports; zero additions')
 
 
