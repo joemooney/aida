@@ -17,7 +17,7 @@ priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-11-08T11:05:26.104788450Z
-modified_at: 2026-11-08T17:23:05.190108996Z
+modified_at: 2026-11-08T17:23:13.414203822Z
 req_type: Task
 tags:
 - from-advisor:STORY-2493
@@ -37,6 +37,13 @@ comments:
   content: 'Advisor 2026-11-08: F1 resolved by retitling PR-3665 to (Refs STORY-2493); needs a re-review at the same head.'
   created_at: 2026-11-08T15:27:49.679763824Z
   modified_at: 2026-11-08T15:27:49.679763824Z
+  session_id: 01a1bbab-762f-7cd2-8a36-4ea9f209afce
+  harness_version: 2.1.319 (Claude Code)
+- id: 01a1bc2f-8586-7ab1-b7de-2a441774a236
+  author: joe
+  content: 'Advisor 2026-11-08: resolved; PR-3665 retitled to Refs and merged.'
+  created_at: 2026-11-08T17:23:13.414203822Z
+  modified_at: 2026-11-08T17:23:13.414203822Z
   session_id: 01a1bbab-762f-7cd2-8a36-4ea9f209afce
   harness_version: 2.1.319 (Claude Code)
 history:
