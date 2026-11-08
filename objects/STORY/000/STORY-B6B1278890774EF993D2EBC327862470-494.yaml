@@ -27,7 +27,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-06T16:51:02.535818Z
-modified_at: 2026-11-08T16:40:52.301159792Z
+modified_at: 2026-11-08T17:07:19.866247762Z
 req_type: Story
 tags:
 - area:advisor
@@ -562,6 +562,12 @@ comments:
   modified_at: 2026-11-08T15:58:25.408948378Z
   session_id: 01a1bbab-762f-7cd2-8a36-4ea9f209afce
   harness_version: 2.1.319 (Claude Code)
+- id: 01a1bc20-f8ba-7fd3-9d49-3c7682531c10
+  author: joe
+  content: 'PR #3640 round-8 findings addressed in the native implementer lane: retired controllers invalidate reachable kernel keys while retaining grant records for reviewer ancestry; a four-retirement cap reports blocked-retired-controllers and prevents unbounded restarts. Added repeated-exit/key/ancestry/release-recovery regression and documented host-confirmed orphan release with aida review watch --release PR-N. Corrected two existing ReviewWatchArgs callers to Some(2) after the merged Option<u8> change and explicitly Linux-gated procfs/shell service tests. Validation: 42 non-Cargo fast gates passed across the initial and resumed runs; rustfmt and git diff --check passed. untested=true: first targeted build found the two corrected caller errors; corrected run j20261108T165109780-2293077-0 timed out after 900s compiling aida-cli-lib, with zero executed tests and an overlay-stale seed report (primary rewrote generation agent-7646b0c9277103a0). Host needs a fresh build seed and targeted service tests, plus full fast Cargo gates. Changes remain uncommitted per native seat contract; no merge or hold clearance requested.'
+  created_at: 2026-11-08T17:07:19.866247762Z
+  modified_at: 2026-11-08T17:07:19.866247762Z
+  session_id: 01a1bc08b517
 history:
 - id: 01a1b1c5-af09-7d01-81e9-eaaac083f223
   author: joe
