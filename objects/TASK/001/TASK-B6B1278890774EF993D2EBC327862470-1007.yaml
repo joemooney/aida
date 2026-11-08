@@ -1,0 +1,40 @@
+id: 01a1bc6b-255a-7313-8b12-5a8846e3f418
+spec_id: TASK-b6b1278890774ef993d2ebc327862470-1007
+title: 'Repeated unchanged review findings: BUG-2490'
+description: |-
+  Identical reviewer findings recurred twice for BUG-2490; do not requeue a third implementer round until an advisor chooses a different implementer/seat or resolves the dispute.
+
+  REVIEW FINDINGS TO ADDRESS (BUG-2490):
+  Verdict: CHANGES REQUESTED
+  Reviewed commit: c62c93515733
+  Recorded: 2026-11-08T16:14:17.336297585+00:00
+  Findings:
+  1. [major][scope][advisor-action] Carried, re-verified at c62c93515733. Operator scope on BUG-2490 (comment 2026-11-08T03:05Z, advisor evidence 13:16Z) is neither finished nor split: BUG-2490 links only STORY-2671 and no ruling is recorded. Open: (a) maybe_sync_pull still uses plain pull_rebase (aida-cli-lib/src/store_sync.rs:1719), so a same-spec conflict fails on --sync and burndown; (b) it prints Falling back to local view (store_sync.rs:1768) and burndown discards the result with let _ = (burndown_run.rs:367, 748), so a failed pull does not stop burndown writes; (c) resolve_spec_conflict bails when one side deleted the file (aida-core/src/git_ops.rs:2678), and the now-fatal pre-pickup pull (aida-cli-lib/src/queue_cmd.rs:12585) means one such conflict stops every pickup without --no-pull. The implementer cannot clear this. The advisor must record the merge-policy ruling and either require (a)-(c) here or file a linked follow-up, then re-request review.
+  2. [major][ci][gate-state] CI run 42498017215 at c62c93515733 is still pending with zero jobs, so no BUG-2490 test has CI evidence at this head; no local cargo was run. The last completed run with jobs, 42495648136 at 058ee2d704e9, failed; the implementer attributes that to the cli-0 timing gate and this head adds the budget, which is unconfirmed until CI runs. merge-hold-gate job 128784457500 fails only because the supervised merge hold is active: that is the expected human-gated state, not a code defect. Confirm green CI before any approval.
+  3. [minor][correctness] The round-16 retry fix is still incomplete. The same shape (a retry inside the writer lock, then plain pull_rebase) remains at aida-core/src/git_ops.rs:5870, 6066, 6200, 6331, 6503, 7921 and aida-cli-lib/src/store_sync.rs:1230. With autoStash pinned false, pending tracked store changes now fail there with raw git cannot-rebase output instead of the pull_rebase_store_retry refusal, and 5870/6066/6200 wrap that as 'remote unreachable', which misdiagnoses a dirty store. Found by reading source, not executed. Fix: route all store CAS and publication retries through pull_rebase_store_retry.
+  4. [minor][docs][process] AGENTS.md:1-6 prepends a per-change note and OVERVIEW.md:507-512 adds the same note, which the repository CLAUDE.md forbids unless the change is a real architecture change (put these in the PR body and an aida comment; each prepended paragraph conflicts with every open PR). I found no check in ci.yml or the Makefile that needs them. The text is also incomplete: it lists aliases, advisor goals and allocation, but this PR also changed node-alias and team roster retries. Remove both notes, or keep only an invariant-level OVERVIEW sentence.
+  5. [minor][perf] Carried, non-blocking, deferred by the implementer: doctor_multi_agent loads the whole store through Storage::load, then store_object_findings reads and parses every object again (aida-cli-lib/src/doctor_cmd.rs:828-836). Doctor-only cost.
+  Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
+status: Draft
+priority: Medium
+owner: joe
+feature: Uncategorized
+created_at: 2026-11-08T18:28:20.954661945Z
+modified_at: 2026-11-08T18:28:20.954661945Z
+req_type: Task
+tags:
+- from-advisor:BUG-2490
+- kind:observation
+- linked:BUG-2490
+- loop-guard
+- review-recurrence
+- severity:major
+filed_at:
+  code_sha: 8e41434a3e3ae87d52bc6fcab6476ec0608c703a
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 8e41434a3e3
+  vendor: claude
+  session: 01a1b9af-8230-75d2-82f8-667491cc010a
+  harness_version: 2.1.319 (Claude Code)
