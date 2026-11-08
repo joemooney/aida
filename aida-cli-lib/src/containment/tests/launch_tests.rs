@@ -3972,8 +3972,33 @@ print('BACKGROUND-EXIT',flush=True)
     assert!(!root.path().join("../outside-write").exists());
     assert!(authority::read_grant(&parent).unwrap().revoked_at.is_none());
 
-    // A refused seat preflight must never release a second vendor.
+    // Closed handoff under the CLI's SIG_DFL must unwind, revoke the issued
+    // child grant and close the registry row, even before the vendor runs.
     std::fs::remove_file(root.path().join("worker.json")).unwrap();
+    let mut cancelled = plan.clone();
+    cancelled.name = "bg-cancelled".into();
+    let cancelled_dir =
+        agent_claude_background::tests::cancel_during_prepare(&program, &config, &cancelled)
+            .unwrap();
+    assert!(cancelled_dir.join("ended").exists());
+    assert!(!root.path().join("worker.json").exists());
+    let grants: Vec<authority::SeatGrant> = std::fs::read_dir(authority::grant_dir().unwrap())
+        .unwrap()
+        .map(|entry| entry.unwrap().path())
+        .filter(|path| path.extension().and_then(|s| s.to_str()) == Some("json"))
+        .map(|path| serde_json::from_slice(&std::fs::read(path).unwrap()).unwrap())
+        .filter(|grant: &authority::SeatGrant| grant.subject == "bg-cancelled")
+        .collect();
+    assert_eq!(grants.len(), 1);
+    assert!(grants[0].revoked_at.is_some());
+    let rows = crate::agent_registry::load_entries(root.path());
+    let row = rows
+        .iter()
+        .find(|(_, row)| row.name.as_deref() == Some("bg-cancelled"))
+        .unwrap();
+    assert!(row.1.ended_at.is_some());
+
+    // A refused seat preflight must never release a second vendor.
     std::fs::remove_file(root.path().join("finish")).unwrap();
     std::fs::write(bin.join("aida"), "#!/bin/sh\nexit 1\n").unwrap();
     let mut refused = plan.clone();

@@ -34,8 +34,31 @@ struct Handoff {
 fn send<T: serde::Serialize>(socket: &mut UnixStream, value: &T) -> Result<()> {
     let bytes = serde_json::to_vec(value)?;
     anyhow::ensure!(bytes.len() <= LIMIT, "background handoff exceeds limit");
-    socket.write_all(&(bytes.len() as u32).to_be_bytes())?;
-    socket.write_all(&bytes)?;
+    let mut frame = Vec::with_capacity(4 + bytes.len());
+    frame.extend_from_slice(&(bytes.len() as u32).to_be_bytes());
+    frame.extend_from_slice(&bytes);
+    // run_cli restores SIGPIPE to SIG_DFL. A disconnected dispatcher must
+    // unwind the wrapper owner rather than terminate it before grant cleanup.
+    let mut remaining = frame.as_slice();
+    while !remaining.is_empty() {
+        let written = unsafe {
+            libc::send(
+                socket.as_raw_fd(),
+                remaining.as_ptr().cast(),
+                remaining.len(),
+                libc::MSG_NOSIGNAL,
+            )
+        };
+        if written < 0 {
+            let error = std::io::Error::last_os_error();
+            if error.kind() == std::io::ErrorKind::Interrupted {
+                continue;
+            }
+            return Err(error.into());
+        }
+        anyhow::ensure!(written != 0, "background handoff write made no progress");
+        remaining = &remaining[written as usize..];
+    }
     Ok(())
 }
 
@@ -396,10 +419,16 @@ pub(crate) fn logs(attempt: &str, follow: bool) -> Result<()> {
         }
         let (me, _): (ProcId, ProcId) =
             serde_json::from_reader(open_log(&dir.join("supervisor.json"))?)?;
-        anyhow::ensure!(
-            me.is_live(),
-            "background supervisor exited without a terminal result; inspect the log"
-        );
+        if !me.is_live() {
+            // Exit may race the earlier marker check. Loop through the final
+            // drain (including pending UTF-8) once the terminal result exists.
+            if dir.join("ended").exists() {
+                continue;
+            }
+            anyhow::bail!(
+                "background supervisor exited without a terminal result; inspect the log"
+            );
+        }
         std::thread::sleep(Duration::from_millis(100));
     }
     output.write_all(&display.bytes(&[], terminal, true))?;
@@ -467,6 +496,40 @@ impl LogDisplay {
 #[cfg(test)]
 pub(crate) mod tests {
     use super::*;
+    #[test]
+    fn supervisor_closed_socket_unwinds_with_default_sigpipe() {
+        const CHILD: &str = "AIDA_TEST_CLAUDE_BG_SIGPIPE";
+        if aida_core::exec_context::Environment::capture()
+            .get(CHILD)
+            .is_some()
+        {
+            unsafe {
+                libc::signal(libc::SIGPIPE, libc::SIG_DFL);
+            }
+            let (mut sender, peer) = UnixStream::pair().unwrap();
+            drop(peer);
+            let unwound = std::cell::Cell::new(false);
+            struct Cleanup<'a>(&'a std::cell::Cell<bool>);
+            impl Drop for Cleanup<'_> {
+                fn drop(&mut self) {
+                    self.0.set(true);
+                }
+            }
+            let result = (|| -> Result<()> {
+                let _cleanup = Cleanup(&unwound);
+                send(&mut sender, &"ready")?;
+                unreachable!("closed handoff accepted");
+            })();
+            assert!(result.is_err());
+            assert!(unwound.get());
+            return;
+        }
+        let status = crate::launch::control::control_child().unwrap()
+            .args(["--exact", "agent_launch::agent_claude_background::tests::supervisor_closed_socket_unwinds_with_default_sigpipe", "--nocapture"])
+            .env(CHILD, "1").status().unwrap();
+        assert!(status.success(), "closed socket terminated owner: {status}");
+    }
+
     #[test]
     fn supervisor_refusal_survives_cleanup_error() {
         let error = dispatch_error_with_cleanup(
@@ -581,6 +644,67 @@ pub(crate) mod tests {
         assert_eq!(process.wait().unwrap().signal(), Some(libc::SIGKILL));
     }
 
+    // Cancel during prepare, before the owner's ready write. The child uses
+    // production SIG_DFL and must unwind real grant/registry ownership.
+    pub(crate) fn cancel_during_prepare(
+        binary: &Path,
+        config: &AgentLaunchConfig,
+        plan: &AgentLaunchPlan,
+    ) -> Result<PathBuf> {
+        let attempt = uuid::Uuid::new_v4().to_string();
+        let dir = attempt_dir(&plan.project_root, &attempt)?;
+        std::fs::DirBuilder::new().mode(0o700).create(&dir)?;
+        let output = private_file(&dir.join("output.log"))?;
+        let init = Handoff {
+            parent: ProcId::current().unwrap(),
+            binary: binary.into(),
+            args: config.default_args.clone(),
+            delegate_seats: config.delegate_seats.clone(),
+            plan: plan.clone(),
+            context: None,
+            description: None,
+            attempt,
+            aida: crate::kernel::test_aida_exe::current(),
+        };
+        let (mut parent, child) = UnixStream::pair()?;
+        let mut helper = crate::launch::control::control_child()?;
+        helper.current_dir(&plan.project_root).args([
+            "--exact",
+            "agent_launch::agent_claude_background::tests::supervisor_child_entry",
+            "--ignored",
+            "--nocapture",
+        ]);
+        crate::launch::control::detach_with_socket(&mut helper, child.as_raw_fd(), FD);
+        helper
+            .stdin(std::process::Stdio::null())
+            .stdout(output.try_clone()?)
+            .stderr(output);
+        let mut process = helper.spawn()?;
+        drop(child);
+        send(&mut parent, &init)?;
+        parent.shutdown(std::net::Shutdown::Both)?;
+        let deadline = std::time::Instant::now() + TIMEOUT;
+        while process.try_wait()?.is_none() && std::time::Instant::now() < deadline {
+            std::thread::sleep(Duration::from_millis(20));
+        }
+        if process.try_wait()?.is_none() {
+            process.kill()?;
+            process.wait()?;
+            anyhow::bail!("cancelled supervisor failed to unwind");
+        }
+        use std::os::unix::process::ExitStatusExt;
+        anyhow::ensure!(
+            process.wait()?.signal().is_none(),
+            "cancelled owner died by signal"
+        );
+        anyhow::ensure!(
+            dir.join("ended").exists(),
+            "cancelled owner omitted terminal result: {}",
+            std::fs::read_to_string(dir.join("output.log")).unwrap_or_default()
+        );
+        Ok(dir)
+    }
+
     // A dispatcher process exits after dispatch; the live test remains alive
     // to observe the independently owned wrapper and its grant teardown.
     pub(crate) fn dispatch_via_exiting_process(
@@ -636,6 +760,9 @@ pub(crate) mod tests {
     #[test]
     #[ignore]
     fn supervisor_dispatcher_entry() {
+        unsafe {
+            libc::signal(libc::SIGPIPE, libc::SIG_DFL);
+        }
         let mut socket = unsafe { UnixStream::from_raw_fd(FD) };
         unsafe {
             libc::fcntl(FD, libc::F_SETFD, libc::FD_CLOEXEC);
@@ -663,6 +790,9 @@ pub(crate) mod tests {
     #[test]
     #[ignore]
     fn supervisor_child_entry() {
+        unsafe {
+            libc::signal(libc::SIGPIPE, libc::SIG_DFL);
+        }
         supervise_main().unwrap();
     }
 }
