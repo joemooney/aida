@@ -645,7 +645,7 @@ fn task_2712_native_codex_seat_commit_ships_from_seat_without_seat_hooks() {
     // Read the object directly: git_ok trims whitespace and would conceal
     // cleanup of the body or its final blank line.
     // trace:BUG-2493 | ai:codex
-    let object = std::process::Command::new("git")
+    let object = crate::test_git::git_command()
         .args(["cat-file", "commit", "HEAD"])
         .current_dir(&clone)
         .output()
