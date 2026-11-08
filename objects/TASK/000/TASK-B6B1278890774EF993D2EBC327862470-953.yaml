@@ -23,7 +23,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-07T20:45:16.684639200Z
-modified_at: 2026-11-08T06:59:49.386019575Z
+modified_at: 2026-11-08T06:59:56.377307771Z
 req_type: Task
 relationships:
 - rel_type: Child
@@ -49,6 +49,25 @@ comments:
   content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: Part B routes all four named probes through ownership::reader and the ratchet entries are gone, but lease_retained treats every Unknown as held. No current production lease reads Dead (27/27 Unknown), so crashed reviewers and crashed spec claims are retained forever, and --resume hints now disagree with adoption. CI was still pending at this head; Part A is out of scope for this Refs slice.. No triage reason was given.'
   created_at: 2026-11-08T06:59:49.386016358Z
   modified_at: 2026-11-08T06:59:49.386016358Z
+  session_id: 01a1b8be-8170-7fb2-89ab-ecb4c6eee98c
+  harness_version: 2.1.319 (Claude Code)
+- id: 01a1b9f4-df8f-71f2-9ded-480703320ac2
+  author: joe
+  content: |-
+    REVIEW FINDINGS TO ADDRESS (PR #3670):
+    Verdict: CHANGES REQUESTED
+    Reviewed commit: 574bd8c21164
+    Recorded: 2026-11-08T06:53:18.936249484+00:00
+    Findings:
+    1. [major][blocker] TASK-1665 regression: review_lease_running can no longer report a crashed reviewer (lane_liveness.rs:1267, reader.rs:212). It is true unless the verdict is Dead, but production reviewer leases carry no witness: holder_for_lease builds witnesses only from lease_holder_record, and aida own show reports 'the holder records no witness' for PR-2906/2910/2913 and the current PR-3670/3671 reviewer leases. Any reviewer lease at the PR head therefore suppresses unpicked-ready-pr permanently. The new tests pass only because seed_lease_heartbeat writes a Heartbeat witness that no production lease writer uses. Fix: give reviewer leases an admitted witness or keep a provable crashed path, and test with the witness shape production writes.
+    2. [major][blocker] BUG-637 crash-deadlock is back in queue next/fill and session-start claims (queue_cmd.rs:4664, session_start.rs:2478). The old gate released LeaseState::Stale; lease_retained holds every Unknown. On the live store 21/21 stale leases read Unknown (no witness, unadmitted witness, or no record naming the session), including approved BUG-...-212/213/214 and in-progress TASK-2708, so those specs would be hidden from pickup until someone manually ends the lease. aida own migrate only adds records and cannot prove death, so the reader's suggested repair does not clear it. leases.rs:2382-2387 and 2433 still promise a crashed agent cannot lock its spec. Fix: define a reachable release path for crashed unadmitted holders, or get an advisor ruling that pickup must retain them and update those contracts.
+    3. [major][blocker] The --resume offer and the adoption gate now use different judges. orphan_lease_to_adopt (session_start.rs:999-1009) requires an ownership Dead verdict, but lease_adoption_refusal/adoptable_orphan_lease (leases.rs:4782-4825), which drive queue work --resume (queue_cmd.rs:12309) and scope_conflict_resume_hint, still use stale_lease_recovery_for_lease. For a StaleDirty lease with Unknown ownership, the hint offers --resume, then session start bails 'cannot re-enter' (session_start.rs:2145). This breaks the invariant documented at leases.rs:4778 and queue_cmd.rs:12035. Fix: route lease_adoption_refusal through the same owner verdict and add a test that hint and adoption agree.
+    4. [major] Hot-path cost: lease_owner calls lease_record, which calls load_store_for_lookup and re-parses the whole store (GitBackend::load, 7,391 objects today) per lease, even for PR-scoped leases that never resolve a spec (reader.rs:68). live_spec_claim_by_other and lease_owning_spec call is_live before the scope match (leases.rs:2047, 2435), so queue next costs candidates x leases x full store load, session start costs one load per lease (27 today), and the queue stale-base loop (queue_cmd.rs:3093) also loads per lease. Previously this was one process probe plus an O(1) predicate. Fix: load lazily only for spec scopes and share one store/memo across the batch, or check scope before liveness.
+    5. [minor] Coverage gap: task_3420 tests exercise lease_retained and orphan_lease_to_adopt, but no test drives the migrated decisions in session_start_with_receipt (claim gate, reviewer conflict is_live, adopted-orphan sweep) or the queue next filter with ownership records. The refusal paths for (b) and (c) are unproven at their call sites.
+    6. [minor] CI unverified: lib-0, lib-1, cli-0, cli-1 and gates were still pending at 574bd8c21164 when this verdict was recorded; only rest, contracts and merge-hold-gate had passed. Confirm all lanes green at the rework head.
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
+  created_at: 2026-11-08T06:59:55.407242517Z
+  modified_at: 2026-11-08T06:59:55.407242517Z
   session_id: 01a1b8be-8170-7fb2-89ab-ecb4c6eee98c
   harness_version: 2.1.319 (Claude Code)
 history:
