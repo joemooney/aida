@@ -11,7 +11,7 @@ priority: Low
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-08T03:38:52.682099623Z
-modified_at: 2026-11-08T21:17:20.511909003Z
+modified_at: 2026-11-08T21:17:23.839400139Z
 req_type: Task
 tags:
 - area:ci-relay
@@ -121,6 +121,22 @@ comments:
   content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: PARTIAL: acceptance and F7-F10 hold in source, but the PR''s new Rust wrapper test turns two CI jobs red (lib-1 raw-exe ratchet, gates nextest waiver pin), and exact-read rows can name a command that refuses.. No triage reason was given.'
   created_at: 2026-11-08T21:17:20.511907171Z
   modified_at: 2026-11-08T21:17:20.511907171Z
+  session_id: 01a1bc93-77a0-7740-8b03-df4e3e8d1df5
+  harness_version: 2.1.319 (Claude Code)
+- id: 01a1bd05-e8d6-7893-b497-015670e489f7
+  author: joe
+  content: |-
+    REVIEW FINDINGS TO ADDRESS (TASK-3452):
+    Verdict: CHANGES REQUESTED
+    Reviewed commit: cb1e41f9aae3
+    Recorded: 2026-11-08T21:13:42.136488985+00:00
+    Findings:
+    1. F11 (blocking, aida-cli-lib/src/ci_relay.rs:1193): task3452_history_window_reports_skipped_attempts calls std::env::current_exe() directly. The ratchet orchestrator_leases::resolve_aida_exe_tests::no_cli_source_outside_the_resolver_uses_raw_current_executable_lookup (resolve_aida_exe_tests.rs:65) allows zero such calls outside aida_bin.rs and kernel.rs, so CI (lib-1) job 128856792750 fails at cb1e41f9aae3. Do not add an allowance. Resolve the binary like the sibling test at aida-cli-lib/src/tests/task_1945_commit_ci_tests.rs:353 (AIDA_TEST_BIN, then CARGO_TARGET_DIR/debug/aida), or drop the wrapper per F12.
+    2. F12 (blocking, .config/nextest.toml:68-72 and scripts/test-time-budget.toml:36): the new whole-runner, extended-timeout override and 480s budget break tests/test_ci_test_shards.py test_nextest_gates_the_test_lanes, which pins the non-serial overrides to exactly the aida_sized relay test (:307-318) so no new test inherits that waiver. That step (STORY-1853 test-speed tooling tests) failed in CI (gates) job 128856792618; the job log was not downloadable here, so this is from the failed step name plus the assertion in source. Preferred fix: remove the Rust wrapper, override and budget entry, since the Python regressions already run in the contracts shard (.github/workflows/ci.yml:510, python3 tests/test_work_ci_relay.py); check that step's full_ci condition covers this change. Otherwise make the test fit the ordinary limits. Do not widen the pin without advisor agreement. The 480 entry also lacks the measured evidence the budget file requires (a 94s run was reported).
+    3. F13 (minor, aida-cli-lib/src/ci_relay.rs record_skipped): every unverified latest attempt is labelled outside the revalidation window with an exact-read command, including a receipt that exact read refuses. check_history_bounds shows this at total=35: attempt 2 (job not-in-home) is counted in reported[skipped], then ci read --attempt 2 is refused. The row stays in aida awaiting, its total and the status meter with no working recovery. Either record a distinct state and reason when exact verification has refused, or document the operator path for an unrecoverable row, with a regression.
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
+  created_at: 2026-11-08T21:17:23.542184912Z
+  modified_at: 2026-11-08T21:17:23.542184912Z
   session_id: 01a1bc93-77a0-7740-8b03-df4e3e8d1df5
   harness_version: 2.1.319 (Claude Code)
 history:
