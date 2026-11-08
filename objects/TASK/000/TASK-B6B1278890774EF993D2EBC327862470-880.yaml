@@ -8,7 +8,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-06T13:39:53.442026096Z
-modified_at: 2026-11-08T13:16:32.103704937Z
+modified_at: 2026-11-08T13:20:42.247594546Z
 req_type: Task
 tags:
 - architecture
@@ -799,6 +799,37 @@ comments:
   modified_at: 2026-11-08T13:04:15.283589710Z
   session_id: 01a1b9af-8230-75d2-82f8-667491cc010a
   harness_version: 2.1.319 (Claude Code)
+- id: 01a1bb51-7d07-7dd3-8c50-1966d52d20d3
+  author: dirtlab
+  content: |
+    TASK-3223 native implementer handoff — PARTIAL; publication veto (saved design-fork punt)
+
+    Changes left uncommitted:
+    - aida-cli-lib/src/containment/tests/mediated_store_tests.rs: same-bwrap-process raw canonical-object overwrite denial followed by a real broker/host comment_add success; verifies correlated reply/revision and parent-observed single comment/host-bound author in primary and linked-store layouts. Existing raw create/append/rename and private-cache controls retained.
+    - aida-cli-lib/src/store_mutation/routed_tests.rs and store_mutation/mod.rs: share the production broker/host fixture with the boundary test, using synthetic launch ancestry and host authority; preserve actual kernel credential/pidfd transport. This is synthetic filesystem/broker evidence, not production admission or real-vendor C2.
+    - aida-cli-lib/src/store_mutation_client.rs and store_mutation_client_tests.rs: no-repeat guidance applies only to OutcomeUnknown; definite refusals and connect-time Unavailable retain request UUID without that warning. Routed stale Conflict and lost-reply regressions assert the distinction.
+    - aida-cli-lib/src/mcp.rs and store_mutation_mcp_tests.rs: reject present non-string configured MCP profiles before stdio; cover integer, boolean, array, table and unknown-string values.
+    - aida-cli-lib/src/lib_part1.rs and store_mutation_entry.rs: capture early argv as OsString and refuse non-Unicode mediated arguments without panicking or dispatching; compatibility still falls through normally. Regression includes a non-UTF-8 body-file path.
+    - docs/internal/security/store-mutation-writers.md: correct direct-origin versus agreed-ID lookup behavior and describe real routed tests, paired boundary evidence and their synthetic authority limits.
+
+    Validation:
+    - cargo test --profile agent -p aida-cli-lib --lib -- mediated_profile_live_raw_create_append_rename_denied_and_private_cache_writable --nocapture: 1 executed live test passed, zero ignored, both layouts exercised. Lane job j20261108T131550189-2-0. An initial compile failed on an incorrect test-module path, corrected before this green run.
+    - cargo test --profile agent -p aida-cli-lib --lib -- store_mutation: 40 executed tests passed. Lane job j20261108T131551344-2-0.
+    - Python protocol/inventory fixtures: 76 passed.
+    - 41 fast source gates passed in three subsets (14/14/13), excluding CLI no-default-features compile, TUI seam and Cargo formatting commands. Logs: /tmp/task3223-gates-{0,1,2}.log. This is NOT an aggregate make check-ci-fast pass. Direct Cargo is prohibited in this seat; the lane runner accepts Cargo test/check/build rather than make.
+    - Final compatibility writer ratchet passed; final ExecContext ledger passed (1239 exact sites, zero additions); rustfmt of all changed Rust files and git diff --check passed.
+
+    Remaining acceptance and veto:
+    - Mediated inventory still refuses: 3163 writer sites and 293 operations unresolved. Other writer families are not routed. Do not mark them routed solely because early dispatch refuses them.
+    - Production mediated profile remains gated. own_claim/queue_done remain unsupported under TASK-3326.
+    - make check-ci-fast is not green as an aggregate; host execution remains required.
+    - Saved aida punt (design-fork) moved TASK-3223 to Needs Attention. Policy decision requested: whether existing writer operations such as comment edit/delete may remain explicitly refused for this cutover, or what approved ownership policy their typed host handlers must enforce. The current review required removing those verbs until an ownership policy is approved. The binding all-writers routing acceptance remains unmet.
+    - IMPORTANT: aida punt saved the status/reason but could not write AIDA_PUNT_SIGNAL_FILE (read-only filesystem). Host must honor the saved punt as a publication veto; absence of its signal file is not permission to publish.
+    - PR metadata finding is host-side: this seat is prohibited from PR mutations. No commit, push, PR mutation, queue done, merge or review verdict was performed. No publication declaration was issued after the punt.
+  created_at: 2026-11-08T13:20:42.247594546Z
+  modified_at: 2026-11-08T13:20:42.247594546Z
+  session_id: 01a1bb44e8d1
+  harness_version: codex-cli 0.167.0
 history:
 - id: 01a1b116-742d-73c0-9064-1933f11e4c38
   author: joe

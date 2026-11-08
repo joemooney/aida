@@ -18,7 +18,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-08T02:46:34.549817Z
-modified_at: 2026-11-08T13:11:17.695133223Z
+modified_at: 2026-11-08T13:20:36.532517900Z
 req_type: Bug
 tags:
 - area:ci
@@ -297,6 +297,14 @@ comments:
   modified_at: 2026-11-08T13:09:53.057120025Z
   session_id: 01a1b9af-8230-75d2-82f8-667491cc010a
   harness_version: 2.1.319 (Claude Code)
+- id: 01a1bb51-66b4-7462-ab39-830acf2f2a1f
+  author: dirtlab
+  content: |
+    Native rework handoff: active-only pending holds now refuse release --after-pr immediately by reading active/recorded/cleared labels together, without granting release authority. Added an active-only zero-budget regression. Removed AC1/AC2/AC4 fixture anchors; retained the label-table and malformed-state anchors. Updated stale pending-gate documentation and added dual-trigger cancelled publisher row/mail checks to the operator cutover runbook. Changed files: aida-cli-lib/src/ci_gate.rs, aida-cli-lib/src/forge.rs, aida-core/templates/skills-portable/aida-orchestrate.md, docs/advanced/autonomous-drain.md, docs/internal/agents/aida-repository-guide.md, docs/internal/testing/bug-2492-status-cutover.md, tests/test_merge_hold_gate.sh. Validation: launcher job j20261108T131220776-2-0 passed all 24 ci_gate::tests:: tests; shell fixtures passed 8 label states x 2 gates and 36 train cases; bash syntax, rustfmt --check and git diff --check passed. untested=false for targeted local validation. Codegraph unavailable (command missing); rg confirmed call sites. Edits uncommitted. Native publication declaration recorded: [AI:codex] fix(ci): refuse active-only pending holds during release (Refs BUG-2492). Host must retitle existing PR #3651 to end (Refs BUG-2492), publish edits and obtain green exact-head CI. Live raw merge/UI refusal, unchanged-SHA label clearance, notification and bootstrap cancellation observations remain operator cutover evidence; keep BUG-2492 open until attached. No commit/push/PR mutation, merge, review verdict or queue completion performed.
+  created_at: 2026-11-08T13:20:36.532517900Z
+  modified_at: 2026-11-08T13:20:36.532517900Z
+  session_id: 01a1bb488aec
+  harness_version: codex-cli 0.167.0
 history:
 - id: 01a1b90d-4bec-7bd0-9af1-86f501692f64
   author: joe
