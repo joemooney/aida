@@ -1349,6 +1349,11 @@ pub(crate) fn db_sync_local_window(
         // is ever added. Mirrors `aida fetch --code-only`'s tolerance.
         // trace:BUG-432 | ai:claude
         println!("  No `origin` remote — skipping pull (local-only project).");
+    } else if pull && !aida_core::git_ops::probe_remote_branch(store_path, "origin", &branch)? {
+        // A configured remote can precede the store's first push. Only a
+        // successful query establishes this state; failed queries refuse sync.
+        // trace:BUG-2490 | ai:codex
+        println!("  No origin/{branch} branch yet — skipping pull (push to create it).");
     } else if pull {
         // Snapshot local state before pull for conflict detection.
         // trace:TASK-1717 | ai:claude — strict: an unreadable or unparsable

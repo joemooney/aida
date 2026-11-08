@@ -519,6 +519,39 @@ fn no_launch_completion_text_is_codex_aware() {
 
 // trace:BUG-2490 | ai:codex
 #[test]
+fn bug_2490_missing_remote_store_branch_does_not_stop_pickup() {
+    // Cover both an empty origin and an origin with code but no store branch.
+    for has_code_branch in [false, true] {
+        let base = tempfile::tempdir().unwrap();
+        let base_dir = base.path().canonicalize().unwrap();
+        let (repo, home, spec) = init_codex_only_project(&base_dir);
+        let remote = base_dir.join("remote.git");
+        git(&base_dir, &["init", "--bare", remote.to_str().unwrap()]);
+        if has_code_branch {
+            git(&repo, &["push", remote.to_str().unwrap(), "main"]);
+        }
+        let store = repo.join(".aida-store");
+        git(
+            &store,
+            &["remote", "add", "origin", remote.to_str().unwrap()],
+        );
+        let out = aida(&repo, &home)
+            .args(["queue", "work", &spec, "--no-launch"])
+            .output()
+            .unwrap();
+        let message = format!(
+            "{}{}",
+            String::from_utf8_lossy(&out.stdout),
+            String::from_utf8_lossy(&out.stderr)
+        );
+        assert!(out.status.success(), "{message}");
+        assert!(message.contains("push to create it"), "{message}");
+        assert!(!message.contains("pre-pickup pull failed"), "{message}");
+    }
+}
+
+// trace:BUG-2490 | ai:codex
+#[test]
 fn bug_2490_failed_pull_stops_pickup_before_session_and_spec_writes() {
     let base = tempfile::tempdir().unwrap();
     let base_dir = base.path().canonicalize().unwrap();

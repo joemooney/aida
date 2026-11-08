@@ -4985,6 +4985,29 @@ pub fn remote_branch_exists(repo: &Path, remote: &str, branch: &str) -> bool {
     .unwrap_or(false)
 }
 
+/// A branch absence used to skip a pull must be confirmed by a successful
+/// remote query. Offline and unreadable remotes remain errors.
+// trace:BUG-2490 | ai:codex
+pub fn probe_remote_branch(repo: &Path, remote: &str, branch: &str) -> Result<bool> {
+    let result = remote_git(
+        repo,
+        remote,
+        &[
+            "ls-remote",
+            "--heads",
+            "--end-of-options",
+            remote,
+            &format!("refs/heads/{branch}"),
+        ],
+    )?;
+    anyhow::ensure!(
+        result.success,
+        "cannot inspect remote branch {remote}/{branch}: {}",
+        result.stderr.trim()
+    );
+    Ok(!result.stdout.trim().is_empty())
+}
+
 /// Resolve `<remote>/<branch>`'s head SHA via a single `git ls-remote` query,
 /// WITHOUT fetching any objects. One cheap network round-trip (refs only, no
 /// object transfer) — the building block for "is my local store already current
