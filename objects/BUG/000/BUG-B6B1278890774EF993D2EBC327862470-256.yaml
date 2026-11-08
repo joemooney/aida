@@ -8,7 +8,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-08T00:05:07.175003336Z
-modified_at: 2026-11-08T04:16:20.694327203Z
+modified_at: 2026-11-08T04:16:23.935074613Z
 req_type: Bug
 comments:
 - id: 01a1b879-aeab-7d60-b2eb-2aee3e5a94bb
@@ -37,6 +37,23 @@ comments:
   content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: No production change: only a comment in seat_clone.rs plus a test that asserts the opposite of the advisor-clarified AC(1); AC(2) force-claim self-retirement is untested; the reported refusal is not fixed.. It was punted on: missing-context: The described reachable slice-tag condition passes a live sandbox regression on this checkout; shared probe and force-claim retirement already implement that path. No production behavior change is justified without a retained failing clone or its exact peeled tag OIDs, branch/origin ancestry and deployed binary revision. Regression edits are retained uncommitted; final-source test rerun is pending.. No triage reason was given.'
   created_at: 2026-11-08T04:16:20.694325307Z
   modified_at: 2026-11-08T04:16:20.694325307Z
+  session_id: 01a1b8be-8170-7fb2-89ab-ecb4c6eee98c
+  harness_version: 2.1.319 (Claude Code)
+- id: 01a1b95f-28da-7b32-a58e-0c0f74b05fda
+  author: joe
+  content: |-
+    REVIEW FINDINGS TO ADDRESS (BUG-2491):
+    Verdict: CHANGES REQUESTED
+    Reviewed commit: f27e74223186
+    Recorded: 2026-11-08T03:17:10.482255734+00:00
+    Findings:
+    1. AC(1) unmet, and the test encodes the opposite rule. Advisor clarification (2026-11-07 comment) says refs/tags/slice-* checkpoint tags must NEVER count as unpushed when the branch head is pushed and the tree is clean, even if they point at pre-squash commits origin cannot reach (the reported case: '1 commit(s) on refs/tags/slice-00-r1 ... (+46 more)'). REF_TIPS_SCRIPT / UNPUSHED_COUNT_SCRIPT (aida-cli-lib/src/seat_clone.rs:2378-2410) have no slice-* exclusion, and bug_2491_pushed_slice_tags_are_not_unpushed_work (task_2053_seat_clone_lifecycle_tests.rs:2684-2716) asserts unpushed==1 and Destroyed::Kept for an unreachable slice-02-r1 tag, which is the exact refusal the bug reports. Fix: exclude refs/tags/slice-* from the unpushed count/refs list when the branch head is pushed (reachable from origin or an excused shipped head) and the tree is clean; non-slice refs keep the current rule. Flip the test so an unreachable slice tag on a pushed, clean clone yields unpushed==0, and add a negative case (unpushed branch head, or a non-slice tag on unreachable history, still counts).
+    2. AC(2) unverified: nothing tests that 'aida queue work SPEC --force-claim' ends the retained finished lease itself and proceeds once the slice-only evidence is excused. Add a force-claim-level regression (retained lease plus a clone carrying only unreachable slice-* tags and a pushed clean head means force-claim retires the lease and does not refuse), or cite the existing test that covers this path after the AC(1) change.
+    3. AC(3) partial: the regression only covers slice tags reachable from published history, which current code already excuses (the implementer's own spec comment says so). It does not reproduce the reported failure (pre-squash checkpoint tags unreachable from origin), so the test would pass on main and proves no fix.
+    4. The comment added at seat_clone.rs:2374-2377 ('a checkpoint on unpublished history continues to protect the clone') documents the behavior the advisor ruled out. Rewrite it to describe the slice-tag exemption once that is implemented.
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
+  created_at: 2026-11-08T04:16:23.770656061Z
+  modified_at: 2026-11-08T04:16:23.770656061Z
   session_id: 01a1b8be-8170-7fb2-89ab-ecb4c6eee98c
   harness_version: 2.1.319 (Claude Code)
 history:
