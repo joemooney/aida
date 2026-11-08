@@ -567,6 +567,7 @@ fn queue_work_as(
 ) -> anyhow::Result<()> {
     crate::queue_cmd::handle_queue_work(
         storage,
+        None,
         crate::test_env::HERMETIC_TEST_USER,
         Some(scope),
         None,

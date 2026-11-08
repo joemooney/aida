@@ -977,3 +977,13 @@ codex_min_grant_secs = "policy"
 [readers."aida-cli-lib/src/launch/codex_auth.rs"]
 channels = ["write"]
 sites = 1
+
+# Lane host reads/writes user Cargo config, never project executable policy.
+# trace:STORY-2642 | ai:codex
+[readers."aida-cli-lib/src/lane_host.rs"]
+channels = ["home", "write"]
+sites = 2
+
+[readers."aida-cli-lib/src/vendors/host_diagnostics.rs"]
+channels = ["home"]
+sites = 2

@@ -50,7 +50,7 @@ impl Fixture {
                     std::env::var("PATH").unwrap_or_default()
                 ),
             )
-            .env("AIDA_OS_WRAP", "0")
+            .env_remove("AIDA_OS_WRAP")
             .env("AIDA_TELEMETRY", "0")
             .env("AIDA_TEE_HEADLESS", "0")
             .env("AIDA_AGENT_CMD", self.bin.join("claude"));
@@ -93,6 +93,7 @@ fn scrubbed_headless_reviewer_records_but_implementer_shell_refuses() {
     for path in [&fixture.repo, &fixture.home, &fixture.bin] {
         std::fs::create_dir_all(path).unwrap();
     }
+    support::contained_lane_host(&fixture.home, &fixture.bin);
     git(&fixture.repo, &["init", "-q", "-b", "main"]);
     // trace:BUG-2017 | ai:codex — explicit positive global-ID fixture.
     test_git::enroll_synthetic_home(&fixture.repo);
@@ -157,7 +158,11 @@ fn scrubbed_headless_reviewer_records_but_implementer_shell_refuses() {
         toml::Value::String("github".into()),
     )]));
     std::fs::write(&config, toml::to_string(&config_value).unwrap()).unwrap();
-    git(&fixture.repo, &["add", ".aida/config.toml"]);
+    support::contained_lane_project(&fixture.repo);
+    git(
+        &fixture.repo,
+        &["add", "-f", ".aida/config.toml", ".claude/settings.json"],
+    );
     git(
         &fixture.repo,
         &["commit", "-q", "-m", "fixture forge configuration"],
