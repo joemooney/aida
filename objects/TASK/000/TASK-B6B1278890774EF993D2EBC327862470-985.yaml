@@ -1,0 +1,29 @@
+id: 01a1bb00-5c6c-7600-a03c-c1daa202c9c0
+spec_id: TASK-b6b1278890774ef993d2ebc327862470-985
+title: 'Non-blocking (minor): destroy_inner''s slice-only checkpoint count (aida-cli-lib…'
+description: |-
+  Non-blocking finding carried forward from an APPROVED review verdict on BUG-2491, which has since completed — recorded here so it keeps a queryable home once the verdict record stops being read.
+
+  Non-blocking (minor): destroy_inner's slice-only checkpoint count (aida-cli-lib/src/seat_clone.rs:3881-3898) passes only caller-supplied shipped heads, not the in_main tip excuses probe_until computes. A seat that publishes through main has no origin tracking ref in its clone, so checkpoints already published read as unpublished and teardown runs an unneeded salvage; a salvage failure there can keep a clone with nothing to save.
+
+  PR: #3650
+  Reviewed sha: f0314f75d2a203b9a62b49cd5754c3a6f9404644
+status: Draft
+priority: Medium
+owner: joe
+feature: Uncategorized
+created_at: 2026-11-08T11:52:05.484050227Z
+modified_at: 2026-11-08T11:52:05.484050227Z
+req_type: Task
+tags:
+- carried-from:BUG-2491
+- finding-hash:f7a64e9c
+- from-review:PR-3650
+- kind:carried-forward
+filed_at:
+  code_sha: b77fce7b3ca9b542a0244e2513c2468cd74d4c56
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 92e7eb35446
+  vendor: claude
