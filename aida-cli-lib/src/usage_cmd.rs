@@ -3,7 +3,7 @@
 //!
 //! The usage-telemetry query surface: the top-N default view, `errors`,
 //! `unused`, `slowest` + `events` (the performance lens), `--read-write`
-//! (the trace-read-rate audit), and `auto-complete` (orchestrator telemetry
+//! (the trace-read-rate audit), and `drains` (orchestrator telemetry
 //! views). Reads the per-command usage log (`~/.aida/usage.jsonl`) and the
 //! orchestrator log (`~/.aida/auto-complete.jsonl`); never writes them.
 //! Extracted verbatim from `main.rs` (SPIKE-78); no behavior change.
@@ -76,8 +76,8 @@ where
 // `aida usage slowest` + `aida usage events` — the performance lens
 // (STORY-709). Both read the SAME `~/.aida/usage.jsonl` log via
 // `usage::read_events()` and the same `UsageEvent` struct (cmd + duration_ms +
-// exit_code + ts) — no new capture, no new file. `--slowest` aggregates
-// latency per command shape; `--events` streams the raw rows.
+// exit_code + ts) — no new capture, no new file. `aida usage slowest` aggregates
+// latency per command shape; `aida usage events` streams the raw rows.
 // ----------------------------------------------------------------------------
 
 /// Latency aggregate for one command shape over a telemetry window.
@@ -884,7 +884,7 @@ pub(crate) fn handle_usage_command(
         return handle_usage_read_write(since_raw, json_out, limit);
     }
 
-    // STORY-709: `--slowest` is the performance lens — aggregate per-command
+    // STORY-709: `aida usage slowest` is the performance lens — aggregate per-command
     // latency (p50/p95/max + count) from the same usage log and rank
     // slowest-first. Reuses the existing read/parse path; no new capture.
     if slowest {
@@ -907,7 +907,7 @@ pub(crate) fn handle_usage_command(
         return handle_usage_timeline(since_raw, json_out, limit, cmd_filter, slower_than);
     }
 
-    // STORY-530: `--health` renders the deterministic Tier-1 health catalog
+    // STORY-530: `aida usage health` renders the deterministic Tier-1 health catalog
     // (six pure metrics over the telemetry logs + the spec graph). It reads
     // its own sources, so it gets its own handler.
     if health {
@@ -920,7 +920,7 @@ pub(crate) fn handle_usage_command(
         );
     }
 
-    // TASK-266: `--auto-complete` switches to the orchestrator telemetry
+    // TASK-266: `aida usage drains` switches to the orchestrator telemetry
     // log (`~/.aida/auto-complete.jsonl`) — a different source from the
     // per-command usage log, so it gets its own handler.
     if auto_complete {
@@ -1295,12 +1295,12 @@ fn handle_usage_read_write(since_raw: &str, json_out: bool, limit: usize) -> Res
 
 // ----------------------------------------------------------------------------
 // `aida usage drains` — orchestrator telemetry views (TASK-266).
-// Reads `~/.aida/auto-complete.jsonl` (written one line per `--auto-complete`
+// Reads `~/.aida/auto-complete.jsonl` (written one line per `aida queue work --auto-complete`
 // run by `record_auto_complete_run`).
 // ----------------------------------------------------------------------------
 
 /// TASK-266: the `aida usage drains` view family. Bare
-/// `--auto-complete` prints a success/failure summary plus the most recent
+/// `aida usage drains` prints a success/failure summary plus the most recent
 /// failures; `--failures` expands the full failure list; `--pattern` shows
 /// the per-phase failure histogram.
 // trace:TASK-266 | ai:claude
@@ -1351,7 +1351,7 @@ fn handle_auto_complete_usage(
     if pattern {
         return render_auto_complete_pattern(&events, json_out);
     }
-    // `--failures` expands the full list; bare `--auto-complete` is the
+    // `--failures` expands the full list; bare `aida usage drains` is the
     // compact overview that caps the list and points at `--failures`.
     render_auto_complete_failures(
         &events,
@@ -1386,7 +1386,7 @@ fn compute_session_drain_gap(
 }
 
 /// Render the summary header + recent-failures list. `overview` (bare
-/// `--auto-complete`) caps the list short and adds navigation hints;
+/// `aida usage drains`) caps the list short and adds navigation hints;
 /// `--failures` shows the full list up to `limit`.
 // trace:TASK-266 | ai:claude
 fn render_auto_complete_failures(

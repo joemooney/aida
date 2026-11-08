@@ -1974,11 +1974,11 @@ where
 
 // trace:STORY-472 | ai:claude
 // trace:TASK-1721 | ai:claude
+// trace:TASK-1214 | ai:codex
 /// One-verb release: sync the store, run the version bump through a release PR
 /// and tag the merged commit, wait for the published tarballs, and upgrade sibling installs. Wraps the
 /// whole sequence so you don't have to remember it. Use `release check` first to
 /// preview without acting.
-// trace:TASK-1214 | ai:codex
 #[derive(clap::Parser, Debug)]
 #[clap(name = "release")]
 pub(crate) struct ReleaseArgs {

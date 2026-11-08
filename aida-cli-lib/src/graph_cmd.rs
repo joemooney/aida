@@ -139,9 +139,9 @@ pub(crate) fn handle_graph_command(
     };
     let is_tree = mode == "tree";
 
-    // TASK-1074: `--tree` membership routes through the shared rank-oriented
-    // hierarchy closure (`graph_walk::hierarchy_tree`) so `aida graph <epic>
-    // --tree` and `aida focus <epic>` (the cache's `descendant_ids`) agree — the
+    // TASK-1074: `aida graph tree` membership routes through the shared rank-oriented
+    // hierarchy closure (`graph_walk::hierarchy_tree`) so `aida graph tree <epic>`
+    // and `aida focus <epic>` (the cache's `descendant_ids`) agree — the
     // old `walk_union([Child,Parent])` leaked a descendant's same-rank second
     // parent into the count. The other modes keep their own walk_union legs.
     let result = if is_tree {
