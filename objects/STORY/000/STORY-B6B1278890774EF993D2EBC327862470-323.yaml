@@ -8,7 +8,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-02T19:20:50.092491662Z
-modified_at: 2026-11-08T01:00:01.098788369Z
+modified_at: 2026-11-08T01:33:39.617480860Z
 req_type: Story
 tags:
 - architecture
@@ -658,6 +658,13 @@ comments:
   created_at: 2026-11-08T00:47:07.356095165Z
   modified_at: 2026-11-08T00:47:07.356095165Z
   session_id: 01a1b8852a0f
+- id: 01a1b8ca-2ba1-7303-91b0-ce4a05596d1c
+  author: joe
+  content: 'ADVISOR RULING 2026-11-07 18:35 (PR-3619, round 8, past the 2-round cap): one FINAL round, scoped strictly to the round-8 verdict''s findings: (1) production recovery hints that still prescribe the refused --steal, plus the three smaller named defects. No new scope. Any further non-blocking finding becomes a follow-up spec, not round 10. If round 9 still has a blocking finding, the PR is parked and the spec is clarified before more work.'
+  created_at: 2026-11-08T01:33:39.617480860Z
+  modified_at: 2026-11-08T01:33:39.617480860Z
+  session_id: 01a1b8be-8170-7fb2-89ab-ecb4c6eee98c
+  harness_version: 2.1.319 (Claude Code)
 history:
 - id: 01a19ed2-508b-7401-9865-70193fa0d0af
   author: joe
