@@ -18,12 +18,12 @@ description: |
   The ratchet baseline must shrink to zero entries for these paths.
 
   LIGHT gate. Parts A and B may be separate PRs (Refs this task; the last one completes it).
-status: Approved
+status: NeedsAttention
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-07T20:45:16.684639200Z
-modified_at: 2026-11-08T10:53:55.905645866Z
+modified_at: 2026-11-08T10:54:03.315372543Z
 req_type: Task
 relationships:
 - rel_type: Child
@@ -224,6 +224,15 @@ history:
   - field_name: status
     old_value: NeedsAttention
     new_value: Approved
+- id: 01a1bacb-3a33-7db3-b535-9a45ddfa3790
+  author: aida-loop-guard
+  timestamp: 2026-11-08T10:54:03.315367684Z
+  session_id: 01a1b9af-8230-75d2-82f8-667491cc010a
+  harness_version: 2.1.319 (Claude Code)
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: NeedsAttention
 filed_at:
   code_sha: e278eeb1d8f95dadba5f6e9d8bfd41d10eac52c3
   branch: main
