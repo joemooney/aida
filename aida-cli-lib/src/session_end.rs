@@ -1662,7 +1662,13 @@ pub(crate) fn session_end_with_discard_unpushed(
 
     // Re-read immediately before any teardown writes.
     // trace:BUG-2450 | ai:codex
-    if has_worktree {
+    // A missing checkout has no HEAD to inspect. Its recorded branch is
+    // retained by session end, so ending only the stale lease loses no commits.
+    // Unreadable paths still reach the coverage guard and fail closed.
+    // trace:STORY-2325 | ai:codex
+    let tree_missing = std::fs::symlink_metadata(&target.worktree_path)
+        .is_err_and(|error| error.kind() == std::io::ErrorKind::NotFound);
+    if has_worktree && !tree_missing {
         guard_remote_commits(&project_root, &target, discard_unpushed)?;
     }
 
