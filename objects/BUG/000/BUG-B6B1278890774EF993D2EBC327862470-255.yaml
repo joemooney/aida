@@ -8,7 +8,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-08T00:02:55.282155934Z
-modified_at: 2026-11-08T04:46:39.722927177Z
+modified_at: 2026-11-08T04:50:30.781757526Z
 req_type: Bug
 comments:
 - id: 01a1b91d-d20d-7930-ae4c-256520578a3d
@@ -90,6 +90,11 @@ history:
   - field_name: status
     old_value: InProgress
     new_value: NeedsAttention
+- id: 01a1b97e-6575-71f3-b0f0-c92268d89c50
+  author: joe
+  timestamp: 2026-11-08T04:50:30.901806296Z
+  session_id: 01a1b977c304
+  changes: []
 filed_at:
   code_sha: 2a7fe186bdcd718fa356e5e4d028a3b2ff13769d
   branch: main
@@ -99,6 +104,12 @@ filed_at:
   vendor: claude
   session: 01a1b848-940b-7bd2-8acd-52e428b182b8
   harness_version: 2.1.319 (Claude Code)
+attention_reason:
+  category: design-fork
+  detail: 'Round 2 finding 3 remains unresolved: operator requires upstream-wins semantic store merging plus failed-pull write blocking, or an advisor-authorized linked split. Existing resolve_spec_conflict/merge_spec_three_way already unions comments/history by id but intentionally applies field-level LWW, terminal-status protection and hypothesis evidence preservation. Replacing that policy is an architecture decision; this implementer cannot authorize the requested advisor split. Findings 1, 2 and 4 have local edits and targeted lane tests are running. Do not publish this as the complete BUG-2490 fix.'
+  lean: Advisor should explicitly approve a linked follow-up covering upstream scalar policy and durable fail-closed write admission after failed store pulls, retaining lifecycle/evidence protections; otherwise approve a sketch for implementing both here.
+  raised_by: implementer
+  raised_at: 2026-11-08T04:50:30.781757526Z
 failure_reason:
   phase: reviewer
   phase_index: 3
