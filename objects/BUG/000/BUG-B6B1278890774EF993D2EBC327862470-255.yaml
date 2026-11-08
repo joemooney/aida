@@ -8,7 +8,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-08T00:02:55.282155Z
-modified_at: 2026-11-08T15:58:12.504449345Z
+modified_at: 2026-11-08T16:14:17.899112557Z
 req_type: Bug
 relationships:
 - rel_type:
@@ -1051,6 +1051,12 @@ history:
   - field_name: status
     old_value: InProgress
     new_value: NeedsAttention
+- id: 01a1bbf0-6b95-7df2-9bf9-0f721d4160dd
+  author: joe
+  timestamp: 2026-11-08T16:14:18.005289661Z
+  session_id: 01a1bbece1e9
+  harness_version: 2.1.319 (Claude Code)
+  changes: []
 filed_at:
   code_sha: 2a7fe186bdcd718fa356e5e4d028a3b2ff13769d
   branch: main
@@ -1065,3 +1071,11 @@ attention_reason:
   detail: 'Round 16 finding 1 remains an advisor-action blocker. This implementer disputes treating an implementer merge-policy replacement or implementer-filed split as advisor approval: BUG-2490 still has no advisor ruling or linked follow-up for upstream scalar and modify/delete handling versus existing LWW, terminal-status and hypothesis-evidence safeguards. maybe_sync_pull semantic merging, burndown failed-pull write fencing and modify/delete policy remain incomplete. Advisor must record the ruling and require (a)-(c) here or file and link the follow-up, then re-request review. Finding 2 requires green CI at the next published head and the supervised merge hold remains active. Finding 3 is patched locally; finding 4 is explicitly deferred as the non-blocking doctor-only double parse. Preserve the publication veto; no completion or approval is claimed.'
   raised_by: implementer
   raised_at: 2026-11-08T15:53:00.173338266Z
+failure_reason:
+  phase: reviewer
+  phase_index: 3
+  kind: verdict:request-changes
+  detail: AC1-AC4 hold by source and named tests and all round-16 findings are fixed at their named sites, but CI has not started at this head, operator scope still has no advisor ruling or linked split, and more unguarded store retry sites remain.
+  recovery_hint: address the review findings, move BUG-2490 back to In Progress, and clear the PR hold only after approval
+  shelved_by: reviewer
+  shelved_at: 2026-11-08T16:14:17.899112557Z
