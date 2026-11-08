@@ -18,12 +18,12 @@ description: |
   2. Without sccache configured, behaviour is unchanged.
   3. Test: the job profile's env/bind set includes the cache dir and wrapper only when configured.
   4. The trust decision (shared or lane-only cache) is recorded on this spec before implementation.
-status: NeedsAttention
+status: Approved
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-07T19:59:26.079479533Z
-modified_at: 2026-11-08T05:42:32.095338727Z
+modified_at: 2026-11-08T05:50:50.331494725Z
 req_type: Story
 comments:
 - id: 01a1b798-f0d4-73b1-93d5-f84581f2d190
@@ -88,6 +88,13 @@ comments:
   created_at: 2026-11-08T05:35:33.208530418Z
   modified_at: 2026-11-08T05:35:33.208530418Z
   session_id: 01a1b994e1cb
+- id: 01a1b9b5-9fdb-7880-aac5-de17adedb70d
+  author: joe
+  content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: Round-1 findings 1 and 3 fixed with tests; AC0/AC2/AC3/AC4 met. AC1 (measured sccache hits from two consecutive lane jobs on primary and dell1) still has no evidence, and the implementer says so; CI at head still pending.. It was punted on: blocked-dependency: Round 2 finding 2 remains open: AC1 requires measured cache hits from two consecutive lane Cargo jobs on both primary and dell1; this seat has only a real local cross-server persistence smoke (second server: 1 Rust hit), not the required two-host lane evidence. Targeted resource-env test timed out before execution at 900s and reported overlay-stale (primary rewrote agent-9300e3b2a1667f94); the session runner reuses that overlay. Host must prepare a fresh target/runner, rerun the targeted Rust tests and collect both-host lane statistics, or obtain an advisor amendment. Findings 1 and 3, server drain/statistics and the CI config inventory fix are left uncommitted; make check-ci-fast passes all 43 gates. Preserve the publication veto and existing merge hold.. No triage reason was given.'
+  created_at: 2026-11-08T05:50:50.331492916Z
+  modified_at: 2026-11-08T05:50:50.331492916Z
+  session_id: 01a1b9af-8230-75d2-82f8-667491cc010a
+  harness_version: 2.1.319 (Claude Code)
 history:
 - id: 01a1b929-7921-7980-8202-36c2cc4f3845
   author: aida-session-start
@@ -140,6 +147,15 @@ history:
   session_id: 01a1b9ac8d52
   harness_version: 2.1.319 (Claude Code)
   changes: []
+- id: 01a1b9b5-9fdb-7880-aac5-de03f5772c46
+  author: joe
+  timestamp: 2026-11-08T05:50:50.331474599Z
+  session_id: 01a1b9af-8230-75d2-82f8-667491cc010a
+  harness_version: 2.1.319 (Claude Code)
+  changes:
+  - field_name: status
+    old_value: NeedsAttention
+    new_value: Approved
 filed_at:
   code_sha: 7a18c0d52a6a4e0822befd4c810cfed16b04b74c
   branch: main
@@ -149,17 +165,3 @@ filed_at:
   vendor: claude
   session: 01a1b76b-2fe7-7dd2-88d0-356fc8d96d04
   harness_version: 2.1.319 (Claude Code)
-attention_reason:
-  category: blocked-dependency
-  detail: 'Round 2 finding 2 remains open: AC1 requires measured cache hits from two consecutive lane Cargo jobs on both primary and dell1; this seat has only a real local cross-server persistence smoke (second server: 1 Rust hit), not the required two-host lane evidence. Targeted resource-env test timed out before execution at 900s and reported overlay-stale (primary rewrote agent-9300e3b2a1667f94); the session runner reuses that overlay. Host must prepare a fresh target/runner, rerun the targeted Rust tests and collect both-host lane statistics, or obtain an advisor amendment. Findings 1 and 3, server drain/statistics and the CI config inventory fix are left uncommitted; make check-ci-fast passes all 43 gates. Preserve the publication veto and existing merge hold.'
-  lean: Keep AC1 unchanged; validate the revised launcher on fresh host targets before publication or completion.
-  raised_by: implementer
-  raised_at: 2026-11-08T05:35:40.818746545Z
-failure_reason:
-  phase: reviewer
-  phase_index: 3
-  kind: verdict:request-changes
-  detail: Round-1 findings 1 and 3 fixed with tests; AC0/AC2/AC3/AC4 met. AC1 (measured sccache hits from two consecutive lane jobs on primary and dell1) still has no evidence, and the implementer says so; CI at head still pending.
-  recovery_hint: address the review findings, move STORY-2641 back to In Progress, and clear the PR hold only after approval
-  shelved_by: reviewer
-  shelved_at: 2026-11-08T05:42:32.095338727Z
