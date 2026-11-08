@@ -8,7 +8,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-04T17:54:51.353376614Z
-modified_at: 2026-11-08T00:21:37.409187408Z
+modified_at: 2026-11-08T00:21:45.375448814Z
 req_type: Task
 tags:
 - area:containment
@@ -395,6 +395,26 @@ comments:
   content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: Partial slice of the 2026-11-07 16:40 ruling. AC status: (1) run_aida accepts agy + shared-boundary launch with receipt-gated argv: PARTIAL - fixture accepts agy, argv drops --sandbox/--settings and gates bypass on accepted receipt (contained.rs:1715, launch_tests.rs:628), but agy never executes (require_conformance refuses; doc admits) and MCP/browser/URL disabling is absent; (2) auth hosts as data + measured refresh hosts + unknown-host fail-closed: PARTIAL - oauth2 host added from static binary strings only, auth_hosts not consumed by the launcher egress set, no named unknown-host refusal, no measured list on spec; (3) native diagnostic never gets credit: verified conformance.py:1131 hardcodes false; (4) production require_conformance still refuses: verified agy.rs:207-216. CI still pending at review time.. No triage reason was given.'
   created_at: 2026-11-08T00:21:37.409182898Z
   modified_at: 2026-11-08T00:21:37.409182898Z
+  session_id: 01a1b848-940b-7bd2-8acd-52e428b182b8
+  harness_version: 2.1.319 (Claude Code)
+- id: 01a1b888-563c-7cc3-94c0-c2c7f985ca04
+  author: joe
+  content: |-
+    REVIEW FINDINGS TO ADDRESS (PR #3641):
+    Verdict: CHANGES REQUESTED
+    Reviewed commit: 9b8a2498c235
+    Recorded: 2026-11-07T23:54:34.336793812+00:00
+    Findings:
+    1. Ruling item 1 unmet: run_aida --vendor agy goes through 'aida queue work --vendor agy', which the production Adapter::require_conformance refuses, so the fixture never reaches agy execution and the advisor's C0-C4 live run through the AIDA boundary is impossible (containment-conformance.md new section admits this). Add a fixture/diagnostic-only entry into the shared wrapper (outer_only_argv + receipt barrier) that does not unlock production admission, with a test proving production still refuses.
+    2. Ruling item 1: MCP, browser and URL tools are not disabled. vendors.toml argv_prefix only adds --disable-slash-commands; the private settings.json is now {} with no tool restrictions. Add the agy flags/settings that disable MCP/browser/URL tools and a test asserting them in candidate and wrapper argv.
+    3. Ruling item 2: runtime_policy auth_hosts is not consumed by the contained launcher's egress allow-set (only tests and the Python fixture read it; contained.rs:1027/1384 handle Codex OAuth hosts only). There is no fail-closed with a named reason for an unlisted host, and oauth2.googleapis.com comes from a static string in the binary, not a measurement; no measured list is recorded on the spec.
+    4. Stale native-permission data: vendors.toml:42 still sets workspace_permission = "write_file", RuntimePolicy::settings (containment/mod.rs:219) now has no production caller (dead_code warning; Makefile clippy -D warnings would fail), launch/agy.rs:227-237 tests still assert the write_file(<ws>/**) allow the ruling retired, and install_private_runtime keeps an unused _workspace parameter (contained.rs:462). Remove the field/method/tests and parameter, or cfg(test)-gate them with a stated reason.
+    5. scripts/containment/conformance.py fixture_policy reads auth_hosts from the script's own source checkout (parents[2]/aida-cli-lib/src/containment/vendors.toml), not from the aida binary under test (shutil.which), so a fixture run against a different build can allow hosts that differ from the launcher's shipped data. Derive hosts from the binary under test (e.g. an aida subcommand) or assert the binary's SHA matches the checkout.
+    6. Test gap (strict tier): no test covers ready() building the queue-work argv with --vendor agy, or run_aida --vendor agy getting past the output-dir check into setup with agy fixture policy; test_agy_aida_boundary_retains_hidden_output_refusal only exercises the pre-existing /tmp refusal.
+    7. Cosmetic: vendors.toml:29-31 header comment still says 'Only this endpoint is present in recorded host evidence' above a two-host list; reconcile with the new inline comment.
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
+  created_at: 2026-11-08T00:21:45.148134190Z
+  modified_at: 2026-11-08T00:21:45.148134190Z
   session_id: 01a1b848-940b-7bd2-8acd-52e428b182b8
   harness_version: 2.1.319 (Claude Code)
 history:
