@@ -13,12 +13,12 @@ description: |
   3. Works for Claude, Codex and AGY through their headless resume commands; one adapter test per vendor using a recorded fixture.
   4. A wait whose seat or session has been lost surfaces as an escalation, never a silent drop.
   Ref: docs/plans/2026-11-07-infinity-agent-architecture-deep-dive.md section 3.3 and the SPIKE-711 results table.
-status: Draft
+status: Approved
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-08T02:58:08.667753563Z
-modified_at: 2026-11-08T06:07:41.773208667Z
+modified_at: 2026-11-08T06:07:44.806318840Z
 req_type: Story
 tags:
 - area:human-wait
@@ -32,6 +32,16 @@ comments:
   modified_at: 2026-11-08T06:07:41.773208667Z
   session_id: 01a1b9af-8230-75d2-82f8-667491cc010a
   harness_version: 2.1.319 (Claude Code)
+history:
+- id: 01a1b9c5-1aa6-78e3-9355-9af12a0ce44c
+  author: joe
+  timestamp: 2026-11-08T06:07:44.806305712Z
+  session_id: 01a1b9af-8230-75d2-82f8-667491cc010a
+  harness_version: 2.1.319 (Claude Code)
+  changes:
+  - field_name: status
+    old_value: Draft
+    new_value: Approved
 filed_at:
   code_sha: dc41ee8da2f44f88178936fc1a8e6cb7168a3de7
   branch: main
