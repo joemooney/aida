@@ -8,7 +8,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-07T23:39:41.575597Z
-modified_at: 2026-11-08T22:17:43.491334800Z
+modified_at: 2026-11-08T22:17:49.987610536Z
 req_type: Task
 relationships:
 - rel_type: Child
@@ -396,6 +396,24 @@ comments:
   content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: Import diff is sound on full inspection (only imports/comments plus one qualified lease_state_for call; ledger 164 matches source). Blocked by AC5 (CI still running at this head) and by the 57-file size exceeding the advisor <=50-file cap. AC1/AC3 remain later Refs slices.. No triage reason was given.'
   created_at: 2026-11-08T22:17:43.491333555Z
   modified_at: 2026-11-08T22:17:43.491333555Z
+  session_id: 20abb7c3-8f9b-4a5e-b326-404921f3b450
+- id: 01a1bd3d-3e35-75e1-a4b1-d57a1e83396d
+  author: joe
+  content: |-
+    REVIEW FINDINGS TO ADDRESS (PR #3695):
+    Verdict: CHANGES REQUESTED
+    Reviewed commit: 980adf1b3fb1
+    Recorded: 2026-11-08T21:35:22.967875817+00:00
+    Review comment: https://github.com/joemooney/aida/pull/3695#issuecomment-6727444464
+    Findings:
+    1. BLOCKING (wait state, not a code defect) AC5: CI run 42524746668 at 980adf1b3fb1 is incomplete: cli-0 success; contracts and lib-1 in progress; gates, rest, cli-1 and lib-0 queued. No complete CI run exists at any head of this PR, and make check-ci-fast was not run by the implementer. Action: re-review at this SHA when CI is green; rework only if CI fails. Earlier findings said not to push while waiting; commit 980adf1 restarted CI.
+    2. MAJOR scope (TASK-3428 'Split into two PRs if over ~40 files'; advisor amendment 2026-11-07 'Ship as 3-4 PRs of <=50 files'): the PR now touches 57 files (54 modules, 2 test files, the ledger) after 980adf1 added 15 adapters to it. The implementer's own batch-1 note called the slice intentionally partial under the <=50 cap. Action: either obtain an explicit advisor waiver on the spec for this import-only PR (avoids a CI restart), or move at least 7 files, e.g. commit 980adf1's adapters, to a follow-up Refs PR.
+    3. MINOR non-blocking aida-cli-lib/src/usage_mcp_helpers.rs (advisor amendment 'skip files in open PRs'): still also changed by open PR-3687 (TASK-3429). Hunks did not overlap at the last review, so this is merge-order awareness only unless the file is moved out during a split.
+    4. COSMETIC non-blocking PR title: says '34 command modules', but the head retires globs in 54 modules plus two test-file import additions (ledger 220 to 164). Round-10 finding 3 remains open and has grown. Action: correct the title before squash.
+    5. COSMETIC non-blocking commit.rs:552, exposition.rs:900, help_catalog.rs:753, mandate.rs:1109, monitor_contract.rs:89, regen.rs:720, shift.rs:3839, wiki.rs:702: 980adf1 re-adds function-body TASK-3428 markers where a glob was simply unused, the pattern moved to module headers after the round-8 finding. Action: move them to module headers if the files are touched again.
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
+  created_at: 2026-11-08T22:17:49.877497618Z
+  modified_at: 2026-11-08T22:17:49.877497618Z
   session_id: 20abb7c3-8f9b-4a5e-b326-404921f3b450
 history:
 - id: 01a1b862-2e0b-7a50-a4d0-25097c707b57
