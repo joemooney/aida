@@ -497,6 +497,12 @@ def bounded_launch(argv, workspace, env, root, seconds, pass_fds=(), on_tick=Non
 # trace:TASK-3131 | ai:codex
 def aida_refuse(root, report, reason):
     report["unsupported_reason"] = reason
+    # A late cleanup/setup refusal must also withdraw previously computed
+    # aggregate credit; retain individual observations for diagnosis.
+    # trace:TASK-3048 | ai:codex
+    report["whole_lane_pass"] = False
+    report["production_launcher_credit"] = False
+    report["shared_boundary_credit"] = False
     for check in report["checks"].values():
         check["unsupported_reason"] = reason
         if report["containment_receipt_sha256"] is None:
@@ -886,6 +892,7 @@ def setup_aida(root):
 # trace:TASK-3048 | ai:codex
 def aida_whole_lane_pass(report):
     return bool(report.get("boundary") == "aida" and report.get("shared_boundary_credit")
+                and not report.get("unsupported_reason")
                 and set(report.get("checks", {})) == {"C0", "C1", "C2", "C3", "C4"}
                 and all(row.get("status") == "pass" for row in report["checks"].values()))
 

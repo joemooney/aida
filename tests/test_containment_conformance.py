@@ -222,6 +222,9 @@ items = [{name = "preserved", enabled = true}]
         report = {"boundary": "aida", "shared_boundary_credit": True,
                   "checks": {k: {"status": "pass"} for k in ("C0", "C1", "C2", "C3", "C4")}}
         self.assertTrue(c.aida_whole_lane_pass(report))
+        report["unsupported_reason"] = "harness-interrupted: cleanup failed"
+        self.assertFalse(c.aida_whole_lane_pass(report))
+        report.pop("unsupported_reason")
         report["boundary"] = "native"
         self.assertFalse(c.aida_whole_lane_pass(report))
         report["boundary"] = "aida"
@@ -942,6 +945,22 @@ except ValueError as error:
         self.assertEqual(saved["checks"]["C0"]["status"], "unknown")
         self.assertEqual(saved["checks"]["C0"]["terminal_status"], "unknown")
         self.assertEqual(saved["checks"]["C1"]["status"], "fail")
+
+    # trace:TASK-3048 | ai:codex
+    def test_late_refusal_withdraws_aggregate_credit_with_valid_receipt(self):
+        report = {"boundary": "aida", "containment_receipt_sha256": "a" * 64,
+                  "whole_lane_pass": True, "production_launcher_credit": True,
+                  "shared_boundary_credit": True,
+                  "checks": {k: {"status": "pass"} for k in ("C0", "C1", "C2", "C3", "C4")}}
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            with self.assertRaisesRegex(ValueError, "cleanup-failed"):
+                c.aida_refuse(root, report, "cleanup-failed")
+            saved = json.loads((root / "report.json").read_text())
+        for field in ("whole_lane_pass", "production_launcher_credit", "shared_boundary_credit"):
+            self.assertFalse(saved[field], field)
+        self.assertFalse(c.aida_whole_lane_pass(saved))
+        self.assertTrue(all(row["status"] == "pass" for row in saved["checks"].values()))
 
     def test_unsupported_shared_vendors_never_fall_back(self):
         for vendor in ("claude",):

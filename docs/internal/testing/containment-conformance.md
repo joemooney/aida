@@ -92,6 +92,11 @@ provides and independently proves the selected adapter.
 ### AGY shared-boundary adapter preparation
 
 <!-- trace:TASK-3048 | ai:codex -->
+An AIDA-boundary refusal clears `whole_lane_pass`,
+`production_launcher_credit` and `shared_boundary_credit`, including a late
+refusal after receipt acceptance. Individual observations remain available for
+diagnosis; a report with `unsupported_reason` cannot earn whole-lane credit.
+
 The binding 2026-11-05 12:20 MST advisor ruling supersedes the earlier native
 permission experiment: AGY is **outer-only**. The 2026-11-07 advisor ruling supplies newer AGY 1.5.3 evidence: default-mode
 headless workspace writes can succeed when private settings allow the target.
