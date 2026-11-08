@@ -14,13 +14,21 @@ priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-11-08T05:40:02.450050053Z
-modified_at: 2026-11-08T05:40:02.450050053Z
+modified_at: 2026-11-08T19:22:39.681806799Z
 req_type: Task
 tags:
 - carried-from:STORY-2653
 - finding-hash:328cd2f9
 - from-review:PR-3656
 - kind:carried-forward
+comments:
+- id: 01a1bc9c-dec1-7590-a9cf-f3a82fcdabee
+  author: joe
+  content: 'Advisor ruling: accepted, minor test gap: glue is exercised every live rotation and turn-state is covered.'
+  created_at: 2026-11-08T19:22:39.681806799Z
+  modified_at: 2026-11-08T19:22:39.681806799Z
+  session_id: 01a1bc93-77a0-7740-8b03-df4e3e8d1df5
+  harness_version: 2.1.319 (Claude Code)
 history:
 - id: 01a1b9bb-4211-7580-9631-8172d64de4da
   author: joe
