@@ -19,12 +19,12 @@ description: |-
   7. MINOR (test evidence; host action): the only test against real CodeGraph 1.6.0 (tests/test_codegraph_proxy.py:363-370) skips when codegraph is absent, as in the implementer seat (handoff doc: 18 tests, 17 passed, 1 skipped), and CI has not run at any recent head. No recorded run exercises the snapshot path against real upstream, including whether a directory holding only .codegraph/codegraph.db is accepted. Host must run it and paste the output with the AC5 evidence.
   8. CI (gate): run 42468500142 at 19839cfc31e6 is pending with 0 jobs started, and every earlier CI run on this PR that I checked was cancelled or queued, so no head has a recorded green run for tests/test_codegraph_proxy.py or codegraph::tests. merge-hold-gate fails as the expected supervised hold (label aida:merge-hold), not a code defect. Needs a green run at the final head.
   Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
-status: Draft
+status: Superseded
 priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-11-08T15:41:27.807010288Z
-modified_at: 2026-11-08T15:41:27.807010288Z
+modified_at: 2026-11-08T17:23:14.870397061Z
 req_type: Task
 tags:
 - from-advisor:STORY-2630
@@ -38,6 +38,15 @@ history:
   author: joe
   timestamp: 2026-11-08T16:01:08.430569851Z
   changes: []
+- id: 01a1bc2f-8b36-7070-be49-fd5dd4d404b0
+  author: joe
+  timestamp: 2026-11-08T17:23:14.870388131Z
+  session_id: 01a1bbab-762f-7cd2-8a36-4ea9f209afce
+  harness_version: 2.1.319 (Claude Code)
+  changes:
+  - field_name: status
+    old_value: Draft
+    new_value: Superseded
 filed_at:
   code_sha: 48e3865999b9c0e8acbc7899ce92ccd43191a3c7
   branch: main
