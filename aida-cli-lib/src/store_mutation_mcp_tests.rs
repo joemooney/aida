@@ -19,6 +19,87 @@ fn request(method: &str, params: Value) -> JsonRpcRequest {
     serde_json::from_value(json!({"jsonrpc":"2.0","id":1,"method":method,"params":params})).unwrap()
 }
 
+// Exercise successful tools/call replies through the real broker and durable
+// host writer, then compare their envelope to tools/list's schema. A rejected
+// call cannot cover a malformed success reply after a committed mutation.
+// trace:TASK-3223 | ai:codex
+#[cfg(test)] // Explicit test boundary for the source writer inventory.
+#[test]
+fn mediated_mcp_committed_success_matches_advertised_output_schema() {
+    let tmp = tempfile::tempdir().unwrap();
+    let route = crate::launch::contained::MediatedTestRoute::at(tmp.path().join("store"));
+    let client = crate::store_mutation_client::Client::fixture(
+        route.endpoint().to_str().unwrap().into(),
+        route.epoch(),
+    );
+    let listed = mediated_mcp_response(
+        &client,
+        &route.root(),
+        McpProfile::Full,
+        None,
+        &request("tools/list", json!({})),
+    )
+    .unwrap()
+    .result
+    .unwrap();
+    for (name, arguments) in [
+        (
+            "add_comment",
+            json!({"id":route.origin,"text":"schema accepted comment"}),
+        ),
+        (
+            "update_requirement",
+            json!({"id":route.origin,"title":"schema accepted title"}),
+        ),
+    ] {
+        let result = mediated_mcp_response(
+            &client,
+            &route.root(),
+            McpProfile::Full,
+            None,
+            &request("tools/call", json!({"name":name,"arguments":arguments})),
+        )
+        .unwrap()
+        .result
+        .unwrap();
+        assert_ne!(result["isError"], true, "{result}");
+        let descriptor = listed["tools"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .find(|tool| tool["name"] == name)
+            .unwrap();
+        let schema = &descriptor["outputSchema"];
+        // Both the top-level result and the structured mirror use the
+        // descriptor's content-array schema and must carry its required keys.
+        for (envelope, schema) in [
+            (&result, schema),
+            (
+                &result["structuredContent"],
+                &schema["properties"]["structuredContent"],
+            ),
+        ] {
+            assert_eq!(schema["type"], "object");
+            for key in schema["required"].as_array().unwrap() {
+                assert!(envelope.get(key.as_str().unwrap()).is_some(), "{envelope}");
+            }
+            let items = envelope["content"].as_array().unwrap();
+            assert_eq!(items.len(), 1);
+            let item_schema = &schema["properties"]["content"]["items"];
+            for key in item_schema["required"].as_array().unwrap() {
+                assert!(items[0][key.as_str().unwrap()].is_string());
+            }
+            assert_eq!(items[0]["type"], item_schema["properties"]["type"]["const"]);
+            serde_json::from_str::<Value>(items[0]["text"].as_str().unwrap()).unwrap();
+        }
+        assert_eq!(result["structuredContent"]["content"], result["content"]);
+    }
+    let row = route.row();
+    assert_eq!(row.title, "schema accepted title");
+    assert_eq!(row.comments.len(), 1);
+    assert_eq!(row.comments[0].content, "schema accepted comment");
+}
+
 #[test]
 fn mediated_mcp_advertises_only_translated_tools_with_existing_profile_and_persona_limits() {
     let client = client();

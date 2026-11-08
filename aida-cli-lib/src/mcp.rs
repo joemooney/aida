@@ -9260,8 +9260,11 @@ fn mediated_mcp_response(
             };
             let result = match result {
                 Ok(value) => {
-                    let text = value.to_string();
-                    json!({"content":[{"type":"text","text":text}],"structuredContent":{"text":text}})
+                    // Mirror the advertised text envelope after the mutation
+                    // commits, so schema-validating clients can accept success.
+                    // trace:TASK-3223 | ai:codex
+                    let content = json!([{"type":"text","text":value.to_string()}]);
+                    json!({"content":content,"structuredContent":{"content":content}})
                 }
                 Err(error) => mediated_mcp_error(name, &error).to_result_value(),
             };
