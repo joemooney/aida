@@ -1834,5 +1834,4 @@ Agent children receive their host-recorded seat target and disabled wrapper
 through declared launch resources rather than parent build-environment values.
 The lane job runner alone opts into the lane cache. Recorded clones without a
 cargo target (including fresh/non-Rust seats and targets removed by host clean)
-launch without resource overrides. AC1 still requires measured hits from two
-consecutive jobs on both primary and dell1; unit fixtures do not establish it.
+launch without resource overrides.

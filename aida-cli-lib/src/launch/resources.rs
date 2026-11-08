@@ -72,7 +72,10 @@ impl SandboxResources {
         host: Option<&std::path::Path>,
         seat: &std::path::Path,
     ) -> anyhow::Result<Option<Self>> {
-        let Some(clone) = crate::seat_clone::recorded_clone_for(host, seat) else {
+        let Some(host) = host else {
+            return Ok(None);
+        };
+        let Some(clone) = crate::seat_clone::host_recorded_clone(host, seat) else {
             return Ok(None);
         };
         // Fresh/non-Rust clones and targets removed by host cargo clean have
@@ -80,8 +83,6 @@ impl SandboxResources {
         let Some(target) = clone.cargo_target_dir.as_deref() else {
             return Ok(None);
         };
-        let host =
-            host.ok_or_else(|| anyhow::anyhow!("seat resources require a pinned host root"))?;
         Ok(Some(Self {
             write_roots: crate::seat_clone::seat_extra_write_paths(&clone),
             store_paths: vec![],
