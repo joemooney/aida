@@ -1031,6 +1031,16 @@ pub(crate) fn provision_attempt_signals(
     Ok((seat[0].0.clone(), seat[1].0.clone()))
 }
 
+/// Consume both copies of a handled punt so an advisor resume cannot replay it.
+/// Hold markers remain available for held-resume admission.
+// trace:BUG-2488 | ai:codex
+pub(crate) fn consume_punt_signal(main: &Path, tree: &Path, spec: &str) -> Result<()> {
+    let seat = prepare_signal_paths(tree, spec)?;
+    let host = prepare_signal_paths(main, spec)?;
+    clear_signal_paths(&seat[..1])?;
+    clear_signal_paths(&host[..1])
+}
+
 /// Install explicit seat paths rather than inheriting a host-only handshake.
 // trace:BUG-2488 | ai:codex
 pub(crate) fn apply_seat_signals(cmd: &mut std::process::Command, tree: &Path, spec: &str) {

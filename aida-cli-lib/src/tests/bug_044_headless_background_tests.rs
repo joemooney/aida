@@ -1252,3 +1252,42 @@ fn bug_2464_fast_forward_to_remote_main_is_not_unpushed_work() {
     );
     assert_eq!(head_has_unpushed_commits(&root.join("missing")), None);
 }
+
+// trace:BUG-2488 | ai:codex
+#[cfg(target_os = "linux")]
+#[test]
+fn bug_2488_noncontained_queue_resume_mirrors_hold_after_real_child_exit() {
+    if crate::test_env::run_path_isolated_test() {
+        return;
+    }
+    let fx = Fixture::new("c0ffee248808");
+    let _ambient = crate::seat_clone::LauncherMainPin::new(&fx.project);
+    let host_marker = crate::punt::hold_signal_path(&fx.project, "STORY-9");
+    let (_, old_hold) = si::provision_signals(&fx.project, "STORY-9").unwrap();
+    crate::punt::write_hold_signal(
+        &old_hold,
+        &crate::punt::HoldSignal {
+            spec: "STORY-9".into(),
+            branch: "old-attempt".into(),
+            reason: None,
+            spec_key: None,
+        },
+    )
+    .unwrap();
+    fx.run_mode(
+        r#"test -n "$AIDA_HOLD_SIGNAL_FILE" || exit 41
+printf '%s\n' '{"spec":"STORY-9","branch":"claude/story-9","reason":"new hold"}' > "$AIDA_HOLD_SIGNAL_FILE"
+"#,
+        crate::session::HeadlessVendor::Codex,
+        false,
+        2,
+    ).unwrap();
+    assert_eq!(fx.invocations(), 1);
+    let hold = crate::punt::read_hold_signal(&host_marker).expect("resume hold reaches host");
+    assert_eq!(hold.reason.as_deref(), Some("new hold"));
+    assert!(crate::queue_cmd::held_resume_reentry_allowed(
+        true,
+        &aida_core::RequirementStatus::Done,
+        true,
+    ));
+}

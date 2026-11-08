@@ -3505,3 +3505,44 @@ fn bug_2488_other_branch_work_refuses_no_change_publication() {
     );
     assert!(tree.exists(), "unpublished work must remain available");
 }
+
+// trace:BUG-2488 | ai:codex
+#[test]
+fn bug_2488_consumed_drain_punt_is_not_replayed_after_claude_resume() {
+    let main = tempfile::tempdir().unwrap();
+    let tree = tempfile::tempdir().unwrap();
+    let spec = "BUG-2488";
+    let (punt, hold) =
+        crate::standalone_implementer::provision_attempt_signals(main.path(), tree.path(), spec)
+            .unwrap();
+    let signal = crate::punt::PuntSignal {
+        spec: spec.into(),
+        category: aida_core::PuntCategory::DesignFork,
+        detail: "handled by advisor".into(),
+        lean: None,
+    };
+    crate::punt::write_signal(&punt, &signal).unwrap();
+    crate::punt::write_hold_signal(
+        &hold,
+        &crate::punt::HoldSignal {
+            spec: spec.into(),
+            branch: "held-work".into(),
+            reason: None,
+            spec_key: None,
+        },
+    )
+    .unwrap();
+    crate::standalone_implementer::reconcile_signals(main.path(), tree.path(), spec).unwrap();
+    crate::standalone_implementer::consume_punt_signal(main.path(), tree.path(), spec).unwrap();
+    // Claude's resume bypasses Codex signal provisioning. Its exit still
+    // reconciles the seat, which must not recreate the consumed host punt.
+    crate::standalone_implementer::reconcile_signals(main.path(), tree.path(), spec).unwrap();
+    assert!(!punt.exists());
+    assert!(!crate::punt::signal_path(main.path(), spec).exists());
+    assert!(hold.exists());
+    assert!(crate::punt::hold_signal_path(main.path(), spec).exists());
+    // A genuinely new punt from a resumed child still reaches the host.
+    crate::punt::write_signal(&punt, &signal).unwrap();
+    crate::standalone_implementer::reconcile_signals(main.path(), tree.path(), spec).unwrap();
+    assert!(crate::punt::signal_path(main.path(), spec).exists());
+}

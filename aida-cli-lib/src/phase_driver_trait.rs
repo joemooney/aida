@@ -788,7 +788,18 @@ impl auto_complete::PhaseDriver for RealPhaseDriver {
         // branch is reconciled from the worktree HEAD now so a resume +
         // PR-lookup has it. trace:STORY-276, STORY-306 | ai:claude
         if let Some(signal) = punt::read_signal(&punt_signal) {
-            let _ = std::fs::remove_file(&punt_signal);
+            // trace:BUG-2488 | ai:codex
+            crate::standalone_implementer::consume_punt_signal(
+                &self.project_root,
+                &worktree_path,
+                &self.spec,
+            )
+            .map_err(|e| {
+                auto_complete::PhaseFailure::of(
+                    auto_complete::FailureKind::Internal,
+                    format!("could not consume implementer punt: {e:#}"),
+                )
+            })?;
             self.branch = Some(reconcile_orchestrated_branch(
                 &self.project_root,
                 &lease_id,

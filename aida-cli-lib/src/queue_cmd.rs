@@ -9068,6 +9068,11 @@ pub(crate) fn run_queue_resume_to_exit(
     let status = session::spawn_vendor_headless_resume(
         host_main, target, prompt, log, tree, tee, contained, role,
     )?;
+    // Runtime evidence belongs to the host even when publication is disabled.
+    // trace:BUG-2488 | ai:codex
+    if crate::canonical_role_name(role) == "implementer" {
+        crate::standalone_implementer::reconcile_signals(publication.0, tree, publication.1)?;
+    }
     if publish_on_exit {
         crate::ship_from_seat::publish_queue_exit(
             publication.0,
