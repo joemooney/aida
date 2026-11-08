@@ -64,7 +64,7 @@ but re-verify per spec, because state drifts between the launch and your turn.
 ### 1. Read the spec + its graph context
 
 ```bash
-aida show <SPEC>
+aida show <SPEC> --full
 ```
 
 Read **all** of it: title, description, existing acceptance (if any), comments,

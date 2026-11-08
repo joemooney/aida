@@ -100,7 +100,7 @@ Example (discipline pack):
 Never declare a spec done before:
 1. The commit is on `main` (not just locally committed)
 2. The PR (if any) is merged or the spec doesn't need one
-3. `aida show <SPEC>` shows the expected linkage
+3. `aida show <SPEC> --full` shows the expected linkage
 
 The "I ran the tests, looks good" claim isn't substrate-grounded. Check the substrate.
 ```
