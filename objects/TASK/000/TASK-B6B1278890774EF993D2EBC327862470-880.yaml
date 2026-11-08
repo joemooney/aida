@@ -8,7 +8,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-06T13:39:53.442026096Z
-modified_at: 2026-11-08T14:15:04.568506203Z
+modified_at: 2026-11-08T14:15:10.868824916Z
 req_type: Task
 tags:
 - architecture
@@ -888,6 +888,26 @@ comments:
   content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: Head 51fc750dd391 adds partial-route records only: the staged code still fails closed and the production gate holds, but the binding routing acceptance is unmet (mediated inventory exits 1), the design-fork punt has no ruling, and CI has not run.. It was punted on: design-fork: Routing reconciliation found an unresolved acceptance/policy boundary: the staged code and writer guide explicitly refuse comment edit/delete pending an advisor-approved ownership policy, while the binding part-3 ruling requires every inventoried writer to route. The current host schema supports only comment_add and title/description spec_edit. Please decide whether explicit early UnsupportedOperation refusal counts as a reconciled writer for part-3 acceptance, or provide the ownership policy needed to implement existing-comment mutation. This lane did not relabel refused writers as routed or enable mediated launch. Partial uncommitted inventory evidence records the four implemented variants; 3163 writer sites and all 293 operation mappings still block mediated admission. own_claim and queue_done remain TASK-3326.. No triage reason was given.'
   created_at: 2026-11-08T14:15:04.568504507Z
   modified_at: 2026-11-08T14:15:04.568504507Z
+  session_id: 01a1b9af-8230-75d2-82f8-667491cc010a
+  harness_version: 2.1.319 (Claude Code)
+- id: 01a1bb83-5c9c-7ac3-973d-e286f8339496
+  author: joe
+  content: |-
+    REVIEW FINDINGS TO ADDRESS (PR #3661):
+    Verdict: CHANGES REQUESTED
+    Reviewed commit: 51fc750dd391
+    Recorded: 2026-11-08T14:10:12.085736720+00:00
+    Findings:
+    1. BLOCKING acceptance gap (spec description; advisor ruling, TASK-3223 comment 34), unfixed and needing an advisor ruling rather than more code. 'python3 scripts/check-store-writers.py --profile mediated' exits 1 at this head. The four new mediated_route records are reported as partial_routes and by design clear no blockers; docs/internal/security/store-mutation-writers.md itself says this does not meet the zero-unrouted acceptance. mediated_blockers (scripts/check-store-writers.py) counts every operation row, so it cannot reach zero without a reviewed operation policy. store_mutation_entry.rs:203 refuses every command except comment add and title/description edit, including reads such as show and list, and run_mediated_mcp_server lists only two tools, so a mediated lane could not read the store through CLI or MCP once the gate opens. Either re-scope this PR explicitly as a staged partial with a follow-up owning the rest, or define the operation policy.
+    2. BLOCKING until CI reports: the CI workflow at 51fc750dd391 is still queued with no jobs started (latest check at review end), so none of the new tests have CI evidence at this head. make check-ci-fast is not shown green as an aggregate, and ruling comment 34 names it as acceptance. merge-hold-gate run 42487984626 failed at step 'Require recorded clearance for every previously held PR' while aida:merge-hold is set; that needs advisor or operator clearance.
+    3. PROCESS, needs advisor attention: TASK-3223 is still needs-attention. The latest design-fork punt (comment 61, 'No subsequent ruling resolves that fork'; 'no publication is authorized by this partial fix') has no recorded ruling, and head 51fc750dd391 was committed at 14:04Z and published after it. Rule on the fork and confirm whether publication under a saved punt is authorized before this PR advances.
+    4. PR metadata, unfixed: the title still says 'report unresolved mediated routing evidence', while the diff adds early dispatch in main_entry, a SEQPACKET client, a mediated MCP server, host routing of comment_add/spec_edit and refusal correlation. The body is only the seat-publication line. Rewrite both to describe staged, gated routing with no launch authority. Commits 7bb74c41a80, e88fe1f3543 and 30eb320657c use a subject claiming full routing and raw-write denial, so the squash must use the corrected title with an empty body.
+    5. MINOR, new at this head: scripts/store-writers.toml mediated_route evidence for mcp:add_comment and mcp:update_requirement cites store_mutation_entry.rs, routed_tests.rs and mediated_store_tests.rs, none of which mention MCP or run_mediated_mcp_server. The real MCP tests are in aida-cli-lib/src/store_mutation_mcp_tests.rs, which is not cited. check_routes only tests that the paths exist, so the guard passes on evidence that does not cover the route. Cite the MCP test file.
+    6. MINOR, new at this head: check_routes (scripts/check-store-writers.py) validates operation, functions and evidence paths but never wire_operation, although the doc says each record names its wire operation. A typo or a verb the host refuses (for example own_claim) passes the guard, and tests/test_store_writer_inventory.py has no negative case. Check it against the host's CANONICAL_VERBS or the Rust operation set, and add a refusal test.
+    7. MINOR, test scope, unfixed: mediated_store_tests.rs (mediated_profile_live_raw_create_append_rename_denied_and_private_cache_writable) proves raw denial and a successful comment_add in one bwrap process, but the mediated request is a hand-built Python packet rather than the lane client (store_mutation_client.rs / aida comment add), and the fixture supplies synthetic launch identity. The doc states these limits honestly. Before this counts as the ruling's contained-lane test, either drive the real client inside the sandbox or have the advisor accept the synthetic route.
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
+  created_at: 2026-11-08T14:15:10.748818771Z
+  modified_at: 2026-11-08T14:15:10.748818771Z
   session_id: 01a1b9af-8230-75d2-82f8-667491cc010a
   harness_version: 2.1.319 (Claude Code)
 history:
