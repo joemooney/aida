@@ -39,8 +39,26 @@ fn write(main: &Path, receipt: &Receipt) -> Result<()> {
     Ok(())
 }
 
+// Serialize reservation replacement with stale-owner cleanup. The sidecar is
+// permanent: replacing the receipt must never replace the lock inode.
+// trace:STORY-2640 | ai:codex
+fn receipt_lock(main: &Path, branch: &str) -> Result<std::fs::File> {
+    use fs2::FileExt;
+    let lock = path(main, branch).with_extension("lock");
+    std::fs::create_dir_all(lock.parent().context("fast gate lock directory")?)?;
+    let file = std::fs::OpenOptions::new()
+        .create(true)
+        .truncate(false)
+        .read(true)
+        .write(true)
+        .open(lock)?;
+    file.lock_exclusive()?;
+    Ok(file)
+}
+
 /// Reserve before the vendor can push. Existing retry credit survives relaunches.
 pub(crate) fn begin(main: &Path, branch: &str) -> Result<()> {
+    let _lock = receipt_lock(main, branch)?;
     let mut receipt = read(main, branch)?.unwrap_or(Receipt {
         branch: branch.into(),
         head: None,
@@ -141,11 +159,18 @@ pub(crate) fn infrastructure(main: &Path, branch: &str, lease: &str, error: &any
 }
 
 pub(crate) fn result_line(main: &Path, branch: &str, line: &str) -> String {
-    format!("{line} fast_gate={}", marker(main, branch))
+    let marker = marker(main, branch);
+    let marker = if marker == "skipped(pending)" {
+        "skipped(lane-ended)"
+    } else {
+        &marker
+    };
+    format!("{line} fast_gate={marker}")
 }
 
 /// An absent receipt is an ordinary non-lane PR. Corrupt state fails closed.
 pub(crate) fn blocks_review(main: &Path, branch: &str, _head: &str) -> Result<bool> {
+    let _lock = receipt_lock(main, branch)?;
     let Some(r) = read(main, branch)? else {
         return Ok(false);
     };
@@ -161,7 +186,7 @@ pub(crate) fn blocks_review(main: &Path, branch: &str, _head: &str) -> Result<bo
             .map(chrono::DateTime::<chrono::Utc>::from)
     });
     if reserved_at.is_some_and(|at| chrono::Utc::now() - at >= chrono::Duration::hours(24)) {
-        release(main, branch)?;
+        release_locked(main, branch)?;
         return Ok(false);
     }
     if let Some(entry) = &r.repair_queue {
@@ -177,7 +202,7 @@ pub(crate) fn blocks_review(main: &Path, branch: &str, _head: &str) -> Result<bo
             aida_core::proc_identity::Verdict::Dead(_)
         )
     }) {
-        release(main, branch)?;
+        release_locked(main, branch)?;
         return Ok(false);
     }
     Ok(true)
@@ -187,6 +212,11 @@ pub(crate) fn blocks_review(main: &Path, branch: &str, _head: &str) -> Result<bo
 /// publication authority or erase a known gate verdict.
 // trace:STORY-2640 | ai:codex
 pub(crate) fn release(main: &Path, branch: &str) -> Result<()> {
+    let _lock = receipt_lock(main, branch)?;
+    release_locked(main, branch)
+}
+
+fn release_locked(main: &Path, branch: &str) -> Result<()> {
     if let Some(mut r) = read(main, branch)? {
         r.pending = false;
         r.native_ready = false;
@@ -411,6 +441,7 @@ fn native_inner(
             Ok(())
         },
     )?;
+    record_marker(main, lease, &marker(main, branch))?;
     Ok(publishable.get())
 }
 
@@ -442,6 +473,9 @@ pub(crate) fn native_rounds(
     let Some((mut head, mut result, output)) = attempt()? else {
         return Ok(());
     };
+    if receipt.repair_used {
+        result = retry_marker("fail", &result).into();
+    }
     if result == "fail" && !receipt.repair_used {
         receipt.repair_used = true;
         receipt.marker = result.clone();
@@ -451,13 +485,23 @@ pub(crate) fn native_rounds(
             return Ok(());
         };
         head = next_head;
-        result = next_result;
+        result = retry_marker(&result, &next_result).into();
     }
     receipt.head = Some(head);
     receipt.marker = result;
     receipt.pending = true;
     receipt.native_ready = true;
     write(main, &receipt)
+}
+
+// A retry without a verdict cannot erase the first observed source failure.
+// trace:STORY-2640 | ai:codex
+fn retry_marker<'a>(previous: &'a str, next: &'a str) -> &'a str {
+    if previous == "fail" && next != "pass" && next != "fail" {
+        previous
+    } else {
+        next
+    }
 }
 
 fn repair_prompt(output: &str) -> String {
@@ -511,6 +555,13 @@ fn pushed_inner(
             .and_then(|(_, head)| head)
             .context("cannot bind skipped fast gate to the published PR head")?;
     }
+    let prior = read(main, branch)?.context("fast gate was not reserved")?;
+    let result = if prior.repair_used {
+        retry_marker("fail", &result).to_string()
+    } else {
+        result
+    };
+    record_marker(main, lease, &result)?;
     pushed_round(
         main,
         branch,
@@ -606,7 +657,15 @@ fn pushed_round(
 ) -> Result<bool> {
     let mut receipt = read(main, branch)?.context("fast gate was not reserved")?;
     receipt.head = Some(head.into());
-    receipt.marker = result.into();
+    receipt.marker = retry_marker(
+        if receipt.repair_used {
+            "fail"
+        } else {
+            &receipt.marker
+        },
+        result,
+    )
+    .into();
     let queue = result == "fail" && !receipt.repair_used;
     receipt.pending = true;
     write(main, &receipt)?;
@@ -793,6 +852,75 @@ mod tests {
 
     // trace:STORY-2640 | ai:codex
     #[test]
+    fn fast_gate_retry_timeout_preserves_red_in_both_modes() {
+        let tmp = tempfile::tempdir().unwrap();
+        begin(tmp.path(), "native").unwrap();
+        let mut round = 0;
+        native_rounds(
+            tmp.path(),
+            "native",
+            || {
+                round += 1;
+                Ok(Some((
+                    format!("head-{round}"),
+                    if round == 1 {
+                        "fail"
+                    } else {
+                        "skipped(timeout)"
+                    }
+                    .into(),
+                    String::new(),
+                )))
+            },
+            |_| Ok(()),
+        )
+        .unwrap();
+        assert_eq!(marker(tmp.path(), "native"), "fail");
+        begin(tmp.path(), "push").unwrap();
+        let mut r = read(tmp.path(), "push").unwrap().unwrap();
+        r.marker = "fail".into();
+        r.repair_used = true;
+        write(tmp.path(), &r).unwrap();
+        begin(tmp.path(), "push").unwrap();
+        pushed_round(
+            tmp.path(),
+            "push",
+            "retry",
+            "skipped(timeout)",
+            || Ok(()),
+            || panic!("no second repair"),
+        )
+        .unwrap();
+        assert_eq!(marker(tmp.path(), "push"), "fail");
+        assert_eq!(retry_marker("fail", "pass"), "pass");
+    }
+
+    // trace:STORY-2640 | ai:codex
+    #[test]
+    fn fast_gate_cleanup_serializes_with_new_reservation() {
+        let tmp = tempfile::tempdir().unwrap();
+        begin(tmp.path(), "lane").unwrap();
+        let lock = receipt_lock(tmp.path(), "lane").unwrap();
+        let main = tmp.path().to_path_buf();
+        let (tx, rx) = std::sync::mpsc::channel();
+        let child = std::thread::spawn(move || {
+            begin(&main, "lane").unwrap();
+            tx.send(()).unwrap();
+        });
+        assert!(rx
+            .recv_timeout(std::time::Duration::from_millis(50))
+            .is_err());
+        release_locked(tmp.path(), "lane").unwrap();
+        drop(lock);
+        child.join().unwrap();
+        assert!(blocks_review(tmp.path(), "lane", "head").unwrap());
+        assert!(
+            result_line(tmp.path(), "lane", "implementer: held").contains("skipped(lane-ended)")
+        );
+    }
+
+    // trace:STORY-2640 | ai:codex
+    #[test]
     fn timeout_skips_without_consuming_the_repair_round() {
         let tmp = tempfile::tempdir().unwrap();
         begin(tmp.path(), "lane").unwrap();
@@ -968,6 +1096,18 @@ mod tests {
         let tmp = tempfile::tempdir().unwrap();
         let backend =
             crate::test_env::home_fixture_backend(&tmp.path().join(".aida-store")).unwrap();
+        // This fixture must satisfy allocation trust even with a shared-write
+        // launcher umask; never weaken the production reader for a test.
+        // trace:STORY-2640 | ai:codex
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            let setting =
+                aida_core::allocation_authority::common_dir(&tmp.path().join(".aida-store"))
+                    .unwrap()
+                    .join(aida_core::allocation_authority::CONFIG_FILE);
+            std::fs::set_permissions(setting, std::fs::Permissions::from_mode(0o600)).unwrap();
+        }
         std::fs::create_dir_all(tmp.path().join(".aida")).unwrap();
         std::fs::write(
             tmp.path().join(".aida/config.toml"),
@@ -1342,8 +1482,27 @@ fn record_marker(main: &Path, lease: &str, marker: &str) -> Result<()> {
     Ok(())
 }
 
-/// The final imported bundle must still be the commit the host checked,
-/// including when publication reconciled a concurrently advanced remote head.
+// Reconciliation is a host-controlled merge after the gate. Preserve red
+// evidence; otherwise explicitly report that the published merge was not gated.
+// trace:STORY-2640 | ai:codex
+pub(crate) fn reconciled_import(main: &Path, branch: &str, tip: &str) -> Result<()> {
+    let _lock = receipt_lock(main, branch)?;
+    let mut r = read(main, branch)?.context("host publication has no fast-gate receipt")?;
+    anyhow::ensure!(
+        r.native_ready,
+        "host publication has no ready fast-gate receipt"
+    );
+    if r.head.as_deref() != Some(tip) {
+        r.head = Some(tip.into());
+        if r.marker != "fail" {
+            r.marker = "skipped(reconciled)".into();
+        }
+        write(main, &r)?;
+    }
+    Ok(())
+}
+
+/// Enforce the checked tip after explicitly accounting for host reconciliation.
 // trace:STORY-2640 | ai:codex
 pub(crate) fn check_import(main: &Path, branch: &str, tip: &str, automatic: bool) -> Result<()> {
     if !automatic {

@@ -1806,14 +1806,7 @@ pub(crate) fn run_fast_gate(
         argv: vec!["make".into(), "check-ci-fast".into()],
         env: BTreeMap::new(),
     };
-    run_one(
-        &lane,
-        &id,
-        Ok(job),
-        &AtomicBool::new(false),
-        &Tally::default(),
-        &SeedNote::new(None, "host fast gate (no target seed)".into(), false),
-    );
+    run_seeded_fast_gate(&lane, &id, job);
     let rc = read_rc(&lane.results, &id).context("host fast gate produced no result")?;
     use std::io::Read;
     let mut output = String::new();
@@ -1821,6 +1814,20 @@ pub(crate) fn run_fast_gate(
         .take(1024 * 1024)
         .read_to_string(&mut output)?;
     Ok(Some((rc, tail(&output, 100))))
+}
+
+// Share the same target selection and overlay transport as cargo lane jobs.
+// trace:STORY-2640 | ai:codex
+fn run_seeded_fast_gate(lane: &LaneJobs, id: &str, job: JobRequest) {
+    let seed = seed_lane_target(lane);
+    run_one(
+        lane,
+        id,
+        Ok(job),
+        &AtomicBool::new(false),
+        &Tally::default(),
+        &seed,
+    );
 }
 
 #[cfg(unix)]
@@ -1903,6 +1910,46 @@ mod fast_gate_job_tests {
             .expect("sandbox required; no skip counts as evidence");
         eprintln!("real sandbox fast gate head={head} rc={rc}\n{output}");
         assert_eq!(rc, 0, "{output}");
+    }
+
+    // Exercise the production gate dispatch, including seed selection and
+    // transport into the job output, without needing a real toolchain build.
+    // trace:STORY-2640 | ai:codex
+    #[test]
+    fn fast_gate_dispatch_receives_lane_target_seed() {
+        let tmp = tempfile::tempdir().unwrap();
+        let bin = tmp.path().join("bin");
+        let seat = tmp.path().join("seat");
+        std::fs::create_dir_all(&bin).unwrap();
+        std::fs::create_dir_all(&seat).unwrap();
+        let target = tmp.path().join("target/worktrees/seed");
+        std::fs::create_dir_all(target.join("agent")).unwrap();
+        std::fs::write(target.join("agent/fixture"), "warm artifact").unwrap();
+        crate::test_exec::write_executable(&bin.join("make"), "#!/bin/sh\ntest -f \"$CARGO_TARGET_DIR/agent/fixture\" || exit 1\necho gate-executed\n");
+        let lane = LaneJobs {
+            inbox: seat.join(INBOX_RELATIVE),
+            seat,
+            results: tmp.path().join("host-results"),
+            lease_id: "seed".into(),
+            build_env: vec![("CARGO_TARGET_DIR".into(), target.display().to_string())],
+            host_env: vec![("PATH".into(), bin.display().to_string())],
+            program: "cargo".into(),
+            sandbox: Sandbox::TestUnwrapped,
+        };
+        lane.prepare().unwrap();
+        run_seeded_fast_gate(
+            &lane,
+            "seeded",
+            JobRequest {
+                argv: vec!["make".into(), "check-ci-fast".into()],
+                env: BTreeMap::new(),
+            },
+        );
+        assert_eq!(read_rc(&lane.results, "seeded"), Some(0));
+        let out = std::fs::read_to_string(out_path(&lane.results, "seeded")).unwrap();
+        assert!(out.contains("gate-executed"), "{out}");
+        assert!(out.contains("seed: warm"), "{out}");
+        assert!(!out.contains("no target seed"));
     }
 
     // The unwrapped fixture is test-only. Production run_fast_gate always

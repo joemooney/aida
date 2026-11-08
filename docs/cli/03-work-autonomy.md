@@ -231,7 +231,11 @@ The same recipe is embedded in every phase-failure comment, so the reader who de
 
 The host runs each lane's `make check-ci-fast` in the lane-job sandbox.
 A source failure gets one repair round; a timeout reports
-`fast_gate=skipped(timeout)` without consuming that round. A host process that
+`fast_gate=skipped(timeout)` without consuming that round. A retry that times out
+retains an earlier `fast_gate=fail`. Gate jobs reuse the lane target seed and
+overlay. If host publication merges a concurrently advanced PR head after the
+gate, it reports `fast_gate=skipped(reconciled)` (or retains a known failure)
+for that published merge. A host process that
 exits or is killed releases its unqueued review hold on the next review-watch
 check. Pending receipts have a 24-hour backstop, including legacy receipts
 (measured from file modification time). Queued repairs hold review only while

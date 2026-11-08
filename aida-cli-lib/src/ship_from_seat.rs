@@ -1665,6 +1665,13 @@ pub(crate) fn run_from_with_reconciliation(
         return Ok(());
     }
 
+    if automatic && merged {
+        drop_quarantine_on_refusal(
+            &staged,
+            false,
+            crate::lane_fast_gate::reconciled_import(&main, &branch, tip),
+        )?;
+    }
     // trace:STORY-2640 | ai:codex — bind evidence to the actual imported tip.
     drop_quarantine_on_refusal(
         &staged,

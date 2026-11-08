@@ -1877,6 +1877,7 @@ fn task_2879_run_at_reconciles_moved_origin_and_refuses_unsafe_merges() {
         return;
     }
     for case in [
+        "automatic",
         "merge",
         "live",
         "conflict",
@@ -1946,12 +1947,48 @@ fn task_2879_run_at_reconciles_moved_origin_and_refuses_unsafe_merges() {
             let hook = fx.origin.join("hooks/pre-receive");
             crate::test_exec::write_executable(&hook, "#!/bin/sh\nexit 1\n");
         }
-        let result = crate::ship_from_seat::run_at(&fx.main, opts(&clone, false, true));
+        let reservation = if case == "automatic" {
+            let reservation = crate::lane_fast_gate::reserve(&fx.main, branch).unwrap();
+            crate::lane_fast_gate::native_rounds(
+                &fx.main,
+                branch,
+                || Ok(Some((local.clone(), "pass".into(), String::new()))),
+                |_| panic!("green gate"),
+            )
+            .unwrap();
+            Some(reservation)
+        } else {
+            None
+        };
+        // trace:STORY-2640 | ai:codex — actual automatic reconciliation path.
+        let result = if case == "automatic" {
+            crate::ship_from_seat::run_from_with_reconciliation(
+                &fx.main,
+                opts(&clone, false, true),
+                &crate::ship_from_seat::Deps {
+                    bundle: &test_bundle,
+                    commit: &no_commit,
+                    forge: &|_| panic!("no PR requested"),
+                    after_open: &|_, _| {},
+                },
+                true,
+                true,
+            )
+        } else {
+            crate::ship_from_seat::run_at(&fx.main, opts(&clone, false, true))
+        };
+        if case == "automatic" {
+            assert_eq!(
+                crate::lane_fast_gate::marker(&fx.main, branch),
+                "skipped(reconciled)"
+            );
+        }
+        drop(reservation);
         if let Some(owner) = &mut owner {
             let _ = owner.kill();
             let _ = owner.wait();
         }
-        if case == "merge" {
+        if case == "merge" || case == "automatic" {
             result.unwrap();
             let head = git_ok(&clone, &["rev-parse", "HEAD"]);
             assert_eq!(
