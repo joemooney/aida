@@ -20,7 +20,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-07T20:18:53.564500330Z
-modified_at: 2026-11-08T05:33:01.094250584Z
+modified_at: 2026-11-08T05:33:04.865008682Z
 req_type: Bug
 relationships:
 - rel_type:
@@ -130,6 +130,12 @@ comments:
   modified_at: 2026-11-08T04:17:28.721571557Z
   session_id: 01a1b8be-8170-7fb2-89ab-ecb4c6eee98c
   harness_version: 2.1.319 (Claude Code)
+- id: 01a1b9a5-5de1-76d2-a772-83d1f9259a99
+  author: joe
+  content: 'Round 3 approach: Acceptance criteria as tests: fixture regressions verify native punt reaches host and vetoes publication, and unchanged seats return no-change without bundling; attach the two canonical criterion traces. Ledger regression: reconcile an open punt, resolve the host record, reconcile again with case-varied spec, and assert it remains resolved without duplicate records. Launch regression: reused drain and queue-resume seats clear prior punt/hold signals before child launch while new signals still veto. Changes: deduplicate mirrored punts by immutable identity and provision signal files at both missing launch boundaries. Validation: lane-runner targeted Rust tests, criterion report, formatting and portability gate; report CI evidence and supervised hold separately.'
+  created_at: 2026-11-08T05:33:04.865008682Z
+  modified_at: 2026-11-08T05:33:04.865008682Z
+  session_id: 01a1b9a47968
 history:
 - id: 01a1b7ad-9096-7320-bbe8-fc34c8e11c09
   author: aida-session-start
