@@ -8,7 +8,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-07T15:34:33.363448208Z
-modified_at: 2026-11-08T07:26:04.982974448Z
+modified_at: 2026-11-08T07:46:05.917747295Z
 req_type: Story
 comments:
 - id: 01a1b6a6-52e1-70a0-a9c1-d32888979ca5
@@ -727,6 +727,12 @@ history:
   - field_name: status
     old_value: InProgress
     new_value: NeedsAttention
+- id: 01a1ba1f-2643-7ff0-a2ab-996373675cea
+  author: joe
+  timestamp: 2026-11-08T07:46:06.019516629Z
+  session_id: 01a1ba1bfad0
+  harness_version: 2.1.319 (Claude Code)
+  changes: []
 filed_at:
   code_sha: 122fea66d306d6739516983479c50201e9d0ae84
   branch: main
@@ -741,3 +747,11 @@ attention_reason:
   detail: 'PR-3662 rework removes the blocking seat-controlled PATH injection and adds redirected-graph regression coverage. Host deployment is still a manual gate: this environment has no codegraph executable, primary .codegraph index, proxy service, or candidate doctor --lane-host binary. AC2 live read-only grant evidence and AC5 correct non-empty contained-seat query remain unavailable. Host operator must deploy the reviewed proxy per scripts/codegraph/README.md and capture acceptance output before completing publication. Minor finding 4 (busy serialized proxy versus short doctor probe) remains documented. Uncommitted changes and exact failed commands are in .aida/story-2630-handoff.txt and .aida/story-2630-pr-body.txt; do not complete STORY-2630 or widen index writes.'
   raised_by: implementer
   raised_at: 2026-11-08T07:22:05.336931563Z
+failure_reason:
+  phase: reviewer
+  phase_index: 3
+  kind: verdict:request-changes
+  detail: 'Refs slice for AC2+AC5 (host query proxy). The seat-controlled PATH blocker is fixed, with a refusal test. AC1 partial: routing on main, but after deployment bare codegraph in a lane still does not reach the proxy. AC2 partial: native-seat read-only observation only; aida-contained posture has no index mount. AC3 present but points lanes at the bare command. AC4 implemented, tests pending CI (proxy_reports_source_age_and_rejects_stale_or_invalid_heartbeats, doctor_proxy_round_trip_and_stalled_peer_are_bounded). AC5 unverified: no live seat evidence. Upstream 1.6.0 --path/--limit/--depth/--json flags confirmed via --help. All build/test CI jobs pending at 30c73ca6bade; merge-hold-gate red is the expected supervised-spec hold, not a code failure.'
+  recovery_hint: address the review findings, move STORY-2630 back to In Progress, and clear the PR hold only after approval
+  shelved_by: reviewer
+  shelved_at: 2026-11-08T07:46:05.917747295Z
