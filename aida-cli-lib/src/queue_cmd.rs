@@ -13199,13 +13199,15 @@ pub(crate) fn handle_queue_work(
     // TASK-1053: single-spec dry-run preview. The plan is now fully resolved —
     // the pre-flight summary above already printed anchor/scope/role/mode/skill;
     // here we add the branch, worktree path, session id, and the lease the
-    // pickup WOULD create, then return. We sit BEFORE the first side effect
-    // (the scope-conflict sweep, the pre-pickup pull, and session_start that
-    // follow), so a dry run creates no worktree, takes no lease, writes no
+    // pickup WOULD create, then return. The earlier pre-pickup pull and
+    // admission writes are guarded by !dry_run; we return before the
+    // scope-conflict sweep and session_start, so a dry run creates no
+    // worktree, takes no lease, writes no
     // manifest, and launches no claude. The branch + worktree derivation
     // mirror `session_start` exactly so the preview matches a real pickup.
     // The `--batch` dry-run is a separate path that returns at the dispatch
     // site before this function is even called. trace:TASK-1053 | ai:claude
+    // trace:BUG-2490 | ai:codex
     if dry_run {
         let dry_line = |label: &str, value: String| {
             eprintln!("  {:<8} {}", format!("{}:", label).bold(), value);
