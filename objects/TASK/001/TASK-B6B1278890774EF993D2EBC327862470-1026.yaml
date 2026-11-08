@@ -1,5 +1,6 @@
 id: 01a1bd58-16e7-7de0-bfb2-bb0f34c6f3b0
 spec_id: TASK-b6b1278890774ef993d2ebc327862470-1026
+agreed_id: TASK-3063
 title: 'Non-blocking (minor, carried forward): a native-lane body line ending in a diff…'
 description: |-
   Non-blocking finding carried forward from an APPROVED review verdict on BUG-2493, which has since completed — recorded here so it keeps a queryable home once the verdict record stops being read.
@@ -20,6 +21,11 @@ tags:
 - finding-hash:9c590adf
 - from-review:PR-3667
 - kind:carried-forward
+history:
+- id: 01a1bd9a-2aba-7141-8da0-f76588125be1
+  author: joe
+  timestamp: 2026-11-08T23:59:19.738813445Z
+  changes: []
 filed_at:
   code_sha: d0e3cb3eb33d2718f823c4fe504696a1f9c8f1e8
   branch: main
