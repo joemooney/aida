@@ -1,0 +1,34 @@
+id: 01a1bbcd-bf56-7221-a271-8c20bfe8931c
+spec_id: STORY-b6b1278890774ef993d2ebc327862470-601
+agreed_id: STORY-2678
+title: 'Review PR-3682: [AI:codex] fix: Conformance harness fixture omits chatgpt.com, so a ChatGPT-auth Codex run fails before any check and reports C0-C4 unknown (BUG-2497)'
+description: |
+  Auto-filed by `aida pr auto-queue-review` (typically from /aida-pr) (session `01a1bbca`) for branch `bug-b6b1278890774ef993d2ebc327862470-262`.
+
+  - PR: <https://github.com/joemooney/aida/pull/3682>
+  - Branch: `bug-b6b1278890774ef993d2ebc327862470-262` → `main`
+
+  ## Covers
+
+  - BUG-2497
+
+  ## Acceptance
+
+  - Generate a structured review prompt with `aida review prompt --pr 3682` and verify each spec's acceptance criteria.
+  - Approve and merge, or request changes by spec id.
+  - Mark this story `completed` once the PR is merged.
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-11-08T15:36:25.686595998Z
+modified_at: 2026-11-08T15:36:25.686595998Z
+req_type: Story
+filed_at:
+  code_sha: 48e3865999b9c0e8acbc7899ce92ccd43191a3c7
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: f6dec017d96
+  vendor: claude
+  session: 01a1bbca0337
