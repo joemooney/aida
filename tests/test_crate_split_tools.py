@@ -39,6 +39,8 @@ class CrateSplitTools(unittest.TestCase):
         (root / 'scripts').mkdir()
         (root / 'scripts/portability-allowlist.txt').write_text('r\told.rs:source\n')
         (root / 'scripts/exec-context-legacy.json').write_text(json.dumps({'sites': {'old.rs:f:var:abc': 2}}))
+        (root / 'scripts/ownership-liveness-legacy.json').write_text(
+            json.dumps({'old.rs:example:pid_is_alive': 2}))
         if ledger:
             self.write_globs(root, {'old.rs': 2})
         self.git(root, 'add', '.')
@@ -151,7 +153,7 @@ class CrateSplitTools(unittest.TestCase):
             self.run_globs(root)
 
     def test_stale_path_in_each_ledger_refuses_before_any_write(self):
-        for ledger in ('portability-allowlist.txt', 'exec-context-legacy.json', 'crate-globs-legacy.json'):
+        for ledger in ('portability-allowlist.txt', 'exec-context-legacy.json', 'crate-globs-legacy.json', 'ownership-liveness-legacy.json'):
             with self.subTest(ledger=ledger):
                 root = self.repository()
                 (root / 'old.rs').rename(root / 'new.rs')
@@ -189,16 +191,22 @@ class CrateSplitTools(unittest.TestCase):
             evidence = {'ceiling': 2, 'sites': {'old.rs:f:var:abc': 2}}
             (root / 'scripts/exec-context-legacy.json').write_text(json.dumps(evidence))
             (root / 'scripts/crate-globs-legacy.json').write_text('{"old.rs": 1}')
+            ownership = {'old.rs:example:pid_is_alive': 2, 'other.rs:f:lease_is_live': 1}
+            ownership_path = root / 'scripts/ownership-liveness-legacy.json'
+            ownership_path.write_text(json.dumps(ownership))
             (root / 'old.rs').rename(root / 'new.rs')
             (root / 'new.rs').write_text('changed')
             with self.assertRaises(ValueError):
                 MOVE.relocate(root, 'old.rs', 'new.rs', 'HEAD')
             self.assertEqual(json.loads((root / 'scripts/exec-context-legacy.json').read_text()), evidence)
+            self.assertEqual(json.loads(ownership_path.read_text()), ownership)
             (root / 'new.rs').write_text('fn example() {}\n')
             MOVE.relocate(root, 'old.rs', 'new.rs', 'HEAD')
             self.assertEqual(json.loads((root / 'scripts/exec-context-legacy.json').read_text()), {'ceiling': 2, 'sites': {'new.rs:f:var:abc': 2}})
             self.assertEqual((root / 'scripts/portability-allowlist.txt').read_text(), '# old.rs:comment\nr\tnew.rs:source old.rs:text\n')
             self.assertEqual(json.loads((root / 'scripts/crate-globs-legacy.json').read_text()), {'new.rs': 1})
+            self.assertEqual(json.loads(ownership_path.read_text()),
+                             {'new.rs:example:pid_is_alive': 2, 'other.rs:f:lease_is_live': 1})
 
     def test_collision_refuses(self):
         with self.assertRaises(ValueError):

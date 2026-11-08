@@ -1,3 +1,14 @@
+`scripts/relocate-ledger-paths.py OLD NEW [--base REF]` verifies a byte-identical
+move and rewrites portability, ExecContext, crate-glob and ownership-liveness
+path keys, validating all results before writing. Counts and evidence remain
+unchanged. It does not update `scripts/config-trust.toml`: rename the matching
+`[readers."OLD"]` table to `[readers."NEW"]` manually, retaining channels/counts,
+and run `bug_1723_config_trust_tests`. Regenerate store-writer inventory with
+`python3 scripts/check-store-writers.py --regenerate` and Git-maintenance inventory
+with `python3 tests/test_git_maintenance_ratchet.py --write-baseline`; review both
+diffs. Stage source moves before the glob ratchet so Git can detect renames.
+<!-- trace:TASK-3428 | ai:codex -->
+
 `cmdkit` holds the command-framework types and shared output/stakeholder vocabulary;
 existing CLI, registry and stakeholder paths re-export them.
 <!-- trace:TASK-3425 | ai:codex -->

@@ -4,6 +4,16 @@
 Usage: relocate-ledger-paths.py OLD NEW [--base REF]. The old path must be
 absent and the destination must exactly match the committed old blob.
 Stage the move before running the glob ratchet so Git can detect its rename.
+Rewrites portability-allowlist.txt, exec-context-legacy.json,
+crate-globs-legacy.json and ownership-liveness-legacy.json under scripts/.
+Other path-keyed inventories require separate updates after a move:
+- scripts/config-trust.toml: manually rename [readers."OLD"] to [readers."NEW"],
+  preserving channels and site counts; run bug_1723_config_trust_tests.
+- scripts/store-writers.toml: run
+  python3 scripts/check-store-writers.py --regenerate and review the diff.
+- scripts/git-maintenance-baseline.txt: run
+  python3 tests/test_git_maintenance_ratchet.py --write-baseline and review the diff.
+
 CI pins the portability growth verifier from the base revision; bases predating
 relocation support still refuse moved portability rows until that support merges.
 """
@@ -59,7 +69,7 @@ def relocate(root, old, new, base):
     if (root / old).exists() or (root / old).is_symlink() or (root / new).is_symlink() or (root / new).read_bytes() != blob:
         raise ValueError('relocation requires an absent source and byte-identical destination')
     updates = {}
-    for name in ('scripts/portability-allowlist.txt', 'scripts/exec-context-legacy.json', 'scripts/crate-globs-legacy.json'):
+    for name in ('scripts/portability-allowlist.txt', 'scripts/exec-context-legacy.json', 'scripts/crate-globs-legacy.json', 'scripts/ownership-liveness-legacy.json'):
         path = root / name
         updates[path] = rewrite(path.read_text(), old, new, path.suffix == '.json')
         # Validate every result before publishing any ledger update.
