@@ -2700,7 +2700,7 @@ fn bug_2493_body_file_errors_validate_usage_before_reading_and_name_path() {
             false,
         ),
     ] {
-        let args = parse(argv);
+        let mut args = parse(argv);
         for expected_kind in [
             std::io::ErrorKind::NotFound,
             std::io::ErrorKind::InvalidData,
@@ -2716,6 +2716,28 @@ fn bug_2493_body_file_errors_validate_usage_before_reading_and_name_path() {
                 expected_kind
             );
         }
+        // trace:BUG-2493 | ai:codex
+        // Both authoring paths reject unsafe messages before publication.
+        std::fs::write(&missing, "Help-Golden: unchanged\n\0hidden").unwrap();
+        assert_eq!(
+            crate::pr_cmd::ship_messages(&args, native)
+                .unwrap_err()
+                .to_string(),
+            "commit body contains NUL"
+        );
+        std::fs::write(&missing, "Help-Golden: unchanged\n").unwrap();
+        let subject = args
+            .message
+            .as_mut()
+            .or(args.commit_pending.as_mut())
+            .unwrap();
+        subject.push_str("\nhidden subject");
+        assert_eq!(
+            crate::pr_cmd::ship_messages(&args, native)
+                .unwrap_err()
+                .to_string(),
+            "--commit-body-file requires a single-line subject"
+        );
         std::fs::remove_file(&missing).unwrap();
     }
 }
