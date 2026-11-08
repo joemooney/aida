@@ -82,28 +82,26 @@ pub(crate) use work::{
     auto_complete_head_drivable, auto_complete_sibling_role_hint, build_queue_work_claude_command,
     build_resolved_entry, change_verdict_bound_to, check_exited_branch_clone,
     claude_posture_display, clear_standalone_reviewer_verdict, deferred_headless_launch_hint,
-    deferred_interactive_launch_hint, derive_queue_work_prompt,
-    derive_queue_work_prompt_with_round, derive_rework_queue_work_prompt, derive_scope_from_entry,
-    derive_scope_from_req_id, drain_preview_head_members, effective_auto_complete_role,
-    end_finished_review, findings_recur_consecutively, format_queue_work_not_queued_error,
-    handle_queue_work, headless_baseline_notice, headless_launch_hint,
-    headless_waiting_rule_suffix, held_resume_plan, held_resume_reentry_allowed,
-    honour_auto_complete_sandbox, infer_queue_work_role, is_ruling_comment, is_standalone_reviewer,
-    latest_findings_block, latest_ruling_comment, launch_refused_before_agent,
+    deferred_interactive_launch_hint, derive_queue_work_prompt_with_round,
+    derive_rework_queue_work_prompt, derive_scope_from_entry, derive_scope_from_req_id,
+    drain_preview_head_members, effective_auto_complete_role, end_finished_review,
+    findings_recur_consecutively, format_queue_work_not_queued_error, handle_queue_work,
+    headless_baseline_notice, headless_launch_hint, headless_waiting_rule_suffix, held_resume_plan,
+    held_resume_reentry_allowed, honour_auto_complete_sandbox, infer_queue_work_role,
+    is_ruling_comment, is_standalone_reviewer, latest_findings_block, launch_refused_before_agent,
     leased_implementer_queue_head, leave_setup_tree, merge_current_spec_queue_entries,
     orchestrator_authorizes_explicit_queue_pickup,
     orchestrator_authorizes_explicit_queue_pickup_with_token, orchestrator_review_envelope_for_pr,
     pick_auto_complete_head, pick_auto_complete_head_for_role,
     pickup_failure_offers_manual_continuation, pickup_refusal_gate, preclaim_branch_state,
     preclaim_collision_check, preflight_queue_work_branch, preflight_queue_work_branch_adopting,
-    preflight_queue_work_branch_reclaiming, prepend_due_jobs, prepend_ruling,
-    preview_queue_work_drain, print_drain_preview_members, print_drain_preview_skipped,
-    queue_add_for_scope_routing, queue_drain_pickup_policy, queue_fresh_pickup_policy,
-    queue_fresh_pickup_reason_label, queue_work_delegation_refusal, queue_work_is_fresh_headless,
-    queue_work_issues_child_grant, queue_work_manual_continuation,
-    queue_work_plan_wants_pr_head_branch, queue_work_role_mismatch, queue_work_self_claim,
-    queued_supervised_mode, reclaim_exited_branch_clone, record_pickup_refusal,
-    refuse_retired_steal, refuse_unpresentable_contained_reviewer,
+    preflight_queue_work_branch_reclaiming, prepend_due_jobs, preview_queue_work_drain,
+    print_drain_preview_members, print_drain_preview_skipped, queue_add_for_scope_routing,
+    queue_drain_pickup_policy, queue_fresh_pickup_policy, queue_fresh_pickup_reason_label,
+    queue_work_delegation_refusal, queue_work_is_fresh_headless, queue_work_issues_child_grant,
+    queue_work_manual_continuation, queue_work_plan_wants_pr_head_branch, queue_work_role_mismatch,
+    queue_work_self_claim, queued_supervised_mode, reclaim_exited_branch_clone,
+    record_pickup_refusal, refuse_retired_steal, refuse_unpresentable_contained_reviewer,
     refused_review_launch_releases_lease, release_refused_review_lease, resolve_auto_complete_head,
     resolve_queue_work_plan, resolve_queue_work_posture, resolve_rework_findings,
     resume_autocomplete_conflict_message, retire_idle_review_worktree, review_calibration_spec_ids,
@@ -111,16 +109,21 @@ pub(crate) use work::{
     review_round_from_comments, reviewer_from_pr_contract_suffix, reviewer_pickup_keeps_pr_scope,
     reviewer_preflight_pr_n, reviewer_prompt_for_round, reviewer_spawn_instant,
     reviewer_vendor_exit_code, reviewer_verdict_anchor_suffix, rework_conflict_route,
-    rework_findings_block_for_spec, rework_pickup_prompt, rework_pr_head_branch_from_lookup,
-    rework_pr_head_branch_override, rework_pr_head_matches_spec, rework_role_input,
-    rework_round_from_comments, ruling_comment_text, run_pickup_launch, run_queue_resume_to_exit,
-    run_standalone_reviewer, scope_conflict_resume_hint, spec_matches, spec_open_change_key,
-    standalone_review_plan, standalone_review_pr_head, standalone_reviewer_outcome,
-    standalone_reviewer_record_anchor, standalone_summary_verdict_body, verdict_recorded_time,
-    AgentLaunchMark, AutoCompleteHeadCandidate, AutoCompleteHeadPick, LeasePeek, NoReviewVerdict,
+    rework_findings_block_for_spec, rework_pickup_prompt, rework_pr_head_branch_override,
+    rework_pr_head_matches_spec, rework_role_input, rework_round_from_comments,
+    ruling_comment_text, run_pickup_launch, run_queue_resume_to_exit, run_standalone_reviewer,
+    scope_conflict_resume_hint, spec_matches, spec_open_change_key, standalone_review_plan,
+    standalone_review_pr_head, standalone_reviewer_outcome, standalone_reviewer_record_anchor,
+    standalone_summary_verdict_body, verdict_recorded_time, AgentLaunchMark,
+    AutoCompleteHeadCandidate, AutoCompleteHeadPick, LeasePeek, NoReviewVerdict,
     PreclaimBranchState, PreclaimDecision, QueueFreshPickup, QueueWorkEntry, QueueWorkMode,
     QueueWorkPlan, QueueWorkPosture, QueueWorkRoleInput, ReviewerVendorExit, ReworkConflictLaunch,
     StandaloneVerdictChecks, NO_REVIEW_VERDICT_EXIT_CODE, RULING_TAG,
+};
+#[cfg(test)]
+pub(crate) use work::{
+    derive_queue_work_prompt, latest_ruling_comment, prepend_ruling,
+    rework_pr_head_branch_from_lookup,
 };
 
 /// `store_path` is the orphan-store path; the `--json` fast path opens a
@@ -371,3 +374,22 @@ mod bug_home_045_reviewer_verdict_tests;
 #[cfg(test)]
 #[path = "../tests/bug_2428_launch_rollback_tests.rs"]
 mod bug_2428_launch_rollback_tests;
+
+// trace:TASK-3426 | ai:codex
+#[cfg(test)]
+pub(crate) fn production_sources() -> Vec<(String, String)> {
+    let directory = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("src/queue_cmd");
+    let mut paths: Vec<_> = std::fs::read_dir(directory)
+        .unwrap()
+        .map(|entry| entry.unwrap().path())
+        .filter(|path| path.extension().is_some_and(|extension| extension == "rs"))
+        .collect();
+    paths.sort();
+    paths
+        .into_iter()
+        .map(|path| {
+            let name = format!("queue_cmd/{}", path.file_name().unwrap().to_str().unwrap());
+            (name, std::fs::read_to_string(path).unwrap())
+        })
+        .collect()
+}

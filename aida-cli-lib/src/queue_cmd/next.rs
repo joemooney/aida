@@ -9,6 +9,7 @@ pub(super) fn handle_queue_command(
 ) -> Result<()> {
     let get_user = |user: &Option<String>| -> String { current_user_id(user.as_deref()) };
     match cmd {
+        // trace:EPIC-1-001 | ai:claude
         QueueCommand::Next {
             role,
             all,

@@ -1286,6 +1286,11 @@ pub(super) fn handle_queue_command(
     _store_path: &std::path::Path,
 ) -> Result<()> {
     match cmd {
+        // TASK-218: encapsulate the implementer → reviewer → fixup
+        // three-command recovery sequence (`aida edit --status` +
+        // `aida queue add` + optional `aida queue work`) behind a single
+        // verb. Smart status table flips per the current status; `--work`
+        // chains the session launch. trace:TASK-218 | ai:claude
         QueueCommand::Rework {
             id,
             work,

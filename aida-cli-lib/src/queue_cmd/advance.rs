@@ -548,6 +548,7 @@ pub(super) fn handle_queue_command(
     _store_path: &std::path::Path,
 ) -> Result<()> {
     match cmd {
+        // trace:STORY-566 | ai:claude
         QueueCommand::Advance { id, yes, user } => {
             handle_queue_advance(storage, id.as_deref(), *yes, user.as_deref())?
         }

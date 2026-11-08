@@ -473,6 +473,9 @@ pub(super) fn handle_queue_command(
     _store_path: &std::path::Path,
 ) -> Result<()> {
     match cmd {
+        // TASK-232: progress view across the buckets a draining session
+        // moves items through (Shipped / In flight / Working now /
+        // Remaining). trace:TASK-232 | ai:claude
         QueueCommand::Progress {
             session,
             batch,

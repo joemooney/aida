@@ -69,6 +69,24 @@ class SplitRelocationTests(unittest.TestCase):
         self.assertEqual(readers, {name: {'channels': ['worktree', 'prose'], 'sites': 1}
                                    for name in destinations})
 
+    def test_unhandled_ledgers_refuse_without_any_writes(self):
+        for ledger in (
+            'scripts/portability-allowlist.txt',
+            'scripts/doc-path-exceptions.json',
+            'scripts/git-maintenance-baseline.txt',
+            'scripts/ci-gate-tiers.toml',
+            'aida-cli-lib/src/tests/fixtures/proc_identity_legacy_baseline.json',
+        ):
+            with self.subTest(ledger=ledger):
+                root, old, destinations, _ = self.fixture()
+                path = root / ledger
+                path.parent.mkdir(parents=True, exist_ok=True)
+                path.write_text(old)
+                before = {p: p.read_bytes() for p in root.rglob('*') if p.is_file()}
+                with self.assertRaisesRegex(ValueError, 'manual relocation required'):
+                    MOVE.relocate(root, old, destinations)
+                self.assertEqual(before, {p: p.read_bytes() for p in before})
+
     def test_retained_source_and_escaping_destination_refuse(self):
         root, old, destinations, _ = self.fixture()
         (root / old).write_text('fn arm() {}')

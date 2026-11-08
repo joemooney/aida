@@ -7542,6 +7542,8 @@ pub(super) fn handle_queue_command(
 ) -> Result<()> {
     let get_user = |user: &Option<String>| -> String { current_user_id(user.as_deref()) };
     match cmd {
+        // STORY-42: one-shot queue pickup → session start → claude launch.
+        // trace:STORY-42 | ai:claude
         QueueCommand::Work {
             id,
             count,

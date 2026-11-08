@@ -271,6 +271,11 @@ pub(super) fn handle_queue_command(
 ) -> Result<()> {
     let get_user = |user: &Option<String>| -> String { current_user_id(user.as_deref()) };
     match cmd {
+        // Prune queue entries matching a predicate: `--orphaned` (spec deleted)
+        // and/or `--merged` (shipped reviewer row). The sibling `queue gc`
+        // handles the archived/terminal-but-present class.
+        // trace:TASK-537 | ai:claude
+        // trace:TASK-1063 | ai:claude
         QueueCommand::Prune {
             orphaned,
             merged,
@@ -413,6 +418,15 @@ pub(super) fn handle_queue_command(
                 }
             }
         }
+        // TASK-1052: queue-GC — sweep dead routed entries (target spec
+        // archived / Completed / Rejected) and report the count. The explicit
+        // companion to the opportunistic self-heal that runs on `queue list`.
+        // BUG-1512: additionally sweeps routed review entries whose PR
+        // already merged, independent of the review STORY's own status — see
+        // `merged_pr_review_entries` for why that's a second, additive
+        // condition rather than a change to the target-spec rule.
+        // trace:TASK-1052 | ai:claude
+        // trace:BUG-1512 | ai:claude
         QueueCommand::Gc {
             user,
             r#for,

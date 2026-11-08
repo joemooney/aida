@@ -7,6 +7,8 @@ OLD must be absent. Uses the existing inventory lexers, never line numbers.
 Review source-inspection tests separately: their semantic assertions cannot
 be relocated by a generic path replacement. Config-trust reader metadata is
 retained per destination with the original channels and conserved site counts.
+Other inventoried ledger formats refuse when OLD appears; relocate those
+manually before rerunning this helper.
 """
 # trace:TASK-3426 | ai:codex
 import argparse
@@ -33,6 +35,18 @@ def relocate(root, old, destinations):
             raise ValueError('paths must stay inside the repository')
     if (root / old).exists():
         raise ValueError('source must have been moved before re-keying')
+    # These inventories have distinct schemas and need a reviewed mapping.
+    # Refuse before any writes rather than silently leaving stale path keys.
+    for ledger in (
+        'scripts/portability-allowlist.txt',
+        'scripts/doc-path-exceptions.json',
+        'scripts/git-maintenance-baseline.txt',
+        'scripts/ci-gate-tiers.toml',
+        'aida-cli-lib/src/tests/fixtures/proc_identity_legacy_baseline.json',
+    ):
+        path = root / ledger
+        if path.exists() and old in path.read_text():
+            raise ValueError(f'manual relocation required: {old} appears in {ledger}')
     writer = load('check-store-writers')
     env = load('check-exec-context')
     globs = load('check-crate-globs')

@@ -304,10 +304,18 @@ fn bug_045_contained_refusal_precedes_the_verdict_reset() {
 #[test]
 fn bug_045_launch_paths_mint_through_the_containment_aware_issuer() {
     for (file, source) in [
-        ("session.rs", include_str!("../session.rs")),
-        ("queue_cmd/work.rs", include_str!("../queue_cmd/work.rs")),
-        ("agent_launch.rs", include_str!("../agent_launch.rs")),
-    ] {
+        (
+            "session.rs".to_string(),
+            include_str!("../session.rs").to_string(),
+        ),
+        (
+            "agent_launch.rs".to_string(),
+            include_str!("../agent_launch.rs").to_string(),
+        ),
+    ]
+    .into_iter()
+    .chain(crate::queue_cmd::production_sources())
+    {
         assert!(
             !source.contains("seat_authority::issue_child("),
             "{file} mints a launch child grant without its containment"
@@ -327,13 +335,18 @@ fn bug_045_launch_paths_mint_through_the_containment_aware_issuer() {
 fn task_144_headless_child_launches_pass_their_containment() {
     let mut calls = 0;
     for (file, source) in [
-        ("queue_cmd/work.rs", include_str!("../queue_cmd/work.rs")),
-        ("burndown_run.rs", include_str!("../burndown_run.rs")),
         (
-            "phase_driver_trait.rs",
-            include_str!("../phase_driver_trait.rs"),
+            "burndown_run.rs".to_string(),
+            include_str!("../burndown_run.rs").to_string(),
         ),
-    ] {
+        (
+            "phase_driver_trait.rs".to_string(),
+            include_str!("../phase_driver_trait.rs").to_string(),
+        ),
+    ]
+    .into_iter()
+    .chain(crate::queue_cmd::production_sources())
+    {
         for call in source
             .split("seat_authority::issue_headless_child(")
             .skip(1)

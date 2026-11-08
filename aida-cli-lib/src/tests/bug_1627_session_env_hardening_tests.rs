@@ -147,11 +147,10 @@ fn bug_1627_apply_session_env_to_process_drops_unknown_agent_type() {
 /// raw `source` of the branch-controllable file.
 #[test]
 fn bug_1627_no_launch_hint_does_not_source_session_env() {
+    for (file, src) in crate::queue_cmd::production_sources() {
+        let needle = concat!("\"source .aida/", "session-env.sh\"");
+        assert!(!src.contains(needle), "{file} still prints {needle}");
+    }
     let src = include_str!("../queue_cmd/work.rs");
-    let needle = concat!("\"source .aida/", "session-env.sh\"");
-    assert!(
-        !src.contains(needle),
-        "queue_cmd/work.rs still prints {needle}"
-    );
     assert!(src.contains("format!(\"aida worktree enter {}\", lease.scope)"));
 }

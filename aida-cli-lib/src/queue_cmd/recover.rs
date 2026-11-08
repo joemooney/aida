@@ -465,6 +465,9 @@ pub(super) fn handle_queue_command(
     _store_path: &std::path::Path,
 ) -> Result<()> {
     match cmd {
+        // STORY-384: failed-phase-1 recovery wizard — inspect state, recommend a
+        // recovery path, step through it. A front-end over existing primitives.
+        // trace:STORY-384 | ai:claude
         QueueCommand::Recover {
             id,
             dry_run,
