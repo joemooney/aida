@@ -76,8 +76,12 @@ For the TASK-3223 routing slice, run
 source reconciliation, then prints JSON listing unresolved writer sites and
 operation IDs and exits nonzero while any remain. The default compatibility
 check still validates inventory reconciliation only. Neither result grants
-launch authority. Version 2 requires every operation mapping to remain blocked;
-the routing implementation must introduce reviewed operation policy and evidence
+launch authority. Version 2 requires every operation mapping to remain blocked.
+Only `host_only` and `lane_private` writer rows are excluded from unresolved
+counts. The compatibility labels `s2_typed` and `read_only` remain unresolved
+under the mediated profile: v2 does not verify evidence for either label.
+Every operation mapping remains unresolved regardless of its disposition.
+The routing implementation must introduce reviewed operation policy and evidence
 before this profile check can certify zero unresolved mappings. This diagnostic
 does not implement routing, prove runtime coverage, or exempt TASK-3326 writers
 from their existing blockers.

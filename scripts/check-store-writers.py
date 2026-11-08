@@ -630,11 +630,14 @@ def mediated_blockers(data):
     The v2 operation schema deliberately requires blocked dispositions. A
     reconciled inventory therefore cannot certify mediated-profile readiness;
     routing needs reviewed operation policy and evidence before this can pass.
-    Keep host-only and lane-private sites distinct from unresolved sites.
+    Only host-only and lane-private writer sites are outside routing in v2.
+    Neither s2_typed nor read_only carries verified routing evidence in this
+    schema. All operation mappings remain unresolved, regardless of labels.
     """
     return {
         kind: sorted(row["id"] for row in data.get(kind, [])
-                     if row.get("disposition") == "blocked")
+                     if kind == "operation" or row.get("disposition") not in
+                     {"host_only", "lane_private"})
         for kind in ("writer", "operation")
     }
 

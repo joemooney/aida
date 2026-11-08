@@ -86,6 +86,63 @@ class WriterInventoryTests(unittest.TestCase):
         ], operation=[dict(id="cli:edit", disposition="blocked")]))
         self.assertEqual(dict(writer=["raw"], operation=["cli:edit"]), report)
 
+    # trace:TASK-3223 | ai:codex
+    def test_mediated_writer_labels_cannot_substitute_for_routing_evidence(self):
+        import subprocess
+        import sys
+        path = self.root / guard.INVENTORY
+        original = path.read_text()
+        for disposition in ("s2_typed", "read_only"):
+            with self.subTest(disposition=disposition):
+                path.write_text(original.replace('disposition = "blocked"',
+                                                 f'disposition = "{disposition}"'))
+                # These are valid compatibility classifications, but v2 has
+                # no verified route evidence for either classification.
+                self.assertEqual([], guard.check(self.root))
+                result = subprocess.run(
+                    [sys.executable, str(Path(guard.__file__)), "--root", str(self.root),
+                     "--profile", "mediated"], capture_output=True, text=True, timeout=30)
+                self.assertEqual(1, result.returncode, result.stderr)
+                report = json.loads(result.stdout)
+                self.assertEqual(sorted(guard.discover(self.root)),
+                                 report["unresolved"]["writer"])
+                self.assertEqual(len(report["unresolved"]["writer"]),
+                                 report["counts"]["writer"])
+                self.assertIn("keep production admission gated", result.stderr)
+
+    def test_mediated_operations_cannot_escape_using_writer_classifications(self):
+        for disposition in ("blocked", "s2_typed", "read_only", "host_only", "lane_private", None):
+            with self.subTest(disposition=disposition):
+                report = guard.mediated_blockers(dict(
+                    writer=[dict(id="unknown", disposition=disposition)],
+                    operation=[dict(id="cli:edit", disposition=disposition)]))
+                self.assertEqual(["cli:edit"], report["operation"])
+                self.assertEqual([] if disposition in ("host_only", "lane_private")
+                                 else ["unknown"], report["writer"])
+
+    def test_mediated_zero_blocker_exit_and_output(self):
+        import subprocess
+        import sys
+        path = self.root / guard.INVENTORY
+        original = path.read_text()
+        for disposition in ("host_only", "lane_private"):
+            with self.subTest(disposition=disposition):
+                path.write_text(original.replace('disposition = "blocked"',
+                                                 f'disposition = "{disposition}"'))
+                result = subprocess.run(
+                    [sys.executable, str(Path(guard.__file__)), "--root", str(self.root),
+                     "--profile", "mediated"], capture_output=True, text=True, timeout=30)
+                self.assertEqual(0, result.returncode, result.stderr)
+                self.assertEqual("", result.stderr)
+                lines = result.stdout.splitlines()
+                self.assertEqual(2, len(lines), result.stdout)
+                self.assertEqual(dict(profile="mediated", counts=dict(writer=0, operation=0),
+                                      unresolved=dict(writer=[], operation=[])), json.loads(lines[0]))
+                self.assertEqual(
+                    f"store-writers: {len(guard.discover(self.root))} sink sites reconciled; "
+                    "0 operation mappings with explicit S2 cutover blockers; no runtime authority granted",
+                    lines[1])
+
     def test_raw_fs_writer_mutant(self):
         self.put("aida-cli-lib/src/new_raw.rs", '''
             fn raw(path: &Path) { std::fs::write(path, "raw").unwrap(); }
