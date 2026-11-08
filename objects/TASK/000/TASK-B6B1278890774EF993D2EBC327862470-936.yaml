@@ -8,7 +8,7 @@ priority: Low
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-07T10:46:47.827833836Z
-modified_at: 2026-11-08T03:04:45.780580085Z
+modified_at: 2026-11-08T03:06:50.002750191Z
 req_type: Task
 relationships:
 - rel_type: Child
@@ -90,6 +90,17 @@ comments:
   modified_at: 2026-11-07T23:42:36.187564062Z
   session_id: 01a1b848-940b-7bd2-8acd-52e428b182b8
   harness_version: 2.1.319 (Claude Code)
+- id: 01a1b91f-7912-7c11-8ef3-72ff769c7dd9
+  author: joe
+  content: |
+    Round 2 review handoff: revised docs/plans/2026-11-07-task-3368-proc-identity-broker.md to incorporate the latest advisor signed decisions (2026-11-07 17:05 MST), superseding conflicting 14:00 decisions. Observation-only; AF_UNIX SOCK_SEQPACKET authenticates every message with kernel-attached SCM_PIDFD/SCM_CREDENTIALS; probe kernel support at startup; explicit broker lifecycle; host-only v1 with no seat socket route. Handles, namespace refusal, channel receipts and rollout/real-kernel test gates remain as accepted. This records the plan pointer and decisions requested by finding 2. No runtime implementation is claimed; implementation remains owed starting with disabled service + protocol tests. Flagging for advisor routing, preserving punt/merge-hold vetoes.
+
+    Findings 1 and 3: PR #3622 title/body updated with Refs-only completion semantics and per-change summary. The native seat cannot rewrite commit 218ab59b2a98 or produce a new code-branch commit: Git metadata is read-only by the launcher contract. Host action required: commit the uncommitted sketch revision and correct the original completion-bearing commit subject; use [AI:codex] docs(proc-identity): record signed broker decisions (Refs TASK-3368). Never clear or bypass the merge hold from this seat.
+
+    Validation: aida plan verify PASS; git diff --check PASS; referenced paths verified by plan lint. No Cargo execution required for prose-only changes.
+  created_at: 2026-11-08T03:06:50.002750191Z
+  modified_at: 2026-11-08T03:06:50.002750191Z
+  session_id: 01a1b91d7e61
 history:
 - id: 01a1b59e-5972-7d63-967f-d8572322d9d1
   author: joe
