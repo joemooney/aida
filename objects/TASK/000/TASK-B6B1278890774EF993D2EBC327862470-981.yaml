@@ -9,12 +9,12 @@ description: |-
 
   PR: #3672
   Reviewed sha: e0ccdac2422d8f24d8a506059cd3ada37dd10203
-status: InProgress
+status: Completed
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-08T08:58:22.319212Z
-modified_at: 2026-11-08T19:12:50.858062544Z
+modified_at: 2026-11-08T22:02:22.975152745Z
 req_type: Task
 tags:
 - carried-from:BUG-2495
@@ -192,6 +192,20 @@ history:
   session_id: 01a1bc8bdb39
   harness_version: codex-cli 0.167.0
   changes: []
+- id: 01a1bd2f-193b-7161-a80e-beca5a8fcd96
+  author: aida-auto-bump
+  timestamp: 2026-11-08T22:02:22.907804263Z
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Completed
+processing_record:
+- id: 01a1bd2f-197f-7930-ba45-2af10ed9cacd
+  timestamp: 2026-11-08T22:02:22.975149265Z
+  agent: aida
+  commit_sha: b8d5ab4ca115ff92b569cb4faade049ead6c4ca7
+  summary: 'All TASK-3015 criteria met: contained Codex refuses posture config keys in every accepted flag form, keeps text after -- opaque, and checks inline sandbox values; CI build and test jobs green at head; merge-hold-gate is the supervised hold, not a code failure'
+  review_verdict: approved
 filed_at:
   code_sha: 5cbe14e5fc6be0d87709049b48f3b7eaeab77808
   branch: main
@@ -199,11 +213,7 @@ filed_at:
   aida_version: 0.16.0
   aida_build_sha: 08cbf8a3fe7
   vendor: claude
-failure_reason:
-  phase: reviewer
-  phase_index: 3
-  kind: verdict:request-changes
-  detail: 'No rework landed: head differs from the rejected 94e074359b04 only by a merge from main, so the -c=K=V posture-key bypass and default_permissions gap remain'
-  recovery_hint: address the review findings, move TASK-3015 back to In Progress, and clear the PR hold only after approval
-  shelved_by: reviewer
-  shelved_at: 2026-11-08T18:51:02.435287Z
+implementation_info:
+  implemented: false
+  completed_at: 2026-11-08T22:02:22.907797745Z
+  completion_sha: b8d5ab4ca115ff92b569cb4faade049ead6c4ca7
