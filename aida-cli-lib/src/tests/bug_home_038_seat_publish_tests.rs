@@ -2324,6 +2324,7 @@ fn task_2902_declared_subject_survives_host_commit_and_pr_title() {
 }
 
 // trace:BUG-2493 | ai:codex
+#[cfg(unix)]
 #[test]
 fn bug_2493_declared_body_survives_host_commit_and_refs_downgrade() {
     use crate::ship_from_seat::{post_exit_commit, PostExitCommit};
@@ -2649,6 +2650,41 @@ fn task_2902_native_ship_message_records_only_and_dry_run_does_not_write() {
     }
     let no_message = command().try_get_matches_from(["ship"]).unwrap();
     assert!(run(&no_message, &ctx).is_err());
+}
+
+// trace:BUG-2493 | ai:codex
+#[test]
+fn bug_2493_body_file_errors_validate_usage_before_reading_and_name_path() {
+    use clap::FromArgMatches;
+    let dir = tempfile::tempdir().unwrap();
+    let missing = dir.path().join("missing-body.txt");
+    let command = || (crate::pr_cmd::SHIP.command)();
+    let parse = |argv: Vec<&str>| {
+        let matches = command().try_get_matches_from(argv).unwrap();
+        crate::pr_cmd::ShipArgs::from_arg_matches(&matches).unwrap()
+    };
+    let path = missing.to_str().unwrap();
+    for (argv, native) in [
+        (vec!["ship", "--commit-body-file", path], true),
+        (
+            vec!["ship", "-m", "subject", "--commit-body-file", path],
+            false,
+        ),
+    ] {
+        let error = crate::pr_cmd::ship_messages(&parse(argv), native).unwrap_err();
+        assert_eq!(
+            error.to_string(),
+            "--commit-body-file requires native -m or --from-seat --commit-pending"
+        );
+    }
+    let args = parse(vec!["ship", "-m", "subject", "--commit-body-file", path]);
+    let error = crate::pr_cmd::ship_messages(&args, true).unwrap_err();
+    assert!(error.to_string().contains("--commit-body-file"));
+    assert!(error.to_string().contains(path));
+    assert_eq!(
+        error.downcast_ref::<std::io::Error>().unwrap().kind(),
+        std::io::ErrorKind::NotFound
+    );
 }
 
 // trace:TASK-2902 trace:BUG-2459 | ai:codex

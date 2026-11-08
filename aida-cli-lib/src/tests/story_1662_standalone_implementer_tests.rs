@@ -1109,8 +1109,12 @@ fn task_2879_native_stop_hands_pending_work_to_host() {
 }
 
 // trace:BUG-2493 | ai:codex
+#[cfg(unix)]
 #[test]
 fn bug_2493_native_prompts_name_safe_body_file_surface() {
+    assert!(NATIVE_STOP_CONTRACT.contains(
+        "aida ship -m \"[AI:codex] type(scope): subject (SPEC-ID)\" --commit-body-file <file>"
+    ));
     for text in [
         NATIVE_STOP_CONTRACT,
         include_str!("../../../aida-core/templates/skills/aida-pickup.md"),

@@ -8838,17 +8838,22 @@ pub(crate) fn ship_messages(
     args: &ShipArgs,
     native: bool,
 ) -> anyhow::Result<(Option<String>, Option<String>)> {
-    let body = args
-        .commit_body_file
-        .as_ref()
-        .map(std::fs::read_to_string)
-        .transpose()?;
-    if let Some(body) = &body {
-        anyhow::ensure!(!body.contains('\0'), "commit body contains NUL");
+    if args.commit_body_file.is_some() {
         anyhow::ensure!(
             args.commit_pending.is_some() || (args.message.is_some() && native),
             "--commit-body-file requires native -m or --from-seat --commit-pending"
         );
+    }
+    let body = args
+        .commit_body_file
+        .as_ref()
+        .map(|path| {
+            std::fs::read_to_string(path)
+                .with_context(|| format!("reading --commit-body-file {}", path.display()))
+        })
+        .transpose()?;
+    if let Some(body) = &body {
+        anyhow::ensure!(!body.contains('\0'), "commit body contains NUL");
     }
     let with_body = |subject: &str| -> anyhow::Result<String> {
         anyhow::ensure!(
