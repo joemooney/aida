@@ -23,12 +23,12 @@ description: |
   Deliberate sweep: for each stale branch/worktree, check the spec status — if Completed/merged-elsewhere, delete the branch + remove the worktree; if it holds genuine uncommitted work, salvage-commit or discard per a per-item decision. aida session reap already handles the finished+merged+exited class safely; this task is the long-tail the reap conservatively leaves (unfinished-spec or uncommitted-work worktrees, and pure branch cruft). Consider an aida worktree gc --older-than / --stale sweep if one doesn't cover it.
 
   Immediate: STORY-1006 + STORY-993 (both Completed) have uncommitted worktree changes — operator decision: salvage or discard, then remove those two worktrees.
-status: NeedsAttention
+status: Approved
 priority: Low
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-09-13T22:07:45.944235Z
-modified_at: 2026-11-08T20:13:14.340992268Z
+modified_at: 2026-11-08T20:40:30.012044848Z
 req_type: Task
 tags:
 - cleanup
@@ -571,6 +571,13 @@ comments:
   modified_at: 2026-11-08T20:05:18.400842269Z
   session_id: 01a1bcbd182a
   harness_version: codex-cli 0.167.0
+- id: 01a1bce4-223c-7072-ac42-ea3a28aca1a7
+  author: joe
+  content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: No blocking code defect in a full read of the merge-base diff; both prior minor findings are fixed. Not approvable because CI run 42518333153 at this head has not started, so the new Rust is unproven. Re-run a reviewer when CI is terminal; do not push.. No triage reason was given.'
+  created_at: 2026-11-08T20:40:30.012037655Z
+  modified_at: 2026-11-08T20:40:30.012037655Z
+  session_id: 01a1bc93-77a0-7740-8b03-df4e3e8d1df5
+  harness_version: 2.1.319 (Claude Code)
 history:
 - id: 01a1b7cd-7751-7262-8ad1-f0f9d2ef6d4d
   author: joe
@@ -1105,11 +1112,12 @@ history:
   - field_name: status
     old_value: InProgress
     new_value: NeedsAttention
-failure_reason:
-  phase: reviewer
-  phase_index: 3
-  kind: verdict:request-changes
-  detail: No blocking code defect in a full read of the merge-base diff; both prior minor findings are fixed. Not approvable because CI run 42518333153 at this head has not started, so the new Rust is unproven. Re-run a reviewer when CI is terminal; do not push.
-  recovery_hint: address the review findings, move TASK-1222 back to In Progress, and clear the PR hold only after approval
-  shelved_by: reviewer
-  shelved_at: 2026-11-08T20:13:14.340992268Z
+- id: 01a1bce4-223c-7072-ac42-ea2d36521ea3
+  author: joe
+  timestamp: 2026-11-08T20:40:30.012027003Z
+  session_id: 01a1bc93-77a0-7740-8b03-df4e3e8d1df5
+  harness_version: 2.1.319 (Claude Code)
+  changes:
+  - field_name: status
+    old_value: NeedsAttention
+    new_value: Approved
