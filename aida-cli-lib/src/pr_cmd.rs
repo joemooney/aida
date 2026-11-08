@@ -5091,7 +5091,7 @@ pub(crate) fn pr_ship_create_pr(project_root: &std::path::Path, branch: &str) ->
         req,
         &extract_spec_ids_from_commit(&commit_msg),
     )
-    .context("could not open a forge change request")?;
+    .map_err(crate::forge::open_change_error)?;
     if change.id == 0 {
         anyhow::bail!(
             "`gh pr create` succeeded but no PR number found in its output: {}",
