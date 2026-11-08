@@ -8,7 +8,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-08T00:05:07.175003336Z
-modified_at: 2026-11-08T05:06:32.760476092Z
+modified_at: 2026-11-08T05:10:50.452609307Z
 req_type: Bug
 comments:
 - id: 01a1b879-aeab-7d60-b2eb-2aee3e5a94bb
@@ -56,6 +56,13 @@ comments:
   modified_at: 2026-11-08T04:16:23.770656061Z
   session_id: 01a1b8be-8170-7fb2-89ab-ecb4c6eee98c
   harness_version: 2.1.319 (Claude Code)
+- id: 01a1b991-0154-7df3-9d00-335dffe6843d
+  author: dirtlab
+  content: 'Rework addresses the advisor clarification and all review findings: clean clones with a published HEAD exempt refs/tags/slice-* from unpushed counts even for unreachable pre-squash checkpoints. Unpublished HEADs, dirty trees and non-slice refs retain protection. Teardown salvages checkpoint refs with the existing all-ref bundle path before removal and keeps the clone on salvage failure. Added force-claim regression proving retained lease retirement plus lightweight/annotated checkpoint bundle preservation; updated probe regression with unpublished HEAD, dirty-tree and non-slice negative cases. Final-source lane jobs: j20261108T050616813-2-0 (bug_2491: 2 passed) and j20261108T050722539-2-0 (bug_2455: 7 passed); git diff --check passed. Earlier intermediate run failed the missing-salvage assertion before that fix; final rerun passed. Three files changed: aida-cli-lib/src/seat_clone.rs, aida-cli-lib/src/tests/bug_2455_force_claim_clone_tests.rs, aida-cli-lib/src/tests/task_2053_seat_clone_lifecycle_tests.rs. Edits left uncommitted for native host publication; no queue completion, commit, push, PR or review command issued. No implementation blockers remain.'
+  created_at: 2026-11-08T05:10:50.452609307Z
+  modified_at: 2026-11-08T05:10:50.452609307Z
+  session_id: 01a1b9899ea4
+  harness_version: codex-cli 0.167.0
 history:
 - id: 01a1b91a-93cc-7372-8d80-82eb4086793e
   author: aida-session-start
