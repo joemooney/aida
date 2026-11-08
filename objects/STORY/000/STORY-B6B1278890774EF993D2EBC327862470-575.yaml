@@ -122,7 +122,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-08T00:35:39.542243859Z
-modified_at: 2026-11-08T05:23:48.521882519Z
+modified_at: 2026-11-08T05:51:16.095102634Z
 req_type: Story
 comments:
 - id: 01a1b895-7815-78d0-ba38-bbf9fe9f1533
@@ -146,6 +146,21 @@ comments:
   modified_at: 2026-11-08T05:01:36.084880897Z
   session_id: 01a1b8be-8170-7fb2-89ab-ecb4c6eee98c
   harness_version: 2.1.319 (Claude Code)
+- id: 01a1b9b6-047f-7253-9de5-7d7d8a89f74e
+  author: joe
+  content: |-
+    Implemented the approved S1 native round-trip slice in this native implementer seat; edits remain uncommitted for host publication. Profile v2 is explicitly selected by enroll --role producer|processor, with pinned remote/deny policy/writer identity/producer and authorized receipt refs. IDs use an existing WORK binding or a persisted clone-local UUID, without node allocation. Producer observations and processor receipts use independent dash-separated aida-feedback histories, role-specific path validation, standalone receipt validation and combined views. Producer process and processor publish/CI operations refuse. Legacy enrollment remains unchanged unless explicitly opting into v2; no silent migration. Existing operation journal/store-marker recovery now publishes to the processor receipt history. Unknown-observation receipt digests are reported by pull JSON. Documentation includes CLI guidance and limits; existing architecture sections were updated.
+
+    Changed files: aida-cli-lib/src/intent_intake.rs; aida-cli/tests/task_3096_intake_transport.rs; docs/cli/02-specs.md; AGENTS.md; OVERVIEW.md.
+
+    Validation: final-source launcher job j20261108T054039628-2636094-0 ran cargo test --profile agent -p aida-cli --test task_3096_intake_transport: 24 passed, 0 failed/ignored/filtered, exit 0, including four new per-writer tests covering isolation, pinned/default WORK identity, foreign paths/standalone receipts and recovery after a store write plus refused receipt publication. rustfmt --check on both Rust files, git diff --check, and scripts/check-exec-context.py passed (1241 exact legacy sites; zero additions). untested=false.
+
+    Infrastructure limitation: first job j20261108T052530511-2-0 timed out at 900s before tests. Both job logs reported seed overlay-stale: the primary rewrote a file in generation agent-9300e3b2a1667f94 in place. The retry nevertheless built the final source and executed all 24 tests successfully. Codegraph doctor reports the shared index unreachable; navigation used rg/source inspection without initializing a lane index. Attempted to file a draft finding about the timeout/stale-overlay/reused-generation observation, but aida findings add refused: requirement ID allocation failed, Read-only file system, no metadata or object written. Host/advisor should triage seed recovery; these observations do not establish that the stale seed caused the first timeout.
+
+    Partial-slice publication declaration already recorded: [AI:codex] feat(intake): split per-writer observation and receipt histories (Refs STORY-2652). Do not complete the story on this slice. S2 protection probing/own-branch foreign-write refusal, S3 receipt v2 identities and richer unknown/unavailable status, and S4 relay/server-policy alignment remain outstanding; optional S5 multi-producer/processor semantics remain deferred. Protection is explicitly reported unverified. No commit, push, PR, queue completion, review record or merge was attempted from this seat.
+  created_at: 2026-11-08T05:51:16.095102634Z
+  modified_at: 2026-11-08T05:51:16.095102634Z
+  session_id: 01a1b99c0850
 history:
 - id: 01a1b92a-7413-7ed3-b4ef-34036b0ecfba
   author: aida-session-start
