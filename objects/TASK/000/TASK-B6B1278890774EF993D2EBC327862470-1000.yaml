@@ -1,0 +1,29 @@
+id: 01a1bb7d-789a-7781-a06e-f69b285ddfeb
+spec_id: TASK-b6b1278890774ef993d2ebc327862470-1000
+title: 'Non-blocking (docs): docs/internal/testing/bug-2487-codex-pin.md:136 still cite…'
+description: |-
+  Non-blocking finding carried forward from an APPROVED review verdict on TASK-3463, which has since completed — recorded here so it keeps a queryable home once the verdict record stops being read.
+
+  Non-blocking (docs): docs/internal/testing/bug-2487-codex-pin.md:136 still cites the renamed aida-cli-lib/src/launch/codex_0166_help.json path.
+
+  PR: #3676
+  Reviewed sha: dab675d3e77985e34714a0f4f133aadc38e55957
+status: Draft
+priority: Medium
+owner: joe
+feature: Uncategorized
+created_at: 2026-11-08T14:08:44.698534484Z
+modified_at: 2026-11-08T14:08:44.698534484Z
+req_type: Task
+tags:
+- carried-from:TASK-3463
+- finding-hash:0ac93ecf
+- from-review:PR-3676
+- kind:carried-forward
+filed_at:
+  code_sha: f6dec017d966720a692d3764f622f1ced5dba0b8
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: d68eb4ec071
+  vendor: claude
