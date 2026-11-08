@@ -1,4 +1,10 @@
 - user_id: role:implementer
+  requirement_id: 01a1b879-1be7-7313-8372-4853e5297f5d
+  position: -182000
+  added_by: role:implementer
+  added_at: 2026-11-08T04:16:25.770963387Z
+  for_role: implementer
+- user_id: role:implementer
   requirement_id: 01a1b90c-ed35-72f3-96f9-9af73d67f23c
   position: -181000
   added_by: role:implementer
@@ -224,13 +230,6 @@
   position: 608000
   added_by: role:implementer
   added_at: 2026-11-08T03:00:29.084245332Z
-  for_role: implementer
-  added_by_machine: imac
-- user_id: role:implementer
-  requirement_id: 01a1b879-1be7-7313-8372-4853e5297f5d
-  position: 610000
-  added_by: role:implementer
-  added_at: 2026-11-08T03:00:37.720810657Z
   for_role: implementer
   added_by_machine: imac
 - user_id: role:implementer
