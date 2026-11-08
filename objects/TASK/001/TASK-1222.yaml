@@ -23,12 +23,12 @@ description: |
   Deliberate sweep: for each stale branch/worktree, check the spec status — if Completed/merged-elsewhere, delete the branch + remove the worktree; if it holds genuine uncommitted work, salvage-commit or discard per a per-item decision. aida session reap already handles the finished+merged+exited class safely; this task is the long-tail the reap conservatively leaves (unfinished-spec or uncommitted-work worktrees, and pure branch cruft). Consider an aida worktree gc --older-than / --stale sweep if one doesn't cover it.
 
   Immediate: STORY-1006 + STORY-993 (both Completed) have uncommitted worktree changes — operator decision: salvage or discard, then remove those two worktrees.
-status: NeedsAttention
+status: Approved
 priority: Low
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-09-13T22:07:45.944235Z
-modified_at: 2026-11-08T10:18:43.852104056Z
+modified_at: 2026-11-08T11:17:58.234483029Z
 req_type: Task
 tags:
 - cleanup
@@ -229,6 +229,13 @@ comments:
   modified_at: 2026-11-08T07:39:24.943030341Z
   session_id: 01a1ba11743b
   harness_version: codex-cli 0.167.0
+- id: 01a1bae1-1f5a-77e2-bb51-08fe5647bd36
+  author: joe
+  content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: Prior findings and AC1/AC3/AC4 hold and all code CI is green, but ignored __pycache__ output still counts as uncommitted work, so only 8 of 115 sampled real linked worktrees pass the ignored-state check and AC2 stays near-vacuous on the target host.. No triage reason was given.'
+  created_at: 2026-11-08T11:17:58.234481627Z
+  modified_at: 2026-11-08T11:17:58.234481627Z
+  session_id: 01a1b9af-8230-75d2-82f8-667491cc010a
+  harness_version: 2.1.319 (Claude Code)
 history:
 - id: 01a1b7cd-7751-7262-8ad1-f0f9d2ef6d4d
   author: joe
@@ -407,11 +414,12 @@ history:
   - field_name: status
     old_value: InProgress
     new_value: NeedsAttention
-failure_reason:
-  phase: reviewer
-  phase_index: 3
-  kind: verdict:request-changes
-  detail: Prior findings and AC1/AC3/AC4 hold and all code CI is green, but ignored __pycache__ output still counts as uncommitted work, so only 8 of 115 sampled real linked worktrees pass the ignored-state check and AC2 stays near-vacuous on the target host.
-  recovery_hint: address the review findings, move TASK-1222 back to In Progress, and clear the PR hold only after approval
-  shelved_by: reviewer
-  shelved_at: 2026-11-08T10:18:43.852104056Z
+- id: 01a1bae1-1f5a-77e2-bb51-08e5f46e6bad
+  author: joe
+  timestamp: 2026-11-08T11:17:58.234471521Z
+  session_id: 01a1b9af-8230-75d2-82f8-667491cc010a
+  harness_version: 2.1.319 (Claude Code)
+  changes:
+  - field_name: status
+    old_value: NeedsAttention
+    new_value: Approved
