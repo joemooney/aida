@@ -3,12 +3,12 @@ spec_id: STORY-b6b1278890774ef993d2ebc327862470-553
 agreed_id: STORY-2630
 title: 'Lanes can actually use codegraph: seat clones resolve the primary index, AGENTS.md documents it, doctor and dell1 check it'
 description: 'Measured 2026-11-07: codegraph 1.6.0 is installed and indexed only at the primary checkout (/home/joe/ai/aida/.codegraph, synced every 15 min by codegraph-sync-aida.timer). Implementer and reviewer lanes run in seat clones (aida-worktrees/aida-seat-aida-*), where ''codegraph callers X'' fails with ''CodeGraph not initialized''. Of 837 headless lane logs in 3 days, 16 invoke codegraph and 422 use rg/grep. Only CLAUDE.md mentions codegraph; AGENTS.md (which Codex reads) and aida-core/templates say nothing, so Codex lanes, the majority, never hear of it. dell1 has no codegraph. Acceptance: (1) a lane in a seat clone or worktree gets a working codegraph without a per-clone index: lane env or wrapper passes -p <primary checkout>, or the seat setup links .codegraph read-only. (2) The contained boundary grants read-only access to that index and nothing writable. (3) The AGENTS.md template and the shared lane prompt carry one line on when to use callers/callees/impact and to confirm ''no callers'' with rg. Edit the template master, then sync-templates. (4) aida doctor reports codegraph missing, index stale (>1h) or unreachable from a seat. (5) Evidence: one codex lane log shows a successful codegraph call from a seat clone. Out of scope: indexing lane branches (main is fine for navigation).'
-status: InProgress
+status: NeedsAttention
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-07T15:34:33.363448208Z
-modified_at: 2026-11-08T03:57:42.126121451Z
+modified_at: 2026-11-08T04:46:06.916908518Z
 req_type: Story
 comments:
 - id: 01a1b6a6-52e1-70a0-a9c1-d32888979ca5
@@ -477,6 +477,14 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a1b97a-5e44-7052-ba36-21287f23e75d
+  author: joe
+  timestamp: 2026-11-08T04:46:06.916928182Z
+  session_id: 01a1b94e002e
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: NeedsAttention
 filed_at:
   code_sha: 122fea66d306d6739516983479c50201e9d0ae84
   branch: main
@@ -486,6 +494,12 @@ filed_at:
   vendor: claude
   session: 01a1b646-c67d-7b43-98ff-3604a53f5d1f
   harness_version: 2.1.319 (Claude Code)
+attention_reason:
+  category: blocked-dependency
+  detail: 'Host query proxy implementation is complete and uncommitted; final-source Rust codegraph suite passed 12 tests, Python proxy suite passed 11, and writer inventory fixtures passed 42. AC2 read-only index access is verified in this native seat: header read succeeds and O_RDWR is denied with EROFS. Completing AC5 still requires host deployment of a frozen candidate proxy under /home/joe/ai/aida/.codegraph/proxy-state/bin, starting its user service, and a correct non-empty codegraph callers query plus candidate aida doctor --lane-host output from a contained Codex seat. Those host paths are read-only here, so this native seat cannot perform deployment. Per the manual-gate instruction this punt is a publication veto; the recorded Refs declaration does not bypass it. Concrete setup, changed files, tests and PR-body draft are in this seat .aida/story-2630-handoff.md and .aida/story-2630-pr-body.md; scripts/codegraph/README.md contains host setup and acceptance commands. Do not widen the seat index write grant or mark the story complete without live evidence.'
+  lean: Host deploy the frozen candidate with existing read-only seat grants, capture the live caller and snapshot-age output, then resolve the punt through the authorized path and publish with the required evidence.
+  raised_by: implementer
+  raised_at: 2026-11-08T04:46:06.916908518Z
 failure_reason:
   phase: reviewer
   phase_index: 3
