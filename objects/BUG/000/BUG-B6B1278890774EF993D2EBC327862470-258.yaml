@@ -10,12 +10,12 @@ description: |
   2. `aida ship --commit-pending` accepts a body (e.g. --commit-body-file or repeated --trailer) and keeps today's single-subject call unchanged.
   3. A native-lane fixture whose declaration includes `Help-Golden: unchanged` produces a host commit on which check-help-golden-cochange.sh exits 0.
   4. The lane pickup prompt names this surface where it lists commit-message trailers.
-status: InProgress
+status: Approved
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-08T03:09:42.520017343Z
-modified_at: 2026-11-08T08:48:48.923019132Z
+modified_at: 2026-11-08T11:00:41.093906510Z
 req_type: Bug
 tags:
 - area:lanes
@@ -134,6 +134,15 @@ history:
   session_id: 01a1ba52c266
   harness_version: codex-cli 0.167.0
   changes: []
+- id: 01a1bad1-5e7c-7b81-825f-96a3e9393b19
+  author: joe
+  timestamp: 2026-11-08T11:00:45.820078644Z
+  session_id: 01a1b9af-8230-75d2-82f8-667491cc010a
+  harness_version: 2.1.319 (Claude Code)
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Approved
 filed_at:
   code_sha: 049e5206de120518bb94fae84bf359f789e76236
   branch: main
