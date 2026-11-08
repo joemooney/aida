@@ -224,6 +224,23 @@ fn an_unreadable_seat_clone_fails_reentry_and_salvage_closed() {
     let (shim_dir, log, _) = git_shim(&fx);
     let _path = crate::test_env::EnvVarGuard::prepend_path(&shim_dir);
 
+    // trace:STORY-2325 | ai:codex — reach the tree probe with proven-dead ownership.
+    crate::test_env::write_project_config_fixture(&fx.main, "store_path = \".aida-store\"\n");
+    let mut store = aida_core::RequirementsStore::default();
+    let mut req = aida_core::Requirement::new("host git fixture".into(), "".into());
+    req.spec_id = Some("TASK-2053".into());
+    let key = crate::ownership::WorkKey::Spec {
+        spec: crate::gate::canon::SpecKey(req.id),
+    };
+    store.requirements.push(req);
+    crate::test_env::home_fixture_storage(fx.main.join(".aida-store"))
+        .save(&store)
+        .unwrap();
+    let lease = crate::list_leases(&fx.main)
+        .into_iter()
+        .find(|l| l.worktree_path == clone)
+        .unwrap();
+    crate::ownership::reader::seed_lease_heartbeat(&fx.main, &lease, key, false);
     let error = crate::agent_launch::preflight_agent_launch_lease(
         &fx.main,
         None,
@@ -292,6 +309,23 @@ fn task_2053_bwrap_a_submodule_clone_fails_reentry_and_salvage_closed() {
     )
     .unwrap();
 
+    // trace:STORY-2325 | ai:codex — reach the tree probe with proven-dead ownership.
+    crate::test_env::write_project_config_fixture(&fx.main, "store_path = \".aida-store\"\n");
+    let mut store = aida_core::RequirementsStore::default();
+    let mut req = aida_core::Requirement::new("host git fixture".into(), "".into());
+    req.spec_id = Some("TASK-2053".into());
+    let key = crate::ownership::WorkKey::Spec {
+        spec: crate::gate::canon::SpecKey(req.id),
+    };
+    store.requirements.push(req);
+    crate::test_env::home_fixture_storage(fx.main.join(".aida-store"))
+        .save(&store)
+        .unwrap();
+    let lease = crate::list_leases(&fx.main)
+        .into_iter()
+        .find(|l| l.worktree_path == clone)
+        .unwrap();
+    crate::ownership::reader::seed_lease_heartbeat(&fx.main, &lease, key, false);
     let error = crate::agent_launch::preflight_agent_launch_lease(
         &fx.main,
         None,

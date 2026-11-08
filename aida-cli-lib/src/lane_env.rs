@@ -314,9 +314,13 @@ pub(crate) fn daemons_holding_a_grant(proc_root: &Path) -> Vec<u32> {
 /// (TASK-2217). The read-modify-write holds [`with_lease_write_lock`].
 pub(crate) fn stamp_lease_role_at(project_root: &Path, lease_id: &str, role: &str) -> Result<()> {
     let main_root = crate::main_worktree_root_from(project_root);
-    let live_sessions = crate::process_probe::probe_live_claude_sessions();
-    let is_live = crate::leases::lease_is_live(&live_sessions, chrono::Utc::now());
-    stamp_lease_role_checked(&main_root, lease_id, role, |l| is_live(l))
+    // trace:STORY-2325 | ai:codex — unknown ownership retains the role.
+    stamp_lease_role_checked(&main_root, lease_id, role, |lease| {
+        !matches!(
+            crate::ownership::reader::lease_owner(&main_root, lease),
+            crate::ownership::OwnerVerdict::Dead { .. }
+        )
+    })
 }
 
 /// [`stamp_lease_role_at`] with the liveness predicate injected.
@@ -336,7 +340,7 @@ pub(crate) fn stamp_lease_role_checked(
             toml::from_str(&body).with_context(|| format!("parsing lease {}", path.display()))?;
         if is_live(&lease) {
             anyhow::bail!(
-                "the worktree {} is held by a live session (lease {lease_id}, role {}); \
+                "the worktree {} has retained ownership (live session or unknown; lease {lease_id}, role {}); \
                  end that session before giving its lane a new role",
                 lease.worktree_path.display(),
                 lease.role.as_deref().unwrap_or("none")
