@@ -8,7 +8,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-07T23:39:41.575597Z
-modified_at: 2026-11-08T23:08:55.486616624Z
+modified_at: 2026-11-08T23:09:01.992909593Z
 req_type: Task
 relationships:
 - rel_type: Child
@@ -420,6 +420,24 @@ comments:
   content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: Import diff is sound at ff07b72 (imports/comments only, ledger 158 matches source), but AC5 is unverified because CI is still queued and the PR is 63 files against the advisor <=50-file cap with no waiver.. No triage reason was given.'
   created_at: 2026-11-08T23:08:55.486612584Z
   modified_at: 2026-11-08T23:08:55.486612584Z
+  session_id: 20abb7c3-8f9b-4a5e-b326-404921f3b450
+- id: 01a1bd6c-1e31-75d0-acd0-5f1b15268261
+  author: joe
+  content: |-
+    REVIEW FINDINGS TO ADDRESS (PR #3695):
+    Verdict: CHANGES REQUESTED
+    Reviewed commit: ff07b72258cc
+    Recorded: 2026-11-08T22:33:34.422161320+00:00
+    Review comment: https://github.com/joemooney/aida/pull/3695#issuecomment-6728080810
+    Findings:
+    1. MAJOR scope (spec 'split if over ~40 files'; advisor amendment 2026-11-07 '<=50 files'): gh pr diff 3695 lists 63 files, up from 57 when the cap was flagged at 980adf1 and 5b39844; ff07b72 added 7 more, and TASK-3428 has no waiver. Action: record an explicit advisor waiver on TASK-3428 (no push, no CI restart), or move at least 13 files, e.g. the adapters from 980adf1 and ff07b72, to a follow-up Refs PR.
+    2. BLOCKING wait state, not a code defect (AC5): CI run 42530386141 at ff07b72 has CI (rest) in progress and lib-0, lib-1, cli-0, cli-1, gates and contracts queued; no complete CI run exists at any head of this PR and the implementer did not run make check-ci-fast. Compilation of the removed globs, including test modules and cargo check --no-default-features, is unproven at this head. Action: re-review once CI is green; do not push or merge main only to answer this, because each push restarts CI.
+    3. MINOR merge order: aida-cli-lib/src/usage_mcp_helpers.rs is also changed by open PR 3687, and scripts/crate-globs-legacy.json is also changed by open PRs 3685, 3687 and 3704. Whichever lands later must re-prune the ledger or the exact-match glob ratchet fails.
+    4. COSMETIC: the PR title says '34 command modules' but the head changes 60 modules, 2 test files and the ledger (220 to 158 imports). Correct the title before squash; a title edit needs no push.
+    5. COSMETIC: body-scope markers such as commit.rs:552 'trace:TASK-3428 — dispatch uses only local or qualified bindings' (also exposition, help_catalog, mandate, monitor_contract, regen, shift, wiki, report_cmd) trace a removed import rather than implementation code. Move them to module headers if these files are touched again.
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
+  created_at: 2026-11-08T23:09:01.873926806Z
+  modified_at: 2026-11-08T23:09:01.873926806Z
   session_id: 20abb7c3-8f9b-4a5e-b326-404921f3b450
 history:
 - id: 01a1b862-2e0b-7a50-a4d0-25097c707b57
