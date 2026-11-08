@@ -1676,6 +1676,11 @@ fn validate_codex_flags_with_help(
 /// filter: the Bash sandbox wraps tool calls, not the vendor process.
 // trace:TASK-2708 | ai:claude
 fn claude_argv(original: &[String], port: u16, allowed: &[String]) -> Result<Vec<String>> {
+    // trace:TASK-3219 | ai:codex
+    anyhow::ensure!(
+        !crate::agent_launch::agent_claude_background::is_attach_subcommand(original),
+        crate::vendors::background_attach_refusal()
+    );
     let mut args = Vec::with_capacity(original.len());
     let mut settings_seen = 0;
     let mut i = 0;
