@@ -60,6 +60,13 @@ comments:
   created_at: 2026-11-08 00:27:44.975190+00:00
   modified_at: 2026-11-08 00:27:44.975190+00:00
   session_id: 01a1b88bb2d1
+- id: 01a1b890-db73-7363-9c0f-8e90cf727d52
+  author: dirtlab
+  content: 'Addressed all four PR #3644 review findings in four uncommitted files: scripts/check-crate-globs.py, scripts/relocate-ledger-paths.py, scripts/ci-gate-tiers.toml, tests/test_crate_split_tools.py. Historical glob debt now uses a total ceiling so pure moves pass and real growth refuses. Totality checks all rewritten ledgers before writes; regression fixtures inject missed rewrites in each ledger. Added --base Git fixtures for shrink, growth, bootstrap, relocation, missing ref and unreadable existing ledger. Validation: 31 Python tests, glob ratchet, classification audit, diff hygiene and launcher no-default-features cargo check pass. Full fast gate remains unverified under runner-only constraints. Refs publication declaration recorded; host must commit/publish this partial tooling slice. AC1/AC3 remain future work; no queue completion performed.'
+  created_at: 2026-11-08 00:31:03.539094+00:00
+  modified_at: 2026-11-08 00:31:03.539094+00:00
+  session_id: 01a1b88cd5b1
+  harness_version: codex-cli 0.167.0
 - id: 01a1b8c4-4b2f-7f51-b4a2-480767b1cd5a
   author: joe
   content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: Round-1 findings all fixed (sum-based glob growth, stale-path totality check, git-fixture tests, tier trace moved). Still blocking: relocate-ledger-paths.py rewrites portability-allowlist rows to the new path, and CI''s base-pinned check-portability-growth.py compares (rule, path:content) sets, so a relocated row counts as new allowlist growth and fails CI. Pure moves of files with allowlist rows (AC4''s purpose) stay blocked. AC1/AC3 deferred to later Refs slices; AC5 unverified because CI at 488ca58 is still pending.. No triage reason was given.'
@@ -156,6 +163,18 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a1b88d-2df1-7ab3-b2b0-f1f5a6b91905
+  author: dirtlab
+  timestamp: 2026-11-08 00:27:02.513949+00:00
+  session_id: 01a1b88cd5b1
+  harness_version: codex-cli 0.167.0
+  changes: []
+- id: 01a1b890-ce2f-7791-a6e5-7089e72740a9
+  author: dirtlab
+  timestamp: 2026-11-08 00:31:00.143678+00:00
+  session_id: 01a1b88cd5b1
+  harness_version: codex-cli 0.167.0
+  changes: []
 - id: 01a1b891-1664-78e0-8830-56eb53a7006b
   author: aida-orchestrator
   timestamp: 2026-11-08 00:31:18.628530+00:00

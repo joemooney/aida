@@ -7,8 +7,8 @@ status: InProgress
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
-created_at: 2026-11-04T17:54:51.353376614Z
-modified_at: 2026-11-08T02:45:21.572319252Z
+created_at: 2026-11-04 17:54:51.353376+00:00
+modified_at: 2026-11-08 02:45:21.572319+00:00
 req_type: Task
 tags:
 - area:containment
@@ -16,487 +16,593 @@ tags:
 relationships:
 - rel_type: Child
   target_id: 01a1a736-e545-7881-9b39-de61a3c68b66
-  created_at: 2026-11-04T17:55:01.270526387Z
+  created_at: 2026-11-04 17:55:01.270526+00:00
 - rel_type: BlockedBy
   target_id: 01a1a7b2-12a8-7152-a1ee-b47bf941b0ea
-  created_at: 2026-11-04T17:55:33.727876933Z
+  created_at: 2026-11-04 17:55:33.727876+00:00
   created_by: joe
 - rel_type: Blocks
   target_id: 01a1a7b3-5233-7033-9bbb-750072f402c1
-  created_at: 2026-11-04T17:55:41.549012593Z
+  created_at: 2026-11-04 17:55:41.549012+00:00
   created_by: joe
 - rel_type:
     custom: implemented-by
   target_id: 01a1abca-1b49-79a0-ab37-6275e0054873
-  created_at: 2026-11-05T12:58:48.015617680Z
+  created_at: 2026-11-05 12:58:48.015617+00:00
   created_by: joe
 - rel_type: BlockedBy
   target_id: 01a1ad5d-cbb1-7cd2-93fc-9a345aaa493f
-  created_at: 2026-11-06T16:04:13.604588114Z
+  created_at: 2026-11-06 16:04:13.604588+00:00
   created_by: joe
 comments:
 - id: 01a1abad-14aa-7520-a8f8-caed95d7ba76
   author: joe
-  content: 'Pickup investigation (2026-11-05): selected posture is A/shared AIDA boundary per STORY-2460 signoff and S1 evidence. No production enablement performed. Blocking evidence: docs/testing/containment-conformance.md explicitly says C3 has no pass rule, C1/C2 cannot attest native file-tool denial, and whole_lane_pass/production_launcher_credit are always false. The latest STORY-2460 comment requests an advisor ruling on TASK-3046 review finding 3: fresh host runs of the shipped harness versus historical/offline reassessment plus a named follow-up; no subsequent ruling is recorded. Host auth inventory is explicitly incomplete (only daily-cloudcode-pa.googleapis.com observed). Both aida-deputy-shell list 3 3 and list 2 1 currently report runner: NOT running; no host job was queued and no real credentials/model calls were used. Current launch/contained.rs is Codex-specific: OPENAI_API_KEY/auth handling, generated native profile, sandbox seat preflight, and raw .aida-store writable grants; contained_store_deny_write_paths protects Git metadata but not objects. These cannot be presented as the signed Q2 AGY policy. Recovery: resolve the outstanding S1 evidence ruling, restore the authorized host script deputy for a scoped private-runtime auth/refresh-host measurement (no token copying/logging), then implement the AGY shared-boundary adapter with raw store denial/mediated writes and integrated C0-C4 validation. Keep agy=aida/native refused until real all-tool conformance passes. Working tree remains clean; no commit, PR, queue-done, review verdict or ship was attempted.'
-  created_at: 2026-11-05T12:26:49.386885231Z
-  modified_at: 2026-11-05T12:26:49.386885231Z
+  content: 'Pickup investigation (2026-11-05): selected posture is A/shared AIDA boundary per STORY-2460 signoff and S1 evidence. No production enablement performed. Blocking evidence: docs/testing/containment-conformance.md explicitly says C3 has no pass rule, C1/C2 cannot attest native file-tool denial, and whole_lane_pass/production_launcher_credit are always false. The latest STORY-2460 comment requests an advisor ruling on TASK-3046 review finding 3: fresh host runs of the shipped harness versus historical/offline reassessment plus a named follow-up; no subsequent ruling is recorded. Host auth inventory is explicitly incomplete (only daily-cloudcode-pa.googleapis.com observed). Both aida-deputy-shell list 3 3 and list 2 1 currently report runner: NOT running; no host job was queued and no real credentials/model calls were used. Current launch/contained.rs is Codex-specific: OPENAI_API_KEY/auth handling, generated native profile, sandbox seat preflight, and raw .aida-store writable grants;
+    contained_store_deny_write_paths protects Git metadata but not objects. These cannot be presented as the signed Q2 AGY policy. Recovery: resolve the outstanding S1 evidence ruling, restore the authorized host script deputy for a scoped private-runtime auth/refresh-host measurement (no token copying/logging), then implement the AGY shared-boundary adapter with raw store denial/mediated writes and integrated C0-C4 validation. Keep agy=aida/native refused until real all-tool conformance passes. Working tree remains clean; no commit, PR, queue-done, review verdict or ship was attempted.'
+  created_at: 2026-11-05 12:26:49.386885+00:00
+  modified_at: 2026-11-05 12:26:49.386885+00:00
   session_id: 01a1abaae052
 - id: 01a1abba-e368-7393-9100-7f9a9d619e6d
   author: joe
   content: 'Advisor ruling: ADVISOR BRIEF 2026-11-05 05:45: S1 evidence ruling is made (option a, fresh runs recorded on STORY-2460). Posture A (shared AIDA boundary) stands. Scope for this lane: (1) scripts/containment/conformance.py: for --vendor agy, provision a fixture-scoped permissions.allow rule (write_file/edit/shell limited to the fixture workspace) in the private runtime settings so headless probes execute; never pass --dangerously-skip-permissions; add an offline test that the generated settings contain only fixture-scoped rules. (2) Implement the agy adapter in the shared boundary as data (posture/argv/auth-host tables), raw store writes denied, mediated writes only; keep agy refused (named refusal) until a fresh all-tool run passes. Host measurement runs are the ADVISOR''s job via deputy 3; do not try to reach deputies from the lane. Open the PR with a Refs STORY-2460 title. LIGHT gate.'
-  created_at: 2026-11-05T12:41:54.280312962Z
-  modified_at: 2026-11-05T12:41:54.280312962Z
+  created_at: 2026-11-05 12:41:54.280312+00:00
+  modified_at: 2026-11-05 12:41:54.280312+00:00
   session_id: b83457ff-84e3-46cb-8f68-4be531a63422
 - id: 01a1abba-f2ae-7552-9846-dbbb174eb2d9
   author: joe
   content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was punted on: blocked-dependency: AGY S2 cannot satisfy its conformance acceptance from current evidence: S1 left an unresolved advisor ruling on fresh shipped-harness runs; the harness cannot pass C3 or whole-lane coverage; exact auth/refresh hosts remain unknown. Authorized script deputies 2 and 3 report NOT running, preventing the required scoped host measurements. Existing Codex launcher also grants raw store writes contrary to signed AGY Q2. See investigation comment for concrete recovery; no containment opt-in or completion claimed.. No triage reason was given.'
-  created_at: 2026-11-05T12:41:58.190616541Z
-  modified_at: 2026-11-05T12:41:58.190616541Z
+  created_at: 2026-11-05 12:41:58.190616+00:00
+  modified_at: 2026-11-05 12:41:58.190616+00:00
   session_id: b83457ff-84e3-46cb-8f68-4be531a63422
 - id: 01a1abbe-6bfd-7b32-b573-3166efc41df9
   author: joe
   content: 'Implementation approach under binding 2026-11-05 ruling: add a session-only AGY write_file permission for the exact fixture workspace plus only the immutable fixture payload command, with offline integration coverage of generated private settings and argv. Add an explicitly gated AGY adapter data table alongside the shared launcher describing posture A, private runtime/auth evidence, safe argv order, disabled host-capable tool surfaces, and raw-store denial with mediated-only writes. Route AGY posture refusals through its named conformance gate; no production enablement, real credentials, host measurement or deputies. Validate with offline conformance tests, targeted Rust containment tests and LIGHT checks. Open Refs STORY-2460 PR if publication is available; otherwise retain a concrete publication handoff.'
-  created_at: 2026-11-05T12:45:45.853875499Z
-  modified_at: 2026-11-05T12:45:45.853875499Z
+  created_at: 2026-11-05 12:45:45.853875+00:00
+  modified_at: 2026-11-05 12:45:45.853875+00:00
   session_id: 01a1abbc157d
 - id: 01a1abc8-f850-7603-b6bf-9de1326cd373
   author: joe
-  content: |-
-    Implementation ready locally under the binding 2026-11-05 ruling. No AGY enablement or host measurement claimed.
+  content: 'Implementation ready locally under the binding 2026-11-05 ruling. No AGY enablement or host measurement claimed.
 
-    Changes: scripts/containment/conformance.py now creates private runtime conformance-settings.json with only write_file(<canonical fixture workspace>) (covers native writes/edits) and the exact immutable fixture payload command; --settings points at the overlay file; no permission-bypass flag. Offline tests exercise both rule generation/refusal of unsafe paths and the actual generated AGY argv/settings through a mocked vendor spawn. Shared launch/agy.rs supplies typed adapter data for posture A, private runtime/credential layout, observed-vs-approved auth hosts (approved empty, inventory incomplete), safe option order ending -p <prompt>, four writable classes, raw Git/store denial and mediated-only writes, and tool confinement/disablement requirements. Session admission now gives a named pending-fresh-all-tool-conformance refusal; trusted aida/native and missing opt-ins remain refused. Existing Codex/Claude enforcement is unchanged. Updated conformance documentation and Rust refusal/adapter regressions.
+
+    Changes: scripts/containment/conformance.py now creates private runtime conformance-settings.json with only write_file(<canonical fixture workspace>) (covers native writes/edits) and the exact immutable fixture payload command; --settings points at the overlay file; no permission-bypass flag. Offline tests exercise both rule generation/refusal of unsafe paths and the actual generated AGY argv/settings through a mocked vendor spawn. Shared launch/agy.rs supplies typed adapter data for posture A, private runtime/credential layout, observed-vs-approved auth hosts (approved empty, inventory incomplete), safe option order ending -p <prompt>, four writable classes, raw Git/store denial and mediated-only writes, and tool confinement/disablement requirements. Session admission now gives a named pending-fresh-all-tool-conformance refusal; trusted aida/native and missing opt-ins remain refused. Existing Codex/Claude enforcement is unchanged. Updated conformance documentation and Rust refusal/adapter
+    regressions.
+
 
     Validation: 18 offline conformance tests PASS; make check-ci-fast PASS (all 37 gates), including aida-cli --no-default-features compilation, TUI seam, formatting and conformance fixtures. git diff --check PASS. Rust unit tests untested=true: aida lane job run -- cargo test --profile agent -p aida-cli-lib --lib -- task_2631_containment_tests refused because lease 01a1abbc157d has no lane job runner. Host/CI should run the containment tests plus launch::agy::tests. No real vendor calls, credentials copied/logged, deputies contacted, review verdict, merge or completion claim.
 
+
     Publication blocked by native seat, not a design fork: aida ship TASK-3048 --no-merge --dry-run refused before mutation because the seat Git directory is read-only. It explicitly requires leaving edits uncommitted for the host-side exit step; publication remains a separate host operation. Seven source/test/doc files are pending, including new aida-cli-lib/src/launch/agy.rs. No PR exists from this work. Per aida-pickup pre-exit publication rule, filing category=other punt rather than claiming a published result.
 
+
     Requested PR title (Refs parent, completion trailer only for this task): [AI:codex] fix(containment): prepare gated agy adapter; Refs STORY-2460 (TASK-3048)
-    Requested commit subject: same as PR title. From the main checkout, the documented recovery is aida ship TASK-3048 --from-seat /home/joe/ai/aida-worktrees/aida-seat-aida-task-b6b1278890774ef993d2ebc327862470-786 --commit-pending '<subject above>'. That host seat path never merges. If the launcher already committed pending work, omit --commit-pending. Ensure the opened PR title includes Refs STORY-2460, preserve the current AGY refusal, and stop at PR-open for independent review. Fresh host measurements remain the advisor's responsibility.
-  created_at: 2026-11-05T12:57:17.136716828Z
-  modified_at: 2026-11-05T12:57:17.136716828Z
+
+    Requested commit subject: same as PR title. From the main checkout, the documented recovery is aida ship TASK-3048 --from-seat /home/joe/ai/aida-worktrees/aida-seat-aida-task-b6b1278890774ef993d2ebc327862470-786 --commit-pending ''<subject above>''. That host seat path never merges. If the launcher already committed pending work, omit --commit-pending. Ensure the opened PR title includes Refs STORY-2460, preserve the current AGY refusal, and stop at PR-open for independent review. Fresh host measurements remain the advisor''s responsibility.'
+  created_at: 2026-11-05 12:57:17.136716+00:00
+  modified_at: 2026-11-05 12:57:17.136716+00:00
   session_id: 01a1abbc157d
 - id: 01a1abcc-3869-7db1-a43a-d577e920d987
   author: joe
-  content: |-
-    **Advisor host evidence at head 2d4a4f979f4 (deputy 3, 2026-11-05 05:59):** agy conformance still produces C0-C4 = unknown, whole_lane_pass=false, 0 vendor receipts.
+  content: '**Advisor host evidence at head 2d4a4f979f4 (deputy 3, 2026-11-05 05:59):** agy conformance still produces C0-C4 = unknown, whole_lane_pass=false, 0 vendor receipts.
+
 
     - The fixture-scoped `permissions.allow` settings are generated and loaded correctly: `cli_setting_manager.go: CLI settings initialized: permissions=&{Allow:[write_file(<workspace>) command(...runner.py...)]}`.
+
     - The denial comes from a different layer: `Monitor agy_tool_safety FINISHED: triggered=true, reason="unsupported_tool: write_file"`. It fires because `--mode auto` is unavailable for this account ("continuing in the default mode").
+
     - So AC (1) of the brief (probes execute under headless agy) is **not met** by a permissions rule alone. Options for the implementer: drive the probes only through the allowed `command(... runner.py ...)` tool (no `write_file` dependency), or report agy as `unknown/unsupported: default-mode tool safety` with a named reason in the report instead of silent unknowns. Do not use `--dangerously-skip-permissions`.
 
-    Evidence: `~/aida-conformance-agy-PR3426-20261105/` (report.json, runtime/log/cli-*.log).
-  created_at: 2026-11-05T13:00:50.153492878Z
-  modified_at: 2026-11-05T13:00:50.153492878Z
+
+    Evidence: `~/aida-conformance-agy-PR3426-20261105/` (report.json, runtime/log/cli-*.log).'
+  created_at: 2026-11-05 13:00:50.153492+00:00
+  modified_at: 2026-11-05 13:00:50.153492+00:00
   session_id: b83457ff-84e3-46cb-8f68-4be531a63422
 - id: 01a1abdd-57d5-7e10-b47c-80d0e9b9a7c8
   author: joe
   content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: Adapter data, fixture-scoped AGY settings and named refusal look sound, but the spec acceptance (conformance harness passes for agy / probes execute headless) is unmet per advisor host evidence at this head, and the PR is not titled Refs STORY-2460 while its (TASK-3048) trailer would complete the task.. It was punted on: other: Implementation and all 37 fast gates pass locally, but native Codex publication preflight refuses: this seat Git directory is read-only. Edits remain uncommitted for host post-exit commit/publication. Rust unit tests untested=true because this lease has no lane job runner. No PR opened.. Triage reason: Address the latest review on #3426 (see its last ''## Review'' comment and the spec''s review verdict) and any red CI at the current head; push to branch task-b6b1278890774ef993d2ebc327862470-786 (no new branch). LIGHT gate.'
-  created_at: 2026-11-05T13:19:32.309228588Z
-  modified_at: 2026-11-05T13:19:32.309228588Z
+  created_at: 2026-11-05 13:19:32.309228+00:00
+  modified_at: 2026-11-05 13:19:32.309228+00:00
   session_id: b83457ff-84e3-46cb-8f68-4be531a63422
 - id: 01a1abdd-65f3-7590-9dae-f2f628585671
   author: joe
-  content: |-
-    REVIEW FINDINGS TO ADDRESS (TASK-3048):
+  content: 'REVIEW FINDINGS TO ADDRESS (TASK-3048):
+
     Verdict: CHANGES REQUESTED
+
     Reviewed commit: 2d4a4f979f4f
+
     Recorded: 2026-11-05T13:06:03.880341937+00:00
+
     Findings:
-    1. ACCEPTANCE UNMET (blocking): advisor host run at 2d4a4f979f4 (spec comment 5, ~/aida-conformance-agy-PR3426-20261105/report.json) shows C0-C4 = unknown, whole_lane_pass=false, 0 vendor receipts. The permissions.allow rules load, but agy_tool_safety rejects write_file ('unsupported_tool: write_file') because --mode auto is unavailable and agy falls back to default mode. scripts/containment/conformance.py:481-490 must either drive every probe only through the allowed exact command(... runner.py ...) tool (no write_file dependency) or have report.json record agy as unknown/unsupported with a named reason (e.g. 'default-mode tool safety: unsupported_tool write_file') instead of silent unknowns. Never add --dangerously-skip-permissions.
+
+    1. ACCEPTANCE UNMET (blocking): advisor host run at 2d4a4f979f4 (spec comment 5, ~/aida-conformance-agy-PR3426-20261105/report.json) shows C0-C4 = unknown, whole_lane_pass=false, 0 vendor receipts. The permissions.allow rules load, but agy_tool_safety rejects write_file (''unsupported_tool: write_file'') because --mode auto is unavailable and agy falls back to default mode. scripts/containment/conformance.py:481-490 must either drive every probe only through the allowed exact command(... runner.py ...) tool (no write_file dependency) or have report.json record agy as unknown/unsupported with a named reason (e.g. ''default-mode tool safety: unsupported_tool write_file'') instead of silent unknowns. Never add --dangerously-skip-permissions.
+
     2. TEST GAP (tied to finding 1): tests/test_containment_conformance.py test_agy_run_uses_private_settings_without_permission_bypass only asserts whole_lane_pass/production_launcher_credit are false. Add an offline test feeding a mocked agy stream/log containing the tool-safety refusal and asserting the report carries the named unsupported reason per check (or that command-only probes produce receipts).
-    3. PR/COMMIT TITLE: the PR and commit subject are '[AI:codex] fix: address CI failures and review findings (TASK-3048)', which describes nothing in this diff and omits the 'Refs STORY-2460' the advisor ruling (spec comment 1) requires. Retitle to the requested '[AI:codex] fix(containment): prepare gated agy adapter; Refs STORY-2460 (TASK-3048)'. Keep the (TASK-3048) completion trailer only once the harness acceptance is met or the advisor rescopes TASK-3048's acceptance.
-    4. ADAPTER DATA DRIFT (minor): aida-cli-lib/src/launch/agy.rs AGY.argv_prefix hard-codes '--mode auto', which host evidence shows is unavailable for this account (agy silently continues in default mode). The adapter table should not encode a mode the vendor does not grant: record the observed fallback, or make the mode requirement explicit (refuse when auto is unavailable) so the future integrated arm cannot assume auto-mode semantics.
-    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
-  created_at: 2026-11-05T13:19:35.923389585Z
-  modified_at: 2026-11-05T13:19:35.923389585Z
+
+    3. PR/COMMIT TITLE: the PR and commit subject are ''[AI:codex] fix: address CI failures and review findings (TASK-3048)'', which describes nothing in this diff and omits the ''Refs STORY-2460'' the advisor ruling (spec comment 1) requires. Retitle to the requested ''[AI:codex] fix(containment): prepare gated agy adapter; Refs STORY-2460 (TASK-3048)''. Keep the (TASK-3048) completion trailer only once the harness acceptance is met or the advisor rescopes TASK-3048''s acceptance.
+
+    4. ADAPTER DATA DRIFT (minor): aida-cli-lib/src/launch/agy.rs AGY.argv_prefix hard-codes ''--mode auto'', which host evidence shows is unavailable for this account (agy silently continues in default mode). The adapter table should not encode a mode the vendor does not grant: record the observed fallback, or make the mode requirement explicit (refuse when auto is unavailable) so the future integrated arm cannot assume auto-mode semantics.
+
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.'
+  created_at: 2026-11-05 13:19:35.923389+00:00
+  modified_at: 2026-11-05 13:19:35.923389+00:00
   session_id: b83457ff-84e3-46cb-8f68-4be531a63422
 - id: 01a1abe6-dd04-7140-a0ca-afa85c1e7582
   author: mcp
-  content: 'Round 2 implementation: commits 0a621f60c39 and f7569c357b6 address all four findings without claiming acceptance. Report now records bounded AGY stream/stderr/private-log unsupported_tool diagnostics as unsupported_reason at report level and on every C0-C4 check; measured violations remain failures. Added mocked stream and runtime-log regressions (20 offline conformance tests PASS). Adapter argv no longer requests unavailable auto mode and records observed default fallback. Updated both reported CI tests, including the later per-tool-flags assertion, to expect AGY''s named conformance gate. Production AGY remains refused; no bypass flag, host measurements or deputy contact. PR #3426 title/body now use Refs STORY-2460 and Refs TASK-3048 without completion trailers because fresh all-tool acceptance remains advisor-owned and unmet. cargo fmt and diff checks pass; make check-ci-fast is still running locally. Targeted Rust unit tests untested=true: lane job refused because lease 01a1abe1d75f has no lane job runner. Existing merge hold remains; no ship/review verdict/merge attempted.'
-  created_at: 2026-11-05T13:29:56.228549687Z
-  modified_at: 2026-11-05T13:29:56.228549687Z
+  content: 'Round 2 implementation: commits 0a621f60c39 and f7569c357b6 address all four findings without claiming acceptance. Report now records bounded AGY stream/stderr/private-log unsupported_tool diagnostics as unsupported_reason at report level and on every C0-C4 check; measured violations remain failures. Added mocked stream and runtime-log regressions (20 offline conformance tests PASS). Adapter argv no longer requests unavailable auto mode and records observed default fallback. Updated both reported CI tests, including the later per-tool-flags assertion, to expect AGY''s named conformance gate. Production AGY remains refused; no bypass flag, host measurements or deputy contact. PR #3426 title/body now use Refs STORY-2460 and Refs TASK-3048 without completion trailers because fresh all-tool acceptance remains advisor-owned and unmet. cargo fmt and diff checks pass; make check-ci-fast is still running locally. Targeted Rust unit tests untested=true: lane job refused because lease
+    01a1abe1d75f has no lane job runner. Existing merge hold remains; no ship/review verdict/merge attempted.'
+  created_at: 2026-11-05 13:29:56.228549+00:00
+  modified_at: 2026-11-05 13:29:56.228549+00:00
 - id: 01a1abe7-afdf-71e2-819d-98e75d3d070f
   author: mcp
   content: 'Final handoff: GitHub confirms PR #3426 head f7569c357b633c4cc2a02b5b12e3b1aad8a20e6b; working tree clean. Remote pushes succeeded, with only local remote-tracking-ref updates refused by the read-only Git sandbox. Stopped make check-ci-fast (exit 130) while it was compiling the no-default-features guard, to stop at PR-open as instructed; fast suite INCOMPLETE, not a pass. PR body records this and targeted Rust tests untested=true. Offline conformance tests (20), formatting and diff checks passed. No completion claim; fresh host acceptance and merge-hold clearance remain with advisor/reviewer/merge seat.'
-  created_at: 2026-11-05T13:30:50.207039219Z
-  modified_at: 2026-11-05T13:30:50.207039219Z
+  created_at: 2026-11-05 13:30:50.207039+00:00
+  modified_at: 2026-11-05 13:30:50.207039+00:00
 - id: 01a1ac6d-0430-7301-b0b9-a72d919401cd
   author: joe
   content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: Round-2 code addresses all four prior findings (named per-check unsupported_reason, mocked stream/log tests, no --mode auto in adapter, Refs title), but the merge would still COMPLETE TASK-3048 via ship''s branch-name fallback, contradicting the PR''s deliberate non-completion; CI build jobs still queued at this head.. No triage reason was given.'
-  created_at: 2026-11-05T15:56:28.080587673Z
-  modified_at: 2026-11-05T15:56:28.080587673Z
+  created_at: 2026-11-05 15:56:28.080587+00:00
+  modified_at: 2026-11-05 15:56:28.080587+00:00
   session_id: b83457ff-84e3-46cb-8f68-4be531a63422
 - id: 01a1ac6d-0d73-7fa3-9584-f85d3b54a210
   author: joe
-  content: |-
-    REVIEW FINDINGS TO ADDRESS (PR #3426):
+  content: 'REVIEW FINDINGS TO ADDRESS (PR #3426):
+
     Verdict: CHANGES REQUESTED
+
     Reviewed commit: 5a91eba5c63b
+
     Recorded: 2026-11-05T13:47:45.379963072+00:00
+
     Findings:
-    1. BLOCKING (completion leak): the PR intends no completion, but 'aida pr ship' would complete TASK-3048 on merge. Title '...; Refs STORY-2460; Refs TASK-3048' has no trailing paren group, so pr_ship.rs derive_squash_trailer (l.314-401) finds no title ids and no '(Refs …)' group (refs_spec_ids_in_text only reads paren groups, l.798), then falls back to the branch name 'task-b6b1278890774ef993d2ebc327862470-786'. extract_spec_ids_from_text (l.174, case-insensitive) maps it to TASK-B6B…-786, which resolves to TASK-3048 (verified with 'aida show'). TASK-3048 has no open slice children, so completion_held does not withhold it. Fix with PR metadata only: end the title with '(Refs STORY-2460, TASK-3048)' (BUG-2203 path, l.360-367) or add a whole-line 'aida: no-complete' marker to the PR body (NO_COMPLETE_BODY_MARKERS, l.224).
-    2. BLOCKING (same root, rebase path): branch commit 2d4a4f979f4 still has the subject '[AI:codex] fix: address CI failures and review findings (TASK-3048)' with a completing trailer. A rebase/merge-commit landing puts that subject on main, where merge-time auto-bump can complete TASK-3048. The squash body (repo squash_merge_commit_message=COMMIT_MESSAGES) also repeats it. Either reword that commit (rebase -i is unavailable to agents, so squash the branch into one commit titled '...; Refs STORY-2460 (Refs TASK-3048)') or confirm ship is squash-only for this PR and the title/body marker covers it.
+
+    1. BLOCKING (completion leak): the PR intends no completion, but ''aida pr ship'' would complete TASK-3048 on merge. Title ''...; Refs STORY-2460; Refs TASK-3048'' has no trailing paren group, so pr_ship.rs derive_squash_trailer (l.314-401) finds no title ids and no ''(Refs …)'' group (refs_spec_ids_in_text only reads paren groups, l.798), then falls back to the branch name ''task-b6b1278890774ef993d2ebc327862470-786''. extract_spec_ids_from_text (l.174, case-insensitive) maps it to TASK-B6B…-786, which resolves to TASK-3048 (verified with ''aida show''). TASK-3048 has no open slice children, so completion_held does not withhold it. Fix with PR metadata only: end the title with ''(Refs STORY-2460, TASK-3048)'' (BUG-2203 path, l.360-367) or add a whole-line ''aida: no-complete'' marker to the PR body (NO_COMPLETE_BODY_MARKERS, l.224).
+
+    2. BLOCKING (same root, rebase path): branch commit 2d4a4f979f4 still has the subject ''[AI:codex] fix: address CI failures and review findings (TASK-3048)'' with a completing trailer. A rebase/merge-commit landing puts that subject on main, where merge-time auto-bump can complete TASK-3048. The squash body (repo squash_merge_commit_message=COMMIT_MESSAGES) also repeats it. Either reword that commit (rebase -i is unavailable to agents, so squash the branch into one commit titled ''...; Refs STORY-2460 (Refs TASK-3048)'') or confirm ship is squash-only for this PR and the title/body marker covers it.
+
     3. EVIDENCE GAP (non-code): the Rust changes (launch/agy.rs tests, session.rs agy short-circuit, three updated refusal assertions) were never run locally (untested=true, check-ci-fast interrupted). At 5a91eba5c63 every CI build job (cli-0/1, lib-0/1, contracts, gates, rest) was still pending. A re-review must cite green CI at the new head, specifically launch::agy::tests, task_2631_containment_tests and bug_2144_2146 tests.
-    4. MINOR (acceptance not claimed, record only): TASK-3048 acceptance 'conformance harness passes for agy' remains unmet. Advisor host run at 2d4a4f979f4 reported C0-C4 unknown; auth host inventory incomplete (approved_auth_hosts empty); browser/URL/MCP disablement and private runtime are data-only in an unlaunchable adapter. That is correct for this Refs-only slice, but TASK-3048 must stay open: hence findings 1-2.
-    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
-  created_at: 2026-11-05T15:56:30.451163339Z
-  modified_at: 2026-11-05T15:56:30.451163339Z
+
+    4. MINOR (acceptance not claimed, record only): TASK-3048 acceptance ''conformance harness passes for agy'' remains unmet. Advisor host run at 2d4a4f979f4 reported C0-C4 unknown; auth host inventory incomplete (approved_auth_hosts empty); browser/URL/MCP disablement and private runtime are data-only in an unlaunchable adapter. That is correct for this Refs-only slice, but TASK-3048 must stay open: hence findings 1-2.
+
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.'
+  created_at: 2026-11-05 15:56:30.451163+00:00
+  modified_at: 2026-11-05 15:56:30.451163+00:00
   session_id: b83457ff-84e3-46cb-8f68-4be531a63422
 - id: 01a1ac71-fa45-7221-88b4-4fc1322c9159
   author: joe
-  content: 'Round 3: PR #3426 metadata corrected: title ends (Refs STORY-2460, TASK-3048) and body contains standalone aida: no-complete. Accepted reviewer finding 2 squash-only alternative: authorized merge seat must use aida pr ship 3426 --merge-method squash --no-complete after review/hold clearance; no direct GitHub/rebase/merge-commit landing. pr_cmd::ship_squash_body appends no-complete to explicit squash body, suppressing historical completing commit messages even with COMMIT_MESSAGES default. Repository-wide merge settings unchanged. Acceptance still unmet and production AGY remains refused. Docs now record this handoff; pending publication because git add failed creating .git/index.lock (read-only filesystem). 20 offline conformance tests PASS; diff check PASS. Reviewed head 5a91eba5c63b now has all seven CI shards and Build green: https://github.com/joemooney/aida/actions/runs/42037460932 . Local targeted launch::agy::tests again refused: lease 01a1ac6f0c4f has no lane job runner (untested=true). New-head CI is not available without host publication; finding 3 remains explicitly blocked, not claimed satisfied. Merge hold retained. No host measurements, deputy contact, ship, review verdict or merge.'
-  created_at: 2026-11-05T16:01:53.221552896Z
-  modified_at: 2026-11-05T16:01:53.221552896Z
+  content: 'Round 3: PR #3426 metadata corrected: title ends (Refs STORY-2460, TASK-3048) and body contains standalone aida: no-complete. Accepted reviewer finding 2 squash-only alternative: authorized merge seat must use aida pr ship 3426 --merge-method squash --no-complete after review/hold clearance; no direct GitHub/rebase/merge-commit landing. pr_cmd::ship_squash_body appends no-complete to explicit squash body, suppressing historical completing commit messages even with COMMIT_MESSAGES default. Repository-wide merge settings unchanged. Acceptance still unmet and production AGY remains refused. Docs now record this handoff; pending publication because git add failed creating .git/index.lock (read-only filesystem). 20 offline conformance tests PASS; diff check PASS. Reviewed head 5a91eba5c63b now has all seven CI shards and Build green: https://github.com/joemooney/aida/actions/runs/42037460932 . Local targeted launch::agy::tests again refused: lease 01a1ac6f0c4f has no lane job runner
+    (untested=true). New-head CI is not available without host publication; finding 3 remains explicitly blocked, not claimed satisfied. Merge hold retained. No host measurements, deputy contact, ship, review verdict or merge.'
+  created_at: 2026-11-05 16:01:53.221552+00:00
+  modified_at: 2026-11-05 16:01:53.221552+00:00
   session_id: 01a1ac6f0c4f
 - id: 01a1ac73-c1ac-74d3-a4b1-23a726fafe2c
   author: joe
   content: 'Final Round 3 validation/handoff: make check-ci-fast stopped with exit 130 during the no-default-features compile guard, INCOMPLETE (not a pass). No Rust source changed this round. 20 offline conformance tests PASS; git diff --check PASS. Head remains 5a91eba5c63b; no new commit or push possible because staging is read-only. Only pending local file: docs/testing/containment-conformance.md. PR metadata changes are verified live. Explicit punt filed for publication/new-head CI finding 3; no findings disputed and no completion claimed. Suggested host commit subject remains [AI:codex] docs(containment): require non-completing squash handoff; Refs STORY-2460 (Refs TASK-3048).'
-  created_at: 2026-11-05T16:03:49.804279069Z
-  modified_at: 2026-11-05T16:03:49.804279069Z
+  created_at: 2026-11-05 16:03:49.804279+00:00
+  modified_at: 2026-11-05 16:03:49.804279+00:00
   session_id: 01a1ac6f0c4f
 - id: 01a1ad20-2d50-7b93-944b-86df14adb17c
   author: joe
-  content: 'ADVISOR RULING 2026-11-05 12:20 MST (agy posture, amends the STORY-2460 S1 decision). Evidence: ~/aida-conformance-agy-PR3426b-20261105 (agy 1.5.1, harness at the #3426 head). agy''s own agy_tool_safety monitor rejects write_file as ''unsupported_tool'' in default mode BEFORE permissions.allow is consulted (cli.log: ''Monitor agy_tool_safety FINISHED: triggered=true, reason="unsupported_tool: write_file"''), and ''--mode auto is not available for this account''. agy''s native permission layer therefore cannot run a headless implementer on this account; no allow-rule shape fixes it. RULING: agy becomes an OUTER-ONLY vendor in STORY-2238''s vendor-neutral model. AIDA''s shared boundary (bwrap, netns relay, broker and grant keyring) is the sole containment authority. agy runs inside it with --dangerously-skip-permissions, and that flag is permitted ONLY when the launch carries an AIDA ContainmentReceipt (applied). Any other path refuses by name, and the existing refusal for agy without the AIDA boundary stays. The posture is data in vendors.toml (native_layer = "none"); no agy-specific containment code. This is the A2/M2 ''outer-only'' option, signed here for agy only: Claude stays M1 and Codex stays as ruled. CONSEQUENCE: TASK-3048''s remaining acceptance (agy launched in the selected posture) is BLOCKED BY TASK-2708 AC1 (the common contained wrapper for non-Codex vendors). After it lands, TASK-3048''s final slice adds the agy descriptor and argv and runs the harness through AIDA''s boundary; TASK-3049 follows.'
-  created_at: 2026-11-05T19:12:09.552352455Z
-  modified_at: 2026-11-05T19:12:09.552352455Z
+  content: 'ADVISOR RULING 2026-11-05 12:20 MST (agy posture, amends the STORY-2460 S1 decision). Evidence: ~/aida-conformance-agy-PR3426b-20261105 (agy 1.5.1, harness at the #3426 head). agy''s own agy_tool_safety monitor rejects write_file as ''unsupported_tool'' in default mode BEFORE permissions.allow is consulted (cli.log: ''Monitor agy_tool_safety FINISHED: triggered=true, reason="unsupported_tool: write_file"''), and ''--mode auto is not available for this account''. agy''s native permission layer therefore cannot run a headless implementer on this account; no allow-rule shape fixes it. RULING: agy becomes an OUTER-ONLY vendor in STORY-2238''s vendor-neutral model. AIDA''s shared boundary (bwrap, netns relay, broker and grant keyring) is the sole containment authority. agy runs inside it with --dangerously-skip-permissions, and that flag is permitted ONLY when the launch carries an AIDA ContainmentReceipt (applied). Any other path refuses by name, and the existing refusal for agy
+    without the AIDA boundary stays. The posture is data in vendors.toml (native_layer = "none"); no agy-specific containment code. This is the A2/M2 ''outer-only'' option, signed here for agy only: Claude stays M1 and Codex stays as ruled. CONSEQUENCE: TASK-3048''s remaining acceptance (agy launched in the selected posture) is BLOCKED BY TASK-2708 AC1 (the common contained wrapper for non-Codex vendors). After it lands, TASK-3048''s final slice adds the agy descriptor and argv and runs the harness through AIDA''s boundary; TASK-3049 follows.'
+  created_at: 2026-11-05 19:12:09.552352+00:00
+  modified_at: 2026-11-05 19:12:09.552352+00:00
   session_id: 688fbe55-f92b-4b09-a8d1-2ca064cb7e25
 - id: 01a1ad21-0ffe-7f70-b0a9-346f784af37f
   author: joe
-  content: 'Returned from NeedsAttention to Approved via `aida edit --status`. It was punted on: other: Round 3: findings 1 and 2 accepted and addressed via PR #3426 metadata: trailing (Refs STORY-2460, TASK-3048), whole-line aida: no-complete marker, and explicit squash-only aida pr ship --merge-method squash --no-complete merge-seat handoff. Current ship appends marker to explicit squash body, covering historical completing commit 2d4a4f979f4 without rewriting shared history. Finding 4 accepted: acceptance remains unmet; AGY stays refused and task must remain open. Finding 3 explicitly BLOCKED, not disputed or satisfied: no new-head green CI can exist because native sandbox refuses git add (.git/index.lock read-only), and local targeted Rust run refused (lease 01a1ac6f0c4f has no lane job runner, untested=true). Reviewed head 5a91eba5c63b now has green full CI run 42037460932, lib-1 selects launch/session/status_sections covering requested regressions; new-head CI must be verified after host commit/publication. 20 offline conformance tests and diff check PASS. New docs/testing/containment-conformance.md merge-contract section is pending host commit. Suggested non-completing subject: [AI:codex] docs(containment): require non-completing squash handoff; Refs STORY-2460 (Refs TASK-3048). Do not auto-complete this task. Merge hold retained. No ship, verdict, host measurements, deputy contact, merge or history rewrite attempted.. No triage reason was given.'
-  created_at: 2026-11-05T19:13:07.582561825Z
-  modified_at: 2026-11-05T19:13:07.582561825Z
+  content: 'Returned from NeedsAttention to Approved via `aida edit --status`. It was punted on: other: Round 3: findings 1 and 2 accepted and addressed via PR #3426 metadata: trailing (Refs STORY-2460, TASK-3048), whole-line aida: no-complete marker, and explicit squash-only aida pr ship --merge-method squash --no-complete merge-seat handoff. Current ship appends marker to explicit squash body, covering historical completing commit 2d4a4f979f4 without rewriting shared history. Finding 4 accepted: acceptance remains unmet; AGY stays refused and task must remain open. Finding 3 explicitly BLOCKED, not disputed or satisfied: no new-head green CI can exist because native sandbox refuses git add (.git/index.lock read-only), and local targeted Rust run refused (lease 01a1ac6f0c4f has no lane job runner, untested=true). Reviewed head 5a91eba5c63b now has green full CI run 42037460932, lib-1 selects launch/session/status_sections covering requested regressions; new-head CI must be verified after
+    host commit/publication. 20 offline conformance tests and diff check PASS. New docs/testing/containment-conformance.md merge-contract section is pending host commit. Suggested non-completing subject: [AI:codex] docs(containment): require non-completing squash handoff; Refs STORY-2460 (Refs TASK-3048). Do not auto-complete this task. Merge hold retained. No ship, verdict, host measurements, deputy contact, merge or history rewrite attempted.. No triage reason was given.'
+  created_at: 2026-11-05 19:13:07.582561+00:00
+  modified_at: 2026-11-05 19:13:07.582561+00:00
   session_id: 688fbe55-f92b-4b09-a8d1-2ca064cb7e25
 - id: 01a1b19a-cafb-7981-8f06-89a568fdb1ad
   author: joe
   content: 'ADVISOR: the blocker is narrowed from TASK-2708 (which stays open for TASK-3219 and the AC2/AC3 evidence) to PR #3449 (review story STORY-2528, merged at 20a33ba). The agy adapter needs only the shared contained wrapper now on main. Per TASK-2708 AC1, vendor additions are DATA on the common wrapper, not new containment code. The four accepted AC1 deltas apply unchanged.'
-  created_at: 2026-11-06T16:04:34.171737115Z
-  modified_at: 2026-11-06T16:04:34.171737115Z
+  created_at: 2026-11-06 16:04:34.171737+00:00
+  modified_at: 2026-11-06 16:04:34.171737+00:00
   session_id: b0a84e34-277c-4df6-b53c-43f4bbe2e84d
 - id: 01a1b1c7-0f36-7f02-9037-43c3d9cd3fac
   author: joe
-  content: 'Current native-seat preparation under the signed outer-only ruling: vendors.toml now records agy native_layer=none; missing native_layer stays required for Claude/Codex/OpenCode. A common descriptor/receipt gate requires a host-accepted receipt before candidate AGY argv can return --dangerously-skip-permissions; missing/deserialized receipts refuse. Candidate argv omits --sandbox and unavailable --mode auto. Production AGY admission remains closed; no new enforcement arm, vendor launch or applied credit. Added descriptor, receipt refusal and real-wrapper candidate-argv regressions (the latter tests argv only, not AGY conformance). Native harness remains bypass-free, preserves per-check unsupported_tool diagnostics, and now records the selected outer-only posture. Shared-boundary harness refuses AGY by name with remaining auth, mediated-write and conformance gates. Documentation updated. Validation: 36 offline conformance tests PASS; fmt/diff checks PASS; targeted Rust tests untested=true because lease 01a1b1bfc08b has no lane job runner. Fast checks are still compiling; final result will follow. Recorded non-completing publication declaration: [AI:codex] fix(containment): gate outer-only agy adapter argv; Refs STORY-2460 (Refs TASK-3048). No completion claim, commit/push/PR/queue-done or host measurement attempted.'
-  created_at: 2026-11-06T16:52:55.222115298Z
-  modified_at: 2026-11-06T16:52:55.222115298Z
+  content: 'Current native-seat preparation under the signed outer-only ruling: vendors.toml now records agy native_layer=none; missing native_layer stays required for Claude/Codex/OpenCode. A common descriptor/receipt gate requires a host-accepted receipt before candidate AGY argv can return --dangerously-skip-permissions; missing/deserialized receipts refuse. Candidate argv omits --sandbox and unavailable --mode auto. Production AGY admission remains closed; no new enforcement arm, vendor launch or applied credit. Added descriptor, receipt refusal and real-wrapper candidate-argv regressions (the latter tests argv only, not AGY conformance). Native harness remains bypass-free, preserves per-check unsupported_tool diagnostics, and now records the selected outer-only posture. Shared-boundary harness refuses AGY by name with remaining auth, mediated-write and conformance gates. Documentation updated. Validation: 36 offline conformance tests PASS; fmt/diff checks PASS; targeted Rust tests untested=true
+    because lease 01a1b1bfc08b has no lane job runner. Fast checks are still compiling; final result will follow. Recorded non-completing publication declaration: [AI:codex] fix(containment): gate outer-only agy adapter argv; Refs STORY-2460 (Refs TASK-3048). No completion claim, commit/push/PR/queue-done or host measurement attempted.'
+  created_at: 2026-11-06 16:52:55.222115+00:00
+  modified_at: 2026-11-06 16:52:55.222115+00:00
   session_id: 01a1b1bfc08b
 - id: 01a1b1cc-dc87-7d13-9eae-f7225ce6a6b5
   author: joe
-  content: 'Final validation/handoff: 36 offline conformance tests PASS; cargo fmt --all -- --check and git diff --check PASS; no-default-features compilation guard PASS (210.3s). The original make check-ci-fast was interrupted with exit 130 at the TUI build-slot wait, so the full tier is INCOMPLETE. All 36 remaining fast-tier gates then PASS using the unchanged CI runner/step bodies, excluding only the completed no-default-features guard and interrupted TUI guard. Targeted Rust tests remain untested=true: lease has no lane job runner; newly added Rust receipt/descriptor tests were not executed. Nine modified files remain uncommitted: containment/{mod.rs,vendors.toml,tests.rs,tests/launch_tests.rs}, launch/{agy.rs,contained.rs}, scripts/containment/conformance.py, tests/test_containment_conformance.py, docs/internal/testing/containment-conformance.md. TASK-3048 was explicitly punted for finding 1 and remains Needs Attention; no findings disputed. The Refs publication declaration is recorded, but the punt and any hold remain publication vetoes. No commit, push, PR creation, queue done, vendor launch, host measurement, review record or merge performed. Turn ended after this handoff.'
-  created_at: 2026-11-06T16:59:15.463434830Z
-  modified_at: 2026-11-06T16:59:15.463434830Z
+  content: 'Final validation/handoff: 36 offline conformance tests PASS; cargo fmt --all -- --check and git diff --check PASS; no-default-features compilation guard PASS (210.3s). The original make check-ci-fast was interrupted with exit 130 at the TUI build-slot wait, so the full tier is INCOMPLETE. All 36 remaining fast-tier gates then PASS using the unchanged CI runner/step bodies, excluding only the completed no-default-features guard and interrupted TUI guard. Targeted Rust tests remain untested=true: lease has no lane job runner; newly added Rust receipt/descriptor tests were not executed. Nine modified files remain uncommitted: containment/{mod.rs,vendors.toml,tests.rs,tests/launch_tests.rs}, launch/{agy.rs,contained.rs}, scripts/containment/conformance.py, tests/test_containment_conformance.py, docs/internal/testing/containment-conformance.md. TASK-3048 was explicitly punted for finding 1 and remains Needs Attention; no findings disputed. The Refs publication declaration is recorded,
+    but the punt and any hold remain publication vetoes. No commit, push, PR creation, queue done, vendor launch, host measurement, review record or merge performed. Turn ended after this handoff.'
+  created_at: 2026-11-06 16:59:15.463434+00:00
+  modified_at: 2026-11-06 16:59:15.463434+00:00
   session_id: 01a1b1bfc08b
 - id: 01a1b2ac-6c32-7481-98ae-b8d2424f6c5a
   author: joe
-  content: 'Returned from NeedsAttention to Approved via `aida edit --status`. It was punted on: missing-context: Finding 1 (AC unmet) remains open under the binding outer-only ruling; no finding is disputed. The common wrapper from PR #3449 is present, but only Codex API-key and Claude credential/expiry mechanisms are represented, and it grants raw store writes. AGY still needs the approved auth/refresh-host inventory, generic runtime/credential and mediated-only write policy representation, migration/refusal of legacy bypass launch paths, and advisor-owned integrated all-tool host evidence. This seat must not invent approved hosts or claim candidate argv tests as a passing AGY lane. New uncommitted preparation records native_layer=none and receipt-gates candidate bypass argv, preserves named unsupported reports/tests and the closed production gate. Rust tests are untested=true (no lane job runner); no host measurement or completion claimed. Existing/new punts and holds remain publication vetoes. Requested non-completing host subject was declared with Refs STORY-2460 and (Refs TASK-3048); edits remain for triage, not automatic completion.. No triage reason was given.'
-  created_at: 2026-11-06T21:03:26.770082819Z
-  modified_at: 2026-11-06T21:03:26.770082819Z
+  content: 'Returned from NeedsAttention to Approved via `aida edit --status`. It was punted on: missing-context: Finding 1 (AC unmet) remains open under the binding outer-only ruling; no finding is disputed. The common wrapper from PR #3449 is present, but only Codex API-key and Claude credential/expiry mechanisms are represented, and it grants raw store writes. AGY still needs the approved auth/refresh-host inventory, generic runtime/credential and mediated-only write policy representation, migration/refusal of legacy bypass launch paths, and advisor-owned integrated all-tool host evidence. This seat must not invent approved hosts or claim candidate argv tests as a passing AGY lane. New uncommitted preparation records native_layer=none and receipt-gates candidate bypass argv, preserves named unsupported reports/tests and the closed production gate. Rust tests are untested=true (no lane job runner); no host measurement or completion claimed. Existing/new punts and holds remain publication
+    vetoes. Requested non-completing host subject was declared with Refs STORY-2460 and (Refs TASK-3048); edits remain for triage, not automatic completion.. No triage reason was given.'
+  created_at: 2026-11-06 21:03:26.770082+00:00
+  modified_at: 2026-11-06 21:03:26.770082+00:00
   session_id: 3dd100c3-f8c0-44d9-ac4c-f9ff0eb32a27
 - id: 01a1b2ac-7563-7543-8c5d-71a5ec0a5664
   author: joe
   content: 'ADVISOR BRIEF 14:05: #3518 (Refs) landed the outer-only argv gate and receipt requirement. Continue from origin/main (git log --grep TASK-3048) and implement the rest of the S2 scope: private agy runtime dir, auth-host allow-list entries as vendor data, and all-tool confinement under the shared wrapper (vendor additions are DATA on the common wrapper, per TASK-2708 AC1). Use a completing (TASK-3048) trailer only if this PR finishes every acceptance criterion; otherwise use Refs and list what remains. LIGHT gate.'
-  created_at: 2026-11-06T21:03:29.123822052Z
-  modified_at: 2026-11-06T21:03:29.123822052Z
+  created_at: 2026-11-06 21:03:29.123822+00:00
+  modified_at: 2026-11-06 21:03:29.123822+00:00
   session_id: 3dd100c3-f8c0-44d9-ac4c-f9ff0eb32a27
 - id: 01a1b2d4-cd2d-7950-b45c-c55a64dbc65a
   author: mcp
-  content: |-
-    Native-seat Refs-only S2 handoff continuing origin/main df7655109ef and #3518 under the newest advisor brief.
+  content: 'Native-seat Refs-only S2 handoff continuing origin/main df7655109ef and #3518 under the newest advisor brief.
+
 
     Implemented a generic RuntimeCredentialsFile mechanism on the existing common wrapper, with AGY runtime/credential/auth-host/argv/write-policy values in containment/vendors.toml. The private mode-0700 runtime starts with empty settings; host runtime parents are masked from descriptor data for every vendor, and the opaque credential is pinned read-only by handle without copying. Runtime-file profiles keep store/cache and Git metadata read-only, including private-clone Git. Exact host validation is shared; inventory entries require pinned trusted allowed_hosts approval and never add grants automatically. Common-wrapper exec remains receipt-gated; candidate bypass argv still refuses missing/deserialized receipts. AGY-specific duplicate runtime/argv data was removed from launch/agy.rs.
 
+
     The only endpoint found in recorded host log evidence is daily-cloudcode-pa.googleapis.com. auth_inventory_complete remains false; both session admission and direct wrapper preparation remain refused. No real vendor calls, token contents, deputy jobs, production enablement or passing all-tool credit claimed.
+
 
     Remaining TASK-3048 acceptance: complete refresh/login host inventory, verify private read-only token refresh/expiry behavior, demonstrate mediated-write positive controls, wire production argv/caller routing (including legacy bypass-path migration/refusal) and the AGY shared-boundary harness, then obtain fresh passing all-tool host evidence before opening admission. The current runtime-file arm accepts only -p <prompt>; existing headless builders are not claimed integrated.
 
+
     Validation: all 38 make check-ci-fast gates PASS; 41 offline conformance tests PASS; final cargo check -p aida-cli --no-default-features PASS; cargo fmt and git diff --check PASS. The first fast run caught a /tmp literal in a new path-rejection test; changed to a neutral absolute path and the full rerun passed. Rust execution untested=true: aida lane job run -- cargo test --profile agent -p aida-cli-lib --lib -- task_3048 refused because lease 01a1b2c3374d has no lane job runner. New runtime/credential/mask/live-wrapper regressions and launch::agy::tests need host/CI execution; model-free wrapper tests are not AGY conformance.
 
+
     Eight files remain uncommitted: OVERVIEW.md; containment/{mod.rs,tests.rs,tests/launch_tests.rs,vendors.toml}; launch/{agy.rs,contained.rs}; docs/internal/testing/containment-conformance.md (source paths under aida-cli-lib/src where applicable).
+
     Recorded publication declaration: [AI:codex] feat(containment): prepare shared private runtime for agy; Refs STORY-2460 (Refs TASK-3048).
-    No commit, push, PR, queue done, ship/merge or review verdict performed. TASK-3048 remains open. Host publication after process exit must retain Refs and honor existing punt/hold vetoes.
-  created_at: 2026-11-06T21:47:33.037567970Z
-  modified_at: 2026-11-06T21:47:33.037567970Z
+
+    No commit, push, PR, queue done, ship/merge or review verdict performed. TASK-3048 remains open. Host publication after process exit must retain Refs and honor existing punt/hold vetoes.'
+  created_at: 2026-11-06 21:47:33.037567+00:00
+  modified_at: 2026-11-06 21:47:33.037567+00:00
 - id: 01a1b33c-02e3-73d0-ad75-0f53b5cc45d0
   author: joe
-  content: |
-    Native-seat Refs-only S2 follow-up to the existing private-runtime/auth-policy preparation at 1ff0066194a. The signed outer-only ruling is now enforced against legacy permission-bypass launches: common LaunchContext resolution checks native_layer descriptor data and refuses receipt-only flags even with an Aida posture marker; prompt option names are vendor data, so prompt contents do not select posture. Agent-new explicit/default bypass checks run before setup. AGY headless preflight consults the existing conformance admission gate before lease/worktree creation. Deferred manual handoffs no longer print a bypass command. No AGY-specific confinement engine was added and admission remains closed.
+  content: 'Native-seat Refs-only S2 follow-up to the existing private-runtime/auth-policy preparation at 1ff0066194a. The signed outer-only ruling is now enforced against legacy permission-bypass launches: common LaunchContext resolution checks native_layer descriptor data and refuses receipt-only flags even with an Aida posture marker; prompt option names are vendor data, so prompt contents do not select posture. Agent-new explicit/default bypass checks run before setup. AGY headless preflight consults the existing conformance admission gate before lease/worktree creation. Deferred manual handoffs no longer print a bypass command. No AGY-specific confinement engine was added and admission remains closed.
+
 
     Updated legacy spawn regressions to expect refusal before vendor exec, retained pure argv-order tests, added shared-context fresh/resume/exec/background and prompt/default-flag regressions, and kept the native-permission tracked fixture without bypass.
 
+
     Validation: make check-ci-fast PASS (38 gates); independent offline containment-conformance tests PASS (43); final cargo check -p aida-cli --no-default-features PASS on the final source; cargo fmt --all -- --check and git diff --check PASS. Targeted Rust execution remains untested=true: aida lane job run --wait 50 -- cargo test --profile agent -p aida-cli-lib --lib -- task_3048 refused because lease 01a1b32f1c5e names no lane job runner. New/updated Rust tests still require host/CI execution, including affected session, agent-launcher and BUG-1686 regressions. No real AGY calls or passing all-tool credit claimed.
+
 
     Ten files left uncommitted: aida-cli-lib/src/agent_launch.rs; containment/mod.rs; containment/vendors.toml; launch/agy.rs; launch/context.rs; queue_cmd.rs; session.rs; tests/agent_launcher_tests.rs; tests/bug_1686_agy_headless_argv_tests.rs (all paths after the first under aida-cli-lib/src); docs/internal/testing/containment-conformance.md.
 
+
     Remaining acceptance: complete measured login/refresh host inventory beyond daily-cloudcode-pa.googleapis.com; validate private read-only credential refresh/expiry; demonstrate mediated-write positive controls; finish production common-wrapper caller/argv and shared-boundary harness integration; obtain fresh passing all-tool host evidence before opening admission. TASK-3048 remains open. Retain Refs publication credit and honor punt/hold vetoes. No commit, push, PR creation, queue done, merge or review verdict performed.
-  created_at: 2026-11-06T23:40:16.995703744Z
-  modified_at: 2026-11-06T23:40:16.995703744Z
+
+    '
+  created_at: 2026-11-06 23:40:16.995703+00:00
+  modified_at: 2026-11-06 23:40:16.995703+00:00
   session_id: 01a1b32f1c5e
 - id: 01a1b34a-8d49-7cb0-990b-cdc7991c14a3
   author: joe
   content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: Refs-only S2 slice is directionally right, but the new LaunchContext guard looks up vendor ''antigravity'' (LaunchVendor::Agy.as_str()) in a descriptor keyed ''agy'', so every agy launch context refuses with ''unsupported vendor capability'' and the new task_3048 test cannot pass; the bypass guard also misses Go single-dash flags. CI at head still queued (unverified).. No triage reason was given.'
-  created_at: 2026-11-06T23:56:09.929665063Z
-  modified_at: 2026-11-06T23:56:09.929665063Z
+  created_at: 2026-11-06 23:56:09.929665+00:00
+  modified_at: 2026-11-06 23:56:09.929665+00:00
   session_id: 3dd100c3-f8c0-44d9-ac4c-f9ff0eb32a27
 - id: 01a1b34a-a50a-7442-82ed-f1aa6ff6734a
   author: joe
-  content: |-
-    REVIEW FINDINGS TO ADDRESS (PR #3545):
+  content: 'REVIEW FINDINGS TO ADDRESS (PR #3545):
+
     Verdict: CHANGES REQUESTED
+
     Reviewed commit: 86a7eba8d0fe
+
     Recorded: 2026-11-06T23:52:05.390494864+00:00
+
     Review comment: https://github.com/joemooney/aida/pull/3545#issuecomment-6698973608
+
     Findings:
-    1. BLOCKING aida-cli-lib/src/launch/context.rs:162: refuse_unreceipted_bypass(req.vendor.as_str(), ..) passes aida_core LaunchVendor::Agy.as_str() == "antigravity" (aida-core/src/launch_policy.rs:122), but vendors.toml has only [vendor.agy]; containment::native_layer("antigravity") errors 'unsupported vendor capability: antigravity', mapped to LaunchRefusal::OuterOnlyPermission. Result: EVERY agy LaunchContext::resolve refuses, including native no-bypass launches (agent new agy, compete_cmd.rs:1153, dispatch.rs:2623), contradicting the doc claim 'Native diagnostic runs without bypass remain available'; and launch/agy.rs task_3048_legacy_bypass_refuses_before_command_construction asserts the message contains 'agy permission bypass requires an applied AIDA ContainmentReceipt' and will fail (message names the lookup error instead). Fix: map LaunchVendor to the descriptor key (Agy => "agy") at this call site or in containment lookup, and add a positive test that an agy LaunchRequest WITHOUT bypass resolves Ok for each LaunchKind.
-    2. BLOCKING (authority gate fail-open) aida-cli-lib/src/containment/mod.rs refuse_unreceipted_bypass: only refuses names starting with '--dangerously-'. agy parses Go stdlib flags (session.rs:4290 comment, BUG-1686), where one and two dashes are equivalent, so '-dangerously-skip-permissions' (or '-dangerously-skip-permissions=true') supplied via agents.toml default_flags or --extra-flag passes the guard and reaches agy as the bypass. Normalize a leading '-'/'--' before comparing (for both the bypass check and prompt_options matching, e.g. '-prompt'/'-print'), and add refusal tests for the single-dash spellings.
-    3. MINOR aida-cli-lib/src/launch/contained.rs (~line 857): the nested runtime mountpoint is created inside the single shared 'empty' mask dir, which is bound over every masked vendor dir, so an agy launch shows a stray antigravity-cli/ under ~/.codex, ~/.claude etc. Harmless but confusing; use a dedicated empty view for the runtime parent.
+
+    1. BLOCKING aida-cli-lib/src/launch/context.rs:162: refuse_unreceipted_bypass(req.vendor.as_str(), ..) passes aida_core LaunchVendor::Agy.as_str() == "antigravity" (aida-core/src/launch_policy.rs:122), but vendors.toml has only [vendor.agy]; containment::native_layer("antigravity") errors ''unsupported vendor capability: antigravity'', mapped to LaunchRefusal::OuterOnlyPermission. Result: EVERY agy LaunchContext::resolve refuses, including native no-bypass launches (agent new agy, compete_cmd.rs:1153, dispatch.rs:2623), contradicting the doc claim ''Native diagnostic runs without bypass remain available''; and launch/agy.rs task_3048_legacy_bypass_refuses_before_command_construction asserts the message contains ''agy permission bypass requires an applied AIDA ContainmentReceipt'' and will fail (message names the lookup error instead). Fix: map LaunchVendor to the descriptor key (Agy => "agy") at this call site or in containment lookup, and add a positive test that an agy LaunchRequest
+    WITHOUT bypass resolves Ok for each LaunchKind.
+
+    2. BLOCKING (authority gate fail-open) aida-cli-lib/src/containment/mod.rs refuse_unreceipted_bypass: only refuses names starting with ''--dangerously-''. agy parses Go stdlib flags (session.rs:4290 comment, BUG-1686), where one and two dashes are equivalent, so ''-dangerously-skip-permissions'' (or ''-dangerously-skip-permissions=true'') supplied via agents.toml default_flags or --extra-flag passes the guard and reaches agy as the bypass. Normalize a leading ''-''/''--'' before comparing (for both the bypass check and prompt_options matching, e.g. ''-prompt''/''-print''), and add refusal tests for the single-dash spellings.
+
+    3. MINOR aida-cli-lib/src/launch/contained.rs (~line 857): the nested runtime mountpoint is created inside the single shared ''empty'' mask dir, which is bound over every masked vendor dir, so an agy launch shows a stray antigravity-cli/ under ~/.codex, ~/.claude etc. Harmless but confusing; use a dedicated empty view for the runtime parent.
+
     4. NOTE (operational, not a code defect) session.rs preflight_launch_vendor now refuses all headless Agy launches and agent new agy --bypass-sandbox refuses, per the signed outer-only ruling. Any operator agy lane scripts stop working until admission opens (TASK-3049); advisor should confirm this is intended now rather than after the wrapper path is wired.
-    5. UNVERIFIED: CI run 42313509517 at 86a7eba8d0f was still queued at review time; the new/updated Rust tests (task_3048_*, session agy expect_err regressions, bug_1686 refusal tests) have never executed per the implementer's own handoff (untested=true). Re-review must cite green CI at the new head.
-    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
-  created_at: 2026-11-06T23:56:16.010198653Z
-  modified_at: 2026-11-06T23:56:16.010198653Z
+
+    5. UNVERIFIED: CI run 42313509517 at 86a7eba8d0f was still queued at review time; the new/updated Rust tests (task_3048_*, session agy expect_err regressions, bug_1686 refusal tests) have never executed per the implementer''s own handoff (untested=true). Re-review must cite green CI at the new head.
+
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.'
+  created_at: 2026-11-06 23:56:16.010198+00:00
+  modified_at: 2026-11-06 23:56:16.010198+00:00
   session_id: 3dd100c3-f8c0-44d9-ac4c-f9ff0eb32a27
 - id: 01a1b35d-e154-7f72-9c49-bd1c2f738ae7
   author: joe
-  content: |-
-    PR #3545 round 4: addressed findings 1-3. LaunchContext maps Agy to descriptor key agy and checks combined profile/caller argv. The outer-only guard normalizes Go single/double-dash bypass and prompt options (including descriptor validation). Regressions cover defaults/caller tails, joined flags, prompt text and each session LaunchKind; Query/Control retain separate constructors. The private runtime parent now has its own mask view, leaving other vendor masks empty.
+  content: 'PR #3545 round 4: addressed findings 1-3. LaunchContext maps Agy to descriptor key agy and checks combined profile/caller argv. The outer-only guard normalizes Go single/double-dash bypass and prompt options (including descriptor validation). Regressions cover defaults/caller tails, joined flags, prompt text and each session LaunchKind; Query/Control retain separate constructors. The private runtime parent now has its own mask view, leaving other vendor masks empty.
+
     Executed validation: cargo test -p aida-cli-lib --lib task_3048_ -- --nocapture: 12 passed, including the live runtime/read-only credential check, no skips. Fresh test binary with bug_1686_agy_headless_argv_tests, preflight_launch_vendor and story_2326_launch_tests filters: 26 passed. cargo fmt --all -- --check and git diff --check passed. make check-ci-fast: all 38 gates passed.
+
     Finding 4: retained immediate headless/bypass refusals under the signed ruling. AGY admission remains closed pending complete auth/refresh inventory and fresh integrated all-tool conformance; operator-script impact remains for advisor acknowledgement. Finding 5: local Rust tests have now executed, but new-head CI requires host publication; re-review must cite that new head. Existing merge hold requires authorized clearance. This remains a Refs slice rather than TASK-3048 completion.
-    Four files left uncommitted: containment/mod.rs and launch/{context,contained,agy}.rs. Native publication declaration recorded: [AI:codex] fix(containment): normalize outer-only flags and restore agy diagnostics (Refs TASK-3048). Host must commit and publish after seat exit. AIDA MCP comment attempt failed with Transport closed; recording through CLI instead.
-  created_at: 2026-11-07T00:17:16.628701357Z
-  modified_at: 2026-11-07T00:17:16.628701357Z
+
+    Four files left uncommitted: containment/mod.rs and launch/{context,contained,agy}.rs. Native publication declaration recorded: [AI:codex] fix(containment): normalize outer-only flags and restore agy diagnostics (Refs TASK-3048). Host must commit and publish after seat exit. AIDA MCP comment attempt failed with Transport closed; recording through CLI instead.'
+  created_at: 2026-11-07 00:17:16.628701+00:00
+  modified_at: 2026-11-07 00:17:16.628701+00:00
   session_id: 01a1b34bcab6
 - id: 01a1b37f-061e-7020-97f3-381544c86ee3
   author: joe
   content: 'Round 4 follow-up: checkout already contains the descriptor-key fix, Go single-dash normalization, positive diagnostic-resolution tests, and dedicated runtime-parent mask from 0c9dafac74b4. Fixed its remaining CI source-ratchet failure by extracting the outer-only runtime argv adapter from the shared prepare function, without changing the Claude guard or adding an exemption. Added regression coverage rejecting extra site options while preserving prompt text. Validation: Claude posture ratchet 1/1 passed; task_3048 13/13 passed (including synthetic live-boundary tests); agy 55/55 passed (including BUG-1686 and session refusal regressions); cargo fmt and diff whitespace checks passed. AGY admission remains closed pending complete auth inventory and integrated all-tool conformance. This is Refs-only; green CI at the host-published new head and authorized merge-hold clearance remain outstanding. Native seat leaves edits uncommitted for host publication.'
-  created_at: 2026-11-07T00:53:28.734918553Z
-  modified_at: 2026-11-07T00:53:28.734918553Z
+  created_at: 2026-11-07 00:53:28.734918+00:00
+  modified_at: 2026-11-07 00:53:28.734918+00:00
   session_id: 01a1b3786470
 - id: 01a1b56a-842d-7013-8d9d-91919b4063a0
   author: joe
-  content: |
-    Partial S2 follow-up from origin/main (which already includes #3518 and #3545): expanded the common wrapper's private-runtime regression to execute external file/URL helpers and a stdio request server without a native permission layer. Each descendant must write private runtime state, refuse overwrites of readable host canaries, refuse reachable host UNIX/TCP endpoints, and retain access to the inherited relay. Host positive controls run before containment; the parent checks host canaries and runtime isolation afterward. No AGY-specific containment engine or production admission change was introduced. Updated AGENTS.md, OVERVIEW.md and docs/internal/testing/containment-conformance.md to distinguish this synthetic inheritance evidence from actual AGY tool/browser/MCP conformance.
+  content: 'Partial S2 follow-up from origin/main (which already includes #3518 and #3545): expanded the common wrapper''s private-runtime regression to execute external file/URL helpers and a stdio request server without a native permission layer. Each descendant must write private runtime state, refuse overwrites of readable host canaries, refuse reachable host UNIX/TCP endpoints, and retain access to the inherited relay. Host positive controls run before containment; the parent checks host canaries and runtime isolation afterward. No AGY-specific containment engine or production admission change was introduced. Updated AGENTS.md, OVERVIEW.md and docs/internal/testing/containment-conformance.md to distinguish this synthetic inheritance evidence from actual AGY tool/browser/MCP conformance.
+
 
     Validation: 13 targeted task_3048 Rust tests passed, including the expanded live runtime regression. The new regression also passed separately with AIDA_REQUIRE_BWRAP_LIVE=1 (no skip). All 43 offline containment conformance tests passed. make check-ci-fast passed all 43 gates, including the feature-disabled CLI build and TUI seam. cargo fmt --all -- --check and git diff --check passed.
 
+
     TASK-3048 remains open. Remaining acceptance: advisor-owned complete auth/login/refresh host inventory and trusted approval; private read-only token refresh/expiry validation; mediated Git/AIDA write positive controls; wire and pass the production AGY all-tool conformance path before opening admission. Existing endpoint data remains incomplete rather than inventing auth hosts or treating synthetic helper processes as AGY receipts. No real vendor/model calls, credentials copied/logged, deputies contacted, queue completion, review verdict, commit, push or PR operation occurred.
 
+
     Four files remain uncommitted for the host launcher: aida-cli-lib/src/containment/tests/launch_tests.rs, AGENTS.md, OVERVIEW.md, docs/internal/testing/containment-conformance.md. Native publication declaration recorded: [AI:codex] test(containment): verify private-runtime tool descendants; Refs STORY-2460 (Refs TASK-3048). This is non-completing work; host publication and independent review remain separate.
-  created_at: 2026-11-07T09:50:19.181507903Z
-  modified_at: 2026-11-07T09:50:19.181507903Z
+
+    '
+  created_at: 2026-11-07 09:50:19.181507+00:00
+  modified_at: 2026-11-07 09:50:19.181507+00:00
   session_id: 01a1b55871a8
 - id: 01a1b6ae-2118-7de1-9696-28c743e55473
   author: joe
   content: 'ADVISOR 2026-11-07 08:50 BLOCKER (live evidence): integrated agy conformance at origin/main 1220b5d94cc (agy 1.5.3; deputy job 20261107T084217-d1df47; report ~/aida-conformance-agy-main-1220b5d94cc-20261107b/report.json): C0-C4 all unknown, whole_lane_pass=false. agy reports ''--mode auto is not available for this account'' and headless auto-denies write_file before permissions.allow is consulted (same as the 11-05 agy_tool_safety finding). The acceptance ''conformance harness passes for agy'' cannot be met from AIDA''s side with this account. Operator decision needed: an agy account/mode that allows headless writes, or reject the STORY-2460 agy-lane goal.'
-  created_at: 2026-11-07T15:43:47.480701678Z
-  modified_at: 2026-11-07T15:43:47.480701678Z
+  created_at: 2026-11-07 15:43:47.480701+00:00
+  modified_at: 2026-11-07 15:43:47.480701+00:00
   session_id: 01a1b646-c67d-7b43-98ff-3604a53f5d1f
   harness_version: 2.1.319 (Claude Code)
 - id: 01a1b6e1-80cb-7b42-bd2e-5325ee801dfa
   author: joe
-  content: 'ADVISOR RULING 2026-11-07 09:50 (supersedes the 08:50 blocker). New evidence: agy 1.5.3 on the operator''s Google AI Ultra account. Interactive ''--mode auto'' works. Headless ''-p'' warns that ''--mode auto is not available for this account'', but default-mode headless writes still SUCCEED: agy_tool_safety flags write_file (unsupported_tool), then the sir_flash_lite LLM monitor allows routine workspace writes (probe 16:38Z, ~/.gemini/antigravity-cli/cli.log lines 135-150). The harness run at 1220b5d94cc failed C0-C4 ''unknown'' because, in the fixture''s private agy runtime/home, headless write_file was auto-denied (''add an allow-rule under permissions.allow ... write_file(<target>)''). NEXT: in the S2 adapter and conformance fixture, give the private agy runtime a fixture-scoped permissions.allow for write_file(<workspace>/**) only, never host paths or canaries. Keep the 11-05 posture ruling: no blanket --dangerously-skip-permissions inside a claimed boundary, no --mode auto dependency. Then rerun ''python3 scripts/containment/conformance.py --vendor agy --output <fresh> --timeout 600'' and attach the report. Completing (TASK-3048) only if C0-C4 pass; otherwise Refs with the report. LIGHT gate.'
-  created_at: 2026-11-07T16:39:54.315078424Z
-  modified_at: 2026-11-07T16:39:54.315078424Z
+  content: 'ADVISOR RULING 2026-11-07 09:50 (supersedes the 08:50 blocker). New evidence: agy 1.5.3 on the operator''s Google AI Ultra account. Interactive ''--mode auto'' works. Headless ''-p'' warns that ''--mode auto is not available for this account'', but default-mode headless writes still SUCCEED: agy_tool_safety flags write_file (unsupported_tool), then the sir_flash_lite LLM monitor allows routine workspace writes (probe 16:38Z, ~/.gemini/antigravity-cli/cli.log lines 135-150). The harness run at 1220b5d94cc failed C0-C4 ''unknown'' because, in the fixture''s private agy runtime/home, headless write_file was auto-denied (''add an allow-rule under permissions.allow ... write_file(<target>)''). NEXT: in the S2 adapter and conformance fixture, give the private agy runtime a fixture-scoped permissions.allow for write_file(<workspace>/**) only, never host paths or canaries. Keep the 11-05 posture ruling: no blanket --dangerously-skip-permissions inside a claimed boundary, no --mode auto
+    dependency. Then rerun ''python3 scripts/containment/conformance.py --vendor agy --output <fresh> --timeout 600'' and attach the report. Completing (TASK-3048) only if C0-C4 pass; otherwise Refs with the report. LIGHT gate.'
+  created_at: 2026-11-07 16:39:54.315078+00:00
+  modified_at: 2026-11-07 16:39:54.315078+00:00
   session_id: 01a1b646-c67d-7b43-98ff-3604a53f5d1f
   harness_version: 2.1.319 (Claude Code)
 - id: 01a1b6e2-dd62-73d0-8cfe-a27d54bc95fd
   author: joe
-  content: |-
-    REVIEW FINDINGS TO ADDRESS (TASK-3048):
+  content: 'REVIEW FINDINGS TO ADDRESS (TASK-3048):
+
     Verdict: CHANGES REQUESTED
+
     Reviewed commit: 2d4a4f979f4f
+
     Recorded: 2026-11-05T13:06:03.880341937+00:00
+
     Findings:
-    1. ACCEPTANCE UNMET (blocking): advisor host run at 2d4a4f979f4 (spec comment 5, ~/aida-conformance-agy-PR3426-20261105/report.json) shows C0-C4 = unknown, whole_lane_pass=false, 0 vendor receipts. The permissions.allow rules load, but agy_tool_safety rejects write_file ('unsupported_tool: write_file') because --mode auto is unavailable and agy falls back to default mode. scripts/containment/conformance.py:481-490 must either drive every probe only through the allowed exact command(... runner.py ...) tool (no write_file dependency) or have report.json record agy as unknown/unsupported with a named reason (e.g. 'default-mode tool safety: unsupported_tool write_file') instead of silent unknowns. Never add --dangerously-skip-permissions.
+
+    1. ACCEPTANCE UNMET (blocking): advisor host run at 2d4a4f979f4 (spec comment 5, ~/aida-conformance-agy-PR3426-20261105/report.json) shows C0-C4 = unknown, whole_lane_pass=false, 0 vendor receipts. The permissions.allow rules load, but agy_tool_safety rejects write_file (''unsupported_tool: write_file'') because --mode auto is unavailable and agy falls back to default mode. scripts/containment/conformance.py:481-490 must either drive every probe only through the allowed exact command(... runner.py ...) tool (no write_file dependency) or have report.json record agy as unknown/unsupported with a named reason (e.g. ''default-mode tool safety: unsupported_tool write_file'') instead of silent unknowns. Never add --dangerously-skip-permissions.
+
     2. TEST GAP (tied to finding 1): tests/test_containment_conformance.py test_agy_run_uses_private_settings_without_permission_bypass only asserts whole_lane_pass/production_launcher_credit are false. Add an offline test feeding a mocked agy stream/log containing the tool-safety refusal and asserting the report carries the named unsupported reason per check (or that command-only probes produce receipts).
-    3. PR/COMMIT TITLE: the PR and commit subject are '[AI:codex] fix: address CI failures and review findings (TASK-3048)', which describes nothing in this diff and omits the 'Refs STORY-2460' the advisor ruling (spec comment 1) requires. Retitle to the requested '[AI:codex] fix(containment): prepare gated agy adapter; Refs STORY-2460 (TASK-3048)'. Keep the (TASK-3048) completion trailer only once the harness acceptance is met or the advisor rescopes TASK-3048's acceptance.
-    4. ADAPTER DATA DRIFT (minor): aida-cli-lib/src/launch/agy.rs AGY.argv_prefix hard-codes '--mode auto', which host evidence shows is unavailable for this account (agy silently continues in default mode). The adapter table should not encode a mode the vendor does not grant: record the observed fallback, or make the mode requirement explicit (refuse when auto is unavailable) so the future integrated arm cannot assume auto-mode semantics.
-    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
-  created_at: 2026-11-07T16:41:23.554170491Z
-  modified_at: 2026-11-07T16:41:23.554170491Z
+
+    3. PR/COMMIT TITLE: the PR and commit subject are ''[AI:codex] fix: address CI failures and review findings (TASK-3048)'', which describes nothing in this diff and omits the ''Refs STORY-2460'' the advisor ruling (spec comment 1) requires. Retitle to the requested ''[AI:codex] fix(containment): prepare gated agy adapter; Refs STORY-2460 (TASK-3048)''. Keep the (TASK-3048) completion trailer only once the harness acceptance is met or the advisor rescopes TASK-3048''s acceptance.
+
+    4. ADAPTER DATA DRIFT (minor): aida-cli-lib/src/launch/agy.rs AGY.argv_prefix hard-codes ''--mode auto'', which host evidence shows is unavailable for this account (agy silently continues in default mode). The adapter table should not encode a mode the vendor does not grant: record the observed fallback, or make the mode requirement explicit (refuse when auto is unavailable) so the future integrated arm cannot assume auto-mode semantics.
+
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.'
+  created_at: 2026-11-07 16:41:23.554170+00:00
+  modified_at: 2026-11-07 16:41:23.554170+00:00
   session_id: 01a1b646-c67d-7b43-98ff-3604a53f5d1f
   harness_version: 2.1.319 (Claude Code)
 - id: 01a1b6e4-bcc1-7bd2-a1f3-8265459f6289
   author: joe
   content: 'ADVISOR 2026-11-07 09:45, addendum to the 09:50 ruling (operator-confirmed mechanism): agy headless writes pass a deterministic rule check (agy_tool_safety), then a nondeterministic LLM judge (sir_flash_lite). AIDA must NOT rely on the LLM judge. Conformance passes must come from the fixture-scoped permissions.allow write_file(<workspace>/**) plus the AIDA boundary. Record in the report which layer allowed each positive write (rule allow vs judge allow), and treat a judge-only allow as non-conformant.'
-  created_at: 2026-11-07T16:43:26.273411137Z
-  modified_at: 2026-11-07T16:43:26.273411137Z
+  created_at: 2026-11-07 16:43:26.273411+00:00
+  modified_at: 2026-11-07 16:43:26.273411+00:00
   session_id: 01a1b646-c67d-7b43-98ff-3604a53f5d1f
   harness_version: 2.1.319 (Claude Code)
 - id: 01a1b6ec-dac4-73d2-ab29-935c6e98990c
   author: joe
   content: 'Implemented the binding 2026-11-07 private workspace write permission as vendor data on the shared wrapper: write_file(<workspace>/**), without host paths/canaries. Removed blanket bypass from candidate argv and auto mode from the native fixture. Fresh AGY 1.5.3 host fixture run at /home/joe/.aida/conformance-agy-task3048-20261107-seat786/report.json: C0-C4 unknown; exact runner refused by native sandbox: readwrite <workspace>/**: globs not supported. No terminal receipt or whole-lane credit. Keeping production admission and incomplete auth inventory closed; adding named configuration diagnostics and regression coverage, attaching fresh report. This is Refs-only; integrated all-tool conformance, auth/refresh inventory and mediated-write controls remain.'
-  created_at: 2026-11-07T16:52:18.244127757Z
-  modified_at: 2026-11-07T16:52:18.244127757Z
+  created_at: 2026-11-07 16:52:18.244127+00:00
+  modified_at: 2026-11-07 16:52:18.244127+00:00
   session_id: 01a1b6e79dd6
 - id: 01a1b6ee-4108-7713-84a9-2c0fe7e72169
   author: joe
   content: 'Final evidence attached in docs/internal/testing/containment-conformance-agy-2026-11-07.json (raw host output: /home/joe/.aida/conformance-agy-task3048-20261107-seat786-final). AGY 1.5.3; C0-C4 unknown; unsupported_reason=agy native sandbox configuration: workspace write_file glob is unsupported; no terminal receipt, whole_lane_pass=false. Python conformance suite: 44 passed. Native publication declaration recorded with Refs TASK-3048 and Refs STORY-2460; no completion requested.'
-  created_at: 2026-11-07T16:53:49.960448280Z
-  modified_at: 2026-11-07T16:53:49.960448280Z
+  created_at: 2026-11-07 16:53:49.960448+00:00
+  modified_at: 2026-11-07 16:53:49.960448+00:00
   session_id: 01a1b6e79dd6
 - id: 01a1b6f1-b642-7091-95a1-7508e2668ef5
   author: joe
   content: 'Final isolated rerun (no inherited operator settings): /home/joe/.aida/conformance-agy-task3048-20261107-seat786-isolated/report.json; attached report updated to that exact run. Same AGY 1.5.3 native sandbox glob configuration refusal, C0-C4 unknown, no terminal receipt. All 44 offline conformance tests pass after settings-isolation assertions. Rust initial 13-test run passed 12 and found an obsolete empty-settings assertion in the live regression; corrected to assert the exact workspace permission and rerunning.'
-  created_at: 2026-11-07T16:57:36.578293732Z
-  modified_at: 2026-11-07T16:57:36.578293732Z
+  created_at: 2026-11-07 16:57:36.578293+00:00
+  modified_at: 2026-11-07 16:57:36.578293+00:00
   session_id: 01a1b6e79dd6
 - id: 01a1b6f3-6384-7400-bfda-f6111e794c0d
   author: joe
   content: 'Final validation: cargo test -p aida-cli-lib --lib -- task_3048 agy_private_permissions_are_workspace_only agy_adapter_ --nocapture passed all 16 tests, including the live common-wrapper private-runtime/credential/tool-descendant regression. Python conformance suite passed all 44 tests. cargo fmt --all -- --check and git diff --check passed. Nine files left uncommitted for native host publication; Refs subject already declared. TASK-3048 remains incomplete with the isolated AGY report attached and production admission closed.'
-  created_at: 2026-11-07T16:59:26.468668799Z
-  modified_at: 2026-11-07T16:59:26.468668799Z
+  created_at: 2026-11-07 16:59:26.468668+00:00
+  modified_at: 2026-11-07 16:59:26.468668+00:00
   session_id: 01a1b6e79dd6
 - id: 01a1b859-89db-71f0-860c-263d736c1ae3
   author: joe
-  content: |-
-    ADVISOR RULING 2026-11-07 16:40 MST (TASK-3048 next slice; supersedes the native-diagnostic direction of the 11-07 rounds).
-    Finding: every agy conformance run so far used the harness's NATIVE path (scripts/containment/conformance.py:1043-1052: `agy --sandbox --settings` with a write_file(<ws>/**) allow glob). agy rejects that glob ("readwrite <ws>/**: globs not supported") before any probe runs, so C0-C4 can only ever read "unknown". Under the 11-05 ruling agy is OUTER-ONLY (vendors.toml native_layer="none"): its native sandbox/permission layer is not the admission path, and fixing the glob would not earn credit.
+  content: 'ADVISOR RULING 2026-11-07 16:40 MST (TASK-3048 next slice; supersedes the native-diagnostic direction of the 11-07 rounds).
+
+    Finding: every agy conformance run so far used the harness''s NATIVE path (scripts/containment/conformance.py:1043-1052: `agy --sandbox --settings` with a write_file(<ws>/**) allow glob). agy rejects that glob ("readwrite <ws>/**: globs not supported") before any probe runs, so C0-C4 can only ever read "unknown". Under the 11-05 ruling agy is OUTER-ONLY (vendors.toml native_layer="none"): its native sandbox/permission layer is not the admission path, and fixing the glob would not earn credit.
+
     THIS SLICE (code only; the implementer does not run real vendor models):
-    1. Extend run_aida (conformance.py:681) to accept agy: launch it through AIDA's shared boundary (the same bwrap/netns relay/broker/grant path Codex uses there), with argv from contained::outer_only_argv (launch/agy.rs candidate_argv) — `--dangerously-skip-permissions` present ONLY with an applied ContainmentReceipt, no --sandbox, no native permissions settings file, private runtime dir, OAuth token mounted read-only by handle, no ~/.gemini inheritance, MCP/browser/URL tools off.
+
+    1. Extend run_aida (conformance.py:681) to accept agy: launch it through AIDA''s shared boundary (the same bwrap/netns relay/broker/grant path Codex uses there), with argv from contained::outer_only_argv (launch/agy.rs candidate_argv) — `--dangerously-skip-permissions` present ONLY with an applied ContainmentReceipt, no --sandbox, no native permissions settings file, private runtime dir, OAuth token mounted read-only by handle, no ~/.gemini inheritance, MCP/browser/URL tools off.
+
     2. Auth host inventory: make the allowed egress set data (runtime_policy auth_hosts), add the hosts agy actually needs for token refresh, and record the measured list on the spec. Unknown host => fail closed with a named reason.
+
     3. Retire the native agy diagnostic as an admission input: leave it runnable for diagnosis if you want, but its report must say production_launcher_credit=false and the AIDA-boundary report is the only one that can flip whole_lane_pass.
-    4. Keep Adapter::require_conformance refusing in production. Unlocking it is a SEPARATE final step after the advisor's fresh live run passes C0-C4 through the AIDA boundary (advisor runs it via script deputy and attaches report.json).
-    Tests: Python conformance suite plus one targeted `cargo test -p aida-cli-lib --lib task_3048` and make check-ci-fast (LIGHT gate). Commit subject trailer: (Refs TASK-3048). Do not complete TASK-3048 in this PR.
-  created_at: 2026-11-07T23:30:38.171659084Z
-  modified_at: 2026-11-07T23:30:38.171659084Z
+
+    4. Keep Adapter::require_conformance refusing in production. Unlocking it is a SEPARATE final step after the advisor''s fresh live run passes C0-C4 through the AIDA boundary (advisor runs it via script deputy and attaches report.json).
+
+    Tests: Python conformance suite plus one targeted `cargo test -p aida-cli-lib --lib task_3048` and make check-ci-fast (LIGHT gate). Commit subject trailer: (Refs TASK-3048). Do not complete TASK-3048 in this PR.'
+  created_at: 2026-11-07 23:30:38.171659+00:00
+  modified_at: 2026-11-07 23:30:38.171659+00:00
   session_id: 01a1b848-940b-7bd2-8acd-52e428b182b8
   harness_version: 2.1.319 (Claude Code)
 - id: 01a1b863-d4fd-7f80-9142-5b0b3038c250
   author: dirtlab
-  content: |
-    Partial follow-up to the binding 2026-11-07 16:40 MST ruling; TASK-3048 is not complete. Seven source/test/docs files changed, left uncommitted for the native host. AIDA fixture accepts AGY and selects vendor-specific trusted policy/auth-host data; outer-only candidate argv now has receipt-barrier-gated --dangerously-skip-permissions, no --sandbox or --settings permission profile; private runtime settings are empty and inode-pinned read-only credentials remain unchanged. Adapter::require_conformance still refuses production launches.
+  content: 'Partial follow-up to the binding 2026-11-07 16:40 MST ruling; TASK-3048 is not complete. Seven source/test/docs files changed, left uncommitted for the native host. AIDA fixture accepts AGY and selects vendor-specific trusted policy/auth-host data; outer-only candidate argv now has receipt-barrier-gated --dangerously-skip-permissions, no --sandbox or --settings permission profile; private runtime settings are empty and inode-pinned read-only credentials remain unchanged. Adapter::require_conformance still refuses production launches.
+
 
     Inventory evidence: measured host remains daily-cloudcode-pa.googleapis.com from the prior attached host run. Installed /home/dirtlab/.local/bin/agy contains https://oauth2.googleapis.com/token, so oauth2.googleapis.com was added as a candidate refresh host in runtime_policy.auth_hosts. This is static evidence, not a measured refresh inventory; auth_inventory_complete remains false. No real vendor model was run.
 
+
     Remaining work for the requested slice: a diagnostic-only entry point through the shared wrapper (the current fixture still reaches the production conformance refusal), verified MCP/browser/URL disabling, explicit credential-source transport across fixture HOME relocation, and advisor-measured refresh inventory. Native diagnostic reports still grant no production_launcher_credit or whole_lane_pass. Do not mistake the fixture accepting --vendor agy for a successful AIDA-boundary execution.
 
+
     Validation so far: 52 offline conformance tests passed; separate production fixture test passed under umask 022. Targeted Rust task_3048 lane job j20261107T233740281-2-0 and make check-ci-fast are running. Initial fast gate run failed unrelated mail-wake fixture ownership checks with shared-write temp directories; rerunning under umask 022. Refs-only publication subject declared; no commit, push, PR, ship merge, review record or queue completion performed.
-  created_at: 2026-11-07T23:41:52.765829056Z
-  modified_at: 2026-11-07T23:41:52.765829056Z
+
+    '
+  created_at: 2026-11-07 23:41:52.765829+00:00
+  modified_at: 2026-11-07 23:41:52.765829+00:00
   session_id: 01a1b85e95ed
   harness_version: codex-cli 0.167.0
 - id: 01a1b867-705b-7ae2-b430-3c41886eff1b
   author: dirtlab
-  content: |
-    Final targeted validation: cargo test --profile agent -p aida-cli-lib --lib -- task_3048, via lane job j20261107T233740281-2-0, executed 13 tests and passed all 13. Offline conformance suite executed 52 tests and passed; separate production-boundary fixture executed one test and passed. git diff --check passed. make check-ci-fast rerun under umask 022 has passed formatting and conformance checks and is finishing later guards. The lane runner noted overlay-stale after the primary rewrote its seed; the job nevertheless finished exit 0 with an executed-test result.
+  content: 'Final targeted validation: cargo test --profile agent -p aida-cli-lib --lib -- task_3048, via lane job j20261107T233740281-2-0, executed 13 tests and passed all 13. Offline conformance suite executed 52 tests and passed; separate production-boundary fixture executed one test and passed. git diff --check passed. make check-ci-fast rerun under umask 022 has passed formatting and conformance checks and is finishing later guards. The lane runner noted overlay-stale after the primary rewrote its seed; the job nevertheless finished exit 0 with an executed-test result.
+
 
     Punt succeeded in setting TASK-3048 to Needs Attention, but could not write the local punt signal file (read-only filesystem). HOST HANDOFF: preserve the recorded punt publication veto; do not automatically publish this partial slice. Required remaining work is described in the prior comment and docs/internal/testing/containment-conformance.md. The Refs-only subject declaration is not permission to bypass the punt. No Git metadata mutation or queue completion was performed.
-  created_at: 2026-11-07T23:45:49.147578325Z
-  modified_at: 2026-11-07T23:45:49.147578325Z
+
+    '
+  created_at: 2026-11-07 23:45:49.147578+00:00
+  modified_at: 2026-11-07 23:45:49.147578+00:00
   session_id: 01a1b85e95ed
   harness_version: codex-cli 0.167.0
 - id: 01a1b868-f1f4-7fb0-a51c-cf0e49f8e3f8
   author: dirtlab
   content: 'Final LIGHT validation: make check-ci-fast completed exit 0 under umask 022; all 43 fast-tier gates passed. Targeted Rust: 13/13 passed. Python conformance: 52/52 plus separate AIDA production fixture 1/1 passed. Edits remain uncommitted. TASK-3048 remains Needs Attention, incomplete, with a recorded punt publication veto; local punt signal-file write was refused by the read-only filesystem, so the host must preserve that veto explicitly.'
-  created_at: 2026-11-07T23:47:27.860839453Z
-  modified_at: 2026-11-07T23:47:27.860839453Z
+  created_at: 2026-11-07 23:47:27.860839+00:00
+  modified_at: 2026-11-07 23:47:27.860839+00:00
   session_id: 01a1b85e95ed
   harness_version: codex-cli 0.167.0
 - id: 01a1b888-3801-7de3-83bd-4ae8a6d3a23f
   author: joe
   content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: Partial slice of the 2026-11-07 16:40 ruling. AC status: (1) run_aida accepts agy + shared-boundary launch with receipt-gated argv: PARTIAL - fixture accepts agy, argv drops --sandbox/--settings and gates bypass on accepted receipt (contained.rs:1715, launch_tests.rs:628), but agy never executes (require_conformance refuses; doc admits) and MCP/browser/URL disabling is absent; (2) auth hosts as data + measured refresh hosts + unknown-host fail-closed: PARTIAL - oauth2 host added from static binary strings only, auth_hosts not consumed by the launcher egress set, no named unknown-host refusal, no measured list on spec; (3) native diagnostic never gets credit: verified conformance.py:1131 hardcodes false; (4) production require_conformance still refuses: verified agy.rs:207-216. CI still pending at review time.. No triage reason was given.'
-  created_at: 2026-11-08T00:21:37.409182898Z
-  modified_at: 2026-11-08T00:21:37.409182898Z
+  created_at: 2026-11-08 00:21:37.409182+00:00
+  modified_at: 2026-11-08 00:21:37.409182+00:00
   session_id: 01a1b848-940b-7bd2-8acd-52e428b182b8
   harness_version: 2.1.319 (Claude Code)
 - id: 01a1b888-563c-7cc3-94c0-c2c7f985ca04
   author: joe
-  content: |-
-    REVIEW FINDINGS TO ADDRESS (PR #3641):
+  content: 'REVIEW FINDINGS TO ADDRESS (PR #3641):
+
     Verdict: CHANGES REQUESTED
+
     Reviewed commit: 9b8a2498c235
+
     Recorded: 2026-11-07T23:54:34.336793812+00:00
+
     Findings:
-    1. Ruling item 1 unmet: run_aida --vendor agy goes through 'aida queue work --vendor agy', which the production Adapter::require_conformance refuses, so the fixture never reaches agy execution and the advisor's C0-C4 live run through the AIDA boundary is impossible (containment-conformance.md new section admits this). Add a fixture/diagnostic-only entry into the shared wrapper (outer_only_argv + receipt barrier) that does not unlock production admission, with a test proving production still refuses.
+
+    1. Ruling item 1 unmet: run_aida --vendor agy goes through ''aida queue work --vendor agy'', which the production Adapter::require_conformance refuses, so the fixture never reaches agy execution and the advisor''s C0-C4 live run through the AIDA boundary is impossible (containment-conformance.md new section admits this). Add a fixture/diagnostic-only entry into the shared wrapper (outer_only_argv + receipt barrier) that does not unlock production admission, with a test proving production still refuses.
+
     2. Ruling item 1: MCP, browser and URL tools are not disabled. vendors.toml argv_prefix only adds --disable-slash-commands; the private settings.json is now {} with no tool restrictions. Add the agy flags/settings that disable MCP/browser/URL tools and a test asserting them in candidate and wrapper argv.
-    3. Ruling item 2: runtime_policy auth_hosts is not consumed by the contained launcher's egress allow-set (only tests and the Python fixture read it; contained.rs:1027/1384 handle Codex OAuth hosts only). There is no fail-closed with a named reason for an unlisted host, and oauth2.googleapis.com comes from a static string in the binary, not a measurement; no measured list is recorded on the spec.
+
+    3. Ruling item 2: runtime_policy auth_hosts is not consumed by the contained launcher''s egress allow-set (only tests and the Python fixture read it; contained.rs:1027/1384 handle Codex OAuth hosts only). There is no fail-closed with a named reason for an unlisted host, and oauth2.googleapis.com comes from a static string in the binary, not a measurement; no measured list is recorded on the spec.
+
     4. Stale native-permission data: vendors.toml:42 still sets workspace_permission = "write_file", RuntimePolicy::settings (containment/mod.rs:219) now has no production caller (dead_code warning; Makefile clippy -D warnings would fail), launch/agy.rs:227-237 tests still assert the write_file(<ws>/**) allow the ruling retired, and install_private_runtime keeps an unused _workspace parameter (contained.rs:462). Remove the field/method/tests and parameter, or cfg(test)-gate them with a stated reason.
-    5. scripts/containment/conformance.py fixture_policy reads auth_hosts from the script's own source checkout (parents[2]/aida-cli-lib/src/containment/vendors.toml), not from the aida binary under test (shutil.which), so a fixture run against a different build can allow hosts that differ from the launcher's shipped data. Derive hosts from the binary under test (e.g. an aida subcommand) or assert the binary's SHA matches the checkout.
+
+    5. scripts/containment/conformance.py fixture_policy reads auth_hosts from the script''s own source checkout (parents[2]/aida-cli-lib/src/containment/vendors.toml), not from the aida binary under test (shutil.which), so a fixture run against a different build can allow hosts that differ from the launcher''s shipped data. Derive hosts from the binary under test (e.g. an aida subcommand) or assert the binary''s SHA matches the checkout.
+
     6. Test gap (strict tier): no test covers ready() building the queue-work argv with --vendor agy, or run_aida --vendor agy getting past the output-dir check into setup with agy fixture policy; test_agy_aida_boundary_retains_hidden_output_refusal only exercises the pre-existing /tmp refusal.
-    7. Cosmetic: vendors.toml:29-31 header comment still says 'Only this endpoint is present in recorded host evidence' above a two-host list; reconcile with the new inline comment.
-    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
-  created_at: 2026-11-08T00:21:45.148134190Z
-  modified_at: 2026-11-08T00:21:45.148134190Z
+
+    7. Cosmetic: vendors.toml:29-31 header comment still says ''Only this endpoint is present in recorded host evidence'' above a two-host list; reconcile with the new inline comment.
+
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.'
+  created_at: 2026-11-08 00:21:45.148134+00:00
+  modified_at: 2026-11-08 00:21:45.148134+00:00
   session_id: 01a1b848-940b-7bd2-8acd-52e428b182b8
   harness_version: 2.1.319 (Claude Code)
 - id: 01a1b8c8-2493-7db1-ac64-426a48335ff1
   author: joe
   content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: Rework round 2: prior findings 4,5,7 fixed and 6 partly covered (runtime-policy descriptor from tested binary, retired write_file permission, setup test), but ruling items 1-3 (prior findings 1,2,3) remain unaddressed with no recorded dispute; CI build still pending at head.. No triage reason was given.'
-  created_at: 2026-11-08T01:31:26.739708450Z
-  modified_at: 2026-11-08T01:31:26.739708450Z
+  created_at: 2026-11-08 01:31:26.739708+00:00
+  modified_at: 2026-11-08 01:31:26.739708+00:00
   session_id: 01a1b8be-8170-7fb2-89ab-ecb4c6eee98c
   harness_version: 2.1.319 (Claude Code)
 - id: 01a1b8c8-3ec7-7631-a455-730c5fb9a950
   author: joe
-  content: |-
-    REVIEW FINDINGS TO ADDRESS (PR #3641):
+  content: 'REVIEW FINDINGS TO ADDRESS (PR #3641):
+
     Verdict: CHANGES REQUESTED
+
     Reviewed commit: 905a9756bb94
+
     Recorded: 2026-11-08T00:45:37.918091301+00:00
+
     Findings:
-    1. Prior finding 1 still open: run_aida --vendor agy still routes through 'aida queue work --vendor agy', which Adapter::require_conformance refuses (agy.rs), so agy never executes through the shared wrapper and the advisor's C0-C4 AIDA-boundary run is impossible. Add a fixture/diagnostic-only entry into the shared wrapper (outer_only_argv + receipt barrier) that leaves production admission closed, plus a test that production still refuses. If disputed, punt naming this finding.
+
+    1. Prior finding 1 still open: run_aida --vendor agy still routes through ''aida queue work --vendor agy'', which Adapter::require_conformance refuses (agy.rs), so agy never executes through the shared wrapper and the advisor''s C0-C4 AIDA-boundary run is impossible. Add a fixture/diagnostic-only entry into the shared wrapper (outer_only_argv + receipt barrier) that leaves production admission closed, plus a test that production still refuses. If disputed, punt naming this finding.
+
     2. Prior finding 2 still open: MCP, browser and URL tools are not disabled. vendors.toml argv_prefix is still only --output-format stream-json --disable-slash-commands, and install_private_runtime writes settings.json as {} (contained.rs:474-475). Add the agy flags/settings that turn these tools off, and a test asserting them in both candidate and wrapper argv/settings.
-    3. Prior finding 3 still open: runtime_policy auth_hosts is still not consumed by the contained launcher's egress allow-set. rg shows only agy.rs:211 (require_auth_policy check), tests and the Python fixture read it; contained.rs:1026/1383 handle Codex OAUTH_HOSTS only. No named fail-closed refusal for an unlisted host, and no measured refresh-host list on the spec (oauth2.googleapis.com is still static-string evidence). Wire auth_hosts into the wrapper egress set with a named refusal and test, or record the dispute on the spec.
+
+    3. Prior finding 3 still open: runtime_policy auth_hosts is still not consumed by the contained launcher''s egress allow-set. rg shows only agy.rs:211 (require_auth_policy check), tests and the Python fixture read it; contained.rs:1026/1383 handle Codex OAUTH_HOSTS only. No named fail-closed refusal for an unlisted host, and no measured refresh-host list on the spec (oauth2.googleapis.com is still static-string evidence). Wire auth_hosts into the wrapper egress set with a named refusal and test, or record the dispute on the spec.
+
     4. Prior finding 6 partially open: test_agy_aida_setup_uses_policy_from_selected_binary now covers run_aida reaching setup with binary-derived agy policy, but there is still no test that ready() builds the queue-work argv with --vendor agy.
+
     5. Rework contract: the round-1 contract says to produce a commit for each finding or punt explicitly naming any disputed finding. The spec has no comment after the 00:21 findings, and commit 905a975 says nothing about findings 1-3. Record a disposition for each finding on TASK-3048.
-    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
-  created_at: 2026-11-08T01:31:33.447142706Z
-  modified_at: 2026-11-08T01:31:33.447142706Z
+
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.'
+  created_at: 2026-11-08 01:31:33.447142+00:00
+  modified_at: 2026-11-08 01:31:33.447142+00:00
   session_id: 01a1b8be-8170-7fb2-89ab-ecb4c6eee98c
   harness_version: 2.1.319 (Claude Code)
 - id: 01a1b8cc-9b5a-7ed3-8de0-8c7dc88ed415
   author: joe
-  content: 'Round 7 disposition plan: (1) add an explicit fixture-only AGY entry using the shared wrapper and its live receipt/exec barrier, without changing production require_conformance; (2) use supported tool-deny controls and isolate global/workspace MCP/plugin inputs; verify candidate and wrapper settings/argv without invoking a model; (3) derive wrapper relay destinations from runtime auth_hosts intersected with trusted approval and name unlisted-host denials. Measured inventory remains daily-cloudcode-pa.googleapis.com only; oauth2.googleapis.com is a static candidate token endpoint, not a measured refresh. Advisor must attach refresh observations and report.json; implementer will not fabricate a measured list. (4) cover vendor propagation in conformance launch argv and ready callback; (5) record final dispositions and validation here. Expected scope: containment runtime data/common wrapper, diagnostic CLI adapter, conformance harness/tests, CLI catalog/audit fixtures and conformance docs. Keep Refs and TASK-3048 in progress.'
-  created_at: 2026-11-08T01:36:19.290923332Z
-  modified_at: 2026-11-08T01:36:19.290923332Z
+  content: 'Round 7 disposition plan: (1) add an explicit fixture-only AGY entry using the shared wrapper and its live receipt/exec barrier, without changing production require_conformance; (2) use supported tool-deny controls and isolate global/workspace MCP/plugin inputs; verify candidate and wrapper settings/argv without invoking a model; (3) derive wrapper relay destinations from runtime auth_hosts intersected with trusted approval and name unlisted-host denials. Measured inventory remains daily-cloudcode-pa.googleapis.com only; oauth2.googleapis.com is a static candidate token endpoint, not a measured refresh. Advisor must attach refresh observations and report.json; implementer will not fabricate a measured list. (4) cover vendor propagation in conformance launch argv and ready callback; (5) record final dispositions and validation here. Expected scope: containment runtime data/common wrapper, diagnostic CLI adapter, conformance harness/tests, CLI catalog/audit fixtures and conformance
+    docs. Keep Refs and TASK-3048 in progress.'
+  created_at: 2026-11-08 01:36:19.290923+00:00
+  modified_at: 2026-11-08 01:36:19.290923+00:00
   session_id: 01a1b8c99472
 - id: 01a1b8da-8053-78f1-8d3f-926549af6186
   author: joe
-  content: 'Round 7 code dispositions (validation in progress): Finding 1 addressed with the hidden config permissions conformance-launch entry in launch/agy.rs. It issues the normal contained child grant and calls PreparedLaunch::prepare_runtime_diagnostic; production preflight/Adapter::require_conformance still refuse. The shared spawn barrier rechecks outer_only_argv with its live accepted receipt before exec release. Finding 2 addressed with shipped tool_denies (mcp(*), read_url(*), execute_url(*)), mandatory inline argv controls plus private runtime settings, and masked global/source .gemini and workspace MCP/hooks/plugins. No native sandbox/profile file, no inherited Codex API key. Candidate, wrapper argv/settings and private credential-handle tests cover the configuration; actual AGY enforcement still needs advisor live evidence. Finding 3 addressed in code: runtime auth_hosts populates the approved relay allow-set; missing trusted approval names AGY_AUTH_HOST_UNAPPROVED and unlisted runtime requests log CONTAINED_EGRESS_HOST_UNLISTED before DNS. Inventory evidence recorded explicitly: measured inference hosts=[daily-cloudcode-pa.googleapis.com]; measured refresh hosts=[]; candidate refresh hosts=[oauth2.googleapis.com] from the installed token-endpoint string only. auth_inventory_complete remains false. This code-only implementer run performs no real model/refresh measurement. Finding 4 addressed with vendor propagation test for queue-work argv and an actual continue_aida/ready callback fixture proving AGY selects the diagnostic entry and waits for a shared receipt before publishing probe payload; AGY no longer uses queue work because finding 1 requires avoiding that production refusal. Finding 5: these dispositions are recorded for every finding. Native seat leaves edits uncommitted for a new host commit (Refs TASK-3048); no finding is being silently disputed, no completion or production unlock is claimed.'
-  created_at: 2026-11-08T01:51:29.875007689Z
-  modified_at: 2026-11-08T01:51:29.875007689Z
+  content: 'Round 7 code dispositions (validation in progress): Finding 1 addressed with the hidden config permissions conformance-launch entry in launch/agy.rs. It issues the normal contained child grant and calls PreparedLaunch::prepare_runtime_diagnostic; production preflight/Adapter::require_conformance still refuse. The shared spawn barrier rechecks outer_only_argv with its live accepted receipt before exec release. Finding 2 addressed with shipped tool_denies (mcp(*), read_url(*), execute_url(*)), mandatory inline argv controls plus private runtime settings, and masked global/source .gemini and workspace MCP/hooks/plugins. No native sandbox/profile file, no inherited Codex API key. Candidate, wrapper argv/settings and private credential-handle tests cover the configuration; actual AGY enforcement still needs advisor live evidence. Finding 3 addressed in code: runtime auth_hosts populates the approved relay allow-set; missing trusted approval names AGY_AUTH_HOST_UNAPPROVED and unlisted
+    runtime requests log CONTAINED_EGRESS_HOST_UNLISTED before DNS. Inventory evidence recorded explicitly: measured inference hosts=[daily-cloudcode-pa.googleapis.com]; measured refresh hosts=[]; candidate refresh hosts=[oauth2.googleapis.com] from the installed token-endpoint string only. auth_inventory_complete remains false. This code-only implementer run performs no real model/refresh measurement. Finding 4 addressed with vendor propagation test for queue-work argv and an actual continue_aida/ready callback fixture proving AGY selects the diagnostic entry and waits for a shared receipt before publishing probe payload; AGY no longer uses queue work because finding 1 requires avoiding that production refusal. Finding 5: these dispositions are recorded for every finding. Native seat leaves edits uncommitted for a new host commit (Refs TASK-3048); no finding is being silently disputed, no completion or production unlock is claimed.'
+  created_at: 2026-11-08 01:51:29.875007+00:00
+  modified_at: 2026-11-08 01:51:29.875007+00:00
   session_id: 01a1b8c99472
 - id: 01a1b8f0-a991-7b32-8582-d551ee30a89a
   author: joe
-  content: 'Validation checkpoint: all 59 Python tests in tests.test_containment_conformance + tests.test_containment_conformance_aida passed (52.3s); Rust formatting, git diff --check, ExecContext zero-additions and updated store-writer inventory passed. The first launcher job j20261108T013924117-74151-0 (cargo test --profile agent -p aida-cli-lib --lib task_3048) is still running; no executed-test result is claimed. No-default-feature check j20261108T014227613-54-0, help snapshot regeneration j20261108T014243083-2-0, final task_3048 repeat j20261108T014641929-2-0 and CLI JSON-audit regression j20261108T015318193-187309-0 are queued. make check-ci-fast is active with Cargo builds routed through lane jobs; its separate non-Cargo checks passed up to the pending help snapshot and store-writer inventory was then fixed and checked. Native publication declaration recorded: [AI:codex] fix(containment): route AGY conformance through the shared boundary (Refs TASK-3048). No commit/push, model run, queue completion or production unlock was performed.'
-  created_at: 2026-11-08T02:15:42.225595922Z
-  modified_at: 2026-11-08T02:15:42.225595922Z
+  content: 'Validation checkpoint: all 59 Python tests in tests.test_containment_conformance + tests.test_containment_conformance_aida passed (52.3s); Rust formatting, git diff --check, ExecContext zero-additions and updated store-writer inventory passed. The first launcher job j20261108T013924117-74151-0 (cargo test --profile agent -p aida-cli-lib --lib task_3048) is still running; no executed-test result is claimed. No-default-feature check j20261108T014227613-54-0, help snapshot regeneration j20261108T014243083-2-0, final task_3048 repeat j20261108T014641929-2-0 and CLI JSON-audit regression j20261108T015318193-187309-0 are queued. make check-ci-fast is active with Cargo builds routed through lane jobs; its separate non-Cargo checks passed up to the pending help snapshot and store-writer inventory was then fixed and checked. Native publication declaration recorded: [AI:codex] fix(containment): route AGY conformance through the shared boundary (Refs TASK-3048). No commit/push, model run,
+    queue completion or production unlock was performed.'
+  created_at: 2026-11-08 02:15:42.225595+00:00
+  modified_at: 2026-11-08 02:15:42.225595+00:00
   session_id: 01a1b8c99472
 - id: 01a1b90b-d024-75d3-af85-916f6c1cce7c
   author: joe
-  content: 'Round 7 final handoff (AI:codex): code dispositions 1-5 are implemented as recorded above. Validation: 59 Python conformance tests passed; the requested task_3048 Rust suite passed all 17 tests twice (no ignored/zero-match result); normal help snapshot comparison passed after regeneration; checked_in_audit_is_exhaustive_and_every_honoured_probe_parses passed; vendor-literal/Codex spawn-path guards passed 4 tests. No-default-feature aida-cli and standalone TUI all-target checks passed through lane jobs. make check-ci-fast ran with Cargo handed to the launcher and stopped only at Help golden snapshot co-change guard: that script compares git diff <merge-base> HEAD, so it cannot see the repaired snapshot while native-seat edits are uncommitted. All checks before that guard passed in the full run; all 13 checks after it were then run with the same fast runner and passed. The host must include the regenerated golden in the new Refs commit and rerun the committed-history guard. Source formatting passed; generated Clap snapshot retains its normal blank-help indentation. Changed files (16): aida-cli-lib/src/config_cmd.rs; aida-cli-lib/src/config_cmd_args.rs; aida-cli-lib/src/containment/contained_host.py; aida-cli-lib/src/containment/mod.rs; aida-cli-lib/src/containment/tests/codex_auth_tests.rs; aida-cli-lib/src/containment/tests/launch_tests.rs; aida-cli-lib/src/containment/vendors.toml; aida-cli-lib/src/launch/agy.rs; aida-cli-lib/src/launch/contained.rs; aida-cli-lib/src/tests/golden/cli_help_snapshot.txt; docs/cli/07-project-setup.md; docs/internal/cli-format-json-audit.md; docs/internal/testing/containment-conformance.md; scripts/containment/conformance.py; scripts/store-writers.toml; tests/test_containment_conformance.py. Publication declaration is recorded as [AI:codex] fix(containment): route AGY conformance through the shared boundary (Refs TASK-3048). Edits remain uncommitted as required in this native seat. No real vendor model or refresh run occurred. Remaining broader acceptance: advisor measured refresh-host inventory and integrated C0-C4 evidence (existing evaluator unmeasured controls stay unknown), then a separate production-admission change. auth_inventory_complete=false and Adapter::require_conformance refusal remain; TASK-3048 is not completed.'
-  created_at: 2026-11-08T02:45:21.572319252Z
-  modified_at: 2026-11-08T02:45:21.572319252Z
+  content: 'Round 7 final handoff (AI:codex): code dispositions 1-5 are implemented as recorded above. Validation: 59 Python conformance tests passed; the requested task_3048 Rust suite passed all 17 tests twice (no ignored/zero-match result); normal help snapshot comparison passed after regeneration; checked_in_audit_is_exhaustive_and_every_honoured_probe_parses passed; vendor-literal/Codex spawn-path guards passed 4 tests. No-default-feature aida-cli and standalone TUI all-target checks passed through lane jobs. make check-ci-fast ran with Cargo handed to the launcher and stopped only at Help golden snapshot co-change guard: that script compares git diff <merge-base> HEAD, so it cannot see the repaired snapshot while native-seat edits are uncommitted. All checks before that guard passed in the full run; all 13 checks after it were then run with the same fast runner and passed. The host must include the regenerated golden in the new Refs commit and rerun the committed-history guard. Source
+    formatting passed; generated Clap snapshot retains its normal blank-help indentation. Changed files (16): aida-cli-lib/src/config_cmd.rs; aida-cli-lib/src/config_cmd_args.rs; aida-cli-lib/src/containment/contained_host.py; aida-cli-lib/src/containment/mod.rs; aida-cli-lib/src/containment/tests/codex_auth_tests.rs; aida-cli-lib/src/containment/tests/launch_tests.rs; aida-cli-lib/src/containment/vendors.toml; aida-cli-lib/src/launch/agy.rs; aida-cli-lib/src/launch/contained.rs; aida-cli-lib/src/tests/golden/cli_help_snapshot.txt; docs/cli/07-project-setup.md; docs/internal/cli-format-json-audit.md; docs/internal/testing/containment-conformance.md; scripts/containment/conformance.py; scripts/store-writers.toml; tests/test_containment_conformance.py. Publication declaration is recorded as [AI:codex] fix(containment): route AGY conformance through the shared boundary (Refs TASK-3048). Edits remain uncommitted as required in this native seat. No real vendor model or refresh run occurred. Remaining
+    broader acceptance: advisor measured refresh-host inventory and integrated C0-C4 evidence (existing evaluator unmeasured controls stay unknown), then a separate production-admission change. auth_inventory_complete=false and Adapter::require_conformance refusal remain; TASK-3048 is not completed.'
+  created_at: 2026-11-08 02:45:21.572319+00:00
+  modified_at: 2026-11-08 02:45:21.572319+00:00
   session_id: 01a1b8c99472
 history:
 - id: 01a1a7b3-3699-7713-8ae7-69568c287956
   author: joe
-  timestamp: 2026-11-04T17:55:02.425728010Z
+  timestamp: 2026-11-04 17:55:02.425728+00:00
   session_id: 5bf140f7-38b2-4a04-9e8c-ccf69b1258f8
   changes: []
 - id: 01a1a7b3-b532-78e0-9e93-7ca1e51b64f5
   author: joe
-  timestamp: 2026-11-04T17:55:34.834427527Z
+  timestamp: 2026-11-04 17:55:34.834427+00:00
   session_id: 5bf140f7-38b2-4a04-9e8c-ccf69b1258f8
   changes: []
 - id: 01a1a7b3-d3b8-7ea0-a1a2-12f3715c9502
   author: joe
-  timestamp: 2026-11-04T17:55:42.648072185Z
+  timestamp: 2026-11-04 17:55:42.648072+00:00
   session_id: 5bf140f7-38b2-4a04-9e8c-ccf69b1258f8
   changes: []
 - id: 01a1abaa-e83a-7110-96ee-0b245b0ed7cc
   author: aida-session-start
-  timestamp: 2026-11-05T12:24:26.938858717Z
+  timestamp: 2026-11-05 12:24:26.938858+00:00
   changes:
   - field_name: status
     old_value: Approved
     new_value: InProgress
 - id: 01a1abab-9e23-7ec2-845f-81313a52be6e
   author: joe
-  timestamp: 2026-11-05T12:25:13.507335047Z
+  timestamp: 2026-11-05 12:25:13.507335+00:00
   session_id: 01a1abaae052
   changes: []
 - id: 01a1abad-19ed-71f3-8a79-9c5cbc3bd06c
   author: joe
-  timestamp: 2026-11-05T12:26:50.733686573Z
+  timestamp: 2026-11-05 12:26:50.733686+00:00
   session_id: 01a1abaae052
   changes:
   - field_name: status
@@ -504,7 +610,7 @@ history:
     new_value: NeedsAttention
 - id: 01a1abba-f2ae-7552-9846-dbacf7d991a1
   author: joe
-  timestamp: 2026-11-05T12:41:58.190606458Z
+  timestamp: 2026-11-05 12:41:58.190606+00:00
   session_id: b83457ff-84e3-46cb-8f68-4be531a63422
   changes:
   - field_name: status
@@ -512,14 +618,14 @@ history:
     new_value: Approved
 - id: 01a1abbc-1f3f-7652-a7ed-dbfe6c2b02b4
   author: aida-session-start
-  timestamp: 2026-11-05T12:43:15.135895100Z
+  timestamp: 2026-11-05 12:43:15.135895+00:00
   changes:
   - field_name: status
     old_value: Approved
     new_value: InProgress
 - id: 01a1abc8-fbc5-7160-9ddb-a143fd689688
   author: joe
-  timestamp: 2026-11-05T12:57:18.021536618Z
+  timestamp: 2026-11-05 12:57:18.021536+00:00
   session_id: 01a1abbc157d
   changes:
   - field_name: status
@@ -527,18 +633,18 @@ history:
     new_value: NeedsAttention
 - id: 01a1abca-614b-7b80-adca-a70e0b4863dd
   author: joe
-  timestamp: 2026-11-05T12:58:49.547760176Z
+  timestamp: 2026-11-05 12:58:49.547760+00:00
   session_id: b83457ff-84e3-46cb-8f68-4be531a63422
   changes: []
 - id: 01a1abd1-02a1-7be0-823e-0f4eb104ff03
   author: joe
-  timestamp: 2026-11-05T13:06:04.065323705Z
+  timestamp: 2026-11-05 13:06:04.065323+00:00
   session_id: 01a1abd01c31
   harness_version: 2.1.318 (Claude Code)
   changes: []
 - id: 01a1abdd-57d5-7e10-b47c-80c8f5c2a2fb
   author: joe
-  timestamp: 2026-11-05T13:19:32.309207034Z
+  timestamp: 2026-11-05 13:19:32.309207+00:00
   session_id: b83457ff-84e3-46cb-8f68-4be531a63422
   changes:
   - field_name: status
@@ -546,14 +652,14 @@ history:
     new_value: Approved
 - id: 01a1abe1-e215-7622-8de7-d6eb1a577cd9
   author: aida-session-start
-  timestamp: 2026-11-05T13:24:29.845869055Z
+  timestamp: 2026-11-05 13:24:29.845869+00:00
   changes:
   - field_name: status
     old_value: Approved
     new_value: InProgress
 - id: 01a1abf7-2dd2-7cd0-a84f-816146849b37
   author: aida-orchestrator
-  timestamp: 2026-11-05T13:47:45.490960243Z
+  timestamp: 2026-11-05 13:47:45.490960+00:00
   session_id: 01a1abf4edd5
   harness_version: 2.1.318 (Claude Code)
   changes:
@@ -562,7 +668,7 @@ history:
     new_value: NeedsAttention
 - id: 01a1ac6d-0430-7301-b0b9-a71900aaa4ae
   author: joe
-  timestamp: 2026-11-05T15:56:28.080575939Z
+  timestamp: 2026-11-05 15:56:28.080575+00:00
   session_id: b83457ff-84e3-46cb-8f68-4be531a63422
   changes:
   - field_name: status
@@ -570,14 +676,14 @@ history:
     new_value: Approved
 - id: 01a1ac6f-1473-77e3-8ef8-a4349a2b1e12
   author: aida-session-start
-  timestamp: 2026-11-05T15:58:43.315415385Z
+  timestamp: 2026-11-05 15:58:43.315415+00:00
   changes:
   - field_name: status
     old_value: Approved
     new_value: InProgress
 - id: 01a1ac72-c494-7381-95e8-c7a4f3138730
   author: joe
-  timestamp: 2026-11-05T16:02:45.012397452Z
+  timestamp: 2026-11-05 16:02:45.012397+00:00
   session_id: 01a1ac6f0c4f
   changes:
   - field_name: status
@@ -585,12 +691,12 @@ history:
     new_value: NeedsAttention
 - id: 01a1ad20-56ba-7860-964a-536c557fecde
   author: joe
-  timestamp: 2026-11-05T19:12:20.154760959Z
+  timestamp: 2026-11-05 19:12:20.154760+00:00
   session_id: 688fbe55-f92b-4b09-a8d1-2ca064cb7e25
   changes: []
 - id: 01a1ad21-0ffe-7f70-b0a9-345349308f05
   author: joe
-  timestamp: 2026-11-05T19:13:07.582524150Z
+  timestamp: 2026-11-05 19:13:07.582524+00:00
   session_id: 688fbe55-f92b-4b09-a8d1-2ca064cb7e25
   changes:
   - field_name: status
@@ -598,24 +704,24 @@ history:
     new_value: Approved
 - id: 01a1b19a-6596-7e93-8d3e-baca8764bdbd
   author: joe
-  timestamp: 2026-11-06T16:04:08.214675980Z
+  timestamp: 2026-11-06 16:04:08.214675+00:00
   session_id: b0a84e34-277c-4df6-b53c-43f4bbe2e84d
   changes: []
 - id: 01a1b19a-8486-7ba0-a272-eb678babe5b0
   author: joe
-  timestamp: 2026-11-06T16:04:16.134742619Z
+  timestamp: 2026-11-06 16:04:16.134742+00:00
   session_id: b0a84e34-277c-4df6-b53c-43f4bbe2e84d
   changes: []
 - id: 01a1b1bf-cd8f-7480-b275-5e97585a9d3a
   author: aida-session-start
-  timestamp: 2026-11-06T16:44:59.663653180Z
+  timestamp: 2026-11-06 16:44:59.663653+00:00
   changes:
   - field_name: status
     old_value: Approved
     new_value: InProgress
 - id: 01a1b1c9-05f6-72b3-9eb1-4c93abc32448
   author: joe
-  timestamp: 2026-11-06T16:55:03.926192074Z
+  timestamp: 2026-11-06 16:55:03.926192+00:00
   session_id: 01a1b1bfc08b
   changes:
   - field_name: status
@@ -623,7 +729,7 @@ history:
     new_value: NeedsAttention
 - id: 01a1b2ac-6c32-7481-98ae-b8c7c51706f3
   author: joe
-  timestamp: 2026-11-06T21:03:26.770058511Z
+  timestamp: 2026-11-06 21:03:26.770058+00:00
   session_id: 3dd100c3-f8c0-44d9-ac4c-f9ff0eb32a27
   changes:
   - field_name: status
@@ -631,14 +737,14 @@ history:
     new_value: Approved
 - id: 01a1b2c3-41b8-75a1-8a2b-e15d766e1013
   author: aida-session-start
-  timestamp: 2026-11-06T21:28:23.224948756Z
+  timestamp: 2026-11-06 21:28:23.224948+00:00
   changes:
   - field_name: status
     old_value: Approved
     new_value: InProgress
 - id: 01a1b300-2fe9-7293-a491-f34a6c41b094
   author: joe
-  timestamp: 2026-11-06T22:34:56.361038699Z
+  timestamp: 2026-11-06 22:34:56.361038+00:00
   session_id: 3dd100c3-f8c0-44d9-ac4c-f9ff0eb32a27
   changes:
   - field_name: status
@@ -646,14 +752,14 @@ history:
     new_value: Approved
 - id: 01a1b301-b8d2-7c63-853c-cd295ba6317b
   author: aida-session-start
-  timestamp: 2026-11-06T22:36:36.946931802Z
+  timestamp: 2026-11-06 22:36:36.946931+00:00
   changes:
   - field_name: status
     old_value: Approved
     new_value: InProgress
 - id: 01a1b32a-803d-7c81-b7b3-58310d4c12b2
   author: joe
-  timestamp: 2026-11-06T23:21:09.437658098Z
+  timestamp: 2026-11-06 23:21:09.437658+00:00
   session_id: 3dd100c3-f8c0-44d9-ac4c-f9ff0eb32a27
   changes:
   - field_name: status
@@ -661,7 +767,7 @@ history:
     new_value: Approved
 - id: 01a1b32c-cb4c-7922-92b8-efa53eaefde3
   author: aida-pr-open
-  timestamp: 2026-11-06T23:23:39.724815433Z
+  timestamp: 2026-11-06 23:23:39.724815+00:00
   session_id: 3dd100c3-f8c0-44d9-ac4c-f9ff0eb32a27
   changes:
   - field_name: status
@@ -669,7 +775,7 @@ history:
     new_value: InProgress
 - id: 01a1b346-d28f-78c0-83d1-31b15d0895b8
   author: aida-orchestrator
-  timestamp: 2026-11-06T23:52:05.520000290Z
+  timestamp: 2026-11-06 23:52:05.520000+00:00
   session_id: 01a1b342b912
   harness_version: 2.1.319 (Claude Code)
   changes:
@@ -678,7 +784,7 @@ history:
     new_value: NeedsAttention
 - id: 01a1b34a-8d49-7cb0-990b-cdb85c29d681
   author: joe
-  timestamp: 2026-11-06T23:56:09.929656128Z
+  timestamp: 2026-11-06 23:56:09.929656+00:00
   session_id: 3dd100c3-f8c0-44d9-ac4c-f9ff0eb32a27
   changes:
   - field_name: status
@@ -686,14 +792,14 @@ history:
     new_value: Approved
 - id: 01a1b34b-d29b-7c32-96be-ab940b2c8a46
   author: aida-session-start
-  timestamp: 2026-11-06T23:57:33.211810085Z
+  timestamp: 2026-11-06 23:57:33.211810+00:00
   changes:
   - field_name: status
     old_value: Approved
     new_value: InProgress
 - id: 01a1b377-1d85-7c81-a5fa-cdc2e6b4e0ab
   author: joe
-  timestamp: 2026-11-07T00:44:50.437266316Z
+  timestamp: 2026-11-07 00:44:50.437266+00:00
   session_id: 01a1b358-7de9-72a0-b4a1-1a909992fa05
   harness_version: 2.1.319 (Claude Code)
   changes:
@@ -702,14 +808,14 @@ history:
     new_value: Approved
 - id: 01a1b378-6cd1-7463-9586-d48862d47805
   author: aida-session-start
-  timestamp: 2026-11-07T00:46:16.273679561Z
+  timestamp: 2026-11-07 00:46:16.273679+00:00
   changes:
   - field_name: status
     old_value: Approved
     new_value: InProgress
 - id: 01a1b54e-3994-7320-80b9-80b63fa981fc
   author: joe
-  timestamp: 2026-11-07T09:19:25.076740260Z
+  timestamp: 2026-11-07 09:19:25.076740+00:00
   session_id: 01a1b441-8158-7162-ad75-f7915b45ee33
   harness_version: 2.1.319 (Claude Code)
   changes:
@@ -718,14 +824,14 @@ history:
     new_value: Approved
 - id: 01a1b558-7b58-74e2-8c3e-865f270de60f
   author: aida-session-start
-  timestamp: 2026-11-07T09:30:37.272995120Z
+  timestamp: 2026-11-07 09:30:37.272995+00:00
   changes:
   - field_name: status
     old_value: Approved
     new_value: InProgress
 - id: 01a1b6e1-8855-7ab3-8801-412bff0aa07d
   author: joe
-  timestamp: 2026-11-07T16:39:56.245125295Z
+  timestamp: 2026-11-07 16:39:56.245125+00:00
   session_id: 01a1b646-c67d-7b43-98ff-3604a53f5d1f
   harness_version: 2.1.319 (Claude Code)
   changes:
@@ -734,20 +840,20 @@ history:
     new_value: Approved
 - id: 01a1b6e2-e91a-7600-b0dd-378b350a67a8
   author: joe
-  timestamp: 2026-11-07T16:41:26.554846904Z
+  timestamp: 2026-11-07 16:41:26.554846+00:00
   session_id: 01a1b646-c67d-7b43-98ff-3604a53f5d1f
   harness_version: 2.1.319 (Claude Code)
   changes: []
 - id: 01a1b6e7-aa0e-73c2-9593-04ae497f7e4d
   author: aida-session-start
-  timestamp: 2026-11-07T16:46:38.094140217Z
+  timestamp: 2026-11-07 16:46:38.094140+00:00
   changes:
   - field_name: status
     old_value: Approved
     new_value: InProgress
 - id: 01a1b864-3524-73c2-ae15-3c03f1686f00
   author: dirtlab
-  timestamp: 2026-11-07T23:42:17.380088104Z
+  timestamp: 2026-11-07 23:42:17.380088+00:00
   session_id: 01a1b85e95ed
   harness_version: codex-cli 0.167.0
   changes:
@@ -756,7 +862,7 @@ history:
     new_value: NeedsAttention
 - id: 01a1b86f-74de-7ef3-bbc5-66ebe28c748b
   author: aida-orchestrator
-  timestamp: 2026-11-07T23:54:34.590744453Z
+  timestamp: 2026-11-07 23:54:34.590744+00:00
   session_id: 01a1b86daa87
   harness_version: 2.1.319 (Claude Code)
   changes:
@@ -765,7 +871,7 @@ history:
     new_value: NeedsAttention
 - id: 01a1b888-3801-7de3-83bd-4adf51ed8281
   author: joe
-  timestamp: 2026-11-08T00:21:37.409173250Z
+  timestamp: 2026-11-08 00:21:37.409173+00:00
   session_id: 01a1b848-940b-7bd2-8acd-52e428b182b8
   harness_version: 2.1.319 (Claude Code)
   changes:
@@ -774,20 +880,29 @@ history:
     new_value: Approved
 - id: 01a1b88b-8447-7380-a690-ea06cfb24e17
   author: aida-session-start
-  timestamp: 2026-11-08T00:25:13.543123041Z
+  timestamp: 2026-11-08 00:25:13.543123+00:00
   changes:
   - field_name: status
     old_value: Approved
     new_value: InProgress
 - id: 01a1b88e-1851-7180-a7be-8829456e9c86
   author: joe
-  timestamp: 2026-11-08T00:28:02.513174412Z
+  timestamp: 2026-11-08 00:28:02.513174+00:00
   session_id: 01a1b88d0e35
   harness_version: 2.1.319 (Claude Code)
   changes: []
+- id: 01a1b890-30d8-7c80-bc54-7191304e8c18
+  author: dirtlab
+  timestamp: 2026-11-08 00:30:19.864057+00:00
+  session_id: 01a1b88b7e86
+  harness_version: codex-cli 0.167.0
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: NeedsAttention
 - id: 01a1b89e-339c-7b52-b2c2-64157f6b9e2d
   author: aida-orchestrator
-  timestamp: 2026-11-08T00:45:38.076661991Z
+  timestamp: 2026-11-08 00:45:38.076661+00:00
   session_id: 01a1b89d3d26
   harness_version: 2.1.319 (Claude Code)
   changes:
@@ -796,7 +911,7 @@ history:
     new_value: NeedsAttention
 - id: 01a1b8c8-2493-7db1-ac64-425c413b95ca
   author: joe
-  timestamp: 2026-11-08T01:31:26.739699981Z
+  timestamp: 2026-11-08 01:31:26.739699+00:00
   session_id: 01a1b8be-8170-7fb2-89ab-ecb4c6eee98c
   harness_version: 2.1.319 (Claude Code)
   changes:
@@ -805,7 +920,7 @@ history:
     new_value: Approved
 - id: 01a1b8c9-9fe8-7ab2-b5e4-c8e4696a00b4
   author: aida-session-start
-  timestamp: 2026-11-08T01:33:03.848347412Z
+  timestamp: 2026-11-08 01:33:03.848347+00:00
   changes:
   - field_name: status
     old_value: Approved
@@ -818,3 +933,8 @@ filed_at:
   aida_build_sha: e422daaa1a4
   vendor: claude
   session: 5bf140f7-38b2-4a04-9e8c-ccf69b1258f8
+attention_reason:
+  category: missing-context
+  detail: Partial review repair only; findings 1-3 remain blocking. A diagnostic-only entry must preserve the shared grant/receipt/seat barrier while production require_conformance stays closed; no such entry is implemented here. Installed AGY help exposes no MCP/browser/URL disabling flags, and binary setting-name strings alone do not establish supported disabling semantics; need version-pinned settings contract before claiming tools off. oauth2.googleapis.com is static binary evidence only; advisor must measure refresh traffic, as this code-only seat must not run real vendor models. Do not publish as completing or unlock production admission. Current edits address stale native-permission data, binary-owned fixture policy, and setup coverage; Refs declaration does not override this punt.
+  raised_by: implementer
+  raised_at: 2026-11-08 00:30:19.864040+00:00
