@@ -8,7 +8,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-06T13:28:15.158321967Z
-modified_at: 2026-11-08T12:39:27.302684041Z
+modified_at: 2026-11-08T12:39:34.630736860Z
 req_type: Task
 tags:
 - architecture
@@ -507,6 +507,22 @@ comments:
   content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: All round-6 findings are fixed (MSG_NOSIGNAL send, SIG_DFL regression, attach re-check) and S3 matches the sketch except one condition: the advisor-required claude attach refusal in claude_argv only inspects argv[0], which is never attach on a composed launch. CI at 08d8ee6 was still queued/running when recorded (lib-0 green only; merge-hold-gate red is the expected supervised hold).. No triage reason was given.'
   created_at: 2026-11-08T12:39:27.302680380Z
   modified_at: 2026-11-08T12:39:27.302680380Z
+  session_id: 01a1b9af-8230-75d2-82f8-667491cc010a
+  harness_version: 2.1.319 (Claude Code)
+- id: 01a1bb2b-d57a-72f0-81c5-fc7a4ae1271e
+  author: joe
+  content: |-
+    REVIEW FINDINGS TO ADDRESS (PR #3628):
+    Verdict: CHANGES REQUESTED
+    Reviewed commit: 08d8ee6c9daa
+    Recorded: 2026-11-08T12:26:23.852532116+00:00
+    Findings:
+    1. BLOCKING (sketch condition, test gap; no authority impact): the signed sketch (docs/plans/2026-11-06-task-3219-claude-wrapper-launches.md, Advisor decision) requires opted-in claude attach to refuse with an explicit hint. claude_argv (aida-cli-lib/src/launch/contained.rs:1680-1684) only refuses when original.first() == attach. Every composed launch has the generated flags first (--setting-sources project --settings ..., spliced at index 0 in lib_part2.rs apply_agent_default_flags; extra flags are appended at lib_part2.rs:902), and claude_argv itself requires exactly one --settings, so a reachable argv never starts with attach. Scenario: aida agent new claude --bg --extra-flag attach --extra-flag <session-id> composes --setting-sources project --settings X attach <session-id> ..., passes claude_argv without the hint and hands attach to the vendor inside the wrapper. Whether Claude parses that as its subcommand was not run (no local execution in this review); containment still holds, only the mandated refusal is missing. task_3219_background_attach_argv_refuses_subcommand_preserves_prompt only covers a synthetic argv with attach at index 0 and has no case with attach <id> after the generated flags. Fix: refuse attach as the first positional after skipping known option/value pairs, or refuse it at --extra-flag composition, while still allowing a single prompt argument attach; add a case using the real composed flag order.
+    2. cosmetic: RegistryEnd (agent_claude_background.rs:360-374) is meant for handshake/release/wait errors but also fires on every normal exit, after run_agent_generation_with_io has already ended the row. mark_agent_ended is not idempotent (end_entry, agent_registry.rs:1923), so it rewrites ended_at and last_active_at, recomputes spec_status_at_end and re-retires mail wake. Disarm it once the normal end has been recorded.
+    3. CI wait state, not a code defect: at review time run 42477654460 at 08d8ee6 had lib-0 passed, rest and contracts in progress, and cli-0, cli-1, lib-1 and gates queued. The required-live bwrap count and the new tests are therefore unconfirmed at this head. merge-hold-gate red is the expected supervised hold and needs the human/advisor clearance path.
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
+  created_at: 2026-11-08T12:39:34.522458762Z
+  modified_at: 2026-11-08T12:39:34.522458762Z
   session_id: 01a1b9af-8230-75d2-82f8-667491cc010a
   harness_version: 2.1.319 (Claude Code)
 history:
