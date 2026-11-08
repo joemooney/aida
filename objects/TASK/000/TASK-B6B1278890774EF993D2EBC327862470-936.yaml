@@ -8,7 +8,7 @@ priority: Low
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-07T10:46:47.827833836Z
-modified_at: 2026-11-08T03:07:47.875112116Z
+modified_at: 2026-11-08T05:01:30.363595749Z
 req_type: Task
 relationships:
 - rel_type: Child
@@ -106,6 +106,13 @@ comments:
   created_at: 2026-11-08T03:06:50.002750191Z
   modified_at: 2026-11-08T03:06:50.002750191Z
   session_id: 01a1b91d7e61
+- id: 01a1b988-757b-7043-ad3d-30dbe768468f
+  author: joe
+  content: 'ADVISOR 2026-11-07 22:08: #3622 landed the signed broker sketch (ff9b8c91808). NEXT = the implementation slice, exactly as signed in docs/plans/2026-11-07-task-3368-proc-identity-broker.md ''Advisor decisions and manual gate'' (D1-D10); branch off main. The manual gate named there stays a manual gate: the PR records it as pending, never self-clears it.'
+  created_at: 2026-11-08T05:01:30.363595749Z
+  modified_at: 2026-11-08T05:01:30.363595749Z
+  session_id: 01a1b8be-8170-7fb2-89ab-ecb4c6eee98c
+  harness_version: 2.1.319 (Claude Code)
 history:
 - id: 01a1b59e-5972-7d63-967f-d8572322d9d1
   author: joe
