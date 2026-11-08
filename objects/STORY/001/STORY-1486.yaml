@@ -23,7 +23,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-09-26T18:30:26.622729Z
-modified_at: 2026-11-08T18:26:12.579003432Z
+modified_at: 2026-11-08T19:17:04.632231988Z
 req_type: Story
 tags:
 - agent-launch
@@ -895,6 +895,13 @@ comments:
   created_at: 2026-11-08T18:23:45.521258394Z
   modified_at: 2026-11-08T18:23:45.521258394Z
   session_id: 01a1b9af-8230-75d2-82f8-667491cc010a
+  harness_version: 2.1.319 (Claude Code)
+- id: 01a1bc97-c1f8-71c3-ae64-a28bf73c828d
+  author: joe
+  content: 'Advisor CI rework (#3671, head 3bbb2988b3): the push is needed, earlier lanes exited with no changes. CI (gates) step ''Store writer inventory ratchet'' refuses new sinks: agent_launch.rs handle_agent_command wrapper validate_recipe, and launch_permission_profile.rs validate_recipe OpenOptions::new. Merge current main, run python3 scripts/check-store-writers.py --regenerate, review and classify the additions. LIGHT gate: make check-ci-fast.'
+  created_at: 2026-11-08T19:17:04.632231988Z
+  modified_at: 2026-11-08T19:17:04.632231988Z
+  session_id: 01a1bc93-77a0-7740-8b03-df4e3e8d1df5
   harness_version: 2.1.319 (Claude Code)
 history:
 - id: 01a12b8d-22bd-7ed1-a30b-21d8634b3184
