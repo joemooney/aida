@@ -221,7 +221,11 @@ def validate_job(job, current):
     if set(job.get("defaults", {})) - {"run"}:
         raise ValueError("Unsupported upstream defaults")
     allowed = {"name", "id", "if", "run", "uses", "with", "env", "shell", "timeout-minutes"}
-    step_environment(job, current, {})
+    # Job env is evaluated before a runner exists (GitHub context availability).
+    job_context = {key: value for key, value in current.items()
+                   if key.split(".")[0] in {"github", "needs", "strategy", "matrix",
+                                            "vars", "secrets", "inputs"}}
+    step_environment(job, job_context, {})
     if job.get("defaults", {}).get("run", {}) not in ({}, {"shell": "bash --noprofile --norc -e -o pipefail {0}"}):
         raise ValueError("Unsupported upstream run defaults")
     for step in job["steps"]:
@@ -247,7 +251,11 @@ def validate_job(job, current):
             if step.get("name") not in INSTALL_STEPS:
                 if re.search(r"\b(?:sudo|apt-get)\b", command):
                     raise ValueError("Unmapped upstream image installation step")
-                unknown = set(RUNNER_REFERENCE.findall(command)) - RUNNER_VARIABLES
+                references = set(RUNNER_REFERENCE.findall(command))
+                # This step never executes in the hosted-equivalent adapter.
+                if step.get("if") == "runner.environment == 'self-hosted'":
+                    references.discard("GITHUB_ENV")
+                unknown = references - RUNNER_VARIABLES
                 if unknown:
                     raise ValueError(f"Unsupported runner variables: {', '.join(sorted(unknown))}")
         else:

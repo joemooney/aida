@@ -45,7 +45,6 @@ jobs:
     # scripts skip `cargo build -p aida-cli`, whose different feature set
     # recompiled the CLI for 1-2 min per lane. trace:TASK-1979 | ai:claude
     env:
-      AIDA_REQUIRE_BWRAP_LIVE: ${{ runner.environment == 'self-hosted' && '1' || '' }}
       AIDA_CI_PREBUILT_CLI: ${{ (matrix.shard == 'gates' || matrix.shard == 'contracts') && '1' || '' }}
     strategy:
       fail-fast: false
@@ -158,7 +157,9 @@ jobs:
       # trace:STORY-2672 | ai:codex
       - name: Verify self-hosted prerequisites
         if: runner.environment == 'self-hosted'
-        run: bash scripts/runner/check-prerequisites.sh
+        run: |
+          bash scripts/runner/check-prerequisites.sh
+          echo "AIDA_REQUIRE_BWRAP_LIVE=1" >> "$GITHUB_ENV"
 
       # The test lanes compile test binaries and dev-deps that gates never
       # builds, so each lane group (lib, cli, rest) saves its own cache;

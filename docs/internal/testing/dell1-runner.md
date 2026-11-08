@@ -76,12 +76,26 @@ gh api --method POST repos/joemooney/aida/actions/runners/generate-jitconfig \
 This uses GitHub's JIT API instead of retaining a registration token. Generating
 registration credentials is always an operator act; never run it from the lane.
 The JIT runner takes one job, exits and deregisters. The launcher stops its whole
-cgroup and deletes the disposable directory on exit; a one-hour runtime limit
-also bounds idle registration. For continuous capacity, run the reviewed `scripts/runner/rearm.sh` in a
+cgroup and deletes the disposable directory on exit. Idle listening has no
+local lifetime limit: a late pickup still gets the full 40-minute job timeout
+from `ci.yml`. A normal runner exit (job completion or clean idle retirement)
+re-arms; nonzero runner/service exits stop supervision for diagnosis. For continuous capacity, run the reviewed `scripts/runner/rearm.sh` in a
 foreground operator session (for example an operator-owned tmux session). It
 uses host-side gh credentials to generate each fresh configuration and invokes
 the installed root launcher through sudo. Credentials never enter the job.
-Keep sudo authorization valid under the operator policy; any API, sudo or runner
+Before starting supervision, use `sudo visudo -f /etc/sudoers.d/aida-ci-launcher`
+to install this rule (replace `dirtlab` only if the credentialed operator differs):
+
+```sudoers
+dirtlab ALL=(root) NOPASSWD: /usr/local/sbin/aida-ci-one-job ""
+```
+
+The `""` restricts this grant to no arguments. Keep the launcher and all parent
+paths root-owned and unwritable by the operator or runner. Grant this rule only
+to the operator, never `aida-ci`; it does not grant general sudo or project-script
+execution. Verify with `sudo -k` then `sudo -n -l /usr/local/sbin/aida-ci-one-job`
+and confirm `aida-ci` has no sudo rule. The supervisor uses `sudo -n` on every
+cycle and does not depend on cached credentials. Any API, sudo or runner
 failure stops the loop. Monitor that session and restart after diagnosing a
 failure. Ctrl-C stops it. Start this supervisor before enabling routing and keep
 it active while enabled: each PR needs four successive registrations. There is

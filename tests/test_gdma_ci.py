@@ -79,8 +79,10 @@ class ExpressionTests(unittest.TestCase):
                                 self.assertIn(step['uses'].split('@')[0], adapter.ACTIONS)
                             elif 'run' in step and step.get('name') not in adapter.INSTALL_STEPS:
                                 command = adapter.shell(step['run'])
-                                self.assertLessEqual(set(adapter.RUNNER_REFERENCE.findall(command)),
-                                                     adapter.RUNNER_VARIABLES)
+                                references = set(adapter.RUNNER_REFERENCE.findall(command))
+                                if step.get('if') == "runner.environment == 'self-hosted'":
+                                    references.discard('GITHUB_ENV')
+                                self.assertLessEqual(references, adapter.RUNNER_VARIABLES)
 
     # trace:STORY-2672 | ai:codex
     def test_guarded_routing_is_closed_and_gitlab_uses_hosted_setup(self):
@@ -99,6 +101,27 @@ class ExpressionTests(unittest.TestCase):
         self.assertTrue(adapter.condition(setup['if'], current))
         probe = next(step for step in job['steps'] if step.get('name') == 'Verify self-hosted prerequisites')
         self.assertFalse(adapter.condition(probe['if'], current))
+
+    # trace:STORY-2672 | ai:codex
+    def test_job_environment_refuses_unavailable_contexts(self):
+        for context in ('runner.environment', 'steps.probe.outputs.value', 'env.VALUE', 'job.status'):
+            job = {'env': {'VALUE': '${{ ' + context + ' }}'}, 'steps': []}
+            with self.subTest(context=context), self.assertRaises(ValueError):
+                adapter.validate_job(job, adapter.context('lib-0', True))
+
+    def test_hosted_adapter_environment_does_not_require_live_bwrap(self):
+        workflow = yaml.safe_load((ROOT / '.github/workflows/ci.yml').read_text())
+        job = workflow['jobs']['build']
+        for lane in job['strategy']['matrix']['shard']:
+            current = adapter.context(lane, True)
+            environment = adapter.step_environment(workflow, current, {})
+            environment = adapter.step_environment(job, current, environment)
+            self.assertNotIn('AIDA_REQUIRE_BWRAP_LIVE', environment)
+            for step in job['steps']:
+                if adapter.condition(step.get('if', 'true'), current):
+                    self.assertNotIn('AIDA_REQUIRE_BWRAP_LIVE',
+                                     adapter.step_environment(step, current, environment))
+                    self.assertNotIn('>> "$GITHUB_ENV"', step.get('run', ''))
 
     def test_every_current_package_install_is_mapped(self):
         workflow = yaml.safe_load((ROOT / '.github/workflows/ci.yml').read_text())

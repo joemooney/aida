@@ -44,6 +44,27 @@ class Routing(unittest.TestCase):
             wanted = ['self-hosted', 'Linux', 'X64', 'aida-dell1'] if expected else 'ubuntu-latest'
             self.assertEqual(actual, wanted, context)
 
+    def test_live_bwrap_export_requires_successful_self_hosted_probe(self):
+        import os
+        import subprocess
+        import tempfile
+        build = yaml.safe_load((ROOT / '.github/workflows/ci.yml').read_text())['jobs']['build']
+        self.assertNotIn('AIDA_REQUIRE_BWRAP_LIVE', build['env'])
+        step = next(s for s in build['steps'] if s.get('name') == 'Verify self-hosted prerequisites')
+        self.assertEqual(step['if'], "runner.environment == 'self-hosted'")
+        for status in (0, 1):
+            with tempfile.TemporaryDirectory() as directory:
+                root = Path(directory)
+                probe = root / 'probe.sh'
+                probe.write_text('exit ' + str(status))
+                exported = root / 'env'
+                command = step['run'].replace('scripts/runner/check-prerequisites.sh', str(probe))
+                result = subprocess.run(['bash', '-e', '-c', command],
+                                        env={**os.environ, 'GITHUB_ENV': str(exported)}, timeout=5)
+                self.assertEqual(result.returncode, status)
+                self.assertEqual(exported.read_text() if exported.exists() else '',
+                                 'AIDA_REQUIRE_BWRAP_LIVE=1\n' if status == 0 else '')
+
     def test_host_mutating_setup_excludes_self_hosted(self):
         workflow = yaml.safe_load((ROOT / '.github/workflows/ci.yml').read_text())
         build = workflow['jobs']['build']
@@ -164,7 +185,7 @@ class LauncherRefusals(unittest.TestCase):
             received = root / 'received'
             commands = {
                 'gh': f'echo fresh-jit >> "{count}"; echo fresh-jit',
-                'sudo': f'if [ "$1" = -v ]; then exit 0; fi; cat >> "{received}"; '
+                'sudo': f'[ "$1" = -n ] || exit 97; cat >> "{received}"; '
                         f'[ "$(wc -l < "{received}")" -lt 2 ]',
             }
             for name, body in commands.items():
@@ -178,3 +199,12 @@ class LauncherRefusals(unittest.TestCase):
             self.assertNotEqual(result.returncode, 0)
             self.assertEqual(count.read_text().splitlines(), ['fresh-jit'] * 2)
             self.assertEqual(received.read_text().splitlines(), ['fresh-jit'] * 2)
+
+    def test_idle_wait_does_not_consume_job_execution_budget(self):
+        launcher = (ROOT / 'scripts/runner/one-job.sh').read_text()
+        self.assertNotIn('RuntimeMaxSec=', launcher)
+        workflow = yaml.safe_load((ROOT / '.github/workflows/ci.yml').read_text())
+        self.assertEqual(workflow['jobs']['build']['timeout-minutes'], 40)
+        supervisor = (ROOT / 'scripts/runner/rearm.sh').read_text()
+        self.assertNotIn('sudo -v', supervisor)
+        self.assertIn('sudo -n /usr/local/sbin/aida-ci-one-job', supervisor)

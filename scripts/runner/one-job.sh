@@ -38,6 +38,8 @@ chown -R "$runner_user:$runner_user" "$state"
 # cpuset, protecting the other twelve dell1 cores even during compiler bursts.
 systemctl start aida-ci.slice
 systemctl set-property --runtime aida-ci.slice CPUQuota=800% AllowedCPUs=0-7
+# Idle listening has no wall-clock limit. GitHub bounds execution from job
+# pickup via ci.yml timeout-minutes, independently of time spent waiting.
 printf '%s\n' "$jit" | systemd-run --quiet --wait --pipe --collect \
     --unit="$unit" --slice=aida-ci.slice \
     -p User="$runner_user" -p Group="$runner_user" \
@@ -47,6 +49,6 @@ printf '%s\n' "$jit" | systemd-run --quiet --wait --pipe --collect \
     -p ProtectKernelModules=yes \
     -p ProtectControlGroups=yes -p RemoveIPC=yes \
     -p 'InaccessiblePaths=-/run/docker.sock -/run/podman -/run/dbus' \
-    -p KillMode=control-group -p RuntimeMaxSec=3600 -p TimeoutStopSec=30 \
+    -p KillMode=control-group -p TimeoutStopSec=30 \
     /usr/bin/env -i HOME="$state/home" PATH=/usr/local/bin:/usr/bin:/bin \
     /bin/bash -c 'set -eu; IFS= read -r config; exec ./run.sh --jitconfig "$config"'
