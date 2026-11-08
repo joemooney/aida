@@ -110,6 +110,29 @@ and no continuing grant authority merely because it is parked. Other work may
 use the released slot in another seat. Pickup and GC must recognize parked
 ownership and refuse reuse/removal until explicit cancellation or recovery.
 
+### Parked work is live work (R19)
+
+An open host-owned wait is durable work ownership even after its process lease
+is dead or reaped. Extend `live_work::spec_live_work` to return `Keep` for an
+exact spec UUID/current canonical park binding with a nonterminal wait, including
+blocked authority, delivery uncertainty and post-exit recovery. This evidence
+does not require an open PR, committed changes or a live PID. It grants no
+running-slot or launch authority. Delivered acknowledgement alone does not end
+ownership: retain it through resumed work and the post-exit pipeline until
+explicit checked completion/cancellation releases it.
+
+Doctor's status-drift detection and heal must use this shared ownership probe;
+heal rechecks it at the status-write boundary under the ownership lock, so a
+new park cannot race an already collected no-lease finding. An unreadable,
+conflicting or partially persisted binding retains the spec and reports recovery
+uncertainty rather than authorizing a reset to Approved. Use a documented common
+ownership/store lock order for park acceptance, cancellation and this heal.
+`ps_integrate` orphan detection and its `orphaned_in_progress_items` projection
+must use the same evidence: show a parked/recovery wait instead of abandoned
+InProgress work, without inventing a live lease. Pickup, worktree GC and doctor
+worktree/branch cleanup also honor retained ownership. Only checked release
+restores ordinary abandonment/cleanup rules; timestamp age is insufficient.
+
 ## Park and exit handshake
 
 ### Seat-to-host transport (new surfaces, R4)
@@ -357,8 +380,10 @@ completion or an ordinary failed-phase shelf as a surrogate for a human wait.
 The runtime wait blocks phase advancement and generic queue pickup. Resume is
 allowed only for the original InProgress spec with its exact active binding,
 a verified exited child, an unchanged answered question, a resolution that does
-not keep it parked/reject it, and `evaluate_unpark == Ready` for dependencies and
-other holds, plus all authority/seat/posture checks above. Do not call
+not keep it parked/reject it, and the new `evaluate_bound_resume` predicate below,
+plus all authority/seat/posture checks above. Do not call `evaluate_unpark`,
+`burndown::classify`, or use autonomous implementer lane classification here.
+Do not call
 `maybe_autoqueue` or require its Approved-only predicate. A resolution changing
 status to Approved or any other status blocks bound resume with a visible
 status-mismatch recovery reason; it never silently resets that status. Lost or
@@ -366,6 +391,29 @@ changed bindings, terminal status and independent holds also refuse. Clearing
 such a block requires authorized recovery and revalidation, not an answer alone.
 A changed seat/HEAD requires explicit recovery rather than silently discarding
 edits or switching sessions.
+
+`evaluate_bound_resume` is a new explicit continuation check, not a new-work
+pickability check (R18). Share the structural deferral and `BlockedBy` checks
+with `evaluate_unpark`: every blocker must resolve to Completed, and missing or
+unreadable targets refuse. Require the exact bound answered decision and refuse
+any additional pending decision, independent hold/punt, or unresolved design,
+decision, draft-review or deferral gate. Preserve existing manual-clear and
+reasoned-defer authority requirements. Do not clear gates merely because an
+answer exists. Generic autoqueue retains its current predicate.
+
+A research spike may continue in its original admitted research role; its type
+alone never refuses bound resume or routes it into an implementer lane. Retain
+the original execution mode. `needs-human`, `needs-human-input`,
+`needs-supervised-build` and `operator-action` are supervision requirements here:
+continuation requires fresh explicit supervised admission for that original
+role and mode, otherwise return `blocked_supervision`. They are not unconditional
+type/lane exclusions. Other parking tags (`blocked`, `needs-design-signoff`,
+`needs-design`, `needs-decision`, `review:draft-only`, and `deferred:*`) remain
+blocking until independently resolved through their authorized surfaces. This
+closed distinction must be explicit in tests; unknown gate evidence refuses.
+The same predicate runs before spawn after acquiring the wait/seat locks, not
+only when the answer is observed. Research completion uses its original role's
+completion pipeline; it does not gain implementer publication requirements.
 
 Prompt data contains the bound question, selected answer, consequence and the
 complete free-text `DecisionRequest.note` (including an explicit absent note), with
@@ -488,6 +536,18 @@ hold/punt vetoes; rejected/kept-parked answers; and containment refusal
 before artifacts or child spawn. PATH changes use the existing isolated-test
 helper. Host integration must demonstrate the child recalls both question and
 answer, with no generic queue duplicate, and no publication while parked.
+
+R18 regressions must park an admitted research spike, answer it and resume the
+same session in the research role; verify supervised tags require fresh
+supervised admission, while unresolved dependencies, deferrals and independent
+design/hold gates still refuse. R19 regressions must park with only dirty
+uncommitted edits, no PR/unmerged commits and a dead/reaped lease, then run
+autonomous doctor heal and orphan detection: status stays InProgress, pickup
+remains blocked, dirty seat survives and awaiting shows the wait. Repeat with
+a stale pre-collected heal finding, acceptance racing heal, unreadable runtime
+evidence and explicit cancellation; only checked ownership release allows the
+ordinary abandonment path. These are required future implementation tests,
+not tests executed by this sketch-only change.
 
 Review decision requested: approve the durable host-owned park/outbox protocol,
 exclusive retained seat with a released running slot, and the initial admission
