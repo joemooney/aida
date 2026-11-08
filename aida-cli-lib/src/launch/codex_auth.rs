@@ -2,6 +2,7 @@
 //! host cache or refresh material into the lane, argv, environment or receipts.
 // trace:STORY-2593 | ai:codex
 use super::{Mount, WriteProfile};
+use crate::vendors::codex_auth_hints as hints;
 use anyhow::{Context, Result};
 use base64::{engine::general_purpose::URL_SAFE_NO_PAD, Engine};
 use std::fs::File;
@@ -59,8 +60,9 @@ pub(crate) fn resolve_native_program(program: &Path) -> Result<PathBuf> {
 
 pub(super) const RELAUNCH: &str =
     "contained ChatGPT authentication unavailable or expired; reauthenticate on the host, then relaunch";
-const MARGIN: i64 = 300;
+pub(super) const MARGIN: i64 = 300;
 const BASELINE: i64 = 3600;
+pub(crate) const DEFAULT_MIN_GRANT_SECS: i64 = 1800;
 const BOUND: usize = 65536;
 pub(crate) const PROGRAM_SHA256: &str =
     "b8a11fedf24b2dfb59a70c9e52b030f9a508dcd49cd2dd0d41956f4c785156b8";
@@ -111,6 +113,18 @@ pub(super) const OAUTH_HOSTS: [&str; 4] = [
 pub(super) struct Credential {
     pub file: File,
     pub deadline: i64,
+    pub expires_at: i64,
+}
+
+// trace:BUG-2486 | ai:codex
+impl Credential {
+    /// Keep the lane TTL and its launch diagnostic bound to the same deadline.
+    pub(super) fn launch_lifetime(&self, requested: i64, now: i64) -> (i64, String) {
+        let effective = self.deadline.saturating_sub(now);
+        let diagnostic =
+            hints::launch_lifetime(requested, effective, self.deadline, self.expires_at);
+        (effective, diagnostic)
+    }
 }
 
 /// No endpoint-level TLS inspection exists in the CONNECT broker. Deny the
@@ -130,8 +144,9 @@ fn claims(token: &str) -> Result<serde_json::Value> {
     serde_json::from_slice(&bytes).map_err(|_| anyhow::anyhow!("ChatGPT token claims invalid"))
 }
 
-// Executable compatibility is enforced by require_program before this reader.
-pub(super) fn prepare(home: &Path, owner: u32, ttl: i64) -> Result<Credential> {
+// Launch callers enforce executable compatibility before this reader; doctor
+// reads the same bounded metadata without executing or admitting the vendor.
+fn read_credentials(home: &Path, owner: u32) -> Result<serde_json::Value> {
     let file = std::fs::OpenOptions::new().read(true)
         .custom_flags(libc::O_NOFOLLOW | libc::O_NONBLOCK | libc::O_CLOEXEC)
         .open(home.join("auth.json"))
@@ -157,6 +172,57 @@ pub(super) fn prepare(home: &Path, owner: u32, ttl: i64) -> Result<Credential> {
         value.get("auth_mode").and_then(|v| v.as_str()) == Some("chatgpt"),
         "ChatGPT file login required; keyring and other auth modes unsupported"
     );
+    Ok(value)
+}
+
+// trace:BUG-2486 | ai:codex
+pub(crate) fn token_expiry(home: &Path, owner: u32) -> Result<i64> {
+    access_expiry(&read_credentials(home, owner)?)
+}
+
+fn access_expiry(value: &serde_json::Value) -> Result<i64> {
+    let access = value
+        .pointer("/tokens/access_token")
+        .and_then(|v| v.as_str())
+        .context("ChatGPT access token missing")?;
+    claims(access)?
+        .get("exp")
+        .and_then(|v| v.as_i64())
+        .context("ChatGPT access-token expiry missing")
+}
+
+// trace:BUG-2486 | ai:codex — resolve only the caller's pinned trusted policy.
+pub(super) fn minimum_grant(policy: &toml::Value) -> Result<i64> {
+    policy
+        .get("contained")
+        .and_then(|c| c.get(hints::MIN_GRANT_KEY))
+        .map(|v| {
+            v.as_integer()
+                .filter(|n| *n > 0)
+                .context(hints::MIN_GRANT_INVALID)
+        })
+        .transpose()
+        .map(|floor| floor.unwrap_or(DEFAULT_MIN_GRANT_SECS))
+}
+
+// trace:BUG-2486 | ai:codex
+pub(super) fn grant_deadline(now: i64, exp: i64, ttl: i64, floor: i64) -> Result<i64> {
+    anyhow::ensure!(floor > 0, "{}", hints::MIN_GRANT_INVALID);
+    let requested = now
+        .checked_add(if ttl > 0 { ttl } else { BASELINE })
+        .context("ChatGPT deadline invalid")?;
+    let cap = exp.saturating_sub(MARGIN);
+    let deadline = requested.min(cap);
+    anyhow::ensure!(
+        cap >= requested || deadline.saturating_sub(now) >= floor,
+        "{}",
+        hints::floor_refusal(exp, exp.saturating_sub(now), floor)
+    );
+    Ok(deadline)
+}
+
+pub(super) fn prepare(home: &Path, owner: u32, ttl: i64, floor: i64) -> Result<Credential> {
+    let value = read_credentials(home, owner)?;
     let tokens = value.get("tokens").context("ChatGPT tokens missing")?;
     let access = tokens
         .get("access_token")
@@ -183,19 +249,9 @@ pub(super) fn prepare(home: &Path, owner: u32, ttl: i64) -> Result<Credential> {
             .is_none_or(|v| v == account),
         "ChatGPT account routing mismatch"
     );
-    let exp = claims(access)?
-        .get("exp")
-        .and_then(|v| v.as_i64())
-        .context("ChatGPT access-token expiry missing")?;
+    let exp = access_expiry(&value)?;
     let now = chrono::Utc::now().timestamp();
-    let lifetime = if ttl > 0 { ttl } else { BASELINE };
-    let deadline = now
-        .checked_add(lifetime)
-        .context("ChatGPT deadline invalid")?;
-    anyhow::ensure!(
-        exp.saturating_sub(deadline) >= MARGIN,
-        "{RELAUNCH} (grant plus 300s margin required)"
-    );
+    let deadline = grant_deadline(now, exp, ttl, floor)?;
     // No other host-cache fields are copied. Codex needs explicit account
     // routing and a recent cache timestamp to avoid its refresh path. Derive
     // routing from the approved ID token and stamp this leaf's delivery time;
@@ -228,6 +284,7 @@ pub(super) fn prepare(home: &Path, owner: u32, ttl: i64) -> Result<Credential> {
     Ok(Credential {
         file: leaf,
         deadline,
+        expires_at: exp,
     })
 }
 

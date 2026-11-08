@@ -989,7 +989,7 @@ impl PreparedLaunch {
             .unwrap_or_else(|| host_home.join(".claude"));
         let grant = explicit(child, crate::gate::seat_authority::GRANT_ENV)
             .context("contained child requires explicit grant decision")?;
-        let ttl = if grant.is_empty() {
+        let mut ttl = if grant.is_empty() {
             0
         } else {
             (crate::gate::seat_authority::read_grant(&grant)?.expires_at - chrono::Utc::now())
@@ -1011,7 +1011,19 @@ impl PreparedLaunch {
                         let program = codex_auth::resolve_native_program(&program)?;
                         codex_auth::require_program(&program, codex_sha256)?;
                         pinned_program = Some(program);
-                        let auth = codex_auth::prepare(&codex_home, credential_owner, ttl)?;
+                        // trace:BUG-2486 | ai:codex — pinned trusted policy only.
+                        let floor = codex_auth::minimum_grant(&policy)?;
+                        let auth = codex_auth::prepare(&codex_home, credential_owner, ttl, floor)?;
+                        if !grant.is_empty() {
+                            crate::gate::seat_authority::cap_launch_child_expiry(
+                                &grant,
+                                auth.expires_at.saturating_sub(codex_auth::MARGIN),
+                            )?;
+                        }
+                        let (effective, diagnostic) =
+                            auth.launch_lifetime(ttl, chrono::Utc::now().timestamp());
+                        eprintln!("{diagnostic}");
+                        ttl = effective;
                         codex_auth::exclude_oauth_hosts(&mut allowed);
                         Auth::ChatGpt(auth)
                     }
@@ -1400,7 +1412,7 @@ fn runtime_argv(
     wrapped_outer_only_argv(policy, runtime, &original[1])
 }
 
-/// Codex's argv: the tool-env and native-profile overrides, then the site's
+/// Codex's argv: the tool-env and exec-compatible profile config, then the site's
 /// argv minus anything that would replace the generated profile. Its seat
 /// probe runs through Codex's own sandbox as well (`codex sandbox ... --`).
 // trace:TASK-2707 TASK-2708 | ai:claude
@@ -1430,7 +1442,8 @@ fn codex_argv(
             ),
         ]);
     }
-    args.extend(["-P".into(), "aida".into()]);
+    // trace:BUG-2487 | ai:codex — -P belongs only to `codex sandbox`.
+    args.extend(["-c".into(), "default_permissions=\"aida\"".into()]);
     if let Some(at) = original.iter().position(|a| a == "exec") {
         anyhow::ensure!(
             !original
@@ -1457,15 +1470,98 @@ fn codex_argv(
                     | "-P"
                     | "--permission-profile"
             ),
-            "contained Codex cannot override its generated native profile"
+            "contained Codex cannot override its generated native profile with {}",
+            original[i]
         );
         args.push(original[i].clone());
         i += 1;
     }
+    validate_codex_flags(&args, "exec")?;
+    let mut sandbox = crate::codex_tool_env::sandbox_args_for_contained(&args)?;
+    // The model-free seat preflight retains the same explicit profile.
+    sandbox.extend([
+        "-P".into(),
+        "aida".into(),
+        "--include-managed-config".into(),
+    ]);
+    validate_codex_flags(&sandbox, "sandbox")?;
     let mut preflight = vec![program.to_string_lossy().into_owned()];
-    preflight.extend(crate::codex_tool_env::sandbox_args_for_contained(&args)?);
+    preflight.extend(sandbox);
     preflight.push("--".into());
     Ok((args, preflight))
+}
+
+/// Validate against recorded help from the exact auth pin, without executing
+/// lane-selected vendor code on the host. Parse option declarations only;
+/// option values and text within the terminal prompt are opaque. The recorded
+/// help lives beside this production consumer, not under a tests directory.
+// trace:BUG-2487 | ai:codex
+fn validate_codex_flags(args: &[String], scope: &str) -> Result<()> {
+    let fixture: serde_json::Value = serde_json::from_str(include_str!("codex_0166_help.json"))?;
+    anyhow::ensure!(
+        fixture["sha256"] == codex_auth::PROGRAM_SHA256,
+        "contained Codex help fixture differs from executable pin; re-record help before launch"
+    );
+    let help = fixture[scope]
+        .as_str()
+        .context("missing pinned Codex help")?;
+    let mut options = BTreeMap::new();
+    for line in help
+        .lines()
+        .map(str::trim)
+        .filter(|line| line.starts_with('-'))
+    {
+        let declaration = line.split("  ").next().unwrap();
+        let takes_value = declaration.contains('<');
+        for flag in declaration
+            .split_whitespace()
+            .take_while(|word| !word.starts_with('<'))
+        {
+            options.insert(flag.trim_end_matches(','), takes_value);
+        }
+    }
+    let mut command_seen = false;
+    let mut i = 0;
+    while i < args.len() {
+        let arg = &args[i];
+        if arg == "--" {
+            break;
+        }
+        if arg == scope && !command_seen {
+            command_seen = true;
+            i += 1;
+            continue;
+        }
+        if !arg.starts_with('-') {
+            anyhow::ensure!(
+                command_seen && scope == "exec" && i + 1 == args.len(),
+                "contained Codex requires a fresh exec with one terminal prompt"
+            );
+            break;
+        }
+        let (flag, inline) = arg
+            .split_once('=')
+            .map_or((arg.as_str(), false), |(f, _)| (f, true));
+        let takes_value = options.get(flag).with_context(|| {
+            format!(
+                "contained Codex {scope} flag {flag} is unsupported by pinned codex-cli 0.166.0"
+            )
+        })?;
+        anyhow::ensure!(
+            !inline || *takes_value,
+            "contained Codex {scope} flag {flag} takes no value"
+        );
+        if *takes_value && !inline {
+            anyhow::ensure!(
+                i + 1 < args.len(),
+                "contained Codex {scope} flag {flag} requires a value"
+            );
+            i += 1;
+        }
+        i += 1;
+    }
+    anyhow::ensure!(command_seen, "contained Codex requires {scope}");
+    Ok(())
 }
 
 /// Claude's argv: the site's argv with its one generated `--settings`
