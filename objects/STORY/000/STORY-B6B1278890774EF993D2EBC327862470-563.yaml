@@ -25,7 +25,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-07T19:45:35.836129088Z
-modified_at: 2026-11-08T18:14:04.168690153Z
+modified_at: 2026-11-08T18:21:06.008471775Z
 req_type: Story
 tags:
 - docs:impacted
@@ -330,6 +330,38 @@ comments:
   modified_at: 2026-11-08T18:06:17.800242398Z
   session_id: 01a1b9af-8230-75d2-82f8-667491cc010a
   harness_version: 2.1.319 (Claude Code)
+- id: 01a1bc64-8258-7291-a454-20052628ed3f
+  author: dirtlab
+  content: |
+    Addressed the latest review of c142d7f3d2c8. Changes remain uncommitted for native host publication.
+
+    1. Fast source ratchets now run before Cargo compilation, so cold compilation cannot hide the later gates. Local cargo check uses the seeded agent profile while preserving feature/package flags and explicit profiles. Added an executed cold-target runner fixture with agent-only artifacts that requires the later source gate to run before checking.
+    2. Runner refusal (126) and stopped/signaled jobs (137) map to skipped(refused) and skipped(stopped), without a native repair or self-push queued repair. Parameterized regressions also retain timeout coverage.
+    3. native_error now propagates an unsuccessful clean-seat snapshot/publication recovery through publication_result, retaining gate diagnostics and releasing the review hold rather than returning success with unpublished work. Added dirty-seat regression; recoverable known-red behavior stays tested.
+    4. Moved production items before test modules in lane_fast_gate/lane_job and removed blocks_review's unused head argument across production and test callers. Updated CI testing documentation.
+
+    Changed files:
+    aida-cli-lib/src/lane_fast_gate.rs
+    aida-cli-lib/src/lane_job.rs
+    aida-cli-lib/src/review_watch.rs
+    aida-cli-lib/src/tests/bug_home_038_seat_publish_tests.rs
+    scripts/check-ci-gates.py
+    tests/test_story_1853_test_speed.py
+    docs/internal/testing/ci-test-shards.md
+
+    Validation:
+    - Host sandbox lane job j20261108T181535862-2-0: cargo test --profile agent -p aida-cli-lib --lib -- fast_gate; exit 0, 33 passed, 0 failed, 1 ignored. Includes native exact-tip publication and real exit paths, infrastructure skip mapping, dirty-seat publication failure, and fail/fix/persistent-red regressions.
+    - Python test_story_1853_test_speed.py: 29 passed; test_ci_test_shards.py: 25 passed.
+    - CI gate audit: all 83 Build gates classified. Listed fast plan confirms source gates precede cargo check --profile agent -p aida-cli --no-default-features.
+    - Store-writer inventory, execution-context ledger (zero additions), portability, rustfmt check and git diff --check passed.
+    untested=false
+
+    Limitations: the explicitly ignored real-main sandbox gate was not run; this handoff does not claim a full make check-ci-fast result. Codegraph is missing, confirmed by aida doctor check codegraph; references were checked with rg. No implementation blockers. No commit, push, PR creation, queue completion, ship or review verdict performed. Existing punt/hold vetoes remain binding for host publication.
+    Suggested host subject: [AI:codex] fix(fast-gate): reach source gates before cold compilation (STORY-2640)
+  created_at: 2026-11-08T18:21:06.008471775Z
+  modified_at: 2026-11-08T18:21:06.008471775Z
+  session_id: 01a1bc5e0af0
+  harness_version: codex-cli 0.167.0
 history:
 - id: 01a1b78d-2628-7313-92de-8804ac5f8f71
   author: aida-session-start
