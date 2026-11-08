@@ -13,12 +13,12 @@ description: |
   3. Works for Claude, Codex and AGY through their headless resume commands; one adapter test per vendor using a recorded fixture.
   4. A wait whose seat or session has been lost surfaces as an escalation, never a silent drop.
   Ref: docs/plans/2026-11-07-infinity-agent-architecture-deep-dive.md section 3.3 and the SPIKE-711 results table.
-status: InProgress
+status: NeedsAttention
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-08T02:58:08.667753563Z
-modified_at: 2026-11-08T11:04:48.118967330Z
+modified_at: 2026-11-08T11:05:41.503274481Z
 req_type: Story
 tags:
 - area:human-wait
@@ -623,6 +623,15 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a1bad5-e17f-77e1-a0c5-b088f822e8db
+  author: dirtlab
+  timestamp: 2026-11-08T11:05:41.503285906Z
+  session_id: 01a1bad50af4
+  harness_version: codex-cli 0.167.0
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: NeedsAttention
 filed_at:
   code_sha: dc41ee8da2f44f88178936fc1a8e6cb7168a3de7
   branch: main
@@ -632,3 +641,8 @@ filed_at:
   vendor: claude
   session: 01a1b8be-8170-7fb2-89ab-ecb4c6eee98c
   harness_version: 2.1.319 (Claude Code)
+attention_reason:
+  category: design-fork
+  detail: 'R20 addressed in docs/plans/2026-11-08-story-2661-park-resume-sketch.md: persist_unclaim_status must use shared retained-ownership evidence at its locked status-write boundary; added unclaim, race, uncertain-evidence and cancellation regression requirements. No findings disputed. R1 remains a host/advisor action: retitle PR #3666 exactly [AI:codex] docs(plans): sketch park-on-ask resume-on-answer (Refs STORY-2661). This seat cannot change PR metadata. Binding advisor ruling requires sketch signoff before code. Retain publication veto pending signoff and title repair. Validation: git diff --check passed; documentation only, runtime tests not run (untested=true). Edits remain uncommitted.'
+  raised_by: implementer
+  raised_at: 2026-11-08T11:05:41.503274481Z
