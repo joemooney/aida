@@ -1,0 +1,29 @@
+id: 01a1bb7d-6651-73a2-8c3a-44718303a55d
+spec_id: TASK-b6b1278890774ef993d2ebc327862470-998
+title: 'Non-blocking (operational): host codex is still 0.166.0, so after promotion con…'
+description: |-
+  Non-blocking finding carried forward from an APPROVED review verdict on TASK-3463, which has since completed — recorded here so it keeps a queryable home once the verdict record stops being read.
+
+  Non-blocking (operational): host codex is still 0.166.0, so after promotion contained ChatGPT lanes refuse until npm i -g @openai/codex@0.167.0 is run; sequence the upgrade with the merge.
+
+  PR: #3676
+  Reviewed sha: dab675d3e77985e34714a0f4f133aadc38e55957
+status: Draft
+priority: Medium
+owner: joe
+feature: Uncategorized
+created_at: 2026-11-08T14:08:40.017617188Z
+modified_at: 2026-11-08T14:08:40.017617188Z
+req_type: Task
+tags:
+- carried-from:TASK-3463
+- finding-hash:cd623e45
+- from-review:PR-3676
+- kind:carried-forward
+filed_at:
+  code_sha: f6dec017d966720a692d3764f622f1ced5dba0b8
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: d68eb4ec071
+  vendor: claude
