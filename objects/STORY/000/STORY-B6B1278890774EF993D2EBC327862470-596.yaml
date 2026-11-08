@@ -1,0 +1,36 @@
+id: 01a1b9a8-5aa2-7430-812c-648cf84bf72e
+spec_id: STORY-b6b1278890774ef993d2ebc327862470-596
+agreed_id: STORY-2673
+title: 'Review PR-3657: [AI:codex] feat(lane): declare seat resources and isolate sccache (Refs STORY-2641)'
+description: |
+  Auto-filed by `aida pr auto-queue-review` (typically from /aida-pr) (session `01a1b994`) for branch `story-b6b1278890774ef993d2ebc327862470-564`.
+
+  - PR: <https://github.com/joemooney/aida/pull/3657>
+  - Branch: `story-b6b1278890774ef993d2ebc327862470-564` → `main`
+
+  ## Slice of (Refs only — not completed by this PR)
+
+  Commit subjects carry `(Refs SPEC-ID)`: this PR is one slice of a spec that a later PR completes. Review this slice against that spec's acceptance criteria.
+
+  - STORY-2641
+
+  ## Acceptance
+
+  - Generate a structured review prompt with `aida review prompt --pr 3657` and verify each spec's acceptance criteria.
+  - Approve and merge, or request changes by spec id.
+  - Mark this story `completed` once the PR is merged.
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-11-08T05:36:20.642503420Z
+modified_at: 2026-11-08T05:36:20.642503420Z
+req_type: Story
+filed_at:
+  code_sha: ff9b8c91808130e9bddf339d428915a5d551416e
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: efbd07d6c35
+  vendor: claude
+  session: 01a1b994e1cb
