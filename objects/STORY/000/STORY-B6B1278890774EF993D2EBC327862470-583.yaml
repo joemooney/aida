@@ -20,7 +20,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-08T02:56:36.206726Z
-modified_at: 2026-11-08T13:35:04.031467528Z
+modified_at: 2026-11-08T13:52:08.736665014Z
 req_type: Story
 tags:
 - architecture
@@ -145,6 +145,27 @@ comments:
   modified_at: 2026-11-08T13:29:16.975576268Z
   session_id: 01a1bb4d8601
   harness_version: codex-cli 0.167.0
+- id: 01a1bb6e-45c0-7d80-91ac-d01d3286b384
+  author: joe
+  content: |-
+    REVIEW FINDINGS TO ADDRESS (PR #3680):
+    Verdict: CHANGES REQUESTED
+    Reviewed commit: 3e357008ce70
+    Recorded: 2026-11-08T13:35:03.230881221+00:00
+    Findings:
+    1. BLOCKER aida-cli/tests/story_1662_queue_work_wiring.rs:232 cap_refusal_exits_34_and_leaves_no_lease_worktree_or_queue_row still seeds the live slot in repo/.aida/standalone-implementers. refuse_legacy_slots (standalone_implementer.rs, acquire_slot) now rejects that live legacy slot with a plain anyhow error, not StandaloneImplementerExit, so the launch cannot exit 34 and the assert_eq!(code, Some(34)) fails. Seed fx.home/.aida/standalone-implementers instead (fixture sets HOME), and keep a separate assertion for the legacy refusal path.
+    2. BLOCKER scripts/store-writers.toml:1934-1938 inventories the slot sinks under item acquire_slot_with, but the sinks moved to acquire_slot_in and acquire_slot_with is now a cfg(test) wrapper. check-store-writers.py (CI gates) refuses a stale/new inventory. Regenerate with python3 scripts/check-store-writers.py --regenerate and review the diff.
+    3. BLOCKER tests/test_ownership_liveness_ratchet.py::test_no_new_legacy_sites: the PR adds process_identity_is_alive sites in refuse_legacy_slots and host_status that are not in scripts/ownership-liveness-legacy.json (only acquire_slot:process_identity_is_alive=1), so the ratchet reports growth. Route them through ownership/, or share one liveness helper so no new legacy site appears; do not simply grow the baseline without justification.
+    4. MAJOR standalone_implementer.rs acquire_slot_in: the loop changed from tolerant (.flatten(), .ok()) to hard-fail (entry?, std::fs::read(&path)?), but SlotGuard::drop removes slot files WITHOUT the slot lock. If lane A finishes between B's read_dir yielding A's entry and B's read, B gets NotFound and is refused admission with a generic error (not exit 34) although capacity was just freed. Host-wide slots make this more likely. Treat NotFound as an absent reservation (keep refusing only on corrupt/unreadable content), or take the lock in Drop; add a test. observe_host_slots has the same read, so a shared lock there does not protect doctor --lane-host either: a NotFound there is a spurious error.
+    5. MINOR aida-cli/tests/story_1662_queue_work_wiring.rs:286 punting_child_exits_32...: the 'slot released' check reads repo/.aida/standalone-implementers, which is no longer written, and unwrap_or(0) makes it pass vacuously. Point it at fx.home/.aida/standalone-implementers.
+    6. MINOR stale docs after the default and scope change: docs/cli/03-work-autonomy.md:170-172 still says at most three per project configured only in .aida/config.toml; aida-core/templates/.aida/discipline/machinery-glossary.md:205 and generated docs/cli/12-glossary.md:222 still say default 3. Default is now max(1, floor(nproc/2)), counted host-wide, with host.toml taking precedence.
+    7. MINOR test gaps: cap_comes_from_config_with_a_default_of_three was deleted and its replacement only exercises resolve_host_capacity with an in-memory toml::Value, so nothing covers host_capacity() reading the real project .aida/config.toml and HOME/.aida/host.toml. The A3 allow_ungranted warning text and doctor_host_status output are also unasserted (the doctor test only parses flags). Add one host_capacity fixture and one assertion on the warnings field.
+    8. COSMETIC standalone_implementer.rs edit_own_slot keeps an unused _project_root parameter; docs/cli/07-project-setup.md new paragraph has one over-long unwrapped line ('...free-slot count. The printed slot scope identifies the shared state. This is a capacity').
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
+  created_at: 2026-11-08T13:52:08.640082473Z
+  modified_at: 2026-11-08T13:52:08.640082473Z
+  session_id: 01a1b9af-8230-75d2-82f8-667491cc010a
+  harness_version: 2.1.319 (Claude Code)
 history:
 - id: 01a1b91a-2eb5-7142-b252-8d3eb8d49b14
   author: joe
