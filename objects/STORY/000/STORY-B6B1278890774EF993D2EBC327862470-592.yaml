@@ -1,0 +1,36 @@
+id: 01a1b97c-ff0a-7ee3-9610-41eac3b21ef6
+spec_id: STORY-b6b1278890774ef993d2ebc327862470-592
+agreed_id: STORY-2669
+title: 'Review PR-3662: [AI:codex] feat(codegraph): proxy lane queries through host snapshots (Refs STORY-2630)'
+description: |
+  Auto-filed by `aida pr auto-queue-review` (typically from /aida-pr) (session `01a1b94e`) for branch `story-2630-r2053`.
+
+  - PR: <https://github.com/joemooney/aida/pull/3662>
+  - Branch: `story-2630-r2053` → `main`
+
+  ## Slice of (Refs only — not completed by this PR)
+
+  Commit subjects carry `(Refs SPEC-ID)`: this PR is one slice of a spec that a later PR completes. Review this slice against that spec's acceptance criteria.
+
+  - STORY-2630
+
+  ## Acceptance
+
+  - Generate a structured review prompt with `aida review prompt --pr 3662` and verify each spec's acceptance criteria.
+  - Approve and merge, or request changes by spec id.
+  - Mark this story `completed` once the PR is merged.
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-11-08T04:48:59.146307489Z
+modified_at: 2026-11-08T04:48:59.146307489Z
+req_type: Story
+filed_at:
+  code_sha: efbd07d6c351284adbad0cbe5dcd54989dcf7fff
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: efbd07d6c35
+  vendor: claude
+  session: 01a1b94e002e
