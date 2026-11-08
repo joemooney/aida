@@ -8,7 +8,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-07T23:39:41.575597Z
-modified_at: 2026-11-08T20:05:34.592477653Z
+modified_at: 2026-11-08T20:05:56.427326262Z
 req_type: Task
 relationships:
 - rel_type: Child
@@ -521,6 +521,12 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a1bcc4-8164-7070-bbb2-5fa7da8efa43
+  author: dirtlab
+  timestamp: 2026-11-08T20:05:57.220260998Z
+  session_id: 01a1bcc4231a
+  harness_version: codex-cli 0.167.0
+  changes: []
 test_coverage_notes: 'Final launcher cargo test --profile agent -p aida-cli-lib --lib -- command_registry passed: 32 executed tests, zero failures (job j20261108T192003657-2-0). Launcher cargo check --profile agent -p aida-cli --no-default-features passed (job j20261108T192150425-2976173-0). 15 crate-split tooling and 2 ownership-liveness fixtures passed. Glob ratchet against HEAD passes at 186; ExecContext (1239 sites), store-writer inventory (3385 sinks/293 mappings), portability guard and 83-gate classification audit pass. Touched-file rustfmt and git diff --check pass. Non-import Rust token comparison matches HEAD apart from existing lease-call qualification. Full make check-ci-fast not run because it directly invokes Cargo outside the required launcher; published-head CI remains for host.'
 implementation_summary: 'Tooling slice landed in PR #3644. Next Refs slice prepared: retire root crate globs in 34 smaller command modules, replacing required bindings explicitly and removing unused globs; baseline shrinks from 220 to 186. Existing lease-state call is qualified to preserve ownership-liveness evidence without adding an import site. goal_cmd.rs excluded because open PR #3687 owns it. Remaining explicit-import batches and lib_part1..6 module extraction remain outstanding.'
 filed_at:
