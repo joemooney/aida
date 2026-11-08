@@ -4,7 +4,9 @@
 > Implemented slices: registry, identity compatibility, capability consumers, hints,
 > headless argv/settings composition and the inventoried production vendor ratchet
 > (scope approved by Joe on 2026-11-07 at 10:42 UTC).
-> Remaining: hook event/backend, resume/fork backend and effectful adapter migration,
+> Implemented step 3a: hook event/backend layouts, profile-driven init, shared
+> handler parsing and symlink-safe scaffolding (2026-11-07 ruling).
+> Remaining: resume/fork backend and effectful launch adapter migration,
 > with further reductions to the vendor-debt ledger.
 > STORY-782 remains deferred; BUG-2390 remains Completed. No fan-out or launch
 > admission is added. Publish this slice with `(Refs STORY-2539)`.
@@ -157,3 +159,30 @@ Approve or amend the core-descriptor/effectful-adapter split, the PR-C-first
 ownership boundary and later single move into `vendors/`, the production-code
 ratchet scope, and preservation of AGY's current admission refusal. Until then,
 punt STORY-2539 as `design-fork`; retain the publication veto and open no PR.
+
+## Step 3a round 4 review corrections (2026-11-07)
+
+The signed pure/effectful boundary remains in force: `vendors/hooks.rs` owns
+layout-derived parsing and event-contract validation only; filesystem installation
+remains in `scaffolding/codex_hooks.rs`. Init iterates profiles by HookBackend.
+Compatibility repair entry points keep explicit-path calls so the store-writer
+scanner retains both original init wrappers and the new profile wrapper. The
+inventory regression reads production sources to pin these call-chain edges.
+
+Hook writers reuse BUG-718/BUG-1645 skip-and-warn semantics per file and check
+ancestors with the same helper. Tests cover live and dangling file/directory
+links under force and non-force, unchanged external targets, no writes below
+blocked ancestors, and continued installation of unrelated handlers/wiring.
+The removed all-or-nothing guard is no longer an installation policy. Two more
+literal-ledger keys disappear through registry-derived repair identities.
+
+Rework publication stays `(Refs STORY-2539)`. All PR CI lanes and the existing
+merge-hold clearance remain host-side gates after native-seat publication.
+
+Round 4 local validation: 16 executed core `codex_hooks` tests passed; all 42
+store-writer inventory fixtures passed; 41 non-build fast gates (including
+formatting) passed. The two fast-tier Cargo checks were delegated to the lane
+runner. The CLI `story_2539` ratchet job timed out after 900 seconds during
+compilation, without executing tests, and reported `seed: overlay-stale` because
+the primary rewrote a file in the pinned generation. Ratchet and compile checks
+therefore require a fresh host runner/generation; this is not a green LIGHT gate.

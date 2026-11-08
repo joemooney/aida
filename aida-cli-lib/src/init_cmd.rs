@@ -1857,14 +1857,18 @@ fn complete_init_scaffolding(
     // every re-init and `--refresh`. Failing to write it must never fail an
     // init: a project without a manifest is entirely normal.
     // trace:STORY-781 | ai:claude
-    // BUG-794: the Codex hook wiring is a Codex-facing surface — it obeys the
-    // allow-list like every other agent artifact.
-    if codex_profile_selected {
-        maybe_scaffold_codex_hooks_on_init(root, force);
-    }
-    // trace:TASK-1744 | ai:antigravity
-    if antigravity_profile_selected && !no_hooks {
-        maybe_scaffold_antigravity_hooks_on_init(root, force);
+    // trace:STORY-2539 | ai:codex — selection and no-hooks semantics remain
+    // surface-specific; layout and installation dispatch come from the registry.
+    for profile in &aida_core::vendors::PROFILES {
+        use aida_core::vendors::HookBackend;
+        let selected = match profile.hooks.backend {
+            HookBackend::Settings => false, // full scaffolder owns shared settings
+            HookBackend::Standalone => codex_profile_selected,
+            HookBackend::NamedEntries => antigravity_profile_selected && !no_hooks,
+        };
+        if selected {
+            maybe_scaffold_profile_hooks_on_init(root, force, profile);
+        }
     }
 
     let manifest_written = ensure_project_manifest_scaffold(root, force).unwrap_or(false);
@@ -5085,6 +5089,35 @@ pub(crate) fn handle_init_distributed_worktree(
     Ok(())
 }
 
+// trace:STORY-2539 | ai:codex
+fn maybe_scaffold_profile_hooks_on_init(
+    root: &std::path::Path,
+    force: bool,
+    profile: &aida_core::vendors::VendorProfile,
+) {
+    match aida_core::scaffolding::codex_hooks::scaffold_hooks(root, force, profile.hooks) {
+        Ok(outcome) => {
+            if let Some(warning) = outcome.warning {
+                eprintln!("  {} {warning}", "Warning:".yellow());
+            }
+            if !outcome.written.is_empty() {
+                println!(
+                    "  {} wrote {} hook wiring ({} file(s), {})",
+                    crate::glyph(crate::glyphs::Glyph::Check).green(),
+                    profile.launch_name,
+                    outcome.written.len(),
+                    profile.hooks.wiring
+                );
+            }
+        }
+        Err(error) => eprintln!(
+            "  {} {} hook scaffold skipped ({error})",
+            "Warning:".yellow(),
+            profile.launch_name
+        ),
+    }
+}
+
 /// TASK-1181: scaffold the Codex hook wiring (`.codex/hooks.json` plus the
 /// handlers under `.codex/hooks/`).
 ///
@@ -5098,6 +5131,9 @@ pub(crate) fn handle_init_distributed_worktree(
 // trace:TASK-1181 | ai:claude
 fn maybe_scaffold_codex_hooks_on_init(project_root: &std::path::Path, force: bool) {
     match aida_core::scaffolding::codex_hooks::scaffold_codex_hooks(project_root, force) {
+        Ok(outcome) if outcome.warning.is_some() => {
+            eprintln!("  {} {}", "Warning:".yellow(), outcome.warning.unwrap());
+        }
         Ok(outcome) if !outcome.written.is_empty() => {
             println!(
                 "  {} wrote Codex hook wiring ({} file(s) under .codex/) — the awaiting notice, \
@@ -5164,13 +5200,23 @@ fn maybe_repair_codex_hooks_on_reinit(
         return Ok(());
     }
 
+    // trace:STORY-2539 | ai:codex — reuse registry identity for the existing
+    // backend-specific repair policies, retaining the configured launch spelling.
+    let backend_name = |backend| {
+        aida_core::vendors::PROFILES
+            .iter()
+            .find(|profile| profile.hooks.backend == backend)
+            .map(|profile| profile.launch_name)
+    };
     let codex_selected = match agent {
         Some(agent) => parse_agent_selection(agent)?.codex,
         None => {
             read_enabled_agent_selection(project_root).is_some_and(|selection| selection.codex)
                 || aida_core::agents_config::resolve_default_vendor(project_root).as_deref()
-                    == Some("codex")
-                || project_root.join(".codex/hooks.json").is_file()
+                    == backend_name(aida_core::vendors::HookBackend::Standalone)
+                || project_root
+                    .join(aida_core::vendors::hooks::CODEX_LAYOUT.wiring)
+                    .is_file()
         }
     };
     if codex_selected {
@@ -5180,13 +5226,16 @@ fn maybe_repair_codex_hooks_on_reinit(
     let antigravity_selected = match agent {
         Some(agent) => parse_agent_selection(agent)?.antigravity,
         None => {
-            if project_root.join(".agents/hooks.json").exists() {
+            if project_root
+                .join(aida_core::vendors::hooks::AGY_LAYOUT.wiring)
+                .exists()
+            {
                 aida_core::scaffolding::codex_hooks::antigravity_hooks_wired(project_root)
             } else {
                 read_enabled_agent_selection(project_root)
                     .is_some_and(|selection| selection.antigravity)
                     || aida_core::agents_config::resolve_default_vendor(project_root).as_deref()
-                        == Some("antigravity")
+                        == backend_name(aida_core::vendors::HookBackend::NamedEntries)
             }
         }
     };
