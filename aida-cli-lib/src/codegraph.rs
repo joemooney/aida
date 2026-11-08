@@ -11,6 +11,237 @@ pub(crate) const CATEGORY: &str = "codegraph";
 const INDEX: &str = ".codegraph/codegraph.db";
 const MAX_AGE: Duration = Duration::from_secs(3600);
 
+/// Route already-projected child PATH through the host's client, when deployed.
+/// This does not expand the filesystem write set or read ambient environment.
+// trace:STORY-2630 | ai:codex
+pub(crate) fn route_queries(child: &mut std::process::Command) -> Result<()> {
+    let Some(root) = child.get_current_dir() else {
+        return Ok(());
+    };
+    let Ok(graph) = root.join(".codegraph").canonicalize() else {
+        return Ok(());
+    };
+    if !graph.join("lane-proxy.json").is_file() {
+        return Ok(());
+    }
+    let bin = graph.join("proxy-state/bin");
+    anyhow::ensure!(
+        bin.join("codegraph").is_file(),
+        "host codegraph proxy client is missing at {}",
+        bin.display()
+    );
+    let path = child
+        .get_envs()
+        .find(|(k, _)| *k == "PATH")
+        .and_then(|(_, v)| v)
+        .map(|v| v.to_owned());
+    if let Some(path) = path {
+        if std::env::split_paths(&path).next().as_ref() != Some(&bin) {
+            let entries = std::iter::once(bin).chain(std::env::split_paths(&path));
+            child.env("PATH", std::env::join_paths(entries)?);
+        }
+    }
+    Ok(())
+}
+
+// The proxy descriptor is observational only: no write or launch authority.
+// trace:STORY-2630 | ai:codex
+#[derive(serde::Deserialize, serde::Serialize)]
+pub(crate) struct LaneHostStatus {
+    protocol: u32,
+    indexed_at: f64,
+    captured_at: f64,
+    observed_at: f64,
+    refresh_error: Option<String>,
+}
+
+pub(crate) fn lane_host_status(root: &Path) -> Result<LaneHostStatus> {
+    use std::io::Read;
+    let path = root.join(".codegraph/lane-proxy.json");
+    let mut options = std::fs::OpenOptions::new();
+    options.read(true);
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::OpenOptionsExt;
+        options.custom_flags(libc::O_NOFOLLOW | libc::O_NONBLOCK);
+    }
+    let file = options.open(path)?;
+    anyhow::ensure!(
+        file.metadata()?.is_file(),
+        "proxy status is not a regular file"
+    );
+    let mut body = Vec::new();
+    file.take(8193).read_to_end(&mut body)?;
+    anyhow::ensure!(body.len() <= 8192, "proxy status exceeds size limit");
+    let status: LaneHostStatus = serde_json::from_slice(&body)?;
+    anyhow::ensure!(status.protocol == 1, "unsupported codegraph proxy protocol");
+    Ok(status)
+}
+
+impl LaneHostStatus {
+    fn age(at: f64, now: SystemTime) -> Result<u64> {
+        let now = now.duration_since(SystemTime::UNIX_EPOCH)?.as_secs_f64();
+        anyhow::ensure!(
+            at.is_finite() && at > 0.0 && at <= now + 5.0,
+            "invalid codegraph proxy timestamp"
+        );
+        Ok((now - at).max(0.0) as u64)
+    }
+
+    pub(crate) fn report(&self, now: SystemTime) -> Result<serde_json::Value> {
+        Ok(serde_json::json!({
+            "snapshot_age_seconds": Self::age(self.indexed_at, now)?,
+            "snapshot_captured_age_seconds": Self::age(self.captured_at, now)?,
+            "host_observation_age_seconds": Self::age(self.observed_at, now)?,
+            "refresh_error": self.refresh_error,
+            "index_access": "read-only; queries via host proxy",
+        }))
+    }
+}
+
+/// A bounded real socket round trip, including a full backlog or stalled peer.
+/// No subprocess, ambient input or caller-selected socket address.
+// trace:STORY-2630 | ai:codex
+#[cfg(unix)]
+fn probe_proxy(root: &Path) -> Result<()> {
+    use std::io::{Read, Write};
+    use std::os::fd::{AsRawFd, FromRawFd};
+    use std::os::unix::{ffi::OsStrExt, net::UnixStream};
+    let path = root
+        .join(".codegraph")
+        .canonicalize()?
+        .join("lane-query.sock");
+    let bytes = path.as_os_str().as_bytes();
+    // SAFETY: zero is a valid initial sockaddr_un; path is copied within bounds.
+    let mut address: libc::sockaddr_un = unsafe { std::mem::zeroed() };
+    anyhow::ensure!(
+        bytes.len() < address.sun_path.len(),
+        "proxy socket path too long"
+    );
+    address.sun_family = libc::AF_UNIX as libc::sa_family_t;
+    for (target, byte) in address.sun_path.iter_mut().zip(bytes) {
+        *target = *byte as libc::c_char;
+    }
+    // SAFETY: no pointers; the returned descriptor is owned exactly once below.
+    let fd = unsafe {
+        libc::socket(
+            libc::AF_UNIX,
+            libc::SOCK_STREAM | libc::SOCK_NONBLOCK | libc::SOCK_CLOEXEC,
+            0,
+        )
+    };
+    anyhow::ensure!(
+        fd >= 0,
+        "create proxy socket: {}",
+        std::io::Error::last_os_error()
+    );
+    // SAFETY: fd is a newly owned socket, not shared with any other owner.
+    let mut stream = unsafe { UnixStream::from_raw_fd(fd) };
+    // SAFETY: address points to an initialized sockaddr_un of the given length.
+    let connected = unsafe {
+        libc::connect(
+            stream.as_raw_fd(),
+            &address as *const _ as *const libc::sockaddr,
+            std::mem::size_of_val(&address) as libc::socklen_t,
+        )
+    };
+    anyhow::ensure!(
+        connected == 0,
+        "connect proxy: {}",
+        std::io::Error::last_os_error()
+    );
+    stream.write_all(b"{\"op\":\"status\"}\n")?;
+    let deadline = std::time::Instant::now() + Duration::from_millis(250);
+    let mut body = Vec::new();
+    loop {
+        anyhow::ensure!(
+            std::time::Instant::now() < deadline,
+            "proxy status timed out"
+        );
+        let mut buffer = [0; 1024];
+        match stream.read(&mut buffer) {
+            Ok(0) => anyhow::bail!("proxy closed without a status response"),
+            Ok(n) => body.extend_from_slice(&buffer[..n]),
+            Err(e) if e.kind() == std::io::ErrorKind::WouldBlock => {
+                std::thread::sleep(Duration::from_millis(5));
+                continue;
+            }
+            Err(e) => return Err(e.into()),
+        }
+        anyhow::ensure!(body.len() <= 8192, "proxy status response too large");
+        if let Some(end) = body.iter().position(|b| *b == b'\n') {
+            let response: serde_json::Value = serde_json::from_slice(&body[..end])?;
+            anyhow::ensure!(
+                response["rc"] == 0 && response["protocol"] == 1,
+                "proxy refused status: {}",
+                response["output"]
+            );
+            return Ok(());
+        }
+    }
+}
+
+pub(crate) fn lane_host_report(root: &Path) -> Result<serde_json::Value> {
+    let mut report = lane_host_status(root)?.report(SystemTime::now())?;
+    let probe = probe_proxy(root);
+    report["query_reachable"] = serde_json::json!(probe.is_ok());
+    report["query_error"] = serde_json::json!(probe.err().map(|e| format!("{e:#}")));
+    Ok(report)
+}
+
+fn assess_proxy(root: &Path, now: SystemTime) -> Vec<DoctorFinding> {
+    let report = lane_host_status(root).and_then(|status| status.report(now));
+    let action = "Check the host codegraph proxy service and snapshot refresh; do not grant the seat index write access.";
+    match report {
+        Err(error) => vec![finding(
+            "unreachable",
+            format!("codegraph proxy status unreachable: {error:#}"),
+            action,
+        )],
+        Ok(report) => {
+            let mut findings = Vec::new();
+            if report["host_observation_age_seconds"]
+                .as_u64()
+                .unwrap_or(u64::MAX)
+                > 30
+            {
+                findings.push(finding(
+                    "unreachable",
+                    "codegraph host proxy has no recent heartbeat or socket".into(),
+                    action,
+                ));
+            } else if let Err(error) = probe_proxy(root) {
+                findings.push(finding(
+                    "unreachable",
+                    format!("codegraph host proxy unreachable from this seat: {error:#}"),
+                    action,
+                ));
+            }
+            if !report["refresh_error"].is_null() {
+                findings.push(finding(
+                    "snapshot-refresh",
+                    format!(
+                        "codegraph snapshot refresh failed: {}",
+                        report["refresh_error"]
+                    ),
+                    action,
+                ));
+            }
+            if report["snapshot_age_seconds"].as_u64().unwrap_or(u64::MAX) > MAX_AGE.as_secs() {
+                findings.push(finding(
+                    "stale",
+                    format!(
+                        "codegraph host snapshot is {} seconds old (over one hour)",
+                        report["snapshot_age_seconds"]
+                    ),
+                    action,
+                ));
+            }
+            findings
+        }
+    }
+}
+
 /// Plan the link for the existing seat-clone/linked-worktree setup writer. Never copy or
 /// build a private index, replace existing content, or chmod the shared index.
 /// A symlink is routing only, not a read-only security boundary.
@@ -94,6 +325,10 @@ fn assess(root: &Path, binary_present: bool, now: SystemTime) -> Vec<DoctorFindi
             return findings;
         }
     }
+    if std::fs::symlink_metadata(root.join(".codegraph/lane-proxy.json")).is_ok() {
+        findings.extend(assess_proxy(root, now));
+        return findings;
+    }
     let path = root.join(INDEX);
     let reachable = (|| -> Result<SystemTime> {
         let meta = std::fs::metadata(&path)?;
@@ -131,6 +366,100 @@ fn assess(root: &Path, binary_present: bool, now: SystemTime) -> Vec<DoctorFindi
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    // trace:STORY-2630 | ai:codex
+    #[test]
+    fn proxy_reports_source_age_and_rejects_stale_or_invalid_heartbeats() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        std::fs::create_dir(root.join(".codegraph")).unwrap();
+        let now = SystemTime::UNIX_EPOCH + Duration::from_secs(1_800_000_000);
+        let seconds = now
+            .duration_since(SystemTime::UNIX_EPOCH)
+            .unwrap()
+            .as_secs_f64();
+        let mut status = serde_json::json!({"protocol": 1, "indexed_at": seconds - 7200.0,
+            "captured_at": seconds, "observed_at": seconds, "refresh_error": null});
+        let path = root.join(".codegraph/lane-proxy.json");
+        std::fs::write(&path, status.to_string()).unwrap();
+        let report = lane_host_status(root).unwrap().report(now).unwrap();
+        assert_eq!(report["snapshot_age_seconds"], 7200);
+        assert_eq!(report["snapshot_captured_age_seconds"], 0);
+        // A fresh capture never makes a stale index fresh; no socket also refuses.
+        let findings = assess_proxy(root, now);
+        assert!(findings.iter().any(|f| f.id == "stale"));
+        assert!(findings.iter().any(|f| f.id == "unreachable"));
+        status["indexed_at"] = serde_json::json!(seconds + 60.0);
+        std::fs::write(&path, status.to_string()).unwrap();
+        assert!(lane_host_status(root).unwrap().report(now).is_err());
+        std::fs::write(&path, "x".repeat(8193)).unwrap();
+        assert!(lane_host_status(root).is_err());
+        std::fs::remove_file(&path).unwrap();
+        std::os::unix::fs::symlink("absent", &path).unwrap();
+        assert!(lane_host_status(root).is_err());
+    }
+
+    #[test]
+    fn query_routing_preserves_projected_path_without_new_write_grants() {
+        let tmp = tempfile::tempdir().unwrap();
+        let primary = tmp.path().join("primary");
+        let seat = tmp.path().join("seat");
+        std::fs::create_dir_all(primary.join(".codegraph")).unwrap();
+        std::fs::create_dir_all(primary.join(".codegraph/proxy-state/bin")).unwrap();
+        std::fs::create_dir(&seat).unwrap();
+        std::fs::write(primary.join(".codegraph/lane-proxy.json"), "{}").unwrap();
+        std::fs::write(
+            primary.join(".codegraph/proxy-state/bin/codegraph"),
+            "client",
+        )
+        .unwrap();
+        std::os::unix::fs::symlink(primary.join(".codegraph"), seat.join(".codegraph")).unwrap();
+        let mut child = std::process::Command::new("vendor");
+        child
+            .current_dir(&seat)
+            .env("PATH", "/trusted/bin:/usr/bin");
+        route_queries(&mut child).unwrap();
+        route_queries(&mut child).unwrap();
+        let path = child
+            .get_envs()
+            .find(|(k, _)| *k == "PATH")
+            .unwrap()
+            .1
+            .unwrap();
+        assert_eq!(
+            std::env::split_paths(path).collect::<Vec<_>>(),
+            [
+                primary.join(".codegraph/proxy-state/bin"),
+                PathBuf::from("/trusted/bin"),
+                PathBuf::from("/usr/bin")
+            ]
+        );
+        assert_eq!(child.get_envs().count(), 1);
+        assert_eq!(
+            child.get_args().count(),
+            0,
+            "no sandbox flags or grants added"
+        );
+    }
+
+    #[test]
+    fn lane_host_doctor_flag_parses_and_conflicts_with_heal() {
+        let cli =
+            crate::command_registry::try_parse_from(["aida", "doctor", "--lane-host", "--json"])
+                .unwrap();
+        assert!(
+            cli.command
+                .registered::<crate::doctor_cmd::DoctorArgs>()
+                .lane_host
+        );
+        assert!(crate::command_registry::try_parse_from([
+            "aida",
+            "doctor",
+            "--lane-host",
+            "--heal"
+        ])
+        .is_err());
+    }
 
     fn index(root: &Path) {
         std::fs::create_dir_all(root.join(".codegraph")).unwrap();
@@ -254,6 +583,42 @@ mod tests {
             !scan(root).is_empty(),
             "opted-in projects need setup guidance"
         );
+    }
+
+    #[test]
+    fn doctor_proxy_round_trip_and_stalled_peer_are_bounded() {
+        use std::io::{BufRead, Write};
+        use std::os::unix::net::UnixListener;
+        let tmp = tempfile::tempdir().unwrap();
+        let graph = tmp.path().join(".codegraph");
+        std::fs::create_dir(&graph).unwrap();
+        let socket = graph.join("lane-query.sock");
+        let listener = UnixListener::bind(&socket).unwrap();
+        let peer = std::thread::spawn(move || {
+            let (mut stream, _) = listener.accept().unwrap();
+            let mut request = String::new();
+            std::io::BufReader::new(&stream)
+                .read_line(&mut request)
+                .unwrap();
+            assert_eq!(request, "{\"op\":\"status\"}\n");
+            stream.write_all(b"{\"rc\":0,\"protocol\":1}\n").unwrap();
+        });
+        assert!(probe_proxy(tmp.path()).is_ok());
+        peer.join().unwrap();
+        std::fs::remove_file(&socket).unwrap();
+        let listener = UnixListener::bind(&socket).unwrap();
+        let peer = std::thread::spawn(move || {
+            let (stream, _) = listener.accept().unwrap();
+            std::thread::sleep(Duration::from_millis(400));
+            drop(stream);
+        });
+        assert!(probe_proxy(tmp.path())
+            .unwrap_err()
+            .to_string()
+            .contains("timed out"));
+        peer.join().unwrap();
+        std::fs::remove_file(socket).unwrap();
+        assert!(probe_proxy(tmp.path()).is_err());
     }
 
     #[test]

@@ -128,6 +128,9 @@ impl VendorProfile {
     /// Last step before spawn/exec. Receipt-owning AIDA Codex launches use
     /// containment::launch instead; this adapter deliberately refuses them.
     pub(crate) fn finalize(&self, child: &mut Command) -> Result<()> {
+        // Query routing only; never grant the seat writes to a host index.
+        // trace:STORY-2630 | ai:codex
+        crate::codegraph::route_queries(child)?;
         match self.0.vendor {
             LaunchVendor::Codex => prepare_launch(child),
             LaunchVendor::Claude | LaunchVendor::Agy => Ok(()),

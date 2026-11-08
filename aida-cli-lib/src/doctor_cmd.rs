@@ -16094,6 +16094,11 @@ mod bug_1505_review_verdict_doctor_tests {
 #[derive(clap::Parser, Debug)]
 #[clap(name = "doctor")]
 pub(crate) struct DoctorArgs {
+    /// Report the host codegraph snapshot age as seen from this lane.
+    // trace:STORY-2630 | ai:codex
+    #[clap(long, conflicts_with_all = ["heal", "fix", "fix_sandbox", "contradictions"])]
+    pub lane_host: bool,
+
     /// Apply safe fixes after scanning. Without this, doctor is read-only.
     #[clap(long)]
     pub heal: bool,
@@ -16208,6 +16213,7 @@ fn run_doctor(
 ) -> anyhow::Result<()> {
     let args = <DoctorArgs as clap::FromArgMatches>::from_arg_matches(matches)?;
     let DoctorArgs {
+        lane_host,
         heal,
         yes,
         category,
@@ -16226,6 +16232,34 @@ fn run_doctor(
         contradictions_offset,
         cmd,
     } = &args;
+    // No store refresh, host mutation or arbitrary subprocess for this report.
+    // trace:STORY-2630 | ai:codex
+    if *lane_host {
+        anyhow::ensure!(
+            cmd.is_none() && category.is_none(),
+            "--lane-host is a standalone codegraph report"
+        );
+        let root = crate::find_project_root()?;
+        let report = crate::codegraph::lane_host_report(&root)?;
+        if *json {
+            println!("{}", serde_json::to_string_pretty(&report)?);
+        } else {
+            println!(
+                "codegraph host snapshot: {}s old; captured {}s ago; host observation {}s ago; {}",
+                report["snapshot_age_seconds"],
+                report["snapshot_captured_age_seconds"],
+                report["host_observation_age_seconds"],
+                report["index_access"].as_str().unwrap_or("unknown")
+            );
+            if !report["refresh_error"].is_null() {
+                println!("snapshot refresh error: {}", report["refresh_error"]);
+            }
+            if !report["query_error"].is_null() {
+                println!("query service unreachable: {}", report["query_error"]);
+            }
+        }
+        return Ok(());
+    }
     // trace:BUG-B6B1278890774EF993D2EBC327862470-046 | ai:claude
     if let Some(category) = fix.as_deref() {
         if *json {

@@ -314,6 +314,8 @@ jobs:
           command -v git
           command -v openssl
           python3 -m unittest tests/test_containment_conformance.py
+          # trace:STORY-2630 | ai:codex
+          python3 -m unittest tests/test_codegraph_proxy.py
 
       # Fixed read-only protocol and kernel-credential channel fixtures.
       # trace:TASK-3225 | ai:codex
