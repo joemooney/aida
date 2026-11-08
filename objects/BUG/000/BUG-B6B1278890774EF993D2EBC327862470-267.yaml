@@ -8,8 +8,16 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-08T19:37:15.450252326Z
-modified_at: 2026-11-08T19:37:15.450252326Z
+modified_at: 2026-11-08T20:01:13.691269627Z
 req_type: Bug
+comments:
+- id: 01a1bcc0-2ddb-79f0-b763-2d703d44589a
+  author: joe
+  content: 'Advisor triage 2026-11-08: approved for a dell1 lane, independent of the open PRs. LIGHT gate: one targeted test plus make check-ci-fast.'
+  created_at: 2026-11-08T20:01:13.691269627Z
+  modified_at: 2026-11-08T20:01:13.691269627Z
+  session_id: 01a1bc93-77a0-7740-8b03-df4e3e8d1df5
+  harness_version: 2.1.319 (Claude Code)
 filed_at:
   code_sha: db2eb4c39e46704132705ccb2b8300574ead41a6
   branch: main
