@@ -559,8 +559,10 @@ fn mediated_host_routes_owned_comment_and_revalidates_authority_before_replay() 
     )
     .unwrap();
     let mut row = aida_core::Requirement::new("host route".into(), "description".into());
-    row.spec_id = Some("TASK-3223".into());
-    let path = object_store::object_path(&root.join("objects"), "TASK-3223").unwrap();
+    let origin = "TASK-b6b1278890774ef993d2ebc327862470-880";
+    row.spec_id = Some(origin.into());
+    row.agreed_id = Some("TASK-3223".into());
+    let path = object_store::object_path(&root.join("objects"), origin).unwrap();
     std::fs::create_dir_all(path.parent().unwrap()).unwrap();
     std::fs::write(&path, serde_yaml::to_string(&row).unwrap()).unwrap();
     let before = std::fs::read(&path).unwrap();
@@ -570,7 +572,7 @@ fn mediated_host_routes_owned_comment_and_revalidates_authority_before_replay() 
         launch_epoch: epoch,
         request_id: uuid::Uuid::new_v4(),
         op: "comment_add".into(),
-        data: serde_json::json!({"spec_id":"TASK-3223", "expected_revision":redo::hash(&before), "content":"one routed comment"}),
+        data: serde_json::json!({"spec_id":origin.to_ascii_uppercase(), "expected_revision":redo::hash(&before), "content":"one routed comment"}),
     };
     let scopes = [row.id.to_string()];
     let context = HostContext {
@@ -722,3 +724,7 @@ channel.close()
         Ok(())
     }).unwrap();
 }
+
+#[cfg(test)]
+#[path = "routed_tests.rs"]
+mod routed_tests;

@@ -86,7 +86,7 @@ def mutation_request(raw):
             if not isinstance(revision, str) or len(revision) != 64 or any(c not in '0123456789abcdef' for c in revision):
                 raise ValueError('revision')
             if obj['op'] == 'comment_add':
-                if not isinstance(data['content'], str) or not data['content']:
+                if not isinstance(data['content'], str) or not data['content'].strip():
                     raise ValueError('comment')
             elif obj['op'] == 'spec_edit':
                 fields = data['fields']
@@ -342,8 +342,16 @@ class StoreMutationSession:
                     raise MutationRefusal('InvalidRequest')
                 response = self.dispatch(raw, credentials[0], sender_fds[0])
             except MutationRefusal as error:
-                # Refusals never echo unvalidated input or host diagnostics.
-                response = json.dumps(dict(version=1, launch_epoch=self.epoch, request_id=None,
+                # Correlate only a fully validated same-epoch request. Parsing
+                # here is data-only; it neither authorizes nor retries dispatch.
+                request_id = None
+                try:
+                    request = mutation_request(raw)
+                    if request['launch_epoch'] == self.epoch:
+                        request_id = request['request_id']
+                except MutationRefusal:
+                    pass
+                response = json.dumps(dict(version=1, launch_epoch=self.epoch, request_id=request_id,
                                            outcome='error', error=str(error))).encode()
             except EOFError:
                 response = None

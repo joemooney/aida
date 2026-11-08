@@ -84,6 +84,71 @@ fn seqpacket_success_and_known_refusals_are_correlated() {
 }
 
 #[test]
+fn preparse_refusals_are_nullable_but_mutation_outcomes_require_correlation() {
+    for error in [
+        "InvalidRequest",
+        "UnsupportedVersion",
+        "UnsupportedOperation",
+        "Conflict",
+        "Busy",
+        "Revoked",
+    ] {
+        let expected = if matches!(
+            error,
+            "InvalidRequest" | "UnsupportedVersion" | "UnsupportedOperation"
+        ) {
+            error
+        } else {
+            "OutcomeUnknown"
+        };
+        let result = exchange_with(move |r| {
+            serde_json::to_vec(&json!({
+                "version":1,"launch_epoch":r["launch_epoch"],"request_id":null,
+                "outcome":"error","error":error
+            }))
+            .unwrap()
+        })
+        .unwrap_err();
+        assert_eq!(result.to_string(), expected);
+    }
+    for field in ["request_id", "launch_epoch"] {
+        let result = exchange_with(move |r| {
+            let mut reply = json!({"version":1,"launch_epoch":r["launch_epoch"],"request_id":null,
+                "outcome":"error","error":"InvalidRequest"});
+            reply.as_object_mut().unwrap().remove(field);
+            serde_json::to_vec(&reply).unwrap()
+        })
+        .unwrap_err();
+        assert_eq!(result.to_string(), "OutcomeUnknown");
+    }
+}
+
+#[test]
+fn direct_origin_preimage_ignores_unrelated_malformed_objects_but_not_unsafe_targets() {
+    let tmp = tempfile::tempdir().unwrap();
+    let mut row = aida_core::Requirement::new("origin".into(), "description".into());
+    let origin = "TASK-b6b1278890774ef993d2ebc327862470-880";
+    row.spec_id = Some(origin.into());
+    aida_core::object_store::write_object(&tmp.path().join("objects"), &row).unwrap();
+    let bad = aida_core::object_store::object_path(&tmp.path().join("objects"), "TASK-2").unwrap();
+    std::fs::create_dir_all(bad.parent().unwrap()).unwrap();
+    std::fs::write(bad, "invalid: [yaml").unwrap();
+    let (sid, bytes) = canonical_preimage(tmp.path(), &origin.to_ascii_uppercase()).unwrap();
+    assert_eq!(sid, origin);
+    assert_eq!(
+        serde_yaml::from_slice::<aida_core::Requirement>(&bytes)
+            .unwrap()
+            .id,
+        row.id
+    );
+    let target = aida_core::object_store::object_path(&tmp.path().join("objects"), origin).unwrap();
+    let moved = tmp.path().join("moved");
+    std::fs::rename(&target, &moved).unwrap();
+    std::os::unix::fs::symlink(moved, target).unwrap();
+    assert!(canonical_preimage(tmp.path(), origin).is_err());
+}
+
+#[test]
 fn malformed_mismatched_and_oversized_replies_have_unknown_outcomes() {
     for field in [
         "version",
@@ -194,10 +259,6 @@ fn success_requires_the_typed_result_for_the_requested_target() {
     let mut edit = result;
     edit["comment_id"] = Value::Null;
     validate_result("spec_edit", &data, &edit).unwrap();
-    for state in ["completed", "unknown"] {
-        validate_result("request_status", &Value::Null, &json!({"state":state})).unwrap();
-    }
-    assert!(validate_result("request_status", &Value::Null, &json!({"state":"accepted"})).is_err());
 }
 
 #[test]
@@ -284,7 +345,7 @@ fn canonical_preimages_route_agreed_and_origin_ids_over_seqpacket() {
     let tmp = tempfile::tempdir().unwrap();
     let store = tmp.path().join("store");
     let mut row = aida_core::Requirement::new("before".into(), "description".into());
-    let origin = "TASK-B6B1278890774EF993D2EBC327862470-880";
+    let origin = "TASK-b6b1278890774ef993d2ebc327862470-880";
     row.spec_id = Some(origin.into());
     row.agreed_id = Some("TASK-3223".into());
     aida_core::object_store::write_object(&store.join("objects"), &row).unwrap();

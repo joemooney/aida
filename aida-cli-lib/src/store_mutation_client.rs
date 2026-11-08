@@ -18,6 +18,11 @@ pub(crate) struct Client {
 }
 
 impl Client {
+    #[cfg(test)]
+    pub(crate) fn fixture(endpoint: String, epoch: Uuid) -> Self {
+        Self { endpoint, epoch }
+    }
+
     /// Capture inputs at the entry point, before ordinary CLI/MCP setup. A
     /// missing endpoint in a selected profile is an error, never compatibility.
     pub(crate) fn from_environment(env: &Environment) -> Result<Option<Self>> {
@@ -136,6 +141,26 @@ fn canonical_preimage(root: &std::path::Path, id: &str) -> Result<(String, Vec<u
     use aida_core::{db::redo, object_store};
     let requested = object_store::canonical_spec_id(id);
     object_store::relative_object_path(&requested)?;
+    // Origin IDs already name an object: do not scan unrelated YAML or require
+    // an agreed-ID index for this common path. Existing unsafe/unreadable paths
+    // still fail closed through object_bytes rather than falling back.
+    let direct = object_store::object_path(&root.join("objects"), &requested)?;
+    match std::fs::symlink_metadata(&direct) {
+        Ok(_) => {
+            let bytes = redo::object_bytes(root, &requested)?;
+            let row: aida_core::Requirement = serde_yaml::from_slice(&bytes)?;
+            let sid = row
+                .spec_id
+                .context("Conflict: missing canonical identity")?;
+            ensure!(
+                sid.eq_ignore_ascii_case(&requested),
+                "Conflict: canonical identity mismatch"
+            );
+            return Ok((sid, bytes));
+        }
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
+        Err(error) => return Err(error.into()),
+    }
     let mut selected = None;
     for (sid, _) in object_store::list_objects_strict(&root.join("objects"))? {
         let bytes = redo::object_bytes(root, &sid)?;
@@ -146,11 +171,14 @@ fn canonical_preimage(root: &std::path::Path, id: &str) -> Result<(String, Vec<u
             .any(|value| aida_core::id_identity::same_id(value, &requested));
         if matches {
             ensure!(selected.is_none(), "Conflict: ambiguous canonical ID");
+            let stored = row
+                .spec_id
+                .context("Conflict: missing canonical identity")?;
             ensure!(
-                row.spec_id.as_deref() == Some(sid.as_str()),
+                stored.eq_ignore_ascii_case(&sid),
                 "Conflict: canonical identity mismatch"
             );
-            selected = Some((sid, bytes));
+            selected = Some((stored, bytes));
         }
     }
     selected.context("canonical requirement not found")
@@ -168,41 +196,35 @@ pub(crate) fn session_role(env: &Environment) -> Result<Option<String>> {
 
 fn validate_result(op: &str, data: &Value, result: &Value) -> Result<()> {
     let object = result.as_object().context("OutcomeUnknown")?;
-    if op == "request_status" {
+    ensure!(
+        object.len() == 3
+            && object.contains_key("comment_id")
+            && result["spec_id"] == data["spec_id"],
+        "OutcomeUnknown"
+    );
+    let revision = result["revision"].as_str().context("OutcomeUnknown")?;
+    ensure!(
+        revision.len() == 64
+            && revision
+                .bytes()
+                .all(|b| b.is_ascii_digit() || (b'a'..=b'f').contains(&b)),
+        "OutcomeUnknown"
+    );
+    if op == "comment_add" {
         ensure!(
-            object.len() == 1 && matches!(result["state"].as_str(), Some("completed" | "unknown")),
+            result["comment_id"]
+                .as_str()
+                .and_then(|id| Uuid::parse_str(id).ok())
+                .is_some(),
             "OutcomeUnknown"
         );
     } else {
         ensure!(
-            object.len() == 3
-                && object.contains_key("comment_id")
-                && result["spec_id"] == data["spec_id"],
+            op == "spec_edit" && result["comment_id"].is_null(),
             "OutcomeUnknown"
         );
-        let revision = result["revision"].as_str().context("OutcomeUnknown")?;
-        ensure!(
-            revision.len() == 64
-                && revision
-                    .bytes()
-                    .all(|b| b.is_ascii_digit() || (b'a'..=b'f').contains(&b)),
-            "OutcomeUnknown"
-        );
-        if op == "comment_add" {
-            ensure!(
-                result["comment_id"]
-                    .as_str()
-                    .and_then(|id| Uuid::parse_str(id).ok())
-                    .is_some(),
-                "OutcomeUnknown"
-            );
-        } else {
-            ensure!(
-                op == "spec_edit" && result["comment_id"].is_null(),
-                "OutcomeUnknown"
-            );
-        }
     }
+
     Ok(())
 }
 
@@ -310,6 +332,13 @@ fn exchange(fd: &OwnedFd, raw: &[u8], epoch: Uuid, id: Uuid, timeout: Duration) 
     decode_reply(&bytes[..received as usize], epoch, id)
 }
 
+// Require the field even though its value can be null for a pre-parse refusal.
+fn nullable_request_id<'de, D: serde::Deserializer<'de>>(
+    d: D,
+) -> std::result::Result<Option<Uuid>, D::Error> {
+    serde::Deserialize::deserialize(d)
+}
+
 fn decode_reply(raw: &[u8], epoch: Uuid, id: Uuid) -> Result<Value> {
     #[derive(serde::Deserialize)]
     #[serde(tag = "outcome", rename_all = "snake_case", deny_unknown_fields)]
@@ -323,30 +352,40 @@ fn decode_reply(raw: &[u8], epoch: Uuid, id: Uuid) -> Result<Value> {
         Error {
             version: u32,
             launch_epoch: Uuid,
-            request_id: Uuid,
+            #[serde(deserialize_with = "nullable_request_id")]
+            request_id: Option<Uuid>,
             error: String,
         },
     }
     let reply: Reply =
         serde_json::from_slice(raw).map_err(|_| anyhow::anyhow!("OutcomeUnknown"))?;
-    let (version, actual_epoch, actual_id) = match &reply {
+    let correlated = match &reply {
         Reply::Success {
             version,
             launch_epoch,
             request_id,
             ..
-        }
-        | Reply::Error {
+        } => *version == 1 && *launch_epoch == epoch && *request_id == id,
+        Reply::Error {
             version,
             launch_epoch,
             request_id,
-            ..
-        } => (*version, *launch_epoch, *request_id),
+            error,
+        } => {
+            *version == 1
+                && *launch_epoch == epoch
+                && match request_id {
+                    Some(actual) => *actual == id,
+                    // Pre-schema refusals cannot echo an unvalidated request ID.
+                    // This channel carries exactly one outstanding request.
+                    None => matches!(
+                        error.as_str(),
+                        "InvalidRequest" | "UnsupportedVersion" | "UnsupportedOperation"
+                    ),
+                }
+        }
     };
-    ensure!(
-        version == 1 && actual_epoch == epoch && actual_id == id,
-        "OutcomeUnknown"
-    );
+    ensure!(correlated, "OutcomeUnknown");
     match reply {
         Reply::Success { result, .. } => Ok(result),
         Reply::Error { error, .. } => {

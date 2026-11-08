@@ -338,6 +338,32 @@ class StoreMutationTests(unittest.TestCase):
             for client in clients:
                 client.close()
 
+    def test_poll_correlates_validated_refusals_and_leaves_bad_packets_unbound(self):
+        client = self.service.connect(os.getpid())
+        self.addCleanup(client.close)
+        client.settimeout(2)
+        request = self.request()
+        for error in ('Revoked', 'Unauthorized', 'Busy', 'Conflict'):
+            self.error = error
+            os.write(client.fileno(), self.wire(request))
+            self.service.poll()
+            reply = json.loads(client.recv(65536))
+            self.assertEqual(reply, dict(version=1, launch_epoch=self.epoch,
+                request_id=request['request_id'], outcome='error', error=error))
+        self.error = None
+        for raw in (b'bad-json', self.wire(dict(request, launch_epoch=str(uuid.uuid4())))):
+            os.write(client.fileno(), raw)
+            self.service.poll()
+            reply = json.loads(client.recv(65536))
+            self.assertIsNone(reply['request_id'])
+            self.assertEqual(reply['outcome'], 'error')
+        self.assertFalse(self.service.accepted)
+
+    def test_comment_schema_refuses_blank_text(self):
+        for text in ('', ' ', '\n\t', '\u2003'):
+            self.refuses('InvalidRequest', self.request('comment_add', dict(
+                spec_id='TASK-1', expected_revision='a' * 64, content=text)))
+
     def test_kernel_credentials_write_is_actual_sender_not_socketpair_creator(self):
         client = self.service.connect(os.getpid())
         self.addCleanup(client.close)

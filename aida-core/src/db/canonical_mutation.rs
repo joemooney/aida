@@ -76,7 +76,10 @@ impl CanonicalOperation {
         };
         match self {
             Self::CommentAdd { content, .. } => {
-                anyhow::ensure!(text(content), "InvalidRequest")
+                anyhow::ensure!(
+                    text(content) && !content.trim().is_empty(),
+                    "InvalidRequest"
+                )
             }
             Self::SpecEdit { fields, .. } => {
                 anyhow::ensure!(
@@ -102,6 +105,19 @@ impl CanonicalOperation {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn comments_reject_whitespace_across_all_entry_points() {
+        for content in ["", " ", "\n\t", "\u{2003}"] {
+            assert!(CanonicalOperation::CommentAdd {
+                spec_id: "TASK-1".into(),
+                expected_revision: "a".repeat(64),
+                content: content.into(),
+            }
+            .validate()
+            .is_err());
+        }
+    }
 
     #[test]
     fn canonical_schema_matches_broker_revision_and_field_rules() {

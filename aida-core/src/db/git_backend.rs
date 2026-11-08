@@ -2725,7 +2725,13 @@ impl GitBackend {
             let before = redo::object_bytes(&self.root, sid)?;
             anyhow::ensure!(redo::hash(&before) == revision, "Conflict");
             let current: Requirement = serde_yaml::from_slice(&before)?;
-            anyhow::ensure!(current.spec_id.as_deref() == Some(sid), "Conflict");
+            anyhow::ensure!(
+                current
+                    .spec_id
+                    .as_deref()
+                    .is_some_and(|stored| stored.eq_ignore_ascii_case(sid)),
+                "Conflict"
+            );
             let mut next = current.clone();
             let context = crate::provenance::WriteContext {
                 session_id: Some(epoch.to_string()),
