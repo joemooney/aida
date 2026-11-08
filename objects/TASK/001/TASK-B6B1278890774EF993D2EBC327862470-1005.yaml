@@ -17,7 +17,7 @@ priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-11-08T16:03:48.376356557Z
-modified_at: 2026-11-08T17:23:24.627247935Z
+modified_at: 2026-11-08T17:23:29.714140528Z
 req_type: Task
 tags:
 - from-advisor:STORY-1486
@@ -31,6 +31,14 @@ relationships:
   target_id: 01a1bbe0-6514-7fa1-b803-d22f7371f01a
   created_at: 2026-11-08T17:23:24.627245015Z
   created_by: joe
+comments:
+- id: 01a1bc2f-c532-7e22-a457-5e0fb90a6375
+  author: joe
+  content: 'Advisor 2026-11-08: duplicate of the same STORY-1486 note.'
+  created_at: 2026-11-08T17:23:29.714140528Z
+  modified_at: 2026-11-08T17:23:29.714140528Z
+  session_id: 01a1bbab-762f-7cd2-8a36-4ea9f209afce
+  harness_version: 2.1.319 (Claude Code)
 history:
 - id: 01a1bc03-8591-7582-ba09-bd4e9928fc7f
   author: joe
