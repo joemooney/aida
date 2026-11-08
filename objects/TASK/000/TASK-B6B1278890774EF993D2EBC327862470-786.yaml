@@ -8,7 +8,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-04T17:54:51.353376614Z
-modified_at: 2026-11-08T01:36:19.290923332Z
+modified_at: 2026-11-08T01:51:29.875007689Z
 req_type: Task
 tags:
 - area:containment
@@ -447,6 +447,12 @@ comments:
   content: 'Round 7 disposition plan: (1) add an explicit fixture-only AGY entry using the shared wrapper and its live receipt/exec barrier, without changing production require_conformance; (2) use supported tool-deny controls and isolate global/workspace MCP/plugin inputs; verify candidate and wrapper settings/argv without invoking a model; (3) derive wrapper relay destinations from runtime auth_hosts intersected with trusted approval and name unlisted-host denials. Measured inventory remains daily-cloudcode-pa.googleapis.com only; oauth2.googleapis.com is a static candidate token endpoint, not a measured refresh. Advisor must attach refresh observations and report.json; implementer will not fabricate a measured list. (4) cover vendor propagation in conformance launch argv and ready callback; (5) record final dispositions and validation here. Expected scope: containment runtime data/common wrapper, diagnostic CLI adapter, conformance harness/tests, CLI catalog/audit fixtures and conformance docs. Keep Refs and TASK-3048 in progress.'
   created_at: 2026-11-08T01:36:19.290923332Z
   modified_at: 2026-11-08T01:36:19.290923332Z
+  session_id: 01a1b8c99472
+- id: 01a1b8da-8053-78f1-8d3f-926549af6186
+  author: joe
+  content: 'Round 7 code dispositions (validation in progress): Finding 1 addressed with the hidden config permissions conformance-launch entry in launch/agy.rs. It issues the normal contained child grant and calls PreparedLaunch::prepare_runtime_diagnostic; production preflight/Adapter::require_conformance still refuse. The shared spawn barrier rechecks outer_only_argv with its live accepted receipt before exec release. Finding 2 addressed with shipped tool_denies (mcp(*), read_url(*), execute_url(*)), mandatory inline argv controls plus private runtime settings, and masked global/source .gemini and workspace MCP/hooks/plugins. No native sandbox/profile file, no inherited Codex API key. Candidate, wrapper argv/settings and private credential-handle tests cover the configuration; actual AGY enforcement still needs advisor live evidence. Finding 3 addressed in code: runtime auth_hosts populates the approved relay allow-set; missing trusted approval names AGY_AUTH_HOST_UNAPPROVED and unlisted runtime requests log CONTAINED_EGRESS_HOST_UNLISTED before DNS. Inventory evidence recorded explicitly: measured inference hosts=[daily-cloudcode-pa.googleapis.com]; measured refresh hosts=[]; candidate refresh hosts=[oauth2.googleapis.com] from the installed token-endpoint string only. auth_inventory_complete remains false. This code-only implementer run performs no real model/refresh measurement. Finding 4 addressed with vendor propagation test for queue-work argv and an actual continue_aida/ready callback fixture proving AGY selects the diagnostic entry and waits for a shared receipt before publishing probe payload; AGY no longer uses queue work because finding 1 requires avoiding that production refusal. Finding 5: these dispositions are recorded for every finding. Native seat leaves edits uncommitted for a new host commit (Refs TASK-3048); no finding is being silently disputed, no completion or production unlock is claimed.'
+  created_at: 2026-11-08T01:51:29.875007689Z
+  modified_at: 2026-11-08T01:51:29.875007689Z
   session_id: 01a1b8c99472
 history:
 - id: 01a1a7b3-3699-7713-8ae7-69568c287956
