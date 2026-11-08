@@ -205,6 +205,7 @@ fn parse_project(toml_body: &str) -> Result<Option<LoadedScheduleConfig>> {
 
 // trace:TASK-1222 | ai:codex
 #[test]
+// trace:TASK-1222.ac14b158 | ai:codex
 fn task_1222_weekly_gc_reports_to_advisor_without_apply() {
     let repo_root = Path::new(env!("CARGO_MANIFEST_DIR")).parent().unwrap();
     let registry = load_config(repo_root).unwrap().unwrap();
@@ -240,59 +241,17 @@ fn task_1222_weekly_gc_reports_to_advisor_without_apply() {
 
 // trace:TASK-1596 | ai:codex
 #[test]
-fn task_1596_monthly_guard_is_read_only_and_routes_to_advisor() {
+fn task_1596_monthly_guard_is_superseded_by_weekly_gc() {
     let repo_root = Path::new(env!("CARGO_MANIFEST_DIR")).parent().unwrap();
     let registry = load_config(repo_root).unwrap().unwrap();
-    let guard = registry
+    assert!(!registry
         .tasks
         .iter()
-        .find(|t| t.name == "merged-worktrees-guard")
-        .unwrap();
-    assert!(guard.enabled);
-    assert_eq!(guard.interval, Some(Duration::days(30)));
-    let command = guard.command.as_ref().unwrap();
-    assert_eq!(
-        command.args,
-        &["worktree", "gc", "--json", "--fail-on-findings"]
-    );
-    assert!(!command.hook_allowed);
-    assert!(parse_scheduled_command("worktree gc --yes --force").is_err());
-    let route = registry
+        .any(|t| t.name.starts_with("merged-worktrees-guard")));
+    assert!(registry
         .tasks
         .iter()
-        .find(|t| t.name == "merged-worktrees-guard-route")
-        .unwrap();
-    assert!(route.enabled);
-    assert_eq!(route.seats, vec!["advisor"]);
-    assert_eq!(
-        route.on.iter().map(ToString::to_string).collect::<Vec<_>>(),
-        vec!["CronJobFailed:merged-worktrees-guard"]
-    );
-    assert!(route.command.is_none());
-
-    let tmp = tempfile::tempdir().unwrap();
-    let mut state = ScheduleState::default();
-    let seen = Rc::new(RefCell::new(Vec::new()));
-    for now in [
-        at(12),
-        at(12) + Duration::days(29),
-        at(12) + Duration::days(30),
-    ] {
-        tick_with_executor(
-            tmp.path(),
-            config(vec![guard.clone()]),
-            &mut state,
-            now,
-            false,
-            ok_exec(Rc::clone(&seen)),
-        )
-        .unwrap();
-    }
-    assert_eq!(
-        seen.borrow().len(),
-        2,
-        "guard runs initially and after 30 days, not after 29"
-    );
+        .any(|t| t.name == "worktree-lifecycle-gc" && t.enabled));
 }
 
 // trace:BUG-1746 | ai:codex
@@ -394,7 +353,7 @@ fn bug_1746_mirror_sync_failure_does_not_wake_unrelated_guard_routes() {
         "disk-headroom-guard-route",
         "performance-guard-route",
         "watchdog-route",
-        "merged-worktrees-guard-route",
+        "worktree-lifecycle-gc-route",
     ];
     let routes: Vec<Task> = parsed
         .tasks

@@ -185,8 +185,8 @@ commits while fetching and pushing origin's SHA. See
 [git lifecycle](docs/cli/04-git-lifecycle.md#aida-pull).
 <!-- trace:BUG-1803 | ai:codex -->
 
-The project schedule runs weekly and monthly read-only lifecycle-worktree GC
-checks and routes failures to the advisor. The operator reviews `aida worktree gc` and
+The project schedule runs a weekly read-only lifecycle-worktree GC
+check and routes failures to the advisor. The operator reviews `aida worktree gc` and
 runs `aida worktree gc --apply` at a TTY; forced cleanup stays outside
 scheduled and headless jobs.
 <!-- trace:TASK-1596 | ai:codex -->

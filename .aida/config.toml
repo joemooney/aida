@@ -312,22 +312,6 @@ on = ["CronJobFailed:session-hygiene"]
 prompt = "The hourly hygiene pass kept something it must not touch on its own. The routed trip evidence names each item and the act it needs: salvage or discard uncommitted work in a dead session's worktree, activate mail retention so a finished session can be reaped, or rerun a failed step by hand. Never force-reap or delete a dirty worktree to clear it."
 enabled = true
 
-# Monthly read-only check after the merged-worktree backlog slowed pr ship.
-# Cleanup needs a human at a TTY; never schedule worktree gc --force.
-# trace:TASK-1596 | ai:codex
-[[schedule.jobs]]
-name = "merged-worktrees-guard"
-command = "worktree gc --fail-on-findings"
-every = "30d"
-enabled = true
-
-[[schedule.jobs]]
-name = "merged-worktrees-guard-route"
-seats = ["advisor"]
-on = ["CronJobFailed:merged-worktrees-guard"]
-prompt = "Merged agent worktrees are accumulating. Review the routed lifecycle counts and `aida worktree gc --json`. Ask the operator to review `aida worktree gc` (dry run), then run `aida worktree gc --apply` at an interactive TTY to clean up. Force is refused in unattended contexts; do not run forced cleanup from a scheduled job or headless seat."
-enabled = true
-
 # STORY-1462: the runaway-seat watchdog. BUG-1589 (2026-09-21): two seats
 # answered a mail tick every ~7-10s (~460 wakes and ~700M tokens an hour
 # each) and nobody noticed for ~24h. This job reads new bytes of this

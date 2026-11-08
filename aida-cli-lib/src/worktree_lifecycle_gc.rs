@@ -12,6 +12,7 @@ struct Candidate {
     branch: Option<String>,
     head: Option<String>,
     bytes: u64,
+    bytes_complete: bool,
     eligible: bool,
     reason: String,
     removed: bool,
@@ -159,6 +160,7 @@ fn inspect_with(
         branch: None,
         head: None,
         bytes: 0,
+        bytes_complete: true,
         eligible: false,
         reason: String::new(),
         removed: false,
@@ -273,13 +275,15 @@ fn inspect_with(
             }
         }
         aida_core::worktree_holders::check_worktree_removal(path)?;
-        row.bytes = bytes(path)?;
+        estimate_bytes(&mut row, bytes(path));
         if is_clone {
             let target = main
                 .join("target/worktrees")
                 .join(path.file_name().context("seat name")?);
-            if target.try_exists()? {
-                row.bytes = row.bytes.saturating_add(bytes(&target)?);
+            match target.try_exists() {
+                Ok(true) => estimate_bytes(&mut row, bytes(&target)),
+                Ok(false) => {}
+                Err(_) => row.bytes_complete = false,
             }
         }
         row.reason = if ancestor {
@@ -295,6 +299,15 @@ fn inspect_with(
         row.reason = format!("{error:#}");
     }
     row
+}
+
+// Accounting is informational: incomplete walks must never veto safe cleanup.
+// trace:TASK-1222 | ai:codex
+fn estimate_bytes(row: &mut Candidate, estimate: Result<u64>) {
+    match estimate {
+        Ok(size) => row.bytes = row.bytes.saturating_add(size),
+        Err(_) => row.bytes_complete = false,
+    }
 }
 
 fn inventory(main: &Path) -> Result<Vec<(PathBuf, bool)>> {
@@ -484,12 +497,21 @@ fn render_toon(report: &serde_json::Value) -> String {
         "failures",
         "reclaimable_bytes",
         "freed_bytes",
+        "bytes_complete",
     ]
     .into_iter()
     .map(|key| scalar(key, &report[key].to_string()))
     .collect();
     let fields = [
-        "path", "clone", "branch", "head", "bytes", "eligible", "removed", "reason",
+        "path",
+        "clone",
+        "branch",
+        "head",
+        "bytes",
+        "eligible",
+        "removed",
+        "reason",
+        "bytes_complete",
     ];
     let rows: Vec<Vec<String>> = report["items"]
         .as_array()
@@ -597,6 +619,7 @@ pub(crate) fn run(apply: bool, json: bool, fail_on_findings: bool) -> Result<()>
         .count();
     let report = serde_json::json!({
         "partial": remaining > 0, "remaining": remaining, "dry_run": !apply, "eligible": eligible, "kept": kept, "scanned": rows.len(), "failures": failures,
+        "bytes_complete": rows.iter().all(|r| r.bytes_complete),
         "removed": removed, "reclaimable_bytes": reclaimable_bytes, "freed_bytes": freed_bytes, "items": &rows
     });
     use crate::doctor_cmd::DoctorRenderMode;
@@ -614,7 +637,7 @@ pub(crate) fn run(apply: bool, json: bool, fail_on_findings: bool) -> Result<()>
             );
             for row in &rows {
                 println!(
-                    "{} {} ({} bytes): {}",
+                    "{} {} ({} bytes{}): {}",
                     if row.removed {
                         "removed"
                     } else if row.eligible && !apply {
@@ -624,6 +647,11 @@ pub(crate) fn run(apply: bool, json: bool, fail_on_findings: bool) -> Result<()>
                     },
                     row.path.display(),
                     row.bytes,
+                    if row.bytes_complete {
+                        ""
+                    } else {
+                        "+; estimate incomplete"
+                    },
                     row.reason
                 );
             }
@@ -643,6 +671,22 @@ pub(crate) fn run(apply: bool, json: bool, fail_on_findings: bool) -> Result<()>
 mod tests {
     use super::*;
     use crate::forge_observed::Observed;
+
+    #[test]
+    fn task_1222_byte_budget_does_not_veto_eligibility() {
+        // trace:TASK-1222.ac683e0c | ai:codex
+        // trace:TASK-1222.ac5418e8 | ai:codex
+        let (_tmp, main) = fixture();
+        let tree = linked(&main, "feature");
+        let mut row = inspect_with(&main, &tree, false, "origin/main", &mut absent);
+        assert!(row.eligible, "{}", row.reason);
+        let known = row.bytes;
+        estimate_bytes(&mut row, bytes_until(&tree, Instant::now()));
+        assert!(row.eligible);
+        assert!(!row.bytes_complete);
+        assert_eq!(row.bytes, known);
+        assert!(tree.exists());
+    }
 
     #[test]
     fn task_1222_budget_and_apply_authority() {
@@ -689,6 +733,8 @@ mod tests {
 
     #[test]
     fn task_1222_live_holder_retains_linked_tree() {
+        // trace:TASK-1222.acfbfd06 | ai:codex
+        // trace:TASK-1222.ac5418e8 | ai:codex
         let (_tmp, main) = fixture();
         let tree = linked(&main, "feature");
         let _held_file = std::fs::File::open(tree.join("seed")).unwrap();
@@ -769,23 +815,27 @@ mod tests {
     fn task_1222_toon_report_preserves_counts_bytes_and_quoted_paths() {
         let report = serde_json::json!({
             "dry_run":true, "scanned":1, "eligible":0, "kept":1, "removed":0,
-            "failures":0, "reclaimable_bytes":0, "freed_bytes":0,
-            "items":[{"path":"/tmp/seat,one", "clone":true, "branch":null,
+            "failures":0, "reclaimable_bytes":0, "freed_bytes":0, "bytes_complete":false,
+            "items":[{"path":"seat,one", "clone":true, "branch":null,
                 "head":null, "bytes":42, "eligible":false, "removed":false,
-                "reason":"retained, dirty"}]
+                "reason":"retained, dirty", "bytes_complete":false}]
         });
         let output = render_toon(&report);
         assert!(output.contains("kept: 1"));
         assert!(output.contains("freed_bytes: 0"));
         let table = crate::toon::parse_table(&output[output.find("items[").unwrap()..]).unwrap();
         assert_eq!(table.rows.len(), 1);
-        assert_eq!(table.rows[0][0], "/tmp/seat,one");
+        assert_eq!(table.rows[0][0], "seat,one");
         assert_eq!(table.rows[0][4], "42");
         assert_eq!(table.rows[0][7], "retained, dirty");
+        assert_eq!(table.rows[0][8], "false");
+        assert!(output.contains("bytes_complete: false"));
     }
 
     #[test]
     fn task_1222_linked_preview_and_removal_revalidate_dirty_and_locks() {
+        // trace:TASK-1222.acfbfd06 | ai:codex
+        // trace:TASK-1222.ac5418e8 | ai:codex
         let (_tmp, main) = fixture();
         let tree = linked(&main, "feature");
         let plan = inspect_with(&main, &tree, false, "origin/main", &mut absent);
@@ -827,6 +877,8 @@ mod tests {
 
     #[test]
     fn task_1222_linked_closed_pr_and_unknown_or_reopened_pr() {
+        // trace:TASK-1222.acfbfd06 | ai:codex
+        // trace:TASK-1222.ac5418e8 | ai:codex
         let (_tmp, main) = fixture();
         let tree = linked(&main, "unmerged");
         std::fs::write(tree.join("new"), "published work").unwrap();
@@ -848,6 +900,8 @@ mod tests {
 
     #[test]
     fn task_1222_ownership_unknown_and_locks_keep_linked_tree() {
+        // trace:TASK-1222.acfbfd06 | ai:codex
+        // trace:TASK-1222.ac5418e8 | ai:codex
         let (_tmp, main) = fixture();
         let tree = linked(&main, "feature");
         crate::worktree_lock::acquire(&main, &tree, "advisor").unwrap();
@@ -879,6 +933,8 @@ mod tests {
 
     #[test]
     fn task_1222_ended_clone_requires_origin_coverage_and_closed_pr() {
+        // trace:TASK-1222.ac683e0c | ai:codex
+        // trace:TASK-1222.ac5418e8 | ai:codex
         let (_tmp, main) = fixture();
         let clone = main.parent().unwrap().join("aida-seat-project-test");
         crate::seat_clone::create(&main, &clone, "feature", "origin/main").unwrap();

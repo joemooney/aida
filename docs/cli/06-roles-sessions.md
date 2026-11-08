@@ -193,8 +193,9 @@ can run `aida worktree gc --apply` at an interactive host terminal; scheduled
 and unattended contexts refuse removal. The legacy `--yes --force` combination
 also requests removal through the same gate. Scans have a soft budget and report
 partial counts plus the number of deferred entries; a partial scheduled scan
-routes to the advisor. Byte walks are bounded and retain trees on timeout.
-The monthly guard and weekly report both use lifecycle eligibility checks.
+routes to the advisor. Byte walks are bounded; incomplete estimates are flagged and do not affect
+eligibility. Byte totals are lower bounds when estimates are incomplete.
+The weekly report replaces the former monthly guard.
 
 A candidate must have no remaining session lease (even a dead-process lease
 must first be ended/reaped), no operator or Git worktree lock, no uncommitted
@@ -215,7 +216,7 @@ Before removal, GC rechecks identity, HEAD, branch, ownership and eligibility,
 then uses the existing mailbox-retention and process-holder teardown guards.
 Linked local branch refs are compare-deleted only if unchanged and no longer
 checked out. The weekly `worktree-lifecycle-gc` scheduled job runs only the
-preview (`--fail-on-findings`), routing counts and byte estimates to the advisor
+preview (`aida worktree gc --fail-on-findings`), routing counts and byte estimates to the advisor
 when candidates need operator review; it never applies cleanup.
 
 **Chains with** — `aida queue work` ([Chapter 3](03-work-autonomy.md)) leases under the hood; `aida session start --launch` is the manual equivalent. After review + merge, `aida session end` tears the worktree down. Cross-reference `aida agent new` for the multi-process launcher.

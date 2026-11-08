@@ -4594,6 +4594,11 @@ pub(crate) fn is_full_commit_sha(sha: &str) -> bool {
 // trace:STORY-1689 | ai:claude
 const COMMIT_CI_API_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(30);
 
+// trace:TASK-1222 | ai:codex
+fn forge_read_command(cli: &Path) -> Command {
+    Command::new(cli)
+}
+
 /// Run `<cli> api -X GET <endpoint>` in `root` for the commit-keyed reader;
 /// a spawn failure, timeout or non-zero exit is an `Err`.
 // trace:STORY-1689 | ai:claude
@@ -4603,7 +4608,7 @@ fn commit_ci_api(cli: &Path, root: &Path, endpoint: &str) -> Result<Vec<u8>> {
     // own durable checkpoint. Outside an active train this is a no-op.
     // trace:STORY-2401 | ai:codex
     crate::pr_train::before_train_forge_call("commit CI API read")?;
-    let mut command = Command::new(cli);
+    let mut command = forge_read_command(cli);
     command
         .args(["api", "-X", "GET", endpoint])
         .current_dir(root)
@@ -7448,7 +7453,7 @@ pub(crate) fn observe_gc_branch_closed(root: &Path, branch: &str, head: &str) ->
     let Some(binary) = crate::resolve_forge_cli(kind) else {
         return Observed::Transient("forge CLI unavailable".into());
     };
-    let mut cmd = Command::new(binary);
+    let mut cmd = forge_read_command(&binary);
     cmd.current_dir(root).stdin(std::process::Stdio::null());
     match kind {
         ForgeKind::GitHub => {
