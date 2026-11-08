@@ -1620,14 +1620,14 @@ forge evidence downgrade declared completion to Refs; failed exits always use
 Refs. Punt/hold vetoes take precedence. See the
 [native publication handshake](docs/cli/04-git-lifecycle.md#aida-ship).
 <!-- trace:TASK-2902 | ai:codex -->
+Permission reports, doctor, launch output and statusline distinguish the posture;
+`AIDA_CONTAINMENT_POSTURE` stamps actual child posture for display only.
+
 Host fast gates run `make check-ci-fast` in the offline, cleared-environment
 lane-job bubblewrap sandbox. Native publication gets one repair round before
 publishing; self-pushing lanes get one queued repair before review. Seat scripts
 never run unsandboxed, and missing bubblewrap reports `skipped(no-sandbox)`.
 <!-- trace:STORY-2640 | ai:codex -->
-
-Permission reports, doctor, launch output and statusline distinguish the posture;
-`AIDA_CONTAINMENT_POSTURE` stamps actual child posture for display only.
 
 The contained permission preset (`aida config permissions set contained`) writes
 `sandbox_workspace_write.writable_roots = []` for Codex. Reapplying it clears

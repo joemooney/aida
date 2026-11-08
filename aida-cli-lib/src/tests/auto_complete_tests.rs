@@ -592,6 +592,8 @@ struct MockPhaseDriver {
     /// orchestrator must continue from this PR-only re-entry phase instead
     /// of retrying phase 1 or shelving.
     phase1_pr_recovery: Option<Phase>,
+    fast_gate_blocked: bool,
+    fast_gate_block_after: Option<Phase>,
     /// BUG-1213: successful phase 1 that nevertheless left the rework PR
     /// at its prior head.
     rework_no_op: bool,
@@ -662,6 +664,8 @@ impl MockPhaseDriver {
             transient_retry_events: Vec::new(),
             recover_review_pr: None,
             phase1_pr_recovery: None,
+            fast_gate_blocked: false,
+            fast_gate_block_after: None,
             harvest_gate_calls: 0,
             rework_no_op: false,
             already_merged: None,
@@ -1139,6 +1143,12 @@ impl PhaseDriver for MockPhaseDriver {
         let pr = self.recover_review_pr.filter(|n| *n > 0)?;
         self.pr_number = Some(pr);
         Some(pr)
+    }
+    fn fast_gate_blocks_review(&mut self) -> Result<bool, String> {
+        Ok(self.fast_gate_blocked
+            || self
+                .fast_gate_block_after
+                .is_some_and(|phase| self.calls.contains(&phase)))
     }
     fn recover_phase1_failure_with_open_pr(&mut self, _failure: &PhaseFailure) -> Option<Phase> {
         self.phase1_pr_recovery
@@ -8272,4 +8282,86 @@ fn scenario_all_green_batch_drains_clean() {
         result.shipped,
         vec!["TASK-A".to_string(), "TASK-B".to_string()],
     );
+}
+
+// A red self-pushing lane already has a PR. Its queued repair must survive
+// without failure shelving, PR recovery, CI, reviewer dispatch, or merging.
+// trace:STORY-2640 | ai:codex
+#[test]
+fn fast_gate_drain_queued_repair_stops_open_pr_failure_recovery() {
+    let mut driver = MockPhaseDriver {
+        fail_at: Some(Phase::Implementer),
+        phase1_pr_recovery: Some(Phase::Ci),
+        fast_gate_blocked: true,
+        shelve_succeeds: true,
+        ..MockPhaseDriver::base()
+    };
+    let result = orchestrate(
+        &mut driver,
+        "STORY-2640",
+        AutoCompleteVariant::Full,
+        false,
+        EscalateMode::Blocks,
+    );
+    assert_eq!(driver.calls, vec![Phase::Implementer]);
+    assert!(result
+        .inconclusive_reason
+        .unwrap()
+        .contains("repair is pending"));
+    assert!(result.shelved_reason.is_none());
+    assert!(result.failed_phase.is_none());
+}
+
+// trace:STORY-2640 | ai:codex
+#[test]
+fn fast_gate_drain_pending_repair_blocks_resumed_pr_and_late_review() {
+    for phase in [Phase::Ci, Phase::Reviewer, Phase::Merge] {
+        let mut driver = MockPhaseDriver {
+            fast_gate_blocked: true,
+            ..MockPhaseDriver::all_ok()
+        };
+        let result = orchestrate_with_resume(
+            &mut driver,
+            "STORY-2640",
+            AutoCompleteVariant::Full,
+            false,
+            EscalateMode::Blocks,
+            LifecycleSkip::none(),
+            false,
+            phase,
+        );
+        assert!(driver.calls.is_empty());
+        assert!(result.inconclusive_reason.is_some());
+        assert!(result.shelved_reason.is_none());
+    }
+    let mut driver = MockPhaseDriver {
+        fast_gate_block_after: Some(Phase::Ci),
+        ..MockPhaseDriver::all_ok()
+    };
+    let result = orchestrate(
+        &mut driver,
+        "STORY-2640",
+        AutoCompleteVariant::Full,
+        false,
+        EscalateMode::Blocks,
+    );
+    assert_eq!(driver.calls, vec![Phase::Implementer, Phase::Ci]);
+    assert!(result.inconclusive_reason.is_some());
+}
+
+// trace:STORY-2640 | ai:codex
+#[test]
+fn fast_gate_drain_settled_repair_allows_normal_pipeline() {
+    let mut driver = MockPhaseDriver::all_ok();
+    let result = orchestrate(
+        &mut driver,
+        "STORY-2640",
+        AutoCompleteVariant::Full,
+        false,
+        EscalateMode::Blocks,
+    );
+    assert_eq!(result.exit_code, 0);
+    assert!(result.inconclusive_reason.is_none());
+    assert!(driver.calls.contains(&Phase::Reviewer));
+    assert!(driver.calls.contains(&Phase::Merge));
 }

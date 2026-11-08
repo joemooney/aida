@@ -1203,6 +1203,22 @@ impl auto_complete::PhaseDriver for RealPhaseDriver {
         self.pr_number
     }
 
+    // trace:STORY-2640 | ai:codex
+    fn fast_gate_blocks_review(&mut self) -> Result<bool, String> {
+        let branch = match self.branch.clone() {
+            Some(branch) if !branch.is_empty() => branch,
+            _ => match self.project_forge().change_for_spec(&self.spec) {
+                Ok(crate::forge::ChangeLookup::Found(pr)) if !pr.branch.is_empty() => pr.branch,
+                _ => return Ok(false),
+            },
+        };
+        crate::lane_fast_gate::blocks_review(
+            &crate::main_worktree_root_from(&self.project_root),
+            &branch,
+        )
+        .map_err(|error| format!("{error:#}"))
+    }
+
     fn recover_phase1_failure_with_open_pr(
         &mut self,
         _failure: &auto_complete::PhaseFailure,

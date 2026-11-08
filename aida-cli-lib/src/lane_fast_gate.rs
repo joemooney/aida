@@ -145,7 +145,7 @@ impl Drop for Reservation {
 
 /// Infrastructure trouble is visible but must not bypass lane reporting/cleanup.
 // trace:STORY-2640 | ai:codex
-pub(crate) fn infrastructure(main: &Path, branch: &str, lease: &str, error: &anyhow::Error) {
+pub(crate) fn infrastructure(main: &Path, branch: &str, _lease: &str, error: &anyhow::Error) {
     let result = (|| -> Result<()> {
         let marker = read(main, branch)?
             .map(|r| {
@@ -159,7 +159,6 @@ pub(crate) fn infrastructure(main: &Path, branch: &str, lease: &str, error: &any
             })
             .unwrap_or_else(|| "skipped(infrastructure)".into());
         eprintln!("fast_gate={marker}: {error:#}");
-        record_marker(main, lease, &marker)?;
         if let Some(mut r) = read(main, branch)? {
             r.marker = marker;
             write(main, &r)?;
@@ -387,7 +386,6 @@ fn attempt(
     branch: &str,
 ) -> Result<(String, String, String)> {
     if crate::session::bwrap_availability() != crate::session::BwrapAvailability::Ok {
-        record_marker(main, lease, "skipped(no-sandbox)")?;
         eprintln!("fast_gate=skipped(no-sandbox)");
         return Ok((String::new(), "skipped(no-sandbox)".into(), String::new()));
     }
@@ -397,7 +395,6 @@ fn attempt(
         snapshot(main, tree, branch)? == head,
         "seat changed during fast gate; refusing stale evidence"
     );
-    record_marker(main, lease, &marker)?;
     eprintln!("fast_gate={marker} head={head}\n{output}");
     Ok((head, marker, output))
 }
@@ -498,14 +495,12 @@ fn native_inner(
             Ok(())
         },
     )?;
-    record_marker(main, lease, &marker(main, branch))?;
     Ok(publishable.get())
 }
 
 // Native seat Git itself requires bubblewrap: no commit or publication can
 // safely run here. Settle rather than reserving review forever.
-fn skip_native_without_sandbox(main: &Path, branch: &str, lease: &str) -> Result<()> {
-    record_marker(main, lease, "skipped(no-sandbox)")?;
+fn skip_native_without_sandbox(main: &Path, branch: &str, _lease: &str) -> Result<()> {
     let mut receipt = read(main, branch)?.context("fast gate was not reserved")?;
     receipt.marker = "skipped(no-sandbox)".into();
     receipt.pending = false;
@@ -642,7 +637,6 @@ fn pushed_inner(
     } else {
         result
     };
-    record_marker(main, lease, &result)?;
     pushed_round(
         main,
         branch,
@@ -827,14 +821,6 @@ pub(crate) fn published(main: &Path, branch: &str) -> Result<()> {
     receipt.pending = false;
     receipt.native_ready = false;
     write(main, &receipt)
-}
-
-// trace:STORY-2640 | ai:codex
-fn record_marker(main: &Path, lease: &str, marker: &str) -> Result<()> {
-    let dir = crate::lane_job::results_dir(main, lease);
-    std::fs::create_dir_all(&dir)?;
-    aida_core::write_atomic(&dir.join("fast-gate-marker"), marker.as_bytes())?;
-    Ok(())
 }
 
 // Reconciliation is a host-controlled merge after the gate. Preserve red
@@ -1298,13 +1284,6 @@ mod tests {
                 native_error(tmp.path(), "lane", "lease", &error, || Ok("new".into())).unwrap()
             );
             assert_eq!(marker(tmp.path(), "lane"), "fail");
-            assert_eq!(
-                std::fs::read_to_string(
-                    crate::lane_job::results_dir(tmp.path(), "lease").join("fast-gate-marker")
-                )
-                .unwrap(),
-                "fail"
-            );
             assert!(read(tmp.path(), "lane").unwrap().unwrap().native_ready);
             assert!(result_line(tmp.path(), "lane", "implementer:").contains("fast_gate=fail"));
             finish_publication(tmp.path(), "lane", || anyhow::bail!("forge unavailable")).unwrap();

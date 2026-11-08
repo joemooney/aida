@@ -1593,6 +1593,12 @@ pub(crate) trait PhaseDriver {
     /// design-fork and punted the spec to `NeedsAttention` (STORY-276).
     fn run_implementer(&mut self) -> Result<ImplementerOutcome, PhaseFailure>;
 
+    /// A host fast-gate repair must finish before any PR recovery or review.
+    // trace:STORY-2640 | ai:codex
+    fn fast_gate_blocks_review(&mut self) -> Result<bool, String> {
+        Ok(false)
+    }
+
     /// BUG-1244: freeze the PR proved by phase 1 for this orchestration run.
     /// Later phases may probe forge state, but may not silently switch to a PR
     /// discovered from an inherited/sibling branch.
@@ -3319,6 +3325,32 @@ pub(crate) fn phase1_resolver_failure_reason(spec: &str, err: &str) -> String {
     )
 }
 
+// Preserve the queued repair and its status; ordinary failure shelving would
+// park the very work this gate requires. No CI, reviewer, or merge may follow.
+// trace:STORY-2640 | ai:codex
+fn stop_for_fast_gate(
+    driver: &mut dyn PhaseDriver,
+    spec: &str,
+    json: bool,
+    start: &Instant,
+    durations: &[(Phase, u128)],
+) -> Option<OrchestrationResult> {
+    let reason = match driver.fast_gate_blocks_review() {
+        Ok(false) => return None,
+        Ok(true) => "fast gate repair is pending; leaving its queued round for pickup".to_string(),
+        Err(error) => format!("cannot establish fast gate repair state: {error}"),
+    };
+    Some(finish_inconclusive(
+        spec,
+        json,
+        start,
+        durations.to_vec(),
+        &reason,
+        Some("complete the queued fast gate repair before resuming this PR"),
+        driver.hint_context().forge,
+    ))
+}
+
 /// Resolve a phase `Err` through the BUG-241 reconcile step. The orchestrator
 /// asks the driver — via [`PhaseDriver::reconcile_failure`] — whether ground
 /// truth shows the spec shipped despite the missing artifact. If it did, the
@@ -4037,7 +4069,13 @@ pub(crate) fn orchestrate_with_resume(
         let phase_start = Instant::now();
         let mut retries_used = 0usize;
         loop {
-            match driver.run_implementer() {
+            let outcome = driver.run_implementer();
+            // Check before failure recovery: an open PR cannot redeem a queued repair.
+            // trace:STORY-2640 | ai:codex
+            if let Some(result) = stop_for_fast_gate(driver, spec, json, &start, &durations) {
+                return result;
+            }
+            match outcome {
                 Err(f) => {
                     // BUG-1524: a launch refusal (preflight/lease refusal,
                     // agent-binary launch failure) means no implementer ran
@@ -4232,6 +4270,12 @@ pub(crate) fn orchestrate_with_resume(
         }
     } // end phase-1 gate (STORY-492)
 
+    // Also protect --from-pr/--resume runs that skipped the implementer.
+    // trace:STORY-2640 | ai:codex
+    if let Some(result) = stop_for_fast_gate(driver, spec, json, &start, &durations) {
+        return result;
+    }
+
     // Phase 2 — end + wait for CI. lifecycle:no-ci-wait (incl. lifecycle:trivial)
     // skips the BLOCKING wait — CI still runs remotely, the orchestrator just
     // doesn't block on it (STORY-442). Mirrors the no_review / no_build skips;
@@ -4340,6 +4384,9 @@ pub(crate) fn orchestrate_with_resume(
 
     // Phase 3 — reviewer session. lifecycle:no-review skips only this model
     // phase; merge and pull still run so substrate state stays coherent.
+    if let Some(result) = stop_for_fast_gate(driver, spec, json, &start, &durations) {
+        return result;
+    }
     if start_phase.index() > Phase::Reviewer.index() {
         if !json {
             eprintln!("  {} resumed past phase 3 (reviewer)", "↩".cyan());
