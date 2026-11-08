@@ -8,7 +8,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-06T13:39:53.442026096Z
-modified_at: 2026-11-08T11:10:56.392420434Z
+modified_at: 2026-11-08T11:34:20.441736194Z
 req_type: Task
 tags:
 - architecture
@@ -665,6 +665,56 @@ comments:
   modified_at: 2026-11-08T11:09:27.348100415Z
   session_id: 01a1b9af-8230-75d2-82f8-667491cc010a
   harness_version: 2.1.319 (Claude Code)
+- id: 01a1baf0-1c19-7d20-89d8-02e8acaef6e3
+  author: dirtlab
+  content: |
+    TASK-3223 native implementer handoff — PARTIAL, Refs-only
+
+    Implemented staged-route review fixes:
+    - Resolve agreed/native IDs read-only to the canonical origin-keyed object and hash its exact bounded no-follow preimage. Ambiguous, incomplete, corrupt or linked inventories refuse.
+    - Add successful SEQPACKET fixtures for comment_add and spec_edit through direct client and MCP translation, checking agreed/origin IDs, exact revisions and complete wire requests.
+    - Remove unapproved mediated comment_edit/comment_delete from client, broker, host schema and canonical handlers; rewriting existing comments still needs an approved ownership policy.
+    - Reject unsupported global CLI options, fail closed on non-Unicode roles in CLI/MCP, tolerate closed stdout consumers after commit, and remove the unused client status method.
+    - Correct staged-routing documentation and provision redo test authority through the existing private-file writer, independently of runner umask.
+
+    Changed files (uncommitted):
+    aida-cli-lib/src/mcp.rs
+    aida-cli-lib/src/store_mutation/mod.rs
+    aida-cli-lib/src/store_mutation/service.py
+    aida-cli-lib/src/store_mutation_client.rs
+    aida-cli-lib/src/store_mutation_client_tests.rs
+    aida-cli-lib/src/store_mutation_entry.rs
+    aida-cli-lib/src/store_mutation_mcp_tests.rs
+    aida-core/src/db/canonical_mutation.rs
+    aida-core/src/db/git_backend.rs
+    aida-core/src/db/redo/tests.rs
+    docs/internal/security/store-mutation-writers.md
+    tests/test_store_mutation.py
+
+    Validation:
+    - cargo test --profile agent -p aida-cli-lib --lib -- store_mutation: 31 executed tests passed; lane job j20261108T112459073-2-0.
+    - cargo test --profile agent -p aida-core --lib -- db::redo::tests: 22 executed tests passed; lane job j20261108T112615298-2-0. This includes recovery, concurrent mutation and revision tests at the core boundary, not new production client/service admission evidence.
+    - cargo check --profile agent -p aida-cli --no-default-features: passed; lane job j20261108T111734950-2-0.
+    - cargo check --profile agent -p aida-tui --all-targets: passed; lane job j20261108T112834918-2-0.
+    - Python protocol/inventory fixtures: 73 passed.
+    - 40 fast source gates passed with CLI compile, TUI and formatting gates excluded; log /tmp/task3223-source-gates-private.log. Formatting was checked separately with rustfmt, and compile checks were delegated to the lane runner. Source gates used umask 077 because existing mail-wake fixtures otherwise inherit shared-write permissions.
+    - Documentation links: 1502 local paths, zero missing. git diff --check and rustfmt passed.
+    - Full make check-ci-fast is NOT green: its no-build harness rejects the aida delegation used by the temporary Cargo-to-lane-runner adapter. An unmodified aggregate run is still required on the host.
+
+    Remaining binding acceptance:
+    - Mediated profile inventory still refuses: 3160 unresolved writer sites and 293 operations.
+    - No new contained-lane raw-store-write denial plus successful production-mediated comment_add proof.
+    - Complete writer routing and integrated client/service fault/concurrency evidence are still required before enabling admission. Launcher/broker/host production gates remain closed. own_claim/queue_done remain unsupported for TASK-3326.
+    - TASK-3223 stays open. Existing punts/holds remain publication vetoes.
+
+    Host publication subject:
+    [AI:codex] fix(mediation): resolve canonical IDs and restrict staged writers (Refs TASK-3223)
+
+    No commit, push, PR mutation, queue completion, ship merge or review verdict was performed. The native ship declaration only records host publication intent.
+  created_at: 2026-11-08T11:34:20.441736194Z
+  modified_at: 2026-11-08T11:34:20.441736194Z
+  session_id: 01a1badaa9a7
+  harness_version: codex-cli 0.167.0
 history:
 - id: 01a1b116-742d-73c0-9064-1933f11e4c38
   author: joe

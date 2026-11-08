@@ -18,7 +18,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-08T02:46:34.549817284Z
-modified_at: 2026-11-08T11:21:16.075646158Z
+modified_at: 2026-11-08T11:34:14.722622952Z
 req_type: Bug
 tags:
 - area:ci
@@ -186,6 +186,13 @@ comments:
   content: 'Round 5 implementation: transient no-label/cleared pending inspections wait; only confirmed recorded-without-cleared pending evidence refuses without release authority. Ship/refinement fetch pinned label state when needed. Release --after-pr now uses a 300-second snapshot wait instead of unbounded forge.watch_ci. Status display jq reads conclusion or StatusContext state. Added train inspection, bounded release, label classification and shipped jq projection regressions; gate fixtures carry criterion anchors with live-evidence limitations. Corrected bootstrap residual trust wording. Host requirement: retitle existing PR #3651 to end (Refs BUG-2492), matching the native publication declaration; this seat cannot publish PR metadata. AC1/AC2 operator live cutover evidence remains outstanding; keep spec open. Rust launcher validation running.'
   created_at: 2026-11-08T11:21:16.075646158Z
   modified_at: 2026-11-08T11:21:16.075646158Z
+  session_id: 01a1bae08abc
+  harness_version: codex-cli 0.167.0
+- id: 01a1baf0-05c2-7bd0-afcd-f0d8d8b378f7
+  author: dirtlab
+  content: 'Round 5 final native handoff: eight changed files left uncommitted: aida-cli-lib/src/{ci_gate.rs,forge.rs,status_sections.rs,upgrade_release.rs,tests/story_1690_train_tests.rs}, docs/internal/testing/bug-2492-status-cutover.md, tests/test_merge_hold_gate.sh, tests/test_merge_hold_status_rollup.py. Final validation passed: bug2492 13 executed tests (launcher j20261108T112342368-2-0); ci_gate::tests:: 23 executed tests (j20261108T112545963-2-0); shell fixtures 8 label combinations x 2 gates and 36 train cases; shipped jq projection test covers SUCCESS/PENDING/FAILURE/ERROR; bash syntax, rustfmt --check and git diff --check pass. Initial earlier-source run had one release fixture failure due to an unmapped pinned-origin read; the final forge-method mock and label-state integration tests pass. untested=false for targeted local validation. Codegraph unavailable (command not found); used rg. Native Refs subject recorded: [AI:codex] fix(ci): distinguish pending inspections from recorded holds (Refs BUG-2492). Host must retitle existing PR #3651 to end (Refs BUG-2492). AC1/AC2 raw merge/UI enforcement and unchanged-SHA label-only clearance remain operator cutover work: do not mark Completed until live evidence is attached. No commit, push, PR creation, merge, review verdict or queue completion performed.'
+  created_at: 2026-11-08T11:34:14.722622952Z
+  modified_at: 2026-11-08T11:34:14.722622952Z
   session_id: 01a1bae08abc
   harness_version: codex-cli 0.167.0
 history:
