@@ -1258,25 +1258,71 @@ impl PreparedLaunch {
         if runtime_policy.is_some() {
             let disabled_extensions = state.path().join("disabled-extensions.json");
             std::fs::write(&disabled_extensions, "{}")?;
-            for base in [&root, &main] {
-                for name in [".agents/mcp_config.json", ".agents/hooks.json", ".mcp.json"] {
-                    let path = base.join(name);
-                    if !path.exists() {
-                        std::fs::write(&path, "")?;
+            profile.add(&disabled_extensions, false)?;
+            for (index, base) in [&root, &main].into_iter().enumerate() {
+                // Stage mountpoints privately so preparation never leaves new
+                // MCP/hooks/plugins files in either Git checkout.
+                // trace:TASK-3048 | ai:codex
+                let extensions = state.path().join(format!("disabled-agents-{index}"));
+                ensure_dir(&extensions)?;
+                let original = base.join(".agents");
+                let mut retained = Vec::new();
+                if original.exists() {
+                    for entry in std::fs::read_dir(&original)? {
+                        let entry = entry?;
+                        let name = entry.file_name();
+                        if ["mcp_config.json", "hooks.json", "plugins"]
+                            .iter()
+                            .any(|n| name == *n)
+                        {
+                            continue;
+                        }
+                        let source = entry.path();
+                        let placeholder = extensions.join(&name);
+                        if source.is_dir() {
+                            ensure_dir(&placeholder)?;
+                        } else {
+                            std::fs::write(&placeholder, "")?;
+                        }
+                        retained.push(source);
                     }
+                }
+                for name in ["mcp_config.json", "hooks.json"] {
+                    std::fs::write(extensions.join(name), "{}")?;
+                }
+                ensure_dir(&extensions.join("plugins"))?;
+                profile.add(&extensions, false)?;
+                profile.mounts.push(Mount {
+                    data: false,
+                    file: File::open(&extensions)?,
+                    path: original.clone(),
+                    writable: false,
+                });
+                for source in retained {
+                    // Reuse the non-symlink regular-file/directory validation;
+                    // an unexpected FIFO must refuse rather than block setup.
+                    profile.add(&source, false)?;
+                }
+                // Explicit leaves remain pinned even when a retained sibling
+                // points back to the private tree.
+                for name in ["mcp_config.json", "hooks.json"] {
                     profile.mounts.push(Mount {
                         data: false,
                         file: File::open(&disabled_extensions)?,
-                        path,
+                        path: original.join(name),
                         writable: false,
                     });
                 }
-                let path = base.join(".agents/plugins");
-                ensure_dir(&path)?;
                 profile.mounts.push(Mount {
                     data: false,
                     file: File::open(&empty)?,
-                    path,
+                    path: original.join("plugins"),
+                    writable: false,
+                });
+                profile.mounts.push(Mount {
+                    data: false,
+                    file: File::open(&disabled_extensions)?,
+                    path: base.join(".mcp.json"),
                     writable: false,
                 });
             }
@@ -1381,7 +1427,7 @@ impl PreparedLaunch {
             // The opaque runtime leaf is this row's only credential. Do not
             // forward a diagnostic caller's unrelated Codex auth or state.
             // trace:TASK-3048 | ai:codex
-            for name in ["OPENAI_API_KEY", "CODEX_HOME", "CODEX_SQLITE_HOME"] {
+            for name in ["CODEX_HOME", "CODEX_SQLITE_HOME"] {
                 env.remove(name);
             }
         }
@@ -1525,6 +1571,9 @@ impl PreparedLaunch {
         }
         if let Some(service) = &mutation {
             cfg["mutation"] = service.config.clone();
+        }
+        if diagnostic_credential.is_some() {
+            cfg["egress_hosts"] = serde_json::json!(runtime_policy.as_ref().unwrap().auth_hosts);
         }
         let mut prepared = Self::from_config(profile, state, sha, cfg, env, &root)?;
         prepared.mutation = mutation;
@@ -1914,6 +1963,13 @@ impl PreparedLaunch {
         if cfg.get("chatgpt_deadline").is_some() {
             cfg["oauth_denial_fd"] = oauth_denial.as_raw_fd().into();
         }
+        // A bounded host-only bitmap shares the unlinked evidence handle.
+        // Offset zero remains reserved for the OAuth-denial flag.
+        // trace:TASK-3048 | ai:codex
+        if let Some(hosts) = cfg.get("egress_hosts").and_then(|v| v.as_array()) {
+            oauth_denial.write_at(&vec![b'0'; hosts.len()], 1)?;
+            cfg["egress_fd"] = oauth_denial.as_raw_fd().into();
+        }
         let (reader, writer) = pipe()?;
         let (accept_reader, accept_writer) = pipe()?;
         let source = format!(
@@ -2096,6 +2152,23 @@ pub(crate) struct ContainedChild {
     _state: tempfile::TempDir,
 }
 impl ContainedChild {
+    // The helper alone receives this descriptor; no lane-visible log is evidence.
+    // trace:TASK-3048 | ai:codex
+    pub(crate) fn observed_egress_hosts(&self, hosts: &[String]) -> Result<Vec<String>> {
+        let mut flags = vec![0; hosts.len()];
+        self.oauth_denial.read_exact_at(&mut flags, 1)?;
+        anyhow::ensure!(
+            flags.iter().all(|v| matches!(v, b'0' | b'1')),
+            "invalid host egress evidence"
+        );
+        Ok(hosts
+            .iter()
+            .zip(flags)
+            .filter(|(_, flag)| *flag == b'1')
+            .map(|(host, _)| host.clone())
+            .collect())
+    }
+
     /// Preserve vendor exits unless a failed ChatGPT lane expired or the host
     /// denied an OAuth CONNECT. Neither refusal permits a writable retry.
     // trace:TASK-2708 | ai:claude

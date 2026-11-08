@@ -545,7 +545,7 @@ def _hung_up(fd):
     return any(ev & (select.POLLHUP | select.POLLERR) for _, ev in p.poll(0))
 
 
-def proxy_request(data, fds, allowed, fixture, oauth_denial_fd=None, oauth_hosts=()):
+def proxy_request(data, fds, allowed, fixture, oauth_denial_fd=None, oauth_hosts=(), egress_fd=None, egress_hosts=()):
     """Validate one typed CONNECT, pin a checked public address, connect on
     the host and hand the connected socket back over the per-request pair."""
     reply_fd = fds[0] if len(fds) == 1 else None
@@ -571,8 +571,10 @@ def proxy_request(data, fds, allowed, fixture, oauth_denial_fd=None, oauth_hosts
             # hostname/port, never credentials, URL paths or request payloads.
             # trace:TASK-3048 | ai:codex
             name = host_name(request['host'])
+            require(type(request['port']) is int and 1 <= request['port'] <= 65535,
+                    'invalid proxy port')
             if (name, request['port']) not in allowed:
-                print('aida-containment: CONTAINED_EGRESS_HOST_UNLISTED %s' % name,
+                print('aida-containment: CONTAINED_EGRESS_HOST_UNLISTED %s:%s' % (name, request['port']),
                       file=sys.stderr, flush=True)
                 raise RuntimeError('proxy destination refused')
             family, kind, proto, address = destination(request, allowed, resolve, fixture)
@@ -580,6 +582,11 @@ def proxy_request(data, fds, allowed, fixture, oauth_denial_fd=None, oauth_hosts
                 tunnel.settimeout(10)
                 tunnel.connect(address)
                 tunnel.settimeout(None)
+                # Record before releasing the socket: a fast vendor exit must
+                # not race the host observation. No lane receives this FD.
+                # trace:TASK-3048 | ai:codex
+                if egress_fd is not None and name in egress_hosts:
+                    os.pwrite(egress_fd, b'1', 1 + egress_hosts.index(name))
                 send_fd(reply, b'tunnel-v1', tunnel.fileno())
             # Bounded metadata only: host, port, decision. Never payloads.
             print('aida-containment: proxy allowed %s:%d' % (request['host'], request['port']),
@@ -618,6 +625,8 @@ def host_contained(cfg, receipt_fd, acceptance_fd):
     credential_deadline()
     oauth_denial_fd = cfg.get('oauth_denial_fd')
     oauth_hosts = frozenset(cfg.get('oauth_hosts', ()))
+    egress_fd = cfg.get('egress_fd')
+    egress_hosts = tuple(cfg.get('egress_hosts', ()))
     port = cfg['port']
     allowed = {(h, 443) for h in cfg['allowed']}
     fixture = tuple(cfg['fixture']) if cfg.get('fixture') else None
@@ -725,7 +734,7 @@ def host_contained(cfg, receipt_fd, acceptance_fd):
             if proxy in ready:
                 data, got = receive(proxy)
                 require(data, 'proxy died during preflight')
-                threading.Thread(target=proxy_request, args=(data, got, allowed, fixture, oauth_denial_fd, oauth_hosts),
+                threading.Thread(target=proxy_request, args=(data, got, allowed, fixture, oauth_denial_fd, oauth_hosts, egress_fd, egress_hosts),
                                  daemon=True).start()
             if broker in ready:
                 data, ancillary, flags, _ = broker.recvmsg(32, socket.CMSG_SPACE(12))
@@ -784,7 +793,7 @@ def host_contained(cfg, receipt_fd, acceptance_fd):
                 if not data:
                     watch.remove(proxy)
                     continue
-                threading.Thread(target=proxy_request, args=(data, got, allowed, fixture, oauth_denial_fd, oauth_hosts),
+                threading.Thread(target=proxy_request, args=(data, got, allowed, fixture, oauth_denial_fd, oauth_hosts, egress_fd, egress_hosts),
                                  daemon=True).start()
         rc = process.wait()
         return rc if rc >= 0 else 128 - rc

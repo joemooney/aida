@@ -218,6 +218,23 @@ items = [{name = "preserved", enabled = true}]
         with self.assertRaisesRegex(ValueError, "credential-source-missing"):
             c.aida_fixture_argv("aida", "TASK-1", "agy", workspace)
 
+    # trace:TASK-3048 | ai:codex
+    def test_host_egress_never_trusts_vendor_stderr(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            report = {"vendor": "agy", "runtime_policy": {"auth_hosts": ["oauth2.googleapis.com"]}}
+            (root / "stderr.txt").write_text("aida-containment: proxy allowed oauth2.googleapis.com:443\n")
+            with self.assertRaisesRegex(ValueError, "host-egress-evidence-unavailable"):
+                c.host_egress_evidence(root, report)
+            (root / "host-egress.json").write_text("[]")
+            self.assertEqual(c.host_egress_evidence(root, report), [])
+            (root / "host-egress.json").write_text('["oauth2.googleapis.com"]')
+            self.assertEqual(c.host_egress_evidence(root, report), ["oauth2.googleapis.com"])
+            for invalid in ('{}', '["unknown.test"]', '[null]'):
+                (root / "host-egress.json").write_text(invalid)
+                with self.assertRaisesRegex(ValueError, "host-egress-evidence-invalid"):
+                    c.host_egress_evidence(root, report)
+
     def test_only_complete_aida_evidence_can_flip_whole_lane(self):
         report = {"boundary": "aida", "shared_boundary_credit": True,
                   "checks": {k: {"status": "pass"} for k in ("C0", "C1", "C2", "C3", "C4")}}
@@ -242,6 +259,7 @@ items = [{name = "preserved", enabled = true}]
             repo.mkdir()
             report = {"vendor": "agy", "boundary": "aida", "trusted_policy_sha": "a" * 40,
                       "setup": [], "containment_receipt_sha256": None,
+                      "runtime_policy": {"auth_hosts": ["oauth2.googleapis.com"]},
                       "checks": {k: {"status": "unknown"} for k in ("C0", "C1", "C2", "C3", "C4")}}
             c.write_json(root / "aida-state.json", {"report": report, "aida": "fixture",
                          "timeout": 1, "spec": "TASK-1", "credential_source": "/host/token"})
@@ -263,6 +281,7 @@ items = [{name = "preserved", enabled = true}]
                 on_tick()
                 self.assertTrue((root / "payload/manifest.json").is_file())
                 (root / "stdout.jsonl").write_text("")
+                (root / "host-egress.json").write_text("[]")
                 return {"exit_code": 0}
             with mock.patch.object(c, "fixture_command", side_effect=setup), \
                  mock.patch.object(c, "Network", return_value=network), \
@@ -333,6 +352,7 @@ items = [{name = "preserved", enabled = true}]
             repo = root / "repository"
             repo.mkdir()
             report = {"vendor": "codex", "setup": [], "containment_receipt_sha256": None,
+                      "runtime_policy": {"auth_hosts": ["oauth2.googleapis.com"]},
                       "checks": {"C0": {"status": "unknown"}}}
             c.write_json(root / "aida-state.json", {"report": report, "aida": "fixture", "timeout": 1})
             stages = []
@@ -870,6 +890,7 @@ except ValueError:
             repo = root / "repository"
             repo.mkdir()
             report = {"vendor": "codex", "setup": [], "containment_receipt_sha256": None,
+                      "runtime_policy": {"auth_hosts": ["oauth2.googleapis.com"]},
                       "checks": {"C0": {"status": "unknown"}}}
             c.write_json(root / "aida-state.json", {"report": report, "aida": "fixture", "timeout": 30, "spec": "TASK-1"})
             # Run the real continuation, lane launcher and signal cleanup with

@@ -77,7 +77,7 @@ pub(crate) fn diagnostic_launch(
     // The shipped runtime descriptor is the closed selector. No arbitrary
     // program or settings template comes from fixture data.
     anyhow::ensure!(
-        vendor == "agy",
+        vendor == aida_core::vendors::AGY_EXECUTABLE,
         "AGY_DIAGNOSTIC_FIXTURE_INVALID: expected vendor agy"
     );
     let policy = crate::containment::runtime_policy(vendor)?;
@@ -113,12 +113,14 @@ pub(crate) fn diagnostic_launch(
         }
     }
     let grant = Grant(grant.id);
+    let (ceiling_key, ceiling_value) = crate::bg_wait_ceiling_env(Some(&root));
     let mut command = std::process::Command::new(vendor);
     super::contained::apply_transport_inputs(&mut command, parent);
     command
         .args(["-p", &prompt])
         .current_dir(&root)
         .env("AIDA_HEADLESS", "1")
+        .envs(crate::headless_wait_envs(ceiling_key, &ceiling_value))
         .env("AIDA_CONTAINED", "1")
         .env("AIDA_CONTAINMENT_POSTURE", "aida")
         .env("AIDA_PROJECT_ROOT", &root)
@@ -140,6 +142,12 @@ pub(crate) fn diagnostic_launch(
     crate::gate::seat_authority::bind_contained_launch_worker(&grant.0, run.receipt())?;
     run.release()?;
     let status = run.child.wait()?;
+    let hosts = run.observed_egress_hosts(&policy.auth_hosts)?;
+    let evidence = std::fs::OpenOptions::new()
+        .write(true)
+        .create_new(true)
+        .open(fixture.join("host-egress.json"))?;
+    serde_json::to_writer(evidence, &hosts)?;
     let status = run.vendor_exit(status)?;
     anyhow::ensure!(status.success(), "AGY_DIAGNOSTIC_VENDOR_FAILED: {status}");
     Ok(())

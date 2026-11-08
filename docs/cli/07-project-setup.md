@@ -697,7 +697,7 @@ credentials or grants, with a five-second and 128 KiB per-stream limit per call.
 The SHA-256-pinned ChatGPT path retains its recorded-help validation.
 <!-- trace:TASK-3000 | ai:codex -->
 
-#### Model-free containment tracer
+#### AGY runtime policy and live conformance
 
 `aida config permissions runtime-policy --vendor agy` prints the validated
 runtime descriptor embedded in the running AIDA binary as JSON, without opening
@@ -716,6 +716,8 @@ is mounted read-only without inheriting the original `.gemini` configuration;
 MCP, URL and browser actions carry explicit deny controls. See the
 [conformance procedure](../internal/testing/containment-conformance.md#agy-outer-only-follow-up-2026-11-07-ruling).
 <!-- trace:TASK-3048 | ai:codex -->
+
+#### Model-free containment tracer
 
 `aida config permissions probe --vendor codex --json` runs a closed Linux
 filesystem/supervisor and egress/local-IPC diagnostic in fresh synthetic state. `claude` and

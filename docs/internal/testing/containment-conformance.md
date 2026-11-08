@@ -511,7 +511,10 @@ the controls during the live run.
 Runtime `auth_hosts` feeds the common relay allow-set after trusted approval.
 Missing approval names `AGY_AUTH_HOST_UNAPPROVED`; an unlisted requested host
 is denied before DNS and logged as `CONTAINED_EGRESS_HOST_UNLISTED <host>`.
-Successful host/port metadata appears in `observed_egress_hosts` in the report;
+Successful auth-host metadata is recorded in a bounded host-only bitmap on an
+unlinked descriptor that is never passed to bwrap. After the vendor exits, the
+host launcher writes `host-egress.json` outside the writable workspace; only
+this channel supplies `observed_egress_hosts`. Vendor stderr is diagnostic only;
 this is traffic evidence, not proof that refresh occurred. AGY reports distinguish
 `shared_boundary_credit` from production admission, which stays `closed` with
 `production_launcher_credit=false`. Whole-lane success stays conservative until

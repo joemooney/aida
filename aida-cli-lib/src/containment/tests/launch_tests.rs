@@ -3926,6 +3926,50 @@ assert a.recv(128)==b'denied-v1'
         .contains("CONTAINED_EGRESS_HOST_UNLISTED unknown.fixture.test"));
 }
 
+// Record only successfully connected destinations, never vendor log text.
+// trace:TASK-3048 | ai:codex
+#[test]
+fn task_3048_host_egress_bitmap_requires_successful_host_connection() {
+    let test = r#"
+import tempfile
+with tempfile.TemporaryFile() as evidence:
+    evidence.write(b'000')
+    evidence.flush()
+    listener=socket.socket()
+    listener.bind(('127.0.0.1',0))
+    listener.listen(1)
+    port=listener.getsockname()[1]
+    hosts=('allow.fixture.test','oauth2.googleapis.com')
+    for requested_port in (1,port):
+        a,b=socket.socketpair(socket.AF_UNIX,socket.SOCK_SEQPACKET)
+        request=dict(version=1,method='CONNECT',host=hosts[0],port=requested_port,
+                     host_header=hosts[0]+':'+str(requested_port),protocol='tcp')
+        proxy_request(json.dumps(request).encode(),[b.detach()],{(hosts[0],port)},
+                      (hosts[0],port,'127.0.0.1'),egress_fd=evidence.fileno(),egress_hosts=hosts)
+        if requested_port != port:
+            assert a.recv(128)==b'denied-v1'
+            assert os.pread(evidence.fileno(),3,0)==b'000'
+        else:
+            data,fds=receive(a)
+            assert data==b'tunnel-v1'
+            for fd in fds: os.close(fd)
+            assert os.pread(evidence.fileno(),3,0)==b'010'
+        a.close()
+    listener.close()
+"#;
+    let output = Command::new("/usr/bin/python3")
+        .args(["-I", "-S", "-c", &format!("{COMMON}\n{HOST}\n{test}")])
+        .output()
+        .unwrap();
+    assert!(
+        output.status.success(),
+        "{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    assert!(String::from_utf8_lossy(&output.stderr)
+        .contains("CONTAINED_EGRESS_HOST_UNLISTED allow.fixture.test:"));
+}
+
 // The actual prepare API, with a fake vendor and token. Never executes AGY.
 // trace:TASK-3048 | ai:codex
 #[test]
@@ -3989,6 +4033,39 @@ fn task_3048_diagnostic_prepare_uses_common_wrapper_and_keeps_production_closed(
         .err()
         .unwrap();
     assert!(refusal.to_string().contains("inventory is incomplete"));
+    // Neither absence in origin/main nor a working-tree-only opt-in grants
+    // the diagnostic permission bypass. No plan may escape either refusal.
+    // trace:TASK-3048 | ai:codex
+    let approved_text = std::fs::read_to_string(&config).unwrap();
+    trusted_policy(root.path(), "");
+    for working_tree_opt_in in [false, true] {
+        if working_tree_opt_in {
+            std::fs::write(&config, &approved_text).unwrap();
+        }
+        let error =
+            PreparedLaunch::prepare_runtime_diagnostic(&mut child, root.path(), &credential)
+                .err()
+                .expect("untrusted posture returned a launch plan");
+        assert!(
+            format!("{error:#}").contains("requires trusted policy"),
+            "{error:#}"
+        );
+    }
+    trusted_policy(root.path(), "agy = \"aida\"");
+    std::fs::write(&config, &approved_text).unwrap();
+    for args in [
+        vec!["add", ".aida/config.toml"],
+        vec!["commit", "-qm", "restore approved hosts"],
+        vec!["update-ref", "refs/remotes/origin/main", "HEAD"],
+    ] {
+        assert!(crate::test_git::git_command()
+            .arg("-C")
+            .arg(root.path())
+            .args(args)
+            .status()
+            .unwrap()
+            .success());
+    }
     let plan = PreparedLaunch::prepare_runtime_diagnostic(&mut child, root.path(), &credential)
         .unwrap_or_else(|e| panic!("diagnostic prepare: {e:#}"));
     assert!(!plan
@@ -4038,6 +4115,16 @@ fn task_3048_diagnostic_prepare_uses_common_wrapper_and_keeps_production_closed(
         mount.file.read_exact_at(&mut bytes, 0).unwrap();
         assert_eq!(&bytes, b"{}");
         assert!(!mount.writable);
+    }
+    for name in [
+        ".agents/mcp_config.json",
+        ".agents/hooks.json",
+        ".agents/plugins",
+    ] {
+        assert!(
+            !root.path().join(name).exists(),
+            "mask leaked host path: {name}"
+        );
     }
     assert!(crate::launch::agy::AGY.require_conformance().is_err());
 }

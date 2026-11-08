@@ -886,6 +886,22 @@ def setup_aida(root):
         raise
 
 
+# Host-written evidence is separate from inherited vendor stderr.
+# trace:TASK-3048 | ai:codex
+def host_egress_evidence(root, report):
+    """Only the host launcher writes this file after reaping the vendor."""
+    if report["vendor"] != "agy":
+        return []
+    try:
+        hosts = json.loads((root / "host-egress.json").read_text())
+    except (OSError, ValueError) as error:
+        raise ValueError("host-egress-evidence-unavailable") from error
+    approved = report["runtime_policy"]["auth_hosts"]
+    if not isinstance(hosts, list) or any(not isinstance(h, str) or h not in approved for h in hosts):
+        raise ValueError("host-egress-evidence-invalid")
+    return sorted(set(hosts))
+
+
 # Only the AIDA-boundary evidence can ever supply this signal. Unknown checks
 # (including unmeasured lifecycle controls) continue to refuse whole-lane credit.
 # This report cannot change the Rust production-admission gate.
@@ -1034,8 +1050,7 @@ def continue_aida(root):
                       unsupported_reason=None)
         report["shared_boundary_credit"] = bool(report["containment_receipt_sha256"] and results and integrity)
         report["production_launcher_credit"] = report["shared_boundary_credit"] and report["vendor"] != "agy"
-        report["observed_egress_hosts"] = sorted(set(re.findall(
-            r"^aida-containment: proxy allowed ([a-z0-9.-]+):443$", text, re.M)))
+        report["observed_egress_hosts"] = host_egress_evidence(root, report)
         report["production_admission"] = "closed" if report["vendor"] == "agy" else "unchanged"
         report["whole_lane_pass"] = aida_whole_lane_pass(report)
         if not report["containment_receipt_sha256"]:
