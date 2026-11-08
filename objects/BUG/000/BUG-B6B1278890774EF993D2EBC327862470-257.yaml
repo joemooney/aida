@@ -311,6 +311,35 @@ comments:
   modified_at: 2026-11-08 12:49:49.183676+00:00
   session_id: 01a1b9af-8230-75d2-82f8-667491cc010a
   harness_version: 2.1.319 (Claude Code)
+- id: 01a1bb35-462f-7272-ab63-dd8e81cb2f28
+  author: joe
+  content: 'REVIEW FINDINGS TO ADDRESS (BUG-2492):
+
+    Verdict: CHANGES REQUESTED
+
+    Reviewed commit: dd99463404e3
+
+    Recorded: 2026-11-08T12:40:22.548770812+00:00
+
+    Findings:
+
+    1. Blocker, unresolved since round 5: PR #3651''s title still ends ''(BUG-2492)''. derive_squash_subject_with_trailer (aida-cli-lib/src/pr_ship.rs:685-716) takes the PR title first, so merging would complete the spec, while docs/internal/testing/bug-2492-status-cutover.md requires a trailing ''(Refs BUG-2492)'' and forbids Completed until live outputs are attached. Fix: the host retitles PR #3651 to end ''(Refs BUG-2492)'' before merge.
+
+    2. Blocker: CI has not finished at reviewed head dd99463404e3. At review time only cli-0 and publish-merge-hold-status had passed; lib-0, lib-1, cli-1, contracts, gates and rest were still pending (run 42478369147). Approval needs green CI at the exact head.
+
+    3. Open, operator action rather than a code defect: AC1/AC2 live evidence is still missing. This head does show live pending status from github-actions[bot], BLOCKED merge state and app pin 15368 with enforce_admins on, but raw ''gh pr merge'' refusal, web-UI refusal and unchanged-SHA label-only pending-to-success are not on the spec. Keep BUG-2492 open until the runbook outputs are attached.
+
+    4. Minor, round 6 finding partly addressed: tests/test_merge_hold_gate.sh:112-116 anchors all five criteria to the single ''Test 1'' section, so aida criteria now reports ''Untested criteria: none'', although the comment above the anchors says the fixtures do not establish live enforcement or mail delivery. The round 6 ask was to anchor only what each test covers. Fix: keep ac4be33b and ac24a24e on the fixture, and do not trace AC1, AC2 and AC4 to fixtures alone until live evidence exists.
+
+    5. Minor: aida-cli-lib/src/ci_gate.rs:311-326 classify_live_rows and upgrade_release.rs wait_after_pr_ci treat a pending gate as a hold only with recorded-without-cleared labels. A PR carrying only the active aida:merge-hold label, a state the gate fixtures cover as blocking, is ordinary pending for release --after-pr and waits the whole ci_absolute ceiling before CiTimeout; the legacy watch failed immediately. It still refuses. Fix: read the active label with the recorded/cleared pair and refuse at once, with a test for active-only labels.
+
+    6. Cosmetic doc drift: aida-core/templates/skills-portable/aida-orchestrate.md:460 still says ''merge-hold-gate is red''; docs/advanced/autonomous-drain.md:114-118 still says the gate is designed to be red; docs/internal/agents/aida-repository-guide.md:256-262 still says a replacement reports the required merge-hold-gate job and that an out-of-order label event can replace newer evidence, which the serialized live-metadata publisher changes.
+
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.'
+  created_at: 2026-11-08 12:49:53.199494+00:00
+  modified_at: 2026-11-08 12:49:53.199494+00:00
+  session_id: 01a1b9af-8230-75d2-82f8-667491cc010a
+  harness_version: 2.1.319 (Claude Code)
 - id: 01a1bb3a-66fd-70b1-bcda-5c75a371980d
   author: dirtlab
   content: 'Pickup audit: clean worktree at d6f1d3186b already includes round 6 implementation 5f57df7893; no newer review findings or source changes. Revalidated shell gate fixtures (8 label states x 2 gates, 36 train cases), shipped jq projection test, bash syntax and git diff --check: PASS. aida criteria recognizes all five anchors, with live acceptance still unverified. Rust rerun j20261108T125318134-2-0 remains running with no executed-test result yet (untested=true for this rerun). Punted to Needs Attention for host PR #3651 Refs retitle/exact-head CI and operator cutover evidence. Punt spec update succeeded, but separate punt signal write refused read-only filesystem; host must honor the persisted Needs Attention reason as publication veto. No source files changed; no commit/publication/completion performed.'
