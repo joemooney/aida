@@ -3,12 +3,12 @@ spec_id: BUG-b6b1278890774ef993d2ebc327862470-255
 agreed_id: BUG-2490
 title: 'Store commit path commits git conflict markers: an autostash re-apply conflict in .aida-store is committed by the contained-session store commit, breaking every command that loads the object'
 description: 'Observed 2026-11-07 17:00 MST: local .aida-store commit 7124c0f (''reviewer: commit 2 store changes from the contained session'') contained ''<<<<<<< Updated upstream / ======= / >>>>>>> Stashed changes'' in objects/STORY/000/STORY-B6B1278890774EF993D2EBC327862470-565.yaml (modified_at only). Every store load then failed: ''Failed to parse .../STORY-...-565.yaml'' (aida queue rework, aida push). The advisor hand-fixed it in c02902bd108 before it reached origin. Cause: the store worktree inherits the operator''s global rebase.autoStash=true / merge.autoStash=true; a pull over a dirty store tree re-applied the autostash with a conflict (the stash stays in the list as stash@{0} autostash), and the contained-session store commit then staged and committed the markered file. Acceptance: (1) every git invocation on the store worktree passes -c rebase.autoStash=false -c merge.autoStash=false (or the store worktree config pins them false), so no autostash ever touches the store; (2) the store commit path refuses to commit any object that does not parse, or that contains conflict markers, naming the file; unmerged paths also refuse; (3) a regression test reproduces the autostash-conflict sequence and asserts refusal; (4) aida doctor flags a store object with conflict markers. LIGHT gate.'
-status: NeedsAttention
+status: Approved
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-08T00:02:55.282155934Z
-modified_at: 2026-11-08T11:43:15.374727242Z
+modified_at: 2026-11-08T11:44:19.012393870Z
 req_type: Bug
 relationships:
 - rel_type:
@@ -243,6 +243,13 @@ comments:
   modified_at: 2026-11-08T11:24:31.400670959Z
   session_id: 01a1baded6ca
   harness_version: codex-cli 0.167.0
+- id: 01a1baf9-3e44-7072-8839-cfd96b4c68f3
+  author: joe
+  content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: AC1-AC4 hold by source and named tests, and round-5 findings 2/3 are fixed; CI is still queued at this head so no test pass is claimed. Blocked on operator scope with no advisor ruling or linked split on BUG-2490. AC1 verified git_ops.rs:477-478 + store_hook_tests.rs:1290; AC2 verified validate_* + bug_2490 schema/pending tests; AC3 verified bug_2490_autostash_conflict_refuses_store_commit; AC4 verified bug_2490_doctor_reports_conflict_file_without_aborting; operator (a) semantic merge partial; operator (b) failed-pull fencing partial.. It was punted on: design-fork: Latest review finding 1 requires advisor action: rule on whether the existing LWW semantic merge policy satisfies the operator request, and authorize the remaining maybe_sync_pull/burndown failed-pull fencing and delete/modify policy here or record a linked split. CLAUDE.md requires advisor signoff for architecture changes; no ruling or split is recorded. This round fixes findings 2 and 3 only (launch preflights before pickup pull; visible sync merge notes). Preserve the existing merge hold and publication veto; do not publish as a complete fix.. No triage reason was given.'
+  created_at: 2026-11-08T11:44:19.012387208Z
+  modified_at: 2026-11-08T11:44:19.012387208Z
+  session_id: 01a1b9af-8230-75d2-82f8-667491cc010a
+  harness_version: 2.1.319 (Claude Code)
 history:
 - id: 01a1b923-982d-7512-93a5-cd08923b4f98
   author: aida-session-start
@@ -473,6 +480,15 @@ history:
   session_id: 01a1baf5dddf
   harness_version: 2.1.319 (Claude Code)
   changes: []
+- id: 01a1baf9-3e44-7072-8839-cfca0cd521be
+  author: joe
+  timestamp: 2026-11-08T11:44:19.012372229Z
+  session_id: 01a1b9af-8230-75d2-82f8-667491cc010a
+  harness_version: 2.1.319 (Claude Code)
+  changes:
+  - field_name: status
+    old_value: NeedsAttention
+    new_value: Approved
 filed_at:
   code_sha: 2a7fe186bdcd718fa356e5e4d028a3b2ff13769d
   branch: main
@@ -482,16 +498,3 @@ filed_at:
   vendor: claude
   session: 01a1b848-940b-7bd2-8acd-52e428b182b8
   harness_version: 2.1.319 (Claude Code)
-attention_reason:
-  category: design-fork
-  detail: 'Latest review finding 1 requires advisor action: rule on whether the existing LWW semantic merge policy satisfies the operator request, and authorize the remaining maybe_sync_pull/burndown failed-pull fencing and delete/modify policy here or record a linked split. CLAUDE.md requires advisor signoff for architecture changes; no ruling or split is recorded. This round fixes findings 2 and 3 only (launch preflights before pickup pull; visible sync merge notes). Preserve the existing merge hold and publication veto; do not publish as a complete fix.'
-  raised_by: implementer
-  raised_at: 2026-11-08T11:17:57.242140225Z
-failure_reason:
-  phase: reviewer
-  phase_index: 3
-  kind: verdict:request-changes
-  detail: AC1-AC4 hold by source and named tests, and round-5 findings 2/3 are fixed; CI is still queued at this head so no test pass is claimed. Blocked on operator scope with no advisor ruling or linked split on BUG-2490. AC1 verified git_ops.rs:477-478 + store_hook_tests.rs:1290; AC2 verified validate_* + bug_2490 schema/pending tests; AC3 verified bug_2490_autostash_conflict_refuses_store_commit; AC4 verified bug_2490_doctor_reports_conflict_file_without_aborting; operator (a) semantic merge partial; operator (b) failed-pull fencing partial.
-  recovery_hint: address the review findings, move BUG-2490 back to In Progress, and clear the PR hold only after approval
-  shelved_by: reviewer
-  shelved_at: 2026-11-08T11:43:15.374727242Z
