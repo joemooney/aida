@@ -517,11 +517,6 @@ The orphan branch `aida-store` is the writer of record. Each requirement is one 
 
 The legacy centralized SQLite path (`aida init --centralized`) still exists but prints a deprecation warning. PostgreSQL is opt-in via the `postgres` feature flag for teams wanting a server-backed shared projection.
 
-Store Git commands disable rebase and merge autostashing; publication retries
-refuse pending changes under the writer lock for host review and commit.
-Structured rebase failures preserve their underlying diagnosis after abort.
-<!-- trace:BUG-2490 | ai:codex -->
-
 Store commits run only AIDA's shipped pre-commit, commit-msg, prepare-commit-msg,
 and post-commit hooks, plus a shipped pre-push identity gate. Host git pins a versioned directory under its common git
 directory; project `core.hooksPath` (including husky, pre-commit and lefthook)
