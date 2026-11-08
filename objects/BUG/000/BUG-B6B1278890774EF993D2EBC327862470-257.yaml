@@ -13,12 +13,12 @@ description: |
   3. The BUG-1693 label rules (recorded vs cleared, train members' labels) behave exactly as today: same pass/block outcome for every label combination (table test over the existing check_labels cases).
   4. A push to a held PR sends no "run failed" notification for this check.
   5. A genuinely malformed label state (clearance with no recorded hold) still FAILS, since that is a real error.
-status: Approved
+status: InProgress
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-08T02:46:34.549817284Z
-modified_at: 2026-11-08T05:42:45.742663397Z
+modified_at: 2026-11-08T05:44:30.619290323Z
 req_type: Bug
 tags:
 - area:ci
@@ -169,6 +169,13 @@ history:
   - field_name: status
     old_value: NeedsAttention
     new_value: Approved
+- id: 01a1b9af-d49b-7932-9c80-5a5936a5bac4
+  author: aida-pr-open
+  timestamp: 2026-11-08T05:44:30.619288767Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: InProgress
 filed_at:
   code_sha: dc41ee8da2f44f88178936fc1a8e6cb7168a3de7
   branch: main
