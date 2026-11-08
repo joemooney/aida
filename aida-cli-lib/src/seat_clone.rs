@@ -2044,12 +2044,11 @@ pub(crate) fn describe_status_entry(line: &str) -> String {
     described.unwrap_or_else(|| line.escape_debug().to_string())
 }
 
-/// Whether a probe `git status` entry is the session's runtime state or
-/// build/cache output rather than work: the `.aida-store` link to the
-/// primary's store, `.aida/cache-db` (and legacy `.aida/cache.db*`),
-/// `.aida/agents`, and `target/`. Only
-/// untracked entries qualify; `.aida-store` and `.codegraph` only while symlinks (read
-/// with metadata only; nothing in the clone is opened).
+/// Whether an untracked probe entry is disposable runtime state: shared
+/// store/codegraph links, agent/cache/build output, Python bytecode, notice
+/// markers, empty sandbox placeholders, Claude runtime links, session-env.sh,
+/// and the sessions symlink or direct regular `*.toml` lease files. Other
+/// session files remain work; tracked entries never qualify.
 // trace:BUG-B6B1278890774EF993D2EBC327862470-051 | ai:claude
 pub(crate) fn is_runtime_noise_entry(clone: &Path, line: &str) -> bool {
     let Some(path) = line.strip_prefix("? ") else {
@@ -2089,11 +2088,19 @@ pub(crate) fn is_runtime_noise_entry(clone: &Path, line: &str) -> bool {
             }
         }
     }
-    if path == ".aida/session-env.sh"
-        || path == ".aida/sessions"
-        || path.starts_with(".aida/sessions/")
-    {
+    if path == ".aida/session-env.sh" {
         return true;
+    }
+    // A real sessions directory can contain operator notes. Only the shared
+    // link or direct regular lease files are disposable; unknown state stays.
+    // trace:TASK-1222 | ai:codex
+    if path == ".aida/sessions" {
+        return std::fs::symlink_metadata(clone.join(path)).is_ok_and(|meta| meta.is_symlink());
+    }
+    if let Some(lease) = path.strip_prefix(".aida/sessions/") {
+        return !lease.contains('/')
+            && lease.ends_with(".toml")
+            && std::fs::symlink_metadata(clone.join(path)).is_ok_and(|meta| meta.is_file());
     }
     // trace:STORY-2630 | ai:codex
     if matches!(path, ".aida-store" | ".codegraph") {

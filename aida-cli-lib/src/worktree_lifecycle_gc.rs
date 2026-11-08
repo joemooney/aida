@@ -879,7 +879,7 @@ mod tests {
         for file in [
             ".aida/agents/registry",
             ".aida/cache-db/cache",
-            ".aida/sessions/ended",
+            ".aida/sessions/ended.toml",
             ".aida/session-env.sh",
             "target/cache",
             "tests/__pycache__/fixture.cpython-313.pyc",
@@ -900,6 +900,7 @@ mod tests {
         let row = inspect_with(&main, &tree, false, "origin/main", &mut closed);
         assert!(row.eligible, "{}", row.reason);
         for file in [
+            ".aida/sessions/precious-notes",
             "tests/local-notes",
             "tests/__pycache__/precious-notes",
             ".aida/brief.md",
