@@ -8,7 +8,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-04T17:54:51.353376614Z
-modified_at: 2026-11-08T01:33:03.848351790Z
+modified_at: 2026-11-08T01:36:19.290923332Z
 req_type: Task
 tags:
 - area:containment
@@ -442,6 +442,12 @@ comments:
   modified_at: 2026-11-08T01:31:33.447142706Z
   session_id: 01a1b8be-8170-7fb2-89ab-ecb4c6eee98c
   harness_version: 2.1.319 (Claude Code)
+- id: 01a1b8cc-9b5a-7ed3-8de0-8c7dc88ed415
+  author: joe
+  content: 'Round 7 disposition plan: (1) add an explicit fixture-only AGY entry using the shared wrapper and its live receipt/exec barrier, without changing production require_conformance; (2) use supported tool-deny controls and isolate global/workspace MCP/plugin inputs; verify candidate and wrapper settings/argv without invoking a model; (3) derive wrapper relay destinations from runtime auth_hosts intersected with trusted approval and name unlisted-host denials. Measured inventory remains daily-cloudcode-pa.googleapis.com only; oauth2.googleapis.com is a static candidate token endpoint, not a measured refresh. Advisor must attach refresh observations and report.json; implementer will not fabricate a measured list. (4) cover vendor propagation in conformance launch argv and ready callback; (5) record final dispositions and validation here. Expected scope: containment runtime data/common wrapper, diagnostic CLI adapter, conformance harness/tests, CLI catalog/audit fixtures and conformance docs. Keep Refs and TASK-3048 in progress.'
+  created_at: 2026-11-08T01:36:19.290923332Z
+  modified_at: 2026-11-08T01:36:19.290923332Z
+  session_id: 01a1b8c99472
 history:
 - id: 01a1a7b3-3699-7713-8ae7-69568c287956
   author: joe
