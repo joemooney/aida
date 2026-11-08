@@ -8,7 +8,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-07T23:39:41.575597710Z
-modified_at: 2026-11-08T00:25:28.426399635Z
+modified_at: 2026-11-08T00:27:44.975190702Z
 req_type: Task
 relationships:
 - rel_type: Child
@@ -46,6 +46,12 @@ comments:
   modified_at: 2026-11-08T00:22:29.462101421Z
   session_id: 01a1b848-940b-7bd2-8acd-52e428b182b8
   harness_version: 2.1.319 (Claude Code)
+- id: 01a1b88d-d3cf-7710-959a-4daa2bb86a20
+  author: joe
+  content: 'Round 2 review fixes prepared for PR #3644: --base glob growth compares total import counts so pure moves pass; relocation validates all rewritten ledgers for stale old-path keys/rows before any write; Git fixtures cover shrink, growth, bootstrap, pure relocation plus post-move growth, unreadable/malformed/missing base refusal; injected incomplete rewrites verify each ledger refuses without partial writes. Moved CI tier trace next to its entry. Validation: all 12 Python unittests pass; repository check-crate-globs.py --base HEAD passes (220 imports); all 81 CI Build gates classified; git diff --check passes. No Rust changes; full fast suite and CI rerun not performed. Merge hold remains active. Native seat leaves edits uncommitted for host publication; AC1/AC3 remain later slices.'
+  created_at: 2026-11-08T00:27:44.975190702Z
+  modified_at: 2026-11-08T00:27:44.975190702Z
+  session_id: 01a1b88bb2d1
 history:
 - id: 01a1b862-2e0b-7a50-a4d0-25097c707b57
   author: joe
