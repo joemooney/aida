@@ -25,7 +25,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-07T19:45:35.836129088Z
-modified_at: 2026-11-08T20:51:18.475142887Z
+modified_at: 2026-11-08T21:06:05.216474982Z
 req_type: Story
 tags:
 - docs:impacted
@@ -461,6 +461,13 @@ comments:
   modified_at: 2026-11-08T20:51:18.475142887Z
   session_id: 01a1bcec69f2
   harness_version: codex-cli 0.167.0
+- id: 01a1bcfb-8f20-7d40-b18d-09e87221b1be
+  author: joe
+  content: 'Advisor priority 2026-11-08 (operator-agreed): next after the crate-split blockers. PR CI fails 53% of decided runs, largely on gates check-ci-fast should catch; this PR puts that gate on the host. Keep it ahead of new Approved work.'
+  created_at: 2026-11-08T21:06:05.216474982Z
+  modified_at: 2026-11-08T21:06:05.216474982Z
+  session_id: 01a1bc93-77a0-7740-8b03-df4e3e8d1df5
+  harness_version: 2.1.319 (Claude Code)
 history:
 - id: 01a1b78d-2628-7313-92de-8804ac5f8f71
   author: aida-session-start
