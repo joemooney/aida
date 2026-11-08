@@ -2,109 +2,146 @@ id: 01a1b798-64a0-7890-a8c2-dd20db15b24d
 spec_id: STORY-b6b1278890774ef993d2ebc327862470-565
 agreed_id: STORY-2642
 title: 'aida doctor --lane-host: check and fix what any machine needs to run contained AIDA lanes (from the dell1 checklist)'
-description: |
-  ## Problem
+description: '## Problem
+
   FAQ-151 is a hand-kept checklist for making a machine able to run AIDA lanes (written for dell1). Missing items failed silently on 2026-11-07: lanes ran UNCONTAINED without agents.toml and the Codex workspace-write section; lanes ran untested with AIDA_OS_WRAP=0; bubblewrap failed until the userns sysctl was set; and the build cache was missing. Every project that wants AIDA automation on a machine hits the same list.
 
+
   ## Proposal
+
   `aida doctor --lane-host` (also run by `aida init` and before `aida queue work --no-human`) checks each requirement, says PASS/FAIL with the exact fix, and applies safe user-level fixes with `--fix`:
-  - binary current vs the project's main (dev builds) or release;
+
+  - binary current vs the project''s main (dev builds) or release;
+
   - `~/.aida/agents.toml` contained=true for every vendor that will run lanes;
+
   - vendor sandbox config (Codex `[sandbox_workspace_write]` writable_roots/network);
+
   - bubblewrap works (userns sysctl/AppArmor); prints the sudo line, never runs it;
+
   - vendor auth present (codex/claude/agy);
+
   - build cache configured and reachable from a lane job (see the sccache lane-job story);
+
   - store remote reachable and in sync (`aida pull` freshness);
+
   - `AIDA_OS_WRAP` not forced off.
+
   A no-human lane launch on a host that fails a containment check refuses, with the doctor line, rather than running uncontained.
 
+
   ## Acceptance
+
   1. Each item above is a doctor finding with a fix hint, plus a test for each finding.
+
   2. `--fix` writes only user-level files (agents.toml, codex config section, cargo config) and is idempotent.
+
   3. `aida queue work --no-human` refuses an uncontained launch on a host whose containment checks fail.
+
   4. FAQ-151 is replaced by a pointer to the command plus the remaining manual steps (ssh, clone, login).
+
+  '
 status: NeedsAttention
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
-created_at: 2026-11-07T19:59:40.192574469Z
-modified_at: 2026-11-08T02:24:42.555161986Z
+created_at: 2026-11-07 19:59:40.192574+00:00
+modified_at: 2026-11-08 02:24:42.555161+00:00
 req_type: Story
 comments:
 - id: 01a1b86c-54fb-76f0-b04b-0ed1c7c07cfb
   author: dirtlab
-  content: |
-    Native implementer handoff: initial non-completing slice, left uncommitted. Recorded publication declaration: [AI:codex] feat(doctor): add lane host diagnostics and containment preflight (Refs STORY-2642).
+  content: 'Native implementer handoff: initial non-completing slice, left uncommitted. Recorded publication declaration: [AI:codex] feat(doctor): add lane host diagnostics and containment preflight (Refs STORY-2642).
+
 
     Implemented --lane-host text/JSON diagnostics for every enabled lane vendor, user permission-preset fixes, safe idempotent Cargo wrapper configuration, init reporting, and a containment preflight before real no-human launches (including drains; resumes use their recorded vendor). The existing trusted native-Codex policy remains distinct from AIDA containment. FAQ-151 now points to the command and retains manual setup steps.
 
+
     Changed files: aida-cli-lib/src/doctor_cmd.rs, init_cmd.rs, lib.rs, queue_cmd.rs, lane_host.rs, vendors/mod.rs, vendors/host_diagnostics.rs; docs/cli/07-project-setup.md. FAQ-151 was updated through AIDA.
+
 
     Final-source lane-runner validation passed: lane_host::tests (10 executed tests), story_2539_vendor_literal_ratchet (3 executed tests), permissions_set_contained_is_parseable_idempotent_and_backed_up (1 executed test). rustfmt checks, git diff --check, check-exec-context.py (zero new ambient sites), and check-store-writers.py passed. make check-ci-fast was interrupted when it unexpectedly started a direct Cargo check; it is not counted as validation. Runner receipts noted overlay-stale after the primary rewrote its seed generation; all listed jobs nevertheless exited 0 with executed-test results.
 
+
     Remaining contract gaps: lane cache reachability cannot be certified until STORY-2641 supplies transport and an in-sandbox probe (the row deliberately fails as unverified); binary freshness currently compares the local origin default-branch SHA, with release freshness unverified; unsupported/AGY auth sources remain unverified. Auth checks establish recognized source presence only. The command therefore cannot certify full readiness yet. Keep STORY-2642 In Progress and preserve Refs on publication. No commit, push, PR creation, queue completion, review recording or merge was attempted from this seat.
-  created_at: 2026-11-07T23:51:09.819197553Z
-  modified_at: 2026-11-07T23:51:09.819197553Z
+
+    '
+  created_at: 2026-11-07 23:51:09.819197+00:00
+  modified_at: 2026-11-07 23:51:09.819197+00:00
   session_id: 01a1b85d3963
   harness_version: codex-cli 0.167.0
 - id: 01a1b888-b64e-7fd3-a106-2a41ad0c95f5
   author: joe
   content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: Checks and --fix are sound and idempotent, but AC4 (FAQ-151 replaced) is not done, the AC3 refusal path has no test, build-cache is a constant FAIL so --lane-host can never exit 0, and agy auth can never pass. CI was still pending at review time.. No triage reason was given.'
-  created_at: 2026-11-08T00:22:09.742701625Z
-  modified_at: 2026-11-08T00:22:09.742701625Z
+  created_at: 2026-11-08 00:22:09.742701+00:00
+  modified_at: 2026-11-08 00:22:09.742701+00:00
   session_id: 01a1b848-940b-7bd2-8acd-52e428b182b8
   harness_version: 2.1.319 (Claude Code)
 - id: 01a1b888-d1b9-7981-97af-7470ed2025a8
   author: joe
-  content: |-
-    REVIEW FINDINGS TO ADDRESS (PR #3643):
+  content: 'REVIEW FINDINGS TO ADDRESS (PR #3643):
+
     Verdict: CHANGES REQUESTED
+
     Reviewed commit: 91c6a1ddf072
+
     Recorded: 2026-11-08T00:00:20.954269607+00:00
+
     Findings:
-    1. AC4 unmet: FAQ-151 still holds the full hand-kept checklist ('To be automated by aida doctor --lane-host'). Replace it with a pointer to 'aida doctor --lane-host [--fix]' plus only the remaining manual steps (ssh/hosts pin, clone, PATH, vendor login). Also note its writable_roots list now contradicts the preset (writable_roots=[]).
-    2. AC3 refusal path untested: no test covers lane_host::preflight() or the two call sites (queue_cmd.rs ~5817 fresh/drain routes, ~12355 resume). Add tests proving 'queue work --no-human' refuses with the doctor lines BEFORE any queue/lease/worktree mutation when posture=None, os_wrap=false, bwrap is unavailable or the codex preset is wrong, and that --dry-run/--no-launch/--list-sessions skip it.
-    3. AC1 build-cache: lane_host.rs cache_check() is a hard-coded pass=false and never inspects the host. At least check the 'configured' half (an executable rustc-wrapper in ~/.cargo/config.toml), and report lane reachability as a separate unverified note. Today 'aida doctor --lane-host' can never exit 0, so its exit code is useless as a gate, and every 'aida init' prints a FAIL row.
-    4. host_diagnostics.rs auth_check: the agy/'_' arm has an empty env key and an empty file, so auth-agy can never pass on any host. That makes --lane-host permanently fail wherever agy is enabled, and the test asserts the always-fail. Recognize agy's real credential source, or report it as an explicit 'unverifiable' state that does not fail the run.
+
+    1. AC4 unmet: FAQ-151 still holds the full hand-kept checklist (''To be automated by aida doctor --lane-host''). Replace it with a pointer to ''aida doctor --lane-host [--fix]'' plus only the remaining manual steps (ssh/hosts pin, clone, PATH, vendor login). Also note its writable_roots list now contradicts the preset (writable_roots=[]).
+
+    2. AC3 refusal path untested: no test covers lane_host::preflight() or the two call sites (queue_cmd.rs ~5817 fresh/drain routes, ~12355 resume). Add tests proving ''queue work --no-human'' refuses with the doctor lines BEFORE any queue/lease/worktree mutation when posture=None, os_wrap=false, bwrap is unavailable or the codex preset is wrong, and that --dry-run/--no-launch/--list-sessions skip it.
+
+    3. AC1 build-cache: lane_host.rs cache_check() is a hard-coded pass=false and never inspects the host. At least check the ''configured'' half (an executable rustc-wrapper in ~/.cargo/config.toml), and report lane reachability as a separate unverified note. Today ''aida doctor --lane-host'' can never exit 0, so its exit code is useless as a gate, and every ''aida init'' prints a FAIL row.
+
+    4. host_diagnostics.rs auth_check: the agy/''_'' arm has an empty env key and an empty file, so auth-agy can never pass on any host. That makes --lane-host permanently fail wherever agy is enabled, and the test asserts the always-fail. Recognize agy''s real credential source, or report it as an explicit ''unverifiable'' state that does not fail the run.
+
     5. Probe-1 inconsistency: auth_check honors CODEX_HOME, but workspace_check/user_preset_matches (and the --fix User-scope writer) always use ~/.codex/config.toml. On a host with CODEX_HOME set, codex-config checks and fixes a file Codex does not read. Resolve the codex config path the same way in all three places, and add a test.
+
     6. Preflight checks only the vendor resolved at entry (resolve_enabled_headless_vendor). Routes that switch vendor later, such as apply_rework_conflict_route rerouting to claude or orchestrator phases on another vendor, never get the host checks for the vendor that actually launches. Either preflight at the per-launch vendor resolution or document and test the limitation.
+
     7. Preflight ignores an AIDA_CONTAINED parent (monotonic containment). A no-human launch from inside a contained seat reads host user files (~/.aida/agents.toml, ~/.codex/config.toml) and probes bwrap from inside the sandbox, so it may refuse legitimate nested reviewer/implementer launches. Decide the contained-parent behaviour explicitly and add a test (plausible risk, not reproduced).
-    8. Authority audit gap: config_cmd.rs's source test that audits apply_permission_posture call sites (bypass-tier guard) scans only doctor_cmd.rs and lib*.rs. Add lane_host.rs, the new production call site.
-    9. Cosmetic: --lane-host conflicts only with heal/fix_sandbox/contradictions, so --category, --yes and the other doctor flags are silently ignored with it. init_cmd now runs a network 'git ls-remote' (8s bound) on every 'aida init'. Consider conflicts_with for the remaining flags and skipping the live store probe during init.
-    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
-  created_at: 2026-11-08T00:22:16.761106721Z
-  modified_at: 2026-11-08T00:22:16.761106721Z
+
+    8. Authority audit gap: config_cmd.rs''s source test that audits apply_permission_posture call sites (bypass-tier guard) scans only doctor_cmd.rs and lib*.rs. Add lane_host.rs, the new production call site.
+
+    9. Cosmetic: --lane-host conflicts only with heal/fix_sandbox/contradictions, so --category, --yes and the other doctor flags are silently ignored with it. init_cmd now runs a network ''git ls-remote'' (8s bound) on every ''aida init''. Consider conflicts_with for the remaining flags and skipping the live store probe during init.
+
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.'
+  created_at: 2026-11-08 00:22:16.761106+00:00
+  modified_at: 2026-11-08 00:22:16.761106+00:00
   session_id: 01a1b848-940b-7bd2-8acd-52e428b182b8
   harness_version: 2.1.319 (Claude Code)
 - id: 01a1b8dc-8f76-70b3-a4d8-9f39387410b8
   author: joe
   content: 'Native rework progress: changed only aida-cli-lib/src/lane_host.rs to exercise each containment failure independently through real fresh and drain queue handlers, with passing controls for all other containment rows and snapshots proving no project/user writes. Formatting, git diff --check, execution-context ledger (zero additions), and 8 Git fixture-maintenance tests passed. Rust validation remains pending: job j20261108T013313655-2-0 timed out compiling after 900s (no tests executed); retry j20261108T014845851-2-0 uses AIDA_CARGO_TIMEOUT=3600 and is currently queued for a Cargo slot. Non-completing native publication declaration recorded: [AI:codex] test(doctor): isolate lane host queue refusal conditions (Refs STORY-2642). No commit, push, PR creation or queue completion performed.'
-  created_at: 2026-11-08T01:53:44.822037351Z
-  modified_at: 2026-11-08T01:53:44.822037351Z
+  created_at: 2026-11-08 01:53:44.822037+00:00
+  modified_at: 2026-11-08 01:53:44.822037+00:00
   session_id: 01a1b8c792b8
 - id: 01a1b8f1-6801-7df1-b3a9-9aa1408710f0
   author: joe
-  content: 'Native rework final handoff: aida-cli-lib/src/lane_host.rs now exercises uncontained policy, OS wrapping disabled, bubblewrap absent, and missing Codex preset as independent failures through both fresh and drain queue handlers. Every scenario asserts all other containment checks pass, verifies doctor refusal output, and compares project and user-file snapshots to prove refusal precedes writes. Existing preview-skip coverage remains. Final-source validation: lane runner job j20261108T014845851-2-0 exited 0 with 18 executed lane_host::tests passing (0 failed); rustfmt check, git diff --check, execution-context audit (1241 ledger sites, zero additions), and all 8 tests/test_git_maintenance_ratchet.py tests passed. The earlier 900-second run timed out during compilation without executing tests; the 3600-second retry completed. Runner additionally reported overlay-stale because the primary rewrote the seed generation; test execution nevertheless completed successfully. Only lane_host.rs is changed and edits are uncommitted. Publication declaration remains [AI:codex] test(doctor): isolate lane host queue refusal conditions (Refs STORY-2642). Preserve Refs and In Progress: the broader diagnostic limitations documented in the prior slice remain (lane cache reachability, release freshness, unsupported credential probes, and per-future-phase coverage). No commit, push, PR creation, queue completion, ship merge or review recording attempted. Host launcher owns publication.'
-  created_at: 2026-11-08T02:16:30.977943741Z
-  modified_at: 2026-11-08T02:16:30.977943741Z
+  content: 'Native rework final handoff: aida-cli-lib/src/lane_host.rs now exercises uncontained policy, OS wrapping disabled, bubblewrap absent, and missing Codex preset as independent failures through both fresh and drain queue handlers. Every scenario asserts all other containment checks pass, verifies doctor refusal output, and compares project and user-file snapshots to prove refusal precedes writes. Existing preview-skip coverage remains. Final-source validation: lane runner job j20261108T014845851-2-0 exited 0 with 18 executed lane_host::tests passing (0 failed); rustfmt check, git diff --check, execution-context audit (1241 ledger sites, zero additions), and all 8 tests/test_git_maintenance_ratchet.py tests passed. The earlier 900-second run timed out during compilation without executing tests; the 3600-second retry completed. Runner additionally reported overlay-stale because the primary rewrote the seed generation; test execution nevertheless completed successfully. Only lane_host.rs
+    is changed and edits are uncommitted. Publication declaration remains [AI:codex] test(doctor): isolate lane host queue refusal conditions (Refs STORY-2642). Preserve Refs and In Progress: the broader diagnostic limitations documented in the prior slice remain (lane cache reachability, release freshness, unsupported credential probes, and per-future-phase coverage). No commit, push, PR creation, queue completion, ship merge or review recording attempted. Host launcher owns publication.'
+  created_at: 2026-11-08 02:16:30.977943+00:00
+  modified_at: 2026-11-08 02:16:30.977943+00:00
   session_id: 01a1b8c792b8
 history:
 - id: 01a1b85d-3f02-70c2-a82d-cefccf97dc04
   author: aida-session-start
-  timestamp: 2026-11-07T23:34:41.154138885Z
+  timestamp: 2026-11-07 23:34:41.154138+00:00
   changes:
   - field_name: status
     old_value: Approved
     new_value: InProgress
 - id: 01a1b85d-761f-75a3-9fd1-04eca7a54e2e
   author: dirtlab
-  timestamp: 2026-11-07T23:34:55.263926784Z
+  timestamp: 2026-11-07 23:34:55.263926+00:00
   session_id: 01a1b85d3963
   harness_version: codex-cli 0.167.0
   changes: []
 - id: 01a1b874-c107-7e51-900e-72f4cde7aab8
   author: aida-orchestrator
-  timestamp: 2026-11-08T00:00:21.767650302Z
+  timestamp: 2026-11-08 00:00:21.767650+00:00
   session_id: 01a1b871adc3
   harness_version: 2.1.319 (Claude Code)
   changes:
@@ -113,34 +150,41 @@ history:
     new_value: NeedsAttention
 - id: 01a1b888-b64e-7fd3-a106-2a3b64fc1b3e
   author: joe
-  timestamp: 2026-11-08T00:22:09.742678739Z
+  timestamp: 2026-11-08 00:22:09.742678+00:00
   session_id: 01a1b848-940b-7bd2-8acd-52e428b182b8
   harness_version: 2.1.319 (Claude Code)
   changes:
   - field_name: status
     old_value: NeedsAttention
     new_value: Approved
+- id: 01a1b88c-66f4-7372-bc9e-ac9b93eaf040
+  author: aida-session-start
+  timestamp: 2026-11-08 00:26:11.572383+00:00
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: InProgress
 - id: 01a1b893-9a4f-7143-8d11-22f999e1f58d
   author: joe
-  timestamp: 2026-11-08T00:34:03.471094267Z
+  timestamp: 2026-11-08 00:34:03.471094+00:00
   session_id: 01a1b89265e3
   harness_version: 2.1.319 (Claude Code)
   changes: []
 - id: 01a1b8c7-9cff-7d30-886a-3046de31fcd5
   author: aida-session-start
-  timestamp: 2026-11-08T01:30:52.031627500Z
+  timestamp: 2026-11-08 01:30:52.031627+00:00
   changes:
   - field_name: status
     old_value: Approved
     new_value: InProgress
 - id: 01a1b8c8-14fe-7a51-a052-e4e5dd213435
   author: joe
-  timestamp: 2026-11-08T01:31:22.750882882Z
+  timestamp: 2026-11-08 01:31:22.750882+00:00
   session_id: 01a1b8c792b8
   changes: []
 - id: 01a1b8f8-e83b-76c0-b173-777c92605efc
   author: aida-orchestrator
-  timestamp: 2026-11-08T02:24:42.555189034Z
+  timestamp: 2026-11-08 02:24:42.555189+00:00
   session_id: 01a1b8f3e237
   harness_version: 2.1.319 (Claude Code)
   changes:
@@ -163,4 +207,4 @@ failure_reason:
   detail: All 4 acceptance criteria are met in source and every round-1 finding is addressed, but CI is red. cli-1 failed at 0db504f7, and all four test shards failed at 301d0ef05 while main stayed green. The widened --no-human host gate refuses existing uncontained headless integration tests, and the PR migrates none of them.
   recovery_hint: address the review findings, move STORY-2642 back to In Progress, and clear the PR hold only after approval
   shelved_by: reviewer
-  shelved_at: 2026-11-08T02:24:42.555161986Z
+  shelved_at: 2026-11-08 02:24:42.555161+00:00
