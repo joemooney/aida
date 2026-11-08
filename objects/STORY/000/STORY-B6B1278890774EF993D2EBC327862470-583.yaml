@@ -1,0 +1,38 @@
+id: 01a1b916-1b6e-7ba2-a259-e3714ce900a2
+spec_id: STORY-b6b1278890774ef993d2ebc327862470-583
+agreed_id: STORY-2660
+title: 'Lane host pool: AIDA places implementer lanes across registered hosts by free slots (remote-first, local overflow) and sees their lanes, replacing the advisor''s hardcoded dell1 scripts'
+description: |
+  Problem (2026-11-07): lanes run wherever the advisor's helper scripts start them. fill-slots3.sh launched only on the 6-core primary host (load 14) while dell1 (20 cores, load 0.5) sat idle; earlier dell1 lanes had been started by hand over ssh. The advisor then hardcoded a dell1-first route in ~/.local/share/aida/ops/advisor-scripts (fill-slots3.sh launch_dell, dell1:~/lane-run.sh, auto-rework lane_running over ssh). AIDA itself has no placement concept: host readiness exists (STORY-2642 `aida doctor --lane-host`) and host identity exists (node registry / `aida team`), but nothing chooses a host, counts its slots, or sees its lanes.
+
+  Sketch (needs advisor signoff + operator review before implementation; architecture change):
+  1. Registration: a host joins the lane pool with a capacity (slots), admitted only after `doctor --lane-host` passes there. Prefer a capacity/role field on the existing node registry entry over a new registry.
+  2. Placement: `aida queue work` / dispatch tick choose a host by free slots and load under a policy (e.g. remote-first, local overflow). The ssh + remote `aida queue work` mechanics live in AIDA, not in advisor scripts.
+  3. Cross-host visibility: leases, "does this spec have a running lane", fleet watch and `aida awaiting` see lanes on every pool host, so nothing duplicates and a stalled remote lane surfaces.
+  4. Publish on the lane host: the remote host commits/ships from its own seat; the primary only orchestrates (matches dell1:~/lane-run.sh today).
+  5. Out of scope here: build-only offload (cargo slot wrapper, aida-host STORY-100); whole-lane placement is the bigger win because agent and builds share a host.
+
+  Acceptance (draft): with dell1 registered at 6 slots and the primary at 4, a burst of 8 queued reworks lands 6 on dell1 and 2 locally with no advisor script; `aida session leases` and the "lane running" check show the dell1 lanes; an unreachable pool host is skipped with a visible reason, never counted as free; vendor pins (e.g. BUG-2487 Codex 0.166) are checked per host before placement.
+
+  Related: STORY-2571 (operator plumbing into AIDA), STORY-2642 (lane-host readiness), FAQ-151.
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-11-08T02:56:36.206726001Z
+modified_at: 2026-11-08T02:56:36.206726001Z
+req_type: Story
+tags:
+- architecture
+- area:dispatch
+- area:lanes
+- needs-sketch-signoff
+filed_at:
+  code_sha: dc41ee8da2f44f88178936fc1a8e6cb7168a3de7
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: dc41ee8da2f
+  vendor: claude
+  session: 01a1b8be-8170-7fb2-89ab-ecb4c6eee98c
+  harness_version: 2.1.319 (Claude Code)
