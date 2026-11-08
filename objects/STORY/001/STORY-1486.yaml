@@ -23,7 +23,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-09-26T18:30:26.622729865Z
-modified_at: 2026-11-08T12:23:03.413624046Z
+modified_at: 2026-11-08T12:23:05.332180177Z
 req_type: Story
 tags:
 - agent-launch
@@ -680,6 +680,21 @@ comments:
   content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: STORY-1486 PARTIAL: AC1,2,4,5 have matching tests by source and all round-6 findings are fixed, but AC3 is not met when the seat comes from the role picker (git_policy is printed before the role is resolved), and CI at this head is still queued. No cargo run, by policy.. No triage reason was given.'
   created_at: 2026-11-08T12:23:03.413620490Z
   modified_at: 2026-11-08T12:23:03.413620490Z
+  session_id: 01a1b9af-8230-75d2-82f8-667491cc010a
+  harness_version: 2.1.319 (Claude Code)
+- id: 01a1bb1c-bcf6-7373-a5de-a71ca3161709
+  author: joe
+  content: |-
+    REVIEW FINDINGS TO ADDRESS (STORY-1486):
+    Verdict: CHANGES REQUESTED
+    Reviewed commit: 18e98acfe80c
+    Recorded: 2026-11-08T12:18:39.674395259+00:00
+    Findings:
+    1. BLOCKING (AC3, effective seat): handle_agent_command computes and prints git_policy (aida-cli-lib/src/agent_launch.rs:417-427) from the raw --role before dispatch_agent_new runs, but the seat is only resolved later by resolve_child_role (agent_launch.rs:2727 claude, :2866 codex, :2953 antigravity), which opens the role picker at a TTY when --role is absent, and that picker appends guest/requester (role.rs:685,725-749). So `aida agent new claude --no-exec --verbose` at a terminal prints `git_policy: write (development baseline; requested seat: default ...)` and then the operator picks guest: the declared policy says write for a read-only seat, and the same happens on a real launch with --verbose. Fix: emit the declaration after the child role is resolved (for example from the shared launch path with the resolved role, keeping stdout for no-exec, stderr for real launches and silence for --show-prompt/--show-context), or resolve the role first. Add a test that a picked or otherwise late-resolved guest/requester role declares read-only; the current e2e test always passes --role or gets no TTY.
+    2. WAIT STATE, no code change needed: CI run 42478929548 at 18e98acfe80c was still queued with all 7 jobs (rest, lib-0, lib-1, cli-0, cli-1, gates, contracts) unassigned at 12:2x UTC, and merge-hold-gate was pending. No CI result confirms this head, including the round-6 changes (b3d619c7a0b) and the earlier unexplained cli-0 timeout in bug_2187_reviewer_record_identity::scrubbed_headless_reviewer_records_but_implementer_shell_refuses. Every AC test above is verified by source reading only until CI completes.
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
+  created_at: 2026-11-08T12:23:05.206597279Z
+  modified_at: 2026-11-08T12:23:05.206597279Z
   session_id: 01a1b9af-8230-75d2-82f8-667491cc010a
   harness_version: 2.1.319 (Claude Code)
 history:
