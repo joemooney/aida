@@ -8,7 +8,7 @@ priority: Low
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-05T04:41:25.538710401Z
-modified_at: 2026-11-08T08:28:51.733180002Z
+modified_at: 2026-11-08T08:35:06.623687106Z
 req_type: Story
 comments:
 - id: 01a1aa03-51be-7480-baec-91ac74908e0b
@@ -283,6 +283,12 @@ history:
   - field_name: status
     old_value: InProgress
     new_value: NeedsAttention
+- id: 01a1ba4c-054c-73a2-b526-3cbc2c71f215
+  author: joe
+  timestamp: 2026-11-08T08:35:06.700014467Z
+  session_id: 01a1ba4aecab
+  harness_version: 2.1.319 (Claude Code)
+  changes: []
 filed_at:
   code_sha: d561213a36febec31d45921d3d43d4dc7590135e
   branch: main
@@ -296,3 +302,11 @@ attention_reason:
   detail: 'F6/F7 sketch fixes are ready as uncommitted documentation. F1 remains unresolved: host/advisor must retitle PR-3665 with (Refs STORY-2493) or add aida: no-complete to its body; another code push cannot repair the completing PR title. CLAUDE.md requires advisor architecture signoff before implementation. Reviewer/session attestation, home verification and authenticated supersession/disposition authority still need approval. Preserve publication veto; design-only changes do not complete this story.'
   raised_by: implementer
   raised_at: 2026-11-08T08:28:51.733180002Z
+failure_reason:
+  phase: reviewer
+  phase_index: 3
+  kind: verdict:request-changes
+  detail: F2-F7 are fixed, but the PR title still completes the unimplemented STORY-2493 at merge, and the sketch's same-head and superseded release paths can unblock merge while a finding is open.
+  recovery_hint: address the review findings, move STORY-2493 back to In Progress, and clear the PR hold only after approval
+  shelved_by: reviewer
+  shelved_at: 2026-11-08T08:35:06.623687106Z
