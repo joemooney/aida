@@ -260,7 +260,10 @@ fn lane_sccache_env(parent: &aida_core::exec_context::Environment) -> Vec<(Strin
     else {
         return vec![];
     };
-    if Path::new(&wrapper).file_name().and_then(|s| s.to_str()) != Some("sccache") {
+    let wrapper_path = Path::new(&wrapper);
+    if (wrapper != "sccache" && !wrapper_path.is_absolute())
+        || wrapper_path.file_name().and_then(|s| s.to_str()) != Some("sccache")
+    {
         return vec![];
     }
     let cache = home.join(".cache/aida/lane-sccache");
@@ -826,9 +829,9 @@ impl LaneJobs {
     }
 
     /// The paths a job's sandbox may write besides the seat: its cargo
-    /// target and the host cargo wrapper's slot locks and slot log, so the
-    /// job queues for a slot with every other cargo on the host and its run
-    /// is recorded.
+    /// target, the optional lane-only sccache directory, and the host cargo
+    /// wrapper's slot locks and slot log, so the job queues for a slot with
+    /// every other cargo on the host and its run is recorded.
     ///
     /// Nothing in cargo home is writable. `bin/` holds the rustup proxies
     /// (`cargo`, `rustc`), `config.toml` can name a `build.rustc-wrapper`,

@@ -1795,6 +1795,22 @@ fn story_2641_sccache_job_env_and_binds_are_opt_in_and_lane_only() {
         ("SCCACHE_SERVER_UDS".into(), "/operator/server".into()),
     ]);
     assert!(lane_sccache_env(&parent).is_empty());
+    for wrapper in ["tools/sccache", "./sccache", "../bin/sccache"] {
+        std::fs::write(
+            cargo.join("config.toml"),
+            format!("[build]\nrustc-wrapper = '{wrapper}'\n"),
+        )
+        .unwrap();
+        assert!(lane_sccache_env(&parent).is_empty(), "{wrapper}");
+    }
+    std::fs::write(
+        cargo.join("config.toml"),
+        "[build]\nrustc-wrapper = 'sccache'\n",
+    )
+    .unwrap();
+    assert!(lane_sccache_env(&parent)
+        .iter()
+        .any(|(key, value)| key == "RUSTC_WRAPPER" && value == "sccache"));
     std::fs::write(
         cargo.join("config.toml"),
         "[build]\nrustc-wrapper = 'other-wrapper'\n",
