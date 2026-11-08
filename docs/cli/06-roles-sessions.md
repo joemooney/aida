@@ -193,14 +193,18 @@ can run `aida worktree gc --apply` at an interactive host terminal; scheduled
 and unattended contexts refuse removal. The legacy `--yes --force` combination
 also requests removal through the same gate. Scans have a soft budget and report
 partial counts plus the number of deferred entries; a partial scheduled scan
-routes to the advisor. Byte walks are bounded; incomplete estimates are flagged and do not affect
-eligibility. Byte totals are lower bounds when estimates are incomplete.
+routes to the advisor. The sorted inventory starts at a different entry each UTC week,
+cycling through all start positions to avoid repeatedly deferring the same tail.
+Byte walks are bounded; incomplete estimates are flagged and do not affect eligibility. Byte totals are lower bounds when estimates are incomplete.
 The weekly report replaces the former monthly guard.
 
 A candidate must have no remaining session lease (even a dead-process lease
 must first be ended/reaped), no operator or Git worktree lock, no uncommitted
 or untracked work. Linked worktrees also retain ignored local state, except
-regenerable target output, AIDA runtime links/caches and empty sandbox placeholders.
+regenerable target output, Python `.pyc` files under `__pycache__`, AIDA runtime
+links/caches, notice/onboarding markers and empty sandbox placeholders.
+Ignored `.aida/brief.md` and `.aida/events.jsonl` remain protected as work context
+and audit evidence, along with notes, holds and review verdicts.
 Seat clone probes do not inspect ignored files. All candidates require
 no live filesystem holders. Main, default/store branches,
 detached checkouts, submodules, and unreadable evidence stay protected. Linked

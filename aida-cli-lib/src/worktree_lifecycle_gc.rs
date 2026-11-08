@@ -571,6 +571,18 @@ fn scan_budgeted<T, R>(
         .collect()
 }
 
+// Rotate once per UTC week so budget-limited scheduled scans do not always
+// inspect the same prefix. Read-only and deterministic: no cursor to corrupt or
+// race with interactive scans. For a stable inventory every entry leads once
+// per inventory-length cycle, even if only one inspection fits the budget.
+// trace:TASK-1222 | ai:codex
+fn rotate_inventory<T>(items: &mut [T], week: i64) {
+    if !items.is_empty() {
+        let start = week.rem_euclid(items.len() as i64) as usize;
+        items.rotate_left(start);
+    }
+}
+
 pub(crate) fn run(apply: bool, json: bool, fail_on_findings: bool) -> Result<()> {
     let invoking = crate::find_project_root()?;
     let main = crate::worktree_gc::main_worktree_root_from(&invoking);
@@ -581,7 +593,11 @@ pub(crate) fn run(apply: bool, json: bool, fail_on_findings: bool) -> Result<()>
     )?;
     let default =
         crate::resolve_default_branch_ref(&main).context("cannot resolve default branch")?;
-    let inventory = inventory(&main)?;
+    let mut inventory = inventory(&main)?;
+    rotate_inventory(
+        &mut inventory,
+        chrono::Utc::now().timestamp().div_euclid(604_800),
+    );
     let total = inventory.len();
     let mut rows = scan_budgeted(inventory, Duration::from_secs(60), |(p, c)| {
         inspect(&main, &p, c, &default)
@@ -708,7 +724,7 @@ mod tests {
         // trace:TASK-1222.ac5418e8 | ai:codex
         let (_tmp, main) = fixture();
         let tree = linked(&main, "runtime");
-        std::fs::write(tree.join(".gitignore"), ".aida/\ntarget/\n.aida-store\n.codegraph\n.claude/\n.bashrc\n.gitconfig\n.gitmodules\n.env\nnotes\n").unwrap();
+        std::fs::write(tree.join(".gitignore"), ".aida/\ntarget/\n.aida-store\n.codegraph\n.claude/\n.bashrc\n.gitconfig\n.gitmodules\n.env\nnotes\n__pycache__/\ntests/local-notes\n").unwrap();
         git_ok(&tree, &["add", ".gitignore"]);
         git_ok(&tree, &["commit", "-qm", "runtime ignores"]);
         for directory in [
@@ -717,6 +733,9 @@ mod tests {
             ".aida/sessions",
             "target",
             ".claude",
+            "tests/__pycache__",
+            "scripts/__pycache__",
+            "docs/__pycache__",
         ] {
             std::fs::create_dir_all(tree.join(directory)).unwrap();
         }
@@ -726,6 +745,12 @@ mod tests {
             ".aida/sessions/ended",
             ".aida/session-env.sh",
             "target/cache",
+            "tests/__pycache__/fixture.cpython-313.pyc",
+            "scripts/__pycache__/gate.cpython-313.pyc",
+            "docs/__pycache__/check.cpython-313.pyc",
+            ".aida/team-onboarded",
+            ".aida/upstream-report-notice-version",
+            ".aida/.format-hint-shown",
         ] {
             std::fs::write(tree.join(file), "runtime").unwrap();
         }
@@ -738,6 +763,10 @@ mod tests {
         let row = inspect_with(&main, &tree, false, "origin/main", &mut closed);
         assert!(row.eligible, "{}", row.reason);
         for file in [
+            "tests/local-notes",
+            "tests/__pycache__/precious-notes",
+            ".aida/brief.md",
+            ".aida/events.jsonl",
             ".aida/merge-holds",
             ".aida/review-verdicts",
             ".env",
@@ -757,6 +786,26 @@ mod tests {
         git_ok(&tree, &["add", "-f", ".gitmodules"]);
         git_ok(&tree, &["commit", "-qm", "tracked modules"]);
         assert!(!inspect_with(&main, &tree, false, "origin/main", &mut closed).eligible);
+    }
+
+    #[test]
+    fn task_1222_weekly_rotation_reaches_budget_deferred_tail() {
+        // trace:TASK-1222.ac14b158 | ai:codex
+        // trace:TASK-1222.ac5418e8 | ai:codex
+        let mut inspected = std::collections::BTreeSet::new();
+        for week in 2900..2907 {
+            let mut inventory = vec![0, 1, 2, 3, 4, 5, 6];
+            rotate_inventory(&mut inventory, week);
+            // Worst case: only the first inspection fits each weekly budget.
+            inspected.insert(inventory[0]);
+            inventory.sort();
+            assert_eq!(inventory, vec![0, 1, 2, 3, 4, 5, 6]);
+        }
+        assert_eq!(inspected.len(), 7);
+        rotate_inventory::<usize>(&mut [], 2900);
+        let mut single = [42];
+        rotate_inventory(&mut single, 2900);
+        assert_eq!(single, [42]);
     }
 
     #[test]
