@@ -2,70 +2,78 @@ id: 01a1ba22-fb45-77b3-8aaa-626d7e65356e
 spec_id: TASK-b6b1278890774ef993d2ebc327862470-980
 agreed_id: TASK-3472
 title: 'review watch: raise the hard 1..=2 reviewer concurrency cap to a configurable 1..=8 ([review_watch] max_concurrent)'
-description: 'Observed 2026-11-08 00:50: 28 open PRs, ~18 heads awaiting re-review, review watch capped at 2 concurrent reviews (review_watch.rs:46 value_parser range(1..=2) and validate_state (1..=2).contains at ~:1172; the skip message at ~:1398 names the cap). At ~20-30 min/review that is a 4-5 h queue while lanes idle on verdicts. The cap of 2 dates from reviewers sharing the 2 cargo slots; under the 2026-10-23 LIGHT ruling reviewers run no cargo, so reviews are model-bound only. CHANGE: --max-concurrent accepts 1..=8; default comes from [review_watch] max_concurrent in .aida/config.toml (default 2 when absent); validate_state accepts 1..=8 (existing state files with 1 or 2 stay valid); docs/cli help updated (help golden regenerated, Help-Golden trailer). Set this repo''s [review_watch] max_concurrent = 4. ACCEPTANCE: unit tests that 4 parses, 9 is refused, the config value is used when the flag is absent, and a state file with max_concurrent 4 validates. Gate LIGHT: one targeted cargo test -p aida-cli-lib review_watch + make check-ci-fast.'
+description: 'Observed 2026-11-08 00:50: 28 open PRs, ~18 heads awaiting re-review, review watch capped at 2 concurrent reviews (review_watch.rs:46 value_parser range(1..=2) and validate_state (1..=2).contains at ~:1172; the skip message at ~:1398 names the cap). At ~20-30 min/review that is a 4-5 h queue while lanes idle on verdicts. The cap of 2 dates from reviewers sharing the 2 cargo slots; under the 2026-10-23 LIGHT ruling reviewers run no cargo, so reviews are model-bound only. CHANGE: --max-concurrent accepts 1..=8; default comes from [review_watch] max_concurrent in .aida/config.toml (default 2 when absent); validate_state accepts 1..=8 (existing state files with 1 or 2 stay valid); docs/cli help updated (help golden regenerated, Help-Golden trailer). Set this repo''s [review_watch] max_concurrent = 4. ACCEPTANCE: unit tests that 4 parses, 9 is refused, the config value is used when the flag is absent, and a state file with max_concurrent 4 validates. Gate LIGHT: one targeted cargo
+  test -p aida-cli-lib review_watch + make check-ci-fast.'
 status: Completed
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
-created_at: 2026-11-08T07:50:17.157189157Z
-modified_at: 2026-11-08T12:48:25.888712798Z
+created_at: 2026-11-08 07:50:17.157189+00:00
+modified_at: 2026-11-08 12:48:25.888712+00:00
 req_type: Task
 comments:
 - id: 01a1ba23-1dfe-7172-aedd-5ca1e197357c
   author: joe
   content: 'Advisor ruling 2026-11-08 00:52: approved, front of queue; it gates the review throughput for every other open PR.'
-  created_at: 2026-11-08T07:50:26.046665268Z
-  modified_at: 2026-11-08T07:50:26.046665268Z
+  created_at: 2026-11-08 07:50:26.046665+00:00
+  modified_at: 2026-11-08 07:50:26.046665+00:00
   session_id: 01a1b9af-8230-75d2-82f8-667491cc010a
   harness_version: 2.1.319 (Claude Code)
 - id: 01a1ba30-d61e-75b3-8891-00d675697b3b
   author: codex
   content: 'Implemented configurable review-watch concurrency: flag accepts 1..=8, omitted flag reads [review_watch] max_concurrent with fallback 2, repository default is 4, persisted limits 1..=8 validate. Added config/parser/state/capacity regressions, updated CLI docs and regenerated help golden. Validation: lane job j20261108T075736191-2-0 passed 135 review_watch tests; j20261108T075409017-2-0 passed help snapshot regeneration; make check-ci-fast passed all 43 gates with umask 022; git diff --check passed. Initial compile exposed an old parser expectation, now corrected; initial fast run exposed fixture assumptions about umask 0002, rerun under 022 passed. Native implementer handoff: five files remain uncommitted; no publication or queue completion performed. Host commit should include Help-Golden: updated. No blockers.'
-  created_at: 2026-11-08T08:05:25.150702788Z
-  modified_at: 2026-11-08T08:05:25.150702788Z
+  created_at: 2026-11-08 08:05:25.150702+00:00
+  modified_at: 2026-11-08 08:05:25.150702+00:00
   session_id: 01a1ba251fad
   harness_version: codex-cli 0.167.0
 - id: 01a1ba6d-dc95-7b01-ba81-368fac83da9e
   author: dirtlab
   content: 'Revalidated existing implementation at HEAD 4a688a8796 (task commit 317e7493a8 already present on entry; no new source edits). Lane job j20261108T090354306-2-0 executed 135 review_watch tests: all passed. make check-ci-fast under umask 022 passed all 43 gates. git diff --check passed; working tree clean. Five task files relative to origin/main: .aida/config.toml, aida-cli-lib/src/review_watch.rs, aida-cli-lib/src/tests/task_1993_review_watch_tests.rs, aida-cli-lib/src/tests/golden/cli_help_snapshot.txt, docs/cli/06-roles-sessions.md. Host follow-up: existing task commit lacks the requested Help-Golden: updated trailer; add it during host publication preparation. No commit, push, PR creation, review recording or queue completion performed in this turn.'
-  created_at: 2026-11-08T09:12:04.501346794Z
-  modified_at: 2026-11-08T09:12:04.501346794Z
+  created_at: 2026-11-08 09:12:04.501346+00:00
+  modified_at: 2026-11-08 09:12:04.501346+00:00
   session_id: 01a1ba65d356
   harness_version: codex-cli 0.167.0
 - id: 01a1ba79-4f30-7a00-8560-b8a54fa0904b
   author: joe
   content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: Concurrency change itself meets TASK-3472, but the new config.toml read is not inventoried in scripts/config-trust.toml, so the BUG-1723 trust guard will fail; PR CI still pending at review time.. No triage reason was given.'
-  created_at: 2026-11-08T09:24:34.736437906Z
-  modified_at: 2026-11-08T09:24:34.736437906Z
+  created_at: 2026-11-08 09:24:34.736437+00:00
+  modified_at: 2026-11-08 09:24:34.736437+00:00
   session_id: 01a1b8be-8170-7fb2-89ab-ecb4c6eee98c
   harness_version: 2.1.319 (Claude Code)
 - id: 01a1ba79-581b-7d20-a1b1-7c97e03ae57a
   author: joe
-  content: |-
-    REVIEW FINDINGS TO ADDRESS (TASK-3472):
+  content: 'REVIEW FINDINGS TO ADDRESS (TASK-3472):
+
     Verdict: CHANGES REQUESTED
+
     Reviewed commit: 4a688a8796cf
+
     Recorded: 2026-11-08T09:09:39.510167096+00:00
+
     Findings:
+
     1. aida-cli-lib/src/review_watch.rs:2188 adds a new production read of ".aida/config.toml", but scripts/config-trust.toml has no [readers."aida-cli-lib/src/review_watch.rs"] entry. The detector in aida-cli-lib/src/tests/bug_1723_config_trust_tests.rs (is_config_toml_site matches `config.toml"`) counts this site, so every_config_toml_site_is_inventoried_and_every_worktree_key_is_policy will fail. Found by reading the guard; not executed (no cargo under review-watch policy), and PR CI was still pending. Fix: add the readers entry with channels=["worktree"], sites=1, or reuse the existing read in review_watch_ready.rs:388 and keep that one site.
+
     2. scripts/config-trust.toml [keys.worktree.review_watch] (line ~652) lists only required_checks. The new branch-local key max_concurrent is unclassified, contrary to the BUG-1723 doctrine that every key parsed from the worktree copy is classified. Add max_concurrent = "policy" with a one-line rationale (bounds reviewer count, launches nothing).
+
     3. TASK-3472 CHANGE calls for a Help-Golden trailer; commit 317e7493a87 has none, although the implementer handoff comment says the host commit should include "Help-Golden: updated". Include the trailer on the rework commit.
-    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
-  created_at: 2026-11-08T09:24:37.019719834Z
-  modified_at: 2026-11-08T09:24:37.019719834Z
+
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.'
+  created_at: 2026-11-08 09:24:37.019719+00:00
+  modified_at: 2026-11-08 09:24:37.019719+00:00
   session_id: 01a1b8be-8170-7fb2-89ab-ecb4c6eee98c
   harness_version: 2.1.319 (Claude Code)
 - id: 01a1ba80-c649-7883-8ed6-c870a9e76100
   author: dirtlab
   content: 'Rework addressed reviewer findings 1 and 2 in scripts/config-trust.toml: inventoried review_watch.rs as one worktree config reader and classified review_watch.max_concurrent as policy with rationale. Lane job j20261108T092703203-2-0 executed all 10 config trust tests successfully, including every_config_toml_site_is_inventoried_and_every_worktree_key_is_policy; j20261108T092715504-2-0 executed all 135 review_watch tests successfully. git diff --check passed. make check-ci-fast stopped at its first gate (Check aida-cli without default features): direct Cargo target writes were refused by the sandbox; host must rerun it. Native handoff: scripts/config-trust.toml remains uncommitted; publication subject recorded. Finding 3 requires the HOST commit body to contain Help-Golden: updated; native declaration supports only a subject line, and this seat is forbidden to commit. No commit, push, PR creation, review record or queue completion performed.'
-  created_at: 2026-11-08T09:32:43.977586745Z
-  modified_at: 2026-11-08T09:32:43.977586745Z
+  created_at: 2026-11-08 09:32:43.977586+00:00
+  modified_at: 2026-11-08 09:32:43.977586+00:00
   session_id: 01a1ba7afbcf
   harness_version: codex-cli 0.167.0
 history:
 - id: 01a1ba23-190f-7443-b904-ef1070197546
   author: joe
-  timestamp: 2026-11-08T07:50:24.783634742Z
+  timestamp: 2026-11-08 07:50:24.783634+00:00
   session_id: 01a1b9af-8230-75d2-82f8-667491cc010a
   harness_version: 2.1.319 (Claude Code)
   changes:
@@ -74,14 +82,14 @@ history:
     new_value: Approved
 - id: 01a1ba25-25b8-70d1-b3ab-ce5df30b2405
   author: aida-session-start
-  timestamp: 2026-11-08T07:52:39.096287836Z
+  timestamp: 2026-11-08 07:52:39.096287+00:00
   changes:
   - field_name: status
     old_value: Approved
     new_value: InProgress
 - id: 01a1ba64-a458-7142-bfee-cfec1de92e6e
   author: joe
-  timestamp: 2026-11-08T09:02:00.280365520Z
+  timestamp: 2026-11-08 09:02:00.280365+00:00
   session_id: 01a1b8be-8170-7fb2-89ab-ecb4c6eee98c
   harness_version: 2.1.319 (Claude Code)
   changes:
@@ -90,14 +98,14 @@ history:
     new_value: Approved
 - id: 01a1ba65-d9fa-7ea2-8a65-cb0fd29ad0f8
   author: aida-session-start
-  timestamp: 2026-11-08T09:03:19.546991688Z
+  timestamp: 2026-11-08 09:03:19.546991+00:00
   changes:
   - field_name: status
     old_value: Approved
     new_value: InProgress
 - id: 01a1ba6b-a6b9-7630-80cc-5063444ab28b
   author: aida-orchestrator
-  timestamp: 2026-11-08T09:09:39.641666722Z
+  timestamp: 2026-11-08 09:09:39.641666+00:00
   session_id: 01a1ba69b8dd
   harness_version: 2.1.319 (Claude Code)
   changes:
@@ -106,7 +114,7 @@ history:
     new_value: NeedsAttention
 - id: 01a1ba79-4f30-7a00-8560-b89e9ea22e1e
   author: joe
-  timestamp: 2026-11-08T09:24:34.736422248Z
+  timestamp: 2026-11-08 09:24:34.736422+00:00
   session_id: 01a1b8be-8170-7fb2-89ab-ecb4c6eee98c
   harness_version: 2.1.319 (Claude Code)
   changes:
@@ -115,21 +123,28 @@ history:
     new_value: Approved
 - id: 01a1ba7b-01df-7b22-b8ad-1e9718d04408
   author: aida-session-start
-  timestamp: 2026-11-08T09:26:26.015890463Z
+  timestamp: 2026-11-08 09:26:26.015890+00:00
   changes:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a1bb2d-6ffd-7150-8812-47d205dfc4cb
+  author: aida-auto-bump
+  timestamp: 2026-11-08 12:41:19.613415+00:00
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Completed
 - id: 01a1bb33-f115-7d22-820c-0a13b7a0239b
   author: aida-auto-bump
-  timestamp: 2026-11-08T12:48:25.877028347Z
+  timestamp: 2026-11-08 12:48:25.877028+00:00
   changes:
   - field_name: status
     old_value: InProgress
     new_value: Completed
 processing_record:
 - id: 01a1bb33-f120-71a0-8531-4f17d5f90490
-  timestamp: 2026-11-08T12:48:25.888710261Z
+  timestamp: 2026-11-08 12:48:25.888710+00:00
   agent: aida
   commit_sha: 5eb4757b6f1d8664f07343b0d5f5d6edfe76c584
   summary: Completed via merge 5eb4757b
@@ -144,5 +159,5 @@ filed_at:
   harness_version: 2.1.319 (Claude Code)
 implementation_info:
   implemented: false
-  completed_at: 2026-11-08T12:48:25.877020846Z
+  completed_at: 2026-11-08 12:48:25.877020+00:00
   completion_sha: 5eb4757b6f1d8664f07343b0d5f5d6edfe76c584
