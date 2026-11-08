@@ -777,6 +777,16 @@ pub(crate) fn collect_doctor_findings_at(
         }
     };
 
+    // trace:STORY-2630 | ai:codex
+    if filter
+        .as_deref()
+        .is_none_or(|category| category == crate::codegraph::CATEGORY)
+    {
+        for finding in crate::codegraph::scan(project_root) {
+            push(finding);
+        }
+    }
+
     // A parent edge is canonical; parent:* tags are a denormalized query aid.
     // Surface either direction of drift without touching the graph.
     // trace:BUG-1252 | ai:codex
@@ -1827,6 +1837,8 @@ pub(crate) static DOCTOR_CATEGORY_ALIASES: &[(&[&str], &str)] = &[
     ),
     // trace:TASK-2347 | ai:codex
     (&["codex-mail-wake"], "codex-mail-wake"),
+    // trace:STORY-2630 | ai:codex
+    (&["codegraph", "code-graph"], "codegraph"),
     // STORY-HOME-128: unread requests/handoffs older than the threshold
     // addressed to a live agent or a role it holds. trace:STORY-HOME-128 | ai:claude
     (
