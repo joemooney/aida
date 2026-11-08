@@ -15,12 +15,20 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-08T03:09:42.520017343Z
-modified_at: 2026-11-08T06:06:29.324065044Z
+modified_at: 2026-11-08T06:17:25.896548163Z
 req_type: Bug
 tags:
 - area:lanes
 - area:publish
 - vendor:codex
+comments:
+- id: 01a1b9cd-f888-7910-afe1-a516ca50b4f3
+  author: dirtlab
+  content: Implemented optional --commit-body-file for native -m declarations and host --from-seat --commit-pending. Declarations retain a backward-compatible optional body; host Refs downgrade changes only the subject; host Git uses --cleanup=verbatim. Added declaration/host-commit help-golden regression and extended CLI/body/hook tests; updated pickup templates and CLI docs. Initial BUG-2493 regression passed (1 executed test); full publication suite and help snapshot regeneration are running via lane jobs. Edits remain uncommitted for host publication.
+  created_at: 2026-11-08T06:17:25.896548163Z
+  modified_at: 2026-11-08T06:17:25.896548163Z
+  session_id: 01a1b9c37009
+  harness_version: codex-cli 0.167.0
 history:
 - id: 01a1b9c3-7cea-7270-b22c-10e229024e5a
   author: aida-session-start
