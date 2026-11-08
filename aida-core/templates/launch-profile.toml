@@ -1,0 +1,8 @@
+# trace:STORY-1486 | ai:codex
+version = 1
+policy = "declared"
+writable = ["project", "git-dir", "git-common-dir", "project-state", "store", "cache", "build"]
+read_only = ["aida-checkout-unless-same-repository"]
+executables = ["aida-resolved", "aida-checkout/target/debug/aida", "aida-checkout/target/release/aida"]
+git_default = "development-write-guest-read-only"
+approvals = "preserve"

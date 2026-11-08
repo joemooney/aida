@@ -21,6 +21,7 @@ mod codex_md;
 pub mod codex_prompts;
 mod hooks;
 pub mod inventory;
+pub mod launch_profile;
 mod managed_merge;
 pub mod mcp_translate;
 pub mod refresh;
@@ -1377,6 +1378,23 @@ aida show <SPEC-ID>
         let mut new_dirs = HashSet::new();
         let mut modified_files = Vec::new();
         let mut upgradeable_files = Vec::new();
+
+        // A declaration only: never translated into vendor approval exemptions.
+        // trace:STORY-1486 | ai:codex
+        let path = PathBuf::from(launch_profile::PROFILE_PATH);
+        let artifact = self.create_artifact(
+            path.clone(),
+            launch_profile::RECIPE.to_string(),
+            "Portable agent launch root and Git policy declaration".to_string(),
+            false,
+        );
+        if artifact.exists {
+            overwrites.push(path);
+        } else {
+            new_files.push(path);
+        }
+        new_dirs.insert(PathBuf::from(".aida"));
+        artifacts.push(artifact);
 
         // README.md - Seed-class project starter. It is intentionally plain
         // markdown with no AIDA header, like CLAUDE.md/AGENTS.md.

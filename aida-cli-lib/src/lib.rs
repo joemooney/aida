@@ -52,6 +52,7 @@ mod auto_complete;
 mod auto_complete_telemetry;
 mod autonomy_cmd;
 mod autopilot;
+mod launch_permission_profile;
 // trace:TASK-1018 | ai:claude — durable execution audit + one-command reversal.
 mod autopilot_audit;
 mod autopilot_intake;

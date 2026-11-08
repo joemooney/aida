@@ -919,6 +919,10 @@ pub enum AgentCommand {
     // `aida agent new` opens an arrow-key agent-type picker instead of
     // erroring to clap help (mirrors `aida human`/`aida solo`).
     New {
+        /// Declare Git read-only policy for this launch (not enforced by current adapters).
+        // trace:STORY-1486 | ai:codex
+        #[clap(long, global = true)]
+        git_read_only: bool,
         /// Role for a launch using the configured default vendor.
         #[clap(long)]
         role: Option<String>,

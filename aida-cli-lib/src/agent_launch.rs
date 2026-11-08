@@ -347,6 +347,7 @@ pub(crate) fn handle_agent_command(cmd: &AgentCommand) -> Result<()> {
             role,
             spec,
             delegate_seats,
+            git_read_only,
         } => {
             let mut resolved;
             let command = if let Some(command) = command {
@@ -396,6 +397,22 @@ pub(crate) fn handle_agent_command(cmd: &AgentCommand) -> Result<()> {
                 }
                 &resolved
             };
+            // Resolve this declaration independently of approval posture. It grants no authority.
+            // trace:STORY-1486 | ai:codex
+            let (AgentNewCommand::Claude { role, cwd, .. }
+            | AgentNewCommand::Codex { role, cwd, .. }
+            | AgentNewCommand::Antigravity { role, cwd, .. }) = command;
+            let root = child_role_project_root(cwd.as_deref())?;
+            crate::launch_permission_profile::validate_recipe(&root)?;
+            let seat = crate::gate::seat_authority::current_seat(&root);
+            print!(
+                "{}",
+                crate::launch_permission_profile::git_policy(
+                    role.as_deref(),
+                    seat.as_deref(),
+                    *git_read_only
+                )
+            );
             dispatch_agent_new(command)
         }
         AgentCommand::Register {
@@ -6182,6 +6199,17 @@ pub(crate) fn render_agent_launch_noexec(
     ));
     if aida.stale {
         out.push_str("aida_build_stale: alternate build is newer than selected build\n");
+    }
+    // trace:STORY-1486 | ai:codex
+    if plan
+        .project_root
+        .join(aida_core::scaffolding::launch_profile::PROFILE_PATH)
+        .exists()
+    {
+        out.push_str(&crate::launch_permission_profile::render_roots(
+            &plan.project_root,
+            &aida.path,
+        )?);
     }
     out.push_str("permission_posture:\n");
     let confirm = bypass_confirm::load(&plan.project_root);
