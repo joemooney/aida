@@ -652,12 +652,14 @@ pub(crate) fn bound_facts(handle: &str, vendor: &str) -> crate::MailIdentityFact
     use aida_core::mailbox_identity::{IdentityEnv, PeopleCatalogView};
     let dir = tempfile::tempdir().unwrap();
     let row = dir.path().join("test-row.toml");
+    let captured = aida_core::proc_identity::ProcIdentity::capture(std::process::id()).unwrap();
     std::fs::write(
         &row,
         format!(
-            "id = \"test-row\"\nagent_type = \"{vendor}\"\npid = {}\nname = \"{handle}\"\npid_start = \"{}\"\n",
+            "id = \"test-row\"\nagent_type = \"{vendor}\"\npid = {}\nname = \"{handle}\"\npid_start = \"{}\"\npid_namespace = {}\n",
             std::process::id(),
-            aida_core::liveness::process_start_identity(std::process::id()).unwrap_or_default()
+            captured.legacy().start,
+            captured.pidns_inode
         ),
     )
     .unwrap();
@@ -678,12 +680,14 @@ pub(crate) fn bound_facts_with_recipient(
     use aida_core::mailbox_identity::{IdentityEnv, PeopleCatalogView};
     let dir = tempfile::tempdir().unwrap();
     let row = dir.path().join("test-row.toml");
+    let captured = aida_core::proc_identity::ProcIdentity::capture(std::process::id()).unwrap();
     std::fs::write(
         &row,
         format!(
-            "id = \"test-row\"\nagent_type = \"{vendor}\"\npid = {}\nname = \"{handle}\"\npid_start = \"{}\"\n",
+            "id = \"test-row\"\nagent_type = \"{vendor}\"\npid = {}\nname = \"{handle}\"\npid_start = \"{}\"\npid_namespace = {}\n",
             std::process::id(),
-            aida_core::liveness::process_start_identity(std::process::id()).unwrap_or_default()
+            captured.legacy().start,
+            captured.pidns_inode
         ),
     )
     .unwrap();
