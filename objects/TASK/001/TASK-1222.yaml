@@ -28,7 +28,7 @@ priority: Low
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-09-13T22:07:45.944235Z
-modified_at: 2026-11-08T19:58:13.399261777Z
+modified_at: 2026-11-08T20:05:18.400842269Z
 req_type: Task
 tags:
 - cleanup
@@ -564,6 +564,13 @@ comments:
   modified_at: 2026-11-08T19:51:26.922650919Z
   session_id: 01a1bc93-77a0-7740-8b03-df4e3e8d1df5
   harness_version: 2.1.319 (Claude Code)
+- id: 01a1bcc3-e9c0-7671-b147-e04c6105bac4
+  author: dirtlab
+  content: 'Native rework handoff: addressed latest review findings 2 and 3 in aida-cli-lib/src/worktree_lifecycle_gc.rs. Linked checkout branch reads now use full symbolic refs and strip refs/heads/, including the final teardown recheck. Added a fixture proving branch/tag collisions retain correct identity, delete only the intended branch while preserving the tag, and protect a linked main checkout. Scheduled scans now take the 60-second budget even when a manual schedule tick inherits a terminal; all autonomous/scheduled combinations are covered. Final lane job j20261108T200313815-2-0 executed 25 TASK-1222 tests: 25 passed, exit 0. Initial job executed 24 passed/1 failed because the new protected-main fixture hit the earlier primary-checkout protection; corrected fixture and rerun passed. rustfmt check, git diff --check and scripts/check-store-writers.py pass (3393 sinks, 293 mappings). codegraph unavailable; doctor confirms missing PATH tool. Latest observed CI run 42514964555 at 61023b1cda49 is in_progress, not terminal. Finding 1 remains a CI wait; preserve existing supervised merge hold and do not cancel CI with a push. No publication authority or clearance requested/granted. One source file changed, edits uncommitted; no commit, push, PR creation, queue completion, review record, ship or host cleanup performed. Host must resolve CI/review wait and existing hold before publication/completion.'
+  created_at: 2026-11-08T20:05:18.400842269Z
+  modified_at: 2026-11-08T20:05:18.400842269Z
+  session_id: 01a1bcbd182a
+  harness_version: codex-cli 0.167.0
 history:
 - id: 01a1b7cd-7751-7262-8ad1-f0f9d2ef6d4d
   author: joe
