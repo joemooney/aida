@@ -17,7 +17,7 @@ priority: Low
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-08T02:58:18.689963065Z
-modified_at: 2026-11-08T08:16:55.067148039Z
+modified_at: 2026-11-08T08:26:20.658325964Z
 req_type: Story
 tags:
 - area:handoff
@@ -122,6 +122,30 @@ comments:
   modified_at: 2026-11-08T08:15:44.823287816Z
   session_id: 01a1b8be-8170-7fb2-89ab-ecb4c6eee98c
   harness_version: 2.1.319 (Claude Code)
+- id: 01a1ba43-fe72-7102-ae39-d77792d0f205
+  author: dirtlab
+  content: |
+    STORY-2662 rework implements the six findings from review of 410b560d5a92. Claude only; Codex remains deferred under the advisor ruling. Edits are uncommitted for the native host publisher.
+
+    Changes:
+    - aida-core/templates/hooks/aida-precompact-handoff.sh: branch-scoped read-only gh lookup (explicit cap and saturation handling), 3-second PR/verdict caps, 6.5-second findings cap, 14-second total with reserved write time, optional-tool failure retained as unknown, and unresolved branch spec findings labelled unknown.
+    - aida-cli-lib/src/session_misc.rs and seat_rotation.rs: key snapshots on canonical Git worktree root plus role; stamp ownership in existing diagnostic log; prune recognized snapshot files only when their recorded worktree is verifiably missing. Legacy/unreadable/unrecognized slots remain for safe manual recovery.
+    - aida-cli/tests/story_2662_precompact_handoff.rs: real CLI coverage for nested cwd recovery, actual sibling-worktree isolation and removed-worktree pruning.
+    - aida-cli-lib/src/tests/agent_rotation_tests.rs: update writer fixtures for optional snapshot ownership metadata.
+    - tests/test_precompact_handoff_hook.py: combined realistic 1.66-second verdict / 1.97-second PR / 5.4-second findings latency, saturated PR lookup, unresolved canonical branch pointer and missing optional executable fixtures.
+    - scripts/check-store-writers.py, scripts/store-writers.toml: inventory pruning alongside snapshot writes; existing host-writer authority blockers remain unchanged.
+    - scripts/ci-gate-tiers.toml: restore the BUG-2014 comment to its grant-expiry gate.
+    - OVERVIEW.md: update snapshot identity, retention and timing behavior.
+
+    Validation passed: 20 hook fixtures; 42 writer-inventory fixtures; 7 executable-fixture tests; real CLI round-trip (1 executed test); writer audit; all 81 CI Build gates classified; environment ledger zero additions; trace headers; rustfmt and git diff --check. Three live read-only branch PR probes found PR-3669 in 0.59-0.61s against the 3s budget.
+
+    Validation limitation: make check-templates passed the hook symlink checks, then its nested check-agent-skills invoked Cargo directly and failed on a read-only debug target. No full fast-gate aggregate was run. Rust verification uses the lane runner.
+
+    Lane runner rotation regression also passed: agent_rotation::tests::compact_snapshot_does_not_request_rotation (1 executed test). No implementation blockers remain. Host owns commit, publication, review and queue completion; this seat performs none of those operations.
+  created_at: 2026-11-08T08:26:20.658325964Z
+  modified_at: 2026-11-08T08:26:20.658325964Z
+  session_id: 01a1ba3b50e9
+  harness_version: codex-cli 0.167.0
 history:
 - id: 01a1b9c5-3252-7530-8b0b-bbe2c3ac5581
   author: joe
