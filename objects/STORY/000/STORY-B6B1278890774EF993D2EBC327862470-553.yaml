@@ -8,7 +8,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-07T15:34:33.363448208Z
-modified_at: 2026-11-08T07:16:50.506213594Z
+modified_at: 2026-11-08T07:16:56.775374086Z
 req_type: Story
 comments:
 - id: 01a1b6a6-52e1-70a0-a9c1-d32888979ca5
@@ -384,6 +384,27 @@ comments:
   content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: Refs slice for AC2+AC5 (host query proxy). AC1 on main (prior slices); AC2 unverified (no seat-grant evidence; contained posture not routed); AC3 not-applicable (on main); AC4 verified by codegraph::tests::{proxy_reports_source_age_and_rejects_stale_or_invalid_heartbeats, doctor_proxy_round_trip_and_stalled_peer_are_bounded} pending CI; AC5 unverified (no live seat evidence). Blocking: route_queries prepends a seat-controlled directory to the host-launched Codex PATH. CI pending at review time.. It was punted on: blocked-dependency: Host query proxy implementation is complete and uncommitted; final-source Rust codegraph suite passed 12 tests, Python proxy suite passed 11, and writer inventory fixtures passed 42. AC2 read-only index access is verified in this native seat: header read succeeds and O_RDWR is denied with EROFS. Completing AC5 still requires host deployment of a frozen candidate proxy under /home/joe/ai/aida/.codegraph/proxy-state/bin, starting its user service, and a correct non-empty codegraph callers query plus candidate aida doctor --lane-host output from a contained Codex seat. Those host paths are read-only here, so this native seat cannot perform deployment. Per the manual-gate instruction this punt is a publication veto; the recorded Refs declaration does not bypass it. Concrete setup, changed files, tests and PR-body draft are in this seat .aida/story-2630-handoff.md and .aida/story-2630-pr-body.md; scripts/codegraph/README.md contains host setup and acceptance commands. Do not widen the seat index write grant or mark the story complete without live evidence.. No triage reason was given.'
   created_at: 2026-11-08T07:16:50.506209889Z
   modified_at: 2026-11-08T07:16:50.506209889Z
+  session_id: 01a1b8be-8170-7fb2-89ab-ecb4c6eee98c
+  harness_version: 2.1.319 (Claude Code)
+- id: 01a1ba04-74d5-7292-b375-2b754c7c50ee
+  author: joe
+  content: |-
+    REVIEW FINDINGS TO ADDRESS (PR #3662):
+    Verdict: CHANGES REQUESTED
+    Reviewed commit: 5bdfc2b97ed1
+    Recorded: 2026-11-08T04:54:58.218451234+00:00
+    Review comment: https://github.com/joemooney/aida/pull/3662#issuecomment-6717458603
+    Findings:
+    1. BLOCKING (containment, Probe 5): aida-cli-lib/src/codegraph.rs:17-44 route_queries runs host-side in VendorProfile::finalize (launch/profile.rs:133) before the Codex child spawns. It canonicalizes <seat cwd>/.codegraph, which is a seat-writable runtime symlink, and accepts ANY target that contains lane-proxy.json and proxy-state/bin/codegraph. It then prepends that whole bin directory to the child PATH. A seat can point .codegraph at ./x containing x/lane-proxy.json, x/proxy-state/bin/codegraph and x/proxy-state/bin/aida. The next native Codex launch in that seat resolves bare-name commands from x first; Codex's MCP server is configured as command = "aida" (codex_md.rs:734), so the host spawns seat-authored code outside the sandbox. Fix: resolve the primary checkout host-side, require the canonical graph dir to equal <primary>/.codegraph and the bin dir to be outside every seat write root (and owned by the user, not group/world-writable), or prepend only a fixed host path. Add a refusal test for a seat-redirected .codegraph; today only the happy path is tested (query_routing_preserves_projected_path_without_new_write_grants).
+    2. MAJOR (AC2/AC5 path): route_queries is called only from VendorProfile::finalize, and the only production caller of finalize is finalize_codex. prepare_launch refuses the aida containment posture (refuse_unwired_aida_posture), so aida-contained Codex launches go through containment::launch and are never routed. Claude and Agy lanes are never routed either. The README tells the operator to 'launch a new contained Codex seat' for AC5 and describes routing by 'the shared launch finalizer', but on that path the seat gets no proxy client on PATH. Either route the containment::launch PATH projection (containment/filesystem.rs PATH) and other vendors too, or correct the docs to the native-posture Codex scope. Add a test for whichever path is claimed.
+    3. MAJOR (process, repeat of PR-3632 finding 2 and the 2026-11-07 20:46 ruling): the PR body is only the ship boilerplate. It must state the status of AC1-AC5 on origin/main and paste the AC5 live-seat command and output ('codegraph callers primary_index_link --json' plus 'aida doctor --lane-host --json'), or say explicitly that this is a Refs slice with deployment and AC5 evidence deferred, and name who completes them.
+    4. MINOR (false unreachable): scripts/codegraph/codegraph serve handles one connection at a time and runs refresh(), a backup of up to 15 s, inside the accept loop. Queries can hold it for up to about 17 s. probe_proxy (codegraph.rs, 250 ms deadline) and assess_proxy therefore report 'unreachable' whenever any lane query or snapshot refresh is in flight. One idle peer also stalls every lane for 2 s per connection. Consider a longer probe deadline, a threaded accept loop, or answering status off the query path.
+    5. MINOR (docs rule): CLAUDE.md says per-change notes go in the PR body, not as prepended paragraphs in AGENTS.md/OVERVIEW.md. OVERVIEW.md:1-8 prepends status prose ('This requires host service deployment and a successful real-seat call before STORY-2630's final acceptance can be claimed'), and AGENTS.md:477 adds another paragraph. Keep one durable architecture sentence at most and move the acceptance-status text to the PR body or a spec comment.
+    6. MINOR (cleanup): serve() writes the descriptor through NamedTemporaryFile(delete=False) in primary/.codegraph about once a second. If json.dump or os.replace raises (e.g. ENOSPC), the tmp file leaks into the shared index directory and the exception kills the service. Wrap it so the temp file is unlinked on failure.
+    7. CI: all CI jobs except merge-hold-gate were still pending at 5bdfc2b97ed1 when reviewed; AC4 test evidence is unconfirmed until lib jobs are green.
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
+  created_at: 2026-11-08T07:16:56.661492671Z
+  modified_at: 2026-11-08T07:16:56.661492671Z
   session_id: 01a1b8be-8170-7fb2-89ab-ecb4c6eee98c
   harness_version: 2.1.319 (Claude Code)
 history:
