@@ -8,7 +8,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-08T00:02:55.282155934Z
-modified_at: 2026-11-08T14:27:27.911074421Z
+modified_at: 2026-11-08T14:33:16.218595441Z
 req_type: Bug
 relationships:
 - rel_type:
@@ -750,6 +750,12 @@ history:
   - field_name: status
     old_value: InProgress
     new_value: NeedsAttention
+- id: 01a1bb93-ed12-79d2-91e6-a1d52accba77
+  author: joe
+  timestamp: 2026-11-08T14:33:16.306709040Z
+  session_id: 01a1bb90af82
+  harness_version: 2.1.319 (Claude Code)
+  changes: []
 filed_at:
   code_sha: 2a7fe186bdcd718fa356e5e4d028a3b2ff13769d
   branch: main
@@ -764,3 +770,11 @@ attention_reason:
   detail: 'Latest review of b3b3a379f1c6 finding 1 explicitly requires advisor action: record the semantic merge-policy ruling and require maybe_sync_pull/burndown failed-pull fencing and delete/modify handling here, or file and link a follow-up. No ruling or linked split is recorded. CLAUDE.md requires advisor signoff for architecture changes. This round addresses findings 3 and 5 (merge-abort diagnostics and OVERVIEW cleanup); it does not supply advisor authority. Preserve existing merge hold and publication veto. Finding 2 requires host CI at the final head; finding 4 remains non-blocking.'
   raised_by: implementer
   raised_at: 2026-11-08T14:24:27.846835767Z
+failure_reason:
+  phase: reviewer
+  phase_index: 3
+  kind: verdict:request-changes
+  detail: AC1, AC3, AC4 and the marker/parse half of AC2 hold by source, and round-11 findings 3 and 5 are fixed. AC2's unmerged-path refusal is bypassed on the contained-session commit path; operator scope still has no advisor ruling or linked split; CI is queued at this head so no test pass is claimed.
+  recovery_hint: address the review findings, move BUG-2490 back to In Progress, and clear the PR hold only after approval
+  shelved_by: reviewer
+  shelved_at: 2026-11-08T14:33:16.218595441Z
