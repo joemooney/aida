@@ -8,7 +8,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-06T13:39:53.442026Z
-modified_at: 2026-11-08T21:20:12.373574285Z
+modified_at: 2026-11-08T21:20:20.164543464Z
 req_type: Task
 tags:
 - architecture
@@ -1339,6 +1339,26 @@ comments:
   content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: Head fixes the two carried minors and adds no new code defect, but zero-unrouted acceptance is unmet with no advisor ruling, CI is unfinished at this head, the merge hold is on, and the spec is NeedsAttention.. No triage reason was given.'
   created_at: 2026-11-08T21:20:12.373572202Z
   modified_at: 2026-11-08T21:20:12.373572202Z
+  session_id: 01a1bc93-77a0-7740-8b03-df4e3e8d1df5
+  harness_version: 2.1.319 (Claude Code)
+- id: 01a1bd08-95a9-7b91-8d76-e593fe1ae064
+  author: joe
+  content: |-
+    REVIEW FINDINGS TO ADDRESS (PR #3661):
+    Verdict: CHANGES REQUESTED
+    Reviewed commit: 6e5185cee284
+    Recorded: 2026-11-08T21:17:15.167121171+00:00
+    Review comment: https://github.com/joemooney/aida/pull/3661#issuecomment-6727247859
+    Findings:
+    1. BLOCKING, needs an advisor ruling rather than more code. AC1 'route every inventoried in-lane writer' (TASK-3223 comment 34: zero unrouted writers for the mediated profile): UNMET. python3 scripts/check-store-writers.py --profile mediated at 6e5185cee284 exits 1 with 3173 writers and 293 operations unresolved. mediated_blockers (scripts/check-store-writers.py) counts every operation row, so it cannot reach zero by construction, and the 4 mediated_route records clear nothing. Only comment add and title/description/priority edit route (aida-cli-lib/src/store_mutation_entry.rs translate_with_reader). The implementer punted this design fork again (comment 93) and no operation policy is on the spec. Advisor must authorize a staged partial with named follow-up owners or define which refusals count as reconciled. Further rework rounds cannot resolve this.
+    2. BLOCKING, same advisor ruling. AC2/AC3 shared-boundary read-only objects, metadata and cache with lane-private derived caches (ancestor grants, symlinks, primary launches, resume): UNVERIFIED in production. mediated_store_tests.rs mediated_profile_live_raw_create_append_rename_denied_and_private_cache_wr* and mediated_profile_pins_readonly_targets_and_fresh_private_cache cover a synthetic-identity fixture only, and resume has refusal coverage only (mediated_profile_resume_refuses_before_effects_in_primary_and_linked_layouts). selected_store_profile (aida-cli-lib/src/launch/contained.rs) correctly refuses mediated, so no production lane has this boundary. Durable Git/event publication is also outstanding (docs/internal/security/store-mutation-writers.md 'Remaining work').
+    3. BLOCKING until CI reports: run 42520865304 at 6e5185cee284 has only CI (gates) green; lib-1 is in progress and lib-0, cli-0, cli-1, rest and contracts are queued. Merge state is BLOCKED. Run 42516752069 at f5fb1bca6d8a was cancelled, so the last full pass cited in earlier rounds is 42507182557 at 114ee1f3865b, before the two latest code changes. The new regression repeated_text_edit_preserves_history_and_modified_timestamp has no CI result yet.
+    4. BLOCKING until cleared by advisor or operator: aida:merge-hold is active, merge-hold-gate (run 42520865364) failed at this head as designed, and the marker still cites f5fb1bca6d8a. The reviewer cannot clear it.
+    5. PROCESS, carried, needs advisor attention: TASK-3223 status is needs-attention and comment 93 says 'No commit, push, PR write or queue completion' and 'Do not publish over persisted NeedsAttention', yet 6e5185cee284 (13:34 -07:00) reached this PR afterwards. publication_veto (aida-cli-lib/src/ship_from_seat.rs) was previously found to read only signal and hold files, not persisted NeedsAttention. This is outside the PR diff. Confirm the publication was authorized and repair the veto.
+    6. COSMETIC, carried: the PR body still says 'comment_add and title/description spec_edit'; the branch also routes priority (aida-core/src/db/canonical_mutation.rs EditFields::parsed_priority, store_mutation_entry.rs edit arm). Update it before publication.
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
+  created_at: 2026-11-08T21:20:18.857529273Z
+  modified_at: 2026-11-08T21:20:18.857529273Z
   session_id: 01a1bc93-77a0-7740-8b03-df4e3e8d1df5
   harness_version: 2.1.319 (Claude Code)
 history:
