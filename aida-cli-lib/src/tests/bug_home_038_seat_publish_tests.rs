@@ -2865,7 +2865,7 @@ fn story_2640_fast_gate_native_publishes_exact_checked_tip_and_releases_review()
         crate::lane_fast_gate::marker(&fx.main, "native-gated"),
         "pass"
     );
-    assert!(!crate::lane_fast_gate::blocks_review(&fx.main, "native-gated", &tip).unwrap());
+    assert!(!crate::lane_fast_gate::blocks_review(&fx.main, "native-gated").unwrap());
     assert!(forge.opened.lock().unwrap().is_empty());
     crate::lane_fast_gate::native_rounds(
         &fx.main,
@@ -2890,14 +2890,13 @@ fn story_2640_fast_gate_native_publishes_exact_checked_tip_and_releases_review()
         );
         assert!(crate::lane_fast_gate::blocks_review(
             &fx.main,
-            "native-gated",
-            &tip
+            "native-gated"
         )?);
         Ok(())
     })
     .unwrap();
     drop(reservation);
-    assert!(!crate::lane_fast_gate::blocks_review(&fx.main, "native-gated", &tip).unwrap());
+    assert!(!crate::lane_fast_gate::blocks_review(&fx.main, "native-gated").unwrap());
     assert_eq!(
         crate::lane_fast_gate::result_line(&fx.main, "native-gated", "implementer: pr=77"),
         "implementer: pr=77 fast_gate=pass"
@@ -2988,7 +2987,7 @@ fn story_2640_fast_gate_real_lane_exit_paths_settle_reservations() {
             "{path} must reach the real reservation boundary: {error:?}"
         );
         assert!(
-            !crate::lane_fast_gate::blocks_review(&fx.main, branch, "operator-head").unwrap(),
+            !crate::lane_fast_gate::blocks_review(&fx.main, branch).unwrap(),
             "{path} left a permanent review reservation"
         );
     }

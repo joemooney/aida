@@ -1773,14 +1773,6 @@ pub(crate) fn tail(text: &str, n: usize) -> String {
     lines[start..].join("\n")
 }
 
-#[cfg(test)]
-#[path = "tests/bug_2383_lane_job_tests.rs"]
-mod tests;
-
-#[cfg(test)]
-#[path = "tests/bug_2434_lane_os_wrap_tests.rs"]
-mod bug_2434_tests;
-
 // trace:STORY-2640 | ai:codex
 pub(crate) fn fast_gate_job(job: &JobRequest) -> bool {
     job.argv == ["make", "check-ci-fast"]
@@ -1829,6 +1821,55 @@ fn run_seeded_fast_gate(lane: &LaneJobs, id: &str, job: JobRequest) {
         &seed,
     );
 }
+
+// trace:STORY-2640 | ai:codex
+fn fast_gate_home(seat: &Path) -> PathBuf {
+    seat.join(INBOX_RELATIVE).join("fast-gate-home")
+}
+
+fn fast_gate_namespaces(mut args: Vec<String>, seat: &Path) -> Vec<String> {
+    // This helper is only used for the exact two-argument make job. Create
+    // HOME after mounts, inside bubblewrap, so seat symlinks cannot induce a
+    // host-side mkdir outside the write boundary.
+    let command = args.len() - 2;
+    args.splice(
+        command..command,
+        ["--dir".into(), fast_gate_home(seat).display().to_string()],
+    );
+    args.splice(
+        0..0,
+        ["--unshare-net", "--unshare-ipc", "--unshare-pid"].map(String::from),
+    );
+    args
+}
+
+// A missing or overbroad lane binding must never make its own result writable.
+// trace:STORY-2640 | ai:codex
+fn check_fast_gate_results(lane: &LaneJobs) -> Result<()> {
+    let results = lane.results.canonicalize()?;
+    let mut writable = lane.sandbox_rw_paths(&lane.job_env(&JobRequest {
+        argv: vec!["make".into(), "check-ci-fast".into()],
+        env: BTreeMap::new(),
+    }));
+    writable.push(lane.seat.clone());
+    for path in writable {
+        if let Ok(path) = path.canonicalize() {
+            anyhow::ensure!(
+                !results.starts_with(path),
+                "fast gate results overlap a writable job path"
+            );
+        }
+    }
+    Ok(())
+}
+
+#[cfg(test)]
+#[path = "tests/bug_2383_lane_job_tests.rs"]
+mod tests;
+
+#[cfg(test)]
+#[path = "tests/bug_2434_lane_os_wrap_tests.rs"]
+mod bug_2434_tests;
 
 #[cfg(unix)]
 #[cfg(test)]
@@ -2051,45 +2092,4 @@ mod fast_gate_job_tests {
             "skipped(timeout)"
         );
     }
-}
-
-// trace:STORY-2640 | ai:codex
-fn fast_gate_home(seat: &Path) -> PathBuf {
-    seat.join(INBOX_RELATIVE).join("fast-gate-home")
-}
-
-fn fast_gate_namespaces(mut args: Vec<String>, seat: &Path) -> Vec<String> {
-    // This helper is only used for the exact two-argument make job. Create
-    // HOME after mounts, inside bubblewrap, so seat symlinks cannot induce a
-    // host-side mkdir outside the write boundary.
-    let command = args.len() - 2;
-    args.splice(
-        command..command,
-        ["--dir".into(), fast_gate_home(seat).display().to_string()],
-    );
-    args.splice(
-        0..0,
-        ["--unshare-net", "--unshare-ipc", "--unshare-pid"].map(String::from),
-    );
-    args
-}
-
-// A missing or overbroad lane binding must never make its own result writable.
-// trace:STORY-2640 | ai:codex
-fn check_fast_gate_results(lane: &LaneJobs) -> Result<()> {
-    let results = lane.results.canonicalize()?;
-    let mut writable = lane.sandbox_rw_paths(&lane.job_env(&JobRequest {
-        argv: vec!["make".into(), "check-ci-fast".into()],
-        env: BTreeMap::new(),
-    }));
-    writable.push(lane.seat.clone());
-    for path in writable {
-        if let Ok(path) = path.canonicalize() {
-            anyhow::ensure!(
-                !results.starts_with(path),
-                "fast gate results overlap a writable job path"
-            );
-        }
-    }
-    Ok(())
 }

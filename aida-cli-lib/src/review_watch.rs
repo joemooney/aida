@@ -2501,7 +2501,7 @@ fn watch_change(
     let key = change.key();
     // trace:STORY-2640 | ai:codex — reserve before the seat can open its PR.
     if let Some(branch) = change.head_branch.as_deref() {
-        if crate::lane_fast_gate::blocks_review(root, branch, &change.head)? {
+        if crate::lane_fast_gate::blocks_review(root, branch)? {
             eprintln!("{key}: host fast gate or its single repair round is pending");
             return Ok(());
         }

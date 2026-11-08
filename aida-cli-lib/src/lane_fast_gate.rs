@@ -169,7 +169,7 @@ pub(crate) fn result_line(main: &Path, branch: &str, line: &str) -> String {
 }
 
 /// An absent receipt is an ordinary non-lane PR. Corrupt state fails closed.
-pub(crate) fn blocks_review(main: &Path, branch: &str, _head: &str) -> Result<bool> {
+pub(crate) fn blocks_review(main: &Path, branch: &str) -> Result<bool> {
     let _lock = receipt_lock(main, branch)?;
     let Some(r) = read(main, branch)? else {
         return Ok(false);
@@ -356,6 +356,8 @@ pub(crate) fn gate_result(result: Option<(i32, String)>) -> (String, String) {
         None => ("skipped(no-sandbox)".into(), String::new()),
         Some((0, output)) => ("pass".into(), output),
         Some((crate::lane_job::TIMEOUT_RC, output)) => ("skipped(timeout)".into(), output),
+        Some((crate::lane_job::REFUSED_RC, output)) => ("skipped(refused)".into(), output),
+        Some((crate::lane_job::STOPPED_RC, output)) => ("skipped(stopped)".into(), output),
         Some((_, output)) => ("fail".into(), output),
     }
 }
@@ -377,9 +379,7 @@ pub(crate) fn native(
         Err(error) if error.is::<NativeCommitError>() => {
             publication_result(main, branch, Err(error))
         }
-        Err(error) => Ok(native_error(main, branch, lease, &error, || {
-            snapshot(main, tree, branch)
-        })),
+        Err(error) => native_error(main, branch, lease, &error, || snapshot(main, tree, branch)),
     }
 }
 
@@ -392,7 +392,7 @@ fn native_error(
     lease: &str,
     error: &anyhow::Error,
     snapshot: impl FnOnce() -> Result<String>,
-) -> bool {
+) -> Result<bool> {
     infrastructure(main, branch, lease, error);
     let ready = (|| -> Result<()> {
         let head = snapshot()?;
@@ -401,7 +401,12 @@ fn native_error(
         r.native_ready = true;
         write(main, &r)
     })();
-    ready.is_ok()
+    publication_result(
+        main,
+        branch,
+        ready.context("native publication cannot recover a clean committed seat"),
+    )?;
+    Ok(true)
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -718,732 +723,6 @@ pub(crate) fn publication_ready(main: &Path, tree: &Path, branch: &str) -> Resul
     Ok(())
 }
 
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use crate::lane_job::{self, JobRequest};
-    use std::collections::BTreeMap;
-    use std::time::Duration;
-
-    // trace:STORY-2640 | ai:codex
-    #[test]
-    fn killed_host_releases_pending_review_hold_without_drop() {
-        let tmp = tempfile::tempdir().unwrap();
-        begin(tmp.path(), "lane").unwrap();
-        let mut child = std::process::Command::new("sleep")
-            .arg("5")
-            .spawn()
-            .unwrap();
-        let owner = aida_core::proc_identity::ProcIdentity::capture(child.id());
-        // Always reap the bounded child even when identity capture fails.
-        child.kill().unwrap();
-        child.wait().unwrap();
-        let mut r = read(tmp.path(), "lane").unwrap().unwrap();
-        r.owner = Some(owner.unwrap());
-        r.head = Some("published".into());
-        r.marker = "fail".into();
-        write(tmp.path(), &r).unwrap();
-        assert!(!blocks_review(tmp.path(), "lane", "published").unwrap());
-        assert_eq!(marker(tmp.path(), "lane"), "fail");
-        assert!(!read(tmp.path(), "lane").unwrap().unwrap().pending);
-    }
-
-    // trace:STORY-2640 | ai:codex
-    #[test]
-    fn expired_or_operator_released_receipt_cannot_wedge_review() {
-        let tmp = tempfile::tempdir().unwrap();
-        begin(tmp.path(), "lane").unwrap();
-        let mut r = read(tmp.path(), "lane").unwrap().unwrap();
-        r.reserved_at = Some(chrono::Utc::now() - chrono::Duration::hours(25));
-        write(tmp.path(), &r).unwrap();
-        assert!(!blocks_review(tmp.path(), "lane", "head").unwrap());
-        // Legacy receipts have neither timestamp nor owner: use file age.
-        std::fs::write(
-            path(tmp.path(), "lane"),
-            r#"{"branch":"lane","head":null,"marker":"fail","pending":true,"repair_used":false}"#,
-        )
-        .unwrap();
-        std::fs::File::options()
-            .write(true)
-            .open(path(tmp.path(), "lane"))
-            .unwrap()
-            .set_modified(std::time::SystemTime::now() - Duration::from_secs(25 * 3600))
-            .unwrap();
-        assert!(!blocks_review(tmp.path(), "lane", "head").unwrap());
-        begin(tmp.path(), "lane").unwrap();
-        assert!(blocks_review(tmp.path(), "lane", "head").unwrap());
-        release(tmp.path(), "lane").unwrap();
-        assert!(!blocks_review(tmp.path(), "lane", "head").unwrap());
-        assert!(!read(tmp.path(), "lane").unwrap().unwrap().native_ready);
-    }
-
-    // trace:STORY-2640 | ai:codex
-    #[test]
-    fn passing_gate_publication_failure_returns_error_and_preserves_pass() {
-        let tmp = tempfile::tempdir().unwrap();
-        let guard = reserve(tmp.path(), "lane").unwrap();
-        native_rounds(
-            tmp.path(),
-            "lane",
-            || Ok(Some(("head".into(), "pass".into(), String::new()))),
-            |_| panic!("green must not repair"),
-        )
-        .unwrap();
-        let result: Result<()> =
-            publication_result(tmp.path(), "lane", Err(anyhow::anyhow!("push refused")));
-        assert!(result.unwrap_err().to_string().contains("push refused"));
-        assert_eq!(marker(tmp.path(), "lane"), "pass");
-        assert!(result_line(tmp.path(), "lane", "publication failed:").contains("fast_gate=pass"));
-        infrastructure(
-            tmp.path(),
-            "lane",
-            "lease",
-            &anyhow::anyhow!("unrelated error"),
-        );
-        assert_eq!(marker(tmp.path(), "lane"), "pass");
-        assert!(!blocks_review(tmp.path(), "lane", "head").unwrap());
-        drop(guard);
-    }
-
-    // trace:STORY-2640 | ai:codex
-    #[test]
-    fn native_commit_failure_is_a_publication_error() {
-        let tmp = tempfile::tempdir().unwrap();
-        begin(tmp.path(), "lane").unwrap();
-        let error = crate::ship_from_seat::with_post_exit_step(
-            Box::new(|_, _, _, _, _| {
-                crate::ship_from_seat::PostExitCommit::Failed("commit refused".into())
-            }),
-            || commit(tmp.path(), tmp.path(), "STORY-2640", "lease", true),
-        )
-        .unwrap_err();
-        assert!(error.is::<NativeCommitError>());
-        let result: Result<bool> = publication_result(tmp.path(), "lane", Err(error));
-        assert!(result
-            .unwrap_err()
-            .to_string()
-            .contains("host post-exit commit failed"));
-        assert!(!blocks_review(tmp.path(), "lane", "head").unwrap());
-        if crate::session::bwrap_availability() == crate::session::BwrapAvailability::Ok {
-            begin(tmp.path(), "lane").unwrap();
-            let result = crate::ship_from_seat::with_post_exit_step(
-                Box::new(|_, _, _, _, _| {
-                    crate::ship_from_seat::PostExitCommit::Failed("commit refused".into())
-                }),
-                || {
-                    native(
-                        tmp.path(),
-                        tmp.path(),
-                        "STORY-2640",
-                        "lease",
-                        "lane",
-                        true,
-                        |_| panic!("commit failure must not start a repair"),
-                    )
-                },
-            );
-            assert!(result
-                .unwrap_err()
-                .to_string()
-                .contains("host post-exit commit failed"));
-            assert!(!blocks_review(tmp.path(), "lane", "head").unwrap());
-        }
-    }
-
-    // trace:STORY-2640 | ai:codex
-    #[test]
-    fn fast_gate_retry_timeout_preserves_red_in_both_modes() {
-        let tmp = tempfile::tempdir().unwrap();
-        begin(tmp.path(), "native").unwrap();
-        let mut round = 0;
-        native_rounds(
-            tmp.path(),
-            "native",
-            || {
-                round += 1;
-                Ok(Some((
-                    format!("head-{round}"),
-                    if round == 1 {
-                        "fail"
-                    } else {
-                        "skipped(timeout)"
-                    }
-                    .into(),
-                    String::new(),
-                )))
-            },
-            |_| Ok(()),
-        )
-        .unwrap();
-        assert_eq!(marker(tmp.path(), "native"), "fail");
-        begin(tmp.path(), "push").unwrap();
-        let mut r = read(tmp.path(), "push").unwrap().unwrap();
-        r.marker = "fail".into();
-        r.repair_used = true;
-        write(tmp.path(), &r).unwrap();
-        begin(tmp.path(), "push").unwrap();
-        pushed_round(
-            tmp.path(),
-            "push",
-            "retry",
-            "skipped(timeout)",
-            || Ok(()),
-            || panic!("no second repair"),
-        )
-        .unwrap();
-        assert_eq!(marker(tmp.path(), "push"), "fail");
-        assert_eq!(retry_marker("fail", "pass"), "pass");
-    }
-
-    // trace:STORY-2640 | ai:codex
-    #[test]
-    fn fast_gate_cleanup_serializes_with_new_reservation() {
-        let tmp = tempfile::tempdir().unwrap();
-        begin(tmp.path(), "lane").unwrap();
-        let lock = receipt_lock(tmp.path(), "lane").unwrap();
-        let main = tmp.path().to_path_buf();
-        let (tx, rx) = std::sync::mpsc::channel();
-        let child = std::thread::spawn(move || {
-            begin(&main, "lane").unwrap();
-            tx.send(()).unwrap();
-        });
-        assert!(rx
-            .recv_timeout(std::time::Duration::from_millis(50))
-            .is_err());
-        release_locked(tmp.path(), "lane").unwrap();
-        drop(lock);
-        child.join().unwrap();
-        assert!(blocks_review(tmp.path(), "lane", "head").unwrap());
-        assert!(
-            result_line(tmp.path(), "lane", "implementer: held").contains("skipped(lane-ended)")
-        );
-    }
-
-    // trace:STORY-2640 | ai:codex
-    #[test]
-    fn timeout_skips_without_consuming_the_repair_round() {
-        let tmp = tempfile::tempdir().unwrap();
-        begin(tmp.path(), "lane").unwrap();
-        native_rounds(
-            tmp.path(),
-            "lane",
-            || {
-                let (result, output) =
-                    gate_result(Some((lane_job::TIMEOUT_RC, "cold target timeout".into())));
-                Ok(Some(("head".into(), result, output)))
-            },
-            |_| panic!("timeout must not prompt for a source repair"),
-        )
-        .unwrap();
-        let r = read(tmp.path(), "lane").unwrap().unwrap();
-        assert_eq!(r.marker, "skipped(timeout)");
-        assert!(!r.repair_used);
-        assert!(r.native_ready);
-        begin(tmp.path(), "pushed").unwrap();
-        assert!(!pushed_round(
-            tmp.path(),
-            "pushed",
-            "head",
-            "skipped(timeout)",
-            || Ok(()),
-            || panic!("timeout must not queue a repair")
-        )
-        .unwrap());
-        assert!(!read(tmp.path(), "pushed").unwrap().unwrap().repair_used);
-        assert!(!blocks_review(tmp.path(), "pushed", "head").unwrap());
-    }
-
-    // trace:STORY-b6b1278890774ef993d2ebc327862470-563.ac433911 | ai:codex
-    // trace:STORY-b6b1278890774ef993d2ebc327862470-563.acb1c30b | ai:codex
-    #[test]
-    fn native_fail_then_fixed_round_binds_repaired_head() {
-        let tmp = tempfile::tempdir().unwrap();
-        let root = tmp.path();
-        begin(root, "lane").unwrap();
-        let mut attempts = 0;
-        let mut repairs = 0;
-        native_rounds(
-            root,
-            "lane",
-            || {
-                attempts += 1;
-                assert!(blocks_review(root, "lane", "old").unwrap());
-                Ok(Some(if attempts == 1 {
-                    (
-                        "old".into(),
-                        "fail".into(),
-                        "portability gate FAILED".into(),
-                    )
-                } else {
-                    ("fixed".into(), "pass".into(), String::new())
-                }))
-            },
-            |prompt| {
-                repairs += 1;
-                assert!(prompt.contains("portability gate FAILED"));
-                assert!(read(root, "lane")?.unwrap().repair_used);
-                Ok(())
-            },
-        )
-        .unwrap();
-        assert_eq!((attempts, repairs), (2, 1));
-        assert_eq!(marker(root, "lane"), "pass");
-        assert!(blocks_review(root, "lane", "fixed").unwrap());
-        published(root, "lane").unwrap();
-        assert!(!blocks_review(root, "lane", "fixed").unwrap());
-        assert!(!blocks_review(root, "lane", "later-merge-head").unwrap());
-    }
-
-    // trace:STORY-b6b1278890774ef993d2ebc327862470-563.acb1c30b | ai:codex
-    #[test]
-    fn native_persistent_failure_releases_for_publication_without_third_round() {
-        let tmp = tempfile::tempdir().unwrap();
-        let root = tmp.path();
-        begin(root, "lane").unwrap();
-        let mut repairs = 0;
-        for _ in 0..2 {
-            native_rounds(
-                root,
-                "lane",
-                || Ok(Some(("same".into(), "fail".into(), "gate red".into()))),
-                |_| {
-                    repairs += 1;
-                    Ok(())
-                },
-            )
-            .unwrap();
-            assert_eq!(marker(root, "lane"), "fail");
-            assert!(read(root, "lane").unwrap().unwrap().native_ready);
-        }
-        assert_eq!(repairs, 1);
-        published(root, "lane").unwrap();
-        assert!(!blocks_review(root, "lane", "later-operator-head").unwrap());
-        assert_eq!(marker(root, "lane"), "fail");
-    }
-
-    // trace:STORY-2640 | ai:codex
-    #[test]
-    fn fast_gate_native_errors_preserve_first_red() {
-        for fail_repair in [true, false] {
-            let tmp = tempfile::tempdir().unwrap();
-            begin(tmp.path(), "lane").unwrap();
-            let mut attempts = 0;
-            let error = native_rounds(
-                tmp.path(),
-                "lane",
-                || {
-                    attempts += 1;
-                    if attempts == 2 {
-                        anyhow::bail!("seat changed during fast gate");
-                    }
-                    Ok(Some(("old".into(), "fail".into(), "red".into())))
-                },
-                |_| {
-                    if fail_repair {
-                        anyhow::bail!("vendor spawn failed");
-                    }
-                    Ok(())
-                },
-            )
-            .unwrap_err();
-            assert!(native_error(tmp.path(), "lane", "lease", &error, || Ok(
-                "new".into()
-            )));
-            assert_eq!(marker(tmp.path(), "lane"), "fail");
-            assert_eq!(
-                std::fs::read_to_string(
-                    crate::lane_job::results_dir(tmp.path(), "lease").join("fast-gate-marker")
-                )
-                .unwrap(),
-                "fail"
-            );
-            assert!(read(tmp.path(), "lane").unwrap().unwrap().native_ready);
-            assert!(result_line(tmp.path(), "lane", "implementer:").contains("fast_gate=fail"));
-            finish_publication(tmp.path(), "lane", || anyhow::bail!("forge unavailable")).unwrap();
-            assert_eq!(marker(tmp.path(), "lane"), "fail");
-            assert!(!blocks_review(tmp.path(), "lane", "new").unwrap());
-        }
-    }
-
-    // trace:STORY-2640 | ai:codex
-    #[test]
-    fn fast_gate_self_published_settled_result_allows_later_head() {
-        let tmp = tempfile::tempdir().unwrap();
-        for result in ["pass", "fail"] {
-            begin(tmp.path(), result).unwrap();
-            // A red second round settles with its failure marker intact.
-            let mut receipt = read(tmp.path(), result).unwrap().unwrap();
-            receipt.repair_used = true;
-            write(tmp.path(), &receipt).unwrap();
-            assert!(!pushed_round(
-                tmp.path(),
-                result,
-                "published",
-                result,
-                || Ok(()),
-                || panic!("a settled round needs no repair"),
-            )
-            .unwrap());
-            assert!(!blocks_review(tmp.path(), result, "merge-from-main").unwrap());
-            assert_eq!(marker(tmp.path(), result), result);
-        }
-    }
-
-    // trace:STORY-2640 | ai:codex
-    #[test]
-    fn fast_gate_queued_repair_releases_when_removed_replaced_or_parked() {
-        use aida_core::db::DatabaseBackend as _;
-        let tmp = tempfile::tempdir().unwrap();
-        let backend =
-            crate::test_env::home_fixture_backend(&tmp.path().join(".aida-store")).unwrap();
-        // This fixture must satisfy allocation trust even with a shared-write
-        // launcher umask; never weaken the production reader for a test.
-        // trace:STORY-2640 | ai:codex
-        #[cfg(unix)]
-        {
-            use std::os::unix::fs::PermissionsExt;
-            let setting =
-                aida_core::allocation_authority::common_dir(&tmp.path().join(".aida-store"))
-                    .unwrap()
-                    .join(aida_core::allocation_authority::CONFIG_FILE);
-            std::fs::set_permissions(setting, std::fs::Permissions::from_mode(0o600)).unwrap();
-        }
-        std::fs::create_dir_all(tmp.path().join(".aida")).unwrap();
-        std::fs::write(
-            tmp.path().join(".aida/config.toml"),
-            "store_path = \".aida-store\"\n",
-        )
-        .unwrap();
-        let storage = crate::Storage::new(tmp.path().join(".aida-store"));
-        let mut req = aida_core::Requirement::new("Repair".into(), String::new());
-        req.status = aida_core::RequirementStatus::InProgress;
-        let req = backend.add_requirement(req).unwrap();
-        let entry = aida_core::QueueEntry {
-            user_id: "role:implementer".into(),
-            requirement_id: req.id,
-            position: 0,
-            added_by: "fast-gate".into(),
-            note: None,
-            added_at: chrono::Utc::now(),
-            for_role: Some("implementer".into()),
-            for_scope: None,
-            for_session: None,
-            added_by_machine: None,
-        };
-        begin(tmp.path(), "lane").unwrap();
-        pushed_round(
-            tmp.path(),
-            "lane",
-            "published",
-            "fail",
-            || Ok(()),
-            || {
-                storage.queue_add(entry.clone())?;
-                Ok(Some(entry.clone()))
-            },
-        )
-        .unwrap();
-        assert!(blocks_review(tmp.path(), "lane", "published").unwrap());
-        storage.queue_remove(&entry.user_id, &req.id).unwrap();
-        assert!(!blocks_review(tmp.path(), "lane", "published").unwrap());
-        let mut replacement = entry.clone();
-        replacement.added_at += chrono::Duration::seconds(1);
-        storage.queue_add(replacement).unwrap();
-        assert!(!blocks_review(tmp.path(), "lane", "published").unwrap());
-        storage.queue_remove(&entry.user_id, &req.id).unwrap();
-        storage.queue_add(entry).unwrap();
-        for (status, deferred) in [
-            (aida_core::RequirementStatus::Superseded, false),
-            (aida_core::RequirementStatus::NeedsAttention, false),
-            (aida_core::RequirementStatus::InProgress, true),
-        ] {
-            let mut store = backend.load().unwrap();
-            store.requirements[0].status = status;
-            store.requirements[0].deferred = deferred;
-            backend.save(&store).unwrap();
-            assert!(!blocks_review(tmp.path(), "lane", "published").unwrap());
-        }
-    }
-
-    #[test]
-    fn native_repair_veto_keeps_publication_and_review_pending() {
-        let tmp = tempfile::tempdir().unwrap();
-        begin(tmp.path(), "lane").unwrap();
-        let mut attempts = 0;
-        native_rounds(
-            tmp.path(),
-            "lane",
-            || {
-                attempts += 1;
-                Ok((attempts == 1).then(|| ("old".into(), "fail".into(), "failure".into())))
-            },
-            |_| Ok(()),
-        )
-        .unwrap();
-        assert!(blocks_review(tmp.path(), "lane", "old").unwrap());
-    }
-
-    // trace:STORY-b6b1278890774ef993d2ebc327862470-563.ac486725 | ai:codex
-    #[test]
-    fn exact_make_job_has_fixed_timeout_and_never_counts_as_cargo_tests() {
-        let mut job = JobRequest {
-            argv: vec!["make".into(), "check-ci-fast".into()],
-            env: BTreeMap::new(),
-        };
-        assert!(lane_job::validate(&job).is_ok());
-        assert_eq!(lane_job::timeout_for(&job, true), Duration::from_secs(300));
-        assert!(!lane_job::runs_tests(&job));
-        let tally = lane_job::Tally::default();
-        tally.record_exit(&job, "test result: ok. 1 passed; 0 failed;".as_bytes());
-        assert!(tally.untested());
-        job.env.insert("AIDA_CARGO_TIMEOUT".into(), "3600".into());
-        assert!(lane_job::validate(&job).is_err());
-        job.env.clear();
-        job.argv.push("SHELL=evil".into());
-        assert!(lane_job::validate(&job).is_err());
-    }
-
-    #[test]
-    fn host_receipt_is_required_only_for_lane_branches_and_corruption_refuses() {
-        let tmp = tempfile::tempdir().unwrap();
-        assert!(!blocks_review(tmp.path(), "ordinary", "head").unwrap());
-        begin(tmp.path(), "lane").unwrap();
-        assert!(blocks_review(tmp.path(), "lane", "head").unwrap());
-        std::fs::write(path(tmp.path(), "lane"), b"invalid").unwrap();
-        assert!(blocks_review(tmp.path(), "lane", "head").is_err());
-    }
-    // trace:STORY-b6b1278890774ef993d2ebc327862470-563.acb1c30b | ai:codex
-    #[test]
-    fn native_publication_refuses_pending_and_changed_heads() {
-        let tmp = tempfile::tempdir().unwrap();
-        let tree = tmp.path().join("seat");
-        let main = tmp.path().join("host");
-        std::fs::create_dir_all(&tree).unwrap();
-        let first = crate::test_git::commit_fixture(&tree);
-        begin(&main, "main").unwrap();
-        assert!(publication_ready(&main, &tree, "main").is_err());
-        native_rounds(
-            &main,
-            "main",
-            || {
-                Ok(Some((
-                    snapshot(&main, &tree, "main")?,
-                    "pass".into(),
-                    String::new(),
-                )))
-            },
-            |_| panic!("green gates need no repair"),
-        )
-        .unwrap();
-        publication_ready(&main, &tree, "main").unwrap();
-        check_import(&main, "main", &first, true).unwrap();
-        assert!(check_import(&main, "main", "different-import", true).is_err());
-        let next = crate::test_git::commit_fixture(&tree);
-        assert_ne!(first, next);
-        assert!(publication_ready(&main, &tree, "main").is_err());
-    }
-
-    #[test]
-    fn self_pushed_failure_queues_before_review_and_retry_can_stay_red() {
-        let tmp = tempfile::tempdir().unwrap();
-        let root = tmp.path();
-        begin(root, "lane").unwrap();
-        let mut queued = 0;
-        let first = pushed_round(
-            root,
-            "lane",
-            "first",
-            "fail",
-            || {
-                assert!(blocks_review(root, "lane", "first")?);
-                Ok(())
-            },
-            || {
-                queued += 1;
-                assert!(blocks_review(root, "lane", "first")?);
-                Ok(None)
-            },
-        )
-        .unwrap();
-        assert!(first);
-        assert!(blocks_review(root, "lane", "first").unwrap());
-        begin(root, "lane").unwrap();
-        assert!(!pushed_round(
-            root,
-            "lane",
-            "second",
-            "fail",
-            || Ok(()),
-            || {
-                queued += 1;
-                Ok(None)
-            }
-        )
-        .unwrap());
-        assert_eq!(queued, 1);
-        assert_eq!(marker(root, "lane"), "fail");
-        assert!(!blocks_review(root, "lane", "second").unwrap());
-    }
-
-    // trace:STORY-b6b1278890774ef993d2ebc327862470-563.ac897346 | ai:codex
-    #[test]
-    fn annotation_flake_does_not_abort_green_or_red_lane() {
-        let tmp = tempfile::tempdir().unwrap();
-        for result in ["pass", "fail"] {
-            let guard = reserve(tmp.path(), result).unwrap();
-            let mut queued = false;
-            assert_eq!(
-                pushed_round(
-                    tmp.path(),
-                    result,
-                    "head",
-                    result,
-                    || anyhow::bail!("forge unavailable"),
-                    || {
-                        queued = true;
-                        Ok(None)
-                    },
-                )
-                .unwrap(),
-                result == "fail"
-            );
-            assert_eq!(queued, result == "fail");
-            assert_eq!(marker(tmp.path(), result), result);
-            drop(guard);
-            assert!(!blocks_review(tmp.path(), result, "head").unwrap());
-        }
-    }
-
-    #[test]
-    fn queue_error_settles_red_without_consuming_repair() {
-        let tmp = tempfile::tempdir().unwrap();
-        let guard = reserve(tmp.path(), "lane").unwrap();
-        assert!(pushed_round(
-            tmp.path(),
-            "lane",
-            "head",
-            "fail",
-            || Ok(()),
-            || anyhow::bail!("queue unavailable"),
-        )
-        .is_err());
-        assert!(!blocks_review(tmp.path(), "lane", "head").unwrap());
-        assert_eq!(marker(tmp.path(), "lane"), "fail");
-        drop(guard);
-        assert!(!blocks_review(tmp.path(), "lane", "head").unwrap());
-        assert!(!read(tmp.path(), "lane").unwrap().unwrap().repair_used);
-    }
-
-    // trace:STORY-b6b1278890774ef993d2ebc327862470-563.ac486725 | ai:codex
-    #[test]
-    fn held_lane_later_opened_by_operator_is_reviewable() {
-        let tmp = tempfile::tempdir().unwrap();
-        for outcome in ["held", "punted", "no-pr", "lookup-lag"] {
-            {
-                let _reservation = reserve(tmp.path(), outcome).unwrap();
-                assert!(blocks_review(tmp.path(), outcome, "later-head").unwrap());
-            }
-            assert!(!blocks_review(tmp.path(), outcome, "later-head").unwrap());
-        }
-    }
-
-    // trace:STORY-b6b1278890774ef993d2ebc327862470-563.ac486725 | ai:codex
-    #[test]
-    fn infrastructure_error_settles_reservation_and_result_line_has_marker() {
-        let tmp = tempfile::tempdir().unwrap();
-        let guard = reserve(tmp.path(), "lane").unwrap();
-        infrastructure(tmp.path(), "lane", "lease", &anyhow::anyhow!("dirty seat"));
-        let line = result_line(tmp.path(), "lane", "implementer: pr=77");
-        let outcome = crate::standalone_implementer::Outcome::PrOpened {
-            pr: 77,
-            head: Some("head".into()),
-        };
-        let line = crate::standalone_implementer::with_untested(line, &outcome, true);
-        assert!(line.contains("fast_gate=skipped(infrastructure)"));
-        assert!(line.contains("untested=true"));
-        drop(guard);
-        assert!(!blocks_review(tmp.path(), "lane", "later-head").unwrap());
-    }
-
-    // trace:STORY-b6b1278890774ef993d2ebc327862470-563.ac897346 | ai:codex
-    // trace:STORY-b6b1278890774ef993d2ebc327862470-563.acb1c30b | ai:codex
-    #[test]
-    fn native_publication_annotation_flake_releases_review_with_known_result() {
-        let tmp = tempfile::tempdir().unwrap();
-        let main = tmp.path().join("host");
-        let tree = tmp.path().join("seat");
-        std::fs::create_dir_all(&tree).unwrap();
-        let head = crate::test_git::commit_fixture(&tree);
-        let guard = reserve(&main, "main").unwrap();
-        native_rounds(
-            &main,
-            "main",
-            || Ok(Some((head.clone(), "pass".into(), String::new()))),
-            |_| panic!("green needs no repair"),
-        )
-        .unwrap();
-        publication_ready(&main, &tree, "main").unwrap();
-        check_import(&main, "main", &head, true).unwrap();
-        finish_publication(&main, "main", || anyhow::bail!("gh flake")).unwrap();
-        drop(guard);
-        assert!(!blocks_review(&main, "main", &head).unwrap());
-        assert_eq!(
-            result_line(&main, "main", "implementer: pr=77"),
-            "implementer: pr=77 fast_gate=pass"
-        );
-    }
-
-    // trace:STORY-b6b1278890774ef993d2ebc327862470-563.acc30b8a | ai:codex
-    #[test]
-    fn advisor_step_six_documents_host_sandbox_and_one_repair() {
-        for doc in [
-            include_str!("../../.aida/discipline/rework-brief-craft.md"),
-            include_str!("../../aida-core/templates/.aida/discipline/rework-brief-craft.md"),
-        ] {
-            let step = doc.split("6.").nth(1).unwrap().split("7.").next().unwrap();
-            assert!(step.contains("host"));
-            assert!(step.contains("sandbox"));
-            assert!(step.contains("one") || step.contains("ONE"));
-            assert!(step.contains("fast_gate="));
-            assert!(step.contains("skipped(<reason>)"));
-        }
-    }
-
-    // trace:STORY-b6b1278890774ef993d2ebc327862470-563.ac486725 | ai:codex
-    #[test]
-    fn native_no_sandbox_settles_without_publication_authority() {
-        let tmp = tempfile::tempdir().unwrap();
-        let guard = reserve(tmp.path(), "lane").unwrap();
-        skip_native_without_sandbox(tmp.path(), "lane", "lease").unwrap();
-        let r = read(tmp.path(), "lane").unwrap().unwrap();
-        assert!(!r.pending);
-        assert!(!r.native_ready);
-        assert_eq!(r.marker, "skipped(no-sandbox)");
-        drop(guard);
-        assert!(!blocks_review(tmp.path(), "lane", "operator-head").unwrap());
-    }
-
-    #[test]
-    fn skipped_gate_needs_no_repair_and_does_not_claim_a_pass() {
-        let tmp = tempfile::tempdir().unwrap();
-        begin(tmp.path(), "lane").unwrap();
-        native_rounds(
-            tmp.path(),
-            "lane",
-            || {
-                Ok(Some((
-                    "head".into(),
-                    "skipped(no-sandbox)".into(),
-                    String::new(),
-                )))
-            },
-            |_| panic!("no sandbox must never run a repair or an unsandboxed fallback"),
-        )
-        .unwrap();
-        assert_eq!(marker(tmp.path(), "lane"), "skipped(no-sandbox)");
-    }
-}
-
 /// Annotation is informational: a forge flake cannot invalidate a checked
 /// publication or strand its lease. Diagnostics record the annotation failure;
 /// a known gate verdict remains intact.
@@ -1514,4 +793,756 @@ pub(crate) fn check_import(main: &Path, branch: &str, tip: &str, automatic: bool
         "imported lane head differs from the host fast gate; rerun the lane before publication"
     );
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::lane_job::{self, JobRequest};
+    use std::collections::BTreeMap;
+    use std::time::Duration;
+
+    // trace:STORY-2640 | ai:codex
+    #[test]
+    fn killed_host_releases_pending_review_hold_without_drop() {
+        let tmp = tempfile::tempdir().unwrap();
+        begin(tmp.path(), "lane").unwrap();
+        let mut child = std::process::Command::new("sleep")
+            .arg("5")
+            .spawn()
+            .unwrap();
+        let owner = aida_core::proc_identity::ProcIdentity::capture(child.id());
+        // Always reap the bounded child even when identity capture fails.
+        child.kill().unwrap();
+        child.wait().unwrap();
+        let mut r = read(tmp.path(), "lane").unwrap().unwrap();
+        r.owner = Some(owner.unwrap());
+        r.head = Some("published".into());
+        r.marker = "fail".into();
+        write(tmp.path(), &r).unwrap();
+        assert!(!blocks_review(tmp.path(), "lane").unwrap());
+        assert_eq!(marker(tmp.path(), "lane"), "fail");
+        assert!(!read(tmp.path(), "lane").unwrap().unwrap().pending);
+    }
+
+    // trace:STORY-2640 | ai:codex
+    #[test]
+    fn expired_or_operator_released_receipt_cannot_wedge_review() {
+        let tmp = tempfile::tempdir().unwrap();
+        begin(tmp.path(), "lane").unwrap();
+        let mut r = read(tmp.path(), "lane").unwrap().unwrap();
+        r.reserved_at = Some(chrono::Utc::now() - chrono::Duration::hours(25));
+        write(tmp.path(), &r).unwrap();
+        assert!(!blocks_review(tmp.path(), "lane").unwrap());
+        // Legacy receipts have neither timestamp nor owner: use file age.
+        std::fs::write(
+            path(tmp.path(), "lane"),
+            r#"{"branch":"lane","head":null,"marker":"fail","pending":true,"repair_used":false}"#,
+        )
+        .unwrap();
+        std::fs::File::options()
+            .write(true)
+            .open(path(tmp.path(), "lane"))
+            .unwrap()
+            .set_modified(std::time::SystemTime::now() - Duration::from_secs(25 * 3600))
+            .unwrap();
+        assert!(!blocks_review(tmp.path(), "lane").unwrap());
+        begin(tmp.path(), "lane").unwrap();
+        assert!(blocks_review(tmp.path(), "lane").unwrap());
+        release(tmp.path(), "lane").unwrap();
+        assert!(!blocks_review(tmp.path(), "lane").unwrap());
+        assert!(!read(tmp.path(), "lane").unwrap().unwrap().native_ready);
+    }
+
+    // trace:STORY-2640 | ai:codex
+    #[test]
+    fn passing_gate_publication_failure_returns_error_and_preserves_pass() {
+        let tmp = tempfile::tempdir().unwrap();
+        let guard = reserve(tmp.path(), "lane").unwrap();
+        native_rounds(
+            tmp.path(),
+            "lane",
+            || Ok(Some(("head".into(), "pass".into(), String::new()))),
+            |_| panic!("green must not repair"),
+        )
+        .unwrap();
+        let result: Result<()> =
+            publication_result(tmp.path(), "lane", Err(anyhow::anyhow!("push refused")));
+        assert!(result.unwrap_err().to_string().contains("push refused"));
+        assert_eq!(marker(tmp.path(), "lane"), "pass");
+        assert!(result_line(tmp.path(), "lane", "publication failed:").contains("fast_gate=pass"));
+        infrastructure(
+            tmp.path(),
+            "lane",
+            "lease",
+            &anyhow::anyhow!("unrelated error"),
+        );
+        assert_eq!(marker(tmp.path(), "lane"), "pass");
+        assert!(!blocks_review(tmp.path(), "lane").unwrap());
+        drop(guard);
+    }
+
+    // trace:STORY-2640 | ai:codex
+    #[test]
+    fn native_commit_failure_is_a_publication_error() {
+        let tmp = tempfile::tempdir().unwrap();
+        begin(tmp.path(), "lane").unwrap();
+        let error = crate::ship_from_seat::with_post_exit_step(
+            Box::new(|_, _, _, _, _| {
+                crate::ship_from_seat::PostExitCommit::Failed("commit refused".into())
+            }),
+            || commit(tmp.path(), tmp.path(), "STORY-2640", "lease", true),
+        )
+        .unwrap_err();
+        assert!(error.is::<NativeCommitError>());
+        let result: Result<bool> = publication_result(tmp.path(), "lane", Err(error));
+        assert!(result
+            .unwrap_err()
+            .to_string()
+            .contains("host post-exit commit failed"));
+        assert!(!blocks_review(tmp.path(), "lane").unwrap());
+        if crate::session::bwrap_availability() == crate::session::BwrapAvailability::Ok {
+            begin(tmp.path(), "lane").unwrap();
+            let result = crate::ship_from_seat::with_post_exit_step(
+                Box::new(|_, _, _, _, _| {
+                    crate::ship_from_seat::PostExitCommit::Failed("commit refused".into())
+                }),
+                || {
+                    native(
+                        tmp.path(),
+                        tmp.path(),
+                        "STORY-2640",
+                        "lease",
+                        "lane",
+                        true,
+                        |_| panic!("commit failure must not start a repair"),
+                    )
+                },
+            );
+            assert!(result
+                .unwrap_err()
+                .to_string()
+                .contains("host post-exit commit failed"));
+            assert!(!blocks_review(tmp.path(), "lane").unwrap());
+        }
+    }
+
+    // trace:STORY-2640 | ai:codex
+    #[test]
+    fn fast_gate_retry_timeout_preserves_red_in_both_modes() {
+        let tmp = tempfile::tempdir().unwrap();
+        begin(tmp.path(), "native").unwrap();
+        let mut round = 0;
+        native_rounds(
+            tmp.path(),
+            "native",
+            || {
+                round += 1;
+                Ok(Some((
+                    format!("head-{round}"),
+                    if round == 1 {
+                        "fail"
+                    } else {
+                        "skipped(timeout)"
+                    }
+                    .into(),
+                    String::new(),
+                )))
+            },
+            |_| Ok(()),
+        )
+        .unwrap();
+        assert_eq!(marker(tmp.path(), "native"), "fail");
+        begin(tmp.path(), "push").unwrap();
+        let mut r = read(tmp.path(), "push").unwrap().unwrap();
+        r.marker = "fail".into();
+        r.repair_used = true;
+        write(tmp.path(), &r).unwrap();
+        begin(tmp.path(), "push").unwrap();
+        pushed_round(
+            tmp.path(),
+            "push",
+            "retry",
+            "skipped(timeout)",
+            || Ok(()),
+            || panic!("no second repair"),
+        )
+        .unwrap();
+        assert_eq!(marker(tmp.path(), "push"), "fail");
+        assert_eq!(retry_marker("fail", "pass"), "pass");
+    }
+
+    // trace:STORY-2640 | ai:codex
+    #[test]
+    fn fast_gate_cleanup_serializes_with_new_reservation() {
+        let tmp = tempfile::tempdir().unwrap();
+        begin(tmp.path(), "lane").unwrap();
+        let lock = receipt_lock(tmp.path(), "lane").unwrap();
+        let main = tmp.path().to_path_buf();
+        let (tx, rx) = std::sync::mpsc::channel();
+        let child = std::thread::spawn(move || {
+            begin(&main, "lane").unwrap();
+            tx.send(()).unwrap();
+        });
+        assert!(rx
+            .recv_timeout(std::time::Duration::from_millis(50))
+            .is_err());
+        release_locked(tmp.path(), "lane").unwrap();
+        drop(lock);
+        child.join().unwrap();
+        assert!(blocks_review(tmp.path(), "lane").unwrap());
+        assert!(
+            result_line(tmp.path(), "lane", "implementer: held").contains("skipped(lane-ended)")
+        );
+    }
+
+    // trace:STORY-2640 | ai:codex
+    #[test]
+    fn fast_gate_infrastructure_skips_without_consuming_the_repair_round() {
+        for (rc, expected) in [
+            (lane_job::TIMEOUT_RC, "skipped(timeout)"),
+            (lane_job::REFUSED_RC, "skipped(refused)"),
+            (lane_job::STOPPED_RC, "skipped(stopped)"),
+        ] {
+            let tmp = tempfile::tempdir().unwrap();
+            begin(tmp.path(), "lane").unwrap();
+            native_rounds(
+                tmp.path(),
+                "lane",
+                || {
+                    let (result, output) =
+                        gate_result(Some((rc, "runner infrastructure failure".into())));
+                    Ok(Some(("head".into(), result, output)))
+                },
+                |_| panic!("timeout must not prompt for a source repair"),
+            )
+            .unwrap();
+            let r = read(tmp.path(), "lane").unwrap().unwrap();
+            assert_eq!(r.marker, expected);
+            assert!(!r.repair_used);
+            assert!(r.native_ready);
+            begin(tmp.path(), "pushed").unwrap();
+            assert!(!pushed_round(
+                tmp.path(),
+                "pushed",
+                "head",
+                expected,
+                || Ok(()),
+                || panic!("timeout must not queue a repair")
+            )
+            .unwrap());
+            assert!(!read(tmp.path(), "pushed").unwrap().unwrap().repair_used);
+            assert!(!blocks_review(tmp.path(), "pushed").unwrap());
+        }
+    }
+
+    // trace:STORY-b6b1278890774ef993d2ebc327862470-563.ac433911 | ai:codex
+    // trace:STORY-b6b1278890774ef993d2ebc327862470-563.acb1c30b | ai:codex
+    #[test]
+    fn native_fail_then_fixed_round_binds_repaired_head() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        begin(root, "lane").unwrap();
+        let mut attempts = 0;
+        let mut repairs = 0;
+        native_rounds(
+            root,
+            "lane",
+            || {
+                attempts += 1;
+                assert!(blocks_review(root, "lane").unwrap());
+                Ok(Some(if attempts == 1 {
+                    (
+                        "old".into(),
+                        "fail".into(),
+                        "portability gate FAILED".into(),
+                    )
+                } else {
+                    ("fixed".into(), "pass".into(), String::new())
+                }))
+            },
+            |prompt| {
+                repairs += 1;
+                assert!(prompt.contains("portability gate FAILED"));
+                assert!(read(root, "lane")?.unwrap().repair_used);
+                Ok(())
+            },
+        )
+        .unwrap();
+        assert_eq!((attempts, repairs), (2, 1));
+        assert_eq!(marker(root, "lane"), "pass");
+        assert!(blocks_review(root, "lane").unwrap());
+        published(root, "lane").unwrap();
+        assert!(!blocks_review(root, "lane").unwrap());
+        assert!(!blocks_review(root, "lane").unwrap());
+    }
+
+    // trace:STORY-b6b1278890774ef993d2ebc327862470-563.acb1c30b | ai:codex
+    #[test]
+    fn native_persistent_failure_releases_for_publication_without_third_round() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        begin(root, "lane").unwrap();
+        let mut repairs = 0;
+        for _ in 0..2 {
+            native_rounds(
+                root,
+                "lane",
+                || Ok(Some(("same".into(), "fail".into(), "gate red".into()))),
+                |_| {
+                    repairs += 1;
+                    Ok(())
+                },
+            )
+            .unwrap();
+            assert_eq!(marker(root, "lane"), "fail");
+            assert!(read(root, "lane").unwrap().unwrap().native_ready);
+        }
+        assert_eq!(repairs, 1);
+        published(root, "lane").unwrap();
+        assert!(!blocks_review(root, "lane").unwrap());
+        assert_eq!(marker(root, "lane"), "fail");
+    }
+
+    // trace:STORY-2640 | ai:codex
+    #[test]
+    fn fast_gate_native_uninspectable_seat_is_a_publication_error() {
+        let tmp = tempfile::tempdir().unwrap();
+        begin(tmp.path(), "lane").unwrap();
+        let error = native_error(
+            tmp.path(),
+            "lane",
+            "lease",
+            &anyhow::anyhow!("seat changed during fast gate"),
+            || anyhow::bail!("dirty seat"),
+        )
+        .unwrap_err();
+        assert!(format!("{error:#}").contains("dirty seat"));
+        assert!(!read(tmp.path(), "lane").unwrap().unwrap().native_ready);
+        assert!(!blocks_review(tmp.path(), "lane").unwrap());
+        assert!(result_line(tmp.path(), "lane", "publication failed:")
+            .contains("fast_gate=skipped(infrastructure)"));
+    }
+
+    // trace:STORY-2640 | ai:codex
+    #[test]
+    fn fast_gate_native_errors_preserve_first_red() {
+        for fail_repair in [true, false] {
+            let tmp = tempfile::tempdir().unwrap();
+            begin(tmp.path(), "lane").unwrap();
+            let mut attempts = 0;
+            let error = native_rounds(
+                tmp.path(),
+                "lane",
+                || {
+                    attempts += 1;
+                    if attempts == 2 {
+                        anyhow::bail!("seat changed during fast gate");
+                    }
+                    Ok(Some(("old".into(), "fail".into(), "red".into())))
+                },
+                |_| {
+                    if fail_repair {
+                        anyhow::bail!("vendor spawn failed");
+                    }
+                    Ok(())
+                },
+            )
+            .unwrap_err();
+            assert!(
+                native_error(tmp.path(), "lane", "lease", &error, || Ok("new".into())).unwrap()
+            );
+            assert_eq!(marker(tmp.path(), "lane"), "fail");
+            assert_eq!(
+                std::fs::read_to_string(
+                    crate::lane_job::results_dir(tmp.path(), "lease").join("fast-gate-marker")
+                )
+                .unwrap(),
+                "fail"
+            );
+            assert!(read(tmp.path(), "lane").unwrap().unwrap().native_ready);
+            assert!(result_line(tmp.path(), "lane", "implementer:").contains("fast_gate=fail"));
+            finish_publication(tmp.path(), "lane", || anyhow::bail!("forge unavailable")).unwrap();
+            assert_eq!(marker(tmp.path(), "lane"), "fail");
+            assert!(!blocks_review(tmp.path(), "lane").unwrap());
+        }
+    }
+
+    // trace:STORY-2640 | ai:codex
+    #[test]
+    fn fast_gate_self_published_settled_result_allows_later_head() {
+        let tmp = tempfile::tempdir().unwrap();
+        for result in ["pass", "fail"] {
+            begin(tmp.path(), result).unwrap();
+            // A red second round settles with its failure marker intact.
+            let mut receipt = read(tmp.path(), result).unwrap().unwrap();
+            receipt.repair_used = true;
+            write(tmp.path(), &receipt).unwrap();
+            assert!(!pushed_round(
+                tmp.path(),
+                result,
+                "published",
+                result,
+                || Ok(()),
+                || panic!("a settled round needs no repair"),
+            )
+            .unwrap());
+            assert!(!blocks_review(tmp.path(), result).unwrap());
+            assert_eq!(marker(tmp.path(), result), result);
+        }
+    }
+
+    // trace:STORY-2640 | ai:codex
+    #[test]
+    fn fast_gate_queued_repair_releases_when_removed_replaced_or_parked() {
+        use aida_core::db::DatabaseBackend as _;
+        let tmp = tempfile::tempdir().unwrap();
+        let backend =
+            crate::test_env::home_fixture_backend(&tmp.path().join(".aida-store")).unwrap();
+        // This fixture must satisfy allocation trust even with a shared-write
+        // launcher umask; never weaken the production reader for a test.
+        // trace:STORY-2640 | ai:codex
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            let setting =
+                aida_core::allocation_authority::common_dir(&tmp.path().join(".aida-store"))
+                    .unwrap()
+                    .join(aida_core::allocation_authority::CONFIG_FILE);
+            std::fs::set_permissions(setting, std::fs::Permissions::from_mode(0o600)).unwrap();
+        }
+        std::fs::create_dir_all(tmp.path().join(".aida")).unwrap();
+        std::fs::write(
+            tmp.path().join(".aida/config.toml"),
+            "store_path = \".aida-store\"\n",
+        )
+        .unwrap();
+        let storage = crate::Storage::new(tmp.path().join(".aida-store"));
+        let mut req = aida_core::Requirement::new("Repair".into(), String::new());
+        req.status = aida_core::RequirementStatus::InProgress;
+        let req = backend.add_requirement(req).unwrap();
+        let entry = aida_core::QueueEntry {
+            user_id: "role:implementer".into(),
+            requirement_id: req.id,
+            position: 0,
+            added_by: "fast-gate".into(),
+            note: None,
+            added_at: chrono::Utc::now(),
+            for_role: Some("implementer".into()),
+            for_scope: None,
+            for_session: None,
+            added_by_machine: None,
+        };
+        begin(tmp.path(), "lane").unwrap();
+        pushed_round(
+            tmp.path(),
+            "lane",
+            "published",
+            "fail",
+            || Ok(()),
+            || {
+                storage.queue_add(entry.clone())?;
+                Ok(Some(entry.clone()))
+            },
+        )
+        .unwrap();
+        assert!(blocks_review(tmp.path(), "lane").unwrap());
+        storage.queue_remove(&entry.user_id, &req.id).unwrap();
+        assert!(!blocks_review(tmp.path(), "lane").unwrap());
+        let mut replacement = entry.clone();
+        replacement.added_at += chrono::Duration::seconds(1);
+        storage.queue_add(replacement).unwrap();
+        assert!(!blocks_review(tmp.path(), "lane").unwrap());
+        storage.queue_remove(&entry.user_id, &req.id).unwrap();
+        storage.queue_add(entry).unwrap();
+        for (status, deferred) in [
+            (aida_core::RequirementStatus::Superseded, false),
+            (aida_core::RequirementStatus::NeedsAttention, false),
+            (aida_core::RequirementStatus::InProgress, true),
+        ] {
+            let mut store = backend.load().unwrap();
+            store.requirements[0].status = status;
+            store.requirements[0].deferred = deferred;
+            backend.save(&store).unwrap();
+            assert!(!blocks_review(tmp.path(), "lane").unwrap());
+        }
+    }
+
+    #[test]
+    fn native_repair_veto_keeps_publication_and_review_pending() {
+        let tmp = tempfile::tempdir().unwrap();
+        begin(tmp.path(), "lane").unwrap();
+        let mut attempts = 0;
+        native_rounds(
+            tmp.path(),
+            "lane",
+            || {
+                attempts += 1;
+                Ok((attempts == 1).then(|| ("old".into(), "fail".into(), "failure".into())))
+            },
+            |_| Ok(()),
+        )
+        .unwrap();
+        assert!(blocks_review(tmp.path(), "lane").unwrap());
+    }
+
+    // trace:STORY-b6b1278890774ef993d2ebc327862470-563.ac486725 | ai:codex
+    #[test]
+    fn exact_make_job_has_fixed_timeout_and_never_counts_as_cargo_tests() {
+        let mut job = JobRequest {
+            argv: vec!["make".into(), "check-ci-fast".into()],
+            env: BTreeMap::new(),
+        };
+        assert!(lane_job::validate(&job).is_ok());
+        assert_eq!(lane_job::timeout_for(&job, true), Duration::from_secs(300));
+        assert!(!lane_job::runs_tests(&job));
+        let tally = lane_job::Tally::default();
+        tally.record_exit(&job, "test result: ok. 1 passed; 0 failed;".as_bytes());
+        assert!(tally.untested());
+        job.env.insert("AIDA_CARGO_TIMEOUT".into(), "3600".into());
+        assert!(lane_job::validate(&job).is_err());
+        job.env.clear();
+        job.argv.push("SHELL=evil".into());
+        assert!(lane_job::validate(&job).is_err());
+    }
+
+    #[test]
+    fn host_receipt_is_required_only_for_lane_branches_and_corruption_refuses() {
+        let tmp = tempfile::tempdir().unwrap();
+        assert!(!blocks_review(tmp.path(), "ordinary").unwrap());
+        begin(tmp.path(), "lane").unwrap();
+        assert!(blocks_review(tmp.path(), "lane").unwrap());
+        std::fs::write(path(tmp.path(), "lane"), b"invalid").unwrap();
+        assert!(blocks_review(tmp.path(), "lane").is_err());
+    }
+    // trace:STORY-b6b1278890774ef993d2ebc327862470-563.acb1c30b | ai:codex
+    #[test]
+    fn native_publication_refuses_pending_and_changed_heads() {
+        let tmp = tempfile::tempdir().unwrap();
+        let tree = tmp.path().join("seat");
+        let main = tmp.path().join("host");
+        std::fs::create_dir_all(&tree).unwrap();
+        let first = crate::test_git::commit_fixture(&tree);
+        begin(&main, "main").unwrap();
+        assert!(publication_ready(&main, &tree, "main").is_err());
+        native_rounds(
+            &main,
+            "main",
+            || {
+                Ok(Some((
+                    snapshot(&main, &tree, "main")?,
+                    "pass".into(),
+                    String::new(),
+                )))
+            },
+            |_| panic!("green gates need no repair"),
+        )
+        .unwrap();
+        publication_ready(&main, &tree, "main").unwrap();
+        check_import(&main, "main", &first, true).unwrap();
+        assert!(check_import(&main, "main", "different-import", true).is_err());
+        let next = crate::test_git::commit_fixture(&tree);
+        assert_ne!(first, next);
+        assert!(publication_ready(&main, &tree, "main").is_err());
+    }
+
+    #[test]
+    fn self_pushed_failure_queues_before_review_and_retry_can_stay_red() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        begin(root, "lane").unwrap();
+        let mut queued = 0;
+        let first = pushed_round(
+            root,
+            "lane",
+            "first",
+            "fail",
+            || {
+                assert!(blocks_review(root, "lane")?);
+                Ok(())
+            },
+            || {
+                queued += 1;
+                assert!(blocks_review(root, "lane")?);
+                Ok(None)
+            },
+        )
+        .unwrap();
+        assert!(first);
+        assert!(blocks_review(root, "lane").unwrap());
+        begin(root, "lane").unwrap();
+        assert!(!pushed_round(
+            root,
+            "lane",
+            "second",
+            "fail",
+            || Ok(()),
+            || {
+                queued += 1;
+                Ok(None)
+            }
+        )
+        .unwrap());
+        assert_eq!(queued, 1);
+        assert_eq!(marker(root, "lane"), "fail");
+        assert!(!blocks_review(root, "lane").unwrap());
+    }
+
+    // trace:STORY-b6b1278890774ef993d2ebc327862470-563.ac897346 | ai:codex
+    #[test]
+    fn annotation_flake_does_not_abort_green_or_red_lane() {
+        let tmp = tempfile::tempdir().unwrap();
+        for result in ["pass", "fail"] {
+            let guard = reserve(tmp.path(), result).unwrap();
+            let mut queued = false;
+            assert_eq!(
+                pushed_round(
+                    tmp.path(),
+                    result,
+                    "head",
+                    result,
+                    || anyhow::bail!("forge unavailable"),
+                    || {
+                        queued = true;
+                        Ok(None)
+                    },
+                )
+                .unwrap(),
+                result == "fail"
+            );
+            assert_eq!(queued, result == "fail");
+            assert_eq!(marker(tmp.path(), result), result);
+            drop(guard);
+            assert!(!blocks_review(tmp.path(), result).unwrap());
+        }
+    }
+
+    #[test]
+    fn queue_error_settles_red_without_consuming_repair() {
+        let tmp = tempfile::tempdir().unwrap();
+        let guard = reserve(tmp.path(), "lane").unwrap();
+        assert!(pushed_round(
+            tmp.path(),
+            "lane",
+            "head",
+            "fail",
+            || Ok(()),
+            || anyhow::bail!("queue unavailable"),
+        )
+        .is_err());
+        assert!(!blocks_review(tmp.path(), "lane").unwrap());
+        assert_eq!(marker(tmp.path(), "lane"), "fail");
+        drop(guard);
+        assert!(!blocks_review(tmp.path(), "lane").unwrap());
+        assert!(!read(tmp.path(), "lane").unwrap().unwrap().repair_used);
+    }
+
+    // trace:STORY-b6b1278890774ef993d2ebc327862470-563.ac486725 | ai:codex
+    #[test]
+    fn held_lane_later_opened_by_operator_is_reviewable() {
+        let tmp = tempfile::tempdir().unwrap();
+        for outcome in ["held", "punted", "no-pr", "lookup-lag"] {
+            {
+                let _reservation = reserve(tmp.path(), outcome).unwrap();
+                assert!(blocks_review(tmp.path(), outcome).unwrap());
+            }
+            assert!(!blocks_review(tmp.path(), outcome).unwrap());
+        }
+    }
+
+    // trace:STORY-b6b1278890774ef993d2ebc327862470-563.ac486725 | ai:codex
+    #[test]
+    fn infrastructure_error_settles_reservation_and_result_line_has_marker() {
+        let tmp = tempfile::tempdir().unwrap();
+        let guard = reserve(tmp.path(), "lane").unwrap();
+        infrastructure(tmp.path(), "lane", "lease", &anyhow::anyhow!("dirty seat"));
+        let line = result_line(tmp.path(), "lane", "implementer: pr=77");
+        let outcome = crate::standalone_implementer::Outcome::PrOpened {
+            pr: 77,
+            head: Some("head".into()),
+        };
+        let line = crate::standalone_implementer::with_untested(line, &outcome, true);
+        assert!(line.contains("fast_gate=skipped(infrastructure)"));
+        assert!(line.contains("untested=true"));
+        drop(guard);
+        assert!(!blocks_review(tmp.path(), "lane").unwrap());
+    }
+
+    // trace:STORY-b6b1278890774ef993d2ebc327862470-563.ac897346 | ai:codex
+    // trace:STORY-b6b1278890774ef993d2ebc327862470-563.acb1c30b | ai:codex
+    #[test]
+    fn native_publication_annotation_flake_releases_review_with_known_result() {
+        let tmp = tempfile::tempdir().unwrap();
+        let main = tmp.path().join("host");
+        let tree = tmp.path().join("seat");
+        std::fs::create_dir_all(&tree).unwrap();
+        let head = crate::test_git::commit_fixture(&tree);
+        let guard = reserve(&main, "main").unwrap();
+        native_rounds(
+            &main,
+            "main",
+            || Ok(Some((head.clone(), "pass".into(), String::new()))),
+            |_| panic!("green needs no repair"),
+        )
+        .unwrap();
+        publication_ready(&main, &tree, "main").unwrap();
+        check_import(&main, "main", &head, true).unwrap();
+        finish_publication(&main, "main", || anyhow::bail!("gh flake")).unwrap();
+        drop(guard);
+        assert!(!blocks_review(&main, "main").unwrap());
+        assert_eq!(
+            result_line(&main, "main", "implementer: pr=77"),
+            "implementer: pr=77 fast_gate=pass"
+        );
+    }
+
+    // trace:STORY-b6b1278890774ef993d2ebc327862470-563.acc30b8a | ai:codex
+    #[test]
+    fn advisor_step_six_documents_host_sandbox_and_one_repair() {
+        for doc in [
+            include_str!("../../.aida/discipline/rework-brief-craft.md"),
+            include_str!("../../aida-core/templates/.aida/discipline/rework-brief-craft.md"),
+        ] {
+            let step = doc.split("6.").nth(1).unwrap().split("7.").next().unwrap();
+            assert!(step.contains("host"));
+            assert!(step.contains("sandbox"));
+            assert!(step.contains("one") || step.contains("ONE"));
+            assert!(step.contains("fast_gate="));
+            assert!(step.contains("skipped(<reason>)"));
+        }
+    }
+
+    // trace:STORY-b6b1278890774ef993d2ebc327862470-563.ac486725 | ai:codex
+    #[test]
+    fn native_no_sandbox_settles_without_publication_authority() {
+        let tmp = tempfile::tempdir().unwrap();
+        let guard = reserve(tmp.path(), "lane").unwrap();
+        skip_native_without_sandbox(tmp.path(), "lane", "lease").unwrap();
+        let r = read(tmp.path(), "lane").unwrap().unwrap();
+        assert!(!r.pending);
+        assert!(!r.native_ready);
+        assert_eq!(r.marker, "skipped(no-sandbox)");
+        drop(guard);
+        assert!(!blocks_review(tmp.path(), "lane").unwrap());
+    }
+
+    #[test]
+    fn skipped_gate_needs_no_repair_and_does_not_claim_a_pass() {
+        let tmp = tempfile::tempdir().unwrap();
+        begin(tmp.path(), "lane").unwrap();
+        native_rounds(
+            tmp.path(),
+            "lane",
+            || {
+                Ok(Some((
+                    "head".into(),
+                    "skipped(no-sandbox)".into(),
+                    String::new(),
+                )))
+            },
+            |_| panic!("no sandbox must never run a repair or an unsandboxed fallback"),
+        )
+        .unwrap();
+        assert_eq!(marker(tmp.path(), "lane"), "skipped(no-sandbox)");
+    }
 }
