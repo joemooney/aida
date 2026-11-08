@@ -8,7 +8,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-04T17:54:51.353376Z
-modified_at: 2026-11-08T14:51:39.698479613Z
+modified_at: 2026-11-08T14:51:45.741831896Z
 req_type: Task
 tags:
 - area:containment
@@ -709,6 +709,22 @@ comments:
   content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: Round 9 at 5695ca4 (0 commits behind main; merge-base diff, Refs-only slice under the 2026-11-07 16:40 ruling). No blocking code defect found by inspection; 5293ac6 fixes the round-8 test gap, forged-stderr egress evidence, leaked .agents files, port logging, docs heading and duplicate env removal. Not approved because no test result exists at this head: CI run 42491060521 has all 7 test jobs queued, and the last completed run (42487333753 at 8a6439d) failed lib-1, rest and Build; job logs are unreachable from the review sandbox, so whether 5293ac6 cures them is unverified. All ''verified by'' lines below are from reading test source, none from a run at this head. AC: R1 shared-boundary launch: verified by task_3048_diagnostic_prepare_uses_common_wrapper_and_keeps_production_closed (source). R1 bypass only with applied receipt: verified by task_3048_outer_only_candidate_requires_live_accepted_receipt (source). R1 no --sandbox, options before final -p: verified by task_3048_runtime_argv_accepts_only_the_site_prompt (source). R1 private runtime, read-only token and settings: verified by task_3048_live_private_runtime_preserves_read_only_credential (source). R1 no ~/.gemini inheritance: verified by the diagnostic prepare mask assertions (source). R1 MCP/browser/URL off: configuration verified by task_3048_runtime_policy_fails_closed_before_launch (source); AGY enforcement unverified, advisor live run. R2 hosts as data with trusted approval: verified by task_3048_diagnostic_hosts_do_not_open_production_admission (source). R2 unknown host named refusal: verified by task_3048_unlisted_host_is_named_before_dns (source). R2 host-only egress evidence: verified by task_3048_host_egress_bitmap_requires_successful_host_connection and test_host_egress_never_trusts_vendor_stderr (source). R2 measured refresh list: unverified, oauth2.googleapis.com is a candidate from binary strings, advisor live run. R3 native no credit, AIDA-only flip: verified by test_only_complete_aida_evidence_can_flip_whole_lane and test_late_refusal_withdraws_aggregate_credit_with_valid_receipt (source). R4 production refusal: verified by agy_adapter_keeps_unmeasured_policy_closed (source). Trusted origin/main posture only, fail closed: verified by the new absent and working-tree-only refusal loop in the diagnostic prepare test (source). No blanket bypass: not-applicable-because superseded by the 2026-11-07 16:40 outer-only ruling. Conformance harness passes for agy: not-applicable-because this is a Refs-only slice and the advisor live run is a separate step.. No triage reason was given.'
   created_at: 2026-11-08T14:51:39.698477869Z
   modified_at: 2026-11-08T14:51:39.698477869Z
+  session_id: 01a1b9af-8230-75d2-82f8-667491cc010a
+  harness_version: 2.1.319 (Claude Code)
+- id: 01a1bba4-da62-76d0-98f5-1d8f7e2c83c4
+  author: joe
+  content: |-
+    REVIEW FINDINGS TO ADDRESS (PR #3641):
+    Verdict: CHANGES REQUESTED
+    Reviewed commit: 5695ca404820
+    Recorded: 2026-11-08T14:47:48.152940299+00:00
+    Findings:
+    1. BLOCKING, wait state, no code defect identified: no CI test result exists at 5695ca4. Run 42491060521 has lib-0, lib-1, cli-0, cli-1, rest, gates and contracts all queued. The last completed run, 42487333753 at 8a6439d, failed CI (lib-1), CI (rest) and Build. 5293ac6 adds inventory, store-writer and headless-env entries that look aimed at those shards, but job logs are unreachable from the review sandbox, so that is unverified. Needs a green run at this head, then a re-review or re-record at the same SHA. If it goes red, fix those shards. merge-hold-gate failure is the expected supervised-spec hold and still needs its clearance.
+    2. Minor, strict-tier test gap aida-cli-lib/src/launch/contained.rs:1268-1305: the retained .agents sibling path added in 5293ac6 has no test. task_3048_diagnostic_prepare_uses_common_wrapper_and_keeps_production_closed runs with no extra .agents entries, so nothing proves that a sibling such as .agents/skills stays visible read-only, or that the FIFO or symlink refusal named in the comment at contained.rs:1303 fires. The real fixture does create repo/.agents/skills, so this path is hit first in the advisor's live run. Add one case with a retained directory and file, asserting read-only mounts, and one with a FIFO or symlink, asserting no plan is returned.
+    3. Cosmetic docs/internal/testing/containment-conformance.md:513: says the refusal is logged as CONTAINED_EGRESS_HOST_UNLISTED <host>, but contained_host.py:577 now logs <host>:<port>.
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
+  created_at: 2026-11-08T14:51:45.634565739Z
+  modified_at: 2026-11-08T14:51:45.634565739Z
   session_id: 01a1b9af-8230-75d2-82f8-667491cc010a
   harness_version: 2.1.319 (Claude Code)
 history:
