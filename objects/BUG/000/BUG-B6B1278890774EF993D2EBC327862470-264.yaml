@@ -8,7 +8,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-08T19:01:55.483195458Z
-modified_at: 2026-11-08T20:17:03.620020643Z
+modified_at: 2026-11-08T20:52:25.740721384Z
 req_type: Bug
 comments:
 - id: 01a1bcc0-c857-7ae0-8568-8095391555d2
@@ -18,6 +18,12 @@ comments:
   modified_at: 2026-11-08T20:01:53.239210262Z
   session_id: 01a1bc93-77a0-7740-8b03-df4e3e8d1df5
   harness_version: 2.1.319 (Claude Code)
+- id: 01a1bcef-0e0c-7f42-a8bd-e843a2918f85
+  author: joe
+  content: 'Implementation: dev builds now supply full HEAD as a stable Cargo fingerprint input; the shared CLI/server stamp helper watches it while still reading the actual stamp from Git. Added a real-Cargo fixture covering fast-forward restamping with stale metadata mtimes, both ordinary and incremental-clean builds, plus warm unchanged-HEAD repeats. Updated docs/cli/11-dev.md. Validation: all 44 non-compile fast gates passed; feature-disabled CLI check and complete TUI seam guard passed using lane-runner agent-profile compile jobs. Two test-harness builds hit the seeded-target 900s timeout before test execution; targeted retry j20261108T205116308-2-0 is running with the permitted 3600s override. Edits remain uncommitted for the native host launcher. Codegraph database was unavailable in both lane and primary checkout; call sites verified with rg.'
+  created_at: 2026-11-08T20:52:25.740721384Z
+  modified_at: 2026-11-08T20:52:25.740721384Z
+  session_id: 01a1bcce401f
 history:
 - id: 01a1bcc0-d868-7912-a616-acafbcb7dba5
   author: joe
