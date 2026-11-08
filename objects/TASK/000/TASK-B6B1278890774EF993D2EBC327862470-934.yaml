@@ -3,12 +3,12 @@ spec_id: TASK-b6b1278890774ef993d2ebc327862470-934
 agreed_id: TASK-3366
 title: 'STORY-2537 S4: ProcIdentity for the agent registry and mail-wake'
 description: 'Slice per the signed sketch docs/plans/2026-11-05-story-2537-proc-identity.md (lines ~189-224, ordering at ~305; advisor signoff 2026-11-06T03:48). Migrate this owner family to aida-core/src/proc_identity.rs (landed in #3483) and remove its legacy pid-only liveness checks. Keep the task_1750_liveness_primitive_guard_tests.rs ratchet non-growing and shrink it by the migrated sites. Test: the family''s namespace, pid-reuse and subreaper cases on the proc_identity matrix. LIGHT gate.'
-status: Approved
+status: InProgress
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-07T10:45:58.443413275Z
-modified_at: 2026-11-08T09:17:19.028960524Z
+modified_at: 2026-11-08T09:18:54.625201725Z
 req_type: Task
 relationships:
 - rel_type: Child
@@ -375,6 +375,13 @@ history:
   - field_name: status
     old_value: NeedsAttention
     new_value: Approved
+- id: 01a1ba74-1ea1-79c1-b59e-6cb22743c2b9
+  author: aida-session-start
+  timestamp: 2026-11-08T09:18:54.625201132Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: InProgress
 filed_at:
   code_sha: 4803b66ade90fa4f6ccbcfb20f3af84d4aaf7886
   branch: main
