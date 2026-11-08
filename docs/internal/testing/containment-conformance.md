@@ -490,7 +490,9 @@ local to this explicit entry and never relaxes trusted allowed-host approval.
 
 The credential source is retained before authority HOME relocation; only its
 checked leaf handle is mounted read-only. Both the relocated and original
-`.gemini` parents are masked. Runtime state is private and writable. Workspace
+`.gemini` parents are masked. Runtime state is private and writable except for the credential and mandatory
+`settings.json` leaves, which are pinned read-only by handle. The settings source
+path in launch state is also pinned read-only to prevent writes through that alias. Workspace
 MCP configuration, hooks and plugins are masked too. The private runtime
 `settings.json`, selected by `--settings <path>`, carries `permissions.deny = ["mcp(*)", "read_url(*)", "execute_url(*)"]`, covering
 MCP, URL reads and browser actuation; these controls are seeded before vendor

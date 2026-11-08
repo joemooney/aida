@@ -452,7 +452,7 @@ pub(crate) fn validate_allowed_host(host: &str) -> Result<()> {
 
 /// Install a private writable runtime at the descriptor's conventional path.
 /// The whole host vendor parent was masked first; only this runtime is reopened.
-/// Credentials are bound separately and never copied into writable state.
+/// Settings are pinned read-only; credentials are bound separately by handle.
 // trace:TASK-3048 | ai:codex
 fn install_private_runtime(
     profile: &mut WriteProfile,
@@ -481,6 +481,16 @@ fn install_private_runtime(
         .last_mut()
         .context("runtime mount missing")?
         .path = destination.clone();
+    // Pin mandatory controls over writable runtime state. A terminal or file
+    // tool must not remove denies for a later settings read or child process.
+    // The launch-state source is also visible: seal both aliases of the inode.
+    profile.add(&source.join("settings.json"), false)?;
+    profile.add(&source.join("settings.json"), false)?;
+    profile
+        .mounts
+        .last_mut()
+        .context("runtime settings mount missing")?
+        .path = destination.join("settings.json");
     Ok(destination)
 }
 
@@ -938,8 +948,9 @@ impl PreparedLaunch {
         )
     }
 
-    // Explicit fixture entry only. No environment/config switch opens admission.
-    // trace:TASK-3048 | ai:codex
+    // Shared preparation pins the Codex auth executable to the supplied digest.
+    // Production supplies the shipped pin; tests may inject a fixture digest.
+    // trace:STORY-2593 | ai:codex
     fn prepare_with_io(
         child: &mut Command,
         root: &Path,

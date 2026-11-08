@@ -2274,7 +2274,7 @@ fn task_3194_receipt_diagnostic_pins_harness_line() {
 // No model calls or real credentials: exercise the shared filesystem inputs.
 // trace:TASK-3048 | ai:codex
 #[test]
-fn task_3048_private_runtime_pins_only_the_credential_leaf() {
+fn task_3048_private_runtime_pins_settings_and_credential_leaves() {
     use std::os::unix::fs::symlink;
     let home = tempfile::tempdir().unwrap();
     let state = tempfile::tempdir().unwrap();
@@ -2307,12 +2307,16 @@ fn task_3048_private_runtime_pins_only_the_credential_leaf() {
     assert!(profile.mounts[0].writable);
     assert_eq!(profile.mounts[0].path, host);
     assert!(!profile.mounts[1].writable);
-    assert_eq!(profile.mounts[1].path, token);
+    assert_eq!(profile.mounts[1].path, source.join("settings.json"));
+    assert!(!profile.mounts[2].writable);
+    assert_eq!(profile.mounts[2].path, runtime.join("settings.json"));
+    assert!(!profile.mounts[3].writable);
+    assert_eq!(profile.mounts[3].path, token);
     // Mount pins the original inode, even if the host replaces the pathname.
     std::fs::rename(&token, host.join("old-token")).unwrap();
     std::fs::write(&token, "replacement").unwrap();
     let mut pinned = String::new();
-    profile.mounts[1]
+    profile.mounts[3]
         .file
         .try_clone()
         .unwrap()
@@ -2372,6 +2376,19 @@ fn task_3048_runtime_policy_fails_closed_before_launch() {
     policy = crate::containment::runtime_policy("agy").unwrap();
     policy.raw_store_writes = true;
     assert!(policy.validate().is_err());
+    for denies in [
+        vec![],
+        vec!["read_url(*)", "mcp(*)", "execute_url(*)"],
+        vec!["mcp(*)", "read_url(*)"],
+    ] {
+        policy = crate::containment::runtime_policy("agy").unwrap();
+        policy.tool_denies = denies.into_iter().map(String::from).collect();
+        assert!(policy
+            .validate()
+            .unwrap_err()
+            .to_string()
+            .contains("requires MCP, URL and browser tool denies"));
+    }
 }
 
 // Uses the actual common process boundary with synthetic credentials, not AGY
@@ -2420,6 +2437,12 @@ fn task_3048_live_private_runtime_preserves_read_only_credential() {
 import pathlib,errno,subprocess,sys,json,os
 runtime=pathlib.Path({runtime_json})
 assert json.loads((runtime/'settings.json').read_text())=={settings_json}
+for settings in (runtime/'settings.json', pathlib.Path.home()/'vendor-runtime/settings.json'):
+    try:
+        settings.write_text('{{}}')
+        raise AssertionError(f'settings writable: {{settings}}')
+    except OSError as e:
+        assert e.errno in (errno.EACCES,errno.EPERM,errno.EROFS),e
 assert not (runtime/'host-plugin').exists()
 token=runtime/{leaf_json}
 assert token.read_text()=='synthetic-credential'

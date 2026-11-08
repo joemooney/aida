@@ -945,12 +945,12 @@ def continue_aida(root):
         shutil.copyfile(__file__, runner)
         runner.chmod(0o444)
         manifest = payload_dir / "manifest.json"
-        interpreter = "/usr/bin/python3" if report["vendor"] == "agy" else sys.executable
-        invocation = shlex.join([interpreter, str(runner), "--await-payload", str(manifest)])
         if report["vendor"] == "agy":
             invocation = diagnostic_invocation(runner, manifest)
             fixture_command(["git", "worktree", "add", "-b", "probe", str(workspace), "main"],
                             repo, env, report, "diagnostic-worktree")
+        else:
+            invocation = shlex.join([sys.executable, str(runner), "--await-payload", str(manifest)])
         observed = {}
         def ready():
             if observed or not (workspace / ".git").is_file():
