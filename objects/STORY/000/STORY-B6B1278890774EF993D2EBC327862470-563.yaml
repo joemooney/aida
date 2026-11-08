@@ -25,7 +25,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-07T19:45:35.836129088Z
-modified_at: 2026-11-08T03:12:43.978791675Z
+modified_at: 2026-11-08T03:36:06.996943669Z
 req_type: Story
 tags:
 - docs:impacted
@@ -267,6 +267,12 @@ comments:
   content: 'Round 4 implementation complete: owner identity plus 24h legacy-compatible expiry and lane fast-gate-release recovery; failed repair queue insertion settles red; all three native publication callers propagate errors while settling/printing original gate evidence; native commit failures remain errors; unchanged lanes always attempt advisor notification with gate refusal details; timeout skips without repair; per-change AGENTS note removed and OVERVIEW trimmed. rustfmt on touched Rust files and git diff --check pass. Validation job j20261108T025215731-2-0 timed out at 900s during compilation (no executed tests). Broader final-source fast_gate job j20261108T025426569-584687-0 is compiling aida-cli-lib; existing publication regression job j20261108T030013961-601961-0 is queued. Tests are not yet claimed passed.'
   created_at: 2026-11-08T03:12:43.978791675Z
   modified_at: 2026-11-08T03:12:43.978791675Z
+  session_id: 01a1b90eb553
+- id: 01a1b93a-4854-71a2-85e5-638db5c68d3c
+  author: joe
+  content: 'Round 4 final validation: sandboxed job j20261108T032145569-2-0 (AIDA_CARGO_TIMEOUT=3600) passed fast_gate: 29 passed, 0 failed, 1 existing real-main-gate integration ignored. Job j20261108T030013961-601961-0 passed story_2475: 11 passed. Executed tests cover dead owner release, 24h and legacy TTL, operator release, queue failure settlement, green-gate publication refusal through real bundle path with pass retained, commit error propagation, unconditional unchanged-lane advisor notification, and timeout skip without repair. Initial 900s build timed out; the first completed suite exposed an old lane_job timeout test expecting fail/one repair, now updated to skipped(timeout)/no repair. Final rustfmt and git diff --check pass. Runner warned after successful final tests that the primary rewrote the seed generation in place (overlay-stale); job exit remained 0. All five findings addressed. Changed lane_fast_gate.rs; lane_job.rs (test only); lane_cmd.rs and lane_cmd_args.rs; session.rs, queue_cmd.rs, standalone_implementer.rs; ship_from_seat.rs; existing bug_home_038_seat_publish_tests.rs fixture; AGENTS.md, OVERVIEW.md and docs/cli/03-work-autonomy.md. Native seat leaves source edits uncommitted for the host to create a NEW round-4 commit and update PR #3627. Existing merge-hold governance is unchanged.'
+  created_at: 2026-11-08T03:36:06.996943669Z
+  modified_at: 2026-11-08T03:36:06.996943669Z
   session_id: 01a1b90eb553
 history:
 - id: 01a1b78d-2628-7313-92de-8804ac5f8f71
