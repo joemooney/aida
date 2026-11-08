@@ -8,7 +8,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-08T00:02:55.282155934Z
-modified_at: 2026-11-08T14:42:26.529871964Z
+modified_at: 2026-11-08T14:42:29.193939570Z
 req_type: Bug
 relationships:
 - rel_type:
@@ -390,6 +390,23 @@ comments:
   content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: AC1, AC3, AC4 and the marker/parse half of AC2 hold by source, and round-11 findings 3 and 5 are fixed. AC2''s unmerged-path refusal is bypassed on the contained-session commit path; operator scope still has no advisor ruling or linked split; CI is queued at this head so no test pass is claimed.. It was punted on: design-fork: Latest review of b3b3a379f1c6 finding 1 explicitly requires advisor action: record the semantic merge-policy ruling and require maybe_sync_pull/burndown failed-pull fencing and delete/modify handling here, or file and link a follow-up. No ruling or linked split is recorded. CLAUDE.md requires advisor signoff for architecture changes. This round addresses findings 3 and 5 (merge-abort diagnostics and OVERVIEW cleanup); it does not supply advisor authority. Preserve existing merge hold and publication veto. Finding 2 requires host CI at the final head; finding 4 remains non-blocking.. No triage reason was given.'
   created_at: 2026-11-08T14:42:26.529870811Z
   modified_at: 2026-11-08T14:42:26.529870811Z
+  session_id: 01a1b9af-8230-75d2-82f8-667491cc010a
+  harness_version: 2.1.319 (Claude Code)
+- id: 01a1bb9c-5c5f-7fa1-836d-a55913d7a6ed
+  author: joe
+  content: |-
+    REVIEW FINDINGS TO ADDRESS (BUG-2490):
+    Verdict: CHANGES REQUESTED
+    Reviewed commit: f381713b2018
+    Recorded: 2026-11-08T14:33:15.698409797+00:00
+    Findings:
+    1. [major][correctness][AC2] 'unmerged paths also refuse' is not met on the store commit path this bug names. commit_store_writes_since (aida-cli-lib/src/child_store_commit.rs:161) runs add_all (git add -A) on every changed path, and changed_paths_since deliberately includes unmerged records (:319,:336). git add -A erases the unmerged stages before commit_paths runs validate_store_index_paths, so the guard sees a clean index. Failures: a conflicted non-object store file (registry/queues/*.yaml, timings/*.json; timings conflicted in the 06:10 advisor evidence) is committed with its markers, because only is_spec_object_path files are content-checked; a modify/delete object with valid YAML silently resolves to the worktree side; a markered object is refused only after its stages are destroyed. The same order exists at aida-core/src/db/git_backend.rs:927 and :983 and other add_all callers. Round 10 fixed this pattern only for the three whole-tree sites via validate_pending_store_commit. Fix: refuse unmerged paths before staging at this choke point (for example a store-tree check inside add_all for the given pathspec, leaving the rebase/merge resolvers on their own staging), and add a regression through commit_store_writes_since asserting refusal with stages preserved for both a non-object file and a modify/delete object.
+    2. [major][scope][advisor-action] Carried and re-verified at f381713b2018: operator scope on BUG-2490 (comment 2026-11-08T03:05Z, stopgap note 05:26Z, advisor evidence 06:10 MST) is neither finished nor split; BUG-2490 links only STORY-2671 and no ruling is recorded. Open: (a) maybe_sync_pull still uses plain pull_rebase (aida-cli-lib/src/store_sync.rs:1719), so a same-spec conflict fails on --sync and burndown; (b) it prints 'Falling back to local view' (store_sync.rs:1768) and burndown discards its result with 'let _ =' (burndown_run.rs:367, 748), so a failed pull does not stop burndown's writes; (c) resolve_spec_conflict bails on delete/modify (aida-core/src/git_ops.rs:2644), and since pre-pickup pull is now fatal (queue_cmd.rs:12585) one such conflict stops every pickup without --no-pull. The implementer has correctly punted this every round; another implementer round cannot clear it. The advisor must record the merge-policy ruling and either require (a)-(c) here or file a linked follow-up, then re-request review.
+    3. [major][ci][gate-state] CI run 42489951574 at f381713b2018 is still queued (7 jobs, none started) when this verdict was recorded, so no test named here has CI evidence at this head. The last green CI was at the earlier head 06ed31ae0d80. merge-hold-gate fails only on the supervised hold, as expected. Confirm green CI before any approval.
+    4. [minor][perf] Carried, non-blocking: doctor_multi_agent loads the whole store through Storage::load, then store_object_findings reads and parses every object again (aida-cli-lib/src/doctor_cmd.rs:828-836; about 7365 objects live). Doctor-only cost.
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
+  created_at: 2026-11-08T14:42:29.087997709Z
+  modified_at: 2026-11-08T14:42:29.087997709Z
   session_id: 01a1b9af-8230-75d2-82f8-667491cc010a
   harness_version: 2.1.319 (Claude Code)
 history:
