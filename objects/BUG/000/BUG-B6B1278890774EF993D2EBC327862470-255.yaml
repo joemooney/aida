@@ -8,7 +8,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-08T00:02:55.282155934Z
-modified_at: 2026-11-08T12:04:22.213699429Z
+modified_at: 2026-11-08T12:07:00.431672983Z
 req_type: Bug
 relationships:
 - rel_type:
@@ -290,6 +290,20 @@ comments:
   modified_at: 2026-11-08T11:59:38.957387934Z
   session_id: 01a1b9af-8230-75d2-82f8-667491cc010a
   harness_version: 2.1.319 (Claude Code)
+- id: 01a1bb0e-044f-7a41-b8a3-1c598c5654fe
+  author: dirtlab
+  content: |
+    Native-seat rework handoff for review 0c0318f8c610: finding 3 addressed in uncommitted edits. db_sync_local_window skips pull only when a successful remote query confirms the current store branch is absent. Added fallible git_ops::probe_remote_branch because remote_branch_exists conflates absent and unreachable; unreachable origins still refuse before pickup. CLI regression covers both an empty origin and an origin containing main but no store branch.
+
+    Changed files: aida-core/src/git_ops.rs; aida-cli-lib/src/git_backend_cmd.rs; aida-cli/tests/queue_work_dry_run.rs.
+
+    Validation: core lane job j20261108T120150507-2-0 executed all 7 existing BUG-2490 regressions, passed. CLI job j20261108T120319512-2-0 executed all 3 BUG-2490 pickup regressions against final edits, passed; j20261108T120223679-2-0 also executed the same 3 and passed. Tests cover confirmed missing branch, unreachable remote refusal without pickup mutation, and same-spec semantic merge pickup. Writer inventory passed (3370 sinks/293 mappings); 8 maintenance ratchet tests passed; rustfmt --check and git diff --check passed. Codegraph unavailable; rg used.
+
+    Finding 1 explicitly punted: advisor must rule on semantic merge policy and require remaining maybe_sync_pull/burndown failed-pull fencing and delete/modify handling here, or file a linked split. No ruling or split is recorded. Finding 2 requires host CI at the final published head. Finding 4 remains non-blocking doctor double scan. Persisted Needs Attention punt succeeded; local punt signal could not be written (read-only filesystem). Preserve persisted punt, merge hold and publication veto. No commit, push, PR creation, queue completion, ship declaration or review recording performed. Do not publish as a complete BUG-2490 fix.
+  created_at: 2026-11-08T12:07:00.431672983Z
+  modified_at: 2026-11-08T12:07:00.431672983Z
+  session_id: 01a1bb088418
+  harness_version: codex-cli 0.167.0
 history:
 - id: 01a1b923-982d-7512-93a5-cd08923b4f98
   author: aida-session-start
