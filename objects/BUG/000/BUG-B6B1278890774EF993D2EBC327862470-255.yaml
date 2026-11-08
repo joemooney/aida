@@ -8,7 +8,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-08T00:02:55.282155934Z
-modified_at: 2026-11-08T05:17:22.594040593Z
+modified_at: 2026-11-08T05:26:52.446136059Z
 req_type: Bug
 relationships:
 - rel_type:
@@ -83,6 +83,13 @@ comments:
     Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
   created_at: 2026-11-08T05:15:49.591458200Z
   modified_at: 2026-11-08T05:15:49.591458200Z
+  session_id: 01a1b8be-8170-7fb2-89ab-ecb4c6eee98c
+  harness_version: 2.1.319 (Claude Code)
+- id: 01a1b99f-af1e-7223-b530-475f5d7976f2
+  author: joe
+  content: 'Stopgap in place 2026-11-07 21:50: dell1:~/store-sync.sh (rebase + semantic resolve via ~/store-resolve.py: objects upstream-scalars + union comments/history; per-user list files take the local owner''s version; modify/delete keeps upstream) runs before and after every dell1 lane (dell1:~/lane-run.sh). It recurs every few hours without it. Remove both when this bug lands.'
+  created_at: 2026-11-08T05:26:52.446136059Z
+  modified_at: 2026-11-08T05:26:52.446136059Z
   session_id: 01a1b8be-8170-7fb2-89ab-ecb4c6eee98c
   harness_version: 2.1.319 (Claude Code)
 history:
