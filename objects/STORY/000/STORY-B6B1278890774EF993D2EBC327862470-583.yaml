@@ -20,7 +20,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-08T02:56:36.206726Z
-modified_at: 2026-11-08T15:04:41.853749368Z
+modified_at: 2026-11-08T15:08:18.455244611Z
 req_type: Story
 tags:
 - architecture
@@ -247,6 +247,13 @@ comments:
   content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: Head 8306bd48ae97 only merges main into dab39e29ad41, so the round-2 findings stand: host status and admission still treat unobservable PID-namespace reservations as dead, reporting false free capacity.. No triage reason was given.'
   created_at: 2026-11-08T15:04:41.853747862Z
   modified_at: 2026-11-08T15:04:41.853747862Z
+  session_id: 01a1bbab-762f-7cd2-8a36-4ea9f209afce
+  harness_version: 2.1.319 (Claude Code)
+- id: 01a1bbb4-0097-7832-89c3-56e9c729cef1
+  author: joe
+  content: 'PR-3680 CI at 91dcf013585a, additional: CI (lib-1) fails command_registry::story_1728_command_registry_tests::help_surface_matches_golden_snapshot (aida-cli-lib/src/tests/story_1728_command_registry_tests.rs:103). The new CLI surface changed help; regenerate the help golden in the same push as make sync-templates. CI (contracts) also failed, cause not identified from its log; check it after those two are fixed.'
+  created_at: 2026-11-08T15:08:18.455244611Z
+  modified_at: 2026-11-08T15:08:18.455244611Z
   session_id: 01a1bbab-762f-7cd2-8a36-4ea9f209afce
   harness_version: 2.1.319 (Claude Code)
 history:
