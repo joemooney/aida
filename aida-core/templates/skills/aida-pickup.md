@@ -347,7 +347,7 @@ card so its contract sits at the top of the terminal scrollback for the
 whole working session — no separate `aida show` in another shell:
 
 ```bash
-aida show <spec_id> --card
+aida show <spec_id> --card --full
 ```
 
 The card prints a header rule, the `id · type · priority · status`

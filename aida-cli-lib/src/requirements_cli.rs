@@ -6277,9 +6277,8 @@ pub(crate) struct ShowArgs {
     #[clap(long)]
     pub sync: bool,
 
-    /// Skip the git-linkage section (commits / files traced /
-    /// branch / PR). Faster for read-only contexts that only need
-    /// the requirement fields.
+    /// Suppress git linkage in full, verbose and JSON views.
+    /// Default detail views already skip linkage.
     // trace:TASK-241 | ai:claude
     #[clap(long)]
     pub no_git: bool,
@@ -6293,7 +6292,7 @@ pub(crate) struct ShowArgs {
     /// Render a compact, boxed "spec card" instead of the linear
     /// detail view: a header rule, an ID/type/priority/status
     /// one-liner, key fields, a truncated description, the
-    /// acceptance criteria, and the git-linkage summary. The
+    /// acceptance criteria, and (with --full) the git-linkage summary. The
     /// /aida-pickup skill renders this at session start so the
     /// spec's contract stays in terminal scrollback.
     #[clap(long)]
@@ -6893,7 +6892,7 @@ fn run_show(
                                     }),
                                     _ => serde_json::json!({
                                         "id": rel.target_id.to_string(),
-                                        "status": "missing",
+                                        "status": "unknown",
                                         "satisfied": false,
                                     }),
                                 })
@@ -7165,7 +7164,7 @@ fn run_show(
                                                 )
                                             }
                                             None => {
-                                                (target.to_string(), "missing".to_string(), false)
+                                                (target.to_string(), "unknown".to_string(), false)
                                             }
                                         };
                                         if !satisfied {
@@ -7490,7 +7489,7 @@ fn run_show(
                                                 t.title
                                             ),
                                             None => println!(
-                                                "  {} {} {} (missing)",
+                                                "  {} {} {} (unknown)",
                                                 crate::glyph(crate::glyphs::Glyph::SubArrow),
                                                 phrase.cyan(),
                                                 rel.target_id.to_string().dimmed()
@@ -7588,7 +7587,7 @@ fn run_show(
                                                 matches!(b.status, RequirementStatus::Completed);
                                             (b.friendly_id(), format!("{}", b.status), satisfied)
                                         }
-                                        None => (target.to_string(), "missing".to_string(), false),
+                                        None => (target.to_string(), "unknown".to_string(), false),
                                     };
                                     if !satisfied {
                                         unsatisfied += 1;

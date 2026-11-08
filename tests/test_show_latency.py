@@ -87,6 +87,9 @@ def check_in(binary, temp):
     assert not (git_dir / "commondir").exists()
     with (git_dir / "aida-allocation.toml").open("x", encoding="utf-8") as setting:
         setting.write("version=1\nauthoritative=true\n")
+    # Trusted allocation evidence must not inherit group writes from the lane.
+    # trace:BUG-2466 | ai:codex
+    (git_dir / "aida-allocation.toml").chmod(0o600)
     require(run([binary, "init", "--no-skills", "--no-hooks"], root, env))
     require(run([binary, "add", "--title", "original title", "--type", "task"], root, env))
     require(run([binary, "cache", "rebuild"], root, env))

@@ -48,7 +48,9 @@ fn run_ok(cmd: &mut Command) -> String {
     let out = cmd.output().expect("run aida");
     assert!(
         out.status.success(),
-        "aida failed: {}",
+        "aida failed ({}): stdout={} stderr={}",
+        out.status,
+        String::from_utf8_lossy(&out.stdout),
         String::from_utf8_lossy(&out.stderr)
     );
     String::from_utf8_lossy(&out.stdout).into_owned()
@@ -119,6 +121,14 @@ fn fixture() -> (
     git(&repo, &["init", "-q", "-b", "main"]);
     // trace:BUG-2017 | ai:codex — explicit positive global-ID fixture.
     test_git::enroll_synthetic_home(&repo);
+    // The trusted fixture must remain private under a group-writable lane umask.
+    // trace:BUG-2466 | ai:codex
+    use std::os::unix::fs::PermissionsExt;
+    std::fs::set_permissions(
+        repo.join(".git/aida-allocation.toml"),
+        std::fs::Permissions::from_mode(0o600),
+    )
+    .unwrap();
     git(&repo, &["config", "user.email", "t@t.t"]);
     git(&repo, &["config", "user.name", "t"]);
     git(&repo, &["commit", "-q", "--allow-empty", "-m", "init"]);

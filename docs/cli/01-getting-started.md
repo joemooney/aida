@@ -123,7 +123,8 @@ in-memory index. On an index miss, origin IDs read their named canonical
 object directly. After literal and node-alias lookups miss, a stale or unavailable
 projection uses a bounded canonical scan for agreed IDs. Fresh snapshot misses
 return without scanning. If a fallback scan runs out of time, the result carries an incomplete-scan warning and may be not found.
-Use `aida cache refresh` to update the projection explicitly.
+Relationship targets share one bounded fallback scan; targets not reached are
+shown as unknown. Use `aida cache refresh` to update the projection explicitly.
 
 Default human, TOON and card views skip Git linkage and run no Git history
 walk. Request `--full`, `--verbose`, `--json` or `--format json` for linkage;
@@ -135,7 +136,7 @@ Usage events split backend opening into `open.backend`, `open.location` and
 
 **The `linkage:` line (agent/TOON output).** With `--full` or `--verbose` under `--format toon` (the agent surface), `show` carries one cheap `linkage:` line that checks only the default branch — `origin/<default>` first, then the local `<default>` (skipped when it is the same commit as, or behind, the remote). It is whitespace-separated `key=value` tokens, for example `linkage: shipped=true shipped_pr=53 commit=1a2b3c4 commits=1 files=2 on=origin/main`, or for nothing shipped yet `linkage: shipped=false commits=0 files=0 checked=origin/main+main detail=--format=json`. `shipped` is true when a commit message on that ref names the spec or a tracked file there carries a `trace:<ID>` comment; `detail=--format=json` points at the full linkage scan. `--no-git` drops the line.
 
-**Gotchas.** The git-linkage section is the slow part; if `show` feels sluggish in a loop, you almost certainly want `--no-git`. Markdown is rendered only for a person at a terminal: piped output, `--format toon` and `--format json` always carry the source text unchanged, so scripts and agents never see the rendered form. Under `NO_COLOR` the layout stays and the styling goes.
+**Gotchas.** Default `show` skips linkage. Expanded `--full`, `--verbose` and JSON views request it; add `--no-git` to suppress that work when only requirement fields are needed. Markdown is rendered only for a person at a terminal: piped output, `--format toon` and `--format json` always carry the source text unchanged, so scripts and agents never see the rendered form. Under `NO_COLOR` the layout stays and the styling goes.
 
 **Chains with** — the natural stop between `list` (found it) and acting (`edit` / `queue work` / `comment add`).
 
@@ -173,7 +174,7 @@ Usage events split backend opening into `open.backend`, `open.location` and
 - `--status` — the lifecycle mover. Approval (Draft→Approved) is authority-gated on multi-agent projects; status transitions are where the governance lives.
 - `--blocked-by` (repeatable) — add dependency edges after creation. Same edge `add --blocked-by` makes, just later.
 
-**The completion warning.** When `edit --status completed` (or `aida done` or `aida queue advance` closing a parent) moves a code spec into Completed, AIDA checks the default branch — `origin/<default>` and the local `<default>` — for a commit whose message names the spec or a tracked file carrying a `trace:<ID>` comment. If neither is found it prints a warning to stderr naming the refs it checked; the status change still goes through. If the PR merged on the remote, `git fetch` and re-check with `aida show <ID>`. In a shallow clone the warning says `(shallow clone)`, because an older shipping commit may sit below the history cut. Decisions, docs and other non-code types are never warned about; for code-typed work that legitimately landed outside this repo, opt out with `aida edit <ID> --add-tag doctor:no-code`. `aida doctor --category completed-without-commit` applies the same rule across the whole store.
+**The completion warning.** When `edit --status completed` (or `aida done` or `aida queue advance` closing a parent) moves a code spec into Completed, AIDA checks the default branch — `origin/<default>` and the local `<default>` — for a commit whose message names the spec or a tracked file carrying a `trace:<ID>` comment. If neither is found it prints a warning to stderr naming the refs it checked; the status change still goes through. If the PR merged on the remote, `git fetch` and re-check with `aida show <ID> --full`. In a shallow clone the warning says `(shallow clone)`, because an older shipping commit may sit below the history cut. Decisions, docs and other non-code types are never warned about; for code-typed work that legitimately landed outside this repo, opt out with `aida edit <ID> --add-tag doctor:no-code`. `aida doctor --category completed-without-commit` applies the same rule across the whole store.
 
 **Gotchas.** Refinements you make in a *comment* do **not** bind an implementer — only the description / acceptance criteria do. If a design decision must be honored, `edit` it into the acceptance criteria; don't leave it in a comment and assume it'll be followed.
 
