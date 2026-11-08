@@ -6277,9 +6277,8 @@ pub(crate) struct ShowArgs {
     #[clap(long)]
     pub sync: bool,
 
-    /// Skip the git-linkage section (commits / files traced /
-    /// branch / PR). Faster for read-only contexts that only need
-    /// the requirement fields.
+    /// Suppress git linkage in full, verbose and JSON views.
+    /// Default detail views already skip linkage.
     // trace:TASK-241 | ai:claude
     #[clap(long)]
     pub no_git: bool,
@@ -6293,7 +6292,7 @@ pub(crate) struct ShowArgs {
     /// Render a compact, boxed "spec card" instead of the linear
     /// detail view: a header rule, an ID/type/priority/status
     /// one-liner, key fields, a truncated description, the
-    /// acceptance criteria, and the git-linkage summary. The
+    /// acceptance criteria, and (with --full) the git-linkage summary. The
     /// /aida-pickup skill renders this at session start so the
     /// spec's contract stays in terminal scrollback.
     #[clap(long)]
@@ -6893,7 +6892,7 @@ fn run_show(
                                     }),
                                     _ => serde_json::json!({
                                         "id": rel.target_id.to_string(),
-                                        "status": "missing",
+                                        "status": backend.relationship_missing_label(),
                                         "satisfied": false,
                                     }),
                                 })
@@ -7100,7 +7099,8 @@ fn run_show(
                                 lines.extend(toon_show_comment_lines(&req.comments, *comments));
                                 // STORY-1649: one cheap default-branch linkage scalar;
                                 // `--no-git` turns it off. trace:STORY-1649 | ai:claude
-                                if !*no_git {
+                                // trace:BUG-2466 | ai:codex
+                                if !*no_git && (*full || *verbose) {
                                     if let Some(root) = store_path.parent() {
                                         let ids = crate::shipped_linkage::spec_lookup_ids(&req);
                                         let _phase = crate::usage::phase("linkage");
@@ -7163,9 +7163,11 @@ fn run_show(
                                                     satisfied,
                                                 )
                                             }
-                                            None => {
-                                                (target.to_string(), "missing".to_string(), false)
-                                            }
+                                            None => (
+                                                target.to_string(),
+                                                backend.relationship_missing_label().to_string(),
+                                                false,
+                                            ),
                                         };
                                         if !satisfied {
                                             unsatisfied += 1;
@@ -7241,7 +7243,12 @@ fn run_show(
                                     rels.push(CardRel::new(&rel.rel_type, rid, rtitle));
                                 }
                                 render_spec_card(
-                                    &req, &rels, store_path, density, *no_git, *verbose,
+                                    &req,
+                                    &rels,
+                                    store_path,
+                                    density,
+                                    *no_git || !(*full || *verbose),
+                                    *verbose,
                                 );
                                 let mut next = Vec::new();
                                 crate::help_next::push_serialize_cluster(
@@ -7484,10 +7491,11 @@ fn run_show(
                                                 t.title
                                             ),
                                             None => println!(
-                                                "  {} {} {} (missing)",
+                                                "  {} {} {} ({})",
                                                 crate::glyph(crate::glyphs::Glyph::SubArrow),
                                                 phrase.cyan(),
-                                                rel.target_id.to_string().dimmed()
+                                                rel.target_id.to_string().dimmed(),
+                                                backend.relationship_missing_label()
                                             ),
                                         }
                                     }
@@ -7582,7 +7590,11 @@ fn run_show(
                                                 matches!(b.status, RequirementStatus::Completed);
                                             (b.friendly_id(), format!("{}", b.status), satisfied)
                                         }
-                                        None => (target.to_string(), "missing".to_string(), false),
+                                        None => (
+                                            target.to_string(),
+                                            backend.relationship_missing_label().to_string(),
+                                            false,
+                                        ),
                                     };
                                     if !satisfied {
                                         unsatisfied += 1;
@@ -7836,7 +7848,8 @@ fn run_show(
                             // --no-git. Grep against every id form the spec has
                             // worn (canonical / agreed / origin) so commits and
                             // trace comments survive id migration.
-                            if !*no_git {
+                            // trace:BUG-2466 | ai:codex
+                            if !*no_git && (*full || *verbose) {
                                 let mut ids: Vec<String> = vec![req.display_id()];
                                 if let Some(ref a) = req.agreed_id {
                                     if !ids.contains(&a.to_string()) {

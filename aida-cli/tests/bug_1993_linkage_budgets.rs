@@ -95,7 +95,8 @@ fn show_json(repo: &Path, home: &Path, spec: &str, shim: Option<&Path>) -> serde
 
 fn show_human(repo: &Path, home: &Path, spec: &str, shim: &Path) -> String {
     let mut cmd = aida(repo, home);
-    cmd.args(["show", spec, "--format", "human"]);
+    // trace:BUG-2466 | ai:codex — linkage now requires an explicit request.
+    cmd.args(["show", spec, "--format", "human", "--full"]);
     with_shim(&mut cmd, shim);
     run_ok(&mut cmd)
 }
