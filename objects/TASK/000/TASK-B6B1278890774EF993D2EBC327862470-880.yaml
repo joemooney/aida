@@ -8,7 +8,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-06T13:39:53.442026Z
-modified_at: 2026-11-08T17:47:20.211969390Z
+modified_at: 2026-11-08T17:52:45.200547463Z
 req_type: Task
 tags:
 - architecture
@@ -1227,6 +1227,18 @@ comments:
   modified_at: 2026-11-08T17:42:36.122000182Z
   session_id: 01a1b9af-8230-75d2-82f8-667491cc010a
   harness_version: 2.1.319 (Claude Code)
+- id: 01a1bc4a-8e90-7fb2-9220-cb9803997806
+  author: dirtlab
+  content: |
+    Review comment 85 findings 5 and 6 fixed in uncommitted edits: security guide now describes the host-owned pinned root, expected revision and owned UUID checks without claiming transmission of the lane path; mediated MCP update_requirement advertises only title/description/priority, with regression assertion. Changed files: aida-cli-lib/src/mcp.rs, aida-cli-lib/src/store_mutation_mcp_tests.rs, docs/internal/security/store-mutation-writers.md.
+
+    Validation: launcher job j20261108T174543802-2-0 passed the exact mediated MCP advertisement regression (1 executed test, 0 failures). Inventory fixture suite: 52 passed. make check-ci-fast with umask 022: all 45 gates passed. git diff --check passed. Mediated inventory still refuses: 3171 writer sites and 293 operations unresolved; no zero-unrouted or profile activation claim. Existing boundary positive was not rerun for these description-only changes.
+
+    TASK-3223 punted design-fork to Needs Attention for unresolved operation policy in finding 1. No finding is disputed. own_claim/queue_done remain TASK-3326. Findings 3/4 require advisor/operator hold and publication-veto handling. The punt command persisted Needs Attention but reported: could not write punt signal file: Read-only file system (os error 30). Host MUST honor the persisted punt and existing holds: do not auto-commit or publish these edits over that veto. No publication declaration was issued. No commit/push/PR mutation/review recording/queue completion occurred. PR body finding 7 remains for host update when publication is authorized. Codegraph unavailable, confirmed by doctor.
+  created_at: 2026-11-08T17:52:45.200547463Z
+  modified_at: 2026-11-08T17:52:45.200547463Z
+  session_id: 01a1bc43351c
+  harness_version: codex-cli 0.167.0
 history:
 - id: 01a1b116-742d-73c0-9064-1933f11e4c38
   author: joe
