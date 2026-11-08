@@ -259,12 +259,20 @@ mod imp {
     /// Pin a recorded process and prove it is still exactly that process,
     /// ours, and in the recorded group. `Ok(None)`: it is gone.
     fn verify(identity: &Identity, pgid: Option<u32>) -> Result<Option<(OwnedFd, Stat)>, String> {
-        if super::super::boot_id().ok().as_deref() != Some(identity.boot.as_str()) {
-            return Ok(None);
-        }
         let Some(fd) = pin(identity.pid)? else {
             return Ok(None);
         };
+        // Pin first; unknown observation never authorizes a signal.
+        // trace:TASK-3365 | ai:codex
+        match identity.verdict() {
+            aida_core::proc_identity::Verdict::Alive => {}
+            aida_core::proc_identity::Verdict::Dead(_) => return Ok(None),
+            aida_core::proc_identity::Verdict::ForeignUnknown(why) => {
+                return Err(format!(
+                    "process identity unknown: {why:?}; held without signalling"
+                ))
+            }
+        }
         // Read only after the pin: a matching start identity now proves the
         // descriptor refers to the recorded process, never a reused PID.
         let Some(stat) = stat(identity.pid) else {
@@ -304,7 +312,10 @@ mod imp {
             if parent <= 1 {
                 return false;
             }
-            if recorded.iter().any(|r| r.pid == parent && r.alive()) {
+            if recorded
+                .iter()
+                .any(|r| r.pid == parent && r.verdict() == aida_core::proc_identity::Verdict::Alive)
+            {
                 return true;
             }
             match self::stat(parent) {

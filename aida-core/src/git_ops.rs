@@ -1100,6 +1100,8 @@ pub fn is_git_repo(path: &Path) -> bool {
 /// resolves the exclude file, which lives in the COMMON git dir: it is one
 /// file shared by the main checkout and every linked worktree, so every
 /// pattern written here applies repository-wide.
+/// Private seat clones instead use their own real `.git/info/exclude`
+/// directly, preserving the refusal to execute host Git inside a clone.
 ///
 /// The `.aida` pattern is therefore anchored and narrow: `/.aida/*` hides the
 /// root runtime directory's contents (BUG-914: a repository that does not
@@ -1111,17 +1113,24 @@ pub fn is_git_repo(path: &Path) -> bool {
 /// line, which shadowed both, is rewritten in place.
 // trace:BUG-914 trace:BUG-2141 | ai:claude
 pub fn ensure_aida_runtime_excluded(worktree: &Path) -> Result<bool> {
-    let exclude_path = resolve_exclude_path(worktree)?;
-    update_exclude_entries(
-        &exclude_path,
-        &[
-            AIDA_RUNTIME_EXCLUDE,
-            ".aida-store",
-            ".aida-store/",
-            ".aida-compete-*.log",
-        ],
-        &[(LEGACY_AIDA_RUNTIME_EXCLUDE, AIDA_RUNTIME_EXCLUDE)],
-    )
+    // Private seat clones have their own real .git directory. Never spawn
+    // host Git there: its seat-writable config/hooks are deliberately refused.
+    // This setup writer needs only the clone-local runtime exclude file.
+    // trace:STORY-2630 | ai:codex
+    let entries = &[
+        AIDA_RUNTIME_EXCLUDE,
+        ".aida-store",
+        ".aida-store/",
+        // Include symlinks on older bases whose ignore only has .codegraph/.
+        // trace:STORY-2630 | ai:codex
+        ".codegraph",
+        ".aida-compete-*.log",
+    ];
+    let migrations = &[(LEGACY_AIDA_RUNTIME_EXCLUDE, AIDA_RUNTIME_EXCLUDE)];
+    if let Some(clone) = crate::seat_clone_detect::seat_clone_root(worktree) {
+        return update_clone_exclude_entries(&clone, entries, migrations);
+    }
+    update_exclude_entries(&resolve_exclude_path(worktree)?, entries, migrations)
 }
 
 /// Anchored root-runtime exclude written by [`ensure_aida_runtime_excluded`].
@@ -1213,6 +1222,99 @@ fn update_exclude_entries(
             return Err(e).with_context(|| format!("read {}", exclude_path.display()));
         }
     };
+    let Some(contents) = amended_exclude_contents(existing, entries, migrations) else {
+        return Ok(false);
+    };
+    if let Some(parent) = exclude_path.parent() {
+        std::fs::create_dir_all(parent).with_context(|| format!("create {}", parent.display()))?;
+    }
+    crate::write_atomic(exclude_path, contents.as_bytes())
+        .with_context(|| format!("write {}", exclude_path.display()))?;
+    Ok(true)
+}
+
+/// Seat-owned Git metadata must never redirect host reads or writes. Pin both
+/// directories before inspecting exclude; all subsequent operations use the
+/// pinned info directory even if the seat replaces either directory by name.
+// trace:STORY-2630 | ai:codex
+#[cfg(target_os = "linux")]
+fn update_clone_exclude_entries(
+    clone: &Path,
+    entries: &[&str],
+    migrations: &[(&str, &str)],
+) -> Result<bool> {
+    use std::io::Write;
+    use std::os::fd::AsRawFd;
+    use std::os::unix::fs::OpenOptionsExt;
+
+    let open_directory = |path: &Path| -> Result<std::fs::File> {
+        anyhow::ensure!(
+            std::fs::symlink_metadata(path)?.file_type().is_dir(),
+            "refusing non-directory clone metadata: {}",
+            path.display()
+        );
+        std::fs::OpenOptions::new()
+            .read(true)
+            .custom_flags(libc::O_DIRECTORY | libc::O_NOFOLLOW)
+            .open(path)
+            .with_context(|| format!("pin clone metadata directory {}", path.display()))
+    };
+    let git_dir = open_directory(&clone.join(".git"))?;
+    let git_path = PathBuf::from(format!("/proc/self/fd/{}", git_dir.as_raw_fd()));
+    let info_dir = open_directory(&git_path.join("info"))?;
+    let info_path = PathBuf::from(format!("/proc/self/fd/{}", info_dir.as_raw_fd()));
+    let exclude_path = info_path.join("exclude");
+    let existing = match std::fs::symlink_metadata(&exclude_path) {
+        Ok(metadata) => {
+            anyhow::ensure!(
+                metadata.file_type().is_file(),
+                "refusing non-regular clone exclude"
+            );
+            crate::seat_clone_detect::read_regular_file(&exclude_path)
+                .context("refusing unreadable or oversized clone exclude")?
+        }
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => String::new(),
+        Err(error) => return Err(error).context("inspect clone exclude"),
+    };
+    let Some(contents) = amended_exclude_contents(existing, entries, migrations) else {
+        return Ok(false);
+    };
+    let temporary = info_path.join(format!("exclude.tmp.{}", uuid::Uuid::new_v4()));
+    let mut file = std::fs::OpenOptions::new()
+        .write(true)
+        .create_new(true)
+        .mode(0o600)
+        .custom_flags(libc::O_NOFOLLOW)
+        .open(&temporary)
+        .context("create clone exclude temporary file")?;
+    let result = (|| -> Result<()> {
+        file.write_all(contents.as_bytes())?;
+        file.sync_all()?;
+        std::fs::rename(&temporary, &exclude_path)?;
+        Ok(())
+    })();
+    if result.is_err() {
+        let _ = std::fs::remove_file(&temporary);
+    }
+    result.context("write clone exclude")?;
+    Ok(true)
+}
+
+#[cfg(not(target_os = "linux"))]
+fn update_clone_exclude_entries(
+    _clone: &Path,
+    _entries: &[&str],
+    _migrations: &[(&str, &str)],
+) -> Result<bool> {
+    anyhow::bail!("safe clone exclude updates require Linux")
+}
+
+// trace:STORY-2630 | ai:codex
+fn amended_exclude_contents(
+    existing: String,
+    entries: &[&str],
+    migrations: &[(&str, &str)],
+) -> Option<String> {
     let mut changed = false;
     let mut migrated = existing.clone();
     for (legacy, replacement) in migrations {
@@ -1248,15 +1350,7 @@ fn update_exclude_entries(
         contents.push('\n');
         changed = true;
     }
-    if !changed {
-        return Ok(false);
-    }
-    if let Some(parent) = exclude_path.parent() {
-        std::fs::create_dir_all(parent).with_context(|| format!("create {}", parent.display()))?;
-    }
-    crate::write_atomic(exclude_path, contents.as_bytes())
-        .with_context(|| format!("write {}", exclude_path.display()))?;
-    Ok(true)
+    changed.then_some(contents)
 }
 
 /// Initialize a new git repository.
@@ -7596,6 +7690,81 @@ mod tests {
         assert_eq!(std::fs::read_to_string(&fresh).unwrap(), ".aida/*.lock\n");
     }
 
+    // trace:STORY-2630 | ai:codex
+    #[cfg(target_os = "linux")]
+    fn clone_exclude_fixture() -> (tempfile::TempDir, PathBuf) {
+        let tmp = tempfile::tempdir().unwrap();
+        let clone = tmp.path().join("aida-seat-exclude-test");
+        std::fs::create_dir_all(clone.join(".git/info")).unwrap();
+        assert_eq!(
+            crate::seat_clone_detect::seat_clone_root(&clone),
+            Some(clone.clone())
+        );
+        (tmp, clone)
+    }
+
+    // trace:STORY-2630 | ai:codex
+    #[cfg(target_os = "linux")]
+    #[test]
+    fn clone_runtime_exclude_refuses_symlinked_exclude_without_copying_secret() {
+        let (tmp, clone) = clone_exclude_fixture();
+        let outside = tmp.path().join("secret");
+        std::fs::write(&outside, "outside secret\n").unwrap();
+        let exclude = clone.join(".git/info/exclude");
+        std::os::unix::fs::symlink(&outside, &exclude).unwrap();
+
+        assert!(ensure_aida_runtime_excluded(&clone).is_err());
+        assert!(
+            exclude.is_symlink(),
+            "secret must not be copied into the clone"
+        );
+        assert_eq!(std::fs::read_link(&exclude).unwrap(), outside);
+        assert_eq!(
+            std::fs::read_to_string(&outside).unwrap(),
+            "outside secret\n"
+        );
+        assert_eq!(
+            std::fs::read_dir(clone.join(".git/info")).unwrap().count(),
+            1
+        );
+    }
+
+    // trace:STORY-2630 | ai:codex
+    #[cfg(target_os = "linux")]
+    #[test]
+    fn clone_runtime_exclude_refuses_symlinked_info_without_outside_writes() {
+        let (tmp, clone) = clone_exclude_fixture();
+        let outside = tmp.path().join("outside");
+        std::fs::create_dir(&outside).unwrap();
+        let info = clone.join(".git/info");
+        std::fs::remove_dir(&info).unwrap();
+        std::os::unix::fs::symlink(&outside, &info).unwrap();
+
+        assert!(ensure_aida_runtime_excluded(&clone).is_err());
+        assert!(info.is_symlink());
+        assert!(std::fs::read_dir(&outside).unwrap().next().is_none());
+    }
+
+    // trace:STORY-2630 | ai:codex
+    #[cfg(target_os = "linux")]
+    #[test]
+    fn clone_runtime_exclude_preserves_rules_and_repairs_absent_file_idempotently() {
+        let (_tmp, clone) = clone_exclude_fixture();
+        let exclude = clone.join(".git/info/exclude");
+        assert!(ensure_aida_runtime_excluded(&clone).unwrap());
+        assert!(!ensure_aida_runtime_excluded(&clone).unwrap());
+        std::fs::write(&exclude, "# user rules\nkeep/\n.aida/\n").unwrap();
+        assert!(ensure_aida_runtime_excluded(&clone).unwrap());
+        let contents = std::fs::read_to_string(&exclude).unwrap();
+        assert!(contents.starts_with("# user rules\nkeep/\n/.aida/*\n"));
+        assert!(contents.lines().any(|line| line == ".codegraph"));
+        assert!(!ensure_aida_runtime_excluded(&clone).unwrap());
+        assert_eq!(
+            std::fs::read_dir(clone.join(".git/info")).unwrap().count(),
+            1
+        );
+    }
+
     #[test]
     fn aida_runtime_excludes_hide_materialized_worktree_state() {
         let tmp = tempfile::tempdir().unwrap();
@@ -7629,6 +7798,10 @@ mod tests {
 
         std::fs::create_dir_all(worktree.join(".aida/sessions")).unwrap();
         std::fs::create_dir_all(worktree.join(".aida-store/objects")).unwrap();
+        // trace:STORY-2630 | ai:codex
+        std::fs::create_dir(repo.join(".codegraph")).unwrap();
+        #[cfg(unix)]
+        std::os::unix::fs::symlink(repo.join(".codegraph"), worktree.join(".codegraph")).unwrap();
 
         assert!(
             !worktree.join(".gitignore").exists(),
@@ -7779,7 +7952,7 @@ mod tests {
         let migrated = std::fs::read_to_string(&exclude_path).unwrap();
         assert_eq!(
             migrated,
-            "# user\nfoo/\n/.aida/*\n.aida-store\n.aida-store/\n.aida-compete-*.log\nbar\n"
+            "# user\nfoo/\n/.aida/*\n.aida-store\n.aida-store/\n.aida-compete-*.log\nbar\n.codegraph\n"
         );
         assert!(!bug_2141_ignored(&worktree, ".aida/discipline/new.md"));
 

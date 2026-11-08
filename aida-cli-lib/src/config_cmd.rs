@@ -486,6 +486,16 @@ const CONFIG_KNOBS: &[KnobSpec] = &[
         edit: EditSafety::Bool { default: true },
     },
     // --- [contained] — sandbox + egress posture (read-only: security-relevant). ---
+    // trace:BUG-2486 | ai:codex
+    KnobSpec {
+        section: "contained",
+        key: crate::vendors::codex_auth_hints::MIN_GRANT_KEY,
+        doc: "Minimum usable child grant in seconds when the ChatGPT token caps its lifetime.",
+        default: "1800",
+        edit: EditSafety::ReadOnly {
+            reason: "trusted launch policy — edit default-branch .aida/config.toml deliberately",
+        },
+    },
     KnobSpec {
         section: "contained",
         key: "enable",
@@ -2410,6 +2420,24 @@ fn policy_registry(project_root: &std::path::Path) -> Vec<PolicySection> {
     // existing resolution helpers rather than re-deriving. trace:TASK-802 | ai:claude
     sections.push({
         let mut rows = Vec::new();
+        // trace:BUG-2486 | ai:codex — display the configured value, even if invalid.
+        let floor = config_lookup(
+            cfg.as_ref(),
+            "contained",
+            crate::vendors::codex_auth_hints::MIN_GRANT_KEY,
+        );
+        rows.push(PolicyRow {
+            key: crate::vendors::codex_auth_hints::MIN_GRANT_KEY,
+            value: floor.map(|v| v.to_string()).unwrap_or_else(|| {
+                crate::launch::contained::codex_auth::DEFAULT_MIN_GRANT_SECS.to_string()
+            }),
+            source: if floor.is_some() {
+                PolicySource::ProjectConfig
+            } else {
+                PolicySource::Default
+            },
+        });
+
         // `enable`: resolve the source by precedence (last-wins, mirroring
         // load_agents_contained): unified `[contained] enable` overrides legacy
         // `[agents] contained` (project, then global); else default false.
@@ -4398,6 +4426,41 @@ mod bug_533_config_show_tests {
     // declared knob table, so a knob added in code without a declaration — or a
     // declaration with no resolver — fails CI instead of silently vanishing (the
     // exact failure that produced BUG-533). trace:STORY-671 trace:TASK-793
+
+    // trace:BUG-2486 | ai:codex
+    #[test]
+    fn bug_2486_minimum_grant_visible_and_readonly() {
+        let dir = tempfile::tempdir().unwrap();
+        let key = crate::vendors::codex_auth_hints::MIN_GRANT_KEY;
+        let spec = config_knob_spec("contained", key).unwrap();
+        assert_eq!(spec.default, "1800");
+        assert!(config_knob_readonly_reason("contained", key).is_some());
+        for expected in ["1800", "600"] {
+            if expected == "600" {
+                std::fs::create_dir_all(dir.path().join(".aida")).unwrap();
+                std::fs::write(
+                    dir.path().join(".aida/config.toml"),
+                    format!("[contained]\n{key} = 600\n"),
+                )
+                .unwrap();
+            }
+            let sections = policy_registry(dir.path());
+            let row = sections
+                .iter()
+                .find(|s| s.section == "contained")
+                .unwrap()
+                .rows
+                .iter()
+                .find(|r| r.key == key)
+                .unwrap();
+            assert_eq!(row.value, expected);
+            if expected == "600" {
+                assert!(matches!(row.source, PolicySource::ProjectConfig));
+            } else {
+                assert!(matches!(row.source, PolicySource::Default));
+            }
+        }
+    }
 
     /// Every section a [`KnobSpec`] declares must be emitted by
     /// `policy_registry` — i.e. `aida config show` renders a live row for every

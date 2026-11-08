@@ -31,6 +31,8 @@ impl Scaffolder {
 
         let aida_block = self.generate_aida_md_for_agents(store);
         let memory_reflex = self.generate_memory_reflex_block();
+        // trace:STORY-2630 | ai:codex
+        let navigation = include_str!("../../templates/dispatch/code-navigation.md").trim();
 
         format!(
             r#"# AGENTS.md
@@ -53,6 +55,8 @@ Use `OVERVIEW.md` for product/architecture context and
 model. Use `docs/agents/codex-mcp-setup.md` when configuring Codex
 against AIDA's MCP server. Use `docs/agents/session-communication.md`
 for agent pause/abort/defer semantics.
+
+{navigation}
 
 {aida_block}
 

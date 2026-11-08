@@ -1521,8 +1521,10 @@ the compatibility profile. It removes canonical store/cache write grants and
 seals resolved store, project authority, Git metadata and shared-cache targets
 read-only after broader grants, including primary-checkout and linked/symlink
 layouts. Its fresh private derived-cache path is an explicit reader input;
-it never overlays or copies the shared cache. Missing protected mountpoints or
-a private state root inside protected state refuse. Explicit child selection
+it never overlays or copies the shared cache. Each cache directory is created
+owner-only (0700), and an existing directory or symlink refuses reuse. Missing
+protected mountpoints or a private state root inside protected state refuse.
+Explicit child selection
 `AIDA_STORE_MUTATION_PROFILE=mediated` currently refuses before launch setup:
 CLI/MCP routing, transactional Git/event publication and integrated comment/edit
 positives remain prerequisites to activation. The read-only service requirement
@@ -1789,6 +1791,16 @@ legacy ownership retains its heartbeat policy. An admitted worker never borrows
 liveness from creator metadata or a heartbeat. Foreign lease expiry remains a
 separate consumer policy. Ownership repair pins the recorded generation without
 recapturing today's process at an old PID.
+
+Review-watch receipts require a verified local procfs view. Caller capture
+fails closed on masked, hidepid, unverified or ancestor-coordinate views, with
+host-retry guidance; existing reservations remain held. Retained children may
+be recorded after exit but before reaping, when the PID cannot be reused.
+Missing legacy identity evidence uses the existing reboot/foreign-TTL backstop;
+undated legacy receipts still require reboot or operator recovery. Unknown
+identity never authorizes signalling, including orphaned group members adopted
+by an unrelated subreaper.
+<!-- trace:TASK-3365 | ai:codex -->
 
 The TASK-1750 ratchet inventories compatibility consumers in
 `proc_identity_legacy_baseline.json` and prevents new private PID/start
