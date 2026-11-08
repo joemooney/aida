@@ -850,7 +850,8 @@ fn run_terminal(
     matches: &clap::ArgMatches,
     ctx: &crate::command_registry::DispatchCtx,
 ) -> anyhow::Result<crate::command_registry::Flow> {
-    use crate::*;
+    // trace:TASK-3428 | ai:codex — explicit command adapter dependencies.
+    use crate::handle_terminal_command;
     let args = <TerminalArgs as clap::FromArgMatches>::from_arg_matches(matches)?;
     match &ctx.store {
         None => {
