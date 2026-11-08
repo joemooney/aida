@@ -14,7 +14,7 @@ priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-11-08T14:08:40.017617188Z
-modified_at: 2026-11-08T15:26:10.188775995Z
+modified_at: 2026-11-08T15:26:15.829822198Z
 req_type: Task
 tags:
 - carried-from:TASK-3463
@@ -26,6 +26,14 @@ relationships:
   target_id: 01a1b9ba-4d81-7e60-bb92-919bf9dec5cd
   created_at: 2026-11-08T15:26:10.188771778Z
   created_by: joe
+comments:
+- id: 01a1bbc4-7115-7cc3-a209-07a4670a130f
+  author: joe
+  content: 'Advisor 2026-11-08, per the operator''s 2026-10-28 one-time ruling on non-blocking findings: fixed. Conformance report of 2026-11-08 shows the vendor binary at codex-cli 0.167.0.'
+  created_at: 2026-11-08T15:26:15.829822198Z
+  modified_at: 2026-11-08T15:26:15.829822198Z
+  session_id: 01a1bbab-762f-7cd2-8a36-4ea9f209afce
+  harness_version: 2.1.319 (Claude Code)
 history:
 - id: 01a1bba6-1ddb-7c93-b710-b1160f6485b2
   author: joe
