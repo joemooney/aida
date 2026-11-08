@@ -3,12 +3,12 @@ spec_id: TASK-b6b1278890774ef993d2ebc327862470-960
 agreed_id: TASK-3428
 title: 'Crate-split PR4: explicit imports instead of use crate::* in non-in-flight files, a glob-import ratchet, dissolve lib_part1..6.rs, and relocate-ledger-paths.py'
 description: 'Per SPIKE-713 deep dive section 7 row 4 and advisor rulings 3 and 8 (2026-11-07). Acceptance: (1) replace use crate::*; with explicit imports in every file not owned by an in-flight spec (section 7 list; about 85 of 104), no behavior change; (2) a ratchet (same shape as scripts/check-exec-context.py) forbids new glob crate imports, wired into make check-ci-fast and CI gates; (3) lib_part1..6.rs (lib.rs:772-777) dissolved into real modules, closing the TASK-1538 condition; (4) scripts/relocate-ledger-paths.py rewrites path-keyed ledgers (including scripts/portability-allowlist.txt and exec-context-legacy.json) for pure moves, with a test; (5) make check-ci-fast green. Split into two PRs if over ~40 files.'
-status: NeedsAttention
+status: Approved
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-07T23:39:41.575597710Z
-modified_at: 2026-11-08T00:07:51.263656559Z
+modified_at: 2026-11-08T00:22:22.767129242Z
 req_type: Task
 relationships:
 - rel_type: Child
@@ -20,6 +20,13 @@ comments:
   content: 'ADVISOR AMENDMENT 2026-11-07 17:45 MST: the glob-import count is 170 files (82 _cmd/_args), not 104; skip files in open PRs (#3619''s 52-file footprint especially). Ship as 3-4 PRs of <=50 files. The ledger relocation script must include a totality check that no stale old path remains.'
   created_at: 2026-11-07T23:51:53.722930848Z
   modified_at: 2026-11-07T23:51:53.722930848Z
+  session_id: 01a1b848-940b-7bd2-8acd-52e428b182b8
+  harness_version: 2.1.319 (Claude Code)
+- id: 01a1b888-e92f-7f30-bae5-259e91411623
+  author: joe
+  content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: Refs slice (AC2 ratchet + AC4 relocation helper) is close, but the glob ratchet''s --base shrink check is per-path and so rejects the very pure moves relocate-ledger-paths.py exists for, and the advisor-required totality check is missing. AC1/AC3 deferred to later slices; AC5 unverified (CI still running at review time).. No triage reason was given.'
+  created_at: 2026-11-08T00:22:22.767125135Z
+  modified_at: 2026-11-08T00:22:22.767125135Z
   session_id: 01a1b848-940b-7bd2-8acd-52e428b182b8
   harness_version: 2.1.319 (Claude Code)
 history:
@@ -57,6 +64,15 @@ history:
   - field_name: status
     old_value: InProgress
     new_value: NeedsAttention
+- id: 01a1b888-e92f-7f30-bae5-258031f6a65a
+  author: joe
+  timestamp: 2026-11-08T00:22:22.767108348Z
+  session_id: 01a1b848-940b-7bd2-8acd-52e428b182b8
+  harness_version: 2.1.319 (Claude Code)
+  changes:
+  - field_name: status
+    old_value: NeedsAttention
+    new_value: Approved
 test_coverage_notes: Four Python unittest fixtures passed; repository glob ratchet with --base HEAD passed (220 imports); CI gate classification audit passed (81 classified); git diff --check passed. make check-ci-fast interrupted after discovering its fast-classified no-default-features gate directly invokes Cargo contrary to this native lane runner-only rule; full fast suite unvalidated. No Rust source changes.
 implementation_summary: 'First split slice prepared: root crate glob baseline and CI/fast gate; byte-identical path-ledger relocation helper for portability, ExecContext and glob ledgers. Refs publication declared. Explicit-import migration and lib_part1..6 module extraction remain outstanding.'
 filed_at:
@@ -68,11 +84,3 @@ filed_at:
   vendor: claude
   session: 01a1b848-940b-7bd2-8acd-52e428b182b8
   harness_version: 2.1.319 (Claude Code)
-failure_reason:
-  phase: reviewer
-  phase_index: 3
-  kind: verdict:request-changes
-  detail: Refs slice (AC2 ratchet + AC4 relocation helper) is close, but the glob ratchet's --base shrink check is per-path and so rejects the very pure moves relocate-ledger-paths.py exists for, and the advisor-required totality check is missing. AC1/AC3 deferred to later slices; AC5 unverified (CI still running at review time).
-  recovery_hint: address the review findings, move TASK-3428 back to In Progress, and clear the PR hold only after approval
-  shelved_by: reviewer
-  shelved_at: 2026-11-08T00:07:51.263656559Z
