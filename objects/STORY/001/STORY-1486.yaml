@@ -23,7 +23,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-09-26T18:30:26.622729865Z
-modified_at: 2026-11-08T11:36:43.906376606Z
+modified_at: 2026-11-08T11:36:45.760626157Z
 req_type: Story
 tags:
 - agent-launch
@@ -645,6 +645,23 @@ comments:
   content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: STORY-1486 PARTIAL: all five ACs have matching tests by source and every prior finding is fixed, but CI run 42474150272 had assigned no jobs at this head, so no test result confirms them. No blocking code defect found. Re-review once CI finishes. No cargo run, by policy.. No triage reason was given.'
   created_at: 2026-11-08T11:36:43.906373994Z
   modified_at: 2026-11-08T11:36:43.906373994Z
+  session_id: 01a1b9af-8230-75d2-82f8-667491cc010a
+  harness_version: 2.1.319 (Claude Code)
+- id: 01a1baf2-5346-7590-8ee6-01d944bd518b
+  author: joe
+  content: |-
+    REVIEW FINDINGS TO ADDRESS (STORY-1486):
+    Verdict: CHANGES REQUESTED
+    Reviewed commit: e21e2ae5087f
+    Recorded: 2026-11-08T11:13:36.933062424+00:00
+    Findings:
+    1. WAIT STATE, no code change needed for this item: CI run 42474150272 (CI, e21e2ae5087f) was still 'pending' with zero jobs at 11:13 UTC, behind other queued runs, and merge-hold-gate was queued. This head fixes the round-6 help golden, policy golden, reviewer fixture and docs findings by source, but no CI result confirms them, including the earlier cli-0 timeout in bug_2187_reviewer_record_identity::scrubbed_headless_reviewer_records_but_implementer_shell_refuses, which the implementer could not reproduce or explain. Re-review at this head when CI completes; if it is green, this item closes without a new commit.
+    2. Minor, contract: explicit-vendor --no-exec is now classified Read for guest and requester seats and described as side-effect-free (aida-cli-lib/src/tests/story_1728_policy_parity_tests.rs header), but the claude path calls maybe_show_faithful_launcher_notice (aida-cli-lib/src/agent_launch.rs:4008) before the no-exec return (agent_launch.rs:3158), and that function writes <aida home>/.faithful-launcher-notice on first use. A stakeholder preview therefore performs a write once. Skip the notice for no-exec and preview launches, and add a test that the marker is not created.
+    3. Cosmetic: the launch-profile artifact in Scaffolder::preview (aida-core/src/scaffolding/mod.rs:1391-1395) pushes any existing file to overwrites, unlike sibling Template artifacts that match on file_status. A hand-edited or older profile is never listed in modified_files or upgradeable_files. 'scaffold upgrade' compares content itself, so its remedy still works; only the preview classification is wrong.
+    4. Cosmetic, test: git_read_only_flag_parses_before_or_after_vendor (aida-cli-lib/src/launch_permission_profile.rs:324) tests codex only with the flag before the vendor. Codex is the one vendor with a positional argument, so it is the case that most needs the after-vendor form. Add 'agent new codex --git-read-only --no-exec --verbose'.
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
+  created_at: 2026-11-08T11:36:45.638718714Z
+  modified_at: 2026-11-08T11:36:45.638718714Z
   session_id: 01a1b9af-8230-75d2-82f8-667491cc010a
   harness_version: 2.1.319 (Claude Code)
 history:
