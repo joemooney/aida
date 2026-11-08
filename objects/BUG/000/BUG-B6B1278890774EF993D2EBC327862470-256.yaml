@@ -3,12 +3,12 @@ spec_id: BUG-b6b1278890774ef993d2ebc327862470-256
 agreed_id: BUG-2491
 title: Force-claim treats a dead lane's local slice-* tags as unpushed work, so every rework of a finished contained lane refuses until the seat is ended by hand
 description: 'Observed 4 times on 2026-11-07 (dell1: TASK-3424, TASK-3425, TASK-1214 seats; BUG-2488 a variant). ''aida queue work SPEC --force-claim'' refuses: ''retained lease L and private clone P: its tree has commits origin lacks: 1 commit(s) on refs/tags/slice-00-r1 ... (+46 more). Diff stat: no tracked changes.'' The branch HEAD is an ancestor of (or equal to) origin''s PR head; the only ''unpushed'' refs are the lane''s own slice-NN-rN checkpoint tags. The advisor must run ''aida session end L --force --discard-unpushed'' and relaunch each time; auto-rework cannot proceed unattended. Acceptance: (1) the unpushed-work check ignores refs/tags/slice-* (lane checkpoint tags) when every tagged commit is reachable from the pushed branch head or is the branch''s own history; tags pointing at commits NOT reachable from origin still count; (2) when the remaining evidence is clean, force-claim ends the retained finished lease itself and proceeds; (3) regression test with a seat clone carrying slice tags and a clean pushed branch. LIGHT gate.'
-status: InProgress
+status: NeedsAttention
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-08T00:05:07.175003336Z
-modified_at: 2026-11-08T05:03:08.293292332Z
+modified_at: 2026-11-08T05:06:32.760476092Z
 req_type: Bug
 comments:
 - id: 01a1b879-aeab-7d60-b2eb-2aee3e5a94bb
@@ -101,6 +101,15 @@ history:
   session_id: 01a1b9899ea4
   harness_version: codex-cli 0.167.0
   changes: []
+- id: 01a1b98d-12b8-7672-87a3-0bac8504e684
+  author: aida-orchestrator
+  timestamp: 2026-11-08T05:06:32.760498914Z
+  session_id: 01a1b98c46ec
+  harness_version: 2.1.319 (Claude Code)
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: NeedsAttention
 filed_at:
   code_sha: 2a7fe186bdcd718fa356e5e4d028a3b2ff13769d
   branch: main
@@ -110,3 +119,11 @@ filed_at:
   vendor: claude
   session: 01a1b848-940b-7bd2-8acd-52e428b182b8
   harness_version: 2.1.319 (Claude Code)
+failure_reason:
+  phase: reviewer
+  phase_index: 3
+  kind: verdict:request-changes
+  detail: 'No production change: head e6ee594 only merges main; seat_clone.rs/test files are byte-identical to the previously rejected f27e742. AC(1) unmet and contradicted by the test, AC(2) untested, AC(3) proves no fix.'
+  recovery_hint: address the review findings, move BUG-2491 back to In Progress, and clear the PR hold only after approval
+  shelved_by: reviewer
+  shelved_at: 2026-11-08T05:06:32.760476092Z
