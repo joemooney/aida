@@ -8,7 +8,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-06T13:28:15.158321967Z
-modified_at: 2026-11-08T02:46:34.726203626Z
+modified_at: 2026-11-08T03:04:13.775828272Z
 req_type: Task
 tags:
 - architecture
@@ -442,6 +442,27 @@ comments:
   modified_at: 2026-11-08T02:45:10.041047824Z
   session_id: 01a1b8be-8170-7fb2-89ab-ecb4c6eee98c
   harness_version: 2.1.319 (Claude Code)
+- id: 01a1b91d-16cf-7ed3-a298-70c0fc070cfa
+  author: joe
+  content: |
+    Round 5 PR #3628 rework, native-seat handoff (edits intentionally uncommitted; host publication required):
+
+    Finding 1 confirmed from job 128571688822 logs, run 42428425690 at 3d64e5c239b4: task_3219_background_logs_and_attach_commands measured 11.912s and task_3219_native_background_entry_keeps_bg_without_wrapper_opt_in measured 10.692s. Added 25s [budget] entries for both (max x2, rounded up to 5s) with run/job evidence. Retained both verbs' coverage.
+
+    Finding 2: initial checkout HEAD bb66cff7d13 already merged origin/main dc41ee8da2f, including 2782389cd8a. Direct scripts/check-portability.sh --check-allowlist-growth origin/main passed. Prior 31a4e2b9713 writer-inventory changes are reflected in the current inventory (prepare_with_io and PrivatePty sites), so no cherry-pick was needed. New host publication should trigger fresh CI; none was triggered from this seat. Existing merge hold remains intact.
+
+    Finding 3: logs/attach now incrementally decode UTF-8, retaining incomplete trailing sequences across reads. Printable Unicode, tabs and newlines pass through; other C0, DEL, C1 and invalid bytes receive byte escapes. Final incomplete sequences flush as escapes. Pipes remain byte-preserving. Kept split-read tests, added Unicode/invalid/truncated UTF-8 coverage, and extended both real PTY command probes with em dash, check mark and Japanese text. Updated docs/cli/06-roles-sessions.md.
+
+    Changed files: aida-cli-lib/src/agent_claude_background.rs; aida-cli/tests/bug_1502_format_json_audit.rs; docs/cli/06-roles-sessions.md; scripts/test-time-budget.toml.
+
+    Validation: 40 distinct non-Cargo fast gates passed using CI gate commands through the existing runner helpers in bounded batches. Initial make check-ci-fast was interrupted when its Cargo check began, since this seat requires Cargo through the lane runner; the TUI compile guard was likewise handed to the lane runner. Direct portability check, touched-file rustfmt --check and git diff --check passed. The exact LogDisplay implementation and its two split-read tests were extracted without modification into an isolated rustc --test harness: 2 passed. This supplemental check does not satisfy the lane's Cargo test contract.
+
+    untested=true: lane job j20261108T024801715-534498-0 (supervisor module cargo test) timed out during compilation after 900s, exit 124; no tests executed. Live regression count: 0 confirmed. Remaining jobs at handoff: j20261108T024851062-2-0 (two CLI regressions, running); j20261108T024900909-541563-0 (live background supervisor, queued); j20261108T024902070-541737-0 (feature-disabled CLI check, queued); j20261108T025005228-553621-0 (TUI all-target check, queued). Inspect each with aida lane job wait <id>. No full Cargo success or full make check-ci-fast success is claimed. Codegraph callers failed with an unreachable index; doctor confirmed it; no lane index was initialized.
+
+    Native publication declaration recorded successfully: [AI:codex] fix(containment): preserve UTF-8 background logs and calibrate CI budgets (Refs TASK-3219). Host must create this round's commit and publish. No commit, push, PR creation, review record, queue completion or merge action was performed by this seat.
+  created_at: 2026-11-08T03:04:13.775828272Z
+  modified_at: 2026-11-08T03:04:13.775828272Z
+  session_id: 01a1b90ce0e3
 history:
 - id: 01a1b10b-ebd9-7db3-bc79-b89eb0de54f2
   author: joe
