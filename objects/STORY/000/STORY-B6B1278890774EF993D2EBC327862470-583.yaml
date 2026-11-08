@@ -20,7 +20,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-08T02:56:36.206726Z
-modified_at: 2026-11-08T14:18:24.586655200Z
+modified_at: 2026-11-08T14:32:12.603240567Z
 req_type: Story
 tags:
 - architecture
@@ -206,6 +206,35 @@ comments:
   modified_at: 2026-11-08T14:12:31.835968241Z
   session_id: 01a1b9af-8230-75d2-82f8-667491cc010a
   harness_version: 2.1.319 (Claude Code)
+- id: 01a1bb92-f43b-7c93-bccc-c41881e6c6c8
+  author: dirtlab
+  content: |
+    PR #3680 round-2 review rework complete under advisor slice-1 signoff A1-A5. Edits remain UNCOMMITTED for the native host launcher. Recorded publication declaration: [AI:codex] fix(lanes): preserve unobservable host reservations (Refs STORY-2660). No commit/push/PR/queue done/pr ship/review record performed.
+
+    Addressed all four findings:
+    1. Slot records stamp pid_namespace. Status, admission and legacy-slot refusal use PidObserver visibility before probing a PID. Unobservable reservations report unknown and remain occupied even with a completed child log; admission never prunes them. Numeric PID collisions cannot overwrite unknown receipts. Injected isolated-observer regression covers stamped foreign and unstamped legacy reservations, no PID probing, exit-34 refusal, unchanged receipts, legacy refusal and visible-process positive controls.
+    2. Read-only capacity moved to doctor --lane-capacity [--json], reserving --lane-host for STORY-2642 readiness. Updated parsing/integration tests and documented the distinct contract; no new placement or readiness authority.
+    3. Pipeline detail and alarm explicitly label the count project-local and cap host-wide, warning that other clones may hold slots. No claim that a project-local under-cap alarm proves host admission capacity.
+    4. Removed unused record_slot_log/mark_slot_waiting project-root arguments and obsolete ownership-liveness baseline entry; wrapped autonomy docs. Regenerated and reviewed five store-writer sink item renames to acquire_slot_in_from.
+
+    Changed files:
+    aida-cli-lib/src/standalone_implementer.rs
+    aida-cli-lib/src/doctor_cmd.rs
+    aida-cli-lib/src/pipeline_stall_signals.rs
+    aida-cli-lib/src/tests/story_1662_standalone_implementer_tests.rs
+    aida-cli/tests/story_1662_queue_work_wiring.rs
+    docs/cli/03-work-autonomy.md
+    docs/cli/07-project-setup.md
+    scripts/ownership-liveness-legacy.json
+    scripts/store-writers.toml
+
+    Validation via launcher (cargo test --profile agent): final host_capacity library filter 8 passed (j20261108T141813260-2-0; initial run also 8 passed, j20261108T141605089-2-0); existing standalone cap filter 2 passed (j20261108T141744561-2-0); CLI story_1662_queue_work_wiring integration suite 4 passed (j20261108T141625815-2-0). 14 distinct executed Rust tests passed. Python ownership ratchet 2 passed; store-writer inventory tests 42 passed. check-store-writers.py passed; check-exec-context.py zero additions; rustfmt --check and git diff --check passed. pytest is unavailable; Python suites were successfully executed with their unittest entrypoints. untested=false. Codegraph unavailable (command not found); caller searches used rg.
+
+    No remaining slice-1 blockers. Full-story placement/SSH/idempotency, remote leases/ps, grant issuer/security review, completion circulation and script retirement remain later slices per advisor A4/A5. Existing punt/hold signals were not cleared. Host launcher owns commit and publication after this process exits.
+  created_at: 2026-11-08T14:32:12.603240567Z
+  modified_at: 2026-11-08T14:32:12.603240567Z
+  session_id: 01a1bb82a71f
+  harness_version: codex-cli 0.167.0
 history:
 - id: 01a1b91a-2eb5-7142-b252-8d3eb8d49b14
   author: joe
