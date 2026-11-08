@@ -8,7 +8,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-08T15:10:55.149158862Z
-modified_at: 2026-11-08T15:56:00.684081905Z
+modified_at: 2026-11-08T15:56:04.786963486Z
 req_type: Bug
 relationships:
 - rel_type:
@@ -65,6 +65,22 @@ comments:
   content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: Round 2 addressed findings 1, 3 and 4 and the invalid-run code reads correct, but BUG-2497''s live ChatGPT-auth acceptance still has no run; two minor defects added. CI at review: cli-0, cli-1, rest pass; lib-0, lib-1, contracts, gates still running; merge-hold-gate fails only on the supervised hold.. It was punted on: blocked-dependency: Round 2 finding 2 remains unverified: BUG-2497 acceptance requires a live ChatGPT-auth --boundary aida turn and report.json run_status plus C0-C4 statuses. This standalone native implementer seat has no operator terminal for production roster/role entry and must not synthesize one or clear managed identity. Findings 1, 3 and 4 are addressed in uncommitted edits; all 54 Python conformance tests pass. No finding is disputed. Operator must run the harness from this branch and attach evidence, or advisor must explicitly split live acceptance into a follow-up. Existing merge hold remains; no completion or live containment credit claimed.. No triage reason was given.'
   created_at: 2026-11-08T15:56:00.684079382Z
   modified_at: 2026-11-08T15:56:00.684079382Z
+  session_id: 01a1b9af-8230-75d2-82f8-667491cc010a
+  harness_version: 2.1.319 (Claude Code)
+- id: 01a1bbdf-bc03-7403-a51b-17bdf77e4577
+  author: joe
+  content: |-
+    REVIEW FINDINGS TO ADDRESS (BUG-2497):
+    Verdict: CHANGES REQUESTED
+    Reviewed commit: 83fbb5d238de
+    Recorded: 2026-11-08T15:47:39.110975789+00:00
+    Findings:
+    1. Acceptance unverified (blocking; needs operator or advisor, not implementer rework): BUG-2497 requires that with the fix a ChatGPT-auth run completes a turn and C0-C4 report real results. No such run exists: the newest ~/.aida/conformance-codex-aida-1794150336 predates the fix, has no run_status and all checks unknown. The open blocked-dependency punt on BUG-2497 asks for this. Either the operator runs the harness from this branch with --boundary aida and attaches report.json run_status and C0-C4 statuses to the spec, or the advisor explicitly splits the live check into a follow-up spec.
+    2. Minor, repo rule: AGENTS.md:1-6 and OVERVIEW.md:1703-1706 add per-change notes for a harness fix. The root CLAUDE.md says per-change notes go in the PR body and an aida comment on the spec, and these files change only for a real architecture change, because each prepended paragraph conflicts with every open PR. Remove both hunks; docs/internal/testing/containment-conformance.md already carries the behaviour.
+    3. Minor, test gap: the AGY branch of finish_run (scripts/containment/conformance.py:399-400) has no positive test. Every run_agy_fixture case asserts verified_terminal_receipt false and expects invalid-run (tests/test_containment_conformance.py:1139,1178), and RunCompletionTests uses vendor codex only. If the branch regressed so a completed AGY exact-command receipt became invalid-run, no test would fail. Add a finish_run case with vendor agy and verified_terminal_receipt true asserting run_status completed and no raise.
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
+  created_at: 2026-11-08T15:56:04.483840334Z
+  modified_at: 2026-11-08T15:56:04.483840334Z
   session_id: 01a1b9af-8230-75d2-82f8-667491cc010a
   harness_version: 2.1.319 (Claude Code)
 history:
