@@ -226,6 +226,13 @@ comments:
   modified_at: 2026-11-08 12:29:20.093713+00:00
   session_id: 01a1bb178e1d
   harness_version: codex-cli 0.167.0
+- id: 01a1bb38-487e-7a41-80ae-892bd32a4bb8
+  author: joe
+  content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: All round-4 findings are fixed and both acceptance tests read correctly, but the new resume lease requirement breaks an existing Codex resume test, and CI has no result at this head.. No triage reason was given.'
+  created_at: 2026-11-08 12:53:10.398425+00:00
+  modified_at: 2026-11-08 12:53:10.398425+00:00
+  session_id: 01a1b9af-8230-75d2-82f8-667491cc010a
+  harness_version: 2.1.319 (Claude Code)
 - id: 01a1bb41-174f-7ad1-bcf7-ae88a66cc767
   author: dirtlab
   content: 'Validation-only pickup at 73987ccf57: round-four implementation is already present; no source edits required. Confirmed resume admission consumes prior main/seat vetoes, resume/drain vendor commands receive seat-local signal paths, publication reconciles before checking vetoes, and cleanup requires host-retained handshake evidence. Lane-runner BUG-2488 regressions: 7 executed tests passed (j20261108T125613744-2-0). Launch-boundary regression: 1 executed test passed (j20261108T130235702-2-0). Both acceptance criteria traced, none untested. Rustfmt on seven implementation/test files and git diff --check pass. Working tree clean; changed files: none; untested=false. Codegraph unavailable, call sites confirmed with rg. No implementation blockers; fresh CI/review and supervised hold clearance remain host work. No commit, push, PR creation, queue completion, ship or review-record attempted.'
@@ -384,6 +391,15 @@ history:
   - field_name: status
     old_value: InProgress
     new_value: NeedsAttention
+- id: 01a1bb38-487e-7a41-80ae-891013d8dba1
+  author: joe
+  timestamp: 2026-11-08 12:53:10.398417+00:00
+  session_id: 01a1b9af-8230-75d2-82f8-667491cc010a
+  harness_version: 2.1.319 (Claude Code)
+  changes:
+  - field_name: status
+    old_value: NeedsAttention
+    new_value: Approved
 - id: 01a1bb3a-c5de-78d0-bcc3-8ccbe0494338
   author: dirtlab
   timestamp: 2026-11-08 12:55:53.566056+00:00
