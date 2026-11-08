@@ -8,8 +8,23 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-08T15:10:55.149158862Z
-modified_at: 2026-11-08T15:13:57.945027181Z
+modified_at: 2026-11-08T15:16:12.267677431Z
 req_type: Bug
+comments:
+- id: 01a1bbba-ccf5-7ed1-8f16-63c4fa05dc0a
+  author: dirtlab
+  content: Implemented fixture allow-list addition for chatgpt.com only, with auth hosts and deny.fixture.test still excluded. Added explicit invalid-run reporting and nonzero failure when Codex has no turn.completed event (AGY requires completed exact-command receipt), preserving measured check observations. Focused completion/exit regressions pass; full Python conformance and binary-dependent fixture suites running. Live ChatGPT-auth C0-C4 validation requires the authorized host/operator run; this managed seat cannot supply that evidence. Edits remain uncommitted for host publication.
+  created_at: 2026-11-08T15:15:43.989685154Z
+  modified_at: 2026-11-08T15:15:43.989685154Z
+  session_id: 01a1bbb8ca7f
+  harness_version: codex-cli 0.167.0
+- id: 01a1bbbb-3b6b-7a30-94da-c5745125084a
+  author: dirtlab
+  content: 'Final validation: fast Python conformance suite passed 53 tests (including two new completion/exit regressions); git diff --check passed. Combined run executed 54 tests: binary-dependent production fixture failed before changed code at fixture-init-refused, instead of reaching expected managed role refusal. Updated its exact allow-list expectation to include chatgpt.com. Live ChatGPT-auth acceptance remains host validation. Changed files: scripts/containment/conformance.py, tests/test_containment_conformance.py, tests/test_containment_conformance_aida.py, docs/internal/testing/containment-conformance.md. No commit/push/PR/queue completion performed.'
+  created_at: 2026-11-08T15:16:12.267677431Z
+  modified_at: 2026-11-08T15:16:12.267677431Z
+  session_id: 01a1bbb8ca7f
+  harness_version: codex-cli 0.167.0
 history:
 - id: 01a1bbb8-d03f-7092-98dc-459d41472f93
   author: aida-session-start
