@@ -1,3 +1,10 @@
+Codex conformance completion uses vendor headless JSONL logs after production
+launch acceptance; oversized logs report `vendor-log-oversize`. Invalid runs
+preserve measured checks without production-launch credit. Live ChatGPT C0–C4
+acceptance still requires an operator run. See
+[conformance](docs/internal/testing/containment-conformance.md).
+<!-- trace:BUG-2497 | ai:codex -->
+
 Review-watch records retained fast-exiting children before reaping. Incomplete
 legacy receipts use the existing reboot/TTL backstop. Caller capture requires
 verified local procfs and fails closed with host-retry guidance. See OVERVIEW.md.

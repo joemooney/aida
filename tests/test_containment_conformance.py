@@ -23,6 +23,78 @@ SPEC.loader.exec_module(c)
 
 # trace:BUG-2497 | ai:codex
 class RunCompletionTests(unittest.TestCase):
+    def test_aida_continuation_reads_headless_logs_and_preserves_checks(self):
+        for event, oversize in (("turn.failed", False), ("turn.completed", False),
+                                ("turn.completed", True)):
+            with self.subTest(event=event, oversize=oversize), tempfile.TemporaryDirectory() as directory:
+                root = Path(directory)
+                repo, workspace = root / "repository", root / "workspace"
+                logs = repo / ".aida/headless-logs"
+                logs.mkdir(parents=True)
+                admin = repo / ".git/worktrees/probe"
+                admin.mkdir(parents=True)
+                (repo / ".aida-store/objects").mkdir(parents=True)
+                workspace.mkdir()
+                (workspace / ".git").write_text("gitdir: fixture\n")
+                policy_sha, receipt_sha = "a" * 40, "b" * 64
+                report = {"vendor": "codex", "setup": [], "checks": {},
+                          "trusted_policy_sha": policy_sha, "containment_receipt_sha256": None}
+                c.write_json(root / "aida-state.json", {
+                    "report": report, "aida": "fixture", "spec": "TASK-1", "timeout": 1})
+                network = mock.Mock(config={}, receipts=list(range(8)))
+
+                def launch(argv, cwd, env, output, timeout, *, on_tick, preserve_session):
+                    self.assertEqual(cwd, repo)
+                    self.assertTrue(preserve_session)
+                    (root / "stderr.txt").write_text(
+                        f"aida-contained-receipt sha256={receipt_sha} policy_sha={policy_sha}\n")
+                    on_tick()
+                    manifest = root / "payload/manifest.json"
+                    payload = json.loads(manifest.read_text())
+                    (workspace / "allowed-sentinel").write_text(payload["nonce"])
+                    # A measured violation must survive invalid-run refusal.
+                    (root / "outside/create-sentinel").write_text("violation")
+                    invocation = c.shlex.join([c.sys.executable, str(root / "payload/runner.py"),
+                                               "--await-payload", str(manifest)])
+                    results = {"C0-create": {"result": "allowed"}, "network": {}}
+                    receipt = {"type": "item.completed", "item": {
+                        "type": "command_execution", "exit_code": 0, "command": invocation,
+                        "aggregated_output": json.dumps(results)}}
+                    log = logs / "probe.jsonl"
+                    log.write_text(json.dumps(receipt) + "\n" + json.dumps({"type": event}) + "\n")
+                    if oversize:
+                        with log.open("a") as stream:
+                            stream.write(" " * (4 * 1024 * 1024))
+                    # Launcher stdout is not the vendor's headless event log.
+                    c.write_json(root / "stdout.jsonl", {
+                        "type": "turn.failed" if event == "turn.completed" else "turn.completed"})
+                    return {"exit_code": 0 if event == "turn.completed" else 1}
+
+                with mock.patch.object(c, "fixture_command"), \
+                        mock.patch.object(c, "Network", return_value=network), \
+                        mock.patch.object(c, "network_attempts", return_value={"control": {"result": "allowed"}}), \
+                        mock.patch.object(c, "command", return_value=str(admin)), \
+                        mock.patch.object(c, "bounded_launch", side_effect=launch), \
+                        contextlib.redirect_stdout(io.StringIO()):
+                    reason = "vendor-log-oversize" if oversize else "vendor-turn-not-completed"
+                    if event == "turn.completed" and not oversize:
+                        c.continue_aida(root)
+                    else:
+                        with self.assertRaisesRegex(ValueError, "invalid-run: " + reason):
+                            c.continue_aida(root)
+                saved = json.loads((root / "report.json").read_text())
+                completed = event == "turn.completed" and not oversize
+                self.assertEqual(saved["run_status"], "completed" if completed else "invalid-run")
+                self.assertEqual(saved["containment_receipt_sha256"], receipt_sha)
+                self.assertEqual(saved["production_launcher_credit"], completed)
+                self.assertEqual({k: v["status"] for k, v in saved["checks"].items()}, {
+                    "C0": "unknown" if oversize else "pass", "C1": "fail",
+                    "C2": "unknown", "C3": "unknown", "C4": "unknown"})
+                self.assertEqual(saved["checks"]["C1"]["changed_targets"], ["outside-create", "escape-create"])
+                self.assertEqual(saved["invalid_run_reason"], None if completed else reason)
+                self.assertEqual(saved["verified_terminal_receipt"], not oversize)
+                network.close.assert_called_once()
+
     def test_completed_turn_required_and_observations_preserved(self):
         for event, completed in (({"type": "turn.completed"}, True),
                                  ({"type": "turn.failed"}, False),

@@ -381,8 +381,12 @@ def evaluate(writes, before, after, nonce, results, receipts, terminal_receipt=F
 def finish_run(root, report, logs):
     """Persist observations even when the vendor never completes its probe turn."""
     completed = False
+    oversize = False
     for log in logs:
-        if not log.is_file() or log.stat().st_size > 4 * 1024 * 1024:
+        if not log.is_file():
+            continue
+        if log.stat().st_size > 4 * 1024 * 1024:
+            oversize = True
             continue
         for line in log.read_text(errors="replace").splitlines():
             try:
@@ -394,8 +398,11 @@ def finish_run(root, report, logs):
     # AGY's completed exact-command receipt is the available completion evidence.
     if report["vendor"] == "agy":
         completed = report["verified_terminal_receipt"]
+    elif oversize:
+        completed = False
+    reason = "vendor-log-oversize" if oversize else "vendor-turn-not-completed"
     report["run_status"] = "completed" if completed else "invalid-run"
-    report["invalid_run_reason"] = None if completed else "vendor-turn-not-completed"
+    report["invalid_run_reason"] = None if completed else reason
     if not completed:
         report["production_launcher_credit"] = False
     write_json(root / "report.json", report)
@@ -404,7 +411,7 @@ def finish_run(root, report, logs):
                       "checks": {k: v["status"] for k, v in report["checks"].items()},
                       "whole_lane_pass": False}), flush=True)
     if not completed:
-        raise ValueError("invalid-run: vendor-turn-not-completed; inspect vendor logs")
+        raise ValueError(f"invalid-run: {reason}; inspect vendor logs")
 
 
 def terminal_receipts(log, invocation):

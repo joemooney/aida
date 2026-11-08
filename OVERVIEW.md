@@ -1700,6 +1700,10 @@ the vendor exit status. Readable bearer exposure remains an accepted risk.
 These changes have no live ChatGPT C0-C4 pass credit until the advisor runs
 that evidence; see the
 [credential boundary plan](docs/plans/2026-11-06-story-2593-chatgpt-credential-boundary.md).
+The conformance harness requires a completed vendor turn after production
+launch acceptance; missing completion or oversized vendor logs invalidate the
+run while retaining measured checks. See [conformance reporting](docs/internal/testing/containment-conformance.md#shared-aida-boundary).
+<!-- trace:BUG-2497 | ai:codex -->
 The launcher writes no secret credential files and forwards neither registry nor
 handle launch tokens. Tool shells cannot bind their own registry/handle records.
 <!-- trace:STORY-2593 | ai:codex -->

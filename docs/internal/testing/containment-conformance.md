@@ -435,9 +435,13 @@ request the auto-complete pipeline, CI, PR publication, or queue completion.
 
 The disposable Codex policy allows `api.openai.com`, `chatgpt.com` and
 `allow.fixture.test` only; authentication hosts and `deny.fixture.test` remain
-excluded. A Codex invocation without a `turn.completed` event produces
+excluded. After launch acceptance and containment-receipt validation, a Codex
+invocation without a `turn.completed` event in `.aida/headless-logs/*.jsonl` produces
 `run_status: "invalid-run"`, reason `vendor-turn-not-completed`, and a nonzero
-harness exit. AGY requires a completed exact-command payload receipt. Reports
+harness exit. A vendor log over 4 MiB instead produces reason
+`vendor-log-oversize`; its completion evidence cannot be inspected within the cap.
+Earlier launch or receipt refusals exit nonzero with `unsupported_reason` and
+may have no `run_status` field. AGY requires a completed exact-command payload receipt. Reports
 retain measured failures and unknown checks for diagnosis; an invalid run earns
 no production-launch credit.
 <!-- trace:BUG-2497 | ai:codex -->
