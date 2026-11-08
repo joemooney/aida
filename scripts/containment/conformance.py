@@ -898,6 +898,17 @@ def queue_work_argv(aida, spec, vendor, workspace):
             "--branch", "probe", "--path", str(workspace)]
 
 
+# Match Rust's shell_quote_diagnostic byte-for-byte, including non-ASCII paths.
+# trace:TASK-3048 | ai:codex
+def diagnostic_invocation(runner, manifest):
+    def quote(value):
+        value = str(value)
+        if value and re.fullmatch(r"[a-zA-Z0-9_@%+=:,./-]+", value):
+            return value
+        return "'" + value.replace("'", "'\"'\"'") + "'"
+    return "/usr/bin/python3 " + quote(runner) + " --await-payload " + quote(manifest)
+
+
 def aida_fixture_argv(aida, spec, vendor, workspace, credential=None):
     if vendor == "agy":
         if not credential:
@@ -937,6 +948,7 @@ def continue_aida(root):
         interpreter = "/usr/bin/python3" if report["vendor"] == "agy" else sys.executable
         invocation = shlex.join([interpreter, str(runner), "--await-payload", str(manifest)])
         if report["vendor"] == "agy":
+            invocation = diagnostic_invocation(runner, manifest)
             fixture_command(["git", "worktree", "add", "-b", "probe", str(workspace), "main"],
                             repo, env, report, "diagnostic-worktree")
         observed = {}

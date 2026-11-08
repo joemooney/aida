@@ -503,7 +503,7 @@ fn bind_runtime_credential(
     Ok(())
 }
 
-// Mandatory per-invocation controls override writable runtime preferences.
+// Private runtime settings carry the mandatory tool controls.
 // No native sandbox or filesystem permission allow rules are supplied.
 // trace:TASK-3048 | ai:codex
 fn runtime_tool_settings(policy: &crate::containment::RuntimePolicy) -> serde_json::Value {
@@ -564,7 +564,7 @@ fn wrapped_outer_only_argv(
     let mut args = policy.argv_prefix.clone();
     args.extend([
         "--settings".into(),
-        runtime_tool_settings(policy).to_string(),
+        runtime.join("settings.json").to_string_lossy().into_owned(),
     ]);
     args.extend([
         // The exec barrier verifies applied evidence before releasing this argv.

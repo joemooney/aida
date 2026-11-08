@@ -591,13 +591,9 @@ fn task_3048_runtime_argv_accepts_only_the_site_prompt() {
             .count(),
         1
     );
-    let controls: serde_json::Value =
-        serde_json::from_str(&args[args.iter().position(|a| a == "--settings").unwrap() + 1])
-            .unwrap();
-    assert_eq!(controls, runtime_tool_settings(&policy));
     assert_eq!(
-        controls["permissions"]["deny"],
-        serde_json::json!(["mcp(*)", "read_url(*)", "execute_url(*)"])
+        args[args.iter().position(|a| a == "--settings").unwrap() + 1],
+        runtime.join("settings.json").to_string_lossy()
     );
     for original in [
         vec![],
@@ -638,12 +634,9 @@ fn task_3048_outer_only_candidate_requires_live_accepted_receipt() {
             .count(),
         1
     );
-    let settings: serde_json::Value =
-        serde_json::from_str(&args[args.iter().position(|a| a == "--settings").unwrap() + 1])
-            .unwrap();
     assert_eq!(
-        settings,
-        runtime_tool_settings(&crate::containment::runtime_policy("agy").unwrap())
+        args[args.iter().position(|a| a == "--settings").unwrap() + 1],
+        runtime.join("settings.json").to_string_lossy()
     );
     assert!(!args.iter().any(|a| a == "--sandbox" || a == "--mode"));
     assert!(crate::launch::agy::AGY
@@ -3818,8 +3811,8 @@ fn task_3048_diagnostic_prepare_uses_common_wrapper_and_keeps_production_closed(
     assert!(!argv.contains(&serde_json::json!("--sandbox")));
     let settings = argv.iter().position(|a| a == "--settings").unwrap();
     assert_eq!(
-        serde_json::from_str::<serde_json::Value>(argv[settings + 1].as_str().unwrap()).unwrap(),
-        runtime_tool_settings(&policy)
+        argv[settings + 1].as_str().unwrap(),
+        runtime.join("settings.json").to_string_lossy()
     );
     let bound = plan
         .profile

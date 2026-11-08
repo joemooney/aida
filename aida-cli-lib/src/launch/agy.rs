@@ -76,6 +76,10 @@ pub(crate) fn diagnostic_launch(
         .context("AGY_DIAGNOSTIC_FIXTURE_INVALID: missing vendor")?;
     // The shipped runtime descriptor is the closed selector. No arbitrary
     // program or settings template comes from fixture data.
+    anyhow::ensure!(
+        vendor == "agy",
+        "AGY_DIAGNOSTIC_FIXTURE_INVALID: expected vendor agy"
+    );
     let policy = crate::containment::runtime_policy(vendor)?;
     anyhow::ensure!(
         credential.is_absolute()
@@ -144,6 +148,139 @@ pub(crate) fn diagnostic_launch(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    // All malformed fixture inputs must refuse before grant issuance or exec.
+    // trace:TASK-3048 | ai:codex
+    struct DiagnosticFixture {
+        root: tempfile::TempDir,
+        credential: std::path::PathBuf,
+    }
+
+    impl DiagnosticFixture {
+        fn new() -> Self {
+            let root = tempfile::tempdir().unwrap();
+            for directory in ["workspace", "repository", "payload"] {
+                std::fs::create_dir(root.path().join(directory)).unwrap();
+            }
+            std::fs::write(root.path().join("payload/runner.py"), "# never executed").unwrap();
+            let fixture = Self {
+                credential: root
+                    .path()
+                    .join(".gemini/antigravity-cli/antigravity-oauth-token"),
+                root,
+            };
+            fixture.state("aida", "agy");
+            fixture
+        }
+
+        fn state(&self, boundary: &str, vendor: &str) {
+            std::fs::write(
+                self.root.path().join("aida-state.json"),
+                serde_json::json!({"report": {"boundary": boundary, "vendor": vendor}}).to_string(),
+            )
+            .unwrap();
+        }
+
+        fn refusal(&self) -> anyhow::Error {
+            diagnostic_launch(
+                self.root.path(),
+                &self.credential,
+                &aida_core::exec_context::Environment::from_pairs([]),
+            )
+            .unwrap_err()
+        }
+    }
+
+    #[test]
+    fn task_3048_diagnostic_refuses_non_sibling_directories_and_symlink_escapes() {
+        use std::os::unix::fs::symlink;
+        for entry in ["workspace", "repository"] {
+            let fixture = DiagnosticFixture::new();
+            let outside = tempfile::tempdir().unwrap();
+            std::fs::remove_dir(fixture.root.path().join(entry)).unwrap();
+            symlink(outside.path(), fixture.root.path().join(entry)).unwrap();
+            assert!(fixture
+                .refusal()
+                .to_string()
+                .contains("AGY_DIAGNOSTIC_FIXTURE_INVALID"));
+        }
+        // A symlink to a nested directory is not a direct sibling either.
+        let fixture = DiagnosticFixture::new();
+        let nested = fixture.root.path().join("payload/nested");
+        std::fs::create_dir(&nested).unwrap();
+        std::fs::remove_dir(fixture.root.path().join("workspace")).unwrap();
+        symlink(nested, fixture.root.path().join("workspace")).unwrap();
+        assert!(fixture
+            .refusal()
+            .to_string()
+            .contains("AGY_DIAGNOSTIC_FIXTURE_INVALID"));
+    }
+
+    #[test]
+    fn task_3048_diagnostic_refuses_wrong_boundary_and_vendor_before_grant() {
+        let fixture = DiagnosticFixture::new();
+        for (boundary, vendor) in [("native", "agy"), ("aida", "codex"), ("aida", "unknown")] {
+            fixture.state(boundary, vendor);
+            assert!(fixture
+                .refusal()
+                .to_string()
+                .contains("AGY_DIAGNOSTIC_FIXTURE_INVALID"));
+        }
+    }
+
+    #[test]
+    fn task_3048_diagnostic_refuses_invalid_credentials_and_missing_runner() {
+        let mut fixture = DiagnosticFixture::new();
+        let credential = fixture.credential.clone();
+        for path in [
+            "relative/.gemini/antigravity-cli/antigravity-oauth-token",
+            "/private/antigravity-oauth-token",
+            "/private/.gemini/antigravity-cli/other-token",
+            "/private/.other/antigravity-cli/antigravity-oauth-token",
+        ] {
+            fixture.credential = path.into();
+            assert!(fixture
+                .refusal()
+                .to_string()
+                .contains("AGY_DIAGNOSTIC_CREDENTIAL_INVALID"));
+        }
+        fixture.credential = credential;
+        std::fs::remove_file(fixture.root.path().join("payload/runner.py")).unwrap();
+        assert!(fixture.refusal().to_string().contains("runner missing"));
+    }
+
+    #[test]
+    fn task_3048_diagnostic_without_parent_grant_never_spawns() {
+        let _env = crate::test_env::EnvVarsGuard::apply(&[
+            ("AIDA_SESSION_GRANT", Some("task-3048-nonexistent-parent")),
+            ("AIDA_SESSION_GRANT_FILE", None),
+        ]);
+        let fixture = DiagnosticFixture::new();
+        let error = fixture.refusal();
+        assert!(
+            crate::gate::seat_authority::ChildGrantRefused::is_in(&error),
+            "{error:#}"
+        );
+        // No credential exists and runner is not executable: reaching spawn or
+        // credential setup would yield a different error, not ChildGrantRefused.
+        assert!(!fixture.credential.exists());
+    }
+
+    #[test]
+    fn task_3048_diagnostic_quote_matches_harness_for_non_ascii_paths() {
+        assert_eq!(
+            shell_quote_diagnostic("/fixture/ascii/runner.py"),
+            "/fixture/ascii/runner.py"
+        );
+        assert_eq!(
+            shell_quote_diagnostic("/fixture/café/runner.py"),
+            "'/fixture/café/runner.py'"
+        );
+        assert_eq!(
+            shell_quote_diagnostic("/fixture/a'b"),
+            "'/fixture/a'\"'\"'b'"
+        );
+    }
 
     // Check every central launch surface, including a forged Aida posture:
     // a context marker never substitutes for the receipt/exec barrier.

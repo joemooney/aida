@@ -114,14 +114,17 @@ pub enum ConfigPermissionsCommand {
     // trace:TASK-3048 | ai:codex
     #[clap(hide = true)]
     ConformanceLaunch {
+        /// Fresh conformance fixture containing workspace, repository and payload.
         #[clap(long)]
         fixture_root: PathBuf,
+        /// Absolute path to the existing AGY OAuth credential leaf.
         #[clap(long)]
         credential: PathBuf,
     },
     /// Print the runtime descriptor embedded in this binary. No launch authority.
     // trace:TASK-3048 | ai:codex
     RuntimePolicy {
+        /// Vendor whose embedded runtime descriptor to inspect.
         #[clap(long)]
         vendor: String,
     },

@@ -65,6 +65,17 @@ class PolicyRevisionTests(unittest.TestCase):
 
 # trace:TASK-3131 | ai:codex
 class AidaBoundaryTests(unittest.TestCase):
+    # trace:TASK-3048 | ai:codex
+    def test_agy_diagnostic_invocation_matches_rust_quoting(self):
+        for parent in ["/fixture/ascii", "/fixture/café", "/fixture/space and 'quote'"]:
+            runner, manifest = Path(parent) / "runner.py", Path(parent) / "manifest.json"
+            invocation = c.diagnostic_invocation(runner, manifest)
+            self.assertEqual(c.shlex.split(invocation),
+                             ["/usr/bin/python3", str(runner), "--await-payload", str(manifest)])
+            if "café" in parent:
+                self.assertEqual(invocation,
+                                 "/usr/bin/python3 '/fixture/café/runner.py' --await-payload '/fixture/café/manifest.json'")
+
     # trace:BUG-2470 | ai:codex
     def test_fixture_policy_merges_existing_tables_and_replaces_hosts(self):
         with tempfile.TemporaryDirectory() as directory:

@@ -44,7 +44,10 @@ class AidaProductionBoundaryTests(unittest.TestCase):
                 result = c.subprocess.run([c.sys.executable, str(Path(c.__file__).resolve()),
                                            "--vendor", "codex", "--boundary", "aida", "--output", str(output)],
                                           env=env, stdin=terminal, stderr=terminal,
-                                          stdout=c.subprocess.PIPE, text=True, timeout=45)
+                                          # Authority records must be private even when the
+                                          # invoking shell uses a collaborative umask.
+                                          stdout=c.subprocess.PIPE, text=True, timeout=45,
+                                          umask=0o077)
                 os.set_blocking(master, False)
                 diagnostics = bytearray()
                 while True:

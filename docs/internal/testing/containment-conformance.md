@@ -482,10 +482,10 @@ local to this explicit entry and never relaxes trusted allowed-host approval.
 The credential source is retained before authority HOME relocation; only its
 checked leaf handle is mounted read-only. Both the relocated and original
 `.gemini` parents are masked. Runtime state is private and writable. Workspace
-MCP configuration, hooks and plugins are masked too. Mandatory inline settings
-carry `permissions.deny = ["mcp(*)", "read_url(*)", "execute_url(*)"]`, covering
-MCP, URL reads and browser actuation; the same controls seed private runtime
-preferences. These are documented [AGY tool actions](https://antigravity.google/docs/permissions/).
+MCP configuration, hooks and plugins are masked too. The private runtime
+`settings.json`, selected by `--settings <path>`, carries `permissions.deny = ["mcp(*)", "read_url(*)", "execute_url(*)"]`, covering
+MCP, URL reads and browser actuation; these controls are seeded before vendor
+execution. These are documented [AGY tool actions](https://antigravity.google/docs/permissions/).
 There is no native `--sandbox` or native permissions-profile file. Candidate
 and wrapper argv share the controls and terminal `-p <prompt>` order. Only the
 accepted-receipt barrier permits permission-bypass execution. Model-free tests

@@ -20326,10 +20326,10 @@ Usage: aida config permissions conformance-launch [OPTIONS] --fixture-root <FIXT
 
 Options:
       --fixture-root <FIXTURE_ROOT>
-          
+          Fresh conformance fixture containing workspace, repository and payload
 
       --credential <CREDENTIAL>
-          
+          Absolute path to the existing AGY OAuth credential leaf
 
       --format <FORMAT>
           Pin the output format regardless of whether stdout is a terminal: human = tables, toon =
@@ -20354,7 +20354,7 @@ Usage: aida config permissions runtime-policy [OPTIONS] --vendor <VENDOR>
 
 Options:
       --vendor <VENDOR>
-          
+          Vendor whose embedded runtime descriptor to inspect
 
       --format <FORMAT>
           Pin the output format regardless of whether stdout is a terminal: human = tables, toon =
@@ -52049,12 +52049,12 @@ Working on aida itself
       {
         "name": "credential",
         "takes_value": true,
-        "help": ""
+        "help": "Absolute path to the existing AGY OAuth credential leaf"
       },
       {
         "name": "fixture-root",
         "takes_value": true,
-        "help": ""
+        "help": "Fresh conformance fixture containing workspace, repository and payload"
       },
       {
         "name": "format",
@@ -52096,7 +52096,7 @@ Working on aida itself
       {
         "name": "vendor",
         "takes_value": true,
-        "help": ""
+        "help": "Vendor whose embedded runtime descriptor to inspect"
       }
     ],
     "hidden": true
