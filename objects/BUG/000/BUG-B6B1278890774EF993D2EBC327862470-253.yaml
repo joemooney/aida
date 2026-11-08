@@ -20,7 +20,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-07T20:18:53.564500Z
-modified_at: 2026-11-08T17:54:48.417667144Z
+modified_at: 2026-11-08T17:54:54.505868046Z
 req_type: Bug
 relationships:
 - rel_type:
@@ -225,6 +225,25 @@ comments:
   content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: Round-5 findings are fixed and both acceptance tests read correctly, but the host now reads and unlinks seat-controlled handshake paths without bounds, and CI has not finished at this head.. No triage reason was given.'
   created_at: 2026-11-08T17:54:48.417665455Z
   modified_at: 2026-11-08T17:54:48.417665455Z
+  session_id: 01a1b9af-8230-75d2-82f8-667491cc010a
+  harness_version: 2.1.319 (Claude Code)
+- id: 01a1bc4c-873f-7e03-a5f4-b75bb50d1dee
+  author: joe
+  content: |-
+    REVIEW FINDINGS TO ADDRESS (BUG-2488):
+    Verdict: CHANGES REQUESTED
+    Reviewed commit: 5a16e2d82f1d
+    Recorded: 2026-11-08T17:46:59.498133146+00:00
+    Findings:
+    1. MAJOR (containment; standalone_implementer.rs provision_signals ~L985 and reconcile_signals ~L1026, ship_from_seat.rs:502 and :356 publication_veto(tree), punt.rs:396/472/220): this PR makes the host read files inside the writable seat using std::fs::read_to_string (read_signal, read_hold_signal, read_ledger), which follows symlinks and has no size limit. A seat can leave a FIFO at .aida/punt-signals/<spec>.json so the host blocks forever after the child exits, or a symlink to /dev/zero at .aida/punts.jsonl so the host reads until out of memory. The same PR's is_mirrored_handshake_entry uses aida_core::seat_clone_detect::read_regular_file for exactly this reason (its comment names FIFOs and symlinks). provision_signals also runs create_dir_all and remove_file through a seat-controlled .aida/punt-signals or .aida/pr-holds, so a symlinked directory makes the host delete <target>/<spec>.json outside the seat (for example the primary's hold marker). Fix: read seat-side handshakes with read_regular_file or an equivalent bounded no-follow reader, refuse symlinked parent directories before unlinking, and add refusal tests for FIFO, symlink and oversize seat signals and ledgers. Seat-side only; host-side reads of main paths can stay as they are.
+    2. MINOR (queue_cmd.rs:9070, run_queue_resume_to_exit): provision_attempt_signals deletes the main and seat hold and punt markers before spawn_vendor_headless_resume runs its policy preflight. If that spawn is refused, no attempt ran but the persisted hold is gone. The spec is still Done, so the next held --resume fails admission at queue_cmd.rs:12245 (held_resume_reentry_allowed needs the marker) and held work is stranded until someone recreates the marker. task_2902_launch_paths_clear_and_provision_before_spawn asserts this behaviour (signals cleared on the queue-resume refusal path), so it needs changing too. standalone_implementer::run has the same ordering ahead of native_publication::prepare. Fix: consume the markers only after preflight and prepare succeed, immediately before spawn, and test that a refused resume keeps the hold marker and can be retried.
+    3. MINOR (seat_clone.rs is_mirrored_handshake_entry ~L2058): read_regular_file is capped at 64 KiB and returns None for a larger file, and the host ledger is read through it. The None branch returns text.is_empty(), so any non-empty seat ledger counts as unmirrored once the host ledger passes 64 KiB. The primary's .aida/punts.jsonl is 320392 bytes today, so this branch is never true on this host. It fails safe (the lease is kept), and seat clones exclude /.aida/* so it only applies to seats where that entry is visible. Separately, the signal comparison uses main.join(path) with the seat's exact spelling, while reconcile writes the main copy under the publication spelling, so case-variant markers read as unmirrored; this is the seat-clone remainder of round-5 finding 2. Fix: read the host ledger without the 64 KiB cap (it is host-owned) and resolve the main path through signal_path/hold_signal_path.
+    4. MINOR, plausible (spec Expected 2; session.rs run_vendor_headless_to_exit, queue_cmd.rs run_queue_resume_to_exit, auto_complete.rs:954): only the standalone path reports implementer: no-change. On queue-resume and drain, publish_queue_exit prints it to stderr and the host continues, and ImplementerOutcome has no no-change variant, so the drain driver appears to treat a no-commit seat as its ordinary no-PR outcome instead of no-change with exit 0. I read this path but did not trace it to the final failure classification. Also, Expected 2 says punted exits 0, while report() returns PUNTED_EXIT_CODE (32); that matches the existing lane contract, so either correct the spec wording or the code. Fix: add a no-change outcome to the drain and resume reporting, or have the advisor split this into a tracked follow-up.
+    5. COSMETIC (scripts/store-writers.toml): the regeneration removed four trace:TASK-3366 explanatory comments that are unrelated to this PR (end_entry and watch_row rows); no TASK-3366 reference remains under scripts/. Restore them when next touching the file, or confirm the generator always drops comments.
+    6. CI GATE: run 42506092000 at 5a16e2d82f1d is unfinished (2 of 7 jobs in progress, 5 queued when checked), and the round-5 handoff records untested=true because its resume-routing build timed out. No executed evidence exists yet for this round's code, including the extended bug_2386 resume test and the case-variant test. merge-hold-gate fails only because of the expected supervised hold, which is not a code defect.
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
+  created_at: 2026-11-08T17:54:54.399682989Z
+  modified_at: 2026-11-08T17:54:54.399682989Z
   session_id: 01a1b9af-8230-75d2-82f8-667491cc010a
   harness_version: 2.1.319 (Claude Code)
 history:
