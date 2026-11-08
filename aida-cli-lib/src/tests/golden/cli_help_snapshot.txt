@@ -12613,6 +12613,9 @@ Options:
       --json
           Emit machine-readable JSON
 
+      --lane-capacity
+          Read-only typed local lane capacity and reservations (not readiness admission)
+
       --force
           Permit riskier destructive fixes such as branch deletion
 
@@ -12648,6 +12651,7 @@ Options:
           runs sudo. Runs the non-sudo availability re-probe as a smoke check
 
       --fix [<CATEGORY>]
+      --fix <CATEGORY>
           Repair one category of store damage that needs a data migration. `id-collisions`: spec IDs
           that differ only by leading zeros are the same ID, so each collision keeps one spec on the
           number and gives the others a fresh ID, rewriting their mentions in the store, docs and
@@ -14993,11 +14997,6 @@ Options:
           With `--write`: this is the last handoff of the run, so an `aida agent new --rotate`
           supervisor exits instead of relaunching
 
-      --standing-orders <ACTION> <TEXT>
-          Manage the seat's repo-local standing orders (`.aida/standing-orders/<seat>.md`): `add
-          "<text>"` appends a dated entry, `list` prints them. `--show` prints standing orders
-          before the handoff
-
       --format <FORMAT>
           Pin the output format regardless of whether stdout is a terminal: human = tables, toon =
           compact agent output, json = machine JSON. Default (unset) is human at a TTY, toon when
@@ -15011,6 +15010,11 @@ Options:
       --canonical-ids
           Show node-local spec IDs in their canonical form instead of the node's friendly label (for
           scripts). Also settable via AIDA_CANONICAL_IDS=1
+
+      --standing-orders <ACTION> <TEXT>
+          Manage the seat's repo-local standing orders (`.aida/standing-orders/<seat>.md`): `add
+          "<text>"` appends a dated entry, `list` prints them. `--show` prints standing orders
+          before the handoff
 
   -h, --help
           Print help (see a summary with '-h')
@@ -44211,6 +44215,9 @@ Working on aida itself
         "name": "lane-host",
         "takes_value": false,
         "help": "Check this machine before running automated lanes"
+        "name": "lane-capacity",
+        "takes_value": false,
+        "help": "Read-only typed local lane capacity and reservations (not readiness admission)"
       },
       {
         "name": "mapping",
@@ -46552,6 +46559,11 @@ Working on aida itself
     "about": "Probe whether it is safer to start a fresh agent session or compact the current conversation. This is substrate-only: it can see live drains and this session's live leases, but not conversation-only residue",
     "flags": [
       {
+        "name": "body-only",
+        "takes_value": false,
+        "help": "Read only the handoff text, without standing context"
+      },
+      {
         "name": "canonical-ids",
         "takes_value": false,
         "help": "Show node-local spec IDs in their canonical form instead of the node's friendly label (for scripts). Also settable via AIDA_CANONICAL_IDS=1"
@@ -46590,6 +46602,11 @@ Working on aida itself
         "name": "show",
         "takes_value": false,
         "help": "Print the seat's standing orders (if any), then its latest handoff note (the seed for a fresh session)"
+      },
+      {
+        "name": "snapshot",
+        "takes_value": false,
+        "help": "Read/write the worktree recovery snapshot; never requests rotation"
       },
       {
         "name": "standing-orders",

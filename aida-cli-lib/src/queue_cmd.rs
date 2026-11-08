@@ -12602,11 +12602,12 @@ pub(crate) fn handle_queue_work(
                 }
             }
             // trace:STORY-1662 | ai:claude
+            // trace:STORY-2660 | ai:codex
             if standalone_implementer {
                 _standalone_slot = Some(crate::standalone_implementer::acquire_slot(
                     &project_root,
                     &plan.scope,
-                    crate::standalone_implementer::configured_cap(&project_root),
+                    crate::standalone_implementer::configured_cap(&project_root)?,
                 )?);
             }
             // Force-claim may retire a dead clone, so delegation and launch
