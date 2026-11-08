@@ -8,7 +8,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-06T13:39:53.442026096Z
-modified_at: 2026-11-08T05:10:15.749411059Z
+modified_at: 2026-11-08T05:11:51.244614869Z
 req_type: Task
 tags:
 - architecture
@@ -505,6 +505,36 @@ comments:
   modified_at: 2026-11-08T05:05:48.537046745Z
   session_id: 01a1b8be-8170-7fb2-89ab-ecb4c6eee98c
   harness_version: 2.1.319 (Claude Code)
+- id: 01a1b991-eecc-7f01-ac08-5b12da5a9185
+  author: dirtlab
+  content: |
+    TASK-3223 / PR #3661 review handoff
+
+    Uncommitted changes address review findings 1 and 2 only:
+    - scripts/check-store-writers.py: mediated v2 resolves only host_only/lane_private writer rows; s2_typed, read_only and missing/unknown labels stay unresolved. All operation mappings remain unresolved regardless of label.
+    - tests/test_store_writer_inventory.py: real CLI refusal for relabeled s2_typed/read_only rows; operation relabel/missing-label negatives; zero-blocker CLI success for host_only/lane_private fixtures, pinning exit status, JSON and compatibility summary.
+    - docs/internal/security/store-mutation-writers.md: document conservative v2 label behavior and lack of verified route evidence.
+
+    Validation:
+    - python3 -m unittest tests/test_store_writer_inventory.py: 47 tests passed.
+    - python3 scripts/check-store-writers.py: 3360 sink sites / 293 operation mappings reconciled.
+    - python3 scripts/check-ci-gates.py --audit: all 80 CI Build gates classified.
+    - git diff --check: passed.
+    - Real mediated profile remains refused: 3151 unresolved writer candidates / 293 operations. These are conservative static candidates, not confirmed canonical writers.
+    - Launcher job j20261108T051025245-2-0: cargo check --profile agent -p aida-cli --no-default-features passed, exit 0, 1m11s. This is compilation evidence, not executed Rust tests.
+    - Full make check-ci-fast not run: its first gate invokes Cargo directly, contrary to this seat's lane-job-only compilation requirement. No green aggregate claimed.
+
+    Remaining findings:
+    3 accepted: full routing, activation and contained raw-write-negative/comment_add-positive acceptance remain unimplemented. This diagnostic repair cannot complete TASK-3223. Parts 1-2 are landed per the binding ruling; no obsolete sketch-only premise is asserted. own_claim/queue_done remain TASK-3326.
+    4 requires operator/advisor resolution: latest review explicitly requires resolution of the prior design-fork punt and authorization for diagnostic-only publication, or closure of PR #3661. This seat has no authorization to mutate PR metadata or clear that manual publication gate. The required PR body must describe diagnostic-only, Refs-only scope, no launch authority, and TASK-3223 remaining open.
+
+    No commit, push, PR mutation, publication declaration, review record, merge or queue completion. No production gate or runtime permission changes. Leave edits for host review; retain publication vetoes. This handoff does not claim the requested full routing slice is delivered.
+
+    Manual gate: aida punt succeeded and set TASK-3223 to Needs Attention. Store change queued for host commit because Git metadata is read-only. Punt signal-file write failed with read-only filesystem; host must honor the persisted punt and this handoff even without that signal file. No publication declaration was recorded.
+  created_at: 2026-11-08T05:11:51.244614869Z
+  modified_at: 2026-11-08T05:11:51.244614869Z
+  session_id: 01a1b98d5a5a
+  harness_version: codex-cli 0.167.0
 history:
 - id: 01a1b116-742d-73c0-9064-1933f11e4c38
   author: joe
@@ -975,6 +1005,12 @@ history:
   - field_name: status
     old_value: InProgress
     new_value: NeedsAttention
+- id: 01a1b991-af35-7972-96da-c0110d6573cd
+  author: dirtlab
+  timestamp: 2026-11-08T05:11:34.965913979Z
+  session_id: 01a1b98d5a5a
+  harness_version: codex-cli 0.167.0
+  changes: []
 execution_mode: drive
 filed_at:
   code_sha: 50ce509da3f7edbd12ff6636fe996c9c3a65c68f
@@ -984,6 +1020,11 @@ filed_at:
   aida_build_sha: dd852f74c3b
   vendor: claude
   session: b0a84e34-277c-4df6-b53c-43f4bbe2e84d
+attention_reason:
+  category: design-fork
+  detail: 'PR #3661 review finding 4 requires operator/advisor resolution of the prior punt and explicit authorization for diagnostic-only publication, or PR closure. This seat repaired findings 1-2 with 47 passing inventory tests but cannot clear that manual publication gate or mutate PR metadata. Finding 3 is accepted: full routing, zero-unrouted inventory and contained mediated comment_add evidence remain unmet; production mediation stays gated. The binding ruling approves the full routing slice, not publication of this diagnostic-only repair. Edits are uncommitted; do not publish around this veto.'
+  raised_by: implementer
+  raised_at: 2026-11-08T05:11:33.461443753Z
 failure_reason:
   phase: reviewer
   phase_index: 3
