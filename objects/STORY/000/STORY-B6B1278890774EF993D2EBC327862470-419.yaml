@@ -8,7 +8,7 @@ priority: Low
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-05T04:41:25.538710401Z
-modified_at: 2026-11-08T07:15:11.403611233Z
+modified_at: 2026-11-08T07:15:13.628532296Z
 req_type: Story
 comments:
 - id: 01a1aa03-51be-7480-baec-91ac74908e0b
@@ -46,6 +46,22 @@ comments:
   content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: Design sketch only, but the feat subject with a completing (STORY-2493) trailer would mark the unimplemented spec Completed at merge; also a design gap on clearing dismissed blocking findings.. It was punted on: design-fork: Architecture signoff required by CLAUDE.md. Proposed sketch: docs/plans/2026-11-07-story-2493-untrusted-review.md. Decide how home authenticates work reviewer principal/session and independence: checksum plus reviewer node is insufficient, and trusted-node signoff explicitly excluded this channel.. No triage reason was given.'
   created_at: 2026-11-08T07:15:11.403607755Z
   modified_at: 2026-11-08T07:15:11.403607755Z
+  session_id: 01a1b8be-8170-7fb2-89ab-ecb4c6eee98c
+  harness_version: 2.1.319 (Claude Code)
+- id: 01a1ba02-e1d8-7af0-9c28-02e9e9384840
+  author: joe
+  content: |-
+    REVIEW FINDINGS TO ADDRESS (STORY-2493):
+    Verdict: CHANGES REQUESTED
+    Reviewed commit: cffcd1b62843
+    Recorded: 2026-11-08T07:12:14.923786267+00:00
+    Findings:
+    1. F1 (blocking): commit cffcd1b6284 and the PR title use 'feat: ... (STORY-2493)', a completing trailer on a PR that adds only docs/plans/2026-11-07-story-2493-untrusted-review.md. Merge-time auto-bump would complete STORY-2493 from Needs Attention (extract_trailing_spec_ids_from_subject in aida-cli-lib/src/pr_ship.rs; test auto_bump_completes_needs_attention_spec_and_clears_failure_reason). The plan-commit exemption covers only docs(plan)/docs(plans) subjects (is_plan_commit_subject in aida-cli-lib/src/zen_drive_root.rs), so 'feat:' is not exempt. None of the spec's envelope, transport, home-processing or merge-block criteria are implemented and advisor signoff is not recorded. Fix: reword the commit subject and PR title (a squash takes the title) to '[AI:codex] docs(plans): untrusted-node review return channel sketch (Refs STORY-2493)'.
+    2. F2 (design gap): sketch step 6 says closed findings may clear a blocking digest and dismissed-without-resolution cannot, without mapping these to canonical statuses. 'aida findings dismiss' sets Rejected (aida-cli-lib/src/findings_gate.rs), so a false-positive blocking finding dismissed at home blocks the PR with no stated exit, and Superseded is unaddressed. Step 7 defers verdict supersession. Fix: name which statuses clear a digest and state how an invalid blocking finding is released (for example a superseding same-head verdict or an audited operator resolution).
+    3. F3 (minor): the Existing owners section cites gate/review_publication.rs, gate/ledger/mod.rs and gate/review_verdict.rs without the aida-cli-lib/src/ prefix, so 'aida plan verify' reports all three as file not found (plan lines 75-77). Fix: use full repo-relative paths. The missing-section errors from the same command are not raised as a defect; the merged STORY-2492 sketch fails the same way.
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
+  created_at: 2026-11-08T07:15:13.496511273Z
+  modified_at: 2026-11-08T07:15:13.496511273Z
   session_id: 01a1b8be-8170-7fb2-89ab-ecb4c6eee98c
   harness_version: 2.1.319 (Claude Code)
 history:
