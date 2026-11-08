@@ -7,631 +7,481 @@ status: NeedsAttention
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
-created_at: 2026-11-07 23:39:41.575597+00:00
-modified_at: 2026-11-08 23:15:05.135568+00:00
+created_at: 2026-11-07T23:39:41.575597Z
+modified_at: 2026-11-08T23:18:37.687138196Z
 req_type: Task
 relationships:
 - rel_type: Child
   target_id: 01a13390-7b59-7570-a329-3542db098e83
-  created_at: 2026-11-07 23:40:02.824548+00:00
+  created_at: 2026-11-07T23:40:02.824548Z
 comments:
 - id: 01a1b86d-007a-75d3-ae18-4d12eea38c3f
   author: joe
   content: 'ADVISOR AMENDMENT 2026-11-07 17:45 MST: the glob-import count is 170 files (82 _cmd/_args), not 104; skip files in open PRs (#3619''s 52-file footprint especially). Ship as 3-4 PRs of <=50 files. The ledger relocation script must include a totality check that no stale old path remains.'
-  created_at: 2026-11-07 23:51:53.722930+00:00
-  modified_at: 2026-11-07 23:51:53.722930+00:00
+  created_at: 2026-11-07T23:51:53.722930Z
+  modified_at: 2026-11-07T23:51:53.722930Z
   session_id: 01a1b848-940b-7bd2-8acd-52e428b182b8
   harness_version: 2.1.319 (Claude Code)
 - id: 01a1b888-e92f-7f30-bae5-259e91411623
   author: joe
   content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: Refs slice (AC2 ratchet + AC4 relocation helper) is close, but the glob ratchet''s --base shrink check is per-path and so rejects the very pure moves relocate-ledger-paths.py exists for, and the advisor-required totality check is missing. AC1/AC3 deferred to later slices; AC5 unverified (CI still running at review time).. No triage reason was given.'
-  created_at: 2026-11-08 00:22:22.767125+00:00
-  modified_at: 2026-11-08 00:22:22.767125+00:00
+  created_at: 2026-11-08T00:22:22.767125Z
+  modified_at: 2026-11-08T00:22:22.767125Z
   session_id: 01a1b848-940b-7bd2-8acd-52e428b182b8
   harness_version: 2.1.319 (Claude Code)
 - id: 01a1b889-0356-7a63-958c-942ee8785329
   author: joe
-  content: 'REVIEW FINDINGS TO ADDRESS (PR #3644):
-
+  content: |-
+    REVIEW FINDINGS TO ADDRESS (PR #3644):
     Verdict: CHANGES REQUESTED
-
     Reviewed commit: 334b8fbd4284
-
     Recorded: 2026-11-08T00:07:51.139697456+00:00
-
     Findings:
-
-    1. MAJOR scripts/check-crate-globs.py:51-52: the --base growth check ''Counter(expected) - Counter(json.loads(old.stdout))'' is keyed by file path, so after relocate-ledger-paths.py moves old.rs->new.rs the ledger gains a new ''new.rs'' key that the base lacks and CI fails with ''crate glob baseline may only shrink relative to base''. That blocks the pure moves this tooling is meant to enable (AC3, dissolving lib_part1..6.rs). check-exec-context.py check_growth (lines 322-341) avoids this by comparing relocation-invariant fingerprints. Fix: compare the total (sum) or match retirements against additions so a pure rename passes and real growth still fails, and add a test for it.
-
-    2. MAJOR scripts/relocate-ledger-paths.py:41-49 (advisor amendment 2026-11-07 on TASK-3428): there''s no totality check. After the rewrite nothing verifies that no stale reference to OLD remains as a path key in the three ledgers (portability-allowlist ''\tOLD:'' rows, exec-context ''OLD:'' site keys, crate-globs ''OLD'' key). Add a post-rewrite assertion that fails when any old-path key or row survives, plus a test.
-
+    1. MAJOR scripts/check-crate-globs.py:51-52: the --base growth check 'Counter(expected) - Counter(json.loads(old.stdout))' is keyed by file path, so after relocate-ledger-paths.py moves old.rs->new.rs the ledger gains a new 'new.rs' key that the base lacks and CI fails with 'crate glob baseline may only shrink relative to base'. That blocks the pure moves this tooling is meant to enable (AC3, dissolving lib_part1..6.rs). check-exec-context.py check_growth (lines 322-341) avoids this by comparing relocation-invariant fingerprints. Fix: compare the total (sum) or match retirements against additions so a pure rename passes and real growth still fails, and add a test for it.
+    2. MAJOR scripts/relocate-ledger-paths.py:41-49 (advisor amendment 2026-11-07 on TASK-3428): there's no totality check. After the rewrite nothing verifies that no stale reference to OLD remains as a path key in the three ledgers (portability-allowlist '\tOLD:' rows, exec-context 'OLD:' site keys, crate-globs 'OLD' key). Add a post-rewrite assertion that fails when any old-path key or row survives, plus a test.
     3. MINOR tests/test_crate_split_tools.py: main() --base logic in check-crate-globs.py (shrink-only, bootstrap when base lacks ledger, refuse an unreadable base ledger) has no test. Only count() and check() are exercised. Add git-fixture tests covering a shrink, a growth refusal, a bootstrap, and a pure relocation (see the first finding).
-
-    4. COSMETIC scripts/ci-gate-tiers.toml:174-175: a dangling ''# trace:TASK-3428 | ai:codex'' line sits alone at EOF, after the skip-reasons section, with nothing under it. Move it beside the ''Crate glob import ratchet'' = ''fast'' entry at line 131, or delete it.
-
-    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.'
-  created_at: 2026-11-08 00:22:29.462101+00:00
-  modified_at: 2026-11-08 00:22:29.462101+00:00
+    4. COSMETIC scripts/ci-gate-tiers.toml:174-175: a dangling '# trace:TASK-3428 | ai:codex' line sits alone at EOF, after the skip-reasons section, with nothing under it. Move it beside the 'Crate glob import ratchet' = 'fast' entry at line 131, or delete it.
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
+  created_at: 2026-11-08T00:22:29.462101Z
+  modified_at: 2026-11-08T00:22:29.462101Z
   session_id: 01a1b848-940b-7bd2-8acd-52e428b182b8
   harness_version: 2.1.319 (Claude Code)
 - id: 01a1b88d-d3cf-7710-959a-4daa2bb86a20
   author: joe
   content: 'Round 2 review fixes prepared for PR #3644: --base glob growth compares total import counts so pure moves pass; relocation validates all rewritten ledgers for stale old-path keys/rows before any write; Git fixtures cover shrink, growth, bootstrap, pure relocation plus post-move growth, unreadable/malformed/missing base refusal; injected incomplete rewrites verify each ledger refuses without partial writes. Moved CI tier trace next to its entry. Validation: all 12 Python unittests pass; repository check-crate-globs.py --base HEAD passes (220 imports); all 81 CI Build gates classified; git diff --check passes. No Rust changes; full fast suite and CI rerun not performed. Merge hold remains active. Native seat leaves edits uncommitted for host publication; AC1/AC3 remain later slices.'
-  created_at: 2026-11-08 00:27:44.975190+00:00
-  modified_at: 2026-11-08 00:27:44.975190+00:00
+  created_at: 2026-11-08T00:27:44.975190Z
+  modified_at: 2026-11-08T00:27:44.975190Z
   session_id: 01a1b88bb2d1
 - id: 01a1b890-db73-7363-9c0f-8e90cf727d52
   author: dirtlab
   content: 'Addressed all four PR #3644 review findings in four uncommitted files: scripts/check-crate-globs.py, scripts/relocate-ledger-paths.py, scripts/ci-gate-tiers.toml, tests/test_crate_split_tools.py. Historical glob debt now uses a total ceiling so pure moves pass and real growth refuses. Totality checks all rewritten ledgers before writes; regression fixtures inject missed rewrites in each ledger. Added --base Git fixtures for shrink, growth, bootstrap, relocation, missing ref and unreadable existing ledger. Validation: 31 Python tests, glob ratchet, classification audit, diff hygiene and launcher no-default-features cargo check pass. Full fast gate remains unverified under runner-only constraints. Refs publication declaration recorded; host must commit/publish this partial tooling slice. AC1/AC3 remain future work; no queue completion performed.'
-  created_at: 2026-11-08 00:31:03.539094+00:00
-  modified_at: 2026-11-08 00:31:03.539094+00:00
+  created_at: 2026-11-08T00:31:03.539094Z
+  modified_at: 2026-11-08T00:31:03.539094Z
   session_id: 01a1b88cd5b1
   harness_version: codex-cli 0.167.0
 - id: 01a1b8c4-4b2f-7f51-b4a2-480767b1cd5a
   author: joe
   content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: Round-1 findings all fixed (sum-based glob growth, stale-path totality check, git-fixture tests, tier trace moved). Still blocking: relocate-ledger-paths.py rewrites portability-allowlist rows to the new path, and CI''s base-pinned check-portability-growth.py compares (rule, path:content) sets, so a relocated row counts as new allowlist growth and fails CI. Pure moves of files with allowlist rows (AC4''s purpose) stay blocked. AC1/AC3 deferred to later Refs slices; AC5 unverified because CI at 488ca58 is still pending.. No triage reason was given.'
-  created_at: 2026-11-08 01:27:14.479469+00:00
-  modified_at: 2026-11-08 01:27:14.479469+00:00
+  created_at: 2026-11-08T01:27:14.479469Z
+  modified_at: 2026-11-08T01:27:14.479469Z
   session_id: 01a1b8be-8170-7fb2-89ab-ecb4c6eee98c
   harness_version: 2.1.319 (Claude Code)
 - id: 01a1b8c4-61f2-78b2-95d8-239bbe48c7ca
   author: joe
-  content: 'REVIEW FINDINGS TO ADDRESS (PR #3644):
-
+  content: |-
+    REVIEW FINDINGS TO ADDRESS (PR #3644):
     Verdict: CHANGES REQUESTED
-
     Reviewed commit: 488ca588c423
-
     Recorded: 2026-11-08T00:31:18.455563758+00:00
-
     Findings:
-
-    1. MAJOR scripts/relocate-ledger-paths.py:33 + scripts/check-portability-growth.py:44-47: rewrite() changes ''<rule>\told.rs:<content>'' to ''<rule>\tnew.rs:<content>'', but the growth check (which CI runs from the BASE revision, ci.yml:896-900) treats every entry in current-minus-base as an addition and fails with ''portability rules are unchanged, so the allowlist may not grow''. The portability ledger is relocated correctly but always fails CI, so the helper does not enable pure moves for any file with allowlist rows (e.g. dispatch_health_ps.rs has 16, agent_registry.rs has 12). Fix: make check-portability-growth.py relocation-tolerant the same way check-exec-context.py check_growth does (match additions to retirements by (rule, content) fingerprint, ignoring the path prefix, so multiplicity cannot grow). Note that CI pins the base copy of the growth script, so the fix applies to PRs after this one merges. Add a fixture test that runs the growth check on a relocated allowlist and
-    confirms it passes, plus one where it grows and confirms it fails.
-
-    2. MINOR scripts/check-crate-globs.py:52-54: the --base check compares only the total import count, so one PR can retire a glob in a.rs and add a new ''use crate::*;'' in b.rs and still pass, and the gate then prints ''zero additions''. AC2 says the ratchet forbids new glob crate imports. Tighten it: allow a new path key only when it takes over a retired key''s exact count (or matches a git rename, git diff -M), otherwise refuse. Add a test for the swap case.
-
+    1. MAJOR scripts/relocate-ledger-paths.py:33 + scripts/check-portability-growth.py:44-47: rewrite() changes '<rule>\told.rs:<content>' to '<rule>\tnew.rs:<content>', but the growth check (which CI runs from the BASE revision, ci.yml:896-900) treats every entry in current-minus-base as an addition and fails with 'portability rules are unchanged, so the allowlist may not grow'. The portability ledger is relocated correctly but always fails CI, so the helper does not enable pure moves for any file with allowlist rows (e.g. dispatch_health_ps.rs has 16, agent_registry.rs has 12). Fix: make check-portability-growth.py relocation-tolerant the same way check-exec-context.py check_growth does (match additions to retirements by (rule, content) fingerprint, ignoring the path prefix, so multiplicity cannot grow). Note that CI pins the base copy of the growth script, so the fix applies to PRs after this one merges. Add a fixture test that runs the growth check on a relocated allowlist and confirms it passes, plus one where it grows and confirms it fails.
+    2. MINOR scripts/check-crate-globs.py:52-54: the --base check compares only the total import count, so one PR can retire a glob in a.rs and add a new 'use crate::*;' in b.rs and still pass, and the gate then prints 'zero additions'. AC2 says the ratchet forbids new glob crate imports. Tighten it: allow a new path key only when it takes over a retired key's exact count (or matches a git rename, git diff -M), otherwise refuse. Add a test for the swap case.
     3. UNVERIFIED AC5: CI at 488ca588c423 had not started (CI pending, merge-hold-gate pending) at review time, and the implementer notes say make check-ci-fast was interrupted. The next round needs a green CI run at the reworked head.
-
-    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.'
-  created_at: 2026-11-08 01:27:20.306963+00:00
-  modified_at: 2026-11-08 01:27:20.306963+00:00
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
+  created_at: 2026-11-08T01:27:20.306963Z
+  modified_at: 2026-11-08T01:27:20.306963Z
   session_id: 01a1b8be-8170-7fb2-89ab-ecb4c6eee98c
   harness_version: 2.1.319 (Claude Code)
 - id: 01a1b8ca-8f8d-7912-922a-e471f08d63f7
   author: joe
-  content: 'Round 3 PR #3644 rework prepared for host publication: portability growth now matches added and retired rows by (rule, exact content), ignoring only path and preserving multiplicity; glob growth now requires a same-count Git-detected rename for new path keys, with per-path shrink checks for retained keys. Added unrelated swap/borrow refusal and relocated-portability growth fixtures; helper documents staging and base-pinned verifier rollout. Validation: 15 crate-split Python tests pass; portability growth shell suite passes; all 81 CI gates classified; git diff --check passes. Partial fast run passed GitLab smoke, classifier inventory, planner, mail-wake, containment conformance, store mutation gates, then stopped because test-speed fixtures invoke cargo metadata blocked by native-seat guard. Direct TUI seam Cargo invocation was discovered and interrupted; no pass claimed. Full make check-ci-fast and reworked-head CI remain unverified; merge hold retained. No Rust source changed.
-    Lane check submitted as j20261108T013049596-6643-0 (cargo check --profile agent -p aida-cli --no-default-features); result pending at note time. Native publication declaration recorded: [AI:codex] fix(ratchets): validate ledger moves without admitting new debt (Refs TASK-3428). Edits remain uncommitted for the host; AC1/AC3 remain later slices.'
-  created_at: 2026-11-08 01:34:05.197585+00:00
-  modified_at: 2026-11-08 01:34:05.197585+00:00
+  content: 'Round 3 PR #3644 rework prepared for host publication: portability growth now matches added and retired rows by (rule, exact content), ignoring only path and preserving multiplicity; glob growth now requires a same-count Git-detected rename for new path keys, with per-path shrink checks for retained keys. Added unrelated swap/borrow refusal and relocated-portability growth fixtures; helper documents staging and base-pinned verifier rollout. Validation: 15 crate-split Python tests pass; portability growth shell suite passes; all 81 CI gates classified; git diff --check passes. Partial fast run passed GitLab smoke, classifier inventory, planner, mail-wake, containment conformance, store mutation gates, then stopped because test-speed fixtures invoke cargo metadata blocked by native-seat guard. Direct TUI seam Cargo invocation was discovered and interrupted; no pass claimed. Full make check-ci-fast and reworked-head CI remain unverified; merge hold retained. No Rust source changed. Lane check submitted as j20261108T013049596-6643-0 (cargo check --profile agent -p aida-cli --no-default-features); result pending at note time. Native publication declaration recorded: [AI:codex] fix(ratchets): validate ledger moves without admitting new debt (Refs TASK-3428). Edits remain uncommitted for the host; AC1/AC3 remain later slices.'
+  created_at: 2026-11-08T01:34:05.197585Z
+  modified_at: 2026-11-08T01:34:05.197585Z
   session_id: 01a1b8c5953a
 - id: 01a1b930-f017-7d72-8098-d87067b68e8a
   author: joe
   content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: Round-2 findings fixed (relocation-tolerant portability growth by (rule,content); glob growth needs same-count Git rename; swap/copy fixtures). Still blocking: tests/test_crate_split_tools.py:184 has an unguarded py ''git commit'' that the git auto-maintenance ratchet rejected at 488ca58 (line 143 then) and will reject again at this head. AC1/AC3 deferred to later Refs slices; AC5 unmet (CI at f4adb8b not started; prior CI red).. No triage reason was given.'
-  created_at: 2026-11-08 03:25:54.583818+00:00
-  modified_at: 2026-11-08 03:25:54.583818+00:00
+  created_at: 2026-11-08T03:25:54.583818Z
+  modified_at: 2026-11-08T03:25:54.583818Z
   session_id: 01a1b8be-8170-7fb2-89ab-ecb4c6eee98c
   harness_version: 2.1.319 (Claude Code)
 - id: 01a1b931-1d0a-7550-8891-b358e65a8c5d
   author: joe
-  content: 'REVIEW FINDINGS TO ADDRESS (PR #3644):
-
+  content: |-
+    REVIEW FINDINGS TO ADDRESS (PR #3644):
     Verdict: CHANGES REQUESTED
-
     Reviewed commit: f4adb8b5530d
-
     Recorded: 2026-11-08T01:39:36.600811808+00:00
-
     Findings:
-
-    1. MAJOR tests/test_crate_split_tools.py:184: subprocess.run([''git'', ''-c'', ''user.name=fixture'', ..., ''commit'', ...]) lacks ''-c maintenance.auto=false -c gc.auto=0''. CI run 42429907571 at 488ca58 failed ''Test git auto-maintenance ratchet'' (test_unguarded_write_class_git_sites_only_go_down: ''tests/test_crate_split_tools.py: 1 > baseline 0 / 143: py git commit''), which also failed ''Require every CI lane''. That same line moved to 184 in round 3 and was not fixed, so CI at this head will fail the same way. Fix: add ''-c'', ''maintenance.auto=false'', ''-c'', ''gc.auto=0'' to that argv. Do not raise the ratchet baseline.
-
-    2. MINOR tests/test_crate_split_tools.py:29,43,146: the self.git() helper runs ''git commit'' (and other write-class commands) without the maintenance guard. The ratchet''s PY_SITE regex misses it only because ''git'' and ''commit'' are in different literals, but the fixture can still trigger background auto-maintenance in temp repos. Put ''-c maintenance.auto=false -c gc.auto=0'' into the helper''s argv so every fixture git call is guarded.
-
-    3. UNVERIFIED AC5: CI at f4adb8b5530d had not started at review time (status pending, no jobs), and the previous head''s CI was red (finding 1). Implementer notes say make check-ci-fast was never completed. The next round needs a green CI run at the reworked head; merge-hold-gate failing is the expected supervised hold, not a defect.
-
-    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.'
-  created_at: 2026-11-08 03:26:06.090796+00:00
-  modified_at: 2026-11-08 03:26:06.090796+00:00
+    1. MAJOR tests/test_crate_split_tools.py:184: subprocess.run(['git', '-c', 'user.name=fixture', ..., 'commit', ...]) lacks '-c maintenance.auto=false -c gc.auto=0'. CI run 42429907571 at 488ca58 failed 'Test git auto-maintenance ratchet' (test_unguarded_write_class_git_sites_only_go_down: 'tests/test_crate_split_tools.py: 1 > baseline 0 / 143: py git commit'), which also failed 'Require every CI lane'. That same line moved to 184 in round 3 and was not fixed, so CI at this head will fail the same way. Fix: add '-c', 'maintenance.auto=false', '-c', 'gc.auto=0' to that argv. Do not raise the ratchet baseline.
+    2. MINOR tests/test_crate_split_tools.py:29,43,146: the self.git() helper runs 'git commit' (and other write-class commands) without the maintenance guard. The ratchet's PY_SITE regex misses it only because 'git' and 'commit' are in different literals, but the fixture can still trigger background auto-maintenance in temp repos. Put '-c maintenance.auto=false -c gc.auto=0' into the helper's argv so every fixture git call is guarded.
+    3. UNVERIFIED AC5: CI at f4adb8b5530d had not started at review time (status pending, no jobs), and the previous head's CI was red (finding 1). Implementer notes say make check-ci-fast was never completed. The next round needs a green CI run at the reworked head; merge-hold-gate failing is the expected supervised hold, not a defect.
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
+  created_at: 2026-11-08T03:26:06.090796Z
+  modified_at: 2026-11-08T03:26:06.090796Z
   session_id: 01a1b8be-8170-7fb2-89ab-ecb4c6eee98c
   harness_version: 2.1.319 (Claude Code)
 - id: 01a1b940-84b0-7252-b143-e69139cb5cb2
   author: joe
   content: 'Round 4 PR #3644 rework: fixed findings 1 and 2 in tests/test_crate_split_tools.py by adding maintenance.auto=false and gc.auto=0 to both the shared fixture Git helper and the direct fixture commit argv. Ratchet baseline unchanged. Validation: 15 crate-split fixture tests passed; 8 Git auto-maintenance ratchet tests passed; glob ratchet against HEAD passed (220 remaining, zero additions); all 81 CI Build gates classified; git diff --check passed. Finding 3/AC5 remains unverified: native seat cannot publish a reworked head, and make check-ci-fast includes direct Cargo commands prohibited by this lane runner-only policy. Host must commit/publish these uncommitted edits and obtain green functional CI at the new head; supervised merge hold remains expected. No Rust source changes or Cargo tests run.'
-  created_at: 2026-11-08 03:42:55.664268+00:00
-  modified_at: 2026-11-08 03:42:55.664268+00:00
+  created_at: 2026-11-08T03:42:55.664268Z
+  modified_at: 2026-11-08T03:42:55.664268Z
   session_id: 01a1b93ee41f
 - id: 01a1b9bb-72f1-7a20-a182-bf8e7abdabd8
   author: joe
   content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: Round-4 findings fixed: fixture git calls guarded, and the auto-maintenance, crate-glob, portability and ExecContext ratchets pass in CI. Still blocking: CI (gates) at 1a408b1 fails ''Store writer inventory ratchet'' because the new scripts/relocate-ledger-paths.py adds two unclassified sinks. AC1/AC3 deferred to later Refs slices; AC5 unmet.. No triage reason was given.'
-  created_at: 2026-11-08 05:57:12.049129+00:00
-  modified_at: 2026-11-08 05:57:12.049129+00:00
+  created_at: 2026-11-08T05:57:12.049129Z
+  modified_at: 2026-11-08T05:57:12.049129Z
   session_id: 01a1b8be-8170-7fb2-89ab-ecb4c6eee98c
   harness_version: 2.1.319 (Claude Code)
 - id: 01a1b9bb-b2ea-7c33-930d-a9b50de7302a
   author: joe
-  content: 'REVIEW FINDINGS TO ADDRESS (PR #3644):
-
+  content: |-
+    REVIEW FINDINGS TO ADDRESS (PR #3644):
     Verdict: CHANGES REQUESTED
-
     Reviewed commit: 1a408b172951
-
     Recorded: 2026-11-08T04:34:26.451012822+00:00
-
     Findings:
-
-    1. MAJOR scripts/relocate-ledger-paths.py:34,70 + scripts/store-writers.toml: CI run 42443913577 job ''CI (gates)'' fails step ''Store writer inventory ratchet'' (python3 scripts/check-store-writers.py). Reproduced at the head: ''unclassified writer/caller sink site (addition): scripts/relocate-ledger-paths.py|relocate|python:write_text'' and ''... scripts/relocate-ledger-paths.py|rewrite|python:replace''. Main gained this ratchet (#3511) and the branch picked it up in merge bb7425c. Fix: run ''python3 scripts/check-store-writers.py --regenerate'', review the two added rows (blocked disposition, same as scripts/check-exec-context.py|main|python:write_text at store-writers.toml:3146) and commit the inventory diff. Don''t hand-weaken the ratchet.
-
-    2. UNVERIFIED AC5 (make check-ci-fast / CI green): every CI shard except gates passed at 1a408b1 (cli-0, cli-1, lib-0, lib-1, rest, contracts). Gates failed only on the store-writer step above. The new ''Crate glob import ratchet'', ''Test git auto-maintenance ratchet'', ''Check Rust test portability ratchet'' and ''ExecContext environment ratchet'' steps passed. The next round needs a fully green CI run at the reworked head. merge-hold-gate failing is the expected supervised hold, not a defect.
-
-    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.'
-  created_at: 2026-11-08 05:57:28.426767+00:00
-  modified_at: 2026-11-08 05:57:28.426767+00:00
+    1. MAJOR scripts/relocate-ledger-paths.py:34,70 + scripts/store-writers.toml: CI run 42443913577 job 'CI (gates)' fails step 'Store writer inventory ratchet' (python3 scripts/check-store-writers.py). Reproduced at the head: 'unclassified writer/caller sink site (addition): scripts/relocate-ledger-paths.py|relocate|python:write_text' and '... scripts/relocate-ledger-paths.py|rewrite|python:replace'. Main gained this ratchet (#3511) and the branch picked it up in merge bb7425c. Fix: run 'python3 scripts/check-store-writers.py --regenerate', review the two added rows (blocked disposition, same as scripts/check-exec-context.py|main|python:write_text at store-writers.toml:3146) and commit the inventory diff. Don't hand-weaken the ratchet.
+    2. UNVERIFIED AC5 (make check-ci-fast / CI green): every CI shard except gates passed at 1a408b1 (cli-0, cli-1, lib-0, lib-1, rest, contracts). Gates failed only on the store-writer step above. The new 'Crate glob import ratchet', 'Test git auto-maintenance ratchet', 'Check Rust test portability ratchet' and 'ExecContext environment ratchet' steps passed. The next round needs a fully green CI run at the reworked head. merge-hold-gate failing is the expected supervised hold, not a defect.
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
+  created_at: 2026-11-08T05:57:28.426767Z
+  modified_at: 2026-11-08T05:57:28.426767Z
   session_id: 01a1b8be-8170-7fb2-89ab-ecb4c6eee98c
   harness_version: 2.1.319 (Claude Code)
 - id: 01a1b9d5-f525-7232-8873-a29790e9b34e
   author: joe
-  content: 'Round 5 PR #3644: regenerated scripts/store-writers.toml with python3 scripts/check-store-writers.py --regenerate. Reviewed exactly two additions for relocate-ledger-paths.py (relocate/write_text and rewrite/replace): both blocked, same policy fields as check-exec-context.py/main/write_text; all pre-existing writer rows and operation mappings unchanged. Standalone store-writer ratchet passes: 3370 sinks and 293 operation mappings. Validation: 67 writer-inventory/crate-split/Git-maintenance/ownership fixture tests and 19 ExecContext fixture tests passed; repository glob ratchet (220 imports, zero additions), ExecContext ratchet (1239 sites, zero additions), portability ratchet, portability-growth shell fixtures, 81-gate classification audit and git diff --check passed. Inventory-only change, no Rust changes or Cargo tests run. AC5 remains unverified until host commits/publishes and obtains green CI at the reworked head; full make check-ci-fast includes direct Cargo calls prohibited
-    by this native seat runner-only rule. Expected supervised merge hold retained. Edits remain uncommitted for host publication per seat instructions; AC1/AC3 remain later slices.'
-  created_at: 2026-11-08 06:26:09.317296+00:00
-  modified_at: 2026-11-08 06:26:09.317296+00:00
+  content: 'Round 5 PR #3644: regenerated scripts/store-writers.toml with python3 scripts/check-store-writers.py --regenerate. Reviewed exactly two additions for relocate-ledger-paths.py (relocate/write_text and rewrite/replace): both blocked, same policy fields as check-exec-context.py/main/write_text; all pre-existing writer rows and operation mappings unchanged. Standalone store-writer ratchet passes: 3370 sinks and 293 operation mappings. Validation: 67 writer-inventory/crate-split/Git-maintenance/ownership fixture tests and 19 ExecContext fixture tests passed; repository glob ratchet (220 imports, zero additions), ExecContext ratchet (1239 sites, zero additions), portability ratchet, portability-growth shell fixtures, 81-gate classification audit and git diff --check passed. Inventory-only change, no Rust changes or Cargo tests run. AC5 remains unverified until host commits/publishes and obtains green CI at the reworked head; full make check-ci-fast includes direct Cargo calls prohibited by this native seat runner-only rule. Expected supervised merge hold retained. Edits remain uncommitted for host publication per seat instructions; AC1/AC3 remain later slices.'
+  created_at: 2026-11-08T06:26:09.317296Z
+  modified_at: 2026-11-08T06:26:09.317296Z
   session_id: 01a1b9d3d486
 - id: 01a1ba11-ef51-7cb0-ba8e-179868018b86
   author: joe
   content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: Round-5 finding fixed: store-writer inventory now has the two relocate-ledger-paths.py rows and CI (gates) is green at a8054c8. Still blocking: AC4, because the helper hard-codes three ledgers and skips other path-keyed ones that fail CI after a pure move, notably ownership-liveness-legacy.json (two lib_part5.rs rows, no regenerate path). AC1/AC3 belong to later Refs slices.. No triage reason was given.'
-  created_at: 2026-11-08 07:31:39.985610+00:00
-  modified_at: 2026-11-08 07:31:39.985610+00:00
+  created_at: 2026-11-08T07:31:39.985610Z
+  modified_at: 2026-11-08T07:31:39.985610Z
   session_id: 01a1b8be-8170-7fb2-89ab-ecb4c6eee98c
   harness_version: 2.1.319 (Claude Code)
 - id: 01a1ba12-064f-7742-a409-62b5342a5914
   author: joe
-  content: 'REVIEW FINDINGS TO ADDRESS (PR #3644):
-
+  content: |-
+    REVIEW FINDINGS TO ADDRESS (PR #3644):
     Verdict: CHANGES REQUESTED
-
     Reviewed commit: a8054c84ad33
-
     Recorded: 2026-11-08T07:18:48.026352179+00:00
-
     Findings:
-
-    1. MAJOR scripts/relocate-ledger-paths.py:62 (AC4, advisor amendment 2026-11-07 totality check): relocate() rewrites only portability-allowlist.txt, exec-context-legacy.json and crate-globs-legacy.json, so other path-keyed ledgers keep the old path and a pure move fails CI. Concrete case: scripts/ownership-liveness-legacy.json:95-96 keys two rows on aida-cli-lib/src/lib_part5.rs (AC3''s dissolve target), 25 files in crate-globs-legacy.json also have rows there, and tests/test_ownership_liveness_ratchet.py:75-78 fails any site whose count exceeds baseline.get(key, 0), i.e. the moved key reads 0. That ledger has no regenerate command and uses the same flat ''path:...'' key shape the JSON branch of rewrite() already handles. Fix: add it to the ledger list and extend test_stale_path_in_each_ledger_refuses_before_any_write and test_move_verifies_content_and_preserves_evidence to cover it. Also handle scripts/config-trust.toml [readers."<file>"] (its header says bug_1723_config_trust_tests
-    enforces exact per-file counts), or state in the helper docstring which ledgers it does not cover and the command or edit each needs (store-writers.toml --regenerate, git-maintenance-baseline --write-baseline).
-
+    1. MAJOR scripts/relocate-ledger-paths.py:62 (AC4, advisor amendment 2026-11-07 totality check): relocate() rewrites only portability-allowlist.txt, exec-context-legacy.json and crate-globs-legacy.json, so other path-keyed ledgers keep the old path and a pure move fails CI. Concrete case: scripts/ownership-liveness-legacy.json:95-96 keys two rows on aida-cli-lib/src/lib_part5.rs (AC3's dissolve target), 25 files in crate-globs-legacy.json also have rows there, and tests/test_ownership_liveness_ratchet.py:75-78 fails any site whose count exceeds baseline.get(key, 0), i.e. the moved key reads 0. That ledger has no regenerate command and uses the same flat 'path:...' key shape the JSON branch of rewrite() already handles. Fix: add it to the ledger list and extend test_stale_path_in_each_ledger_refuses_before_any_write and test_move_verifies_content_and_preserves_evidence to cover it. Also handle scripts/config-trust.toml [readers."<file>"] (its header says bug_1723_config_trust_tests enforces exact per-file counts), or state in the helper docstring which ledgers it does not cover and the command or edit each needs (store-writers.toml --regenerate, git-maintenance-baseline --write-baseline).
     2. UNVERIFIED AC5 remainder: CI (gates) and CI (cli-0) passed at a8054c84ad33; cli-1, contracts, lib-0, lib-1 and rest were still pending at 00:18 local. The next head needs a fully green run. merge-hold-gate failing is the expected supervised hold, not a defect.
-
-    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.'
-  created_at: 2026-11-08 07:31:45.871946+00:00
-  modified_at: 2026-11-08 07:31:45.871946+00:00
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
+  created_at: 2026-11-08T07:31:45.871946Z
+  modified_at: 2026-11-08T07:31:45.871946Z
   session_id: 01a1b8be-8170-7fb2-89ab-ecb4c6eee98c
   harness_version: 2.1.319 (Claude Code)
 - id: 01a1ba15-0f29-7bd0-a5e3-360f7cb162a6
   author: joe
   content: 'Round 6 / PR #3644: added ownership-liveness-legacy.json to pure-move ledger relocation; extended stale-path pre-write refusal and content/evidence preservation fixtures. Helper docstring and AGENTS.md/OVERVIEW.md document manual config-trust reader table relocation and store-writer/Git-maintenance regeneration commands. Validation: 15 crate-split tool tests and 2 ownership-liveness ratchet tests passed; crate-glob ratchet --base HEAD passed (220 imports, zero additions); git diff --check passed. No Rust changes or Cargo run. AC5 full next-head CI remains unverified until host publication; supervised merge hold remains. Changes left uncommitted under native-seat instructions. Codegraph unavailable (doctor reports unreachable index); no lane index initialized.'
-  created_at: 2026-11-08 07:35:04.744997+00:00
-  modified_at: 2026-11-08 07:35:04.744997+00:00
+  created_at: 2026-11-08T07:35:04.744997Z
+  modified_at: 2026-11-08T07:35:04.744997Z
   session_id: 01a1ba13b016
 - id: 01a1ba6f-9050-7ee1-b744-b02c1fa4c6de
   author: joe
   content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: Round-6 finding fixed (ownership-liveness relocated; config-trust, store-writer and git-maintenance documented) and CI is green on all shards at cb9d047. Still blocking AC4: two path-keyed Rust fixtures named in the SPIKE-713 deep dive are neither rewritten nor listed by the helper, so a pure move fails tests. AC1/AC3 belong to later Refs slices.. No triage reason was given.'
-  created_at: 2026-11-08 09:13:56.048994+00:00
-  modified_at: 2026-11-08 09:13:56.048994+00:00
+  created_at: 2026-11-08T09:13:56.048994Z
+  modified_at: 2026-11-08T09:13:56.048994Z
   session_id: 01a1b8be-8170-7fb2-89ab-ecb4c6eee98c
   harness_version: 2.1.319 (Claude Code)
 - id: 01a1ba6f-a7cf-7120-b185-de8ef615ea67
   author: joe
-  content: 'REVIEW FINDINGS TO ADDRESS (PR #3644):
-
+  content: |-
+    REVIEW FINDINGS TO ADDRESS (PR #3644):
     Verdict: CHANGES REQUESTED
-
     Reviewed commit: cb9d047264fc
-
     Recorded: 2026-11-08T09:10:55.496729381+00:00
-
     Findings:
-
-    1. MAJOR scripts/relocate-ledger-paths.py:72 and :9-15 (AC4; advisor totality amendment): the helper omits the two path-keyed fixtures that docs/plans/2026-11-07-aida-cli-lib-crate-split-deep-dive.md:505-507 names, and the docstring list of "Other path-keyed inventories" omits them too, so it reads as complete when it is not. (a) aida-cli-lib/src/tests/fixtures/proc_identity_legacy_baseline.json is a flat {path: count} map (67 files; includes lib_part5.rs at line 33, AC3 dissolve target; 13 files overlap crate-globs-legacy.json). task_1750_liveness_primitive_guard_tests.rs proc_identity_legacy_decisions_do_not_expand uses baseline.get(rel).unwrap_or(0), so a moved file with identity decisions fails. It already fits the JSON branch of rewrite() (key == old). (b) aida-cli-lib/src/tests/story_2539_vendor_literals.tsv has rows "path|item|token<TAB>count" (13 lib_part rows). story_2539_vendor_literal_ratchet_tests.rs violations() (lines 297-305) requires exact key equality both ways, so a
-    pure move fails on the new key and on the stale key. Neither the JSON branch nor the tab-prefixed text branch matches this "|" key shape. Fix: add (a) to the ledger tuple; add a pipe-key rewrite and stale check for (b), or else list each with its exact manual edit in the docstring, AGENTS/OVERVIEW and PR notes. Extend test_stale_path_in_each_ledger_refuses_before_any_write and test_move_verifies_content_and_preserves_evidence for whichever are automated.
-
+    1. MAJOR scripts/relocate-ledger-paths.py:72 and :9-15 (AC4; advisor totality amendment): the helper omits the two path-keyed fixtures that docs/plans/2026-11-07-aida-cli-lib-crate-split-deep-dive.md:505-507 names, and the docstring list of "Other path-keyed inventories" omits them too, so it reads as complete when it is not. (a) aida-cli-lib/src/tests/fixtures/proc_identity_legacy_baseline.json is a flat {path: count} map (67 files; includes lib_part5.rs at line 33, AC3 dissolve target; 13 files overlap crate-globs-legacy.json). task_1750_liveness_primitive_guard_tests.rs proc_identity_legacy_decisions_do_not_expand uses baseline.get(rel).unwrap_or(0), so a moved file with identity decisions fails. It already fits the JSON branch of rewrite() (key == old). (b) aida-cli-lib/src/tests/story_2539_vendor_literals.tsv has rows "path|item|token<TAB>count" (13 lib_part rows). story_2539_vendor_literal_ratchet_tests.rs violations() (lines 297-305) requires exact key equality both ways, so a pure move fails on the new key and on the stale key. Neither the JSON branch nor the tab-prefixed text branch matches this "|" key shape. Fix: add (a) to the ledger tuple; add a pipe-key rewrite and stale check for (b), or else list each with its exact manual edit in the docstring, AGENTS/OVERVIEW and PR notes. Extend test_stale_path_in_each_ledger_refuses_before_any_write and test_move_verifies_content_and_preserves_evidence for whichever are automated.
     2. MINOR AGENTS.md:1-4 and OVERVIEW.md:1-11: both prepend a per-change note about this helper. CLAUDE.md says per-change notes go in the PR body and an aida comment add on the spec, and that those two files change only for a real architecture change because each prepended paragraph conflicts with every open PR. A repo script is not an architecture change, and the helper docstring already carries this content. Fix: drop both paragraphs and keep the docstring plus PR/spec notes.
-
-    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.'
-  created_at: 2026-11-08 09:14:02.063792+00:00
-  modified_at: 2026-11-08 09:14:02.063792+00:00
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
+  created_at: 2026-11-08T09:14:02.063792Z
+  modified_at: 2026-11-08T09:14:02.063792Z
   session_id: 01a1b8be-8170-7fb2-89ab-ecb4c6eee98c
   harness_version: 2.1.319 (Claude Code)
 - id: 01a1ba73-9180-7f02-b414-c6310b0dc244
   author: joe
   content: 'PR #3644 round 7: addressed both review findings. Pure-move helper now includes aida-cli-lib/src/tests/fixtures/proc_identity_legacy_baseline.json and aida-cli-lib/src/tests/story_2539_vendor_literals.tsv, with pipe-key rewriting and stale-key validation. Extended both all-ledger no-write refusal and content/evidence preservation tests to cover these fixtures. Removed per-change paragraphs from AGENTS.md and OVERVIEW.md; usage/inventory notes remain in helper docstring. Targeted crate-split Python suite: 15 tests passed; git diff --check passed. Native seat leaves edits uncommitted for host publication. Existing merge-hold remains a separate review gate.'
-  created_at: 2026-11-08 09:18:18.496920+00:00
-  modified_at: 2026-11-08 09:18:18.496920+00:00
+  created_at: 2026-11-08T09:18:18.496920Z
+  modified_at: 2026-11-08T09:18:18.496920Z
   session_id: 01a1ba71ed90
 - id: 01a1ba74-11fe-7ce2-bf60-fcc9b106c0a0
   author: joe
   content: 'Round 7 final validation: python3 tests/test_exec_context_ratchet.py passed 19 tests; python3 scripts/check-crate-globs.py --base HEAD passed (220 remaining imports, zero additions). All 15 crate-split tests and git diff --check also passed. Host publication subject declared: [AI:codex] fix(crate-split): relocate identity and vendor fixture paths (Refs TASK-3428). No Rust changes or Cargo runs.'
-  created_at: 2026-11-08 09:18:51.390321+00:00
-  modified_at: 2026-11-08 09:18:51.390321+00:00
+  created_at: 2026-11-08T09:18:51.390321Z
+  modified_at: 2026-11-08T09:18:51.390321Z
   session_id: 01a1ba71ed90
 - id: 01a1bc8d-45e8-7e71-8384-9ba5b7e10b94
   author: joe
   content: 'Advisor 2026-11-08: dell1 seat lease 01a1b88cd5b1 released after its clean tree''s commit 2a1c2af445 was saved to ops/advisor-scripts/dell1-salvage-20261108/960.bundle; relaunching.'
-  created_at: 2026-11-08 19:05:37.512761+00:00
-  modified_at: 2026-11-08 19:05:37.512761+00:00
+  created_at: 2026-11-08T19:05:37.512761Z
+  modified_at: 2026-11-08T19:05:37.512761Z
   session_id: 01a1bbab-762f-7cd2-8a36-4ea9f209afce
   harness_version: 2.1.319 (Claude Code)
 - id: 01a1bca8-f56e-7ab2-9d53-cbaf889f67eb
   author: joe
-  content: 'Explicit-import batch 1 ready for host publication, intentionally partial under the advisor <=50-file cap. Tooling slice landed in PR #3644. Next Refs slice prepared: retire root crate globs in 34 smaller command modules, replacing required bindings explicitly and removing unused globs; baseline shrinks from 220 to 186. Existing lease-state call is qualified to preserve ownership-liveness evidence without adding an import site. goal_cmd.rs excluded because open PR #3687 owns it. Remaining explicit-import batches and lib_part1..6 module extraction remain outstanding.
-
+  content: |-
+    Explicit-import batch 1 ready for host publication, intentionally partial under the advisor <=50-file cap. Tooling slice landed in PR #3644. Next Refs slice prepared: retire root crate globs in 34 smaller command modules, replacing required bindings explicitly and removing unused globs; baseline shrinks from 220 to 186. Existing lease-state call is qualified to preserve ownership-liveness evidence without adding an import site. goal_cmd.rs excluded because open PR #3687 owns it. Remaining explicit-import batches and lib_part1..6 module extraction remain outstanding.
 
     Changed files:
-
     aida-cli-lib/src/approvals_cmd.rs
-
     aida-cli-lib/src/autonomy_cmd.rs
-
     aida-cli-lib/src/changelog_cmd.rs
-
     aida-cli-lib/src/decide_cmd.rs
-
     aida-cli-lib/src/deps_cmd.rs
-
     aida-cli-lib/src/derisk_cmd.rs
-
     aida-cli-lib/src/digest_cmd.rs
-
     aida-cli-lib/src/driver_cmd.rs
-
     aida-cli-lib/src/feature_cmd.rs
-
     aida-cli-lib/src/field_study_cmd.rs
-
     aida-cli-lib/src/focus_cmd.rs
-
     aida-cli-lib/src/gate_cmd.rs
-
     aida-cli-lib/src/health_vitals_cmd.rs
-
     aida-cli-lib/src/human_cmd.rs
-
     aida-cli-lib/src/import_plan_cmd.rs
-
     aida-cli-lib/src/internal_cmd.rs
-
     aida-cli-lib/src/lifecycle_cmd.rs
-
     aida-cli-lib/src/lint_cmd.rs
-
     aida-cli-lib/src/lock_cmd.rs
-
     aida-cli-lib/src/memories_cmd.rs
-
     aida-cli-lib/src/protocol_cmd.rs
-
     aida-cli-lib/src/rebase_cmd.rs
-
     aida-cli-lib/src/record_cmd.rs
-
     aida-cli-lib/src/rel_def_cmd.rs
-
     aida-cli-lib/src/remote_cmd.rs
-
     aida-cli-lib/src/rules_cmd.rs
-
     aida-cli-lib/src/server_cmd.rs
-
     aida-cli-lib/src/session_misc_cmd.rs
-
     aida-cli-lib/src/skill_cmd.rs
-
     aida-cli-lib/src/solo_cmd.rs
-
     aida-cli-lib/src/triage_cmd.rs
-
     aida-cli-lib/src/type_cmd.rs
-
     aida-cli-lib/src/ultraplan_cmd.rs
-
     aida-cli-lib/src/verify_cmd.rs
-
     scripts/crate-globs-legacy.json
-
 
     Validation: Final launcher cargo test --profile agent -p aida-cli-lib --lib -- command_registry passed: 32 executed tests, zero failures (job j20261108T192003657-2-0). Launcher cargo check --profile agent -p aida-cli --no-default-features passed (job j20261108T192150425-2976173-0). 15 crate-split tooling and 2 ownership-liveness fixtures passed. Glob ratchet against HEAD passes at 186; ExecContext (1239 sites), store-writer inventory (3385 sinks/293 mappings), portability guard and 83-gate classification audit pass. Touched-file rustfmt and git diff --check pass. Non-import Rust token comparison matches HEAD apart from existing lease-call qualification. Full make check-ci-fast not run because it directly invokes Cargo outside the required launcher; published-head CI remains for host.
 
-
-    Native publication declaration recorded: [AI:codex] refactor(commands): replace crate globs in 34 command modules (Refs TASK-3428). Edits remain uncommitted; no push, PR creation, queue completion, ship-to-merge, or verdict recording performed. Codegraph shared index unreachable; used rg/source inspection and did not initialize a lane index. Task stays In Progress for the remaining slices.'
-  created_at: 2026-11-08 19:35:51.918214+00:00
-  modified_at: 2026-11-08 19:35:51.918214+00:00
+    Native publication declaration recorded: [AI:codex] refactor(commands): replace crate globs in 34 command modules (Refs TASK-3428). Edits remain uncommitted; no push, PR creation, queue completion, ship-to-merge, or verdict recording performed. Codegraph shared index unreachable; used rg/source inspection and did not initialize a lane index. Task stays In Progress for the remaining slices.
+  created_at: 2026-11-08T19:35:51.918214Z
+  modified_at: 2026-11-08T19:35:51.918214Z
   session_id: 01a1bc95c427
 - id: 01a1bcc2-57c7-7581-aa68-2d8e3af49088
   author: joe
   content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: No source defect found in the 34-file import slice; blocked only because CI at this head is still queued (AC5 unverified). Re-review at the same SHA once CI is green; no code rework needed unless CI fails.. No triage reason was given.'
-  created_at: 2026-11-08 20:03:35.495477+00:00
-  modified_at: 2026-11-08 20:03:35.495477+00:00
+  created_at: 2026-11-08T20:03:35.495477Z
+  modified_at: 2026-11-08T20:03:35.495477Z
   session_id: 01a1bc93-77a0-7740-8b03-df4e3e8d1df5
   harness_version: 2.1.319 (Claude Code)
 - id: 01a1bcc2-73a8-79e1-8034-4b25b7db93ec
   author: joe
-  content: 'REVIEW FINDINGS TO ADDRESS (PR #3695):
-
+  content: |-
+    REVIEW FINDINGS TO ADDRESS (PR #3695):
     Verdict: CHANGES REQUESTED
-
     Reviewed commit: 2ece9886b46b
-
     Recorded: 2026-11-08T19:45:43.492634426+00:00
-
     Review comment: https://github.com/joemooney/aida/pull/3695#issuecomment-6726232824
-
     Findings:
-
     1. BLOCKING (wait state, not a code defect) AC5: CI run 42515877089 at 2ece9886b46b is queued with all 7 CI shards pending (only merge-hold-gate has passed), behind 20+ queued runs, and make check-ci-fast was not run by the implementer. The compile/fmt result for these import removals is therefore unverified. Action: when CI is green at this SHA, re-run review; only rework if CI reports a failure.
-
-    2. MINOR non-blocking aida-cli-lib/src/deps_cmd.rs:14, lifecycle_cmd.rs, solo_cmd.rs: explicit imports take std/anyhow names through the crate root (crate::HashSet, crate::Result) rather than from std::collections and anyhow, so these files still record a false dependency on lib.rs private aliases, against the deep dive''s stated goal of an exact dependency matrix, and will break if those root aliases are removed.
-
-    3. COSMETIC non-blocking 18 run_* functions (e.g. driver_cmd.rs:285, gate_cmd.rs:279, verify_cmd.rs:439): where the glob was simply unused, a lone ''// trace:TASK-3428'' comment replaces it and annotates nothing.
-
-    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.'
-  created_at: 2026-11-08 20:03:42.632871+00:00
-  modified_at: 2026-11-08 20:03:42.632871+00:00
+    2. MINOR non-blocking aida-cli-lib/src/deps_cmd.rs:14, lifecycle_cmd.rs, solo_cmd.rs: explicit imports take std/anyhow names through the crate root (crate::HashSet, crate::Result) rather than from std::collections and anyhow, so these files still record a false dependency on lib.rs private aliases, against the deep dive's stated goal of an exact dependency matrix, and will break if those root aliases are removed.
+    3. COSMETIC non-blocking 18 run_* functions (e.g. driver_cmd.rs:285, gate_cmd.rs:279, verify_cmd.rs:439): where the glob was simply unused, a lone '// trace:TASK-3428' comment replaces it and annotates nothing.
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
+  created_at: 2026-11-08T20:03:42.632871Z
+  modified_at: 2026-11-08T20:03:42.632871Z
   session_id: 01a1bc93-77a0-7740-8b03-df4e3e8d1df5
   harness_version: 2.1.319 (Claude Code)
 - id: 01a1bcd6-003c-7852-aeb4-609ae399aadf
   author: joe
   content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: Import diff is sound on inspection, but AC5 is unverified: CI run 42518333560 is still queued at this head (wait state, no code defect found). No triage reason was given.'
-  created_at: 2026-11-08 20:25:03.804373+00:00
-  modified_at: 2026-11-08 20:25:03.804373+00:00
+  created_at: 2026-11-08T20:25:03.804373Z
+  modified_at: 2026-11-08T20:25:03.804373Z
   session_id: 01a1bc93-77a0-7740-8b03-df4e3e8d1df5
   harness_version: 2.1.319 (Claude Code)
 - id: 01a1bcd6-180b-7e32-8fc9-a2cd17e29d29
   author: joe
-  content: 'REVIEW FINDINGS TO ADDRESS (PR #3695):
-
+  content: |-
+    REVIEW FINDINGS TO ADDRESS (PR #3695):
     Verdict: CHANGES REQUESTED
-
     Reviewed commit: 36ee76656d61
-
     Recorded: 2026-11-08T20:11:56.639543185+00:00
-
     Review comment: https://github.com/joemooney/aida/pull/3695#issuecomment-6726524080
-
     Findings:
-
     1. BLOCKING (wait state, not a code defect) AC5: CI run 42518333560 at 36ee76656d61 has lib-1 in progress and the other 6 shards queued, and make check-ci-fast was not run by the implementer. Prior run 42515877089 at 2ece9886b46b passed gates, lib-0, lib-1, rest and cli-0 but cancelled contracts and cli-1, so cli-1 and contracts have no result for this change. The merge of main shares no files with the 34 changed modules. Action: do not push or merge main just to answer this finding, because that restarts CI; re-run review when CI is green at this SHA and rework only if CI reports a failure.
-
     2. MINOR non-blocking aida-cli-lib/src/deps_cmd.rs, lifecycle_cmd.rs, solo_cmd.rs: explicit imports still take crate::HashSet and crate::Result, which are private root aliases of std/anyhow names, so these modules keep a false dependency on lib.rs and break if the aliases are removed. Carried from the prior round; head 36ee76656d61 added only a merge of main.
-
-    3. COSMETIC non-blocking 18 run_* functions (e.g. driver_cmd.rs, gate_cmd.rs, verify_cmd.rs): where the glob was unused, a lone ''// trace:TASK-3428'' comment replaces it and annotates nothing. Carried from the prior round.
-
-    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.'
-  created_at: 2026-11-08 20:25:09.899294+00:00
-  modified_at: 2026-11-08 20:25:09.899294+00:00
+    3. COSMETIC non-blocking 18 run_* functions (e.g. driver_cmd.rs, gate_cmd.rs, verify_cmd.rs): where the glob was unused, a lone '// trace:TASK-3428' comment replaces it and annotates nothing. Carried from the prior round.
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
+  created_at: 2026-11-08T20:25:09.899294Z
+  modified_at: 2026-11-08T20:25:09.899294Z
   session_id: 01a1bc93-77a0-7740-8b03-df4e3e8d1df5
   harness_version: 2.1.319 (Claude Code)
 - id: 01a1bcda-7924-7ad3-8ad1-fd8ccc2941b2
   author: dirtlab
-  content: 'Prepared another import-only Refs slice: brief_cmd.rs, load_cmd.rs, output_format.rs, tui_entry.rs and usage_mcp_helpers.rs now use explicit imports; removed redundant inner globs from brief/load. Added explicit formerly transitive test dependencies in tests/task970_agent_output_tests.rs and tests/task_2205_list_fields_tests.rs. Pruned scripts/crate-globs-legacy.json from 186 to 179 imports. Non-import Rust token comparison against HEAD matches all seven Rust files.
-
+  content: |
+    Prepared another import-only Refs slice: brief_cmd.rs, load_cmd.rs, output_format.rs, tui_entry.rs and usage_mcp_helpers.rs now use explicit imports; removed redundant inner globs from brief/load. Added explicit formerly transitive test dependencies in tests/task970_agent_output_tests.rs and tests/task_2205_list_fields_tests.rs. Pruned scripts/crate-globs-legacy.json from 186 to 179 imports. Non-import Rust token comparison against HEAD matches all seven Rust files.
 
     Validation: 15 crate-split tooling fixtures passed; glob ratchet --base HEAD passes at 179; ExecContext ratchet passes at 1239 sites; store-writer inventory passes (3387 sinks/293 mappings); portability guard passes; 84-gate classification audit, touched-file rustfmt and diff whitespace checks pass. Launcher cargo check --profile agent -p aida-cli --no-default-features passed (j20261108T201048293-2-0). Earlier test compiles exposed missing imports, corrected in working tree. Final launcher cargo test --profile agent -p aida-cli-lib --lib -- output_format timed out at 900 seconds during compilation without new diagnostics and without executing tests (j20261108T201130439-2-0, exit 124). untested=true. Full make check-ci-fast not run because it invokes Cargo directly outside the required launcher.
 
-
     Test blocker: successful executed Rust tests still required; final log /home/dirtlab/ai/aida/.aida/lane-jobs/01a1bcc4231a/j20261108T201130439-2-0.out. Codegraph unavailable, confirmed by aida doctor check codegraph; used rg. Remaining glob batches and lib_part1..6 extraction remain outstanding; TASK-3428 stays in progress. Native publication declaration recorded: [AI:codex] refactor(imports): retire crate globs in five shared modules (Refs TASK-3428). All edits uncommitted for host publication.
-
-    '
-  created_at: 2026-11-08 20:29:56.900793+00:00
-  modified_at: 2026-11-08 20:29:56.900793+00:00
+  created_at: 2026-11-08T20:29:56.900793Z
+  modified_at: 2026-11-08T20:29:56.900793Z
   session_id: 01a1bcc4231a
   harness_version: codex-cli 0.167.0
 - id: 01a1bce9-a955-7dd1-8597-ceb66fcb920f
   author: joe
-  content: 'Round 9 native implementer handoff for PR #3695, based on 36ee76656d61.
-
+  content: |
+    Round 9 native implementer handoff for PR #3695, based on 36ee76656d61.
 
     Finding 2 addressed: deps_cmd imports anyhow::Result and std::collections::HashSet directly; lifecycle_cmd and solo_cmd import anyhow::Result directly. Finding 3 addressed: moved all 18 orphan TASK-3428 dispatch-body markers to their module headers, preserving module-level traceability for removed unused globs.
 
-
     Validation: 15 crate-split tooling fixtures and 2 ownership-liveness fixtures passed. Crate glob ratchet against HEAD passes at 186 remaining imports, zero additions. Touched-file rustfmt, git diff --check, trace-header stranding guard and 84-gate CI classification audit passed. Launcher cargo check --profile agent -p aida-cli --no-default-features passed (j20261108T202922993-3383728-0, exit 0). Launcher cargo test --profile agent -p aida-cli-lib --lib -- command_registry timed out during compilation after 900 seconds (j20261108T202832708-3379905-0, exit 124), before any executed-test result; Rust tests untested=true for this round.
 
-
-    Finding 1 remains open, undisputed: run 42518333560 at 36ee76656d61 passed lib-1, then six other shards were cancelled and the aggregate failed. The PR advanced externally to 75c368c152dc; that commit changes eight files with no overlap with this lane''s 21 edited files. No main merge, commit, push or CI restart was performed by this seat. Full make check-ci-fast was not run because its first gate directly invokes Cargo, which this lane is explicitly forbidden to run outside the launcher. Existing merge hold remains a separate review/clearance gate.
-
+    Finding 1 remains open, undisputed: run 42518333560 at 36ee76656d61 passed lib-1, then six other shards were cancelled and the aggregate failed. The PR advanced externally to 75c368c152dc; that commit changes eight files with no overlap with this lane's 21 edited files. No main merge, commit, push or CI restart was performed by this seat. Full make check-ci-fast was not run because its first gate directly invokes Cargo, which this lane is explicitly forbidden to run outside the launcher. Existing merge hold remains a separate review/clearance gate.
 
     All edits remain uncommitted for host integration with the advanced PR branch. Recorded native publication declaration: [AI:codex] refactor(imports): remove root aliases and scope trace comments (Refs TASK-3428). No queue completion or review verdict recorded.
 
-
     Changed files:
-
     - aida-cli-lib/src/autonomy_cmd.rs
-
     - aida-cli-lib/src/changelog_cmd.rs
-
     - aida-cli-lib/src/decide_cmd.rs
-
     - aida-cli-lib/src/deps_cmd.rs
-
     - aida-cli-lib/src/driver_cmd.rs
-
     - aida-cli-lib/src/feature_cmd.rs
-
     - aida-cli-lib/src/field_study_cmd.rs
-
     - aida-cli-lib/src/gate_cmd.rs
-
     - aida-cli-lib/src/import_plan_cmd.rs
-
     - aida-cli-lib/src/internal_cmd.rs
-
     - aida-cli-lib/src/lifecycle_cmd.rs
-
     - aida-cli-lib/src/protocol_cmd.rs
-
     - aida-cli-lib/src/rebase_cmd.rs
-
     - aida-cli-lib/src/record_cmd.rs
-
     - aida-cli-lib/src/rel_def_cmd.rs
-
     - aida-cli-lib/src/rules_cmd.rs
-
     - aida-cli-lib/src/server_cmd.rs
-
     - aida-cli-lib/src/solo_cmd.rs
-
     - aida-cli-lib/src/type_cmd.rs
-
     - aida-cli-lib/src/ultraplan_cmd.rs
-
     - aida-cli-lib/src/verify_cmd.rs
-
-    '
-  created_at: 2026-11-08 20:46:32.277520+00:00
-  modified_at: 2026-11-08 20:46:32.277520+00:00
+  created_at: 2026-11-08T20:46:32.277520Z
+  modified_at: 2026-11-08T20:46:32.277520Z
   session_id: 01a1bcd7ae1d
 - id: 01a1bcf8-451a-7193-8ab5-283980e706cd
   author: joe
   content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: Import diff sound on full inspection; rounds 8 findings fixed. Blocked only by AC5: CI run 42521886122 at this head has not started (0 jobs, 24 runs queued). No code rework needed unless CI fails. AC1/AC3 remain later Refs slices.. No triage reason was given.'
-  created_at: 2026-11-08 21:02:29.658647+00:00
-  modified_at: 2026-11-08 21:02:29.658647+00:00
+  created_at: 2026-11-08T21:02:29.658647Z
+  modified_at: 2026-11-08T21:02:29.658647Z
   session_id: 01a1bc93-77a0-7740-8b03-df4e3e8d1df5
   harness_version: 2.1.319 (Claude Code)
 - id: 01a1bcf8-5f37-72f3-ac5e-bea884c8b245
   author: joe
-  content: 'REVIEW FINDINGS TO ADDRESS (PR #3695):
-
+  content: |-
+    REVIEW FINDINGS TO ADDRESS (PR #3695):
     Verdict: CHANGES REQUESTED
-
     Reviewed commit: 4fa49369388b
-
     Recorded: 2026-11-08T20:56:07.518971641+00:00
-
     Review comment: https://github.com/joemooney/aida/pull/3695#issuecomment-6727012979
-
     Findings:
-
     1. BLOCKING (wait state, not a code defect) AC5: CI run 42521886122 at 4fa49369388b is pending with 0 jobs started and 24 runs queued repo-wide; merge-hold-gate is queued too, and make check-ci-fast was not run by the implementer. The prior full result is incomplete (run 42515877089 cancelled contracts and cli-1). Action: re-run review at this SHA when CI is green; rework only if CI reports a failure; do not push or merge main just to answer this, since that restarts CI.
-
-    2. MINOR non-blocking aida-cli-lib/src/usage_mcp_helpers.rs (AC1 scope, advisor amendment 2026-11-07 ''skip files in open PRs''): the batch-2 file is also changed by open PR-3687 (TASK-3429), which is the same reason goal_cmd.rs was excluded. The hunks do not overlap (3687 touches lines 1 and 140+; this PR touches lines 3-8), so no conflict is expected. Action: none required beyond awareness of merge order; future batches should re-check open-PR footprints.
-
-    3. COSMETIC non-blocking PR title and first commit subject say ''34 command modules'' but the head retires globs in 39 modules plus two test files (ledger 220 to 179). Action: correct the title before squash so the merged subject is accurate.
-
-    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.'
-  created_at: 2026-11-08 21:02:36.343416+00:00
-  modified_at: 2026-11-08 21:02:36.343416+00:00
+    2. MINOR non-blocking aida-cli-lib/src/usage_mcp_helpers.rs (AC1 scope, advisor amendment 2026-11-07 'skip files in open PRs'): the batch-2 file is also changed by open PR-3687 (TASK-3429), which is the same reason goal_cmd.rs was excluded. The hunks do not overlap (3687 touches lines 1 and 140+; this PR touches lines 3-8), so no conflict is expected. Action: none required beyond awareness of merge order; future batches should re-check open-PR footprints.
+    3. COSMETIC non-blocking PR title and first commit subject say '34 command modules' but the head retires globs in 39 modules plus two test files (ledger 220 to 179). Action: correct the title before squash so the merged subject is accurate.
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
+  created_at: 2026-11-08T21:02:36.343416Z
+  modified_at: 2026-11-08T21:02:36.343416Z
   session_id: 01a1bc93-77a0-7740-8b03-df4e3e8d1df5
   harness_version: 2.1.319 (Claude Code)
 - id: 01a1bd08-9566-7c43-a5b0-85d641dff49c
   author: dirtlab
-  content: 'Tooling slice landed in PR #3644; prior 34-command import batch is open as #3695. This subsequent Refs slice removes 15 remaining root crate globs from command adapters outside current open-PR footprints: commit, criteria, exposition, harvest, help_catalog, mandate, metrics_cmd, monitor_contract, notify, reconstitute, regen, shift, user_alias, watch and wiki. Required bindings now use explicit imports (including DatabaseBackend traits); unused globs are removed. Baseline shrinks from 179 to 164. All non-import Rust tokens match HEAD. Remaining import batches and lib_part1..6 dissolution remain outstanding; TASK-3428 stays In Progress. Validation: Launcher cargo test --profile agent -p aida-cli-lib --lib -- command_registry passed: 32 executed tests, zero failures (j20261108T210750606-2-0). Launcher cargo check --profile agent -p aida-cli --no-default-features passed (j20261108T211040978-2-0). Initial test compilation found two missing module imports; corrected before the passing
-    run. 15 crate-split Python fixtures pass. Glob ratchet against HEAD passes at 164; ExecContext 1239 sites, store-writer 3387 sinks / 293 mappings, portability guard, and all 84 CI gate classifications pass. All 15 adapters preserve every non-import Rust token; touched-file rustfmt and git diff --check pass. Full make check-ci-fast not run because gates invoke Cargo outside this seat’s required launcher; host validation remains. Codegraph unavailable (doctor confirmed), used rg/source inspection. Edits uncommitted for host publication.'
-  created_at: 2026-11-08 21:20:18.790496+00:00
-  modified_at: 2026-11-08 21:20:18.790496+00:00
+  content: 'Tooling slice landed in PR #3644; prior 34-command import batch is open as #3695. This subsequent Refs slice removes 15 remaining root crate globs from command adapters outside current open-PR footprints: commit, criteria, exposition, harvest, help_catalog, mandate, metrics_cmd, monitor_contract, notify, reconstitute, regen, shift, user_alias, watch and wiki. Required bindings now use explicit imports (including DatabaseBackend traits); unused globs are removed. Baseline shrinks from 179 to 164. All non-import Rust tokens match HEAD. Remaining import batches and lib_part1..6 dissolution remain outstanding; TASK-3428 stays In Progress. Validation: Launcher cargo test --profile agent -p aida-cli-lib --lib -- command_registry passed: 32 executed tests, zero failures (j20261108T210750606-2-0). Launcher cargo check --profile agent -p aida-cli --no-default-features passed (j20261108T211040978-2-0). Initial test compilation found two missing module imports; corrected before the passing run. 15 crate-split Python fixtures pass. Glob ratchet against HEAD passes at 164; ExecContext 1239 sites, store-writer 3387 sinks / 293 mappings, portability guard, and all 84 CI gate classifications pass. All 15 adapters preserve every non-import Rust token; touched-file rustfmt and git diff --check pass. Full make check-ci-fast not run because gates invoke Cargo outside this seat’s required launcher; host validation remains. Codegraph unavailable (doctor confirmed), used rg/source inspection. Edits uncommitted for host publication.'
+  created_at: 2026-11-08T21:20:18.790496Z
+  modified_at: 2026-11-08T21:20:18.790496Z
   session_id: 01a1bcf9e577
   harness_version: codex-cli 0.167.0
 - id: 01a1bd3d-2543-7c60-b215-4c14e3ae7ca1
   author: joe
   content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: Import diff is sound on full inspection (only imports/comments plus one qualified lease_state_for call; ledger 164 matches source). Blocked by AC5 (CI still running at this head) and by the 57-file size exceeding the advisor <=50-file cap. AC1/AC3 remain later Refs slices.. No triage reason was given.'
-  created_at: 2026-11-08 22:17:43.491333+00:00
-  modified_at: 2026-11-08 22:17:43.491333+00:00
+  created_at: 2026-11-08T22:17:43.491333Z
+  modified_at: 2026-11-08T22:17:43.491333Z
   session_id: 20abb7c3-8f9b-4a5e-b326-404921f3b450
 - id: 01a1bd3d-3e35-75e1-a4b1-d57a1e83396d
   author: joe
-  content: 'REVIEW FINDINGS TO ADDRESS (PR #3695):
-
+  content: |-
+    REVIEW FINDINGS TO ADDRESS (PR #3695):
     Verdict: CHANGES REQUESTED
-
     Reviewed commit: 980adf1b3fb1
-
     Recorded: 2026-11-08T21:35:22.967875817+00:00
-
     Review comment: https://github.com/joemooney/aida/pull/3695#issuecomment-6727444464
-
     Findings:
-
     1. BLOCKING (wait state, not a code defect) AC5: CI run 42524746668 at 980adf1b3fb1 is incomplete: cli-0 success; contracts and lib-1 in progress; gates, rest, cli-1 and lib-0 queued. No complete CI run exists at any head of this PR, and make check-ci-fast was not run by the implementer. Action: re-review at this SHA when CI is green; rework only if CI fails. Earlier findings said not to push while waiting; commit 980adf1 restarted CI.
-
-    2. MAJOR scope (TASK-3428 ''Split into two PRs if over ~40 files''; advisor amendment 2026-11-07 ''Ship as 3-4 PRs of <=50 files''): the PR now touches 57 files (54 modules, 2 test files, the ledger) after 980adf1 added 15 adapters to it. The implementer''s own batch-1 note called the slice intentionally partial under the <=50 cap. Action: either obtain an explicit advisor waiver on the spec for this import-only PR (avoids a CI restart), or move at least 7 files, e.g. commit 980adf1''s adapters, to a follow-up Refs PR.
-
-    3. MINOR non-blocking aida-cli-lib/src/usage_mcp_helpers.rs (advisor amendment ''skip files in open PRs''): still also changed by open PR-3687 (TASK-3429). Hunks did not overlap at the last review, so this is merge-order awareness only unless the file is moved out during a split.
-
-    4. COSMETIC non-blocking PR title: says ''34 command modules'', but the head retires globs in 54 modules plus two test-file import additions (ledger 220 to 164). Round-10 finding 3 remains open and has grown. Action: correct the title before squash.
-
+    2. MAJOR scope (TASK-3428 'Split into two PRs if over ~40 files'; advisor amendment 2026-11-07 'Ship as 3-4 PRs of <=50 files'): the PR now touches 57 files (54 modules, 2 test files, the ledger) after 980adf1 added 15 adapters to it. The implementer's own batch-1 note called the slice intentionally partial under the <=50 cap. Action: either obtain an explicit advisor waiver on the spec for this import-only PR (avoids a CI restart), or move at least 7 files, e.g. commit 980adf1's adapters, to a follow-up Refs PR.
+    3. MINOR non-blocking aida-cli-lib/src/usage_mcp_helpers.rs (advisor amendment 'skip files in open PRs'): still also changed by open PR-3687 (TASK-3429). Hunks did not overlap at the last review, so this is merge-order awareness only unless the file is moved out during a split.
+    4. COSMETIC non-blocking PR title: says '34 command modules', but the head retires globs in 54 modules plus two test-file import additions (ledger 220 to 164). Round-10 finding 3 remains open and has grown. Action: correct the title before squash.
     5. COSMETIC non-blocking commit.rs:552, exposition.rs:900, help_catalog.rs:753, mandate.rs:1109, monitor_contract.rs:89, regen.rs:720, shift.rs:3839, wiki.rs:702: 980adf1 re-adds function-body TASK-3428 markers where a glob was simply unused, the pattern moved to module headers after the round-8 finding. Action: move them to module headers if the files are touched again.
-
-    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.'
-  created_at: 2026-11-08 22:17:49.877497+00:00
-  modified_at: 2026-11-08 22:17:49.877497+00:00
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
+  created_at: 2026-11-08T22:17:49.877497Z
+  modified_at: 2026-11-08T22:17:49.877497Z
   session_id: 20abb7c3-8f9b-4a5e-b326-404921f3b450
 - id: 01a1bd6c-053e-78e0-9825-4567231bdb45
   author: joe
   content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: Import diff is sound at ff07b72 (imports/comments only, ledger 158 matches source), but AC5 is unverified because CI is still queued and the PR is 63 files against the advisor <=50-file cap with no waiver.. No triage reason was given.'
-  created_at: 2026-11-08 23:08:55.486612+00:00
-  modified_at: 2026-11-08 23:08:55.486612+00:00
+  created_at: 2026-11-08T23:08:55.486612Z
+  modified_at: 2026-11-08T23:08:55.486612Z
   session_id: 20abb7c3-8f9b-4a5e-b326-404921f3b450
 - id: 01a1bd6c-1e31-75d0-acd0-5f1b15268261
   author: joe
-  content: 'REVIEW FINDINGS TO ADDRESS (PR #3695):
-
+  content: |-
+    REVIEW FINDINGS TO ADDRESS (PR #3695):
     Verdict: CHANGES REQUESTED
-
     Reviewed commit: ff07b72258cc
-
     Recorded: 2026-11-08T22:33:34.422161320+00:00
-
     Review comment: https://github.com/joemooney/aida/pull/3695#issuecomment-6728080810
-
     Findings:
-
-    1. MAJOR scope (spec ''split if over ~40 files''; advisor amendment 2026-11-07 ''<=50 files''): gh pr diff 3695 lists 63 files, up from 57 when the cap was flagged at 980adf1 and 5b39844; ff07b72 added 7 more, and TASK-3428 has no waiver. Action: record an explicit advisor waiver on TASK-3428 (no push, no CI restart), or move at least 13 files, e.g. the adapters from 980adf1 and ff07b72, to a follow-up Refs PR.
-
+    1. MAJOR scope (spec 'split if over ~40 files'; advisor amendment 2026-11-07 '<=50 files'): gh pr diff 3695 lists 63 files, up from 57 when the cap was flagged at 980adf1 and 5b39844; ff07b72 added 7 more, and TASK-3428 has no waiver. Action: record an explicit advisor waiver on TASK-3428 (no push, no CI restart), or move at least 13 files, e.g. the adapters from 980adf1 and ff07b72, to a follow-up Refs PR.
     2. BLOCKING wait state, not a code defect (AC5): CI run 42530386141 at ff07b72 has CI (rest) in progress and lib-0, lib-1, cli-0, cli-1, gates and contracts queued; no complete CI run exists at any head of this PR and the implementer did not run make check-ci-fast. Compilation of the removed globs, including test modules and cargo check --no-default-features, is unproven at this head. Action: re-review once CI is green; do not push or merge main only to answer this, because each push restarts CI.
-
     3. MINOR merge order: aida-cli-lib/src/usage_mcp_helpers.rs is also changed by open PR 3687, and scripts/crate-globs-legacy.json is also changed by open PRs 3685, 3687 and 3704. Whichever lands later must re-prune the ledger or the exact-match glob ratchet fails.
-
-    4. COSMETIC: the PR title says ''34 command modules'' but the head changes 60 modules, 2 test files and the ledger (220 to 158 imports). Correct the title before squash; a title edit needs no push.
-
-    5. COSMETIC: body-scope markers such as commit.rs:552 ''trace:TASK-3428 — dispatch uses only local or qualified bindings'' (also exposition, help_catalog, mandate, monitor_contract, regen, shift, wiki, report_cmd) trace a removed import rather than implementation code. Move them to module headers if these files are touched again.
-
-    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.'
-  created_at: 2026-11-08 23:09:01.873926+00:00
-  modified_at: 2026-11-08 23:09:01.873926+00:00
+    4. COSMETIC: the PR title says '34 command modules' but the head changes 60 modules, 2 test files and the ledger (220 to 158 imports). Correct the title before squash; a title edit needs no push.
+    5. COSMETIC: body-scope markers such as commit.rs:552 'trace:TASK-3428 — dispatch uses only local or qualified bindings' (also exposition, help_catalog, mandate, monitor_contract, regen, shift, wiki, report_cmd) trace a removed import rather than implementation code. Move them to module headers if these files are touched again.
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
+  created_at: 2026-11-08T23:09:01.873926Z
+  modified_at: 2026-11-08T23:09:01.873926Z
   session_id: 20abb7c3-8f9b-4a5e-b326-404921f3b450
 - id: 01a1bd71-4b6a-7a70-88df-a6ef5f5fa807
   author: dirtlab
   content: 'Round-12 scope rework: current PR #3695 was 63 files. Restored 23 Rust files to the pinned PR merge-base d0e3cb3eb33d, including the 15-adapter batch, six later adapters, driver_cmd and overlapping usage_mcp_helpers. Reconciled glob ledger to 181. Prospective PR diff is exactly 40 files: 37 import-migrated modules, two existing test files and ledger. Deferred changes remain recoverable from existing branch commits and /tmp/task-3428-deferred-imports.patch (applies cleanly; prune ledger upon follow-up). This addresses the size finding by splitting rather than adding more imports. No new behavior; deferred files exactly match base. Host should update PR title to 37 modules; recorded matching Refs publication declaration. Remaining import batches/lib_part dissolution and AC5 remain outstanding. Launcher test and feature-disabled check in progress; final validation follows. No git metadata mutations or queue completion performed.'
-  created_at: 2026-11-08 23:14:41.130128+00:00
-  modified_at: 2026-11-08 23:14:41.130128+00:00
+  created_at: 2026-11-08T23:14:41.130128Z
+  modified_at: 2026-11-08T23:14:41.130128Z
+  session_id: 01a1bd6d94d5
+  harness_version: codex-cli 0.167.0
+- id: 01a1bd74-e777-7bc3-b64e-e7b0cabe64b4
+  author: dirtlab
+  content: 'Round-12 scope rework for PR #3695 reduces the prospective PR from 63 files to 40: 37 explicit-import modules, two existing test files, and the glob ledger. Restored 23 adapters byte-for-byte to merge-base d0e3cb3eb33d, including the 15-adapter and six-adapter follow-on batches, driver_cmd and overlapping usage_mcp_helpers. Ledger now has 181 remaining imports. Deferred changes are preserved in branch history and /tmp/task-3428-deferred-imports.patch for a separate PR. Native Refs publication declaration recorded with an accurate 37-module subject. Remaining AC1 batches and AC3 lib_part dissolution stay outstanding; TASK-3428 remains In Progress. Validation: Launcher cargo test --profile agent -p aida-cli-lib --lib -- command_registry passed: 32 executed tests, zero failures, full library test binary compiled (j20261108T231146749-2-0). Launcher cargo check --profile agent -p aida-cli --no-default-features passed (j20261108T231207043-2-0). All 17 crate-split Python tests pass. Glob ratchet against origin/main passes at 181; ExecContext 1239 sites, store-writer 3400 sinks / 293 mappings, portability guard, all 84 CI gate classifications, retained-file rustfmt and git diff --check pass. All 23 deferred files exactly match base; deferred patch applies cleanly. Retained non-import Rust tokens match base apart from the already-reviewed lease_state_for qualification. Full make check-ci-fast and current-head CI remain unverified: direct Cargo is prohibited in this seat, so Cargo checks used the launcher. Codegraph unavailable, doctor confirmed. Edits uncommitted; host must publish the split and update PR title. Detailed file list and recovery notes: /tmp/task-3428-handoff.md.'
+  created_at: 2026-11-08T23:18:37.687138196Z
+  modified_at: 2026-11-08T23:18:37.687138196Z
   session_id: 01a1bd6d94d5
   harness_version: codex-cli 0.167.0
 history:
 - id: 01a1b862-2e0b-7a50-a4d0-25097c707b57
   author: joe
-  timestamp: 2026-11-07 23:40:04.491422+00:00
+  timestamp: 2026-11-07T23:40:04.491422Z
   session_id: 01a1b848-940b-7bd2-8acd-52e428b182b8
   harness_version: 2.1.319 (Claude Code)
   changes: []
 - id: 01a1b874-df3d-71f2-9b04-29b442e402a9
   author: aida-session-start
-  timestamp: 2026-11-08 00:00:29.501490+00:00
+  timestamp: 2026-11-08T00:00:29.501490Z
   changes:
   - field_name: status
     old_value: Approved
     new_value: InProgress
 - id: 01a1b875-21d7-7561-80f1-3932d9107fc3
   author: dirtlab
-  timestamp: 2026-11-08 00:00:46.551281+00:00
+  timestamp: 2026-11-08T00:00:46.551281Z
   session_id: 01a1b874d943
   harness_version: codex-cli 0.167.0
   changes: []
 - id: 01a1b877-3a2b-7153-967d-8c564811a822
   author: dirtlab
-  timestamp: 2026-11-08 00:03:03.851451+00:00
+  timestamp: 2026-11-08T00:03:03.851451Z
   session_id: 01a1b874d943
   harness_version: codex-cli 0.167.0
   changes: []
 - id: 01a1b87b-9cdf-77e0-a1e4-db0c76c46bb4
   author: aida-orchestrator
-  timestamp: 2026-11-08 00:07:51.263680+00:00
+  timestamp: 2026-11-08T00:07:51.263680Z
   session_id: 01a1b8795f05
   harness_version: 2.1.319 (Claude Code)
   changes:
@@ -640,7 +490,7 @@ history:
     new_value: NeedsAttention
 - id: 01a1b888-e92f-7f30-bae5-258031f6a65a
   author: joe
-  timestamp: 2026-11-08 00:22:22.767108+00:00
+  timestamp: 2026-11-08T00:22:22.767108Z
   session_id: 01a1b848-940b-7bd2-8acd-52e428b182b8
   harness_version: 2.1.319 (Claude Code)
   changes:
@@ -649,33 +499,33 @@ history:
     new_value: Approved
 - id: 01a1b88b-be6a-7010-92ad-2c738e89ce8e
   author: aida-session-start
-  timestamp: 2026-11-08 00:25:28.426395+00:00
+  timestamp: 2026-11-08T00:25:28.426395Z
   changes:
   - field_name: status
     old_value: Approved
     new_value: InProgress
 - id: 01a1b88c-dfc3-74d3-b2bb-9b7e904c3022
   author: aida-session-start
-  timestamp: 2026-11-08 00:26:42.499894+00:00
+  timestamp: 2026-11-08T00:26:42.499894Z
   changes:
   - field_name: status
     old_value: Approved
     new_value: InProgress
 - id: 01a1b88d-2df1-7ab3-b2b0-f1f5a6b91905
   author: dirtlab
-  timestamp: 2026-11-08 00:27:02.513949+00:00
+  timestamp: 2026-11-08T00:27:02.513949Z
   session_id: 01a1b88cd5b1
   harness_version: codex-cli 0.167.0
   changes: []
 - id: 01a1b890-ce2f-7791-a6e5-7089e72740a9
   author: dirtlab
-  timestamp: 2026-11-08 00:31:00.143678+00:00
+  timestamp: 2026-11-08T00:31:00.143678Z
   session_id: 01a1b88cd5b1
   harness_version: codex-cli 0.167.0
   changes: []
 - id: 01a1b891-1664-78e0-8830-56eb53a7006b
   author: aida-orchestrator
-  timestamp: 2026-11-08 00:31:18.628530+00:00
+  timestamp: 2026-11-08T00:31:18.628530Z
   session_id: 01a1b88f6478
   harness_version: 2.1.319 (Claude Code)
   changes:
@@ -684,7 +534,7 @@ history:
     new_value: NeedsAttention
 - id: 01a1b8c4-4b2f-7f51-b4a2-47f5a966b549
   author: joe
-  timestamp: 2026-11-08 01:27:14.479451+00:00
+  timestamp: 2026-11-08T01:27:14.479451Z
   session_id: 01a1b8be-8170-7fb2-89ab-ecb4c6eee98c
   harness_version: 2.1.319 (Claude Code)
   changes:
@@ -693,14 +543,14 @@ history:
     new_value: Approved
 - id: 01a1b8c5-9e88-7813-a2ab-4780d9f1987d
   author: aida-session-start
-  timestamp: 2026-11-08 01:28:41.352760+00:00
+  timestamp: 2026-11-08T01:28:41.352760Z
   changes:
   - field_name: status
     old_value: Approved
     new_value: InProgress
 - id: 01a1b8cf-9ed5-73b1-ad3e-2463f2557f93
   author: aida-orchestrator
-  timestamp: 2026-11-08 01:39:36.789208+00:00
+  timestamp: 2026-11-08T01:39:36.789208Z
   session_id: 01a1b8cdaae1
   harness_version: 2.1.319 (Claude Code)
   changes:
@@ -709,7 +559,7 @@ history:
     new_value: NeedsAttention
 - id: 01a1b930-f017-7d72-8098-d86e0209e007
   author: joe
-  timestamp: 2026-11-08 03:25:54.583806+00:00
+  timestamp: 2026-11-08T03:25:54.583806Z
   session_id: 01a1b8be-8170-7fb2-89ab-ecb4c6eee98c
   harness_version: 2.1.319 (Claude Code)
   changes:
@@ -718,14 +568,14 @@ history:
     new_value: Approved
 - id: 01a1b93e-f57e-7162-a51b-7433bbbc30c6
   author: aida-session-start
-  timestamp: 2026-11-08 03:41:13.470031+00:00
+  timestamp: 2026-11-08T03:41:13.470031Z
   changes:
   - field_name: status
     old_value: Approved
     new_value: InProgress
 - id: 01a1b96f-aeec-76e1-9cb1-0b3a3f5f065b
   author: aida-orchestrator
-  timestamp: 2026-11-08 04:34:26.668484+00:00
+  timestamp: 2026-11-08T04:34:26.668484Z
   session_id: 01a1b96a4dd6
   harness_version: 2.1.319 (Claude Code)
   changes:
@@ -734,7 +584,7 @@ history:
     new_value: NeedsAttention
 - id: 01a1b9bb-72f1-7a20-a182-bf709b5e777e
   author: joe
-  timestamp: 2026-11-08 05:57:12.049109+00:00
+  timestamp: 2026-11-08T05:57:12.049109Z
   session_id: 01a1b8be-8170-7fb2-89ab-ecb4c6eee98c
   harness_version: 2.1.319 (Claude Code)
   changes:
@@ -743,14 +593,14 @@ history:
     new_value: Approved
 - id: 01a1b9d3-df8d-7ec1-9472-31b3361c2a99
   author: aida-session-start
-  timestamp: 2026-11-08 06:23:52.717932+00:00
+  timestamp: 2026-11-08T06:23:52.717932Z
   changes:
   - field_name: status
     old_value: Approved
     new_value: InProgress
 - id: 01a1ba06-2877-78a0-b77a-5f784b4c51b8
   author: aida-orchestrator
-  timestamp: 2026-11-08 07:18:48.183350+00:00
+  timestamp: 2026-11-08T07:18:48.183350Z
   session_id: 01a1ba009b48
   harness_version: 2.1.319 (Claude Code)
   changes:
@@ -759,7 +609,7 @@ history:
     new_value: NeedsAttention
 - id: 01a1ba11-ef51-7cb0-ba8e-178e34daa797
   author: joe
-  timestamp: 2026-11-08 07:31:39.985599+00:00
+  timestamp: 2026-11-08T07:31:39.985599Z
   session_id: 01a1b8be-8170-7fb2-89ab-ecb4c6eee98c
   harness_version: 2.1.319 (Claude Code)
   changes:
@@ -768,14 +618,14 @@ history:
     new_value: Approved
 - id: 01a1ba13-b95a-7923-8551-72df046d1fb3
   author: aida-session-start
-  timestamp: 2026-11-08 07:33:37.242105+00:00
+  timestamp: 2026-11-08T07:33:37.242105Z
   changes:
   - field_name: status
     old_value: Approved
     new_value: InProgress
 - id: 01a1ba6c-cfa5-73e1-b9ac-fcefd94dd751
   author: aida-orchestrator
-  timestamp: 2026-11-08 09:10:55.653629+00:00
+  timestamp: 2026-11-08T09:10:55.653629Z
   session_id: 01a1ba6ab511
   harness_version: 2.1.319 (Claude Code)
   changes:
@@ -784,7 +634,7 @@ history:
     new_value: NeedsAttention
 - id: 01a1ba6f-9050-7ee1-b744-b010d6f16df6
   author: joe
-  timestamp: 2026-11-08 09:13:56.048984+00:00
+  timestamp: 2026-11-08T09:13:56.048984Z
   session_id: 01a1b8be-8170-7fb2-89ab-ecb4c6eee98c
   harness_version: 2.1.319 (Claude Code)
   changes:
@@ -793,29 +643,29 @@ history:
     new_value: Approved
 - id: 01a1ba71-f93f-7712-9711-c35e98bb625f
   author: aida-session-start
-  timestamp: 2026-11-08 09:16:33.983155+00:00
+  timestamp: 2026-11-08T09:16:33.983155Z
   changes:
   - field_name: status
     old_value: Approved
     new_value: InProgress
 - id: 01a1ba72-87d4-7ea0-9f8d-9ebd588e5523
   author: joe
-  timestamp: 2026-11-08 09:17:10.484186+00:00
+  timestamp: 2026-11-08T09:17:10.484186Z
   session_id: 01a1ba71ed90
   changes: []
 - id: 01a1bc96-21ba-73f3-933a-ac4dadcbe388
   author: joe
-  timestamp: 2026-11-08 19:15:18.074755+00:00
+  timestamp: 2026-11-08T19:15:18.074755Z
   session_id: 01a1bc95c427
   changes: []
 - id: 01a1bca8-da3d-71a0-bbad-b9c29f0b32cc
   author: joe
-  timestamp: 2026-11-08 19:35:44.957710+00:00
+  timestamp: 2026-11-08T19:35:44.957710Z
   session_id: 01a1bc95c427
   changes: []
 - id: 01a1bcb1-fcef-7591-a6df-4f89e8f6fcf2
   author: aida-orchestrator
-  timestamp: 2026-11-08 19:45:43.663507+00:00
+  timestamp: 2026-11-08T19:45:43.663507Z
   session_id: 01a1bcacd388
   harness_version: 2.1.319 (Claude Code)
   changes:
@@ -824,7 +674,7 @@ history:
     new_value: NeedsAttention
 - id: 01a1bcc2-57c7-7581-aa68-2d7cfd437d97
   author: joe
-  timestamp: 2026-11-08 20:03:35.495471+00:00
+  timestamp: 2026-11-08T20:03:35.495471Z
   session_id: 01a1bc93-77a0-7740-8b03-df4e3e8d1df5
   harness_version: 2.1.319 (Claude Code)
   changes:
@@ -833,20 +683,20 @@ history:
     new_value: Approved
 - id: 01a1bcc4-2900-7863-845c-8004efb02b2a
   author: aida-session-start
-  timestamp: 2026-11-08 20:05:34.592476+00:00
+  timestamp: 2026-11-08T20:05:34.592476Z
   changes:
   - field_name: status
     old_value: Approved
     new_value: InProgress
 - id: 01a1bcc4-8164-7070-bbb2-5fa7da8efa43
   author: dirtlab
-  timestamp: 2026-11-08 20:05:57.220260+00:00
+  timestamp: 2026-11-08T20:05:57.220260Z
   session_id: 01a1bcc4231a
   harness_version: codex-cli 0.167.0
   changes: []
 - id: 01a1bcc9-fe01-7060-9673-42962b8afe5f
   author: aida-orchestrator
-  timestamp: 2026-11-08 20:11:56.801188+00:00
+  timestamp: 2026-11-08T20:11:56.801188Z
   session_id: 01a1bcc5e599
   harness_version: 2.1.319 (Claude Code)
   changes:
@@ -855,7 +705,7 @@ history:
     new_value: NeedsAttention
 - id: 01a1bcd6-003c-7852-aeb4-6082c64bab1d
   author: joe
-  timestamp: 2026-11-08 20:25:03.804360+00:00
+  timestamp: 2026-11-08T20:25:03.804360Z
   session_id: 01a1bc93-77a0-7740-8b03-df4e3e8d1df5
   harness_version: 2.1.319 (Claude Code)
   changes:
@@ -864,14 +714,14 @@ history:
     new_value: Approved
 - id: 01a1bcd7-b9a2-7d32-86f6-40ef07e9bde7
   author: aida-session-start
-  timestamp: 2026-11-08 20:26:56.802977+00:00
+  timestamp: 2026-11-08T20:26:56.802977Z
   changes:
   - field_name: status
     old_value: Approved
     new_value: InProgress
 - id: 01a1bcf2-7101-72f2-82d9-b005a454526c
   author: aida-orchestrator
-  timestamp: 2026-11-08 20:56:07.681658+00:00
+  timestamp: 2026-11-08T20:56:07.681658Z
   session_id: 01a1bcecec3e
   harness_version: 2.1.319 (Claude Code)
   changes:
@@ -880,7 +730,7 @@ history:
     new_value: NeedsAttention
 - id: 01a1bcf8-451a-7193-8ab5-282ca0d28dab
   author: joe
-  timestamp: 2026-11-08 21:02:29.658638+00:00
+  timestamp: 2026-11-08T21:02:29.658638Z
   session_id: 01a1bc93-77a0-7740-8b03-df4e3e8d1df5
   harness_version: 2.1.319 (Claude Code)
   changes:
@@ -889,20 +739,20 @@ history:
     new_value: Approved
 - id: 01a1bcf9-ebda-74b1-a0eb-075f9a15b31e
   author: aida-session-start
-  timestamp: 2026-11-08 21:04:17.882331+00:00
+  timestamp: 2026-11-08T21:04:17.882331Z
   changes:
   - field_name: status
     old_value: Approved
     new_value: InProgress
 - id: 01a1bcfa-4060-7fe2-963f-5c72a177bff2
   author: dirtlab
-  timestamp: 2026-11-08 21:04:39.520845+00:00
+  timestamp: 2026-11-08T21:04:39.520845Z
   session_id: 01a1bcf9e577
   harness_version: codex-cli 0.167.0
   changes: []
 - id: 01a1bcff-9dff-7510-8d11-19e01af2902f
   author: aida-orchestrator
-  timestamp: 2026-11-08 21:10:31.167437+00:00
+  timestamp: 2026-11-08T21:10:31.167437Z
   session_id: 01a1bcfd1afc
   harness_version: 2.1.319 (Claude Code)
   changes:
@@ -911,19 +761,19 @@ history:
     new_value: NeedsAttention
 - id: 01a1bd08-9148-7e52-99b7-59a2931a7f25
   author: dirtlab
-  timestamp: 2026-11-08 21:20:17.736642+00:00
+  timestamp: 2026-11-08T21:20:17.736642Z
   session_id: 01a1bcf9e577
   harness_version: codex-cli 0.167.0
   changes: []
 - id: 01a1bd16-6420-7cf3-92ff-68b1db71eba4
   author: joe
-  timestamp: 2026-11-08 21:35:23.680888+00:00
+  timestamp: 2026-11-08T21:35:23.680888Z
   session_id: 01a1bd11c7d9
   harness_version: 2.1.319 (Claude Code)
   changes: []
 - id: 01a1bd3d-2543-7c60-b215-4c0495388b60
   author: joe
-  timestamp: 2026-11-08 22:17:43.491323+00:00
+  timestamp: 2026-11-08T22:17:43.491323Z
   session_id: 20abb7c3-8f9b-4a5e-b326-404921f3b450
   changes:
   - field_name: status
@@ -931,20 +781,20 @@ history:
     new_value: Approved
 - id: 01a1bd3e-c808-7830-8eca-5afd3368b49a
   author: aida-session-start
-  timestamp: 2026-11-08 22:19:30.696270+00:00
+  timestamp: 2026-11-08T22:19:30.696270Z
   changes:
   - field_name: status
     old_value: Approved
     new_value: InProgress
 - id: 01a1bd3f-1e4a-7cf2-97da-96f2013e1f7f
   author: dirtlab
-  timestamp: 2026-11-08 22:19:52.778797+00:00
+  timestamp: 2026-11-08T22:19:52.778797Z
   session_id: 01a1bd3ec1e0
   harness_version: codex-cli 0.167.0
   changes: []
 - id: 01a1bd42-ef31-78d3-a302-c7a42eebb427
   author: aida-orchestrator
-  timestamp: 2026-11-08 22:24:02.865333+00:00
+  timestamp: 2026-11-08T22:24:02.865333Z
   session_id: 01a1bd409d90
   harness_version: 2.1.319 (Claude Code)
   changes:
@@ -953,25 +803,25 @@ history:
     new_value: NeedsAttention
 - id: 01a1bd45-a114-7ae1-a34a-db1bec0fba88
   author: dirtlab
-  timestamp: 2026-11-08 22:26:59.476222+00:00
+  timestamp: 2026-11-08T22:26:59.476222Z
   session_id: 01a1bd3ec1e0
   harness_version: codex-cli 0.167.0
   changes: []
 - id: 01a1bd46-5dae-7361-8170-6dc10838c1a7
   author: dirtlab
-  timestamp: 2026-11-08 22:27:47.758551+00:00
+  timestamp: 2026-11-08T22:27:47.758551Z
   session_id: 01a1bd3ec1e0
   harness_version: codex-cli 0.167.0
   changes: []
 - id: 01a1bd4b-a8c9-7f31-8404-a3411f36610d
   author: joe
-  timestamp: 2026-11-08 22:33:34.665079+00:00
+  timestamp: 2026-11-08T22:33:34.665079Z
   session_id: 01a1bd489614
   harness_version: 2.1.319 (Claude Code)
   changes: []
 - id: 01a1bd6c-053e-78e0-9825-455878ba702a
   author: joe
-  timestamp: 2026-11-08 23:08:55.486606+00:00
+  timestamp: 2026-11-08T23:08:55.486606Z
   session_id: 20abb7c3-8f9b-4a5e-b326-404921f3b450
   changes:
   - field_name: status
@@ -979,28 +829,34 @@ history:
     new_value: Approved
 - id: 01a1bd6d-9ada-7be0-aaf2-5c56fd4d6cd2
   author: aida-session-start
-  timestamp: 2026-11-08 23:10:39.322689+00:00
+  timestamp: 2026-11-08T23:10:39.322689Z
   changes:
   - field_name: status
     old_value: Approved
     new_value: InProgress
 - id: 01a1bd6d-fa8f-7261-b7cd-7182c5b27b87
   author: dirtlab
-  timestamp: 2026-11-08 23:11:03.823519+00:00
+  timestamp: 2026-11-08T23:11:03.823519Z
   session_id: 01a1bd6d94d5
   harness_version: codex-cli 0.167.0
   changes: []
 - id: 01a1bd71-a92f-7e33-8597-48dec5ab23a4
   author: aida-orchestrator
-  timestamp: 2026-11-08 23:15:05.135591+00:00
+  timestamp: 2026-11-08T23:15:05.135591Z
   session_id: 01a1bd6f9505
   harness_version: 2.1.319 (Claude Code)
   changes:
   - field_name: status
     old_value: InProgress
     new_value: NeedsAttention
-test_coverage_notes: 'Launcher cargo test --profile agent -p aida-cli-lib --lib -- command_registry passed: 32 executed tests, zero failures (j20261108T210750606-2-0). Launcher cargo check --profile agent -p aida-cli --no-default-features passed (j20261108T211040978-2-0). Initial test compilation found two missing module imports; corrected before the passing run. 15 crate-split Python fixtures pass. Glob ratchet against HEAD passes at 164; ExecContext 1239 sites, store-writer 3387 sinks / 293 mappings, portability guard, and all 84 CI gate classifications pass. All 15 adapters preserve every non-import Rust token; touched-file rustfmt and git diff --check pass. Full make check-ci-fast not run because gates invoke Cargo outside this seat’s required launcher; host validation remains. Codegraph unavailable (doctor confirmed), used rg/source inspection. Edits uncommitted for host publication.'
-implementation_summary: 'Tooling slice landed in PR #3644; prior 34-command import batch is open as #3695. This subsequent Refs slice removes 15 remaining root crate globs from command adapters outside current open-PR footprints: commit, criteria, exposition, harvest, help_catalog, mandate, metrics_cmd, monitor_contract, notify, reconstitute, regen, shift, user_alias, watch and wiki. Required bindings now use explicit imports (including DatabaseBackend traits); unused globs are removed. Baseline shrinks from 179 to 164. All non-import Rust tokens match HEAD. Remaining import batches and lib_part1..6 dissolution remain outstanding; TASK-3428 stays In Progress.'
+- id: 01a1bd74-e33b-7332-afda-4adf53d76fa9
+  author: dirtlab
+  timestamp: 2026-11-08T23:18:36.603189507Z
+  session_id: 01a1bd6d94d5
+  harness_version: codex-cli 0.167.0
+  changes: []
+test_coverage_notes: 'Launcher cargo test --profile agent -p aida-cli-lib --lib -- command_registry passed: 32 executed tests, zero failures, full library test binary compiled (j20261108T231146749-2-0). Launcher cargo check --profile agent -p aida-cli --no-default-features passed (j20261108T231207043-2-0). All 17 crate-split Python tests pass. Glob ratchet against origin/main passes at 181; ExecContext 1239 sites, store-writer 3400 sinks / 293 mappings, portability guard, all 84 CI gate classifications, retained-file rustfmt and git diff --check pass. All 23 deferred files exactly match base; deferred patch applies cleanly. Retained non-import Rust tokens match base apart from the already-reviewed lease_state_for qualification. Full make check-ci-fast and current-head CI remain unverified: direct Cargo is prohibited in this seat, so Cargo checks used the launcher. Codegraph unavailable, doctor confirmed. Edits uncommitted; host must publish the split and update PR title. Detailed file list and recovery notes: /tmp/task-3428-handoff.md.'
+implementation_summary: 'Round-12 scope rework for PR #3695 reduces the prospective PR from 63 files to 40: 37 explicit-import modules, two existing test files, and the glob ledger. Restored 23 adapters byte-for-byte to merge-base d0e3cb3eb33d, including the 15-adapter and six-adapter follow-on batches, driver_cmd and overlapping usage_mcp_helpers. Ledger now has 181 remaining imports. Deferred changes are preserved in branch history and /tmp/task-3428-deferred-imports.patch for a separate PR. Native Refs publication declaration recorded with an accurate 37-module subject. Remaining AC1 batches and AC3 lib_part dissolution stay outstanding; TASK-3428 remains In Progress.'
 filed_at:
   code_sha: 2a7fe186bdcd718fa356e5e4d028a3b2ff13769d
   branch: main
@@ -1017,4 +873,4 @@ failure_reason:
   detail: Import diff is sound at e27dfa2 (imports/comments plus one qualified call; ledger 158 matches source; no block-glob rebind), but CI has not finished at this head (AC5 unverified) and the PR is 63 files against the advisor <=50-file cap with no waiver.
   recovery_hint: address the review findings, move TASK-3428 back to In Progress, and clear the PR hold only after approval
   shelved_by: reviewer
-  shelved_at: 2026-11-08 23:15:05.135568+00:00
+  shelved_at: 2026-11-08T23:15:05.135568Z
