@@ -42,6 +42,10 @@ fn mediated_mcp_advertises_only_translated_tools_with_existing_profile_and_perso
         // trace:TASK-3223 | ai:codex
         for tool in tools {
             if tool["name"] == "update_requirement" {
+                assert_eq!(
+                    tool["description"],
+                    "Update an owned requirement's title, description or priority through the mediated store service. At least one edit field is required."
+                );
                 let properties = tool["inputSchema"]["properties"].as_object().unwrap();
                 assert!(properties.contains_key("priority"));
                 assert!(!properties.contains_key("status"));

@@ -52,8 +52,10 @@ This staged dispatcher requires a literal `.aida-store/objects` directory (or
 `.aida-store` symlink) at or above cwd. It does not yet use the ordinary
 `store_path` configuration or main-worktree fallback. A custom store location
 or plain linked worktree without that link refuses with “mediated operations
-require an existing canonical store”; no store is created. The host still
-revalidates the resolved path against its launch-bound store identity.
+require an existing canonical store”; no store is created. The host uses its
+own pinned store root and checks the expected revision and owned UUID under
+the writer lock; the lane's resolved path is never sent to the host. A different
+discovered store produces conflict or not-found when those checks do not match.
 
 MCP request lines are limited to 64 KiB including the newline. An oversized
 line is drained through its newline with bounded memory, receives JSON-RPC

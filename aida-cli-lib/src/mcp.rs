@@ -9235,6 +9235,10 @@ fn mediated_mcp_response(
                 let fields: &[&str] = if tool["name"] == "add_comment" {
                     &["id", "text"]
                 } else {
+                    // trace:TASK-3223 | ai:codex
+                    tool["description"] = json!(
+                        "Update an owned requirement's title, description or priority through the mediated store service. At least one edit field is required."
+                    );
                     &["id", "title", "description", "priority"]
                 };
                 tool["inputSchema"]["properties"]
