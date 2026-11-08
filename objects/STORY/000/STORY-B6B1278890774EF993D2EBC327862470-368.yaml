@@ -29,7 +29,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-04T02:34:20.173245666Z
-modified_at: 2026-11-08T04:16:51.276239150Z
+modified_at: 2026-11-08T04:17:03.916258351Z
 req_type: Story
 relationships:
 - rel_type:
@@ -577,6 +577,25 @@ comments:
   content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: S5 logic meets the signed-off brief and prior round findings 1-4 are addressed (help snapshot regenerated, S5 policy rows pinned, conditional handoffs auto-push, deferral-saved error paths tested), but CI is red at 0a15330: gates fails the ExecContext environment ratchet on a new env read in the policy-parity test, and lib-1 fails its Test time budget step.. No triage reason was given.'
   created_at: 2026-11-08T04:16:51.276231264Z
   modified_at: 2026-11-08T04:16:51.276231264Z
+  session_id: 01a1b8be-8170-7fb2-89ab-ecb4c6eee98c
+  harness_version: 2.1.319 (Claude Code)
+- id: 01a1b95f-af0f-7eb2-b7e6-f9605dc7bb01
+  author: joe
+  content: |-
+    REVIEW FINDINGS TO ADDRESS (PR #3639):
+    Verdict: CHANGES REQUESTED
+    Reviewed commit: 0a15330c9f04
+    Recorded: 2026-11-08T03:02:29.796647192+00:00
+    Review comment: https://github.com/joemooney/aida/pull/3639#issuecomment-6716478467
+    Findings:
+    1. BLOCKING (contract-drift, CI gates red): the ExecContext environment ratchet fails on a new ambient-env site. Reproduced statically with python3 scripts/check-exec-context.py --base $(git merge-base origin/main HEAD): 'new sites (forbidden): aida-cli-lib/src/tests/story_1728_policy_parity_tests.rs:registered_policy_matches_mains_legacy_tables_for_every_verb:var_os'. The source is std::env::var_os("AIDA_UPDATE_SNAPSHOTS") at story_1728_policy_parity_tests.rs:178. Fix: delete the update block at :175-196 and the doc lines at :16-18. The five S5 rows are already committed in story_1728_main_policy.tsv, and story2402_s5_policy_fixture_covers_conditional_writers pins them. If you need an update path, put it inside the existing AIDA_CAPTURE_MAIN_POLICY branch rather than adding a new env read. Re-run the ratchet before pushing.
+    2. BLOCKING (perf, CI lib-1 red): the 'Test time budget' step failed in job 128605854218. The 'Run tests' step passed, so a test exceeded its budget (default_limit = 10s in scripts/test-time-budget.toml for a touched test without an entry). This reviewer's sandbox cannot reach the job log, so the test is not identified here. The likeliest candidate is the new story_2402_resurface_tests::story2402_s5_recur_conditions_resurface_and_manual_routes (git init, store bootstrap, a path-isolated child re-exec and many store writes). Read the step summary or the test-timings artifact of run 42439623436, then either split or speed up the test, or add a measured budget entry (max measured x2, rounded up to 5s) with a trace comment.
+    3. cosmetic (help layout): the regenerated cli_help_snapshot.txt now lists --standing-orders below the global options in 'aida session handoff --help' (snapshot :14986; it used to sit before --format). The snapshot is real generated output, but the reorder is unexplained. Confirm the reorder is intended or restore the old position, and say which in the PR body.
+    4. cosmetic (echo of raw input): the conditional-handoff note line 'Revisit {spec} when {condition}' (session_misc.rs:1012) uses the raw --spec argument, and the recurrence error (findings_gate.rs:1388) uses the raw --until text instead of the canonical condition that canonical_condition returned. Use the canonical condition and the resolved display ID so the note and the error match what was stored.
+    5. cosmetic (stale comment, placement): defer_cmd.rs:114-115 still says bare re-deferral keeps 'legacy text pending the separate migration slice', but S3 has landed and been applied. condition_cmd.rs:215 defines canonical_condition after the #[cfg(test)] mod tests declaration at :211; move it above. docs/cli/06-roles-sessions.md:1118 has a doubled blank line.
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
+  created_at: 2026-11-08T04:16:58.127800603Z
+  modified_at: 2026-11-08T04:16:58.127800603Z
   session_id: 01a1b8be-8170-7fb2-89ab-ecb4c6eee98c
   harness_version: 2.1.319 (Claude Code)
 history:
