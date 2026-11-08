@@ -8,7 +8,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-02T19:20:50.092491662Z
-modified_at: 2026-11-08T03:14:25.373112255Z
+modified_at: 2026-11-08T03:44:45.089370411Z
 req_type: Story
 tags:
 - architecture
@@ -716,6 +716,17 @@ comments:
     use process death for artifact cleanup because watcher PIDs are not work owners.
   created_at: 2026-11-08T03:14:25.373112255Z
   modified_at: 2026-11-08T03:14:25.373112255Z
+  session_id: 01a1b923f3c3
+- id: 01a1b942-3021-75d2-b10b-c6e3aaee980d
+  author: joe
+  content: |
+    Round 9 native implementer handoff (PR #3619): scoped source/documentation fixes for findings 1-5 are ready and uncommitted. Removed retired --steal from production recovery commands and lifecycle documentation; limited queue recover journaling/gates to confirmed session-end branches; added an actual WIP-park regression for live and unknown ownership; moved the per-change OVERVIEW section to a spec comment; corrected SafeEnd wording; documented unreachable compatibility flag plumbing as permitted by finding 5.
+
+    Validation: ownership-liveness ratchet passed 2 tests; rustfmt --check and git diff --check passed. untested=true for Rust: queue_recover_ job j20261108T031414004-2-0 and recovery_hint job j20261108T031528821-718930-0 each timed out after 900 seconds compiling, with no executed tests. The second reports overlay-stale because the primary rewrote a file in seed generation agent-322d5688851d23dd. Retry j20261108T033157268-839390-0 remains unverified. make check-ci-fast was incomplete at the bounded 55-second limit; no pass claimed.
+
+    Host must recover/reseed the target and obtain executed-test results, commit/publish the native edits, then verify every CI lane at the new head for finding 6. Existing merge-hold-gate failure requires authorized clearance; no hold was cleared or bypassed. Publication declaration recorded: [AI:codex] fix(ownership): repair final-round recovery hints and reclaim gating (Refs STORY-2325). No completing credit; TASK-3420 retains the remainder. Full changed-file/validation handoff: /home/joe/.aida/handoffs/story-2325-round9.md. No commit, push, PR mutation, queue done, review record or merge was performed from this seat.
+  created_at: 2026-11-08T03:44:45.089370411Z
+  modified_at: 2026-11-08T03:44:45.089370411Z
   session_id: 01a1b923f3c3
 history:
 - id: 01a19ed2-508b-7401-9865-70193fa0d0af
