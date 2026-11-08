@@ -15,7 +15,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-08T03:09:42.520017343Z
-modified_at: 2026-11-08T11:03:08.078126868Z
+modified_at: 2026-11-08T11:08:14.241842598Z
 req_type: Bug
 tags:
 - area:lanes
@@ -66,6 +66,13 @@ comments:
   created_at: 2026-11-08T08:48:48.923019132Z
   modified_at: 2026-11-08T08:48:48.923019132Z
   session_id: 01a1ba52c266
+  harness_version: codex-cli 0.167.0
+- id: 01a1bad8-3621-7a22-8ce9-13bb54d64d2b
+  author: dirtlab
+  content: 'Revalidated prior implementation and review fixes. Strengthened bug_2493_declared_body_survives_host_commit_and_refs_downgrade to compare the raw commit message, including a leading # line, trailing spaces and final blank lines through both completion and Refs downgrade. Lane job j20261108T110343054-2-0: 2 BUG-2493 tests passed. Lane job j20261108T110421638-2-0: all 51 seat publication tests passed, including sandboxed host commits and body-file CLI assembly/refusals. Help-golden shell fixtures and git diff --check passed. Only aida-cli-lib/src/tests/bug_home_038_seat_publish_tests.rs has uncommitted changes; host owns publication and queue completion. No implementation blockers. Codegraph unavailable; caller confirmed with rg.'
+  created_at: 2026-11-08T11:08:14.241842598Z
+  modified_at: 2026-11-08T11:08:14.241842598Z
+  session_id: 01a1bad2ea24
   harness_version: codex-cli 0.167.0
 history:
 - id: 01a1b9c3-7cea-7270-b22c-10e229024e5a
