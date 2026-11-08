@@ -8,8 +8,16 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-08T18:38:43.709546225Z
-modified_at: 2026-11-08T18:41:36.437717524Z
+modified_at: 2026-11-08T19:04:36.449060923Z
 req_type: Bug
+comments:
+- id: 01a1bc8c-5761-7180-b3a9-aa9efdae2409
+  author: dirtlab
+  content: 'Implemented review-only cleanup for explicitly closed ownership records, alongside existing dead-owner handling. General reclaim still requires death proof; missing or ambiguous ownership remains refused. Extended consecutive-head pickup coverage for completed leases, dirty/live/unpublished protection and merge-hold preservation; covered successful and bounded watcher setup retry. Lane runner validation: seat_clone::review_repickup_tests (2 passed), bug2498_review_worktree_release_allows_one_watch_setup_retry (1 passed), bug2450_observed_setup_refusals_retry_without_consuming_a_review (1 passed). Corrected local fixture allocation-file permissions and enabled the test-only ownership adapter for simulated release. rustfmt and git diff --check pass. Native seat: edits left uncommitted; host publication and queue completion remain pending.'
+  created_at: 2026-11-08T19:04:36.449060923Z
+  modified_at: 2026-11-08T19:04:36.449060923Z
+  session_id: 01a1bc76c0fb
+  harness_version: codex-cli 0.167.0
 history:
 - id: 01a1bc76-cd85-7f81-93f5-51ee03fadbe7
   author: aida-session-start
