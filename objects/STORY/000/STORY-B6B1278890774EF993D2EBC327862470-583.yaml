@@ -20,7 +20,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-08T02:56:36.206726Z
-modified_at: 2026-11-08T14:32:12.603240567Z
+modified_at: 2026-11-08T15:04:39.482386284Z
 req_type: Story
 tags:
 - architecture
@@ -235,6 +235,13 @@ comments:
   modified_at: 2026-11-08T14:32:12.603240567Z
   session_id: 01a1bb82a71f
   harness_version: codex-cli 0.167.0
+- id: 01a1bbb0-a93a-7e42-8db4-b93a2e53db30
+  author: joe
+  content: 'PR-3680 CI at 91dcf013585a: CI (rest) fails templates::tests::project_discipline_pack_matches_master (generated discipline mirror out of sync with aida-core/templates). Fix: edit only the template master, run make sync-templates and make check-templates, commit the regenerated mirror, push; delta re-review, then hold clear once approved at head, Build green and current with main.'
+  created_at: 2026-11-08T15:04:39.482386284Z
+  modified_at: 2026-11-08T15:04:39.482386284Z
+  session_id: 01a1bbab-762f-7cd2-8a36-4ea9f209afce
+  harness_version: 2.1.319 (Claude Code)
 history:
 - id: 01a1b91a-2eb5-7142-b252-8d3eb8d49b14
   author: joe
