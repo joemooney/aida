@@ -15,7 +15,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-08T03:09:42.520017343Z
-modified_at: 2026-11-08T12:37:01.619173108Z
+modified_at: 2026-11-08T13:03:58.614813299Z
 req_type: Bug
 tags:
 - area:lanes
@@ -190,6 +190,12 @@ history:
   author: dirtlab
   timestamp: 2026-11-08T12:27:37.354070014Z
   session_id: 01a1bb204da2
+  harness_version: codex-cli 0.167.0
+  changes: []
+- id: 01a1bb42-2f77-7bd2-a7e6-6f3d3460b64c
+  author: dirtlab
+  timestamp: 2026-11-08T13:03:59.351480977Z
+  session_id: 01a1bb41e0f0
   harness_version: codex-cli 0.167.0
   changes: []
 filed_at:
