@@ -8,7 +8,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-08T05:25:50.443321273Z
-modified_at: 2026-11-08T07:10:39.904398854Z
+modified_at: 2026-11-08T07:13:11.323308165Z
 req_type: Story
 tags:
 - area:ci
@@ -57,6 +57,14 @@ comments:
   modified_at: 2026-11-08T07:09:22.735203987Z
   session_id: 01a1b8be-8170-7fb2-89ab-ecb4c6eee98c
   harness_version: 2.1.319 (Claude Code)
+- id: 01a1ba01-049b-7392-9d3e-2137f2d17b2e
+  author: dirtlab
+  content: |
+    Addressed PR #3668 review findings in the native rework seat; edits remain uncommitted for host publication. GitLab adapter now accepts only the exact guarded upstream runs-on policy plus legacy matrix.os and provides github-hosted-equivalent runner.environment; tests retain arbitrary-runner refusals. Launcher distribution permissions ignore symlink mode while requiring ownership, fail closed on find errors, and report guard failures. Prerequisites now require zstd and probe fresh dev/proc mounts; removed ProtectProc and ProtectKernelTunables procfs overmounts, and self-hosted shards require AIDA_REQUIRE_BWRAP_LIVE=1. Added operator-side foreground rearm supervisor: each successful one-job exit generates a fresh JIT config using host gh credentials, passes only config to installed sudo launcher, and stops on errors. Updated runbook for supervision and mandatory actual-unit smoke test. Added executable refusal/symlink/rearm fixtures. Validation: 38 Python tests passed (test_self_hosted_runner + test_gdma_ci), bash syntax and diff whitespace passed, all 82 CI gates classified, nine docs guards schedule correctly. No Rust changes or cargo execution. Live dell1 systemd/JIT smoke test remains untested; independent reviewer must explicitly recheck event/repository gate. Operator still must provision, verify outside-collaborator approval setting, smoke-test isolation/cgroup/live bwrap, register/rearm, activate opt-in and measure before/after capacity. No credentials, repository settings, registration, commit, push, PR or queue completion performed. Host publication should retain Refs STORY-2672 pending live acceptance.
+  created_at: 2026-11-08T07:13:11.323308165Z
+  modified_at: 2026-11-08T07:13:11.323308165Z
+  session_id: 01a1b9feaec9
+  harness_version: codex-cli 0.167.0
 history:
 - id: 01a1b9c5-53ea-79e1-9008-26e3abcd0e20
   author: joe
