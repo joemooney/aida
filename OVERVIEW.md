@@ -1834,16 +1834,6 @@ Review-watch uses shared process identity observations with a separate
 reservation-expiry policy; unknown identity never authorizes signalling.
 <!-- trace:TASK-3367 | ai:codex -->
 
-Reviewer supervisor exit records lease-bound completion even without a collected
-verdict. Review watch captures the exact lease before reviewer spawn; confirmed
-supersede (all recorded processes and the process group gone) records completion
-before freeing that reservation. Next-head pickup still requires a clean,
-published, idle default review checkout and preserves merge holds. Missing legacy
-lease bindings remain refused; completion does not grant review credit. Mail
-retention timestamps and reasons do not change the bound worker generation.
-<!-- trace:BUG-2498 | ai:codex -->
-
-
 The TASK-1750 ratchet inventories compatibility consumers in
 `proc_identity_legacy_baseline.json` and prevents new private PID/start
 decisions. See the signed

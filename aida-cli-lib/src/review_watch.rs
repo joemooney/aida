@@ -1647,7 +1647,17 @@ fn advance(store: &Store, key: &str, token: &str) -> Result<Option<String>> {
         };
         let cause = match confirm(a) {
             Ok(()) => {
-                finish_confirmed_review(&store.root, a)?;
+                // Process exit frees watcher capacity even when best-effort
+                // ownership evidence cannot be recorded. Pickup still requires
+                // a valid receipt before retiring the retained checkout.
+                // trace:BUG-2498 | ai:codex
+                if let Err(error) = finish_confirmed_review(&store.root, a) {
+                    let diagnostic = bounded_diagnostic(&format!(
+                        "review completion receipt refused; retained checkout requires recovery: {error:#}"
+                    ));
+                    eprintln!("{key}: {diagnostic}");
+                    a.diagnostic = Some(diagnostic);
+                }
                 a.review_lease = None;
                 a.phase = Phase::Superseded;
                 return Ok(None);

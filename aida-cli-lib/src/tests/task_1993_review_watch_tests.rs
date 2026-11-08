@@ -1327,7 +1327,29 @@ pub(crate) fn bug2498_confirm_superseded(root: &Path, lease: &crate::SessionLeas
     let mut replacement = lease.clone();
     replacement.active_pid = Some(std::process::id());
     std::fs::write(&lease_path, toml::to_string(&replacement).unwrap()).unwrap();
-    assert!(advance(&store, &c.key(), &attempt.token).is_err());
+    let stopped = store.load().unwrap().entries[&c.key()].attempts[0].clone();
+    assert!(advance(&store, &c.key(), &attempt.token).unwrap().is_none());
+    let terminal = store.load().unwrap().entries[&c.key()].attempts[0].clone();
+    assert_eq!(terminal.phase, Phase::Superseded);
+    assert!(!active(&terminal));
+    assert!(terminal.review_lease.is_none());
+    assert!(terminal
+        .diagnostic
+        .as_deref()
+        .unwrap()
+        .contains("completion receipt refused"));
+    assert!(!crate::ownership::reader::review_lease_ended(
+        root,
+        &replacement
+    ));
+    assert!(!crate::ownership::reader::review_lease_ended(root, lease));
+    // Also exercise successful recording from the same stopped process state.
+    store
+        .transaction(&c.key(), |state| {
+            *attempt_mut(state, &c.key(), &attempt.token).unwrap() = stopped;
+            Ok(())
+        })
+        .unwrap();
     std::fs::write(&lease_path, original).unwrap();
     assert!(advance(&store, &c.key(), &attempt.token).unwrap().is_none());
     assert_eq!(

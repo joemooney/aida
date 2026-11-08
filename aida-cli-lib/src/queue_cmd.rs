@@ -14422,10 +14422,10 @@ pub(crate) fn release_refused_review_lease(
 /// A standalone reviewer has exited: once its verdict is on the ledger, its
 /// review (`scope` over this review's own `worktree`) is reaped — tree,
 /// lease, and review branch — so neither the lease nor the tree blocks the
-/// next review of the PR. With no verdict collected, the tree is what the
-/// recovery text points at, so the review is kept; a review the reap refuses
-/// (dirty tree, unpushed commits, a live holder) keeps its lease, which is how
-/// the dead-reviewer reap tears the tree down after the PR merges. Returns
+/// next review of the PR. Exit records a lease-bound completion receipt even
+/// without a verdict. The retained tree and lease remain available for recovery;
+/// next-head pickup may retire them once clean, published and idle. A refused
+/// reap also retains them under the same guards. Returns
 /// `(lease id, Ok(outcome) | Err(why kept))` per matching lease.
 // trace:BUG-b6b1278890774ef993d2ebc327862470-024 | ai:claude
 pub(crate) fn end_finished_review(
