@@ -28,11 +28,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-07T19:59:40.192574469Z
-<<<<<<< Updated upstream
-modified_at: 2026-11-07T23:51:09.819197553Z
-=======
 modified_at: 2026-11-08T00:00:21.767627105Z
->>>>>>> Stashed changes
 req_type: Story
 comments:
 - id: 01a1b86c-54fb-76f0-b04b-0ed1c7c07cfb
