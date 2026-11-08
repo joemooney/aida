@@ -2334,7 +2334,7 @@ fn bug_2493_declared_body_survives_host_commit_and_refs_downgrade() {
     for clean in [true, false] {
         let base = git_ok(&clone, &["rev-parse", "HEAD"]);
         crate::native_publication::prepare(&fx.main, &clone).unwrap();
-        let body = "Explanation with (BUG-2) in prose.\n\nHelp-Golden: unchanged";
+        let body = "# Explanation with (BUG-2) in prose.  \n\nHelp-Golden: unchanged\n\n";
         let message = format!("[AI:codex] fix: body (BUG-1)\n\n{body}");
         crate::native_publication::declare(&clone, Some("BUG-1"), &message, false).unwrap();
         let surface = clone.join("aida-cli-lib/src/example_args.rs");
@@ -2342,7 +2342,25 @@ fn bug_2493_declared_body_survives_host_commit_and_refs_downgrade() {
         std::fs::write(surface, format!("// changed {clean}")).unwrap();
         let result = post_exit_commit(&fx.main, &clone, "BUG-1", "test", clean, &test_commit);
         assert!(matches!(result, PostExitCommit::Committed(_)), "{result:?}");
-        assert_eq!(git_ok(&clone, &["log", "-1", "--format=%b"]), body);
+        // Inspect raw bytes so whitespace cleanup during declaration reading
+        // or Refs downgrade cannot hide behind git_ok's trimmed output.
+        // trace:BUG-2493 | ai:codex
+        let object = crate::test_git::git_command()
+            .args(["cat-file", "commit", "HEAD"])
+            .current_dir(&clone)
+            .output()
+            .unwrap();
+        assert!(object.status.success());
+        let object = String::from_utf8(object.stdout).unwrap();
+        let expected_subject = if clean {
+            "[AI:codex] fix: body (BUG-1)"
+        } else {
+            "[AI:codex] fix: body (Refs BUG-1)"
+        };
+        assert_eq!(
+            object.split_once("\n\n").unwrap().1,
+            format!("{expected_subject}\n\n{body}")
+        );
         if !clean {
             assert_eq!(
                 git_ok(&clone, &["log", "-1", "--format=%s"]),
