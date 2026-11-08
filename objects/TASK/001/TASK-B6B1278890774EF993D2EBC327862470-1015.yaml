@@ -1,0 +1,43 @@
+id: 01a1bce0-e6e2-76b0-8c8d-ef3c909ad0ea
+spec_id: TASK-b6b1278890774ef993d2ebc327862470-1015
+title: 'Repeated unchanged review findings: TASK-3223'
+description: |-
+  Identical reviewer findings recurred twice for TASK-3223; do not requeue a third implementer round until an advisor chooses a different implementer/seat or resolves the dispute.
+
+  REVIEW FINDINGS TO ADDRESS (PR #3661):
+  Verdict: CHANGES REQUESTED
+  Reviewed commit: f5fb1bca6d8a
+  Recorded: 2026-11-08T19:54:27.644880613+00:00
+  Review comment: https://github.com/joemooney/aida/pull/3661#issuecomment-6726328594
+  Findings:
+  1. BLOCKING, needs an advisor ruling rather than more code (spec 'route every inventoried in-lane writer'; TASK-3223 comment 34 'zero unrouted writers for the mediated profile'). python3 scripts/check-store-writers.py --profile mediated at f5fb1bca6d8a exits 1 with 3173 writers and 293 operations unresolved; mediated_blockers counts every operation row, so it cannot reach zero by construction, and the 4 mediated_route records clear nothing. Only comment add and title/description/priority edit route (store_mutation_entry.rs translate_with_reader). Reads refuse, durable Git/event publication is outstanding, and resume is only refusal-tested. The advisor must authorize a staged partial with named follow-up owners or define the operation policy. No ruling is on the spec. Further rework rounds cannot resolve this. selected_store_profile (launch/contained.rs:800) correctly stays closed.
+  2. BLOCKING until CI reports: run 42516752069 at f5fb1bca6d8a is pending with zero jobs started, and merge state is BLOCKED. The last full pass is run 42507182557 at 114ee1f3865b, before the merge from main and this fix. make check-ci-fast (comment 34) has only an implementer report on the uncommitted change (comment 90).
+  3. BLOCKING until cleared by advisor or operator: aida:merge-hold is on this PR and merge-hold-gate (run 42516752100) is queued at this head. The reviewer cannot clear it.
+  4. PROCESS, carried, needs advisor attention: TASK-3223 is NeedsAttention under a no-publish punt, whose signal-file write failed (comment 75), yet commits have kept reaching this PR, most recently f5fb1bca6d8a at 12:46 -07:00. publication_veto (aida-cli-lib/src/ship_from_seat.rs:567) reads only signal and hold files, not persisted NeedsAttention, so a failed signal write fails open. This code is outside this PR's diff. Confirm the publication was authorized and repair the veto.
+  5. MINOR, new, non-blocking: aida-core/src/db/git_backend.rs:2750-2765 mutate_canonical pushes a FieldChange for title and description unconditionally, while priority (added by this PR) records only on a real change. A mediated edit that repeats the current title or description writes a history entry with old_value == new_value and bumps modified_at. Compare before pushing, as the priority arm does, and add a regression.
+  6. COSMETIC, carried: the PR body still says 'comment_add and title/description spec_edit'; the branch also routes priority. Update it before any publication.
+  7. COSMETIC, new: aida-cli-lib/src/store_mutation_entry.rs:63 root() repeats ensure!(root.join("objects").is_dir()) directly after a find() with the same predicate, so the check and its message are dead code.
+  Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
+status: Draft
+priority: Medium
+owner: joe
+feature: Uncategorized
+created_at: 2026-11-08T20:36:58.210059537Z
+modified_at: 2026-11-08T20:36:58.210059537Z
+req_type: Task
+tags:
+- from-advisor:TASK-3223
+- kind:observation
+- linked:TASK-3223
+- loop-guard
+- review-recurrence
+- severity:major
+filed_at:
+  code_sha: db2eb4c39e46704132705ccb2b8300574ead41a6
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: db2eb4c39e4
+  vendor: claude
+  session: 01a1bc93-77a0-7740-8b03-df4e3e8d1df5
+  harness_version: 2.1.319 (Claude Code)
