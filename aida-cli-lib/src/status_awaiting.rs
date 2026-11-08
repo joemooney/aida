@@ -1372,11 +1372,51 @@ fn arm_launch_mail_wake(
 /// outlives this process. Missing or malformed hook metadata simply renders the
 /// time line with no session key. Fail-open throughout.
 pub(crate) fn emit_notice_time_line() {
+    // trace:STORY-2653 | ai:codex — a Stop relay is not human input and
+    // must not refresh presence, turn clocks, mandate activity or notices.
+    let event = std::env::var("AIDA_HOOK_EVENT").ok();
+    let mut hook_payload = aida_core::exec_context::Environment::capture()
+        .var("AIDA_HOOK_PAYLOAD")
+        .unwrap_or_default()
+        .to_string();
+    // The managed Stop relay names its event even on harness versions that
+    // omit hook_event_name from the payload.
+    if event.as_deref() == Some("Stop") {
+        if let Ok(mut value) = serde_json::from_str::<serde_json::Value>(&hook_payload) {
+            if let Some(object) = value.as_object_mut() {
+                object.insert("hook_event_name".into(), serde_json::json!("Stop"));
+                hook_payload = value.to_string();
+            }
+        }
+    }
+    if serde_json::from_str::<serde_json::Value>(&hook_payload)
+        .ok()
+        .and_then(|v| {
+            v.get("hook_event_name")
+                .and_then(|e| e.as_str())
+                .map(str::to_string)
+        })
+        .as_deref()
+        == Some("Stop")
+    {
+        if let (Ok(root), Ok(seat)) = (
+            find_project_root(),
+            crate::session_misc::resolve_handoff_seat(None),
+        ) {
+            let _ = crate::agent_rotation::hook_turn(
+                &main_worktree_root_from(&root),
+                &seat,
+                &hook_payload,
+                false,
+                &seat_rotation::HandoffWriter::from_env(false),
+            );
+        }
+        return;
+    }
     // trace:BUG-1239 | ai:codex
     // trace:TASK-2253 | ai:claude — an agy relay names the event in env.
-    let event = std::env::var("AIDA_HOOK_EVENT").ok();
     let (session_id, is_session_start) = notice_hook_session(
-        &std::env::var("AIDA_HOOK_PAYLOAD").unwrap_or_default(),
+        &hook_payload,
         event.as_deref(),
         std::env::current_dir().ok().as_deref(),
     );
@@ -1393,12 +1433,24 @@ pub(crate) fn emit_notice_time_line() {
     // crossed the context ceiling, tell the seat to hand off and restart.
     // Tail-read of the hook's transcript only; silent below the ceiling.
     // trace:STORY-1464 | ai:claude
-    if let Ok(payload) = std::env::var("AIDA_HOOK_PAYLOAD") {
+    if !hook_payload.is_empty() {
+        let payload = &hook_payload;
         // The same seat resolver the handoff commands use, so a rotation
         // supervisor's seat wins. trace:STORY-B6B1278890774EF993D2EBC327862470-101 | ai:claude
         let seat = crate::session_misc::resolve_handoff_seat(None)
             .unwrap_or_else(|_| "<seat>".to_string());
-        if let Some(line) = seat_rotation::notice_from_hook_payload(&payload, &seat) {
+        let line = seat_rotation::notice_from_hook_payload(&payload, &seat);
+        // trace:STORY-2653 | ai:codex — only supervised generations stamp rotation state.
+        if let Ok(root) = find_project_root() {
+            let _ = crate::agent_rotation::hook_turn(
+                &main_worktree_root_from(&root),
+                &seat,
+                &payload,
+                line.is_some(),
+                &seat_rotation::HandoffWriter::from_env(false),
+            );
+        }
+        if let Some(line) = line {
             println!("{line}");
         }
     }

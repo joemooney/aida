@@ -25157,12 +25157,8 @@ Options:
           reused). Only meaningful with `--base`
 
       --steal
-          Override the In-Progress guard when the target scope is already held by another active
-          lease. Without --steal, `aida queue work` refuses and names the holding lease. With
-          --steal, the holding session is ended first (`aida session end <id>` — clean exit;
-          uncommitted work still blocks, exit those manually or use `aida session end --force`; a
-          live process using the worktree also blocks, stop it or use `aida session end
-          --include-in-use`) and the new session takes over
+          Retired. Refuses explicitly; proven-dead ownership is reclaimed automatically through
+          guarded session end. Live or unknown owners must hand off voluntarily
 
       --force-claim
           Claim a spec whose status is ambiguous: already In Progress with no local lease, or Needs
@@ -25632,8 +25628,8 @@ Options:
           scripts). Also settable via AIDA_CANONICAL_IDS=1
 
       --steal
-          When chaining `--work`, end any session holding the target scope first (passes through to
-          `aida queue work --steal`)
+          Retired. Refuses explicitly when chaining `--work`; ownership handles proven-dead reclaim
+          automatically
 
       --permission-mode <MODE>
           Permission mode (only used with `--work`; passed to `aida queue work --permission-mode`)
@@ -26333,7 +26329,7 @@ Options:
           scripts). Also settable via AIDA_CANONICAL_IDS=1
 
       --steal
-          Pass `--steal` through to chained `aida queue work`
+          Retired. Refuses explicitly; ownership handles proven-dead reclaim automatically
 
       --permission-mode <MODE>
           Permission mode (only used with `--work`)
@@ -57253,7 +57249,7 @@ Working on aida itself
       {
         "name": "steal",
         "takes_value": false,
-        "help": "Override the In-Progress guard when the target scope is already held by another active lease. Without --steal, `aida queue work` refuses and names the holding lease. With --steal, the holding session is ended first (`aida session end <id>` — clean exit; uncommitted work still blocks, exit those manually or use `aida session end --force`; a live process using the worktree also blocks, stop it or use `aida session end --include-in-use`) and the new session takes over"
+        "help": "Retired. Refuses explicitly; proven-dead ownership is reclaimed automatically through guarded session end. Live or unknown owners must hand off voluntarily"
       },
       {
         "name": "strict",
@@ -57405,7 +57401,7 @@ Working on aida itself
       {
         "name": "steal",
         "takes_value": false,
-        "help": "When chaining `--work`, end any session holding the target scope first (passes through to `aida queue work --steal`)"
+        "help": "Retired. Refuses explicitly when chaining `--work`; ownership handles proven-dead reclaim automatically"
       },
       {
         "name": "tail",
@@ -58122,7 +58118,7 @@ Working on aida itself
       {
         "name": "steal",
         "takes_value": false,
-        "help": "Pass `--steal` through to chained `aida queue work`"
+        "help": "Retired. Refuses explicitly; ownership handles proven-dead reclaim automatically"
       },
       {
         "name": "tail",

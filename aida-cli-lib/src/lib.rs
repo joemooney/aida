@@ -76,6 +76,8 @@ mod claude_agents;
 mod cli;
 #[cfg(feature = "remote")]
 mod client;
+// trace:TASK-3425 | ai:codex
+mod cmdkit;
 mod command_registry;
 mod comment_cmd;
 mod commit;
