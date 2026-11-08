@@ -1,0 +1,35 @@
+id: 01a1b917-abc1-7b33-8413-fbe374fed0a6
+spec_id: STORY-b6b1278890774ef993d2ebc327862470-585
+agreed_id: STORY-2662
+title: 'Pre-compaction handoff: a PreCompact hook writes a bounded AIDA handoff packet before a lane''s context compacts (Claude first; Codex after its trusted-hook test)'
+description: |
+  From SPIKE-711 (PR-3638 host rerun, 2026-11-07): a Claude Code PreCompact command hook fired live when `claude -p --resume <sid> "/compact"` ran headless, and the session still answered from prior context after compaction. Codex 0.166 also has a PreCompact hook event and compaction can be forced (`-c model_auto_compact_token_limit=2000` printed "context compacted"), but Codex runs only trusted hooks, so the live hook-fire test is still pending (see the SPIKE-711 doc). AGY 1.5.3 shows no compaction hook event.
+
+  Goal: before a lane's context is compacted, AIDA writes a bounded handoff packet (spec, branch, last verdict, open findings, next step) into the substrate so post-compaction work, or a relaunch, starts from AIDA state instead of a lossy summary. Claude first, through PreCompact; Codex once its trusted-hook test passes; other vendors keep AIDA-side handoffs at turn boundaries.
+
+  Acceptance (draft):
+  1. The Claude seat template registers a PreCompact hook that runs an AIDA command writing the handoff packet; a fixture test covers the hook payload.
+  2. The packet is size-bounded and readable by the next turn and by `aida session handoff --show`.
+  3. Codex uses the same command once the trusted-hook rerun is a yes; until then a vendor descriptor says the capability is absent.
+  4. No vendor depends on this for correctness: a lane without the hook still completes.
+status: Draft
+priority: Low
+owner: ''
+feature: Uncategorized
+created_at: 2026-11-08T02:58:18.689963065Z
+modified_at: 2026-11-08T02:58:18.689963065Z
+req_type: Story
+tags:
+- area:handoff
+- area:lanes
+- from:SPIKE-711
+- vendor:claude
+filed_at:
+  code_sha: dc41ee8da2f44f88178936fc1a8e6cb7168a3de7
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: dc41ee8da2f
+  vendor: claude
+  session: 01a1b8be-8170-7fb2-89ab-ecb4c6eee98c
+  harness_version: 2.1.319 (Claude Code)
