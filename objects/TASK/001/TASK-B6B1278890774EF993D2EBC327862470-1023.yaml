@@ -1,0 +1,29 @@
+id: 01a1bd2f-5e65-7760-93fd-fe417bcd8cd0
+spec_id: TASK-b6b1278890774ef993d2ebc327862470-1023
+title: 'COSMETIC (non-blocking): the "--sandbox" | "-s" arms in the denylist after the …'
+description: |-
+  Non-blocking finding carried forward from an APPROVED review verdict on TASK-3015, which has since completed — recorded here so it keeps a queryable home once the verdict record stops being read.
+
+  COSMETIC (non-blocking): the "--sandbox" | "-s" arms in the denylist after the new sandbox branch in aida-cli-lib/src/launch/contained.rs are unreachable and can be removed.
+
+  PR: #3689
+  Reviewed sha: ea14bd1cbb8339b2bc79711207bdc3771d50438f
+status: Draft
+priority: Medium
+owner: joe
+feature: Uncategorized
+created_at: 2026-11-08T22:02:40.613401169Z
+modified_at: 2026-11-08T22:02:40.613401169Z
+req_type: Task
+tags:
+- carried-from:TASK-3015
+- finding-hash:b38ee6b3
+- from-review:PR-3689
+- kind:carried-forward
+filed_at:
+  code_sha: 65d5a89946c24177a8c3a0d6d076fcede9be9107
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: db2eb4c39e4
+  vendor: claude
