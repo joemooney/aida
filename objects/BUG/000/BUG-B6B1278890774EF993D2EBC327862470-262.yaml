@@ -8,7 +8,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-08T15:10:55.149158862Z
-modified_at: 2026-11-08T16:12:59.276853176Z
+modified_at: 2026-11-08T16:13:04.475953722Z
 req_type: Bug
 relationships:
 - rel_type:
@@ -93,6 +93,20 @@ comments:
   content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: Round 3 fixed both minor findings and a full re-sweep found no new code defects, but BUG-2497''s live ChatGPT-auth acceptance still has no run and no advisor split. CI was still pending at review; merge-hold-gate fails on the hold.. It was punted on: blocked-dependency: Round 3 finding 1 remains blocked on operator/advisor acceptance, not disputed: BUG-2497 requires a live ChatGPT-auth harness run from this branch with --boundary aida and report.json run_status plus C0-C4 statuses attached to the spec, or an explicit advisor split into a follow-up. This standalone native implementer seat cannot supply the operator production role/roster entry and must not bypass managed identity. Findings 2 and 3 are addressed in uncommitted edits: removed the AGENTS.md and OVERVIEW.md per-change notes and added a passing AGY verified-terminal-receipt finish_run regression. No live acceptance or completion credit claimed; merge hold and publication veto remain.. No triage reason was given.'
   created_at: 2026-11-08T16:12:59.276851662Z
   modified_at: 2026-11-08T16:12:59.276851662Z
+  session_id: 01a1b9af-8230-75d2-82f8-667491cc010a
+  harness_version: 2.1.319 (Claude Code)
+- id: 01a1bbef-4bc0-7700-89ea-67fef613d598
+  author: joe
+  content: |-
+    REVIEW FINDINGS TO ADDRESS (BUG-2497):
+    Verdict: CHANGES REQUESTED
+    Reviewed commit: 088f72e4d163
+    Recorded: 2026-11-08T16:07:57.564815843+00:00
+    Findings:
+    1. Acceptance unverified (blocking; needs operator or advisor, not implementer rework): BUG-2497 requires that with the fix a ChatGPT-auth run completes a turn and C0-C4 report real results. The newest run, ~/.aida/conformance-codex-aida-1794150336, predates the fix: no run_status, all checks unknown, its headless log ends turn.failed with no turn.completed. Either the operator runs the harness from this branch with --vendor codex --boundary aida and attaches report.json run_status and C0-C4 statuses to the spec, or the advisor explicitly splits the live check into a follow-up spec.
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
+  created_at: 2026-11-08T16:13:04.320389270Z
+  modified_at: 2026-11-08T16:13:04.320389270Z
   session_id: 01a1b9af-8230-75d2-82f8-667491cc010a
   harness_version: 2.1.319 (Claude Code)
 history:
