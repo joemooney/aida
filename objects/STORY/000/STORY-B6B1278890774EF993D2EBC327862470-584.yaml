@@ -18,7 +18,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-08T02:58:08.667753563Z
-modified_at: 2026-11-08T11:03:06.340703104Z
+modified_at: 2026-11-08T11:03:10.632061576Z
 req_type: Story
 tags:
 - area:human-wait
@@ -378,6 +378,21 @@ comments:
   content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: R18 and R19 are fixed in the sketch, but the PR title still completes STORY-2661 at squash merge with AC1-4 unimplemented (R1), and aida unclaim can still return a parked spec to Approved (R20). AC1-4: unverified, not implemented by this sketch-only PR. CI was pending at review.. It was punted on: design-fork: R18 and R19 sketch revisions are ready at docs/plans/2026-11-08-story-2661-park-resume-sketch.md; no findings disputed. Binding advisor ruling requires signoff before implementation. R1 remains host/advisor metadata action: retitle PR #3666 exactly [AI:codex] docs(plans): sketch park-on-ask resume-on-answer (Refs STORY-2661). This native seat cannot repair PR metadata. Retain publication veto pending sketch signoff and title repair.. No triage reason was given.'
   created_at: 2026-11-08T11:03:06.340701663Z
   modified_at: 2026-11-08T11:03:06.340701663Z
+  session_id: 01a1b9af-8230-75d2-82f8-667491cc010a
+  harness_version: 2.1.319 (Claude Code)
+- id: 01a1bad3-93be-7f13-b235-dcda126fb1c0
+  author: joe
+  content: |-
+    REVIEW FINDINGS TO ADDRESS (STORY-2661):
+    Verdict: CHANGES REQUESTED
+    Reviewed commit: bdd8067563cc
+    Recorded: 2026-11-08T09:46:19.435573112+00:00
+    Findings:
+    1. R1 BLOCKER (open since round 1): at head bdd8067563cc PR #3666 is still titled '[AI:codex] feat: Park on ask, resume on answer... (STORY-2661)'. aida-cli-lib/src/pr_ship.rs:339-372 short-circuits only on a trailing '(Refs ...)' and otherwise takes completion ids from the title, so a squash merge completes the story with AC1-4 unimplemented, contradicting sketch:9 and sketch:13. Fix: retitle to exactly '[AI:codex] docs(plans): sketch park-on-ask resume-on-answer (Refs STORY-2661)'. This needs host or advisor metadata action; no seat commit clears it.
+    2. R20 minor: the sketch's parked-work ownership misses a third writer that returns In Progress to Approved. sketch:113-134 routes doctor heal, orphan detection, pickup and GC through the shared probe, but aida unclaim (claim.rs:318-330, persist_unclaim_status at claim.rs:467-510) uses its own check: no Live lease on the scope plus no open PR. A parked lane's lease is dead, so running unclaim from the shell holding a claim on that spec moves it to Approved, reopening generic pickup and making resume refuse as a status mismatch (sketch:387-389). Fix: state that persist_unclaim_status uses the same retained-ownership evidence at its locked write boundary, and add a test that unclaim leaves a parked spec In Progress with its wait intact.
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
+  created_at: 2026-11-08T11:03:10.526967426Z
+  modified_at: 2026-11-08T11:03:10.526967426Z
   session_id: 01a1b9af-8230-75d2-82f8-667491cc010a
   harness_version: 2.1.319 (Claude Code)
 history:
