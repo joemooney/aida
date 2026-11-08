@@ -8,7 +8,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-06T13:39:53.442026096Z
-modified_at: 2026-11-08T08:07:57.296074061Z
+modified_at: 2026-11-08T08:17:25.257766197Z
 req_type: Task
 tags:
 - architecture
@@ -559,6 +559,18 @@ comments:
   modified_at: 2026-11-08T06:32:08.109215136Z
   session_id: 01a1b8be-8170-7fb2-89ab-ecb4c6eee98c
   harness_version: 2.1.319 (Claude Code)
+- id: 01a1ba3b-d309-7e70-8758-89d192f918de
+  author: dirtlab
+  content: |
+    Partial routing handoff: added mediated CLI comment add --body-file translation. The lane opens a non-symlink regular file read-only/nonblocking, reads at most 16385 bytes and accepts at most 16384 UTF-8 bytes of nonblank text. Only literal text reaches the existing typed add_comment/comment_add route. Author/relay/parent/stdin/editor semantics still refuse. Updated the writer inventory for this read-only OpenOptions site and documented the staged route.
+
+    Validation: launcher job j20261108T081131610-2-0 ran all 3 store_mutation_entry tests successfully, including literal file content, size boundary, oversized/blank/invalid UTF-8, directory, symlink and FIFO cases. Python inventory/protocol suite passed 73 tests. Inventory compatibility reconciliation passed (3369 sites, 293 operation mappings). git diff --check passed. make check-ci-fast with umask 022 progressed through formatting and stopped at the unchanged store_mutation_client_tests.rs:20 /tmp/socket portability finding against the locally available base; Git fetch is refused by this seat's read-only metadata. Initial umask 0002 also caused mail-wake fixture failures; those passed with 022.
+
+    TASK-3223 IS NOT COMPLETE. Mediated inventory still reports 3160 unresolved writer sites and 293 operation mappings. Host canonical verbs and production launch admission remain gated. Remaining writer families, publication integration, contained-Codex profile selection and same-lane raw-denial/real-mediated-comment proof remain unfinished. own_claim/queue_done remain with TASK-3326. No completion/containment claim. Edits remain uncommitted in store_mutation_entry.rs, scripts/store-writers.toml and docs/internal/security/store-mutation-writers.md. Native publication declaration recorded as [AI:codex] feat(store): route mediated comment body files (Refs TASK-3223).
+  created_at: 2026-11-08T08:17:25.257766197Z
+  modified_at: 2026-11-08T08:17:25.257766197Z
+  session_id: 01a1ba3322bc
+  harness_version: codex-cli 0.167.0
 history:
 - id: 01a1b116-742d-73c0-9064-1933f11e4c38
   author: joe
