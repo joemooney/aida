@@ -1,0 +1,29 @@
+id: 01a1bc9e-7695-7562-8f0d-d9022e32d9e6
+spec_id: TASK-b6b1278890774ef993d2ebc327862470-1010
+title: '[cosmetic] Non-blocking: HandoffWriter.snapshot_owner stamps worktree and role …'
+description: |-
+  Non-blocking finding carried forward from an APPROVED review verdict on STORY-2662, which has since completed — recorded here so it keeps a queryable home once the verdict record stops being read.
+
+  [cosmetic] Non-blocking: HandoffWriter.snapshot_owner stamps worktree and role into the snapshot log as 'retention metadata' (seat_rotation.rs:328), but pruning was removed in round 6, so nothing reads them. Drop them or relabel as diagnostics.
+
+  PR: #3669
+  Reviewed sha: 8a9ddc796a0719d25546fe4a65a42a0fc8bd922a
+status: Draft
+priority: Medium
+owner: joe
+feature: Uncategorized
+created_at: 2026-11-08T19:24:24.085460162Z
+modified_at: 2026-11-08T19:24:24.085460162Z
+req_type: Task
+tags:
+- carried-from:STORY-2662
+- finding-hash:7d59fb3d
+- from-review:PR-3669
+- kind:carried-forward
+filed_at:
+  code_sha: db2eb4c39e46704132705ccb2b8300574ead41a6
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: eeec474c545
+  vendor: claude
