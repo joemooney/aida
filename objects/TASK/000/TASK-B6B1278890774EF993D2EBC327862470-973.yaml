@@ -14,13 +14,21 @@ priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-11-08T05:39:45.537322724Z
-modified_at: 2026-11-08T05:39:45.537322724Z
+modified_at: 2026-11-08T19:22:03.396655268Z
 req_type: Task
 tags:
 - carried-from:STORY-2653
 - finding-hash:c0c96e7a
 - from-review:PR-3656
 - kind:carried-forward
+comments:
+- id: 01a1bc9c-5104-7692-9db4-ac2c0a061539
+  author: joe
+  content: 'Advisor ruling: accepted, minor: padded PID list in a best-effort handoff note; no behaviour impact.'
+  created_at: 2026-11-08T19:22:03.396655268Z
+  modified_at: 2026-11-08T19:22:03.396655268Z
+  session_id: 01a1bc93-77a0-7740-8b03-df4e3e8d1df5
+  harness_version: 2.1.319 (Claude Code)
 history:
 - id: 01a1b9bb-3de6-7093-b0af-eed05094dd14
   author: joe
