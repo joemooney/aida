@@ -23,7 +23,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-09-26T18:30:26.622729865Z
-modified_at: 2026-11-08T07:41:09.180296582Z
+modified_at: 2026-11-08T07:53:23.097392542Z
 req_type: Story
 tags:
 - agent-launch
@@ -537,6 +537,20 @@ comments:
   modified_at: 2026-11-08T07:39:28.310056738Z
   session_id: 01a1b8be-8170-7fb2-89ab-ecb4c6eee98c
   harness_version: 2.1.319 (Claude Code)
+- id: 01a1ba25-d199-7b92-b56b-97c1a0a8387d
+  author: dirtlab
+  content: |-
+    Addressed all three review findings from e8002e052434. Policy output is now limited to verbose diagnostics: stdout for no-exec previews, stderr for real launches, and omitted for show-prompt/show-context. Unresolvable declared state/store/cache/build roots are omitted with diagnostics instead of aborting the renderer. Criterion trace suffix validation now matches the labels minted by criteria explicit_label, including generated_profile_preserves_approval_prompts. Added CLI prompt-only and dangling-root regressions, render_roots regression, and trace-token regression.
+
+    Changed files: aida-cli-lib/src/agent_launch.rs; aida-cli-lib/src/launch_permission_profile.rs; aida-cli-lib/src/worktree_gc.rs; aida-cli/tests/story_1486_launch_profile.rs.
+
+    Validation via lane runner: cargo test --profile agent -p aida-cli --test story_1486_launch_profile: 1 passed (j20261108T074219828-2-0); cargo test --profile agent -p aida-cli-lib --lib -- minted_underscore_criterion: 1 passed (j20261108T074219836-2-0); cargo test --profile agent -p aida-cli-lib --lib -- launch_permission_profile: 13 passed (j20261108T074334560-2-0). Initial build failed on a field typo, corrected before all successful runs. Final rustfmt checks and git diff --check passed. Codegraph unavailable; doctor reported no diagnosis, navigation used rg.
+
+    No implementation blockers. Native handoff: edits remain uncommitted; host must commit/publish and complete queue after exit. No commit, push, PR creation, review record, or queue completion attempted.
+  created_at: 2026-11-08T07:53:23.097392542Z
+  modified_at: 2026-11-08T07:53:23.097392542Z
+  session_id: 01a1ba1a131c
+  harness_version: codex-cli 0.167.0
 history:
 - id: 01a12b8d-22bd-7ed1-a30b-21d8634b3184
   author: joe
