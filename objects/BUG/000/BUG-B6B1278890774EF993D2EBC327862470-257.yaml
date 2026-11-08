@@ -13,12 +13,12 @@ description: |
   3. The BUG-1693 label rules (recorded vs cleared, train members' labels) behave exactly as today: same pass/block outcome for every label combination (table test over the existing check_labels cases).
   4. A push to a held PR sends no "run failed" notification for this check.
   5. A genuinely malformed label state (clearance with no recorded hold) still FAILS, since that is a real error.
-status: InProgress
+status: NeedsAttention
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-08T02:46:34.549817Z
-modified_at: 2026-11-08T13:44:41.382694359Z
+modified_at: 2026-11-08T13:45:10.153535195Z
 req_type: Bug
 tags:
 - area:ci
@@ -603,6 +603,15 @@ history:
   session_id: 01a1bb67113c
   harness_version: codex-cli 0.167.0
   changes: []
+- id: 01a1bb67-e309-7962-9faf-0185f72821c1
+  author: dirtlab
+  timestamp: 2026-11-08T13:45:10.153555793Z
+  session_id: 01a1bb67113c
+  harness_version: codex-cli 0.167.0
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: NeedsAttention
 filed_at:
   code_sha: dc41ee8da2f44f88178936fc1a8e6cb7168a3de7
   branch: main
@@ -612,3 +621,8 @@ filed_at:
   vendor: claude
   session: 01a1b8be-8170-7fb2-89ab-ecb4c6eee98c
   harness_version: 2.1.319 (Claude Code)
+attention_reason:
+  category: blocked-dependency
+  detail: 'Latest review at 0df36483bb9b explicitly requests no code changes and reports round 7 code findings fixed. Remaining manual gates: host must retitle existing PR #3651 with trailing (Refs BUG-2492) before merge and obtain green CI at its exact published head; repository operator must attach raw gh/web merge-refusal under app pin 15368, unchanged-SHA label-only pending-to-success, and notification evidence per docs/internal/testing/bug-2492-status-cutover.md. Native implementer is prohibited from PR metadata mutation, merge and completion. No source edits are warranted; do not republish another no-change head. Keep spec open until live evidence is attached.'
+  raised_by: implementer
+  raised_at: 2026-11-08T13:45:10.153535195Z
