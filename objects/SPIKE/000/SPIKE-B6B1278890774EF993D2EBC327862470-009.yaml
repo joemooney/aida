@@ -16,7 +16,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-07T21:37:39.393335869Z
-modified_at: 2026-11-08T02:07:21.451829232Z
+modified_at: 2026-11-08T03:09:27.815958096Z
 req_type: Spike
 relationships:
 - rel_type: Child
@@ -60,6 +60,13 @@ comments:
   content: 'Residue 2026-11-07: PR1''s (#3637) test lift conflicted with in-flight #3647 (TASK-1222 had added a test inside the inline mod tests of maintenance_schedule.rs). host-merge.sh cannot resolve this; the advisor replayed the hunk into src/tests/maintenance_schedule_tests.rs by hand (de-indented 4). Expect the same for every open PR that touches a module the later split PRs move. Sequence each move PR after open PRs on the same files land, or have host-merge replay the PR''s diff onto the moved file automatically.'
   created_at: 2026-11-08T02:07:21.451829232Z
   modified_at: 2026-11-08T02:07:21.451829232Z
+  session_id: 01a1b8be-8170-7fb2-89ab-ecb4c6eee98c
+  harness_version: 2.1.319 (Claude Code)
+- id: 01a1b921-e187-7d93-82f3-9e8564194479
+  author: joe
+  content: 'Plan correction 2026-11-07: PR2''s ''29 modules leave the SCC via re-exports, no caller edits'' does not hold; re-exports keep the edges. The reduction needs caller import changes: TASK-3448.'
+  created_at: 2026-11-08T03:09:27.815958096Z
+  modified_at: 2026-11-08T03:09:27.815958096Z
   session_id: 01a1b8be-8170-7fb2-89ab-ecb4c6eee98c
   harness_version: 2.1.319 (Claude Code)
 history:
