@@ -8,7 +8,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-07T15:34:33.363448208Z
-modified_at: 2026-11-07T22:13:48.428442889Z
+modified_at: 2026-11-08T00:14:55.787134632Z
 req_type: Story
 comments:
 - id: 01a1b6a6-52e1-70a0-a9c1-d32888979ca5
@@ -370,6 +370,12 @@ history:
   - field_name: status
     old_value: NeedsAttention
     new_value: Approved
+- id: 01a1b882-179d-7443-ab1d-cd9e814f0f2e
+  author: joe
+  timestamp: 2026-11-08T00:14:55.901504526Z
+  session_id: 01a1b88057b4
+  harness_version: 2.1.319 (Claude Code)
+  changes: []
 filed_at:
   code_sha: 122fea66d306d6739516983479c50201e9d0ae84
   branch: main
@@ -379,3 +385,11 @@ filed_at:
   vendor: claude
   session: 01a1b646-c67d-7b43-98ff-3604a53f5d1f
   harness_version: 2.1.319 (Claude Code)
+failure_reason:
+  phase: reviewer
+  phase_index: 3
+  kind: verdict:request-changes
+  detail: 'Round 2 at 0e7038c: no rework since the request-changes at b4f7968 (head is only a merge of main; codegraph.rs, doctor_root.rs and PR body unchanged), so all five prior findings stand. AC3 verified (AGENTS.md:477 + dispatch/code-navigation.md from #3607); AC1/AC2/AC5 fail in practice from this contained worktree; CI still pending.'
+  recovery_hint: address the review findings, move STORY-2630 back to In Progress, and clear the PR hold only after approval
+  shelved_by: reviewer
+  shelved_at: 2026-11-08T00:14:55.787134632Z
