@@ -976,9 +976,20 @@ pub(crate) fn record_child_authority(
     crate::gate::review_authority::record_launch_authority(project_root, lease_id, launch);
 }
 
+// Revoke on setup, vendor and gate errors as well as successful completion.
+// trace:STORY-2640 trace:BUG-2139 | ai:codex
+struct ChildGrantGuard<'a>(&'a crate::gate::seat_authority::HeadlessChildGrant);
+
+impl Drop for ChildGrantGuard<'_> {
+    fn drop(&mut self) {
+        crate::session::revoke_standalone_implementer_grant(self.0);
+    }
+}
+
 /// Run the child, wait, classify, print the result line, and return the
 /// outcome's exit code (`Ok` only for an open PR).
 pub(crate) fn run(launch: Launch<'_>) -> Result<()> {
+    let child_grant_guard = ChildGrantGuard(launch.child_grant);
     let main_root = crate::main_worktree_root_from(launch.project_root);
     claim_spec(launch.project_root, launch.spec);
     // Provision the punt and hold handshakes exactly as the drain's phase 1
@@ -1178,7 +1189,7 @@ pub(crate) fn run(launch: Launch<'_>) -> Result<()> {
     }
     // trace:BUG-2383 | ai:claude
     let untested = runner.map(|r| r.stop().untested()).unwrap_or(true);
-    crate::session::revoke_standalone_implementer_grant(launch.child_grant);
+    drop(child_grant_guard);
     let bg::LoopEnd {
         status,
         verdict: outcome,
@@ -1427,6 +1438,40 @@ mod bug_2436_finished_lane_lease_tests;
 // trace:STORY-2660 | ai:codex
 #[cfg(test)]
 mod host_capacity_tests {
+    // trace:STORY-2640 trace:BUG-2139 | ai:codex
+    #[test]
+    fn fast_gate_standalone_errors_revoke_issued_child_grant() {
+        if crate::test_env::run_path_isolated_test() {
+            return;
+        }
+        let tmp = tempfile::tempdir().unwrap();
+        let _env = crate::test_env::AmbientGuard::hermetic_with_seat(
+            tmp.path(),
+            "advisor",
+            &["implementer"],
+        );
+        for failure in ["vendor loop", "native commit", "uninspectable seat"] {
+            let child = crate::gate::seat_authority::issue_child(
+                tmp.path(),
+                "implementer",
+                crate::test_env::HERMETIC_TEST_USER,
+            )
+            .unwrap();
+            let id = child.id.clone();
+            let grant = crate::gate::seat_authority::HeadlessChildGrant::Issued(child);
+            let result: Result<()> = (|| {
+                let _guard = super::ChildGrantGuard(&grant);
+                Err(anyhow::anyhow!("{failure}"))?;
+                Ok(())
+            })();
+            assert!(result.is_err());
+            assert!(
+                !crate::gate::seat_authority::revoke_by_id(&id).unwrap(),
+                "grant still live after {failure}"
+            );
+        }
+    }
+
     use super::*;
 
     #[test]

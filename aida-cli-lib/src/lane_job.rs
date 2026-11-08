@@ -1800,12 +1800,20 @@ pub(crate) fn run_fast_gate(
     };
     run_seeded_fast_gate(&lane, &id, job);
     let rc = read_rc(&lane.results, &id).context("host fast gate produced no result")?;
-    use std::io::Read;
-    let mut output = String::new();
-    std::fs::File::open(out_path(&lane.results, &id))?
-        .take(1024 * 1024)
-        .read_to_string(&mut output)?;
-    Ok(Some((rc, tail(&output, 100))))
+    let output = fast_gate_output_tail(&out_path(&lane.results, &id))?;
+    Ok(Some((rc, output)))
+}
+
+// Read bounded trailing bytes: diagnostics may contain arbitrary tool output.
+// trace:STORY-2640 | ai:codex
+fn fast_gate_output_tail(path: &Path) -> Result<String> {
+    use std::io::{Read, Seek, SeekFrom};
+    let mut file = std::fs::File::open(path)?;
+    let start = file.metadata()?.len().saturating_sub(1024 * 1024);
+    file.seek(SeekFrom::Start(start))?;
+    let mut bytes = Vec::new();
+    file.take(1024 * 1024).read_to_end(&mut bytes)?;
+    Ok(tail(&String::from_utf8_lossy(&bytes), 100))
 }
 
 // Share the same target selection and overlay transport as cargo lane jobs.
@@ -1956,6 +1964,20 @@ mod fast_gate_job_tests {
     // Exercise the production gate dispatch, including seed selection and
     // transport into the job output, without needing a real toolchain build.
     // trace:STORY-2640 | ai:codex
+    #[test]
+    // trace:STORY-2640 | ai:codex
+    fn fast_gate_output_keeps_trailing_failure_and_invalid_bytes() {
+        let tmp = tempfile::tempdir().unwrap();
+        let path = tmp.path().join("out");
+        let mut output = vec![b'x'; 2 * 1024 * 1024];
+        output.extend_from_slice(b"\ninvalid: \xff\nFAILED source-ratchet\n");
+        std::fs::write(&path, output).unwrap();
+        let tail = fast_gate_output_tail(&path).unwrap();
+        assert!(tail.contains("FAILED source-ratchet"));
+        assert!(tail.contains('\u{fffd}'));
+        assert!(tail.len() <= 1024 * 1024 + 3);
+    }
+
     #[test]
     fn fast_gate_dispatch_receives_lane_target_seed() {
         let tmp = tempfile::tempdir().unwrap();

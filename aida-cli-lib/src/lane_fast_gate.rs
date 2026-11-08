@@ -534,6 +534,22 @@ pub(crate) fn pushed(
     }
 }
 
+// trace:STORY-2640 | ai:codex
+fn pushed_head_attempt(
+    local: &str,
+    published: &str,
+    run: impl FnOnce() -> Result<(String, String, String)>,
+) -> Result<(String, String, String)> {
+    if local != published {
+        return Ok((
+            published.into(),
+            "skipped(unpushed-head)".into(),
+            String::new(),
+        ));
+    }
+    run()
+}
+
 #[allow(clippy::too_many_arguments)]
 fn pushed_inner(
     main: &Path,
@@ -547,7 +563,15 @@ fn pushed_inner(
     if veto(main, spec) {
         return Ok(false);
     }
-    let (mut head, result, output) = match attempt(main, tree, lease, branch) {
+    let published_head = crate::standalone_implementer::lookup_pr(main, branch)
+        .filter(|(id, _)| *id == pr)
+        .and_then(|(_, head)| head)
+        .context("cannot bind fast gate to the published PR head")?;
+    let local_head = snapshot(main, tree, branch)?;
+    let checked = pushed_head_attempt(&local_head, &published_head, || {
+        attempt(main, tree, lease, branch)
+    });
+    let (mut head, result, output) = match checked {
         Ok(result) => result,
         Err(error) => {
             infrastructure(main, branch, lease, &error);
@@ -797,6 +821,42 @@ pub(crate) fn check_import(main: &Path, branch: &str, tip: &str, automatic: bool
 
 #[cfg(test)]
 mod tests {
+    // trace:STORY-2640 | ai:codex
+    #[test]
+    fn fast_gate_unpushed_head_never_claims_pr_pass() {
+        let tmp = tempfile::tempdir().unwrap();
+        for prior_red in [false, true] {
+            super::begin(tmp.path(), "push").unwrap();
+            if prior_red {
+                let mut r = super::read(tmp.path(), "push").unwrap().unwrap();
+                r.marker = "fail".into();
+                r.repair_used = true;
+                super::write(tmp.path(), &r).unwrap();
+            }
+            let (head, marker, _) = super::pushed_head_attempt("local", "published", || {
+                panic!("unpublished head must not run the gate")
+            })
+            .unwrap();
+            super::pushed_round(
+                tmp.path(),
+                "push",
+                &head,
+                &marker,
+                || Ok(()),
+                || panic!("mismatch is not source repair"),
+            )
+            .unwrap();
+            assert_eq!(
+                super::marker(tmp.path(), "push"),
+                if prior_red {
+                    "fail"
+                } else {
+                    "skipped(unpushed-head)"
+                }
+            );
+        }
+    }
+
     use super::*;
     use crate::lane_job::{self, JobRequest};
     use std::collections::BTreeMap;

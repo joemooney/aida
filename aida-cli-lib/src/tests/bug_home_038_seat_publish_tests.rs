@@ -2914,24 +2914,30 @@ fn story_2640_fast_gate_real_lane_exit_paths_settle_reservations() {
     let lease = "c0ffee264002";
     let branch = "gate-exits";
     let clone = seat_with_publication_pending(&fx, "gate-exits", lease, branch);
-    let _env = crate::test_env::EnvVarsGuard::apply(&[
-        ("AIDA_OS_WRAP", Some("0")),
-        ("AIDA_CONTAINED", None),
-        ("AIDA_AGENT_CMD", Some("/aida-missing-test-vendor")),
-        ("AIDA_HOME", Some(fx.root.to_str().unwrap())),
-        ("HOME", Some(fx.root.to_str().unwrap())),
-        ("AIDA_SESSION_GRANT", None),
-        ("AIDA_SESSION_ROLE", None),
-    ]);
+    let _env = crate::test_env::AmbientGuard::hermetic_with_seat_and(
+        &fx.main,
+        "advisor",
+        &["implementer"],
+        &[
+            ("AIDA_OS_WRAP", Some("0")),
+            ("AIDA_CONTAINED", None),
+            ("AIDA_AGENT_CMD", Some("/aida-missing-test-vendor")),
+        ],
+    );
     let _cwd = crate::session::contained_cwd_seam::pin(&fx.main);
-    let grant = crate::gate::seat_authority::HeadlessChildGrant::Baseline {
-        cause: "test".into(),
-    };
     let tee = crate::headless_tee::TeeOptions {
         enabled: false,
         label: None,
     };
     for path in ["standalone", "drain", "resume"] {
+        let child = crate::gate::seat_authority::issue_child(
+            &fx.main,
+            "implementer",
+            crate::test_env::HERMETIC_TEST_USER,
+        )
+        .unwrap();
+        let child_id = child.id.clone();
+        let grant = crate::gate::seat_authority::HeadlessChildGrant::Issued(child);
         crate::lane_fast_gate::begin(&fx.main, branch).unwrap();
         let error = match path {
             "standalone" => {
@@ -2981,6 +2987,14 @@ fn story_2640_fast_gate_real_lane_exit_paths_settle_reservations() {
             .err(),
         };
         assert!(error.is_some(), "{path} must refuse the missing vendor");
+        if path != "resume" {
+            assert!(
+                !crate::gate::seat_authority::revoke_by_id(&child_id).unwrap(),
+                "{path} must already have revoked its child grant"
+            );
+        } else {
+            crate::gate::seat_authority::revoke_by_id(&child_id).unwrap();
+        }
         assert_eq!(
             crate::lane_fast_gate::marker(&fx.main, branch),
             "skipped(lane-ended)",
