@@ -17,7 +17,7 @@ priority: Low
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-08T02:58:18.689963065Z
-modified_at: 2026-11-08T15:40:41.241014821Z
+modified_at: 2026-11-08T15:40:48.824057243Z
 req_type: Story
 tags:
 - area:handoff
@@ -224,6 +224,13 @@ comments:
   modified_at: 2026-11-08T14:55:21.257466228Z
   session_id: 01a1bba43cba
   harness_version: codex-cli 0.167.0
+- id: 01a1bbd1-c338-7853-8cfc-11e6e0d0cb27
+  author: joe
+  content: 'Advisor 2026-11-08: the dell1 lane left one unpublished commit, bd4ae2de19d ''fix(handoff): retain snapshots when closed-output probes time out'' (+13/-1 in aida-core/templates/hooks/aida-precompact-handoff.sh and tests/test_precompact_handoff_hook.py). It is available in this clone as refs/salvage/585 and in ops/advisor-scripts/dell1-salvage-20261108/585.bundle. The local rework lane should take it if it is still wanted at PR-3669''s current head, rather than redo it.'
+  created_at: 2026-11-08T15:40:48.824057243Z
+  modified_at: 2026-11-08T15:40:48.824057243Z
+  session_id: 01a1bbab-762f-7cd2-8a36-4ea9f209afce
+  harness_version: 2.1.319 (Claude Code)
 history:
 - id: 01a1b9c5-3252-7530-8b0b-bbe2c3ac5581
   author: joe
