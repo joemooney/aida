@@ -8,7 +8,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-07T23:40:15.306412624Z
-modified_at: 2026-11-08T17:50:27.922197335Z
+modified_at: 2026-11-08T17:50:30.512045886Z
 req_type: Task
 relationships:
 - rel_type: BlockedBy
@@ -178,6 +178,30 @@ comments:
   content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: Extraction is faithful (AC0, 1, 2, 4 by source), but AC5 timings are absent, AC3 is unresolved, path-keyed ratchets were not migrated, one security audit test became vacuous, and CI at head is still queued.. It was punted on: ambiguous-spec: The aida-mcp transport extraction and binary-injected full store handler are implemented, with shared descriptors kept below the boundary per the advisor amendment. Review finding 5 remains unresolved: AC3 says 72 unchanged tools, but the committed schema is byte-identical and has 58 unique names; no advisor ruling confirms the count. Review finding 3 also remains unmet: AC5 requires dell1 clean-build cargo --timings comparisons, unavailable in this lane. Broad MCP tests ran 118 passed and 39 fixture allocation-trust refusals; do not claim a clean suite or complete/publish this spec until the contract and validation are resolved.. No triage reason was given.'
   created_at: 2026-11-08T17:50:27.922192826Z
   modified_at: 2026-11-08T17:50:27.922192826Z
+  session_id: 01a1b9af-8230-75d2-82f8-667491cc010a
+  harness_version: 2.1.319 (Claude Code)
+- id: 01a1bc48-7fec-7021-9c02-44aaabbeaece
+  author: joe
+  content: |-
+    REVIEW FINDINGS TO ADDRESS (TASK-3429):
+    Verdict: CHANGES REQUESTED
+    Reviewed commit: 6d6f869eb126
+    Recorded: 2026-11-08T17:49:45.421364227+00:00
+    Findings:
+    1. AC5 not met: no dell1 clean-build comparison or cargo --timings numbers are on TASK-3429 (ruling 2); the implementer handoff confirms this was not performed.
+    2. AC3 unresolved: the spec requires 72 unchanged tool names, aida-cli-lib/src/mcp_schema.rs defines 58, and no advisor ruling is recorded. The tools/list goldens also have no CI result at 6d6f869eb126 (all CI jobs queued). Needs an advisor ruling on the count plus green goldens.
+    3. Title and both commit subjects end in the (TASK-3429) completion trailer while AC5 and AC3 are open, the spec is Needs Attention, and the implementer's handoff says no full-completion trailer is justified and publication is vetoed until triage. The PR body discloses none of this. Finish the criteria, or use (Refs TASK-3429) and disclose the partial scope.
+    4. Security audit test made vacuous: aida-cli-lib/src/config_cmd.rs:5639 (bug_1667_mcp_cannot_reach_the_posture_writer) uses include_str!("mcp.rs"), which now reads the 7-line include! stub, so the moved transport is no longer checked for posture-writer references. Point it at aida-mcp/src/mcp.rs and aida-mcp/src/serve.rs.
+    5. Predicted red, from reading the code (not run): aida-cli-lib/src/tests/story_2326_launch_ratchet_tests.rs:53 still ledgers aida-cli-lib/src/mcp.rs at 1, but the stub has 0 markers and CRATES (line 12) omits aida-mcp, so launch_sites_outside_the_launcher_match_the_ledger fails. Add aida-mcp to CRATES and move the ledger key, so the respawn exec at aida-mcp/src/mcp.rs:298-306 stays governed.
+    6. Predicted red, from reading the code (not run): aida-cli-lib/src/tests/task_2143_clone_git_ratchet_tests.rs:24 allowlists aida-cli-lib/src/mcp.rs, while workspace_sources now finds the raw git builder at aida-mcp/src/mcp.rs:6784 under an unlisted path, and the old key is no longer measured. Both are ratchet_violations. Move the key.
+    7. Predicted red CI gates, from reading the code (not run): scripts/crate-globs-legacy.json:79 expects 1 root glob in aida-cli-lib/src/mcp.rs, now 0 (ci.yml:963); scripts/portability-allowlist.txt:182-188 keys 7 prose-classification sites to the old path while they now sit in aida-mcp/src/mcp.rs (e.g. :511); scripts/doc-path-exceptions.json:135 keys the story-536 reference to mcp.rs while it now sits in aida-cli-lib/src/mcp_schema.rs:1524. make check-ci-fast is not in the implementer's recorded validation.
+    8. Containment guard coverage gap: CRATES in aida-cli-lib/src/gate/tests/task_1752_grant_env_guard_tests.rs (grant env) and aida-cli-lib/src/tests/task_1750_liveness_primitive_guard_tests.rs, plus the required list in bug_1929_contained_store_tests.rs:1354, omit aida-mcp, though those guards claim to cover every crate's production source. Authority-adjacent MCP code can now add a grant read or raw liveness probe unguarded. Add aida-mcp to each list.
+    9. The new root glob 'use aida_cli_lib::*' at aida-mcp/src/serve.rs:9 replaces a counted 'use crate::*', and scripts/check-crate-globs.py only counts crate::*, so the import debt leaves the ratchet instead of shrinking. Import the handful of needed names explicitly.
+    10. No test covers the new injection boundary directly: run_mcp_handler's unregistered path (aida-cli-lib/src/command_registry.rs) has no refusal test, and aida-mcp has no tests of its own because the transport is only exercised through the cfg(test) include! copy in cli-lib. Add a refusal test and a serve-path test in the crate that ships.
+    11. Minor: scripts/publish.sh:37-39 publish order omits aida-mcp although aida-cli now depends on it by version; docs/showcase/integrations.html:27 links the MCP implementation to the 7-line test stub.
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
+  created_at: 2026-11-08T17:50:30.380966792Z
+  modified_at: 2026-11-08T17:50:30.380966792Z
   session_id: 01a1b9af-8230-75d2-82f8-667491cc010a
   harness_version: 2.1.319 (Claude Code)
 history:
