@@ -8,7 +8,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-08T19:37:15.450252326Z
-modified_at: 2026-11-08T21:00:05.579433481Z
+modified_at: 2026-11-08T21:00:07.951991238Z
 req_type: Bug
 comments:
 - id: 01a1bcc0-2ddb-79f0-b763-2d703d44589a
@@ -41,6 +41,21 @@ comments:
   content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: Root-cause fix is correct for all five reported specs, but the narrowed guard drops repeated Rejected reviews and its call site has no handler-level test.. No triage reason was given.'
   created_at: 2026-11-08T21:00:05.579431910Z
   modified_at: 2026-11-08T21:00:05.579431910Z
+  session_id: 01a1bc93-77a0-7740-8b03-df4e3e8d1df5
+  harness_version: 2.1.319 (Claude Code)
+- id: 01a1bcf6-1acd-7f42-b84c-76fc826ae715
+  author: joe
+  content: |-
+    REVIEW FINDINGS TO ADDRESS (BUG-2502):
+    Verdict: CHANGES REQUESTED
+    Reviewed commit: b808c73faeaf
+    Recorded: 2026-11-08T20:47:40.461918011+00:00
+    Findings:
+    1. aida-cli-lib/src/queue_cmd.rs:8034 rework_is_review_shelf accepts only kind "verdict:request-changes", so a repeated identical Rejected review no longer trips the BUG-1213 loop guard. rework_findings_comment renders Rejected verdicts too (blocks_done covers RequestChanges | Rejected; review_verdict_display.rs:38), and before this PR any NeedsAttention recurrence parked. Now two identical Rejected shelves return the spec to Approved and requeue it with no escalation. Accept the reviewer rejection kinds as well; both spellings are written today: "verdict:rejected" (lib_part5.rs:3426, aida review record) and "verdict:reject" (auto_complete.rs:678, drain cause_slug). Add a predicate case for each.
+    2. aida-cli-lib/src/tests/queue_rework_tests.rs:2095 bug_2502_loop_guard_requires_a_reviewer_request_changes_shelf only tests the predicate; no test proves handle_queue_rework still parks a genuine repeat review. Replacing the call at queue_cmd.rs:8552 with false would pass every BUG-2502 test, silently disabling the BUG-1213 guard. Add a handler-level case: reviewer shelf (phase reviewer, kind verdict:request-changes, no attention_reason) plus an already-imported identical findings block, asserting the spec ends NeedsAttention and is not queued. The park happens before the findings/brief subprocesses, so tolerate or stub their failure.
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
+  created_at: 2026-11-08T21:00:07.757137077Z
+  modified_at: 2026-11-08T21:00:07.757137077Z
   session_id: 01a1bc93-77a0-7740-8b03-df4e3e8d1df5
   harness_version: 2.1.319 (Claude Code)
 history:
