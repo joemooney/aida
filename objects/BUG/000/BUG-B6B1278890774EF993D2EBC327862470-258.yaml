@@ -15,7 +15,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-08T03:09:42.520017343Z
-modified_at: 2026-11-08T12:27:34.079945227Z
+modified_at: 2026-11-08T12:37:01.619173108Z
 req_type: Bug
 tags:
 - area:lanes
@@ -73,6 +73,13 @@ comments:
   created_at: 2026-11-08T11:08:14.241842598Z
   modified_at: 2026-11-08T11:08:14.241842598Z
   session_id: 01a1bad2ea24
+  harness_version: codex-cli 0.167.0
+- id: 01a1bb29-8033-7f12-b1be-c43fe0b6e5c4
+  author: dirtlab
+  content: 'Revalidated existing body-file implementation and review fixes. Added host-boundary regression: tampering a persisted declaration body with NUL must refuse before the commit callback and leave HEAD unchanged. Changed only aida-cli-lib/src/tests/bug_home_038_seat_publish_tests.rs. Lane jobs j20261108T122755305-2-0 (2 BUG-2493 tests) and j20261108T122827139-2-0 (all 51 seat publication tests) passed. Help-golden shell fixtures and git diff --check passed. Codegraph unavailable; ship_messages caller confirmed with rg. No implementation blockers; edits remain uncommitted for host publication and queue completion.'
+  created_at: 2026-11-08T12:37:01.619173108Z
+  modified_at: 2026-11-08T12:37:01.619173108Z
+  session_id: 01a1bb204da2
   harness_version: codex-cli 0.167.0
 history:
 - id: 01a1b9c3-7cea-7270-b22c-10e229024e5a
