@@ -1,0 +1,29 @@
+id: 01a1bb2d-a850-7f43-962c-afa134928a84
+spec_id: TASK-b6b1278890774ef993d2ebc327862470-991
+title: 'Cosmetic, non-blocking: three comments still name retired flags: aida-cli-lib/s…'
+description: |-
+  Non-blocking finding carried forward from an APPROVED review verdict on TASK-1214, which has since completed — recorded here so it keeps a queryable home once the verdict record stops being read.
+
+  Cosmetic, non-blocking: three comments still name retired flags: aida-cli-lib/src/drain_cmd.rs:215 (--clear), statusline_cmd.rs:30 (--title), focus_cmd.rs:74 (--show).
+
+  PR: #3629
+  Reviewed sha: 8d55a72dd8ddd7679a8b4ce1ef2cfcaf0489ff9d
+status: Draft
+priority: Medium
+owner: joe
+feature: Uncategorized
+created_at: 2026-11-08T12:41:34.032211319Z
+modified_at: 2026-11-08T12:41:34.032211319Z
+req_type: Task
+tags:
+- carried-from:TASK-1214
+- finding-hash:c79746e0
+- from-review:PR-3629
+- kind:carried-forward
+filed_at:
+  code_sha: d68eb4ec071092cbe9a36eb356d033c613633453
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 92e7eb35446
+  vendor: claude
