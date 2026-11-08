@@ -18,7 +18,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-08T02:58:08.667753563Z
-modified_at: 2026-11-08T12:11:12.848830321Z
+modified_at: 2026-11-08T12:11:15.538758825Z
 req_type: Story
 tags:
 - area:human-wait
@@ -451,6 +451,21 @@ comments:
   content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: R22''s named reclaim doors are fixed in the sketch, but the PR title still completes STORY-2661 at squash merge with AC1-4 unimplemented (R1), and the closed reclaim inventory omits aida claim and MCP claim_task (R23). AC1: unverified, not implemented by this sketch-only PR. AC2: unverified, not implemented; manual resume only. AC3: unverified, not implemented; AGY and contained Codex deferred. AC4: unverified, not implemented; escalation designed only. Advisor sketch signoff not recorded. CI pending at this head.. It was punted on: design-fork: R22 addressed in docs/plans/2026-11-08-story-2661-park-resume-sketch.md: closed reclaim-door inventory includes MCP queue_rework, rework --work, force-claim, orchestrator auto-claim and orphan adoption, with retained ownership refusing all force bypasses at final write/claim boundaries and future regressions per door. No findings disputed. Binding advisor ruling requires sketch signoff before code. R1 remains host/advisor metadata action: retitle PR #3666 exactly [AI:codex] docs(plans): sketch park-on-ask resume-on-answer (Refs STORY-2661). Retain publication veto until signoff and title repair. Validation: git diff --check passed; sketch only, runtime regressions untested=true. Codegraph executable unavailable; inspected relevant source with sed. Native non-completing Refs declaration recorded; edits left uncommitted.. No triage reason was given.'
   created_at: 2026-11-08T12:11:12.848827626Z
   modified_at: 2026-11-08T12:11:12.848827626Z
+  session_id: 01a1b9af-8230-75d2-82f8-667491cc010a
+  harness_version: 2.1.319 (Claude Code)
+- id: 01a1bb11-e85e-7fb0-878c-17236c2c3e30
+  author: joe
+  content: |-
+    REVIEW FINDINGS TO ADDRESS (STORY-2661):
+    Verdict: CHANGES REQUESTED
+    Reviewed commit: b79a114626db
+    Recorded: 2026-11-08T12:05:15.718790061+00:00
+    Findings:
+    1. R1 BLOCKER (open since round 1): at head b79a114626db PR #3666 is still titled '[AI:codex] feat: Park on ask, resume on answer... (STORY-2661)'. aida-cli-lib/src/pr_ship.rs:339-372 short-circuits only on a trailing '(Refs ...)' and otherwise takes completion ids from the title, so a squash merge completes the story with AC1-4 unimplemented, contradicting sketch:9 and sketch:13. Fix: retitle to exactly '[AI:codex] docs(plans): sketch park-on-ask resume-on-answer (Refs STORY-2661)'. This needs host or advisor metadata action; no seat commit clears it.
+    2. R23 minor: the inventory at sketch:164-184 calls itself closed but omits the two claim verbs, which take a scope lease on a parked spec after its lane lease is dead. (a) CLI 'aida claim' (claim.rs handle_claim:148) has no ownership check, and persist_claim_status/claim_status (claim.rs:366-372) overwrites req.owner on an InProgress spec. (b) MCP claim_task (mcp.rs:3853-3951) refuses only when a lease file for the scope exists, so it succeeds once the lane lease is reaped. A new live claim also satisfies live_spec_claim_by_other (leases.rs:2035), whose refusal text at session_start.rs:2483-2489 recommends --force-claim. sketch:136-138 only covers releasing a claim. Fix: add both verbs to the inventory with a regression each, either refusing them while ownership is retained or stating they are advisory-only, leave req.owner unchanged, and say how bound resume treats a live claim by another session.
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
+  created_at: 2026-11-08T12:11:15.422235638Z
+  modified_at: 2026-11-08T12:11:15.422235638Z
   session_id: 01a1b9af-8230-75d2-82f8-667491cc010a
   harness_version: 2.1.319 (Claude Code)
 history:
