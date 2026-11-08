@@ -28,7 +28,7 @@ priority: Low
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-09-13T22:07:45.944235Z
-modified_at: 2026-11-08T18:53:20.355389156Z
+modified_at: 2026-11-08T18:53:22.587691926Z
 req_type: Task
 tags:
 - cleanup
@@ -488,6 +488,23 @@ comments:
   content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: No blocking code defect in a full read of the merge-base diff; all four criteria have code and test evidence. Not approvable because CI run 42510498051 at this head is not terminal. Re-run a reviewer when CI finishes; rework only if a job fails.. It was punted on: blocked-dependency: Latest review finding 1 explicitly requires no code rework or new head until complete CI. Observed run 42509346975 at 40f2b6b8dcd4: lib-1, cli-0, lib-0, gates, cli-1, contracts and rest cancelled; aggregate Build queued. This is incomplete CI evidence, not a code failure to repair. Host must obtain a complete CI run on the existing head and rerun independent review; finding 2 requires separate authorized merge-hold clearance. Optional cosmetic findings 3/4 left unchanged to honor the no-new-head instruction. No source edits or tests in this turn (untested=true); working tree clean. No publication or host cleanup performed.. No triage reason was given.'
   created_at: 2026-11-08T18:53:20.355384041Z
   modified_at: 2026-11-08T18:53:20.355384041Z
+  session_id: 01a1b9af-8230-75d2-82f8-667491cc010a
+  harness_version: 2.1.319 (Claude Code)
+- id: 01a1bc82-0d3d-7c62-a52d-d309c163f8a3
+  author: joe
+  content: |-
+    REVIEW FINDINGS TO ADDRESS (TASK-1222):
+    Verdict: CHANGES REQUESTED
+    Reviewed commit: 6891d1d82dc0
+    Recorded: 2026-11-08T18:40:31.311558509+00:00
+    Findings:
+    1. WAIT STATE, not a code change: CI run 42510498051 at 6891d1d82dc0 is still queued/in progress (lib-0, lib-1, contracts running; cli-0, cli-1, gates, rest queued). Do not rework, push or merge main for this finding: each new head restarts a roughly 73-minute run. Re-run an independent reviewer when CI is terminal.
+    2. Not a code change: merge-hold-gate failed at this head (job 128822299487) on the aida:merge-hold label. It needs separate authorized clearance through aida merge-hold.
+    3. Cosmetic, AC2 (non-blocking): is_runtime_noise_entry (aida-cli-lib/src/seat_clone.rs:2100-2103) identifies a lease only by a direct regular file named *.toml, so an operator note such as .aida/sessions/notes.toml in a real sessions directory reads as disposable. The normal layout is a symlink, so exposure is narrow. Optional: parse it as a lease before excusing it.
+    4. Cosmetic, docs (non-blocking): OVERVIEW.md:188-190 still says 'routes failures' and 'forced cleanup' while AGENTS.md:444-445 says 'routes findings and partial scans' and 'cleanup' for the same weekly job.
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
+  created_at: 2026-11-08T18:53:22.109391428Z
+  modified_at: 2026-11-08T18:53:22.109391428Z
   session_id: 01a1b9af-8230-75d2-82f8-667491cc010a
   harness_version: 2.1.319 (Claude Code)
 history:
