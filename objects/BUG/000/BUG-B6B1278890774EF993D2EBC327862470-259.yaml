@@ -3,12 +3,12 @@ spec_id: BUG-b6b1278890774ef993d2ebc327862470-259
 agreed_id: BUG-2494
 title: aida ship --no-merge prints only 'could not open a forge change request' and hides the forge's reason (likely the over-long PR title from a long commit subject)
 description: '2026-11-07 20:35: shipping BUG-2489''s recovered branch failed with exactly that line; ''gh pr create'' with a shorter title then succeeded (#3655). Acceptance: the error includes the forge''s message; a subject over the forge title limit is truncated or reported with the limit.'
-status: InProgress
+status: Completed
 priority: Low
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-08T05:26:30.635530303Z
-modified_at: 2026-11-08T20:25:50.910343961Z
+modified_at: 2026-11-08T22:46:44.725381302Z
 req_type: Bug
 tags:
 - area:ship
@@ -58,6 +58,20 @@ history:
   session_id: 01a1bcc7b8ef
   harness_version: codex-cli 0.167.0
   changes: []
+- id: 01a1bd57-b6b2-7e93-9b0b-78da4a5313ab
+  author: aida-auto-bump
+  timestamp: 2026-11-08T22:46:44.658386623Z
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Completed
+processing_record:
+- id: 01a1bd57-b6f5-7ed1-8320-304a4404c62c
+  timestamp: 2026-11-08T22:46:44.725372838Z
+  agent: aida
+  commit_sha: dc0691ac7e456e24aa3bc9e351d6be890dc976ab
+  summary: 'BUG-2494 PASS: both ship opener sites now flatten the full forge error chain into Display (the CLI renders only ''Error: {error}''), and GitHub titles over 256 chars are refused with measured length, limit and retry guidance. All CI green at this head. Non-blocking: ''Shorten the commit subject'' can misdirect when a generic seat subject takes its title from the spec.'
+  review_verdict: approved
 filed_at:
   code_sha: ff9b8c91808130e9bddf339d428915a5d551416e
   branch: main
@@ -67,3 +81,7 @@ filed_at:
   vendor: claude
   session: 01a1b8be-8170-7fb2-89ab-ecb4c6eee98c
   harness_version: 2.1.319 (Claude Code)
+implementation_info:
+  implemented: false
+  completed_at: 2026-11-08T22:46:44.658382057Z
+  completion_sha: dc0691ac7e456e24aa3bc9e351d6be890dc976ab
