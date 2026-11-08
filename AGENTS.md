@@ -635,6 +635,13 @@ refuse with direct-spelling guidance before performing observation I/O. Enrolled
 index, refs and lock under the clone-common `aida-intake/` directory. Full history
 validation precedes fast-forward acceptance; create/comment processing uses
 ordinary authorized CLI writers with durable operation journals and receipts.
+Opt-in profile v2 (`enroll --role producer|processor`) separates
+`aida-feedback-<producer-id>` observations from the enrolled
+`aida-feedback-receipts-<processor-id>` receipt history. S1 supports one producer
+and one processor; protection remains unverified, receipt identity/status and
+relay alignment remain later slices. Enrollment without `--role` keeps legacy
+flat transport. See [per-writer intake](docs/cli/02-specs.md#native-per-writer-intake-first-round-trip-slice).
+<!-- trace:STORY-2652 | ai:codex -->
 <!-- trace:STORY-2479 trace:TASK-3096 | ai:codex -->
 <!-- trace:TASK-3114 | ai:codex -->
 
