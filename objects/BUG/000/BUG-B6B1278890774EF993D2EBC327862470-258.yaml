@@ -15,7 +15,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-08T03:09:42.520017343Z
-modified_at: 2026-11-08T06:17:25.896548163Z
+modified_at: 2026-11-08T06:18:28.184331850Z
 req_type: Bug
 tags:
 - area:lanes
@@ -27,6 +27,13 @@ comments:
   content: Implemented optional --commit-body-file for native -m declarations and host --from-seat --commit-pending. Declarations retain a backward-compatible optional body; host Refs downgrade changes only the subject; host Git uses --cleanup=verbatim. Added declaration/host-commit help-golden regression and extended CLI/body/hook tests; updated pickup templates and CLI docs. Initial BUG-2493 regression passed (1 executed test); full publication suite and help snapshot regeneration are running via lane jobs. Edits remain uncommitted for host publication.
   created_at: 2026-11-08T06:17:25.896548163Z
   modified_at: 2026-11-08T06:17:25.896548163Z
+  session_id: 01a1b9c37009
+  harness_version: codex-cli 0.167.0
+- id: 01a1b9ce-ebd8-7443-8240-8c2a2ec292e8
+  author: dirtlab
+  content: 'Final validation: lane job j20261108T061656259-2-0 executed all 51 seat_clone::seat_publish_tests successfully, including the BUG-2493 help-golden fixture, native body-file CLI declaration, and sandboxed host commit with verbatim body. Help snapshot regeneration passed (1 executed test), and its diff contains only --commit-body-file. Execution-context ratchet: 1239 exact sites, zero additions. Template command check: 455 resolve. Help-golden shell fixtures and git diff --check passed. Full make template check stops at its cargo-run portable pack step, which is outside the permitted lane-job command set; symlink and discipline checks passed. Nine changed source/test/template/doc files remain uncommitted; host owns publication and queue completion.'
+  created_at: 2026-11-08T06:18:28.184331850Z
+  modified_at: 2026-11-08T06:18:28.184331850Z
   session_id: 01a1b9c37009
   harness_version: codex-cli 0.167.0
 history:
