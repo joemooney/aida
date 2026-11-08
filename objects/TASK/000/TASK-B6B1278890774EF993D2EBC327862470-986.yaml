@@ -1,0 +1,29 @@
+id: 01a1bb00-6650-7c32-b020-2957ae6818e9
+spec_id: TASK-b6b1278890774ef993d2ebc327862470-986
+title: 'Non-blocking (cosmetic): the UNPUSHED_COUNT_SCRIPT doc comment (seat_clone.rs:2…'
+description: |-
+  Non-blocking finding carried forward from an APPROVED review verdict on BUG-2491, which has since completed — recorded here so it keeps a queryable home once the verdict record stops being read.
+
+  Non-blocking (cosmetic): the UNPUSHED_COUNT_SCRIPT doc comment (seat_clone.rs:2397-2404) still says it counts ANY ref and calls the base the first positional argument; it omits the optional ignore-slice/keep-slice/slice-only mode argument and the slice-tag exemption.
+
+  PR: #3650
+  Reviewed sha: f0314f75d2a203b9a62b49cd5754c3a6f9404644
+status: Draft
+priority: Medium
+owner: joe
+feature: Uncategorized
+created_at: 2026-11-08T11:52:08.016502661Z
+modified_at: 2026-11-08T11:52:08.016502661Z
+req_type: Task
+tags:
+- carried-from:BUG-2491
+- finding-hash:d7d2a015
+- from-review:PR-3650
+- kind:carried-forward
+filed_at:
+  code_sha: b77fce7b3ca9b542a0244e2513c2468cd74d4c56
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 92e7eb35446
+  vendor: claude
