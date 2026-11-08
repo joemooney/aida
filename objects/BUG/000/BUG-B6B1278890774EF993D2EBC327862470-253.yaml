@@ -20,7 +20,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-07T20:18:53.564500330Z
-modified_at: 2026-11-08T05:33:04.865008682Z
+modified_at: 2026-11-08T06:08:52.079531368Z
 req_type: Bug
 relationships:
 - rel_type:
@@ -135,6 +135,12 @@ comments:
   content: 'Round 3 approach: Acceptance criteria as tests: fixture regressions verify native punt reaches host and vetoes publication, and unchanged seats return no-change without bundling; attach the two canonical criterion traces. Ledger regression: reconcile an open punt, resolve the host record, reconcile again with case-varied spec, and assert it remains resolved without duplicate records. Launch regression: reused drain and queue-resume seats clear prior punt/hold signals before child launch while new signals still veto. Changes: deduplicate mirrored punts by immutable identity and provision signal files at both missing launch boundaries. Validation: lane-runner targeted Rust tests, criterion report, formatting and portability gate; report CI evidence and supervised hold separately.'
   created_at: 2026-11-08T05:33:04.865008682Z
   modified_at: 2026-11-08T05:33:04.865008682Z
+  session_id: 01a1b9a47968
+- id: 01a1b9c6-216f-7002-92fb-52ff8a9a6448
+  author: joe
+  content: 'Round 3 implementation is in the native seat, uncommitted for host publication: criterion traces now report no untested criteria; punt mirroring deduplicates case-insensitive spec + timestamp + category; drain and queue-resume admissions clear stale seat signals; store-writer inventory reconciled to fix CI run 42441426173 actual gate failure. Validation so far: 42 inventory tests and 27 environment/Git-maintenance ratchet tests pass; portability + growth, environment ledger + base ratchet, rustfmt and diff checks pass. Both initial Rust jobs timed out at 900s while compiling (no executed tests, no compiler error); 1800s retries submitted. Native publication subject declared. Fresh CI and supervised merge-hold clearance remain host/review work.'
+  created_at: 2026-11-08T06:08:52.079531368Z
+  modified_at: 2026-11-08T06:08:52.079531368Z
   session_id: 01a1b9a47968
 history:
 - id: 01a1b7ad-9096-7320-bbe8-fc34c8e11c09
