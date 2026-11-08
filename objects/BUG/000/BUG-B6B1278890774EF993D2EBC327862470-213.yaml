@@ -15,7 +15,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-05T01:34:10.411285281Z
-modified_at: 2026-11-07T00:37:17.167086674Z
+modified_at: 2026-11-08T18:37:50.785282723Z
 req_type: Bug
 tags:
 - area:containment
@@ -116,6 +116,13 @@ comments:
   created_at: 2026-11-07T00:37:17.167086674Z
   modified_at: 2026-11-07T00:37:17.167086674Z
   session_id: 01a1b358-7de9-72a0-b4a1-1a909992fa05
+  harness_version: 2.1.319 (Claude Code)
+- id: 01a1bc73-d741-7282-be1f-f5cf13a32979
+  author: joe
+  content: 'Conformance run 2026-11-08 11:35 MST (~/.aida/conformance-codex-aida-1794162936), codex-cli 0.167.0, ChatGPT auth, turn completed: terminal allow, deny-host, redirect, proxy-bypass and tcp probes were all refused; udp reported allowed (a UDP send proves nothing about delivery). C3 stays unknown: the S1 loopback fixture cannot award a pass, no violations recorded.'
+  created_at: 2026-11-08T18:37:50.785282723Z
+  modified_at: 2026-11-08T18:37:50.785282723Z
+  session_id: 01a1bbab-762f-7cd2-8a36-4ea9f209afce
   harness_version: 2.1.319 (Claude Code)
 history:
 - id: 01a1a957-aeb7-7150-887a-dd6b7a33021d
