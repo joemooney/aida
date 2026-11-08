@@ -127,7 +127,14 @@ def main():
     # Real stores need ~5 seconds; leave the remaining budget for persistence.
     rows = run(['aida', 'findings', 'list', '--json'], 65536, timeout=6.5)
     try:
-        findings = json.dumps([row for row in json.loads(rows)['findings']
+        evidence = json.loads(rows)
+        if not isinstance(evidence, dict) or not isinstance(evidence.get('findings'), list):
+            raise ValueError('invalid findings response')
+        entries = evidence['findings']
+        if any(not isinstance(row, dict) or not isinstance(row.get('origin', ''), str)
+               for row in entries):
+            raise ValueError('invalid finding row')
+        findings = json.dumps([row for row in entries
                                if row.get('origin', '').upper() in origins], ensure_ascii=False)
         encoded = findings.encode()
         findings = encoded[:2048].decode('utf-8', errors='ignore')

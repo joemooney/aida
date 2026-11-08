@@ -14,7 +14,7 @@ HOOK = ROOT / 'aida-core/templates/hooks/aida-precompact-handoff.sh'
 
 
 class PrecompactHandoff(unittest.TestCase):
-    def fixture(self, event='PreCompact', extra=None, fail=False, large=False, slow=False, missing=False, rotated=False, slow_findings=False, pr_fail=False, branch="story-2662", scope="STORY-2662", slow_pr=False, saturated=False, empty_pr=False):
+    def fixture(self, event='PreCompact', extra=None, fail=False, large=False, slow=False, missing=False, rotated=False, slow_findings=False, pr_fail=False, branch="story-2662", scope="STORY-2662", slow_pr=False, saturated=False, empty_pr=False, findings_response=None):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
             for flag, enabled in [('slow-findings', slow_findings), ('pr-fail', pr_fail), ('slow-pr', slow_pr), ('saturated', saturated), ('empty-pr', empty_pr)]:
@@ -45,6 +45,9 @@ elif 'pr' in args:
     print(__import__('json').dumps([{'headRefName': os.environ['FIXTURE_BRANCH'], 'number': 3655}] * (0 if (p/'empty-pr').exists() else 100 if (p/'saturated').exists() else 1)))
 elif 'findings' in args:
     if (p/'slow-findings').exists(): time.sleep(5.4)
+    if 'FINDINGS_RESPONSE' in os.environ:
+        print(os.environ['FINDINGS_RESPONSE'])
+        sys.exit(0)
     print('{"findings":[{"id":"TASK-1","source":"implementer","origin":"STORY-2662","title":"parser mismatch"},{"id":"TASK-2","source":"review","origin":"PR-3655","title":"review regression"},{"origin":"STORY-other","title":"unrelated finding"}]}' if os.environ['LARGE'] == '0' else '界'*100000)
 ''')
             fake.chmod(0o755)
@@ -57,6 +60,8 @@ elif 'findings' in args:
                        AIDA_ROTATION_SEAT='', AIDA_SESSION_SCOPE=scope, FIXTURE_BRANCH=branch,
                        FAIL=str(int(fail)), LARGE=str(int(large)), SLOW=str(int(slow)),
                        MISSING=str(int(missing)), AIDA_ROTATION_HANDOFF='matched.md' if rotated else '')
+            if findings_response is not None:
+                env['FINDINGS_RESPONSE'] = json.dumps(findings_response)
             payload = dict(hook_event_name=event, cwd=directory, session_id='fixture', trigger='auto')
             payload.update(extra or {})
             result = subprocess.run([str(HOOK)], input=json.dumps(payload), text=True,
@@ -158,6 +163,16 @@ elif 'findings' in args:
         self.assertEqual(result.returncode, 0)
         self.assertIn('findings unavailable or exceeded output cap', packet)
         self.assertLessEqual(len(packet.encode()), 10000)
+
+    def test_malformed_findings_remain_unknown_and_packet_still_writes(self):
+        for response in [[], {'findings': None}, {'findings': {}}, {'findings': [None]},
+                         {'findings': ['invalid row']}, {'findings': [{'origin': None}]}]:
+            with self.subTest(response=response):
+                result, packet, _ = self.fixture(findings_response=response)
+                self.assertEqual(result.returncode, 0)
+                self.assertIn('findings unavailable', packet)
+                self.assertIn('Next step:', packet)
+                self.assertNotIn('Traceback', result.stderr)
 
     def test_failed_cli_does_not_block_compaction(self):
         result, packet, _ = self.fixture(fail=True)
