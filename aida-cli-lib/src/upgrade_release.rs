@@ -1648,7 +1648,8 @@ fn capture_dev_release_store(store: &std::path::Path, tag: &str) -> Result<(Stri
 // trace:TASK-1981 | ai:codex
 fn rebase_dev_release_store_snapshot(store: &std::path::Path, branch: &str) -> Result<String> {
     aida_core::db::with_store_write_lock(store, || {
-        aida_core::git_ops::pull_rebase(store, "origin", branch)?;
+        // trace:BUG-2490 | ai:codex — preserve pending changes during publication retry.
+        aida_core::git_ops::pull_rebase_store_retry(store, "origin", branch)?;
         aida_core::git_ops::head_sha(store)
     })
 }

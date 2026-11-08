@@ -371,7 +371,8 @@ fn persist_checked(
         // a conflicting pending operator roster edit: that could undo revocation.
         tip = with_store_write_lock(store, || -> Result<String> {
             git_ops::ensure_store_write_safe(store)?;
-            git_ops::pull_rebase(store, "origin", &branch)?;
+            // trace:BUG-2490 | ai:codex — preserve pending changes during publication retry.
+            git_ops::pull_rebase_store_retry(store, "origin", &branch)?;
             let tip = head(store)?;
             for (rel, bytes) in files {
                 ensure!(

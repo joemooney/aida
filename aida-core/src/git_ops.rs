@@ -5867,10 +5867,11 @@ pub fn register_node_full_identity(
             || -> Result<(String, String, String)> {
                 // Step 1: Pull latest (skip on first attempt if no remote)
                 if attempt > 0 && !local_only {
-                    if let Err(e) = pull_rebase(aida_repo, "origin", &branch) {
+                    // trace:BUG-2490 | ai:codex — preserve pending changes before publication retry.
+                    if let Err(e) = pull_rebase_store_retry(aida_repo, "origin", &branch) {
                         eprintln!("Warning: pull failed (attempt {}): {}", attempt, e);
                         anyhow::bail!(
-                        "Cannot complete node registration: remote unreachable after {} attempts. Error: {}",
+                        "Cannot complete node registration: store pull failed after {} attempts. Error: {}",
                         attempt, e
                     );
                     }
@@ -6063,10 +6064,11 @@ pub fn register_node_remote_only(
         let committed_sha = crate::db::with_store_write_lock(aida_repo, || -> Result<String> {
             // Step 1: Pull latest (skip on first attempt if no remote)
             if attempt > 0 && !local_only {
-                if let Err(e) = pull_rebase(aida_repo, "origin", &branch) {
+                // trace:BUG-2490 | ai:codex — preserve pending changes before publication retry.
+                if let Err(e) = pull_rebase_store_retry(aida_repo, "origin", &branch) {
                     eprintln!("Warning: pull failed (attempt {}): {}", attempt, e);
                     anyhow::bail!(
-                        "Cannot complete remote-only node backfill: remote unreachable after {} attempts. Error: {}",
+                        "Cannot complete remote-only node backfill: store pull failed after {} attempts. Error: {}",
                         attempt, e
                     );
                 }
@@ -6197,9 +6199,10 @@ pub fn set_node_identity_field(
             || -> Result<Option<String>> {
                 // Step 1: pull latest (skip first attempt / solo).
                 if attempt > 0 && !local_only {
-                    if let Err(e) = pull_rebase(aida_repo, "origin", &branch) {
+                    // trace:BUG-2490 | ai:codex — preserve pending changes before publication retry.
+                    if let Err(e) = pull_rebase_store_retry(aida_repo, "origin", &branch) {
                         anyhow::bail!(
-                            "Cannot update node identity: remote unreachable after {} attempts. Error: {}",
+                            "Cannot update node identity: store pull failed after {} attempts. Error: {}",
                             attempt,
                             e
                         );
@@ -6328,7 +6331,8 @@ pub fn hijack_node(
                 aida_repo,
                 || -> Result<(HijackOutcome, String, Option<String>, String)> {
                     if attempt > 0 {
-                        pull_rebase(aida_repo, "origin", &branch)?;
+                        // trace:BUG-2490 | ai:codex — preserve pending changes before publication retry.
+                        pull_rebase_store_retry(aida_repo, "origin", &branch)?;
                     }
 
                     let mut registry = NodeRegistry::load(&registry_path).unwrap_or_default();
@@ -6500,7 +6504,8 @@ pub fn unregister_node(aida_repo: &Path, node_id: &str) -> Result<bool> {
         let committed_sha =
             crate::db::with_store_write_lock(aida_repo, || -> Result<Option<String>> {
                 if attempt > 0 {
-                    pull_rebase(aida_repo, "origin", &branch)?;
+                    // trace:BUG-2490 | ai:codex — preserve pending changes before publication retry.
+                    pull_rebase_store_retry(aida_repo, "origin", &branch)?;
                 }
 
                 let mut registry = NodeRegistry::load(&registry_path).unwrap_or_default();
@@ -7918,7 +7923,8 @@ pub fn sync_objects(aida_repo: &Path, message: &str) -> Result<bool> {
             true => return Ok(true),
             false => {
                 sha = crate::db::with_store_write_lock(aida_repo, || {
-                    pull_rebase(aida_repo, "origin", &branch)?;
+                    // trace:BUG-2490 | ai:codex — preserve pending changes before publication retry.
+                    pull_rebase_store_retry(aida_repo, "origin", &branch)?;
                     head_sha(aida_repo)
                 })?;
             }

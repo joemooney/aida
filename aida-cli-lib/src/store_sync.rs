@@ -1227,7 +1227,8 @@ pub(crate) fn pull_store_before_id_allocation(
         // window, so the allocator never starts from a store another writer
         // changed between the pull and the check.
         let pulled = aida_core::db::with_store_write_lock(store_path, || {
-            git_ops::pull_rebase(store_path, "origin", &branch)?;
+            // trace:BUG-2490 | ai:codex — preserve pending changes during allocation retries.
+            git_ops::pull_rebase_store_retry(store_path, "origin", &branch)?;
             Ok(ensure_no_spec_id_collisions_canonical(store_path))
         });
         match pulled {

@@ -1,9 +1,3 @@
-Store publication retries for aliases, advisor goals and allocation refuse
-pending changes under the writer lock before pulling; host review and commit
-are required before retrying. Store Git disables rebase/merge autostashing.
-Structured rebase refusals retain their cause after abort. See OVERVIEW.md.
-<!-- trace:BUG-2490 | ai:codex -->
-
 Review-watch records retained fast-exiting children before reaping. Incomplete
 legacy receipts use the existing reboot/TTL backstop. Caller capture requires
 verified local procfs and fails closed with host-retry guidance. See OVERVIEW.md.
