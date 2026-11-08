@@ -18,7 +18,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-08T02:46:34.549817284Z
-modified_at: 2026-11-08T09:22:28.145752631Z
+modified_at: 2026-11-08T09:26:42.593617317Z
 req_type: Bug
 tags:
 - area:ci
@@ -145,6 +145,13 @@ comments:
   content: 'Round 4 addresses the latest review: status_prs now summarizes StatusContext SUCCESS/FAILURE/ERROR/PENDING/EXPECTED; integrate parks a pending active or uncleared recorded hold, while malformed gate statuses remain failing. Pending gate rows without local marker or confirmed active-label release authority refuse immediately instead of waiting indefinitely. Idle evidence reads successful status startedAt; coarse probes fetch labels and report transient unheld pending inspections as InProgress. Updated stale hold wording and added bug2492 regressions for rollup, integration, timestamps, probe evidence and unbounded ship refusal. Shell gate fixtures, shell syntax, rustfmt and diff hygiene pass. Launcher Rust jobs j20261108T091530867-2-0 and j20261108T091648905-2-0 are running/queued; executed-test results not yet available. AC1/AC2 live operator cutover evidence remains required before Completed.'
   created_at: 2026-11-08T09:22:28.145752631Z
   modified_at: 2026-11-08T09:22:28.145752631Z
+  session_id: 01a1ba6ef7fd
+  harness_version: codex-cli 0.167.0
+- id: 01a1ba7b-42a1-7da1-b11c-df13294520c0
+  author: dirtlab
+  content: 'Round 4 final native handoff: edits are uncommitted for host publication. Changed aida-cli-lib/src/{ci_gate.rs,ci_probe.rs,forge.rs,idle_eligible.rs,merge_hold.rs,merge_hold_cmd.rs,pr_list.rs,pr_train.rs,queue_cmd.rs,status_prs.rs,tests/ci_action_tests.rs}. Initial bug2492 runs caught a PR-list display regression from the stricter ship classifier; fixed by preserving unconfirmed pending inspections as Pending in the read-only listing. Final launcher results all pass: bug2492 11 tests (j20261108T092255218-2-0), ci_gate::tests:: 22 (j20261108T092307799-2-0), ci_action_tests:: 35 (j20261108T092329882-2-0), pr_list::tests:: 15 (j20261108T092331073-2-0). Shell gate fixtures pass: 8 label combinations x 2 gates and 36 train cases. Shell syntax, rustfmt and git diff --check pass. untested=false for targeted implementation validation; live GitHub AC1/AC2 operator cutover evidence is still outstanding, so keep BUG-2492 open. Native publication subject: [AI:codex] fix(ci): finish pending merge-hold consumer handling (Refs BUG-2492). No commit, push, PR creation, merge, review verdict or queue completion performed in this seat.'
+  created_at: 2026-11-08T09:26:42.593617317Z
+  modified_at: 2026-11-08T09:26:42.593617317Z
   session_id: 01a1ba6ef7fd
   harness_version: codex-cli 0.167.0
 history:
