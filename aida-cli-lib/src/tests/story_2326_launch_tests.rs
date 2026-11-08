@@ -1889,7 +1889,30 @@ fn story_2326_resource_env_spawn_without_recorded_target() {
             req.host_main = Some(host.clone());
             let ctx = LaunchContext::resolve_under(req, false).unwrap();
             let mut cmd = spawn_agent(&ctx).unwrap();
+            let env: BTreeMap<_, _> = cmd.get_envs().collect();
+            assert_eq!(
+                env.get(OsStr::new("RUSTC_WRAPPER")),
+                Some(&Some(OsStr::new("")))
+            );
             assert!(cmd.status().unwrap().success());
         }
+    }
+}
+
+// Unrecorded seats also must not use the operator's configured cache server.
+// trace:STORY-2641 | ai:codex
+#[test]
+fn story_2326_resource_env_unrecorded_seat_disables_wrapper() {
+    for vendor in [LaunchVendor::Claude, LaunchVendor::Codex, LaunchVendor::Agy] {
+        let mut req = request(ContainmentPosture::None, LaunchKind::Fresh, &[]);
+        req.vendor = vendor;
+        req.host_main = None;
+        let ctx = LaunchContext::resolve_under(req, false).unwrap();
+        let cmd = spawn_agent(&ctx).unwrap();
+        let env: BTreeMap<_, _> = cmd.get_envs().collect();
+        assert_eq!(
+            env.get(OsStr::new("RUSTC_WRAPPER")),
+            Some(&Some(OsStr::new("")))
+        );
     }
 }

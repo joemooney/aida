@@ -1822,6 +1822,14 @@ fn story_2641_sccache_job_env_and_binds_are_opt_in_and_lane_only() {
         "[build]\nrustc-wrapper = '/host/bin/sccache'\n",
     )
     .unwrap();
+    // Cargo prefers the extensionless file when both files exist.
+    std::fs::write(
+        cargo.join("config"),
+        "[build]\nrustc-wrapper = 'other-wrapper'\n",
+    )
+    .unwrap();
+    assert!(lane_sccache_env(&parent).is_empty());
+    std::fs::remove_file(cargo.join("config")).unwrap();
     let mut lane = fixture_lane(tmp.path());
     lane.build_env.extend(lane_sccache_env(&parent));
     lane.prepare().unwrap();
@@ -1830,7 +1838,7 @@ fn story_2641_sccache_job_env_and_binds_are_opt_in_and_lane_only() {
     assert_eq!(env["SCCACHE_DIR"], cache.display().to_string());
     assert_eq!(env["RUSTC_WRAPPER"], "/host/bin/sccache");
     assert_eq!(env["CARGO_NET_OFFLINE"], "true");
-    assert_eq!(env["CARGO_INCREMENTAL"], "0");
+    assert!(!env.contains_key("CARGO_INCREMENTAL"));
     assert_eq!(env["SCCACHE_SERVER_PORT"], "0");
     assert_eq!(env["SCCACHE_SERVER_UDS"], "/tmp/aida-lane-sccache.sock");
     let rw = lane.sandbox_rw_paths(&env);

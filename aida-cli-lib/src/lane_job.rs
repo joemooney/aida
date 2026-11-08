@@ -231,7 +231,6 @@ pub(crate) const BUILD_ENV_ALLOWED: &[&str] = &[
     "SCCACHE_SERVER_UDS",
     "SCCACHE_SERVER_PORT",
     "SCCACHE_IDLE_TIMEOUT",
-    "CARGO_INCREMENTAL",
 ];
 
 /// Host cargo config opts jobs into a lane-only cache. Never inherit the
@@ -245,8 +244,8 @@ fn lane_sccache_env(parent: &aida_core::exec_context::Environment) -> Vec<(Strin
         .get("CARGO_HOME")
         .map(PathBuf::from)
         .unwrap_or_else(|| home.join(".cargo"));
-    let config = std::fs::read_to_string(cargo.join("config.toml"))
-        .or_else(|_| std::fs::read_to_string(cargo.join("config")));
+    let config = std::fs::read_to_string(cargo.join("config"))
+        .or_else(|_| std::fs::read_to_string(cargo.join("config.toml")));
     let Some(wrapper) = config
         .ok()
         .and_then(|text| text.parse::<toml::Value>().ok())

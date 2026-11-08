@@ -569,7 +569,6 @@ impl EnvPolicy {
                     "SCCACHE_SERVER_UDS",
                     "SCCACHE_SERVER_PORT",
                     "SCCACHE_IDLE_TIMEOUT",
-                    "CARGO_INCREMENTAL",
                 ]
                 .iter()
                 .any(|k| key == *k))

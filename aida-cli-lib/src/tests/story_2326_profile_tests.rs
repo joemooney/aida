@@ -94,8 +94,5 @@ fn story_2326_resource_env_uses_vendor_projection() {
         env.get("SCCACHE_DIR"),
         Some(std::ffi::OsStr::new("/lane/cache"))
     );
-    assert_eq!(
-        env.get("CARGO_INCREMENTAL"),
-        Some(std::ffi::OsStr::new("0"))
-    );
+    assert_eq!(env.get("CARGO_INCREMENTAL"), None);
 }

@@ -37,8 +37,6 @@ impl Sccache {
                 // Unsupported UDS clients must never fall back to the operator's TCP server.
                 ("SCCACHE_SERVER_PORT", "0".into()),
                 ("SCCACHE_IDLE_TIMEOUT", "60".into()),
-                // sccache cannot cache incremental Rust compilations.
-                ("CARGO_INCREMENTAL", "0".into()),
             ]);
         }
         env
