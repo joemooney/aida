@@ -25,7 +25,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-07T19:45:35.836129088Z
-modified_at: 2026-11-08T21:22:48.564930452Z
+modified_at: 2026-11-08T21:23:00.594268433Z
 req_type: Story
 tags:
 - docs:impacted
@@ -473,6 +473,23 @@ comments:
   content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: AC2-AC5 verified from source and the sandbox ruling is followed, but a red self-pushing drain lane still reaches CI and review before its one repair round (AC1). Delta since the 9e4ce85 approval is a main merge only. CI pending at review time; source review only.. It was punted on: blocked-dependency: Required seeded full-gate validation remains blocked: current host launcher refuses aida lane job run -- make check-ci-fast with refused: a lane job must start with cargo. Existing implementation and round-7 fixes are already committed in this checkout; no new edits. Binding sandbox ruling forbids an unsandboxed fallback. Host must update its runner and validate the committed head using a genuinely seeded target and host-only results before publication.. No triage reason was given.'
   created_at: 2026-11-08T21:22:48.564927590Z
   modified_at: 2026-11-08T21:22:48.564927590Z
+  session_id: 01a1bc93-77a0-7740-8b03-df4e3e8d1df5
+  harness_version: 2.1.319 (Claude Code)
+- id: 01a1bd0b-020d-7c00-ab54-d69f49bbead5
+  author: joe
+  content: |-
+    REVIEW FINDINGS TO ADDRESS (STORY-2640):
+    Verdict: CHANGES REQUESTED
+    Reviewed commit: 7cd86faad061
+    Recorded: 2026-11-08T21:21:56.621727159+00:00
+    Findings:
+    1. [major] AC1 / advisor ruling (b): a red self-pushing drain lane is reviewed without its repair. pushed() queues the repair, then session.rs:6836 exits the child with an error (anyhow::ensure!(!queued)). The drain treats that as a phase-1 failure with an open PR: auto_complete.rs:4066 calls recover_phase1_failure_with_open_pr, which sets from_pr, tears down the attempt worktree and re-enters at CI, then the reviewer. That path never consults lane_fast_gate::blocks_review, whose only production caller is review_watch.rs:2504. Scenario: a Claude drain lane opens its PR, the gate is red, the repair row is queued, and the same drain carries the red head through CI and review toward merge while the row waits. The fix round is not guaranteed before review. Fix: make a queued fast-gate repair a typed phase-1 outcome that ends the drain for this spec without recovery (or have recovery and the drain reviewer honor blocks_review), and add a drain-level test. No existing test covers this path.
+    2. [minor] The real gate still has no recorded pass, and the timeout is not explained by cold compilation. The last real run (spec comment 36) hit the fixed 300s during Containment conformance, which is the 6th gate in the reordered fast plan; tests/test_containment_conformance.py has no cargo or target references. Later source ratchets such as the store-writer inventory would not have run, so the lane would report skipped(timeout) and publish ungated on them. fast_gate_real_main_target_passes_in_sandbox is #[ignore], so CI will not cover it. Run it from the host on a seeded head and record marker and elapsed time; if it exceeds 300s, adjust the budget or gate order.
+    3. [cosmetic] record_marker writes results/<lease>/fast-gate-marker (lane_fast_gate.rs:833-838) but no production code reads it. Consume it or remove it.
+    4. [cosmetic] The OVERVIEW.md insertion at about line 1623 falls between the native-publication trace comment and the sentence beginning Permission reports, splitting that paragraph.
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
+  created_at: 2026-11-08T21:22:57.677842379Z
+  modified_at: 2026-11-08T21:22:57.677842379Z
   session_id: 01a1bc93-77a0-7740-8b03-df4e3e8d1df5
   harness_version: 2.1.319 (Claude Code)
 history:
