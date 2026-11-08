@@ -8,7 +8,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-08T07:50:17.157189157Z
-modified_at: 2026-11-08T09:26:26.015892257Z
+modified_at: 2026-11-08T09:32:43.977586745Z
 req_type: Task
 comments:
 - id: 01a1ba23-1dfe-7172-aedd-5ca1e197357c
@@ -55,6 +55,13 @@ comments:
   modified_at: 2026-11-08T09:24:37.019719834Z
   session_id: 01a1b8be-8170-7fb2-89ab-ecb4c6eee98c
   harness_version: 2.1.319 (Claude Code)
+- id: 01a1ba80-c649-7883-8ed6-c870a9e76100
+  author: dirtlab
+  content: 'Rework addressed reviewer findings 1 and 2 in scripts/config-trust.toml: inventoried review_watch.rs as one worktree config reader and classified review_watch.max_concurrent as policy with rationale. Lane job j20261108T092703203-2-0 executed all 10 config trust tests successfully, including every_config_toml_site_is_inventoried_and_every_worktree_key_is_policy; j20261108T092715504-2-0 executed all 135 review_watch tests successfully. git diff --check passed. make check-ci-fast stopped at its first gate (Check aida-cli without default features): direct Cargo target writes were refused by the sandbox; host must rerun it. Native handoff: scripts/config-trust.toml remains uncommitted; publication subject recorded. Finding 3 requires the HOST commit body to contain Help-Golden: updated; native declaration supports only a subject line, and this seat is forbidden to commit. No commit, push, PR creation, review record or queue completion performed.'
+  created_at: 2026-11-08T09:32:43.977586745Z
+  modified_at: 2026-11-08T09:32:43.977586745Z
+  session_id: 01a1ba7afbcf
+  harness_version: codex-cli 0.167.0
 history:
 - id: 01a1ba23-190f-7443-b904-ef1070197546
   author: joe
