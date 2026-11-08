@@ -6,8 +6,9 @@ Status: proposed; advisor signoff required before implementation.
 The binding advisor ruling requires a sketch before code. This document is
 that review artifact, not an implementation or authorization to resume.
 
-This revision addresses F1–F8 and R1–R6 from commits `39ab419eb862` and
-`48811d8051db`. R1 requires a host metadata action and remains unresolved here.
+This revision addresses the protocol findings F2–F8, R2–R10 from commits
+`39ab419eb862`, `48811d8051db` and `12ea0f7b294c`. F1/R1 requires a host
+metadata action and remains unresolved here; no further seat commit clears it.
 Publication must use a non-completing subject:
 `[AI:codex] docs(plans): sketch park-on-ask resume-on-answer (Refs STORY-2661)`.
 AC1–4 remain unimplemented; merging this sketch must not complete the story.
@@ -114,7 +115,12 @@ record, then `<seat>/.aida/park-receipt.json`. This host-mediated canonical writ
 works when containment forbids direct store access; the seat needs only its own
 write root. The ask command waits at most 10 seconds for the matching receipt,
 then returns pending/failure guidance, never a false park acknowledgement.
-Retries reuse the wait UUID. Late receipts remain recoverable and the supervisor
+A pending result requires the lane to stop work and end its current turn, just
+as an accepted receipt does; it must not continue editing or attempt publication.
+A failure after intent submission has an uncertain acceptance outcome and requires
+the same stop pending host reconciliation. Only a definitive pre-submission
+refusal establishes that no park intent exists. Retries reuse the wait UUID.
+Late receipts remain recoverable and the supervisor
 suppresses publication on any validated pending intent. Both canonical and runtime
 state must reconcile before acceptance; crashes after either write are visible.
 The receipt is host evidence, never accepted back as authority from the seat.
@@ -125,13 +131,21 @@ The receipt is host evidence, never accepted back as authority from the seat.
 2. The host binds and accepts the intent before publication, phase completion,
    ordinary background-work resume, or lease cleanup. A park is neither a
    successful implementation nor a failed phase to retry from scratch.
-3. State advances `park_requested -> parked` only after the host verifies the
+3. Before accepting an intent or exposing its receipt, the host marks the
+   original launch slot waiting via `mark_slot_waiting` (or the equivalent
+   durable flag under the shared slot lock), disabling final-result discounting
+   throughout `park_requested`. Failure to retain that reservation refuses
+   acceptance and escalates; no accepted park may have a discountable live slot.
+   The current best-effort helper needs a checked persistence/readback result
+   for this handshake; invoking its void-returning API alone is insufficient.
+   This rule covers original launches as well as managed resumes. State advances
+   `park_requested -> parked` only after the host verifies the
    vendor child has exited and transcript identity is retained. Until exit,
    its running slot remains occupied. No process is killed by the ask command.
 4. Failure to persist either side refuses the handshake with recovery guidance;
    a question alone does not release a live slot. A lane that fails to stop
    becomes `stop_timeout` if its managed vendor process group has not exited
-   within 60 seconds after the ask command returns its accepted receipt.
+   within 60 seconds of the stop boundary below.
    This is a wall-clock safety deadline, not a claim to detect model turns.
    A slow final response can time out; that is an operational failure requiring
    recovery, not evidence of a second turn. No Claude, Codex or AGY stream parser
@@ -139,9 +153,17 @@ The receipt is host evidence, never accepted back as authority from the seat.
    a cooperative instruction for all three; a future per-vendor event contract
    would need separate fixtures before enforcing a turn-count rule. The host
    observes command completion via a bound seat completion marker written just
-   before CLI return; missing marker uses acceptance plus 10 seconds as a
-   conservative fallback and reports `stop_boundary_unknown`. The supervisor
-   owns a monotonic deadline: at expiry it stops its verified child process group,
+   before every post-submission CLI return, including pending/failure, carrying
+   the same wait and launch generation and its return outcome. If the command
+   already returned when the host accepts (late acceptance), the deadline starts
+   at host acceptance, regardless of that return outcome. Otherwise it starts
+   when the matching completion marker is observed. Missing marker uses
+   acceptance plus 10 seconds as a conservative fallback and reports
+   `stop_boundary_unknown`. A marker observed after the fallback cannot extend
+   an established deadline. The host records the chosen boundary and deadline
+   durably for restart reconciliation; a restart never resets the budget.
+   The supervisor owns a monotonic deadline while alive: at expiry it stops its
+   verified child process group,
    gives it 5 seconds to exit, then kills that same group if necessary and reaps
    it. This is a proposed new supervisor behavior requiring advisor approval,
    not permission for the ask command to kill anything. Preserve transcript and
@@ -198,8 +220,9 @@ wait. It acquires its own PID/start-identity slot via `acquire_slot`, before
 launching the vendor, and holds its guard through vendor exit/reaping; it never
 uses the observer PID for child slots. Observer restart cannot release these
 slots or kill these processes, which are outside the observer unit cgroup.
-Existing final-result-based slot discounting must be disabled for this managed
-resume until verified child exit; a vendor final message is not process exit.
+Existing final-result-based slot discounting must be disabled for both the
+original `park_requested` launch and this managed resume until verified child
+exit; a vendor final message is not process exit.
 
 Supervisor death must not make a surviving child invisible to the cap. Before
 spawn persist an attempt reservation under the shared slot lock; after spawn
@@ -230,8 +253,17 @@ An answer is always `manual_resume_required`; a manual attempt without a valid
 parent becomes
 `blocked_authority`, retaining the answer and seat. `aida awaiting` must show
 this even when no observer is running, plus the explicit recovery: an authorized
-operator enters the permitted delegating role via `aida role enter <role>` in a
-live host shell, then runs the proposed `aida lane resume <wait-id>` command.
+operator enters a permitted parent role in a live host shell with an explicit
+seat delegation for the wait's `owner_role`, then runs the proposed resume command.
+For an implementer wait, the shell-init helper commands are
+`aida role enter <permitted-parent-role> --delegate-seat implementer`, followed
+by `aida lane resume <wait-id>`. Without the helper, capture the role command's
+output and evaluate it only after successful exit and validation of the complete
+standalone eval-marker pair, using the existing guarded shell-init protocol.
+For other waits substitute their exact `owner_role` for `implementer`.
+`aida awaiting` must print this delegation flag and the wait's concrete role
+in its recovery guidance. A bare role entry without `--delegate-seat` is
+insufficient; role admission and delegation validation still apply.
 That command claims the wait under the same per-wait lock/attempt protocol and
 supervises the resumed child under that caller's fresh parent grant. It does not
 renew the exited session or grant the daemon permanent authority. The watcher
@@ -323,11 +355,17 @@ reservation recovery; native and contained seat intent/receipt transport; stale
 binding tokens and interrupted canonical write; legacy contained Claude transcript
 staging, missing/conflicting transcripts and shared-wrapper refusal;
 remote-node answer synced after park; contained answerer without runtime access;
-lost wake hint; stopped/stale service and registration refusal; sync errors;
+lost wake hint; parking and `aida awaiting` with the observer stopped; stale
+observer diagnostics without an admission refusal; sync errors;
 legacy question migration; forced overwrite before/after answer; synced binding
 replacement; free-text note such as “1, but name it X” in each vendor prompt;
 InProgress resume versus Approved/status-mismatch refusal; cooperative one-turn
 exit and 60-second stop timeout with surviving/ambiguous descendants;
+pending-return stop followed by late acceptance with a deadline starting at
+acceptance, missing completion marker and restart without deadline extension;
+admission at cap during `park_requested` after the original vendor emits a
+final result but before verified exit; recovery with explicit owner-role
+`--delegate-seat` and refusal when that flag is absent;
 hold/punt vetoes; rejected/kept-parked answers; and containment refusal
 before artifacts or child spawn. PATH changes use the existing isolated-test
 helper. Host integration must demonstrate the child recalls both question and
