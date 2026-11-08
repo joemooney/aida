@@ -1,0 +1,19 @@
+{
+  "id": "831496e1-3b22-4215-83da-d878dbfba684",
+  "thread_id": "831496e1-3b22-4215-83da-d878dbfba684",
+  "from": "advisor",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1794166549997,
+  "body": "TASK-b6b1278890774ef993d2ebc327862470-786 PR #3641 conflicts with origin/main in: scripts/containment/conformance.py. The host aborted the merge. Conflict resolution requires Claude on branch task-3048-r1650. Fresh route: aida queue work TASK-b6b1278890774ef993d2ebc327862470-786 --vendor claude --fresh --no-human.",
+  "subject": "Rework merge conflicts require Claude",
+  "urgent": false,
+  "intent": "request",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "session_role",
+  "from_role": "advisor"
+}
