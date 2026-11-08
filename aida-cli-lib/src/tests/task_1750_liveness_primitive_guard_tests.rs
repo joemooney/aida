@@ -1,9 +1,8 @@
-//! TASK-1750: process liveness has ONE primitive, `aida_core::liveness::pid_is_alive`
-//! (and `process_identity_is_alive` when a start time was recorded). A raw
-//! `kill(pid, 0)` in production code is a second definition of "alive" that skips the
-//! zombie check (BUG-1741) and the negative-pid wrap, so leases, registries and
-//! watchdogs drift apart again. This guard scans every crate's production source.
-// trace:TASK-1750 | ai:claude
+//! TASK-1750: process identity decisions belong in `aida_core::proc_identity`.
+//! The raw-kill guard retains the low-level compatibility primitive and named
+//! group/cleanup exceptions. The identity guard permits only enumerated legacy
+//! consumers until their receipt and policy migrations are complete.
+// trace:TASK-1750 trace:TASK-3367 | ai:codex
 
 use std::path::{Path, PathBuf};
 
@@ -118,6 +117,18 @@ fn proc_identity_legacy_decisions_do_not_expand() {
     let mut files = Vec::new();
     for krate in CRATES {
         rust_files(&root.join(krate).join("src"), &mut files);
+    }
+    // A skipped/deleted file must not leave dormant permission for a future
+    // private identity implementation. Zero-count entries grant nothing.
+    // trace:TASK-3367 | ai:codex
+    for (path, count) in &baseline {
+        assert!(*count > 0, "remove empty legacy allowance: {path}");
+        assert!(
+            files
+                .iter()
+                .any(|file| file.strip_prefix(root).unwrap() == Path::new(path)),
+            "remove unscanned legacy allowance: {path}"
+        );
     }
     let mut offenders = Vec::new();
     for file in files {
