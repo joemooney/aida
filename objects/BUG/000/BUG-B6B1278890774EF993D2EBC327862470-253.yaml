@@ -233,6 +233,30 @@ comments:
   modified_at: 2026-11-08 12:53:10.398425+00:00
   session_id: 01a1b9af-8230-75d2-82f8-667491cc010a
   harness_version: 2.1.319 (Claude Code)
+- id: 01a1bb38-60d3-7a60-a898-5ae7dfc5e08c
+  author: joe
+  content: 'REVIEW FINDINGS TO ADDRESS (BUG-2488):
+
+    Verdict: CHANGES REQUESTED
+
+    Reviewed commit: 73987ccf57f8
+
+    Recorded: 2026-11-08T12:48:20.950187446+00:00
+
+    Findings:
+
+    1. MAJOR (test regression and new hard failure; session.rs spawn_vendor_headless_resume_granted ~L8280-8293): the new signal_scope lookup bails with ''resumed implementer has no lease for signal transport'' when no lease has worktree_path == cwd. Existing test headless_codex_resume_gets_grant_role_native_posture_and_no_aida_contained (tests/bug_2386_resume_routing_tests.rs:541, not changed by this PR) resumes Codex as ''implementer'' in a lane with no lease and calls .unwrap() at ~L576-590, so it should now panic. Found by reading the source; no cargo run per review policy, and CI has not reported. The round-4 validation list did not include this test. Fix: add a matching lease to that fixture if a lease is truly required, or skip signal transport when no lease exists. Whichever you choose, state the no-lease behaviour and test it. The lookup also compares paths without canonicalizing (l.worktree_path == cwd), unlike has_commits_beyond_base; canonicalize it, or confirm every caller passes
+    the lease''s own path.
+
+    2. MINOR, plausible (handshake keyed on two identifiers; queue_cmd.rs:13594 and 14202, session.rs ~L8280 and ~L6723, phase_driver_trait.rs:50 and 386): the child''s env path uses lease.scope, while queue-resume admission, reconcile and veto use plan.scope, and the drain driver uses self.spec. Both callers match the lease with eq_ignore_ascii_case, and derive_scope_from_entry uppercases for_scope (queue_cmd.rs:10291), while on-disk leases hold mixed-case origin IDs such as TASK-b6b...-941. Signal paths are case-sensitive on Linux. With a case-variant lease, a resumed native lane writes <seat>/.aida/punt-signals/<lease.scope>.json, reconcile and publication_veto read <plan.scope>.json, and the host publishes past the punt. The drain driver would likewise miss the mirrored punt at main/<self.spec>.json. Fix: derive the env path and the veto/reconcile path from one identifier (pass the publication spec into the spawn), or match case-insensitively, and add a case-variant test.
+
+    3. CI GATE: CI run 42481535495 at 73987ccf57f8 is pending with no jobs, and the previous head''s CI (44bb939ee30, run 42480534715) was still queued when last listed, so no green full-suite evidence exists for the round-4 code. The merge-hold-gate check is queued at this head; its failures at earlier heads look like the expected supervised hold rather than a code defect.
+
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.'
+  created_at: 2026-11-08 12:53:16.627095+00:00
+  modified_at: 2026-11-08 12:53:16.627095+00:00
+  session_id: 01a1b9af-8230-75d2-82f8-667491cc010a
+  harness_version: 2.1.319 (Claude Code)
 - id: 01a1bb41-174f-7ad1-bcf7-ae88a66cc767
   author: dirtlab
   content: 'Validation-only pickup at 73987ccf57: round-four implementation is already present; no source edits required. Confirmed resume admission consumes prior main/seat vetoes, resume/drain vendor commands receive seat-local signal paths, publication reconciles before checking vetoes, and cleanup requires host-retained handshake evidence. Lane-runner BUG-2488 regressions: 7 executed tests passed (j20261108T125613744-2-0). Launch-boundary regression: 1 executed test passed (j20261108T130235702-2-0). Both acceptance criteria traced, none untested. Rustfmt on seven implementation/test files and git diff --check pass. Working tree clean; changed files: none; untested=false. Codegraph unavailable, call sites confirmed with rg. No implementation blockers; fresh CI/review and supervised hold clearance remain host work. No commit, push, PR creation, queue completion, ship or review-record attempted.'
