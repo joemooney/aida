@@ -1574,13 +1574,42 @@ fi
 printf '%s\n' "$negative" | git rev-list --stdin --count $head --branches --not --remotes
 "#;
     let script = if remotes == "--remotes=origin" {
-        // Preserve local tags and every stash entry too. Host-only refs and
-        // secondary remotes never grant origin coverage to GC.
+        // Inherited host tags are not seat work. Exclude only an exact
+        // name/object match from positive roots, never from negative coverage:
+        // a seat branch at the same unpublished commit must still retain it.
+        // trace:TASK-1222 | ai:codex
+        let mut tags = aida_core::git_ops::host_git_command(main);
+        tags.args([
+            "for-each-ref",
+            "--format=%(objectname) %(refname)",
+            "refs/tags/",
+        ]);
+        let host_tags = run_bounded(tags, "", deadline).context("cannot read host tags")?;
+        let host_tags = host_tags.replace('\'', "'\"'\"'");
+        let positives = format!(
+            r#"host_tags='{host_tags}'
+positives=''
+refs=$(git for-each-ref --format='%(objectname) %(refname)')
+while read -r oid name; do
+  [ -n "$oid" ] || continue
+  case "$name" in
+    refs/tags/*)
+      if printf '%s\n' "$host_tags" | grep -Fqx -- "$oid $name"; then continue; fi ;;
+  esac
+  positives="$positives $oid"
+done <<EOF
+$refs
+EOF
+"#
+        );
+        // Preserve seat-created/moved tags, other refs and every stash entry.
+        // Secondary remotes never grant origin coverage to GC.
         format!(
-            "set -eu\n{}\n{}",
+            "set -eu\n{}\n{}\n{}",
             GC_STASH_ENTRIES,
+            positives,
             script
-                .replace("--branches", "--all $s")
+                .replace("--branches", "$positives $s")
                 // Clone tracking refs are seat-writable. Only the negative
                 // OIDs corroborated through host origin refs/advertisement
                 // above may excuse a commit in the GC path.

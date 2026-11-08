@@ -571,15 +571,15 @@ fn scan_budgeted<T, R>(
         .collect()
 }
 
-// Rotate once per UTC week so budget-limited scheduled scans do not always
-// inspect the same prefix. Read-only and deterministic: no cursor to corrupt or
-// race with interactive scans. For a stable inventory every entry leads once
-// per inventory-length cycle, even if only one inspection fits the budget.
+// The cursor is only a scan-order hint; it grants no eligibility authority.
+// Resume after the last inspected path, including when inventory changes.
 // trace:TASK-1222 | ai:codex
-fn rotate_inventory<T>(items: &mut [T], week: i64) {
-    if !items.is_empty() {
-        let start = week.rem_euclid(items.len() as i64) as usize;
-        items.rotate_left(start);
+fn rotate_inventory(items: &mut [(PathBuf, bool)], after: Option<&Path>) {
+    if let Some(after) = after {
+        let start = items.partition_point(|(path, _)| path.as_path() <= after);
+        if start < items.len() {
+            items.rotate_left(start);
+        }
     }
 }
 
@@ -594,14 +594,40 @@ pub(crate) fn run(apply: bool, json: bool, fail_on_findings: bool) -> Result<()>
     let default =
         crate::resolve_default_branch_ref(&main).context("cannot resolve default branch")?;
     let mut inventory = inventory(&main)?;
-    rotate_inventory(
-        &mut inventory,
-        chrono::Utc::now().timestamp().div_euclid(604_800),
-    );
+    let autonomous = crate::doctor_cmd::doctor_running_autonomously(&main);
+    let cursor = main.join(".aida/worktree-gc-cursor.json");
+    let after: Option<PathBuf> = aida_core::seat_clone_detect::read_regular_file(&cursor)
+        .and_then(|body| serde_json::from_str(&body).ok());
+    if autonomous {
+        rotate_inventory(&mut inventory, after.as_deref());
+    }
     let total = inventory.len();
-    let mut rows = scan_budgeted(inventory, Duration::from_secs(60), |(p, c)| {
-        inspect(&main, &p, c, &default)
-    });
+    let mut rows = if autonomous {
+        scan_budgeted(inventory, Duration::from_secs(60), |(p, c)| {
+            inspect(&main, &p, c, &default)
+        })
+    } else {
+        inventory
+            .into_iter()
+            .map(|(p, c)| inspect(&main, &p, c, &default))
+            .collect()
+    };
+    if autonomous {
+        if let Some(last) = rows.last() {
+            // Atomic replacement avoids following a cursor symlink. A failed
+            // hint write is visible but cannot discard scan results.
+            let saved = (|| -> Result<()> {
+                use std::io::Write;
+                let mut file = tempfile::NamedTempFile::new_in(cursor.parent().unwrap())?;
+                file.write_all(&serde_json::to_vec(&last.path)?)?;
+                file.persist(&cursor).map_err(|e| e.error)?;
+                Ok(())
+            })();
+            if let Err(error) = saved {
+                eprintln!("warning: GC scan cursor not saved: {error:#}");
+            }
+        }
+    }
     let remaining = total - rows.len();
     let eligible = rows.iter().filter(|r| r.eligible).count();
     let reclaimable_bytes: u64 = rows.iter().filter(|r| r.eligible).map(|r| r.bytes).sum();
@@ -792,20 +818,23 @@ mod tests {
     fn task_1222_weekly_rotation_reaches_budget_deferred_tail() {
         // trace:TASK-1222.ac14b158 | ai:codex
         // trace:TASK-1222.ac5418e8 | ai:codex
+        let mut after = None;
         let mut inspected = std::collections::BTreeSet::new();
-        for week in 2900..2907 {
-            let mut inventory = vec![0, 1, 2, 3, 4, 5, 6];
-            rotate_inventory(&mut inventory, week);
-            // Worst case: only the first inspection fits each weekly budget.
-            inspected.insert(inventory[0]);
-            inventory.sort();
-            assert_eq!(inventory, vec![0, 1, 2, 3, 4, 5, 6]);
+        // A realistic 270-tree inventory is exhausted in nine 30-row scans,
+        // rather than advancing by only one row on each weekly invocation.
+        for _ in 0..9 {
+            let mut inventory: Vec<_> = (0..270)
+                .map(|n| (PathBuf::from(format!("tree-{n:03}")), false))
+                .collect();
+            rotate_inventory(&mut inventory, after.as_deref());
+            for (path, _) in inventory.iter().take(30) {
+                assert!(inspected.insert(path.clone()));
+                after = Some(path.clone());
+            }
         }
-        assert_eq!(inspected.len(), 7);
-        rotate_inventory::<usize>(&mut [], 2900);
-        let mut single = [42];
-        rotate_inventory(&mut single, 2900);
-        assert_eq!(single, [42]);
+        assert_eq!(inspected.len(), 270);
+        let mut empty = vec![];
+        rotate_inventory(&mut empty, after.as_deref());
     }
 
     #[test]
@@ -1080,7 +1109,24 @@ mod tests {
         // trace:TASK-1222.ac5418e8 | ai:codex
         let (_tmp, main) = fixture();
         let clone = main.parent().unwrap().join("aida-seat-project-test");
+        git_ok(&main, &["checkout", "-qb", "host-only"]);
+        std::fs::write(main.join("host-note"), "host history").unwrap();
+        git_ok(&main, &["add", "."]);
+        git_ok(&main, &["commit", "-qm", "host only"]);
+        git_ok(&main, &["tag", "host-backup"]);
+        git_ok(&main, &["checkout", "-q", "main"]);
         crate::seat_clone::create(&main, &clone, "feature", "origin/main").unwrap();
+        // Legacy host-cloned seats inherited host-local tags. Current origin
+        // clones need the same ref installed explicitly to model that layout.
+        let host_tag = git_ok(&main, &["rev-parse", "refs/tags/host-backup"]);
+        git_ok(&clone, &["update-ref", "refs/tags/host-backup", &host_tag]);
+        assert_eq!(
+            git_ok(&clone, &["rev-parse", "refs/tags/host-backup"]),
+            host_tag
+        );
+        git_ok(&clone, &["branch", "seat-at-host-tag", &host_tag]);
+        assert!(!inspect_with(&main, &clone, true, "origin/main", &mut closed).eligible);
+        git_ok(&clone, &["branch", "-D", "seat-at-host-tag"]);
         let target = main
             .join("target/worktrees")
             .join(clone.file_name().unwrap());
@@ -1189,7 +1235,13 @@ mod tests {
             "{}",
             side.reason
         );
+        git_ok(&clone, &["tag", "seat-only", "spare"]);
         git_ok(&clone, &["branch", "-D", "spare"]);
+        assert!(!inspect_with(&main, &clone, true, "origin/main", &mut closed).eligible);
+        git_ok(&clone, &["tag", "-f", "host-backup", "seat-only"]);
+        git_ok(&clone, &["tag", "-d", "seat-only"]);
+        assert!(!inspect_with(&main, &clone, true, "origin/main", &mut closed).eligible);
+        git_ok(&clone, &["tag", "-d", "host-backup"]);
         assert!(remove_with(&main, &published, "origin/main", &[], &mut closed).unwrap());
         assert!(!clone.exists());
         assert!(!target.exists());

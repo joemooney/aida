@@ -773,7 +773,7 @@ pub enum SessionCommand {
     /// process is still alive owns its worktree as its cwd, so it is skipped
     /// and reaped on a later pass once it exits on its own. Dirty worktrees,
     /// locked worktrees, and branches carrying unique unmerged commits are
-    /// never removed — the same safety checks `aida worktree gc` applies.
+    /// never removed — the same safety checks as the doctor merged-agent-worktrees heal.
     ///
     /// A lease held on the main checkout (or another protected checkout) is
     /// never reaped, but it is RELEASED — the lease file only, never a file of

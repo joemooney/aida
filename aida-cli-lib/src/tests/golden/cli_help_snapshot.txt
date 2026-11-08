@@ -15447,7 +15447,8 @@ Reads substrate state only — spec status, branch-merged-ness, process liveness
 terminal output to guess whether an agent is finished, and it NEVER closes a running agent: a
 session whose process is still alive owns its worktree as its cwd, so it is skipped and reaped on a
 later pass once it exits on its own. Dirty worktrees, locked worktrees, and branches carrying unique
-unmerged commits are never removed — the same safety checks `aida worktree gc` applies.
+unmerged commits are never removed — the same safety checks as the doctor merged-agent-worktrees
+heal.
 
 A lease held on the main checkout (or another protected checkout) is never reaped, but it is
 RELEASED — the lease file only, never a file of the checkout — when the agent process it recorded

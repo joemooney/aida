@@ -191,10 +191,11 @@ reasons, candidate/retained counts, and estimated logical bytes reclaimable or
 freed. It does not delete by default. After reviewing the preview, an operator
 can run `aida worktree gc --apply` at an interactive host terminal; scheduled
 and unattended contexts refuse removal. The legacy `--yes --force` combination
-also requests removal through the same gate. Scans have a soft budget and report
-partial counts plus the number of deferred entries; a partial scheduled scan
-routes to the advisor. The sorted inventory starts at a different entry each UTC week,
-cycling through all start positions to avoid repeatedly deferring the same tail.
+also requests removal through the same gate. Unattended scans have a soft budget
+and report partial counts plus the number of deferred entries; a partial scheduled
+scan routes to the advisor. A runtime cursor resumes after the last inspected path
+on the next unattended scan, so each scan advances by its inspected count.
+Interactive host scans inspect the full inventory.
 Byte walks are bounded; incomplete estimates are flagged and do not affect eligibility. Byte totals are lower bounds when estimates are incomplete.
 The weekly report replaces the former monthly guard.
 
@@ -211,9 +212,11 @@ detached checkouts, submodules, and unreadable evidence stay protected. Linked
 worktrees qualify when their HEAD is an ancestor of the default branch or an
 exact same-repository merged/closed PR head. Seat clones additionally require a
 matching host base pin and object-store binding, an exact merged/closed PR head,
-and **all local branches, tags, HEAD and stash entries covered by host-verified
-origin evidence**; a secondary remote, a seat-written tracking ref or a host-only
-branch cannot excuse unpushed commits. Origin-advertised PR/MR head refs can
+and **all local branches, seat-created or moved tags, HEAD and stash entries
+covered by host-verified origin evidence**. Tags with the exact same name and
+object ID on the host are inherited host history and excluded from seat work;
+a secondary remote, a seat-written tracking ref or a host-only branch cannot
+excuse unpushed commits. Origin-advertised PR/MR head refs can
 cover a published head after a squash merge deletes its source branch. An open
 PR on a reused branch prevents the PR-based cleanup proof. Missing forge evidence
 retains the tree.
