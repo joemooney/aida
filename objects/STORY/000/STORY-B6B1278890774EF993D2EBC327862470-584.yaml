@@ -13,12 +13,12 @@ description: |
   3. Works for Claude, Codex and AGY through their headless resume commands; one adapter test per vendor using a recorded fixture.
   4. A wait whose seat or session has been lost surfaces as an escalation, never a silent drop.
   Ref: docs/plans/2026-11-07-infinity-agent-architecture-deep-dive.md section 3.3 and the SPIKE-711 results table.
-status: InProgress
+status: NeedsAttention
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-08T02:58:08.667753563Z
-modified_at: 2026-11-08T08:44:09.501632293Z
+modified_at: 2026-11-08T08:45:45.745038519Z
 req_type: Story
 tags:
 - area:human-wait
@@ -303,6 +303,13 @@ comments:
   modified_at: 2026-11-08T08:43:09.819092236Z
   session_id: 01a1b8be-8170-7fb2-89ab-ecb4c6eee98c
   harness_version: 2.1.319 (Claude Code)
+- id: 01a1ba55-b69d-7193-a8d6-a62f1b8d0fc3
+  author: dirtlab
+  content: 'Revised sketch for R11-R13; no findings disputed. R11 names Claude minted ID, Codex launch-bound stamp/thread.started without rollout fallback, and verified AGY completed JSON conversation_id. Fresh AGY first-turn park remains refused without an earlier verified capture; later admitted resumes can use the prior captured ID. Missing identity refuses before canonical park acceptance. R12 adds mandatory post-exit intent drain before publication or slot release, publication veto for every present/rejected/unsafe intent, and direct parked acceptance after verified exit under the retained slot guard. R13 removes stale review narrative and adds owner node and durable stop budget fields. Added verification cases. Validation: git diff --check passed; docs-only, runtime tests not run (untested=true). Codegraph unavailable; checked source with rg and host spike results. Native Refs publication declaration recorded; edits remain uncommitted. R1 still requires host/advisor to retitle PR #3666 exactly: [AI:codex] docs(plans): sketch park-on-ask resume-on-answer (Refs STORY-2661). No seat commit fixes PR metadata. Advisor signoff remains required before code, including manual-only resume and AGY capture limitation; contained Codex remains excluded until PR2.'
+  created_at: 2026-11-08T08:45:41.917755014Z
+  modified_at: 2026-11-08T08:45:41.917755014Z
+  session_id: 01a1ba5440fd
+  harness_version: codex-cli 0.167.0
 history:
 - id: 01a1b9c5-1aa6-78e3-9355-9af12a0ce44c
   author: joe
@@ -444,6 +451,15 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a1ba55-c591-7381-8c77-7ee4331084dc
+  author: dirtlab
+  timestamp: 2026-11-08T08:45:45.745051756Z
+  session_id: 01a1ba5440fd
+  harness_version: codex-cli 0.167.0
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: NeedsAttention
 filed_at:
   code_sha: dc41ee8da2f44f88178936fc1a8e6cb7168a3de7
   branch: main
@@ -453,3 +469,8 @@ filed_at:
   vendor: claude
   session: 01a1b8be-8170-7fb2-89ab-ecb4c6eee98c
   harness_version: 2.1.319 (Claude Code)
+attention_reason:
+  category: design-fork
+  detail: 'Sketch revised for R11-R13; no findings disputed. Advisor signoff required before code on manual-only initial scope, explicit per-vendor capture limits (fresh AGY cannot park before completed-output capture), and final exit intent barrier. R1 remains host/advisor metadata action: retitle PR #3666 exactly to [AI:codex] docs(plans): sketch park-on-ask resume-on-answer (Refs STORY-2661). Seat edits cannot repair PR title; retain publication veto pending signoff and metadata repair.'
+  raised_by: implementer
+  raised_at: 2026-11-08T08:45:45.745038519Z
