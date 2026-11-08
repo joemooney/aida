@@ -8825,6 +8825,12 @@ pub(crate) struct ShipArgs {
         allow_hyphen_values = true
     )]
     pub commit_pending: Option<String>,
+
+    /// Read a UTF-8 commit body verbatim from this file. Use with native
+    /// -m declarations or --from-seat --commit-pending.
+    // trace:BUG-2493 | ai:codex
+    #[clap(long, value_name = "FILE")]
+    pub commit_body_file: Option<std::path::PathBuf>,
 }
 
 // STORY-720: `aida ship` dispatches before storage init for the same
@@ -8847,7 +8853,31 @@ fn run_ship(
         no_trailer_check,
         from_seat,
         commit_pending,
+        commit_body_file,
     } = &args;
+    // trace:BUG-2493 | ai:codex
+    let native = std::env::var("AIDA_CONTAINMENT_POSTURE").as_deref() == Ok("native");
+    let body = commit_body_file
+        .as_ref()
+        .map(std::fs::read_to_string)
+        .transpose()?;
+    if let Some(body) = &body {
+        anyhow::ensure!(!body.contains('\0'), "commit body contains NUL");
+        anyhow::ensure!(
+            commit_pending.is_some() || (message.is_some() && native),
+            "--commit-body-file requires native -m or --from-seat --commit-pending"
+        );
+    }
+    let with_body = |subject: &str| -> anyhow::Result<String> {
+        anyhow::ensure!(
+            body.is_none() || !subject.contains(['\n', '\r']),
+            "--commit-body-file requires a single-line subject"
+        );
+        Ok(crate::native_publication::join_message(
+            subject,
+            body.as_deref(),
+        ))
+    };
     // trace:BUG-HOME-038 | ai:claude
     if let Some(clone) = from_seat {
         return crate::ship_from_seat::run(crate::ship_from_seat::FromSeatOptions {
@@ -8856,11 +8886,11 @@ fn run_ship(
             no_pr: *no_pr,
             dry_run: *dry_run,
             // trace:TASK-2712 | ai:claude
-            commit_pending: commit_pending.clone(),
+            commit_pending: commit_pending.as_deref().map(with_body).transpose()?,
         });
     }
     // trace:TASK-2902 | ai:codex
-    if std::env::var("AIDA_CONTAINMENT_POSTURE").as_deref() == Ok("native") {
+    if native {
         if let Some(subject) = message {
             anyhow::ensure!(
                 !*no_trailer_check,
@@ -8869,7 +8899,7 @@ fn run_ship(
             return crate::native_publication::declare(
                 &crate::find_project_root().unwrap_or(std::env::current_dir()?),
                 spec.as_deref(),
-                subject,
+                &with_body(subject)?,
                 *dry_run,
             );
         }

@@ -1,5 +1,5 @@
 //! Native-seat publication declarations. The host owns the launch binding;
-//! the seat writes only its requested subject, never Git metadata.
+//! the seat writes only its requested subject and optional body, never Git metadata.
 // trace:TASK-2902 | ai:codex
 use anyhow::{Context, Result};
 use std::path::{Path, PathBuf};
@@ -18,6 +18,9 @@ struct Binding {
 struct Declaration {
     binding: Binding,
     subject: String,
+    // trace:BUG-2493 | ai:codex
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    body: Option<String>,
 }
 
 // Never let a seat-written FIFO, link or oversized file stall the host.
@@ -164,7 +167,7 @@ fn binding(main: &Path, lease: &crate::SessionLease) -> Result<Binding> {
 
 fn validate_subject(main: &Path, spec: &str, subject: &str) -> Result<()> {
     anyhow::ensure!(
-        !subject.is_empty() && !subject.contains(['\n', '\r']),
+        !subject.is_empty() && !subject.contains(['\n', '\r', '\0']),
         "publication declaration must contain one nonempty subject line"
     );
     let footer = subject
@@ -190,6 +193,22 @@ fn validate_subject(main: &Path, spec: &str, subject: &str) -> Result<()> {
     Ok(())
 }
 
+// trace:BUG-2493 | ai:codex
+pub(crate) fn split_message(message: &str) -> (&str, Option<&str>) {
+    match message.split_once("\n\n") {
+        Some((subject, body)) => (subject, Some(body)),
+        None => (message, None),
+    }
+}
+
+// trace:BUG-2493 | ai:codex
+pub(crate) fn join_message(subject: &str, body: Option<&str>) -> String {
+    match body {
+        Some(body) => format!("{subject}\n\n{body}"),
+        None => subject.to_string(),
+    }
+}
+
 /// Authoring surface for native `aida ship -m`: declaration only.
 pub(crate) fn declare(
     tree: &Path,
@@ -208,17 +227,26 @@ pub(crate) fn declare(
             lease.scope
         );
     }
+    // trace:BUG-2493 | ai:codex
+    let (subject, body) = split_message(subject);
     validate_subject(&main, &spec, subject)?;
+    anyhow::ensure!(
+        !body.unwrap_or("").contains('\0'),
+        "commit body contains NUL"
+    );
     let declaration = Declaration {
         binding: binding(&main, &lease)?,
         subject: subject.to_string(),
+        body: body.map(str::to_string),
     };
+    let bytes = serde_json::to_vec(&declaration)?;
+    anyhow::ensure!(bytes.len() <= 16384, "native publication file too large");
     if !dry_run {
         let path = declaration_path(tree);
         std::fs::create_dir_all(path.parent().unwrap())?;
         let mut file = tempfile::NamedTempFile::new_in(path.parent().unwrap())?;
         use std::io::Write;
-        file.write_all(&serde_json::to_vec(&declaration)?)?;
+        file.write_all(&bytes)?;
         file.persist(&path).map_err(|e| e.error)?;
     }
     println!(
@@ -265,9 +293,13 @@ pub(crate) fn read(main: &Path, tree: &Path, spec: &str) -> Result<Option<String
         .rsplit_once('(')
         .context("missing publication trailer")?
         .0;
-    Ok(Some(format!(
-        "{prefix}({}{spec})",
-        if completing { "" } else { "Refs " }
+    anyhow::ensure!(
+        !d.body.as_deref().unwrap_or("").contains('\0'),
+        "commit body contains NUL"
+    );
+    Ok(Some(join_message(
+        &format!("{prefix}({}{spec})", if completing { "" } else { "Refs " }),
+        d.body.as_deref(),
     )))
 }
 

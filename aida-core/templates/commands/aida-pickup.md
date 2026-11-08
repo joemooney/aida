@@ -26,6 +26,10 @@ Follow the workflow in `.claude/skills/aida-pickup/SKILL.md`:
    For an approved partial slice, first record its subject with
    `aida ship -m '[AI:codex] type(scope): subject (Refs ID)'`. This only records
    a lease-bound declaration; failed exits always retain Refs.
+   For required commit-body trailers such as `Help-Golden: unchanged`, add
+   `--commit-body-file <UTF-8-file>` to that declaration. The host also accepts it
+   with `--from-seat <clone> --commit-pending '<subject>'`.
+   <!-- trace:BUG-2493 | ai:codex -->
    <!-- trace:TASK-2902 | ai:codex -->
    Do not attempt commit/push/PR creation
    or `aida queue done` from this seat. The host finishes queue completion after publication.

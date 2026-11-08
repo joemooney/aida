@@ -3542,6 +3542,8 @@ pub(crate) fn commit_pending(
             &[
                 os("commit"),
                 os("--no-verify"),
+                // trace:BUG-2493 | ai:codex
+                os("--cleanup=verbatim"),
                 os("-q"),
                 os("-m"),
                 message.as_ref(),

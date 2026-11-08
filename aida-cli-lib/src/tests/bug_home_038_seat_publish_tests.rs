@@ -595,7 +595,9 @@ fn task_2712_native_codex_seat_commit_ships_from_seat_without_seat_hooks() {
     plant_hooks(&clone, &sentinel, &fx.root);
     std::fs::write(clone.join("native.txt"), "native seat\n").unwrap();
     let base = git_ok(&clone, &["rev-parse", "HEAD"]);
-    let message = "fix: native codex seat (BUG-1)";
+    // trace:BUG-2493 | ai:codex
+    let message =
+        "fix: native codex seat (BUG-1)\n\n# Body stays verbatim\n\nHelp-Golden: unchanged";
 
     // A seat that moved off its lease's branch is refused; nothing commits.
     git_ok(&clone, &["checkout", "-q", "-b", "elsewhere"]);
@@ -639,7 +641,8 @@ fn task_2712_native_codex_seat_commit_ships_from_seat_without_seat_hooks() {
     assert_eq!(git_ok(&clone, &["status", "--porcelain"]), "");
     let opened = forge.opened.lock().unwrap().clone();
     assert_eq!(opened.len(), 1);
-    assert_eq!(opened[0].title, message);
+    assert_eq!(opened[0].title, message.lines().next().unwrap());
+    assert_eq!(git_ok(&clone, &["log", "-1", "--format=%B"]), message);
     assert!(
         !sentinel.exists(),
         "a seat hook ran: {}",
@@ -715,6 +718,7 @@ fn test_commit(
             "-c",
             "user.email=host@example.com",
             "commit",
+            "--cleanup=verbatim",
             "-qm",
             message,
         ],
@@ -2309,6 +2313,47 @@ fn task_2902_declared_subject_survives_host_commit_and_pr_title() {
     }
 }
 
+// trace:BUG-2493 | ai:codex
+#[test]
+fn bug_2493_declared_body_survives_host_commit_and_refs_downgrade() {
+    use crate::ship_from_seat::{post_exit_commit, PostExitCommit};
+    let fx = fixture();
+    let clone = seat_with_publication_pending(&fx, "body", "c0ffee249301", "body");
+    let script =
+        Path::new(env!("CARGO_MANIFEST_DIR")).join("../scripts/check-help-golden-cochange.sh");
+    for clean in [true, false] {
+        let base = git_ok(&clone, &["rev-parse", "HEAD"]);
+        crate::native_publication::prepare(&fx.main, &clone).unwrap();
+        let body = "Explanation with (BUG-2) in prose.\n\nHelp-Golden: unchanged";
+        let message = format!("[AI:codex] fix: body (BUG-1)\n\n{body}");
+        crate::native_publication::declare(&clone, Some("BUG-1"), &message, false).unwrap();
+        let surface = clone.join("aida-cli-lib/src/example_args.rs");
+        std::fs::create_dir_all(surface.parent().unwrap()).unwrap();
+        std::fs::write(surface, format!("// changed {clean}")).unwrap();
+        let result = post_exit_commit(&fx.main, &clone, "BUG-1", "test", clean, &test_commit);
+        assert!(matches!(result, PostExitCommit::Committed(_)), "{result:?}");
+        assert_eq!(git_ok(&clone, &["log", "-1", "--format=%b"]), body);
+        if !clean {
+            assert_eq!(
+                git_ok(&clone, &["log", "-1", "--format=%s"]),
+                "[AI:codex] fix: body (Refs BUG-1)"
+            );
+        }
+        let output = std::process::Command::new("bash")
+            .arg(&script)
+            .arg(&base)
+            .current_dir(&clone)
+            .output()
+            .unwrap();
+        assert!(
+            output.status.success(),
+            "{}",
+            String::from_utf8_lossy(&output.stderr)
+        );
+        assert!(String::from_utf8_lossy(&output.stdout).contains("allowed by"));
+    }
+}
+
 // trace:TASK-2902 | ai:codex
 #[test]
 fn task_2902_stale_invalid_and_mismatched_declarations_refuse_before_commit() {
@@ -2481,6 +2526,47 @@ fn task_2902_native_ship_message_records_only_and_dry_run_does_not_write() {
     );
     assert_eq!(git_ok(&clone, &["rev-parse", "HEAD"]), base);
     assert_eq!(git_ok(&clone, &["status", "--porcelain"]), pending);
+    // trace:BUG-2493 | ai:codex
+    let body_file = fx.main.join("body.txt");
+    std::fs::write(&body_file, "Help-Golden: unchanged\n").unwrap();
+    let declare = command()
+        .try_get_matches_from([
+            "ship",
+            "-m",
+            subject,
+            "--commit-body-file",
+            body_file.to_str().unwrap(),
+        ])
+        .unwrap();
+    run(&declare, &ctx).unwrap();
+    assert_eq!(
+        crate::native_publication::read(&fx.main, &clone, "BUG-1")
+            .unwrap()
+            .unwrap(),
+        format!("{subject}\n\nHelp-Golden: unchanged\n")
+    );
+    let missing = command()
+        .try_get_matches_from(["ship", "--commit-body-file", body_file.to_str().unwrap()])
+        .unwrap();
+    assert!(run(&missing, &ctx).is_err());
+    let host = command()
+        .try_get_matches_from([
+            "ship",
+            "--from-seat",
+            clone.to_str().unwrap(),
+            "--commit-pending",
+            subject,
+            "--commit-body-file",
+            body_file.to_str().unwrap(),
+        ])
+        .unwrap();
+    use clap::FromArgMatches;
+    assert_eq!(
+        crate::pr_cmd::ShipArgs::from_arg_matches(&host)
+            .unwrap()
+            .commit_body_file,
+        Some(body_file)
+    );
     let no_message = command().try_get_matches_from(["ship"]).unwrap();
     assert!(run(&no_message, &ctx).is_err());
 }

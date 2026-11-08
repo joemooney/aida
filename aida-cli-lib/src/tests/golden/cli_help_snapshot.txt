@@ -15902,6 +15902,10 @@ Options:
           Show node-local spec IDs in their canonical form instead of the node's friendly label (for
           scripts). Also settable via AIDA_CANONICAL_IDS=1
 
+      --commit-body-file <FILE>
+          Read a UTF-8 commit body verbatim from this file. Use with native -m declarations or
+          --from-seat --commit-pending
+
   -h, --help
           Print help (see a summary with '-h')
 ===== aida pr
@@ -47441,6 +47445,11 @@ Working on aida itself
         "name": "canonical-ids",
         "takes_value": false,
         "help": "Show node-local spec IDs in their canonical form instead of the node's friendly label (for scripts). Also settable via AIDA_CANONICAL_IDS=1"
+      },
+      {
+        "name": "commit-body-file",
+        "takes_value": true,
+        "help": "Read a UTF-8 commit body verbatim from this file. Use with native -m declarations or --from-seat --commit-pending"
       },
       {
         "name": "commit-pending",

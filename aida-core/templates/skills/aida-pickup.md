@@ -35,7 +35,13 @@ its descriptive publication subject before exiting: use
 `aida ship -m '[AI:codex] type(scope): subject (ID)'` for completed work, or
 `aida ship -m '[AI:codex] type(scope): subject (Refs ID)'` for an approved
 partial slice. In a native seat this only records a lease-bound declaration;
-the host commits and publishes after exit. Failed exits always retain Refs.
+the host commits and publishes after exit. For required commit-body trailers,
+write a UTF-8 body file and add `--commit-body-file <file>` to the declaration
+(for example, a file containing `Help-Golden: unchanged`). The host also accepts
+`aida ship --from-seat <clone> --commit-pending '<subject>' --commit-body-file <file>`.
+The body is preserved after the subject; completion IDs still come from the subject.
+Failed exits always retain Refs.
+<!-- trace:BUG-2493 | ai:codex -->
 Publication refuses while another live process owns the seat; do not ask a deputy to bypass that refusal. A punt
 or manual hold remains a publication veto. Other postures keep the ordinary
 shipping workflow below.
