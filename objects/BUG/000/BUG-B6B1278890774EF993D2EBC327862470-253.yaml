@@ -20,7 +20,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-07T20:18:53.564500Z
-modified_at: 2026-11-08T19:19:24.675851201Z
+modified_at: 2026-11-08T19:19:31.416699404Z
 req_type: Bug
 relationships:
 - rel_type:
@@ -287,6 +287,24 @@ comments:
   content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: Round-6 findings are fixed and both acceptance tests read correctly, but CI lib-1 failed in Run tests at this head, and four minor no-change, ledger and documentation defects remain.. No triage reason was given.'
   created_at: 2026-11-08T19:19:24.675843079Z
   modified_at: 2026-11-08T19:19:24.675843079Z
+  session_id: 01a1b9af-8230-75d2-82f8-667491cc010a
+  harness_version: 2.1.319 (Claude Code)
+- id: 01a1bc99-feea-7eb2-b530-2115400e5dd0
+  author: joe
+  content: |-
+    REVIEW FINDINGS TO ADDRESS (BUG-2488):
+    Verdict: CHANGES REQUESTED
+    Reviewed commit: 0c16c609e8dc
+    Recorded: 2026-11-08T19:18:16.512863818+00:00
+    Findings:
+    1. CI BLOCKER: run 42512231790 job 'CI (lib-1)' failed in step 17 'Run tests' at reviewed head 0c16c609e8dc (cli-0, cli-1, rest passed; lib-0, gates, contracts were still running at record time). The prior head 5a16e2d82f (run 42506092000) and main (run 42510288694) were green, so the last commit is the prime suspect, though a flake is not excluded. The reviewer could not read the failing test name: the sandbox denies the Actions log host. Read https://github.com/joemooney/aida/actions/runs/42512231790/job/128827564791, fix or show it is a flake, and get a green run at the new head.
+    2. MINOR (standalone_implementer.rs:1302 classify_no_change call; seat_clone.rs:1512 has_commits_beyond_base): post_exit_commit returns NotASeat and publish_queue_exit returns Ok for a contained Codex lane on a worktree (the clone-fallback path in session_start.rs:2596 produces these), then a clean exit with no PR calls has_commits_beyond_base, which requires TreeKind::Clone and fails with 'could not read seat branch lease'. run() returns that error before report(), replacing the existing NoPr result and its unshipped-work reason. Only classify no-change for a recorded seat clone, and add a worktree-lease test.
+    3. MINOR (ship_from_seat.rs:518 publish closure, seat_clone.rs:1556): probe counts unpushed commits on all local branches of a private clone, while no_change inspects only the lease branch. A seat that commits on another local branch reaches publish() via facts.unpushed > 0, prints 'implementer: no-change', returns Ok with no advisor notice, and classify_no_change then reports exit 0. Existing session-end protection should keep the clone, so the work is not deleted, but the result line is false. When unpushed > 0 and the lease branch is unchanged, refuse or notify instead of reporting no-change.
+    4. MINOR (phase_driver_trait.rs:3260 resume_implementer): this PR points drain children at seat-local punt paths, but the advisor-tier resume never calls reconcile_signals (callers are only standalone run, run_implementer and publish_queue_exit, and this resume passes contained=false so publication does not run). A re-punt is still detected through spec status, but its seat-local .aida/punts.jsonl record never reaches the host ledger. Reconcile after the resume exits.
+    5. MINOR (AGENTS.md:1-6, OVERVIEW.md:1610-1628): both gain per-change notes, including 'as split by PR #3625 review finding 4'. Root CLAUDE.md says to put per-change notes in the PR body and an aida comment, not these files, because each prepended paragraph conflicts with every open PR. Drop the AGENTS.md paragraph and cut the OVERVIEW.md text to any durable architecture statement.
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
+  created_at: 2026-11-08T19:19:31.306273443Z
+  modified_at: 2026-11-08T19:19:31.306273443Z
   session_id: 01a1b9af-8230-75d2-82f8-667491cc010a
   harness_version: 2.1.319 (Claude Code)
 history:
