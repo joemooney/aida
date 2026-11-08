@@ -8,7 +8,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-08T15:10:55.149158862Z
-modified_at: 2026-11-08T15:30:21.807519236Z
+modified_at: 2026-11-08T15:30:27.552401251Z
 req_type: Bug
 comments:
 - id: 01a1bbba-ccf5-7ed1-8f16-63c4fa05dc0a
@@ -30,6 +30,23 @@ comments:
   content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: Fixture and invalid-run logic read correct, and the operator log confirms the chatgpt.com root cause, but the production-boundary invalid-run path has no test and the spec''s live ChatGPT-auth acceptance is unverified; CI still pending at review.. No triage reason was given.'
   created_at: 2026-11-08T15:30:21.807516589Z
   modified_at: 2026-11-08T15:30:21.807516589Z
+  session_id: 01a1b9af-8230-75d2-82f8-667491cc010a
+  harness_version: 2.1.319 (Claude Code)
+- id: 01a1bbc8-4767-7a50-98ae-34f75f2556dd
+  author: joe
+  content: |-
+    REVIEW FINDINGS TO ADDRESS (BUG-2497):
+    Verdict: CHANGES REQUESTED
+    Reviewed commit: 0c7265b40348
+    Recorded: 2026-11-08T15:21:19.493977341+00:00
+    Findings:
+    1. Missing test on the failing path: scripts/containment/conformance.py:1001 wires finish_run into continue_aida (the --boundary aida path from the operator's failed run), but no test reaches it. tests/test_containment_conformance.py:219 stops at a mocked bounded_launch error, and RunCompletionTests only calls finish_run directly or via native c.run. Add continue_aida regressions using .aida/headless-logs/*.jsonl: turn.failed with a present containment receipt must leave run_status invalid-run, production_launcher_credit false, preserved checks, and a raised error; turn.completed must give run_status completed. Without this, a wrong log glob or a broken refuse path is undetected, and a wrong glob would mark every real run invalid.
+    2. Acceptance unverified: BUG-2497 requires that a ChatGPT-auth run completes a turn and C0-C4 report real results. No such run exists; the newest ~/.aida/conformance-codex-aida-1794150336 predates the fix and ended turn.failed. The implementer's seat could not supply it (spec comment 0). An operator needs to run the harness from this branch with --boundary aida and attach the report.json run_status and C0-C4 statuses to the spec, or the advisor must explicitly split that live check into a follow-up.
+    3. Minor, misattributed cause: finish_run (conformance.py:385) silently skips any log over 4 MiB, so a --boundary aida headless log above the cap that contains turn.completed is reported as vendor-turn-not-completed. That log is separate from bounded_launch's capped stdout. Fails closed, but the reason is wrong; report a distinct reason such as vendor-log-oversize.
+    4. Minor, doc overstatement: docs/internal/testing/containment-conformance.md:438 says a Codex invocation without turn.completed produces run_status invalid-run, but the earlier exits at conformance.py:963 (fixture-production-launch-not-accepted) and :997 (production-containment-receipt-unavailable) raise before finish_run, so those reports have no run_status field. Exit is still nonzero. Either set run_status on those paths or narrow the doc sentence.
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
+  created_at: 2026-11-08T15:30:27.303902650Z
+  modified_at: 2026-11-08T15:30:27.303902650Z
   session_id: 01a1b9af-8230-75d2-82f8-667491cc010a
   harness_version: 2.1.319 (Claude Code)
 history:
