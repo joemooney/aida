@@ -11,7 +11,7 @@ priority: Low
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-08T03:38:52.682099623Z
-modified_at: 2026-11-08T21:19:48.238816100Z
+modified_at: 2026-11-08T21:29:40.201465585Z
 req_type: Task
 tags:
 - area:ci-relay
@@ -139,6 +139,20 @@ comments:
   modified_at: 2026-11-08T21:17:23.542184912Z
   session_id: 01a1bc93-77a0-7740-8b03-df4e3e8d1df5
   harness_version: 2.1.319 (Claude Code)
+- id: 01a1bd11-2669-76f3-b0d0-6defb65cdad0
+  author: dirtlab
+  content: |-
+    Addressed review findings F11-F13. Removed the duplicate Rust Python-history wrapper, its raw current_exe lookup, extended nextest waiver and 480s budget. The Python regression remains in the contracts shard; full_ci covers the changed source/test/config files. Documented recovery when exact verification refuses: inspect audit/refusal, repair pipeline/configuration, then issue a new globally unused attempt for the same SHA. Cold/warm regressions prove the new request removes the refused old row from process output and awaiting cache, with only the expected pending status and no publication from the unverified receipt.
+
+    Changed files: aida-cli-lib/src/ci_relay.rs; .config/nextest.toml; scripts/test-time-budget.toml; docs/agents/work-ci-relay.md; tests/test_work_ci_relay.py.
+
+    Validation: lane cargo test ci_relay::tests:: passed 3 executed tests; lane executable lookup ratchet passed 1 executed test; lane cargo build -p aida-cli passed. Against the lane overlay binary, 33-attempt regression passed; final cold/warm-history regressions passed 2 tests in 45.57s. CI shard tooling passed 25 tests. Python syntax, TOML parsing and git diff --check passed. Initial Python run used an older installed binary; corrected to lane overlay binary. New recovery assertions initially overlooked the expected request pending status; corrected and rerun successfully.
+
+    Native handoff: five files remain uncommitted; host owns publication and queue completion. No remaining implementation blockers. codegraph unavailable (doctor confirms missing); used rg. untested=false.
+  created_at: 2026-11-08T21:29:40.201465585Z
+  modified_at: 2026-11-08T21:29:40.201465585Z
+  session_id: 01a1bd07c41f
+  harness_version: codex-cli 0.167.0
 history:
 - id: 01a1bc6c-f8c6-7083-91af-c24f9a88e846
   author: aida-session-start
