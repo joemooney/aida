@@ -28,7 +28,7 @@ priority: Low
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-09-13T22:07:45.944235Z
-modified_at: 2026-11-08T19:51:24.939433187Z
+modified_at: 2026-11-08T19:51:27.072262654Z
 req_type: Task
 tags:
 - cleanup
@@ -545,6 +545,23 @@ comments:
   content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: No blocking code defect in a full read of the merge-base diff; not approvable because CI run 42514964555 at this head is queued and the gates fix is unproven. Two minor non-blocking defects filed. Re-run a reviewer when CI is terminal; do not push for the wait state.. No triage reason was given.'
   created_at: 2026-11-08T19:51:24.939426768Z
   modified_at: 2026-11-08T19:51:24.939426768Z
+  session_id: 01a1bc93-77a0-7740-8b03-df4e3e8d1df5
+  harness_version: 2.1.319 (Claude Code)
+- id: 01a1bcb7-39ca-7c03-b4bd-4e9b3edfef8f
+  author: joe
+  content: |-
+    REVIEW FINDINGS TO ADDRESS (TASK-1222):
+    Verdict: CHANGES REQUESTED
+    Reviewed commit: 61023b1cda49
+    Recorded: 2026-11-08T19:36:06.639573761+00:00
+    Findings:
+    1. WAIT STATE, blocking, no code change requested: CI run 42514964555 at 61023b1cda49 is queued (all 7 jobs not started; 13 CI runs queued repo-wide). The last terminal run 42510498051 at 6891d1d82dc0 passed cli-0, cli-1, lib-0, lib-1, contracts and rest but failed gates (store-writer inventory ratchet) and Build (ubuntu-latest). c409e79e140 changes only scripts/store-writers.toml to fix that ratchet, and no CI has yet proven it. Do NOT push or merge main for this finding, because a new push cancels the queued run. Re-run a reviewer once run 42514964555 is terminal. The merge-hold-gate failure is the expected supervised hold and needs the human or advisor clear path; it is not a code defect.
+    2. MINOR, non-blocking (AC2 acfbfd06): aida-cli-lib/src/worktree_lifecycle_gc.rs:258 and :481 read the linked branch with `git symbolic-ref --quiet --short HEAD`, which returns heads/<name> when a tag shares the branch name (reproduced in a scratch repo: heads/foo, heads/main). Consequences: the protected-branch check at :265 is bypassed for a linked checkout of main when a tag named main exists; the forge lookup misses the PR, so the tree is retained unless ancestor-merged; on the ancestor path the tree is removed, then update-ref targets refs/heads/heads/<name> and the run reports cleanup incomplete with the real branch left behind. Fix: read the full ref and strip refs/heads/. Fails safe for commits; needs a tag/branch name collision.
+    3. MINOR, non-blocking (AC3 ac14b158): aida-cli-lib/src/worktree_lifecycle_gc.rs:669 applies the 60-second budget only when doctor_running_autonomously is true, which depends on stdin not being a TTY. run_with_kill_timeout (maintenance_schedule.rs:3886) sets no stdin, so a manual `aida schedule tick` at a terminal runs the scheduled child unbudgeted. A large inventory then hits the 300s kill: exit 124 with no counts and no cursor save, so the next scan restarts at the same position. Fix: budget when autonomous || scheduled. Cron and non-TTY ticks are unaffected; nothing is deleted.
+    4. Criterion status at this head (full merge-base diff read; tests not executed at this head, see the CI wait finding). ac683e0c: code verified, traced by task_1222_ended_clone_requires_origin_coverage_and_closed_pr, task_1222_byte_budget_does_not_veto_eligibility, task_1222_gc_cli_defaults_to_preview_and_rejects_apply_guard_combo. acfbfd06: code verified with the minor short-ref gap above, traced by task_1222_linked_preview_and_removal_revalidate_dirty_and_locks, task_1222_linked_closed_pr_and_unknown_or_reopened_pr, task_1222_ownership_unknown_and_locks_keep_linked_tree, task_1222_live_holder_retains_linked_tree; linked mailbox retention via teardown_worktree_path retire_checkout. ac14b158: code verified with the minor budget gap above, traced by task_1222_weekly_gc_reports_to_advisor_without_apply and each_new_guard_job_trips_and_routes_on_failure_and_is_silent_when_clean. ac5418e8: fixture repositories in worktree_lifecycle_gc.rs tests; execution unverified at this head until CI is terminal. The untraced list supplied with this review is stale: these tests carry trace:TASK-1222.<ac> comments.
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
+  created_at: 2026-11-08T19:51:26.922650919Z
+  modified_at: 2026-11-08T19:51:26.922650919Z
   session_id: 01a1bc93-77a0-7740-8b03-df4e3e8d1df5
   harness_version: 2.1.319 (Claude Code)
 history:
