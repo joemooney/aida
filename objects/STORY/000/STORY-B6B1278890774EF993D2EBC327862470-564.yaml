@@ -18,12 +18,12 @@ description: |
   2. Without sccache configured, behaviour is unchanged.
   3. Test: the job profile's env/bind set includes the cache dir and wrapper only when configured.
   4. The trust decision (shared or lane-only cache) is recorded on this spec before implementation.
-status: InProgress
+status: NeedsAttention
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-07T19:59:26.079479Z
-modified_at: 2026-11-08T08:54:03.398283548Z
+modified_at: 2026-11-08T09:03:02.138263156Z
 req_type: Story
 comments:
 - id: 01a1b798-f0d4-73b1-93d5-f84581f2d190
@@ -150,6 +150,13 @@ comments:
   modified_at: 2026-11-08T08:52:40.373847231Z
   session_id: 01a1b8be-8170-7fb2-89ab-ecb4c6eee98c
   harness_version: 2.1.319 (Claude Code)
+- id: 01a1ba65-95fa-7782-93a0-d3d532d92cf1
+  author: dirtlab
+  content: 'Round 4 native handoff: Fixed latest review findings 2 and 3. lane_sccache_env now opts in only for bare sccache or an absolute path whose filename is sccache; regression rejects tools/sccache, ./sccache and ../bin/sccache and checks bare-name acceptance alongside existing absolute-path env/bind coverage. sandbox_rw_paths documentation names the optional lane-only cache. Changed files: aida-cli-lib/src/lane_job.rs and aida-cli-lib/src/tests/bug_2383_lane_job_tests.rs. PASS resource-env job j20261108T085448146-2-0 (3 executed tests); PASS sccache job j20261108T085455828-2-0 (3 executed tests); untested=false for targeted Rust tests. PASS rustfmt --check and git diff --check. make check-ci-fast FAILED at first gate, Check aida-cli without default features: sccache failed writing dep-info under the lane target with Read-only file system. Log: /tmp/story-2641-round4-ci-fast.log. Host must rerun the fast gate. Finding 1 is agreed and remains open: no both-host consecutive lane Cargo cache-hit evidence and no advisor amendment. Punt recorded for that host dependency; preserve publication veto and existing merge hold. Refs subject declaration recorded. Edits remain uncommitted; no commit, push, PR, review record or queue completion performed.'
+  created_at: 2026-11-08T09:03:02.138263156Z
+  modified_at: 2026-11-08T09:03:02.138263156Z
+  session_id: 01a1ba5d513d
+  harness_version: codex-cli 0.167.0
 history:
 - id: 01a1b929-7921-7980-8202-36c2cc4f3845
   author: aida-session-start
@@ -255,6 +262,15 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a1ba65-8854-7eb1-9ae5-9473d7f6c9a5
+  author: dirtlab
+  timestamp: 2026-11-08T09:02:58.644265325Z
+  session_id: 01a1ba5d513d
+  harness_version: codex-cli 0.167.0
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: NeedsAttention
 filed_at:
   code_sha: 7a18c0d52a6a4e0822befd4c810cfed16b04b74c
   branch: main
@@ -264,3 +280,8 @@ filed_at:
   vendor: claude
   session: 01a1b76b-2fe7-7dd2-88d0-356fc8d96d04
   harness_version: 2.1.319 (Claude Code)
+attention_reason:
+  category: blocked-dependency
+  detail: 'Round-4 finding 1 is agreed and remains unresolved: AC1 requires two consecutive lane Cargo jobs with final sccache statistics and second-job Rust hits > 0 on both primary and dell1, or a recorded advisor amendment. This seat cannot obtain both-host evidence. Local findings 2 and 3 are fixed: reject relative sccache wrapper paths with regression cases and document the writable lane cache. Targeted resource-env and sccache tests each pass 3 executed tests. make check-ci-fast failed at its first Cargo gate because sccache could not write dep-info to the lane target (read-only filesystem). Preserve the publication veto and existing merge hold; host/operator action is required.'
+  raised_by: implementer
+  raised_at: 2026-11-08T09:02:58.644246597Z
