@@ -8,7 +8,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-04T17:54:51.353376614Z
-modified_at: 2026-11-08T01:51:29.875007689Z
+modified_at: 2026-11-08T02:15:42.225595922Z
 req_type: Task
 tags:
 - area:containment
@@ -453,6 +453,12 @@ comments:
   content: 'Round 7 code dispositions (validation in progress): Finding 1 addressed with the hidden config permissions conformance-launch entry in launch/agy.rs. It issues the normal contained child grant and calls PreparedLaunch::prepare_runtime_diagnostic; production preflight/Adapter::require_conformance still refuse. The shared spawn barrier rechecks outer_only_argv with its live accepted receipt before exec release. Finding 2 addressed with shipped tool_denies (mcp(*), read_url(*), execute_url(*)), mandatory inline argv controls plus private runtime settings, and masked global/source .gemini and workspace MCP/hooks/plugins. No native sandbox/profile file, no inherited Codex API key. Candidate, wrapper argv/settings and private credential-handle tests cover the configuration; actual AGY enforcement still needs advisor live evidence. Finding 3 addressed in code: runtime auth_hosts populates the approved relay allow-set; missing trusted approval names AGY_AUTH_HOST_UNAPPROVED and unlisted runtime requests log CONTAINED_EGRESS_HOST_UNLISTED before DNS. Inventory evidence recorded explicitly: measured inference hosts=[daily-cloudcode-pa.googleapis.com]; measured refresh hosts=[]; candidate refresh hosts=[oauth2.googleapis.com] from the installed token-endpoint string only. auth_inventory_complete remains false. This code-only implementer run performs no real model/refresh measurement. Finding 4 addressed with vendor propagation test for queue-work argv and an actual continue_aida/ready callback fixture proving AGY selects the diagnostic entry and waits for a shared receipt before publishing probe payload; AGY no longer uses queue work because finding 1 requires avoiding that production refusal. Finding 5: these dispositions are recorded for every finding. Native seat leaves edits uncommitted for a new host commit (Refs TASK-3048); no finding is being silently disputed, no completion or production unlock is claimed.'
   created_at: 2026-11-08T01:51:29.875007689Z
   modified_at: 2026-11-08T01:51:29.875007689Z
+  session_id: 01a1b8c99472
+- id: 01a1b8f0-a991-7b32-8582-d551ee30a89a
+  author: joe
+  content: 'Validation checkpoint: all 59 Python tests in tests.test_containment_conformance + tests.test_containment_conformance_aida passed (52.3s); Rust formatting, git diff --check, ExecContext zero-additions and updated store-writer inventory passed. The first launcher job j20261108T013924117-74151-0 (cargo test --profile agent -p aida-cli-lib --lib task_3048) is still running; no executed-test result is claimed. No-default-feature check j20261108T014227613-54-0, help snapshot regeneration j20261108T014243083-2-0, final task_3048 repeat j20261108T014641929-2-0 and CLI JSON-audit regression j20261108T015318193-187309-0 are queued. make check-ci-fast is active with Cargo builds routed through lane jobs; its separate non-Cargo checks passed up to the pending help snapshot and store-writer inventory was then fixed and checked. Native publication declaration recorded: [AI:codex] fix(containment): route AGY conformance through the shared boundary (Refs TASK-3048). No commit/push, model run, queue completion or production unlock was performed.'
+  created_at: 2026-11-08T02:15:42.225595922Z
+  modified_at: 2026-11-08T02:15:42.225595922Z
   session_id: 01a1b8c99472
 history:
 - id: 01a1a7b3-3699-7713-8ae7-69568c287956
