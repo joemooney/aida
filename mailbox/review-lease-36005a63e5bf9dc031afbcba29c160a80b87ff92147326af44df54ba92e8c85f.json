@@ -1,0 +1,18 @@
+{
+  "id": "review-lease-36005a63e5bf9dc031afbcba29c160a80b87ff92147326af44df54ba92e8c85f",
+  "thread_id": "review-lease-36005a63e5bf9dc031afbcba29c160a80b87ff92147326af44df54ba92e8c85f",
+  "from": "review-launch",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1794112677304,
+  "body": "lease 01a1b90eb553 (implementer, seat /home/joe/ai/aida-worktrees/aida-seat-aida-story-b6b1278890774ef993d2ebc327862470-563) holds branch `story-2640-d1335` and its session has exited, but it was not ended automatically: its seat has 1 commit(s) that no remote has. Commit and push the work to the PR, or discard it with `aida session end 01a1b90eb553 --force --discard-unpushed`, then retry",
+  "subject": "Review blocked by retained lease 01a1b90eb553",
+  "urgent": false,
+  "intent": "request",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "explicit"
+}
