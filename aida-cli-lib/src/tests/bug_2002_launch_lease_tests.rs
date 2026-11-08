@@ -1781,3 +1781,64 @@ fn fresh_dispatch_receipt_cannot_authorize_a_later_recordless_reentry() {
         "a later dispatch must retain unknown ownership"
     );
 }
+
+// trace:STORY-1486 | ai:codex
+#[test]
+fn launch_previews_do_not_create_faithful_notice_marker() {
+    if crate::test_env::run_path_isolated_test() {
+        return;
+    }
+    let (tmp, _) = fixture();
+    let _env = crate::test_env::AmbientGuard::hermetic(tmp.path(), None);
+    let marker = crate::aida_home_dir()
+        .unwrap()
+        .join(".faithful-launcher-notice");
+    assert!(!marker.exists());
+    for background in [false, true] {
+        for (show_context, show_prompt, noexec) in [
+            (true, false, false),
+            (false, true, false),
+            (false, false, true),
+        ] {
+            let config = AgentLaunchConfig {
+                delegate_seats: Vec::new(),
+                agent_type: "claude",
+                binary: "/usr/bin/true",
+                default_args: vec![],
+                prompt_style: AgentPromptStyle::Positional,
+                contained: false,
+            };
+            let launch = if background {
+                agent_new_bg_dispatch
+            } else {
+                agent_new_with_config
+            };
+            launch(
+                config,
+                None,
+                None,
+                false,
+                Some(tmp.path()),
+                AgentContextOptions::new(false, show_context),
+                false,
+                noexec,
+                show_prompt,
+                false,
+                AgentPromptOptions::new(Some("preview".into()), false),
+                AgentResumeOptions::new(false, None, false, false),
+                AgentDefaultFlagOptions::new(false, Vec::new(), None),
+                Some("preview-notice".into()),
+                None,
+                false,
+            )
+            .unwrap();
+            assert!(
+                !marker.exists(),
+                "bg={background} ctx={show_context} prompt={show_prompt} noexec={noexec} wrote marker"
+            );
+        }
+    }
+    // Positive control: the same HOME can persist a real launch's notice.
+    maybe_show_faithful_launcher_notice();
+    assert_eq!(std::fs::read_to_string(marker).unwrap(), "shown\n");
+}

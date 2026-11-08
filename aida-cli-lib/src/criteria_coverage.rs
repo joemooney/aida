@@ -294,7 +294,10 @@ fn git_grep_lines(project_root: &Path, pattern: &str, pathspecs: &[&str]) -> Opt
 /// (`TASK-<hex node>-NNN`) count.
 // trace:TASK-b6b1278890774ef993d2ebc327862470-007 | ai:claude
 fn criterion_token_pattern() -> String {
-    format!(r"trace:{}\.(ac|AC|a|A)[0-9A-Za-z_-]+", crate::SPEC_ID_ERE)
+    // Gather whole dotted tokens; the shared parser validates criterion labels
+    // and rejects filename extensions without losing their trailing dots.
+    // trace:STORY-1486 | ai:codex
+    format!(r"trace:{}\.[0-9A-Za-z_.-]+", crate::SPEC_ID_ERE)
 }
 
 fn trace_comment_pattern() -> String {
