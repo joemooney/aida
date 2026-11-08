@@ -8,7 +8,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-07T15:34:33.363448208Z
-modified_at: 2026-11-08T16:44:28.536581245Z
+modified_at: 2026-11-08T16:44:59.807582045Z
 req_type: Story
 comments:
 - id: 01a1b6a6-52e1-70a0-a9c1-d32888979ca5
@@ -883,6 +883,33 @@ comments:
   content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: Refs slice, no code change since a16c73f (main merges only): help golden still lacks --lane-host; AC1/AC3 partial (proxy client undelivered, AF_UNIX denied in Claude seats); AC2/AC5 unverified (no deployment or contained-seat evidence); AC4 implemented, CI pending at this head.. No triage reason was given.'
   created_at: 2026-11-08T16:44:28.536573394Z
   modified_at: 2026-11-08T16:44:28.536573394Z
+  session_id: 01a1b9af-8230-75d2-82f8-667491cc010a
+  harness_version: 2.1.319 (Claude Code)
+- id: 01a1bc0c-3969-7a52-a190-ffe5f09e0b61
+  author: joe
+  content: |-
+    REVIEW FINDINGS TO ADDRESS (PR #3662):
+    Verdict: CHANGES REQUESTED
+    Reviewed commit: 28b3409a0cdb
+    Recorded: 2026-11-08T16:07:51.454087358+00:00
+    Findings:
+    1. AC status at 28b3409a0cdb: AC1 partial (primary_index_link links the index; proxy client not delivered, AF_UNIX denied in Claude seats). AC2 unverified (native bwrap test only; README says the AIDA-contained posture is unsupported). AC3 partial (AGENTS.md:477 has the line, but it names bare codegraph, which is not routed). AC4 implemented (assess_proxy, doctor --lane-host, codegraph::tests) but no green CI at this head. AC5 unverified (no lane log; no lane-proxy.json in the primary .codegraph).
+    2. MAJOR (CI, unchanged, seat-fixable): aida-cli-lib/src/doctor_cmd.rs:16097 adds --lane-host but aida-cli-lib/src/tests/golden/cli_help_snapshot.txt still has 0 matches for it, so help_surface_matches_golden_snapshot is expected to fail as it did in lib-1 at a16c73f. Fix: AIDA_UPDATE_SNAPSHOTS=1 cargo test --profile agent -p aida-cli-lib help_surface_matches_golden_snapshot, then review and commit the diff.
+    3. MAJOR (AC1/AC3, unchanged, host action): nothing delivers the proxy client to lanes. AGENTS.md:477 and the shared lane prompt name bare codegraph, while scripts/codegraph/README.md says bare codegraph is not routed, so a lane following its prompt still fails after deployment. Put the fixed host client command in the template master, provide a host-resolved PATH entry, or have the advisor defer this explicitly.
+    4. MAJOR (AC1, unchanged, reproduced this round): the AF_UNIX transport does not work in a Claude sandboxed seat: python3 -c 'import socket; socket.socket(socket.AF_UNIX)' raises EPERM here, and tests in tests/test_codegraph_proxy.py error instead of skipping (e.g. line 248). Decide how those seats are served or scope them out explicitly, and make the tests skip when socket creation is denied.
+    5. MAJOR (AC2/AC5, advisor decision, unchanged): the 2026-11-08 ruling asks for a completing slice with contained-seat evidence. This PR is Refs-only, README says the AIDA-contained posture is unsupported, the proxy is not deployed, and no live seat output exists. The advisor must accept this slice with AC2/AC5 moved to a named follow-up, or require the evidence here.
+    6. MAJOR (process, host/advisor action, unchanged): the PR body is still the 'Published from seat' boilerplate. Add AC1-AC5 status, state that this is a Refs slice, and name who completes AC2/AC5. Commit trailers also use '(Refs STORY-2630)', which aida review prompt does not parse ('no (REQ-ID) trailers found'), so this review attributed the PR from its title.
+    7. MINOR (new, seat-fixable): a persistent refresh failure has no backoff. refresh() updates self.stamp only on success (scripts/codegraph/codegraph:113,137), and the maintain thread retries every second holding the work lock (:273-276). Any failure after the backup (e.g. a files-table error) therefore repeats a 413 MB backup about once a second and starves queries of the lock. Back off after a failure, or remember the failed stamp.
+    8. MINOR (new, seat-fixable): write_descriptor in the accept loop (scripts/codegraph/codegraph:318-321) is not guarded, so a transient OSError such as ENOSPC while publishing the heartbeat stops the whole service and drops in-flight waiters to a restart. Catch it, log it, and let the stale heartbeat report the problem.
+    9. MINOR (test gap, strict tier, new): the foreign-uid refusal at scripts/codegraph/codegraph:282-284 has no test; tests/test_codegraph_proxy.py covers only same-uid peers. Extract the check so a mocked peer credential proves the refusal response.
+    10. MINOR (test flake, unchanged, seat-fixable): tests/test_codegraph_proxy.py:252-256 connects as soon as the socket path exists, but serve() binds before listen (scripts/codegraph/codegraph:308-310), so connect can get ECONNREFUSED. Wait for the descriptor as well, as line 339 does.
+    11. MINOR (unchanged, seat-fixable): serve() never removes snapshot-* generations left by an unclean stop (scripts/codegraph/codegraph:259-261). The primary index is 413 MB, so each SIGKILL or crash leaks about that much under proxy-state. Sweep stale generations at startup, before the first refresh.
+    12. MINOR (unchanged, seat-fixable): README's TimeoutStopSec=20 is shorter than the worst-case in-flight query (15s lock wait, 15s backup, 15s query), since serve() joins all workers on stop. systemd can SIGKILL during a graceful stop, leaving a stale socket and orphaned snapshot. Raise it above 45s or bound the join.
+    13. MINOR (evidence, host action, unchanged): test_installed_codegraph_returns_real_edges_from_host_snapshot skips when codegraph is absent and CI does not install it, so no recorded run covers real upstream. Host must run it and paste the output with the AC5 evidence.
+    14. CI gate: 7 jobs were still queued or running at 28b3409a0cdb when this was recorded; a green run at the final head is required. merge-hold-gate fails as the expected supervised hold, not a code defect.
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
+  created_at: 2026-11-08T16:44:40.169852538Z
+  modified_at: 2026-11-08T16:44:40.169852538Z
   session_id: 01a1b9af-8230-75d2-82f8-667491cc010a
   harness_version: 2.1.319 (Claude Code)
 history:
