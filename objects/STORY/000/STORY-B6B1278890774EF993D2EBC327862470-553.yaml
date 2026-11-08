@@ -8,7 +8,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-07T15:34:33.363448208Z
-modified_at: 2026-11-08T00:32:21.945656489Z
+modified_at: 2026-11-08T03:39:36.745921374Z
 req_type: Story
 comments:
 - id: 01a1b6a6-52e1-70a0-a9c1-d32888979ca5
@@ -249,6 +249,13 @@ comments:
   created_at: 2026-11-08T00:32:21.945656489Z
   modified_at: 2026-11-08T00:32:21.945656489Z
   session_id: 01a1b89092af
+- id: 01a1b93d-7ba9-7001-a32b-9ab2393f54a4
+  author: joe
+  content: 'ADVISOR RULING 2026-11-07 20:46: #3632 landed AC4 (and AC1 routing, AC3 already on main). NEXT = the final slice for AC2+AC5, COMPLETING (STORY-2630). Do not grant the seat write access to the primary index. Pick the smaller of: (a) seats query a host-maintained read-only snapshot of the index (copy or SQLite backup to a seat-readable path after each primary reindex, opened with file:...?mode=ro&immutable=1 so no WAL/shm is created), or (b) a host-side query proxy that lanes call. Acceptance: a contained Codex seat runs ''codegraph callers <known symbol>'' and gets a correct non-empty result (AC5 evidence in the PR body), with the seat grant read-only on the index path (AC2), and doctor --lane-host reports the snapshot age. If codegraph cannot open a read-only DB at all, record that with the exact error and implement (b).'
+  created_at: 2026-11-08T03:39:36.745921374Z
+  modified_at: 2026-11-08T03:39:36.745921374Z
+  session_id: 01a1b8be-8170-7fb2-89ab-ecb4c6eee98c
+  harness_version: 2.1.319 (Claude Code)
 history:
 - id: 01a1b6a6-1e2f-7932-a527-6de38b6d8545
   author: joe
