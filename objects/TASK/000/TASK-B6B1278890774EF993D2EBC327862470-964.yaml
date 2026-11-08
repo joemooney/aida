@@ -12,13 +12,21 @@ priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-11-08T01:27:05.138443285Z
-modified_at: 2026-11-08T01:27:05.138443285Z
+modified_at: 2026-11-08T03:06:04.945441767Z
 req_type: Task
 tags:
 - carried-from:BUG-2487
 - finding-hash:b338c908
 - from-review:BUG-2487
 - kind:carried-forward
+comments:
+- id: 01a1b91e-c911-7903-a005-cf10c032da84
+  author: joe
+  content: 'ADVISOR RULING 2026-11-07 20:08: rejected as moot. The squash landed with the corrected title (2d1589ac325 ''select Codex exec profile via -c default_permissions ...''), and the live denied-write proof is opt-in by design because CI has no codex binary; the fixture/argv regression is the CI guard. TASK-3000 covers the real residual risk.'
+  created_at: 2026-11-08T03:06:04.945441767Z
+  modified_at: 2026-11-08T03:06:04.945441767Z
+  session_id: 01a1b8be-8170-7fb2-89ab-ecb4c6eee98c
+  harness_version: 2.1.319 (Claude Code)
 history:
 - id: 01a1b8dd-4f77-7b90-b5ca-0173714bee35
   author: joe
