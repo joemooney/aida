@@ -3,12 +3,12 @@ spec_id: TASK-b6b1278890774ef993d2ebc327862470-1006
 agreed_id: TASK-3608
 title: Propagate native-seat no-change through queue-resume and drain outcomes
 description: 'Split from PR #3625 round-6 finding 4 for advisor triage. publish_queue_exit currently prints implementer: no-change and returns (), while ImplementerOutcome lacks NoChange. Trace run_vendor_headless_to_exit, run_queue_resume_to_exit and phase_driver_trait lease discovery through final drain classification. Preserve failed-exit and punt/hold precedence. Add an explicit NoChange outcome to phase 1, resume and batch reporting; a successful no-commit seat must exit 0 without bundle, no-PR failure, NeedsAttention shelving or false shipped credit. Include fresh and resumed drain tests that reach final classification and keep an existing PR/rework path intact. This work has not been implemented by the BUG-2488 round-6 security fix. Advisor: approve and route this split as permitted by review finding 4.'
-status: Draft
+status: Approved
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-08T18:01:54.649358829Z
-modified_at: 2026-11-08T20:02:15.007572783Z
+modified_at: 2026-11-08T20:02:17.898421478Z
 req_type: Task
 relationships:
 - rel_type: Child
@@ -28,6 +28,15 @@ history:
   timestamp: 2026-11-08T18:02:02.313582724Z
   session_id: 01a1bc4dcf8e
   changes: []
+- id: 01a1bcc1-28aa-7d53-9b59-f155a39f6e5d
+  author: joe
+  timestamp: 2026-11-08T20:02:17.898414839Z
+  session_id: 01a1bc93-77a0-7740-8b03-df4e3e8d1df5
+  harness_version: 2.1.319 (Claude Code)
+  changes:
+  - field_name: status
+    old_value: Draft
+    new_value: Approved
 filed_at:
   aida_version: 0.16.0
   aida_build_sha: e1c46e7f769
