@@ -8,7 +8,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-04T17:54:51.353376Z
-modified_at: 2026-11-08T05:55:43.517281851Z
+modified_at: 2026-11-08T06:00:33.118208105Z
 req_type: Task
 tags:
 - area:containment
@@ -517,6 +517,20 @@ comments:
   modified_at: 2026-11-08T03:49:53.235790621Z
   session_id: 01a1b8be-8170-7fb2-89ab-ecb4c6eee98c
   harness_version: 2.1.319 (Claude Code)
+- id: 01a1b9be-845e-7162-ad6b-566ca063e590
+  author: dirtlab
+  content: |
+    Round 8 review dispositions (code-only; validation in progress):
+    1. Replaced unverified --settings inline JSON with the exact private runtime settings.json pathname. Existing runtime initialization writes the tool-deny document; candidate and common-wrapper argv tests now assert the pathname. Updated conformance documentation and descriptor comment. AGY tool enforcement still needs advisor evidence; no model ran here.
+    2. Added task_3048 diagnostic-launch refusal tests for workspace/repository symlink escapes and nested non-sibling resolution, wrong report boundary, non-agy and unknown vendor, relative/wrong-shape credential paths, missing runner, and an invalid parent grant producing ChildGrantRefused before credential setup or spawn. Added an explicit vendor=agy guard before runtime lookup/grant issuance.
+    3. Added help descriptions for fixture-root, credential and runtime-policy vendor. Help golden regeneration is queued through the lane runner.
+    4. Python AIDA-boundary receipt matching now uses the same ASCII-safe shell quoting as Rust, including Unicode paths and embedded quotes, with Python and Rust regressions.
+    Validation: initial Python run executed 60 tests with only the binary-dependent fixture failing at init because inherited umask produced mode 0664 authority metadata. Setting a private umask in that test fixed it (one-test rerun passed); combined suite rerun is active. ExecContext ratchet reports zero additions; source formatting and diff checks pass. Required Rust task_3048 and LIGHT make check-ci-fast are active via lane jobs; pending is not passing evidence.
+    Inventory unchanged: measured inference hosts=[daily-cloudcode-pa.googleapis.com]; measured refresh hosts=[]; candidate refresh hosts=[oauth2.googleapis.com] (static installed-binary endpoint only). Advisor must attach live refresh observations and AIDA-boundary report.json. auth_inventory_complete=false and production Adapter::require_conformance refusal remain. TASK-3048 stays incomplete; host publication must use (Refs TASK-3048), with no completion or production unlock. Edits remain uncommitted in this native seat.
+  created_at: 2026-11-08T06:00:33.118208105Z
+  modified_at: 2026-11-08T06:00:33.118208105Z
+  session_id: 01a1b9ba08ed
+  harness_version: codex-cli 0.167.0
 history:
 - id: 01a1a7b3-3699-7713-8ae7-69568c287956
   author: joe
