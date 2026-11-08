@@ -133,6 +133,17 @@ InProgress work, without inventing a live lease. Pickup, worktree GC and doctor
 worktree/branch cleanup also honor retained ownership. Only checked release
 restores ordinary abandonment/cleanup rules; timestamp age is insufficient.
 
+`claim.rs::persist_unclaim_status` must consult the same retained-ownership
+evidence at its locked status-write boundary (R20). Releasing a shell claim
+removes only that claim; it does not cancel a wait or release its seat. A dead
+lane lease and confirmed absence of an open PR are insufficient to return a
+parked spec to Approved. Recheck the current canonical binding and host wait
+under the common ownership/store lock order before calling `unclaim_status`;
+an active wait or unreadable/conflicting ownership evidence retains InProgress
+and the wait, with recovery uncertainty reported. This applies even if park
+acceptance races the earlier lease/forge lookup. Only checked cancellation or
+completion releasing retained ownership restores ordinary unclaim behavior.
+
 ## Park and exit handshake
 
 ### Seat-to-host transport (new surfaces, R4)
@@ -548,6 +559,19 @@ a stale pre-collected heal finding, acceptance racing heal, unreadable runtime
 evidence and explicit cancellation; only checked ownership release allows the
 ordinary abandonment path. These are required future implementation tests,
 not tests executed by this sketch-only change.
+
+R20 regressions must run unclaim from a shell holding a claim on a parked spec
+with dirty edits, a dead/reaped lane lease and no open PR: the shell claim is
+released, status stays InProgress, and the wait, binding and retained seat remain
+intact. Repeat with park acceptance racing the pre-write lookup, unreadable or
+conflicting ownership evidence, and checked cancellation; only the last case
+permits the ordinary return to Approved after ownership is released.
+
+Publication metadata gate (R1): host/advisor must retitle PR #3666 exactly
+`[AI:codex] docs(plans): sketch park-on-ask resume-on-answer (Refs STORY-2661)`.
+Use non-completing Refs metadata for this documentation revision as well.
+A seat edit or publication declaration does not repair the existing PR title;
+retain the publication veto until title repair and advisor sketch signoff.
 
 Review decision requested: approve the durable host-owned park/outbox protocol,
 exclusive retained seat with a released running slot, and the initial admission
