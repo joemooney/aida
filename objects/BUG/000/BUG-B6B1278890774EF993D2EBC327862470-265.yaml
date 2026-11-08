@@ -3,12 +3,12 @@ spec_id: BUG-b6b1278890774ef993d2ebc327862470-265
 agreed_id: BUG-2500
 title: Reviewers record CHANGES REQUESTED for CI-wait or host-only items, burning implementer rounds and tripping the repeat-findings breaker
 description: '2026-11-08: PR-3671, PR-3651 and PR-3657 were parked by ''Repeated unchanged review findings'' where the findings were CI not yet run or host-only evidence; no code could close them. Expected: a distinct wait/host-action verdict that does not queue implementer rework or count as a repeat.'
-status: Draft
+status: Approved
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-08T19:02:09.839960883Z
-modified_at: 2026-11-08T20:02:02.068402372Z
+modified_at: 2026-11-08T20:02:05.787162408Z
 req_type: Bug
 comments:
 - id: 01a1bcc0-ead4-7a62-9dca-00d49f15937e
@@ -18,6 +18,16 @@ comments:
   modified_at: 2026-11-08T20:02:02.068402372Z
   session_id: 01a1bc93-77a0-7740-8b03-df4e3e8d1df5
   harness_version: 2.1.319 (Claude Code)
+history:
+- id: 01a1bcc0-f95b-7082-8ca7-a86211b6ddd8
+  author: joe
+  timestamp: 2026-11-08T20:02:05.787155390Z
+  session_id: 01a1bc93-77a0-7740-8b03-df4e3e8d1df5
+  harness_version: 2.1.319 (Claude Code)
+  changes:
+  - field_name: status
+    old_value: Draft
+    new_value: Approved
 filed_at:
   code_sha: eeec474c545cbc8a354d386c8cb6d81460da7b9f
   branch: main
