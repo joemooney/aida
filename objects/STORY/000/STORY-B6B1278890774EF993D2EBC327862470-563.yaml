@@ -25,7 +25,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-07T19:45:35.836129088Z
-modified_at: 2026-11-08T00:46:04.603346405Z
+modified_at: 2026-11-08T00:48:50.009544251Z
 req_type: Story
 relationships:
 - rel_type:
@@ -203,6 +203,12 @@ comments:
   content: 'Round 3 continuation: prior commit 223b62938d4 already fixes findings 1, 2, 3 and 5 and adds the real-target sandbox test for finding 4. Acceptance as tests: rerun receipt lifecycle/one-repair/timeout/native tests, run both failing ratchets, and exercise the real make target through the sandbox integration test. Changes: mark stored brief identities canonical, move protected selector projection into launch ownership, and ensure intentional negative lane fixture output cannot be mistaken for a top-level gate failure. Existing sandbox and publication authority remain unchanged. Validation uses host lane jobs; no seat cargo or unsandboxed gate execution.'
   created_at: 2026-11-08T00:46:04.603346405Z
   modified_at: 2026-11-08T00:46:04.603346405Z
+  session_id: 01a1b89daf7a
+- id: 01a1b8a1-2159-7360-82b6-3bf4d0f29687
+  author: joe
+  content: 'CI diagnosis correction: fetched job 128572821379 failed at Check Rust test portability ratchet because main had moved MCP allowlist entries; current merged head 5667cc54fcf has no portability-allowlist diff from origin/main. The reported lane_fixture_fails panic is deliberate negative-fixture output, not a failed parent test; no fixture change is needed. Findings 1-5 remain implemented by 223b62938d4. This round marks the two canonical brief identities, moves LaneJobs::apply_selector into launch/profile.rs rather than growing the launch ratchet, broadens settled-head tests to retained fail results, and updates AGENTS/OVERVIEW. Finding 4 already has positive recorded evidence in the previous handoff: job j20261107T233517287-2-0 passed 24 tests including a fresh production run_fast_gate job fast-c1116727-fbfb-4363-addc-17d6d2bc3f85 on clean main 77bc9e4e4d38b978afaaf602dd8300419c320ea7, all 43 fast gates in 232s, rc=0. A newer-main real-target rerun and final regression checks are queued through the host runner.'
+  created_at: 2026-11-08T00:48:50.009544251Z
+  modified_at: 2026-11-08T00:48:50.009544251Z
   session_id: 01a1b89daf7a
 history:
 - id: 01a1b78d-2628-7313-92de-8804ac5f8f71
