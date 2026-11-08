@@ -8,7 +8,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-07T22:12:32.196595160Z
-modified_at: 2026-11-08T18:21:26.582841518Z
+modified_at: 2026-11-08T18:21:32.776004590Z
 req_type: Task
 relationships:
 - rel_type: Child
@@ -163,6 +163,22 @@ comments:
   content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: Split is a faithful move and the help co-change blocker is fixed, but two repointed source-guard tests name the wrong split module and will fail deterministically; targeted-test and check-ci evidence absent (CI has not started at this head).. No triage reason was given.'
   created_at: 2026-11-08T18:21:26.582840117Z
   modified_at: 2026-11-08T18:21:26.582840117Z
+  session_id: 01a1b9af-8230-75d2-82f8-667491cc010a
+  harness_version: 2.1.319 (Claude Code)
+- id: 01a1bc64-ea6b-7bd2-aa1b-13c22027f9f8
+  author: joe
+  content: |-
+    REVIEW FINDINGS TO ADDRESS (PR #3685):
+    Verdict: CHANGES REQUESTED
+    Reviewed commit: 58d0c52fe26d
+    Recorded: 2026-11-08T18:13:46.167267584+00:00
+    Findings:
+    1. BLOCKER (test, acceptance: targeted queue tests pass): aida-cli-lib/src/tests/bug_2149_2150_standalone_reviewer_tests.rs:1096 rework_work_dispatch_uses_intent_preserving_adapter now reads queue_cmd/work.rs and does .split("pub(crate) fn handle_queue_rework(").nth(1).unwrap(), but that function is defined only at queue_cmd/rework.rs:507, so nth(1) is None and the test panics. Fix: read queue_cmd/rework.rs. The body-end marker '/// Keep route inheritance' stayed at work.rs:189, so also choose an end boundary that exists in rework.rs; otherwise the negative assertion on QueueWorkRoleInput::direct( silently runs to end of file.
+    2. BLOCKER (test, acceptance: targeted queue tests pass): aida-cli-lib/src/tests/story_1418_completion_seam_tests.rs:669 the_scan_sees_the_routed_paths asserts files["aida-cli-lib/queue_cmd/done.rs"].contains(transition_to_completed), but the only call in the split modules is queue_cmd/advance.rs:490 (advance_dispatch_close; old queue_cmd.rs:553, outside the Done arm), so the assertion fails. Fix: key the assertion on aida-cli-lib/queue_cmd/advance.rs.
+    3. MINOR (comment accuracy, fix in the same rework): aida-cli-lib/src/tests/queue_rework_tests.rs:535 was relocated to say the BUG-1470 F1 gate lives in queue_cmd/work.rs; it is in queue_cmd/rework.rs (rework.rs:624).
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
+  created_at: 2026-11-08T18:21:32.651224029Z
+  modified_at: 2026-11-08T18:21:32.651224029Z
   session_id: 01a1b9af-8230-75d2-82f8-667491cc010a
   harness_version: 2.1.319 (Claude Code)
 history:
