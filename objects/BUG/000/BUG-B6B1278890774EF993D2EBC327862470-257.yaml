@@ -18,7 +18,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-08T02:46:34.549817Z
-modified_at: 2026-11-08T20:21:59.348112663Z
+modified_at: 2026-11-08T20:35:22.113552672Z
 req_type: Bug
 tags:
 - area:ci
@@ -392,6 +392,23 @@ comments:
   modified_at: 2026-11-08T20:16:56.416441712Z
   session_id: 01a1bc93-77a0-7740-8b03-df4e3e8d1df5
   harness_version: 2.1.319 (Claude Code)
+- id: 01a1bcdf-6f81-7b33-aa3f-6e154eeb04b4
+  author: joe
+  content: |
+    Round 11 native implementer handoff:
+
+    Finding 3 fixed in aida-cli-lib/src/ci_gate.rs: hold_gate_state requires every case-insensitive merge-hold-gate row to pass. A successful legacy check cannot hide a pending commit status, nor can a successful status hide a failing legacy check. Regression coverage exercises both row orders, nonpassing buckets, absent rows, all-pass duplicates, and unrelated pending checks. AGENTS.md and OVERVIEW.md document this behavior. All three files remain uncommitted for the host; Git metadata was not mutated.
+
+    Validation: bash tests/test_merge_hold_gate.sh passed 8 label states x 2 shipped gates, 36 train-mode cases and 1 jq projection test. rustfmt --edition 2021 --check aida-cli-lib/src/ci_gate.rs, bash -n tests/test_merge_hold_gate.sh and git diff --check passed. Launcher job j20261108T201956849-3324578-0 ran cargo test --profile agent -p aida-cli-lib --lib -- ci_gate::tests::, but timed out after 900 seconds with exit 124 during compilation, before an executed-test result. Rust untested=true. Full log: /home/joe/ai/aida/.aida/lane-jobs/01a1bcd062a8/j20261108T201956849-3324578-0.out. Host must rerun targeted Rust tests before treating the patch as validated.
+
+    Read-only GitHub observations at head 66702289454904c656ffe39eacaaea8e55a1e73b: publisher run https://github.com/joemooney/aida/actions/runs/42517183256 succeeded at 20:04:03Z and the status API reports merge-hold-gate=pending, description 'Merge held: awaiting recorded clearance', targeting that run. PR #3651 title ends (Refs BUG-2492). Last observed CI run https://github.com/joemooney/aida/actions/runs/42517183273 has cli-0 success, rest in progress and five queued lanes; it is not green. Finding 1 remains open, and any subsequent host-published head needs its own green CI.
+
+    Finding 2 remains operator-owned: AC1/ac798dd7, AC2/accb2afb and AC4/ac4d9581 need the pre-merge canary procedure in docs/internal/testing/bug-2492-status-cutover.md. Missing evidence: raw gh/web merge refusal with unrelated gates settled, unchanged-SHA label-only pending-to-success, cleared-canary acceptance and notification observations. This seat did not attempt merges, change labels/protection, record a review, or complete the queue/spec.
+
+    Native publication declaration recorded: [AI:codex] fix(ci): wait for every merge-hold gate row (Refs BUG-2492). Explicit blocked-dependency punt names findings 1 and 2; BUG-2492 is Needs Attention and the punt remains a publication veto pending host/operator resolution. Keep the spec open; no live acceptance claim is made.
+  created_at: 2026-11-08T20:35:22.113552672Z
+  modified_at: 2026-11-08T20:35:22.113552672Z
+  session_id: 01a1bcd062a8
 history:
 - id: 01a1b90d-4bec-7bd0-9af1-86f501692f64
   author: joe
