@@ -8,7 +8,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-07T23:39:41.575597Z
-modified_at: 2026-11-08T21:10:31.167412120Z
+modified_at: 2026-11-08T21:20:18.790496361Z
 req_type: Task
 relationships:
 - rel_type: Child
@@ -384,6 +384,13 @@ comments:
   modified_at: 2026-11-08T21:02:36.343416885Z
   session_id: 01a1bc93-77a0-7740-8b03-df4e3e8d1df5
   harness_version: 2.1.319 (Claude Code)
+- id: 01a1bd08-9566-7c43-a5b0-85d641dff49c
+  author: dirtlab
+  content: 'Tooling slice landed in PR #3644; prior 34-command import batch is open as #3695. This subsequent Refs slice removes 15 remaining root crate globs from command adapters outside current open-PR footprints: commit, criteria, exposition, harvest, help_catalog, mandate, metrics_cmd, monitor_contract, notify, reconstitute, regen, shift, user_alias, watch and wiki. Required bindings now use explicit imports (including DatabaseBackend traits); unused globs are removed. Baseline shrinks from 179 to 164. All non-import Rust tokens match HEAD. Remaining import batches and lib_part1..6 dissolution remain outstanding; TASK-3428 stays In Progress. Validation: Launcher cargo test --profile agent -p aida-cli-lib --lib -- command_registry passed: 32 executed tests, zero failures (j20261108T210750606-2-0). Launcher cargo check --profile agent -p aida-cli --no-default-features passed (j20261108T211040978-2-0). Initial test compilation found two missing module imports; corrected before the passing run. 15 crate-split Python fixtures pass. Glob ratchet against HEAD passes at 164; ExecContext 1239 sites, store-writer 3387 sinks / 293 mappings, portability guard, and all 84 CI gate classifications pass. All 15 adapters preserve every non-import Rust token; touched-file rustfmt and git diff --check pass. Full make check-ci-fast not run because gates invoke Cargo outside this seat’s required launcher; host validation remains. Codegraph unavailable (doctor confirmed), used rg/source inspection. Edits uncommitted for host publication.'
+  created_at: 2026-11-08T21:20:18.790496361Z
+  modified_at: 2026-11-08T21:20:18.790496361Z
+  session_id: 01a1bcf9e577
+  harness_version: codex-cli 0.167.0
 history:
 - id: 01a1b862-2e0b-7a50-a4d0-25097c707b57
   author: joe
@@ -690,8 +697,14 @@ history:
   - field_name: status
     old_value: InProgress
     new_value: NeedsAttention
-test_coverage_notes: 'Final launcher cargo test --profile agent -p aida-cli-lib --lib -- command_registry passed: 32 executed tests, zero failures (job j20261108T192003657-2-0). Launcher cargo check --profile agent -p aida-cli --no-default-features passed (job j20261108T192150425-2976173-0). 15 crate-split tooling and 2 ownership-liveness fixtures passed. Glob ratchet against HEAD passes at 186; ExecContext (1239 sites), store-writer inventory (3385 sinks/293 mappings), portability guard and 83-gate classification audit pass. Touched-file rustfmt and git diff --check pass. Non-import Rust token comparison matches HEAD apart from existing lease-call qualification. Full make check-ci-fast not run because it directly invokes Cargo outside the required launcher; published-head CI remains for host.'
-implementation_summary: 'Tooling slice landed in PR #3644. Next Refs slice prepared: retire root crate globs in 34 smaller command modules, replacing required bindings explicitly and removing unused globs; baseline shrinks from 220 to 186. Existing lease-state call is qualified to preserve ownership-liveness evidence without adding an import site. goal_cmd.rs excluded because open PR #3687 owns it. Remaining explicit-import batches and lib_part1..6 module extraction remain outstanding.'
+- id: 01a1bd08-9148-7e52-99b7-59a2931a7f25
+  author: dirtlab
+  timestamp: 2026-11-08T21:20:17.736642001Z
+  session_id: 01a1bcf9e577
+  harness_version: codex-cli 0.167.0
+  changes: []
+test_coverage_notes: 'Launcher cargo test --profile agent -p aida-cli-lib --lib -- command_registry passed: 32 executed tests, zero failures (j20261108T210750606-2-0). Launcher cargo check --profile agent -p aida-cli --no-default-features passed (j20261108T211040978-2-0). Initial test compilation found two missing module imports; corrected before the passing run. 15 crate-split Python fixtures pass. Glob ratchet against HEAD passes at 164; ExecContext 1239 sites, store-writer 3387 sinks / 293 mappings, portability guard, and all 84 CI gate classifications pass. All 15 adapters preserve every non-import Rust token; touched-file rustfmt and git diff --check pass. Full make check-ci-fast not run because gates invoke Cargo outside this seat’s required launcher; host validation remains. Codegraph unavailable (doctor confirmed), used rg/source inspection. Edits uncommitted for host publication.'
+implementation_summary: 'Tooling slice landed in PR #3644; prior 34-command import batch is open as #3695. This subsequent Refs slice removes 15 remaining root crate globs from command adapters outside current open-PR footprints: commit, criteria, exposition, harvest, help_catalog, mandate, metrics_cmd, monitor_contract, notify, reconstitute, regen, shift, user_alias, watch and wiki. Required bindings now use explicit imports (including DatabaseBackend traits); unused globs are removed. Baseline shrinks from 179 to 164. All non-import Rust tokens match HEAD. Remaining import batches and lib_part1..6 dissolution remain outstanding; TASK-3428 stays In Progress.'
 filed_at:
   code_sha: 2a7fe186bdcd718fa356e5e4d028a3b2ff13769d
   branch: main
