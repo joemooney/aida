@@ -1512,7 +1512,10 @@ pub(crate) fn handle_git_backend_command(
     let cache_rebuild = command
         .args::<crate::cache_cmd::CacheArgs>()
         .is_some_and(|args| matches!(args.inner, CacheCommand::Rebuild { history: false, .. }));
-    let backend_result = if notice_fast_fail || cache_rebuild {
+    // trace:BUG-2466 | ai:codex — show never refreshes or writes its projection.
+    let backend_result = if command.name() == "show" {
+        aida_core::CachedGitBackend::with_inner_stale_snapshot(inner, &cache_path)
+    } else if notice_fast_fail || cache_rebuild {
         // BUG-1569: even a non-contended normal open may refresh a stale cache
         // by scanning every canonical object before dispatch reaches the
         // targeted notice lookup. The advisory path instead consumes the last
@@ -1527,24 +1530,6 @@ pub(crate) fn handle_git_backend_command(
         Err(_) if notice_fast_fail => {
             // Cache momentarily locked — the advisory notice degrades to empty.
             return Ok(());
-        }
-        // BUG-b6b1278890774ef993d2ebc327862470-008: the open's refresh cannot
-        // run inside show's zero read budget — a writer holds the lock it
-        // needs, or a pending migration makes the snapshot unservable (which
-        // used to end `show` silently with no output). `show` reads the spec
-        // from authoritative YAML anyway, so it degrades to the committed
-        // snapshot; its reads then take their own degrade paths.
-        // trace:BUG-b6b1278890774ef993d2ebc327862470-008 | ai:claude
-        Err(e)
-            if _show_fast_fail.is_some()
-                && (aida_core::db::is_cache_lock_error(&e)
-                    || e.chain().any(|c| {
-                        c.is::<aida_core::db::cache_refresh::AdvisoryCacheUnavailable>()
-                    })) =>
-        {
-            let inner = aida_core::GitBackend::new(store_path)?;
-            aida_core::CachedGitBackend::with_inner_cache_snapshot(inner, &cache_path)
-                .map_err(|_| e)?
         }
         Err(e) => return Err(e),
     };

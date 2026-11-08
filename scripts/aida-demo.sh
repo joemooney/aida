@@ -659,7 +659,7 @@ note "Run it to verify it works:"
 show_cmd "demo$" ./hello.sh
 echo
 note_box --title "Why the trace comment matters" \
-  "• 'aida show $HELLO_SPEC' later will list hello.sh under 'Git" \
+  "• 'aida show $HELLO_SPEC --full' later will list hello.sh under 'Git" \
   "  linkage' — substrate sees the code-side reference automatically" \
   "• 'aida search Hello' finds the spec via the trace web — not" \
   "  just title match" \
@@ -710,14 +710,14 @@ step_pause "Press Enter — read the pull output, then we'll verify the auto-bum
 do_clear
 
 note_box --title "Verify: did the auto-bump fire?" \
-  "Run 'aida show $HELLO_SPEC' and look for:" \
+  "Run 'aida show $HELLO_SPEC --full' and look for:" \
   "  • Status: Completed  (auto-bumped from Approved)" \
   "  • Git linkage: hello.sh listed — the trace:$HELLO_SPEC comment" \
   "    was scanned automatically and bound back to the spec" \
   "  • Recent commits: the 'feat: hello world script ($HELLO_SPEC)'" \
   "    commit appears here"
 echo
-show_cmd "demo$" aida show "$HELLO_SPEC"
+show_cmd "demo$" aida show "$HELLO_SPEC" --full
 
 # -----------------------------------------------------------------------------
 # Final state
@@ -730,8 +730,8 @@ echo
 
 note_box --title "Inspect the code-side of the bidirectional link" \
   "The trace-link is queryable both directions: from code (grep below)" \
-  "and from substrate (the 'Git linkage' section of 'aida show'" \
-  "$HELLO_SPEC). That's the bidirectional code↔spec link AIDA" \
+  "and from substrate (the 'Git linkage' section of 'aida show" \
+  "$HELLO_SPEC --full'). That's the bidirectional code↔spec link AIDA" \
   "maintains automatically."
 echo
 show_cmd "demo$" grep -n "trace:" hello.sh
@@ -739,7 +739,7 @@ echo
 step_pause "Press Enter — see the substrate surfaces you can now query"
 
 note_box --title "Substrate surfaces you can now query" \
-  "  aida show $HELLO_SPEC            # spec body + git linkage" \
+  "  aida show $HELLO_SPEC --full            # spec body + git linkage" \
   "  aida history events            # chronological substrate ledger" \
   "  aida list                        # backlog view" \
   "  aida search 'Hello'              # full-text spec search" \
@@ -867,7 +867,7 @@ while true; do
               "  2. aida pull — scanner finds ($GOODBYE_SPEC) trailer," \
               "                 auto-bumps Approved → Done → Completed" \
               "  3. aida queue list — confirm the task is gone from queue" \
-              "  4. aida show $GOODBYE_SPEC — confirm Completed + linkage"
+              "  4. aida show $GOODBYE_SPEC --full — confirm Completed + linkage"
             echo
             show_cmd "demo$" git push origin main --quiet || dim "(push may fail if you're not on a branch with upstream — okay for demo)"
             echo
