@@ -23,7 +23,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-07T19:59:26.079479Z
-modified_at: 2026-11-08T11:55:01.735206135Z
+modified_at: 2026-11-08T12:34:10.410337219Z
 req_type: Story
 comments:
 - id: 01a1b798-f0d4-73b1-93d5-f84581f2d190
@@ -419,6 +419,12 @@ history:
   - field_name: status
     old_value: InProgress
     new_value: NeedsAttention
+- id: 01a1bb26-fbe3-7202-9d68-cbe0d480e2d5
+  author: joe
+  timestamp: 2026-11-08T12:34:16.675091802Z
+  session_id: 01a1bb2482a9
+  harness_version: 2.1.319 (Claude Code)
+  changes: []
 filed_at:
   code_sha: 7a18c0d52a6a4e0822befd4c810cfed16b04b74c
   branch: main
@@ -433,3 +439,11 @@ attention_reason:
   detail: 'Round-6 finding 1 is agreed and remains unresolved: AC1 requires two consecutive lane Cargo jobs using a launcher built from this branch, with final sccache statistics and second-job Rust hits greater than zero on both primary and dell1, or an advisor amendment. This native seat cannot obtain both-host evidence. Local findings 2-4 are addressed: wrapper-off is limited to recorded or sandboxed seats, the foreground lane server receives TMPDIR=/tmp with a dangling-TMPDIR regression, and documentation describes wrapper-off without a target override. Required validation is running. Preserve the publication veto and existing merge hold.'
   raised_by: implementer
   raised_at: 2026-11-08T11:47:19.716781568Z
+failure_reason:
+  phase: reviewer
+  phase_index: 3
+  kind: verdict:request-changes
+  detail: Round 6 fixes check out and AC0/AC2/AC3/AC4 plus the lane/unsandboxed separation ruling are met in code, but AC1 (second lane job shows sccache hits on primary and dell1) still has no evidence or amendment; one new minor server-lifecycle defect. CI cli-1/contracts/rest were still running at record time; merge-hold-gate fails by design.
+  recovery_hint: address the review findings, move STORY-2641 back to In Progress, and clear the PR hold only after approval
+  shelved_by: reviewer
+  shelved_at: 2026-11-08T12:34:10.410337219Z
