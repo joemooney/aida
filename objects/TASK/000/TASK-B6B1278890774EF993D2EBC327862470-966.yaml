@@ -11,7 +11,7 @@ priority: Low
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-08T03:38:52.682099623Z
-modified_at: 2026-11-08T19:02:28.916700789Z
+modified_at: 2026-11-08T19:14:15.181137074Z
 req_type: Task
 tags:
 - area:ci-relay
@@ -57,6 +57,13 @@ comments:
   modified_at: 2026-11-08T19:00:16.312976734Z
   session_id: 01a1b9af-8230-75d2-82f8-667491cc010a
   harness_version: 2.1.319 (Claude Code)
+- id: 01a1bc95-2c0d-79a2-a452-2bb36b4a48cc
+  author: dirtlab
+  content: 'Validated existing implementation at cb8f6e76f3; no additional source edits needed. Lane jobs: cargo build --profile agent -p aida-cli passed; cargo test --profile agent -p aida-cli-lib --lib ci_relay_skipped_names_exact_recovery_in_every_awaiting_view passed (1 executed); cargo test --profile agent -p aida-cli-lib --lib task3452_history_window_reports_skipped_attempts passed (1 executed, wraps 33-attempt plus cold/warm Python regressions, 92.28s). Initial history run lacked the CLI binary; rerun after building passed. Codegraph unavailable (doctor confirms missing PATH tool); used rg. Native seat leaves queue completion/publication to host.'
+  created_at: 2026-11-08T19:14:15.181137074Z
+  modified_at: 2026-11-08T19:14:15.181137074Z
+  session_id: 01a1bc89d9d2
+  harness_version: codex-cli 0.167.0
 history:
 - id: 01a1bc6c-f8c6-7083-91af-c24f9a88e846
   author: aida-session-start
