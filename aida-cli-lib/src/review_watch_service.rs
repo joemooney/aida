@@ -937,7 +937,9 @@ mod tests {
     // trace:STORY-2571 | ai:codex
     #[test]
     fn story2571_crash_mid_superseding_or_unpinned_reservation_restarts() {
-        for superseding in [true, false] {
+        for (superseding, retained_child) in
+            [(true, false), (false, false), (true, true), (false, true)]
+        {
             let (temp, _guard, parent) = fixture();
             let root = temp.path();
             rebind(root, "default", &parent).unwrap();
@@ -980,7 +982,9 @@ mod tests {
                 dir.write(STATE, &serde_json::to_vec_pretty(&reviews).unwrap())
                     .unwrap();
             }
-            let mut controller = None;
+            // Cover both recovery from the persisted dead identity and the
+            // live supervisor observing its retained Child's exit status.
+            let mut controller = if retained_child { Some(process) } else { None };
             tick(root, "default", true, &mut controller).unwrap();
             let mut retired = read(&dir).unwrap().unwrap();
             assert!(retired.worker.is_none());
