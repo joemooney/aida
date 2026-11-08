@@ -1,0 +1,35 @@
+id: 01a1b924-8f6c-7432-972d-b3c815fa19d7
+spec_id: STORY-b6b1278890774ef993d2ebc327862470-588
+agreed_id: STORY-2665
+title: 'Review PR-3625: [AI:codex] fix: Native Codex seat: punt signal cannot be written (read-only FS), so the host publishes anyway and fails with ''Refusing to create empty bundle''; no-commit seats hit the '
+description: |
+  Auto-filed by `aida session end` (backup trigger) (session `01a1b911`) for branch `bug-2488-d1330`.
+
+  - PR: <https://github.com/joemooney/aida/pull/3625>
+  - Branch: `bug-2488-d1330` → `main`
+
+  ## Covers
+
+  - BUG-2488
+
+  ## Acceptance
+
+  - Generate a structured review prompt with `aida review prompt --pr 3625` and verify each spec's acceptance criteria.
+  - Approve and merge, or request changes by spec id.
+  - Mark this story `completed` once the PR is merged.
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-11-08T03:12:23.404370109Z
+modified_at: 2026-11-08T03:12:23.404370109Z
+req_type: Story
+filed_at:
+  code_sha: 049e5206de120518bb94fae84bf359f789e76236
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: dc41ee8da2f
+  vendor: claude
+  session: 01a1b848-940b-7bd2-8acd-52e428b182b8
+  harness_version: 2.1.319 (Claude Code)
