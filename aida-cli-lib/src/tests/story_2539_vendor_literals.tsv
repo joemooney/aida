@@ -1,6 +1,7 @@
 # STORY-2539 vendor debt outside vendors/. Counts may only go down.
 # Baseline: 4803b66ade9; 786 item/token keys, 1159 occurrences.
 # Headless migration: 780 keys, 1148 occurrences; no added or raised keys.
+# Hook backend migration removes 8 more keys/occurrences; no additions.
 # Columns: workspace-relative path|enclosing item|token kind TAB count.
 # Typed tokens conservatively include enum/variant declarations and references.
 aida-cli-lib/src/advisor.rs|impl(AdvisorRegistration:)::is_codex|literal:codex	1
@@ -328,8 +329,6 @@ aida-cli-lib/src/init_cmd.rs|detected_agent_selection|literal:codex	1
 aida-cli-lib/src/init_cmd.rs|impl(AgentSelection:)::names|literal:antigravity	1
 aida-cli-lib/src/init_cmd.rs|impl(AgentSelection:)::names|literal:claude	1
 aida-cli-lib/src/init_cmd.rs|impl(AgentSelection:)::names|literal:codex	1
-aida-cli-lib/src/init_cmd.rs|maybe_repair_codex_hooks_on_reinit|literal:antigravity	1
-aida-cli-lib/src/init_cmd.rs|maybe_repair_codex_hooks_on_reinit|literal:codex	1
 aida-cli-lib/src/init_cmd.rs|maybe_scaffold_codex_prompts_on_init|literal:codex	1
 aida-cli-lib/src/init_cmd.rs|parse_agent_selection|literal:agy	1
 aida-cli-lib/src/init_cmd.rs|parse_agent_selection|literal:antigravity	1
@@ -758,14 +757,6 @@ aida-core/src/mailbox_identity.rs|impl(SessionBindingFacts:)::verify|literal:cla
 aida-core/src/mailbox_identity.rs|normalize_agent_type|literal:antigravity	2
 aida-core/src/mailbox_identity.rs|normalize_agent_type|literal:claude	2
 aida-core/src/mailbox_identity.rs|normalize_agent_type|literal:codex	2
-aida-core/src/scaffolding/codex_hooks.rs|AGY_HOOKS_DIR_REL|typed:Agy	1
-aida-core/src/scaffolding/codex_hooks.rs|AGY_HOOKS_DIR_REL|typed:LaunchVendor	1
-aida-core/src/scaffolding/codex_hooks.rs|AGY_HOOKS_JSON_REL|typed:Agy	1
-aida-core/src/scaffolding/codex_hooks.rs|AGY_HOOKS_JSON_REL|typed:LaunchVendor	1
-aida-core/src/scaffolding/codex_hooks.rs|HOOKS_DIR_REL|typed:Codex	1
-aida-core/src/scaffolding/codex_hooks.rs|HOOKS_DIR_REL|typed:LaunchVendor	1
-aida-core/src/scaffolding/codex_hooks.rs|HOOKS_JSON_REL|typed:Codex	1
-aida-core/src/scaffolding/codex_hooks.rs|HOOKS_JSON_REL|typed:LaunchVendor	1
 aida-core/src/scaffolding/inventory.rs|PackKind|typed:Claude	1
 aida-core/src/scaffolding/inventory.rs|skill_enabled|typed:Claude	1
 aida-core/src/scaffolding/mod.rs|impl(Scaffolder:)::preview|typed:Claude	1

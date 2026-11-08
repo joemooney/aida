@@ -1,68 +1,20 @@
-//! Codex hook wiring — `.codex/hooks.json` plus the handler scripts.
-//!
-//! AIDA wires seven Claude Code hook events. Codex supports all seven (its
-//! `hooks` feature is stable and on by default), uses the same
-//! `matcher`/`hooks`/`hookSpecificOutput` schema, and — verified empirically
-//! against codex-cli 0.144.6 — normalizes tool names to Claude's vocabulary,
-//! so a `"Bash"` matcher matches a Codex shell call. The wiring therefore
-//! ports almost mechanically.
-//!
-//! ONE SET OF SCRIPTS, TWO WIRINGS. The handlers are NOT forked per vendor.
-//! Forking would double every future hook fix and guarantee drift; instead the
-//! scripts resolve the project root through a vendor-neutral chain and are
-//! copied from the same embedded masters into each vendor's tree. The only
-//! per-vendor difference is the wiring file, and `codex_hooks_match_settings`
-//! pins it against `settings.json` so the two cannot silently diverge.
-//!
-//! What differs from the Claude wiring, and why:
-//!   - `$CLAUDE_PROJECT_DIR` has no Codex equivalent, so the command uses
-//!     `$(git rev-parse --show-toplevel)`, which is what the porting doc
-//!     prescribes and which an empirical probe confirmed works.
-//!   - handler paths point at `.codex/hooks/` so a codex-only machine needs no
-//!     `.claude/` directory at all.
-//!
-//! trace:TASK-1181 | ai:claude
-
+//! HookBackend installation adapters for standalone and named-entry wiring.
+//! Layouts/events come from VendorProfile; shared settings keep their full
+//! scaffolder. Shared embedded handlers and compatibility entry points remain
+//! here, with BUG-718/BUG-1645 per-file symlink skip-and-warn semantics.
+// trace:STORY-2539 | ai:codex
+use crate::vendors::hooks::{hook_template, layout_handler_names, AGY_LAYOUT, CODEX_LAYOUT};
+pub use crate::vendors::hooks::{
+    AGY_EXPIRY_NOTICE_KEY, AGY_HOOKS_DIR_REL, AGY_HOOKS_JSON_REL, HOOKS_DIR_REL, HOOKS_JSON_REL,
+};
+use crate::vendors::{HookBackend, HookLayout};
 use std::path::Path;
 
-/// Where the wiring lives, relative to the project root.
-// trace:STORY-2539 | ai:codex
-pub const HOOKS_JSON_REL: &str = crate::vendors::profile(crate::vendors::LaunchVendor::Codex)
-    .hooks
-    .wiring;
-/// Where the handler scripts live, relative to the project root.
-pub const HOOKS_DIR_REL: &str = crate::vendors::profile(crate::vendors::LaunchVendor::Codex)
-    .hooks
-    .handlers;
-
-/// The handlers referenced by the Codex wiring.
-///
-/// Deliberately a subset of `templates/hooks/`: the git hooks
-/// (`aida-commit-msg`, `aida-pre-commit.sh`, `aida-post-commit.sh`) are
-/// git-level and vendor-independent — they are installed into `.git/hooks`
-/// and must NOT be duplicated here.
 pub fn handler_names() -> Vec<String> {
-    let text = crate::templates::EMBEDDED_TEMPLATES
-        .get("codex-hooks.json")
-        .copied()
-        .unwrap_or("{}");
-    let mut names: Vec<String> = Vec::new();
-    for line in text.lines() {
-        if let Some(i) = line.find("/.codex/hooks/") {
-            let rest = &line[i + "/.codex/hooks/".len()..];
-            if let Some(name) = rest
-                .split(|c: char| c == '"' || c == '\\' || c.is_whitespace())
-                .next()
-            {
-                let n = name.trim().to_string();
-                if !n.is_empty() && !names.contains(&n) {
-                    names.push(n);
-                }
-            }
-        }
-    }
-    names.sort();
-    names
+    layout_handler_names(CODEX_LAYOUT)
+}
+pub fn antigravity_handler_names() -> Vec<String> {
+    layout_handler_names(AGY_LAYOUT)
 }
 
 /// The raw (header-less) body of the Codex handler `name`, exactly as the
@@ -87,23 +39,31 @@ pub struct CodexHooksOutcome {
 ///
 /// Idempotent: an existing file is left alone unless `force`, matching every
 /// other AIDA scaffold. A user who edited their wiring keeps it.
-pub fn scaffold_codex_hooks(
+fn install_standalone(
     project_root: &Path,
     force: bool,
+    layout: HookLayout,
 ) -> std::io::Result<CodexHooksOutcome> {
     // trace:STORY-1741 | ai:claude
-    super::refuse_in_adopted_worktree(project_root)
+    crate::scaffolding::refuse_in_adopted_worktree(project_root)
         .map_err(|e| std::io::Error::new(std::io::ErrorKind::PermissionDenied, e.to_string()))?;
     let mut out = CodexHooksOutcome::default();
-    let dir = project_root.join(HOOKS_DIR_REL);
-    std::fs::create_dir_all(&dir)?;
+    let body = hook_template(layout).map_err(std::io::Error::other)?;
+    let dir = project_root.join(layout.handlers);
 
     // Handlers first, so the wiring never points at a script that is not there.
-    for name in handler_names() {
+    for name in layout_handler_names(layout) {
         let Some(raw) = handler_raw_body(&name) else {
             continue;
         };
         let dest = dir.join(&name);
+        if skip_link(
+            project_root,
+            &Path::new(layout.handlers).join(&name),
+            &mut out,
+        ) {
+            continue;
+        }
         if dest.exists() && !force {
             out.skipped_existing.push(name);
             continue;
@@ -112,22 +72,23 @@ pub fn scaffold_codex_hooks(
         // body `aida scaffold apply` writes, so a fresh `aida init` is not
         // reported as drift by `aida scaffold status`.
         // trace:BUG-2395 | ai:claude
-        let rel = Path::new(HOOKS_DIR_REL).join(&name);
-        std::fs::write(&dest, super::wrap_with_aida_header(&rel, &raw))?;
+        let rel = Path::new(layout.handlers).join(&name);
+        std::fs::create_dir_all(&dir)?;
+        std::fs::write(&dest, crate::scaffolding::wrap_with_aida_header(&rel, &raw))?;
         set_executable(&dest);
         out.written.push(name);
     }
 
-    let wiring = project_root.join(HOOKS_JSON_REL);
+    let wiring = project_root.join(layout.wiring);
+    if skip_link(project_root, Path::new(layout.wiring), &mut out) {
+        return Ok(out);
+    }
     if wiring.exists() && !force {
-        out.skipped_existing.push(HOOKS_JSON_REL.to_string());
+        out.skipped_existing.push(layout.wiring.to_string());
     } else {
-        let body = crate::templates::EMBEDDED_TEMPLATES
-            .get("codex-hooks.json")
-            .copied()
-            .unwrap_or("{}");
+        std::fs::create_dir_all(wiring.parent().unwrap())?;
         std::fs::write(&wiring, format!("{}\n", body.trim_end()))?;
-        out.written.push(HOOKS_JSON_REL.to_string());
+        out.written.push(layout.wiring.to_string());
     }
     Ok(out)
 }
@@ -140,21 +101,8 @@ pub fn scaffold_codex_hooks(
 // trace:BUG-2395 | ai:claude
 pub fn codex_hooks_wired(project_root: &Path) -> bool {
     std::fs::read_to_string(project_root.join(HOOKS_JSON_REL))
-        .is_ok_and(|raw| raw.contains("/.codex/hooks/"))
+        .is_ok_and(|raw| raw.contains(&format!("/{}/", CODEX_LAYOUT.handlers)))
 }
-
-/// Where the Antigravity wiring lives, relative to the project root.
-// trace:TASK-1744 | ai:antigravity
-// trace:STORY-2539 | ai:codex
-pub const AGY_HOOKS_JSON_REL: &str = crate::vendors::profile(crate::vendors::LaunchVendor::Agy)
-    .hooks
-    .wiring;
-/// Where the Antigravity handler scripts live, relative to the project root.
-pub const AGY_HOOKS_DIR_REL: &str = crate::vendors::profile(crate::vendors::LaunchVendor::Agy)
-    .hooks
-    .handlers;
-/// The named hook key AIDA manages inside `.agents/hooks.json`.
-pub const AGY_EXPIRY_NOTICE_KEY: &str = "aida-grant-expiry-notice";
 
 /// True when `.agents/hooks.json` is a valid JSON object containing AIDA's
 /// `aida-grant-expiry-notice` entry. A third-party `.agents/hooks.json` that
@@ -170,32 +118,6 @@ pub fn antigravity_hooks_wired(project_root: &Path) -> bool {
         return false;
     };
     map.contains_key(AGY_EXPIRY_NOTICE_KEY)
-}
-
-/// The handlers referenced by the Antigravity wiring.
-// trace:TASK-1744 | ai:antigravity
-pub fn antigravity_handler_names() -> Vec<String> {
-    let text = crate::templates::EMBEDDED_TEMPLATES
-        .get("antigravity-hooks.json")
-        .copied()
-        .unwrap_or("{}");
-    let mut names: Vec<String> = Vec::new();
-    for line in text.lines() {
-        if let Some(i) = line.find("/.agents/hooks/") {
-            let rest = &line[i + "/.agents/hooks/".len()..];
-            if let Some(name) = rest
-                .split(|c: char| c == '"' || c == '\\' || c.is_whitespace())
-                .next()
-            {
-                let n = name.trim().to_string();
-                if !n.is_empty() && !names.contains(&n) {
-                    names.push(n);
-                }
-            }
-        }
-    }
-    names.sort();
-    names
 }
 
 /// Order-preserving JSON value so merging `aida-grant-expiry-notice` into a
@@ -319,15 +241,20 @@ impl<'de> serde::Deserialize<'de> for OrderedJson {
 /// JSON or not a top-level object, it is never overwritten (even with `force = true`),
 /// the handler script is not dropped, and a single warning is recorded on the outcome.
 // trace:TASK-1744 | ai:antigravity
-pub fn scaffold_antigravity_hooks(
+fn install_named_entries(
     project_root: &Path,
     force: bool,
+    layout: HookLayout,
 ) -> std::io::Result<CodexHooksOutcome> {
     // trace:STORY-1741 | ai:claude
-    super::refuse_in_adopted_worktree(project_root)
+    crate::scaffolding::refuse_in_adopted_worktree(project_root)
         .map_err(|e| std::io::Error::new(std::io::ErrorKind::PermissionDenied, e.to_string()))?;
     let mut out = CodexHooksOutcome::default();
-    let wiring = project_root.join(AGY_HOOKS_JSON_REL);
+    let template_body = hook_template(layout).map_err(std::io::Error::other)?;
+    let wiring = project_root.join(layout.wiring);
+    if skip_link(project_root, Path::new(layout.wiring), &mut out) {
+        return Ok(out);
+    }
 
     let existing_entries = if wiring.exists() {
         let raw = std::fs::read_to_string(&wiring)?;
@@ -335,7 +262,7 @@ pub fn scaffold_antigravity_hooks(
             Ok(OrderedJson::Object(entries)) => Some(entries),
             _ => {
                 let msg = format!(
-                    "{AGY_HOOKS_JSON_REL} is not a valid top-level JSON object; leaving it untouched and skipping Antigravity hook installation"
+                    "{} is not a valid top-level JSON object; leaving it untouched and skipping hook installation", layout.wiring
                 );
                 out.warning = Some(msg);
                 return Ok(out);
@@ -345,32 +272,36 @@ pub fn scaffold_antigravity_hooks(
         None
     };
 
-    let dir = project_root.join(AGY_HOOKS_DIR_REL);
-    std::fs::create_dir_all(&dir)?;
+    let dir = project_root.join(layout.handlers);
 
-    for name in antigravity_handler_names() {
+    for name in layout_handler_names(layout) {
         let Some(body) = crate::templates::EMBEDDED_TEMPLATES.get(&format!("hooks/{name}") as &str)
         else {
             continue;
         };
         let dest = dir.join(&name);
+        if skip_link(
+            project_root,
+            &Path::new(layout.handlers).join(&name),
+            &mut out,
+        ) {
+            continue;
+        }
         if dest.exists() && !force {
             out.skipped_existing.push(name);
             continue;
         }
+        std::fs::create_dir_all(&dir)?;
         std::fs::write(&dest, format!("{}\n", body.trim_end()))?;
         set_executable(&dest);
         out.written.push(name);
     }
 
-    let template_body = crate::templates::EMBEDDED_TEMPLATES
-        .get("antigravity-hooks.json")
-        .copied()
-        .unwrap_or("{}");
     match existing_entries {
         None => {
+            std::fs::create_dir_all(wiring.parent().unwrap())?;
             std::fs::write(&wiring, format!("{}\n", template_body.trim_end()))?;
-            out.written.push(AGY_HOOKS_JSON_REL.to_string());
+            out.written.push(layout.wiring.to_string());
         }
         Some(mut entries) => {
             // Every AIDA-managed key in the template: a missing one is added
@@ -393,12 +324,13 @@ pub fn scaffold_antigravity_hooks(
                 }
             }
             if !changed {
-                out.skipped_existing.push(AGY_HOOKS_JSON_REL.to_string());
+                out.skipped_existing.push(layout.wiring.to_string());
             } else {
                 let rendered = serde_json::to_string_pretty(&OrderedJson::Object(entries))
                     .map_err(std::io::Error::other)?;
+                std::fs::create_dir_all(wiring.parent().unwrap())?;
                 std::fs::write(&wiring, format!("{rendered}\n"))?;
-                out.written.push(AGY_HOOKS_JSON_REL.to_string());
+                out.written.push(layout.wiring.to_string());
             }
         }
     }
@@ -406,7 +338,7 @@ pub fn scaffold_antigravity_hooks(
 }
 
 #[cfg(unix)]
-fn set_executable(p: &Path) {
+pub(crate) fn set_executable(p: &Path) {
     use std::os::unix::fs::PermissionsExt;
     if let Ok(md) = std::fs::metadata(p) {
         let mut perms = md.permissions();
@@ -416,7 +348,198 @@ fn set_executable(p: &Path) {
 }
 
 #[cfg(not(unix))]
-fn set_executable(_p: &Path) {}
+pub(crate) fn set_executable(_p: &Path) {}
+
+// trace:STORY-2539 | ai:codex
+pub fn scaffold_hooks(
+    root: &Path,
+    force: bool,
+    layout: HookLayout,
+) -> std::io::Result<CodexHooksOutcome> {
+    match layout.backend {
+        HookBackend::Standalone => self::install_standalone(root, force, layout),
+        HookBackend::NamedEntries => self::install_named_entries(root, force, layout),
+        HookBackend::Settings => Err(std::io::Error::new(
+            std::io::ErrorKind::Unsupported,
+            "shared settings hooks require the full scaffolder",
+        )),
+    }
+}
+pub fn scaffold_codex_hooks(root: &Path, force: bool) -> std::io::Result<CodexHooksOutcome> {
+    self::install_standalone(root, force, CODEX_LAYOUT)
+}
+pub fn scaffold_antigravity_hooks(root: &Path, force: bool) -> std::io::Result<CodexHooksOutcome> {
+    self::install_named_entries(root, force, AGY_LAYOUT)
+}
+
+/// Apply the existing safe-writer policy at every ancestor, including dangling
+/// links. A blocked file is skipped; unrelated files can still be installed.
+// trace:STORY-2539 | ai:codex
+fn skip_link(root: &Path, rel: &Path, out: &mut CodexHooksOutcome) -> bool {
+    for component in rel.ancestors().collect::<Vec<_>>().into_iter().rev() {
+        if let Some((link, target)) =
+            super::symlink_blocking_write(root, component, &root.join(component))
+        {
+            let warning = format!(
+                "{} is a symlink to {}; skipping hook file ({})",
+                link.display(),
+                target.display(),
+                super::SYMLINK_SKIP_REMEDY
+            );
+            eprintln!("warning: {warning}");
+            out.warning = Some(match out.warning.take() {
+                Some(previous) => format!("{previous}\n{warning}"),
+                None => warning,
+            });
+            out.skipped_existing.push(rel.display().to_string());
+            return true;
+        }
+    }
+    false
+}
+#[cfg(test)]
+mod story_2539_tests {
+    use super::*;
+    use crate::vendors::{HookBackend, PROFILES};
+    use std::collections::BTreeSet;
+
+    // trace:STORY-2539 | ai:codex
+    #[test]
+    fn story_2539_hook_layout_matches_embedded_fixtures() {
+        for profile in &PROFILES {
+            let layout = profile.hooks;
+            let raw = crate::templates::EMBEDDED_TEMPLATES[layout.template];
+            let value: serde_json::Value = serde_json::from_str(raw).unwrap();
+            let events: BTreeSet<&str> = match layout.backend {
+                HookBackend::Settings | HookBackend::Standalone => value["hooks"]
+                    .as_object()
+                    .unwrap()
+                    .keys()
+                    .map(String::as_str)
+                    .collect(),
+                HookBackend::NamedEntries => value
+                    .as_object()
+                    .unwrap()
+                    .values()
+                    .flat_map(|entry| entry.as_object().unwrap().keys().map(String::as_str))
+                    .collect(),
+            };
+            assert_eq!(
+                events,
+                layout.events.iter().copied().collect(),
+                "{}",
+                layout.wiring
+            );
+            assert!(raw.contains(&format!("/{}/", layout.handlers)));
+            if layout.backend != HookBackend::Settings {
+                let tmp = tempfile::tempdir().unwrap();
+                scaffold_hooks(tmp.path(), false, layout).unwrap();
+                assert_eq!(
+                    std::fs::read_to_string(tmp.path().join(layout.wiring)).unwrap(),
+                    format!("{}\n", raw.trim_end())
+                );
+            }
+        }
+    }
+    // trace:STORY-2539 | ai:codex
+    #[cfg(unix)]
+    #[test]
+    fn story_2539_hook_writers_skip_live_and_dangling_links_per_file() {
+        use std::os::unix::fs::symlink;
+        for profile in &PROFILES {
+            let layout = profile.hooks;
+            if layout.backend == HookBackend::Settings {
+                continue;
+            }
+            let names = layout_handler_names(layout);
+            for force in [false, true] {
+                for dangling in [false, true] {
+                    for rel in [
+                        std::path::PathBuf::from(layout.wiring),
+                        std::path::PathBuf::from(layout.handlers),
+                        Path::new(layout.handlers).join(&names[0]),
+                        Path::new(layout.wiring).parent().unwrap().to_path_buf(),
+                    ] {
+                        let root = tempfile::tempdir().unwrap();
+                        let outside = tempfile::tempdir().unwrap();
+                        let target = outside.path().join("sentinel");
+                        let is_dir = rel == Path::new(layout.handlers)
+                            || rel == Path::new(layout.wiring).parent().unwrap();
+                        if !dangling {
+                            if is_dir {
+                                std::fs::create_dir(&target).unwrap();
+                            } else {
+                                std::fs::write(&target, "keep").unwrap();
+                            }
+                        }
+                        let dest = root.path().join(&rel);
+                        std::fs::create_dir_all(dest.parent().unwrap()).unwrap();
+                        symlink(&target, &dest).unwrap();
+                        let outcome = scaffold_hooks(root.path(), force, layout).unwrap();
+                        assert!(outcome
+                            .warning
+                            .as_ref()
+                            .unwrap()
+                            .contains(super::super::SYMLINK_SKIP_REMEDY));
+                        assert!(std::fs::symlink_metadata(&dest)
+                            .unwrap()
+                            .file_type()
+                            .is_symlink());
+                        if dangling {
+                            assert!(!target.exists(), "dangling target was created");
+                        } else if is_dir {
+                            assert_eq!(std::fs::read_dir(&target).unwrap().count(), 0);
+                        } else {
+                            assert_eq!(std::fs::read_to_string(&target).unwrap(), "keep");
+                        }
+                        // No handler directory, handler or wiring is created below
+                        // a blocked ancestor; per-file skips allow unrelated writes.
+                        for candidate in std::iter::once(std::path::PathBuf::from(layout.wiring))
+                            .chain(
+                                names
+                                    .iter()
+                                    .map(|name| Path::new(layout.handlers).join(name)),
+                            )
+                        {
+                            if candidate.starts_with(&rel) && candidate != rel {
+                                assert!(!root.path().join(candidate).exists());
+                            }
+                        }
+                        if rel == Path::new(layout.wiring).parent().unwrap() {
+                            assert!(outcome.written.is_empty());
+                            assert_eq!(std::fs::read_dir(root.path()).unwrap().count(), 1);
+                        }
+                        if rel == Path::new(layout.handlers).join(&names[0]) {
+                            assert!(root.path().join(layout.wiring).is_file());
+                            assert!(names.iter().skip(1).all(|name| root
+                                .path()
+                                .join(layout.handlers)
+                                .join(name)
+                                .is_file()));
+                        }
+                        if rel == Path::new(layout.wiring)
+                            && layout.backend == HookBackend::NamedEntries
+                        {
+                            assert!(!root.path().join(layout.handlers).exists());
+                            assert!(outcome.written.is_empty());
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn story_2539_handler_parser_uses_layout_and_event_contract() {
+        let mut layout = CODEX_LAYOUT;
+        layout.handlers = "unreferenced/handlers";
+        assert!(layout_handler_names(layout).is_empty());
+        layout.events = &["unsupported-event"];
+        let root = tempfile::tempdir().unwrap();
+        assert!(scaffold_hooks(root.path(), false, layout).is_err());
+        assert_eq!(std::fs::read_dir(root.path()).unwrap().count(), 0);
+    }
+}
 
 #[cfg(test)]
 mod tests {
@@ -436,7 +559,11 @@ mod tests {
         .expect("settings.json parses");
         let codex: serde_json::Value = serde_json::from_str(
             crate::templates::EMBEDDED_TEMPLATES
-                .get("codex-hooks.json")
+                .get(
+                    crate::vendors::profile(crate::vendors::LaunchVendor::Codex)
+                        .hooks
+                        .template,
+                )
                 .expect("codex-hooks.json embedded"),
         )
         .expect("codex-hooks.json parses");
@@ -544,7 +671,11 @@ mod tests {
     #[test]
     fn the_wiring_carries_no_claude_only_variable() {
         let body = crate::templates::EMBEDDED_TEMPLATES
-            .get("codex-hooks.json")
+            .get(
+                crate::vendors::profile(crate::vendors::LaunchVendor::Codex)
+                    .hooks
+                    .template,
+            )
             .unwrap();
         assert!(
             !body.contains("CLAUDE_PROJECT_DIR"),
