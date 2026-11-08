@@ -20,12 +20,12 @@ description: |
   3. A lane that passes behaves exactly as today, plus the marker.
   4. Tests cover: a gate fail followed by a fixed round, a fail that persists (publishes with fast_gate=fail), a timeout, and the Codex native-publication path.
   5. Advisor docs (rework-brief-craft step 6) say lanes are fast-gated by the host.
-status: InProgress
+status: NeedsAttention
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-07T19:45:35.836129088Z
-modified_at: 2026-11-08T01:10:44.286667885Z
+modified_at: 2026-11-08T01:18:10.785070245Z
 req_type: Story
 relationships:
 - rel_type:
@@ -309,6 +309,15 @@ history:
   timestamp: 2026-11-08T01:10:44.357328508Z
   session_id: 01a1b89daf7a
   changes: []
+- id: 01a1b8bb-ff61-72c2-8edd-69ff5f39f427
+  author: aida-orchestrator
+  timestamp: 2026-11-08T01:18:10.785097411Z
+  session_id: 01a1b8b78100
+  harness_version: 2.1.319 (Claude Code)
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: NeedsAttention
 filed_at:
   code_sha: 7a18c0d52a6a4e0822befd4c810cfed16b04b74c
   branch: main
@@ -318,3 +327,11 @@ filed_at:
   vendor: claude
   session: 01a1b76b-2fe7-7dd2-88d0-356fc8d96d04
   harness_version: 2.1.319 (Claude Code)
+failure_reason:
+  phase: reviewer
+  phase_index: 3
+  kind: verdict:request-changes
+  detail: 'Round-2 findings 1,3,5 fixed and 2 partly fixed; sandbox ruling followed. Blocking: unsettled fast-gate receipts still wedge review permanently (killed lane / failed repair queue), and native publication failures are now swallowed, so the lane exits 0 and the error is mislabelled skipped(infrastructure), which breaks AC3. AC1/AC4/AC5 verified by tests; AC2/AC3 partial. CI pending at review time; merge-hold-gate red (governance).'
+  recovery_hint: address the review findings, move STORY-2640 back to In Progress, and clear the PR hold only after approval
+  shelved_by: reviewer
+  shelved_at: 2026-11-08T01:18:10.785070245Z
