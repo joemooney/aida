@@ -18,7 +18,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-08T02:46:34.549817284Z
-modified_at: 2026-11-08T04:51:40.762444202Z
+modified_at: 2026-11-08T04:52:51.358303138Z
 req_type: Bug
 tags:
 - area:ci
@@ -50,6 +50,12 @@ comments:
   modified_at: 2026-11-08T04:16:14.791276904Z
   session_id: 01a1b8be-8170-7fb2-89ab-ecb4c6eee98c
   harness_version: 2.1.319 (Claude Code)
+- id: 01a1b980-8a1e-7123-929e-98f847020db2
+  author: joe
+  content: 'Round 2 approach: address bootstrap with a temporary same-repository pull_request publisher alongside trusted pull_request_target, with explicit operator removal steps. Document GitHub same-name check/status conjunction and an operator cutover procedure verifying app_id 15368 with enforce_admins retained: legacy successful check plus pending status blocks raw merge and UI; label-only clearance succeeds on unchanged SHA; fresh SHA passes without a legacy check. Assert explicit success/pending/failure states in every train fixture and shared parser case. Expected files: .github/workflows/merge-hold-gate.yml, tests/test_merge_hold_gate.sh, docs/cli/08-reporting.md and a focused cutover runbook. Live GitHub verification is operator work after publication; local fixtures cannot establish app-pinned server behavior. Native seat will leave edits uncommitted for host publication.'
+  created_at: 2026-11-08T04:52:51.358303138Z
+  modified_at: 2026-11-08T04:52:51.358303138Z
+  session_id: 01a1b97f6957
 history:
 - id: 01a1b90d-4bec-7bd0-9af1-86f501692f64
   author: joe
