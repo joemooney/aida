@@ -28,7 +28,7 @@ priority: Low
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-09-13T22:07:45.944235Z
-modified_at: 2026-11-08T16:19:41.133934871Z
+modified_at: 2026-11-08T16:37:10.799797165Z
 req_type: Task
 tags:
 - cleanup
@@ -335,6 +335,12 @@ comments:
   modified_at: 2026-11-08T13:14:19.312757413Z
   session_id: 01a1bb4aba92
   harness_version: codex-cli 0.167.0
+- id: 01a1bc05-5e0f-7672-9f5b-b50784336f0c
+  author: joe
+  content: 'Round 7: implemented finding 2 by limiting weekly cursor rotation/persistence to scheduled children; piped ad-hoc previews start from sorted inventory and do not advance the weekly cursor. Added on-disk cursor regression coverage. Implemented finding 3 by resolving canonical GitHub pr-N aliases with pr view N and validating returned PR number, same repository, closed/merged state and exact checkout HEAD; added refusal/positive tests and updated docs/cli/06-roles-sessions.md. Validation: changed-file rustfmt check, git diff --check and scripts/check-exec-context.py passed (zero ambient site additions). Lane job j20261108T162155989-2-0 (cargo test --profile agent -p aida-cli-lib --lib -- task_1222) timed out at 900s during compilation, exit 124, with overlay-stale diagnostic (primary rewrote generation agent-6c47403a3de099f9); no executed tests, untested=true. Finding 1 remains a host follow-up: latest observed PR head 397599f0e6de has queued CI and failing merge-hold-gate; rerun independent review after terminal CI and clear hold separately through authorized path. Native edits left uncommitted; descriptive Refs publication declaration recorded for host launcher.'
+  created_at: 2026-11-08T16:37:10.799797165Z
+  modified_at: 2026-11-08T16:37:10.799797165Z
+  session_id: 01a1bbf54eb4
 history:
 - id: 01a1b7cd-7751-7262-8ad1-f0f9d2ef6d4d
   author: joe
