@@ -8,7 +8,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-06T13:39:53.442026Z
-modified_at: 2026-11-08T22:20:12.923344792Z
+modified_at: 2026-11-08T22:20:19.014397676Z
 req_type: Task
 tags:
 - architecture
@@ -1366,6 +1366,24 @@ comments:
   content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: Merge-only head adds no code defect, but zero-unrouted acceptance is unmet with no advisor ruling, CI is pending at this head, and the merge hold is on.. It was punted on: design-fork: PR #3661 review finding 1 remains unresolved; no finding disputed. Reverified current tree: python3 scripts/check-store-writers.py --profile mediated exits 1 with 3173 writer sites and 293 operations unresolved. The supplied 2026-11-08 ruling sets zero-unrouted acceptance and requires all writers before enabling contained Codex admission, but does not define remaining operation policy or authorize a partial. Existing typed routes support comment_add and title/description/priority spec_edit only. Need advisor decision identifying supported typed semantics and authority for remaining lifecycle/bulk/metadata/backend operations, or explicitly defining which host-only/lane-private/refused operations count as reconciled. own_claim/queue_done remain TASK-3326. Do not relabel blocked evidence or enable selected_store_profile to manufacture acceptance. No source edits, commit, push, PR mutation, queue completion or publication declaration. Preserve this punt as publication veto.. No triage reason was given.'
   created_at: 2026-11-08T22:20:12.923342340Z
   modified_at: 2026-11-08T22:20:12.923342340Z
+  session_id: 20abb7c3-8f9b-4a5e-b326-404921f3b450
+- id: 01a1bd3f-8455-75b1-9a63-e48bdf6c9d2c
+  author: joe
+  content: |-
+    REVIEW FINDINGS TO ADDRESS (PR #3661):
+    Verdict: CHANGES REQUESTED
+    Reviewed commit: d9414167c069
+    Recorded: 2026-11-08T21:35:37.249257649+00:00
+    Review comment: https://github.com/joemooney/aida/pull/3661#issuecomment-6727447060
+    Findings:
+    1. BLOCKING, needs an advisor ruling rather than more code. Routing acceptance (TASK-3223 description; comment 34 'zero unrouted writers for the mediated profile') is UNMET: python3 scripts/check-store-writers.py --profile mediated at d9414167c069 exits 1 with 3173 writers and 293 operations unresolved. mediated_blockers counts every operation row, so it cannot reach zero by construction, and the 4 mediated_route records clear nothing. Only comment add and title/description/priority edit route (store_mutation_entry.rs translate_with_reader). The advisor must authorize a staged partial with named follow-up owners or define which refusals count as reconciled. Another rework round cannot resolve this.
+    2. BLOCKING, same advisor ruling. Shared-boundary read-only objects, metadata and cache with lane-private derived caches (ancestor grants, symlinks, primary launches): proven only by synthetic-identity fixtures in mediated_store_tests.rs, because selected_store_profile (launch/contained.rs) correctly refuses mediated. Resume has refusal coverage only (mediated_profile_resume_refuses_before_effects_in_primary_and_linked_layouts). Durable Git/event publication is also outstanding (docs/internal/security/store-mutation-writers.md).
+    3. BLOCKING until CI reports: all 7 CI jobs at d9414167c069 (run 42524865280) were pending when this review ended. No full CI pass exists for the latest code: run 42520865304 at 6e5185cee284 was cancelled with only gates and lib-1 green, so the last full pass is 42507182557 at 114ee1f3865b, before the MCP envelope and no-op edit fixes.
+    4. BLOCKING until cleared by advisor or operator: aida:merge-hold is active and merge-hold-gate (job 128866115627) fails at this head as designed. The reviewer cannot clear it. TASK-3223 is also in needs-attention.
+    5. COSMETIC, carried: the PR body still says 'comment_add and title/description spec_edit'; the branch also routes priority (EditFields::parsed_priority, store_mutation_entry.rs edit arm). Update it before publication.
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
+  created_at: 2026-11-08T22:20:18.901666172Z
+  modified_at: 2026-11-08T22:20:18.901666172Z
   session_id: 20abb7c3-8f9b-4a5e-b326-404921f3b450
 history:
 - id: 01a1b116-742d-73c0-9064-1933f11e4c38
