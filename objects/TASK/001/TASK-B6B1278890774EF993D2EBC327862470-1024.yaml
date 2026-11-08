@@ -1,0 +1,29 @@
+id: 01a1bd58-0265-7af2-827d-d5926d7ce5f0
+spec_id: TASK-b6b1278890774ef993d2ebc327862470-1024
+title: 'Non-blocking (cosmetic): aida-core/templates/commands/aida-pickup.md:29-30 show…'
+description: |-
+  Non-blocking finding carried forward from an APPROVED review verdict on BUG-2493, which has since completed — recorded here so it keeps a queryable home once the verdict record stops being read.
+
+  Non-blocking (cosmetic): aida-core/templates/commands/aida-pickup.md:29-30 shows the completing-lane declaration with --commit-body-file unconditionally, then says to add the flag for required trailers, so the optional flag reads as mandatory. NATIVE_STOP_CONTRACT got an explicit omit sentence; this template did not. Note bug_2493_native_prompts_name_safe_body_file_surface pins the current string.
+
+  PR: #3667
+  Reviewed sha: 5f64ea6609498dae663d8c205ce7ae62db056839
+status: Draft
+priority: Medium
+owner: joe
+feature: Uncategorized
+created_at: 2026-11-08T22:47:04.037837735Z
+modified_at: 2026-11-08T22:47:04.037837735Z
+req_type: Task
+tags:
+- carried-from:BUG-2493
+- finding-hash:8cd022ae
+- from-review:PR-3667
+- kind:carried-forward
+filed_at:
+  code_sha: d0e3cb3eb33d2718f823c4fe504696a1f9c8f1e8
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 65d5a89946c
+  vendor: claude
