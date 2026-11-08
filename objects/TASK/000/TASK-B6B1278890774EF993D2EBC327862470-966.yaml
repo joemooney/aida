@@ -11,11 +11,26 @@ priority: Low
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-08T03:38:52.682099623Z
-modified_at: 2026-11-08T18:30:54.886319351Z
+modified_at: 2026-11-08T18:52:55.050097905Z
 req_type: Task
 tags:
 - area:ci-relay
 - from:STORY-2480
+comments:
+- id: 01a1bc81-a38a-7853-8159-1e6a18910552
+  author: dirtlab
+  content: |
+    Implemented TASK-3452. CI process human/JSON output reports every unverified latest-per-SHA result with SHA, attempt, the outside-the-32-attempt-window reason, and exact aida intent ci read command. A bounded display-only local cache feeds awaiting human/agent/JSON views and the status meter; intake reads and exact revalidation refresh it. Unverified receipt publication remains refused.
+
+    Changed files: aida-cli-lib/src/ci_relay.rs, intent_intake.rs, awaiting_you.rs, status_awaiting.rs, statusbar_cmd.rs, tests/awaiting_you_tests.rs; tests/test_work_ci_relay.py.
+
+    Validation: lane CLI agent build passed; ci_relay::tests: 3 passed (including the 33-attempt and cold/warm-history CLI regressions); awaiting_you::tests: 84 passed; rustfmt, Python syntax and git diff whitespace checks passed. The initial compile fixture omission and zero-match awaiting filter were corrected before these passing runs.
+
+    Native handoff: edits are uncommitted for host publication and subsequent queue completion. No implementation blockers. Codegraph is unavailable on this host; navigation used rg after doctor confirmed the missing tool.
+  created_at: 2026-11-08T18:52:55.050097905Z
+  modified_at: 2026-11-08T18:52:55.050097905Z
+  session_id: 01a1bc6cecb1
+  harness_version: codex-cli 0.167.0
 history:
 - id: 01a1bc6c-f8c6-7083-91af-c24f9a88e846
   author: aida-session-start
