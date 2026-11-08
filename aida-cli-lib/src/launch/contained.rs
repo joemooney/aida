@@ -1525,7 +1525,7 @@ fn codex_argv(
 /// help lives beside this production consumer, not under a tests directory.
 // trace:BUG-2487 | ai:codex
 fn validate_codex_flags(args: &[String], scope: &str) -> Result<()> {
-    let fixture: serde_json::Value = serde_json::from_str(include_str!("codex_0166_help.json"))?;
+    let fixture: serde_json::Value = serde_json::from_str(include_str!("codex_0167_help.json"))?;
     anyhow::ensure!(
         fixture["sha256"] == codex_auth::PROGRAM_SHA256,
         "contained Codex help fixture differs from executable pin; re-record help before launch"
@@ -1533,7 +1533,7 @@ fn validate_codex_flags(args: &[String], scope: &str) -> Result<()> {
     let help = fixture[scope]
         .as_str()
         .context("missing pinned Codex help")?;
-    validate_codex_flags_with_help(args, scope, help, "pinned codex-cli 0.166.0")
+    validate_codex_flags_with_help(args, scope, help, "pinned codex-cli 0.167.0")
 }
 
 // trace:TASK-3000 | ai:codex
@@ -1676,6 +1676,11 @@ fn validate_codex_flags_with_help(
 /// filter: the Bash sandbox wraps tool calls, not the vendor process.
 // trace:TASK-2708 | ai:claude
 fn claude_argv(original: &[String], port: u16, allowed: &[String]) -> Result<Vec<String>> {
+    // trace:TASK-3219 | ai:codex
+    anyhow::ensure!(
+        !crate::agent_launch::agent_claude_background::is_attach_subcommand(original),
+        crate::vendors::background_attach_refusal()
+    );
     let mut args = Vec::with_capacity(original.len());
     let mut settings_seen = 0;
     let mut i = 0;
