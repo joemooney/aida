@@ -549,9 +549,9 @@ pub(crate) struct RealBatchDriver<'a> {
     pub(crate) no_human: Option<auto_complete::NoHumanMode>,
     /// STORY-306: advisor-escalation mode, propagated to every member.
     pub(crate) escalate_mode: auto_complete::EscalateMode,
-    /// BUG-311: outer `--steal` flag, propagated to every member's phase-1
-    /// subprocess so a dormant lease on the member's scope is cleared rather
-    /// than blocking the drain with the canned "pass --steal" message.
+    /// Compatibility-only flag: queue-work entry refuses steal=true before
+    /// batch dispatch; the forwarding arms are unreachable in production.
+    /// trace:STORY-2325 | ai:codex
     pub(crate) steal: bool,
     /// TASK-559: outer `--force-claim` flag, propagated to every member's
     /// phase-1 subprocess so ambiguous spec status can be claimed.
@@ -795,6 +795,8 @@ pub(crate) fn pipelined_child_common_args(
             auto_complete::EscalateMode::Defaults => args.push("--escalate-defaults".to_string()),
         }
     }
+    // Compatibility only: steal=true is refused before production dispatch.
+    // trace:STORY-2325 | ai:codex
     if steal {
         args.push("--steal".to_string());
     }
@@ -990,7 +992,7 @@ pub(crate) fn handle_auto_complete_batch(
     max_failures: Option<usize>,
     no_human: Option<auto_complete::NoHumanMode>,
     escalate_mode: auto_complete::EscalateMode,
-    // BUG-311: outer `--steal`, threaded to every batch member's phase 1.
+    // Compatibility only: steal=true is unreachable after queue-work entry.
     steal: bool,
     // TASK-559: outer `--force-claim`, threaded to every batch member's phase 1.
     force_claim: bool,

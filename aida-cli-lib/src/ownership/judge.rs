@@ -231,7 +231,7 @@ pub(crate) fn judge(
         (_, OwnerVerdict::Unknown { why }) => {
             Reclaim::Keep(format!("the holder cannot be proven gone: {why}"))
         }
-        (_, OwnerVerdict::Dead { .. }) => reclaim_dead_tree(tree, pr_head, is_ancestor),
+        (_, OwnerVerdict::Dead { .. }) => reclaim_dead_tree(tree, pr_head, false, is_ancestor),
     };
     Verdict { owner, reclaim }
 }
@@ -241,6 +241,7 @@ pub(crate) fn judge(
 pub(crate) fn reclaim_dead_tree(
     tree: &TreeReading,
     pr_head: Option<&str>,
+    covered_non_pr_implementer: bool,
     is_ancestor: &dyn Fn(&str, &str) -> bool,
 ) -> Reclaim {
     let (dirty, unpushed, head) = match tree {
@@ -277,6 +278,11 @@ pub(crate) fn reclaim_dead_tree(
         return Reclaim::EndBySafeRule;
     };
     let Some(pr_head) = pr_head else {
+        // trace:STORY-2325 | ai:codex — clean dead lanes before their first
+        // branch push can already be fully covered by another origin ref.
+        if covered_non_pr_implementer {
+            return Reclaim::EndBySafeRule;
+        }
         return Reclaim::Keep(
             "there is no PR head on origin to compare its tree against".to_string(),
         );
