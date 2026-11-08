@@ -12,12 +12,12 @@ description: |
   2. The TASK-3425 measurement script, run on base and head, shows the largest SCC shrinks, and the doc records both numbers. The target is the plan's ~29-module reduction; a smaller result is acceptable if the doc names the edges that still hold modules in.
   3. make check-ci-fast passes; the command-registry ratchet tests pass; help output unchanged (Help-Golden: unchanged).
   4. Sequence: start after PR-3635 merges, and touch only import lines in files with no open PR, to avoid the SPIKE-713 conflict pattern.
-status: InProgress
+status: NeedsAttention
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-08T03:08:54.290380002Z
-modified_at: 2026-11-08T05:32:49.350647541Z
+modified_at: 2026-11-08T05:33:49.692171111Z
 req_type: Task
 tags:
 - area:architecture
@@ -42,6 +42,21 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a1b9a5-6761-7f92-88a7-2f1d335dce53
+  author: dirtlab
+  timestamp: 2026-11-08T05:33:07.297076826Z
+  session_id: 01a1b9a51ba7
+  harness_version: codex-cli 0.167.0
+  changes: []
+- id: 01a1b9a6-0cfc-7991-9169-bc3cd3566018
+  author: dirtlab
+  timestamp: 2026-11-08T05:33:49.692179331Z
+  session_id: 01a1b9a51ba7
+  harness_version: codex-cli 0.167.0
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: NeedsAttention
 filed_at:
   code_sha: 049e5206de120518bb94fae84bf359f789e76236
   branch: main
@@ -51,3 +66,9 @@ filed_at:
   vendor: claude
   session: 01a1b8be-8170-7fb2-89ab-ecb4c6eee98c
   harness_version: 2.1.319 (Claude Code)
+attention_reason:
+  category: blocked-dependency
+  detail: 'Acceptance 4 forbids changes in files with open PRs, but acceptance 1 requires migrating framework references in these files: aida-cli-lib/src/config_cmd.rs (PR #3641); aida-cli-lib/src/usage_cmd.rs (PR #3629); aida-cli-lib/src/doctor_cmd.rs (PR #3643); aida-cli-lib/src/leases.rs (PR #3634); aida-cli-lib/src/defer_cmd.rs (PR #3639); aida-cli-lib/src/git_backend_cmd.rs (PR #3658); aida-cli-lib/src/worktree_gc.rs (PR #3647); aida-cli-lib/src/lib_part1.rs (PR #3628); aida-cli-lib/src/agent_launch.rs (PR #3619); aida-cli-lib/src/condition_cmd.rs (PR #3639); aida-cli-lib/src/queue_cmd.rs (PR #3619); aida-cli-lib/src/advisor_cmd_root.rs (PR #3640); aida-cli-lib/src/drain_cmd.rs (PR #3629); aida-cli-lib/src/upgrade_release.rs (PR #3629); aida-cli-lib/src/maintenance_schedule.rs (PR #3647); aida-cli-lib/src/internal_cmd.rs (PR #3628); aida-cli-lib/src/focus_cmd.rs (PR #3629); aida-cli-lib/src/cli.rs (PR #3629); aida-cli-lib/src/init_cmd.rs (PR #3643); aida-cli-lib/src/graph_cmd.rs (PR #3629); aida-cli-lib/src/requirements_cli.rs (PR #3658); aida-cli-lib/src/statusline_cmd.rs (PR #3629); aida-cli-lib/src/findings_gate.rs (PR #3639); aida-cli-lib/src/status_awaiting.rs (PR #3656); aida-cli-lib/src/history.rs (PR #3629); aida-cli-lib/src/upgrade_cmd.rs (PR #3629); aida-cli-lib/src/tests/bug_home_038_seat_publish_tests.rs (PR #3625). Most consumers also use fully qualified command_registry::Type paths in signatures/expressions rather than use imports, requiring changes beyond literal import lines. PR #3635 prerequisite is satisfied: train #3660 landed b9601840a1, present in this seat HEAD ff9b8c9180. No source edits or tests performed. codegraph executable unavailable; rg used and aida doctor check codegraph returned total: 0. Need advisor scope/sequencing ruling before migration; retaining existing re-exports is necessary while blocked consumers remain.'
+  lean: Wait for overlapping PRs to land or explicitly authorize coordinated path-only edits (including qualified references), then rerun the open-PR inventory and implement the whole migration.
+  raised_by: implementer
+  raised_at: 2026-11-08T05:33:49.692171111Z
