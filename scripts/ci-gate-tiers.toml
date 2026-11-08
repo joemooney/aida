@@ -128,6 +128,7 @@
 "Check Rust test portability ratchet" = "fast"
 "Prose-classification rule fixtures" = "fast"
 "Executable fixture ratchet" = "fast"
+"Crate glob import ratchet" = "fast"
 "ExecContext environment ratchet" = "fast"  # trace:STORY-2538 | ai:codex
 "Test git auto-maintenance ratchet" = "fast"  # trace:BUG-2191 | ai:claude
 "Verify pure-move slice stack fixtures" = "fast"
@@ -170,3 +171,5 @@
 # trace:STORY-1853 | ai:claude
 "Test shard root hygiene" = "asserts an ephemeral CI checkout has no untracked root entries; local worktrees can contain operator scratch files"
 "Test time budget" = "its budgets are CI-runner seconds on the debug profile; a local run is a different profile on a shared host. `python3 scripts/test-timings.py <log> --junit <target dir>/nextest/ci/junit-*.xml` still prints local per-test timings"
+
+# trace:TASK-3428 | ai:codex
