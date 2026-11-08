@@ -1030,6 +1030,8 @@ pub(crate) struct ProbeFacts {
     /// Commits reachable from any ref or stash entry that are on no
     /// `origin/*` ref, not in the clone's base and not reachable from a ref of
     /// the main checkout.
+    // Clean, published heads exempt slice checkpoint tags; teardown salvages them.
+    // trace:BUG-2491 | ai:codex
     pub(crate) unpushed: u64,
     /// The refs those commits are on, as `<count> commit(s) on <ref>` lines
     /// (seat-written names, escaped for display), for the refusal message.
@@ -1864,6 +1866,12 @@ pub(crate) fn probe_until(
             "-c".as_ref(),
             UNPUSHED_COUNT_SCRIPT.as_ref(),
             "aida-seat-unpushed".as_ref(),
+            if facts.dirty.is_empty() {
+                "ignore-slice"
+            } else {
+                "keep-slice"
+            }
+            .as_ref(),
             base.as_ref(),
         ]
         .into_iter()
@@ -2371,6 +2379,10 @@ exit 0
 /// too: each one main reaches is excused, and with it its ancestors.
 // trace:BUG-2224 | ai:claude
 // trace:BUG-B6B1278890774EF993D2EBC327862470-051 | ai:claude
+// Clean, published branch heads may retire lane checkpoint tags even when
+// pre-squash checkpoints are unreachable from origin. Salvage still counts
+// every ref so those checkpoints are bundled before teardown.
+// trace:BUG-2491 | ai:codex
 const REF_TIPS_SCRIPT: &str = concat!(
     "set -u\n",
     "git for-each-ref --format='%(if)%(*objectname)%(then)%(*objectname)%(else)%(objectname)%(end)' || exit 1\n",
@@ -2384,8 +2396,8 @@ const TIPS_SEPARATOR: &str = "--";
 
 /// Inside the probe sandbox: how many commits the clone holds that origin
 /// does not: reachable from ANY ref (every branch, tag, HEAD) or stash entry,
-/// and not from `origin/*`, the pinned base (`$1`, or empty) or an excused
-/// head (`$2...`, full hex ids: a shipped head, or a tip main reaches; one the
+/// and not from `origin/*`, the pinned base (first positional argument, or empty) or an excused
+/// head (remaining full hex ids: a shipped head, or a tip main reaches; one the
 /// clone lacks is skipped). Submodules are not counted: [`probe`] keeps any
 /// clone that has one. The total is the first line; then, when it is not 0,
 /// `<count> <ref>` for each ref (a detached HEAD, every ref outside
@@ -2398,15 +2410,31 @@ const UNPUSHED_COUNT_SCRIPT: &str = concat!(
     // revisions; absent objects and tags never excuse work. Keep the large set
     // on stdin to rev-list rather than expanding it into each process's argv.
     // trace:BUG-2384 | ai:codex
+    // Only the clean-tree probe requests this exemption; salvage keeps all refs.
+    // trace:BUG-2491 | ai:codex
+    "ignore_slice=0\nslice_only=0\ncase $1 in ignore-slice) ignore_slice=1; shift;; keep-slice) shift;; slice-only) slice_only=1; shift;; esac\n",
     "base=$1\nshift\nshipped=''\n",
     "if [ \"$#\" -gt 0 ]; then\n",
     "  objects=$(printf '%s\\n' \"$@\" | git cat-file --batch-check='%(objectname) %(objecttype)') || exit 1\n",
     "  shipped=$(printf '%s\\n' \"$objects\" | awk '$2 == \"commit\" {print \"^\" $1}') || exit 1\n",
     "fi\n",
-    "total=$(printf '%s\\n' \"$shipped\" | git rev-list --stdin --count --all $s --not --remotes=origin ${base:+\"$base\"}) || exit 1\n",
+    "refs=$(git for-each-ref --format='%(refname)') || exit 1\n",
+    "head=\"\"\nif git rev-parse -q --verify HEAD^{commit} >/dev/null; then head=HEAD; fi\n",
+    "if [ \"$ignore_slice\" -eq 1 ] && [ -n \"$head\" ]; then\n",
+    "  n=$(printf '%s\\n' \"$shipped\" | git rev-list --stdin --count HEAD --not --remotes=origin ${base:+\"$base\"}) || exit 1\n",
+    "  if [ \"$n\" -eq 0 ]; then refs=$(printf '%s\\n' \"$refs\" | awk 'index($0, \"refs/tags/slice-\") != 1') || exit 1; fi\n",
+    "fi\n",
+    // Teardown only needs salvage for checkpoint history not already published.
+    // trace:BUG-2491 | ai:codex
+    "if [ \"$slice_only\" -eq 1 ]; then\n",
+    "  refs=$(printf '%s\\n' \"$refs\" | awk 'index($0, \"refs/tags/slice-\") == 1') || exit 1\n",
+    "  head=''; s=''\nfi\n",
+    // Blank lines terminate rev-list stdin, including an unborn HEAD.
+    // trace:BUG-2491 | ai:codex
+    "revisions=$(printf '%s\\n' \"$head\" \"$refs\" \"$shipped\" | sed '/^$/d') || exit 1\n",
+    "total=$(printf '%s\\n' \"$revisions\" | git rev-list --stdin --count $s --not --remotes=origin ${base:+\"$base\"}) || exit 1\n",
     "printf '%s\\n' \"$total\"\n",
     "if [ \"$total\" -eq 0 ]; then exit 0; fi\n",
-    "refs=$(git for-each-ref --format='%(refname)') || exit 1\n",
     "if ! git symbolic-ref -q HEAD >/dev/null && git rev-parse -q --verify HEAD >/dev/null; then\n",
     "  refs=\"HEAD\n$refs\"\n",
     "fi\n",
@@ -3849,7 +3877,40 @@ fn destroy_inner(
                 });
             }
         }
-        if facts.unshipped() {
+        // Unpublished checkpoint history needs a recoverable bundle before removal.
+        // Probe inside the same sandbox; unreadable evidence retains the clone.
+        // trace:BUG-2491 | ai:codex
+        let base = pinned_base(main, clone).unwrap_or_default();
+        let checkpoint_args: Vec<&std::ffi::OsStr> = [
+            "-c".as_ref(),
+            UNPUSHED_COUNT_SCRIPT.as_ref(),
+            "aida-seat-checkpoints".as_ref(),
+            "slice-only".as_ref(),
+            base.as_ref(),
+        ]
+        .into_iter()
+        .chain(
+            shipped
+                .iter()
+                .filter(|oid| is_full_oid(oid))
+                .map(|oid| oid.as_ref()),
+        )
+        .collect();
+        let checkpoints = match probe_run(clone, main, &checkpoint_args, "sh").and_then(|out| {
+            parse_unpushed_count(&out)
+                .map(|(n, _)| n > 0)
+                .ok_or_else(|| "invalid checkpoint count".to_string())
+        }) {
+            Ok(unpublished) => unpublished,
+            Err(why) => {
+                return Ok(Destroyed::Kept {
+                    reason: format!("checkpoint refs could not be read ({why})"),
+                    salvage: None,
+                    retention: None,
+                })
+            }
+        };
+        if facts.unshipped() || checkpoints {
             // A salvage that failed or was cut off keeps the clone: removing
             // it would lose what the patch does not hold.
             // trace:TASK-2053 | ai:claude
@@ -3863,7 +3924,7 @@ fn destroy_inner(
                     })
                 }
             }
-            if mode == DestroyMode::KeepUnshipped {
+            if mode == DestroyMode::KeepUnshipped && facts.unshipped() {
                 return Ok(Destroyed::Kept {
                     reason: unshipped_reason(&facts),
                     salvage: salvaged,

@@ -230,17 +230,9 @@ spec doesn't uniquely identify which comment you mean. Run `aida comment list
 - you're wiring CI provenance gates — `trace gate`, `trace coverage`, and `trace check` are the three checks.
 - you suspect *existing* trace comments have gone stale (a spec was deleted, renumbered by the merge-gate, or rejected) — `trace check` scans the inline `// trace:SPEC-ID` markers already in the tree, resolves each against the live graph, and flags the dead links so a rotted trace goes red like a failing type.
 
-**Don't reach for it when** — you just want to *see* what code exists for a spec — `aida show <ID>` already renders the git linkage (commits/files/branch/PR) without you running `trace list`. And don't conflate the two CI checks: `gate` asks "do the cited spec-ids exist and aren't rejected?"; `coverage` asks "is the changed code actually traced?" — different failure modes.
+**Don't reach for it when** — you just want to *see* what code exists for a spec — `aida show <ID> --full` renders the git linkage (commits/files/branch/PR) without you running `trace list`. And don't conflate the two CI checks: `gate` asks "do the cited spec-ids exist and aren't rejected?"; `coverage` asks "is the changed code actually traced?" — different failure modes.
 
-`show` reads the requested spec from canonical YAML without opening the ID
-allocator. Cache-refresh hints use a nonblocking lock on this path; contention
-serves the committed snapshot with a `deferred` stale label. Optional Git linkage
-has a shared 1.2-second deadline and reports partial or unknown evidence when it
-expires. Usage events split backend opening into `open.backend`, `open.location`
-and `open.cache` sub-spans for diagnosing remaining latency.
-<!-- trace:BUG-2466 | ai:codex -->
-
-**How `aida show` keeps the no-commits case fast.** Finding the commits that reference a spec means searching the message of every commit reachable from every ref, and proving that *none* do is the expensive case. `aida show` remembers, per spec and per worktree, which commits have already been checked, in a small local cache under the repository's git directory (`aida-cache/show-negative-v1`; never in the store and never tracked). A spec's first `show` runs the full search as before and, if it finds nothing, notes that. The next `show` runs the full search once more, this time recording exactly which commits it covered. Later shows only check commits that are new since then, so a spec with no commits answers without searching history again. A spec that has commits always runs the full search, with no extra work in front of it. If the previous answer cannot be reused — refs moved while it was being checked, the history is shallow or uses grafts or replace refs, the git configuration changed, or the cache is missing, locked by another process or corrupt — `show` runs the full search, or reports the commit list as incomplete (shipped state unknown) while the check finishes over the next few shows. It never reports "no commits" without that proof. Deleting the cache directory only costs speed. The `files` part of linkage (`trace:` comments in the source tree) has a time limit covering the whole walk, including listing directories; a symlink loop, a link that points outside the project, or an unreadable directory marks the file list incomplete instead of silently skipping it. <!-- trace:BUG-2221 | ai:claude -->
+**How explicit show linkage keeps the no-commits case fast.** Finding the commits that reference a spec means searching the message of every commit reachable from every ref, and proving that *none* do is the expensive case. `aida show` remembers, per spec and per worktree, which commits have already been checked, in a small local cache under the repository's git directory (`aida-cache/show-negative-v1`; never in the store and never tracked). A spec's first explicit linkage request runs the full search and, if it finds nothing, notes that. The next explicit linkage request runs the full search once more, this time recording exactly which commits it covered. Later linkage requests only check commits that are new since then, so a spec with no commits answers without searching history again. A spec that has commits always runs the full search, with no extra work in front of it. If the previous answer cannot be reused — refs moved while it was being checked, the history is shallow or uses grafts or replace refs, the git configuration changed, or the cache is missing, locked by another process or corrupt — `show` runs the full search, or reports the commit list as incomplete (shipped state unknown) while the check finishes over the next few shows. It never reports "no commits" without that proof. Deleting the cache directory only costs speed. The `files` part of linkage (`trace:` comments in the source tree) has a time limit covering the whole walk, including listing directories; a symlink loop, a link that points outside the project, or an unreadable directory marks the file list incomplete instead of silently skipping it. <!-- trace:BUG-2221 | ai:claude -->
 
 **Linked documentation in `aida show`.** The human view lists a **Documentation** section when any Doc entry is linked to the spec, whether the spec references the Doc or the Doc was filed about the spec with `aida doc add --about`; archived, Rejected and Superseded Docs are omitted. Each entry shows its ID, title, audience, scenario and tags, how it is linked, and the `aida doc show <DOC-ID>` command that prints it. Entries are grouped by authorship as recorded in their tags: `human` marks a human-authored explanation, `generated` or `ai-generated` marks generated prose, and anything else is listed as documentation whose authorship is not recorded. Nothing is written to the spec, and the TOON and JSON output are unchanged. The section is absent when no eligible Doc is linked. <!-- trace:TASK-1471 | ai:claude ai:codex -->
 
@@ -509,17 +501,73 @@ These local commands do not publish. Enrolled intake transport is described
 below; backup-comment recovery remains a separate slice.
 <!-- doc-intent: shaped by STORY-2479 -->
 
-### Manual per-writer bootstrap (before native per-writer transport)
+### Native per-writer intake (first-round-trip slice)
 
 <!-- trace:STORY-2652 | ai:codex -->
-The native transport described below still uses the legacy flat `aida-intent`
-branch. It does **not** enroll or poll per-writer branches yet. For a reviewed
-manual round trip, use `aida-feedback-<producer-node-id>` for envelopes. The
-reserved receipt family is `aida-feedback-receipts-<processor-node-id>`; do not
-invent receipt files before its native schema and authorization are available.
-These names use dashes, not slashes. Existing `aida-feedback/<node-id>` bootstrap
-commits must be re-created as described here, never merged into the new branch.
-Do not reuse the legacy flat `aida-intent` name for per-writer intake.
+Opt into independent histories by supplying `enroll --role`. Enrollment without
+`--role` retains the legacy flat transport described below; existing profiles
+are never silently converted. Use separate clones for the producer and processor:
+
+```bash
+# Work clone: publish observations, read only the named processor's receipts.
+aida intent enroll --remote ssh://git@example.org/intake.git --reviewed \
+  --role producer --writer-id aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa \
+  --receipt-writer bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb
+# Home clone: read that producer, write only this processor's receipts.
+aida intent enroll --remote ssh://git@example.org/intake.git --reviewed \
+  --role processor --writer-id bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb \
+  --producer-id aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
+```
+
+Replace these example IDs with the agreed 32-character lowercase hex identities.
+Without `--writer-id`, enrollment uses the existing WORK binding if present,
+otherwise a new UUID saved only in the clone-local profile; it never acquires a
+store node. Repeating enrollment retains that identity. Remote, deny policy,
+role, identity and branch mappings are pinned; changes require another clone.
+`--producer-id` is required for processors. A producer defaults to its own ID.
+The current slice supports one producer and at most one authorized processor
+per enrollment; processors cannot enroll another processor's receipt branch.
+
+Profile v2 pins `producer_branch` to `refs/heads/aida-feedback-<producer-id>` and
+`receipt_branches` to the explicitly authorized
+`refs/heads/aida-feedback-receipts-<processor-id>`. A producer uses `publish`;
+a processor uses `process`. Both use `pull` then `list --all --json` to see the
+combined validated view. Only observations are admitted to producer histories,
+and only version-1 processing receipts to receipt histories. Each branch has its
+own parentless, linear, immutable history. V2 histories currently receive full
+validation on every read, without the legacy checkpoint optimization. Receipt
+validation is standalone:
+a receipt for an observation not yet fetched is valid audit data, not a reason
+to import an observation or write the store. Listing shows local observations.
+`pull --json` reports receipt digests for absent observations under
+`receipts_for_unknown_observations`; a receipt alone does not manufacture a
+listing row. Envelope JSON and its hash contract are unchanged. Processing retains the operation journal and store
+markers: retry the same command after a failed receipt push, without a second
+requirement or comment write.
+
+This is the approved S1 slice. Enrollment JSON reports `protection: unverified`;
+configure and verify forge writer restrictions independently. IDs, fixed commit
+authors and branch names are labels, not credentials. The protection probe and
+own-branch foreign-write refusal remain S2 work. Receipt v2 store/producer/
+processor identities and richer unknown/unavailable status remain S3 work;
+version-1 receipts must not be treated as cross-store identity evidence. There
+is no global exactly-once guarantee. CI relay remains on explicitly enrolled
+legacy profiles until S4; per-writer profiles refuse CI commands. Ordinary
+workspace sync never publishes either intake family. Keep archived flat intake
+outcomes and journals; use a fresh clone for deliberate per-writer enrollment,
+never rewrite or merge legacy history into the new branches.
+
+### Manual per-writer bootstrap
+
+<!-- trace:STORY-2652 | ai:codex -->
+For a reviewed manual round trip, use `aida-feedback-<producer-node-id>` for
+envelopes. Native S1 can validate this history without relaxing its validator;
+manual processing remains available when native enrollment is unavailable.
+The receipt family is `aida-feedback-receipts-<processor-node-id>`; manual ledgers
+must not be inserted into it. These names use dashes, not slashes. Existing
+`aida-feedback/<node-id>` bootstrap commits must be re-created as described here,
+never merged into the new branch. Do not reuse the legacy flat `aida-intent`
+name for per-writer intake.
 
 Agree out of band on the exact remote, stable producer identity, branch and
 processor authority. A writer ID labels a writer; neither the branch name, the
@@ -624,9 +672,10 @@ and must not be inserted into either branch family. Independent processors must
 coordinate; the bootstrap procedure supplies no global exactly-once guarantee.
 Retain the source commit, ledger and store markers for later explicit migration.
 
-### `aida intent enroll`, `publish`, `pull`, `list`, and `process`
+### Legacy flat intake: `enroll`, `publish`, `pull`, `list`, and `process`
 
-Intake transport uses a separately enrolled destination and policy. It works in a
+Legacy intake (enrollment without `--role`) uses a separately enrolled destination
+and policy. It works in a
 Git clone without a requirement store. Enroll an explicit absolute local path,
 HTTPS URL, or SSH URL (remote nicknames and helper protocols refuse):
 
