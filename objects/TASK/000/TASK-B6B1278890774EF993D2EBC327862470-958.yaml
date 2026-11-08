@@ -3,12 +3,12 @@ spec_id: TASK-b6b1278890774ef993d2ebc327862470-958
 agreed_id: TASK-3425
 title: 'Crate-split PR2: move the 14 command-framework types from command_registry.rs into cmdkit.rs, with a re-export (no import churn)'
 description: 'Plan: docs/plans/2026-11-07-aida-cli-lib-crate-split-deep-dive.md (PR #3633, SPIKE-713). Move the command-framework types the plan lists (section 5/7) into a new aida-cli-lib/src/cmdkit.rs; command_registry.rs re-exports them, so no caller import changes. The plan measures that this removes 29 modules from the main SCC. Acceptance: no caller edits; the dependency script from the plan (or rg) shows the reduced SCC; make check-ci-fast passes; and the command-registry ratchet tests pass. LIGHT gate.'
-status: InProgress
+status: NeedsAttention
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-07T22:12:10.371157002Z
-modified_at: 2026-11-08T02:28:22.115322322Z
+modified_at: 2026-11-08T02:40:10.897960158Z
 req_type: Task
 relationships:
 - rel_type: Child
@@ -109,6 +109,21 @@ comments:
   created_at: 2026-11-08T02:28:22.115322322Z
   modified_at: 2026-11-08T02:28:22.115322322Z
   session_id: 01a1b8f57985
+- id: 01a1b906-ef25-7a12-981b-923477211fac
+  author: joe
+  content: |
+    Round-3 validation final handoff at published head 67139bfb2d2 (round-3 edits are documentation only):
+
+    All six test shards are GREEN in https://github.com/joemooney/aida/actions/runs/42438168743 . lib-0 job 128601425348 passed 5,449 tests with zero failures; lib-1 job 128601425261 passed 7,485 with zero failures, explicitly including command_registry::story_1728_command_registry_tests::help_surface_matches_golden_snapshot (11.358s). The full library shards cover the command-registry ratchets. The golden must remain unchanged. CI (gates), job 128601425294, failed exactly at the Help golden co-change guard. The lane_fixture_fails panic earlier in its log is an intentional negative fixture: its parent test passed and the enclosing group finished 88 passed / zero failed. No fixture code fix is needed. The merge hold remains active. No overall green CI or full make check-ci-fast pass is claimed; the next host commit still needs fresh CI.
+
+    Local validation: all 39 selected non-build fast gates, changed-file rustfmt, help guard fixtures and git diff --check passed. Local ratchet job j20261108T022140013-3-0 timed out at 900s (exit 124, no tests executed), reporting overlay-stale due to primary seed rewrite. Longer-timeout golden job j20261108T022709861-2-0 is compiling and ratchet retry j20261108T023723340-2-0 is queued at handoff. No local executed-test pass is claimed; executed Rust evidence is supplied by CI. Those duplicate local runs are unnecessary to establish the green CI test-shard evidence.
+
+    Uncommitted files for host review: AGENTS.md, OVERVIEW.md, docs/internal/testing/task-3425-cmdkit-rework.md. PR #3635 title/body now use Refs and include the measurements, limitations and CI links. No completion, commit, push, queue done, merge, hold clearance or review verdict was performed from this seat.
+
+    Punt required for finding 1 and the remaining overall-green-CI part of finding 5: native Git metadata is read-only; aida ship -m accepts only one subject line, so the recorded Refs publication declaration cannot include the required standalone body trailer. This is a launch-contract blocker, not a dispute of the findings on their merits. Do not repeat the previous automatic subject-only publication. Host/advisor must resolve this publication veto, create the new same-branch commit using the exact Refs subject and separate Help-Golden: unchanged body line in the evidence document, rebase/sync as required, run make check-ci-fast after that commit, push, and obtain green current-head CI. Retain Refs in the squash message and leave TASK-3425 open for the unfulfilled SCC acceptance; the proposed follow-up is described in the previous comment because native draft ID allocation failed.
+  created_at: 2026-11-08T02:40:01.829125832Z
+  modified_at: 2026-11-08T02:40:01.829125832Z
+  session_id: 01a1b8f57985
 history:
 - id: 01a1b811-df16-79c0-9152-0fbdcca89083
   author: joe
@@ -184,6 +199,14 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a1b907-1291-75d3-be55-1a5c8b3b499d
+  author: joe
+  timestamp: 2026-11-08T02:40:10.897978107Z
+  session_id: 01a1b8f57985
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: NeedsAttention
 filed_at:
   code_sha: 77bc9e4e4d38b978afaaf602dd8300419c320ea7
   branch: main
@@ -193,3 +216,9 @@ filed_at:
   vendor: claude
   session: 01a1b76b-2fe7-7dd2-88d0-356fc8d96d04
   harness_version: 2.1.319 (Claude Code)
+attention_reason:
+  category: blocked-dependency
+  detail: 'Round-3 finding 1 and the remaining overall-green-CI part of finding 5 require host publication: native Git metadata is read-only and the aida ship -m API accepts only one subject line, so it cannot convey the required standalone Help-Golden: unchanged body trailer. Findings are not disputed on their merits. Three documentation files are fixed and uncommitted; PR #3635 title/body and native declaration use Refs TASK-3425. All six CI test shards at 67139bfb2d2 passed, including the golden and full library ratchets; CI gates fails specifically at the missing help trailer and merge hold remains red. Host must resolve the publication veto and explicitly commit the full message in docs/internal/testing/task-3425-cmdkit-rework.md, rerun make check-ci-fast, publish to the same branch and obtain green CI. Retain Refs and leave SCC acceptance open; draft follow-up allocation is also host-blocked. Do not repeat a subject-only host commit.'
+  lean: 'Host commits the ready documentation changes with the recorded Refs subject plus the separate Help-Golden: unchanged body line, then reruns the full gate and CI.'
+  raised_by: implementer
+  raised_at: 2026-11-08T02:40:10.897960158Z
