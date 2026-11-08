@@ -8,7 +8,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-07T10:46:16.888539142Z
-modified_at: 2026-11-08T18:26:40.543410385Z
+modified_at: 2026-11-08T18:27:51.634380087Z
 req_type: Task
 relationships:
 - rel_type: Child
@@ -22,6 +22,13 @@ comments:
   modified_at: 2026-11-07T23:37:57.155933215Z
   session_id: 01a1b848-940b-7bd2-8acd-52e428b182b8
   harness_version: 2.1.319 (Claude Code)
+- id: 01a1bc6a-b2d2-73b1-af12-54fd1865a632
+  author: dirtlab
+  content: 'TASK-2997: relocated per-change notes from AGENTS.md and OVERVIEW.md per advisor ruling. Review-watch records retained fast-exiting children before reaping. Incomplete legacy receipts use the existing reboot/TTL backstop. Caller capture requires verified local procfs and fails closed with host-retry guidance. Masked, hidepid, unverified or ancestor-coordinate views refuse caller capture while existing reservations remain held. Retained children can be recorded after exit before reaping, while the PID cannot be reused. Undated legacy receipts require reboot or operator recovery. Unknown identity never authorizes signalling, including orphaned group members adopted by an unrelated subreaper. Original implementation: TASK-3365.'
+  created_at: 2026-11-08T18:27:51.634380087Z
+  modified_at: 2026-11-08T18:27:51.634380087Z
+  session_id: 01a1bc6989dc
+  harness_version: codex-cli 0.167.0
 history:
 - id: 01a1b59d-e453-77c2-9141-8b9b3f4b1fba
   author: joe
