@@ -525,7 +525,39 @@ fn story2402_s5_recur_conditions_resurface_and_manual_routes() {
         Some("needs judgement"),
     )
     .unwrap();
+    // A valid manual handoff persists the same hold as recurrence parking;
+    // the timer routes it to a human without clearing it or bumping recurrence.
+    // trace:STORY-2402 | ai:codex
+    let recurrence = crate::findings::finding_recurrence(
+        &backend
+            .get_requirement(&row.id)
+            .unwrap()
+            .unwrap()
+            .tags
+            .into_iter()
+            .collect::<Vec<_>>(),
+    );
+    crate::session_misc::session_handoff_seat(
+        Some(note.to_str().unwrap()),
+        false,
+        Some("advisor"),
+        false,
+        false,
+        Some("manual:joe"),
+        Some(id),
+        Some("handoff needs judgement"),
+    )
+    .unwrap();
     let mut current = backend.get_requirement(&row.id).unwrap().unwrap();
+    assert_eq!(current.deferred_until.as_deref(), Some("manual:joe"));
+    assert_eq!(
+        current.deferred_reason.as_deref(),
+        Some("handoff needs judgement")
+    );
+    assert_eq!(
+        crate::findings::finding_recurrence(&current.tags.iter().cloned().collect::<Vec<_>>()),
+        recurrence,
+    );
     current.deferred_at = Some(Utc::now() - chrono::Duration::days(15));
     backend.update_requirement(&current).unwrap();
     let current = backend.get_requirement(&row.id).unwrap().unwrap();
