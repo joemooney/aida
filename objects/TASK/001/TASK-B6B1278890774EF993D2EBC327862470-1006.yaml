@@ -8,7 +8,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-08T18:01:54.649358829Z
-modified_at: 2026-11-08T22:44:25.125030536Z
+modified_at: 2026-11-08T23:09:37.192802293Z
 req_type: Task
 relationships:
 - rel_type: Child
@@ -53,6 +53,12 @@ comments:
   created_at: 2026-11-08T22:42:11.121506666Z
   modified_at: 2026-11-08T22:42:11.121506666Z
   session_id: 20abb7c3-8f9b-4a5e-b326-404921f3b450
+- id: 01a1bd6c-a828-7cf0-ad4d-f84fed948cc4
+  author: joe
+  content: 'Round-2 rework: addressed all six findings in source. RealPhaseDriver resume now preserves a typed post-child publication failure as shelvable Failed instead of Spawn, preserves unknown branch lookup observations as Inconclusive, consumes receipts even on failed child exits, and checks explicit resume punt/hold signals. Confirmed fresh/resumed NoChange ends the implementer session. Only corroborated drain fresh launches and drain resumes request receipts; standalone and explicit resumes do not retain them. Added real Codex-resume subprocess/driver/orchestration coverage (no-change, existing PR, failed child, publication failure, punt, hold, transient and malformed forge lookup), fresh existing-PR orchestration, writer/reader agreement and dirty-probe refusal tests, plus a real watchdog test. Updated lifecycle docs and six host receipt writer inventory sites. Initial lane job j20261108T224834105-4022100-0 executed 7 TASK-3608 tests successfully. Final-source expanded run j20261108T225558416-4055405-0 is still compiling; no-default-features check j20261108T225609614-4055551-0 and TUI check j20261108T225727361-4058793-0 are queued. All 43 non-Cargo fast gates passed, changed-file rustfmt and git diff checks passed, TUI manifest dependency seam passed. Native seat edits remain uncommitted for host publication; merge hold remains an authorized-review gate.'
+  created_at: 2026-11-08T23:09:37.192802293Z
+  modified_at: 2026-11-08T23:09:37.192802293Z
+  session_id: 01a1bd558c6d
 history:
 - id: 01a1bc53-0ec9-7670-9674-41fd5fd9d861
   author: joe
