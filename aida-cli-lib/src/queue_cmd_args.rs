@@ -689,16 +689,10 @@ pub enum QueueCommand {
         // trace:STORY-248 | ai:claude
         #[clap(long = "force-base")]
         force_base: bool,
-        /// Override the In-Progress guard when the target scope is already
-        /// held by another active lease. Without --steal, `aida queue work`
-        /// refuses and names the holding lease. With --steal, the holding
-        /// session is ended first (`aida session end <id>` — clean exit;
-        /// uncommitted work still blocks, exit those manually or use
-        /// `aida session end --force`; a live process using the worktree
-        /// also blocks, stop it or use `aida session end --include-in-use`)
-        /// and the new session takes over.
-        // trace:TASK-81 | ai:claude
-        // trace:BUG-1986 | ai:claude
+        /// Retired. Refuses explicitly; proven-dead ownership is reclaimed
+        /// automatically through guarded session end. Live or unknown owners
+        /// must hand off voluntarily.
+        // trace:STORY-2325 | ai:codex
         #[clap(long)]
         steal: bool,
         /// Claim a spec whose status is ambiguous: already In Progress with
@@ -1336,8 +1330,8 @@ pub enum QueueCommand {
         // trace:TASK-487 | ai:claude
         #[clap(long)]
         force: bool,
-        /// When chaining `--work`, end any session holding the target
-        /// scope first (passes through to `aida queue work --steal`).
+        /// Retired. Refuses explicitly when chaining `--work`; ownership
+        /// handles proven-dead reclaim automatically.
         // trace:TASK-81 | ai:claude
         #[clap(long)]
         steal: bool,

@@ -244,9 +244,7 @@ pub(crate) fn ci_red_recovery_hint(
     } else {
         format!("CI failed: {subjects}")
     };
-    format!(
-        "{route}. Push fixups to the same branch: `aida queue work {spec} --branch {branch} --steal`"
-    )
+    format!("{route}. Push fixups to the same branch: `aida queue work {spec} --branch {branch}`")
 }
 
 #[cfg(test)]
