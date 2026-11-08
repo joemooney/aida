@@ -3,12 +3,12 @@ spec_id: TASK-b6b1278890774ef993d2ebc327862470-880
 agreed_id: TASK-3223
 title: 'STORY-2561 S2: route CLI/MCP store writes through the mediation service and deny raw store writes in the shared boundary'
 description: 'Slice 2 of STORY-2561. Route every inventoried in-lane writer through the S1 service. In the shared AIDA bwrap boundary, make store objects, authority-bearing metadata and the shared derived cache read-only (ancestor grants, symlinks, primary-checkout launches and resume included), with lane-private or read-only derived caches where readers need them. The mediated profile is gated; Codex-native compatibility and its labels stay unchanged. Concurrency tests: stale base, concurrent mutation, and host failure after persist but before reply. Claude behavior is preserved.'
-status: NeedsAttention
+status: Approved
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-06T13:39:53.442026096Z
-modified_at: 2026-11-08T14:37:10.181218116Z
+modified_at: 2026-11-08T14:38:06.955529254Z
 req_type: Task
 tags:
 - architecture
@@ -941,6 +941,13 @@ comments:
   modified_at: 2026-11-08T14:31:58.388678356Z
   session_id: 01a1bb84d664
   harness_version: codex-cli 0.167.0
+- id: 01a1bb98-5c6b-7f63-87e0-0770a5c01841
+  author: joe
+  content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: Head 2588cb1c1fd6 fixes the three minor findings from the last round (MCP evidence, wire-verb validation, real lane client in the sandbox test), but the binding routing acceptance is still unmet (mediated inventory cannot reach zero), the design-fork punt has no ruling, CI has no results at this head, and the host does not enforce the guest/requester comment and edit refusal.. It was punted on: design-fork: PR #3661 review comment 64 findings 1 and 3 remain unresolved: the binding part-3 ruling requires every inventoried writer to route, but comment edit/delete lack an approved host ownership policy and intentionally refuse. Decide whether explicit refusal is acceptable at cutover or approve typed operation policies; do not count refusal as verified routing. This run fixes findings 5 and 6 and drives the real early CLI entrypoint/Rust lane client inside the sealed boundary for finding 7 (executed live test passed in primary and linked layouts). The mediated inventory still refuses with 3163 writer sites and 293 operations unresolved; production admission remains gated and own_claim/queue_done remain TASK-3326. make check-ci-fast is not verified as an aggregate; its Cargo checks require host execution under this seat rule. Existing merge hold and publication-under-punt questions require advisor/operator resolution. Edits remain uncommitted; this punt is a publication veto, not authorization to publish a partial slice.. No triage reason was given.'
+  created_at: 2026-11-08T14:38:06.955527526Z
+  modified_at: 2026-11-08T14:38:06.955527526Z
+  session_id: 01a1b9af-8230-75d2-82f8-667491cc010a
+  harness_version: 2.1.319 (Claude Code)
 history:
 - id: 01a1b116-742d-73c0-9064-1933f11e4c38
   author: joe
@@ -1727,6 +1734,15 @@ history:
   session_id: 01a1bb94592b
   harness_version: 2.1.319 (Claude Code)
   changes: []
+- id: 01a1bb98-5c6b-7f63-87e0-076b672680f1
+  author: joe
+  timestamp: 2026-11-08T14:38:06.955513602Z
+  session_id: 01a1b9af-8230-75d2-82f8-667491cc010a
+  harness_version: 2.1.319 (Claude Code)
+  changes:
+  - field_name: status
+    old_value: NeedsAttention
+    new_value: Approved
 execution_mode: drive
 filed_at:
   code_sha: 50ce509da3f7edbd12ff6636fe996c9c3a65c68f
@@ -1736,16 +1752,3 @@ filed_at:
   aida_build_sha: dd852f74c3b
   vendor: claude
   session: b0a84e34-277c-4df6-b53c-43f4bbe2e84d
-attention_reason:
-  category: design-fork
-  detail: 'PR #3661 review comment 64 findings 1 and 3 remain unresolved: the binding part-3 ruling requires every inventoried writer to route, but comment edit/delete lack an approved host ownership policy and intentionally refuse. Decide whether explicit refusal is acceptable at cutover or approve typed operation policies; do not count refusal as verified routing. This run fixes findings 5 and 6 and drives the real early CLI entrypoint/Rust lane client inside the sealed boundary for finding 7 (executed live test passed in primary and linked layouts). The mediated inventory still refuses with 3163 writer sites and 293 operations unresolved; production admission remains gated and own_claim/queue_done remain TASK-3326. make check-ci-fast is not verified as an aggregate; its Cargo checks require host execution under this seat rule. Existing merge hold and publication-under-punt questions require advisor/operator resolution. Edits remain uncommitted; this punt is a publication veto, not authorization to publish a partial slice.'
-  raised_by: implementer
-  raised_at: 2026-11-08T14:31:26.758227509Z
-failure_reason:
-  phase: reviewer
-  phase_index: 3
-  kind: verdict:request-changes
-  detail: Head 2588cb1c1fd6 fixes the three minor findings from the last round (MCP evidence, wire-verb validation, real lane client in the sandbox test), but the binding routing acceptance is still unmet (mediated inventory cannot reach zero), the design-fork punt has no ruling, CI has no results at this head, and the host does not enforce the guest/requester comment and edit refusal.
-  recovery_hint: address the review findings, move TASK-3223 back to In Progress, and clear the PR hold only after approval
-  shelved_by: reviewer
-  shelved_at: 2026-11-08T14:37:10.181218116Z
