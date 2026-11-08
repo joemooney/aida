@@ -1,0 +1,29 @@
+id: 01a1b9ab-571e-73d0-a1e9-20ad2fd04f8e
+spec_id: TASK-b6b1278890774ef993d2ebc327862470-971
+title: 'cosmetic (non-blocking): rework_direction.rs lead_rework_prompt uses direction.…'
+description: |-
+  Non-blocking finding carried forward from an APPROVED review verdict on BUG-2489, which has since completed — recorded here so it keeps a queryable home once the verdict record stops being read.
+
+  cosmetic (non-blocking): rework_direction.rs lead_rework_prompt uses direction.ruling.unwrap() in production, guarded by ruling_leads; restructure as a single match on (brief, ruling) to drop the unwrap.
+
+  PR: #3655
+  Reviewed sha: f1c2aec9af0fdd3f4f6be697b16b0873cd3e1524
+status: Draft
+priority: Medium
+owner: joe
+feature: Uncategorized
+created_at: 2026-11-08T05:39:36.350066314Z
+modified_at: 2026-11-08T05:39:36.350066314Z
+req_type: Task
+tags:
+- carried-from:BUG-2489
+- finding-hash:2b4135e2
+- from-review:PR-3655
+- kind:carried-forward
+filed_at:
+  code_sha: 08cbf8a3fe7e5cef1171627f2b6edb446abc6539
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: ff9b8c91808
+  vendor: claude
