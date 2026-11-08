@@ -1,0 +1,24 @@
+id: 01a1b99f-59eb-7242-b327-dba7bf280c5a
+spec_id: BUG-b6b1278890774ef993d2ebc327862470-259
+agreed_id: BUG-2494
+title: aida ship --no-merge prints only 'could not open a forge change request' and hides the forge's reason (likely the over-long PR title from a long commit subject)
+description: '2026-11-07 20:35: shipping BUG-2489''s recovered branch failed with exactly that line; ''gh pr create'' with a shorter title then succeeded (#3655). Acceptance: the error includes the forge''s message; a subject over the forge title limit is truncated or reported with the limit.'
+status: Draft
+priority: Low
+owner: ''
+feature: Uncategorized
+created_at: 2026-11-08T05:26:30.635530303Z
+modified_at: 2026-11-08T05:26:30.635530303Z
+req_type: Bug
+tags:
+- area:ship
+- ux
+filed_at:
+  code_sha: ff9b8c91808130e9bddf339d428915a5d551416e
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: efbd07d6c35
+  vendor: claude
+  session: 01a1b8be-8170-7fb2-89ab-ecb4c6eee98c
+  harness_version: 2.1.319 (Claude Code)
