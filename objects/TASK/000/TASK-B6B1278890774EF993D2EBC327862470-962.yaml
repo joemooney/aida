@@ -1,0 +1,31 @@
+id: 01a1b886-57d9-7f92-ae49-8514aff1554f
+spec_id: TASK-b6b1278890774ef993d2ebc327862470-962
+title: 'COSMETIC: PR #3637 body is stale vs head b04c98e — it still reports the portabi…'
+description: |-
+  Non-blocking finding carried forward from an APPROVED review verdict on TASK-3424, which has since completed — recorded here so it keeps a queryable home once the verdict record stops being read.
+
+  COSMETIC: PR #3637 body is stale vs head b04c98e — it still reports the portability ratchet as FAIL, a NeedsAttention punt, uncommitted source edits and BLOCKED targeted cargo runs, while the head deletes the 5 obsolete mcp.rs allowlist rows, makes the fixtures portable (/nonexistent), and CI (gates incl. portability/fmt/clippy, lib-0, lib-1) is green. Refresh the body's Validation section on next touch.
+
+  PR: #3637
+  Reviewed sha: b04c98e1fc12e7d0e095a4225736d8a8b5422f1b
+status: Draft
+priority: Medium
+owner: joe
+feature: Uncategorized
+created_at: 2026-11-08T00:19:34.489306322Z
+modified_at: 2026-11-08T00:19:34.489306322Z
+req_type: Task
+tags:
+- carried-from:TASK-3424
+- finding-hash:615af454
+- from-review:PR-3637
+- kind:carried-forward
+filed_at:
+  code_sha: 2782389cd8ad9240672ea95d0f2209c7f193700b
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 2a7fe186bdc
+  vendor: claude
+  session: 01a1b848-940b-7bd2-8acd-52e428b182b8
+  harness_version: 2.1.319 (Claude Code)
