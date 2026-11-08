@@ -28,7 +28,7 @@ priority: Low
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-09-13T22:07:45.944235Z
-modified_at: 2026-11-08T12:15:20.098090274Z
+modified_at: 2026-11-08T12:26:45.919800574Z
 req_type: Task
 tags:
 - cleanup
@@ -289,6 +289,22 @@ comments:
   modified_at: 2026-11-08T12:13:33.954382769Z
   session_id: 01a1b9af-8230-75d2-82f8-667491cc010a
   harness_version: 2.1.319 (Claude Code)
+- id: 01a1bb20-1b1f-7a00-a4fe-fef6fd4fc23e
+  author: dirtlab
+  content: |
+    Native rework handoff for review at fb7893f973b0: addressed all three latest findings. Origin GC coverage excludes only tags whose full ref name and raw object ID exactly match the host at inspection. These tags are removed from positive roots, never added as negative reachability evidence: a seat branch at the same unpublished commit still retains work. Seat-created/moved tags, stashes and other refs remain protected. The expanded clone fixture models legacy inherited host tags and verifies eligibility plus seat-created/moved-tag and same-commit branch retention.
+
+    Unattended scans now resume after the last inspected path using an atomically replaced, noncanonical .aida/worktree-gc-cursor.json hint. This advances by the actual scanned count; the regression covers 270 entries in nine 30-entry scans. Cursor save failures warn without losing scan results; concurrent scans may duplicate inspection but cannot grant deletion authority. Interactive host scans inspect the complete inventory without the 60-second soft budget. Session-reap help now names the doctor merged-agent-worktrees healer; the golden snapshot was regenerated and verified. Documentation and the writer inventory describe the new behavior.
+
+    Final launcher validation: j20261108T121926097-2-0 executed 19 TASK-1222 tests; j20261108T122049715-2-0 executed the existing bug2450 remote-coverage regression; j20261108T122309174-2-0 executed normal help snapshot verification. All passed, exit 0 (21 final tests). Earlier corrected suite j20261108T121832322-2-0 also passed 19/19; snapshot regeneration j20261108T121712262-2-0 passed. Initial wrong-package and Option-conversion failures were corrected and are not pass claims. Direct rustfmt, git diff --check, portability, store-writer inventory and its 42 Python fixture tests pass. Criteria report no untested criteria or unanchored tests. untested=false. Codegraph unavailable; used rg after doctor check.
+
+    Changed files: aida-cli-lib/src/seat_clone.rs; aida-cli-lib/src/worktree_lifecycle_gc.rs; aida-cli-lib/src/agent_launch_args.rs; aida-cli-lib/src/tests/golden/cli_help_snapshot.txt; docs/cli/06-roles-sessions.md; scripts/store-writers.toml. No implementation blockers. Full CI/prepublication checks remain for the host.
+
+    Edits remain uncommitted under the native seat contract. No host cleanup, commit, push, PR creation, ship, review record or queue completion performed. Host publication and queue completion follow exit; operator application remains separate.
+  created_at: 2026-11-08T12:26:45.919800574Z
+  modified_at: 2026-11-08T12:26:45.919800574Z
+  session_id: 01a1bb1552c8
+  harness_version: codex-cli 0.167.0
 history:
 - id: 01a1b7cd-7751-7262-8ad1-f0f9d2ef6d4d
   author: joe
