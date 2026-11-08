@@ -64,80 +64,31 @@ copy a per-lane index, patch the globally installed client from a lane, or
 change host timer/index settings from this seat. A symlink is routing only;
 non-contained seats still inherit the host's ordinary filesystem permissions.
 
-No containment or launcher code was changed by this investigation. In
-particular, `launch/spawn.rs` and `launch/profile.rs` remain untouched. The
-installed `aida doctor check codegraph` still rejects the category because
-that installed binary predates Slice 1; this is distinct from the client
-failure reproduced above.
+## Acceptance status and remaining ownership
 
-## Validation and handoff
-
-- `cargo test --profile agent -p aida-cli-lib codegraph::tests -- --nocapture`:
-  seven tests passed, including runtime linking, reused-seat excludes, prompt
-  invocation preservation, template equality, and doctor probes.
-- `make check-ci-fast`: all 43 fast gates passed, including formatting.
-- `make check-templates`: passed; absent portable `.agents` pack is a clean
-  no-op for this clone. No templates were changed in this investigation.
-- `git diff --check`: passed.
-
-The host published this investigation at `ae96e54ce1a4` on Slice 1's PR
-#3607. That publication does not resolve the Slice 2 client decision or clear
-any punt or merge hold. Unit tests validate Slice 1 behavior; they do not
-satisfy AC2 or AC5.
-
-## Completing-slice review handoff (2026-11-08 UTC)
-
-PR-body evidence for the host publisher (PR #3632): inspected local
-`origin/main` at `2a7fe186bdcd718fa356e5e4d028a3b2ff13769d`; no fetch or
-publication was performed by this native seat.
-
-- AC1: routing implementation is present on main in
+- AC1: primary-index routing is present on main in
   `codegraph::primary_index_link` and `worktree_gc::link_worktree_runtime_state`.
-  It links an existing primary index without copying it. Runtime success is
-  unverified in this seat: neither the seat nor `/home/dirtlab/ai/aida` has a
-  `.codegraph` entry. Routing code alone does not establish AC2 or AC5.
-- AC2: not verified complete. No codegraph-specific read grant was found in
-  main's containment/launch code. The earlier read-only client/WAL blocker
-  above remains unresolved; this change adds no access grant. Host provisioning
-  and the supported read-only client decision remain required before completion.
-- AC3: main already contains the navigation guidance in the shared dispatch
-  master and AGENTS.md, with template-equality and assembled-prompt tests.
-- AC4: existing missing/stale/unreachable probes are retained, now gated on
-  an explicit `.codegraph` ignore rule in the invoking or primary checkout's
-  `.gitignore`. Unrelated projects stay silent even with an incidental index.
-  Missing tool plus absent index produces one setup finding. Broken links
-  and other access errors still receive reachability diagnostics.
-- AC5: open. From this seat's working directory, the actual command and output
-  were:
+  Setup links the existing index without copying it. A successful runtime query
+  from a seat remains unverified; routing alone does not establish AC2 or AC5.
+- AC2: not met. No codegraph-specific containment read grant is implemented.
+  The supported read-only client and WAL-layout decision above remains required;
+  the routing symlink grants no read-only boundary.
+- AC3: main already carries the navigation guidance in the AGENTS.md template
+  and shared lane prompt, with template-equality and assembled-prompt coverage.
+- AC4: doctor probes missing tools, indexes older than one hour and unreachable
+  indexes. Diagnostics require an explicit `.codegraph` ignore rule in the
+  invoking or primary checkout's `.gitignore`, so unrelated projects stay silent.
+  Missing tool plus absent index produces one setup finding; broken links and
+  access errors retain reachability diagnostics.
+- AC5: open because no successful read-only seat query has been demonstrated.
+  The installed client's writable-open/WAL behavior described above blocks that
+  evidence even when the executable and routing link are available.
 
-  ```console
-  $ codegraph callers primary_index_link
-  /bin/bash: line 1: codegraph: command not found
-  ```
-
-  This is a failed attempt, not successful seat-call evidence. The host must
-  supply the tool and primary index, then capture a successful read-only call.
-
-Keep a `Refs STORY-2630` publication subject until AC2 and AC5 are demonstrated;
-this rework cannot honestly complete the story. Existing punts/holds remain
-publication vetoes. BUG-2486's #3613 commit `47e379ad6e` is already an ancestor
-of this lane HEAD; the host must still refresh/rebase before pushing.
-
-Validation limitation: `make sync-templates` and `make check-templates` were
-attempted with `-o sync-agent-skills` / `-o check-agent-skills`; recursive Make
-did not inherit those exclusions, attempted local Cargo and failed in sccache
-(exit 254). Neither full target passed. The host must run both full targets.
-The direct template-hook check, rustfmt and whitespace check passed.
-
-The launcher job `j20261108T000943538-2-0` executed
-`cargo test --profile agent -p aida-cli-lib --lib -- codegraph::tests`:
-8 passed, 0 failed (exit 0). This includes the opted-out regression, all
-doctor probes, primary routing and prompt/template checks. It does not prove
-AC2 or AC5. STORY-2630 was punted to Needs Attention for those dependencies;
-the CLI persisted that status but reported that its punt signal file could
-not be written on the read-only filesystem. The host must honor the persisted
-punt even without that signal. A Refs publication declaration was recorded;
-it does not clear this veto.
+STORY-2630 owns the further slice for AC2 and AC5, including host provisioning,
+the supported read-only client decision, containment read admission and a
+successful seat-call log. This PR uses `Refs STORY-2630`; it does not complete
+those acceptance items. Per-round command output, validation and publication
+handoff belong in the PR body and STORY-2630 comments.
 
 ## Slice 1 clone exclude regression
 
@@ -154,8 +105,3 @@ file in the pinned directory. Unsafe metadata skips optional navigation setup.
 The refusal tests cover an exclude symlink to an outside secret and an info
 symlink to an outside directory, checking that the secret is not copied and
 that nothing is written outside the clone.
-
-The prior exclude repair was published at `02d9c1304b46`; its durable CI
-evidence is [run 42410096051](https://github.com/joemooney/aida/actions/runs/42410096051).
-Per-round validation, launcher handoff and publication state belong in
-STORY-2630 comments and the PR trail, rather than this investigation note.
