@@ -1,3 +1,8 @@
+Post-release hold waits require every `merge-hold-gate` row to pass, including
+coexisting legacy check runs and commit statuses. Live cutover evidence remains
+operator-owned; see docs/internal/testing/bug-2492-status-cutover.md.
+<!-- trace:BUG-2492 | ai:codex -->
+
 Review-watch records retained fast-exiting children before reaping. Incomplete
 legacy receipts use the existing reboot/TTL backstop. Caller capture requires
 verified local procfs and fails closed with host-retry guidance. See OVERVIEW.md.

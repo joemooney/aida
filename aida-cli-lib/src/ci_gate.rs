@@ -597,17 +597,20 @@ pub(crate) enum HoldGateState {
 }
 
 pub(crate) fn hold_gate_state(rows: &[CheckRow]) -> HoldGateState {
-    let Some(row) = rows
+    // During cutover, a legacy check run and a commit status can share this
+    // name. Both must pass before the post-release wait can finish.
+    // trace:BUG-2492 | ai:codex
+    let mut state = HoldGateState::Absent;
+    for row in rows
         .iter()
-        .find(|r| r.name.eq_ignore_ascii_case(HOLD_GATE_CHECK))
-    else {
-        return HoldGateState::Absent;
-    };
-    if row.bucket == "pass" {
-        HoldGateState::Green
-    } else {
-        HoldGateState::NotGreen
+        .filter(|r| r.name.eq_ignore_ascii_case(HOLD_GATE_CHECK))
+    {
+        if row.bucket != "pass" {
+            return HoldGateState::NotGreen;
+        }
+        state = HoldGateState::Green;
     }
+    state
 }
 
 #[cfg(test)]
@@ -1451,6 +1454,29 @@ mod tests {
         let body = &src[..src.find("#[cfg(test)]").unwrap()];
         assert!(!body.contains(concat!("Command::new(\"g", "h\")")));
         assert!(!body.contains(concat!("Command::new(\"gl", "ab\")")));
+    }
+
+    // trace:BUG-2492 | ai:codex
+    #[test]
+    fn hold_gate_state_requires_all_same_named_rows_to_pass() {
+        assert_eq!(hold_gate_state(&[]), HoldGateState::Absent);
+        for bucket in ["pending", "fail", "cancel", "skipping", "unknown", ""] {
+            let mut rows = vec![
+                row("merge-hold-gate", "legacy workflow", "pass"),
+                row("MERGE-HOLD-GATE", "", bucket),
+                row("Build", "CI", "pass"),
+            ];
+            for _ in 0..2 {
+                assert_eq!(hold_gate_state(&rows), HoldGateState::NotGreen, "{rows:?}");
+                rows.reverse();
+            }
+        }
+        let rows = vec![
+            row("merge-hold-gate", "legacy workflow", "pass"),
+            row("merge-hold-gate", "", "pass"),
+            row("Build", "CI", "pending"),
+        ];
+        assert_eq!(hold_gate_state(&rows), HoldGateState::Green);
     }
 
     #[test]

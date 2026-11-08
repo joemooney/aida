@@ -1,3 +1,10 @@
+The post-release hold wait requires all rows named `merge-hold-gate` to pass.
+During status cutover, a successful legacy check run cannot end the wait while
+the same-name commit status is pending; a failed legacy check also keeps the
+wait open. Row order does not affect the result. Live enforcement and notification
+verification follow the operator [cutover procedure](docs/internal/testing/bug-2492-status-cutover.md).
+<!-- trace:BUG-2492 | ai:codex -->
+
 `cmdkit` holds the command-framework types and shared output/stakeholder vocabulary;
 existing CLI, registry and stakeholder paths re-export them.
 <!-- trace:TASK-3425 | ai:codex -->
