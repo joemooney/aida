@@ -8,7 +8,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-07T23:40:15.306412624Z
-modified_at: 2026-11-08T20:27:38.119725843Z
+modified_at: 2026-11-08T20:27:43.254924483Z
 req_type: Task
 relationships:
 - rel_type: BlockedBy
@@ -475,6 +475,23 @@ comments:
   content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: Round-6 fixes are correct and the extraction is faithful, but AC5 timings and the AC3 72-vs-58 ruling are still open, the completion trailer remains, CI has no result at head, and merge-hold-gate fails.. It was punted on: ambiguous-spec: Round 6: findings 5 and 6 are fixed locally (MCP schema public-surface detection plus real-path regression coverage; self-alias restricted to cfg(test)). Findings 1 and 2 remain unresolved: AC5 needs dell1 clean-build comparisons and cargo --timings or advisor amendment; this seat reports hostname imac and has no dell1 evidence. AC3 still requires advisor correction of 72 tools versus the preserved 58-tool surface. Findings 3 and 4 require host PR/title/body correction to Refs TASK-3429 for any authorized partial publication, final-head green CI, and recorded merge-hold clearance. No completion credit is justified. Preserve all existing publication vetoes; repeated requeue with no ruling does not authorize publication.. No triage reason was given.'
   created_at: 2026-11-08T20:27:38.119724095Z
   modified_at: 2026-11-08T20:27:38.119724095Z
+  session_id: 01a1bc93-77a0-7740-8b03-df4e3e8d1df5
+  harness_version: 2.1.319 (Claude Code)
+- id: 01a1bcd8-6e43-7ca1-a5db-a711d5ade315
+  author: joe
+  content: |-
+    REVIEW FINDINGS TO ADDRESS (TASK-3429):
+    Verdict: CHANGES REQUESTED
+    Reviewed commit: 488164b2b3b3
+    Recorded: 2026-11-08T20:11:28.390696303+00:00
+    Findings:
+    1. AC5 not met: TASK-3429 has no dell1 clean-build comparison or cargo --timings numbers (ruling 2). The 2026-11-08 13:03 handoff confirms none were taken and that seat was on host imac. Needs a run on dell1 by someone with that host, or an advisor amendment to the criterion; the implementer lane cannot satisfy it.
+    2. AC3 unverified: the spec still requires 72 unchanged tool names; aida-cli-lib/src/mcp_schema.rs has 58 unique names. A normalized line compare of base mcp.rs against aida-mcp/src/mcp.rs plus the shared modules shows only qualification, reformatting and //! to // doc changes, so 72 looks like a spec error, but no advisor correction is recorded. The advisor must correct the number, and the tools/list and descriptor tests need a green CI result at the head.
+    3. Completion trailer overclaims: the PR title and every commit subject end in (TASK-3429), which drives merge-time completion, while AC3 and AC5 are open and the spec is Needs Attention with a publication veto in the 13:03 handoff. The PR body is one provenance line and discloses none of this. Finish the criteria, or retitle with (Refs TASK-3429) and disclose the partial scope; the handoff already proposes the wording.
+    4. CI has not validated this head: all 7 CI shards in run 42518226614 at 488164b2b3b3 are pending, so the aida-mcp tests, tools/list goldens, respawn tests and static gates have no result. The handoff also reports a broad local surface run with 1 failure (missing CLI binary fixture) and several launcher jobs incomplete. merge-hold-gate job 128845822557 fails on the active aida:merge-hold, which needs a recorded clearance, not a code change. A green run at the final head is required before approval.
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
+  created_at: 2026-11-08T20:27:43.043365810Z
+  modified_at: 2026-11-08T20:27:43.043365810Z
   session_id: 01a1bc93-77a0-7740-8b03-df4e3e8d1df5
   harness_version: 2.1.319 (Claude Code)
 history:
