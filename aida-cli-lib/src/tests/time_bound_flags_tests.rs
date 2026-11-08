@@ -1,5 +1,5 @@
 //! Every time-bound flag in the CLI (`--since`, `--until`, `--older-than`,
-//! `--unused` and the `aida usage unused <DURATION>` positional) either runs
+//! and the `aida usage unused <DURATION>` positional) either runs
 //! through the shared time-bound grammar in `parse_since_arg_at`, or is
 //! listed below as deliberately NOT a time bound (a git ref, a tag, a
 //! free-text condition, an integer day count).
@@ -36,7 +36,7 @@ fn history_until(raw: &str, now: DateTime<Utc>, tz: &FixedOffset) -> Result<Date
 }
 
 /// `parse_days_arg` (usage, health, metrics) and the labeled lookbacks
-/// (mailbox `--older-than`, usage `--unused`) all resolve through
+/// (mailbox `--older-than`, usage `unused <DURATION>`) all resolve through
 /// `parse_lookback_at`.
 fn lookback(raw: &str, now: DateTime<Utc>, tz: &FixedOffset) -> Result<DateTime<Utc>, String> {
     parse_lookback_at(raw, "--since", now, tz)
@@ -93,9 +93,7 @@ fn classified_flags() -> Vec<(&'static str, Kind)> {
             NotATimeBound("absolute RFC3339 response deadline per the disposition contract; no relative/lookback grammar"),
         ),
         ("aida usage --since", Shared(lookback)),
-        // Split so the retired-flag lint (scripts/check-removed-flags.sh),
-        // which matches the joined spelling, doesn't flag this label.
-        (concat!("aida usage", " --unused"), Shared(lookback)),
+        // trace:TASK-1214 | ai:codex — only the retained positional is classified.
         ("aida usage unused <duration>", Shared(lookback)),
         ("aida metrics agent-lift --since", Shared(lookback)),
         // trace:STORY-1479 | ai:claude — cycle-time resolves both bounds

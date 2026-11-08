@@ -724,7 +724,9 @@ starts ordinary attested reviewers as soon as a head is eligible. It does not
 wait for CI. Run it from a shell with a validated grant that delegates the
 reviewer seat. `--once` performs one discovery pass and leaves admitted reviews
 running; the ordinary loop polls every 10 seconds. `--interval` accepts 1–3600
-seconds, and `--max-concurrent` accepts one or two reviewers (default two).
+seconds, and `--max-concurrent` accepts 1–8 reviewers. When omitted, it uses
+`[review_watch] max_concurrent` in `.aida/config.toml`, defaulting to 2 when
+absent. This repository configures 4. <!-- trace:TASK-3472 | ai:codex -->
 `--vendor` uses the ordinary queue-work vendor selection when omitted.
 
 A refusal or setup failure for one change is reported against that change and

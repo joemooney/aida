@@ -100,7 +100,7 @@ fn upgrade_running_binary(
 
     if check {
         println!(
-            "\n{}: an upgrade is available. Run `aida upgrade` (without --check) to install.",
+            "\n{}: an upgrade is available. Run `aida upgrade` to install.",
             "INFO".blue()
         );
         return Ok(());
@@ -166,7 +166,7 @@ fn upgrade_specific_binary(
 
     if check {
         println!(
-            "\n{}: upgrade available for {}. Re-run without --check to install.",
+            "\n{}: upgrade available for {}. Run `aida upgrade` to install.",
             "INFO".blue(),
             target_path.display()
         );
@@ -264,7 +264,7 @@ pub(crate) fn upgrade_dev_mode_sibling_scan(
             print_unreleased_dev_hint(&exe, &target_tag, diff);
         } else {
             println!(
-                "{}: {} sibling install(s) are stale. Re-run without --check to upgrade.",
+                "{}: {} sibling install(s) are stale. Run `aida upgrade` to upgrade.",
                 "INFO".blue(),
                 stale.len()
             );
@@ -435,8 +435,8 @@ fn print_unreleased_dev_hint(exe: &std::path::Path, target_tag: &str, with_diff:
         println!();
     } else {
         println!(
-            "      Pass {} to see the unreleased commits before shipping.",
-            "--diff".cyan()
+            "      Run {} to see the unreleased commits before shipping.",
+            "aida upgrade diff".cyan()
         );
     }
 
@@ -662,13 +662,10 @@ fn dest_writable(dir: &std::path::Path) -> bool {
 /// the matching upgrade strategy. From a developer build with no
 /// --target, scans common install locations and offers to upgrade
 /// any stale sibling installs.
+// trace:TASK-1214 | ai:codex
 #[derive(clap::Parser, Debug)]
 #[clap(name = "upgrade")]
 pub(crate) struct UpgradeArgs {
-    /// Compare current/sibling versions to latest release; report only, don't install.
-    #[clap(long)]
-    pub check: bool,
-
     /// Install a specific version instead of latest. Format: `v0.4.0`.
     #[clap(long)]
     pub version: Option<String>,
@@ -681,12 +678,6 @@ pub(crate) struct UpgradeArgs {
     /// Useful from a developer shell to upgrade `~/.local/bin/aida` etc.
     #[clap(long)]
     pub target: Option<String>,
-
-    /// When the dev build is ahead of the latest release tag, print a
-    /// `git log --stat` of the unreleased commits so you can vet what
-    /// `aida dev patch` would ship.
-    #[clap(long, hide = true)]
-    pub diff: bool,
 
     /// Upgrade action.
     // trace:STORY-1028 | ai:codex
@@ -702,14 +693,12 @@ fn run_upgrade(
 ) -> anyhow::Result<()> {
     let args = <UpgradeArgs as clap::FromArgMatches>::from_arg_matches(matches)?;
     let UpgradeArgs {
-        check,
         version,
         yes,
         target,
-        diff,
         cmd,
     } = &args;
-    let (check, diff) = normalize_upgrade_mode(*check, *diff, cmd.as_ref());
+    let (check, diff) = normalize_upgrade_mode(cmd.as_ref());
     return self::handle_upgrade_command(check, version.as_deref(), *yes, target.as_deref(), diff);
 }
 

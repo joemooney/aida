@@ -14,6 +14,10 @@
 //! - `session leases --prune-stale`: Read → Session. It releases stale
 //!   leases, including other clones' claims (TASK-1939).
 //! - Conditional session handoffs auto-push their spec deferral (STORY-2402).
+//!
+//! Rows removed by hand after capture:
+//! - Twenty retired STORY-1028 mode-flag variants (TASK-1214).
+// trace:TASK-1214 | ai:codex
 // trace:STORY-1728 | ai:claude
 
 use super::*;
