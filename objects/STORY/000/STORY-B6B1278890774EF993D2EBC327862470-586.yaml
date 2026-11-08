@@ -2,49 +2,70 @@ id: 01a1b91a-f79c-7341-bcb5-fc2bc238b9d3
 spec_id: STORY-b6b1278890774ef993d2ebc327862470-586
 agreed_id: STORY-2663
 title: 'Review PR-3629: [AI:codex] chore: Remove STORY-1028 hidden CLI aliases (TASK-1214)'
-description: |
-  Auto-filed by `aida pr auto-queue-review` (typically from /aida-pr) (session `01a1b90a`) for branch `task-1214`.
+description: 'Auto-filed by `aida pr auto-queue-review` (typically from /aida-pr) (session `01a1b90a`) for branch `task-1214`.
+
 
   - PR: <https://github.com/joemooney/aida/pull/3629>
+
   - Branch: `task-1214` → `main`
+
 
   ## Covers
 
+
   - TASK-1214
+
 
   ## Acceptance
 
-  - Generate a structured review prompt with `aida review prompt --pr 3629` and verify each spec's acceptance criteria.
+
+  - Generate a structured review prompt with `aida review prompt --pr 3629` and verify each spec''s acceptance criteria.
+
   - Approve and merge, or request changes by spec id.
+
   - Mark this story `completed` once the PR is merged.
+
+  '
 status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
-created_at: 2026-11-08T03:01:54.716012338Z
-modified_at: 2026-11-08T12:41:09.222980542Z
+created_at: 2026-11-08 03:01:54.716012+00:00
+modified_at: 2026-11-08 12:41:09.222980+00:00
 req_type: Story
 relationships:
 - rel_type:
     custom: implements
   target_id: 01a09395-1a21-7ca0-b624-e7c61ae1051d
-  created_at: 2026-11-08T03:02:11.381451487Z
+  created_at: 2026-11-08 03:02:11.381451+00:00
   created_by: joe
 comments:
 - id: 01a1bb2d-5111-7a91-bd33-904da1e745d6
   author: aida-auto-bump
   content: 'Auto-completed: PR #3629 is merged on the forge (its merge commit was outside the local scan window).'
-  created_at: 2026-11-08T12:41:11.697953823Z
-  modified_at: 2026-11-08T12:41:11.697953823Z
+  created_at: 2026-11-08 12:41:11.697953+00:00
+  modified_at: 2026-11-08 12:41:11.697953+00:00
+- id: 01a1bb2d-77a3-70f1-85de-7f5c02537370
+  author: aida-auto-bump
+  content: 'Auto-completed: PR #3629 merged without a reviewer session (self-merge or orchestrator skipped phase 3).'
+  created_at: 2026-11-08 12:41:21.571526+00:00
+  modified_at: 2026-11-08 12:41:21.571526+00:00
 history:
 - id: 01a1b91b-3eeb-75f0-97fd-a1ea854bcbb1
   author: joe
-  timestamp: 2026-11-08T03:02:12.971727252Z
+  timestamp: 2026-11-08 03:02:12.971727+00:00
   session_id: 01a1b90afd9e
   changes: []
 - id: 01a1bb2d-5111-7a91-bd33-905c99bb91cb
   author: aida-auto-bump
-  timestamp: 2026-11-08T12:41:11.697958467Z
+  timestamp: 2026-11-08 12:41:11.697958+00:00
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: Completed
+- id: 01a1bb2d-77a3-70f1-85de-7f4a76110376
+  author: aida-auto-bump
+  timestamp: 2026-11-08 12:41:21.571513+00:00
   changes:
   - field_name: status
     old_value: Approved
@@ -59,4 +80,4 @@ filed_at:
   session: 01a1b90afd9e
 implementation_info:
   implemented: false
-  completed_at: 2026-11-08T12:41:11.697952153Z
+  completed_at: 2026-11-08 12:41:11.697952+00:00
