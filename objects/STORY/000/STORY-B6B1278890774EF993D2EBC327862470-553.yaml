@@ -8,7 +8,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-07T15:34:33.363448Z
-modified_at: 2026-11-08T17:30:01.530521942Z
+modified_at: 2026-11-08T17:41:40.377078931Z
 req_type: Story
 comments:
 - id: 01a1b6a6-52e1-70a0-a9c1-d32888979ca5
@@ -966,6 +966,62 @@ comments:
   modified_at: 2026-11-08T17:24:25.087864301Z
   session_id: 01a1b9af-8230-75d2-82f8-667491cc010a
   harness_version: 2.1.319 (Claude Code)
+- id: 01a1bc40-6999-7f60-8710-44b17283c3bf
+  author: joe
+  content: |
+    This remains a Refs slice for STORY-2630. The binding completing-slice ruling is not satisfied: the host proxy is not deployed, lane client delivery is unresolved, and no AIDA-contained Codex primary-index query has succeeded. Joe (host operator/advisor) owns those blocked actions; no acceptance criteria have been moved to a follow-up without advisor approval.
+
+    Round 15 fixes:
+
+    - Finding 6: a lane with a proxy descriptor and no codegraph binary now receives the host-client routing action, without upstream-install advice. The primary host retains upstream-install advice. Added None-binary regression coverage.
+    - Finding 7: a missing or dangling proxy descriptor now reports its full path and asks the host to deploy or repair the proxy and lane link, preserving the OS error. Added coverage through the lane-host report entry point.
+    - Finding 8: ran the installed CodeGraph 1.6.0 compatibility test successfully in the Python suite; it was not skipped. This verifies synthetic edges, not AC5.
+
+    Acceptance status (checked against locally available origin/main, not a new fetch):
+
+    | AC | Status |
+    | --- | --- |
+    | AC1 | Partial. Primary index linking is on main; this seat's link resolves to /home/joe/ai/aida/.codegraph, but the host descriptor and socket are absent. |
+    | AC2 | Unverified for AIDA-contained Codex. This native seat's writable roots exclude the primary index. The Python read-only bwrap test passes, but is not integrated AIDA-contained evidence. |
+    | AC3 | Partial. Navigation guidance is on main in AGENTS.md and the shared template. Joe must deploy and deliver the reviewed host client command; bare upstream codegraph remains unrouted. |
+    | AC4 | Doctor baseline is on main; proxy diagnostics and the two fixes are in this branch. Live installed AIDA lacks --lane-host, so a candidate binary is required for the final age report. |
+    | AC5 | Unverified. No successful primary-index query from an AIDA-contained Codex seat. Joe must run the deployed client and candidate doctor with the actual grant evidence. |
+
+    Live seat reproduction:
+
+    ```text
+    $ codegraph callers primary_index_link
+    ✗ callers failed: unable to open database file
+    $ aida doctor --lane-host --json
+    error: unexpected argument '--lane-host' found
+    ```
+
+    The linked primary directory contains codegraph.db only, with no lane-proxy.json or lane-query.sock. No index write grant was added. Claude AF_UNIX-denied seats also need a separate advisor transport/admission decision; native sandbox socket success does not settle that issue.
+
+    Validation:
+
+    ```text
+    $ python3 -m unittest discover -s tests -p test_codegraph_proxy.py -v
+    test_installed_codegraph_returns_real_edges_from_host_snapshot ... ok
+    test_service_query_from_read_only_seat_and_graceful_restart ... ok
+    Ran 21 tests in 17.544s
+    OK
+    ```
+
+    ```text
+    $ aida lane job run -- cargo test --profile agent -p aida-cli-lib --lib -- codegraph::tests
+    job: j20261108T172812430-2482145-0
+    Finished agent profile in 13m 05s
+    test result: ok. 14 passed; 0 failed; 0 ignored; 12972 filtered out
+    exit 0
+    ```
+
+    Formatting and git diff --check pass. No template masters changed in this round.
+
+    Host handoff: findings 1-5 require deployment, trusted client delivery and the advisor's transport/containment decision. The native seat must leave edits uncommitted; the host owns commit/PR-body publication. Do not grant completion credit from the Refs trailer or bypass the supervised hold. Finding 9 requires green final-head CI after the host publishes; the reported merge-hold failure is expected and requires the authorized clearance path.
+  created_at: 2026-11-08T17:41:40.377078931Z
+  modified_at: 2026-11-08T17:41:40.377078931Z
+  session_id: 01a1bc329b36
 history:
 - id: 01a1b6a6-1e2f-7932-a527-6de38b6d8545
   author: joe
