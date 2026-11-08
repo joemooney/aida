@@ -62,7 +62,14 @@ if scoped remote attestation is unsuitable.
    mean remediation, and a replacement may still be open. Missing, pending,
    corrupt or conflicting mappings also cannot clear it. Reopening a resolved
    finding blocks again. Out-of-order verdict/finding arrival stays pending.
-   A stale-head verdict grants no credit.
+   Blocking digest obligations are scoped to the verdict's repository, PR and
+   exact head, not globally to the PR. At head B, a verdict for head A grants
+   neither approval credit nor blocking digest obligations; it remains audit
+   evidence. Missing an authenticated review for B still blocks merge. A fresh
+   authorized independent verdict for B must assess B and enumerate its current
+   blocking digests. It may omit a false positive rejected at A, retaining the
+   home dismissal audit trail; no same-head successor for A is required to
+   review B. If B includes the old digest, its unresolved status blocks B.
    To release a false positive or superseded finding, require a new authenticated
    verdict for the same PR and exact head from the authorized independent
    reviewer, explicitly superseding the previous verdict and omitting that
@@ -97,6 +104,9 @@ points. Cover approved exact-head review; request-changes with a blocking digest
 verdict arriving first; digest-to-origin-ID retry recovery; open/closed/reopened
 findings; dismissed (`Rejected`) and `Superseded` findings remaining blocked;
 authenticated same-head supersession releasing a false positive; replayed,
+head A with a rejected blocking finding followed by head B (no review blocks,
+fresh approved B verdict omitting that digest releases, including it blocks,
+and replaying A cannot change B's result);
 forked and concurrent successors; stale head; cross-node self-review; unknown or revoked signer;
 tampering; unknown fields; sensitive paths/text; duplicate/conflicting receipts;
 and concurrent publication. Assert work operations never mutate canonical store
@@ -108,6 +118,3 @@ merge credit. Run executed Rust tests through the lane job runner.
 Obtain advisor signoff on reviewer/session attestation, home verification and
 the supersession contract before implementing this proposal. This document
 provides no review authority and does not complete the owning requirement.
-The host must use the declared `docs(plans)` subject with a non-completing
-Refs trailer for this design-only change; the existing completing `feat`
-subject must not become the squash title.
