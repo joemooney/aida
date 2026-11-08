@@ -131,15 +131,21 @@ pub(crate) fn review_lease_ended(root: &Path, lease: &crate::SessionLease) -> bo
     matches!(lease_owner(root, lease), OwnerVerdict::Dead { .. })
 }
 
-// Bind completion to the entire lease, including its worker generation. A
+// Bind completion to the lease identity and worker generation. A
 // best-effort acquire failure on a later same-head review cannot reuse it.
 // trace:BUG-2498 | ai:codex
 fn review_finished_reason(lease: &crate::SessionLease) -> Result<String> {
     use sha2::{Digest, Sha256};
+    // Mail-retention bookkeeping does not change the worker generation.
+    // All identity, authority and process fields remain in the binding.
+    // trace:BUG-2498 | ai:codex
+    let mut lease = lease.clone();
+    lease.ending_retained_at = None;
+    lease.ending_retained_reason = None;
     Ok(format!(
         "review supervisor finished lease {}:{:x}",
         lease.id,
-        Sha256::digest(toml::to_string(lease)?.as_bytes())
+        Sha256::digest(toml::to_string(&lease)?.as_bytes())
     ))
 }
 
@@ -166,8 +172,8 @@ fn review_completion_matches(lease: &crate::SessionLease, why: &str) -> bool {
     })
 }
 
-/// Called only after the standalone supervisor observed reviewer exit and
-/// collected its verdict. Keep positive completion evidence even when guarded
+/// Called after the supervisor observed reviewer exit, or the watcher proved
+/// the captured attempt gone. Keep positive completion evidence even when guarded
 /// teardown retains the tree. Missing/replaced ownership is never repaired here.
 // trace:BUG-2498 | ai:codex
 pub(crate) fn review_finished(root: &Path, lease: &crate::SessionLease) -> Result<()> {
@@ -181,7 +187,7 @@ pub(crate) fn review_finished(root: &Path, lease: &crate::SessionLease) -> Resul
             crate::lease_path(root, &lease.id),
         )?)?;
         anyhow::ensure!(
-            toml::to_string(&current)? == toml::to_string(lease)?,
+            review_finished_reason(&current)? == review_finished_reason(lease)?,
             "review lease changed before completion receipt"
         );
         let record = lease_record(root, lease)?

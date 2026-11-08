@@ -468,11 +468,24 @@ fn bug_2469_dead_review_reclaimed_only_when_new_head_covers_recorded_and_actual_
     assert!(!crate::ownership::reader::review_lease_ended(
         &fx.main, &lease
     ));
-    std::fs::write(tree.join("pending"), "keep completed review notes").unwrap();
+    // Observed production state: clean, pushed, witness-less, no verdict.
+    // The real supervisor exit path must still record completion.
+    // trace:BUG-2498 | ai:codex
     crate::queue_cmd::end_finished_review(&fx.main, "PR-2457", &tree, false);
-    assert!(!crate::ownership::reader::review_lease_ended(
+    assert!(crate::ownership::reader::review_lease_ended(
         &fx.main, &lease
     ));
+    // A mail-retention refusal may stamp the lease after completion; it must
+    // preserve the binding while retaining all worker identity checks.
+    let mut retained = lease.clone();
+    retained.ending_retained_at = Some(chrono::Utc::now());
+    retained.ending_retained_reason = Some("unread mail".into());
+    std::fs::write(&lease_file, toml::to_string(&retained).unwrap()).unwrap();
+    assert!(crate::ownership::reader::review_lease_ended(
+        &fx.main, &retained
+    ));
+    save(&lease);
+    std::fs::write(tree.join("pending"), "keep completed review notes").unwrap();
     let ended = crate::queue_cmd::end_finished_review(&fx.main, "PR-2457", &tree, true);
     assert!(ended[0].1.is_err());
     assert!(crate::ownership::reader::review_lease_ended(
@@ -534,7 +547,11 @@ fn bug_2469_dead_review_reclaimed_only_when_new_head_covers_recorded_and_actual_
                 &replacement
             ));
             save(&lease);
-            crate::queue_cmd::end_finished_review(&fx.main, "PR-2457", &tree, true);
+            // Superseding killed the supervisor before verdict collection.
+            // Its watcher proves all recorded processes gone and closes the
+            // captured lease before the failed next-head pickup retries.
+            // trace:BUG-2498 | ai:codex
+            crate::review_watch::bug2498_confirm_superseded(&fx.main, &lease);
             std::fs::remove_file(tree.join("pending")).unwrap();
         },
     );

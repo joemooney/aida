@@ -1261,6 +1261,82 @@ pub(crate) fn bug2498_review_worktree_release_allows_one_watch_setup_retry(
     ));
 }
 
+// Exercise the production supersede transition, with a bound pre-spawn lease.
+// trace:BUG-2498 | ai:codex
+pub(crate) fn bug2498_confirm_superseded(root: &Path, lease: &crate::SessionLease) {
+    let (_temp, mut store) = fixture();
+    store.root = root.to_path_buf();
+    let mut c = change(2457, 1, false);
+    c.head = lease.pr_head_sha.clone().unwrap();
+    let attempt = dispatch(select(&store, &c, None, 1).unwrap());
+    // Capture a real retained child before reaping; an invented PID is
+    // correctly Unknown under the process-identity admission policy.
+    let mut child = Command::new("sleep").arg("30").spawn().unwrap();
+    let dead = Identity::child(&child).unwrap();
+    child.kill().unwrap();
+    child.wait().unwrap();
+    assert!(!dead.alive());
+    store
+        .transaction(&c.key(), |state| {
+            let a = attempt_mut(state, &c.key(), &attempt.token).unwrap();
+            a.phase = Phase::Running;
+            a.identity = Some(Identity::current()?);
+            a.spawning = true;
+            a.worker = Some(Identity::current()?);
+            Ok(())
+        })
+        .unwrap();
+    store.record_reviewer(&c.key(), &c.head, None).unwrap();
+    assert_eq!(
+        store.load().unwrap().entries[&c.key()].attempts[0].review_lease,
+        Some(toml::to_string(lease).unwrap())
+    );
+    store
+        .transaction(&c.key(), |state| {
+            let a = attempt_mut(state, &c.key(), &attempt.token).unwrap();
+            a.phase = Phase::Superseding;
+            a.supersede = Some(Supersede {
+                by: "f".repeat(40),
+                requested_at: chrono::Utc::now(),
+                term_at: None,
+                kill_at: None,
+                diagnostic: None,
+            });
+            a.identity = Some(Identity::current()?);
+            a.worker = Some(dead.clone());
+            a.reviewer = Some(dead.clone());
+            a.spawning = true;
+            a.reviewer_spawning = true;
+            Ok(())
+        })
+        .unwrap();
+    let live = store.load().unwrap().entries[&c.key()].attempts[0].clone();
+    assert!(finish_confirmed_review(root, &live).is_err());
+    assert!(!crate::ownership::reader::review_lease_ended(root, lease));
+    store
+        .transaction(&c.key(), |state| {
+            attempt_mut(state, &c.key(), &attempt.token)
+                .unwrap()
+                .identity = Some(dead.clone());
+            Ok(())
+        })
+        .unwrap();
+    // A changed worker generation cannot borrow the stopped attempt's proof.
+    let lease_path = crate::lease_path(root, &lease.id);
+    let original = std::fs::read(&lease_path).unwrap();
+    let mut replacement = lease.clone();
+    replacement.active_pid = Some(std::process::id());
+    std::fs::write(&lease_path, toml::to_string(&replacement).unwrap()).unwrap();
+    assert!(advance(&store, &c.key(), &attempt.token).is_err());
+    std::fs::write(&lease_path, original).unwrap();
+    assert!(advance(&store, &c.key(), &attempt.token).unwrap().is_none());
+    assert_eq!(
+        store.load().unwrap().entries[&c.key()].attempts[0].phase,
+        Phase::Superseded
+    );
+    assert!(crate::ownership::reader::review_lease_ended(root, lease));
+}
+
 // trace:TASK-1993.ac55aab8 | ai:claude
 #[test]
 fn task1993_state_stays_bounded_far_past_one_thousand_changes() {
@@ -1294,6 +1370,7 @@ fn task1993_state_stays_bounded_far_past_one_thousand_changes() {
                     format!("PR-{id}"),
                     Entry {
                         attempts: vec![Attempt {
+                            review_lease: None,
                             admission_hub: None,
                             head: format!("{id:040x}"),
                             token: uuid::Uuid::new_v4().to_string(),

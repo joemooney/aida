@@ -14438,19 +14438,22 @@ pub(crate) fn end_finished_review(
         .into_iter()
         .filter(|l| l.scope.eq_ignore_ascii_case(scope) && l.worktree_path == worktree)
         .map(|l| {
+            // Exit is positive lifecycle evidence even when no verdict exists.
+            // Write before teardown; mail-retention stamps preserve this binding.
+            // trace:BUG-2498 | ai:codex
+            let receipt = crate::ownership::reader::review_finished(project_root, &l);
             let outcome = if verdict_collected {
-                // A witness-less Reviewing record cannot prove process death.
-                // The supervisor has observed exit and collected the verdict;
-                // retain that positive, lease-bound fact for the next pickup.
-                // trace:BUG-2498 | ai:codex
                 crate::session_reap::reap_finished_review(project_root, &l).map_err(|why| {
-                    match crate::ownership::reader::review_finished(project_root, &l) {
+                    match receipt {
                         Ok(()) => why,
                         Err(error) => format!("{why}; completion receipt refused: {error:#}"),
                     }
                 })
             } else {
-                Err("no verdict was collected; its review tree is kept for recovery".to_string())
+                Err(match receipt {
+                    Ok(()) => "no verdict was collected; review exit recorded for guarded next-head cleanup".to_string(),
+                    Err(error) => format!("no verdict was collected; completion receipt refused: {error:#}"),
+                })
             };
             (l.id, outcome)
         })
