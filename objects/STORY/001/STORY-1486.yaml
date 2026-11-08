@@ -23,7 +23,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-09-26T18:30:26.622729865Z
-modified_at: 2026-11-08T07:39:26.463897235Z
+modified_at: 2026-11-08T07:39:28.440877735Z
 req_type: Story
 tags:
 - agent-launch
@@ -519,6 +519,22 @@ comments:
   content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: STORY-1486 PARTIAL: all five ACs have matching tests and the eight round-1 findings are addressed, but the always-on policy line breaks the stdout and --show-prompt contracts, and an unresolvable declared root aborts a real --verbose launch. One criterion anchor is still not recognised. CI still queued at review.. No triage reason was given.'
   created_at: 2026-11-08T07:39:26.463895871Z
   modified_at: 2026-11-08T07:39:26.463895871Z
+  session_id: 01a1b8be-8170-7fb2-89ab-ecb4c6eee98c
+  harness_version: 2.1.319 (Claude Code)
+- id: 01a1ba19-14b6-7ae2-99c8-b54daa52ca68
+  author: joe
+  content: |-
+    REVIEW FINDINGS TO ADDRESS (STORY-1486):
+    Verdict: CHANGES REQUESTED
+    Reviewed commit: e8002e052434
+    Recorded: 2026-11-08T07:30:02.604344379+00:00
+    Findings:
+    1. Policy line breaks the stdout contract. agent_launch.rs:410 print!s git_policy to stdout for every agent new, ahead of dispatch. On a real launch without --verbose this contradicts the contract at agent_launch.rs:3333-3335 (diagnostics go to stderr so stdout stays exactly what it is without --verbose). It also prepends two lines to --show-prompt, which docs/cli/06-roles-sessions.md:334 says prints only the exact initial prompt, and to --show-context. AC3 only needs the line in --no-exec --verbose. Fix: emit it inside the no-exec body, send real-launch output to stderr, skip it for --show-prompt/--show-context, and add a test that --show-prompt stdout starts with the preview header.
+    2. A declaration can abort a real launch. With a recipe present and a dangling target symlink, planned() fails at launch_permission_profile.rs:59-62 and render_roots propagates at :135. render_agent_launch_noexec propagates at agent_launch.rs:6209-6213, and aida agent new <vendor> --verbose then dies at agent_launch.rs:3339 before spawning; --no-exec fails the same way. Round 1 finding 6 asked for unavailable roots to degrade to a printed note, but only Git metadata does. dangling_root_symlink_is_not_a_planned_output pins planned() only. Fix: report the unresolvable root as a diagnostic in render_roots and add a render_roots-level test.
+    3. Criterion still reports untraced. aida criteria STORY-1486 lists generated_profile_preserves_approval_prompts as untraced and the test at aida-core/src/scaffolding/launch_profile.rs:15 as unanchored, despite its exact trace:STORY-1486.generated_profile_preserves_approval_prompts anchor. criterion_trace_suffix (worktree_gc.rs:393) rejects that lowercase underscored suffix, so the id is minted but cannot be anchored. The test exists; only coverage is misreported, under the default warn gate. Fix: make the tracer accept minted criterion ids, or re-key the criterion to a traceable id.
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
+  created_at: 2026-11-08T07:39:28.310056738Z
+  modified_at: 2026-11-08T07:39:28.310056738Z
   session_id: 01a1b8be-8170-7fb2-89ab-ecb4c6eee98c
   harness_version: 2.1.319 (Claude Code)
 history:
