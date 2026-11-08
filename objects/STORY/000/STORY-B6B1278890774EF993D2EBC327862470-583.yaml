@@ -15,12 +15,12 @@ description: |
   Acceptance (draft): with dell1 registered at 6 slots and the primary at 4, a burst of 8 queued reworks lands 6 on dell1 and 2 locally with no advisor script; `aida session leases` and the "lane running" check show the dell1 lanes; an unreachable pool host is skipped with a visible reason, never counted as free; vendor pins (e.g. BUG-2487 Codex 0.166) are checked per host before placement.
 
   Related: STORY-2571 (operator plumbing into AIDA), STORY-2642 (lane-host readiness), FAQ-151.
-status: InProgress
+status: NeedsAttention
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-08T02:56:36.206726001Z
-modified_at: 2026-11-08T06:11:48.530203156Z
+modified_at: 2026-11-08T06:13:56.320593280Z
 req_type: Story
 tags:
 - architecture
@@ -67,6 +67,36 @@ comments:
   modified_at: 2026-11-08T06:07:35.412700116Z
   session_id: 01a1b9af-8230-75d2-82f8-667491cc010a
   harness_version: 2.1.319 (Claude Code)
+- id: 01a1b9ca-c5e0-7190-b6d5-67c2edc923c8
+  author: dirtlab
+  content: |
+    Architecture sketch v1 — REQUEST ADVISOR SIGNOFF BEFORE CODE. First slice only; binding ruling overrides draft spec. No implementation or executed tests.
+
+    Evidence: inspected NodeRegistryEntry (aida-core/src/node.rs), SessionLease (aida-cli-lib/src/leases.rs), configured_cap and slot management (aida-cli-lib/src/standalone_implementer.rs), and all R1–R9 comments. Existing leases carry hostname, PID namespace/start identity; cap currently reads project config/default and slots are checkout-local. The advisor-scripts directory is absent on this host; searches under /home/dirtlab/ai and ~/.local/share/aida found no fill-slots3.sh/lane-run.sh/end-finished.sh/store-sync.sh. Their actual snapshots must be reviewed before implementation; R1–R9 are presently the behavioral evidence.
+
+    1. Host registry and trust. Extend existing node registry entries with optional versioned lane_host metadata: enabled, stable host_id, project/clone identity, roles, advertised capacity/readiness. Old entries remain compatible and not enrolled. Multiple clones on one host share host_id/capacity. Node metadata advertises membership, not execution authority. Operator-owned local config maps host_id to allowlisted SSH destination and absolute checkout; preserve host-key checks and use argv to a fixed AIDA endpoint, never stored shell snippets. Runtime reservations/observations remain host-local, outside canonical Git objects.
+
+    2. R9 per-host cap. Propose versioned ~/.aida/host.toml with [queue] standalone_implementer_cap. Effective precedence: positive host override > existing trusted project cap > CPU default max(1, floor(nproc/2)). Measure nproc on the receiving host under effective affinity; report CPUs, effective cap and source. Invalid explicit host config refuses admission. This permits dell1=8 despite tracked project=4, without skip-worktree. Acceptance fixture explicitly sets dell1=6, primary=4; these are overrides, not inferred defaults. Preserve project caps for compatibility. Cap reductions stop new starts without killing lanes. Both direct standalone and placed lanes use this resolver and the SAME atomic host slot lock across participating clones. Host config is consumed by host-owned code and must not become a lane-writable authority source. CPU formula/precedence require advisor signoff.
+
+    3. Placement and R1–R3/R5/R7. Remote-first, local overflow; within each tier rank healthy hosts by free slots, load per CPU, stable host_id. Unreachable/stale/protocol-incompatible hosts, failed doctor --lane-host, failed store sync or selected-vendor pin mismatch contribute zero usable slots with explicit reasons. Load is a tie-breaker, not a new threshold. Push placing-host store writes first and capture the published commit; receiver must successfully pull using existing locked/evidence-preserving store APIs and verify that commit is included before pickup. Any conflict/refusal stops launch; never proceed with stale local view.
+
+    Use persisted dispatch UUID bound to project/spec/rework generation/host. One coordinator holds the project dispatch lock; receiver atomically reserves host capacity and records UUID before spawn. Repeating a UUID returns its existing receipt. Typed states: reserved, preparing, running, publishing, finished, refused, unknown; include host/lease/slot/timestamps/reasons. Cold setup stays preparing for however long needed. Lost acknowledgement becomes unknown, retains occupancy/spec ownership and requires receiver reconciliation; do not fall back locally from timeout, exit diagnostics or log grep. Initial slice supports one coordinator; refuse conflicting ownership. Git sync alone cannot implement multi-coordinator exactly-once admission.
+
+    4. R4–R5 leases/ps. Bounded versioned host-status endpoint reports host slots, reservations, launcher identity and local lease/liveness evidence. session leases, ps, fleet watch, awaiting and shared lane-running checks consume the same observation boundary, joined by host_id + dispatch/lease UUID, with host, state and observation age visible. Unknown remote state retains occupancy and duplicate protection. Never inspect remote PIDs through local procfs. Legacy hostname-only leases remain conservative when identity is unproven. Only owning host reaps stale leases using existing verified process identity, seat cleanliness, landed-head and ownership safeguards. Remote requestors request reconciliation, never directly delete leases. Finished log alone does not establish death; dirty seats/ambiguous receipts remain visible for recovery; child jobs/publication retain occupancy.
+
+    5. R8 grants. SSH and pool membership grant no seat authority. Receiver must issue/validate a host-local implementer grant using existing issuer, bound to role/spec/worktree/process/expiry. Never copy source-host process-bound grants or borrow advisor authority. Without a supported remote issuer/deputy path, host is ineligible with setup guidance; ungranted launch is forbidden. Keep trusted vendor containment/native posture rules and per-host binary pins. Host config protection and issuer bootstrap require security/architecture review before activation.
+
+    6. R6 completion/store circulation. Reuse existing standalone launcher on owning host, with remote dispatch marked to avoid recursive placement. Keep slot through child exit and publication. Owning host publishes its own seat after exact lease/seat validation; primary only orchestrates. Failed exits retain Refs; punts/holds veto publication; queue completion follows publication. Host-side store-sync handles preflight and post-publication circulation under existing store locks. Failed circulation is visible and retryable by the same receipt without respawning implementation or clearing ambiguous occupancy.
+
+    7. Sequence AFTER signoff. Capture actual script snapshots and map every branch to R1–R9. Add backward-compatible registry/local cap resolver and typed read-only status. Add receiver admission/idempotency/grants, then placement/store handoff. Wire unified lease/ps/running consumers and owner-side cleanup/publication. Demonstrate parity; stop old script launchers before enabling pool dispatch, then retire fill-slots3.sh, lane-run.sh, end-finished.sh and store-sync.sh. Never dual-schedule through scripts and AIDA.
+
+    Planned validation (not executed): old registry compatibility; cap precedence/malformed values/CPU sizing; concurrent cross-clone direct+placed admission; explicit 6+4 caps place 8 items as 6 remote+2 local; unreachable host; pin mismatch; store push/pull/conflict failures; duplicate dispatch/lost ack; cold setup >5m; remote PID collision; dead/dirty/landed lease recovery; missing issuer/grant refusal; hold/punt/failed-exit publication; restart and failed post-publication sync recovery.
+
+    Manual gate: advisor approve/amend this sketch, especially CPU policy, coordinator ownership and grant bootstrap, and supply script snapshots/location. Existing punt sets Needs Attention/publication veto; its separate signal write reported read-only filesystem. No code/files changed in repository. No cargo run, untested=true. No commit/push/PR/queue completion. Initial MCP comment attempt required unavailable approval; this CLI comment is the actual posted sketch.
+  created_at: 2026-11-08T06:13:56.320593280Z
+  modified_at: 2026-11-08T06:13:56.320593280Z
+  session_id: 01a1b9c8a465
+  harness_version: codex-cli 0.167.0
 history:
 - id: 01a1b91a-2eb5-7142-b252-8d3eb8d49b14
   author: joe
@@ -96,6 +126,15 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a1b9ca-2f4b-71a0-809f-b50405be52f0
+  author: dirtlab
+  timestamp: 2026-11-08T06:13:17.771523032Z
+  session_id: 01a1b9c8a465
+  harness_version: codex-cli 0.167.0
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: NeedsAttention
 filed_at:
   code_sha: dc41ee8da2f44f88178936fc1a8e6cb7168a3de7
   branch: main
@@ -105,3 +144,9 @@ filed_at:
   vendor: claude
   session: 01a1b8be-8170-7fb2-89ab-ecb4c6eee98c
   harness_version: 2.1.319 (Claude Code)
+attention_reason:
+  category: design-fork
+  detail: 'Architecture sketch v1 posted on STORY-2660 as required by the binding advisor ruling. Await advisor signoff before code; actual advisor scripts are absent on this host and require inspection before implementation. Decisions proposed: host registry/trust boundary, nproc-derived cap with host override, single coordinator and receiver idempotency, host-local grants, unified remote lease/ps observations.'
+  lean: Approve or amend sketch v1 and provide script snapshots; then dispatch implementation. No code or publication in this slice.
+  raised_by: implementer
+  raised_at: 2026-11-08T06:13:17.771507819Z
