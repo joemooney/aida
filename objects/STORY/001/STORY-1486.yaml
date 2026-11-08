@@ -23,7 +23,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-09-26T18:30:26.622729Z
-modified_at: 2026-11-08T17:52:29.087975468Z
+modified_at: 2026-11-08T17:52:33.211852681Z
 req_type: Story
 tags:
 - agent-launch
@@ -847,6 +847,24 @@ comments:
   content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: STORY-1486 PARTIAL: all five criteria have matching tests by source and all five prior findings are fixed, but CI at this head has not completed, and the last fix made --git-read-only break the documented --show-prompt/--show-context silence. Two smaller defects also listed. No cargo run, by policy.. No triage reason was given.'
   created_at: 2026-11-08T17:52:29.087969250Z
   modified_at: 2026-11-08T17:52:29.087969250Z
+  session_id: 01a1b9af-8230-75d2-82f8-667491cc010a
+  harness_version: 2.1.319 (Claude Code)
+- id: 01a1bc4a-5f50-7681-96e5-8fce0e72e3bc
+  author: joe
+  content: |-
+    REVIEW FINDINGS TO ADDRESS (STORY-1486):
+    Verdict: CHANGES REQUESTED
+    Reviewed commit: e9a9134dc948
+    Recorded: 2026-11-08T17:46:05.102982130+00:00
+    Review comment: https://github.com/joemooney/aida/pull/3671#issuecomment-6724893190
+    Findings:
+    1. WAIT STATE: CI run 42506069813 at e9a9134dc948 has not completed (status queued; only lib-1 and cli-0 had started at review time). The previous completed run, 42486514383 at 4649d63143c, failed in CI (gates), and every later run was cancelled, so no completed run has confirmed the fixes since then. merge-hold-gate fails by design until the hold is released. No cargo run, by policy.
+    2. MINOR (documented contract broken, regression from the last rework): launch_permission_profile.rs:44 prints whenever the downgrade is explicit, even when the caller passed visible=false for a preview. So `aida agent new claude --show-prompt --git-read-only` emits git_policy, and with --no-exec it goes to stdout ahead of the preview header. Same for --show-context and for foreground codex and antigravity (agent_launch.rs:2735, 2883, 2977). docs/cli/06-roles-sessions.md:246 says these previews omit the diagnostics, and agent_codex_background.rs returns before printing, so vendors disagree. The test loop at aida-cli/tests/story_1486_launch_profile.rs:222 never combines these flags. Fix: pass preview suppression separately from verbosity so explicit downgrades print except under --show-prompt/--show-context, add those flag combinations to the test, and update docs line 245, which still implies only --verbose prints.
+    3. MINOR (trace-parser regression): trace.rs:38 rejects any suffix followed by a dot, and criteria_coverage.rs:300 now captures trailing dots. A sentence-ending anchor such as `trace:STORY-1.ac12345.` used to yield STORY-1.AC12345 and now yields bare STORY-1, so that criterion is reported untraced. No such token exists in the tree today, and no test covers it. Fix: reject only when the dot is followed by an alphanumeric, and add a parse_trace_id_token case for the trailing period.
+    4. COSMETIC: launch_permission_profile.rs:224-225 prints the overlap note inside the read_only_roots list at the same indent as a root path, so it reads as an entry. It also fires on the normal AIDA linked-worktree flow, because git-common-dir sits under the read-only primary checkout, with no hint that this overlap is expected. Print it outside the list and name the overlapping pair.
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
+  created_at: 2026-11-08T17:52:33.104547913Z
+  modified_at: 2026-11-08T17:52:33.104547913Z
   session_id: 01a1b9af-8230-75d2-82f8-667491cc010a
   harness_version: 2.1.319 (Claude Code)
 history:
