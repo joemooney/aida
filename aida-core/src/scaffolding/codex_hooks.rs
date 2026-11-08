@@ -598,7 +598,6 @@ mod tests {
             "PreToolUse",
             "PermissionRequest",
             "PostToolUse",
-            "PreCompact",
             "PostCompact",
             "UserPromptSubmit",
             "SessionStart",
@@ -615,7 +614,23 @@ mod tests {
                 "settings.json wires `{ev}` but the Codex wiring does not — \
                  regenerate templates/codex-hooks.json"
             );
-            let s_entries = sh[ev].as_array().unwrap();
+            // trace:STORY-2662 | ai:codex
+            // Only the compaction recovery handler is Claude-only. All other
+            // entries still participate in exact event/handler parity.
+            let s_entries: Vec<_> = sh[ev]
+                .as_array()
+                .unwrap()
+                .iter()
+                .filter(|entry| {
+                    !(ev == "SessionStart"
+                        && entry["hooks"].as_array().is_some_and(|hooks| {
+                            hooks.len() == 1
+                                && hooks[0]["command"]
+                                    .as_str()
+                                    .is_some_and(|cmd| cmd.contains("/aida-precompact-handoff.sh"))
+                        }))
+                })
+                .collect();
             let c_entries = ch[ev].as_array().unwrap();
             assert_eq!(
                 s_entries.len(),

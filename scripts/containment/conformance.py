@@ -377,6 +377,45 @@ def evaluate(writes, before, after, nonce, results, receipts, terminal_receipt=F
     return checks
 
 
+# trace:BUG-2497 | ai:codex
+def finish_run(root, report, logs):
+    """Persist observations even when the vendor never completes its probe turn."""
+    completed = False
+    oversize = False
+    for log in logs:
+        if not log.is_file():
+            continue
+        if log.stat().st_size > 4 * 1024 * 1024:
+            oversize = True
+            continue
+        for line in log.read_text(errors="replace").splitlines():
+            try:
+                row = json.loads(line)
+            except ValueError:
+                continue
+            if isinstance(row, dict) and row.get("type") == "turn.completed":
+                completed = True
+    # AGY's completed exact-command receipt is the available completion evidence.
+    if report["vendor"] == "agy":
+        completed = report["verified_terminal_receipt"]
+    elif oversize:
+        completed = False
+    reason = "vendor-log-oversize" if oversize else "vendor-turn-not-completed"
+    report["run_status"] = "completed" if completed else "invalid-run"
+    report["invalid_run_reason"] = None if completed else reason
+    if not completed:
+        report["production_launcher_credit"] = False
+        report["shared_boundary_credit"] = False
+        report["whole_lane_pass"] = False
+    write_json(root / "report.json", report)
+    print(json.dumps({"report": str(root / "report.json"),
+                      "run_status": report["run_status"],
+                      "checks": {k: v["status"] for k, v in report["checks"].items()},
+                      "whole_lane_pass": report.get("whole_lane_pass", False)}), flush=True)
+    if not completed:
+        raise ValueError(f"invalid-run: {reason}; inspect vendor logs")
+
+
 def terminal_receipts(log, invocation):
     """Only completed execution-tool events can corroborate payload diagnostics.
 
@@ -658,8 +697,9 @@ def fixture_policy(config, vendor="codex", runtime=None):
     policy = tomllib.loads(config.read_text())
     policy.setdefault("agents", {}).update(contained=True, vendor=vendor)
     contained = policy.setdefault("contained", {})
+    # trace:BUG-2497 | ai:codex
     # Replace, never extend: init's default hosts must not weaken C3's denial.
-    contained["allowed_hosts"] = ["api.openai.com", "allow.fixture.test"]
+    contained["allowed_hosts"] = ["api.openai.com", "chatgpt.com", "allow.fixture.test"]
     if vendor == "agy":
         # The binary under test owns its descriptor, independently of this
         # script's checkout. Never fall back to local source on query failure.
@@ -1055,8 +1095,7 @@ def continue_aida(root):
         report["whole_lane_pass"] = aida_whole_lane_pass(report)
         if not report["containment_receipt_sha256"]:
             aida_refuse(root, report, "production-containment-receipt-unavailable")
-        write_json(root / "report.json", report)
-        print(json.dumps({"report": str(root / "report.json"), "checks": {k: v["status"] for k, v in checks.items()}, "whole_lane_pass": report["whole_lane_pass"]}), flush=True)
+        finish_run(root, report, list((repo / ".aida/headless-logs").glob("*.jsonl")))
     except (KeyboardInterrupt, ValueError, OSError, subprocess.SubprocessError) as error:
         aida_refuse(root, report, "harness-interrupted: SIGINT"
                         if isinstance(error, KeyboardInterrupt) else str(error))
@@ -1219,8 +1258,7 @@ def run(args):
                   "whole_lane_pass": False, "production_launcher_credit": False,
                   "unsupported_reason": unsupported,
                   "agy_posture": "aida outer-only (native_layer=none); applied ContainmentReceipt required" if args.vendor == "agy" else None}
-        write_json(root / "report.json", report)
-        print(json.dumps({"report": str(root / "report.json"), "checks": {k: v["status"] for k, v in checks.items()}, "whole_lane_pass": False}), flush=True)
+        finish_run(root, report, [root / "stdout.jsonl"])
     finally:
         network.close()
 

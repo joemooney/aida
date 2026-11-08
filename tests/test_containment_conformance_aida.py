@@ -95,7 +95,7 @@ class AidaProductionBoundaryTests(unittest.TestCase):
             self.assertEqual(parsed["agents"]["vendor"], "codex")
             self.assertEqual(parsed["contained"]["vendors"]["codex"], "aida")
             self.assertEqual(parsed["contained"]["allowed_hosts"],
-                             ["api.openai.com", "allow.fixture.test"])
+                             ["api.openai.com", "chatgpt.com", "allow.fixture.test"])
             self.assertTrue((repo / ".aida-store/objects").is_dir())
             roster = (repo / ".aida-store/registry/team.toml").read_text()
             self.assertIn("fixture-operator", roster)
