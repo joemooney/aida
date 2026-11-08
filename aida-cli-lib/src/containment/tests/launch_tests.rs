@@ -3847,3 +3847,377 @@ fn story_2326_wrapper_refuses_projected_commands_before_io() {
         );
     }
 }
+
+/// S3 runs the real supervisor behind a dispatcher that exits, using synthetic
+/// credentials and Claude. It retains the same attested wrapper and seat gates.
+// trace:TASK-3219 | ai:codex
+#[test]
+#[cfg(target_os = "linux")]
+fn task_3219_live_claude_background_supervisor() {
+    if crate::test_env::run_path_isolated_test() {
+        return;
+    }
+    if !live_available() {
+        return;
+    }
+    use crate::agent_launch::{
+        agent_claude_background, AgentLaunchConfig, AgentLaunchPlan, AgentPromptStyle,
+    };
+    use crate::gate::seat_authority as authority;
+    // The runner may inherit a revoked session ring from another fixture.
+    // Own a fresh synthetic ring before issuing a real child key; do not
+    // let a proc-only fallback masquerade as wrapper key possession.
+    assert!(
+        unsafe {
+            libc::syscall(
+                libc::SYS_keyctl,
+                1 as libc::c_long,
+                0 as libc::c_long,
+                0 as libc::c_long,
+                0 as libc::c_long,
+                0 as libc::c_long,
+            )
+        } >= 0,
+        "live background regression requires an anonymous session keyring"
+    );
+    let root = tempfile::tempdir().unwrap();
+    trusted_policy(root.path(), "claude = \"aida\"");
+    let _cwd = crate::session::contained_cwd_seam::pin(root.path());
+    for p in crate::contained_boundary::contained_store_write_paths(root.path()) {
+        std::fs::create_dir_all(p).unwrap();
+    }
+    std::fs::write(
+        root.path().join("host-net"),
+        std::fs::read_link("/proc/self/ns/net")
+            .unwrap()
+            .to_str()
+            .unwrap(),
+    )
+    .unwrap();
+    let home = crate::home_dir().unwrap();
+    let config_home = home.join(".claude");
+    std::fs::create_dir_all(&config_home).unwrap();
+    credentials_expiring_in(&config_home, 8 * 3600);
+    let bin = root.path().join("bin");
+    std::fs::create_dir(&bin).unwrap();
+    let program = bin.join("claude");
+    std::fs::write(
+        &program,
+        r#"#!/usr/bin/python3
+import os,sys,errno,time,json,socket
+from pathlib import Path
+if '--version' in sys.argv:
+    print('synthetic-3219-bg');sys.exit(0)
+assert '--bg' not in sys.argv and '--print' in sys.argv
+assert os.environ['AIDA_HEADLESS']=='1'
+assert os.environ['AIDA_SESSION_ROLE']=='implementer'
+assert os.environ['AIDA_CONTAINMENT_POSTURE']=='aida'
+assert os.environ['AIDA_USER']=='bg-3219'
+assert Path('preflight-ran').exists()
+assert os.readlink('/proc/self/ns/net')!=Path('host-net').read_text()
+assert '--mcp-config' not in sys.argv and '--strict-mcp-config' not in sys.argv
+for leaf in ['.git/config', '.aida/config.toml']:
+    try: Path(leaf).write_text('escape');raise AssertionError('write escaped: '+leaf)
+    except OSError as e: assert e.errno in (errno.EROFS,errno.EACCES,errno.EPERM)
+try:
+    s=socket.socket(socket.AF_INET,socket.SOCK_STREAM);s.settimeout(.2)
+    s.connect(('1.1.1.1',443));raise AssertionError('network escaped')
+except OSError: pass
+# /tmp outside the bound project is private scratch, never the host parent.
+Path('../outside-write').write_text('private scratch')
+Path('worker.json').write_text(json.dumps({'grant':os.environ['AIDA_SESSION_GRANT']}))
+print('BACKGROUND-READY',flush=True)
+end=time.monotonic()+20
+while not Path('finish').exists() and time.monotonic()<end: time.sleep(.05)
+assert Path('finish').exists()
+print('BACKGROUND-EXIT',flush=True)
+"#,
+    )
+    .unwrap();
+    let aida = bin.join("aida");
+    std::fs::write(
+        &aida,
+        "#!/bin/sh\nprintf yes > preflight-ran\necho 'seat_grant_valid=true expected_seat=true'\n",
+    )
+    .unwrap();
+    for p in [&program, &aida] {
+        std::fs::set_permissions(p, std::fs::Permissions::from_mode(0o700)).unwrap();
+    }
+    let _aida = crate::kernel::test_aida_exe::set(aida);
+    let path = format!("{}:/usr/bin:/bin", bin.display());
+    let mut env = crate::test_env::AmbientGuard::hermetic_and(
+        root.path(),
+        None,
+        &[
+            ("PATH", Some(&path)),
+            ("AIDA_CONTAINED", None),
+            ("AIDA_AGENT_CMD", None),
+            ("AIDA_OS_WRAP", Some("1")),
+            ("CLAUDE_CONFIG_DIR", Some(config_home.to_str().unwrap())),
+        ],
+    );
+    env.set_key("AIDA_USER", "bg-parent");
+    let parent = authority::test_support::mint_grant_for_with_ttl(
+        root.path(),
+        "bg-parent",
+        "advisor",
+        &["implementer"],
+        Some(chrono::Duration::hours(1)),
+    );
+    env.set_key(authority::GRANT_ENV, &parent);
+    let flags = {
+        let _scope = crate::session::ClaudeWrapperComposition::enter();
+        crate::session::claude_contained_flags_for(None, root.path()).unwrap()
+    };
+    let config = AgentLaunchConfig {
+        agent_type: "claude",
+        binary: "claude",
+        default_args: flags,
+        prompt_style: AgentPromptStyle::Positional,
+        contained: true,
+        delegate_seats: vec![],
+    };
+    let plan = AgentLaunchPlan {
+        project_root: root.path().into(),
+        launch_cwd: root.path().into(),
+        role: Some("implementer".into()),
+        role_instance: crate::role::RoleInstanceKind::Driver,
+        current_spec: None,
+        name: "bg-3219".into(),
+        lease_id: None,
+        native_session_id: None,
+        resumed_from: None,
+    };
+    agent_claude_background::tests::dispatch_via_exiting_process(&program, &config, &plan).unwrap();
+    let attempts = root.path().join(".aida/claude-background");
+    let dir = std::fs::read_dir(&attempts)
+        .unwrap()
+        .next()
+        .unwrap()
+        .unwrap()
+        .path();
+    let wait_for = |leaf: &Path| {
+        let end = Instant::now() + Duration::from_secs(25);
+        while !leaf.exists() && Instant::now() < end {
+            std::thread::sleep(Duration::from_millis(20));
+        }
+        assert!(
+            leaf.exists(),
+            "missing {}: {}",
+            leaf.display(),
+            std::fs::read_to_string(dir.join("output.log")).unwrap_or_default()
+        );
+    };
+    wait_for(&root.path().join("worker.json"));
+    let (supervisor, dispatcher): (
+        crate::agent_launch::codex_bg_receipt::ProcId,
+        crate::agent_launch::codex_bg_receipt::ProcId,
+    ) = serde_json::from_slice(&std::fs::read(dir.join("supervisor.json")).unwrap()).unwrap();
+    assert!(supervisor.is_live());
+    // Wait until its original dispatcher is gone (reparented), while the
+    // actual model remains alive inside the wrapper.
+    let end = Instant::now() + Duration::from_secs(5);
+    loop {
+        let stat = std::fs::read_to_string(format!("/proc/{}/stat", supervisor.pid)).unwrap();
+        let ppid = stat
+            .rsplit_once(')')
+            .unwrap()
+            .1
+            .split_whitespace()
+            .nth(1)
+            .unwrap()
+            .to_string();
+        if ppid != dispatcher.pid.to_string() {
+            break;
+        }
+        assert!(Instant::now() < end, "dispatcher has not exited: {stat}");
+        std::thread::sleep(Duration::from_millis(20));
+    }
+    let worker: serde_json::Value =
+        serde_json::from_slice(&std::fs::read(root.path().join("worker.json")).unwrap()).unwrap();
+    let child_id = worker["grant"].as_str().unwrap();
+    let child = authority::read_grant(child_id).unwrap();
+    assert_eq!(child.parent_grant_id.as_deref(), Some(parent.as_str()));
+    assert_eq!(child.subject, "bg-3219");
+    assert!(child.revoked_at.is_none());
+    assert!(child
+        .binding
+        .iter()
+        .filter_map(|b| authority::binding_process(b))
+        .any(|(pid, _, _)| pid != supervisor.pid && pid != std::process::id()));
+    assert!(std::fs::read_to_string(dir.join("output.log"))
+        .unwrap()
+        .contains("BACKGROUND-READY"));
+    std::fs::write(root.path().join("finish"), "yes").unwrap();
+    wait_for(&dir.join("ended"));
+    assert!(authority::read_grant(child_id)
+        .unwrap()
+        .revoked_at
+        .is_some());
+    assert!(std::fs::read_to_string(dir.join("output.log"))
+        .unwrap()
+        .contains("BACKGROUND-EXIT"));
+    assert!(!root.path().join("../outside-write").exists());
+    assert!(authority::read_grant(&parent).unwrap().revoked_at.is_none());
+
+    // Closed handoff under the CLI's SIG_DFL must unwind, revoke the issued
+    // child grant and close the registry row, even before the vendor runs.
+    std::fs::remove_file(root.path().join("worker.json")).unwrap();
+    let mut cancelled = plan.clone();
+    cancelled.name = "bg-cancelled".into();
+    let cancelled_dir =
+        agent_claude_background::tests::cancel_during_prepare(&program, &config, &cancelled)
+            .unwrap();
+    assert!(cancelled_dir.join("ended").exists());
+    assert!(!root.path().join("worker.json").exists());
+    let grants: Vec<authority::SeatGrant> = std::fs::read_dir(authority::grant_dir().unwrap())
+        .unwrap()
+        .map(|entry| entry.unwrap().path())
+        .filter(|path| path.extension().and_then(|s| s.to_str()) == Some("json"))
+        .map(|path| serde_json::from_slice(&std::fs::read(path).unwrap()).unwrap())
+        .filter(|grant: &authority::SeatGrant| grant.subject == "bg-cancelled")
+        .collect();
+    assert_eq!(grants.len(), 1);
+    assert!(grants[0].revoked_at.is_some());
+    let rows = crate::agent_registry::load_entries(root.path());
+    let row = rows
+        .iter()
+        .find(|(_, row)| row.name.as_deref() == Some("bg-cancelled"))
+        .unwrap();
+    assert!(row.1.ended_at.is_some());
+
+    // A refused seat preflight must never release a second vendor.
+    std::fs::remove_file(root.path().join("finish")).unwrap();
+    std::fs::write(bin.join("aida"), "#!/bin/sh\nexit 1\n").unwrap();
+    let mut refused = plan.clone();
+    refused.name = "bg-refused".into();
+    assert!(
+        agent_claude_background::dispatch(&program, &config, &refused, None, &[], None, || {})
+            .is_err()
+    );
+    assert!(!root.path().join("worker.json").exists());
+    eprintln!("LIVE: background supervisor passed (1 live regression)");
+}
+
+// trace:TASK-3219 | ai:codex
+#[test]
+fn task_3219_background_attach_argv_refuses_subcommand_preserves_prompt() {
+    let args = |a: &[&str]| a.iter().map(|s| s.to_string()).collect::<Vec<_>>();
+    let err =
+        claude_argv(&args(&["attach", "session-id", "--settings", "{}"]), 1, &[]).unwrap_err();
+    assert!(err.to_string().contains("aida agent attach <attempt>"));
+    // Real composition prepends generated flags before --extra-flag values.
+    let composed = args(&[
+        "--setting-sources",
+        "project",
+        "--settings",
+        "{}",
+        "--permission-mode",
+        "dontAsk",
+        "--model",
+        "sonnet",
+        "attach",
+        "session-id",
+        "--session-id",
+        "uuid",
+        "--print",
+    ]);
+    let err = claude_argv(&composed, 1, &[]).unwrap_err();
+    assert!(err.to_string().contains("aida agent attach <attempt>"));
+    for input in [
+        args(&["--settings", "{}", "attach"]),
+        args(&["attach", "--settings", "{}"]),
+        args(&["--settings", "{}", "--", "attach"]),
+    ] {
+        assert!(claude_argv(&input, 1, &[]).is_ok());
+    }
+}
+
+// Exercise the production entry point, with invalid requests deliberately
+// refusing before executable discovery, claims, worktrees or setup receipts.
+// trace:TASK-3219 | ai:codex
+#[test]
+fn task_3219_background_entry_refuses_before_setup_and_native_argv() {
+    if crate::test_env::run_path_isolated_test() {
+        return;
+    }
+    use crate::agent_launch::*;
+    use crate::{session, RoleInstanceKind};
+    let root = tempfile::tempdir().unwrap();
+    trusted_policy(root.path(), "claude = \"aida\"");
+    let _cwd = session::contained_cwd_seam::pin(root.path());
+    let mut env = crate::test_env::AmbientGuard::hermetic_and(
+        root.path(),
+        None,
+        &[("AIDA_CONTAINED", None), ("AIDA_OS_WRAP", Some("1"))],
+    );
+    let config = || AgentLaunchConfig {
+        delegate_seats: vec![],
+        agent_type: "claude",
+        binary: "/missing/claude",
+        default_args: vec![],
+        prompt_style: AgentPromptStyle::Positional,
+        contained: true,
+    };
+    for (rotate, resume, prompt, expected) in [
+        (true, None, Some("work"), "--rotate"),
+        (false, Some("session"), Some("work"), "resume waits"),
+        (false, None, None, "need a prompt"),
+    ] {
+        let err = agent_new_bg_dispatch(
+            config(),
+            Some("implementer".into()),
+            Some("TASK-3219".into()),
+            false,
+            Some(root.path()),
+            AgentContextOptions::new(false, false),
+            false,
+            false,
+            false,
+            false,
+            // No explicit prompt still enables auto-prompt unless --no-prompt is set.
+            AgentPromptOptions::new(prompt.map(str::to_owned), prompt.is_none()),
+            AgentResumeOptions::new(true, resume.map(str::to_owned), false, true),
+            AgentDefaultFlagOptions::new(false, vec![], None).rotating(rotate),
+            None,
+            None,
+            true,
+        )
+        .unwrap_err();
+        assert!(format!("{err:#}").contains(expected), "{err:#}");
+        let files: Vec<_> = std::fs::read_dir(root.path().join(".aida"))
+            .unwrap()
+            .map(|e| e.unwrap().file_name())
+            .collect();
+        assert_eq!(files, vec![std::ffi::OsString::from("config.toml")]);
+    }
+    trusted_policy(root.path(), "");
+    let mut cfg = config();
+    cfg.default_args = vec!["--bg".into(), "--model".into(), "sonnet".into()];
+    let plan = AgentLaunchPlan {
+        project_root: root.path().into(),
+        launch_cwd: root.path().into(),
+        role: None,
+        role_instance: RoleInstanceKind::Driver,
+        current_spec: None,
+        name: "native".into(),
+        lease_id: None,
+        native_session_id: None,
+        resumed_from: None,
+    };
+    // Native os_wrap is disabled as on the historical daemon path.
+    env.set_key("AIDA_OS_WRAP", "0");
+    let cmd = build_agent_new_bg_command(
+        Path::new("/bin/echo"),
+        &cfg,
+        &plan,
+        &["attach".into(), "prompt with spaces".into()],
+        None,
+    )
+    .unwrap();
+    assert_eq!(cmd.get_program(), "/bin/echo");
+    assert_eq!(
+        cmd.get_args().collect::<Vec<_>>(),
+        ["--bg", "--model", "sonnet", "attach", "prompt with spaces"].map(std::ffi::OsStr::new)
+    );
+}

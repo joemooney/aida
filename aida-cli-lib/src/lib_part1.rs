@@ -1550,6 +1550,8 @@ pub(crate) fn rewrite_agent_default_new(args: &[String]) -> Vec<String> {
             // failed. trace:STORY-2256 | ai:claude
             "describe",
             "wake",
+            "logs",
+            "attach",
             "launch-status",
             "recover-launch",
             "list-roles",

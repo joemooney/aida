@@ -8,6 +8,11 @@ use std::path::PathBuf;
 // trace:STORY-684
 #[derive(Subcommand, Debug)]
 pub enum InternalCommand {
+    /// AIDA-owned shared-wrapper Claude background supervisor.
+    // trace:TASK-3219 | ai:codex
+    #[clap(hide = true)]
+    ClaudeBgSupervise,
+
     /// Enforce the advisor-no-code-write invariant at the commit boundary.
     /// Called by the scaffolded git pre-commit hook so the gate binds any
     /// vendor's commit (Codex, raw terminal, headless), not just Claude. Exits

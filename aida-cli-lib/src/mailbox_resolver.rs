@@ -720,6 +720,9 @@ mod tests {
                 .open(dir.join(format!("{id}.toml")))
                 .unwrap();
             writeln!(file, "pid_namespace = {namespace}").unwrap();
+            let identity =
+                aida_core::proc_identity::ProcIdentity::capture(std::process::id()).unwrap();
+            writeln!(file, "pid_start = '{}'", identity.legacy().start).unwrap();
         }
     }
 
