@@ -14,7 +14,7 @@ priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-11-08T11:52:20.129452497Z
-modified_at: 2026-11-08T15:24:46.019915027Z
+modified_at: 2026-11-08T15:25:01.188962918Z
 req_type: Task
 tags:
 - carried-from:TASK-3000
@@ -26,6 +26,14 @@ relationships:
   target_id: 01a1b8c4-1bdd-78c2-9c50-56b2f410e810
   created_at: 2026-11-08T15:24:46.019911448Z
   created_by: joe
+comments:
+- id: 01a1bbc3-4d84-7170-85b3-90d8a3f6a9f7
+  author: joe
+  content: 'Advisor 2026-11-08, per the operator''s 2026-10-28 one-time ruling on non-blocking findings: accepted. Vacuous assert; the preceding unwrap carries the proof.'
+  created_at: 2026-11-08T15:25:01.188962918Z
+  modified_at: 2026-11-08T15:25:01.188962918Z
+  session_id: 01a1bbab-762f-7cd2-8a36-4ea9f209afce
+  harness_version: 2.1.319 (Claude Code)
 history:
 - id: 01a1bb01-5004-7320-9c61-14ac16d390d0
   author: joe
