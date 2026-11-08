@@ -1,0 +1,38 @@
+id: 01a1b98b-b51f-7c33-a34c-9aff78b1f4c4
+spec_id: TASK-b6b1278890774ef993d2ebc327862470-967
+title: 'Repeated unchanged review findings: TASK-3368'
+description: |-
+  Identical reviewer findings recurred twice for TASK-3368; do not requeue a third implementer round until an advisor chooses a different implementer/seat or resolves the dispute.
+
+  REVIEW FINDINGS TO ADDRESS (TASK-3368):
+  Verdict: CHANGES REQUESTED
+  Reviewed commit: 218ab59b2a98
+  Recorded: 2026-11-07T19:42:34.929661490+00:00
+  Findings:
+  1. Commit/PR subject ends with the completion trailer '(TASK-3368)', which drives merge-time completion of TASK-3368. The sketch itself (docs/plans/2026-11-07-task-3368-proc-identity-broker.md:183-187, 209-211) requires the task to stay open in Needs Attention until the advisor's signed decision, and implementation is still owed under this task. The parent sketch precedent (879529cf830, #3464) used '(Refs STORY-2537)'. Retitle the commit and PR to '(Refs TASK-3368)'.
+  2. The sketch isn't recorded on the owning spec: TASK-3368 has only the advisor's lane comment, with no sketch or plan-pointer comment and no punt for advisor attention, and its status is still In Progress. The doc says it 'changes only this document and spec comments' (line 133) and 'punt TASK-3368 for advisor attention' (line 186). Add 'aida comment add TASK-3368' pointing to the plan doc and listing the advisor decisions, then punt or flag the task as the doc says.
+  3. The PR body has only the ship boilerplate. The repo rule puts per-change notes in the PR body. Add a short summary: docs-only sketch, observation-only scope, open advisor decisions (per-message sender auth, sandbox transport).
+  Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
+status: Draft
+priority: Medium
+owner: joe
+feature: Uncategorized
+created_at: 2026-11-08T05:05:03.263624914Z
+modified_at: 2026-11-08T05:05:03.263624914Z
+req_type: Task
+tags:
+- from-advisor:TASK-3368
+- kind:observation
+- linked:TASK-3368
+- loop-guard
+- review-recurrence
+- severity:major
+filed_at:
+  code_sha: ff9b8c91808130e9bddf339d428915a5d551416e
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: efbd07d6c35
+  vendor: claude
+  session: 01a1b8be-8170-7fb2-89ab-ecb4c6eee98c
+  harness_version: 2.1.319 (Claude Code)
