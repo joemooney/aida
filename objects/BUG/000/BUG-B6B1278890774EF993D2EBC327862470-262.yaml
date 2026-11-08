@@ -3,12 +3,12 @@ spec_id: BUG-b6b1278890774ef993d2ebc327862470-262
 agreed_id: BUG-2497
 title: Conformance harness fixture omits chatgpt.com, so a ChatGPT-auth Codex run fails before any check and reports C0-C4 unknown
 description: 'scripts/containment/conformance.py fixture_policy (line 656) sets contained.allowed_hosts to api.openai.com and allow.fixture.test only. The production template (aida-core/templates/contained.toml) also allows chatgpt.com. Operator run 2026-11-08 (~/.aida/conformance-codex-aida-1794150336): contained Codex ChatGPT grant issued, turn.failed ''workspace routing discovery failed'' after 10 reconnects, launch exit 1, all checks unknown, verdict null. Fix: add chatgpt.com to the fixture list and nothing else; the auth hosts stay excluded per the STORY-2593 credential boundary, and deny.fixture.test must stay denied so C3 remains meaningful. Also make the harness report a vendor that never completed a turn as an explicit invalid-run result rather than rc=0 with unknown checks. Acceptance: with the fix a ChatGPT-auth run completes a turn and C0-C4 report real results. Critical path for STORY-2593, STORY-2238, TASK-2688/2689/2690, BUG-2446/2447/2448.'
-status: NeedsAttention
+status: Approved
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-08T15:10:55.149158862Z
-modified_at: 2026-11-08T15:21:20.074100541Z
+modified_at: 2026-11-08T15:30:21.807519236Z
 req_type: Bug
 comments:
 - id: 01a1bbba-ccf5-7ed1-8f16-63c4fa05dc0a
@@ -25,6 +25,13 @@ comments:
   modified_at: 2026-11-08T15:16:12.267677431Z
   session_id: 01a1bbb8ca7f
   harness_version: codex-cli 0.167.0
+- id: 01a1bbc8-31ef-76e3-973c-758095fe3e30
+  author: joe
+  content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: Fixture and invalid-run logic read correct, and the operator log confirms the chatgpt.com root cause, but the production-boundary invalid-run path has no test and the spec''s live ChatGPT-auth acceptance is unverified; CI still pending at review.. No triage reason was given.'
+  created_at: 2026-11-08T15:30:21.807516589Z
+  modified_at: 2026-11-08T15:30:21.807516589Z
+  session_id: 01a1b9af-8230-75d2-82f8-667491cc010a
+  harness_version: 2.1.319 (Claude Code)
 history:
 - id: 01a1bbb8-d03f-7092-98dc-459d41472f93
   author: aida-session-start
@@ -48,6 +55,15 @@ history:
   - field_name: status
     old_value: InProgress
     new_value: NeedsAttention
+- id: 01a1bbc8-31ef-76e3-973c-757a6a3447ab
+  author: joe
+  timestamp: 2026-11-08T15:30:21.807499118Z
+  session_id: 01a1b9af-8230-75d2-82f8-667491cc010a
+  harness_version: 2.1.319 (Claude Code)
+  changes:
+  - field_name: status
+    old_value: NeedsAttention
+    new_value: Approved
 filed_at:
   code_sha: 48e3865999b9c0e8acbc7899ce92ccd43191a3c7
   branch: main
@@ -57,11 +73,3 @@ filed_at:
   vendor: claude
   session: 01a1bbab-762f-7cd2-8a36-4ea9f209afce
   harness_version: 2.1.319 (Claude Code)
-failure_reason:
-  phase: reviewer
-  phase_index: 3
-  kind: verdict:request-changes
-  detail: Fixture and invalid-run logic read correct, and the operator log confirms the chatgpt.com root cause, but the production-boundary invalid-run path has no test and the spec's live ChatGPT-auth acceptance is unverified; CI still pending at review.
-  recovery_hint: address the review findings, move BUG-2497 back to In Progress, and clear the PR hold only after approval
-  shelved_by: reviewer
-  shelved_at: 2026-11-08T15:21:20.074100541Z
