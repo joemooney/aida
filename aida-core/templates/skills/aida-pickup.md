@@ -347,13 +347,13 @@ card so its contract sits at the top of the terminal scrollback for the
 whole working session — no separate `aida show` in another shell:
 
 ```bash
-aida show <spec_id> --card
+aida show <spec_id> --card --full
 ```
 
 The card prints a header rule, the `id · type · priority · status`
 one-liner, key fields (feature, tags, parent, related specs), the spec's
 cached **Intent (AI-generated)** comprehension if one is fresh (TASK-838),
-the description trimmed to its lead summary, the acceptance criteria, and
+the full description and acceptance criteria (`--full` disables card truncation), and
 the git-linkage summary. The user can scroll up at any point to re-read
 the goal, and can catch a mismatch between the spec and how you're
 interpreting it early.
