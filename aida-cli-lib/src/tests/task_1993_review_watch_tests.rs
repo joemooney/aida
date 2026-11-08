@@ -1343,6 +1343,32 @@ pub(crate) fn bug2498_confirm_superseded(root: &Path, lease: &crate::SessionLeas
         &replacement
     ));
     assert!(!crate::ownership::reader::review_lease_ended(root, lease));
+    // Corrupt persisted snapshots also release capacity after process exit,
+    // without manufacturing completion evidence for the retained checkout.
+    // trace:BUG-2498 | ai:codex
+    store
+        .transaction(&c.key(), |state| {
+            let mut malformed = stopped.clone();
+            malformed.review_lease = Some("invalid lease snapshot".into());
+            *attempt_mut(state, &c.key(), &attempt.token).unwrap() = malformed;
+            Ok(())
+        })
+        .unwrap();
+    assert!(advance(&store, &c.key(), &attempt.token).unwrap().is_none());
+    let terminal = store.load().unwrap().entries[&c.key()].attempts[0].clone();
+    assert_eq!(terminal.phase, Phase::Superseded);
+    assert!(!active(&terminal));
+    assert!(terminal.review_lease.is_none());
+    assert!(terminal
+        .diagnostic
+        .as_deref()
+        .unwrap()
+        .contains("completion receipt refused"));
+    assert!(!crate::ownership::reader::review_lease_ended(
+        root,
+        &replacement
+    ));
+    assert!(!crate::ownership::reader::review_lease_ended(root, lease));
     // Also exercise successful recording from the same stopped process state.
     store
         .transaction(&c.key(), |state| {
