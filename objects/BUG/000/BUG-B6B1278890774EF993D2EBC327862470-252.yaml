@@ -8,7 +8,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-07T16:53:03.893981953Z
-modified_at: 2026-11-07T20:21:49.507979568Z
+modified_at: 2026-11-08T00:21:04.879716576Z
 req_type: Bug
 relationships:
 - rel_type:
@@ -151,6 +151,13 @@ comments:
   created_at: 2026-11-07T20:21:49.507979568Z
   modified_at: 2026-11-07T20:21:49.507979568Z
   session_id: 01a1b79c234b
+  harness_version: 2.1.319 (Claude Code)
+- id: 01a1b887-b8ef-7f00-99eb-19473ffd3815
+  author: joe
+  content: 'Advisor 2026-11-07 17:22 MST: serial-ship.sh ran gh update-branch on PR #3611 (49cbdf4 -> 47f7c04, a main merge only) and recorded a base-only carry-over APPROVED at 47f7c04 under the advisor identity before I stopped it. That record is NOT an independent approval and must not gate a ship. The independent approval is the claude-reviewer verdict at 49cbdf4 (23:42Z); train #3642 is landing that reviewed content. If the train aborts on the head change, ship only after an independent reviewer approves 47f7c04 (the review watcher will dispatch it).'
+  created_at: 2026-11-08T00:21:04.879716576Z
+  modified_at: 2026-11-08T00:21:04.879716576Z
+  session_id: 01a1b848-940b-7bd2-8acd-52e428b182b8
   harness_version: 2.1.319 (Claude Code)
 history:
 - id: 01a1b6ed-d267-78a1-99be-341414183511
