@@ -2086,14 +2086,23 @@ fn rebase_onto(repo: &Path, target: &str) -> Result<()> {
 /// Preserve both the original failure and failed automatic recovery diagnostics.
 // trace:BUG-2490 | ai:codex
 fn abort_failed_store_rebase(repo: &Path, error: anyhow::Error) -> anyhow::Error {
-    match git(repo, &["rebase", "--abort"]) {
+    abort_failed_store_operation(repo, "rebase", error)
+}
+
+// trace:BUG-2490 | ai:codex
+fn abort_failed_store_operation(
+    repo: &Path,
+    operation: &str,
+    error: anyhow::Error,
+) -> anyhow::Error {
+    match git(repo, &[operation, "--abort"]) {
         Ok(abort) if abort.success => error,
         Ok(abort) => anyhow::anyhow!(
-            "{error:#}; automatic `git rebase --abort` also failed: {}",
+            "{error:#}; automatic `git {operation} --abort` also failed: {}",
             abort.stderr
         ),
         Err(abort) => {
-            anyhow::anyhow!("{error:#}; automatic `git rebase --abort` also failed: {abort:#}")
+            anyhow::anyhow!("{error:#}; automatic `git {operation} --abort` also failed: {abort:#}")
         }
     }
 }
@@ -2813,10 +2822,9 @@ fn merge_union_onto(repo: &Path, ref_: &str, message: &str) -> Result<StorePullO
             && !is_registry_nodes_path(path)
             && !is_schedule_ledger_path(path)
         {
-            let _ = git(repo, &["merge", "--abort"]);
-            anyhow::bail!(
+            return Err(abort_failed_store_operation(repo, "merge", anyhow::anyhow!(
                 "conflict in non-mergeable path `{path}` — cannot auto-union; resolve it manually in the store worktree"
-            );
+            )));
         }
     }
 
@@ -2841,21 +2849,26 @@ fn merge_union_onto(repo: &Path, ref_: &str, message: &str) -> Result<StorePullO
                 notes.push(note);
             }
             Err(e) => {
-                let _ = git(repo, &["merge", "--abort"]);
-                anyhow::bail!("structured union of `{path}` failed: {e}");
+                return Err(abort_failed_store_operation(
+                    repo,
+                    "merge",
+                    anyhow::anyhow!("structured union of `{path}` failed: {e}"),
+                ));
             }
         }
     }
 
     // trace:BUG-2490 | ai:codex — resolved objects still require schema validation.
     if let Err(error) = validate_store_index(repo) {
-        let _ = git(repo, &["merge", "--abort"]);
-        return Err(error);
+        return Err(abort_failed_store_operation(repo, "merge", error));
     }
     let commit = git(repo, &["-c", "core.editor=true", "commit", "--no-edit"])?;
     if !commit.success {
-        let _ = git(repo, &["merge", "--abort"]);
-        anyhow::bail!("committing the union merge failed: {}", commit.stderr);
+        return Err(abort_failed_store_operation(
+            repo,
+            "merge",
+            anyhow::anyhow!("committing the union merge failed: {}", commit.stderr),
+        ));
     }
     Ok(StorePullOutcome::AutoMerged { notes })
 }

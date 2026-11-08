@@ -1497,8 +1497,22 @@ fn bug_2490_rebase_continuation_refuses_invalid_resolved_index() {
 // trace:BUG-2490 | ai:codex
 #[test]
 fn bug_2490_union_refusal_aborts_and_restores_branch() {
+    bug_2490_union_refusal(false);
+}
+
+// trace:BUG-2490 | ai:codex
+#[test]
+fn bug_2490_union_refusal_reports_failed_abort() {
+    bug_2490_union_refusal(true);
+}
+
+// trace:BUG-2490 | ai:codex
+fn bug_2490_union_refusal(block_abort: bool) {
     let dir = tempfile::tempdir().unwrap();
-    let (_main, store) = bug_1929_main_with_store(dir.path());
+    let (main, store) = bug_1929_main_with_store(dir.path());
+    // A plain repository permits a test-owned hook; store repositories
+    // deliberately pin verified shipped hooks instead of project hooks.
+    let store = if block_abort { main } else { store };
     let path = "objects/STORY/000/STORY-shared.yaml";
     let bad = "objects/STORY/000/STORY-legacy.yaml";
     std::fs::create_dir_all(store.join("objects/STORY/000")).unwrap();
@@ -1510,6 +1524,7 @@ fn bug_2490_union_refusal_aborts_and_restores_branch() {
     std::fs::write(store.join(path), &valid).unwrap();
     add(&store, &[path]).unwrap();
     commit(&store, "base").unwrap();
+    let original_branch = current_branch(&store).unwrap();
     assert!(
         git(&store, &["checkout", "-b", "incoming"])
             .unwrap()
@@ -1539,7 +1554,11 @@ fn bug_2490_union_refusal_aborts_and_restores_branch() {
         .unwrap()
         .success
     );
-    assert!(git(&store, &["checkout", "aida-store"]).unwrap().success);
+    assert!(
+        git(&store, &["checkout", &original_branch])
+            .unwrap()
+            .success
+    );
     std::fs::write(
         store.join(path),
         valid.replace("title: base", "title: local"),
@@ -1550,6 +1569,24 @@ fn bug_2490_union_refusal_aborts_and_restores_branch() {
     let original_head = head_sha(&store).unwrap();
     // Exercise the post-resolution guard directly: public preflight also rejects
     // this historical invalid object before starting the managed operation.
+    if block_abort {
+        // Refuse the abort's ref transaction while allowing the merge to
+        // reach object validation.
+        use std::os::unix::fs::PermissionsExt;
+        let hooks = dir.path().join("hooks");
+        std::fs::create_dir_all(&hooks).unwrap();
+        let hook = hooks.join("reference-transaction");
+        std::fs::write(&hook, "#!/bin/sh\n[ \"$1\" = prepared ] || exit 0\ncase \"$(ps -o args= -p $PPID)\" in *merge*--abort*|*reset*--merge*) echo UNION-ABORT-BLOCKED >&2; exit 1;; esac\nexit 0\n").unwrap();
+        std::fs::set_permissions(&hook, std::fs::Permissions::from_mode(0o755)).unwrap();
+        assert!(
+            git(
+                &store,
+                &["config", "core.hooksPath", hooks.to_str().unwrap()]
+            )
+            .unwrap()
+            .success
+        );
+    }
     let error = merge_union_onto(&store, "incoming", "union")
         .unwrap_err()
         .to_string();
@@ -1557,6 +1594,15 @@ fn bug_2490_union_refusal_aborts_and_restores_branch() {
         error.contains(bad) && error.contains("does not parse"),
         "{error}"
     );
+    if block_abort {
+        assert!(
+            error.contains("automatic `git merge --abort` also failed"),
+            "{error}"
+        );
+        assert!(error.contains("UNION-ABORT-BLOCKED"), "{error}");
+        assert!(merge_in_progress(&store));
+        return;
+    }
     assert_eq!(original_head, head_sha(&store).unwrap());
     assert_eq!(current_branch(&store).unwrap(), "aida-store");
     assert!(
