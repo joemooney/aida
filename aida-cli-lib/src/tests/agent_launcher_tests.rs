@@ -344,6 +344,12 @@ fn noexec_preview_renders_command_and_codex_permission_posture() {
         "[agents]\nbypass = false\n",
     )
     .unwrap();
+    // trace:STORY-1486 | ai:codex
+    std::fs::write(
+        project.join(aida_core::scaffolding::launch_profile::PROFILE_PATH),
+        aida_core::scaffolding::launch_profile::RECIPE,
+    )
+    .unwrap();
     let config = AgentLaunchConfig {
         delegate_seats: Vec::new(),
         agent_type: "codex",
@@ -380,6 +386,11 @@ fn noexec_preview_renders_command_and_codex_permission_posture() {
     .unwrap();
 
     assert!(preview.contains("# AIDA agent launch preview"), "{preview}");
+    assert!(
+        preview.contains("launch_profile_scope: primary checkout until launch;")
+            && preview.contains("dedicated worktree and Git administrative roots"),
+        "{preview}"
+    );
     assert!(preview.contains("aida_executable: "), "{preview}");
     assert!(
         preview.contains("(source: ") && preview.contains("profile: "),
