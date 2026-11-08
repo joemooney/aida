@@ -8,7 +8,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-06T13:39:53.442026096Z
-modified_at: 2026-11-08T11:34:30.912300647Z
+modified_at: 2026-11-08T11:38:32.971849234Z
 req_type: Task
 tags:
 - architecture
@@ -1313,6 +1313,12 @@ history:
   - field_name: status
     old_value: InProgress
     new_value: NeedsAttention
+- id: 01a1baf3-f6ee-7122-9f57-0dd84ed23be9
+  author: joe
+  timestamp: 2026-11-08T11:38:33.070341211Z
+  session_id: 01a1baf20036
+  harness_version: 2.1.319 (Claude Code)
+  changes: []
 execution_mode: drive
 filed_at:
   code_sha: 50ce509da3f7edbd12ff6636fe996c9c3a65c68f
@@ -1326,7 +1332,7 @@ failure_reason:
   phase: reviewer
   phase_index: 3
   kind: verdict:request-changes
-  detail: Head 2b3a8a9f1c36 only merges unrelated intake work from main over e645c412dfbb; all prior findings persist in source, the advisor's routing acceptance (comment 34) is unmet, and CI lib-0 is red.
+  detail: Head 6c2eeeeb2895 fixes most prior findings (edit/delete verbs removed, client positive route test, role, pipe, option refusal), but agreed-ID resolution still refuses every lowercase origin-keyed spec including TASK-3223 itself, routing acceptance (comment 34) is unmet, and CI is not finished at this head.
   recovery_hint: address the review findings, move TASK-3223 back to In Progress, and clear the PR hold only after approval
   shelved_by: reviewer
-  shelved_at: 2026-11-08T11:34:30.912300647Z
+  shelved_at: 2026-11-08T11:38:32.971849234Z

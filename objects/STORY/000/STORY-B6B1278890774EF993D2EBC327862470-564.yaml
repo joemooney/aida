@@ -23,7 +23,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-07T19:59:26.079479Z
-modified_at: 2026-11-08T11:26:01.437992997Z
+modified_at: 2026-11-08T11:38:30.905336225Z
 req_type: Story
 comments:
 - id: 01a1b798-f0d4-73b1-93d5-f84581f2d190
@@ -349,6 +349,12 @@ history:
   - field_name: status
     old_value: InProgress
     new_value: NeedsAttention
+- id: 01a1baf3-eed3-7fd2-8fef-69b308658a62
+  author: joe
+  timestamp: 2026-11-08T11:38:30.995774020Z
+  session_id: 01a1baf183a9
+  harness_version: 2.1.319 (Claude Code)
+  changes: []
 filed_at:
   code_sha: 7a18c0d52a6a4e0822befd4c810cfed16b04b74c
   branch: main
@@ -363,3 +369,11 @@ attention_reason:
   detail: 'Round-5 finding 1 is agreed and remains unresolved: AC1 requires two consecutive lane Cargo jobs with final sccache statistics and second-job Rust hits greater than zero on both primary and dell1, using a launcher built from this branch, or a recorded advisor amendment. This native seat cannot obtain both-host evidence. Findings 2-4 are fixed locally: no-resource seats disable the wrapper, lane cache preserves incremental compilation, and Cargo config precedence matches Cargo. Targeted tests and fast gates are running. Preserve the publication veto and existing merge hold.'
   raised_by: implementer
   raised_at: 2026-11-08T11:15:40.526863888Z
+failure_reason:
+  phase: reviewer
+  phase_index: 3
+  kind: verdict:request-changes
+  detail: 'Round 5 fixes check out: AC0/AC2/AC3/AC4 and the advisor''s lane/unsandboxed separation are met in code, but AC1 (lane-job cache hits on primary and dell1) still has no evidence or amendment. Code CI at this head is still pending (only merge-hold-gate has reported, failing by design). Three smaller defects are listed.'
+  recovery_hint: address the review findings, move STORY-2641 back to In Progress, and clear the PR hold only after approval
+  shelved_by: reviewer
+  shelved_at: 2026-11-08T11:38:30.905336225Z
