@@ -1,0 +1,91 @@
+{
+  "schema_version": 1,
+  "spec": "STORY-2662",
+  "publishes": [
+    {
+      "at": "2026-11-08T19:24:18.385069031Z",
+      "closed_by": "auto-bump"
+    }
+  ],
+  "events": [
+    {
+      "ts": "2026-11-08T07:01:52.368895620Z",
+      "spec": "STORY-2662",
+      "seat": "advisor",
+      "kind": {
+        "event": "SpecRequeued",
+        "via": "queue-rework",
+        "actor": "joe",
+        "from": "Needs Attention",
+        "to": "Approved"
+      }
+    },
+    {
+      "ts": "2026-11-08T07:41:10.589591465Z",
+      "spec": "STORY-2662",
+      "seat": "advisor",
+      "kind": {
+        "event": "SpecRequeued",
+        "via": "queue-rework",
+        "actor": "joe",
+        "from": "Needs Attention",
+        "to": "Approved"
+      }
+    },
+    {
+      "ts": "2026-11-08T08:15:43.346370194Z",
+      "spec": "STORY-2662",
+      "seat": "advisor",
+      "kind": {
+        "event": "SpecRequeued",
+        "via": "queue-rework",
+        "actor": "joe",
+        "from": "Needs Attention",
+        "to": "Approved"
+      }
+    },
+    {
+      "ts": "2026-11-08T08:39:06.840771742Z",
+      "spec": "STORY-2662",
+      "seat": "advisor",
+      "kind": {
+        "event": "SpecRequeued",
+        "via": "queue-rework",
+        "actor": "joe",
+        "from": "Needs Attention",
+        "to": "Approved"
+      }
+    },
+    {
+      "ts": "2026-11-08T16:30:32.743045449Z",
+      "spec": "STORY-2662",
+      "seat": "advisor",
+      "kind": {
+        "event": "SpecRequeued",
+        "via": "queue-rework",
+        "actor": "joe",
+        "from": "Needs Attention",
+        "to": "Approved"
+      }
+    },
+    {
+      "ts": "2026-11-08T19:23:13.539558610Z",
+      "spec": "STORY-2662",
+      "seat": "advisor",
+      "kind": {
+        "event": "PrMerged",
+        "pr": 3669
+      }
+    },
+    {
+      "ts": "2026-11-08T19:24:18.174760288Z",
+      "spec": "STORY-2662",
+      "kind": {
+        "event": "SpecCompleted",
+        "commit": "db2eb4c39e46704132705ccb2b8300574ead41a6",
+        "pr": 3669,
+        "closed_by": "auto-bump"
+      }
+    }
+  ]
+}
