@@ -1,0 +1,21 @@
+id: 01a1bc74-a5fd-7d41-9dd6-f2f6f05d74b3
+spec_id: BUG-b6b1278890774ef993d2ebc327862470-263
+agreed_id: BUG-2498
+title: 'Review repickup still refused by a completed review''s aida-pr-N worktree: ''branch pr-N is held by worktree before pickup setup'', and review watch does not retry'
+description: 'BUG-2457, BUG-2469 and BUG-2428 are completed, but on 2026-11-08 the same stall hit PR-3662, 3669, 3652, 3661 and 3667 on the live binary. Each prior reviewer had finished: worktree clean, nothing unpushed, no process with its cwd there, lease still present. The next-head launch then fails with ''branch pr-N is held by worktree ... before pickup setup'' (e.g. .aida/review-watch/logs/PR-3667-e2b56895-cff6-42cb-8b23-624676627d0d.log) and review watch records ''not relaunched'', leaving that head unreviewed until an advisor ends the lease by hand. Acceptance: (1) a reviewer whose worktree is clean, fully pushed and has no live process no longer blocks the next head of that PR; the pre-pickup check releases it, preserving any merge-holds marker (BUG-2176); (2) dirty, unpushed or live worktrees are still refused; (3) a regression test drives two consecutive heads of one PR through the pickup path; (4) review watch retries once after such a release instead of parking the head.'
+status: Approved
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-11-08T18:38:43.709546225Z
+modified_at: 2026-11-08T18:38:43.709546225Z
+req_type: Bug
+filed_at:
+  code_sha: eeec474c545cbc8a354d386c8cb6d81460da7b9f
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 8e41434a3e3
+  vendor: claude
+  session: 01a1bbab-762f-7cd2-8a36-4ea9f209afce
+  harness_version: 2.1.319 (Claude Code)
