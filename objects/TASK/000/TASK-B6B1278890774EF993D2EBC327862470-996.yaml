@@ -14,7 +14,7 @@ priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-11-08T12:41:50.599130080Z
-modified_at: 2026-11-08T15:26:00.156266859Z
+modified_at: 2026-11-08T15:26:07.145843147Z
 req_type: Task
 tags:
 - carried-from:TASK-3472
@@ -26,6 +26,14 @@ relationships:
   target_id: 01a1ba22-fb45-77b3-8aaa-626d7e65356e
   created_at: 2026-11-08T15:26:00.156263126Z
   created_by: joe
+comments:
+- id: 01a1bbc4-4f29-72e0-a200-9b965e8ecc9e
+  author: joe
+  content: 'Advisor 2026-11-08, per the operator''s 2026-10-28 one-time ruling on non-blocking findings: accepted. Cosmetic; no code enforces the old number.'
+  created_at: 2026-11-08T15:26:07.145843147Z
+  modified_at: 2026-11-08T15:26:07.145843147Z
+  session_id: 01a1bbab-762f-7cd2-8a36-4ea9f209afce
+  harness_version: 2.1.319 (Claude Code)
 history:
 - id: 01a1bb7d-171a-72d2-8b97-ae9bc75998d8
   author: joe
