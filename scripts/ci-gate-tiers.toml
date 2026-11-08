@@ -59,8 +59,8 @@
 "Documentation landing smoke" = "full"
 # trace:STORY-2480 | ai:codex
 "Run restricted work CI relay contract" = "full"
-# trace:BUG-2014 | ai:codex
 "PreCompact handoff hook protocol" = "fast"  # trace:STORY-2662 | ai:codex
+# trace:BUG-2014 | ai:codex
 "Grant expiry hook protocol" = "fast"
 "Build all packages" = "full"
 "Build aida binary for lib unit tests" = "full"

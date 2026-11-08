@@ -492,6 +492,12 @@ def operations(root, scanned=None):
     for selector, (module, function) in explicit.items():
         if (root / f"aida-cli-lib/src/{module}.rs").exists():
             resolve("cli", selector, [f"aida_cli_lib::{module}::{function}"])
+    # trace:STORY-2662 | ai:codex
+    if "aida-cli-lib/src/seat_rotation.rs" in files:
+        resolve("cli", "session handoff", [
+            "aida_cli_lib::seat_rotation::write_handoff_kind",
+            "aida_cli_lib::seat_rotation::prune_compact_snapshots",
+        ], "Reviewed session_handoff_seat snapshot branch writes and prunes recognized missing-worktree slots; host writer authority remains a cutover blocker.")
     # trace:TASK-3222 | ai:codex
     # Reviewed bare-name edge: defer_resurface::run calls sweep. Do not infer
     # other bare calls globally, where unrelated names can collide.

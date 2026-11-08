@@ -989,12 +989,12 @@ pub(crate) fn session_handoff_seat(
 ) -> Result<()> {
     let role_seat = resolve_handoff_seat(seat)?;
     // trace:STORY-2662 | ai:codex
-    let cwd = std::env::current_dir()?.canonicalize()?;
+    let cwd = find_project_root()?.canonicalize()?;
     let snapshot_seat = seat_rotation::compact_snapshot_seat(&cwd, &role_seat);
     let seat = if snapshot {
         snapshot_seat.clone()
     } else {
-        role_seat
+        role_seat.clone()
     };
     let project_root = main_worktree_root_from(&find_project_root()?);
     if let Some(src) = write {
@@ -1006,12 +1006,17 @@ pub(crate) fn session_handoff_seat(
             std::fs::read_to_string(src).with_context(|| format!("reading {src}"))?
         };
         // trace:STORY-B6B1278890774EF993D2EBC327862470-101 | ai:claude
+        let mut writer = seat_rotation::HandoffWriter::from_env(final_);
+        if snapshot {
+            seat_rotation::prune_compact_snapshots(&project_root);
+            writer.snapshot_owner = Some((cwd, role_seat));
+        }
         let written = seat_rotation::write_handoff_kind(
             &project_root,
             &seat,
             &body,
             chrono::Utc::now(),
-            &seat_rotation::HandoffWriter::from_env(final_),
+            &writer,
             if snapshot {
                 "compact-snapshot"
             } else {

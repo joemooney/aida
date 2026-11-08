@@ -2,7 +2,7 @@
 """Best-effort Claude PreCompact snapshot; persistence belongs to session handoff.
 
 No transcript scraping, model calls, or new state directory.
-Every subprocess has a deadline and output cap; the entire hook has 12 seconds.
+Every subprocess has a deadline and output cap; the entire hook has 14 seconds.
 """
 # trace:STORY-2662 | ai:codex
 import json
@@ -16,10 +16,10 @@ import tempfile
 import time
 from datetime import datetime, timezone
 
-DEADLINE = time.monotonic() + 12
+DEADLINE = time.monotonic() + 14
 
 
-def run(argv, limit=2048, body=None, timeout=2):
+def run(argv, limit=2048, body=None, timeout=3):
     remaining = min(timeout, DEADLINE - time.monotonic() - (0 if body else 1.5))
     if remaining <= 0:
         return "unknown (hook budget exhausted)"
@@ -27,9 +27,14 @@ def run(argv, limit=2048, body=None, timeout=2):
     if source:
         source.write(body.encode())
         source.seek(0)
-    child = subprocess.Popen(argv, stdin=source if source else subprocess.DEVNULL,
-                             stdout=subprocess.PIPE, stderr=subprocess.DEVNULL,
-                             start_new_session=True)
+    try:
+        child = subprocess.Popen(argv, stdin=source if source else subprocess.DEVNULL,
+                                 stdout=subprocess.PIPE, stderr=subprocess.DEVNULL,
+                                 start_new_session=True)
+    except OSError:
+        if source:
+            source.close()
+        return 'unknown (command unavailable)'
     data = bytearray()
     try:
         end = time.monotonic() + remaining
@@ -90,15 +95,18 @@ def main():
         return
     branch = run(['git', 'branch', '--show-current'], 256)
     spec = os.environ.get('AIDA_SESSION_SCOPE', '')
+    spec_known = bool(spec)
     # Branch fallback is a pointer only; never grants completion/ownership credit.
     if not spec:
         match = re.search(r'(?<![A-Za-z0-9])(?:STORY|TASK|BUG|SPIKE)-[A-Za-z0-9]+(?:-[0-9]+)?', branch, re.I)
         spec = match.group(0).upper() if match else 'unknown'
     spec = spec[:160]
     verdict = run(['aida', 'review', 'verdict', spec]) if spec != 'unknown' else 'unknown (no spec pointer)'
-    # Resolve the branch's PR through the existing read-only forge adapter.
+    # Branch-scoped GitHub read: never infer absence from a fleet-wide page.
+    # Other forges remain explicitly unknown; compaction is optional.
     # A failed lookup must not turn PR-keyed review findings into an empty set.
-    prs = run(['aida', 'pr', 'list', '--json'], 65536, timeout=1.5)
+    prs = run(['gh', 'pr', 'list', '--head', branch, '--state', 'open',
+               '--limit', '100', '--json', 'number,headRefName'], 65536, timeout=3)
     origins = {spec.upper()}
     pr_known = False
     try:
@@ -106,13 +114,13 @@ def main():
         if not isinstance(entries, list):
             raise ValueError('invalid PR list')
         for entry in entries:
-            if entry['branch'] == branch:
-                origins.add('PR-' + str(int(entry['pr_number'])))
-        pr_known = bool(branch) and not branch.startswith('unknown (')
+            if entry['headRefName'] == branch:
+                origins.add('PR-' + str(int(entry['number'])))
+        pr_known = len(entries) < 100 and bool(branch) and not branch.startswith('unknown (')
     except (ValueError, KeyError, TypeError):
         pass
     # Real stores need ~5 seconds; leave the remaining budget for persistence.
-    rows = run(['aida', 'findings', 'list', '--json'], 65536, timeout=6)
+    rows = run(['aida', 'findings', 'list', '--json'], 65536, timeout=6.5)
     try:
         findings = json.dumps([row for row in json.loads(rows)['findings']
                                if row.get('origin', '').upper() in origins], ensure_ascii=False)
@@ -122,8 +130,8 @@ def main():
             findings += '\n[truncated]'
         if not pr_known:
             findings += '\nReview findings unknown (branch PR lookup unavailable).'
-        if spec == 'unknown':
-            findings += '\nSpec findings unknown (no spec pointer).'
+        if not spec_known:
+            findings += '\nSpec findings unknown (branch pointer is not a resolved display ID).'
     except (ValueError, KeyError, TypeError):
         findings = 'unknown (findings unavailable or exceeded output cap)'
     # Always re-read the matched rotation note. Never recursively nest snapshots.

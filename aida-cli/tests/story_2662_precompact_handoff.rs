@@ -209,9 +209,37 @@ fn precompact_handoff_cli_round_trip() {
     assert_eq!(log.lines().count(), 1);
     let record: serde_json::Value = serde_json::from_str(log.trim()).unwrap();
     assert_eq!(record["event"], "compact-snapshot");
-    // A sibling cwd must never receive this worktree's packet.
-    let sibling = repo.join("sibling");
-    std::fs::create_dir(&sibling).unwrap();
+    // Subdirectories resolve to the same worktree slot on relaunch.
+    let subdir = repo.join("nested");
+    std::fs::create_dir(&subdir).unwrap();
+    let nested = aida(&subdir, &home)
+        .args([
+            "session",
+            "handoff",
+            "--seat",
+            "implementer",
+            "--snapshot",
+            "--show",
+            "--body-only",
+        ])
+        .output()
+        .unwrap();
+    assert!(nested.status.success(), "{}", show(&nested));
+    assert_eq!(nested.stdout, packet.as_bytes());
+    // An actual sibling worktree must never receive this worktree's packet.
+    let sibling = tmp.path().join("sibling");
+    git(
+        &repo,
+        &home,
+        &[
+            "worktree",
+            "add",
+            "-q",
+            "-b",
+            "sibling",
+            sibling.to_str().unwrap(),
+        ],
+    );
     let other = aida(&sibling, &home)
         .args([
             "session",
@@ -226,4 +254,68 @@ fn precompact_handoff_cli_round_trip() {
         .unwrap();
     assert!(other.status.success(), "{}", show(&other));
     assert!(other.stdout.is_empty());
+    let mut child = aida(&sibling, &home)
+        .args([
+            "session",
+            "handoff",
+            "--seat",
+            "implementer",
+            "--snapshot",
+            "--write",
+            "-",
+        ])
+        .stdin(Stdio::piped())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .spawn()
+        .unwrap();
+    child
+        .stdin
+        .take()
+        .unwrap()
+        .write_all(b"SIBLING RECOVERY")
+        .unwrap();
+    let written = child.wait_with_output().unwrap();
+    assert!(written.status.success(), "{}", show(&written));
+    assert_eq!(
+        std::fs::read_dir(repo.join(".aida/handoff"))
+            .unwrap()
+            .count(),
+        2
+    );
+    git(
+        &repo,
+        &home,
+        &["worktree", "remove", "--force", sibling.to_str().unwrap()],
+    );
+    let mut child = aida(&repo, &home)
+        .args([
+            "session",
+            "handoff",
+            "--seat",
+            "implementer",
+            "--snapshot",
+            "--write",
+            "-",
+        ])
+        .stdin(Stdio::piped())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .spawn()
+        .unwrap();
+    child
+        .stdin
+        .take()
+        .unwrap()
+        .write_all(b"ROOT STILL LIVE")
+        .unwrap();
+    let written = child.wait_with_output().unwrap();
+    assert!(written.status.success(), "{}", show(&written));
+    assert_eq!(
+        std::fs::read_dir(repo.join(".aida/handoff"))
+            .unwrap()
+            .count(),
+        1,
+        "removed worktree's snapshot is pruned; live root remains"
+    );
 }

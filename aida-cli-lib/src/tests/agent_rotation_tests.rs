@@ -187,6 +187,7 @@ fn a_stamped_handoff_round_trips_through_the_log() {
         native_session_id: Some("s1".to_string()),
         generation: Some(2),
         final_: false,
+        snapshot_owner: None,
     };
     let w =
         crate::seat_rotation::write_handoff_by(dir.path(), "advisor", "next: x", at(5), &writer)
@@ -583,6 +584,7 @@ fn turn_monitor_requires_notice_fresh_own_handoff_and_stop_boundary() {
         native_session_id: Some("own".into()),
         generation: Some(1),
         final_: false,
+        snapshot_owner: None,
     };
     let payload = |event: &str, session: &str| {
         serde_json::json!({"session_id":session,"hook_event_name":event}).to_string()
@@ -794,6 +796,7 @@ fn compact_snapshot_does_not_request_rotation() {
         native_session_id: Some("s1".into()),
         generation: Some(1),
         final_: false,
+        snapshot_owner: None,
     };
     crate::seat_rotation::write_handoff_kind(
         dir.path(),

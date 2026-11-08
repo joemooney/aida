@@ -3,6 +3,7 @@
 # trace:STORY-2662 | ai:codex
 import json
 import os
+import runpy
 from pathlib import Path
 import subprocess
 import tempfile
@@ -13,10 +14,10 @@ HOOK = ROOT / 'aida-core/templates/hooks/aida-precompact-handoff.sh'
 
 
 class PrecompactHandoff(unittest.TestCase):
-    def fixture(self, event='PreCompact', extra=None, fail=False, large=False, slow=False, missing=False, rotated=False, slow_findings=False, pr_fail=False, branch="story-2662", scope="STORY-2662"):
+    def fixture(self, event='PreCompact', extra=None, fail=False, large=False, slow=False, missing=False, rotated=False, slow_findings=False, pr_fail=False, branch="story-2662", scope="STORY-2662", slow_pr=False, saturated=False):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
-            for flag, enabled in [('slow-findings', slow_findings), ('pr-fail', pr_fail)]:
+            for flag, enabled in [('slow-findings', slow_findings), ('pr-fail', pr_fail), ('slow-pr', slow_pr), ('saturated', saturated)]:
                 if enabled:
                     (root/flag).touch()
             fake = root / 'aida'
@@ -36,15 +37,18 @@ elif '--show' in args:
     else: print('standing order '*2000 + 'Next step: finish parser regression')
 elif 'verdict' in args:
     if os.environ['SLOW'] == '1': time.sleep(20)
+    if (p/'slow-pr').exists(): time.sleep(1.66)
     print('Rework: validate parser')
 elif 'pr' in args:
+    if (p/'slow-pr').exists(): time.sleep(1.97)
     if (p/'pr-fail').exists(): sys.exit(1)
-    print('[{"branch":"story-2662","pr_number":3655}]')
+    print(__import__('json').dumps([{'headRefName': os.environ['FIXTURE_BRANCH'], 'number': 3655}] * (100 if (p/'saturated').exists() else 1)))
 elif 'findings' in args:
-    if (p/'slow-findings').exists(): time.sleep(4.9)
+    if (p/'slow-findings').exists(): time.sleep(5.4)
     print('{"findings":[{"id":"TASK-1","source":"implementer","origin":"STORY-2662","title":"parser mismatch"},{"id":"TASK-2","source":"review","origin":"PR-3655","title":"review regression"},{"origin":"STORY-other","title":"unrelated finding"}]}' if os.environ['LARGE'] == '0' else '界'*100000)
 ''')
             fake.chmod(0o755)
+            (root / 'gh').symlink_to(fake)
             git = root / 'git'
             git.write_text('#!/bin/sh\nprintf "%s\\n" "$FIXTURE_BRANCH"\n')
             git.chmod(0o755)
@@ -105,6 +109,25 @@ elif 'findings' in args:
         self.assertEqual(result.returncode, 0)
         self.assertIn('parser mismatch', packet)
         self.assertIn('review regression', packet)
+
+    def test_realistic_combined_probe_latency(self):
+        result, packet, calls = self.fixture(slow_pr=True, slow_findings=True)
+        self.assertEqual(result.returncode, 0)
+        self.assertIn('review regression', packet)
+        self.assertNotIn('Review findings unknown', packet)
+        self.assertIn("'--head', 'story-2662'", calls)
+
+    def test_missing_optional_executable_stays_unknown(self):
+        run = runpy.run_path(str(HOOK), run_name='fixture')['run']
+        self.assertEqual(run(['/no/such/aida-hook-command']), 'unknown (command unavailable)')
+
+    def test_saturated_branch_list_stays_unknown(self):
+        _, packet, _ = self.fixture(saturated=True)
+        self.assertIn('Review findings unknown', packet)
+
+    def test_canonical_branch_fallback_labels_spec_findings_unknown(self):
+        _, packet, _ = self.fixture(branch='story-b6b1278890774ef993d2ebc327862470-585', scope='')
+        self.assertIn('Spec findings unknown', packet)
 
     def test_failed_pr_lookup_is_explicitly_unknown(self):
         _, packet, _ = self.fixture(pr_fail=True)

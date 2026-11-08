@@ -219,6 +219,8 @@ pub(crate) struct HandoffWriter {
     pub generation: Option<u64>,
     /// `--final`: the handoff is recorded, but the session ends for real.
     pub final_: bool,
+    // trace:STORY-2662 | ai:codex
+    pub snapshot_owner: Option<(std::path::PathBuf, String)>,
 }
 
 impl HandoffWriter {
@@ -237,6 +239,7 @@ impl HandoffWriter {
             native_session_id: crate::agent_handle::current_native_session_id(),
             generation: var(crate::agent_rotation::GENERATION_ENV).and_then(|g| g.parse().ok()),
             final_,
+            snapshot_owner: None,
         }
     }
 }
@@ -260,6 +263,71 @@ pub(crate) fn compact_snapshot_seat(cwd: &Path, seat: &str) -> String {
     use sha2::{Digest, Sha256};
     let digest = Sha256::digest(format!("{}\0{seat}", cwd.display()).as_bytes());
     format!("compact-{:x}", digest)[..48].to_string()
+}
+
+// Only remove recognized snapshot files for a verifiably missing owner. Unknown
+// legacy slots, symlinks, unreadable owners and extra files are retained.
+// trace:STORY-2662 | ai:codex
+pub(crate) fn prune_compact_snapshots(project_root: &Path) {
+    let Ok(entries) = std::fs::read_dir(project_root.join(".aida/handoff")) else {
+        return;
+    };
+    for entry in entries.flatten() {
+        let Ok(kind) = entry.file_type() else {
+            continue;
+        };
+        let name = entry.file_name();
+        let Some(seat) = name.to_str() else { continue };
+        if !kind.is_dir() || !seat.starts_with("compact-") {
+            continue;
+        }
+        let dir = entry.path();
+        let log = dir.join("log.jsonl");
+        let Ok(meta) = std::fs::symlink_metadata(&log) else {
+            continue;
+        };
+        if !meta.is_file() || meta.len() > 16384 {
+            continue;
+        }
+        let Ok(text) = std::fs::read_to_string(&log) else {
+            continue;
+        };
+        let Ok(row) = serde_json::from_str::<serde_json::Value>(&text) else {
+            continue;
+        };
+        let (Some(worktree), Some(role)) = (row["worktree"].as_str(), row["role"].as_str()) else {
+            continue;
+        };
+        let worktree = Path::new(worktree);
+        if row["event"] != "compact-snapshot"
+            || !worktree.is_absolute()
+            || compact_snapshot_seat(worktree, role) != seat
+        {
+            continue;
+        }
+        if !matches!(std::fs::symlink_metadata(worktree), Err(e) if e.kind() == std::io::ErrorKind::NotFound)
+        {
+            continue;
+        }
+        let Ok(files) = std::fs::read_dir(&dir) else {
+            continue;
+        };
+        let files: Vec<_> = files.collect();
+        if !files.iter().all(|f| {
+            f.as_ref().is_ok_and(|f| {
+                matches!(
+                    f.file_name().to_str(),
+                    Some("snapshot.md" | "latest.md" | "log.jsonl")
+                ) && f.file_type().is_ok_and(|t| t.is_file())
+            })
+        }) {
+            continue;
+        }
+        for file in files.into_iter().flatten() {
+            let _ = std::fs::remove_file(file.path());
+        }
+        let _ = std::fs::remove_dir(&dir);
+    }
 }
 
 // trace:STORY-2662 | ai:codex
@@ -322,6 +390,12 @@ pub(crate) fn write_handoff_kind(
         "bytes": body.len(),
         "approx_tokens": body.len() / 4,
     });
+    // Snapshot ownership is diagnostic retention metadata, never launch authority.
+    // trace:STORY-2662 | ai:codex
+    if let Some((worktree, role)) = &writer.snapshot_owner {
+        record["worktree"] = serde_json::json!(worktree);
+        record["role"] = serde_json::json!(role);
+    }
     if let Some(handle) = &writer.handle {
         record["handle"] = serde_json::json!(handle);
     }
