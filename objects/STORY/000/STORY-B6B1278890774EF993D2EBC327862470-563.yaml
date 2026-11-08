@@ -25,7 +25,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-07T19:45:35.836129088Z
-modified_at: 2026-11-08T03:36:06.996943669Z
+modified_at: 2026-11-08T17:09:34.132326402Z
 req_type: Story
 tags:
 - docs:impacted
@@ -274,6 +274,13 @@ comments:
   created_at: 2026-11-08T03:36:06.996943669Z
   modified_at: 2026-11-08T03:36:06.996943669Z
   session_id: 01a1b90eb553
+- id: 01a1bc23-0534-73f3-bf44-df564406b677
+  author: joe
+  content: 'Advisor 2026-11-08: round-4 commit c44e3a9cd513 was never published from its seat; cherry-picked onto PR-3627 at 4a7126633fcc (compile-checked on dell1), copy kept at refs/salvage/2640. Lease 01a1b90eb553 released. Ready for review at this head.'
+  created_at: 2026-11-08T17:09:34.132326402Z
+  modified_at: 2026-11-08T17:09:34.132326402Z
+  session_id: 01a1bbab-762f-7cd2-8a36-4ea9f209afce
+  harness_version: 2.1.319 (Claude Code)
 history:
 - id: 01a1b78d-2628-7313-92de-8804ac5f8f71
   author: aida-session-start
