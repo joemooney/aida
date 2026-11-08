@@ -8,7 +8,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-07T10:45:58.443413275Z
-modified_at: 2026-11-08T09:18:54.625201725Z
+modified_at: 2026-11-08T09:31:29.839990443Z
 req_type: Task
 relationships:
 - rel_type: Child
@@ -248,6 +248,26 @@ comments:
   modified_at: 2026-11-08T09:17:18.922455219Z
   session_id: 01a1b8be-8170-7fb2-89ab-ecb4c6eee98c
   harness_version: 2.1.319 (Claude Code)
+- id: 01a1ba7f-a4b0-73a0-acdc-c21f3474b262
+  author: dirtlab
+  content: |
+    Round 5 native-seat handoff for PR #3634 / TASK-3366 (Refs STORY-2537).
+
+    Addressed both findings at reviewed head f4ae2f32ab86:
+    - gather_running_work now uses load_live_identity_entries so the registered-agent overlay retains the full ProcIdentity needed by live_agent_for_lease_or_spec. The Linux-only factory-lane regression now writes the registry row, loads it through that loader, checks identity preservation, and verifies the stale lane becomes Live and its orphan is pruned.
+    - Corrected the watch_row store-writer inventory comment to describe audience/thread validation and short generation rechecks around dispatch, rather than holding the allocator lock through external I/O.
+
+    Base: HEAD c0b94d1a17 includes origin/main 5cbe14e5fc; merge-base equals origin/main. Main is already incorporated; no Git metadata mutation was needed.
+
+    Validation: untested=false. Launcher job j20261108T091940813-2-0 ran cargo test --profile agent -p aida-cli-lib --lib -- test_live_factory_lane_not_reported_stale_when_lease_pid_differs: 1 executed, 1 passed. make check-ci-fast: all 43 gates passed, exit 0, including no-default-features and standalone TUI checks. Used umask 022 and the existing /tmp/task3366-bin/cargo adapter to delegate Cargo commands to lane jobs; no source gates bypassed. Full fast log: /tmp/task3366-r5-fast.log. rustfmt --check on changed Rust and git diff --check passed. codegraph unavailable in PATH; used rg, and aida doctor check codegraph supplied no codegraph diagnostic.
+
+    Changed files: aida-cli-lib/src/ps_integrate.rs; aida-cli-lib/src/tests/bug_2010_factory_lane_ps_tests.rs; scripts/store-writers.toml.
+
+    Edits remain uncommitted for the host launcher. No commit, push, PR creation, queue completion, ship, or review verdict action performed. No finding disputed; no local validation blocker. Host must commit/publish and obtain PR CI at the new head; remote CI for these unpublished edits is unverified. Existing hold/veto signals remain in force and were not cleared.
+  created_at: 2026-11-08T09:31:29.839990443Z
+  modified_at: 2026-11-08T09:31:29.839990443Z
+  session_id: 01a1ba7418c3
+  harness_version: codex-cli 0.167.0
 history:
 - id: 01a1b59d-9fb4-77d2-8894-d17d89775ce4
   author: joe
