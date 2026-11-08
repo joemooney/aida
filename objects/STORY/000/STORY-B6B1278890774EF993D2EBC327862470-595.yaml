@@ -8,7 +8,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-08T05:25:50.443321273Z
-modified_at: 2026-11-08T12:10:41.223861925Z
+modified_at: 2026-11-08T13:04:47.149805040Z
 req_type: Story
 tags:
 - area:ci
@@ -165,6 +165,13 @@ comments:
   modified_at: 2026-11-08T11:02:15.113338375Z
   session_id: 01a1bad0b76e
   harness_version: codex-cli 0.167.0
+- id: 01a1bb42-ea2d-7b61-b0f8-f32ea7d5a03f
+  author: joe
+  content: 'Advisor 2026-11-08 06:08, CI (gates) at PR-3668 head 605e2d75b6e3 fails ''Store writer inventory ratchet'' (scripts/check-store-writers.py): six unclassified sink sites in the new scripts/runner/one-job.sh (<script>: >, cp, install, mkdir, rm; cleanup: rm). EXACT FIX for the rework: run ''python3 scripts/check-store-writers.py --regenerate'' on a head that contains current main, then classify those six rows as non-store (runner job scratch under the runner user''s own work dir; they never touch .aida-store or the store worktree), and commit the inventory diff. Nothing else changes; the re-review is delta-only. Then run ''python3 scripts/check-store-writers.py'' (no flags) to confirm it passes before pushing.'
+  created_at: 2026-11-08T13:04:47.149805040Z
+  modified_at: 2026-11-08T13:04:47.149805040Z
+  session_id: 01a1b9af-8230-75d2-82f8-667491cc010a
+  harness_version: 2.1.319 (Claude Code)
 history:
 - id: 01a1b9c5-53ea-79e1-9008-26e3abcd0e20
   author: joe
