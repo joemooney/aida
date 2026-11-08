@@ -9,7 +9,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-06T00:18:06.619162338Z
-modified_at: 2026-11-08T01:46:29.385794594Z
+modified_at: 2026-11-08T01:55:39.214502412Z
 req_type: Story
 tags:
 - architecture
@@ -535,6 +535,13 @@ comments:
     Round 4 rework for PR #3645: restored effectful hook installers to scaffolding; vendors/hooks is pure layout-derived parsing/event validation. Init iterates VendorProfile backends. Legacy wrapper calls use explicit self paths; regenerated store-writer inventory retains both init wrappers plus the new profile wrapper, with production-source regression coverage. Reused BUG-718/BUG-1645 per-file skip/warn helpers for live/dangling links and ancestors; tests prove blocked subtrees/external targets remain untouched and unrelated files install. Removed two more literal-ledger keys via registry-derived repair identities; updated module/orientation/sketch docs. Local validation so far: 16 core codex_hooks tests pass; 42 store inventory tests pass; 41 non-build fast gates pass, including formatting. Rust ratchet job j20261108T013051482-6696-0 running; no-default-features check j20261108T013147353-11968-0 and TUI check j20261108T013202454-13141-0 queued. Full PR CI on the new host-published head and merge-hold clearance remain outstanding (finding 7). Native seat edits remain uncommitted; publication must retain Refs STORY-2539. No finding disputed.
   created_at: 2026-11-08T01:46:29.385794594Z
   modified_at: 2026-11-08T01:46:29.385794594Z
+  session_id: 01a1b8c3c89e
+- id: 01a1b8de-4e4e-77a1-a834-22f455db490e
+  author: joe
+  content: |
+    Round 4 validation handoff: 16 executed aida-core codex_hooks tests PASS (including all three new story tests); 42 store inventory fixtures PASS; regenerated inventory PASS (3360 sites, 293 operation mappings, original init wrappers retained); 41 non-build fast gates PASS including formatting; git diff --check PASS. CLI story_2539 ratchet job j20261108T013051482-6696-0 exited 124 after the 900-second compile timeout, no tests executed. Runner additionally reported overlay-stale: primary rewrote a file of pinned generation agent-a89c436927a0fea6. Do not count that job as tested. no-default-features job j20261108T013147353-11968-0 last running; TUI job j20261108T013202454-13141-0 last queued. Host needs a fresh runner/generation for ratchet and compile checks, then all CI lanes on the new publication and existing merge-hold clearance (finding 7). untested=true for remaining CLI validation. Findings 1-6 implemented, none disputed. Nine files changed, edits uncommitted per native-seat contract. Native publication subject recorded: [AI:codex] fix(vendors): preserve pure hook profiles and safe scaffolding (Refs STORY-2539). No queue completion, commit/push, PR creation or merge attempted.
+  created_at: 2026-11-08T01:55:39.214502412Z
+  modified_at: 2026-11-08T01:55:39.214502412Z
   session_id: 01a1b8c3c89e
 history:
 - id: 01a1ae38-c1a4-7913-9856-03e3793500ff
