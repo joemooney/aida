@@ -18,7 +18,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-08T02:46:34.549817284Z
-modified_at: 2026-11-08T06:06:21.108990578Z
+modified_at: 2026-11-08T06:20:21.255728124Z
 req_type: Bug
 tags:
 - area:ci
@@ -107,6 +107,12 @@ comments:
   content: 'Round 3 also migrates the coarse ci_probe path: a pending merge-hold-gate routes to existing Red refinement only after ordinary CI settles, so drain polling cannot wait forever before reaching classify_red. The refiner still requires marker or confirmed label evidence, and other pending/failing checks remain blockers. New regressions cover coarse probe, ship/refine waits, classifier evidence matrix, PR-list label-aware rollup, pipeline readiness/log exclusion, and lane StatusContext readiness. First launcher Rust run j20261108T054956507-2683506-0 timed out at 900s during compilation without executing tests; further targeted jobs remain queued/running. Shell fixtures, rustfmt checks and diff hygiene pass. Native Refs publication subject recorded; no Completed transition is claimed.'
   created_at: 2026-11-08T06:06:21.108990578Z
   modified_at: 2026-11-08T06:06:21.108990578Z
+  session_id: 01a1b9b177e2
+- id: 01a1b9d0-a587-76f2-9ad6-a1cdff7d095f
+  author: joe
+  content: 'Round 3 native handoff: implementation and regression fixtures are ready, left uncommitted for host publication. Changed .github/workflows/merge-hold-gate.yml (cleanup tracking comment); aida-cli-lib/src/ci_gate.rs, ci_probe.rs, lane_liveness.rs, pipeline_stall.rs, pr_list.rs; src/tests/ci_action_tests.rs and story_1688_lane_liveness_tests.rs; docs/cli/08-reporting.md and docs/internal/testing/bug-2492-status-cutover.md. Validation passed: bash tests/test_merge_hold_gate.sh (8 label states x 2 gates, 36 train cases), bash -n, rustfmt --check for all touched Rust files, git diff --check. untested=true: launcher jobs j20261108T054956507-2683506-0 (bug2492) and j20261108T055327498-2726863-0 (ci_gate::tests::) each timed out at 900 seconds during compilation, with no executed-test result and no reported compiler error. Remaining requested filters are pipeline_stall::tests::, pr_list::tests::, bug2492 and ci_action_tests::; host needs a sufficient compile budget to establish Rust validation. Follow-up TASK-b6b1278890774ef993d2ebc327862470-978 is filed and blocked by BUG-2492. AC1/AC2 live raw merge/UI refusal and unchanged-SHA label clearance remain operator evidence required on this spec before Completed. Recorded native publication declaration: [AI:codex] fix(ci): recognize pending merge holds across consumers (Refs BUG-2492). No completion, ship, merge or review verdict claimed.'
+  created_at: 2026-11-08T06:20:21.255728124Z
+  modified_at: 2026-11-08T06:20:21.255728124Z
   session_id: 01a1b9b177e2
 history:
 - id: 01a1b90d-4bec-7bd0-9af1-86f501692f64
