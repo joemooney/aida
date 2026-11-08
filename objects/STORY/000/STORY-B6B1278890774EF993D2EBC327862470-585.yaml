@@ -12,12 +12,12 @@ description: |
   2. The packet is size-bounded and readable by the next turn and by `aida session handoff --show`.
   3. Codex uses the same command once the trusted-hook rerun is a yes; until then a vendor descriptor says the capability is absent.
   4. No vendor depends on this for correctness: a lane without the hook still completes.
-status: Approved
+status: InProgress
 priority: Low
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-08T02:58:18.689963065Z
-modified_at: 2026-11-08T14:49:38.691852031Z
+modified_at: 2026-11-08T14:51:06.800553814Z
 req_type: Story
 tags:
 - area:handoff
@@ -375,6 +375,13 @@ history:
   - field_name: status
     old_value: InProgress
     new_value: Approved
+- id: 01a1bba4-42b0-73d0-9264-199f4c85754c
+  author: aida-session-start
+  timestamp: 2026-11-08T14:51:06.800550430Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: InProgress
 filed_at:
   code_sha: dc41ee8da2f44f88178936fc1a8e6cb7168a3de7
   branch: main
