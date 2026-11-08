@@ -118,7 +118,24 @@ fn noexec_verbose_prints_stakeholder_and_explicit_git_downgrades() {
     )
     .unwrap();
     // trace:STORY-1486 | ai:codex
-    for extra in [vec!["--show-prompt"], vec!["--show-prompt", "--verbose"]] {
+    for (extra, header) in [
+        (
+            vec!["--show-prompt"],
+            "# AIDA agent launch preview — initial prompt only;",
+        ),
+        (
+            vec!["--show-prompt", "--verbose"],
+            "# AIDA agent launch preview — initial prompt only;",
+        ),
+        (
+            vec!["--show-context"],
+            "# DRY PREVIEW — no session was started.",
+        ),
+        (
+            vec!["--show-context", "--verbose"],
+            "# DRY PREVIEW — no session was started.",
+        ),
+    ] {
         let mut args = vec!["agent", "new", "claude"];
         args.extend(extra);
         let out = aida(&repo, &home, &path, &args);
@@ -128,11 +145,11 @@ fn noexec_verbose_prints_stakeholder_and_explicit_git_downgrades() {
             "{stdout}\n{}",
             String::from_utf8_lossy(&out.stderr)
         );
-        assert!(
-            stdout.starts_with("# AIDA agent launch preview — initial prompt only;"),
-            "{stdout}"
-        );
+        assert!(stdout.starts_with(header), "{stdout}");
         assert!(!stdout.contains("git_policy:"), "{stdout}");
+        let stderr = String::from_utf8_lossy(&out.stderr);
+        assert!(!stderr.contains("git_policy:"), "{stderr}");
+        assert!(!stderr.contains("unexpected-agent-execution"), "{stderr}");
     }
     // Unresolvable declarations remain visible without preventing the preview.
     std::os::unix::fs::symlink(repo.join("missing"), repo.join("target")).unwrap();
