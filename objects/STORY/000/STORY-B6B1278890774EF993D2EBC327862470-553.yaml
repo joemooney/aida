@@ -8,7 +8,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-07T15:34:33.363448208Z
-modified_at: 2026-11-08T11:06:31.793561482Z
+modified_at: 2026-11-08T11:06:40.350461066Z
 req_type: Story
 comments:
 - id: 01a1b6a6-52e1-70a0-a9c1-d32888979ca5
@@ -732,6 +732,27 @@ comments:
   content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: Refs slice (host query proxy) at 19839cfc31e6. Prior-round inventory, stderr, heartbeat-throttle, capacity-doc and client-deadline findings are fixed. New: rustfmt violation at codegraph.rs:130 will fail CI. AC1 partial (index link on main, proxy client not delivered); AC2 unverified (native bwrap test only, contained posture unsupported); AC3 partial (guidance names bare codegraph); AC4 implemented, no CI run at this head; AC5 unverified (no live seat output). CI has 0 jobs at this head.. It was punted on: blocked-dependency: PR-3662 findings 2-5 require host/advisor action: no codegraph executable, primary index or deployed host proxy exists in this native seat, and installed aida rejects doctor --lane-host. AC2 contained read admission and AC5 non-empty primary callers evidence remain unavailable. Seat fixes findings 1 and 6-9; host must deploy the reviewed client, deliver its fixed path, validate contained grants, update PR evidence and obtain final-head CI. Completing publication remains vetoed; see docs/internal/testing/story-2630-seat-handoff.md.. No triage reason was given.'
   created_at: 2026-11-08T11:06:31.793557660Z
   modified_at: 2026-11-08T11:06:31.793557660Z
+  session_id: 01a1b9af-8230-75d2-82f8-667491cc010a
+  harness_version: 2.1.319 (Claude Code)
+- id: 01a1bad6-c6f0-7f70-ac31-4f7c82bcb48a
+  author: joe
+  content: |-
+    REVIEW FINDINGS TO ADDRESS (PR #3662):
+    Verdict: CHANGES REQUESTED
+    Reviewed commit: 19839cfc31e6
+    Recorded: 2026-11-08T09:57:42.491998382+00:00
+    Findings:
+    1. MAJOR (CI gate, new; seat-fixable): aida-cli-lib/src/codegraph.rs:130 is 111 columns after this round lengthened the bail! message. The string fits when wrapped at the macro-argument indent, so rustfmt will rewrap it and 'cargo fmt --all -- --check' (ci.yml:853) fails. Established by source trace; the formatter was not run under the no-local-gates policy. Run cargo fmt.
+    2. MAJOR (process, eighth occurrence; host/advisor action): the PR body at 19839cfc31e6 is still only the 'Published from seat' boilerplate (194 bytes). Apply the AC1-AC5 status, state that this is a Refs slice, and name who completes AC2/AC5. Ready-made text is in spec comment 37 and docs/internal/testing/story-2630-seat-handoff.md.
+    3. MAJOR (AC1/AC3, unchanged; host action): nothing delivers the proxy client to lanes. AGENTS.md:477 and aida-core/templates/dispatch/code-navigation.md:1 tell lanes to run bare 'codegraph callers', while scripts/codegraph/README.md:69-72,118 says bare codegraph is not routed and upstream stays on PATH; README:135-136 confirms the shared prompt does not select the client. A deployed lane following its prompt still fails ('unable to open database file', README:5-7). Fix: put the fixed absolute host client command in the template master and sync (never derive it from the seat .codegraph), provide a host-resolved PATH entry, or have the advisor defer this explicitly.
+    4. MAJOR (AC2/AC5; advisor decision): the 2026-11-08 ruling requires a COMPLETING slice in which a contained Codex seat gets a correct non-empty 'codegraph callers' result with read-only grant evidence. This PR is Refs-only, README:73-76 says the AIDA-contained posture is unsupported (no mount for client, descriptor or socket), and no live seat output exists. No later spec comment accepts the deferral. Advisor must either accept a Refs slice with AC2/AC5 moved to a named follow-up, or require contained admission and live evidence here. The publication-veto punt (handoff doc lines 7-8, spec comments 34, 37, 40) is also unresolved.
+    5. MINOR (repo hygiene, new): docs/internal/testing/story-2630-seat-handoff.md commits per-round session notes, against the CLAUDE.md rule that per-change notes go in the PR body and an aida comment. Now that it is committed its content is false: 'All six changed files remain uncommitted' and 'No commit, push, PR publication...' (lines 633-635 of the round's text, final paragraph), plus a 'publication remains vetoed' claim on a published PR. Move the content to the PR body or a spec comment and delete the file.
+    6. MINOR (test weakened, new): tests/test_codegraph_proxy.py:276 replaced the heartbeat freshness assertion with assertEqual(observed_at, initial_observation). test_status_and_heartbeat_stay_responsive_during_query_and_stalled_peer therefore no longer shows a heartbeat being published during a query, which README:143 claims. It can also fail spuriously: the 3s heartbeat can fire between the initial read and the polls when CI startup is slow (the start deadline allows 5s). Assert observed_at stays within the heartbeat interval plus margin, or advances across a query longer than 3s.
+    7. MINOR (test evidence; host action): the only test against real CodeGraph 1.6.0 (tests/test_codegraph_proxy.py:363-370) skips when codegraph is absent, as in the implementer seat (handoff doc: 18 tests, 17 passed, 1 skipped), and CI has not run at any recent head. No recorded run exercises the snapshot path against real upstream, including whether a directory holding only .codegraph/codegraph.db is accepted. Host must run it and paste the output with the AC5 evidence.
+    8. CI (gate): run 42468500142 at 19839cfc31e6 is pending with 0 jobs started, and every earlier CI run on this PR that I checked was cancelled or queued, so no head has a recorded green run for tests/test_codegraph_proxy.py or codegraph::tests. merge-hold-gate fails as the expected supervised hold (label aida:merge-hold), not a code defect. Needs a green run at the final head.
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
+  created_at: 2026-11-08T11:06:40.240814374Z
+  modified_at: 2026-11-08T11:06:40.240814374Z
   session_id: 01a1b9af-8230-75d2-82f8-667491cc010a
   harness_version: 2.1.319 (Claude Code)
 history:
