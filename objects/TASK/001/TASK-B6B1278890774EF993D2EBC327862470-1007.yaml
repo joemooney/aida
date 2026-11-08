@@ -21,7 +21,7 @@ priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-11-08T18:28:20.954661945Z
-modified_at: 2026-11-08T18:28:20.954661945Z
+modified_at: 2026-11-08T19:27:59.686528809Z
 req_type: Task
 tags:
 - from-advisor:BUG-2490
@@ -30,6 +30,14 @@ tags:
 - loop-guard
 - review-recurrence
 - severity:major
+comments:
+- id: 01a1bca1-c0c6-7813-ab7b-fbcdd0d06e89
+  author: joe
+  content: 'Advisor ruling: resolved by the split to BUG-2501, recorded on BUG-2490.'
+  created_at: 2026-11-08T19:27:59.686528809Z
+  modified_at: 2026-11-08T19:27:59.686528809Z
+  session_id: 01a1bc93-77a0-7740-8b03-df4e3e8d1df5
+  harness_version: 2.1.319 (Claude Code)
 history:
 - id: 01a1bc6c-d357-7083-a2f0-6ffb423dff3c
   author: joe
