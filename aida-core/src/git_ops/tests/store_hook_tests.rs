@@ -1430,3 +1430,77 @@ fn bug_2490_bulk_staged_objects_support_batch_and_unusual_names() {
         "{error}"
     );
 }
+
+// trace:BUG-2490 | ai:codex
+#[test]
+fn bug_2490_rebase_continuation_refuses_invalid_resolved_index() {
+    let dir = tempfile::tempdir().unwrap();
+    let (_main, store) = bug_1929_main_with_store(dir.path());
+    let path = "objects/STORY/000/STORY-resolved.yaml";
+    std::fs::create_dir_all(store.join("objects/STORY/000")).unwrap();
+    let valid = serde_yaml::to_string(&crate::models::Requirement::new(
+        "base".into(),
+        String::new(),
+    ))
+    .unwrap();
+    std::fs::write(store.join(path), &valid).unwrap();
+    add(&store, &[path]).unwrap();
+    commit(&store, "base").unwrap();
+    git(&store, &["checkout", "-b", "incoming"]).unwrap();
+    std::fs::write(
+        store.join(path),
+        valid.replace("title: base", "title: upstream"),
+    )
+    .unwrap();
+    add(&store, &[path]).unwrap();
+    commit(&store, "upstream").unwrap();
+    git(&store, &["checkout", "aida-store"]).unwrap();
+    std::fs::write(
+        store.join(path),
+        valid.replace("title: base", "title: local"),
+    )
+    .unwrap();
+    add(&store, &[path]).unwrap();
+    commit(&store, "local").unwrap();
+    assert!(
+        !git(
+            &store,
+            &[
+                "-c",
+                "maintenance.auto=false",
+                "-c",
+                "gc.auto=0",
+                "rebase",
+                "incoming"
+            ]
+        )
+        .unwrap()
+        .success
+    );
+    assert!(rebase_in_progress(&store));
+    // Simulate a manual resolution that clears unmerged stages but is invalid.
+    std::fs::write(store.join(path), "title: []\n").unwrap();
+    add(&store, &[path]).unwrap();
+    let head = git(&store, &["rev-parse", "HEAD"]).unwrap().stdout;
+    let error = rebase_auto_merge_onto(&store, "incoming")
+        .unwrap_err()
+        .to_string();
+    assert!(
+        error.contains(path) && error.contains("does not parse"),
+        "{error}"
+    );
+    assert_eq!(head, git(&store, &["rev-parse", "HEAD"]).unwrap().stdout);
+    assert!(rebase_in_progress(&store));
+    git(
+        &store,
+        &[
+            "-c",
+            "maintenance.auto=false",
+            "-c",
+            "gc.auto=0",
+            "rebase",
+            "--abort",
+        ],
+    )
+    .unwrap();
+}

@@ -12493,6 +12493,26 @@ pub(crate) fn handle_queue_work(
             plan.review_target.is_none(),
             no_human,
         );
+    // TASK-619: capture the anchor spec's status from the *local* (pre-pull)
+    // view so we can detect whether the pull below reveals that another
+    // machine claimed the spec under us. Best-effort + read-only — a load
+    // failure just yields None, which makes the guard a no-op.
+    // trace:TASK-619 | ai:claude
+    let status_before_pull: Option<RequirementStatus> = storage.load().ok().and_then(|store| {
+        store
+            .get_requirement_by_spec_id(&plan.scope)
+            .map(|r| r.status.clone())
+    });
+
+    // Pull before session setup or store writes. A stale local view cannot
+    // authorize pickup after a failed synchronization. trace:BUG-2490 | ai:codex
+    if !no_pull && !list_sessions && !dry_run {
+        run_aida_db_sync_pull(storage.path()).context(
+            "pre-pickup pull failed; pickup stopped before session setup and store writes; \
+             resolve the store sync failure and retry `aida db sync --pull`",
+        )?;
+    }
+
     let mut _standalone_slot = None;
     if !list_sessions {
         eprintln!("  pickup role: {role} ({role_origin}); --role overrides queue routing, then scope default");
@@ -13327,26 +13347,6 @@ pub(crate) fn handle_queue_work(
                 orphan.worktree_path.display()
             );
         }
-    }
-
-    // TASK-619: capture the anchor spec's status from the *local* (pre-pull)
-    // view so we can detect whether the pull below reveals that another
-    // machine claimed the spec under us. Best-effort + read-only — a load
-    // failure just yields None, which makes the guard a no-op.
-    // trace:TASK-619 | ai:claude
-    let status_before_pull: Option<RequirementStatus> = storage.load().ok().and_then(|store| {
-        store
-            .get_requirement_by_spec_id(&plan.scope)
-            .map(|r| r.status.clone())
-    });
-
-    // Pull before session setup or store writes. A stale local view cannot
-    // authorize pickup after a failed synchronization. trace:BUG-2490 | ai:codex
-    if !no_pull {
-        run_aida_db_sync_pull(storage.path()).context(
-            "pre-pickup pull failed; pickup stopped before session setup and store writes; \
-             resolve the store sync failure and retry `aida db sync --pull`",
-        )?;
     }
 
     // TASK-619: cross-machine duplicate-pickup guard. Session leases are

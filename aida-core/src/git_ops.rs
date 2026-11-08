@@ -2152,6 +2152,8 @@ fn rebase_auto_merge_onto(repo: &Path, target: &str) -> Result<StorePullOutcome>
         let conflicted = unmerged_paths(repo)?;
         if conflicted.is_empty() {
             // No conflicts right now but still mid-rebase — let git advance.
+            // trace:BUG-2490 | ai:codex — continuation can create a store commit.
+            validate_store_index(repo)?;
             let cont = git(repo, &["-c", "core.editor=true", "rebase", "--continue"])?;
             if !rebase_in_progress(repo) {
                 if cont.success || rebase_completed_ok(repo) {
@@ -2214,6 +2216,8 @@ fn rebase_auto_merge_onto(repo: &Path, target: &str) -> Result<StorePullOutcome>
         // Continue the rebase with the resolved objects staged. Force a
         // no-op editor so `--continue` never blocks waiting for a commit
         // message on a TTY-less drain.
+        // trace:BUG-2490 | ai:codex
+        validate_store_index(repo)?;
         let cont = git(repo, &["-c", "core.editor=true", "rebase", "--continue"])?;
         if !rebase_in_progress(repo) {
             if cont.success || rebase_completed_ok(repo) {
@@ -2820,6 +2824,8 @@ fn merge_union_onto(repo: &Path, ref_: &str, message: &str) -> Result<StorePullO
         }
     }
 
+    // trace:BUG-2490 | ai:codex — resolved objects still require schema validation.
+    validate_store_index(repo)?;
     let commit = git(repo, &["-c", "core.editor=true", "commit", "--no-edit"])?;
     if !commit.success {
         let _ = git(repo, &["merge", "--abort"]);
@@ -7352,9 +7358,10 @@ pub fn store_object_findings(repo: &Path) -> Vec<(PathBuf, String)> {
         .collect()
 }
 
-/// Read-only strict integrity check for explicit diagnostics.
+/// Test helper for asserting the diagnostic inventory is empty.
+#[cfg(test)]
 // trace:BUG-2490 | ai:codex
-pub fn validate_store_objects(repo: &Path) -> Result<()> {
+fn validate_store_objects(repo: &Path) -> Result<()> {
     if let Some((_, error)) = store_object_findings(repo).into_iter().next() {
         anyhow::bail!(error);
     }
@@ -7475,9 +7482,10 @@ fn validate_store_index_paths(repo: &Path, paths: Option<&[&str]>) -> Result<()>
     // than :path requests also support filenames containing newlines.
     // trace:BUG-2490 | ai:codex
     let mut command = host_git_command(repo);
-    command
-        .args(["--literal-pathspecs", "ls-files", "--stage", "-z", "--"])
-        .args(&paths);
+    // Read the index once without expanding the dirty path set into argv.
+    // trace:BUG-2490 | ai:codex
+    command.args(["ls-files", "--stage", "-z"]);
+    let selected: std::collections::HashSet<_> = paths.into_iter().collect();
     let index = command.output()?;
     anyhow::ensure!(index.status.success(), "cannot list staged store objects");
     let entries: Vec<_> = std::str::from_utf8(&index.stdout)?
@@ -7491,7 +7499,10 @@ fn validate_store_index_paths(repo: &Path, paths: Option<&[&str]>) -> Result<()>
                 .context("missing index OID")?;
             Ok((oid, path))
         })
-        .collect::<Result<_>>()?;
+        .collect::<Result<Vec<_>>>()?
+        .into_iter()
+        .filter(|(_, path)| selected.contains(path))
+        .collect();
     use std::io::{BufRead, Read, Write};
     use std::process::Stdio;
     let mut child = host_git_command(repo)

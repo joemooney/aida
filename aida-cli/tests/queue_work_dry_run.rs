@@ -84,7 +84,10 @@ fn init_codex_only_project(base_dir: &Path) -> (std::path::PathBuf, std::path::P
         .expect("run aida init");
     assert!(
         init.status.success(),
-        "aida init failed: {}",
+        // trace:BUG-2490 | ai:codex — preserve setup diagnostics in lane runs.
+        "aida init failed ({}): stdout={} stderr={}",
+        init.status,
+        String::from_utf8_lossy(&init.stdout),
         String::from_utf8_lossy(&init.stderr)
     );
     std::fs::write(
