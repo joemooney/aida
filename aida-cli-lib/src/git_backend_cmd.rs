@@ -1,3 +1,4 @@
+// trace:TASK-3429 | ai:codex
 //! `aida db` git-backend command cluster — the storage/git-backend command
 //! handler (`handle_git_backend_command`), extracted from `main.rs` (SPIKE-78
 //! / TASK-1151; pure movement, no behavior change). Shared store/git helpers
@@ -1399,7 +1400,7 @@ pub(crate) fn db_sync_local_window(
 /// A command the git-backend dispatcher does not serve. Shared with
 /// registered store-phase commands that have no git-backend form.
 // trace:STORY-1728 | ai:claude
-pub(crate) fn exit_unsupported_on_git_backend() -> ! {
+pub fn exit_unsupported_on_git_backend() -> ! {
     eprintln!(
         "Command not yet supported for git backend.\n\
          Supported: list, add, show, edit, del, search, comment add/list,\n\

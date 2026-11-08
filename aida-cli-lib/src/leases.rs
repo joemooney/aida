@@ -1,3 +1,4 @@
+// trace:TASK-3429 | ai:codex
 //! session leases: lease listing and gates, cross-clone leases, prune and force cleanup, shelve/phase-1 status flips and stale-lease recovery (STORY-1488 slice 1)
 // trace:STORY-1488 | ai:claude
 
@@ -920,7 +921,7 @@ pub(crate) fn all_queued_added_at(
 /// is a project-global axis so we union across all queue files. Returns an
 /// empty vec when the dir is absent or the spec sits in no queue (the
 /// caller omits the line in that case). trace:BUG-527
-pub(crate) fn queue_memberships_for(
+pub fn queue_memberships_for(
     project_root: &std::path::Path,
     requirement_id: &Uuid,
 ) -> Vec<(Option<String>, usize)> {
@@ -971,7 +972,7 @@ pub(crate) fn queue_memberships_for(
 /// Unrouted entries render as `general (pos N)`. Returns `None` when there
 /// are no memberships so the caller can omit the line entirely.
 /// trace:BUG-527
-pub(crate) fn format_queue_membership(memberships: &[(Option<String>, usize)]) -> Option<String> {
+pub fn format_queue_membership(memberships: &[(Option<String>, usize)]) -> Option<String> {
     if memberships.is_empty() {
         return None;
     }
@@ -2056,7 +2057,7 @@ pub(crate) fn live_spec_claim_by_other<'a>(
 /// What the requeue lease gate found for a spec.
 // trace:STORY-1429 | ai:claude
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub(crate) enum RequeueLeaseCheck {
+pub enum RequeueLeaseCheck {
     /// No other session holds a live lease on the spec.
     Clear,
     /// Another session holds a live lease: requeueing would reset work a
@@ -2075,7 +2076,7 @@ impl RequeueLeaseCheck {
     /// The refusal text for `id`, or `None` when the gate is clear. It names
     /// the holder and the command that releases it. `--force` does not
     /// override it.
-    pub(crate) fn refusal(&self, id: &str) -> Option<String> {
+    pub fn refusal(&self, id: &str) -> Option<String> {
         match self {
             RequeueLeaseCheck::Clear => None,
             RequeueLeaseCheck::HeldByOther {
@@ -2124,7 +2125,7 @@ pub(crate) fn is_session_lease_file(name: &str) -> bool {
 /// staging match keeps the helper correct for a caller without that check.
 // trace:BUG-b6b1278890774ef993d2ebc327862470-012 | ai:claude
 // trace:TASK-b6b1278890774ef993d2ebc327862470-065 | ai:claude
-pub(crate) fn is_lease_companion(name: &str) -> bool {
+pub fn is_lease_companion(name: &str) -> bool {
     if name.ends_with(".activity.toml") || name.ends_with(".manifest.toml") {
         return true;
     }
@@ -2358,10 +2359,7 @@ pub(crate) fn requeue_lease_liveness(
 /// Run the requeue lease gate for `spec_ids` against the leases under
 /// `project_root`.
 // trace:STORY-1429 | ai:claude
-pub(crate) fn requeue_lease_gate(
-    project_root: &std::path::Path,
-    spec_ids: &[&str],
-) -> RequeueLeaseCheck {
+pub fn requeue_lease_gate(project_root: &std::path::Path, spec_ids: &[&str]) -> RequeueLeaseCheck {
     let listed = list_leases_strict(project_root, spec_ids);
     let self_lease = std::env::current_dir()
         .ok()

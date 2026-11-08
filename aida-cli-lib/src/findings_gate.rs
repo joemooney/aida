@@ -1,3 +1,4 @@
+// trace:TASK-3429 | ai:codex
 //! Findings command: promote, dismiss, add, recur, gate authority and promote-to-gate, reviewer-verdict and non-blocking findings (STORY-1488 slice 1)
 // trace:STORY-1488 | ai:claude
 
@@ -16,7 +17,7 @@ pub(crate) use findings_gate_args::*;
 /// change after an automated one leaves mixed history and the BUG-1625 merge
 /// guard lets the human win.
 // trace:BUG-1637 | ai:claude
-pub(crate) fn record_caller_status_transition(req: &mut Requirement, from: &RequirementStatus) {
+pub fn record_caller_status_transition(req: &mut Requirement, from: &RequirementStatus) {
     aida_core::conflict::record_status_transition(req, &get_default_author(), from);
 }
 

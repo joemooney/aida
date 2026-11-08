@@ -1,3 +1,4 @@
+// trace:TASK-3429 | ai:codex
 //! worktree GC, salvage, stranded-primary detection, and worktree/pool commands (STORY-1488 slice 1)
 // trace:STORY-1488 | ai:claude
 
@@ -1263,7 +1264,7 @@ pub(crate) fn for_route_is_request_only(for_role: &str) -> bool {
 // (advisor / human / reviewer). This scopes the TASK-647 gate to the act it was
 // meant to guard — committing the team to build — and lets `aida queue add
 // --for advisor` (a request for review) succeed from any role. trace:BUG-631
-pub(crate) fn for_target_requires_dispatch_authority(for_role: Option<&str>) -> bool {
+pub fn for_target_requires_dispatch_authority(for_role: Option<&str>) -> bool {
     match for_role {
         Some("any") => true,
         Some(role) => !for_route_is_request_only(role),

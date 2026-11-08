@@ -1,3 +1,4 @@
+// trace:TASK-3429 | ai:codex
 //! Role State and Activities (STORY-1488 slice 1)
 // trace:STORY-1488 | ai:claude
 
@@ -454,7 +455,7 @@ pub(crate) fn maybe_prompt_role_restore(command: &Command) -> Result<()> {
 /// no-op if no role active or the role file is unwriteable). Called from
 /// the show/edit/add/comment paths so resuming a role surfaces what the
 /// user was working on last.
-pub(crate) fn record_role_activity(spec_id: &str, action: &str) {
+pub fn record_role_activity(spec_id: &str, action: &str) {
     let role_name = match std::env::var("AIDA_SESSION_ROLE") {
         Ok(n) if !n.is_empty() => n,
         _ => return,

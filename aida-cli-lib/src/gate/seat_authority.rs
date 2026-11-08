@@ -1,3 +1,4 @@
+// trace:TASK-3429 | ai:codex
 //! Session-bound role grants. `AIDA_SESSION_ROLE` is retained for display and
 //! routing only; authorization comes from a validated local grant record.
 // trace:STORY-1473 | ai:codex
@@ -1238,7 +1239,7 @@ pub(crate) fn validated_grant(
     grant_check_for_at(project_root, id, subject, now).into_valid()
 }
 
-pub(crate) fn current_seat(project_root: &Path) -> Option<String> {
+pub fn current_seat(project_root: &Path) -> Option<String> {
     current_grant(project_root).map(|grant| grant.seat)
 }
 

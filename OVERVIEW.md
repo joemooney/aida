@@ -1,3 +1,13 @@
+The `aida-mcp` crate owns the MCP stdio transport and store handler above
+`aida-cli-lib`. The binary installs that handler before CLI parsing; the
+`mcp-serve` registry entry forwards to it. Shared tool descriptors and claim-path
+naming remain below the boundary in cli-lib (also re-exported by aida-mcp),
+so CLI registration and session cleanup do not depend on the transport.
+The CLI unit-test harness includes the transport source to retain its private
+fixtures; production cli-lib does not compile the transport. Respawn compares
+the CLI image's compiled identity and still probes the same resolved executable.
+<!-- trace:TASK-3429 | ai:codex -->
+
 `cmdkit` holds the command-framework types and shared output/stakeholder vocabulary;
 existing CLI, registry and stakeholder paths re-export them.
 <!-- trace:TASK-3425 | ai:codex -->

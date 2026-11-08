@@ -1,3 +1,4 @@
+// trace:TASK-3429 | ai:codex
 //! burndown command, burndown run waves, wave PR integration and burndown config (STORY-1488 slice 1)
 // trace:STORY-1488 | ai:claude
 
@@ -2655,7 +2656,7 @@ pub(crate) const STANDING_ARTIFACT_TYPES: [&str; 6] = [
 ];
 
 // pub(crate) so the MCP status surface can mirror this exact exclusion (BUG-717).
-pub(crate) fn is_standing_artifact_type(req_type: &str) -> bool {
+pub fn is_standing_artifact_type(req_type: &str) -> bool {
     STANDING_ARTIFACT_TYPES
         .iter()
         .any(|s| req_type.eq_ignore_ascii_case(s))

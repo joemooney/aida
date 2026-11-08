@@ -1,3 +1,9 @@
+MCP transport and its store handler live in `aida-mcp`; the binary injects the
+handler into cli-lib's `mcp-serve` registration before parsing. Shared descriptors
+and claim naming stay below that boundary. CLI-local MCP tests include the
+transport source to retain private fixtures. See OVERVIEW.md.
+<!-- trace:TASK-3429 | ai:codex -->
+
 Review-watch records retained fast-exiting children before reaping. Incomplete
 legacy receipts use the existing reboot/TTL backstop. Caller capture requires
 verified local procfs and fails closed with host-retry guidance. See OVERVIEW.md.

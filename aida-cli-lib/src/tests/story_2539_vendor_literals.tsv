@@ -396,8 +396,8 @@ aida-cli-lib/src/mailbox_wake_run.rs|ensure_service|literal:codex	1
 aida-cli-lib/src/mailbox_wake_run.rs|service|literal:codex	1
 aida-cli-lib/src/mailbox_wake_run.rs|watch_row|literal:codex	1
 aida-cli-lib/src/mandate_drive.rs|unowned_spec_launch|typed:HeadlessVendor	1
-aida-cli-lib/src/mcp.rs|tool_descriptors|literal:claude	2
-aida-cli-lib/src/mcp.rs|tool_descriptors|literal:codex	2
+aida-cli-lib/src/mcp_schema.rs|tool_descriptors|literal:claude	2
+aida-cli-lib/src/mcp_schema.rs|tool_descriptors|literal:codex	2
 aida-cli-lib/src/phase_driver.rs|RealPhaseDriver|typed:HeadlessVendor	1
 aida-cli-lib/src/phase_driver.rs|build_phase_driver_advisor_command|typed:HeadlessVendor	1
 aida-cli-lib/src/phase_driver.rs|contained_child_program_and_args|typed:HeadlessVendor	1

@@ -1,3 +1,4 @@
+// trace:TASK-3429 | ai:codex
 /// A behind-base warning. Workflow content identities determine whether CI's
 /// definition changed; changed paths explain the difference and ordinary test
 /// changes remain advisory. The head and base are pinned for the entire read.
@@ -1543,7 +1544,7 @@ pub(crate) fn status_requires_advisor_authority(status: &RequirementStatus) -> b
 /// the triage the punt exists to request. Execution flips from a source
 /// already in the pipeline (`Approved → InProgress → Done`) are NOT gated, so
 /// drains are unaffected. trace:BUG-482 | ai:claude
-pub(crate) fn status_advance_requires_advisor_authority(
+pub fn status_advance_requires_advisor_authority(
     from: &RequirementStatus,
     to: &RequirementStatus,
 ) -> bool {
@@ -1562,7 +1563,7 @@ pub(crate) fn status_advance_requires_advisor_authority(
 /// `InProgress`, and an idempotent `Done`). Anything else is refused through
 /// the existing lifecycle guard rather than a new rule.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub(crate) enum QueueDoneLifecycleRefusal {
+pub enum QueueDoneLifecycleRefusal {
     /// `Draft` / `NeedsAttention`: never approved, or punted back for triage.
     /// The lifecycle guard marks `→ Done` from these as an advisor-authority
     /// act, and the caller does not hold that authority.
@@ -1578,7 +1579,7 @@ pub(crate) enum QueueDoneLifecycleRefusal {
 /// [`has_advisor_authority`]; MCP: the server's role). `None` = proceed.
 /// `--force` deliberately has no say here.
 // trace:BUG-1611 | ai:claude
-pub(crate) fn queue_done_lifecycle_refusal(
+pub fn queue_done_lifecycle_refusal(
     from: &RequirementStatus,
     has_advisor_authority: bool,
 ) -> Option<QueueDoneLifecycleRefusal> {
@@ -1598,7 +1599,7 @@ pub(crate) fn queue_done_lifecycle_refusal(
 /// legitimate route (approval, or a reopen that is itself authority-gated) and
 /// never suggests an environment-variable role override.
 // trace:BUG-1611 | ai:claude
-pub(crate) fn queue_done_lifecycle_refusal_message(
+pub fn queue_done_lifecycle_refusal_message(
     display_id: &str,
     from: &RequirementStatus,
     refusal: QueueDoneLifecycleRefusal,

@@ -324,7 +324,7 @@ sites = 3
 channels = ["worktree", "write"]
 sites = 1
 
-[readers."aida-cli-lib/src/mcp.rs"]
+[readers."aida-mcp/src/mcp.rs"]
 channels = ["worktree"]
 sites = 1
 

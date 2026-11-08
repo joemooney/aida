@@ -1,3 +1,4 @@
+// trace:TASK-3429 | ai:codex
 //! Invocation-wide CLI cache labels. Arrays retain their existing wire shape.
 // trace:TASK-1526 | ai:codex
 use aida_core::db::cache_refresh::{cache_read_metadata, CacheReadScope};
@@ -84,7 +85,7 @@ fn footer_after_body(footer: &str, line_open: bool) -> String {
 }
 
 // trace:TASK-1526 | ai:codex
-pub(crate) fn json_pretty<T: serde::Serialize + ?Sized>(value: &T) -> serde_json::Result<String> {
+pub fn json_pretty<T: serde::Serialize + ?Sized>(value: &T) -> serde_json::Result<String> {
     let mut value = serde_json::to_value(value)?;
     if let Some(object) = value.as_object_mut() {
         let metadata = cache_read_metadata();

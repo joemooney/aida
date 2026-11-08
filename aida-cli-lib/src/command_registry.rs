@@ -1,3 +1,4 @@
+// trace:TASK-3429 | ai:codex
 //! Per-module command registration. Each command module owns its clap
 //! definition, dispatch phase, policy and handler in one `CommandReg`, listed
 //! once in [`REGISTRY`]; the legacy `Command` enum in `cli.rs` shrinks one
@@ -12,7 +13,7 @@ use clap::{ArgMatches, CommandFactory, FromArgMatches};
 use crate::cli::{Cli, Command, GlobalArgs};
 // Preserve the existing framework import paths.
 // trace:TASK-3425 | ai:codex
-pub(crate) use crate::cmdkit::*;
+pub use crate::cmdkit::*;
 
 /// Every registered command, sorted by command name (byte order) so parallel
 /// additions rarely touch the same line.
@@ -105,7 +106,7 @@ pub(crate) static REGISTRY: &[&CommandReg] = &[
     &crate::mandate::MANDATE,
     &crate::manual::MANUAL,
     &crate::mcp_cmd::MCP,
-    &crate::mcp::MCP_SERVE,
+    &crate::mcp_serve::MCP_SERVE,
     &crate::memories_cmd::MEMORIES,
     &crate::merge_hold_cmd::MERGE_HOLD,
     &crate::merge_hold_cmd::MERGE_LOCK,
@@ -393,3 +394,23 @@ mod bug_2189_format_collision_tests;
 #[cfg(test)]
 #[path = "tests/bug_2221_pristine_tree_tests.rs"]
 mod bug_2221_pristine_tree_tests;
+
+// trace:TASK-3429 | ai:codex
+/// Store handler supplied by the binary, so cli-lib never depends on aida-mcp.
+pub type McpHandler = fn(&clap::ArgMatches, &DispatchCtx) -> anyhow::Result<Flow>;
+static MCP_HANDLER: std::sync::OnceLock<McpHandler> = std::sync::OnceLock::new();
+/// Install the transport handler used by the mcp-serve REGISTRY entry before parsing.
+pub fn register_mcp_handler(handler: McpHandler) {
+    MCP_HANDLER
+        .set(handler)
+        .expect("MCP handler already installed");
+}
+pub(crate) fn run_mcp_handler(
+    matches: &clap::ArgMatches,
+    ctx: &DispatchCtx,
+) -> anyhow::Result<Flow> {
+    let handler = MCP_HANDLER
+        .get()
+        .ok_or_else(|| anyhow::anyhow!("MCP transport not registered by binary"))?;
+    handler(matches, ctx)
+}

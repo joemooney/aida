@@ -1,3 +1,4 @@
+// trace:TASK-3429 | ai:codex
 //! STORY-1662 PR2: lane identity from the worktree lease, for sessions whose
 //! environment is not their own.
 //!
@@ -243,7 +244,7 @@ pub(crate) fn in_linked_worktree(cwd: &Path) -> bool {
 /// environment too, so it applies the same correction to itself at start.
 /// Fails closed: on an error inside a linked worktree it drops the grant and
 /// purpose and sets no role.
-pub(crate) fn apply_in_process(project_root: &Path, cwd: &Path) {
+pub fn apply_in_process(project_root: &Path, cwd: &Path) {
     let grant_env = crate::gate::seat_authority::GRANT_ENV;
     match fix_at(project_root, cwd) {
         Ok(None) => {}

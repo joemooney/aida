@@ -1,3 +1,4 @@
+// trace:TASK-3429 | ai:codex
 //! `aida queue` command cluster — `handle_queue_command` and the
 //! advance/progress/rework/work/recover/integrate handlers plus their
 //! queue-local helpers, extracted from `lib.rs` (SPIKE-78 / STORY-771;
@@ -7056,7 +7057,7 @@ pub(crate) fn rework_smart_target(current: &RequirementStatus) -> Option<Require
 /// Metadata-only rework must leave the queued spec claimable.
 /// `InProgress` is only valid when this command immediately chains into
 /// `queue work`, which establishes the lease that backs that status.
-pub(crate) fn rework_target_for_mode(
+pub fn rework_target_for_mode(
     current: &RequirementStatus,
     launches_work: bool,
 ) -> Option<RequirementStatus> {
@@ -7331,7 +7332,7 @@ pub(crate) fn parse_lookback_at<Tz: chrono::TimeZone>(
 
 /// [`parse_lookback_at`] against the wall clock and the system timezone.
 // trace:TASK-1509 | ai:claude
-pub(crate) fn parse_lookback(raw: &str, flag: &str) -> Result<chrono::Duration> {
+pub fn parse_lookback(raw: &str, flag: &str) -> Result<chrono::Duration> {
     parse_lookback_at(raw, flag, chrono::Utc::now(), &chrono::Local)
 }
 
@@ -7780,7 +7781,7 @@ mod bug_1808_delegation_preflight_tests;
 /// log for `storage`: the store's parent directory, falling back to the
 /// discovered project root.
 // trace:STORY-1429 | ai:claude
-pub(crate) fn requeue_project_root(storage: &Storage) -> std::path::PathBuf {
+pub fn requeue_project_root(storage: &Storage) -> std::path::PathBuf {
     storage
         .path()
         .parent()

@@ -36,6 +36,7 @@ version = "0.16.0"
 dependencies = [
  "aida-cli-lib",
  "aida-core",
+ "aida-mcp",
  "chrono",
  "fs2",
  "libc",
@@ -133,6 +134,22 @@ dependencies = [
  "aida-core",
  "serde_json",
  "ts-rs",
+]
+
+[[package]]
+name = "aida-mcp"
+version = "0.16.0"
+dependencies = [
+ "aida-cli-lib",
+ "aida-core",
+ "anyhow",
+ "chrono",
+ "clap",
+ "libc",
+ "serde",
+ "serde_json",
+ "toml",
+ "uuid",
 ]
 
 [[package]]
