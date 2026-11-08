@@ -9,7 +9,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-06T00:18:06.619162338Z
-modified_at: 2026-11-08T01:24:50.695403173Z
+modified_at: 2026-11-08T01:24:58.370183514Z
 req_type: Story
 tags:
 - architecture
@@ -507,6 +507,26 @@ comments:
   content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: Slice 3a adds backend/template/events to HookLayout with fixture-parity and symlink tests and shrinks the TSV by 8, but the indirection silently drops aida init''s hook writers from the store-writer inventory, puts effectful fs writers in the pure core vendors/ module against the signed split, and replaces the BUG-718 skip-and-warn writer with a divergent hard-fail guard. CI was 3/8 pass, 5 pending at review time.. No triage reason was given.'
   created_at: 2026-11-08T01:24:50.695401511Z
   modified_at: 2026-11-08T01:24:50.695401511Z
+  session_id: 01a1b8be-8170-7fb2-89ab-ecb4c6eee98c
+  harness_version: 2.1.319 (Claude Code)
+- id: 01a1b8c2-3718-7823-86a7-b31531414d6f
+  author: joe
+  content: |-
+    REVIEW FINDINGS TO ADDRESS (PR #3645):
+    Verdict: CHANGES REQUESTED
+    Reviewed commit: 5b80f2744967
+    Recorded: 2026-11-08T00:24:44.016584824+00:00
+    Findings:
+    1. 1 (normal) Store-writer inventory coverage regression: scripts/store-writers.toml drops the init_cmd.rs|maybe_scaffold_codex_hooks_on_init and maybe_scaffold_antigravity_hooks_on_init wrapper rows, yet init_cmd.rs:5100/5121 still reach hook fs writes. Cause: scripts/check-store-writers.py qualified() only propagates explicit-path calls, and the new chain runs through a re-export (scaffolding::codex_hooks re-exports vendors::hooks), a receiver method (profile(..).scaffold_hooks) and a bare install_standalone/install_named_entries call, so the wrappers no longer register and the TASK-3223 routing inventory loses the init entry points without any failure. Fix: make the chain visible to the scanner, e.g. scaffold_codex_hooks/scaffold_antigravity_hooks call self::install_standalone / self::install_named_entries by explicit path, and init_cmd calls the defining aida_core::vendors::hooks path (or keep the wrapper fns defined in scaffolding::codex_hooks). Regenerate and confirm init_cmd wrapper rows are present again.
+    2. 2 (normal) Departure from the signed core/effectful split: the 2026-11-06 signoff and sketch (docs/plans/2026-11-06-story-2539-vendor-profile-sketch.md 'Proposed module shape') restrict aida-core/src/vendors/ to pure descriptors and put effectful adapters elsewhere. This PR moves fs::write/create_dir_all/set_permissions installers into aida-core/src/vendors/hooks.rs and adds an I/O method VendorProfile::scaffold_hooks (hooks.rs:444) on the descriptor type. Because vendors/ is exempt from the literal ratchet, the 8-key TSV reduction comes from relocating Codex/AGY-specific effectful code into the exempt directory, not from removing vendor branching. Either keep the installers in scaffolding (dispatched by the descriptor's HookBackend, which is pure data) or get an explicit advisor amendment on the spec before relocating effectful code into core vendors/.
+    3. 3 (minor) The new guard diverges from the existing safe writer: the sketch (line 96) says the existing safe writers keep enforcing symlink rules, but refuse_hook_links (hooks.rs:462) is new hand-rolled policy. It returns PermissionDenied for the whole install even with force=false, when a symlinked existing handler or wiring file would only have been skipped (dest.exists() && !force). scaffolding/mod.rs symlink_target/symlink_blocking_write (BUG-718/BUG-1645) skip and warn per file with SYMLINK_SKIP_REMEDY. Scenario: a downstream repo that symlinks .codex/hooks/<one-handler> into its source of truth (the BUG-718 dogfood pattern) now gets no missing handlers or wiring on aida init, only a 'hook scaffold skipped' warning. Either reuse the BUG-718 helpers and their skip-and-warn semantics, or record the all-or-nothing refusal as a deliberate policy and add a non-force test that pins it.
+    4. 4 (minor) Gaps in the safe-writer test story_2539_hook_writers_refuse_links_before_any_write (hooks.rs:558): every symlink points at an existing sentinel, so there is no dangling-symlink case. That case was the dangerous pre-PR write-through, because Path::exists() is false for a dangling link and the old writer followed it to create a file outside the root. The test also never checks the 'before any write' part of its name (that no handler dir, handler or wiring file was created under root after the refusal). Add both assertions.
+    5. 5 (minor) The descriptor is not yet the single source of truth: handler_names (hooks.rs:55), antigravity_handler_names (hooks.rs:199) and codex_hooks_wired (hooks.rs:154) still hardcode '/.codex/hooks/' and '/.agents/hooks/' instead of deriving them from layout.handlers, and the two parsers are copies that differ only in that literal. HookLayout.events has no production consumer (tests only). init_cmd.rs:1863-1867 still switches per vendor (maybe_scaffold_codex_hooks_on_init / maybe_scaffold_antigravity_hooks_on_init) instead of iterating PROFILES by HookBackend, against the sketch's 'delete superseded switches as consumers move'. Parameterize one handler parser by HookLayout and route at least the init consumer through the profile.
+    6. 6 (cosmetic) aida-core/src/vendors/hooks.rs:1-24 still carries the old module doc ('Codex hook wiring — .codex/hooks.json plus the handler scripts'), although the module now owns both backends and the profile dispatch. scaffolding/codex_hooks.rs is reduced to a one-line doc. Update the module doc to describe the HookBackend dispatch.
+    7. 7 (process) PR CI was not finished at 5b80f2744967 when reviewed (cli-1, rest and merge-hold-gate pass; cli-0, gates, lib-0, lib-1 and contracts pending). The rework head needs green CI on all lanes; the new story_2539 hook tests in lib lanes are unconfirmed.
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
+  created_at: 2026-11-08T01:24:58.264745160Z
+  modified_at: 2026-11-08T01:24:58.264745160Z
   session_id: 01a1b8be-8170-7fb2-89ab-ecb4c6eee98c
   harness_version: 2.1.319 (Claude Code)
 history:
