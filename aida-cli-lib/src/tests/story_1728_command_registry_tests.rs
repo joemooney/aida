@@ -817,7 +817,10 @@ fn command_clap_types(src: &std::path::Path) -> Vec<(String, bool)> {
     let mut out = Vec::new();
     for path in production_sources(src) {
         let name = path.file_name().unwrap().to_string_lossy().to_string();
-        if path.parent() == Some(src) && is_hot_file(&name) {
+        // Scan cmdkit declarations too; only GlobalArgs is exempt below.
+        // Keep cmdkit hot so it cannot grow command-specific flag handling.
+        // trace:TASK-3425 | ai:codex
+        if path.parent() == Some(src) && is_hot_file(&name) && name != "cmdkit.rs" {
             continue;
         }
         let text = std::fs::read_to_string(&path).unwrap();
@@ -837,6 +840,16 @@ fn command_clap_types(src: &std::path::Path) -> Vec<(String, bool)> {
                 });
                 if clap {
                     if let Some(caps) = lines[i + 1..].iter().find_map(|line| item.captures(line)) {
+                        // Only the shared root options may live outside a command module.
+                        // trace:TASK-3425 | ai:codex
+                        if path.parent() == Some(src)
+                            && name == "cmdkit.rs"
+                            && &caps[3] == "GlobalArgs"
+                            && &caps[2] == "struct"
+                        {
+                            i += 1;
+                            continue;
+                        }
                         out.push((caps[3].to_string(), &caps[2] == "enum"));
                     }
                 }

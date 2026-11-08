@@ -1,4 +1,4 @@
-use clap::{ArgGroup, Parser, Subcommand, ValueEnum};
+use clap::{ArgGroup, Parser, Subcommand};
 use std::path::PathBuf;
 
 // Command clap types live with their commands (`<module>_args.rs`); these
@@ -103,22 +103,6 @@ pub(crate) use crate::wiki::wiki_args::WikiCommand;
 pub(crate) use crate::worktree_gc::worktree_gc_args::{WorktreeCommand, WorktreePoolCommand};
 pub(crate) use crate::zen_cmd::zen_cmd_args::ZenCommand;
 
-/// Explicit output-format pin. Overrides the default, which is chosen from
-/// whether stdout is a terminal: the human table at a TTY, token-efficient
-/// TOON when the output is piped or captured. That silent switch broke real
-/// user scripts that parsed the table, so `--format` (or `AIDA_OUTPUT_FORMAT`)
-/// lets a script pin the format it expects regardless of the TTY.
-// trace:STORY-764 | ai:claude
-#[derive(ValueEnum, Clone, Copy, Debug, PartialEq, Eq)]
-pub enum OutputFormat {
-    /// Human-readable tables / emoji (the interactive default at a TTY).
-    Human,
-    /// Token-efficient TOON — the compact agent default when piped/captured.
-    Toon,
-    /// Machine JSON, for commands that support a JSON projection.
-    Json,
-}
-
 #[derive(Parser, Debug)]
 #[clap(
     author,
@@ -136,7 +120,7 @@ pub struct Cli {
 }
 
 // trace:TASK-3425 | ai:codex
-pub use crate::cmdkit::GlobalArgs;
+pub use crate::cmdkit::{GlobalArgs, OutputFormat};
 
 // trace:FR-1-043 | ai:claude
 

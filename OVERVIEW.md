@@ -1,3 +1,12 @@
+The in-crate `cmdkit` holds command registration/dispatch types, `GlobalArgs`,
+`OutputFormat` and `StakeholderAction`. Existing paths re-export them to preserve
+consumer imports. Its only named production module dependency is `spec_arg`;
+the root Storage alias still resolves to aida-core. This prepares a framework
+leaf, but the lexical module graph still follows consumers' registry re-export
+paths, so the plan's 29-module SCC reduction is not established. See the
+[measurement and scope decision](docs/internal/testing/task-3425-cmdkit-rework.md).
+<!-- trace:TASK-3425 | ai:codex -->
+
 Mailbox delivery resolves named agents against current registry liveness,
 shares canonicalization across CLI/MCP/mentions, refuses unknown/dead agents
 and empty role/vendor audiences, and lists group readers. Known people retain

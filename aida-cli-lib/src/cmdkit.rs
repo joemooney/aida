@@ -6,8 +6,51 @@ use anyhow::Result;
 use clap::ArgMatches;
 use std::path::PathBuf;
 
-use crate::cli::OutputFormat;
-use crate::stakeholder_role::StakeholderAction;
+// Shared vocabulary lives here so framework consumers do not reach the CLI
+// parser or stakeholder gate. Existing paths re-export these pure types.
+// trace:TASK-3425 | ai:codex
+
+/// Explicit output-format pin. Overrides the default, which is chosen from
+/// whether stdout is a terminal: the human table at a TTY, token-efficient
+/// TOON when the output is piped or captured. That silent switch broke real
+/// user scripts that parsed the table, so `--format` (or `AIDA_OUTPUT_FORMAT`)
+/// lets a script pin the format it expects regardless of the TTY.
+// trace:STORY-764 | ai:claude
+#[derive(clap::ValueEnum, Clone, Copy, Debug, PartialEq, Eq)]
+pub enum OutputFormat {
+    /// Human-readable tables / emoji (the interactive default at a TTY).
+    Human,
+    /// Token-efficient TOON — the compact agent default when piped/captured.
+    Toon,
+    /// Machine JSON, for commands that support a JSON projection.
+    Json,
+}
+
+// trace:BUG-1197 | ai:codex
+// trace:TASK-1264 | ai:codex
+/// Shared capability vocabulary for the CLI and MCP stakeholder envelopes.
+/// Keeping this decision independent of either transport prevents a new write
+/// path from silently widening guest/requester authority.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum StakeholderAction {
+    Read,
+    Intake,
+    EditRequirement,
+    Queue,
+    Database,
+    MergeGate,
+    Session,
+    Role,
+    Relationship,
+    Comment,
+    Type,
+    Trace,
+    Finding,
+    Question,
+    Configuration,
+    BuildLoop,
+    Write,
+}
 
 // The top-level options, shared by both dispatch paths: a registered command
 // has no `Command` variant to parse through, so its handler reads these from
