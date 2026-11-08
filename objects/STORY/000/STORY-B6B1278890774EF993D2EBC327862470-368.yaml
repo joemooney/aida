@@ -29,7 +29,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-04T02:34:20.173245666Z
-modified_at: 2026-11-08T08:31:54.095455617Z
+modified_at: 2026-11-08T08:32:00.234570279Z
 req_type: Story
 relationships:
 - rel_type:
@@ -610,6 +610,27 @@ comments:
   content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: S5 logic still meets the brief (typed --until on session handoff and findings recur, shared admission, hold authority via defer_single, hourly sweep), but the head only expanded one test: CI''s ExecContext ratchet and store-writer inventory both fail statically at 37346dd, and three prior-round findings remain unaddressed.. No triage reason was given.'
   created_at: 2026-11-08T08:31:54.095449057Z
   modified_at: 2026-11-08T08:31:54.095449057Z
+  session_id: 01a1b8be-8170-7fb2-89ab-ecb4c6eee98c
+  harness_version: 2.1.319 (Claude Code)
+- id: 01a1ba49-2c7f-7b50-9a40-8a3cdac2a742
+  author: joe
+  content: |-
+    REVIEW FINDINGS TO ADDRESS (PR #3639):
+    Verdict: CHANGES REQUESTED
+    Reviewed commit: 37346ddfb2ba
+    Recorded: 2026-11-08T08:19:06.487989989+00:00
+    Review comment: https://github.com/joemooney/aida/pull/3639#issuecomment-6719190299
+    Findings:
+    1. BLOCKING (contract-drift, CI gates; carried from prior round, unaddressed): python3 scripts/check-exec-context.py --base 08cbf8a3fe7e exits 1 at 37346dd: new forbidden site story_1728_policy_parity_tests.rs:registered_policy_matches_mains_legacy_tables_for_every_verb:var_os, from std::env::var_os("AIDA_UPDATE_SNAPSHOTS") at :178. ci.yml:936 runs this gate. Delete the update block at :175-196 and the doc lines at :16-18 (the five S5 rows are committed and pinned by story2402_s5_policy_fixture_covers_conditional_writers), or move the update path inside the existing AIDA_CAPTURE_MAIN_POLICY branch. Do not add the site to exec-context-legacy.json.
+    2. BLOCKING (contract-drift, CI gates; new): python3 scripts/check-store-writers.py exits 1 at 37346dd (ci.yml:944): unclassified writer/caller sink additions aida-cli-lib/src/findings_gate.rs|handle_findings_recur|wrapper:aida_cli_lib::defer_cmd::defer_single and aida-cli-lib/src/session_misc.rs|session_handoff_seat|wrapper:aida_cli_lib::defer_cmd::defer_single. Run python3 scripts/check-store-writers.py --regenerate on the merged branch, classify those two rows in scripts/store-writers.toml, and remove any stale rows in the inventory diff.
+    3. BLOCKING until shown green (perf, CI lib-1; carried from prior round): the Test time budget step failed at 0a15330 (job 128605854218) and no budget entry or test split followed; scripts/test-time-budget.toml has only the S3 story2402 row, while 37346dd made story_2402_resurface_tests::story2402_s5_recur_conditions_resurface_and_manual_routes larger (a sweep loop over five more conditions). lib-1 was still in progress at review time, so this is unverified at this head. Read the test-timings artifact, then split or speed up the test, or add a measured budget entry (max measured x2, rounded up to 5s) with a trace comment.
+    4. minor (untested-path, authority): the refusal path for setting a hold through the new writers is untested. story2402_s5_recur_conditions_resurface_and_manual_routes runs only as seat advisor (AmbientGuard::hermetic_with_seat(dir.path(), "advisor", &[])), so nothing proves that a seat without hold authority running findings recur --until manual:<who> --reason X or session handoff --until manual:<who> --reason X --spec S is refused by set_hold_refusal in defer_cmd.rs:36 with no deferral, recurrence bump or note. Add a story2402_s5_* case using a non-authorized seat such as implementer, asserting the refusal and no mutation for both writers.
+    5. cosmetic (carried, unaddressed; help layout): cli_help_snapshot.txt moves --standing-orders below the global options in 'aida session handoff --help' (snapshot ~:14986). Confirm the reorder is intended or restore the old position, and say which in the PR body; the PR body does not mention it.
+    6. cosmetic (carried, unaddressed; raw input echoed): the note line 'Revisit {spec} when {condition}' in session_misc.rs:session_handoff_seat uses the raw --spec argument, and recurrence_error in findings_gate.rs:handle_findings_recur uses raw --until text although canonical_condition's result is discarded at the top of that function. Use the resolved display ID and canonical condition so the note and error match what was stored.
+    7. cosmetic (carried, unaddressed; stale comment, placement, docs): defer_cmd.rs:114-115 still says 'legacy text pending the separate migration slice' although S3 landed and was applied; condition_cmd.rs defines canonical_condition after the #[cfg(test)] mod tests declaration at :211, so move it above; the docs/cli/06-roles-sessions.md addition starts with a doubled blank line.
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
+  created_at: 2026-11-08T08:32:00.127092930Z
+  modified_at: 2026-11-08T08:32:00.127092930Z
   session_id: 01a1b8be-8170-7fb2-89ab-ecb4c6eee98c
   harness_version: 2.1.319 (Claude Code)
 history:
