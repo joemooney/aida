@@ -4106,6 +4106,24 @@ fn task_3219_background_attach_argv_refuses_subcommand_preserves_prompt() {
     let err =
         claude_argv(&args(&["attach", "session-id", "--settings", "{}"]), 1, &[]).unwrap_err();
     assert!(err.to_string().contains("aida agent attach <attempt>"));
+    // Real composition prepends generated flags before --extra-flag values.
+    let composed = args(&[
+        "--setting-sources",
+        "project",
+        "--settings",
+        "{}",
+        "--permission-mode",
+        "dontAsk",
+        "--model",
+        "sonnet",
+        "attach",
+        "session-id",
+        "--session-id",
+        "uuid",
+        "--print",
+    ]);
+    let err = claude_argv(&composed, 1, &[]).unwrap_err();
+    assert!(err.to_string().contains("aida agent attach <attempt>"));
     for input in [
         args(&["--settings", "{}", "attach"]),
         args(&["attach", "--settings", "{}"]),

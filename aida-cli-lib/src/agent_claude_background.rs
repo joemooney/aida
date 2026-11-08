@@ -17,6 +17,49 @@ const FD: i32 = 3;
 const LIMIT: usize = 1024 * 1024;
 const TIMEOUT: Duration = Duration::from_secs(45);
 
+/// Locate the first positional after AIDA's generated option/value pairs.
+/// A lone `attach` is a prompt; `--` explicitly starts prompt text.
+// trace:TASK-3219 | ai:codex
+pub(crate) fn is_attach_subcommand(args: &[String]) -> bool {
+    let mut i = 0;
+    while let Some(arg) = args.get(i) {
+        if arg == "--" {
+            return false;
+        }
+        if !arg.starts_with('-') {
+            return arg == "attach" && args.get(i + 1).is_some_and(|v| !v.starts_with('-'));
+        }
+        i += if matches!(
+            arg.as_str(),
+            "--setting-sources"
+                | "--settings"
+                | "--permission-mode"
+                | "--model"
+                | "--session-id"
+                | "--name"
+                | "--agent"
+                | "--agents"
+                | "--system-prompt"
+                | "--append-system-prompt"
+                | "--output-format"
+                | "--input-format"
+                | "--mcp-config"
+                | "--allowedTools"
+                | "--disallowedTools"
+                | "--tools"
+                | "--add-dir"
+                | "--max-turns"
+                | "--max-budget-usd"
+                | "--effort"
+        ) {
+            2
+        } else {
+            1
+        };
+    }
+    false
+}
+
 #[derive(serde::Serialize, serde::Deserialize)]
 struct Handoff {
     parent: ProcId,
@@ -360,9 +403,13 @@ pub(crate) fn supervise_main() -> Result<()> {
 pub(crate) struct RegistryEnd {
     pub(crate) root: PathBuf,
     pub(crate) pid: u32,
+    pub(crate) armed: bool,
 }
 impl Drop for RegistryEnd {
     fn drop(&mut self) {
+        if !self.armed {
+            return;
+        }
         if let Err(e) = agent_registry::mark_agent_ended(
             &self.root,
             crate::vendors::supervised_background_name(),
@@ -496,6 +543,103 @@ impl LogDisplay {
 #[cfg(test)]
 pub(crate) mod tests {
     use super::*;
+    #[test]
+    fn supervisor_attach_detection_skips_composed_flags() {
+        let args = |a: &[&str]| a.iter().map(|s| s.to_string()).collect::<Vec<_>>();
+        for prefix in [
+            vec![],
+            args(&["--setting-sources", "project", "--settings", "{}"]),
+            args(&[
+                "--settings",
+                "{}",
+                "--model",
+                "attach",
+                "--session-id",
+                "uuid",
+                "--print",
+            ]),
+            args(&["--settings={}", "--model=sonnet"]),
+        ] {
+            let mut subcommand = prefix.clone();
+            subcommand.extend(args(&["attach", "session-id"]));
+            assert!(is_attach_subcommand(&subcommand), "{subcommand:?}");
+            for prompt in [
+                args(&["attach"]),
+                args(&["--", "attach", "session-id"]),
+                args(&["help", "attach"]),
+            ] {
+                let mut input = prefix.clone();
+                input.extend(prompt);
+                assert!(!is_attach_subcommand(&input), "{input:?}");
+            }
+        }
+    }
+
+    #[test]
+    fn supervisor_registry_guard_preserves_normal_end() {
+        let root = tempfile::tempdir().unwrap();
+        let vendor = crate::vendors::supervised_background_name();
+        let pid = std::process::id();
+        agent_registry::register_spawned_agent_with_row(
+            root.path(),
+            vendor,
+            pid,
+            agent_registry::SpawnedRow {
+                role: None,
+                current_spec: None,
+                worktree_path: root.path().into(),
+                binary: None,
+                name: None,
+                native_session_id: None,
+                resumed_from: None,
+                description: None,
+                delegate_seats: vec![],
+            },
+        )
+        .unwrap();
+        let mut guard = RegistryEnd {
+            root: root.path().into(),
+            pid,
+            armed: true,
+        };
+        let ended = agent_registry::mark_agent_ended(root.path(), vendor, pid)
+            .unwrap()
+            .unwrap();
+        guard.armed = false;
+        drop(guard);
+        let rows = agent_registry::load_entries(root.path());
+        let row = rows.iter().find(|(_, row)| row.id == ended.id).unwrap();
+        assert_eq!(row.1.ended_at, ended.ended_at);
+        assert_eq!(row.1.last_active_at, ended.last_active_at);
+
+        // An error before ordinary teardown still closes the row.
+        agent_registry::register_spawned_agent_with_row(
+            root.path(),
+            vendor,
+            pid,
+            agent_registry::SpawnedRow {
+                role: None,
+                current_spec: None,
+                worktree_path: root.path().into(),
+                binary: None,
+                name: None,
+                native_session_id: None,
+                resumed_from: None,
+                description: None,
+                delegate_seats: vec![],
+            },
+        )
+        .unwrap();
+        drop(RegistryEnd {
+            root: root.path().into(),
+            pid,
+            armed: true,
+        });
+        assert!(agent_registry::load_entries(root.path())
+            .iter()
+            .any(|(_, row)| row.ended_at.is_some()));
+    }
+
     #[test]
     fn supervisor_closed_socket_unwinds_with_default_sigpipe() {
         const CHILD: &str = "AIDA_TEST_CLAUDE_BG_SIGPIPE";

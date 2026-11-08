@@ -7752,6 +7752,7 @@ pub(crate) fn run_agent_generation_with_io(
             _background_registry = Some(agent_claude_background::RegistryEnd {
                 root: plan.project_root.clone(),
                 pid: child_pid,
+                armed: true,
             });
         }
         if let Some(control) = background_control.as_mut() {
@@ -7832,7 +7833,14 @@ pub(crate) fn run_agent_generation_with_io(
         match agent_registry::mark_agent_ended(&plan.project_root, config.agent_type, child_pid) {
             // The ended row keeps the session id the child's hook recorded.
             // trace:STORY-B6B1278890774EF993D2EBC327862470-150 | ai:claude
-            Ok(row) => row.and_then(|row| row.native_session_id.or(row.claude_session_id)),
+            Ok(row) => {
+                // Normal teardown succeeded; retain the guard only on errors.
+                // trace:TASK-3219 | ai:codex
+                if let Some(guard) = _background_registry.as_mut() {
+                    guard.armed = false;
+                }
+                row.and_then(|row| row.native_session_id.or(row.claude_session_id))
+            }
             Err(err) => {
                 eprintln!(
                     "{} failed to mark agent registry entry ended for {}#{}: {err}",

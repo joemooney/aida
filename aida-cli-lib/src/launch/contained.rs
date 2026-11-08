@@ -1678,8 +1678,7 @@ fn validate_codex_flags_with_help(
 fn claude_argv(original: &[String], port: u16, allowed: &[String]) -> Result<Vec<String>> {
     // trace:TASK-3219 | ai:codex
     anyhow::ensure!(
-        !(original.first().map(String::as_str) == Some("attach")
-            && original.get(1).is_some_and(|arg| !arg.starts_with('-'))),
+        !crate::agent_launch::agent_claude_background::is_attach_subcommand(original),
         crate::vendors::background_attach_refusal()
     );
     let mut args = Vec::with_capacity(original.len());
