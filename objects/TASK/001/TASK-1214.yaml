@@ -8,7 +8,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-09-12T03:06:57.441067647Z
-modified_at: 2026-11-08T08:19:37.952622047Z
+modified_at: 2026-11-08T08:19:39.841995930Z
 req_type: Task
 tags:
 - cli
@@ -164,6 +164,21 @@ comments:
   content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: Alias removal is complete across all 8 STORY-1028 families and all round-5 findings are fixed, but this PR''s new trace marker on ReleaseArgs trips the Trace/doc-header stranding gate, so CI (gates) is red at f4ee5cc.. No triage reason was given.'
   created_at: 2026-11-08T08:19:37.952620573Z
   modified_at: 2026-11-08T08:19:37.952620573Z
+  session_id: 01a1b8be-8170-7fb2-89ab-ecb4c6eee98c
+  harness_version: 2.1.319 (Claude Code)
+- id: 01a1ba3d-e046-73e2-a9ce-5053367efc73
+  author: joe
+  content: |-
+    REVIEW FINDINGS TO ADDRESS (TASK-1214):
+    Verdict: CHANGES REQUESTED
+    Reviewed commit: f4ee5cc7eb59
+    Recorded: 2026-11-08T08:18:41.651548945+00:00
+    Findings:
+    1. BLOCKER aida-cli-lib/src/upgrade_release.rs:1981: the added `// trace:TASK-1214 | ai:codex` sits below the /// doc block of ReleaseArgs, whose header starts with a doc-less run `// trace:STORY-472` + `// trace:TASK-1721` (lines 1975-1976). That makes two trace runs where the leading run has no doc and shares no spec id with the other, which is exactly what scripts/check-trace-headers.py (find_strandings) refuses. CI (gates) step 86 "Trace/doc-header stranding gate" is the only failed step in job 128657492318; the base is green on main. Fix: move the TASK-1214 line up to directly follow line 1976 (one contiguous run), or drop it. Do not add an ALLOW_LIST entry. Re-confirm the whole gate with `python3 scripts/check-trace-headers.py`. Note the `lane_fixture_fails` lines in the launcher CI excerpt are the expected output of a deliberately failing fixture (bug_2383_seat_target_overlay_tests.rs:1190), not a defect; the step after 86 ("Docs-drift guards schedule on docs-only PRs") was skipped and Build was still pending, so both still need a green run.
+    2. COSMETIC stale retired-flag spellings left in comments, against the "delete compatibility notes" clause: aida-cli-lib/src/usage_cmd.rs:6 says `auto-complete` but no such subcommand exists (it is `drains`); usage_cmd.rs:79 and :887 `--slowest`, :910 `--health`, :923/:1298/:1303/:1354/:1389 name `--auto-complete` as the usage view selector; graph_cmd.rs:142 and :144 `--tree`. Say `aida usage slowest`, `health`, `drains` and `aida graph tree`. Leave the `--failures`/`--pattern` mentions (they are valid on `usage drains`) and the user-visible "--auto-complete runs/failures" strings at :1335/:1531 (they name the orchestrator flag on `queue work`).
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
+  created_at: 2026-11-08T08:19:39.718101362Z
+  modified_at: 2026-11-08T08:19:39.718101362Z
   session_id: 01a1b8be-8170-7fb2-89ab-ecb4c6eee98c
   harness_version: 2.1.319 (Claude Code)
 history:
