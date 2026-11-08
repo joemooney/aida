@@ -219,6 +219,58 @@ class LauncherRefusals(unittest.TestCase):
         self.assertLess(create, copy)
         self.assertIn('refuse "cannot stop previous job unit', launcher)
 
+    def test_launcher_reuses_clean_path_and_refuses_live_service(self):
+        import os
+        import subprocess
+        import tempfile
+        for stop_status in (0, 5, 1):
+            with self.subTest(stop_status=stop_status), tempfile.TemporaryDirectory() as directory:
+                root = Path(directory)
+                jobs = root / 'jobs'
+                state = jobs / 'current'
+                state.mkdir(parents=True)
+                (state / 'old-job').write_text('must disappear only after a safe stop')
+                dist = root / 'distribution'
+                dist.mkdir(mode=0o755)
+                (dist / 'run.sh').write_text('#!/bin/sh\nexit 0\n')
+                (dist / 'run.sh').chmod(0o755)
+                commands = root / 'bin'
+                commands.mkdir()
+                log = root / 'launches'
+                mocks = {
+                    'id': 'echo 1001',
+                    'flock': 'exit 0',
+                    'chown': 'exit 0',
+                    'systemctl': f'[ "$1" != stop ] || exit {stop_status}',
+                    'systemd-run': f'[ ! -e "{state}/old-job" ] || exit 92; '
+                                   f'[ -f "{state}/run.sh" ] || exit 93; '
+                                   f'[ -d "{state}/home" ] || exit 94; '
+                                   f'cat >> "{log}"',
+                }
+                for name, body in mocks.items():
+                    path = commands / name
+                    path.write_text('#!/bin/sh\n' + body + '\n')
+                    path.chmod(0o755)
+                script = (ROOT / 'scripts/runner/one-job.sh').read_text()
+                script = script.replace('"$EUID"', '"0"')
+                script = script.replace('/run/aida-ci-runner.lock', str(root / 'lock'))
+                script = script.replace('/opt/aida-actions-runner', str(dist))
+                script = script.replace('/var/lib/aida-ci-jobs', str(jobs))
+                script = script.replace('! -user root', f'! -user {os.getuid()}')
+                for attempt in range(2):
+                    result = subprocess.run(['bash', '-c', script], input='fresh-config\n',
+                                            capture_output=True, text=True, timeout=5,
+                                            env={**os.environ, 'PATH': f'{commands}:/usr/bin:/bin'})
+                    if stop_status == 1:
+                        self.assertNotEqual(result.returncode, 0)
+                        self.assertIn('cannot stop previous job unit', result.stderr)
+                        self.assertTrue((state / 'old-job').exists())
+                        self.assertFalse(log.exists())
+                    else:
+                        self.assertEqual(result.returncode, 0, result.stderr)
+                        self.assertFalse(state.exists(), 'job content must be removed on exit')
+                        self.assertEqual(log.read_text().splitlines(), ['fresh-config'] * (attempt + 1))
+
     def test_idle_wait_does_not_consume_job_execution_budget(self):
         launcher = (ROOT / 'scripts/runner/one-job.sh').read_text()
         self.assertNotIn('RuntimeMaxSec=', launcher)
