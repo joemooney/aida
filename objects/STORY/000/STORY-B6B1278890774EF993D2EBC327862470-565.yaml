@@ -28,7 +28,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-07T19:59:40.192574469Z
-modified_at: 2026-11-08T00:22:09.742703536Z
+modified_at: 2026-11-08T00:22:16.931518804Z
 req_type: Story
 comments:
 - id: 01a1b86c-54fb-76f0-b04b-0ed1c7c07cfb
@@ -52,6 +52,28 @@ comments:
   content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: Checks and --fix are sound and idempotent, but AC4 (FAQ-151 replaced) is not done, the AC3 refusal path has no test, build-cache is a constant FAIL so --lane-host can never exit 0, and agy auth can never pass. CI was still pending at review time.. No triage reason was given.'
   created_at: 2026-11-08T00:22:09.742701625Z
   modified_at: 2026-11-08T00:22:09.742701625Z
+  session_id: 01a1b848-940b-7bd2-8acd-52e428b182b8
+  harness_version: 2.1.319 (Claude Code)
+- id: 01a1b888-d1b9-7981-97af-7470ed2025a8
+  author: joe
+  content: |-
+    REVIEW FINDINGS TO ADDRESS (PR #3643):
+    Verdict: CHANGES REQUESTED
+    Reviewed commit: 91c6a1ddf072
+    Recorded: 2026-11-08T00:00:20.954269607+00:00
+    Findings:
+    1. AC4 unmet: FAQ-151 still holds the full hand-kept checklist ('To be automated by aida doctor --lane-host'). Replace it with a pointer to 'aida doctor --lane-host [--fix]' plus only the remaining manual steps (ssh/hosts pin, clone, PATH, vendor login). Also note its writable_roots list now contradicts the preset (writable_roots=[]).
+    2. AC3 refusal path untested: no test covers lane_host::preflight() or the two call sites (queue_cmd.rs ~5817 fresh/drain routes, ~12355 resume). Add tests proving 'queue work --no-human' refuses with the doctor lines BEFORE any queue/lease/worktree mutation when posture=None, os_wrap=false, bwrap is unavailable or the codex preset is wrong, and that --dry-run/--no-launch/--list-sessions skip it.
+    3. AC1 build-cache: lane_host.rs cache_check() is a hard-coded pass=false and never inspects the host. At least check the 'configured' half (an executable rustc-wrapper in ~/.cargo/config.toml), and report lane reachability as a separate unverified note. Today 'aida doctor --lane-host' can never exit 0, so its exit code is useless as a gate, and every 'aida init' prints a FAIL row.
+    4. host_diagnostics.rs auth_check: the agy/'_' arm has an empty env key and an empty file, so auth-agy can never pass on any host. That makes --lane-host permanently fail wherever agy is enabled, and the test asserts the always-fail. Recognize agy's real credential source, or report it as an explicit 'unverifiable' state that does not fail the run.
+    5. Probe-1 inconsistency: auth_check honors CODEX_HOME, but workspace_check/user_preset_matches (and the --fix User-scope writer) always use ~/.codex/config.toml. On a host with CODEX_HOME set, codex-config checks and fixes a file Codex does not read. Resolve the codex config path the same way in all three places, and add a test.
+    6. Preflight checks only the vendor resolved at entry (resolve_enabled_headless_vendor). Routes that switch vendor later, such as apply_rework_conflict_route rerouting to claude or orchestrator phases on another vendor, never get the host checks for the vendor that actually launches. Either preflight at the per-launch vendor resolution or document and test the limitation.
+    7. Preflight ignores an AIDA_CONTAINED parent (monotonic containment). A no-human launch from inside a contained seat reads host user files (~/.aida/agents.toml, ~/.codex/config.toml) and probes bwrap from inside the sandbox, so it may refuse legitimate nested reviewer/implementer launches. Decide the contained-parent behaviour explicitly and add a test (plausible risk, not reproduced).
+    8. Authority audit gap: config_cmd.rs's source test that audits apply_permission_posture call sites (bypass-tier guard) scans only doctor_cmd.rs and lib*.rs. Add lane_host.rs, the new production call site.
+    9. Cosmetic: --lane-host conflicts only with heal/fix_sandbox/contradictions, so --category, --yes and the other doctor flags are silently ignored with it. init_cmd now runs a network 'git ls-remote' (8s bound) on every 'aida init'. Consider conflicts_with for the remaining flags and skipping the live store probe during init.
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
+  created_at: 2026-11-08T00:22:16.761106721Z
+  modified_at: 2026-11-08T00:22:16.761106721Z
   session_id: 01a1b848-940b-7bd2-8acd-52e428b182b8
   harness_version: 2.1.319 (Claude Code)
 history:
