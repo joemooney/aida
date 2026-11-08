@@ -13,6 +13,8 @@
 //! Rows corrected by hand after capture, each a deliberate policy change:
 //! - `session leases --prune-stale`: Read → Session. It releases stale
 //!   leases, including other clones' claims (TASK-1939).
+//! - `agent new <vendor> --no-exec`: Write → Read. Side-effect-free launch
+//!   declarations are available to stakeholder seats (STORY-1486).
 //!
 //! Rows removed by hand after capture:
 //! - Twenty retired STORY-1028 mode-flag variants (TASK-1214).
