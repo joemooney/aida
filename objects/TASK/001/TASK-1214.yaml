@@ -7,8 +7,8 @@ status: Completed
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
-created_at: 2026-09-12 03:06:57.441067+00:00
-modified_at: 2026-11-08 12:48:19.219759+00:00
+created_at: 2026-09-12T03:06:57.441067Z
+modified_at: 2026-11-08T15:25:06.185347403Z
 req_type: Task
 tags:
 - cli
@@ -17,226 +17,191 @@ tags:
 relationships:
 - rel_type: Child
   target_id: 01a08ee4-4fed-7631-bd6e-fcefb80d0c17
-  created_at: 2026-09-12 03:07:05.518724+00:00
+  created_at: 2026-09-12T03:07:05.518724Z
   created_by: joe
 - rel_type:
     custom: implemented-by
   target_id: 01a1b91a-f79c-7341-bcb5-fc2bc238b9d3
-  created_at: 2026-11-08 03:02:14.807525+00:00
+  created_at: 2026-11-08T03:02:14.807525Z
+  created_by: joe
+- rel_type: Supersedes
+  target_id: 01a1bb2d-a850-7f43-962c-afa134928a84
+  created_at: 2026-11-08T15:25:06.185342806Z
   created_by: joe
 comments:
 - id: 01a1b7b1-326d-71c0-93c2-92d4416a0287
   author: aida:defer-migration
-  content: '[aida:defer-migration]
-
+  content: |-
+    [aida:defer-migration]
     {"deferred":true,"deferred_at":"2026-09-12T14:39:53.399428869Z","deferred_until":"after the first release that ships the STORY-1028 subcommands (0.16.0) plus one release of alias grace","legacy_tags":[]}
-
-    Migrated condition: manual:operator'
-  created_at: 2026-11-07 20:26:45.741850+00:00
-  modified_at: 2026-11-07 20:26:45.741850+00:00
+    Migrated condition: manual:operator
+  created_at: 2026-11-07T20:26:45.741850Z
+  modified_at: 2026-11-07T20:26:45.741850Z
   session_id: 01a1b76b-2fe7-7dd2-88d0-356fc8d96d04
   harness_version: 2.1.319 (Claude Code)
 - id: 01a1b7cd-8afd-7872-a79b-4311484af0a8
   author: joe
   content: 'ADVISOR 2026-11-07 14:20, regroup triage: ACTIVATED. 0.16.0 shipped and the hidden aliases are still live (aida graph --blocked-by). Single user: remove them now, no grace period.'
-  created_at: 2026-11-07 20:57:43.421735+00:00
-  modified_at: 2026-11-07 20:57:43.421735+00:00
+  created_at: 2026-11-07T20:57:43.421735Z
+  modified_at: 2026-11-07T20:57:43.421735Z
   session_id: 01a1b76b-2fe7-7dd2-88d0-356fc8d96d04
   harness_version: 2.1.319 (Claude Code)
 - id: 01a1b7e8-5a79-75a3-a588-f918aaa1d184
   author: joe
   content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: Alias removal is complete across all 8 STORY-1028 families, but the policy-parity fixture still lists 20 removed-flag argv rows (test will fail) and a user-facing hint still tells users to run the retired history --events flag.. No triage reason was given.'
-  created_at: 2026-11-07 21:27:00.473054+00:00
-  modified_at: 2026-11-07 21:27:00.473054+00:00
+  created_at: 2026-11-07T21:27:00.473054Z
+  modified_at: 2026-11-07T21:27:00.473054Z
   session_id: 01a1b646-c67d-7b43-98ff-3604a53f5d1f
   harness_version: 2.1.319 (Claude Code)
 - id: 01a1b7e8-62ef-7682-8c95-20b7ec3226e8
   author: joe
-  content: 'REVIEW FINDINGS TO ADDRESS (TASK-1214):
-
+  content: |-
+    REVIEW FINDINGS TO ADDRESS (TASK-1214):
     Verdict: CHANGES REQUESTED
-
     Reviewed commit: 910ac86bdb11
-
     Recorded: 2026-11-07T21:25:16.162728721+00:00
-
     Findings:
-
-    1. aida-cli-lib/src/tests/golden/story_1728_main_policy.tsv still has rows for the removed flags: lines 537 (drain status --clear), 661-662 (focus --clear/--show), 725/726/729/731 (graph --blocked-by/--blocks/--impact/--tree), 1445-1448 (release --check/--major/--minor/--patch), 1859 (statusline --title), 1963-1964 (upgrade --check/--diff), 1970/1972/1973/1974/1980/1981 (usage --auto-complete/--errors/--events/--health/--slowest/--unused TASK-1). registered_policy_matches_mains_legacy_tables_for_every_verb (story_1728_policy_parity_tests.rs) reports each of those argv as ''no longer parses'', so it fails. The fixture must not be regenerated from a branch, so remove those rows by hand and add a ''Rows removed by hand'' note to that file''s header doc naming TASK-1214 (same as the existing TASK-1939 note).
-
-    2. aida-cli-lib/src/db_reconcile.rs:4678 still prints ''Run `aida history --since "5 min ago" --events` for the full event stream.''. With the hidden --events flag gone, that command now fails at parse. Change it to ''aida history events --since "5 min ago"'' (or use --full).
-
-    3. scripts/check-removed-flags.sh: the guard only matches the literal ''aida history --events'', so it missed the db_reconcile.rs hint above, where filters sit between ''history'' and ''--events''. Tighten it the way graph_regex already is (e.g. ''aida history( +[^|;`]*)? +--events\b''), add a fixture case to tests/test_check_removed_flags.sh, and check that the wider pattern does not flag the canonical ''aida usage events'' or ''aida history events''.
-
-    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.'
-  created_at: 2026-11-07 21:27:02.639319+00:00
-  modified_at: 2026-11-07 21:27:02.639319+00:00
+    1. aida-cli-lib/src/tests/golden/story_1728_main_policy.tsv still has rows for the removed flags: lines 537 (drain status --clear), 661-662 (focus --clear/--show), 725/726/729/731 (graph --blocked-by/--blocks/--impact/--tree), 1445-1448 (release --check/--major/--minor/--patch), 1859 (statusline --title), 1963-1964 (upgrade --check/--diff), 1970/1972/1973/1974/1980/1981 (usage --auto-complete/--errors/--events/--health/--slowest/--unused TASK-1). registered_policy_matches_mains_legacy_tables_for_every_verb (story_1728_policy_parity_tests.rs) reports each of those argv as 'no longer parses', so it fails. The fixture must not be regenerated from a branch, so remove those rows by hand and add a 'Rows removed by hand' note to that file's header doc naming TASK-1214 (same as the existing TASK-1939 note).
+    2. aida-cli-lib/src/db_reconcile.rs:4678 still prints 'Run `aida history --since "5 min ago" --events` for the full event stream.'. With the hidden --events flag gone, that command now fails at parse. Change it to 'aida history events --since "5 min ago"' (or use --full).
+    3. scripts/check-removed-flags.sh: the guard only matches the literal 'aida history --events', so it missed the db_reconcile.rs hint above, where filters sit between 'history' and '--events'. Tighten it the way graph_regex already is (e.g. 'aida history( +[^|;`]*)? +--events\b'), add a fixture case to tests/test_check_removed_flags.sh, and check that the wider pattern does not flag the canonical 'aida usage events' or 'aida history events'.
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
+  created_at: 2026-11-07T21:27:02.639319Z
+  modified_at: 2026-11-07T21:27:02.639319Z
   session_id: 01a1b646-c67d-7b43-98ff-3604a53f5d1f
   harness_version: 2.1.319 (Claude Code)
 - id: 01a1b8f8-4912-7f50-a9bb-08294a02d085
   author: joe
   content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: Round-1 findings all fixed (policy TSV rows + header note, db_reconcile history hint, widened history guard + fixtures) and alias removal is complete across all 8 STORY-1028 families, but removing graph''s hidden mode flags broke the documented ''aida graph <ID> --follow <TYPE>'' path.. No triage reason was given.'
-  created_at: 2026-11-08 02:24:01.810598+00:00
-  modified_at: 2026-11-08 02:24:01.810598+00:00
+  created_at: 2026-11-08T02:24:01.810598Z
+  modified_at: 2026-11-08T02:24:01.810598Z
   session_id: 01a1b8be-8170-7fb2-89ab-ecb4c6eee98c
   harness_version: 2.1.319 (Claude Code)
 - id: 01a1b8f8-55f2-7203-86cf-e7b752247429
   author: joe
-  content: 'REVIEW FINDINGS TO ADDRESS (TASK-1214):
-
+  content: |-
+    REVIEW FINDINGS TO ADDRESS (TASK-1214):
     Verdict: CHANGES REQUESTED
-
     Reviewed commit: 1e32efd38e22
-
     Recorded: 2026-11-08T00:20:13.876949688+00:00
-
     Findings:
-
-    1. aida-cli-lib/src/graph_cmd.rs:443 and :484: with no subcommand, the None arm now passes tree=true, i.e. (id, false, false, true, false). handle_graph_command (graph_cmd.rs:68-77) counts tree plus a non-empty --follow as two modes and bails with ''choose at most one graph mode''. So ''aida graph STORY-1 --follow carved-out-to'', documented in docs/cli/02-specs.md:73/188 and in the policy TSV row ''graph --follow TASK-1'', now always fails. On main the None arm passed tree=false, and handle_graph_command already falls back to tree when no mode is set (graph_cmd.rs:122 else branch). Fix: pass tree=false in both None arms (or tree = follow.is_empty()), and add a regression test that runs ''graph <id> --follow <type>'' through run_graph or handle_graph_command. A parse-only test would not catch this.
-
-    2. Cosmetic: aida-cli-lib/src/upgrade_release.rs:1191 resolve_release_bump''s error still says ''specify only one of --patch / --minor / --major'', naming the retired flags. It is unreachable from the CLI now that the mode is a single subcommand, but the wording should say ''patch / minor / major'' (or the arm should be dropped) so the retired spelling does not linger.
-
-    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.'
-  created_at: 2026-11-08 02:24:05.106867+00:00
-  modified_at: 2026-11-08 02:24:05.106867+00:00
+    1. aida-cli-lib/src/graph_cmd.rs:443 and :484: with no subcommand, the None arm now passes tree=true, i.e. (id, false, false, true, false). handle_graph_command (graph_cmd.rs:68-77) counts tree plus a non-empty --follow as two modes and bails with 'choose at most one graph mode'. So 'aida graph STORY-1 --follow carved-out-to', documented in docs/cli/02-specs.md:73/188 and in the policy TSV row 'graph --follow TASK-1', now always fails. On main the None arm passed tree=false, and handle_graph_command already falls back to tree when no mode is set (graph_cmd.rs:122 else branch). Fix: pass tree=false in both None arms (or tree = follow.is_empty()), and add a regression test that runs 'graph <id> --follow <type>' through run_graph or handle_graph_command. A parse-only test would not catch this.
+    2. Cosmetic: aida-cli-lib/src/upgrade_release.rs:1191 resolve_release_bump's error still says 'specify only one of --patch / --minor / --major', naming the retired flags. It is unreachable from the CLI now that the mode is a single subcommand, but the wording should say 'patch / minor / major' (or the arm should be dropped) so the retired spelling does not linger.
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
+  created_at: 2026-11-08T02:24:05.106867Z
+  modified_at: 2026-11-08T02:24:05.106867Z
   session_id: 01a1b8be-8170-7fb2-89ab-ecb4c6eee98c
   harness_version: 2.1.319 (Claude Code)
 - id: 01a1b91a-54d0-75b3-a398-2d4165a6854b
   author: joe
   content: 'Round 3 edits address both review findings: graph dispatch leaves tree unset in both bare-ID fallback arms and has a run_graph execution regression for bare tree and --follow carved-out-to; release bump diagnostics use patch/minor/major spelling. Also removed the deleted events argument from history digest conflicts, fixing the reported Clap definition panic. Updated AGENTS.md and OVERVIEW.md. Passed rustfmt check, git diff --check, scripts/check-removed-flags.sh and tests/test_check_removed_flags.sh. Rust validation blocked: graph test job j20261108T024556940-519653-0 timed out during compilation after 900s (exit 124), no executed tests. CLI tests job j20261108T024612131-2-0 and release tests job j20261108T024635375-524851-0 remain queued. untested=true. Native seat leaves edits uncommitted for the host launcher.'
-  created_at: 2026-11-08 03:01:13.040258+00:00
-  modified_at: 2026-11-08 03:01:13.040258+00:00
+  created_at: 2026-11-08T03:01:13.040258Z
+  modified_at: 2026-11-08T03:01:13.040258Z
   session_id: 01a1b90afd9e
 - id: 01a1b977-df3b-7902-ba8d-eac0d6d5b3ac
   author: joe
   content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: Alias removal is complete across all 8 STORY-1028 families and prior-round findings are fixed, but history''s --timeline conflicts_with_all still names the deleted ''events'' arg, so clap''s debug assert panics on every history parse and full-tree build; all 7 CI jobs are red at cc858c1.. No triage reason was given.'
-  created_at: 2026-11-08 04:43:23.323894+00:00
-  modified_at: 2026-11-08 04:43:23.323894+00:00
+  created_at: 2026-11-08T04:43:23.323894Z
+  modified_at: 2026-11-08T04:43:23.323894Z
   session_id: 01a1b8be-8170-7fb2-89ab-ecb4c6eee98c
   harness_version: 2.1.319 (Claude Code)
 - id: 01a1b977-e968-7543-97f7-7f2ce515d673
   author: joe
-  content: 'REVIEW FINDINGS TO ADDRESS (TASK-1214):
-
+  content: |-
+    REVIEW FINDINGS TO ADDRESS (TASK-1214):
     Verdict: CHANGES REQUESTED
-
     Reviewed commit: cc858c1eab3f
-
     Recorded: 2026-11-08T04:34:45.961757308+00:00
-
     Findings:
-
-    1. aida-cli-lib/src/history.rs:5160: the #[clap(long, conflicts_with_all = [...])] on HistoryArgs::timeline still lists "events", but the hidden --events field was deleted in this PR. clap''s debug_asserts.rs:220 panics with "Argument or group ''events'' specified in ''conflicts_with*'' for ''timeline'' does not exist". That breaks every history invocation and every test that builds the full CLI tree (cli_arg_tree_has_no_definition_conflicts, retired_mode_flags_refuse_and_subcommands_parse, history_positional_spec_id_parses, docs_sweep::*, help_catalog::*, story_1650_history_status_flow, bug_1502_format_json_audit, journey, contracts). Round 3 fixed only the digest list at :4959. Fix: drop "events" from the timeline list, then rg every conflicts_with/requires list in the 8 touched arg structs for any other deleted field name.
-
-    2. AGENTS.md:1-5 and OVERVIEW.md:1-5: the PR prepends a per-change paragraph (''STORY-1028 mode flag aliases are retired...'') to both files. CLAUDE.md says per-change notes go in the PR body and an aida comment on the spec, not AGENTS.md/OVERVIEW.md, because each prepended paragraph conflicts with every open PR. Removing aliases is not an architecture change. Revert both hunks; the note already lives in the TASK-1214 comment.
-
+    1. aida-cli-lib/src/history.rs:5160: the #[clap(long, conflicts_with_all = [...])] on HistoryArgs::timeline still lists "events", but the hidden --events field was deleted in this PR. clap's debug_asserts.rs:220 panics with "Argument or group 'events' specified in 'conflicts_with*' for 'timeline' does not exist". That breaks every history invocation and every test that builds the full CLI tree (cli_arg_tree_has_no_definition_conflicts, retired_mode_flags_refuse_and_subcommands_parse, history_positional_spec_id_parses, docs_sweep::*, help_catalog::*, story_1650_history_status_flow, bug_1502_format_json_audit, journey, contracts). Round 3 fixed only the digest list at :4959. Fix: drop "events" from the timeline list, then rg every conflicts_with/requires list in the 8 touched arg structs for any other deleted field name.
+    2. AGENTS.md:1-5 and OVERVIEW.md:1-5: the PR prepends a per-change paragraph ('STORY-1028 mode flag aliases are retired...') to both files. CLAUDE.md says per-change notes go in the PR body and an aida comment on the spec, not AGENTS.md/OVERVIEW.md, because each prepended paragraph conflicts with every open PR. Removing aliases is not an architecture change. Revert both hunks; the note already lives in the TASK-1214 comment.
     3. Validation gap: the round-3 commit 330dde83 was pushed with Rust validation untested=true, per the TASK-1214 comment (the graph test job timed out compiling). The new run_graph regression task_1214_bare_graph_and_follow_execute and the regenerated cli_help_snapshot.txt golden have never run green. After fixing finding 1, run the targeted tests (cli::tests::, graph_cmd::tests::task_1214, the help snapshot test, story_1728 policy parity) before pushing so this round does not go out red again.
-
-    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.'
-  created_at: 2026-11-08 04:43:25.928241+00:00
-  modified_at: 2026-11-08 04:43:25.928241+00:00
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
+  created_at: 2026-11-08T04:43:25.928241Z
+  modified_at: 2026-11-08T04:43:25.928241Z
   session_id: 01a1b8be-8170-7fb2-89ab-ecb4c6eee98c
   harness_version: 2.1.319 (Claude Code)
 - id: 01a1b98b-98db-7e02-8fb4-cf0b205be706
   author: joe
   content: 'Round 4 edits: removed the dangling events argument from HistoryArgs::timeline conflicts; audited conflicts_with/requires across usage, graph, release, focus, drain, upgrade, statusline and history with no other stale references found. Removed the per-change notes from AGENTS.md and OVERVIEW.md. rustfmt check, git diff --check and tests/test_check_removed_flags.sh pass. Initial cli::tests:: lane job j20261108T044627711-1614043-0 timed out after 900 seconds during compilation after waiting for a build slot, with no executed tests. Graph/help/parity jobs and a 3600-second CLI retry remain pending; validation is not yet complete. Native seat edits remain uncommitted for host publication.'
-  created_at: 2026-11-08 05:04:56.027432+00:00
-  modified_at: 2026-11-08 05:04:56.027432+00:00
+  created_at: 2026-11-08T05:04:56.027432Z
+  modified_at: 2026-11-08T05:04:56.027432Z
   session_id: 01a1b979cc33
 - id: 01a1b99f-d7c3-7b50-b6bf-f84834a4f3e7
   author: joe
-  content: 'Round 4 final handoff: findings 1 and 2 addressed in uncommitted history.rs, AGENTS.md and OVERVIEW.md. All eight affected argument structs audited with rg; no other deleted-field conflicts/requires remain. rustfmt --check --edition 2021 aida-cli-lib/src/history.rs, git diff --check and bash tests/test_check_removed_flags.sh passed. Finding 3 remains UNMET, untested=true: CLI job j20261108T044627711-1614043-0 and graph job j20261108T044643906-1623772-0 each timed out after 900s while compiling aida-cli-lib, with zero executed tests. Latest state: help snapshot j20261108T044649889-1625856-0 running; parity j20261108T044651050-1626219-0 queued; 3600s CLI retry j20261108T050257199-2-0 queued; 3600s combined run j20261108T051801170-2-0 queued (filters cli::tests::, graph_cmd::tests::task_1214, help_surface_matches_golden_snapshot, story_1728_policy_parity_tests::). Session grant had only 9m remaining at 05:26 UTC, insufficient for remaining queued compilation. No findings disputed.
-    Native edits left uncommitted; partial Refs publication subject declared. Publication must remain vetoed until finding 3 has green executed-test evidence; host should resume the runner jobs or rerun with extended timeout.'
-  created_at: 2026-11-08 05:27:02.851635+00:00
-  modified_at: 2026-11-08 05:27:02.851635+00:00
+  content: 'Round 4 final handoff: findings 1 and 2 addressed in uncommitted history.rs, AGENTS.md and OVERVIEW.md. All eight affected argument structs audited with rg; no other deleted-field conflicts/requires remain. rustfmt --check --edition 2021 aida-cli-lib/src/history.rs, git diff --check and bash tests/test_check_removed_flags.sh passed. Finding 3 remains UNMET, untested=true: CLI job j20261108T044627711-1614043-0 and graph job j20261108T044643906-1623772-0 each timed out after 900s while compiling aida-cli-lib, with zero executed tests. Latest state: help snapshot j20261108T044649889-1625856-0 running; parity j20261108T044651050-1626219-0 queued; 3600s CLI retry j20261108T050257199-2-0 queued; 3600s combined run j20261108T051801170-2-0 queued (filters cli::tests::, graph_cmd::tests::task_1214, help_surface_matches_golden_snapshot, story_1728_policy_parity_tests::). Session grant had only 9m remaining at 05:26 UTC, insufficient for remaining queued compilation. No findings disputed. Native edits left uncommitted; partial Refs publication subject declared. Publication must remain vetoed until finding 3 has green executed-test evidence; host should resume the runner jobs or rerun with extended timeout.'
+  created_at: 2026-11-08T05:27:02.851635Z
+  modified_at: 2026-11-08T05:27:02.851635Z
   session_id: 01a1b979cc33
 - id: 01a1b9d4-80cd-74c2-a41a-2c1c2f36f396
   author: joe
-  content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: Round-4 findings fixed (stale ''events'' conflict removed; AGENTS.md/OVERVIEW.md hunks reverted; cli-0/cli-1/rest green, so the clap panic is gone), but removing the visible ''aida upgrade --check'' flag left the CLI manual and upgrade hints citing retired flags: CI contracts (CLI-manual drift-guard) and lib-0 (Run tests) are red at 4e0767b.. It was punted on: blocked-dependency: Round 4 finding 3 validation gate remains unmet (no dispute): both CLI and graph lane runs timed out after 900s compiling aida-cli-lib with zero executed tests. Snapshot is running; parity and 3600s retry jobs remain queued (IDs in final spec comment). Session grant has under 9m left, insufficient to complete queued builds. Findings 1 and 2 are fixed in three uncommitted files. Retain publication veto until the targeted CLI, graph execution, help snapshot and policy parity tests execute
-    green; host must resume extended-timeout validation before publishing.. No triage reason was given.'
-  created_at: 2026-11-08 06:24:33.997173+00:00
-  modified_at: 2026-11-08 06:24:33.997173+00:00
+  content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: Round-4 findings fixed (stale ''events'' conflict removed; AGENTS.md/OVERVIEW.md hunks reverted; cli-0/cli-1/rest green, so the clap panic is gone), but removing the visible ''aida upgrade --check'' flag left the CLI manual and upgrade hints citing retired flags: CI contracts (CLI-manual drift-guard) and lib-0 (Run tests) are red at 4e0767b.. It was punted on: blocked-dependency: Round 4 finding 3 validation gate remains unmet (no dispute): both CLI and graph lane runs timed out after 900s compiling aida-cli-lib with zero executed tests. Snapshot is running; parity and 3600s retry jobs remain queued (IDs in final spec comment). Session grant has under 9m left, insufficient to complete queued builds. Findings 1 and 2 are fixed in three uncommitted files. Retain publication veto until the targeted CLI, graph execution, help snapshot and policy parity tests execute green; host must resume extended-timeout validation before publishing.. No triage reason was given.'
+  created_at: 2026-11-08T06:24:33.997173Z
+  modified_at: 2026-11-08T06:24:33.997173Z
   session_id: 01a1b8be-8170-7fb2-89ab-ecb4c6eee98c
   harness_version: 2.1.319 (Claude Code)
 - id: 01a1b9d4-8a72-7593-8f97-7b75807b5a1d
   author: joe
-  content: 'REVIEW FINDINGS TO ADDRESS (TASK-1214):
-
+  content: |-
+    REVIEW FINDINGS TO ADDRESS (TASK-1214):
     Verdict: CHANGES REQUESTED
-
     Reviewed commit: 4e0767b309c3
-
     Recorded: 2026-11-08T05:57:52.329928193+00:00
-
     Findings:
-
-    1. docs/cli/11-dev.md:76 and :80 (the ''aida upgrade'' section) still cite `--check` (''--check first to compare current/sibling versions…'', ''--check pairs with the statusline''s version-staleness hint''). On main --check was a VISIBLE flag (#[clap(long)], not hidden); this PR removes it, so docs/cli/verify-manual.py''s flag-accuracy check fails. That is the red ''CLI-manual drift-guard (every command documented)'' step in CI (contracts). Fix: say ''aida upgrade check'' instead. scripts/check-removed-flags.sh missed it because it only matches the literal ''aida upgrade --check''. Before pushing, rescan every docs/cli section for the 8 commands for bare retired flag tokens.
-
-    2. aida-cli-lib/src/upgrade_cmd.rs:437-440 still prints ''Pass --diff to see the unreleased commits before shipping.'' ''aida upgrade --diff'' now fails at parse. Change it to name ''aida upgrade diff''. Same class: upgrade_cmd.rs:103, :169 and :267 say ''without --check''; the user ran ''aida upgrade check'', so these should read ''Run aida upgrade (not upgrade check)'' or similar. Check whether any test asserts on these strings and update it with the change.
-
-    3. CI lib-0 ''Run tests'' failed at 4e0767b (job 128640662545) and the base ff9b8c9 is green on main. The reviewer sandbox could not reach the job-log host (blob.core.windows.net denied), so the failing test is unidentified. Read the job log, fix the failure, and say in the rework comment which test it was. Likely candidates: the regenerated cli_help_snapshot.txt golden, story_1728 policy parity, or the new graph_cmd::tests::task_1214_bare_graph_and_follow_execute, none of which has yet had a green executed run (round-4 finding 3 is still unmet). Run those targeted tests green before pushing.
-
-    4. Cosmetic: retired spellings remain in prose. aida-cli-lib/src/graph_cmd.rs:1-4 module doc still describes ''--blocked-by / --blocks chains, --tree epic rollup, --impact reverse closure''. usage_cmd.rs:967 comment and :972 parse_lookback(raw, "--unused") label the ''usage unused <DURATION>'' error with the retired ''--unused'' flag; use ''unused <DURATION>'' or ''usage unused''.
-
-    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.'
-  created_at: 2026-11-08 06:24:36.466713+00:00
-  modified_at: 2026-11-08 06:24:36.466713+00:00
+    1. docs/cli/11-dev.md:76 and :80 (the 'aida upgrade' section) still cite `--check` ('--check first to compare current/sibling versions…', '--check pairs with the statusline's version-staleness hint'). On main --check was a VISIBLE flag (#[clap(long)], not hidden); this PR removes it, so docs/cli/verify-manual.py's flag-accuracy check fails. That is the red 'CLI-manual drift-guard (every command documented)' step in CI (contracts). Fix: say 'aida upgrade check' instead. scripts/check-removed-flags.sh missed it because it only matches the literal 'aida upgrade --check'. Before pushing, rescan every docs/cli section for the 8 commands for bare retired flag tokens.
+    2. aida-cli-lib/src/upgrade_cmd.rs:437-440 still prints 'Pass --diff to see the unreleased commits before shipping.' 'aida upgrade --diff' now fails at parse. Change it to name 'aida upgrade diff'. Same class: upgrade_cmd.rs:103, :169 and :267 say 'without --check'; the user ran 'aida upgrade check', so these should read 'Run aida upgrade (not upgrade check)' or similar. Check whether any test asserts on these strings and update it with the change.
+    3. CI lib-0 'Run tests' failed at 4e0767b (job 128640662545) and the base ff9b8c9 is green on main. The reviewer sandbox could not reach the job-log host (blob.core.windows.net denied), so the failing test is unidentified. Read the job log, fix the failure, and say in the rework comment which test it was. Likely candidates: the regenerated cli_help_snapshot.txt golden, story_1728 policy parity, or the new graph_cmd::tests::task_1214_bare_graph_and_follow_execute, none of which has yet had a green executed run (round-4 finding 3 is still unmet). Run those targeted tests green before pushing.
+    4. Cosmetic: retired spellings remain in prose. aida-cli-lib/src/graph_cmd.rs:1-4 module doc still describes '--blocked-by / --blocks chains, --tree epic rollup, --impact reverse closure'. usage_cmd.rs:967 comment and :972 parse_lookback(raw, "--unused") label the 'usage unused <DURATION>' error with the retired '--unused' flag; use 'unused <DURATION>' or 'usage unused'.
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
+  created_at: 2026-11-08T06:24:36.466713Z
+  modified_at: 2026-11-08T06:24:36.466713Z
   session_id: 01a1b8be-8170-7fb2-89ab-ecb4c6eee98c
   harness_version: 2.1.319 (Claude Code)
 - id: 01a1b9db-75ab-7cc2-95a3-ac991bb05767
   author: dirtlab
-  content: 'Round 5: addressed all latest review findings. Updated docs/cli/11-dev.md to use upgrade check; upgrade_cmd.rs hints now name upgrade and upgrade diff; graph/usage module prose and usage unused duration diagnostics use retained subcommands. Retrieved CI job 128640662545 logs with a writable XDG_CACHE_HOME: the failing test was queue_cmd::time_bound_flags_tests::every_time_bound_flag_is_classified, whose inventory still expected the deleted usage --unused alias. Removed that obsolete entry, retaining positional duration coverage. Rescanned docs/cli for retired tokens across all eight affected command sections; no additional stale citations found. Validation: lane job j20261108T062715717-2-0 executed 74 tests, all passed (cli::tests::, graph execution TASK-1214 regression, help snapshot, policy parity, and time_bound_flags_tests). bash tests/test_check_removed_flags.sh, bash scripts/check-removed-flags.sh, rustfmt --check for all changed Rust files, git diff --check, verify-manual.py
-    --static, and verify-manual.py 11-dev.md passed. untested=false. Five files remain uncommitted for native host publication: graph_cmd.rs, usage_cmd.rs, upgrade_cmd.rs, tests/time_bound_flags_tests.rs, docs/cli/11-dev.md. No commit/push/PR or queue completion performed; existing publication holds/punts were not cleared.'
-  created_at: 2026-11-08 06:32:09.899357+00:00
-  modified_at: 2026-11-08 06:32:09.899357+00:00
+  content: 'Round 5: addressed all latest review findings. Updated docs/cli/11-dev.md to use upgrade check; upgrade_cmd.rs hints now name upgrade and upgrade diff; graph/usage module prose and usage unused duration diagnostics use retained subcommands. Retrieved CI job 128640662545 logs with a writable XDG_CACHE_HOME: the failing test was queue_cmd::time_bound_flags_tests::every_time_bound_flag_is_classified, whose inventory still expected the deleted usage --unused alias. Removed that obsolete entry, retaining positional duration coverage. Rescanned docs/cli for retired tokens across all eight affected command sections; no additional stale citations found. Validation: lane job j20261108T062715717-2-0 executed 74 tests, all passed (cli::tests::, graph execution TASK-1214 regression, help snapshot, policy parity, and time_bound_flags_tests). bash tests/test_check_removed_flags.sh, bash scripts/check-removed-flags.sh, rustfmt --check for all changed Rust files, git diff --check, verify-manual.py --static, and verify-manual.py 11-dev.md passed. untested=false. Five files remain uncommitted for native host publication: graph_cmd.rs, usage_cmd.rs, upgrade_cmd.rs, tests/time_bound_flags_tests.rs, docs/cli/11-dev.md. No commit/push/PR or queue completion performed; existing publication holds/punts were not cleared.'
+  created_at: 2026-11-08T06:32:09.899357Z
+  modified_at: 2026-11-08T06:32:09.899357Z
   session_id: 01a1b9d5c6de
   harness_version: codex-cli 0.167.0
 - id: 01a1ba3d-d960-7f73-8852-48b780c83b0f
   author: joe
   content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: Alias removal is complete across all 8 STORY-1028 families and all round-5 findings are fixed, but this PR''s new trace marker on ReleaseArgs trips the Trace/doc-header stranding gate, so CI (gates) is red at f4ee5cc.. No triage reason was given.'
-  created_at: 2026-11-08 08:19:37.952620+00:00
-  modified_at: 2026-11-08 08:19:37.952620+00:00
+  created_at: 2026-11-08T08:19:37.952620Z
+  modified_at: 2026-11-08T08:19:37.952620Z
   session_id: 01a1b8be-8170-7fb2-89ab-ecb4c6eee98c
   harness_version: 2.1.319 (Claude Code)
 - id: 01a1ba3d-e046-73e2-a9ce-5053367efc73
   author: joe
-  content: 'REVIEW FINDINGS TO ADDRESS (TASK-1214):
-
+  content: |-
+    REVIEW FINDINGS TO ADDRESS (TASK-1214):
     Verdict: CHANGES REQUESTED
-
     Reviewed commit: f4ee5cc7eb59
-
     Recorded: 2026-11-08T08:18:41.651548945+00:00
-
     Findings:
-
-    1. BLOCKER aida-cli-lib/src/upgrade_release.rs:1981: the added `// trace:TASK-1214 | ai:codex` sits below the /// doc block of ReleaseArgs, whose header starts with a doc-less run `// trace:STORY-472` + `// trace:TASK-1721` (lines 1975-1976). That makes two trace runs where the leading run has no doc and shares no spec id with the other, which is exactly what scripts/check-trace-headers.py (find_strandings) refuses. CI (gates) step 86 "Trace/doc-header stranding gate" is the only failed step in job 128657492318; the base is green on main. Fix: move the TASK-1214 line up to directly follow line 1976 (one contiguous run), or drop it. Do not add an ALLOW_LIST entry. Re-confirm the whole gate with `python3 scripts/check-trace-headers.py`. Note the `lane_fixture_fails` lines in the launcher CI excerpt are the expected output of a deliberately failing fixture (bug_2383_seat_target_overlay_tests.rs:1190), not a defect; the step after 86 ("Docs-drift guards schedule on docs-only PRs") was skipped
-    and Build was still pending, so both still need a green run.
-
+    1. BLOCKER aida-cli-lib/src/upgrade_release.rs:1981: the added `// trace:TASK-1214 | ai:codex` sits below the /// doc block of ReleaseArgs, whose header starts with a doc-less run `// trace:STORY-472` + `// trace:TASK-1721` (lines 1975-1976). That makes two trace runs where the leading run has no doc and shares no spec id with the other, which is exactly what scripts/check-trace-headers.py (find_strandings) refuses. CI (gates) step 86 "Trace/doc-header stranding gate" is the only failed step in job 128657492318; the base is green on main. Fix: move the TASK-1214 line up to directly follow line 1976 (one contiguous run), or drop it. Do not add an ALLOW_LIST entry. Re-confirm the whole gate with `python3 scripts/check-trace-headers.py`. Note the `lane_fixture_fails` lines in the launcher CI excerpt are the expected output of a deliberately failing fixture (bug_2383_seat_target_overlay_tests.rs:1190), not a defect; the step after 86 ("Docs-drift guards schedule on docs-only PRs") was skipped and Build was still pending, so both still need a green run.
     2. COSMETIC stale retired-flag spellings left in comments, against the "delete compatibility notes" clause: aida-cli-lib/src/usage_cmd.rs:6 says `auto-complete` but no such subcommand exists (it is `drains`); usage_cmd.rs:79 and :887 `--slowest`, :910 `--health`, :923/:1298/:1303/:1354/:1389 name `--auto-complete` as the usage view selector; graph_cmd.rs:142 and :144 `--tree`. Say `aida usage slowest`, `health`, `drains` and `aida graph tree`. Leave the `--failures`/`--pattern` mentions (they are valid on `usage drains`) and the user-visible "--auto-complete runs/failures" strings at :1335/:1531 (they name the orchestrator flag on `queue work`).
-
-    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.'
-  created_at: 2026-11-08 08:19:39.718101+00:00
-  modified_at: 2026-11-08 08:19:39.718101+00:00
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
+  created_at: 2026-11-08T08:19:39.718101Z
+  modified_at: 2026-11-08T08:19:39.718101Z
   session_id: 01a1b8be-8170-7fb2-89ab-ecb4c6eee98c
   harness_version: 2.1.319 (Claude Code)
 - id: 01a1ba40-3a51-7853-81c5-e73f2abb63e9
   author: dirtlab
   content: 'Round 6: addressed both latest review findings. Moved the TASK-1214 ReleaseArgs trace into the contiguous leading trace run without an allowlist exception. Updated usage/graph comments to retained subcommand spellings, including the adjacent usage events comment; preserved valid queue work --auto-complete references and user-visible orchestrator labels. Validation passed: python3 scripts/check-trace-headers.py (reproduced one violation before the edit, zero after), bash tests/test_check_removed_flags.sh, bash scripts/check-removed-flags.sh, rustfmt --check on all three changed files, and git diff --check. This round changes comments/trace placement only; Rust behavior tests were not rerun (round 5 records 74 executed passing tests). Three files remain uncommitted: aida-cli-lib/src/upgrade_release.rs, usage_cmd.rs, graph_cmd.rs. No blockers identified in these edits. Host publication and CI remain outside this native seat; no commit, push, PR creation or queue completion performed.'
-  created_at: 2026-11-08 08:22:13.841805+00:00
-  modified_at: 2026-11-08 08:22:13.841805+00:00
+  created_at: 2026-11-08T08:22:13.841805Z
+  modified_at: 2026-11-08T08:22:13.841805Z
   session_id: 01a1ba3eedda
   harness_version: codex-cli 0.167.0
 history:
 - id: 01a1b7cd-863a-7761-9489-0e4071138ab5
   author: joe
-  timestamp: 2026-11-07 20:57:42.202408+00:00
+  timestamp: 2026-11-07T20:57:42.202408Z
   session_id: 01a1b76b-2fe7-7dd2-88d0-356fc8d96d04
   harness_version: 2.1.319 (Claude Code)
   changes: []
 - id: 01a1b7cd-918e-7e42-80fe-7af9d2d73618
   author: joe
-  timestamp: 2026-11-07 20:57:45.102091+00:00
+  timestamp: 2026-11-07T20:57:45.102091Z
   session_id: 01a1b76b-2fe7-7dd2-88d0-356fc8d96d04
   harness_version: 2.1.319 (Claude Code)
   changes:
@@ -245,20 +210,20 @@ history:
     new_value: Approved
 - id: 01a1b7d6-9a1e-7f13-9298-b35460dea8fd
   author: aida-session-start
-  timestamp: 2026-11-07 21:07:37.118160+00:00
+  timestamp: 2026-11-07T21:07:37.118160Z
   changes:
   - field_name: status
     old_value: Approved
     new_value: InProgress
 - id: 01a1b7d6-dcfe-75d0-84c6-7bba8930e524
   author: dirtlab
-  timestamp: 2026-11-07 21:07:54.238352+00:00
+  timestamp: 2026-11-07T21:07:54.238352Z
   session_id: 01a1b7d69430
   harness_version: codex-cli 0.167.0
   changes: []
 - id: 01a1b7e6-c396-76a2-876d-bcb438be9d24
   author: aida-orchestrator
-  timestamp: 2026-11-07 21:25:16.310855+00:00
+  timestamp: 2026-11-07T21:25:16.310855Z
   session_id: 01a1b7e3b9c6
   harness_version: 2.1.319 (Claude Code)
   changes:
@@ -267,7 +232,7 @@ history:
     new_value: NeedsAttention
 - id: 01a1b7e8-5a79-75a3-a588-f90850a86709
   author: joe
-  timestamp: 2026-11-07 21:27:00.473031+00:00
+  timestamp: 2026-11-07T21:27:00.473031Z
   session_id: 01a1b646-c67d-7b43-98ff-3604a53f5d1f
   harness_version: 2.1.319 (Claude Code)
   changes:
@@ -276,20 +241,20 @@ history:
     new_value: Approved
 - id: 01a1b878-cd64-74e0-bb34-fe83d6831069
   author: aida-session-start
-  timestamp: 2026-11-08 00:04:47.076742+00:00
+  timestamp: 2026-11-08T00:04:47.076742Z
   changes:
   - field_name: status
     old_value: Approved
     new_value: InProgress
 - id: 01a1b879-2478-7b21-a5d6-9764a1047b89
   author: dirtlab
-  timestamp: 2026-11-08 00:05:09.368085+00:00
+  timestamp: 2026-11-08T00:05:09.368085Z
   session_id: 01a1b878c776
   harness_version: codex-cli 0.167.0
   changes: []
 - id: 01a1b87e-890f-71b1-ac95-78bc20a384ec
   author: aida-orchestrator
-  timestamp: 2026-11-08 00:11:02.799207+00:00
+  timestamp: 2026-11-08T00:11:02.799207Z
   session_id: 01a1b87d9d5b
   harness_version: 2.1.319 (Claude Code)
   changes:
@@ -298,13 +263,13 @@ history:
     new_value: NeedsAttention
 - id: 01a1b886-f2dd-7ee2-bafd-8982a7a23b3c
   author: joe
-  timestamp: 2026-11-08 00:20:14.173483+00:00
+  timestamp: 2026-11-08T00:20:14.173483Z
   session_id: 01a1b884eb46
   harness_version: 2.1.319 (Claude Code)
   changes: []
 - id: 01a1b8f8-4912-7f50-a9bb-081a900810d3
   author: joe
-  timestamp: 2026-11-08 02:24:01.810586+00:00
+  timestamp: 2026-11-08T02:24:01.810586Z
   session_id: 01a1b8be-8170-7fb2-89ab-ecb4c6eee98c
   harness_version: 2.1.319 (Claude Code)
   changes:
@@ -313,24 +278,24 @@ history:
     new_value: Approved
 - id: 01a1b90b-068b-7731-9f11-ca04bc83cf56
   author: aida-session-start
-  timestamp: 2026-11-08 02:44:29.963986+00:00
+  timestamp: 2026-11-08T02:44:29.963986Z
   changes:
   - field_name: status
     old_value: Approved
     new_value: InProgress
 - id: 01a1b90c-01c6-71d1-8ddc-86ca3ffccfa5
   author: joe
-  timestamp: 2026-11-08 02:45:34.278655+00:00
+  timestamp: 2026-11-08T02:45:34.278655Z
   session_id: 01a1b90afd9e
   changes: []
 - id: 01a1b91b-4cba-7d90-8bb4-d01a2c172cf9
   author: joe
-  timestamp: 2026-11-08 03:02:16.506061+00:00
+  timestamp: 2026-11-08T03:02:16.506061Z
   session_id: 01a1b90afd9e
   changes: []
 - id: 01a1b96f-fadc-78e2-9db5-49f78f6a6862
   author: aida-orchestrator
-  timestamp: 2026-11-08 04:34:46.108788+00:00
+  timestamp: 2026-11-08T04:34:46.108788Z
   session_id: 01a1b96ea7c5
   harness_version: 2.1.319 (Claude Code)
   changes:
@@ -339,7 +304,7 @@ history:
     new_value: NeedsAttention
 - id: 01a1b977-df3b-7902-ba8d-eabdf4d6987c
   author: joe
-  timestamp: 2026-11-08 04:43:23.323881+00:00
+  timestamp: 2026-11-08T04:43:23.323881Z
   session_id: 01a1b8be-8170-7fb2-89ab-ecb4c6eee98c
   harness_version: 2.1.319 (Claude Code)
   changes:
@@ -348,14 +313,14 @@ history:
     new_value: Approved
 - id: 01a1b979-d709-7240-81a5-8358ef608a8f
   author: aida-session-start
-  timestamp: 2026-11-08 04:45:32.297149+00:00
+  timestamp: 2026-11-08T04:45:32.297149Z
   changes:
   - field_name: status
     old_value: Approved
     new_value: InProgress
 - id: 01a1b99f-f2cc-73f1-9f7c-83c997e0ed96
   author: joe
-  timestamp: 2026-11-08 05:27:09.772156+00:00
+  timestamp: 2026-11-08T05:27:09.772156Z
   session_id: 01a1b979cc33
   changes:
   - field_name: status
@@ -363,13 +328,13 @@ history:
     new_value: NeedsAttention
 - id: 01a1b9bc-a549-7cb2-ad20-c269fbf80cb7
   author: joe
-  timestamp: 2026-11-08 05:58:30.473263+00:00
+  timestamp: 2026-11-08T05:58:30.473263Z
   session_id: 01a1b9a8f8f1
   harness_version: 2.1.319 (Claude Code)
   changes: []
 - id: 01a1b9d4-80cd-74c2-a41a-2c096c4c1774
   author: joe
-  timestamp: 2026-11-08 06:24:33.997153+00:00
+  timestamp: 2026-11-08T06:24:33.997153Z
   session_id: 01a1b8be-8170-7fb2-89ab-ecb4c6eee98c
   harness_version: 2.1.319 (Claude Code)
   changes:
@@ -378,20 +343,20 @@ history:
     new_value: Approved
 - id: 01a1b9d5-cd04-7a93-bd80-5aea75d273e4
   author: aida-session-start
-  timestamp: 2026-11-08 06:25:59.044925+00:00
+  timestamp: 2026-11-08T06:25:59.044925Z
   changes:
   - field_name: status
     old_value: Approved
     new_value: InProgress
 - id: 01a1b9d6-359a-7782-b981-f89cf9b7c7b0
   author: dirtlab
-  timestamp: 2026-11-08 06:26:25.818491+00:00
+  timestamp: 2026-11-08T06:26:25.818491Z
   session_id: 01a1b9d5c6de
   harness_version: codex-cli 0.167.0
   changes: []
 - id: 01a1ba3d-0c3d-7640-889d-52875dac5d3f
   author: aida-orchestrator
-  timestamp: 2026-11-08 08:18:45.437196+00:00
+  timestamp: 2026-11-08T08:18:45.437196Z
   session_id: 01a1ba3aae0d
   harness_version: 2.1.319 (Claude Code)
   changes:
@@ -400,7 +365,7 @@ history:
     new_value: NeedsAttention
 - id: 01a1ba3d-d960-7f73-8852-48a5b5281e54
   author: joe
-  timestamp: 2026-11-08 08:19:37.952610+00:00
+  timestamp: 2026-11-08T08:19:37.952610Z
   session_id: 01a1b8be-8170-7fb2-89ab-ecb4c6eee98c
   harness_version: 2.1.319 (Claude Code)
   changes:
@@ -409,38 +374,44 @@ history:
     new_value: Approved
 - id: 01a1ba3e-f419-7b33-86ee-c42332e954b3
   author: aida-session-start
-  timestamp: 2026-11-08 08:20:50.329906+00:00
+  timestamp: 2026-11-08T08:20:50.329906Z
   changes:
   - field_name: status
     old_value: Approved
     new_value: InProgress
 - id: 01a1ba3f-6af4-71b3-b911-4710741e5ed5
   author: dirtlab
-  timestamp: 2026-11-08 08:21:20.756988+00:00
+  timestamp: 2026-11-08T08:21:20.756988Z
   session_id: 01a1ba3eedda
   harness_version: codex-cli 0.167.0
   changes: []
 - id: 01a1bb2d-6896-74d1-b5dc-400d058265be
   author: aida-auto-bump
-  timestamp: 2026-11-08 12:41:17.718456+00:00
+  timestamp: 2026-11-08T12:41:17.718456Z
   changes:
   - field_name: status
     old_value: InProgress
     new_value: Completed
 - id: 01a1bb33-d6fb-7cb3-a7e5-4d09c5fd73cd
   author: aida-auto-bump
-  timestamp: 2026-11-08 12:48:19.195269+00:00
+  timestamp: 2026-11-08T12:48:19.195269Z
   changes:
   - field_name: status
     old_value: InProgress
     new_value: Completed
+- id: 01a1bbc3-6663-76a0-88ca-61950d35241d
+  author: joe
+  timestamp: 2026-11-08T15:25:07.555572572Z
+  session_id: 01a1bbab-762f-7cd2-8a36-4ea9f209afce
+  harness_version: 2.1.319 (Claude Code)
+  changes: []
 processing_record:
 - id: 01a1bb33-d713-7002-97e6-d86404e9b192
-  timestamp: 2026-11-08 12:48:19.219755+00:00
+  timestamp: 2026-11-08T12:48:19.219755Z
   agent: aida
   commit_sha: d68eb4ec071092cbe9a36eb356d033c613633453
   summary: Completed via merge d68eb4ec
 implementation_info:
   implemented: false
-  completed_at: 2026-11-08 12:48:19.195263+00:00
+  completed_at: 2026-11-08T12:48:19.195263Z
   completion_sha: d68eb4ec071092cbe9a36eb356d033c613633453
