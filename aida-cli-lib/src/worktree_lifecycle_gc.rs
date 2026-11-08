@@ -583,6 +583,28 @@ fn rotate_inventory(items: &mut [(PathBuf, bool)], after: Option<&Path>) {
     }
 }
 
+// Only scheduled reports consume the weekly scan-order hint. Piped advisor
+// previews keep a stable start and cannot move the next scheduled window.
+// trace:TASK-1222 | ai:codex
+fn scheduled_scan(environment: &aida_core::exec_context::Environment) -> bool {
+    environment.var("AIDA_SCHEDULE_CHILD") == Ok("1")
+}
+
+// trace:TASK-1222 | ai:codex
+fn save_scan_cursor(cursor: &Path, scheduled: bool, last: Option<&Path>) -> Result<()> {
+    if !scheduled {
+        return Ok(());
+    }
+    if let Some(last) = last {
+        // Atomic replacement avoids following a cursor symlink.
+        use std::io::Write;
+        let mut file = tempfile::NamedTempFile::new_in(cursor.parent().unwrap())?;
+        file.write_all(&serde_json::to_vec(last)?)?;
+        file.persist(cursor).map_err(|e| e.error)?;
+    }
+    Ok(())
+}
+
 pub(crate) fn run(apply: bool, json: bool, fail_on_findings: bool) -> Result<()> {
     let invoking = crate::find_project_root()?;
     let main = crate::worktree_gc::main_worktree_root_from(&invoking);
@@ -595,10 +617,11 @@ pub(crate) fn run(apply: bool, json: bool, fail_on_findings: bool) -> Result<()>
         crate::resolve_default_branch_ref(&main).context("cannot resolve default branch")?;
     let mut inventory = inventory(&main)?;
     let autonomous = crate::doctor_cmd::doctor_running_autonomously(&main);
+    let scheduled = scheduled_scan(&aida_core::exec_context::Environment::capture());
     let cursor = main.join(".aida/worktree-gc-cursor.json");
     let after: Option<PathBuf> = aida_core::seat_clone_detect::read_regular_file(&cursor)
         .and_then(|body| serde_json::from_str(&body).ok());
-    if autonomous {
+    if scheduled {
         rotate_inventory(&mut inventory, after.as_deref());
     }
     let total = inventory.len();
@@ -612,21 +635,10 @@ pub(crate) fn run(apply: bool, json: bool, fail_on_findings: bool) -> Result<()>
             .map(|(p, c)| inspect(&main, &p, c, &default))
             .collect()
     };
-    if autonomous {
-        if let Some(last) = rows.last() {
-            // Atomic replacement avoids following a cursor symlink. A failed
-            // hint write is visible but cannot discard scan results.
-            let saved = (|| -> Result<()> {
-                use std::io::Write;
-                let mut file = tempfile::NamedTempFile::new_in(cursor.parent().unwrap())?;
-                file.write_all(&serde_json::to_vec(&last.path)?)?;
-                file.persist(&cursor).map_err(|e| e.error)?;
-                Ok(())
-            })();
-            if let Err(error) = saved {
-                eprintln!("warning: GC scan cursor not saved: {error:#}");
-            }
-        }
+    // A failed hint write is visible but cannot discard scan results.
+    if let Err(error) = save_scan_cursor(&cursor, scheduled, rows.last().map(|r| r.path.as_path()))
+    {
+        eprintln!("warning: GC scan cursor not saved: {error:#}");
     }
     let remaining = total - rows.len();
     let eligible = rows.iter().filter(|r| r.eligible).count();
@@ -812,6 +824,35 @@ mod tests {
         git_ok(&tree, &["add", "-f", ".gitmodules"]);
         git_ok(&tree, &["commit", "-qm", "tracked modules"]);
         assert!(!inspect_with(&main, &tree, false, "origin/main", &mut closed).eligible);
+    }
+
+    #[test]
+    fn task_1222_only_scheduled_scans_consume_weekly_cursor() {
+        // trace:TASK-1222.ac14b158 | ai:codex
+        use aida_core::exec_context::Environment;
+        assert!(!scheduled_scan(&Environment::default()));
+        let temp = tempfile::tempdir().unwrap();
+        let cursor = temp.path().join("cursor.json");
+        save_scan_cursor(&cursor, true, Some(Path::new("tree-029"))).unwrap();
+        let previous = std::fs::read(&cursor).unwrap();
+        // A piped advisor preview must not change the next weekly window.
+        save_scan_cursor(&cursor, false, Some(Path::new("tree-059"))).unwrap();
+        assert_eq!(std::fs::read(&cursor).unwrap(), previous);
+        save_scan_cursor(&cursor, true, None).unwrap();
+        assert_eq!(std::fs::read(&cursor).unwrap(), previous);
+        save_scan_cursor(&cursor, true, Some(Path::new("tree-059"))).unwrap();
+        let after: PathBuf = serde_json::from_slice(&std::fs::read(&cursor).unwrap()).unwrap();
+        let mut inventory = vec![
+            (PathBuf::from("tree-000"), false),
+            (PathBuf::from("tree-060"), false),
+        ];
+        rotate_inventory(&mut inventory, Some(&after));
+        assert_eq!(inventory[0].0, Path::new("tree-060"));
+        for (value, expected) in [("1", true), ("0", false), ("", false)] {
+            let environment =
+                Environment::from_pairs([("AIDA_SCHEDULE_CHILD".into(), value.into())]);
+            assert_eq!(scheduled_scan(&environment), expected);
+        }
     }
 
     #[test]

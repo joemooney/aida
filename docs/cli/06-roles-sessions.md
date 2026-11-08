@@ -194,7 +194,9 @@ and unattended contexts refuse removal. The legacy `--yes --force` combination
 also requests removal through the same gate. Unattended scans have a soft budget
 and report partial counts plus the number of deferred entries; a partial scheduled
 scan routes to the advisor. A runtime cursor resumes after the last inspected path
-on the next unattended scan, so each scan advances by its inspected count.
+on the next scheduled scan, so each weekly report advances by its inspected count.
+Ad-hoc previews (including piped `--json` runs) start at the sorted inventory
+head and leave the weekly cursor unchanged.
 Interactive host scans inspect the full inventory.
 Byte walks are bounded; incomplete estimates are flagged and do not affect eligibility. Byte totals are lower bounds when estimates are incomplete.
 The weekly report replaces the former monthly guard.
@@ -219,7 +221,8 @@ a secondary remote, a seat-written tracking ref or a host-only branch cannot
 excuse unpushed commits. Origin-advertised PR/MR head refs can
 cover a published head after a squash merge deletes its source branch. An open
 PR on a reused branch prevents the PR-based cleanup proof. Missing forge evidence
-retains the tree.
+retains the tree. Reviewer checkouts named `pr-N` resolve GitHub PR N directly;
+the response must still match that number, repository and exact checkout HEAD.
 
 Before removal, GC rechecks identity, HEAD, branch, ownership and eligibility,
 then uses the existing mailbox-retention and process-holder teardown guards.

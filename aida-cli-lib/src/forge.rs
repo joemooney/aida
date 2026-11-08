@@ -7456,6 +7456,16 @@ pub(crate) fn observe_gc_branch_closed(root: &Path, branch: &str, head: &str) ->
     let mut cmd = forge_read_command(&binary);
     cmd.current_dir(root).stdin(std::process::Stdio::null());
     match kind {
+        ForgeKind::GitHub if gc_reviewer_pr_number(branch).is_some() => {
+            // Reviewer checkouts use a local alias, not the forge head ref.
+            cmd.args([
+                "pr",
+                "view",
+                &gc_reviewer_pr_number(branch).unwrap().to_string(),
+                "--json",
+                "number,state,headRefName,headRefOid,isCrossRepository",
+            ]);
+        }
         ForgeKind::GitHub => {
             cmd.args([
                 "pr",
@@ -7496,10 +7506,38 @@ pub(crate) fn observe_gc_branch_closed(root: &Path, branch: &str, head: &str) ->
             String::from_utf8_lossy(&out.stderr)
         ));
     }
-    match parse_gc_branch_closed(&out.stdout, kind, branch, head) {
+    let closed = match (kind, gc_reviewer_pr_number(branch)) {
+        (ForgeKind::GitHub, Some(number)) => parse_gc_reviewer_pr_closed(&out.stdout, number, head),
+        _ => parse_gc_branch_closed(&out.stdout, kind, branch, head),
+    };
+    match closed {
         Some(value) => Observed::Known(value),
         None => Observed::Transient("invalid or truncated GC forge history".into()),
     }
+}
+
+// trace:TASK-1222 | ai:codex
+fn gc_reviewer_pr_number(branch: &str) -> Option<u64> {
+    let suffix = branch.strip_prefix("pr-")?;
+    let number: u64 = suffix.parse().ok()?;
+    (number > 0 && number.to_string() == suffix).then_some(number)
+}
+
+// Number lookup alone grants no authority: validate the response identity,
+// same-repository lifecycle and exact checked-out HEAD through the usual parser.
+// trace:TASK-1222 | ai:codex
+fn parse_gc_reviewer_pr_closed(body: &[u8], number: u64, head: &str) -> Option<bool> {
+    let row: serde_json::Value = serde_json::from_slice(body).ok()?;
+    if row.get("number")?.as_u64()? != number {
+        return None;
+    }
+    let branch = row.get("headRefName")?.as_str()?;
+    parse_gc_branch_closed(
+        &serde_json::to_vec(&vec![&row]).ok()?,
+        ForgeKind::GitHub,
+        branch,
+        head,
+    )
 }
 
 // trace:TASK-1222 | ai:codex
@@ -7569,6 +7607,33 @@ mod task_1222_gc_forge_tests {
         assert_eq!(parse(serde_json::json!(vec![row; 100])), None);
         assert_eq!(parse(serde_json::json!([])), Some(false));
     }
+    #[test]
+    fn task_1222_gc_reviewer_alias_pins_number_repository_and_exact_head() {
+        // trace:TASK-1222.acfbfd06 | ai:codex
+        assert_eq!(gc_reviewer_pr_number("pr-3647"), Some(3647));
+        for branch in ["pr-0", "pr-01", "pr-+1", "pr-1-extra", "task-3647"] {
+            assert_eq!(gc_reviewer_pr_number(branch), None);
+        }
+        let row = serde_json::json!({"number":3647,"state":"MERGED", "headRefName":"task-1222", "headRefOid":"abc", "isCrossRepository":false});
+        let parse = |row: &serde_json::Value| {
+            parse_gc_reviewer_pr_closed(&serde_json::to_vec(row).unwrap(), 3647, "abc")
+        };
+        assert_eq!(parse(&row), Some(true));
+        for (field, value, expected) in [
+            ("state", serde_json::json!("CLOSED"), Some(true)),
+            ("state", serde_json::json!("OPEN"), Some(false)),
+            ("headRefOid", serde_json::json!("different"), Some(false)),
+            ("isCrossRepository", serde_json::json!(true), Some(false)),
+            ("number", serde_json::json!(3648), None),
+            ("headRefOid", serde_json::Value::Null, None),
+        ] {
+            let mut changed = row.clone();
+            changed[field] = value;
+            assert_eq!(parse(&changed), expected, "{field}");
+        }
+        assert_eq!(parse(&serde_json::json!({})), None);
+    }
+
     #[test]
     fn task_1222_gc_gitlab_requires_same_project_and_head() {
         let row = serde_json::json!({"state":"closed", "source_branch":"task-1", "sha":"abc", "source_project_id":1,"target_project_id":1});
