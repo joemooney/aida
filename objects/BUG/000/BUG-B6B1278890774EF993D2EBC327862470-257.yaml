@@ -18,7 +18,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-08T02:46:34.549817284Z
-modified_at: 2026-11-08T11:46:51.794491109Z
+modified_at: 2026-11-08T11:46:56.119387354Z
 req_type: Bug
 tags:
 - area:ci
@@ -200,6 +200,27 @@ comments:
   content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: Round 5''s classifier, status jq and doc findings are fixed, but release --after-pr now aborts at 300s on normal CI, the PR title still completes the spec at merge, criterion anchors are not recognized, shipped skill watchers never exit on a held PR, and CI at this head has not finished.. No triage reason was given.'
   created_at: 2026-11-08T11:46:51.794489297Z
   modified_at: 2026-11-08T11:46:51.794489297Z
+  session_id: 01a1b9af-8230-75d2-82f8-667491cc010a
+  harness_version: 2.1.319 (Claude Code)
+- id: 01a1bafb-a392-72d3-b16e-4ce03cc4f181
+  author: joe
+  content: |-
+    REVIEW FINDINGS TO ADDRESS (BUG-2492):
+    Verdict: CHANGES REQUESTED
+    Reviewed commit: 5f8bfa8650f1
+    Recorded: 2026-11-08T11:44:26.924185593+00:00
+    Findings:
+    1. Regression: aida-cli-lib/src/upgrade_release.rs:1672-1677 gives release --after-pr a fixed 300-second CI budget. The previous wait lasted until checks finished, and docs/cli/11-dev.md:62 still promises to wait for the PR's checks. This repo's PR CI runs far longer (run 42467241644: created 09:27, updated 11:03 UTC, including queueing), so a normal --after-pr call on a PR with CI running now fails with a CiTimeout error. Fix: use crate::ci_idle_timeout::ci_absolute_ceiling_secs(&merge_root), as the train wait does at pr_train.rs:2604, which keeps the bound. bug2492_release_after_pr_pending_wait_is_bounded only exercises Duration::ZERO; assert the budget actually passed.
+    2. Completion contradiction still open (round 5 finding 4): the PR title still ends '(BUG-2492)', which completes the spec at merge, while docs/internal/testing/bug-2492-status-cutover.md requires a trailing '(Refs BUG-2492)' and forbids Completed until live outputs are attached. The implementer handed this to the host and it has not happened. Fix: retitle PR #3651 before merge.
+    3. AC traceability still open (round 5 finding 6): aida criteria run in this worktree still lists all five criteria as untraced. The anchors in tests/test_merge_hold_gate.sh sit above the helper github_gate(), but scan_shell_test_file (aida-cli-lib/src/criteria.rs:565) only attributes traces to 'Test <n>:' info/echo sections or test_*() functions, and this script has neither. Fix: put the criterion anchors in recognized sections or on bug2492_* tests, and anchor only what each test covers. AC1, AC2 and AC4 fixtures prove only the status/exit split, per the comment at that block.
+    4. Regression in shipped skill watchers: aida-core/templates/skills/aida-fire.md:296 runs 'gh pr checks N --watch --fail-fast' as a background wait with no timeout. A held PR used to exit promptly on the red gate; with a permanent pending status the watcher never exits and the fire session is never notified. aida-core/templates/skills/aida-orchestrate.md:373 has the same shape (--required --watch --fail-fast, no timeout), and its line 387 stop rule keys on red. skills-portable already uses 'timeout 540' and re-runs. Fix: bound these watchers or check hold labels first, and update the stop rule to cover pending.
+    5. Minor: aida-cli-lib/src/pipeline_stall.rs:1010 hold_gate_blocking treats any pending merge-hold-gate as a hold without checking labels, unlike ci_probe.rs and pr_list.rs in this PR. pipeline_stall.rs:1141 then tells the operator 'merge hold; aida merge-hold auto-release/clear' for an unheld PR during the transient Inspecting window. bug2492_pending_hold_status_blocks_readiness_without_red_ci_or_logs pins this with labels:[]. Fix: use the same label evidence for the blocker text and keep readiness false.
+    6. Cosmetic: stale wording that the hold gate is red or fails remains at aida-cli-lib/src/gate/pr_ship_batch.rs:381 (named in round 3 finding 5) and in the pr_train.rs hold_release_admitted doc and train_ci_snapshot comment ('the hold gate fails within seconds').
+    7. AC1/AC2/AC4 live evidence is still outstanding, as an operator action rather than a code defect: no raw gh pr merge refusal, web-UI refusal under app pin 15368, unchanged-SHA label-only pending-to-success, or failure-mail observation is on the spec. Keep BUG-2492 open until the runbook outputs are attached.
+    8. CI incomplete at the reviewed head: at 2026-11-08T11:42Z, run 42476368761 (CI) was queued with cli-0 in progress, merge-hold-gate run 42476368880 was pending with no jobs, and 5f8bfa8 had no commit statuses or check runs. The last completed green CI was at 3447fd6. The next approval needs green CI at its exact head.
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
+  created_at: 2026-11-08T11:46:56.018645339Z
+  modified_at: 2026-11-08T11:46:56.018645339Z
   session_id: 01a1b9af-8230-75d2-82f8-667491cc010a
   harness_version: 2.1.319 (Claude Code)
 history:
