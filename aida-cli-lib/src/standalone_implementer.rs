@@ -347,9 +347,9 @@ pub(crate) use crate::headless_background::{resume_log_path, SeatState, Unshippe
 /// hold, a stall, or a seat git cannot read keeps its lease.
 // trace:BUG-2436 | ai:claude
 pub(crate) fn finished_lease_ends(outcome: &Outcome, seat: &SeatState) -> bool {
-    matches!(outcome, Outcome::PrOpened { .. })
-        && seat.uncommitted == Some(0)
-        && seat.pushed_head().is_some()
+    seat.uncommitted == Some(0)
+        && (matches!(outcome, Outcome::NoChange)
+            || (matches!(outcome, Outcome::PrOpened { .. }) && seat.pushed_head().is_some()))
 }
 
 /// BUG-2436: end a finished lane's lease the way the drain's phase 2 does,
@@ -664,12 +664,56 @@ pub(crate) fn provision_signals(worktree: &Path, spec: &str) -> Result<(PathBuf,
     Ok((punt, hold))
 }
 
+/// Reconcile seat-local runtime evidence before publication or lease cleanup.
+// trace:BUG-2488 | ai:codex
+pub(crate) fn reconcile_signals(main: &Path, tree: &Path, spec: &str) -> Result<()> {
+    if main.canonicalize()? == tree.canonicalize()? {
+        return Ok(());
+    }
+    if let Some(signal) = crate::punt::read_signal(&crate::punt::signal_path(tree, spec)) {
+        crate::punt::write_signal(&crate::punt::signal_path(main, spec), &signal)?;
+    }
+    if let Some(signal) = crate::punt::read_hold_signal(&crate::punt::hold_signal_path(tree, spec))
+    {
+        crate::punt::write_hold_signal(&crate::punt::hold_signal_path(main, spec), &signal)?;
+    }
+    let mut existing = crate::punt::read_ledger(main);
+    for record in crate::punt::read_ledger(tree)
+        .into_iter()
+        .filter(|r| r.spec == spec)
+    {
+        if !existing.contains(&record) {
+            crate::punt::append_to_ledger(main, &record)?;
+            existing.push(record);
+        }
+    }
+    Ok(())
+}
+
+/// Classify only successful, unpublished native runs as unchanged.
+// trace:BUG-2488 | ai:codex
+pub(crate) fn classify_no_change(
+    outcome: Outcome,
+    success: bool,
+    has_commits: impl FnOnce() -> Result<bool>,
+) -> Result<Outcome> {
+    if matches!(outcome, Outcome::NoPr) && success && !has_commits()? {
+        Ok(Outcome::NoChange)
+    } else {
+        Ok(outcome)
+    }
+}
+
 /// Run the child, wait, classify, print the result line, and return the
 /// outcome's exit code (`Ok` only for an open PR).
 pub(crate) fn run(launch: Launch<'_>) -> Result<()> {
     let main_root = crate::main_worktree_root_from(launch.project_root);
     claim_spec(launch.project_root, launch.spec);
     let worktree = lease_worktree(launch.project_root, launch.lease_id);
+    // A resumed/new attempt must not inherit the prior host-side veto.
+    // Held-resume admission has already consumed the persisted hold marker.
+    // trace:BUG-2488 | ai:codex
+    provision_signals(&main_root, launch.spec)?;
     let (punt_signal, hold_signal) = provision_signals(&worktree, launch.spec)?;
     // BUG-2383: the lane job runner, so the seat can run its tests here,
     // outside its 60-second tool-call cap. trace:BUG-2383 | ai:claude
@@ -837,6 +881,7 @@ pub(crate) fn run(launch: Launch<'_>) -> Result<()> {
         resumes,
         log: run_log,
     } = finished?;
+    reconcile_signals(&main_root, &worktree, launch.spec)?;
     store_commit.commit();
 
     // Publish before reading the final seat state or ending its lease. A punt
@@ -856,12 +901,9 @@ pub(crate) fn run(launch: Launch<'_>) -> Result<()> {
         )?;
         outcome = classify(None, None, || lookup_pr(launch.project_root, launch.branch));
         // trace:BUG-2488 | ai:codex
-        if matches!(outcome, Outcome::NoPr)
-            && status.success()
-            && !crate::seat_clone::has_commits_beyond_base(&main_root, &worktree)?
-        {
-            outcome = Outcome::NoChange;
-        }
+        outcome = classify_no_change(outcome, status.success(), || {
+            crate::seat_clone::has_commits_beyond_base(&main_root, &worktree)
+        })?;
     }
 
     // trace:BUG-B6B1278890774EF993D2EBC327862470-044 | ai:claude
@@ -900,7 +942,7 @@ pub(crate) fn run(launch: Launch<'_>) -> Result<()> {
     if finished_lease_ends(&outcome, &seat) {
         if let Err(e) = end_finished_lease(launch.project_root, launch.lease_id) {
             eprintln!(
-                "{} the PR is open but lease {} was kept: {e:#}. End it with \
+                "{} the lane finished but lease {} was kept: {e:#}. End it with \
                  `aida session end {} --yes --skip-ci` so its review can start.",
                 "Warning:".yellow().bold(),
                 launch.lease_id,

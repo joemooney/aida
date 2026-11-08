@@ -114,3 +114,29 @@ fn a_refused_session_end_is_an_error_not_a_panic() {
         "{err:#}"
     );
 }
+
+// trace:BUG-2488 | ai:codex
+#[test]
+fn bug_2488_no_change_ends_only_a_readable_clean_seat() {
+    assert!(finished_lease_ends(
+        &Outcome::NoChange,
+        &seat(OriginHead::Absent, Some(0))
+    ));
+    for dirty in [None, Some(1)] {
+        assert!(!finished_lease_ends(
+            &Outcome::NoChange,
+            &seat(OriginHead::Absent, dirty)
+        ));
+    }
+    assert!(matches!(
+        classify_no_change(Outcome::NoPr, false, || panic!(
+            "failed exit must not be reclassified"
+        ))
+        .unwrap(),
+        Outcome::NoPr
+    ));
+    assert!(matches!(
+        classify_no_change(Outcome::NoPr, true, || Ok(true)).unwrap(),
+        Outcome::NoPr
+    ));
+}

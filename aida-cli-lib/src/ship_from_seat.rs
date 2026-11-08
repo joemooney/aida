@@ -503,6 +503,10 @@ pub(crate) fn publish_queue_exit(
 ) -> Result<()> {
     let main = crate::main_worktree_root_from(main);
     // trace:BUG-2488 | ai:codex
+    if publication_veto(&main, spec) {
+        return Ok(());
+    }
+    crate::standalone_implementer::reconcile_signals(&main, tree, spec)?;
     if publication_veto(tree, spec) {
         return Ok(());
     }
@@ -532,7 +536,7 @@ pub(crate) fn publish_queue_exit(
         || crate::seat_clone::probe(&main, tree),
         publish,
         || {
-            if no_change()? {
+            if skip_unchanged_notice(clean_exit, no_change)? {
                 eprintln!("implementer: no-change (seat has no commits beyond its base)");
                 return Ok(());
             }
@@ -550,10 +554,27 @@ pub(crate) fn publish_queue_exit(
     )
 }
 
+// Failed exits must still ask the advisor even when no work was produced.
+// trace:BUG-2488 | ai:codex
+fn skip_unchanged_notice(
+    clean_exit: bool,
+    no_change: impl FnOnce() -> Result<bool>,
+) -> Result<bool> {
+    Ok(clean_exit && no_change()?)
+}
+
+#[cfg(test)]
+#[test]
+fn bug_2488_failed_unchanged_exit_retains_advisor_notice() {
+    assert!(!skip_unchanged_notice(false, || panic!("failed exit must notify")).unwrap());
+    assert!(skip_unchanged_notice(true, || Ok(true)).unwrap());
+    assert!(!skip_unchanged_notice(true, || Ok(false)).unwrap());
+}
+
 // These effects are injected at the publication boundary so tests exercise
 // the same veto, probe and dispatch as all three lane exit paths.
 // trace:STORY-2475 | ai:codex
-fn publish_queue_exit_with(
+pub(crate) fn publish_queue_exit_with(
     main: &Path,
     spec: &str,
     commit: impl FnOnce() -> PostExitCommit,
@@ -1543,7 +1564,7 @@ fn run_from_with_reconciliation(
     // trace:BUG-2488 | ai:codex
     // An unchanged seat cannot produce a nonempty bundle. Inspect before
     // invoking the bundler, including direct host publication retries.
-    if !crate::seat_clone::has_commits_beyond_base(&main, &seat.root)? {
+    if !crate::seat_clone::branch_has_commits_beyond_base(&seat, &branch)? {
         println!("implementer: no-change (seat has no commits beyond its base)");
         return Ok(());
     }

@@ -1508,7 +1508,6 @@ pub(crate) fn head_has_unpushed_commits(main: &Path, clone: &Path) -> Option<boo
 /// Whether the leased branch contains work beyond the host-pinned seat base.
 // trace:BUG-2488 | ai:codex
 pub(crate) fn has_commits_beyond_base(main: &Path, clone: &Path) -> Result<bool> {
-    let base = pinned_base(main, clone).context("could not read seat base pin")?;
     let root = clone.canonicalize()?;
     let lease = crate::list_leases(main)
         .into_iter()
@@ -1520,7 +1519,19 @@ pub(crate) fn has_commits_beyond_base(main: &Path, clone: &Path) -> Result<bool>
                     .is_ok_and(|path| path == root)
         })
         .context("could not read seat branch lease")?;
-    let branch = format!("refs/heads/{}", lease.branch);
+    let seat = host_recorded_clone(main, clone).context("could not validate seat clone")?;
+    branch_has_commits_beyond_base(&seat, &lease.branch)
+}
+
+// trace:BUG-2488 | ai:codex
+pub(crate) fn branch_has_commits_beyond_base(
+    seat: &HostRecordedClone,
+    branch: &str,
+) -> Result<bool> {
+    let main = &seat.main;
+    let clone = &seat.root;
+    let base = pinned_base(main, clone).context("could not read seat base pin")?;
+    let branch = format!("refs/heads/{branch}");
     let out = run_sandboxed_until(
         clone,
         main,
@@ -2030,6 +2041,11 @@ pub(crate) fn is_runtime_noise_entry(clone: &Path, line: &str) -> bool {
         || path.starts_with(".aida/cache-db/")
         || path == ".aida/agents"
         || path.starts_with(".aida/agents/")
+        // Mirrored by the host before successful no-change lease cleanup.
+        // trace:BUG-2488 | ai:codex
+        || path == ".aida/punts.jsonl"
+        || path.starts_with(".aida/punt-signals/")
+        || path.starts_with(".aida/pr-holds/")
         || path == "target"
         || path.starts_with("target/")
 }

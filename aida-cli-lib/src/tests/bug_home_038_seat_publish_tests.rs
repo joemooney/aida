@@ -2842,6 +2842,16 @@ fn bug_2488_native_signals_reach_host_and_unchanged_seat_never_bundles() {
     // Missing host spec/intent is deliberate: the writable-seat veto must
     // prevent even post-exit commit preparation, not merely the push.
     crate::ship_from_seat::publish_queue_exit(&fx.main, &clone, spec, "lane", true).unwrap();
+    crate::ship_from_seat::publish_queue_exit_with(
+        &fx.main,
+        spec,
+        || panic!("punt must suppress commit"),
+        || panic!("punt must suppress probe"),
+        || panic!("punt must suppress bundle/push/forge"),
+        || panic!("punt must suppress notification"),
+    )
+    .unwrap();
+    std::fs::remove_file(crate::punt::signal_path(&fx.main, spec)).unwrap();
     std::fs::remove_file(punt).unwrap();
     let forge = crate::forge::fake::RecordingForge::new();
     let deps = crate::ship_from_seat::Deps {
@@ -2853,7 +2863,12 @@ fn bug_2488_native_signals_reach_host_and_unchanged_seat_never_bundles() {
     assert!(!crate::seat_clone::has_commits_beyond_base(&fx.main, &clone).unwrap());
     crate::ship_from_seat::run_from(&fx.main, opts(&clone, false, false), &deps).unwrap();
     let (line, code) = crate::standalone_implementer::report(
-        &crate::standalone_implementer::Outcome::NoChange,
+        &crate::standalone_implementer::classify_no_change(
+            crate::standalone_implementer::Outcome::NoPr,
+            true,
+            || crate::seat_clone::has_commits_beyond_base(&fx.main, &clone),
+        )
+        .unwrap(),
         Some(0),
         None,
     );
@@ -2873,4 +2888,71 @@ fn bug_2488_native_signals_reach_host_and_unchanged_seat_never_bundles() {
         ],
     );
     assert!(crate::seat_clone::has_commits_beyond_base(&fx.main, &clone).unwrap());
+}
+
+// trace:BUG-2488 | ai:codex
+#[test]
+fn bug_2488_standalone_hold_survives_seat_and_allows_held_resume() {
+    let main = tempfile::tempdir().unwrap();
+    let tree = tempfile::tempdir().unwrap();
+    let spec = "BUG-2488";
+    let (_, hold) = crate::standalone_implementer::provision_signals(tree.path(), spec).unwrap();
+    crate::punt::write_hold_signal(
+        &hold,
+        &crate::punt::HoldSignal {
+            spec: spec.into(),
+            branch: "held-branch".into(),
+            reason: Some("manual gate".into()),
+            spec_key: None,
+        },
+    )
+    .unwrap();
+    let record: crate::punt::PuntRecord = serde_json::from_value(serde_json::json!({
+        "timestamp": "2026-11-07T20:00:00Z", "spec": spec,
+        "category": "design-fork", "detail": "choose design", "resolution_path": "punted"
+    }))
+    .unwrap();
+    // Write the child ledger directly, independent of telemetry preference.
+    std::fs::write(
+        crate::punt::ledger_path(tree.path()),
+        format!("{}\n", serde_json::to_string(&record).unwrap()),
+    )
+    .unwrap();
+    crate::standalone_implementer::reconcile_signals(main.path(), tree.path(), spec).unwrap();
+    crate::standalone_implementer::reconcile_signals(main.path(), tree.path(), spec).unwrap();
+    drop(tree);
+    let marker = crate::punt::read_hold_signal(&crate::punt::hold_signal_path(main.path(), spec));
+    assert!(crate::queue_cmd::held_resume_reentry_allowed(
+        true,
+        &aida_core::RequirementStatus::Done,
+        marker.is_some()
+    ));
+    // Ledger retention follows the existing telemetry policy.
+    if crate::usage::is_enabled(Some(main.path())) {
+        assert_eq!(crate::punt::read_ledger(main.path()), vec![record]);
+    }
+}
+
+// trace:BUG-2488 | ai:codex
+#[test]
+fn bug_2488_only_untracked_handshake_runtime_is_noise() {
+    let root = tempfile::tempdir().unwrap();
+    for path in [
+        ".aida/punts.jsonl",
+        ".aida/punt-signals/BUG-2488.json",
+        ".aida/pr-holds/BUG-2488.json",
+    ] {
+        assert!(crate::seat_clone::is_runtime_noise_entry(
+            root.path(),
+            &format!("? {path}")
+        ));
+        assert!(!crate::seat_clone::is_runtime_noise_entry(
+            root.path(),
+            &format!("1 .M {path}")
+        ));
+    }
+    assert!(!crate::seat_clone::is_runtime_noise_entry(
+        root.path(),
+        "? .aida/important-work"
+    ));
 }
