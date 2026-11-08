@@ -3,12 +3,12 @@ spec_id: TASK-1214
 agreed_id: TASK-1214
 title: Remove STORY-1028 hidden CLI aliases
 description: Remove the one-release hidden compatibility aliases for STORY-1028's mode-selecting flag migrations after the next minor release ships. Delete legacy parser flags, compatibility notes, and alias tests, then tighten the removed-flags guard if needed.
-status: InProgress
+status: NeedsAttention
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-09-12T03:06:57.441067647Z
-modified_at: 2026-11-08T05:27:02.851635154Z
+modified_at: 2026-11-08T05:27:09.772137723Z
 req_type: Task
 tags:
 - cli
@@ -254,3 +254,16 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a1b99f-f2cc-73f1-9f7c-83c997e0ed96
+  author: joe
+  timestamp: 2026-11-08T05:27:09.772156025Z
+  session_id: 01a1b979cc33
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: NeedsAttention
+attention_reason:
+  category: blocked-dependency
+  detail: 'Round 4 finding 3 validation gate remains unmet (no dispute): both CLI and graph lane runs timed out after 900s compiling aida-cli-lib with zero executed tests. Snapshot is running; parity and 3600s retry jobs remain queued (IDs in final spec comment). Session grant has under 9m left, insufficient to complete queued builds. Findings 1 and 2 are fixed in three uncommitted files. Retain publication veto until the targeted CLI, graph execution, help snapshot and policy parity tests execute green; host must resume extended-timeout validation before publishing.'
+  raised_by: implementer
+  raised_at: 2026-11-08T05:27:09.772137723Z
