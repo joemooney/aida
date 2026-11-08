@@ -161,6 +161,67 @@ impl ProcIdentity {
     }
 }
 
+/// Advisory compatibility evidence for incomplete local registry rows.
+/// This never supplies a full identity or authorizes a reader. Namespace
+/// admission and a verified procfs view precede absence/start-time checks.
+// trace:TASK-3366 | ai:codex
+pub fn observe_legacy_registry(pid: u32, start: Option<&str>, namespace: Option<u64>) -> Verdict {
+    let unknown = || Verdict::ForeignUnknown(UnknownReason::MissingIdentity);
+    // These values cannot name a Linux process in any namespace.
+    if pid == 0 || pid > i32::MAX as u32 {
+        return Verdict::Dead(DeadReason::Absent);
+    }
+    if !crate::pid_observer::PidObserver::current().can_observe(namespace) {
+        return Verdict::ForeignUnknown(UnknownReason::NamespaceMismatch);
+    }
+    if LocalView::read().is_err() {
+        return Verdict::ForeignUnknown(UnknownReason::IncompleteProcfs);
+    }
+    let root = Path::new("/proc");
+    match read_stat(root, pid) {
+        Ok(StatRead::Missing) => Verdict::Dead(DeadReason::Absent),
+        Ok(StatRead::Found { state, .. }) if is_exited(state) => Verdict::Dead(DeadReason::Exited),
+        Ok(StatRead::Found { start_ticks, .. }) => {
+            if let Some(recorded) = start {
+                if let Some((boot, ticks)) = crate::process_probe::parse_start_identity(recorded) {
+                    if !valid_boot_id(boot) {
+                        return unknown();
+                    }
+                    let Ok(current) = boot_id(root) else {
+                        return unknown();
+                    };
+                    if current != boot {
+                        return Verdict::Dead(DeadReason::Reboot);
+                    }
+                    if ticks != start_ticks {
+                        return Verdict::Dead(DeadReason::Reused);
+                    }
+                    return Verdict::Alive;
+                } else if let Some(ticks) = recorded
+                    .strip_prefix("linux-starttime:")
+                    .and_then(|ticks| ticks.parse::<u64>().ok())
+                {
+                    if ticks != start_ticks {
+                        return Verdict::Dead(DeadReason::Reused);
+                    }
+                    return Verdict::Alive;
+                } else if chrono::DateTime::parse_from_rfc3339(recorded).is_ok() {
+                    // Historical wall-clock starts retain their existing comparison
+                    // adapter, after local coordinate admission. Advisory only.
+                    if crate::liveness::process_provably_dead(pid, Some(recorded)) {
+                        return Verdict::Dead(DeadReason::Reused);
+                    }
+                    if crate::liveness::process_identity_matches_strict(pid, recorded) {
+                        return Verdict::Alive;
+                    }
+                }
+            }
+            unknown()
+        }
+        Err(why) => Verdict::ForeignUnknown(UnknownReason::Unreadable(why)),
+    }
+}
+
 /// Coordinate/provenance admission always precedes the numeric PID lookup.
 /// The closure supplies only a process observation, never holder admission.
 pub fn judge(

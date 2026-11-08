@@ -249,8 +249,6 @@ struct RegistryRow {
     role: Option<String>,
     #[serde(default)]
     mail_wake: Option<String>,
-    #[serde(default)]
-    last_active_at: Option<chrono::DateTime<chrono::Utc>>,
 }
 
 /// Why a registry row was not accepted as this process's session binding.
@@ -289,9 +287,10 @@ impl SessionBindingFacts {
     /// process: its process is this process or an ancestor (start identity
     /// matching when recorded), or its native session id is this process's
     /// own (hook payload or that vendor's session variable), or, for a
-    /// Claude row, `CLAUDE_PID` names it. A native session match with a
-    /// heartbeat no older than five minutes also survives an observer namespace
-    /// mismatch; this private-inbox policy does not admit watched-mail readers.
+    /// Claude row, `CLAUDE_PID` names it. A native session match also survives
+    /// an observer namespace mismatch.
+    /// SessionStart hooks do not heartbeat continuously, so this private-inbox
+    /// policy uses explicit ending, not heartbeat age; it never admits watchers.
     pub fn verify(row: &Path, env: &IdentityEnv) -> Result<Self, BindingRefusal> {
         Self::verify_with(row, env, |id| crate::proc_identity::observe(id, true))
     }
@@ -320,27 +319,28 @@ impl SessionBindingFacts {
             .flatten()
             .any(|sid| !sid.trim().is_empty() && env.owns_session(&vendor, sid));
         let by_claude_pid = vendor == "claude" && env.claude_pid == Some(parsed.pid);
-        if !(by_session || by_claude_pid || is_self_or_ancestor(&parsed)) {
+        let by_ancestry = is_self_or_ancestor(&parsed);
+        if !(by_session || by_claude_pid || by_ancestry) {
             return Err(BindingRefusal::NotThisProcess);
         }
-        // A sandbox cannot observe host PID coordinates. A fresh native session
-        // binding can retain inbox access on namespace mismatch only; numeric PID
-        // selection, dead processes and incomplete records remain insufficient.
+        // A sandbox cannot observe host PID coordinates. A native session binding
+        // retains its private inbox on namespace mismatch until explicit ending.
+        // Numeric PID selection alone never grants that exception.
         // trace:TASK-3366 | ai:codex
         let identity = crate::proc_identity::ProcIdentity::from_registry(
             parsed.pid,
             parsed.pid_start.as_deref(),
             parsed.pid_namespace,
         )
+        .or_else(|| {
+            by_ancestry
+                .then(|| capture_ancestor_identity(&parsed))
+                .flatten()
+        })
         .ok_or(BindingRefusal::NotLive)?;
         let verdict = observe(&identity);
-        let fresh_session = by_session
-            && parsed.last_active_at.is_some_and(|at| {
-                let age = chrono::Utc::now().signed_duration_since(at).num_seconds();
-                (0..=300).contains(&age)
-            });
         if verdict != crate::proc_identity::Verdict::Alive
-            && !(fresh_session
+            && !(by_session
                 && verdict
                     == crate::proc_identity::Verdict::ForeignUnknown(
                         crate::proc_identity::UnknownReason::NamespaceMismatch,
@@ -504,8 +504,21 @@ fn is_self_or_ancestor(row: &RegistryRow) -> bool {
         row.pid,
         row.pid_start.as_deref(),
         chain.iter().map(|p| p.identity.pid),
-        |pid, start| registry_process_live(pid, start, row.pid_namespace),
+        |_, _| capture_ancestor_identity(row).is_some(),
     )
+}
+
+// Positively capture only a self/ancestor selected by the local process chain.
+// Both legacy ticks and boot-qualified starts must match; a foreign namespace
+// or a missing/unknown start can never borrow the current numeric PID.
+// trace:TASK-3366 | ai:codex
+fn capture_ancestor_identity(row: &RegistryRow) -> Option<crate::proc_identity::ProcIdentity> {
+    let id = crate::proc_identity::ProcIdentity::capture(row.pid).ok()?;
+    if row.pid_namespace.is_some_and(|ns| ns != id.pidns_inode) {
+        return None;
+    }
+    let start = row.pid_start.as_deref()?;
+    (start == id.legacy().start || start == id.legacy_ticks_start()).then_some(id)
 }
 
 /// [`is_self_or_ancestor`] over an explicit ancestry and identity matcher.

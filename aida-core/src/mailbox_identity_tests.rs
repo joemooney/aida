@@ -670,13 +670,20 @@ fn proc_identity_s4_foreign_observer_session_binding() {
         SessionBindingFacts::verify_with(&path, &env, |_| Verdict::Dead(DeadReason::Reused)),
         Err(BindingRefusal::NotLive)
     );
-    let stale = body.replace(
+    // SessionStart-only rows keep their private inbox through long tool turns.
+    let aged = body.replace(
         &chrono::Utc::now().format("%Y-%m-%d").to_string(),
         "2020-01-01",
     );
-    std::fs::write(&path, stale).unwrap();
+    std::fs::write(&path, &aged).unwrap();
+    assert!(SessionBindingFacts::verify_with(&path, &env, foreign).is_ok());
+    std::fs::write(
+        &path,
+        format!("{aged}\nended_at = \"2026-11-01T00:00:00Z\"\n"),
+    )
+    .unwrap();
     assert_eq!(
         SessionBindingFacts::verify_with(&path, &env, foreign),
-        Err(BindingRefusal::NotLive)
+        Err(BindingRefusal::Ended)
     );
 }

@@ -754,7 +754,7 @@ aida-core/src/liveness.rs|walk_live_agent_processes|typed:Claude	1
 aida-core/src/liveness.rs|walk_live_agent_processes|typed:Codex	1
 aida-core/src/mailbox_identity.rs|impl(IdentityEnv:)::observed|literal:claude	1
 aida-core/src/mailbox_identity.rs|impl(IdentityEnv:)::observed|literal:codex	2
-aida-core/src/mailbox_identity.rs|impl(SessionBindingFacts:)::verify|literal:claude	1
+aida-core/src/mailbox_identity.rs|impl(SessionBindingFacts:)::verify_with|literal:claude	1
 aida-core/src/mailbox_identity.rs|normalize_agent_type|literal:antigravity	2
 aida-core/src/mailbox_identity.rs|normalize_agent_type|literal:claude	2
 aida-core/src/mailbox_identity.rs|normalize_agent_type|literal:codex	2

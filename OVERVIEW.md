@@ -1802,6 +1802,16 @@ identity never authorizes signalling, including orphaned group members adopted
 by an unrelated subreaper.
 <!-- trace:TASK-3365 | ai:codex -->
 
+Registry and mail-wake readers use namespace-qualified ProcIdentity evidence.
+Incomplete legacy registry rows can still prove absence, exit or start mismatch
+from a verified local procfs view; they never supply positive authorization.
+Private inbox binding positively captures a legacy self/ancestor only when its
+recorded start matches and its namespace is compatible. Native-session matches
+retain private inbox access across observer namespace mismatch until an explicit
+end, without a heartbeat-age cutoff: SessionStart/status hooks do not guarantee
+continuous heartbeats. Watchers still require a full, positively live tuple.
+<!-- trace:TASK-3366 | ai:codex -->
+
 The TASK-1750 ratchet inventories compatibility consumers in
 `proc_identity_legacy_baseline.json` and prevents new private PID/start
 decisions. See the signed

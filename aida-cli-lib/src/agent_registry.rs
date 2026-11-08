@@ -2687,7 +2687,19 @@ pub(crate) fn observed_liveness_from(
     if !observer.can_observe(entry.pid_namespace) {
         return None;
     }
-    match entry_process_verdict(entry) {
+    // Legacy matches retain advisory listing/capacity behavior without lending
+    // a full identity to signalling, replacement or watched-mail admission.
+    let verdict = if entry.process_identity().is_none() && !entry.id.starts_with("proc-identity-v")
+    {
+        proc_identity::observe_legacy_registry(
+            entry.pid,
+            entry.pid_start.as_deref(),
+            entry.pid_namespace,
+        )
+    } else {
+        entry_process_verdict(entry)
+    };
+    match verdict {
         Verdict::Alive => Some(registry_entry_is_live(project_root, entry)),
         Verdict::Dead(_) => Some(false),
         Verdict::ForeignUnknown(_) => None,
@@ -2762,11 +2774,23 @@ fn entry_process_alive(entry: &AgentRegistryEntry) -> bool {
 }
 
 // Registry files are local runtime records, never replicated node evidence.
-// Missing legacy coordinates stay unknown; inspection never recaptures an old PID.
+// Incomplete legacy rows supply negative evidence only; never recapture an old PID.
 // trace:TASK-3366 | ai:codex
 fn entry_process_verdict(entry: &AgentRegistryEntry) -> Verdict {
-    entry.process_identity().map_or(
-        Verdict::ForeignUnknown(proc_identity::UnknownReason::MissingIdentity),
+    if entry.id.starts_with("proc-identity-v") {
+        return Verdict::ForeignUnknown(proc_identity::UnknownReason::MissingIdentity);
+    }
+    entry.process_identity().map_or_else(
+        || match proc_identity::observe_legacy_registry(
+            entry.pid,
+            entry.pid_start.as_deref(),
+            entry.pid_namespace,
+        ) {
+            Verdict::Alive => {
+                Verdict::ForeignUnknown(proc_identity::UnknownReason::MissingIdentity)
+            }
+            verdict => verdict,
+        },
         |id| proc_identity::observe(&id, true),
     )
 }
@@ -3692,6 +3716,45 @@ mod tests {
             .unwrap()
             .join("retired")
             .exists());
+    }
+
+    // trace:TASK-3366 | ai:codex
+    #[test]
+    #[cfg(target_os = "linux")]
+    fn proc_identity_s4_legacy_rows_prove_death_without_authorizing_liveness() {
+        let pid = std::process::id();
+        let identity = ProcIdentity::capture(pid).unwrap();
+        let mut row = entry_with(pid, Utc::now());
+        row.pid_namespace = None;
+        for start in [
+            None,
+            Some(identity.legacy_ticks_start()),
+            Some(identity.legacy().start),
+        ] {
+            row.pid_start = start;
+            assert!(matches!(
+                entry_process_verdict(&row),
+                Verdict::ForeignUnknown(_)
+            ));
+        }
+        row.pid_namespace = Some(identity.pidns_inode);
+        row.pid_start = Some(format!("linux-starttime:{}", identity.starttime + 1));
+        assert_eq!(
+            entry_process_verdict(&row),
+            Verdict::Dead(proc_identity::DeadReason::Reused)
+        );
+        row.pid_namespace = Some(identity.pidns_inode ^ 1);
+        assert!(matches!(
+            entry_process_verdict(&row),
+            Verdict::ForeignUnknown(_)
+        ));
+        row.pid_namespace = None;
+        row.pid = i32::MAX as u32;
+        row.pid_start = None;
+        assert_eq!(
+            entry_process_verdict(&row),
+            Verdict::Dead(proc_identity::DeadReason::Absent)
+        );
     }
 
     // trace:TASK-3366 | ai:codex
