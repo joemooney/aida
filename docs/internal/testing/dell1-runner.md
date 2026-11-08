@@ -31,7 +31,7 @@ at a time; measure whether this actually improves train wait before expanding.
    SSH keys, Codex auth or AIDA grants outside it. Never copy these into CI.
 3. Install systemd, build-essential, git, curl, python3, pkg-config,
    protobuf-compiler, libxcb-render0-dev, libxcb-shape0-dev, libxcb-xfixes0-dev,
-   libxkbcommon-dev, libssl-dev, libgtk-3-dev, bubblewrap, ripgrep, zstd and zsh.
+   libxkbcommon-dev, libssl-dev, libgtk-3-dev, bubblewrap, ripgrep, zstd, jq, openssh-client and zsh.
    Install the runner distribution's .NET runtime prerequisites as needed.
    CI installs Rust into the disposable job HOME. Ensure at least eight CPUs
    numbered 0–7 are available; change the reviewed cpuset if dell1 differs.
@@ -55,7 +55,10 @@ at a time; measure whether this actually improves train wait before expanding.
    same fresh `/dev` and `/proc` mounts as those tests; self-hosted jobs set
    `AIDA_REQUIRE_BWRAP_LIVE=1` so supported live-test failures cannot skip. There is
    no host credential/environment projection. Root owns the distribution and
-   job parent; each job gets a fresh home/work directory. A shared slice caps
+   job parent; each job gets a wiped home/work directory at the fixed
+   `/var/lib/aida-ci-jobs/current` path. The exclusive launcher lock prevents
+   overlap. Stable absolute paths let main-branch pushes warm reusable dell1
+   Rust caches; no previous job files survive locally. A shared slice caps
    all runners to eight cores (800% quota and CPU set 0–7). This is a host
    process sandbox, with host network access; do not give it secrets.
 
@@ -101,8 +104,8 @@ failure. Ctrl-C stops it. Start this supervisor before enabling routing and keep
 it active while enabled: each PR needs four successive registrations. There is
 no unattended credential service installed by this change.
 Use the GitHub UI to remove orphan registrations if setup fails. After a host
-crash, remove inactive `aida-ci-*` services and stale `/var/lib/aida-ci-jobs/job.*`
-directories before registering again. Preserve relevant diagnostics first.
+crash, remove inactive `aida-ci-*` services and stale `/var/lib/aida-ci-jobs/current`
+directory (and legacy `job.*` directories) before registering again. Preserve relevant diagnostics first.
 
 Enable with repository variable `AIDA_DELL1_CI=true` only after verification.
 During a smoke run, record `systemctl show aida-ci.slice -p CPUQuotaPerSecUSec

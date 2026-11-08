@@ -146,7 +146,7 @@ class LauncherRefusals(unittest.TestCase):
         import os
         import subprocess
         import tempfile
-        for failure in ('root', 'sudo', 'home', 'auth', 'zstd'):
+        for failure in ('root', 'sudo', 'home', 'auth', 'zstd', 'jq', 'ssh-keygen'):
             with self.subTest(failure=failure), tempfile.TemporaryDirectory() as directory:
                 root = Path(directory)
                 home = root / 'operator'
@@ -156,13 +156,13 @@ class LauncherRefusals(unittest.TestCase):
                 script = (ROOT / 'scripts/runner/check-prerequisites.sh').read_text()
                 script = script.replace('/home/dirtlab/.codex/auth.json', str(auth) if failure == 'auth' else str(root / 'absent'))
                 script = script.replace('/home/dirtlab', str(home) if failure == 'home' else str(root / 'absent'))
-                for name in ('cc', 'git', 'curl', 'python3', 'pkg-config', 'protoc', 'zsh', 'rg', 'bwrap', 'zstd', 'sudo', 'id'):
+                for name in ('cc', 'git', 'curl', 'python3', 'pkg-config', 'protoc', 'zsh', 'rg', 'bwrap', 'zstd', 'jq', 'ssh-keygen', 'sudo', 'id'):
                     body = 'exit 0'
                     if name == 'id':
                         body = 'echo ' + ('0' if failure == 'root' else '1001')
                     if name == 'sudo':
                         body = 'exit ' + ('0' if failure == 'sudo' else '1')
-                    if name == 'zstd' and failure == 'zstd':
+                    if name == failure and failure in ('zstd', 'jq', 'ssh-keygen'):
                         continue
                     path = root / name
                     path.write_text('#!/bin/sh\n' + body + '\n')
@@ -172,7 +172,8 @@ class LauncherRefusals(unittest.TestCase):
                 self.assertNotEqual(result.returncode, 0)
                 expected = {'root': 'unprivileged', 'sudo': 'sudo access',
                             'home': 'home is traversable', 'auth': 'auth is readable',
-                            'zstd': 'missing tool: zstd'}[failure]
+                            'zstd': 'missing tool: zstd', 'jq': 'missing tool: jq',
+                            'ssh-keygen': 'missing tool: ssh-keygen'}[failure]
                 self.assertIn(expected, result.stderr)
 
     def test_rearm_generates_fresh_configs_and_stops_on_failure(self):
@@ -199,6 +200,24 @@ class LauncherRefusals(unittest.TestCase):
             self.assertNotEqual(result.returncode, 0)
             self.assertEqual(count.read_text().splitlines(), ['fresh-jit'] * 2)
             self.assertEqual(received.read_text().splitlines(), ['fresh-jit'] * 2)
+
+    def test_job_paths_are_stable_and_wiped_under_lock(self):
+        launcher = (ROOT / 'scripts/runner/one-job.sh').read_text()
+        self.assertIn('state=/var/lib/aida-ci-jobs/current', launcher)
+        self.assertNotIn('mktemp', launcher)
+        self.assertIn('HOME="$state/home"', launcher)
+        self.assertIn('WorkingDirectory="$state"', launcher)
+        lock = launcher.index('flock -n 9')
+        prepare = launcher.index('systemctl stop "$unit.service" || {')
+        wipe = launcher.index('rm -rf -- "$state"', prepare)
+        create = launcher.index('install -d -m 0700 "$state"')
+        copy = launcher.index('cp -a "$runner_source/." "$state/"')
+        self.assertLess(lock, prepare)
+        self.assertLess(prepare, launcher.index('trap cleanup EXIT'))
+        self.assertLess(launcher.index('trap cleanup EXIT'), wipe)
+        self.assertLess(wipe, create)
+        self.assertLess(create, copy)
+        self.assertIn('refuse "cannot stop previous job unit', launcher)
 
     def test_idle_wait_does_not_consume_job_execution_budget(self):
         launcher = (ROOT / 'scripts/runner/one-job.sh').read_text()

@@ -22,15 +22,26 @@ IFS= read -r jit || refuse "missing JIT configuration"
 [ -n "$jit" ] || refuse "empty JIT configuration"
 # Only one invocation may run; the user must traverse the root-owned parent.
 install -d -m 0711 /var/lib/aida-ci-jobs
-state=$(mktemp -d /var/lib/aida-ci-jobs/job.XXXXXXXX)
-unit="aida-ci-${state##*.}"
+# Cache versions include absolute HOME/workspace paths. Keep those stable while
+# removing all previous job content under the exclusive launcher lock.
+state=/var/lib/aida-ci-jobs/current
+unit=aida-ci-current
 cleanup() {
     systemctl stop "$unit.service" >/dev/null 2>&1 || true
     rm -rf -- "$state"
 }
+# Reconcile a service left by an interrupted launcher before reusing its path.
+# A failed stop must refuse reuse rather than delete a possibly live workspace.
+systemctl stop "$unit.service" || {
+    status=$?
+    # systemctl uses 5 for a unit that has never been loaded.
+    [ "$status" -eq 5 ] || refuse "cannot stop previous job unit (exit $status)"
+}
 trap cleanup EXIT
 trap 'exit 130' INT
 trap 'exit 143' TERM
+rm -rf -- "$state"
+install -d -m 0700 "$state"
 cp -a "$runner_source/." "$state/"
 mkdir "$state/home"
 chown -R "$runner_user:$runner_user" "$state"

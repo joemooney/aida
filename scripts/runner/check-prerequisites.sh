@@ -3,7 +3,7 @@
 set -euo pipefail
 refuse() { echo "Runner prerequisite refused: $*" >&2; exit 1; }
 [ "$(id -u)" -ne 0 ] || refuse "runner must be unprivileged"
-for tool in cc git curl python3 pkg-config protoc zsh rg bwrap zstd; do
+for tool in cc git curl python3 pkg-config protoc zsh rg bwrap zstd jq ssh-keygen; do
     command -v "$tool" >/dev/null || refuse "missing tool: $tool"
 done
 pkg-config --exists openssl gtk+-3.0 xcb-render xcb-shape xcb-xfixes xkbcommon || refuse "missing build libraries"
