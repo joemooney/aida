@@ -1481,7 +1481,7 @@ fn bug_2490_rebase_continuation_refuses_invalid_resolved_index() {
     assert!(rebase_in_progress(&store));
     // Simulate a manual resolution that clears unmerged stages but is invalid.
     std::fs::write(store.join(path), "title: []\n").unwrap();
-    add(&store, &[path]).unwrap();
+    stage_resolved_paths(&store, &[path]).unwrap();
     let error = rebase_auto_merge_onto(&store, "incoming")
         .unwrap_err()
         .to_string();

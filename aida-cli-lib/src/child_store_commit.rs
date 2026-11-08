@@ -413,6 +413,7 @@ mod tests {
 
     fn git(store: &Path, args: &[&str]) {
         let st = aida_core::git_ops::host_git_command(store)
+            .args(["-c", "maintenance.auto=false", "-c", "gc.auto=0"])
             .args(args)
             .status()
             .unwrap();
@@ -433,7 +434,14 @@ mod tests {
         git(&store, &["add", "."]);
         git(&store, &["commit", "-qm", "local"]);
         let merge = aida_core::git_ops::host_git_command(&store)
-            .args(["merge", "incoming"])
+            .args([
+                "-c",
+                "maintenance.auto=false",
+                "-c",
+                "gc.auto=0",
+                "merge",
+                "incoming",
+            ])
             .output()
             .unwrap();
         assert!(!merge.status.success());
@@ -449,6 +457,62 @@ mod tests {
             .unwrap();
         assert!(unmerged.status.success());
         assert!(String::from_utf8_lossy(&unmerged.stdout).contains("objects/old.yaml"));
+    }
+
+    // trace:BUG-2490 | ai:codex
+    #[test]
+    fn bug_2490_child_commit_preserves_non_object_and_modify_delete_conflicts() {
+        for path in ["registry/queues/test.yaml", "objects/old.yaml"] {
+            let (_tmp, store) = store_fixture();
+            let baseline = StoreBaseline::capture(&store);
+            let hash = aida_core::git_ops::host_git_command(&store)
+                .args(["rev-parse", "HEAD:objects/old.yaml"])
+                .output()
+                .unwrap();
+            assert!(hash.status.success());
+            let hash = String::from_utf8(hash.stdout).unwrap();
+            // A single stage-2 entry models a modify/delete conflict.
+            let mut child = aida_core::git_ops::host_git_command(&store)
+                .args(["update-index", "--index-info"])
+                .stdin(std::process::Stdio::piped())
+                .spawn()
+                .unwrap();
+            use std::io::Write;
+            writeln!(
+                child.stdin.take().unwrap(),
+                "0 {}\t{path}\n100644 {} 2\t{path}",
+                "0".repeat(40),
+                hash.trim()
+            )
+            .unwrap();
+            assert!(child.wait().unwrap().success());
+            std::fs::create_dir_all(store.join(path).parent().unwrap()).unwrap();
+            std::fs::write(
+                store.join(path),
+                if path.starts_with("objects/") {
+                    object("repaired")
+                } else {
+                    "<<<<<<< unresolved\n".into()
+                },
+            )
+            .unwrap();
+            let read = |args: &[&str]| {
+                aida_core::git_ops::host_git_command(&store)
+                    .args(args)
+                    .output()
+                    .unwrap()
+                    .stdout
+            };
+            let before = read(&["ls-files", "--unmerged"]);
+            let head = read(&["rev-parse", "HEAD"]);
+            let error = commit_store_writes_since(&store, &baseline, "reviewer").unwrap_err();
+            assert!(
+                error.to_string().contains("unmerged store paths"),
+                "{error:#}"
+            );
+            assert_eq!(read(&["ls-files", "--unmerged"]), before);
+            assert_eq!(read(&["rev-parse", "HEAD"]), head);
+        }
     }
 
     /// Only paths changed after the baseline are committed: a new file, a

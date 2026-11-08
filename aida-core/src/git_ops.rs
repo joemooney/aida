@@ -1434,7 +1434,18 @@ pub fn protect_roster_advisors(store: &Path) -> Result<Vec<String>> {
 
 /// Stage specific files.
 pub fn add(repo: &Path, paths: &[&str]) -> Result<()> {
-    refuse_embedded_repos(repo)?; // trace:BUG-1929 | ai:claude
+    // Preserve conflict stages before git add can implicitly resolve them.
+    // trace:BUG-2490 | ai:codex
+    if is_store_tree(repo) {
+        refuse_unmerged_store_paths(repo)?;
+    }
+    stage_resolved_paths(repo, paths)
+}
+
+// Only structured conflict resolvers may deliberately replace unmerged stages.
+// trace:BUG-2490 | ai:codex
+fn stage_resolved_paths(repo: &Path, paths: &[&str]) -> Result<()> {
+    refuse_embedded_repos(repo)?;
     ensure_index_lock_clear_for_write(repo, 10, 100)?;
     let mut args = vec!["add"];
     args.extend(paths);
@@ -1447,7 +1458,13 @@ pub fn add(repo: &Path, paths: &[&str]) -> Result<()> {
 
 /// Stage all changes (tracked and untracked) in a subdirectory.
 pub fn add_all(repo: &Path, subdir: &str) -> Result<()> {
-    refuse_embedded_repos(repo)?; // trace:BUG-1929 | ai:claude
+    // trace:BUG-1929 | ai:claude
+    refuse_embedded_repos(repo)?;
+    // Preserve conflict stages before git add can implicitly resolve them.
+    // trace:BUG-2490 | ai:codex
+    if is_store_tree(repo) {
+        refuse_unmerged_store_paths(repo)?;
+    }
     ensure_index_lock_clear_for_write(repo, 10, 100)?;
     let result = git_with_index_lock_retry(repo, &["add", "-A", subdir])?;
     if !result.success {
@@ -2229,7 +2246,7 @@ fn rebase_auto_merge_onto(repo: &Path, target: &str) -> Result<StorePullOutcome>
             };
             match resolved {
                 Ok(note) => {
-                    add(repo, &[path])
+                    stage_resolved_paths(repo, &[path])
                         .with_context(|| format!("git add {path} after auto-merge"))?;
                     notes.push(note);
                 }
@@ -2845,7 +2862,8 @@ fn merge_union_onto(repo: &Path, ref_: &str, message: &str) -> Result<StorePullO
         };
         match resolved {
             Ok(note) => {
-                add(repo, &[path]).with_context(|| format!("git add {path} after auto-union"))?;
+                stage_resolved_paths(repo, &[path])
+                    .with_context(|| format!("git add {path} after auto-union"))?;
                 notes.push(note);
             }
             Err(e) => {
@@ -7511,7 +7529,8 @@ pub fn validate_store_index(repo: &Path) -> Result<()> {
     validate_store_index_paths(repo, None)
 }
 
-fn validate_store_index_paths(repo: &Path, paths: Option<&[&str]>) -> Result<()> {
+// trace:BUG-2490 | ai:codex
+fn refuse_unmerged_store_paths(repo: &Path) -> Result<()> {
     let unmerged = git(repo, &["ls-files", "--unmerged"])?;
     anyhow::ensure!(
         unmerged.success,
@@ -7523,6 +7542,11 @@ fn validate_store_index_paths(repo: &Path, paths: Option<&[&str]>) -> Result<()>
         "unmerged store paths; resolve before committing: {}",
         unmerged.stdout
     );
+    Ok(())
+}
+
+fn validate_store_index_paths(repo: &Path, paths: Option<&[&str]>) -> Result<()> {
+    refuse_unmerged_store_paths(repo)?;
     let mut command = host_git_command(repo);
     command.args([
         "diff",

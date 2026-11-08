@@ -3883,6 +3883,54 @@ mod tests {
     }
     use super::*;
 
+    // trace:BUG-2490 | ai:codex
+    #[test]
+    fn bug_2490_backend_save_preserves_unmerged_index() {
+        let dir = tempfile::tempdir().unwrap();
+        let root = dir.path().join(".aida-store");
+        let backend = home_fixture_backend(&root).unwrap().with_auto_commit(true);
+        crate::git_ops::init(&root).unwrap();
+        crate::git_ops::configure_user(&root, "fixture", "fixture@localhost").unwrap();
+        let store = backend.load().unwrap();
+        backend.save(&store).unwrap();
+        let run = |args: &[&str]| {
+            let out = crate::git_ops::host_git_command(&root)
+                .args(args)
+                .output()
+                .unwrap();
+            assert!(out.status.success(), "{args:?}: {:?}", out);
+            out.stdout
+        };
+        // A surviving non-object conflict must fence even an unrelated save.
+        let hash = String::from_utf8(run(&["rev-parse", "HEAD:metadata.yaml"])).unwrap();
+        let mut child = crate::git_ops::host_git_command(&root)
+            .args(["update-index", "--index-info"])
+            .stdin(std::process::Stdio::piped())
+            .spawn()
+            .unwrap();
+        use std::io::Write;
+        writeln!(
+            child.stdin.take().unwrap(),
+            "100644 {} 2\toplog.yaml",
+            hash.trim()
+        )
+        .unwrap();
+        assert!(child.wait().unwrap().success());
+        let before = run(&["ls-files", "--unmerged"]);
+        let head = run(&["rev-parse", "HEAD"]);
+        for error in [
+            crate::git_ops::add(&root, &["metadata.yaml"]).unwrap_err(),
+            crate::git_ops::add_all(&root, "metadata.yaml").unwrap_err(),
+        ] {
+            assert!(error.to_string().contains("oplog.yaml"), "{error:#}");
+        }
+        let mut store = store;
+        store.name = "pending change".into();
+        backend.save(&store).unwrap(); // Writes remain pending on auto-commit refusal.
+        assert_eq!(run(&["ls-files", "--unmerged"]), before);
+        assert_eq!(run(&["rev-parse", "HEAD"]), head);
+    }
+
     #[test]
     fn test_git_backend_create_and_load_empty() {
         let dir = tempfile::tempdir().unwrap();
