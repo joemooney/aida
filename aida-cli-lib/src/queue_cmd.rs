@@ -7895,6 +7895,9 @@ impl ReworkFlags<'_> {
         if self.force {
             v.push("--force");
         }
+        // Compatibility spelling only: handle_rework_entry refuses this before
+        // spec_scoped or the queue-work pass-through can see steal=true.
+        // trace:STORY-2325 | ai:codex
         if self.steal {
             v.push("--steal");
         }
@@ -8757,7 +8760,7 @@ pub(crate) fn handle_queue_rework(
             /* stack */ false,
             /* base */ None,
             /* force_base */ false,
-            steal,
+            /* steal is unreachable: handle_queue_rework refuses it at entry */ false,
             /* force */ false,
             /* force_claim */ false,
             // Bare `--resume` → resume the scope's most recent recorded
@@ -13268,7 +13271,7 @@ pub(crate) fn handle_queue_work(
             ) {
                 crate::pr_lease_takeover::LeaseEndAction::SafeEnd => {
                     eprintln!(
-                        "  {} lease {}'s session has exited and its seat on `{}` is clean and already in the PR — ending it",
+                        "  {} lease {}'s session has exited and its seat on `{}` is clean and fully covered by origin — ending it",
                         crate::glyph(crate::glyphs::Glyph::Info).cyan(),
                         &conflict.id[..conflict.id.len().min(8)],
                         conflict.branch
@@ -16356,17 +16359,20 @@ pub(crate) fn handle_queue_recover(
     }
 
     // --- Execution. ---
-    // All recovery actions may end or relaunch the lane. Refresh death proof
-    // immediately before dispatch; a prior inspection is not a reclaim grant.
+    // Refresh death proof only when the confirmed action ends the lease.
+    // Pulling, pushing, parking WIP and driving an existing PR do not reclaim it.
     // trace:STORY-2325 | ai:codex
-    if let Some(lease) = &lease {
-        crate::ownership::reader::journal_reclaim(&project_root, lease).with_context(|| {
-            format!(
-                "ownership reclaim could not end lease {}; inspect `aida session end {}`",
-                lease.id, lease.id
-            )
-        })?;
-    }
+    let journal_reclaim = || -> Result<()> {
+        if let Some(lease) = &lease {
+            crate::ownership::reader::journal_reclaim(&project_root, lease).with_context(|| {
+                format!(
+                    "ownership reclaim could not end lease {}; inspect `aida session end {}`",
+                    lease.id, lease.id
+                )
+            })?;
+        }
+        Ok(())
+    };
     let aida = crate::aida_exe_path();
     // Helper: run an `aida` subcommand from the project root, surfacing its
     // exit code. Non-zero leaves the state visible for manual resume.
@@ -16411,6 +16417,7 @@ pub(crate) fn handle_queue_recover(
                 spec
             );
             if state.lease_held && confirm("end the leaked lease for this spec?") {
+                journal_reclaim()?;
                 let _ = run_aida(&["session", "end", &spec]);
             }
         }
@@ -16422,6 +16429,7 @@ pub(crate) fn handle_queue_recover(
             );
             let _ = run_aida(&["pull"]);
             if state.lease_held && confirm("end the leaked lease for this spec?") {
+                journal_reclaim()?;
                 let _ = run_aida(&["session", "end", &spec]);
             }
         }
@@ -16556,6 +16564,7 @@ pub(crate) fn handle_queue_recover(
                 return Ok(());
             }
             if state.lease_held {
+                journal_reclaim()?;
                 let _ = run_aida(&["session", "end", &spec]);
             }
             // Re-queue for the spec's owner. queue add is advisor-gated in

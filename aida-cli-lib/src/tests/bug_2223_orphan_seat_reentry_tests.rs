@@ -1023,6 +1023,8 @@ fn queue_recover_dry_run_inspects_live_and_unknown_ownership_without_mutation() 
     let (storage, _) = queued_scope(&fx.main, scope);
     crate::test_env::write_project_config_fixture(&fx.main, "store_path = \".aida-store\"\n");
     let lease = orphaned_worktree(&fx.main, scope);
+    // With no WIP, execution takes EndAndRequeue, which really ends a lease.
+    std::fs::remove_file(lease.worktree_path.join("wip.txt")).unwrap();
     let req = storage
         .load()
         .unwrap()
@@ -1060,5 +1062,65 @@ fn queue_recover_dry_run_inspects_live_and_unknown_ownership_without_mutation() 
         )
         .unwrap_err();
         assert!(format!("{error:#}").contains(&lease.id));
+    }
+}
+
+// trace:STORY-2325 | ai:codex
+#[test]
+fn queue_recover_parks_wip_with_live_and_unknown_ownership_without_reclaim() {
+    for unknown in [false, true] {
+        let fx = fixture();
+        let _ambient =
+            crate::test_env::AmbientGuard::hermetic_with_seat(&fx.main, "implementer", &[]);
+        let scope = "TASK-922714";
+        git_ok(&fx.main, &["init", "-q", ".aida-store"]);
+        let (storage, _) = queued_scope(&fx.main, scope);
+        crate::test_env::write_project_config_fixture(&fx.main, "store_path = \".aida-store\"\n");
+        let lease = orphaned_worktree(&fx.main, scope);
+        let req = storage
+            .load()
+            .unwrap()
+            .requirements
+            .into_iter()
+            .find(|r| r.spec_id.as_deref() == Some(scope))
+            .unwrap();
+        crate::ownership::reader::seed_lease_heartbeat(
+            &fx.main,
+            &lease,
+            crate::ownership::WorkKey::Spec {
+                spec: crate::gate::canon::SpecKey(req.id),
+            },
+            true,
+        );
+        if unknown {
+            std::fs::remove_dir_all(fx.main.join(".aida/ownership")).unwrap();
+        }
+        let lease_before = std::fs::read(crate::lease_path(&fx.main, &lease.id)).unwrap();
+        let journal = fx.main.join(".aida/ownership/journal.jsonl");
+        let journal_before = std::fs::read(&journal).ok();
+        let head_before = git_ok(&lease.worktree_path, &["rev-parse", "HEAD"]);
+        // Execute WipCommitPark with --auto: commit the WIP without ending or
+        // relaunching the owner. Neither live nor missing evidence may gate it.
+        crate::queue_cmd::handle_queue_recover(
+            &storage,
+            crate::test_env::HERMETIC_TEST_USER,
+            scope,
+            false,
+            true,
+        )
+        .unwrap();
+        assert_ne!(
+            git_ok(&lease.worktree_path, &["rev-parse", "HEAD"]),
+            head_before
+        );
+        assert_eq!(
+            git_ok(&lease.worktree_path, &["show", "HEAD:wip.txt"]),
+            "untracked work"
+        );
+        assert_eq!(
+            std::fs::read(crate::lease_path(&fx.main, &lease.id)).unwrap(),
+            lease_before
+        );
+        assert_eq!(std::fs::read(&journal).ok(), journal_before);
     }
 }
