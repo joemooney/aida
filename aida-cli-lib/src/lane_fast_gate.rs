@@ -57,8 +57,13 @@ fn receipt_lock(main: &Path, branch: &str) -> Result<std::fs::File> {
 }
 
 /// Reserve before the vendor can push. Existing retry credit survives relaunches.
+#[cfg(test)]
 pub(crate) fn begin(main: &Path, branch: &str) -> Result<()> {
     let _lock = receipt_lock(main, branch)?;
+    begin_locked(main, branch)
+}
+
+fn begin_locked(main: &Path, branch: &str) -> Result<()> {
     let mut receipt = read(main, branch)?.unwrap_or(Receipt {
         branch: branch.into(),
         head: None,
@@ -90,6 +95,7 @@ pub(crate) struct Reservation {
     main: PathBuf,
     branch: String,
     report_result: bool,
+    reserved_at: Option<chrono::DateTime<chrono::Utc>>,
 }
 impl Reservation {
     pub(crate) fn with_result_line(mut self) -> Self {
@@ -98,18 +104,25 @@ impl Reservation {
     }
 }
 pub(crate) fn reserve(main: &Path, branch: &str) -> Result<Reservation> {
-    begin(main, branch)?;
+    let _lock = receipt_lock(main, branch)?;
+    begin_locked(main, branch)?;
     Ok(Reservation {
         main: main.into(),
         branch: branch.into(),
         report_result: false,
+        reserved_at: read(main, branch)?.and_then(|r| r.reserved_at),
     })
 }
 impl Drop for Reservation {
     fn drop(&mut self) {
         let result = (|| -> Result<()> {
+            let _lock = receipt_lock(&self.main, &self.branch)?;
             if let Some(mut r) = read(&self.main, &self.branch)? {
-                if r.repair_queue.is_none() {
+                if r.reserved_at == self.reserved_at
+                    && r.owner
+                        == aida_core::proc_identity::ProcIdentity::capture(std::process::id()).ok()
+                    && r.repair_queue.is_none()
+                {
                     r.pending = false;
                     r.native_ready = false;
                     r.head = None;
@@ -170,6 +183,9 @@ pub(crate) fn result_line(main: &Path, branch: &str, line: &str) -> String {
 
 /// An absent receipt is an ordinary non-lane PR. Corrupt state fails closed.
 pub(crate) fn blocks_review(main: &Path, branch: &str) -> Result<bool> {
+    if read(main, branch)?.is_none() {
+        return Ok(false);
+    }
     let _lock = receipt_lock(main, branch)?;
     let Some(r) = read(main, branch)? else {
         return Ok(false);
@@ -214,6 +230,42 @@ pub(crate) fn blocks_review(main: &Path, branch: &str) -> Result<bool> {
 pub(crate) fn release(main: &Path, branch: &str) -> Result<()> {
     let _lock = receipt_lock(main, branch)?;
     release_locked(main, branch)
+}
+
+// trace:STORY-2640 | ai:codex
+pub(crate) fn operator_release(main: &Path, branch: &str, lane_context: bool) -> Result<()> {
+    anyhow::ensure!(
+        !lane_context,
+        "fast-gate release requires an operator outside a seat or lane"
+    );
+    let _lock = receipt_lock(main, branch)?;
+    anyhow::ensure!(
+        read(main, branch)?.is_some(),
+        "no fast-gate receipt for branch"
+    );
+    release_locked(main, branch)
+}
+
+pub(crate) fn missing_lease(main: &Path, branch: Option<&str>) {
+    if let Some(branch) = branch {
+        let result = (|| -> Result<()> {
+            let _lock = receipt_lock(main, branch)?;
+            if let Some(mut r) = read(main, branch)? {
+                if r.marker != "fail" {
+                    r.marker = "skipped(missing-lease)".into();
+                }
+                write(main, &r)?;
+            }
+            Ok(())
+        })();
+        if let Err(error) = result {
+            eprintln!("fast gate missing-lease marker: {error:#}");
+        }
+    }
+    let marker = branch
+        .map(|branch| marker(main, branch))
+        .unwrap_or_else(|| "skipped(missing-lease)".into());
+    eprintln!("fast_gate={marker}");
 }
 
 fn release_locked(main: &Path, branch: &str) -> Result<()> {
@@ -821,6 +873,39 @@ pub(crate) fn check_import(main: &Path, branch: &str, tip: &str, automatic: bool
 
 #[cfg(test)]
 mod tests {
+    // trace:STORY-2640 | ai:codex
+    #[test]
+    fn fast_gate_drop_preserves_new_reservation_and_ordinary_branch_has_no_lock() {
+        let tmp = tempfile::tempdir().unwrap();
+        assert!(!blocks_review(tmp.path(), "ordinary").unwrap());
+        assert!(!path(tmp.path(), "ordinary").with_extension("lock").exists());
+        let old = reserve(tmp.path(), "lane").unwrap();
+        let newer = reserve(tmp.path(), "lane").unwrap();
+        drop(old);
+        assert!(read(tmp.path(), "lane").unwrap().unwrap().pending);
+        drop(newer);
+        assert!(!read(tmp.path(), "lane").unwrap().unwrap().pending);
+        let stale = reserve(tmp.path(), "lane").unwrap();
+        let mut replacement = read(tmp.path(), "lane").unwrap().unwrap();
+        replacement.owner.as_mut().unwrap().starttime += 1;
+        write(tmp.path(), &replacement).unwrap();
+        drop(stale);
+        assert!(read(tmp.path(), "lane").unwrap().unwrap().pending);
+    }
+
+    // trace:STORY-2640 | ai:codex
+    #[test]
+    fn fast_gate_operator_release_refuses_lane_and_missing_receipt() {
+        let tmp = tempfile::tempdir().unwrap();
+        assert!(operator_release(tmp.path(), "unknown", false).is_err());
+        let reservation = reserve(tmp.path(), "lane").unwrap();
+        assert!(operator_release(tmp.path(), "lane", true).is_err());
+        assert!(read(tmp.path(), "lane").unwrap().unwrap().pending);
+        operator_release(tmp.path(), "lane", false).unwrap();
+        assert!(!read(tmp.path(), "lane").unwrap().unwrap().pending);
+        drop(reservation);
+    }
+
     // trace:STORY-2640 | ai:codex
     #[test]
     fn fast_gate_unpushed_head_never_claims_pr_pass() {

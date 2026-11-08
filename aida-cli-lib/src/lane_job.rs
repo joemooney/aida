@@ -1885,8 +1885,7 @@ mod fast_gate_job_tests {
     use super::*;
 
     // Runs the actual committed main target through the production sandbox,
-    // with host-only results. Explicit because warming a fresh private target
-    // can take several bounded runs before the measured five-minute gate.
+    // with host-only results and the production artifact seed, without warmup.
     // trace:STORY-2640 | ai:codex
     #[test]
     #[ignore = "requires bubblewrap and the real fast-tier tools; run explicitly"]
@@ -1935,37 +1934,40 @@ mod fast_gate_job_tests {
             "--detach".as_ref(),
             head.as_ref(),
         ]);
-        // Fixture preparation only: CI's fast tier includes cargo check, and
-        // this fresh clone has none of a production lane's target artifacts.
-        // Warm that private target using the SAME sandbox and real target.
-        // Only a timeout may retry; an actual gate failure fails immediately.
-        // These warmups do not change production's one-repair policy.
-        for warmup in 1..=4 {
-            let (rc, output) = run_fast_gate(&tmp.path().join("host"), &seat, "real-main")
-                .unwrap()
-                .expect("sandbox required for fixture warmup");
-            eprintln!("sandbox target warmup={warmup} head={head} rc={rc}\n{output}");
-            if rc != TIMEOUT_RC {
-                assert_eq!(rc, 0, "{output}");
-                break;
-            }
-            assert!(
-                warmup < 4,
-                "private target still cold after four bounded runs: {output}"
-            );
-        }
-        let (rc, output) = run_fast_gate(&tmp.path().join("host"), &seat, "real-main")
-            .unwrap()
-            .expect("sandbox required; no skip counts as evidence");
-        eprintln!("real sandbox fast gate head={head} rc={rc}\n{output}");
+        let target = tmp.path().join("target/worktrees/real-main");
+        let primary = crate::main_worktree_root_from(source).join("target");
+        let seeded = crate::seat_target_seed::seed_seat_target(
+            &primary,
+            &target,
+            crate::seat_target_seed::LOCK_WAIT,
+        );
+        eprintln!("real-main artifact seed: {seeded:?}");
+        let mut lane = LaneJobs::for_lease(&tmp.path().join("host"), &seat, "real-main");
+        lane.build_env = vec![("CARGO_TARGET_DIR".into(), target.display().to_string())];
+        lane.sandbox = Sandbox::BwrapDefaultOn;
+        lane.prepare().unwrap();
+        check_fast_gate_results(&lane).unwrap();
+        let started = Instant::now();
+        run_seeded_fast_gate(
+            &lane,
+            "real-main",
+            JobRequest {
+                argv: vec!["make".into(), "check-ci-fast".into()],
+                env: BTreeMap::new(),
+            },
+        );
+        let rc = read_rc(&lane.results, "real-main").expect("host result");
+        let output = fast_gate_output_tail(&out_path(&lane.results, "real-main")).unwrap();
+        let (marker, _) = crate::lane_fast_gate::gate_result(Some((rc, output.clone())));
+        eprintln!(
+            "real sandbox fast_gate={marker} head={head} rc={rc} elapsed={:?}\n{output}",
+            started.elapsed()
+        );
         assert_eq!(rc, 0, "{output}");
     }
 
-    // Exercise the production gate dispatch, including seed selection and
-    // transport into the job output, without needing a real toolchain build.
     // trace:STORY-2640 | ai:codex
     #[test]
-    // trace:STORY-2640 | ai:codex
     fn fast_gate_output_keeps_trailing_failure_and_invalid_bytes() {
         let tmp = tempfile::tempdir().unwrap();
         let path = tmp.path().join("out");
@@ -1978,6 +1980,8 @@ mod fast_gate_job_tests {
         assert!(tail.len() <= 1024 * 1024 + 3);
     }
 
+    // Exercise production dispatch and seed selection without a toolchain build.
+    // trace:STORY-2640 | ai:codex
     #[test]
     fn fast_gate_dispatch_receives_lane_target_seed() {
         let tmp = tempfile::tempdir().unwrap();
@@ -1988,7 +1992,7 @@ mod fast_gate_job_tests {
         let target = tmp.path().join("target/worktrees/seed");
         std::fs::create_dir_all(target.join("agent")).unwrap();
         std::fs::write(target.join("agent/fixture"), "warm artifact").unwrap();
-        crate::test_exec::write_executable(&bin.join("make"), "#!/bin/sh\ntest -f \"$CARGO_TARGET_DIR/agent/fixture\" || exit 1\necho gate-executed\n");
+        crate::test_exec::write_executable(&bin.join("make"), "#!/bin/sh\ntest -f \"$CARGO_TARGET_DIR/agent/fixture\" || exit 1\ntest \"$(umask)\" = 0022 || exit 2\necho gate-executed\n");
         let lane = LaneJobs {
             inbox: seat.join(INBOX_RELATIVE),
             seat,

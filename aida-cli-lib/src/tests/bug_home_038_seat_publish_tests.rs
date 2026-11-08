@@ -3006,3 +3006,45 @@ fn story_2640_fast_gate_real_lane_exit_paths_settle_reservations() {
         );
     }
 }
+
+// trace:STORY-2640 | ai:codex
+#[test]
+fn story_2640_fast_gate_missing_resume_lease_preserves_vendor_status() {
+    if crate::test_env::run_path_isolated_test() {
+        return;
+    }
+    let fx = fixture();
+    let vendor = fx.root.join("vendor");
+    crate::test_exec::write_executable(&vendor, "#!/bin/sh\nexit 7\n");
+    let _env = crate::test_env::AmbientGuard::hermetic_with_seat_and(
+        &fx.main,
+        "advisor",
+        &["implementer"],
+        &[
+            ("AIDA_OS_WRAP", Some("0")),
+            ("AIDA_CONTAINED", None),
+            ("AIDA_AGENT_CMD", Some(vendor.to_str().unwrap())),
+        ],
+    );
+    let _cwd = crate::session::contained_cwd_seam::pin(&fx.main);
+    let status = crate::queue_cmd::run_queue_resume_to_exit(
+        Some(&fx.main),
+        &crate::session::HeadlessResume {
+            vendor: crate::session::HeadlessVendor::Claude,
+            session_id: "test",
+            resume_id: "test",
+        },
+        "go",
+        &fx.root.join("log"),
+        &fx.main,
+        &crate::headless_tee::TeeOptions {
+            enabled: false,
+            label: None,
+        },
+        false,
+        "implementer",
+        (&fx.main, "BUG-1", "missing"),
+    )
+    .unwrap();
+    assert_eq!(status.code(), Some(7));
+}

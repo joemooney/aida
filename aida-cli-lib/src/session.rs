@@ -6788,11 +6788,15 @@ pub(crate) fn run_vendor_headless_to_exit(
             // trace:STORY-2640 | ai:codex — gate before revoking the repair grant.
             let mut status = result?;
             if let Some((lease, (tree, branch))) = implementer_job_lane(seat, lease_id, lane_tree) {
-                let scope = crate::list_leases(&main_root)
+                let Some(active_lease) = crate::list_leases(&main_root)
                     .into_iter()
                     .find(|l| l.id == lease)
-                    .context("fast gate lease disappeared")?
-                    .scope;
+                else {
+                    crate::lane_fast_gate::missing_lease(&main_root, Some(branch));
+                    publish_native.set(false);
+                    return Ok(status);
+                };
+                let scope = active_lease.scope;
                 if host_published {
                     publish_native.set(crate::lane_fast_gate::native(
                         &main_root,

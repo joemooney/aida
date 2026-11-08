@@ -9070,12 +9070,18 @@ pub(crate) fn run_queue_resume_to_exit(
     let main = crate::main_worktree_root_from(publication.0);
     let mut _fast_gate = None;
     let branch = if implementing {
-        let lease = crate::list_leases(&main)
+        if let Some(lease) = crate::list_leases(&main)
             .into_iter()
             .find(|l| l.id == publication.2)
-            .context("fast gate resume lease disappeared")?;
-        _fast_gate = Some(crate::lane_fast_gate::reserve(&main, &lease.branch)?.with_result_line());
-        Some(lease.branch)
+        {
+            _fast_gate =
+                Some(crate::lane_fast_gate::reserve(&main, &lease.branch)?.with_result_line());
+            Some(lease.branch)
+        } else {
+            crate::lane_fast_gate::missing_lease(&main, None);
+            publish_native = false;
+            None
+        }
     } else {
         None
     };

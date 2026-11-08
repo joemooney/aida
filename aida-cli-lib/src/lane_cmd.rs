@@ -30,8 +30,24 @@ fn run_lane(matches: &clap::ArgMatches, _ctx: &crate::command_registry::Dispatch
     let job = match args.command {
         LaneCommand::Job(job) => job,
         LaneCommand::FastGateRelease { branch } => {
-            let main = crate::main_worktree_root_from(&std::env::current_dir()?);
-            crate::lane_fast_gate::release(&main, &branch)?;
+            let cwd = std::env::current_dir()?;
+            let main = crate::main_worktree_root_from(&cwd);
+            let inputs = aida_core::exec_context::Environment::capture();
+            let lane_context = [
+                "AIDA_SESSION_ID",
+                "AIDA_HEADLESS",
+                "AIDA_CONTAINED",
+                crate::gate::seat_authority::GRANT_ENV,
+                crate::gate::seat_authority::GRANT_FILE_ENV,
+                crate::headless_background::LANE_MARKER_ENV,
+            ]
+            .iter()
+            .any(|key| inputs.get(key).is_some())
+                || crate::seat_clone::seat_clone_root(&cwd).is_some()
+                || crate::list_leases(&main)
+                    .iter()
+                    .any(|l| cwd.starts_with(&l.worktree_path));
+            crate::lane_fast_gate::operator_release(&main, &branch, lane_context)?;
             println!(
                 "{}",
                 crate::lane_fast_gate::result_line(&main, &branch, "review hold released:")

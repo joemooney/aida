@@ -23,14 +23,17 @@ impl crate::lane_job::LaneJobs {
 
 /// A headless harness can ignore or block terminal interrupts. Reset that
 /// state only in the sandboxed gate child so its PTY fixtures can receive them.
+/// Use the CI file-creation mask too: a shared-write host mask otherwise makes
+/// ownership-sensitive fixtures reject their own freshly created directories.
 // trace:STORY-2640 | ai:codex
 #[cfg(unix)]
 pub(crate) fn prepare_fast_gate_signals(cmd: &mut Command) {
     use std::os::unix::process::CommandExt;
-    // SAFETY: the child hook uses only signal operations and stack data;
+    // SAFETY: the child hook uses only umask, signal operations and stack data;
     // it captures no state and does not allocate or acquire locks.
     unsafe {
         cmd.pre_exec(|| {
+            libc::umask(0o022);
             let mut signals: libc::sigset_t = std::mem::zeroed();
             libc::sigemptyset(&mut signals);
             for signal in [libc::SIGINT, libc::SIGQUIT] {
