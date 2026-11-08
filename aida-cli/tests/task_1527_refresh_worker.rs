@@ -55,6 +55,17 @@ fn init_fixture() -> Fixture {
     assert!(git(&repo, &["init", "-q", "-b", "main"]).status.success());
     // trace:BUG-2017 | ai:codex — explicit positive global-ID fixture.
     test_git::enroll_synthetic_home(&repo);
+    // Explicit trust evidence must stay private under the lane's umask 0002.
+    // trace:BUG-2466 | ai:codex
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        std::fs::set_permissions(
+            repo.join(".git/aida-allocation.toml"),
+            std::fs::Permissions::from_mode(0o600),
+        )
+        .unwrap();
+    }
     assert!(git(&repo, &["config", "user.email", "test@example.com"])
         .status
         .success());
@@ -395,10 +406,10 @@ fn reader_spawned_worker_completes_the_refresh() {
     .success());
     let conn = rusqlite::Connection::open(&cache).unwrap();
     conn.execute_batch("BEGIN IMMEDIATE").unwrap();
-    let show = aida(&fixture, &["show", "TASK-1"]);
+    let show = aida(&fixture, &["list"]);
     assert!(
         show.status.success(),
-        "show behind a held lock must still serve:\n{}",
+        "list behind a held lock must still serve:\n{}",
         String::from_utf8_lossy(&show.stderr)
     );
     conn.execute_batch("ROLLBACK").unwrap();
