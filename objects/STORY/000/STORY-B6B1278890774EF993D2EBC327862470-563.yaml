@@ -25,7 +25,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-07T19:45:35.836129088Z
-modified_at: 2026-11-08T02:54:47.114857580Z
+modified_at: 2026-11-08T02:54:49.580272381Z
 req_type: Story
 tags:
 - docs:impacted
@@ -255,6 +255,12 @@ comments:
   content: 'Round 4 approach. Acceptance criteria as tests: unit coverage retains native fail/fix and persistent-red one-round behavior (AC1/4), marker plus publication-error propagation and unchanged-lane advisor notification (AC2/3), sandbox/timeout and existing documentation contract tests (AC4/5). Add killed-owner/expired legacy receipt, operator-release and failed queue insertion regressions. Expected files: lane_fast_gate.rs, lane_cmd{,_args}.rs, publication callers in session.rs/queue_cmd.rs/standalone_implementer.rs, ship_from_seat.rs, CLI reference, AGENTS.md and OVERVIEW.md. Ambiguities / conflicts as questions: does a timeout warrant source repair? Per finding 4 use skipped(timeout), preserving the repair budget. Binding sandbox ruling remains unchanged. Native-seat finish overrides the commit requirement: host must create the new round commit after exit.'
   created_at: 2026-11-08T02:49:45.018427003Z
   modified_at: 2026-11-08T02:49:45.018427003Z
+  session_id: 01a1b90eb553
+- id: 01a1b914-7aec-7133-a6f2-6474190c7cbf
+  author: joe
+  content: 'Round 4 scope check: extended the existing native bundle/publication fixture in tests/bug_home_038_seat_publish_tests.rs to exercise a real refused bundle after a passing gate through the production error wrapper, then successful retry. This is the requested publication-failure regression, not a new surface. Source edits complete; sandboxed targeted tests are compiling. Eight pending findings await advisor triage (pickup status). Codegraph lookup failed to open its shared database; doctor check reports no codegraph findings, navigation confirmed with rg.'
+  created_at: 2026-11-08T02:54:49.580272381Z
+  modified_at: 2026-11-08T02:54:49.580272381Z
   session_id: 01a1b90eb553
 history:
 - id: 01a1b78d-2628-7313-92de-8804ac5f8f71
