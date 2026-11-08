@@ -23,7 +23,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-07T19:59:26.079479Z
-modified_at: 2026-11-08T19:37:25.461483914Z
+modified_at: 2026-11-08T19:43:57.168263532Z
 req_type: Story
 comments:
 - id: 01a1b798-f0d4-73b1-93d5-f84581f2d190
@@ -886,6 +886,12 @@ history:
   - field_name: status
     old_value: InProgress
     new_value: NeedsAttention
+- id: 01a1bcb0-5d6e-7700-8d2b-1e6f8d6642e8
+  author: joe
+  timestamp: 2026-11-08T19:43:57.294194832Z
+  session_id: 01a1bcae11b3
+  harness_version: 2.1.319 (Claude Code)
+  changes: []
 filed_at:
   code_sha: 7a18c0d52a6a4e0822befd4c810cfed16b04b74c
   branch: main
@@ -900,3 +906,11 @@ attention_reason:
   detail: 'AC1 remains unresolved: requires two consecutive lane Cargo jobs using the revised launcher on BOTH primary and dell1, retained final sccache statistics and second-job Rust hits greater than zero, or a recorded advisor amendment. This seat cannot produce both-host evidence. Existing implementation already includes advisor AC0 resource wiring and sccache tests; no source edits needed. make check-ci-fast failed at first compile gate because sccache could not write lane-target dep-info (read-only filesystem). Targeted jobs j20261108T193520228-2-0 and j20261108T193521467-2-0 are in progress. Preserve existing merge hold and publication veto; route to host/operator or advisor.'
   raised_by: implementer
   raised_at: 2026-11-08T19:36:45.961213867Z
+failure_reason:
+  phase: reviewer
+  phase_index: 3
+  kind: verdict:request-changes
+  detail: AC1 (second lane job shows sccache hits on primary and dell1) still has no evidence or advisor amendment at 3d0b99367e6a; AC0/AC2/AC3/AC4 and the lane/unsandboxed separation ruling are met in source. Head adds only a merge from main since round 11. CI code jobs are queued at this head; merge-hold-gate fails by design. No local cargo run.
+  recovery_hint: address the review findings, move STORY-2641 back to In Progress, and clear the PR hold only after approval
+  shelved_by: reviewer
+  shelved_at: 2026-11-08T19:43:57.168263532Z
