@@ -8,7 +8,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-08T00:02:55.282155Z
-modified_at: 2026-11-08T20:16:18.230666171Z
+modified_at: 2026-11-08T20:19:20.521119875Z
 req_type: Bug
 relationships:
 - rel_type:
@@ -652,6 +652,12 @@ comments:
   modified_at: 2026-11-08T20:15:16.216596478Z
   session_id: 01a1bc93-77a0-7740-8b03-df4e3e8d1df5
   harness_version: 2.1.319 (Claude Code)
+- id: 01a1bcd0-c349-7f80-a4c7-3937781ba0b9
+  author: joe
+  content: 'Round 19: restored all four TASK-3366 rationale comments in scripts/store-writers.toml beside their original sink entries. Parsed TOML data is unchanged. Store-writer ratchet passed (3391 sites), all 42 mutation fixtures passed, and git diff --check passed. Finding 1 remains pending CI evidence: run 42516929972 at 696585a3afe4 currently has CI (cli-0) successful and six jobs queued; active supervised merge hold is expected and unchanged. Current PR base db2eb4c39e4 is already an ancestor; AGENTS.md and OVERVIEW.md have no PR diff. Targeted frozen-inventory test submitted through lane job j20261108T201702299-3299616-0. Edits remain uncommitted for host publication.'
+  created_at: 2026-11-08T20:19:20.521119875Z
+  modified_at: 2026-11-08T20:19:20.521119875Z
+  session_id: 01a1bccdf01e
 history:
 - id: 01a1b923-982d-7512-93a5-cd08923b4f98
   author: aida-session-start
