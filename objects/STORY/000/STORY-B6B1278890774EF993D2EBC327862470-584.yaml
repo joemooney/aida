@@ -1,0 +1,35 @@
+id: 01a1b917-849b-7832-a1f3-fc456cfde576
+spec_id: STORY-b6b1278890774ef993d2ebc327862470-584
+agreed_id: STORY-2661
+title: 'Park on ask, resume on answer: a lane that asks the human exits and frees its slot, and AIDA resumes the same vendor session with the answer (Claude, Codex, AGY headless resume)'
+description: |
+  From SPIKE-711 (PR-3638 host rerun, 2026-11-07): exit + resume across a human wait is a live yes on all three vendors with headless CLI surfaces: `claude -p --resume <sid>`, `codex exec resume <id>`, `agy --conversation <id> --print=...`. Each resumed run answered from prior context (PELICAN, and the fruit question plus its answer).
+
+  Goal: when a lane asks the human a question, it parks instead of idling a slot: it records the question as a durable AIDA wait (the human-question item plus the vendor session id), exits, and frees its slot. When the answer arrives, AIDA resumes the same vendor session with the answer as the next prompt, in the same seat.
+
+  Acceptance (draft):
+  1. A lane that asks a question exits within one turn and its slot frees; `aida awaiting` shows the question with the lane, spec and vendor session id.
+  2. Answering it (the existing answer surface) resumes that exact vendor session in its seat with the answer as the prompt; the resumed turn can cite the question and the answer.
+  3. Works for Claude, Codex and AGY through their headless resume commands; one adapter test per vendor using a recorded fixture.
+  4. A wait whose seat or session has been lost surfaces as an escalation, never a silent drop.
+  Ref: docs/plans/2026-11-07-infinity-agent-architecture-deep-dive.md section 3.3 and the SPIKE-711 results table.
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-11-08T02:58:08.667753563Z
+modified_at: 2026-11-08T02:58:08.667753563Z
+req_type: Story
+tags:
+- area:human-wait
+- area:lanes
+- from:SPIKE-711
+filed_at:
+  code_sha: dc41ee8da2f44f88178936fc1a8e6cb7168a3de7
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: dc41ee8da2f
+  vendor: claude
+  session: 01a1b8be-8170-7fb2-89ab-ecb4c6eee98c
+  harness_version: 2.1.319 (Claude Code)
