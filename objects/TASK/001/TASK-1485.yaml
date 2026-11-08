@@ -23,7 +23,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-24T15:09:38.693878746Z
-modified_at: 2026-11-07T20:27:05.569083430Z
+modified_at: 2026-11-08T15:08:11.900301246Z
 req_type: Task
 tags:
 - operator-held
@@ -99,7 +99,13 @@ history:
   timestamp: 2026-11-04T02:42:43.295823011Z
   session_id: 04f971d5-7365-46ed-b777-d4ff41d730ed
   changes: []
+- id: 01a1bbb3-e76b-7ee0-aafc-aa48ec0f8b98
+  author: joe
+  timestamp: 2026-11-08T15:08:12.011755677Z
+  session_id: 01a1bbab-762f-7cd2-8a36-4ea9f209afce
+  harness_version: 2.1.319 (Claude Code)
+  changes: []
 deferred: true
 deferred_at: 2026-11-04T02:42:43.118285026Z
-deferred_until: manual:operator
-deferred_reason: 'OPERATOR RULING 2026-11-03 19:36 MST: the regeneration / north-star research line stays deferred (revised from reject).'
+deferred_until: date:2026-12-08
+deferred_reason: 'Operator 2026-11-08 08:07 MST: defer the regeneration / north-star line for a month; revisit the stop/continue ruling then.'
