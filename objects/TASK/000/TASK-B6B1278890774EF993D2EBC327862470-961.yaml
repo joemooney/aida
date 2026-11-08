@@ -3,12 +3,12 @@ spec_id: TASK-b6b1278890774ef993d2ebc327862470-961
 agreed_id: TASK-3429
 title: 'Crate-split PR12: extract aida-mcp crate (mcp.rs + schema) above aida-cli-lib, handler injected into REGISTRY from the bin'
 description: 'Per SPIKE-713 section 7 row 12 and advisor ruling 1 (aida-mcp is the first crate). Acceptance: (1) new aida-mcp crate holds mcp.rs and its schema; widened cli-lib items (~99) are pub with re-exports keeping paths; (2) aida mcp handler registered from the binary into command_registry::REGISTRY; (3) MCP surface byte-identical: tools/list golden tests pass unchanged and the 72 tool names are unchanged; (4) the respawn identity check (mcp.rs:201-267) still reads the same binary; (5) measured on dell1: clean build no slower than run-to-run spread (ruling 2), with the cargo --timings numbers on the spec.'
-status: NeedsAttention
+status: Approved
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-07T23:40:15.306412624Z
-modified_at: 2026-11-08T20:11:38.515943232Z
+modified_at: 2026-11-08T20:27:38.119725843Z
 req_type: Task
 relationships:
 - rel_type: BlockedBy
@@ -470,6 +470,13 @@ comments:
     PR body: Extract MCP transport into aida-mcp with the binary-injected handler and shared schema below the crate boundary. Round 6 restores doc-suggest MCP descriptor detection at its new path and makes the cli-lib self-alias test-only. This remains a partial implementation: AC3 awaits advisor correction of the 72-versus-58 count; AC5 awaits dell1 timing evidence or amendment. It does not complete TASK-3429. The broad local surface run passed 110 tests and failed one missing-CLI-binary fixture; both changed regressions passed. Additional local jobs were incomplete at handoff. Final-head CI and recorded merge-hold clearance are outstanding.
   created_at: 2026-11-08T20:03:50.502560296Z
   modified_at: 2026-11-08T20:03:50.502560296Z
+- id: 01a1bcd8-5b07-78c0-b84e-a8c41ef69bba
+  author: joe
+  content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: Round-6 fixes are correct and the extraction is faithful, but AC5 timings and the AC3 72-vs-58 ruling are still open, the completion trailer remains, CI has no result at head, and merge-hold-gate fails.. It was punted on: ambiguous-spec: Round 6: findings 5 and 6 are fixed locally (MCP schema public-surface detection plus real-path regression coverage; self-alias restricted to cfg(test)). Findings 1 and 2 remain unresolved: AC5 needs dell1 clean-build comparisons and cargo --timings or advisor amendment; this seat reports hostname imac and has no dell1 evidence. AC3 still requires advisor correction of 72 tools versus the preserved 58-tool surface. Findings 3 and 4 require host PR/title/body correction to Refs TASK-3429 for any authorized partial publication, final-head green CI, and recorded merge-hold clearance. No completion credit is justified. Preserve all existing publication vetoes; repeated requeue with no ruling does not authorize publication.. No triage reason was given.'
+  created_at: 2026-11-08T20:27:38.119724095Z
+  modified_at: 2026-11-08T20:27:38.119724095Z
+  session_id: 01a1bc93-77a0-7740-8b03-df4e3e8d1df5
+  harness_version: 2.1.319 (Claude Code)
 history:
 - id: 01a1b862-7fc0-7e63-899e-5179ac0131ed
   author: joe
@@ -700,6 +707,15 @@ history:
   session_id: 01a1bcc7813b
   harness_version: 2.1.319 (Claude Code)
   changes: []
+- id: 01a1bcd8-5b07-78c0-b84e-a8b0865afc98
+  author: joe
+  timestamp: 2026-11-08T20:27:38.119708922Z
+  session_id: 01a1bc93-77a0-7740-8b03-df4e3e8d1df5
+  harness_version: 2.1.319 (Claude Code)
+  changes:
+  - field_name: status
+    old_value: NeedsAttention
+    new_value: Approved
 filed_at:
   code_sha: 2a7fe186bdcd718fa356e5e4d028a3b2ff13769d
   branch: main
@@ -709,16 +725,3 @@ filed_at:
   vendor: claude
   session: 01a1b848-940b-7bd2-8acd-52e428b182b8
   harness_version: 2.1.319 (Claude Code)
-attention_reason:
-  category: ambiguous-spec
-  detail: 'Round 6: findings 5 and 6 are fixed locally (MCP schema public-surface detection plus real-path regression coverage; self-alias restricted to cfg(test)). Findings 1 and 2 remain unresolved: AC5 needs dell1 clean-build comparisons and cargo --timings or advisor amendment; this seat reports hostname imac and has no dell1 evidence. AC3 still requires advisor correction of 72 tools versus the preserved 58-tool surface. Findings 3 and 4 require host PR/title/body correction to Refs TASK-3429 for any authorized partial publication, final-head green CI, and recorded merge-hold clearance. No completion credit is justified. Preserve all existing publication vetoes; repeated requeue with no ruling does not authorize publication.'
-  raised_by: implementer
-  raised_at: 2026-11-08T19:48:24.375848269Z
-failure_reason:
-  phase: reviewer
-  phase_index: 3
-  kind: verdict:request-changes
-  detail: Round-6 fixes are correct and the extraction is faithful, but AC5 timings and the AC3 72-vs-58 ruling are still open, the completion trailer remains, CI has no result at head, and merge-hold-gate fails.
-  recovery_hint: address the review findings, move TASK-3429 back to In Progress, and clear the PR hold only after approval
-  shelved_by: reviewer
-  shelved_at: 2026-11-08T20:11:38.515943232Z
