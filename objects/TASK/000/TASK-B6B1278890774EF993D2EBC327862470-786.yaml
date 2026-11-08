@@ -8,7 +8,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-04T17:54:51.353376Z
-modified_at: 2026-11-08T09:51:01.091345312Z
+modified_at: 2026-11-08T10:03:05.594721577Z
 req_type: Task
 tags:
 - area:containment
@@ -596,6 +596,13 @@ comments:
   content: 'Review rework in progress for PR #3641: pinning settings.json read-only by handle at both the runtime destination and launch-state source alias; adding live write-refusal assertions for both paths and validation cases for empty, reordered and missing tool denies. Restored shared preparation binary-pin commentary and removed discarded Python invocation construction. Production admission remains closed; no vendor model or refresh run. Python conformance suites: 60 passed. Final-source Rust and LIGHT gate are pending lane jobs. Measured inference hosts=[daily-cloudcode-pa.googleapis.com]; measured refresh hosts=[]; candidate refresh hosts=[oauth2.googleapis.com]. Publication declaration remains Refs TASK-3048.'
   created_at: 2026-11-08T09:51:01.091345312Z
   modified_at: 2026-11-08T09:51:01.091345312Z
+  session_id: 01a1ba8d86cf
+  harness_version: codex-cli 0.167.0
+- id: 01a1ba9c-91fa-7cf2-b802-d36ff4a14703
+  author: dirtlab
+  content: 'Final native handoff for PR #3641 review rework: all four latest findings addressed. Shared wrapper pins settings.json read-only by handle at both destination and launch-state source alias; live regression confirms EACCES/EPERM/EROFS for writes through both paths. RuntimePolicy tests reject empty, reordered and missing tool denies with the named error. Shared preparation binary-pin commentary restored; Python invocation construction simplified. Changed files: aida-cli-lib/src/launch/contained.rs; aida-cli-lib/src/containment/tests/launch_tests.rs; scripts/containment/conformance.py; docs/internal/testing/containment-conformance.md. Validation: Python suites 60 passed; final-source lane job j20261108T095051553-2-0 executed 22 tests, 0 failed/ignored, live wrapper receipts present and no skips; make check-ci-fast exit 0, all 43 gates passed; rustfmt and git diff --check passed. untested=false. Logs: /tmp/task3048-python-current.log; /tmp/task3048-fast-rework-final.log. Handoff: /tmp/task3048-review-rework-handoff.txt. Edits remain uncommitted for host launcher; publication declaration recorded as [AI:codex] fix(containment): pin AGY tool controls read-only (Refs TASK-3048). No commit/push/PR/queue done/pr ship/review record. No real vendor model or refresh run. Measured inference hosts=[daily-cloudcode-pa.googleapis.com]; measured refresh hosts=[]; candidate refresh hosts=[oauth2.googleapis.com]. Advisor fresh AIDA-boundary C0-C4 report.json and measured refresh inventory remain; production admission stays closed, auth_inventory_complete=false, with final unlock a separate approved step. TASK-3048 is not complete.'
+  created_at: 2026-11-08T10:03:05.594721577Z
+  modified_at: 2026-11-08T10:03:05.594721577Z
   session_id: 01a1ba8d86cf
   harness_version: codex-cli 0.167.0
 history:
