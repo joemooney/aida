@@ -13,12 +13,12 @@ description: |
   3. The BUG-1693 label rules (recorded vs cleared, train members' labels) behave exactly as today: same pass/block outcome for every label combination (table test over the existing check_labels cases).
   4. A push to a held PR sends no "run failed" notification for this check.
   5. A genuinely malformed label state (clearance with no recorded hold) still FAILS, since that is a real error.
-status: NeedsAttention
+status: Approved
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-08T02:46:34.549817284Z
-modified_at: 2026-11-08T10:14:43.623063055Z
+modified_at: 2026-11-08T11:16:04.197189526Z
 req_type: Bug
 tags:
 - area:ci
@@ -154,6 +154,13 @@ comments:
   modified_at: 2026-11-08T09:26:42.593617317Z
   session_id: 01a1ba6ef7fd
   harness_version: codex-cli 0.167.0
+- id: 01a1badf-61e5-7970-bbb1-ef5d48e77f74
+  author: joe
+  content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: Round 4 migrates the named consumers and the gate fixtures are sound, but any unconfirmed pending gate now refuses as CI red, so a just-cleared or unheld PR fails ship and a clean train takes the red path; two more consumers regress and AC1/AC2 live evidence is outstanding. CI incomplete at review.. No triage reason was given.'
+  created_at: 2026-11-08T11:16:04.197188071Z
+  modified_at: 2026-11-08T11:16:04.197188071Z
+  session_id: 01a1b9af-8230-75d2-82f8-667491cc010a
+  harness_version: 2.1.319 (Claude Code)
 history:
 - id: 01a1b90d-4bec-7bd0-9af1-86f501692f64
   author: joe
@@ -290,6 +297,15 @@ history:
   - field_name: status
     old_value: InProgress
     new_value: NeedsAttention
+- id: 01a1badf-61e5-7970-bbb1-ef49f2cb9aed
+  author: joe
+  timestamp: 2026-11-08T11:16:04.197174055Z
+  session_id: 01a1b9af-8230-75d2-82f8-667491cc010a
+  harness_version: 2.1.319 (Claude Code)
+  changes:
+  - field_name: status
+    old_value: NeedsAttention
+    new_value: Approved
 filed_at:
   code_sha: dc41ee8da2f44f88178936fc1a8e6cb7168a3de7
   branch: main
@@ -299,11 +315,3 @@ filed_at:
   vendor: claude
   session: 01a1b8be-8170-7fb2-89ab-ecb4c6eee98c
   harness_version: 2.1.319 (Claude Code)
-failure_reason:
-  phase: reviewer
-  phase_index: 3
-  kind: verdict:request-changes
-  detail: Round 4 migrates the named consumers and the gate fixtures are sound, but any unconfirmed pending gate now refuses as CI red, so a just-cleared or unheld PR fails ship and a clean train takes the red path; two more consumers regress and AC1/AC2 live evidence is outstanding. CI incomplete at review.
-  recovery_hint: address the review findings, move BUG-2492 back to In Progress, and clear the PR hold only after approval
-  shelved_by: reviewer
-  shelved_at: 2026-11-08T10:14:43.623063055Z
