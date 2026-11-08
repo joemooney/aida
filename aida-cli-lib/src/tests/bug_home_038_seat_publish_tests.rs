@@ -2565,8 +2565,37 @@ fn task_2902_native_ship_message_records_only_and_dry_run_does_not_write() {
         crate::pr_cmd::ShipArgs::from_arg_matches(&host)
             .unwrap()
             .commit_body_file,
-        Some(body_file)
+        Some(body_file.clone())
     );
+    // Test the same assembly used to populate FromSeatOptions in run_ship.
+    let host_args = crate::pr_cmd::ShipArgs::from_arg_matches(&host).unwrap();
+    assert_eq!(
+        crate::pr_cmd::ship_messages(&host_args, false).unwrap(),
+        (None, Some(format!("{subject}\n\nHelp-Golden: unchanged\n")))
+    );
+    for argv in [
+        vec![
+            "ship",
+            "--from-seat",
+            clone.to_str().unwrap(),
+            "--commit-body-file",
+            body_file.to_str().unwrap(),
+        ],
+        vec![
+            "ship",
+            "-m",
+            subject,
+            "--commit-body-file",
+            body_file.to_str().unwrap(),
+        ],
+    ] {
+        let parsed = command().try_get_matches_from(argv).unwrap();
+        let args = crate::pr_cmd::ShipArgs::from_arg_matches(&parsed).unwrap();
+        assert!(crate::pr_cmd::ship_messages(&args, false)
+            .unwrap_err()
+            .to_string()
+            .contains("requires native -m or --from-seat --commit-pending"));
+    }
     let no_message = command().try_get_matches_from(["ship"]).unwrap();
     assert!(run(&no_message, &ctx).is_err());
 }

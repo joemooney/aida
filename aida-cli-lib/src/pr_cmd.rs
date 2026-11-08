@@ -8833,6 +8833,39 @@ pub(crate) struct ShipArgs {
     pub commit_body_file: Option<std::path::PathBuf>,
 }
 
+// trace:BUG-2493 | ai:codex
+pub(crate) fn ship_messages(
+    args: &ShipArgs,
+    native: bool,
+) -> anyhow::Result<(Option<String>, Option<String>)> {
+    let body = args
+        .commit_body_file
+        .as_ref()
+        .map(std::fs::read_to_string)
+        .transpose()?;
+    if let Some(body) = &body {
+        anyhow::ensure!(!body.contains('\0'), "commit body contains NUL");
+        anyhow::ensure!(
+            args.commit_pending.is_some() || (args.message.is_some() && native),
+            "--commit-body-file requires native -m or --from-seat --commit-pending"
+        );
+    }
+    let with_body = |subject: &str| -> anyhow::Result<String> {
+        anyhow::ensure!(
+            body.is_none() || !subject.contains(['\n', '\r']),
+            "--commit-body-file requires a single-line subject"
+        );
+        Ok(crate::native_publication::join_message(
+            subject,
+            body.as_deref(),
+        ))
+    };
+    Ok((
+        args.message.as_deref().map(with_body).transpose()?,
+        args.commit_pending.as_deref().map(with_body).transpose()?,
+    ))
+}
+
 // STORY-720: `aida ship` dispatches before storage init for the same
 // reason as `aida pr` — every side-effect is a git / gh / self-invoked
 // `aida` call (the finish tail reuses `pr_ship_handler`). The spec is
@@ -8852,32 +8885,12 @@ fn run_ship(
         dry_run,
         no_trailer_check,
         from_seat,
-        commit_pending,
-        commit_body_file,
+        commit_pending: _,
+        commit_body_file: _,
     } = &args;
     // trace:BUG-2493 | ai:codex
     let native = std::env::var("AIDA_CONTAINMENT_POSTURE").as_deref() == Ok("native");
-    let body = commit_body_file
-        .as_ref()
-        .map(std::fs::read_to_string)
-        .transpose()?;
-    if let Some(body) = &body {
-        anyhow::ensure!(!body.contains('\0'), "commit body contains NUL");
-        anyhow::ensure!(
-            commit_pending.is_some() || (message.is_some() && native),
-            "--commit-body-file requires native -m or --from-seat --commit-pending"
-        );
-    }
-    let with_body = |subject: &str| -> anyhow::Result<String> {
-        anyhow::ensure!(
-            body.is_none() || !subject.contains(['\n', '\r']),
-            "--commit-body-file requires a single-line subject"
-        );
-        Ok(crate::native_publication::join_message(
-            subject,
-            body.as_deref(),
-        ))
-    };
+    let (publication_message, pending_message) = ship_messages(&args, native)?;
     // trace:BUG-HOME-038 | ai:claude
     if let Some(clone) = from_seat {
         return crate::ship_from_seat::run(crate::ship_from_seat::FromSeatOptions {
@@ -8886,12 +8899,12 @@ fn run_ship(
             no_pr: *no_pr,
             dry_run: *dry_run,
             // trace:TASK-2712 | ai:claude
-            commit_pending: commit_pending.as_deref().map(with_body).transpose()?,
+            commit_pending: pending_message,
         });
     }
     // trace:TASK-2902 | ai:codex
     if native {
-        if let Some(subject) = message {
+        if let Some(subject) = &publication_message {
             anyhow::ensure!(
                 !*no_trailer_check,
                 "native declarations require trailer validation"
@@ -8899,7 +8912,7 @@ fn run_ship(
             return crate::native_publication::declare(
                 &crate::find_project_root().unwrap_or(std::env::current_dir()?),
                 spec.as_deref(),
-                &with_body(subject)?,
+                subject,
                 *dry_run,
             );
         }

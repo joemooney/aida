@@ -145,8 +145,10 @@ commit and publish it with
 `aida ship <SPEC> --from-seat <clone> --commit-pending '<subject> (<SPEC>)'`.
 Both commands accept `--commit-body-file <file>` for an optional UTF-8 body,
 including required trailers such as `Help-Golden: unchanged`. The body is
-written verbatim after the subject and a blank line. Only the subject supplies
-completion IDs; failed exits preserve the body while retaining Refs.
+written verbatim after the subject and a blank line. Store body files outside the
+checkout (for example under `/tmp`) so host staging does not commit them. Avoid
+body lines ending in `(ID)` groups: those lines can also supply completion credit
+in squash commits. Failed exits preserve the body while retaining Refs.
 <!-- trace:BUG-2493 | ai:codex -->
 
 Either way the commit runs inside AIDA's own sandbox on the seat's leased

@@ -1107,3 +1107,17 @@ fn task_2879_native_stop_hands_pending_work_to_host() {
     assert!(!NATIVE_STOP_CONTRACT.contains("when your PR is open"));
     assert!(STOP_CONTRACT.contains("when your PR is open"));
 }
+
+// trace:BUG-2493 | ai:codex
+#[test]
+fn bug_2493_native_prompts_name_safe_body_file_surface() {
+    for text in [
+        NATIVE_STOP_CONTRACT,
+        include_str!("../../../aida-core/templates/skills/aida-pickup.md"),
+        include_str!("../../../aida-core/templates/commands/aida-pickup.md"),
+    ] {
+        assert!(text.contains("--commit-body-file"));
+        assert!(text.contains("/tmp"));
+        assert!(text.contains("Help-Golden: unchanged"));
+    }
+}

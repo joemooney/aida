@@ -27,7 +27,8 @@ Follow the workflow in `.claude/skills/aida-pickup/SKILL.md`:
    `aida ship -m '[AI:codex] type(scope): subject (Refs ID)'`. This only records
    a lease-bound declaration; failed exits always retain Refs.
    For required commit-body trailers such as `Help-Golden: unchanged`, add
-   `--commit-body-file <UTF-8-file>` to that declaration. The host also accepts it
+   `--commit-body-file <UTF-8-file>` to that declaration. Store the file outside
+   the checkout (for example under `/tmp`) so host staging does not commit it. The host also accepts it
    with `--from-seat <clone> --commit-pending '<subject>'`.
    <!-- trace:BUG-2493 | ai:codex -->
    <!-- trace:TASK-2902 | ai:codex -->
