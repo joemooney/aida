@@ -8,7 +8,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-06T13:39:53.442026096Z
-modified_at: 2026-11-08T04:13:53.914331083Z
+modified_at: 2026-11-08T04:16:52.772639666Z
 req_type: Task
 tags:
 - architecture
@@ -432,6 +432,43 @@ comments:
   modified_at: 2026-11-08T03:33:22.987624318Z
   session_id: 01a1b8be-8170-7fb2-89ab-ecb4c6eee98c
   harness_version: 2.1.319 (Claude Code)
+- id: 01a1b95f-9a24-7bb2-8357-67725299df55
+  author: joe
+  content: |
+    TASK-3223 S2a routing audit — native-seat handoff
+
+    Result: partial diagnostic only; routing acceptance is NOT met. Leave TASK-3223 open and production mediated admission closed. No commit, push, PR metadata change, history rewrite, merge-hold clearance, review record or queue completion was attempted.
+
+    Changed files:
+    - scripts/check-store-writers.py: --profile mediated checks reconciliation then lists unresolved writer/operation IDs as JSON and refuses while blockers remain. This diagnostic conveys no launch authority.
+    - tests/test_store_writer_inventory.py: proves reconciled inventory with unresolved MCP receiver/no lexical sinks still refuses; separates host-only/private-cache classifications from unresolved sites.
+    - docs/internal/security/store-mutation-writers.md: documents the diagnostic and its v2 schema limitations.
+
+    Observed blockers:
+    - 3360 writer sites: 3151 blocked, 209 host_only; 293 operation mappings, all blocked. Counts include broad static candidates and TASK-3326 participants; they are not 3151 confirmed canonical writers.
+    - service.py only admits session_probe/request_status. Canonical schemas cover comment_add and spec_edit(title/description) only. Host also explicitly refuses canonical operations.
+    - GitBackend::mutate_canonical -> redo::commit installs durable object images but does not publish Git/event evidence; redo::install explicitly documents the uncommitted install. The previous round kept these verbs disabled until publication exists.
+    - CLAUDE.md:19 requires architecture sketches on the owning spec plus advisor signoff. A generic Storage replacement/CLI forwarding bridge would change the approved closed typed operation model. Need operation-specific authority/transaction/publication design for remaining writers; cannot label unresolved writers routed or enable the profile on static evidence.
+    - codegraph callers mutate_canonical failed (index unreachable); rg confirmed production host and fixture/test callers. aida doctor check codegraph reports unreachable. No lane indexing attempted.
+
+    Round-7 findings:
+    1–3 concern historical PR #3563 metadata/squash history. Host-only, untouched; preserve Refs-only subject and empty squash body for any eventual publication.
+    4: hold/signoff gate untouched. Latest ruling authorizes the next slice, not an invented generic mutation protocol or multi-root protocol. own_claim/queue_done remain TASK-3326.
+    5: dispute its obsolete sketch-only scope and assertions that the boundary/private caches do not exist; #3584/#3598/#3623 and the binding 2026-11-08 03:33 UTC ruling supersede those premises. Agree implementation acceptance remains unmet: no routing/activation claim.
+    6: no eventual merge attempted; host must check CI on its new commit. Local make check-ci-fast was interrupted at its unexpected direct cargo check to comply with lane-only Cargo execution.
+
+    Validation:
+    - python3 -m unittest tests/test_store_writer_inventory.py: 44 tests passed.
+    - default writer reconciliation: 3360 sites / 293 operations passed.
+    - --profile mediated: expected exit 1; 3151 unresolved sites / 293 unresolved operations. Full JSON: /tmp/task3223-mediated-inventory.json.
+    - git diff --check passed.
+    - make check-ci-fast NOT green: interrupted at Check aida-cli without default features; log /tmp/task3223-ci-fast.log.
+    - Launcher Cargo check job j20261108T041548760-1118735-0 submitted; final state to be recorded separately. No Rust test execution claimed.
+
+    Publication: punt is a publication veto. These edits are uncommitted and reviewable; host must not publish around the veto. If advisor resolves it and accepts this diagnostic as a partial slice, retain Refs TASK-3223 and describe it as diagnostics only, not implementation completion.
+  created_at: 2026-11-08T04:16:52.772639666Z
+  modified_at: 2026-11-08T04:16:52.772639666Z
+  session_id: 01a1b95c2df0
 history:
 - id: 01a1b116-742d-73c0-9064-1933f11e4c38
   author: joe
