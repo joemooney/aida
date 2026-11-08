@@ -8,7 +8,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-07T23:40:15.306412624Z
-modified_at: 2026-11-08T19:08:25.363305548Z
+modified_at: 2026-11-08T19:13:21.673823875Z
 req_type: Task
 relationships:
 - rel_type: BlockedBy
@@ -551,6 +551,12 @@ history:
   - field_name: status
     old_value: InProgress
     new_value: NeedsAttention
+- id: 01a1bc94-5b62-71b0-aaf6-a2c1d28be0e5
+  author: joe
+  timestamp: 2026-11-08T19:13:21.762082147Z
+  session_id: 01a1bc9239f0
+  harness_version: 2.1.319 (Claude Code)
+  changes: []
 filed_at:
   code_sha: 2a7fe186bdcd718fa356e5e4d028a3b2ff13769d
   branch: main
@@ -565,3 +571,11 @@ attention_reason:
   detail: 'Latest review findings 5, 6 and 7 are fixed locally: gate-drift scan includes aida-mcp, audit commands scan the transport, and four TASK-3366 rationale comments are restored. Findings 1 and 2 still block completion: AC5 requires dell1 clean-build timing evidence unavailable on disrad-dvp98b3puw; AC3 requires advisor correction of 72 tools versus the unchanged 58-tool surface. Findings 3 and 4 require host PR metadata, final-head CI and recorded hold clearance. Preserve existing publication vetoes; no completion trailer or publication until triage.'
   raised_by: implementer
   raised_at: 2026-11-08T19:08:25.363305548Z
+failure_reason:
+  phase: reviewer
+  phase_index: 3
+  kind: verdict:request-changes
+  detail: 'Extraction still reads faithful (AC0, 1, 2, 4 by source), but the head only merged main: AC5 timings and the AC3 72-vs-58 ruling are open, the completion trailer remains, CI has no result at head, round-4 guard and doc findings are unaddressed, and aida doc suggest lost MCP tool detection.'
+  recovery_hint: address the review findings, move TASK-3429 back to In Progress, and clear the PR hold only after approval
+  shelved_by: reviewer
+  shelved_at: 2026-11-08T19:13:21.673823875Z
