@@ -13,12 +13,12 @@ description: |
   3. Works for Claude, Codex and AGY through their headless resume commands; one adapter test per vendor using a recorded fixture.
   4. A wait whose seat or session has been lost surfaces as an escalation, never a silent drop.
   Ref: docs/plans/2026-11-07-infinity-agent-architecture-deep-dive.md section 3.3 and the SPIKE-711 results table.
-status: InProgress
+status: NeedsAttention
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-08T02:58:08.667753563Z
-modified_at: 2026-11-08T12:12:49.242467558Z
+modified_at: 2026-11-08T12:13:42.358331618Z
 req_type: Story
 tags:
 - area:human-wait
@@ -787,6 +787,15 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a1bb14-2656-7273-aa10-24f5e483b7e3
+  author: dirtlab
+  timestamp: 2026-11-08T12:13:42.358342649Z
+  session_id: 01a1bb134e69
+  harness_version: codex-cli 0.167.0
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: NeedsAttention
 filed_at:
   code_sha: dc41ee8da2f44f88178936fc1a8e6cb7168a3de7
   branch: main
@@ -796,3 +805,8 @@ filed_at:
   vendor: claude
   session: 01a1b8be-8170-7fb2-89ab-ecb4c6eee98c
   harness_version: 2.1.319 (Claude Code)
+attention_reason:
+  category: design-fork
+  detail: 'R23 addressed in docs/plans/2026-11-08-story-2661-park-resume-sketch.md: CLI claim and MCP claim_task refuse retained ownership at final lease/status/owner boundaries; added regressions per verb, races, uncertainty, cancellation and legacy conflicting live-claim recovery for bound resume. No findings disputed. Binding advisor ruling requires sketch signoff before implementation. R1 remains host/advisor metadata action: retitle PR #3666 exactly [AI:codex] docs(plans): sketch park-on-ask resume-on-answer (Refs STORY-2661). Retain publication veto until signoff and title repair. Validation: git diff --check passed; documentation only, runtime regressions untested=true. Codegraph unavailable; inspected claim and MCP source directly. Native non-completing Refs declaration recorded; edits left uncommitted.'
+  raised_by: implementer
+  raised_at: 2026-11-08T12:13:42.358331618Z
