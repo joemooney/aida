@@ -515,6 +515,27 @@ class WorkCiTests(unittest.TestCase):
             self.assertEqual(row["command"], f"aida intent ci read --attempt {row['attempt']} --sha {row['sha']}")
         self.assertFalse(source_fetches())
         self.assertFalse(f.statuses)
+        # A publication refusal still reports skipped rows in one JSON object.
+        # trace:TASK-3452 | ai:codex
+        recent = values[-1]
+        marker = f.private(fresh) / f"ci-status-{total}.json"
+        marker.unlink()
+        pending = f.private(fresh) / f"ci-status-pending-{total}.json"
+        pending.write_text(recent["digest"])
+        pending.chmod(0o600)
+        refused = f.cli(fresh, "ci", "process", "--json", ok=False)
+        self.assertNotEqual(refused.returncode, 0)
+        failure = json.loads(refused.stdout)
+        self.assertIn("Uncertain native CI status", failure["error"])
+        self.assertEqual(failure["skipped"], reported["skipped"])
+        refused = f.cli(fresh, "ci", "process", ok=False)
+        if unverified:
+            self.assertIn(reason, refused.stdout)
+        pending.unlink()
+        marker.write_text(recent["digest"])
+        marker.chmod(0o600)
+        self.assertEqual(source_fetches(), [shas[total], shas[total]])
+        log.write_text("")
         # Exact read revalidates only this old identity and persists its proof.
         old_attempt = 3 if warm else 1
         rows = json.loads(f.cli(fresh, "ci", "read", "--attempt", str(old_attempt), "--sha", shas[old_attempt], "--json").stdout)
@@ -526,6 +547,11 @@ class WorkCiTests(unittest.TestCase):
         log.write_text("")
         f.cli(fresh, "ci", "read", "--attempt", str(old_attempt), "--sha", shas[old_attempt])
         self.assertFalse(source_fetches())
+        # Published old results must stay quiet after a cold validator pass.
+        # trace:TASK-3452 | ai:codex
+        marker = f.private(fresh) / "ci-status-1.json"
+        marker.write_text(original["digest"])
+        marker.chmod(0o600)
         # A validator fingerprint change invalidates all old proof, but uses
         # exactly the same bounded path and creates a fresh incremental checkpoint.
         state = json.loads(checkpoint.read_text())
@@ -534,6 +560,9 @@ class WorkCiTests(unittest.TestCase):
         pulled = f.cli(fresh, "pull")
         self.assertIn(f"{total - 32} unverified-history", pulled.stderr)
         self.assertEqual(len(source_fetches()), 32)
+        processed = json.loads(f.cli(fresh, "ci", "process", "--json").stdout)
+        self.assertNotIn(1, [row["attempt"] for row in processed["skipped"]])
+        self.assertFalse(f.statuses)
         log.write_text("")
         f.cli(fresh, "pull")
         self.assertFalse(source_fetches())

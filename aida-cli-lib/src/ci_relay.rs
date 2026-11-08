@@ -847,7 +847,16 @@ pub(super) fn record_skipped(
         .filter(|(path, _)| path.starts_with("ci-results/"))
     {
         let r: Receipt = serde_json::from_slice(bytes)?;
+        // A validator upgrade can drop verification proof without undoing a
+        // completed native publication. Such rows need no operator action.
+        // trace:TASK-3452 | ai:codex
         if !intake.ci_verified(path) && latest.get(&r.sha) == Some(&&r.attempt) {
+            let published = intake
+                .private
+                .read(&format!("ci-status-{}.json", r.attempt))?;
+            if published.as_deref() == Some(r.digest.as_bytes()) {
+                continue;
+            }
             skipped.push(SkippedAttempt {
                 command: format!(
                     "aida intent ci read --attempt {} --sha {}",
@@ -876,7 +885,7 @@ pub(super) fn record_skipped(
     intake
         .private
         .write(SKIPPED, &serde_json::to_vec(&parts)?)?;
-    for index in parts..old_parts.min(82) {
+    for index in parts..old_parts {
         intake
             .private
             .remove(&format!("ci-skipped-results-{index}.json"))?;
@@ -891,9 +900,6 @@ pub(crate) fn awaiting_skipped(root: &Path) -> Vec<SkippedAttempt> {
             .join(SKIPPED);
         let bytes = crate::observation_envelope::read_bounded(&path, 65536)?;
         let parts: usize = serde_json::from_slice(&bytes)?;
-        if parts > 82 {
-            bail!("Invalid CI display cache size");
-        }
         let mut rows = Vec::new();
         for index in 0..parts {
             let bytes = crate::observation_envelope::read_bounded(
@@ -919,85 +925,93 @@ fn process(intake: &Intake, p: &Profile, json_format: bool) -> Result<()> {
             .or_insert(*n);
     }
     let skipped = record_skipped(intake, &files, &snapshot.requests)?;
-    let report = |message: String| {
-        if json_format {
-            println!("{}", json!({"message": message, "skipped": skipped}));
-        } else {
-            for item in &skipped {
-                println!("{}", item.message());
+    // Report the skipped inventory even when a later publication step fails.
+    // trace:TASK-3452 | ai:codex
+    let result = (|| -> Result<String> {
+        for (path, bytes) in files
+            .iter()
+            .filter(|(path, _)| path.starts_with("ci-results/"))
+        {
+            // Only inventory-verified history grants receipt authority. Select
+            // current attempts before source work; audit-only history cannot publish.
+            let r: Receipt = serde_json::from_slice(bytes)?;
+            if !intake.ci_verified(path) || latest.get(&r.sha) != Some(&r.attempt) {
+                continue;
             }
-            println!("{message}");
-        }
-    };
-    for (path, bytes) in files
-        .iter()
-        .filter(|(path, _)| path.starts_with("ci-results/"))
-    {
-        // Only inventory-verified history grants receipt authority. Select
-        // current attempts before source work; audit-only history cannot publish.
-        let r: Receipt = serde_json::from_slice(bytes)?;
-        if !intake.ci_verified(path) || latest.get(&r.sha) != Some(&r.attempt) {
-            continue;
-        }
-        let marker = format!("ci-status-{}.json", r.attempt);
-        if intake.private.read(&marker)?.as_deref() == Some(r.digest.as_bytes()) {
-            continue;
-        }
-        let r = snapshot.validate(path, bytes)?;
-        let marker = format!("ci-status-{}.json", r.attempt);
-        if let Some(old) = intake.private.read(&marker)? {
-            if old != r.digest.as_bytes() {
-                bail!("CI status processing identity conflict");
+            let marker = format!("ci-status-{}.json", r.attempt);
+            if intake.private.read(&marker)?.as_deref() == Some(r.digest.as_bytes()) {
+                continue;
             }
-            continue;
-        }
-        // Persist uncertainty before the POST. A crash/timeout never blindly
-        // replays a status side effect. Operator reconciles native status and
-        // removes this pending marker only after establishing no write happened.
-        let pending = format!("ci-status-pending-{}.json", r.attempt);
-        let endpoint = p
-            .home_api
-            .as_ref()
-            .context("Home-only status endpoint required")?;
-        if status_observed(endpoint, &r)? {
+            let r = snapshot.validate(path, bytes)?;
+            let marker = format!("ci-status-{}.json", r.attempt);
+            if let Some(old) = intake.private.read(&marker)? {
+                if old != r.digest.as_bytes() {
+                    bail!("CI status processing identity conflict");
+                }
+                continue;
+            }
+            // Persist uncertainty before the POST. A crash/timeout never blindly
+            // replays a status side effect. Operator reconciles native status and
+            // removes this pending marker only after establishing no write happened.
+            let pending = format!("ci-status-pending-{}.json", r.attempt);
+            let endpoint = p
+                .home_api
+                .as_ref()
+                .context("Home-only status endpoint required")?;
+            if status_observed(endpoint, &r)? {
+                intake.private.write(&marker, r.digest.as_bytes())?;
+                intake.private.remove(&pending)?;
+                return Ok(format!(
+                    "CI attempt {}: native status reconciled",
+                    r.attempt
+                ));
+            }
+            if intake.private.read(&pending)?.is_some() {
+                bail!("Uncertain native CI status publication; reconcile pending marker with forge before retrying");
+            }
+            intake.private.write(&pending, r.digest.as_bytes())?;
+            // Re-pin admission immediately before the write. A new attempt for this
+            // SHA supersedes older receipts even if the new receipt has not arrived.
+            let current = refs(&source(intake)?, &p.home_remote)?;
+            if current
+                .iter()
+                .any(|(n, sha)| sha == &r.sha && *n > r.attempt)
+            {
+                intake.private.remove(&pending)?;
+                continue;
+            }
+            if current.get(&r.attempt) != Some(&r.sha) {
+                bail!("Retained CI request changed before status publication");
+            }
+            publish_status(
+                p.home_api
+                    .as_ref()
+                    .context("Home-only status endpoint required")?,
+                &r,
+            )?;
             intake.private.write(&marker, r.digest.as_bytes())?;
             intake.private.remove(&pending)?;
-            report(format!(
-                "CI attempt {}: native status reconciled",
-                r.attempt
-            ));
-            return Ok(());
+            return Ok(format!("CI attempt {}: native status published", r.attempt));
         }
-        if intake.private.read(&pending)?.is_some() {
-            bail!("Uncertain native CI status publication; reconcile pending marker with forge before retrying");
+        Ok("CI intake: no unprocessed current results".to_string())
+    })();
+    if json_format {
+        match &result {
+            Ok(message) => println!("{}", json!({"message": message, "skipped": skipped})),
+            Err(error) => println!(
+                "{}",
+                json!({"error": error.to_string(), "skipped": skipped})
+            ),
         }
-        intake.private.write(&pending, r.digest.as_bytes())?;
-        // Re-pin admission immediately before the write. A new attempt for this
-        // SHA supersedes older receipts even if the new receipt has not arrived.
-        let current = refs(&source(intake)?, &p.home_remote)?;
-        if current
-            .iter()
-            .any(|(n, sha)| sha == &r.sha && *n > r.attempt)
-        {
-            intake.private.remove(&pending)?;
-            continue;
+    } else {
+        for item in &skipped {
+            println!("{}", item.message());
         }
-        if current.get(&r.attempt) != Some(&r.sha) {
-            bail!("Retained CI request changed before status publication");
+        if let Ok(message) = &result {
+            println!("{message}");
         }
-        publish_status(
-            p.home_api
-                .as_ref()
-                .context("Home-only status endpoint required")?,
-            &r,
-        )?;
-        intake.private.write(&marker, r.digest.as_bytes())?;
-        intake.private.remove(&pending)?;
-        report(format!("CI attempt {}: native status published", r.attempt));
-        return Ok(());
     }
-    report("CI intake: no unprocessed current results".to_string());
-    Ok(())
+    result.map(|_| ())
 }
 fn probe(intake: &Intake, root: &Path, sha: &str) -> Result<()> {
     // The actual separately enrolled return URL/credential is used. Passing a
@@ -1188,6 +1202,40 @@ mod tests {
             String::from_utf8_lossy(&stderr)
         );
     }
+    // Exercise the actual on-disk awaiting reader, including histories larger
+    // than the former arbitrary 82-part display ceiling.
+    // trace:TASK-3452 | ai:codex
+    #[test]
+    fn awaiting_reads_large_skipped_cache() {
+        let (temp, _) = repository("name: test", ".github/workflows/test.yml");
+        let dir = aida_core::allocation_authority::common_dir(temp.path())
+            .unwrap()
+            .join("aida-intake");
+        fs::create_dir_all(&dir).unwrap();
+        fs::write(dir.join(SKIPPED), b"83").unwrap();
+        for index in 0..83 {
+            let row = SkippedAttempt {
+                sha: "a".repeat(40),
+                attempt: index + 1,
+                reason: "outside the 32-attempt revalidation window".into(),
+                command: format!(
+                    "aida intent ci read --attempt {} --sha {}",
+                    index + 1,
+                    "a".repeat(40)
+                ),
+            };
+            fs::write(
+                dir.join(format!("ci-skipped-results-{index}.json")),
+                serde_json::to_vec(&vec![row]).unwrap(),
+            )
+            .unwrap();
+        }
+        let rows = awaiting_skipped(temp.path());
+        assert_eq!(rows.len(), 83);
+        assert_eq!(rows[82].attempt, 83);
+        assert!(rows[82].message().contains(&rows[82].command));
+    }
+
     fn repository(yaml: &str, path: &str) -> (tempfile::TempDir, String) {
         let temp = tempfile::tempdir().unwrap();
         git(temp.path(), &["init", "-q", "--template=", "-b", "main"]).unwrap();

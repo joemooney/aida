@@ -1881,6 +1881,7 @@ impl AwaitingReport {
     // trace:BUG-1739 | ai:claude
     pub(crate) fn contributions(&self) -> Vec<(&'static str, usize)> {
         vec![
+            // trace:TASK-3452 | ai:codex
             ("ci_relay_skipped", self.ci_relay_skipped.len()),
             ("prs", self.mergeable_prs.len()),
             ("idle_eligible", self.idle_eligible.len()),
@@ -2058,7 +2059,7 @@ impl AwaitingReport {
             self.reviewer_actionable_count(),
             self.reviewer_queue_items.len()
         );
-        // trace:BUG-2426 | ai:claude
+        // trace:TASK-3452 | ai:codex
         let ci_rows: Vec<Vec<String>> = self
             .ci_relay_skipped
             .iter()
@@ -2080,6 +2081,7 @@ impl AwaitingReport {
                 &ci_rows
             )
         );
+        // trace:BUG-2426 | ai:claude
         let skipped: Vec<Vec<String>> = self
             .review_watch_skipped
             .iter()
@@ -2604,7 +2606,7 @@ impl AwaitingReport {
             budget -= 1;
         }
 
-        // trace:BUG-2426 | ai:claude
+        // trace:TASK-3452 | ai:codex
         for item in &self.ci_relay_skipped {
             if budget == 0 {
                 overflow += 1;
@@ -2613,6 +2615,7 @@ impl AwaitingReport {
             writeln!(w, "  {}", item.message())?;
             budget -= 1;
         }
+        // trace:BUG-2426 | ai:claude
         for item in &self.review_watch_skipped {
             if budget == 0 {
                 overflow += 1;
@@ -3127,8 +3130,9 @@ impl AwaitingReport {
         serde_json::json!({
             "total": self.total(),
             "idle_eligible": self.idle_eligible,
-            // trace:BUG-2426 | ai:claude
+            // trace:TASK-3452 | ai:codex
             "ci_relay_skipped": self.ci_relay_skipped,
+            // trace:BUG-2426 | ai:claude
             "review_watch_skipped": self.review_watch_skipped,
             "mergeable_prs": self.mergeable_prs.iter().map(|p| serde_json::json!({
                 "number": p.number,
@@ -3371,13 +3375,14 @@ impl AwaitingReport {
         if !self.idle_eligible.is_empty() {
             parts.push(format!("{} idle eligible", self.idle_eligible.len()));
         }
-        // trace:BUG-2426 | ai:claude
+        // trace:TASK-3452 | ai:codex
         if !self.ci_relay_skipped.is_empty() {
             parts.push(format!(
                 "{} CI results need exact read",
                 self.ci_relay_skipped.len()
             ));
         }
+        // trace:BUG-2426 | ai:claude
         if !self.review_watch_skipped.is_empty() {
             parts.push(format!(
                 "{} skipped by review watch",
