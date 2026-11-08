@@ -3,12 +3,12 @@ spec_id: TASK-b6b1278890774ef993d2ebc327862470-880
 agreed_id: TASK-3223
 title: 'STORY-2561 S2: route CLI/MCP store writes through the mediation service and deny raw store writes in the shared boundary'
 description: 'Slice 2 of STORY-2561. Route every inventoried in-lane writer through the S1 service. In the shared AIDA bwrap boundary, make store objects, authority-bearing metadata and the shared derived cache read-only (ancestor grants, symlinks, primary-checkout launches and resume included), with lane-private or read-only derived caches where readers need them. The mediated profile is gated; Codex-native compatibility and its labels stay unchanged. Concurrency tests: stale base, concurrent mutation, and host failure after persist but before reply. Claude behavior is preserved.'
-status: InProgress
+status: NeedsAttention
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-06T13:39:53.442026096Z
-modified_at: 2026-11-08T13:57:43.222075001Z
+modified_at: 2026-11-08T14:03:16.682035512Z
 req_type: Task
 tags:
 - architecture
@@ -1617,6 +1617,15 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a1bb78-774a-7dc3-a58e-3402fd405f97
+  author: dirtlab
+  timestamp: 2026-11-08T14:03:16.682047959Z
+  session_id: 01a1bb735a8f
+  harness_version: codex-cli 0.167.0
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: NeedsAttention
 execution_mode: drive
 filed_at:
   code_sha: 50ce509da3f7edbd12ff6636fe996c9c3a65c68f
@@ -1626,3 +1635,9 @@ filed_at:
   aida_build_sha: dd852f74c3b
   vendor: claude
   session: b0a84e34-277c-4df6-b53c-43f4bbe2e84d
+attention_reason:
+  category: design-fork
+  detail: 'Routing reconciliation found an unresolved acceptance/policy boundary: the staged code and writer guide explicitly refuse comment edit/delete pending an advisor-approved ownership policy, while the binding part-3 ruling requires every inventoried writer to route. The current host schema supports only comment_add and title/description spec_edit. Please decide whether explicit early UnsupportedOperation refusal counts as a reconciled writer for part-3 acceptance, or provide the ownership policy needed to implement existing-comment mutation. This lane did not relabel refused writers as routed or enable mediated launch. Partial uncommitted inventory evidence records the four implemented variants; 3163 writer sites and all 293 operation mappings still block mediated admission. own_claim and queue_done remain TASK-3326.'
+  lean: Keep existing-comment mutation refused until its ownership policy is approved; retain nonzero inventory blockers rather than claiming a zero-unrouted cutover from generic refusal.
+  raised_by: implementer
+  raised_at: 2026-11-08T14:03:16.682035512Z
