@@ -346,9 +346,13 @@ sites = 1
 channels = ["write", "probe"]
 sites = 2
 
-[readers."aida-cli-lib/src/queue_cmd.rs"]
+[readers."aida-cli-lib/src/queue_cmd/integrate.rs"]
 channels = ["worktree", "prose"]
-sites = 2
+sites = 1
+
+[readers."aida-cli-lib/src/queue_cmd/work.rs"]
+channels = ["worktree", "prose"]
+sites = 1
 
 [readers."aida-cli-lib/src/role_cmd.rs"]
 channels = ["worktree"]

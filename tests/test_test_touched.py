@@ -338,14 +338,14 @@ class RealRepoTest(unittest.TestCase):
         self.assertEqual(p.commands, [BASE + ["-p", "aida-cli-lib", "--lib", "--", "story_1853"]])
 
     def test_untested_heavy_lib_module_is_dropped_not_widened(self):
-        p = self.run_plan(["aida-cli-lib/src/tests/role_identity_tests.rs", "aida-cli-lib/src/queue_cmd.rs"])
+        p = self.run_plan(["aida-cli-lib/src/tests/role_identity_tests.rs", "aida-cli-lib/src/queue_cmd/work.rs"])
         ran = []
-        listing = lambda c: (0, "queue_cmd::tests::t: test\n")
+        listing = lambda c: (0, "queue_cmd::work::tests::t: test\n")
         p.suspect = {}  # treat role_identity_tests as untested, not a mapping bug
         self.assertEqual(tt.execute(p, [], False, lambda c: ran.append(c) or 0, listing), 0)
         self.assertEqual(len(ran), 1)
         self.assertNotIn("role::role_identity_tests", ran[0])
-        self.assertIn("queue_cmd", ran[0])
+        self.assertIn("queue_cmd::work", ran[0])
         p.derived = {"aida-cli-lib": {"role::role_identity_tests"}}
         p.commands = [BASE + ["-p", "aida-cli-lib", "--lib", "--", "role::role_identity_tests"]]
         self.assertEqual(tt.execute(p, [], False, self.fail_run, listing), 0)
@@ -376,9 +376,9 @@ class RealRepoTest(unittest.TestCase):
                          ["git_ops", "tests", "store_hook_tests"])
 
     def test_source_read_by_a_guard_test_adds_the_guard_module(self):
-        p = self.run_plan(["aida-cli-lib/src/queue_cmd.rs"])
+        p = self.run_plan(["aida-cli-lib/src/queue_cmd/work.rs"])
         self.assertEqual(len(p.commands), 1)
-        self.assertIn("queue_cmd", p.derived["aida-cli-lib"])
+        self.assertIn("queue_cmd::work", p.derived["aida-cli-lib"])
         self.assertIn("headless_hint_tests", " ".join(p.derived["aida-cli-lib"]))
 
     def test_templates_run_aida_core_unit_tests_unfiltered(self):

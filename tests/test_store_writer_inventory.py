@@ -558,7 +558,7 @@ class WriterInventoryTests(unittest.TestCase):
         self.assertIn('bare sweep call', row['resolution_note'])
 
     def test_queue_done_maps_only_concrete_arm(self):
-        self.put('aida-cli-lib/src/queue_cmd.rs', '''
+        self.put('aida-cli-lib/src/queue_cmd/done.rs', '''
             fn handle_queue_command() {
                 match cmd {
                     QueueCommand::Add { id } => { std::fs::rename(a, b); },
