@@ -23,6 +23,23 @@ SPEC.loader.exec_module(c)
 
 # trace:BUG-2497 | ai:codex
 class RunCompletionTests(unittest.TestCase):
+    def test_agy_verified_terminal_receipt_completes_run(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            report = {"vendor": "agy", "verified_terminal_receipt": True,
+                      "production_launcher_credit": False,
+                      "checks": {"C0": {"status": "pass"}}}
+            # AGY completion comes from its exact-command receipt, without
+            # a Codex turn.completed event or production-launch credit.
+            with contextlib.redirect_stdout(io.StringIO()):
+                c.finish_run(root, report, [])
+            saved = json.loads((root / "report.json").read_text())
+            self.assertEqual(saved["run_status"], "completed")
+            self.assertIsNone(saved["invalid_run_reason"])
+            self.assertTrue(saved["verified_terminal_receipt"])
+            self.assertFalse(saved["production_launcher_credit"])
+            self.assertEqual(saved["checks"], {"C0": {"status": "pass"}})
+
     def test_aida_continuation_reads_headless_logs_and_preserves_checks(self):
         for event, oversize in (("turn.failed", False), ("turn.completed", False),
                                 ("turn.completed", True)):
