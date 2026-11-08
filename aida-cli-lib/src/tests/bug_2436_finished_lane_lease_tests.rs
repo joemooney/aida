@@ -116,6 +116,7 @@ fn a_refused_session_end_is_an_error_not_a_panic() {
 }
 
 // trace:BUG-2488 | ai:codex
+// trace:BUG-b6b1278890774ef993d2ebc327862470-253.acf66e50 | ai:codex
 #[test]
 fn bug_2488_no_change_ends_only_a_readable_clean_seat() {
     assert!(finished_lease_ends(

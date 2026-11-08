@@ -680,9 +680,15 @@ pub(crate) fn reconcile_signals(main: &Path, tree: &Path, spec: &str) -> Result<
     let mut existing = crate::punt::read_ledger(main);
     for record in crate::punt::read_ledger(tree)
         .into_iter()
-        .filter(|r| r.spec == spec)
+        .filter(|r| r.spec.eq_ignore_ascii_case(spec))
     {
-        if !existing.contains(&record) {
+        // Resolution rewrites the host record; the seat retains its open copy.
+        // Compare immutable identity so replay cannot reopen a resolved punt.
+        if !existing.iter().any(|r| {
+            r.spec.eq_ignore_ascii_case(&record.spec)
+                && r.timestamp == record.timestamp
+                && r.category == record.category
+        }) {
             crate::punt::append_to_ledger(main, &record)?;
             existing.push(record);
         }

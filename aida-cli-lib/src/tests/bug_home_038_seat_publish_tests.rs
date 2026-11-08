@@ -2584,7 +2584,9 @@ fn task_2902_rotation_retains_intent_and_lease_release_cleans_binding() {
 
 /// Hit each real launch entry point with an unwritable binding destination.
 /// Setup must clear stale seat intent, then refuse before a child can spawn.
+/// Queue resume also clears stale signals before an earlier policy refusal.
 // trace:TASK-2902 | ai:codex
+// trace:BUG-2488 | ai:codex
 #[test]
 fn task_2902_launch_paths_clear_and_provision_before_spawn() {
     if crate::test_env::run_path_isolated_test() {
@@ -2657,12 +2659,23 @@ fn task_2902_launch_paths_clear_and_provision_before_spawn() {
         "standalone",
         "drain",
         "resume",
+        "queue-resume",
         "bg",
         "worker",
         "generation",
         "nonrotating",
     ] {
         std::fs::write(&declaration, "stale declaration").unwrap();
+        let stale_signals = [
+            crate::punt::signal_path(&clone, "BUG-1"),
+            crate::punt::hold_signal_path(&clone, "BUG-1"),
+        ];
+        if matches!(path, "standalone" | "drain" | "queue-resume") {
+            for signal in &stale_signals {
+                std::fs::create_dir_all(signal.parent().unwrap()).unwrap();
+                std::fs::write(signal, "stale signal").unwrap();
+            }
+        }
         let error = match path {
             "standalone" => {
                 crate::standalone_implementer::run(crate::standalone_implementer::Launch {
@@ -2708,6 +2721,22 @@ fn task_2902_launch_paths_clear_and_provision_before_spawn() {
                 "implementer",
             )
             .err(),
+            "queue-resume" => crate::queue_cmd::run_queue_resume_to_exit(
+                Some(&fx.main),
+                &crate::session::HeadlessResume {
+                    vendor: HeadlessVendor::Codex,
+                    session_id: "test",
+                    resume_id: "test",
+                },
+                "go",
+                &fx.root.join("log"),
+                &clone,
+                &tee,
+                true,
+                "implementer",
+                (&fx.main, "BUG-1", lease),
+            )
+            .err(),
             "bg" => {
                 crate::agent_launch::build_agent_new_bg_command(binary, &config, &plan, &[], None)
                     .err()
@@ -2732,6 +2761,22 @@ fn task_2902_launch_paths_clear_and_provision_before_spawn() {
             .err(),
         };
         let error = error.unwrap_or_else(|| panic!("{path} should refuse a binding write failure"));
+        if matches!(path, "standalone" | "drain" | "queue-resume") {
+            for signal in &stale_signals {
+                assert!(!signal.exists(), "{path} retained {}", signal.display());
+            }
+        }
+        if path == "queue-resume" {
+            // This clone has no trusted native policy of its own. Admission
+            // must clear its old signals even when policy preflight refuses
+            // before publication binding setup or vendor spawn.
+            assert!(
+                format!("{error:#}").contains("cannot run an AIDA-contained session"),
+                "{error:#}"
+            );
+            assert!(declaration.exists());
+            continue;
+        }
         assert_eq!(
             error
                 .downcast_ref::<std::io::Error>()
@@ -2769,6 +2814,8 @@ fn task_2902_launch_paths_clear_and_provision_before_spawn() {
 }
 
 // trace:BUG-2488 | ai:codex
+// trace:BUG-b6b1278890774ef993d2ebc327862470-253.acc03424 | ai:codex
+// trace:BUG-b6b1278890774ef993d2ebc327862470-253.acf66e50 | ai:codex
 #[test]
 fn bug_2488_native_signals_reach_host_and_unchanged_seat_never_bundles() {
     if !bwrap_live_or_skip() {
@@ -2931,6 +2978,66 @@ fn bug_2488_standalone_hold_survives_seat_and_allows_held_resume() {
     if crate::usage::is_enabled(Some(main.path())) {
         assert_eq!(crate::punt::read_ledger(main.path()), vec![record]);
     }
+}
+
+// trace:BUG-2488 | ai:codex
+#[test]
+fn bug_2488_reconcile_never_reopens_resolved_punts() {
+    let _env = crate::test_env::EnvVarsGuard::apply(&[
+        ("AIDA_TELEMETRY", Some("1")),
+        (crate::events::EVENTS_DISABLE_ENV, Some("0")),
+    ]);
+    let main = tempfile::tempdir().unwrap();
+    let tree = tempfile::tempdir().unwrap();
+    let spec = "BUG-2488";
+    std::fs::create_dir_all(tree.path().join(".aida")).unwrap();
+    let mut record: crate::punt::PuntRecord = serde_json::from_value(serde_json::json!({
+        "timestamp": "2026-11-07T20:00:00Z", "spec": "bug-2488",
+        "category": "design-fork", "detail": "choose design", "resolution_path": "punted"
+    }))
+    .unwrap();
+    let write_seat = |record: &crate::punt::PuntRecord| {
+        std::fs::write(
+            crate::punt::ledger_path(tree.path()),
+            format!("{}\n", serde_json::to_string(record).unwrap()),
+        )
+        .unwrap();
+    };
+    write_seat(&record);
+    crate::standalone_implementer::reconcile_signals(main.path(), tree.path(), spec).unwrap();
+    assert_eq!(crate::punt::read_ledger(main.path()), vec![record.clone()]);
+    assert_eq!(
+        crate::punt::close_open_records(
+            main.path(),
+            spec,
+            "advisor-resolved",
+            "proceed",
+            None,
+            None
+        )
+        .unwrap(),
+        1
+    );
+    let resolved = crate::punt::read_ledger(main.path());
+    let events = std::fs::read(crate::events::events_path(main.path())).unwrap();
+    // Both the lookup and identity comparison must ignore spec-ID case.
+    record.spec = spec.into();
+    write_seat(&record);
+    crate::standalone_implementer::reconcile_signals(main.path(), tree.path(), spec).unwrap();
+    assert_eq!(crate::punt::read_ledger(main.path()), resolved);
+    assert_eq!(
+        std::fs::read(crate::events::events_path(main.path())).unwrap(),
+        events,
+        "replay must not emit another PuntFiled wake"
+    );
+    assert!(!crate::punt::is_open(&resolved[0]));
+    // A genuinely new punt still mirrors, rather than being suppressed by spec alone.
+    record.timestamp += chrono::Duration::seconds(1);
+    write_seat(&record);
+    crate::standalone_implementer::reconcile_signals(main.path(), tree.path(), spec).unwrap();
+    let records = crate::punt::read_ledger(main.path());
+    assert_eq!(records.len(), 2);
+    assert!(crate::punt::is_open(&records[1]));
 }
 
 // trace:BUG-2488 | ai:codex

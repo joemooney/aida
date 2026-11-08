@@ -6660,7 +6660,17 @@ pub(crate) fn run_vendor_headless_to_exit(
     let drain_lane = drain_resume_lane(vendor, seat, lease_id, lane_tree);
     // trace:TASK-2902 | ai:codex
     if vendor == HeadlessVendor::Codex {
-        if let Some((_, (tree, _))) = implementer_job_lane(seat, lease_id, lane_tree) {
+        if let Some((lease, (tree, _))) = implementer_job_lane(seat, lease_id, lane_tree) {
+            // Clear only the reused seat's previous attempt, before spawning.
+            // Host-side holds retain their independent publication veto.
+            // trace:BUG-2488 | ai:codex
+            let main = crate::main_worktree_root_from(&headless_worktree_root());
+            let scope = crate::list_leases(&main)
+                .into_iter()
+                .find(|l| l.id == lease)
+                .context("publication lease disappeared")?
+                .scope;
+            crate::standalone_implementer::provision_signals(tree, &scope)?;
             crate::native_publication::prepare(
                 &crate::main_worktree_root_from(&headless_worktree_root()),
                 tree,
