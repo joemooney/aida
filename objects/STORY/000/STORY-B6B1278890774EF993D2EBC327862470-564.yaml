@@ -18,12 +18,12 @@ description: |
   2. Without sccache configured, behaviour is unchanged.
   3. Test: the job profile's env/bind set includes the cache dir and wrapper only when configured.
   4. The trust decision (shared or lane-only cache) is recorded on this spec before implementation.
-status: Approved
+status: NeedsAttention
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-07T19:59:26.079479Z
-modified_at: 2026-11-08T21:29:49.050392251Z
+modified_at: 2026-11-08T21:29:57.753385657Z
 req_type: Story
 comments:
 - id: 01a1b798-f0d4-73b1-93d5-f84581f2d190
@@ -1036,6 +1036,14 @@ history:
   - field_name: status
     old_value: NeedsAttention
     new_value: Approved
+- id: 01a1bd11-6af9-7d13-9db9-93f5969ace95
+  author: aida-loop-guard
+  timestamp: 2026-11-08T21:29:57.753384526Z
+  session_id: 20abb7c3-8f9b-4a5e-b326-404921f3b450
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: NeedsAttention
 filed_at:
   code_sha: 7a18c0d52a6a4e0822befd4c810cfed16b04b74c
   branch: main
