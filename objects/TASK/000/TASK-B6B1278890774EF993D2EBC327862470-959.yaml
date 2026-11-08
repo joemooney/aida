@@ -8,7 +8,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-07T22:12:32.196595160Z
-modified_at: 2026-11-08T16:07:14.703515190Z
+modified_at: 2026-11-08T16:25:20.650487013Z
 req_type: Task
 relationships:
 - rel_type: Child
@@ -36,6 +36,11 @@ comments:
   modified_at: 2026-11-07T23:51:50.813524486Z
   session_id: 01a1b848-940b-7bd2-8acd-52e428b182b8
   harness_version: 2.1.319 (Claude Code)
+- id: 01a1bbfa-880a-75a0-ac5e-6d239212d4f2
+  author: mcp
+  content: 'Implementation in the native TASK-3426 lane is complete pending lane-runner Rust validation. Split queue_cmd.rs into queue_cmd/mod.rs plus subcommand modules (including the Work arm and handle_queue_work under the binding ruling); existing queue_cmd item paths remain through re-exports. Added scripts/relocate-paths.py, conserved environment/liveness/glob budgets, relocated config/store/vendor inventories, and updated source-pinning tests. Token comparisons confirm all 218 non-dispatch function bodies and all 16 match-arm bodies are unchanged. Formatting, whitespace, relocation/planner/store-writer fixtures pass. Of 45 fast gates: 40 passed, 3 Cargo-backed steps deferred to host/launcher, 2 index-only scanners refuse untracked split modules in this read-only-Git seat; supplying the new source paths to those exact scanners passes both exact-ledger and HEAD-growth checks. No commit, push, PR, ship, review record or queue completion performed. Rust jobs: j20261108T161532510-2056159-0 (queue filter) running; j20261108T162414142-2111540-0 (source guards) queued.'
+  created_at: 2026-11-08T16:25:20.650469571Z
+  modified_at: 2026-11-08T16:25:20.650469571Z
 history:
 - id: 01a1b812-66e1-7502-809a-7f261ca63ac4
   author: joe
