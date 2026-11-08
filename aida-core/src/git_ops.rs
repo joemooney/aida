@@ -2153,7 +2153,10 @@ fn rebase_auto_merge_onto(repo: &Path, target: &str) -> Result<StorePullOutcome>
         if conflicted.is_empty() {
             // No conflicts right now but still mid-rebase — let git advance.
             // trace:BUG-2490 | ai:codex — continuation can create a store commit.
-            validate_store_index(repo)?;
+            if let Err(error) = validate_store_index(repo) {
+                let _ = git(repo, &["rebase", "--abort"]);
+                return Err(error);
+            }
             let cont = git(repo, &["-c", "core.editor=true", "rebase", "--continue"])?;
             if !rebase_in_progress(repo) {
                 if cont.success || rebase_completed_ok(repo) {
@@ -2217,7 +2220,10 @@ fn rebase_auto_merge_onto(repo: &Path, target: &str) -> Result<StorePullOutcome>
         // no-op editor so `--continue` never blocks waiting for a commit
         // message on a TTY-less drain.
         // trace:BUG-2490 | ai:codex
-        validate_store_index(repo)?;
+        if let Err(error) = validate_store_index(repo) {
+            let _ = git(repo, &["rebase", "--abort"]);
+            return Err(error);
+        }
         let cont = git(repo, &["-c", "core.editor=true", "rebase", "--continue"])?;
         if !rebase_in_progress(repo) {
             if cont.success || rebase_completed_ok(repo) {
@@ -2825,7 +2831,10 @@ fn merge_union_onto(repo: &Path, ref_: &str, message: &str) -> Result<StorePullO
     }
 
     // trace:BUG-2490 | ai:codex — resolved objects still require schema validation.
-    validate_store_index(repo)?;
+    if let Err(error) = validate_store_index(repo) {
+        let _ = git(repo, &["merge", "--abort"]);
+        return Err(error);
+    }
     let commit = git(repo, &["-c", "core.editor=true", "commit", "--no-edit"])?;
     if !commit.success {
         let _ = git(repo, &["merge", "--abort"]);

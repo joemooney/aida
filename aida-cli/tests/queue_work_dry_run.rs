@@ -561,6 +561,7 @@ fn bug_2490_failed_pull_stops_pickup_before_session_and_spec_writes() {
         "{message}"
     );
     assert!(!message.contains("proceeding with local view"), "{message}");
+    assert!(message.contains("--no-pull"), "{message}");
     assert_eq!(
         snapshot(),
         objects_before,
@@ -569,6 +570,90 @@ fn bug_2490_failed_pull_stops_pickup_before_session_and_spec_writes() {
     assert_pickup_unstarted(&repo, &home, &spec);
     assert_eq!(list_session_files(&repo), sessions_before);
     assert_eq!(sibling_worktrees(&base_dir), siblings_before);
+}
+
+// trace:BUG-2490 | ai:codex
+#[test]
+fn bug_2490_same_spec_conflict_does_not_stop_pickup() {
+    let base = tempfile::tempdir().unwrap();
+    let base_dir = base.path().canonicalize().unwrap();
+    let (repo, home, spec) = init_codex_only_project(&base_dir);
+    let store = repo.join(".aida-store");
+    git(&store, &["add", "."]);
+    git(
+        &store,
+        &["commit", "--allow-empty", "-m", "fixture snapshot"],
+    );
+    let remote = base_dir.join("remote.git");
+    git(
+        &base_dir,
+        &[
+            "clone",
+            "--bare",
+            store.to_str().unwrap(),
+            remote.to_str().unwrap(),
+        ],
+    );
+    git(
+        &store,
+        &["remote", "add", "origin", remote.to_str().unwrap()],
+    );
+    let peer = base_dir.join("peer");
+    git(
+        &base_dir,
+        &["clone", remote.to_str().unwrap(), peer.to_str().unwrap()],
+    );
+    git(&peer, &["config", "user.email", "peer@example.test"]);
+    git(&peer, &["config", "user.name", "peer"]);
+    let files = test_git::git_command()
+        .current_dir(&store)
+        .args(["ls-files", "objects"])
+        .output()
+        .unwrap();
+    assert!(files.status.success());
+    let path = String::from_utf8(files.stdout)
+        .unwrap()
+        .lines()
+        .find(|p| {
+            std::fs::read_to_string(store.join(p))
+                .unwrap()
+                .contains("codex only queue work")
+        })
+        .expect("fixture object")
+        .to_string();
+    let original = std::fs::read_to_string(store.join(&path)).unwrap();
+    for (root, title) in [(&store, "local queue work"), (&peer, "peer queue work")] {
+        std::fs::write(
+            root.join(&path),
+            original.replace("codex only queue work", title),
+        )
+        .unwrap();
+        git(root, &["add", &path]);
+        git(root, &["commit", "-m", title]);
+    }
+    git(&peer, &["push", "origin", "HEAD"]);
+    let out = aida(&repo, &home)
+        .args(["queue", "work", &spec, "--no-launch"])
+        .output()
+        .unwrap();
+    let message = format!(
+        "{}{}",
+        String::from_utf8_lossy(&out.stdout),
+        String::from_utf8_lossy(&out.stderr)
+    );
+    assert!(out.status.success(), "{message}");
+    assert!(!message.contains("pre-pickup pull failed"), "{message}");
+    let show = aida(&repo, &home)
+        .args(["show", &spec, "--format", "json"])
+        .output()
+        .unwrap();
+    assert!(
+        show.status.success(),
+        "{}",
+        String::from_utf8_lossy(&show.stderr)
+    );
+    let value: serde_json::Value = serde_json::from_slice(&show.stdout).unwrap();
+    assert_eq!(value["status"], "In Progress");
 }
 
 #[test]

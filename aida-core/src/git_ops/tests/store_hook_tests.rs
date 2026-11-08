@@ -1462,6 +1462,7 @@ fn bug_2490_rebase_continuation_refuses_invalid_resolved_index() {
     .unwrap();
     add(&store, &[path]).unwrap();
     commit(&store, "local").unwrap();
+    let original_head = head_sha(&store).unwrap();
     assert!(
         !git(
             &store,
@@ -1481,7 +1482,6 @@ fn bug_2490_rebase_continuation_refuses_invalid_resolved_index() {
     // Simulate a manual resolution that clears unmerged stages but is invalid.
     std::fs::write(store.join(path), "title: []\n").unwrap();
     add(&store, &[path]).unwrap();
-    let head = git(&store, &["rev-parse", "HEAD"]).unwrap().stdout;
     let error = rebase_auto_merge_onto(&store, "incoming")
         .unwrap_err()
         .to_string();
@@ -1489,18 +1489,80 @@ fn bug_2490_rebase_continuation_refuses_invalid_resolved_index() {
         error.contains(path) && error.contains("does not parse"),
         "{error}"
     );
-    assert_eq!(head, git(&store, &["rev-parse", "HEAD"]).unwrap().stdout);
-    assert!(rebase_in_progress(&store));
-    git(
-        &store,
-        &[
-            "-c",
-            "maintenance.auto=false",
-            "-c",
-            "gc.auto=0",
-            "rebase",
-            "--abort",
-        ],
+    assert_eq!(original_head, head_sha(&store).unwrap());
+    assert!(!rebase_in_progress(&store));
+    assert_eq!(current_branch(&store).unwrap(), "aida-store");
+}
+
+// trace:BUG-2490 | ai:codex
+#[test]
+fn bug_2490_union_refusal_aborts_and_restores_branch() {
+    let dir = tempfile::tempdir().unwrap();
+    let (_main, store) = bug_1929_main_with_store(dir.path());
+    let path = "objects/STORY/000/STORY-shared.yaml";
+    let bad = "objects/STORY/000/STORY-legacy.yaml";
+    std::fs::create_dir_all(store.join("objects/STORY/000")).unwrap();
+    let valid = serde_yaml::to_string(&crate::models::Requirement::new(
+        "base".into(),
+        String::new(),
+    ))
+    .unwrap();
+    std::fs::write(store.join(path), &valid).unwrap();
+    add(&store, &[path]).unwrap();
+    commit(&store, "base").unwrap();
+    assert!(
+        git(&store, &["checkout", "-b", "incoming"])
+            .unwrap()
+            .success
+    );
+    std::fs::write(
+        store.join(path),
+        valid.replace("title: base", "title: upstream"),
     )
     .unwrap();
+    // A historical invalid sibling arrives alongside a resolvable conflict.
+    std::fs::write(store.join(bad), "title: []\n").unwrap();
+    add(&store, &[path, bad]).unwrap();
+    assert!(
+        git(
+            &store,
+            &[
+                "-c",
+                "maintenance.auto=false",
+                "-c",
+                "gc.auto=0",
+                "commit",
+                "-m",
+                "legacy upstream"
+            ]
+        )
+        .unwrap()
+        .success
+    );
+    assert!(git(&store, &["checkout", "aida-store"]).unwrap().success);
+    std::fs::write(
+        store.join(path),
+        valid.replace("title: base", "title: local"),
+    )
+    .unwrap();
+    add(&store, &[path]).unwrap();
+    commit(&store, "local").unwrap();
+    let original_head = head_sha(&store).unwrap();
+    // Exercise the post-resolution guard directly: public preflight also rejects
+    // this historical invalid object before starting the managed operation.
+    let error = merge_union_onto(&store, "incoming", "union")
+        .unwrap_err()
+        .to_string();
+    assert!(
+        error.contains(bad) && error.contains("does not parse"),
+        "{error}"
+    );
+    assert_eq!(original_head, head_sha(&store).unwrap());
+    assert_eq!(current_branch(&store).unwrap(), "aida-store");
+    assert!(
+        !git(&store, &["rev-parse", "--verify", "MERGE_HEAD"])
+            .unwrap()
+            .success
+    );
+    assert!(!has_changes_checked(&store).unwrap());
 }

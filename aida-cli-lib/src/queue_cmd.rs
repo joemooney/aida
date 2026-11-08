@@ -12509,7 +12509,7 @@ pub(crate) fn handle_queue_work(
     if !no_pull && !list_sessions && !dry_run {
         run_aida_db_sync_pull(storage.path()).context(
             "pre-pickup pull failed; pickup stopped before session setup and store writes; \
-             resolve the store sync failure and retry `aida db sync --pull`",
+             resolve the store sync failure and retry `aida db sync --pull`, or use `--no-pull` for an intentional offline pickup",
         )?;
     }
 

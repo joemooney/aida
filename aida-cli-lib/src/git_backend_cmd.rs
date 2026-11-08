@@ -1357,7 +1357,9 @@ pub(crate) fn db_sync_local_window(
             .context("cannot sync: the local store did not read completely")?;
 
         println!("Pulling from origin/{}...", branch);
-        if let Err(e) = aida_core::git_ops::pull_rebase(store_path, "origin", &branch) {
+        // Use the established structured resolver, as in the ordinary store pull.
+        // trace:BUG-2490 | ai:codex
+        if let Err(e) = aida_core::git_ops::pull_rebase_auto_merge(store_path, "origin", &branch) {
             // A failed rebase leaves the repo in a partial
             // state — but only advise `git rebase --abort`
             // when a rebase is actually in progress; a
