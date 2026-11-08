@@ -3,12 +3,12 @@ spec_id: BUG-b6b1278890774ef993d2ebc327862470-267
 agreed_id: BUG-2502
 title: 'aida queue rework prints ''status: Needs Attention -> Approved'' but the spec stays needs-attention, so lanes are refused as needs-triage'
 description: 'Seen 2026-11-08 on TASK-1222, STORY-1486, TASK-3048, STORY-2642, TASK-3420: metadata-only queue rework printed the Approved transition, aida show still reported needs-attention, and fill-slots launches failed with ''not pickable for fresh work: needs-triage''. An explicit aida edit --status approved fixed each one. Possibly a punt signal or cache overlay reasserting the status. Auto-rework depends on this path.'
-status: NeedsAttention
+status: Approved
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-08T19:37:15.450252326Z
-modified_at: 2026-11-08T20:47:41.070306140Z
+modified_at: 2026-11-08T21:00:05.579433481Z
 req_type: Bug
 comments:
 - id: 01a1bcc0-2ddb-79f0-b763-2d703d44589a
@@ -36,6 +36,13 @@ comments:
   modified_at: 2026-11-08T20:25:18.883634457Z
   session_id: 01a1bcc5c11d
   harness_version: codex-cli 0.167.0
+- id: 01a1bcf6-124b-7023-8e8f-4edd21d9747f
+  author: joe
+  content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: Root-cause fix is correct for all five reported specs, but the narrowed guard drops repeated Rejected reviews and its call site has no handler-level test.. No triage reason was given.'
+  created_at: 2026-11-08T21:00:05.579431910Z
+  modified_at: 2026-11-08T21:00:05.579431910Z
+  session_id: 01a1bc93-77a0-7740-8b03-df4e3e8d1df5
+  harness_version: 2.1.319 (Claude Code)
 history:
 - id: 01a1bcc0-76ed-7d22-8b7b-93e7daa2feca
   author: joe
@@ -68,6 +75,15 @@ history:
   - field_name: status
     old_value: InProgress
     new_value: NeedsAttention
+- id: 01a1bcf6-124b-7023-8e8f-4ec9a56cb3bf
+  author: joe
+  timestamp: 2026-11-08T21:00:05.579415078Z
+  session_id: 01a1bc93-77a0-7740-8b03-df4e3e8d1df5
+  harness_version: 2.1.319 (Claude Code)
+  changes:
+  - field_name: status
+    old_value: NeedsAttention
+    new_value: Approved
 filed_at:
   code_sha: db2eb4c39e46704132705ccb2b8300574ead41a6
   branch: main
@@ -77,11 +93,3 @@ filed_at:
   vendor: claude
   session: 01a1bc93-77a0-7740-8b03-df4e3e8d1df5
   harness_version: 2.1.319 (Claude Code)
-failure_reason:
-  phase: reviewer
-  phase_index: 3
-  kind: verdict:request-changes
-  detail: Root-cause fix is correct for all five reported specs, but the narrowed guard drops repeated Rejected reviews and its call site has no handler-level test.
-  recovery_hint: address the review findings, move BUG-2502 back to In Progress, and clear the PR hold only after approval
-  shelved_by: reviewer
-  shelved_at: 2026-11-08T20:47:41.070306140Z
