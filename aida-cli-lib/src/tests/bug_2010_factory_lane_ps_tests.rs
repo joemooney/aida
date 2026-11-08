@@ -996,6 +996,7 @@ fn test_main_checkout_session_does_not_revive_dead_harness_lease() {
 /// must not be reported stale in `aida ps` and must not appear in "Orphaned In-Progress specs".
 // trace:BUG-2010 | ai:antigravity
 #[test]
+#[cfg(target_os = "linux")]
 fn test_live_factory_lane_not_reported_stale_when_lease_pid_differs() {
     let tmp = tempfile::tempdir().unwrap();
     let wt = tmp.path().join("worktree-2010");
@@ -1012,7 +1013,13 @@ fn test_live_factory_lane_not_reported_stale_when_lease_pid_differs() {
         Some("BUG-2010"),
         wt.clone(),
     );
-    let live_agents = vec![agent.clone()];
+    // Exercise the persisted-row loader used by ps: the compatibility loader
+    // projects raw ticks and would lose the identity required by lease matching.
+    // trace:TASK-3366 | ai:codex
+    agent_registry::write_entry(tmp.path(), &agent).unwrap();
+    let live_agents = agent_registry::load_live_identity_entries(tmp.path());
+    assert_eq!(live_agents.len(), 1);
+    assert_eq!(live_agents[0].process_identity(), agent.process_identity());
 
     // The lease was minted with the factory lane owner and active_pid = agent.pid,
     // but creator_pid was a transient process (e.g. 99999) that died.

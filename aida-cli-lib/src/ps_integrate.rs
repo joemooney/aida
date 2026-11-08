@@ -2144,7 +2144,9 @@ pub(crate) fn gather_running_work(project_root: &std::path::Path) -> (Vec<PsRow>
     // keeps the row live even if the lease recorded a dead or transient pid.
     // Prune contradictory orphan rows when the spec belongs to a live registered agent.
     // trace:BUG-2010 | ai:antigravity
-    let live_agents = agent_registry::load_live_entries(project_root);
+    // Lease matching needs the boot-qualified identity, not the display projection.
+    // trace:TASK-3366 | ai:codex
+    let live_agents = agent_registry::load_live_identity_entries(project_root);
     apply_registered_agent_overlay(
         &live_agents,
         &leases,
