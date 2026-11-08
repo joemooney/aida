@@ -649,8 +649,8 @@ pub enum SessionCommand {
         rotated: bool,
 
         // trace:STORY-2662 | ai:codex
-        /// Internal compaction snapshot; never requests rotation.
-        #[clap(long, hide = true, requires = "write", conflicts_with_all = ["final_", "rotated", "check"])]
+        /// Read/write the worktree recovery snapshot; never requests rotation.
+        #[clap(long, hide = true, conflicts_with_all = ["final_", "rotated", "check"])]
         snapshot: bool,
 
         /// Read only the handoff text, without standing context.

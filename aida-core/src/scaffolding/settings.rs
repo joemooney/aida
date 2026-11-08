@@ -227,6 +227,11 @@ impl Scaffolder {
             );
         }
 
+        // trace:STORY-2662 | ai:codex
+        if !self.config.include_role_context_hook {
+            hooks.push(r#"    "SessionStart": [{"hooks": [{"type": "command", "command": "\"$CLAUDE_PROJECT_DIR\"/.claude/hooks/aida-precompact-handoff.sh", "timeout": 15}]}]"#.to_string());
+        }
+
         // UserPromptSubmit: clears the pending-approval marker (the other
         // half of the pair below on PostToolUse) once a human sends the next
         // prompt. trace:TASK-1461 | ai:claude
@@ -373,21 +378,26 @@ mod tests {
     // trace:STORY-2662 | ai:codex
     #[test]
     fn precompact_handoff_is_claude_only_and_managed() {
-        let settings = parse_json(&build(ScaffoldConfig::default()));
-        let hook = &settings["hooks"]["PreCompact"][0]["hooks"][0];
-        assert!(hook["command"]
-            .as_str()
-            .unwrap()
-            .contains("aida-precompact-handoff.sh"));
-        assert_eq!(hook["timeout"], 15);
-        assert!(settings["hooks"]["SessionStart"]
-            .as_array()
-            .unwrap()
-            .iter()
-            .any(|entry| entry["hooks"][0]["command"]
+        for include_role_context_hook in [true, false] {
+            let settings = parse_json(&build(ScaffoldConfig {
+                include_role_context_hook,
+                ..ScaffoldConfig::default()
+            }));
+            let hook = &settings["hooks"]["PreCompact"][0]["hooks"][0];
+            assert!(hook["command"]
                 .as_str()
                 .unwrap()
-                .contains("aida-precompact-handoff.sh")));
+                .contains("aida-precompact-handoff.sh"));
+            assert_eq!(hook["timeout"], 15);
+            assert!(settings["hooks"]["SessionStart"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .any(|entry| entry["hooks"][0]["command"]
+                    .as_str()
+                    .unwrap()
+                    .contains("aida-precompact-handoff.sh")));
+        }
         assert!(
             super::super::managed_merge::slots_for_file(std::path::Path::new(
                 ".claude/settings.json"

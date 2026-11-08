@@ -484,7 +484,7 @@ def operations(root, scanned=None):
         "comment delete": ("comment_cmd", "delete_comment"),
         "comment add": ("comment_cmd", "add_comment_cli_relayed"),
         "findings add": ("findings_gate", "handle_findings_add"),
-        "session handoff": ("seat_rotation", "write_handoff_by"),
+        "session handoff": ("seat_rotation", "write_handoff_kind"),  # trace:STORY-2662 | ai:codex
         "session handoff standing-orders add": ("seat_rotation", "add_standing_order"),
         "mailbox send": ("mailbox_store", "write_message_with_deliveries"),
         "mailbox digest": ("mailbox_store", "digest_snapshot_to_canonical"),

@@ -987,7 +987,15 @@ pub(crate) fn session_handoff_seat(
     snapshot: bool,
     body_only: bool,
 ) -> Result<()> {
-    let seat = resolve_handoff_seat(seat)?;
+    let role_seat = resolve_handoff_seat(seat)?;
+    // trace:STORY-2662 | ai:codex
+    let cwd = std::env::current_dir()?.canonicalize()?;
+    let snapshot_seat = seat_rotation::compact_snapshot_seat(&cwd, &role_seat);
+    let seat = if snapshot {
+        snapshot_seat.clone()
+    } else {
+        role_seat
+    };
     let project_root = main_worktree_root_from(&find_project_root()?);
     if let Some(src) = write {
         let body = if src == "-" {
@@ -1042,7 +1050,21 @@ pub(crate) fn session_handoff_seat(
     } else {
         seat_rotation::read_latest_handoff(&project_root, &seat)?
     };
+    // Ordinary reads advertise this worktree's recovery packet to relaunches.
+    // Explicit body-only and rotated reads retain their exact-note semantics.
     // trace:STORY-2662 | ai:codex
+    let handoff = if !snapshot && !rotated && !body_only {
+        let recovery = seat_rotation::read_latest_handoff(&project_root, &snapshot_seat)?;
+        match recovery {
+            Some(text) => Some(format!(
+                "{}\nRecovery snapshot (may be stale; revalidate):\n{text}",
+                handoff.unwrap_or_default()
+            )),
+            None => handoff,
+        }
+    } else {
+        handoff
+    };
     if body_only {
         if let Some(text) = handoff {
             print!("{text}");

@@ -46545,7 +46545,7 @@ Working on aida itself
       {
         "name": "snapshot",
         "takes_value": false,
-        "help": "Internal compaction snapshot; never requests rotation"
+        "help": "Read/write the worktree recovery snapshot; never requests rotation"
       },
       {
         "name": "standing-orders",

@@ -815,12 +815,12 @@ jobs:
         if: matrix.shard == 'gates'
         run: python3 tests/test_mail_notice_hook.py
 
-      # Tool-only expiry notices: shell/JSON protocol needs no CLI build.
-      # trace:BUG-2014 | ai:codex
       - name: PreCompact handoff hook protocol
         if: matrix.shard == 'gates'
         run: python3 tests/test_precompact_handoff_hook.py
 
+      # Tool-only expiry notices: shell/JSON protocol needs no CLI build.
+      # trace:BUG-2014 | ai:codex
       - name: Grant expiry hook protocol
         if: matrix.shard == 'gates'
         run: python3 tests/test_grant_expiry_notice_hook.py

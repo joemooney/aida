@@ -1,11 +1,10 @@
 #!/usr/bin/env python3
 """Best-effort Claude PreCompact snapshot; persistence belongs to session handoff.
 
-No transcript scraping, model calls, forge probes, or new state directory.
+No transcript scraping, model calls, or new state directory.
 Every subprocess has a deadline and output cap; the entire hook has 12 seconds.
 """
 # trace:STORY-2662 | ai:codex
-import hashlib
 import json
 import os
 import re
@@ -15,12 +14,13 @@ import subprocess
 import sys
 import tempfile
 import time
+from datetime import datetime, timezone
 
 DEADLINE = time.monotonic() + 12
 
 
-def run(argv, limit=2048, body=None):
-    remaining = min(2, DEADLINE - time.monotonic())
+def run(argv, limit=2048, body=None, timeout=2):
+    remaining = min(timeout, DEADLINE - time.monotonic() - (0 if body else 1.5))
     if remaining <= 0:
         return "unknown (hook budget exhausted)"
     source = tempfile.TemporaryFile() if body else None
@@ -78,49 +78,62 @@ def main():
     sid = payload.get('session_id')
     if not isinstance(sid, str) or not sid or len(sid) > 256:
         return
-    # Separate seat within the existing handoff substrate: sibling lanes and
-    # deliberate rotation notes cannot replace this session's recovery packet.
-    snapshot_seat = 'compact-' + hashlib.sha256((cwd + '\0' + sid).encode()).hexdigest()[:40]
-    handoff = ['aida', 'session', 'handoff', '--seat', snapshot_seat]
+    # CLI owns a reusable worktree/role slot in the existing handoff substrate.
+    handoff = ['aida', 'session', 'handoff', '--seat', seat]
     if event == 'SessionStart':
         if payload.get('source') != 'compact':
             return
-        text = run(handoff + ['--show', '--body-only'], 12000)
+        text = run(handoff + ['--snapshot', '--show', '--body-only'], 12000)
         if text and not text.startswith('unknown ('):
             print(json.dumps({'hookSpecificOutput': {'hookEventName': event,
-                            'additionalContext': text}}))
+                            'additionalContext': 'Recovery snapshot; may predate the latest compaction if its write failed. Revalidate before acting.\n' + text}}))
         return
     branch = run(['git', 'branch', '--show-current'], 256)
     spec = os.environ.get('AIDA_SESSION_SCOPE', '')
     # Branch fallback is a pointer only; never grants completion/ownership credit.
     if not spec:
-        match = re.search(r'(?:STORY|TASK|BUG|SPIKE)-[A-Za-z0-9]+(?:-[0-9]+)?', branch, re.I)
+        match = re.search(r'(?<![A-Za-z0-9])(?:STORY|TASK|BUG|SPIKE)-[A-Za-z0-9]+(?:-[0-9]+)?', branch, re.I)
         spec = match.group(0).upper() if match else 'unknown'
     spec = spec[:160]
     verdict = run(['aida', 'review', 'verdict', spec]) if spec != 'unknown' else 'unknown (no spec pointer)'
-    rows = run(['aida', 'findings', 'list', '--json'], 65536)
+    # Resolve the branch's PR through the existing read-only forge adapter.
+    # A failed lookup must not turn PR-keyed review findings into an empty set.
+    prs = run(['aida', 'pr', 'list', '--json'], 65536, timeout=1.5)
+    origins = {spec.upper()}
+    pr_known = False
+    try:
+        entries = json.loads(prs)
+        if not isinstance(entries, list):
+            raise ValueError('invalid PR list')
+        for entry in entries:
+            if entry['branch'] == branch:
+                origins.add('PR-' + str(int(entry['pr_number'])))
+        pr_known = bool(branch) and not branch.startswith('unknown (')
+    except (ValueError, KeyError, TypeError):
+        pass
+    # Real stores need ~5 seconds; leave the remaining budget for persistence.
+    rows = run(['aida', 'findings', 'list', '--json'], 65536, timeout=6)
     try:
         findings = json.dumps([row for row in json.loads(rows)['findings']
-                               if row.get('origin', '').upper() == spec.upper()], ensure_ascii=False)
+                               if row.get('origin', '').upper() in origins], ensure_ascii=False)
         encoded = findings.encode()
         findings = encoded[:2048].decode('utf-8', errors='ignore')
         if len(encoded) > 2048:
             findings += '\n[truncated]'
+        if not pr_known:
+            findings += '\nReview findings unknown (branch PR lookup unavailable).'
         if spec == 'unknown':
-            findings = 'unknown (no spec pointer)'
+            findings += '\nSpec findings unknown (no spec pointer).'
     except (ValueError, KeyError, TypeError):
         findings = 'unknown (findings unavailable or exceeded output cap)'
-    prior = run(handoff + ['--show', '--body-only'], 2048)
-    if not prior:
-        original = ['aida', 'session', 'handoff', '--seat', seat, '--show', '--body-only']
-        if os.environ.get('AIDA_ROTATION_HANDOFF'):
-            original.append('--rotated')
-            prior = run(original, 2048)
-        else:
-            prior = 'unknown (no session-bound prior handoff)'
+    # Always re-read the matched rotation note. Never recursively nest snapshots.
+    prior = 'unknown (no session-bound prior handoff)'
+    if os.environ.get('AIDA_ROTATION_HANDOFF'):
+        prior = run(handoff + ['--show', '--body-only', '--rotated'], 2048)
+    captured = datetime.now(timezone.utc).isoformat()
     body = (f'# PreCompact recovery snapshot (Claude; informational, revalidate before action)\n'
-            f'Spec pointer: {spec}\nBranch: {branch}\n'
-            f'Last verdict:\n{verdict}\nOpen findings (spec origin):\n{findings}\n'
+            f'Captured: {captured}\nSpec pointer: {spec}\nBranch: {branch}\n'
+            f'Last verdict:\n{verdict}\nOpen findings (spec / branch PR origin):\n{findings}\n'
             f'Prior handoff / next-action context:\n{prior}\n'
             f'Next step: inspect `aida show {spec}` and the working diff; reconcile the '
             'verdict and findings, then continue the active spec. Unknown evidence stays unknown.\n')

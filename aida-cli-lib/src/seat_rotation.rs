@@ -253,6 +253,15 @@ pub(crate) fn write_handoff_by(
     write_handoff_kind(project_root, seat, body, now, writer, "handoff")
 }
 
+// One slot per worktree and role, independent of native session generations.
+// This keeps relaunch discovery local and avoids directories per compaction/session.
+// trace:STORY-2662 | ai:codex
+pub(crate) fn compact_snapshot_seat(cwd: &Path, seat: &str) -> String {
+    use sha2::{Digest, Sha256};
+    let digest = Sha256::digest(format!("{}\0{seat}", cwd.display()).as_bytes());
+    format!("compact-{:x}", digest)[..48].to_string()
+}
+
 // trace:STORY-2662 | ai:codex
 pub(crate) fn write_handoff_kind(
     project_root: &Path,
@@ -292,7 +301,14 @@ pub(crate) fn write_handoff_kind(
         "<!-- seat handoff: seat={seat} written={}{stamp} -->\n{body}\n",
         now.to_rfc3339()
     );
-    let path = dir.join(format!("{}.md", now.format("%Y%m%dT%H%M%SZ")));
+    // Snapshot slots retain only the current packet and one diagnostic log row.
+    // Deliberate rotation handoffs retain their ordinary history.
+    let is_snapshot = event == "compact-snapshot";
+    let path = if is_snapshot {
+        dir.join("snapshot.md")
+    } else {
+        dir.join(format!("{}.md", now.format("%Y%m%dT%H%M%SZ")))
+    };
     std::fs::write(&path, &content).with_context(|| format!("writing {}", path.display()))?;
     let latest = dir.join("latest.md");
     let tmp = dir.join(".latest.md.tmp");
@@ -320,7 +336,9 @@ pub(crate) fn write_handoff_kind(
     }
     let mut log = std::fs::OpenOptions::new()
         .create(true)
-        .append(true)
+        .append(!is_snapshot)
+        .write(true)
+        .truncate(is_snapshot)
         .open(dir.join("log.jsonl"))?;
     writeln!(log, "{record}")?;
     Ok(HandoffWritten {
