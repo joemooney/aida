@@ -387,9 +387,19 @@ explicit regex rules refuse sensitive content without certifying sanitization.
 Manual-email export is a self-contained JSON attachment. Store-only transport
 retains its separate authority. Independently enrolled intake transport uses
 `aida-intake/` under the clone common Git directory, with a separate repository,
-worktree, index, object database, refs and permanent lock. Only `aida-intent`
-is transported; full incoming history is validated before fast-forward
-acceptance. Explicit processing stores immutable receipts and journals
+worktree, index, object database, refs and permanent lock. Legacy enrollment
+transports only `aida-intent`. Opt-in profile v2 pins a writer identity and role,
+one `aida-feedback-<producer-id>` observation branch and at most one authorized
+`aida-feedback-receipts-<processor-id>` branch. Producer and processor write only
+their respective orphan histories; readers validate each history independently
+before combining views. Receipts can validate without a local observation.
+Full incoming history is validated before fast-forward acceptance. V2 currently
+uses full validation rather than legacy checkpoints; writer protection is
+reported unverified. Protection probing/foreign-write refusal, receipt v2 identity
+and unknown-state reporting, and CI relay alignment remain later slices; v2
+refuses CI commands until that alignment. See [per-writer intake](docs/cli/02-specs.md#native-per-writer-intake-first-round-trip-slice).
+<!-- trace:STORY-2652 | ai:codex -->
+ Explicit processing stores immutable receipts and journals
 create/comment operations to recover confirmed writes without replay. See [the wire format and commands](docs/cli/02-specs.md#aida-intent-note-validate-and-export).
 <!-- trace:STORY-2479 trace:TASK-3096 | ai:codex -->
 <!-- trace:TASK-3114 | ai:codex -->

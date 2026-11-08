@@ -1518,3 +1518,256 @@ fn sync_failures_preserve_git_stderr_and_local_ahead_push_keeps_policy_error() {
     assert!(!String::from_utf8_lossy(&out.stderr).contains("Retry;"));
     assert_eq!(tip, git(&f.intake(), &["rev-parse", "HEAD"]));
 }
+
+// trace:STORY-2652 | ai:codex
+const PRODUCER: &str = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
+const PROCESSOR: &str = "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb";
+
+fn enroll_writer(f: &Fixture, remote: &Path, processor: bool) -> Output {
+    let mut args = vec![
+        "intent",
+        "enroll",
+        "--remote",
+        remote.to_str().unwrap(),
+        "--reviewed",
+        "--role",
+        if processor { "processor" } else { "producer" },
+        "--writer-id",
+        if processor { PROCESSOR } else { PRODUCER },
+        "--producer-id",
+        PRODUCER,
+        "--json",
+    ];
+    if !processor {
+        args.extend(["--receipt-writer", PROCESSOR]);
+    }
+    f.run(&args)
+}
+
+#[test]
+fn per_writer_round_trip_separates_orphans_and_preserves_product_store_refs() {
+    let temp = tempfile::tempdir().unwrap();
+    let remote = remote(&temp);
+    let work = Fixture::new();
+    let home = Fixture::new();
+    work.git(&["push", remote.to_str().unwrap(), "main", "aida-store"]);
+    let remote_product = git(&remote, &["rev-parse", "refs/heads/main"]);
+    let remote_store = git(&remote, &["rev-parse", "refs/heads/aida-store"]);
+    let work_before = work.snapshot();
+    let home_before = home.snapshot();
+    let enrollment = enroll_writer(&work, &remote, false);
+    good(&enrollment);
+    let profile: Value = serde_json::from_slice(&enrollment.stdout).unwrap();
+    assert_eq!(profile["profile"]["version"], 2);
+    assert_eq!(profile["protection"], "unverified");
+    good(&enroll_writer(&work, &remote, false));
+    good(&enroll_writer(&home, &remote, true));
+    let checksum = work.note("Separated round trip");
+    good(&work.publish());
+    let producer_ref = format!("refs/heads/aida-feedback-{PRODUCER}");
+    let receipt_ref = format!("refs/heads/aida-feedback-receipts-{PROCESSOR}");
+    let observation = format!("observations/{checksum}.json");
+    assert_eq!(
+        git(&remote, &["ls-tree", "-r", "--name-only", &producer_ref]),
+        observation
+    );
+    good(&home.run(&["intent", "pull"]));
+    good(&home.run(&["intent", "process", &checksum, "--action", "dismiss"]));
+    good(&home.run(&["intent", "process", &checksum, "--action", "dismiss"]));
+    assert_eq!(git(&remote, &["rev-list", "--count", &receipt_ref]), "1");
+    assert_eq!(
+        git(&remote, &["ls-tree", "-r", "--name-only", &receipt_ref]),
+        format!("receipts/{checksum}.json")
+    );
+    for branch in [&producer_ref, &receipt_ref] {
+        assert_eq!(
+            git(&remote, &["rev-list", "--parents", branch])
+                .split_whitespace()
+                .count(),
+            1
+        );
+    }
+    good(&work.run(&["intent", "pull"]));
+    let list = work.run(&["intent", "list", "--all", "--json"]);
+    good(&list);
+    let rows: Value = serde_json::from_slice(&list.stdout).unwrap();
+    assert_eq!(rows[0]["checksum"], checksum);
+    assert_eq!(rows[0]["state"], "processed");
+    assert_eq!(rows[0]["receipt"]["action"], "dismiss");
+    bad(
+        &work.run(&["intent", "process", &checksum, "--action", "create"]),
+        "Only an enrolled processor",
+    );
+    bad(&home.publish(), "Only an enrolled producer");
+    assert_eq!(
+        git(&remote, &["rev-parse", "refs/heads/main"]),
+        remote_product
+    );
+    assert_eq!(
+        git(&remote, &["rev-parse", "refs/heads/aida-store"]),
+        remote_store
+    );
+    assert_eq!(work.snapshot(), work_before);
+    assert_eq!(home.snapshot(), home_before);
+    assert_eq!(
+        git(&remote, &["for-each-ref", "--format=%(refname)"])
+            .lines()
+            .count(),
+        4
+    );
+}
+
+#[test]
+fn per_writer_enrollment_pins_identity_and_defaults_without_store() {
+    let temp = tempfile::tempdir().unwrap();
+    let remote = remote(&temp);
+    let f = Fixture::new();
+    let before = f.snapshot();
+    let args = [
+        "intent",
+        "enroll",
+        "--remote",
+        remote.to_str().unwrap(),
+        "--reviewed",
+        "--role",
+        "producer",
+        "--json",
+    ];
+    let first = f.run(&args);
+    good(&first);
+    let second = f.run(&args);
+    good(&second);
+    assert_eq!(first.stdout, second.stdout);
+    let profile: Value = serde_json::from_slice(&first.stdout).unwrap();
+    assert_eq!(profile["profile"]["writer_id"].as_str().unwrap().len(), 32);
+    bad(&enroll_writer(&f, &remote, false), "already enrolled");
+    assert_eq!(f.snapshot(), before);
+    let g = Fixture::new();
+    bad(
+        &g.run(&[
+            "intent",
+            "enroll",
+            "--remote",
+            remote.to_str().unwrap(),
+            "--reviewed",
+            "--role",
+            "producer",
+            "--writer-id",
+            "../main",
+        ]),
+        "Invalid writer identity",
+    );
+    assert!(!g.root.join(".git/aida-intake/profile.json").exists());
+    // WORK identity is read without allocating a store node or changing binding.
+    use std::os::unix::fs::PermissionsExt;
+    let binding = g.root.join(".git/aida-work-node.toml");
+    let bytes = format!("version = 1\nnode_id = \"{PRODUCER}\"\n");
+    fs::write(&binding, &bytes).unwrap();
+    fs::set_permissions(&binding, fs::Permissions::from_mode(0o600)).unwrap();
+    let inherited = g.run(&args);
+    good(&inherited);
+    assert_eq!(
+        serde_json::from_slice::<Value>(&inherited.stdout).unwrap()["profile"]["writer_id"],
+        PRODUCER
+    );
+    assert_eq!(fs::read_to_string(&binding).unwrap(), bytes);
+}
+
+#[test]
+fn per_writer_receipt_retry_after_store_write_does_not_duplicate() {
+    use std::os::unix::fs::PermissionsExt;
+    let temp = tempfile::tempdir().unwrap();
+    let remote = remote(&temp);
+    let work = Fixture::new();
+    let home = Fixture::new();
+    good(&enroll_writer(&work, &remote, false));
+    good(&enroll_writer(&home, &remote, true));
+    home.git(&["branch", "-D", "aida-store"]);
+    good(&home.run(&[
+        "init",
+        "--no-skills",
+        "--no-hooks",
+        "--no-agent-config",
+        "--no-roles",
+    ]));
+    let checksum = work.note("Separated receipt retry");
+    good(&work.publish());
+    let hook = remote.join("hooks/pre-receive");
+    fs::write(
+        &hook,
+        "#!/bin/sh\necho receipt-publication-denied >&2\nexit 1\n",
+    )
+    .unwrap();
+    fs::set_permissions(&hook, fs::Permissions::from_mode(0o755)).unwrap();
+    let failed = home.run(&["intent", "process", &checksum, "--action", "create"]);
+    bad(
+        &failed,
+        "Spec write confirmed but its receipt is not published",
+    );
+    let journal = home
+        .root
+        .join(format!(".git/aida-intake/operation-{checksum}.json"));
+    assert!(journal.exists());
+    let store_path = aida_core::store_locate::detect_distributed_store_from(&home.root).unwrap();
+    let count = || {
+        let backend = aida_core::GitBackend::new(&store_path).unwrap();
+        aida_core::DatabaseBackend::load(&backend)
+            .unwrap()
+            .requirements
+            .iter()
+            .filter(|r| r.title == "Separated receipt retry")
+            .count()
+    };
+    assert_eq!(count(), 1);
+    fs::remove_file(hook).unwrap();
+    good(&home.run(&["intent", "process", &checksum, "--action", "create"]));
+    assert_eq!(count(), 1);
+    assert!(!journal.exists());
+    good(&work.run(&["intent", "pull"]));
+    let rows = work.run(&["intent", "list", "--all", "--json"]);
+    good(&rows);
+    assert_eq!(
+        serde_json::from_slice::<Value>(&rows.stdout).unwrap()[0]["state"],
+        "processed"
+    );
+}
+
+#[test]
+fn per_writer_foreign_paths_refuse_and_standalone_receipts_are_readable() {
+    let temp = tempfile::tempdir().unwrap();
+    let remote = remote(&temp);
+    let work = Fixture::new();
+    let home = Fixture::new();
+    good(&enroll_writer(&work, &remote, false));
+    good(&enroll_writer(&home, &remote, true));
+    let checksum = work.note("Standalone receipt");
+    good(&work.publish());
+    let producer_ref = format!("refs/heads/aida-feedback-{PRODUCER}");
+    let receipt_ref = format!("refs/heads/aida-feedback-receipts-{PROCESSOR}");
+    // A valid observation history is invalid on a receipt branch, even with the
+    // validator checkpoint from the same commit on the observation branch.
+    let producer_tip = git(&remote, &["rev-parse", &producer_ref]);
+    git(&remote, &["update-ref", &receipt_ref, &producer_tip]);
+    bad(
+        &work.run(&["intent", "pull"]),
+        "forbidden for this intake branch role",
+    );
+    assert!(!work.intake().join(format!(".git/{receipt_ref}")).exists());
+    git(&remote, &["update-ref", "-d", &receipt_ref]);
+    good(&home.run(&["intent", "process", &checksum, "--action", "dismiss"]));
+    git(&remote, &["update-ref", "-d", &producer_ref]);
+    // A fresh reader can validate receipt-only history without its observation.
+    let reader = Fixture::new();
+    good(&enroll_writer(&reader, &remote, false));
+    let pulled = reader.run(&["intent", "pull", "--json"]);
+    good(&pulled);
+    assert_eq!(
+        serde_json::from_slice::<Value>(&pulled.stdout).unwrap()
+            ["receipts_for_unknown_observations"],
+        json!([checksum])
+    );
+    assert_eq!(
+        git(&reader.intake(), &["rev-parse", &receipt_ref]),
+        git(&remote, &["rev-parse", &receipt_ref])
+    );
+}

@@ -11498,7 +11498,7 @@ Usage: aida intent [OPTIONS] <ID>
 Commands:
   ci        Configure or run the restricted work CI return channel
   enroll    Enroll an independent pinned URL and reviewed deny patterns; no store required
-  publish   Commit a reviewed envelope and push only aida-intent; never force
+  publish   Commit a reviewed envelope and push only the enrolled producer branch
   pull      Fetch into quarantine, validate all history, then accept only a fast-forward
   list      List pending observations, or include processed observations with --all
   process   Explicitly keep pending, dismiss, create a draft task, or comment on a spec
@@ -11726,14 +11726,25 @@ Options:
       --remote <REMOTE>
           Explicit absolute local path, HTTPS URL, or SSH URL
 
+      --role <ROLE>
+          Opt into per-writer histories (omitting this preserves legacy enrollment)
+          
+          [possible values: producer, processor]
+
+      --writer-id <WRITER_ID>
+          Stable opaque writer ID; defaults to WORK binding or a clone-local UUID
+
+      --producer-id <PRODUCER_ID>
+          Producer to read; required for a processor, otherwise the writer itself
+
+      --receipt-writer <RECEIPT_WRITER>
+          Authorized receipt writer to read (repeatable; currently one processor)
+
       --reviewed
           Confirm review of the destination and policy, including an empty policy
 
       --deny-pattern <DENY_PATTERN>
           Reviewed regex refusing matching title or body text (repeatable)
-
-      --json
-          Emit machine-readable JSON
 
       --format <FORMAT>
           Pin the output format regardless of whether stdout is a terminal: human = tables, toon =
@@ -11745,6 +11756,9 @@ Options:
           - toon:  Token-efficient TOON — the compact agent default when piped/captured
           - json:  Machine JSON, for commands that support a JSON projection
 
+      --json
+          Emit machine-readable JSON
+
       --canonical-ids
           Show node-local spec IDs in their canonical form instead of the node's friendly label (for
           scripts). Also settable via AIDA_CANONICAL_IDS=1
@@ -11752,7 +11766,7 @@ Options:
   -h, --help
           Print help (see a summary with '-h')
 ===== aida intent publish
-Commit a reviewed envelope and push only aida-intent; never force
+Commit a reviewed envelope and push only the enrolled producer branch
 
 Usage: aida intent publish [OPTIONS]
 
@@ -43223,6 +43237,16 @@ Working on aida itself
         "help": "Emit machine-readable JSON"
       },
       {
+        "name": "producer-id",
+        "takes_value": true,
+        "help": "Producer to read; required for a processor, otherwise the writer itself"
+      },
+      {
+        "name": "receipt-writer",
+        "takes_value": true,
+        "help": "Authorized receipt writer to read (repeatable; currently one processor)"
+      },
+      {
         "name": "remote",
         "takes_value": true,
         "help": "Explicit absolute local path, HTTPS URL, or SSH URL"
@@ -43231,6 +43255,16 @@ Working on aida itself
         "name": "reviewed",
         "takes_value": false,
         "help": "Confirm review of the destination and policy, including an empty policy"
+      },
+      {
+        "name": "role",
+        "takes_value": true,
+        "help": "Opt into per-writer histories (omitting this preserves legacy enrollment)"
+      },
+      {
+        "name": "writer-id",
+        "takes_value": true,
+        "help": "Stable opaque writer ID; defaults to WORK binding or a clone-local UUID"
       }
     ],
     "hidden": false
@@ -43241,7 +43275,7 @@ Working on aida itself
       "intent",
       "publish"
     ],
-    "about": "Commit a reviewed envelope and push only aida-intent; never force",
+    "about": "Commit a reviewed envelope and push only the enrolled producer branch",
     "flags": [
       {
         "name": "canonical-ids",
