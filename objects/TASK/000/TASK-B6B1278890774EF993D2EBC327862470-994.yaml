@@ -1,0 +1,29 @@
+id: 01a1bb2d-d597-7082-b2de-84a7820b6467
+spec_id: TASK-b6b1278890774ef993d2ebc327862470-994
+title: 'NON-BLOCKING, minor: a persisted state.max_concurrent above 2 fails validate_st…'
+description: |-
+  Non-blocking finding carried forward from an APPROVED review verdict on TASK-3472, which has since completed — recorded here so it keeps a queryable home once the verdict record stops being read.
+
+  NON-BLOCKING, minor: a persisted state.max_concurrent above 2 fails validate_state in any pre-PR binary, so 'aida dev rollback' past this change makes review watch refuse .aida/review-watch/state.json until it is reset (old check was 1..=2; review_watch.rs:1173).
+
+  PR: #3674
+  Reviewed sha: c196dce0864b77ad45696bf8940b8ff8e367a4fc
+status: Draft
+priority: Medium
+owner: joe
+feature: Uncategorized
+created_at: 2026-11-08T12:41:45.623898030Z
+modified_at: 2026-11-08T12:41:45.623898030Z
+req_type: Task
+tags:
+- carried-from:TASK-3472
+- finding-hash:d2694597
+- from-review:PR-3674
+- kind:carried-forward
+filed_at:
+  code_sha: d68eb4ec071092cbe9a36eb356d033c613633453
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 92e7eb35446
+  vendor: claude
