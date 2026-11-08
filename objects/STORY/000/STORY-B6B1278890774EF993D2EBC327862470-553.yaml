@@ -3,12 +3,12 @@ spec_id: STORY-b6b1278890774ef993d2ebc327862470-553
 agreed_id: STORY-2630
 title: 'Lanes can actually use codegraph: seat clones resolve the primary index, AGENTS.md documents it, doctor and dell1 check it'
 description: 'Measured 2026-11-07: codegraph 1.6.0 is installed and indexed only at the primary checkout (/home/joe/ai/aida/.codegraph, synced every 15 min by codegraph-sync-aida.timer). Implementer and reviewer lanes run in seat clones (aida-worktrees/aida-seat-aida-*), where ''codegraph callers X'' fails with ''CodeGraph not initialized''. Of 837 headless lane logs in 3 days, 16 invoke codegraph and 422 use rg/grep. Only CLAUDE.md mentions codegraph; AGENTS.md (which Codex reads) and aida-core/templates say nothing, so Codex lanes, the majority, never hear of it. dell1 has no codegraph. Acceptance: (1) a lane in a seat clone or worktree gets a working codegraph without a per-clone index: lane env or wrapper passes -p <primary checkout>, or the seat setup links .codegraph read-only. (2) The contained boundary grants read-only access to that index and nothing writable. (3) The AGENTS.md template and the shared lane prompt carry one line on when to use callers/callees/impact and to confirm ''no callers'' with rg. Edit the template master, then sync-templates. (4) aida doctor reports codegraph missing, index stale (>1h) or unreachable from a seat. (5) Evidence: one codex lane log shows a successful codegraph call from a seat clone. Out of scope: indexing lane branches (main is fine for navigation).'
-status: NeedsAttention
+status: Approved
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-07T15:34:33.363448208Z
-modified_at: 2026-11-08T09:57:43.346559997Z
+modified_at: 2026-11-08T11:06:31.793561482Z
 req_type: Story
 comments:
 - id: 01a1b6a6-52e1-70a0-a9c1-d32888979ca5
@@ -727,6 +727,13 @@ comments:
   modified_at: 2026-11-08T09:36:18.422344519Z
   session_id: 01a1b8be-8170-7fb2-89ab-ecb4c6eee98c
   harness_version: 2.1.319 (Claude Code)
+- id: 01a1bad6-a5f1-7ba1-bfc1-b12f84785e15
+  author: joe
+  content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: Refs slice (host query proxy) at 19839cfc31e6. Prior-round inventory, stderr, heartbeat-throttle, capacity-doc and client-deadline findings are fixed. New: rustfmt violation at codegraph.rs:130 will fail CI. AC1 partial (index link on main, proxy client not delivered); AC2 unverified (native bwrap test only, contained posture unsupported); AC3 partial (guidance names bare codegraph); AC4 implemented, no CI run at this head; AC5 unverified (no live seat output). CI has 0 jobs at this head.. It was punted on: blocked-dependency: PR-3662 findings 2-5 require host/advisor action: no codegraph executable, primary index or deployed host proxy exists in this native seat, and installed aida rejects doctor --lane-host. AC2 contained read admission and AC5 non-empty primary callers evidence remain unavailable. Seat fixes findings 1 and 6-9; host must deploy the reviewed client, deliver its fixed path, validate contained grants, update PR evidence and obtain final-head CI. Completing publication remains vetoed; see docs/internal/testing/story-2630-seat-handoff.md.. No triage reason was given.'
+  created_at: 2026-11-08T11:06:31.793557660Z
+  modified_at: 2026-11-08T11:06:31.793557660Z
+  session_id: 01a1b9af-8230-75d2-82f8-667491cc010a
+  harness_version: 2.1.319 (Claude Code)
 history:
 - id: 01a1b6a6-1e2f-7932-a527-6de38b6d8545
   author: joe
@@ -1148,6 +1155,15 @@ history:
   session_id: 01a1ba94e6b4
   harness_version: 2.1.319 (Claude Code)
   changes: []
+- id: 01a1bad6-a5f1-7ba1-bfc1-b11e42281213
+  author: joe
+  timestamp: 2026-11-08T11:06:31.793546089Z
+  session_id: 01a1b9af-8230-75d2-82f8-667491cc010a
+  harness_version: 2.1.319 (Claude Code)
+  changes:
+  - field_name: status
+    old_value: NeedsAttention
+    new_value: Approved
 filed_at:
   code_sha: 122fea66d306d6739516983479c50201e9d0ae84
   branch: main
@@ -1157,16 +1173,3 @@ filed_at:
   vendor: claude
   session: 01a1b646-c67d-7b43-98ff-3604a53f5d1f
   harness_version: 2.1.319 (Claude Code)
-attention_reason:
-  category: blocked-dependency
-  detail: 'PR-3662 findings 2-5 require host/advisor action: no codegraph executable, primary index or deployed host proxy exists in this native seat, and installed aida rejects doctor --lane-host. AC2 contained read admission and AC5 non-empty primary callers evidence remain unavailable. Seat fixes findings 1 and 6-9; host must deploy the reviewed client, deliver its fixed path, validate contained grants, update PR evidence and obtain final-head CI. Completing publication remains vetoed; see docs/internal/testing/story-2630-seat-handoff.md.'
-  raised_by: implementer
-  raised_at: 2026-11-08T09:40:25.456003410Z
-failure_reason:
-  phase: reviewer
-  phase_index: 3
-  kind: verdict:request-changes
-  detail: 'Refs slice (host query proxy) at 19839cfc31e6. Prior-round inventory, stderr, heartbeat-throttle, capacity-doc and client-deadline findings are fixed. New: rustfmt violation at codegraph.rs:130 will fail CI. AC1 partial (index link on main, proxy client not delivered); AC2 unverified (native bwrap test only, contained posture unsupported); AC3 partial (guidance names bare codegraph); AC4 implemented, no CI run at this head; AC5 unverified (no live seat output). CI has 0 jobs at this head.'
-  recovery_hint: address the review findings, move STORY-2630 back to In Progress, and clear the PR hold only after approval
-  shelved_by: reviewer
-  shelved_at: 2026-11-08T09:57:43.346559997Z
