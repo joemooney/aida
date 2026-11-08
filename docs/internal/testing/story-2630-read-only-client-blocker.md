@@ -64,26 +64,31 @@ copy a per-lane index, patch the globally installed client from a lane, or
 change host timer/index settings from this seat. A symlink is routing only;
 non-contained seats still inherit the host's ordinary filesystem permissions.
 
-No containment or launcher code was changed by this investigation. In
-particular, `launch/spawn.rs` and `launch/profile.rs` remain untouched. The
-installed `aida doctor check codegraph` still rejects the category because
-that installed binary predates Slice 1; this is distinct from the client
-failure reproduced above.
+## Acceptance status and remaining ownership
 
-## Validation and handoff
+- AC1: primary-index routing is present on main in
+  `codegraph::primary_index_link` and `worktree_gc::link_worktree_runtime_state`.
+  Setup links the existing index without copying it. A successful runtime query
+  from a seat remains unverified; routing alone does not establish AC2 or AC5.
+- AC2: not met. No codegraph-specific containment read grant is implemented.
+  The supported read-only client and WAL-layout decision above remains required;
+  the routing symlink grants no read-only boundary.
+- AC3: main already carries the navigation guidance in the AGENTS.md template
+  and shared lane prompt, with template-equality and assembled-prompt coverage.
+- AC4: doctor probes missing tools, indexes older than one hour and unreachable
+  indexes. Diagnostics require an explicit `.codegraph` ignore rule in the
+  invoking or primary checkout's `.gitignore`, so unrelated projects stay silent.
+  Missing tool plus absent index produces one setup finding; broken links and
+  access errors retain reachability diagnostics.
+- AC5: open because no successful read-only seat query has been demonstrated.
+  The installed client's writable-open/WAL behavior described above blocks that
+  evidence even when the executable and routing link are available.
 
-- `cargo test --profile agent -p aida-cli-lib codegraph::tests -- --nocapture`:
-  seven tests passed, including runtime linking, reused-seat excludes, prompt
-  invocation preservation, template equality, and doctor probes.
-- `make check-ci-fast`: all 43 fast gates passed, including formatting.
-- `make check-templates`: passed; absent portable `.agents` pack is a clean
-  no-op for this clone. No templates were changed in this investigation.
-- `git diff --check`: passed.
-
-The host published this investigation at `ae96e54ce1a4` on Slice 1's PR
-#3607. That publication does not resolve the Slice 2 client decision or clear
-any punt or merge hold. Unit tests validate Slice 1 behavior; they do not
-satisfy AC2 or AC5.
+STORY-2630 owns the further slice for AC2 and AC5, including host provisioning,
+the supported read-only client decision, containment read admission and a
+successful seat-call log. This PR uses `Refs STORY-2630`; it does not complete
+those acceptance items. Per-round command output, validation and publication
+handoff belong in the PR body and STORY-2630 comments.
 
 ## Slice 1 clone exclude regression
 
@@ -100,8 +105,3 @@ file in the pinned directory. Unsafe metadata skips optional navigation setup.
 The refusal tests cover an exclude symlink to an outside secret and an info
 symlink to an outside directory, checking that the secret is not copied and
 that nothing is written outside the clone.
-
-The prior exclude repair was published at `02d9c1304b46`; its durable CI
-evidence is [run 42410096051](https://github.com/joemooney/aida/actions/runs/42410096051).
-Per-round validation, launcher handoff and publication state belong in
-STORY-2630 comments and the PR trail, rather than this investigation note.
