@@ -2472,7 +2472,7 @@ fn pull_store_leg_locked(
     // STORY-641 / MU-204: auto-reconcile conflicting spec objects instead
     // of stopping for manual resolution. Two clones editing the SAME spec
     // (each appending a HistoryEntry + a scalar edit) are structurally
-    // mergeable — history is unioned by id, scalars resolve LWW. The
+    // mergeable — history is unioned by id, scalars come from upstream. The
     // oplog and per-user queue registries (same user on two machines —
     // BUG-725) union the same way; other conflicts (blocks, nodes,
     // counters) still fall back to the manual path.

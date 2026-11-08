@@ -12493,6 +12493,17 @@ pub(crate) fn handle_queue_work(
             plan.review_target.is_none(),
             no_human,
         );
+    // TASK-619: capture the anchor spec's status from the *local* (pre-pull)
+    // view so we can detect whether the pull below reveals that another
+    // machine claimed the spec under us. Best-effort + read-only — a load
+    // failure just yields None, which makes the guard a no-op.
+    // trace:TASK-619 | ai:claude
+    let status_before_pull: Option<RequirementStatus> = storage.load().ok().and_then(|store| {
+        store
+            .get_requirement_by_spec_id(&plan.scope)
+            .map(|r| r.status.clone())
+    });
+
     let mut _standalone_slot = None;
     if !list_sessions {
         eprintln!("  pickup role: {role} ({role_origin}); --role overrides queue routing, then scope default");
@@ -12596,6 +12607,12 @@ pub(crate) fn handle_queue_work(
                 adopt_orphan.as_ref().map(|l| l.worktree_path.as_path()),
                 force_claim,
             )?;
+            // Pull before the first canonical pickup write, including implicit rows.
+            // trace:BUG-2501 | ai:codex
+            if !no_pull {
+                run_aida_db_sync_pull(storage.path())
+                    .context("pre-pickup store pull failed; pickup stopped")?;
+            }
             // Persist only the synthesized explicit row, after all three
             // preflight decisions. Do not reselect a different queue head.
             for entry in &plan.entries {
@@ -13328,23 +13345,6 @@ pub(crate) fn handle_queue_work(
                 orphan.worktree_path.display()
             );
         }
-    }
-
-    // TASK-619: capture the anchor spec's status from the *local* (pre-pull)
-    // view so we can detect whether the pull below reveals that another
-    // machine claimed the spec under us. Best-effort + read-only — a load
-    // failure just yields None, which makes the guard a no-op.
-    // trace:TASK-619 | ai:claude
-    let status_before_pull: Option<RequirementStatus> = storage.load().ok().and_then(|store| {
-        store
-            .get_requirement_by_spec_id(&plan.scope)
-            .map(|r| r.status.clone())
-    });
-
-    // trace:BUG-2501 | ai:codex — never start work from a failed sync.
-    if !no_pull {
-        run_aida_db_sync_pull(storage.path())
-            .context("pre-pickup store pull failed; pickup stopped")?;
     }
 
     // TASK-619: cross-machine duplicate-pickup guard. Session leases are

@@ -2129,93 +2129,115 @@ fn rebase_auto_merge_onto(repo: &Path, target: &str) -> Result<StorePullOutcome>
         anyhow::bail!("git pull --rebase failed: {}", result.stderr);
     }
 
-    let mut notes: Vec<String> = Vec::new();
+    // Abort every failure after this invocation starts a rebase.
+    // trace:BUG-2501 | ai:codex
+    let outcome = (|| -> Result<StorePullOutcome> {
+        let mut notes: Vec<String> = Vec::new();
 
-    // Drive the rebase forward one conflicted step at a time. Each
-    // `--continue` may surface a fresh batch of conflicts (one rebased
-    // commit at a time), so loop until the rebase is no longer in progress.
-    loop {
-        let conflicted = unmerged_paths(repo)?;
-        if conflicted.is_empty() {
-            // No conflicts right now but still mid-rebase — let git advance.
+        // Drive the rebase forward one conflicted step at a time. Each
+        // `--continue` may surface a fresh batch of conflicts (one rebased
+        // commit at a time), so loop until the rebase is no longer in progress.
+        loop {
+            let conflicted = unmerged_paths(repo)?;
+            if conflicted.is_empty() {
+                // No conflicts right now but still mid-rebase — let git advance.
+                let cont = git(repo, &["-c", "core.editor=true", "rebase", "--continue"])?;
+                if !rebase_in_progress(repo) {
+                    if cont.success || rebase_completed_ok(repo) {
+                        return Ok(if notes.is_empty() {
+                            StorePullOutcome::Clean
+                        } else {
+                            StorePullOutcome::AutoMerged { notes }
+                        });
+                    }
+                    let _ = git(repo, &["rebase", "--abort"]);
+                    anyhow::bail!("git rebase --continue failed: {}", cont.stderr);
+                }
+                if !cont.success {
+                    anyhow::bail!(
+                        "git rebase --continue failed without conflicts: {}",
+                        cont.stderr
+                    );
+                }
+                continue;
+            }
+
+            // Every conflicted path must be a structurally-mergeable artifact: a
+            // spec object (history union + upstream scalars), the oplog (operations
+            // union by id + lamport reconcile), or a per-user queue registry
+            // (entry union by requirement_id — BUG-725, the same-user-two-machines
+            // collision). Anything else (agreed_counters, blocks, nodes) → bail to
+            // the manual path; we never force-resolve files without a known union
+            // rule.
+            for path in &conflicted {
+                if !is_spec_object_path(path)
+                    && !is_oplog_path(path)
+                    && !is_queue_registry_path(path)
+                    && !is_schedule_ledger_path(path)
+                {
+                    let _ = git(repo, &["rebase", "--abort"]);
+                    anyhow::bail!(
+                    "conflict in non-mergeable path `{path}` — cannot auto-merge; falling back to manual resolution"
+                );
+                }
+            }
+
+            for path in &conflicted {
+                let resolved = if is_oplog_path(path) {
+                    resolve_oplog_conflict(repo, path)
+                } else if is_queue_registry_path(path) {
+                    resolve_queue_conflict(repo, path)
+                } else if is_schedule_ledger_path(path) {
+                    // trace:STORY-1226 | ai:claude
+                    resolve_schedule_ledger_conflict(repo, path)
+                } else {
+                    resolve_spec_conflict(repo, path, true)
+                };
+                match resolved {
+                    Ok(note) => {
+                        // Upstream deletion is already resolved by `git rm`.
+                        // trace:BUG-2501 | ai:codex
+                        if !unmerged_paths(repo)?.contains(path) {
+                            notes.push(note);
+                            continue;
+                        }
+                        add(repo, &[path])
+                            .with_context(|| format!("git add {path} after auto-merge"))?;
+                        notes.push(note);
+                    }
+                    Err(e) => {
+                        let _ = git(repo, &["rebase", "--abort"]);
+                        anyhow::bail!("structured merge of `{path}` failed: {e}");
+                    }
+                }
+            }
+
+            // Continue the rebase with the resolved objects staged. Force a
+            // no-op editor so `--continue` never blocks waiting for a commit
+            // message on a TTY-less drain.
             let cont = git(repo, &["-c", "core.editor=true", "rebase", "--continue"])?;
             if !rebase_in_progress(repo) {
                 if cont.success || rebase_completed_ok(repo) {
-                    return Ok(if notes.is_empty() {
-                        StorePullOutcome::Clean
-                    } else {
-                        StorePullOutcome::AutoMerged { notes }
-                    });
+                    return Ok(StorePullOutcome::AutoMerged { notes });
                 }
                 let _ = git(repo, &["rebase", "--abort"]);
                 anyhow::bail!("git rebase --continue failed: {}", cont.stderr);
             }
-            continue;
-        }
-
-        // Every conflicted path must be a structurally-mergeable artifact: a
-        // spec object (history union + upstream scalars), the oplog (operations
-        // union by id + lamport reconcile), or a per-user queue registry
-        // (entry union by requirement_id — BUG-725, the same-user-two-machines
-        // collision). Anything else (agreed_counters, blocks, nodes) → bail to
-        // the manual path; we never force-resolve files without a known union
-        // rule.
-        for path in &conflicted {
-            if !is_spec_object_path(path)
-                && !is_oplog_path(path)
-                && !is_queue_registry_path(path)
-                && !is_schedule_ledger_path(path)
-            {
-                let _ = git(repo, &["rebase", "--abort"]);
+            // A failed continuation is progress only when it exposes new conflicts.
+            // trace:BUG-2501 | ai:codex
+            if !cont.success && unmerged_paths(repo)?.is_empty() {
                 anyhow::bail!(
-                    "conflict in non-mergeable path `{path}` — cannot auto-merge; falling back to manual resolution"
+                    "git rebase --continue failed without conflicts: {}",
+                    cont.stderr
                 );
             }
+            // else: another conflicted commit ahead — loop and resolve it too.
         }
-
-        for path in &conflicted {
-            let resolved = if is_oplog_path(path) {
-                resolve_oplog_conflict(repo, path)
-            } else if is_queue_registry_path(path) {
-                resolve_queue_conflict(repo, path)
-            } else if is_schedule_ledger_path(path) {
-                // trace:STORY-1226 | ai:claude
-                resolve_schedule_ledger_conflict(repo, path)
-            } else {
-                resolve_spec_conflict(repo, path, true)
-            };
-            match resolved {
-                Ok(note) => {
-                    // Upstream deletion is already resolved by `git rm`.
-                    // trace:BUG-2501 | ai:codex
-                    if !unmerged_paths(repo)?.contains(path) {
-                        notes.push(note);
-                        continue;
-                    }
-                    add(repo, &[path])
-                        .with_context(|| format!("git add {path} after auto-merge"))?;
-                    notes.push(note);
-                }
-                Err(e) => {
-                    let _ = git(repo, &["rebase", "--abort"]);
-                    anyhow::bail!("structured merge of `{path}` failed: {e}");
-                }
-            }
-        }
-
-        // Continue the rebase with the resolved objects staged. Force a
-        // no-op editor so `--continue` never blocks waiting for a commit
-        // message on a TTY-less drain.
-        let cont = git(repo, &["-c", "core.editor=true", "rebase", "--continue"])?;
-        if !rebase_in_progress(repo) {
-            if cont.success || rebase_completed_ok(repo) {
-                return Ok(StorePullOutcome::AutoMerged { notes });
-            }
-            let _ = git(repo, &["rebase", "--abort"]);
-            anyhow::bail!("git rebase --continue failed: {}", cont.stderr);
-        }
-        // else: another conflicted commit ahead — loop and resolve it too.
+    })();
+    if outcome.is_err() && rebase_in_progress(repo) {
+        let _ = git(repo, &["rebase", "--abort"]);
     }
+    outcome
 }
 
 /// True when a rebase is currently in progress in `repo`.
@@ -10329,6 +10351,29 @@ mod tests {
         .unwrap();
         add(&second, &[relative]).unwrap();
         commit(&second, "local edit").unwrap();
+        // A failing commit hook leaves a resolved rebase paused without conflicts.
+        // The hook permits the third attempt so the old retry loop fails this
+        // regression without hanging the test process.
+        // trace:BUG-2501 | ai:codex
+        let before = head_sha(&second).unwrap();
+        let hook = second.join(".git/hooks/prepare-commit-msg");
+        std::fs::write(&hook, "#!/bin/sh\nn=0\n[ ! -f .git/hook-count ] || n=$(cat .git/hook-count)\nn=$((n + 1))\necho $n > .git/hook-count\n[ $n -gt 2 ]\n").unwrap();
+        {
+            use std::os::unix::fs::PermissionsExt;
+            std::fs::set_permissions(&hook, std::fs::Permissions::from_mode(0o755)).unwrap();
+        }
+        let error = pull_rebase(&second, "origin", "aida-store").unwrap_err();
+        assert!(error.to_string().contains("continue failed"), "{error:#}");
+        assert!(!rebase_in_progress(&second));
+        assert_eq!(head_sha(&second).unwrap(), before);
+        assert_eq!(current_branch(&second).unwrap(), "aida-store");
+        assert_eq!(
+            std::fs::read_to_string(second.join(".git/hook-count"))
+                .unwrap()
+                .trim(),
+            "1"
+        );
+        std::fs::remove_file(hook).unwrap();
         pull_rebase(&second, "origin", "aida-store").unwrap();
         assert!(!rebase_in_progress(&second));
         assert_eq!(current_branch(&second).unwrap(), "aida-store");

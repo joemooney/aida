@@ -438,6 +438,19 @@ pub fn merge_spec_upstream(
         &upstream.processing_record,
         &local.processing_record,
     ]);
+    // Set additions survive and removals win against retention, as in reconciliation.
+    // trace:BUG-2501 | ai:codex
+    merged.tags = merge_string_set_three_way(&base.tags, &upstream.tags, &local.tags);
+    merged.relationships = merge_relationships_three_way(
+        &base.relationships,
+        &upstream.relationships,
+        &local.relationships,
+    );
+    merged.dependencies = merge_dependencies_three_way(
+        &base.dependencies,
+        &upstream.dependencies,
+        &local.dependencies,
+    );
     // Pre-registration evidence remains monotonic across every merge policy.
     crate::hypothesis::preserve_merge(Some(base), upstream, local, &mut merged);
     merged
@@ -1249,7 +1262,16 @@ mod tests {
         b.created_at = a.created_at + chrono::Duration::seconds(1);
         upstream.comments = vec![a.clone()];
         local.comments = vec![b.clone(), a.clone()];
+        base.tags = ["removed".into()].into_iter().collect();
+        upstream.tags = base.tags.clone();
+        local.tags = ["local".into()].into_iter().collect();
+        let target = uuid::Uuid::new_v4();
+        local.relationships = vec![rel(RelationshipType::BlockedBy, target)];
+        local.dependencies = vec![target];
         let merged = merge_spec_upstream(&base, &upstream, &local);
+        assert_eq!(merged.tags, local.tags);
+        assert_eq!(merged.relationships, local.relationships);
+        assert_eq!(merged.dependencies, local.dependencies);
         assert_eq!(merged.title, "upstream");
         assert_eq!(merged.modified_at, upstream.modified_at);
         assert_eq!(merged.history.len(), 3);
