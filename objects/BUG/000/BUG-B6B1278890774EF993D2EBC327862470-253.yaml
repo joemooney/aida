@@ -20,7 +20,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-07T20:18:53.564500Z
-modified_at: 2026-11-08T18:07:52.268179322Z
+modified_at: 2026-11-08T18:51:50.366454237Z
 req_type: Bug
 relationships:
 - rel_type:
@@ -260,6 +260,27 @@ comments:
   content: 'Round-6 scope update: findings 1-3 are implemented with pinned-parent, bounded no-follow seat reads/unlinks and spawn-boundary marker consumption; finding 5 comments are restored. Finding 4 is explicitly tracked as draft child TASK-3608 for advisor triage under the review-permitted follow-up option; no drain outcome implementation is claimed. Expected 2 now distinguishes no-change exit 0 from the established standalone punt exit 32. Validation is in progress via lane job j20261108T180017880-2-0; Rust has not yet executed tests. The writer inventory guard, its 42 Python tests, rustfmt check, portability guard and git diff --check pass.'
   created_at: 2026-11-08T18:07:52.268179322Z
   modified_at: 2026-11-08T18:07:52.268179322Z
+  session_id: 01a1bc4dcf8e
+- id: 01a1bc80-a6de-7911-9ae2-54c6f0b174be
+  author: joe
+  content: |
+    Round 6 native-seat handoff: tested=false is NOT claimed; untested=false for this security slice. Edits remain uncommitted under the native-seat contract. Recorded publication subject: [AI:codex] fix(seats): bound handshake reads and preserve refused-launch holds (Refs BUG-2488).
+
+    Findings 1-3 and 5: host reads of seat punt/hold signals and ledgers now resolve the host-supplied lease root once, pin every child directory, and use the existing 64-KiB bounded no-follow/nonblocking regular-file reader. Unsafe/unreadable/malformed evidence refuses before publication or cleanup. Signal provisioning retains pinned parent handles through unlink; internal directory links cannot redirect deletion into the primary. Host-owned root aliases remain supported. Standalone/drain/explicit-resume clear prior markers at the final spawn boundary after policy and publication preparation; refused resumes retain a readable hold and remain admissible on repeated retries. Cleanup reads the host-owned ledger without the seat cap and resolves host signal spelling through the signal/hold path helpers. Restored all four TASK-3366 inventory comments; regenerated/reviewed blocked inventory rows. AGENTS.md and OVERVIEW.md document behavior and limits.
+
+    Changed files: aida-cli-lib/src/punt.rs, standalone_implementer.rs, session.rs, queue_cmd.rs, ship_from_seat.rs, seat_clone.rs; aida-cli-lib/src/tests/bug_home_038_seat_publish_tests.rs; scripts/store-writers.toml; AGENTS.md; OVERVIEW.md.
+
+    Executed validation:
+    - cargo build --profile agent -p aida-cli --bin aida: passed (lane job j20261108T182340501-2-0).
+    - cargo test --profile agent -p aida-cli-lib --lib -- bug_2386_resume_routing_tests --nocapture: 9 passed (j20261108T182443209-2-0), including the extended real-CLI grant/native-posture and root-alias resume fixture. An earlier run failed only because the matching CLI was absent; building it resolved that setup failure.
+    - cargo test --profile agent -p aida-cli-lib --lib -- bug_2488 --nocapture: 11 passed plus the explicitly executed watchdog child, 1 intentionally ignored direct helper entry (j20261108T182653554-2-0). Includes FIFO, device and regular-file symlinks, oversize signals/ledgers, linked-parent unlink protection, host-root aliases, large host ledger, case-variant publication veto, native punt and actual no-change/no-bundle path.
+    - cargo test --profile agent -p aida-cli-lib --lib -- seat_clone::seat_publish_tests --nocapture: 58 passed plus watchdog child, 1 intentionally ignored direct helper entry (j20261108T182654726-2-0). Includes task_2902_launch_paths_preserve_signals_on_refused_spawn and repeated held-resume admission.
+    - Writer-inventory guard (3396 sites), 42 Python inventory tests, rustfmt --check, portability guard and git diff --check passed.
+    - A filename-based filter initially matched zero tests; it supplies no test evidence. The corrected module filter above executed tests.
+
+    Limits / remaining work: the runner reported overlay-stale because the primary rewrote a shared seed-generation file; all cited executed suites nevertheless exited 0. CI for these uncommitted edits awaits host publication; the supervised merge-hold is expected and was not cleared. Finding 4 is NOT implemented here: draft child TASK-3608 tracks explicit no-change outcomes through queue-resume and final drain/batch reporting, per the review-permitted split option. Advisor approval/routing was requested in mailbox thread 5d88d871-9082-4d0a-b32a-1295ac657322; no response was present at the last bounded thread read. Expected 2 now states standalone punt exit 32 (drain punt exit 0), preserving the existing contract. Keep this publication Refs and do not claim full BUG-2488 completion on this slice.
+  created_at: 2026-11-08T18:51:50.366454237Z
+  modified_at: 2026-11-08T18:51:50.366454237Z
   session_id: 01a1bc4dcf8e
 history:
 - id: 01a1b7ad-9096-7320-bbe8-fc34c8e11c09
