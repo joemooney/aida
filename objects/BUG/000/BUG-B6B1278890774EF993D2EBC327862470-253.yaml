@@ -20,7 +20,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-07T20:18:53.564500Z
-modified_at: 2026-11-08T19:23:41.915016940Z
+modified_at: 2026-11-08T19:40:10.224940901Z
 req_type: Bug
 relationships:
 - rel_type:
@@ -576,6 +576,12 @@ history:
   - field_name: status
     old_value: InProgress
     new_value: Approved
+- id: 01a1bcac-e6fa-7203-940d-aadd2c8942ea
+  author: joe
+  timestamp: 2026-11-08T19:40:10.362946680Z
+  session_id: 01a1bca9569c
+  harness_version: 2.1.319 (Claude Code)
+  changes: []
 filed_at:
   code_sha: 7a18c0d52a6a4e0822befd4c810cfed16b04b74c
   branch: main
@@ -585,3 +591,11 @@ filed_at:
   vendor: claude
   session: 01a1b76b-2fe7-7dd2-88d0-356fc8d96d04
   harness_version: 2.1.319 (Claude Code)
+failure_reason:
+  phase: reviewer
+  phase_index: 3
+  kind: verdict:request-changes
+  detail: 'Both acceptance tests read correctly, but this head adds only main merges since the last review: four code/doc defects remain (one widened) and CI at this head has not finished after lib-1 failed on the last code head.'
+  recovery_hint: address the review findings, move BUG-2488 back to In Progress, and clear the PR hold only after approval
+  shelved_by: reviewer
+  shelved_at: 2026-11-08T19:40:10.224940901Z
