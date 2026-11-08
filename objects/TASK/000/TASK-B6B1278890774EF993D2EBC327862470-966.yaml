@@ -11,7 +11,7 @@ priority: Low
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-08T03:38:52.682099623Z
-modified_at: 2026-11-08T20:08:47.517890540Z
+modified_at: 2026-11-08T20:08:49.991610436Z
 req_type: Task
 tags:
 - area:ci-relay
@@ -83,6 +83,23 @@ comments:
   content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: PARTIAL: F1-F6 are fixed and acceptance holds on a home clone, but Work clones raise the same false exact-read alarms F1 removed, and prior F7 is still open. CI was queued at review time.. No triage reason was given.'
   created_at: 2026-11-08T20:08:47.517889091Z
   modified_at: 2026-11-08T20:08:47.517889091Z
+  session_id: 01a1bc93-77a0-7740-8b03-df4e3e8d1df5
+  harness_version: 2.1.319 (Claude Code)
+- id: 01a1bcc7-23c2-7e13-b613-d965047ddb7a
+  author: joe
+  content: |-
+    REVIEW FINDINGS TO ADDRESS (TASK-3452):
+    Verdict: CHANGES REQUESTED
+    Reviewed commit: 2819edec063c
+    Recorded: 2026-11-08T19:52:43.580865025+00:00
+    Findings:
+    1. F8 (blocking, aida-cli-lib/src/intent_intake.rs:904 and ci_relay.rs record_skipped/awaiting_skipped): the F1 fix depends on ci-status-<attempt>.json, but only process() writes those markers and process() is home-only (ci_relay.rs CiCommand::Process refuses p.role != home). Work clones also load ci_snapshot, through poll -> intake.append -> sync/files -> ci_admit, so files() calls record_skipped there. On a Work clone with more than 32 retained attempts, any cold pass (every validator change) therefore caches every old latest attempt as needing an exact read, and aida awaiting, its total and the status meter show them even though home already published them. The exact read cannot publish from Work either. Fix: write the cache only for the home role and make Work clones report none (clear any stale cache), with a Python regression using a work-profile clone and more than 32 attempts.
+    2. F7 (minor, still open from the previous round; intent_intake.rs:905, ci_relay.rs process record_skipped call, ci_relay.rs CiCommand::Read record_skipped call): the cache is commented display-only, yet a record_skipped failure propagates with ? out of Intake::files() (which serves append, pull and list), out of process() before any publication, and out of an exact read that has already verified. A failed display-cache write therefore aborts intake operations and blocks native status publication for current verified results. Make the refresh best-effort (warn and continue) at these sites, with a test. In process(), the skipped rows must still be computed and reported when only the cache write fails.
+    3. F9 (minor, ci_relay.rs CiCommand::Read, the Snapshot::load added before record_skipped): every exact read now runs Snapshot::load and an ls-remote against home_remote, even when the attempt was already verified and verify_ci_read did no work. Before this PR a re-read of a verified attempt needed no home contact, so an unreachable home remote now fails a read that used to succeed, before any row prints. Refresh only when this read actually verified something, reusing the snapshot verify_ci_read already loaded.
+    4. F10 (cosmetic, docs/agents/work-ci-relay.md:251 and :319-321): the docs still say Home processing skips unverified results, with no mention of the report or aida awaiting, and that CI commands emit one object with a message field on success and that refusals remain nonzero exits. ci process --json now adds a skipped array on success and prints {error, skipped} on stdout on refusal. Document the skipped field, the error object and the awaiting row.
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
+  created_at: 2026-11-08T20:08:49.858290909Z
+  modified_at: 2026-11-08T20:08:49.858290909Z
   session_id: 01a1bc93-77a0-7740-8b03-df4e3e8d1df5
   harness_version: 2.1.319 (Claude Code)
 history:
