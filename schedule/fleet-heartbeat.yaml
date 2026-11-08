@@ -6,3 +6,5 @@ last_by:
   vendor: claude
 result: done
 note: 'PRs 14 open (4 green awaiting review, 10 red in rework); lanes: 4 local codex + 4 dell1 codex. Oldest stall: review watcher dead on stale grant 16:13-16:38, fixed (relaunched on current grant, concurrency arg fixed). Acted: PR-3611 seat ended+review released; PR-3619 conflict merged; TASK-3048/3424/3425/3368/2539/2538/3426 ruled; STORY-2326 + SPIKE-713 completed. Human: none. Next: next hourly tick.'
+due_since: 2026-11-08T00:47:17.574719109Z
+due_reason: every 1h
