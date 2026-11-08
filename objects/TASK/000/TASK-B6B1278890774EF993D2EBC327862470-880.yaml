@@ -8,7 +8,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-06T13:39:53.442026Z
-modified_at: 2026-11-08T23:46:00.597542271Z
+modified_at: 2026-11-08T23:46:08.117250002Z
 req_type: Task
 tags:
 - architecture
@@ -1414,6 +1414,24 @@ comments:
   content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: Merge-only head; a full sweep of the merge-base diff found no new code defect and the launch gate stays closed, but zero-unrouted acceptance is unmet (3180 blocked and 6 read_only writer rows, 293 operations), so this needs an advisor ruling, finished CI and hold clearance rather than another code round.. No triage reason was given.'
   created_at: 2026-11-08T23:46:00.597540312Z
   modified_at: 2026-11-08T23:46:00.597540312Z
+  session_id: 20abb7c3-8f9b-4a5e-b326-404921f3b450
+- id: 01a1bd8e-1605-7cc2-aa39-bc96afba1813
+  author: joe
+  content: |-
+    REVIEW FINDINGS TO ADDRESS (PR #3661):
+    Verdict: CHANGES REQUESTED
+    Reviewed commit: 5122542f63ac
+    Recorded: 2026-11-08T23:18:14.977518584+00:00
+    Review comment: https://github.com/joemooney/aida/pull/3661#issuecomment-6728562965
+    Findings:
+    1. BLOCKING, needs an advisor ruling rather than more code. Routing acceptance (TASK-3223 description; advisor ruling comment 34 'zero unrouted writers for the mediated profile') is UNMET at 5122542f63ac. check-store-writers.py --profile mediated reports 3186 writer and 293 operation rows unresolved (scripts/store-writers.toml: 3180 blocked, 6 read_only, 215 host_only). mediated_blockers (scripts/check-store-writers.py) counts every operation row, so it cannot reach zero by construction, and the 4 mediated_route records clear nothing. Only comment add and title/description/priority edit route (aida-cli-lib/src/store_mutation_entry.rs translate_with_reader). The advisor must either authorize a staged partial with named follow-up owners or define which refusals count as reconciled. The implementer has punted this fork repeatedly; another rework round cannot resolve it.
+    2. BLOCKING, same advisor ruling. Shared-boundary read-only objects, metadata and cache with lane-private derived caches (ancestor grants, symlinks, primary launches) are proven only by synthetic-identity fixtures in aida-cli-lib/src/containment/tests/mediated_store_tests.rs, because selected_store_profile (aida-cli-lib/src/launch/contained.rs:800) correctly refuses the mediated profile, so no production lane runs under this boundary. Resume has refusal coverage only (mediated_profile_resume_refuses_before_effects_in_primary_and_linked_layouts). Durable Git/oplog publication is also outstanding (docs/internal/security/store-mutation-writers.md).
+    3. BLOCKING until CI reports: all 7 CI jobs at 5122542f63ac (run 42534138584) were pending when this review ended, so comment 34's make check-ci-fast evidence depends on CI (gates) at this head. This head merges main's queue_cmd split and regenerated inventory, which touch this PR's scripts/config-trust.toml, scripts/store-writers.toml, scripts/check-store-writers.py and tests/test_store_writer_inventory.py.
+    4. BLOCKING until cleared by advisor or operator: the aida:merge-hold label is active, merge-hold-gate failed at this head (run 42534138583) and merge state is BLOCKED. The reviewer cannot clear it.
+    5. COSMETIC, carried: the PR body still says 'comment_add and title/description spec_edit'; the branch also routes priority (EditFields::parsed_priority in aida-core/src/db/canonical_mutation.rs and the edit arm of store_mutation_entry.rs). Update it before publication.
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
+  created_at: 2026-11-08T23:46:08.005869083Z
+  modified_at: 2026-11-08T23:46:08.005869083Z
   session_id: 20abb7c3-8f9b-4a5e-b326-404921f3b450
 history:
 - id: 01a1b116-742d-73c0-9064-1933f11e4c38
