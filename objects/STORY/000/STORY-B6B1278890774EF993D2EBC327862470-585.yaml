@@ -17,7 +17,7 @@ priority: Low
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-08T02:58:18.689963065Z
-modified_at: 2026-11-08T07:42:25.142035219Z
+modified_at: 2026-11-08T07:57:08.716304846Z
 req_type: Story
 tags:
 - area:handoff
@@ -89,6 +89,13 @@ comments:
   modified_at: 2026-11-08T07:41:12.081909911Z
   session_id: 01a1b8be-8170-7fb2-89ab-ecb4c6eee98c
   harness_version: 2.1.319 (Claude Code)
+- id: 01a1ba29-42ec-7441-a680-d9e9f47ac8d8
+  author: dirtlab
+  content: 'Rework complete in native Codex seat; edits remain uncommitted for host publication. Claude only: findings get a six-second budget plus reserved write time, branch PR origins are included through bounded existing aida pr list reads, failed PR lookup stays unknown, snapshot timestamps and stale labels are explicit, matched rotation context is reread without nesting, and CLI-owned worktree/role slots reuse bounded packet/log files. Ordinary handoff show discovers the local recovery snapshot across relaunches; role-context-disabled settings retain paired SessionStart handling. Added real CLI round-trip coverage, updated hidden help golden, CI gate classification/comment placement and writer inventory. Passed: 16 hook fixtures; 42 writer-inventory tests; lane-runner generated-settings, rotation-exclusion, help-golden (including regeneration), and real CLI integration tests; environment ratchet zero additions; writer inventory, CI classification, trace headers, executable fixture, hidden-flag manual, template and rustfmt checks. Full fast-gate run was stopped because its fast steps invoke Cargo directly outside the lane runner; portable skill sync refused a read-only destination, while template checks pass. No implementation blocker; host owns commit, publication and queue completion.'
+  created_at: 2026-11-08T07:57:08.716304846Z
+  modified_at: 2026-11-08T07:57:08.716304846Z
+  session_id: 01a1ba1bc14e
+  harness_version: codex-cli 0.167.0
 history:
 - id: 01a1b9c5-3252-7530-8b0b-bbe2c3ac5581
   author: joe
