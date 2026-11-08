@@ -28,7 +28,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-07T19:59:40.192574Z
-modified_at: 2026-11-08T20:44:51.222582738Z
+modified_at: 2026-11-08T20:48:05.067732972Z
 req_type: Story
 comments:
 - id: 01a1b86c-54fb-76f0-b04b-0ed1c7c07cfb
@@ -252,6 +252,13 @@ comments:
   content: Returned from NeedsAttention to Approved via `aida edit --status`. No triage reason was given.
   created_at: 2026-11-08T19:33:00.580997400Z
   modified_at: 2026-11-08T19:33:00.580997400Z
+  session_id: 01a1bc93-77a0-7740-8b03-df4e3e8d1df5
+  harness_version: 2.1.319 (Claude Code)
+- id: 01a1bceb-13cb-7170-9e70-fd0541603d3d
+  author: joe
+  content: 'Advisor hand merge: #3643 is now current with main (union of --lane-host and --lane-capacity, snapshot regenerated; 21 registry tests pass on dell1). Rework brief: do NOT merge main again unless it conflicts. Fix review findings 1 (binary row must be advisory outside a dev build of this project, with tests) and 2-5 as listed in the 17:06 review; finding 6 accepted as non-blocking unless trivial. LIGHT gate: one targeted lane_host test plus make check-ci-fast.'
+  created_at: 2026-11-08T20:48:05.067732972Z
+  modified_at: 2026-11-08T20:48:05.067732972Z
   session_id: 01a1bc93-77a0-7740-8b03-df4e3e8d1df5
   harness_version: 2.1.319 (Claude Code)
 history:
