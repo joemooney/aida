@@ -213,7 +213,13 @@ coordinators retain JSONL output. This evidence grants no sandbox conformance.
 
 **Scaffolded launch policy.** `aida scaffold` generates
 `.aida/launch-profile.toml`, a portable recipe containing symbolic roots rather
-than local absolute paths. `aida agent new <vendor> --no-exec --verbose` resolves
+than local absolute paths. This is per-clone configuration: the default
+deny-by-default `.aida/*` Git ignore rule excludes it, so a fresh clone needs
+`aida scaffold` before it has a recipe. When the file is absent, launch previews
+omit the root declaration; they still report the verbose seat Git policy.
+<!-- trace:STORY-1486 | ai:codex -->
+
+`aida agent new <vendor> --no-exec --verbose` resolves
 the recipe into separate writable and read-only root lists. Project source,
 Git administrative directories (including the common directory shared by linked
 worktrees), project state, store, cache and build output are listed separately.
