@@ -8,7 +8,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-08T18:38:43.709546225Z
-modified_at: 2026-11-08T19:17:15.901612207Z
+modified_at: 2026-11-08T19:17:19.775664199Z
 req_type: Bug
 comments:
 - id: 01a1bc8c-5761-7180-b3a9-aa9efdae2409
@@ -23,6 +23,23 @@ comments:
   content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: BUG-2498 not fixed for the state that actually stalled: finished reviewers still hold a witness-less Reviewing record (owner Unknown), but the patch only accepts Closed records; AC2 logic holds, CI was pending at review.. No triage reason was given.'
   created_at: 2026-11-08T19:17:15.901610903Z
   modified_at: 2026-11-08T19:17:15.901610903Z
+  session_id: 01a1b9af-8230-75d2-82f8-667491cc010a
+  harness_version: 2.1.319 (Claude Code)
+- id: 01a1bc97-fc82-7b91-9ca8-2aa5374d7466
+  author: joe
+  content: |-
+    REVIEW FINDINGS TO ADDRESS (BUG-2498):
+    Verdict: CHANGES REQUESTED
+    Reviewed commit: 65baec1ec915
+    Recorded: 2026-11-08T19:10:10.954295566+00:00
+    Findings:
+    1. AC1 unmet, aida-cli-lib/src/ownership/reader.rs:119-132 and queue_cmd.rs:11515: review_lease_ended only adds Phase::Closed with no holder. The production stall had a Phase::Reviewing record with a holder and zero witnesses, so lease_owner returns Unknown and retire_idle_review_worktree falls through to the same 'held by worktree before pickup setup' refusal. Evidence: .aida/ownership/journal.jsonl shows PR-3652 head 6f22e5b3 released at 18:31:40Z ('session ended', the manual cleanup), after its stall log at 17:43:46Z; PR-3661 head 604105fe was acquired 17:49:28Z and released 18:31:54Z, with its stall at 17:55:57Z. aida own show lists all 6 reviewing records with witnesses=0 ('the holder records no witness'), including live reviewers. Fix needs positive end-of-review evidence for this state (or make holder_for_lease/lease_holder_record record a witness for reviewer leases), while Unknown from missing evidence stays refused.
+    2. AC3 gap, aida-cli-lib/src/tests/bug_2457_review_repickup_tests.rs:443-455: the new case creates the Closed state by calling dual::lease_released directly and its comment says a finished review releases ownership before lease cleanup. Production release call sites run with lease removal (session end, reap, ReviewLeaseGuard), and the stalled records were not Closed. Drive two consecutive heads from the real finished-reviewer state: a Reviewing holder with no witnesses and the lease file still present.
+    3. AC4 unproven, aida-cli-lib/src/tests/task_1993_review_watch_tests.rs:1236-1260: bug2498_review_worktree_release_allows_one_watch_setup_retry feeds a synthetic setup error into the BUG-2450 retry state machine, and review_watch.rs is unchanged, so it would pass without this fix. It does not show a release followed by a successful retry. Link the watcher retry to the real release path once AC1 is fixed.
+    4. Minor, aida-cli-lib/src/ownership/reader.rs:124-130: the Closed branch does not bind the record to this lease, since a Closed record has no session. Records are keyed by PR and head and dual-writes are best-effort, so a same-head re-review whose acquire write failed sees the earlier Closed record and counts as ended while live. Only the cwd-based process scan then protects it; the lease's own recorded PIDs are not consulted.
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
+  created_at: 2026-11-08T19:17:19.618706447Z
+  modified_at: 2026-11-08T19:17:19.618706447Z
   session_id: 01a1b9af-8230-75d2-82f8-667491cc010a
   harness_version: 2.1.319 (Claude Code)
 history:
