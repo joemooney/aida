@@ -8,7 +8,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-07T15:34:33.363448208Z
-modified_at: 2026-11-08T11:10:09.236867919Z
+modified_at: 2026-11-08T11:10:46.229267463Z
 req_type: Story
 comments:
 - id: 01a1b6a6-52e1-70a0-a9c1-d32888979ca5
@@ -832,6 +832,29 @@ comments:
     host, subject to the persisted punt/publication veto.
   created_at: 2026-11-08T11:09:59.270371944Z
   modified_at: 2026-11-08T11:09:59.270371944Z
+  session_id: 01a1bad8a06f
+  harness_version: codex-cli 0.167.0
+- id: 01a1bada-87d5-7543-9cfb-1e3ec4d74206
+  author: dirtlab
+  content: |
+    PR #3662 host handoff, current rework:
+    - Verified local origin/main 92e7eb3544665f922dabf96cf10439b5dcf736db: AC1 primary_index_link routing, AC3 shared navigation template and AC4 direct doctor diagnostics are already present. This seat cannot fetch/rebase because Git metadata is read-only.
+    - Fixed latest review finding 1 with rustfmt on codegraph.rs.
+    - Fixed finding 5 by moving the previous committed session handoff into the preceding spec comment and deleting docs/internal/testing/story-2630-seat-handoff.md.
+    - Fixed finding 6: use a five-second query, poll status for a bounded 4.5 seconds and require observed_at to advance while the query thread is alive; also bound heartbeat age. The old equality assumption is gone.
+    - Python suite: 18 tests, 17 passed, one skipped (bundled CodeGraph 1.6.0 not installed). rustfmt --check and git diff --check pass. make check-templates passes. make sync-templates fails at sync-agent-skills: agent_skill_pack: Read-only file system (os error 30).
+    - Rust tests submitted through lane job j20261108T110933107-2-0; result follows separately.
+    AC5 exact attempted command/output:
+    $ codegraph callers primary_index_link
+    /bin/bash: line 1: codegraph: command not found
+    $ aida doctor --lane-host
+    error: unexpected argument '--lane-host' found
+    Usage: aida doctor [OPTIONS] [COMMAND]
+    For more information, try '--help'.
+    Neither the lane .codegraph nor /home/dirtlab/ai/aida/.codegraph exists. rg confirms primary_index_link's caller in worktree_gc.rs:1124; that is not graph acceptance evidence.
+    AC2/AC5 remain incomplete. No write grant has been added. Host Joe must deploy the reviewed proxy/client outside seat writable roots, deliver the fixed absolute command/PATH, provide reviewed contained admission, run real non-empty primary callers acceptance plus candidate doctor --lane-host, update the PR body and obtain final-head CI. Do not claim completion. A blocked-dependency punt is persisted; signal-file creation failed EROFS, so the host must honor the persisted punt even without a signal file. Existing holds/vetoes remain. No commit, push, PR, ship or queue completion was run from this seat.
+  created_at: 2026-11-08T11:10:46.229267463Z
+  modified_at: 2026-11-08T11:10:46.229267463Z
   session_id: 01a1bad8a06f
   harness_version: codex-cli 0.167.0
 history:
