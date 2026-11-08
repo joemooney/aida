@@ -10,12 +10,12 @@ description: |
   2. A failed store pull stops store writes instead of proceeding on a local view: queue_cmd.rs pre-pickup pull, store_sync.rs maybe_sync_pull fallback, and burndown_run.rs, which discards the result.
   3. Retry sites that hold the writer lock then plain pull_rebase (git_ops.rs and store_sync.rs) report a dirty store accurately, not as 'remote unreachable'.
   4. Remove the stopgaps noted on BUG-2490 when this lands.
-status: InProgress
+status: NeedsAttention
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-08T19:27:28.525198886Z
-modified_at: 2026-11-08T22:34:21.239764640Z
+modified_at: 2026-11-08T22:37:50.571138034Z
 req_type: Bug
 comments:
 - id: 01a1bcd8-beaf-7582-aa0b-006077ac5867
@@ -215,6 +215,15 @@ history:
   session_id: 01a1bd4bfe5b
   harness_version: codex-cli 0.167.0
   changes: []
+- id: 01a1bd4f-906b-7a63-90bf-ef91fb950d17
+  author: aida-orchestrator
+  timestamp: 2026-11-08T22:37:50.571162406Z
+  session_id: 01a1bd4d2ded
+  harness_version: 2.1.319 (Claude Code)
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: NeedsAttention
 filed_at:
   code_sha: db2eb4c39e46704132705ccb2b8300574ead41a6
   branch: main
@@ -224,3 +233,11 @@ filed_at:
   vendor: claude
   session: 01a1bc93-77a0-7740-8b03-df4e3e8d1df5
   harness_version: 2.1.319 (Claude Code)
+failure_reason:
+  phase: reviewer
+  phase_index: 3
+  kind: verdict:request-changes
+  detail: Head 63507647da0f only merges main into 85c74b231ed; none of the six round-2 findings were addressed, so the same CI-breaking regressions remain. AC1 and AC2 are implemented in source, AC3 is partial, AC4 is an open host action. CI at this head was still queued at review.
+  recovery_hint: address the review findings, move BUG-2501 back to In Progress, and clear the PR hold only after approval
+  shelved_by: reviewer
+  shelved_at: 2026-11-08T22:37:50.571138034Z
