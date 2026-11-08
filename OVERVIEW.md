@@ -1621,9 +1621,7 @@ directory refuses before host markers are consumed. Prior-attempt hold/punt
 markers survive policy and publication-preparation refusals, and are consumed
 immediately before the admitted child spawn. Mirroring compares signals through
 case-insensitive signal paths; host-owned ledgers have no seat-size cap.
-Standalone punts retain exit 32; no-change exits 0. Explicit no-change outcome
-propagation through queue-resume and the final drain classifier remains draft
-TASK-3608 for advisor triage, as split by PR #3625 review finding 4.
+Standalone punts retain exit 32; no-change exits 0.
 <!-- trace:BUG-2488 | ai:codex -->
 
 Permission reports, doctor, launch output and statusline distinguish the posture;

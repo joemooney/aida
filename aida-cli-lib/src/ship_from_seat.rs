@@ -514,10 +514,7 @@ pub(crate) fn publish_queue_exit(
     let no_change =
         || -> Result<bool> { Ok(!crate::seat_clone::has_commits_beyond_base(&main, tree)?) };
     let publish = || {
-        if no_change()? {
-            eprintln!("implementer: no-change (seat has no commits beyond its base)");
-            return Ok(());
-        }
+        require_lease_branch_work(&main, tree)?;
         run_at(
             &main,
             FromSeatOptions {
@@ -553,6 +550,15 @@ pub(crate) fn publish_queue_exit(
             )
         },
     )
+}
+
+// Invoked only when the exit probe found committed or unpushed work.
+// trace:BUG-2488 | ai:codex
+pub(crate) fn require_lease_branch_work(main: &Path, tree: &Path) -> Result<()> {
+    if !crate::seat_clone::has_commits_beyond_base(main, tree)? {
+        anyhow::bail!("seat has unpublished work outside its leased branch; retain the seat and inspect its local branches");
+    }
+    Ok(())
 }
 
 // Failed exits must still ask the advisor even when no work was produced.

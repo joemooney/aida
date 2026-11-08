@@ -1093,6 +1093,22 @@ pub(crate) fn classify_no_change(
     }
 }
 
+/// Worktree fallback lanes retain their ordinary unpublished-work outcome.
+// trace:BUG-2488 | ai:codex
+pub(crate) fn classify_seat_no_change(
+    outcome: Outcome,
+    success: bool,
+    main: &Path,
+    tree: &Path,
+) -> Result<Outcome> {
+    if crate::seat_clone::host_recorded_clone(main, tree).is_none() {
+        return Ok(outcome);
+    }
+    classify_no_change(outcome, success, || {
+        crate::seat_clone::has_commits_beyond_base(main, tree)
+    })
+}
+
 /// Run the child, wait, classify, print the result line, and return the
 /// outcome's exit code (`Ok` only for an open PR).
 pub(crate) fn run(launch: Launch<'_>) -> Result<()> {
@@ -1300,9 +1316,7 @@ pub(crate) fn run(launch: Launch<'_>) -> Result<()> {
         )?;
         outcome = classify(None, None, || lookup_pr(launch.project_root, launch.branch));
         // trace:BUG-2488 | ai:codex
-        outcome = classify_no_change(outcome, status.success(), || {
-            crate::seat_clone::has_commits_beyond_base(&main_root, &worktree)
-        })?;
+        outcome = classify_seat_no_change(outcome, status.success(), &main_root, &worktree)?;
     }
 
     // trace:BUG-B6B1278890774EF993D2EBC327862470-044 | ai:claude

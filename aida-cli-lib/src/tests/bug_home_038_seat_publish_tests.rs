@@ -3269,7 +3269,7 @@ fn bug_2488_seat_handshakes_refuse_fifo_symlink_and_oversize() {
         "bug_2488_seat_handshakes_refuse_fifo_symlink_and_oversize",
         "bug_2488_seat_handshake_refusals_child",
     );
-    let mut child = std::process::Command::new(std::env::current_exe().unwrap())
+    let mut child = std::process::Command::new(crate::resolve_aida_exe())
         .args(["--exact", &name, "--ignored", "--nocapture"])
         .spawn()
         .unwrap();
@@ -3435,4 +3435,73 @@ fn bug_2488_mirroring_accepts_large_host_ledger_and_case_variant_signals() {
             &format!("? .aida/{directory}/bug-2488.json")
         ));
     }
+}
+
+// trace:BUG-2488 | ai:codex
+#[test]
+fn bug_2488_worktree_fallback_retains_no_pr() {
+    let fx = fixture();
+    let tree = fx.root.join("worktree-fallback");
+    git_ok(
+        &fx.main,
+        &["worktree", "add", "-b", "fallback", tree.to_str().unwrap()],
+    );
+    let path = crate::lease_path(&fx.main, "c0ffee248877");
+    std::fs::create_dir_all(path.parent().unwrap()).unwrap();
+    std::fs::write(&path, format!(
+        "id = \"c0ffee248877\"\nscope = \"BUG-2488\"\nslug = \"fallback\"\nowner = \"test\"\nworktree_path = {}\nbranch = \"fallback\"\nstarted_at = \"2026-10-16T00:00:00Z\"\nhostname = \"h\"\ntree_kind = \"worktree\"\n",
+        aida_core::toml_quote::toml_string(&tree.display().to_string())
+    )).unwrap();
+    assert!(crate::list_leases(&fx.main)
+        .iter()
+        .any(|lease| lease.tree_kind == TreeKind::Worktree));
+    assert!(matches!(
+        crate::standalone_implementer::classify_seat_no_change(
+            crate::standalone_implementer::Outcome::NoPr,
+            true,
+            &fx.main,
+            &tree,
+        )
+        .unwrap(),
+        crate::standalone_implementer::Outcome::NoPr
+    ));
+}
+
+// trace:BUG-2488 | ai:codex
+#[test]
+fn bug_2488_other_branch_work_refuses_no_change_publication() {
+    if !bwrap_live_or_skip() {
+        return;
+    }
+    let fx = fixture();
+    let tree = leased_clone(&fx, "other-branch", "c0ffee248878");
+    git_ok(&tree, &["checkout", "-b", "other-work"]);
+    git_ok(
+        &tree,
+        &[
+            "-c",
+            "user.name=Test",
+            "-c",
+            "user.email=test@example.com",
+            "commit",
+            "--allow-empty",
+            "-m",
+            "other work",
+        ],
+    );
+    assert!(!crate::seat_clone::has_commits_beyond_base(&fx.main, &tree).unwrap());
+    let error = crate::ship_from_seat::publish_queue_exit_with(
+        &fx.main,
+        "BUG-2488",
+        || crate::ship_from_seat::PostExitCommit::Clean,
+        || crate::seat_clone::probe(&fx.main, &tree),
+        || crate::ship_from_seat::require_lease_branch_work(&fx.main, &tree),
+        || panic!("unpushed branch work must reach publication refusal"),
+    )
+    .unwrap_err();
+    assert!(
+        error.to_string().contains("outside its leased branch"),
+        "{error:#}"
+    );
+    assert!(tree.exists(), "unpublished work must remain available");
 }

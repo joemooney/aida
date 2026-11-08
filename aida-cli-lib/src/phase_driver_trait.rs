@@ -3343,6 +3343,16 @@ impl auto_complete::PhaseDriver for RealPhaseDriver {
                 format!("advisor tier: could not resume the implementer session: {e}"),
             )
         })?;
+        // A resumed implementer may punt again, including on a failed exit.
+        // Mirror its ledger before any status/outage classification returns.
+        // trace:BUG-2488 | ai:codex
+        crate::standalone_implementer::reconcile_signals(&self.project_root, &worktree, &self.spec)
+            .map_err(|e| {
+                PhaseFailure::of(
+                    FailureKind::Internal,
+                    format!("advisor tier: could not reconcile implementer signals: {e}"),
+                )
+            })?;
         if !status.success() {
             // BUG-266: same Anthropic-API outage classification on the
             // advisor-resume leg — `spawn_claude_headless_resume` is the
