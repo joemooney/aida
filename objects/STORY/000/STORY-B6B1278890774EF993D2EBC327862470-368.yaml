@@ -29,7 +29,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-04T02:34:20.173245666Z
-modified_at: 2026-11-08T12:03:25.136408472Z
+modified_at: 2026-11-08T12:18:29.169397839Z
 req_type: Story
 relationships:
 - rel_type:
@@ -741,6 +741,18 @@ comments:
   modified_at: 2026-11-08T12:01:46.629558429Z
   session_id: 01a1b9af-8230-75d2-82f8-667491cc010a
   harness_version: 2.1.319 (Claude Code)
+- id: 01a1bb18-86b1-7c50-a41f-9091287a0127
+  author: dirtlab
+  content: |
+    S5 native implementer rework complete; changes left UNCOMMITTED for host publication (Refs STORY-2402). Addressed latest PR #3639 findings: conditional handoffs now invoke per-write maybe_auto_push_store immediately after successful deferral and before note I/O; tests observe the actual call on success and note failure. Added story2402_s5_implementer_cannot_set_holds proving both writers refuse unauthorized manual holds without row/recurrence/note mutation. Removed unledgered snapshot env read. Regenerated and classified the two deferral wrapper inventory rows. Canonicalized recurrence error conditions and handoff display IDs; corrected manual flag context, stale migration comment, helper placement and blank line. Current standing-orders help ordering is intentional; no snapshot reorder.
+
+    Retrieved CI run 42464033547 artifacts test-timings-lib-0/1: S4 persistence 10.448s, S5 recurrence 10.332s, S5 policy fixture 20.060s. Added measured x2/round-up-to-5 budgets (25/25/45s); both archived shard reports now pass test-timings.py budget enforcement.
+
+    Validation: lane job j20261108T120511876-2-0 executed cargo test --profile agent -p aida-cli-lib --lib -- story2402_s5_: 5 passed, 0 failed, 8.03s. Lane build j20261108T121048753-2-0 passed. Full docs/cli/verify-manual.py passed using that build from the runner overlay; installed CLI initially produced stale-binary mismatches. Static manual guard, ExecContext ratchet (--base 92e7eb35446; zero additions), store-writer inventory, rustfmt and git diff --check passed. LIGHT gate followed; no direct cargo, commit, push, PR, queue done, review record or ship. Derived attention untouched. No remaining blockers. Codegraph unavailable; rg used after attempted codegraph call/doctor.
+  created_at: 2026-11-08T12:18:29.169397839Z
+  modified_at: 2026-11-08T12:18:29.169397839Z
+  session_id: 01a1bb0ab18c
+  harness_version: codex-cli 0.167.0
 history:
 - id: 01a1a468-9c3a-76d2-ab8c-12bf6457966b
   author: joe
