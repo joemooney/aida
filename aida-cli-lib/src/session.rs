@@ -238,6 +238,7 @@ fn process_legend() -> String {
 /// directory sweep.
 // trace:STORY-993 | ai:claude
 struct ProcessResolver {
+    root: Option<std::path::PathBuf>,
     procs: Vec<crate::session_liveness::LiveAgentProcess>,
     leases: Vec<crate::SessionLease>,
     manifests: Vec<crate::session_manifest::SessionManifest>,
@@ -254,6 +255,7 @@ impl ProcessResolver {
             .map(crate::session_manifest::list_all)
             .unwrap_or_default();
         Self {
+            root,
             procs,
             leases,
             manifests,
@@ -264,26 +266,23 @@ impl ProcessResolver {
     /// Resolve pid / tty / liveness for each row — no per-row spawn, no
     /// per-row directory read. A lease covers a transcript when a session
     /// manifest joins the lease id to the transcript's `claude_session_id`;
-    /// the lease's `active_pid` (or its `creator_pid` when that pid IS a live
-    /// agent process — the launcher exec'd into the agent) then wins over the
-    /// proc-scan. Falls back to the cwd + start-window scan against live
-    /// claude/codex processes. `aida ps` parity (TASK-152): when the
-    /// transcript names no role but the lease does, the lease role fills the
-    /// ROLE cell and is always carried as `lease_role` in JSON.
+    /// its ownership judgment decides liveness. A cwd scan attributes only
+    /// unleased historical conversations and cannot revive a dead owner.
+    /// The lease role fills a missing transcript role.
     // trace:STORY-993 | ai:claude
     fn fill(&self, sessions: &mut [SessionMeta]) {
         use crate::session_liveness::{self as sl, AgentKind, LeaseFacts, TranscriptFacts};
-        let is_agent_proc = |pid: u32| self.procs.iter().any(|p| p.pid == pid);
         for s in sessions.iter_mut() {
-            let lease = self
+            // trace:STORY-2325 | ai:codex — scans cannot revive recorded ownership.
+            let owned_lease = self
                 .manifests
                 .iter()
                 .find(|m| m.claude_session_id.as_deref() == Some(s.id.as_str()))
-                .and_then(|m| self.leases.iter().find(|l| l.id == m.session_id))
-                .map(|l| LeaseFacts {
-                    pid: l.active_pid.or(l.creator_pid.filter(|p| is_agent_proc(*p))),
-                    role: l.role.clone(),
-                });
+                .and_then(|m| self.leases.iter().find(|l| l.id == m.session_id));
+            let lease = owned_lease.map(|l| LeaseFacts {
+                pid: l.active_pid.or(l.creator_pid),
+                role: l.role.clone(),
+            });
             let cwd = s.last_cwd.as_deref().map(Path::new);
             let t = TranscriptFacts {
                 agent: s.agent.as_str(),
@@ -296,8 +295,22 @@ impl ProcessResolver {
             s.process = sl::resolve(
                 &t,
                 lease.as_ref(),
-                &self.procs,
-                &crate::process_probe::pid_is_alive,
+                if owned_lease.is_some() {
+                    &[]
+                } else {
+                    &self.procs
+                },
+                &|pid| {
+                    let Some(lease) = owned_lease else {
+                        return false;
+                    };
+                    self.root.as_deref().is_some_and(|root| {
+                        matches!(
+                            crate::ownership::reader::lease_owner(root, lease),
+                            crate::ownership::OwnerVerdict::Alive { .. }
+                        ) && lease.active_pid.or(lease.creator_pid) == Some(pid)
+                    })
+                },
                 &|pid| {
                     (
                         aida_core::liveness::process_start_time(pid),
@@ -312,6 +325,16 @@ impl ProcessResolver {
                     .as_deref()
                     .and_then(|path| sl::transcript_spinning(path, self.now)),
             );
+            if owned_lease.is_some_and(|lease| {
+                self.root.as_deref().is_none_or(|root| {
+                    matches!(
+                        crate::ownership::reader::lease_owner(root, lease),
+                        crate::ownership::OwnerVerdict::Unknown { .. }
+                    )
+                })
+            }) {
+                s.process.liveness = sl::Liveness::Unknown;
+            }
             if s.role.is_none() {
                 s.role = s.process.lease_role.clone();
             }
@@ -530,6 +553,40 @@ mod normalize_specs_tests {
             path: None,
             process: Default::default(),
         }
+    }
+
+    // trace:STORY-2325 | ai:codex
+    #[test]
+    fn recordless_leased_conversation_renders_unknown_even_when_old() {
+        let tmp = tempfile::tempdir().unwrap();
+        let mut row = meta(None);
+        row.age_seconds = 86400;
+        let lease: crate::SessionLease = serde_json::from_value(serde_json::json!({
+            "id": "owner", "scope": uuid::Uuid::from_u128(7).to_string(),
+            "slug": "owned", "owner": "tester", "worktree_path": tmp.path(),
+            "branch": "work", "started_at": chrono::Utc::now(), "hostname": "test",
+            "active_pid": std::process::id(), "role": "implementer",
+        }))
+        .unwrap();
+        let manifest = serde_json::from_value(serde_json::json!({
+            "session_id": "owner", "claude_session_id": row.id,
+            "planned_at": chrono::Utc::now(), "plan_source": "test", "items": [],
+        }))
+        .unwrap();
+        let resolver = ProcessResolver {
+            root: Some(tmp.path().to_path_buf()),
+            procs: vec![],
+            leases: vec![lease],
+            manifests: vec![manifest],
+            now: chrono::Utc::now(),
+        };
+        resolver.fill(std::slice::from_mut(&mut row));
+        assert_eq!(
+            row.process.liveness,
+            crate::session_liveness::Liveness::Unknown
+        );
+        assert_eq!(process_liveness_glyph(&row), "?");
+        assert_eq!(row.process.liveness.label(), "unknown");
     }
 
     fn req(spec_id: &str, agreed_id: Option<&str>) -> aida_core::Requirement {
@@ -9460,6 +9517,7 @@ fn process_liveness_glyph(s: &SessionMeta) -> &'static str {
         Liveness::Spinning => "⟳",
         Liveness::FileTouched => glyph(crate::glyphs::Glyph::InFlight),
         Liveness::None => " ",
+        Liveness::Unknown => "?",
     }
 }
 
@@ -9513,6 +9571,7 @@ fn print_table_with_widths(sessions: &[SessionMeta], w: &TableWidths) {
             crate::session_liveness::Liveness::Spinning => live.yellow().bold().to_string(),
             crate::session_liveness::Liveness::FileTouched => live.yellow().to_string(),
             crate::session_liveness::Liveness::None => live.dimmed().to_string(),
+            crate::session_liveness::Liveness::Unknown => live.yellow().to_string(),
         };
         println!(
             "{} {:<id_w$}  {:<age_w$}  {:<pid_w$}  {:<tty_w$}  {:<agent_w$}  {:<role_w$}  {:<spec_w$}  {:<term_w$}  {:<wt_w$}  {}",

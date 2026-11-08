@@ -5739,6 +5739,7 @@ pub(crate) fn handle_queue_command(
             panes,
             strict,
         } => {
+            refuse_retired_steal(*steal)?;
             let user_id = get_user(user);
             // TASK-1120: opt-in pane hosting. Export the requested host so every
             // implementer this drain spawns (single / --batch / nextN) reads it
@@ -7894,6 +7895,9 @@ impl ReworkFlags<'_> {
         if self.force {
             v.push("--force");
         }
+        // Compatibility spelling only: handle_rework_entry refuses this before
+        // spec_scoped or the queue-work pass-through can see steal=true.
+        // trace:STORY-2325 | ai:codex
         if self.steal {
             v.push("--steal");
         }
@@ -7918,6 +7922,7 @@ pub(crate) fn handle_rework_entry(
     id: Option<&str>,
     flags: &ReworkFlags<'_>,
 ) -> Result<()> {
+    refuse_retired_steal(flags.steal)?;
     if let Some(id) = id {
         // The ruling is recorded first so a chained `--work` launch reads it
         // into its pickup prompt. trace:BUG-B6B1278890774EF993D2EBC327862470-021 | ai:claude
@@ -8224,6 +8229,7 @@ pub(crate) fn handle_queue_rework(
     no_pull: bool,
     user: Option<&str>,
 ) -> Result<()> {
+    refuse_retired_steal(steal)?;
     // `--resume` chains through to `aida queue work --resume` (TASK-112,
     // shipped). It implies `--work` — there is nothing to resume without
     // launching a session. trace:BUG-236 | ai:claude
@@ -8754,7 +8760,7 @@ pub(crate) fn handle_queue_rework(
             /* stack */ false,
             /* base */ None,
             /* force_base */ false,
-            steal,
+            /* steal is unreachable: handle_queue_rework refuses it at entry */ false,
             /* force */ false,
             /* force_claim */ false,
             // Bare `--resume` → resume the scope's most recent recorded
@@ -11564,7 +11570,10 @@ fn retire_idle_review_worktree(root: &std::path::Path, forge: ReviewForge, n: u6
                 && crate::worktree::canonical_or_self(&lease.worktree_path)
                     == crate::worktree::canonical_or_self(&path)
                 && crate::pr_lease_takeover::reviewer_target(lease) == Some((forge, n))
-                && crate::leases::lease_owner_gone(lease) == Some(true) =>
+                && matches!(
+                    crate::ownership::reader::lease_owner(root, lease),
+                    crate::ownership::OwnerVerdict::Dead { .. }
+                ) =>
         {
             Some(lease)
         }
@@ -11668,8 +11677,10 @@ fn retire_idle_review_worktree(root: &std::path::Path, forge: ReviewForge, n: u6
     // trace:BUG-2469 | ai:codex
     if let Some(lease) = reclaim {
         anyhow::ensure!(
-            crate::leases::lease_owner_gone(lease) == Some(true)
-                && Some(std::fs::read(crate::lease_path(root, &lease.id))?) == lease_snapshot
+            matches!(
+                crate::ownership::reader::lease_owner(root, lease),
+                crate::ownership::OwnerVerdict::Dead { .. }
+            ) && Some(std::fs::read(crate::lease_path(root, &lease.id))?) == lease_snapshot
                 && working_tree_clean(&path) == Some(true),
             "review ownership or working tree changed before retirement"
         );
@@ -11682,6 +11693,15 @@ fn retire_idle_review_worktree(root: &std::path::Path, forge: ReviewForge, n: u6
             current.len() == 1 && current[0].id == lease.id,
             "review lease ownership became ambiguous"
         );
+    }
+    // trace:STORY-2325 | ai:codex
+    if let Some(lease) = reclaim {
+        crate::ownership::reader::journal_reclaim(root, lease).with_context(|| {
+            format!(
+                "ownership reclaim could not end lease {}; inspect `aida session end {}`",
+                lease.id, lease.id
+            )
+        })?;
     }
     aida_core::worktree_holders::check_worktree_removal(&path)?;
     aida_core::mailbox_lifecycle::guard::remove_worktree_retained(
@@ -12124,6 +12144,12 @@ pub(crate) fn scope_conflict_resume_hint(
     }
 }
 
+// trace:STORY-2325 | ai:codex
+fn refuse_retired_steal(steal: bool) -> Result<()> {
+    anyhow::ensure!(!steal, "`--steal` is retired: ownership decides reclaim automatically; live or unknown owners retain their lane. Ask the owner to use `aida session end <id>` for voluntary handoff");
+    Ok(())
+}
+
 /// STORY-42: the orchestrator. Resolves the plan, optionally pulls,
 /// runs session_start in non-launch mode (so we can write the manifest
 /// from the freshly minted lease), then either prints next-steps or
@@ -12214,6 +12240,7 @@ pub(crate) fn handle_queue_work(
     // STORY-1003: opaque vendor model override for this pickup/drain.
     model_override: Option<&str>,
 ) -> Result<()> {
+    refuse_retired_steal(steal)?;
     let role_override = role_input.pickup;
     // STORY-132: validate a caller-minted --session-id up front — before
     // any side effect — so a malformed id fails clean with a clear
@@ -13275,318 +13302,22 @@ pub(crate) fn handle_queue_work(
         return Ok(());
     }
 
-    // TASK-81: scope-conflict pre-flight. If any active lease already
-    // owns plan.scope, `session_start` would refuse with "scope X already
-    // owned by session Y". Surface that here with a queue-work-flavored
-    // message that names --steal as the override, and when --steal is
-    // passed, end EACH holding session cleanly first so session_start
-    // sees a free scope. Re-list + re-detect after every end so we drain
-    // the rare-but-possible multi-lease-same-scope state (manual lease
-    // restores, partial session_end crashes, concurrent writes) — the
-    // helper itself returns only the freshest, but session_start's guard
-    // bails on ANY same-scope lease, so we must sweep until clean.
-    // Uncommitted-changes guards in session_end still apply — we don't
-    // escalate to --force on the user's behalf because that would
-    // silently discard their in-flight work; the message points at
-    // `aida session end --force` for the user-driven path.
-    //
-    // BUG-307 extension: before refusing or applying --steal, check
-    // whether the conflict lease is **dormant** (process dead, mtime
-    // stale, no live claude in the worktree). If it is AND the worktree
-    // is clean, auto-release it transparently — the dominant friction
-    // class for unsupervised drains is stale-lease state from PREVIOUS
-    // stalls, every recovered failure leaves a lease behind. If the
-    // worktree carries uncommitted changes we still refuse, but with a
-    // loss-risk-aware message instead of the generic "pass --steal".
-    // trace:TASK-81 trace:BUG-307 | ai:claude
+    // Re-list after each guarded end: a prior owner may exit during pickup,
+    // but PID scans and lease age cannot authorize reclaim. Ownership's judge
+    // supplies death proof; tree coverage and ordinary session_end protect WIP.
+    // trace:STORY-2325 | ai:codex
     {
         let project_root_for_conflict = find_main_worktree_root()?;
-        let orch_config = orchestrator::OrchestratorConfig::load(&project_root_for_conflict);
-        // Safety cap: in practice this resolves in 1 iteration for the
-        // canonical case, 2-3 for the multi-lease state. A bound prevents
-        // a hypothetical infinite loop if session_end ever returns Ok
-        // without actually removing the lease (defense-in-depth).
+        // trace:STORY-2325 | ai:codex — the judge alone decides ownership.
+        // Tree coverage and session_end still guard every destructive step.
         let mut remaining = 16usize;
-        // BUG-2223: the orphan `--resume` adopts stays, tree and all (session
-        // start replaces its lease record in place); every OTHER lease on the
-        // scope is still swept, so a live one refuses the pickup.
-        // trace:BUG-2223 | ai:claude
         let adopting = adopt_orphan.as_ref().map(|o| o.id.as_str());
         while let Some(conflict) = crate::leases::next_scope_conflict(
             list_leases(&project_root_for_conflict),
             &plan.scope,
             adopting,
         ) {
-            // BUG-307: classify before deciding to refuse. The auto-release
-            // path only fires when every liveness signal says the lease is
-            // truly dormant; a live or freshly-minted lease falls through to
-            // the existing --steal/refuse logic unchanged.
-            // trace:BUG-307 | ai:claude
-            match auto_release_decision_for_lease(
-                &project_root_for_conflict,
-                &conflict,
-                &orch_config,
-            ) {
-                orchestrator::AutoReleaseDecision::SafelyDormant {
-                    process_dead,
-                    mtime_age_secs,
-                    worktree_missing,
-                } => {
-                    let cause = if worktree_missing {
-                        format!(
-                            "worktree missing, lease {}",
-                            humanize_secs_short(mtime_age_secs)
-                        )
-                    } else if process_dead {
-                        format!(
-                            "process dead {} ago, worktree clean",
-                            humanize_secs_short(mtime_age_secs)
-                        )
-                    } else {
-                        format!(
-                            "mtime {} old, worktree clean",
-                            humanize_secs_short(mtime_age_secs)
-                        )
-                    };
-                    eprintln!(
-                        "  {} released stale lease {} ({})",
-                        crate::glyph(crate::glyphs::Glyph::Info).cyan(),
-                        (&conflict.id[..conflict.id.len().min(8)]).yellow(),
-                        cause.dimmed()
-                    );
-                    // force_cleanup_lease removes the lease file first, then
-                    // attempts `git worktree remove --force`. A `false` return
-                    // means the worktree leg failed (likely already gone or
-                    // permissions); the lease file is still removed and the
-                    // loop's `find_scope_lease_conflict` re-check will confirm
-                    // the conflict has cleared. force_cleanup_lease prints its
-                    // own Warning so the operator sees the worktree-remove
-                    // failure without a hard bail.
-                    let _ = force_cleanup_lease(&project_root_for_conflict, &conflict);
-                    remaining -= 1;
-                    if remaining == 0 {
-                        anyhow::bail!(
-                            "auto-release sweep gave up after 16 iterations on scope `{}` — \
-                             the lease store may be corrupt; inspect `.aida/sessions/`",
-                            plan.scope
-                        );
-                    }
-                    continue;
-                }
-                orchestrator::AutoReleaseDecision::DormantDirty { dirty_entries } => {
-                    // TASK-402 (friction #3 + #4): a dormant lease with a dirty
-                    // worktree is the canonical resume-after-failure state — the
-                    // process died mid-implementation (orphaned) and the
-                    // unfinished work lives uncommitted in that exact worktree.
-                    // The bare message ("commit/stash, or --force to discard")
-                    // omits the one option that keeps the WIP: resume into the
-                    // existing worktree. `--steal` would remove the worktree the
-                    // WIP lives in, so name it as the destructive path, not the
-                    // default. trace:TASK-402 | ai:claude
-                    // BUG-2223: offer `--resume` only when it adopts this very
-                    // lease (a lease recording no owner pid is DormantDirty
-                    // here but cannot be adopted); otherwise say why and name
-                    // what does work. trace:BUG-2223 | ai:claude
-                    let resume_hint = scope_conflict_resume_hint(
-                        &plan.scope,
-                        &conflict.id,
-                        crate::leases::lease_adoption_refusal(&project_root, &conflict),
-                        adopting,
-                        conflict.tree_kind == crate::seat_clone::TreeKind::Clone,
-                    );
-                    // trace:BUG-B6B1278890774EF993D2EBC327862470-023 | ai:claude
-                    anyhow::bail!(
-                        "lease {} for scope `{}` looks orphaned (dormant process, \
-                         worktree has {} uncommitted change(s) at {}).{}",
-                        conflict.id,
-                        plan.scope,
-                        dirty_entries,
-                        conflict.worktree_path.display(),
-                        resume_hint
-                    );
-                }
-                orchestrator::AutoReleaseDecision::Live => {
-                    // Fall through to the existing --steal/refuse logic.
-                }
-            }
-
-            // BUG-777: the BUG-307 gate above keeps a lease "Live" while its
-            // file mtime is inside the staleness window even when the owning
-            // process is demonstrably dead — correct for a SILENT sweep (a
-            // freshly-minted lease whose shell hasn't wired up yet must not be
-            // swept out from under itself), wrong as the last word for an
-            // operator who is staring at an orphan. So before refusing, re-ask
-            // using the SAME liveness verdict `aida ps` / `aida status <spec>`
-            // render (● live / ⚠ STALE) plus the lease's recorded pids, and:
-            //   * `--force-claim` releases a lease whose owner is verifiably
-            //     gone AND whose worktree is clean — ONE recovery verb, the
-            //     same flag the InProgress-without-lease path already names;
-            //   * a dead owner with a DIRTY worktree still refuses, naming
-            //     what is uncommitted and where (never silently discarded);
-            //   * a genuinely live lease is never reaped, --force-claim or not.
-            // Every refusal below states the worktree's clean/dirty state so
-            // "work there is lost unless committed" is evaluable in place.
-            // trace:BUG-777 | ai:claude
-            let recovery = stale_lease_recovery_for_lease(&conflict);
-            // Refusals name the FULL lease id so the `aida session end <id>`
-            // they suggest is unambiguous.
-            // trace:BUG-B6B1278890774EF993D2EBC327862470-023 | ai:claude
             let conflict_id = conflict.id.as_str();
-            // A dead lease whose worktree is gone has nothing left to lose, so
-            // it is released without `--force-claim`; only a verdict of
-            // ReclaimableClean { worktree_missing: true } is released here.
-            // trace:BUG-b6b1278890774ef993d2ebc327862470-024 | ai:claude
-            let released_gone = crate::session_reap::release_gone_worktree_lease(
-                &project_root_for_conflict,
-                &conflict,
-                &recovery.verdict,
-            );
-            match &recovery.verdict {
-                StaleLeaseRecovery::ReclaimableClean { worktree_missing }
-                    if force_claim || released_gone =>
-                {
-                    eprintln!(
-                        "  {} released orphaned lease {} ({})",
-                        crate::glyph(crate::glyphs::Glyph::Info).cyan(),
-                        conflict_id.yellow(),
-                        if *worktree_missing {
-                            "owning session gone, worktree already removed".dimmed()
-                        } else {
-                            "owning session gone, worktree clean".dimmed()
-                        }
-                    );
-                    if !released_gone {
-                        let _ = force_cleanup_lease(&project_root_for_conflict, &conflict);
-                    }
-                    remaining -= 1;
-                    if remaining == 0 {
-                        anyhow::bail!(
-                            "lease-recovery sweep gave up after 16 iterations on scope `{}` — \
-                             the lease store may be corrupt; inspect `.aida/sessions/`",
-                            plan.scope
-                        );
-                    }
-                    continue;
-                }
-                StaleLeaseRecovery::StaleDirty { dirty_entries } => {
-                    // Safety floor: uncommitted work is never discarded on a
-                    // recovery flag's say-so. Name it so the operator can act.
-                    anyhow::bail!(
-                        "scope `{}` is held by lease {} ({}) whose owning session is no longer \
-                         running, but its worktree at {} still has {} uncommitted change(s) — \
-                         refusing so that work is not discarded (--force-claim does NOT \
-                         override this). Uncommitted: {}.{}",
-                        plan.scope,
-                        conflict_id,
-                        conflict.role.as_deref().unwrap_or("(unset)"),
-                        conflict.worktree_path.display(),
-                        dirty_entries,
-                        recovery.dirty_sample(),
-                        // trace:BUG-2223 | ai:claude
-                        scope_conflict_resume_hint(
-                            &plan.scope,
-                            &conflict.id,
-                            crate::leases::lease_adoption_refusal(&project_root, &conflict),
-                            adopting,
-                            conflict.tree_kind == crate::seat_clone::TreeKind::Clone,
-                        )
-                    );
-                }
-                StaleLeaseRecovery::ReclaimableClean { .. } if !steal => {
-                    anyhow::bail!(
-                        "scope `{}` is held by lease {} ({}, worktree: {}) whose owning session \
-                         is no longer running — the lease is orphaned and its {}. \
-                         Recovery: `aida queue work {} --force-claim` releases the dead lease \
-                         and takes the scope.{}",
-                        plan.scope,
-                        conflict_id,
-                        conflict.role.as_deref().unwrap_or("(unset)"),
-                        conflict.worktree_path.display(),
-                        recovery.worktree_state_phrase(),
-                        plan.scope,
-                        // trace:BUG-2223 | ai:claude
-                        match crate::leases::lease_adoption_refusal(&project_root, &conflict) {
-                            None => scope_conflict_resume_hint(
-                                &plan.scope,
-                                &conflict.id,
-                                None,
-                                adopting,
-                                conflict.tree_kind == crate::seat_clone::TreeKind::Clone,
-                            ),
-                            Some(_) => String::new(),
-                        }
-                    );
-                }
-                // ReclaimableClean + --steal, Live, UnknownLiveness → fall
-                // through to the existing --steal / refuse logic below.
-                _ => {}
-            }
-
-            if !steal {
-                // TASK-402 (friction #4): the lease is live (the auto-release
-                // sweep above handles dormant/orphaned leases). Warn that
-                // `--steal` ends the session AND removes its worktree.
-                // BUG-2223: `--resume` never re-enters a live lease's tree, so
-                // this refusal no longer offers it. trace:TASK-402 | ai:claude
-                //
-                // BUG-777: append the worktree's clean/dirty state (and, when
-                // --force-claim was passed at a lease we could not prove dead,
-                // why it did not apply) so the destructive-option warning is
-                // something the operator can evaluate without leaving the
-                // shell. trace:BUG-777 | ai:claude
-                let force_claim_note = if force_claim {
-                    match recovery.verdict {
-                        StaleLeaseRecovery::Live =>
-                            " `--force-claim` does not apply: a live process still backs this lease.",
-                        _ =>
-                            " `--force-claim` does not apply: this lease records no process-liveness signal, so it cannot be proven dead.",
-                    }
-                } else {
-                    ""
-                };
-                anyhow::bail!(
-                    "scope `{}` is owned by lease {} ({}, worktree: {} — {}) — \
-                     to take over: `--steal` ends that session and removes its \
-                     worktree (work there is lost unless committed), \
-                     or `aida session end {}` manually.{}",
-                    plan.scope,
-                    conflict_id,
-                    conflict.role.as_deref().unwrap_or("(unset)"),
-                    conflict.worktree_path.display(),
-                    recovery.worktree_state_phrase(),
-                    conflict_id,
-                    force_claim_note
-                );
-            }
-
-            // BUG-1574 AC1: `--steal` may only steal a scope that is either
-            // outside any active batch's scoping (no batch currently
-            // running) or IS a declared member of the currently active
-            // batch — and never a keyboard-only spec (tag or
-            // execution_mode), headless or not. Fail-closed on a
-            // store-load failure or malformed drain-state.json too.
-            // trace:BUG-1574 | ai:claude
-            if let Some(reason) = unattended_git_mutation_refusal(
-                &project_root_for_conflict,
-                &plan.scope,
-                "steal",
-                Some(conflict.branch.as_str()),
-            ) {
-                anyhow::bail!("`--steal` refused for scope `{}`: {}", plan.scope, reason);
-            }
-
-            eprintln!(
-                "  {} {} — ending it first (--steal)",
-                "⟲".cyan().bold(),
-                format!(
-                    "scope `{}` owned by lease {}",
-                    plan.scope,
-                    &conflict.id[..conflict.id.len().min(8)]
-                )
-                .cyan()
-            );
-            // trace:STORY-2325 | ai:codex — cleanup keeps every ordinary
-            // session_end guard; ownership proof grants no force override.
             let pr_branch = crate::pr_lease_takeover::pr_branch_for_lease(
                 &project_root_for_conflict,
                 &conflict,
@@ -13598,16 +13329,24 @@ pub(crate) fn handle_queue_work(
             ) {
                 crate::pr_lease_takeover::LeaseEndAction::SafeEnd => {
                     eprintln!(
-                        "  {} lease {}'s session has exited and its seat on `{}` is clean and already in the PR — ending it",
+                        "  {} lease {}'s session has exited and its seat on `{}` is clean and fully covered by origin — ending it",
                         crate::glyph(crate::glyphs::Glyph::Info).cyan(),
                         &conflict.id[..conflict.id.len().min(8)],
                         conflict.branch
                     );
                 }
                 crate::pr_lease_takeover::LeaseEndAction::Bail(message) => {
-                    anyhow::bail!("--steal could not end lease {}: {}", conflict_id, message);
+                    anyhow::bail!(
+                        "ownership reclaim could not end lease {}: {}",
+                        conflict_id,
+                        message
+                    );
                 }
             };
+            crate::ownership::reader::journal_reclaim(&project_root_for_conflict, &conflict)
+                .with_context(|| {
+                    format!("ownership reclaim could not end lease {}", conflict.id)
+                })?;
             session_end(
                 Some(&conflict.id),
                 /* spec */ None,
@@ -13617,43 +13356,21 @@ pub(crate) fn handle_queue_work(
                 /* purge_cc */ false,
                 /* wait_ci */ false,
                 /* watch_ci */ false,
-                // --steal is a recovery path for stuck leases; skip the
-                // CI probe so we don't ask the user to wait on CI for a
-                // session they're actively stealing. trace:TASK-111
-                /* skip_ci */
-                true,
+                // Reclaim skips CI, while keeping tree and holder safeguards.
+                /* skip_ci */ true,
                 /* return_to_pool */ false,
-                // --steal reclaims a stuck lease's tree; let the default apply
-                // (a pooled tree is returned + reset clean, not deleted).
-                /* remove */
-                false,
-                // A live process inside the stolen tree still refuses the
-                // teardown; --steal never implies --include-in-use.
-                // trace:BUG-1986 | ai:claude
+                /* remove */ false,
                 /* include_in_use */
                 false,
             )
-            // BUG-311: collapse the internal session_end error into the
-            // primary message so it surfaces specifically as "--steal could
-            // not end lease X: <actual reason>" — not the canned "pass
-            // --steal" loop and not a context line that buries the cause
-            // under a "Caused by:" chain. Anyhow's `{:#}` chains the cause
-            // inline on one line for the same effect. trace:BUG-311
-            .map_err(|e| {
-                anyhow::anyhow!(
-                    "--steal could not end lease {}: {:#} \
-                     (resolve manually: `aida session end {} --force` discards uncommitted \
-                     changes and `--include-in-use` overrides a live process in the worktree; \
-                     or commit/stash the changes or stop the process first, then re-run)",
-                    conflict_id,
-                    e,
-                    conflict_id,
-                ) // trace:BUG-1986 | ai:claude
-            })?;
+            .map_err(|error| anyhow::anyhow!(
+                "ownership reclaim could not end lease {}: {error:#}; retain the lane and resolve its tree or mail safeguards before retrying",
+                conflict_id,
+            ))?;
             remaining -= 1;
             if remaining == 0 {
                 anyhow::bail!(
-                    "--steal sweep gave up after 16 iterations on scope `{}` — \
+                    "ownership reclaim sweep gave up after 16 iterations on scope `{}` — \
                      the lease store may be corrupt; inspect `.aida/sessions/`",
                     plan.scope
                 );
@@ -16576,10 +16293,10 @@ pub(crate) fn handle_queue_recover(
     // Lease state — does a session still hold this spec's scope?
     let leases = list_leases(&project_root);
     let lease = find_lease_by_spec(&spec, &leases).ok();
-    let now = chrono::Utc::now();
-    let live = process_probe::probe_live_claude_sessions();
-    // BUG-511: review-verb leases classify by creator PID, not worktree.
-    let lease_state = lease.as_ref().map(|l| lease_state_for(l, &live, now));
+    // trace:STORY-2325 | ai:codex — recovery never substitutes a PID/cwd scan.
+    let lease_state = lease
+        .as_ref()
+        .map(|l| crate::ownership::reader::lease_owner(&project_root, l));
 
     // The branch we inspect for commits-ahead / dirty: prefer the lease's
     // branch (where a phase-1 implementer committed), else the PR head branch.
@@ -16633,16 +16350,13 @@ pub(crate) fn handle_queue_recover(
     // --- Print the inspection result. ---
     println!("🔎 recovery inspection for {}", spec.bold());
     println!("  {:<14} {}", "status".dimmed(), status_label);
-    match (&lease, lease_state) {
-        (Some(l), Some(st)) => println!(
-            "  {:<14} {} {} (id {}, branch {})",
-            "lease".dimmed(),
-            st.glyph(),
-            st.label(),
-            &l.id[..l.id.len().min(8)],
-            l.branch
+    match (&lease, &lease_state) {
+        (Some(l), Some(verdict)) => println!(
+            "  lease {}: {}",
+            l.id,
+            crate::ownership::reader::owner_label(verdict)
         ),
-        _ => println!("  {:<14} none", "lease".dimmed()),
+        _ => println!("  lease none"),
     }
     match &branch {
         Some(b) => println!(
@@ -16703,6 +16417,20 @@ pub(crate) fn handle_queue_recover(
     }
 
     // --- Execution. ---
+    // Refresh death proof only when the confirmed action ends the lease.
+    // Pulling, pushing, parking WIP and driving an existing PR do not reclaim it.
+    // trace:STORY-2325 | ai:codex
+    let journal_reclaim = || -> Result<()> {
+        if let Some(lease) = &lease {
+            crate::ownership::reader::journal_reclaim(&project_root, lease).with_context(|| {
+                format!(
+                    "ownership reclaim could not end lease {}; inspect `aida session end {}`",
+                    lease.id, lease.id
+                )
+            })?;
+        }
+        Ok(())
+    };
     let aida = crate::aida_exe_path();
     // Helper: run an `aida` subcommand from the project root, surfacing its
     // exit code. Non-zero leaves the state visible for manual resume.
@@ -16747,6 +16475,7 @@ pub(crate) fn handle_queue_recover(
                 spec
             );
             if state.lease_held && confirm("end the leaked lease for this spec?") {
+                journal_reclaim()?;
                 let _ = run_aida(&["session", "end", &spec]);
             }
         }
@@ -16758,6 +16487,7 @@ pub(crate) fn handle_queue_recover(
             );
             let _ = run_aida(&["pull"]);
             if state.lease_held && confirm("end the leaked lease for this spec?") {
+                journal_reclaim()?;
                 let _ = run_aida(&["session", "end", &spec]);
             }
         }
@@ -16892,6 +16622,7 @@ pub(crate) fn handle_queue_recover(
                 return Ok(());
             }
             if state.lease_held {
+                journal_reclaim()?;
                 let _ = run_aida(&["session", "end", &spec]);
             }
             // Re-queue for the spec's owner. queue add is advisor-gated in
@@ -18688,7 +18419,7 @@ pub(crate) struct ReworkArgs {
     /// Bypass terminal-status / already-in-progress guards.
     #[clap(long)]
     pub force: bool,
-    /// Pass `--steal` through to chained `aida queue work`.
+    /// Retired. Refuses explicitly; ownership handles proven-dead reclaim automatically.
     #[clap(long)]
     pub steal: bool,
     /// Permission mode (only used with `--work`).
