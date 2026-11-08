@@ -3,12 +3,12 @@ spec_id: TASK-b6b1278890774ef993d2ebc327862470-957
 agreed_id: TASK-3424
 title: 'Crate-split PR1: lift inline #[cfg(test)] suites out of mcp.rs, auto_complete.rs, maintenance_schedule.rs, awaiting_you.rs and burndown.rs into src/tests/ (no production-line changes)'
 description: 'Plan: docs/plans/2026-11-07-aida-cli-lib-crate-split-deep-dive.md (PR #3633, SPIKE-713). Move each file''s inline test module into src/tests/<module>_tests.rs, using the STORY-770 pattern (#[cfg(test)] #[path] or a tests-module include), with zero production-line changes. EXCLUDE doctor_cmd.rs until #3613 (BUG-2486) and STORY-2630''s final slice land; its own follow-up gets filed then. Update path-keyed ledgers (store-writers.toml, exec-context-legacy.json, portability-allowlist.txt) for moved test sites. Acceptance: the same test count runs before and after (report both numbers), make check-ci-fast passes, and production code is byte-identical outside the test-module stanza. LIGHT gate: one targeted cargo test for each moved module.'
-status: NeedsAttention
+status: Completed
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-07T22:11:42.128507852Z
-modified_at: 2026-11-07T23:45:26.379739324Z
+modified_at: 2026-11-08T00:19:27.521166758Z
 req_type: Task
 relationships:
 - rel_type: Child
@@ -203,6 +203,22 @@ history:
   - field_name: status
     old_value: InProgress
     new_value: NeedsAttention
+- id: 01a1b886-3c50-7893-9920-025a0851ea0f
+  author: aida-auto-bump
+  timestamp: 2026-11-08T00:19:27.440751733Z
+  session_id: 01a1b848-940b-7bd2-8acd-52e428b182b8
+  harness_version: 2.1.319 (Claude Code)
+  changes:
+  - field_name: status
+    old_value: NeedsAttention
+    new_value: Completed
+processing_record:
+- id: 01a1b886-3ca1-7e22-9b62-9a28d1072f74
+  timestamp: 2026-11-08T00:19:27.521159964Z
+  agent: aida
+  commit_sha: 2782389cd8ad9240672ea95d0f2209c7f193700b
+  summary: 'Pure test-suite move verified: 9 #[cfg(test)] #[path] modules, parents changed only at test-module stanzas, bodies equal originals modulo rustfmt, 689/689 tests, ledgers/portability per advisor ruling, ADR9 file-level cfg(test) with regression cases; all 7 CI jobs green at head'
+  review_verdict: approved
 filed_at:
   code_sha: 77bc9e4e4d38b978afaaf602dd8300419c320ea7
   branch: main
@@ -212,6 +228,10 @@ filed_at:
   vendor: claude
   session: 01a1b76b-2fe7-7dd2-88d0-356fc8d96d04
   harness_version: 2.1.319 (Claude Code)
+implementation_info:
+  implemented: false
+  completed_at: 2026-11-08T00:19:27.440738630Z
+  completion_sha: 2782389cd8ad9240672ea95d0f2209c7f193700b
 attention_reason:
   category: other
   detail: 'PR #3637 portability rework is ready as uncommitted test-only edits: five /tmp fixture lines now use /nonexistent and five allowlist rows removed; scripts/check-portability.sh and git diff --check pass. Required mcp_tests filter matches zero because module is mcp::tests; corrected lane run executed 156 tests, 117 passed and 39 failed with allocation setting must be a bounded owned regular file without shared writes at mcp_tests.rs:4824. Host runner inherits shared-write umask; rerun mcp::tests:: with host umask 022 before publication. No scope widening. make check-ci-fast rerun with umask 022 is still running; final handoff will include result.'
