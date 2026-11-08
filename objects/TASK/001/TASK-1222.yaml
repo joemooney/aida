@@ -28,7 +28,7 @@ priority: Low
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-09-13T22:07:45.944235Z
-modified_at: 2026-11-08T17:13:06.234435411Z
+modified_at: 2026-11-08T17:16:34.461100960Z
 req_type: Task
 tags:
 - cleanup
@@ -363,6 +363,20 @@ comments:
   modified_at: 2026-11-08T17:04:24.956981876Z
   session_id: 01a1b9af-8230-75d2-82f8-667491cc010a
   harness_version: 2.1.319 (Claude Code)
+- id: 01a1bc29-6f1d-7cc1-b930-7cd039282fd6
+  author: dirtlab
+  content: |
+    Native rework handoff: addressed latest review finding 2 by adding worktree gc --fail-on-findings to each_new_guard_job_trips_and_routes_on_failure_and_is_silent_when_clean, with TASK-1222.ac14b158 trace. The fixture now exercises replacement weekly GC failure trips, routing, and clean-run silence.
+
+    Changed file: aida-cli-lib/src/tests/maintenance_schedule_tests.rs (two added lines). Edits remain uncommitted for host publication.
+
+    Executed launcher validation: j20261108T170718966-2-0 passed the scheduler trip/route/silence regression (1 test); j20261108T170732552-2-0 passed all 21 TASK-1222 tests, including scheduled-only cursor and GitHub reviewer PR alias regressions. Both exit 0, 22 executed tests total; untested=false. Changed-file rustfmt and git diff --check pass. Codegraph unavailable, confirmed with doctor; used rg.
+
+    Finding 1 remains a host CI/review follow-up. Observed run 42500854537 at reviewed head e2dea80e9fb2: lib-0, lib-1, cli-0, cli-1 and contracts passed; rest and gates cancelled; aggregate Build queued. This is incomplete CI evidence, not a terminal code failure. Host should obtain complete CI at the published head and rerun independent review; merge hold needs separate authorized clearance. No cleanup, commit, push, PR creation, queue completion, review record or hold clearance performed.
+  created_at: 2026-11-08T17:16:34.461100960Z
+  modified_at: 2026-11-08T17:16:34.461100960Z
+  session_id: 01a1bc2001e0
+  harness_version: codex-cli 0.167.0
 history:
 - id: 01a1b7cd-7751-7262-8ad1-f0f9d2ef6d4d
   author: joe
