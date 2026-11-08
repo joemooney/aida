@@ -8,7 +8,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-06T13:39:53.442026Z
-modified_at: 2026-11-08T15:26:27.118874553Z
+modified_at: 2026-11-08T15:33:07.186393618Z
 req_type: Task
 tags:
 - architecture
@@ -1070,6 +1070,12 @@ comments:
     The exact title above is also the proposed host commit subject only if the advisor separately resolves the publication veto. No aida ship declaration is issued while punted.
   created_at: 2026-11-08T15:26:27.118874553Z
   modified_at: 2026-11-08T15:26:27.118874553Z
+  session_id: 01a1bbc13bf1
+- id: 01a1bbca-b7f2-7d72-b48a-4a5643b8ca9c
+  author: joe
+  content: 'Round 21 finding 3 diagnostic: aida punt succeeded and show confirms NeedsAttention, but both /home/joe/ai/aida/.aida/punt-signals/TASK-3223.json and the TASK-b6b1278890774ef993d2ebc327862470-880.json path are absent (same in the seat). ship_from_seat.rs publication_veto reads signal/hold files; punt_done.rs emits a punt signal only to AIDA_PUNT_SIGNAL_FILE when that environment entry exists. This is a concrete host investigation lead, not authorization to publish: durable saved punt and holds remain vetoes by the binding session instruction. Host must reconcile persisted punt state, configured signal transport and publication-path evidence before publishing. No publication declaration issued.'
+  created_at: 2026-11-08T15:33:07.186393618Z
+  modified_at: 2026-11-08T15:33:07.186393618Z
   session_id: 01a1bbc13bf1
 history:
 - id: 01a1b116-742d-73c0-9064-1933f11e4c38

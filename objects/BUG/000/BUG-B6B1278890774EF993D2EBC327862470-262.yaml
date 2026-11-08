@@ -8,7 +8,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-08T15:10:55.149158862Z
-modified_at: 2026-11-08T15:35:25.742053732Z
+modified_at: 2026-11-08T15:35:38.476594813Z
 req_type: Bug
 comments:
 - id: 01a1bbba-ccf5-7ed1-8f16-63c4fa05dc0a
@@ -49,6 +49,11 @@ comments:
   modified_at: 2026-11-08T15:30:27.303902650Z
   session_id: 01a1b9af-8230-75d2-82f8-667491cc010a
   harness_version: 2.1.319 (Claude Code)
+- id: 01a1bbcd-06ec-7f43-98bb-3fd336fea03b
+  author: mcp
+  content: 'Round 2 handoff: addressed finding 1 with continue_aida regressions reading actual repository/.aida/headless-logs/probe.jsonl through the real terminal receipt parser, snapshots, evaluate, finish_run and refusal path. Cases cover turn.failed with accepted containment receipt (raises, invalid-run, no production-launch credit, preserved C0 pass/C1 failure/C2-C4 unknown), turn.completed (completed), and oversized headless log containing completion (invalid-run/vendor-log-oversize). Conflicting stdout event catches wrong log selection. Finding 3 now has distinct oversize diagnostics; finding 4 docs explicitly scope run_status to post-acceptance reporting and describe earlier unsupported_reason refusals. Changed AGENTS.md, OVERVIEW.md, scripts/containment/conformance.py, tests/test_containment_conformance.py, docs/internal/testing/containment-conformance.md. Validation: python3 -m unittest discover -s tests -p test_containment_conformance.py: 54 tests passed in 43.395s; focused RunCompletionTests: 3 passed; git diff --check passed. Finding 2 remains an operator/advisor gate, not disputed or silently waived; punt requested with the exact live evidence needed. No live ChatGPT C0-C4 credit claimed. Edits left uncommitted under native-seat instructions. Native Refs publication declaration recorded, subject to punt/hold vetoes. No commit, push, PR, queue done, ship merge or review verdict performed.'
+  created_at: 2026-11-08T15:35:38.476577912Z
+  modified_at: 2026-11-08T15:35:38.476577912Z
 history:
 - id: 01a1bbb8-d03f-7092-98dc-459d41472f93
   author: aida-session-start
