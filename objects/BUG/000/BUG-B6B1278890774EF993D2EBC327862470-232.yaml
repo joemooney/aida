@@ -21,7 +21,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-06T17:06:21.254759647Z
-modified_at: 2026-11-08T03:40:11.814989592Z
+modified_at: 2026-11-08T03:59:48.122035223Z
 req_type: Bug
 comments:
 - id: 01a1b1ff-81bd-7b80-8ed5-ea84e52557a5
@@ -105,6 +105,35 @@ comments:
   content: 'Next-slice investigation (advisor 2026-11-07 17:35/17:45 MST ruling): paired live-binary show --no-git probes from this lane and the primary checkout recorded total/open.cache 397/52 ms and 348/53 ms respectively. This seat resolves .aida-store and .aida/cache-db to the shared primary paths, so a cold per-seat cache was not reproduced here. Code inspection found a concrete unbounded refresh wait: freshen_for_read passes show’s zero read budget to git_ops::is_ancestor_with_timeout, whose zero case waits indefinitely; an elected reader can then run try_incremental_update (Git diff plus changed-object reads) inline. In-progress edits bypass that entire protocol using a pinned read-only projection, defer stale context without refresh hints/workers, and omit default human/TOON/card linkage while retaining explicit full/verbose/JSON linkage. Added regressions assert default show invokes no git log, merge-base or diff and does not advance the cache stamp, with explicit-linkage positive controls; snapshot/cold-cache and held-writer tests cover stale/canonical behavior. Lane-runner validation is still running; acceptance 3 remains the unchanged 24-hour post-go-live guard window.'
   created_at: 2026-11-08T03:40:11.814989592Z
   modified_at: 2026-11-08T03:40:11.814989592Z
+  session_id: 01a1b9366f44
+- id: 01a1b94f-f79a-7e90-a3ab-46c181c4ab6b
+  author: joe
+  content: |-
+    Native implementer handoff: next-slice edits are uncommitted; no commit, push, PR, queue completion, pr ship or review record was performed. BUG-2466 remains In Progress pending the unchanged production acceptance window.
+
+    Investigation: paired current-binary lane/primary show --no-git usage records were 397/348 ms total and 52/53 ms open.cache. This seat uses the shared primary store/cache paths. The concrete refresh wait is the zero-budget call to is_ancestor_with_timeout (zero means indefinite), followed by possible inline incremental Git diff/object reads. An isolated fixture delaying merge-base by 3 seconds took 6.351 seconds on the current binary and 0.124 seconds on the modified binary.
+
+    Changed files:
+    - aida-cli-lib/src/git_backend_cmd.rs: show opens the pinned read-only projection directly; removed the old refresh-error reopen path.
+    - aida-cli-lib/src/requirements_cli.rs: default human/TOON/card output skips linkage; full/verbose/JSON retain explicit linkage and no-git suppresses it.
+    - aida-core/src/db/cache.rs: bounded read-only snapshot open; missing, corrupt or structurally incompatible projections use an empty in-memory index without disk repair/migration.
+    - aida-core/src/db/cached_git_backend.rs: snapshot-only reads retain pinned rows/metadata, label stale/redo-generation mismatch Deferred, and bypass refresh elections, hints, worker spawns and schema-rebuild retry; two snapshot regressions.
+    - aida-cli/tests/bug_1993_show_phase_timings.rs: explicit-linkage timing cases; cold-cache writer now serves canonical data without a schema write.
+    - aida-cli/tests/bug_1594_show_bounded.rs, bug_1993_linkage_budgets.rs, bug_1993_toon_linkage_budget.rs, story_1649_show_linkage.rs: linkage checks request full explicitly.
+    - tests/test_show_latency.py: default show invokes no Git log/merge-base/diff, leaves the stale cache stamp unchanged, and schedules no refresh work; explicit-linkage positive controls, existing held-lock and strict-recovery checks.
+    - docs/cli/02-specs.md: show linkage opt-in and stale-OK read behavior.
+
+    Validation PASS:
+    - Lane job j20261108T033421030-851813-0: 6 CLI timing tests.
+    - Lane job j20261108T033645881-2-0: 2 aida-core show_snapshot tests.
+    - Lane job j20261108T033817926-877694-0: 4 bounded-show plus 12 shipped-linkage tests.
+    - Lane job j20261108T034116198-2-0: 2 linkage-budget tests plus 6 timing tests repeated. All four jobs exited 0 with executed tests (26 distinct Rust tests).
+    - Python latency fixture against the new agent/aida binary passed: held refresh/request locks 69-124 ms, SQLite-writer fallback 75 ms, slow optional JSON linkage 1311 ms with truthful incomplete/unknown evidence. Default no-history/no-refresh assertions and positive controls passed.
+    - 19 exec-context guard tests; final exact-site checker reports 1241 sites, zero additions. Touched-file rustfmt check, Python syntax check and git diff --check passed.
+
+    Remaining acceptance: observe 24 hours of guard passes after this slice goes live, at unchanged 2000 ms / 10 percent / 5000 ms thresholds. This seat does not attest that future window. Publish with Refs, not completion credit. No design fork or new punt/hold was introduced.
+  created_at: 2026-11-08T03:59:48.122035223Z
+  modified_at: 2026-11-08T03:59:48.122035223Z
   session_id: 01a1b9366f44
 history:
 - id: 01a1b1f4-7697-7833-aec1-9ed69cd01b42
