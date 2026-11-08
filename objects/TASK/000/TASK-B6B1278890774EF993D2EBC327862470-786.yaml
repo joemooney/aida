@@ -3,12 +3,12 @@ spec_id: TASK-b6b1278890774ef993d2ebc327862470-786
 agreed_id: TASK-3048
 title: 'STORY-2460 S2: agy adapter in the posture S1 selects (private runtime, auth hosts, argv order, all-tool confinement)'
 description: 'Per signoff Q3 and Q6, blocked on S1''s posture decision. Private writable agy runtime dir; exact auth host inventory; options placed before the final -p <prompt>; no blanket --dangerously-skip-permissions inside a claimed boundary; browser, URL and MCP tools disabled unless confined. Accept agy=<posture> only from trusted origin/main config, and fail closed otherwise. Acceptance: the conformance harness passes for agy.'
-status: NeedsAttention
+status: Approved
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-04T17:54:51.353376Z
-modified_at: 2026-11-08T14:47:48.323863881Z
+modified_at: 2026-11-08T14:51:39.698479613Z
 req_type: Task
 tags:
 - area:containment
@@ -704,6 +704,13 @@ comments:
   modified_at: 2026-11-08T14:39:11.430817921Z
   session_id: 01a1bb7bab9d
   harness_version: codex-cli 0.167.0
+- id: 01a1bba4-c332-7571-8e9a-b8a16af884dd
+  author: joe
+  content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: Round 9 at 5695ca4 (0 commits behind main; merge-base diff, Refs-only slice under the 2026-11-07 16:40 ruling). No blocking code defect found by inspection; 5293ac6 fixes the round-8 test gap, forged-stderr egress evidence, leaked .agents files, port logging, docs heading and duplicate env removal. Not approved because no test result exists at this head: CI run 42491060521 has all 7 test jobs queued, and the last completed run (42487333753 at 8a6439d) failed lib-1, rest and Build; job logs are unreachable from the review sandbox, so whether 5293ac6 cures them is unverified. All ''verified by'' lines below are from reading test source, none from a run at this head. AC: R1 shared-boundary launch: verified by task_3048_diagnostic_prepare_uses_common_wrapper_and_keeps_production_closed (source). R1 bypass only with applied receipt: verified by task_3048_outer_only_candidate_requires_live_accepted_receipt (source). R1 no --sandbox, options before final -p: verified by task_3048_runtime_argv_accepts_only_the_site_prompt (source). R1 private runtime, read-only token and settings: verified by task_3048_live_private_runtime_preserves_read_only_credential (source). R1 no ~/.gemini inheritance: verified by the diagnostic prepare mask assertions (source). R1 MCP/browser/URL off: configuration verified by task_3048_runtime_policy_fails_closed_before_launch (source); AGY enforcement unverified, advisor live run. R2 hosts as data with trusted approval: verified by task_3048_diagnostic_hosts_do_not_open_production_admission (source). R2 unknown host named refusal: verified by task_3048_unlisted_host_is_named_before_dns (source). R2 host-only egress evidence: verified by task_3048_host_egress_bitmap_requires_successful_host_connection and test_host_egress_never_trusts_vendor_stderr (source). R2 measured refresh list: unverified, oauth2.googleapis.com is a candidate from binary strings, advisor live run. R3 native no credit, AIDA-only flip: verified by test_only_complete_aida_evidence_can_flip_whole_lane and test_late_refusal_withdraws_aggregate_credit_with_valid_receipt (source). R4 production refusal: verified by agy_adapter_keeps_unmeasured_policy_closed (source). Trusted origin/main posture only, fail closed: verified by the new absent and working-tree-only refusal loop in the diagnostic prepare test (source). No blanket bypass: not-applicable-because superseded by the 2026-11-07 16:40 outer-only ruling. Conformance harness passes for agy: not-applicable-because this is a Refs-only slice and the advisor live run is a separate step.. No triage reason was given.'
+  created_at: 2026-11-08T14:51:39.698477869Z
+  modified_at: 2026-11-08T14:51:39.698477869Z
+  session_id: 01a1b9af-8230-75d2-82f8-667491cc010a
+  harness_version: 2.1.319 (Claude Code)
 history:
 - id: 01a1a7b3-3699-7713-8ae7-69568c287956
   author: joe
@@ -1196,6 +1203,15 @@ history:
   - field_name: status
     old_value: InProgress
     new_value: NeedsAttention
+- id: 01a1bba4-c332-7571-8e9a-b89073423f2e
+  author: joe
+  timestamp: 2026-11-08T14:51:39.698468270Z
+  session_id: 01a1b9af-8230-75d2-82f8-667491cc010a
+  harness_version: 2.1.319 (Claude Code)
+  changes:
+  - field_name: status
+    old_value: NeedsAttention
+    new_value: Approved
 filed_at:
   code_sha: 6a331a8a5c91ca7485b695a076af44bdf9be3894
   branch: main
@@ -1204,11 +1220,3 @@ filed_at:
   aida_build_sha: e422daaa1a4
   vendor: claude
   session: 5bf140f7-38b2-4a04-9e8c-ccf69b1258f8
-failure_reason:
-  phase: reviewer
-  phase_index: 3
-  kind: verdict:request-changes
-  detail: 'Round 9 at 5695ca4 (0 commits behind main; merge-base diff, Refs-only slice under the 2026-11-07 16:40 ruling). No blocking code defect found by inspection; 5293ac6 fixes the round-8 test gap, forged-stderr egress evidence, leaked .agents files, port logging, docs heading and duplicate env removal. Not approved because no test result exists at this head: CI run 42491060521 has all 7 test jobs queued, and the last completed run (42487333753 at 8a6439d) failed lib-1, rest and Build; job logs are unreachable from the review sandbox, so whether 5293ac6 cures them is unverified. All ''verified by'' lines below are from reading test source, none from a run at this head. AC: R1 shared-boundary launch: verified by task_3048_diagnostic_prepare_uses_common_wrapper_and_keeps_production_closed (source). R1 bypass only with applied receipt: verified by task_3048_outer_only_candidate_requires_live_accepted_receipt (source). R1 no --sandbox, options before final -p: verified by task_3048_runtime_argv_accepts_only_the_site_prompt (source). R1 private runtime, read-only token and settings: verified by task_3048_live_private_runtime_preserves_read_only_credential (source). R1 no ~/.gemini inheritance: verified by the diagnostic prepare mask assertions (source). R1 MCP/browser/URL off: configuration verified by task_3048_runtime_policy_fails_closed_before_launch (source); AGY enforcement unverified, advisor live run. R2 hosts as data with trusted approval: verified by task_3048_diagnostic_hosts_do_not_open_production_admission (source). R2 unknown host named refusal: verified by task_3048_unlisted_host_is_named_before_dns (source). R2 host-only egress evidence: verified by task_3048_host_egress_bitmap_requires_successful_host_connection and test_host_egress_never_trusts_vendor_stderr (source). R2 measured refresh list: unverified, oauth2.googleapis.com is a candidate from binary strings, advisor live run. R3 native no credit, AIDA-only flip: verified by test_only_complete_aida_evidence_can_flip_whole_lane and test_late_refusal_withdraws_aggregate_credit_with_valid_receipt (source). R4 production refusal: verified by agy_adapter_keeps_unmeasured_policy_closed (source). Trusted origin/main posture only, fail closed: verified by the new absent and working-tree-only refusal loop in the diagnostic prepare test (source). No blanket bypass: not-applicable-because superseded by the 2026-11-07 16:40 outer-only ruling. Conformance harness passes for agy: not-applicable-because this is a Refs-only slice and the advisor live run is a separate step.'
-  recovery_hint: address the review findings, move TASK-3048 back to In Progress, and clear the PR hold only after approval
-  shelved_by: reviewer
-  shelved_at: 2026-11-08T14:47:48.323863881Z
