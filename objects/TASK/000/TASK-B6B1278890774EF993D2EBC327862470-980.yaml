@@ -3,12 +3,12 @@ spec_id: TASK-b6b1278890774ef993d2ebc327862470-980
 agreed_id: TASK-3472
 title: 'review watch: raise the hard 1..=2 reviewer concurrency cap to a configurable 1..=8 ([review_watch] max_concurrent)'
 description: 'Observed 2026-11-08 00:50: 28 open PRs, ~18 heads awaiting re-review, review watch capped at 2 concurrent reviews (review_watch.rs:46 value_parser range(1..=2) and validate_state (1..=2).contains at ~:1172; the skip message at ~:1398 names the cap). At ~20-30 min/review that is a 4-5 h queue while lanes idle on verdicts. The cap of 2 dates from reviewers sharing the 2 cargo slots; under the 2026-10-23 LIGHT ruling reviewers run no cargo, so reviews are model-bound only. CHANGE: --max-concurrent accepts 1..=8; default comes from [review_watch] max_concurrent in .aida/config.toml (default 2 when absent); validate_state accepts 1..=8 (existing state files with 1 or 2 stay valid); docs/cli help updated (help golden regenerated, Help-Golden trailer). Set this repo''s [review_watch] max_concurrent = 4. ACCEPTANCE: unit tests that 4 parses, 9 is refused, the config value is used when the flag is absent, and a state file with max_concurrent 4 validates. Gate LIGHT: one targeted cargo test -p aida-cli-lib review_watch + make check-ci-fast.'
-status: Approved
+status: InProgress
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-08T07:50:17.157189157Z
-modified_at: 2026-11-08T09:02:00.181934214Z
+modified_at: 2026-11-08T09:03:19.546993635Z
 req_type: Task
 comments:
 - id: 01a1ba23-1dfe-7172-aedd-5ca1e197357c
@@ -51,6 +51,13 @@ history:
   - field_name: status
     old_value: InProgress
     new_value: Approved
+- id: 01a1ba65-d9fa-7ea2-8a65-cb0fd29ad0f8
+  author: aida-session-start
+  timestamp: 2026-11-08T09:03:19.546991688Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: InProgress
 filed_at:
   code_sha: 08cbf8a3fe7e5cef1171627f2b6edb446abc6539
   branch: main
