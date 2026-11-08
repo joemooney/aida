@@ -8,7 +8,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-08T00:02:55.282155Z
-modified_at: 2026-11-08T19:33:04.181413346Z
+modified_at: 2026-11-08T19:48:22.172283649Z
 req_type: Bug
 relationships:
 - rel_type:
@@ -625,6 +625,11 @@ comments:
   modified_at: 2026-11-08T19:28:09.175641944Z
   session_id: 01a1bc93-77a0-7740-8b03-df4e3e8d1df5
   harness_version: 2.1.319 (Claude Code)
+- id: 01a1bcb4-681c-7121-b42b-4277e049de04
+  author: mcp
+  content: 'Round 18 native-seat handoff: restored review_publication::persist_checked to plain git_ops::pull_rebase and restored its store-writers inventory id/sink; frozen orchestrator inventory untouched. All review_publication inventory rows now match origin/main. Removed the BUG-2490 OVERVIEW paragraph; AGENTS was already clean. PR #3652 body now contains scope notes, advisor acceptance of doctor double-parse, and BUG-2501 split. Live origin/main db2eb4c39e46704132705ccb2b8300574ead41a6 already merged into current head cf9f8e899574. Required frozen-inventory test PASSED via lane job j20261108T193332405-2-0: 1 executed, 0 failed. Store-writer ratchet (3391 sites), 42 inventory mutation fixtures, CI gate audit (84 gates), and git diff --check passed. make check-ci-fast timed out at 55s in its first Cargo check; full host run outstanding. Green CI on the new rework head cannot be verified before host commit/publication; previous head''s merge-hold-gate failed for the existing active hold, preserved. Three source/doc files left uncommitted as required; host must commit/publish, complete fast checks, and verify new-head CI before approval. No finding disputed.'
+  created_at: 2026-11-08T19:48:22.172268249Z
+  modified_at: 2026-11-08T19:48:22.172268249Z
 history:
 - id: 01a1b923-982d-7512-93a5-cd08923b4f98
   author: aida-session-start
