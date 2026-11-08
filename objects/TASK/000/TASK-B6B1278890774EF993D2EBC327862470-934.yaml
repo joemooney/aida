@@ -8,7 +8,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-07T10:45:58.443413275Z
-modified_at: 2026-11-08T04:46:16.778301350Z
+modified_at: 2026-11-08T04:54:53.692542840Z
 req_type: Task
 relationships:
 - rel_type: Child
@@ -199,6 +199,33 @@ comments:
   modified_at: 2026-11-08T04:17:15.821177158Z
   session_id: 01a1b8be-8170-7fb2-89ab-ecb4c6eee98c
   harness_version: 2.1.319 (Claude Code)
+- id: 01a1b982-67fc-73a1-8ce8-9830ae281f7a
+  author: dirtlab
+  content: |
+    Round 4 native-seat handoff for PR #3634 / TASK-3366 (Refs STORY-2537). Edits are uncommitted; no commit, push, PR, queue completion, ship or review verdict action was performed.
+
+    Base: main and origin/main both efbd07d6c351; HEAD 189057a2bf includes that tip. Main is already an ancestor; no Git metadata mutation was needed.
+
+    Retrieved CI 42439611550 failure logs using writable /tmp gh cache. Fixed all three named failures without rewriting the protected regression tests:
+    - Live wall-clock legacy starts remain Unknown in observe_legacy_registry, preserving registry retention rather than treating a wall-clock mismatch as proof of death.
+    - Agent views retain original legacy start strings when a complete ProcIdentity cannot be projected, preserving agent-stop recycled-PID/GC diagnostics while refusing signalling.
+    - load_live_entries keeps its existing raw-tick compatibility transport; load_live_identity_entries retains the boot-qualified tuple for identity-aware lease/launch/handshake consumers.
+    Added the requested observed_liveness_from assertions: matching legacy raw-tick/boot-qualified starts yield Some(true); a missing start yields None. Removed TASK-3366 per-change paragraphs from AGENTS.md and OVERVIEW.md and moved policy into docs/internal/testing/proc-identity-s4.md (also corrected its obsolete five-minute inbox-binding text).
+
+    Validation (untested=false):
+    - Launcher j20261108T044418275-2-0: cargo test --profile agent -p aida-cli-lib --lib -- proc_identity_s4: 7 passed.
+    - Launcher j20261108T044441600-2-0: recycled_pid_entry_is_not_live and bug_2148_agent_stop_never_signals_unconfirmed_identity_and_keeps_entry passed. The supervisor test failed in this combined parallel run at cleanup/RecoveryRequired; rerun alone below passed, consistent with shared-session occupancy interference.
+    - Launcher j20261108T045117232-2-0: story_2254_bg_supervisor_end_to_end_accepts_registers_and_cleans_up: 1 passed in isolation.
+    - make check-ci-fast: all 43 gates passed, including no-default-features and standalone TUI checks. Used umask 022 because the inherited 0002 created shared-writable mail-health fixture directories and caused fixture refusals. A temporary /tmp Cargo adapter delegated compilation to aida lane job; no source gate or test was bypassed. Log: /tmp/task3366-fast.log.
+    - rustfmt --check and git diff --check passed.
+
+    Changed files: AGENTS.md; OVERVIEW.md; aida-cli-lib/src/{advisor_handshake.rs,agent_launch.rs,agent_registry.rs,lane_liveness.rs,leases.rs}; aida-core/src/proc_identity.rs; docs/internal/testing/proc-identity-s4.md.
+
+    Host action: commit/publish these edits, then obtain green PR CI at the published new head. Remote green CI remains unverified because this native seat cannot publish. Existing hold/veto signals remain in force; none was cleared. No finding disputed; TASK-3366 remains in-progress until host publication/completion.
+  created_at: 2026-11-08T04:54:53.692542840Z
+  modified_at: 2026-11-08T04:54:53.692542840Z
+  session_id: 01a1b9774eb5
+  harness_version: codex-cli 0.167.0
 history:
 - id: 01a1b59d-9fb4-77d2-8894-d17d89775ce4
   author: joe
