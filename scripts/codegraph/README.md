@@ -24,7 +24,8 @@ server serializes queries and backups, while bounded request workers answer
 status independently and the accept loop publishes heartbeats. Its periodic refresh detects primary
 DB/WAL changes after host reindexing, even without a lane query. An active upstream reindex lock or changed input
 during backup refuses that refresh and retains the preceding snapshot age.
-Queries continue against the preceding snapshot when refresh fails; status and
+Failed refreshes back off for 30 seconds; heartbeat write failures are logged and
+leave the previous heartbeat to age out. Queries continue against the preceding snapshot when refresh fails; status and
 the descriptor expose the refresh error. A first snapshot remains mandatory.
 New snapshots preserve the primary index's timestamp for freshness: capturing
 an old index cannot make it appear fresh.
@@ -55,7 +56,7 @@ ExecStart=/usr/bin/python3 /home/joe/ai/aida/.codegraph/proxy-state/bin/codegrap
 Restart=on-failure
 RestartSec=5
 UMask=0077
-TimeoutStopSec=20
+TimeoutStopSec=60
 
 [Install]
 WantedBy=default.target
@@ -92,8 +93,8 @@ The service refuses a live listener and non-socket paths. After a crash it
 recovers only an unchanged socket whose connect probe returns ECONNREFUSED,
 so a killed service can restart without manual socket removal. Other probe
 errors refuse startup for host investigation. A graceful stop cleans its own socket. Old descriptor heartbeats cannot claim health after 30s.
-Old snapshot directories left after a crash can be removed by the host while
-the service is stopped. Do not run `serve` from a seat.
+After acquiring its listening socket, the service removes abandoned snapshot
+directories before its first backup; symbolic links are preserved. Do not run `serve` from a seat.
 
 ## Doctor and acceptance
 

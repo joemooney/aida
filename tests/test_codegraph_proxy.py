@@ -50,6 +50,35 @@ with sqlite3.connect(p / '.codegraph/codegraph.db') as db:
         self.addCleanup(lambda: host.snapshot and host.snapshot.cleanup())
         return host
 
+    def require_unix_socket(self):
+        try:
+            with socket.socket(socket.AF_UNIX):
+                pass
+        except PermissionError as exc:
+            self.skipTest(f"sandbox denies AF_UNIX: {exc}")
+
+    def test_foreign_peer_is_refused(self):
+        conn = mock.Mock()
+        conn.getsockopt.return_value = proxy.struct.pack("3i", 123, os.getuid() + 1, 0)
+        with self.assertRaisesRegex(ValueError, "foreign proxy peer"):
+            proxy.verify_peer(conn)
+
+    def test_failed_refresh_backs_off_without_hiding_error(self):
+        host = self.host()
+        host.refresh()
+        with mock.patch.object(host, "refresh", side_effect=sqlite3.OperationalError("broken")) as refresh:
+            host.maintain()
+            host.maintain()
+            self.assertEqual(refresh.call_count, 1)
+            self.assertEqual(host.status()["refresh_error"], "broken")
+            host.retry_after = 0
+            host.maintain()
+            self.assertEqual(refresh.call_count, 2)
+
+    def test_heartbeat_failure_preserves_service(self):
+        with mock.patch.object(proxy, "write_descriptor", side_effect=OSError("disk full")):
+            proxy.publish_heartbeat(self.primary, self.primary / proxy.DESCRIPTOR, {})
+
     def test_success_json_excludes_stderr_and_failure_retains_diagnostics(self):
         self.upstream.write_text("#!/usr/bin/python3\nimport sys\nprint('{}')\nprint('warning', file=sys.stderr)\nsys.exit(int(sys.argv[2]))\n")
         host = self.host()
@@ -128,6 +157,7 @@ with sqlite3.connect(p / '.codegraph/codegraph.db') as db:
         previous.cleanup()
 
     def test_socket_recovery_preserves_live_service_and_non_socket_paths(self):
+        self.require_unix_socket()
         path = self.root / "recovery.sock"
         with socket.socket(socket.AF_UNIX) as live:
             live.bind(str(path))
@@ -202,6 +232,7 @@ with sqlite3.connect(p / '.codegraph/codegraph.db') as db:
         self.assertFalse(marker.exists(), "fast-exiting query left a running descendant")
 
     def test_socket_protocol_and_seat_discovery(self):
+        self.require_unix_socket()
         path = str(self.root / "query.sock")
         server = socket.socket(socket.AF_UNIX)
         self.addCleanup(server.close)
@@ -236,6 +267,7 @@ with sqlite3.connect(p / '.codegraph/codegraph.db') as db:
                 self.assertNotIn("Traceback", result.stderr)
 
     def test_status_and_heartbeat_stay_responsive_during_query_and_stalled_peer(self):
+        self.require_unix_socket()
         marker = self.state / "query-started"
         self.upstream.write_text("#!/usr/bin/python3\nimport pathlib,time\npathlib.Path(" +
                                  repr(str(marker)) + ").touch()\ntime.sleep(5)\nprint('{}')\n")
@@ -249,7 +281,7 @@ with sqlite3.connect(p / '.codegraph/codegraph.db') as db:
         try:
             path = str(self.primary / ".codegraph/lane-query.sock")
             deadline = time.monotonic() + 5
-            while not Path(path).exists():
+            while not (self.primary / ".codegraph" / proxy.DESCRIPTOR).exists():
                 if server.poll() is not None or time.monotonic() > deadline:
                     self.fail("proxy did not start")
                 time.sleep(0.01)
@@ -298,6 +330,7 @@ with sqlite3.connect(p / '.codegraph/codegraph.db') as db:
         self.assertEqual(server.returncode, 0)
 
     def test_protocol_refuses_oversized_and_truncated_requests(self):
+        self.require_unix_socket()
         for data in (b"x" * 100, b'{"op":"status"}'):
             left, right = socket.socketpair()
             with left, right:
@@ -307,6 +340,7 @@ with sqlite3.connect(p / '.codegraph/codegraph.db') as db:
                     proxy.receive(right, 50)
 
     def test_protocol_refuses_excessive_nesting_and_times_out_incomplete_peer(self):
+        self.require_unix_socket()
         left, right = socket.socketpair()
         with left, right:
             left.sendall(b"[" * 1500 + b"]" * 1500 + b"\n")
@@ -319,6 +353,7 @@ with sqlite3.connect(p / '.codegraph/codegraph.db') as db:
                 proxy.receive(right, proxy.MAX_REQUEST, timeout=0.05)
 
     def test_service_query_from_read_only_seat_and_graceful_restart(self):
+        self.require_unix_socket()
         bwrap = shutil.which("bwrap")
         if not bwrap:
             self.skipTest("bubblewrap is not installed")
@@ -330,6 +365,12 @@ with sqlite3.connect(p / '.codegraph/codegraph.db') as db:
         seat.mkdir()
         (seat / ".codegraph").symlink_to(self.primary / ".codegraph", target_is_directory=True)
         for _ in range(2):
+            orphan = self.state / "snapshot-orphan"
+            orphan.mkdir()
+            (orphan / "abandoned.db").write_text("old generation")
+            preserved = self.state / "snapshot-link"
+            if not preserved.is_symlink():
+                preserved.symlink_to(self.primary, target_is_directory=True)
             server = subprocess.Popen([str(SCRIPT), "serve", "--primary", str(self.primary),
                                        "--state", str(self.state), "--upstream", str(self.upstream)],
                                       stdout=subprocess.PIPE, stderr=subprocess.PIPE)
@@ -340,6 +381,9 @@ with sqlite3.connect(p / '.codegraph/codegraph.db') as db:
                     if server.poll() is not None or time.monotonic() > deadline:
                         self.fail("proxy did not start")
                     time.sleep(0.02)
+                self.assertFalse(orphan.exists())
+                self.assertTrue(preserved.is_symlink())
+                self.assertTrue(self.db.exists())
                 command = [bwrap, "--ro-bind", "/", "/", "--unshare-net", "--bind", str(seat), str(seat),
                            "--chdir", str(seat), "--", "/usr/bin/python3", "-c", '''
 import errno, os, subprocess, sys

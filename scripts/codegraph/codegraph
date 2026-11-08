@@ -12,6 +12,7 @@ import json
 import os
 from pathlib import Path
 import signal
+import shutil
 import socket
 import sqlite3
 import struct
@@ -104,6 +105,7 @@ class Host:
         self.captured_at = None
         self.refresh_error = None
         self.published = None
+        self.retry_after = 0.0
 
     def refresh(self):
         lock = self.primary / ".codegraph/codegraph.lock"
@@ -160,11 +162,15 @@ class Host:
                 "snapshot_age_seconds": max(0, int(time.time() - published["indexed_at"]))}
 
     def maintain(self):
+        if self.snapshot is not None and time.monotonic() < self.retry_after:
+            return
         try:
             self.refresh()
             self.refresh_error = None
+            self.retry_after = 0.0
         except (OSError, ValueError, sqlite3.Error, TimeoutError) as exc:
             self.refresh_error = str(exc)
+            self.retry_after = time.monotonic() + 30
             if self.snapshot is None:
                 raise
 
@@ -256,9 +262,21 @@ def bind_socket(server, path):
     server.bind(str(path))
 
 
+def verify_peer(conn):
+    _, uid, _ = struct.unpack("3i", conn.getsockopt(socket.SOL_SOCKET, socket.SO_PEERCRED, 12))
+    if uid != os.getuid():
+        raise ValueError("foreign proxy peer")
+
+
+def publish_heartbeat(directory, descriptor, data):
+    try:
+        write_descriptor(directory, descriptor, data)
+    except OSError as exc:
+        print(f"codegraph proxy: heartbeat publication failed: {exc}", file=sys.stderr)
+
+
 def serve(primary, state, upstream):
     host = Host(primary, state, upstream)
-    host.refresh()
     directory = host.primary / ".codegraph"
     path = directory / "lane-query.sock"
     descriptor = directory / DESCRIPTOR
@@ -279,9 +297,7 @@ def serve(primary, state, upstream):
         try:
             with conn:
                 try:
-                    _, uid, _ = struct.unpack("3i", conn.getsockopt(socket.SOL_SOCKET, socket.SO_PEERCRED, 12))
-                    if uid != os.getuid():
-                        raise ValueError("foreign proxy peer")
+                    verify_peer(conn)
                     request = receive(conn, MAX_REQUEST, timeout=2)
                     validate(request)
                     if request["op"] == "status":
@@ -308,6 +324,12 @@ def serve(primary, state, upstream):
         bind_socket(server, path)
         os.chmod(path, 0o600)
         server.listen(16)
+        # Socket ownership excludes another service for this primary. Sweep only
+        # real generation directories; never follow links in the host state.
+        for old in host.state.glob("snapshot-*"):
+            if old.is_dir() and not old.is_symlink():
+                shutil.rmtree(old)
+        host.refresh()
         server.settimeout(0.1)
         identity = path.stat().st_ino
         refresher = threading.Thread(target=maintain)
@@ -317,7 +339,7 @@ def serve(primary, state, upstream):
             while True:
                 if time.monotonic() >= next_heartbeat:
                     data = {**host.status(), "socket": str(path), "observed_at": time.time()}
-                    write_descriptor(directory, descriptor, data)
+                    publish_heartbeat(directory, descriptor, data)
                     next_heartbeat = time.monotonic() + 3
                 try:
                     conn, _ = server.accept()
