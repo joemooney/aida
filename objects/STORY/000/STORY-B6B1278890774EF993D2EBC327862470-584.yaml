@@ -13,12 +13,12 @@ description: |
   3. Works for Claude, Codex and AGY through their headless resume commands; one adapter test per vendor using a recorded fixture.
   4. A wait whose seat or session has been lost surfaces as an escalation, never a silent drop.
   Ref: docs/plans/2026-11-07-infinity-agent-architecture-deep-dive.md section 3.3 and the SPIKE-711 results table.
-status: InProgress
+status: NeedsAttention
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-08T02:58:08.667753563Z
-modified_at: 2026-11-08T09:33:12.425497929Z
+modified_at: 2026-11-08T09:34:48.000232714Z
 req_type: Story
 tags:
 - area:human-wait
@@ -366,6 +366,13 @@ comments:
   modified_at: 2026-11-08T09:31:27.128683715Z
   session_id: 01a1b8be-8170-7fb2-89ab-ecb4c6eee98c
   harness_version: 2.1.319 (Claude Code)
+- id: 01a1ba82-9be3-7ad2-bd87-477681fc03d4
+  author: dirtlab
+  content: 'Revised docs/plans/2026-11-08-story-2661-park-resume-sketch.md for R18 and R19; neither disputed. R18 replaces evaluate_unpark with an explicit bound-continuation predicate, preserving dependency/deferral/hold gates while allowing original-role research spikes and requiring fresh supervised admission for supervision tags. R19 requires shared durable live-work ownership in doctor status-drift detection/heal, orphan reporting and cleanup, with a locked write-boundary recheck and fail-closed uncertainty. Added planned regressions for both. Validation: git diff --check passed; documentation only, runtime tests not run (untested=true). Codegraph unavailable; inspected source using rg and sed. Native non-completing Refs declaration recorded; edits remain uncommitted. R1 remains external: host/advisor must retitle PR #3666 exactly [AI:codex] docs(plans): sketch park-on-ask resume-on-answer (Refs STORY-2661). Binding advisor signoff remains required before code; retain publication veto pending signoff and metadata repair.'
+  created_at: 2026-11-08T09:34:44.195902766Z
+  modified_at: 2026-11-08T09:34:44.195902766Z
+  session_id: 01a1ba812b2b
+  harness_version: codex-cli 0.167.0
 history:
 - id: 01a1b9c5-1aa6-78e3-9355-9af12a0ce44c
   author: joe
@@ -563,6 +570,15 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a1ba82-aac0-7813-93ca-a9d673e1f2fb
+  author: dirtlab
+  timestamp: 2026-11-08T09:34:48.000249714Z
+  session_id: 01a1ba812b2b
+  harness_version: codex-cli 0.167.0
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: NeedsAttention
 filed_at:
   code_sha: dc41ee8da2f44f88178936fc1a8e6cb7168a3de7
   branch: main
@@ -572,3 +588,9 @@ filed_at:
   vendor: claude
   session: 01a1b8be-8170-7fb2-89ab-ecb4c6eee98c
   harness_version: 2.1.319 (Claude Code)
+attention_reason:
+  category: design-fork
+  detail: 'R18 and R19 sketch revisions are ready at docs/plans/2026-11-08-story-2661-park-resume-sketch.md; no findings disputed. Binding advisor ruling requires signoff before implementation. R1 remains host/advisor metadata action: retitle PR #3666 exactly [AI:codex] docs(plans): sketch park-on-ask resume-on-answer (Refs STORY-2661). This native seat cannot repair PR metadata. Retain publication veto pending sketch signoff and title repair.'
+  lean: Approve the revised bound-resume predicate and durable parked live-work ownership contract, repair the non-completing PR title, then authorize implementation separately.
+  raised_by: implementer
+  raised_at: 2026-11-08T09:34:48.000232714Z
