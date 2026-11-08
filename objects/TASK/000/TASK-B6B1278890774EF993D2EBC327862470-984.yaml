@@ -17,7 +17,7 @@ priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-11-08T11:05:26.104788450Z
-modified_at: 2026-11-08T11:05:26.104788450Z
+modified_at: 2026-11-08T15:27:49.679763824Z
 req_type: Task
 tags:
 - from-advisor:STORY-2493
@@ -26,6 +26,14 @@ tags:
 - loop-guard
 - review-recurrence
 - severity:major
+comments:
+- id: 01a1bbc5-dfaf-7612-bd91-c898e9afe43f
+  author: joe
+  content: 'Advisor 2026-11-08: F1 resolved by retitling PR-3665 to (Refs STORY-2493); needs a re-review at the same head.'
+  created_at: 2026-11-08T15:27:49.679763824Z
+  modified_at: 2026-11-08T15:27:49.679763824Z
+  session_id: 01a1bbab-762f-7cd2-8a36-4ea9f209afce
+  harness_version: 2.1.319 (Claude Code)
 history:
 - id: 01a1baff-b40e-7da1-93a2-5aced59a09fe
   author: joe
