@@ -434,7 +434,29 @@ fn story2402_s5_recur_conditions_resurface_and_manual_routes() {
     )
     .is_err());
     assert!(!backend.get_requirement(&row.id).unwrap().unwrap().deferred);
+    // A note I/O failure must report the already-persisted deferral.
+    // trace:STORY-2402 | ai:codex
     std::fs::write(&note, "Review the dependency after merge.").unwrap();
+    let handoff_dir = dir.path().join(".aida/handoff/advisor");
+    std::fs::create_dir_all(handoff_dir.parent().unwrap()).unwrap();
+    std::fs::write(&handoff_dir, "block directory creation").unwrap();
+    let error = crate::session_misc::session_handoff_seat(
+        Some(note.to_str().unwrap()),
+        false,
+        Some("advisor"),
+        false,
+        false,
+        Some("date:2026-01-01"),
+        Some(id),
+        None,
+    )
+    .unwrap_err();
+    let message = format!("{error:#}");
+    assert!(message.contains(id), "{message}");
+    assert!(message.contains("date:2026-01-01"), "{message}");
+    assert!(message.contains("deferral remains saved"), "{message}");
+    assert!(backend.get_requirement(&row.id).unwrap().unwrap().deferred);
+    std::fs::remove_file(&handoff_dir).unwrap();
     crate::session_misc::session_handoff_seat(
         Some(note.to_str().unwrap()),
         false,
@@ -506,4 +528,32 @@ fn story2402_s5_handoff_cli_requires_write_and_spec() {
     ])
     .is_ok());
     assert!(crate::condition_cmd::canonical_condition(Some("if it stalls"), None).is_err());
+}
+
+// trace:STORY-2402 | ai:codex
+#[test]
+fn story2402_s5_conditional_handoff_auto_pushes() {
+    for (args, expected) in [
+        (vec!["--show"], false),
+        (vec!["--write", "note.md"], false),
+        (
+            vec![
+                "--write",
+                "note.md",
+                "--spec",
+                "TASK-1",
+                "--until",
+                "date:2026-01-01",
+            ],
+            true,
+        ),
+    ] {
+        let mut argv = vec!["aida", "session", "handoff"];
+        argv.extend(args);
+        let cli = crate::command_registry::try_parse_from(argv).unwrap();
+        assert_eq!(
+            crate::command_triggers_per_write_auto_push(&cli.command),
+            expected
+        );
+    }
 }

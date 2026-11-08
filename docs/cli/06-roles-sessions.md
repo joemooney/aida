@@ -1122,6 +1122,9 @@ Conditional relay/seat handoffs use
 This parks the named spec using the same typed condition and hold policy as
 `aida defer`, and includes the canonical trigger in the handoff note. The
 hourly `defer-resurface` job evaluates that spec; a met condition resurfaces it.
+Conditional handoffs use the same per-write store auto-push policy as `aida defer`.
+The deferral is saved before the note: if note I/O fails, the error names the
+saved spec and trigger. Repair the note and retry; the deferral remains active.
 This does not automatically execute the handoff instructions or launch a seat.
 Free-text triggers are refused. Use `--until manual:<who> --reason '<explanation>'`
 for a human decision; this retains an operator hold and routes old manual

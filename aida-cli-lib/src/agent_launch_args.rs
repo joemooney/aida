@@ -628,7 +628,7 @@ pub enum SessionCommand {
         until: Option<String>,
 
         /// Spec to resurface when the handoff condition is met.
-        #[clap(long, requires = "until")]
+        #[clap(long, requires = "until", value_parser = crate::spec_arg::spec_id)]
         spec: Option<String>,
 
         /// Explanation for an operator hold; required for manual:<who>.

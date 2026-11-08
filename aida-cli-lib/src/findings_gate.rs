@@ -1381,12 +1381,23 @@ pub(crate) fn handle_findings_recur(
         );
     }
 
+    // These remain separate store writes. Never hide a persisted deferral if
+    // the later recurrence write fails. trace:STORY-2402 | ai:codex
+    let recurrence_error = || match until {
+        Some(condition) => format!(
+            "recurrence update failed after deferring {id} until {condition}; \
+             deferral remains saved; inspect the recurrence count before retrying"
+        ),
+        None => format!("updating recurrence for {id}"),
+    };
     if until.is_some() {
         crate::defer_cmd::defer_single(id, until, reason, backend, store_path)?;
         // Reload the deferral so the recurrence write preserves it.
         req = backend
-            .get_requirement_unambiguous(id)?
-            .ok_or_else(|| anyhow::anyhow!("finding disappeared"))?;
+            .get_requirement_unambiguous(id)
+            .with_context(recurrence_error)?
+            .ok_or_else(|| anyhow::anyhow!("finding disappeared"))
+            .with_context(recurrence_error)?;
     }
 
     // Find and bump the existing counter; default to 2 when absent (the
@@ -1424,7 +1435,9 @@ pub(crate) fn handle_findings_recur(
         relayed_from: None,
     });
     req.modified_at = now;
-    backend.update_requirement(&req)?;
+    backend
+        .update_requirement(&req)
+        .with_context(recurrence_error)?;
 
     let display_id = req.spec_id.as_deref().unwrap_or(id);
     println!("Recurred {} — recurrence count now ×{next}.", display_id);

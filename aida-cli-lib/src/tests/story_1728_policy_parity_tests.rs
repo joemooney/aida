@@ -13,6 +13,9 @@
 //! Rows corrected by hand after capture, each a deliberate policy change:
 //! - `session leases --prune-stale`: Read → Session. It releases stale
 //!   leases, including other clones' claims (TASK-1939).
+//! - Conditional session handoffs auto-push their spec deferral (STORY-2402).
+//!   AIDA_UPDATE_SNAPSHOTS=1 updates only the explicitly listed S5 invocations,
+//!   retaining the legacy baseline for every other command.
 // trace:STORY-1728 | ai:claude
 
 use super::*;
@@ -169,6 +172,28 @@ fn registered_policy_matches_mains_legacy_tables_for_every_verb() {
         std::fs::write(fixture_path(), text).unwrap();
         return;
     }
+    // S5 flags require companion arguments, so single-flag synthesis cannot
+    // probe every invocation. Pin them explicitly without recapturing unrelated
+    // legacy policies from this branch. trace:STORY-2402 | ai:codex
+    if std::env::var_os("AIDA_UPDATE_SNAPSHOTS").is_some() {
+        let mut rows: std::collections::BTreeMap<String, String> =
+            std::fs::read_to_string(fixture_path())
+                .unwrap()
+                .lines()
+                .map(|line| {
+                    let (argv, answer) = line.split_once('\t').unwrap();
+                    (argv.to_string(), answer.to_string())
+                })
+                .collect();
+        for argv in S5_POLICY_INVOCATIONS {
+            rows.insert((*argv).to_string(), answers(argv));
+        }
+        let text = rows
+            .into_iter()
+            .map(|(argv, answer)| format!("{argv}\t{answer}\n"))
+            .collect::<String>();
+        std::fs::write(fixture_path(), text).unwrap();
+    }
     let want: std::collections::BTreeMap<String, String> = std::fs::read_to_string(fixture_path())
         .expect("main policy fixture exists")
         .lines()
@@ -204,4 +229,26 @@ fn registered_policy_matches_mains_legacy_tables_for_every_verb() {
         diverged.join("\n")
     );
     assert_eq!(checked, want.len());
+}
+
+// trace:STORY-2402 | ai:codex
+const S5_POLICY_INVOCATIONS: &[&str] = &[
+    "findings recur --until date:2026-01-01 TASK-1",
+    "findings recur --reason hold --until manual:joe TASK-1",
+    "session handoff --until date:2026-01-01 --write TASK-1 --spec TASK-1",
+    "session handoff --spec TASK-1 --write TASK-1 --until date:2026-01-01",
+    "session handoff --reason hold --until manual:joe --spec TASK-1 --write TASK-1",
+];
+
+#[test]
+fn story2402_s5_policy_fixture_covers_conditional_writers() {
+    let fixture = std::fs::read_to_string(fixture_path()).unwrap();
+    for argv in S5_POLICY_INVOCATIONS {
+        assert!(
+            fixture
+                .lines()
+                .any(|line| line == format!("{argv}\t{}", answers(argv))),
+            "missing S5 policy: {argv}"
+        );
+    }
 }

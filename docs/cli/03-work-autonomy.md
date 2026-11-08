@@ -469,6 +469,9 @@ The recurrence counter still increments; the finding is deferred and the hourly
 deferral. Free text is refused; `--until manual:<who>` requires a non-empty
 `--reason` and the same hold authority as `aida defer`. A reasoned hold is
 retained for human review even when its condition is met.
+Parking and incrementing recurrence are separate writes. If the recurrence
+write fails after parking succeeds, the error names the saved deferral and
+trigger. Inspect the recurrence count before retrying.
 <!-- trace:STORY-2402 | ai:codex -->
 
 **Gotchas.** A finding is the right home for a not-yet-confirmed pattern; promote it at recurrence (the counter survives in a `recurrence:N` tag).

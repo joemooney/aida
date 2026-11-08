@@ -1002,7 +1002,7 @@ pub(crate) fn session_handoff_seat(
             std::fs::read_to_string(src).with_context(|| format!("reading {src}"))?
         };
         anyhow::ensure!(!body.trim().is_empty(), "handoff note is empty");
-        let body = if let Some(condition) = condition {
+        let body = if let Some(ref condition) = condition {
             let spec =
                 spec.ok_or_else(|| anyhow::anyhow!("conditional handoffs require --spec"))?;
             let path = crate::store_sync::detect_distributed_store_from(&project_root).ok_or_else(
@@ -1026,7 +1026,16 @@ pub(crate) fn session_handoff_seat(
             &body,
             chrono::Utc::now(),
             &seat_rotation::HandoffWriter::from_env(final_),
-        )?;
+        )
+        .with_context(|| match condition.as_deref() {
+            // The store write already succeeded; preserve that fact on I/O failure.
+            // trace:STORY-2402 | ai:codex
+            Some(condition) => format!(
+                "handoff note failed after deferring {} until {condition}; deferral remains saved; repair the note and retry",
+                spec.unwrap_or("?")
+            ),
+            None => "writing handoff note".to_string(),
+        })?;
         println!(
             "Handoff written: {} ({} bytes)",
             written.path.display(),

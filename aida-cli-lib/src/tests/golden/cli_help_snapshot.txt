@@ -1824,6 +1824,12 @@ Options:
       --note <TEXT>
           What you saw this time. Appended as a timestamped audit comment
 
+      --until <CONDITION>
+          Park this finding until a typed condition is met
+
+      --reason <REASON>
+          Explanation for an operator hold; required for manual:<who>
+
       --format <FORMAT>
           Pin the output format regardless of whether stdout is a terminal: human = tables, toon =
           compact agent output, json = machine JSON. Default (unset) is human at a TTY, toon when
@@ -14942,6 +14948,15 @@ Options:
           Write a seat handoff note from FILE (`-` reads stdin) under `.aida/handoff/<seat>/` and
           update its `latest.md`. The note is capped at ~4k tokens because it seeds the next session
 
+      --until <CONDITION>
+          Typed condition for work parked by this handoff
+
+      --spec <SPEC>
+          Spec to resurface when the handoff condition is met
+
+      --reason <REASON>
+          Explanation for an operator hold; required for manual:<who>
+
       --show
           Print the seat's standing orders (if any), then its latest handoff note (the seed for a
           fresh session)
@@ -14953,11 +14968,6 @@ Options:
       --final
           With `--write`: this is the last handoff of the run, so an `aida agent new --rotate`
           supervisor exits instead of relaunching
-
-      --standing-orders <ACTION> <TEXT>
-          Manage the seat's repo-local standing orders (`.aida/standing-orders/<seat>.md`): `add
-          "<text>"` appends a dated entry, `list` prints them. `--show` prints standing orders
-          before the handoff
 
       --format <FORMAT>
           Pin the output format regardless of whether stdout is a terminal: human = tables, toon =
@@ -14972,6 +14982,11 @@ Options:
       --canonical-ids
           Show node-local spec IDs in their canonical form instead of the node's friendly label (for
           scripts). Also settable via AIDA_CANONICAL_IDS=1
+
+      --standing-orders <ACTION> <TEXT>
+          Manage the seat's repo-local standing orders (`.aida/standing-orders/<seat>.md`): `add
+          "<text>"` appends a dated entry, `list` prints them. `--show` prints standing orders
+          before the handoff
 
   -h, --help
           Print help (see a summary with '-h')
@@ -33209,6 +33224,16 @@ Working on aida itself
         "name": "note",
         "takes_value": true,
         "help": "What you saw this time. Appended as a timestamped audit comment"
+      },
+      {
+        "name": "reason",
+        "takes_value": true,
+        "help": "Explanation for an operator hold; required for manual:<who>"
+      },
+      {
+        "name": "until",
+        "takes_value": true,
+        "help": "Park this finding until a typed condition is met"
       }
     ],
     "hidden": false
@@ -46527,6 +46552,11 @@ Working on aida itself
         "help": "Print help (see more with '--help')"
       },
       {
+        "name": "reason",
+        "takes_value": true,
+        "help": "Explanation for an operator hold; required for manual:<who>"
+      },
+      {
         "name": "rotated",
         "takes_value": false,
         "help": "With `--show`, inside a session `aida agent new --rotate` relaunched: show exactly the handoff its supervisor matched (`AIDA_ROTATION_HANDOFF`), not the seat's latest. The SessionStart hook's call"
@@ -46542,9 +46572,19 @@ Working on aida itself
         "help": "Print the seat's standing orders (if any), then its latest handoff note (the seed for a fresh session)"
       },
       {
+        "name": "spec",
+        "takes_value": true,
+        "help": "Spec to resurface when the handoff condition is met"
+      },
+      {
         "name": "standing-orders",
         "takes_value": true,
         "help": "Manage the seat's repo-local standing orders (`.aida/standing-orders/<seat>.md`): `add \"<text>\"` appends a dated entry, `list` prints them. `--show` prints standing orders before the handoff"
+      },
+      {
+        "name": "until",
+        "takes_value": true,
+        "help": "Typed condition for work parked by this handoff"
       },
       {
         "name": "write",
