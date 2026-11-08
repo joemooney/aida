@@ -12,6 +12,10 @@ use std::sync::{
 };
 
 const SERVICE: &str = "service.json";
+// Bound retained ancestry even if startup repeatedly fails behind a review
+// whose descendant evidence needs operator recovery.
+// trace:STORY-2571 | ai:codex
+const MAX_RETIRED_GRANTS: usize = 4;
 
 #[derive(Clone, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -203,6 +207,8 @@ pub(crate) fn command(action: &AdvisorLoopsCommand) -> Result<()> {
                 "blocked-ambiguous-spawn"
             } else if state.worker.as_ref().is_some_and(Identity::alive) {
                 "running"
+            } else if state.retired_grants.len() >= MAX_RETIRED_GRANTS {
+                "blocked-retired-controllers"
             } else {
                 "waiting-for-supervisor"
             };
@@ -354,7 +360,7 @@ fn worker(root: &Path) -> Result<()> {
         &ReviewWatchArgs {
             once: false,
             interval: 10,
-            max_concurrent: 2,
+            max_concurrent: Some(2),
             vendor: None,
             release: None,
             launch_reservation: None,
@@ -526,7 +532,8 @@ fn tick_with_launcher(
     // Restart and grant revocation are independent: supersede progress may
     // require a live controller. Unclaimed reservations can also hide
     // a dispatcher spawned before its identity was persisted. Neither may
-    // block replacement, nor justify revoking possible reviewer descendants.
+    // individually block replacement, nor justify revoking possible reviewer
+    // descendants. Repeated failures still obey the bounded retirement cap.
     // trace:STORY-2571 | ai:codex
     if exited {
         if let Some(grant) = state.child_grant.take() {
@@ -539,6 +546,14 @@ fn tick_with_launcher(
     if before != serde_json::to_vec(&state)? {
         write(&dir, &state)?;
     }
+    // Free kernel quota for keys still reachable by this launcher now, but
+    // retain the records: reviewer ancestry checks lifetime, roster and
+    // delegation, not possession of an ancestor's key. Retry after a crash
+    // between persisting retirement and invalidation, including old receipts.
+    // trace:STORY-2571 | ai:codex
+    for id in &state.retired_grants {
+        crate::grant_keyring::invalidate(id);
+    }
     let before = serde_json::to_vec(&state)?;
     if !state.retired_grants.is_empty() && reviews_finished(root, &dir)? {
         for id in &state.retired_grants {
@@ -549,7 +564,11 @@ fn tick_with_launcher(
     if before != serde_json::to_vec(&state)? {
         write(&dir, &state)?;
     }
-    if !host_valid || state.child_grant.is_some() || Utc::now() < state.retry_after {
+    if !host_valid
+        || state.child_grant.is_some()
+        || state.retired_grants.len() >= MAX_RETIRED_GRANTS
+        || Utc::now() < state.retry_after
+    {
         return Ok(());
     }
     let parent = match state.binding.validate(root) {
@@ -585,7 +604,7 @@ fn tick_with_launcher(
     }
 }
 
-// Retired grants protect reviews but never gate controller replacement.
+// Retired grants protect reviews; the cap bounds controller replacement.
 // Reservations do not record grant ancestry, so conservatively protect every
 // unresolved attempt, including unrecorded and unknown descendants.
 // trace:STORY-2571 | ai:codex
@@ -724,6 +743,7 @@ fn rebind_after_launch_with(
 }
 
 #[cfg(test)]
+#[cfg(target_os = "linux")]
 mod tests {
     use super::*;
 
@@ -829,6 +849,115 @@ mod tests {
             }
             assert!(stopped.retry_after > Utc::now());
         }
+    }
+
+    // Repeated startup exits behind an unclaimed reservation must free keys
+    // and stop growing retained ancestry, without revoking a live reviewer.
+    // trace:STORY-2571 | ai:codex
+    #[test]
+    fn story2571_repeated_controller_exits_bound_retired_grants_and_keys() {
+        let (temp, _guard, parent) = fixture();
+        let root = temp.path();
+        rebind(root, "default", &parent).unwrap();
+        let dir = directory(root, false).unwrap().unwrap();
+        let store = Store::open(root, "github:github.com/owner/repo").unwrap();
+        assert!(matches!(
+            select(&store, &change(1), None, 2).unwrap(),
+            Action::Dispatch(_)
+        ));
+        let mut controller = None;
+        let mut grants = Vec::new();
+        let mut reviewer: Option<SeatGrant> = None;
+        let mut installed_keys = 0;
+        for _ in 0..MAX_RETIRED_GRANTS * 3 {
+            let mut state = read(&dir).unwrap().unwrap();
+            state.retry_after = Utc::now() - chrono::Duration::seconds(1);
+            write(&dir, &state).unwrap();
+            tick_with_launcher(root, "default", true, &mut controller, |root, parent| {
+                let grant =
+                    seat_authority::issue_review_watch_child(root, &parent.id, &parent.subject)?;
+                if crate::grant_keyring::available() {
+                    assert!(matches!(
+                        crate::grant_keyring::read(&grant.id),
+                        crate::grant_keyring::KeyRead::Held(_)
+                    ));
+                    installed_keys += 1;
+                }
+                if reviewer.is_none() {
+                    reviewer = Some(seat_authority::issue_child_from(
+                        grant.clone(),
+                        "reviewer",
+                        "surviving-reviewer",
+                        false,
+                    )?);
+                }
+                grants.push(grant.id.clone());
+                let mut command = Command::new("sh");
+                command.args(["-c", "exit 7"]);
+                Ok((grant, command))
+            })
+            .unwrap();
+            if let Some(child) = controller.as_mut() {
+                child.wait().unwrap();
+            }
+            // Observe exit through the production tick and retain the orphan.
+            tick(root, "default", true, &mut controller).unwrap();
+            assert!(controller.is_none());
+            let state = read(&dir).unwrap().unwrap();
+            assert_eq!(state.retired_grants, grants);
+            assert!(state.retired_grants.len() <= MAX_RETIRED_GRANTS);
+            assert!(state.child_grant.is_none());
+            for id in &grants {
+                assert!(!matches!(
+                    crate::grant_keyring::read(id),
+                    crate::grant_keyring::KeyRead::Held(_)
+                ));
+                assert!(seat_authority::read_grant(id).unwrap().revoked_at.is_none());
+            }
+            let reviewer = reviewer.as_ref().unwrap();
+            assert!(seat_authority::validated_grant(
+                root,
+                &reviewer.id,
+                &reviewer.subject,
+                Utc::now()
+            )
+            .is_some());
+            if crate::grant_keyring::available() {
+                assert!(matches!(
+                    crate::grant_keyring::read(&reviewer.id),
+                    crate::grant_keyring::KeyRead::Held(_)
+                ));
+            }
+        }
+        assert_eq!(grants.len(), MAX_RETIRED_GRANTS);
+        assert_eq!(
+            store.load().unwrap().entries["PR-1"].attempts[0].phase,
+            Phase::Reserved
+        );
+        assert_eq!(review_blockers(&dir).unwrap().len(), 1);
+        if installed_keys == 0 {
+            eprintln!("kernel keyring unavailable; exercised bounded process-bound grants");
+        }
+
+        // Operator recovery clears the unclaimed reservation and lets cleanup
+        // revoke the retired records before admission resumes.
+        assert_eq!(store.release("PR-1").unwrap(), 1);
+        tick_with_launcher(root, "default", true, &mut controller, |root, parent| {
+            assert!(grants
+                .iter()
+                .all(|id| seat_authority::read_grant(id).unwrap().revoked_at.is_some()));
+            let grant =
+                seat_authority::issue_review_watch_child(root, &parent.id, &parent.subject)?;
+            let mut command = Command::new("sh");
+            command.args(["-c", "exit 0"]);
+            Ok((grant, command))
+        })
+        .unwrap();
+        assert!(read(&dir).unwrap().unwrap().retired_grants.is_empty());
+        assert!(controller.is_some(), "recovery must restore admission");
+        controller.as_mut().unwrap().wait().unwrap();
+        tick(root, "default", false, &mut controller).unwrap();
+        seat_authority::revoke_by_id(&reviewer.unwrap().id).unwrap();
     }
 
     // Exercise the actual reviewer ancestry, not just the controller record.
@@ -1244,7 +1373,7 @@ mod tests {
         let args = ReviewWatchArgs {
             once: true,
             interval: 10,
-            max_concurrent: 2,
+            max_concurrent: Some(2),
             vendor: None,
             release: None,
             launch_reservation: None,

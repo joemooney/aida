@@ -788,8 +788,14 @@ waits for confirmed exit and retains unknown process identities or ambiguous
 spawn receipts. Controller restarts preserve all ordinary PR-head reservations;
 a refusal for one PR still leaves the remaining PRs available. Exited
 controllers move their grants into `retired_grants` in the service receipt,
-so in-flight reviewers keep their authority. A replacement starts after the
-normal ten-second backoff even while review reservations remain unresolved.
+so in-flight reviewers keep their authority. Retirement immediately invalidates
+any controller kernel key reachable by the supervisor; reviewer ancestry uses
+the retained grant record, not that key. A replacement starts after the normal
+ten-second backoff even while review reservations remain unresolved, until four retired controller
+grants are pending. At that cap, status reports `blocked-retired-controllers`
+and replacement waits for review reconciliation or operator recovery. This bounds
+retained grants during repeated startup failures, including when key invalidation
+is unavailable to the supervisor.
 Restart reconciliation completes persisted supersede intent when every recorded
 process and group is confirmed gone; live or ambiguous attempts remain reserved
 for the replacement controller or operator recovery. In particular, a reservation
@@ -820,6 +826,11 @@ must reset the binding from a host terminal:
    ordinary review receipts. Let any recorded controller exit and let the
    supervisor observe it; with an intact receipt it clears `worker` and
    `child_grant` and retains the grant in `retired_grants` until reviews finish.
+   If `review_blockers` lists an orphaned reservation (including one with no
+   dispatcher identity), first confirm from host evidence that no descendant
+   survives, then run `aida review watch --release PR-N` for that reservation.
+   Release clears it only when no recorded process is alive; missing dispatcher
+   identity alone does not establish that an unrecorded descendant has exited.
    Wait for all retired grants to be revoked before resetting the receipt.
    If the receipt is missing or ambiguous, identify the controller from host process/grant records and
    establish that it and its descendants have exited. Do not infer exit from
