@@ -1575,6 +1575,50 @@ impl Cache {
         Self::open_at(path.clone(), true).map_err(|err| tag_cache_corruption(&path, err))
     }
 
+    /// A pinned, stale-OK projection for single-spec reads. Never creates,
+    /// migrates, heals or refreshes the on-disk cache. An unavailable projection
+    /// becomes an empty in-memory index; callers still read canonical objects.
+    // trace:BUG-2466 | ai:codex
+    pub(crate) fn open_stale_snapshot(path: &Path) -> Result<Self> {
+        let opened = (|| -> Result<Connection> {
+            let conn =
+                Connection::open_with_flags(path, rusqlite::OpenFlags::SQLITE_OPEN_READ_ONLY)?;
+            conn.busy_timeout(Duration::ZERO)?;
+            conn.execute_batch("BEGIN DEFERRED")?;
+            anyhow::ensure!(
+                cache_tables_present(&conn) && !schema_structurally_drifted(&conn),
+                "cache projection unavailable"
+            );
+            Ok(conn)
+        })();
+        let conn = match opened {
+            Ok(conn) => conn,
+            Err(_) => {
+                let conn = Connection::open_in_memory()?;
+                conn.execute_batch(SCHEMA_SQL)?;
+                conn.execute_batch("BEGIN DEFERRED")?;
+                conn
+            }
+        };
+        let version = conn
+            .query_row(
+                "SELECT value FROM cache_meta WHERE key = ?1",
+                params![META_KEY_SCHEMA_VERSION],
+                |row| row.get::<_, String>(0),
+            )
+            .ok();
+        let migration_pending = schema_stamp_is_older(version.as_deref());
+        Ok(Self {
+            conn: Mutex::new(conn),
+            path: path.to_path_buf(),
+            lock_info_path: cache_lock_info_path(path),
+            migration_pending: AtomicBool::new(migration_pending),
+            usable_snapshot: AtomicBool::new(true),
+            read_only: true,
+            binding: Mutex::new(CacheBinding::pinned()),
+        })
+    }
+
     fn open_at(path: PathBuf, allow_fallback: bool) -> Result<Self> {
         // TASK-2707: a project cache path moves its `.aida` out of the legacy
         // layout before the open, so nothing ever opens the legacy file.

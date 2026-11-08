@@ -101,23 +101,42 @@ An empty focused subtree does not mean the project has no open work.
 
 **One line** — the full detail view of one spec.
 
-**Mental model.** Where `list` is breadth, `show` is depth on a single spec: its fields, description, acceptance criteria, relationships, and — by default — its **git linkage** (the commits, files, branch, and PR that reference it). That git section is what makes `show` more than a database dump: it answers "what code actually serves this spec."
+**Mental model.** Where `list` is breadth, `show` is depth on a single spec: its fields, description, acceptance criteria, relationships, and — with `--full`, `--verbose` or JSON output — its **git linkage** (the commits, files, branch, and PR that reference it). That git section is what makes `show` more than a database dump: it answers "what code actually serves this spec."
 
 **Reach for it when** — you're about to work, review, or reason about a specific spec and need its full contract; or you want to see what's already shipped against it.
 
-**Don't reach for it when** — you only need the fields and not the (slower) git scan — pass `--no-git`. Or you want the whole subtree, not one node — that's `--tree`.
+**Don't reach for it when** — you need a broad list of specs — use `aida list`. Default detail reads skip Git linkage; `--no-git` also suppresses it in expanded views. Or you want the whole subtree, not one node — that's `--tree`.
 
 **Key options (rationale only).**
 - `--card` (+ `--brief` / `--full`) — renders a boxed "spec card" instead of the linear view. The pickup skill prints this at session start so the spec's contract stays in scrollback. `--brief` is the one-liner for scripts; `--full` is the no-truncation deep dive.
-- `--no-git` — skip the git-linkage scan. The right default for read-only/scripted contexts that only need the fields; meaningfully faster on specs with many referencing commits.
+- `--no-git` — suppress the git-linkage scan in full, verbose and JSON views when only the fields are needed.
 - `--tree` (+ `--depth`) — show the spec *and its descendants* as an indented hierarchy. The quick "what's under this EPIC" without leaving `show`.
 - `--rels` / `--relations` — force every relationship edge to print. Without it, `show` summarizes (lists edges when few, otherwise a count + pointer to `rel list`) to keep the view readable on hub specs.
 - `-c/--comments` — inline the comment bodies (design discussion, doc seeds) rather than just the count.
 - `--raw` — print the description and comments as their markdown source. At an interactive terminal, human output renders that markdown: styled headings and emphasis, indented lists and code blocks, and tables drawn as aligned boxes that fit the terminal width. `AIDA_MARKDOWN=raw` does the same for every run.
 
-**The `linkage:` line (agent/TOON output).** Under `--format toon` (the agent surface), `show` carries one cheap `linkage:` line that checks only the default branch — `origin/<default>` first, then the local `<default>` (skipped when it is the same commit as, or behind, the remote). It is whitespace-separated `key=value` tokens, for example `linkage: shipped=true shipped_pr=53 commit=1a2b3c4 commits=1 files=2 on=origin/main`, or for nothing shipped yet `linkage: shipped=false commits=0 files=0 checked=origin/main+main detail=--format=json`. `shipped` is true when a commit message on that ref names the spec or a tracked file there carries a `trace:<ID>` comment; `detail=--format=json` points at the full linkage scan. `--no-git` drops the line.
+**Latency and caching.** `show` reads the requested spec from canonical YAML without opening the ID
+allocator. Its derived context comes from a pinned, read-only cache snapshot;
+it never refreshes, migrates, heals, or queues refresh work. Stale context is
+labelled `deferred`. Missing, incompatible or unreadable caches use an empty
+in-memory index. On an index miss, origin IDs read their named canonical
+object directly. After literal and node-alias lookups miss, a stale or unavailable
+projection uses a bounded canonical scan for agreed IDs. Fresh snapshot misses
+return without scanning. If a fallback scan runs out of time, the result carries an incomplete-scan warning and may be not found.
+Relationship targets share one bounded fallback scan; targets not reached are
+shown as unknown. Use `aida cache refresh` to update the projection explicitly.
 
-**Gotchas.** The git-linkage section is the slow part; if `show` feels sluggish in a loop, you almost certainly want `--no-git`. Markdown is rendered only for a person at a terminal: piped output, `--format toon` and `--format json` always carry the source text unchanged, so scripts and agents never see the rendered form. Under `NO_COLOR` the layout stays and the styling goes.
+Default human, TOON and card views skip Git linkage and run no Git history
+walk. Request `--full`, `--verbose`, `--json` or `--format json` for linkage;
+`--no-git` suppresses it in those views too. Optional Git linkage has a shared
+1.2-second deadline and reports partial or unknown evidence when it expires.
+Usage events split backend opening into `open.backend`, `open.location` and
+`open.cache` sub-spans for diagnosing remaining latency.
+<!-- trace:BUG-2466 | ai:codex -->
+
+**The `linkage:` line (agent/TOON output).** With `--full` or `--verbose` under `--format toon` (the agent surface), `show` carries one cheap `linkage:` line that checks only the default branch — `origin/<default>` first, then the local `<default>` (skipped when it is the same commit as, or behind, the remote). It is whitespace-separated `key=value` tokens, for example `linkage: shipped=true shipped_pr=53 commit=1a2b3c4 commits=1 files=2 on=origin/main`, or for nothing shipped yet `linkage: shipped=false commits=0 files=0 checked=origin/main+main detail=--format=json`. `shipped` is true when a commit message on that ref names the spec or a tracked file there carries a `trace:<ID>` comment; `detail=--format=json` points at the full linkage scan. `--no-git` drops the line.
+
+**Gotchas.** Default `show` skips linkage. Expanded `--full`, `--verbose` and JSON views request it; add `--no-git` to suppress that work when only requirement fields are needed. Markdown is rendered only for a person at a terminal: piped output, `--format toon` and `--format json` always carry the source text unchanged, so scripts and agents never see the rendered form. Under `NO_COLOR` the layout stays and the styling goes.
 
 **Chains with** — the natural stop between `list` (found it) and acting (`edit` / `queue work` / `comment add`).
 
@@ -155,7 +174,7 @@ An empty focused subtree does not mean the project has no open work.
 - `--status` — the lifecycle mover. Approval (Draft→Approved) is authority-gated on multi-agent projects; status transitions are where the governance lives.
 - `--blocked-by` (repeatable) — add dependency edges after creation. Same edge `add --blocked-by` makes, just later.
 
-**The completion warning.** When `edit --status completed` (or `aida done` or `aida queue advance` closing a parent) moves a code spec into Completed, AIDA checks the default branch — `origin/<default>` and the local `<default>` — for a commit whose message names the spec or a tracked file carrying a `trace:<ID>` comment. If neither is found it prints a warning to stderr naming the refs it checked; the status change still goes through. If the PR merged on the remote, `git fetch` and re-check with `aida show <ID>`. In a shallow clone the warning says `(shallow clone)`, because an older shipping commit may sit below the history cut. Decisions, docs and other non-code types are never warned about; for code-typed work that legitimately landed outside this repo, opt out with `aida edit <ID> --add-tag doctor:no-code`. `aida doctor --category completed-without-commit` applies the same rule across the whole store.
+**The completion warning.** When `edit --status completed` (or `aida done` or `aida queue advance` closing a parent) moves a code spec into Completed, AIDA checks the default branch — `origin/<default>` and the local `<default>` — for a commit whose message names the spec or a tracked file carrying a `trace:<ID>` comment. If neither is found it prints a warning to stderr naming the refs it checked; the status change still goes through. If the PR merged on the remote, `git fetch` and re-check with `aida show <ID> --full`. In a shallow clone the warning says `(shallow clone)`, because an older shipping commit may sit below the history cut. Decisions, docs and other non-code types are never warned about; for code-typed work that legitimately landed outside this repo, opt out with `aida edit <ID> --add-tag doctor:no-code`. `aida doctor --category completed-without-commit` applies the same rule across the whole store.
 
 **Gotchas.** Refinements you make in a *comment* do **not** bind an implementer — only the description / acceptance criteria do. If a design decision must be honored, `edit` it into the acceptance criteria; don't leave it in a comment and assume it'll be followed.
 
