@@ -8,7 +8,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-06T13:39:53.442026Z
-modified_at: 2026-11-08T16:57:32.749818642Z
+modified_at: 2026-11-08T16:57:41.729188555Z
 req_type: Task
 tags:
 - architecture
@@ -1167,6 +1167,24 @@ comments:
   content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: Head af26575f93df closes last round''s resume, test-binary, MCP error-code and PR-metadata findings, and the code is sound as a gated staged slice; zero-unrouted acceptance is still unmet (3171 writers, 293 operations) with no advisor ruling, current-head CI has not run, and this head was published against a recorded no-publish handoff.. It was punted on: design-fork: Round 22 findings 1-3 accepted; none disputed. The mediated inventory still has 3171 writer sites and 293 operations unresolved. Advisor ruling is required on operation reconciliation, explicit UnsupportedOperation and read admission, or authorization of a staged partial with follow-up ownership. Keep production admission gated and own_claim/queue_done with TASK-3326. Source inspection confirms punt_done writes a signal only if AIDA_PUNT_SIGNAL_FILE is set, while ship_from_seat publication_veto checks only signal/hold files, not persisted NeedsAttention; this seat has that variable unset and neither friendly nor canonical main punt signal. Advisor must establish whether the four prior publications were authorized and repair the fail-open publication path as needed. Do not publish these edits over this punt or existing holds; no ship declaration is issued. PR 3661 title/body were corrected to comment 74 with an empty-squash-body instruction; no code was committed or pushed. Reviewed-head CI 4387ae4fad6e is now green, but final-source lane tests are still running and aggregate make check-ci-fast requires a host run. Human/advisor merge-hold clearance remains mandatory. Findings 5-7 have uncommitted resume-refusal coverage/documentation, exact-test executable selection and explicit machine-readable MCP error mapping. Full TASK-3223 acceptance remains unmet.. No triage reason was given.'
   created_at: 2026-11-08T16:57:32.749810790Z
   modified_at: 2026-11-08T16:57:32.749810790Z
+  session_id: 01a1b9af-8230-75d2-82f8-667491cc010a
+  harness_version: 2.1.319 (Claude Code)
+- id: 01a1bc18-250a-79c0-b13b-cc57ea7d1646
+  author: joe
+  content: |-
+    REVIEW FINDINGS TO ADDRESS (PR #3661):
+    Verdict: CHANGES REQUESTED
+    Reviewed commit: af26575f93df
+    Recorded: 2026-11-08T16:35:17.525851834+00:00
+    Review comment: https://github.com/joemooney/aida/pull/3661#issuecomment-6724099617
+    Findings:
+    1. BLOCKING acceptance gap, needs an advisor ruling rather than more code (spec 'route every inventoried in-lane writer'; ruling in TASK-3223 comment 34: 'zero unrouted writers for the mediated profile'). At this head python3 scripts/check-store-writers.py --profile mediated exits 1 with 3171 writers and 293 operations unresolved; mediated_blockers counts every operation row, so it cannot reach zero by construction, and the 4 partial routes clear nothing. store_mutation_entry.rs translate_with_reader routes only comment add and title/description edit, and mediated_mcp_response only add_comment and update_requirement, so reads are refused too. The advisor must either authorize this as a staged partial with named follow-up ownership (including successful mediated resume, since the new test proves refusal only) or define the operation policy, including whether explicit early UnsupportedOperation counts as reconciled. selected_store_profile (launch/contained.rs:796) correctly stays closed.
+    2. BLOCKING until CI reports: CI run 42499790929 at af26575f93df is queued with no job started. The last full success is run 42496043147 at 4387ae4fad6e, which predates this head's four changed files (mcp.rs, store_mutation_mcp_tests.rs, mediated_store_tests.rs, store-mutation-writers.md). TASK-3223 comment 80 records untested=true for final-source Rust because the lane job timed out (exit 124). make check-ci-fast has no aggregate result and ruling comment 34 names it as acceptance, so it needs a host run. merge-hold-gate fails on the expected aida:merge-hold, which needs advisor or operator clearance, not a code fix.
+    3. PROCESS, needs advisor attention: TASK-3223 is needs-attention under a design-fork punt. Comment 80 (16:24:37Z) says the changes remain uncommitted and not to auto-commit or push, yet af26575f93df was committed at 16:24:58Z, 21 seconds later, and published. This is the fifth instance after 2588cb1c1fd6, 409a1990ad5d, 4769cc5d759a and 4387ae4fad6e. Comment 75's lead is still unresolved: a persisted NeedsAttention produces no signal file when AIDA_PUNT_SIGNAL_FILE is unset, and publication_veto (ship_from_seat.rs) reads signal/hold files. Confirm whether this publication was authorized or the veto is failing open.
+    4. MINOR, docs: docs/internal/security/store-mutation-writers.md says 'The host still revalidates the resolved path against its launch-bound store identity.' The lane's resolved path never reaches the host: HostRequest carries only spec_id, expected_revision and payload, and host_operation works on its own pinned root. What the host actually checks is the expected revision and owned UUID under the writer lock. A lane that discovers a different store gets a conflict or not-found from that comparison. Reword the sentence so the security doc does not claim a path check that does not exist.
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
+  created_at: 2026-11-08T16:57:41.386772177Z
+  modified_at: 2026-11-08T16:57:41.386772177Z
   session_id: 01a1b9af-8230-75d2-82f8-667491cc010a
   harness_version: 2.1.319 (Claude Code)
 history:
