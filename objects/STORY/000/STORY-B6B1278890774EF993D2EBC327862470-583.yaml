@@ -20,7 +20,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-08T02:56:36.206726Z
-modified_at: 2026-11-08T15:16:00.733854287Z
+modified_at: 2026-11-08T16:09:49.678687106Z
 req_type: Story
 tags:
 - architecture
@@ -256,6 +256,32 @@ comments:
   modified_at: 2026-11-08T15:08:18.455244611Z
   session_id: 01a1bbab-762f-7cd2-8a36-4ea9f209afce
   harness_version: 2.1.319 (Claude Code)
+- id: 01a1bbec-536e-7cc3-9e02-448084a03ae8
+  author: joe
+  content: |
+    PR #3680 CI rework complete for approved slice 1 (advisor A1-A5). Edits remain UNCOMMITTED for the native host launcher. Native publication declaration recorded: [AI:codex] fix(lanes): refresh capacity snapshots and manual contracts (Refs STORY-2660).
+
+    Changed files:
+    - .aida/discipline/machinery-glossary.md: refreshed from the existing template master; host-wide cap/default/host.toml wording now matches.
+    - aida-cli-lib/src/tests/golden/cli_help_snapshot.txt: regenerated with the existing update-mode test; reviewed doctor --lane-capacity help/catalog addition and emitted option ordering. Comparison-mode rerun passes.
+    - docs/cli/07-project-setup.md: fixed the actual contracts failures at CI head 91dcf013585a. Explicit doctor capacity heading prevents flags being attributed to aida add; removed two visible spec IDs and the reserved, unimplemented lane-host flag citation. Capacity/readiness distinction retained.
+
+    Validation:
+    - Launcher j20261108T151726785-2-0: cargo test --profile agent -p aida-core --lib -- project_discipline_pack_matches_master: 1 executed, passed.
+    - Launcher j20261108T151806138-1760296-0: cargo build --profile agent -p aida-cli: passed.
+    - Launcher j20261108T153308658-2-0: update-mode help_surface_matches_golden_snapshot: 1 executed, passed.
+    - Launcher j20261108T160859000-2025859-0: snapshot comparison WITHOUT update mode: 1 executed, passed.
+    - Full verify-manual.py against rebuilt CLI: all checks pass (85-command completeness, spec-ID leakage, reflection of 14 surface-changing specs, subcommands, flags).
+    - tests/test_verify_manual.py: 13 passed. Static manual flags, glossary generator --check against rebuilt CLI, template hooks, documentation links, tracked documentation paths, all discipline mirror byte comparisons, and git diff --check passed.
+
+    Initial snapshot job j20261108T151714688-2-0 timed out at 900 seconds without executing tests. Retried with AIDA_CARGO_TIMEOUT=3600 and passed after 19m07s compilation. Runner flagged overlay-stale on completed jobs; executed tests/build still exited zero. untested=false.
+
+    make sync-templates/check-templates were not invoked because their recipes directly run cargo run, prohibited in this lane. Copied the changed mirror from its master, compared all discipline mirrors, and executed the real Rust mirror guard through the launcher. Codegraph callers failed with unable to open database file; inspected source with rg. MCP comment attempt failed with Transport closed; this CLI comment is the durable handoff.
+
+    No remaining blockers for this CI-fix slice. Full-story placement/SSH/idempotency, unified remote visibility, grant issuer, circulation and script retirement remain later slices per A4/A5. No commit/push/PR creation/queue done/pr ship/review record performed. Existing punt/hold signals were not cleared. Host launcher owns commit and publication after exit.
+  created_at: 2026-11-08T16:09:49.678687106Z
+  modified_at: 2026-11-08T16:09:49.678687106Z
+  session_id: 01a1bbbb051d
 history:
 - id: 01a1b91a-2eb5-7142-b252-8d3eb8d49b14
   author: joe
