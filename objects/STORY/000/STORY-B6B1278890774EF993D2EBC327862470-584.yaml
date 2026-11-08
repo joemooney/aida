@@ -18,7 +18,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-08T02:58:08.667753563Z
-modified_at: 2026-11-08T07:44:40.575456582Z
+modified_at: 2026-11-08T07:44:44.256628696Z
 req_type: Story
 tags:
 - area:human-wait
@@ -225,6 +225,25 @@ comments:
   content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: Prior F2-F8 are addressed in the sketch, but the completing PR title (F1) is still live, so merging would close STORY-2661 with AC1-4 unimplemented; the revised protocol also has no reachable automatic resume path, slot accounting that conflicts with the pid-keyed slot code, no seat-to-host intent transport, and no decision for contained Claude lanes.. It was punted on: design-fork: Revised sketch addresses review findings F1-F8 at docs/plans/2026-11-08-story-2661-park-resume-sketch.md. Binding advisor ruling requires signoff before code. Please review new resume-watch service, canonical question binding, fresh-parent/manual overnight recovery limit, 60s stop deadline and initial uncontained-only Codex scope until PR2. F1 metadata repair requires host publication with recorded non-completing Refs subject; this native seat cannot rewrite commits or PR metadata. No findings disputed; edits remain uncommitted. Punt remains publication veto pending advisor decision.. No triage reason was given.'
   created_at: 2026-11-08T07:44:40.575454230Z
   modified_at: 2026-11-08T07:44:40.575454230Z
+  session_id: 01a1b8be-8170-7fb2-89ab-ecb4c6eee98c
+  harness_version: 2.1.319 (Claude Code)
+- id: 01a1ba1d-e676-7033-a268-38a14c503f72
+  author: joe
+  content: |-
+    REVIEW FINDINGS TO ADDRESS (STORY-2661):
+    Verdict: CHANGES REQUESTED
+    Reviewed commit: 48811d8051db
+    Recorded: 2026-11-08T07:40:29.165131039+00:00
+    Findings:
+    1. R1 BLOCKER (prior F1 not fixed): PR #3666 title still ends '(STORY-2661)' with a feat prefix. pr_ship.rs:355-372 takes completion ids from the title (only a trailing '(Refs ...)' short-circuits, :339-346), and db_reconcile auto-bump treats NeedsAttention as merge-eligible, so a squash merge completes the story with AC1-4 unimplemented, contradicting sketch:10-12. Only commit 48811d8051d uses Refs; the host published it without retitling. Fix: retitle the PR to '[AI:codex] docs(plans): sketch park-on-ask resume-on-answer (Refs STORY-2661)'. The seat cannot do this, so host/advisor metadata action is required.
+    2. R2 Automatic resume has no reachable path in the documented deployment (AC2). sketch:130-135 installs resume-watch as a per-user systemd service holding a project singleton lock; sketch:166 admits a systemd start has no grant (consistent with seat_occupancy/runtime.rs:711, systemd/cron has no validated dispatch grant); sketch:164 allows launching only under a live delegator parent. A delegator-launched instance cannot hold the singleton while the systemd unit does, and the sketch defines no way to hand it a parent. So every answer becomes blocked_authority and needs an operator at a terminal running 'aida lane resume'. Park admission (sketch:142) checks only heartbeat and registration, not launch authority, so parks are accepted that cannot auto-resume. State plainly whether the initial slice is manual-resume only, in which case AC2 stays open, or define how the singleton service obtains a valid parent; make admission and aida awaiting report the no-authority state up front.
+    3. R3 Running-slot accounting across the watcher contradicts the slot and systemd mechanics. sketch:148-150 says the child supervisor retains slot accounting until each child exits even if the watch process restarts. The existing slot (standalone_implementer.rs:497-503 acquire_slot) is keyed to the holder's pid and start identity, one per process, so a single watcher pid cannot hold one slot per child and a restart makes its slots look dead while children still run, allowing cap overrun. The sketch also never sets KillMode: default control-group kills resumed children on restart (compare KillMode=process at schedule_driver.rs:439; mailbox_wake_run.rs:755 has Restart=on-failure with none). Define per-child slot ownership that survives watcher restart and the unit's KillMode, and add a test that restarts the watcher with a live child.
+    4. R4 Seat-to-host park intent transport is undefined. sketch:86-89 says the lane creates a durable park intent and the host binds it, but names no CLI surface for the blocking ask and no writable path. Seats are sandboxed from the main project's runtime state where sketch:33-36 keeps records (the same sketch notes a contained answerer lacks that access, and native seats declare publication through a host-bound file: native_publication.rs:44-50). Name the command or flag, the intent file and binding-token scheme (native_publication.rs's Binding is the precedent), how the launcher learns of it mid-run, and how the seat writes the canonical question under containment; add a test from a contained or native seat.
+    5. R5 Park admission for contained Claude, the repo's actual Claude posture, is left undecided. .aida/config.toml:99-103 keeps Claude AIDA-contained. sketch:29 says legacy Claude admission 'must be assessed separately' but sketch:220 then says 'use existing admitted resume posture' without doing that assessment. session.rs:8132-8137 has a contained headless Claude resume path, contained.rs:1598-1605 refuses resume on the shared wrapper because the session lives in a private config dir, and session.rs stage_resume_transcript copies transcripts for the lease-tree case. Answer per launch path whether a default contained Claude lane can park, where its transcript lives after exit, and whether AC3's Claude adapter is reachable in the initial slice; the advisor ruling asked this question for Codex and it applies equally here.
+    6. R6 minor: the stop deadline is not implementable or fair as written. sketch:97-99 triggers stop_timeout when a lane starts another model turn after the receipt but names no per-vendor detection for Claude, Codex or AGY stream output. The 60-second bound also runs from park acceptance, so a cooperative lane whose final response takes over 60 seconds is killed and counted as an AC1 failure. Specify detection per vendor and measure from the end of the tool call or use a turn-aware bound.
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
+  created_at: 2026-11-08T07:44:44.150181611Z
+  modified_at: 2026-11-08T07:44:44.150181611Z
   session_id: 01a1b8be-8170-7fb2-89ab-ecb4c6eee98c
   harness_version: 2.1.319 (Claude Code)
 history:
