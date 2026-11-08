@@ -23,7 +23,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-07T20:45:16.684639200Z
-modified_at: 2026-11-08T07:09:38.287549199Z
+modified_at: 2026-11-08T07:17:13.429181153Z
 req_type: Task
 relationships:
 - rel_type: Child
@@ -144,6 +144,12 @@ history:
   - field_name: status
     old_value: InProgress
     new_value: NeedsAttention
+- id: 01a1ba04-b6e5-7713-a180-2be4e1a09274
+  author: joe
+  timestamp: 2026-11-08T07:17:13.573052755Z
+  session_id: 01a1ba02c754
+  harness_version: 2.1.319 (Claude Code)
+  changes: []
 filed_at:
   code_sha: e278eeb1d8f95dadba5f6e9d8bfd41d10eac52c3
   branch: main
@@ -159,3 +165,11 @@ attention_reason:
   lean: Allow explicitly scoped legacy observation policy in the shared reader, while keeping destructive reclaim and admitted/refused generation handling fail closed.
   raised_by: implementer
   raised_at: 2026-11-08T07:03:38.472381885Z
+failure_reason:
+  phase: reviewer
+  phase_index: 3
+  kind: verdict:request-changes
+  detail: 'Part B routes all four named probes through ownership::reader and the ratchet entries are gone, and the hot-path filter from finding 4 landed for the two scope matchers. But prior blockers 1-3 are unchanged at this head: lease_retained holds every Unknown, and aida own show --compare shows 22/22 holder-bearing leased/reviewing records Unknown, 0 Dead. The advisor ruling the implementer punted for is not on the spec. CI still queued; Part A is out of scope for this Refs slice.'
+  recovery_hint: address the review findings, move TASK-3420 back to In Progress, and clear the PR hold only after approval
+  shelved_by: reviewer
+  shelved_at: 2026-11-08T07:17:13.429181153Z
