@@ -4879,6 +4879,7 @@ mod tests {
 // trace:BUG-1635 | ai:claude
 // trace:TASK-1480 | ai:claude
 // trace:TASK-1512 | ai:claude
+// trace:TASK-1214 | ai:codex
 #[derive(clap::Parser, Debug)]
 #[clap(name = "history")]
 pub(crate) struct HistoryArgs {
@@ -4898,7 +4899,7 @@ pub(crate) struct HistoryArgs {
     /// priority is Added/PriorityChange; otherwise empty. Comment is a count/summary,
     /// never a body. No literal newlines; max 4096 bytes, rendered line 16384 bytes.
     // trace:STORY-1477 | ai:codex
-    #[clap(long, global = true, conflicts_with_all = ["fields", "oneline", "full", "events", "kind"])]
+    #[clap(long, global = true, conflicts_with_all = ["fields", "oneline", "full", "kind"])]
     pub template: Option<String>,
 
     /// Ordered event columns: commit,date,author,id,type,priority,title,kind,event,
@@ -4936,16 +4937,6 @@ pub(crate) struct HistoryArgs {
     #[clap(long, global = true)]
     pub max_commits: Option<usize>,
 
-    /// Switch to per-event chronological mode — each commit's YAML
-    /// diff is decoded into one event line per change (status
-    /// transitions, comments added, tags edited, etc.). Slower than
-    /// digest because it shells out to `git show` per file per
-    /// commit; useful for inspecting one requirement closely with
-    /// --id, less useful as a general overview. `--full` is the more
-    /// discoverable spelling of the same mode.
-    #[clap(long, hide = true, global = true)]
-    pub events: bool,
-
     /// The complete edit/event trail — every status change, comment,
     /// tag edit, and field edit, chronological newest-first.
     /// Equivalent to the `events` subcommand, but composes naturally
@@ -4965,7 +4956,7 @@ pub(crate) struct HistoryArgs {
     #[clap(
         long,
         conflicts_with_all = [
-            "spec", "id", "full", "events", "timeline", "status_changes",
+            "spec", "id", "full", "timeline", "status_changes",
             "comments", "oneline", "shipped", "to", "from", "opened",
             "template", "fields", "kind",
         ]
@@ -5163,10 +5154,11 @@ pub(crate) struct HistoryArgs {
     /// windowing and event-selector flags are refused rather than
     /// silently producing partial totals that read as complete.
     // trace:STORY-1478 | ai:claude — plain `//` keeps the marker out of `--help`.
+    // trace:TASK-1214 | ai:codex — conflicts name arguments, not retired mode flags.
     #[clap(
         long,
         conflicts_with_all = [
-            "full", "events", "status_changes", "comments", "oneline",
+            "full", "status_changes", "comments", "oneline",
             "shipped", "opened", "to", "from", "kind", "since", "until",
             "max_commits", "type", "author", "all", "archived", "deferred",
         ]
@@ -5209,7 +5201,6 @@ fn run_history(
                     force,
                     limit,
                     max_commits,
-                    events,
                     full,
                     digest,
                     id,
@@ -5283,7 +5274,7 @@ fn run_history(
                             ("a SPEC-ID", spec.is_some() || id.is_some()),
                             ("--template", template.is_some()),
                             ("--fields", fields.is_some()),
-                            ("--full", *full || *events),
+                            ("--full", *full),
                             ("--digest", *digest),
                             ("--status-changes", *status_changes),
                             ("--kind", kind.is_some()),
@@ -5410,15 +5401,9 @@ fn run_history(
                         // trace:STORY-1664 | ai:claude — the list views returned above.
                         Some(_) => unreachable!(),
                         None => {
-                            if *events {
-                                note_hidden_alias(
-                                    concat!("aida history ", "--events"),
-                                    "aida history events",
-                                );
-                            }
                             // trace:TASK-1480 | ai:claude — `--full` is the
                             // discoverable, non-hidden spelling of the same mode.
-                            *events || *full || matches!(layout, Some(Layout::Full)) || custom_feed
+                            *full || matches!(layout, Some(Layout::Full)) || custom_feed
                         }
                     };
                     // TASK-1512: `--to`/`--from` take the status spellings `aida
