@@ -3,12 +3,12 @@ spec_id: BUG-b6b1278890774ef993d2ebc327862470-262
 agreed_id: BUG-2497
 title: Conformance harness fixture omits chatgpt.com, so a ChatGPT-auth Codex run fails before any check and reports C0-C4 unknown
 description: 'scripts/containment/conformance.py fixture_policy (line 656) sets contained.allowed_hosts to api.openai.com and allow.fixture.test only. The production template (aida-core/templates/contained.toml) also allows chatgpt.com. Operator run 2026-11-08 (~/.aida/conformance-codex-aida-1794150336): contained Codex ChatGPT grant issued, turn.failed ''workspace routing discovery failed'' after 10 reconnects, launch exit 1, all checks unknown, verdict null. Fix: add chatgpt.com to the fixture list and nothing else; the auth hosts stay excluded per the STORY-2593 credential boundary, and deny.fixture.test must stay denied so C3 remains meaningful. Also make the harness report a vendor that never completed a turn as an explicit invalid-run result rather than rc=0 with unknown checks. Acceptance: with the fix a ChatGPT-auth run completes a turn and C0-C4 report real results. Critical path for STORY-2593, STORY-2238, TASK-2688/2689/2690, BUG-2446/2447/2448.'
-status: InProgress
+status: NeedsAttention
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-08T15:10:55.149158862Z
-modified_at: 2026-11-08T15:32:24.073934044Z
+modified_at: 2026-11-08T15:35:25.742053732Z
 req_type: Bug
 comments:
 - id: 01a1bbba-ccf5-7ed1-8f16-63c4fa05dc0a
@@ -88,6 +88,14 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a1bbcc-d52e-7e00-91cf-22f5f22dae2e
+  author: joe
+  timestamp: 2026-11-08T15:35:25.742080698Z
+  session_id: 01a1bbca0337
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: NeedsAttention
 filed_at:
   code_sha: 48e3865999b9c0e8acbc7899ce92ccd43191a3c7
   branch: main
@@ -97,3 +105,9 @@ filed_at:
   vendor: claude
   session: 01a1bbab-762f-7cd2-8a36-4ea9f209afce
   harness_version: 2.1.319 (Claude Code)
+attention_reason:
+  category: blocked-dependency
+  detail: 'Round 2 finding 2 remains unverified: BUG-2497 acceptance requires a live ChatGPT-auth --boundary aida turn and report.json run_status plus C0-C4 statuses. This standalone native implementer seat has no operator terminal for production roster/role entry and must not synthesize one or clear managed identity. Findings 1, 3 and 4 are addressed in uncommitted edits; all 54 Python conformance tests pass. No finding is disputed. Operator must run the harness from this branch and attach evidence, or advisor must explicitly split live acceptance into a follow-up. Existing merge hold remains; no completion or live containment credit claimed.'
+  lean: Retain the code and test edits for host review; obtain operator evidence before completing BUG-2497, or have the advisor explicitly authorize a follow-up split.
+  raised_by: implementer
+  raised_at: 2026-11-08T15:35:25.742053732Z
