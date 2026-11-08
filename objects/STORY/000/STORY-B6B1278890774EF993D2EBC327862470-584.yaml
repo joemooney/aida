@@ -18,7 +18,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-08T02:58:08.667753563Z
-modified_at: 2026-11-08T09:09:08.181447979Z
+modified_at: 2026-11-08T09:25:23.660753742Z
 req_type: Story
 tags:
 - area:human-wait
@@ -518,6 +518,12 @@ history:
   - field_name: status
     old_value: InProgress
     new_value: NeedsAttention
+- id: 01a1ba7a-0e9e-76b2-b4f2-545cc2e0465b
+  author: joe
+  timestamp: 2026-11-08T09:25:23.742498147Z
+  session_id: 01a1ba77fe57
+  harness_version: 2.1.319 (Claude Code)
+  changes: []
 filed_at:
   code_sha: dc41ee8da2f44f88178936fc1a8e6cb7168a3de7
   branch: main
@@ -532,3 +538,11 @@ attention_reason:
   detail: 'Sketch revised for R14-R17; no findings disputed. Binding ruling requires advisor signoff before code, including manual-only resume, AGY exclusion until verified mid-turn capture/admission, per-generation transport clearing and post-exit recovery ownership. R1 remains host/advisor metadata repair: retitle PR #3666 exactly to [AI:codex] docs(plans): sketch park-on-ask resume-on-answer (Refs STORY-2661). Seat edits cannot fix PR metadata; retain publication veto pending signoff and title repair.'
   raised_by: implementer
   raised_at: 2026-11-08T09:09:08.181447979Z
+failure_reason:
+  phase: reviewer
+  phase_index: 3
+  kind: verdict:request-changes
+  detail: R14-R17 are fixed in the sketch, but the PR title still completes STORY-2661 at squash merge with AC1-4 unimplemented (R1), and the resume predicate and doctor heal conflict with parked lanes (R18, R19).
+  recovery_hint: address the review findings, move STORY-2661 back to In Progress, and clear the PR hold only after approval
+  shelved_by: reviewer
+  shelved_at: 2026-11-08T09:25:23.660753742Z
