@@ -1357,8 +1357,9 @@ pub(crate) fn handle_release(
             Ok(state) => anyhow::bail!(
                 "{change_noun} #{n}'s checks did not pass ({state:?}) — not merging or releasing."
             ),
+            // trace:BUG-2492 | ai:codex — holds and red CI are refusals too.
             Err(e) => anyhow::bail!(
-                "could not watch {change_noun} #{n}'s checks via forge provider: {e:#}"
+                "{change_noun} #{n}'s checks did not pass — not merging or releasing: {e:#}"
             ),
         }
 
