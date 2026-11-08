@@ -122,7 +122,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-08T00:35:39.542243859Z
-modified_at: 2026-11-08T03:19:05.934425756Z
+modified_at: 2026-11-08T03:20:35.895082562Z
 req_type: Story
 comments:
 - id: 01a1b895-7815-78d0-ba38-bbf9fe9f1533
@@ -132,6 +132,13 @@ comments:
   modified_at: 2026-11-08T00:36:05.781119956Z
   session_id: 01a1b848-940b-7bd2-8acd-52e428b182b8
   harness_version: 2.1.319 (Claude Code)
+- id: 01a1b92c-1337-75e1-893e-49522af3199d
+  author: dirtlab
+  content: 'Completed approved S0 documentation slice in docs/cli/02-specs.md. Uses the latest operator dash-separated aida-feedback producer/receipt families; documents explicit manual admission, orphan commit-tree metadata without store trailers, guarded initial publication, exact-ref/tip home inspection, store-independent envelope validation, and manual operation-marker recovery/outcome reporting. Native legacy transport is explicitly unchanged; S1-S4 remain outstanding. Validation: executed both documented shell recipes against an isolated temporary bare remote, checked orphan metadata/exact blob/only intended ref, conflicting publication refusal and wrong expected-tip refusal; all passed. git diff --check passed. No Cargo run: documentation-only change. Codegraph executable unavailable; inspected validator source directly. Edits left uncommitted for host publication.'
+  created_at: 2026-11-08T03:20:35.895082562Z
+  modified_at: 2026-11-08T03:20:35.895082562Z
+  session_id: 01a1b92a6e74
+  harness_version: codex-cli 0.167.0
 history:
 - id: 01a1b92a-7413-7ed3-b4ef-34036b0ecfba
   author: aida-session-start
