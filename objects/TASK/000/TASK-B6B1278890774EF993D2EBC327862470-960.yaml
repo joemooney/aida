@@ -8,7 +8,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-07T23:39:41.575597Z
-modified_at: 2026-11-08T23:10:39.322693267Z
+modified_at: 2026-11-08T23:11:03.057547988Z
 req_type: Task
 relationships:
 - rel_type: Child
@@ -820,6 +820,12 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a1bd6d-fa8f-7261-b7cd-7182c5b27b87
+  author: dirtlab
+  timestamp: 2026-11-08T23:11:03.823519363Z
+  session_id: 01a1bd6d94d5
+  harness_version: codex-cli 0.167.0
+  changes: []
 test_coverage_notes: 'Launcher cargo test --profile agent -p aida-cli-lib --lib -- command_registry passed: 32 executed tests, zero failures (j20261108T210750606-2-0). Launcher cargo check --profile agent -p aida-cli --no-default-features passed (j20261108T211040978-2-0). Initial test compilation found two missing module imports; corrected before the passing run. 15 crate-split Python fixtures pass. Glob ratchet against HEAD passes at 164; ExecContext 1239 sites, store-writer 3387 sinks / 293 mappings, portability guard, and all 84 CI gate classifications pass. All 15 adapters preserve every non-import Rust token; touched-file rustfmt and git diff --check pass. Full make check-ci-fast not run because gates invoke Cargo outside this seat’s required launcher; host validation remains. Codegraph unavailable (doctor confirmed), used rg/source inspection. Edits uncommitted for host publication.'
 implementation_summary: 'Tooling slice landed in PR #3644; prior 34-command import batch is open as #3695. This subsequent Refs slice removes 15 remaining root crate globs from command adapters outside current open-PR footprints: commit, criteria, exposition, harvest, help_catalog, mandate, metrics_cmd, monitor_contract, notify, reconstitute, regen, shift, user_alias, watch and wiki. Required bindings now use explicit imports (including DatabaseBackend traits); unused globs are removed. Baseline shrinks from 179 to 164. All non-import Rust tokens match HEAD. Remaining import batches and lib_part1..6 dissolution remain outstanding; TASK-3428 stays In Progress.'
 filed_at:
