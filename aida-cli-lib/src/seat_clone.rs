@@ -2412,7 +2412,7 @@ const UNPUSHED_COUNT_SCRIPT: &str = concat!(
     // trace:BUG-2384 | ai:codex
     // Only the clean-tree probe requests this exemption; salvage keeps all refs.
     // trace:BUG-2491 | ai:codex
-    "ignore_slice=0\ncase $1 in ignore-slice) ignore_slice=1; shift;; keep-slice) shift;; esac\n",
+    "ignore_slice=0\nslice_only=0\ncase $1 in ignore-slice) ignore_slice=1; shift;; keep-slice) shift;; slice-only) slice_only=1; shift;; esac\n",
     "base=$1\nshift\nshipped=''\n",
     "if [ \"$#\" -gt 0 ]; then\n",
     "  objects=$(printf '%s\\n' \"$@\" | git cat-file --batch-check='%(objectname) %(objecttype)') || exit 1\n",
@@ -2424,7 +2424,15 @@ const UNPUSHED_COUNT_SCRIPT: &str = concat!(
     "  n=$(printf '%s\\n' \"$shipped\" | git rev-list --stdin --count HEAD --not --remotes=origin ${base:+\"$base\"}) || exit 1\n",
     "  if [ \"$n\" -eq 0 ]; then refs=$(printf '%s\\n' \"$refs\" | awk 'index($0, \"refs/tags/slice-\") != 1') || exit 1; fi\n",
     "fi\n",
-    "total=$(printf '%s\\n' \"$head\" \"$refs\" \"$shipped\" | git rev-list --stdin --count $s --not --remotes=origin ${base:+\"$base\"}) || exit 1\n",
+    // Teardown only needs salvage for checkpoint history not already published.
+    // trace:BUG-2491 | ai:codex
+    "if [ \"$slice_only\" -eq 1 ]; then\n",
+    "  refs=$(printf '%s\\n' \"$refs\" | awk 'index($0, \"refs/tags/slice-\") == 1') || exit 1\n",
+    "  head=''; s=''\nfi\n",
+    // Blank lines terminate rev-list stdin, including an unborn HEAD.
+    // trace:BUG-2491 | ai:codex
+    "revisions=$(printf '%s\\n' \"$head\" \"$refs\" \"$shipped\" | sed '/^$/d') || exit 1\n",
+    "total=$(printf '%s\\n' \"$revisions\" | git rev-list --stdin --count $s --not --remotes=origin ${base:+\"$base\"}) || exit 1\n",
     "printf '%s\\n' \"$total\"\n",
     "if [ \"$total\" -eq 0 ]; then exit 0; fi\n",
     "if ! git symbolic-ref -q HEAD >/dev/null && git rev-parse -q --verify HEAD >/dev/null; then\n",
@@ -3869,19 +3877,31 @@ fn destroy_inner(
                 });
             }
         }
-        // Exempt checkpoint refs still need a recoverable bundle before removal.
+        // Unpublished checkpoint history needs a recoverable bundle before removal.
         // Probe inside the same sandbox; unreadable evidence retains the clone.
         // trace:BUG-2491 | ai:codex
-        let checkpoints = match probe_run(
-            clone,
-            main,
-            &[
-                "-c".as_ref(),
-                "git for-each-ref --format='%(refname)' 'refs/tags/slice-*'".as_ref(),
-            ],
-            "sh",
-        ) {
-            Ok(refs) => !refs.trim().is_empty(),
+        let base = pinned_base(main, clone).unwrap_or_default();
+        let checkpoint_args: Vec<&std::ffi::OsStr> = [
+            "-c".as_ref(),
+            UNPUSHED_COUNT_SCRIPT.as_ref(),
+            "aida-seat-checkpoints".as_ref(),
+            "slice-only".as_ref(),
+            base.as_ref(),
+        ]
+        .into_iter()
+        .chain(
+            shipped
+                .iter()
+                .filter(|oid| is_full_oid(oid))
+                .map(|oid| oid.as_ref()),
+        )
+        .collect();
+        let checkpoints = match probe_run(clone, main, &checkpoint_args, "sh").and_then(|out| {
+            parse_unpushed_count(&out)
+                .map(|(n, _)| n > 0)
+                .ok_or_else(|| "invalid checkpoint count".to_string())
+        }) {
+            Ok(unpublished) => unpublished,
             Err(why) => {
                 return Ok(Destroyed::Kept {
                     reason: format!("checkpoint refs could not be read ({why})"),

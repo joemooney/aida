@@ -2669,7 +2669,7 @@ fn bug_2491_pushed_slice_tags_are_not_unpushed_work() {
     );
     let checkpoint = git_ok(&clone, &["rev-parse", "HEAD"]);
     seat_commit(&clone, "later-published.txt");
-    git_ok(&clone, &["push", "-q", "origin", "HEAD:refs/heads/feat"]);
+    seat_git(&clone, &["push", "-q", "origin", "HEAD:refs/heads/feat"]);
     // The finished lane can remain behind the published branch head.
     git_ok(&clone, &["reset", "--hard", &checkpoint]);
     // Model a finished lane with stale tracking refs; only the host can refresh.
@@ -2744,4 +2744,59 @@ fn bug_2491_pushed_slice_tags_are_not_unpushed_work() {
         Destroyed::Removed { .. }
     ));
     assert!(!clone.exists());
+}
+
+// trace:BUG-2491 | ai:codex
+#[cfg(target_os = "linux")]
+#[test]
+fn bug_2491_unborn_head_keeps_private_branch_work() {
+    if crate::test_env::run_path_isolated_test() {
+        return;
+    }
+    assert!(bwrap_live(), "requires live sandbox coverage");
+    let fx = fixture();
+    let clone = seat(&fx, "unborn-head", "b2491c0ffee2");
+    seat_commit(&clone, "private.txt");
+    seat_git(&clone, &["checkout", "--orphan", "unborn"]);
+    seat_git(&clone, &["rm", "-rf", "."]);
+    let facts = known(probe(&fx.main, &clone));
+    assert!(facts.dirty.is_empty(), "{facts:?}");
+    assert_eq!(facts.head, None, "{facts:?}");
+    assert_eq!(facts.unpushed, 1, "{facts:?}");
+    assert!(
+        facts
+            .unpushed_refs
+            .iter()
+            .any(|r| r.contains("refs/heads/feat")),
+        "{facts:?}"
+    );
+    assert!(matches!(
+        destroy(&fx.main, &clone, DestroyMode::KeepUnshipped, None).unwrap(),
+        Destroyed::Kept { .. }
+    ));
+    assert!(clone.exists());
+}
+
+// trace:BUG-2491 | ai:codex
+#[cfg(target_os = "linux")]
+#[test]
+fn bug_2491_published_checkpoints_need_no_salvage() {
+    if crate::test_env::run_path_isolated_test() {
+        return;
+    }
+    assert!(bwrap_live(), "requires live sandbox coverage");
+    let fx = fixture();
+    let clone = seat(&fx, "published-checkpoints", "b2491c0ffee3");
+    seat_commit(&clone, "published.txt");
+    seat_git(&clone, &["tag", "slice-00-r1"]);
+    seat_git(&clone, &["push", "-q", "origin", "HEAD:refs/heads/feat"]);
+    assert!(matches!(
+        destroy(&fx.main, &clone, DestroyMode::KeepUnshipped, None).unwrap(),
+        Destroyed::Removed { .. }
+    ));
+    assert!(!fx
+        .main
+        .join(".aida/salvage")
+        .join(clone.file_name().unwrap())
+        .exists());
 }
