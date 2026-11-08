@@ -18,7 +18,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-08T02:58:08.667753563Z
-modified_at: 2026-11-08T08:17:27.269989952Z
+modified_at: 2026-11-08T08:17:29.715350447Z
 req_type: Story
 tags:
 - area:human-wait
@@ -251,6 +251,24 @@ comments:
   content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: R2-R6 are addressed and the sketch is close, but the PR title still completes STORY-2661 at merge with AC1-4 unimplemented (R1); three smaller protocol gaps and one stale test item remain.. It was punted on: design-fork: Revised sketch addresses R2-R6 at docs/plans/2026-11-08-story-2661-park-resume-sketch.md; no findings disputed. Binding ruling requires advisor signoff before code. Proposed initial manual-resume-only scope leaves AC2 open; approve observer-only service, per-child slot reservations, seat-bound intent transport, legacy contained Claude transcript retention and deadline policy. R1 remains blocked on host/advisor retitling PR #3666 to [AI:codex] docs(plans): sketch park-on-ask resume-on-answer (Refs STORY-2661); a Refs commit alone is insufficient. Native seat cannot edit PR metadata or commit. Docs validation git diff --check passed; no runtime tests for sketch-only changes. Publication veto remains pending advisor decision.. No triage reason was given.'
   created_at: 2026-11-08T08:17:27.269988667Z
   modified_at: 2026-11-08T08:17:27.269988667Z
+  session_id: 01a1b8be-8170-7fb2-89ab-ecb4c6eee98c
+  harness_version: 2.1.319 (Claude Code)
+- id: 01a1ba3b-e3f1-7161-8540-bf8a83b37ae5
+  author: joe
+  content: |-
+    REVIEW FINDINGS TO ADDRESS (STORY-2661):
+    Verdict: CHANGES REQUESTED
+    Reviewed commit: 12ea0f7b294c
+    Recorded: 2026-11-08T08:14:26.970380414+00:00
+    Findings:
+    1. R1 BLOCKER (still open from rounds 1 and 2): PR #3666 title is still '[AI:codex] feat: Park on ask, resume on answer... (STORY-2661)'. aida-cli-lib/src/pr_ship.rs:339-372 only short-circuits on a trailing '(Refs ...)' and otherwise takes completion ids from the title, so a squash merge completes the story with AC1-4 unimplemented, contradicting sketch:13 and 15-17. Commit 12ea0f7b294 uses Refs but the title governs. Fix: retitle to exactly '[AI:codex] docs(plans): sketch park-on-ask resume-on-answer (Refs STORY-2661)'. The seat cannot do this; it needs host/advisor metadata action, and no further seat commit will clear it.
+    2. R7 Stop deadline has no start when the receipt is late. sketch:115-117 lets the ask command return pending/failure guidance after 10 seconds while the host may accept later, but sketch:133-134 starts the 60-second deadline only 'after the ask command returns its accepted receipt', and the fallback at sketch:141-143 still keys on acceptance plus a marker for a command that already returned non-accepted. The sketch also never says whether a lane told 'pending' must stop or may keep working. A lane that gets pending and continues editing has an accepted park with no deadline, an AC1 escape. Define the lane's required behaviour on pending, start the deadline at host acceptance when the ask already returned, and add the late-acceptance case to the test list at sketch:316-334.
+    3. R8 The original lane's slot is discounted before exit. sketch:128-130 and 149 say the slot stays occupied until verified exit, but sketch:201-202 disables final-result discounting only for the managed resume. In acquire_slot_with (aida-cli-lib/src/standalone_implementer.rs:536-541) a live launcher whose log has a final result and whose slot is not waiting is not counted. A parked lane's cooperative stop normally emits that final result, so during the stop window, up to the 65-second bound, the cap can be overrun by exactly the park path. Extend the rule to park_requested launches, for example via the existing mark_slot_waiting (standalone_implementer.rs:480), and add the admission-at-cap test during park_requested.
+    4. R9 The manual recovery command as written cannot launch. sketch:233-234 tells the operator to run 'aida role enter <role>' then 'aida lane resume', but role_cmd_args.rs:39 documents that omitting --delegate-seat means the session cannot delegate seats, and issue_launch_child revalidates delegation (launch/grant.rs:8-18). Followed literally, every overnight recovery ends in the sketch's own blocked_authority state. Name the exact command in the sketch and in the aida awaiting recovery text, including --delegate-seat for the wait's owner_role (for example --delegate-seat implementer).
+    5. R10 cosmetic: the test list at sketch:326 still says 'stopped/stale service and registration refusal', left from the prior design. 'Registration' now appears nowhere else, and sketch:187-192 makes the observer optional with no admission role, so that test contradicts the manual-only scope. Replace it with a test that parking and aida awaiting work with the observer stopped.
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
+  created_at: 2026-11-08T08:17:29.585881063Z
+  modified_at: 2026-11-08T08:17:29.585881063Z
   session_id: 01a1b8be-8170-7fb2-89ab-ecb4c6eee98c
   harness_version: 2.1.319 (Claude Code)
 history:
