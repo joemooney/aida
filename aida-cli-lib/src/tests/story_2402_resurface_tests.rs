@@ -436,22 +436,31 @@ fn story2402_s5_recur_conditions_resurface_and_manual_routes() {
     let note = dir.path().join("handoff.txt");
     std::fs::write(&note, "Review the dependency after merge.").unwrap();
     let before = backend.get_requirement(&row.id).unwrap().unwrap();
-    assert!(crate::session_misc::session_handoff_seat(
-        Some(note.to_str().unwrap()),
-        false,
-        Some("advisor"),
-        false,
-        false,
-        Some("if it stalls"),
-        Some(id),
-        None
-    )
-    .is_err());
-    assert_eq!(
-        serde_yaml::to_value(&before).unwrap(),
-        serde_yaml::to_value(backend.get_requirement(&row.id).unwrap().unwrap()).unwrap()
-    );
-    assert!(!dir.path().join(".aida/handoff/advisor/latest.md").exists());
+    // Manual handoffs must reject missing/blank reasons before touching either
+    // the note or the canonical spec, just like free-text triggers.
+    // trace:STORY-2402 | ai:codex
+    for (trigger, reason) in [
+        ("if it stalls", None),
+        ("manual:joe", None),
+        ("manual:joe", Some("  ")),
+    ] {
+        assert!(crate::session_misc::session_handoff_seat(
+            Some(note.to_str().unwrap()),
+            false,
+            Some("advisor"),
+            false,
+            false,
+            Some(trigger),
+            Some(id),
+            reason
+        )
+        .is_err());
+        assert_eq!(
+            serde_yaml::to_value(&before).unwrap(),
+            serde_yaml::to_value(backend.get_requirement(&row.id).unwrap().unwrap()).unwrap()
+        );
+        assert!(!dir.path().join(".aida/handoff/advisor/latest.md").exists());
+    }
     std::fs::write(&note, "x".repeat(crate::seat_rotation::HANDOFF_MAX_BYTES)).unwrap();
     assert!(crate::session_misc::session_handoff_seat(
         Some(note.to_str().unwrap()),
