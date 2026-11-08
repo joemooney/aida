@@ -25,7 +25,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-07T19:45:35.836129088Z
-modified_at: 2026-11-08T18:06:08.046945344Z
+modified_at: 2026-11-08T18:06:17.895424147Z
 req_type: Story
 tags:
 - docs:impacted
@@ -311,6 +311,23 @@ comments:
   content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: Round-4 findings 1,3,4,5 are fixed and the sandbox ruling is followed, but the cold-target fix does not work: the gate''s first step compiles the debug profile while only the agent profile is seeded, so normal lanes still time out and publish ungated (AC1). Reviewed from source only; CI had not started at this head.. No triage reason was given.'
   created_at: 2026-11-08T18:06:08.046941682Z
   modified_at: 2026-11-08T18:06:08.046941682Z
+  session_id: 01a1b9af-8230-75d2-82f8-667491cc010a
+  harness_version: 2.1.319 (Claude Code)
+- id: 01a1bc56-f4c8-7a21-9349-5e6dada693c8
+  author: joe
+  content: |-
+    REVIEW FINDINGS TO ADDRESS (STORY-2640):
+    Verdict: CHANGES REQUESTED
+    Reviewed commit: c142d7f3d2c8
+    Recorded: 2026-11-08T17:55:55.177267907+00:00
+    Findings:
+    1. [major] AC1 still defeated on cold targets; prior finding 2 is not fixed. run_seeded_fast_gate now calls seed_lane_target, but SEED_PROFILES is only ["agent"] (seat_target_seed.rs:36) and overlay_for snapshots SEED_PROFILES[0]. The first fast-tier gate is 'Check aida-cli without default features', 'cargo check -p aida-cli --no-default-features' (ci.yml:180, ci-gate-tiers.toml:69), which uses the dev profile in target/debug; check-ci-gates.py only rewrites cargo test to the agent profile. A fresh lane therefore has no debug artifacts, spends the fixed 300s there (the implementer logged rc=124 on an empty target), and gate_result maps that to skipped(timeout) with no repair, so the ratchets this story targets never run and the head publishes. fast_gate_dispatch_receives_lane_target_seed cannot catch this: its fake make tests target/agent/fixture. Fix: order or split the no-build gates ahead of cargo check, or run the gate's cargo check against a seeded profile, and add a test that a cold lane still reaches the later gates.
+    2. [minor] gate_result (lane_fast_gate.rs:354-361) treats every rc except 0 and TIMEOUT_RC as a source failure. REFUSED_RC 126 (make not on PATH, target directory or overlay wrap refused, lane_job.rs run_one_timed refuse) and STOPPED_RC 137 (killed by a signal such as OOM, or child lost) therefore become fast_gate=fail, spend the one repair round on a seat that cannot fix them, and publish or queue rework reporting a gate failure when no gate ran. The timeout case was already made skipped for this reason. Map 126 and 137 to skipped(<reason>) with no repair, and test both.
+    3. [minor] native_error (lane_fast_gate.rs:389-405) returns false when the seat cannot be snapshotted, for example a gate that dirties the tree ('seat changed during fast gate' then a dirty snapshot). In run_vendor_headless_to_exit (session.rs publish_native) and run_queue_resume_to_exit (queue_cmd.rs) publication is then skipped and the vendor's success status returns, so the lane exits 0 with committed work unpublished and only fast_gate=skipped(infrastructure) as a clue. The round-3 review rejected swallowing native publication failures. Return an error or notify the advisor on this path, and test it.
+    4. [cosmetic] lane_fast_gate.rs keeps production items after the test module (finish_publication, published, record_marker, reconciled_import, check_import after line 1445), as does lane_job.rs (fast_gate_home, fast_gate_namespaces, check_fast_gate_results), which clippy::items_after_test_module flags. blocks_review also keeps an unused _head parameter that every caller and test still supplies.
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
+  created_at: 2026-11-08T18:06:17.800242398Z
+  modified_at: 2026-11-08T18:06:17.800242398Z
   session_id: 01a1b9af-8230-75d2-82f8-667491cc010a
   harness_version: 2.1.319 (Claude Code)
 history:
