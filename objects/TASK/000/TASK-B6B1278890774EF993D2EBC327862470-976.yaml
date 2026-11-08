@@ -14,13 +14,21 @@ priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-11-08T05:40:05.712381122Z
-modified_at: 2026-11-08T05:40:05.712381122Z
+modified_at: 2026-11-08T19:22:14.896589040Z
 req_type: Task
 tags:
 - carried-from:STORY-2653
 - finding-hash:baba6040
 - from-review:PR-3656
 - kind:carried-forward
+comments:
+- id: 01a1bc9c-7df0-7220-81bf-a571fc10f762
+  author: joe
+  content: 'Advisor ruling: accepted, cosmetic: rare terminal lines, no functional effect.'
+  created_at: 2026-11-08T19:22:14.896589040Z
+  modified_at: 2026-11-08T19:22:14.896589040Z
+  session_id: 01a1bc93-77a0-7740-8b03-df4e3e8d1df5
+  harness_version: 2.1.319 (Claude Code)
 history:
 - id: 01a1b9bb-3f87-7343-bcde-2ab9155aefa7
   author: joe
