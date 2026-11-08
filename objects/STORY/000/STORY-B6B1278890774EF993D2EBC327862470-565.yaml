@@ -23,12 +23,12 @@ description: |
   2. `--fix` writes only user-level files (agents.toml, codex config section, cargo config) and is idempotent.
   3. `aida queue work --no-human` refuses an uncontained launch on a host whose containment checks fail.
   4. FAQ-151 is replaced by a pointer to the command plus the remaining manual steps (ssh, clone, login).
-status: NeedsAttention
+status: Approved
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-07T19:59:40.192574Z
-modified_at: 2026-11-08T21:42:01.996920746Z
+modified_at: 2026-11-08T22:10:02.844676651Z
 req_type: Story
 comments:
 - id: 01a1b86c-54fb-76f0-b04b-0ed1c7c07cfb
@@ -261,6 +261,12 @@ comments:
   modified_at: 2026-11-08T20:48:05.067732972Z
   session_id: 01a1bc93-77a0-7740-8b03-df4e3e8d1df5
   harness_version: 2.1.319 (Claude Code)
+- id: 01a1bd36-1ddc-7ce3-a936-290d654936a1
+  author: joe
+  content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: Rework findings 1-5 are addressed and AC2-AC4 are met in source, but CI lib-1 is red from this PR''s raw current_exe() ratchet violation, and the new binary row treats the promoted live dev binary as a release install.. No triage reason was given.'
+  created_at: 2026-11-08T22:10:02.844675085Z
+  modified_at: 2026-11-08T22:10:02.844675085Z
+  session_id: 20abb7c3-8f9b-4a5e-b326-404921f3b450
 history:
 - id: 01a1b85d-3f02-70c2-a82d-cefccf97dc04
   author: aida-session-start
@@ -530,6 +536,14 @@ history:
   - field_name: status
     old_value: InProgress
     new_value: NeedsAttention
+- id: 01a1bd36-1ddc-7ce3-a936-28f00312082f
+  author: joe
+  timestamp: 2026-11-08T22:10:02.844664825Z
+  session_id: 20abb7c3-8f9b-4a5e-b326-404921f3b450
+  changes:
+  - field_name: status
+    old_value: NeedsAttention
+    new_value: Approved
 filed_at:
   code_sha: 7a18c0d52a6a4e0822befd4c810cfed16b04b74c
   branch: main
@@ -539,11 +553,3 @@ filed_at:
   vendor: claude
   session: 01a1b76b-2fe7-7dd2-88d0-356fc8d96d04
   harness_version: 2.1.319 (Claude Code)
-failure_reason:
-  phase: reviewer
-  phase_index: 3
-  kind: verdict:request-changes
-  detail: Rework findings 1-5 are addressed and AC2-AC4 are met in source, but CI lib-1 is red from this PR's raw current_exe() ratchet violation, and the new binary row treats the promoted live dev binary as a release install.
-  recovery_hint: address the review findings, move STORY-2642 back to In Progress, and clear the PR hold only after approval
-  shelved_by: reviewer
-  shelved_at: 2026-11-08T21:42:01.996920746Z
