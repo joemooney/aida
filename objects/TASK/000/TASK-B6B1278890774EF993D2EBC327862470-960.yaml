@@ -3,137 +3,127 @@ spec_id: TASK-b6b1278890774ef993d2ebc327862470-960
 agreed_id: TASK-3428
 title: 'Crate-split PR4: explicit imports instead of use crate::* in non-in-flight files, a glob-import ratchet, dissolve lib_part1..6.rs, and relocate-ledger-paths.py'
 description: 'Per SPIKE-713 deep dive section 7 row 4 and advisor rulings 3 and 8 (2026-11-07). Acceptance: (1) replace use crate::*; with explicit imports in every file not owned by an in-flight spec (section 7 list; about 85 of 104), no behavior change; (2) a ratchet (same shape as scripts/check-exec-context.py) forbids new glob crate imports, wired into make check-ci-fast and CI gates; (3) lib_part1..6.rs (lib.rs:772-777) dissolved into real modules, closing the TASK-1538 condition; (4) scripts/relocate-ledger-paths.py rewrites path-keyed ledgers (including scripts/portability-allowlist.txt and exec-context-legacy.json) for pure moves, with a test; (5) make check-ci-fast green. Split into two PRs if over ~40 files.'
-status: NeedsAttention
+status: Approved
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
-created_at: 2026-11-07 23:39:41.575597+00:00
-modified_at: 2026-11-08 01:39:36.789180+00:00
+created_at: 2026-11-07T23:39:41.575597Z
+modified_at: 2026-11-08T03:25:54.583819791Z
 req_type: Task
 relationships:
 - rel_type: Child
   target_id: 01a13390-7b59-7570-a329-3542db098e83
-  created_at: 2026-11-07 23:40:02.824548+00:00
+  created_at: 2026-11-07T23:40:02.824548Z
 comments:
 - id: 01a1b86d-007a-75d3-ae18-4d12eea38c3f
   author: joe
   content: 'ADVISOR AMENDMENT 2026-11-07 17:45 MST: the glob-import count is 170 files (82 _cmd/_args), not 104; skip files in open PRs (#3619''s 52-file footprint especially). Ship as 3-4 PRs of <=50 files. The ledger relocation script must include a totality check that no stale old path remains.'
-  created_at: 2026-11-07 23:51:53.722930+00:00
-  modified_at: 2026-11-07 23:51:53.722930+00:00
+  created_at: 2026-11-07T23:51:53.722930Z
+  modified_at: 2026-11-07T23:51:53.722930Z
   session_id: 01a1b848-940b-7bd2-8acd-52e428b182b8
   harness_version: 2.1.319 (Claude Code)
 - id: 01a1b888-e92f-7f30-bae5-259e91411623
   author: joe
   content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: Refs slice (AC2 ratchet + AC4 relocation helper) is close, but the glob ratchet''s --base shrink check is per-path and so rejects the very pure moves relocate-ledger-paths.py exists for, and the advisor-required totality check is missing. AC1/AC3 deferred to later slices; AC5 unverified (CI still running at review time).. No triage reason was given.'
-  created_at: 2026-11-08 00:22:22.767125+00:00
-  modified_at: 2026-11-08 00:22:22.767125+00:00
+  created_at: 2026-11-08T00:22:22.767125Z
+  modified_at: 2026-11-08T00:22:22.767125Z
   session_id: 01a1b848-940b-7bd2-8acd-52e428b182b8
   harness_version: 2.1.319 (Claude Code)
 - id: 01a1b889-0356-7a63-958c-942ee8785329
   author: joe
-  content: 'REVIEW FINDINGS TO ADDRESS (PR #3644):
-
+  content: |-
+    REVIEW FINDINGS TO ADDRESS (PR #3644):
     Verdict: CHANGES REQUESTED
-
     Reviewed commit: 334b8fbd4284
-
     Recorded: 2026-11-08T00:07:51.139697456+00:00
-
     Findings:
-
-    1. MAJOR scripts/check-crate-globs.py:51-52: the --base growth check ''Counter(expected) - Counter(json.loads(old.stdout))'' is keyed by file path, so after relocate-ledger-paths.py moves old.rs->new.rs the ledger gains a new ''new.rs'' key that the base lacks and CI fails with ''crate glob baseline may only shrink relative to base''. That blocks the pure moves this tooling is meant to enable (AC3, dissolving lib_part1..6.rs). check-exec-context.py check_growth (lines 322-341) avoids this by comparing relocation-invariant fingerprints. Fix: compare the total (sum) or match retirements against additions so a pure rename passes and real growth still fails, and add a test for it.
-
-    2. MAJOR scripts/relocate-ledger-paths.py:41-49 (advisor amendment 2026-11-07 on TASK-3428): there''s no totality check. After the rewrite nothing verifies that no stale reference to OLD remains as a path key in the three ledgers (portability-allowlist ''\tOLD:'' rows, exec-context ''OLD:'' site keys, crate-globs ''OLD'' key). Add a post-rewrite assertion that fails when any old-path key or row survives, plus a test.
-
+    1. MAJOR scripts/check-crate-globs.py:51-52: the --base growth check 'Counter(expected) - Counter(json.loads(old.stdout))' is keyed by file path, so after relocate-ledger-paths.py moves old.rs->new.rs the ledger gains a new 'new.rs' key that the base lacks and CI fails with 'crate glob baseline may only shrink relative to base'. That blocks the pure moves this tooling is meant to enable (AC3, dissolving lib_part1..6.rs). check-exec-context.py check_growth (lines 322-341) avoids this by comparing relocation-invariant fingerprints. Fix: compare the total (sum) or match retirements against additions so a pure rename passes and real growth still fails, and add a test for it.
+    2. MAJOR scripts/relocate-ledger-paths.py:41-49 (advisor amendment 2026-11-07 on TASK-3428): there's no totality check. After the rewrite nothing verifies that no stale reference to OLD remains as a path key in the three ledgers (portability-allowlist '\tOLD:' rows, exec-context 'OLD:' site keys, crate-globs 'OLD' key). Add a post-rewrite assertion that fails when any old-path key or row survives, plus a test.
     3. MINOR tests/test_crate_split_tools.py: main() --base logic in check-crate-globs.py (shrink-only, bootstrap when base lacks ledger, refuse an unreadable base ledger) has no test. Only count() and check() are exercised. Add git-fixture tests covering a shrink, a growth refusal, a bootstrap, and a pure relocation (see the first finding).
-
-    4. COSMETIC scripts/ci-gate-tiers.toml:174-175: a dangling ''# trace:TASK-3428 | ai:codex'' line sits alone at EOF, after the skip-reasons section, with nothing under it. Move it beside the ''Crate glob import ratchet'' = ''fast'' entry at line 131, or delete it.
-
-    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.'
-  created_at: 2026-11-08 00:22:29.462101+00:00
-  modified_at: 2026-11-08 00:22:29.462101+00:00
+    4. COSMETIC scripts/ci-gate-tiers.toml:174-175: a dangling '# trace:TASK-3428 | ai:codex' line sits alone at EOF, after the skip-reasons section, with nothing under it. Move it beside the 'Crate glob import ratchet' = 'fast' entry at line 131, or delete it.
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
+  created_at: 2026-11-08T00:22:29.462101Z
+  modified_at: 2026-11-08T00:22:29.462101Z
   session_id: 01a1b848-940b-7bd2-8acd-52e428b182b8
   harness_version: 2.1.319 (Claude Code)
 - id: 01a1b88d-d3cf-7710-959a-4daa2bb86a20
   author: joe
   content: 'Round 2 review fixes prepared for PR #3644: --base glob growth compares total import counts so pure moves pass; relocation validates all rewritten ledgers for stale old-path keys/rows before any write; Git fixtures cover shrink, growth, bootstrap, pure relocation plus post-move growth, unreadable/malformed/missing base refusal; injected incomplete rewrites verify each ledger refuses without partial writes. Moved CI tier trace next to its entry. Validation: all 12 Python unittests pass; repository check-crate-globs.py --base HEAD passes (220 imports); all 81 CI Build gates classified; git diff --check passes. No Rust changes; full fast suite and CI rerun not performed. Merge hold remains active. Native seat leaves edits uncommitted for host publication; AC1/AC3 remain later slices.'
-  created_at: 2026-11-08 00:27:44.975190+00:00
-  modified_at: 2026-11-08 00:27:44.975190+00:00
+  created_at: 2026-11-08T00:27:44.975190Z
+  modified_at: 2026-11-08T00:27:44.975190Z
   session_id: 01a1b88bb2d1
 - id: 01a1b890-db73-7363-9c0f-8e90cf727d52
   author: dirtlab
   content: 'Addressed all four PR #3644 review findings in four uncommitted files: scripts/check-crate-globs.py, scripts/relocate-ledger-paths.py, scripts/ci-gate-tiers.toml, tests/test_crate_split_tools.py. Historical glob debt now uses a total ceiling so pure moves pass and real growth refuses. Totality checks all rewritten ledgers before writes; regression fixtures inject missed rewrites in each ledger. Added --base Git fixtures for shrink, growth, bootstrap, relocation, missing ref and unreadable existing ledger. Validation: 31 Python tests, glob ratchet, classification audit, diff hygiene and launcher no-default-features cargo check pass. Full fast gate remains unverified under runner-only constraints. Refs publication declaration recorded; host must commit/publish this partial tooling slice. AC1/AC3 remain future work; no queue completion performed.'
-  created_at: 2026-11-08 00:31:03.539094+00:00
-  modified_at: 2026-11-08 00:31:03.539094+00:00
+  created_at: 2026-11-08T00:31:03.539094Z
+  modified_at: 2026-11-08T00:31:03.539094Z
   session_id: 01a1b88cd5b1
   harness_version: codex-cli 0.167.0
 - id: 01a1b8c4-4b2f-7f51-b4a2-480767b1cd5a
   author: joe
   content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: Round-1 findings all fixed (sum-based glob growth, stale-path totality check, git-fixture tests, tier trace moved). Still blocking: relocate-ledger-paths.py rewrites portability-allowlist rows to the new path, and CI''s base-pinned check-portability-growth.py compares (rule, path:content) sets, so a relocated row counts as new allowlist growth and fails CI. Pure moves of files with allowlist rows (AC4''s purpose) stay blocked. AC1/AC3 deferred to later Refs slices; AC5 unverified because CI at 488ca58 is still pending.. No triage reason was given.'
-  created_at: 2026-11-08 01:27:14.479469+00:00
-  modified_at: 2026-11-08 01:27:14.479469+00:00
+  created_at: 2026-11-08T01:27:14.479469Z
+  modified_at: 2026-11-08T01:27:14.479469Z
   session_id: 01a1b8be-8170-7fb2-89ab-ecb4c6eee98c
   harness_version: 2.1.319 (Claude Code)
 - id: 01a1b8c4-61f2-78b2-95d8-239bbe48c7ca
   author: joe
-  content: 'REVIEW FINDINGS TO ADDRESS (PR #3644):
-
+  content: |-
+    REVIEW FINDINGS TO ADDRESS (PR #3644):
     Verdict: CHANGES REQUESTED
-
     Reviewed commit: 488ca588c423
-
     Recorded: 2026-11-08T00:31:18.455563758+00:00
-
     Findings:
-
-    1. MAJOR scripts/relocate-ledger-paths.py:33 + scripts/check-portability-growth.py:44-47: rewrite() changes ''<rule>\told.rs:<content>'' to ''<rule>\tnew.rs:<content>'', but the growth check (which CI runs from the BASE revision, ci.yml:896-900) treats every entry in current-minus-base as an addition and fails with ''portability rules are unchanged, so the allowlist may not grow''. The portability ledger is relocated correctly but always fails CI, so the helper does not enable pure moves for any file with allowlist rows (e.g. dispatch_health_ps.rs has 16, agent_registry.rs has 12). Fix: make check-portability-growth.py relocation-tolerant the same way check-exec-context.py check_growth does (match additions to retirements by (rule, content) fingerprint, ignoring the path prefix, so multiplicity cannot grow). Note that CI pins the base copy of the growth script, so the fix applies to PRs after this one merges. Add a fixture test that runs the growth check on a relocated allowlist and
-    confirms it passes, plus one where it grows and confirms it fails.
-
-    2. MINOR scripts/check-crate-globs.py:52-54: the --base check compares only the total import count, so one PR can retire a glob in a.rs and add a new ''use crate::*;'' in b.rs and still pass, and the gate then prints ''zero additions''. AC2 says the ratchet forbids new glob crate imports. Tighten it: allow a new path key only when it takes over a retired key''s exact count (or matches a git rename, git diff -M), otherwise refuse. Add a test for the swap case.
-
+    1. MAJOR scripts/relocate-ledger-paths.py:33 + scripts/check-portability-growth.py:44-47: rewrite() changes '<rule>\told.rs:<content>' to '<rule>\tnew.rs:<content>', but the growth check (which CI runs from the BASE revision, ci.yml:896-900) treats every entry in current-minus-base as an addition and fails with 'portability rules are unchanged, so the allowlist may not grow'. The portability ledger is relocated correctly but always fails CI, so the helper does not enable pure moves for any file with allowlist rows (e.g. dispatch_health_ps.rs has 16, agent_registry.rs has 12). Fix: make check-portability-growth.py relocation-tolerant the same way check-exec-context.py check_growth does (match additions to retirements by (rule, content) fingerprint, ignoring the path prefix, so multiplicity cannot grow). Note that CI pins the base copy of the growth script, so the fix applies to PRs after this one merges. Add a fixture test that runs the growth check on a relocated allowlist and confirms it passes, plus one where it grows and confirms it fails.
+    2. MINOR scripts/check-crate-globs.py:52-54: the --base check compares only the total import count, so one PR can retire a glob in a.rs and add a new 'use crate::*;' in b.rs and still pass, and the gate then prints 'zero additions'. AC2 says the ratchet forbids new glob crate imports. Tighten it: allow a new path key only when it takes over a retired key's exact count (or matches a git rename, git diff -M), otherwise refuse. Add a test for the swap case.
     3. UNVERIFIED AC5: CI at 488ca588c423 had not started (CI pending, merge-hold-gate pending) at review time, and the implementer notes say make check-ci-fast was interrupted. The next round needs a green CI run at the reworked head.
-
-    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.'
-  created_at: 2026-11-08 01:27:20.306963+00:00
-  modified_at: 2026-11-08 01:27:20.306963+00:00
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
+  created_at: 2026-11-08T01:27:20.306963Z
+  modified_at: 2026-11-08T01:27:20.306963Z
   session_id: 01a1b8be-8170-7fb2-89ab-ecb4c6eee98c
   harness_version: 2.1.319 (Claude Code)
 - id: 01a1b8ca-8f8d-7912-922a-e471f08d63f7
   author: joe
-  content: 'Round 3 PR #3644 rework prepared for host publication: portability growth now matches added and retired rows by (rule, exact content), ignoring only path and preserving multiplicity; glob growth now requires a same-count Git-detected rename for new path keys, with per-path shrink checks for retained keys. Added unrelated swap/borrow refusal and relocated-portability growth fixtures; helper documents staging and base-pinned verifier rollout. Validation: 15 crate-split Python tests pass; portability growth shell suite passes; all 81 CI gates classified; git diff --check passes. Partial fast run passed GitLab smoke, classifier inventory, planner, mail-wake, containment conformance, store mutation gates, then stopped because test-speed fixtures invoke cargo metadata blocked by native-seat guard. Direct TUI seam Cargo invocation was discovered and interrupted; no pass claimed. Full make check-ci-fast and reworked-head CI remain unverified; merge hold retained. No Rust source changed.
-    Lane check submitted as j20261108T013049596-6643-0 (cargo check --profile agent -p aida-cli --no-default-features); result pending at note time. Native publication declaration recorded: [AI:codex] fix(ratchets): validate ledger moves without admitting new debt (Refs TASK-3428). Edits remain uncommitted for the host; AC1/AC3 remain later slices.'
-  created_at: 2026-11-08 01:34:05.197585+00:00
-  modified_at: 2026-11-08 01:34:05.197585+00:00
+  content: 'Round 3 PR #3644 rework prepared for host publication: portability growth now matches added and retired rows by (rule, exact content), ignoring only path and preserving multiplicity; glob growth now requires a same-count Git-detected rename for new path keys, with per-path shrink checks for retained keys. Added unrelated swap/borrow refusal and relocated-portability growth fixtures; helper documents staging and base-pinned verifier rollout. Validation: 15 crate-split Python tests pass; portability growth shell suite passes; all 81 CI gates classified; git diff --check passes. Partial fast run passed GitLab smoke, classifier inventory, planner, mail-wake, containment conformance, store mutation gates, then stopped because test-speed fixtures invoke cargo metadata blocked by native-seat guard. Direct TUI seam Cargo invocation was discovered and interrupted; no pass claimed. Full make check-ci-fast and reworked-head CI remain unverified; merge hold retained. No Rust source changed. Lane check submitted as j20261108T013049596-6643-0 (cargo check --profile agent -p aida-cli --no-default-features); result pending at note time. Native publication declaration recorded: [AI:codex] fix(ratchets): validate ledger moves without admitting new debt (Refs TASK-3428). Edits remain uncommitted for the host; AC1/AC3 remain later slices.'
+  created_at: 2026-11-08T01:34:05.197585Z
+  modified_at: 2026-11-08T01:34:05.197585Z
   session_id: 01a1b8c5953a
+- id: 01a1b930-f017-7d72-8098-d87067b68e8a
+  author: joe
+  content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: Round-2 findings fixed (relocation-tolerant portability growth by (rule,content); glob growth needs same-count Git rename; swap/copy fixtures). Still blocking: tests/test_crate_split_tools.py:184 has an unguarded py ''git commit'' that the git auto-maintenance ratchet rejected at 488ca58 (line 143 then) and will reject again at this head. AC1/AC3 deferred to later Refs slices; AC5 unmet (CI at f4adb8b not started; prior CI red).. No triage reason was given.'
+  created_at: 2026-11-08T03:25:54.583818167Z
+  modified_at: 2026-11-08T03:25:54.583818167Z
+  session_id: 01a1b8be-8170-7fb2-89ab-ecb4c6eee98c
+  harness_version: 2.1.319 (Claude Code)
 history:
 - id: 01a1b862-2e0b-7a50-a4d0-25097c707b57
   author: joe
-  timestamp: 2026-11-07 23:40:04.491422+00:00
+  timestamp: 2026-11-07T23:40:04.491422Z
   session_id: 01a1b848-940b-7bd2-8acd-52e428b182b8
   harness_version: 2.1.319 (Claude Code)
   changes: []
 - id: 01a1b874-df3d-71f2-9b04-29b442e402a9
   author: aida-session-start
-  timestamp: 2026-11-08 00:00:29.501490+00:00
+  timestamp: 2026-11-08T00:00:29.501490Z
   changes:
   - field_name: status
     old_value: Approved
     new_value: InProgress
 - id: 01a1b875-21d7-7561-80f1-3932d9107fc3
   author: dirtlab
-  timestamp: 2026-11-08 00:00:46.551281+00:00
+  timestamp: 2026-11-08T00:00:46.551281Z
   session_id: 01a1b874d943
   harness_version: codex-cli 0.167.0
   changes: []
 - id: 01a1b877-3a2b-7153-967d-8c564811a822
   author: dirtlab
-  timestamp: 2026-11-08 00:03:03.851451+00:00
+  timestamp: 2026-11-08T00:03:03.851451Z
   session_id: 01a1b874d943
   harness_version: codex-cli 0.167.0
   changes: []
 - id: 01a1b87b-9cdf-77e0-a1e4-db0c76c46bb4
   author: aida-orchestrator
-  timestamp: 2026-11-08 00:07:51.263680+00:00
+  timestamp: 2026-11-08T00:07:51.263680Z
   session_id: 01a1b8795f05
   harness_version: 2.1.319 (Claude Code)
   changes:
@@ -142,7 +132,7 @@ history:
     new_value: NeedsAttention
 - id: 01a1b888-e92f-7f30-bae5-258031f6a65a
   author: joe
-  timestamp: 2026-11-08 00:22:22.767108+00:00
+  timestamp: 2026-11-08T00:22:22.767108Z
   session_id: 01a1b848-940b-7bd2-8acd-52e428b182b8
   harness_version: 2.1.319 (Claude Code)
   changes:
@@ -151,33 +141,33 @@ history:
     new_value: Approved
 - id: 01a1b88b-be6a-7010-92ad-2c738e89ce8e
   author: aida-session-start
-  timestamp: 2026-11-08 00:25:28.426395+00:00
+  timestamp: 2026-11-08T00:25:28.426395Z
   changes:
   - field_name: status
     old_value: Approved
     new_value: InProgress
 - id: 01a1b88c-dfc3-74d3-b2bb-9b7e904c3022
   author: aida-session-start
-  timestamp: 2026-11-08 00:26:42.499894+00:00
+  timestamp: 2026-11-08T00:26:42.499894Z
   changes:
   - field_name: status
     old_value: Approved
     new_value: InProgress
 - id: 01a1b88d-2df1-7ab3-b2b0-f1f5a6b91905
   author: dirtlab
-  timestamp: 2026-11-08 00:27:02.513949+00:00
+  timestamp: 2026-11-08T00:27:02.513949Z
   session_id: 01a1b88cd5b1
   harness_version: codex-cli 0.167.0
   changes: []
 - id: 01a1b890-ce2f-7791-a6e5-7089e72740a9
   author: dirtlab
-  timestamp: 2026-11-08 00:31:00.143678+00:00
+  timestamp: 2026-11-08T00:31:00.143678Z
   session_id: 01a1b88cd5b1
   harness_version: codex-cli 0.167.0
   changes: []
 - id: 01a1b891-1664-78e0-8830-56eb53a7006b
   author: aida-orchestrator
-  timestamp: 2026-11-08 00:31:18.628530+00:00
+  timestamp: 2026-11-08T00:31:18.628530Z
   session_id: 01a1b88f6478
   harness_version: 2.1.319 (Claude Code)
   changes:
@@ -186,7 +176,7 @@ history:
     new_value: NeedsAttention
 - id: 01a1b8c4-4b2f-7f51-b4a2-47f5a966b549
   author: joe
-  timestamp: 2026-11-08 01:27:14.479451+00:00
+  timestamp: 2026-11-08T01:27:14.479451Z
   session_id: 01a1b8be-8170-7fb2-89ab-ecb4c6eee98c
   harness_version: 2.1.319 (Claude Code)
   changes:
@@ -195,20 +185,29 @@ history:
     new_value: Approved
 - id: 01a1b8c5-9e88-7813-a2ab-4780d9f1987d
   author: aida-session-start
-  timestamp: 2026-11-08 01:28:41.352760+00:00
+  timestamp: 2026-11-08T01:28:41.352760Z
   changes:
   - field_name: status
     old_value: Approved
     new_value: InProgress
 - id: 01a1b8cf-9ed5-73b1-ad3e-2463f2557f93
   author: aida-orchestrator
-  timestamp: 2026-11-08 01:39:36.789208+00:00
+  timestamp: 2026-11-08T01:39:36.789208Z
   session_id: 01a1b8cdaae1
   harness_version: 2.1.319 (Claude Code)
   changes:
   - field_name: status
     old_value: InProgress
     new_value: NeedsAttention
+- id: 01a1b930-f017-7d72-8098-d86e0209e007
+  author: joe
+  timestamp: 2026-11-08T03:25:54.583806173Z
+  session_id: 01a1b8be-8170-7fb2-89ab-ecb4c6eee98c
+  harness_version: 2.1.319 (Claude Code)
+  changes:
+  - field_name: status
+    old_value: NeedsAttention
+    new_value: Approved
 test_coverage_notes: Four Python unittest fixtures passed; repository glob ratchet with --base HEAD passed (220 imports); CI gate classification audit passed (81 classified); git diff --check passed. make check-ci-fast interrupted after discovering its fast-classified no-default-features gate directly invokes Cargo contrary to this native lane runner-only rule; full fast suite unvalidated. No Rust source changes.
 implementation_summary: 'First split slice prepared: root crate glob baseline and CI/fast gate; byte-identical path-ledger relocation helper for portability, ExecContext and glob ledgers. Refs publication declared. Explicit-import migration and lib_part1..6 module extraction remain outstanding.'
 filed_at:
@@ -220,11 +219,3 @@ filed_at:
   vendor: claude
   session: 01a1b848-940b-7bd2-8acd-52e428b182b8
   harness_version: 2.1.319 (Claude Code)
-failure_reason:
-  phase: reviewer
-  phase_index: 3
-  kind: verdict:request-changes
-  detail: 'Round-2 findings fixed (relocation-tolerant portability growth by (rule,content); glob growth needs same-count Git rename; swap/copy fixtures). Still blocking: tests/test_crate_split_tools.py:184 has an unguarded py ''git commit'' that the git auto-maintenance ratchet rejected at 488ca58 (line 143 then) and will reject again at this head. AC1/AC3 deferred to later Refs slices; AC5 unmet (CI at f4adb8b not started; prior CI red).'
-  recovery_hint: address the review findings, move TASK-3428 back to In Progress, and clear the PR hold only after approval
-  shelved_by: reviewer
-  shelved_at: 2026-11-08 01:39:36.789180+00:00
