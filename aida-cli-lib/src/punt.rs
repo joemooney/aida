@@ -350,10 +350,36 @@ impl PuntSignal {
 /// Path the orchestrator provisions for a spec's punt signal —
 /// `.aida/punt-signals/<spec>.json` under the (main) project root.
 pub fn signal_path(project_root: &Path, spec: &str) -> PathBuf {
-    project_root
-        .join(".aida")
-        .join("punt-signals")
-        .join(format!("{spec}.json"))
+    case_insensitive_signal_path(project_root, "punt-signals", spec)
+}
+
+// Scope admission is ASCII case-insensitive; Linux filenames are not. Reuse
+// existing spellings (including legacy mixed-case origin IDs) on every surface.
+// trace:BUG-2488 | ai:codex
+fn case_insensitive_signal_path(root: &Path, directory: &str, spec: &str) -> PathBuf {
+    let directory = root.join(".aida").join(directory);
+    let name = format!("{spec}.json");
+    let exact = directory.join(&name);
+    if exact.exists() {
+        return exact;
+    }
+    if let Ok(entries) = std::fs::read_dir(&directory) {
+        let mut matches: Vec<_> = entries
+            .flatten()
+            .filter(|entry| {
+                entry
+                    .file_name()
+                    .to_string_lossy()
+                    .eq_ignore_ascii_case(&name)
+            })
+            .map(|entry| entry.path())
+            .collect();
+        matches.sort();
+        if let Some(path) = matches.into_iter().next() {
+            return path;
+        }
+    }
+    exact
 }
 
 /// Write a punt signal file, creating `.aida/punt-signals/` if needed.
@@ -429,10 +455,7 @@ impl HoldSignal {
 /// Path the orchestrator provisions for a spec's PR-hold signal —
 /// `.aida/pr-holds/<spec>.json` under the (main) project root.
 pub fn hold_signal_path(project_root: &Path, spec: &str) -> PathBuf {
-    project_root
-        .join(".aida")
-        .join("pr-holds")
-        .join(format!("{spec}.json"))
+    case_insensitive_signal_path(project_root, "pr-holds", spec)
 }
 
 /// Write a PR-hold signal file, creating `.aida/pr-holds/` if needed.

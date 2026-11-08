@@ -691,7 +691,11 @@ pub(crate) fn apply_seat_signals(cmd: &mut std::process::Command, tree: &Path, s
 /// Reconcile seat-local runtime evidence before publication or lease cleanup.
 // trace:BUG-2488 | ai:codex
 pub(crate) fn reconcile_signals(main: &Path, tree: &Path, spec: &str) -> Result<()> {
-    if main.canonicalize()? == tree.canonicalize()? {
+    // A retired/missing seat has no local evidence to mirror. Host-side signals
+    // still apply, including phase recovery after a child lost its workspace.
+    if main == tree
+        || matches!((main.canonicalize(), tree.canonicalize()), (Ok(a), Ok(b)) if a == b)
+    {
         return Ok(());
     }
     if let Some(signal) = crate::punt::read_signal(&crate::punt::signal_path(tree, spec)) {

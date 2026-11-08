@@ -870,6 +870,86 @@ mod queue_exit_tests {
         }
     }
 
+    // trace:BUG-2488 | ai:codex
+    #[test]
+    fn bug_2488_case_variant_resume_signals_veto_publication_and_reach_driver() {
+        for hold in [false, true] {
+            let main = tempfile::tempdir().unwrap();
+            let tree = tempfile::tempdir().unwrap();
+            let lease_scope = "TASK-b6b1278890774ef993d2ebc327862470-941";
+            let publication_scope = lease_scope.to_ascii_uppercase();
+            crate::standalone_implementer::provision_attempt_signals(
+                main.path(),
+                tree.path(),
+                &publication_scope,
+            )
+            .unwrap();
+            let mut cmd = std::process::Command::new("unused");
+            crate::standalone_implementer::apply_seat_signals(&mut cmd, tree.path(), lease_scope);
+            let key = if hold {
+                crate::punt::HOLD_SIGNAL_FILE_ENV
+            } else {
+                crate::punt::SIGNAL_FILE_ENV
+            };
+            let path = std::path::PathBuf::from(
+                cmd.get_envs().find(|(k, _)| *k == key).unwrap().1.unwrap(),
+            );
+            if hold {
+                crate::punt::write_hold_signal(
+                    &path,
+                    &crate::punt::HoldSignal {
+                        spec: lease_scope.into(),
+                        branch: "resume".into(),
+                        reason: None,
+                        spec_key: None,
+                    },
+                )
+                .unwrap();
+            } else {
+                crate::punt::write_signal(
+                    &path,
+                    &crate::punt::PuntSignal {
+                        spec: lease_scope.into(),
+                        category: aida_core::PuntCategory::DesignFork,
+                        detail: "manual decision".into(),
+                        lean: None,
+                    },
+                )
+                .unwrap();
+            }
+            assert!(publication_veto(tree.path(), &publication_scope));
+            // The public boundary would fail preparing publication in this non-repo
+            // fixture if the case-variant signal were missed.
+            publish_queue_exit(main.path(), tree.path(), &publication_scope, "resume", true)
+                .unwrap();
+            assert!(publication_veto(main.path(), &publication_scope));
+            // The drain reads the mirrored signal using its own spec spelling.
+            if hold {
+                assert!(
+                    crate::punt::read_hold_signal(&crate::punt::hold_signal_path(
+                        main.path(),
+                        &publication_scope
+                    ))
+                    .is_some()
+                );
+            } else {
+                assert!(crate::punt::read_signal(&crate::punt::signal_path(
+                    main.path(),
+                    &publication_scope
+                ))
+                .is_some());
+            }
+            crate::standalone_implementer::provision_attempt_signals(
+                main.path(),
+                tree.path(),
+                &publication_scope,
+            )
+            .unwrap();
+            assert!(!publication_veto(main.path(), lease_scope));
+            assert!(!publication_veto(tree.path(), lease_scope));
+        }
+    }
+
     // trace:STORY-2475 | ai:codex
     #[test]
     fn story_2475_clean_unpushed_publishes_without_no_change_mail() {

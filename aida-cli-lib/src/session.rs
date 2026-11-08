@@ -670,9 +670,10 @@ fn fill_branches(sessions: &mut [SessionMeta]) {
     }
 }
 
+// trace:BUG-2488 | ai:codex — status discovery also observes the host Git boundary.
 fn resolve_branch(cwd: &str) -> Option<String> {
-    let out = std::process::Command::new("git")
-        .args(["-C", cwd, "branch", "--show-current"])
+    let out = aida_core::git_ops::host_git_command(Path::new(cwd))
+        .args(["branch", "--show-current"])
         .output()
         .ok()?;
     if !out.status.success() {
@@ -8277,19 +8278,18 @@ pub(crate) fn spawn_vendor_headless_resume_granted(
             cwd,
         )?;
     }
-    // Resolve before creating the tee or grant so a missing lease fails cleanly.
+    // Unleased resumes remain supported; only leased implementers receive the
+    // seat-local handshake. Resolve aliases before comparing runtime paths.
     // trace:BUG-2488 | ai:codex
     let signal_scope = if crate::canonical_role_name(seat) == "implementer" {
         let main = host_main
             .map(Path::to_path_buf)
             .unwrap_or_else(|| crate::main_worktree_root_from(cwd));
-        Some(
-            crate::list_leases(&main)
-                .into_iter()
-                .find(|l| l.worktree_path == cwd)
-                .context("resumed implementer has no lease for signal transport")?
-                .scope,
-        )
+        let canonical_cwd = cwd.canonicalize()?;
+        crate::list_leases(&main)
+            .into_iter()
+            .find(|l| l.worktree_path.canonicalize().ok().as_ref() == Some(&canonical_cwd))
+            .map(|l| l.scope)
     } else {
         None
     };
@@ -8346,7 +8346,10 @@ pub(crate) fn spawn_vendor_headless_resume_granted(
         .env("AIDA_DRIVE_ROOT", headless_worktree_root())
         .env("PATH", drive_path_env().unwrap_or_default())
         .envs(crate::headless_wait_envs(ceiling_key, &ceiling_value));
-    // trace:BUG-2488 | ai:codex
+    // trace:BUG-2488 | ai:codex — an unleased resume must not inherit a
+    // launcher-only path outside its writable tree.
+    cmd.env_remove(crate::punt::SIGNAL_FILE_ENV)
+        .env_remove(crate::punt::HOLD_SIGNAL_FILE_ENV);
     if let Some(scope) = signal_scope.as_deref() {
         crate::standalone_implementer::apply_seat_signals(&mut cmd, cwd, scope);
     }
