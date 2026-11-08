@@ -8,7 +8,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-07T23:39:41.575597Z
-modified_at: 2026-11-08T09:17:10.410338395Z
+modified_at: 2026-11-08T09:18:18.496920755Z
 req_type: Task
 relationships:
 - rel_type: Child
@@ -195,6 +195,12 @@ comments:
   modified_at: 2026-11-08T09:14:02.063792721Z
   session_id: 01a1b8be-8170-7fb2-89ab-ecb4c6eee98c
   harness_version: 2.1.319 (Claude Code)
+- id: 01a1ba73-9180-7f02-b414-c6310b0dc244
+  author: joe
+  content: 'PR #3644 round 7: addressed both review findings. Pure-move helper now includes aida-cli-lib/src/tests/fixtures/proc_identity_legacy_baseline.json and aida-cli-lib/src/tests/story_2539_vendor_literals.tsv, with pipe-key rewriting and stale-key validation. Extended both all-ledger no-write refusal and content/evidence preservation tests to cover these fixtures. Removed per-change paragraphs from AGENTS.md and OVERVIEW.md; usage/inventory notes remain in helper docstring. Targeted crate-split Python suite: 15 tests passed; git diff --check passed. Native seat leaves edits uncommitted for host publication. Existing merge-hold remains a separate review gate.'
+  created_at: 2026-11-08T09:18:18.496920755Z
+  modified_at: 2026-11-08T09:18:18.496920755Z
+  session_id: 01a1ba71ed90
 history:
 - id: 01a1b862-2e0b-7a50-a4d0-25097c707b57
   author: joe
