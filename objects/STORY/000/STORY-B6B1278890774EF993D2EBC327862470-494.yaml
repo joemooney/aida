@@ -27,7 +27,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-06T16:51:02.535818766Z
-modified_at: 2026-11-08T01:38:48.805474982Z
+modified_at: 2026-11-08T01:42:02.972386324Z
 req_type: Story
 tags:
 - area:advisor
@@ -459,6 +459,12 @@ comments:
   modified_at: 2026-11-08T01:33:47.950329997Z
   session_id: 01a1b8be-8170-7fb2-89ab-ecb4c6eee98c
   harness_version: 2.1.319 (Claude Code)
+- id: 01a1b8d1-d9dc-7b92-90ea-579a1d20991e
+  author: joe
+  content: 'Round 6: implementing the four current review findings. Confirmed controller exit will retain its grant/receipt until reservation reconciliation proves no unresolved or live/ambiguous review descendants remain; tests validate an actual reviewer child after reap, confirmed death, rotation and crash recovery. Automatic launch bootstrap will skip an unused service without a running default deputy; bound advisor descendants will be refused as successors while operator-to-advisor bootstrap remains supported. Removing per-change notes from AGENTS.md and OVERVIEW.md and updating the CLI lifecycle documentation. Targeted story2571 tests submitted to the lane runner.'
+  created_at: 2026-11-08T01:42:02.972386324Z
+  modified_at: 2026-11-08T01:42:02.972386324Z
+  session_id: 01a1b8ced5dc
 history:
 - id: 01a1b1c5-af09-7d01-81e9-eaaac083f223
   author: joe
