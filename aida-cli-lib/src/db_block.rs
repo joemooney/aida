@@ -227,12 +227,19 @@ pub(crate) fn fold_run(run: &[&aida_core::AgreedIdBlock]) -> MergedBlockRow {
 
 /// A block-claim retry's refresh: transport failures stay best-effort (the
 /// push retry decides), but a store-sync refusal (hypothesis evidence or
-/// allocation claims) stops the claim before it commits or publishes.
+/// allocation claims) or pending tracked changes stops the claim before it
+/// commits or publishes.
 // trace:BUG-2162 | ai:claude
 // trace:BUG-2017 | ai:claude
 fn pull_unless_refused(store_path: &std::path::Path, remote: &str, branch: &str) -> Result<()> {
     match aida_core::git_ops::pull_rebase(store_path, remote, branch) {
-        Err(e) if aida_core::git_ops::is_sync_refusal(&e) => Err(e),
+        // trace:BUG-2501 | ai:codex
+        Err(e)
+            if aida_core::git_ops::is_sync_refusal(&e)
+                || aida_core::git_ops::is_dirty_store_refusal(&e) =>
+        {
+            Err(e)
+        }
         _ => Ok(()),
     }
 }
@@ -1863,5 +1870,36 @@ mod task_1930_tests {
             (501, 600),
             "doctor_migrate_counter_scope_in_store must re-read blocks.yaml inside lock and start above fresh highest_end=500"
         );
+    }
+}
+
+// trace:BUG-2501 | ai:codex
+#[cfg(test)]
+mod dirty_pull_tests {
+    #[test]
+    fn bug_2501_block_pull_preserves_dirty_refusal() {
+        let temp = tempfile::tempdir().unwrap();
+        let repo = temp.path();
+        aida_core::git_ops::init(repo).unwrap();
+        aida_core::git_ops::configure_user(repo, "Test", "test@example.com").unwrap();
+        std::fs::write(repo.join("seed"), "seed").unwrap();
+        aida_core::git_ops::add(repo, &["seed"]).unwrap();
+        aida_core::git_ops::commit(repo, "seed").unwrap();
+        let output = crate::test_git::git_command()
+            .arg("-C")
+            .arg(repo)
+            .args(["remote", "add", "origin", "."])
+            .output()
+            .unwrap();
+        assert!(output.status.success());
+        let branch = aida_core::git_ops::current_branch(repo).unwrap();
+        std::fs::write(repo.join("seed"), "dirty").unwrap();
+        let error = super::pull_unless_refused(repo, "origin", &branch).unwrap_err();
+        assert!(
+            aida_core::git_ops::is_dirty_store_refusal(&error),
+            "{error:#}"
+        );
+        assert!(error.to_string().contains("commit or stash"), "{error:#}");
+        assert_eq!(std::fs::read_to_string(repo.join("seed")).unwrap(), "dirty");
     }
 }

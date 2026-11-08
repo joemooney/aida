@@ -72,6 +72,16 @@ fn fixture() -> Fixture {
         "version=1\nauthoritative=true\n",
     )
     .unwrap();
+    // trace:BUG-2501 | ai:codex — satisfy the allocation trust contract
+    // regardless of the lane runner's inherited umask.
+    {
+        use std::os::unix::fs::PermissionsExt;
+        std::fs::set_permissions(
+            common.join(aida_core::allocation_authority::CONFIG_FILE),
+            std::fs::Permissions::from_mode(0o600),
+        )
+        .unwrap();
+    }
     let mut nodes = aida_core::NodeRegistry::default();
     nodes.nodes.push(aida_core::node::NodeRegistryEntry {
         id: "n1".into(),
@@ -267,4 +277,23 @@ fn bug_2194_lock_claim_push_error_is_not_unavailable_after_rollback_error() {
     let before = arm(&fx, Failure::Errored);
     let error = acquire_lock(&fx).unwrap_err();
     assert_preserved(&fx, &before, error, "lock claim (push error)");
+}
+
+// trace:BUG-2501 | ai:codex
+#[test]
+fn bug_2501_dirty_lock_claim_refuses_without_local_only_fallback() {
+    let fx = fixture();
+    let before = aida_core::git_ops::head_sha(&fx.store).unwrap();
+    std::fs::write(fx.store.join("seed.txt"), "pending tracked write\n").unwrap();
+    let error = acquire_lock(&fx).unwrap_err();
+    assert!(
+        aida_core::git_ops::is_dirty_store_refusal(&error),
+        "{error:#}"
+    );
+    assert!(error.to_string().contains("commit or stash"), "{error:#}");
+    assert_eq!(aida_core::git_ops::head_sha(&fx.store).unwrap(), before);
+    assert_eq!(
+        std::fs::read_to_string(fx.store.join("seed.txt")).unwrap(),
+        "pending tracked write\n"
+    );
 }

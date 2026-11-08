@@ -1221,17 +1221,27 @@ pub(crate) fn pull_store_before_id_allocation(
         }
     }
 
-    for attempt in 0..cfg.retry_max {
+    pull_store_allocation_retry(store_path, &branch, cfg.retry_max)
+}
+
+// trace:BUG-2501 | ai:codex
+fn pull_store_allocation_retry(
+    store_path: &std::path::Path,
+    branch: &str,
+    retry_max: usize,
+) -> Result<()> {
+    use aida_core::git_ops;
+    for attempt in 0..retry_max {
         // trace:TASK-1717 | ai:claude — each attempt's rebase, its own
         // cleanup and the collision re-read of the result share one lock
         // window, so the allocator never starts from a store another writer
         // changed between the pull and the check.
         let pulled = aida_core::db::with_store_write_lock(store_path, || {
             anyhow::ensure!(
-                !git_ops::has_changes_checked(store_path)?,
+                !git_ops::has_tracked_changes_checked(store_path)?,
                 "store pull refused: uncommitted changes; commit or stash the store before retrying"
             );
-            git_ops::pull_rebase(store_path, "origin", &branch)?;
+            git_ops::pull_rebase(store_path, "origin", branch)?;
             Ok(ensure_no_spec_id_collisions_canonical(store_path))
         });
         match pulled {
@@ -1242,25 +1252,25 @@ pub(crate) fn pull_store_before_id_allocation(
             // trace:BUG-2017 | ai:claude
             Err(e) if git_ops::is_sync_refusal(&e) => return Err(e),
             // trace:BUG-2501 | ai:codex — dirty state needs operator action, not retries.
-            Err(e) if e.to_string().contains("uncommitted changes") => {
+            Err(e) if git_ops::is_dirty_store_refusal(&e) => {
                 anyhow::bail!(
                     "{}",
                     crate::store_pull_failure_hint(store_path, &e.to_string())
                 );
             }
-            Err(e) if attempt + 1 < cfg.retry_max => {
+            Err(e) if attempt + 1 < retry_max => {
                 eprintln!(
                     "{} store allocation pull failed ({}) — retrying ({}/{})",
                     "Warning:".yellow().bold(),
                     e,
                     attempt + 1,
-                    cfg.retry_max
+                    retry_max
                 );
             }
             Err(e) => {
                 anyhow::bail!(
                     "store allocation pull failed after {} attempt(s): {}",
-                    cfg.retry_max,
+                    retry_max,
                     crate::store_pull_failure_hint(store_path, &e.to_string())
                 );
             }
@@ -1711,7 +1721,7 @@ pub(crate) fn maybe_sync_pull(store_path: &std::path::Path) -> Result<()> {
             )));
         }
         // A failing `git status` is a failed pull, not a clean tree.
-        match aida_core::git_ops::has_changes_checked(store_path) {
+        match aida_core::git_ops::has_tracked_changes_checked(store_path) {
             Ok(true) => return Ok(SyncPull::Dirty),
             Ok(false) => {}
             Err(e) => return Ok(SyncPull::Failed(e)),
@@ -1955,6 +1965,25 @@ pub(crate) fn maybe_spawn_bg_fetch(project_root: &std::path::Path, store_path: &
 #[cfg(test)]
 mod pull_failure_tests {
     use super::*;
+
+    #[test]
+    fn allocation_retry_dirty_store_stops_before_fetch() {
+        let temp = tempfile::tempdir().unwrap();
+        let repo = temp.path();
+        aida_core::git_ops::init(repo).unwrap();
+        aida_core::git_ops::configure_user(repo, "Test", "test@example.com").unwrap();
+        std::fs::write(repo.join("seed"), "seed").unwrap();
+        aida_core::git_ops::add(repo, &["seed"]).unwrap();
+        aida_core::git_ops::commit(repo, "seed").unwrap();
+        std::fs::write(repo.join("seed"), "dirty").unwrap();
+        // No remote exists: any attempt to fetch or exhaust the retry loop
+        // would replace this actionable refusal with a different error.
+        let error = pull_store_allocation_retry(repo, "aida-store", 3).unwrap_err();
+        let message = error.to_string();
+        assert!(message.contains("commit or stash"), "{message}");
+        assert!(!message.contains("after 3 attempt"), "{message}");
+        assert_eq!(std::fs::read_to_string(repo.join("seed")).unwrap(), "dirty");
+    }
 
     #[test]
     fn sync_pull_refuses_dirty_store_and_unreachable_remote() {

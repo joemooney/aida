@@ -402,6 +402,10 @@ fn bug_2501_burndown_residual_refuses_failed_pull() {
         storage.path(),
         &[
             "-c",
+            "maintenance.auto=false",
+            "-c",
+            "gc.auto=0",
+            "-c",
             "user.name=Test",
             "-c",
             "user.email=test@example.com",

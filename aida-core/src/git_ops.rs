@@ -2046,7 +2046,11 @@ pub fn pull_rebase(repo: &Path, remote: &str, branch: &str) -> Result<()> {
         let gate = evidence::preflight(repo, &target)?;
         // trace:BUG-2501 | ai:codex — ordinary pulls use the same structural
         // resolver as explicit auto-merge, including locked retry callers.
-        rebase_auto_merge_onto(repo, &target)?;
+        if let StorePullOutcome::AutoMerged { notes } = rebase_auto_merge_onto(repo, &target)? {
+            for note in notes {
+                eprintln!("store pull: {note}");
+            }
+        }
         gate.map_or(Ok(()), |gate| gate.finalize(repo))
     })
 }
@@ -2106,7 +2110,7 @@ fn rebase_auto_merge_onto(repo: &Path, target: &str) -> Result<StorePullOutcome>
         "store pull refused: rebase already in progress; resolve or abort it before retrying"
     );
     anyhow::ensure!(
-        !has_changes_checked(repo)?,
+        !has_tracked_changes_checked(repo)?,
         "store pull refused: uncommitted changes; commit or stash the store before retrying"
     );
     let result = git(
@@ -2177,7 +2181,7 @@ fn rebase_auto_merge_onto(repo: &Path, target: &str) -> Result<StorePullOutcome>
                 {
                     let _ = git(repo, &["rebase", "--abort"]);
                     anyhow::bail!(
-                    "conflict in non-mergeable path `{path}` — cannot auto-merge; falling back to manual resolution"
+                    "rebase conflict in non-mergeable path `{path}` — cannot auto-merge; falling back to manual resolution"
                 );
                 }
             }
@@ -2658,8 +2662,9 @@ fn resolve_spec_conflict(repo: &Path, path: &str, upstream: bool) -> Result<Stri
         .unwrap_or_else(|| path.to_string());
     let hist_count = merged.history.len();
     let status = merged.effective_status();
+    let policy = if upstream { "upstream" } else { "LWW" };
     Ok(format!(
-        "auto-merged {spec_label}: unioned {hist_count} history entr{}, status LWW={status}",
+        "auto-merged {spec_label}: unioned {hist_count} history entr{}, status {policy}={status}",
         if hist_count == 1 { "y" } else { "ies" }
     ))
 }
@@ -3374,6 +3379,39 @@ pub fn has_changes_checked(repo: &Path) -> Result<bool> {
     );
     refuse_embedded_repos(repo)?;
     Ok(!result.stdout.is_empty())
+}
+
+/// Pull admission ignores untracked files, as Git rebase does. Embedded
+/// repositories and unreadable status still refuse.
+// trace:BUG-2501 | ai:codex
+pub fn has_tracked_changes_checked(repo: &Path) -> Result<bool> {
+    let result = git(
+        repo,
+        &[
+            "status",
+            "--porcelain",
+            "--untracked-files=no",
+            "--ignore-submodules=all",
+        ],
+    )?;
+    anyhow::ensure!(
+        result.success,
+        "git status failed in {}: {}",
+        repo.display(),
+        result.stderr.trim()
+    );
+    refuse_embedded_repos(repo)?;
+    Ok(!result.stdout.is_empty())
+}
+
+/// Pending tracked writes need operator action, never an offline fallback.
+// trace:BUG-2501 | ai:codex
+pub fn is_dirty_store_refusal(error: &anyhow::Error) -> bool {
+    error.chain().any(|cause| {
+        cause
+            .to_string()
+            .contains("store pull refused: uncommitted changes")
+    })
 }
 
 // ---------------------------------------------------------------------------
@@ -10387,6 +10425,12 @@ mod tests {
             .any(|c| c.id == remote.comments[0].id));
         assert!(merged.comments.iter().any(|c| c.id == local.comments[0].id));
         assert!(!has_changes_checked(&second).unwrap());
+        // Untracked host metadata must not disable coordination refreshes.
+        std::fs::create_dir_all(second.join(".aida")).unwrap();
+        std::fs::write(second.join(".aida/node.toml"), "local metadata").unwrap();
+        pull_rebase(&second, "origin", "aida-store").unwrap();
+        pull_rebase_auto_merge(&second, "origin", "aida-store").unwrap();
+        assert!(second.join(".aida/node.toml").exists());
         // Both pull entry points refuse staged and unstaged pending writes,
         // even when the operator enables Git autostashing.
         assert!(
