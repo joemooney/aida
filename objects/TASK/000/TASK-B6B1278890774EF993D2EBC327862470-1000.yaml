@@ -14,7 +14,7 @@ priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-11-08T14:08:44.698534484Z
-modified_at: 2026-11-08T15:26:29.036861220Z
+modified_at: 2026-11-08T15:26:34.763173342Z
 req_type: Task
 tags:
 - carried-from:TASK-3463
@@ -26,6 +26,14 @@ relationships:
   target_id: 01a1b9ba-4d81-7e60-bb92-919bf9dec5cd
   created_at: 2026-11-08T15:26:29.036857380Z
   created_by: joe
+comments:
+- id: 01a1bbc4-bb0b-7c30-bd43-8dcb5324038f
+  author: joe
+  content: 'Advisor 2026-11-08, per the operator''s 2026-10-28 one-time ruling on non-blocking findings: accepted. Stale path in an internal testing note.'
+  created_at: 2026-11-08T15:26:34.763173342Z
+  modified_at: 2026-11-08T15:26:34.763173342Z
+  session_id: 01a1bbab-762f-7cd2-8a36-4ea9f209afce
+  harness_version: 2.1.319 (Claude Code)
 history:
 - id: 01a1bba6-1d95-7640-aea9-13b165ce0885
   author: joe
