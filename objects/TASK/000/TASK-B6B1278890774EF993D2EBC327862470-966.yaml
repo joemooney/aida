@@ -6,12 +6,12 @@ description: |
   Non-blocking note from the approved PR-3504 review (STORY-2480): process() (aida-cli-lib/src/ci_relay.rs:1019) skips an unverified latest-attempt result without saying so. A SHA whose result falls outside the newest-32 revalidation window keeps a pending native status until someone runs `aida intent ci read --attempt N --sha S` by hand.
 
   Acceptance: process() reports each skipped unverified latest attempt (SHA, attempt, reason "outside the 32-attempt revalidation window") in its human and JSON output and in `aida awaiting`, with the exact `aida intent ci read` command; a test with 33 attempts proves the report; no status is published for an unverified result (unchanged).
-status: Approved
+status: InProgress
 priority: Low
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-08T03:38:52.682099623Z
-modified_at: 2026-11-08T21:17:23.839400139Z
+modified_at: 2026-11-08T21:19:26.919776256Z
 req_type: Task
 tags:
 - area:ci-relay
@@ -261,6 +261,13 @@ history:
   - field_name: status
     old_value: NeedsAttention
     new_value: Approved
+- id: 01a1bd07-cac7-7233-bf5f-fdf4dc925ed1
+  author: aida-session-start
+  timestamp: 2026-11-08T21:19:26.919774813Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: InProgress
 filed_at:
   code_sha: 049e5206de120518bb94fae84bf359f789e76236
   branch: main
