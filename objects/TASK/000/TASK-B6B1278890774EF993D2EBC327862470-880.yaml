@@ -3,12 +3,12 @@ spec_id: TASK-b6b1278890774ef993d2ebc327862470-880
 agreed_id: TASK-3223
 title: 'STORY-2561 S2: route CLI/MCP store writes through the mediation service and deny raw store writes in the shared boundary'
 description: 'Slice 2 of STORY-2561. Route every inventoried in-lane writer through the S1 service. In the shared AIDA bwrap boundary, make store objects, authority-bearing metadata and the shared derived cache read-only (ancestor grants, symlinks, primary-checkout launches and resume included), with lane-private or read-only derived caches where readers need them. The mediated profile is gated; Codex-native compatibility and its labels stay unchanged. Concurrency tests: stale base, concurrent mutation, and host failure after persist but before reply. Claude behavior is preserved.'
-status: Approved
+status: NeedsAttention
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-06T13:39:53.442026096Z
-modified_at: 2026-11-08T13:04:20.044483038Z
+modified_at: 2026-11-08T13:16:32.103704937Z
 req_type: Task
 tags:
 - architecture
@@ -1462,6 +1462,24 @@ history:
   - field_name: status
     old_value: NeedsAttention
     new_value: Approved
+- id: 01a1bb4d-5d16-7c73-a331-be26405deee8
+  author: dirtlab
+  timestamp: 2026-11-08T13:16:11.926953681Z
+  session_id: 01a1bb44e8d1
+  harness_version: codex-cli 0.167.0
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: InProgress
+- id: 01a1bb4d-abe7-7241-b712-111af0a1be0c
+  author: dirtlab
+  timestamp: 2026-11-08T13:16:32.103722034Z
+  session_id: 01a1bb44e8d1
+  harness_version: codex-cli 0.167.0
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: NeedsAttention
 execution_mode: drive
 filed_at:
   code_sha: 50ce509da3f7edbd12ff6636fe996c9c3a65c68f
@@ -1471,3 +1489,9 @@ filed_at:
   aida_build_sha: dd852f74c3b
   vendor: claude
   session: b0a84e34-277c-4df6-b53c-43f4bbe2e84d
+attention_reason:
+  category: design-fork
+  detail: 'The remaining S2a routing acceptance needs a policy decision: the binding ruling requires every inventoried CLI/MCP writer to route before mediated admission, but existing comment edit/delete intentionally refuse because no ownership policy is approved (review finding 4 in comment 50, removal in comment 51). Decide whether these existing writer operations may remain explicitly refused for this cutover, as the approved sketch allows, or approve their typed host-handler ownership policy. I dispute treating early refusal alone as verified routing: that would hide the still-unresolved writer inventory (3163 sites, 293 operations), so I am retaining the production gate. This run adds a same-bwrap-process raw-object-write denial plus production-broker/host comment_add fixture and fixes current review findings 3, 5, 6 and 7 from comment 57; validation is running. Complete routing and make check-ci-fast remain unmet. own_claim/queue_done stay with TASK-3326.'
+  lean: Keep admission gated and Refs-only; approve explicit per-operation routing/refusal dispositions and existing-comment ownership before claiming zero unrouted writers.
+  raised_by: implementer
+  raised_at: 2026-11-08T13:16:32.103704937Z
