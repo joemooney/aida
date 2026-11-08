@@ -124,6 +124,7 @@ pub(crate) struct RuntimePolicy {
     pub raw_git_writes: bool,
     pub argv_prefix: Vec<String>,
     pub prompt_options: Vec<String>,
+    pub tool_denies: Vec<String>,
 }
 
 /// Legacy launchers may not supply an outer-only vendor's permission bypass.
@@ -240,6 +241,10 @@ impl RuntimePolicy {
         for host in &self.auth_hosts {
             crate::launch::contained::validate_allowed_host(host)?;
         }
+        anyhow::ensure!(
+            self.tool_denies == ["mcp(*)", "read_url(*)", "execute_url(*)"],
+            "outer-only runtime requires MCP, URL and browser tool denies"
+        );
         Ok(())
     }
 

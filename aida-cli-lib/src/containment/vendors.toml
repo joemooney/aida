@@ -40,5 +40,7 @@ auth_inventory_complete = false
 raw_store_writes = false
 raw_git_writes = false
 argv_prefix = ["--output-format", "stream-json", "--disable-slash-commands"]
+# Mandatory tool controls, carried inline, not a native sandbox profile.
+tool_denies = ["mcp(*)", "read_url(*)", "execute_url(*)"]
 # Value-taking prompt options are data too: prompt text cannot select posture.
 prompt_options = ["-p", "--print", "--prompt", "--prompt-interactive"]

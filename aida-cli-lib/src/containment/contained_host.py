@@ -554,6 +554,7 @@ def proxy_request(data, fds, allowed, fixture, oauth_denial_fd=None, oauth_hosts
     if reply_fd is None:
         return
     with socket.socket(fileno=reply_fd) as reply:
+        request = {}
         try:
             def no_duplicates(pairs):
                 d = dict(pairs)
@@ -566,6 +567,14 @@ def proxy_request(data, fds, allowed, fixture, oauth_denial_fd=None, oauth_hosts
                              (fixture[2], port))]
                 return socket.getaddrinfo(name, port, 0, socket.SOCK_STREAM,
                                           socket.IPPROTO_TCP)[:16]
+            # Name the refusal before DNS or any connection. Log only a parsed
+            # hostname/port, never credentials, URL paths or request payloads.
+            # trace:TASK-3048 | ai:codex
+            name = host_name(request['host'])
+            if (name, request['port']) not in allowed:
+                print('aida-containment: CONTAINED_EGRESS_HOST_UNLISTED %s' % name,
+                      file=sys.stderr, flush=True)
+                raise RuntimeError('proxy destination refused')
             family, kind, proto, address = destination(request, allowed, resolve, fixture)
             with socket.socket(family, kind, proto) as tunnel:
                 tunnel.settimeout(10)

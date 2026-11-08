@@ -589,7 +589,15 @@ fn task_3048_runtime_argv_accepts_only_the_site_prompt() {
         args.iter()
             .filter(|arg| arg.as_str() == "--settings")
             .count(),
-        0
+        1
+    );
+    let controls: serde_json::Value =
+        serde_json::from_str(&args[args.iter().position(|a| a == "--settings").unwrap() + 1])
+            .unwrap();
+    assert_eq!(controls, runtime_tool_settings(&policy));
+    assert_eq!(
+        controls["permissions"]["deny"],
+        serde_json::json!(["mcp(*)", "read_url(*)", "execute_url(*)"])
     );
     for original in [
         vec![],
@@ -630,7 +638,13 @@ fn task_3048_outer_only_candidate_requires_live_accepted_receipt() {
             .count(),
         1
     );
-    assert!(!args.iter().any(|a| a == "--settings"));
+    let settings: serde_json::Value =
+        serde_json::from_str(&args[args.iter().position(|a| a == "--settings").unwrap() + 1])
+            .unwrap();
+    assert_eq!(
+        settings,
+        runtime_tool_settings(&crate::containment::runtime_policy("agy").unwrap())
+    );
     assert!(!args.iter().any(|a| a == "--sandbox" || a == "--mode"));
     assert!(crate::launch::agy::AGY
         .candidate_argv(Path::new("/"), prompt, Some(run.receipt()))
@@ -2288,7 +2302,7 @@ fn task_3048_private_runtime_pins_only_the_credential_leaf() {
             &std::fs::read(source.join("settings.json")).unwrap()
         )
         .unwrap(),
-        serde_json::json!({})
+        runtime_tool_settings(&policy)
     );
     assert!(std::fs::read(source.join(&policy.credential))
         .unwrap()
@@ -2403,7 +2417,7 @@ fn task_3048_live_private_runtime_preserves_read_only_credential() {
         })
         .into();
     let workspace = tempfile::tempdir().unwrap();
-    let settings_json = serde_json::json!({}).to_string();
+    let settings_json = runtime_tool_settings(&policy).to_string();
     let runtime_json = serde_json::to_string(&runtime).unwrap();
     let leaf_json = serde_json::to_string(&policy.credential).unwrap();
     let protected_json = serde_json::to_string(&protected).unwrap();
@@ -3667,4 +3681,173 @@ fn story_2326_wrapper_refuses_projected_commands_before_io() {
             "{error:#}"
         );
     }
+}
+
+// trace:TASK-3048 | ai:codex
+#[test]
+fn task_3048_diagnostic_hosts_do_not_open_production_admission() {
+    let policy = crate::containment::runtime_policy("agy").unwrap();
+    let mut approved = policy.auth_hosts.clone();
+    approved.push("allow.fixture.test".into());
+    let relay = runtime_relay_hosts(&policy, &approved, true).unwrap();
+    for host in &policy.auth_hosts {
+        assert!(relay.contains(host));
+    }
+    assert!(runtime_relay_hosts(&policy, &approved, false)
+        .unwrap_err()
+        .to_string()
+        .contains("inventory is incomplete"));
+    assert!(runtime_relay_hosts(&policy, &[], true)
+        .unwrap_err()
+        .to_string()
+        .contains("AGY_AUTH_HOST_UNAPPROVED"));
+    assert!(
+        crate::session::preflight_launch_vendor(crate::session::HeadlessVendor::Agy, false)
+            .unwrap_err()
+            .to_string()
+            .contains("fresh all-tool conformance")
+    );
+}
+
+// No DNS or real egress: exercise the actual host refusal and typed reply.
+// trace:TASK-3048 | ai:codex
+#[test]
+fn task_3048_unlisted_host_is_named_before_dns() {
+    let test = r#"
+a,b=socket.socketpair(socket.AF_UNIX,socket.SOCK_SEQPACKET)
+request=dict(version=1,method='CONNECT',host='unknown.fixture.test',port=443,
+             host_header='unknown.fixture.test:443',protocol='tcp')
+def no_dns(*args,**kwargs):
+    raise AssertionError('DNS attempted for unlisted host')
+socket.getaddrinfo=no_dns
+proxy_request(json.dumps(request).encode(),[b.detach()],{('oauth2.googleapis.com',443)},None)
+assert a.recv(128)==b'denied-v1'
+"#;
+    let output = Command::new("/usr/bin/python3")
+        .args(["-I", "-S", "-c", &format!("{COMMON}\n{HOST}\n{test}")])
+        .output()
+        .unwrap();
+    assert!(
+        output.status.success(),
+        "{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    assert!(String::from_utf8_lossy(&output.stderr)
+        .contains("CONTAINED_EGRESS_HOST_UNLISTED unknown.fixture.test"));
+}
+
+// The actual prepare API, with a fake vendor and token. Never executes AGY.
+// trace:TASK-3048 | ai:codex
+#[test]
+fn task_3048_diagnostic_prepare_uses_common_wrapper_and_keeps_production_closed() {
+    if crate::test_env::run_path_isolated_test() {
+        return;
+    }
+    if let Err(error) = host_prerequisites() {
+        skip_under(live_required(), &format!("{error:#}"));
+        return;
+    }
+    let home = crate::home_dir().unwrap();
+    let root = tempfile::tempdir().unwrap();
+    let policy = crate::containment::runtime_policy("agy").unwrap();
+    trusted_policy(root.path(), "agy = \"aida\"");
+    let config = root.path().join(".aida/config.toml");
+    let text = std::fs::read_to_string(&config).unwrap().replace(
+        "[contained]\n",
+        &format!(
+            "[contained]\nallowed_hosts = {}\n",
+            serde_json::to_string(&policy.auth_hosts).unwrap()
+        ),
+    );
+    std::fs::write(&config, text).unwrap();
+    for args in [
+        vec!["add", ".aida/config.toml"],
+        vec!["commit", "-qm", "fixture auth approval"],
+        vec!["update-ref", "refs/remotes/origin/main", "HEAD"],
+    ] {
+        assert!(crate::test_git::git_command()
+            .arg("-C")
+            .arg(root.path())
+            .args(args)
+            .status()
+            .unwrap()
+            .success());
+    }
+    for path in crate::contained_boundary::contained_store_write_paths(root.path()) {
+        std::fs::create_dir_all(path).unwrap();
+    }
+    let runtime = home.join(&policy.relative);
+    std::fs::create_dir_all(&runtime).unwrap();
+    let source_home = tempfile::tempdir().unwrap();
+    let source = source_home.path().join(&policy.relative);
+    std::fs::create_dir_all(&source).unwrap();
+    let credential = source.join(&policy.credential);
+    std::fs::write(&credential, "synthetic-only").unwrap();
+    let bin = home.join("bin");
+    std::fs::create_dir_all(&bin).unwrap();
+    let program = bin.join("agy");
+    std::fs::write(&program, "#!/bin/sh\nexit 99\n").unwrap();
+    std::fs::set_permissions(&program, std::fs::Permissions::from_mode(0o700)).unwrap();
+    let mut child = Command::new(program);
+    child
+        .args(["-p", "fixture only"])
+        .env("AIDA_HEADLESS", "1")
+        .env("AIDA_SESSION_GRANT", "")
+        .env("AIDA_SESSION_ROLE", "companion")
+        .env("OPENAI_API_KEY", "must-not-reach-agy");
+    let refusal = PreparedLaunch::prepare(&mut child, root.path(), None)
+        .err()
+        .unwrap();
+    assert!(refusal.to_string().contains("inventory is incomplete"));
+    let plan = PreparedLaunch::prepare_runtime_diagnostic(&mut child, root.path(), &credential)
+        .unwrap_or_else(|e| panic!("diagnostic prepare: {e:#}"));
+    assert!(!plan
+        .command
+        .get_envs()
+        .any(|(k, v)| k == "OPENAI_API_KEY" && v.is_some()));
+    let cfg: serde_json::Value =
+        serde_json::from_str(&plan.command.get_args().nth(5).unwrap().to_string_lossy()).unwrap();
+    for host in &policy.auth_hosts {
+        assert!(cfg["allowed"]
+            .as_array()
+            .unwrap()
+            .contains(&serde_json::json!(host)));
+    }
+    let argv = cfg["argv"].as_array().unwrap();
+    assert!(argv.contains(&serde_json::json!("--dangerously-skip-permissions")));
+    assert!(!argv.contains(&serde_json::json!("--sandbox")));
+    let settings = argv.iter().position(|a| a == "--settings").unwrap();
+    assert_eq!(
+        serde_json::from_str::<serde_json::Value>(argv[settings + 1].as_str().unwrap()).unwrap(),
+        runtime_tool_settings(&policy)
+    );
+    let bound = plan
+        .profile
+        .mounts
+        .iter()
+        .find(|m| m.path == runtime.join(&policy.credential))
+        .unwrap();
+    assert!(!bound.writable);
+    assert_eq!(
+        bound.file.metadata().unwrap().ino(),
+        std::fs::metadata(credential).unwrap().ino()
+    );
+    assert!(plan
+        .profile
+        .mounts
+        .iter()
+        .any(|m| m.path == source_home.path().join(".gemini") && !m.writable));
+    for name in [".agents/mcp_config.json", ".agents/hooks.json", ".mcp.json"] {
+        let mount = plan
+            .profile
+            .mounts
+            .iter()
+            .find(|m| m.path == root.path().join(name) && m.file.metadata().unwrap().len() == 2)
+            .unwrap();
+        let mut bytes = [0; 2];
+        mount.file.read_exact_at(&mut bytes, 0).unwrap();
+        assert_eq!(&bytes, b"{}");
+        assert!(!mount.writable);
+    }
+    assert!(crate::launch::agy::AGY.require_conformance().is_err());
 }

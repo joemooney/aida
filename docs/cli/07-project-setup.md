@@ -697,6 +697,16 @@ refuses setup instead of falling back to the script checkout. This inventory
 is candidate configuration, not measured refresh evidence or launch admission.
 <!-- trace:TASK-3048 | ai:codex -->
 
+The host-only AGY conformance harness uses the hidden
+`aida config permissions conformance-launch --fixture-root <run> --credential <leaf>`
+entry to measure the candidate through the shared AIDA wrapper. It accepts only
+the closed fixture prompt and retains normal child-grant, trusted-host and
+receipt checks. It does not open production AGY admission. The credential leaf
+is mounted read-only without inheriting the original `.gemini` configuration;
+MCP, URL and browser actions carry explicit deny controls. See the
+[conformance procedure](../internal/testing/containment-conformance.md#agy-outer-only-follow-up-2026-11-07-ruling).
+<!-- trace:TASK-3048 | ai:codex -->
+
 `aida config permissions probe --vendor codex --json` runs a closed Linux
 filesystem/supervisor and egress/local-IPC diagnostic in fresh synthetic state. `claude` and
 `opencode` also have shipped capability descriptors; this does not launch those

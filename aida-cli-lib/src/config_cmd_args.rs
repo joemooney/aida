@@ -109,6 +109,16 @@ pub enum ConfigCommand {
 // trace:STORY-1127 | ai:codex
 #[derive(Subcommand, Debug)]
 pub enum ConfigPermissionsCommand {
+    /// Run the closed AGY conformance fixture through the shared AIDA wrapper.
+    /// Diagnostic only: does not enable production AGY admission.
+    // trace:TASK-3048 | ai:codex
+    #[clap(hide = true)]
+    ConformanceLaunch {
+        #[clap(long)]
+        fixture_root: PathBuf,
+        #[clap(long)]
+        credential: PathBuf,
+    },
     /// Print the runtime descriptor embedded in this binary. No launch authority.
     // trace:TASK-3048 | ai:codex
     RuntimePolicy {

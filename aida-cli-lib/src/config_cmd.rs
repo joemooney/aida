@@ -1038,6 +1038,13 @@ struct CodexConfigPosture {
 pub(crate) fn handle_config_permissions_command(cmd: &ConfigPermissionsCommand) -> Result<()> {
     match cmd {
         // trace:TASK-3048 | ai:codex
+        ConfigPermissionsCommand::ConformanceLaunch {
+            fixture_root,
+            credential,
+        } => {
+            let parent = aida_core::exec_context::Environment::capture();
+            crate::launch::agy::diagnostic_launch(fixture_root, credential, &parent)?;
+        }
         ConfigPermissionsCommand::RuntimePolicy { vendor } => {
             println!(
                 "{}",
@@ -5865,7 +5872,8 @@ fn run_config(
     // The closed diagnostic needs no requirement-store/cache write access.
     // trace:TASK-2705 | ai:codex
     if let ConfigCommand::Permissions(
-        command @ (ConfigPermissionsCommand::Probe { .. }
+        command @ (ConfigPermissionsCommand::ConformanceLaunch { .. }
+        | ConfigPermissionsCommand::Probe { .. }
         | ConfigPermissionsCommand::RuntimePolicy { .. }),
     ) = &args.inner
     {

@@ -468,19 +468,38 @@ The native `agy --sandbox` experiment is diagnostic only. Its report always
 retains `production_launcher_credit=false` and `whole_lane_pass=false`; a native
 sandbox result cannot admit the outer-only vendor.
 
-The AIDA fixture now accepts `--vendor agy --boundary aida`, pins the fixture
-vendor selection and reads its auth hosts from the common wrapper's shipped
-runtime data. Production admission still refuses in `Adapter::require_conformance`;
-this fixture therefore does **not yet reach AGY execution**. A separate diagnostic
-entry point through the shared wrapper is still required, along with verified
-MCP/browser/URL disabling and explicit credential-source handling across the
-fixture's relocated authority HOME. Do not remove the production gate to make
-this fixture run.
+The AIDA fixture accepts `--vendor agy --boundary aida`, pins the fixture
+vendor selection and queries the selected binary's runtime policy. AGY uses
+`aida config permissions conformance-launch --fixture-root <run> --credential
+<original-home>/.gemini/antigravity-cli/antigravity-oauth-token`, a hidden,
+explicit diagnostic entry; it does not go through the refusing queue-work
+production admission path. Codex retains queue work. The diagnostic issues a
+normal contained child grant and uses the common bwrap, relay, broker, seat
+preflight and live receipt/exec barrier. The unmeasured inventory exception is
+local to this explicit entry and never relaxes trusted allowed-host approval.
+`Adapter::require_conformance` and ordinary wrapper preparation remain closed.
 
-Candidate outer-only argv has no `--sandbox` or `--settings` permission profile;
-its permission bypass remains behind the shared wrapper's accepted-receipt exec
-barrier. The private conventional settings file is empty. Existing tests exercise
-private runtime mounts and credential inode pinning without executing AGY.
+The credential source is retained before authority HOME relocation; only its
+checked leaf handle is mounted read-only. Both the relocated and original
+`.gemini` parents are masked. Runtime state is private and writable. Workspace
+MCP configuration, hooks and plugins are masked too. Mandatory inline settings
+carry `permissions.deny = ["mcp(*)", "read_url(*)", "execute_url(*)"]`, covering
+MCP, URL reads and browser actuation; the same controls seed private runtime
+preferences. These are documented [AGY tool actions](https://antigravity.google/docs/permissions/).
+There is no native `--sandbox` or native permissions-profile file. Candidate
+and wrapper argv share the controls and terminal `-p <prompt>` order. Only the
+accepted-receipt barrier permits permission-bypass execution. Model-free tests
+assert configuration and wrapper behavior; the advisor must verify AGY honors
+the controls during the live run.
+
+Runtime `auth_hosts` feeds the common relay allow-set after trusted approval.
+Missing approval names `AGY_AUTH_HOST_UNAPPROVED`; an unlisted requested host
+is denied before DNS and logged as `CONTAINED_EGRESS_HOST_UNLISTED <host>`.
+Successful host/port metadata appears in `observed_egress_hosts` in the report;
+this is traffic evidence, not proof that refresh occurred. AGY reports distinguish
+`shared_boundary_credit` from production admission, which stays `closed` with
+`production_launcher_credit=false`. Whole-lane success stays conservative until
+the complete C0–C4 evidence (including the existing unmeasured controls) exists.
 
 The host-observed inventory remains `daily-cloudcode-pa.googleapis.com` only.
 `oauth2.googleapis.com` is an additional candidate refresh host: the installed

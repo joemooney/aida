@@ -160,6 +160,109 @@ items = [{name = "preserved", enabled = true}]
             self.assertFalse(report["production_launcher_credit"])
             self.assertFalse(report["whole_lane_pass"])
 
+    # Relocating role authority must not silently relocate the credential source.
+    # trace:TASK-3048 | ai:codex
+    def test_agy_fixture_keeps_original_credential_source(self):
+        fixture_home = Path.home() / ".aida"
+        fixture_home.mkdir(exist_ok=True)
+        with tempfile.TemporaryDirectory(dir=fixture_home) as directory:
+            root = Path(directory) / "experiment"
+            runtime = {"auth_hosts": ["binary.fixture.test"], "relative": ".gemini/antigravity-cli",
+                       "credential": "antigravity-oauth-token"}
+            def setup(argv, cwd, env, report, stage):
+                if stage == "init":
+                    (cwd / ".aida").mkdir()
+                    (cwd / ".aida/config.toml").write_text("[contained]\n")
+                if stage == "runtime-policy":
+                    return json.dumps(runtime)
+                return "fixture"
+            def continuation(script, repo, env, timeout, **kwargs):
+                state = json.loads((root / "aida-state.json").read_text())
+                self.assertEqual(state["credential_source"], str(Path.home() / runtime["relative"] / runtime["credential"]))
+                private = Path(env["HOME"]) / runtime["relative"]
+                self.assertTrue(private.is_dir())
+                self.assertEqual(list(private.iterdir()), [])
+                self.assertNotEqual(private, Path(state["credential_source"]).parent)
+                return 0
+            args = c.argparse.Namespace(vendor="agy", output=root, timeout=1)
+            with mock.patch.object(c.shutil, "which", return_value=c.sys.executable), \
+                 mock.patch.object(c, "fixture_command", side_effect=setup), \
+                 mock.patch.object(c.subprocess, "run", return_value=c.subprocess.CompletedProcess([], 0, stdout="")), \
+                 mock.patch.object(c, "fixture_role_enter", return_value="true"), \
+                 mock.patch.object(c, "launch_aida_continuation", side_effect=continuation) as launched:
+                c.run_aida(args)
+            launched.assert_called_once()
+
+    # trace:TASK-3048 | ai:codex
+    def test_agy_queue_vendor_and_diagnostic_selection(self):
+        workspace = Path("/fixture/workspace")
+        queue = c.queue_work_argv("aida", "TASK-1", "agy", workspace)
+        self.assertEqual(queue[queue.index("--vendor") + 1], "agy")
+        argv = c.aida_fixture_argv("aida", "TASK-1", "agy", workspace, "/host/token")
+        self.assertEqual(argv[:4], ["aida", "config", "permissions", "conformance-launch"])
+        self.assertNotIn("queue", argv)
+        self.assertEqual(argv[-2:], ["--credential", "/host/token"])
+        self.assertEqual(c.aida_fixture_argv("aida", "TASK-1", "codex", workspace),
+                         c.queue_work_argv("aida", "TASK-1", "codex", workspace))
+        with self.assertRaisesRegex(ValueError, "credential-source-missing"):
+            c.aida_fixture_argv("aida", "TASK-1", "agy", workspace)
+
+    def test_only_complete_aida_evidence_can_flip_whole_lane(self):
+        report = {"boundary": "aida", "shared_boundary_credit": True,
+                  "checks": {k: {"status": "pass"} for k in ("C0", "C1", "C2", "C3", "C4")}}
+        self.assertTrue(c.aida_whole_lane_pass(report))
+        report["boundary"] = "native"
+        self.assertFalse(c.aida_whole_lane_pass(report))
+        report["boundary"] = "aida"
+        report["checks"]["C4"]["status"] = "unknown"
+        self.assertFalse(c.aida_whole_lane_pass(report))
+        report["checks"].pop("C4")
+        self.assertFalse(c.aida_whole_lane_pass(report))
+
+    # Execute the actual continuation and its ready callback. No vendor model.
+    # trace:TASK-3048 | ai:codex
+    def test_agy_ready_publishes_only_after_shared_receipt(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            repo, workspace = root / "repository", root / "workspace"
+            repo.mkdir()
+            report = {"vendor": "agy", "boundary": "aida", "trusted_policy_sha": "a" * 40,
+                      "setup": [], "containment_receipt_sha256": None,
+                      "checks": {k: {"status": "unknown"} for k in ("C0", "C1", "C2", "C3", "C4")}}
+            c.write_json(root / "aida-state.json", {"report": report, "aida": "fixture",
+                         "timeout": 1, "spec": "TASK-1", "credential_source": "/host/token"})
+            network = mock.Mock(config={}, receipts=list(range(8)))
+            def setup(argv, cwd, env, report, stage):
+                if stage == "diagnostic-worktree":
+                    workspace.mkdir()
+                    (workspace / ".git").write_text("fixture")
+                    for path in (root / "git-admin", repo / ".git", repo / ".aida-store/objects"):
+                        path.mkdir(parents=True)
+                return ""
+            def launch(argv, cwd, env, output, timeout, on_tick, **kwargs):
+                self.assertEqual(argv[:4], ["fixture", "config", "permissions", "conformance-launch"])
+                (root / "stderr.txt").write_text("")
+                on_tick()
+                self.assertFalse((root / "payload/manifest.json").exists())
+                (root / "stderr.txt").write_text("aida-contained-receipt sha256=" + "b" * 64 +
+                                                " policy_sha=" + "a" * 40 + "\n")
+                on_tick()
+                self.assertTrue((root / "payload/manifest.json").is_file())
+                (root / "stdout.jsonl").write_text("")
+                return {"exit_code": 0}
+            with mock.patch.object(c, "fixture_command", side_effect=setup), \
+                 mock.patch.object(c, "Network", return_value=network), \
+                 mock.patch.object(c, "network_attempts", return_value={"control": {"result": "allowed"}}), \
+                 mock.patch.object(c, "command", return_value=str(root / "git-admin")), \
+                 mock.patch.object(c, "bounded_launch", side_effect=launch), \
+                 contextlib.redirect_stdout(io.StringIO()):
+                c.continue_aida(root)
+            saved = json.loads((root / "report.json").read_text())
+            self.assertEqual(saved["containment_receipt_sha256"], "b" * 64)
+            self.assertFalse(saved["production_launcher_credit"])
+            self.assertEqual(saved["production_admission"], "closed")
+            network.close.assert_called_once()
+
     # trace:BUG-2462 | ai:codex
     def test_role_refusal_reports_actual_diagnostic_and_keeps_tty(self):
         fixture_home = Path.home() / ".aida"

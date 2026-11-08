@@ -472,7 +472,7 @@ fn install_private_runtime(
     // Private settings inherit no host plugins, MCP or hooks.
     std::fs::write(
         source.join("settings.json"),
-        serde_json::to_vec(&serde_json::json!({}))?,
+        serde_json::to_vec(&runtime_tool_settings(policy))?,
     )?;
     std::fs::write(source.join(&policy.credential), "")?;
     profile.add(&source, true)?;
@@ -503,6 +503,51 @@ fn bind_runtime_credential(
     Ok(())
 }
 
+// Mandatory per-invocation controls override writable runtime preferences.
+// No native sandbox or filesystem permission allow rules are supplied.
+// trace:TASK-3048 | ai:codex
+fn runtime_tool_settings(policy: &crate::containment::RuntimePolicy) -> serde_json::Value {
+    serde_json::json!({"permissions": {"deny": policy.tool_denies}})
+}
+
+// The diagnostic uses the same transport inputs as ordinary shared launches.
+// trace:TASK-3048 | ai:codex
+pub(crate) fn apply_transport_inputs(
+    child: &mut Command,
+    parent: &aida_core::exec_context::Environment,
+) {
+    for name in ENV {
+        if let Some(value) = parent.get(name) {
+            child.env(name, value);
+        }
+    }
+}
+
+/// Production requires a measured inventory; the explicit diagnostic entry may
+/// measure the candidate list, but never widens trusted operator approval.
+// trace:TASK-3048 | ai:codex
+fn runtime_relay_hosts(
+    policy: &crate::containment::RuntimePolicy,
+    approved: &[String],
+    diagnostic: bool,
+) -> Result<Vec<String>> {
+    policy.validate()?;
+    if !diagnostic {
+        policy.require_auth_policy(approved)?;
+    }
+    for host in &policy.auth_hosts {
+        anyhow::ensure!(
+            approved.contains(host),
+            "AGY_AUTH_HOST_UNAPPROVED: {host} requires trusted contained.allowed_hosts approval"
+        );
+    }
+    let mut hosts = policy.auth_hosts.clone();
+    hosts.extend_from_slice(approved);
+    hosts.sort();
+    hosts.dedup();
+    Ok(hosts)
+}
+
 /// Only the common wrapper may prepare argv before receipt acceptance; it
 /// cannot release exec until spawn accepts a live receipt and checks the row.
 // trace:TASK-3048 | ai:codex
@@ -517,6 +562,10 @@ fn wrapped_outer_only_argv(
         "outer-only vendor requires an exact absolute private runtime path"
     );
     let mut args = policy.argv_prefix.clone();
+    args.extend([
+        "--settings".into(),
+        runtime_tool_settings(policy).to_string(),
+    ]);
     args.extend([
         // The exec barrier verifies applied evidence before releasing this argv.
         "--dangerously-skip-permissions".into(),
@@ -818,7 +867,7 @@ pub(crate) struct PreparedLaunch {
     chatgpt_deadline: Option<i64>,
     /// Unlinked host-only evidence; never mounted or passed to the lane.
     oauth_denial: File,
-    outer_only: Option<&'static str>,
+    outer_only: Option<(&'static str, PathBuf, String)>,
     mutation: Option<store_mutation::Session>,
     io: LaunchIo,
 }
@@ -847,6 +896,7 @@ impl PreparedLaunch {
             credential_owner,
             LaunchIo::Headless,
             codex_auth::PROGRAM_SHA256,
+            None,
         )
     }
     pub(crate) fn prepare_interactive(
@@ -861,10 +911,35 @@ impl PreparedLaunch {
             unsafe { libc::getuid() },
             LaunchIo::Interactive,
             codex_auth::PROGRAM_SHA256,
+            None,
         )
     }
-    // trace:STORY-2593 | ai:codex — inject the binary pin while keeping
-    // ambient reads under their existing ExecContext ledger owner.
+    // Explicit diagnostic API; no production caller opts into the unmeasured
+    // inventory. All mounts, credentials, grants and exec barriers stay shared.
+    // trace:TASK-3048 | ai:codex
+    pub(crate) fn prepare_runtime_diagnostic(
+        child: &mut Command,
+        root: &Path,
+        credential: &Path,
+    ) -> Result<Self> {
+        anyhow::ensure!(
+            ContainedVendor::for_program(child.get_program())?.auth
+                == VendorAuth::RuntimeCredentialsFile,
+            "runtime diagnostic requires an outer-only runtime descriptor"
+        );
+        Self::prepare_with_io(
+            child,
+            root,
+            None,
+            unsafe { libc::getuid() },
+            LaunchIo::Headless,
+            codex_auth::PROGRAM_SHA256,
+            Some(credential),
+        )
+    }
+
+    // Explicit fixture entry only. No environment/config switch opens admission.
+    // trace:TASK-3048 | ai:codex
     fn prepare_with_io(
         child: &mut Command,
         root: &Path,
@@ -872,6 +947,7 @@ impl PreparedLaunch {
         credential_owner: u32,
         io: LaunchIo,
         codex_sha256: &str,
+        diagnostic_credential: Option<&Path>,
     ) -> Result<Self> {
         // Projection turns ambient values into explicit pairs, which this
         // wrapper would mistake for site decisions. All wrapper entrypoints
@@ -968,7 +1044,7 @@ impl PreparedLaunch {
         // trace:TASK-3048 | ai:codex
         let runtime_policy = if vendor.auth == VendorAuth::RuntimeCredentialsFile {
             let policy = crate::containment::runtime_policy(vendor.key)?;
-            policy.require_auth_policy(&allowed)?;
+            allowed = runtime_relay_hosts(&policy, &allowed, diagnostic_credential.is_some())?;
             Some(policy)
         } else {
             None
@@ -1041,7 +1117,13 @@ impl PreparedLaunch {
             }
             VendorAuth::RuntimeCredentialsFile => {
                 let policy = runtime_policy.as_ref().context("runtime policy missing")?;
-                Auth::RuntimeFile(host_home.join(&policy.relative).join(&policy.credential))
+                Auth::RuntimeFile(
+                    diagnostic_credential
+                        .map(Path::to_path_buf)
+                        .unwrap_or_else(|| {
+                            host_home.join(&policy.relative).join(&policy.credential)
+                        }),
+                )
             }
         };
         let mut profile = WriteProfile::new();
@@ -1086,6 +1168,19 @@ impl PreparedLaunch {
         if let Ok(relocated) = std::fs::canonicalize(&claude_home) {
             if !masks.contains(&relocated) {
                 masks.push(relocated);
+            }
+        }
+        // Relocated fixture authority HOME must not expose the real credential
+        // parent or inherit its plugins/config. The leaf is rebound by handle.
+        // trace:TASK-3048 | ai:codex
+        if let Some(source) = diagnostic_credential {
+            let parent = source
+                .parent()
+                .and_then(Path::parent)
+                .context("diagnostic credential parent missing")?;
+            let parent = std::fs::canonicalize(parent)?;
+            if !masks.contains(&parent) {
+                masks.push(parent);
             }
         }
         let empty_file = state.path().join("empty-file");
@@ -1147,6 +1242,32 @@ impl PreparedLaunch {
                     std::fs::write(&p, "")?;
                 }
                 profile.add(&p, false)?;
+            }
+        }
+        if runtime_policy.is_some() {
+            let disabled_extensions = state.path().join("disabled-extensions.json");
+            std::fs::write(&disabled_extensions, "{}")?;
+            for base in [&root, &main] {
+                for name in [".agents/mcp_config.json", ".agents/hooks.json", ".mcp.json"] {
+                    let path = base.join(name);
+                    if !path.exists() {
+                        std::fs::write(&path, "")?;
+                    }
+                    profile.mounts.push(Mount {
+                        data: false,
+                        file: File::open(&disabled_extensions)?,
+                        path,
+                        writable: false,
+                    });
+                }
+                let path = base.join(".agents/plugins");
+                ensure_dir(&path)?;
+                profile.mounts.push(Mount {
+                    data: false,
+                    file: File::open(&empty)?,
+                    path,
+                    writable: false,
+                });
             }
         }
         for p in crate::contained_boundary::contained_store_deny_write_paths(
@@ -1245,6 +1366,14 @@ impl PreparedLaunch {
             other => Some(other),
         };
         let mut env = selected_environment(child);
+        if runtime_policy.is_some() {
+            // The opaque runtime leaf is this row's only credential. Do not
+            // forward a diagnostic caller's unrelated Codex auth or state.
+            // trace:TASK-3048 | ai:codex
+            for name in ["OPENAI_API_KEY", "CODEX_HOME", "CODEX_SQLITE_HOME"] {
+                env.remove(name);
+            }
+        }
         // A ChatGPT lane must not inherit an alternate API credential.
         env.remove("OPENAI_API_KEY");
         env.insert(
@@ -1389,7 +1518,8 @@ impl PreparedLaunch {
         prepared.mutation = mutation;
         prepared.credentials = credentials;
         prepared.chatgpt_deadline = codex_deadline;
-        prepared.outer_only = runtime_policy.map(|_| vendor.key);
+        prepared.outer_only =
+            runtime_policy.map(|_| (vendor.key, private_home, original[1].clone()));
         prepared.io = io;
         Ok(prepared)
     }
@@ -1795,8 +1925,10 @@ impl PreparedLaunch {
         receipt.validate(&self.policy_sha)?;
         validate_service_receipt(&receipt, run.mutation.as_ref().map(|s| s.epoch.as_str()))?;
         receipt.accepted = true;
-        if let Some(vendor) = self.outer_only {
-            require_outer_only_receipt(vendor, Some(&receipt))?;
+        if let Some((vendor, runtime, prompt)) = &self.outer_only {
+            // Re-enter the public candidate gate using the live accepted receipt
+            // while exec is still blocked. Serialized/config receipts cannot pass.
+            outer_only_argv(vendor, runtime, prompt, Some(&receipt))?;
         }
         // Host-side evidence only: never export the private receipt or grant.
         // trace:TASK-3131 | ai:codex
