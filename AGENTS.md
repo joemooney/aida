@@ -966,3 +966,9 @@ starting the session.
    `--pr` mode; write a `## Acceptance` section in every STORY/BUG so
    there's something to lift. Detail: same discipline doc.
 <!-- AIDA-AUTOGEN-END -->
+
+Hook init iterates VendorProfile layouts/backends; event contract validation and
+handler parsing are pure. Effectful installers remain in scaffolding, with
+per-file symlink skip-and-warn checks including ancestors and dangling links.
+See OVERVIEW.md.
+<!-- trace:STORY-2539 | ai:codex -->

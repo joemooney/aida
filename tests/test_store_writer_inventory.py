@@ -68,6 +68,20 @@ class WriterInventoryTests(unittest.TestCase):
         self.assertTrue(any("new_surface.rs" in error for error in errors), errors)
         self.assert_refused_then_classified()
 
+    # trace:STORY-2539 | ai:codex
+    def test_hook_init_wrappers_reach_scaffolding_writers(self):
+        # Use production source: a fixture with simplified calls missed the
+        # re-export/receiver regression that silently removed these entry points.
+        repo = Path(__file__).resolve().parents[1]
+        for path in ("aida-core/src/scaffolding/codex_hooks.rs",
+                     "aida-cli-lib/src/init_cmd.rs"):
+            self.put(path, (repo / path).read_text())
+        rows = guard.discover(self.root)
+        for name in ("maybe_scaffold_codex_hooks_on_init",
+                     "maybe_scaffold_antigravity_hooks_on_init",
+                     "maybe_scaffold_profile_hooks_on_init"):
+            self.assertTrue(any(row["item"] == name for row in rows.values()), name)
+
     def test_cache_on_read_mutant(self):
         self.put("aida-cli-lib/src/show.rs", '''
             fn show(conn: &Connection) {
