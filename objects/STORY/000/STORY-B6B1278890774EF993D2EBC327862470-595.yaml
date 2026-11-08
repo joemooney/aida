@@ -8,7 +8,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-08T05:25:50.443321273Z
-modified_at: 2026-11-08T07:44:09.349126938Z
+modified_at: 2026-11-08T07:45:59.401319235Z
 req_type: Story
 tags:
 - area:ci
@@ -90,6 +90,13 @@ comments:
   modified_at: 2026-11-08T07:42:58.072041391Z
   session_id: 01a1b8be-8170-7fb2-89ab-ecb4c6eee98c
   harness_version: 2.1.319 (Claude Code)
+- id: 01a1ba1f-0c69-7013-b86f-bcb68f517457
+  author: dirtlab
+  content: 'Addressed latest PR #3668 rework: removed unavailable runner context from job env; successful self-hosted prerequisite step alone persists AIDA_REQUIRE_BWRAP_LIVE=1, leaving hosted/GitLab job environments unset. Adapter now rejects unavailable job-env contexts and permits GITHUB_ENV only in its skipped self-hosted step. Removed unit lifetime deadline so idle time cannot kill a late job; existing workflow timeout bounds execution after pickup. Supervisor uses command-only NOPASSWD sudo path documented for operator installation, without timestamp dependency. Validation: 42 Python tests passed, including routing, export success/failure, adapter context and hosted environment fixtures; bash syntax, nine docs guards and diff whitespace passed. No Rust changed or cargo run. Live systemd/JIT and GitHub workflow execution remain untested here. Independent review must recheck event/repository gate; operator provisioning, settings, isolation/cgroup smoke test, registration/activation and capacity measurement remain outstanding. Edits left uncommitted for host publication; retain Refs STORY-2672.'
+  created_at: 2026-11-08T07:45:59.401319235Z
+  modified_at: 2026-11-08T07:45:59.401319235Z
+  session_id: 01a1ba1d58b5
+  harness_version: codex-cli 0.167.0
 history:
 - id: 01a1b9c5-53ea-79e1-9008-26e3abcd0e20
   author: joe
