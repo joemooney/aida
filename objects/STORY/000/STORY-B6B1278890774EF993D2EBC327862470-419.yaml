@@ -3,12 +3,12 @@ spec_id: STORY-b6b1278890774ef993d2ebc327862470-419
 agreed_id: STORY-2493
 title: 'Cross-machine review from an untrusted (work) node: verdict and finding envelopes over the aida-intent channel'
 description: 'Deferred (operator 2026-11-04: do the trusted-node case STORY-2492 first). When the reviewing node must not write to the home store, findings come back as content, not IDs. Add kind=review-verdict (fixed fields: PR, head SHA, decision, blocking finding digests, reviewer node; no free text, automatic) and kind=finding (severity, blocking, title, body, home file/line; free text, so it passes the validator and sensitive-pattern check and needs operator sign-off at work) to the STORY-2479 envelope format, carried over the STORY-2480 return channel. Home processes findings into specs and receipts map digest → home ID. Merge stays blocked while a blocking digest is unprocessed or open. Depends on STORY-2479, STORY-2480, STORY-2492.'
-status: InProgress
+status: NeedsAttention
 priority: Low
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-05T04:41:25.538710401Z
-modified_at: 2026-11-08T08:27:36.284200778Z
+modified_at: 2026-11-08T08:28:51.733180002Z
 req_type: Story
 comments:
 - id: 01a1aa03-51be-7480-baec-91ac74908e0b
@@ -117,6 +117,13 @@ comments:
   modified_at: 2026-11-08T08:26:38.027771806Z
   session_id: 01a1b8be-8170-7fb2-89ab-ecb4c6eee98c
   harness_version: 2.1.319 (Claude Code)
+- id: 01a1ba46-443b-7cd1-8eb1-da63f484a55c
+  author: dirtlab
+  content: 'Rework addressed F6 and F7 in docs/plans/2026-11-07-story-2493-untrusted-review.md: unresolved blocking digest obligations persist across heads; omission alone cannot release them. A moved-head false-positive/superseded disposition requires authenticated predecessor/origin binding and home audit evidence, and cannot release an open or unprocessed finding. Added matching verification cases and repaired replayed/forked/concurrent-successor wording. git diff --check and Python document assertions/reference checks passed. Documentation only; no Rust tests executed. F1 remains a host/advisor action: retitle PR-3665 to [AI:codex] docs(plans): untrusted-node review return channel sketch (Refs STORY-2493), or add the aida: no-complete PR-body marker. Native seat leaves edits uncommitted. Advisor architecture signoff remains absent; this is not implementation or completion.'
+  created_at: 2026-11-08T08:28:49.595211290Z
+  modified_at: 2026-11-08T08:28:49.595211290Z
+  session_id: 01a1ba452017
+  harness_version: codex-cli 0.167.0
 history:
 - id: 01a1aa0a-8ae7-7523-b84e-68f1c2e158c7
   author: joe
@@ -261,6 +268,21 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a1ba45-b65b-7312-887f-6ffcc824828f
+  author: dirtlab
+  timestamp: 2026-11-08T08:28:13.275224059Z
+  session_id: 01a1ba452017
+  harness_version: codex-cli 0.167.0
+  changes: []
+- id: 01a1ba46-4c95-73d2-a0a4-27c13cb4bf43
+  author: dirtlab
+  timestamp: 2026-11-08T08:28:51.733190239Z
+  session_id: 01a1ba452017
+  harness_version: codex-cli 0.167.0
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: NeedsAttention
 filed_at:
   code_sha: d561213a36febec31d45921d3d43d4dc7590135e
   branch: main
@@ -269,3 +291,8 @@ filed_at:
   aida_build_sha: e1fc3f06903
   vendor: claude
   session: 5bf140f7-38b2-4a04-9e8c-ccf69b1258f8
+attention_reason:
+  category: design-fork
+  detail: 'F6/F7 sketch fixes are ready as uncommitted documentation. F1 remains unresolved: host/advisor must retitle PR-3665 with (Refs STORY-2493) or add aida: no-complete to its body; another code push cannot repair the completing PR title. CLAUDE.md requires advisor architecture signoff before implementation. Reviewer/session attestation, home verification and authenticated supersession/disposition authority still need approval. Preserve publication veto; design-only changes do not complete this story.'
+  raised_by: implementer
+  raised_at: 2026-11-08T08:28:51.733180002Z
