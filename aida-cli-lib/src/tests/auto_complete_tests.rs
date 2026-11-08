@@ -3183,6 +3183,7 @@ fn drain_batch_held_pauses_without_shipping() {
                 punt_reason: None,
                 shipped_spec_id: None,
                 escalation: None,
+                fast_gate_pending: false,
                 inconclusive_reason: None,
                 shelved_reason: None,
                 held_reason: Some("PR held on `story-306` — SPIKE-7 smoke".to_string()),
@@ -3230,6 +3231,7 @@ fn drain_batch_inconclusive_pauses_without_advancing() {
                 punt_reason: None,
                 shipped_spec_id: None,
                 escalation: None,
+                fast_gate_pending: false,
                 inconclusive_reason: Some("GH API unreachable — cannot confirm PR".to_string()),
                 shelved_reason: None,
                 held_reason: None,
@@ -5266,6 +5268,7 @@ fn ok_result() -> OrchestrationResult {
         punt_reason: None,
         shipped_spec_id: None,
         escalation: None,
+        fast_gate_pending: false,
         inconclusive_reason: None,
         shelved_reason: None,
         held_reason: None,
@@ -5282,6 +5285,7 @@ fn fail_result(phase: Phase) -> OrchestrationResult {
         punt_reason: None,
         shipped_spec_id: None,
         escalation: None,
+        fast_gate_pending: false,
         inconclusive_reason: None,
         shelved_reason: None,
         held_reason: None,
@@ -5300,6 +5304,7 @@ fn punt_result() -> OrchestrationResult {
         punt_reason: Some("mock punt: design-fork".to_string()),
         shipped_spec_id: None,
         escalation: None,
+        fast_gate_pending: false,
         inconclusive_reason: None,
         shelved_reason: None,
         held_reason: None,
@@ -5319,6 +5324,7 @@ fn mismatch_result(shipped: &str) -> OrchestrationResult {
         punt_reason: None,
         shipped_spec_id: Some(shipped.to_string()),
         escalation: None,
+        fast_gate_pending: false,
         inconclusive_reason: None,
         shelved_reason: None,
         held_reason: None,
@@ -5349,6 +5355,7 @@ fn shelve_result(phase: Phase) -> OrchestrationResult {
         punt_reason: None,
         shipped_spec_id: None,
         escalation: None,
+        fast_gate_pending: false,
         inconclusive_reason: None,
         shelved_reason: Some(fr),
         held_reason: None,
@@ -5370,6 +5377,7 @@ fn escalated_result() -> OrchestrationResult {
             kind: EscalationKind::MergeDecision,
             reason: "mock escalation: merge decision".to_string(),
         }),
+        fast_gate_pending: false,
         inconclusive_reason: None,
         shelved_reason: None,
         held_reason: None,
@@ -5389,6 +5397,7 @@ struct MockBatchDriver {
     shelve_failure: Vec<(String, PhaseFailure)>,
     fail_at: Option<(String, Phase)>,
     stall_spec: Option<String>,
+    fast_gate_spec: Option<String>,
     punt_spec: Option<String>,
     /// BUG-245: when `run_spec` is called for `dispatched`, return a
     /// success result crediting `shipped` instead. The dispatched head
@@ -5433,6 +5442,7 @@ impl MockBatchDriver {
             shelve_failure: Vec::new(),
             fail_at: None,
             stall_spec: None,
+            fast_gate_spec: None,
             punt_spec: None,
             mismatch: None,
             escalate_spec: None,
@@ -5529,6 +5539,10 @@ impl BatchDriver for MockBatchDriver {
         self.heads.first().cloned()
     }
 
+    fn next_head_excluding(&mut self, excluded: &[String]) -> Option<String> {
+        self.heads.iter().find(|id| !excluded.contains(id)).cloned()
+    }
+
     // trace:BUG-1980 | ai:claude
     fn stop_requested(&mut self) -> bool {
         self.stop_file.as_deref().is_some_and(|p| p.exists())
@@ -5536,6 +5550,26 @@ impl BatchDriver for MockBatchDriver {
 
     fn run_spec(&mut self, spec: &str) -> OrchestrationResult {
         self.runs.push(spec.to_string());
+        if self.fast_gate_spec.as_deref() == Some(spec) {
+            return crate::drive_robustness::run_with_transient_backoff(|| {
+                let mut driver = MockPhaseDriver {
+                    fail_at: Some(Phase::Implementer),
+                    phase1_pr_recovery: Some(Phase::Ci),
+                    fast_gate_blocked: true,
+                    ..MockPhaseDriver::base()
+                };
+                let result = orchestrate(
+                    &mut driver,
+                    spec,
+                    AutoCompleteVariant::Full,
+                    false,
+                    EscalateMode::Blocks,
+                );
+                assert_eq!(driver.calls, vec![Phase::Implementer]);
+                result
+            });
+        }
+
         if let Some((fail_spec, phase)) = &self.fail_at {
             if fail_spec == spec {
                 // Failure leaves the spec queued — head does not advance.
@@ -8364,4 +8398,34 @@ fn fast_gate_drain_settled_repair_allows_normal_pipeline() {
     assert!(result.inconclusive_reason.is_none());
     assert!(driver.calls.contains(&Phase::Reviewer));
     assert!(driver.calls.contains(&Phase::Merge));
+}
+
+// trace:STORY-2640 | ai:codex
+#[test]
+fn fast_gate_batch_leaves_repair_queued_and_drives_next_member() {
+    let mut driver = MockBatchDriver::new(&["TASK-RED", "TASK-NEXT"]);
+    driver.fast_gate_spec = Some("TASK-RED".into());
+    let result = drain_batch(&mut driver, None, None);
+    assert_eq!(driver.runs, vec!["TASK-RED", "TASK-NEXT"]);
+    assert_eq!(driver.heads, vec!["TASK-RED"]); // repair remains queued
+    assert_eq!(result.shipped, vec!["TASK-NEXT"]);
+    assert_eq!(result.skipped.len(), 1);
+    assert_eq!(result.skipped[0].0, "TASK-RED");
+    assert!(result.skipped[0].1.contains("repair is pending"));
+    assert!(result.stopped_at.is_none());
+    assert_eq!(result.outcome, BatchDrainOutcome::DrainedWithShelved);
+}
+
+// trace:STORY-2640 | ai:codex
+#[test]
+fn fast_gate_pipeline_sidecar_preserves_nonretryable_stop() {
+    let mut result = OrchestrationResult::ok();
+    result.fast_gate_pending = true;
+    result.inconclusive_reason = Some("queued repair".into());
+    let encoded = crate::drain_batch::pipelined_child_result_sidecar_json(&result);
+    let decoded = crate::drain_batch::parse_pipelined_child_result_sidecar(&encoded).unwrap();
+    assert!(decoded.fast_gate_pending);
+    assert!(!crate::drive_robustness::is_retryable_orchestration(
+        &decoded
+    ));
 }

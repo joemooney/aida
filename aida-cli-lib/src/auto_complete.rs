@@ -1479,6 +1479,9 @@ pub(crate) struct OrchestrationResult {
     /// the caller can log the run and a batch drain can sort the spec apart
     /// from a clean ship. trace:STORY-306 | ai:claude
     pub(crate) escalation: Option<EscalationSummary>,
+    /// Host fast-gate repair is queued: do not retry or claim a ship.
+    // trace:STORY-2640 | ai:codex
+    pub(crate) fast_gate_pending: bool,
     /// BUG-257: set when phase 1 ended *inconclusively* — the orchestrator
     /// could not determine whether a PR exists (a transient GH-API network
     /// error). Like `punt_reason` this is a non-failure stop (`exit_code` `0`,
@@ -1521,6 +1524,7 @@ impl OrchestrationResult {
             punt_reason: None,
             shipped_spec_id: None,
             escalation: None,
+            fast_gate_pending: false,
             inconclusive_reason: None,
             shelved_reason: None,
             held_reason: None,
@@ -1541,6 +1545,7 @@ impl OrchestrationResult {
             punt_reason: None,
             shipped_spec_id: None,
             escalation: None,
+            fast_gate_pending: false,
             inconclusive_reason: None,
             shelved_reason: None,
             held_reason: None,
@@ -2429,6 +2434,7 @@ pub(crate) fn finish_noop(
         punt_reason: None,
         shipped_spec_id: None,
         escalation: None,
+        fast_gate_pending: false,
         inconclusive_reason: None,
         shelved_reason: None,
         held_reason: None,
@@ -2486,6 +2492,7 @@ fn finish_success(
         punt_reason: None,
         shipped_spec_id,
         escalation: None,
+        fast_gate_pending: false,
         inconclusive_reason: None,
         shelved_reason: None,
         held_reason: None,
@@ -2593,6 +2600,7 @@ fn finish_through_ci_success(
         punt_reason: None,
         shipped_spec_id,
         escalation: None,
+        fast_gate_pending: false,
         inconclusive_reason: None,
         shelved_reason: None,
         held_reason: None,
@@ -2669,6 +2677,7 @@ fn finish_punted(
         punt_reason: Some(reason.to_string()),
         shipped_spec_id: None,
         escalation: None,
+        fast_gate_pending: false,
         inconclusive_reason: None,
         shelved_reason: None,
         held_reason: None,
@@ -2787,6 +2796,7 @@ fn finish_escalated(
             kind,
             reason: reason.to_string(),
         }),
+        fast_gate_pending: false,
         inconclusive_reason: None,
         shelved_reason: None,
         held_reason: None,
@@ -2879,6 +2889,7 @@ fn finish_inconclusive(
         punt_reason: None,
         shipped_spec_id: None,
         escalation: None,
+        fast_gate_pending: false,
         inconclusive_reason: Some(reason.to_string()),
         shelved_reason: None,
         held_reason: None,
@@ -2983,6 +2994,7 @@ fn finish_inconclusive_shelved(
         punt_reason: None,
         shipped_spec_id: None,
         escalation: None,
+        fast_gate_pending: false,
         inconclusive_reason: None,
         shelved_reason,
         held_reason: None,
@@ -3069,6 +3081,7 @@ fn finish_held(
         punt_reason: None,
         shipped_spec_id: None,
         escalation: None,
+        fast_gate_pending: false,
         inconclusive_reason: None,
         shelved_reason: None,
         held_reason: Some(summary),
@@ -3225,6 +3238,7 @@ fn finish_failure(
         punt_reason: None,
         shipped_spec_id: None,
         escalation: None,
+        fast_gate_pending: false,
         inconclusive_reason: None,
         shelved_reason,
         held_reason: None,
@@ -3295,6 +3309,7 @@ fn finish_reconciled(
         punt_reason: None,
         shipped_spec_id: None,
         escalation: None,
+        fast_gate_pending: false,
         inconclusive_reason: None,
         shelved_reason: None,
         held_reason: None,
@@ -3340,7 +3355,7 @@ fn stop_for_fast_gate(
         Ok(true) => "fast gate repair is pending; leaving its queued round for pickup".to_string(),
         Err(error) => format!("cannot establish fast gate repair state: {error}"),
     };
-    Some(finish_inconclusive(
+    let mut result = finish_inconclusive(
         spec,
         json,
         start,
@@ -3348,7 +3363,9 @@ fn stop_for_fast_gate(
         &reason,
         Some("complete the queued fast gate repair before resuming this PR"),
         driver.hint_context().forge,
-    ))
+    );
+    result.fast_gate_pending = true;
+    Some(result)
 }
 
 /// Resolve a phase `Err` through the BUG-241 reconcile step. The orchestrator
@@ -4994,6 +5011,10 @@ pub(crate) trait BatchDriver {
     /// Re-resolved each call — a completed spec leaves the queue, so the head
     /// advances naturally.
     fn next_head(&mut self) -> Option<String>;
+    // trace:STORY-2640 | ai:codex
+    fn next_head_excluding(&mut self, excluded: &[String]) -> Option<String> {
+        self.next_head().filter(|id| !excluded.contains(id))
+    }
     /// Run one spec's full `--auto-complete` orchestration.
     fn run_spec(&mut self, spec: &str) -> OrchestrationResult;
     /// TASK-966: cumulative reported tokens across every headless phase the
@@ -5217,6 +5238,15 @@ fn apply_batch_result(
             exit_code: DRIVE_EXIT_HARD_FAIL,
         });
     }
+    if result.fast_gate_pending {
+        skipped.push((
+            head,
+            result
+                .inconclusive_reason
+                .unwrap_or_else(|| "fast gate repair pending".into()),
+        ));
+        return None;
+    }
     if result.inconclusive_reason.is_some() {
         return Some(BatchDrainResult {
             shipped: shipped.clone(),
@@ -5332,7 +5362,7 @@ pub(crate) fn drain_batch_pipelined_with_caps(
     let mut punted = Vec::new();
     let mut escalated = Vec::new();
     let mut shelved = Vec::new();
-    let mut skipped = Vec::new();
+    let mut skipped: Vec<(String, String)> = Vec::new();
     // STORY-1429: monotonic shelve-event count for the failure budget.
     // trace:STORY-1429 | ai:claude
     let mut shelve_events = 0usize;
@@ -5391,7 +5421,9 @@ pub(crate) fn drain_batch_pipelined_with_caps(
                     break;
                 }
             }
-            let Some(head) = driver.next_head() else {
+            let Some(head) = driver
+                .next_head_excluding(&skipped.iter().map(|(id, _)| id.clone()).collect::<Vec<_>>())
+            else {
                 no_more_heads = true;
                 break;
             };
@@ -5434,7 +5466,11 @@ pub(crate) fn drain_batch_pipelined_with_caps(
                 || (max.is_some()
                     && launched >= max.unwrap()
                     && !no_more_heads
-                    && driver.next_head().is_some())
+                    && driver
+                        .next_head_excluding(
+                            &skipped.iter().map(|(id, _)| id.clone()).collect::<Vec<_>>(),
+                        )
+                        .is_some())
             {
                 return BatchDrainResult {
                     shipped,
@@ -5663,7 +5699,9 @@ fn drain_batch_with_caps_streak(
     loop {
         // Resolve the head first: a `--max` of exactly the batch size should
         // report `Drained` (the batch genuinely emptied), not `MaxReached`.
-        let Some(head) = driver.next_head() else {
+        let Some(head) = driver
+            .next_head_excluding(&skipped.iter().map(|(id, _)| id.clone()).collect::<Vec<_>>())
+        else {
             // EPIC-28: clean drain or drained-with-shelved. The latter
             // wins whenever any failure shelved a spec, regardless of how
             // many independents shipped after — the operator still has to
@@ -5849,6 +5887,16 @@ fn drain_batch_with_caps_streak(
                 // `DrainedWithShelved` branch above. trace:TASK-1054 | ai:claude
                 exit_code: DRIVE_EXIT_HARD_FAIL,
             };
+        }
+        // trace:STORY-2640 | ai:codex — leave the repair row for a fresh pickup.
+        if result.fast_gate_pending {
+            skipped.push((
+                head,
+                result
+                    .inconclusive_reason
+                    .unwrap_or_else(|| "fast gate repair pending".into()),
+            ));
+            continue;
         }
         // BUG-257: an inconclusive run pauses the drain. The spec stays in
         // its current state — no ship, no punt, no escalate — so the next

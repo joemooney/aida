@@ -243,6 +243,10 @@ impl Backoff {
 pub(crate) fn is_retryable_orchestration(
     result: &crate::auto_complete::OrchestrationResult,
 ) -> bool {
+    // trace:STORY-2640 | ai:codex — a queued repair requires its own pickup brief.
+    if result.fast_gate_pending {
+        return false;
+    }
     if result.inconclusive_reason.is_some() {
         return true;
     }
@@ -299,6 +303,24 @@ mod tests {
     use super::*;
     use crate::auto_complete::{FailureKind, OrchestrationResult, Phase, PhaseFailure};
     use std::time::Duration;
+
+    // trace:STORY-2640 | ai:codex
+    #[test]
+    fn fast_gate_pending_does_not_backoff_or_restart_implementer() {
+        let mut calls = 0;
+        let result = run_with_transient_backoff_using(
+            || {
+                calls += 1;
+                let mut result = OrchestrationResult::ok();
+                result.fast_gate_pending = true;
+                result.inconclusive_reason = Some("repair queued".into());
+                result
+            },
+            |_| panic!("a queued repair must not back off"),
+        );
+        assert_eq!(calls, 1);
+        assert!(result.fast_gate_pending);
+    }
 
     // ── SleepInhibitor: invoked-then-released around a drive ──────────────────
 
