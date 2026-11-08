@@ -1,4 +1,4 @@
-use clap::{ArgGroup, Parser, Subcommand, ValueEnum};
+use clap::{ArgGroup, Parser, Subcommand};
 use std::path::PathBuf;
 
 // Command clap types live with their commands (`<module>_args.rs`); these
@@ -103,22 +103,6 @@ pub(crate) use crate::wiki::wiki_args::WikiCommand;
 pub(crate) use crate::worktree_gc::worktree_gc_args::{WorktreeCommand, WorktreePoolCommand};
 pub(crate) use crate::zen_cmd::zen_cmd_args::ZenCommand;
 
-/// Explicit output-format pin. Overrides the default, which is chosen from
-/// whether stdout is a terminal: the human table at a TTY, token-efficient
-/// TOON when the output is piped or captured. That silent switch broke real
-/// user scripts that parsed the table, so `--format` (or `AIDA_OUTPUT_FORMAT`)
-/// lets a script pin the format it expects regardless of the TTY.
-// trace:STORY-764 | ai:claude
-#[derive(ValueEnum, Clone, Copy, Debug, PartialEq, Eq)]
-pub enum OutputFormat {
-    /// Human-readable tables / emoji (the interactive default at a TTY).
-    Human,
-    /// Token-efficient TOON — the compact agent default when piped/captured.
-    Toon,
-    /// Machine JSON, for commands that support a JSON projection.
-    Json,
-}
-
 #[derive(Parser, Debug)]
 #[clap(
     author,
@@ -135,56 +119,8 @@ pub struct Cli {
     pub command: Command,
 }
 
-// The top-level options, shared by both dispatch paths: a registered command
-// has no `Command` variant to parse through, so its handler reads these from
-// the same `ArgMatches`. No doc comment: on a flattened `Args` struct it would
-// replace the root `about`. trace:STORY-1728 | ai:claude
-#[derive(clap::Args, Debug)]
-pub struct GlobalArgs {
-    /// Path to the requirements file (overrides auto-detection)
-    #[clap(long)]
-    pub file: Option<String>,
-
-    /// Project name to use from central registry
-    #[clap(long, short = 'p')]
-    pub project: Option<String>,
-
-    /// Connect to a remote AIDA server (e.g., "localhost:50051" or "grpc://host:port")
-    /// Can also be set via AIDA_SERVER environment variable
-    #[clap(long, short = 's')]
-    pub server: Option<String>,
-
-    /// Record this invocation with asciinema when running in a terminal
-    #[clap(long)]
-    pub asciinema: bool,
-
-    /// Output path for --asciinema recordings
-    #[clap(long, value_name = "PATH", requires = "asciinema")]
-    pub cast_out: Option<PathBuf>,
-
-    /// Title for --asciinema recordings
-    #[clap(long, value_name = "TITLE", requires = "asciinema")]
-    pub cast_title: Option<String>,
-
-    /// Print the absolute path to the current aida binary and exit.
-    // trace:TASK-1718 | ai:antigravity
-    #[clap(long)]
-    pub path: bool,
-
-    /// Pin the output format regardless of whether stdout is a terminal:
-    /// human = tables, toon = compact agent output, json = machine JSON.
-    /// Default (unset) is human at a TTY, toon when piped/captured. Also
-    /// settable via AIDA_OUTPUT_FORMAT (the flag wins).
-    #[clap(long, global = true, value_enum, value_name = "FORMAT")]
-    pub format: Option<OutputFormat>,
-
-    /// Show node-local spec IDs in their canonical form instead of the
-    /// node's friendly label (for scripts). Also settable via
-    /// AIDA_CANONICAL_IDS=1.
-    // trace:STORY-B6B1278890774EF993D2EBC327862470-078 | ai:claude
-    #[clap(long, global = true)]
-    pub canonical_ids: bool,
-}
+// trace:TASK-3425 | ai:codex
+pub use crate::cmdkit::{GlobalArgs, OutputFormat};
 
 // trace:FR-1-043 | ai:claude
 

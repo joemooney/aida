@@ -27,31 +27,9 @@ pub(crate) fn stakeholder_refusal(role: &str, action: &str) -> anyhow::Error {
     anyhow::anyhow!(stakeholder_refusal_message(role, action))
 }
 
-// trace:BUG-1197 | ai:codex
-// trace:TASK-1264 | ai:codex
-/// Shared capability vocabulary for the CLI and MCP stakeholder envelopes.
-/// Keeping this decision independent of either transport prevents a new write
-/// path from silently widening guest/requester authority.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub(crate) enum StakeholderAction {
-    Read,
-    Intake,
-    EditRequirement,
-    Queue,
-    Database,
-    MergeGate,
-    Session,
-    Role,
-    Relationship,
-    Comment,
-    Type,
-    Trace,
-    Finding,
-    Question,
-    Configuration,
-    BuildLoop,
-    Write,
-}
+// Preserve the capability vocabulary path without coupling cmdkit to this gate.
+// trace:TASK-3425 | ai:codex
+pub(crate) use crate::cmdkit::StakeholderAction;
 
 pub(crate) fn stakeholder_action_allowed(role: &str, action: StakeholderAction) -> bool {
     match role {
