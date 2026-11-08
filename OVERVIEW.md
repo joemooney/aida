@@ -1836,7 +1836,9 @@ Unix-domain socket in private `/tmp`. The job prints final `sccache --show-stats
 pending local cache writes can drain. Shutdown/statistics failures fail an
 otherwise successful job; Cargo failures retain their exit code. Timeouts and
 forced lane stops can still interrupt cache writes. Jobs share cached artifacts
-but have separate servers. Cargo home remains read-only and Cargo stays offline. One lane can poison another lane's
+but have separate servers. A private PID namespace keeps the host Cargo wrapper
+from observing other builds and restarting the job-owned server. Cargo home
+remains read-only and Cargo stays offline. One lane can poison another lane's
 cache; this is accepted for contained, CI-gated lanes, and grants no access to
 operator builds. Host sccache statistics do not measure these separate servers;
 cache-hit acceptance must inspect the lane server's statistics on each host.
