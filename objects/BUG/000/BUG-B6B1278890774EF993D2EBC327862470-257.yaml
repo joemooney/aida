@@ -18,7 +18,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-08T02:46:34.549817Z
-modified_at: 2026-11-08T13:09:50.150916430Z
+modified_at: 2026-11-08T13:09:53.165126731Z
 req_type: Bug
 tags:
 - area:ci
@@ -275,6 +275,26 @@ comments:
   content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: Round 6''s code findings are fixed and no merge-safety defect was found, but the PR title still completes the spec at merge against the cutover runbook, CI is unfinished at this head, AC1/AC2 live evidence is outstanding, and three minor items remain.. It was punted on: blocked-dependency: Round 6 implementation is already present at 5f57df7893, with no newer review findings and no new source changes needed. Manual cutover gate remains: host must retitle PR #3651 with trailing (Refs BUG-2492) and obtain green CI at its exact published head; repository operator must attach raw gh/web merge-refusal, unchanged-SHA label-only pending-to-success, app-pin/protection and notification evidence per docs/internal/testing/bug-2492-status-cutover.md before completion. Native seat cannot perform publication or human-gated cutover. Shell and jq regression fixtures pass; Rust revalidation job j20261108T125318134-2-0 is running.. No triage reason was given.'
   created_at: 2026-11-08T13:09:50.150910946Z
   modified_at: 2026-11-08T13:09:50.150910946Z
+  session_id: 01a1b9af-8230-75d2-82f8-667491cc010a
+  harness_version: 2.1.319 (Claude Code)
+- id: 01a1bb47-9521-7e81-8358-fc94540db34a
+  author: joe
+  content: |-
+    REVIEW FINDINGS TO ADDRESS (BUG-2492):
+    Verdict: CHANGES REQUESTED
+    Reviewed commit: d6f1d3186b65
+    Recorded: 2026-11-08T13:02:23.368660345+00:00
+    Findings:
+    1. 1. Blocker, unresolved since round 5: PR #3651's title still ends '(BUG-2492)' (re-read live at this review). The squash subject takes the PR title first, so merging completes the spec, while docs/internal/testing/bug-2492-status-cutover.md requires a trailing '(Refs BUG-2492)' and forbids Completed until live outputs are attached. Fix: the host retitles PR #3651 to end '(Refs BUG-2492)' before merge.
+    2. 2. Blocker: CI has not finished at reviewed head d6f1d3186b65. All 8 rows are pending (CI cli-0, cli-1, contracts, gates, lib-0, lib-1, rest and publish-merge-hold-status), and this head has no merge-hold-gate commit status yet. The publisher and shell fixtures have therefore not executed here. Approval needs green CI at the exact head.
+    3. 3. Open, operator action rather than a code defect: AC1 (ac798dd7), AC2 (accb2afb) and AC4 (ac4d9581) have no live evidence on the spec: no raw 'gh pr merge' refusal, web-UI refusal under app pin 15368, unchanged-SHA label-only pending-to-success, or notification observation. The agreed route is the cutover runbook; keep BUG-2492 open until its outputs are attached.
+    4. 4. Minor, unresolved from round 6: tests/test_merge_hold_gate.sh:117-121 anchors all five criteria to the single 'Test 1' section at :124, so aida criteria reports 'Untested criteria: none' although the comment at the block says the fixtures do not establish live enforcement or mail delivery. Fix: keep ac4be33b and ac24a24e on the fixture and remove the AC1, AC2 and AC4 anchors until live evidence exists.
+    5. 5. Minor, unresolved from round 6: aida-cli-lib/src/ci_gate.rs:302-326 classify_live_rows reads only the recorded/cleared pair, and upgrade_release.rs:1220 wait_after_pr_ci passes marker=false, label=false. A PR with only the active aida:merge-hold label (a blocking state in the gate fixtures) is ordinary pending for release --after-pr and waits the whole ci_absolute ceiling before CiTimeout; the legacy watch failed immediately. Fix: read the active label with the pair and refuse at once, with an active-only test.
+    6. 6. Cosmetic, unresolved from round 6: stale wording at aida-core/templates/skills-portable/aida-orchestrate.md:460 ('merge-hold-gate is red'); docs/advanced/autonomous-drain.md:114-118 (gate designed to be red); docs/internal/agents/aida-repository-guide.md:256-262 (replacement reports the required merge-hold-gate job; out-of-order label event can replace newer evidence, which the serialized live-metadata publisher changes).
+    7. 7. Plausible, verify during cutover (new this round; not reproduced, because no PR has run both triggers yet): while the temporary pull_request trigger coexists with pull_request_target, each event starts two runs in one concurrency group, and a newer waiting run cancels the older waiting one. A held PR's opened/labeled burst or aida merge-hold clear's two label changes can leave a cancelled publish-merge-hold-status row for one event. ci_gate.rs:47 treats bucket 'cancel' as red and that job is neither the hold gate nor informational, so aida pr ship could refuse with CiRed if gh pr checks surfaces that row. GitHub may also mail cancelled runs, which bears on AC4. Fix: add a runbook check for cancelled publisher rows and mail in the bootstrap window, or classify a superseded publisher job as non-blocking.
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
+  created_at: 2026-11-08T13:09:53.057120025Z
+  modified_at: 2026-11-08T13:09:53.057120025Z
   session_id: 01a1b9af-8230-75d2-82f8-667491cc010a
   harness_version: 2.1.319 (Claude Code)
 history:
