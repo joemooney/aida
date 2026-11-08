@@ -3206,45 +3206,6 @@ fn held_resume_plan_is_item_scoped_to_the_spec() {
     assert_eq!(plan.entries[0].spec_id, "STORY-306");
 }
 
-/// BUG-311 acceptance: when `--steal`'s internal `session_end` fails, the
-/// inner subprocess's error must name the lease + actual reason — not
-/// the canned "pass --steal" message. anyhow's `{:#}` collapses the
-/// chain inline; the `--steal`-prefixed map_err in `handle_queue_work`
-/// guarantees the lease id + reason are in the primary line.
-// trace:BUG-311 | ai:claude
-#[test]
-fn steal_session_end_failure_surfaces_actual_reason_not_canned_message() {
-    let lease_id = "019e4dec-abcd-7000-8000-000000000000";
-    let short = &lease_id[..8];
-    let underlying = anyhow::anyhow!("worktree has uncommitted changes — pass --force to discard");
-    let wrapped: anyhow::Error = anyhow::anyhow!(
-        "--steal could not end lease {}: {:#} \
-             (resolve manually: `aida session end {} --force` discards uncommitted \
-             changes and `--include-in-use` overrides a live process in the worktree; \
-             or commit/stash the changes or stop the process first, then re-run)",
-        short,
-        underlying,
-        short,
-    );
-
-    let primary = format!("{}", wrapped);
-    assert!(
-        primary.contains(&format!("--steal could not end lease {}", short)),
-        "primary line must name the lease the steal targeted; got: {}",
-        primary
-    );
-    assert!(
-        primary.contains("worktree has uncommitted changes"),
-        "primary line must include the actual session_end reason inline; got: {}",
-        primary
-    );
-    assert!(
-            !primary.contains("pass --steal to end that session first"),
-            "BUG-311: must NOT emit the canned `pass --steal` message when --steal IS already in play; got: {}",
-            primary
-        );
-}
-
 /// BUG-1568: the pipelined batch child is itself a `queue work
 /// --auto-complete`, so it takes the drain lock at its top while the parent
 /// batch drive still holds it. Without `AIDA_DRAIN_BORROW` it is refused with
@@ -4753,4 +4714,28 @@ fn bug_2451_cluster_cannot_fork_away_from_a_members_open_pr() {
         .unwrap_err()
         .to_string()
         .contains("individually"));
+}
+
+// trace:STORY-2325 | ai:codex
+#[test]
+fn retired_steal_refuses_rework_before_store_or_ruling_mutation() {
+    let tmp = tempfile::tempdir().unwrap();
+    let root = tmp.path().join("must-not-be-created");
+    let storage = Storage::new(&root);
+    let error = handle_rework_entry(
+        &storage,
+        Some("STORY-2325"),
+        &ReworkFlags {
+            work: true,
+            steal: true,
+            ruling: Some("must not be recorded"),
+            ..Default::default()
+        },
+    )
+    .unwrap_err();
+    assert!(
+        error.to_string().contains("`--steal` is retired"),
+        "{error:#}"
+    );
+    assert!(!root.exists());
 }
