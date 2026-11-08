@@ -13,12 +13,12 @@ description: |
   3. The BUG-1693 label rules (recorded vs cleared, train members' labels) behave exactly as today: same pass/block outcome for every label combination (table test over the existing check_labels cases).
   4. A push to a held PR sends no "run failed" notification for this check.
   5. A genuinely malformed label state (clearance with no recorded hold) still FAILS, since that is a real error.
-status: InProgress
+status: NeedsAttention
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-08T02:46:34.549817284Z
-modified_at: 2026-11-08T03:12:46.055564773Z
+modified_at: 2026-11-08T03:28:52.809728047Z
 req_type: Bug
 tags:
 - area:ci
@@ -47,6 +47,15 @@ history:
   session_id: 01a1b9249e89
   harness_version: codex-cli 0.167.0
   changes: []
+- id: 01a1b933-a849-7672-a6cf-f867b7644a4c
+  author: aida-orchestrator
+  timestamp: 2026-11-08T03:28:52.809755895Z
+  session_id: 01a1b931d790
+  harness_version: 2.1.319 (Claude Code)
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: NeedsAttention
 filed_at:
   code_sha: dc41ee8da2f44f88178936fc1a8e6cb7168a3de7
   branch: main
@@ -56,3 +65,11 @@ filed_at:
   vendor: claude
   session: 01a1b8be-8170-7fb2-89ab-ecb4c6eee98c
   harness_version: 2.1.319 (Claude Code)
+failure_reason:
+  phase: reviewer
+  phase_index: 3
+  kind: verdict:request-changes
+  detail: Gate logic and fixtures are correct (AC3/AC4/AC5 verified by tests/test_merge_hold_gate.sh), but switching to pull_request_target + a commit status leaves this PR with no merge-hold-gate status at all (required, enforce_admins on) and has no transition plan for legacy check runs; AC1 server-side behaviour unproven; CI still queued at review.
+  recovery_hint: address the review findings, move BUG-2492 back to In Progress, and clear the PR hold only after approval
+  shelved_by: reviewer
+  shelved_at: 2026-11-08T03:28:52.809728047Z
