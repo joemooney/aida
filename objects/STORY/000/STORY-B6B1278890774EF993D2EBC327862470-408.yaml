@@ -38,7 +38,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-05T02:09:16.726846978Z
-modified_at: 2026-11-07T04:30:43.939762462Z
+modified_at: 2026-11-08T03:38:37.511258221Z
 req_type: Story
 relationships:
 - rel_type:
@@ -271,6 +271,13 @@ comments:
   created_at: 2026-11-07T04:30:43.939762462Z
   modified_at: 2026-11-07T04:30:43.939762462Z
   session_id: 01a1b441-8158-7162-ad75-f7915b45ee33
+  harness_version: 2.1.319 (Claude Code)
+- id: 01a1b93c-9447-7742-aafb-fdff65dd4f32
+  author: joe
+  content: 'ADVISOR 2026-11-07 20:42: complete. PR-3504 landed on main as 28ff4ec9ac7 (train #3528). The round-4 approved review traced all six acceptance criteria to green tests: acc0579e/ac0a4b5e/acadec5a/AC6 tests/test_work_ci_relay.py:171; ac0a391b test_work_ci_relay.py:227 + ci_relay.rs:1271 + ci_receipt.rs:183; acd204af test_work_ci_relay.py:216 (deliberate refused push). The PR used Refs, so it did not auto-complete. The non-blocking note (silent skip of an unverified latest attempt) is filed as a follow-up. Deployment at work (user service + hub protected-branch rule) is operator setup, covered by the docs, not open acceptance.'
+  created_at: 2026-11-08T03:38:37.511258221Z
+  modified_at: 2026-11-08T03:38:37.511258221Z
+  session_id: 01a1b8be-8170-7fb2-89ab-ecb4c6eee98c
   harness_version: 2.1.319 (Claude Code)
 history:
 - id: 01a1a981-30bc-76b1-9765-3d063ed66a0b
