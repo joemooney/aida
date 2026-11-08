@@ -122,7 +122,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-08T00:35:39.542243859Z
-modified_at: 2026-11-08T03:20:35.895082562Z
+modified_at: 2026-11-08T05:01:36.084880897Z
 req_type: Story
 comments:
 - id: 01a1b895-7815-78d0-ba38-bbf9fe9f1533
@@ -139,6 +139,13 @@ comments:
   modified_at: 2026-11-08T03:20:35.895082562Z
   session_id: 01a1b92a6e74
   harness_version: codex-cli 0.167.0
+- id: 01a1b988-8bd4-7123-beba-fc647d7a8346
+  author: joe
+  content: 'ADVISOR 2026-11-07 22:08: #3653 landed the docs slice (per-writer bootstrap round trip). NEXT = implementation per rulings R1-R8 and the 17:35 OPERATOR RULING branch names (aida-feedback-<producer-node-id>, aida-feedback-receipts-<processor-node-id>, dash separator). Branch off main.'
+  created_at: 2026-11-08T05:01:36.084880897Z
+  modified_at: 2026-11-08T05:01:36.084880897Z
+  session_id: 01a1b8be-8170-7fb2-89ab-ecb4c6eee98c
+  harness_version: 2.1.319 (Claude Code)
 history:
 - id: 01a1b92a-7413-7ed3-b4ef-34036b0ecfba
   author: aida-session-start
