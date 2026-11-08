@@ -7504,8 +7504,10 @@ fn validate_store_worktree_paths(repo: &Path, paths: &[&str]) -> Result<()> {
 
 // Validate the actual staged bytes too: a clean worktree copy must not mask a
 // corrupt staged object. Unmerged entries refuse before any commit attempt.
+/// Refuse unmerged paths and invalid staged objects before staging can replace
+/// conflict stages. Call while holding the store writer lock.
 // trace:BUG-2490 | ai:codex
-fn validate_store_index(repo: &Path) -> Result<()> {
+pub fn validate_store_index(repo: &Path) -> Result<()> {
     validate_store_index_paths(repo, None)
 }
 

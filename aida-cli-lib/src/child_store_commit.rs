@@ -156,6 +156,10 @@ pub(crate) fn commit_store_writes_since(
         if paths.is_empty() {
             return Ok(paths);
         }
+        // Staging would erase unmerged stages even when the child repaired
+        // the worktree text. Preserve that evidence and refuse first.
+        // trace:BUG-2490 | ai:codex
+        aida_core::git_ops::validate_store_index(store)?;
         for path in &paths {
             if store.join(path).symlink_metadata().is_ok() {
                 aida_core::git_ops::add_all(store, path)?;
@@ -413,6 +417,38 @@ mod tests {
             .status()
             .unwrap();
         assert!(st.success(), "git {args:?}");
+    }
+
+    // trace:BUG-2490 | ai:codex
+    #[test]
+    fn bug_2490_child_commit_preserves_unmerged_index_after_text_repair() {
+        let (_tmp, store) = store_fixture();
+        let baseline = StoreBaseline::capture(&store);
+        git(&store, &["checkout", "-qb", "incoming"]);
+        std::fs::write(store.join("objects/old.yaml"), object("incoming")).unwrap();
+        git(&store, &["add", "."]);
+        git(&store, &["commit", "-qm", "incoming"]);
+        git(&store, &["checkout", "-"]);
+        std::fs::write(store.join("objects/old.yaml"), object("local")).unwrap();
+        git(&store, &["add", "."]);
+        git(&store, &["commit", "-qm", "local"]);
+        let merge = aida_core::git_ops::host_git_command(&store)
+            .args(["merge", "incoming"])
+            .output()
+            .unwrap();
+        assert!(!merge.status.success());
+        // Valid YAML alone must not implicitly resolve the index conflict.
+        std::fs::write(store.join("objects/old.yaml"), object("repaired")).unwrap();
+        let error = commit_store_writes_since(&store, &baseline, "reviewer")
+            .unwrap_err()
+            .to_string();
+        assert!(error.contains("unmerged store paths"), "{error}");
+        let unmerged = aida_core::git_ops::host_git_command(&store)
+            .args(["ls-files", "--unmerged"])
+            .output()
+            .unwrap();
+        assert!(unmerged.status.success());
+        assert!(String::from_utf8_lossy(&unmerged.stdout).contains("objects/old.yaml"));
     }
 
     /// Only paths changed after the baseline are committed: a new file, a
