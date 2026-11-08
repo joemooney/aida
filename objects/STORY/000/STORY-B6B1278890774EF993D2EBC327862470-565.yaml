@@ -28,7 +28,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-07T19:59:40.192574469Z
-modified_at: 2026-11-08T01:53:44.822037351Z
+modified_at: 2026-11-08T02:16:30.977943741Z
 req_type: Story
 comments:
 - id: 01a1b86c-54fb-76f0-b04b-0ed1c7c07cfb
@@ -81,6 +81,12 @@ comments:
   content: 'Native rework progress: changed only aida-cli-lib/src/lane_host.rs to exercise each containment failure independently through real fresh and drain queue handlers, with passing controls for all other containment rows and snapshots proving no project/user writes. Formatting, git diff --check, execution-context ledger (zero additions), and 8 Git fixture-maintenance tests passed. Rust validation remains pending: job j20261108T013313655-2-0 timed out compiling after 900s (no tests executed); retry j20261108T014845851-2-0 uses AIDA_CARGO_TIMEOUT=3600 and is currently queued for a Cargo slot. Non-completing native publication declaration recorded: [AI:codex] test(doctor): isolate lane host queue refusal conditions (Refs STORY-2642). No commit, push, PR creation or queue completion performed.'
   created_at: 2026-11-08T01:53:44.822037351Z
   modified_at: 2026-11-08T01:53:44.822037351Z
+  session_id: 01a1b8c792b8
+- id: 01a1b8f1-6801-7df1-b3a9-9aa1408710f0
+  author: joe
+  content: 'Native rework final handoff: aida-cli-lib/src/lane_host.rs now exercises uncontained policy, OS wrapping disabled, bubblewrap absent, and missing Codex preset as independent failures through both fresh and drain queue handlers. Every scenario asserts all other containment checks pass, verifies doctor refusal output, and compares project and user-file snapshots to prove refusal precedes writes. Existing preview-skip coverage remains. Final-source validation: lane runner job j20261108T014845851-2-0 exited 0 with 18 executed lane_host::tests passing (0 failed); rustfmt check, git diff --check, execution-context audit (1241 ledger sites, zero additions), and all 8 tests/test_git_maintenance_ratchet.py tests passed. The earlier 900-second run timed out during compilation without executing tests; the 3600-second retry completed. Runner additionally reported overlay-stale because the primary rewrote the seed generation; test execution nevertheless completed successfully. Only lane_host.rs is changed and edits are uncommitted. Publication declaration remains [AI:codex] test(doctor): isolate lane host queue refusal conditions (Refs STORY-2642). Preserve Refs and In Progress: the broader diagnostic limitations documented in the prior slice remain (lane cache reachability, release freshness, unsupported credential probes, and per-future-phase coverage). No commit, push, PR creation, queue completion, ship merge or review recording attempted. Host launcher owns publication.'
+  created_at: 2026-11-08T02:16:30.977943741Z
+  modified_at: 2026-11-08T02:16:30.977943741Z
   session_id: 01a1b8c792b8
 history:
 - id: 01a1b85d-3f02-70c2-a82d-cefccf97dc04
