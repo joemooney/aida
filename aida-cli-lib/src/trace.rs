@@ -3799,12 +3799,13 @@ pub(crate) fn mcp_tool_name_in_line(line: &str) -> Option<&str> {
 }
 
 /// Classify a single ADDED diff line as new public surface, or `None`. PURE —
-/// the `file` path only selects the MCP-tool probe (limited to `mcp.rs`).
+/// the `file` path only selects the MCP-tool probe (`mcp.rs` or `mcp_schema.rs`).
 // trace:TASK-939 | ai:claude
+// trace:TASK-3429 | ai:codex
 pub(crate) fn classify_surface_line(file: &str, line: &str) -> Option<PublicSurfaceKind> {
-    // MCP tool descriptor — only in the MCP surface file. The server-name line
+    // MCP tool descriptor — in the transport or shared schema. The server-name line
     // (`"name": "aida"`) is excluded so it never reads as a new tool.
-    if file.ends_with("mcp.rs") {
+    if file.ends_with("mcp.rs") || file.ends_with("mcp_schema.rs") {
         if let Some(name) = mcp_tool_name_in_line(line) {
             if name != "aida" {
                 return Some(PublicSurfaceKind::McpTool);

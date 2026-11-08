@@ -536,6 +536,7 @@ mod manual;
 #[cfg(test)]
 mod mcp;
 pub mod mcp_serve;
+#[cfg(test)]
 extern crate self as aida_cli_lib;
 // Shared with the extracted MCP transport; CLI callers stay below that boundary.
 // trace:TASK-3429 | ai:codex
