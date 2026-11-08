@@ -25,7 +25,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-07T19:45:35.836129088Z
-modified_at: 2026-11-08T02:49:27.405575375Z
+modified_at: 2026-11-08T02:49:45.018427003Z
 req_type: Story
 relationships:
 - rel_type:
@@ -248,6 +248,12 @@ comments:
   modified_at: 2026-11-08T01:24:24.499318309Z
   session_id: 01a1b8be-8170-7fb2-89ab-ecb4c6eee98c
   harness_version: 2.1.319 (Claude Code)
+- id: 01a1b90f-d53a-7b82-94ca-cd8f92f44239
+  author: joe
+  content: 'Round 4 approach. Acceptance criteria as tests: unit coverage retains native fail/fix and persistent-red one-round behavior (AC1/4), marker plus publication-error propagation and unchanged-lane advisor notification (AC2/3), sandbox/timeout and existing documentation contract tests (AC4/5). Add killed-owner/expired legacy receipt, operator-release and failed queue insertion regressions. Expected files: lane_fast_gate.rs, lane_cmd{,_args}.rs, publication callers in session.rs/queue_cmd.rs/standalone_implementer.rs, ship_from_seat.rs, CLI reference, AGENTS.md and OVERVIEW.md. Ambiguities / conflicts as questions: does a timeout warrant source repair? Per finding 4 use skipped(timeout), preserving the repair budget. Binding sandbox ruling remains unchanged. Native-seat finish overrides the commit requirement: host must create the new round commit after exit.'
+  created_at: 2026-11-08T02:49:45.018427003Z
+  modified_at: 2026-11-08T02:49:45.018427003Z
+  session_id: 01a1b90eb553
 history:
 - id: 01a1b78d-2628-7313-92de-8804ac5f8f71
   author: aida-session-start
