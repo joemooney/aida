@@ -31,7 +31,7 @@ at a time; measure whether this actually improves train wait before expanding.
    SSH keys, Codex auth or AIDA grants outside it. Never copy these into CI.
 3. Install systemd, build-essential, git, curl, python3, pkg-config,
    protobuf-compiler, libxcb-render0-dev, libxcb-shape0-dev, libxcb-xfixes0-dev,
-   libxkbcommon-dev, libssl-dev, libgtk-3-dev, bubblewrap, ripgrep and zsh.
+   libxkbcommon-dev, libssl-dev, libgtk-3-dev, bubblewrap, ripgrep, zstd and zsh.
    Install the runner distribution's .NET runtime prerequisites as needed.
    CI installs Rust into the disposable job HOME. Ensure at least eight CPUs
    numbered 0–7 are available; change the reviewed cpuset if dell1 differs.
@@ -49,7 +49,11 @@ at a time; measure whether this actually improves train wait before expanding.
    disposable VM; do not copy the hosted VM's policy-disabling steps onto dell1.
 6. Review the systemd sandbox: ProtectHome hides `/home`, `/root`, `/run/user`;
    fresh private tmp/IPC/devices, read-only system, no privilege escalation,
-   protected proc visibility and blocked common host-control sockets. There is
+   blocked common host-control sockets. Do not enable ProtectProc or
+   ProtectKernelTunables: their procfs overmounts can prevent the nested proc
+   mounts required by the containment tests. The prerequisite probe uses the
+   same fresh `/dev` and `/proc` mounts as those tests; self-hosted jobs set
+   `AIDA_REQUIRE_BWRAP_LIVE=1` so supported live-test failures cannot skip. There is
    no host credential/environment projection. Root owns the distribution and
    job parent; each job gets a fresh home/work directory. A shared slice caps
    all runners to eight cores (800% quota and CPU set 0–7). This is a host
@@ -73,16 +77,25 @@ This uses GitHub's JIT API instead of retaining a registration token. Generating
 registration credentials is always an operator act; never run it from the lane.
 The JIT runner takes one job, exits and deregisters. The launcher stops its whole
 cgroup and deletes the disposable directory on exit; a one-hour runtime limit
-also bounds idle registration. Repeat the operator command to accept another
-job; there is no credential-bearing automatic re-registration service here.
+also bounds idle registration. For continuous capacity, run the reviewed `scripts/runner/rearm.sh` in a
+foreground operator session (for example an operator-owned tmux session). It
+uses host-side gh credentials to generate each fresh configuration and invokes
+the installed root launcher through sudo. Credentials never enter the job.
+Keep sudo authorization valid under the operator policy; any API, sudo or runner
+failure stops the loop. Monitor that session and restart after diagnosing a
+failure. Ctrl-C stops it. Start this supervisor before enabling routing and keep
+it active while enabled: each PR needs four successive registrations. There is
+no unattended credential service installed by this change.
 Use the GitHub UI to remove orphan registrations if setup fails. After a host
 crash, remove inactive `aida-ci-*` services and stale `/var/lib/aida-ci-jobs/job.*`
 directories before registering again. Preserve relevant diagnostics first.
 
 Enable with repository variable `AIDA_DELL1_CI=true` only after verification.
 During a smoke run, record `systemctl show aida-ci.slice -p CPUQuotaPerSecUSec
--p AllowedCPUs`, confirm the job uses the `aida-ci` uid, and confirm prerequisites
-pass without access to `/home/dirtlab` or sudo. Check a fork PR still selects
+-p AllowedCPUs`, confirm the job uses the `aida-ci` uid, and confirm the exact prerequisite probe (including fresh proc/dev mounts and
+nested user namespaces) passes under the actual unit properties, then run a
+heavy shard with `AIDA_REQUIRE_BWRAP_LIVE=1`. Do not enable routing until this
+smoke test succeeds. Confirm prerequisites pass without access to `/home/dirtlab` or sudo. Check a fork PR still selects
 `ubuntu-latest`; approving it must not move it to dell1. Review the default
 branch workflow as well as any pending workflow modifications.
 

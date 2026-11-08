@@ -82,6 +82,24 @@ class ExpressionTests(unittest.TestCase):
                                 self.assertLessEqual(set(adapter.RUNNER_REFERENCE.findall(command)),
                                                      adapter.RUNNER_VARIABLES)
 
+    # trace:STORY-2672 | ai:codex
+    def test_guarded_routing_is_closed_and_gitlab_uses_hosted_setup(self):
+        import copy
+        job = yaml.safe_load((ROOT / '.github/workflows/ci.yml').read_text())['jobs']['build']
+        current = adapter.context('lib-0', True)
+        self.assertEqual(current['runner.environment'], 'github-hosted')
+        adapter.validate_job(job, current)
+        for runner in ('self-hosted', ['self-hosted', 'Linux'],
+                       job['runs-on'].replace("github.event_name == 'push'", 'true')):
+            changed = copy.deepcopy(job)
+            changed['runs-on'] = runner
+            with self.subTest(runner=runner), self.assertRaises(ValueError):
+                adapter.validate_job(changed, current)
+        setup = next(step for step in job['steps'] if step.get('name') == 'Install Linux dependencies')
+        self.assertTrue(adapter.condition(setup['if'], current))
+        probe = next(step for step in job['steps'] if step.get('name') == 'Verify self-hosted prerequisites')
+        self.assertFalse(adapter.condition(probe['if'], current))
+
     def test_every_current_package_install_is_mapped(self):
         workflow = yaml.safe_load((ROOT / '.github/workflows/ci.yml').read_text())
         for step in workflow['jobs']['build']['steps']:

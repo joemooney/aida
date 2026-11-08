@@ -53,3 +53,128 @@ class Routing(unittest.TestCase):
                 gate_only = "matrix.shard == 'gates'" in step.get('if', '')
                 self.assertTrue(gate_only or "runner.environment != 'self-hosted'" in step['if'], step['name'])
         self.assertEqual(workflow['jobs']['build-result']['runs-on'], 'ubuntu-latest')
+
+
+class LauncherRefusals(unittest.TestCase):
+    """Execute real shell guards with isolated paths and mocked host tools."""
+    def run_launcher(self, *, uid='1001', groups='1001', writable=False,
+                     symlink=False, jit='config\n', invoking_uid='0'):
+        import os
+        import subprocess
+        import tempfile
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            dist = root / 'distribution'
+            dist.mkdir(mode=0o755)
+            (dist / 'run.sh').write_text('#!/bin/sh\nexit 0\n')
+            (dist / 'run.sh').chmod(0o755)
+            if writable:
+                (dist / 'run.sh').chmod(0o777)
+            if symlink:
+                (dist / 'npm').symlink_to('run.sh')
+            commands = root / 'bin'
+            commands.mkdir()
+            mocks = {
+                'id': f'case "$1" in -u) echo {uid};; -G) echo "{groups}";; esac',
+                'flock': 'exit 0',
+                # Stop before any system mutation, after all input guards.
+                'install': 'echo REACHED_INSTALL >&2; exit 91',
+            }
+            # The fixture user owns its temp tree; substitute the owner predicate
+            # only, preserving find's real type/permission behavior for symlinks.
+            script = (ROOT / 'scripts/runner/one-job.sh').read_text()
+            script = script.replace('"$EUID"', f'"{invoking_uid}"')
+            script = script.replace('/run/aida-ci-runner.lock', str(root / 'lock'))
+            script = script.replace('/opt/aida-actions-runner', str(dist))
+            script = script.replace('! -user root', f'! -user {os.getuid()}')
+            for name, body in mocks.items():
+                path = commands / name
+                path.write_text('#!/bin/sh\n' + body + '\n')
+                path.chmod(0o755)
+            return subprocess.run(['bash', '-c', script], input=jit, text=True,
+                                  capture_output=True, timeout=5,
+                                  env={**os.environ, 'PATH': f'{commands}:/usr/bin:/bin'})
+
+    def test_refuses_nonroot_operator(self):
+        result = self.run_launcher(invoking_uid='1001')
+        self.assertEqual(result.returncode, 2)
+        self.assertIn('Usage:', result.stderr)
+
+    def test_refuses_root_runner(self):
+        self.assertIn('must be non-root', self.run_launcher(uid='0').stderr)
+
+    def test_refuses_supplementary_groups(self):
+        self.assertIn('supplementary groups', self.run_launcher(groups='1001 27').stderr)
+
+    def test_refuses_writable_distribution(self):
+        self.assertIn('not writable', self.run_launcher(writable=True).stderr)
+
+    def test_symlink_distribution_passes_mode_guard(self):
+        result = self.run_launcher(symlink=True)
+        self.assertEqual(result.returncode, 91, result.stderr)
+        self.assertIn('REACHED_INSTALL', result.stderr)
+
+    def test_refuses_empty_or_missing_jit(self):
+        for jit in ('\n', ''):
+            result = self.run_launcher(jit=jit)
+            self.assertNotEqual(result.returncode, 0)
+            self.assertIn('JIT configuration', result.stderr)
+            self.assertNotIn('REACHED_INSTALL', result.stderr)
+
+    def test_prerequisite_refusals(self):
+        import os
+        import subprocess
+        import tempfile
+        for failure in ('root', 'sudo', 'home', 'auth', 'zstd'):
+            with self.subTest(failure=failure), tempfile.TemporaryDirectory() as directory:
+                root = Path(directory)
+                home = root / 'operator'
+                home.mkdir(mode=0o700)
+                auth = home / 'auth.json'
+                auth.write_text('fixture')
+                script = (ROOT / 'scripts/runner/check-prerequisites.sh').read_text()
+                script = script.replace('/home/dirtlab/.codex/auth.json', str(auth) if failure == 'auth' else str(root / 'absent'))
+                script = script.replace('/home/dirtlab', str(home) if failure == 'home' else str(root / 'absent'))
+                for name in ('cc', 'git', 'curl', 'python3', 'pkg-config', 'protoc', 'zsh', 'rg', 'bwrap', 'zstd', 'sudo', 'id'):
+                    body = 'exit 0'
+                    if name == 'id':
+                        body = 'echo ' + ('0' if failure == 'root' else '1001')
+                    if name == 'sudo':
+                        body = 'exit ' + ('0' if failure == 'sudo' else '1')
+                    if name == 'zstd' and failure == 'zstd':
+                        continue
+                    path = root / name
+                    path.write_text('#!/bin/sh\n' + body + '\n')
+                    path.chmod(0o755)
+                result = subprocess.run(['/bin/bash', '-c', script], capture_output=True,
+                                        text=True, timeout=5, env={**os.environ, 'PATH': str(root)})
+                self.assertNotEqual(result.returncode, 0)
+                expected = {'root': 'unprivileged', 'sudo': 'sudo access',
+                            'home': 'home is traversable', 'auth': 'auth is readable',
+                            'zstd': 'missing tool: zstd'}[failure]
+                self.assertIn(expected, result.stderr)
+
+    def test_rearm_generates_fresh_configs_and_stops_on_failure(self):
+        import os
+        import subprocess
+        import tempfile
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            count = root / 'count'
+            received = root / 'received'
+            commands = {
+                'gh': f'echo fresh-jit >> "{count}"; echo fresh-jit',
+                'sudo': f'if [ "$1" = -v ]; then exit 0; fi; cat >> "{received}"; '
+                        f'[ "$(wc -l < "{received}")" -lt 2 ]',
+            }
+            for name, body in commands.items():
+                path = root / name
+                path.write_text('#!/bin/sh\n' + body + '\n')
+                path.chmod(0o755)
+            script = (ROOT / 'scripts/runner/rearm.sh').read_text().replace('"$EUID"', '"1001"')
+            result = subprocess.run(['bash', '-c', script], capture_output=True,
+                                    text=True, timeout=5,
+                                    env={**os.environ, 'PATH': f'{root}:/usr/bin:/bin'})
+            self.assertNotEqual(result.returncode, 0)
+            self.assertEqual(count.read_text().splitlines(), ['fresh-jit'] * 2)
+            self.assertEqual(received.read_text().splitlines(), ['fresh-jit'] * 2)

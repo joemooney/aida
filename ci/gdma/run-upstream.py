@@ -178,6 +178,7 @@ def context(lane, full, failed=False, environ=None):
     environ = {} if environ is None else environ
     return {
         "matrix.shard": lane, "runner.os": "Linux",
+        "runner.environment": "github-hosted",
         "github.event_name": event_name(environ),
         "github.event.pull_request.base.sha": environ.get("CI_MERGE_REQUEST_DIFF_BASE_SHA", ""),
         "github.event.merge_group.base_sha": "",
@@ -211,7 +212,11 @@ def validate_job(job, current):
         raise ValueError("Unsupported upstream matrix settings")
     if matrix.get("os", ["ubuntu-latest"]) != ["ubuntu-latest"]:
         raise ValueError("Unsupported upstream matrix OS")
-    if job.get("runs-on", "${{ matrix.os }}") != "${{ matrix.os }}":
+    # trace:STORY-2672 | ai:codex
+    # GitLab always uses its provisioned image; accept only the reviewed GitHub
+    # routing policy, never arbitrary runner expressions.
+    guarded_runner = '${{ vars.AIDA_DELL1_CI == \'true\' && (github.event_name == \'push\' || (github.event_name == \'pull_request\' && github.event.pull_request.head.repo.full_name == github.repository)) && contains(fromJSON(\'["lib-0","lib-1","cli-0","cli-1"]\'), matrix.shard) && fromJSON(\'["self-hosted","Linux","X64","aida-dell1"]\') || matrix.os }}'
+    if job.get("runs-on", "${{ matrix.os }}") not in ("${{ matrix.os }}", guarded_runner):
         raise ValueError("Unsupported upstream runner")
     if set(job.get("defaults", {})) - {"run"}:
         raise ValueError("Unsupported upstream defaults")

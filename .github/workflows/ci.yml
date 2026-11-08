@@ -45,6 +45,7 @@ jobs:
     # scripts skip `cargo build -p aida-cli`, whose different feature set
     # recompiled the CLI for 1-2 min per lane. trace:TASK-1979 | ai:claude
     env:
+      AIDA_REQUIRE_BWRAP_LIVE: ${{ runner.environment == 'self-hosted' && '1' || '' }}
       AIDA_CI_PREBUILT_CLI: ${{ (matrix.shard == 'gates' || matrix.shard == 'contracts') && '1' || '' }}
     strategy:
       fail-fast: false
