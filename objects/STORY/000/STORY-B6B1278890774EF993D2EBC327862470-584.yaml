@@ -18,7 +18,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-08T02:58:08.667753563Z
-modified_at: 2026-11-08T06:18:28.050795702Z
+modified_at: 2026-11-08T07:10:37.356950168Z
 req_type: Story
 tags:
 - area:human-wait
@@ -211,6 +211,12 @@ history:
   - field_name: status
     old_value: InProgress
     new_value: NeedsAttention
+- id: 01a1b9fe-ab7e-7721-ac33-124bbfadb591
+  author: joe
+  timestamp: 2026-11-08T07:10:37.438318078Z
+  session_id: 01a1b9fb239b
+  harness_version: 2.1.319 (Claude Code)
+  changes: []
 filed_at:
   code_sha: dc41ee8da2f44f88178936fc1a8e6cb7168a3de7
   branch: main
@@ -226,3 +232,11 @@ attention_reason:
   lean: Approve the sketch and admission limits, then implement with crash-recovery and per-vendor fixture coverage.
   raised_by: implementer
   raised_at: 2026-11-08T06:18:28.050795702Z
+failure_reason:
+  phase: reviewer
+  phase_index: 3
+  kind: verdict:request-changes
+  detail: Sketch-only PR carries a completing (STORY-2661) trailer that would close the story at merge with AC1-4 unimplemented and no advisor signoff; the sketch also leaves the resume consumer, grant source and question identity undefined.
+  recovery_hint: address the review findings, move STORY-2661 back to In Progress, and clear the PR hold only after approval
+  shelved_by: reviewer
+  shelved_at: 2026-11-08T07:10:37.356950168Z
