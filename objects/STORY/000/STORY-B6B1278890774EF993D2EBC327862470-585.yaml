@@ -12,12 +12,12 @@ description: |
   2. The packet is size-bounded and readable by the next turn and by `aida session handoff --show`.
   3. Codex uses the same command once the trusted-hook rerun is a yes; until then a vendor descriptor says the capability is absent.
   4. No vendor depends on this for correctness: a lane without the hook still completes.
-status: NeedsAttention
+status: Approved
 priority: Low
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-08T02:58:18.689963065Z
-modified_at: 2026-11-08T06:57:26.361626883Z
+modified_at: 2026-11-08T07:01:51.525327270Z
 req_type: Story
 tags:
 - area:handoff
@@ -31,6 +31,13 @@ comments:
   created_at: 2026-11-08T06:07:47.871900382Z
   modified_at: 2026-11-08T06:07:47.871900382Z
   session_id: 01a1b9af-8230-75d2-82f8-667491cc010a
+  harness_version: 2.1.319 (Claude Code)
+- id: 01a1b9f6-a525-7bb3-b9d9-e3d685388072
+  author: joe
+  content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: CI (rest) is red from this PR, and PreCompact snapshots enter the rotation handoff channel; AC1 and AC2 not met.. No triage reason was given.'
+  created_at: 2026-11-08T07:01:51.525324862Z
+  modified_at: 2026-11-08T07:01:51.525324862Z
+  session_id: 01a1b8be-8170-7fb2-89ab-ecb4c6eee98c
   harness_version: 2.1.319 (Claude Code)
 history:
 - id: 01a1b9c5-3252-7530-8b0b-bbe2c3ac5581
@@ -58,6 +65,15 @@ history:
   - field_name: status
     old_value: InProgress
     new_value: NeedsAttention
+- id: 01a1b9f6-a525-7bb3-b9d9-e3c690afbdfa
+  author: joe
+  timestamp: 2026-11-08T07:01:51.525304490Z
+  session_id: 01a1b8be-8170-7fb2-89ab-ecb4c6eee98c
+  harness_version: 2.1.319 (Claude Code)
+  changes:
+  - field_name: status
+    old_value: NeedsAttention
+    new_value: Approved
 filed_at:
   code_sha: dc41ee8da2f44f88178936fc1a8e6cb7168a3de7
   branch: main
@@ -67,11 +83,3 @@ filed_at:
   vendor: claude
   session: 01a1b8be-8170-7fb2-89ab-ecb4c6eee98c
   harness_version: 2.1.319 (Claude Code)
-failure_reason:
-  phase: reviewer
-  phase_index: 3
-  kind: verdict:request-changes
-  detail: CI (rest) is red from this PR, and PreCompact snapshots enter the rotation handoff channel; AC1 and AC2 not met.
-  recovery_hint: address the review findings, move STORY-2662 back to In Progress, and clear the PR hold only after approval
-  shelved_by: reviewer
-  shelved_at: 2026-11-08T06:57:26.361626883Z
