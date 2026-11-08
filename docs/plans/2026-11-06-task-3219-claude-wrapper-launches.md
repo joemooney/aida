@@ -7,7 +7,9 @@ four separate Refs slices in order: S1 coordinator, S2 interactive PTY,
 S3 background supervisor, S4 resume. S4 alone removes the remaining refusal
 and carries the completing trailer. S1 uses the existing foreground headless
 boundary, receipt-before-release and worker grant binding. S2 adds private-PTY
-foreground agent-new on that boundary; background and resume continue to refuse. This document grants no launch or publication authority.
+foreground agent-new on that boundary. S3 adds an AIDA-owned detached supervisor
+for foreground print-mode Claude, with AIDA log snapshots and read-only attach.
+Resume remains refused until S4. This document grants no launch or publication authority.
 
 ## Contract
 
@@ -114,5 +116,5 @@ fork remain refused.
 The binding implementation order is S1 coordinator, S2 interactive PTY,
 S3 background supervisor, S4 resume, with a separate Refs PR and targeted/live
 regression for each. Only S4 removes the remaining refusal and completes the
-task. This checkout implements S1 and S2; validation results belong in the spec audit
+task. This checkout implements S1, S2 and S3; validation results belong in the spec audit
 trail and host publication handoff.

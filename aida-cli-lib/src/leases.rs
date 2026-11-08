@@ -2951,7 +2951,7 @@ pub(crate) fn classify_session_leases(
 ) -> Vec<(SessionLease, LeaseState, Option<u32>)> {
     let now = chrono::Utc::now();
     let live = process_probe::probe_live_claude_sessions();
-    let live_agents = agent_registry::load_live_entries(project_root);
+    let live_agents = agent_registry::load_live_identity_entries(project_root);
     leases
         .iter()
         .map(|l| {

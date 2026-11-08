@@ -64,8 +64,9 @@ pub(super) const MARGIN: i64 = 300;
 const BASELINE: i64 = 3600;
 pub(crate) const DEFAULT_MIN_GRANT_SECS: i64 = 1800;
 const BOUND: usize = 65536;
+// trace:TASK-3463 | ai:codex — exact 0.167.0 musl executable and help fixture.
 pub(crate) const PROGRAM_SHA256: &str =
-    "b8a11fedf24b2dfb59a70c9e52b030f9a508dcd49cd2dd0d41956f4c785156b8";
+    "cdcb45aaa01d0f14e298985e09465aebccd47f64ecd298aea44814af7b62bbda";
 
 /// Pin the probed interface without executing lane-selected code on the host.
 /// The actual vendor execution still happens only within the contained lane.
@@ -98,7 +99,7 @@ pub(crate) fn require_program(program: &Path, expected_sha256: &str) -> Result<(
     }
     anyhow::ensure!(
         format!("{:x}", digest.finalize()) == expected_sha256,
-        "contained ChatGPT auth refused: re-probe this codex binary (supported: codex-cli 0.166.0 SHA-256 {PROGRAM_SHA256}); put the probed native codex binary first on PATH"
+        "contained ChatGPT auth refused: re-probe this codex binary (supported: codex-cli 0.167.0 SHA-256 {PROGRAM_SHA256}); put the probed native codex binary first on PATH"
     );
     Ok(())
 }
