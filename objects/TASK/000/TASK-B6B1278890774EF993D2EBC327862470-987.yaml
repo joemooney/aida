@@ -1,0 +1,29 @@
+id: 01a1bb00-7356-7282-bae9-857a20b9d263
+spec_id: TASK-b6b1278890774ef993d2ebc327862470-987
+title: 'NON-BLOCKING (minor): contained.rs:1502 still runs fixture validation before th…'
+description: |-
+  Non-blocking finding carried forward from an APPROVED review verdict on TASK-3000, which has since completed — recorded here so it keeps a queryable home once the verdict record stops being read.
+
+  NON-BLOCKING (minor): contained.rs:1502 still runs fixture validation before the live probe on unpinned lanes, so a caller flag added after 0.166.0 is refused with 'unsupported by pinned codex-cli 0.166.0' even though another binary is in use.
+
+  PR: #3659
+  Reviewed sha: 910c7aaf8350088bb98dfd8f4b891895b4003cb9
+status: Draft
+priority: Medium
+owner: joe
+feature: Uncategorized
+created_at: 2026-11-08T11:52:11.350455220Z
+modified_at: 2026-11-08T11:52:11.350455220Z
+req_type: Task
+tags:
+- carried-from:TASK-3000
+- finding-hash:d79bd43e
+- from-review:PR-3659
+- kind:carried-forward
+filed_at:
+  code_sha: b77fce7b3ca9b542a0244e2513c2468cd74d4c56
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 92e7eb35446
+  vendor: claude
