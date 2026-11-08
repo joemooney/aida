@@ -3,12 +3,12 @@ spec_id: STORY-b6b1278890774ef993d2ebc327862470-595
 agreed_id: STORY-2672
 title: 'CI capacity: add a self-hosted GitHub Actions runner on dell1 (20 idle cores) so test shards stop queueing behind the hosted-runner concurrency cap'
 description: 'Observed 2026-11-07 21:00: 7 CI runs queued + 6 in progress on GitHub-hosted runners (no self-hosted runners registered); each run is ~8 jobs, so merge trains waited 40+ min on CI while dell1 sat at load 0.3. Operator decision needed (registration token, trust of running private-repo CI on dell1). Acceptance: runner registered with a label; heavy shards (lib-0/1, cli-0/1) route to it via runs-on labels with hosted fallback; median train CI wait measured before/after.'
-status: Approved
+status: InProgress
 priority: Medium
-owner: ''
+owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-08T05:25:50.443321273Z
-modified_at: 2026-11-08T06:07:59.466573855Z
+modified_at: 2026-11-08T06:19:00.470682512Z
 req_type: Story
 tags:
 - area:ci
@@ -31,6 +31,13 @@ history:
   - field_name: status
     old_value: Draft
     new_value: Approved
+- id: 01a1b9cf-69f6-7b70-bf3b-a4eb1784d983
+  author: aida-session-start
+  timestamp: 2026-11-08T06:19:00.470681097Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: InProgress
 filed_at:
   code_sha: ff9b8c91808130e9bddf339d428915a5d551416e
   branch: main
