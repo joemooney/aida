@@ -1461,6 +1461,51 @@ fn codex_argv(
     }
     let mut i = 0;
     while i < original.len() {
+        // trace:TASK-3015 | ai:codex — the option terminator makes the
+        // remaining prompt opaque, including text that resembles config flags.
+        if original[i] == "--" {
+            args.extend_from_slice(&original[i..]);
+            break;
+        }
+        // trace:TASK-3015 | ai:codex — site config must not replace the
+        // generated posture; match the background launch's protected keys.
+        let config = match original[i].as_str() {
+            "-c" | "--config" => Some(
+                original
+                    .get(i + 1)
+                    .context("contained Codex config flag requires a value")?
+                    .as_str(),
+            ),
+            arg => arg.strip_prefix("--config=").or_else(|| {
+                arg.strip_prefix("-c")
+                    .filter(|v| !v.is_empty())
+                    .map(|v| v.strip_prefix('=').unwrap_or(v))
+            }),
+        };
+        if let Some(config) = config {
+            let key = config.split('=').next().unwrap_or("").trim();
+            anyhow::ensure!(
+                ![
+                    "sandbox",
+                    "approval",
+                    "default_permissions",
+                    "shell_environment_policy",
+                    "permissions"
+                ]
+                .iter()
+                .any(|prefix| key.starts_with(prefix)),
+                "contained Codex refuses posture config override `{key}`"
+            );
+            // Consume the value as data, even if it resembles another flag.
+            let consumed = if matches!(original[i].as_str(), "-c" | "--config") {
+                2
+            } else {
+                1
+            };
+            args.extend_from_slice(&original[i..i + consumed]);
+            i += consumed;
+            continue;
+        }
         // trace:BUG-2495 | ai:codex — approval flags are top-level only in
         // the pinned CLI; exec accepts the equivalent config override.
         let approval = if matches!(original[i].as_str(), "--ask-for-approval" | "-a") {
@@ -1482,10 +1527,28 @@ fn codex_argv(
             i += consumed;
             continue;
         }
-        if original[i] == "--sandbox"
-            && original.get(i + 1).map(String::as_str) == Some("workspace-write")
-        {
-            i += 2;
+        // trace:TASK-3015 | ai:codex — inline sandbox values must pass
+        // the same posture check as split values before flag validation.
+        let sandbox = if matches!(original[i].as_str(), "--sandbox" | "-s") {
+            Some((
+                original
+                    .get(i + 1)
+                    .context("contained Codex sandbox flag requires a value")?
+                    .as_str(),
+                2,
+            ))
+        } else {
+            original[i]
+                .strip_prefix("--sandbox=")
+                .or_else(|| original[i].strip_prefix("-s="))
+                .map(|value| (value, 1))
+        };
+        if let Some((value, consumed)) = sandbox {
+            anyhow::ensure!(
+                value == "workspace-write",
+                "contained Codex sandbox policy must be workspace-write"
+            );
+            i += consumed;
             continue;
         }
         anyhow::ensure!(
