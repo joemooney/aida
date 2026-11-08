@@ -14,7 +14,7 @@ priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-11-08T14:08:42.329402111Z
-modified_at: 2026-11-08T15:26:19.191893029Z
+modified_at: 2026-11-08T15:26:24.857158835Z
 req_type: Task
 tags:
 - carried-from:TASK-3463
@@ -26,6 +26,14 @@ relationships:
   target_id: 01a1b9ba-4d81-7e60-bb92-919bf9dec5cd
   created_at: 2026-11-08T15:26:19.191889229Z
   created_by: joe
+comments:
+- id: 01a1bbc4-9459-7591-aca6-3fe28d234b5e
+  author: joe
+  content: 'Advisor 2026-11-08, per the operator''s 2026-10-28 one-time ruling on non-blocking findings: accepted. Docs placement only.'
+  created_at: 2026-11-08T15:26:24.857158835Z
+  modified_at: 2026-11-08T15:26:24.857158835Z
+  session_id: 01a1bbab-762f-7cd2-8a36-4ea9f209afce
+  harness_version: 2.1.319 (Claude Code)
 history:
 - id: 01a1bba6-1dbc-7ea0-8898-6f6ca1a7ec92
   author: joe
