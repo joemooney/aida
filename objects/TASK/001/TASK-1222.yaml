@@ -28,7 +28,7 @@ priority: Low
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-09-13T22:07:45.944235Z
-modified_at: 2026-11-08T07:31:30.201716692Z
+modified_at: 2026-11-08T07:39:24.943030341Z
 req_type: Task
 tags:
 - cleanup
@@ -215,6 +215,20 @@ comments:
   modified_at: 2026-11-08T07:29:45.405906447Z
   session_id: 01a1b8be-8170-7fb2-89ab-ecb4c6eee98c
   harness_version: 2.1.319 (Claude Code)
+- id: 01a1ba19-078f-7e03-abb8-ad3b6333bd52
+  author: dirtlab
+  content: |
+    Native rework handoff for review at d68a193f5371: addressed the five latest findings. Linked cleanliness now shares the seat runtime-noise classifier for explicit AIDA links/caches and empty sandbox placeholders, while tracked changes and genuine ignored state remain protected. Empty untracked/ignored .gitmodules is excused; tracked or nonempty .gitmodules retains the tree. Added a realistic launched-worktree fixture and preservation assertions. Scheduler's final error line now includes scanned, eligible, kept, remaining, reclaimable_bytes and bytes_complete, with a regression. Scoped ignored-state documentation to linked worktrees, updated AGENTS weekly/operator guidance, and removed the retired monthly command allowlist entry and stale scheduler regression case.
+
+    Validation: j20261108T073254280-2-0 executed 18 TASK-1222 tests, all passed; j20261108T073325705-2-0 executed the shared runtime classifier regression, passed; j20261108T073326880-2-0 executed scheduler routing regression, passed. All exit 0, 20 executed tests total, untested=false. Direct rustfmt checks, git diff --check and schedule TOML parsing pass. aida criteria finds all four criteria traced and no unanchored tests. Initial wrong-package job j20261108T073246890-2-0 exited 101 without tests and is not included in pass claims.
+
+    Changed files: AGENTS.md; aida-cli-lib/src/maintenance_schedule.rs; aida-cli-lib/src/seat_clone.rs; aida-cli-lib/src/tests/maintenance_schedule_tests.rs; aida-cli-lib/src/worktree_lifecycle_gc.rs; docs/cli/06-roles-sessions.md. No implementation blockers. Existing path-sorted scan order remains; repeated slow-prefix deferral is still possible and is now visible in routed remaining counts. Full CI/prepublication checks remain with the host. Codegraph is unavailable in this seat; used rg and the required doctor check.
+
+    Edits remain uncommitted under the standalone native seat contract. No host cleanup, commit, push, PR creation, ship, review record or queue completion performed. Host publication and queue completion follow exit; operator --apply remains separate.
+  created_at: 2026-11-08T07:39:24.943030341Z
+  modified_at: 2026-11-08T07:39:24.943030341Z
+  session_id: 01a1ba11743b
+  harness_version: codex-cli 0.167.0
 history:
 - id: 01a1b7cd-7751-7262-8ad1-f0f9d2ef6d4d
   author: joe
