@@ -2044,12 +2044,12 @@ pub(crate) fn live_spec_claim_by_other<'a>(
                 return false;
             }
         }
-        if !is_live(l) {
-            return false;
-        }
+        // Scope filtering must precede ownership I/O on this hot path.
+        // trace:TASK-3420 | ai:codex
         spec_ids
             .iter()
             .any(|id| !id.is_empty() && l.scope.eq_ignore_ascii_case(id))
+            && is_live(l)
     })
 }
 
@@ -2429,23 +2429,15 @@ pub(crate) fn lease_owning_spec(
                 continue;
             }
         }
-        // BUG-637: a dead/stale claim doesn't own the scope anymore — skip it so a
-        // crashed agent can't permanently block edits to its spec.
-        // trace:BUG-637 | ai:claude
-        if !is_live(lease) {
-            continue;
-        }
+        // Filter by scope before reading ownership; unrelated leases can be
+        // numerous and spec-label resolution can load the requirement store.
+        // trace:TASK-3420 | ai:codex
         let scope_lc = lease.scope.to_ascii_lowercase();
-        // Direct id-form match (handles SPEC-ID + agreed-id forms).
-        if ancestor_ids.contains(&scope_lc) {
+        let matches_scope = ancestor_ids.contains(&scope_lc)
+            || target_spec_id.is_some_and(|tid| tid.eq_ignore_ascii_case(&lease.scope));
+        // BUG-637: a stale claim no longer owns its matching scope.
+        if matches_scope && is_live(lease) {
             return Some(lease.clone());
-        }
-        // The provided target_spec_id might equal the scope verbatim even
-        // when ancestor walking doesn't pick it up (e.g. agreed_id stripped).
-        if let Some(tid) = target_spec_id {
-            if tid.eq_ignore_ascii_case(&lease.scope) {
-                return Some(lease.clone());
-            }
         }
         // Path globs / free-form tags: no ancestry to walk → don't enforce.
     }

@@ -65,13 +65,16 @@ pub(crate) fn ended_record(record: &Ownership) -> Option<String> {
 }
 
 pub(crate) fn lease_record(root: &Path, lease: &crate::SessionLease) -> Result<Option<Ownership>> {
-    let reqs = crate::load_store_for_lookup(root);
+    // Resolve lazily: change/review keys and UUID scopes need no spec store.
+    // trace:TASK-3420 | ai:codex
+    let reqs = std::cell::OnceCell::new();
     let resolve = |label: &str| {
         uuid::Uuid::parse_str(label.trim())
             .ok()
             .map(crate::gate::canon::SpecKey)
             .or_else(|| {
-                reqs.as_ref()
+                reqs.get_or_init(|| crate::load_store_for_lookup(root))
+                    .as_ref()
                     .and_then(|s| dual::spec_key_in_store(s, label))
             })
     };
