@@ -20,7 +20,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-07T20:18:53.564500330Z
-modified_at: 2026-11-08T12:55:52.049923595Z
+modified_at: 2026-11-08T13:02:47.631884462Z
 req_type: Bug
 relationships:
 - rel_type:
@@ -181,6 +181,13 @@ comments:
   created_at: 2026-11-08T12:29:20.093713665Z
   modified_at: 2026-11-08T12:29:20.093713665Z
   session_id: 01a1bb178e1d
+  harness_version: codex-cli 0.167.0
+- id: 01a1bb41-174f-7ad1-bcf7-ae88a66cc767
+  author: dirtlab
+  content: 'Validation-only pickup at 73987ccf57: round-four implementation is already present; no source edits required. Confirmed resume admission consumes prior main/seat vetoes, resume/drain vendor commands receive seat-local signal paths, publication reconciles before checking vetoes, and cleanup requires host-retained handshake evidence. Lane-runner BUG-2488 regressions: 7 executed tests passed (j20261108T125613744-2-0). Launch-boundary regression: 1 executed test passed (j20261108T130235702-2-0). Both acceptance criteria traced, none untested. Rustfmt on seven implementation/test files and git diff --check pass. Working tree clean; changed files: none; untested=false. Codegraph unavailable, call sites confirmed with rg. No implementation blockers; fresh CI/review and supervised hold clearance remain host work. No commit, push, PR creation, queue completion, ship or review-record attempted.'
+  created_at: 2026-11-08T13:02:47.631884462Z
+  modified_at: 2026-11-08T13:02:47.631884462Z
+  session_id: 01a1bb3a66c0
   harness_version: codex-cli 0.167.0
 history:
 - id: 01a1b7ad-9096-7320-bbe8-fc34c8e11c09
