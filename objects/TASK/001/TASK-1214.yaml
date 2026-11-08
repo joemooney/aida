@@ -8,7 +8,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-09-12T03:06:57.441067647Z
-modified_at: 2026-11-08T06:26:24.344838191Z
+modified_at: 2026-11-08T06:32:09.899357763Z
 req_type: Task
 tags:
 - cli
@@ -152,6 +152,13 @@ comments:
   modified_at: 2026-11-08T06:24:36.466713966Z
   session_id: 01a1b8be-8170-7fb2-89ab-ecb4c6eee98c
   harness_version: 2.1.319 (Claude Code)
+- id: 01a1b9db-75ab-7cc2-95a3-ac991bb05767
+  author: dirtlab
+  content: 'Round 5: addressed all latest review findings. Updated docs/cli/11-dev.md to use upgrade check; upgrade_cmd.rs hints now name upgrade and upgrade diff; graph/usage module prose and usage unused duration diagnostics use retained subcommands. Retrieved CI job 128640662545 logs with a writable XDG_CACHE_HOME: the failing test was queue_cmd::time_bound_flags_tests::every_time_bound_flag_is_classified, whose inventory still expected the deleted usage --unused alias. Removed that obsolete entry, retaining positional duration coverage. Rescanned docs/cli for retired tokens across all eight affected command sections; no additional stale citations found. Validation: lane job j20261108T062715717-2-0 executed 74 tests, all passed (cli::tests::, graph execution TASK-1214 regression, help snapshot, policy parity, and time_bound_flags_tests). bash tests/test_check_removed_flags.sh, bash scripts/check-removed-flags.sh, rustfmt --check for all changed Rust files, git diff --check, verify-manual.py --static, and verify-manual.py 11-dev.md passed. untested=false. Five files remain uncommitted for native host publication: graph_cmd.rs, usage_cmd.rs, upgrade_cmd.rs, tests/time_bound_flags_tests.rs, docs/cli/11-dev.md. No commit/push/PR or queue completion performed; existing publication holds/punts were not cleared.'
+  created_at: 2026-11-08T06:32:09.899357763Z
+  modified_at: 2026-11-08T06:32:09.899357763Z
+  session_id: 01a1b9d5c6de
+  harness_version: codex-cli 0.167.0
 history:
 - id: 01a1b7cd-863a-7761-9489-0e4071138ab5
   author: joe
