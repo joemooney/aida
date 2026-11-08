@@ -1,0 +1,27 @@
+id: 01a1b93c-cf8a-7d22-86c0-b725b24e025a
+spec_id: TASK-b6b1278890774ef993d2ebc327862470-966
+agreed_id: TASK-3452
+title: 'Work CI relay: report (don''t silently skip) a latest attempt that is outside the 32-attempt revalidation window, naming the exact ''aida intent ci read'' command'
+description: |
+  Non-blocking note from the approved PR-3504 review (STORY-2480): process() (aida-cli-lib/src/ci_relay.rs:1019) skips an unverified latest-attempt result without saying so. A SHA whose result falls outside the newest-32 revalidation window keeps a pending native status until someone runs `aida intent ci read --attempt N --sha S` by hand.
+
+  Acceptance: process() reports each skipped unverified latest attempt (SHA, attempt, reason "outside the 32-attempt revalidation window") in its human and JSON output and in `aida awaiting`, with the exact `aida intent ci read` command; a test with 33 attempts proves the report; no status is published for an unverified result (unchanged).
+status: Approved
+priority: Low
+owner: ''
+feature: Uncategorized
+created_at: 2026-11-08T03:38:52.682099623Z
+modified_at: 2026-11-08T03:38:52.682099623Z
+req_type: Task
+tags:
+- area:ci-relay
+- from:STORY-2480
+filed_at:
+  code_sha: 049e5206de120518bb94fae84bf359f789e76236
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: dc41ee8da2f
+  vendor: claude
+  session: 01a1b8be-8170-7fb2-89ab-ecb4c6eee98c
+  harness_version: 2.1.319 (Claude Code)
