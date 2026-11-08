@@ -1,0 +1,42 @@
+{
+  "schema_version": 1,
+  "spec": "TASK-B6B1278890774EF993D2EBC327862470-957",
+  "publishes": [
+    {
+      "at": "2026-11-08T00:19:31.725086197Z",
+      "closed_by": "auto-bump"
+    }
+  ],
+  "events": [
+    {
+      "ts": "2026-11-07T22:45:37.589278085Z",
+      "spec": "TASK-b6b1278890774ef993d2ebc327862470-957",
+      "seat": "advisor",
+      "kind": {
+        "event": "PhaseEntered",
+        "idx": 1,
+        "slug": "implementer",
+        "attempt": 1
+      }
+    },
+    {
+      "ts": "2026-11-08T00:17:15.024499938Z",
+      "spec": "TASK-B6B1278890774EF993D2EBC327862470-957",
+      "seat": "advisor",
+      "kind": {
+        "event": "CiTerminal",
+        "green": true
+      }
+    },
+    {
+      "ts": "2026-11-08T00:19:31.561449080Z",
+      "spec": "TASK-b6b1278890774ef993d2ebc327862470-957",
+      "kind": {
+        "event": "SpecCompleted",
+        "commit": "2782389cd8ad9240672ea95d0f2209c7f193700b",
+        "pr": 3637,
+        "closed_by": "auto-bump"
+      }
+    }
+  ]
+}
