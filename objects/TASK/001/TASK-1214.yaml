@@ -8,7 +8,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-09-12T03:06:57.441067647Z
-modified_at: 2026-11-08T05:27:09.772137723Z
+modified_at: 2026-11-08T05:58:21.040623749Z
 req_type: Task
 tags:
 - cli
@@ -262,8 +262,22 @@ history:
   - field_name: status
     old_value: InProgress
     new_value: NeedsAttention
+- id: 01a1b9bc-a549-7cb2-ad20-c269fbf80cb7
+  author: joe
+  timestamp: 2026-11-08T05:58:30.473263854Z
+  session_id: 01a1b9a8f8f1
+  harness_version: 2.1.319 (Claude Code)
+  changes: []
 attention_reason:
   category: blocked-dependency
   detail: 'Round 4 finding 3 validation gate remains unmet (no dispute): both CLI and graph lane runs timed out after 900s compiling aida-cli-lib with zero executed tests. Snapshot is running; parity and 3600s retry jobs remain queued (IDs in final spec comment). Session grant has under 9m left, insufficient to complete queued builds. Findings 1 and 2 are fixed in three uncommitted files. Retain publication veto until the targeted CLI, graph execution, help snapshot and policy parity tests execute green; host must resume extended-timeout validation before publishing.'
   raised_by: implementer
   raised_at: 2026-11-08T05:27:09.772137723Z
+failure_reason:
+  phase: reviewer
+  phase_index: 3
+  kind: verdict:request-changes
+  detail: 'Round-4 findings fixed (stale ''events'' conflict removed; AGENTS.md/OVERVIEW.md hunks reverted; cli-0/cli-1/rest green, so the clap panic is gone), but removing the visible ''aida upgrade --check'' flag left the CLI manual and upgrade hints citing retired flags: CI contracts (CLI-manual drift-guard) and lib-0 (Run tests) are red at 4e0767b.'
+  recovery_hint: address the review findings, move TASK-1214 back to In Progress, and clear the PR hold only after approval
+  shelved_by: reviewer
+  shelved_at: 2026-11-08T05:58:21.040623749Z
