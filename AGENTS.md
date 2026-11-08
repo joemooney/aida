@@ -1,3 +1,9 @@
+Codegraph doctor directs lanes with a proxy descriptor and no PATH client to
+select the reviewed host client. Missing or dangling `--lane-host` descriptors
+name the host deployment action. Proxy deployment and contained-seat acceptance
+remain required; see scripts/codegraph/README.md.
+<!-- trace:STORY-2630 | ai:codex -->
+
 Review-watch records retained fast-exiting children before reaping. Incomplete
 legacy receipts use the existing reboot/TTL backstop. Caller capture requires
 verified local procfs and fails closed with host-retry guidance. See OVERVIEW.md.

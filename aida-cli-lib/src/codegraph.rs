@@ -2,7 +2,7 @@
 //! containment read admission is a separate boundary.
 // trace:STORY-2630 | ai:codex
 use crate::doctor_root::DoctorFinding;
-use anyhow::Result;
+use anyhow::{Context, Result};
 use rusqlite::OptionalExtension;
 use std::path::{Path, PathBuf};
 use std::time::{Duration, SystemTime};
@@ -32,7 +32,12 @@ pub(crate) fn lane_host_status(root: &Path) -> Result<LaneHostStatus> {
         use std::os::unix::fs::OpenOptionsExt;
         options.custom_flags(libc::O_NOFOLLOW | libc::O_NONBLOCK);
     }
-    let file = options.open(path)?;
+    let file = options.open(&path).with_context(|| {
+        format!(
+            "Cannot open codegraph proxy descriptor {}; ask the host to deploy or repair the codegraph query proxy and its lane link",
+            path.display()
+        )
+    })?;
     anyhow::ensure!(
         file.metadata()?.is_file(),
         "proxy status is not a regular file"
@@ -249,12 +254,29 @@ pub(crate) fn scan(root: &Path) -> Vec<DoctorFinding> {
         return Vec::new();
     }
     let binary = crate::which_binary("codegraph");
-    let mut findings = assess(root, binary.is_some(), SystemTime::now());
-    findings.extend(client_routing_findings(
+    assess_with_client_routing(
         root,
         &crate::main_worktree_root_from(root),
         binary.as_deref().map(Path::new),
-    ));
+        SystemTime::now(),
+    )
+}
+
+// A lane with a descriptor needs the host client, even when PATH is empty.
+// Suppress the upstream-install advice only when lane routing supplies the fix.
+// trace:STORY-2630 | ai:codex
+fn assess_with_client_routing(
+    root: &Path,
+    primary: &Path,
+    binary: Option<&Path>,
+    now: SystemTime,
+) -> Vec<DoctorFinding> {
+    let routing = client_routing_findings(root, primary, binary);
+    let mut findings = assess(root, binary.is_some(), now);
+    if !routing.is_empty() {
+        findings.retain(|finding| finding.id != "missing");
+    }
+    findings.extend(routing);
     findings
 }
 
@@ -266,16 +288,15 @@ fn client_routing_findings(
     binary: Option<&Path>,
 ) -> Vec<DoctorFinding> {
     let mut findings = Vec::new();
-    if root != primary && root.join(".codegraph/lane-proxy.json").exists() {
-        if let Some(binary) = binary {
-            if !is_bundled_proxy(binary) {
-                findings.push(finding(
-                    "client-routing",
-                    "PATH codegraph is not the bundled host-query client".into(),
-                    "Ask the host for the reviewed absolute query-client path outside seat writable roots and select its directory on this lane shell PATH; keep upstream on the primary host PATH. A healthy proxy alone does not route bare codegraph commands.",
-                ));
-            }
-        }
+    if root != primary
+        && std::fs::symlink_metadata(root.join(".codegraph/lane-proxy.json")).is_ok()
+        && !binary.is_some_and(is_bundled_proxy)
+    {
+        findings.push(finding(
+            "client-routing",
+            "PATH codegraph is missing or is not the bundled host-query client".into(),
+            "Ask the host for the reviewed absolute query-client path outside seat writable roots and select its directory on this lane shell PATH; keep upstream on the primary host PATH. A healthy proxy alone does not route bare codegraph commands.",
+        ));
     }
     findings
 }
@@ -401,6 +422,30 @@ mod tests {
 
     // trace:STORY-2630 | ai:codex
     #[test]
+    fn lane_host_missing_or_dangling_descriptor_names_host_recovery() {
+        let tmp = tempfile::tempdir().unwrap();
+        let path = tmp.path().join(".codegraph/lane-proxy.json");
+        for dangling in [false, true] {
+            if dangling {
+                std::fs::create_dir(tmp.path().join(".codegraph")).unwrap();
+                std::os::unix::fs::symlink("absent", &path).unwrap();
+            }
+            let error = lane_host_report(tmp.path()).unwrap_err();
+            let message = format!("{error:#}");
+            assert!(message.contains(&path.display().to_string()), "{message}");
+            assert!(
+                message.contains("ask the host to deploy or repair"),
+                "{message}"
+            );
+            assert!(
+                error.chain().count() > 1,
+                "preserve the OS error: {message}"
+            );
+        }
+    }
+
+    // trace:STORY-2630 | ai:codex
+    #[test]
     fn proxy_reports_source_age_and_rejects_stale_or_invalid_heartbeats() {
         let tmp = tempfile::tempdir().unwrap();
         let root = tmp.path();
@@ -462,6 +507,17 @@ mod tests {
         let upstream = tmp.path().join("upstream");
         std::fs::write(&upstream, "upstream CLI").unwrap();
         assert!(client_routing_findings(&primary, &primary, Some(&upstream)).is_empty());
+        assert!(client_routing_findings(&primary, &primary, None).is_empty());
+        let findings = assess_with_client_routing(&seat, &primary, None, SystemTime::now());
+        assert!(findings.iter().any(|f| {
+            f.id == "client-routing" && f.action.contains("reviewed absolute query-client path")
+        }));
+        assert!(!findings
+            .iter()
+            .any(|f| f.action.contains("Install codegraph")));
+        let primary_findings =
+            assess_with_client_routing(&primary, &primary, None, SystemTime::now());
+        assert!(primary_findings.iter().any(|f| f.id == "missing"));
         assert_eq!(
             client_routing_findings(&seat, &primary, Some(&upstream))[0].id,
             "client-routing"

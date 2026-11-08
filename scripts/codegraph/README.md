@@ -107,7 +107,12 @@ query service or heartbeat. Before proxy deployment it retains the
 existing direct-index diagnostic. The descriptor is read with a bounded
 non-following regular-file handle. When a proxy descriptor is present, doctor
 also compares the PATH client with the bundled wrapper using a bounded read;
-an upstream or different client on a lane produces a `client-routing` finding.
+an absent, upstream or different client on a lane produces a `client-routing`
+finding directing the operator to select the reviewed host client. A lane with
+a descriptor and no PATH client does not receive upstream-install advice.
+Before deployment, or with a dangling descriptor link, `--lane-host` names the
+descriptor path and asks the host to deploy or repair the proxy and lane link,
+while preserving the underlying OS error.
 The primary host keeps upstream on PATH for index maintenance and skips this
 lane-only client check. Reinstall
 the matching reviewed host wrapper with a candidate AIDA build. This diagnostic
@@ -131,6 +136,9 @@ Paste exact command/output into the PR body. Confirm callers includes
 `proxy-state` remain outside all seat writable roots; use the actual seat
 sandbox evidence, not symlink routing, as the grant evidence. If socket IPC is
 denied by the deployed sandbox, do not widen index writes or claim AC5.
+In particular, Claude seats that deny creation of AF_UNIX sockets cannot use
+this transport. Their admission or an alternative transport requires an advisor
+decision; the presence of a descriptor does not establish support.
 Host operator Joe owns deployment, delivery of the reviewed absolute client
 path to lane prompts, and the remaining contained-seat AC2/AC5 run. The current
 shared navigation prompt describes query selection but does not install or
