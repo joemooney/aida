@@ -6,16 +6,7 @@ Status: proposed; advisor signoff required before implementation.
 The binding advisor ruling requires a sketch before code. This document is
 that review artifact, not an implementation or authorization to resume.
 
-This revision addresses the protocol findings F2–F8, R2–R10 from commits
-`39ab419eb862`, `48811d8051db` and `12ea0f7b294c`. F1/R1 requires a host
-metadata action and remains unresolved here; no further seat commit clears it.
-Publication must use a non-completing subject:
-`[AI:codex] docs(plans): sketch park-on-ask resume-on-answer (Refs STORY-2661)`.
-AC1–4 remain unimplemented; merging this sketch must not complete the story.
-The native seat leaves edits uncommitted for the host to publish and must not
-rewrite the earlier commit or PR itself. The host/advisor must retitle PR #3666
-to that exact subject before publication/merge; a Refs commit alone does not fix
-the completing PR title. Advisor signoff is still outstanding.
+AC1–4 remain unimplemented; this sketch does not complete the story.
 
 Initial scope decision (R2): parking plus **manual authorized resume only**.
 Answer arrival makes a wait ready and observable, but does not launch a child.
@@ -52,11 +43,12 @@ its retained seat. Proposed fields:
 |---|---|
 | version, wait_id, generation | Closed schema and compare/update identity |
 | spec_uuid, question_id, question_revision/hash | Bind one exact question, not an index that can move |
-| lease_id, run_id, phase, owner_role | Route the original lane and prevent phase advancement |
-| vendor, vendor_session_id, harness_version | Exact transcript identity and adapter evidence |
+| owner_node_id, lease_id, run_id, phase, owner_role | Route the original lane and prevent phase advancement |
+| vendor, vendor_session_id, capture source/generation, harness_version | Exact transcript identity and adapter evidence |
 | seat_path, worktree identity, branch, head_sha | Detect seat removal, replacement, or unrelated changes |
 | posture, grant reference, requester identity | Revalidate authority; no credentials or reusable grant tokens |
 | state, created_at, updated_at | Lifecycle and recovery diagnostics |
+| stop_boundary, stop_deadline, completion outcome, launch generation | Durable stop budget and generation-bound command completion evidence |
 | answer revision/hash, answer event reference | Durable delivery key; answer content stays in canonical evidence |
 | attempt_id, child receipt, acknowledgement | Recover dispatch without assuming successful delivery |
 | error/recovery reason | Visible escalation or admission block |
@@ -86,6 +78,27 @@ vendor transcript identity, and seat identity. An arbitrary session ID supplied
 by the model grants no resume authority. Do not use `--last` or transcript search
 as a fallback. Runtime files require bounded regular-file reads, no symlink
 traversal, private permissions, and the established runtime writer discipline.
+
+### Exact vendor session capture (new host admission preflight)
+
+The host persists capture provenance with the launch generation before accepting
+any canonical park question. The model's intent cannot establish identity.
+Missing, conflicting or malformed identity refuses park before the canonical
+question/binding is accepted; retain the submitted intent as a publication veto
+and show `session_identity_unavailable` with manual recovery guidance.
+
+| Vendor | Capture source and timing | Initial limitation |
+|---|---|---|
+| Claude | Host-minted UUID passed as `--session-id` before fresh exec; for a resumed launch, the exact admitted `--resume` ID. Bind it to the launch receipt and verify the exact transcript before parking. | Never substitute a model-supplied ID or locate another transcript. |
+| Codex | Validated vendor-session lease stamp bound to this launch, or `thread_id` from this child's captured `codex exec --json` `thread.started` event, persisted as it arrives before ask acceptance. Conflicting evidence refuses. | Use only these two sources; do not call `resolve_thread_id` unchanged, since its unique-rollout fallback is forbidden here. |
+| AGY | SPIKE-711's verified `agy --print=... --output-format json` result field `conversation_id`, captured from this child's completed output and persisted by the host. An admitted resumed launch can use the exact prior captured ID passed to `--conversation`. | The result is completion-time evidence, not a demonstrated mid-turn source. A fresh AGY lane cannot park during its first run unless a separately verified earlier headless capture is implemented. Prior completed-run capture makes later resumed AGY runs eligible, subject to adapter admission. |
+
+AGY hook `conversationId` is not accepted as headless capture evidence in this
+slice. Do not guess an event contract or scan transcripts. The host spike proves
+resume, not first-turn park eligibility; that remaining AC3 limitation requires
+advisor acceptance. Fixtures must cover missing identity refusal for each vendor,
+Codex conflicting/stale stamps, AGY result capture after exit and exact-ID reuse
+on a subsequent admitted launch.
 
 The parked lane retains exclusive ownership of its seat/worktree and branch,
 including dirty edits. It holds **no running concurrency slot**, no child process,
@@ -121,7 +134,8 @@ A failure after intent submission has an uncertain acceptance outcome and requir
 the same stop pending host reconciliation. Only a definitive pre-submission
 refusal establishes that no park intent exists. Retries reuse the wait UUID.
 Late receipts remain recoverable and the supervisor
-suppresses publication on any validated pending intent. Both canonical and runtime
+suppresses publication on any present intent, including malformed or rejected
+intents. Both canonical and runtime
 state must reconcile before acceptance; crashes after either write are visible.
 The receipt is host evidence, never accepted back as authority from the seat.
 
@@ -131,13 +145,16 @@ The receipt is host evidence, never accepted back as authority from the seat.
 2. The host binds and accepts the intent before publication, phase completion,
    ordinary background-work resume, or lease cleanup. A park is neither a
    successful implementation nor a failed phase to retry from scratch.
-3. Before accepting an intent or exposing its receipt, the host marks the
+3. For a still-live child, before accepting an intent or exposing its receipt,
+   the host marks the
    original launch slot waiting via `mark_slot_waiting` (or the equivalent
    durable flag under the shared slot lock), disabling final-result discounting
    throughout `park_requested`. Failure to retain that reservation refuses
-   acceptance and escalates; no accepted park may have a discountable live slot.
+   acceptance and escalates; the present intent still vetoes publication. No
+   accepted park may have a discountable live slot.
    The current best-effort helper needs a checked persistence/readback result
    for this handshake; invoking its void-returning API alone is insufficient.
+   Already-exited children use the exit barrier below instead.
    This rule covers original launches as well as managed resumes. State advances
    `park_requested -> parked` only after the host verifies the
    vendor child has exited and transcript identity is retained. Until exit,
@@ -171,6 +188,32 @@ The receipt is host evidence, never accepted back as authority from the seat.
    Free the slot only after verified exit; if descendants cannot be accounted
    for, retain an uncertain-capacity reservation and require operator recovery.
    Only the cooperative path satisfies AC1; timeout is an explicit failure.
+
+### Exit barrier, including unaccepted intents
+
+Every managed launch must perform a final synchronous intent drain after vendor
+exit/reaping and output collection, before publication, phase completion, lease
+cleanup or SlotGuard release. Polling is only an early notification path. The
+host retains its guard through this barrier even if the child exits between
+polls. Once the managed child/group is verified exited, inspect the exact intent
+path with the same safe bounded reads; an unreadable or unsafe path is evidence
+requiring escalation, not absence. Any present intent suppresses ordinary success
+publication, even if rejected for a bad token, oversize payload, unsupported
+posture, missing identity or reservation failure. Rejection preserves diagnostics
+and dirty seat ownership for explicit recovery; clean vendor exit never turns
+that refusal into a publishable result. This permits denial of publication by
+the seat, not authorization to park or resume.
+
+For a valid intent first read after verified exit, accept through the same
+canonical/runtime reconciliation and exact-session preflight. Record exit
+identity and accept directly into `parked`; no live-child waiting mark or stop
+deadline is needed. The original slot guard is still held through durable seat
+retention, acceptance and receipt persistence, then released. If group exit is
+uncertain, retain capacity and escalate instead. For invalid/unaccepted intents,
+write the rejection/recovery state and retain the seat before releasing capacity
+only on verified group exit. No answer or late receipt can bypass this barrier.
+A crash during the barrier leaves an unresolved launch reservation for host
+reconciliation, never inferred publication authority.
 
 Canonical and runtime writes cannot be one transaction. Use the immutable wait
 ID on both sides; host reconciliation repairs an interrupted handshake and
@@ -346,7 +389,12 @@ Reuse store locks, launch admission, injected execution context and environment
 projection; do not create another ambient-reader or allowlist mechanism.
 
 Recorded fake-harness tests must exercise one resume per vendor with exact ID,
-answer and cwd; question persistence before exit; slot release only after exit;
+answer and cwd; per-vendor missing-session-ID refusal before question acceptance;
+AGY completion-only capture and subsequent exact-ID resume;
+exit within the poll interval followed by final intent drain; rejected intent
+after a stop (bad token, oversize and reservation failure), with no publication;
+valid late intent accepted after verified exit without a live-child waiting mark;
+question persistence before exit on the live-child path; slot release only after exit;
 retained dirty seat; answer-before-exit; duplicate and batch answers; restart at
 each write/spawn boundary; uncertain delivery; lost seat/transcript; expired
 grant; observer restart with no grant and fresh authorized manual resume;
