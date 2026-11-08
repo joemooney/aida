@@ -3,12 +3,12 @@ spec_id: TASK-b6b1278890774ef993d2ebc327862470-880
 agreed_id: TASK-3223
 title: 'STORY-2561 S2: route CLI/MCP store writes through the mediation service and deny raw store writes in the shared boundary'
 description: 'Slice 2 of STORY-2561. Route every inventoried in-lane writer through the S1 service. In the shared AIDA bwrap boundary, make store objects, authority-bearing metadata and the shared derived cache read-only (ancestor grants, symlinks, primary-checkout launches and resume included), with lane-private or read-only derived caches where readers need them. The mediated profile is gated; Codex-native compatibility and its labels stay unchanged. Concurrency tests: stale base, concurrent mutation, and host failure after persist but before reply. Claude behavior is preserved.'
-status: NeedsAttention
+status: Approved
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-06T13:39:53.442026Z
-modified_at: 2026-11-08T18:40:23.770010601Z
+modified_at: 2026-11-08T18:51:44.146447859Z
 req_type: Task
 tags:
 - architecture
@@ -1239,6 +1239,13 @@ comments:
   modified_at: 2026-11-08T17:52:45.200547463Z
   session_id: 01a1bc43351c
   harness_version: codex-cli 0.167.0
+- id: 01a1bc80-8e92-7b33-adfb-65676aeb7e78
+  author: joe
+  content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: The two carried minors are fixed, no new code defect was found and CI is green apart from the merge hold, but zero-unrouted acceptance is still unmet and needs an advisor ruling; the merge hold and a repeat publication over a punt also remain.. It was punted on: design-fork: Review comment 85 finding 1 remains unresolved: binding zero-unrouted acceptance is unmet (3171 writer sites and 293 operations). Existing broker supports only comment_add and title/description/priority spec_edit; inventory v2 counts all operation rows as unresolved by construction. Need advisor operation policy: route remaining supported writers with approved typed host semantics, identify excluded host/private writers and TASK-3326 participants, or explicitly authorize refusal dispositions/staged scope. I do not dispute zero-unrouted acceptance and have not weakened the guard or enabled the profile. Fixed findings 5 and 6 in uncommitted docs/MCP description plus regression assertion; validation underway. Findings 3 and 4 need operator/advisor hold and publication-veto investigation; this seat cannot clear them. Do not publish over punt or existing holds. No publication declaration, commit, push, PR mutation or queue completion.. No triage reason was given.'
+  created_at: 2026-11-08T18:51:44.146444652Z
+  modified_at: 2026-11-08T18:51:44.146444652Z
+  session_id: 01a1b9af-8230-75d2-82f8-667491cc010a
+  harness_version: 2.1.319 (Claude Code)
 history:
 - id: 01a1b116-742d-73c0-9064-1933f11e4c38
   author: joe
@@ -2230,6 +2237,15 @@ history:
   session_id: 01a1bc70116b
   harness_version: 2.1.319 (Claude Code)
   changes: []
+- id: 01a1bc80-8e92-7b33-adfb-655b62fb0442
+  author: joe
+  timestamp: 2026-11-08T18:51:44.146426662Z
+  session_id: 01a1b9af-8230-75d2-82f8-667491cc010a
+  harness_version: 2.1.319 (Claude Code)
+  changes:
+  - field_name: status
+    old_value: NeedsAttention
+    new_value: Approved
 execution_mode: drive
 filed_at:
   code_sha: 50ce509da3f7edbd12ff6636fe996c9c3a65c68f
@@ -2239,16 +2255,3 @@ filed_at:
   aida_build_sha: dd852f74c3b
   vendor: claude
   session: b0a84e34-277c-4df6-b53c-43f4bbe2e84d
-attention_reason:
-  category: design-fork
-  detail: 'Review comment 85 finding 1 remains unresolved: binding zero-unrouted acceptance is unmet (3171 writer sites and 293 operations). Existing broker supports only comment_add and title/description/priority spec_edit; inventory v2 counts all operation rows as unresolved by construction. Need advisor operation policy: route remaining supported writers with approved typed host semantics, identify excluded host/private writers and TASK-3326 participants, or explicitly authorize refusal dispositions/staged scope. I do not dispute zero-unrouted acceptance and have not weakened the guard or enabled the profile. Fixed findings 5 and 6 in uncommitted docs/MCP description plus regression assertion; validation underway. Findings 3 and 4 need operator/advisor hold and publication-veto investigation; this seat cannot clear them. Do not publish over punt or existing holds. No publication declaration, commit, push, PR mutation or queue completion.'
-  raised_by: implementer
-  raised_at: 2026-11-08T17:47:20.211969390Z
-failure_reason:
-  phase: reviewer
-  phase_index: 3
-  kind: verdict:request-changes
-  detail: The two carried minors are fixed, no new code defect was found and CI is green apart from the merge hold, but zero-unrouted acceptance is still unmet and needs an advisor ruling; the merge hold and a repeat publication over a punt also remain.
-  recovery_hint: address the review findings, move TASK-3223 back to In Progress, and clear the PR hold only after approval
-  shelved_by: reviewer
-  shelved_at: 2026-11-08T18:40:23.770010601Z
