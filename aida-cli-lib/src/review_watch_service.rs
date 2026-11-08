@@ -1054,6 +1054,74 @@ mod tests {
         }
     }
 
+    // Restart itself completes persisted supersede intent when no descendant
+    // remains; the replacement must not be needed to release the old grant.
+    // trace:STORY-2571 | ai:codex
+    #[test]
+    fn story2571_restart_finishes_dead_superseding_before_launch() {
+        let (temp, _guard, parent) = fixture();
+        let root = temp.path();
+        rebind(root, "default", &parent).unwrap();
+        let dir = directory(root, false).unwrap().unwrap();
+        let grant =
+            seat_authority::issue_review_watch_child(root, &parent.id, &parent.subject).unwrap();
+        let mut process = Command::new("sh").args(["-c", "exit 7"]).spawn().unwrap();
+        let identity = Identity::child(&process).unwrap();
+        process.wait().unwrap();
+        let mut service = read(&dir).unwrap().unwrap();
+        service.worker = Some(identity.clone());
+        service.child_grant = Some(grant.id.clone());
+        write(&dir, &service).unwrap();
+
+        let store = Store::open(root, "github:github.com/owner/repo").unwrap();
+        assert!(matches!(
+            select(&store, &change(1), None, 2).unwrap(),
+            Action::Dispatch(_)
+        ));
+        let mut reviews = store.load().unwrap();
+        let attempt = &mut reviews.entries.get_mut("PR-1").unwrap().attempts[0];
+        attempt.phase = Phase::Superseding;
+        attempt.identity = Some(identity);
+        attempt.supersede = Some(Supersede {
+            by: change(2).head,
+            requested_at: Utc::now(),
+            term_at: None,
+            kill_at: None,
+            diagnostic: None,
+        });
+        dir.write(STATE, &serde_json::to_vec_pretty(&reviews).unwrap())
+            .unwrap();
+
+        let mut controller = None;
+        tick(root, "default", true, &mut controller).unwrap();
+        assert_eq!(
+            store.load().unwrap().entries["PR-1"].attempts[0].phase,
+            Phase::Superseded
+        );
+        assert!(seat_authority::read_grant(&grant.id)
+            .unwrap()
+            .revoked_at
+            .is_some());
+        let mut retired = read(&dir).unwrap().unwrap();
+        assert!(retired.retired_grants.is_empty());
+        assert!(controller.is_none());
+        retired.retry_after = Utc::now() - chrono::Duration::seconds(1);
+        write(&dir, &retired).unwrap();
+        tick_with_launcher(root, "default", true, &mut controller, |root, parent| {
+            let grant =
+                seat_authority::issue_review_watch_child(root, &parent.id, &parent.subject)?;
+            let mut command = Command::new("sh");
+            command.args(["-c", "exit 0"]);
+            Ok((grant, command))
+        })
+        .unwrap();
+        controller
+            .as_mut()
+            .expect("replacement started")
+            .wait()
+            .unwrap();
+    }
+
     #[test]
     fn story2571_sub_advisor_does_not_narrow_binding_before_rotation() {
         let temp = tempfile::tempdir().unwrap();
