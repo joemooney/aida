@@ -946,3 +946,41 @@ fn priority_edit_replays_once_and_refuses_stale_or_invalid_requests() {
         assert_eq!(object_bytes(root, "TASK-1").unwrap(), installed);
     }
 }
+
+// trace:TASK-3223 | ai:codex
+#[test]
+fn repeated_text_edit_preserves_history_and_modified_timestamp() {
+    for (title, description) in [(true, false), (false, true), (true, true)] {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        let (_, comment) = fixture(root);
+        let before: crate::Requirement =
+            serde_yaml::from_slice(&object_bytes(root, "TASK-1").unwrap()).unwrap();
+        let operation = CanonicalOperation::SpecEdit {
+            spec_id: "TASK-1".into(),
+            expected_revision: comment.target().1.into(),
+            fields: super::super::canonical_mutation::EditFields {
+                title: title.then(|| before.title.clone()),
+                description: description.then(|| before.description.clone()),
+                priority: None,
+            },
+        };
+        GitBackend::new(root)
+            .unwrap()
+            .mutate_canonical(
+                "fixed",
+                uuid::Uuid::new_v4(),
+                uuid::Uuid::new_v4(),
+                "bound author",
+                &operation,
+                || Ok(()),
+            )
+            .unwrap();
+        let after: crate::Requirement =
+            serde_yaml::from_slice(&object_bytes(root, "TASK-1").unwrap()).unwrap();
+        assert_eq!(after.title, before.title);
+        assert_eq!(after.description, before.description);
+        assert_eq!(after.history.len(), before.history.len());
+        assert_eq!(after.modified_at, before.modified_at);
+    }
+}

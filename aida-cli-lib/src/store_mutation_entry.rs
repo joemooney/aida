@@ -60,10 +60,6 @@ fn root(cwd: &Path) -> Result<PathBuf> {
         .map(|p| p.join(".aida-store"))
         .find(|p| p.join("objects").is_dir())
         .context("mediated operations require an existing canonical store")?;
-    ensure!(
-        root.join("objects").is_dir(),
-        "mediated operations require an existing canonical store"
-    );
     Ok(root)
 }
 

@@ -2747,7 +2747,11 @@ impl GitBackend {
                 }
                 CanonicalOperation::SpecEdit { fields, .. } => {
                     let mut changes = Vec::new();
-                    if let Some(title) = &fields.title {
+                    if let Some(title) = fields
+                        .title
+                        .as_ref()
+                        .filter(|title| **title != current.title)
+                    {
                         changes.push(crate::models::FieldChange {
                             field_name: "title".into(),
                             old_value: current.title.clone(),
@@ -2755,7 +2759,11 @@ impl GitBackend {
                         });
                         next.title = title.clone();
                     }
-                    if let Some(description) = &fields.description {
+                    if let Some(description) = fields
+                        .description
+                        .as_ref()
+                        .filter(|description| **description != current.description)
+                    {
                         changes.push(crate::models::FieldChange {
                             field_name: "description".into(),
                             old_value: current.description.clone(),
