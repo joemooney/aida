@@ -2,7 +2,9 @@
 
 <!-- trace:TASK-3368 | ai:codex -->
 
-Status: proposed; advisor signoff required before production implementation.
+Status: approved for implementation (observation-only), per the advisor signed
+decisions recorded on TASK-3368 at 2026-11-07 17:05 MST. Implementation remains
+owed under this task; this documentation slice must use `(Refs TASK-3368)`.
 This is the separately reviewed S6 sketch for STORY-2537. It grants no launch,
 containment, role, publication, or human-terminal authority. Approval of the
 parent sketch does not approve this slice.
@@ -42,26 +44,31 @@ explicit approval. Do not enable those features through an observation flag.
 
 ## Connection and observation protocol
 
-Proposed version-1 AF_UNIX service resides in a host-owned private runtime
+Version-1 AF_UNIX SOCK_SEQPACKET service resides in a host-owned private runtime
 directory (0700), socket mode 0600. Validate ownership, non-symlink directory
 components and socket identity before connection; refuse unsafe or replaced
 paths. One explicitly managed broker instance holds an exclusive runtime lock.
-Do not auto-spawn a broker on an untrusted socket path or inside a seat.
-Sandbox access needs a separately reviewed narrow transport; do not open all
-host AF_UNIX sockets to make this service reachable. No sandbox admission or
-vendor containment claim follows from this sketch.
+Start the broker explicitly through an `aida <service> run`-style command,
+optionally managed by a systemd user unit. Never auto-spawn it from a client or
+seat. Version 1 serves host processes only: contained seats get no route to the
+socket. Any narrow sandbox transport requires a separate spec and sketch. No
+sandbox admission or vendor containment claim follows from this sketch.
 
-On accept, obtain same-UID kernel credentials and the kernel peer pidfd.
-Require SO_PEERPIDFD support; do not substitute pidfd_open on an untrusted
-numeric PID. Capture the peer in the broker's proven procfs coordinates,
-check the pinned process before and after validation, and reject peer exit,
-PID reuse, incomplete procfs or unavailable namespace evidence. Credential
-PID and target innermost namespace must never be combined into one tuple.
-A passed socket descriptor must not transfer authority: operations require
-fresh kernel sender authentication (or a transport that binds each sender),
-not just the original connection's SO_PEERCRED. Version 1 must refuse any
-transport unable to establish that property; a long-lived stream alone is
-insufficient. The exact per-message mechanism is an advisor decision below.
+At broker startup, probe SO_PEERPIDFD and SO_PASSPIDFD/SCM_PIDFD support
+(Linux >= 6.5); refuse to start if unavailable. Enable SO_PASSPIDFD and
+SO_PASSCRED so the kernel attaches SCM_PIDFD and SCM_CREDENTIALS to every
+message. Use one request per message and authenticate each message from its
+own kernel-attached pidfd, never from the connection's SO_PEERCRED or
+SO_PEERPIDFD. Refuse messages without the required kernel credentials;
+caller-supplied SCM_CREDENTIALS PIDs alone are not trusted. Do not substitute
+pidfd_open on an untrusted numeric PID.
+
+Require same-UID sender credentials. Capture the sender in the broker's proven
+procfs coordinates, check the pinned process before and after validation, and
+reject sender exit, PID reuse, incomplete procfs or unavailable namespace
+evidence. Credential PID and target innermost namespace must never be combined
+into one tuple. Descriptor transfer grants no authority: the authenticated
+party is the sender of each message, established by that message's kernel pidfd.
 
 A request contains protocol version, unique nonce, project/store binding,
 operation, subject ProcIdentity, holder generation and the existing grant
@@ -150,11 +157,12 @@ substitutes for BUG-2458 host acceptance or STORY-2325 compare gates.
 
 Future implementation requires executed tests, including positive controls:
 
-- Authenticate a live same-UID peer; reject other UID, peer exit/reuse,
-  inherited/passed connections, forged request identity, missing peer pidfd,
+- Authenticate a live same-UID sender; reject other UID, sender exit/reuse,
+  forged request identity and absent kernel-attached message credentials;
+  inherited/passed connections must authenticate the actual sender. Reject
   unsafe socket parents and socket replacement. Require a real-kernel host
-  check for SO_PEERPIDFD and sender-authentication semantics; mocks alone do
-  not establish admission safety.
+  check for SO_PEERPIDFD and SCM_PIDFD per-message authentication semantics;
+  mocks alone do not establish admission safety.
 - Exercise initial/child/sibling PID namespaces, collisions, ancestor-mounted
   and masked procfs; valid same-coordinate observations succeed and every
   unsupported translation stays Unknown. Test local reboot versus other node.
@@ -174,17 +182,34 @@ For this docs slice, inspect the diff, verify referenced paths, and run
 
 ## Advisor decisions and manual gate
 
-Before code, the advisor must explicitly accept or revise: observation-only
-scope; same-user threat boundary; the kernel/per-message sender authentication
-mechanism (including descriptor transfer); no arbitrary namespace translation;
-non-portable channel receipts; scoped handle revocation semantics; required
-kernel support and broker runtime lifecycle; narrow sandbox transport; and the
-consumer rollout/host test gates. Sender authentication and sandbox transport
-are unresolved design choices, not implementation discretion. Record the
-signed decision on TASK-3368 and revise this sketch before implementation.
-Grant replacement and human-terminal policy remain separately gated even if
-this sketch is approved. Until then punt TASK-3368 for advisor attention and
-retain its publication veto.
+### Signed decisions 2026-11-07
+
+The advisor's 17:05 MST signed comment on TASK-3368 supersedes the earlier
+14:00 decision where they conflict. It resolves the former sender-authentication
+and sandbox-transport placeholders:
+
+- D1–D2: accept observation-only scope and the same-UID-trusted boundary.
+  Grant replacement, signaling, namespace translation and human-terminal policy
+  remain out of scope and separately gated.
+- D3–D4: use AF_UNIX SOCK_SEQPACKET with kernel-attached SCM_PIDFD and
+  SCM_CREDENTIALS on every message, as specified above. Require and probe
+  SO_PEERPIDFD and SO_PASSPIDFD/SCM_PIDFD; no numeric-PID fallback.
+- D5–D7: accept no namespace translation, non-portable channel-bound receipts,
+  and broker-resident handles with per-operation grant revalidation,
+  monotonic lifetime and restart invalidation.
+- D8: one explicitly started broker holds an exclusive runtime lock; clients
+  and seats never auto-spawn it.
+- D9: v1 serves host processes only. Contained seats have no socket route;
+  sandbox transport needs a separate spec and sketch.
+- D10: retain the rollout and test gates, including real-kernel per-message
+  SCM_PIDFD checks before enabling any consumer adapter.
+
+This docs-only PR does not complete TASK-3368. Use `(Refs TASK-3368)` in the
+commit subject and PR title so merge does not award completion. Keep the task
+flagged for advisor attention to route implementation slices, beginning with
+**disabled service + protocol tests**. Preserve existing punt/merge-hold
+publication vetoes until the authorized host/advisor resolves them; this signed
+design decision is not itself merge-hold clearance.
 
 ## Critical Files
 
@@ -206,9 +231,10 @@ an implicit prerequisite for retaining unknown ownership safely.
 
 ## Followups
 
-Obtain advisor decisions on the manual gate above, revise the protocol, and
-only then scope implementation and host conformance work. Keep the task in
-Needs Attention until the recorded decision authorizes continuation. Do not
+Record the revised sketch on the owning spec and hand off implementation and
+host conformance slices under TASK-3368, starting with disabled service and
+protocol tests. The signed design authorizes that scope; retain Needs Attention
+for advisor routing until the handoff is resolved. Do not
 file grant replacement or terminal-authority changes as implicitly approved
 children of observation work.
 
