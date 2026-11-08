@@ -8,8 +8,16 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-08T00:05:07.175003336Z
-modified_at: 2026-11-08T00:05:07.175003336Z
+modified_at: 2026-11-08T00:05:44.747163556Z
 req_type: Bug
+comments:
+- id: 01a1b879-aeab-7d60-b2eb-2aee3e5a94bb
+  author: joe
+  content: 'Advisor clarification 2026-11-07: the slice-* tags may point at checkpoint commits that are NOT reachable from origin (pre-squash lane checkpoints), so acceptance (1) is: slice-* checkpoint tags never count as unpushed work when the branch head itself is pushed and the tree is clean; the salvage patch that session end already writes (.aida/salvage/<seat>/<ts>.patch) preserves them. Non-slice refs keep the current rule.'
+  created_at: 2026-11-08T00:05:44.747163556Z
+  modified_at: 2026-11-08T00:05:44.747163556Z
+  session_id: 01a1b848-940b-7bd2-8acd-52e428b182b8
+  harness_version: 2.1.319 (Claude Code)
 filed_at:
   code_sha: 2a7fe186bdcd718fa356e5e4d028a3b2ff13769d
   branch: main
