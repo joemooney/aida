@@ -533,6 +533,10 @@ mod main_checkout_drift;
 mod maintenance_schedule;
 mod manual;
 mod mcp;
+// Shared with the extracted MCP transport; CLI callers stay below that boundary.
+// trace:TASK-3429 | ai:codex
+pub mod mcp_claim;
+pub mod mcp_schema;
 mod mcp_translate;
 mod memories_cmd;
 mod merge_hold;
