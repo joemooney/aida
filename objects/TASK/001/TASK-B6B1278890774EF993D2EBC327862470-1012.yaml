@@ -1,0 +1,37 @@
+id: 01a1bca1-1bf5-7550-b5f2-7e80fd70180a
+spec_id: TASK-b6b1278890774ef993d2ebc327862470-1012
+title: 'Repeated unchanged review findings: TASK-3048'
+description: |-
+  Identical reviewer findings recurred twice for TASK-3048; do not requeue a third implementer round until an advisor chooses a different implementer/seat or resolves the dispute.
+
+  REVIEW FINDINGS TO ADDRESS (PR #3641):
+  Verdict: CHANGES REQUESTED
+  Reviewed commit: b108a2c06a87
+  Recorded: 2026-11-08T16:55:49.328849691+00:00
+  Findings:
+  1. BLOCKING, wait state, no code defect identified and no implementer rework needed: no CI test result exists at b108a2c. Run 42501596251 has lib-0, lib-1, cli-0, cli-1, rest, gates and contracts all queued. Needs a green run at this head, then a re-review or re-record at the same SHA. Do not push a commit to answer this finding; a new head restarts the CI wait. If the run goes red, fix those shards. merge-hold-gate failure is the expected supervised-spec hold and still needs its clearance.
+  2. Non-blocking, advisor question, aida-cli-lib/src/launch/contained.rs:516-521: the 2026-11-07 16:40 ruling says no native permissions settings file, while the wrapper passes --settings with permissions.deny for mcp, read_url and execute_url. It carries no allow rules or sandbox profile and is the only mechanism visible for the ruling tools-off requirement, so I read it as compliant; I found no advisor comment confirming that. Advisor should confirm at the live run, which must also show AGY honours these denies alongside --dangerously-skip-permissions.
+  Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
+status: Draft
+priority: Medium
+owner: joe
+feature: Uncategorized
+created_at: 2026-11-08T19:27:17.493690005Z
+modified_at: 2026-11-08T19:27:17.493690005Z
+req_type: Task
+tags:
+- from-advisor:TASK-3048
+- kind:observation
+- linked:TASK-3048
+- loop-guard
+- review-recurrence
+- severity:major
+filed_at:
+  code_sha: db2eb4c39e46704132705ccb2b8300574ead41a6
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: eeec474c545
+  vendor: claude
+  session: 01a1bc93-77a0-7740-8b03-df4e3e8d1df5
+  harness_version: 2.1.319 (Claude Code)
