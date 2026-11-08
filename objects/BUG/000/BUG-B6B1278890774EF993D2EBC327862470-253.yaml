@@ -20,7 +20,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-07T20:18:53.564500Z
-modified_at: 2026-11-08T17:56:20.839877373Z
+modified_at: 2026-11-08T17:57:53.657703060Z
 req_type: Bug
 relationships:
 - rel_type:
@@ -246,6 +246,12 @@ comments:
   modified_at: 2026-11-08T17:54:54.399682989Z
   session_id: 01a1b9af-8230-75d2-82f8-667491cc010a
   harness_version: 2.1.319 (Claude Code)
+- id: 01a1bc4f-4379-7d80-9d30-e4af0fc95c9a
+  author: joe
+  content: 'Round 6 approach. Acceptance criteria as tests: run the native-seat punt/publication suppression fixture and no-commit/no-bundle fixture (command-level), plus FIFO/symlink/oversize refusal, linked-parent unlink protection, retained markers on refused launch, large host ledger and case-variant mirroring tests. Expected files: punt.rs, standalone_implementer.rs, session.rs, queue_cmd.rs, seat_clone.rs, ship_from_seat.rs, their fixture tests, scripts/store-writers.toml and orientation docs. Ambiguities / conflicts as questions: Expected 2 currently promises punt exit 0 although the established lane contract uses 32; preserve that contract and correct the wording. Trace drain no-change classification and either implement it or record an explicit follow-up as requested.'
+  created_at: 2026-11-08T17:57:53.657703060Z
+  modified_at: 2026-11-08T17:57:53.657703060Z
+  session_id: 01a1bc4dcf8e
 history:
 - id: 01a1b7ad-9096-7320-bbe8-fc34c8e11c09
   author: aida-session-start
