@@ -8,7 +8,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-07T15:34:33.363448Z
-modified_at: 2026-11-08T20:35:54.618300165Z
+modified_at: 2026-11-08T23:15:06.467649035Z
 req_type: Story
 comments:
 - id: 01a1b6a6-52e1-70a0-a9c1-d32888979ca5
@@ -1115,6 +1115,12 @@ comments:
   modified_at: 2026-11-08T20:33:47.588742879Z
   session_id: 01a1bc93-77a0-7740-8b03-df4e3e8d1df5
   harness_version: 2.1.319 (Claude Code)
+- id: 01a1bd71-ae63-7b53-b4cb-5d89e525afcb
+  author: joe
+  content: 'Advisor ruling 2026-11-08: #3643 and #3662 both defined aida doctor --lane-host. STORY-2642 keeps --lane-host (machine readiness and --fix); the STORY-2630 codegraph report becomes --lane-codegraph. Done in the #3643 hand merge at 47141a7791a, with docs, README, tests and help snapshot updated.'
+  created_at: 2026-11-08T23:15:06.467649035Z
+  modified_at: 2026-11-08T23:15:06.467649035Z
+  session_id: 20abb7c3-8f9b-4a5e-b326-404921f3b450
 history:
 - id: 01a1b6a6-1e2f-7932-a527-6de38b6d8545
   author: joe
