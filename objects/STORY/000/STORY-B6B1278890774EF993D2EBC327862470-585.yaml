@@ -17,7 +17,7 @@ priority: Low
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-08T02:58:18.689963065Z
-modified_at: 2026-11-08T13:37:37.401789546Z
+modified_at: 2026-11-08T13:42:34.566504631Z
 req_type: Story
 tags:
 - area:handoff
@@ -200,6 +200,22 @@ comments:
   created_at: 2026-11-08T11:04:02.735796713Z
   modified_at: 2026-11-08T11:04:02.735796713Z
   session_id: 01a1bace541a
+  harness_version: codex-cli 0.167.0
+- id: 01a1bb65-8346-7be0-8667-11da0822bfe8
+  author: dirtlab
+  content: |
+    Native-seat verification and PR-evidence hardening complete. The branch already contains the Claude-only PreCompact handoff implementation and previous review fixes; this pass tightens malformed forge-response handling without changing the advisor-approved scope.
+
+    Changed files (uncommitted for host publication):
+    - aida-core/templates/hooks/aida-precompact-handoff.sh: validate every PR row before accepting origins; reject non-object rows, invalid branch names, non-integer/boolean/nonpositive PR numbers. A malformed mixed response remains unknown and cannot partially contribute origins.
+    - tests/test_precompact_handoff_hook.py: fixture accepts custom PR responses; regression covers seven malformed row cases after a valid row, asserting spec findings and the recovery packet survive while PR evidence remains unknown.
+
+    Validation: 24 Python hook tests passed; lane-runner real CLI integration precompact_handoff_cli_round_trip passed (1 executed test), job j20261108T133840732-2-0. Template hook-link checks and git diff --check passed. Codegraph unavailable; aida doctor check codegraph reported total: 0, so navigation used source searches. No live Claude compaction or full CI run performed. untested=false. No implementation blockers.
+
+    Recorded native publication declaration: [AI:codex] fix(handoff): validate PreCompact PR evidence before accepting origins (Refs STORY-2662). Host owns commit, publication and queue completion. No commit, push, PR creation, PR ship, verdict recording or queue-done performed in this seat.
+  created_at: 2026-11-08T13:42:34.566504631Z
+  modified_at: 2026-11-08T13:42:34.566504631Z
+  session_id: 01a1bb60ef7b
   harness_version: codex-cli 0.167.0
 history:
 - id: 01a1b9c5-3252-7530-8b0b-bbe2c3ac5581
