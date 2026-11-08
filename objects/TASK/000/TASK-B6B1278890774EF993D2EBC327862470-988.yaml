@@ -14,7 +14,7 @@ priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-11-08T11:52:14.473099515Z
-modified_at: 2026-11-08T15:24:14.899197898Z
+modified_at: 2026-11-08T15:24:20.133684210Z
 req_type: Task
 tags:
 - carried-from:TASK-3000
@@ -26,6 +26,14 @@ relationships:
   target_id: 01a1b8c4-1bdd-78c2-9c50-56b2f410e810
   created_at: 2026-11-08T15:24:14.899194660Z
   created_by: joe
+comments:
+- id: 01a1bbc2-ad25-7440-b18d-20b56c56a602
+  author: joe
+  content: 'Advisor 2026-11-08, per the operator''s 2026-10-28 one-time ruling on non-blocking findings: accepted. Whether codex honours the setting is proven by the conformance run, not help text.'
+  created_at: 2026-11-08T15:24:20.133684210Z
+  modified_at: 2026-11-08T15:24:20.133684210Z
+  session_id: 01a1bbab-762f-7cd2-8a36-4ea9f209afce
+  harness_version: 2.1.319 (Claude Code)
 history:
 - id: 01a1bb01-5054-7413-9a4b-c76548186605
   author: joe
