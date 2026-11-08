@@ -25,7 +25,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-07T19:45:35.836129088Z
-modified_at: 2026-11-08T00:48:50.009544251Z
+modified_at: 2026-11-08T01:10:44.286667885Z
 req_type: Story
 relationships:
 - rel_type:
@@ -210,6 +210,19 @@ comments:
   created_at: 2026-11-08T00:48:50.009544251Z
   modified_at: 2026-11-08T00:48:50.009544251Z
   session_id: 01a1b89daf7a
+- id: 01a1b8b4-aba3-75c1-9ad6-89f410b5f7a3
+  author: joe
+  content: |-
+    Round 3 follow-up final handoff: six files left uncommitted for host publication: AGENTS.md, OVERVIEW.md, aida-cli-lib/src/forge.rs, aida-cli-lib/src/lane_fast_gate.rs, aida-cli-lib/src/lane_job.rs, aida-cli-lib/src/launch/profile.rs. Prior commit 223b62938d4 already implements findings 1-5. This follow-up expands later-head regression coverage to retained fail results, asserts skipped(<reason>) in both discipline copies, documents queued-repair release and failure preservation, marks persisted brief IDs canonical, moves lane selector projection and the unchanged gate signal hook into launch/profile.rs, and constructs the closed gh/glab alternatives literally. Neither ratchet baseline nor sandbox policy was weakened. Latest merged main already resolves the portability allowlist drift; intentional lane_fixture_fails output needed no fix.
+
+    Final fresh validation: host lane job j20261108T010126356-2-0 exited 0: 50 passed, 0 failed, 0 ignored. Command: AIDA_CARGO_TIMEOUT=3600 cargo test --profile agent -p aida-cli-lib --lib -- lane_fast_gate node_alias_display_ratchet_tests story_2326_launch_ratchet_tests fast_gate_timeout_writes_host_result_and_retains_untested fast_gate_body selector. Includes both previously failing Rust ratchets, all receipt lifecycle regressions, timeout and result-line behavior, launcher ownership mutants and PR-body preservation. Raw log: /home/joe/ai/aida/.aida/lane-jobs/01a1b89daf7a/j20261108T010126356-2-0.out. Final rustfmt and git diff --check passed. untested=false. Runner warning retained: overlay-stale because the primary rewrote an underlying generation file.
+
+    Finding 4 positive sandbox evidence independently checked in raw prior log /home/joe/ai/aida/.aida/lane-jobs/01a1b80dd99e/j20261107T233517287-2-0.out: production run_fast_gate job fast-c1116727-fbfb-4363-addc-17d6d2bc3f85 ran clean main 77bc9e4e4d38b978afaaf602dd8300419c320ea7, exited 0 in 232 seconds, and reported all 43 fast-tier gates passed under the unchanged 300-second sandbox profile. The duplicate new-main real-target request was withdrawn before execution after verifying this recorded evidence.
+
+    Native publication declaration recorded: [AI:codex] fix(fast-gate): satisfy ratchets and retain review regression coverage (STORY-2640). No seat commit, push, PR creation, queue completion, review verdict or merge-hold clearance ran. Host must create the new commit and publish after exit; existing hold signals remain untouched.
+  created_at: 2026-11-08T01:10:10.595720539Z
+  modified_at: 2026-11-08T01:10:44.286667761Z
+  session_id: 01a1b89daf7a
 history:
 - id: 01a1b78d-2628-7313-92de-8804ac5f8f71
   author: aida-session-start
@@ -291,6 +304,11 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a1b8b5-2f85-7321-b1a3-390b757ae252
+  author: joe
+  timestamp: 2026-11-08T01:10:44.357328508Z
+  session_id: 01a1b89daf7a
+  changes: []
 filed_at:
   code_sha: 7a18c0d52a6a4e0822befd4c810cfed16b04b74c
   branch: main
