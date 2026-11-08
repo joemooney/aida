@@ -23,12 +23,12 @@ description: |
   Deliberate sweep: for each stale branch/worktree, check the spec status — if Completed/merged-elsewhere, delete the branch + remove the worktree; if it holds genuine uncommitted work, salvage-commit or discard per a per-item decision. aida session reap already handles the finished+merged+exited class safely; this task is the long-tail the reap conservatively leaves (unfinished-spec or uncommitted-work worktrees, and pure branch cruft). Consider an aida worktree gc --older-than / --stale sweep if one doesn't cover it.
 
   Immediate: STORY-1006 + STORY-993 (both Completed) have uncommitted worktree changes — operator decision: salvage or discard, then remove those two worktrees.
-status: NeedsAttention
+status: Approved
 priority: Low
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-09-13T22:07:45.944235Z
-modified_at: 2026-11-08T20:53:00.352004710Z
+modified_at: 2026-11-08T21:07:15.607935625Z
 req_type: Task
 tags:
 - cleanup
@@ -602,6 +602,13 @@ comments:
   modified_at: 2026-11-08T20:43:13.524756808Z
   session_id: 01a1bce597b9
   harness_version: codex-cli 0.167.0
+- id: 01a1bcfc-a217-7840-b1f8-fa96e95dbc4a
+  author: joe
+  content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: No code defect in a full read of the merge-base diff; the head adds only a main merge over 6d34424d54b. Not approvable because CI run 42521473017 is still queued, so the Rust is unproven. Re-run a reviewer when CI is terminal; do not push.. It was punted on: blocked-dependency: Latest review finding 1 requests no code change, push or main merge until terminal CI and fresh independent review. Current head is 1725311184d4ad1677755195fe9ec1b9ff291f6f; its runs 42521473050 and 42521473017 are queued. Reviewed-head run 42518333153 is still queued with cancelled component jobs after the host advanced the branch. Preserve this head and obtain terminal CI plus independent review; existing supervised merge hold requires separate authorized clearance. Changed files: none; working tree clean; no local tests executed (untested=true). No publication or host cleanup performed.. No triage reason was given.'
+  created_at: 2026-11-08T21:07:15.607928969Z
+  modified_at: 2026-11-08T21:07:15.607928969Z
+  session_id: 01a1bc93-77a0-7740-8b03-df4e3e8d1df5
+  harness_version: 2.1.319 (Claude Code)
 history:
 - id: 01a1b7cd-7751-7262-8ad1-f0f9d2ef6d4d
   author: joe
@@ -1173,16 +1180,12 @@ history:
   session_id: 01a1bceca56b
   harness_version: 2.1.319 (Claude Code)
   changes: []
-attention_reason:
-  category: blocked-dependency
-  detail: 'Latest review finding 1 requests no code change, push or main merge until terminal CI and fresh independent review. Current head is 1725311184d4ad1677755195fe9ec1b9ff291f6f; its runs 42521473050 and 42521473017 are queued. Reviewed-head run 42518333153 is still queued with cancelled component jobs after the host advanced the branch. Preserve this head and obtain terminal CI plus independent review; existing supervised merge hold requires separate authorized clearance. Changed files: none; working tree clean; no local tests executed (untested=true). No publication or host cleanup performed.'
-  raised_by: implementer
-  raised_at: 2026-11-08T20:43:07.723798899Z
-failure_reason:
-  phase: reviewer
-  phase_index: 3
-  kind: verdict:request-changes
-  detail: No code defect in a full read of the merge-base diff; the head adds only a main merge over 6d34424d54b. Not approvable because CI run 42521473017 is still queued, so the Rust is unproven. Re-run a reviewer when CI is terminal; do not push.
-  recovery_hint: address the review findings, move TASK-1222 back to In Progress, and clear the PR hold only after approval
-  shelved_by: reviewer
-  shelved_at: 2026-11-08T20:53:00.352004710Z
+- id: 01a1bcfc-a217-7840-b1f8-fa879cb08c4f
+  author: joe
+  timestamp: 2026-11-08T21:07:15.607914057Z
+  session_id: 01a1bc93-77a0-7740-8b03-df4e3e8d1df5
+  harness_version: 2.1.319 (Claude Code)
+  changes:
+  - field_name: status
+    old_value: NeedsAttention
+    new_value: Approved
