@@ -8,7 +8,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-08T05:52:44.068560018Z
-modified_at: 2026-11-08T06:35:08.669310888Z
+modified_at: 2026-11-08T06:48:16.456923913Z
 req_type: Bug
 relationships:
 - rel_type: Blocks
@@ -34,6 +34,12 @@ comments:
   content: 'Validation update: production-posture regression job j20261108T060829638-2822272-0 also timed out after 900s during aida-cli-lib compilation (exit 124; no executed tests). Runner additionally reported seed: overlay-stale, because the primary rewrote a file in seed generation agent-eb517b3f5eb72f8c in place. The BUG-2495 retry j20261108T063053269-2-0 is running with an explicit 1800-second timeout. No code changes since the first validation submission.'
   created_at: 2026-11-08T06:35:08.669310888Z
   modified_at: 2026-11-08T06:35:08.669310888Z
+  session_id: 01a1b9c0edf0
+- id: 01a1b9ea-3548-7523-b681-0ebf62ad9642
+  author: joe
+  content: 'Targeted BUG-2495 tests now executed successfully in launcher job j20261108T063053269-2-0 (explicit 1800s allowance): 2 passed, 0 failed, exit 0, after 13m19s compilation. The runner retained its overlay-stale diagnostic; actual test execution and passing results are present. Final touched-file rustfmt --check and git diff --check pass. Re-running the updated pin/production-posture regression in job j20261108T064804470-2929058-0 against the newly built test binary.'
+  created_at: 2026-11-08T06:48:16.456923913Z
+  modified_at: 2026-11-08T06:48:16.456923913Z
   session_id: 01a1b9c0edf0
 history:
 - id: 01a1b9b8-adb2-7962-b5b8-c3407472eb9f
