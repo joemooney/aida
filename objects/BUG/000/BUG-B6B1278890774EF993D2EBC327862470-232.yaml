@@ -21,7 +21,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-06T17:06:21.254759647Z
-modified_at: 2026-11-08T05:17:06.041828801Z
+modified_at: 2026-11-08T05:25:45.527600657Z
 req_type: Bug
 comments:
 - id: 01a1b1ff-81bd-7b80-8ed5-ea84e52557a5
@@ -259,6 +259,12 @@ history:
   - field_name: status
     old_value: InProgress
     new_value: NeedsAttention
+- id: 01a1b99e-aa5c-7641-881e-b7d451bfc678
+  author: joe
+  timestamp: 2026-11-08T05:25:45.693008782Z
+  session_id: 01a1b99b94a9
+  harness_version: 2.1.319 (Claude Code)
+  changes: []
 filed_at:
   code_sha: 5af57cdbc22163e080ac828964bf33e5baf61937
   branch: main
@@ -272,7 +278,7 @@ failure_reason:
   phase: reviewer
   phase_index: 3
   kind: verdict:request-changes
-  detail: 'No rework since the b1b9b5b6 request-changes: head 0002223 only merges main (PR-touched code byte-identical to b1b9b5b6); all five prior findings still hold. AC1 verified (comments 8/9 attribute the wait to the zero-budget is_ancestor_with_timeout refresh); AC2 partial (refresh/linkage waits removed, but snapshot-only show loses agreed-id resolution); AC3 n/a at review (post-go-live 24h guard window, Refs-only publication).'
+  detail: Round-1 findings 1,2,4,5 fixed (agreed-ID bounded scan + missing/corrupt/stale regression, docs moved/corrected, Python exists-guard); but the new snapshot-only miss path runs a full store scan on every literal miss, including node-label forms before alias expansion, re-adding BUG-...-018's ~700ms-4s cost to default show; CI at head still pending so the contracts fix is unverified.
   recovery_hint: address the review findings, move BUG-2466 back to In Progress, and clear the PR hold only after approval
   shelved_by: reviewer
-  shelved_at: 2026-11-08T05:15:05.210225534Z
+  shelved_at: 2026-11-08T05:25:45.527600657Z
