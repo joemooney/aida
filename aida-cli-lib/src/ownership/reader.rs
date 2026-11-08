@@ -205,3 +205,10 @@ pub(crate) fn seed_lease_heartbeat(
         })
         .unwrap();
 }
+
+/// Pickup and review observations retain unknown owners; only positive death
+/// evidence permits treating their assignment as available.
+// trace:TASK-3420 | ai:codex
+pub(crate) fn lease_retained(root: &Path, lease: &crate::SessionLease) -> bool {
+    !matches!(lease_owner(root, lease), OwnerVerdict::Dead { .. })
+}

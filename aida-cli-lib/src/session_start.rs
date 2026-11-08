@@ -996,8 +996,16 @@ pub(crate) fn orphan_lease_to_adopt(
             ));
         }
     }
-    if let Some(why) = orphan_adoption_refusal(&stale_lease_recovery_for_lease(&lease)) {
-        return refuse(format!("lease {id} is not orphaned: {why}"));
+    // trace:TASK-3420 | ai:codex
+    if !lease.worktree_path.exists() {
+        return refuse(format!("lease {id} tree no longer exists"));
+    }
+    let verdict = crate::ownership::reader::lease_owner(project_root, &lease);
+    if !matches!(verdict, crate::ownership::OwnerVerdict::Dead { .. }) {
+        return refuse(format!(
+            "lease {id} is not orphaned: {}",
+            crate::ownership::reader::owner_label(&verdict)
+        ));
     }
     Ok(Some(lease))
 }
@@ -2268,22 +2276,21 @@ pub(crate) fn session_start_with_receipt(
         );
     }
     // ...and so does any other lease on the scope whose owner is still alive,
-    // with or without a live linked worktree: adoption bypasses the BUG-637
-    // live-claim gate's claude-process probe, so it checks owners itself.
-    // An owner whose liveness cannot be determined (no recorded pid) is
-    // treated as alive, the same rule queue work's conflict sweep applies.
+    // with or without a linked worktree. Adoption checks the recorded owner;
+    // unknown evidence retains ownership, as in the ordinary pickup gate.
     // trace:BUG-2223, TASK-b6b1278890774ef993d2ebc327862470-004 | ai:claude
     if let Some(orphan) = &adopted_orphan {
         let held = list_leases(&project_root).into_iter().find_map(|l| {
             if l.id == orphan.id || !l.scope.eq_ignore_ascii_case(owns) {
                 return None;
             }
-            match stale_lease_recovery_for_lease(&l).base_verdict {
-                StaleLeaseRecovery::Live => Some((l, "live session")),
-                StaleLeaseRecovery::UnknownLiveness => {
+            // trace:TASK-3420 | ai:codex
+            match crate::ownership::reader::lease_owner(&project_root, &l) {
+                crate::ownership::OwnerVerdict::Dead { .. } => None,
+                crate::ownership::OwnerVerdict::Alive { .. } => Some((l, "live session")),
+                crate::ownership::OwnerVerdict::Unknown { .. } => {
                     Some((l, "session whose owner cannot be proven gone"))
                 }
-                _ => None,
             }
         });
         if let Some((live, what)) = held {
@@ -2467,21 +2474,19 @@ pub(crate) fn session_start_with_receipt(
             let self_lease = std::env::current_dir()
                 .ok()
                 .and_then(|cwd| active_lease_for_cwd(&project_root, &cwd));
-            let now = chrono::Utc::now();
-            let live = process_probe::probe_live_claude_sessions();
-            if let Some(claim) = live_spec_claim_by_other(
-                &leases,
-                self_lease.as_ref(),
-                &[owns],
-                lease_is_live(&live, now),
-            ) {
+            // trace:TASK-3420 | ai:codex
+            if let Some(claim) =
+                live_spec_claim_by_other(&leases, self_lease.as_ref(), &[owns], |lease| {
+                    crate::ownership::reader::lease_retained(&project_root, lease)
+                })
+            {
                 let claim_id_short: String = claim.id.chars().take(8).collect();
                 let started = claim
                     .started_at
                     .with_timezone(&chrono::Local)
                     .format("%H:%M");
                 anyhow::bail!(
-                    "`{owns}` is already claimed by session {claim_id_short} (live, started \
+                    "`{owns}` is already claimed by session {claim_id_short} (ownership retained, started \
                      {started}) — skipping to avoid duplicate work.\n  \
                      worktree: {}\n  \
                      If that session is wrong/abandoned, end it (`aida session end \
@@ -2677,8 +2682,8 @@ pub(crate) fn session_start_with_receipt(
                 // trace:BUG-1205 | ai:claude
                 let headless = std::env::var_os("AIDA_HEADLESS").is_some()
                     || !std::io::IsTerminal::is_terminal(&std::io::stdin());
-                let live_sessions = process_probe::probe_live_claude_sessions();
-                let is_live = lease_is_live(&live_sessions, chrono::Utc::now())(l);
+                // trace:TASK-3420 | ai:codex
+                let is_live = crate::ownership::reader::lease_retained(&project_root, l);
                 // BUG-2150: an explicit reviewer pickup coexists with the
                 // implementer's lease; another reviewer's lease still conflicts.
                 // trace:BUG-2150 | ai:claude

@@ -1584,3 +1584,34 @@ fn prd_reentry_and_rotation_use_only_the_exact_ownership_holder() {
     ));
     assert!(reader::require_rotation_owner(dir.path(), "rotation").is_err());
 }
+
+/// Pickup predicates must retain missing, unreadable and replacement evidence.
+// trace:TASK-3420 | ai:codex
+#[test]
+fn task_3420_pickup_retains_unknown_and_releases_only_matching_dead_owner() {
+    let tmp = tempfile::tempdir().unwrap();
+    let root = tmp.path();
+    let _ambient = crate::test_env::AmbientGuard::hermetic_with_seat(root, "implementer", &[]);
+    assert!(std::process::Command::new("git")
+        .args(["init", "-q"])
+        .current_dir(root)
+        .status()
+        .unwrap()
+        .success());
+    let item = lease("pickup", "PR-3420", "");
+    let key = WorkKey::Change {
+        change: dual::change(3420),
+    };
+    assert!(super::reader::lease_retained(root, &item));
+    super::reader::seed_lease_heartbeat(root, &item, key.clone(), true);
+    assert!(super::reader::lease_retained(root, &item));
+    super::reader::seed_lease_heartbeat(root, &item, key.clone(), false);
+    assert!(!super::reader::lease_retained(root, &item));
+    let mut replacement = item.clone();
+    replacement.id = "replacement".into();
+    super::reader::seed_lease_heartbeat(root, &replacement, key.clone(), false);
+    assert!(super::reader::lease_retained(root, &item));
+    let store = OwnershipStore::for_project(root).unwrap().unwrap();
+    std::fs::write(store.path_for(&key), "corrupt").unwrap();
+    assert!(super::reader::lease_retained(root, &item));
+}

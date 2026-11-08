@@ -1364,15 +1364,20 @@ fn linked_verdict_does_not_count_as_review_started() {
     );
 }
 
-/// TASK-2094 / TASK-1665: an attested reviewer whose creator shell exited is
-/// read with the live probes. A crashed reviewer (nothing live in its
-/// worktree) no longer suppresses unpicked-ready-pr; a Codex-style reviewer
-/// registered inside its worktree still counts as the review started.
+/// A positive owner-death proof permits review pickup. An unrelated registry
+/// process in the worktree cannot override that proof.
+// trace:TASK-3420 | ai:codex
 // trace:TASK-1955 | ai:claude (TASK-2094, TASK-1665)
 #[test]
-fn reviewer_lease_with_a_dead_creator_is_read_with_live_probes() {
+fn reviewer_lease_uses_ownership_instead_of_registry_cwd() {
     let tmp = tempfile::tempdir().unwrap();
     let root = tmp.path().canonicalize().unwrap();
+    std::process::Command::new("git")
+        .args(["init", "-q"])
+        .current_dir(&root)
+        .status()
+        .unwrap();
+    let _ambient = crate::test_env::AmbientGuard::hermetic_with_seat(&root, "implementer", &[]);
     let now = Utc::now();
     let worktree = root.join("aida-pr-2730");
     std::fs::create_dir_all(&worktree).unwrap();
@@ -1388,6 +1393,14 @@ fn reviewer_lease_with_a_dead_creator_is_read_with_live_probes() {
     review.creator_pid_start_time = creator.1;
     review.pr_head_sha = Some(HEAD_A.into());
     write_lease(&root, &review);
+    let key = crate::ownership::WorkKey::Review {
+        change: crate::ownership::ChangeId {
+            forge: "origin".into(),
+            n: 2730,
+        },
+        head: HEAD_A.into(),
+    };
+    crate::ownership::reader::seed_lease_heartbeat(&root, &review, key.clone(), false);
     let feed = prs_json(vec![gh_pr(
         2730,
         HEAD_A,
@@ -1440,60 +1453,57 @@ fn reviewer_lease_with_a_dead_creator_is_read_with_live_probes() {
         },
     )
     .unwrap();
+    assert_eq!(
+        ids(&findings_at(&root, now, &prs)),
+        ["lane-liveness:unpicked-ready-pr:PR-2730@a1b2c3d4"],
+        "an unrelated registry process cannot override owner death"
+    );
+    crate::ownership::reader::seed_lease_heartbeat(&root, &review, key, true);
     assert!(
         ids(&findings_at(&root, now, &prs)).is_empty(),
-        "a live registered reviewer in the worktree has started the review"
+        "the recorded holder is alive"
     );
 }
 
-/// TASK-2120: the live-session arm of `review_lease_running`. A Claude
-/// reviewer still running in its review worktree after its creator shell
-/// exited has started the review, with no agent-registry entry; with no live
-/// session there, the lease is not running. The probes are pre-filled, so no
-/// real process table is read.
-// trace:TASK-1955 | ai:claude (TASK-2120)
+/// Review progress follows the recorded owner, even if unrelated processes
+/// occupy the same worktree. Missing or replacement evidence retains ownership.
+// trace:TASK-3420 | ai:codex
 #[test]
-fn reviewer_lease_with_a_dead_creator_counts_a_live_claude_session_in_its_worktree() {
+fn task_3420_review_lease_uses_recorded_ownership() {
     let tmp = tempfile::tempdir().unwrap();
     let root = tmp.path().canonicalize().unwrap();
+    // The production reader resolves the project through Git.
+    std::process::Command::new("git")
+        .args(["init", "-q"])
+        .current_dir(&root)
+        .status()
+        .unwrap();
+    let _ambient = crate::test_env::AmbientGuard::hermetic_with_seat(&root, "implementer", &[]);
     let now = Utc::now();
-    let worktree = root.join("aida-pr-2731");
-    std::fs::create_dir_all(&worktree).unwrap();
     let mut review = lease("rv31", "PR-2731", &dead_pid(), now);
     review.role = Some("reviewer".into());
     review.review_verb = true;
     review.claim_verb = false;
-    review.worktree_path = worktree.clone();
-    review.active_pid = None;
-    review.active_pid_start_time = None;
-    let creator = dead_pid();
-    review.creator_pid = Some(creator.0);
-    review.creator_pid_start_time = creator.1;
-
-    let claude = |cwd: &Path| crate::process_probe::LiveSession {
-        // Not the inspecting process or its ancestors (BUG-2197 excludes those).
-        pid: 4_000_001,
-        cwd: cwd.to_path_buf(),
-        jsonl: None,
-        stale_cwd: false,
+    review.pr_head_sha = Some("head".into());
+    let running = || review_lease_running(&root, &review);
+    assert!(running(), "missing evidence retains ownership");
+    let key = crate::ownership::WorkKey::Review {
+        change: crate::ownership::ChangeId {
+            forge: "origin".into(),
+            n: 2731,
+        },
+        head: "head".into(),
     };
-    let running = |sessions: Vec<crate::process_probe::LiveSession>| {
-        review_lease_running(
-            &root,
-            &review,
-            &mut Some(sessions),
-            &mut Some(Vec::new()),
-            now,
-        )
-    };
+    crate::ownership::reader::seed_lease_heartbeat(&root, &review, key.clone(), true);
+    assert!(running(), "live recorded holder");
+    crate::ownership::reader::seed_lease_heartbeat(&root, &review, key.clone(), false);
+    assert!(!running(), "positive death proof releases the review");
+    let mut replacement = review.clone();
+    replacement.id = "replacement".into();
+    crate::ownership::reader::seed_lease_heartbeat(&root, &replacement, key, false);
     assert!(
-        running(vec![claude(&worktree.join("src"))]),
-        "a live Claude session in the review worktree has started the review"
-    );
-    assert!(!running(Vec::new()), "nothing live: the reviewer crashed");
-    assert!(
-        !running(vec![claude(&root.join("elsewhere"))]),
-        "a session outside the review worktree does not count"
+        running(),
+        "another generation does not prove this owner dead"
     );
 }
 
