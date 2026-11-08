@@ -3,12 +3,12 @@ spec_id: TASK-b6b1278890774ef993d2ebc327862470-880
 agreed_id: TASK-3223
 title: 'STORY-2561 S2: route CLI/MCP store writes through the mediation service and deny raw store writes in the shared boundary'
 description: 'Slice 2 of STORY-2561. Route every inventoried in-lane writer through the S1 service. In the shared AIDA bwrap boundary, make store objects, authority-bearing metadata and the shared derived cache read-only (ancestor grants, symlinks, primary-checkout launches and resume included), with lane-private or read-only derived caches where readers need them. The mediated profile is gated; Codex-native compatibility and its labels stay unchanged. Concurrency tests: stale base, concurrent mutation, and host failure after persist but before reply. Claude behavior is preserved.'
-status: InProgress
+status: NeedsAttention
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-06T13:39:53.442026Z
-modified_at: 2026-11-08T17:44:45.075864450Z
+modified_at: 2026-11-08T17:47:20.211969390Z
 req_type: Task
 tags:
 - architecture
@@ -2197,6 +2197,15 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a1bc45-9913-7cb1-aaff-6364fe097859
+  author: dirtlab
+  timestamp: 2026-11-08T17:47:20.211991914Z
+  session_id: 01a1bc43351c
+  harness_version: codex-cli 0.167.0
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: NeedsAttention
 execution_mode: drive
 filed_at:
   code_sha: 50ce509da3f7edbd12ff6636fe996c9c3a65c68f
@@ -2206,3 +2215,8 @@ filed_at:
   aida_build_sha: dd852f74c3b
   vendor: claude
   session: b0a84e34-277c-4df6-b53c-43f4bbe2e84d
+attention_reason:
+  category: design-fork
+  detail: 'Review comment 85 finding 1 remains unresolved: binding zero-unrouted acceptance is unmet (3171 writer sites and 293 operations). Existing broker supports only comment_add and title/description/priority spec_edit; inventory v2 counts all operation rows as unresolved by construction. Need advisor operation policy: route remaining supported writers with approved typed host semantics, identify excluded host/private writers and TASK-3326 participants, or explicitly authorize refusal dispositions/staged scope. I do not dispute zero-unrouted acceptance and have not weakened the guard or enabled the profile. Fixed findings 5 and 6 in uncommitted docs/MCP description plus regression assertion; validation underway. Findings 3 and 4 need operator/advisor hold and publication-veto investigation; this seat cannot clear them. Do not publish over punt or existing holds. No publication declaration, commit, push, PR mutation or queue completion.'
+  raised_by: implementer
+  raised_at: 2026-11-08T17:47:20.211969390Z
