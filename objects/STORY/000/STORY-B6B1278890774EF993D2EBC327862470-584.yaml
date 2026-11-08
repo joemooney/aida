@@ -13,12 +13,12 @@ description: |
   3. Works for Claude, Codex and AGY through their headless resume commands; one adapter test per vendor using a recorded fixture.
   4. A wait whose seat or session has been lost surfaces as an escalation, never a silent drop.
   Ref: docs/plans/2026-11-07-infinity-agent-architecture-deep-dive.md section 3.3 and the SPIKE-711 results table.
-status: InProgress
+status: NeedsAttention
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-08T02:58:08.667753563Z
-modified_at: 2026-11-08T07:46:05.329687131Z
+modified_at: 2026-11-08T07:47:34.691296508Z
 req_type: Story
 tags:
 - area:human-wait
@@ -325,6 +325,15 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a1ba20-80a3-7cb1-a8fa-7a044cb82d1f
+  author: dirtlab
+  timestamp: 2026-11-08T07:47:34.691308638Z
+  session_id: 01a1ba1f188c
+  harness_version: codex-cli 0.167.0
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: NeedsAttention
 filed_at:
   code_sha: dc41ee8da2f44f88178936fc1a8e6cb7168a3de7
   branch: main
@@ -334,3 +343,8 @@ filed_at:
   vendor: claude
   session: 01a1b8be-8170-7fb2-89ab-ecb4c6eee98c
   harness_version: 2.1.319 (Claude Code)
+attention_reason:
+  category: design-fork
+  detail: 'Revised sketch addresses R2-R6 at docs/plans/2026-11-08-story-2661-park-resume-sketch.md; no findings disputed. Binding ruling requires advisor signoff before code. Proposed initial manual-resume-only scope leaves AC2 open; approve observer-only service, per-child slot reservations, seat-bound intent transport, legacy contained Claude transcript retention and deadline policy. R1 remains blocked on host/advisor retitling PR #3666 to [AI:codex] docs(plans): sketch park-on-ask resume-on-answer (Refs STORY-2661); a Refs commit alone is insufficient. Native seat cannot edit PR metadata or commit. Docs validation git diff --check passed; no runtime tests for sketch-only changes. Publication veto remains pending advisor decision.'
+  raised_by: implementer
+  raised_at: 2026-11-08T07:47:34.691296508Z
