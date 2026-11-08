@@ -14,7 +14,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-08T08:58:22.319212Z
-modified_at: 2026-11-08T19:00:49.546936164Z
+modified_at: 2026-11-08T19:02:40.908406318Z
 req_type: Task
 tags:
 - carried-from:BUG-2495
@@ -81,6 +81,24 @@ comments:
   modified_at: 2026-11-08T19:00:49.546936164Z
   session_id: 01a1bc7d1b9e
   harness_version: codex-cli 0.167.0
+- id: 01a1bc8a-9399-7522-a19d-c1b8d113f79c
+  author: joe
+  content: |-
+    REVIEW FINDINGS TO ADDRESS (TASK-3015):
+    Verdict: CHANGES REQUESTED
+    Reviewed commit: af5907409d6a
+    Recorded: 2026-11-08T18:51:02.240191144+00:00
+    Findings:
+    1. BLOCKING (authority bypass, unaddressed from round 1): aida-cli-lib/src/launch/contained.rs:1470 strips only "-c" from an attached config arg, so -c=approval_policy="on-request" yields value =approval_policy="on-request" and line 1473 computes an empty key that matches no protected prefix. validate_codex_flags_with_help (contained.rs:1683-1692) splits on = and accepts it as -c with an inline value, so it reaches Codex. Same for sandbox_mode, sandbox_workspace_write.*, shell_environment_policy.*, permissions.*. Fix: strip one leading = after -c and trim, or refuse every attached -c form as agent_codex_background.rs:189 does.
+    2. BLOCKING (refusal-path test gap, unaddressed from round 1): task_3015_codex_config_refuses_posture_overrides (aida-cli-lib/src/containment/tests/launch_tests.rs:3435-3440) covers -c K=V, --config K=V, --config=K=V and -cK=V but not -c=K=V, the one attached short form the flag validator lets through (-cK=V is already rejected there as unsupported flag -cK). Add -c=K=V for every protected key.
+    3. BLOCKING (same posture class, unaddressed from round 1): default_permissions is not protected. contained.rs:1448 generates -c default_permissions="aida" and site config is appended after it, while the prefix list at contained.rs:1475-1480 only matches keys starting with permissions. -c default_permissions="other" passes in every config form, contrary to the comment at contained.rs:1459. Refuse it and test all config forms. That the later override wins is Codex behaviour not reproduced here (review ran no builds).
+    4. MINOR (regression, unaddressed from round 1): the config scan at contained.rs:1461-1471 does not stop at --, while validate_codex_flags_with_help (contained.rs:1668) treats everything after -- as opaque. exec -- -c now fails with "requires a value" and exec -- "--config=approval_policy notes" is refused as a posture override; both were accepted before this PR. Stop scanning at --, with a test.
+    5. MINOR (pre-existing, same function, non-blocking for this spec): contained.rs:1516-1534 matches --sandbox and -s only as exact args, so --sandbox=danger-full-access and -s=danger-full-access pass the refusal and the validator accepts them as inline values; agent_codex_background.rs:187 refuses --sandbox=. Also -p/--profile is allowed through and -c profile=/profiles.* are not protected, so a config profile may carry posture; whether it can win over the generated settings is unverified. Filed for follow-up; may be fixed in this rework.
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
+  created_at: 2026-11-08T19:02:40.793081298Z
+  modified_at: 2026-11-08T19:02:40.793081298Z
+  session_id: 01a1b9af-8230-75d2-82f8-667491cc010a
+  harness_version: 2.1.319 (Claude Code)
 history:
 - id: 01a1ba73-e80f-7793-8070-c900efd439d3
   author: joe
