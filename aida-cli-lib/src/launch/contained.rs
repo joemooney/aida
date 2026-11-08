@@ -1456,6 +1456,12 @@ fn codex_argv(
     }
     let mut i = 0;
     while i < original.len() {
+        // trace:TASK-3015 | ai:codex — the option terminator makes the
+        // remaining prompt opaque, including text that resembles config flags.
+        if original[i] == "--" {
+            args.extend_from_slice(&original[i..]);
+            break;
+        }
         // trace:TASK-3015 | ai:codex — site config must not replace the
         // generated posture; match the background launch's protected keys.
         let config = match original[i].as_str() {
@@ -1465,9 +1471,11 @@ fn codex_argv(
                     .context("contained Codex config flag requires a value")?
                     .as_str(),
             ),
-            arg => arg
-                .strip_prefix("--config=")
-                .or_else(|| arg.strip_prefix("-c").filter(|v| !v.is_empty())),
+            arg => arg.strip_prefix("--config=").or_else(|| {
+                arg.strip_prefix("-c")
+                    .filter(|v| !v.is_empty())
+                    .map(|v| v.strip_prefix('=').unwrap_or(v))
+            }),
         };
         if let Some(config) = config {
             let key = config.split('=').next().unwrap_or("").trim();
@@ -1475,6 +1483,7 @@ fn codex_argv(
                 ![
                     "sandbox",
                     "approval",
+                    "default_permissions",
                     "shell_environment_policy",
                     "permissions"
                 ]
