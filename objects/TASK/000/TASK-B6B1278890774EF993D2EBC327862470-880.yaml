@@ -3,12 +3,12 @@ spec_id: TASK-b6b1278890774ef993d2ebc327862470-880
 agreed_id: TASK-3223
 title: 'STORY-2561 S2: route CLI/MCP store writes through the mediation service and deny raw store writes in the shared boundary'
 description: 'Slice 2 of STORY-2561. Route every inventoried in-lane writer through the S1 service. In the shared AIDA bwrap boundary, make store objects, authority-bearing metadata and the shared derived cache read-only (ancestor grants, symlinks, primary-checkout launches and resume included), with lane-private or read-only derived caches where readers need them. The mediated profile is gated; Codex-native compatibility and its labels stay unchanged. Concurrency tests: stale base, concurrent mutation, and host failure after persist but before reply. Claude behavior is preserved.'
-status: NeedsAttention
+status: Approved
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-06T13:39:53.442026Z
-modified_at: 2026-11-08T20:17:58.066974961Z
+modified_at: 2026-11-08T20:36:44.637079637Z
 req_type: Task
 tags:
 - architecture
@@ -1327,6 +1327,13 @@ comments:
   modified_at: 2026-11-08T20:10:58.271411323Z
   session_id: 01a1bc93-77a0-7740-8b03-df4e3e8d1df5
   harness_version: 2.1.319 (Claude Code)
+- id: 01a1bce0-b1dd-7d50-8f4c-413b45e34da0
+  author: joe
+  content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was punted on: design-fork: Review comment 92 finding 1 remains: binding routing acceptance is not met (3173 writer sites, 293 operations unresolved). The supplied ruling specifies the destination but does not define typed host semantics and authority for remaining lifecycle, bulk, alternative-backend and metadata operations. Inventory v2 requires blocked operation dispositions and counts all operations; four partial routes clear none. Need an explicit operation policy for exclusions/refusals versus supported typed routes before changing that schema or enabling admission. No finding disputed. Fixing findings 5 and 7 only: unchanged title/description no longer add history changes; redundant root predicate removed. Targeted lane jobs and check-ci-fast running. Do not publish over persisted NeedsAttention or existing holds even if punt signal-file persistence fails. No commit, push, PR write or queue completion.. No triage reason was given.'
+  created_at: 2026-11-08T20:36:44.637076403Z
+  modified_at: 2026-11-08T20:36:44.637076403Z
+  session_id: 01a1bc93-77a0-7740-8b03-df4e3e8d1df5
+  harness_version: 2.1.319 (Claude Code)
 history:
 - id: 01a1b116-742d-73c0-9064-1933f11e4c38
   author: joe
@@ -2389,6 +2396,15 @@ history:
   - field_name: status
     old_value: InProgress
     new_value: NeedsAttention
+- id: 01a1bce0-b1dd-7d50-8f4c-4126d9c687c1
+  author: joe
+  timestamp: 2026-11-08T20:36:44.637064376Z
+  session_id: 01a1bc93-77a0-7740-8b03-df4e3e8d1df5
+  harness_version: 2.1.319 (Claude Code)
+  changes:
+  - field_name: status
+    old_value: NeedsAttention
+    new_value: Approved
 execution_mode: drive
 filed_at:
   code_sha: 50ce509da3f7edbd12ff6636fe996c9c3a65c68f
@@ -2398,8 +2414,3 @@ filed_at:
   aida_build_sha: dd852f74c3b
   vendor: claude
   session: b0a84e34-277c-4df6-b53c-43f4bbe2e84d
-attention_reason:
-  category: design-fork
-  detail: 'Review comment 92 finding 1 remains: binding routing acceptance is not met (3173 writer sites, 293 operations unresolved). The supplied ruling specifies the destination but does not define typed host semantics and authority for remaining lifecycle, bulk, alternative-backend and metadata operations. Inventory v2 requires blocked operation dispositions and counts all operations; four partial routes clear none. Need an explicit operation policy for exclusions/refusals versus supported typed routes before changing that schema or enabling admission. No finding disputed. Fixing findings 5 and 7 only: unchanged title/description no longer add history changes; redundant root predicate removed. Targeted lane jobs and check-ci-fast running. Do not publish over persisted NeedsAttention or existing holds even if punt signal-file persistence fails. No commit, push, PR write or queue completion.'
-  raised_by: implementer
-  raised_at: 2026-11-08T20:17:58.066974961Z
