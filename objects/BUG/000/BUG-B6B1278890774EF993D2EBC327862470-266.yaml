@@ -15,7 +15,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-08T19:27:28.525198886Z
-modified_at: 2026-11-08T22:37:50.571138034Z
+modified_at: 2026-11-08T22:46:53.804688729Z
 req_type: Bug
 comments:
 - id: 01a1bcd8-beaf-7582-aa0b-006077ac5867
@@ -134,6 +134,37 @@ comments:
   created_at: 2026-11-08T22:32:16.589753415Z
   modified_at: 2026-11-08T22:32:16.589753415Z
   session_id: 20abb7c3-8f9b-4a5e-b326-404921f3b450
+- id: 01a1bd57-da6c-7bc0-838d-0e9b020866ef
+  author: dirtlab
+  content: |-
+    BUG-2501 native rework handoff: all six PR #3699 review findings addressed in source; edits remain uncommitted for host publication.
+
+    Changed files:
+    - aida-core/src/git_ops.rs: pull admission checks tracked/staged changes while allowing untracked metadata; retains embedded-repository/status failure checks. Ordinary pulls emit structural merge notes, now labeled with the upstream policy. Non-mergeable conflicts name the rebase again. Expanded pull regression covers untracked metadata plus tracked/staged refusal.
+    - aida-cli-lib/src/coordination.rs and db_block.rs: dirty-store refusals propagate as errors instead of unreachable/local-only outcomes; added block-pull regression.
+    - aida-cli-lib/src/store_sync.rs: uses tracked-change admission and shared refusal classification; extracted the existing allocation retry loop for an executable dirty-refusal regression proving it stops before fetch/retry exhaustion.
+    - aida-cli-lib/src/tests/bug_2194_rollback_caller_tests.rs: added dirty lock-claim regression; fixture allocation config explicitly mode 0600 to satisfy the trust contract under the runner umask. Existing rollback assertions unchanged.
+    - aida-cli-lib/src/tests/bug_2451_pickup_entry_tests.rs: fixture commit disables automatic maintenance and GC.
+    - scripts/store-writers.toml: moved the allocation pull row and added the extracted helper lock row with the existing host-only restrictions preserved. Other rationale comments retained.
+
+    Executed validation (untested=false):
+    - j20261108T223550235-2-0: core pull_ suite, 9 passed.
+    - j20261108T223544840-2-0: CLI pull_failure_tests, 2 passed.
+    - j20261108T224432841-2-0: rollback caller suite, 7 passed (rerun after fixture permissions fix).
+    - j20261108T224441921-2-0: bug_2501 suite, 4 passed.
+    - j20261108T223720883-2-0: roster_conflict_never_auto_merges_revocation_away, 1 passed.
+    - Store writer inventory: 3390 sites / 293 operation mappings reconciled; 42 inventory fixtures passed.
+    - Git maintenance ratchet: 8 passed; ownership liveness ratchet: 2 passed.
+    - rustfmt --check and git diff --check passed.
+    Initial rollback and bug_2501 runs failed at fixture setup because allocation config inherited shared-write permissions; the final reruns above pass with mode 0600. No assertion weakened. No full CI or make check-ci-fast result claimed. Codegraph is absent from PATH (doctor confirmed); used rg without modifying the shared index.
+
+    Remaining host action / AC4: deploy the fixed binary before retiring dell1 stopgaps. Refreshed /tmp/BUG-2501-remove-stopgaps.patch against current /home/dirtlab/lane-run.sh; patch --dry-run -d /home/dirtlab -p1 passes. It replaces both wrapper calls with fail-closed aida db sync --pull --push and deletes store-sync.sh/store-resolve.py. Those host files are outside this seat's writable roots; AC4 remains incomplete until the host applies it. Keep Refs and do not complete the spec until rollout/removal and published-head checks finish.
+
+    Recorded native publication declaration: [AI:codex] fix(store): correct pull admission and preserve dirty refusals (Refs BUG-2501). No commit, push, PR mutation, queue done, pr ship or review record performed. Existing holds/vetoes remain in force.
+  created_at: 2026-11-08T22:46:53.804688729Z
+  modified_at: 2026-11-08T22:46:53.804688729Z
+  session_id: 01a1bd4bfe5b
+  harness_version: codex-cli 0.167.0
 history:
 - id: 01a1bcc3-bd29-7692-a764-d1e8c8dbaa00
   author: aida-session-start
