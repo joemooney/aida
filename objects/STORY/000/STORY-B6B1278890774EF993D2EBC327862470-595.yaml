@@ -8,7 +8,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-08T05:25:50.443321273Z
-modified_at: 2026-11-08T08:00:05.351301244Z
+modified_at: 2026-11-08T08:01:17.338175690Z
 req_type: Story
 tags:
 - area:ci
@@ -120,6 +120,13 @@ comments:
   modified_at: 2026-11-08T07:58:39.330978153Z
   session_id: 01a1b8be-8170-7fb2-89ab-ecb4c6eee98c
   harness_version: 2.1.319 (Claude Code)
+- id: 01a1ba2d-0e1a-7501-9a81-06ce0c33d209
+  author: dirtlab
+  content: 'Addressed latest PR #3668 review: launcher now uses the fixed, wiped /var/lib/aida-ci-jobs/current path under its exclusive lock so absolute HOME/workspace cache versions remain stable. Stops a stale fixed-name service before reuse and refuses unexpected stop errors before installing cleanup traps. Added jq and ssh-keygen prerequisites and documented jq/openssh-client provisioning. Added stable-path/order fixture and missing-tool refusals. Validation: 43 Python tests passed (self-hosted runner and GitLab adapter), bash syntax, docs scheduling (9 guards), and diff whitespace passed. No Rust changed or cargo run. Live dell1 systemd/JIT execution and cache hits remain untested; operator provisioning, approval setting verification, activation and capacity measurement remain outstanding. Existing CI event/repository gate unchanged; independent reviewer must explicitly verify it. Edits remain uncommitted for host publication; retain Refs STORY-2672 pending operator acceptance.'
+  created_at: 2026-11-08T08:01:17.338175690Z
+  modified_at: 2026-11-08T08:01:17.338175690Z
+  session_id: 01a1ba2bee45
+  harness_version: codex-cli 0.167.0
 history:
 - id: 01a1b9c5-53ea-79e1-9008-26e3abcd0e20
   author: joe
