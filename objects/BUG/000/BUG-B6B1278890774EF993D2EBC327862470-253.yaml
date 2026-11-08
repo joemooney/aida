@@ -10,7 +10,7 @@ description: |
 
   ## Expected
   1. The punt signal reaches the host from a native Codex seat. Write it inside the seat's writable area (a path the host reads from the lease) instead of a host-only path.
-  2. When the seat branch has no commits beyond its base, the host does not try to publish. It reports `implementer: no-change` (or `punted` when a punt exists) with exit 0 and a clear line, never a bundle error.
+  2. When the seat branch has no commits beyond its base, the host does not try to publish. It reports `implementer: no-change` with exit 0 and a clear line, never a bundle error. A punt reports `implementer: punted` and retains the established standalone lane exit code 32 (the drain maps its punt outcome to exit 0). Queue-resume and drain propagation of an explicit no-change outcome is tracked in draft TASK-3608 for advisor triage, split per PR #3625 round-6 finding 4; the current publication boundary prints no-change but does not yet carry that classification through the final drain outcome.
 
   ## Acceptance
   - A test for the native-seat punt that reaches the host and suppresses publication.
@@ -20,7 +20,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-07T20:18:53.564500Z
-modified_at: 2026-11-08T17:57:55.286184892Z
+modified_at: 2026-11-08T18:02:56.140485220Z
 req_type: Bug
 relationships:
 - rel_type:
@@ -470,6 +470,11 @@ history:
 - id: 01a1bc53-1ee4-7f72-be14-924112001f41
   author: joe
   timestamp: 2026-11-08T18:02:06.436188846Z
+  session_id: 01a1bc4dcf8e
+  changes: []
+- id: 01a1bc53-e161-7c01-b98a-b6355b989603
+  author: joe
+  timestamp: 2026-11-08T18:02:56.225283090Z
   session_id: 01a1bc4dcf8e
   changes: []
 filed_at:
