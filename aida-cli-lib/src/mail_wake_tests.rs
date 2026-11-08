@@ -19,7 +19,10 @@ fn row(
     for (key, value) in [
         ("id", id.clone()),
         ("agent_type", agent_type.into()),
-        ("pid_start", "start-1".into()),
+        (
+            "pid_start",
+            "linux:00000000-0000-4000-8000-000000000001:1".into(),
+        ),
         ("name", "codex-agent-03".into()),
         ("role", "implementer".into()),
         ("started_at", "2026-10-29T00:00:00Z".into()),
@@ -29,6 +32,7 @@ fn row(
     ] {
         table.insert(key.into(), toml::Value::String(value));
     }
+    table.insert("pid_namespace".into(), toml::Value::Integer(42));
     table.insert("pid".into(), toml::Value::Integer(i64::from(pid)));
     if let Some(wake) = wake {
         table.insert("mail_wake".into(), toml::Value::String(wake.into()));
@@ -359,9 +363,11 @@ fn story_home_096_launcher_row_keeps_a_hook_session_id() {
     let dir = tempfile::tempdir().unwrap();
     let project = dir.path();
     let pid = std::process::id();
-    let start = crate::process_probe::process_start_identity(pid);
+    let captured = aida_core::proc_identity::ProcIdentity::capture(pid).unwrap();
+    let start = Some(captured.legacy().start);
     let mut hook = row(project, "codex", pid, None, Some(THREAD));
     hook.pid_start = start.clone();
+    hook.pid_namespace = Some(captured.pidns_inode);
     agent_registry::write_entry(project, &hook).unwrap();
     let launched = agent_registry::register_spawned_agent(
         project,

@@ -536,6 +536,8 @@ block_primary_commits = true
 # green. Names are this project's own: AIDA's `build-result` job, which
 # requires every CI lane. A test pins it to .github/workflows/ci.yml.
 [review_watch]
+# trace:TASK-3472 | ai:codex
+max_concurrent = 4
 required_checks = ["Build (ubuntu-latest)"]
 
 # STORY-1917: execute pending `take` and `impl` dispatch requests outside any

@@ -44,6 +44,8 @@
 #     while an agent is mid-edit, so that gate belongs after the push, not
 #     before it. trace:TASK-1567
 [tiers]
+# trace:STORY-2672 | ai:codex
+"Self-hosted routing security fixtures" = "fast"
 # trace:STORY-2606 | ai:codex
 "GitLab upstream CI adapter fixtures" = "fast"
 # trace:BUG-2475 | ai:codex
@@ -128,6 +130,7 @@
 "Check Rust test portability ratchet" = "fast"
 "Prose-classification rule fixtures" = "fast"
 "Executable fixture ratchet" = "fast"
+"Crate glob import ratchet" = "fast"  # trace:TASK-3428 | ai:codex
 "ExecContext environment ratchet" = "fast"  # trace:STORY-2538 | ai:codex
 "Test git auto-maintenance ratchet" = "fast"  # trace:BUG-2191 | ai:claude
 "Verify pure-move slice stack fixtures" = "fast"
@@ -157,6 +160,7 @@
 # visible rather than silent, and a skip nobody sees is how this drifted in the
 # first place.
 [skips]
+"Verify self-hosted prerequisites" = "operator-provisioned dell1 runner boundary only"
 # trace:BUG-2475 | ai:codex
 "Install awk engines" = "`sudo apt-get` against the runner image; full-tier hook tests require mawk and gawk on PATH"
 "CI docs-only short-circuit" = "an echo for CI flow control; it asserts nothing about the tree"

@@ -54,6 +54,17 @@ pub(crate) fn launch_with_skill(
     }
 }
 
+// trace:TASK-3219 | ai:codex
+pub(crate) fn supervised_background_name() -> &'static str {
+    aida_core::vendors::profile(aida_core::vendors::LaunchVendor::Claude).launch_name
+}
+pub(crate) fn supervised_background_hint(attempt: &str) -> String {
+    format!("AIDA background attempt {attempt}\n  logs: aida agent logs {attempt}\n  attach: aida agent attach {attempt}\n  claude attach is unavailable for AIDA-supervised sessions.")
+}
+pub(crate) fn background_attach_refusal() -> &'static str {
+    "claude attach is unavailable under the AIDA wrapper; use aida agent attach <attempt> or aida agent logs <attempt>"
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

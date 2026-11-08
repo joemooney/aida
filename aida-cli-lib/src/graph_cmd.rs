@@ -1,5 +1,5 @@
 //! `aida graph` command handlers — STORY-489 cross-spec transitive queries
-//! (`--blocked-by` / `--blocks` chains, `--tree` epic rollup, `--impact` reverse
+//! (`blocked-by` / `blocks` chains, `tree` epic rollup, `impact` reverse
 //! closure, `--json`). Extracted verbatim from `main.rs` (SPIKE-78, pure
 //! movement — no behavior change).
 
@@ -139,9 +139,9 @@ pub(crate) fn handle_graph_command(
     };
     let is_tree = mode == "tree";
 
-    // TASK-1074: `--tree` membership routes through the shared rank-oriented
-    // hierarchy closure (`graph_walk::hierarchy_tree`) so `aida graph <epic>
-    // --tree` and `aida focus <epic>` (the cache's `descendant_ids`) agree — the
+    // TASK-1074: `aida graph tree` membership routes through the shared rank-oriented
+    // hierarchy closure (`graph_walk::hierarchy_tree`) so `aida graph tree <epic>`
+    // and `aida focus <epic>` (the cache's `descendant_ids`) agree — the
     // old `walk_union([Child,Parent])` leaked a descendant's same-rank second
     // parent into the count. The other modes keep their own walk_union legs.
     let result = if is_tree {
@@ -318,6 +318,36 @@ pub(crate) fn handle_graph_command(
 mod tests {
     use super::*;
 
+    // Exercise dispatch and execution: parsing alone cannot catch an implicit
+    // tree mode conflicting with --follow. trace:TASK-1214 | ai:codex
+    #[test]
+    fn task_1214_bare_graph_and_follow_execute() {
+        use clap::CommandFactory;
+
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("requirements.yaml");
+        let mut store = aida_core::RequirementsStore::new();
+        let mut root = aida_core::Requirement::new("Root".into(), String::new());
+        root.spec_id = Some("STORY-1".into());
+        store.add_requirement(root);
+        std::fs::write(&path, serde_yaml::to_string(&store).unwrap()).unwrap();
+        let storage = crate::Storage::new(&path);
+        let ctx = crate::command_registry::DispatchCtx {
+            globals: None,
+            store: Some(crate::command_registry::StoreCtx::Legacy {
+                storage: &storage,
+                requirements_path: &path,
+            }),
+        };
+        for argv in [
+            vec!["graph", "STORY-1", "--json"],
+            vec!["graph", "STORY-1", "--follow", "carved-out-to", "--json"],
+        ] {
+            let matches = GraphArgs::command().try_get_matches_from(&argv).unwrap();
+            run_graph(&matches, &ctx).unwrap_or_else(|err| panic!("{argv:?}: {err}"));
+        }
+    }
+
     // BUG-672: `aida graph` in agent mode emits a parseable TOON table named per
     // direction with a `{id,title,status}` schema — an EMPTY direction still
     // emits a valid `<name>[0]{...}:` header (NOT the human prose `(no related
@@ -369,31 +399,12 @@ mod tests {
 /// mode.
 // trace:STORY-489 | ai:claude
 // trace:TASK-778
+// trace:TASK-1214 | ai:codex
 #[derive(clap::Parser, Debug)]
 #[clap(name = "graph")]
 pub(crate) struct GraphArgs {
     /// The root spec (SPEC-ID or UUID) to query from.
     pub id: Option<String>,
-
-    /// Transitive BlockedBy chain: every spec the root is directly or
-    /// indirectly blocked by.
-    #[clap(long, hide = true)]
-    pub blocked_by: bool,
-
-    /// Transitive Blocks chain: every spec the root directly or
-    /// indirectly blocks.
-    #[clap(long, hide = true)]
-    pub blocks: bool,
-
-    /// Parent/Child descendants of the root with a status rollup — the
-    /// epic-rollup view. The default when no mode flag is given.
-    #[clap(long, hide = true)]
-    pub tree: bool,
-
-    /// Reverse impact: every spec that is (transitively) blocked by the
-    /// root — what is at risk if the root slips.
-    #[clap(long, hide = true)]
-    pub impact: bool,
 
     /// Follow a custom (or built-in) relationship type by name, outgoing —
     /// e.g. `--follow begets`. Repeatable to walk several types at once.
@@ -436,10 +447,6 @@ fn run_graph(
             match &args {
                 GraphArgs {
                     id: graph_id,
-                    blocked_by,
-                    blocks,
-                    tree,
-                    impact,
                     follow,
                     depth,
                     json,
@@ -463,31 +470,7 @@ fn run_graph(
                                     "aida graph needs a spec id, e.g. `aida graph tree STORY-1`"
                                 )
                             })?;
-                            if *blocked_by {
-                                note_hidden_alias(
-                                    concat!("aida graph <id> ", "--blocked-by"),
-                                    "aida graph blocked-by <id>",
-                                );
-                            }
-                            if *blocks {
-                                note_hidden_alias(
-                                    concat!("aida graph <id> ", "--blocks"),
-                                    "aida graph blocks <id>",
-                                );
-                            }
-                            if *tree {
-                                note_hidden_alias(
-                                    concat!("aida graph <id> ", "--tree"),
-                                    "aida graph tree <id>",
-                                );
-                            }
-                            if *impact {
-                                note_hidden_alias(
-                                    concat!("aida graph <id> ", "--impact"),
-                                    "aida graph impact <id>",
-                                );
-                            }
-                            (id, *blocked_by, *blocks, *tree, *impact)
+                            (id, false, false, false, false)
                         }
                     };
                     self::handle_graph_command(
@@ -505,10 +488,6 @@ fn run_graph(
             match &args {
                 GraphArgs {
                     id: graph_id,
-                    blocked_by,
-                    blocks,
-                    tree,
-                    impact,
                     follow,
                     depth,
                     json,
@@ -532,31 +511,7 @@ fn run_graph(
                                     "aida graph needs a spec id, e.g. `aida graph tree STORY-1`"
                                 )
                             })?;
-                            if *blocked_by {
-                                note_hidden_alias(
-                                    concat!("aida graph <id> ", "--blocked-by"),
-                                    "aida graph blocked-by <id>",
-                                );
-                            }
-                            if *blocks {
-                                note_hidden_alias(
-                                    concat!("aida graph <id> ", "--blocks"),
-                                    "aida graph blocks <id>",
-                                );
-                            }
-                            if *tree {
-                                note_hidden_alias(
-                                    concat!("aida graph <id> ", "--tree"),
-                                    "aida graph tree <id>",
-                                );
-                            }
-                            if *impact {
-                                note_hidden_alias(
-                                    concat!("aida graph <id> ", "--impact"),
-                                    "aida graph impact <id>",
-                                );
-                            }
-                            (id, *blocked_by, *blocks, *tree, *impact)
+                            (id, false, false, false, false)
                         }
                     };
                     self::handle_graph_command(
