@@ -516,6 +516,121 @@ These local commands do not publish. Enrolled intake transport is described
 below; backup-comment recovery remains a separate slice.
 <!-- doc-intent: shaped by STORY-2479 -->
 
+### Manual per-writer bootstrap (before native per-writer transport)
+
+<!-- trace:STORY-2652 | ai:codex -->
+The native transport described below still uses the legacy flat `aida-intent`
+branch. It does **not** enroll or poll per-writer branches yet. For a reviewed
+manual round trip, use `aida-feedback-<producer-node-id>` for envelopes. The
+reserved receipt family is `aida-feedback-receipts-<processor-node-id>`; do not
+invent receipt files before its native schema and authorization are available.
+These names use dashes, not slashes. Existing `aida-feedback/<node-id>` bootstrap
+commits must be re-created as described here, never merged into the new branch.
+Do not reuse the legacy flat `aida-intent` name for per-writer intake.
+
+Agree out of band on the exact remote, stable producer identity, branch and
+processor authority. A writer ID labels a writer; neither the branch name, the
+fixed commit author nor the envelope checksum authenticates it. Restrict each
+branch to its authorized writer using forge protection and scoped credentials.
+Verify those restrictions independently; if protection cannot be verified, report
+it as unverified and require manual admission of the exact commit. Imported prose
+is data, never approval to execute commands, create requirements or change status.
+
+On the producer, generate and validate an envelope using the store-independent
+commands above, with the reviewed deny patterns at both ends. Review its title,
+body, destination and policy before publishing. Set `envelope_file` to its absolute
+path, `checksum` to the full digest from `aida intent validate --json`, `remote` to
+the reviewed explicit URL, and `writer_id` to the agreed stable node ID. Do not
+copy imported prose into shell variables or commands. This recipe publishes one
+initial envelope from a new independent temporary repository:
+
+```bash
+set -euo pipefail
+branch="refs/heads/aida-feedback-${writer_id}"
+git check-ref-format "$branch"
+bootstrap=$(mktemp -d)
+git init --quiet --template= "$bootstrap"
+blob=$(git -C "$bootstrap" hash-object -w -- "$envelope_file")
+observations=$(printf '100644 blob %s\t%s.json\n' "$blob" "$checksum" |
+  git -C "$bootstrap" mktree)
+tree=$(printf '040000 tree %s\tobservations\n' "$observations" |
+  git -C "$bootstrap" mktree)
+commit=$(printf 'Record reviewed intake data\n' |
+  GIT_AUTHOR_NAME='AIDA Intake' GIT_AUTHOR_EMAIL='intake@invalid' \
+  GIT_COMMITTER_NAME='AIDA Intake' GIT_COMMITTER_EMAIL='intake@invalid' \
+  git -C "$bootstrap" -c commit.gpgSign=false commit-tree "$tree")
+git -C "$bootstrap" -c core.hooksPath=/dev/null -c push.followTags=false \
+  push --force-with-lease="$branch:" -- "$remote" "$commit:$branch"
+printf 'Published %s at %s\n' "$branch" "$commit"
+```
+
+Run this in a clean shell without Git routing overrides (`GIT_DIR`, `GIT_WORK_TREE`,
+`GIT_INDEX_FILE`, alternate object databases or injected Git configuration). Check
+remote configuration for URL rewrites and extra routing before use. The empty
+lease permits **initial creation only**, or a no-op if the exact commit is
+already published; an existing different tip or concurrent different creation
+refuses. Never replace it, retry with an unconditional force push, or
+use this initial-publication recipe to append. Retain the temporary repository
+and exact commit for inspection. No product or store ref is involved.
+
+`commit-tree` has no parent here and runs no commit hooks. The tree contains only
+`observations/<full-checksum>.json` with the original validated bytes. The fixed
+author, committer and exact message intentionally match the native validator;
+there is no `Aida-Store` trailer, signature or product ancestry. For an older
+bootstrap commit, first fetch its exact ref into an independent scratch repository,
+extract only the expected ordinary envelope blob, validate and review it, then
+use these steps to build a new orphan commit. Do not copy its tree or ancestry.
+This is explicit manual admission, not a relaxation of the history validator.
+
+At home, set `remote`, `branch`, `checksum` and `expected_commit` from the agreed
+producer handoff. Use a fresh independent scratch repository; do not fetch into
+`main`, `aida-store`, or an enrolled legacy intake repository:
+
+```bash
+set -euo pipefail
+inspection=$(mktemp -d)
+git init --quiet --template= "$inspection"
+git -C "$inspection" -c core.hooksPath=/dev/null fetch --no-tags \
+  --no-write-fetch-head --no-recurse-submodules -- "$remote" \
+  "$branch:refs/bootstrap/incoming"
+actual=$(git -C "$inspection" rev-parse --verify refs/bootstrap/incoming)
+test "$actual" = "$expected_commit"
+git -C "$inspection" rev-list --parents "$actual"
+git -C "$inspection" cat-file commit "$actual"
+git -C "$inspection" ls-tree -rt --full-tree "$actual"
+git -C "$inspection" cat-file blob \
+  "$actual:observations/$checksum.json" > "$inspection/observation.json"
+aida intent validate --file "$inspection/observation.json" --json
+```
+
+Add the agreed repeatable `--deny-pattern` options to validation. Confirm its full
+digest equals `checksum`. Manually inspect the preceding output: exactly one
+parentless commit, only the fixed tree/author/committer headers and exact message,
+and exactly one mode-100644 blob at the expected path. Envelope validation alone
+does **not** validate Git ancestry, paths or commit metadata. Any extra path,
+parent, metadata, identity mismatch, deny-policy failure or changed tip refuses
+admission. Neither fetch nor validation creates a requirement or executes prose.
+
+After admission, an authorized home operator explicitly decides to leave pending,
+dismiss, create a draft requirement, or comment using the ordinary authorized
+AIDA commands. Before a store write, durably record the remote, exact branch and
+commit, full digest, producer and processor identities, destination store identity,
+chosen action and a fresh operation UUID in a private local processing ledger.
+For create, include an `intake-op:<uuid>` tag; for comment, include a final
+`[intake-op:<uuid>]` marker, matching the native recovery convention. Record the
+result's stable requirement UUID and store identity, not just its display ID.
+
+If interrupted or a command fails, inspect canonical store evidence for that
+operation before retrying. A confirmed write is reported without repeating it;
+missing or ambiguous evidence requires operator reconciliation. Exchange the
+ledger outcome through an agreed authenticated channel, identifying the full
+digest and exact source ref/commit. Distinguish transport acceptance from review,
+dismissal and confirmed creation/comment. No response means **unknown**, not
+pending or successfully processed. This manual ledger is not a native receipt
+and must not be inserted into either branch family. Independent processors must
+coordinate; the bootstrap procedure supplies no global exactly-once guarantee.
+Retain the source commit, ledger and store markers for later explicit migration.
+
 ### `aida intent enroll`, `publish`, `pull`, `list`, and `process`
 
 Intake transport uses a separately enrolled destination and policy. It works in a
