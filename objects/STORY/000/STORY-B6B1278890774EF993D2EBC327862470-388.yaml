@@ -18,12 +18,12 @@ description: |
   3. A contained agy lane cannot write outside its worktree or reach hosts outside allowed_hosts (one negative test each).
   4. The refusal message stops telling agy users to "fix [contained.vendors]" until a value actually works; it names the supported vendors.
   5. One real agy lane completes a small spec end to end (PR opened), and the result is cited on this story.
-status: InProgress
+status: NeedsAttention
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-04T15:39:15.141070572Z
-modified_at: 2026-11-08T06:15:50.093908030Z
+modified_at: 2026-11-08T06:16:34.262646599Z
 req_type: Story
 tags:
 - area:containment
@@ -299,6 +299,15 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a1b9cd-2ed6-7e51-8337-abcf42e03ed4
+  author: dirtlab
+  timestamp: 2026-11-08T06:16:34.262662591Z
+  session_id: 01a1b9cc6bac
+  harness_version: codex-cli 0.167.0
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: NeedsAttention
 filed_at:
   code_sha: c19294416a9bc68dab12b910c0566ad80a7cc995
   branch: main
@@ -307,3 +316,8 @@ filed_at:
   aida_build_sha: c19294416a9
   vendor: claude
   session: 5bf140f7-38b2-4a04-9e8c-ccf69b1258f8
+attention_reason:
+  category: blocked-dependency
+  detail: Parent acceptance remains blocked by TASK-3048 integrated AGY AIDA-boundary conformance and subsequent TASK-3049 real lane through PR-open. TASK-3048 is In Progress with its own registered implementer lease (task-3048-r1650) and newer round-8 review repairs recorded; do not duplicate that lane from this older parent checkout. Latest advisor ruling requires code-only implementer work, production require_conformance stays closed, and advisor must attach fresh C0-C4 report plus measured refresh-host inventory before separate admission unlock. TASK-3049 explicitly refuses pickup until TASK-3048 is Completed. S1 TASK-3046 and S3 TASK-3047 are Completed. No source edits or model runs made in this parent pickup; preserve the binding outer-only receipt requirement and existing production refusal.
+  raised_by: implementer
+  raised_at: 2026-11-08T06:16:34.262646599Z
