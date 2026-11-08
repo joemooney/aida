@@ -4066,6 +4066,14 @@ fn task_3048_diagnostic_prepare_uses_common_wrapper_and_keeps_production_closed(
             .unwrap()
             .success());
     }
+    // Retained siblings must survive the private extension mask as pinned,
+    // read-only mounts, including ordinary files alongside skill directories.
+    // trace:TASK-3048 | ai:codex
+    let skills = root.path().join(".agents/skills");
+    std::fs::create_dir_all(&skills).unwrap();
+    std::fs::write(skills.join("SKILL.md"), "fixture skill").unwrap();
+    let sibling = root.path().join(".agents/notes.txt");
+    std::fs::write(&sibling, "fixture notes").unwrap();
     let plan = PreparedLaunch::prepare_runtime_diagnostic(&mut child, root.path(), &credential)
         .unwrap_or_else(|e| panic!("diagnostic prepare: {e:#}"));
     assert!(!plan
@@ -4097,7 +4105,7 @@ fn task_3048_diagnostic_prepare_uses_common_wrapper_and_keeps_production_closed(
     assert!(!bound.writable);
     assert_eq!(
         bound.file.metadata().unwrap().ino(),
-        std::fs::metadata(credential).unwrap().ino()
+        std::fs::metadata(&credential).unwrap().ino()
     );
     assert!(plan
         .profile
@@ -4126,5 +4134,29 @@ fn task_3048_diagnostic_prepare_uses_common_wrapper_and_keeps_production_closed(
             "mask leaked host path: {name}"
         );
     }
+    for path in [&skills, &sibling] {
+        let mount = plan
+            .profile
+            .mounts
+            .iter()
+            .find(|m| m.path == *path)
+            .unwrap();
+        assert!(!mount.writable);
+        assert_eq!(
+            mount.file.metadata().unwrap().ino(),
+            std::fs::metadata(path).unwrap().ino()
+        );
+    }
+    drop(plan);
+    // A symlink sibling must refuse preparation, even when its target is a
+    // valid retained directory. No launch plan may escape this validation.
+    std::os::unix::fs::symlink(&skills, root.path().join(".agents/linked-skills")).unwrap();
+    let error = PreparedLaunch::prepare_runtime_diagnostic(&mut child, root.path(), &credential)
+        .err()
+        .expect("symlink sibling returned a launch plan");
+    assert!(
+        format!("{error:#}").contains("unsafe mount identity"),
+        "{error:#}"
+    );
     assert!(crate::launch::agy::AGY.require_conformance().is_err());
 }

@@ -510,7 +510,7 @@ the controls during the live run.
 
 Runtime `auth_hosts` feeds the common relay allow-set after trusted approval.
 Missing approval names `AGY_AUTH_HOST_UNAPPROVED`; an unlisted requested host
-is denied before DNS and logged as `CONTAINED_EGRESS_HOST_UNLISTED <host>`.
+is denied before DNS and logged as `CONTAINED_EGRESS_HOST_UNLISTED <host>:<port>`.
 Successful auth-host metadata is recorded in a bounded host-only bitmap on an
 unlinked descriptor that is never passed to bwrap. After the vendor exits, the
 host launcher writes `host-egress.json` outside the writable workspace; only
