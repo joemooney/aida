@@ -1,0 +1,21 @@
+id: 01a1b8b8-c6b5-78a3-aa99-96228b120bb4
+spec_id: STORY-b6b1278890774ef993d2ebc327862470-576
+agreed_id: STORY-2653
+title: 'Seat rotation ends the session itself: once a seat past its context ceiling writes a fresh handoff, the launcher ends that session at the next turn boundary and relaunches, with no operator exit or Ct'
+description: 'Operator 2026-11-07 18:14: ''I miss the relay logic we had working that would kill the session and automatically relaunch it if the handoff file existed.'' Today (claude-advisor-106) the rotation hook says ''write a handoff, then exit'', the model writes .aida/handoff/advisor/latest.md, but the session stays open: an assistant cannot exit itself, and a goal Stop hook kept re-prompting it for 10+ turns after the handoff. The operator had to exit manually. STORY-2141''s relaunch-on-exit works; the missing half is ending the session. Acceptance: (1) when the rotation notice is active (context above the seat ceiling) and a handoff for that seat is written by this session AFTER the notice, the aida agent new launcher ends the vendor session at the next turn boundary (Claude: Stop hook returns end / SIGTERM to the child after the turn completes; Codex: equivalent) and relaunches under the same handle with the handoff loaded; (2) a session-scoped goal or other Stop hook cannot block that rotation exit; the goal carries over to the relaunched session or is reported in the handoff; (3) background processes started by the old session that hold its grant are listed in the handoff automatically (or rebound), so watchers do not silently die (today''s review watcher outage at 16:13 had this cause); (4) no rotation when the handoff predates the notice, or when no handoff was written; (5) regression test with a fake vendor child. Related: STORY-2141, STORY-1464, BUG-1659.'
+status: Approved
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-11-08T01:14:39.669105479Z
+modified_at: 2026-11-08T01:14:39.669105479Z
+req_type: Story
+filed_at:
+  code_sha: 2782389cd8ad9240672ea95d0f2209c7f193700b
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 2782389cd8a
+  vendor: claude
+  session: 01a1b848-940b-7bd2-8acd-52e428b182b8
+  harness_version: 2.1.319 (Claude Code)
