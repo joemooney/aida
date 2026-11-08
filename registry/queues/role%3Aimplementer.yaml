@@ -1,4 +1,10 @@
 - user_id: role:implementer
+  requirement_id: 01a1b6a5-ac93-76e0-869d-b844520e579f
+  position: -246000
+  added_by: role:implementer
+  added_at: 2026-11-08T08:46:42.982620842Z
+  for_role: implementer
+- user_id: role:implementer
   requirement_id: 01a1aa02-ff22-7df1-a307-23aba18f6c6c
   position: -245000
   added_by: role:implementer
@@ -33,12 +39,6 @@
   position: -240000
   added_by: role:implementer
   added_at: 2026-11-08T08:30:23.207425678Z
-  for_role: implementer
-- user_id: role:implementer
-  requirement_id: 01a1b6a5-ac93-76e0-869d-b844520e579f
-  position: -239000
-  added_by: role:implementer
-  added_at: 2026-11-08T08:28:11.180639933Z
   for_role: implementer
 - user_id: role:implementer
   requirement_id: 01a09395-1a21-7ca0-b624-e7c61ae1051d
