@@ -15,7 +15,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-08T19:27:28.525198886Z
-modified_at: 2026-11-08T20:57:27.777738731Z
+modified_at: 2026-11-08T20:57:43.406075932Z
 req_type: Bug
 comments:
 - id: 01a1bcd8-beaf-7582-aa0b-006077ac5867
@@ -54,6 +54,26 @@ comments:
   content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: AC1 partial (local tags/relationships/dependencies dropped), AC2 partial (no-origin stores now fail; pickup writes queue before pull; no pickup/burndown refusal test), AC3 partial (wrong rebase-abort advice on dirty store); unbounded --continue loop now reaches every plain pull; AC4 is an external host action; CI pending at review.. No triage reason was given.'
   created_at: 2026-11-08T20:57:27.777737271Z
   modified_at: 2026-11-08T20:57:27.777737271Z
+  session_id: 01a1bc93-77a0-7740-8b03-df4e3e8d1df5
+  harness_version: 2.1.319 (Claude Code)
+- id: 01a1bcf3-d8cf-7fd1-9a94-0ae57e1feee7
+  author: joe
+  content: |-
+    REVIEW FINDINGS TO ADDRESS (PR #3699):
+    Verdict: CHANGES REQUESTED
+    Reviewed commit: 67e3f71df291
+    Recorded: 2026-11-08T20:41:32.972050473+00:00
+    Findings:
+    1. [major][correctness][AC1] aida-core/src/conflict.rs:429 merge_spec_upstream clones upstream and unions only history, comments and processing records, so tags, relationships and dependencies added locally are silently dropped whenever the object conflicts. These are set fields, not the scalars AC1 assigns to upstream. The rebase path used merge_spec_three_way before this PR, which keeps them (conflict.rs:397,410,418; STORY-645, BUG-602), so this regresses 'aida pull'. Failure: node A adds a blocked-by edge, node B edits the same spec, A pulls: the edge is gone with no warning. Keep the three-way set merges for these fields and add a test.
+    2. [major][regression][AC2] aida-cli-lib/src/store_sync.rs:1679 maybe_sync_pull has no local-only branch, unlike 'aida db sync --pull' (git_backend_cmd.rs:1345, BUG-432). On a store with no origin the pull now returns Err, and burndown_run.rs:358 and :738 propagate it, so 'aida burndown run' (including dry-run) and every --sync read die on local-only projects. The new test store_sync.rs pull_failure_tests asserts this no-origin failure as the expected result. A missing remote is not a failed pull: skip it as BUG-432 does and test that, using a real unreachable remote for the failure case.
+    3. [major][correctness][AC2] aida-cli-lib/src/queue_cmd.rs:12608 persists the synthesized queue row (storage.queue_add plus record_role_activity) before the pre-pickup pull at queue_cmd.rs:13346, so a failed pull has already written to the store from the local view, contrary to AC2. Review of BUG-2490 at 1a83194161c4 raised this same ordering. Move the pull ahead of the persistence and add a regression. There is also no test proving pickup or burndown stop on a failed pull: only maybe_sync_pull's refusal is tested.
+    4. [major][correctness] aida-core/src/git_ops.rs rebase_auto_merge_onto: the loop has no bound when a rebase stays paused with no unmerged paths. A persistent 'git rebase --continue' failure (stale index.lock, missing committer identity, failing prepare-commit-msg hook) reaches the conflicted.is_empty() branch and retries forever while holding the store write lock. Plain pull_rebase used rebase_onto, which aborted on first failure (BUG-1229), and this PR routes all plain pulls through the loop, including the locked retry sites. Abort and return an error when --continue fails and makes no progress.
+    5. [minor][correctness] aida-core/src/git_ops.rs rebase_auto_merge_onto: the '?' exits on unmerged_paths, add(...) and the git() --continue calls return with the rebase still paused and no abort, losing the BUG-1229 guarantee that a failed plain pull restores the branch. Only maybe_sync_pull retries the abort; other pull_rebase callers leave the store on a detached rebase HEAD. Abort on these error paths too.
+    6. [minor][correctness][AC3] aida-cli-lib/src/store_sync.rs:1250 still tells the user 'git rebase --abort' after a dirty-store refusal, where no rebase is in progress and that command fails. AC3 requires accurate dirty-store reporting at the store_sync.rs retry sites, and the same pull is also retried cfg.retry_max times although a dirty refusal is not transient. Use store_pull_failure_hint or branch on the refusal, and add a test for a dirty-store diagnostic at a retry site.
+    7. [minor][docs] User-facing text still promises the removed fallback: aida-cli-lib/src/queue_cmd_args.rs:63 and requirements_cli.rs:4231 (--sync help) and docs/advanced/multi-node.md:71 say --sync warns and falls back to the local view when offline. aida-cli-lib/src/store_push_pull.rs:2474 still says scalars resolve LWW. Update them to the new behavior.
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
+  created_at: 2026-11-08T20:57:39.791430761Z
+  modified_at: 2026-11-08T20:57:39.791430761Z
   session_id: 01a1bc93-77a0-7740-8b03-df4e3e8d1df5
   harness_version: 2.1.319 (Claude Code)
 history:
