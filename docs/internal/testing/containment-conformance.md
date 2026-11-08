@@ -102,9 +102,10 @@ The advisor owns fresh host measurements. The common wrapper's `RuntimeCredentia
 `[vendor.agy.runtime]` data in `containment/vendors.toml`. It provisions a mode
 0700 runtime under launch-owned state and binds it at the vendor's conventional
 `~/.gemini/antigravity-cli` path. The host `.gemini` tree is masked first; the
-runtime starts with private settings allowing only `write_file(<workspace>/**)`,
-without inherited plugins, MCP servers,
-hooks, logs or daemon endpoints. The OAuth token is opened with the common
+runtime starts with private `settings.json` denying MCP, `read_url` and
+`execute_url` tools, without a native sandbox profile or workspace permission
+glob. Plugins, MCP servers, hooks, logs and daemon endpoints are not inherited.
+The OAuth token is opened with the common
 non-following regular-file/owner/single-link checks and bound read-only by
 handle, never copied into writable state. Refresh and expiry behavior of this
 opaque credential remains unverified; this mechanism does not adopt Claude's
@@ -129,18 +130,23 @@ mechanics, not AGY tool invocation, real browser/MCP behavior or C0–C4 accepta
 Set `AIDA_REQUIRE_BWRAP_LIVE=1` when running the regression to turn missing live
 prerequisites into failures rather than skips.
 
-The data records only the host-evidenced endpoint
-`daily-cloudcode-pa.googleapis.com`, with `auth_inventory_complete = false`.
+The data records the measured inference endpoint
+`daily-cloudcode-pa.googleapis.com` and candidate refresh endpoint
+`oauth2.googleapis.com`, with `auth_inventory_complete = false`. The refresh
+endpoint comes from the installed binary; no refresh traffic has been measured.
 Inventory entries are requirements on the pinned trusted
 `contained.allowed_hosts`, never automatic additions to it. Missing or malformed
-hosts and incomplete inventories refuse before runtime creation or credential
-access. Completing the inventory requires advisor-owned refresh/login evidence;
+hosts refuse before runtime creation or credential access. An incomplete
+inventory also refuses ordinary production preparation; the explicit diagnostic
+entry may measure the candidate hosts with trusted approval. Completing the inventory requires advisor-owned refresh/login evidence;
 this change does not assume that a Google wildcard is safe or sufficient.
 
 Options precede the final `-p <prompt>`. The shipped argv omits both `--sandbox`
-and the unavailable `--mode auto`. Candidate argv also omits blanket permission bypass and still
-requires a host-accepted `ContainmentReceipt`; deserialized or missing receipts
-refuse. Within the common wrapper, argv preparation stays behind its exec
+and the unavailable `--mode auto`. Candidate argv includes
+`--dangerously-skip-permissions` only with a
+host-accepted `ContainmentReceipt`; deserialized or missing receipts refuse.
+`--settings` names the private runtime settings file. Within the common wrapper,
+argv preparation stays behind its exec
 barrier, and receipt acceptance checks the outer-only descriptor before exec
 can be released. Extra caller options are refused in the runtime-file arm.
 
@@ -167,10 +173,13 @@ remain failures.
 This is a **Refs-only S2 slice**, continuing merged PR #3518 and the common
 wrapper from #3449. Remaining acceptance: finish the auth/refresh inventory,
 validate credential refresh/expiry with the private read-only token, demonstrate
-mediated-write positive controls, wire and run the production all-tool AGY
-conformance path, then change the admission gate only with fresh passing host
-evidence. The shared-boundary harness still refuses AGY by name; native fixture
-or model-free wrapper tests cannot substitute for that integrated host run.
+mediated-write positive controls and run the integrated all-tool AGY
+conformance path, then change the production admission gate in a separate step
+only with fresh passing host evidence. The AIDA-boundary harness selects the
+explicit `conformance-launch` diagnostic entry, preserving the shared grant,
+receipt and seat barriers while ordinary production launches still refuse.
+Native fixture or model-free wrapper tests cannot substitute for that
+integrated host run.
 
 ### 2026-11-07 workspace-only permission rerun
 
