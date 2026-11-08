@@ -44,6 +44,8 @@
 #     while an agent is mid-edit, so that gate belongs after the push, not
 #     before it. trace:TASK-1567
 [tiers]
+# trace:STORY-2672 | ai:codex
+"Self-hosted routing security fixtures" = "fast"
 # trace:STORY-2606 | ai:codex
 "GitLab upstream CI adapter fixtures" = "fast"
 # trace:BUG-2475 | ai:codex
@@ -157,6 +159,7 @@
 # visible rather than silent, and a skip nobody sees is how this drifted in the
 # first place.
 [skips]
+"Verify self-hosted prerequisites" = "operator-provisioned dell1 runner boundary only"
 # trace:BUG-2475 | ai:codex
 "Install awk engines" = "`sudo apt-get` against the runner image; full-tier hook tests require mawk and gawk on PATH"
 "CI docs-only short-circuit" = "an echo for CI flow control; it asserts nothing about the tree"

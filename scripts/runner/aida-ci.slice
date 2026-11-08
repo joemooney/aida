@@ -1,0 +1,8 @@
+# trace:STORY-2672 | ai:codex
+[Unit]
+Description=Shared dell1 CI CPU budget
+
+[Slice]
+CPUAccounting=yes
+CPUQuota=800%
+AllowedCPUs=0-7
