@@ -8,7 +8,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-08T19:37:15.450252326Z
-modified_at: 2026-11-08T20:07:43.008499308Z
+modified_at: 2026-11-08T20:25:18.883634457Z
 req_type: Bug
 comments:
 - id: 01a1bcc0-2ddb-79f0-b763-2d703d44589a
@@ -18,6 +18,24 @@ comments:
   modified_at: 2026-11-08T20:01:13.691269627Z
   session_id: 01a1bc93-77a0-7740-8b03-df4e3e8d1df5
   harness_version: 2.1.319 (Claude Code)
+- id: 01a1bcd6-3b23-7453-af5a-f18e4e69e0c1
+  author: dirtlab
+  content: |
+    BUG-2502 implementation handoff (native seat; edits uncommitted).
+
+    Root cause confirmed in canonical history for all five reported specs: aida-loop-guard wrote Approved -> NeedsAttention after queue rework's successful transition. The guard compared imported review text for every NeedsAttention pause, so a punt/CI pause carrying the same old review receipt was mistaken for another reviewer request-changes shelf.
+
+    Changed files:
+    - aida-cli-lib/src/queue_cmd.rs: scope the repeated-findings repark to NeedsAttention with a reviewer/verdict:request-changes failure and no agent punt. Preserve the existing repeated-review guard for actual reviewer shelves; old imported findings remain deduplicated.
+    - aida-cli-lib/src/tests/queue_rework_tests.rs: add real-store, handler-level regressions for metadata-only rework without a reason after CI and punt (including retained reviewer failure), asserting Approved persistence, queue insertion, marker clearing and no duplicated findings. Add positive guard eligibility coverage.
+
+    Validation: git diff --check PASS; rustfmt --check --edition 2021 on both changed files PASS. untested=true: launcher job j20261108T201001386-2-0 (cargo test --profile agent -p aida-cli-lib --lib -- bug_2502) timed out after 900 seconds, exit 124, during dependency compilation; no executed-test result and no compiler errors reported. Full log: /home/dirtlab/ai/aida/.aida/lane-jobs/01a1bcc5c11d/j20261108T201001386-2-0.out. Host/CI must execute the new regressions (and the queue_rework_tests suite); a longer AIDA_CARGO_TIMEOUT may be needed for compilation on this target.
+
+    codegraph is missing from PATH, confirmed by aida doctor check codegraph; navigation used rg. No commit, push, PR creation, queue done, pr ship or review record was performed. Host launcher owns publication and subsequent queue completion.
+  created_at: 2026-11-08T20:25:18.883634457Z
+  modified_at: 2026-11-08T20:25:18.883634457Z
+  session_id: 01a1bcc5c11d
+  harness_version: codex-cli 0.167.0
 history:
 - id: 01a1bcc0-76ed-7d22-8b7b-93e7daa2feca
   author: joe
