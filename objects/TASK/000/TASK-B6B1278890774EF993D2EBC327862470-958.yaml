@@ -8,7 +8,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-07T22:12:10.371157002Z
-modified_at: 2026-11-08T00:18:07.266422832Z
+modified_at: 2026-11-08T00:30:08.456846680Z
 req_type: Task
 relationships:
 - rel_type: Child
@@ -52,6 +52,17 @@ comments:
   modified_at: 2026-11-07T23:33:21.108092319Z
   session_id: 01a1b848-940b-7bd2-8acd-52e428b182b8
   harness_version: 2.1.319 (Claude Code)
+- id: 01a1b890-0448-7f10-bf67-c0dae5f41943
+  author: joe
+  content: |
+    Round-2 native implementer handoff (uncommitted; Git metadata is read-only): moved OutputFormat and StakeholderAction unchanged into cmdkit, with re-exports at the existing consumer paths. The only named production module edge from cmdkit is now spec_arg. Narrowed the clap declaration exemption to the GlobalArgs struct while retaining cmdkit as a hot file for command-specific flag handling. Updated AGENTS.md and OVERVIEW.md; full evidence, pinned measurements, reproduction script and proposed host commit message are in docs/internal/testing/task-3425-cmdkit-rework.md.
+
+    Finding 2 is explicitly punted: largest lexical SCC 327 at c6118ac -> 326 after rework; base 2a7fe186 is also 326. No 29-module reduction or completion is claimed. Publication remains vetoed pending advisor scope decision. Finding 1 requires the host to include the exact standalone Help-Golden: unchanged trailer when publication is authorized; no golden was changed for these pure moves. No commit/push/PR/queue-done/ship was performed in this seat.
+
+    Validation: the existing fast-gate runner passed all 39 non-Cargo gates excluding the two compilation gates, Cargo formatting and branch-history help co-change guard; changed-file rustfmt, git diff --check, trace-header/store-writer checks, working-tree doc audience/link/path checks and help co-change fixture tests passed. The actual branch-history help guard still exits 1 until the host commit includes the trailer. make check-ci-fast was interrupted when it attempted direct Cargo compilation, as the lane requires launcher-mediated builds. Launcher job j20261108T001448544-2-0 (cargo test --profile agent -p aida-cli-lib --lib story_1728_command_registry_tests) timed out after 900s during compilation, exit 124, with no executed tests. untested=true for Rust tests. Final test-helper refinement has formatting/trace validation but no current-source Rust test pass.
+  created_at: 2026-11-08T00:30:08.456846680Z
+  modified_at: 2026-11-08T00:30:08.456846680Z
+  session_id: 01a1b8813cc5
 history:
 - id: 01a1b811-df16-79c0-9152-0fbdcca89083
   author: joe
