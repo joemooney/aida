@@ -432,9 +432,14 @@ source/literal candidate checks retain escaped strings before decoding; mutant
 fixtures exercise new literals, match arms and aliases.
 The effectful `launch/profile.rs` adapter references the same descriptor and retains the existing finalizer. Capabilities do not admit
 launches or grant containment credit; AGY's outer-only containment candidate
-still refuses pending conformance. Hook event/backend and resume/fork backend
-migration, the effectful adapter move and further vendor-debt reductions remain
-later slices. See the [approved sketch](docs/plans/2026-11-06-story-2539-vendor-profile-sketch.md).
+still refuses pending conformance. Hook layouts, event contracts and backend
+selection now drive the init hook consumer. Pure parsing/fixture validation stays
+in core `vendors/hooks.rs`; filesystem adapters and compatibility entry points
+stay in `scaffolding/codex_hooks.rs`. Hook writers reuse the existing symlink
+skip-and-warn policy for each file and its ancestors, including dangling links;
+unrelated files still install. Shared settings retain the full scaffolder.
+Resume/fork backend migration, the effectful launch adapter move and further
+vendor-debt reductions remain later slices. See the [approved sketch](docs/plans/2026-11-06-story-2539-vendor-profile-sketch.md).
 <!-- trace:STORY-2539 | ai:codex -->
 
 ### The four layers
