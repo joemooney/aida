@@ -1,0 +1,35 @@
+id: 01a1bd11-72a8-7770-a184-4c2a0d21056a
+spec_id: TASK-b6b1278890774ef993d2ebc327862470-1019
+title: 'Repeated unchanged review findings: STORY-2641'
+description: |-
+  Identical reviewer findings recurred twice for STORY-2641; do not requeue a third implementer round until an advisor chooses a different implementer/seat or resolves the dispute.
+
+  REVIEW FINDINGS TO ADDRESS (PR #3657):
+  Verdict: CHANGES REQUESTED
+  Reviewed commit: fd899f640875
+  Recorded: 2026-11-08T19:55:01.483853349+00:00
+  Findings:
+  1. major/acceptance: AC1 is unverified at fd899f640875. It requires a second lane job on the same dependency set to show sccache hits (stats delta > 0) on the primary AND on dell1. The spec has no lane-job statistics from either host and no advisor amendment; the latest handoff (2026-11-08 12:50 -07:00) confirms this. A code change cannot close it, so route it to the host/operator or advisor, not implementer rework. Fix: with a launcher built from this branch, run two consecutive 'aida lane job run' cargo jobs on each host and record both logs' 'lane sccache: final job statistics' output (second job Rust hits > 0) on STORY-2641, or have the advisor record an amendment of AC1.
+  Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
+status: Draft
+priority: Medium
+owner: joe
+feature: Uncategorized
+created_at: 2026-11-08T21:29:59.720181597Z
+modified_at: 2026-11-08T21:29:59.720181597Z
+req_type: Task
+tags:
+- from-advisor:STORY-2641
+- kind:observation
+- linked:STORY-2641
+- loop-guard
+- review-recurrence
+- severity:major
+filed_at:
+  code_sha: b57c1fab753d30430c7a544b781bd8c7d91da0d2
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: db2eb4c39e4
+  vendor: claude
+  session: 20abb7c3-8f9b-4a5e-b326-404921f3b450
