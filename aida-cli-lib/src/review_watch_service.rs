@@ -143,6 +143,22 @@ pub(crate) fn rebind(root: &Path, deputy: &str, grant: &SeatGrant) -> Result<()>
                 "review-watch belongs to another deputy"
             );
             binding.succeeds(&state.binding)?;
+            // Operator roots may hand off to their first advisor child. Once
+            // bound to a session, its descendants are sub-advisors, not rotations.
+            // trace:STORY-2571 | ai:codex
+            if seat_authority::read_grant(&state.binding.grant)?
+                .parent_grant_id
+                .is_some()
+            {
+                let mut ancestor = grant.parent_grant_id.clone();
+                while let Some(id) = ancestor {
+                    anyhow::ensure!(
+                        id != state.binding.grant,
+                        "review-watch sub-advisor cannot replace its ancestor binding"
+                    );
+                    ancestor = seat_authority::read_grant(&id)?.parent_grant_id;
+                }
+            }
             state.binding = binding;
             state
         }
@@ -183,6 +199,8 @@ pub(crate) fn command(action: &AdvisorLoopsCommand) -> Result<()> {
                 "blocked-ambiguous-spawn"
             } else if state.worker.as_ref().is_some_and(Identity::alive) {
                 "running"
+            } else if state.child_grant.is_some() {
+                "waiting-for-reviews"
             } else {
                 "waiting-for-supervisor"
             };
@@ -466,27 +484,25 @@ fn tick(root: &Path, deputy: &str, host_valid: bool, child: &mut Option<Child>) 
         state.host = Some(Identity::current()?);
         state.checked_at = Some(Utc::now());
     }
-    if let Some(process) = child.as_mut() {
-        // The identity was captured before any try_wait/reap.
+    let exited = if let Some(process) = child.as_mut() {
+        // Capture the exit before dropping the reaped handle. Retain the
+        // persisted identity and grant while reviews may still descend from it.
         if let Some(status) = process.try_wait()? {
-            revoke_controller(&state)?;
             state.last_exit = status.code();
-            state.worker = None;
-            state.child_grant = None;
-            state.retry_after = Utc::now() + chrono::Duration::seconds(10);
             *child = None;
+            true
+        } else {
+            false
         }
-    } else if let Some(worker) = &state.worker {
-        match worker.verdict() {
-            aida_core::proc_identity::Verdict::Dead(_) => {
-                revoke_controller(&state)?;
-                state.worker = None;
-                state.child_grant = None;
-                state.retry_after = Utc::now() + chrono::Duration::seconds(10);
-            }
-            // Alive and unknown both retain the controller reservation.
-            _ => {}
-        }
+    } else {
+        state.worker.as_ref().is_some_and(|worker| {
+            matches!(worker.verdict(), aida_core::proc_identity::Verdict::Dead(_))
+        })
+    };
+    if exited && revoke_controller(root, &dir, &state)? {
+        state.worker = None;
+        state.child_grant = None;
+        state.retry_after = Utc::now() + chrono::Duration::seconds(10);
     }
     if before != serde_json::to_vec(&state)? {
         write(&dir, &state)?;
@@ -528,13 +544,24 @@ fn tick(root: &Path, deputy: &str, host_valid: bool, child: &mut Option<Child>) 
     }
 }
 
-// Keep the receipt until revocation succeeds, so a failed revoke is retried.
+// Keep the receipt until all reviews are finished and revocation succeeds.
+// Reservations do not record grant ancestry, so conservatively protect every
+// unresolved attempt, including unrecorded and unknown descendants.
 // trace:STORY-2571 | ai:codex
-fn revoke_controller(state: &Service) -> Result<()> {
+fn revoke_controller(root: &Path, dir: &Directory, state: &Service) -> Result<bool> {
+    reconcile_reviews(root, dir)?;
+    if let Some(bytes) = dir.read(STATE)? {
+        let reviews: State = serde_json::from_slice(&bytes)?;
+        if reviews.entries.values().flat_map(|e| &e.attempts).any(|a| {
+            active(a) || a.unrecorded_descendant() || a.recorded().iter().any(|p| p.alive())
+        }) {
+            return Ok(false);
+        }
+    }
     if let Some(id) = &state.child_grant {
         seat_authority::revoke_by_id(id)?;
     }
-    Ok(())
+    Ok(true)
 }
 
 // Reuse the ordinary reservation recovery while holding admission.lock. A
@@ -575,22 +602,37 @@ fn reconcile_reviews(root: &Path, dir: &Directory) -> Result<()> {
 // trace:STORY-2571 | ai:codex
 pub(crate) fn rebind_after_launch(start: &Path, grant: &SeatGrant) -> Result<()> {
     let root = forge::main_root(start)?;
-    rebind_after_launch_with(&root, grant, |deputy, root, grant| {
-        let queue = crate::deputy_shell::current_queue(deputy)?;
-        let reply = crate::deputy_shell::socket::request(
-            &queue,
-            &crate::deputy_shell::socket::Request::ReviewWatchRebind {
-                project: root.into(),
-                grant: grant.id.clone(),
-            },
-        )?;
-        anyhow::ensure!(
-            reply.ok,
-            "review-watch rotation rebind refused: {}",
-            reply.why.unwrap_or_default()
-        );
-        Ok(())
-    })
+    let default_running = matches!(
+        crate::deputy_shell::current_queue("default")?.runner_status(),
+        crate::deputy_shell::RunnerStatus::Live(_) | crate::deputy_shell::RunnerStatus::Legacy(_)
+    );
+    rebind_after_launch_with(
+        &root,
+        grant,
+        default_running,
+        |deputy, root, grant, configured| {
+            let queue = crate::deputy_shell::current_queue(deputy)?;
+            let reply = match crate::deputy_shell::socket::request(
+                &queue,
+                &crate::deputy_shell::socket::Request::ReviewWatchRebind {
+                    project: root.into(),
+                    grant: grant.id.clone(),
+                },
+            ) {
+                Ok(reply) => reply,
+                // A deputy can disappear between the liveness probe and connect.
+                // An unused service is silent unless a deputy actually refuses it.
+                Err(_) if !configured => return Ok(()),
+                Err(error) => return Err(error),
+            };
+            anyhow::ensure!(
+                reply.ok,
+                "review-watch rotation rebind refused: {}",
+                reply.why.unwrap_or_default()
+            );
+            Ok(())
+        },
+    )
 }
 
 // Trusted launchers may bootstrap the default deputy or rotate an operator's
@@ -600,7 +642,8 @@ pub(crate) fn rebind_after_launch(start: &Path, grant: &SeatGrant) -> Result<()>
 fn rebind_after_launch_with(
     root: &Path,
     grant: &SeatGrant,
-    request: impl FnOnce(&str, &Path, &SeatGrant) -> Result<()>,
+    default_running: bool,
+    request: impl FnOnce(&str, &Path, &SeatGrant, bool) -> Result<()>,
 ) -> Result<()> {
     let state = if let Some(dir) = directory(root, false)? {
         let _lock = dir.lock("admission.lock")?;
@@ -608,11 +651,14 @@ fn rebind_after_launch_with(
     } else {
         None
     };
+    if state.is_none() && !default_running {
+        return Ok(());
+    }
     let deputy = state
         .as_ref()
         .map(|s| s.deputy.as_str())
         .unwrap_or("default");
-    request(deputy, root, grant)
+    request(deputy, root, grant, state.is_some())
 }
 
 #[cfg(test)]
@@ -723,6 +769,155 @@ mod tests {
         }
     }
 
+    // Exercise the actual reviewer ancestry, not just the controller record.
+    // trace:STORY-2571 | ai:codex
+    #[test]
+    fn story2571_live_reviewer_survives_controller_reap_and_rotation() {
+        for reap_in_tick in [true, false] {
+            for rotate in [true, false] {
+                let (temp, _guard, parent) = fixture();
+                let root = temp.path();
+                rebind(root, "default", &parent).unwrap();
+                let dir = directory(root, false).unwrap().unwrap();
+                let grant =
+                    seat_authority::issue_review_watch_child(root, &parent.id, &parent.subject)
+                        .unwrap();
+                let reviewer = seat_authority::issue_child_from(
+                    grant.clone(),
+                    "reviewer",
+                    "live-reviewer",
+                    false,
+                )
+                .unwrap();
+                assert_eq!(reviewer.parent_grant_id.as_ref(), Some(&grant.id));
+                let mut process = Command::new("sh").args(["-c", "exit 7"]).spawn().unwrap();
+                let mut state = read(&dir).unwrap().unwrap();
+                state.worker = Some(Identity::child(&process).unwrap());
+                state.child_grant = Some(grant.id.clone());
+                write(&dir, &state).unwrap();
+                let store = Store::open(root, "github:github.com/owner/repo").unwrap();
+                assert!(matches!(
+                    select(&store, &change(1), None, 2).unwrap(),
+                    Action::Dispatch(_)
+                ));
+                let mut reviews = store.load().unwrap();
+                let attempt = &mut reviews.entries.get_mut("PR-1").unwrap().attempts[0];
+                attempt.phase = Phase::Running;
+                attempt.identity = Some(Identity::current().unwrap());
+                attempt.reviewer_spawning = true;
+                attempt.reviewer = Some(Identity::current().unwrap());
+                dir.write(STATE, &serde_json::to_vec_pretty(&reviews).unwrap())
+                    .unwrap();
+                if rotate {
+                    rebind(root, "default", &successor(root, &parent)).unwrap();
+                }
+                if !reap_in_tick {
+                    process.wait().unwrap();
+                }
+                let mut child = reap_in_tick.then_some(process);
+                let deadline = std::time::Instant::now() + std::time::Duration::from_secs(3);
+                loop {
+                    tick(root, "default", false, &mut child).unwrap();
+                    if child.is_none() {
+                        break;
+                    }
+                    assert!(std::time::Instant::now() < deadline);
+                    std::thread::sleep(std::time::Duration::from_millis(10));
+                }
+                assert!(
+                    seat_authority::validated_grant(
+                        root,
+                        &reviewer.id,
+                        &reviewer.subject,
+                        Utc::now()
+                    )
+                    .is_some(),
+                    "reviewer must retain full-chain authority after controller exit"
+                );
+                assert_eq!(
+                    read(&dir).unwrap().unwrap().child_grant.as_ref(),
+                    Some(&grant.id)
+                );
+                // An unrecorded spawn is also protected across supervisor ticks.
+                let attempt = &mut reviews.entries.get_mut("PR-1").unwrap().attempts[0];
+                attempt.reviewer = None;
+                dir.write(STATE, &serde_json::to_vec_pretty(&reviews).unwrap())
+                    .unwrap();
+                tick(root, "default", false, &mut child).unwrap();
+                assert!(seat_authority::validated_grant(
+                    root,
+                    &reviewer.id,
+                    &reviewer.subject,
+                    Utc::now()
+                )
+                .is_some());
+                // Once the review is terminal and all identities are gone,
+                // revocation and ordinary restart backoff may proceed.
+                let attempt = &mut reviews.entries.get_mut("PR-1").unwrap().attempts[0];
+                attempt.phase = Phase::Exited;
+                attempt.identity = None;
+                attempt.reviewer_spawning = false;
+                dir.write(STATE, &serde_json::to_vec_pretty(&reviews).unwrap())
+                    .unwrap();
+                tick(root, "default", false, &mut child).unwrap();
+                assert!(read(&dir).unwrap().unwrap().child_grant.is_none());
+                assert!(seat_authority::read_grant(&grant.id)
+                    .unwrap()
+                    .revoked_at
+                    .is_some());
+            }
+        }
+    }
+
+    #[test]
+    fn story2571_sub_advisor_does_not_narrow_binding_before_rotation() {
+        let temp = tempfile::tempdir().unwrap();
+        let mut guard = crate::test_env::AmbientGuard::hermetic_with_seat(
+            temp.path(),
+            "advisor",
+            &["advisor", "reviewer", "implementer"],
+        );
+        let root = temp.path();
+        let operator = seat_authority::grant_check(root).into_valid().unwrap();
+        rebind(root, "default", &operator).unwrap();
+        let advisor =
+            seat_authority::issue_child_from(operator.clone(), "advisor", "first-advisor", false)
+                .unwrap();
+        rebind_after_launch_with(root, &advisor, false, |d, r, g, _| rebind(r, d, g)).unwrap();
+        let sub =
+            seat_authority::issue_child_from(advisor.clone(), "advisor", "sub-advisor", false)
+                .unwrap();
+        // Explicitly narrow the sub-advisor's delegation as a real --delegate-seat launch does.
+        guard.set_key(seat_authority::GRANT_ENV, &advisor.id);
+        guard.set_key("AIDA_USER", &advisor.subject);
+        guard.set_key("AIDA_AGENT_NAME", &advisor.subject);
+        let narrow = seat_authority::issue_launch_child_with_delegation(
+            root,
+            "advisor",
+            "narrow-advisor",
+            false,
+            &["advisor".into(), "reviewer".into()],
+        )
+        .unwrap();
+        for sub in [sub, narrow] {
+            assert!(
+                rebind_after_launch_with(root, &sub, false, |d, r, g, _| rebind(r, d, g))
+                    .unwrap_err()
+                    .to_string()
+                    .contains("sub-advisor")
+            );
+        }
+        let next = seat_authority::issue_child_from(operator, "advisor", "rotated-advisor", false)
+            .unwrap();
+        rebind_after_launch_with(root, &next, false, |d, r, g, _| rebind(r, d, g)).unwrap();
+        let dir = directory(root, false).unwrap().unwrap();
+        assert_eq!(read(&dir).unwrap().unwrap().binding.grant, next.id);
+        assert_eq!(
+            read(&dir).unwrap().unwrap().binding.delegations,
+            advisor.delegable_seats
+        );
+    }
+
     #[test]
     fn story2571_controller_select_after_rotation_stops_pass() {
         let (temp, mut guard, parent) = fixture();
@@ -826,11 +1021,29 @@ mod tests {
             .status()
             .unwrap()
             .success());
-        // The public hook must attempt bootstrap even without a service receipt.
-        // This hermetic home has no deputy, so transport must refuse, not skip.
-        assert!(rebind_after_launch(root, &operator).is_err());
-        let send = |deputy: &str, root: &Path, grant: &SeatGrant| rebind(root, deputy, grant);
-        rebind_after_launch_with(root, &operator, send).unwrap();
+        // An unused service with no deputy must not warn on advisor launch.
+        rebind_after_launch(root, &operator).unwrap();
+        rebind_after_launch_with(root, &operator, false, |_, _, _, _| {
+            panic!("no deputy or service: do not send a request")
+        })
+        .unwrap();
+        assert!(
+            rebind_after_launch_with(root, &operator, true, |_, _, _, configured| {
+                assert!(!configured);
+                anyhow::bail!("deputy answered with a refusal")
+            })
+            .is_err()
+        );
+        let send =
+            |deputy: &str, root: &Path, grant: &SeatGrant, _: bool| rebind(root, deputy, grant);
+        rebind_after_launch_with(root, &operator, true, send).unwrap();
+        assert!(
+            rebind_after_launch_with(root, &operator, false, |_, _, _, configured| {
+                assert!(configured);
+                anyhow::bail!("bound deputy unavailable")
+            })
+            .is_err()
+        );
         let next = seat_authority::issue_launch_child_with_delegation(
             root,
             "advisor",
@@ -839,13 +1052,13 @@ mod tests {
             &[],
         )
         .unwrap();
-        rebind_after_launch_with(root, &next, send).unwrap();
+        rebind_after_launch_with(root, &next, false, send).unwrap();
         let dir = directory(root, false).unwrap().unwrap();
         assert_eq!(
             read(&dir).unwrap().unwrap().binding.subject,
             "new-advisor-handle"
         );
-        assert!(rebind_after_launch_with(root, &operator, send).is_err());
+        assert!(rebind_after_launch_with(root, &operator, true, send).is_err());
         assert_eq!(read(&dir).unwrap().unwrap().binding.grant, next.id);
         let source = include_str!("agent_launch.rs");
         assert!(source.contains("service::rebind_after_launch(&plan.project_root, &grant)"));
@@ -966,16 +1179,26 @@ mod tests {
         tick(root, "default", true, &mut controller).unwrap();
         let rebound = read(&dir).unwrap().unwrap();
         assert_eq!(rebound.binding.validate(root).unwrap().id, next.id);
-        assert!(rebound.worker.is_none());
-        assert!(rebound.child_grant.is_none());
-        assert!(rebound.retry_after > Utc::now());
-        assert!(controller.is_none(), "exit backoff precedes replacement");
+        assert!(rebound.worker.is_some());
+        assert_eq!(rebound.child_grant.as_ref(), Some(&child.id));
+        assert!(
+            controller.is_none(),
+            "unresolved reviews precede replacement"
+        );
+        reconcile_reviews(root, &dir).unwrap();
+        assert_eq!(std::fs::read(dir.path().join(STATE)).unwrap(), reservations);
+        let mut reviews = store.load().unwrap();
+        reviews.entries.get_mut("PR-1").unwrap().attempts[0].phase = Phase::Exited;
+        dir.write(STATE, &serde_json::to_vec_pretty(&reviews).unwrap())
+            .unwrap();
+        tick(root, "default", true, &mut controller).unwrap();
+        let stopped = read(&dir).unwrap().unwrap();
+        assert!(stopped.child_grant.is_none());
+        assert!(stopped.retry_after > Utc::now());
         assert!(seat_authority::read_grant(&child.id)
             .unwrap()
             .revoked_at
             .is_some());
-        reconcile_reviews(root, &dir).unwrap();
-        assert_eq!(std::fs::read(dir.path().join(STATE)).unwrap(), reservations);
         assert!(rebind(root, "default", &first).is_err());
         assert_eq!(read(&dir).unwrap().unwrap().binding.grant, next.id);
     }

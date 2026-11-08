@@ -1,9 +1,3 @@
-Supervised review-watch revokes controller grants on confirmed exit. Trusted
-advisor launches bootstrap the default deputy binding and rotate operator
-bindings under successor checks. Status supports JSON/TOON and links the manual
-operator reset procedure; see docs/cli/06-roles-sessions.md.
-<!-- trace:STORY-2571 | ai:codex -->
-
 Review-watch records retained fast-exiting children before reaping. Incomplete
 legacy receipts use the existing reboot/TTL backstop. Caller capture requires
 verified local procfs and fails closed with host-retry guidance. See OVERVIEW.md.

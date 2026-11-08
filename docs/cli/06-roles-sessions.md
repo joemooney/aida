@@ -716,10 +716,12 @@ This host step replaces the advisor's manual auto-publish workaround.
 For an advisor service that follows grant rotation, start the operator's
 `aida deputy shell run` in its ordinary advisor terminal, then launch the
 advisor through `aida agent new ... --role advisor`. The trusted host launcher
-bootstraps review-watch on the default deputy before entering the sandbox;
+bootstraps review-watch on a running default deputy before entering the sandbox;
 subsequent launches use the deputy recorded in the service receipt. It can
 replace an operator-terminal binding with the advisor handle it just minted,
 subject to the same principal, newer issuance and non-widening successor checks.
+When no service receipt exists and no default deputy is running, launches skip
+rebind silently. Sub-advisors cannot take over their ancestor session's binding.
 No socket exemption is needed inside the advisor sandbox for this path.
 
 For a named deputy, first run `aida advisor loops rebind --deputy NAME` in the
@@ -744,9 +746,13 @@ old-generation admission before a replacement controller starts. The supervisor
 waits for confirmed exit and retains unknown process identities or ambiguous
 spawn receipts. Controller restarts preserve all ordinary PR-head reservations;
 a refusal for one PR still leaves the remaining PRs available. Exited
-controllers have their recorded child grant revoked before their receipt is
-cleared, then a ten-second restart backoff. Deputy pause, stale heartbeat,
-authority loss or its existing mandate policy blocks admission. An expired
+controllers retain their grant and receipt while any review reservation or
+live or ambiguous descendant remains, so in-flight reviewers keep their
+authority. Status reports `waiting-for-reviews` after confirmed controller exit.
+After review reconciliation proves no unresolved attempts remain, the supervisor
+revokes the controller grant, clears its receipt and waits ten seconds before
+restarting. Deputy pause, stale heartbeat, authority loss or its existing
+mandate policy blocks admission. An expired
 advisor binding reports `blocked-authority` until a valid successor rebinds.
 
 Service binding and controller receipts live in `review-watch/service.json`

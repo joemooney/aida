@@ -1806,11 +1806,3 @@ The TASK-1750 ratchet inventories compatibility consumers in
 `proc_identity_legacy_baseline.json` and prevents new private PID/start
 decisions. See the signed
 [process identity sketch](docs/plans/2026-11-05-story-2537-proc-identity.md).
-
-The deputy supervises review-watch under the current advisor binding. Confirmed
-controller exit revokes the recorded child grant before clearing its receipt.
-Trusted advisor launchers bootstrap the default deputy and rotate operator
-bindings under the same successor rules. Status supports JSON/TOON and links
-[manual operator recovery](docs/cli/06-roles-sessions.md#review-watch-service-recovery)
-for widening delegation or damaged service receipts.
-<!-- trace:STORY-2571 | ai:codex -->
