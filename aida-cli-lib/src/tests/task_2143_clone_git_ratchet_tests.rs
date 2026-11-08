@@ -51,11 +51,34 @@ const RAW_GIT_ALLOWLIST: &[(&str, usize)] = &[
 /// `ship.rs` runs step 1's commit in the ship root, a seat clone when ship
 /// runs in one (TASK-2359).
 // trace:TASK-2359 | ai:claude
-const ALWAYS_SCANNED: &[&str] = &[
-    "aida-cli-lib/src/ship.rs",
-    // Keep the moved commit-evidence builder covered after the split.
-    "aida-cli-lib/src/queue_cmd/done.rs",
-];
+const ALWAYS_SCANNED: &[&str] = &["aida-cli-lib/src/ship.rs"];
+
+// All split queue modules inherit the original queue_cmd.rs scan boundary.
+// trace:TASK-3426 | ai:codex
+fn always_scanned(file: &str) -> bool {
+    ALWAYS_SCANNED.contains(&file)
+        || (file.starts_with("aida-cli-lib/src/queue_cmd/") && file.ends_with(".rs"))
+}
+
+#[test]
+fn task_3426_all_queue_modules_reject_new_raw_git() {
+    let workspace = Path::new(env!("CARGO_MANIFEST_DIR")).parent().unwrap();
+    let sources = workspace_sources(workspace);
+    let queue_files: Vec<_> = sources
+        .keys()
+        .filter(|file| file.starts_with("aida-cli-lib/src/queue_cmd/"))
+        .collect();
+    assert!(!queue_files.is_empty());
+    for file in queue_files {
+        // No worktree_path token: coverage must follow the module boundary.
+        let injected = "fn injected() { let _ = Command::new(\"git\"); }";
+        let count = raw_git_builders(injected, !always_scanned(file)).unwrap();
+        let measured = BTreeMap::from([(file.clone(), count)]);
+        assert_eq!(ratchet_violations(&measured, &[]).len(), 1, "{file}");
+    }
+    // A future module gets the same protection without updating a file list.
+    assert!(always_scanned("aida-cli-lib/src/queue_cmd/future.rs"));
+}
 
 /// Lexical state across lines: braces inside Rust literals and comments do
 /// not close a test module. Raw strings close only with their full delimiter.
@@ -392,8 +415,7 @@ fn task_2143_no_new_raw_git_where_a_lease_tree_is_read() {
     let measured: BTreeMap<String, usize> = sources
         .iter()
         .filter_map(|(file, src)| {
-            raw_git_builders(src, !ALWAYS_SCANNED.contains(&file.as_str()))
-                .map(|n| (file.clone(), n))
+            raw_git_builders(src, !always_scanned(file)).map(|n| (file.clone(), n))
         })
         .collect();
     for always in ALWAYS_SCANNED {
