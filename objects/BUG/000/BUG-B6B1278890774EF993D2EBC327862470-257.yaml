@@ -13,12 +13,12 @@ description: |
   3. The BUG-1693 label rules (recorded vs cleared, train members' labels) behave exactly as today: same pass/block outcome for every label combination (table test over the existing check_labels cases).
   4. A push to a held PR sends no "run failed" notification for this check.
   5. A genuinely malformed label state (clearance with no recorded hold) still FAILS, since that is a real error.
-status: InProgress
+status: NeedsAttention
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-08T02:46:34.549817Z
-modified_at: 2026-11-08T19:37:20.521329304Z
+modified_at: 2026-11-08T19:38:21.326359298Z
 req_type: Bug
 tags:
 - area:ci
@@ -670,6 +670,21 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a1bcaa-e2f5-70d2-8442-d23b888d7800
+  author: dirtlab
+  timestamp: 2026-11-08T19:37:58.261268764Z
+  session_id: 01a1bcaa41e8
+  harness_version: codex-cli 0.167.0
+  changes: []
+- id: 01a1bcab-3d0e-7d60-82b8-d5835c6e4442
+  author: dirtlab
+  timestamp: 2026-11-08T19:38:21.326380078Z
+  session_id: 01a1bcaa41e8
+  harness_version: codex-cli 0.167.0
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: NeedsAttention
 filed_at:
   code_sha: dc41ee8da2f44f88178936fc1a8e6cb7168a3de7
   branch: main
@@ -679,3 +694,8 @@ filed_at:
   vendor: claude
   session: 01a1b8be-8170-7fb2-89ab-ecb4c6eee98c
   harness_version: 2.1.319 (Claude Code)
+attention_reason:
+  category: blocked-dependency
+  detail: 'Latest review at 0df36483bb9b explicitly requests no code changes; round 7 code findings are fixed. Native implementer cannot resolve remaining manual gates: host must retitle PR #3651 to end (Refs BUG-2492) and obtain green CI at its exact published head; repository operator must attach raw gh/web merge-refusal under app pin 15368, unchanged-SHA label-only pending-to-success, and notification evidence per docs/internal/testing/bug-2492-status-cutover.md. Do not publish another unchanged head or complete BUG-2492 before that evidence. This pickup changed no source files. Revalidated shell fixtures: 8 label states x 2 shipped gates, 36 train cases and 1 jq projection test PASS; bash syntax and git diff --check PASS. No Rust rerun needed for unchanged source.'
+  raised_by: implementer
+  raised_at: 2026-11-08T19:38:21.326359298Z
