@@ -14,13 +14,21 @@ priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-11-08T05:39:42.288894055Z
-modified_at: 2026-11-08T05:39:42.288894055Z
+modified_at: 2026-11-08T19:22:42.781160864Z
 req_type: Task
 tags:
 - carried-from:BUG-2489
 - finding-hash:1a8d609f
 - from-review:PR-3655
 - kind:carried-forward
+comments:
+- id: 01a1bc9c-eadd-7923-abdf-ac9504c84dd4
+  author: joe
+  content: 'Advisor ruling: duplicate of TASK-3005 (finding-hash 1a8d609f), accepted there.'
+  created_at: 2026-11-08T19:22:42.781160864Z
+  modified_at: 2026-11-08T19:22:42.781160864Z
+  session_id: 01a1bc93-77a0-7740-8b03-df4e3e8d1df5
+  harness_version: 2.1.319 (Claude Code)
 history:
 - id: 01a1b9bb-4069-78f3-a7ff-c9cdbd387bcc
   author: joe
