@@ -8,7 +8,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-07T15:34:33.363448208Z
-modified_at: 2026-11-08T09:12:40.167377482Z
+modified_at: 2026-11-08T09:31:15.578298557Z
 req_type: Story
 comments:
 - id: 01a1b6a6-52e1-70a0-a9c1-d32888979ca5
@@ -1081,6 +1081,12 @@ history:
   - field_name: status
     old_value: InProgress
     new_value: NeedsAttention
+- id: 01a1ba7f-6d51-7472-ab46-2c65f72d1506
+  author: joe
+  timestamp: 2026-11-08T09:31:15.665488986Z
+  session_id: 01a1ba7cb6ae
+  harness_version: 2.1.319 (Claude Code)
+  changes: []
 filed_at:
   code_sha: 122fea66d306d6739516983479c50201e9d0ae84
   branch: main
@@ -1095,3 +1101,11 @@ attention_reason:
   detail: 'AC2/AC5 require host provisioning: this native seat has no codegraph on PATH, no primary /home/dirtlab/ai/aida/.codegraph index or host proxy, and installed aida rejects doctor --lane-host. Existing candidate proxy is validated synthetically but cannot supply the required non-empty primary-index query or AIDA-contained admission evidence. Host must deploy reviewed proxy outside writable roots, provision primary index and read-only client/descriptor/socket admission, then run real contained-seat acceptance. Do not publish as Completing STORY-2630.'
   raised_by: implementer
   raised_at: 2026-11-08T09:12:40.167377482Z
+failure_reason:
+  phase: reviewer
+  phase_index: 3
+  kind: verdict:request-changes
+  detail: 'Refs slice (host query proxy) at 559e59d0456d; only delta since 4ab8b385dc16 is a merge from main. AC1 partial (index link on main, proxy client not delivered); AC2 unverified (native bwrap test only, contained posture unsupported); AC3 partial (guidance names bare codegraph); AC4 implemented, tests not yet run in CI; AC5 unverified (no live seat output). New: is_bundled_proxy missing from the store-writer inventory, which will fail CI; CI has no jobs at this head.'
+  recovery_hint: address the review findings, move STORY-2630 back to In Progress, and clear the PR hold only after approval
+  shelved_by: reviewer
+  shelved_at: 2026-11-08T09:31:15.578298557Z
