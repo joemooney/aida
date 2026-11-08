@@ -1,3 +1,8 @@
+STORY-1028 mode flag aliases are retired. Bare `graph <ID>` keeps the tree
+fallback and `graph <ID> --follow <TYPE>` selects the requested relationship.
+History digest conflicts reference only active arguments.
+<!-- trace:TASK-1214 | ai:codex -->
+
 Mailbox delivery resolves named agents against current registry liveness,
 shares canonicalization across CLI/MCP/mentions, refuses unknown/dead agents
 and empty role/vendor audiences, and lists group readers. Known people retain

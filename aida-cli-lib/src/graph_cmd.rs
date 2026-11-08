@@ -318,6 +318,36 @@ pub(crate) fn handle_graph_command(
 mod tests {
     use super::*;
 
+    // Exercise dispatch and execution: parsing alone cannot catch an implicit
+    // tree mode conflicting with --follow. trace:TASK-1214 | ai:codex
+    #[test]
+    fn task_1214_bare_graph_and_follow_execute() {
+        use clap::CommandFactory;
+
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("requirements.yaml");
+        let mut store = aida_core::RequirementsStore::new();
+        let mut root = aida_core::Requirement::new("Root".into(), String::new());
+        root.spec_id = Some("STORY-1".into());
+        store.add_requirement(root);
+        std::fs::write(&path, serde_yaml::to_string(&store).unwrap()).unwrap();
+        let storage = crate::Storage::new(&path);
+        let ctx = crate::command_registry::DispatchCtx {
+            globals: None,
+            store: Some(crate::command_registry::StoreCtx::Legacy {
+                storage: &storage,
+                requirements_path: &path,
+            }),
+        };
+        for argv in [
+            vec!["graph", "STORY-1", "--json"],
+            vec!["graph", "STORY-1", "--follow", "carved-out-to", "--json"],
+        ] {
+            let matches = GraphArgs::command().try_get_matches_from(&argv).unwrap();
+            run_graph(&matches, &ctx).unwrap_or_else(|err| panic!("{argv:?}: {err}"));
+        }
+    }
+
     // BUG-672: `aida graph` in agent mode emits a parseable TOON table named per
     // direction with a `{id,title,status}` schema — an EMPTY direction still
     // emits a valid `<name>[0]{...}:` header (NOT the human prose `(no related
@@ -440,7 +470,7 @@ fn run_graph(
                                     "aida graph needs a spec id, e.g. `aida graph tree STORY-1`"
                                 )
                             })?;
-                            (id, false, false, true, false)
+                            (id, false, false, false, false)
                         }
                     };
                     self::handle_graph_command(
@@ -481,7 +511,7 @@ fn run_graph(
                                     "aida graph needs a spec id, e.g. `aida graph tree STORY-1`"
                                 )
                             })?;
-                            (id, false, false, true, false)
+                            (id, false, false, false, false)
                         }
                     };
                     self::handle_graph_command(

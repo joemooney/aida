@@ -1,3 +1,8 @@
+STORY-1028 mode flag aliases are retired. Bare `graph <ID>` keeps the tree
+fallback and `graph <ID> --follow <TYPE>` selects the requested relationship.
+History digest conflicts reference only active arguments.
+<!-- trace:TASK-1214 | ai:codex -->
+
 Review-watch records retained fast-exiting children before reaping. Incomplete
 legacy receipts use the existing reboot/TTL backstop. Caller capture requires
 verified local procfs and fails closed with host-retry guidance. See OVERVIEW.md.

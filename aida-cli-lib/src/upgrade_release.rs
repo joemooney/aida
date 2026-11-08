@@ -1177,7 +1177,7 @@ pub(crate) fn eval_subcommand_hint(subcommand: &str) -> String {
 }
 
 /// STORY-472: resolve the bump kind from the mutually-exclusive
-/// `--patch`/`--minor`/`--major` flags. None set → "patch" (smallest, safe
+/// patch/minor/major modes. None set → "patch" (smallest, safe
 /// default); more than one set → a clean error. trace:STORY-472 | ai:claude
 pub(crate) fn resolve_release_bump(
     patch: bool,
@@ -1185,10 +1185,10 @@ pub(crate) fn resolve_release_bump(
     major: bool,
 ) -> Result<&'static str, String> {
     match (patch, minor, major) {
-        (_, false, false) => Ok("patch"), // explicit --patch or nothing
+        (_, false, false) => Ok("patch"), // explicit patch or nothing
         (false, true, false) => Ok("minor"),
         (false, false, true) => Ok("major"),
-        _ => Err("specify only one of --patch / --minor / --major".to_string()),
+        _ => Err("specify only one of patch / minor / major".to_string()),
     }
 }
 

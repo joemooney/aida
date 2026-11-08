@@ -4956,7 +4956,7 @@ pub(crate) struct HistoryArgs {
     #[clap(
         long,
         conflicts_with_all = [
-            "spec", "id", "full", "events", "timeline", "status_changes",
+            "spec", "id", "full", "timeline", "status_changes",
             "comments", "oneline", "shipped", "to", "from", "opened",
             "template", "fields", "kind",
         ]
