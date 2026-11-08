@@ -11,7 +11,7 @@ priority: Low
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-08T03:38:52.682099623Z
-modified_at: 2026-11-08T19:46:15.780580337Z
+modified_at: 2026-11-08T19:52:50.961636Z
 req_type: Task
 tags:
 - area:ci-relay
@@ -154,6 +154,12 @@ history:
   - field_name: status
     old_value: InProgress
     new_value: NeedsAttention
+- id: 01a1bcb8-9dfe-7363-b6f9-fbbc9cda6be4
+  author: joe
+  timestamp: 2026-11-08T19:52:58.110388745Z
+  session_id: 01a1bcb5641e
+  harness_version: 2.1.319 (Claude Code)
+  changes: []
 filed_at:
   code_sha: 049e5206de120518bb94fae84bf359f789e76236
   branch: main
@@ -167,7 +173,7 @@ failure_reason:
   phase: reviewer
   phase_index: 3
   kind: verdict:request-changes
-  detail: 'PARTIAL: rework added no source change, so the six findings from cb8f6e76f358 all remain (one blocking false alarm in aida awaiting), plus one new display-cache failure path; CI pending at review.'
+  detail: 'PARTIAL: F1-F6 are fixed and acceptance holds on a home clone, but Work clones raise the same false exact-read alarms F1 removed, and prior F7 is still open. CI was queued at review time.'
   recovery_hint: address the review findings, move TASK-3452 back to In Progress, and clear the PR hold only after approval
   shelved_by: reviewer
-  shelved_at: 2026-11-08T19:30:19.652335052Z
+  shelved_at: 2026-11-08T19:52:50.961636Z
