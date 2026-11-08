@@ -64,9 +64,3 @@ test-group = "serial"
 filter = 'test(aida_sized_relay_native_statuses_reach_required_pr_and_train_gates)'
 threads-required = "num-test-threads"
 slow-timeout = { period = "10s", terminate-after = 54 }
-
-# trace:TASK-3452 | ai:codex
-[[profile.ci.overrides]]
-filter = 'test(task3452_history_window_reports_skipped_attempts)'
-threads-required = "num-test-threads"
-slow-timeout = { period = "10s", terminate-after = 54 }

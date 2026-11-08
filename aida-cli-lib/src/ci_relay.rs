@@ -1187,39 +1187,6 @@ pub(crate) fn run(intake: &Intake, command: &CiCommand, json_format: bool) -> Re
 mod tests {
     use super::*;
 
-    // trace:TASK-3452 | ai:codex
-    #[test]
-    fn task3452_history_window_reports_skipped_attempts() {
-        let executable = std::env::current_exe().unwrap();
-        let binary = executable.parent().unwrap().parent().unwrap().join("aida");
-        assert!(
-            binary.is_file(),
-            "build the CLI in this profile before running this regression"
-        );
-        let script = Path::new(env!("CARGO_MANIFEST_DIR")).join("../tests/test_work_ci_relay.py");
-        let mut command = std::process::Command::new("python3");
-        command
-            .arg(script)
-            .args([
-                "WorkCiTests.test_33_attempts_report_unverified_latest_result",
-                "WorkCiTests.test_cold_history_bounds_inventory_and_exact_old_read",
-                "WorkCiTests.test_warm_history_bounds_new_inventory_and_exact_old_read",
-            ])
-            .env("AIDA_TEST_BIN", binary);
-        let (status, stdout, stderr) = aida_core::transport_policy::bounded_with_stderr(
-            command,
-            &[],
-            1024 * 1024,
-            std::time::Instant::now() + Duration::from_secs(480),
-        )
-        .unwrap();
-        assert!(
-            status.success(),
-            "{}\n{}",
-            String::from_utf8_lossy(&stdout),
-            String::from_utf8_lossy(&stderr)
-        );
-    }
     // Exercise the actual on-disk awaiting reader, including histories larger
     // than the former arbitrary 82-part display ceiling.
     // trace:TASK-3452 | ai:codex

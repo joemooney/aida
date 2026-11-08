@@ -609,6 +609,22 @@ class WorkCiTests(unittest.TestCase):
         old = next(row for row in rows if row["audit"]["attempt"] == 2)
         self.assertEqual(old["verification"], "unverified-history")
         self.assertFalse(f.statuses)
+        # A new request supersedes a refused receipt without publishing it.
+        # trace:TASK-3452 | ai:codex
+        before = json.loads(f.cli(fresh, "ci", "process", "--json").stdout)
+        self.assertIn(2, [row["attempt"] for row in before["skipped"]])
+        f.cli(fresh, "ci", "request", "--attempt", str(total + 1),
+              "--sha", shas[2], principal="request")
+        self.assertEqual(len(f.statuses), 1)
+        self.assertEqual(f.statuses[0]["state"], "pending")
+        self.assertEqual(f.statuses[0]["sha"], shas[2])
+        requested_statuses = list(f.statuses)
+        after = json.loads(f.cli(fresh, "ci", "process", "--json").stdout)
+        self.assertNotIn(2, [row["attempt"] for row in after["skipped"]])
+        cached = [row for index in range(json.loads(cache.read_text()))
+                  for row in json.loads((f.private(fresh) / f"ci-skipped-results-{index}.json").read_text())]
+        self.assertEqual(cached, after["skipped"])
+        self.assertEqual(f.statuses, requested_statuses)
 
     def test_pending_attempt_does_not_starve_later_attempt(self):
         f = self.f

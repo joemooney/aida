@@ -32,8 +32,6 @@ default_limit = 10
 untouched_factor = 1.5
 
 [budget]
-# trace:TASK-3452 | ai:codex
-"aida-cli-lib ci_relay::tests::task3452_history_window_reports_skipped_attempts" = 480
 # PR #3628 run 42428425690, CI (cli-0) job 128571688822 measured
 # 11.912s for real logs/attach CLI and PTY probes, 10.692s for two native
 # agent-new previews. Max x2 rounded up to 5s; retain both verbs' coverage.
