@@ -8,7 +8,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-07T23:40:15.306412624Z
-modified_at: 2026-11-08T17:08:04.126832569Z
+modified_at: 2026-11-08T17:15:57.976554232Z
 req_type: Task
 relationships:
 - rel_type: BlockedBy
@@ -81,6 +81,12 @@ history:
   - field_name: status
     old_value: InProgress
     new_value: NeedsAttention
+- id: 01a1bc28-e249-7b20-93fc-d945befea5ec
+  author: joe
+  timestamp: 2026-11-08T17:15:58.409586043Z
+  session_id: 01a1bc275f2c
+  harness_version: 2.1.319 (Claude Code)
+  changes: []
 filed_at:
   code_sha: 2a7fe186bdcd718fa356e5e4d028a3b2ff13769d
   branch: main
@@ -96,3 +102,11 @@ attention_reason:
   lean: Preserve the existing 58-tool surface byte-for-byte and correct the stated count; do not add tools during a crate extraction.
   raised_by: implementer
   raised_at: 2026-11-08T17:02:17.350137404Z
+failure_reason:
+  phase: reviewer
+  phase_index: 3
+  kind: verdict:request-changes
+  detail: 'Prerequisite only: claim-path and descriptor moves are clean, but no aida-mcp crate exists, so acceptance 1, 2 and 5 are unmet while the title and trailer claim the full extraction.'
+  recovery_hint: address the review findings, move TASK-3429 back to In Progress, and clear the PR hold only after approval
+  shelved_by: reviewer
+  shelved_at: 2026-11-08T17:15:57.976554232Z
