@@ -8,7 +8,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-09-12T03:06:57.441067647Z
-modified_at: 2026-11-08T02:45:34.195206286Z
+modified_at: 2026-11-08T03:01:13.040258518Z
 req_type: Task
 tags:
 - cli
@@ -82,6 +82,12 @@ comments:
   modified_at: 2026-11-08T02:24:05.106867918Z
   session_id: 01a1b8be-8170-7fb2-89ab-ecb4c6eee98c
   harness_version: 2.1.319 (Claude Code)
+- id: 01a1b91a-54d0-75b3-a398-2d4165a6854b
+  author: joe
+  content: 'Round 3 edits address both review findings: graph dispatch leaves tree unset in both bare-ID fallback arms and has a run_graph execution regression for bare tree and --follow carved-out-to; release bump diagnostics use patch/minor/major spelling. Also removed the deleted events argument from history digest conflicts, fixing the reported Clap definition panic. Updated AGENTS.md and OVERVIEW.md. Passed rustfmt check, git diff --check, scripts/check-removed-flags.sh and tests/test_check_removed_flags.sh. Rust validation blocked: graph test job j20261108T024556940-519653-0 timed out during compilation after 900s (exit 124), no executed tests. CLI tests job j20261108T024612131-2-0 and release tests job j20261108T024635375-524851-0 remain queued. untested=true. Native seat leaves edits uncommitted for the host launcher.'
+  created_at: 2026-11-08T03:01:13.040258518Z
+  modified_at: 2026-11-08T03:01:13.040258518Z
+  session_id: 01a1b90afd9e
 history:
 - id: 01a1b7cd-863a-7761-9489-0e4071138ab5
   author: joe
