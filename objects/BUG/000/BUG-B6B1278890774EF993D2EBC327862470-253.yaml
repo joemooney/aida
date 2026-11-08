@@ -2,335 +2,448 @@ id: 01a1b7a9-fdfc-7391-be7e-4103bd326cb7
 spec_id: BUG-b6b1278890774ef993d2ebc327862470-253
 agreed_id: BUG-2488
 title: 'Native Codex seat: punt signal cannot be written (read-only FS), so the host publishes anyway and fails with ''Refusing to create empty bundle''; no-commit seats hit the same error'
-description: |
-  ## Observed (dell1, 2026-11-07 ~12:50)
+description: '## Observed (dell1, 2026-11-07 ~12:50)
+
   A Codex native-sandbox implementer lane (STORY-2640) punted to Needs Attention on a design fork, as it should. But its punt signal file "could not be written because the filesystem is read-only". The host saw no punt signal, went ahead with `aida ship --from-seat`, and failed with `could not bundle refs/heads/<branch> ... Refusing to create empty bundle`. The lane result line was an error instead of a punt.
+
 
   Two lanes that found nothing to do (STORY-2402, STORY-2571: their briefs had already landed) hit the same empty-bundle error.
 
+
   ## Expected
-  1. The punt signal reaches the host from a native Codex seat. Write it inside the seat's writable area (a path the host reads from the lease) instead of a host-only path.
+
+  1. The punt signal reaches the host from a native Codex seat. Write it inside the seat''s writable area (a path the host reads from the lease) instead of a host-only path.
+
   2. When the seat branch has no commits beyond its base, the host does not try to publish. It reports `implementer: no-change` with exit 0 and a clear line, never a bundle error. A punt reports `implementer: punted` and retains the established standalone lane exit code 32 (the drain maps its punt outcome to exit 0). Queue-resume and drain propagation of an explicit no-change outcome is tracked in draft TASK-3608 for advisor triage, split per PR #3625 round-6 finding 4; the current publication boundary prints no-change but does not yet carry that classification through the final drain outcome.
 
+
   ## Acceptance
+
   - A test for the native-seat punt that reaches the host and suppresses publication.
+
   - A test for a no-commit seat that yields `no-change` without invoking bundle.
+
+  '
 status: Approved
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
-created_at: 2026-11-07T20:18:53.564500Z
-modified_at: 2026-11-08T19:40:10.224940901Z
+created_at: 2026-11-07 20:18:53.564500+00:00
+modified_at: 2026-11-08 19:40:10.224940+00:00
 req_type: Bug
 relationships:
 - rel_type:
     custom: implemented-by
   target_id: 01a1b924-8f6c-7432-972d-b3c815fa19d7
-  created_at: 2026-11-08T03:12:46.602923Z
+  created_at: 2026-11-08 03:12:46.602923+00:00
   created_by: joe
 - rel_type: Parent
   target_id: 01a1bc52-f0d9-7512-b8b7-8c44fa27fb36
-  created_at: 2026-11-08T18:02:01.027412505Z
+  created_at: 2026-11-08 18:02:01.027412+00:00
 comments:
 - id: 01a1b7af-5b2f-7c41-b302-d8aeec3784ae
   author: joe
   content: 'Evidence: the lost STORY-2640 punt was in the seat clone''s own .aida/punts.jsonl (dell1 seat 563), which the host never reads.'
-  created_at: 2026-11-07T20:24:45.103215Z
-  modified_at: 2026-11-07T20:24:45.103215Z
+  created_at: 2026-11-07 20:24:45.103215+00:00
+  modified_at: 2026-11-07 20:24:45.103215+00:00
   session_id: 01a1b76b-2fe7-7dd2-88d0-356fc8d96d04
   harness_version: 2.1.319 (Claude Code)
 - id: 01a1b7b8-59c1-7da1-8964-22e7085e5922
   author: dirtlab
-  content: |
-    Implemented in the native seat, left uncommitted for host publication. Standalone punt/hold handshakes now use the leased seat's writable runtime directory; host publication checks both seat and legacy host vetoes. Host publication inspects the leased branch against its host-owned base pin before bundling, and successful unchanged standalone native exits report implementer: no-change with exit 0. Unreadable commit evidence refuses publication.
-    Validation: seat_publish_tests 51 passed, including BUG-2488's sandboxed signal write with read-only host/Git metadata, publication veto, no-bundle unchanged-seat check and positive commit control. queue_exit_tests 6 passed. Standalone suite: 25 passed; 1 fixture failure at storage.save before launcher invocation (allocation file ownership/mode trust check), filed as a draft finding. rustfmt --check and git diff --check pass. Changed files: seat_clone.rs, ship_from_seat.rs, standalone_implementer.rs, tests/bug_home_038_seat_publish_tests.rs, all under aida-cli-lib/src. No commit, push, PR, or queue completion attempted from this seat.
-  created_at: 2026-11-07T20:34:34.561124Z
-  modified_at: 2026-11-07T20:34:34.561124Z
+  content: 'Implemented in the native seat, left uncommitted for host publication. Standalone punt/hold handshakes now use the leased seat''s writable runtime directory; host publication checks both seat and legacy host vetoes. Host publication inspects the leased branch against its host-owned base pin before bundling, and successful unchanged standalone native exits report implementer: no-change with exit 0. Unreadable commit evidence refuses publication.
+
+    Validation: seat_publish_tests 51 passed, including BUG-2488''s sandboxed signal write with read-only host/Git metadata, publication veto, no-bundle unchanged-seat check and positive commit control. queue_exit_tests 6 passed. Standalone suite: 25 passed; 1 fixture failure at storage.save before launcher invocation (allocation file ownership/mode trust check), filed as a draft finding. rustfmt --check and git diff --check pass. Changed files: seat_clone.rs, ship_from_seat.rs, standalone_implementer.rs, tests/bug_home_038_seat_publish_tests.rs, all under aida-cli-lib/src. No commit, push, PR, or queue completion attempted from this seat.
+
+    '
+  created_at: 2026-11-07 20:34:34.561124+00:00
+  modified_at: 2026-11-07 20:34:34.561124+00:00
   session_id: 01a1b7ad8b31
   harness_version: codex-cli 0.167.0
 - id: 01a1b7b8-74b2-77a2-bdcc-b44121d98bc1
   author: dirtlab
-  content: |
-    Correction to the validation note: draft-finding creation was refused because this clone has no AIDA node binding; no finding object was created. Node acquisition was not attempted from this native seat with read-only Git metadata. The fixture failure remains recorded in this comment and lane job j20261107T203349539-2-0 for host triage.
-  created_at: 2026-11-07T20:34:41.458942Z
-  modified_at: 2026-11-07T20:34:41.458942Z
+  content: 'Correction to the validation note: draft-finding creation was refused because this clone has no AIDA node binding; no finding object was created. Node acquisition was not attempted from this native seat with read-only Git metadata. The fixture failure remains recorded in this comment and lane job j20261107T203349539-2-0 for host triage.
+
+    '
+  created_at: 2026-11-07 20:34:41.458942+00:00
+  modified_at: 2026-11-07 20:34:41.458942+00:00
   session_id: 01a1b7ad8b31
   harness_version: codex-cli 0.167.0
 - id: 01a1b7bf-17c2-7781-a831-eea724094951
   author: joe
   content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: Both acceptance tests exist and the run_from no-change guard is sound, but moving the hold signal into the seat for every standalone lane breaks the main-root hold marker that held --resume and PR-open cleanup read; CI was still pending at review time.. No triage reason was given.'
-  created_at: 2026-11-07T20:41:56.418940Z
-  modified_at: 2026-11-07T20:41:56.418940Z
+  created_at: 2026-11-07 20:41:56.418940+00:00
+  modified_at: 2026-11-07 20:41:56.418940+00:00
   session_id: 01a1b646-c67d-7b43-98ff-3604a53f5d1f
   harness_version: 2.1.319 (Claude Code)
 - id: 01a1b7bf-3386-74b0-9296-a7f480ef5692
   author: joe
-  content: |-
-    REVIEW FINDINGS TO ADDRESS (BUG-2488):
+  content: 'REVIEW FINDINGS TO ADDRESS (BUG-2488):
+
     Verdict: CHANGES REQUESTED
+
     Reviewed commit: b3387d9fa806
+
     Recorded: 2026-11-07T20:38:53.350877878+00:00
+
     Findings:
-    1. MAJOR regression (standalone_implementer.rs:649-673, provision_signals): AIDA_HOLD_SIGNAL_FILE now points at <seat>/.aida/pr-holds/<spec>.json for EVERY standalone lane (every vendor, not only native Codex), and nothing mirrors it to the main root. The persisted hold marker is read at the main root by 'aida queue work <spec> --resume' (queue_cmd.rs:12208 -> held_resume_reentry_allowed needs hold_marker_present) and cleared at the main root on PR open (pr_cmd.rs:8471). A lane that runs 'aida pr hold' can no longer be resumed as held, and the marker disappears when the seat is removed. Fix: after the child exits, have the host copy the seat's punt and hold signals to crate::punt::{signal,hold}_signal_path(&main_root, spec), or move the signals only for native contained Codex and mirror them. Add a test for held --resume after a standalone hold.
-    2. Advisor signal lost (ship_from_seat.rs:534-538): the notify closure in publish_queue_exit returns early whenever the seat has no commits beyond its base, even when clean_exit=false. The drain and resume exit paths never classify the run as NoChange, so a failed lane that produced nothing now only writes a line to stderr instead of sending 'Queue-work lane exited without changes'. Keep advisor_request when !clean_exit; skip it only for a clean exit with no change.
+
+    1. MAJOR regression (standalone_implementer.rs:649-673, provision_signals): AIDA_HOLD_SIGNAL_FILE now points at <seat>/.aida/pr-holds/<spec>.json for EVERY standalone lane (every vendor, not only native Codex), and nothing mirrors it to the main root. The persisted hold marker is read at the main root by ''aida queue work <spec> --resume'' (queue_cmd.rs:12208 -> held_resume_reentry_allowed needs hold_marker_present) and cleared at the main root on PR open (pr_cmd.rs:8471). A lane that runs ''aida pr hold'' can no longer be resumed as held, and the marker disappears when the seat is removed. Fix: after the child exits, have the host copy the seat''s punt and hold signals to crate::punt::{signal,hold}_signal_path(&main_root, spec), or move the signals only for native contained Codex and mirror them. Add a test for held --resume after a standalone hold.
+
+    2. Advisor signal lost (ship_from_seat.rs:534-538): the notify closure in publish_queue_exit returns early whenever the seat has no commits beyond its base, even when clean_exit=false. The drain and resume exit paths never classify the run as NoChange, so a failed lane that produced nothing now only writes a line to stderr instead of sending ''Queue-work lane exited without changes''. Keep advisor_request when !clean_exit; skip it only for a clean exit with no change.
+
     3. Untested no-change classification (standalone_implementer.rs:858-864, acceptance criterion acf66e50): the test builds Outcome::NoChange by hand and calls report() on it. Nothing exercises the path where a contained Codex lane with a successful exit and no commits beyond its base is reclassified from NoPr to NoChange. Add a test of that mapping, e.g. by factoring it into a helper.
+
     4. Weak suppression check (bug_home_038_seat_publish_tests.rs, acceptance criterion acc03424): the test treats publish_queue_exit(...) returning Ok as proof that publication was suppressed. Nothing records bundle, push or forge calls, so a veto that silently did nothing could still pass. Call publish_queue_exit_with or run_from with a bundle that panics or a recording forge while the seat punt is present, as the no-change half of the test already does.
+
     5. Duplicate lease lookup (seat_clone.rs:1507-1536, has_commits_beyond_base): it repeats the list_leases/canonicalize lookup that ship_from_seat::seat_lease already does, and fails hard when the base pin is missing. run_from_with_reconciliation already has the validated branch from lease_branch; pass that branch (and the HostRecordedClone) in, so the bundle and the no-change probe cannot resolve different leases.
-    6. Partial fix for the operator's evidence (spec comment: lost punt in the seat's .aida/punts.jsonl): this PR only carries the signal file to the host. The punt record written by 'aida punt' inside a native seat still appears to land in the seat's own .aida/punts.jsonl, which the host's punt list and advisor never read. Either confirm the record reaches the host store (and say so in the PR) or mirror it.
-    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
-  created_at: 2026-11-07T20:42:03.526147Z
-  modified_at: 2026-11-07T20:42:03.526147Z
+
+    6. Partial fix for the operator''s evidence (spec comment: lost punt in the seat''s .aida/punts.jsonl): this PR only carries the signal file to the host. The punt record written by ''aida punt'' inside a native seat still appears to land in the seat''s own .aida/punts.jsonl, which the host''s punt list and advisor never read. Either confirm the record reaches the host store (and say so in the PR) or mirror it.
+
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.'
+  created_at: 2026-11-07 20:42:03.526147+00:00
+  modified_at: 2026-11-07 20:42:03.526147+00:00
   session_id: 01a1b646-c67d-7b43-98ff-3604a53f5d1f
   harness_version: 2.1.319 (Claude Code)
 - id: 01a1b7d7-6fc0-75b1-8418-8c47448fd696
   author: joe
   content: 'Also observed 2026-11-07 14:15 (dell1): a lane that ends with no commits leaves its lease behind as ''orphaned, 1 uncommitted change'' (ignored .aida files only), so the next pickup of the spec refuses until someone runs ''session end --force --discard-unpushed''. The no-change outcome should end its own lease. Fix it in this bug''s rework if it is in the same code path; otherwise, the reviewer should rule it as a follow-up.'
-  created_at: 2026-11-07T21:08:31.808950Z
-  modified_at: 2026-11-07T21:08:31.808950Z
+  created_at: 2026-11-07 21:08:31.808950+00:00
+  modified_at: 2026-11-07 21:08:31.808950+00:00
   session_id: 01a1b76b-2fe7-7dd2-88d0-356fc8d96d04
   harness_version: 2.1.319 (Claude Code)
 - id: 01a1b883-5a10-7cb2-b4c7-b28519059d19
   author: dirtlab
-  content: 'Rework addressed all six review findings plus the no-change lease report. Host exit reconciliation mirrors seat punt/hold markers and spec punt-ledger records before publication/cleanup; held resume retains its main-root marker and fresh attempts clear old vetoes. Failed unchanged exits retain advisor requests. No-change mapping is factored and tested; punt suppression now injects panicking commit/probe/publication effects. Direct publication uses its already validated seat/branch for the base comparison. Clean no-change standalone outcomes end their lease; known untracked handshake runtime is excluded from work, while tracked changes and unknown paths remain protected. Changed files: OVERVIEW.md; aida-cli-lib/src/seat_clone.rs, ship_from_seat.rs, standalone_implementer.rs, tests/bug_2436_finished_lane_lease_tests.rs, tests/bug_home_038_seat_publish_tests.rs. Lane-runner validation: BUG-2488 regressions 5 passed; seat_publish_tests 53 passed; finished-lane lease suite 5 passed; queue_exit_tests 6 passed. Final rustfmt check and git diff --check pass. No blockers; untested=false. Edits remain uncommitted for host publication per native-seat instructions; no commit, push, PR creation, ship or queue completion attempted.'
-  created_at: 2026-11-08T00:16:18.448413Z
-  modified_at: 2026-11-08T00:16:18.448413Z
+  content: 'Rework addressed all six review findings plus the no-change lease report. Host exit reconciliation mirrors seat punt/hold markers and spec punt-ledger records before publication/cleanup; held resume retains its main-root marker and fresh attempts clear old vetoes. Failed unchanged exits retain advisor requests. No-change mapping is factored and tested; punt suppression now injects panicking commit/probe/publication effects. Direct publication uses its already validated seat/branch for the base comparison. Clean no-change standalone outcomes end their lease; known untracked handshake runtime is excluded from work, while tracked changes and unknown paths remain protected. Changed files: OVERVIEW.md; aida-cli-lib/src/seat_clone.rs, ship_from_seat.rs, standalone_implementer.rs, tests/bug_2436_finished_lane_lease_tests.rs, tests/bug_home_038_seat_publish_tests.rs. Lane-runner validation: BUG-2488 regressions 5 passed; seat_publish_tests 53 passed; finished-lane lease suite 5 passed;
+    queue_exit_tests 6 passed. Final rustfmt check and git diff --check pass. No blockers; untested=false. Edits remain uncommitted for host publication per native-seat instructions; no commit, push, PR creation, ship or queue completion attempted.'
+  created_at: 2026-11-08 00:16:18.448413+00:00
+  modified_at: 2026-11-08 00:16:18.448413+00:00
   session_id: 01a1b878d54d
   harness_version: codex-cli 0.167.0
 - id: 01a1b90f-4993-7442-bedf-4f08736b9756
   author: joe
   content: Returned from NeedsAttention to Approved via `aida queue rework`. No triage reason was given.
-  created_at: 2026-11-08T02:49:09.267571Z
-  modified_at: 2026-11-08T02:49:09.267571Z
+  created_at: 2026-11-08 02:49:09.267571+00:00
+  modified_at: 2026-11-08 02:49:09.267571+00:00
   session_id: 01a1b8be-8170-7fb2-89ab-ecb4c6eee98c
   harness_version: 2.1.319 (Claude Code)
 - id: 01a1b920-4d6c-7890-91ef-e9e46a8df1b0
   author: joe
   content: 'Validation-only pickup at 5f76948c94ac (existing reviewed BUG-2488 fix 8b2b70a8d59 plus merged main dc41ee8da2f). No source edits needed: inspected the six addressed review findings and both acceptance paths. scripts/check-portability.sh --check-allowlist-growth dc41ee8da2f44f88178936fc1a8e6cb7168a3de7 and the ordinary portability ratchet pass; rustfmt --check on all five changed Rust files and git diff --check pass. Targeted lane job j20261108T025215770-577344-0 (cargo test --profile agent -p aida-cli-lib --lib -- bug_2488) timed out after 900s compiling, exit 124, with no executed tests. Broader seat_publish_tests job j20261108T025334842-582104-0 was queued behind it and is now running; no result at handoff. untested=true. Ending local validation after the 900s build timeout with current runner state retained. No commit, push, PR creation, queue completion, ship or review-record attempted. Working tree remains clean; fresh review/CI at the merged head remains host work.'
-  created_at: 2026-11-08T03:07:44.364296Z
-  modified_at: 2026-11-08T03:07:44.364296Z
+  created_at: 2026-11-08 03:07:44.364296+00:00
+  modified_at: 2026-11-08 03:07:44.364296+00:00
   session_id: 01a1b9112c08
 - id: 01a1b960-0c06-7870-974b-4b21babd5237
   author: joe
   content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: Rework addresses all six round-1 findings and both acceptance paths have real tests; but the tests carry no criterion-ID traces (aida criteria still reports both criteria untested), the mirrored punt ledger can re-open resolved punts, and PR CI at the head is still queued.. No triage reason was given.'
-  created_at: 2026-11-08T04:17:21.926166Z
-  modified_at: 2026-11-08T04:17:21.926166Z
+  created_at: 2026-11-08 04:17:21.926166+00:00
+  modified_at: 2026-11-08 04:17:21.926166+00:00
   session_id: 01a1b8be-8170-7fb2-89ab-ecb4c6eee98c
   harness_version: 2.1.319 (Claude Code)
 - id: 01a1b960-2691-7711-8800-fa61267f7db5
   author: joe
-  content: |-
-    REVIEW FINDINGS TO ADDRESS (BUG-2488):
+  content: 'REVIEW FINDINGS TO ADDRESS (BUG-2488):
+
     Verdict: CHANGES REQUESTED
+
     Reviewed commit: 6b14f3762f36
+
     Recorded: 2026-11-08T03:19:48.308864484+00:00
+
     Findings:
-    1. MINOR (acceptance traceability, criteria acc03424 + acf66e50): the tests exist (bug_home_038_seat_publish_tests.rs: bug_2488_native_signals_reach_host_and_unchanged_seat_never_bundles; bug_2436_finished_lane_lease_tests.rs: bug_2488_no_change_ends_only_a_readable_clean_seat) but carry only trace:BUG-2488, so 'aida criteria BUG-2488' reports both criteria 'untraced, no traced tests' and lists them under Untested criteria. Add trace:BUG-b6b1278890774ef993d2ebc327862470-253.acc03424 and .acf66e50 comments to the tests (repo convention, e.g. store_local.rs:363), then confirm aida criteria shows them traced.
-    2. MINOR (correctness, standalone_implementer.rs reconcile_signals ~L683-691): ledger mirroring dedups with full-record equality (existing.contains(&record)). close_open_records (punt.rs:650) rewrites the main record on resolution (resolution_path, decision, resolved_at), but the seat's .aida/punts.jsonl keeps the original open record, and provision_signals clears only the signal files, never the seat ledger. Any later reconcile from the same seat (resumed or re-launched lane, or drain publish_queue_exit) no longer matches, so it appends the open record again (and append_to_ledger emits another PuntFiled wake), re-opening a resolved punt for the advisor. The spec filter is also case-sensitive (r.spec == spec), unlike close_open_records' eq_ignore_ascii_case. Fix: dedup on identity (spec case-insensitive + timestamp + category), or truncate or mark the seat ledger after mirroring. Test: reconcile, close_open_records on main, reconcile again; assert there is no new open record.
-    3. MINOR (stale seat vetoes, ship_from_seat.rs publish_queue_exit ~L509-512): only standalone run() clears the seat-local punt/hold files (provision_signals). The drain (session.rs:6741) and queue resume (queue_cmd.rs:9066) exit paths now call reconcile_signals, which copies any punt/hold file left in a reused seat by an earlier attempt back into main and silently vetoes that run's publication (returns Ok, no advisor notice). Either clear the seat signals when those paths provision, or mirror only signals newer than the launch.
+
+    1. MINOR (acceptance traceability, criteria acc03424 + acf66e50): the tests exist (bug_home_038_seat_publish_tests.rs: bug_2488_native_signals_reach_host_and_unchanged_seat_never_bundles; bug_2436_finished_lane_lease_tests.rs: bug_2488_no_change_ends_only_a_readable_clean_seat) but carry only trace:BUG-2488, so ''aida criteria BUG-2488'' reports both criteria ''untraced, no traced tests'' and lists them under Untested criteria. Add trace:BUG-b6b1278890774ef993d2ebc327862470-253.acc03424 and .acf66e50 comments to the tests (repo convention, e.g. store_local.rs:363), then confirm aida criteria shows them traced.
+
+    2. MINOR (correctness, standalone_implementer.rs reconcile_signals ~L683-691): ledger mirroring dedups with full-record equality (existing.contains(&record)). close_open_records (punt.rs:650) rewrites the main record on resolution (resolution_path, decision, resolved_at), but the seat''s .aida/punts.jsonl keeps the original open record, and provision_signals clears only the signal files, never the seat ledger. Any later reconcile from the same seat (resumed or re-launched lane, or drain publish_queue_exit) no longer matches, so it appends the open record again (and append_to_ledger emits another PuntFiled wake), re-opening a resolved punt for the advisor. The spec filter is also case-sensitive (r.spec == spec), unlike close_open_records'' eq_ignore_ascii_case. Fix: dedup on identity (spec case-insensitive + timestamp + category), or truncate or mark the seat ledger after mirroring. Test: reconcile, close_open_records on main, reconcile again; assert there is no new open record.
+
+    3. MINOR (stale seat vetoes, ship_from_seat.rs publish_queue_exit ~L509-512): only standalone run() clears the seat-local punt/hold files (provision_signals). The drain (session.rs:6741) and queue resume (queue_cmd.rs:9066) exit paths now call reconcile_signals, which copies any punt/hold file left in a reused seat by an earlier attempt back into main and silently vetoes that run''s publication (returns Ok, no advisor notice). Either clear the seat signals when those paths provision, or mirror only signals newer than the launch.
+
     4. CI GATE: PR CI run 42441426173 at 6b14f3762f36 was still queued at review time. The previous head 8b2b70a8d59 failed CI on the portability-ratchet gate (allowlist growth). The rework comment says the ratchet now passes locally, but there is no green CI evidence at this head. merge-hold-gate failing is the expected supervised hold, not a code defect.
-    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
-  created_at: 2026-11-08T04:17:28.721571Z
-  modified_at: 2026-11-08T04:17:28.721571Z
+
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.'
+  created_at: 2026-11-08 04:17:28.721571+00:00
+  modified_at: 2026-11-08 04:17:28.721571+00:00
   session_id: 01a1b8be-8170-7fb2-89ab-ecb4c6eee98c
   harness_version: 2.1.319 (Claude Code)
 - id: 01a1b9a5-5de1-76d2-a772-83d1f9259a99
   author: joe
   content: 'Round 3 approach: Acceptance criteria as tests: fixture regressions verify native punt reaches host and vetoes publication, and unchanged seats return no-change without bundling; attach the two canonical criterion traces. Ledger regression: reconcile an open punt, resolve the host record, reconcile again with case-varied spec, and assert it remains resolved without duplicate records. Launch regression: reused drain and queue-resume seats clear prior punt/hold signals before child launch while new signals still veto. Changes: deduplicate mirrored punts by immutable identity and provision signal files at both missing launch boundaries. Validation: lane-runner targeted Rust tests, criterion report, formatting and portability gate; report CI evidence and supervised hold separately.'
-  created_at: 2026-11-08T05:33:04.865008Z
-  modified_at: 2026-11-08T05:33:04.865008Z
+  created_at: 2026-11-08 05:33:04.865008+00:00
+  modified_at: 2026-11-08 05:33:04.865008+00:00
   session_id: 01a1b9a47968
 - id: 01a1b9c6-216f-7002-92fb-52ff8a9a6448
   author: joe
   content: 'Round 3 implementation is in the native seat, uncommitted for host publication: criterion traces now report no untested criteria; punt mirroring deduplicates case-insensitive spec + timestamp + category; drain and queue-resume admissions clear stale seat signals; store-writer inventory reconciled to fix CI run 42441426173 actual gate failure. Validation so far: 42 inventory tests and 27 environment/Git-maintenance ratchet tests pass; portability + growth, environment ledger + base ratchet, rustfmt and diff checks pass. Both initial Rust jobs timed out at 900s while compiling (no executed tests, no compiler error); 1800s retries submitted. Native publication subject declared. Fresh CI and supervised merge-hold clearance remain host/review work.'
-  created_at: 2026-11-08T06:08:52.079531Z
-  modified_at: 2026-11-08T06:08:52.079531Z
+  created_at: 2026-11-08 06:08:52.079531+00:00
+  modified_at: 2026-11-08 06:08:52.079531+00:00
   session_id: 01a1b9a47968
 - id: 01a1b9ea-e901-7492-bfdf-38baac42e200
   author: joe
-  content: 'Round 3 final handoff: all 10 selected Rust tests executed and passed through lane job j20261108T063804099-2-0 (6 BUG-2488 regressions, launch-boundary cleanup, and 3 vendor-ratchet tests). Native punt/no-change fixture executed with visible host publication/no-change output. Corrected queue-resume fixture expects its earlier trusted-policy refusal while asserting stale signals were already removed. Reused a single vendor/role predicate so the vendor ledger does not grow. Also passed: 42 store-writer inventory tests, 27 environment/Git-maintenance ratchet tests, writer scanner, environment ledger including base comparison, portability and allowlist growth, rustfmt and whitespace. Both acceptance criteria are traced with no untested criteria. Earlier 900s requests timed out during compilation; 1800s retries supplied real executed-test evidence. Runner emitted overlay-stale after successful builds because the primary rewrote its cached generation; recorded here for host awareness. Six changed files remain uncommitted in the native seat. Publication subject already declared: [AI:codex] fix(seats): prevent resolved punt replay and stale lane vetoes (BUG-2488). Host must commit/publish and obtain fresh CI; supervised merge hold remains untouched.'
-  created_at: 2026-11-08T06:49:02.465074Z
-  modified_at: 2026-11-08T06:49:02.465074Z
+  content: 'Round 3 final handoff: all 10 selected Rust tests executed and passed through lane job j20261108T063804099-2-0 (6 BUG-2488 regressions, launch-boundary cleanup, and 3 vendor-ratchet tests). Native punt/no-change fixture executed with visible host publication/no-change output. Corrected queue-resume fixture expects its earlier trusted-policy refusal while asserting stale signals were already removed. Reused a single vendor/role predicate so the vendor ledger does not grow. Also passed: 42 store-writer inventory tests, 27 environment/Git-maintenance ratchet tests, writer scanner, environment ledger including base comparison, portability and allowlist growth, rustfmt and whitespace. Both acceptance criteria are traced with no untested criteria. Earlier 900s requests timed out during compilation; 1800s retries supplied real executed-test evidence. Runner emitted overlay-stale after successful builds because the primary rewrote its cached generation; recorded here for host awareness.
+    Six changed files remain uncommitted in the native seat. Publication subject already declared: [AI:codex] fix(seats): prevent resolved punt replay and stale lane vetoes (BUG-2488). Host must commit/publish and obtain fresh CI; supervised merge hold remains untouched.'
+  created_at: 2026-11-08 06:49:02.465074+00:00
+  modified_at: 2026-11-08 06:49:02.465074+00:00
   session_id: 01a1b9a47968
 - id: 01a1bb16-12b0-7ae3-a000-52823695b506
   author: joe
   content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: Both acceptance tests pass review and all round-3 findings are fixed for standalone lanes, but queue-resume and drain native paths still lose punts or publish past them, and a mirrored main-root veto strands resumed work.. No triage reason was given.'
-  created_at: 2026-11-08T12:15:48.400810Z
-  modified_at: 2026-11-08T12:15:48.400810Z
+  created_at: 2026-11-08 12:15:48.400810+00:00
+  modified_at: 2026-11-08 12:15:48.400810+00:00
   session_id: 01a1b9af-8230-75d2-82f8-667491cc010a
   harness_version: 2.1.319 (Claude Code)
 - id: 01a1bb16-29b8-79d1-9244-8c32975ed33c
   author: joe
-  content: |-
-    REVIEW FINDINGS TO ADDRESS (BUG-2488):
+  content: 'REVIEW FINDINGS TO ADDRESS (BUG-2488):
+
     Verdict: CHANGES REQUESTED
+
     Reviewed commit: 3a06b74615e1
+
     Recorded: 2026-11-08T12:14:12.973626811+00:00
+
     Findings:
-    1. MAJOR (sticky host veto on queue-resume; standalone_implementer.rs reconcile_signals L673-678, queue_cmd.rs:9071, ship_from_seat.rs:506): reconcile_signals copies a seat punt/hold to <main>/.aida/{punt-signals,pr-holds}/<spec>.json, but run_queue_resume_to_exit clears only the seat copy (provision_signals(tree,...)). Scenario: a native seat punts or holds, run() mirrors the marker to main, the advisor resolves it, then `aida queue work <spec> --resume` runs. publish_queue_exit returns Ok at the main veto (L506), so the resumed work is never committed or published, the advisor gets no notice, and reconcile is skipped, which also loses any fresh punt ledger record from that attempt. resolve_punt_core does not remove the file; only run() provisioning and phase_driver_trait clear main punt markers. The comment at standalone_implementer.rs:~722 ("Held-resume admission has already consumed the persisted hold marker") has no matching code: the only hold-marker removals are pr_cmd.rs:8473 on PR open and the run()/phase-driver provisioning. So held --resume, the case round-1 finding 1 was about, ends vetoed; bug_2488_standalone_hold_survives_seat_and_allows_held_resume only checks admission. Fix: consume the mirrored markers at resume admission, or distinguish prior-attempt markers from this attempt, and add a test driving resume through publish_queue_exit with a pre-existing main marker.
+
+    1. MAJOR (sticky host veto on queue-resume; standalone_implementer.rs reconcile_signals L673-678, queue_cmd.rs:9071, ship_from_seat.rs:506): reconcile_signals copies a seat punt/hold to <main>/.aida/{punt-signals,pr-holds}/<spec>.json, but run_queue_resume_to_exit clears only the seat copy (provision_signals(tree,...)). Scenario: a native seat punts or holds, run() mirrors the marker to main, the advisor resolves it, then `aida queue work <spec> --resume` runs. publish_queue_exit returns Ok at the main veto (L506), so the resumed work is never committed or published, the advisor gets no notice, and reconcile is skipped, which also loses any fresh punt ledger record from that attempt. resolve_punt_core does not remove the file; only run() provisioning and phase_driver_trait clear main punt markers. The comment at standalone_implementer.rs:~722 ("Held-resume admission has already consumed the persisted hold marker") has no matching code: the only hold-marker removals are pr_cmd.rs:8473
+    on PR open and the run()/phase-driver provisioning. So held --resume, the case round-1 finding 1 was about, ends vetoed; bug_2488_standalone_hold_survives_seat_and_allows_held_resume only checks admission. Fix: consume the mirrored markers at resume admission, or distinguish prior-attempt markers from this attempt, and add a test driving resume through publish_queue_exit with a pre-existing main marker.
+
     2. MAJOR (queue-resume child has no signal path; queue_cmd.rs:9066-9078, session.rs spawn_vendor_headless_resume_granted ~L8209): only apply_standalone_child_env (standalone_implementer.rs:156) and phase_driver_trait.rs:391/404 set AIDA_PUNT_SIGNAL_FILE/AIDA_HOLD_SIGNAL_FILE, and the resume spawn sets neither. punt_done.rs:121 writes a signal only when the env var is set. A resumed native lane that runs `aida punt` therefore leaves no signal, publication_veto is false, and the host commits and publishes a punted lane, which is the failure this bug reports. The new comment "before the vendor can write fresh signals" assumes a channel that does not exist. Fix: pass the seat signal paths to the resume child, with a test that a punt during resume vetoes publication.
+
     3. MAJOR (drain path still uses the host-only path; phase_driver_trait.rs:386-404, session.rs:~6729): the drain sets both env vars to <main>/.aida/... The native write set does not include those directories, so a Codex native drain implementer hits the original "could not write punt signal file" failure. session.rs now clears seat signals before spawn, but nothing points the child at them, so publish_queue_exit sees no veto and publishes. The driver also reads the main path (L777/L800), so it misses the punt too. Spec Expected 1 requires the signal to be written inside the seat writable area; the acceptance test covers only the standalone env. Round 2 raised this as a possible follow-up and it remains unfixed. Fix: have the driver point native seat children at the seat paths and read them via reconcile, with a drain-path test, or have the advisor explicitly split it into a tracked follow-up.
+
     4. MINOR (noise filter broader than the mirror; seat_clone.rs:2053-2055): the comment says these files are mirrored before no-change lease cleanup, but is_runtime_noise_entry applies to every probe (seat_clone.rs:1883, dispatch_health_ps.rs:635), including seats whose exit never reached reconcile (spawn/loop error at `finished?`, standalone_implementer.rs:~889), and reconcile mirrors only records for the lease spec. A seat holding an unmirrored punt or hold can read as clean and be reaped, losing the evidence. Fix: scope the exclusion to the post-reconcile no-change check, or confirm the markers were mirrored before excluding them.
-    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
-  created_at: 2026-11-08T12:15:54.296351Z
-  modified_at: 2026-11-08T12:15:54.296351Z
+
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.'
+  created_at: 2026-11-08 12:15:54.296351+00:00
+  modified_at: 2026-11-08 12:15:54.296351+00:00
   session_id: 01a1b9af-8230-75d2-82f8-667491cc010a
   harness_version: 2.1.319 (Claude Code)
 - id: 01a1bb22-755d-7bc3-afc7-d597b9a7e136
   author: dirtlab
-  content: |
-    Round 4 rework complete in native seat; edits remain uncommitted for host publication. Queue-resume admission consumes prior main/seat veto markers after held-resume policy checks. Codex resume explicitly receives leased-seat signal paths; drain vendor children receive seat paths and their resume loop observes those paths. The phase driver reconciles seat signals before classifying the result. Publication reconciles evidence even when an existing main veto is present. Cleanup no longer ignores all handshake files: the clone probe excludes only untracked evidence verified retained on the host, using the existing bounded regular-file reader; generic health noise checks keep these files visible. Ledger regression covers unmatched other-spec evidence as well as resolved-record identity.
+  content: 'Round 4 rework complete in native seat; edits remain uncommitted for host publication. Queue-resume admission consumes prior main/seat veto markers after held-resume policy checks. Codex resume explicitly receives leased-seat signal paths; drain vendor children receive seat paths and their resume loop observes those paths. The phase driver reconciles seat signals before classifying the result. Publication reconciles evidence even when an existing main veto is present. Cleanup no longer ignores all handshake files: the clone probe excludes only untracked evidence verified retained on the host, using the existing bounded regular-file reader; generic health noise checks keep these files visible. Ledger regression covers unmatched other-spec evidence as well as resolved-record identity.
+
     Changed files (all under aida-cli-lib/src): phase_driver_trait.rs, queue_cmd.rs, seat_clone.rs, session.rs, ship_from_seat.rs, standalone_implementer.rs, tests/bug_home_038_seat_publish_tests.rs.
+
     Validation: final-source BUG-2488 tests 7 passed (lane job j20261108T122140170-2-0); publication suite 55 passed (j20261108T122309148-2-0); vendor ratchet 3 passed (j20261108T122623770-2-0); launch-boundary regression 1 passed (j20261108T122628957-2-0). Portability including allowlist-growth comparison, environment ledger including HEAD comparison (zero additions), rustfmt and git diff --check pass. Both acceptance criteria remain traced with no untested criteria. untested=false. No implementation blockers. Fresh CI and supervised hold clearance remain host/review work. No commit, push, PR creation, queue completion, pr ship or review record attempted.
-  created_at: 2026-11-08T12:29:20.093713Z
-  modified_at: 2026-11-08T12:29:20.093713Z
+
+    '
+  created_at: 2026-11-08 12:29:20.093713+00:00
+  modified_at: 2026-11-08 12:29:20.093713+00:00
   session_id: 01a1bb178e1d
   harness_version: codex-cli 0.167.0
 - id: 01a1bb38-487e-7a41-80ae-892bd32a4bb8
   author: joe
   content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: All round-4 findings are fixed and both acceptance tests read correctly, but the new resume lease requirement breaks an existing Codex resume test, and CI has no result at this head.. No triage reason was given.'
-  created_at: 2026-11-08T12:53:10.398425Z
-  modified_at: 2026-11-08T12:53:10.398425Z
+  created_at: 2026-11-08 12:53:10.398425+00:00
+  modified_at: 2026-11-08 12:53:10.398425+00:00
   session_id: 01a1b9af-8230-75d2-82f8-667491cc010a
   harness_version: 2.1.319 (Claude Code)
 - id: 01a1bb38-60d3-7a60-a898-5ae7dfc5e08c
   author: joe
-  content: |-
-    REVIEW FINDINGS TO ADDRESS (BUG-2488):
+  content: 'REVIEW FINDINGS TO ADDRESS (BUG-2488):
+
     Verdict: CHANGES REQUESTED
+
     Reviewed commit: 73987ccf57f8
+
     Recorded: 2026-11-08T12:48:20.950187446+00:00
+
     Findings:
-    1. MAJOR (test regression and new hard failure; session.rs spawn_vendor_headless_resume_granted ~L8280-8293): the new signal_scope lookup bails with 'resumed implementer has no lease for signal transport' when no lease has worktree_path == cwd. Existing test headless_codex_resume_gets_grant_role_native_posture_and_no_aida_contained (tests/bug_2386_resume_routing_tests.rs:541, not changed by this PR) resumes Codex as 'implementer' in a lane with no lease and calls .unwrap() at ~L576-590, so it should now panic. Found by reading the source; no cargo run per review policy, and CI has not reported. The round-4 validation list did not include this test. Fix: add a matching lease to that fixture if a lease is truly required, or skip signal transport when no lease exists. Whichever you choose, state the no-lease behaviour and test it. The lookup also compares paths without canonicalizing (l.worktree_path == cwd), unlike has_commits_beyond_base; canonicalize it, or confirm every caller passes the lease's own path.
-    2. MINOR, plausible (handshake keyed on two identifiers; queue_cmd.rs:13594 and 14202, session.rs ~L8280 and ~L6723, phase_driver_trait.rs:50 and 386): the child's env path uses lease.scope, while queue-resume admission, reconcile and veto use plan.scope, and the drain driver uses self.spec. Both callers match the lease with eq_ignore_ascii_case, and derive_scope_from_entry uppercases for_scope (queue_cmd.rs:10291), while on-disk leases hold mixed-case origin IDs such as TASK-b6b...-941. Signal paths are case-sensitive on Linux. With a case-variant lease, a resumed native lane writes <seat>/.aida/punt-signals/<lease.scope>.json, reconcile and publication_veto read <plan.scope>.json, and the host publishes past the punt. The drain driver would likewise miss the mirrored punt at main/<self.spec>.json. Fix: derive the env path and the veto/reconcile path from one identifier (pass the publication spec into the spawn), or match case-insensitively, and add a case-variant test.
-    3. CI GATE: CI run 42481535495 at 73987ccf57f8 is pending with no jobs, and the previous head's CI (44bb939ee30, run 42480534715) was still queued when last listed, so no green full-suite evidence exists for the round-4 code. The merge-hold-gate check is queued at this head; its failures at earlier heads look like the expected supervised hold rather than a code defect.
-    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
-  created_at: 2026-11-08T12:53:16.627095Z
-  modified_at: 2026-11-08T12:53:16.627095Z
+
+    1. MAJOR (test regression and new hard failure; session.rs spawn_vendor_headless_resume_granted ~L8280-8293): the new signal_scope lookup bails with ''resumed implementer has no lease for signal transport'' when no lease has worktree_path == cwd. Existing test headless_codex_resume_gets_grant_role_native_posture_and_no_aida_contained (tests/bug_2386_resume_routing_tests.rs:541, not changed by this PR) resumes Codex as ''implementer'' in a lane with no lease and calls .unwrap() at ~L576-590, so it should now panic. Found by reading the source; no cargo run per review policy, and CI has not reported. The round-4 validation list did not include this test. Fix: add a matching lease to that fixture if a lease is truly required, or skip signal transport when no lease exists. Whichever you choose, state the no-lease behaviour and test it. The lookup also compares paths without canonicalizing (l.worktree_path == cwd), unlike has_commits_beyond_base; canonicalize it, or confirm every caller passes
+    the lease''s own path.
+
+    2. MINOR, plausible (handshake keyed on two identifiers; queue_cmd.rs:13594 and 14202, session.rs ~L8280 and ~L6723, phase_driver_trait.rs:50 and 386): the child''s env path uses lease.scope, while queue-resume admission, reconcile and veto use plan.scope, and the drain driver uses self.spec. Both callers match the lease with eq_ignore_ascii_case, and derive_scope_from_entry uppercases for_scope (queue_cmd.rs:10291), while on-disk leases hold mixed-case origin IDs such as TASK-b6b...-941. Signal paths are case-sensitive on Linux. With a case-variant lease, a resumed native lane writes <seat>/.aida/punt-signals/<lease.scope>.json, reconcile and publication_veto read <plan.scope>.json, and the host publishes past the punt. The drain driver would likewise miss the mirrored punt at main/<self.spec>.json. Fix: derive the env path and the veto/reconcile path from one identifier (pass the publication spec into the spawn), or match case-insensitively, and add a case-variant test.
+
+    3. CI GATE: CI run 42481535495 at 73987ccf57f8 is pending with no jobs, and the previous head''s CI (44bb939ee30, run 42480534715) was still queued when last listed, so no green full-suite evidence exists for the round-4 code. The merge-hold-gate check is queued at this head; its failures at earlier heads look like the expected supervised hold rather than a code defect.
+
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.'
+  created_at: 2026-11-08 12:53:16.627095+00:00
+  modified_at: 2026-11-08 12:53:16.627095+00:00
   session_id: 01a1b9af-8230-75d2-82f8-667491cc010a
   harness_version: 2.1.319 (Claude Code)
 - id: 01a1bb41-174f-7ad1-bcf7-ae88a66cc767
   author: dirtlab
   content: 'Validation-only pickup at 73987ccf57: round-four implementation is already present; no source edits required. Confirmed resume admission consumes prior main/seat vetoes, resume/drain vendor commands receive seat-local signal paths, publication reconciles before checking vetoes, and cleanup requires host-retained handshake evidence. Lane-runner BUG-2488 regressions: 7 executed tests passed (j20261108T125613744-2-0). Launch-boundary regression: 1 executed test passed (j20261108T130235702-2-0). Both acceptance criteria traced, none untested. Rustfmt on seven implementation/test files and git diff --check pass. Working tree clean; changed files: none; untested=false. Codegraph unavailable, call sites confirmed with rg. No implementation blockers; fresh CI/review and supervised hold clearance remain host work. No commit, push, PR creation, queue completion, ship or review-record attempted.'
-  created_at: 2026-11-08T13:02:47.631884Z
-  modified_at: 2026-11-08T13:02:47.631884Z
+  created_at: 2026-11-08 13:02:47.631884+00:00
+  modified_at: 2026-11-08 13:02:47.631884+00:00
   session_id: 01a1bb3a66c0
   harness_version: codex-cli 0.167.0
 - id: 01a1bc28-187e-7e63-afb8-0ca1dfd53a80
   author: joe
-  content: |
-    Round 5 changes for findings 1 and 2: unleased Codex implementer resumes remain supported and explicitly clear inherited punt/hold paths; leased resumes compare canonical cwd/lease paths. Extended the existing resume regression with no-lease signal assertions and a symlinked leased resume. Shared punt/hold path lookup now recognizes ASCII case variants, retaining legacy origin-ID spellings, with a regression covering mixed-case lease signals, publication veto, host mirroring/drain reads, and attempt cleanup. Reconciliation no longer requires a missing/retired seat path to canonicalize, addressing the phase-1 recovery and missing-seat publication-veto regressions. Replaced session.rs's raw Git builder with host_git_command. Regenerated/reviewed the writer inventory (one added phase-driver reconcile wrapper, two stale provision wrapper rows removed; other changes are ordering).
+  content: 'Round 5 changes for findings 1 and 2: unleased Codex implementer resumes remain supported and explicitly clear inherited punt/hold paths; leased resumes compare canonical cwd/lease paths. Extended the existing resume regression with no-lease signal assertions and a symlinked leased resume. Shared punt/hold path lookup now recognizes ASCII case variants, retaining legacy origin-ID spellings, with a regression covering mixed-case lease signals, publication veto, host mirroring/drain reads, and attempt cleanup. Reconciliation no longer requires a missing/retired seat path to canonicalize, addressing the phase-1 recovery and missing-seat publication-veto regressions. Replaced session.rs''s raw Git builder with host_git_command. Regenerated/reviewed the writer inventory (one added phase-driver reconcile wrapper, two stale provision wrapper rows removed; other changes are ordering).
+
     Validation: rustfmt checks and git diff --check pass; python3 scripts/check-store-writers.py passes (3393 sites); python3 tests/test_store_writer_inventory.py passes all 42 tests. Rust validation incomplete, untested=true: initial invocation used the binary package incorrectly; corrected library run caught a helper-return-type mistake that is now fixed. The subsequent resume-routing build timed out after 900 seconds before any test executed, and reported overlay-stale because the primary rewrote generation agent-7646b0c9277103a0. The phase-recovery run is compiling against that same generation at handoff; clone-Git ratchet, publication-veto and BUG-2488 retry runs remain queued. Host needs a fresh build generation and executed-test results/full CI. No green full-suite claim. The supervised merge-hold remains unchanged. Native-seat edits are uncommitted for host publication.
-  created_at: 2026-11-08T17:15:06.750865776Z
-  modified_at: 2026-11-08T17:15:06.750865776Z
+
+    '
+  created_at: 2026-11-08 17:15:06.750865+00:00
+  modified_at: 2026-11-08 17:15:06.750865+00:00
   session_id: 01a1bc0b114a
 - id: 01a1bc4c-6fe1-74c0-ae45-cfe041ee11a4
   author: joe
   content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: Round-5 findings are fixed and both acceptance tests read correctly, but the host now reads and unlinks seat-controlled handshake paths without bounds, and CI has not finished at this head.. No triage reason was given.'
-  created_at: 2026-11-08T17:54:48.417665455Z
-  modified_at: 2026-11-08T17:54:48.417665455Z
+  created_at: 2026-11-08 17:54:48.417665+00:00
+  modified_at: 2026-11-08 17:54:48.417665+00:00
   session_id: 01a1b9af-8230-75d2-82f8-667491cc010a
   harness_version: 2.1.319 (Claude Code)
 - id: 01a1bc4c-873f-7e03-a5f4-b75bb50d1dee
   author: joe
-  content: |-
-    REVIEW FINDINGS TO ADDRESS (BUG-2488):
+  content: 'REVIEW FINDINGS TO ADDRESS (BUG-2488):
+
     Verdict: CHANGES REQUESTED
+
     Reviewed commit: 5a16e2d82f1d
+
     Recorded: 2026-11-08T17:46:59.498133146+00:00
+
     Findings:
-    1. MAJOR (containment; standalone_implementer.rs provision_signals ~L985 and reconcile_signals ~L1026, ship_from_seat.rs:502 and :356 publication_veto(tree), punt.rs:396/472/220): this PR makes the host read files inside the writable seat using std::fs::read_to_string (read_signal, read_hold_signal, read_ledger), which follows symlinks and has no size limit. A seat can leave a FIFO at .aida/punt-signals/<spec>.json so the host blocks forever after the child exits, or a symlink to /dev/zero at .aida/punts.jsonl so the host reads until out of memory. The same PR's is_mirrored_handshake_entry uses aida_core::seat_clone_detect::read_regular_file for exactly this reason (its comment names FIFOs and symlinks). provision_signals also runs create_dir_all and remove_file through a seat-controlled .aida/punt-signals or .aida/pr-holds, so a symlinked directory makes the host delete <target>/<spec>.json outside the seat (for example the primary's hold marker). Fix: read seat-side handshakes with read_regular_file or an equivalent bounded no-follow reader, refuse symlinked parent directories before unlinking, and add refusal tests for FIFO, symlink and oversize seat signals and ledgers. Seat-side only; host-side reads of main paths can stay as they are.
+
+    1. MAJOR (containment; standalone_implementer.rs provision_signals ~L985 and reconcile_signals ~L1026, ship_from_seat.rs:502 and :356 publication_veto(tree), punt.rs:396/472/220): this PR makes the host read files inside the writable seat using std::fs::read_to_string (read_signal, read_hold_signal, read_ledger), which follows symlinks and has no size limit. A seat can leave a FIFO at .aida/punt-signals/<spec>.json so the host blocks forever after the child exits, or a symlink to /dev/zero at .aida/punts.jsonl so the host reads until out of memory. The same PR''s is_mirrored_handshake_entry uses aida_core::seat_clone_detect::read_regular_file for exactly this reason (its comment names FIFOs and symlinks). provision_signals also runs create_dir_all and remove_file through a seat-controlled .aida/punt-signals or .aida/pr-holds, so a symlinked directory makes the host delete <target>/<spec>.json outside the seat (for example the primary''s hold marker). Fix: read seat-side handshakes with
+    read_regular_file or an equivalent bounded no-follow reader, refuse symlinked parent directories before unlinking, and add refusal tests for FIFO, symlink and oversize seat signals and ledgers. Seat-side only; host-side reads of main paths can stay as they are.
+
     2. MINOR (queue_cmd.rs:9070, run_queue_resume_to_exit): provision_attempt_signals deletes the main and seat hold and punt markers before spawn_vendor_headless_resume runs its policy preflight. If that spawn is refused, no attempt ran but the persisted hold is gone. The spec is still Done, so the next held --resume fails admission at queue_cmd.rs:12245 (held_resume_reentry_allowed needs the marker) and held work is stranded until someone recreates the marker. task_2902_launch_paths_clear_and_provision_before_spawn asserts this behaviour (signals cleared on the queue-resume refusal path), so it needs changing too. standalone_implementer::run has the same ordering ahead of native_publication::prepare. Fix: consume the markers only after preflight and prepare succeed, immediately before spawn, and test that a refused resume keeps the hold marker and can be retried.
-    3. MINOR (seat_clone.rs is_mirrored_handshake_entry ~L2058): read_regular_file is capped at 64 KiB and returns None for a larger file, and the host ledger is read through it. The None branch returns text.is_empty(), so any non-empty seat ledger counts as unmirrored once the host ledger passes 64 KiB. The primary's .aida/punts.jsonl is 320392 bytes today, so this branch is never true on this host. It fails safe (the lease is kept), and seat clones exclude /.aida/* so it only applies to seats where that entry is visible. Separately, the signal comparison uses main.join(path) with the seat's exact spelling, while reconcile writes the main copy under the publication spelling, so case-variant markers read as unmirrored; this is the seat-clone remainder of round-5 finding 2. Fix: read the host ledger without the 64 KiB cap (it is host-owned) and resolve the main path through signal_path/hold_signal_path.
+
+    3. MINOR (seat_clone.rs is_mirrored_handshake_entry ~L2058): read_regular_file is capped at 64 KiB and returns None for a larger file, and the host ledger is read through it. The None branch returns text.is_empty(), so any non-empty seat ledger counts as unmirrored once the host ledger passes 64 KiB. The primary''s .aida/punts.jsonl is 320392 bytes today, so this branch is never true on this host. It fails safe (the lease is kept), and seat clones exclude /.aida/* so it only applies to seats where that entry is visible. Separately, the signal comparison uses main.join(path) with the seat''s exact spelling, while reconcile writes the main copy under the publication spelling, so case-variant markers read as unmirrored; this is the seat-clone remainder of round-5 finding 2. Fix: read the host ledger without the 64 KiB cap (it is host-owned) and resolve the main path through signal_path/hold_signal_path.
+
     4. MINOR, plausible (spec Expected 2; session.rs run_vendor_headless_to_exit, queue_cmd.rs run_queue_resume_to_exit, auto_complete.rs:954): only the standalone path reports implementer: no-change. On queue-resume and drain, publish_queue_exit prints it to stderr and the host continues, and ImplementerOutcome has no no-change variant, so the drain driver appears to treat a no-commit seat as its ordinary no-PR outcome instead of no-change with exit 0. I read this path but did not trace it to the final failure classification. Also, Expected 2 says punted exits 0, while report() returns PUNTED_EXIT_CODE (32); that matches the existing lane contract, so either correct the spec wording or the code. Fix: add a no-change outcome to the drain and resume reporting, or have the advisor split this into a tracked follow-up.
+
     5. COSMETIC (scripts/store-writers.toml): the regeneration removed four trace:TASK-3366 explanatory comments that are unrelated to this PR (end_entry and watch_row rows); no TASK-3366 reference remains under scripts/. Restore them when next touching the file, or confirm the generator always drops comments.
-    6. CI GATE: run 42506092000 at 5a16e2d82f1d is unfinished (2 of 7 jobs in progress, 5 queued when checked), and the round-5 handoff records untested=true because its resume-routing build timed out. No executed evidence exists yet for this round's code, including the extended bug_2386 resume test and the case-variant test. merge-hold-gate fails only because of the expected supervised hold, which is not a code defect.
-    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
-  created_at: 2026-11-08T17:54:54.399682989Z
-  modified_at: 2026-11-08T17:54:54.399682989Z
+
+    6. CI GATE: run 42506092000 at 5a16e2d82f1d is unfinished (2 of 7 jobs in progress, 5 queued when checked), and the round-5 handoff records untested=true because its resume-routing build timed out. No executed evidence exists yet for this round''s code, including the extended bug_2386 resume test and the case-variant test. merge-hold-gate fails only because of the expected supervised hold, which is not a code defect.
+
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.'
+  created_at: 2026-11-08 17:54:54.399682+00:00
+  modified_at: 2026-11-08 17:54:54.399682+00:00
   session_id: 01a1b9af-8230-75d2-82f8-667491cc010a
   harness_version: 2.1.319 (Claude Code)
 - id: 01a1bc4f-4379-7d80-9d30-e4af0fc95c9a
   author: joe
   content: 'Round 6 approach. Acceptance criteria as tests: run the native-seat punt/publication suppression fixture and no-commit/no-bundle fixture (command-level), plus FIFO/symlink/oversize refusal, linked-parent unlink protection, retained markers on refused launch, large host ledger and case-variant mirroring tests. Expected files: punt.rs, standalone_implementer.rs, session.rs, queue_cmd.rs, seat_clone.rs, ship_from_seat.rs, their fixture tests, scripts/store-writers.toml and orientation docs. Ambiguities / conflicts as questions: Expected 2 currently promises punt exit 0 although the established lane contract uses 32; preserve that contract and correct the wording. Trace drain no-change classification and either implement it or record an explicit follow-up as requested.'
-  created_at: 2026-11-08T17:57:53.657703060Z
-  modified_at: 2026-11-08T17:57:53.657703060Z
+  created_at: 2026-11-08 17:57:53.657703+00:00
+  modified_at: 2026-11-08 17:57:53.657703+00:00
   session_id: 01a1bc4dcf8e
 - id: 01a1bc58-65cc-7a31-bda8-18999cd38340
   author: joe
   content: 'Round-6 scope update: findings 1-3 are implemented with pinned-parent, bounded no-follow seat reads/unlinks and spawn-boundary marker consumption; finding 5 comments are restored. Finding 4 is explicitly tracked as draft child TASK-3608 for advisor triage under the review-permitted follow-up option; no drain outcome implementation is claimed. Expected 2 now distinguishes no-change exit 0 from the established standalone punt exit 32. Validation is in progress via lane job j20261108T180017880-2-0; Rust has not yet executed tests. The writer inventory guard, its 42 Python tests, rustfmt check, portability guard and git diff --check pass.'
-  created_at: 2026-11-08T18:07:52.268179322Z
-  modified_at: 2026-11-08T18:07:52.268179322Z
+  created_at: 2026-11-08 18:07:52.268179+00:00
+  modified_at: 2026-11-08 18:07:52.268179+00:00
   session_id: 01a1bc4dcf8e
 - id: 01a1bc80-a6de-7911-9ae2-54c6f0b174be
   author: joe
-  content: |
-    Round 6 native-seat handoff: tested=false is NOT claimed; untested=false for this security slice. Edits remain uncommitted under the native-seat contract. Recorded publication subject: [AI:codex] fix(seats): bound handshake reads and preserve refused-launch holds (Refs BUG-2488).
+  content: 'Round 6 native-seat handoff: tested=false is NOT claimed; untested=false for this security slice. Edits remain uncommitted under the native-seat contract. Recorded publication subject: [AI:codex] fix(seats): bound handshake reads and preserve refused-launch holds (Refs BUG-2488).
+
 
     Findings 1-3 and 5: host reads of seat punt/hold signals and ledgers now resolve the host-supplied lease root once, pin every child directory, and use the existing 64-KiB bounded no-follow/nonblocking regular-file reader. Unsafe/unreadable/malformed evidence refuses before publication or cleanup. Signal provisioning retains pinned parent handles through unlink; internal directory links cannot redirect deletion into the primary. Host-owned root aliases remain supported. Standalone/drain/explicit-resume clear prior markers at the final spawn boundary after policy and publication preparation; refused resumes retain a readable hold and remain admissible on repeated retries. Cleanup reads the host-owned ledger without the seat cap and resolves host signal spelling through the signal/hold path helpers. Restored all four TASK-3366 inventory comments; regenerated/reviewed blocked inventory rows. AGENTS.md and OVERVIEW.md document behavior and limits.
 
+
     Changed files: aida-cli-lib/src/punt.rs, standalone_implementer.rs, session.rs, queue_cmd.rs, ship_from_seat.rs, seat_clone.rs; aida-cli-lib/src/tests/bug_home_038_seat_publish_tests.rs; scripts/store-writers.toml; AGENTS.md; OVERVIEW.md.
 
+
     Executed validation:
+
     - cargo build --profile agent -p aida-cli --bin aida: passed (lane job j20261108T182340501-2-0).
+
     - cargo test --profile agent -p aida-cli-lib --lib -- bug_2386_resume_routing_tests --nocapture: 9 passed (j20261108T182443209-2-0), including the extended real-CLI grant/native-posture and root-alias resume fixture. An earlier run failed only because the matching CLI was absent; building it resolved that setup failure.
+
     - cargo test --profile agent -p aida-cli-lib --lib -- bug_2488 --nocapture: 11 passed plus the explicitly executed watchdog child, 1 intentionally ignored direct helper entry (j20261108T182653554-2-0). Includes FIFO, device and regular-file symlinks, oversize signals/ledgers, linked-parent unlink protection, host-root aliases, large host ledger, case-variant publication veto, native punt and actual no-change/no-bundle path.
+
     - cargo test --profile agent -p aida-cli-lib --lib -- seat_clone::seat_publish_tests --nocapture: 58 passed plus watchdog child, 1 intentionally ignored direct helper entry (j20261108T182654726-2-0). Includes task_2902_launch_paths_preserve_signals_on_refused_spawn and repeated held-resume admission.
+
     - Writer-inventory guard (3396 sites), 42 Python inventory tests, rustfmt --check, portability guard and git diff --check passed.
+
     - A filename-based filter initially matched zero tests; it supplies no test evidence. The corrected module filter above executed tests.
 
+
     Limits / remaining work: the runner reported overlay-stale because the primary rewrote a shared seed-generation file; all cited executed suites nevertheless exited 0. CI for these uncommitted edits awaits host publication; the supervised merge-hold is expected and was not cleared. Finding 4 is NOT implemented here: draft child TASK-3608 tracks explicit no-change outcomes through queue-resume and final drain/batch reporting, per the review-permitted split option. Advisor approval/routing was requested in mailbox thread 5d88d871-9082-4d0a-b32a-1295ac657322; no response was present at the last bounded thread read. Expected 2 now states standalone punt exit 32 (drain punt exit 0), preserving the existing contract. Keep this publication Refs and do not claim full BUG-2488 completion on this slice.
-  created_at: 2026-11-08T18:51:50.366454237Z
-  modified_at: 2026-11-08T18:51:50.366454237Z
+
+    '
+  created_at: 2026-11-08 18:51:50.366454+00:00
+  modified_at: 2026-11-08 18:51:50.366454+00:00
   session_id: 01a1bc4dcf8e
 - id: 01a1bc99-e503-79d2-be82-c8ef424f91b4
   author: joe
   content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: Round-6 findings are fixed and both acceptance tests read correctly, but CI lib-1 failed in Run tests at this head, and four minor no-change, ledger and documentation defects remain.. No triage reason was given.'
-  created_at: 2026-11-08T19:19:24.675843079Z
-  modified_at: 2026-11-08T19:19:24.675843079Z
+  created_at: 2026-11-08 19:19:24.675843+00:00
+  modified_at: 2026-11-08 19:19:24.675843+00:00
   session_id: 01a1b9af-8230-75d2-82f8-667491cc010a
   harness_version: 2.1.319 (Claude Code)
 - id: 01a1bc99-feea-7eb2-b530-2115400e5dd0
   author: joe
-  content: |-
-    REVIEW FINDINGS TO ADDRESS (BUG-2488):
+  content: 'REVIEW FINDINGS TO ADDRESS (BUG-2488):
+
     Verdict: CHANGES REQUESTED
+
     Reviewed commit: 0c16c609e8dc
+
     Recorded: 2026-11-08T19:18:16.512863818+00:00
+
     Findings:
-    1. CI BLOCKER: run 42512231790 job 'CI (lib-1)' failed in step 17 'Run tests' at reviewed head 0c16c609e8dc (cli-0, cli-1, rest passed; lib-0, gates, contracts were still running at record time). The prior head 5a16e2d82f (run 42506092000) and main (run 42510288694) were green, so the last commit is the prime suspect, though a flake is not excluded. The reviewer could not read the failing test name: the sandbox denies the Actions log host. Read https://github.com/joemooney/aida/actions/runs/42512231790/job/128827564791, fix or show it is a flake, and get a green run at the new head.
-    2. MINOR (standalone_implementer.rs:1302 classify_no_change call; seat_clone.rs:1512 has_commits_beyond_base): post_exit_commit returns NotASeat and publish_queue_exit returns Ok for a contained Codex lane on a worktree (the clone-fallback path in session_start.rs:2596 produces these), then a clean exit with no PR calls has_commits_beyond_base, which requires TreeKind::Clone and fails with 'could not read seat branch lease'. run() returns that error before report(), replacing the existing NoPr result and its unshipped-work reason. Only classify no-change for a recorded seat clone, and add a worktree-lease test.
-    3. MINOR (ship_from_seat.rs:518 publish closure, seat_clone.rs:1556): probe counts unpushed commits on all local branches of a private clone, while no_change inspects only the lease branch. A seat that commits on another local branch reaches publish() via facts.unpushed > 0, prints 'implementer: no-change', returns Ok with no advisor notice, and classify_no_change then reports exit 0. Existing session-end protection should keep the clone, so the work is not deleted, but the result line is false. When unpushed > 0 and the lease branch is unchanged, refuse or notify instead of reporting no-change.
+
+    1. CI BLOCKER: run 42512231790 job ''CI (lib-1)'' failed in step 17 ''Run tests'' at reviewed head 0c16c609e8dc (cli-0, cli-1, rest passed; lib-0, gates, contracts were still running at record time). The prior head 5a16e2d82f (run 42506092000) and main (run 42510288694) were green, so the last commit is the prime suspect, though a flake is not excluded. The reviewer could not read the failing test name: the sandbox denies the Actions log host. Read https://github.com/joemooney/aida/actions/runs/42512231790/job/128827564791, fix or show it is a flake, and get a green run at the new head.
+
+    2. MINOR (standalone_implementer.rs:1302 classify_no_change call; seat_clone.rs:1512 has_commits_beyond_base): post_exit_commit returns NotASeat and publish_queue_exit returns Ok for a contained Codex lane on a worktree (the clone-fallback path in session_start.rs:2596 produces these), then a clean exit with no PR calls has_commits_beyond_base, which requires TreeKind::Clone and fails with ''could not read seat branch lease''. run() returns that error before report(), replacing the existing NoPr result and its unshipped-work reason. Only classify no-change for a recorded seat clone, and add a worktree-lease test.
+
+    3. MINOR (ship_from_seat.rs:518 publish closure, seat_clone.rs:1556): probe counts unpushed commits on all local branches of a private clone, while no_change inspects only the lease branch. A seat that commits on another local branch reaches publish() via facts.unpushed > 0, prints ''implementer: no-change'', returns Ok with no advisor notice, and classify_no_change then reports exit 0. Existing session-end protection should keep the clone, so the work is not deleted, but the result line is false. When unpushed > 0 and the lease branch is unchanged, refuse or notify instead of reporting no-change.
+
     4. MINOR (phase_driver_trait.rs:3260 resume_implementer): this PR points drain children at seat-local punt paths, but the advisor-tier resume never calls reconcile_signals (callers are only standalone run, run_implementer and publish_queue_exit, and this resume passes contained=false so publication does not run). A re-punt is still detected through spec status, but its seat-local .aida/punts.jsonl record never reaches the host ledger. Reconcile after the resume exits.
-    5. MINOR (AGENTS.md:1-6, OVERVIEW.md:1610-1628): both gain per-change notes, including 'as split by PR #3625 review finding 4'. Root CLAUDE.md says to put per-change notes in the PR body and an aida comment, not these files, because each prepended paragraph conflicts with every open PR. Drop the AGENTS.md paragraph and cut the OVERVIEW.md text to any durable architecture statement.
-    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
-  created_at: 2026-11-08T19:19:31.306273443Z
-  modified_at: 2026-11-08T19:19:31.306273443Z
+
+    5. MINOR (AGENTS.md:1-6, OVERVIEW.md:1610-1628): both gain per-change notes, including ''as split by PR #3625 review finding 4''. Root CLAUDE.md says to put per-change notes in the PR body and an aida comment, not these files, because each prepended paragraph conflicts with every open PR. Drop the AGENTS.md paragraph and cut the OVERVIEW.md text to any durable architecture statement.
+
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.'
+  created_at: 2026-11-08 19:19:31.306273+00:00
+  modified_at: 2026-11-08 19:19:31.306273+00:00
   session_id: 01a1b9af-8230-75d2-82f8-667491cc010a
   harness_version: 2.1.319 (Claude Code)
 - id: 01a1bc9d-a5ad-7773-8c21-70bf36abd250
   author: joe
   content: 'Advisor CI rework (#3625, head 0c16c609e8): CI lib-1 fails orchestrator_leases::resolve_aida_exe_tests::no_cli_source_outside_the_resolver_uses_raw_current_executable_lookup (aida-cli-lib/src/tests/resolve_aida_exe_tests.rs). Route the new current_exe call through the resolver. Merge current main first. LIGHT gate: that test plus make check-ci-fast.'
-  created_at: 2026-11-08T19:23:30.605725Z
-  modified_at: 2026-11-08T19:23:30.605725Z
+  created_at: 2026-11-08 19:23:30.605725+00:00
+  modified_at: 2026-11-08 19:23:30.605725+00:00
   session_id: 01a1bc93-77a0-7740-8b03-df4e3e8d1df5
   harness_version: 2.1.319 (Claude Code)
+- id: 01a1bcad-4ab0-7e31-9095-b72d7852a53f
+  author: dirtlab
+  content: 'Round-7 native-seat handoff: review findings 1-5 addressed; edits remain uncommitted for host publication.
+
+
+    CI investigation: downloaded the log for run 42512231790/job 128827564791. Its sole lib-1 failure was orchestrator_leases::resolve_aida_exe_tests::no_cli_source_outside_the_resolver_uses_raw_current_executable_lookup: the BUG-2488 watchdog fixture used std::env''s raw executable lookup. Replaced it with the shared resolver. This was a deterministic guard violation, not a claimed flake.
+
+
+    Worktree fallback lanes now retain their ordinary NoPr/unshipped-work result; no-change classification requires a host-recorded seat clone. Publication refuses when the probe finds unpublished work but the leased branch has no commits beyond its base, preserving commits on another local branch. Advisor-tier resumes reconcile seat signals and punt ledgers immediately after child exit, including failed exits, before classification. Removed the BUG-2488 AGENTS.md note and review-specific OVERVIEW.md text; retained durable handshake architecture. Registered the new reconciliation caller in the writer inventory without dropping its existing TASK-3366 comments.
+
+
+    Changed files: AGENTS.md; OVERVIEW.md; aida-cli-lib/src/phase_driver_trait.rs; aida-cli-lib/src/ship_from_seat.rs; aida-cli-lib/src/standalone_implementer.rs; aida-cli-lib/src/tests/bug_home_038_seat_publish_tests.rs; scripts/store-writers.toml.
+
+
+    Executed validation:
+
+    - Lane job j20261108T192414084-2-0: cargo test --profile agent -p aida-cli-lib --lib -- bug_2488 --nocapture: 13 passed, plus the watchdog child passed; the direct child entry is intentionally ignored in the parent run. Includes both acceptance paths, recorded-worktree fallback and other-branch publication refusal.
+
+    - Lane job j20261108T192505518-2-0: cargo test --profile agent -p aida-cli-lib --lib -- resolve_aida_exe_tests --nocapture: 7 passed, including the exact CI-failing guard.
+
+    - 42 Python writer-inventory tests passed; scanner reconciles 3397 sink sites. Portability guard, targeted rustfmt --check and git diff --check passed. aida criteria BUG-2488 reports no untested or unanchored criteria.
+
+
+    untested=false. Native declaration recorded: [AI:codex] fix(seats): address native publication review regressions (Refs BUG-2488). No commit, push, PR creation, queue completion, pr ship or review record was attempted. Fresh CI at the published head remains host/review work; the supervised merge hold remains untouched. Keep Refs scope: TASK-3608 still tracks the separately split drain/queue-resume no-change outcome propagation, and this rework does not claim it implemented.'
+  created_at: 2026-11-08 19:40:35.888557+00:00
+  modified_at: 2026-11-08 19:40:35.888557+00:00
+  session_id: 01a1bc9bdf0d
+  harness_version: codex-cli 0.167.0
 history:
 - id: 01a1b7ad-9096-7320-bbe8-fc34c8e11c09
   author: aida-session-start
-  timestamp: 2026-11-07T20:22:47.702776Z
+  timestamp: 2026-11-07 20:22:47.702776+00:00
   changes:
   - field_name: status
     old_value: Approved
     new_value: InProgress
 - id: 01a1b7ad-d51d-7972-a5de-66727aa262d7
   author: dirtlab
-  timestamp: 2026-11-07T20:23:05.245260Z
+  timestamp: 2026-11-07 20:23:05.245260+00:00
   session_id: 01a1b7ad8b31
   harness_version: codex-cli 0.167.0
   changes: []
 - id: 01a1b7bc-4f6c-7023-b426-536cae0ae42b
   author: aida-orchestrator
-  timestamp: 2026-11-07T20:38:54.060941Z
+  timestamp: 2026-11-07 20:38:54.060941+00:00
   session_id: 01a1b7b9e0f1
   harness_version: 2.1.319 (Claude Code)
   changes:
@@ -339,7 +452,7 @@ history:
     new_value: NeedsAttention
 - id: 01a1b7bf-17c2-7781-a831-ee996fee318a
   author: joe
-  timestamp: 2026-11-07T20:41:56.418924Z
+  timestamp: 2026-11-07 20:41:56.418924+00:00
   session_id: 01a1b646-c67d-7b43-98ff-3604a53f5d1f
   harness_version: 2.1.319 (Claude Code)
   changes:
@@ -348,20 +461,20 @@ history:
     new_value: Approved
 - id: 01a1b878-db37-7312-b2ae-c0092cd65d4e
   author: aida-session-start
-  timestamp: 2026-11-08T00:04:50.615837Z
+  timestamp: 2026-11-08 00:04:50.615837+00:00
   changes:
   - field_name: status
     old_value: Approved
     new_value: InProgress
 - id: 01a1b879-2ce8-7732-b7c3-2e7afd414713
   author: dirtlab
-  timestamp: 2026-11-08T00:05:11.528347Z
+  timestamp: 2026-11-08 00:05:11.528347+00:00
   session_id: 01a1b878d54d
   harness_version: codex-cli 0.167.0
   changes: []
 - id: 01a1b87e-d0a9-7002-9576-d768b65a0706
   author: aida-orchestrator
-  timestamp: 2026-11-08T00:11:21.129140Z
+  timestamp: 2026-11-08 00:11:21.129140+00:00
   session_id: 01a1b87d4f32
   harness_version: 2.1.319 (Claude Code)
   changes:
@@ -370,7 +483,7 @@ history:
     new_value: NeedsAttention
 - id: 01a1b90f-4993-7442-bedf-4efe9daca423
   author: joe
-  timestamp: 2026-11-08T02:49:09.267567Z
+  timestamp: 2026-11-08 02:49:09.267567+00:00
   session_id: 01a1b8be-8170-7fb2-89ab-ecb4c6eee98c
   harness_version: 2.1.319 (Claude Code)
   changes:
@@ -379,25 +492,25 @@ history:
     new_value: Approved
 - id: 01a1b911-38bc-7f10-800c-316df5c944e3
   author: aida-session-start
-  timestamp: 2026-11-08T02:51:16.028442Z
+  timestamp: 2026-11-08 02:51:16.028442+00:00
   changes:
   - field_name: status
     old_value: Approved
     new_value: InProgress
 - id: 01a1b911-ba80-7de3-8267-953bb6be000e
   author: joe
-  timestamp: 2026-11-08T02:51:49.248385Z
+  timestamp: 2026-11-08 02:51:49.248385+00:00
   session_id: 01a1b9112c08
   changes: []
 - id: 01a1b925-0c92-71f3-af5e-3e6a7433bdb8
   author: joe
-  timestamp: 2026-11-08T03:12:55.442765Z
+  timestamp: 2026-11-08 03:12:55.442765+00:00
   session_id: 01a1b848-940b-7bd2-8acd-52e428b182b8
   harness_version: 2.1.319 (Claude Code)
   changes: []
 - id: 01a1b92b-74a6-71e0-98e3-a7178a1dfe65
   author: aida-orchestrator
-  timestamp: 2026-11-08T03:19:55.302874Z
+  timestamp: 2026-11-08 03:19:55.302874+00:00
   session_id: 01a1b92525f8
   harness_version: 2.1.319 (Claude Code)
   changes:
@@ -406,7 +519,7 @@ history:
     new_value: NeedsAttention
 - id: 01a1b960-0c06-7870-974b-4b1df4f0223a
   author: joe
-  timestamp: 2026-11-08T04:17:21.926149Z
+  timestamp: 2026-11-08 04:17:21.926149+00:00
   session_id: 01a1b8be-8170-7fb2-89ab-ecb4c6eee98c
   harness_version: 2.1.319 (Claude Code)
   changes:
@@ -415,19 +528,19 @@ history:
     new_value: Approved
 - id: 01a1b985-8250-7192-88ce-17ec782006ee
   author: aida-pr-open
-  timestamp: 2026-11-08T04:58:17.040113Z
+  timestamp: 2026-11-08 04:58:17.040113+00:00
   changes:
   - field_name: status
     old_value: Approved
     new_value: InProgress
 - id: 01a1b9a5-4fb5-7c01-a69b-5b12a40f7eba
   author: joe
-  timestamp: 2026-11-08T05:33:01.237727Z
+  timestamp: 2026-11-08 05:33:01.237727+00:00
   session_id: 01a1b9a47968
   changes: []
 - id: 01a1bb14-a004-7c22-a6e4-e77cd0fcf443
   author: aida-orchestrator
-  timestamp: 2026-11-08T12:14:13.508672Z
+  timestamp: 2026-11-08 12:14:13.508672+00:00
   session_id: 01a1bb10bfc1
   harness_version: 2.1.319 (Claude Code)
   changes:
@@ -436,7 +549,7 @@ history:
     new_value: NeedsAttention
 - id: 01a1bb16-12b0-7ae3-a000-527d072e6b4f
   author: joe
-  timestamp: 2026-11-08T12:15:48.400800Z
+  timestamp: 2026-11-08 12:15:48.400800+00:00
   session_id: 01a1b9af-8230-75d2-82f8-667491cc010a
   harness_version: 2.1.319 (Claude Code)
   changes:
@@ -445,20 +558,20 @@ history:
     new_value: Approved
 - id: 01a1bb17-9467-7a70-9ee8-c4c72ed33a6a
   author: aida-session-start
-  timestamp: 2026-11-08T12:17:27.143405Z
+  timestamp: 2026-11-08 12:17:27.143405+00:00
   changes:
   - field_name: status
     old_value: Approved
     new_value: InProgress
 - id: 01a1bb17-ecb3-73e1-9546-103d37a66008
   author: dirtlab
-  timestamp: 2026-11-08T12:17:49.747286Z
+  timestamp: 2026-11-08 12:17:49.747286+00:00
   session_id: 01a1bb178e1d
   harness_version: codex-cli 0.167.0
   changes: []
 - id: 01a1bb33-dfe9-7523-9db2-495c21268ef1
   author: aida-orchestrator
-  timestamp: 2026-11-08T12:48:21.481306Z
+  timestamp: 2026-11-08 12:48:21.481306+00:00
   session_id: 01a1bb307c22
   harness_version: 2.1.319 (Claude Code)
   changes:
@@ -467,7 +580,7 @@ history:
     new_value: NeedsAttention
 - id: 01a1bb38-487e-7a41-80ae-891013d8dba1
   author: joe
-  timestamp: 2026-11-08T12:53:10.398417Z
+  timestamp: 2026-11-08 12:53:10.398417+00:00
   session_id: 01a1b9af-8230-75d2-82f8-667491cc010a
   harness_version: 2.1.319 (Claude Code)
   changes:
@@ -476,13 +589,13 @@ history:
     new_value: Approved
 - id: 01a1bb3a-c5de-78d0-bcc3-8ccbe0494338
   author: dirtlab
-  timestamp: 2026-11-08T12:55:53.566056Z
+  timestamp: 2026-11-08 12:55:53.566056+00:00
   session_id: 01a1bb3a66c0
   harness_version: codex-cli 0.167.0
   changes: []
 - id: 01a1bbe2-0506-7a31-8ee9-e396e000a9aa
   author: joe
-  timestamp: 2026-11-08T15:58:34.246827924Z
+  timestamp: 2026-11-08 15:58:34.246827+00:00
   session_id: 01a1bbab-762f-7cd2-8a36-4ea9f209afce
   harness_version: 2.1.319 (Claude Code)
   changes:
@@ -491,14 +604,14 @@ history:
     new_value: Approved
 - id: 01a1bc0b-1aed-7232-a492-9405291031c9
   author: aida-session-start
-  timestamp: 2026-11-08T16:43:26.829992539Z
+  timestamp: 2026-11-08 16:43:26.829992+00:00
   changes:
   - field_name: status
     old_value: Approved
     new_value: InProgress
 - id: 01a1bc45-4a3e-7590-87c0-e9decf24510d
   author: aida-orchestrator
-  timestamp: 2026-11-08T17:47:00.030707831Z
+  timestamp: 2026-11-08 17:47:00.030707+00:00
   session_id: 01a1bc418b2e
   harness_version: 2.1.319 (Claude Code)
   changes:
@@ -507,7 +620,7 @@ history:
     new_value: NeedsAttention
 - id: 01a1bc4c-6fe1-74c0-ae45-cfdbcb69d995
   author: joe
-  timestamp: 2026-11-08T17:54:48.417658607Z
+  timestamp: 2026-11-08 17:54:48.417658+00:00
   session_id: 01a1b9af-8230-75d2-82f8-667491cc010a
   harness_version: 2.1.319 (Claude Code)
   changes:
@@ -516,29 +629,29 @@ history:
     new_value: Approved
 - id: 01a1bc4d-d8e7-7ab1-afae-577811955efe
   author: aida-session-start
-  timestamp: 2026-11-08T17:56:20.839872195Z
+  timestamp: 2026-11-08 17:56:20.839872+00:00
   changes:
   - field_name: status
     old_value: Approved
     new_value: InProgress
 - id: 01a1bc4f-4cd5-7513-9af7-90c950ed9069
   author: joe
-  timestamp: 2026-11-08T17:57:56.053248170Z
+  timestamp: 2026-11-08 17:57:56.053248+00:00
   session_id: 01a1bc4dcf8e
   changes: []
 - id: 01a1bc53-1ee4-7f72-be14-924112001f41
   author: joe
-  timestamp: 2026-11-08T18:02:06.436188846Z
+  timestamp: 2026-11-08 18:02:06.436188+00:00
   session_id: 01a1bc4dcf8e
   changes: []
 - id: 01a1bc53-e161-7c01-b98a-b6355b989603
   author: joe
-  timestamp: 2026-11-08T18:02:56.225283090Z
+  timestamp: 2026-11-08 18:02:56.225283+00:00
   session_id: 01a1bc4dcf8e
   changes: []
 - id: 01a1bc98-dce4-7201-9969-148b1a89028c
   author: aida-orchestrator
-  timestamp: 2026-11-08T19:18:17.060157447Z
+  timestamp: 2026-11-08 19:18:17.060157+00:00
   session_id: 01a1bc864b21
   harness_version: 2.1.319 (Claude Code)
   changes:
@@ -547,7 +660,7 @@ history:
     new_value: NeedsAttention
 - id: 01a1bc99-e503-79d2-be82-c8dbc9a2ec74
   author: joe
-  timestamp: 2026-11-08T19:19:24.675822644Z
+  timestamp: 2026-11-08 19:19:24.675822+00:00
   session_id: 01a1b9af-8230-75d2-82f8-667491cc010a
   harness_version: 2.1.319 (Claude Code)
   changes:
@@ -556,20 +669,20 @@ history:
     new_value: Approved
 - id: 01a1bc9b-f80a-7771-adf4-15a941351668
   author: aida-session-start
-  timestamp: 2026-11-08T19:21:40.618210613Z
+  timestamp: 2026-11-08 19:21:40.618210+00:00
   changes:
   - field_name: status
     old_value: Approved
     new_value: InProgress
 - id: 01a1bc9c-5d97-7d83-97de-0f171af5d3c1
   author: dirtlab
-  timestamp: 2026-11-08T19:22:06.615958581Z
+  timestamp: 2026-11-08 19:22:06.615958+00:00
   session_id: 01a1bc9bdf0d
   harness_version: codex-cli 0.167.0
   changes: []
 - id: 01a1bc9d-d419-7583-a68b-1b6366c5be53
   author: joe
-  timestamp: 2026-11-08T19:23:42.489856886Z
+  timestamp: 2026-11-08 19:23:42.489856+00:00
   session_id: 01a1bc93-77a0-7740-8b03-df4e3e8d1df5
   harness_version: 2.1.319 (Claude Code)
   changes:
@@ -578,7 +691,7 @@ history:
     new_value: Approved
 - id: 01a1bcac-e6fa-7203-940d-aadd2c8942ea
   author: joe
-  timestamp: 2026-11-08T19:40:10.362946680Z
+  timestamp: 2026-11-08 19:40:10.362946+00:00
   session_id: 01a1bca9569c
   harness_version: 2.1.319 (Claude Code)
   changes: []
@@ -598,4 +711,4 @@ failure_reason:
   detail: 'Both acceptance tests read correctly, but this head adds only main merges since the last review: four code/doc defects remain (one widened) and CI at this head has not finished after lib-1 failed on the last code head.'
   recovery_hint: address the review findings, move BUG-2488 back to In Progress, and clear the PR hold only after approval
   shelved_by: reviewer
-  shelved_at: 2026-11-08T19:40:10.224940901Z
+  shelved_at: 2026-11-08 19:40:10.224940+00:00
