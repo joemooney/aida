@@ -1,0 +1,29 @@
+id: 01a1b9ab-c9d0-7022-b661-37fc0b074584
+spec_id: TASK-b6b1278890774ef993d2ebc327862470-976
+title: 'cosmetic: TurnMonitor eprintln! lines (pidfd warning, ''rotation: fresh handoff …'
+description: |-
+  Non-blocking finding carried forward from an APPROVED review verdict on STORY-2653, which has since completed — recorded here so it keeps a queryable home once the verdict record stops being read.
+
+  cosmetic: TurnMonitor eprintln! lines (pidfd warning, 'rotation: fresh handoff at turn boundary') write to the terminal while the vendor TUI owns it.
+
+  PR: #3656
+  Reviewed sha: ef8fe4711ae384368a84d935870d54910c1928de
+status: Draft
+priority: Medium
+owner: joe
+feature: Uncategorized
+created_at: 2026-11-08T05:40:05.712381122Z
+modified_at: 2026-11-08T05:40:05.712381122Z
+req_type: Task
+tags:
+- carried-from:STORY-2653
+- finding-hash:baba6040
+- from-review:PR-3656
+- kind:carried-forward
+filed_at:
+  code_sha: 08cbf8a3fe7e5cef1171627f2b6edb446abc6539
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: ff9b8c91808
+  vendor: claude
