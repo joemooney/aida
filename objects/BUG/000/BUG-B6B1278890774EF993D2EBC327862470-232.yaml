@@ -21,7 +21,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-06T17:06:21.254759647Z
-modified_at: 2026-11-08T07:26:35.990214104Z
+modified_at: 2026-11-08T07:26:41.828573378Z
 req_type: Bug
 comments:
 - id: 01a1b1ff-81bd-7b80-8ed5-ea84e52557a5
@@ -211,6 +211,24 @@ comments:
   content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: Round-2 fixes verified in code (scan only after alias miss and only on stale/unavailable snapshot, tests added, docs moved). Blocking: default show dropped linkage but four skills and the --no-git help/docs still promise it, and CI is still queued at this head so the contracts fix and all tests are unproven.. No triage reason was given.'
   created_at: 2026-11-08T07:26:35.990212538Z
   modified_at: 2026-11-08T07:26:35.990212538Z
+  session_id: 01a1b8be-8170-7fb2-89ab-ecb4c6eee98c
+  harness_version: 2.1.319 (Claude Code)
+- id: 01a1ba0d-6236-7481-8cd1-781f3913e2fe
+  author: joe
+  content: |-
+    REVIEW FINDINGS TO ADDRESS (PR #3658):
+    Verdict: CHANGES REQUESTED
+    Reviewed commit: 88d7cbb5d966
+    Recorded: 2026-11-08T07:23:18.644453307+00:00
+    Findings:
+    1. MINOR behaviour-contract drift (blocking, one small edit pass): default 'aida show' no longer emits linkage, but aida-core/templates/skills/aida-learn.md:103 still makes 'aida show <SPEC> shows the expected linkage' a done-check, which can now never be satisfied on default output. aida-guided-implement.md:111 (comment says git linkage), aida-pickup.md:350-357 ('aida show --card' described as printing the git-linkage summary) and aida-clarify.md:71 ('the git-linkage block') are also stale. No template file is in this diff. Fix: use 'aida show <SPEC> --full' (or --card --full) where linkage is needed and correct the prose, then make sync-templates and make check-templates.
+    2. COSMETIC stale CLI help and docs: aida-cli-lib/src/requirements_cli.rs:6280-6282 --no-git help still says it skips the linkage section and is 'Faster for read-only contexts', which is no longer true of default show. docs/cli/01-getting-started.md:138 Gotchas still says the git-linkage section is the slow part and to use --no-git if show is sluggish. Default show now does neither; point at --full/--verbose/--json semantics. docs/cli/08-reporting.md:562,581,696 and 09-integrations.md:17 name aida show as the linkage surface without the --full qualifier.
+    3. CI UNVERIFIED (wait state, not a code defect): at 88d7cbb5d966 CI run 42455832710 was still not done at 2026-11-08T07:22Z (rest in progress; lib-0, lib-1, cli-0, cli-1, gates, contracts queued). Earlier finding on CI (contracts) 'CLI-manual drift-guard' is therefore still unproven, and tests/test_show_latency.py (ci.yml:479) plus the new show_snapshot tests have no CI evidence at this head. merge-hold-gate failure is the expected supervised-spec hold and is not attributed to this PR; it needs the human/advisor clear path. Confirm green at the rework head.
+    4. MINOR error mapping: aida-core/src/db/cached_git_backend.rs:282 propagates cache_snapshot_is_stale()? on a literal/alias miss, while with_cache_read at :943 treats redo_generation_matches() errors as stale via unwrap_or(false). An unreadable .aida/redo/cache-dirty (redo.rs:116-121) makes 'aida show <id>' fail with run_show's 'Parse failed' version-mismatch hint instead of scanning. Fix: treat Err as stale (unwrap_or(true)) in the snapshot_only branch, with a regression.
+    5. MINOR residual AC2 risk, plausible and not reproduced: requirement_reader (cached_git_backend.rs:519-528) has no deadline. With the new empty in-memory fallback (cold/corrupt/drifted cache) every relationship target misses the index and triggers one full-store parse of all objects on show, unlike the bounded agreed-ID scan. On a ~4,400-object store under load this can approach or pass the 5000 ms ceiling. Bound it with read_fallback_scan_budget and label targets unknown, or file a follow-up with a measurement.
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
+  created_at: 2026-11-08T07:26:41.718074536Z
+  modified_at: 2026-11-08T07:26:41.718074536Z
   session_id: 01a1b8be-8170-7fb2-89ab-ecb4c6eee98c
   harness_version: 2.1.319 (Claude Code)
 history:
