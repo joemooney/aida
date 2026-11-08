@@ -18,7 +18,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-08T02:46:34.549817Z
-modified_at: 2026-11-08T19:51:43.591986270Z
+modified_at: 2026-11-08T20:01:06.945601776Z
 req_type: Bug
 tags:
 - area:ci
@@ -745,6 +745,12 @@ history:
   - field_name: status
     old_value: InProgress
     new_value: NeedsAttention
+- id: 01a1bcc0-1464-7fb2-922f-8b76943cc1fe
+  author: joe
+  timestamp: 2026-11-08T20:01:07.172222035Z
+  session_id: 01a1bcbcc502
+  harness_version: 2.1.319 (Claude Code)
+  changes: []
 filed_at:
   code_sha: dc41ee8da2f44f88178936fc1a8e6cb7168a3de7
   branch: main
@@ -759,3 +765,11 @@ attention_reason:
   detail: Latest review at ca90cc0ffbf6 requires exact-head green CI and operator canary evidence for AC1/AC2/AC4; neither is resolvable by native implementer code changes. Operator must execute docs/internal/testing/bug-2492-status-cutover.md and attach raw gh/web refusal, unchanged-SHA label-only clearance and notification observations. Corrected the non-blocking upgrade_release.rs diagnostic so hold/red-CI refusals are not called forge read failures; edit remains uncommitted. Shell fixtures passed (8 label states x 2 gates, 36 train cases, 1 projection test); bash syntax and git diff --check passed. No Rust test run for this message-only change. Keep spec open and retain Refs BUG-2492 title; this punt vetoes automatic publication pending host/operator resolution.
   raised_by: implementer
   raised_at: 2026-11-08T19:51:43.591986270Z
+failure_reason:
+  phase: reviewer
+  phase_index: 3
+  kind: verdict:request-changes
+  detail: No code change requested and no new merge-safety defect; last round's release-message finding is fixed, but no CI has run at this head and AC1/AC2/AC4 still have no live evidence.
+  recovery_hint: address the review findings, move BUG-2492 back to In Progress, and clear the PR hold only after approval
+  shelved_by: reviewer
+  shelved_at: 2026-11-08T20:01:06.945601776Z
