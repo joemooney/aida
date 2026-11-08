@@ -18,7 +18,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-08T02:46:34.549817284Z
-modified_at: 2026-11-08T11:17:54.888284867Z
+modified_at: 2026-11-08T11:21:16.075646158Z
 req_type: Bug
 tags:
 - area:ci
@@ -181,6 +181,13 @@ comments:
   modified_at: 2026-11-08T11:16:06.552236458Z
   session_id: 01a1b9af-8230-75d2-82f8-667491cc010a
   harness_version: 2.1.319 (Claude Code)
+- id: 01a1bae4-242b-7e01-853d-62ca95c36731
+  author: dirtlab
+  content: 'Round 5 implementation: transient no-label/cleared pending inspections wait; only confirmed recorded-without-cleared pending evidence refuses without release authority. Ship/refinement fetch pinned label state when needed. Release --after-pr now uses a 300-second snapshot wait instead of unbounded forge.watch_ci. Status display jq reads conclusion or StatusContext state. Added train inspection, bounded release, label classification and shipped jq projection regressions; gate fixtures carry criterion anchors with live-evidence limitations. Corrected bootstrap residual trust wording. Host requirement: retitle existing PR #3651 to end (Refs BUG-2492), matching the native publication declaration; this seat cannot publish PR metadata. AC1/AC2 operator live cutover evidence remains outstanding; keep spec open. Rust launcher validation running.'
+  created_at: 2026-11-08T11:21:16.075646158Z
+  modified_at: 2026-11-08T11:21:16.075646158Z
+  session_id: 01a1bae08abc
+  harness_version: codex-cli 0.167.0
 history:
 - id: 01a1b90d-4bec-7bd0-9af1-86f501692f64
   author: joe
