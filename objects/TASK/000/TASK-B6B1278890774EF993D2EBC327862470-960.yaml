@@ -8,7 +8,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-07T23:39:41.575597Z
-modified_at: 2026-11-08T21:20:18.790496361Z
+modified_at: 2026-11-08T21:35:23.134182714Z
 req_type: Task
 relationships:
 - rel_type: Child
@@ -703,6 +703,12 @@ history:
   session_id: 01a1bcf9e577
   harness_version: codex-cli 0.167.0
   changes: []
+- id: 01a1bd16-6420-7cf3-92ff-68b1db71eba4
+  author: joe
+  timestamp: 2026-11-08T21:35:23.680888929Z
+  session_id: 01a1bd11c7d9
+  harness_version: 2.1.319 (Claude Code)
+  changes: []
 test_coverage_notes: 'Launcher cargo test --profile agent -p aida-cli-lib --lib -- command_registry passed: 32 executed tests, zero failures (j20261108T210750606-2-0). Launcher cargo check --profile agent -p aida-cli --no-default-features passed (j20261108T211040978-2-0). Initial test compilation found two missing module imports; corrected before the passing run. 15 crate-split Python fixtures pass. Glob ratchet against HEAD passes at 164; ExecContext 1239 sites, store-writer 3387 sinks / 293 mappings, portability guard, and all 84 CI gate classifications pass. All 15 adapters preserve every non-import Rust token; touched-file rustfmt and git diff --check pass. Full make check-ci-fast not run because gates invoke Cargo outside this seat’s required launcher; host validation remains. Codegraph unavailable (doctor confirmed), used rg/source inspection. Edits uncommitted for host publication.'
 implementation_summary: 'Tooling slice landed in PR #3644; prior 34-command import batch is open as #3695. This subsequent Refs slice removes 15 remaining root crate globs from command adapters outside current open-PR footprints: commit, criteria, exposition, harvest, help_catalog, mandate, metrics_cmd, monitor_contract, notify, reconstitute, regen, shift, user_alias, watch and wiki. Required bindings now use explicit imports (including DatabaseBackend traits); unused globs are removed. Baseline shrinks from 179 to 164. All non-import Rust tokens match HEAD. Remaining import batches and lib_part1..6 dissolution remain outstanding; TASK-3428 stays In Progress.'
 filed_at:
@@ -718,7 +724,7 @@ failure_reason:
   phase: reviewer
   phase_index: 3
   kind: verdict:request-changes
-  detail: 'Import-only diff sound on full inspection; blocked only by AC5: CI run 42523319873 at this head has not started (0 jobs, 23 runs queued). No code rework needed unless CI fails. AC1/AC3 remain later Refs slices; AC2/AC4 landed in PR #3644.'
+  detail: Import diff is sound on full inspection (only imports/comments plus one qualified lease_state_for call; ledger 164 matches source). Blocked by AC5 (CI still running at this head) and by the 57-file size exceeding the advisor <=50-file cap. AC1/AC3 remain later Refs slices.
   recovery_hint: address the review findings, move TASK-3428 back to In Progress, and clear the PR hold only after approval
   shelved_by: reviewer
-  shelved_at: 2026-11-08T21:10:31.167412120Z
+  shelved_at: 2026-11-08T21:35:23.134182714Z
