@@ -1,0 +1,36 @@
+id: 01a1bce8-e8df-7541-a2af-f5424416cdf1
+spec_id: TASK-b6b1278890774ef993d2ebc327862470-1017
+title: 'Repeated unchanged review findings: STORY-2571'
+description: |-
+  Identical reviewer findings recurred twice for STORY-2571; do not requeue a third implementer round until an advisor chooses a different implementer/seat or resolves the dispute.
+
+  REVIEW FINDINGS TO ADDRESS (PR #3640):
+  Verdict: CHANGES REQUESTED
+  Reviewed commit: e0b079e8d113
+  Recorded: 2026-11-08T17:15:11.554504791+00:00
+  Findings:
+  1. major: review_watch_service.rs tick_with_launcher L554-556 invalidates each retired controller's kernel key immediately, but a dispatcher can outlive the controller and still need that key. The controller grant binding is [proc:<deputy>, key:<hash>] (seat_authority.rs issue_child_from_with_delegation). The dispatcher is spawned with process_group(0) and is not killed on controller exit; once the controller dies it reparents away from the deputy (no subreaper in deputy code), so presenter_tokens no longer contains proc:<deputy>. With the key invalidated, presenter_rejection fails and current_grant returns None. Path: rotation makes check_controller_locked fail, the worker exits, and within about 1 s the tick invalidates the key while a dispatcher is in preflight or queue work has not yet reached issue_launch_child (session.rs:2209 / queue_cmd.rs:13946) or the L2228 validate_child_delegation. Result: the launch is refused with 'no valid parent seat grant is active'. Setup failures burn the single setup retry; a dispatcher refused before claiming its receipt is reconciled to Phase::Exited, which select() then skips ('not relaunched') until a new head or --release. The docs claim at 06-roles-sessions.md ('in-flight reviewers keep their authority') holds only after the reviewer child is minted, and no test covers a pre-mint dispatcher. Suggested fix: drop the retirement invalidation loop and let revoke_by_id invalidate at cleanup; MAX_RETIRED_GRANTS already bounds retained keys at 4, which resolves the round-5 quota finding. Update the test assertions at L910-914 and add a test that a retired controller's key stays held while an attempt is unresolved.
+  Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
+status: Draft
+priority: Medium
+owner: joe
+feature: Uncategorized
+created_at: 2026-11-08T20:45:43.007454176Z
+modified_at: 2026-11-08T20:45:43.007454176Z
+req_type: Task
+tags:
+- from-advisor:STORY-2571
+- kind:observation
+- linked:STORY-2571
+- loop-guard
+- review-recurrence
+- severity:major
+filed_at:
+  code_sha: b57c1fab753d30430c7a544b781bd8c7d91da0d2
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: db2eb4c39e4
+  vendor: claude
+  session: 01a1bc93-77a0-7740-8b03-df4e3e8d1df5
+  harness_version: 2.1.319 (Claude Code)
