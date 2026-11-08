@@ -24,7 +24,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-13T04:41:09.209313801Z
-modified_at: 2026-11-07T20:57:17.986174212Z
+modified_at: 2026-11-08T01:52:18.267557804Z
 req_type: Epic
 tags:
 - architecture
@@ -73,6 +73,13 @@ comments:
   created_at: 2026-11-07T20:28:05.982250241Z
   modified_at: 2026-11-07T20:28:05.982250241Z
   session_id: 01a1b76b-2fe7-7dd2-88d0-356fc8d96d04
+  harness_version: 2.1.319 (Claude Code)
+- id: 01a1b8db-3d5b-7e42-9984-c56fd3ff7a5b
+  author: joe
+  content: 'Operator 2026-11-07 18:51: keep deferred until STORY-2325 (PR-3619) lands; then re-check.'
+  created_at: 2026-11-08T01:52:18.267557804Z
+  modified_at: 2026-11-08T01:52:18.267557804Z
+  session_id: 01a1b8be-8170-7fb2-89ab-ecb4c6eee98c
   harness_version: 2.1.319 (Claude Code)
 history:
 - id: 01a154eb-bf11-7023-a7b6-c81d42084fba
