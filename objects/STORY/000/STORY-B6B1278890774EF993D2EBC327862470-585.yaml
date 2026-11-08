@@ -17,7 +17,7 @@ priority: Low
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-08T02:58:18.689963065Z
-modified_at: 2026-11-08T08:40:36.556385247Z
+modified_at: 2026-11-08T08:46:08.517487051Z
 req_type: Story
 tags:
 - area:handoff
@@ -168,6 +168,25 @@ comments:
   modified_at: 2026-11-08T08:39:08.409916693Z
   session_id: 01a1b8be-8170-7fb2-89ab-ecb4c6eee98c
   harness_version: 2.1.319 (Claude Code)
+- id: 01a1ba56-1e85-7f92-8c80-59225179f9ac
+  author: dirtlab
+  content: |
+    Rework addresses both findings on 95000a8e4e7d; Claude only under the advisor ruling. Edits remain uncommitted for the native host publisher.
+
+    Changed files:
+    - aida-cli-lib/src/session_misc.rs: snapshot writes and reads use the canonical lane worktree's existing .aida/handoff root, inside its contained write boundary. Ordinary handoff show discovers the local snapshot across relaunches. Deliberate rotation handoffs remain shared. Printed recovery commands retain --snapshot routing.
+    - aida-cli/tests/story_2662_precompact_handoff.rs: real CLI round-trip writes a sibling snapshot inside bubblewrap with the primary checkout read-only and only the lane worktree/private HOME writable; asserts local storage, recovery discovery, sibling isolation and cleanup with worktree removal.
+    - aida-core/templates/hooks/aida-precompact-handoff.sh: zero-match branch PR results stay unknown; pr-N review branches retain their explicit PR finding origin even when forge head lookup returns no rows.
+    - tests/test_precompact_handoff_hook.py: new empty-result and review-branch fixtures.
+    - OVERVIEW.md: document local snapshot placement and PR absence handling.
+
+    Validation: 22 hook fixtures passed; 42 writer-inventory fixtures passed; final-source lane runner CLI integration passed (1 executed test, bubblewrap branch ran without skip), job j20261108T084450175-2-0. Writer inventory audit, template hook links, trace headers, rustfmt and git diff --check passed. No live Claude compaction or full CI run performed. No implementation blocker. Codegraph executable unavailable; CLI doctor reported total: 0, so navigation used rg/source inspection. untested=false.
+
+    Host owns commit, publication and queue completion. This seat did not commit, push, open a PR, ship a PR, record a verdict or complete the queue row.
+  created_at: 2026-11-08T08:46:08.517487051Z
+  modified_at: 2026-11-08T08:46:08.517487051Z
+  session_id: 01a1ba5101e1
+  harness_version: codex-cli 0.167.0
 history:
 - id: 01a1b9c5-3252-7530-8b0b-bbe2c3ac5581
   author: joe
