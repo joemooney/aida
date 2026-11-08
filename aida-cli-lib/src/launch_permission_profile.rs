@@ -1,6 +1,6 @@
 //! Runtime presentation of the scaffold's symbolic recipe. No enforcement claim.
 // trace:STORY-1486 | ai:codex
-use aida_core::scaffolding::launch_profile::{PROFILE_PATH, RECIPE};
+use aida_core::scaffolding::launch_profile::PROFILE_PATH;
 use anyhow::{bail, Context, Result};
 use std::path::{Path, PathBuf};
 
@@ -105,8 +105,7 @@ pub(crate) fn validate_recipe(project: &Path) -> Result<()> {
             file.take(LIMIT + 1).read_to_string(&mut text)?;
             anyhow::ensure!(text.len() as u64 <= LIMIT, "launch profile exceeds 16 KiB");
             let actual: toml::Value = toml::from_str(&text).context("invalid launch profile")?;
-            let expected: toml::Value = toml::from_str(RECIPE)?;
-            if actual != expected {
+            if actual.get("version").and_then(toml::Value::as_integer) != Some(1) {
                 bail!(
                     "unsupported launch profile {}; regenerate with aida scaffold upgrade",
                     recipe_path.display()
@@ -120,8 +119,11 @@ pub(crate) fn validate_recipe(project: &Path) -> Result<()> {
 }
 
 pub(crate) fn render_roots(project: &Path, executable: &Path) -> Result<String> {
-    validate_recipe(project)?;
-    let project = project.canonicalize()?;
+    // Resolve state and build roots from the worktree, even for --cwd subdirs.
+    // Git-unavailable previews retain their launch-directory fallback.
+    // trace:STORY-1486 | ai:codex
+    let project = git_path(project, "--show-toplevel").or_else(|_| project.canonicalize())?;
+    validate_recipe(&project)?;
     let git_dir = git_path(&project, "--git-dir");
     let common = git_path(&project, "--git-common-dir");
     let mut diagnostics = String::new();
@@ -181,9 +183,11 @@ pub(crate) fn render_roots(project: &Path, executable: &Path) -> Result<String> 
             executables.push(aida.join("target").join(profile).join("aida"));
         }
     }
-    let overlaps = read_only
-        .iter()
-        .any(|read| writable.iter().any(|(_, write)| read.starts_with(write)));
+    let overlaps = read_only.iter().any(|read| {
+        writable
+            .iter()
+            .any(|(_, write)| read.starts_with(write) || write.starts_with(read))
+    });
     let mut out = format!("launch_profile: declared roots, not applied confinement ({note})\n");
     out.push_str(&diagnostics);
     out.push_str("writable_roots:\n");
@@ -195,7 +199,7 @@ pub(crate) fn render_roots(project: &Path, executable: &Path) -> Result<String> 
         out.push_str(&format!("  {}\n", path.display()));
     }
     if overlaps {
-        out.push_str("  overlap: read-only roots exclude nested AIDA paths from writable ancestors in this declaration; current adapters do not enforce that exclusion\n");
+        out.push_str("  overlap: writable and read-only roots overlap in this declaration; current adapters do not enforce precedence\n");
     }
     out.push_str("executable_locations (ordinary approval rules apply):\n");
     for path in executables {
@@ -207,6 +211,7 @@ pub(crate) fn render_roots(project: &Path, executable: &Path) -> Result<String> 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use aida_core::scaffolding::launch_profile::RECIPE;
     fn repo(path: &Path) {
         std::fs::create_dir_all(path).unwrap();
         assert!(crate::test_git::git_command()
@@ -381,6 +386,59 @@ mod tests {
             std::fs::read_to_string(consumer.join(PROFILE_PATH)).unwrap(),
             RECIPE
         );
+    }
+
+    // trace:STORY-1486 | ai:codex
+    #[test]
+    fn subdirectory_uses_worktree_roots() {
+        let tmp = tempfile::tempdir().unwrap();
+        let project = tmp.path().join("consumer");
+        repo(&project);
+        let sub = project.join("sub");
+        std::fs::create_dir_all(&sub).unwrap();
+        let exe = aida(&tmp.path().join("source"));
+        let output = render_roots(&sub, &exe).unwrap();
+        for (kind, path) in [
+            ("project", project.clone()),
+            ("project-state", project.join(".aida")),
+            ("build", project.join("target")),
+        ] {
+            assert!(
+                output.contains(&format!("  {kind}: {}\n", path.display())),
+                "{output}"
+            );
+        }
+    }
+
+    // trace:STORY-1486 | ai:codex
+    #[test]
+    fn nested_consumer_reports_root_overlap() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path().join("source");
+        let exe = aida(&root);
+        let consumer = root.join("consumer");
+        repo(&consumer);
+        let output = render_roots(&consumer, &exe).unwrap();
+        assert!(output.contains("consumer repository"), "{output}");
+        assert!(
+            output.contains("writable and read-only roots overlap"),
+            "{output}"
+        );
+    }
+
+    // trace:STORY-1486 | ai:codex
+    #[test]
+    fn recipe_skew_with_supported_version_is_declarative() {
+        let tmp = tempfile::tempdir().unwrap();
+        std::fs::create_dir_all(tmp.path().join(".aida")).unwrap();
+        std::fs::write(
+            tmp.path().join(PROFILE_PATH),
+            "version = 1\nfuture_note = 'declaration only'\n",
+        )
+        .unwrap();
+        validate_recipe(tmp.path()).unwrap();
+        std::fs::write(tmp.path().join(PROFILE_PATH), "version = [").unwrap();
+        assert!(validate_recipe(tmp.path()).is_err());
     }
 
     #[test]

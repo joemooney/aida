@@ -390,14 +390,43 @@ pub(crate) fn session_gc(dry_run: bool, yes: bool) -> Result<()> {
     Ok(())
 }
 
-// Match explicit_label in criteria.rs: minted labels start with an ASCII
-// letter and contain only ASCII letters, digits, underscores or hyphens.
-// trace:STORY-1486 | ai:codex
 pub(crate) fn criterion_trace_suffix(suffix: &str) -> bool {
-    suffix.starts_with(|c: char| c.is_ascii_alphabetic())
-        && suffix
+    if suffix.is_empty()
+        || !suffix
             .chars()
             .all(|c| c.is_ascii_alphanumeric() || c == '-' || c == '_')
+    {
+        return false;
+    }
+    // Minted compound labels are unambiguous; retain filename-word exclusions.
+    // trace:STORY-1486 | ai:codex
+    if suffix.starts_with(|c: char| c.is_ascii_alphabetic()) && suffix.contains(['_', '-']) {
+        return true;
+    }
+    // STORY-1700: an explicit word label (`Durability: ...` in the spec's
+    // acceptance) yields criterion id `<SPEC>.Durability`; accept that shape
+    // (capitalised, letters only) so such a criterion can be traced at all.
+    // trace:STORY-1700 | ai:claude
+    let mut chars = suffix.chars();
+    if chars.next().is_some_and(|c| c.is_ascii_uppercase())
+        && suffix.len() >= 2
+        && chars.clone().all(|c| c.is_ascii_alphabetic())
+        && chars.any(|c| c.is_ascii_lowercase())
+    {
+        return true;
+    }
+    let upper = suffix.to_ascii_uppercase();
+    let Some(rest) = upper.strip_prefix("AC") else {
+        return upper
+            .chars()
+            .next()
+            .is_some_and(|c| c.is_ascii_alphabetic())
+            && upper.chars().skip(1).all(|c| c.is_ascii_digit());
+    };
+    if !rest.is_empty() && rest.chars().all(|c| c.is_ascii_digit()) {
+        return true;
+    }
+    matches!(rest.len(), 5 | 6) && rest.chars().all(|c| c.is_ascii_hexdigit())
 }
 
 /// Resolve a `--since` value to a UTC cutoff: first parse it with the shared
@@ -3793,6 +3822,13 @@ mod criterion_suffix_regressions {
             ),
             Some("STORY-1486.GENERATED_PROFILE_PRESERVES_APPROVAL_PROMPTS".into())
         );
+        for suffix in ["rs", "TXT"] {
+            assert_eq!(
+                crate::parse_trace_id_token(&format!("trace:STORY-1.{suffix}")),
+                Some("STORY-1".into())
+            );
+        }
+        assert!(super::criterion_trace_suffix("Vendor-neutral"));
         for suffix in ["", "_label", "1label", "label/path", "label.name"] {
             assert!(!super::criterion_trace_suffix(suffix), "{suffix}");
         }

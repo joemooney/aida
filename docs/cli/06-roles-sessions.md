@@ -234,12 +234,14 @@ including when the child requests a development seat. Explicit-vendor
 `--no-exec` previews are reads available to stakeholder seats; actual agent
 launches retain the existing stakeholder write gate.
 `aida agent new <vendor> --git-read-only` explicitly downgrades the declaration.
-The launch output prints the mode and reason, including in dry previews. These
-are declarations, **not enforced Git or filesystem restrictions** on current
+With `--verbose`, launches print the mode and reason to stderr; `--no-exec`
+previews print them to stdout. `--show-prompt` and `--show-context` omit these
+diagnostics. These are declarations, **not enforced Git or filesystem restrictions** on current
 adapters, and they grant no seat, delegation or publication authority. This
 recipe adds no approval exemptions or bypass flags and does not alter existing
 vendor permission settings. Enforcement requires a future backend. Unsupported
-or malformed recipes refuse rather than silently changing the declaration.
+recipe versions or malformed recipes refuse. Supported version-1 recipes tolerate
+template skew; the binary supplies the declaration semantics.
 <!-- trace:STORY-1486 | ai:codex -->
 
 **Native Codex finish.** Git metadata is read-only in a native seat. The
