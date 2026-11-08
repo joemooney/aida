@@ -8,7 +8,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-06T13:39:53.442026096Z
-modified_at: 2026-11-08T09:40:46.194990445Z
+modified_at: 2026-11-08T09:50:54.642567280Z
 req_type: Task
 tags:
 - architecture
@@ -627,6 +627,13 @@ comments:
   modified_at: 2026-11-08T09:38:55.914228050Z
   session_id: 01a1b8be-8170-7fb2-89ab-ecb4c6eee98c
   harness_version: 2.1.319 (Claude Code)
+- id: 01a1ba91-6ab2-7c51-84bc-41563529ce53
+  author: dirtlab
+  content: 'Partial routing handoff: mediated comment add/edit now accept bounded --stdin input, preserving literal text and refusing empty, invalid UTF-8 and >16 KiB bodies. Unsupported author/relay/reply flags refuse before consuming input. Changed only aida-cli-lib/src/store_mutation_entry.rs. Validation: lane job j20261108T094238916-2-0 executed 6 tests, all passed; 47 writer-inventory fixtures and 26 service protocol tests passed; compatibility inventory, CI gate audit, rustfmt and diff checks passed. NOT complete: mediated inventory still refuses with 3160 unresolved writer sites and 293 operation mappings; admission remains gated. No new contained-lane raw-denial plus live mediated-comment proof. make check-ci-fast was interrupted after it invoked Cargo directly, contrary to lane runner instructions; aggregate not green. No commit, push, PR, queue completion or review verdict performed. Remaining routing/cutover work must continue before TASK-3223 completion.'
+  created_at: 2026-11-08T09:50:54.642567280Z
+  modified_at: 2026-11-08T09:50:54.642567280Z
+  session_id: 01a1ba881c0f
+  harness_version: codex-cli 0.167.0
 history:
 - id: 01a1b116-742d-73c0-9064-1933f11e4c38
   author: joe

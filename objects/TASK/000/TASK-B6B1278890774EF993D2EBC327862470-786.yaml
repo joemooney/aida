@@ -8,7 +8,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-04T17:54:51.353376Z
-modified_at: 2026-11-08T09:46:45.798511626Z
+modified_at: 2026-11-08T09:51:01.091345312Z
 req_type: Task
 tags:
 - area:containment
@@ -591,6 +591,13 @@ comments:
   modified_at: 2026-11-08T09:44:48.030257007Z
   session_id: 01a1b8be-8170-7fb2-89ab-ecb4c6eee98c
   harness_version: 2.1.319 (Claude Code)
+- id: 01a1ba91-83e3-7192-849f-4518349f2c5b
+  author: dirtlab
+  content: 'Review rework in progress for PR #3641: pinning settings.json read-only by handle at both the runtime destination and launch-state source alias; adding live write-refusal assertions for both paths and validation cases for empty, reordered and missing tool denies. Restored shared preparation binary-pin commentary and removed discarded Python invocation construction. Production admission remains closed; no vendor model or refresh run. Python conformance suites: 60 passed. Final-source Rust and LIGHT gate are pending lane jobs. Measured inference hosts=[daily-cloudcode-pa.googleapis.com]; measured refresh hosts=[]; candidate refresh hosts=[oauth2.googleapis.com]. Publication declaration remains Refs TASK-3048.'
+  created_at: 2026-11-08T09:51:01.091345312Z
+  modified_at: 2026-11-08T09:51:01.091345312Z
+  session_id: 01a1ba8d86cf
+  harness_version: codex-cli 0.167.0
 history:
 - id: 01a1a7b3-3699-7713-8ae7-69568c287956
   author: joe
