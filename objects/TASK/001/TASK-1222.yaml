@@ -23,12 +23,12 @@ description: |
   Deliberate sweep: for each stale branch/worktree, check the spec status — if Completed/merged-elsewhere, delete the branch + remove the worktree; if it holds genuine uncommitted work, salvage-commit or discard per a per-item decision. aida session reap already handles the finished+merged+exited class safely; this task is the long-tail the reap conservatively leaves (unfinished-spec or uncommitted-work worktrees, and pure branch cruft). Consider an aida worktree gc --older-than / --stale sweep if one doesn't cover it.
 
   Immediate: STORY-1006 + STORY-993 (both Completed) have uncommitted worktree changes — operator decision: salvage or discard, then remove those two worktrees.
-status: NeedsAttention
+status: Approved
 priority: Low
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-09-13T22:07:45.944235Z
-modified_at: 2026-11-08T19:36:06.757350200Z
+modified_at: 2026-11-08T19:51:24.939433187Z
 req_type: Task
 tags:
 - cleanup
@@ -540,6 +540,13 @@ comments:
   modified_at: 2026-11-08T19:23:06.361705988Z
   session_id: 01a1bc9b5a00
   harness_version: codex-cli 0.167.0
+- id: 01a1bcb7-320b-7f82-a5bd-891f9e43a8c0
+  author: joe
+  content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: No blocking code defect in a full read of the merge-base diff; not approvable because CI run 42514964555 at this head is queued and the gates fix is unproven. Two minor non-blocking defects filed. Re-run a reviewer when CI is terminal; do not push for the wait state.. No triage reason was given.'
+  created_at: 2026-11-08T19:51:24.939426768Z
+  modified_at: 2026-11-08T19:51:24.939426768Z
+  session_id: 01a1bc93-77a0-7740-8b03-df4e3e8d1df5
+  harness_version: 2.1.319 (Claude Code)
 history:
 - id: 01a1b7cd-7751-7262-8ad1-f0f9d2ef6d4d
   author: joe
@@ -1043,11 +1050,12 @@ history:
   - field_name: status
     old_value: InProgress
     new_value: NeedsAttention
-failure_reason:
-  phase: reviewer
-  phase_index: 3
-  kind: verdict:request-changes
-  detail: No blocking code defect in a full read of the merge-base diff; not approvable because CI run 42514964555 at this head is queued and the gates fix is unproven. Two minor non-blocking defects filed. Re-run a reviewer when CI is terminal; do not push for the wait state.
-  recovery_hint: address the review findings, move TASK-1222 back to In Progress, and clear the PR hold only after approval
-  shelved_by: reviewer
-  shelved_at: 2026-11-08T19:36:06.757350200Z
+- id: 01a1bcb7-320b-7f82-a5bd-8908e92bd9b3
+  author: joe
+  timestamp: 2026-11-08T19:51:24.939418830Z
+  session_id: 01a1bc93-77a0-7740-8b03-df4e3e8d1df5
+  harness_version: 2.1.319 (Claude Code)
+  changes:
+  - field_name: status
+    old_value: NeedsAttention
+    new_value: Approved
