@@ -808,7 +808,7 @@ token remains valid. `aida config show/menu` displays this trusted, read-only ke
 `aida doctor` reports remaining token life or “expired” without refreshing or exposing
 tokens, both unfiltered and under `--category permission-posture`.
 
-### Host-local implementer capacity
+### `aida doctor --lane-capacity` — host-local implementer capacity
 
 <!-- trace:STORY-2660 | ai:codex -->
 Standalone implementer admission reads `~/.aida/host.toml` before the tracked
@@ -827,8 +827,8 @@ configuration refuses admission. A zero project cap retains its default behavior
 a zero host override is an error. Lowering the cap prevents new starts and does
 not terminate existing lanes.
 
-Capacity uses the distinct `--lane-capacity` flag; `--lane-host` is reserved
-for host readiness checks (STORY-2642).
+Capacity uses the distinct `--lane-capacity` flag; host readiness checks
+remain a separate surface.
 `aida doctor --lane-capacity --json` reports version-1 local capacity data: cap,
 source (`host`, `project`, or `cpu`), nproc, slot scope, occupied/free counts and
 reservation states. Without `--json` it prints the same observation for humans.
@@ -847,4 +847,4 @@ project; it never removes that slot or terminates its owner.
 The advisor-approved legacy `[lane_host] allow_ungranted = true` opt-in is
 reported as a warning. It grants no new authority in this slice: host placement,
 SSH dispatch, a remote grant issuer, unified remote leases/ps, and script
-retirement remain follow-up work under STORY-2660's amended signoff.
+retirement remain follow-up work.
