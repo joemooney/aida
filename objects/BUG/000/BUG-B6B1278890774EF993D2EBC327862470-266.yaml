@@ -15,7 +15,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-08T19:27:28.525198886Z
-modified_at: 2026-11-08T21:04:41.717835754Z
+modified_at: 2026-11-08T21:17:25.523203939Z
 req_type: Bug
 comments:
 - id: 01a1bcd8-beaf-7582-aa0b-006077ac5867
@@ -76,6 +76,40 @@ comments:
   modified_at: 2026-11-08T20:57:39.791430761Z
   session_id: 01a1bc93-77a0-7740-8b03-df4e3e8d1df5
   harness_version: 2.1.319 (Claude Code)
+- id: 01a1bd05-f093-7092-8e3a-12d6495a8e93
+  author: dirtlab
+  content: |
+    BUG-2501 review rework, native-seat handoff (uncommitted).
+
+    Changed files:
+    - aida-core/src/conflict.rs: preserve three-way tags, relationships and dependencies under upstream scalar policy; extend merge regression.
+    - aida-core/src/git_ops.rs: abort all error paths after starting a rebase; refuse failed continuation without new conflicts; regression uses a failing commit hook and verifies restored branch/HEAD.
+    - aida-cli-lib/src/store_sync.rs: preserve local-only stores, fail closed on remote probe errors, stop dirty allocation retries, report state-aware recovery; test local-only, dirty and unreachable-remote behavior.
+    - aida-cli-lib/src/queue_cmd.rs: move pull before implicit queue row and calibration writes while retaining the pre-pull status snapshot.
+    - aida-cli-lib/src/tests/bug_2451_pickup_entry_tests.rs: execute pickup and burndown residual refusal paths; synthetic allocation settings explicitly use mode 0600.
+    - aida-cli-lib/src/queue_cmd_args.rs, aida-cli-lib/src/requirements_cli.rs, aida-cli-lib/src/store_push_pull.rs, aida-cli-lib/src/tests/golden/cli_help_snapshot.txt, docs/advanced/multi-node.md: correct sync failure and upstream scalar policy descriptions.
+
+    Validation:
+    - Core pull suite: 9 executed, all passed (j20261108T210212391-2-0 and j20261108T210405949-2-0).
+    - CLI sync failure regression: 1 executed, passed (j20261108T210749731-2-0).
+    - CLI help golden snapshot: 1 executed, passed (j20261108T210626521-2-0).
+    - Caller regressions: 2 executed, both passed (j20261108T211207268-2-0), covering pickup before implicit queue writes and burndown residual refusal. untested=false for the targeted work.
+    - Earlier caller run failed in fixture allocation permissions before reaching either path; corrected the synthetic setting to 0600.
+    - Store-writer check passes: 3387 sinks / 293 operation mappings. All 42 inventory mutation tests passed.
+    - rustfmt --check and git diff --check passed.
+    - Stopgap removal patch dry-run passed against current host files.
+
+    Host dependency: acceptance item 4 remains incomplete. Deploy the corrected binary before applying /tmp/BUG-2501-remove-stopgaps.patch from /home/dirtlab with patch -p1. It changes lane-run.sh to fail-closed ordinary sync and removes store-sync.sh and store-resolve.py. These files are outside this seat's writable roots. Keep completion credit withheld until retirement is confirmed. No published-head CI result is claimed.
+
+    Draft finding filing was refused because the clone lacks an AIDA node binding; no finding object was written. This comment records the headless flag instead. Codegraph is missing from PATH, confirmed by aida doctor check codegraph; used rg for navigation.
+
+    Recorded native publication declaration: [AI:codex] fix(store): preserve set edits and fence failed pulls (Refs BUG-2501). Keep Refs until host stopgap retirement is confirmed.
+
+    No commit, push, PR creation, queue completion, pr ship or review record performed. Existing hold/punt vetoes remain in force.
+  created_at: 2026-11-08T21:17:25.523203939Z
+  modified_at: 2026-11-08T21:17:25.523203939Z
+  session_id: 01a1bcf58207
+  harness_version: codex-cli 0.167.0
 history:
 - id: 01a1bcc3-bd29-7692-a764-d1e8c8dbaa00
   author: aida-session-start
