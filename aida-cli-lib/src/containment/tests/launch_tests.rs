@@ -2443,6 +2443,17 @@ for settings in (runtime/'settings.json', pathlib.Path.home()/'vendor-runtime/se
         raise AssertionError(f'settings writable: {{settings}}')
     except OSError as e:
         assert e.errno in (errno.EACCES,errno.EPERM,errno.EROFS),e
+    # Writable parent directories must not allow replacing the pinned controls.
+    replacement=settings.parent/'replacement-settings.json'
+    replacement.write_text('{{}}')
+    for mutate in (settings.unlink, lambda: replacement.replace(settings)):
+        try:
+            mutate()
+            raise AssertionError(f'settings replaceable: {{settings}}')
+        except OSError as e:
+            assert e.errno in (errno.EACCES,errno.EPERM,errno.EROFS,errno.EBUSY),e
+        assert json.loads(settings.read_text())=={settings_json}
+    replacement.unlink()
 assert not (runtime/'host-plugin').exists()
 token=runtime/{leaf_json}
 assert token.read_text()=='synthetic-credential'
