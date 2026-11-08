@@ -9,7 +9,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-06T00:18:06.619162338Z
-modified_at: 2026-11-07T23:44:48.527674691Z
+modified_at: 2026-11-08T00:11:09.934680593Z
 req_type: Story
 tags:
 - architecture
@@ -486,6 +486,22 @@ comments:
   modified_at: 2026-11-07T23:44:48.527674691Z
   session_id: 01a1b848-940b-7bd2-8acd-52e428b182b8
   harness_version: 2.1.319 (Claude Code)
+- id: 01a1b87e-a4ee-7281-903c-3f931358cba6
+  author: dirtlab
+  content: |
+    Step 3a implemented under the binding 2026-11-07 17:15 MST ruling. The launcher supplied story-2539-d1705 at current origin/main 2a7fe186bdcd (including PR-D 7a18c0d52a6); Git metadata remains untouched.
+
+    VendorProfile now describes hook backend, embedded template and exact event set alongside wiring/handler paths. Production Codex standalone and AGY named-entry hook backends moved into aida-core/src/vendors/hooks.rs; the scaffolding module keeps compatibility exports and legacy tests at their existing path. Shared settings remain with the full scaffolder. Profile backend dispatch preserves edited wiring, named-entry merge/order behavior, invalid-JSON refusal and adopted-worktree refusal. Added whole-write-set symlink preflight and fixtures for wiring, handler, handler-directory and vendor-directory links with force false/true. This is local preflight, not protection against concurrent directory replacement.
+
+    Changed files: aida-core/src/vendors/mod.rs; new aida-core/src/vendors/hooks.rs; aida-core/src/scaffolding/codex_hooks.rs; aida-cli-lib/src/tests/story_2539_vendor_literals.tsv; scripts/store-writers.toml. Vendor debt shrinks by eight keys/occurrences with no additions. Writer inventory regenerated and reviewed for the relocated sinks and lexical caller mappings; all moved sinks retain their blocked disposition and no runtime authority is granted.
+
+    Validation: lane job j20261108T000831735-2-0: cargo test --profile agent -p aida-core --lib hooks, 40 passed, including new path/event fixture parity and safe-writer tests. Lane job j20261108T000223564-2-0: cargo test --profile agent -p aida-cli-lib --lib story_2539, 4 passed (registry, literal ratchet, mutants and exclusions). Lane job j20261108T000314744-2-0: cargo check --profile agent -p aida-cli --no-default-features passed. Formatting and git diff --check passed. All fast gates passed across resumed runs: the initial make check-ci-fast Cargo check failed through sccache writing a read-only target, so that check was delegated to the lane runner; mail-wake fixtures passed with private umask 077 after the host default created shared-writable fixture directories. Exact-ledger relocation findings were corrected by preserving legacy test locations and refreshing the writer inventory. No remaining test failures or implementation blockers. untested=false.
+
+    Partial slice only: resume/fork backend step 3b and later migration remain. No STORY-2539 completion claimed. Native edits are uncommitted; host launcher owns commit/publication. Proposed subject: [AI:codex] refactor(vendors): centralize hook layouts and backends (Refs STORY-2539). No commit, push, PR, queue done, pr ship or review record performed.
+  created_at: 2026-11-08T00:11:09.934680593Z
+  modified_at: 2026-11-08T00:11:09.934680593Z
+  session_id: 01a1b874ce69
+  harness_version: codex-cli 0.167.0
 history:
 - id: 01a1ae38-c1a4-7913-9856-03e3793500ff
   author: joe
