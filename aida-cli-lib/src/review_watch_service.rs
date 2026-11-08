@@ -935,6 +935,52 @@ mod tests {
     }
 
     #[test]
+    // Rotation must recover from an invalid old parent without borrowing its
+    // authority or discarding unresolved reviews. trace:STORY-2571 | ai:codex
+    fn story2571_rotation_recovers_revoked_parent_after_controller_exit() {
+        let (temp, _guard, first) = fixture();
+        let root = temp.path();
+        rebind(root, "default", &first).unwrap();
+        let dir = directory(root, false).unwrap().unwrap();
+        let child =
+            seat_authority::issue_review_watch_child(root, &first.id, &first.subject).unwrap();
+        let mut process = Command::new("sh").args(["-c", "exit 0"]).spawn().unwrap();
+        let mut state = read(&dir).unwrap().unwrap();
+        state.worker = Some(Identity::child(&process).unwrap());
+        state.child_grant = Some(child.id.clone());
+        write(&dir, &state).unwrap();
+        process.wait().unwrap();
+
+        let store = Store::open(root, "github:github.com/owner/repo").unwrap();
+        assert!(matches!(
+            select(&store, &change(1), None, 2).unwrap(),
+            Action::Dispatch(_)
+        ));
+        let reservations = std::fs::read(dir.path().join(STATE)).unwrap();
+        let next = successor(root, &first);
+        seat_authority::revoke_by_id(&first.id).unwrap();
+        assert!(state.binding.validate(root).is_err());
+        rebind(root, "default", &next).unwrap();
+
+        let mut controller = None;
+        tick(root, "default", true, &mut controller).unwrap();
+        let rebound = read(&dir).unwrap().unwrap();
+        assert_eq!(rebound.binding.validate(root).unwrap().id, next.id);
+        assert!(rebound.worker.is_none());
+        assert!(rebound.child_grant.is_none());
+        assert!(rebound.retry_after > Utc::now());
+        assert!(controller.is_none(), "exit backoff precedes replacement");
+        assert!(seat_authority::read_grant(&child.id)
+            .unwrap()
+            .revoked_at
+            .is_some());
+        reconcile_reviews(root, &dir).unwrap();
+        assert_eq!(std::fs::read(dir.path().join(STATE)).unwrap(), reservations);
+        assert!(rebind(root, "default", &first).is_err());
+        assert_eq!(read(&dir).unwrap().unwrap().binding.grant, next.id);
+    }
+
+    #[test]
     fn story2571_revoked_successor_and_widening_refuse_without_mutation() {
         let (temp, _guard, first) = fixture();
         rebind(temp.path(), "default", &first).unwrap();
