@@ -8,7 +8,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-04T17:54:51.353376614Z
-modified_at: 2026-11-08T02:15:42.225595922Z
+modified_at: 2026-11-08T02:45:21.572319252Z
 req_type: Task
 tags:
 - area:containment
@@ -459,6 +459,12 @@ comments:
   content: 'Validation checkpoint: all 59 Python tests in tests.test_containment_conformance + tests.test_containment_conformance_aida passed (52.3s); Rust formatting, git diff --check, ExecContext zero-additions and updated store-writer inventory passed. The first launcher job j20261108T013924117-74151-0 (cargo test --profile agent -p aida-cli-lib --lib task_3048) is still running; no executed-test result is claimed. No-default-feature check j20261108T014227613-54-0, help snapshot regeneration j20261108T014243083-2-0, final task_3048 repeat j20261108T014641929-2-0 and CLI JSON-audit regression j20261108T015318193-187309-0 are queued. make check-ci-fast is active with Cargo builds routed through lane jobs; its separate non-Cargo checks passed up to the pending help snapshot and store-writer inventory was then fixed and checked. Native publication declaration recorded: [AI:codex] fix(containment): route AGY conformance through the shared boundary (Refs TASK-3048). No commit/push, model run, queue completion or production unlock was performed.'
   created_at: 2026-11-08T02:15:42.225595922Z
   modified_at: 2026-11-08T02:15:42.225595922Z
+  session_id: 01a1b8c99472
+- id: 01a1b90b-d024-75d3-af85-916f6c1cce7c
+  author: joe
+  content: 'Round 7 final handoff (AI:codex): code dispositions 1-5 are implemented as recorded above. Validation: 59 Python conformance tests passed; the requested task_3048 Rust suite passed all 17 tests twice (no ignored/zero-match result); normal help snapshot comparison passed after regeneration; checked_in_audit_is_exhaustive_and_every_honoured_probe_parses passed; vendor-literal/Codex spawn-path guards passed 4 tests. No-default-feature aida-cli and standalone TUI all-target checks passed through lane jobs. make check-ci-fast ran with Cargo handed to the launcher and stopped only at Help golden snapshot co-change guard: that script compares git diff <merge-base> HEAD, so it cannot see the repaired snapshot while native-seat edits are uncommitted. All checks before that guard passed in the full run; all 13 checks after it were then run with the same fast runner and passed. The host must include the regenerated golden in the new Refs commit and rerun the committed-history guard. Source formatting passed; generated Clap snapshot retains its normal blank-help indentation. Changed files (16): aida-cli-lib/src/config_cmd.rs; aida-cli-lib/src/config_cmd_args.rs; aida-cli-lib/src/containment/contained_host.py; aida-cli-lib/src/containment/mod.rs; aida-cli-lib/src/containment/tests/codex_auth_tests.rs; aida-cli-lib/src/containment/tests/launch_tests.rs; aida-cli-lib/src/containment/vendors.toml; aida-cli-lib/src/launch/agy.rs; aida-cli-lib/src/launch/contained.rs; aida-cli-lib/src/tests/golden/cli_help_snapshot.txt; docs/cli/07-project-setup.md; docs/internal/cli-format-json-audit.md; docs/internal/testing/containment-conformance.md; scripts/containment/conformance.py; scripts/store-writers.toml; tests/test_containment_conformance.py. Publication declaration is recorded as [AI:codex] fix(containment): route AGY conformance through the shared boundary (Refs TASK-3048). Edits remain uncommitted as required in this native seat. No real vendor model or refresh run occurred. Remaining broader acceptance: advisor measured refresh-host inventory and integrated C0-C4 evidence (existing evaluator unmeasured controls stay unknown), then a separate production-admission change. auth_inventory_complete=false and Adapter::require_conformance refusal remain; TASK-3048 is not completed.'
+  created_at: 2026-11-08T02:45:21.572319252Z
+  modified_at: 2026-11-08T02:45:21.572319252Z
   session_id: 01a1b8c99472
 history:
 - id: 01a1a7b3-3699-7713-8ae7-69568c287956
