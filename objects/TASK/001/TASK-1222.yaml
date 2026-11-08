@@ -28,7 +28,7 @@ priority: Low
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-09-13T22:07:45.944235Z
-modified_at: 2026-11-08T18:03:46.326255980Z
+modified_at: 2026-11-08T18:03:49.815313041Z
 req_type: Task
 tags:
 - cleanup
@@ -424,6 +424,23 @@ comments:
   content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: No blocking code defect in a full read of the merge-base diff, and all round-8 findings are fixed; not approvable because CI run 42506195372 is still queued, so none of the code since 6bb37c076dc3 has executed in CI. Re-run a reviewer when CI is terminal; code rework is needed only if a job fails.. No triage reason was given.'
   created_at: 2026-11-08T18:03:46.326252234Z
   modified_at: 2026-11-08T18:03:46.326252234Z
+  session_id: 01a1b9af-8230-75d2-82f8-667491cc010a
+  harness_version: 2.1.319 (Claude Code)
+- id: 01a1bc54-b255-7af3-bce1-cef89c699f40
+  author: joe
+  content: |-
+    REVIEW FINDINGS TO ADDRESS (TASK-1222):
+    Verdict: CHANGES REQUESTED
+    Reviewed commit: 190cf3480b8d
+    Recorded: 2026-11-08T17:57:30.331679225+00:00
+    Findings:
+    1. WAIT STATE, not a code change: CI run 42506195372 at 190cf3480b8d is queued (all 7 jobs). Runs at fe51eb311a46 and f7759f45e86 were cancelled; last full green run is 6bb37c076dc3. Never executed in CI: scheduled-only cursor, GitHub pr-N alias lookup, invoking-checkout protection, pool-reservation retention and freed_bytes tests. merge-hold-gate fails only on the aida:merge-hold label and needs separate authorized clearance. Do not push or merge main again before CI finishes unless necessary: each new head cancels the run.
+    2. Minor, AC2 'uncertain evidence must retain work' (non-blocking): is_runtime_noise_entry (aida-cli-lib/src/seat_clone.rs, the '.aida/sessions' arm added here) excuses ANY untracked or ignored path under a real .aida/sessions/ directory, unlike the __pycache__ arm, which limits itself to .pyc. The normal case is a symlink, so this bites only a real directory: a stray note there reads as clean and is deleted by --apply. The classifier is shared, so seat_clone.rs:1901 dirty probes and dispatch_health_ps.rs:635 change too. Fix: excuse only the symlink or *.toml lease files, and add a precious-file case.
+    3. Minor, AC3 usability (non-blocking): the worktree-lifecycle-gc-route prompt (.aida/config.toml:576) tells the advisor to run 'aida worktree gc --json' for per-item reasons, but a non-TTY run is budgeted to 60s and always starts at the sorted head (worktree_lifecycle_gc.rs:674-687), so on a large inventory it shows a different window from the routed weekly scan and may omit the counted candidates. The prompt should say so, or the routed evidence should carry the eligible paths.
+    4. Cosmetic: the doc comment on is_runtime_noise_entry (seat_clone.rs:2048-2053) still lists only the original entries; it omits the .pyc, notice-marker, placeholder, .claude symlink and .aida/sessions cases this PR adds. task_2053_seat_clone_lifecycle_tests.rs:1886-1903 has no matching cases for the shared classifier at the seat-probe level.
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
+  created_at: 2026-11-08T18:03:49.717318625Z
+  modified_at: 2026-11-08T18:03:49.717318625Z
   session_id: 01a1b9af-8230-75d2-82f8-667491cc010a
   harness_version: 2.1.319 (Claude Code)
 history:
