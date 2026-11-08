@@ -1,0 +1,18 @@
+{
+  "id": "review-lease-728d1dd485f9c3907185516d81a9dd7f67b741dccf97ce40a068dbe65102514c",
+  "thread_id": "review-lease-728d1dd485f9c3907185516d81a9dd7f67b741dccf97ce40a068dbe65102514c",
+  "from": "review-launch",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1794097698757,
+  "body": "lease 01a1b88bb2d1 (implementer, seat /home/joe/ai/aida-worktrees/aida-seat-aida-task-b6b1278890774ef993d2ebc327862470-960) holds branch `task-3428-d1705` and its session has exited, but it was not ended automatically: its tree has 4 uncommitted change(s): 1 .M N... 100644 100644 100644 aa365b4ef86f355484900d15016a2decc46d4212 aa365b4ef86f355484900d15016a2decc46d4212 scripts/check-crate-globs.py; 1 .M N... 100644 100644 100644 9170abdead453c2cb37e3a78b749b89add481877 9170abdead453c2cb37e3a78b749b89add481877 scripts/ci-gate-tiers.toml; 1 .M N... 100644 100644 100644 c042a30bc3cd33ae09803dff88a3da6e808f9808 c042a30bc3cd33ae09803dff88a3da6e808f9808 scripts/relocate-ledger-paths.py; 1 .M N... 100644 100644 100644 0f0ca1be65e7ae7c1755f35bb4efdd73290cd931 0f0ca1be65e7ae7c1755f35bb4efdd73290cd931 tests/test_crate_split_tools.py. Commit and push the work to the PR, or discard it with `aida session end 01a1b88bb2d1 --force --discard-unpushed`, then retry",
+  "subject": "Review blocked by retained lease 01a1b88bb2d1",
+  "urgent": false,
+  "intent": "request",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "explicit"
+}
