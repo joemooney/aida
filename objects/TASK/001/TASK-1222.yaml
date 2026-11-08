@@ -23,12 +23,12 @@ description: |
   Deliberate sweep: for each stale branch/worktree, check the spec status — if Completed/merged-elsewhere, delete the branch + remove the worktree; if it holds genuine uncommitted work, salvage-commit or discard per a per-item decision. aida session reap already handles the finished+merged+exited class safely; this task is the long-tail the reap conservatively leaves (unfinished-spec or uncommitted-work worktrees, and pure branch cruft). Consider an aida worktree gc --older-than / --stale sweep if one doesn't cover it.
 
   Immediate: STORY-1006 + STORY-993 (both Completed) have uncommitted worktree changes — operator decision: salvage or discard, then remove those two worktrees.
-status: InProgress
+status: NeedsAttention
 priority: Low
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-09-13T22:07:45.944235Z
-modified_at: 2026-11-08T17:38:58.328308271Z
+modified_at: 2026-11-08T17:57:30.442425645Z
 req_type: Task
 tags:
 - cleanup
@@ -765,3 +765,20 @@ history:
   session_id: 01a1bc347eff
   harness_version: codex-cli 0.167.0
   changes: []
+- id: 01a1bc4e-e8ca-7293-9246-3254cb512c48
+  author: aida-orchestrator
+  timestamp: 2026-11-08T17:57:30.442444877Z
+  session_id: 01a1bc4c0793
+  harness_version: 2.1.319 (Claude Code)
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: NeedsAttention
+failure_reason:
+  phase: reviewer
+  phase_index: 3
+  kind: verdict:request-changes
+  detail: No blocking code defect in a full read of the merge-base diff, and all round-8 findings are fixed; not approvable because CI run 42506195372 is still queued, so none of the code since 6bb37c076dc3 has executed in CI. Re-run a reviewer when CI is terminal; code rework is needed only if a job fails.
+  recovery_hint: address the review findings, move TASK-1222 back to In Progress, and clear the PR hold only after approval
+  shelved_by: reviewer
+  shelved_at: 2026-11-08T17:57:30.442425645Z
