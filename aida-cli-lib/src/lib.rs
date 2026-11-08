@@ -278,6 +278,9 @@ mod status_sections;
 mod statusline_root;
 // trace:STORY-B6B1278890774EF993D2EBC327862470-097 | ai:claude
 mod store_local;
+// trace:TASK-3223 | ai:codex
+mod store_mutation_client;
+mod store_mutation_entry;
 mod store_push_pull;
 mod store_sync;
 mod supervise_cmd;

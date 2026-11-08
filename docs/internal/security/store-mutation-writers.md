@@ -12,8 +12,31 @@ A passing inventory guard is neither C2 evidence nor permission to enable a
 mutation verb. Per the advisor's 2026-11-06 20:29 UTC ruling, this inventory is
 a best-effort static ratchet; completeness is not a merge gate. TASK-3223's
 shared boundary denying raw store writes is the enforcement boundary.
-S2 still needs separate approval for the recoverable transaction
-that couples mutation and dedupe outcome.
+The canonical redo transaction design was subsequently approved in
+[the S2 sketch](../../plans/2026-11-06-task-3223-mediated-transactions.md).
+
+## Staged lane routing
+
+<!-- trace:TASK-3223 | ai:codex -->
+
+`store_mutation_entry.rs` selects an explicit mediated profile before CLI
+identity, telemetry, aliases, extension dispatch and cache setup. The bounded
+Rust SEQPACKET client supports inline `comment add` and title/description-only
+`edit`. Its separate MCP loop translates `add_comment` and `update_requirement`
+without backend setup, agent-registry writes, mail acknowledgements or respawn.
+It retains MCP profile and stakeholder restrictions, narrows advertised input
+properties, and refuses extra fields rather than silently dropping semantics.
+Unsupported commands/tools refuse before ordinary dispatch. Neither transport
+falls back to direct persistence or retries uncertain delivery with a new UUID.
+
+This is staged routing, **not production admission or completed S2a evidence**.
+The launcher and host mutation verbs remain gated. The inventory still requires
+operation-by-operation reconciliation; the early refusal boundary does not
+reclassify its unresolved rows. Remaining work includes the other CLI/MCP
+writer families, host publication integration, contained-Codex profile selection
+and the live same-lane raw-write-denial/mediated-comment positive. `own_claim`
+and `queue_done` remain unsupported under TASK-3326. Native compatibility and
+Claude launch selection are unchanged.
 
 ## Checked-in contract
 

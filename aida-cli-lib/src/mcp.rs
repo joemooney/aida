@@ -9050,6 +9050,150 @@ pub fn run_mcp_server(storage: &Storage, project_root: PathBuf) -> Result<()> {
     Ok(())
 }
 
+/// The gated profile uses the same JSON-RPC wire types but never constructs a
+/// backend, registers/touches an agent, applies lane environment, prepares ACKs,
+/// or starts a respawn worker. Unsupported tools cannot reach ordinary dispatch.
+// trace:TASK-3223 | ai:codex
+pub(crate) fn run_mediated_mcp_server(
+    client: &crate::store_mutation_client::Client,
+    env: &aida_core::exec_context::Environment,
+    store: &Path,
+) -> Result<()> {
+    use anyhow::{ensure, Context};
+    use std::io::Read;
+    let configured = match env.var("AIDA_MCP_PROFILE") {
+        Ok(value) => Some(value.to_owned()),
+        Err(aida_core::exec_context::EnvLookupError::NonUnicode) => {
+            anyhow::bail!("invalid MCP profile")
+        }
+        Err(_) => {
+            let path = store
+                .parent()
+                .context("invalid store root")?
+                .join(".aida/config.toml");
+            match std::fs::read_to_string(path) {
+                Ok(text) => toml::from_str::<toml::Value>(&text)?
+                    .get("mcp")
+                    .and_then(|m| m.get("profile"))
+                    .and_then(toml::Value::as_str)
+                    .map(str::to_owned),
+                Err(e) if e.kind() == io::ErrorKind::NotFound => None,
+                Err(e) => return Err(e.into()),
+            }
+        }
+    };
+    // Unknown explicit profiles fail closed rather than silently widening.
+    let profile = match configured.as_deref() {
+        Some(value) => McpProfile::from_token(value).context("invalid MCP profile")?,
+        None => McpProfile::Full,
+    };
+    let role = env
+        .var("AIDA_SESSION_ROLE")
+        .ok()
+        .map(|role| crate::canonical_role_name(role.trim()));
+    let stdin = io::stdin();
+    let mut input = stdin.lock();
+    let stdout = io::stdout();
+    let mut output = stdout.lock();
+    loop {
+        let mut line = Vec::new();
+        let n = (&mut input).take(65537).read_until(b'\n', &mut line)?;
+        if n == 0 {
+            return Ok(());
+        }
+        ensure!(n <= 65536, "oversized mediated MCP request");
+        if line.iter().all(u8::is_ascii_whitespace) {
+            continue;
+        }
+        let response = match serde_json::from_slice::<JsonRpcRequest>(&line) {
+            Ok(request) => mediated_mcp_response(client, store, profile, role.as_deref(), &request),
+            Err(_) => Some(JsonRpcResponse::error(
+                Value::Null,
+                -32700,
+                "Parse error".into(),
+            )),
+        };
+        if let Some(response) = response {
+            deliver(&mut output, response)?;
+        }
+    }
+}
+
+// trace:TASK-3223 | ai:codex
+fn mediated_mcp_response(
+    client: &crate::store_mutation_client::Client,
+    store: &Path,
+    profile: McpProfile,
+    role: Option<&str>,
+    request: &JsonRpcRequest,
+) -> Option<JsonRpcResponse> {
+    if request.id.is_none() {
+        return None;
+    }
+    let id = request.id.clone().unwrap();
+    if request.jsonrpc != "2.0" {
+        return Some(JsonRpcResponse::error(id, -32600, "Invalid Request".into()));
+    }
+    let allowed = |name: &str| {
+        matches!(name, "add_comment" | "update_requirement")
+            && tool_in_profile(name, profile)
+            && role.is_none_or(|role| stakeholder_tool_allowed(role, name))
+    };
+    Some(match request.method.as_str() {
+        "initialize" => JsonRpcResponse::success(
+            id,
+            json!({
+                "protocolVersion":"2024-11-05", "capabilities":{"tools":{}},
+                "serverInfo":{"name":"aida","version":env!("CARGO_PKG_VERSION")}
+            }),
+        ),
+        "ping" => JsonRpcResponse::success(id, json!({})),
+        "tools/list" => {
+            let mut tools = tool_descriptors_for_profile(profile);
+            tools
+                .as_array_mut()
+                .unwrap()
+                .retain(|t| t["name"].as_str().is_some_and(allowed));
+            for tool in tools.as_array_mut().unwrap() {
+                let fields: &[&str] = if tool["name"] == "add_comment" {
+                    &["id", "text"]
+                } else {
+                    &["id", "title", "description"]
+                };
+                tool["inputSchema"]["properties"]
+                    .as_object_mut()
+                    .unwrap()
+                    .retain(|key, _| fields.contains(&key.as_str()));
+                tool["inputSchema"]["additionalProperties"] = json!(false);
+            }
+            JsonRpcResponse::success(id, json!({"tools":tools}))
+        }
+        "resources/list" => JsonRpcResponse::success(id, json!({"resources":[]})),
+        "resources/templates/list" => JsonRpcResponse::success(id, json!({"resourceTemplates":[]})),
+        "tools/call" => {
+            let name = request.params["name"].as_str().unwrap_or("");
+            let result = if allowed(name) {
+                client.mcp(store, name, &request.params["arguments"])
+            } else {
+                Err(anyhow::anyhow!("UnsupportedOperation"))
+            };
+            let result = match result {
+                Ok(value) => {
+                    let text = value.to_string();
+                    json!({"content":[{"type":"text","text":text}],"structuredContent":{"text":text}})
+                }
+                Err(error) => McpError::classify(name, &format!("{error:#}")).to_result_value(),
+            };
+            JsonRpcResponse::success(id, result)
+        }
+        _ => JsonRpcResponse::error(id, -32601, "Method not found".into()),
+    })
+}
+
+#[cfg(test)]
+#[path = "store_mutation_mcp_tests.rs"]
+mod store_mutation_mcp_tests;
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 struct BriefRef {
     path: String,

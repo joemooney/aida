@@ -210,6 +210,23 @@ mod bug_home_041_fail_fast_command_tests {
 /// `pub(crate)` item stays crate-private.
 // trace:STORY-772 trace:ADR-16 | ai:claude
 pub fn main_entry() {
+    // Resolve the gated lane path before identity, telemetry, aliases, cache
+    // setup or any ordinary dispatcher can write. Inputs confer no authority.
+    // trace:TASK-3223 | ai:codex
+    let environment = aida_core::exec_context::Environment::capture();
+    let argv: Vec<String> = std::env::args().collect();
+    let entry_cwd = std::env::current_dir().ok();
+    if let Some(result) =
+        crate::store_mutation_entry::entry(&environment, &argv, entry_cwd.as_deref())
+    {
+        match result {
+            Ok(()) => return,
+            Err(error) => {
+                eprintln!("Error: {error:#}");
+                std::process::exit(1);
+            }
+        }
+    }
     // Local observation data must never enter identity/store/telemetry setup.
     // trace:STORY-2479 | ai:codex
     if let Some(result) = crate::observation_envelope::local_entry() {
