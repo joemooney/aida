@@ -19,7 +19,7 @@ priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-11-08T15:57:56.822925046Z
-modified_at: 2026-11-08T17:23:38.863861067Z
+modified_at: 2026-11-08T17:23:40.279233340Z
 req_type: Task
 tags:
 - from-advisor:BUG-2492
@@ -28,6 +28,11 @@ tags:
 - loop-guard
 - review-recurrence
 - severity:major
+relationships:
+- rel_type: SupersededBy
+  target_id: 01a1b90c-ed35-72f3-96f9-9af73d67f23c
+  created_at: 2026-11-08T17:23:40.279229990Z
+  created_by: joe
 comments:
 - id: 01a1bbe6-8a44-7ad0-90e7-306031fcb7f2
   author: joe
@@ -50,6 +55,12 @@ history:
   - field_name: status
     old_value: Draft
     new_value: Superseded
+- id: 01a1bc2f-f343-7de3-af1e-2a8399194328
+  author: joe
+  timestamp: 2026-11-08T17:23:41.507465785Z
+  session_id: 01a1bbab-762f-7cd2-8a36-4ea9f209afce
+  harness_version: 2.1.319 (Claude Code)
+  changes: []
 filed_at:
   code_sha: 48e3865999b9c0e8acbc7899ce92ccd43191a3c7
   branch: main
