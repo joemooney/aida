@@ -3,12 +3,12 @@ spec_id: BUG-b6b1278890774ef993d2ebc327862470-255
 agreed_id: BUG-2490
 title: 'Store commit path commits git conflict markers: an autostash re-apply conflict in .aida-store is committed by the contained-session store commit, breaking every command that loads the object'
 description: 'Observed 2026-11-07 17:00 MST: local .aida-store commit 7124c0f (''reviewer: commit 2 store changes from the contained session'') contained ''<<<<<<< Updated upstream / ======= / >>>>>>> Stashed changes'' in objects/STORY/000/STORY-B6B1278890774EF993D2EBC327862470-565.yaml (modified_at only). Every store load then failed: ''Failed to parse .../STORY-...-565.yaml'' (aida queue rework, aida push). The advisor hand-fixed it in c02902bd108 before it reached origin. Cause: the store worktree inherits the operator''s global rebase.autoStash=true / merge.autoStash=true; a pull over a dirty store tree re-applied the autostash with a conflict (the stash stays in the list as stash@{0} autostash), and the contained-session store commit then staged and committed the markered file. Acceptance: (1) every git invocation on the store worktree passes -c rebase.autoStash=false -c merge.autoStash=false (or the store worktree config pins them false), so no autostash ever touches the store; (2) the store commit path refuses to commit any object that does not parse, or that contains conflict markers, naming the file; unmerged paths also refuse; (3) a regression test reproduces the autostash-conflict sequence and asserts refusal; (4) aida doctor flags a store object with conflict markers. LIGHT gate.'
-status: InProgress
+status: NeedsAttention
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-08T00:02:55.282155934Z
-modified_at: 2026-11-08T11:46:14.295416219Z
+modified_at: 2026-11-08T11:47:15.564138478Z
 req_type: Bug
 relationships:
 - rel_type:
@@ -512,6 +512,21 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a1bafb-6935-7883-9e67-4af649d10046
+  author: dirtlab
+  timestamp: 2026-11-08T11:46:41.077143218Z
+  session_id: 01a1bafaf4b6
+  harness_version: codex-cli 0.167.0
+  changes: []
+- id: 01a1bafb-efec-7bf1-8eb5-e9ee264c9b06
+  author: dirtlab
+  timestamp: 2026-11-08T11:47:15.564160015Z
+  session_id: 01a1bafaf4b6
+  harness_version: codex-cli 0.167.0
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: NeedsAttention
 filed_at:
   code_sha: 2a7fe186bdcd718fa356e5e4d028a3b2ff13769d
   branch: main
@@ -521,3 +536,8 @@ filed_at:
   vendor: claude
   session: 01a1b848-940b-7bd2-8acd-52e428b182b8
   harness_version: 2.1.319 (Claude Code)
+attention_reason:
+  category: design-fork
+  detail: 'Latest review of 0df9e76f5643 finding 1 explicitly requires advisor action: rule on the semantic merge policy and authorize remaining maybe_sync_pull/burndown failed-pull fencing and delete/modify handling here, or file and link a scope split. CLAUDE.md:19 requires advisor signoff for architecture changes; no ruling or linked split is recorded. This round fixes only finding 2, the stale dry-run ordering comment. Finding 3 remains the carried non-blocking doctor double scan. Preserve the merge hold and publication veto; do not publish as a complete BUG-2490 fix.'
+  raised_by: implementer
+  raised_at: 2026-11-08T11:47:15.564138478Z
