@@ -18,12 +18,12 @@ description: |
   3. A contained agy lane cannot write outside its worktree or reach hosts outside allowed_hosts (one negative test each).
   4. The refusal message stops telling agy users to "fix [contained.vendors]" until a value actually works; it names the supported vendors.
   5. One real agy lane completes a small spec end to end (PR opened), and the result is cited on this story.
-status: Approved
+status: InProgress
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-04T15:39:15.141070572Z
-modified_at: 2026-11-07T23:30:40.536807900Z
+modified_at: 2026-11-08T06:15:50.093908030Z
 req_type: Story
 tags:
 - area:containment
@@ -292,6 +292,13 @@ history:
   timestamp: 2026-11-06T13:40:51.099387353Z
   session_id: b0a84e34-277c-4df6-b53c-43f4bbe2e84d
   changes: []
+- id: 01a1b9cc-824d-7550-9277-59e00e4724be
+  author: aida-session-start
+  timestamp: 2026-11-08T06:15:50.093904657Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: InProgress
 filed_at:
   code_sha: c19294416a9bc68dab12b910c0566ad80a7cc995
   branch: main
