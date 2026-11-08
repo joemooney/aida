@@ -8,7 +8,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-08T05:25:50.443321273Z
-modified_at: 2026-11-08T10:58:02.218438629Z
+modified_at: 2026-11-08T10:58:08.985055013Z
 req_type: Story
 tags:
 - area:ci
@@ -139,6 +139,23 @@ comments:
   content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: Security floor (3) event/repo gate re-verified correct and the launcher lifecycle is sound, but tests/test_self_hosted_runner.py adds five os.environ sites absent from the exec-context ledger, which fails the required gates shard (it failed at 843cfdf) and blocks the PR''s own fixtures from running in CI. CI at this head had not started when recorded.. No triage reason was given.'
   created_at: 2026-11-08T10:58:02.218436100Z
   modified_at: 2026-11-08T10:58:02.218436100Z
+  session_id: 01a1b9af-8230-75d2-82f8-667491cc010a
+  harness_version: 2.1.319 (Claude Code)
+- id: 01a1bace-f968-7b50-a96d-5cd5ca3abca8
+  author: joe
+  content: |-
+    REVIEW FINDINGS TO ADDRESS (PR #3668):
+    Verdict: CHANGES REQUESTED
+    Reviewed commit: 7a885cda7a3a
+    Recorded: 2026-11-08T09:38:38.451366323+00:00
+    Findings:
+    1. BLOCKING [correctness] tests/test_self_hosted_runner.py:63,117,171,199,263 each pass env={**os.environ, ...}. scripts/check-exec-context.py scans tests/**/*.py and inventories every os.environ reference (python_sites, lines 234-278); scripts/exec-context-legacy.json has no entry for this file and check() raises 'new sites (forbidden)'. CI (gates) at 843cfdf725a9 failed at step 79 'ExecContext environment ratchet' while all six other shards passed and main's gates passed at 5cbe14e; commit 7a885cd adds a fifth site. Step 83 'GitLab upstream CI adapter fixtures' and step 88 'Self-hosted routing security fixtures' were skipped after that failure, so this PR's security fixtures have never executed in CI. Growing the ledger is refused by check_growth, so remove the sites: pass an explicit minimal env to each subprocess (e.g. PATH plus HOME and GITHUB_ENV where needed). Run make check-ci-fast before pushing; the ratchet is classified fast at scripts/ci-gate-tiers.toml:133. Reasoned from source and job step status: the failed-step log download was blocked by the review sandbox and no local tests were run.
+    2. MINOR [operability] Carried from the 843cfdf review and still open: the dell1 provisioning list and probe omit dbus-daemon. aida-cli-lib/src/terminal_cmd.rs:782-791 runs /usr/bin/dbus-run-session and panics when absent. Add dbus-daemon to docs/internal/testing/dell1-runner.md step 3 and dbus-run-session to the tool loop at scripts/runner/check-prerequisites.sh:6, and extend the refusal fixture.
+    3. COSMETIC [operability] Carried from the 843cfdf review and still open: scripts/runner/one-job.sh:35 does not silence systemctl stop stderr, so the expected exit-5 case prints 'Failed to stop aida-ci-current.service: Unit aida-ci-current.service not loaded.' on routine rearm cycles. Suppress or explain the expected case while keeping the refusal for other exit codes.
+    4. COSMETIC [docs] docs/internal/testing/dell1-runner.md:11-12 says routing applies only when the variable is 'exactly true', but GitHub expression == ignores string case, so TRUE or True also enables routing at ci.yml:32. The Python fixture's case-sensitive translation (tests/test_self_hosted_runner.py:32,39-43) does not model this. It does not widen the event/repository gate; correct the wording or note case-insensitivity.
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
+  created_at: 2026-11-08T10:58:08.872916427Z
+  modified_at: 2026-11-08T10:58:08.872916427Z
   session_id: 01a1b9af-8230-75d2-82f8-667491cc010a
   harness_version: 2.1.319 (Claude Code)
 history:
