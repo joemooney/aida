@@ -8,7 +8,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-08T05:25:50.443321273Z
-modified_at: 2026-11-08T07:42:52.285191132Z
+modified_at: 2026-11-08T07:42:58.217015167Z
 req_type: Story
 tags:
 - area:ci
@@ -70,6 +70,24 @@ comments:
   content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: Security floor (3) event/repo gate re-verified correct and round-1 findings 1,2,3(probe),5,6,7 addressed, but the head''s ci.yml is rejected by GitHub (runner context in job-level env), so no CI ran at f1802292a7c3; the rearm supervisor also stops on any idle hour.. No triage reason was given.'
   created_at: 2026-11-08T07:42:52.285189856Z
   modified_at: 2026-11-08T07:42:52.285189856Z
+  session_id: 01a1b8be-8170-7fb2-89ab-ecb4c6eee98c
+  harness_version: 2.1.319 (Claude Code)
+- id: 01a1ba1c-4818-76e1-879b-883e1b785ef6
+  author: joe
+  content: |-
+    REVIEW FINDINGS TO ADDRESS (PR #3668):
+    Verdict: CHANGES REQUESTED
+    Reviewed commit: f1802292a7c3
+    Recorded: 2026-11-08T07:34:42.128145665+00:00
+    Review comment: https://github.com/joemooney/aida/pull/3668#issuecomment-6718800691
+    Findings:
+    1. BLOCKING [correctness] .github/workflows/ci.yml:48 uses runner.environment in jobs.build.env, where GitHub does not provide the runner context (job-level env allows github, needs, strategy, matrix, vars, secrets, inputs). Run 42457906995 at f1802292a7c3 has zero jobs and gh reports 'This run likely failed because of a workflow file issue'; the only ci.yml change since 1f900087fa6, whose CI did start, is this line. CI (including the required aggregate) therefore cannot run at this head, and merging it would stop CI on main. Fix: remove the job-level entry and have the 'Verify self-hosted prerequisites' step, already gated on runner.environment == 'self-hosted', append AIDA_REQUIRE_BWRAP_LIVE=1 to $GITHUB_ENV after the probe passes.
+    2. MAJOR [correctness] The same line would set AIDA_REQUIRE_BWRAP_LIVE to an empty string off dell1 even once the context error is fixed by a matrix-based expression. About 15 test helpers use std::env::var_os("AIDA_REQUIRE_BWRAP_LIVE").is_none() (e.g. aida-cli-lib/src/tests/task_2053_s4b_seat_trees_tests.rs:19, aida-cli/tests/bug_1934_bwrap_presenter.rs:56), so set-but-empty means required. ci/gdma/run-upstream.py:319 exports it the same way ('' via step_environment), turning skips into panics on any GitLab or hosted lane without live bwrap. Export the variable only on the self-hosted path (the $GITHUB_ENV fix above does this) and add a fixture asserting it is absent from hosted/adapter environments.
+    3. MAJOR [correctness] scripts/runner/rearm.sh:12-18 with one-job.sh:50: RuntimeMaxSec=3600 ends an idle registration with a failed unit, systemd-run --wait returns non-zero, and set -e/pipefail stops the supervisor, so one idle hour (overnight, weekends) ends re-arming. Same-repo heavy shards then queue with no failover, which round-1 finding 4 asked to remove. The limit also kills a job picked up late (an idle 50 min plus a job with timeout-minutes 40 at ci.yml:43 is killed at 60). Also sudo -v runs once at line 11 while sudo -n at line 18 needs a live timestamp, so any cycle beyond the sudo timeout (default 15 min) also stops the loop. Distinguish idle expiry from failure and re-register, bound job time separately from idle time, and define a non-interactive sudo path for the installed launcher (or document the required sudoers rule). Reasoned from source; live dell1 behavior not exercised.
+    4. MINOR [test-coverage] Nothing catches an unavailable workflow context: tests/test_gdma_ci.py:86-87 and adapter context() (ci/gdma/run-upstream.py:181) accept runner.environment at any scope, so both passed while GitHub rejected the file. Add a check for context availability at job-level env (actionlint, or a fixture rejecting runner.* outside steps).
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
+  created_at: 2026-11-08T07:42:58.072041391Z
+  modified_at: 2026-11-08T07:42:58.072041391Z
   session_id: 01a1b8be-8170-7fb2-89ab-ecb4c6eee98c
   harness_version: 2.1.319 (Claude Code)
 history:
