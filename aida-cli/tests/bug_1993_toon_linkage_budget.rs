@@ -84,7 +84,8 @@ fn with_shim(cmd: &mut Command, shim_dir: &Path) {
 
 fn show_toon(repo: &Path, home: &Path, spec: &str, shim: Option<&Path>) -> String {
     let mut cmd = aida(repo, home);
-    cmd.args(["show", spec, "--format", "toon"]);
+    // trace:BUG-2466 | ai:codex — linkage now requires an explicit request.
+    cmd.args(["show", spec, "--format", "toon", "--full"]);
     if let Some(dir) = shim {
         with_shim(&mut cmd, dir);
     }

@@ -559,7 +559,7 @@ persistence.
 
 **Reach for it when** — a spec is stuck and you want the machine's read on *why*: blocked by a dependency? awaiting a decision? needs a human? sitting un-queued? It's the fast triage of a single stalled spec.
 
-**Don't reach for it when** — you want the spec's full contract and git linkage (that's `aida show`), or you want to survey *all* the stuck specs (that's `aida backlog`/`burndown explain` across the set). `why` answers one question about one spec.
+**Don't reach for it when** — you want the spec's full contract and git linkage (that's `aida show <ID> --full`), or you want to survey *all* the stuck specs (that's `aida backlog`/`burndown explain` across the set). `why` answers one question about one spec.
 
 **Key options (rationale only).**
 - `--json` — emits `{spec, bucket, reason, needs_human}`. The `needs_human` boolean is the routing signal — it's what an orchestrator checks to decide "park for triage vs keep going."
@@ -578,7 +578,7 @@ persistence.
 
 **Reach for it when** — you've just loaded an unfamiliar spec (or an agent has) and the title plus description don't yet add up to *why it matters*. It's the orientation pass before you plan or implement: get the gist, then dig into the contract.
 
-**Don't reach for it when** — you want the spec's literal contract, status, and git linkage (that's `aida show`), or you want the deterministic "why is it stuck" classification (that's `aida why`). `intent` is interpretive synthesis, not a substrate fact — treat it as a strong summary, not the source of truth.
+**Don't reach for it when** — you want the spec's literal contract, status, and git linkage (that's `aida show <ID> --full`), or you want the deterministic "why is it stuck" classification (that's `aida why`). `intent` is interpretive synthesis, not a substrate fact — treat it as a strong summary, not the source of truth.
 
 **Key options (rationale only).**
 - `--audience` — `layman` (default) writes prose for a human skimmer; `llm` writes a denser, structured register for an agent loading the spec into context. Pick by who's reading.
@@ -693,7 +693,7 @@ persistence.
 
 **Reach for it when** — you (or a reviewer/auditor) want the *reasoning trail* behind a completed spec — what a drain decided and why — not just the diff. It's the substrate behind the "explain intent, not just surface" goal: a place the *why* lives after the work is done.
 
-**Don't reach for it when** — you want *field-change* history (that's `aida history events`) or the *commits/files* a spec touched (that's `aida show`'s git linkage). Record is the narrative layer above both.
+**Don't reach for it when** — you want *field-change* history (that's `aida history events`) or the *commits/files* a spec touched (that's `aida show <ID> --full`'s git linkage). Record is the narrative layer above both.
 
 **Gotchas.** `record prune` is **propose-by-default** — it shows what it *would* trim and only writes with `--apply`. So a bare `aida record prune` is safe to run as a preview. Pruning loses the narrative, not the spec or its transition history.
 
