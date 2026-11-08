@@ -28,7 +28,7 @@ priority: Low
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-09-13T22:07:45.944235Z
-modified_at: 2026-11-08T07:29:43.653226287Z
+modified_at: 2026-11-08T07:29:45.529967400Z
 req_type: Task
 tags:
 - cleanup
@@ -195,6 +195,24 @@ comments:
   content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: AC1, AC3 job registration and AC4 fixtures hold and CI shards are green, but linked_clean counts AIDA runtime/ignored noise as uncommitted work, retaining 92% of sampled real linked worktrees, so AC2 is near-vacuous on the target host; four minor reporting/doc gaps.. No triage reason was given.'
   created_at: 2026-11-08T07:29:43.653224769Z
   modified_at: 2026-11-08T07:29:43.653224769Z
+  session_id: 01a1b8be-8170-7fb2-89ab-ecb4c6eee98c
+  harness_version: 2.1.319 (Claude Code)
+- id: 01a1ba10-2fbd-7341-8eca-bc112be185d5
+  author: joe
+  content: |-
+    REVIEW FINDINGS TO ADDRESS (TASK-1222):
+    Verdict: CHANGES REQUESTED
+    Reviewed commit: d68a193f5371
+    Recorded: 2026-11-08T07:25:06.487584432+00:00
+    Findings:
+    1. MAJOR (AC2 acfbfd06, blocking): linked_clean (aida-cli-lib/src/worktree_lifecycle_gc.rs:65-89) treats every ignored path outside root target/ as uncommitted work, including AIDA's own runtime state. A read-only host sample of 170 linked worktrees found 156 (92%) with such paths and only 14 passing; this reviewer's worktree lists .aida-store, .codegraph, .aida/agents, .aida/cache-db, .aida/sessions, .aida/session-env.sh, .claude/* links and sandbox placeholders (.bashrc, .gitconfig, .gitmodules). So nearly all real worktrees report 'uncommitted work' and AC2's 'make clean linked worktrees eligible' is close to vacuous on the target host. seat_clone::is_runtime_noise_entry (seat_clone.rs:2017) already classifies part of this noise for clones. Fix: keep retaining genuine ignored state (e.g. .aida/merge-holds, review verdicts, .env, notes) but excuse an explicit allowlist of AIDA runtime links/caches and empty sandbox placeholders, sharing the classifier with the seat path. Add a fixture with a realistic launched-worktree layout that stays eligible, plus one where ignored real state retains it.
+    2. MINOR (AC2, same fixture gap): worktree_lifecycle_gc.rs:232-235 retains a linked worktree whenever .gitmodules exists, but the Claude Code sandbox creates an empty ignored .gitmodules placeholder. The seat path deliberately excuses it via is_empty_gitmodules_placeholder (seat_clone.rs:1863). Reuse that check so a placeholder does not read as a submodule; a non-empty or tracked .gitmodules must still retain.
+    3. MINOR (AC3 ac14b158): the advisor route only receives the last stderr line (maintenance_schedule.rs routed_failure_error), which is the bail at worktree_lifecycle_gc.rs:664-665. It omits kept and deferred counts, so a budget-limited scan with eligible=0, remaining>0 routes '0 lifecycle GC candidates; 0 bytes reclaimable; operator review required', contradicting docs/cli/06-roles-sessions.md ('partial scheduled scan routes to the advisor', 'partial counts plus deferred entries'), and a partial eligible count reads as complete. Include scanned, eligible, kept, remaining and bytes (and bytes_complete) in that single line, and test it. Note also that inventory is path-sorted with a 60s budget, so a slow prefix defers the same tail every week.
+    4. MINOR (docs accuracy): docs/cli/06-roles-sessions.md:202-204 states the ignored-state rule for every candidate, but seat clones are probed with git status without --ignored (seat_clone.rs:1844-1853), so ignored files in a seat clone are deleted without inspection. Either scope the sentence to linked worktrees or extend the seat check.
+    5. MINOR (stale docs, remainder of the earlier guard finding): AGENTS.md:444-446 still says a read-only merged-worktree guard runs every 30 days and names 'aida worktree gc --yes --force', but this PR removes that job (OVERVIEW.md was updated, AGENTS.md was not). Update it to match. The comment at maintenance_schedule.rs:3663 ('Read-only monthly guard') and its now-unscheduled allowlist entry are likewise stale.
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
+  created_at: 2026-11-08T07:29:45.405906447Z
+  modified_at: 2026-11-08T07:29:45.405906447Z
   session_id: 01a1b8be-8170-7fb2-89ab-ecb4c6eee98c
   harness_version: 2.1.319 (Claude Code)
 history:
