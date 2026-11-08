@@ -23,7 +23,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-09-26T18:30:26.622729865Z
-modified_at: 2026-11-08T13:21:16.590743412Z
+modified_at: 2026-11-08T13:21:19.709156601Z
 req_type: Story
 tags:
 - agent-launch
@@ -709,6 +709,21 @@ comments:
   content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: STORY-1486 PARTIAL: no code defect found and the round-7 AC3 finding is fixed, but CI at this head has not started (0 jobs assigned), so all five criteria are verified by source reading only. No cargo run, by policy.. No triage reason was given.'
   created_at: 2026-11-08T13:21:16.590742294Z
   modified_at: 2026-11-08T13:21:16.590742294Z
+  session_id: 01a1b9af-8230-75d2-82f8-667491cc010a
+  harness_version: 2.1.319 (Claude Code)
+- id: 01a1bb52-0ef4-7e13-963d-18b94b2e78e9
+  author: joe
+  content: |-
+    REVIEW FINDINGS TO ADDRESS (STORY-1486):
+    Verdict: CHANGES REQUESTED
+    Reviewed commit: 22900c26a0e0
+    Recorded: 2026-11-08T13:06:13.137216394+00:00
+    Findings:
+    1. WAIT STATE, no code change needed: CI run 42482722422 at 22900c26a0e0 was still pending with no jobs assigned at 13:05 UTC, and merge-hold-gate run 42482722418 was queued. No completed CI run exists for this head or for the round-7 changes. The earlier cli-0 timeout in bug_2187_reviewer_record_identity::scrubbed_headless_reviewer_records_but_implementer_shell_refuses and the new PTY test noexec_verbose_prints_stakeholder_and_explicit_git_downgrades are unconfirmed. Re-review once CI is green at this head; do not push a filler commit, which would restart CI.
+    2. NON-BLOCKING, minor: the scaffolded .aida/launch-profile.toml (aida-core/src/scaffolding/launch_profile.rs:3) has no allow-list entry under the deny-by-default .aida/* rule (aida-cli-lib/src/lib_part1.rs:2394-2428, scaffold_init.rs:547), so it is never committed. A fresh clone has no profile until aida scaffold runs there, and render_agent_launch_noexec (agent_launch.rs:6238) then omits the root declaration without saying so, which undercuts the portable-recipe intent in docs/cli/06-roles-sessions.md:214. No acceptance criterion requires committing it; fix by allow-listing the file or by documenting it as per-clone.
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
+  created_at: 2026-11-08T13:21:19.604903382Z
+  modified_at: 2026-11-08T13:21:19.604903382Z
   session_id: 01a1b9af-8230-75d2-82f8-667491cc010a
   harness_version: 2.1.319 (Claude Code)
 history:
