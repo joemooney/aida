@@ -7,12 +7,12 @@ description: |-
 
   Non-blocking (minor): API-key Codex lanes (pinned_program None, contained.rs:1338-1347) run an unpinned npm binary but are validated only against the 0.166.0 help fixture; a different codex version that ignores an unknown -c default_permissions key would silently drop the inner profile instead of failing like -P did. Outer bwrap boundary remains the containment.
   Reviewed sha: 47f7c04664a3d933f34005db763bb0f851b63191
-status: Approved
+status: InProgress
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-08T01:27:02.365575412Z
-modified_at: 2026-11-08T06:34:27.044437430Z
+modified_at: 2026-11-08T06:35:52.096734769Z
 req_type: Task
 tags:
 - carried-from:BUG-2487
@@ -128,6 +128,13 @@ history:
   - field_name: status
     old_value: NeedsAttention
     new_value: Approved
+- id: 01a1b9de-d9a0-7282-8419-2208961d8a39
+  author: aida-session-start
+  timestamp: 2026-11-08T06:35:52.096734213Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: InProgress
 filed_at:
   code_sha: 2d1589ac325cca9366b218b577b7b0f41b2133d5
   branch: main
