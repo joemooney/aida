@@ -23,7 +23,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-07T19:59:26.079479Z
-modified_at: 2026-11-08T19:47:16.407304072Z
+modified_at: 2026-11-08T19:47:22.294379828Z
 req_type: Story
 comments:
 - id: 01a1b798-f0d4-73b1-93d5-f84581f2d190
@@ -483,6 +483,21 @@ comments:
   content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: AC1 (second lane job shows sccache hits on primary and dell1) still has no evidence or advisor amendment at 3d0b99367e6a; AC0/AC2/AC3/AC4 and the lane/unsandboxed separation ruling are met in source. Head adds only a merge from main since round 11. CI code jobs are queued at this head; merge-hold-gate fails by design. No local cargo run.. It was punted on: blocked-dependency: AC1 remains unresolved: requires two consecutive lane Cargo jobs using the revised launcher on BOTH primary and dell1, retained final sccache statistics and second-job Rust hits greater than zero, or a recorded advisor amendment. This seat cannot produce both-host evidence. Existing implementation already includes advisor AC0 resource wiring and sccache tests; no source edits needed. make check-ci-fast failed at first compile gate because sccache could not write lane-target dep-info (read-only filesystem). Targeted jobs j20261108T193520228-2-0 and j20261108T193521467-2-0 are in progress. Preserve existing merge hold and publication veto; route to host/operator or advisor.. No triage reason was given.'
   created_at: 2026-11-08T19:47:16.407298978Z
   modified_at: 2026-11-08T19:47:16.407298978Z
+  session_id: 01a1bc93-77a0-7740-8b03-df4e3e8d1df5
+  harness_version: 2.1.319 (Claude Code)
+- id: 01a1bcb3-7dba-7040-a366-fd196ea71a14
+  author: joe
+  content: |-
+    REVIEW FINDINGS TO ADDRESS (PR #3657):
+    Verdict: CHANGES REQUESTED
+    Reviewed commit: 3d0b99367e6a
+    Recorded: 2026-11-08T19:43:56.221838376+00:00
+    Findings:
+    1. major/acceptance: AC1 is unverified at 3d0b99367e6a. It requires a second lane job on the same dependency set to show sccache hits (stats delta > 0) on the primary AND on dell1. The spec has no lane-job statistics from either host and no advisor amendment; the latest handoff (2026-11-08 12:37 -07:00) confirms this. A code change cannot close it, so route it to the host/operator or advisor, not implementer rework. Fix: with a launcher built from this branch, run two consecutive 'aida lane job run' cargo jobs on each host and record both logs' 'lane sccache: final job statistics' output (second job Rust hits > 0) on STORY-2641, or have the advisor record an amendment of AC1.
+    2. cosmetic/test (non-blocking): aida-cli-lib/src/tests/bug_2383_lane_job_tests.rs story_2641_sccache_host_queue_ticket_stays_live keeps a bare { } block and .env_remove("SCCACHE_SERVER_UDS") that no longer affect the test (bwrap_argv runs /bin/sh with no sccache). Remove them whenever the file is next touched; this alone should not trigger a rework round.
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
+  created_at: 2026-11-08T19:47:22.170758846Z
+  modified_at: 2026-11-08T19:47:22.170758846Z
   session_id: 01a1bc93-77a0-7740-8b03-df4e3e8d1df5
   harness_version: 2.1.319 (Claude Code)
 history:
