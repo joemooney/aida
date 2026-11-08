@@ -74,7 +74,7 @@ def probe(binary, fd):
         version_result = bounded([binary, '--version'], env, 3)
         assert version_result.returncode == 0, 'version probe refused'
         version = version_result.stdout.decode().strip()
-        assert version == 'codex-cli 0.166.0', 're-probe this codex version'
+        assert version == 'codex-cli 0.167.0', 're-probe this codex version'
         # Ephemeral listener, not a persistent application port.
         with http.server.HTTPServer(('127.0.0.1', 0), Recorder) as server:
             server.timeout = 2

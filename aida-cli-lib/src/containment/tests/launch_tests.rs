@@ -3425,13 +3425,13 @@ fn bug_2487_codex_env() -> BTreeMap<String, String> {
 // trace:BUG-2487 | ai:codex
 fn bug_2487_pinned_help_checks_production_argv_and_scopes() {
     let recorded: serde_json::Value =
-        serde_json::from_str(include_str!("../../launch/codex_0166_help.json")).unwrap();
+        serde_json::from_str(include_str!("../../launch/codex_0167_help.json")).unwrap();
     assert_eq!(
         recorded["sha256"],
         codex_auth::PROGRAM_SHA256,
         "pin changed: re-record exec/sandbox help from the newly probed binary"
     );
-    assert_eq!(recorded["version"], "codex-cli 0.166.0");
+    assert_eq!(recorded["version"], "codex-cli 0.167.0");
     let original = aida_core::vendors::profile(aida_core::vendors::LaunchVendor::Codex)
         .headless_args(
             "prompt containing -P and --unknown-flag",
