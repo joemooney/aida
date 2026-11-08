@@ -18,7 +18,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-08T02:46:34.549817284Z
-modified_at: 2026-11-08T11:52:22.656080611Z
+modified_at: 2026-11-08T12:00:09.267955920Z
 req_type: Bug
 tags:
 - area:ci
@@ -228,6 +228,13 @@ comments:
   content: 'Round 6 rework: release --after-pr now uses the configured ci_absolute_ceiling_secs budget instead of 300 seconds; regression checks the production budget helper for default and configured roots. Shipped fire/orchestrate skill watchers are bounded at 540 seconds and distinguish pending holds from ordinary CI at timeout. Pipeline readiness still blocks on a pending gate, but clearance guidance now requires active/recorded-uncleared label evidence; fixtures cover empty, active, recorded-only and cleared labels. Criterion anchors now sit on a recognized shell Test 1 section (aida criteria recognizes all five); fixture evidence still does not establish live enforcement or mail delivery. Stale red/failing-hold comments corrected. Native Refs publication declaration recorded. Host MUST retitle PR #3651 to end (Refs BUG-2492), retain spec open for operator cutover evidence and wait for green CI at published head. Rust lane validation is running; shell fixtures, syntax, rustfmt and diff checks pass.'
   created_at: 2026-11-08T11:52:22.656080611Z
   modified_at: 2026-11-08T11:52:22.656080611Z
+  session_id: 01a1bafd1c50
+  harness_version: codex-cli 0.167.0
+- id: 01a1bb07-be33-7751-8351-8b509a62979f
+  author: dirtlab
+  content: 'Round 6 final native handoff: 8 files changed and left uncommitted: aida-cli-lib/src/ci_gate.rs, gate/pr_ship_batch.rs, pipeline_stall.rs, pr_train.rs, upgrade_release.rs; aida-core/templates/skills/aida-fire.md and aida-orchestrate.md; tests/test_merge_hold_gate.sh. Validation PASS: launcher j20261108T115051383-2-0 ran 13 bug2492 tests, all passed (8m51s compilation, 0.02s executed tests); shell fixtures passed 8 label states x 2 shipped gates and 36 train cases plus shipped jq projection; bash syntax, rustfmt and git diff --check pass; aida criteria recognizes all 5 criterion anchors, with live-evidence limits retained. untested=false. Initial job j20261108T115031591-2-0 used aida-cli --lib and refused because that package has no library; corrected aida-cli-lib job above succeeded. Runner reported overlay-stale after successful completion. Native publication declaration: [AI:codex] fix(ci): bound hold watchers and preserve release CI budget (Refs BUG-2492). Host must retitle PR #3651 with trailing (Refs BUG-2492), publish and obtain green CI at that exact head. Operator still owes raw gh/web merge refusal, unchanged-SHA label-only clearance and notification observations per the cutover runbook; keep BUG-2492 open. No commit, push, PR metadata mutation, merge, review verdict or queue completion performed.'
+  created_at: 2026-11-08T12:00:09.267955920Z
+  modified_at: 2026-11-08T12:00:09.267955920Z
   session_id: 01a1bafd1c50
   harness_version: codex-cli 0.167.0
 history:
