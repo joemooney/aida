@@ -14,7 +14,7 @@ priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-11-08T12:41:43.129222138Z
-modified_at: 2026-11-08T15:26:38.225237465Z
+modified_at: 2026-11-08T15:26:44.204365548Z
 req_type: Task
 tags:
 - carried-from:TASK-3472
@@ -26,6 +26,14 @@ relationships:
   target_id: 01a1bb4d-c2c3-7e00-bb0c-df9eb11b05e1
   created_at: 2026-11-08T15:26:38.225233169Z
   created_by: joe
+comments:
+- id: 01a1bbc4-dfec-7433-926f-8ee98cca8ca5
+  author: joe
+  content: 'Advisor 2026-11-08, per the operator''s 2026-10-28 one-time ruling on non-blocking findings: duplicate; BUG-2496 tracks the review-watch limit stall.'
+  created_at: 2026-11-08T15:26:44.204365548Z
+  modified_at: 2026-11-08T15:26:44.204365548Z
+  session_id: 01a1bbab-762f-7cd2-8a36-4ea9f209afce
+  harness_version: 2.1.319 (Claude Code)
 history:
 - id: 01a1bb7d-1698-7210-bb7c-6c8ed7b56249
   author: joe
