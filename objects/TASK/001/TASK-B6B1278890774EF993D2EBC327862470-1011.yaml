@@ -1,0 +1,41 @@
+id: 01a1bca0-1553-7353-b7e2-7956b884523a
+spec_id: TASK-b6b1278890774ef993d2ebc327862470-1011
+title: 'Repeated unchanged review findings: STORY-2642'
+description: |-
+  Identical reviewer findings recurred twice for STORY-2642; do not requeue a third implementer round until an advisor chooses a different implementer/seat or resolves the dispute.
+
+  REVIEW FINDINGS TO ADDRESS (PR #3643):
+  Verdict: CHANGES REQUESTED
+  Reviewed commit: 2315a95f7663
+  Recorded: 2026-11-08T17:06:30.831536247+00:00
+  Findings:
+  1. BLOCKING (AC1, binary row): aida-cli-lib/src/lane_host.rs:254-258 compares the running binary's build SHA with the current project's refs/remotes/origin/HEAD, and the row is required=true. A release install, or any project other than AIDA itself, can never match, so 'aida doctor --lane-host' exits nonzero forever and every 'aida init' prints a FAIL row whose 'aida dev build' hint does not apply there. The spec asks for 'project's main (dev builds) or release' and the problem statement covers every project; docs/cli/07-project-setup.md says release freshness is unverified, yet the row reports FAIL. This is the same never-exits-0 class as the earlier build-cache and auth-agy findings. Fix: compare with origin/HEAD only when the binary is a dev build of this project; otherwise emit an advisory unverified row (or a real release comparison). Add a test for the release and foreign-project cases; matching_revision alone does not cover them.
+  2. MINOR (AC3 over-refusal, fails closed): lane_host.rs:159 derives requested containment only from load_agents_contained, while queue_cmd.rs:12419 launches with contained = sandbox || contained_env || contained_knob. 'aida queue work --no-human --sandbox' on a host without agents.toml contained=true is refused as uncontained although that launch would be contained, including at the dispatcher gate (queue_cmd.rs:5820-5829). Fix: pass the --sandbox request into preflight/containment_checks and add a test. Found by source reading; not executed.
+  3. MINOR (auth false FAIL): vendors/host_diagnostics.rs:39-61 honors CODEX_HOME but not the Claude equivalents that launch/profile.rs:72-75 passes to the vendor: CLAUDE_CONFIG_DIR and CLAUDE_CODE_OAUTH_TOKEN. A host using a relocated Claude config or an OAuth token gets a required auth-claude FAIL, so the command exits nonzero with a correct setup. Fix: resolve both like Codex and add tests.
+  4. MINOR (build-cache wrong file): lane_host.rs:111-117 and :295-303 always use ~/.cargo, ignoring CARGO_HOME (session.rs:5789 already resolves Cargo's home) and the RUSTC_WRAPPER env. With CARGO_HOME relocated, --fix writes a file Cargo does not read and the row then reports PASS; with RUSTC_WRAPPER set, the row can FAIL on a working cache. Fix: use the shared Cargo-home resolver, honor RUSTC_WRAPPER, and add tests.
+  5. MINOR (store-remote false FAIL): lane_host.rs:51-54 sets GIT_SSH_COMMAND unconditionally, which overrides the operator's core.sshCommand and any ambient GIT_SSH_COMMAND. A host that needs either to reach origin reports store-remote FAIL. Fix: enforce batch mode without discarding the configured command.
+  6. COSMETIC (--fix reporting): lane_host.rs:339-349 drops PermissionPostureWriteResult and prints nothing about what changed, although the preset clears existing Codex writable_roots and creates backups. fix_cargo_cache also returns Ok silently when sccache is absent or a legacy config exists. Fix: report edited and backup paths, keeping --json output parseable, and say why the Cargo fix was skipped.
+  Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
+status: Draft
+priority: Medium
+owner: joe
+feature: Uncategorized
+created_at: 2026-11-08T19:26:10.259994339Z
+modified_at: 2026-11-08T19:26:10.259994339Z
+req_type: Task
+tags:
+- from-advisor:STORY-2642
+- kind:observation
+- linked:STORY-2642
+- loop-guard
+- review-recurrence
+- severity:major
+filed_at:
+  code_sha: db2eb4c39e46704132705ccb2b8300574ead41a6
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: eeec474c545
+  vendor: claude
+  session: 01a1bc93-77a0-7740-8b03-df4e3e8d1df5
+  harness_version: 2.1.319 (Claude Code)
