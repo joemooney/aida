@@ -8,7 +8,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-07T10:46:16.888539142Z
-modified_at: 2026-11-08T18:29:30.895551675Z
+modified_at: 2026-11-08T18:40:12.097241865Z
 req_type: Task
 relationships:
 - rel_type: Child
@@ -34,6 +34,13 @@ comments:
   content: 'Partial S5 inventory audit: the production-source ratchet still enumerates 58 files and 115 legacy syntax matches (not a count of unique authority decisions). The baseline remains the exact path inventory. Removed obsolete test-only/zero allowances and lowered standalone_implementer from two to one; added validation that baseline entries refer to scanned production files and have positive counts. Remaining production families include drain/solo/cache locks, worktree pool/GC, coordination, registry/driver, seat/gate/mandate adapters and containment/launch receipts. Zero-legacy closure is NOT achieved by this change. Carried findings TASK-2996/TASK-2997 are implemented: all review-watch unknown verdicts now use the existing reboot/TTL reservation backstop; per-change documentation moved to comments. Codegraph is missing from PATH (confirmed by aida doctor check codegraph); source navigation used rg.'
   created_at: 2026-11-08T18:29:30.895551675Z
   modified_at: 2026-11-08T18:29:30.895551675Z
+  session_id: 01a1bc6989dc
+  harness_version: codex-cli 0.167.0
+- id: 01a1bc75-ff41-7282-b85d-bf1c88c4667b
+  author: dirtlab
+  content: 'Validation through the lane runner completed successfully: task_3367 regression 1 passed; TASK-1750 guard suite 4 passed; aida-core proc_identity filter 5 passed (namespace/reuse/clock, retained child, subreaper, S4 mail identity); review_watch::supersede_tests 28 passed including the new regression. All jobs exited 0 with executed-test results. git diff --check passed. Six source/documentation/fixture files remain uncommitted. Native host publication declaration recorded with subject [AI:codex] fix(review-watch): bound unknown receipts and tighten legacy inventory (Refs TASK-3367). This is a partial slice: S5 zero-legacy closure remains outstanding at 58 files / 115 syntax sites. No queue completion, commit, push, PR or review verdict was performed in this seat.'
+  created_at: 2026-11-08T18:40:12.097241865Z
+  modified_at: 2026-11-08T18:40:12.097241865Z
   session_id: 01a1bc6989dc
   harness_version: codex-cli 0.167.0
 history:
