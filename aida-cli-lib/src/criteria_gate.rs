@@ -14,7 +14,7 @@
 //!   - `evaluate()` + `read_enforce_mode()` are the whole policy; a future
 //!     TASK-1277 gate calls `evaluate()` alongside its own protocol-item
 //!     check and merges the two `Warn`/`Refuse` line lists into one report.
-//!   - `queue_cmd.rs`'s `QueueCommand::Done` handler calls this at the
+//!   - `queue_cmd/done.rs`'s `QueueCommand::Done` handler calls this at the
 //!     exact point TASK-1277's protocol-item check would also live (next
 //!     to the existing review-verdict gate).
 //!
