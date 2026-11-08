@@ -8,7 +8,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-07T23:39:41.575597Z
-modified_at: 2026-11-08T20:26:56.802981687Z
+modified_at: 2026-11-08T20:29:56.900793818Z
 req_type: Task
 relationships:
 - rel_type: Child
@@ -310,6 +310,18 @@ comments:
   modified_at: 2026-11-08T20:25:09.899294504Z
   session_id: 01a1bc93-77a0-7740-8b03-df4e3e8d1df5
   harness_version: 2.1.319 (Claude Code)
+- id: 01a1bcda-7924-7ad3-8ad1-fd8ccc2941b2
+  author: dirtlab
+  content: |
+    Prepared another import-only Refs slice: brief_cmd.rs, load_cmd.rs, output_format.rs, tui_entry.rs and usage_mcp_helpers.rs now use explicit imports; removed redundant inner globs from brief/load. Added explicit formerly transitive test dependencies in tests/task970_agent_output_tests.rs and tests/task_2205_list_fields_tests.rs. Pruned scripts/crate-globs-legacy.json from 186 to 179 imports. Non-import Rust token comparison against HEAD matches all seven Rust files.
+
+    Validation: 15 crate-split tooling fixtures passed; glob ratchet --base HEAD passes at 179; ExecContext ratchet passes at 1239 sites; store-writer inventory passes (3387 sinks/293 mappings); portability guard passes; 84-gate classification audit, touched-file rustfmt and diff whitespace checks pass. Launcher cargo check --profile agent -p aida-cli --no-default-features passed (j20261108T201048293-2-0). Earlier test compiles exposed missing imports, corrected in working tree. Final launcher cargo test --profile agent -p aida-cli-lib --lib -- output_format timed out at 900 seconds during compilation without new diagnostics and without executing tests (j20261108T201130439-2-0, exit 124). untested=true. Full make check-ci-fast not run because it invokes Cargo directly outside the required launcher.
+
+    Test blocker: successful executed Rust tests still required; final log /home/dirtlab/ai/aida/.aida/lane-jobs/01a1bcc4231a/j20261108T201130439-2-0.out. Codegraph unavailable, confirmed by aida doctor check codegraph; used rg. Remaining glob batches and lib_part1..6 extraction remain outstanding; TASK-3428 stays in progress. Native publication declaration recorded: [AI:codex] refactor(imports): retire crate globs in five shared modules (Refs TASK-3428). All edits uncommitted for host publication.
+  created_at: 2026-11-08T20:29:56.900793818Z
+  modified_at: 2026-11-08T20:29:56.900793818Z
+  session_id: 01a1bcc4231a
+  harness_version: codex-cli 0.167.0
 history:
 - id: 01a1b862-2e0b-7a50-a4d0-25097c707b57
   author: joe
