@@ -1844,4 +1844,4 @@ Agent children receive their host-recorded seat target and disabled wrapper
 through declared launch resources rather than parent build-environment values.
 The lane job runner alone opts into the lane cache. Recorded clones without a
 cargo target (including fresh/non-Rust seats and targets removed by host clean)
-launch without resource overrides.
+launch with the wrapper disabled and no target override.

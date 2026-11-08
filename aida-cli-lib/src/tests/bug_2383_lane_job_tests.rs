@@ -1890,6 +1890,7 @@ import os, socket, sys, time
 from pathlib import Path
 root = Path(os.environ['SCCACHE_DIR'])
 if os.environ.get('SCCACHE_START_SERVER') == '1':
+    assert os.environ['TMPDIR'] == '/tmp'
     sock = socket.socket(socket.AF_UNIX)
     sock.bind(os.environ['SCCACHE_SERVER_UDS'])
     while not (root / 'stop').exists():
@@ -1906,6 +1907,10 @@ else:
 "#,
     );
     let mut env = BTreeMap::from([
+        (
+            "TMPDIR".into(),
+            tmp.path().join("missing-tmp").display().to_string(),
+        ),
         ("RUSTC_WRAPPER".into(), wrapper.display().to_string()),
         ("SCCACHE_DIR".into(), tmp.path().display().to_string()),
         (

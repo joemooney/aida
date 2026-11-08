@@ -56,7 +56,13 @@ pub(crate) fn spawn_agent(ctx: &LaunchContext) -> Result<Command> {
     // A seat without a target must still override Cargo config and inherited
     // wrappers, so it cannot connect to an operator cache server.
     // trace:STORY-2641 | ai:codex
-    if resources.is_none() && !ctx.fixture_override() && !ctx.wrapper_environment() {
+    let isolated_seat = ctx.posture() != ContainmentPosture::None
+        || ctx.parent_contained()
+        || ctx
+            .host_main()
+            .is_some_and(|host| crate::seat_clone::host_recorded_clone(host, ctx.cwd()).is_some());
+    if resources.is_none() && isolated_seat && !ctx.fixture_override() && !ctx.wrapper_environment()
+    {
         cmd.env("RUSTC_WRAPPER", "");
     }
     cmd.args(ctx.argv());

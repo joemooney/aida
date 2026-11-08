@@ -1904,7 +1904,7 @@ fn story_2326_resource_env_spawn_without_recorded_target() {
 #[test]
 fn story_2326_resource_env_unrecorded_seat_disables_wrapper() {
     for vendor in [LaunchVendor::Claude, LaunchVendor::Codex, LaunchVendor::Agy] {
-        let mut req = request(ContainmentPosture::None, LaunchKind::Fresh, &[]);
+        let mut req = request(ContainmentPosture::Native, LaunchKind::Fresh, &[]);
         req.vendor = vendor;
         req.host_main = None;
         let ctx = LaunchContext::resolve_under(req, false).unwrap();
@@ -1914,5 +1914,38 @@ fn story_2326_resource_env_unrecorded_seat_disables_wrapper() {
             env.get(OsStr::new("RUSTC_WRAPPER")),
             Some(&Some(OsStr::new("")))
         );
+    }
+}
+
+// Ordinary primary/worktree launches retain the configured operator wrapper.
+// trace:STORY-2641 | ai:codex
+#[test]
+fn story_2326_resource_env_unsandboxed_launch_preserves_wrapper() {
+    let _env =
+        crate::test_env::EnvVarsGuard::apply(&[("RUSTC_WRAPPER", Some("/operator/sccache"))]);
+    let tmp = tempfile::tempdir().unwrap();
+    let host = tmp.path().join("host");
+    let worktree = tmp.path().join("worktree");
+    for cwd in [&host, &worktree] {
+        std::fs::create_dir_all(cwd).unwrap();
+        for vendor in [LaunchVendor::Claude, LaunchVendor::Codex, LaunchVendor::Agy] {
+            for host_main in [None, Some(host.clone())] {
+                let mut req = request(ContainmentPosture::None, LaunchKind::Fresh, &[]);
+                req.vendor = vendor;
+                req.cwd = cwd.clone();
+                req.host_main = host_main;
+                let ctx = LaunchContext::resolve_under(req, false).unwrap();
+                let cmd = spawn_agent(&ctx).unwrap();
+                let env: BTreeMap<_, _> = cmd.get_envs().collect();
+                if super::profile::VendorProfile::for_vendor(vendor).clears_environment() {
+                    assert_eq!(
+                        env.get(OsStr::new("RUSTC_WRAPPER")),
+                        Some(&Some(OsStr::new("/operator/sccache")))
+                    );
+                } else {
+                    assert!(!env.contains_key(OsStr::new("RUSTC_WRAPPER")));
+                }
+            }
+        }
     }
 }

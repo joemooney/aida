@@ -285,7 +285,7 @@ fn lane_sccache_env(parent: &aida_core::exec_context::Environment) -> Vec<(Strin
 /// All paths/argv are positional arguments, never interpolated shell source.
 // trace:STORY-2641 | ai:codex
 const SCCACHE_JOB_SCRIPT: &str = r#"
-SCCACHE_NO_DAEMON=1 SCCACHE_START_SERVER=1 SCCACHE_IDLE_TIMEOUT=0 "$RUSTC_WRAPPER" &
+TMPDIR=/tmp SCCACHE_NO_DAEMON=1 SCCACHE_START_SERVER=1 SCCACHE_IDLE_TIMEOUT=0 "$RUSTC_WRAPPER" &
 server=$!
 ready=0
 while [ ! -S "$SCCACHE_SERVER_UDS" ]; do
