@@ -28,7 +28,7 @@ priority: Low
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-09-13T22:07:45.944235Z
-modified_at: 2026-11-08T17:29:00.512269281Z
+modified_at: 2026-11-08T17:38:58.328308271Z
 req_type: Task
 tags:
 - cleanup
@@ -405,6 +405,20 @@ comments:
   modified_at: 2026-11-08T17:27:12.017175690Z
   session_id: 01a1b9af-8230-75d2-82f8-667491cc010a
   harness_version: 2.1.319 (Claude Code)
+- id: 01a1bc3d-f098-71f3-8ab9-53e281e6c5e9
+  author: dirtlab
+  content: |
+    Native rework handoff for latest review at fe51eb311a46. Addressed findings 3–8: corrected the schedule command allowlist documentation; documented conservative stale tracking-ref retention (the review's permitted documentation option); retained the invoking checkout explicitly; retained pool reservations, live pool owners and in-flight pool lifecycle entries, failing closed on unreadable/invalid registries and linked pool directories; added regression coverage for caller/pool protection and freed-byte aggregation, including surviving clone target output; explained the read-only forge command constructor's audit purpose.
+
+    Changed files: aida-cli-lib/src/worktree_lifecycle_gc.rs; aida-cli-lib/src/forge.rs; docs/cli/03-work-autonomy.md; docs/cli/06-roles-sessions.md. Changes remain uncommitted for host publication.
+
+    Validation: launcher job j20261108T173013154-2-0 executed all 22 task_1222 tests and passed (exit 0; build 7m57s, tests 1.78s), including the new caller_pool_reservations_and_freed_estimates regression. untested=false. All 42 tests in test_store_writer_inventory.py passed on final source; changed-file rustfmt --check and git diff --check passed. scripts/check-exec-context.py passed with 1239 exact legacy sites and zero additions. Codegraph is unavailable, confirmed by aida doctor check codegraph; navigation used rg.
+
+    Review findings 1/2 remain host follow-ups: observed CI run 42504181470 for fe51eb311a46625927d2e443e96561b693d3223e pending with no jobs. Obtain complete CI at the published head and rerun independent review; the active merge hold needs separate authorized clearance. No host cleanup, commit, push, PR creation, queue completion, review record or hold clearance performed. Queue completion follows host publication under the native-seat contract.
+  created_at: 2026-11-08T17:38:58.328308271Z
+  modified_at: 2026-11-08T17:38:58.328308271Z
+  session_id: 01a1bc347eff
+  harness_version: codex-cli 0.167.0
 history:
 - id: 01a1b7cd-7751-7262-8ad1-f0f9d2ef6d4d
   author: joe
