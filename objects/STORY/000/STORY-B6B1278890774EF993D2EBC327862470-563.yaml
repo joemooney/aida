@@ -25,7 +25,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-07T19:45:35.836129088Z
-modified_at: 2026-11-08T21:48:27.573249816Z
+modified_at: 2026-11-08T21:48:36.799629444Z
 req_type: Story
 tags:
 - docs:impacted
@@ -527,6 +527,21 @@ comments:
   content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: AC2-AC5 verified from source and last round''s drain, marker and OVERVIEW findings are fixed, but the PR fails check-ci-fast''s help-golden guard (CI red), and a queued repair in a batch drain is retried as a transient error, so AC1''s fix round is not assured. PR CI pending; source review only.. It was punted on: blocked-dependency: Review finding 2 remains blocked: installed host runner refuses make check-ci-fast as Cargo-only. Host must update runner, validate a seeded committed head under bubblewrap with host-only results, and record marker/elapsed time including investigation of prior containment-conformance timeout. Findings 1, 3 and 4 fixed in uncommitted edits; 42 targeted fast-gate and 259 orchestrator tests passed. untested=true for required full gate; no unsandboxed fallback or publication authorized.. No triage reason was given.'
   created_at: 2026-11-08T21:48:27.573247236Z
   modified_at: 2026-11-08T21:48:27.573247236Z
+  session_id: 20abb7c3-8f9b-4a5e-b326-404921f3b450
+- id: 01a1bd22-7255-7000-ba98-768cda3c465f
+  author: joe
+  content: |-
+    REVIEW FINDINGS TO ADDRESS (STORY-2640):
+    Verdict: CHANGES REQUESTED
+    Reviewed commit: 03326fbabe7b
+    Recorded: 2026-11-08T21:43:22.791418835+00:00
+    Findings:
+    1. [major] CI-blocking: the PR adds 'aida lane fast-gate-release' (aida-cli-lib/src/lane_cmd_args.rs:15-20) but does not update aida-cli-lib/src/tests/golden/cli_help_snapshot.txt, which has '===== aida lane' sections (line 30785), and no commit carries a 'Help-Golden: unchanged' trailer. I ran scripts/check-help-golden-cochange.sh origin/main at 03326fbabe7b: exit 1. The same gate failed in CI at 9e4ce85f198b (run 42516356758), so the CI run still pending at this head will fail on it, and help_surface_matches_golden_snapshot should fail too. This gate is in the fast tier, so this PR fails the check it introduces. Fix: AIDA_UPDATE_SNAPSHOTS=1 cargo test --profile agent -p aida-cli-lib help_surface_matches_golden_snapshot, then commit the snapshot.
+    2. [major] AC1: a queued repair in a batch or nextN drain is handled as a transient error. stop_for_fast_gate (auto_complete.rs:3331) returns finish_inconclusive, but drive_robustness.rs:246 treats any inconclusive_reason as retryable, and drain_batch.rs:613 / drain_next_n.rs:608 wrap run_auto_complete in run_with_transient_backoff. Scenario: a self-pushing drain lane goes red and its repair row is queued; the drive backs off and re-runs the whole orchestration, so a new implementer launches for that spec while the row is still queued. Its reserve() clears repair_queue but keeps repair_used=true (lane_fast_gate.rs begin_locked), so a still-red head settles as fast_gate=fail and goes on to CI and review, and I found nothing that guarantees the retry received the gate output. When the backoff budget runs out, auto_complete.rs:5220 stops the rest of the batch with exit 0. This contradicts the 'leaving its queued round for pickup' reason. The new drain tests call orchestrate() only, so no test covers it. Fix: use a typed non-retryable outcome for a pending repair, have the batch move on to the next spec, and add a test at the run_with_transient_backoff/batch level.
+    3. [minor] Prior finding still open: no real make check-ci-fast has passed through the host gate. fast_gate_real_main_target_passes_in_sandbox is #[ignore], and the implementer reported on 2026-11-08 that the installed runner refuses make jobs as Cargo-only. The last real run reported on the spec hit the fixed 300s limit during containment conformance, before later source ratchets ran; if that repeats, lanes report skipped(timeout) and publish without those ratchets. Record marker and elapsed time from a host run on a seeded head, before or immediately after merge, and adjust the budget or gate order if it exceeds 300s.
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
+  created_at: 2026-11-08T21:48:33.749126463Z
+  modified_at: 2026-11-08T21:48:33.749126463Z
   session_id: 20abb7c3-8f9b-4a5e-b326-404921f3b450
 history:
 - id: 01a1b78d-2628-7313-92de-8804ac5f8f71
