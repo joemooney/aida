@@ -1,5 +1,6 @@
 id: 01a1b886-57d9-7f92-ae49-8514aff1554f
 spec_id: TASK-b6b1278890774ef993d2ebc327862470-962
+agreed_id: TASK-2999
 title: 'COSMETIC: PR #3637 body is stale vs head b04c98e — it still reports the portabi…'
 description: |-
   Non-blocking finding carried forward from an APPROVED review verdict on TASK-3424, which has since completed — recorded here so it keeps a queryable home once the verdict record stops being read.
@@ -20,6 +21,13 @@ tags:
 - finding-hash:615af454
 - from-review:PR-3637
 - kind:carried-forward
+history:
+- id: 01a1b894-4a2a-79c3-b113-39e69d63767d
+  author: joe
+  timestamp: 2026-11-08T00:34:48.490318116Z
+  session_id: 01a1b848-940b-7bd2-8acd-52e428b182b8
+  harness_version: 2.1.319 (Claude Code)
+  changes: []
 filed_at:
   code_sha: 2782389cd8ad9240672ea95d0f2209c7f193700b
   branch: main
