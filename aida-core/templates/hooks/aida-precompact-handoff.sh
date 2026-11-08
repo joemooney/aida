@@ -108,6 +108,10 @@ def main():
     prs = run(['gh', 'pr', 'list', '--head', branch, '--state', 'open',
                '--limit', '100', '--json', 'number,headRefName'], 65536, timeout=3)
     origins = {spec.upper()}
+    # Reviewer worktrees use pr-N rather than the forge head branch.
+    review_branch = re.fullmatch(r'pr-([1-9][0-9]*)', branch, re.I)
+    if review_branch:
+        origins.add('PR-' + review_branch.group(1))
     pr_known = False
     try:
         entries = json.loads(prs)
@@ -116,9 +120,10 @@ def main():
         for entry in entries:
             if entry['headRefName'] == branch:
                 origins.add('PR-' + str(int(entry['number'])))
-        pr_known = len(entries) < 100 and bool(branch) and not branch.startswith('unknown (')
+        pr_known = bool(origins - {spec.upper()}) and len(entries) < 100
     except (ValueError, KeyError, TypeError):
         pass
+    pr_known = pr_known or bool(review_branch)
     # Real stores need ~5 seconds; leave the remaining budget for persistence.
     rows = run(['aida', 'findings', 'list', '--json'], 65536, timeout=6.5)
     try:

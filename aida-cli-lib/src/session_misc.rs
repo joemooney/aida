@@ -996,7 +996,14 @@ pub(crate) fn session_handoff_seat(
     } else {
         role_seat.clone()
     };
-    let project_root = main_worktree_root_from(&find_project_root()?);
+    // Recovery writes stay inside the lane's existing writable worktree. Deliberate
+    // rotation handoffs and standing orders retain their shared primary root.
+    // trace:STORY-2662 | ai:codex
+    let project_root = if snapshot {
+        cwd.clone()
+    } else {
+        main_worktree_root_from(&cwd)
+    };
     if let Some(src) = write {
         let body = if src == "-" {
             let mut s = String::new();
@@ -1009,7 +1016,7 @@ pub(crate) fn session_handoff_seat(
         let mut writer = seat_rotation::HandoffWriter::from_env(final_);
         if snapshot {
             seat_rotation::prune_compact_snapshots(&project_root);
-            writer.snapshot_owner = Some((cwd, role_seat));
+            writer.snapshot_owner = Some((cwd.clone(), role_seat.clone()));
         }
         let written = seat_rotation::write_handoff_kind(
             &project_root,
@@ -1032,7 +1039,11 @@ pub(crate) fn session_handoff_seat(
         if final_ {
             println!("Final handoff: a rotation supervisor will not relaunch this session.");
         }
-        println!("Next session: aida session handoff --seat {seat} --show");
+        if snapshot {
+            println!("Next session: aida session handoff --seat {role_seat} --snapshot --show");
+        } else {
+            println!("Next session: aida session handoff --seat {seat} --show");
+        }
         return Ok(());
     }
     // A rotated generation loads exactly the handoff its supervisor matched
@@ -1059,7 +1070,7 @@ pub(crate) fn session_handoff_seat(
     // Explicit body-only and rotated reads retain their exact-note semantics.
     // trace:STORY-2662 | ai:codex
     let handoff = if !snapshot && !rotated && !body_only {
-        let recovery = seat_rotation::read_latest_handoff(&project_root, &snapshot_seat)?;
+        let recovery = seat_rotation::read_latest_handoff(&cwd, &snapshot_seat)?;
         match recovery {
             Some(text) => Some(format!(
                 "{}\nRecovery snapshot (may be stale; revalidate):\n{text}",

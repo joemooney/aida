@@ -14,10 +14,10 @@ HOOK = ROOT / 'aida-core/templates/hooks/aida-precompact-handoff.sh'
 
 
 class PrecompactHandoff(unittest.TestCase):
-    def fixture(self, event='PreCompact', extra=None, fail=False, large=False, slow=False, missing=False, rotated=False, slow_findings=False, pr_fail=False, branch="story-2662", scope="STORY-2662", slow_pr=False, saturated=False):
+    def fixture(self, event='PreCompact', extra=None, fail=False, large=False, slow=False, missing=False, rotated=False, slow_findings=False, pr_fail=False, branch="story-2662", scope="STORY-2662", slow_pr=False, saturated=False, empty_pr=False):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
-            for flag, enabled in [('slow-findings', slow_findings), ('pr-fail', pr_fail), ('slow-pr', slow_pr), ('saturated', saturated)]:
+            for flag, enabled in [('slow-findings', slow_findings), ('pr-fail', pr_fail), ('slow-pr', slow_pr), ('saturated', saturated), ('empty-pr', empty_pr)]:
                 if enabled:
                     (root/flag).touch()
             fake = root / 'aida'
@@ -42,7 +42,7 @@ elif 'verdict' in args:
 elif 'pr' in args:
     if (p/'slow-pr').exists(): time.sleep(1.97)
     if (p/'pr-fail').exists(): sys.exit(1)
-    print(__import__('json').dumps([{'headRefName': os.environ['FIXTURE_BRANCH'], 'number': 3655}] * (100 if (p/'saturated').exists() else 1)))
+    print(__import__('json').dumps([{'headRefName': os.environ['FIXTURE_BRANCH'], 'number': 3655}] * (0 if (p/'empty-pr').exists() else 100 if (p/'saturated').exists() else 1)))
 elif 'findings' in args:
     if (p/'slow-findings').exists(): time.sleep(5.4)
     print('{"findings":[{"id":"TASK-1","source":"implementer","origin":"STORY-2662","title":"parser mismatch"},{"id":"TASK-2","source":"review","origin":"PR-3655","title":"review regression"},{"origin":"STORY-other","title":"unrelated finding"}]}' if os.environ['LARGE'] == '0' else '界'*100000)
@@ -124,6 +124,15 @@ elif 'findings' in args:
     def test_saturated_branch_list_stays_unknown(self):
         _, packet, _ = self.fixture(saturated=True)
         self.assertIn('Review findings unknown', packet)
+
+    def test_empty_branch_lookup_stays_unknown(self):
+        _, packet, _ = self.fixture(empty_pr=True)
+        self.assertIn('Review findings unknown', packet)
+
+    def test_review_branch_retains_pr_origin_without_head_match(self):
+        _, packet, _ = self.fixture(branch='pr-3655', empty_pr=True)
+        self.assertIn('review regression', packet)
+        self.assertNotIn('Review findings unknown', packet)
 
     def test_canonical_branch_fallback_labels_spec_findings_unknown(self):
         _, packet, _ = self.fixture(branch='story-b6b1278890774ef993d2ebc327862470-585', scope='')

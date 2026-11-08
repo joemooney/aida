@@ -254,7 +254,39 @@ fn precompact_handoff_cli_round_trip() {
         .unwrap();
     assert!(other.status.success(), "{}", show(&other));
     assert!(other.stdout.is_empty());
-    let mut child = aida(&sibling, &home)
+    // Real write-boundary regression: primary checkout stays read-only while
+    // only the lane worktree and private HOME are writable.
+    let probe = Command::new("bwrap")
+        .args(["--ro-bind", "/", "/", "--", "true"])
+        .output();
+    let base = aida(&sibling, &home);
+    let mut bounded;
+    let command = if probe.is_ok_and(|o| o.status.success()) {
+        bounded = Command::new("bwrap");
+        bounded
+            .args(["--ro-bind", "/", "/", "--bind"])
+            .arg(&sibling)
+            .arg(&sibling)
+            .arg("--bind")
+            .arg(&home)
+            .arg(&home)
+            .arg("--")
+            .arg(base.get_program())
+            .current_dir(&sibling);
+        for (key, value) in base.get_envs() {
+            if let Some(value) = value {
+                bounded.env(key, value);
+            } else {
+                bounded.env_remove(key);
+            }
+        }
+        &mut bounded
+    } else {
+        eprintln!("SKIP boundary namespace: bwrap unavailable; local path assertions still run");
+        bounded = base;
+        &mut bounded
+    };
+    let mut child = command
         .args([
             "session",
             "handoff",
@@ -281,8 +313,19 @@ fn precompact_handoff_cli_round_trip() {
         std::fs::read_dir(repo.join(".aida/handoff"))
             .unwrap()
             .count(),
-        2
+        1
     );
+    assert!(
+        sibling.join(".aida/handoff").is_dir(),
+        "snapshot must use the contained lane write boundary"
+    );
+    let recovered = aida(&sibling, &home)
+        .env("AIDA_SESSION_ROLE", "implementer")
+        .args(["session", "handoff", "--show"])
+        .output()
+        .unwrap();
+    assert!(recovered.status.success(), "{}", show(&recovered));
+    assert!(String::from_utf8_lossy(&recovered.stdout).contains("SIBLING RECOVERY"));
     git(
         &repo,
         &home,
@@ -316,6 +359,6 @@ fn precompact_handoff_cli_round_trip() {
             .unwrap()
             .count(),
         1,
-        "removed worktree's snapshot is pruned; live root remains"
+        "worktree removal removes its local snapshot; primary slot remains"
     );
 }

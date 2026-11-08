@@ -400,10 +400,10 @@ Claude seats register a best-effort `PreCompact` hook that writes through
 `aida session handoff --write -`. The packet retains the spec pointer, branch,
 last recorded verdict, findings with the spec or branch PR as origin, matched rotation
 context and a recovery step. The CLI uses a reusable `compact-<hash>` seat derived
-from the Git worktree root and role within the existing handoff substrate. Each slot retains one
-packet and one diagnostic log row across native session generations. Snapshot writes
-prune recognized slots whose recorded worktree no longer exists; unreadable or
-legacy slots without ownership metadata are retained. Read it with
+from the Git worktree root and role within that worktree’s `.aida/handoff`. This
+keeps writes inside the contained lane boundary; deliberate rotation handoffs remain
+in the primary checkout. Each slot retains one packet and one diagnostic log row
+across native session generations and disappears when its worktree is removed. Read it with
 `aida session handoff --snapshot --show --body-only`; ordinary
 `aida session handoff --show` also includes the current worktree/role snapshot,
 so a relaunch can discover it. The paired `SessionStart` handler injects it only
@@ -418,7 +418,8 @@ role plus native session ID. It reads at most 64 KiB of hook JSON, caps the pack
 caps each command's output and time, and budgets 14 seconds overall (15 seconds
 in Claude's wiring). Missing tools, refused writes and unavailable evidence do
 not block compaction. GitHub PR discovery uses a branch-scoped read-only `gh pr list --head` query
-with a three-second deadline and saturation detection; unavailable PR evidence
+with a three-second deadline and saturation detection. Empty results stay unknown;
+review branches named `pr-N` retain their explicit PR origin. Unavailable PR evidence
 (including other forges) stays explicitly unknown. Unresolved branch-derived spec
 pointers also leave spec findings explicitly unknown. Findings receive
 a 6.5-second probe budget, with time reserved for persistence. Transcript files
