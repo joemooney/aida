@@ -3,12 +3,12 @@ spec_id: TASK-b6b1278890774ef993d2ebc327862470-880
 agreed_id: TASK-3223
 title: 'STORY-2561 S2: route CLI/MCP store writes through the mediation service and deny raw store writes in the shared boundary'
 description: 'Slice 2 of STORY-2561. Route every inventoried in-lane writer through the S1 service. In the shared AIDA bwrap boundary, make store objects, authority-bearing metadata and the shared derived cache read-only (ancestor grants, symlinks, primary-checkout launches and resume included), with lane-private or read-only derived caches where readers need them. The mediated profile is gated; Codex-native compatibility and its labels stay unchanged. Concurrency tests: stale base, concurrent mutation, and host failure after persist but before reply. Claude behavior is preserved.'
-status: NeedsAttention
+status: Approved
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-06T13:39:53.442026096Z
-modified_at: 2026-11-08T13:26:27.308891344Z
+modified_at: 2026-11-08T13:40:01.191537511Z
 req_type: Task
 tags:
 - architecture
@@ -830,6 +830,13 @@ comments:
   modified_at: 2026-11-08T13:20:42.247594546Z
   session_id: 01a1bb44e8d1
   harness_version: codex-cli 0.167.0
+- id: 01a1bb63-2c27-77d3-95d2-87fd4829217d
+  author: joe
+  content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: Head e88fe1f3543b fixes all four code/doc findings from the last round and adds the paired same-sandbox raw-denial plus mediated comment_add test, but the binding routing acceptance is still unmet (mediated inventory exits 1) and CI has not finished.. It was punted on: design-fork: The remaining S2a routing acceptance needs a policy decision: the binding ruling requires every inventoried CLI/MCP writer to route before mediated admission, but existing comment edit/delete intentionally refuse because no ownership policy is approved (review finding 4 in comment 50, removal in comment 51). Decide whether these existing writer operations may remain explicitly refused for this cutover, as the approved sketch allows, or approve their typed host-handler ownership policy. I dispute treating early refusal alone as verified routing: that would hide the still-unresolved writer inventory (3163 sites, 293 operations), so I am retaining the production gate. This run adds a same-bwrap-process raw-object-write denial plus production-broker/host comment_add fixture and fixes current review findings 3, 5, 6 and 7 from comment 57; validation is running. Complete routing and make check-ci-fast remain unmet. own_claim/queue_done stay with TASK-3326.. No triage reason was given.'
+  created_at: 2026-11-08T13:40:01.191535816Z
+  modified_at: 2026-11-08T13:40:01.191535816Z
+  session_id: 01a1b9af-8230-75d2-82f8-667491cc010a
+  harness_version: 2.1.319 (Claude Code)
 history:
 - id: 01a1b116-742d-73c0-9064-1933f11e4c38
   author: joe
@@ -1517,6 +1524,15 @@ history:
   session_id: 01a1bb53c83f
   harness_version: 2.1.319 (Claude Code)
   changes: []
+- id: 01a1bb63-2c27-77d3-95d2-87eb750f4adf
+  author: joe
+  timestamp: 2026-11-08T13:40:01.191526527Z
+  session_id: 01a1b9af-8230-75d2-82f8-667491cc010a
+  harness_version: 2.1.319 (Claude Code)
+  changes:
+  - field_name: status
+    old_value: NeedsAttention
+    new_value: Approved
 execution_mode: drive
 filed_at:
   code_sha: 50ce509da3f7edbd12ff6636fe996c9c3a65c68f
@@ -1526,17 +1542,3 @@ filed_at:
   aida_build_sha: dd852f74c3b
   vendor: claude
   session: b0a84e34-277c-4df6-b53c-43f4bbe2e84d
-attention_reason:
-  category: design-fork
-  detail: 'The remaining S2a routing acceptance needs a policy decision: the binding ruling requires every inventoried CLI/MCP writer to route before mediated admission, but existing comment edit/delete intentionally refuse because no ownership policy is approved (review finding 4 in comment 50, removal in comment 51). Decide whether these existing writer operations may remain explicitly refused for this cutover, as the approved sketch allows, or approve their typed host-handler ownership policy. I dispute treating early refusal alone as verified routing: that would hide the still-unresolved writer inventory (3163 sites, 293 operations), so I am retaining the production gate. This run adds a same-bwrap-process raw-object-write denial plus production-broker/host comment_add fixture and fixes current review findings 3, 5, 6 and 7 from comment 57; validation is running. Complete routing and make check-ci-fast remain unmet. own_claim/queue_done stay with TASK-3326.'
-  lean: Keep admission gated and Refs-only; approve explicit per-operation routing/refusal dispositions and existing-comment ownership before claiming zero unrouted writers.
-  raised_by: implementer
-  raised_at: 2026-11-08T13:16:32.103704937Z
-failure_reason:
-  phase: reviewer
-  phase_index: 3
-  kind: verdict:request-changes
-  detail: Head e88fe1f3543b fixes all four code/doc findings from the last round and adds the paired same-sandbox raw-denial plus mediated comment_add test, but the binding routing acceptance is still unmet (mediated inventory exits 1) and CI has not finished.
-  recovery_hint: address the review findings, move TASK-3223 back to In Progress, and clear the PR hold only after approval
-  shelved_by: reviewer
-  shelved_at: 2026-11-08T13:26:27.308891344Z
