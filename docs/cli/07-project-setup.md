@@ -833,7 +833,8 @@ reservation states. Without `--json` it prints the same observation for humans.
 It observes the standalone launcher's host-wide `~/.aida/standalone-implementers/`
 slot lock and records, shared across participating clones for the same host user;
 it neither initializes nor reaps slots. A busy writer or unreadable reservation
-returns an error rather than a false free-slot count. The printed slot scope identifies the shared state. This is a capacity
+returns an error rather than a false free-slot count. The printed slot scope
+identifies the shared state. This is a capacity
 observation, not readiness certification. Stop old launchers in every clone before
 cutover: older binaries use checkout-local slots and cannot see the new shared
 state. The new binary refuses while a live legacy slot remains in the current

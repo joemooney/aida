@@ -425,6 +425,23 @@ fn slots_dir() -> Result<PathBuf> {
     Ok(host_home()?.join(".aida/standalone-implementers"))
 }
 
+// A guard can release its reservation without the admission lock. A directory
+// entry may therefore disappear before it is opened; other read failures refuse.
+// trace:STORY-2660 | ai:codex
+fn read_slot(path: &Path) -> Result<Option<Slot>> {
+    let body = match std::fs::read(path) {
+        Ok(body) => body,
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Ok(None),
+        Err(e) => return Err(e).with_context(|| format!("reading reservation {}", path.display())),
+    };
+    serde_json::from_slice(&body).map(Some).with_context(|| {
+        format!(
+            "invalid reservation {}; host capacity unknown",
+            path.display()
+        )
+    })
+}
+
 /// Old launchers used checkout-local slots. Fail closed during the transition;
 /// only the owning old launcher may release its live reservation.
 fn refuse_legacy_slots(project_root: &Path) -> Result<()> {
@@ -439,9 +456,10 @@ fn refuse_legacy_slots(project_root: &Path) -> Result<()> {
         if path.extension().and_then(|v| v.to_str()) != Some("json") {
             continue;
         }
-        let slot: Slot = serde_json::from_slice(&std::fs::read(&path)?)
-            .context("unreadable legacy lane slot; host capacity unknown")?;
-        anyhow::ensure!(!aida_core::liveness::process_identity_is_alive(slot.pid, slot.start.as_deref()),
+        let Some(slot) = read_slot(&path)? else {
+            continue;
+        };
+        anyhow::ensure!(!crate::ownership::local_slot_process_is_alive(slot.pid, slot.start.as_deref()),
             "legacy checkout-local launcher {} still holds {}; let it finish before using host-wide slots", slot.pid, path.display());
     }
     Ok(())
@@ -584,7 +602,7 @@ pub(crate) struct HostStatus {
 pub(crate) fn host_status(project_root: &Path) -> Result<HostStatus> {
     refuse_legacy_slots(project_root)?;
     observe_host_slots(slots_dir()?, host_capacity(project_root)?, |pid, start| {
-        aida_core::liveness::process_identity_is_alive(pid, start)
+        crate::ownership::local_slot_process_is_alive(pid, start)
     })
 }
 
@@ -614,13 +632,9 @@ fn observe_host_slots(
                 if path.extension().and_then(|v| v.to_str()) != Some("json") {
                     continue;
                 }
-                let slot: Slot =
-                    serde_json::from_slice(&std::fs::read(&path)?).with_context(|| {
-                        format!(
-                            "invalid reservation {}; host status unknown",
-                            path.display()
-                        )
-                    })?;
+                let Some(slot) = read_slot(&path)? else {
+                    continue;
+                };
                 let live = is_alive(slot.pid, slot.start.as_deref());
                 let finishing = !slot.waiting
                     && slot
@@ -688,7 +702,7 @@ pub(crate) fn doctor_host_status(project_root: &Path, json: bool) -> Result<()> 
 }
 
 /// Rewrite this process's slot with `edit`. Best effort.
-fn edit_own_slot(_project_root: &Path, edit: impl FnOnce(&mut Slot)) {
+fn edit_own_slot(edit: impl FnOnce(&mut Slot)) {
     let Ok(dir) = slots_dir() else {
         return;
     };
@@ -709,8 +723,8 @@ fn edit_own_slot(_project_root: &Path, edit: impl FnOnce(&mut Slot)) {
 /// the slot once the child logs its final result. A new log clears the
 /// waiting mark: the resumed run is counted by its own log.
 // trace:BUG-B6B1278890774EF993D2EBC327862470-027 | ai:claude
-pub(crate) fn record_slot_log(project_root: &Path, log_path: &Path) {
-    edit_own_slot(project_root, |slot| {
+pub(crate) fn record_slot_log(_project_root: &Path, log_path: &Path) {
+    edit_own_slot(|slot| {
         slot.log = Some(log_path.to_path_buf());
         slot.waiting = false;
     });
@@ -719,8 +733,8 @@ pub(crate) fn record_slot_log(project_root: &Path, log_path: &Path) {
 /// Mark this process's slot as waiting on its child's background run, so
 /// the cap keeps counting it while the logged final result says it ended.
 // trace:BUG-B6B1278890774EF993D2EBC327862470-044 | ai:claude
-pub(crate) fn mark_slot_waiting(project_root: &Path) {
-    edit_own_slot(project_root, |slot| slot.waiting = true);
+pub(crate) fn mark_slot_waiting(_project_root: &Path) {
+    edit_own_slot(|slot| slot.waiting = true);
 }
 
 /// A held concurrency slot; released when dropped.
@@ -739,7 +753,7 @@ impl Drop for SlotGuard {
 pub(crate) fn acquire_slot(project_root: &Path, spec: &str, cap: usize) -> Result<SlotGuard> {
     refuse_legacy_slots(project_root)?;
     acquire_slot_in(slots_dir()?, spec, cap, std::process::id(), |pid, start| {
-        aida_core::liveness::process_identity_is_alive(pid, start)
+        crate::ownership::local_slot_process_is_alive(pid, start)
     })
 }
 
@@ -777,9 +791,9 @@ fn acquire_slot_in(
         if path.extension().and_then(|e| e.to_str()) != Some("json") {
             continue;
         }
-        let slot: Slot = serde_json::from_slice(&std::fs::read(&path)?).with_context(|| {
-            format!("invalid reservation {}; refusing admission", path.display())
-        })?;
+        let Some(slot) = read_slot(&path)? else {
+            continue;
+        };
         match slot {
             // A launcher whose child already logged its final result is
             // finishing, not running: its slot stays but is not counted.
@@ -1288,6 +1302,32 @@ mod bug_2436_finished_lane_lease_tests;
 #[cfg(test)]
 mod host_capacity_tests {
     use super::*;
+
+    #[test]
+    fn host_capacity_released_directory_entry_is_absent() {
+        let tmp = tempfile::tempdir().unwrap();
+        let guard = acquire_slot_in(tmp.path().into(), "STORY-2660", 1, 500, |_, _| true).unwrap();
+        let entry = std::fs::read_dir(tmp.path())
+            .unwrap()
+            .map(|e| e.unwrap().path())
+            .find(|p| p.extension().is_some_and(|e| e == "json"))
+            .unwrap();
+        drop(guard);
+        assert!(read_slot(&entry).unwrap().is_none());
+        assert_eq!(
+            observe_host_slots(
+                tmp.path().into(),
+                resolve_host_capacity(None, None, 2).unwrap(),
+                |_, _| true
+            )
+            .unwrap()
+            .free,
+            1
+        );
+        assert!(acquire_slot_in(tmp.path().into(), "STORY-2660", 1, 501, |_, _| true).is_ok());
+        std::fs::create_dir(&entry).unwrap();
+        assert!(read_slot(&entry).is_err(), "other read errors must refuse");
+    }
 
     #[test]
     fn host_capacity_precedence_and_cpu_default() {
