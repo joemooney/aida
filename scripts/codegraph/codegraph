@@ -17,6 +17,7 @@ import struct
 import subprocess
 import sys
 import tempfile
+import threading
 import time
 
 MAX_REQUEST = 4096
@@ -99,6 +100,8 @@ class Host:
         self.stamp = None
         self.indexed_at = None
         self.captured_at = None
+        self.refresh_error = None
+        self.published = None
 
     def refresh(self):
         lock = self.primary / ".codegraph/codegraph.lock"
@@ -132,6 +135,8 @@ class Host:
             self.stamp = stamp
             self.indexed_at = indexed_at
             self.captured_at = time.time()
+            self.published = {"protocol": 1, "indexed_at": self.indexed_at,
+                              "captured_at": self.captured_at}
             if previous is not None:
                 previous.cleanup()
         except BaseException:
@@ -139,17 +144,30 @@ class Host:
             raise
 
     def status(self):
-        return {"protocol": 1, "indexed_at": self.indexed_at,
-                "captured_at": self.captured_at,
-                "snapshot_age_seconds": max(0, int(time.time() - self.indexed_at))}
+        # Publish one complete generation atomically; status never waits for the
+        # snapshot/query lock, and never dereferences a disposable generation.
+        published = self.published
+        if published is None:
+            raise ValueError("no host snapshot available")
+        return {**published, "refresh_error": self.refresh_error,
+                "snapshot_age_seconds": max(0, int(time.time() - published["indexed_at"]))}
+
+    def maintain(self):
+        try:
+            self.refresh()
+            self.refresh_error = None
+        except (OSError, ValueError, sqlite3.Error, TimeoutError) as exc:
+            self.refresh_error = str(exc)
+            if self.snapshot is None:
+                raise
 
     def query(self, request):
         validate(request)
-        # Status observes the maintained snapshot; it never initiates a backup.
-        if request["op"] != "status" or self.snapshot is None:
-            self.refresh()
         if request["op"] == "status":
             return {"rc": 0, "output": "", **self.status()}
+        # A host reindex must not hide an already usable snapshot. Retain its
+        # original freshness and expose the refresh error to diagnostics.
+        self.maintain()
         op = request["op"]
         argv = [str(self.upstream), op, request["symbol"], "--json", "--path", self.snapshot.name]
         if op == "impact":
@@ -206,43 +224,76 @@ def serve(primary, state, upstream):
     directory = host.primary / ".codegraph"
     path = directory / "lane-query.sock"
     descriptor = directory / DESCRIPTOR
-    # Refuse existing sockets, including live services. Host removes a stale
-    # socket explicitly after checking its owner; never unlink blindly.
+    # Refresh and graph queries share a lock; status and heartbeat publication
+    # stay on the accept path. Bounded request workers keep a stalled peer from
+    # blocking doctor's 250ms status probe or growing unbounded host threads.
+    work = threading.Lock()
+    slots = threading.BoundedSemaphore(16)
+    stopped = threading.Event()
+    workers = set()
+
+    def maintain():
+        while not stopped.wait(1):
+            with work:
+                host.maintain()
+
+    def respond(conn):
+        try:
+            with conn:
+                try:
+                    _, uid, _ = struct.unpack("3i", conn.getsockopt(socket.SOL_SOCKET, socket.SO_PEERCRED, 12))
+                    if uid != os.getuid():
+                        raise ValueError("foreign proxy peer")
+                    request = receive(conn, MAX_REQUEST, timeout=2)
+                    validate(request)
+                    if request["op"] == "status":
+                        result = host.query(request)
+                    elif not work.acquire(timeout=QUERY_TIMEOUT):
+                        raise TimeoutError("host query busy; retry")
+                    else:
+                        try:
+                            result = host.query(request)
+                        finally:
+                            work.release()
+                except (OSError, ValueError, sqlite3.Error, TimeoutError) as exc:
+                    result = {"rc": 1, "output": f"codegraph proxy: {exc}\n"}
+                try:
+                    conn.settimeout(1)
+                    send(conn, result)
+                except OSError:
+                    pass
+        finally:
+            slots.release()
+
+    # Refuse existing sockets, including live services; never unlink blindly.
     with socket.socket(socket.AF_UNIX) as server:
         server.bind(str(path))
         os.chmod(path, 0o600)
-        server.listen(4)
-        server.settimeout(1)
+        server.listen(16)
+        server.settimeout(0.1)
         identity = path.stat().st_ino
+        refresher = threading.Thread(target=maintain)
+        refresher.start()
         try:
             while True:
-                # Polling refresh follows every primary sync, including when no
-                # lane is querying. A failed refresh leaves the old age visible.
-                error = None
-                try:
-                    host.refresh()
-                except (OSError, ValueError, sqlite3.Error, TimeoutError) as exc:
-                    error = str(exc)
-                data = {**host.status(), "socket": str(path), "observed_at": time.time(), "refresh_error": error}
+                data = {**host.status(), "socket": str(path), "observed_at": time.time()}
                 write_descriptor(directory, descriptor, data)
                 try:
                     conn, _ = server.accept()
                 except socket.timeout:
                     continue
-                with conn:
-                    conn.settimeout(QUERY_TIMEOUT + 2)
-                    try:
-                        _, uid, _ = struct.unpack("3i", conn.getsockopt(socket.SOL_SOCKET, socket.SO_PEERCRED, 12))
-                        if uid != os.getuid():
-                            raise ValueError("foreign proxy peer")
-                        result = host.query(receive(conn, MAX_REQUEST, timeout=2))
-                    except (OSError, ValueError, sqlite3.Error, TimeoutError) as exc:
-                        result = {"rc": 1, "output": f"codegraph proxy: {exc}\n"}
-                    try:
-                        send(conn, result)
-                    except OSError:
-                        pass
+                workers = {worker for worker in workers if worker.is_alive()}
+                if not slots.acquire(blocking=False):
+                    conn.close()
+                    continue
+                worker = threading.Thread(target=respond, args=(conn,))
+                workers.add(worker)
+                worker.start()
         finally:
+            stopped.set()
+            refresher.join()
+            for worker in workers:
+                worker.join()
             if path.exists() and path.stat().st_ino == identity:
                 path.unlink()
             if host.snapshot is not None:
@@ -254,7 +305,7 @@ def discover(start):
         descriptor = root / ".codegraph" / DESCRIPTOR
         if descriptor.is_file():
             data = json.loads(descriptor.read_text())
-            if data.get("protocol") != 1:
+            if not isinstance(data, dict) or data.get("protocol") != 1:
                 raise ValueError("unsupported codegraph proxy protocol")
             return str(descriptor.parent.resolve() / "lane-query.sock")
     raise ValueError("no host codegraph proxy; ask the host to deploy it (do not initialize a lane index)")

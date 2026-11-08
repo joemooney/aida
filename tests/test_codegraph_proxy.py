@@ -106,14 +106,16 @@ with sqlite3.connect(p / '.codegraph/codegraph.db') as db:
         self.assertGreaterEqual(host.status()["snapshot_age_seconds"], 7200)
         self.assertLess(time.time() - host.captured_at, 2)
 
-    def test_reindex_lock_refuses_refresh_without_replacing_previous_snapshot(self):
+    def test_reindex_lock_serves_previous_snapshot_with_refresh_error(self):
         host = self.host()
         host.refresh()
         previous = host.snapshot.name
         lock = self.primary / ".codegraph/codegraph.lock"
         lock.write_text("host indexer")
-        with self.assertRaisesRegex(ValueError, "reindex lock"):
-            host.query({"op": "callers", "symbol": "known"})
+        result = host.query({"op": "callers", "symbol": "known"})
+        self.assertEqual(result["rc"], 0)
+        self.assertIn("reindex lock", result["refresh_error"])
+        self.assertEqual(json.loads(result["output"])["files"], [["caller.rs"]])
         self.assertEqual(host.snapshot.name, previous)
         self.assertEqual(host.query({"op": "status"})["rc"], 0)
         lock.unlink()
@@ -162,6 +164,70 @@ with sqlite3.connect(p / '.codegraph/codegraph.db') as db:
         (self.primary / ".codegraph" / proxy.DESCRIPTOR).write_text(json.dumps({"protocol": 1, "socket": "/untrusted"}))
         # Derive the socket from the shared directory, never from arbitrary JSON.
         self.assertEqual(proxy.discover(seat), str(self.primary / ".codegraph/lane-query.sock"))
+
+    def test_discovery_refuses_non_object_descriptor(self):
+        for body in ("[]", "null", "1", '"text"'):
+            with self.subTest(body=body):
+                (self.primary / ".codegraph" / proxy.DESCRIPTOR).write_text(body)
+                result = subprocess.run([str(SCRIPT), "status", "--path", str(self.primary)],
+                                        capture_output=True, text=True, timeout=5)
+                self.assertEqual(result.returncode, 1)
+                self.assertIn("unsupported codegraph proxy protocol", result.stderr)
+                self.assertNotIn("Traceback", result.stderr)
+
+    def test_status_and_heartbeat_stay_responsive_during_query_and_stalled_peer(self):
+        marker = self.state / "query-started"
+        self.upstream.write_text("#!/usr/bin/python3\nimport pathlib,time\npathlib.Path(" +
+                                 repr(str(marker)) + ").touch()\ntime.sleep(1)\nprint('{}')\n")
+        server = subprocess.Popen([str(SCRIPT), "serve", "--primary", str(self.primary),
+                                   "--state", str(self.state), "--upstream", str(self.upstream)],
+                                  stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+        query_result = []
+        query_errors = []
+        query = None
+        stalled = socket.socket(socket.AF_UNIX)
+        try:
+            path = str(self.primary / ".codegraph/lane-query.sock")
+            deadline = time.monotonic() + 5
+            while not Path(path).exists():
+                if server.poll() is not None or time.monotonic() > deadline:
+                    self.fail("proxy did not start")
+                time.sleep(0.01)
+            stalled.connect(path)
+            stalled.sendall(b"{")
+            def run_query():
+                try:
+                    query_result.append(proxy.client({"op": "callers", "symbol": "known"}, path))
+                except Exception as exc:
+                    query_errors.append(exc)
+            query = threading.Thread(target=run_query)
+            query.start()
+            while not marker.exists():
+                if time.monotonic() > deadline:
+                    self.fail("query did not start")
+                time.sleep(0.01)
+            for _ in range(3):
+                started = time.monotonic()
+                self.assertEqual(proxy.client({"op": "status"}, path)["rc"], 0)
+                self.assertLess(time.monotonic() - started, 0.25)
+                descriptor = json.loads((self.primary / ".codegraph" / proxy.DESCRIPTOR).read_text())
+                self.assertLess(time.time() - descriptor["observed_at"], 0.5)
+                time.sleep(0.1)
+            query.join(5)
+            self.assertFalse(query.is_alive())
+            self.assertEqual(query_errors, [])
+            self.assertEqual(query_result[0]["rc"], 0)
+        finally:
+            stalled.close()
+            server.terminate()
+            try:
+                server.communicate(timeout=8)
+            except subprocess.TimeoutExpired:
+                server.kill()
+                server.communicate()
+            if query is not None:
+                query.join(5)
+        self.assertEqual(server.returncode, 0)
 
     def test_protocol_refuses_oversized_and_truncated_requests(self):
         for data in (b"x" * 100, b'{"op":"status"}'):

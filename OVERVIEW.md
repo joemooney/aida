@@ -2,11 +2,6 @@
 existing CLI, registry and stakeholder paths re-export them.
 <!-- trace:TASK-3425 | ai:codex -->
 
-CodeGraph's optional host proxy queries disposable primary-index snapshots
-without a seat index write grant; `aida doctor --lane-host` reports snapshot age.
-See [deployment and validation](scripts/codegraph/README.md).
-<!-- trace:STORY-2630 | ai:codex -->
-
 Mailbox delivery resolves named agents against current registry liveness,
 shares canonicalization across CLI/MCP/mentions, refuses unknown/dead agents
 and empty role/vendor audiences, and lists group readers. Known people retain

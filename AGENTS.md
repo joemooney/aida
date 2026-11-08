@@ -474,11 +474,6 @@ next agent.
 
 ## Project Orientation
 
-Host-deployed CodeGraph query proxies use disposable host snapshots and add no
-seat index write grant. `aida doctor --lane-host` reports snapshot age; deployment
-and live-seat acceptance are described in [the proxy guide](scripts/codegraph/README.md).
-<!-- trace:STORY-2630 | ai:codex -->
-
 For code navigation, use `codegraph callers <symbol>`, `codegraph callees <symbol>` or `codegraph impact <symbol>` against the shared primary-checkout index (main, not your lane branch); confirm “no callers” with `rg`, since large or unindexed files can be absent. Never run `codegraph init`, `index` or `sync` from a lane. Use `aida doctor check codegraph` to diagnose missing tools or unreachable/stale indexes.
 <!-- trace:STORY-2630 | ai:codex -->
 

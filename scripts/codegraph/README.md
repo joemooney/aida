@@ -20,9 +20,12 @@ Only `callers`, `callees`, `impact` and `status` are accepted. The server fixes
 the executable, snapshot path and scrubbed environment, bounds requests/results
 and kills query process groups after 15 seconds. Query options cannot change
 project, executable, environment or run an indexer. Same-uid peers only. Each
-server serializes queries and backups. Its periodic refresh detects primary
+server serializes queries and backups, while bounded request workers answer
+status independently and the accept loop publishes heartbeats. Its periodic refresh detects primary
 DB/WAL changes after host reindexing, even without a lane query. An active upstream reindex lock or changed input
 during backup refuses that refresh and retains the preceding snapshot age.
+Queries continue against the preceding snapshot when refresh fails; status and
+the descriptor expose the refresh error. A first snapshot remains mandatory.
 New snapshots preserve the primary index's timestamp for freshness: capturing
 an old index cannot make it appear fresh.
 
@@ -101,7 +104,11 @@ is not evidence of a successful graph query. Normal `doctor check codegraph`
 reports missing tool, stale (>1h) snapshot, refresh failure and unreachable
 query service or heartbeat. Before proxy deployment it retains the
 existing direct-index diagnostic. The descriptor is read with a bounded
-non-following regular-file handle.
+non-following regular-file handle. When a proxy descriptor is present, doctor
+also compares the PATH client with the bundled wrapper using a bounded read;
+an upstream or different client produces a `client-routing` finding. Reinstall
+the matching reviewed host wrapper with a candidate AIDA build. This diagnostic
+identifies client content only and grants no containment or launch authority.
 
 For native-sandbox diagnostics after deployment, use a candidate AIDA binary
 containing the new doctor flag. Existing and new seats both need the explicit
@@ -126,11 +133,10 @@ path to lane prompts, and the remaining contained-seat AC2/AC5 run. The current
 shared navigation prompt describes query selection but does not install or
 select this client. Do not treat a native run as AIDA-contained evidence.
 
-Known diagnostic limitation: the server serializes refresh and queries with
-acceptance of status connections. A busy server can exceed doctor's 250ms
-probe deadline and produce a false unreachable finding. Fixing status
-responsiveness under concurrent queries remains part of the host-proxy
-follow-up before final acceptance, rather than evidence of a missing index.
+Status requests bypass the query/backup lock. Up to sixteen bounded request
+workers isolate stalled peers, with a two-second request deadline. Excess
+connections are closed; callers can retry. Query lock acquisition is bounded
+at fifteen seconds. Heartbeats continue during backups and queries.
 
 The service must be deployed and that live query must pass before a completing
 STORY-2630 trailer is appropriate.

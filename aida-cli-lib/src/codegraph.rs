@@ -246,11 +246,45 @@ pub(crate) fn scan(root: &Path) -> Vec<DoctorFinding> {
     {
         return Vec::new();
     }
-    assess(
-        root,
-        crate::which_binary("codegraph").is_some(),
-        SystemTime::now(),
-    )
+    let binary = crate::which_binary("codegraph");
+    let mut findings = assess(root, binary.is_some(), SystemTime::now());
+    if root.join(".codegraph/lane-proxy.json").exists() {
+        if let Some(binary) = binary {
+            if !is_bundled_proxy(Path::new(&binary)) {
+                findings.push(finding(
+                    "client-routing",
+                    "PATH codegraph is not the bundled host-query client".into(),
+                    "Ask the host to install the reviewed query client outside seat writable roots and select it on PATH; a healthy proxy alone does not route bare codegraph commands.",
+                ));
+            }
+        }
+    }
+    findings
+}
+
+// Compare bounded data only; never execute an unknown PATH tool for diagnosis.
+// This identifies the deployed client, and grants no launch or sandbox authority.
+// trace:STORY-2630 | ai:codex
+fn is_bundled_proxy(path: &Path) -> bool {
+    use std::io::Read;
+    const CLIENT: &[u8] = include_bytes!("../../scripts/codegraph/codegraph");
+    let read = || -> std::io::Result<Vec<u8>> {
+        let mut options = std::fs::OpenOptions::new();
+        options.read(true);
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::OpenOptionsExt;
+            options.custom_flags(libc::O_NONBLOCK);
+        }
+        let file = options.open(path)?;
+        if !file.metadata()?.is_file() {
+            return Ok(Vec::new());
+        }
+        let mut body = Vec::new();
+        file.take(CLIENT.len() as u64 + 1).read_to_end(&mut body)?;
+        Ok(body)
+    };
+    read().is_ok_and(|body| body == CLIENT)
 }
 
 fn project_uses_codegraph(root: &Path) -> bool {
@@ -333,6 +367,19 @@ fn assess(root: &Path, binary_present: bool, now: SystemTime) -> Vec<DoctorFindi
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    // trace:STORY-2630 | ai:codex
+    #[test]
+    fn proxy_client_identity_refuses_upstream_and_nonregular_files() {
+        let tmp = tempfile::tempdir().unwrap();
+        let client = tmp.path().join("codegraph");
+        std::fs::write(&client, include_bytes!("../../scripts/codegraph/codegraph")).unwrap();
+        assert!(is_bundled_proxy(&client));
+        std::fs::write(&client, "#!/bin/sh\necho upstream\n").unwrap();
+        assert!(!is_bundled_proxy(&client));
+        assert!(!is_bundled_proxy(tmp.path()));
+        assert!(!is_bundled_proxy(&tmp.path().join("missing")));
+    }
 
     // trace:STORY-2630 | ai:codex
     #[test]
