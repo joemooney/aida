@@ -15,6 +15,10 @@
 //!   leases, including other clones' claims (TASK-1939).
 //! - `agent new <vendor> --no-exec`: Write → Read. Side-effect-free launch
 //!   declarations are available to stakeholder seats (STORY-1486).
+//!
+//! Rows removed by hand after capture:
+//! - Twenty retired STORY-1028 mode-flag variants (TASK-1214).
+// trace:TASK-1214 | ai:codex
 // trace:STORY-1728 | ai:claude
 
 use super::*;

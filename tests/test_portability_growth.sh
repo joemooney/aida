@@ -29,6 +29,25 @@ expect_failure "rules are unchanged" python3 "$CHECK" \
   "$TMP/base-allowlist" "$TMP/base-rules.json" \
   "$TMP/current-allowlist" "$TMP/current-rules.json"
 
+# trace:TASK-3428 | ai:codex
+# Moves preserve (rule, content) multiplicity, including content with colons.
+printf 'old\told.rs:source:with:colons\nold\tother.rs:source:with:colons\n' >"$TMP/base-allowlist"
+printf 'old\trenamed.rs:source:with:colons\nold\tother.rs:source:with:colons\n' >"$TMP/current-allowlist"
+python3 "$CHECK" "$TMP/base-allowlist" "$TMP/base-rules.json" \
+  "$TMP/current-allowlist" "$TMP/current-rules.json"
+printf 'old\tcopy.rs:source:with:colons\n' >>"$TMP/current-allowlist"
+expect_failure "rules are unchanged" python3 "$CHECK" \
+  "$TMP/base-allowlist" "$TMP/base-rules.json" \
+  "$TMP/current-allowlist" "$TMP/current-rules.json"
+# A changed rule or changed content cannot spend a retirement.
+for row in $'other\trenamed.rs:source:with:colons' $'old\trenamed.rs:different'; do
+  printf '%s\n' "$row" >"$TMP/current-allowlist"
+  expect_failure "rules are unchanged" python3 "$CHECK" \
+    "$TMP/base-allowlist" "$TMP/base-rules.json" \
+    "$TMP/current-allowlist" "$TMP/current-rules.json"
+done
+printf 'old\told.rs:old\n' >"$TMP/base-allowlist"
+
 # A new rule may baseline its findings, but an old rule still may not.
 cat >"$TMP/current-rules.json" <<'EOF'
 [
