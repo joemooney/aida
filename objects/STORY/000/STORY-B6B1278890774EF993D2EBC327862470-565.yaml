@@ -112,6 +112,31 @@ comments:
   modified_at: 2026-11-08 00:22:16.761106+00:00
   session_id: 01a1b848-940b-7bd2-8acd-52e428b182b8
   harness_version: 2.1.319 (Claude Code)
+- id: 01a1b898-b379-7740-b031-df9f60875b92
+  author: dirtlab
+  content: 'Native implementer rework handoff: edits are uncommitted for the host launcher. Addressed the recorded PR #3643 review findings in this pass.
+
+
+    Changed files: aida-cli-lib/src/lane_host.rs, vendors/host_diagnostics.rs, config_cmd.rs, doctor_cmd.rs, queue_cmd.rs; docs/cli/07-project-setup.md. FAQ-151 was updated through AIDA (store change queued for host commit) to retain the command pointer and manual SSH/hosts/clone/PATH/login/system setup steps.
+
+
+    Behavior: build-cache now inspects the effective user Cargo config (including legacy-file precedence) and executable wrapper presence, with lane reachability separated into an explicit non-gating NOTE. Unsupported auth probes, including AGY, likewise report unverifiable advisory evidence rather than permanent failure. JSON exposes required=false on advisory rows. CODEX_HOME is honored consistently by auth/config diagnostics, preset matching and the user-scope permission writer, with empty overrides falling back to ~/.codex. Contained parents skip host-file/nested-bwrap probes while ordinary child admission retains monotonic containment; malformed AIDA_CONTAINED refuses. Both early/resume gate predicates cover real no-human work and skip dry-run/no-launch/list-sessions. The resolved launch vendor is rechecked, including rework rerouting before spawn. The permission-writer bypass audit now includes lane_host.rs. Ignored doctor flags conflict with --lane-host, and init no longer runs the
+    live store-network probe.
+
+
+    Final-source validation (all exit 0, executed tests): lane_host::tests 18 passed (j20261108T003205763-2-0), permissions_set_ 9 passed (j20261108T003626047-2-0), story_2539_vendor_literal_ratchet 3 passed (j20261108T003024044-2-0), task_1531_bypass_writer_has_a_defence_in_depth_gate 1 passed (j20261108T003025308-2-0). The real queue-handler regression asserts doctor FAIL/fix output and no queue/lease/worktree writes on fresh and drain refusals, plus preview gate skipping. Unit tests separately exercise each failed containment row. Direct preflight tests cover missing policy, inherited containment and malformed parent context. rustfmt checks, git diff --check, check-exec-context.py (1241 legacy sites; zero additions) and check-store-writers.py passed. untested=false.
+
+
+    Limits retained explicitly: cache transport/in-sandbox reachability and unsupported credential validity remain advisory; binary freshness still uses the locally known origin default-branch SHA, with release freshness unverified. A late rework-vendor refusal may retain a lease for recovery. Future orchestrator phases retain ordinary admission; the early host gate is not a certification of all future phase vendors. These limits are documented rather than credited as verified evidence. codegraph is absent from this lane; rg confirmed the call sites.
+
+
+    No commit, push, PR creation, queue completion, review recording or merge was attempted. Host publication and subsequent queue completion remain host responsibilities.
+
+    '
+  created_at: 2026-11-08 00:39:37.593145+00:00
+  modified_at: 2026-11-08 00:39:37.593145+00:00
+  session_id: 01a1b88c6132
+  harness_version: codex-cli 0.167.0
 - id: 01a1b8dc-8f76-70b3-a4d8-9f39387410b8
   author: joe
   content: 'Native rework progress: changed only aida-cli-lib/src/lane_host.rs to exercise each containment failure independently through real fresh and drain queue handlers, with passing controls for all other containment rows and snapshots proving no project/user writes. Formatting, git diff --check, execution-context ledger (zero additions), and 8 Git fixture-maintenance tests passed. Rust validation remains pending: job j20261108T013313655-2-0 timed out compiling after 900s (no tests executed); retry j20261108T014845851-2-0 uses AIDA_CARGO_TIMEOUT=3600 and is currently queued for a Cargo slot. Non-completing native publication declaration recorded: [AI:codex] test(doctor): isolate lane host queue refusal conditions (Refs STORY-2642). No commit, push, PR creation or queue completion performed.'
