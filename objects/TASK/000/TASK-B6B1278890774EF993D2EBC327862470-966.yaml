@@ -11,7 +11,7 @@ priority: Low
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-08T03:38:52.682099623Z
-modified_at: 2026-11-08T19:00:13.638243351Z
+modified_at: 2026-11-08T19:00:16.472487181Z
 req_type: Task
 tags:
 - area:ci-relay
@@ -36,6 +36,25 @@ comments:
   content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: PARTIAL: record_skipped reports already-published attempts as needing action, so aida awaiting raises recurring false alarms after any validator change; CI still queued at review time.. No triage reason was given.'
   created_at: 2026-11-08T19:00:13.638242120Z
   modified_at: 2026-11-08T19:00:13.638242120Z
+  session_id: 01a1b9af-8230-75d2-82f8-667491cc010a
+  harness_version: 2.1.319 (Claude Code)
+- id: 01a1bc88-5f38-77c0-af8e-64efb9d94ddd
+  author: joe
+  content: |-
+    REVIEW FINDINGS TO ADDRESS (TASK-3452):
+    Verdict: CHANGES REQUESTED
+    Reviewed commit: cb8f6e76f358
+    Recorded: 2026-11-08T18:59:11.538815129+00:00
+    Findings:
+    1. F1 (blocking, aida-cli-lib/src/ci_relay.rs record_skipped): an unverified latest attempt is reported without checking its ci-status-<attempt>.json marker. process() treats a marker matching r.digest as already handled, but verification proof is lost on any cold pass: validator_prefix (intent_intake.rs:289) hashes ci_relay.rs, intent_intake.rs and three other sources, so routine upgrades discard the checkpoint. Every already-published latest attempt older than the newest 32 then appears in aida awaiting, its total and the status meter as needing a manual exact read, and returns after the next validator change. The spec's problem is a result that keeps a pending native status; these do not. Fix: exclude rows whose marker equals r.digest, and add a test with a cold pass over a published old attempt.
+    2. F2 (minor, ci_relay.rs process): the skipped list prints only through report(), so bail paths after it is computed (Uncertain native CI status publication, CI status processing identity conflict, Retained CI request changed, publish_status errors) exit without reporting skipped attempts in human or JSON output, while acceptance says process reports each one. Emit the report on these paths or before the fallible loop, keeping JSON to one parseable object.
+    3. F3 (minor, test gap, ci_relay.rs awaiting_skipped and status_awaiting.rs:1223): no test exercises the real path from the on-disk cache to aida awaiting. The Python test reads the cache files directly and awaiting_you_tests builds the report by hand, so a path or schema mismatch in awaiting_skipped would be swallowed by unwrap_or_default. Add a CLI or unit regression that loads a real cache through awaiting_skipped.
+    4. F4 (likely CI failure, unconfirmed because CI had not started; ci_relay.rs task3452_history_window_reports_skipped_attempts): the new lib test runs three Python history scenarios of 33-35 attempts in series but has no entry in scripts/test-time-budget.toml (default_limit 10s, over-limit touched tests fail the build) and no nextest override (.config/nextest.toml kills at 180s). Its precedent aida_sized_relay_native_statuses_reach_required_pr_and_train_gates has both. tests/test_work_ci_relay.py already runs in the contracts shard (ci.yml:510). Remove the wrapper or budget it.
+    5. F5 (minor, ci_relay.rs awaiting_skipped): more than 82 parts bails and unwrap_or_default turns that into an empty list, while record_skipped writes any number of parts; profile.branches() merges several histories, each capped at 8192 files. The display then silently loses every row, which is the silent skip this spec removes. Cap the written rows with an explicit overflow indication.
+    6. F6 (cosmetic, aida-cli-lib/src/awaiting_you.rs render_agent_view, render, summary sites): the new CI blocks were inserted between an existing // trace:BUG-2426 comment and the code it annotates, so that trace now labels TASK-3452 code and those blocks lack their own trace:TASK-3452 comment. Move the new blocks above the BUG-2426 comment and trace them.
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
+  created_at: 2026-11-08T19:00:16.312976734Z
+  modified_at: 2026-11-08T19:00:16.312976734Z
   session_id: 01a1b9af-8230-75d2-82f8-667491cc010a
   harness_version: 2.1.319 (Claude Code)
 history:
