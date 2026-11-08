@@ -20,7 +20,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-08T02:56:36.206726001Z
-modified_at: 2026-11-08T03:01:07.919399240Z
+modified_at: 2026-11-08T04:07:18.631582891Z
 req_type: Story
 tags:
 - architecture
@@ -36,6 +36,23 @@ relationships:
   target_id: 01a1b798-64a0-7890-a8c2-dd20db15b24d
   created_at: 2026-11-08T03:01:07.919395707Z
   created_by: joe
+comments:
+- id: 01a1b956-d767-7ce3-8e80-2c9e816f0c2b
+  author: joe
+  content: |-
+    Requirements learned running dell1 lanes from advisor scripts, 2026-11-07 20:00-21:05. Each one broke a real launch; the pool must handle all of them:
+    R1 Store handoff: the placing host pushes its store (queue/rework writes) before a remote launch, and the remote pulls before pickup. Without it dell1 refused reworks as 'needs-triage' because it had not seen 'aida queue rework'. (Script workaround: fill-slots3 'aida db sync --push'; dell1:~/lane-run.sh 'aida db sync --pull'.)
+    R2 Remote store health: a remote whose store pull fails (dell1 diverged 8 ahead / 246 behind on a status/history conflict) must not take lanes. Today the lane printed 'proceeding with local view' and worked stale for ~2.5h (root cause on BUG-2490).
+    R3 Launch outcome is a typed result, not log scraping: a lane emits non-fatal 'error:' lines (failed pre-pickup pull) and keeps going, and cold remote seats (no reflink, cold cargo target) take >5 min to reach 'launching'. Log-grep placement misread both as refusals and launched duplicates locally.
+    R4 Remote orphaned leases: a finished remote lane's lease (clean seat, HEAD already in a landed PR) blocks every rework of that spec, and ending it needed the operator by hand. Pool hosts need the same automatic dead-lease end as local (STORY-2315), run on the host that owns the lease.
+    R5 Cross-host 'lane running' and slot counts: count lanes per host, and treat an unreachable host as full, never as zero (a pgrep -c 0-with-exit-1 bug counted dell1 as full).
+    R6 Publish on the lane host: uncommitted seat edits are published from the remote seat after the lane exits (dell1:~/lane-run.sh does this today).
+    R7 Vendor version per host: dell1 runs codex 0.167.0 vs the 0.166.0 pin (TASK-3000); placement checks the host's vendor binaries against pins.
+    R8 Grants: remote lanes currently launch ungranted. Decide whether pool lanes need a seat grant on the remote; if so the pool delivers it (no remote deputy today).
+  created_at: 2026-11-08T04:07:18.631582891Z
+  modified_at: 2026-11-08T04:07:18.631582891Z
+  session_id: 01a1b8be-8170-7fb2-89ab-ecb4c6eee98c
+  harness_version: 2.1.319 (Claude Code)
 history:
 - id: 01a1b91a-2eb5-7142-b252-8d3eb8d49b14
   author: joe
