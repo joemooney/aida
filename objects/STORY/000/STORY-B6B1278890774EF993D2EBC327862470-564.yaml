@@ -18,12 +18,12 @@ description: |
   2. Without sccache configured, behaviour is unchanged.
   3. Test: the job profile's env/bind set includes the cache dir and wrapper only when configured.
   4. The trust decision (shared or lane-only cache) is recorded on this spec before implementation.
-status: InProgress
+status: NeedsAttention
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-07T19:59:26.079479Z
-modified_at: 2026-11-08T11:13:21.336202421Z
+modified_at: 2026-11-08T11:15:40.526863888Z
 req_type: Story
 comments:
 - id: 01a1b798-f0d4-73b1-93d5-f84581f2d190
@@ -325,6 +325,15 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a1badf-056e-7810-b847-516622214403
+  author: dirtlab
+  timestamp: 2026-11-08T11:15:40.526877206Z
+  session_id: 01a1badcd984
+  harness_version: codex-cli 0.167.0
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: NeedsAttention
 filed_at:
   code_sha: 7a18c0d52a6a4e0822befd4c810cfed16b04b74c
   branch: main
@@ -334,3 +343,8 @@ filed_at:
   vendor: claude
   session: 01a1b76b-2fe7-7dd2-88d0-356fc8d96d04
   harness_version: 2.1.319 (Claude Code)
+attention_reason:
+  category: blocked-dependency
+  detail: 'Round-5 finding 1 is agreed and remains unresolved: AC1 requires two consecutive lane Cargo jobs with final sccache statistics and second-job Rust hits greater than zero on both primary and dell1, using a launcher built from this branch, or a recorded advisor amendment. This native seat cannot obtain both-host evidence. Findings 2-4 are fixed locally: no-resource seats disable the wrapper, lane cache preserves incremental compilation, and Cargo config precedence matches Cargo. Targeted tests and fast gates are running. Preserve the publication veto and existing merge hold.'
+  raised_by: implementer
+  raised_at: 2026-11-08T11:15:40.526863888Z
