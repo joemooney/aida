@@ -8,7 +8,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-07T23:39:41.575597Z
-modified_at: 2026-11-08T09:18:18.496920755Z
+modified_at: 2026-11-08T09:18:51.390321269Z
 req_type: Task
 relationships:
 - rel_type: Child
@@ -200,6 +200,12 @@ comments:
   content: 'PR #3644 round 7: addressed both review findings. Pure-move helper now includes aida-cli-lib/src/tests/fixtures/proc_identity_legacy_baseline.json and aida-cli-lib/src/tests/story_2539_vendor_literals.tsv, with pipe-key rewriting and stale-key validation. Extended both all-ledger no-write refusal and content/evidence preservation tests to cover these fixtures. Removed per-change paragraphs from AGENTS.md and OVERVIEW.md; usage/inventory notes remain in helper docstring. Targeted crate-split Python suite: 15 tests passed; git diff --check passed. Native seat leaves edits uncommitted for host publication. Existing merge-hold remains a separate review gate.'
   created_at: 2026-11-08T09:18:18.496920755Z
   modified_at: 2026-11-08T09:18:18.496920755Z
+  session_id: 01a1ba71ed90
+- id: 01a1ba74-11fe-7ce2-bf60-fcc9b106c0a0
+  author: joe
+  content: 'Round 7 final validation: python3 tests/test_exec_context_ratchet.py passed 19 tests; python3 scripts/check-crate-globs.py --base HEAD passed (220 remaining imports, zero additions). All 15 crate-split tests and git diff --check also passed. Host publication subject declared: [AI:codex] fix(crate-split): relocate identity and vendor fixture paths (Refs TASK-3428). No Rust changes or Cargo runs.'
+  created_at: 2026-11-08T09:18:51.390321269Z
+  modified_at: 2026-11-08T09:18:51.390321269Z
   session_id: 01a1ba71ed90
 history:
 - id: 01a1b862-2e0b-7a50-a4d0-25097c707b57
