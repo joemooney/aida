@@ -8,7 +8,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-04T17:54:51.353376Z
-modified_at: 2026-11-08T08:09:53.279266825Z
+modified_at: 2026-11-08T08:22:21.151779413Z
 req_type: Task
 tags:
 - area:containment
@@ -542,6 +542,30 @@ comments:
   created_at: 2026-11-08T06:19:08.972211670Z
   modified_at: 2026-11-08T06:19:08.972211670Z
   session_id: 01a1b9ba08ed
+  harness_version: codex-cli 0.167.0
+- id: 01a1ba40-56df-7bf3-a12d-5a4a26a3fca2
+  author: dirtlab
+  content: |
+    TASK-3048 native handoff
+
+    Existing HEAD 70a9ae1d86 already contains the requested code-only AIDA-boundary slice and review repairs. No production admission unlock or real model/token-refresh run was performed.
+
+    Changed this turn: docs/internal/testing/containment-conformance.md. Removed stale shared-adapter claims about native workspace glob settings, missing permission bypass, inference-only host data, and an unavailable shared-boundary harness. Documented the current private settings path, receipt-gated bypass, candidate refresh host and explicit diagnostic exception while preserving production refusal and evidence limits.
+
+    Validation on this checkout:
+    - Python: python3 -m unittest tests.test_containment_conformance tests.test_containment_conformance_aida: 60 passed.
+    - Launcher job j20261108T081023691-2-0: cargo test --profile agent -p aida-cli-lib --lib task_3048: 22 passed, 0 failed, 0 ignored.
+    - make check-ci-fast: exit 0; 43 gates passed. Cargo operations routed through launcher lane jobs using /tmp/task3048-cargo/cargo; log /tmp/task3048-fast-current.log. Private fixture umask 077.
+    - git diff --check: passed.
+    untested=false for requested checks.
+
+    Native publication declaration recorded: [AI:codex] docs(containment): align AGY handoff with shared diagnostic boundary (Refs TASK-3048)
+    Edits remain uncommitted. No commit, push, PR, queue done, pr ship or review record performed.
+
+    Remaining broader acceptance: advisor fresh AIDA-boundary C0-C4 report.json and measured refresh inventory; separate production admission change after approval. Measured inference hosts=[daily-cloudcode-pa.googleapis.com]; measured refresh hosts=[]; candidate refresh hosts=[oauth2.googleapis.com] from installed-binary evidence. auth_inventory_complete=false; Adapter::require_conformance still refuses. TASK-3048 is not complete.
+  created_at: 2026-11-08T08:22:21.151779413Z
+  modified_at: 2026-11-08T08:22:21.151779413Z
+  session_id: 01a1ba34e7a5
   harness_version: codex-cli 0.167.0
 history:
 - id: 01a1a7b3-3699-7713-8ae7-69568c287956
