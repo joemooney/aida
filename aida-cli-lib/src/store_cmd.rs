@@ -20,7 +20,11 @@ use colored::Colorize;
 pub(crate) mod store_cmd_args;
 pub(crate) use store_cmd_args::*;
 
-use crate::*;
+// trace:TASK-3428 | ai:codex
+use crate::{
+    cli, commit_count, find_project_root, git_config_value, hostname, short_sha,
+    store_sha_is_ancestor,
+};
 
 pub(crate) fn handle_store_command(cmd: &cli::StoreCommand) -> Result<()> {
     match cmd {

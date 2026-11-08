@@ -7,7 +7,16 @@
 //! stay in `main.rs` and are reached via `crate::`.
 // trace:SPIKE-78 | ai:claude
 
-use crate::*;
+use aida_core::DatabaseBackend;
+use colored::Colorize;
+// trace:TASK-3428 | ai:codex
+use crate::{
+    cli_relationship_type, effective_display_status, get_default_author, handle_rel_list_modern,
+    is_terminal_status, nearest_standard_rel_type, not_found, parse_requirement_id,
+    reject_cross_store_spec_ref, rel_remove_matches, rel_should_write_inverse,
+    relationship_terminal_ambiguity_warning, RelationshipCommand, RelationshipType,
+    RequirementStatus, Result, Storage, STANDARD_REL_TYPES,
+};
 
 // trace:STORY-1728 | ai:claude
 #[path = "relationship_cmd_args.rs"]
@@ -330,7 +339,7 @@ fn run_rel(
     matches: &clap::ArgMatches,
     ctx: &crate::command_registry::DispatchCtx,
 ) -> anyhow::Result<crate::command_registry::Flow> {
-    use crate::*;
+    // trace:TASK-3428 | ai:codex
     let args = <RelArgs as clap::FromArgMatches>::from_arg_matches(matches)?;
     match &ctx.store {
         None => Ok(crate::command_registry::Flow::Continue),

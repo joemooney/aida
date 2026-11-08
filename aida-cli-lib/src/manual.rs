@@ -309,7 +309,8 @@ fn run_manual(
     matches: &clap::ArgMatches,
     _ctx: &crate::command_registry::DispatchCtx,
 ) -> anyhow::Result<()> {
-    use crate::*;
+    // trace:TASK-3428 | ai:codex
+    use crate::find_project_root;
     let args = <ManualArgs as clap::FromArgMatches>::from_arg_matches(matches)?;
     let ManualArgs { command } = &args;
     let project_root =

@@ -197,7 +197,7 @@ fn run_export(
     matches: &clap::ArgMatches,
     ctx: &crate::command_registry::DispatchCtx,
 ) -> anyhow::Result<crate::command_registry::Flow> {
-    use crate::*;
+    // trace:TASK-3428 | ai:codex
     let args = <ExportArgs as clap::FromArgMatches>::from_arg_matches(matches)?;
     // trace:BUG-2189 | ai:claude
     crate::command_registry::refuse_global_format(ctx, "export")?;
@@ -271,7 +271,7 @@ fn run_import(
     matches: &clap::ArgMatches,
     ctx: &crate::command_registry::DispatchCtx,
 ) -> anyhow::Result<crate::command_registry::Flow> {
-    use crate::*;
+    // trace:TASK-3428 | ai:codex
     let args = <ImportArgs as clap::FromArgMatches>::from_arg_matches(matches)?;
     match &ctx.store {
         None => Ok(crate::command_registry::Flow::Continue),
