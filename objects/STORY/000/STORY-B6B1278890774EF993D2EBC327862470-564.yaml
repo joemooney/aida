@@ -23,7 +23,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-07T19:59:26.079479Z
-modified_at: 2026-11-08T14:40:10.355100371Z
+modified_at: 2026-11-08T14:40:16.663877075Z
 req_type: Story
 comments:
 - id: 01a1b798-f0d4-73b1-93d5-f84581f2d190
@@ -433,6 +433,21 @@ comments:
   content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: Round 11 fixes the orphan sccache server with a finite idle timeout equal to the maximum job timeout. AC2, AC3, AC4 and the lane/unsandboxed separation ruling are met in code; AC1 (lane-job sccache hits on primary and dell1) still has no evidence or recorded amendment. PR CI code jobs are pending at this head; merge-hold-gate fails by design. No local cargo run.. It was punted on: blocked-dependency: Review finding 1 / AC1 remains open and is agreed, not disputed: requires consecutive lane Cargo job statistics on primary AND dell1 with second-job Rust cache hits greater than zero, or an advisor amendment. This seat cannot supply both-host evidence. Latest finding 2 fixed: finite sccache server idle timeout tied to MAX_TIMEOUT_SECS; lifecycle regression passes. Both targeted suites pass (5 sccache + 5 resource-env tests). make check-ci-fast blocked by sccache read-only target writes. Preserve publication veto and merge hold; route to host/operator or advisor, not another implementer rework.. No triage reason was given.'
   created_at: 2026-11-08T14:40:10.355095875Z
   modified_at: 2026-11-08T14:40:10.355095875Z
+  session_id: 01a1b9af-8230-75d2-82f8-667491cc010a
+  harness_version: 2.1.319 (Claude Code)
+- id: 01a1bb9a-56ae-7d82-b834-d0a79da9c721
+  author: joe
+  content: |-
+    REVIEW FINDINGS TO ADDRESS (PR #3657):
+    Verdict: CHANGES REQUESTED
+    Reviewed commit: cfc8a3db93da
+    Recorded: 2026-11-08T14:34:49.411132502+00:00
+    Review comment: https://github.com/joemooney/aida/pull/3657#issuecomment-6722782907
+    Findings:
+    1. major/acceptance: AC1 is unverified at cfc8a3db93da. It requires a second lane job on the same dependency set to show sccache hits (stats delta > 0) on the primary AND on dell1. The round 11 handoff (latest spec comment, 2026-11-08 07:30 -07:00) confirms no lane-job statistics from either host, and the spec has no advisor amendment. A code change cannot close this, so do not queue implementer rework for it: route it to the host/operator or advisor. Fix: with a launcher built from this branch, run two consecutive 'aida lane job run' cargo jobs on each host and record both logs' 'lane sccache: final job statistics' output (second job Rust hits > 0) on STORY-2641, or have the advisor record an amendment of AC1.
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
+  created_at: 2026-11-08T14:40:16.558160491Z
+  modified_at: 2026-11-08T14:40:16.558160491Z
   session_id: 01a1b9af-8230-75d2-82f8-667491cc010a
   harness_version: 2.1.319 (Claude Code)
 history:
