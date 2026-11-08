@@ -1,0 +1,29 @@
+id: 01a1bb2d-df36-7bf3-8c44-c3536fedb0dc
+spec_id: TASK-b6b1278890774ef993d2ebc327862470-995
+title: 'NON-BLOCKING, cosmetic: docs/cli/06-roles-sessions.md:729 ''This repository conf…'
+description: |-
+  Non-blocking finding carried forward from an APPROVED review verdict on TASK-3472, which has since completed — recorded here so it keeps a queryable home once the verdict record stops being read.
+
+  NON-BLOCKING, cosmetic: docs/cli/06-roles-sessions.md:729 'This repository configures 4.' describes AIDA's own repo in user-facing CLI docs.
+
+  PR: #3674
+  Reviewed sha: c196dce0864b77ad45696bf8940b8ff8e367a4fc
+status: Draft
+priority: Medium
+owner: joe
+feature: Uncategorized
+created_at: 2026-11-08T12:41:48.086515530Z
+modified_at: 2026-11-08T12:41:48.086515530Z
+req_type: Task
+tags:
+- carried-from:TASK-3472
+- finding-hash:e50a1357
+- from-review:PR-3674
+- kind:carried-forward
+filed_at:
+  code_sha: d68eb4ec071092cbe9a36eb356d033c613633453
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 92e7eb35446
+  vendor: claude
