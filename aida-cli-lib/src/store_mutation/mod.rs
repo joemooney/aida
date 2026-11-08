@@ -105,8 +105,11 @@ fn host_operation(
         _ => None,
     };
     if let Some(action) = action {
+        // Use the same role spelling rules as lane-side filtering. The host
+        // remains authoritative for direct packets and durable-result replay.
+        let role = crate::canonical_role_name(role.trim());
         anyhow::ensure!(
-            crate::stakeholder_action_allowed(role, action),
+            crate::stakeholder_action_allowed(&role, action),
             "Unauthorized"
         );
     }
@@ -603,7 +606,14 @@ fn mediated_host_routes_owned_comment_and_revalidates_authority_before_replay() 
     // trace:TASK-3223 | ai:codex
     // Direct host packets cannot bypass the bound stakeholder role, even with
     // valid ownership and a current grant. Check both canonical verbs.
-    for role in ["guest", "requester"] {
+    for role in [
+        "guest",
+        "Guest",
+        " guest ",
+        "requester",
+        "Requester",
+        " REQUESTER ",
+    ] {
         for (op, data) in [
             ("comment_add", request.data.clone()),
             (
@@ -653,7 +663,14 @@ fn mediated_host_routes_owned_comment_and_revalidates_authority_before_replay() 
     assert_eq!(first, replay);
     // trace:TASK-3223 | ai:codex
     let committed = std::fs::read(&path).unwrap();
-    for role in ["guest", "requester"] {
+    for role in [
+        "guest",
+        "Guest",
+        " guest ",
+        "requester",
+        "Requester",
+        " REQUESTER ",
+    ] {
         let error =
             host_operation(&HostContext { role, ..context }, &request, || Ok(())).unwrap_err();
         assert_eq!(error.to_string(), "Unauthorized");
