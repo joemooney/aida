@@ -584,7 +584,7 @@ const LAUNCH_INVENTORY: &[(&str, usize, Finalization)] = &[
     ("phase_driver_trait.rs", 2, Finalization::PrepareLaunch(1)),
     ("questions.rs", 2, Finalization::CoordinatorSpawn),
     (
-        "queue_cmd.rs",
+        "queue_cmd/work.rs",
         4,
         Finalization::NotACodexLaunch(
             "explicit Claude exec seats; Codex uses finalized session constructors",
@@ -964,7 +964,7 @@ fn bug_2398_final_spawn_boundary_ratchet() {
         at("finalize_coordinator_launch(vendor, cmd, project_root)?") < at("cmd.stdout(stdout)")
     );
     assert!(at("cmd.stdout(stdout)") < at("spawn_retrying_etxtbsy()"));
-    let queue = include_str!("../queue_cmd.rs");
+    let queue = include_str!("../queue_cmd/work.rs");
     assert!(queue.contains("session::exec_codex_session("));
     // Pure composers stay pure; caller-side customization precedes finalization.
     let session = include_str!("../session.rs");
@@ -1877,7 +1877,7 @@ const ROLE_LAUNCH_SITES: &[(&str, usize, RoleRoute)] = &[
     ("phase_driver.rs", 2, RoleRoute::LaunchInventory),
     ("questions.rs", 1, RoleRoute::LaunchInventory),
     (
-        "queue_cmd.rs",
+        "queue_cmd/work.rs",
         4,
         RoleRoute::AidaChild("Claude exec seats; Codex finalizes in session.rs"),
     ),

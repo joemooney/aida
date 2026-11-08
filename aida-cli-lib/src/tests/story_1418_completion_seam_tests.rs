@@ -666,7 +666,8 @@ fn the_scan_sees_the_routed_paths() {
                 .any(|(k, v)| k.starts_with("aida-cli-lib/lib_part") && v.contains(transition))
             || files["aida-cli-lib/punt_done.rs"].contains(transition)
     );
-    assert!(files["aida-cli-lib/queue_cmd.rs"].contains(transition));
+    // trace:TASK-3426 | ai:codex
+    assert!(files["aida-cli-lib/queue_cmd/advance.rs"].contains(transition));
     // trace:STORY-1728 | ai:claude — the edit handler moved to its module.
     assert!(files["aida-cli-lib/requirements_cli.rs"].contains(stamp));
     assert!(files.contains_key("aida-core/models.rs"));
@@ -793,7 +794,7 @@ fn reopen_then_recomplete_gets_a_fresh_completed_at() {
         .expect("first completion stamps completed_at");
 
     // Reopen: every call site captures the prior status BEFORE mutating,
-    // exactly like git_backend_cmd.rs / queue_cmd.rs / mcp.rs do.
+    // exactly like git_backend_cmd.rs / queue_cmd/done.rs / mcp.rs do.
     let prior = req.status.clone();
     req.set_status_from_str("Draft");
     crate::completion::clear_completed_at_on_reopen(&mut req, &prior);

@@ -325,6 +325,7 @@ ID counters and other remotes are untouched by the transport.
 **Don't reach for it when** — you want a *content* lens (what specs exist, their status) — that's `list`/`status`. `doctor` checks *structural integrity*, not project state. And don't pass `--force` casually: it permits riskier destructive fixes (branch deletion).
 
 **Key options (rationale only).**
+- `--lane-host` — standalone, read-only CodeGraph proxy report from the invoking seat: source-index age, snapshot capture age, heartbeat age, refresh errors and a bounded socket status probe. Use `--json` for machine output. It requires a host-deployed proxy; it never provisions one or grants index writes. See [proxy deployment and live-seat acceptance](../../scripts/codegraph/README.md). <!-- trace:STORY-2630 | ai:codex -->
 - `--heal` — the gate between *diagnose* and *repair*. Without it `doctor` never writes; with it, only **safe** fixes apply. This read-only-by-default posture is deliberate — you see the drift before anything changes.
 - `--force` — escalates to riskier fixes (e.g. branch deletion). The explicit "yes, I accept destructive repairs" opt-in; don't reach for it on a hunch.
 - `--since <date-or-ref>` — exempts specs completed before a cutoff (a time bound such as `30d`, `2w`, an ISO date at local midnight, or RFC3339, or else a git ref/tag) from the completed-without-commit check, to quiet noise on legacy history predating trace conventions. An invalid value is an error. The way you stop `doctor` nagging about pre-AIDA commits.

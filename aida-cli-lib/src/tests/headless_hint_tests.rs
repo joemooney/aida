@@ -154,8 +154,10 @@ fn headless_env_launches_route_through_shared_argv_builders() {
             include_str!("../lib_part6.rs")
         ),
     );
-    // STORY-771: the queue-work launch machinery lives in queue_cmd.rs.
-    assert_env_setter_has_builder_context("queue_cmd.rs", include_str!("../queue_cmd.rs"));
+    // STORY-771: the queue-work launch machinery lives in queue_cmd/work.rs.
+    for (file, source) in crate::queue_cmd::production_sources() {
+        assert_env_setter_has_builder_context(&file, &source);
+    }
     // STORY-1488: the phase driver moved out of lib_part6.rs.
     assert_env_setter_has_builder_context("phase_driver.rs", include_str!("../phase_driver.rs"));
     assert_env_setter_has_builder_context(
@@ -172,7 +174,7 @@ fn headless_env_launches_route_through_shared_argv_builders() {
 #[test]
 fn no_human_resume_paths_use_headless_resume_launcher() {
     // STORY-771: the implementer + standalone-reviewer resume paths moved to
-    // queue_cmd.rs; the advisor resume stays in lib.rs. Scan both.
+    // queue_cmd/work.rs; the advisor resume stays in lib.rs. Scan both.
     let src = format!(
         "{}{}{}",
         format!(
@@ -185,7 +187,18 @@ fn no_human_resume_paths_use_headless_resume_launcher() {
             include_str!("../lib_part5.rs"),
             include_str!("../lib_part6.rs")
         ),
-        include_str!("../queue_cmd.rs"),
+        // Keep the Work include explicit so test-touched still discovers this
+        // guard, and scan all sibling modules for additional resume launches.
+        format!(
+            "{}\n{}",
+            include_str!("../queue_cmd/work.rs"),
+            crate::queue_cmd::production_sources()
+                .into_iter()
+                .filter(|(file, _)| file != "queue_cmd/work.rs")
+                .map(|(_, source)| source)
+                .collect::<Vec<_>>()
+                .join("\n")
+        ),
         include_str!("../phase_driver_trait.rs")
     )
     .replace("\r\n", "\n");
