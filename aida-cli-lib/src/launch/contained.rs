@@ -1454,6 +1454,27 @@ fn codex_argv(
     }
     let mut i = 0;
     while i < original.len() {
+        // trace:BUG-2495 | ai:codex — approval flags are top-level only in
+        // the pinned CLI; exec accepts the equivalent config override.
+        let approval = if matches!(original[i].as_str(), "--ask-for-approval" | "-a") {
+            let value = original
+                .get(i + 1)
+                .context("contained Codex approval flag requires a value")?;
+            Some((value.as_str(), 2))
+        } else {
+            original[i]
+                .strip_prefix("--ask-for-approval=")
+                .map(|value| (value, 1))
+        };
+        if let Some((value, consumed)) = approval {
+            anyhow::ensure!(
+                value == "never",
+                "contained Codex approval policy must be never"
+            );
+            args.extend(["-c".into(), "approval_policy=\"never\"".into()]);
+            i += consumed;
+            continue;
+        }
         if original[i] == "--sandbox"
             && original.get(i + 1).map(String::as_str) == Some("workspace-write")
         {
