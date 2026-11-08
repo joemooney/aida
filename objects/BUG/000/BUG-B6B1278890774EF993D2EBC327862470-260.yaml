@@ -8,7 +8,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-08T05:52:44.068560018Z
-modified_at: 2026-11-08T06:19:50.898402957Z
+modified_at: 2026-11-08T06:35:08.669310888Z
 req_type: Bug
 relationships:
 - rel_type: Blocks
@@ -28,6 +28,12 @@ comments:
   content: 'Implemented the binding ruling in codex_argv: rewrite --ask-for-approval V, --ask-for-approval=V and -a V to -c approval_policy="never"; refuse non-never and missing values. Added BUG-2495 regressions and extended the pin/production-argv regression to use CODEX_NATIVE_POSTURE. Pin and help fixture remain 0.166.0. Validation so far: touched-file rustfmt --check and git diff --check passed; 40 fast guards passed with the three Cargo-invoking gates explicitly excluded. Full make check-ci-fast was interrupted when it invoked Cargo directly (native lane requires launcher jobs); host must rerun it. Lane job j20261108T060436127-2796288-0 timed out after 900s during compilation, exit 124, no tests executed. Follow-up production-posture regression job j20261108T060829638-2822272-0 is running. Edits remain uncommitted for native host publication.'
   created_at: 2026-11-08T06:19:50.898402957Z
   modified_at: 2026-11-08T06:19:50.898402957Z
+  session_id: 01a1b9c0edf0
+- id: 01a1b9de-2ffd-7de0-9a7e-17e441b5ad16
+  author: joe
+  content: 'Validation update: production-posture regression job j20261108T060829638-2822272-0 also timed out after 900s during aida-cli-lib compilation (exit 124; no executed tests). Runner additionally reported seed: overlay-stale, because the primary rewrote a file in seed generation agent-eb517b3f5eb72f8c in place. The BUG-2495 retry j20261108T063053269-2-0 is running with an explicit 1800-second timeout. No code changes since the first validation submission.'
+  created_at: 2026-11-08T06:35:08.669310888Z
+  modified_at: 2026-11-08T06:35:08.669310888Z
   session_id: 01a1b9c0edf0
 history:
 - id: 01a1b9b8-adb2-7962-b5b8-c3407472eb9f
