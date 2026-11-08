@@ -370,10 +370,11 @@ pub(crate) fn logs(attempt: &str, follow: bool) -> Result<()> {
     let terminal = crate::authority_stdout_is_terminal();
     let mut output = stdout.lock();
     let mut buf = [0; 16384];
+    let mut display = LogDisplay::default();
     loop {
         let n = log.read(&mut buf)?;
         if n != 0 {
-            output.write_all(&display_log_bytes(&buf[..n], terminal))?;
+            output.write_all(&display.bytes(&buf[..n], terminal, false))?;
             output.flush()?;
             continue;
         }
@@ -388,7 +389,7 @@ pub(crate) fn logs(attempt: &str, follow: bool) -> Result<()> {
                 if n == 0 {
                     break;
                 }
-                output.write_all(&display_log_bytes(&buf[..n], terminal))?;
+                output.write_all(&display.bytes(&buf[..n], terminal, false))?;
             }
             output.flush()?;
             break;
@@ -401,25 +402,66 @@ pub(crate) fn logs(attempt: &str, follow: bool) -> Result<()> {
         );
         std::thread::sleep(Duration::from_millis(100));
     }
+    output.write_all(&display.bytes(&[], terminal, true))?;
+    output.flush()?;
     Ok(())
 }
 
-// Escape bytewise so split reads cannot reassemble terminal control sequences.
-// TTYs get printable ASCII, tabs and newlines; pipes retain the original bytes.
+// Carry incomplete UTF-8 between reads so encoded C1 controls cannot bypass
+// escaping at a chunk boundary. Pipes retain the original bytes.
 // trace:TASK-3219 | ai:codex
-fn display_log_bytes(bytes: &[u8], terminal: bool) -> std::borrow::Cow<'_, [u8]> {
-    if !terminal {
-        return std::borrow::Cow::Borrowed(bytes);
-    }
-    let mut escaped = Vec::with_capacity(bytes.len());
-    for &byte in bytes {
-        if byte.is_ascii_graphic() || matches!(byte, b' ' | b'\t' | b'\n') {
-            escaped.push(byte);
-        } else {
-            escaped.extend_from_slice(format!("\\x{byte:02x}").as_bytes());
+#[derive(Default)]
+struct LogDisplay {
+    pending: Vec<u8>,
+}
+
+impl LogDisplay {
+    fn bytes(&mut self, bytes: &[u8], terminal: bool, end: bool) -> Vec<u8> {
+        if !terminal {
+            return bytes.to_vec();
         }
+        let mut input = std::mem::take(&mut self.pending);
+        input.extend_from_slice(bytes);
+        let mut escaped = Vec::with_capacity(input.len());
+        let mut remaining = input.as_slice();
+        while !remaining.is_empty() {
+            let (valid, invalid) = match std::str::from_utf8(remaining) {
+                Ok(valid) => (valid, None),
+                Err(error) => (
+                    // valid_up_to is a verified UTF-8 boundary.
+                    std::str::from_utf8(&remaining[..error.valid_up_to()]).unwrap(),
+                    Some(error.error_len()),
+                ),
+            };
+            for ch in valid.chars() {
+                if ch.is_control() && !matches!(ch, '\t' | '\n') {
+                    // Escape each encoded byte, preserving an unambiguous
+                    // representation for C0, DEL and Unicode C1 controls.
+                    for byte in ch.encode_utf8(&mut [0; 4]).bytes() {
+                        escaped.extend_from_slice(format!("\\x{byte:02x}").as_bytes());
+                    }
+                } else {
+                    escaped.extend_from_slice(ch.encode_utf8(&mut [0; 4]).as_bytes());
+                }
+            }
+            remaining = &remaining[valid.len()..];
+            match invalid {
+                None => break,
+                Some(None) if !end => {
+                    self.pending.extend_from_slice(remaining);
+                    break;
+                }
+                Some(len) => {
+                    let len = len.unwrap_or(remaining.len());
+                    for byte in &remaining[..len] {
+                        escaped.extend_from_slice(format!("\\x{byte:02x}").as_bytes());
+                    }
+                    remaining = &remaining[len..];
+                }
+            }
+        }
+        escaped
     }
-    std::borrow::Cow::Owned(escaped)
 }
 
 #[cfg(test)]
@@ -443,17 +485,40 @@ pub(crate) mod tests {
     #[test]
     fn supervisor_log_display_escapes_terminal_controls_across_reads() {
         let bytes = b"plain\tline\n\x1b[2J\x1b]52;c;clipboard\x07\r\x08\x7f\x9b\xc2\x9b";
-        assert_eq!(display_log_bytes(bytes, false).as_ref(), bytes);
-        let escaped = display_log_bytes(bytes, true).into_owned();
+        assert_eq!(LogDisplay::default().bytes(bytes, false, true), bytes);
+        let escaped = LogDisplay::default().bytes(bytes, true, true);
         assert!(escaped.starts_with(b"plain\tline\n\\x1b[2J\\x1b]52;c;clipboard\\x07"));
         assert!(escaped
             .iter()
             .all(|b| b.is_ascii_graphic() || matches!(b, b' ' | b'\t' | b'\n')));
         for split in 0..=bytes.len() {
-            let mut parts = display_log_bytes(&bytes[..split], true).into_owned();
-            parts.extend_from_slice(&display_log_bytes(&bytes[split..], true));
+            let mut display = LogDisplay::default();
+            let mut parts = display.bytes(&bytes[..split], true, false);
+            parts.extend_from_slice(&display.bytes(&bytes[split..], true, true));
             assert_eq!(parts, escaped);
         }
+    }
+
+    #[test]
+    fn supervisor_log_display_preserves_utf8_across_reads() {
+        let mut bytes = "Claude — ✓ ‘ready’ 日本語\n".as_bytes().to_vec();
+        bytes.extend_from_slice(b"\xc2\x9b\x9d\xff\xe2\x82");
+        let mut expected = "Claude — ✓ ‘ready’ 日本語\n".as_bytes().to_vec();
+        expected.extend_from_slice(b"\\xc2\\x9b\\x9d\\xff\\xe2\\x82");
+        for split in 0..=bytes.len() {
+            let mut display = LogDisplay::default();
+            let mut output = display.bytes(&bytes[..split], true, false);
+            output.extend_from_slice(&display.bytes(&bytes[split..], true, false));
+            output.extend_from_slice(&display.bytes(&[], true, true));
+            assert_eq!(output, expected, "split={split}");
+        }
+        let mut display = LogDisplay::default();
+        let mut output = Vec::new();
+        for byte in &bytes {
+            output.extend_from_slice(&display.bytes(&[*byte], true, false));
+        }
+        output.extend_from_slice(&display.bytes(&[], true, true));
+        assert_eq!(output, expected);
     }
 
     #[test]

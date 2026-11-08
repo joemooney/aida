@@ -32,6 +32,12 @@ default_limit = 10
 untouched_factor = 1.5
 
 [budget]
+# PR #3628 run 42428425690, CI (cli-0) job 128571688822 measured
+# 11.912s for real logs/attach CLI and PTY probes, 10.692s for two native
+# agent-new previews. Max x2 rounded up to 5s; retain both verbs' coverage.
+# trace:TASK-3219 | ai:codex
+"aida-cli::bug_1502_format_json_audit task_3219_background_logs_and_attach_commands" = 25
+"aida-cli::bug_1502_format_json_audit task_3219_native_background_entry_keeps_bg_without_wrapper_opt_in" = 25
 # CI at 5ef082e760 measured 10.1s; allow headroom for the shared-store CLI probes.
 # trace:STORY-2402 | ai:codex
 "aida-cli::bug_1502_format_json_audit story2402_s3_migration_global_json_matches_dedicated_json" = 15

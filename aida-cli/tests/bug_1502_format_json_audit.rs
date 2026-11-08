@@ -1007,8 +1007,9 @@ fn task_3219_background_logs_and_attach_commands() {
     assert!(child.wait().unwrap().success());
     // Both commands preserve bytes through pipes but neutralize terminal
     // commands (including OSC 52 clipboard writes) at an actual PTY.
-    let payload = b"first line\n\x1b]52;c;clipboard\x07\x1b[2J\r\x9b";
-    std::fs::write(dir.join("output.log"), payload).unwrap();
+    let payload = "first line — ✓ 日本語\n".as_bytes();
+    let payload = [payload, b"\x1b]52;c;clipboard\x07\x1b[2J\r\x9b"].concat();
+    std::fs::write(dir.join("output.log"), &payload).unwrap();
     for verb in ["logs", "attach"] {
         let piped = aida(&repo, &home, &["agent", verb, id]);
         assert!(piped.status.success(), "{piped:?}");
@@ -1050,7 +1051,7 @@ fn task_3219_background_logs_and_attach_commands() {
         // PTY output processing converts the allowed newline to CRLF.
         assert_eq!(
             terminal,
-            b"first line\r\n\\x1b]52;c;clipboard\\x07\\x1b[2J\\x0d\\x9b"
+            "first line — ✓ 日本語\r\n\\x1b]52;c;clipboard\\x07\\x1b[2J\\x0d\\x9b".as_bytes()
         );
     }
     std::fs::write(dir.join("output.log"), b"first line\nfinal result\n").unwrap();

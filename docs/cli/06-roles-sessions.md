@@ -329,7 +329,7 @@ aida agent logs <attempt>
 
 The attempt must be the canonical UUID returned by dispatch. Unknown attempts,
 linked directories and logs, and directories or logs readable by other users
-are refused. At a terminal, control and non-ASCII bytes are displayed as `\xNN` escapes so worker output cannot issue terminal commands. Redirected output preserves the original bytes. This command has no command-specific flags.
+are refused. At a terminal, valid UTF-8 text, tabs and newlines are preserved; other C0 controls, DEL, C1 controls and invalid UTF-8 bytes are displayed as `\xNN` byte escapes so worker output cannot issue terminal commands. Incomplete UTF-8 sequences are carried across reads and escaped at the end of the log. Redirected output preserves the original bytes. This command has no command-specific flags.
 
 ### `aida agent attach`
 
