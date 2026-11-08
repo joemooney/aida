@@ -8,7 +8,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-06T13:39:53.442026096Z
-modified_at: 2026-11-08T13:40:01.191537511Z
+modified_at: 2026-11-08T13:40:07.495767865Z
 req_type: Task
 tags:
 - architecture
@@ -835,6 +835,26 @@ comments:
   content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: Head e88fe1f3543b fixes all four code/doc findings from the last round and adds the paired same-sandbox raw-denial plus mediated comment_add test, but the binding routing acceptance is still unmet (mediated inventory exits 1) and CI has not finished.. It was punted on: design-fork: The remaining S2a routing acceptance needs a policy decision: the binding ruling requires every inventoried CLI/MCP writer to route before mediated admission, but existing comment edit/delete intentionally refuse because no ownership policy is approved (review finding 4 in comment 50, removal in comment 51). Decide whether these existing writer operations may remain explicitly refused for this cutover, as the approved sketch allows, or approve their typed host-handler ownership policy. I dispute treating early refusal alone as verified routing: that would hide the still-unresolved writer inventory (3163 sites, 293 operations), so I am retaining the production gate. This run adds a same-bwrap-process raw-object-write denial plus production-broker/host comment_add fixture and fixes current review findings 3, 5, 6 and 7 from comment 57; validation is running. Complete routing and make check-ci-fast remain unmet. own_claim/queue_done stay with TASK-3326.. No triage reason was given.'
   created_at: 2026-11-08T13:40:01.191535816Z
   modified_at: 2026-11-08T13:40:01.191535816Z
+  session_id: 01a1b9af-8230-75d2-82f8-667491cc010a
+  harness_version: 2.1.319 (Claude Code)
+- id: 01a1bb63-445c-74e2-833e-069700c8fa09
+  author: joe
+  content: |-
+    REVIEW FINDINGS TO ADDRESS (PR #3661):
+    Verdict: CHANGES REQUESTED
+    Reviewed commit: e88fe1f3543b
+    Recorded: 2026-11-08T13:26:23.601034687+00:00
+    Review comment: https://github.com/joemooney/aida/pull/3661#issuecomment-6722073331
+    Findings:
+    1. BLOCKING acceptance gap (spec description and advisor ruling, TASK-3223 comment 34), unfixed. 'python3 scripts/check-store-writers.py --profile mediated' exits 1 at this head with 3163 writers and 293 of 293 operations unresolved. mediated_blockers (scripts/check-store-writers.py:627) counts every operation row by construction, so it cannot reach zero without a reviewed operation policy and evidence. Only comment add and title/description edit route; store_mutation_entry.rs:203 refuses everything else. The implementer's punt (comment 58) asks whether writer operations such as comment edit/delete may stay refused for this cutover. That needs an advisor ruling: either re-scope this PR explicitly as a staged partial, or define the operation policy.
+    2. BLOCKING until CI reports: no CI job has completed at e88fe1f3543b (run 42484568812 pending, merge-hold-gate queued), and make check-ci-fast is not shown green as an aggregate. Comment 58 reports 41 fast gates passed in subsets and states this is not an aggregate pass. The ruling names make check-ci-fast green as acceptance. The new tests have no CI evidence at this head.
+    3. PROCESS, needs advisor attention: head e88fe1f3543b was committed at 13:21:08Z with exactly the changes comment 58 (13:20:42Z) describes as uncommitted under a saved design-fork punt that 'Host must honor as a publication veto'. TASK-3223 is still needs-attention and the punt has no recorded resolution in the spec comments. Resolve the punt or confirm the publication was authorized before this PR advances.
+    4. PR metadata, unfixed: the title still says 'report unresolved mediated routing evidence' while the diff adds early dispatch in main_entry, a SEQPACKET client, a mediated MCP server, host routing of comment_add/spec_edit and refusal correlation. The body is only the seat-publication line. Rewrite both to describe staged, gated routing with no launch authority. Commits 30eb320657c and e88fe1f3543 use subjects claiming full routing and raw-write denial, so the squash must use the corrected title with an empty body.
+    5. MINOR, test scope: mediated_store_tests.rs (mediated_profile_live_raw_create_append_rename_denied_and_private_cache_writable) proves raw denial and a successful comment_add in one bwrap process, but the mediated request is a hand-built Python packet, not the lane client (store_mutation_client.rs / aida comment add), and routed_tests.rs replaces identity.check with fixture_descendant. The doc states these limits honestly. Before this counts as the ruling's contained-lane test, either drive the real client inside the sandbox or have the advisor accept the synthetic route.
+    6. MINOR, retry guidance after this round's change: Client::request (store_mutation_client.rs:129-140) now omits 'do not repeat' for every non-OutcomeUnknown error, including Unavailable. The host maps any error that is not a redo::OutcomeUnknown type or a listed reason to Unavailable (store_mutation/mod.rs:361-363), and redo.rs:437 raises a plain-string OutcomeUnknown that takes this path, as does the post-commit oversize branch at service.py:311. Reachability of these two paths was not established and revision binding limits duplicate effects, but make them typed OutcomeUnknown so the client guidance stays accurate.
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
+  created_at: 2026-11-08T13:40:07.388312391Z
+  modified_at: 2026-11-08T13:40:07.388312391Z
   session_id: 01a1b9af-8230-75d2-82f8-667491cc010a
   harness_version: 2.1.319 (Claude Code)
 history:
