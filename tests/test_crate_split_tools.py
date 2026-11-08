@@ -26,7 +26,9 @@ MOVE = load('relocate-ledger-paths')
 
 class CrateSplitTools(unittest.TestCase):
     def git(self, root, *args):
-        return subprocess.run(['git', *args], cwd=root, check=True, capture_output=True, text=True)
+        return subprocess.run(
+            ['git', '-c', 'maintenance.auto=false', '-c', 'gc.auto=0', *args],
+            cwd=root, check=True, capture_output=True, text=True)
 
     def repository(self, ledger=True):
         directory = tempfile.TemporaryDirectory()
@@ -181,7 +183,7 @@ class CrateSplitTools(unittest.TestCase):
             subprocess.run(['git', 'init', '-q', directory], check=True)
             (root / 'old.rs').write_text('fn example() {}\n')
             subprocess.run(['git', 'add', 'old.rs'], cwd=root, check=True)
-            subprocess.run(['git', '-c', 'user.name=fixture', '-c', 'user.email=fixture@example.com', 'commit', '-qm', 'fixture'], cwd=root, check=True)
+            subprocess.run(['git', '-c', 'maintenance.auto=false', '-c', 'gc.auto=0', '-c', 'user.name=fixture', '-c', 'user.email=fixture@example.com', 'commit', '-qm', 'fixture'], cwd=root, check=True)
             (root / 'scripts').mkdir()
             (root / 'scripts/portability-allowlist.txt').write_text('# old.rs:comment\nr\told.rs:source old.rs:text\n')
             evidence = {'ceiling': 2, 'sites': {'old.rs:f:var:abc': 2}}
