@@ -91,6 +91,25 @@ Claude launch selection are unchanged.
 
 ## Checked-in contract
 
+<!-- trace:TASK-3223 | ai:codex -->
+
+The additive `mediated_route` array records the implemented variants of
+`cli:comment add`, `cli:edit`, `mcp:add_comment` and `mcp:update_requirement`.
+Each record names its wire operation, supported scope, remaining unsupported
+semantics, early entrypoint, client, host handler and evidence files. The guard
+checks that the operation is registered, all three functions exist, and evidence
+paths are safe existing files. Regeneration preserves these reviewed records;
+new operations receive no route automatically. This is source-review evidence,
+not proof of runtime authorization or test execution.
+
+`--profile mediated` includes these records as `partial_routes` alongside its
+unresolved counts. They do **not** clear writer or operation blockers: a
+title/description edit route cannot certify status, ownership or tag edits, and
+a literal-text comment route cannot certify parent, relay or author semantics.
+Production admission remains gated until the remaining inventory is reconciled
+and routed. This partial reconciliation does not meet the advisor's zero
+unrouted-writers acceptance condition.
+
 [`scripts/store-writers.toml`](../../../scripts/store-writers.toml) is review
 evidence, **not an allow-list** and not a second requirements database.
 Version 2 keys each writer row by **path + enclosing item + sink kind**.

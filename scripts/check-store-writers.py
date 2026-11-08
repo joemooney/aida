@@ -587,6 +587,47 @@ def check(root: Path, inventory: Path | None = None, scanned=None) -> list[str]:
     for key in sorted(expected.keys() | registered.keys()):
         if key not in expected or key not in registered or any(registered[key].get(f) != expected[key][f] for f in ("entrypoints", "sites", "resolution_note")):
             errors.append(f"operation mapping changed: {key}")
+    errors.extend(check_routes(root, data, scanned))
+    return errors
+
+
+# trace:TASK-3223 | ai:codex
+def check_routes(root, data, scanned):
+    """Validate partial route evidence without granting whole-command coverage.
+
+    A route describes an implemented variant, not all flags of its ordinary
+    CLI/MCP operation. In particular title-only edit support cannot discharge
+    status, relationship, ownership or other unsupported mutation semantics.
+    """
+    errors, seen = [], set()
+    operation_ids = {row["id"] for row in data.get("operation", [])}
+    functions_present = {function_identity(path, item)
+                         for path, items in scanned[2].items()
+                         for _, _, item in items}
+    required = {"operation", "wire_operation", "scope", "remaining", "entrypoint",
+                "client", "host", "evidence_tests"}
+    for row in data.get("mediated_route", []):
+        if not isinstance(row, dict) or set(row) != required or not all(row.values()):
+            errors.append("mediated route requires complete, closed evidence fields")
+            continue
+        if any(not isinstance(row[field], str) for field in required - {"evidence_tests"}):
+            errors.append("mediated route selectors, scope and remaining work must be strings")
+            continue
+        operation = row["operation"]
+        if operation in seen or operation not in operation_ids:
+            errors.append(f"duplicate or unregistered mediated route: {operation}")
+        seen.add(operation)
+        for field in ("entrypoint", "client", "host"):
+            if row[field] not in functions_present:
+                errors.append(f"mediated route {operation}: missing {field}: {row[field]}")
+        evidence = row["evidence_tests"]
+        if not isinstance(evidence, list) or not evidence:
+            errors.append(f"mediated route {operation}: evidence_tests must be a nonempty array")
+            continue
+        for path in evidence:
+            if (not isinstance(path, str) or Path(path).is_absolute()
+                    or ".." in Path(path).parts or not (root / path).is_file()):
+                errors.append(f"mediated route {operation}: missing or unsafe evidence: {path}")
     return errors
 
 
@@ -618,6 +659,13 @@ def regenerate(root):
                 row[field] = prior_ops[key][field]
         lines.append("  { " + ", ".join(f"{k} = {json.dumps(v)}" for k, v in row.items()) + " },")
     lines += ["]", ""]
+    # Route review survives sink/operation reconciliation. New operations never
+    # inherit a route, and partial routes never clear mediated blockers.
+    if old.get("mediated_route"):
+        lines.append("mediated_route = [")
+        for row in old["mediated_route"]:
+            lines.append("  { " + ", ".join(f"{k} = {json.dumps(v)}" for k, v in row.items()) + " },")
+        lines += ["]", ""]
     target.parent.mkdir(parents=True, exist_ok=True)
     target.write_text("\n".join(lines))
     return scanned
@@ -664,9 +712,11 @@ def main() -> int:
         data = tomllib.loads((args.root / INVENTORY).read_text())
         if args.profile == "mediated":
             blockers = mediated_blockers(data)
-            print(json.dumps(dict(profile="mediated", unresolved=blockers,
-                                  counts={kind: len(rows) for kind, rows in blockers.items()}),
-                             sort_keys=True))
+            report = dict(profile="mediated", unresolved=blockers,
+                          counts={kind: len(rows) for kind, rows in blockers.items()})
+            if data.get("mediated_route"):
+                report["partial_routes"] = data["mediated_route"]
+            print(json.dumps(report, sort_keys=True))
             if any(blockers.values()):
                 print("mediated profile refused: reconciled inventory still has unresolved routing evidence; "
                       "keep production admission gated", file=sys.stderr)

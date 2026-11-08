@@ -55,6 +55,74 @@ class WriterInventoryTests(unittest.TestCase):
         self.assertEqual([], guard.check(self.root))
 
     # trace:TASK-3223 | ai:codex
+    def partial_route(self):
+        self.put("aida-cli-lib/src/mcp.rs", '''
+            impl Server {
+                fn dispatch() { match tool_name { "edit" => self.tool_edit(args), } }
+                fn tool_edit() { opaque.call(); }
+            }
+        ''')
+        guard.regenerate(self.root)
+        return dict(operation="mcp:edit", wire_operation="spec_edit",
+                    scope="title only", remaining="status unsupported",
+                    entrypoint="aida_cli_lib::mcp::Server::tool_edit",
+                    client="aida_cli_lib::mcp::Server::tool_edit",
+                    host="aida_core::writer::write_edit_atomically",
+                    evidence_tests=["aida-core/src/writer.rs"])
+
+    def append_route(self, route):
+        with (self.root / guard.INVENTORY).open("a") as target:
+            target.write("\nmediated_route = [{ " + ", ".join(
+                f"{key} = {json.dumps(value)}" for key, value in route.items()) + " }]\n")
+
+    def test_partial_routes_survive_regeneration_without_clearing_blockers(self):
+        import tomllib
+        route = self.partial_route()
+        self.append_route(route)
+        target = self.root / guard.INVENTORY
+        before = guard.mediated_blockers(tomllib.loads(target.read_text()))
+        guard.regenerate(self.root)
+        data = tomllib.loads(target.read_text())
+        self.assertEqual([route], data["mediated_route"])
+        self.assertEqual(before, guard.mediated_blockers(data))
+        self.assertIn("mcp:edit", before["operation"])
+        self.assertEqual([], guard.check(self.root))
+
+    def test_partial_route_missing_functions_evidence_or_operation_refuses(self):
+        import copy
+        import tomllib
+        route = self.partial_route()
+        data = tomllib.loads((self.root / guard.INVENTORY).read_text())
+        scanned = guard.scan(self.root)
+        for field, value in (("entrypoint", "missing"), ("client", "missing"),
+                             ("host", "missing"), ("operation", "mcp:missing"),
+                             ("evidence_tests", ["missing.rs"]),
+                             ("evidence_tests", ["../outside"]),
+                             ("evidence_tests", "not-an-array"),
+                             ("scope", []), ("remaining", "")):
+            with self.subTest(field=field, value=value):
+                changed = copy.deepcopy(route)
+                changed[field] = value
+                data["mediated_route"] = [changed]
+                self.assertTrue(guard.check_routes(self.root, data, scanned))
+        data["mediated_route"] = [route, route]
+        self.assertTrue(guard.check_routes(self.root, data, scanned))
+
+    def test_partial_routes_are_reported_without_admitting_the_profile(self):
+        import subprocess
+        import sys
+        route = self.partial_route()
+        self.append_route(route)
+        result = subprocess.run(
+            [sys.executable, str(Path(guard.__file__)), "--root", str(self.root),
+             "--profile", "mediated"], capture_output=True, text=True, timeout=30)
+        self.assertEqual(1, result.returncode, result.stderr)
+        report = json.loads(result.stdout)
+        self.assertEqual([route], report["partial_routes"])
+        self.assertIn(route["operation"], report["unresolved"]["operation"])
+        self.assertIn("keep production admission gated", result.stderr)
+
+    # trace:TASK-3223 | ai:codex
     def test_reconciled_inventory_does_not_mean_mediated_routing(self):
         import subprocess
         import sys
