@@ -13,7 +13,7 @@ pub(crate) fn control_child() -> Result<Command> {
     )
 }
 
-/// Only phase-driver unit fixtures may inject a coordinating executable.
+/// Detach a control child and inherit its private handoff socket at `target`.
 // trace:TASK-3219 | ai:codex
 pub(crate) fn detach_with_socket(helper: &mut Command, fd: i32, target: i32) {
     // SAFETY: only async-signal-safe syscalls between fork and exec.
@@ -30,6 +30,7 @@ pub(crate) fn detach_with_socket(helper: &mut Command, fd: i32, target: i32) {
     }
 }
 
+/// Configure a supervised foreground worker for noninteractive print mode.
 pub(crate) fn background_print(command: &mut Command, root: &Path) {
     let (ceiling_key, ceiling_value) = crate::bg_wait_ceiling_env(Some(root));
     command
@@ -38,6 +39,7 @@ pub(crate) fn background_print(command: &mut Command, root: &Path) {
         .envs(crate::headless_wait_envs(ceiling_key, &ceiling_value));
 }
 
+/// Only phase-driver unit fixtures may inject a coordinating executable.
 #[cfg(test)]
 pub(crate) fn control_child_for_test(program: &Path) -> Result<Command> {
     let current = program.canonicalize()?;

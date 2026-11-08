@@ -3849,7 +3849,8 @@ fn task_3219_background_entry_refuses_before_setup_and_native_argv() {
             false,
             false,
             false,
-            AgentPromptOptions::new(prompt.map(str::to_owned), false),
+            // No explicit prompt still enables auto-prompt unless --no-prompt is set.
+            AgentPromptOptions::new(prompt.map(str::to_owned), prompt.is_none()),
             AgentResumeOptions::new(true, resume.map(str::to_owned), false, true),
             AgentDefaultFlagOptions::new(false, vec![], None).rotating(rotate),
             None,

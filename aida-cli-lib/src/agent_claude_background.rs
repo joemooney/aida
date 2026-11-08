@@ -191,8 +191,8 @@ fn dispatch_with_helper(
         );
         Ok(())
     })();
-    if result.is_err() {
-        cancel_supervisor(
+    if let Err(error) = result {
+        let cleanup = cancel_supervisor(
             &mut supervisor,
             parent,
             transferred,
@@ -202,9 +202,20 @@ fn dispatch_with_helper(
             } else {
                 TIMEOUT
             },
-        )?;
+        );
+        return Err(dispatch_error_with_cleanup(error, cleanup));
     }
-    result
+    Ok(())
+}
+
+// trace:TASK-3219 | ai:codex
+fn dispatch_error_with_cleanup(error: anyhow::Error, cleanup: Result<()>) -> anyhow::Error {
+    match cleanup {
+        Ok(()) => error,
+        Err(cleanup) => error.context(format!(
+            "background supervisor cleanup also failed: {cleanup:#}"
+        )),
+    }
 }
 
 // trace:TASK-3219 | ai:codex
@@ -355,12 +366,14 @@ pub(crate) fn logs(attempt: &str, follow: bool) -> Result<()> {
         );
     }
     let mut log = open_log(&dir.join("output.log"))?;
-    let mut output = std::io::stdout().lock();
+    let stdout = std::io::stdout();
+    let terminal = crate::authority_stdout_is_terminal();
+    let mut output = stdout.lock();
     let mut buf = [0; 16384];
     loop {
         let n = log.read(&mut buf)?;
         if n != 0 {
-            output.write_all(&buf[..n])?;
+            output.write_all(&display_log_bytes(&buf[..n], terminal))?;
             output.flush()?;
             continue;
         }
@@ -370,7 +383,13 @@ pub(crate) fn logs(attempt: &str, follow: bool) -> Result<()> {
         if dir.join("ended").exists() {
             // The terminal marker follows worker exit. The writer may have
             // appended between our EOF read and this observation.
-            std::io::copy(&mut log, &mut output)?;
+            loop {
+                let n = log.read(&mut buf)?;
+                if n == 0 {
+                    break;
+                }
+                output.write_all(&display_log_bytes(&buf[..n], terminal))?;
+            }
             output.flush()?;
             break;
         }
@@ -385,9 +404,58 @@ pub(crate) fn logs(attempt: &str, follow: bool) -> Result<()> {
     Ok(())
 }
 
+// Escape bytewise so split reads cannot reassemble terminal control sequences.
+// TTYs get printable ASCII, tabs and newlines; pipes retain the original bytes.
+// trace:TASK-3219 | ai:codex
+fn display_log_bytes(bytes: &[u8], terminal: bool) -> std::borrow::Cow<'_, [u8]> {
+    if !terminal {
+        return std::borrow::Cow::Borrowed(bytes);
+    }
+    let mut escaped = Vec::with_capacity(bytes.len());
+    for &byte in bytes {
+        if byte.is_ascii_graphic() || matches!(byte, b' ' | b'\t' | b'\n') {
+            escaped.push(byte);
+        } else {
+            escaped.extend_from_slice(format!("\\x{byte:02x}").as_bytes());
+        }
+    }
+    std::borrow::Cow::Owned(escaped)
+}
+
 #[cfg(test)]
 pub(crate) mod tests {
     use super::*;
+    #[test]
+    fn supervisor_refusal_survives_cleanup_error() {
+        let error = dispatch_error_with_cleanup(
+            anyhow::anyhow!("background supervisor refused before release: seat refused"),
+            Err(anyhow::anyhow!("wait failed")),
+        );
+        let diagnostic = format!("{error:#}");
+        assert!(diagnostic.contains("background supervisor refused before release: seat refused"));
+        assert!(diagnostic.contains("cleanup also failed: wait failed"));
+        assert_eq!(
+            dispatch_error_with_cleanup(anyhow::anyhow!("original"), Ok(())).to_string(),
+            "original"
+        );
+    }
+
+    #[test]
+    fn supervisor_log_display_escapes_terminal_controls_across_reads() {
+        let bytes = b"plain\tline\n\x1b[2J\x1b]52;c;clipboard\x07\r\x08\x7f\x9b\xc2\x9b";
+        assert_eq!(display_log_bytes(bytes, false).as_ref(), bytes);
+        let escaped = display_log_bytes(bytes, true).into_owned();
+        assert!(escaped.starts_with(b"plain\tline\n\\x1b[2J\\x1b]52;c;clipboard\\x07"));
+        assert!(escaped
+            .iter()
+            .all(|b| b.is_ascii_graphic() || matches!(b, b' ' | b'\t' | b'\n')));
+        for split in 0..=bytes.len() {
+            let mut parts = display_log_bytes(&bytes[..split], true).into_owned();
+            parts.extend_from_slice(&display_log_bytes(&bytes[split..], true));
+            assert_eq!(parts, escaped);
+        }
+    }
+
     #[test]
     fn supervisor_protocol_refuses_unowned_release_and_oversized_frames() {
         let (mut a, mut b) = UnixStream::pair().unwrap();

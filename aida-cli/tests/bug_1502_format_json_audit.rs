@@ -948,7 +948,17 @@ fn task_3219_background_logs_and_attach_commands() {
         std::fs::set_permissions(&dir, std::fs::Permissions::from_mode(0o750)).unwrap();
         let out = aida(&repo, &home, &["agent", verb, id]);
         assert!(!out.status.success());
-        assert!(String::from_utf8_lossy(&out.stderr).contains("unsafe background directory"));
+        // Non-TTY agent-mode errors are emitted on stdout; human errors
+        // use stderr. Assert the refusal independently of the output format.
+        let diagnostic = format!(
+            "{}{}",
+            String::from_utf8_lossy(&out.stdout),
+            String::from_utf8_lossy(&out.stderr)
+        );
+        assert!(
+            diagnostic.contains("unsafe background directory"),
+            "{out:?}"
+        );
         std::fs::set_permissions(&dir, std::fs::Permissions::from_mode(0o700)).unwrap();
         let saved = base.join("saved");
         std::fs::rename(&dir, &saved).unwrap();
@@ -995,6 +1005,55 @@ fn task_3219_background_logs_and_attach_commands() {
     stdout.read_to_string(&mut tail).unwrap();
     assert_eq!(tail, "final result\n");
     assert!(child.wait().unwrap().success());
+    // Both commands preserve bytes through pipes but neutralize terminal
+    // commands (including OSC 52 clipboard writes) at an actual PTY.
+    let payload = b"first line\n\x1b]52;c;clipboard\x07\x1b[2J\r\x9b";
+    std::fs::write(dir.join("output.log"), payload).unwrap();
+    for verb in ["logs", "attach"] {
+        let piped = aida(&repo, &home, &["agent", verb, id]);
+        assert!(piped.status.success(), "{piped:?}");
+        assert_eq!(piped.stdout, payload);
+        use std::os::fd::FromRawFd;
+        let (mut master, mut slave) = (-1, -1);
+        // SAFETY: openpty initializes two owned descriptors; each is wrapped
+        // exactly once. The default termios and window size are sufficient.
+        assert_eq!(
+            unsafe {
+                libc::openpty(
+                    &mut master,
+                    &mut slave,
+                    std::ptr::null_mut(),
+                    std::ptr::null(),
+                    std::ptr::null(),
+                )
+            },
+            0
+        );
+        let mut master = unsafe { std::fs::File::from_raw_fd(master) };
+        let slave = unsafe { std::fs::File::from_raw_fd(slave) };
+        let out = aida_command(&repo, &home)
+            .args(["agent", verb, id])
+            .stdout(slave)
+            .output()
+            .unwrap();
+        assert!(out.status.success(), "{out:?}");
+        let mut terminal = Vec::new();
+        let mut buf = [0; 4096];
+        loop {
+            match master.read(&mut buf) {
+                Ok(0) => break,
+                Ok(n) => terminal.extend_from_slice(&buf[..n]),
+                Err(error) if error.raw_os_error() == Some(libc::EIO) => break,
+                Err(error) => panic!("reading terminal: {error}"),
+            }
+        }
+        // PTY output processing converts the allowed newline to CRLF.
+        assert_eq!(
+            terminal,
+            b"first line\r\n\\x1b]52;c;clipboard\\x07\\x1b[2J\\x0d\\x9b"
+        );
+    }
+    std::fs::write(dir.join("output.log"), b"first line\nfinal result\n").unwrap();
     std::fs::remove_file(dir.join("ended")).unwrap();
     std::fs::remove_file(dir.join("supervisor.json")).unwrap();
     let dead = serde_json::json!({"pid": 4294967295u32, "start": "gone"});
@@ -1004,6 +1063,65 @@ fn task_3219_background_logs_and_attach_commands() {
     );
     let out = aida(&repo, &home, &["agent", "attach", id]);
     assert!(!out.status.success());
-    assert!(String::from_utf8_lossy(&out.stderr).contains("supervisor exited"));
-    assert_eq!(out.stdout, b"first line\nfinal result\n");
+    let diagnostic = format!(
+        "{}{}",
+        String::from_utf8_lossy(&out.stdout),
+        String::from_utf8_lossy(&out.stderr)
+    );
+    assert!(diagnostic.contains("supervisor exited"), "{out:?}");
+    assert!(
+        out.stdout.starts_with(b"first line\nfinal result\n"),
+        "{out:?}"
+    );
+}
+
+// Exercise agent_new_claude's actual composition scope and --bg guard with
+// the trusted wrapper opt-in absent, rather than supplying prebuilt argv.
+// trace:TASK-3219 | ai:codex
+#[test]
+fn task_3219_native_background_entry_keeps_bg_without_wrapper_opt_in() {
+    use std::os::unix::fs::PermissionsExt;
+    let (_tmp, repo, home, _) = fixture();
+    let bin = home.join("bin");
+    std::fs::create_dir(&bin).unwrap();
+    let claude = bin.join("claude");
+    std::fs::write(&claude, "#!/bin/sh\nexit 97\n").unwrap();
+    std::fs::set_permissions(&claude, std::fs::Permissions::from_mode(0o700)).unwrap();
+    // Explicit fixture inputs; do not add an ambient PATH reader.
+    let path = std::env::join_paths([bin, "/usr/bin".into(), "/bin".into()]).unwrap();
+    for sandbox in [false, true] {
+        let mut command = aida_command(&repo, &home);
+        command
+            .env("PATH", &path)
+            .env_remove("AIDA_CONTAINED")
+            .env("AIDA_OS_WRAP", "0")
+            .args([
+                "agent",
+                "new",
+                "claude",
+                "--bg",
+                "--no-exec",
+                "--no-default-flags",
+                "--role",
+                "implementer",
+                "--prompt",
+                "native prompt with spaces",
+            ]);
+        if sandbox {
+            command.arg("--sandbox");
+        }
+        let out = command.output().unwrap();
+        assert!(out.status.success(), "sandbox={sandbox}: {out:?}");
+        let preview = String::from_utf8(out.stdout).unwrap();
+        let command = preview
+            .lines()
+            .find(|line| line.starts_with("command: "))
+            .expect(&preview);
+        assert!(
+            command.split_whitespace().any(|arg| arg == "--bg"),
+            "sandbox={sandbox}: {preview}"
+        );
+        assert!(preview.contains("native prompt with spaces"), "{preview}");
+        assert!(!preview.contains("claude-bg-supervise"), "{preview}");
+    }
 }

@@ -76,7 +76,7 @@ aida-cli-lib/src/agent_launch.rs|agent_new_command_for_type|literal:codex	1
 aida-cli-lib/src/agent_launch.rs|agent_new_command_for_type|typed:Antigravity	1
 aida-cli-lib/src/agent_launch.rs|agent_new_command_for_type|typed:Claude	1
 aida-cli-lib/src/agent_launch.rs|agent_new_command_for_type|typed:Codex	1
-aida-cli-lib/src/agent_launch.rs|agent_new_with_config_wake|literal:claude	2
+aida-cli-lib/src/agent_launch.rs|agent_new_with_config_wake|literal:claude	1
 aida-cli-lib/src/agent_launch.rs|agent_new_with_config_wake|literal:codex	1
 aida-cli-lib/src/agent_launch.rs|agent_new_with_config_wake|typed:Codex	1
 aida-cli-lib/src/agent_launch.rs|agent_resume_args|literal:antigravity	1
