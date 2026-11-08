@@ -28,7 +28,7 @@ priority: Low
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-09-13T22:07:45.944235Z
-modified_at: 2026-11-08T18:30:17.649738557Z
+modified_at: 2026-11-08T18:30:20.048048952Z
 req_type: Task
 tags:
 - cleanup
@@ -464,6 +464,23 @@ comments:
   content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: No blocking code defect in a full read of the merge-base diff, and the 190cf3480b8d findings are fixed; not approvable because CI run 42509346975 at this head has no jobs started. Re-run a reviewer when CI is terminal; rework only if a job fails.. No triage reason was given.'
   created_at: 2026-11-08T18:30:17.649734049Z
   modified_at: 2026-11-08T18:30:17.649734049Z
+  session_id: 01a1b9af-8230-75d2-82f8-667491cc010a
+  harness_version: 2.1.319 (Claude Code)
+- id: 01a1bc6c-f5cb-7aa0-aa72-b82a1dc3c793
+  author: joe
+  content: |-
+    REVIEW FINDINGS TO ADDRESS (TASK-1222):
+    Verdict: CHANGES REQUESTED
+    Reviewed commit: 40f2b6b8dcd4
+    Recorded: 2026-11-08T18:22:58.914369101+00:00
+    Findings:
+    1. WAIT STATE, not a code change: CI run 42509346975 at 40f2b6b8dcd4 is pending with no jobs started. The prior head's run 42506195372 passed lib-0, cli-0, cli-1 and contracts, but lib-1, rest and gates were cancelled and Build never ran; the last full green run is 6bb37c076dc3. Do not rework, push or merge main for this finding: each new head restarts a roughly 73-minute run. Re-run an independent reviewer when CI is terminal.
+    2. Not a code change: merge-hold-gate is queued at this head and failed at the previous head on the aida:merge-hold label. It needs separate authorized clearance.
+    3. Cosmetic, AC2 (non-blocking): is_runtime_noise_entry (aida-cli-lib/src/seat_clone.rs:2100-2103) identifies a lease only by a direct regular file named *.toml, so an operator note such as .aida/sessions/notes.toml in a real sessions directory reads as disposable. The normal layout is a symlink, so exposure is narrow. Optional: parse it as a lease before excusing it.
+    4. Cosmetic, docs (non-blocking): OVERVIEW.md:188-190 still says 'routes failures' and 'forced cleanup' while AGENTS.md:444-445 says 'routes findings and partial scans' and 'cleanup' for the same weekly job.
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
+  created_at: 2026-11-08T18:30:19.851002194Z
+  modified_at: 2026-11-08T18:30:19.851002194Z
   session_id: 01a1b9af-8230-75d2-82f8-667491cc010a
   harness_version: 2.1.319 (Claude Code)
 history:
