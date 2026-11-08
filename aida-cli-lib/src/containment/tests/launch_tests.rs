@@ -3408,6 +3408,126 @@ print('bounded version cases: 6 passed')
     assert!(String::from_utf8_lossy(&output.stdout).contains("6 passed"));
 }
 
+// trace:BUG-2487 | ai:codex
+fn bug_2487_codex_env() -> BTreeMap<String, String> {
+    TOOL_NET_ENV
+        .iter()
+        .chain(TOOL_BUILD_ENV)
+        .map(|name| ((*name).into(), String::new()))
+        .chain([
+            ("AIDA_SESSION_GRANT".into(), String::new()),
+            ("AIDA_ROLE_INSTANCE".into(), "companion".into()),
+        ])
+        .collect()
+}
+
+#[test]
+// trace:BUG-2487 | ai:codex
+fn bug_2487_pinned_help_checks_production_argv_and_scopes() {
+    let recorded: serde_json::Value =
+        serde_json::from_str(include_str!("../../launch/codex_0166_help.json")).unwrap();
+    assert_eq!(
+        recorded["sha256"],
+        codex_auth::PROGRAM_SHA256,
+        "pin changed: re-record exec/sandbox help from the newly probed binary"
+    );
+    assert_eq!(recorded["version"], "codex-cli 0.166.0");
+    let original = aida_core::vendors::profile(aida_core::vendors::LaunchVendor::Codex)
+        .headless_args(
+            "prompt containing -P and --unknown-flag",
+            "",
+            Some("fixture-model"),
+            Some("high"),
+            Some(vec!["--sandbox".into(), "workspace-write".into()]),
+        )
+        .unwrap();
+    let (args, preflight) = codex_argv(
+        Path::new("/fixture/codex"),
+        &bug_2487_codex_env(),
+        &original,
+    )
+    .unwrap();
+    assert!(args
+        .windows(2)
+        .any(|v| v == ["-c", "default_permissions=\"aida\""]));
+    assert!(!args
+        .iter()
+        .any(|v| v == "-P" || v == "--permission-profile"));
+    assert!(preflight.windows(2).any(|v| v == ["-P", "aida"]));
+    assert!(preflight.iter().any(|v| v == "--include-managed-config"));
+    validate_codex_flags(&args, "exec").unwrap();
+    validate_codex_flags(&preflight[1..preflight.len() - 1], "sandbox").unwrap();
+    for unsupported in ["-P", "--permission-profile", "--future-unknown"] {
+        let injected = vec!["exec".into(), unsupported.into(), "aida".into()];
+        let error = validate_codex_flags(&injected, "exec")
+            .unwrap_err()
+            .to_string();
+        assert!(error.contains(unsupported), "{error}");
+    }
+    let error = codex_argv(
+        Path::new("/fixture/codex"),
+        &bug_2487_codex_env(),
+        &["exec".into(), "--future-unknown".into(), "prompt".into()],
+    )
+    .unwrap_err()
+    .to_string();
+    assert!(error.contains("--future-unknown"), "{error}");
+    assert!(validate_codex_flags(&["sandbox".into(), "--json".into()], "sandbox").is_err());
+}
+
+#[test]
+// trace:BUG-2487 | ai:codex
+fn bug_2487_installed_exec_honours_builder_profile() {
+    if !installed_codex_required() {
+        eprintln!("SKIP: set AIDA_REQUIRE_CODEX_INSTALLED_LIVE=1 for pinned exec write probe");
+        return;
+    }
+    let program = resolve_program(
+        &Command::new("codex"),
+        &BTreeMap::from([(
+            "PATH".into(),
+            aida_core::exec_context::Environment::capture()
+                .var("PATH")
+                .unwrap()
+                .into(),
+        )]),
+    )
+    .unwrap();
+    let program = codex_auth::resolve_native_program(&program).unwrap();
+    codex_auth::require_program(&program, codex_auth::PROGRAM_SHA256).unwrap();
+    let (args, preflight) = codex_argv(
+        &program,
+        &bug_2487_codex_env(),
+        &[
+            "exec".into(),
+            "--skip-git-repo-check".into(),
+            "--json".into(),
+            "--sandbox".into(),
+            "workspace-write".into(),
+            "Run the fixture tool call.".into(),
+        ],
+    )
+    .unwrap();
+    let output = Command::new("/usr/bin/python3")
+        .args(["-I", "-S"])
+        .arg(
+            Path::new(env!("CARGO_MANIFEST_DIR"))
+                .join("src/containment/tests/codex_exec_profile_probe.py"),
+        )
+        .arg(program)
+        .arg(serde_json::to_string(&args).unwrap())
+        .arg(serde_json::to_string(&preflight).unwrap())
+        .output()
+        .unwrap();
+    assert!(
+        output.status.success(),
+        "{}\n{}",
+        String::from_utf8_lossy(&output.stdout),
+        String::from_utf8_lossy(&output.stderr)
+    );
+    eprintln!("{}", String::from_utf8_lossy(&output.stdout));
+}
+
 // trace:STORY-2326 | ai:codex
 #[test]
 fn story_2326_wrapper_environment_keeps_ambient_values_implicit() {
