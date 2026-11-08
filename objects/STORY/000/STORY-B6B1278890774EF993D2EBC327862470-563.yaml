@@ -20,12 +20,12 @@ description: |
   3. A lane that passes behaves exactly as today, plus the marker.
   4. Tests cover: a gate fail followed by a fixed round, a fail that persists (publishes with fast_gate=fail), a timeout, and the Codex native-publication path.
   5. Advisor docs (rework-brief-craft step 6) say lanes are fast-gated by the host.
-status: InProgress
+status: NeedsAttention
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-07T19:45:35.836129088Z
-modified_at: 2026-11-08T21:50:03.850398778Z
+modified_at: 2026-11-08T21:58:08.867635479Z
 req_type: Story
 tags:
 - docs:impacted
@@ -543,6 +543,36 @@ comments:
   created_at: 2026-11-08T21:48:33.749126463Z
   modified_at: 2026-11-08T21:48:33.749126463Z
   session_id: 20abb7c3-8f9b-4a5e-b326-404921f3b450
+- id: 01a1bd2b-38e3-7253-bec7-84bf9a2e8901
+  author: dirtlab
+  content: |
+    Latest-review handoff for STORY-2640 (reviewed head 03326fbabe7b). Changes are uncommitted for the native host launcher.
+
+    Finding 1 fixed: regenerated and reviewed CLI help golden. The only surface additions are fast-gate-release help and its JSON command-surface entry. Normal snapshot comparison also passes.
+    Finding 2 fixed: OrchestrationResult explicitly carries fast_gate_pending, preserved by pipeline sidecars. Transient backoff never retries that outcome. Sequential and pipelined batch handling records the spec as skipped while leaving its repair queued; real batch/nextN selection excludes it for this run and continues independent members. Tests exercise the orchestration/backoff/batch path, prove no CI/reviewer recovery occurs, preserve the repair row, and verify sidecar transport and no backoff.
+
+    Changed files:
+    - aida-cli-lib/src/auto_complete.rs
+    - aida-cli-lib/src/drain_batch.rs
+    - aida-cli-lib/src/drain_next_n.rs
+    - aida-cli-lib/src/drive_robustness.rs
+    - aida-cli-lib/src/tests/auto_complete_tests.rs
+    - aida-cli-lib/src/tests/golden/cli_help_snapshot.txt
+
+    Validation through host lane jobs:
+    - j20261108T215231150-3-0: cargo test --profile agent -p aida-cli-lib --lib -- fast_gate: 45 passed, 1 ignored (real-main sandbox integration), exit 0.
+    - j20261108T215342630-2-0: cargo test --profile agent -p aida-cli-lib --lib -- auto_complete::tests::: 261 passed, exit 0.
+    - j20261108T215307809-2-0: snapshot regeneration: 1 passed, exit 0.
+    - j20261108T215743424-2-0: normal help snapshot comparison: 1 passed, exit 0.
+    - Store writer inventory: 3399 sinks reconciled; execution-context ledger: zero additions; portability, targeted rustfmt --check and git diff --check pass.
+    - First snapshot build exposed a type-inference error, corrected before all successful runs above.
+    untested=false for targeted Cargo tests.
+
+    Finding 3 remains blocked, not disputed. Rechecked aida lane job run -- make check-ci-fast: installed runner refuses with 'a lane job must start with cargo'. Required seeded committed-head full-gate pass and elapsed time remain unproven (untested=true for that validation). Host must update its runner and run the actual gate inside bubblewrap with host-only results, investigating the prior containment-conformance timeout. No unsandboxed workaround or speculative timeout change. Punted this manual validation gate; existing punt/hold signals remain publication vetoes. No commit, push, PR, queue done, ship declaration or review record performed.
+  created_at: 2026-11-08T21:58:08.867635479Z
+  modified_at: 2026-11-08T21:58:08.867635479Z
+  session_id: 01a1bd23cc4a
+  harness_version: codex-cli 0.167.0
 history:
 - id: 01a1b78d-2628-7313-92de-8804ac5f8f71
   author: aida-session-start
@@ -856,6 +886,15 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a1bd2a-f612-7c03-9438-bb46f3ed91b2
+  author: dirtlab
+  timestamp: 2026-11-08T21:57:51.762563121Z
+  session_id: 01a1bd23cc4a
+  harness_version: codex-cli 0.167.0
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: NeedsAttention
 filed_at:
   code_sha: 7a18c0d52a6a4e0822befd4c810cfed16b04b74c
   branch: main
@@ -865,3 +904,8 @@ filed_at:
   vendor: claude
   session: 01a1b76b-2fe7-7dd2-88d0-356fc8d96d04
   harness_version: 2.1.319 (Claude Code)
+attention_reason:
+  category: blocked-dependency
+  detail: 'Latest review findings 1 and 2 are fixed in uncommitted edits: regenerated help golden and non-retryable queued-fast-gate outcome with batch/nextN continuation; 45 fast-gate and 261 orchestrator tests passed. Finding 3 remains blocked: installed host runner still refuses make check-ci-fast as Cargo-only. Host must update runner and record a seeded committed-head sandbox gate marker and elapsed time, investigating the prior containment-conformance timeout. No unsandboxed fallback; this manual validation gate remains a publication veto.'
+  raised_by: implementer
+  raised_at: 2026-11-08T21:57:51.762551433Z
