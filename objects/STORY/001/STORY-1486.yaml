@@ -23,7 +23,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-09-26T18:30:26.622729865Z
-modified_at: 2026-11-08T10:51:58.581866977Z
+modified_at: 2026-11-08T10:52:01.358599288Z
 req_type: Story
 tags:
 - agent-launch
@@ -599,6 +599,21 @@ comments:
   content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: STORY-1486 PARTIAL: all five ACs have matching tests by source and all five round-4 findings are fixed, but CI (cli-0) failed at this head (Run tests and Test time budget steps) with the cause undiagnosed, and lib-0, lib-1, rest and gates had not finished. No cargo run, by policy.. No triage reason was given.'
   created_at: 2026-11-08T10:51:58.581865383Z
   modified_at: 2026-11-08T10:51:58.581865383Z
+  session_id: 01a1b9af-8230-75d2-82f8-667491cc010a
+  harness_version: 2.1.319 (Claude Code)
+- id: 01a1bac9-5d56-7293-a2c2-18e2378110ad
+  author: joe
+  content: |-
+    REVIEW FINDINGS TO ADDRESS (STORY-1486):
+    Verdict: CHANGES REQUESTED
+    Reviewed commit: e781399b006c
+    Recorded: 2026-11-08T09:57:39.372969098+00:00
+    Findings:
+    1. BLOCKING, CI: CI (cli-0) failed at e781399b006c in its 'Run tests' and 'Test time budget' steps (job 128692618458). The failing test is not identified: the launcher captured only the exit-code line and this reviewer's sandbox denied the log download host. cli-0 passed at b68d471c9a9a and on main at 5cbe14e5fc6b, so a PR-caused failure is not ruled out. Read the job log and fix the failing test, or show it is an unrelated flake and re-run. Also check the budget result for aida-cli::story_1486_launch_profile noexec_verbose_prints_stakeholder_and_explicit_git_downgrades: it makes about 13 CLI launches and has no entry in scripts/test-time-budget.toml, whose default_limit is 10s (hypothesis, unconfirmed). Separately, lib-0, lib-1, rest and gates were still pending, so word_labelled_criteria_can_be_traced and the lib tests are not yet confirmed green.
+    2. Minor, docs: docs/cli/06-roles-sessions.md still says 'The project root in this declaration is the actual launch directory, including an explicit linked-worktree --cwd'. Since this rework, render_roots (aida-cli-lib/src/launch_permission_profile.rs:125) resolves the Git worktree toplevel, so --cwd <repo>/sub declares <repo> and only falls back to the launch directory when Git is unavailable. Reword to 'the Git worktree containing the launch directory'.
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
+  created_at: 2026-11-08T10:52:01.238706785Z
+  modified_at: 2026-11-08T10:52:01.238706785Z
   session_id: 01a1b9af-8230-75d2-82f8-667491cc010a
   harness_version: 2.1.319 (Claude Code)
 history:
