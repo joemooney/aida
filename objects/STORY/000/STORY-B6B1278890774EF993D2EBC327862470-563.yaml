@@ -25,7 +25,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-07T19:45:35.836129088Z
-modified_at: 2026-11-08T18:46:27.034265432Z
+modified_at: 2026-11-08T18:58:27.863982511Z
 req_type: Story
 tags:
 - docs:impacted
@@ -385,6 +385,24 @@ comments:
   modified_at: 2026-11-08T18:38:14.667836985Z
   session_id: 01a1b9af-8230-75d2-82f8-667491cc010a
   harness_version: 2.1.319 (Claude Code)
+- id: 01a1bc86-b797-7fc0-8d2c-9cbad9f07ea4
+  author: dirtlab
+  content: |
+    Addressed all three findings from review of 31eadc2c2d76; source edits remain uncommitted for native host publication.
+
+    - standalone_implementer.rs: a scope guard owns child-grant revocation from run entry through vendor/repair completion, including setup, vendor-loop, native-commit and uninspectable-seat errors. Successful runs still revoke before publication. Issued-grant tests exercise scope error exits and the real standalone missing-vendor path.
+    - lane_job.rs: bounded diagnostics read the LAST 1 MiB and decode lossily, preserving non-UTF-8 output and late failing-gate names without losing the already-read verdict.
+    - lane_fast_gate.rs: self-push gates compare a clean seat snapshot with the discovered PR head before running. Unpushed local heads report skipped(unpushed-head), while existing known-red evidence remains fail.
+    - tests/bug_home_038_seat_publish_tests.rs: real exit-path regression now uses issued child grants and verifies revocation.
+
+    Validation: host sandbox lane job j20261108T185232454-2-0 ran cargo test --profile agent -p aida-cli-lib --lib -- fast_gate: exit 0, 36 passed, 0 failed, 1 existing real-main integration ignored. Initial runs exposed an expanded test fixture changing HOME after minting the parent grant; corrected before the successful final-source run. Writer inventory (3399 sinks), execution-context ledger (zero additions), portability, rustfmt and git diff --check passed. untested=false.
+
+    No implementation blockers. The full real-main make check-ci-fast integration was not run; no full-gate pass claimed. Codegraph is missing (doctor confirmed); references checked with rg. No commit, push, PR creation, queue completion, ship or review verdict performed. Existing publication vetoes remain binding.
+    Suggested host subject: [AI:codex] fix(fast-gate): revoke child grants and retain bound verdicts (STORY-2640)
+  created_at: 2026-11-08T18:58:27.863982511Z
+  modified_at: 2026-11-08T18:58:27.863982511Z
+  session_id: 01a1bc75f86c
+  harness_version: codex-cli 0.167.0
 history:
 - id: 01a1b78d-2628-7313-92de-8804ac5f8f71
   author: aida-session-start
