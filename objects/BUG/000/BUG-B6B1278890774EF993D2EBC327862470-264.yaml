@@ -8,7 +8,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-08T19:01:55.483195458Z
-modified_at: 2026-11-08T20:52:25.740721384Z
+modified_at: 2026-11-08T21:17:38.331427784Z
 req_type: Bug
 comments:
 - id: 01a1bcc0-c857-7ae0-8568-8095391555d2
@@ -23,6 +23,12 @@ comments:
   content: 'Implementation: dev builds now supply full HEAD as a stable Cargo fingerprint input; the shared CLI/server stamp helper watches it while still reading the actual stamp from Git. Added a real-Cargo fixture covering fast-forward restamping with stale metadata mtimes, both ordinary and incremental-clean builds, plus warm unchanged-HEAD repeats. Updated docs/cli/11-dev.md. Validation: all 44 non-compile fast gates passed; feature-disabled CLI check and complete TUI seam guard passed using lane-runner agent-profile compile jobs. Two test-harness builds hit the seeded-target 900s timeout before test execution; targeted retry j20261108T205116308-2-0 is running with the permitted 3600s override. Edits remain uncommitted for the native host launcher. Codegraph database was unavailable in both lane and primary checkout; call sites verified with rg.'
   created_at: 2026-11-08T20:52:25.740721384Z
   modified_at: 2026-11-08T20:52:25.740721384Z
+  session_id: 01a1bcce401f
+- id: 01a1bd06-229b-7a11-a44a-de6f70772a55
+  author: joe
+  content: 'Final validation: job j20261108T210457242-2-0 executed dev_build_restamps_after_fast_forward_with_cached_git_watches against the final source: 1 passed, 0 failed (agent profile; build 9m12s, test 1.02s). Earlier executed regression runs also passed. The 900s test-harness timeouts were recovered with the permitted 3600s override. All 44 non-compile check-ci-fast gates passed; its feature-disabled CLI and complete TUI seam/dependency guard passed with compile steps delegated to agent-profile lane jobs. Final rustfmt and git diff --check passed. Compatibility retained: Git-less builds keep unknown stamps and Cargo default package-file tracking. Changed files: aida-cli-lib/build_git_stamp.rs, aida-cli-lib/src/dev_build.rs, aida-cli-lib/src/tests/dev_build_tests.rs, docs/cli/11-dev.md. No remaining implementation blockers. Native-seat edits remain uncommitted; host launcher owns commit, publication and queue completion.'
+  created_at: 2026-11-08T21:17:38.331427784Z
+  modified_at: 2026-11-08T21:17:38.331427784Z
   session_id: 01a1bcce401f
 history:
 - id: 01a1bcc0-d868-7912-a616-acafbcb7dba5
