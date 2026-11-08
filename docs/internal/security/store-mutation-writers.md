@@ -71,12 +71,15 @@ conflicts and revocation before replay. The client/broker/host routed tests also
 concurrent writes, stale bases and lost replies with synthetic launch identity.
 They do not establish Git/oplog publication or production admission.
 
-The filesystem boundary fixture also submits a `comment_add` packet through the
-production Python broker, Rust host handler and redo persistence from the same
-bwrap process that was denied a raw canonical-object overwrite. It checks the
-reply correlation and installed revision, and the parent verifies the single
-comment and host-bound author. Both primary-checkout and linked-store layouts
-retain the raw create/append/rename negatives and writable private-cache control.
+The filesystem boundary fixture runs the early CLI entrypoint and Rust lane
+client in a child test process inside the sealed bwrap namespace. That process
+first proves a raw canonical-object overwrite is denied, then invokes
+`comment add` through the production Python broker, Rust host handler and redo
+persistence. The client validates reply correlation and result schema; the
+sandbox driver compares the returned revision with installed bytes. The parent
+independently verifies the single comment and host-bound author. Both primary
+checkout and linked-store layouts retain the raw create/append/rename negatives
+and writable private-cache control.
 This fixture supplies synthetic launch ancestry and authority; it does not run
 the production launch admission or establish real-vendor containment evidence.
 
@@ -97,10 +100,14 @@ The additive `mediated_route` array records the implemented variants of
 `cli:comment add`, `cli:edit`, `mcp:add_comment` and `mcp:update_requirement`.
 Each record names its wire operation, supported scope, remaining unsupported
 semantics, early entrypoint, client, host handler and evidence files. The guard
-checks that the operation is registered, all three functions exist, and evidence
-paths are safe existing files. Regeneration preserves these reviewed records;
-new operations receive no route automatically. This is source-review evidence,
-not proof of runtime authorization or test execution.
+checks that the operation is registered, its wire verb belongs to the broker
+`CANONICAL_VERBS` vocabulary, all three functions exist, and evidence paths are
+safe existing files. The vocabulary is parsed as literal data without executing
+service code; a missing or malformed declaration refuses route validation.
+MCP routes cite `store_mutation_mcp_tests.rs` for their dispatcher coverage.
+Regeneration preserves these reviewed records; new operations receive no route
+automatically. This is source-review evidence, not proof of runtime
+authorization or test execution.
 
 `--profile mediated` includes these records as `partial_routes` alongside its
 unresolved counts. They do **not** clear writer or operation blockers: a

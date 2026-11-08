@@ -606,6 +606,26 @@ def check_routes(root, data, scanned):
                          for _, _, item in items}
     required = {"operation", "wire_operation", "scope", "remaining", "entrypoint",
                 "client", "host", "evidence_tests"}
+    # Read the broker's closed vocabulary as data; never import/execute service
+    # code from the reviewed tree. Missing or malformed declarations fail closed.
+    wire_operations = set()
+    if data.get("mediated_route"):
+        try:
+            tree = ast.parse((root / "aida-cli-lib/src/store_mutation/service.py").read_text())
+            declarations = [node.value for node in tree.body
+                            if isinstance(node, ast.Assign) and any(
+                                isinstance(target, ast.Name) and target.id == "CANONICAL_VERBS"
+                                for target in node.targets)]
+            if len(declarations) != 1:
+                raise ValueError("expected one CANONICAL_VERBS declaration")
+            verbs = ast.literal_eval(declarations[0])
+            if (not isinstance(verbs, (tuple, list)) or not verbs
+                    or any(not isinstance(verb, str) or not verb for verb in verbs)
+                    or len(set(verbs)) != len(verbs)):
+                raise ValueError("invalid CANONICAL_VERBS vocabulary")
+            wire_operations = set(verbs)
+        except (OSError, SyntaxError, ValueError, TypeError) as error:
+            errors.append(f"mediated route wire vocabulary unavailable: {error}")
     for row in data.get("mediated_route", []):
         if not isinstance(row, dict) or set(row) != required or not all(row.values()):
             errors.append("mediated route requires complete, closed evidence fields")
@@ -614,6 +634,8 @@ def check_routes(root, data, scanned):
             errors.append("mediated route selectors, scope and remaining work must be strings")
             continue
         operation = row["operation"]
+        if row["wire_operation"] not in wire_operations:
+            errors.append(f"mediated route {operation}: unsupported wire operation: {row['wire_operation']}")
         if operation in seen or operation not in operation_ids:
             errors.append(f"duplicate or unregistered mediated route: {operation}")
         seen.add(operation)

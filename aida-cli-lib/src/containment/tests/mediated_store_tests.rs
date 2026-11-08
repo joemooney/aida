@@ -172,6 +172,10 @@ fn run_in_profile_with_service(
     command.args(profile.args(cwd));
     if let Some((source, destination)) = service {
         command.arg("--ro-bind").arg(source).arg(destination);
+        command
+            .arg("--ro-bind")
+            .arg(std::env::current_exe().unwrap())
+            .arg("/run/aida-test-client");
     }
     command.args(["--", "/usr/bin/python3", "-I", "-S", "-c", script]);
     let fds: Vec<_> = profile.mounts.iter().map(|m| m.file.as_raw_fd()).collect();
@@ -190,6 +194,60 @@ fn run_in_profile_with_service(
         String::from_utf8_lossy(&out.stderr)
     );
     out
+}
+
+/// Invoked only by the parent fixture inside its sealed bwrap profile. Stdin
+/// carries fixture selectors, not authority. Exercise the actual early CLI
+/// translation, canonical read, Rust transport and reply validation here.
+// trace:TASK-3223 | ai:codex
+#[test]
+#[ignore = "child fixture requires the parent's sealed namespace and service"]
+fn mediated_profile_cli_child() {
+    use aida_core::exec_context::Environment;
+    use std::io::Read;
+    let mut input = String::new();
+    std::io::stdin()
+        .take(16385)
+        .read_to_string(&mut input)
+        .unwrap();
+    assert!(input.len() <= 16384);
+    let config: serde_json::Value = serde_json::from_str(&input).unwrap();
+    let object = Path::new(config["object"].as_str().unwrap());
+    let before = std::fs::read(object).unwrap();
+    let error = std::fs::write(object, b"raw overwrite").unwrap_err();
+    assert!(matches!(
+        error.raw_os_error(),
+        Some(libc::EROFS | libc::EACCES)
+    ));
+    assert_eq!(std::fs::read(object).unwrap(), before);
+    let environment = Environment::from_pairs([
+        ("AIDA_STORE_MUTATION_PROFILE".into(), "mediated".into()),
+        (
+            "AIDA_STORE_MUTATION_ENDPOINT".into(),
+            config["endpoint"].as_str().unwrap().into(),
+        ),
+        ("AIDA_SESSION_ROLE".into(), "implementer".into()),
+    ]);
+    let argv = [
+        "aida",
+        "comment",
+        "add",
+        "TASK-3223",
+        "same lane mediated comment",
+    ]
+    .map(std::ffi::OsString::from);
+    crate::store_mutation_entry::entry(
+        &environment,
+        &argv,
+        Some(Path::new(config["lane"].as_str().unwrap())),
+    )
+    .unwrap()
+    .unwrap();
+    let installed: aida_core::Requirement =
+        serde_yaml::from_slice(&std::fs::read(object).unwrap()).unwrap();
+    assert_eq!(installed.comments.len(), 1);
+    assert_eq!(installed.comments[0].content, "same lane mediated comment");
+    println!("raw writes denied; mediated comment committed through Rust CLI client");
 }
 
 /// Fixture-only transport carries closed operations from this filesystem
@@ -373,7 +431,7 @@ fn mediated_profile_live_raw_create_append_rename_denied_and_private_cache_writa
         let paths = serde_json::to_string(&f.protected).unwrap();
         let script = format!(
             r#"
-import errno, hashlib, json, os, socket, sqlite3, uuid
+import errno, hashlib, json, os, sqlite3, subprocess
 from pathlib import Path
 paths=json.loads({paths:?})
 source=Path({lane:?})/'rename-source'
@@ -401,38 +459,25 @@ db.execute("insert into derived values ('private')")
 db.commit()
 assert db.execute('select value from derived').fetchone()==('private',)
 db.close()
-# The same sandboxed process must fail to modify the actual canonical object
-# and then succeed via the production broker/host route, without leaving it.
-obj=Path({object:?})
-before=obj.read_bytes()
-try:
-    obj.write_bytes(b'raw overwrite')
-except OSError as e:
-    assert e.errno in (errno.EROFS,errno.EACCES),e
-else: raise AssertionError('raw canonical object write allowed')
-assert obj.read_bytes()==before
-request=dict(version=1,launch_epoch={epoch:?},request_id=str(uuid.uuid4()),
-             op='comment_add',data=dict(spec_id={origin:?},
-             expected_revision=hashlib.sha256(before).hexdigest(),content='same lane mediated comment'))
-with socket.socket(socket.AF_UNIX,socket.SOCK_SEQPACKET) as channel:
-    channel.settimeout(5)
-    channel.connect({endpoint:?})
-    wire=json.dumps(request).encode()
-    assert os.write(channel.fileno(),wire)==len(wire)
-    reply=json.loads(channel.recv(65536))
-assert reply['outcome']=='success',reply
-assert reply['launch_epoch']==request['launch_epoch']
-assert reply['request_id']==request['request_id']
-assert reply['result']['spec_id']==request['data']['spec_id']
-assert str(uuid.UUID(reply['result']['comment_id']))==reply['result']['comment_id']
-assert reply['result']['revision']==hashlib.sha256(obj.read_bytes()).hexdigest()
+# The Rust child runs inside this same sealed namespace. It proves raw denial
+# itself, then drives the real early CLI entry and lane client to the host.
+config=dict(object={object:?}, endpoint={endpoint:?}, lane={lane:?})
+result=subprocess.run(['/run/aida-test-client', '--exact',
+    'launch::contained::mediated_store_tests::mediated_profile_cli_child',
+    '--ignored', '--nocapture'], input=json.dumps(config), text=True,
+    capture_output=True, timeout=10)
+assert result.returncode==0,(result.stdout,result.stderr)
+assert '1 passed' in result.stdout,result.stdout
+replies=[json.loads(line) for line in result.stdout.splitlines() if line.startswith(chr(123))]
+assert len(replies)==1,result.stdout
+assert replies[0]['revision']==hashlib.sha256(Path({object:?}).read_bytes()).hexdigest()
+assert 'raw writes denied; mediated comment committed through Rust CLI client' in result.stdout,result.stdout
+print(result.stdout)
 print('raw writes denied; private cache writable; mediated comment committed')
 "#,
             lane = f.lane.to_str().unwrap(),
             cache = cache.to_str().unwrap(),
             object = object.to_str().unwrap(),
-            epoch = route.epoch().to_string(),
-            origin = route.origin,
             endpoint = endpoint,
         );
         let out = run_in_profile_with_service(

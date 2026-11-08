@@ -56,6 +56,8 @@ class WriterInventoryTests(unittest.TestCase):
 
     # trace:TASK-3223 | ai:codex
     def partial_route(self):
+        self.put("aida-cli-lib/src/store_mutation/service.py",
+                 "CANONICAL_VERBS = ('comment_add', 'spec_edit')\n")
         self.put("aida-cli-lib/src/mcp.rs", '''
             impl Server {
                 fn dispatch() { match tool_name { "edit" => self.tool_edit(args), } }
@@ -106,6 +108,32 @@ class WriterInventoryTests(unittest.TestCase):
                 data["mediated_route"] = [changed]
                 self.assertTrue(guard.check_routes(self.root, data, scanned))
         data["mediated_route"] = [route, route]
+        self.assertTrue(guard.check_routes(self.root, data, scanned))
+
+    def test_partial_route_wire_operation_must_be_supported_by_broker(self):
+        import tomllib
+        route = self.partial_route()
+        self.append_route(route)
+        data = tomllib.loads((self.root / guard.INVENTORY).read_text())
+        scanned = guard.scan(self.root)
+        self.assertEqual([], guard.check_routes(self.root, data, scanned))
+        for verb in ("spec_edti", "own_claim", "queue_done", "session_probe"):
+            with self.subTest(verb=verb):
+                data["mediated_route"][0]["wire_operation"] = verb
+                self.assertTrue(any("unsupported wire operation" in error
+                                    for error in guard.check_routes(self.root, data, scanned)))
+        data["mediated_route"][0]["wire_operation"] = "spec_edit"
+        # Validation is tied to the current broker vocabulary, not a copied list.
+        self.put("aida-cli-lib/src/store_mutation/service.py",
+                 "CANONICAL_VERBS = ('comment_add',)\n")
+        self.assertTrue(guard.check_routes(self.root, data, scanned))
+        for source in ("", "CANONICAL_VERBS = calculate()", "CANONICAL_VERBS = 'spec_edit'",
+                       "CANONICAL_VERBS = ('spec_edit', 'spec_edit')", "invalid python !"):
+            with self.subTest(source=source):
+                self.put("aida-cli-lib/src/store_mutation/service.py", source)
+                self.assertTrue(any("wire vocabulary unavailable" in error
+                                    for error in guard.check_routes(self.root, data, scanned)))
+        (self.root / "aida-cli-lib/src/store_mutation/service.py").unlink()
         self.assertTrue(guard.check_routes(self.root, data, scanned))
 
     def test_partial_routes_are_reported_without_admitting_the_profile(self):
