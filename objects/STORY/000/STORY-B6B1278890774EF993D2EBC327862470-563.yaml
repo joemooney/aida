@@ -25,7 +25,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-07T19:45:35.836129088Z
-modified_at: 2026-11-08T19:09:24.899776017Z
+modified_at: 2026-11-08T19:09:31.055170631Z
 req_type: Story
 tags:
 - docs:impacted
@@ -408,6 +408,25 @@ comments:
   content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: Round-6 findings 1-3 are fixed (grant guard, output tail, unpushed head) and all five ACs have traced tests, but three earlier findings are still open, including an AC3 regression; CI is still pending at this head and this review is from source only.. No triage reason was given.'
   created_at: 2026-11-08T19:09:24.899774208Z
   modified_at: 2026-11-08T19:09:24.899774208Z
+  session_id: 01a1b9af-8230-75d2-82f8-667491cc010a
+  harness_version: 2.1.319 (Claude Code)
+- id: 01a1bc90-d5bb-71d3-a905-8b7f0590709e
+  author: joe
+  content: |-
+    REVIEW FINDINGS TO ADDRESS (STORY-2640):
+    Verdict: CHANGES REQUESTED
+    Reviewed commit: c53053de07e2
+    Recorded: 2026-11-08T19:04:15.483515248+00:00
+    Findings:
+    1. [minor] AC3 regression, still open: a vanished lease is a hard error on every implementer lane. session.rs:6794 ('fast gate lease disappeared') now runs for self-pushing lanes that never looked up the lease on main, and queue_cmd.rs:9076 refuses before the vendor spawns. Scenario: an advisor releases a lease mid-run (as on this spec, comment 24), and a finished lane's real exit status becomes Err. Fix: on a missing lease report fast_gate=skipped(<reason>) and keep the lane's status; add a test.
+    2. [minor] Still open: Reservation::drop (lane_fast_gate.rs:108-123) reads and rewrites the receipt without receipt_lock and without comparing owner. standalone_implementer ends the lease before _fast_gate drops, so a relaunch on the branch in that window has its pending receipt settled and review admitted during its gate. fast_gate_cleanup_serializes_with_new_reservation exercises release_locked, not Drop. Fix: take the lock, settle only a receipt this process owns, and test Drop against a newer owner.
+    3. [minor] Still open: 'aida lane fast-gate-release' (lane_cmd.rs:32-41) has no role, grant or seat check and no refusal test, so an uncontained lane can lift its own queued repair hold and admit review of a red head. An unknown branch also reports success as skipped(no-result). Fix: refuse from a seat or lane context, refuse a branch with no receipt, and test both.
+    4. [minor] blocks_review (lane_fast_gate.rs:173) calls receipt_lock before reading the receipt, so review-watch creates a permanent .aida/fast-gates/<hash>.lock for every open non-lane PR on each pass, and a lock-directory error refuses review of PRs the gate does not apply to. Fix: return false when no receipt exists before taking the lock, and assert no lock file is created for an ordinary branch.
+    5. [minor, unverified: not run] Normal lanes may rarely reach fast_gate=pass. 'cargo check --profile agent' is now the last gate; the seed snapshots agent build artifacts (seat_target_seed.rs:36-39), which cargo may not reuse for check units, so it may hit the 300s limit after the source gates and report skipped(timeout). A real cargo-check failure would then go unreported on a cold target. Fix or disprove: run the ignored fast_gate_real_main_target_passes_in_sandbox on a seeded lane without warmup and record the marker and timing.
+    6. [cosmetic] lane_job.rs fast_gate_job_tests: the comment 'Exercise the production gate dispatch...' now sits above fast_gate_output_keeps_trailing_failure_and_invalid_bytes instead of fast_gate_dispatch_receives_lane_target_seed, with a duplicated trace line between #[test] and the fn.
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
+  created_at: 2026-11-08T19:09:30.939577481Z
+  modified_at: 2026-11-08T19:09:30.939577481Z
   session_id: 01a1b9af-8230-75d2-82f8-667491cc010a
   harness_version: 2.1.319 (Claude Code)
 history:
