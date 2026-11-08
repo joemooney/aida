@@ -14,13 +14,21 @@ priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-11-08T00:19:34.489306322Z
-modified_at: 2026-11-08T00:35:51.578508061Z
+modified_at: 2026-11-08T00:35:52.847375972Z
 req_type: Task
 tags:
 - carried-from:TASK-3424
 - finding-hash:615af454
 - from-review:PR-3637
 - kind:carried-forward
+comments:
+- id: 01a1b895-458f-7180-b137-7b54795ae041
+  author: joe
+  content: 'Accepted as-is (advisor 2026-11-07): PR #3637 merged; its body is history.'
+  created_at: 2026-11-08T00:35:52.847375972Z
+  modified_at: 2026-11-08T00:35:52.847375972Z
+  session_id: 01a1b848-940b-7bd2-8acd-52e428b182b8
+  harness_version: 2.1.319 (Claude Code)
 history:
 - id: 01a1b894-4a2a-79c3-b113-39e69d63767d
   author: joe
