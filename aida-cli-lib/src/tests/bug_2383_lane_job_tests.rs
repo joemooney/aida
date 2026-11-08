@@ -1980,37 +1980,35 @@ fn story_2641_sccache_host_queue_ticket_stays_live() {
     // This test process is a live host queue owner throughout the sandbox.
     let pid = std::process::id();
     let ticket = tmp.path().join(format!("wait.0.{pid}"));
-    {
-        std::fs::write(&ticket, "host ticket").unwrap();
-        let script = r#"
+    std::fs::write(&ticket, "host ticket").unwrap();
+    let script = r#"
 # The host wrapper uses the same kill -0 sweep for wait and acq tickets.
 kill -0 "$1" 2>/dev/null || rm "$2"
 test -f "$2"
 # A child must also publish its real host PID, not a namespace-local alias.
 test "$(readlink /proc/self/ns/pid)" = "$3"
 "#;
-        let namespace = std::fs::read_link("/proc/self/ns/pid").unwrap();
-        let args = crate::session::lane_job_bwrap_argv(
-            tmp.path(),
-            &[tmp.path().to_path_buf()],
-            &[],
-            "/bin/sh",
-            vec![
-                "-c".into(),
-                script.into(),
-                "ticket-check".into(),
-                pid.to_string(),
-                ticket.display().to_string(),
-                namespace.to_string_lossy().into_owned(),
-            ],
-        );
-        assert!(!args.iter().any(|arg| arg == "--unshare-pid"));
-        let mut cmd = Command::new("bwrap");
-        cmd.args(args).env_remove("SCCACHE_SERVER_UDS");
-        let output = cmd.output().unwrap();
-        assert!(output.status.success(), "{output:?}");
-        assert_eq!(std::fs::read_to_string(&ticket).unwrap(), "host ticket");
-    }
+    let namespace = std::fs::read_link("/proc/self/ns/pid").unwrap();
+    let args = crate::session::lane_job_bwrap_argv(
+        tmp.path(),
+        &[tmp.path().to_path_buf()],
+        &[],
+        "/bin/sh",
+        vec![
+            "-c".into(),
+            script.into(),
+            "ticket-check".into(),
+            pid.to_string(),
+            ticket.display().to_string(),
+            namespace.to_string_lossy().into_owned(),
+        ],
+    );
+    assert!(!args.iter().any(|arg| arg == "--unshare-pid"));
+    let mut cmd = Command::new("bwrap");
+    cmd.args(args);
+    let output = cmd.output().unwrap();
+    assert!(output.status.success(), "{output:?}");
+    assert_eq!(std::fs::read_to_string(&ticket).unwrap(), "host ticket");
 }
 
 // Host wrappers must inspect only the foreground server, not foreign clients.
