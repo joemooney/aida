@@ -20,7 +20,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-07T20:18:53.564500Z
-modified_at: 2026-11-08T20:51:50.610401421Z
+modified_at: 2026-11-08T20:57:14.291645956Z
 req_type: Bug
 relationships:
 - rel_type:
@@ -374,6 +374,13 @@ comments:
   modified_at: 2026-11-08T20:40:11.929597659Z
   session_id: 01a1bcda7000
   harness_version: codex-cli 0.167.0
+- id: 01a1bcf3-7533-7cc2-8141-0a7a45fbb19d
+  author: dirtlab
+  content: 'Validation-only pickup at 80770067b5 (round-8 fix 968a0b4fa9 already present). No source edits needed: confirmed queue resume reconciles implementer signals independently of contained/publication gating, and consumed drain punts clear seat and host markers while retaining holds. Lane job j20261108T205222441-2-0 executed 15 BUG-2488 regressions successfully plus the watchdog child (direct child entry intentionally ignored in parent). Lane job j20261108T205244274-2-0 executed all 7 resolve_aida_exe_tests successfully, including the prior CI guard. aida criteria reports no untested or unanchored criteria; git diff --check passes; working tree clean. Codegraph unavailable per doctor; used rg. untested=false. No commit, push, PR, queue completion, pr ship or review record attempted. Fresh CI and supervised hold clearance remain host/reviewer work. TASK-3608 retains the separately split drain/queue-resume no-change propagation scope.'
+  created_at: 2026-11-08T20:57:14.291645956Z
+  modified_at: 2026-11-08T20:57:14.291645956Z
+  session_id: 01a1bcee7d48
+  harness_version: codex-cli 0.167.0
 history:
 - id: 01a1b7ad-9096-7320-bbe8-fc34c8e11c09
   author: aida-session-start
@@ -697,6 +704,12 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a1bcee-d6ab-7ac0-9b65-d1fc73c98560
+  author: dirtlab
+  timestamp: 2026-11-08T20:52:11.563972105Z
+  session_id: 01a1bcee7d48
+  harness_version: codex-cli 0.167.0
+  changes: []
 filed_at:
   code_sha: 7a18c0d52a6a4e0822befd4c810cfed16b04b74c
   branch: main
