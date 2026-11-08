@@ -104,12 +104,61 @@ items = [{name = "preserved", enabled = true}]
         with tempfile.TemporaryDirectory() as directory:
             config = Path(directory) / "config.toml"
             config.write_text('[contained]\nallowed_hosts = ["deny.fixture.test"]\n')
-            c.fixture_policy(config, "agy")
+            c.fixture_policy(config, "agy", {"auth_hosts": ["daily-cloudcode-pa.googleapis.com", "oauth2.googleapis.com"]})
             policy = tomllib.loads(config.read_text())
             self.assertEqual(policy["agents"]["vendor"], "agy")
             self.assertEqual(policy["contained"]["vendors"]["agy"], "aida")
             self.assertEqual(policy["contained"]["allowed_hosts"],
                              ["daily-cloudcode-pa.googleapis.com", "oauth2.googleapis.com", "allow.fixture.test"])
+
+    # trace:TASK-3048 | ai:codex
+    def test_agy_policy_requires_binary_descriptor_without_source_fallback(self):
+        with tempfile.TemporaryDirectory() as directory:
+            config = Path(directory) / "config.toml"
+            original = '[contained]\nallowed_hosts = ["unchanged.test"]\n'
+            config.write_text(original)
+            for runtime in (None, {}, {"auth_hosts": []}, {"auth_hosts": ["*.googleapis.com"]}):
+                with self.assertRaisesRegex(ValueError, "fixture-runtime-policy"):
+                    c.fixture_policy(config, "agy", runtime)
+                self.assertEqual(config.read_text(), original)
+            c.fixture_policy(config, "agy", {"auth_hosts": ["binary.fixture.test"]})
+            self.assertEqual(tomllib.loads(config.read_text())["contained"]["allowed_hosts"],
+                             ["binary.fixture.test", "allow.fixture.test"])
+
+    # trace:TASK-3048 | ai:codex
+    def test_agy_aida_setup_uses_policy_from_selected_binary(self):
+        fixture_home = Path.home() / ".aida"
+        fixture_home.mkdir(exist_ok=True)
+        with tempfile.TemporaryDirectory(dir=fixture_home) as directory:
+            root = Path(directory) / "experiment"
+            calls = []
+            def setup(argv, cwd, env, report, stage):
+                calls.append((stage, argv))
+                if stage == "init":
+                    (cwd / ".aida").mkdir()
+                    (cwd / ".aida/config.toml").write_text('[contained]\nallowed_hosts = ["old.test"]\n')
+                if stage == "runtime-policy":
+                    return json.dumps({"auth_hosts": ["binary.fixture.test"]})
+                if stage == "policy-add":
+                    raise ValueError("test-stop-after-policy")
+                return "fixture"
+            args = c.argparse.Namespace(vendor="agy", output=root)
+            with mock.patch.object(c.shutil, "which", return_value=c.sys.executable), \
+                 mock.patch.object(c, "fixture_command", side_effect=setup), \
+                 contextlib.redirect_stdout(io.StringIO()), contextlib.redirect_stderr(io.StringIO()):
+                with self.assertRaisesRegex(ValueError, "test-stop-after-policy"):
+                    c.run_aida(args)
+            policy = tomllib.loads((root / "repository/.aida/config.toml").read_text())
+            self.assertEqual(policy["agents"]["vendor"], "agy")
+            self.assertEqual(policy["contained"]["vendors"]["agy"], "aida")
+            self.assertEqual(policy["contained"]["allowed_hosts"],
+                             ["binary.fixture.test", "allow.fixture.test"])
+            query = next(argv for stage, argv in calls if stage == "runtime-policy")
+            self.assertEqual(query[1:], ["config", "permissions", "runtime-policy", "--vendor", "agy"])
+            report = json.loads((root / "report.json").read_text())
+            self.assertEqual(report["runtime_policy"]["auth_hosts"], ["binary.fixture.test"])
+            self.assertFalse(report["production_launcher_credit"])
+            self.assertFalse(report["whole_lane_pass"])
 
     # trace:BUG-2462 | ai:codex
     def test_role_refusal_reports_actual_diagnostic_and_keeps_tty(self):

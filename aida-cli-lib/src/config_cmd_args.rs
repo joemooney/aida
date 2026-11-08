@@ -109,6 +109,12 @@ pub enum ConfigCommand {
 // trace:STORY-1127 | ai:codex
 #[derive(Subcommand, Debug)]
 pub enum ConfigPermissionsCommand {
+    /// Print the runtime descriptor embedded in this binary. No launch authority.
+    // trace:TASK-3048 | ai:codex
+    RuntimePolicy {
+        #[clap(long)]
+        vendor: String,
+    },
     /// Run the fixed, model-free filesystem/supervisor containment tracer.
     /// This does not enable vendor launches or change permission policy.
     // trace:TASK-2705 | ai:codex

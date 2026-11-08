@@ -689,6 +689,14 @@ shows the resolved path and pin diagnostic, including in JSON and TOON output.
 
 #### Model-free containment tracer
 
+`aida config permissions runtime-policy --vendor agy` prints the validated
+runtime descriptor embedded in the running AIDA binary as JSON, without opening
+the requirement store or starting a vendor. The host conformance fixture uses
+this descriptor for its auth host policy; a missing or malformed descriptor
+refuses setup instead of falling back to the script checkout. This inventory
+is candidate configuration, not measured refresh evidence or launch admission.
+<!-- trace:TASK-3048 | ai:codex -->
+
 `aida config permissions probe --vendor codex --json` runs a closed Linux
 filesystem/supervisor and egress/local-IPC diagnostic in fresh synthetic state. `claude` and
 `opencode` also have shipped capability descriptors; this does not launch those

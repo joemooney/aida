@@ -2271,7 +2271,6 @@ fn task_3048_private_runtime_pins_only_the_credential_leaf() {
     use std::os::unix::fs::symlink;
     let home = tempfile::tempdir().unwrap();
     let state = tempfile::tempdir().unwrap();
-    let workspace = tempfile::tempdir().unwrap();
     let policy = crate::containment::runtime_policy("agy").unwrap();
     let host = home.path().join(&policy.relative);
     std::fs::create_dir_all(&host).unwrap();
@@ -2279,14 +2278,8 @@ fn task_3048_private_runtime_pins_only_the_credential_leaf() {
     let token = host.join(&policy.credential);
     std::fs::write(&token, "synthetic-credential").unwrap();
     let mut profile = WriteProfile::new();
-    let runtime = install_private_runtime(
-        &mut profile,
-        state.path(),
-        home.path(),
-        &policy,
-        workspace.path(),
-    )
-    .unwrap();
+    let runtime =
+        install_private_runtime(&mut profile, state.path(), home.path(), &policy).unwrap();
     assert_eq!(runtime, host);
     let source = state.path().join("vendor-runtime");
     assert_eq!(std::fs::metadata(&source).unwrap().mode() & 0o777, 0o700);
@@ -2489,14 +2482,7 @@ for name in ('file-helper','url-helper','stdio-server'):
     std::fs::create_dir_all(empty.join("antigravity-cli")).unwrap();
     plan.profile.add(&empty, false).unwrap();
     plan.profile.mounts.last_mut().unwrap().path = home.path().join(".gemini");
-    install_private_runtime(
-        &mut plan.profile,
-        plan._state.path(),
-        home.path(),
-        &policy,
-        workspace.path(),
-    )
-    .unwrap();
+    install_private_runtime(&mut plan.profile, plan._state.path(), home.path(), &policy).unwrap();
     bind_runtime_credential(
         &mut plan.profile,
         &runtime,

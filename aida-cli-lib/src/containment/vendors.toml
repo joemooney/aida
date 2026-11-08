@@ -27,8 +27,8 @@ native_layer = "none"
 ipc = "private_runtime"
 credentials = "unverified"
 
-# Common wrapper runtime inputs. Only this endpoint is present in recorded host
-# evidence; refresh/login inventory still needs the advisor's host measurement.
+# Common wrapper runtime inputs. Recorded traffic confirms the inference host;
+# the candidate refresh host still needs the advisor's live measurement.
 # Entries never extend trusted contained.allowed_hosts automatically.
 [vendor.agy.runtime]
 relative = ".gemini/antigravity-cli"
@@ -39,7 +39,6 @@ auth_hosts = ["daily-cloudcode-pa.googleapis.com", "oauth2.googleapis.com"]
 auth_inventory_complete = false
 raw_store_writes = false
 raw_git_writes = false
-workspace_permission = "write_file"
 argv_prefix = ["--output-format", "stream-json", "--disable-slash-commands"]
 # Value-taking prompt options are data too: prompt text cannot select posture.
 prompt_options = ["-p", "--print", "--prompt", "--prompt-interactive"]

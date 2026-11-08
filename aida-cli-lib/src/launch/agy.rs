@@ -219,25 +219,6 @@ mod tests {
             .contains("fresh all-tool conformance"));
     }
 
-    // trace:TASK-3048 | ai:codex
-    #[test]
-    fn agy_private_permissions_are_workspace_only() {
-        let policy = crate::containment::runtime_policy("agy").unwrap();
-        assert_eq!(
-            policy.settings(Path::new("/fixture/workspace")).unwrap(),
-            serde_json::json!({"permissions": {"allow": ["write_file(/fixture/workspace/**)"]}})
-        );
-        for invalid in [
-            "/",
-            "relative",
-            "/fixture/../host",
-            "/fixture/glob*",
-            "/fixture/inject)\ncommand(*)",
-        ] {
-            assert!(policy.settings(Path::new(invalid)).is_err(), "{invalid}");
-        }
-    }
-
     #[test]
     fn agy_adapter_outer_only_argv_refuses_without_applied_receipt() {
         let runtime = Path::new("/private/agy-runtime");

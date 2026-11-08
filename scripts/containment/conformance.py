@@ -647,7 +647,7 @@ def continuation_terminated(_signum, _frame):
 
 
 # trace:BUG-2470 TASK-3048 | ai:codex
-def fixture_policy(config, vendor="codex"):
+def fixture_policy(config, vendor="codex", runtime=None):
     """Merge experiment policy into init's config without duplicating tables."""
     policy = tomllib.loads(config.read_text())
     policy.setdefault("agents", {}).update(contained=True, vendor=vendor)
@@ -655,10 +655,15 @@ def fixture_policy(config, vendor="codex"):
     # Replace, never extend: init's default hosts must not weaken C3's denial.
     contained["allowed_hosts"] = ["api.openai.com", "allow.fixture.test"]
     if vendor == "agy":
-        # Shipped vendor data, never an open-ended hostname glob.
-        data = Path(__file__).resolve().parents[2] / "aida-cli-lib/src/containment/vendors.toml"
-        runtime = tomllib.loads(data.read_text())["vendor"][vendor]["runtime"]
-        contained["allowed_hosts"] = [*runtime["auth_hosts"], "allow.fixture.test"]
+        # The binary under test owns its descriptor, independently of this
+        # script's checkout. Never fall back to local source on query failure.
+        if not isinstance(runtime, dict) or not isinstance(runtime.get("auth_hosts"), list):
+            raise ValueError("fixture-runtime-policy-unavailable")
+        hosts = runtime["auth_hosts"]
+        if not hosts or any(not isinstance(h, str) or not re.fullmatch(r"[a-z0-9]+(?:[.-][a-z0-9]+)*", h)
+                            for h in hosts):
+            raise ValueError("fixture-runtime-policy-invalid-auth-hosts")
+        contained["allowed_hosts"] = [*hosts, "allow.fixture.test"]
     contained.setdefault("vendors", {})[vendor] = "aida"
 
     # TOML inline tables let us retain all parsed init values using only the
@@ -729,7 +734,15 @@ def run_aida(args):
         config = repo / ".aida/config.toml"
         # init owns the store and authority formats. Only fixture policy and
         # experiment instructions are authored here, never seat/lease files.
-        fixture_policy(config, args.vendor)
+        runtime = None
+        if args.vendor == "agy":
+            try:
+                runtime = json.loads(setup([aida, "config", "permissions", "runtime-policy",
+                                            "--vendor", args.vendor], "runtime-policy"))
+            except (ValueError, TypeError) as error:
+                raise ValueError("fixture-runtime-policy-query-failed") from error
+            report["runtime_policy"] = runtime
+        fixture_policy(config, args.vendor, runtime)
         skill = repo / ".agents/skills/aida-pickup/SKILL.md"
         skill.parent.mkdir(parents=True)
         invocation = shlex.join([sys.executable, str(root / "payload/runner.py"),

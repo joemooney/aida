@@ -459,7 +459,6 @@ fn install_private_runtime(
     state: &Path,
     home: &Path,
     policy: &crate::containment::RuntimePolicy,
-    _workspace: &Path,
 ) -> Result<PathBuf> {
     policy.validate()?;
     let destination = home.join(&policy.relative);
@@ -1185,7 +1184,7 @@ impl PreparedLaunch {
         let private_home = if let Some(policy) = &runtime_policy {
             // The vendor resolves this conventional path itself; mount only a
             // launch-owned runtime there, never the host settings/plugins/logs.
-            install_private_runtime(&mut profile, state.path(), &host_home, policy, &root)?
+            install_private_runtime(&mut profile, state.path(), &host_home, policy)?
         } else {
             let path = state.path().join(vendor.key);
             ensure_dir(&path)?;
