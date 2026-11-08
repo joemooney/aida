@@ -8,7 +8,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-04T17:54:51.353376Z
-modified_at: 2026-11-08T22:33:03.792379094Z
+modified_at: 2026-11-08T23:37:00.366713369Z
 req_type: Task
 tags:
 - area:containment
@@ -852,6 +852,22 @@ comments:
   created_at: 2026-11-08T21:10:10.542797085Z
   modified_at: 2026-11-08T21:10:10.542797085Z
   session_id: 01a1bc93-77a0-7740-8b03-df4e3e8d1df5
+  harness_version: 2.1.319 (Claude Code)
+- id: 01a1bd85-bace-7f32-beb7-743b93d8af45
+  author: joe
+  content: |-
+    Non-blocking review finding from PR-3641 round 12 (severity:minor; advisor to triage, because a contained reviewer cannot allocate a draft TASK ID: read-only filesystem).
+
+    The installed AGY binary references ~/.gemini/antigravity-cli/hooks.json. install_private_runtime (aida-cli-lib/src/launch/contained.rs:459-495) pins only settings.json and the credential leaf read-only, so that file stays writable inside the private runtime, while .agents/hooks.json in the workspace and main checkout is masked read-only (contained.rs:1258-1330).
+
+    Not a boundary crossing: runtime state is per-launch, and a hook would run inside the same bwrap box where the terminal tool already runs. It is an inconsistency with the stated purpose of the pinning, which is that a tool must not alter controls for a later read or child process. Whether AGY honours this path in the private runtime is unmeasured.
+
+    Suggested: during the TASK-3049 live run, check whether a lane-written runtime hooks.json is honoured; if it is, pin an empty one the same way as settings.json.
+
+    Raised in review of PR-3641: https://github.com/joemooney/aida/pull/3641#issuecomment-6728754506
+  created_at: 2026-11-08T23:37:00.366713369Z
+  modified_at: 2026-11-08T23:37:00.366713369Z
+  session_id: 01a1bd6f39ad
   harness_version: 2.1.319 (Claude Code)
 history:
 - id: 01a1a7b3-3699-7713-8ae7-69568c287956
