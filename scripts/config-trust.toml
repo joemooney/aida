@@ -68,6 +68,12 @@ sites = 1
 channels = ["worktree"]
 sites = 1
 
+# Reviewer concurrency is bounded policy from the worktree config.
+# trace:TASK-3472 | ai:codex
+[readers."aida-cli-lib/src/review_watch.rs"]
+channels = ["worktree"]
+sites = 1
+
 [readers."aida-cli-lib/src/review_watch_ready.rs"]
 channels = ["worktree"]
 sites = 1
@@ -651,6 +657,7 @@ ctrl_d_palette = "policy"
 # "every check on the head passed", and it launches nothing. TASK-1945.
 [keys.worktree.review_watch]
 required_checks = "policy"
+max_concurrent = "policy" # Bounds reviewer count; selects no executable. TASK-3472.
 
 [keys.worktree.drain]
 gh_verify_retries = "policy"
