@@ -8,7 +8,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-07T15:34:33.363448Z
-modified_at: 2026-11-08T17:41:40.377078931Z
+modified_at: 2026-11-08T19:22:11.132103842Z
 req_type: Story
 comments:
 - id: 01a1b6a6-52e1-70a0-a9c1-d32888979ca5
@@ -1577,6 +1577,12 @@ history:
   - field_name: status
     old_value: InProgress
     new_value: NeedsAttention
+- id: 01a1bc9c-725d-7291-af6c-36e0d1aaa7e4
+  author: joe
+  timestamp: 2026-11-08T19:22:11.933792786Z
+  session_id: 01a1bc97160a
+  harness_version: 2.1.319 (Claude Code)
+  changes: []
 filed_at:
   code_sha: 122fea66d306d6739516983479c50201e9d0ae84
   branch: main
@@ -1591,3 +1597,11 @@ attention_reason:
   detail: 'Round 15 findings 1-5 and 9 remain blocked on host/advisor actions, not disputed. This native seat cannot deploy the host proxy outside its writable roots, deliver a trusted host client to lane PATH/prompts, change AF_UNIX-denied Claude admission/transport, or produce the required AIDA-contained Codex AC2/AC5 evidence. The primary .codegraph contains only codegraph.db; bare codegraph callers primary_index_link fails with unable to open database file. No completion claim or unauthorized follow-up split: the binding completing-slice ruling remains unmet. Joe must deploy and deliver the reviewed host client, decide denied-socket transport/admission, run the live primary-index query plus candidate doctor age report with read-only grant evidence, and publish the prepared PR body and final-head CI. Findings 6 and 7 are fixed in uncommitted edits with regressions; finding 8 compatibility test executed and passed (21 Python tests, no skips). Rust lane job j20261108T172812430-2482145-0 pending. Host-owned commit/publication is required by this native launch; supervised merge hold remains intact. Prepared PR body: /tmp/story-2630-round15-pr-body.md.'
   raised_by: implementer
   raised_at: 2026-11-08T17:30:01.530521942Z
+failure_reason:
+  phase: reviewer
+  phase_index: 3
+  kind: verdict:request-changes
+  detail: 'Refs slice (host query proxy) at faad98f2352e. Round 15 fixes for lane doctor advice with no PATH client and for the missing-descriptor message are correct. Still blocked on host/advisor action: proxy undeployed, client undelivered, AF_UNIX transport undecided, contained posture unsupported, no live seat query. AC1/AC3 partial, AC2/AC5 unverified, AC4 implemented. CI incomplete at this head (cli-0, cli-1, rest green; lib-0, lib-1, gates, contracts pending).'
+  recovery_hint: address the review findings, move STORY-2630 back to In Progress, and clear the PR hold only after approval
+  shelved_by: reviewer
+  shelved_at: 2026-11-08T19:22:11.132103842Z
