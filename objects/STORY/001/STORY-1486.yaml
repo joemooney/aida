@@ -23,13 +23,12 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-26T18:30:26.622729865Z
-modified_at: 2026-11-07T20:57:23.775962832Z
+modified_at: 2026-11-08T01:52:12.442333090Z
 req_type: Story
 tags:
 - agent-launch
 - authority
 - needs-operator
-- operator-held
 - permissions
 - scaffold
 - split-from:TASK-1499
@@ -457,10 +456,12 @@ history:
   session_id: 01a1b76b-2fe7-7dd2-88d0-356fc8d96d04
   harness_version: 2.1.319 (Claude Code)
   changes: []
-deferred: true
-deferred_at: 2026-10-19T15:50:34.517693048Z
-deferred_until: spec:STORY-2326=completed
-deferred_reason: Consumer-scaffold profile; re-check scope after the launcher lands.
+- id: 01a1b8db-27ce-7a52-9cf5-aa6fc1796b4f
+  author: joe
+  timestamp: 2026-11-08T01:52:12.750043071Z
+  session_id: 01a1b8be-8170-7fb2-89ab-ecb4c6eee98c
+  harness_version: 2.1.319 (Claude Code)
+  changes: []
 decision_request:
   question: The portability and session-seat prerequisites have landed. Should the launch permission profile now include approval-prompt exemptions, exclude exemptions, or remain on hold?
   choices:
