@@ -30,7 +30,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-12T00:42:09.445577574Z
-modified_at: 2026-11-07T20:28:00.609571313Z
+modified_at: 2026-11-08T15:08:06.625331909Z
 req_type: Story
 tags:
 - from:aida-host
@@ -140,10 +140,16 @@ history:
   timestamp: 2026-11-04T02:44:51.596344769Z
   session_id: 04f971d5-7365-46ed-b777-d4ff41d730ed
   changes: []
+- id: 01a1bbb3-d2d2-7400-b615-f6bbf0563d8b
+  author: joe
+  timestamp: 2026-11-08T15:08:06.738126030Z
+  session_id: 01a1bbab-762f-7cd2-8a36-4ea9f209afce
+  harness_version: 2.1.319 (Claude Code)
+  changes: []
 deferred: true
 deferred_at: 2026-11-04T02:44:51.445428138Z
-deferred_until: manual:operator
-deferred_reason: 'OPERATOR RULING 2026-11-03 19:36 MST: the regeneration / north-star research line stays deferred (revised from reject).'
+deferred_until: date:2026-12-08
+deferred_reason: 'Operator 2026-11-08 08:07 MST: defer the regeneration / north-star line for a month; revisit the stop/continue ruling then.'
 filed_at:
   code_sha: 95f15a20d4026a49dee5cbb31d3c4e3c974f0ecf
   branch: main
