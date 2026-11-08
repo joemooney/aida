@@ -2,51 +2,73 @@ id: 01a1b8cb-6dcf-78d2-8460-45b258e5fa3c
 spec_id: STORY-b6b1278890774ef993d2ebc327862470-577
 agreed_id: STORY-2654
 title: 'Review PR-3644: [AI:codex] chore(crate-split): add glob ratchet and ledger relocation tooling (Refs TASK-3428)'
-description: |
-  Auto-filed by `aida pr auto-queue-review` (typically from /aida-pr) (session `01a1b8c5`) for branch `task-3428-d1705`.
+description: 'Auto-filed by `aida pr auto-queue-review` (typically from /aida-pr) (session `01a1b8c5`) for branch `task-3428-d1705`.
+
 
   - PR: <https://github.com/joemooney/aida/pull/3644>
+
   - Branch: `task-3428-d1705` → `main`
+
 
   ## Slice of (Refs only — not completed by this PR)
 
-  Commit subjects carry `(Refs SPEC-ID)`: this PR is one slice of a spec that a later PR completes. Review this slice against that spec's acceptance criteria.
+
+  Commit subjects carry `(Refs SPEC-ID)`: this PR is one slice of a spec that a later PR completes. Review this slice against that spec''s acceptance criteria.
+
 
   - TASK-3428
 
+
   ## Acceptance
 
-  - Generate a structured review prompt with `aida review prompt --pr 3644` and verify each spec's acceptance criteria.
+
+  - Generate a structured review prompt with `aida review prompt --pr 3644` and verify each spec''s acceptance criteria.
+
   - Approve and merge, or request changes by spec id.
+
   - Mark this story `completed` once the PR is merged.
+
+  '
 status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
-created_at: 2026-11-08T01:35:02.095094298Z
-modified_at: 2026-11-08T12:41:09.222980542Z
+created_at: 2026-11-08 01:35:02.095094+00:00
+modified_at: 2026-11-08 12:41:09.222980+00:00
 req_type: Story
 relationships:
 - rel_type:
     custom: covers
   target_id: 01a1b861-d487-7132-9e2d-85f02d449679
-  created_at: 2026-11-08T01:35:45.926558377Z
+  created_at: 2026-11-08 01:35:45.926558+00:00
   created_by: joe
 comments:
 - id: 01a1bb2d-4767-75d1-be81-b566765c7d71
   author: aida-auto-bump
   content: 'Auto-completed: PR #3644 is merged on the forge (its merge commit was outside the local scan window).'
-  created_at: 2026-11-08T12:41:09.223106352Z
-  modified_at: 2026-11-08T12:41:09.223106352Z
+  created_at: 2026-11-08 12:41:09.223106+00:00
+  modified_at: 2026-11-08 12:41:09.223106+00:00
+- id: 01a1bb2d-7eef-74b1-8c0f-39b814f35aa4
+  author: aida-auto-bump
+  content: 'Auto-completed: PR #3644 merged without a reviewer session (self-merge or orchestrator skipped phase 3).'
+  created_at: 2026-11-08 12:41:23.439645+00:00
+  modified_at: 2026-11-08 12:41:23.439645+00:00
 history:
 - id: 01a1b8cc-262d-7893-bd6a-de95a8cab2bb
   author: joe
-  timestamp: 2026-11-08T01:35:49.293143013Z
+  timestamp: 2026-11-08 01:35:49.293143+00:00
   session_id: 01a1b8c5953a
   changes: []
 - id: 01a1bb2d-4767-75d1-be81-b57d109e71d9
   author: aida-auto-bump
-  timestamp: 2026-11-08T12:41:09.223110031Z
+  timestamp: 2026-11-08 12:41:09.223110+00:00
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: Completed
+- id: 01a1bb2d-7eef-74b1-8c0f-39acd7c78347
+  author: aida-auto-bump
+  timestamp: 2026-11-08 12:41:23.439635+00:00
   changes:
   - field_name: status
     old_value: Approved
@@ -61,4 +83,4 @@ filed_at:
   session: 01a1b8c5953a
 implementation_info:
   implemented: false
-  completed_at: 2026-11-08T12:41:09.223105018Z
+  completed_at: 2026-11-08 12:41:09.223105+00:00
