@@ -20,7 +20,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-07T20:18:53.564500330Z
-modified_at: 2026-11-08T12:15:48.400811526Z
+modified_at: 2026-11-08T12:15:54.402390129Z
 req_type: Bug
 relationships:
 - rel_type:
@@ -153,6 +153,23 @@ comments:
   content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: Both acceptance tests pass review and all round-3 findings are fixed for standalone lanes, but queue-resume and drain native paths still lose punts or publish past them, and a mirrored main-root veto strands resumed work.. No triage reason was given.'
   created_at: 2026-11-08T12:15:48.400810059Z
   modified_at: 2026-11-08T12:15:48.400810059Z
+  session_id: 01a1b9af-8230-75d2-82f8-667491cc010a
+  harness_version: 2.1.319 (Claude Code)
+- id: 01a1bb16-29b8-79d1-9244-8c32975ed33c
+  author: joe
+  content: |-
+    REVIEW FINDINGS TO ADDRESS (BUG-2488):
+    Verdict: CHANGES REQUESTED
+    Reviewed commit: 3a06b74615e1
+    Recorded: 2026-11-08T12:14:12.973626811+00:00
+    Findings:
+    1. MAJOR (sticky host veto on queue-resume; standalone_implementer.rs reconcile_signals L673-678, queue_cmd.rs:9071, ship_from_seat.rs:506): reconcile_signals copies a seat punt/hold to <main>/.aida/{punt-signals,pr-holds}/<spec>.json, but run_queue_resume_to_exit clears only the seat copy (provision_signals(tree,...)). Scenario: a native seat punts or holds, run() mirrors the marker to main, the advisor resolves it, then `aida queue work <spec> --resume` runs. publish_queue_exit returns Ok at the main veto (L506), so the resumed work is never committed or published, the advisor gets no notice, and reconcile is skipped, which also loses any fresh punt ledger record from that attempt. resolve_punt_core does not remove the file; only run() provisioning and phase_driver_trait clear main punt markers. The comment at standalone_implementer.rs:~722 ("Held-resume admission has already consumed the persisted hold marker") has no matching code: the only hold-marker removals are pr_cmd.rs:8473 on PR open and the run()/phase-driver provisioning. So held --resume, the case round-1 finding 1 was about, ends vetoed; bug_2488_standalone_hold_survives_seat_and_allows_held_resume only checks admission. Fix: consume the mirrored markers at resume admission, or distinguish prior-attempt markers from this attempt, and add a test driving resume through publish_queue_exit with a pre-existing main marker.
+    2. MAJOR (queue-resume child has no signal path; queue_cmd.rs:9066-9078, session.rs spawn_vendor_headless_resume_granted ~L8209): only apply_standalone_child_env (standalone_implementer.rs:156) and phase_driver_trait.rs:391/404 set AIDA_PUNT_SIGNAL_FILE/AIDA_HOLD_SIGNAL_FILE, and the resume spawn sets neither. punt_done.rs:121 writes a signal only when the env var is set. A resumed native lane that runs `aida punt` therefore leaves no signal, publication_veto is false, and the host commits and publishes a punted lane, which is the failure this bug reports. The new comment "before the vendor can write fresh signals" assumes a channel that does not exist. Fix: pass the seat signal paths to the resume child, with a test that a punt during resume vetoes publication.
+    3. MAJOR (drain path still uses the host-only path; phase_driver_trait.rs:386-404, session.rs:~6729): the drain sets both env vars to <main>/.aida/... The native write set does not include those directories, so a Codex native drain implementer hits the original "could not write punt signal file" failure. session.rs now clears seat signals before spawn, but nothing points the child at them, so publish_queue_exit sees no veto and publishes. The driver also reads the main path (L777/L800), so it misses the punt too. Spec Expected 1 requires the signal to be written inside the seat writable area; the acceptance test covers only the standalone env. Round 2 raised this as a possible follow-up and it remains unfixed. Fix: have the driver point native seat children at the seat paths and read them via reconcile, with a drain-path test, or have the advisor explicitly split it into a tracked follow-up.
+    4. MINOR (noise filter broader than the mirror; seat_clone.rs:2053-2055): the comment says these files are mirrored before no-change lease cleanup, but is_runtime_noise_entry applies to every probe (seat_clone.rs:1883, dispatch_health_ps.rs:635), including seats whose exit never reached reconcile (spawn/loop error at `finished?`, standalone_implementer.rs:~889), and reconcile mirrors only records for the lease spec. A seat holding an unmirrored punt or hold can read as clean and be reaped, losing the evidence. Fix: scope the exclusion to the post-reconcile no-change check, or confirm the markers were mirrored before excluding them.
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
+  created_at: 2026-11-08T12:15:54.296351942Z
+  modified_at: 2026-11-08T12:15:54.296351942Z
   session_id: 01a1b9af-8230-75d2-82f8-667491cc010a
   harness_version: 2.1.319 (Claude Code)
 history:
