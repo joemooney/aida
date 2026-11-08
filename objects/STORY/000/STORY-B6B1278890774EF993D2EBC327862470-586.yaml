@@ -1,0 +1,34 @@
+id: 01a1b91a-f79c-7341-bcb5-fc2bc238b9d3
+spec_id: STORY-b6b1278890774ef993d2ebc327862470-586
+agreed_id: STORY-2663
+title: 'Review PR-3629: [AI:codex] chore: Remove STORY-1028 hidden CLI aliases (TASK-1214)'
+description: |
+  Auto-filed by `aida pr auto-queue-review` (typically from /aida-pr) (session `01a1b90a`) for branch `task-1214`.
+
+  - PR: <https://github.com/joemooney/aida/pull/3629>
+  - Branch: `task-1214` → `main`
+
+  ## Covers
+
+  - TASK-1214
+
+  ## Acceptance
+
+  - Generate a structured review prompt with `aida review prompt --pr 3629` and verify each spec's acceptance criteria.
+  - Approve and merge, or request changes by spec id.
+  - Mark this story `completed` once the PR is merged.
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-11-08T03:01:54.716012338Z
+modified_at: 2026-11-08T03:01:54.716012338Z
+req_type: Story
+filed_at:
+  code_sha: 049e5206de120518bb94fae84bf359f789e76236
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: dc41ee8da2f
+  vendor: claude
+  session: 01a1b90afd9e
