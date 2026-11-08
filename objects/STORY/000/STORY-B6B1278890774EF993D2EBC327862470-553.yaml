@@ -8,7 +8,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-07T15:34:33.363448208Z
-modified_at: 2026-11-08T08:28:04.611962065Z
+modified_at: 2026-11-08T08:28:10.654361275Z
 req_type: Story
 comments:
 - id: 01a1b6a6-52e1-70a0-a9c1-d32888979ca5
@@ -545,6 +545,30 @@ comments:
   content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: Refs slice (host query proxy) at 36071a13947b. Delta since last round is README plus a committed handoff doc. README posture and stale commands are fixed. Still open: PR body, lane delivery of the client (AC1/AC3), contained admission and live evidence (AC2/AC5). AC4 implemented but has false-unreachable and false-green cases. lib/cli/gates/contracts CI pending; rest passed; merge-hold-gate red is the expected supervised hold.. It was punted on: blocked-dependency: PR-3662 rework: README now limits support to native sandbox and uses the explicit host client for all seats. AC2/AC5 cannot complete: no codegraph executable, primary index, deployed proxy, or candidate doctor binary exists here; AIDA-contained client/descriptor/socket admission is absent. Joe must deploy, deliver the absolute client command to lane prompts (review finding 1), implement contained read-only admission (finding 2), and paste live evidence plus docs/internal/testing/story-2630-rework-handoff.md into the actual PR body (finding 3). Finding 5 busy-status false unreachable remains open for host-proxy follow-up. No completion or widening index writes authorized.. No triage reason was given.'
   created_at: 2026-11-08T08:28:04.611958618Z
   modified_at: 2026-11-08T08:28:04.611958618Z
+  session_id: 01a1b8be-8170-7fb2-89ab-ecb4c6eee98c
+  harness_version: 2.1.319 (Claude Code)
+- id: 01a1ba45-abb3-7222-aa31-9a05ce84d006
+  author: joe
+  content: |-
+    REVIEW FINDINGS TO ADDRESS (PR #3662):
+    Verdict: CHANGES REQUESTED
+    Reviewed commit: 36071a13947b
+    Recorded: 2026-11-08T08:23:53.164120006+00:00
+    Review comment: https://github.com/joemooney/aida/pull/3662#issuecomment-6719232554
+    Findings:
+    1. MAJOR (process, fourth occurrence; needs host/advisor action, a seat cannot do it): the PR body at this head is still only the 'Published from seat' boilerplate. The status text exists only in spec comment 31 and docs/internal/testing/story-2630-rework-handoff.md. Apply it to the PR: AC1-AC5 status against origin/main, explicitly a Refs slice, AC2/AC5 deferred and who completes them.
+    2. MAJOR (AC1/AC3, unchanged): nothing delivers the proxy client to lanes. AGENTS.md:482 and aida-core/templates/dispatch/code-navigation.md:1 still tell lanes to run bare 'codegraph callers'; scripts/codegraph/README.md:67-69,109 confirm it is unrouted and that upstream must stay on PATH, and upstream fails in a native seat with 'unable to open database file' (README:5-7). README:124-127 names the owner but no mechanism exists. Fix: a fixed host-resolved client path never derived from the seat's .codegraph, or put the exact absolute command in the template master and sync. The PR body must say so if deferred.
+    3. MAJOR (AC2/AC5, needs advisor decision): the 2026-11-08 ruling asks for a COMPLETING slice with a contained Codex seat returning a non-empty 'codegraph callers' result and read-only grant evidence. This head has no contained-posture admission (README:70-73) and the only recorded seat output is 'codegraph: command not found' (spec comment 31). Either the advisor accepts this as a Refs slice with a filed follow-up owning contained admission, deployment and the live run, or the slice must implement and evidence them.
+    4. MAJOR (new, repo hygiene): docs/internal/testing/story-2630-rework-handoff.md commits a transient seat handoff into the repository. It is false once committed ('All edits are uncommitted. No commit, push, PR edit...', lines 58-59) and is an instruction to a host about this PR ('Apply the following text to PR #3662'). CLAUDE.md requires per-change notes in the PR body and an aida comment. Delete the file.
+    5. MINOR (new, CLAUDE.md rule TASK-1954/TASK-2015): AGENTS.md:477-481 and OVERVIEW.md:5-9 add per-change paragraphs for an optional, undeployed proxy; CLAUDE.md permits edits there only for a real architecture change because each one conflicts with every open PR. The AGENTS paragraph also advertises a proxy no lane can reach. Remove both; the README and docs/cli/07-project-setup.md carry the content.
+    6. MINOR (AC4, carried; no follow-up filed): the serial loop in scripts/codegraph/codegraph:218-244 runs refresh and queries inline while probe_proxy allows 250 ms (aida-cli-lib/src/codegraph.rs:121), so doctor reports a healthy proxy unreachable whenever work is in flight. The primary index is 411 MB, about 100k pages, so pages=256 with sleep=0.02 (codegraph:123) spends about 8 s in sleeps alone per refresh. One loop iteration can reach about 47 s (refresh 15 + receive 2 + query refresh 15 + query 15), past the 30 s heartbeat threshold at codegraph.rs:173, giving a second false unreachable. README:129-133 documents it; aida search finds no follow-up. Answer status off the query path, or file a spec and name it in the PR body.
+    7. MINOR (new, AC1 availability): Host.query calls refresh before every query (scripts/codegraph/codegraph:149-150), and refresh raises on the reindex lock or a mid-backup change (:105-106,:127-128). A lane query therefore returns rc 1 during every host sync although a valid previous snapshot is retained; tests/test_codegraph_proxy.py:115 pins this. Serve the retained snapshot when refresh fails and one exists, reporting its age.
+    8. MINOR (new, AC4 false green): assess in aida-cli-lib/src/codegraph.rs:283,295-298 treats any PATH codegraph as present and then reports only proxy health. After deployment, a seat with upstream on PATH and a healthy proxy gets no finding while the documented bare command fails. Doctor should report when the client lanes are told to run is not the proxy.
+    9. CI/EVIDENCE: lib-0, lib-1, cli-0, cli-1, gates and contracts are pending at 36071a13947b (rest passed), so Rust test evidence is unconfirmed; the next reviewer must see green at the exact head. test_installed_codegraph_returns_real_edges_from_host_snapshot skips without codegraph (tests/test_codegraph_proxy.py:236-238) and the latest handoff records it skipped, so query against a real upstream snapshot has no recorded passing run.
+    10. COSMETIC: discover (scripts/codegraph/codegraph:256-257) calls data.get on unvalidated JSON, so a non-object descriptor raises AttributeError, which main does not catch at :306 and prints a traceback. Commit 36071a13947's subject claims 'feat: Lanes can actually use codegraph' for a docs-only change; keep it out of the squash title.
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
+  created_at: 2026-11-08T08:28:10.547013145Z
+  modified_at: 2026-11-08T08:28:10.547013145Z
   session_id: 01a1b8be-8170-7fb2-89ab-ecb4c6eee98c
   harness_version: 2.1.319 (Claude Code)
 history:
