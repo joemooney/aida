@@ -1,0 +1,29 @@
+id: 01a1bd2f-543b-78c2-ad18-78dbc5122e39
+spec_id: TASK-b6b1278890774ef993d2ebc327862470-1022
+title: 'MINOR (non-blocking, outside the same-key-refusal scope): contained codex_argv …'
+description: |-
+  Non-blocking finding carried forward from an APPROVED review verdict on TASK-3015, which has since completed — recorded here so it keeps a queryable home once the verdict record stops being read.
+
+  MINOR (non-blocking, outside the same-key-refusal scope): contained codex_argv still passes -p/--profile and -c profile=/profiles.* (aida-cli-lib/src/launch/contained.rs:1484-1490), so a config profile may carry posture; whether it can beat the generated settings is unverified. The background path has the same gap.
+
+  PR: #3689
+  Reviewed sha: ea14bd1cbb8339b2bc79711207bdc3771d50438f
+status: Draft
+priority: Medium
+owner: joe
+feature: Uncategorized
+created_at: 2026-11-08T22:02:38.011677034Z
+modified_at: 2026-11-08T22:02:38.011677034Z
+req_type: Task
+tags:
+- carried-from:TASK-3015
+- finding-hash:ca937da1
+- from-review:PR-3689
+- kind:carried-forward
+filed_at:
+  code_sha: 65d5a89946c24177a8c3a0d6d076fcede9be9107
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: db2eb4c39e4
+  vendor: claude
