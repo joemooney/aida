@@ -5826,7 +5826,7 @@ pub(crate) fn handle_queue_command(
             {
                 let root = main_worktree_root_from(&find_project_root()?);
                 let lane_vendor = session::resolve_enabled_headless_vendor(&root)?;
-                crate::lane_host::preflight(&root, lane_vendor.as_str())?;
+                crate::lane_host::preflight(&root, lane_vendor.as_str(), *sandbox)?;
                 Some(lane_vendor)
             } else {
                 None
@@ -12400,7 +12400,7 @@ pub(crate) fn handle_queue_work(
         let root = project_root_for_config
             .as_deref()
             .context("cannot resolve lane host root")?;
-        crate::lane_host::preflight(root, launch_vendor.as_str())?;
+        crate::lane_host::preflight(root, launch_vendor.as_str(), sandbox)?;
         preflight_vendor = Some(launch_vendor);
     }
     // trace:BUG-2146 | ai:claude
@@ -13664,7 +13664,7 @@ pub(crate) fn handle_queue_work(
         if crate::lane_host::needs_preflight(no_human, dry_run, no_launch, list_sessions)
             && preflight_vendor != Some(launch_vendor)
         {
-            crate::lane_host::preflight(&project_root, launch_vendor.as_str())?;
+            crate::lane_host::preflight(&project_root, launch_vendor.as_str(), sandbox)?;
         }
         let headless_vendor = no_human.then_some(launch_vendor);
 

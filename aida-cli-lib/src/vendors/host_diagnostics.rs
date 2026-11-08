@@ -49,13 +49,21 @@ pub(crate) fn auth_check(vendor: &str, home: Option<&Path>, env: &Environment) -
             "log in with the vendor CLI and verify its supported auth transport",
         ),
     };
-    let override_home = (vendor == "codex")
-        .then(|| env.get("CODEX_HOME").filter(|p| !p.is_empty()))
-        .flatten();
-    let credential = override_home
-        .map(|p| std::path::PathBuf::from(p).join("auth.json"))
+    let (override_key, credential_file) = if vendor == "codex" {
+        ("CODEX_HOME", "auth.json")
+    } else {
+        ("CLAUDE_CONFIG_DIR", ".credentials.json")
+    };
+    let credential = env
+        .get(override_key)
+        .filter(|p| !p.is_empty())
+        .map(|p| std::path::PathBuf::from(p).join(credential_file))
         .or_else(|| home.map(|h| h.join(file)));
-    let present = (!key.is_empty() && env.get(key).is_some_and(|v| !v.is_empty()))
+    let present = (vendor == "claude"
+        && env
+            .get("CLAUDE_CODE_OAUTH_TOKEN")
+            .is_some_and(|v| !v.is_empty()))
+        || (!key.is_empty() && env.get(key).is_some_and(|v| !v.is_empty()))
         || (!file.is_empty()
             && credential
                 .is_some_and(|p| std::fs::metadata(p).is_ok_and(|m| m.is_file() && m.len() > 0)));

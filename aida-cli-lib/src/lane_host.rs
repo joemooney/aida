@@ -44,24 +44,71 @@ fn matching_store(head: Option<&str>, remote: Option<&str>) -> bool {
 }
 
 fn git(root: &Path, args: &[&str]) -> Option<String> {
+    fn read(mut cmd: Command) -> Option<String> {
+        let (status, bytes) = aida_core::transport_policy::bounded(
+            {
+                cmd.env("GIT_TERMINAL_PROMPT", "0");
+                cmd
+            },
+            &[],
+            16384,
+            Instant::now() + Duration::from_secs(8),
+        )
+        .ok()?;
+        status
+            .success()
+            .then(|| String::from_utf8_lossy(&bytes).trim().to_owned())
+    }
+    let mut config = Command::new("git");
+    config
+        .current_dir(root)
+        .args(["config", "--get", "core.sshCommand"]);
+    let env = Environment::capture();
+    let ssh = env
+        .get("GIT_SSH_COMMAND")
+        .map(|s| s.to_string_lossy().into_owned())
+        .or_else(|| read(config))
+        .unwrap_or_else(|| "ssh".into());
     let mut cmd = Command::new("git");
     cmd.current_dir(root)
         .args(args)
-        .env("GIT_TERMINAL_PROMPT", "0")
-        .env(
-            "GIT_SSH_COMMAND",
-            "ssh -o BatchMode=yes -o ConnectTimeout=5",
-        );
-    let (status, bytes) = aida_core::transport_policy::bounded(
-        cmd,
-        &[],
-        16384,
-        Instant::now() + Duration::from_secs(8),
-    )
-    .ok()?;
-    status
-        .success()
-        .then(|| String::from_utf8_lossy(&bytes).trim().to_owned())
+        .env("GIT_SSH_COMMAND", batch_ssh(&ssh));
+    read(cmd)
+}
+
+fn batch_ssh(command: &str) -> String {
+    // Preserve operator wrappers, identity files and proxy configuration.
+    format!("{command} -o BatchMode=yes -o ConnectTimeout=5")
+}
+
+fn binary_check(
+    dev_build: bool,
+    same_project: bool,
+    built: &str,
+    dirty: bool,
+    main: Option<&str>,
+) -> Check {
+    let dev_project = dev_build && same_project;
+    let row = check(
+        "binary",
+        dev_project && matching_revision(built, main) && !dirty,
+        false,
+        if dev_project {
+            "development binary compared with locally known origin default branch"
+        } else {
+            "unverified: release freshness or binary source does not identify this project"
+        },
+        if dev_project {
+            "fetch the project default branch, then run `aida dev build` from current clean main"
+        } else {
+            "check the installed AIDA release with `aida upgrade`"
+        },
+    );
+    if dev_project {
+        row
+    } else {
+        advisory(row)
+    }
 }
 
 fn wrap_check(explicit: Option<bool>) -> Check {
@@ -108,20 +155,25 @@ pub(crate) fn advisory(mut check: Check) -> Check {
 
 fn cache_check(home: Option<&Path>, env: &Environment) -> Check {
     use std::os::unix::fs::PermissionsExt;
-    let wrapper = home.and_then(|home| {
-        let legacy = home.join(".cargo/config");
-        let path = if legacy.exists() {
-            legacy
-        } else {
-            home.join(".cargo/config.toml")
-        };
-        let body = std::fs::read_to_string(path).ok()?;
-        let doc = body.parse::<toml::Value>().ok()?;
-        let wrapper = doc.get("build")?.get("rustc-wrapper")?.as_str()?;
-        if wrapper.is_empty() {
-            return None;
-        }
-        let path = Path::new(wrapper);
+    let wrapper = env
+        .get("RUSTC_WRAPPER")
+        .map(std::ffi::OsStr::to_os_string)
+        .or_else(|| {
+            home.and_then(|home| {
+                let legacy = home.join("config");
+                let path = if legacy.exists() {
+                    legacy
+                } else {
+                    home.join("config.toml")
+                };
+                let body = std::fs::read_to_string(path).ok()?;
+                let doc = body.parse::<toml::Value>().ok()?;
+                let wrapper = doc.get("build")?.get("rustc-wrapper")?.as_str()?;
+                Some(std::ffi::OsString::from(wrapper))
+            })
+        });
+    let wrapper = wrapper.filter(|w| !w.is_empty()).and_then(|wrapper| {
+        let path = Path::new(&wrapper);
         if path.is_absolute() {
             Some(path.to_path_buf())
         } else if path.components().count() == 1 {
@@ -134,7 +186,7 @@ fn cache_check(home: Option<&Path>, env: &Environment) -> Check {
                     })
             })
         } else {
-            None // Relative paths depend on the launch cwd; not host evidence.
+            None
         }
     });
     let pass = wrapper.is_some_and(|p| {
@@ -142,7 +194,7 @@ fn cache_check(home: Option<&Path>, env: &Environment) -> Check {
     });
     check("build-cache", pass, false,
         "user Cargo build.rustc-wrapper configuration and executable presence (not lane reachability)",
-        "install sccache and configure [build] rustc-wrapper in ~/.cargo/config.toml; aida doctor --lane-host --fix configures an installed ~/.cargo/bin/sccache")
+        "install sccache and configure RUSTC_WRAPPER or [build] rustc-wrapper in CARGO_HOME/config.toml (default ~/.cargo); aida doctor --lane-host --fix configures an installed CARGO_HOME/bin/sccache")
 }
 
 fn cache_reachability_note() -> Check {
@@ -155,8 +207,9 @@ fn cache_reachability_note() -> Check {
     ))
 }
 
-pub(crate) fn containment_checks(root: &Path, vendor: &str) -> Vec<Check> {
-    let requested = crate::agent_config::load_agents_contained(root);
+pub(crate) fn containment_checks(root: &Path, vendor: &str, sandbox: bool) -> Vec<Check> {
+    let requested =
+        crate::agent_config::load_agents_contained(root).map(|configured| sandbox || configured);
     let posture = requested.and_then(|on| crate::session::containment_posture_in(root, vendor, on));
     let mut checks = vec![
         posture_check(posture),
@@ -178,10 +231,10 @@ pub(crate) fn needs_preflight(
     no_human && !dry_run && !no_launch && !list_sessions
 }
 
-pub(crate) fn preflight(root: &Path, vendor: &str) -> Result<()> {
+pub(crate) fn preflight(root: &Path, vendor: &str, sandbox: bool) -> Result<()> {
     crate::session::aida_contained_env()?;
     preflight_with(crate::session::process_contained(), || {
-        containment_checks(root, vendor)
+        containment_checks(root, vendor, sandbox)
     })
 }
 
@@ -231,7 +284,7 @@ fn inspect(root: &Path, live_store: bool) -> Vec<Check> {
     let home = crate::aida_home_dir();
     let mut checks = Vec::new();
     for vendor in &vendors {
-        let mut vendor_checks = containment_checks(root, vendor.as_str());
+        let mut vendor_checks = containment_checks(root, vendor.as_str(), false);
         vendor_checks.push(crate::vendors::host_diagnostics::auth_check(
             vendor.as_str(),
             home.as_deref(),
@@ -253,9 +306,27 @@ fn inspect(root: &Path, live_store: bool) -> Vec<Check> {
     }
     let main = git(root, &["rev-parse", "refs/remotes/origin/HEAD"]);
     let built = crate::upgrade_release::build_git_sha();
-    checks.push(check("binary", matching_revision(built, main.as_deref()) && !crate::upgrade_release::build_git_dirty(), false,
-        "dev binary compared with locally known origin default branch; release freshness is unverified",
-        "fetch the project default branch, then run `aida dev build` from current clean main; release installs: `aida upgrade`"));
+    let source = Path::new(env!("CARGO_MANIFEST_DIR")).parent().unwrap();
+    let dev_build = std::env::current_exe()
+        .ok()
+        .is_some_and(|exe| exe.components().any(|part| part.as_os_str() == "target"));
+    let same_project = root.join("aida-cli-lib/build.rs").is_file()
+        && git(
+            root,
+            &["rev-parse", "--path-format=absolute", "--git-common-dir"],
+        )
+        .zip(git(
+            source,
+            &["rev-parse", "--path-format=absolute", "--git-common-dir"],
+        ))
+        .is_some_and(|(project, built)| project == built);
+    checks.push(binary_check(
+        dev_build,
+        same_project,
+        built,
+        crate::upgrade_release::build_git_dirty(),
+        main.as_deref(),
+    ));
     let store = root.join(".aida-store");
     let head = git(&store, &["rev-parse", "HEAD"]);
     let remote = live_store
@@ -283,7 +354,10 @@ fn inspect(root: &Path, live_store: bool) -> Vec<Check> {
     }
     // The separate lane cache transport must provide real in-sandbox evidence.
     // Host config or a successful host-side `sccache --show-stats` cannot prove it.
-    checks.push(cache_check(home.as_deref(), &env));
+    checks.push(cache_check(
+        crate::session::cargo_home_dir().as_deref(),
+        &env,
+    ));
     checks.push(cache_reachability_note());
     checks
 }
@@ -292,15 +366,15 @@ fn inspect(root: &Path, live_store: bool) -> Vec<Check> {
 // cache transport or an in-lane reachability assertion. Preserve other settings.
 fn fix_cargo_cache(home: &Path) -> Result<()> {
     use std::os::unix::fs::PermissionsExt;
-    let wrapper = home.join(".cargo/bin/sccache");
+    let wrapper = home.join("bin/sccache");
     if !std::fs::metadata(&wrapper)
         .is_ok_and(|m| m.is_file() && m.permissions().mode() & 0o111 != 0)
     {
         return Ok(());
     }
-    let path = home.join(".cargo/config.toml");
+    let path = home.join("config.toml");
     // Cargo's legacy extensionless file wins; leave that manual configuration alone.
-    if home.join(".cargo/config").exists() {
+    if home.join("config").exists() {
         return Ok(());
     }
     let body = match std::fs::read_to_string(&path) {
@@ -345,7 +419,12 @@ pub(crate) fn run(root: &Path, fix: bool, json: bool) -> Result<()> {
         .context("applying user permission preset")?;
     }
     if fix {
-        fix_cargo_cache(&home)?;
+        let env = Environment::capture();
+        if env.get("RUSTC_WRAPPER").is_none() {
+            if let Some(cargo) = crate::session::cargo_home_dir() {
+                fix_cargo_cache(&cargo)?;
+            }
+        }
     }
     let checks = inspect(root, true);
     if json {
@@ -444,6 +523,41 @@ mod tests {
         assert!(matching_revision("abc123", Some("abc123456")));
     }
     #[test]
+    fn binary_release_and_foreign_project_are_advisory() {
+        for (dev, same) in [(false, true), (false, false), (true, false)] {
+            let row = binary_check(dev, same, "abc", false, Some("def"));
+            assert!(!row.required);
+            assert!(!row.pass);
+            assert!(row.detail.contains("unverified"));
+        }
+        assert!(binary_check(true, true, "abc", false, Some("abcdef")).pass);
+        assert!(binary_check(true, true, "abc", false, Some("def")).required);
+        assert!(!binary_check(true, true, "abc", true, Some("abcdef")).pass);
+    }
+
+    #[test]
+    fn relocated_claude_auth_and_oauth_are_recognized() {
+        let dir = tempfile::tempdir().unwrap();
+        let env = Environment::from_pairs([(
+            "CLAUDE_CONFIG_DIR".into(),
+            dir.path().as_os_str().to_os_string(),
+        )]);
+        assert!(!auth_check("claude", None, &env).pass);
+        std::fs::write(dir.path().join(".credentials.json"), "fixture").unwrap();
+        assert!(auth_check("claude", None, &env).pass);
+        let env = Environment::from_pairs([("CLAUDE_CODE_OAUTH_TOKEN".into(), "fixture".into())]);
+        assert!(auth_check("claude", None, &env).pass);
+    }
+
+    #[test]
+    fn ssh_probe_preserves_operator_options() {
+        assert_eq!(
+            batch_ssh("ssh -i /custom/key -o ProxyJump=jump"),
+            "ssh -i /custom/key -o ProxyJump=jump -o BatchMode=yes -o ConnectTimeout=5"
+        );
+    }
+
+    #[test]
     fn store_needs_both_live_and_local_evidence() {
         assert!(!matching_store(None, None));
         assert!(!matching_store(Some("abc"), None));
@@ -451,13 +565,32 @@ mod tests {
         assert!(matching_store(Some("abc"), Some("abc")));
     }
     #[test]
+    fn relocated_cargo_home_is_used_for_checks_and_fixes() {
+        use std::os::unix::fs::PermissionsExt;
+        let relocated = tempfile::tempdir().unwrap();
+        let _guard = crate::test_env::EnvVarsGuard::set(&[(
+            "CARGO_HOME",
+            relocated.path().to_str().unwrap(),
+        )]);
+        let cargo = crate::session::cargo_home_dir().unwrap();
+        assert_eq!(cargo, relocated.path());
+        std::fs::create_dir(cargo.join("bin")).unwrap();
+        let wrapper = cargo.join("bin/sccache");
+        std::fs::write(&wrapper, "fixture").unwrap();
+        std::fs::set_permissions(&wrapper, std::fs::Permissions::from_mode(0o700)).unwrap();
+        fix_cargo_cache(&cargo).unwrap();
+        assert!(cargo.join("config.toml").is_file());
+        assert!(cache_check(Some(&cargo), &Environment::default()).pass);
+    }
+
+    #[test]
     fn cargo_fix_needs_installed_wrapper_and_preserves_custom_config() {
         use std::os::unix::fs::PermissionsExt;
         let home = tempfile::tempdir().unwrap();
         fix_cargo_cache(home.path()).unwrap();
-        let config = home.path().join(".cargo/config.toml");
+        let config = home.path().join("config.toml");
         assert!(!config.exists());
-        let bin = home.path().join(".cargo/bin");
+        let bin = home.path().join("bin");
         std::fs::create_dir_all(&bin).unwrap();
         let wrapper = bin.join("sccache");
         std::fs::write(&wrapper, "fixture").unwrap();
@@ -499,10 +632,10 @@ mod tests {
         let home = tempfile::tempdir().unwrap();
         let env = Environment::default();
         assert!(!cache_check(Some(home.path()), &env).pass);
-        std::fs::create_dir_all(home.path().join(".cargo/bin")).unwrap();
-        let wrapper = home.path().join(".cargo/bin/sccache");
+        std::fs::create_dir_all(home.path().join("bin")).unwrap();
+        let wrapper = home.path().join("bin/sccache");
         std::fs::write(&wrapper, "fixture").unwrap();
-        let config = home.path().join(".cargo/config.toml");
+        let config = home.path().join("config.toml");
         std::fs::write(
             &config,
             format!("[build]\nrustc-wrapper = {:?}\n", wrapper.to_str().unwrap()),
@@ -512,13 +645,24 @@ mod tests {
         std::fs::set_permissions(&wrapper, std::fs::Permissions::from_mode(0o700)).unwrap();
         assert!(cache_check(Some(home.path()), &env).pass);
         std::fs::write(
-            home.path().join(".cargo/config"),
+            home.path().join("config"),
             "[build]\nrustc-wrapper = '/missing'\n",
         )
         .unwrap();
         assert!(
             !cache_check(Some(home.path()), &env).pass,
             "Cargo's legacy config wins"
+        );
+        let env =
+            Environment::from_pairs([("RUSTC_WRAPPER".into(), wrapper.as_os_str().to_os_string())]);
+        assert!(
+            cache_check(None, &env).pass,
+            "environment wrapper overrides Cargo config"
+        );
+        let env = Environment::from_pairs([("RUSTC_WRAPPER".into(), "".into())]);
+        assert!(
+            !cache_check(Some(home.path()), &env).pass,
+            "empty env wrapper disables caching"
         );
         assert!(!cache_reachability_note().required);
     }
@@ -646,7 +790,12 @@ mod tests {
             ("AIDA_HOME", home.path().to_str().unwrap()),
             ("AIDA_CONTAINED", "0"),
         ]);
-        let result = preflight(root.path(), "claude");
+        assert!(!containment_checks(root.path(), "claude", false)[0].pass);
+        assert!(
+            containment_checks(root.path(), "claude", true)[0].pass,
+            "explicit sandbox supplies the launch containment request"
+        );
+        let result = preflight(root.path(), "claude", false);
         assert!(result
             .unwrap_err()
             .to_string()
@@ -654,9 +803,9 @@ mod tests {
         assert_eq!(std::fs::read_dir(root.path()).unwrap().count(), 0);
         assert_eq!(std::fs::read_dir(home.path()).unwrap().count(), 0);
         env.set_key("AIDA_CONTAINED", "1");
-        preflight(root.path(), "claude").unwrap();
+        preflight(root.path(), "claude", false).unwrap();
         env.set_key("AIDA_CONTAINED", "typo");
-        assert!(preflight(root.path(), "claude").is_err());
+        assert!(preflight(root.path(), "claude", false).is_err());
     }
     #[test]
     fn queue_work_no_human_refuses_before_queue_lease_or_worktree_writes() {
@@ -786,7 +935,7 @@ mod tests {
             if !have_bwrap {
                 std::fs::rename(&bwrap, &hidden).unwrap();
             }
-            let checks = containment_checks(root.path(), vendor);
+            let checks = containment_checks(root.path(), vendor, false);
             let failures: Vec<_> = checks
                 .iter()
                 .filter(|c| c.containment && !c.pass)

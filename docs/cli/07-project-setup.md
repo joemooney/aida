@@ -821,15 +821,16 @@ carry `required: false` in JSON and do not fail the command.
 preset to the **user** agents and Codex config files, honoring `CODEX_HOME`
 for both config checks and writes (default `~/.codex`). It clears old extra
 Codex writable roots. It also configures Cargo to use an already installed
-`~/.cargo/bin/sccache` when no rustc wrapper is configured; custom wrappers
-and the legacy `~/.cargo/config` are left for manual review. Repeating the fix
+`bin/sccache` under `CARGO_HOME` (default `~/.cargo`) when no rustc wrapper
+is configured. `RUSTC_WRAPPER` takes precedence; custom wrappers and the legacy
+Cargo `config` file are left for manual review. Repeating the fix
 preserves the resulting content. No system settings or project policy are
 written. Use `aida doctor --fix-sandbox` for the host-specific bubblewrap
 setup instructions and run any sudo commands yourself.
 
 Real `queue work --no-human` launches check containment before queue,
-lease or worktree changes, including drain routes. Dry-run previews remain
-read-only previews; `--no-launch` and `--list-sessions` also skip the gate.
+lease or worktree changes, including drain routes, and honor an explicit
+`--sandbox` request. Dry-run previews remain read-only previews; `--no-launch` and `--list-sessions` also skip the gate.
 Contained parents skip host-file and nested bubblewrap probes; ordinary child
 admission still enforces inherited containment and vendor policy. Rework vendor
 rerouting is checked again before vendor spawn; a refusal at that later point
@@ -840,13 +841,16 @@ native Codex opt-in is reported as “native sandbox, not AIDA-contained”.
 
 The report checks every enabled lane vendor (or the selected headless vendor
 when no enabled list is configured). Auth rows establish
-credential-source presence only. Vendors without a supported credential probe
+credential-source presence only, including Claude’s `CLAUDE_CONFIG_DIR` and
+`CLAUDE_CODE_OAUTH_TOKEN` overrides. Vendors without a supported credential probe
 (including AGY) emit an explicit advisory unverifiable note; log in manually. Binary comparison uses the locally known
-origin default-branch SHA; release freshness is unverified. Store connectivity
-uses a bounded read-only probe against origin's `aida-store` branch.
-The cache check requires an executable user Cargo `build.rustc-wrapper`;
-legacy `~/.cargo/config` takes precedence over `config.toml`. Lane-job cache
-reachability is a separate advisory note until an in-sandbox probe is available.
+origin default-branch SHA only for development binaries built from this project.
+Release installs and other projects receive an advisory unverified binary row.
+Store connectivity uses a bounded read-only probe against origin's `aida-store`
+branch, preserving `GIT_SSH_COMMAND` or `core.sshCommand` with batch-mode options.
+The cache check requires an executable `RUSTC_WRAPPER` or user Cargo
+`build.rustc-wrapper`; legacy `CARGO_HOME/config` takes precedence over
+`config.toml`. Lane-job cache reachability is a separate advisory note until an in-sandbox probe is available.
 A passing host report does not certify cache transport, token validity or every
 future orchestrator phase.
 
