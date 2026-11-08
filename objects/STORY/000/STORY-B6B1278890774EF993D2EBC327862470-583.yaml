@@ -2,25 +2,34 @@ id: 01a1b916-1b6e-7ba2-a259-e3714ce900a2
 spec_id: STORY-b6b1278890774ef993d2ebc327862470-583
 agreed_id: STORY-2660
 title: 'Lane host pool: AIDA places implementer lanes across registered hosts by free slots (remote-first, local overflow) and sees their lanes, replacing the advisor''s hardcoded dell1 scripts'
-description: |
-  Problem (2026-11-07): lanes run wherever the advisor's helper scripts start them. fill-slots3.sh launched only on the 6-core primary host (load 14) while dell1 (20 cores, load 0.5) sat idle; earlier dell1 lanes had been started by hand over ssh. The advisor then hardcoded a dell1-first route in ~/.local/share/aida/ops/advisor-scripts (fill-slots3.sh launch_dell, dell1:~/lane-run.sh, auto-rework lane_running over ssh). AIDA itself has no placement concept: host readiness exists (STORY-2642 `aida doctor --lane-host`) and host identity exists (node registry / `aida team`), but nothing chooses a host, counts its slots, or sees its lanes.
+description: 'Problem (2026-11-07): lanes run wherever the advisor''s helper scripts start them. fill-slots3.sh launched only on the 6-core primary host (load 14) while dell1 (20 cores, load 0.5) sat idle; earlier dell1 lanes had been started by hand over ssh. The advisor then hardcoded a dell1-first route in ~/.local/share/aida/ops/advisor-scripts (fill-slots3.sh launch_dell, dell1:~/lane-run.sh, auto-rework lane_running over ssh). AIDA itself has no placement concept: host readiness exists (STORY-2642 `aida doctor --lane-host`) and host identity exists (node registry / `aida team`), but nothing chooses a host, counts its slots, or sees its lanes.
+
 
   Sketch (needs advisor signoff + operator review before implementation; architecture change):
+
   1. Registration: a host joins the lane pool with a capacity (slots), admitted only after `doctor --lane-host` passes there. Prefer a capacity/role field on the existing node registry entry over a new registry.
+
   2. Placement: `aida queue work` / dispatch tick choose a host by free slots and load under a policy (e.g. remote-first, local overflow). The ssh + remote `aida queue work` mechanics live in AIDA, not in advisor scripts.
+
   3. Cross-host visibility: leases, "does this spec have a running lane", fleet watch and `aida awaiting` see lanes on every pool host, so nothing duplicates and a stalled remote lane surfaces.
+
   4. Publish on the lane host: the remote host commits/ships from its own seat; the primary only orchestrates (matches dell1:~/lane-run.sh today).
+
   5. Out of scope here: build-only offload (cargo slot wrapper, aida-host STORY-100); whole-lane placement is the bigger win because agent and builds share a host.
+
 
   Acceptance (draft): with dell1 registered at 6 slots and the primary at 4, a burst of 8 queued reworks lands 6 on dell1 and 2 locally with no advisor script; `aida session leases` and the "lane running" check show the dell1 lanes; an unreachable pool host is skipped with a visible reason, never counted as free; vendor pins (e.g. BUG-2487 Codex 0.166) are checked per host before placement.
 
+
   Related: STORY-2571 (operator plumbing into AIDA), STORY-2642 (lane-host readiness), FAQ-151.
+
+  '
 status: Approved
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
-created_at: 2026-11-08T02:56:36.206726001Z
-modified_at: 2026-11-08T13:16:50.827297569Z
+created_at: 2026-11-08 02:56:36.206726+00:00
+modified_at: 2026-11-08 13:16:50.827297+00:00
 req_type: Story
 tags:
 - architecture
@@ -30,117 +39,137 @@ tags:
 relationships:
 - rel_type: References
   target_id: 01a1b1c5-5707-73b0-a54a-06e9eb403794
-  created_at: 2026-11-08T03:01:00.446707601Z
+  created_at: 2026-11-08 03:01:00.446707+00:00
   created_by: joe
 - rel_type: References
   target_id: 01a1b798-64a0-7890-a8c2-dd20db15b24d
-  created_at: 2026-11-08T03:01:07.919395707Z
+  created_at: 2026-11-08 03:01:07.919395+00:00
   created_by: joe
 comments:
 - id: 01a1b956-d767-7ce3-8e80-2c9e816f0c2b
   author: joe
-  content: |-
-    Requirements learned running dell1 lanes from advisor scripts, 2026-11-07 20:00-21:05. Each one broke a real launch; the pool must handle all of them:
-    R1 Store handoff: the placing host pushes its store (queue/rework writes) before a remote launch, and the remote pulls before pickup. Without it dell1 refused reworks as 'needs-triage' because it had not seen 'aida queue rework'. (Script workaround: fill-slots3 'aida db sync --push'; dell1:~/lane-run.sh 'aida db sync --pull'.)
-    R2 Remote store health: a remote whose store pull fails (dell1 diverged 8 ahead / 246 behind on a status/history conflict) must not take lanes. Today the lane printed 'proceeding with local view' and worked stale for ~2.5h (root cause on BUG-2490).
-    R3 Launch outcome is a typed result, not log scraping: a lane emits non-fatal 'error:' lines (failed pre-pickup pull) and keeps going, and cold remote seats (no reflink, cold cargo target) take >5 min to reach 'launching'. Log-grep placement misread both as refusals and launched duplicates locally.
-    R4 Remote orphaned leases: a finished remote lane's lease (clean seat, HEAD already in a landed PR) blocks every rework of that spec, and ending it needed the operator by hand. Pool hosts need the same automatic dead-lease end as local (STORY-2315), run on the host that owns the lease.
-    R5 Cross-host 'lane running' and slot counts: count lanes per host, and treat an unreachable host as full, never as zero (a pgrep -c 0-with-exit-1 bug counted dell1 as full).
+  content: 'Requirements learned running dell1 lanes from advisor scripts, 2026-11-07 20:00-21:05. Each one broke a real launch; the pool must handle all of them:
+
+    R1 Store handoff: the placing host pushes its store (queue/rework writes) before a remote launch, and the remote pulls before pickup. Without it dell1 refused reworks as ''needs-triage'' because it had not seen ''aida queue rework''. (Script workaround: fill-slots3 ''aida db sync --push''; dell1:~/lane-run.sh ''aida db sync --pull''.)
+
+    R2 Remote store health: a remote whose store pull fails (dell1 diverged 8 ahead / 246 behind on a status/history conflict) must not take lanes. Today the lane printed ''proceeding with local view'' and worked stale for ~2.5h (root cause on BUG-2490).
+
+    R3 Launch outcome is a typed result, not log scraping: a lane emits non-fatal ''error:'' lines (failed pre-pickup pull) and keeps going, and cold remote seats (no reflink, cold cargo target) take >5 min to reach ''launching''. Log-grep placement misread both as refusals and launched duplicates locally.
+
+    R4 Remote orphaned leases: a finished remote lane''s lease (clean seat, HEAD already in a landed PR) blocks every rework of that spec, and ending it needed the operator by hand. Pool hosts need the same automatic dead-lease end as local (STORY-2315), run on the host that owns the lease.
+
+    R5 Cross-host ''lane running'' and slot counts: count lanes per host, and treat an unreachable host as full, never as zero (a pgrep -c 0-with-exit-1 bug counted dell1 as full).
+
     R6 Publish on the lane host: uncommitted seat edits are published from the remote seat after the lane exits (dell1:~/lane-run.sh does this today).
-    R7 Vendor version per host: dell1 runs codex 0.167.0 vs the 0.166.0 pin (TASK-3000); placement checks the host's vendor binaries against pins.
-    R8 Grants: remote lanes currently launch ungranted. Decide whether pool lanes need a seat grant on the remote; if so the pool delivers it (no remote deputy today).
-  created_at: 2026-11-08T04:07:18.631582891Z
-  modified_at: 2026-11-08T04:07:18.631582891Z
+
+    R7 Vendor version per host: dell1 runs codex 0.167.0 vs the 0.166.0 pin (TASK-3000); placement checks the host''s vendor binaries against pins.
+
+    R8 Grants: remote lanes currently launch ungranted. Decide whether pool lanes need a seat grant on the remote; if so the pool delivers it (no remote deputy today).'
+  created_at: 2026-11-08 04:07:18.631582+00:00
+  modified_at: 2026-11-08 04:07:18.631582+00:00
   session_id: 01a1b8be-8170-7fb2-89ab-ecb4c6eee98c
   harness_version: 2.1.319 (Claude Code)
 - id: 01a1b9bd-8ea1-75a0-97f5-6633007bd0ef
   author: joe
   content: 'Advisor 2026-11-07 23:00: dell1 (20 cores) was capped at 4 lanes by the tracked [queue] standalone_implementer_cap, which has no per-host override. Stopgap: dell1 checkout set to 8 with git skip-worktree (a later upstream edit to .aida/config.toml will make dell1''s ff-only pull fail; then run git update-index --no-skip-worktree there). R9 for this story: a per-host cap (e.g. ~/.aida/host.toml or config.local.toml) sized from nproc.'
-  created_at: 2026-11-08T05:59:30.209334049Z
-  modified_at: 2026-11-08T05:59:30.209334049Z
+  created_at: 2026-11-08 05:59:30.209334+00:00
+  modified_at: 2026-11-08 05:59:30.209334+00:00
   session_id: 01a1b9af-8230-75d2-82f8-667491cc010a
   harness_version: 2.1.319 (Claude Code)
 - id: 01a1b9c4-f5f4-7591-995c-7134a9d8c3a4
   author: joe
   content: 'Advisor ruling 2026-11-07 23:08 (operator deferred to advisor): APPROVED. This changes lane placement architecture, so the first slice posts a sketch on this spec (host registry shape, per-host caps sized from nproc incl. the R9 standalone_implementer_cap override, how leases/ps see remote lanes) and waits for advisor signoff before code. The advisor''s fill-slots3.sh / lane-run.sh / end-finished.sh / store-sync.sh are the behaviour to absorb, then retire.'
-  created_at: 2026-11-08T06:07:35.412700116Z
-  modified_at: 2026-11-08T06:07:35.412700116Z
+  created_at: 2026-11-08 06:07:35.412700+00:00
+  modified_at: 2026-11-08 06:07:35.412700+00:00
   session_id: 01a1b9af-8230-75d2-82f8-667491cc010a
   harness_version: 2.1.319 (Claude Code)
 - id: 01a1b9ca-c5e0-7190-b6d5-67c2edc923c8
   author: dirtlab
-  content: |
-    Architecture sketch v1 — REQUEST ADVISOR SIGNOFF BEFORE CODE. First slice only; binding ruling overrides draft spec. No implementation or executed tests.
+  content: 'Architecture sketch v1 — REQUEST ADVISOR SIGNOFF BEFORE CODE. First slice only; binding ruling overrides draft spec. No implementation or executed tests.
+
 
     Evidence: inspected NodeRegistryEntry (aida-core/src/node.rs), SessionLease (aida-cli-lib/src/leases.rs), configured_cap and slot management (aida-cli-lib/src/standalone_implementer.rs), and all R1–R9 comments. Existing leases carry hostname, PID namespace/start identity; cap currently reads project config/default and slots are checkout-local. The advisor-scripts directory is absent on this host; searches under /home/dirtlab/ai and ~/.local/share/aida found no fill-slots3.sh/lane-run.sh/end-finished.sh/store-sync.sh. Their actual snapshots must be reviewed before implementation; R1–R9 are presently the behavioral evidence.
 
+
     1. Host registry and trust. Extend existing node registry entries with optional versioned lane_host metadata: enabled, stable host_id, project/clone identity, roles, advertised capacity/readiness. Old entries remain compatible and not enrolled. Multiple clones on one host share host_id/capacity. Node metadata advertises membership, not execution authority. Operator-owned local config maps host_id to allowlisted SSH destination and absolute checkout; preserve host-key checks and use argv to a fixed AIDA endpoint, never stored shell snippets. Runtime reservations/observations remain host-local, outside canonical Git objects.
+
 
     2. R9 per-host cap. Propose versioned ~/.aida/host.toml with [queue] standalone_implementer_cap. Effective precedence: positive host override > existing trusted project cap > CPU default max(1, floor(nproc/2)). Measure nproc on the receiving host under effective affinity; report CPUs, effective cap and source. Invalid explicit host config refuses admission. This permits dell1=8 despite tracked project=4, without skip-worktree. Acceptance fixture explicitly sets dell1=6, primary=4; these are overrides, not inferred defaults. Preserve project caps for compatibility. Cap reductions stop new starts without killing lanes. Both direct standalone and placed lanes use this resolver and the SAME atomic host slot lock across participating clones. Host config is consumed by host-owned code and must not become a lane-writable authority source. CPU formula/precedence require advisor signoff.
 
+
     3. Placement and R1–R3/R5/R7. Remote-first, local overflow; within each tier rank healthy hosts by free slots, load per CPU, stable host_id. Unreachable/stale/protocol-incompatible hosts, failed doctor --lane-host, failed store sync or selected-vendor pin mismatch contribute zero usable slots with explicit reasons. Load is a tie-breaker, not a new threshold. Push placing-host store writes first and capture the published commit; receiver must successfully pull using existing locked/evidence-preserving store APIs and verify that commit is included before pickup. Any conflict/refusal stops launch; never proceed with stale local view.
+
 
     Use persisted dispatch UUID bound to project/spec/rework generation/host. One coordinator holds the project dispatch lock; receiver atomically reserves host capacity and records UUID before spawn. Repeating a UUID returns its existing receipt. Typed states: reserved, preparing, running, publishing, finished, refused, unknown; include host/lease/slot/timestamps/reasons. Cold setup stays preparing for however long needed. Lost acknowledgement becomes unknown, retains occupancy/spec ownership and requires receiver reconciliation; do not fall back locally from timeout, exit diagnostics or log grep. Initial slice supports one coordinator; refuse conflicting ownership. Git sync alone cannot implement multi-coordinator exactly-once admission.
 
+
     4. R4–R5 leases/ps. Bounded versioned host-status endpoint reports host slots, reservations, launcher identity and local lease/liveness evidence. session leases, ps, fleet watch, awaiting and shared lane-running checks consume the same observation boundary, joined by host_id + dispatch/lease UUID, with host, state and observation age visible. Unknown remote state retains occupancy and duplicate protection. Never inspect remote PIDs through local procfs. Legacy hostname-only leases remain conservative when identity is unproven. Only owning host reaps stale leases using existing verified process identity, seat cleanliness, landed-head and ownership safeguards. Remote requestors request reconciliation, never directly delete leases. Finished log alone does not establish death; dirty seats/ambiguous receipts remain visible for recovery; child jobs/publication retain occupancy.
+
 
     5. R8 grants. SSH and pool membership grant no seat authority. Receiver must issue/validate a host-local implementer grant using existing issuer, bound to role/spec/worktree/process/expiry. Never copy source-host process-bound grants or borrow advisor authority. Without a supported remote issuer/deputy path, host is ineligible with setup guidance; ungranted launch is forbidden. Keep trusted vendor containment/native posture rules and per-host binary pins. Host config protection and issuer bootstrap require security/architecture review before activation.
 
+
     6. R6 completion/store circulation. Reuse existing standalone launcher on owning host, with remote dispatch marked to avoid recursive placement. Keep slot through child exit and publication. Owning host publishes its own seat after exact lease/seat validation; primary only orchestrates. Failed exits retain Refs; punts/holds veto publication; queue completion follows publication. Host-side store-sync handles preflight and post-publication circulation under existing store locks. Failed circulation is visible and retryable by the same receipt without respawning implementation or clearing ambiguous occupancy.
+
 
     7. Sequence AFTER signoff. Capture actual script snapshots and map every branch to R1–R9. Add backward-compatible registry/local cap resolver and typed read-only status. Add receiver admission/idempotency/grants, then placement/store handoff. Wire unified lease/ps/running consumers and owner-side cleanup/publication. Demonstrate parity; stop old script launchers before enabling pool dispatch, then retire fill-slots3.sh, lane-run.sh, end-finished.sh and store-sync.sh. Never dual-schedule through scripts and AIDA.
 
+
     Planned validation (not executed): old registry compatibility; cap precedence/malformed values/CPU sizing; concurrent cross-clone direct+placed admission; explicit 6+4 caps place 8 items as 6 remote+2 local; unreachable host; pin mismatch; store push/pull/conflict failures; duplicate dispatch/lost ack; cold setup >5m; remote PID collision; dead/dirty/landed lease recovery; missing issuer/grant refusal; hold/punt/failed-exit publication; restart and failed post-publication sync recovery.
 
+
     Manual gate: advisor approve/amend this sketch, especially CPU policy, coordinator ownership and grant bootstrap, and supply script snapshots/location. Existing punt sets Needs Attention/publication veto; its separate signal write reported read-only filesystem. No code/files changed in repository. No cargo run, untested=true. No commit/push/PR/queue completion. Initial MCP comment attempt required unavailable approval; this CLI comment is the actual posted sketch.
-  created_at: 2026-11-08T06:13:56.320593280Z
-  modified_at: 2026-11-08T06:13:56.320593280Z
+
+    '
+  created_at: 2026-11-08 06:13:56.320593+00:00
+  modified_at: 2026-11-08 06:13:56.320593+00:00
   session_id: 01a1b9c8a465
   harness_version: codex-cli 0.167.0
 - id: 01a1ba73-8d5e-7561-9cbb-72a40d50f08f
   author: joe
   content: 'Advisor 2026-11-08 02:10: the R9 skip-worktree stopgap on dell1''s .aida/config.toml blocks ''git checkout'' of any commit that changes that file (''Entry .aida/config.toml not uptodate''), so it will also stall dell1''s ff-only pulls whenever main touches config.toml. R9 (per-host cap outside tracked config) is therefore required, not optional; TASK-3472 adds [review_watch] max_concurrent to the same file, so expect this to bite when it lands.'
-  created_at: 2026-11-08T09:18:17.438611681Z
-  modified_at: 2026-11-08T09:18:17.438611681Z
+  created_at: 2026-11-08 09:18:17.438611+00:00
+  modified_at: 2026-11-08 09:18:17.438611+00:00
   session_id: 01a1b9af-8230-75d2-82f8-667491cc010a
   harness_version: 2.1.319 (Claude Code)
 - id: 01a1bb47-5a63-7883-9764-b1e717298a9f
   author: joe
-  content: 'ADVISOR SIGNOFF (2026-11-08 06:25) on Architecture sketch v1: APPROVED WITH AMENDMENTS. (A1) CPU default max(1, floor(nproc/2)) approved; precedence host.toml > project config > CPU default approved; invalid host config refuses admission. (A2) Single coordinator approved: the advisor''s primary host; refuse a second coordinator. (A3) Grants: ''ungranted launch is forbidden'' would make dell1 ineligible today, while the operator authorized ungranted dell1 lanes on 2026-11-07. Slice 1 therefore keeps legacy ungranted placement as an explicit host.toml opt-in ([lane_host] allow_ungranted = true), shown in ps/status and doctor as a warning. The remote grant issuer is its own later slice with security review before activation. (A4) RESCOPE SLICE 1 to the smallest valuable cut: ~/.aida/host.toml [queue] standalone_implementer_cap resolver (used by both direct and placed launches, same slot lock), plus read-only typed host status (slots, reservations, cap source, nproc) with the doctor --lane-host surface. NO placement, ssh dispatch or lease reaping in slice 1. Publish it with a (Refs STORY-2660) trailer. Placement/idempotent dispatch (sketch 3), unified leases/ps (4), grants (5) and completion circulation (6) follow as separate slices, each referencing this signoff. (A5) Script snapshots: dell1:~/advisor-scripts-snapshot-20261108/{primary,dell1}/ (fill-slots3.sh, auto-rework.sh, auto-train.sh, train-run.sh, host-merge.sh, end-finished.sh, auto-publish.sh, review-watch-loop.sh, store-sync-local.sh, store-resolve.py; dell1 lane-run.sh, end-finished.sh, store-sync.sh, store-resolve.py). Map them to R1-R9 in the slice that retires them, not in slice 1.'
-  created_at: 2026-11-08T13:09:38.019163858Z
-  modified_at: 2026-11-08T13:09:38.019163858Z
+  content: 'ADVISOR SIGNOFF (2026-11-08 06:25) on Architecture sketch v1: APPROVED WITH AMENDMENTS. (A1) CPU default max(1, floor(nproc/2)) approved; precedence host.toml > project config > CPU default approved; invalid host config refuses admission. (A2) Single coordinator approved: the advisor''s primary host; refuse a second coordinator. (A3) Grants: ''ungranted launch is forbidden'' would make dell1 ineligible today, while the operator authorized ungranted dell1 lanes on 2026-11-07. Slice 1 therefore keeps legacy ungranted placement as an explicit host.toml opt-in ([lane_host] allow_ungranted = true), shown in ps/status and doctor as a warning. The remote grant issuer is its own later slice with security review before activation. (A4) RESCOPE SLICE 1 to the smallest valuable cut: ~/.aida/host.toml [queue] standalone_implementer_cap resolver (used by both direct and placed launches, same slot lock), plus read-only typed host status (slots, reservations, cap source, nproc) with the doctor
+    --lane-host surface. NO placement, ssh dispatch or lease reaping in slice 1. Publish it with a (Refs STORY-2660) trailer. Placement/idempotent dispatch (sketch 3), unified leases/ps (4), grants (5) and completion circulation (6) follow as separate slices, each referencing this signoff. (A5) Script snapshots: dell1:~/advisor-scripts-snapshot-20261108/{primary,dell1}/ (fill-slots3.sh, auto-rework.sh, auto-train.sh, train-run.sh, host-merge.sh, end-finished.sh, auto-publish.sh, review-watch-loop.sh, store-sync-local.sh, store-resolve.py; dell1 lane-run.sh, end-finished.sh, store-sync.sh, store-resolve.py). Map them to R1-R9 in the slice that retires them, not in slice 1.'
+  created_at: 2026-11-08 13:09:38.019163+00:00
+  modified_at: 2026-11-08 13:09:38.019163+00:00
   session_id: 01a1b9af-8230-75d2-82f8-667491cc010a
   harness_version: 2.1.319 (Claude Code)
 - id: 01a1bb48-7586-7690-9b18-995ac1f6f8ee
   author: joe
   content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was punted on: design-fork: Architecture sketch v1 posted on STORY-2660 as required by the binding advisor ruling. Await advisor signoff before code; actual advisor scripts are absent on this host and require inspection before implementation. Decisions proposed: host registry/trust boundary, nproc-derived cap with host override, single coordinator and receiver idempotency, host-local grants, unified remote lease/ps observations.. No triage reason was given.'
-  created_at: 2026-11-08T13:10:50.502389365Z
-  modified_at: 2026-11-08T13:10:50.502389365Z
+  created_at: 2026-11-08 13:10:50.502389+00:00
+  modified_at: 2026-11-08 13:10:50.502389+00:00
   session_id: 01a1b9af-8230-75d2-82f8-667491cc010a
   harness_version: 2.1.319 (Claude Code)
 - id: 01a1bb4d-f50b-72a0-b411-5065c6d9ca8b
   author: joe
   content: 'Advisor evidence 2026-11-08 03:50: the advisor''s auto-rework.sh and auto-train.sh loops exit after a fixed HOURS budget (8 h), and both expired overnight (02:57 and 03:26), leaving ~1 h with no rework dispatch and no shipping until noticed. Whatever replaces the scripts must be a supervised service (schedule job or daemon) with liveness visible in aida ps / fleet watch, not a time-boxed loop.'
-  created_at: 2026-11-08T13:16:50.827297569Z
-  modified_at: 2026-11-08T13:16:50.827297569Z
+  created_at: 2026-11-08 13:16:50.827297+00:00
+  modified_at: 2026-11-08 13:16:50.827297+00:00
   session_id: 01a1b9af-8230-75d2-82f8-667491cc010a
   harness_version: 2.1.319 (Claude Code)
 history:
 - id: 01a1b91a-2eb5-7142-b252-8d3eb8d49b14
   author: joe
-  timestamp: 2026-11-08T03:01:03.285583455Z
+  timestamp: 2026-11-08 03:01:03.285583+00:00
   session_id: 01a1b8be-8170-7fb2-89ab-ecb4c6eee98c
   harness_version: 2.1.319 (Claude Code)
   changes: []
 - id: 01a1b91a-4942-7e53-9efa-cc3333bb8500
   author: joe
-  timestamp: 2026-11-08T03:01:10.082633867Z
+  timestamp: 2026-11-08 03:01:10.082633+00:00
   session_id: 01a1b8be-8170-7fb2-89ab-ecb4c6eee98c
   harness_version: 2.1.319 (Claude Code)
   changes: []
 - id: 01a1b9c5-0269-7de3-953f-7fbb1cbe2a83
   author: joe
-  timestamp: 2026-11-08T06:07:38.601960368Z
+  timestamp: 2026-11-08 06:07:38.601960+00:00
   session_id: 01a1b9af-8230-75d2-82f8-667491cc010a
   harness_version: 2.1.319 (Claude Code)
   changes:
@@ -149,14 +178,14 @@ history:
     new_value: Approved
 - id: 01a1b9c8-d2b2-7b40-9c7a-e419536781b2
   author: aida-session-start
-  timestamp: 2026-11-08T06:11:48.530201079Z
+  timestamp: 2026-11-08 06:11:48.530201+00:00
   changes:
   - field_name: status
     old_value: Approved
     new_value: InProgress
 - id: 01a1b9ca-2f4b-71a0-809f-b50405be52f0
   author: dirtlab
-  timestamp: 2026-11-08T06:13:17.771523032Z
+  timestamp: 2026-11-08 06:13:17.771523+00:00
   session_id: 01a1b9c8a465
   harness_version: codex-cli 0.167.0
   changes:
@@ -165,13 +194,20 @@ history:
     new_value: NeedsAttention
 - id: 01a1bb48-7586-7690-9b18-994509300850
   author: joe
-  timestamp: 2026-11-08T13:10:50.502376294Z
+  timestamp: 2026-11-08 13:10:50.502376+00:00
   session_id: 01a1b9af-8230-75d2-82f8-667491cc010a
   harness_version: 2.1.319 (Claude Code)
   changes:
   - field_name: status
     old_value: NeedsAttention
     new_value: Approved
+- id: 01a1bb4d-8ccb-7be2-a387-251fe614f636
+  author: aida-session-start
+  timestamp: 2026-11-08 13:16:24.139776+00:00
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: InProgress
 filed_at:
   code_sha: dc41ee8da2f44f88178936fc1a8e6cb7168a3de7
   branch: main
