@@ -1,0 +1,18 @@
+{
+  "id": "review-lease-b284a7efe4f29a4f889e261e6e948827149901127a7ede2c166927d9ceffc9f3",
+  "thread_id": "review-lease-b284a7efe4f29a4f889e261e6e948827149901127a7ede2c166927d9ceffc9f3",
+  "from": "review-launch",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1794158403010,
+  "body": "ownership retained: its tree could not be read (it is a seat clone the host does not recognise); inspect `aida session end 01a1bc08d0b3`",
+  "subject": "Review blocked by retained lease 01a1bc08d0b3",
+  "urgent": false,
+  "intent": "request",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "explicit"
+}
