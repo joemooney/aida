@@ -18,12 +18,12 @@ description: |
   2. Without sccache configured, behaviour is unchanged.
   3. Test: the job profile's env/bind set includes the cache dir and wrapper only when configured.
   4. The trust decision (shared or lane-only cache) is recorded on this spec before implementation.
-status: InProgress
+status: NeedsAttention
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-07T19:59:26.079479Z
-modified_at: 2026-11-08T14:19:29.094141955Z
+modified_at: 2026-11-08T14:30:05.139669654Z
 req_type: Story
 comments:
 - id: 01a1b798-f0d4-73b1-93d5-f84581f2d190
@@ -421,6 +421,13 @@ comments:
   modified_at: 2026-11-08T14:17:32.213619446Z
   session_id: 01a1b9af-8230-75d2-82f8-667491cc010a
   harness_version: 2.1.319 (Claude Code)
+- id: 01a1bb90-f703-7a61-b1f9-1b70f0c9fc96
+  author: dirtlab
+  content: 'Round 11 native handoff: addressed latest review finding 2. The foreground sccache server now receives SCCACHE_IDLE_TIMEOUT equal to MAX_TIMEOUT_SECS (3600), passed as a positional shell argument rather than duplicated source. If the launcher dies, an idle orphan has a finite lifetime; a full-length cold job remains supported. Extended the executed lifecycle fixture to record and verify the server startup timeout, retaining delayed-write persistence and Cargo exit-code coverage. Changed files: aida-cli-lib/src/lane_job.rs; aida-cli-lib/src/tests/bug_2383_lane_job_tests.rs. Edits remain uncommitted under the native-seat contract. PASS: lane job j20261108T142015468-2-0, story_2641_sccache, 5 executed tests; lane job j20261108T142016687-2-0, story_2326_resource_env, 5 executed tests. PASS: rustfmt --check on both files; git diff --check. BLOCKED: make check-ci-fast failed its first no-default-features compile gate because sccache could not write dep-info into the seat target (read-only filesystem); log /tmp/story-2641-fast-current.log. No full fast-gate pass claimed. Finding 1 remains agreed and open: no consecutive lane Cargo job statistics on primary AND dell1, and no advisor amendment. Host/operator must collect both logs per host using the revised launcher, with second-job Rust hits greater than zero, or obtain advisor amendment. Preserve the publication veto and existing merge hold; route acceptance to host/operator or advisor rather than another implementer rework.'
+  created_at: 2026-11-08T14:30:02.243969897Z
+  modified_at: 2026-11-08T14:30:02.243969897Z
+  session_id: 01a1bb874220
+  harness_version: codex-cli 0.167.0
 history:
 - id: 01a1b929-7921-7980-8202-36c2cc4f3845
   author: aida-session-start
@@ -746,6 +753,15 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a1bb91-0253-7f83-8f9a-79d2cd6de604
+  author: dirtlab
+  timestamp: 2026-11-08T14:30:05.139685811Z
+  session_id: 01a1bb874220
+  harness_version: codex-cli 0.167.0
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: NeedsAttention
 filed_at:
   code_sha: 7a18c0d52a6a4e0822befd4c810cfed16b04b74c
   branch: main
@@ -755,3 +771,8 @@ filed_at:
   vendor: claude
   session: 01a1b76b-2fe7-7dd2-88d0-356fc8d96d04
   harness_version: 2.1.319 (Claude Code)
+attention_reason:
+  category: blocked-dependency
+  detail: 'Review finding 1 / AC1 remains open and is agreed, not disputed: requires consecutive lane Cargo job statistics on primary AND dell1 with second-job Rust cache hits greater than zero, or an advisor amendment. This seat cannot supply both-host evidence. Latest finding 2 fixed: finite sccache server idle timeout tied to MAX_TIMEOUT_SECS; lifecycle regression passes. Both targeted suites pass (5 sccache + 5 resource-env tests). make check-ci-fast blocked by sccache read-only target writes. Preserve publication veto and merge hold; route to host/operator or advisor, not another implementer rework.'
+  raised_by: implementer
+  raised_at: 2026-11-08T14:30:05.139669654Z
