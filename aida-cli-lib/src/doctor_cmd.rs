@@ -10423,6 +10423,36 @@ mod story_462_doctor_tests {
         }
     }
 
+    // trace:STORY-2660 | ai:codex
+    #[test]
+    fn host_capacity_doctor_flags_parse_and_refuse_mutation() {
+        let cli = crate::command_registry::try_parse_from([
+            "aida",
+            "doctor",
+            "--lane-capacity",
+            "--json",
+        ])
+        .unwrap();
+        let DoctorArgs {
+            lane_capacity,
+            json,
+            ..
+        } = cli.command.registered::<DoctorArgs>()
+        else {
+            panic!("doctor args")
+        };
+        assert!(lane_capacity && json);
+        for flag in ["--heal", "--fix-sandbox", "--contradictions"] {
+            assert!(crate::command_registry::try_parse_from([
+                "aida",
+                "doctor",
+                "--lane-capacity",
+                flag
+            ])
+            .is_err());
+        }
+    }
+
     #[test]
     fn doctor_default_flags_parse_without_subcommand() {
         let cli = crate::command_registry::try_parse_from([
@@ -16110,6 +16140,11 @@ pub(crate) struct DoctorArgs {
     #[clap(long)]
     pub json: bool,
 
+    /// Read-only typed local lane capacity and reservations (not readiness admission).
+    // trace:STORY-2660 | ai:codex
+    #[clap(long, conflicts_with_all = ["heal", "fix", "fix_sandbox", "contradictions", "category"])]
+    pub lane_capacity: bool,
+
     /// Permit riskier destructive fixes such as branch deletion.
     #[clap(long)]
     pub force: bool,
@@ -16224,8 +16259,17 @@ fn run_doctor(
         contradictions,
         contradictions_limit,
         contradictions_offset,
+        lane_capacity,
         cmd,
     } = &args;
+    // trace:STORY-2660 | ai:codex
+    if *lane_capacity {
+        anyhow::ensure!(
+            cmd.is_none(),
+            "--lane-capacity cannot be combined with a doctor subcommand"
+        );
+        return crate::standalone_implementer::doctor_host_status(&find_project_root()?, *json);
+    }
     // trace:BUG-B6B1278890774EF993D2EBC327862470-046 | ai:claude
     if let Some(category) = fix.as_deref() {
         if *json {
