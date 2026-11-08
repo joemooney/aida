@@ -886,6 +886,8 @@ fn raw_home_lookup_offenders(workspace: &Path) -> Vec<String> {
     for member in [
         "aida-core",
         "aida-cli-lib",
+        // trace:TASK-3429 | ai:codex
+        "aida-mcp",
         "aida-server",
         "aida-tui",
         "aida-cli",

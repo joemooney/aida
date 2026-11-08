@@ -5688,64 +5688,9 @@ impl<'a> McpServer<'a> {
 
     // trace:EPIC-27 — mirrors `aida cache status`. Reads the SQLite cache +
     // the orphan store's HEAD SHA directly (no GitBackend construction).
+    // trace:TASK-3429 | ai:codex — cache reporting stays below the transport boundary.
     fn tool_cache_status(&self, _args: &Value) -> Result<String, String> {
-        let store_path = self.project_root.join(".aida-store");
-        if !store_path.exists() {
-            return Err(format!(
-                "no git-canonical store at {} — `cache status` applies to a distributed-mode \
-                 project. Run `aida init` first.",
-                store_path.display()
-            ));
-        }
-        let cache_path = aida_core::CachedGitBackend::default_cache_path(&store_path);
-        // trace:TASK-1526 | ai:codex
-        let backend = aida_core::CachedGitBackend::open(&store_path, &cache_path)
-            .map_err(|e| e.to_string())?;
-        backend
-            .ensure_cache_fresh_with_schema_retry()
-            .map_err(|e| e.to_string())?;
-        let cache = backend.cache();
-        let recorded_sha = cache
-            .source_head_sha()
-            .map_err(|e| e.to_string())?
-            .unwrap_or_default();
-        let actual_sha = aida_core::git_ops::head_sha(&store_path).unwrap_or_default();
-        let count = cache.requirement_count().map_err(|e| e.to_string())?;
-        let built_at = cache
-            .built_at()
-            .map_err(|e| e.to_string())?
-            .unwrap_or_else(|| "(never)".into());
-
-        let mut out = String::new();
-        out.push_str(&format!(
-            "Cache path:          {}\n",
-            cache.path().display()
-        ));
-        out.push_str(&format!("Cached requirements: {}\n", count));
-        out.push_str(&format!("Last built:          {}\n", built_at));
-        out.push_str(&format!(
-            "Cache HEAD SHA:      {}\n",
-            if recorded_sha.is_empty() {
-                "(none)".to_string()
-            } else {
-                recorded_sha.clone()
-            }
-        ));
-        out.push_str(&format!(
-            "Store HEAD SHA:      {}\n",
-            if actual_sha.is_empty() {
-                "(no git head — non-git store?)".to_string()
-            } else {
-                actual_sha.clone()
-            }
-        ));
-        let stale = recorded_sha != actual_sha || recorded_sha.is_empty();
-        if stale && !actual_sha.is_empty() {
-            out.push_str("Status:              STALE — run `aida cache rebuild`");
-        } else {
-            out.push_str("Status:              FRESH");
-        }
-        Ok(out)
+        aida_cli_lib::cache_output::mcp_cache_status(&self.project_root)
     }
 
     // trace:EPIC-27 — read-only mirror of `aida plan verify <file>`. Runs the

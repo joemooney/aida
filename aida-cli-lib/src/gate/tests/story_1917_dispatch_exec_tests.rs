@@ -651,6 +651,8 @@ fn no_code_path_outside_role_enter_writes_grant_binding_or_calls_bind_grant_to_p
 
     let mut rs_files = Vec::new();
     visit_rs_files(&src_dir, &mut rs_files);
+    // trace:TASK-3429 | ai:codex — retain coverage of the extracted transport.
+    visit_rs_files(&src_dir.join("../../aida-mcp/src"), &mut rs_files);
     for path in &rs_files {
         let rel = path.strip_prefix(&src_dir).unwrap_or(path);
         let rel_str = rel.to_string_lossy().replace('\\', "/");

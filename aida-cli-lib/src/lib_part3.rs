@@ -1,9 +1,8 @@
-// trace:TASK-3429 | ai:codex
 /// A behind-base warning. Workflow content identities determine whether CI's
 /// definition changed; changed paths explain the difference and ordinary test
 /// changes remain advisory. The head and base are pinned for the entire read.
 /// STORY-1690's independent behind-base gate still refuses any behind head.
-// trace:BUG-1468 trace:STORY-1690 trace:STORY-2401 | ai:codex
+// trace:BUG-1468 trace:STORY-1690 trace:STORY-2401 trace:TASK-3429 | ai:codex
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) struct StaleCheckWarning {
     pub(crate) behind_commits: u64,
