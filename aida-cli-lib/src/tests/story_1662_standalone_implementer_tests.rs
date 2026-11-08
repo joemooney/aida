@@ -742,26 +742,7 @@ fn cap_ignores_a_launcher_whose_child_logged_its_final_result() {
     assert!(format!("{err:#}").contains("STORY-3"));
 }
 
-// trace:STORY-1662.AC7 | ai:claude
-#[test]
-fn cap_comes_from_config_with_a_default_of_three() {
-    let tmp = tempfile::tempdir().unwrap();
-    std::fs::create_dir_all(tmp.path().join(".aida")).unwrap();
-    assert_eq!(configured_cap(tmp.path()), DEFAULT_CAP);
-    assert_eq!(DEFAULT_CAP, 3);
-    std::fs::write(
-        tmp.path().join(".aida/config.toml"),
-        "[queue]\nstandalone_implementer_cap = 5\n",
-    )
-    .unwrap();
-    assert_eq!(configured_cap(tmp.path()), 5);
-    std::fs::write(
-        tmp.path().join(".aida/config.toml"),
-        "[queue]\nstandalone_implementer_cap = 0\n",
-    )
-    .unwrap();
-    assert_eq!(configured_cap(tmp.path()), DEFAULT_CAP);
-}
+// Capacity precedence and invalid host policy are covered beside the resolver.
 
 // ── Authorship and the Q1 ledger note ─────────────────────────────────────
 

@@ -89,11 +89,16 @@ pub(super) fn observe(
     now: i64,
     details: &mut Vec<String>,
 ) -> (Vec<Alarm>, Option<BTreeSet<String>>) {
+    // trace:STORY-2660 | ai:codex
     let cap = crate::standalone_implementer::configured_cap(root);
-    details.push(format!("Implementers: {count:?}, cap {cap}; queued work: {queued:?}; inspect aida queue list --for implementer; dispatch: aida queue work <SPEC>"));
+    if let Err(error) = &cap {
+        details.push(format!("Implementer capacity unknown: {error:#}"));
+    }
+    let cap = cap.ok();
+    details.push(format!("Implementers: {count:?}, cap {cap:?}; queued work: {queued:?}; inspect aida queue list --for implementer; dispatch: aida queue work <SPEC>"));
     let under = Alarm::new(
         "under-cap",
-        and(&[count.map(|n| n < cap), queued]),
+        and(&[count.zip(cap).map(|(n, cap)| n < cap), queued]),
         String::new(),
     );
     let merge = last_merge(root).map(|time| (time.to_string(), time));
@@ -507,9 +512,9 @@ mod tests {
     fn under_cap_is_independent_and_requires_queued_work_and_known_capacity() {
         let t = tempfile::tempdir().unwrap();
         let mut details = Vec::new();
-        let cap = crate::standalone_implementer::configured_cap(t.path());
+        let cap = crate::standalone_implementer::configured_cap(t.path()).unwrap();
         for (count, queued, expected) in [
-            (Some(1), Some(true), Some(true)),
+            (Some(0), Some(true), Some(true)),
             (Some(cap), Some(true), Some(false)),
             (Some(0), Some(false), Some(false)),
             (None, Some(true), None),

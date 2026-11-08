@@ -807,3 +807,39 @@ token expiry and host `codex login` guidance; an already shorter grant with an a
 token remains valid. `aida config show/menu` displays this trusted, read-only key.
 `aida doctor` reports remaining token life or “expired” without refreshing or exposing
 tokens, both unfiltered and under `--category permission-posture`.
+
+### Host-local implementer capacity
+
+<!-- trace:STORY-2660 | ai:codex -->
+Standalone implementer admission reads `~/.aida/host.toml` before the tracked
+project configuration. This lets hosts use different caps without modifying
+`.aida/config.toml` or setting Git's `skip-worktree` bit:
+
+```toml
+[queue]
+standalone_implementer_cap = 8
+```
+
+A positive host cap wins over a positive project `[queue] standalone_implementer_cap`.
+With neither, the default is `max(1, floor(nproc / 2))`, using the process's
+available CPU count. Missing host files are normal; unreadable or invalid host
+configuration refuses admission. A zero project cap retains its default behavior;
+a zero host override is an error. Lowering the cap prevents new starts and does
+not terminate existing lanes.
+
+`aida doctor --lane-host --json` reports version-1 local capacity data: cap,
+source (`host`, `project`, or `cpu`), nproc, slot scope, occupied/free counts and
+reservation states. Without `--json` it prints the same observation for humans.
+It observes the standalone launcher's host-wide `~/.aida/standalone-implementers/`
+slot lock and records, shared across participating clones for the same host user;
+it neither initializes nor reaps slots. A busy writer or unreadable reservation
+returns an error rather than a false free-slot count. The printed slot scope identifies the shared state. This is a capacity
+observation, not readiness certification. Stop old launchers in every clone before
+cutover: older binaries use checkout-local slots and cannot see the new shared
+state. The new binary refuses while a live legacy slot remains in the current
+project; it never removes that slot or terminates its owner.
+
+The advisor-approved legacy `[lane_host] allow_ungranted = true` opt-in is
+reported as a warning. It grants no new authority in this slice: host placement,
+SSH dispatch, a remote grant issuer, unified remote leases/ps, and script
+retirement remain follow-up work under STORY-2660's amended signoff.
