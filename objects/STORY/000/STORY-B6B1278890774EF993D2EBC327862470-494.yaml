@@ -22,12 +22,12 @@ description: |
   6. Evidence run: an advisor session under --permission-mode auto completes one full sweep (rebind loops, dispatch, host-merge, ship) with zero permission prompts and no bypass. Record the prompts it did hit.
 
   Non-goals: no new authority for the advisor, no waiving gates, no generic shell deputy beyond the existing script-deputy contract.
-status: InProgress
+status: Approved
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-06T16:51:02.535818Z
-modified_at: 2026-11-08T08:41:33.513218217Z
+modified_at: 2026-11-08T09:47:18.953856909Z
 req_type: Story
 tags:
 - area:advisor
@@ -775,6 +775,15 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a1ba8e-2088-7793-b64d-276c867ce9cb
+  author: joe
+  timestamp: 2026-11-08T09:47:19.048656359Z
+  session_id: 01a1b8be-8170-7fb2-89ab-ecb4c6eee98c
+  harness_version: 2.1.319 (Claude Code)
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Approved
 execution_mode: drain
 filed_at:
   code_sha: 8dcb86ca85da4826cec197aeb85269210e910403
