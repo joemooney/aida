@@ -402,6 +402,37 @@ fn story2402_s5_recur_conditions_resurface_and_manual_routes() {
     );
     sweep(&backend, &[current], &Facts, Utc::now(), false, 14).unwrap();
     assert!(!backend.get_requirement(&row.id).unwrap().unwrap().deferred);
+    // Exercise every machine condition through the actual recurrence writer,
+    // not just the parser. Unknown forge/release observations must retain work;
+    // a later met condition must still be able to resurface the same finding.
+    // trace:STORY-2402 | ai:codex
+    for (trigger, canonical, retained) in [
+        ("pr:#42=MERGED", "pr:42=merged", true),
+        ("release:v0.17", "release:>=0.17", true),
+        ("spec:TASK-1=approved", "spec:TASK-1=approved", true),
+        ("spec:TASK-1=completed", "spec:TASK-1=completed", false),
+        (
+            "query:tag=ready count>=3",
+            "query:tag=ready count>=3",
+            false,
+        ),
+    ] {
+        crate::findings_gate::handle_findings_recur(&backend, &path, id, None, Some(trigger), None)
+            .unwrap();
+        let current = backend.get_requirement(&row.id).unwrap().unwrap();
+        assert_eq!(current.deferred_until.as_deref(), Some(canonical));
+        let recurrence =
+            crate::findings::finding_recurrence(&current.tags.iter().cloned().collect::<Vec<_>>());
+        sweep(&backend, &[current], &Facts, Utc::now(), false, 14).unwrap();
+        let current = backend.get_requirement(&row.id).unwrap().unwrap();
+        assert_eq!(current.deferred, retained, "{trigger}");
+        assert_eq!(
+            crate::findings::finding_recurrence(&current.tags.iter().cloned().collect::<Vec<_>>(),),
+            recurrence,
+            "sweeping {trigger} must preserve recurrence evidence",
+        );
+        assert!(backend.queue_list("role:human", true).unwrap().is_empty());
+    }
     let note = dir.path().join("handoff.txt");
     std::fs::write(&note, "Review the dependency after merge.").unwrap();
     let before = backend.get_requirement(&row.id).unwrap().unwrap();
