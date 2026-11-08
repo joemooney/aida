@@ -3735,19 +3735,21 @@ pub(crate) fn session_start_with_receipt(
             explicit_name
                 .or_else(|| session::derive_session_name(owns, &branch_name, &role_for_name))
         };
-        return session::new_session_for_vendor(
-            host_main.as_deref(),
-            launch_vendor,
-            Some(owns.to_string()),
-            launch_title,
-            launch_permission_mode,
-            // trace:TASK-2742 | ai:claude
-            codex_child_role.or(launch_role),
-            derived_name,
-            launch_contained,
-            launch_set_title,
-        )
-        .map(|_| SessionStartReceipt::existing(None));
+        return crate::agent_launch::dispatch_fresh_session(&id, || {
+            session::new_session_for_vendor(
+                host_main.as_deref(),
+                launch_vendor,
+                Some(owns.to_string()),
+                launch_title,
+                launch_permission_mode,
+                // trace:TASK-2742 | ai:claude
+                codex_child_role.or(launch_role),
+                derived_name,
+                launch_contained,
+                launch_set_title,
+            )
+            .map(|_| SessionStartReceipt::existing(None))
+        });
     }
 
     if std::env::var_os("AIDA_SUPPRESS_SESSION_NEXT").is_none() {

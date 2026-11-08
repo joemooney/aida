@@ -46,6 +46,7 @@
   "aida-cli-lib/src/regen/score.rs": 3,
   "aida-cli-lib/src/relay_mail.rs": 2,
   "aida-cli-lib/src/review_watch.rs": 3,
+  "aida-cli-lib/src/review_watch_forge.rs": 1,
   "aida-cli-lib/src/review_watch_ready.rs": 1,
   "aida-cli-lib/src/seat_occupancy/runtime.rs": 1,
   "aida-cli-lib/src/session_misc.rs": 1,
