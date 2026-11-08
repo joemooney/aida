@@ -8,7 +8,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-08T00:02:55.282155Z
-modified_at: 2026-11-08T15:18:29.361098021Z
+modified_at: 2026-11-08T15:23:16.504207535Z
 req_type: Bug
 relationships:
 - rel_type:
@@ -465,6 +465,25 @@ comments:
     Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
   created_at: 2026-11-08T15:14:54.254537Z
   modified_at: 2026-11-08T15:14:54.254537Z
+  session_id: 01a1b9af-8230-75d2-82f8-667491cc010a
+  harness_version: 2.1.319 (Claude Code)
+- id: 01a1bbc1-b429-7ba3-8f7a-8fd1d519c9e7
+  author: joe
+  content: |-
+    REVIEW FINDINGS TO ADDRESS (BUG-2490):
+    Verdict: CHANGES REQUESTED
+    Reviewed commit: db2883f23df2
+    Recorded: 2026-11-08T15:18:28.797062939+00:00
+    Findings:
+    1. [major][scope][advisor-action] Carried and re-verified at db2883f23df2. The operator scope on BUG-2490 (comment 2026-11-08T03:05Z: semantic store merge on pull, and a pull failure must stop store writes) is neither finished nor split: BUG-2490 links only STORY-2671 and no ruling is recorded. Open: (a) maybe_sync_pull still uses plain pull_rebase (aida-cli-lib/src/store_sync.rs:1719), so a same-spec conflict fails on --sync and burndown; (b) it prints 'Falling back to local view' (store_sync.rs:1768) and burndown discards the result with 'let _ =' (burndown_run.rs:367, 748), so a failed pull does not stop burndown's writes; (c) resolve_spec_conflict bails when one side deleted the file (aida-core/src/git_ops.rs:2661), and because the pre-pickup pull is now fatal (aida-cli-lib/src/queue_cmd.rs:12585) one such conflict stops every pickup without --no-pull. Another implementer round cannot clear this: the advisor must record the merge-policy ruling and either require (a)-(c) here or file a linked follow-up, then re-request review.
+    2. [major][ci][gate-state] CI run 42493761434 at db2883f23df2 is pending with no jobs started, and merge-hold-gate run 42493761405 is queued, when this verdict was recorded. No test named in this review has CI evidence at this head and no local cargo was run. Confirm green CI before any approval.
+    3. [minor][correctness][diagnostics] Carried, unfixed at db2883f23df2. aida-core/src/git_ops.rs:2256 uses e.context(format!("structured merge of `{path}` failed")). anyhow Display prints only the outermost context, and db sync (git_backend_cmd.rs Pull failed path) and aida pull (store_push_pull.rs store_pull_failure_hint call) both pass e.to_string(). After a successful abort the operator sees only 'structured merge of X failed' and loses the cause, for example 'one side deleted X; not auto-mergeable'. That is the sole diagnosis when the now-fatal pickup pull stops. merge_union_onto keeps the cause with anyhow!("...: {e}"). Fix: format the cause into the message the same way and assert the cause in a test; no test currently references the text.
+    4. [minor][correctness] New in this sweep; found by reading the source, not executed. With autoStash pinned false, git rebase refuses a dirty tracked store file. Retry loops call pull_rebase with no dirty-tree guard: aida-core/src/alias.rs:238, aida-core/src/advisor_goal.rs:138, aida-cli-lib/src/store_sync.rs:1313. They commit only their own path, so unrelated pending store changes (the state after an auto-commit refusal, or any concurrent writer) now make a retry fail with 'cannot rebase: You have unstaged changes' on hosts where the global autoStash previously carried them through. AC1 requires the pin, so the fix is to the callers: guard or commit pending changes before retrying, or decide explicitly that the refusal is acceptable and say so in its message.
+    5. [minor][test-coverage][AC1] No test pins AC1. bug_2490_autostash_conflict_refuses_store_commit (store_hook_tests.rs:1203) creates the autostash with raw git and -c merge.autoStash=true, so it proves the commit refusal, not the pin. Removing git_ops.rs:477-478 would pass every BUG-2490 test. Add a regression asserting host_git_hardening for a store tree carries both settings, or that a pull through git_ops over a dirty store with global autoStash=true creates no autostash.
+    6. [minor][perf] Carried, non-blocking: doctor_multi_agent loads the whole store through Storage::load, then store_object_findings reads and parses every object again (aida-cli-lib/src/doctor_cmd.rs:828-836). Doctor-only cost.
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
+  created_at: 2026-11-08T15:23:16.393174934Z
+  modified_at: 2026-11-08T15:23:16.393174934Z
   session_id: 01a1b9af-8230-75d2-82f8-667491cc010a
   harness_version: 2.1.319 (Claude Code)
 history:
