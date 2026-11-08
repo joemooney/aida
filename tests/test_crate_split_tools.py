@@ -22,6 +22,8 @@ def load(name):
 
 GLOB = load('check-crate-globs')
 MOVE = load('relocate-ledger-paths')
+PROC_IDENTITY = 'aida-cli-lib/src/tests/fixtures/proc_identity_legacy_baseline.json'
+VENDOR_LITERALS = 'aida-cli-lib/src/tests/story_2539_vendor_literals.tsv'
 
 
 class CrateSplitTools(unittest.TestCase):
@@ -41,6 +43,9 @@ class CrateSplitTools(unittest.TestCase):
         (root / 'scripts/exec-context-legacy.json').write_text(json.dumps({'sites': {'old.rs:f:var:abc': 2}}))
         (root / 'scripts/ownership-liveness-legacy.json').write_text(
             json.dumps({'old.rs:example:pid_is_alive': 2}))
+        (root / PROC_IDENTITY).parent.mkdir(parents=True)
+        (root / PROC_IDENTITY).write_text(json.dumps({'old.rs': 3, 'other.rs': 1}))
+        (root / VENDOR_LITERALS).write_text('old.rs|example|literal:codex\t2\n')
         if ledger:
             self.write_globs(root, {'old.rs': 2})
         self.git(root, 'add', '.')
@@ -153,12 +158,15 @@ class CrateSplitTools(unittest.TestCase):
             self.run_globs(root)
 
     def test_stale_path_in_each_ledger_refuses_before_any_write(self):
-        for ledger in ('portability-allowlist.txt', 'exec-context-legacy.json', 'crate-globs-legacy.json', 'ownership-liveness-legacy.json'):
+        for ledger in ('scripts/portability-allowlist.txt', 'scripts/exec-context-legacy.json',
+                       'scripts/crate-globs-legacy.json', 'scripts/ownership-liveness-legacy.json',
+                       PROC_IDENTITY, VENDOR_LITERALS):
             with self.subTest(ledger=ledger):
                 root = self.repository()
                 (root / 'old.rs').rename(root / 'new.rs')
-                before = {path: path.read_text() for path in (root / 'scripts').iterdir()}
-                stale = before[root / 'scripts' / ledger]
+                before = {path: path.read_text() for path in root.rglob('*')
+                          if path.is_file() and '.git' not in path.relative_to(root).parts}
+                stale = before[root / ledger]
                 rewrite = MOVE.rewrite
 
                 def incomplete_rewrite(text, *args):
@@ -194,12 +202,22 @@ class CrateSplitTools(unittest.TestCase):
             ownership = {'old.rs:example:pid_is_alive': 2, 'other.rs:f:lease_is_live': 1}
             ownership_path = root / 'scripts/ownership-liveness-legacy.json'
             ownership_path.write_text(json.dumps(ownership))
+            (root / PROC_IDENTITY).parent.mkdir(parents=True)
+            identity = {'old.rs': 3, 'other.rs': 1}
+            (root / PROC_IDENTITY).write_text(json.dumps(identity))
+            vendor = ('# old.rs|comment\nold.rs|example|literal:codex\t2\n'
+                      'old.rs|another|typed:Claude\t1\n'
+                      'other.rs|old.rs|literal:codex\t3\n'
+                      'old.rs.extra|example|literal:codex\t1\n')
+            (root / VENDOR_LITERALS).write_text(vendor)
             (root / 'old.rs').rename(root / 'new.rs')
             (root / 'new.rs').write_text('changed')
             with self.assertRaises(ValueError):
                 MOVE.relocate(root, 'old.rs', 'new.rs', 'HEAD')
             self.assertEqual(json.loads((root / 'scripts/exec-context-legacy.json').read_text()), evidence)
             self.assertEqual(json.loads(ownership_path.read_text()), ownership)
+            self.assertEqual(json.loads((root / PROC_IDENTITY).read_text()), identity)
+            self.assertEqual((root / VENDOR_LITERALS).read_text(), vendor)
             (root / 'new.rs').write_text('fn example() {}\n')
             MOVE.relocate(root, 'old.rs', 'new.rs', 'HEAD')
             self.assertEqual(json.loads((root / 'scripts/exec-context-legacy.json').read_text()), {'ceiling': 2, 'sites': {'new.rs:f:var:abc': 2}})
@@ -207,6 +225,13 @@ class CrateSplitTools(unittest.TestCase):
             self.assertEqual(json.loads((root / 'scripts/crate-globs-legacy.json').read_text()), {'new.rs': 1})
             self.assertEqual(json.loads(ownership_path.read_text()),
                              {'new.rs:example:pid_is_alive': 2, 'other.rs:f:lease_is_live': 1})
+            self.assertEqual(json.loads((root / PROC_IDENTITY).read_text()),
+                             {'new.rs': 3, 'other.rs': 1})
+            self.assertEqual((root / VENDOR_LITERALS).read_text(),
+                             '# old.rs|comment\nnew.rs|example|literal:codex\t2\n'
+                             'new.rs|another|typed:Claude\t1\n'
+                             'other.rs|old.rs|literal:codex\t3\n'
+                             'old.rs.extra|example|literal:codex\t1\n')
 
     def test_collision_refuses(self):
         with self.assertRaises(ValueError):

@@ -1,8 +1,3 @@
-Pure-move ledger relocation covers portability, ExecContext, crate-glob and
-ownership-liveness baselines. Config-trust, store-writer and Git-maintenance
-inventories need separate updates listed in the helper docstring. See OVERVIEW.md.
-<!-- trace:TASK-3428 | ai:codex -->
-
 Review-watch records retained fast-exiting children before reaping. Incomplete
 legacy receipts use the existing reboot/TTL backstop. Caller capture requires
 verified local procfs and fails closed with host-retry guidance. See OVERVIEW.md.

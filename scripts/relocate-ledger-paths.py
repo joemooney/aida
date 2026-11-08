@@ -5,7 +5,9 @@ Usage: relocate-ledger-paths.py OLD NEW [--base REF]. The old path must be
 absent and the destination must exactly match the committed old blob.
 Stage the move before running the glob ratchet so Git can detect its rename.
 Rewrites portability-allowlist.txt, exec-context-legacy.json,
-crate-globs-legacy.json and ownership-liveness-legacy.json under scripts/.
+crate-globs-legacy.json and ownership-liveness-legacy.json under scripts/,
+plus aida-cli-lib/src/tests/fixtures/proc_identity_legacy_baseline.json and
+aida-cli-lib/src/tests/story_2539_vendor_literals.tsv (path|item|token keys).
 Other path-keyed inventories require separate updates after a move:
 - scripts/config-trust.toml: manually rename [readers."OLD"] to [readers."NEW"],
   preserving channels and site counts; run bug_1723_config_trust_tests.
@@ -41,8 +43,14 @@ def rewrite(text, old, new, json_format=False):
         else:
             data = mapped
         return json.dumps(data, indent=2, sort_keys=True) + '\n'
-    return ''.join(line.replace('\t' + old + ':', '\t' + new + ':', 1) if not line.startswith('#') else line
-                   for line in text.splitlines(keepends=True))
+    lines = []
+    for line in text.splitlines(keepends=True):
+        if line.startswith(old + '|'):
+            line = new + line[len(old):]
+        elif not line.startswith('#'):
+            line = line.replace('\t' + old + ':', '\t' + new + ':', 1)
+        lines.append(line)
+    return ''.join(lines)
 
 
 def assert_relocated(text, old, json_format=False):
@@ -52,7 +60,7 @@ def assert_relocated(text, old, json_format=False):
         stale = any(key == old or key.startswith(old + ':')
                     for key in data.get('sites', data))
     else:
-        stale = any('\t' + old + ':' in line for line in text.splitlines()
+        stale = any(line.startswith(old + '|') or '\t' + old + ':' in line for line in text.splitlines()
                     if not line.startswith('#'))
     if stale:
         raise ValueError(f'stale path remains after relocation: {old}')
@@ -69,7 +77,10 @@ def relocate(root, old, new, base):
     if (root / old).exists() or (root / old).is_symlink() or (root / new).is_symlink() or (root / new).read_bytes() != blob:
         raise ValueError('relocation requires an absent source and byte-identical destination')
     updates = {}
-    for name in ('scripts/portability-allowlist.txt', 'scripts/exec-context-legacy.json', 'scripts/crate-globs-legacy.json', 'scripts/ownership-liveness-legacy.json'):
+    for name in ('scripts/portability-allowlist.txt', 'scripts/exec-context-legacy.json',
+                 'scripts/crate-globs-legacy.json', 'scripts/ownership-liveness-legacy.json',
+                 'aida-cli-lib/src/tests/fixtures/proc_identity_legacy_baseline.json',
+                 'aida-cli-lib/src/tests/story_2539_vendor_literals.tsv'):
         path = root / name
         updates[path] = rewrite(path.read_text(), old, new, path.suffix == '.json')
         # Validate every result before publishing any ledger update.
