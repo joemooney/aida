@@ -23,7 +23,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-07T19:59:26.079479533Z
-modified_at: 2026-11-08T05:50:50.331494725Z
+modified_at: 2026-11-08T05:51:00.691526212Z
 req_type: Story
 comments:
 - id: 01a1b798-f0d4-73b1-93d5-f84581f2d190
@@ -93,6 +93,22 @@ comments:
   content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: Round-1 findings 1 and 3 fixed with tests; AC0/AC2/AC3/AC4 met. AC1 (measured sccache hits from two consecutive lane jobs on primary and dell1) still has no evidence, and the implementer says so; CI at head still pending.. It was punted on: blocked-dependency: Round 2 finding 2 remains open: AC1 requires measured cache hits from two consecutive lane Cargo jobs on both primary and dell1; this seat has only a real local cross-server persistence smoke (second server: 1 Rust hit), not the required two-host lane evidence. Targeted resource-env test timed out before execution at 900s and reported overlay-stale (primary rewrote agent-9300e3b2a1667f94); the session runner reuses that overlay. Host must prepare a fresh target/runner, rerun the targeted Rust tests and collect both-host lane statistics, or obtain an advisor amendment. Findings 1 and 3, server drain/statistics and the CI config inventory fix are left uncommitted; make check-ci-fast passes all 43 gates. Preserve the publication veto and existing merge hold.. No triage reason was given.'
   created_at: 2026-11-08T05:50:50.331492916Z
   modified_at: 2026-11-08T05:50:50.331492916Z
+  session_id: 01a1b9af-8230-75d2-82f8-667491cc010a
+  harness_version: 2.1.319 (Claude Code)
+- id: 01a1b9b5-ba36-76a0-bcac-b82f58b673ff
+  author: joe
+  content: |-
+    REVIEW FINDINGS TO ADDRESS (PR #3657):
+    Verdict: CHANGES REQUESTED
+    Reviewed commit: dd487ec4d721
+    Recorded: 2026-11-08T05:42:31.180206515+00:00
+    Findings:
+    1. major/acceptance: AC1 is unverified. The spec needs a second lane job on the same dependency set to show sccache hits (stats delta > 0) on the primary AND on dell1. Spec comment 4 says AC1 is open: the only evidence is a direct rustc smoke run on host imac, not two lane cargo jobs. Fix: on each host, run two consecutive 'aida lane' cargo jobs with the revised launcher and record the 'lane sccache: final job statistics' output from both job logs (second job Rust hits > 0) on STORY-2641. Or get an advisor amendment of AC1 recorded on the spec. Needs host/operator action; a contained seat cannot produce it.
+    2. minor/docs: AGENTS.md:1-5 adds a per-change status paragraph ('Missing recorded cargo targets no longer block agent launches. Two-host cache-hit acceptance remains outstanding.'), and OVERVIEW.md:1836-1838 ends with 'AC1 still requires measured hits...'. The repo CLAUDE.md says per-change notes belong in the PR body and an aida comment, not in AGENTS.md/OVERVIEW.md (each prepend conflicts with every open PR). Status lines like 'remains outstanding' will go stale at merge. Fix: drop the AGENTS.md paragraph (or reduce it to a durable one-line design pointer) and remove the AC1 status sentence from OVERVIEW.md, keeping only the lane-cache design description.
+    3. cosmetic/correctness: launch/resources.rs:84-85 for_seat's 'host.ok_or_else(... pinned host root)' cannot be reached: recorded_clone_for(None, _) already returns None (seat_clone.rs:969), so host is always Some at that point. Fix: bind host once (let Some(host) = host else { return Ok(None) }) and pass it to host_recorded_clone directly.
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
+  created_at: 2026-11-08T05:50:57.078501709Z
+  modified_at: 2026-11-08T05:50:57.078501709Z
   session_id: 01a1b9af-8230-75d2-82f8-667491cc010a
   harness_version: 2.1.319 (Claude Code)
 history:
