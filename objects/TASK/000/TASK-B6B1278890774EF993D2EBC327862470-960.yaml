@@ -8,7 +8,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-07T23:39:41.575597Z
-modified_at: 2026-11-08T09:16:33.983160915Z
+modified_at: 2026-11-08T09:17:10.410338395Z
 req_type: Task
 relationships:
 - rel_type: Child
@@ -390,6 +390,11 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a1ba72-87d4-7ea0-9f8d-9ebd588e5523
+  author: joe
+  timestamp: 2026-11-08T09:17:10.484186582Z
+  session_id: 01a1ba71ed90
+  changes: []
 test_coverage_notes: Four Python unittest fixtures passed; repository glob ratchet with --base HEAD passed (220 imports); CI gate classification audit passed (81 classified); git diff --check passed. make check-ci-fast interrupted after discovering its fast-classified no-default-features gate directly invokes Cargo contrary to this native lane runner-only rule; full fast suite unvalidated. No Rust source changes.
 implementation_summary: 'First split slice prepared: root crate glob baseline and CI/fast gate; byte-identical path-ledger relocation helper for portability, ExecContext and glob ledgers. Refs publication declared. Explicit-import migration and lib_part1..6 module extraction remain outstanding.'
 filed_at:
