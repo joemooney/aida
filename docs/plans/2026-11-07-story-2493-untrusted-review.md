@@ -76,11 +76,21 @@ if scoped remote attestation is unsuitable.
    that obligation; open or unprocessed findings cannot use this exception.
    No same-head successor for A is required to review B. If B retains the old
    digest without a valid disposition, its unresolved status still blocks B.
-   To release a false positive or superseded finding, require a new authenticated
-   verdict for the same PR and exact head from the authorized independent
-   reviewer, explicitly superseding the previous verdict and omitting that
-   digest. Retain both verdicts and the home dismissal/replacement audit trail;
-   neither a receipt rewrite nor dismissal alone releases the blocker.
+   For the same-head case, require a new authenticated verdict for the same PR
+   and exact head from the authorized independent reviewer, explicitly binding
+   and superseding the previous verdict and dispositioning the omitted digest.
+   Home must verify that the finding is currently `Rejected` or `Superseded`
+   with the corresponding dismissal/replacement audit evidence. A same-head
+   successor cannot release an open or unprocessed digest by omission or by
+   claiming a false-positive disposition. Retain both verdicts and the home
+   audit trail; neither a receipt rewrite nor dismissal alone releases a blocker.
+   For both same-head and moved-head dispositions of `Superseded` findings,
+   require every replacement to resolve through authenticated home mappings to
+   a current `Done` or `Completed` finding before releasing the obligation.
+   Missing, conflicting, cyclic or unresolved replacement evidence blocks;
+   an open replacement cannot be bypassed by omitting either digest. Retain the
+   replacement bindings and recheck their current statuses on every gate entry,
+   so reopening a replacement blocks again.
 7. Preserve current merge holds, reviewer independence and refusal precedence.
    Do not silently upgrade these envelopes into trusted host publications.
    Define replay, key revocation and authenticated verdict supersession in the
@@ -109,7 +119,12 @@ actual generation, publish, quarantine pull, home processing and gate entry
 points. Cover approved exact-head review; request-changes with a blocking digest;
 verdict arriving first; digest-to-origin-ID retry recovery; open/closed/reopened
 findings; dismissed (`Rejected`) and `Superseded` findings remaining blocked;
-authenticated same-head supersession releasing a false positive; replayed,
+authenticated same-head supersession releasing a false positive with current
+`Rejected` status and home dismissal evidence; a same-head successor omitting
+an open or unprocessed digest still blocking, including an attempted false-positive
+disposition; superseded findings with open replacements blocking under both
+same-head and moved-head dispositions, resolved replacements permitting release,
+and missing/cyclic replacement mappings or reopened replacements blocking; replayed,
 forked and concurrent successors;
 head A with a rejected blocking finding followed by head B (no review blocks,
 omission alone blocks, an authenticated B disposition with home dismissal evidence
