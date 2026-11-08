@@ -242,6 +242,14 @@ exit 0
 }
 
 fn write_lease(project: &std::path::Path, id: &str, spec: &str) -> SessionLease {
+    // trace:STORY-2325 | ai:codex — rotation observes its ownership record.
+    assert!(crate::test_git::git_command()
+        .args(["init", "-q", "-b", "main"])
+        .arg(project)
+        .status()
+        .unwrap()
+        .success());
+    crate::ownership::dual::enable_for_test();
     std::fs::create_dir_all(leases_dir(project)).unwrap();
     let lease: SessionLease = serde_json::from_value(serde_json::json!({
         "id": id, "scope": spec, "slug": "rotation",
@@ -270,7 +278,11 @@ fn lease_claim_and_worktree_survive_a_relaunch_and_the_lease_is_live_in_the_gap(
 exit 0
 "#,
     );
-    let before = write_lease(&fx.project, "rot-lease-1", "STORY-ROT-1");
+    let before = write_lease(
+        &fx.project,
+        "rot-lease-1",
+        "00000000-0000-0000-0000-000000000101",
+    );
     let project = fx.project.clone();
     let mut gap_states = Vec::new();
     let mut probe = |next: u64| {
