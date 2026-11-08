@@ -15,7 +15,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-05T01:34:25.744534100Z
-modified_at: 2026-11-07T00:37:21.569604753Z
+modified_at: 2026-11-08T18:37:54.635935534Z
 req_type: Bug
 tags:
 - area:containment
@@ -120,6 +120,13 @@ comments:
   created_at: 2026-11-07T00:37:21.569604753Z
   modified_at: 2026-11-07T00:37:21.569604753Z
   session_id: 01a1b358-7de9-72a0-b4a1-1a909992fa05
+  harness_version: 2.1.319 (Claude Code)
+- id: 01a1bc73-e64b-7600-a108-a40c533a1875
+  author: joe
+  content: 'Conformance run 2026-11-08 11:35 MST (~/.aida/conformance-codex-aida-1794162936), codex-cli 0.167.0, ChatGPT auth, turn completed: no host IPC violations; terminal unix probe got EACCES. C4 unknown pending production lifecycle checks in the integrated adapter.'
+  created_at: 2026-11-08T18:37:54.635935534Z
+  modified_at: 2026-11-08T18:37:54.635935534Z
+  session_id: 01a1bbab-762f-7cd2-8a36-4ea9f209afce
   harness_version: 2.1.319 (Claude Code)
 history:
 - id: 01a1a957-eade-7d82-a591-cd58b2226672
