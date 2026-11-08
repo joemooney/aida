@@ -3,12 +3,12 @@ spec_id: TASK-b6b1278890774ef993d2ebc327862470-960
 agreed_id: TASK-3428
 title: 'Crate-split PR4: explicit imports instead of use crate::* in non-in-flight files, a glob-import ratchet, dissolve lib_part1..6.rs, and relocate-ledger-paths.py'
 description: 'Per SPIKE-713 deep dive section 7 row 4 and advisor rulings 3 and 8 (2026-11-07). Acceptance: (1) replace use crate::*; with explicit imports in every file not owned by an in-flight spec (section 7 list; about 85 of 104), no behavior change; (2) a ratchet (same shape as scripts/check-exec-context.py) forbids new glob crate imports, wired into make check-ci-fast and CI gates; (3) lib_part1..6.rs (lib.rs:772-777) dissolved into real modules, closing the TASK-1538 condition; (4) scripts/relocate-ledger-paths.py rewrites path-keyed ledgers (including scripts/portability-allowlist.txt and exec-context-legacy.json) for pure moves, with a test; (5) make check-ci-fast green. Split into two PRs if over ~40 files.'
-status: Approved
+status: InProgress
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-07T23:39:41.575597Z
-modified_at: 2026-11-08T09:14:02.173255549Z
+modified_at: 2026-11-08T09:16:33.983160915Z
 req_type: Task
 relationships:
 - rel_type: Child
@@ -383,6 +383,13 @@ history:
   - field_name: status
     old_value: NeedsAttention
     new_value: Approved
+- id: 01a1ba71-f93f-7712-9711-c35e98bb625f
+  author: aida-session-start
+  timestamp: 2026-11-08T09:16:33.983155720Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: InProgress
 test_coverage_notes: Four Python unittest fixtures passed; repository glob ratchet with --base HEAD passed (220 imports); CI gate classification audit passed (81 classified); git diff --check passed. make check-ci-fast interrupted after discovering its fast-classified no-default-features gate directly invokes Cargo contrary to this native lane runner-only rule; full fast suite unvalidated. No Rust source changes.
 implementation_summary: 'First split slice prepared: root crate glob baseline and CI/fast gate; byte-identical path-ledger relocation helper for portability, ExecContext and glob ledgers. Refs publication declared. Explicit-import migration and lib_part1..6 module extraction remain outstanding.'
 filed_at:
