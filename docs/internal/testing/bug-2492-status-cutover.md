@@ -53,6 +53,20 @@ job is named `publish-merge-hold-status`, never `merge-hold-gate`.
    same Actions-app status; this pre-existing trust limit requires review of
    workflow changes and is not closed by this cutover.
 
+## Bootstrap cancellation and notification checks
+
+While both triggers exist, capture all runs for a burst of hold-label events
+and for both label changes during clearance. Record event, head SHA, run/job
+conclusion and the rows returned by `gh pr checks`. The shared concurrency
+group serializes execution but GitHub may cancel a waiting run when another
+arrives, even with `cancel-in-progress: false`. Verify that a surviving publisher
+finishes with the current label state, and inspect whether cancelled publisher
+rows remain visible to AIDA as blocking CI. Capture operator notification
+observations for cancelled as well as held successful runs. If a cancelled row
+blocks shipping or produces unwanted failure mail, stop cutover and record the
+outputs for a reviewed correction; do not classify all publisher failures as
+informational or bypass protection.
+
 ## Legacy checks and statuses with the same name
 
 GitHub documents that a required name shared by a check run and a commit status

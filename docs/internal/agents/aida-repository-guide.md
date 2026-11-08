@@ -254,13 +254,16 @@ not add push triggers for `train/*` branches.
 
 The merge-hold gate retains its `synchronize`, `labeled`, `unlabeled`, and
 `edited` triggers as well as `opened` and `reopened`. Label/body events share
-the PR group rather than competing in separate groups, and the replacement
-still reports the required `merge-hold-gate` job. After a cancellation, verify
-that the current PR head has a completed gate; a cancelled run is not clearance.
-[GitHub concurrency](https://docs.github.com/en/actions/how-tos/write-workflows/choose-when-workflows-run/control-workflow-concurrency)
-does not guarantee dispatch order within a PR group, so an out-of-order label
-event can replace newer event evidence. Inspect the latest head and rerun its
-gate if necessary.
+the PR group rather than competing in separate groups. The serialized publisher
+reads live PR metadata and writes the required `merge-hold-gate` commit status;
+its job is named `publish-merge-hold-status`. Dispatch order is not guaranteed,
+but an old event reads current labels rather than replaying its event snapshot.
+`cancel-in-progress: false` preserves a running publisher; GitHub may still
+cancel an older waiting run when replacing its pending slot. A cancelled run is
+not clearance: verify the current head's required status and the surviving
+publisher. During the temporary dual-trigger bootstrap, follow the cancellation
+and notification checks in the cutover runbook.
+<!-- trace:BUG-2492 | ai:codex -->
 <!-- trace:TASK-3267 | ai:codex -->
 
 **Cross-worktree cargo cache gotcha** (TASK-0396): cargo's `target/.fingerprint/` references absolute paths from the build that produced each artifact. If `aida session end` removes a worktree, subsequent `cargo build` from a sibling worktree can fail with errors pointing at the deleted worktree's paths. Recovery: `cargo clean -p <crate>` for the affected workspace members, or `cargo clean` for a full reset. See `docs/advanced/session-lifecycle.md` for the full recipe.

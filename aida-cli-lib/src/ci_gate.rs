@@ -315,8 +315,8 @@ fn classify_live_rows(
             .iter()
             .any(|r| r.is_pending() && check_name_eq(&r.name, HOLD_GATE_CHECK));
     let recorded = if needs_labels {
-        let (recorded, cleared) = forge.recorded_hold_labels(project_root, change)?;
-        recorded && !cleared
+        let (active, recorded, cleared) = forge.recorded_hold_labels(project_root, change)?;
+        active || (recorded && !cleared)
     } else {
         false
     };
@@ -637,7 +637,7 @@ mod tests {
                 required: vec![],
                 row_reads: std::cell::Cell::new(0),
                 registration_polls: std::cell::Cell::new(0),
-                labels: (false, false),
+                labels: (false, false, false),
             };
             let root = tempfile::tempdir().unwrap();
             let start = Instant::now();
@@ -671,7 +671,7 @@ mod tests {
                 required: vec![],
                 row_reads: std::cell::Cell::new(0),
                 registration_polls: std::cell::Cell::new(0),
-                labels: (false, false),
+                labels: (false, false, false),
             };
             let result = wait_for_ship_ci(
                 root.path(),
@@ -792,7 +792,7 @@ mod tests {
             required: vec![],
             row_reads: std::cell::Cell::new(0),
             registration_polls: std::cell::Cell::new(0),
-            labels: (false, false),
+            labels: (false, false, false),
         };
         let mut forwarded = None;
         let result = crate::pr_cmd::ship_ci_handoff(
@@ -872,7 +872,7 @@ mod tests {
                 required: req(&[HOLD_GATE_CHECK]),
                 row_reads: std::cell::Cell::new(0),
                 registration_polls: std::cell::Cell::new(0),
-                labels: (recorded, cleared),
+                labels: (false, recorded, cleared),
             };
             let error = wait_for_ship_ci(
                 root.path(),
@@ -927,7 +927,7 @@ mod tests {
             required: req(&[HOLD_GATE_CHECK]),
             row_reads: std::cell::Cell::new(0),
             registration_polls: std::cell::Cell::new(0),
-            labels: (false, false),
+            labels: (false, false, false),
         };
         let error = crate::upgrade_release::wait_after_pr_ci(
             root.path(),
@@ -937,6 +937,32 @@ mod tests {
         )
         .unwrap_err();
         assert_eq!(crate::exit_code_for_error(&error), 21);
+        assert_eq!(forge.row_reads.get(), 1);
+    }
+
+    // trace:BUG-2492 | ai:codex
+    #[test]
+    fn bug2492_release_after_pr_active_only_hold_refuses_without_wait() {
+        let root = tempfile::tempdir().unwrap();
+        let forge = FakeForge {
+            registrations: std::cell::RefCell::new(vec![
+                crate::forge::CheckRegistration::Registered,
+            ]),
+            rows: Some(vec![row(HOLD_GATE_CHECK, "", "pending")]),
+            required: req(&[HOLD_GATE_CHECK]),
+            row_reads: std::cell::Cell::new(0),
+            registration_polls: std::cell::Cell::new(0),
+            labels: (true, false, false),
+        };
+        // A zero budget distinguishes an immediate hold refusal from timeout.
+        let error = crate::upgrade_release::wait_after_pr_ci(
+            root.path(),
+            &forge,
+            &change(),
+            Duration::ZERO,
+        )
+        .unwrap_err();
+        assert_eq!(crate::exit_code_for_error(&error), 20);
         assert_eq!(forge.row_reads.get(), 1);
     }
 
@@ -958,7 +984,7 @@ mod tests {
                 required: req(&[HOLD_GATE_CHECK]),
                 row_reads: std::cell::Cell::new(0),
                 registration_polls: std::cell::Cell::new(0),
-                labels: (false, false),
+                labels: (false, false, false),
             };
             let result = wait_for_ship_ci(
                 root.path(),
@@ -1160,14 +1186,14 @@ mod tests {
         required: Vec<String>,
         row_reads: std::cell::Cell<usize>,
         registration_polls: std::cell::Cell<usize>,
-        labels: (bool, bool),
+        labels: (bool, bool, bool),
     }
     impl crate::forge::Forge for FakeForge {
         fn recorded_hold_labels(
             &self,
             _: &Path,
             _: &crate::forge::ChangeRef,
-        ) -> anyhow::Result<(bool, bool)> {
+        ) -> anyhow::Result<(bool, bool, bool)> {
             Ok(self.labels)
         }
 
@@ -1303,7 +1329,7 @@ mod tests {
             required: vec![HOLD_GATE_CHECK.into()],
             row_reads: std::cell::Cell::new(0),
             registration_polls: std::cell::Cell::new(0),
-            labels: (false, false),
+            labels: (false, false, false),
         }
     }
 

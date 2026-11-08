@@ -114,10 +114,7 @@ export STATUS_LOG="$work/statuses"
 
 # Fixture evidence only: live merge enforcement, label-event scheduling and mail
 # observation still require the operator cutover procedure.
-# trace:BUG-b6b1278890774ef993d2ebc327862470-257.ac798dd7 | ai:codex
-# trace:BUG-b6b1278890774ef993d2ebc327862470-257.accb2afb | ai:codex
 # trace:BUG-b6b1278890774ef993d2ebc327862470-257.ac4be33b | ai:codex
-# trace:BUG-b6b1278890774ef993d2ebc327862470-257.ac4d9581 | ai:codex
 # trace:BUG-b6b1278890774ef993d2ebc327862470-257.ac24a24e | ai:codex
 # Pending holds succeed as Actions jobs but continue to block required status.
 # Translate the final commit status into the existing pass/block fixture result.
