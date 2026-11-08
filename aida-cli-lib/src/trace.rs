@@ -33,7 +33,13 @@ pub(crate) fn parse_trace_id_token(line: &str) -> Option<String> {
             .find(|c: char| !(c.is_ascii_alphanumeric() || c == '-' || c == '_'))
             .unwrap_or(suffix_rest.len());
         let suffix = &suffix_rest[..suffix_end];
-        if criterion_trace_suffix(suffix) {
+        // A dotted filename must not become a truncated criterion label.
+        // trace:STORY-1486 | ai:codex
+        if !suffix_rest[suffix_end..]
+            .strip_prefix('.')
+            .is_some_and(|tail| tail.starts_with(|c: char| c.is_ascii_alphanumeric()))
+            && criterion_trace_suffix(suffix)
+        {
             return Some(format!("{spec}.{suffix}").to_ascii_uppercase());
         }
     }
