@@ -8023,6 +8023,18 @@ pub(crate) fn needs_attention_parks(store: &aida_core::RequirementsStore) -> Vec
     parks
 }
 
+/// Only a reviewer shelf can complete the repeated-review loop. A punt or CI
+/// pause may retain the same imported review while an advisor resolves a new
+/// obstacle; replaying that receipt must not undo the triage decision.
+// trace:BUG-2502 | ai:codex
+pub(crate) fn rework_is_review_shelf(req: &Requirement) -> bool {
+    req.status == RequirementStatus::NeedsAttention
+        && req.attention_reason.is_none()
+        && req.failure_reason.as_ref().is_some_and(|failure| {
+            failure.phase == "reviewer" && failure.kind == "verdict:request-changes"
+        })
+}
+
 /// The BUG-1213 loop guard's write: return the spec to NeedsAttention after
 /// identical review findings recurred.
 ///
@@ -8537,7 +8549,7 @@ pub(crate) fn handle_queue_rework(
             })?;
             if !recurred {
                 println!("  {} review findings captured as comment", "·".dimmed());
-            } else if current_status == RequirementStatus::NeedsAttention {
+            } else if rework_is_review_shelf(req) {
                 // BUG-1213: the same blocking findings produced two consecutive
                 // request-changes shelves. A third blind requeue is a loop, so
                 // return the spec to NeedsAttention and route an explicit

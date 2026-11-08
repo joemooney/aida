@@ -2025,3 +2025,87 @@ fn rework_ruling_is_recorded_as_a_tagged_spec_comment() {
     assert_eq!(ruling.content, "Advisor ruling: widen to the test");
     assert!(crate::queue_cmd::record_rework_ruling(&storage, "BUG-021", "  ").is_err());
 }
+
+// trace:BUG-2502 | ai:codex
+#[test]
+fn bug_2502_rework_of_punt_retains_approval_with_imported_review() {
+    bug_2502_rework_with_imported_review(true);
+}
+
+// trace:BUG-2502 | ai:codex
+#[test]
+fn bug_2502_rework_of_ci_shelf_retains_approval_with_imported_review() {
+    bug_2502_rework_with_imported_review(false);
+}
+
+// trace:BUG-2502 | ai:codex
+fn bug_2502_rework_with_imported_review(punted: bool) {
+    let (tmp, storage) = story_1429_fixture(vec![parked("BUG-2502")]);
+    let _seat = crate::test_env::AmbientGuard::hermetic_with_seat(tmp.path(), "advisor", &[]);
+    let verdicts = tmp.path().join(".aida/review-verdicts");
+    std::fs::create_dir_all(&verdicts).unwrap();
+    std::fs::write(
+        verdicts.join("BUG-2502.json"),
+        r#"{"verdict":"RequestChanges","summary":"fix A","findings":["fix A"]}"#,
+    )
+    .unwrap();
+    let block = resolve_rework_findings(tmp.path(), "BUG-2502", "BUG-2502", None)
+        .unwrap()
+        .expect("fixture review is selected");
+    storage
+        .update_atomically(|store| {
+            let req = store
+                .requirements
+                .iter_mut()
+                .find(|r| r.spec_id.as_deref() == Some("BUG-2502"))
+                .unwrap();
+            req.add_comment(aida_core::Comment::new("reviewer".into(), block));
+            if punted {
+                // A punt may coexist with a retained reviewer failure marker.
+                let failure = req.failure_reason.as_mut().unwrap();
+                failure.phase = "reviewer".into();
+                failure.kind = "verdict:request-changes".into();
+                req.attention_reason = Some(aida_core::AttentionReason {
+                    category: aida_core::PuntCategory::BlockedDependency,
+                    detail: "advisor decision required".into(),
+                    lean: None,
+                    raised_by: None,
+                    raised_at: chrono::Utc::now(),
+                });
+            }
+        })
+        .unwrap();
+    rework_as(&storage, "BUG-2502", None, false).unwrap();
+    assert_eq!(status_of(&storage, "BUG-2502"), RequirementStatus::Approved);
+    assert_eq!(storage.queue_list("codex", true).unwrap().len(), 1);
+    let store = storage.load().unwrap();
+    let req = store.get_requirement_by_spec_id("BUG-2502").unwrap();
+    assert!(req.attention_reason.is_none());
+    assert!(req.failure_reason.is_none());
+    assert_eq!(
+        req.comments
+            .iter()
+            .filter(|c| crate::review_verdict_display::is_findings_block(&c.content))
+            .count(),
+        1
+    );
+}
+
+// trace:BUG-2502 | ai:codex
+#[test]
+fn bug_2502_loop_guard_requires_a_reviewer_request_changes_shelf() {
+    let mut req = parked("BUG-2502");
+    assert!(
+        !rework_is_review_shelf(&req),
+        "CI failures are not repeat reviews"
+    );
+    let failure = req.failure_reason.as_mut().unwrap();
+    failure.phase = "reviewer".into();
+    failure.kind = "verdict:request-changes".into();
+    assert!(
+        rework_is_review_shelf(&req),
+        "retain the repeated review guard"
+    );
+    req.status = RequirementStatus::Approved;
+    assert!(!rework_is_review_shelf(&req));
+}
