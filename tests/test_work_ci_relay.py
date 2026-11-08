@@ -467,7 +467,7 @@ class WorkCiTests(unittest.TestCase):
         log = f.root / "fetches"
         real_git = shutil.which("git")
         wrapper = shim / "git"
-        wrapper.write_text(f"#!/usr/bin/python3\nimport os,sys\nif 'fetch' in sys.argv: open({str(log)!r},'a').write(sys.argv[-1]+'\\n')\nos.execv({real_git!r},[{real_git!r},*sys.argv[1:]])\n")
+        wrapper.write_text(f"#!/usr/bin/python3\nimport os,sys\nif 'fetch' in sys.argv: open({str(log)!r},'a').write(sys.argv[-1]+'\\n')\nif 'ls-remote' in sys.argv and 'refs/aida/ci/*' in sys.argv: open({str(log)!r},'a').write('ls-remote\\n')\nos.execv({real_git!r},[{real_git!r},*sys.argv[1:]])\n")
         wrapper.chmod(0o700)
         f.env["PATH"] = str(shim) + os.pathsep + f.env["PATH"]
 
@@ -536,17 +536,37 @@ class WorkCiTests(unittest.TestCase):
         marker.chmod(0o600)
         self.assertEqual(source_fetches(), [shas[total], shas[total]])
         log.write_text("")
+        # A broken display cache must not block pull, read, or publication.
+        # trace:TASK-3452 | ai:codex
+        cache = f.private(fresh) / "ci-skipped-results.json"
+        saved_cache = cache.read_bytes()
+        cache.unlink()
+        cache.mkdir()
+        broken_pull = f.cli(fresh, "pull")
+        self.assertIn("display cache", broken_pull.stderr)
+        broken_process = f.cli(fresh, "ci", "process", "--json")
+        self.assertEqual(json.loads(broken_process.stdout)["skipped"], reported["skipped"])
+        marker.unlink()
+        published = f.cli(fresh, "ci", "process", "--json")
+        self.assertIn("native status published", json.loads(published.stdout)["message"])
+        self.assertEqual(len(f.statuses), 1)
+        f.statuses.clear()
         # Exact read revalidates only this old identity and persists its proof.
         old_attempt = 3 if warm else 1
         rows = json.loads(f.cli(fresh, "ci", "read", "--attempt", str(old_attempt), "--sha", shas[old_attempt], "--json").stdout)
         self.assertEqual([row["verification"] for row in rows], ["verified"])
-        cached = [row for index in range(json.loads((f.private(fresh) / "ci-skipped-results.json").read_text()))
+        self.assertEqual(source_fetches(), [shas[total], shas[old_attempt]])
+        cache.rmdir()
+        cache.write_bytes(saved_cache)
+        cache.chmod(0o600)
+        f.cli(fresh, "pull")
+        cached = [row for index in range(json.loads(cache.read_text()))
                   for row in json.loads((f.private(fresh) / f"ci-skipped-results-{index}.json").read_text())]
         self.assertNotIn(old_attempt, [row["attempt"] for row in cached])
-        self.assertEqual(source_fetches(), [shas[old_attempt]])
         log.write_text("")
         f.cli(fresh, "ci", "read", "--attempt", str(old_attempt), "--sha", shas[old_attempt])
         self.assertFalse(source_fetches())
+        self.assertEqual(log.read_text().splitlines().count("ls-remote"), 1)
         # Published old results must stay quiet after a cold validator pass.
         # trace:TASK-3452 | ai:codex
         marker = f.private(fresh) / "ci-status-1.json"
@@ -568,6 +588,19 @@ class WorkCiTests(unittest.TestCase):
         self.assertFalse(source_fetches())
         self.assertFalse(f.statuses)
         if total == 33:
+            # Work cannot act on Home status alarms; clear stale display rows.
+            # trace:TASK-3452 | ai:codex
+            work = f.clone("work-history", "work")
+            work_cache = f.private(work) / "ci-skipped-results.json"
+            work_cache.write_text("1")
+            work_cache.chmod(0o600)
+            part = f.private(work) / "ci-skipped-results-0.json"
+            part.write_text(json.dumps(reported["skipped"]))
+            part.chmod(0o600)
+            f.cli(work, "pull")
+            self.assertEqual(json.loads(work_cache.read_text()), 0)
+            self.assertFalse(part.exists())
+            self.assertFalse(f.statuses)
             return
         refused = f.cli(fresh, "ci", "read", "--attempt", "2", "--sha", shas[2], ok=False)
         self.assertNotEqual(refused.returncode, 0)

@@ -837,6 +837,7 @@ pub(super) fn record_skipped(
     files: &BTreeMap<String, Vec<u8>>,
     requests: &BTreeMap<u32, String>,
 ) -> Result<Vec<SkippedAttempt>> {
+    let home = profile(intake)?.role == "home";
     let mut latest = BTreeMap::new();
     for (n, sha) in requests {
         latest.insert(sha, n);
@@ -850,7 +851,7 @@ pub(super) fn record_skipped(
         // A validator upgrade can drop verification proof without undoing a
         // completed native publication. Such rows need no operator action.
         // trace:TASK-3452 | ai:codex
-        if !intake.ci_verified(path) && latest.get(&r.sha) == Some(&&r.attempt) {
+        if home && !intake.ci_verified(path) && latest.get(&r.sha) == Some(&&r.attempt) {
             let published = intake
                 .private
                 .read(&format!("ci-status-{}.json", r.attempt))?;
@@ -868,8 +869,16 @@ pub(super) fn record_skipped(
             });
         }
     }
-    // Keep each display-cache file below Private's 64-KiB bound even
-    // when a long retained history has many distinct pending SHAs.
+    // Display persistence must never gate intake or status publication.
+    // trace:TASK-3452 | ai:codex
+    if let Err(error) = cache_skipped(intake, &skipped) {
+        eprintln!("warning: could not refresh CI skipped-result display cache: {error}");
+    }
+    Ok(skipped)
+}
+
+fn cache_skipped(intake: &Intake, skipped: &[SkippedAttempt]) -> Result<()> {
+    // Keep each file below Private's 64-KiB bound.
     let old_parts: usize = intake
         .private
         .read(SKIPPED)?
@@ -890,7 +899,7 @@ pub(super) fn record_skipped(
             .private
             .remove(&format!("ci-skipped-results-{index}.json"))?;
     }
-    Ok(skipped)
+    Ok(())
 }
 
 pub(crate) fn awaiting_skipped(root: &Path) -> Vec<SkippedAttempt> {
@@ -898,6 +907,14 @@ pub(crate) fn awaiting_skipped(root: &Path) -> Vec<SkippedAttempt> {
         let path = aida_core::allocation_authority::common_dir(root)?
             .join("aida-intake")
             .join(SKIPPED);
+        // Work clones cannot publish Home statuses, even with a stale cache.
+        // trace:TASK-3452 | ai:codex
+        let config =
+            crate::observation_envelope::read_bounded(&path.with_file_name(CONFIG), 65536)?;
+        let config: Value = serde_json::from_slice(&config)?;
+        if config["role"].as_str() != Some("home") {
+            return Ok(Vec::new());
+        }
         let bytes = crate::observation_envelope::read_bounded(&path, 65536)?;
         let parts: usize = serde_json::from_slice(&bytes)?;
         let mut rows = Vec::new();
@@ -1137,9 +1154,10 @@ pub(crate) fn run(intake: &Intake, command: &CiCommand, json_format: bool) -> Re
                 let bytes = files
                     .get(path)
                     .context("No result for requested attempt/SHA")?;
-                intake.verify_ci_read(path, bytes)?;
-                let snapshot = Snapshot::load(intake)?;
-                record_skipped(intake, &files, &snapshot.requests)?;
+                if !intake.ci_verified(path) {
+                    intake.verify_ci_read(path, bytes)?;
+                    intake.refresh_ci_skipped(&files);
+                }
             }
             let rows: Vec<_> = files.iter().filter(|(path, _)| path.starts_with("ci-results/")
                 && requested.as_ref().is_none_or(|p| p == *path))
@@ -1212,6 +1230,7 @@ mod tests {
             .unwrap()
             .join("aida-intake");
         fs::create_dir_all(&dir).unwrap();
+        fs::write(dir.join(CONFIG), br#"{"role":"home"}"#).unwrap();
         fs::write(dir.join(SKIPPED), b"83").unwrap();
         for index in 0..83 {
             let row = SkippedAttempt {
@@ -1234,6 +1253,8 @@ mod tests {
         assert_eq!(rows.len(), 83);
         assert_eq!(rows[82].attempt, 83);
         assert!(rows[82].message().contains(&rows[82].command));
+        fs::write(dir.join(CONFIG), br#"{"role":"work"}"#).unwrap();
+        assert!(awaiting_skipped(temp.path()).is_empty());
     }
 
     fn repository(yaml: &str, path: &str) -> (tempfile::TempDir, String) {
