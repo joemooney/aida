@@ -7445,6 +7445,8 @@ pub(crate) fn run_agent_generation(
         .stderr(std::process::Stdio::inherit());
     // Keep the wrapper owner alive through registry binding, release and wait.
     // trace:TASK-3219 | ai:codex
+    // Capture before spawn: a fast SessionStart hook may publish its notice immediately.
+    let generation_started_at = chrono::Utc::now();
     let mut contained = if wrapper {
         Some(
             crate::containment::launch::PreparedLaunch::prepare_interactive(
@@ -7592,6 +7594,18 @@ pub(crate) fn run_agent_generation(
     } else {
         None
     };
+    // trace:STORY-2653 | ai:codex
+    let turn_monitor = rotation.map(|rotation| {
+        crate::agent_rotation::TurnMonitor::start(
+            plan.project_root.clone(),
+            rotation.seat.to_string(),
+            plan.name.clone(),
+            rotation.generation,
+            generation_started_at,
+            child_pid,
+            plan.native_session_id.clone(),
+        )
+    });
     let status = supervise_spawned_child(
         config.agent_type,
         child_pid,
@@ -7614,6 +7628,7 @@ pub(crate) fn run_agent_generation(
         verbose,
         &mut std::io::stderr(),
     );
+    drop(turn_monitor);
     if let Some(forwarder) = signal_forwarder {
         forwarder.stop();
     }
