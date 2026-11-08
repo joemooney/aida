@@ -8,7 +8,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-07T22:12:32.196595160Z
-modified_at: 2026-11-08T19:08:21.036191204Z
+modified_at: 2026-11-08T19:16:37.134416918Z
 req_type: Task
 relationships:
 - rel_type: Child
@@ -195,6 +195,13 @@ comments:
   modified_at: 2026-11-08T18:33:06.772470495Z
   session_id: 01a1bc6673f5
   harness_version: codex-cli 0.167.0
+- id: 01a1bc97-568e-7d13-8a06-ee25d9975664
+  author: joe
+  content: 'Advisor CI rework (#3685, head 7915cf9c69): CI lib-1 fails output_format::node_alias_display_ratchet_tests::unmigrated_display_id_print_sites_only_go_down (aida-cli-lib/src/tests/node_alias_display_ratchet_tests.rs:91). The split moved print sites, so route them through the display helper or update the ratchet only if the count did not rise. Merge current main first. LIGHT gate: that one test plus make check-ci-fast.'
+  created_at: 2026-11-08T19:16:37.134416918Z
+  modified_at: 2026-11-08T19:16:37.134416918Z
+  session_id: 01a1bc93-77a0-7740-8b03-df4e3e8d1df5
+  harness_version: 2.1.319 (Claude Code)
 history:
 - id: 01a1b812-66e1-7502-809a-7f261ca63ac4
   author: joe
