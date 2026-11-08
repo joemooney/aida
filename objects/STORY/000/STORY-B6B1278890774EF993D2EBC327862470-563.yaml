@@ -25,7 +25,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-07T19:45:35.836129088Z
-modified_at: 2026-11-07T23:52:18.580943016Z
+modified_at: 2026-11-08T00:10:07.348050139Z
 req_type: Story
 relationships:
 - rel_type:
@@ -186,6 +186,17 @@ comments:
   content: 'Round 3 sandbox compatibility update: job j20261107T231049594-2-0 again passed 23 regressions and reached the real fast-tier containment fixtures after bounded target warmup. Those fixtures exposed inherited HOME/TMPDIR paths missing inside the namespace, plus PTY SIGINT continuations timing out. Make jobs now use a private HOME under the seat inbox and namespace-local /tmp, preserving explicit Cargo/Rustup paths; bubblewrap creates HOME after mounts, without a host-side mkdir through seat-controlled symlinks. The make child resets and unblocks SIGINT/SIGQUIT so headless signal state cannot leak into PTY fixtures. The filesystem boundary, offline namespaces, no-grant transport, production 300-second timeout and one-repair limit are unchanged. The real-main fixture now lives under the workspace instead of a native scratch root. The Unix test module annotation fixes the portability ratchet; portability, exec-context ledger, formatting, whitespace and mirror parity pass. Job j20261107T233517287-2-0 is running the combined regression/real-target suite on these changes. No passing real gate evidence yet; awaiting the bounded result.'
   created_at: 2026-11-07T23:52:18.580943016Z
   modified_at: 2026-11-07T23:52:18.580943016Z
+  session_id: 01a1b80dd99e
+- id: 01a1b87d-b074-76c3-846a-9862124898ff
+  author: joe
+  content: |-
+    Round 3 final handoff: all five findings addressed in five uncommitted files: aida-cli-lib/src/lane_fast_gate.rs; aida-cli-lib/src/lane_job.rs; aida-core/templates/.aida/discipline/rework-brief-craft.md; .aida/discipline/rework-brief-craft.md; scripts/store-writers.toml. Settled receipts admit later heads; queued repair holds bind to the exact live queue entry and release for removal/replacement/parking; known red survives infrastructure and annotation errors; both discipline copies document skipped(<reason>). The real-target fixture exposed and fixed gate HOME/TMPDIR and inherited terminal-signal compatibility without relaxing containment. Make jobs use a private seat HOME, namespace /tmp and default/unblocked SIGINT/SIGQUIT, with explicit Cargo/Rustup paths preserved. HOME is created inside bubblewrap after mounts, never by host mkdir through seat symlinks.
+
+    Final executed validation: host job j20261107T233517287-2-0, AIDA_CARGO_TIMEOUT=3600 cargo test --profile agent -p aida-cli-lib --lib -- fast_gate --include-ignored --nocapture, exit 0: 24 passed, 0 failed, 0 ignored. Includes the real clean-main target through production run_fast_gate. Main head was 77bc9e4e4d38b978afaaf602dd8300419c320ea7. After two bounded cold-target timeout warmups, warmup job fast-5a1607e4-a6ef-46ef-a6d3-3d50de4cb1af passed all 43 fast gates in 239 seconds. A separate fresh sandbox job fast-c1116727-fbfb-4363-addc-17d6d2bc3f85 then passed all 43 gates in 232 seconds, rc=0, with the unchanged 300-second production limit. Both used the production cleared environment, offline network/IPC/PID namespaces, read-only filesystem except the existing lane write surfaces, no grant, and host-only results. No unsandboxed fallback ran. Raw test log: /home/joe/ai/aida/.aida/lane-jobs/01a1b80dd99e/j20261107T233517287-2-0.out. Runner warning retained: overlay-stale because the primary rewrote a generation file in place. untested=false.
+
+    Other validation: 41 writer-inventory fixtures and 8 Git-maintenance fixtures passed; final writer inventory, exec-context ledger (zero additions), portability, CI gate audit, rustfmt, git diff --check and discipline mirror parity passed. The fixture cfg attributes were split into cfg(unix) plus exact cfg(test) to satisfy both static scanners without changing the tested Linux code. No seat commit, push, PR creation, queue completion, review verdict or merge-hold clearance was performed. Host publication and queue completion remain the launcher responsibility.
+  created_at: 2026-11-08T00:10:07.348050139Z
+  modified_at: 2026-11-08T00:10:07.348050139Z
   session_id: 01a1b80dd99e
 history:
 - id: 01a1b78d-2628-7313-92de-8804ac5f8f71
