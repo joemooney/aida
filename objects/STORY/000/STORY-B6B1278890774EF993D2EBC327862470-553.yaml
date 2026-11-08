@@ -8,7 +8,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-07T15:34:33.363448208Z
-modified_at: 2026-11-08T15:41:24.164117698Z
+modified_at: 2026-11-08T15:52:42.163366693Z
 req_type: Story
 comments:
 - id: 01a1b6a6-52e1-70a0-a9c1-d32888979ca5
@@ -1360,6 +1360,12 @@ history:
   - field_name: status
     old_value: Approved
     new_value: NeedsAttention
+- id: 01a1bbdc-a664-7fc0-afce-fc0f55b9648e
+  author: joe
+  timestamp: 2026-11-08T15:52:42.340655080Z
+  session_id: 01a1bbd9a236
+  harness_version: 2.1.319 (Claude Code)
+  changes: []
 filed_at:
   code_sha: 122fea66d306d6739516983479c50201e9d0ae84
   branch: main
@@ -1369,3 +1375,11 @@ filed_at:
   vendor: claude
   session: 01a1b646-c67d-7b43-98ff-3604a53f5d1f
   harness_version: 2.1.319 (Claude Code)
+failure_reason:
+  phase: reviewer
+  phase_index: 3
+  kind: verdict:request-changes
+  detail: 'Refs slice: CI red because new doctor --lane-host flag was not added to the golden help snapshot; AC1-AC3 and AC5 remain partial or unverified; proxy client undelivered and AF_UNIX is denied in Claude seats.'
+  recovery_hint: address the review findings, move STORY-2630 back to In Progress, and clear the PR hold only after approval
+  shelved_by: reviewer
+  shelved_at: 2026-11-08T15:52:42.163366693Z
