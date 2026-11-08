@@ -13,12 +13,12 @@ description: |
   3. Works for Claude, Codex and AGY through their headless resume commands; one adapter test per vendor using a recorded fixture.
   4. A wait whose seat or session has been lost surfaces as an escalation, never a silent drop.
   Ref: docs/plans/2026-11-07-infinity-agent-architecture-deep-dive.md section 3.3 and the SPIKE-711 results table.
-status: InProgress
+status: NeedsAttention
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-08T02:58:08.667753563Z
-modified_at: 2026-11-08T11:39:38.014298259Z
+modified_at: 2026-11-08T11:41:11.213204610Z
 req_type: Story
 tags:
 - area:human-wait
@@ -677,6 +677,14 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a1baf6-60ad-7771-9e59-3af09f38b7fe
+  author: joe
+  timestamp: 2026-11-08T11:41:11.213220366Z
+  session_id: 01a1baf4e954
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: NeedsAttention
 filed_at:
   code_sha: dc41ee8da2f44f88178936fc1a8e6cb7168a3de7
   branch: main
@@ -686,3 +694,8 @@ filed_at:
   vendor: claude
   session: 01a1b8be-8170-7fb2-89ab-ecb4c6eee98c
   harness_version: 2.1.319 (Claude Code)
+attention_reason:
+  category: design-fork
+  detail: 'Round 9: R21 addressed in docs/plans/2026-11-08-story-2661-park-resume-sketch.md with locked retained-ownership checks for metadata-only queue rework and required future regressions. No findings disputed. R1 remains host/advisor metadata action: retitle PR #3666 exactly [AI:codex] docs(plans): sketch park-on-ask resume-on-answer (Refs STORY-2661). Advisor sketch signoff is required before implementation; retain publication veto until signoff and title repair. CI gates rerun accepted: run 42474240880, job 128719748549 remains queued. Original job 128712022973 log retrieved: GitLab fixture recorded+cleared labels expected exit 0, got 1. Local merge-hold fixtures pass (7 label states x 2 gates, 36 train cases); cause remains unverified. git diff --check passes. Generic plan verifier fails on pre-existing missing Critical Files/Followups sections and shorthand launch/contained.rs path. Sketch only; runtime implementation regressions untested=true. Native Refs declaration recorded; edits left uncommitted for host.'
+  raised_by: implementer
+  raised_at: 2026-11-08T11:41:11.213204610Z
