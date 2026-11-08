@@ -79,7 +79,8 @@ def check_in(binary, temp):
                GIT_AUTHOR_NAME="Test", GIT_AUTHOR_EMAIL="test@example.invalid",
                GIT_COMMITTER_NAME="Test", GIT_COMMITTER_EMAIL="test@example.invalid",
                AIDA_TELEMETRY="0", AIDA_CACHE_READ_WAIT_MS="1500")
-    require(run(["git", "init", "-q"], root, env))
+    require(run(["git", "init", "-q", "-b", "main"], root, env))
+    require(run(["git", "-c", "maintenance.auto=false", "-c", "gc.auto=0", "commit", "--allow-empty", "-qm", "fixture"], root, env))
     # trace:BUG-2017 | ai:codex — explicit positive global-ID fixture.
     git_dir = root / ".git"
     assert git_dir.is_dir() and not git_dir.is_symlink()
@@ -97,9 +98,8 @@ def check_in(binary, temp):
     require(run(["git", "add", "objects"], store, env))
     # trace:TASK-1955 | ai:claude (TASK-2010)
     require(run(["git", "-c", "maintenance.auto=false", "-c", "gc.auto=0", "commit", "-qm", "external title"], store, env))
-    # A live foreign refresher forces the default 1500ms wait in the old
-    # binary, even for a one-object store. Show reads the canonical object
-    # while labeling the old cache used for its derived graph context.
+    # A foreign refresher cannot block show's pinned stale projection.
+    # The requested object remains authoritative.
     with open(str(cache) + ".refresh.lock", "a") as holder:
         fcntl.flock(holder, fcntl.LOCK_EX | fcntl.LOCK_NB)
         for fmt in ("toon", "json", "human"):
@@ -114,7 +114,7 @@ def check_in(binary, temp):
             if fmt == "json":
                 metadata = json.loads(result.stdout)["cache"]
                 assert metadata["stale"] is True
-                assert metadata["refreshing"] == "worker_running"
+                assert metadata["refreshing"] == "deferred"
         for handle, flags in ((spec, ["--card"]), (uuid, []), (spec, ["--tree"])):
             start = time.monotonic()
             result = require(run_tty([binary, "show", handle, *flags, "--no-git", "--format", "human"], root, env))
@@ -123,8 +123,7 @@ def check_in(binary, temp):
             assert elapsed < 1, (handle, flags, elapsed)
             assert "canonical title" in result.stdout
     # trace:BUG-2466 | ai:codex
-    # A refresh hint is advisory too: hold its separate lock while show wins
-    # the refresh flock, so delegating work cannot wait behind the hint writer.
+    # Show does not file refresh hints, even when their writer lock is held.
     wait_for_fixture_processes(temp)
     with sqlite3.connect(cache) as conn:
         conn.execute("UPDATE cache_meta SET value='' WHERE key='source_head_sha'")
@@ -150,12 +149,12 @@ def check_in(binary, temp):
     # A strict refresh may have started a worker in its constructor. Let it
     # finish before creating the next deliberately stale snapshot.
     wait_for_fixture_processes(temp)
-    # A TTY winner with an unusable freshness stamp delegates a full
-    # rebuild. Hold only this fixture's SQLite writer so the worker cannot
-    # finish before we observe the stale result; release it before strict
-    # recovery so no worker outlives the isolated fixture.
+    # Even a missing freshness stamp and a live SQLite writer must not
+    # trigger a refresh, worker spawn or on-disk projection write.
     with sqlite3.connect(cache) as conn:
         conn.execute("UPDATE cache_meta SET value='' WHERE key='source_head_sha'")
+    for suffix in (".refresh-request", ".refresh.log"):
+        Path(str(cache) + suffix).unlink(missing_ok=True)
     writer = sqlite3.connect(cache)
     writer.execute("BEGIN IMMEDIATE")
     try:
@@ -166,8 +165,8 @@ def check_in(binary, temp):
         assert elapsed < 1, elapsed
         assert "canonical title" in result.stdout
         assert "note: showing results cached at" in result.stderr
-        assert Path(str(cache) + ".refresh-request").exists()
-        assert Path(str(cache) + ".refresh.log").exists()
+        assert not Path(str(cache) + ".refresh-request").exists()
+        assert not Path(str(cache) + ".refresh.log").exists()
         assert writer.execute("SELECT value FROM cache_meta WHERE key='source_head_sha'").fetchone()[0] == ""
     finally:
         writer.rollback()
@@ -185,11 +184,32 @@ def check_in(binary, temp):
     real_git = shutil.which("git", path=env["PATH"])
     assert real_git
     script = shim / "git"
-    script.write_text("#!/bin/sh\nfor arg in \"$@\"; do\n"
-                      "  case \"$arg\" in log) sleep 3; break ;; esac\ndone\n"
+    calls = shim / "calls"
+    script.write_text(f"#!/bin/sh\nprintf '%s\\n' \"$*\" >> {shlex.quote(str(calls))}\n"
+                      "for arg in \"$@\"; do\n"
+                      "  case \"$arg\" in log|merge-base) sleep 3; break ;; esac\ndone\n"
                       f"exec {shlex.quote(real_git)} \"$@\"\n")
     script.chmod(0o755)
     slow_env = dict(env, PATH=str(shim) + os.pathsep + env["PATH"])
+    # Default reads must never walk Git history, even when a stale cache
+    # would previously refresh inline. Positive controls below prove the shim.
+    with sqlite3.connect(cache) as conn:
+        old_head = conn.execute("SELECT value FROM cache_meta WHERE key='source_head_sha'").fetchone()[0]
+    metadata_file = store / "metadata.yaml"
+    metadata_file.write_text(metadata_file.read_text() + "\n")
+    require(run(["git", "add", "metadata.yaml"], store, env))
+    require(run(["git", "-c", "maintenance.auto=false", "-c", "gc.auto=0", "commit", "-qm", "external metadata"], store, env))
+    for flags in ([], ["--no-git"], ["--format", "toon"], ["--format", "human"], ["--card", "--format", "human"]):
+        calls.unlink(missing_ok=True)
+        result = require(run([binary, "show", spec, *flags], root, slow_env, timeout=6))
+        assert "canonical title" in result.stdout
+        assert not any(set(line.split()) & {"log", "merge-base", "diff"} for line in calls.read_text().splitlines()), calls.read_text()
+        with sqlite3.connect(cache) as conn:
+            assert conn.execute("SELECT value FROM cache_meta WHERE key='source_head_sha'").fetchone()[0] == old_head
+    for flags in (["--full", "--format", "toon"], ["--json"]):
+        calls.unlink(missing_ok=True)
+        require(run([binary, "show", spec, *flags], root, slow_env, timeout=6))
+        assert any("log" in line.split() for line in calls.read_text().splitlines()), calls.read_text()
     start = time.monotonic()
     result = require(run([binary, "show", spec, "--json"], root, slow_env, timeout=6))
     elapsed = time.monotonic() - start

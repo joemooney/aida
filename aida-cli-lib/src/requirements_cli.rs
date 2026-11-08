@@ -7100,7 +7100,8 @@ fn run_show(
                                 lines.extend(toon_show_comment_lines(&req.comments, *comments));
                                 // STORY-1649: one cheap default-branch linkage scalar;
                                 // `--no-git` turns it off. trace:STORY-1649 | ai:claude
-                                if !*no_git {
+                                // trace:BUG-2466 | ai:codex
+                                if !*no_git && (*full || *verbose) {
                                     if let Some(root) = store_path.parent() {
                                         let ids = crate::shipped_linkage::spec_lookup_ids(&req);
                                         let _phase = crate::usage::phase("linkage");
@@ -7241,7 +7242,12 @@ fn run_show(
                                     rels.push(CardRel::new(&rel.rel_type, rid, rtitle));
                                 }
                                 render_spec_card(
-                                    &req, &rels, store_path, density, *no_git, *verbose,
+                                    &req,
+                                    &rels,
+                                    store_path,
+                                    density,
+                                    *no_git || !(*full || *verbose),
+                                    *verbose,
                                 );
                                 let mut next = Vec::new();
                                 crate::help_next::push_serialize_cluster(
@@ -7836,7 +7842,8 @@ fn run_show(
                             // --no-git. Grep against every id form the spec has
                             // worn (canonical / agreed / origin) so commits and
                             // trace comments survive id migration.
-                            if !*no_git {
+                            // trace:BUG-2466 | ai:codex
+                            if !*no_git && (*full || *verbose) {
                                 let mut ids: Vec<String> = vec![req.display_id()];
                                 if let Some(ref a) = req.agreed_id {
                                     if !ids.contains(&a.to_string()) {

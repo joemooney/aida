@@ -41,6 +41,8 @@ pub struct CacheRebuildOutcome {
 pub struct CachedGitBackend {
     inner: GitBackend,
     cache: Cache,
+    // trace:BUG-2466 | ai:codex
+    snapshot_only: bool,
 }
 
 impl CachedGitBackend {
@@ -88,7 +90,11 @@ impl CachedGitBackend {
     /// `cache_path` and brought through the single-flight reader protocol.
     pub fn with_inner(inner: GitBackend, cache_path: &Path) -> Result<Self> {
         let cache = Cache::open(cache_path)?;
-        let backend = CachedGitBackend { inner, cache };
+        let backend = CachedGitBackend {
+            inner,
+            cache,
+            snapshot_only: false,
+        };
         // trace:TASK-1526 | ai:codex
         // Constructors share the tolerant protocol; mutations recheck strictly.
         backend.ensure_cache_fresh_for_read_with_schema_retry()?;
@@ -106,7 +112,23 @@ impl CachedGitBackend {
     // trace:BUG-1569 | ai:codex
     pub fn with_inner_cache_snapshot(inner: GitBackend, cache_path: &Path) -> Result<Self> {
         let cache = Cache::open(cache_path)?;
-        Ok(CachedGitBackend { inner, cache })
+        Ok(CachedGitBackend {
+            inner,
+            cache,
+            snapshot_only: false,
+        })
+    }
+
+    /// Single-spec show reads a pinned projection without refresh work, even
+    /// when the cache is cold, behind, or another refresher is failing.
+    // trace:BUG-2466 | ai:codex
+    pub fn with_inner_stale_snapshot(inner: GitBackend, cache_path: &Path) -> Result<Self> {
+        let cache = Cache::open_stale_snapshot(cache_path)?;
+        Ok(Self {
+            inner,
+            cache,
+            snapshot_only: true,
+        })
     }
 
     /// Whether the unrefreshed cache snapshot differs from canonical HEAD.
@@ -893,6 +915,26 @@ impl CachedGitBackend {
         mut read: impl FnMut(&Cache) -> Result<T>,
     ) -> Result<T> {
         use super::cache_refresh::{self, StaleServe};
+        // No refresh election, hint lock, worker spawn, schema retry or Git
+        // diff belongs on show's read path. Metadata and rows share the
+        // transaction pinned by open_stale_snapshot.
+        // trace:BUG-2466 | ai:codex
+        if self.snapshot_only {
+            let head = self.current_head_sha();
+            let cache_head = self.cache.source_head_sha()?;
+            let built_at = self.cache.built_at()?;
+            let value = read(&self.cache)?;
+            let stale = cache_head.as_deref() != Some(head.as_str())
+                || !self.redo_generation_matches().unwrap_or(false);
+            cache_refresh::record_read(stale.then(|| StaleServe {
+                stale: true,
+                cache_head: cache_head.filter(|s| !s.is_empty()),
+                store_head: head,
+                built_at: built_at.filter(|s| !s.is_empty()),
+                refreshing: cache_refresh::RefreshState::Deferred,
+            }));
+            return Ok(value);
+        }
         let mut schema_retries = 0;
         // A busy store can keep moving HEAD between refresh and pin. Wait only
         // for the normal read budget, then serve the pinned rows with a stale
@@ -1065,7 +1107,7 @@ impl CachedGitBackend {
         let tag = |err| super::cache::tag_cache_corruption(self.cache.path(), err);
         match f() {
             Ok(value) => Ok(value),
-            Err(err) if is_cache_schema_drift_error(&err) => {
+            Err(err) if !self.snapshot_only && is_cache_schema_drift_error(&err) => {
                 eprintln!(
                     "warning: cache schema drift while trying to {action}; rebuilding cache and retrying once: {err}"
                 );
@@ -4411,6 +4453,99 @@ mod tests {
             backend.add_requirement(sample_req(id, title)).unwrap();
         }
         (backend, store_root, cache_path)
+    }
+
+    // trace:BUG-2466 | ai:codex
+    #[test]
+    fn show_snapshot_stays_pinned_without_refresh_or_disk_writes() {
+        let dir = tempdir().unwrap();
+        let (backend, store_root, cache_path) = task_1515_backend(dir.path());
+        drop(backend);
+        task_1515_external_retitle(&store_root, "gen1");
+        let raw = rusqlite::Connection::open(&cache_path).unwrap();
+        let old_head: String = raw
+            .query_row(
+                "SELECT value FROM cache_meta WHERE key='source_head_sha'",
+                [],
+                |r| r.get(0),
+            )
+            .unwrap();
+        let scope = super::super::cache_refresh::CacheReadScope::new();
+        let reader = CachedGitBackend::with_inner_stale_snapshot(
+            GitBackend::new(&store_root).unwrap(),
+            &cache_path,
+        )
+        .unwrap();
+        let rows = reader.list_summaries(&ListFilter::default()).unwrap();
+        assert!(rows.iter().any(|r| r.title == "gen0"));
+        assert!(scope.stale().is_some());
+        // Concurrent commits can replace the projection; this show retains
+        // both its rows and their metadata from the original transaction.
+        raw.execute("UPDATE requirements_cache SET title='new projection'", [])
+            .unwrap();
+        raw.execute(
+            "UPDATE cache_meta SET value='new-head' WHERE key='source_head_sha'",
+            [],
+        )
+        .unwrap();
+        assert_eq!(
+            reader.cache.source_head_sha().unwrap().as_deref(),
+            Some(old_head.as_str())
+        );
+        assert!(reader
+            .list_summaries(&ListFilter::default())
+            .unwrap()
+            .iter()
+            .any(|r| r.title == "gen0"));
+        assert_eq!(
+            reader
+                .get_requirement_unambiguous_for_read("FR-1-001")
+                .unwrap()
+                .unwrap()
+                .title,
+            "gen1"
+        );
+        assert!(!PathBuf::from(format!("{}.refresh-request", cache_path.display())).exists());
+        assert!(reader.cache.is_read_only());
+    }
+
+    // trace:BUG-2466 | ai:codex
+    #[test]
+    fn show_snapshot_missing_or_corrupt_cache_preserves_disk_and_reads_objects() {
+        let dir = tempdir().unwrap();
+        let (backend, store_root, _) = task_1515_backend(dir.path());
+        drop(backend);
+        let cache_path = dir.path().join("cold/cache.db");
+        for corrupt in [false, true] {
+            if corrupt {
+                std::fs::create_dir_all(cache_path.parent().unwrap()).unwrap();
+                std::fs::write(&cache_path, b"not a sqlite cache").unwrap();
+            }
+            let scope = super::super::cache_refresh::CacheReadScope::new();
+            let reader = CachedGitBackend::with_inner_stale_snapshot(
+                GitBackend::new(&store_root).unwrap(),
+                &cache_path,
+            )
+            .unwrap();
+            assert!(reader
+                .list_summaries(&ListFilter::default())
+                .unwrap()
+                .is_empty());
+            assert!(scope.stale().is_some());
+            assert_eq!(
+                reader
+                    .get_requirement_unambiguous_for_read("FR-1-001")
+                    .unwrap()
+                    .unwrap()
+                    .title,
+                "gen0"
+            );
+            if corrupt {
+                assert_eq!(std::fs::read(&cache_path).unwrap(), b"not a sqlite cache");
+            } else {
+                assert!(!cache_path.parent().unwrap().exists());
+            }
+        }
     }
 
     // trace:BUG-1752 | ai:codex
