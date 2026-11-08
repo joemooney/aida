@@ -1,5 +1,6 @@
 id: 01a1b8c4-1bdd-78c2-9c50-56b2f410e810
 spec_id: TASK-b6b1278890774ef993d2ebc327862470-963
+agreed_id: TASK-3000
 title: 'Non-blocking (minor): API-key Codex lanes (pinned_program None, contained.rs:13…'
 description: |-
   Non-blocking finding carried forward from an APPROVED review verdict on BUG-2487, which has since completed — recorded here so it keeps a queryable home once the verdict record stops being read.
@@ -18,6 +19,11 @@ tags:
 - finding-hash:af563a6f
 - from-review:BUG-2487
 - kind:carried-forward
+history:
+- id: 01a1b8dd-4eb0-7041-ba95-ef546f9a6965
+  author: joe
+  timestamp: 2026-11-08T01:54:33.776526707Z
+  changes: []
 filed_at:
   code_sha: 2d1589ac325cca9366b218b577b7b0f41b2133d5
   branch: main
