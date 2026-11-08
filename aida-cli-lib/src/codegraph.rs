@@ -11,39 +11,6 @@ pub(crate) const CATEGORY: &str = "codegraph";
 const INDEX: &str = ".codegraph/codegraph.db";
 const MAX_AGE: Duration = Duration::from_secs(3600);
 
-/// Route already-projected child PATH through the host's client, when deployed.
-/// This does not expand the filesystem write set or read ambient environment.
-// trace:STORY-2630 | ai:codex
-pub(crate) fn route_queries(child: &mut std::process::Command) -> Result<()> {
-    let Some(root) = child.get_current_dir() else {
-        return Ok(());
-    };
-    let Ok(graph) = root.join(".codegraph").canonicalize() else {
-        return Ok(());
-    };
-    if !graph.join("lane-proxy.json").is_file() {
-        return Ok(());
-    }
-    let bin = graph.join("proxy-state/bin");
-    anyhow::ensure!(
-        bin.join("codegraph").is_file(),
-        "host codegraph proxy client is missing at {}",
-        bin.display()
-    );
-    let path = child
-        .get_envs()
-        .find(|(k, _)| *k == "PATH")
-        .and_then(|(_, v)| v)
-        .map(|v| v.to_owned());
-    if let Some(path) = path {
-        if std::env::split_paths(&path).next().as_ref() != Some(&bin) {
-            let entries = std::iter::once(bin).chain(std::env::split_paths(&path));
-            child.env("PATH", std::env::join_paths(entries)?);
-        }
-    }
-    Ok(())
-}
-
 // The proxy descriptor is observational only: no write or launch authority.
 // trace:STORY-2630 | ai:codex
 #[derive(serde::Deserialize, serde::Serialize)]
@@ -397,49 +364,6 @@ mod tests {
         std::fs::remove_file(&path).unwrap();
         std::os::unix::fs::symlink("absent", &path).unwrap();
         assert!(lane_host_status(root).is_err());
-    }
-
-    #[test]
-    fn query_routing_preserves_projected_path_without_new_write_grants() {
-        let tmp = tempfile::tempdir().unwrap();
-        let primary = tmp.path().join("primary");
-        let seat = tmp.path().join("seat");
-        std::fs::create_dir_all(primary.join(".codegraph")).unwrap();
-        std::fs::create_dir_all(primary.join(".codegraph/proxy-state/bin")).unwrap();
-        std::fs::create_dir(&seat).unwrap();
-        std::fs::write(primary.join(".codegraph/lane-proxy.json"), "{}").unwrap();
-        std::fs::write(
-            primary.join(".codegraph/proxy-state/bin/codegraph"),
-            "client",
-        )
-        .unwrap();
-        std::os::unix::fs::symlink(primary.join(".codegraph"), seat.join(".codegraph")).unwrap();
-        let mut child = std::process::Command::new("vendor");
-        child
-            .current_dir(&seat)
-            .env("PATH", "/trusted/bin:/usr/bin");
-        route_queries(&mut child).unwrap();
-        route_queries(&mut child).unwrap();
-        let path = child
-            .get_envs()
-            .find(|(k, _)| *k == "PATH")
-            .unwrap()
-            .1
-            .unwrap();
-        assert_eq!(
-            std::env::split_paths(path).collect::<Vec<_>>(),
-            [
-                primary.join(".codegraph/proxy-state/bin"),
-                PathBuf::from("/trusted/bin"),
-                PathBuf::from("/usr/bin")
-            ]
-        );
-        assert_eq!(child.get_envs().count(), 1);
-        assert_eq!(
-            child.get_args().count(),
-            0,
-            "no sandbox flags or grants added"
-        );
     }
 
     #[test]

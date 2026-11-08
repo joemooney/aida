@@ -2,13 +2,9 @@
 existing CLI, registry and stakeholder paths re-export them.
 <!-- trace:TASK-3425 | ai:codex -->
 
-CodeGraph lane navigation has an optional host query proxy. The host refreshes
-a SQLite backup after primary index changes and runs fixed caller/callee/impact
-queries against that disposable snapshot. The seat receives no index write
-grant. Deployed proxies route projected child PATH to the query client;
-`aida doctor --lane-host` reports source-index, capture and heartbeat ages.
-This requires host service deployment and a successful real-seat call before
-STORY-2630's final acceptance can be claimed. See [deployment and validation](scripts/codegraph/README.md).
+CodeGraph's optional host proxy queries disposable primary-index snapshots
+without a seat index write grant; `aida doctor --lane-host` reports snapshot age.
+See [deployment and validation](scripts/codegraph/README.md).
 <!-- trace:STORY-2630 | ai:codex -->
 
 Mailbox delivery resolves named agents against current registry liveness,

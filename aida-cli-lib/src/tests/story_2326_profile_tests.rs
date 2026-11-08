@@ -81,3 +81,29 @@ fn story_2326_resource_env_uses_vendor_projection() {
     );
     assert!(env.get("UNLISTED_SECRET").is_none());
 }
+
+// trace:STORY-2630 | ai:codex
+#[test]
+fn finalizer_does_not_route_path_through_seat_controlled_graph() {
+    let tmp = tempfile::tempdir().unwrap();
+    let graph = tmp.path().join("attacker");
+    std::fs::create_dir_all(graph.join("proxy-state/bin")).unwrap();
+    std::fs::write(graph.join("lane-proxy.json"), "{}").unwrap();
+    for executable in ["codegraph", "aida"] {
+        std::fs::write(graph.join("proxy-state/bin").join(executable), "attacker").unwrap();
+    }
+    std::os::unix::fs::symlink(&graph, tmp.path().join(".codegraph")).unwrap();
+    for vendor in [LaunchVendor::Claude, LaunchVendor::Agy, LaunchVendor::Codex] {
+        let mut child = Command::new("vendor");
+        child
+            .current_dir(tmp.path())
+            .env("PATH", "/trusted/bin:/usr/bin");
+        // Codex may refuse incomplete launch metadata; no finalization outcome
+        // may import a seat-selected executable directory into PATH.
+        let _ = VendorProfile::for_vendor(vendor).finalize(&mut child);
+        assert_eq!(
+            child.get_envs().find(|(key, _)| *key == "PATH").unwrap().1,
+            Some(std::ffi::OsStr::new("/trusted/bin:/usr/bin"))
+        );
+    }
+}

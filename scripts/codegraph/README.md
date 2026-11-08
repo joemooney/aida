@@ -66,9 +66,10 @@ systemctl --user enable --now codegraph-query-aida.service
 Keep the existing primary `codegraph-sync-aida.timer` and its original upstream
 executable. Do not replace `~/.local/bin/codegraph`: unrelated projects and host
 index maintenance keep using upstream. The host-owned `proxy-state/bin`
-query wrapper is prepended to an already-projected child PATH by the shared launch finalizer only when the
-primary proxy descriptor exists. It adds no environment selector or filesystem
-grant. For an existing lane shell, use the reviewed primary client explicitly:
+query wrapper must be selected explicitly inside the seat shell, in both native
+and AIDA-contained postures. Launch finalization never derives executable PATH
+entries from a seat-controlled `.codegraph` link. The host should provide the
+reviewed absolute client path; existing and new seats use the same command:
 
 ```sh
 PATH=/home/joe/ai/aida/.codegraph/proxy-state/bin:$PATH codegraph callers primary_index_link

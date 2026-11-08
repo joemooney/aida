@@ -14,6 +14,7 @@ import tempfile
 import threading
 import time
 import unittest
+from unittest import mock
 
 SCRIPT = Path(__file__).resolve().parents[1] / "scripts/codegraph/codegraph"
 loader = importlib.machinery.SourceFileLoader("codegraph_proxy", str(SCRIPT))
@@ -48,6 +49,18 @@ with sqlite3.connect(p / '.codegraph/codegraph.db') as db:
         host = proxy.Host(self.primary, self.state, self.upstream)
         self.addCleanup(lambda: host.snapshot and host.snapshot.cleanup())
         return host
+
+    def test_failed_descriptor_publication_cleans_temporary_file(self):
+        directory = self.primary / ".codegraph"
+        descriptor = directory / proxy.DESCRIPTOR
+        before = set(directory.iterdir())
+        for operation in ("json.dump", "os.replace"):
+            with self.subTest(operation=operation):
+                with mock.patch.object(proxy.json if operation == "json.dump" else proxy.os,
+                                       operation.split(".")[1], side_effect=OSError("disk full")):
+                    with self.assertRaisesRegex(OSError, "disk full"):
+                        proxy.write_descriptor(directory, descriptor, {"protocol": 1})
+                self.assertEqual(set(directory.iterdir()), before)
 
     def test_refuses_nonqueries_arbitrary_options_and_unbounded_inputs(self):
         for request in ({"op": "sync"}, {"op": "callers", "symbol": "x", "path": "/tmp"},

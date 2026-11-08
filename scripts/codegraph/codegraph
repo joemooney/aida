@@ -2,7 +2,7 @@
 """Host query proxy for CodeGraph 1.6.0; no seat receives an index write grant.
 
 Install this client as `codegraph` on lane PATH. Run `serve` only on the host,
-using the absolute upstream executable, not this wrapper. See codegraph-proxy.md.
+using the absolute upstream executable, not this wrapper. See README.md.
 """
 # trace:STORY-2630 | ai:codex
 import argparse
@@ -187,6 +187,19 @@ class Host:
             return {"rc": process.returncode, "output": output.read(MAX_OUTPUT).decode("utf-8", errors="replace"), **self.status()}
 
 
+def write_descriptor(directory, descriptor, data):
+    temp_path = None
+    try:
+        with tempfile.NamedTemporaryFile(mode="w", dir=directory, delete=False) as temp:
+            temp_path = Path(temp.name)
+            json.dump(data, temp)
+            temp.flush()
+        os.replace(temp_path, descriptor)
+    finally:
+        if temp_path is not None:
+            temp_path.unlink(missing_ok=True)
+
+
 def serve(primary, state, upstream):
     host = Host(primary, state, upstream)
     host.refresh()
@@ -211,10 +224,7 @@ def serve(primary, state, upstream):
                 except (OSError, ValueError, sqlite3.Error, TimeoutError) as exc:
                     error = str(exc)
                 data = {**host.status(), "socket": str(path), "observed_at": time.time(), "refresh_error": error}
-                with tempfile.NamedTemporaryFile(mode="w", dir=directory, delete=False) as temp:
-                    json.dump(data, temp)
-                    temp.flush()
-                os.replace(temp.name, descriptor)
+                write_descriptor(directory, descriptor, data)
                 try:
                     conn, _ = server.accept()
                 except socket.timeout:
