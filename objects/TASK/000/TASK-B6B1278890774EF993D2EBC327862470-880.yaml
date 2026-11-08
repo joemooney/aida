@@ -8,7 +8,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-06T13:39:53.442026096Z
-modified_at: 2026-11-08T12:33:59.051852238Z
+modified_at: 2026-11-08T12:34:05.031004391Z
 req_type: Task
 tags:
 - architecture
@@ -747,6 +747,28 @@ comments:
   content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: Head abad2d5df775 binds staged routes to the host-selected profile correctly, but origin-keyed specs still refuse, real broker refusals decode as OutcomeUnknown, routing acceptance (comment 34) is unmet, and CI is unfinished.. No triage reason was given.'
   created_at: 2026-11-08T12:33:59.051845986Z
   modified_at: 2026-11-08T12:33:59.051845986Z
+  session_id: 01a1b9af-8230-75d2-82f8-667491cc010a
+  harness_version: 2.1.319 (Claude Code)
+- id: 01a1bb26-cdf8-7232-9b1c-6314aa92c9c4
+  author: joe
+  content: |-
+    REVIEW FINDINGS TO ADDRESS (PR #3661):
+    Verdict: CHANGES REQUESTED
+    Reviewed commit: abad2d5df775
+    Recorded: 2026-11-08T12:29:10.336691019+00:00
+    Findings:
+    1. MAJOR, functional, NEW at this head's review: broker refusals cannot be decoded by the client. service.py:346-347 replies to every MutationRefusal with request_id=None, but decode_reply (store_mutation_client.rs, Reply::Error.request_id: Uuid) requires a UUID, so serde fails and the client reports OutcomeUnknown. A stale-revision Conflict, Unauthorized, Revoked, Busy or UnsupportedOperation from the real broker therefore tells the caller the mutation outcome is uncertain, with 'do not repeat', when it was definitely refused. The client fixture at store_mutation_client_tests.rs:82 echoes the request's request_id, so it hides the mismatch. Either echo the validated request_id when known and accept null only for pre-parse refusals bound to the epoch, and add a test using the actual Python reply shape.
+    2. MAJOR, functional, UNFIXED from round at 6c2eeeeb2895: canonical_preimage (store_mutation_client.rs, row.spec_id == sid) and mutate_canonical (aida-core/src/db/git_backend.rs:2728) compare case-sensitively against the uppercase file stem, while the YAML keeps lowercase hex. Re-measured at this review: 1686 of 7404 live objects differ, including TASK-B6B1278890774EF993D2EBC327862470-880.yaml with spec_id TASK-b6b1278890774ef993d2ebc327862470-880. 'aida comment add TASK-3223' under the mediated profile therefore refuses Conflict. Fix both sides together and keep validate_result's spec_id equality consistent with whichever form the host returns. The new host test mediated_host_routes_owned_comment_and_revalidates_authority_before_replay and the client test at store_mutation_client_tests.rs:282 both use uppercase IDs; add lowercase-hex cases.
+    3. BLOCKING acceptance gap (advisor ruling, TASK-3223 comment 34), unfixed: (a) python3 scripts/check-store-writers.py --profile mediated exits 1 at this head with 3161 writers and 293 of 293 operations unresolved, and mediated_blockers counts every operation row by construction; (b) mediated_store_tests.rs:335 proves raw create/append/rename denial, but no contained-lane test pairs that with a successful mediated comment_add, and selected_store_profile (launch/contained.rs:801) still refuses mediated; (c) make check-ci-fast is not shown green at this head. Spec description's 'route every inventoried in-lane writer' is likewise unmet. Must stay Refs-only with TASK-3223 open.
+    4. Test gap, description acceptance: stale-base, concurrent-mutation and failure-after-persist remain backend-only (aida-core/src/db/redo/tests.rs). The new host test covers replay, changed-payload Conflict and revocation at host_operation, but nothing drives stale base, concurrency or a lost reply through the client and broker route.
+    5. CI and gates at abad2d5df775: all seven CI jobs were still queued or in progress when this verdict was recorded, so there is no green evidence at this head; earlier red lanes (lib-1 at c2d12195813d, lib-0 at 2b3a8a9f1c36) are still not shown resolved. merge-hold-gate fails only because aida:merge-hold is active, which is expected and needs advisor or operator release; it is not a code defect.
+    6. PR metadata, unfixed: the title still says 'report unresolved mediated routing evidence' while the diff adds early dispatch in main_entry, a SEQPACKET client, a mediated MCP server and host routing of comment_add/spec_edit, and the body is only the seat-publication line. Rewrite both to describe staged, gated routing, Refs-only with no launch authority. Commit 30eb320657c's subject claims full routing and boundary denial, so the squash must use the corrected title with an empty body.
+    7. MINOR, per-mutation cost and availability, unfixed: canonical_preimage reads and YAML-parses every object for each mutation (7404 files today), including origin IDs with a direct path, and any one malformed object refuses every mediated mutation. Try the direct object path first and scan only for agreed IDs, or use a bounded read-only index.
+    8. MINOR, inconsistent input validation: comment_text refuses whitespace-only bodies for --body-file and --stdin (store_mutation_entry.rs), but inline CLI content and MCP add_comment text reach CanonicalOperation::validate, which only rejects empty strings, so a whitespace-only comment is accepted through those routes. Apply one rule at the shared layer.
+    9. COSMETIC, unfixed: validate_result's request_status branch (store_mutation_client.rs) is reachable only from tests because Client::status was removed; delete it and its assertions or restore a caller.
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
+  created_at: 2026-11-08T12:34:04.920362129Z
+  modified_at: 2026-11-08T12:34:04.920362129Z
   session_id: 01a1b9af-8230-75d2-82f8-667491cc010a
   harness_version: 2.1.319 (Claude Code)
 history:
