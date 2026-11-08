@@ -763,7 +763,7 @@ mod bug_376_implementer_exit_directive_tests;
 /// state discovered as phases run (branch, lease id, PR number).
 /// trace:STORY-246 | ai:claude
 /// BUG-311: build the argv for the orchestrator's phase-1 `aida queue work`
-/// subprocess. Pure helper so the steal-threading + headless flag rules are
+/// subprocess. Pure helper so compatibility + headless flag rules are
 /// pinnable by unit test without spawning a process. The orchestrator always
 /// sets `--session-id` (so it can locate the phase's lease via
 /// `claude_session_id`), and conditionally appends `--steal`, `--no-human`,
@@ -786,10 +786,9 @@ pub(crate) fn build_implementer_phase_args(
         "--session-id".into(),
         session_uuid.into(),
     ];
-    // BUG-311: the user's outer `--steal` is threaded so phase 1's
-    // `handle_queue_work` can clear a dormant lease on this scope instead of
-    // bailing with the canned "pass --steal" message — which was the BUG-311
-    // symptom (the flag was passed but the inner subprocess never saw it).
+    // Compatibility-only plumbing: production queue-work entry refuses steal=true
+    // before orchestrator dispatch. This arm is unreachable in production.
+    // trace:STORY-2325 | ai:codex
     if steal {
         args.push("--steal".into());
     }

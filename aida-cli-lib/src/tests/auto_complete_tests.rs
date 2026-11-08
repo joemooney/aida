@@ -4430,11 +4430,12 @@ fn recovery_hint_ci_failed_names_session_end() {
 // different problems and must not collapse into "CI is red" (BUG-218).
 
 #[test]
-fn recovery_hint_ci_red_names_run_view_and_steal() {
+fn recovery_hint_ci_red_names_run_view_and_branch_reentry() {
     let hint = recovery_hint(Phase::Ci, FailureKind::CiRed, &ctx());
     assert!(hint.contains("CI failed on run 9988776655"));
     assert!(hint.contains("gh run view 9988776655"));
-    assert!(hint.contains("--steal"));
+    assert!(hint.contains("aida queue work TASK-247 --branch task-247`"));
+    assert!(!hint.contains("--steal"));
 }
 
 #[test]
@@ -4572,7 +4573,8 @@ fn recovery_hint_missing_tool_says_install_gh() {
 fn recovery_hint_reviewer_no_verdict_says_rerun_review() {
     let hint = recovery_hint(Phase::Reviewer, FailureKind::NoVerdict, &ctx());
     assert!(hint.contains("without a usable verdict"));
-    assert!(hint.contains("aida queue work PR-46 --steal"));
+    assert!(hint.contains("aida queue work PR-46`"));
+    assert!(!hint.contains("--steal"));
 }
 
 /// BUG-218 acceptance: each phase produces at least 3 distinguishable

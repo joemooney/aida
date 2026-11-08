@@ -166,8 +166,9 @@ pub(crate) fn supervised_rotation_notice(line: &str, seat: &str, handle: &str) -
     let head = line.split(" Hand off and restart:").next().unwrap_or(line);
     format!(
         "{head} Hand off and rotate: at the next turn boundary, write a short handoff with \
-         `aida session handoff --seat {seat} --write -`, then exit; `aida agent new` \
-         relaunches you as {handle} with the handoff loaded."
+         `aida session handoff --seat {seat} --write -`, then finish your response. The launcher \
+         ends this session at the Stop boundary and relaunches you as {handle} with the handoff loaded. \
+         Include your active session goal and any watchers that must be restarted in the handoff."
     )
 }
 

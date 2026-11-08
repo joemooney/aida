@@ -1,3 +1,7 @@
+`cmdkit` holds the command-framework types and shared output/stakeholder vocabulary;
+existing CLI, registry and stakeholder paths re-export them.
+<!-- trace:TASK-3425 | ai:codex -->
+
 CodeGraph lane navigation has an optional host query proxy. The host refreshes
 a SQLite backup after primary index changes and runs fixed caller/callee/impact
 queries against that disposable snapshot. The seat receives no index write

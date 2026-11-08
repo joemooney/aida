@@ -2111,7 +2111,7 @@ pub(crate) fn recovery_hint(phase: Phase, kind: FailureKind, ctx: &HintContext) 
             return format!(
                 "The stale-base auto-rebase refused to overwrite remote commits that are not \
                  incorporated by patch-id. Follow the fetch + rebase recovery printed in the \
-                 failure detail, then re-run the review: `aida queue work PR-{pr} --steal`."
+                 failure detail, then re-run the review: `aida queue work PR-{pr}`."
             );
         }
         FailureKind::MergeHold => {
@@ -2215,7 +2215,7 @@ pub(crate) fn recovery_hint(phase: Phase, kind: FailureKind, ctx: &HintContext) 
                 .unwrap_or_else(|| "CI failed".to_string());
             format!(
                 "{failure} — view it: `{view}`. Push fixups to the same branch: \
-                 `aida queue work {spec} --branch {branch} --steal`"
+                 `aida queue work {spec} --branch {branch}`"
             )
         }
         (Phase::Ci, FailureKind::CiTimeout) => {
@@ -2244,7 +2244,7 @@ pub(crate) fn recovery_hint(phase: Phase, kind: FailureKind, ctx: &HintContext) 
 
         (Phase::Reviewer, FailureKind::NoVerdict) => format!(
             "The reviewer session ended without a usable verdict — re-run the review: \
-             `aida queue work PR-{pr} --steal`"
+             `aida queue work PR-{pr}`"
         ),
         // BUG-1186: the reviewer seat modified the branch it was reviewing.
         // Never retry (that would review reviewer-authored commits under the
@@ -2253,7 +2253,7 @@ pub(crate) fn recovery_hint(phase: Phase, kind: FailureKind, ctx: &HintContext) 
         (Phase::Reviewer, FailureKind::ReviewerWrote) => format!(
             "The reviewer pushed to `{branch}` during the review — inspect the extra commits \
              (`git log origin/main..origin/{branch}`), drop or keep them deliberately, then \
-             re-run the review: `aida queue work PR-{pr} --steal`"
+             re-run the review: `aida queue work PR-{pr}`"
         ),
         // By phase 3 the spec is Done — the implementer opened the PR in
         // phase 1, so `aida queue work` (queued items only) would reject
