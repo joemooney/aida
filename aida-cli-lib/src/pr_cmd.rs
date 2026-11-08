@@ -8825,6 +8825,61 @@ pub(crate) struct ShipArgs {
         allow_hyphen_values = true
     )]
     pub commit_pending: Option<String>,
+
+    /// Read a UTF-8 commit body verbatim from this file. Use with native
+    /// -m declarations or --from-seat --commit-pending.
+    // trace:BUG-2493 | ai:codex
+    #[clap(long, value_name = "FILE")]
+    pub commit_body_file: Option<std::path::PathBuf>,
+}
+
+// trace:BUG-2493 | ai:codex
+pub(crate) fn ship_messages(
+    args: &ShipArgs,
+    native: bool,
+) -> anyhow::Result<(Option<String>, Option<String>)> {
+    // trace:BUG-2493 | ai:codex
+    // Native authors provide bodies only through the explicit body-file surface.
+    if native {
+        anyhow::ensure!(
+            !args
+                .message
+                .as_deref()
+                .is_some_and(|s| s.contains(['\n', '\r'])),
+            "native -m requires a single-line subject; use --commit-body-file for the body"
+        );
+    }
+    if args.commit_body_file.is_some() {
+        anyhow::ensure!(
+            args.commit_pending.is_some() || (args.message.is_some() && native),
+            "--commit-body-file requires native -m or --from-seat --commit-pending"
+        );
+    }
+    let body = args
+        .commit_body_file
+        .as_ref()
+        .map(|path| {
+            std::fs::read_to_string(path)
+                .with_context(|| format!("reading --commit-body-file {}", path.display()))
+        })
+        .transpose()?;
+    if let Some(body) = &body {
+        anyhow::ensure!(!body.contains('\0'), "commit body contains NUL");
+    }
+    let with_body = |subject: &str| -> anyhow::Result<String> {
+        anyhow::ensure!(
+            body.is_none() || !subject.contains(['\n', '\r']),
+            "--commit-body-file requires a single-line subject"
+        );
+        Ok(crate::native_publication::join_message(
+            subject,
+            body.as_deref(),
+        ))
+    };
+    Ok((
+        args.message.as_deref().map(with_body).transpose()?,
+        args.commit_pending.as_deref().map(with_body).transpose()?,
+    ))
 }
 
 // STORY-720: `aida ship` dispatches before storage init for the same
@@ -8846,8 +8901,12 @@ fn run_ship(
         dry_run,
         no_trailer_check,
         from_seat,
-        commit_pending,
+        commit_pending: _,
+        commit_body_file: _,
     } = &args;
+    // trace:BUG-2493 | ai:codex
+    let native = std::env::var("AIDA_CONTAINMENT_POSTURE").as_deref() == Ok("native");
+    let (publication_message, pending_message) = ship_messages(&args, native)?;
     // trace:BUG-HOME-038 | ai:claude
     if let Some(clone) = from_seat {
         return crate::ship_from_seat::run(crate::ship_from_seat::FromSeatOptions {
@@ -8856,12 +8915,12 @@ fn run_ship(
             no_pr: *no_pr,
             dry_run: *dry_run,
             // trace:TASK-2712 | ai:claude
-            commit_pending: commit_pending.clone(),
+            commit_pending: pending_message,
         });
     }
     // trace:TASK-2902 | ai:codex
-    if std::env::var("AIDA_CONTAINMENT_POSTURE").as_deref() == Ok("native") {
-        if let Some(subject) = message {
+    if native {
+        if let Some(subject) = &publication_message {
             anyhow::ensure!(
                 !*no_trailer_check,
                 "native declarations require trailer validation"
