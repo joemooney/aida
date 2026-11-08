@@ -2,19 +2,21 @@ id: 01a1ba61-50ef-7490-a385-67c5f1ecc507
 spec_id: TASK-b6b1278890774ef993d2ebc327862470-981
 agreed_id: TASK-3015
 title: 'non-blocking (minor, pre-existing, outside BUG-2495 scope): aida-cli-lib/src/la…'
-description: |-
-  Non-blocking finding carried forward from an APPROVED review verdict on BUG-2495, which has since completed — recorded here so it keeps a queryable home once the verdict record stops being read.
+description: 'Non-blocking finding carried forward from an APPROVED review verdict on BUG-2495, which has since completed — recorded here so it keeps a queryable home once the verdict record stops being read.
+
 
   non-blocking (minor, pre-existing, outside BUG-2495 scope): aida-cli-lib/src/launch/contained.rs codex_argv refuses non-never --ask-for-approval but passes -c/--config approval_policy=... through unchecked, so a site argv can supply a conflicting approval override; the --bg path already refuses these keys at agent_codex_background.rs:177-183. Contained path should apply the same key refusal.
 
+
   PR: #3672
-  Reviewed sha: e0ccdac2422d8f24d8a506059cd3ada37dd10203
+
+  Reviewed sha: e0ccdac2422d8f24d8a506059cd3ada37dd10203'
 status: Approved
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
-created_at: 2026-11-08T08:58:22.319212958Z
-modified_at: 2026-11-08T18:51:02.435287780Z
+created_at: 2026-11-08 08:58:22.319212+00:00
+modified_at: 2026-11-08 18:51:02.435287+00:00
 req_type: Task
 tags:
 - carried-from:BUG-2495
@@ -25,58 +27,66 @@ comments:
 - id: 01a1bbc5-d11a-7a70-8f19-5b9cc15d9286
   author: joe
   content: 'Advisor 2026-11-08: kept and approved. Real containment gap confirmed at contained.rs: the approval flags are checked, but -c/--config approval_policy passes through; agent_codex_background.rs:177-183 already refuses those keys. Apply the same refusal.'
-  created_at: 2026-11-08T15:27:45.946600728Z
-  modified_at: 2026-11-08T15:27:45.946600728Z
+  created_at: 2026-11-08 15:27:45.946600+00:00
+  modified_at: 2026-11-08 15:27:45.946600+00:00
   session_id: 01a1bbab-762f-7cd2-8a36-4ea9f209afce
   harness_version: 2.1.319 (Claude Code)
 - id: 01a1bc69-8e63-77b0-9c9b-911d0bd44198
   author: dirtlab
   content: Implemented contained Codex config-key refusal matching the background posture guard, including split and attached config forms. Added protected-key rejection and ordinary model-config regression tests. Targeted lane validation is in progress; edits remain uncommitted for host publication.
-  created_at: 2026-11-08T18:26:36.771954958Z
-  modified_at: 2026-11-08T18:26:36.771954958Z
+  created_at: 2026-11-08 18:26:36.771954+00:00
+  modified_at: 2026-11-08 18:26:36.771954+00:00
   session_id: 01a1bc6748b4
   harness_version: codex-cli 0.167.0
 - id: 01a1bc71-4240-71f0-a35a-d899a1c59e3b
   author: dirtlab
   content: 'Validation complete: lane cargo test --profile agent -p aida-cli-lib --lib -- task_3015 executed 2 tests, both passed; -- bug_2495 executed 2 existing tests, both passed. rustfmt --check and git diff --check passed. Changed aida-cli-lib/src/launch/contained.rs and aida-cli-lib/src/containment/tests/launch_tests.rs. No implementation blockers; codegraph unavailable (doctor confirms missing PATH tool). Edits left uncommitted for native host publication; queue completion deferred to host after publication.'
-  created_at: 2026-11-08T18:35:01.568459992Z
-  modified_at: 2026-11-08T18:35:01.568459992Z
+  created_at: 2026-11-08 18:35:01.568459+00:00
+  modified_at: 2026-11-08 18:35:01.568459+00:00
   session_id: 01a1bc6748b4
   harness_version: codex-cli 0.167.0
 - id: 01a1bc7b-4105-7613-b3b7-578c43ac9302
   author: joe
   content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: Contained Codex posture-key refusal is bypassed by the attached -c=key=value form; generated default_permissions is also still replaceable. No triage reason was given.'
-  created_at: 2026-11-08T18:45:56.613937269Z
-  modified_at: 2026-11-08T18:45:56.613937269Z
+  created_at: 2026-11-08 18:45:56.613937+00:00
+  modified_at: 2026-11-08 18:45:56.613937+00:00
   session_id: 01a1b9af-8230-75d2-82f8-667491cc010a
   harness_version: 2.1.319 (Claude Code)
 - id: 01a1bc7b-4baa-7fc2-9e5a-fea3e105375f
   author: joe
-  content: |-
-    REVIEW FINDINGS TO ADDRESS (TASK-3015):
+  content: 'REVIEW FINDINGS TO ADDRESS (TASK-3015):
+
     Verdict: CHANGES REQUESTED
+
     Reviewed commit: 94e074359b04
+
     Recorded: 2026-11-08T18:40:21.341918451+00:00
+
     Findings:
+
     1. BLOCKING (authority bypass): aida-cli-lib/src/launch/contained.rs:1470 strips only "-c" from an attached config arg, so -c=approval_policy="on-request" yields value =approval_policy="on-request"; line 1473 takes the text before the first = and gets an empty key, which matches no protected prefix. validate_codex_flags_with_help (contained.rs:1657) accepts it as -c with an inline value, and clap strips the leading = (clap_builder parser.rs:980), so Codex applies the override. Same for sandbox_mode, sandbox_workspace_write.*, shell_environment_policy.*, permissions.*. Fix: strip one leading = after -c, or refuse every attached -c form as agent_codex_background.rs:189 does.
+
     2. BLOCKING (test gap on the refusal path): task_3015_codex_config_refuses_posture_overrides (aida-cli-lib/src/containment/tests/launch_tests.rs:3435-3440) covers -c K=V, --config K=V, --config=K=V and -cK=V but not -c=K=V, the one attached short form that reaches Codex (-cK=V is already rejected by the flag validator). Add the -c=K=V variant for every protected key.
+
     3. BLOCKING (same posture class): default_permissions is not protected. contained.rs:1448 generates -c default_permissions="aida" and site config is appended after it, while the prefix list at contained.rs:1475-1480 only matches keys starting with permissions. -c default_permissions="other" therefore passes, and with Codex applying -c overrides in order it replaces the generated profile, the same outcome the loop refuses for -P/--permission-profile and that the new comment says must not happen. Refuse default_permissions in the contained path and test all config forms. Later-wins is Codex behavior not reproduced locally (review ran no builds).
+
     4. MINOR (regression): the new config scan at contained.rs:1459-1471 does not stop at --, while validate_codex_flags_with_help treats everything after -- as an opaque prompt. exec -- -c now fails with "requires a value", and exec -- "--config=approval_policy notes" is refused as a posture override; both were accepted before this PR. Stop config scanning at --.
-    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
-  created_at: 2026-11-08T18:45:59.338824855Z
-  modified_at: 2026-11-08T18:45:59.338824855Z
+
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.'
+  created_at: 2026-11-08 18:45:59.338824+00:00
+  modified_at: 2026-11-08 18:45:59.338824+00:00
   session_id: 01a1b9af-8230-75d2-82f8-667491cc010a
   harness_version: 2.1.319 (Claude Code)
 history:
 - id: 01a1ba73-e80f-7793-8070-c900efd439d3
   author: joe
-  timestamp: 2026-11-08T09:18:40.655368830Z
+  timestamp: 2026-11-08 09:18:40.655368+00:00
   session_id: 01a1b9af-8230-75d2-82f8-667491cc010a
   harness_version: 2.1.319 (Claude Code)
   changes: []
 - id: 01a1bbc5-c754-79e2-95ec-38e9290fd69b
   author: joe
-  timestamp: 2026-11-08T15:27:43.444241801Z
+  timestamp: 2026-11-08 15:27:43.444241+00:00
   session_id: 01a1bbab-762f-7cd2-8a36-4ea9f209afce
   harness_version: 2.1.319 (Claude Code)
   changes:
@@ -85,20 +95,20 @@ history:
     new_value: Approved
 - id: 01a1bc67-4ea8-7842-b119-182883d030aa
   author: aida-session-start
-  timestamp: 2026-11-08T18:24:09.384256218Z
+  timestamp: 2026-11-08 18:24:09.384256+00:00
   changes:
   - field_name: status
     old_value: Approved
     new_value: InProgress
 - id: 01a1bc67-b589-70f0-abe4-40caa9ec730c
   author: dirtlab
-  timestamp: 2026-11-08T18:24:35.721161338Z
+  timestamp: 2026-11-08 18:24:35.721161+00:00
   session_id: 01a1bc6748b4
   harness_version: codex-cli 0.167.0
   changes: []
 - id: 01a1bc76-2417-78b0-a511-9f2c684dbaba
   author: aida-orchestrator
-  timestamp: 2026-11-08T18:40:21.527175050Z
+  timestamp: 2026-11-08 18:40:21.527175+00:00
   session_id: 01a1bc742220
   harness_version: 2.1.319 (Claude Code)
   changes:
@@ -107,16 +117,23 @@ history:
     new_value: NeedsAttention
 - id: 01a1bc7b-4105-7613-b3b7-5773e7fbf471
   author: joe
-  timestamp: 2026-11-08T18:45:56.613915389Z
+  timestamp: 2026-11-08 18:45:56.613915+00:00
   session_id: 01a1b9af-8230-75d2-82f8-667491cc010a
   harness_version: 2.1.319 (Claude Code)
   changes:
   - field_name: status
     old_value: NeedsAttention
     new_value: Approved
+- id: 01a1bc7d-2818-73b2-a8b4-7ea49fc15188
+  author: aida-session-start
+  timestamp: 2026-11-08 18:48:01.304829+00:00
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: InProgress
 - id: 01a1bc7f-ebfd-7d43-8d6a-de1edb28f0ff
   author: joe
-  timestamp: 2026-11-08T18:51:02.525710736Z
+  timestamp: 2026-11-08 18:51:02.525710+00:00
   session_id: 01a1bc7e6855
   harness_version: 2.1.319 (Claude Code)
   changes: []
@@ -134,4 +151,4 @@ failure_reason:
   detail: 'No rework landed: head differs from the rejected 94e074359b04 only by a merge from main, so the -c=K=V posture-key bypass and default_permissions gap remain'
   recovery_hint: address the review findings, move TASK-3015 back to In Progress, and clear the PR hold only after approval
   shelved_by: reviewer
-  shelved_at: 2026-11-08T18:51:02.435287780Z
+  shelved_at: 2026-11-08 18:51:02.435287+00:00
