@@ -1,9 +1,9 @@
 //! `aida usage` command cluster (STORY-122 / STORY-709 / TASK-266 / TASK-872 /
 //! STORY-530 / EPIC-36).
 //!
-//! The usage-telemetry query surface: the top-N default view, `--errors`,
-//! `--unused`, `--slowest` + `--events` (the performance lens), `--read-write`
-//! (the trace-read-rate audit), and `--auto-complete` (orchestrator telemetry
+//! The usage-telemetry query surface: the top-N default view, `errors`,
+//! `unused`, `slowest` + `events` (the performance lens), `--read-write`
+//! (the trace-read-rate audit), and `drains` (orchestrator telemetry
 //! views). Reads the per-command usage log (`~/.aida/usage.jsonl`) and the
 //! orchestrator log (`~/.aida/auto-complete.jsonl`); never writes them.
 //! Extracted verbatim from `main.rs` (SPIKE-78); no behavior change.
@@ -76,8 +76,8 @@ where
 // `aida usage slowest` + `aida usage events` — the performance lens
 // (STORY-709). Both read the SAME `~/.aida/usage.jsonl` log via
 // `usage::read_events()` and the same `UsageEvent` struct (cmd + duration_ms +
-// exit_code + ts) — no new capture, no new file. `--slowest` aggregates
-// latency per command shape; `--events` streams the raw rows.
+// exit_code + ts) — no new capture, no new file. `aida usage slowest` aggregates
+// latency per command shape; `aida usage events` streams the raw rows.
 // ----------------------------------------------------------------------------
 
 /// Latency aggregate for one command shape over a telemetry window.
@@ -884,7 +884,7 @@ pub(crate) fn handle_usage_command(
         return handle_usage_read_write(since_raw, json_out, limit);
     }
 
-    // STORY-709: `--slowest` is the performance lens — aggregate per-command
+    // STORY-709: `aida usage slowest` is the performance lens — aggregate per-command
     // latency (p50/p95/max + count) from the same usage log and rank
     // slowest-first. Reuses the existing read/parse path; no new capture.
     if slowest {
@@ -907,7 +907,7 @@ pub(crate) fn handle_usage_command(
         return handle_usage_timeline(since_raw, json_out, limit, cmd_filter, slower_than);
     }
 
-    // STORY-530: `--health` renders the deterministic Tier-1 health catalog
+    // STORY-530: `aida usage health` renders the deterministic Tier-1 health catalog
     // (six pure metrics over the telemetry logs + the spec graph). It reads
     // its own sources, so it gets its own handler.
     if health {
@@ -920,7 +920,7 @@ pub(crate) fn handle_usage_command(
         );
     }
 
-    // TASK-266: `--auto-complete` switches to the orchestrator telemetry
+    // TASK-266: `aida usage drains` switches to the orchestrator telemetry
     // log (`~/.aida/auto-complete.jsonl`) — a different source from the
     // per-command usage log, so it gets its own handler.
     if auto_complete {
@@ -964,12 +964,13 @@ pub(crate) fn handle_usage_command(
         return Ok(());
     }
 
-    // --unused: show commands present in `events` but with no record
+    // trace:TASK-1214 | ai:codex
+    // unused: show commands present in `events` but with no record
     // since the cutoff. (A "command not in events at all" is invisible
     // here — we can only report what we've seen.)
     if let Some(raw) = unused_raw {
         // trace:TASK-1509 | ai:claude
-        let cutoff_window = crate::queue_cmd::parse_lookback(raw, "--unused")?;
+        let cutoff_window = crate::queue_cmd::parse_lookback(raw, "usage unused <DURATION>")?;
         let cutoff = now - cutoff_window;
         let mut last_seen: std::collections::HashMap<String, chrono::DateTime<chrono::Utc>> =
             std::collections::HashMap::new();
@@ -1294,12 +1295,12 @@ fn handle_usage_read_write(since_raw: &str, json_out: bool, limit: usize) -> Res
 
 // ----------------------------------------------------------------------------
 // `aida usage drains` — orchestrator telemetry views (TASK-266).
-// Reads `~/.aida/auto-complete.jsonl` (written one line per `--auto-complete`
+// Reads `~/.aida/auto-complete.jsonl` (written one line per `aida queue work --auto-complete`
 // run by `record_auto_complete_run`).
 // ----------------------------------------------------------------------------
 
 /// TASK-266: the `aida usage drains` view family. Bare
-/// `--auto-complete` prints a success/failure summary plus the most recent
+/// `aida usage drains` prints a success/failure summary plus the most recent
 /// failures; `--failures` expands the full failure list; `--pattern` shows
 /// the per-phase failure histogram.
 // trace:TASK-266 | ai:claude
@@ -1350,7 +1351,7 @@ fn handle_auto_complete_usage(
     if pattern {
         return render_auto_complete_pattern(&events, json_out);
     }
-    // `--failures` expands the full list; bare `--auto-complete` is the
+    // `--failures` expands the full list; bare `aida usage drains` is the
     // compact overview that caps the list and points at `--failures`.
     render_auto_complete_failures(
         &events,
@@ -1385,7 +1386,7 @@ fn compute_session_drain_gap(
 }
 
 /// Render the summary header + recent-failures list. `overview` (bare
-/// `--auto-complete`) caps the list short and adds navigation hints;
+/// `aida usage drains`) caps the list short and adds navigation hints;
 /// `--failures` shows the full list up to `limit`.
 // trace:TASK-266 | ai:claude
 fn render_auto_complete_failures(
@@ -1733,6 +1734,7 @@ mod task_872_read_write_audit_tests {
 /// "show", "rel add") — never arg values, paths, or req content.
 ///
 // trace:STORY-122 | ai:claude
+// trace:TASK-1214 | ai:codex
 #[derive(clap::Parser, Debug)]
 #[clap(name = "usage")]
 pub(crate) struct UsageArgs {
@@ -1744,18 +1746,6 @@ pub(crate) struct UsageArgs {
     // trace:TASK-1509 | ai:claude
     #[clap(long, value_name = "WINDOW", default_value = "30d")]
     pub since: String,
-    /// Show commands NOT used since this point (deprecation
-    /// candidates). Same forms as `--since`. Mutually exclusive with
-    /// --errors.
-    // trace:STORY-122 | ai:claude
-    // trace:TASK-1509 | ai:claude
-    #[clap(long, value_name = "WINDOW", conflicts_with = "errors", hide = true)]
-    pub unused: Option<String>,
-    /// Show commands with the highest error rate (`exit_code != 0`
-    /// over total invocations). UX-gap candidates.
-    // trace:STORY-122 | ai:claude
-    #[clap(long, hide = true)]
-    pub errors: bool,
     /// JSON output (commands as an array of {cmd, count, errors,
     /// avg_ms} objects).
     // trace:STORY-122 | ai:claude
@@ -1765,37 +1755,6 @@ pub(crate) struct UsageArgs {
     // trace:STORY-122 | ai:claude
     #[clap(long, default_value = "20")]
     pub limit: usize,
-    /// Switch to the `--auto-complete` orchestrator telemetry view.
-    /// Reads `~/.aida/auto-complete.jsonl` instead of the per-command
-    /// usage log: a success/failure summary plus the recent phase
-    /// failures and the Draft BUGs auto-filed for them.
-    // trace:TASK-266 | ai:claude — plain `//` so the SPEC-ID stays out
-    // of `--help` output (TASK-268).
-    #[clap(long = "auto-complete", conflicts_with_all = ["unused", "errors"], hide = true)]
-    pub auto_complete: bool,
-    /// With `--auto-complete`: list every recent orchestrator failure
-    /// in full (date, spec, failed phase, drafted BUG + its status).
-    // trace:TASK-266 | ai:claude
-    #[clap(long, requires = "auto_complete", hide = true)]
-    pub failures: bool,
-    /// With `--auto-complete`: show which phases fail most often — the
-    /// signal for where to invest orchestrator fixes.
-    // trace:TASK-266 | ai:claude
-    #[clap(
-        long,
-        requires = "auto_complete",
-        conflicts_with = "failures",
-        hide = true
-    )]
-    pub pattern: bool,
-    /// Show the deterministic project-health catalog: phase-failure
-    /// distribution, reap-vs-kill breakdown, drain halt-rate, recovery
-    /// latency, draft-inbox depth, and burn-down velocity. Reads the
-    /// orchestrator telemetry log + headless session logs + the spec graph.
-    // trace:STORY-530 | ai:claude — plain `//` so the SPEC-ID stays out of
-    // `--help` output (TASK-268).
-    #[clap(long, conflicts_with_all = ["unused", "errors", "failures", "pattern"], hide = true)]
-    pub health: bool,
     /// Trace-read-rate audit: classify logged commands into graph READS
     /// (list/show/search/graph/why/history/queue list/…) vs graph WRITES
     /// (add/edit/comment add/rel add/queue add/defer/archive/…) and report
@@ -1803,23 +1762,8 @@ pub(crate) struct UsageArgs {
     /// intent graph is consulted, not just written.
     // trace:TASK-872 | ai:claude — plain `//` so the SPEC-ID stays out of
     // `--help` output (TASK-268).
-    #[clap(long = "read-write", conflicts_with_all = ["unused", "errors", "failures", "pattern", "auto_complete", "health"])]
+    #[clap(long = "read-write")]
     pub read_write: bool,
-    /// Performance lens: rank command shapes by latency (p50/p95/max +
-    /// call count), slowest-first, from the captured `duration_ms`. The
-    /// perf-debug view — e.g. `status` topped it at ~26s before its
-    /// latency fix landed. Honors --since/--limit/--json.
-    // trace:STORY-709 | ai:claude — plain `//` so the SPEC-ID stays out of
-    // `--help` output (TASK-268).
-    #[clap(long, conflicts_with_all = ["unused", "errors", "failures", "pattern", "auto_complete", "health", "read_write"], hide = true)]
-    pub slowest: bool,
-    /// Raw recent event stream: each invocation's ts, cmd, duration_ms,
-    /// and exit_code, newest-first. Filter with --cmd / --slower-than;
-    /// cap with --limit (default 25). Honors --since/--json.
-    // trace:STORY-709 | ai:claude — plain `//` so the SPEC-ID stays out of
-    // `--help` output (TASK-268).
-    #[clap(long, conflicts_with_all = ["unused", "errors", "failures", "pattern", "auto_complete", "health", "read_write", "slowest"], hide = true)]
-    pub events: bool,
     /// With `events`: keep only events for this exact command shape
     /// (e.g. `queue list`).
     // trace:STORY-709 | ai:claude
@@ -1857,17 +1801,9 @@ fn run_usage(
             match &args {
                 UsageArgs {
                     since,
-                    unused,
-                    errors,
                     json,
                     limit,
-                    auto_complete,
-                    failures,
-                    pattern,
-                    health,
                     read_write,
-                    slowest,
-                    events,
                     cmd,
                     slower_than,
                     action,
@@ -1922,9 +1858,9 @@ fn run_usage(
                             _ => {}
                         }
                     }
-                    // TASK-266: load the store only for the `--auto-complete` view,
+                    // TASK-266: load the store only for the `drains` view,
                     // which resolves drafted-BUG statuses; plain usage stays cheap.
-                    // STORY-530: the `--health` catalog also needs the store.
+                    // STORY-530: the `health` catalog also needs the store.
                     let (
                         unused,
                         errors,
@@ -1935,17 +1871,7 @@ fn run_usage(
                         slowest,
                         events,
                         timeline,
-                    ) = normalize_usage_mode(
-                        unused.as_deref(),
-                        *errors,
-                        *auto_complete,
-                        *failures,
-                        *pattern,
-                        *health,
-                        *slowest,
-                        *events,
-                        action.as_ref(),
-                    );
+                    ) = normalize_usage_mode(action.as_ref());
                     let store = if auto_complete || health {
                         backend.load().ok()
                     } else {
@@ -1982,17 +1908,9 @@ fn run_usage(
             match &args {
                 UsageArgs {
                     since,
-                    unused,
-                    errors,
                     json,
                     limit,
-                    auto_complete,
-                    failures,
-                    pattern,
-                    health,
                     read_write,
-                    slowest,
-                    events,
                     cmd,
                     slower_than,
                     action,
@@ -2042,9 +1960,9 @@ fn run_usage(
                             _ => {}
                         }
                     }
-                    // TASK-266: only the `--auto-complete` view needs the store
+                    // TASK-266: only the `drains` view needs the store
                     // (to resolve drafted-BUG statuses) — keep plain `aida usage`
-                    // store-load-free. STORY-530: the `--health` catalog also needs
+                    // store-load-free. STORY-530: the `health` catalog also needs
                     // the store for draft-inbox depth + burn-down velocity.
                     let (
                         unused,
@@ -2056,17 +1974,7 @@ fn run_usage(
                         slowest,
                         events,
                         timeline,
-                    ) = normalize_usage_mode(
-                        unused.as_deref(),
-                        *errors,
-                        *auto_complete,
-                        *failures,
-                        *pattern,
-                        *health,
-                        *slowest,
-                        *events,
-                        action.as_ref(),
-                    );
+                    ) = normalize_usage_mode(action.as_ref());
                     let store = if auto_complete || health {
                         storage.load().ok()
                     } else {
