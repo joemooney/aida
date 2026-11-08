@@ -7,8 +7,8 @@ status: InProgress
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
-created_at: 2026-11-06T13:28:15.158321967Z
-modified_at: 2026-11-08T12:41:32.009050414Z
+created_at: 2026-11-06 13:28:15.158321+00:00
+modified_at: 2026-11-08 12:41:32.009050+00:00
 req_type: Task
 tags:
 - architecture
@@ -17,533 +17,538 @@ tags:
 relationships:
 - rel_type: Child
   target_id: 01a1965c-3483-70e3-af35-1caaf7df3f96
-  created_at: 2026-11-06T13:28:37.924934011Z
+  created_at: 2026-11-06 13:28:37.924934+00:00
 - rel_type:
     custom: implemented-by
   target_id: 01a1b1a6-abd1-7f02-a94a-dcf699067bfe
-  created_at: 2026-11-06T16:18:03.725053372Z
+  created_at: 2026-11-06 16:18:03.725053+00:00
   created_by: joe
 - rel_type:
     custom: implemented-by
   target_id: 01a1b1ef-58a6-7970-9358-841d06218011
-  created_at: 2026-11-06T17:37:18.052682038Z
+  created_at: 2026-11-06 17:37:18.052682+00:00
   created_by: joe
 comments:
 - id: 01a1b10c-f42f-7b72-8757-407d34fd2e80
   author: joe
   content: 'Advisor: filed and approved from the TASK-2708 round-8 F4 ruling. Start after PR #3449 merges, because it builds on the headless wrapper path. Execution mode: supervised containment work (heft is high). The implementer posts a sketch on this spec before coding.'
-  created_at: 2026-11-06T13:29:38.607884214Z
-  modified_at: 2026-11-06T13:29:38.607884214Z
+  created_at: 2026-11-06 13:29:38.607884+00:00
+  modified_at: 2026-11-06 13:29:38.607884+00:00
   session_id: b0a84e34-277c-4df6-b53c-43f4bbe2e84d
 - id: 01a1b19b-080c-7e53-b5f8-999cc25594b9
   author: joe
   content: 'ADVISOR: unblocked (#3449 merged at 20a33ba). The first lane posts a sketch covering the interactive, --bg, coordinator and resume paths on the shared wrapper, then implements after signoff.'
-  created_at: 2026-11-06T16:04:49.804081678Z
-  modified_at: 2026-11-06T16:04:49.804081678Z
+  created_at: 2026-11-06 16:04:49.804081+00:00
+  modified_at: 2026-11-06 16:04:49.804081+00:00
   session_id: b0a84e34-277c-4df6-b53c-43f4bbe2e84d
 - id: 01a1b1a6-0ed9-7a13-a63e-6f252f6e7962
   author: joe
-  content: |
-    # Claude shared-wrapper launch sketch
-
-    <!-- trace:TASK-3219 | ai:codex -->
-
-    Status: proposed; advisor signoff required before implementation. TASK-3219
-    comments dated 2026-11-06 13:29 and 16:04 UTC explicitly require this sketch
-    and signoff. This document grants no launch or publication authority.
-
-    ## Contract
-
-    With trusted `[contained.vendors] claude = "aida"`, interactive agent-new,
-    background, coordinator and resume sessions must run inside the existing
-    receipt-attested shared boundary. With that opt-in unset, retain existing
-    Claude-native argv, environment, grant and lifecycle behavior. Preserve the
-    TASK-2708 accepted WAIT_KILLABLE_RECV signal deferral, Linux 5.19+ fail-closed
-    floor, ancillary-credential refusal, and sendmmsg/named-sendmsg restrictions.
-    No broker or network-policy relaxation is proposed.
-
-    ## Current seams and missing support
-
-    * `session::claude_contained_flags_for_roots` refuses all compositions outside
-      `ClaudeWrapperComposition`. Removing that refusal alone would leave the
-      new surfaces executing without the shared wrapper.
-    * `agent_launch::run_agent_generation` owns interactive spawn, grant rollback,
-      registry binding, signals and wait. It currently spawns a plain Command.
-    * `agent_launch::build_agent_new_bg_command` and its caller dispatch Claude's
-      `--bg`; the existing `refuse_bg_under_os_wrap` explains that the vendor
-      daemon, rather than this dispatcher, parents the actual session. Wrapping
-      this handoff cannot establish session containment.
-    * `session::build_coordinator_headless_command_inner` builds coordinator argv;
-      `coordinator_status_with_handle_guard` finalizes and spawns it. Both need
-      wrapper selection and receipt-before-release handling.
-    * `session::build_contained_resume_command` stages a transcript into the
-      host Claude project store, then `exec_or_spawn_agent` directly execs Claude.
-      The wrapper uses a fresh private config directory, and `contained::claude_argv`
-      explicitly refuses resume/continue/fork flags. Merely allowing those flags
-      cannot make the transcript available.
-    * `PreparedLaunch::prepare_for_owner` admits headless launches only;
-      `PreparedLaunch::spawn` forces null stdin. Its write profile uses bwrap
-      `--new-session` and a fresh `/dev`. Interactive terminal behavior needs an
-      explicit tested design, not just inherited stdout.
-
-    ## Proposed implementation after signoff
-
-    1. Resolve wrapper selection at each launch entry point from trusted policy,
-       anchored to the launch project. Scope argv composition only around launches
-       whose spawn will use `PreparedLaunch`; bypass legacy os_wrap only there.
-       Remove `CLAUDE_WRAPPER_UNWIRED` after all four surfaces are wired and tested.
-       Keep widening-flag validation before config/broker setup.
-    2. Add explicit launch I/O modes to the shared wrapper. Preserve today's
-       headless mode exactly; interactive mode uses a private PTY with host-side
-       terminal relay, resize and signal forwarding. Keep namespace/session
-       isolation and descriptor filtering. Restore terminal state on all exits;
-       grant no host `/dev/tty` mount or generic inherited descriptors.
-    3. Route interactive generations through prepare, attested spawn, child-worker
-       grant binding, registry/lease binding, release and supervision. Keep the
-       wrapper state owner alive until the vendor exits; revoke untransferred
-       grants and reservations on refusal. Track the attested worker separately
-       from the helper PID used for host process supervision.
-    4. For the opt-in background path, propose an AIDA-owned detached supervisor
-       running a foreground Claude child inside the wrapper, rather than Claude's
-       external daemon. It owns wrapper state, logs, signals, registry and grants
-       until child exit. Acknowledge dispatch only after receipt acceptance and
-       worker binding. Native `--bg` remains unchanged. This changes the opted-in
-       background lifecycle and needs the advisor's explicit approval, including
-       whether attach/log compatibility must be provided in this slice.
-    5. Route coordinator spawning through the same prepare/bind/release/wait
-       sequence using the coordinator's explicit child grant, identity, cwd and
-       CLI/MCP selection. Preserve quiet/stream output and reservation cleanup.
-    6. For explicit resume IDs, copy only the validated, bounded, singly linked
-       regular transcript from the selected session's project store into the new
-       private config's cwd-keyed project directory. Use handle-based no-follow
-       reads and exclusive private writes. Never expose the whole host Claude
-       config directory. Persist the resumed transcript on exit through an
-       explicit host-side, identity-checked publication seam so a later resume
-       sees new turns. Keep credentials read-only and expiry checks unchanged.
-       Refuse implicit continue/fork forms until their selection and persistence
-       semantics are explicitly covered. Resume must supervise rather than exec
-       away the wrapper owner. Revalidate resume grant authority; do not borrow
-       the launcher's grant accidentally.
-
-    ## Validation plan
-
-    Add one path-level targeted regression for each of interactive, background,
-    coordinator and resume. Exercise the actual spawn adapter with a fake Claude
-    worker: require accepted receipt and own seat, cwd/write limits, selected
-    CLI/MCP surface and failure-before-release behavior. Interactive testing must
-    exercise PTY input, resize and terminal restoration; background testing must
-    prove the worker survives dispatcher exit while remaining confined and loses
-    authority on teardown; resume must prove selected-history visibility,
-    cross-session isolation and persistence after a second resume.
-
-    For every path, compare opt-in-unset behavior against the existing native
-    command and environment contract. Retain the existing headless suite and
-    TASK-2708 signal, old-kernel, credential and network regressions. Add new live
-    tests to the required-live bwrap CI invocation and exact success-count check;
-    neither a missing bwrap/kernel capability nor an unavailable fake worker may
-    silently skip when required-live is enabled. Run targeted tests,
-    `cargo fmt --all -- --check`, and `make check-ci-fast`; report the actual live
-    count and infrastructure refusals separately from unit-test results.
-
-    ## Decisions requested
-
-    Approve or revise the AIDA-owned background supervisor and its attach/log
-    contract, the private-PTY interactive transport, and the narrowly scoped resume
-    transcript import/publication lifecycle. Then authorize implementation of this
-    sketch. No implementation or test pass is claimed by this planning slice.
-  created_at: 2026-11-06T16:16:52.441536812Z
-  modified_at: 2026-11-06T16:16:52.441536812Z
+  content: "# Claude shared-wrapper launch sketch\n\n<!-- trace:TASK-3219 | ai:codex -->\n\nStatus: proposed; advisor signoff required before implementation. TASK-3219\ncomments dated 2026-11-06 13:29 and 16:04 UTC explicitly require this sketch\nand signoff. This document grants no launch or publication authority.\n\n## Contract\n\nWith trusted `[contained.vendors] claude = \"aida\"`, interactive agent-new,\nbackground, coordinator and resume sessions must run inside the existing\nreceipt-attested shared boundary. With that opt-in unset, retain existing\nClaude-native argv, environment, grant and lifecycle behavior. Preserve the\nTASK-2708 accepted WAIT_KILLABLE_RECV signal deferral, Linux 5.19+ fail-closed\nfloor, ancillary-credential refusal, and sendmmsg/named-sendmsg restrictions.\nNo broker or network-policy relaxation is proposed.\n\n## Current seams and missing support\n\n* `session::claude_contained_flags_for_roots` refuses all compositions outside\n  `ClaudeWrapperComposition`.\
+    \ Removing that refusal alone would leave the\n  new surfaces executing without the shared wrapper.\n* `agent_launch::run_agent_generation` owns interactive spawn, grant rollback,\n  registry binding, signals and wait. It currently spawns a plain Command.\n* `agent_launch::build_agent_new_bg_command` and its caller dispatch Claude's\n  `--bg`; the existing `refuse_bg_under_os_wrap` explains that the vendor\n  daemon, rather than this dispatcher, parents the actual session. Wrapping\n  this handoff cannot establish session containment.\n* `session::build_coordinator_headless_command_inner` builds coordinator argv;\n  `coordinator_status_with_handle_guard` finalizes and spawns it. Both need\n  wrapper selection and receipt-before-release handling.\n* `session::build_contained_resume_command` stages a transcript into the\n  host Claude project store, then `exec_or_spawn_agent` directly execs Claude.\n  The wrapper uses a fresh private config directory, and `contained::claude_argv`\n  explicitly\
+    \ refuses resume/continue/fork flags. Merely allowing those flags\n  cannot make the transcript available.\n* `PreparedLaunch::prepare_for_owner` admits headless launches only;\n  `PreparedLaunch::spawn` forces null stdin. Its write profile uses bwrap\n  `--new-session` and a fresh `/dev`. Interactive terminal behavior needs an\n  explicit tested design, not just inherited stdout.\n\n## Proposed implementation after signoff\n\n1. Resolve wrapper selection at each launch entry point from trusted policy,\n   anchored to the launch project. Scope argv composition only around launches\n   whose spawn will use `PreparedLaunch`; bypass legacy os_wrap only there.\n   Remove `CLAUDE_WRAPPER_UNWIRED` after all four surfaces are wired and tested.\n   Keep widening-flag validation before config/broker setup.\n2. Add explicit launch I/O modes to the shared wrapper. Preserve today's\n   headless mode exactly; interactive mode uses a private PTY with host-side\n   terminal relay, resize and signal\
+    \ forwarding. Keep namespace/session\n   isolation and descriptor filtering. Restore terminal state on all exits;\n   grant no host `/dev/tty` mount or generic inherited descriptors.\n3. Route interactive generations through prepare, attested spawn, child-worker\n   grant binding, registry/lease binding, release and supervision. Keep the\n   wrapper state owner alive until the vendor exits; revoke untransferred\n   grants and reservations on refusal. Track the attested worker separately\n   from the helper PID used for host process supervision.\n4. For the opt-in background path, propose an AIDA-owned detached supervisor\n   running a foreground Claude child inside the wrapper, rather than Claude's\n   external daemon. It owns wrapper state, logs, signals, registry and grants\n   until child exit. Acknowledge dispatch only after receipt acceptance and\n   worker binding. Native `--bg` remains unchanged. This changes the opted-in\n   background lifecycle and needs the advisor's explicit\
+    \ approval, including\n   whether attach/log compatibility must be provided in this slice.\n5. Route coordinator spawning through the same prepare/bind/release/wait\n   sequence using the coordinator's explicit child grant, identity, cwd and\n   CLI/MCP selection. Preserve quiet/stream output and reservation cleanup.\n6. For explicit resume IDs, copy only the validated, bounded, singly linked\n   regular transcript from the selected session's project store into the new\n   private config's cwd-keyed project directory. Use handle-based no-follow\n   reads and exclusive private writes. Never expose the whole host Claude\n   config directory. Persist the resumed transcript on exit through an\n   explicit host-side, identity-checked publication seam so a later resume\n   sees new turns. Keep credentials read-only and expiry checks unchanged.\n   Refuse implicit continue/fork forms until their selection and persistence\n   semantics are explicitly covered. Resume must supervise rather than\
+    \ exec\n   away the wrapper owner. Revalidate resume grant authority; do not borrow\n   the launcher's grant accidentally.\n\n## Validation plan\n\nAdd one path-level targeted regression for each of interactive, background,\ncoordinator and resume. Exercise the actual spawn adapter with a fake Claude\nworker: require accepted receipt and own seat, cwd/write limits, selected\nCLI/MCP surface and failure-before-release behavior. Interactive testing must\nexercise PTY input, resize and terminal restoration; background testing must\nprove the worker survives dispatcher exit while remaining confined and loses\nauthority on teardown; resume must prove selected-history visibility,\ncross-session isolation and persistence after a second resume.\n\nFor every path, compare opt-in-unset behavior against the existing native\ncommand and environment contract. Retain the existing headless suite and\nTASK-2708 signal, old-kernel, credential and network regressions. Add new live\ntests to the required-live\
+    \ bwrap CI invocation and exact success-count check;\nneither a missing bwrap/kernel capability nor an unavailable fake worker may\nsilently skip when required-live is enabled. Run targeted tests,\n`cargo fmt --all -- --check`, and `make check-ci-fast`; report the actual live\ncount and infrastructure refusals separately from unit-test results.\n\n## Decisions requested\n\nApprove or revise the AIDA-owned background supervisor and its attach/log\ncontract, the private-PTY interactive transport, and the narrowly scoped resume\ntranscript import/publication lifecycle. Then authorize implementation of this\nsketch. No implementation or test pass is claimed by this planning slice.\n"
+  created_at: 2026-11-06 16:16:52.441536+00:00
+  modified_at: 2026-11-06 16:16:52.441536+00:00
   session_id: 01a1b1a3c9e6
 - id: 01a1b1a8-899d-75a2-a788-463b0920ceff
   author: joe
-  content: 'ADVISOR SIGNOFF on docs/plans/2026-11-06-task-3219-claude-wrapper-launches.md (PR #3514, retitled docs(plans) with Refs). APPROVED: (a) private-PTY interactive transport with a host relay, resize/signal forwarding and terminal restore, no host /dev/tty and no inherited descriptors; (b) an AIDA-owned detached supervisor for opted-in background launches, running a foreground Claude inside the wrapper. Attach/log contract for this task: aida-level logs and ''aida agent attach''-style access only; ''claude attach'' under the opt-in refuses with an explicit hint. Native --bg is unchanged. (c) Narrow resume: import only the validated, bounded transcript for an explicit ID, with identity-checked host publication on exit; refuse continue and fork. AMENDMENT (binding), four Refs slices in this order, each its own PR with one targeted regression and the required-live count: S1 coordinator (closest to headless), S2 interactive PTY, S3 background supervisor, S4 resume. CLAUDE_WRAPPER_UNWIRED stays as a per-surface refusal for unwired surfaces and is removed in S4, which carries the completing (TASK-3219) trailer. Implement S1 now.'
-  created_at: 2026-11-06T16:19:34.941570720Z
-  modified_at: 2026-11-06T16:19:34.941570720Z
+  content: 'ADVISOR SIGNOFF on docs/plans/2026-11-06-task-3219-claude-wrapper-launches.md (PR #3514, retitled docs(plans) with Refs). APPROVED: (a) private-PTY interactive transport with a host relay, resize/signal forwarding and terminal restore, no host /dev/tty and no inherited descriptors; (b) an AIDA-owned detached supervisor for opted-in background launches, running a foreground Claude inside the wrapper. Attach/log contract for this task: aida-level logs and ''aida agent attach''-style access only; ''claude attach'' under the opt-in refuses with an explicit hint. Native --bg is unchanged. (c) Narrow resume: import only the validated, bounded transcript for an explicit ID, with identity-checked host publication on exit; refuse continue and fork. AMENDMENT (binding), four Refs slices in this order, each its own PR with one targeted regression and the required-live count: S1 coordinator (closest to headless), S2 interactive PTY, S3 background supervisor, S4 resume. CLAUDE_WRAPPER_UNWIRED
+    stays as a per-surface refusal for unwired surfaces and is removed in S4, which carries the completing (TASK-3219) trailer. Implement S1 now.'
+  created_at: 2026-11-06 16:19:34.941570+00:00
+  modified_at: 2026-11-06 16:19:34.941570+00:00
   session_id: b0a84e34-277c-4df6-b53c-43f4bbe2e84d
 - id: 01a1b1a8-de8f-78e3-9479-31002bf7fe13
   author: joe
   content: 'Returned from NeedsAttention to Approved via `aida edit --status`. It was punted on: design-fork: Advisor comments require a sketch and signoff before coding. Posted sketch in the spec and docs/plans/2026-11-06-task-3219-claude-wrapper-launches.md. Signoff needed on an AIDA-owned background supervisor (Claude --bg delegates to an external daemon), private-PTY interactive I/O, and private resume transcript import/publication. Existing wrapper is headless-only, nulls stdin and refuses resume flags; removing the composition refusal alone would not satisfy containment. No implementation started; this punt remains a publication veto.. No triage reason was given.'
-  created_at: 2026-11-06T16:19:56.687852404Z
-  modified_at: 2026-11-06T16:19:56.687852404Z
+  created_at: 2026-11-06 16:19:56.687852+00:00
+  modified_at: 2026-11-06 16:19:56.687852+00:00
   session_id: b0a84e34-277c-4df6-b53c-43f4bbe2e84d
 - id: 01a1b1dd-a1bf-73c1-9dcd-f3e735098958
   author: joe
   content: 'S1 coordinator implementation is ready in the native worktree, uncommitted. Routes opted-in Claude headless coordinators through PreparedLaunch, accepted receipt, explicit worker-grant binding and release; retains per-surface refusals for S2-S4 and leaves native argv unchanged. Host-only routing intent prevents a policy-removal downgrade. Added real-spawn quiet/stream/preflight-failure regression, composition/native regression, required-live CI count, and audited the extra Claude-only receipt call in the Codex spawn inventory. Required-live coordinator count: 1/1 successful. Final formatting passes; 38 fast gates passed. The final-source broader run passed 73 tests; five existing process fixtures need the matching CLI, which is building before their rerun. Recorded Refs-only native publication declaration: [AI:codex] feat(containment): wrap Claude coordinator launches (Refs TASK-3219). No completion or publication from this seat.'
-  created_at: 2026-11-06T17:17:34.527893679Z
-  modified_at: 2026-11-06T17:17:34.527893679Z
+  created_at: 2026-11-06 17:17:34.527893+00:00
+  modified_at: 2026-11-06 17:17:34.527893+00:00
   session_id: 01a1b1b68af3
 - id: 01a1b1ee-4c69-7012-babf-05ffdea3a379
   author: joe
-  content: 'Final S1 validation handoff: matching CLI built successfully (cargo build -p aida-cli --profile agent). Final-source regression selection task_3219/bug_2389/bug_2398/task_2707/task_2708: 77 passed, 1 failed. The sole failure is bug_2398_real_native_codex_core_delegated_roles_and_reviewer_recording refusing the app-server socket directory mode/ownership; it reproduces with private TMPDIR/XDG_RUNTIME_DIR and umask 077. TASK-2758 already records this exact host failure, accepted by advisor as non-blocking/no work on 2026-11-02; that ruling is preserved, with no duplicate finding or reopen. Installed-Codex composition companion remains intentionally opt-in and skipped. Required-live TASK-3219 count is explicitly 1/1 successful under AIDA_REQUIRE_BWRAP_LIVE=1, including quiet/stream output and refusal before model release. Launcher-entry ratchet, cargo fmt --all -- --check and git diff --check pass; make check-ci-fast passed all 38 fast gates. Six changed files: session.rs, containment/tests/launch_tests.rs, tests/task_2708_codex_fail_closed_tests.rs, .github/workflows/ci.yml, OVERVIEW.md and docs/plans/2026-11-06-task-3219-claude-wrapper-launches.md. No S1 design blocker. S2-S4 remain per the binding advisor order, and CLAUDE_WRAPPER_UNWIRED stays for their surfaces. Edits remain uncommitted; the recorded host subject is Refs TASK-3219. No queue completion from this native seat.'
-  created_at: 2026-11-06T17:35:46.793180556Z
-  modified_at: 2026-11-06T17:35:46.793180556Z
+  content: 'Final S1 validation handoff: matching CLI built successfully (cargo build -p aida-cli --profile agent). Final-source regression selection task_3219/bug_2389/bug_2398/task_2707/task_2708: 77 passed, 1 failed. The sole failure is bug_2398_real_native_codex_core_delegated_roles_and_reviewer_recording refusing the app-server socket directory mode/ownership; it reproduces with private TMPDIR/XDG_RUNTIME_DIR and umask 077. TASK-2758 already records this exact host failure, accepted by advisor as non-blocking/no work on 2026-11-02; that ruling is preserved, with no duplicate finding or reopen. Installed-Codex composition companion remains intentionally opt-in and skipped. Required-live TASK-3219 count is explicitly 1/1 successful under AIDA_REQUIRE_BWRAP_LIVE=1, including quiet/stream output and refusal before model release. Launcher-entry ratchet, cargo fmt --all -- --check and git diff --check pass; make check-ci-fast passed all 38 fast gates. Six changed files: session.rs, containment/tests/launch_tests.rs,
+    tests/task_2708_codex_fail_closed_tests.rs, .github/workflows/ci.yml, OVERVIEW.md and docs/plans/2026-11-06-task-3219-claude-wrapper-launches.md. No S1 design blocker. S2-S4 remain per the binding advisor order, and CLAUDE_WRAPPER_UNWIRED stays for their surfaces. Edits remain uncommitted; the recorded host subject is Refs TASK-3219. No queue completion from this native seat.'
+  created_at: 2026-11-06 17:35:46.793180+00:00
+  modified_at: 2026-11-06 17:35:46.793180+00:00
   session_id: 01a1b1b68af3
 - id: 01a1b30a-4b3d-7cc1-8b37-ca37b9821378
   author: joe
   content: 'ADVISOR BRIEF 15:52 (S2 of 4): S1 (coordinator, #3522) has landed. Implement S2 only: the private-PTY interactive Claude launch on the shared contained wrapper, per docs/plans/2026-11-06-task-3219-claude-wrapper-launches.md (signed off 16:19 UTC). Background (S3) and resume (S4) keep refusing. One PR with a Refs TASK-3219 trailer; only S4 completes the task. Targeted cargo test on the wrapper/PTY module plus a live regression (report the actual live count separately from unit tests), plus make check-ci-fast.'
-  created_at: 2026-11-06T22:45:58.717904425Z
-  modified_at: 2026-11-06T22:45:58.717904425Z
+  created_at: 2026-11-06 22:45:58.717904+00:00
+  modified_at: 2026-11-06 22:45:58.717904+00:00
   session_id: 3dd100c3-f8c0-44d9-ac4c-f9ff0eb32a27
 - id: 01a1b30f-f68a-7231-a844-411d79ad7608
   author: joe
   content: 'S2 approach: implement the approved explicit interactive I/O mode with a private PTY, host raw-terminal relay, resize and signal forwarding, and RAII restoration. Route foreground Claude agent-new through prepare/receipt/worker grant and registry binding/release/wait, retaining native launch behavior and background/resume refusals. Expected files: launch/contained.rs plus a focused PTY module, contained_lane.py, agent_launch.rs, wrapper tests, required-live CI wording and the approved plan/OVERVIEW architecture description. Validate PTY input/resize/restoration and receipt-before-release with a fake worker, targeted wrapper/PTY cargo tests, required-live count separately, formatting and make check-ci-fast. No new design fork; S3/S4 remain out of scope.'
-  created_at: 2026-11-06T22:52:10.250063875Z
-  modified_at: 2026-11-06T22:52:10.250063875Z
+  created_at: 2026-11-06 22:52:10.250063+00:00
+  modified_at: 2026-11-06 22:52:10.250063+00:00
   session_id: 01a1b30ef0e0
 - id: 01a1b345-a771-7ac3-baab-c977c0f15939
   author: joe
-  content: 'S2 implementation and final validation: private-PTY foreground Claude agent-new now uses the shared wrapper, receipt acceptance, worker grant and registry binding, release and supervision. Tracks the attested worker separately from the helper; relays terminal input/output and resize, forwards signals using a pinned worker pidfd, and restores termios on normal exits, errors and unwind. Version queries run inside the lane after receipt acceptance, with stripped seat selectors, private stdio, a two-second collection deadline and 257-byte raw output bound; failed queries leave version provenance unknown. Headless/native behavior is retained; background and resume remain refused. Final command: AIDA_REQUIRE_BWRAP_LIVE=1 RUSTC_WRAPPER= cargo test -p aida-cli-lib --profile agent --lib -- launch::contained task_2708_every_codex_spawn_path_is_inventoried_and_guarded task_2708_every_spawn_agent_builder_is_inventoried_and_guarded --nocapture --logfile /tmp/task3219-required-results.log. Result: 52 passed, zero failed; the installed-Codex companion remains intentionally opt-in. Separate actual live count: 2/2 task_3219_live_ tests (S1 coordinator and new S2 interactive 1/1), with no infrastructure refusal. PTY unit count: 3/3; confined-version helper covers six bounded-output/cleanup cases. make check-ci-fast passed all 38 gates after adding the explicit Linux guard to the proc-reading live fixture; cargo fmt and git diff --check pass. One earlier isolated-worker exit-1 failure lost its private-terminal exception text; it did not recur in five full-suite repetitions, instrumented diagnostics or the final fresh required-live Cargo run. This is retained as a fixture diagnostics follow-up, with no observed escape or identified production defect. Ten changed files remain uncommitted for host publication. S2 is a Refs slice only; S3/S4 remain and only S4 completes TASK-3219.'
-  created_at: 2026-11-06T23:50:48.945370309Z
-  modified_at: 2026-11-06T23:50:48.945370309Z
+  content: 'S2 implementation and final validation: private-PTY foreground Claude agent-new now uses the shared wrapper, receipt acceptance, worker grant and registry binding, release and supervision. Tracks the attested worker separately from the helper; relays terminal input/output and resize, forwards signals using a pinned worker pidfd, and restores termios on normal exits, errors and unwind. Version queries run inside the lane after receipt acceptance, with stripped seat selectors, private stdio, a two-second collection deadline and 257-byte raw output bound; failed queries leave version provenance unknown. Headless/native behavior is retained; background and resume remain refused. Final command: AIDA_REQUIRE_BWRAP_LIVE=1 RUSTC_WRAPPER= cargo test -p aida-cli-lib --profile agent --lib -- launch::contained task_2708_every_codex_spawn_path_is_inventoried_and_guarded task_2708_every_spawn_agent_builder_is_inventoried_and_guarded --nocapture --logfile /tmp/task3219-required-results.log.
+    Result: 52 passed, zero failed; the installed-Codex companion remains intentionally opt-in. Separate actual live count: 2/2 task_3219_live_ tests (S1 coordinator and new S2 interactive 1/1), with no infrastructure refusal. PTY unit count: 3/3; confined-version helper covers six bounded-output/cleanup cases. make check-ci-fast passed all 38 gates after adding the explicit Linux guard to the proc-reading live fixture; cargo fmt and git diff --check pass. One earlier isolated-worker exit-1 failure lost its private-terminal exception text; it did not recur in five full-suite repetitions, instrumented diagnostics or the final fresh required-live Cargo run. This is retained as a fixture diagnostics follow-up, with no observed escape or identified production defect. Ten changed files remain uncommitted for host publication. S2 is a Refs slice only; S3/S4 remain and only S4 completes TASK-3219.'
+  created_at: 2026-11-06 23:50:48.945370+00:00
+  modified_at: 2026-11-06 23:50:48.945370+00:00
   session_id: 01a1b30ef0e0
 - id: 01a1b348-787d-7bd0-922d-96b359455e45
   author: joe
-  content: 'Host handoff supplement: the native publication declaration was recorded successfully as [AI:codex] feat(containment): wrap interactive Claude with a private PTY (Refs TASK-3219). Exact final required-live count was checked against source test names and the libtest logfile: 2/2, with S2 1/1. Final fresh Cargo selection passed 52/52, PTY unit tests 3/3, and all 38 fast gates passed. The minor diagnostic follow-up is to retain bounded private-PTY driver output before asserting an unexpected worker exit. A draft finding could not be allocated from this native seat: the MCP transport was closed, and the CLI refused ID allocation with Read-only file system and explicitly reported that no metadata or object was written. The observation and initial unreproduced exit-1 failure are retained in this spec audit trail; the host can allocate the draft if desired. This is not a manual hold, punt or identified production defect. Code remains uncommitted; no PR, commit, push or queue completion was attempted from the seat.'
-  created_at: 2026-11-06T23:53:53.533080630Z
-  modified_at: 2026-11-06T23:53:53.533080630Z
+  content: 'Host handoff supplement: the native publication declaration was recorded successfully as [AI:codex] feat(containment): wrap interactive Claude with a private PTY (Refs TASK-3219). Exact final required-live count was checked against source test names and the libtest logfile: 2/2, with S2 1/1. Final fresh Cargo selection passed 52/52, PTY unit tests 3/3, and all 38 fast gates passed. The minor diagnostic follow-up is to retain bounded private-PTY driver output before asserting an unexpected worker exit. A draft finding could not be allocated from this native seat: the MCP transport was closed, and the CLI refused ID allocation with Read-only file system and explicitly reported that no metadata or object was written. The observation and initial unreproduced exit-1 failure are retained in this spec audit trail; the host can allocate the draft if desired. This is not a manual hold, punt or identified production defect. Code remains uncommitted; no PR, commit, push or queue completion
+    was attempted from the seat.'
+  created_at: 2026-11-06 23:53:53.533080+00:00
+  modified_at: 2026-11-06 23:53:53.533080+00:00
   session_id: 01a1b30ef0e0
 - id: 01a1b35b-6b34-7240-b74b-13e11e778eb9
   author: joe
   content: '[advisor 2026-11-06 17:16] #3547 hand-merged onto main at d41de2b: one conflict in agent_launch.rs run_agent_generation. Kept the PR''s pre-supervision register closure and moved it to main''s register_spawned_agent_with_row with delegate_seats (BUG-2467), so contained launches keep delegation. Re-review must cover the merge resolution.'
-  created_at: 2026-11-07T00:14:35.316648945Z
-  modified_at: 2026-11-07T00:14:35.316648945Z
+  created_at: 2026-11-07 00:14:35.316648+00:00
+  modified_at: 2026-11-07 00:14:35.316648+00:00
   session_id: 01a1b358-7de9-72a0-b4a1-1a909992fa05
   harness_version: 2.1.319 (Claude Code)
 - id: 01a1b387-f5a4-74a3-8cb1-20daf6009050
   author: joe
   content: 'S2 continuation on the already merged private-PTY implementation: verify the agent_launch.rs merge resolution preserves pre-release registry binding and delegate_seats. Add focused fixture assertions for that contract and bounded PTY diagnostics so an unexpected worker exit retains its terminal error instead of failing before driver collection. Re-run wrapper/PTY tests under required-live, report actual task_3219_live_ count separately, formatting and make check-ci-fast. S3 background and S4 resume remain refused; Refs-only host publication.'
-  created_at: 2026-11-07T01:03:14.340956522Z
-  modified_at: 2026-11-07T01:03:14.340956522Z
+  created_at: 2026-11-07 01:03:14.340956+00:00
+  modified_at: 2026-11-07 01:03:14.340956+00:00
   session_id: 01a1b3868126
 - id: 01a1b3a4-21c2-7f90-bc1a-6288834dc04b
   author: joe
-  content: 'S2 continuation / merge-resolution validation completed. This checkout already contained private-PTY S2 from #3547 and its main merge resolution. Verified the production path retains receipt -> worker-grant binding -> register_spawned_agent_with_row (including delegate_seats) -> release -> supervision. Two uncommitted files: containment/tests/launch_tests.rs adds live/native delegation assertions, checks registry presence at the spawn callback, and always gathers a bounded 64 KiB PTY tail before exit assertions; launch/contained_pty.rs adds the missing Linux cfg on its shell-backed error-restoration unit test. Final-source required-live command: AIDA_REQUIRE_BWRAP_LIVE=1 RUSTC_WRAPPER= cargo test -p aida-cli-lib --profile agent --lib -- launch::contained task_2708_every_codex_spawn_path_is_inventoried_and_guarded task_2708_every_spawn_agent_builder_is_inventoried_and_guarded --nocapture --logfile /tmp/task3219-s2-final-results.log. Result 52 passed, 0 failed; separate actual TASK-3219 live count 2/2 (S2 private PTY 1/1, S1 coordinator 1/1), PTY units 3/3. No infrastructure refusal; installed-Codex companion remains separately opt-in and was not exercised. make check-ci-fast passed all 38 gates after fixing the Linux annotation identified on the first run; cargo fmt --all -- --check and git diff --check passed. Background/resume remain refused. No new design blocker or manual gate. Edits remain uncommitted for Refs-only host publication; TASK-3219 remains in progress for S3/S4.'
-  created_at: 2026-11-07T01:34:00.642600131Z
-  modified_at: 2026-11-07T01:34:00.642600131Z
+  content: 'S2 continuation / merge-resolution validation completed. This checkout already contained private-PTY S2 from #3547 and its main merge resolution. Verified the production path retains receipt -> worker-grant binding -> register_spawned_agent_with_row (including delegate_seats) -> release -> supervision. Two uncommitted files: containment/tests/launch_tests.rs adds live/native delegation assertions, checks registry presence at the spawn callback, and always gathers a bounded 64 KiB PTY tail before exit assertions; launch/contained_pty.rs adds the missing Linux cfg on its shell-backed error-restoration unit test. Final-source required-live command: AIDA_REQUIRE_BWRAP_LIVE=1 RUSTC_WRAPPER= cargo test -p aida-cli-lib --profile agent --lib -- launch::contained task_2708_every_codex_spawn_path_is_inventoried_and_guarded task_2708_every_spawn_agent_builder_is_inventoried_and_guarded --nocapture --logfile /tmp/task3219-s2-final-results.log. Result 52 passed, 0 failed; separate actual
+    TASK-3219 live count 2/2 (S2 private PTY 1/1, S1 coordinator 1/1), PTY units 3/3. No infrastructure refusal; installed-Codex companion remains separately opt-in and was not exercised. make check-ci-fast passed all 38 gates after fixing the Linux annotation identified on the first run; cargo fmt --all -- --check and git diff --check passed. Background/resume remain refused. No new design blocker or manual gate. Edits remain uncommitted for Refs-only host publication; TASK-3219 remains in progress for S3/S4.'
+  created_at: 2026-11-07 01:34:00.642600+00:00
+  modified_at: 2026-11-07 01:34:00.642600+00:00
   session_id: 01a1b3868126
 - id: 01a1b3c1-c181-7f50-8698-2e010ce4faf2
   author: joe
   content: '[advisor 19:05] #3547 hand-merged again (626b32c) after #3545/#3531 landed: union of PreparedLaunch fields (outer_only + io), neutral module header. dell1: cargo check --tests OK; task_3219/task_3048/contained tests 291 pass. The 2 contained-store failures also fail on main on dell1 (host artifact), and child_grant_revocation_helper passes in isolation (parallel-run flake).'
-  created_at: 2026-11-07T02:06:22.081748547Z
-  modified_at: 2026-11-07T02:06:22.081748547Z
+  created_at: 2026-11-07 02:06:22.081748+00:00
+  modified_at: 2026-11-07 02:06:22.081748+00:00
   session_id: 01a1b358-7de9-72a0-b4a1-1a909992fa05
   harness_version: 2.1.319 (Claude Code)
 - id: 01a1b3d6-7134-72e1-8afe-8041fd9722c2
   author: joe
   content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: S2 private-PTY interactive Claude matches the signed-off scope and required-live CI (gates) is green, but CI lib-0 and lib-1 Run tests are red at 626b32c while main is green at the merge base. No triage reason was given.'
-  created_at: 2026-11-07T02:28:57.780566548Z
-  modified_at: 2026-11-07T02:28:57.780566548Z
+  created_at: 2026-11-07 02:28:57.780566+00:00
+  modified_at: 2026-11-07 02:28:57.780566+00:00
 - id: 01a1b3d6-881d-7a00-ab2e-6e9026d5b4ff
   author: joe
-  content: |-
-    REVIEW FINDINGS TO ADDRESS (PR #3547):
+  content: 'REVIEW FINDINGS TO ADDRESS (PR #3547):
+
     Verdict: CHANGES REQUESTED
+
     Reviewed commit: 626b32c12994
+
     Recorded: 2026-11-07T02:25:49.143281191+00:00
+
     Findings:
-    1. BLOCKING: CI (lib-0) job 128266185539 and CI (lib-1) job 128266185366 'Run tests' failed at head 626b32c (run 42327533849). lib-1 also failed at every earlier head (f98994a run 42324819196, 4a7ec94 run 42321751477, 491349f run 42318803485). Main CI at merge base 4f3096c (run 42325671855) is fully green, so the failures are presumed PR-caused. The 'host artifact / parallel flake' note in the spec audit (comment 2026-11-07 02:06) was observed on dell1, not CI. The reviewer sandbox cannot download job logs (blob host denied). Name the failing tests from the CI log, then fix them, or show a flake with a green re-run at the same head.
-    2. minor: aida-cli-lib/src/launch/contained_pty.rs PrivatePty::wait (around line 150) returns on child.try_wait() Some without a final drain of the master, and reads at most 16x8 KiB per iteration. Output the worker writes just before it exits can be dropped, including Claude's exit sequences (leave alt-screen, show cursor, disable bracketed paste). The host terminal can then stay in those modes even though termios is restored. Drain the master until EIO/EOF after the exit is observed.
-    3. minor (test gap, AC1 'same grants'): task_3219_live_claude_interactive_private_pty only runs plan.role=None (empty AIDA_SESSION_GRANT, so bind_contained_launch_worker returns early). Production agent-new resolves a role and mints a grant through issue_launch_child_with_delegation (agent_launch.rs run_agent_generation). Add a live case that asserts the grant is bound to the attested worker PID before release, and revoked when the launch is refused before release.
-    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
-  created_at: 2026-11-07T02:29:03.645898918Z
-  modified_at: 2026-11-07T02:29:03.645898918Z
+
+    1. BLOCKING: CI (lib-0) job 128266185539 and CI (lib-1) job 128266185366 ''Run tests'' failed at head 626b32c (run 42327533849). lib-1 also failed at every earlier head (f98994a run 42324819196, 4a7ec94 run 42321751477, 491349f run 42318803485). Main CI at merge base 4f3096c (run 42325671855) is fully green, so the failures are presumed PR-caused. The ''host artifact / parallel flake'' note in the spec audit (comment 2026-11-07 02:06) was observed on dell1, not CI. The reviewer sandbox cannot download job logs (blob host denied). Name the failing tests from the CI log, then fix them, or show a flake with a green re-run at the same head.
+
+    2. minor: aida-cli-lib/src/launch/contained_pty.rs PrivatePty::wait (around line 150) returns on child.try_wait() Some without a final drain of the master, and reads at most 16x8 KiB per iteration. Output the worker writes just before it exits can be dropped, including Claude''s exit sequences (leave alt-screen, show cursor, disable bracketed paste). The host terminal can then stay in those modes even though termios is restored. Drain the master until EIO/EOF after the exit is observed.
+
+    3. minor (test gap, AC1 ''same grants''): task_3219_live_claude_interactive_private_pty only runs plan.role=None (empty AIDA_SESSION_GRANT, so bind_contained_launch_worker returns early). Production agent-new resolves a role and mints a grant through issue_launch_child_with_delegation (agent_launch.rs run_agent_generation). Add a live case that asserts the grant is bound to the attested worker PID before release, and revoked when the launch is refused before release.
+
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.'
+  created_at: 2026-11-07 02:29:03.645898+00:00
+  modified_at: 2026-11-07 02:29:03.645898+00:00
 - id: 01a1b3f1-b922-7a11-a9c8-41b25183eb45
   author: mcp
-  content: 'Round 2 / PR #3547 at 626b32c: addressed all three current review findings. Downloaded the actual CI job logs. lib-0 failures were codex_tool_env::tests::bug_2395_every_role_launch_site_is_inventoried (agent_launch role sites 6 vs 5) and bug_2398_final_spawn_boundary_ratchet (launch sites 8 vs 7): audited the Claude-wrapper-only baseline assign_seat arm and updated both counts without weakening Codex finalization. lib-1 failed launch::contained::tests::task_3219_live_claude_interactive_private_pty because its Python SIGINT handler called print while PTY-RESIZED print held BufferedWriter: RuntimeError reentrant call, exit 1. Signal handlers now use os.write/os._exit. PrivatePty::wait now drains the master through EIO/EOF after observing child exit; a regression checks an already-reaped child''s terminal-reset suffix and 256 KiB output. Added required-live task_3219_live_claude_interactive_grant using plan.role=Some(implementer) and the production issue_launch_child_with_delegation path. A test-only pre-release observer verifies the real child grant is bound to the accepted receipt''s worker PID before vendor execution; an injected refusal verifies child revocation, parent preservation and no vendor execution. This new case exposed a production transport defect: contained_host.py omitted unused variadic keyctl arguments, making KEYCTL_SEARCH''s destination register undefined and refusing a possessed child key with EINVAL. Independently reproduced current isolation failure vs successful zero-padded isolation; the helper now supplies every syscall argument explicitly. Final-source required-live wrapper selection plus four inventory guards: 61 passed, zero failed; actual TASK-3219 live count 3/3 (coordinator, baseline interactive, granted interactive), PTY units 4/4. No required-live infrastructure refusal; installed-Codex companion remains separately opt-in and unexercised. Final make check-ci-fast passed all 38 gates; cargo fmt --all -- --check and git diff --check pass. Logs: /tmp/task3219-round2-green.log, /tmp/task3219-round2-green-results.log, /tmp/task3219-round2-fast-final.log. Five changed files remain uncommitted for host publication: agent_launch.rs, containment/contained_host.py, containment/tests/launch_tests.rs, launch/contained_pty.rs, tests/bug_2398_codex_tool_env_tests.rs. Refs-only S2 correction; S3/S4 and existing merge hold remain. No commit, push, PR, ship merge, review verdict or queue completion from this native seat.'
-  created_at: 2026-11-07T02:58:45.666268280Z
-  modified_at: 2026-11-07T02:58:45.666268280Z
+  content: 'Round 2 / PR #3547 at 626b32c: addressed all three current review findings. Downloaded the actual CI job logs. lib-0 failures were codex_tool_env::tests::bug_2395_every_role_launch_site_is_inventoried (agent_launch role sites 6 vs 5) and bug_2398_final_spawn_boundary_ratchet (launch sites 8 vs 7): audited the Claude-wrapper-only baseline assign_seat arm and updated both counts without weakening Codex finalization. lib-1 failed launch::contained::tests::task_3219_live_claude_interactive_private_pty because its Python SIGINT handler called print while PTY-RESIZED print held BufferedWriter: RuntimeError reentrant call, exit 1. Signal handlers now use os.write/os._exit. PrivatePty::wait now drains the master through EIO/EOF after observing child exit; a regression checks an already-reaped child''s terminal-reset suffix and 256 KiB output. Added required-live task_3219_live_claude_interactive_grant using plan.role=Some(implementer) and the production issue_launch_child_with_delegation
+    path. A test-only pre-release observer verifies the real child grant is bound to the accepted receipt''s worker PID before vendor execution; an injected refusal verifies child revocation, parent preservation and no vendor execution. This new case exposed a production transport defect: contained_host.py omitted unused variadic keyctl arguments, making KEYCTL_SEARCH''s destination register undefined and refusing a possessed child key with EINVAL. Independently reproduced current isolation failure vs successful zero-padded isolation; the helper now supplies every syscall argument explicitly. Final-source required-live wrapper selection plus four inventory guards: 61 passed, zero failed; actual TASK-3219 live count 3/3 (coordinator, baseline interactive, granted interactive), PTY units 4/4. No required-live infrastructure refusal; installed-Codex companion remains separately opt-in and unexercised. Final make check-ci-fast passed all 38 gates; cargo fmt --all -- --check and git diff --check
+    pass. Logs: /tmp/task3219-round2-green.log, /tmp/task3219-round2-green-results.log, /tmp/task3219-round2-fast-final.log. Five changed files remain uncommitted for host publication: agent_launch.rs, containment/contained_host.py, containment/tests/launch_tests.rs, launch/contained_pty.rs, tests/bug_2398_codex_tool_env_tests.rs. Refs-only S2 correction; S3/S4 and existing merge hold remain. No commit, push, PR, ship merge, review verdict or queue completion from this native seat.'
+  created_at: 2026-11-07 02:58:45.666268+00:00
+  modified_at: 2026-11-07 02:58:45.666268+00:00
 - id: 01a1b3f9-2e9b-7582-9518-85d02eeaec9a
   author: joe
   content: '[advisor 20:06] #3547 hand-merged a third time, after #3516 landed: union of store_mutation + pty modules and the mutation + io fields. dell1: check --tests OK; task_3219/task_3225 21/21 pass.'
-  created_at: 2026-11-07T03:06:54.491547551Z
-  modified_at: 2026-11-07T03:06:54.491547551Z
+  created_at: 2026-11-07 03:06:54.491547+00:00
+  modified_at: 2026-11-07 03:06:54.491547+00:00
   session_id: 01a1b358-7de9-72a0-b4a1-1a909992fa05
   harness_version: 2.1.319 (Claude Code)
 - id: 01a1b452-d6b1-76e3-9771-6edd80018fa3
   author: joe
   content: 'Advisor 21:50: #3547 was ejected from train 213805 because CI is red on main+PR. Gates job: ''Store writer inventory ratchet'' (scripts/check-store-writers.py, added by #3511/TASK-3222 after this head) refuses 7 unclassified sink sites in launch/contained.rs (PreparedLaunch::prepare_for_owner/prepare_interactive/prepare_with_io) and launch/contained_pty.rs (drain_exited_master, PrivatePty::report_refusal, PrivatePty::wait), plus 2 stale rows. Build ''Require every CI lane'' is red only as a consequence. Rework: merge origin/main, run python3 scripts/check-store-writers.py --regenerate, classify each new row (PTY write_all to a terminal fd is not a store writer; check that the fs::write in prepare_with_io targets lane-private paths only), delete the stale rows, then make check-ci-fast. LIGHT gate; no full suite.'
-  created_at: 2026-11-07T04:44:50.225095615Z
-  modified_at: 2026-11-07T04:44:50.225095615Z
+  created_at: 2026-11-07 04:44:50.225095+00:00
+  modified_at: 2026-11-07 04:44:50.225095+00:00
   session_id: 01a1b441-8158-7162-ad75-f7915b45ee33
   harness_version: 2.1.319 (Claude Code)
 - id: 01a1b45a-bfc6-78d1-b1e3-157c7c81a332
   author: joe
   content: 'S2 rework (PR #3547): the merge train refused the PR because the TASK-3222 store-writer ratchet (#3511) landed on main and flagged the S2 writer sites (prepare_with_io split, three PrivatePty relay write_all). Regenerated scripts/store-writers.toml; the new rows stay ''blocked'' like every other S1a row. check-store-writers.py passes and test_store_writer_inventory.py passes 41/41. No Rust changed. Pushed 31a4e2b. Live bwrap count: not re-run locally; CI (gates) owns it.'
-  created_at: 2026-11-07T04:53:28.646335367Z
-  modified_at: 2026-11-07T04:53:28.646335367Z
+  created_at: 2026-11-07 04:53:28.646335+00:00
+  modified_at: 2026-11-07 04:53:28.646335+00:00
   session_id: 01a1b45562ad
   harness_version: 2.1.319 (Claude Code)
 - id: 01a1b4a0-4f03-7152-ab4b-424ab663c97c
   author: joe
   content: 'S2 current-head continuation: private-PTY implementation and review corrections are already present. Complete the latest advisor inventory rework by replacing generic PTY sink descriptions with reviewed terminal-descriptor destinations, and explicitly documenting that prepare_with_io also bootstraps absent project/git protection leaves (not only lane-private files). Keep mixed preparation routes blocked for TASK-3223; no runtime authority change. Expected edit: scripts/store-writers.toml only. Re-run required-live wrapper/PTY selection and make check-ci-fast per the binding launch brief; report actual live counts separately. No S3/S4 implementation.'
-  created_at: 2026-11-07T06:09:27.299463276Z
-  modified_at: 2026-11-07T06:09:27.299463276Z
+  created_at: 2026-11-07 06:09:27.299463+00:00
+  modified_at: 2026-11-07 06:09:27.299463+00:00
   session_id: 01a1b49f1d8f
 - id: 01a1b4a8-7042-76c1-9933-511711dd9644
   author: joe
   content: 'Current-head validation found a second main-merge integration issue: make check-ci-fast refuses six unchanged ExecContext fingerprints still inventoried under prepare_for_owner after S2 extracted prepare_with_io. Adding scripts/exec-context-legacy.json to the narrow scope: relocate those exact navigation keys using the documented --write-ledger --base origin/main guard; preserve operation/expression fingerprints and total ceiling. No production source changes.'
-  created_at: 2026-11-07T06:18:20.098719310Z
-  modified_at: 2026-11-07T06:18:20.098719310Z
+  created_at: 2026-11-07 06:18:20.098719+00:00
+  modified_at: 2026-11-07 06:18:20.098719+00:00
   session_id: 01a1b49f1d8f
 - id: 01a1b4bd-9fa0-7fc2-9c02-3fa14327c410
   author: joe
-  content: |
-    S2 current-head inventory integration is ready for host publication. The private-PTY S2 implementation and prior review fixes were already present in this clean checkout. Two uncommitted files: scripts/store-writers.toml classifies the three PTY terminal-descriptor writes as host-only and documents the four mixed preparation routes without granting store-service authority; scripts/exec-context-legacy.json relocates six unchanged environment-read fingerprints from prepare_for_owner to prepare_with_io. Reviewed prepare_with_io writes include lane-private files AND absent project/Git protection leaves, so its mixed routes remain blocked for TASK-3223. No production source change, S3 or S4 implementation.
+  content: 'S2 current-head inventory integration is ready for host publication. The private-PTY S2 implementation and prior review fixes were already present in this clean checkout. Two uncommitted files: scripts/store-writers.toml classifies the three PTY terminal-descriptor writes as host-only and documents the four mixed preparation routes without granting store-service authority; scripts/exec-context-legacy.json relocates six unchanged environment-read fingerprints from prepare_for_owner to prepare_with_io. Reviewed prepare_with_io writes include lane-private files AND absent project/Git protection leaves, so its mixed routes remain blocked for TASK-3223. No production source change, S3 or S4 implementation.
 
-    Validation: AIDA_REQUIRE_BWRAP_LIVE=1 RUSTC_WRAPPER= cargo test -p aida-cli-lib --profile agent --lib -- launch::contained task_2708_every_codex_spawn_path_is_inventoried_and_guarded task_2708_every_spawn_agent_builder_is_inventoried_and_guarded bug_2395_every_role_launch_site_is_inventoried bug_2398_final_spawn_boundary_ratchet --nocapture --logfile /tmp/task3219-current-results.log passed 71 total, zero failed. Separate actual TASK-3219 live count: 3/3 (S1 coordinator 1/1, S2 baseline and granted interactive 2/2); PTY unit tests 4/4. No TASK-3219 required-live infrastructure refusal. Installed-Codex companion remains separately opt-in and was not exercised. Store-writer fixtures pass 41/41; ExecContext fixtures pass 19/19. Guarded ledger regeneration against origin/main reports 1241 exact sites, zero additions. Final make check-ci-fast passed all 42 fast gates; cargo fmt --all -- --check and git diff --check pass. Initial fast run identified the now-corrected ExecContext relocation; an intervening retry timed out in the shared Cargo slot queue before the no-default-features check compiled. The final fresh fast run passed that check and every later gate. Logs: /tmp/task3219-current-tests.log, /tmp/task3219-current-results.log, /tmp/task3219-final-fast-retry.log.
+
+    Validation: AIDA_REQUIRE_BWRAP_LIVE=1 RUSTC_WRAPPER= cargo test -p aida-cli-lib --profile agent --lib -- launch::contained task_2708_every_codex_spawn_path_is_inventoried_and_guarded task_2708_every_spawn_agent_builder_is_inventoried_and_guarded bug_2395_every_role_launch_site_is_inventoried bug_2398_final_spawn_boundary_ratchet --nocapture --logfile /tmp/task3219-current-results.log passed 71 total, zero failed. Separate actual TASK-3219 live count: 3/3 (S1 coordinator 1/1, S2 baseline and granted interactive 2/2); PTY unit tests 4/4. No TASK-3219 required-live infrastructure refusal. Installed-Codex companion remains separately opt-in and was not exercised. Store-writer fixtures pass 41/41; ExecContext fixtures pass 19/19. Guarded ledger regeneration against origin/main reports 1241 exact sites, zero additions. Final make check-ci-fast passed all 42 fast gates; cargo fmt --all -- --check and git diff --check pass. Initial fast run identified the now-corrected ExecContext relocation;
+    an intervening retry timed out in the shared Cargo slot queue before the no-default-features check compiled. The final fresh fast run passed that check and every later gate. Logs: /tmp/task3219-current-tests.log, /tmp/task3219-current-results.log, /tmp/task3219-final-fast-retry.log.
+
 
     Recorded native publication declaration: [AI:codex] chore(containment): reconcile private-PTY launch inventories (Refs TASK-3219). Background/resume remain refused and TASK-3219 remains in progress for S3/S4. No new design blocker or punt; existing holds are untouched. No commit, push, PR creation, review verdict, merge or queue completion from this native seat. Host owns publication after exit.
-  created_at: 2026-11-07T06:41:28.480490395Z
-  modified_at: 2026-11-07T06:41:28.480490395Z
+
+    '
+  created_at: 2026-11-07 06:41:28.480490+00:00
+  modified_at: 2026-11-07 06:41:28.480490+00:00
   session_id: 01a1b49f1d8f
 - id: 01a1b7c4-f33d-7a72-9607-58f2edf8f706
   author: joe
   content: 'ADVISOR BRIEF 2026-11-07 14:10 (S3 of 4). S1 (#3522) and S2 (#3547) have landed. Implement S3 only, per the signed sketch docs/plans/2026-11-06-task-3219-claude-wrapper-launches.md, decision (b): an AIDA-owned detached supervisor for opted-in background launches, running a foreground Claude inside the shared contained wrapper. Logs and attach go through AIDA; ''claude attach'' under the opt-in refuses with an explicit hint; native --bg is unchanged byte-for-byte when the opt-in is unset. Resume (S4) keeps refusing. One PR, Refs TASK-3219. First check whether commit 31a4e2b9713 (store-writers inventory reconcile for the PTY sites, from branch task-3219-r1548) is already reflected on origin/main; if not, include it. LIGHT gate: one targeted cargo test on the supervisor module, plus a live regression (report the live count separately), plus make check-ci-fast. Note: BUG-2486/BUG-2487 are editing launch/contained.rs in parallel. Keep your edits there minimal and rebase before pushing.'
-  created_at: 2026-11-07T20:48:20.285002870Z
-  modified_at: 2026-11-07T20:48:20.285002870Z
+  created_at: 2026-11-07 20:48:20.285002+00:00
+  modified_at: 2026-11-07 20:48:20.285002+00:00
   session_id: 01a1b76b-2fe7-7dd2-88d0-356fc8d96d04
   harness_version: 2.1.319 (Claude Code)
 - id: 01a1b7dc-3391-79f3-a759-118e021b9553
   author: dirtlab
-  content: |
-    S3 only, per binding 2026-11-07 advisor brief and signed sketch decision (b). Implemented an AIDA-owned detached supervisor for trusted opted-in contained Claude background launches. It runs foreground print-mode Claude inside PreparedLaunch, keeps wrapper state alive, binds the accepted receipt's worker grant and registry row before release, transfers setup ownership over a private inherited socket before release, acknowledges only after release, forwards signals, marks registry teardown and revokes the child grant. Lost final acknowledgements retain the admitted lease/worktree. Logs and read-only attach use AIDA attempt UUIDs; wrapped claude attach refuses with an AIDA hint. Native background command construction stays on its existing branch. Explicit resume/rotation and the resume picker remain refused in this S3 path; S4 is outstanding.
+  content: 'S3 only, per binding 2026-11-07 advisor brief and signed sketch decision (b). Implemented an AIDA-owned detached supervisor for trusted opted-in contained Claude background launches. It runs foreground print-mode Claude inside PreparedLaunch, keeps wrapper state alive, binds the accepted receipt''s worker grant and registry row before release, transfers setup ownership over a private inherited socket before release, acknowledges only after release, forwards signals, marks registry teardown and revokes the child grant. Lost final acknowledgements retain the admitted lease/worktree. Logs and read-only attach use AIDA attempt UUIDs; wrapped claude attach refuses with an AIDA hint. Native background command construction stays on its existing branch. Explicit resume/rotation and the resume picker remain refused in this S3 path; S4 is outstanding.
+
 
     First checked 31a4e2b9713: its prepare_with_io and three PTY writer inventory changes are already reflected on origin/main, with later destination-policy refinements. No duplicate cherry-pick. Read-only origin probes confirmed remote main and this seat HEAD both e278eeb1d8f95dadba5f6e9d8bfd41d10eac52c3, including at final handoff. Host must refresh/rebase again before pushing if main moves, especially around parallel contained.rs fixes. contained.rs edits are only the five-line attach refusal.
 
+
     Validation (LIGHT):
+
     - Targeted supervisor module unit: cargo test --profile agent -p aida-cli-lib --lib -- supervisor_protocol_refuses_unowned_release_and_oversized_frames: 1 executed, 1 passed. Lane job j20261107T205333176-2-0.
+
     - LIVE COUNT SEPARATE: 1 live regression executed, 1 passed, 0 skipped. cargo test --profile agent -p aida-cli-lib --lib -- task_3219_live_claude_background_supervisor --nocapture. Lane job j20261107T211133692-2-0. It re-execs an exiting dispatcher and independent supervisor, proves accepted-wrapper/grant/registry startup, worker survival after dispatcher exit, protected Git/AIDA writes, denied raw egress, the CLI surface, host isolation of private tmpfs writes, child-grant revocation without revoking the parent, and refusal before vendor release. Initial fixture failures were resolved: inheritably revoked keyring -> own fresh synthetic keyring; writable private /tmp -> host-isolation assertion rather than treating scratch as a host write.
-    - CLI help golden snapshot regenerated and checked; help_surface_matches_golden_snapshot passed in j20261107T210815353-2-0 (that combined run's live fixture still failed before the final successful live run).
+
+    - CLI help golden snapshot regenerated and checked; help_surface_matches_golden_snapshot passed in j20261107T210815353-2-0 (that combined run''s live fixture still failed before the final successful live run).
+
     - make check-ci-fast: 43 gates passed with umask 022, log /tmp/task3219-check-ci-fast-final.log. Initial default-umask mail-wake failures and a missing Linux cfg on the new procfs test were corrected before the green run.
+
     - Final rustfmt --check on changed Rust sources and git diff --check passed.
 
+
     Changed files:
+
     aida-cli-lib/src/agent_claude_background.rs (new)
+
     aida-cli-lib/src/agent_launch.rs
+
     aida-cli-lib/src/agent_launch_args.rs
+
     aida-cli-lib/src/internal_cmd.rs
+
     aida-cli-lib/src/internal_cmd_args.rs
+
     aida-cli-lib/src/launch/contained.rs
+
     aida-cli-lib/src/containment/tests/launch_tests.rs
+
     aida-cli-lib/src/role.rs
+
     aida-cli-lib/src/session.rs
+
     aida-cli-lib/src/tests/golden/cli_help_snapshot.txt
+
     docs/cli/06-roles-sessions.md
+
     docs/plans/2026-11-06-task-3219-claude-wrapper-launches.md
+
     scripts/store-writers.toml
 
+
     Native handoff: all code remains uncommitted. No push, PR creation, queue completion, review record or merge was attempted. Recorded lease-bound host publication declaration: [AI:codex] feat(containment): supervise Claude background launches (Refs TASK-3219). No implementation blockers remain. S4 resume is intentionally outstanding; this is a Refs slice.
-  created_at: 2026-11-07T21:13:44.081819959Z
-  modified_at: 2026-11-07T21:13:44.081819959Z
+
+    '
+  created_at: 2026-11-07 21:13:44.081819+00:00
+  modified_at: 2026-11-07 21:13:44.081819+00:00
   session_id: 01a1b7c61284
   harness_version: codex-cli 0.167.0
 - id: 01a1b7ef-1a96-73c1-add1-cccbf1a3fc62
   author: joe
   content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: S3 AIDA-owned Claude background supervisor matches the signed sketch (detached supervisor, receipt-before-release, worker-bound child grant revoked at exit, native --bg unchanged when the opt-in is unset, resume still refused), but CI is red at 99baa40 (cli-0, rest, lib-1 Run tests; contracts CLI-manual drift guard) while main is green, and aida agent attach can drop the worker''s final output.. No triage reason was given.'
-  created_at: 2026-11-07T21:34:22.870918671Z
-  modified_at: 2026-11-07T21:34:22.870918671Z
+  created_at: 2026-11-07 21:34:22.870918+00:00
+  modified_at: 2026-11-07 21:34:22.870918+00:00
   session_id: 01a1b646-c67d-7b43-98ff-3604a53f5d1f
   harness_version: 2.1.319 (Claude Code)
 - id: 01a1b7ef-32f9-7281-8356-0e1c0ed61dfa
   author: joe
-  content: |-
-    REVIEW FINDINGS TO ADDRESS (PR #3628):
+  content: 'REVIEW FINDINGS TO ADDRESS (PR #3628):
+
     Verdict: CHANGES REQUESTED
+
     Reviewed commit: 99baa4030adc
+
     Recorded: 2026-11-07T21:29:37.539360039+00:00
+
     Review comment: https://github.com/joemooney/aida/pull/3628#issuecomment-6713259141
+
     Findings:
-    1. BLOCKING: CI run 42414900396 at 99baa40 has 4 failed jobs: CI (cli-0) job 128530745434 'Run tests', CI (rest) job 128530745555 'Run tests', CI (lib-1) 'Run tests', and CI (contracts) job 128530745595 'CLI-manual drift-guard (every command documented)'. The latest main CI runs (20:43, 19:40 UTC) are green, so the failures are presumed PR-caused. At the time of review, gates (required-live task_3219_live_ count) and lib-0 were still running. The reviewer sandbox cannot download job logs. Name the failing tests from the logs and fix them. For contracts, run python3 docs/cli/verify-manual.py against a built binary: the new aida agent logs/attach verbs have no '### aida agent' manual entry or flag/verb coverage beyond one prose bullet in docs/cli/06-roles-sessions.md.
-    2. minor (correctness): agent_claude_background.rs logs() follow loop (lines 324-341) can drop the worker's final output. Read returns 0, the worker writes its tail, the supervisor creates 'ended', then the loop sees ended.exists() and breaks without reading again. aida agent attach then misses the last lines (for example Claude's final print-mode result). After observing 'ended', drain the log to EOF once more before breaking.
-    3. minor (refusal-path robustness): dispatch_with_helper (agent_claude_background.rs 207-217) sends SIGTERM to the supervisor on any pre-release error, including the 45 s 'ready' timeout during a slow prepare. WorkerSignals is installed only after spawn and grant binding (agent_launch.rs ~7646), so a SIGTERM before that point kills the supervisor by default action: no unwinding, no IssuedLaunchGrant revoke, no wrapper teardown. The dispatcher also never escalates to SIGKILL after 2 s, and it then returns Err with handle_guard still armed, so the worktree and lease are cleaned up while the supervisor may still be alive. That contradicts the adjacent comment. Make the pre-signal window safe (for example close the socket instead of signalling, or install a TERM handler early), escalate to SIGKILL, and wait for the supervisor before cleanup.
-    4. minor (test gap, advisor decision 'opted-in claude attach must refuse with an explicit hint'): the new claude_argv refusal (launch/contained.rs:1480-1484) has no test. It also fires only when AIDA composes wrapper argv whose first element is 'attach': a bare positional prompt 'attach' is misrefused, and a user running claude attach directly gets no hint. Add a unit test for the refusal, check only the subcommand position (not a prompt that happens to equal 'attach'), and state the limitation in the docs bullet.
-    5. minor (test gap, AC1/'one targeted test per launch path'): the live regression drives dispatch() through a test-only dispatcher entry and bypasses the production agent_new_bg_dispatch wrapper branch (agent_launch.rs 3424-3443, 3669-3687). Untested there: the rotate/direct-resume/no-prompt refusals, the forced resume.prompt_enabled=false, skipping refuse_bg_under_os_wrap, and the take_ownership disarm of handle_guard/setup_receipt. Add a path-level test, a unit test at minimum, that the opted-in wrapper branch refuses rotate/resume/no-prompt before any claim or worktree side effect, and that native --bg argv is byte-identical when the opt-in is unset (AC3).
-    6. minor (test gap): aida agent logs <attempt> and aida agent attach <attempt> (agent_launch.rs:431-432) have no command-level test: snapshot output, refusal of a non-canonical/unknown attempt, refusal of an unsafe (group-readable or symlinked) attempt directory, and follow termination after 'ended' or after a dead supervisor. Only the open_log/attempt_dir helpers are unit-tested.
-    7. cosmetic: .aida/claude-background/<attempt>/ directories (output.log, supervisor.json, ended) are created per dispatch and never pruned, so they accumulate without bound in the project's .aida. Add retention (for example prune ended attempts older than N days on dispatch) or document manual cleanup.
-    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
-  created_at: 2026-11-07T21:34:29.113294976Z
-  modified_at: 2026-11-07T21:34:29.113294976Z
+
+    1. BLOCKING: CI run 42414900396 at 99baa40 has 4 failed jobs: CI (cli-0) job 128530745434 ''Run tests'', CI (rest) job 128530745555 ''Run tests'', CI (lib-1) ''Run tests'', and CI (contracts) job 128530745595 ''CLI-manual drift-guard (every command documented)''. The latest main CI runs (20:43, 19:40 UTC) are green, so the failures are presumed PR-caused. At the time of review, gates (required-live task_3219_live_ count) and lib-0 were still running. The reviewer sandbox cannot download job logs. Name the failing tests from the logs and fix them. For contracts, run python3 docs/cli/verify-manual.py against a built binary: the new aida agent logs/attach verbs have no ''### aida agent'' manual entry or flag/verb coverage beyond one prose bullet in docs/cli/06-roles-sessions.md.
+
+    2. minor (correctness): agent_claude_background.rs logs() follow loop (lines 324-341) can drop the worker''s final output. Read returns 0, the worker writes its tail, the supervisor creates ''ended'', then the loop sees ended.exists() and breaks without reading again. aida agent attach then misses the last lines (for example Claude''s final print-mode result). After observing ''ended'', drain the log to EOF once more before breaking.
+
+    3. minor (refusal-path robustness): dispatch_with_helper (agent_claude_background.rs 207-217) sends SIGTERM to the supervisor on any pre-release error, including the 45 s ''ready'' timeout during a slow prepare. WorkerSignals is installed only after spawn and grant binding (agent_launch.rs ~7646), so a SIGTERM before that point kills the supervisor by default action: no unwinding, no IssuedLaunchGrant revoke, no wrapper teardown. The dispatcher also never escalates to SIGKILL after 2 s, and it then returns Err with handle_guard still armed, so the worktree and lease are cleaned up while the supervisor may still be alive. That contradicts the adjacent comment. Make the pre-signal window safe (for example close the socket instead of signalling, or install a TERM handler early), escalate to SIGKILL, and wait for the supervisor before cleanup.
+
+    4. minor (test gap, advisor decision ''opted-in claude attach must refuse with an explicit hint''): the new claude_argv refusal (launch/contained.rs:1480-1484) has no test. It also fires only when AIDA composes wrapper argv whose first element is ''attach'': a bare positional prompt ''attach'' is misrefused, and a user running claude attach directly gets no hint. Add a unit test for the refusal, check only the subcommand position (not a prompt that happens to equal ''attach''), and state the limitation in the docs bullet.
+
+    5. minor (test gap, AC1/''one targeted test per launch path''): the live regression drives dispatch() through a test-only dispatcher entry and bypasses the production agent_new_bg_dispatch wrapper branch (agent_launch.rs 3424-3443, 3669-3687). Untested there: the rotate/direct-resume/no-prompt refusals, the forced resume.prompt_enabled=false, skipping refuse_bg_under_os_wrap, and the take_ownership disarm of handle_guard/setup_receipt. Add a path-level test, a unit test at minimum, that the opted-in wrapper branch refuses rotate/resume/no-prompt before any claim or worktree side effect, and that native --bg argv is byte-identical when the opt-in is unset (AC3).
+
+    6. minor (test gap): aida agent logs <attempt> and aida agent attach <attempt> (agent_launch.rs:431-432) have no command-level test: snapshot output, refusal of a non-canonical/unknown attempt, refusal of an unsafe (group-readable or symlinked) attempt directory, and follow termination after ''ended'' or after a dead supervisor. Only the open_log/attempt_dir helpers are unit-tested.
+
+    7. cosmetic: .aida/claude-background/<attempt>/ directories (output.log, supervisor.json, ended) are created per dispatch and never pruned, so they accumulate without bound in the project''s .aida. Add retention (for example prune ended attempts older than N days on dispatch) or document manual cleanup.
+
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.'
+  created_at: 2026-11-07 21:34:29.113294+00:00
+  modified_at: 2026-11-07 21:34:29.113294+00:00
   session_id: 01a1b646-c67d-7b43-98ff-3604a53f5d1f
   harness_version: 2.1.319 (Claude Code)
 - id: 01a1b816-2ff5-7590-8928-21c992035504
   author: joe
-  content: |-
-    PR #3628 round 3: uncommitted review fixes prepared for the host publication path.
+  content: 'PR #3628 round 3: uncommitted review fixes prepared for the host publication path.
+
 
     Runtime: drain the output log again after observing ended; cancel pre-ready preparation by closing the release socket rather than sending TERM before WorkerSignals exists; bound graceful cleanup, escalate to SIGKILL, reap the supervisor before returning, and retain launch resources on forced/unconfirmed termination. Ready/ownership-transferred cancellation keeps the two-second TERM grace.
 
+
     Coverage/docs: production agent_new_bg_dispatch early refusals for rotate, direct resume and missing prompt, plus a native argv snapshot; targeted attach-subcommand refusal and literal attach prompt cases; real CLI logs/attach snapshots, canonical/unknown attempt refusals, private-directory/symlink refusals, ended follow and dead-supervisor termination. Documented direct-vendor interception limits and manual cleanup, including uncertain failed attempts. Added logs/attach default-new rewrite registration, manual command sections, and JSON-audit rows.
+
 
     CI failures addressed in source: story_2256_every_agent_subcommand_passes_the_default_new_rewrite; launch_sites_outside_the_launcher_match_the_ledger; task_2708_every_spawn_agent_builder_is_inventoried_and_guarded; task_2708_every_codex_spawn_path_is_inventoried_and_guarded; task_2032_launcher_main_is_called_only_from_entry_points; story_2539_vendor_literal_ratchet; every_headless_spawn_site_disables_background_tasks; every_headless_spawn_site_sets_the_background_wait_ceiling; checked_in_audit_is_exhaustive_and_every_honoured_probe_parses. Moved supervisor detach setup and headless env setup into launch/control instead of expanding launch debt; function inventories follow run_agent_generation_with_io, with explicit Claude-only receipt-boundary checks. Vendor names come from the registry rendering layer. All inventory additions from 31a4e2b9713 are already reflected on origin/main.
 
-    Validation: make check-ci-fast passed all 43 gates; final rustfmt check, git diff --check, static manual check, and writer-inventory check passed. untested=true for runtime/command regressions. Initial lane compilation caught two test imports, corrected; two subsequent 900-second jobs timed out before any executed-test result. The runner then reported overlay-stale: primary rewrote generation agent-65a17c57ad652b4a in place. The queued retry still uses that stale generation, which the overlay implementation documents can make builds inconsistent. No live regression executed (live_count=0); the full verify-manual.py against this branch's built binary could not run. Redundant/queued own requests were withdrawn. Host needs a fresh/reseeded target, then AIDA_CARGO_TIMEOUT=3600 runs for the selected lib tests, bug_1502_format_json_audit, task1169_launcher_sets_ceiling_guardrail, and python3 docs/cli/verify-manual.py with the rebuilt binary on PATH. The active long retry is j20261107T220845284-2-0; lane shutdown owns its termination.
 
-    No git commit/push/PR/queue-done/review-record/ship-to-merge from this native seat. Leave all 13 changed files for the host, with a Refs TASK-3219 publication declaration. Existing merge holds remain in place.
-  created_at: 2026-11-07T22:17:04.245538587Z
-  modified_at: 2026-11-07T22:17:04.245538587Z
+    Validation: make check-ci-fast passed all 43 gates; final rustfmt check, git diff --check, static manual check, and writer-inventory check passed. untested=true for runtime/command regressions. Initial lane compilation caught two test imports, corrected; two subsequent 900-second jobs timed out before any executed-test result. The runner then reported overlay-stale: primary rewrote generation agent-65a17c57ad652b4a in place. The queued retry still uses that stale generation, which the overlay implementation documents can make builds inconsistent. No live regression executed (live_count=0); the full verify-manual.py against this branch''s built binary could not run. Redundant/queued own requests were withdrawn. Host needs a fresh/reseeded target, then AIDA_CARGO_TIMEOUT=3600 runs for the selected lib tests, bug_1502_format_json_audit, task1169_launcher_sets_ceiling_guardrail, and python3 docs/cli/verify-manual.py with the rebuilt binary on PATH. The active long retry is j20261107T220845284-2-0;
+    lane shutdown owns its termination.
+
+
+    No git commit/push/PR/queue-done/review-record/ship-to-merge from this native seat. Leave all 13 changed files for the host, with a Refs TASK-3219 publication declaration. Existing merge holds remain in place.'
+  created_at: 2026-11-07 22:17:04.245538+00:00
+  modified_at: 2026-11-07 22:17:04.245538+00:00
   session_id: 01a1b7f01a5f
 - id: 01a1b830-d5f8-7e63-b484-565c2b6bf93b
   author: joe
   content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: Round-2 fixes for prior findings 2-7 are present and correct (ended-drain, socket-close cancellation with SIGKILL+reap+retain, attach-subcommand refusal + test, production entry refusals, CLI logs/attach test, retention docs); gates (required-live) and contracts now green, but CI cli-0 and lib-1 are red at 6c5d01f while main at the same base 47e379a is green on both shards.. No triage reason was given.'
-  created_at: 2026-11-07T22:46:10.680749995Z
-  modified_at: 2026-11-07T22:46:10.680749995Z
+  created_at: 2026-11-07 22:46:10.680749+00:00
+  modified_at: 2026-11-07 22:46:10.680749+00:00
   session_id: 01a1b646-c67d-7b43-98ff-3604a53f5d1f
   harness_version: 2.1.319 (Claude Code)
 - id: 01a1b830-ef64-7e70-ad73-7625391aa931
   author: joe
-  content: |-
-    REVIEW FINDINGS TO ADDRESS (PR #3628):
+  content: 'REVIEW FINDINGS TO ADDRESS (PR #3628):
+
     Verdict: CHANGES REQUESTED
+
     Reviewed commit: 6c5d01f354d7
+
     Recorded: 2026-11-07T22:40:30.950511986+00:00
+
     Findings:
-    1. BLOCKING (CI): run 42420084831 at 6c5d01f fails CI (cli-0) job 128546514040 and CI (lib-1) job 128546513767 ('Run tests', exit 1). main CI run 42420067746 at the merge base 47e379ad6e4 passes cli-0 and lib-1, so both failures are PR-caused. The reviewer sandbox cannot download job logs (blob host denied), so the failing test names are not known. The handoff says the runtime/command regressions were never executed locally (900s lane timeouts, overlay-stale). Likely candidates, unconfirmed: cli-0 = task_3219_background_logs_and_attach_commands (aida-cli/tests/bug_1502_format_json_audit.rs:912) or the other bug_1502 audit rows; lib-1 = supervisor_cancellation_closes_socket_and_reaps_before_cleanup (agent_claude_background.rs:410), task_3219_background_entry_refuses_before_setup_and_native_argv or task_3219_background_attach_argv_refuses_subcommand_preserves_prompt (containment/tests/launch_tests.rs). Get the names from the job logs, fix them, and run each one with a targeted cargo test before pushing. lib-0, cli-1, rest, contracts and gates (including the required-live count) are green.
-    2. minor (error masking): dispatch_with_helper (agent_claude_background.rs:194-206) calls cancel_supervisor(...)? on the error path. A failing try_wait/kill/wait then replaces the original refusal (for example 'background supervisor refused before release: ...') with a cleanup error, and the operator loses the real reason. Keep the original error and attach the cleanup failure as context.
-    3. minor (containment/terminal hygiene): aida agent logs/attach (agent_claude_background.rs:360-376) copy output.log, which the untrusted contained worker writes, raw to the operator's stdout. A contained worker can send CSI/OSC sequences (OSC 52 clipboard write, title or screen spoofing) into the host terminal. Strip or escape control sequences when stdout is a TTY, or document this as an accepted delta with an advisor ruling.
-    4. minor (test gap, AC3): task_3219_background_entry_refuses_before_setup_and_native_argv proves native byte-identity only for build_agent_new_bg_command with a hand-built '--bg' default_args. It does not exercise the changed agent_new_claude guard 'if bg && !(contained && claude_uses_contained_wrapper)' (agent_launch.rs:2717) or the widened _wrapper_composition scope (agent_launch.rs:2686) with the opt-in unset. Add an assertion that agent_new_claude still pushes --bg when the opt-in is unset.
-    5. cosmetic: launch/control.rs:16. Inserting detach_with_socket under the existing '/// Only phase-driver unit fixtures may inject a coordinating executable.' doc comment moved that doc onto detach_with_socket, so control_child_for_test has none. Move the comment back above control_child_for_test and give detach_with_socket and background_print their own docs.
-    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
-  created_at: 2026-11-07T22:46:17.188823045Z
-  modified_at: 2026-11-07T22:46:17.188823045Z
+
+    1. BLOCKING (CI): run 42420084831 at 6c5d01f fails CI (cli-0) job 128546514040 and CI (lib-1) job 128546513767 (''Run tests'', exit 1). main CI run 42420067746 at the merge base 47e379ad6e4 passes cli-0 and lib-1, so both failures are PR-caused. The reviewer sandbox cannot download job logs (blob host denied), so the failing test names are not known. The handoff says the runtime/command regressions were never executed locally (900s lane timeouts, overlay-stale). Likely candidates, unconfirmed: cli-0 = task_3219_background_logs_and_attach_commands (aida-cli/tests/bug_1502_format_json_audit.rs:912) or the other bug_1502 audit rows; lib-1 = supervisor_cancellation_closes_socket_and_reaps_before_cleanup (agent_claude_background.rs:410), task_3219_background_entry_refuses_before_setup_and_native_argv or task_3219_background_attach_argv_refuses_subcommand_preserves_prompt (containment/tests/launch_tests.rs). Get the names from the job logs, fix them, and run each one with a targeted cargo
+    test before pushing. lib-0, cli-1, rest, contracts and gates (including the required-live count) are green.
+
+    2. minor (error masking): dispatch_with_helper (agent_claude_background.rs:194-206) calls cancel_supervisor(...)? on the error path. A failing try_wait/kill/wait then replaces the original refusal (for example ''background supervisor refused before release: ...'') with a cleanup error, and the operator loses the real reason. Keep the original error and attach the cleanup failure as context.
+
+    3. minor (containment/terminal hygiene): aida agent logs/attach (agent_claude_background.rs:360-376) copy output.log, which the untrusted contained worker writes, raw to the operator''s stdout. A contained worker can send CSI/OSC sequences (OSC 52 clipboard write, title or screen spoofing) into the host terminal. Strip or escape control sequences when stdout is a TTY, or document this as an accepted delta with an advisor ruling.
+
+    4. minor (test gap, AC3): task_3219_background_entry_refuses_before_setup_and_native_argv proves native byte-identity only for build_agent_new_bg_command with a hand-built ''--bg'' default_args. It does not exercise the changed agent_new_claude guard ''if bg && !(contained && claude_uses_contained_wrapper)'' (agent_launch.rs:2717) or the widened _wrapper_composition scope (agent_launch.rs:2686) with the opt-in unset. Add an assertion that agent_new_claude still pushes --bg when the opt-in is unset.
+
+    5. cosmetic: launch/control.rs:16. Inserting detach_with_socket under the existing ''/// Only phase-driver unit fixtures may inject a coordinating executable.'' doc comment moved that doc onto detach_with_socket, so control_child_for_test has none. Move the comment back above control_child_for_test and give detach_with_socket and background_print their own docs.
+
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.'
+  created_at: 2026-11-07 22:46:17.188823+00:00
+  modified_at: 2026-11-07 22:46:17.188823+00:00
   session_id: 01a1b646-c67d-7b43-98ff-3604a53f5d1f
   harness_version: 2.1.319 (Claude Code)
 - id: 01a1b858-2f4f-7682-86f0-1137fdd9069e
   author: joe
   content: 'PR #3628 round 4 edits: fix the no-prompt fixture to disable auto-prompt; check CLI safety refusals on both stdout and stderr; reduce the existing vendor literal ledger entry from 2 to 1. Preserve the launch refusal when supervisor cleanup also fails. Escape control/non-ASCII bytes for terminal log output, preserve redirected bytes, and cover logs/attach with a real PTY. Add native agent_new_claude --bg preview coverage with wrapper opt-in absent (plain and sandbox). Restore helper docs. The seven inventory entries added by 31a4e2b9713 are already reflected on origin/main despite the original commit not being an ancestor. Non-Cargo fast checks passed in segmented runs. Cold lane Cargo build and targeted tests are still running/queued; no executed-test result claimed yet. Native seat leaves edits uncommitted for host publication.'
-  created_at: 2026-11-07T23:29:09.455455409Z
-  modified_at: 2026-11-07T23:29:09.455455409Z
+  created_at: 2026-11-07 23:29:09.455455+00:00
+  modified_at: 2026-11-07 23:29:09.455455+00:00
   session_id: 01a1b83f4946
 - id: 01a1b87b-f106-7272-b5ea-38c9fafa5440
   author: joe
-  content: 'Round 4 final validation: targeted library batch j20261107T231441707-4-0 executed 10 passing tests with 0 failures (2 ignored re-exec helper entrypoints). This includes supervisor cancellation/protocol, original-refusal preservation, terminal byte escaping, background entry/attach argv and vendor literal ratchet coverage. Live regression count: 1 passed, task_3219_live_claude_background_supervisor, with no skip. CLI batch j20261107T231442735-2-0 executed 2 passing tests: logs/attach including real PTY and redirected byte identity, and native agent_new_claude --bg with opt-in unset under plain/sandbox postures. make check-ci-fast passed all 43 gates; its Cargo checks ran through the lane runner on profile agent via a temporary adapter. Formatting and git diff --check passed. Native publication declaration recorded: [AI:codex] fix(launch): preserve background refusals and escape terminal logs (Refs TASK-3219). Six source/test/doc files remain uncommitted for host publication; no commit, push, queue completion, review record or merge action from this seat.'
-  created_at: 2026-11-08T00:08:12.806497510Z
-  modified_at: 2026-11-08T00:08:12.806497510Z
+  content: 'Round 4 final validation: targeted library batch j20261107T231441707-4-0 executed 10 passing tests with 0 failures (2 ignored re-exec helper entrypoints). This includes supervisor cancellation/protocol, original-refusal preservation, terminal byte escaping, background entry/attach argv and vendor literal ratchet coverage. Live regression count: 1 passed, task_3219_live_claude_background_supervisor, with no skip. CLI batch j20261107T231442735-2-0 executed 2 passing tests: logs/attach including real PTY and redirected byte identity, and native agent_new_claude --bg with opt-in unset under plain/sandbox postures. make check-ci-fast passed all 43 gates; its Cargo checks ran through the lane runner on profile agent via a temporary adapter. Formatting and git diff --check passed. Native publication declaration recorded: [AI:codex] fix(launch): preserve background refusals and escape terminal logs (Refs TASK-3219). Six source/test/doc files remain uncommitted for host publication; no
+    commit, push, queue completion, review record or merge action from this seat.'
+  created_at: 2026-11-08 00:08:12.806497+00:00
+  modified_at: 2026-11-08 00:08:12.806497+00:00
   session_id: 01a1b83f4946
 - id: 01a1b90b-7ec2-7e41-869a-5b299786b1b3
   author: joe
   content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: Round-3 findings 2-5 are fixed and correct (cleanup-error context, TTY escaping, native --bg agent_new_claude coverage, doc comments). lib-0/lib-1/cli-1/rest/contracts and the live bwrap gate are green at 3d64e5c. Still blocked: cli-0 fails its Test time budget step (PR-caused; main is green at the base), and gates needs a re-run after main moved.. No triage reason was given.'
-  created_at: 2026-11-08T02:45:00.738705371Z
-  modified_at: 2026-11-08T02:45:00.738705371Z
+  created_at: 2026-11-08 02:45:00.738705+00:00
+  modified_at: 2026-11-08 02:45:00.738705+00:00
   session_id: 01a1b8be-8170-7fb2-89ab-ecb4c6eee98c
   harness_version: 2.1.319 (Claude Code)
 - id: 01a1b90b-a319-71e2-8a80-5a129616ec2b
   author: joe
-  content: |-
-    REVIEW FINDINGS TO ADDRESS (PR #3628):
+  content: 'REVIEW FINDINGS TO ADDRESS (PR #3628):
+
     Verdict: CHANGES REQUESTED
+
     Reviewed commit: 3d64e5c239b4
+
     Recorded: 2026-11-08T00:42:01.216146925+00:00
+
     Findings:
-    1. BLOCKING (CI, PR-caused): CI run 42428425690 at 3d64e5c, job CI (cli-0) 128571688822. 'Run tests' passed, but the 'Test time budget' step (scripts/test-timings.py with scripts/test-time-budget.toml) failed. main run 42421818224 at the base 2a7fe186bdc passes cli-0. This commit edited aida-cli/tests/bug_1502_format_json_audit.rs, so every test in that file counts as touched and is held to its strict limit: 10s default_limit when it has no [budget] entry. Neither new test has an entry. task_3219_background_logs_and_attach_commands now spawns ~18 debug aida processes plus fixture init plus a PTY loop for both verbs. task_3219_native_background_entry_keeps_bg_without_wrapper_opt_in runs 2 agent-new previews. The reviewer sandbox cannot download job logs (blob host denied), so the offending test name is inferred, not confirmed. Read the test-timings summary or the test-timings-cli-0 artifact. Then either add a measured [budget] entry (max x2, rounded up to 5s, with the run/job id as evidence, per the file header) or split/slim the test (e.g. check the 3 malformed-id refusals for one verb only).
-    2. CI (gates, NOT PR-caused, action needed): job 128571689049 failed 'Check Rust test portability ratchet'. The run was created at 00:08:55Z on a merge ref with the old main. main then landed 2782389cd8a (TASK-3424, 00:17:32Z), which deletes 5 aida-cli-lib/src/mcp.rs entries from scripts/portability-allowlist.txt. The step ran at 00:38Z, fetched the new origin/main as BASE, and saw those 5 entries as growth. Reproduced locally: the growth check of origin/main's allowlist vs the PR's prints exactly those 5 mcp.rs lines. scripts/check-portability.sh passes on both the PR head and a simulated merge with 2782389. Fix: update the branch from main and re-run CI. No code change.
-    3. minor (usability, round-4 change): display_log_bytes (agent_claude_background.rs:410-423) escapes every non-ASCII byte at a TTY, so legitimate UTF-8 worker output (Claude's em-dashes, check marks, quotes, non-English text) shows as \xe2\x80\x94 in 'aida agent logs/attach'. Only C0 controls (except tab/newline), DEL and C1 controls (U+0080-U+009F, plus raw 0x80-0x9F bytes that are not part of a valid UTF-8 sequence) need neutralizing for OSC/CSI safety. Decode UTF-8 incrementally, carrying an incomplete trailing sequence across the 16 KiB reads so split reads still cannot reassemble a control. Pass printable code points through and escape controls and invalid bytes. Keep the existing split-read and PTY tests and add a UTF-8 case. Update the docs/cli/06-roles-sessions.md sentence to match.
-    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
-  created_at: 2026-11-08T02:45:10.041047824Z
-  modified_at: 2026-11-08T02:45:10.041047824Z
+
+    1. BLOCKING (CI, PR-caused): CI run 42428425690 at 3d64e5c, job CI (cli-0) 128571688822. ''Run tests'' passed, but the ''Test time budget'' step (scripts/test-timings.py with scripts/test-time-budget.toml) failed. main run 42421818224 at the base 2a7fe186bdc passes cli-0. This commit edited aida-cli/tests/bug_1502_format_json_audit.rs, so every test in that file counts as touched and is held to its strict limit: 10s default_limit when it has no [budget] entry. Neither new test has an entry. task_3219_background_logs_and_attach_commands now spawns ~18 debug aida processes plus fixture init plus a PTY loop for both verbs. task_3219_native_background_entry_keeps_bg_without_wrapper_opt_in runs 2 agent-new previews. The reviewer sandbox cannot download job logs (blob host denied), so the offending test name is inferred, not confirmed. Read the test-timings summary or the test-timings-cli-0 artifact. Then either add a measured [budget] entry (max x2, rounded up to 5s, with the run/job id as
+    evidence, per the file header) or split/slim the test (e.g. check the 3 malformed-id refusals for one verb only).
+
+    2. CI (gates, NOT PR-caused, action needed): job 128571689049 failed ''Check Rust test portability ratchet''. The run was created at 00:08:55Z on a merge ref with the old main. main then landed 2782389cd8a (TASK-3424, 00:17:32Z), which deletes 5 aida-cli-lib/src/mcp.rs entries from scripts/portability-allowlist.txt. The step ran at 00:38Z, fetched the new origin/main as BASE, and saw those 5 entries as growth. Reproduced locally: the growth check of origin/main''s allowlist vs the PR''s prints exactly those 5 mcp.rs lines. scripts/check-portability.sh passes on both the PR head and a simulated merge with 2782389. Fix: update the branch from main and re-run CI. No code change.
+
+    3. minor (usability, round-4 change): display_log_bytes (agent_claude_background.rs:410-423) escapes every non-ASCII byte at a TTY, so legitimate UTF-8 worker output (Claude''s em-dashes, check marks, quotes, non-English text) shows as \xe2\x80\x94 in ''aida agent logs/attach''. Only C0 controls (except tab/newline), DEL and C1 controls (U+0080-U+009F, plus raw 0x80-0x9F bytes that are not part of a valid UTF-8 sequence) need neutralizing for OSC/CSI safety. Decode UTF-8 incrementally, carrying an incomplete trailing sequence across the 16 KiB reads so split reads still cannot reassemble a control. Pass printable code points through and escape controls and invalid bytes. Keep the existing split-read and PTY tests and add a UTF-8 case. Update the docs/cli/06-roles-sessions.md sentence to match.
+
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.'
+  created_at: 2026-11-08 02:45:10.041047+00:00
+  modified_at: 2026-11-08 02:45:10.041047+00:00
   session_id: 01a1b8be-8170-7fb2-89ab-ecb4c6eee98c
   harness_version: 2.1.319 (Claude Code)
 - id: 01a1b91d-16cf-7ed3-a298-70c0fc070cfa
   author: joe
-  content: |
-    Round 5 PR #3628 rework, native-seat handoff (edits intentionally uncommitted; host publication required):
+  content: 'Round 5 PR #3628 rework, native-seat handoff (edits intentionally uncommitted; host publication required):
 
-    Finding 1 confirmed from job 128571688822 logs, run 42428425690 at 3d64e5c239b4: task_3219_background_logs_and_attach_commands measured 11.912s and task_3219_native_background_entry_keeps_bg_without_wrapper_opt_in measured 10.692s. Added 25s [budget] entries for both (max x2, rounded up to 5s) with run/job evidence. Retained both verbs' coverage.
+
+    Finding 1 confirmed from job 128571688822 logs, run 42428425690 at 3d64e5c239b4: task_3219_background_logs_and_attach_commands measured 11.912s and task_3219_native_background_entry_keeps_bg_without_wrapper_opt_in measured 10.692s. Added 25s [budget] entries for both (max x2, rounded up to 5s) with run/job evidence. Retained both verbs'' coverage.
+
 
     Finding 2: initial checkout HEAD bb66cff7d13 already merged origin/main dc41ee8da2f, including 2782389cd8a. Direct scripts/check-portability.sh --check-allowlist-growth origin/main passed. Prior 31a4e2b9713 writer-inventory changes are reflected in the current inventory (prepare_with_io and PrivatePty sites), so no cherry-pick was needed. New host publication should trigger fresh CI; none was triggered from this seat. Existing merge hold remains intact.
 
+
     Finding 3: logs/attach now incrementally decode UTF-8, retaining incomplete trailing sequences across reads. Printable Unicode, tabs and newlines pass through; other C0, DEL, C1 and invalid bytes receive byte escapes. Final incomplete sequences flush as escapes. Pipes remain byte-preserving. Kept split-read tests, added Unicode/invalid/truncated UTF-8 coverage, and extended both real PTY command probes with em dash, check mark and Japanese text. Updated docs/cli/06-roles-sessions.md.
+
 
     Changed files: aida-cli-lib/src/agent_claude_background.rs; aida-cli/tests/bug_1502_format_json_audit.rs; docs/cli/06-roles-sessions.md; scripts/test-time-budget.toml.
 
-    Validation: 40 distinct non-Cargo fast gates passed using CI gate commands through the existing runner helpers in bounded batches. Initial make check-ci-fast was interrupted when its Cargo check began, since this seat requires Cargo through the lane runner; the TUI compile guard was likewise handed to the lane runner. Direct portability check, touched-file rustfmt --check and git diff --check passed. The exact LogDisplay implementation and its two split-read tests were extracted without modification into an isolated rustc --test harness: 2 passed. This supplemental check does not satisfy the lane's Cargo test contract.
+
+    Validation: 40 distinct non-Cargo fast gates passed using CI gate commands through the existing runner helpers in bounded batches. Initial make check-ci-fast was interrupted when its Cargo check began, since this seat requires Cargo through the lane runner; the TUI compile guard was likewise handed to the lane runner. Direct portability check, touched-file rustfmt --check and git diff --check passed. The exact LogDisplay implementation and its two split-read tests were extracted without modification into an isolated rustc --test harness: 2 passed. This supplemental check does not satisfy the lane''s Cargo test contract.
+
 
     untested=true: lane job j20261108T024801715-534498-0 (supervisor module cargo test) timed out during compilation after 900s, exit 124; no tests executed. Live regression count: 0 confirmed. Remaining jobs at handoff: j20261108T024851062-2-0 (two CLI regressions, running); j20261108T024900909-541563-0 (live background supervisor, queued); j20261108T024902070-541737-0 (feature-disabled CLI check, queued); j20261108T025005228-553621-0 (TUI all-target check, queued). Inspect each with aida lane job wait <id>. No full Cargo success or full make check-ci-fast success is claimed. Codegraph callers failed with an unreachable index; doctor confirmed it; no lane index was initialized.
 
-    Native publication declaration recorded successfully: [AI:codex] fix(containment): preserve UTF-8 background logs and calibrate CI budgets (Refs TASK-3219). Host must create this round's commit and publish. No commit, push, PR creation, review record, queue completion or merge action was performed by this seat.
-  created_at: 2026-11-08T03:04:13.775828272Z
-  modified_at: 2026-11-08T03:04:13.775828272Z
+
+    Native publication declaration recorded successfully: [AI:codex] fix(containment): preserve UTF-8 background logs and calibrate CI budgets (Refs TASK-3219). Host must create this round''s commit and publish. No commit, push, PR creation, review record, queue completion or merge action was performed by this seat.
+
+    '
+  created_at: 2026-11-08 03:04:13.775828+00:00
+  modified_at: 2026-11-08 03:04:13.775828+00:00
   session_id: 01a1b90ce0e3
 - id: 01a1baea-f82d-75e1-964c-ec94dbd147ad
   author: joe
   content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: S3 supervised contained Claude --bg matches the signed sketch and all PR CI is green at 497e5cb, but the supervisor runs with default SIGPIPE, so writing to a closed handoff socket kills it before teardown, defeating the documented cancellation unwind.. No triage reason was given.'
-  created_at: 2026-11-08T11:28:43.565224404Z
-  modified_at: 2026-11-08T11:28:43.565224404Z
+  created_at: 2026-11-08 11:28:43.565224+00:00
+  modified_at: 2026-11-08 11:28:43.565224+00:00
   session_id: 01a1b9af-8230-75d2-82f8-667491cc010a
   harness_version: 2.1.319 (Claude Code)
 - id: 01a1baeb-0f83-73e1-9972-6814fce82e4d
   author: joe
-  content: |-
-    REVIEW FINDINGS TO ADDRESS (PR #3628):
+  content: 'REVIEW FINDINGS TO ADDRESS (PR #3628):
+
     Verdict: CHANGES REQUESTED
+
     Reviewed commit: 497e5cbd8e9b
+
     Recorded: 2026-11-08T10:08:15.846950661+00:00
+
     Findings:
-    1. BLOCKING (correctness, teardown): the Claude background supervisor never ignores SIGPIPE. run_cli calls install_sigpipe_handler (lib_part1.rs:232, SIG_DFL) and handle_internal_command reaches agent_claude_background::supervise_main (agent_claude_background.rs:275), which unlike the Codex sibling (agent_codex_background.rs:1253-1257, whose comment states 'a write to its closed channel must fail, not kill the owner of the attempt') sets no SIG_IGN. send() uses UnixStream write_all (lines 34-39), which raises SIGPIPE on a closed peer. Scenario A: prepare outlasts the dispatcher's 45s TIMEOUT, cancel_supervisor calls parent.shutdown(Both) (line 232), and the supervisor's send 'ready' in before_release (line 266) kills it instantly, contradicting the comment at lines 230-231 that the owner 'can unwind and revoke its grant'. Scenario B: the dispatcher dies or times out after 'release', and send 'accepted' (line 321) kills the supervisor after run.release(), so bwrap --die-with-parent (contained.rs:298) kills the just-released worker. Either way IssuedLaunchGrant rollback, RegistryEnd and the 'ended' marker never run: the child grant stays unrevoked until expiry (its process binding is dead, so this is teardown loss, not a live authority escape), the registry row stays open, and attach reports no terminal result. cancel_supervisor sees a prompt exit and treats it as graceful (retain not called). The dispatcher has the same exposure: send(parent, init) or send(parent, 'release') at lines 176/186 to an already-dead supervisor kills the launcher, losing the refusal diagnostic and the handle_guard/setup_receipt cleanup on the first send. Fix: send with MSG_NOSIGNAL, or set SIG_IGN at supervise_main entry and across the dispatcher handshake, so these become Err and take the existing unwind.
-    2. BLOCKING (test coverage, strict-tier refusal path): nothing exercises the finding above. supervisor_child_entry and supervisor_dispatcher_entry run under libtest, which retains Rust's SIGPIPE ignore and does not pass through run_cli, so task_3219_live_claude_background_supervisor and supervisor_cancellation_closes_socket_and_reaps_before_cleanup (a /bin/sh helper) cannot observe it. Add a regression that proves a closed handoff socket yields Err and a completed unwind (grant revoked, registry ended, 'ended' written) under the production SIGPIPE disposition, for example by setting SIG_DFL in the re-exec entry.
-    3. minor (correctness): logs() follow can falsely report failure at exit. At agent_claude_background.rs:384-402 it checks 'ended', then checks me.is_live(). If the supervisor writes 'ended' and exits between those two checks, attach returns 'background supervisor exited without a terminal result' for a clean run, and any pending partial UTF-8 is lost through the early return. Fix: when the supervisor is not live, re-check 'ended' and take the final-drain path before erroring.
-    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
-  created_at: 2026-11-08T11:28:49.539268568Z
-  modified_at: 2026-11-08T11:28:49.539268568Z
+
+    1. BLOCKING (correctness, teardown): the Claude background supervisor never ignores SIGPIPE. run_cli calls install_sigpipe_handler (lib_part1.rs:232, SIG_DFL) and handle_internal_command reaches agent_claude_background::supervise_main (agent_claude_background.rs:275), which unlike the Codex sibling (agent_codex_background.rs:1253-1257, whose comment states ''a write to its closed channel must fail, not kill the owner of the attempt'') sets no SIG_IGN. send() uses UnixStream write_all (lines 34-39), which raises SIGPIPE on a closed peer. Scenario A: prepare outlasts the dispatcher''s 45s TIMEOUT, cancel_supervisor calls parent.shutdown(Both) (line 232), and the supervisor''s send ''ready'' in before_release (line 266) kills it instantly, contradicting the comment at lines 230-231 that the owner ''can unwind and revoke its grant''. Scenario B: the dispatcher dies or times out after ''release'', and send ''accepted'' (line 321) kills the supervisor after run.release(), so bwrap --die-with-parent
+    (contained.rs:298) kills the just-released worker. Either way IssuedLaunchGrant rollback, RegistryEnd and the ''ended'' marker never run: the child grant stays unrevoked until expiry (its process binding is dead, so this is teardown loss, not a live authority escape), the registry row stays open, and attach reports no terminal result. cancel_supervisor sees a prompt exit and treats it as graceful (retain not called). The dispatcher has the same exposure: send(parent, init) or send(parent, ''release'') at lines 176/186 to an already-dead supervisor kills the launcher, losing the refusal diagnostic and the handle_guard/setup_receipt cleanup on the first send. Fix: send with MSG_NOSIGNAL, or set SIG_IGN at supervise_main entry and across the dispatcher handshake, so these become Err and take the existing unwind.
+
+    2. BLOCKING (test coverage, strict-tier refusal path): nothing exercises the finding above. supervisor_child_entry and supervisor_dispatcher_entry run under libtest, which retains Rust''s SIGPIPE ignore and does not pass through run_cli, so task_3219_live_claude_background_supervisor and supervisor_cancellation_closes_socket_and_reaps_before_cleanup (a /bin/sh helper) cannot observe it. Add a regression that proves a closed handoff socket yields Err and a completed unwind (grant revoked, registry ended, ''ended'' written) under the production SIGPIPE disposition, for example by setting SIG_DFL in the re-exec entry.
+
+    3. minor (correctness): logs() follow can falsely report failure at exit. At agent_claude_background.rs:384-402 it checks ''ended'', then checks me.is_live(). If the supervisor writes ''ended'' and exits between those two checks, attach returns ''background supervisor exited without a terminal result'' for a clean run, and any pending partial UTF-8 is lost through the early return. Fix: when the supervisor is not live, re-check ''ended'' and take the final-drain path before erroring.
+
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.'
+  created_at: 2026-11-08 11:28:49.539268+00:00
+  modified_at: 2026-11-08 11:28:49.539268+00:00
   session_id: 01a1b9af-8230-75d2-82f8-667491cc010a
   harness_version: 2.1.319 (Claude Code)
 - id: 01a1bafa-8480-73f0-92f1-d78ac6ca3423
   author: dirtlab
-  content: |
-    S3 review rework for PR #3628, reviewed head 497e5cbd8e9b. Addressed all three findings; S4 resume remains refused.
+  content: 'S3 review rework for PR #3628, reviewed head 497e5cbd8e9b. Addressed all three findings; S4 resume remains refused.
 
-    Handoff sends now use MSG_NOSIGNAL with bounded framing, partial-write handling and EINTR retry, so both dispatcher and supervisor preserve diagnostics and unwind on disconnected peers under the CLI's SIG_DFL. Added a re-exec regression with SIG_DFL and enabled that disposition in both real background test entrypoints. The live fixture now cancels during prepare and requires a signal-free owner exit, ended marker, revoked child grant, ended registry row and no vendor release. Attach rechecks ended after observing a dead supervisor, preserving the final drain and pending UTF-8. Reconciled the writer inventory to remove the retired send/write_all row.
+
+    Handoff sends now use MSG_NOSIGNAL with bounded framing, partial-write handling and EINTR retry, so both dispatcher and supervisor preserve diagnostics and unwind on disconnected peers under the CLI''s SIG_DFL. Added a re-exec regression with SIG_DFL and enabled that disposition in both real background test entrypoints. The live fixture now cancels during prepare and requires a signal-free owner exit, ended marker, revoked child grant, ended registry row and no vendor release. Attach rechecks ended after observing a dead supervisor, preserving the final drain and pending UTF-8. Reconciled the writer inventory to remove the retired send/write_all row.
+
 
     Changed files: aida-cli-lib/src/agent_claude_background.rs; aida-cli-lib/src/containment/tests/launch_tests.rs; scripts/store-writers.toml. No edits to launch/contained.rs this round. Commit 31a4e2b9713 is not an ancestor of local origin/main, but its prepare_with_io/PrivatePty inventory content is already reflected there with newer classifications; no cherry-pick needed.
 
-    Validation: final lane job j20261108T113407523-2-0 passed the supervisor filter: 6 passed, 2 intentionally ignored helper entrypoints (plus the nested one-test child passed). Final required-live job j20261108T113420716-2-0 passed task_3219_live_claude_background_supervisor: 1 test passed. Distinct live regression count: 1, not summed across reruns. make check-ci-fast passed all 43 fast gates with umask 022. Initial fast run exposed unrelated mail-wake fixture assumptions under inherited umask 0002; another run caught the new test's direct env read, which was replaced with Environment::capture before the final green run. Touched-file rustfmt --check and git diff --check passed. untested=false.
+
+    Validation: final lane job j20261108T113407523-2-0 passed the supervisor filter: 6 passed, 2 intentionally ignored helper entrypoints (plus the nested one-test child passed). Final required-live job j20261108T113420716-2-0 passed task_3219_live_claude_background_supervisor: 1 test passed. Distinct live regression count: 1, not summed across reruns. make check-ci-fast passed all 43 fast gates with umask 022. Initial fast run exposed unrelated mail-wake fixture assumptions under inherited umask 0002; another run caught the new test''s direct env read, which was replaced with Environment::capture before the final green run. Touched-file rustfmt --check and git diff --check passed. untested=false.
+
 
     Native publication declaration recorded: [AI:codex] fix(launch): unwind Claude background socket failures (Refs TASK-3219). Changes remain uncommitted for the host launcher. No commit, push, PR creation, queue done, ship/merge action or review record performed. Host must rebase against current main before publishing; preserve existing holds/vetoes. Codegraph executable was unavailable; source searches used instead.
-  created_at: 2026-11-08T11:45:42.528663884Z
-  modified_at: 2026-11-08T11:45:42.528663884Z
+
+    '
+  created_at: 2026-11-08 11:45:42.528663+00:00
+  modified_at: 2026-11-08 11:45:42.528663+00:00
   session_id: 01a1baeceab7
   harness_version: codex-cli 0.167.0
 - id: 01a1bb2b-b946-7c81-8501-9dd89bf70876
   author: joe
   content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: All round-6 findings are fixed (MSG_NOSIGNAL send, SIG_DFL regression, attach re-check) and S3 matches the sketch except one condition: the advisor-required claude attach refusal in claude_argv only inspects argv[0], which is never attach on a composed launch. CI at 08d8ee6 was still queued/running when recorded (lib-0 green only; merge-hold-gate red is the expected supervised hold).. No triage reason was given.'
-  created_at: 2026-11-08T12:39:27.302680380Z
-  modified_at: 2026-11-08T12:39:27.302680380Z
+  created_at: 2026-11-08 12:39:27.302680+00:00
+  modified_at: 2026-11-08 12:39:27.302680+00:00
   session_id: 01a1b9af-8230-75d2-82f8-667491cc010a
   harness_version: 2.1.319 (Claude Code)
 - id: 01a1bb2b-d57a-72f0-81c5-fc7a4ae1271e
   author: joe
-  content: |-
-    REVIEW FINDINGS TO ADDRESS (PR #3628):
+  content: 'REVIEW FINDINGS TO ADDRESS (PR #3628):
+
     Verdict: CHANGES REQUESTED
+
     Reviewed commit: 08d8ee6c9daa
+
     Recorded: 2026-11-08T12:26:23.852532116+00:00
+
     Findings:
-    1. BLOCKING (sketch condition, test gap; no authority impact): the signed sketch (docs/plans/2026-11-06-task-3219-claude-wrapper-launches.md, Advisor decision) requires opted-in claude attach to refuse with an explicit hint. claude_argv (aida-cli-lib/src/launch/contained.rs:1680-1684) only refuses when original.first() == attach. Every composed launch has the generated flags first (--setting-sources project --settings ..., spliced at index 0 in lib_part2.rs apply_agent_default_flags; extra flags are appended at lib_part2.rs:902), and claude_argv itself requires exactly one --settings, so a reachable argv never starts with attach. Scenario: aida agent new claude --bg --extra-flag attach --extra-flag <session-id> composes --setting-sources project --settings X attach <session-id> ..., passes claude_argv without the hint and hands attach to the vendor inside the wrapper. Whether Claude parses that as its subcommand was not run (no local execution in this review); containment still holds, only the mandated refusal is missing. task_3219_background_attach_argv_refuses_subcommand_preserves_prompt only covers a synthetic argv with attach at index 0 and has no case with attach <id> after the generated flags. Fix: refuse attach as the first positional after skipping known option/value pairs, or refuse it at --extra-flag composition, while still allowing a single prompt argument attach; add a case using the real composed flag order.
+
+    1. BLOCKING (sketch condition, test gap; no authority impact): the signed sketch (docs/plans/2026-11-06-task-3219-claude-wrapper-launches.md, Advisor decision) requires opted-in claude attach to refuse with an explicit hint. claude_argv (aida-cli-lib/src/launch/contained.rs:1680-1684) only refuses when original.first() == attach. Every composed launch has the generated flags first (--setting-sources project --settings ..., spliced at index 0 in lib_part2.rs apply_agent_default_flags; extra flags are appended at lib_part2.rs:902), and claude_argv itself requires exactly one --settings, so a reachable argv never starts with attach. Scenario: aida agent new claude --bg --extra-flag attach --extra-flag <session-id> composes --setting-sources project --settings X attach <session-id> ..., passes claude_argv without the hint and hands attach to the vendor inside the wrapper. Whether Claude parses that as its subcommand was not run (no local execution in this review); containment still holds,
+    only the mandated refusal is missing. task_3219_background_attach_argv_refuses_subcommand_preserves_prompt only covers a synthetic argv with attach at index 0 and has no case with attach <id> after the generated flags. Fix: refuse attach as the first positional after skipping known option/value pairs, or refuse it at --extra-flag composition, while still allowing a single prompt argument attach; add a case using the real composed flag order.
+
     2. cosmetic: RegistryEnd (agent_claude_background.rs:360-374) is meant for handshake/release/wait errors but also fires on every normal exit, after run_agent_generation_with_io has already ended the row. mark_agent_ended is not idempotent (end_entry, agent_registry.rs:1923), so it rewrites ended_at and last_active_at, recomputes spec_status_at_end and re-retires mail wake. Disarm it once the normal end has been recorded.
+
     3. CI wait state, not a code defect: at review time run 42477654460 at 08d8ee6 had lib-0 passed, rest and contracts in progress, and cli-0, cli-1, lib-1 and gates queued. The required-live bwrap count and the new tests are therefore unconfirmed at this head. merge-hold-gate red is the expected supervised hold and needs the human/advisor clearance path.
-    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
-  created_at: 2026-11-08T12:39:34.522458762Z
-  modified_at: 2026-11-08T12:39:34.522458762Z
+
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.'
+  created_at: 2026-11-08 12:39:34.522458+00:00
+  modified_at: 2026-11-08 12:39:34.522458+00:00
   session_id: 01a1b9af-8230-75d2-82f8-667491cc010a
   harness_version: 2.1.319 (Claude Code)
 history:
 - id: 01a1b10b-ebd9-7db3-bc79-b89eb0de54f2
   author: joe
-  timestamp: 2026-11-06T13:28:30.937878949Z
+  timestamp: 2026-11-06 13:28:30.937878+00:00
   session_id: b0a84e34-277c-4df6-b53c-43f4bbe2e84d
   changes: []
 - id: 01a1b10c-0c13-7b93-8a22-2d76ddc6b111
   author: joe
-  timestamp: 2026-11-06T13:28:39.187240165Z
+  timestamp: 2026-11-06 13:28:39.187240+00:00
   session_id: b0a84e34-277c-4df6-b53c-43f4bbe2e84d
   changes: []
 - id: 01a1b10c-9c1d-7d91-9031-d8329d19e0aa
   author: joe
-  timestamp: 2026-11-06T13:29:16.061661130Z
+  timestamp: 2026-11-06 13:29:16.061661+00:00
   session_id: b0a84e34-277c-4df6-b53c-43f4bbe2e84d
   changes: []
 - id: 01a1b10c-d7bb-7402-94ab-358832359453
   author: joe
-  timestamp: 2026-11-06T13:29:31.323427943Z
+  timestamp: 2026-11-06 13:29:31.323427+00:00
   session_id: b0a84e34-277c-4df6-b53c-43f4bbe2e84d
   changes:
   - field_name: status
@@ -551,19 +556,19 @@ history:
     new_value: Approved
 - id: 01a1b1a3-d5b0-73c0-a85f-cce010c2b659
   author: aida-session-start
-  timestamp: 2026-11-06T16:14:26.736438193Z
+  timestamp: 2026-11-06 16:14:26.736438+00:00
   changes:
   - field_name: status
     old_value: Approved
     new_value: InProgress
 - id: 01a1b1a4-c04e-7a42-ac16-ca03c2e0a166
   author: joe
-  timestamp: 2026-11-06T16:15:26.798278389Z
+  timestamp: 2026-11-06 16:15:26.798278+00:00
   session_id: 01a1b1a3c9e6
   changes: []
 - id: 01a1b1a6-145d-7420-af57-374343a9ea56
   author: joe
-  timestamp: 2026-11-06T16:16:53.853354358Z
+  timestamp: 2026-11-06 16:16:53.853354+00:00
   session_id: 01a1b1a3c9e6
   changes:
   - field_name: status
@@ -571,12 +576,12 @@ history:
     new_value: NeedsAttention
 - id: 01a1b1a7-2b09-7cd1-ad2f-585daaf0a0b5
   author: joe
-  timestamp: 2026-11-06T16:18:05.193986959Z
+  timestamp: 2026-11-06 16:18:05.193986+00:00
   session_id: 01a1b1a3c9e6
   changes: []
 - id: 01a1b1a8-de8f-78e3-9479-30fc18466c2e
   author: joe
-  timestamp: 2026-11-06T16:19:56.687823027Z
+  timestamp: 2026-11-06 16:19:56.687823+00:00
   session_id: b0a84e34-277c-4df6-b53c-43f4bbe2e84d
   changes:
   - field_name: status
@@ -584,24 +589,24 @@ history:
     new_value: Approved
 - id: 01a1b1b6-9ee9-77d2-8bd6-018d934c5dbf
   author: aida-session-start
-  timestamp: 2026-11-06T16:34:57.897711642Z
+  timestamp: 2026-11-06 16:34:57.897711+00:00
   changes:
   - field_name: status
     old_value: Approved
     new_value: InProgress
 - id: 01a1b1b7-2bbf-7bb3-8469-86d5361676bd
   author: joe
-  timestamp: 2026-11-06T16:35:33.951943881Z
+  timestamp: 2026-11-06 16:35:33.951943+00:00
   session_id: 01a1b1b68af3
   changes: []
 - id: 01a1b1ef-b5b7-7872-92f5-0c018764534a
   author: joe
-  timestamp: 2026-11-06T17:37:19.287116419Z
+  timestamp: 2026-11-06 17:37:19.287116+00:00
   session_id: 01a1b1b68af3
   changes: []
 - id: 01a1b30a-3bd1-72d0-aa87-ffa9212af596
   author: joe
-  timestamp: 2026-11-06T22:45:54.769250941Z
+  timestamp: 2026-11-06 22:45:54.769250+00:00
   session_id: 3dd100c3-f8c0-44d9-ac4c-f9ff0eb32a27
   changes:
   - field_name: status
@@ -609,14 +614,14 @@ history:
     new_value: Approved
 - id: 01a1b30e-f950-7822-9325-3845fbe46b5a
   author: aida-session-start
-  timestamp: 2026-11-06T22:51:05.424424996Z
+  timestamp: 2026-11-06 22:51:05.424424+00:00
   changes:
   - field_name: status
     old_value: Approved
     new_value: InProgress
 - id: 01a1b382-8100-7093-b8cf-a1ec34a7de01
   author: joe
-  timestamp: 2026-11-07T00:57:16.800032616Z
+  timestamp: 2026-11-07 00:57:16.800032+00:00
   session_id: 01a1b358-7de9-72a0-b4a1-1a909992fa05
   harness_version: 2.1.319 (Claude Code)
   changes:
@@ -625,14 +630,14 @@ history:
     new_value: Approved
 - id: 01a1b386-91c1-77e0-9071-c254c0d0d3d9
   author: aida-session-start
-  timestamp: 2026-11-07T01:01:43.233977166Z
+  timestamp: 2026-11-07 01:01:43.233977+00:00
   changes:
   - field_name: status
     old_value: Approved
     new_value: InProgress
 - id: 01a1b3b6-7d83-7f31-8e37-17cba0aedf61
   author: aida-orchestrator
-  timestamp: 2026-11-07T01:54:03.779982811Z
+  timestamp: 2026-11-07 01:54:03.779982+00:00
   session_id: 01a1b3a806cd
   harness_version: 2.1.319 (Claude Code)
   changes:
@@ -641,27 +646,27 @@ history:
     new_value: NeedsAttention
 - id: 01a1b3d3-9135-7672-8d13-2a5acb847dad
   author: joe
-  timestamp: 2026-11-07T02:25:49.365270721Z
+  timestamp: 2026-11-07 02:25:49.365270+00:00
   session_id: 01a1b3cbc9b0
   harness_version: 2.1.319 (Claude Code)
   changes: []
 - id: 01a1b3d6-7134-72e1-8afe-803339f34b28
   author: joe
-  timestamp: 2026-11-07T02:28:57.780556458Z
+  timestamp: 2026-11-07 02:28:57.780556+00:00
   changes:
   - field_name: status
     old_value: NeedsAttention
     new_value: Approved
 - id: 01a1b3d7-a34f-7b93-a33b-1243bc1e34ec
   author: aida-session-start
-  timestamp: 2026-11-07T02:30:16.143571769Z
+  timestamp: 2026-11-07 02:30:16.143571+00:00
   changes:
   - field_name: status
     old_value: Approved
     new_value: InProgress
 - id: 01a1b452-df9d-7f52-9b45-1d3714604d79
   author: joe
-  timestamp: 2026-11-07T04:44:52.510003307Z
+  timestamp: 2026-11-07 04:44:52.510003+00:00
   session_id: 01a1b441-8158-7162-ad75-f7915b45ee33
   harness_version: 2.1.319 (Claude Code)
   changes:
@@ -670,14 +675,14 @@ history:
     new_value: Approved
 - id: 01a1b455-74dc-7162-8c99-a39b542a02a8
   author: aida-session-start
-  timestamp: 2026-11-07T04:47:41.788942945Z
+  timestamp: 2026-11-07 04:47:41.788942+00:00
   changes:
   - field_name: status
     old_value: Approved
     new_value: InProgress
 - id: 01a1b499-4f3d-7e42-aa56-d0d94be66785
   author: joe
-  timestamp: 2026-11-07T06:01:48.605692448Z
+  timestamp: 2026-11-07 06:01:48.605692+00:00
   session_id: 01a1b441-8158-7162-ad75-f7915b45ee33
   harness_version: 2.1.319 (Claude Code)
   changes:
@@ -686,7 +691,7 @@ history:
     new_value: Approved
 - id: 01a1b49c-5722-7d33-bd16-22bbce3d4add
   author: aida-pr-open
-  timestamp: 2026-11-07T06:05:07.234317270Z
+  timestamp: 2026-11-07 06:05:07.234317+00:00
   session_id: 01a1b441-8158-7162-ad75-f7915b45ee33
   harness_version: 2.1.319 (Claude Code)
   changes:
@@ -695,7 +700,7 @@ history:
     new_value: InProgress
 - id: 01a1b7ea-c0e8-71e1-8105-6c9cb8a81979
   author: aida-orchestrator
-  timestamp: 2026-11-07T21:29:37.768170094Z
+  timestamp: 2026-11-07 21:29:37.768170+00:00
   session_id: 01a1b7de2bc4
   harness_version: 2.1.319 (Claude Code)
   changes:
@@ -704,7 +709,7 @@ history:
     new_value: NeedsAttention
 - id: 01a1b7ef-1a96-73c1-add1-ccb17c3a3b24
   author: joe
-  timestamp: 2026-11-07T21:34:22.870901243Z
+  timestamp: 2026-11-07 21:34:22.870901+00:00
   session_id: 01a1b646-c67d-7b43-98ff-3604a53f5d1f
   harness_version: 2.1.319 (Claude Code)
   changes:
@@ -713,14 +718,14 @@ history:
     new_value: Approved
 - id: 01a1b7f0-266f-7f30-a57d-3220d7bb5387
   author: aida-session-start
-  timestamp: 2026-11-07T21:35:31.439455683Z
+  timestamp: 2026-11-07 21:35:31.439455+00:00
   changes:
   - field_name: status
     old_value: Approved
     new_value: InProgress
 - id: 01a1b82b-a7da-7593-8c7f-36a2cf524a8e
   author: aida-orchestrator
-  timestamp: 2026-11-07T22:40:31.194019188Z
+  timestamp: 2026-11-07 22:40:31.194019+00:00
   session_id: 01a1b81afcaf
   harness_version: 2.1.319 (Claude Code)
   changes:
@@ -729,7 +734,7 @@ history:
     new_value: NeedsAttention
 - id: 01a1b830-d5f8-7e63-b484-564144dc7776
   author: joe
-  timestamp: 2026-11-07T22:46:10.680732180Z
+  timestamp: 2026-11-07 22:46:10.680732+00:00
   session_id: 01a1b646-c67d-7b43-98ff-3604a53f5d1f
   harness_version: 2.1.319 (Claude Code)
   changes:
@@ -738,14 +743,14 @@ history:
     new_value: Approved
 - id: 01a1b83f-5444-7a91-b52c-9db382414c3f
   author: aida-session-start
-  timestamp: 2026-11-07T23:02:00.516117303Z
+  timestamp: 2026-11-07 23:02:00.516117+00:00
   changes:
   - field_name: status
     old_value: Approved
     new_value: InProgress
 - id: 01a1b89a-e533-7420-86ea-ecda833b399f
   author: aida-orchestrator
-  timestamp: 2026-11-08T00:42:01.396009381Z
+  timestamp: 2026-11-08 00:42:01.396009+00:00
   session_id: 01a1b88f7bec
   harness_version: 2.1.319 (Claude Code)
   changes:
@@ -754,7 +759,7 @@ history:
     new_value: NeedsAttention
 - id: 01a1b90b-7ec2-7e41-869a-5b1e824289d3
   author: joe
-  timestamp: 2026-11-08T02:45:00.738695928Z
+  timestamp: 2026-11-08 02:45:00.738695+00:00
   session_id: 01a1b8be-8170-7fb2-89ab-ecb4c6eee98c
   harness_version: 2.1.319 (Claude Code)
   changes:
@@ -763,14 +768,14 @@ history:
     new_value: Approved
 - id: 01a1b90c-ede6-7d62-94f3-6276d7c9b111
   author: aida-session-start
-  timestamp: 2026-11-08T02:46:34.726199949Z
+  timestamp: 2026-11-08 02:46:34.726199+00:00
   changes:
   - field_name: status
     old_value: Approved
     new_value: InProgress
 - id: 01a1baa1-4e9a-71f2-81a8-6caf96d6d3c1
   author: aida-orchestrator
-  timestamp: 2026-11-08T10:08:16.026352726Z
+  timestamp: 2026-11-08 10:08:16.026352+00:00
   session_id: 01a1ba9e7833
   harness_version: 2.1.319 (Claude Code)
   changes:
@@ -779,7 +784,7 @@ history:
     new_value: NeedsAttention
 - id: 01a1baea-f82d-75e1-964c-ec84cd687d5f
   author: joe
-  timestamp: 2026-11-08T11:28:43.565212889Z
+  timestamp: 2026-11-08 11:28:43.565212+00:00
   session_id: 01a1b9af-8230-75d2-82f8-667491cc010a
   harness_version: 2.1.319 (Claude Code)
   changes:
@@ -788,14 +793,14 @@ history:
     new_value: Approved
 - id: 01a1baec-f680-7be1-99e3-4d172b039c32
   author: aida-session-start
-  timestamp: 2026-11-08T11:30:54.208751860Z
+  timestamp: 2026-11-08 11:30:54.208751+00:00
   changes:
   - field_name: status
     old_value: Approved
     new_value: InProgress
 - id: 01a1bb1f-c5a1-7f53-9c2c-d8ddc35b90c2
   author: aida-orchestrator
-  timestamp: 2026-11-08T12:26:24.033411079Z
+  timestamp: 2026-11-08 12:26:24.033411+00:00
   session_id: 01a1bb1be302
   harness_version: 2.1.319 (Claude Code)
   changes:
@@ -804,7 +809,7 @@ history:
     new_value: NeedsAttention
 - id: 01a1bb2b-b946-7c81-8501-9dca394d7e88
   author: joe
-  timestamp: 2026-11-08T12:39:27.302672755Z
+  timestamp: 2026-11-08 12:39:27.302672+00:00
   session_id: 01a1b9af-8230-75d2-82f8-667491cc010a
   harness_version: 2.1.319 (Claude Code)
   changes:
@@ -813,11 +818,17 @@ history:
     new_value: Approved
 - id: 01a1bb2d-a069-74b2-b1e8-b6888ecd6200
   author: aida-session-start
-  timestamp: 2026-11-08T12:41:32.009047841Z
+  timestamp: 2026-11-08 12:41:32.009047+00:00
   changes:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a1bb31-b95c-78e0-bcf3-c841561dc4da
+  author: joe
+  timestamp: 2026-11-08 12:46:00.540147+00:00
+  session_id: 01a1bb2f660b
+  harness_version: 2.1.319 (Claude Code)
+  changes: []
 filed_at:
   code_sha: 50ce509da3f7edbd12ff6636fe996c9c3a65c68f
   branch: main
@@ -826,3 +837,11 @@ filed_at:
   aida_build_sha: dd852f74c3b
   vendor: claude
   session: b0a84e34-277c-4df6-b53c-43f4bbe2e84d
+failure_reason:
+  phase: reviewer
+  phase_index: 3
+  kind: verdict:request-changes
+  detail: S3 supervised contained Claude --bg matches the signed sketch on wrapper, grant and teardown, but head 5c4cbfe only merges main, so the required claude attach refusal still inspects argv[0] only and misses every reachable composed argv. CI at this head is still queued.
+  recovery_hint: address the review findings, move TASK-3219 back to In Progress, and clear the PR hold only after approval
+  shelved_by: reviewer
+  shelved_at: 2026-11-08 12:46:00.453213+00:00
