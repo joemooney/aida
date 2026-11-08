@@ -3,12 +3,12 @@ spec_id: BUG-b6b1278890774ef993d2ebc327862470-256
 agreed_id: BUG-2491
 title: Force-claim treats a dead lane's local slice-* tags as unpushed work, so every rework of a finished contained lane refuses until the seat is ended by hand
 description: 'Observed 4 times on 2026-11-07 (dell1: TASK-3424, TASK-3425, TASK-1214 seats; BUG-2488 a variant). ''aida queue work SPEC --force-claim'' refuses: ''retained lease L and private clone P: its tree has commits origin lacks: 1 commit(s) on refs/tags/slice-00-r1 ... (+46 more). Diff stat: no tracked changes.'' The branch HEAD is an ancestor of (or equal to) origin''s PR head; the only ''unpushed'' refs are the lane''s own slice-NN-rN checkpoint tags. The advisor must run ''aida session end L --force --discard-unpushed'' and relaunch each time; auto-rework cannot proceed unattended. Acceptance: (1) the unpushed-work check ignores refs/tags/slice-* (lane checkpoint tags) when every tagged commit is reachable from the pushed branch head or is the branch''s own history; tags pointing at commits NOT reachable from origin still count; (2) when the remaining evidence is clean, force-claim ends the retained finished lease itself and proceeds; (3) regression test with a seat clone carrying slice tags and a clean pushed branch. LIGHT gate.'
-status: NeedsAttention
+status: Approved
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-08T00:05:07.175003336Z
-modified_at: 2026-11-08T03:17:11.391107128Z
+modified_at: 2026-11-08T04:16:20.694327203Z
 req_type: Bug
 comments:
 - id: 01a1b879-aeab-7d60-b2eb-2aee3e5a94bb
@@ -32,6 +32,13 @@ comments:
   modified_at: 2026-11-08T03:08:54.230393121Z
   session_id: 01a1b91a8e35
   harness_version: codex-cli 0.167.0
+- id: 01a1b95f-1cd6-7f21-bf37-3ec25a0fa509
+  author: joe
+  content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: No production change: only a comment in seat_clone.rs plus a test that asserts the opposite of the advisor-clarified AC(1); AC(2) force-claim self-retirement is untested; the reported refusal is not fixed.. It was punted on: missing-context: The described reachable slice-tag condition passes a live sandbox regression on this checkout; shared probe and force-claim retirement already implement that path. No production behavior change is justified without a retained failing clone or its exact peeled tag OIDs, branch/origin ancestry and deployed binary revision. Regression edits are retained uncommitted; final-source test rerun is pending.. No triage reason was given.'
+  created_at: 2026-11-08T04:16:20.694325307Z
+  modified_at: 2026-11-08T04:16:20.694325307Z
+  session_id: 01a1b8be-8170-7fb2-89ab-ecb4c6eee98c
+  harness_version: 2.1.319 (Claude Code)
 history:
 - id: 01a1b91a-93cc-7372-8d80-82eb4086793e
   author: aida-session-start
@@ -55,6 +62,15 @@ history:
   session_id: 01a1b928152e
   harness_version: 2.1.319 (Claude Code)
   changes: []
+- id: 01a1b95f-1cd6-7f21-bf37-3eb046e4bf11
+  author: joe
+  timestamp: 2026-11-08T04:16:20.694300281Z
+  session_id: 01a1b8be-8170-7fb2-89ab-ecb4c6eee98c
+  harness_version: 2.1.319 (Claude Code)
+  changes:
+  - field_name: status
+    old_value: NeedsAttention
+    new_value: Approved
 filed_at:
   code_sha: 2a7fe186bdcd718fa356e5e4d028a3b2ff13769d
   branch: main
@@ -64,17 +80,3 @@ filed_at:
   vendor: claude
   session: 01a1b848-940b-7bd2-8acd-52e428b182b8
   harness_version: 2.1.319 (Claude Code)
-attention_reason:
-  category: missing-context
-  detail: The described reachable slice-tag condition passes a live sandbox regression on this checkout; shared probe and force-claim retirement already implement that path. No production behavior change is justified without a retained failing clone or its exact peeled tag OIDs, branch/origin ancestry and deployed binary revision. Regression edits are retained uncommitted; final-source test rerun is pending.
-  lean: Compare the failing tag commits with the actual origin branch ancestry and verify the deployed binary revision before changing teardown safety.
-  raised_by: implementer
-  raised_at: 2026-11-08T03:08:15.831215732Z
-failure_reason:
-  phase: reviewer
-  phase_index: 3
-  kind: verdict:request-changes
-  detail: 'No production change: only a comment in seat_clone.rs plus a test that asserts the opposite of the advisor-clarified AC(1); AC(2) force-claim self-retirement is untested; the reported refusal is not fixed.'
-  recovery_hint: address the review findings, move BUG-2491 back to In Progress, and clear the PR hold only after approval
-  shelved_by: reviewer
-  shelved_at: 2026-11-08T03:17:11.391107128Z
