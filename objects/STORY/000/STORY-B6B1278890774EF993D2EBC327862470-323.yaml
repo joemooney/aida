@@ -8,7 +8,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-02T19:20:50.092491662Z
-modified_at: 2026-11-08T03:11:49.040994003Z
+modified_at: 2026-11-08T03:14:25.373112255Z
 req_type: Story
 tags:
 - architecture
@@ -692,6 +692,31 @@ comments:
   modified_at: 2026-11-08T03:05:25.917280836Z
   session_id: 01a1b8be-8170-7fb2-89ab-ecb4c6eee98c
   harness_version: 2.1.319 (Claude Code)
+- id: 01a1b926-6bdd-7781-87ec-08edaa255997
+  author: joe
+  content: |
+    Round-9 documentation relocation from OVERVIEW.md (per round-8 finding 3):
+
+
+    <!-- trace:STORY-2325 | ai:codex -->
+
+    A proven-dead non-PR implementer lane with a clean tree and zero commits missing
+    from remotes can be reclaimed through the ownership journal even before its
+    branch has a head on origin. Dirty or unpushed work, unknown ownership, PR-scoped
+    leases and reviewer leases retain their stricter safeguards. Queue recovery dry-runs inspect
+    live and unknown records without mutation; session listings show unknown
+    ownership as `?` rather than dead. Only invocation-local fresh dispatch may warn
+    and continue after a holderless unverified PID-namespace scan; independent
+    re-entry and scans with visible holders still refuse.
+
+    The 2026-11-07 13:50 advisor ruling supersedes the earlier completing-slice
+    ruling: PR-D references STORY-2325. TASK-3420 owns canonical message-state
+    retention and the four grandfathered relaunch readers. Their build-identity gate
+    and legacy ratchet entries remain unchanged in PR-D. Fetch-worker probe refs
+    use process death for artifact cleanup because watcher PIDs are not work owners.
+  created_at: 2026-11-08T03:14:25.373112255Z
+  modified_at: 2026-11-08T03:14:25.373112255Z
+  session_id: 01a1b923f3c3
 history:
 - id: 01a19ed2-508b-7401-9865-70193fa0d0af
   author: joe
