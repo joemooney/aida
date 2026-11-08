@@ -509,6 +509,36 @@ comments:
   modified_at: 2026-11-08 00:21:45.148134+00:00
   session_id: 01a1b848-940b-7bd2-8acd-52e428b182b8
   harness_version: 2.1.319 (Claude Code)
+- id: 01a1b892-0010-76e3-b0df-624ecfa5d43d
+  author: dirtlab
+  content: 'Partial repair of PR #3641 review findings; TASK-3048 is incomplete and punted. Preserve the publication veto: the store punt succeeded but the local punt signal file could not be written (read-only filesystem). A Refs-only publication declaration exists, not permission to override the punt.
+
+
+    Changed files:
+
+    aida-cli-lib/src/config_cmd.rs; aida-cli-lib/src/config_cmd_args.rs: read-only runtime-policy JSON subcommand sourced from this binary, early store-free dispatch, production-refusal regression.
+
+    aida-cli-lib/src/containment/mod.rs; aida-cli-lib/src/containment/vendors.toml; aida-cli-lib/src/launch/agy.rs: remove retired WorkspacePermission/settings helper and obsolete write_file glob test; correct inventory comment.
+
+    aida-cli-lib/src/launch/contained.rs; aida-cli-lib/src/containment/tests/launch_tests.rs: remove unused workspace argument from private runtime installation and adjust callers.
+
+    scripts/containment/conformance.py; tests/test_containment_conformance.py: query descriptor from selected AIDA binary; refuse absent/malformed data without source fallback; cover AGY setup beyond hidden-output refusal using injected fixture commands.
+
+    docs/cli/07-project-setup.md: document descriptor inspection and its limits.
+
+
+    Verified: Python conformance plus AIDA production-boundary refusal suite, 55 executed tests passed; cargo fmt --all -- --check and git diff --check passed. No real vendor model was run.
+
+    Rust task_3048 via lane job j20261108T002724618-2-0 is compiling. Final-source rerun submitted as j20261108T003141067-2-0. make check-ci-fast restarted with Cargo build/check/test invocations delegated to the lane runner; no-default-features job j20261108T002857259-124-0 is queued. Logs: /tmp/task3048-python.log and /tmp/task3048-fast.log. Pending jobs are not passing test evidence.
+
+
+    Remaining blocking review findings: (1) no diagnostic-only executable path through the shared grant/receipt/seat boundary; current queue-work AGY path still refuses; (2) MCP/browser/URL disabling semantics are not verified (installed --help has no disabling flags; binary setting names alone are insufficient); (3) runtime auth_hosts not yet integrated as launcher egress data with named unknown-host refusal, and no measured refresh-host inventory. Existing measurement in the spec is daily-cloudcode-pa.googleapis.com; oauth2.googleapis.com is only a static installed-binary token URL candidate, not a measured refresh host. auth_inventory_complete stays false; production require_conformance stays closed. Finding 6''s queue argv/ready coverage remains, though pre-authority AGY setup now has coverage. Whole-lane completion logic remains unfinished. No completion, commit, push, PR, review record, or queue done.
+
+    '
+  created_at: 2026-11-08 00:32:18.448049+00:00
+  modified_at: 2026-11-08 00:32:18.448049+00:00
+  session_id: 01a1b88b7e86
+  harness_version: codex-cli 0.167.0
 - id: 01a1b8c8-2493-7db1-ac64-426a48335ff1
   author: joe
   content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: Rework round 2: prior findings 4,5,7 fixed and 6 partly covered (runtime-policy descriptor from tested binary, retired write_file permission, setup test), but ruling items 1-3 (prior findings 1,2,3) remain unaddressed with no recorded dispute; CI build still pending at head.. No triage reason was given.'

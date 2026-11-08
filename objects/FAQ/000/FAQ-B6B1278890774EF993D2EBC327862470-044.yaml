@@ -3,23 +3,21 @@ spec_id: FAQ-b6b1278890774ef993d2ebc327862470-044
 agreed_id: FAQ-151
 title: How do I set up a new remote lane host like dell1?
 description: |
-  Run `aida doctor --lane-host` on the target machine, and `aida doctor --lane-host --fix` for safe user-level permission and Cargo configuration fixes. See docs/cli/07-project-setup.md#lane-host-readiness for the checks, fix scope and current limits. This replaces the hand-maintained containment checklist; do not restore the old extra Codex writable roots.
-
-  The command is an initial diagnostic slice, not full host certification: lane cache transport/reachability still depends on STORY-2641; release freshness and vendor credential validity are unverified. STORY-2642 remains in progress.
+  Run `aida doctor --lane-host` on the target machine. Apply safe user-level permission and Cargo configuration fixes with `aida doctor --lane-host --fix`. See docs/cli/07-project-setup.md#lane-host-readiness for the checks, advisory notes and fix scope. Codex uses no extra writable roots (`writable_roots=[]`); checks and fixes honor CODEX_HOME.
 
   ## Remaining manual setup
-  - Configure SSH access (for example `ssh dell1`) and clone the project (reference checkout: `~/ai/aida`).
-  - Configure remote/mirror connectivity. The reference GitLab remote uses ssh://git@gitlab.joemooney.com:2222/ai/aida.git. Machines on that LAN may need an /etc/hosts pin to bypass Cloudflare Access: other hosts use 192.168.179.100 and dell1 uses 127.0.0.1 for gitlab.joemooney.com.
-  - Put `~/.local/bin` on PATH in both `.profile` and `.bashrc`. Use a login shell for remote commands, for example `ssh dell1 'bash -lc "aida doctor --lane-host"'`.
-  - Install AIDA and vendor CLIs, and log in on the host (`codex login` for ChatGPT Codex). Authentication is manual; credential-source presence does not establish token validity.
-  - Follow `aida doctor --fix-sandbox` for any system-level userns/AppArmor setup; run sudo commands yourself.
-  - Fetch dependencies on the host before starting lanes. Leave AIDA_OS_WRAP unset to use the lane test-runner default.
+  - Configure SSH access and any required host/DNS pin. For the reference GitLab remote ssh://git@gitlab.joemooney.com:2222/ai/aida.git, LAN machines may need an /etc/hosts pin to bypass Cloudflare Access: 192.168.179.100 on other hosts, 127.0.0.1 on dell1.
+  - Clone the project (reference checkout: ~/ai/aida) and configure remote/mirror access.
+  - Install AIDA and vendor CLIs. Put ~/.local/bin on PATH in .profile and .bashrc; use a login shell for remote commands, for example `ssh dell1 'bash -lc "aida doctor --lane-host"'`.
+  - Log in with the selected vendor CLI, for example `codex login`. Credential-source presence does not verify token validity; unsupported auth probes remain advisory.
+  - Run any system-level install/userns/AppArmor commands printed by `aida doctor --fix-sandbox` yourself.
+  - Fetch dependencies on the host before starting lanes, and verify cache transport with a lane job. The doctor checks the configured executable Cargo wrapper; in-sandbox cache reachability remains advisory.
 status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-07T19:47:52.567998136Z
-modified_at: 2026-11-07T23:42:40.677730826Z
+modified_at: 2026-11-08T00:32:26.392612840Z
 req_type: Faq
 history:
 - id: 01a1b79c-1360-77b1-b44f-5c865f1ced63
@@ -38,6 +36,12 @@ history:
   author: dirtlab
   timestamp: 2026-11-07T23:42:42.402822063Z
   session_id: 01a1b85d3963
+  harness_version: codex-cli 0.167.0
+  changes: []
+- id: 01a1b892-2dd4-72b1-93ab-f1f783801ddb
+  author: dirtlab
+  timestamp: 2026-11-08T00:32:30.164559442Z
+  session_id: 01a1b88c6132
   harness_version: codex-cli 0.167.0
   changes: []
 filed_at:

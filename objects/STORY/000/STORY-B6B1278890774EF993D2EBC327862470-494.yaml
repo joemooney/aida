@@ -2,32 +2,48 @@ id: 01a1b1c5-5707-73b0-a54a-06e9eb403794
 spec_id: STORY-b6b1278890774ef993d2ebc327862470-494
 agreed_id: STORY-2571
 title: 'Advisor runs without permission bypass: move operator plumbing (loop rebind, lane dispatch, host-merge, cross-namespace liveness) into AIDA commands and the deputy'
-description: |
-  Goal: the advisor seat runs without --dangerously-skip-permissions or bypassPermissions. Today most of its unsandboxed Bash is operator plumbing, so it needs bypass to stay unattended. Move that plumbing into AIDA commands or the deputy, so a Claude advisor under --permission-mode auto (or the default) rarely prompts.
+description: 'Goal: the advisor seat runs without --dangerously-skip-permissions or bypassPermissions. Today most of its unsandboxed Bash is operator plumbing, so it needs bypass to stay unattended. Move that plumbing into AIDA commands or the deputy, so a Claude advisor under --permission-mode auto (or the default) rarely prompts.
+
 
   Evidence (advisor session b0a84e34, 2026-11-06): the unsandboxed calls were
-  (1) reading /proc/<pid>/environ to find which grant the review watcher, auto-train and auto-rework loops hold, then killing and relaunching them under the new session's grant (setsid nohup);
+
+  (1) reading /proc/<pid>/environ to find which grant the review watcher, auto-train and auto-rework loops hold, then killing and relaunching them under the new session''s grant (setsid nohup);
+
   (2) the advisor-scripts filler (fill-slots3.sh SPEC:vendor), lane launch scripts through aida-deputy-shell run 3, and after-NNN.sh waiters;
+
   (3) host-merge.sh and hand conflict resolution in a scratch worktree, then git push to PR branches;
-  (4) cross-namespace liveness: aida ps / session leases report 'foreign pidns' from the sandbox;
+
+  (4) cross-namespace liveness: aida ps / session leases report ''foreign pidns'' from the sandbox;
+
   (5) reading lane logs and headless jsonl under ~/.local/share/aida/ops and .aida/headless-logs;
+
   (6) gh/GitHub API reads (CI job logs, PR checks) and aida remote reconcile.
 
+
   Acceptance:
+
   1. Inventory every advisor-scripts/*.sh in use, with keep / move-to-aida / move-to-deputy / retire for each, checked into docs/internal/agents/.
-  2. The automation loops (review watch, auto-train, auto-rework, slot filler) run as AIDA-supervised services that bind to the current advisor seat grant and re-bind on rotation (e.g. aida advisor loops status|rebind), not loops inheriting a dead session's grant.
+
+  2. The automation loops (review watch, auto-train, auto-rework, slot filler) run as AIDA-supervised services that bind to the current advisor seat grant and re-bind on rotation (e.g. aida advisor loops status|rebind), not loops inheriting a dead session''s grant.
+
   3. Lane dispatch with a queue and a slot cap is an aida command (it subsumes fill-slots3.sh), callable from a sandboxed advisor, with the host act going through the deputy.
+
   4. Host-merging main into a PR branch, with a conflict report, is a deputy job or an aida command.
+
   5. aida ps and session leases give a correct liveness answer from a sandboxed caller (through the deputy or a host-side query), with no foreign-pidns unknowns.
+
   6. Evidence run: an advisor session under --permission-mode auto completes one full sweep (rebind loops, dispatch, host-merge, ship) with zero permission prompts and no bypass. Record the prompts it did hit.
 
+
   Non-goals: no new authority for the advisor, no waiving gates, no generic shell deputy beyond the existing script-deputy contract.
+
+  '
 status: NeedsAttention
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
-created_at: 2026-11-06T16:51:02.535818766Z
-modified_at: 2026-11-08T02:30:22.101577198Z
+created_at: 2026-11-06 16:51:02.535818+00:00
+modified_at: 2026-11-08 02:30:22.101577+00:00
 req_type: Story
 tags:
 - area:advisor
@@ -38,450 +54,313 @@ comments:
 - id: 01a1b1c5-bab0-74d1-8cb3-9fe810d3782d
   author: joe
   content: 'ADVISOR: approved at the operator''s request (2026-11-06 09:50). It touches the deputy contract and grant binding, which is an architecture change, so the first lane posts a sketch for signoff before coding. Lane vendor: codex. Not queued yet; the next advisor session dispatches it.'
-  created_at: 2026-11-06T16:51:28.048937370Z
-  modified_at: 2026-11-06T16:51:28.048937370Z
+  created_at: 2026-11-06 16:51:28.048937+00:00
+  modified_at: 2026-11-06 16:51:28.048937+00:00
   session_id: b0a84e34-277c-4df6-b53c-43f4bbe2e84d
 - id: 01a1b1e7-5601-7260-8508-8965a021bab4
   author: joe
   content: 'Advisor 10:31: guided mode, so the first lane writes the sketch only (an architecture change needs a sketch on the spec plus advisor signoff). The sketch must cover: (1) a review-watch/auto-rework/auto-train rebind that survives an advisor grant rotation without operator acts; (2) lane dispatch as an aida command, replacing advisor-scripts/fill-slots3.sh plus deputy run 3; (3) host-merge of conflicting Codex PRs as an aida command; (4) liveness that is correct from a sandboxed PID namespace (see BUG-2468); (5) it depends on BUG-2467, so an advisor launched by agent new keeps its delegations. Name each script it retires.'
-  created_at: 2026-11-06T17:28:10.497307056Z
-  modified_at: 2026-11-06T17:28:10.497307056Z
+  created_at: 2026-11-06 17:28:10.497307+00:00
+  modified_at: 2026-11-06 17:28:10.497307+00:00
   session_id: 3dd100c3-f8c0-44d9-ac4c-f9ff0eb32a27
 - id: 01a1b212-780a-7351-8873-a90ea94366c7
   author: joe
-  content: |
-    # Advisor operations without permission bypass
-
-    <!-- trace:STORY-2571 | ai:codex -->
-
-    Status: **proposed; advisor signoff required before runtime implementation**.
-    This is the sketch-only first lane requested in the owning spec's 2026-11-06
-    17:28 UTC comment. Nothing here changes the deputy contract or authorizes a
-    service, permission exception, merge, grant issuance, or process termination.
-    The [script inventory](../internal/agents/advisor-script-inventory.md) records
-    the inspected host snapshot and every proposed disposition.
-
-    ## Contract and dependencies
-
-    A Claude advisor launched with `aida agent new claude --role advisor
-    --permission-mode auto` must perform a sweep without permission bypass: bind
-    services, dispatch queued work, update a conflicting PR, and invoke ordinary
-    ship gates. AIDA owns the mechanics; the advisor retains existing authority.
-    Services must stop admitting work when that authority is unavailable.
-
-    BUG-2467 is a prerequisite: advisor/integrator child grants must retain only
-    the parent's permitted delegation set, including across rotation. Its observed
-    status was Needs Attention during this sketch; a related review is not evidence
-    that the fix has landed. Verify the landed implementation and grandchild tests
-    before enabling these services. BUG-2468 covers legacy deputy runner compatibility and honest unknown results
-    when host processes are invisible. Reuse that work; the authenticated host
-    observation proposed here is additional scope, not a claimed BUG-2468 feature.
-    Coordinate with STORY-2476's pipeline alarm instead of duplicating its checks.
-
-    Existing surfaces to reuse:
-
-    - `advisor_cmd_root_args.rs` / `advisor_cmd_root.rs`: advisor command routing.
-    - `deputy_shell/{socket,attribution,runner}.rs`: peer attribution, live submitter
-      validation, grant refresh, audit and host execution.
-    - `gate/seat_authority.rs`: grant validity and delegation checks.
-    - `review_watch*.rs`: persisted admissions, exact-head receipts and reservations.
-    - `aida-core/src/liveness.rs`, `leases.rs`, `status_cmd.rs`: common liveness
-      semantics and their readers.
-    - Ordinary queue, native publication, train, ship and merge-hold commands remain
-      the only authorities for their respective transitions.
-
-    ## Proposed command surface
-
-    These spellings are a proposal, not currently supported CLI instructions.
-
-    | Command | Effect |
-    | --- | --- |
-    | `aida advisor loops status [--json]` | Report desired/running state, binding generation, authority health, pending jobs and last failures. |
-    | `aida advisor loops rebind` | Bind enabled services to the authenticated current advisor generation; idempotent for the same binding. |
-    | `aida advisor dispatch add SPEC --vendor V` | Persist a canonical queue request with a stable idempotency key. |
-    | `aida advisor dispatch status [--json]` | Report queued, reserved, launched, blocked and failed requests with receipts. |
-    | `aida advisor dispatch run --slots N` | Enable bounded dispatch under host supervision; trusted policy caps N. |
-    | `aida pr update-branch N [--json]` | Submit a host merge and return a job id; status includes any conflict report. |
-    | `aida advisor ops log JOB [--tail N]` | Read a bounded, authorized result/transcript through the host service. |
-
-    Service enablement, maximum slots, vendors and project roots are installed by
-    the operator in trusted policy. `rebind` cannot enable another service, raise a
-    cap, widen delegations, or change a deputy's TTY policy. A fresh binding resumes
-    only previously enabled services. An operator pause persists across rotations.
-
-    ## Host supervisor and grant rotation
-
-    Extend the existing operator-started script deputy with a closed AIDA service
-    supervisor. Retain its TTY-only startup and current grant/mandate restrictions.
-    Service requests select fixed operations, never arbitrary argv, script bodies,
-    executable paths or environment overrides. Existing generic script submission
-    continues to have its existing separate contract.
-
-    The host keeps a versioned, private per-project service ledger, protected by a
-    permanent lock and atomic replacement. Proposed service state includes service
-    kind, project identity, desired state, advisor handle, session generation,
-    validated binding reference, worker process identity, admission generation,
-    last tick and job receipts. Grant secrets never appear in status or logs.
-    Unknown schema, unsafe files, ambiguous identity and lock timeout refuse writes.
-
-    The advisor launcher/rotate relay sends an authenticated rebind after the new
-    generation's grant is established. The host validates peer attribution, project,
-    seat, roster, parent chain, expiry and allowed delegations at acceptance and
-    again at each work admission. It compares generations under the supervisor lock;
-    a delayed old session cannot replace a newer binding. A bare advisor
-    registration UUID is informational and cannot authorize a rebind.
-
-    Do not edit another process's environment or discover grants by scanning
-    `/proc/*/environ`. Stop admission for the old generation first; reconcile its
-    receipts, then restart service controllers under new child grants. An old worker
-    is signalled only through its verified boot/PID-namespace/start identity. An
-    unconfirmed exit or ambiguous receipt retains its reservation and blocks a
-    replacement. Long-running children remain bound to their original grants and
-    cannot be retroactively reparented; if invalidated, use their existing failure
-    and recovery paths. Preserve active reviewer reservations across controller
-    restart and never issue a second review for an unresolved prior attempt.
-
-    If the old binding expires before a new generation arrives, services become
-    `blocked-authority`. Rotation can recover automatically when a valid narrowed
-    successor arrives; neither host availability nor a remembered advisor handle
-    permits minting grants from an expired/revoked parent. Deputy grant refresh is
-    separate from advisor grant refresh. Loss of deputy authority/mandate stops
-    admission under the existing policy; recovery may require the operator.
-
-    Supervised services are review-watch, auto-rework, auto-train and dispatch.
-    Persist exact PR-head deduplication and train ejection evidence across restarts.
-    Each tick uses typed forge observations: failed/partial reads remain unknown,
-    never an empty ready set or proof of success. Rework checks current verdict/CI
-    and canonical spec ownership; train uses ordinary readiness and hold gates.
-    Do not port shell title regexes or string-parsed CI decisions as authority.
-
-    ## Dispatch and publication
-
-    Under one host lock, reserve capacity before launching. Count durable dispatch
-    reservations and verified live implementer leases, including lanes launched
-    elsewhere; deduplicate the same child across those sources. Enforce the
-    configured cap plus existing global queue/seat admission limits. Unknown
-    liveness and an accepted job with no resolved launch receipt retain capacity.
-    Two fillers and retries of the same request cannot consume two slots.
-
-    The host invokes ordinary `queue work` launch logic using the validated advisor
-    binding, requested allowed vendor and existing containment posture. Admission
-    revalidates deferral, dependency, ownership, lease and grant gates. Do not port
-    the scripts' automatic `--force-claim`, branch-name guessing, or lease-ending
-    fallbacks. A blocked request stays visible with canonical recovery guidance.
-    Store run-specific logs and launch/publication receipts; no log truncation or
-    matching a generic `launching` line establishes success.
-
-    Dependency waiters become queue conditions. Native lane exit flows through the
-    existing host publication path, preserving punt/hold vetoes, failed-exit Refs,
-    and declared partial subjects. The dispatch controller cannot infer completion
-    from a PR title or publish work held back by its author. `push-held.sh` is retired
-    without reproducing its override. Queue completion follows successful host
-    publication under the existing contract.
-
-    ## Host merge and conflicts
-
-    A fixed host operation resolves the PR through the configured forge, verifies
-    same-repository branch ownership and pins both the PR head and default-branch
-    tip. Serialize against other branch writers and refuse active author/merge
-    ownership conflicts. Fetch explicit refs into job-private refs; create a unique
-    scratch worktree with recorded identity. Never reuse `/tmp/hmN` or forcibly
-    remove another job's worktree.
-
-    Merge the pinned default tip into the pinned PR head. An already-contained tip
-    is a successful no-op. A clean merge uses a non-completing `(Refs ID)` subject
-    from canonical change credit. Before ordinary non-force push, re-read PR
-    identity/head, binding authority and punt/hold signals; refuse a moved head and
-    retry from fresh evidence. A failed push is a failed job, never `merged clean`.
-    The new head requires ordinary fresh review and CI; this operation grants no
-    merge clearance or completion credit.
-
-    On conflict, publish a bounded report with pinned SHAs, conflicted paths, job id
-    and retained scratch identity. Never auto-resolve semantic conflicts. An advisor
-    can dispatch an explicitly scoped resolution lane; any later host publication
-    must revalidate the expected head, scratch identity and existing gates. Retain
-    conflicted/dirty work until explicit recovery; cleanup compare-checks ownership.
-
-    ## Liveness, logs and sandbox transport
-
-    Build an authenticated host observation, alongside BUG-2468's runner fixes,
-    for both `ps` and session leases,
-    including registry and review-controller records. Requests identify records,
-    not arbitrary PIDs or paths. The host correlates host/boot/PID namespace/start
-    identity and returns observed live/dead with observation time. A bounded timeout,
-    foreign host, missing identity or unreachable host remains explicit unavailable
-    or unknown evidence and never authorizes cleanup. The healthy host-backed path
-    eliminates foreign-pidns unknowns; outages cannot honestly promise certainty.
-    Do not set `AIDA_TRUST_PID_NAMESPACE=1` or reinterpret heartbeat age as death.
-    Destructive callers obtain fresh evidence again at their own mutation boundary.
-
-    The current script-deputy socket is blocked in a sandbox. The existing documented
-    escape is a narrow `excludedCommands` entry for submit/cancel. Propose equivalent
-    exact AIDA front ends for these fixed operations and bounded result reads, with
-    host peer attribution preserved. Do not exempt all `aida`, `bash`, `gh`, or unix
-    sockets, and never add these exemptions to contained implementer/reviewer lanes.
-    No raw shell-script bridge is added for this feature. The implementation review
-    must verify prefix/argument matching cannot reach unrelated commands. If Claude
-    auto mode still prompts for a proposed entry, record it as an evidence failure;
-    do not silently disable the sandbox or widen the exclusion.
-
-    Host log reads resolve only authorized job ids with bounded output and safe file
-    handles. They do not expose arbitrary HOME paths, grant files or environment
-    contents. Forge check/log reads and remote reconcile reuse ordinary commands via
-    existing deputy authorization; no new credential or remote-mutation authority.
-
-    ## Delivery and evidence gates
-
-    1. Advisor signs off this sketch, especially service binding succession, fixed
-       operation transport, slot accounting and conflict recovery. Confirm BUG-2467
-       and BUG-2468 integration before dependent runtime work.
-    2. Implement authenticated host liveness and bounded read transport; test healthy
-       and unavailable hosts from a real nested PID namespace.
-    3. Implement supervisor ledger and rotation handshake; test concurrent rebinds,
-       stale successors, revocation, narrowed delegations, corrupt state, crashes
-       between reservation/spawn/receipt and recovery with active reviews.
-    4. Implement dispatch and publication integration; test competing fillers,
-       pre-existing lanes, blocked dependencies, ambiguous spawn and punt/hold vetoes.
-    5. Implement branch update; test clean/no-op/conflicting merges, moved heads,
-       failed pushes, dirty recovery, stale grant and author ownership conflicts.
-    6. Move rework/train decisions into typed ticks with exact-head deduplication;
-       keep ordinary hold/ship gates, including mandatory human-clear cases.
-    7. Run the operator-authorized evidence session using `--permission-mode auto`.
-       Record build/config identity, narrow exemptions, launch command, grant rotation,
-       service receipts, dispatch id, conflict report/resolution, reviewed new head,
-       CI/ship outcome and every prompt (tool, requested permission, decision).
-       Zero prompts and no bypass are the acceptance target, not a claimed result
-       of this sketch. Poll any long waits in steps no longer than 60 seconds.
-    8. Retire inventoried wrappers only after callers migrate and active jobs finish.
-       Archive receipts, not live scripts as an alternative control plane. Rollback
-       pauses new service admission and preserves jobs/reservations; it does not
-       revive expired grants or restart old shell loops automatically.
-
-    This lane validates documentation and inventory completeness only. It does not
-    satisfy runtime acceptance criteria 2–6 or establish a prompt-free live sweep.
-  created_at: 2026-11-06T18:15:17.258407040Z
-  modified_at: 2026-11-06T18:15:17.258407040Z
+  content: "# Advisor operations without permission bypass\n\n<!-- trace:STORY-2571 | ai:codex -->\n\nStatus: **proposed; advisor signoff required before runtime implementation**.\nThis is the sketch-only first lane requested in the owning spec's 2026-11-06\n17:28 UTC comment. Nothing here changes the deputy contract or authorizes a\nservice, permission exception, merge, grant issuance, or process termination.\nThe [script inventory](../internal/agents/advisor-script-inventory.md) records\nthe inspected host snapshot and every proposed disposition.\n\n## Contract and dependencies\n\nA Claude advisor launched with `aida agent new claude --role advisor\n--permission-mode auto` must perform a sweep without permission bypass: bind\nservices, dispatch queued work, update a conflicting PR, and invoke ordinary\nship gates. AIDA owns the mechanics; the advisor retains existing authority.\nServices must stop admitting work when that authority is unavailable.\n\nBUG-2467 is a prerequisite: advisor/integrator\
+    \ child grants must retain only\nthe parent's permitted delegation set, including across rotation. Its observed\nstatus was Needs Attention during this sketch; a related review is not evidence\nthat the fix has landed. Verify the landed implementation and grandchild tests\nbefore enabling these services. BUG-2468 covers legacy deputy runner compatibility and honest unknown results\nwhen host processes are invisible. Reuse that work; the authenticated host\nobservation proposed here is additional scope, not a claimed BUG-2468 feature.\nCoordinate with STORY-2476's pipeline alarm instead of duplicating its checks.\n\nExisting surfaces to reuse:\n\n- `advisor_cmd_root_args.rs` / `advisor_cmd_root.rs`: advisor command routing.\n- `deputy_shell/{socket,attribution,runner}.rs`: peer attribution, live submitter\n  validation, grant refresh, audit and host execution.\n- `gate/seat_authority.rs`: grant validity and delegation checks.\n- `review_watch*.rs`: persisted admissions, exact-head receipts\
+    \ and reservations.\n- `aida-core/src/liveness.rs`, `leases.rs`, `status_cmd.rs`: common liveness\n  semantics and their readers.\n- Ordinary queue, native publication, train, ship and merge-hold commands remain\n  the only authorities for their respective transitions.\n\n## Proposed command surface\n\nThese spellings are a proposal, not currently supported CLI instructions.\n\n| Command | Effect |\n| --- | --- |\n| `aida advisor loops status [--json]` | Report desired/running state, binding generation, authority health, pending jobs and last failures. |\n| `aida advisor loops rebind` | Bind enabled services to the authenticated current advisor generation; idempotent for the same binding. |\n| `aida advisor dispatch add SPEC --vendor V` | Persist a canonical queue request with a stable idempotency key. |\n| `aida advisor dispatch status [--json]` | Report queued, reserved, launched, blocked and failed requests with receipts. |\n| `aida advisor dispatch run --slots N` | Enable bounded\
+    \ dispatch under host supervision; trusted policy caps N. |\n| `aida pr update-branch N [--json]` | Submit a host merge and return a job id; status includes any conflict report. |\n| `aida advisor ops log JOB [--tail N]` | Read a bounded, authorized result/transcript through the host service. |\n\nService enablement, maximum slots, vendors and project roots are installed by\nthe operator in trusted policy. `rebind` cannot enable another service, raise a\ncap, widen delegations, or change a deputy's TTY policy. A fresh binding resumes\nonly previously enabled services. An operator pause persists across rotations.\n\n## Host supervisor and grant rotation\n\nExtend the existing operator-started script deputy with a closed AIDA service\nsupervisor. Retain its TTY-only startup and current grant/mandate restrictions.\nService requests select fixed operations, never arbitrary argv, script bodies,\nexecutable paths or environment overrides. Existing generic script submission\ncontinues to have\
+    \ its existing separate contract.\n\nThe host keeps a versioned, private per-project service ledger, protected by a\npermanent lock and atomic replacement. Proposed service state includes service\nkind, project identity, desired state, advisor handle, session generation,\nvalidated binding reference, worker process identity, admission generation,\nlast tick and job receipts. Grant secrets never appear in status or logs.\nUnknown schema, unsafe files, ambiguous identity and lock timeout refuse writes.\n\nThe advisor launcher/rotate relay sends an authenticated rebind after the new\ngeneration's grant is established. The host validates peer attribution, project,\nseat, roster, parent chain, expiry and allowed delegations at acceptance and\nagain at each work admission. It compares generations under the supervisor lock;\na delayed old session cannot replace a newer binding. A bare advisor\nregistration UUID is informational and cannot authorize a rebind.\n\nDo not edit another process's\
+    \ environment or discover grants by scanning\n`/proc/*/environ`. Stop admission for the old generation first; reconcile its\nreceipts, then restart service controllers under new child grants. An old worker\nis signalled only through its verified boot/PID-namespace/start identity. An\nunconfirmed exit or ambiguous receipt retains its reservation and blocks a\nreplacement. Long-running children remain bound to their original grants and\ncannot be retroactively reparented; if invalidated, use their existing failure\nand recovery paths. Preserve active reviewer reservations across controller\nrestart and never issue a second review for an unresolved prior attempt.\n\nIf the old binding expires before a new generation arrives, services become\n`blocked-authority`. Rotation can recover automatically when a valid narrowed\nsuccessor arrives; neither host availability nor a remembered advisor handle\npermits minting grants from an expired/revoked parent. Deputy grant refresh is\nseparate from\
+    \ advisor grant refresh. Loss of deputy authority/mandate stops\nadmission under the existing policy; recovery may require the operator.\n\nSupervised services are review-watch, auto-rework, auto-train and dispatch.\nPersist exact PR-head deduplication and train ejection evidence across restarts.\nEach tick uses typed forge observations: failed/partial reads remain unknown,\nnever an empty ready set or proof of success. Rework checks current verdict/CI\nand canonical spec ownership; train uses ordinary readiness and hold gates.\nDo not port shell title regexes or string-parsed CI decisions as authority.\n\n## Dispatch and publication\n\nUnder one host lock, reserve capacity before launching. Count durable dispatch\nreservations and verified live implementer leases, including lanes launched\nelsewhere; deduplicate the same child across those sources. Enforce the\nconfigured cap plus existing global queue/seat admission limits. Unknown\nliveness and an accepted job with no resolved launch\
+    \ receipt retain capacity.\nTwo fillers and retries of the same request cannot consume two slots.\n\nThe host invokes ordinary `queue work` launch logic using the validated advisor\nbinding, requested allowed vendor and existing containment posture. Admission\nrevalidates deferral, dependency, ownership, lease and grant gates. Do not port\nthe scripts' automatic `--force-claim`, branch-name guessing, or lease-ending\nfallbacks. A blocked request stays visible with canonical recovery guidance.\nStore run-specific logs and launch/publication receipts; no log truncation or\nmatching a generic `launching` line establishes success.\n\nDependency waiters become queue conditions. Native lane exit flows through the\nexisting host publication path, preserving punt/hold vetoes, failed-exit Refs,\nand declared partial subjects. The dispatch controller cannot infer completion\nfrom a PR title or publish work held back by its author. `push-held.sh` is retired\nwithout reproducing its override. Queue\
+    \ completion follows successful host\npublication under the existing contract.\n\n## Host merge and conflicts\n\nA fixed host operation resolves the PR through the configured forge, verifies\nsame-repository branch ownership and pins both the PR head and default-branch\ntip. Serialize against other branch writers and refuse active author/merge\nownership conflicts. Fetch explicit refs into job-private refs; create a unique\nscratch worktree with recorded identity. Never reuse `/tmp/hmN` or forcibly\nremove another job's worktree.\n\nMerge the pinned default tip into the pinned PR head. An already-contained tip\nis a successful no-op. A clean merge uses a non-completing `(Refs ID)` subject\nfrom canonical change credit. Before ordinary non-force push, re-read PR\nidentity/head, binding authority and punt/hold signals; refuse a moved head and\nretry from fresh evidence. A failed push is a failed job, never `merged clean`.\nThe new head requires ordinary fresh review and CI; this operation\
+    \ grants no\nmerge clearance or completion credit.\n\nOn conflict, publish a bounded report with pinned SHAs, conflicted paths, job id\nand retained scratch identity. Never auto-resolve semantic conflicts. An advisor\ncan dispatch an explicitly scoped resolution lane; any later host publication\nmust revalidate the expected head, scratch identity and existing gates. Retain\nconflicted/dirty work until explicit recovery; cleanup compare-checks ownership.\n\n## Liveness, logs and sandbox transport\n\nBuild an authenticated host observation, alongside BUG-2468's runner fixes,\nfor both `ps` and session leases,\nincluding registry and review-controller records. Requests identify records,\nnot arbitrary PIDs or paths. The host correlates host/boot/PID namespace/start\nidentity and returns observed live/dead with observation time. A bounded timeout,\nforeign host, missing identity or unreachable host remains explicit unavailable\nor unknown evidence and never authorizes cleanup. The healthy\
+    \ host-backed path\neliminates foreign-pidns unknowns; outages cannot honestly promise certainty.\nDo not set `AIDA_TRUST_PID_NAMESPACE=1` or reinterpret heartbeat age as death.\nDestructive callers obtain fresh evidence again at their own mutation boundary.\n\nThe current script-deputy socket is blocked in a sandbox. The existing documented\nescape is a narrow `excludedCommands` entry for submit/cancel. Propose equivalent\nexact AIDA front ends for these fixed operations and bounded result reads, with\nhost peer attribution preserved. Do not exempt all `aida`, `bash`, `gh`, or unix\nsockets, and never add these exemptions to contained implementer/reviewer lanes.\nNo raw shell-script bridge is added for this feature. The implementation review\nmust verify prefix/argument matching cannot reach unrelated commands. If Claude\nauto mode still prompts for a proposed entry, record it as an evidence failure;\ndo not silently disable the sandbox or widen the exclusion.\n\nHost log reads resolve\
+    \ only authorized job ids with bounded output and safe file\nhandles. They do not expose arbitrary HOME paths, grant files or environment\ncontents. Forge check/log reads and remote reconcile reuse ordinary commands via\nexisting deputy authorization; no new credential or remote-mutation authority.\n\n## Delivery and evidence gates\n\n1. Advisor signs off this sketch, especially service binding succession, fixed\n   operation transport, slot accounting and conflict recovery. Confirm BUG-2467\n   and BUG-2468 integration before dependent runtime work.\n2. Implement authenticated host liveness and bounded read transport; test healthy\n   and unavailable hosts from a real nested PID namespace.\n3. Implement supervisor ledger and rotation handshake; test concurrent rebinds,\n   stale successors, revocation, narrowed delegations, corrupt state, crashes\n   between reservation/spawn/receipt and recovery with active reviews.\n4. Implement dispatch and publication integration; test competing\
+    \ fillers,\n   pre-existing lanes, blocked dependencies, ambiguous spawn and punt/hold vetoes.\n5. Implement branch update; test clean/no-op/conflicting merges, moved heads,\n   failed pushes, dirty recovery, stale grant and author ownership conflicts.\n6. Move rework/train decisions into typed ticks with exact-head deduplication;\n   keep ordinary hold/ship gates, including mandatory human-clear cases.\n7. Run the operator-authorized evidence session using `--permission-mode auto`.\n   Record build/config identity, narrow exemptions, launch command, grant rotation,\n   service receipts, dispatch id, conflict report/resolution, reviewed new head,\n   CI/ship outcome and every prompt (tool, requested permission, decision).\n   Zero prompts and no bypass are the acceptance target, not a claimed result\n   of this sketch. Poll any long waits in steps no longer than 60 seconds.\n8. Retire inventoried wrappers only after callers migrate and active jobs finish.\n   Archive receipts, not live\
+    \ scripts as an alternative control plane. Rollback\n   pauses new service admission and preserves jobs/reservations; it does not\n   revive expired grants or restart old shell loops automatically.\n\nThis lane validates documentation and inventory completeness only. It does not\nsatisfy runtime acceptance criteria 2–6 or establish a prompt-free live sweep.\n"
+  created_at: 2026-11-06 18:15:17.258407+00:00
+  modified_at: 2026-11-06 18:15:17.258407+00:00
   session_id: 01a1b20e6fe2
 - id: 01a1b243-b436-7911-9008-2f95413a7f81
   author: joe
-  content: 'ADVISOR RULING 12:10 on the sketch review (#3526): accept all four findings. (1) Extend aida dispatch (STORY-1917: request/take/flow/review/train, dispatch serve). Add slot cap, dependency conditions, per-request vendor and resume intent there. No parallel ''aida advisor dispatch'' surface and no new supervisor ledger. dispatch serve joins the supervised services. (2) Host merge: reuse aida pr rebase / review_watch_update / github_update_branch_argv. The only new act is a LOCAL merge with a conflict report when GitHub''s update-branch refuses (the Codex read-only .git case, BUG-2456). Name it so it does not collide with ''update-branch'' (e.g. ''aida pr host-merge''), and it must refuse when a seat holds commits that are not on the remote (see STORY-2537 on 2026-11-06 and the guard now in host-merge.sh). (3) Retire stall-check.sh as superseded by STORY-2476. (4) Add review-watch-loop.sh to move-to-aida: review watch exits on a single PR refusal, so the supervised service must keep running across per-PR refusals. Revise the sketch only; implementation waits for signoff.'
-  created_at: 2026-11-06T19:09:03.926073196Z
-  modified_at: 2026-11-06T19:09:03.926073196Z
+  content: 'ADVISOR RULING 12:10 on the sketch review (#3526): accept all four findings. (1) Extend aida dispatch (STORY-1917: request/take/flow/review/train, dispatch serve). Add slot cap, dependency conditions, per-request vendor and resume intent there. No parallel ''aida advisor dispatch'' surface and no new supervisor ledger. dispatch serve joins the supervised services. (2) Host merge: reuse aida pr rebase / review_watch_update / github_update_branch_argv. The only new act is a LOCAL merge with a conflict report when GitHub''s update-branch refuses (the Codex read-only .git case, BUG-2456). Name it so it does not collide with ''update-branch'' (e.g. ''aida pr host-merge''), and it must refuse when a seat holds commits that are not on the remote (see STORY-2537 on 2026-11-06 and the guard now in host-merge.sh). (3) Retire stall-check.sh as superseded by STORY-2476. (4) Add review-watch-loop.sh to move-to-aida: review watch exits on a single PR refusal, so the supervised service must
+    keep running across per-PR refusals. Revise the sketch only; implementation waits for signoff.'
+  created_at: 2026-11-06 19:09:03.926073+00:00
+  modified_at: 2026-11-06 19:09:03.926073+00:00
   session_id: 3dd100c3-f8c0-44d9-ac4c-f9ff0eb32a27
 - id: 01a1b251-7ec7-79a3-9642-11a4917ef104
   author: joe
-  content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: AC1 inventory verified exact (267 rows match host sha256 at commit time); sketch ignores the shipped aida dispatch subsystem (STORY-1917) and existing branch-update surfaces, proposing parallel ones without reconciliation. It was punted on: design-fork: Sketch-only lane complete per advisor comment dated 2026-11-06 17:28 UTC. Full architecture sketch posted on the spec and saved at docs/plans/2026-11-06-story-2571-advisor-operations-sketch.md; 267-script hashed inventory at docs/internal/agents/advisor-script-inventory.md. Advisor signoff is required before runtime code: approve grant succession, fixed host-operation transport, slot accounting and conflict recovery. BUG-2467 delegation and BUG-2468 runner integration must be verified before dependent runtime work; prompt-free auto-mode sweep remains unperformed. Inventory/hash/link checks and cargo fmt --all -- --check passed. Native Refs declaration records documentation intent only; this punt remains a publication veto.. No triage reason was given.'
-  created_at: 2026-11-06T19:24:07.751557070Z
-  modified_at: 2026-11-06T19:24:07.751557070Z
+  content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: AC1 inventory verified exact (267 rows match host sha256 at commit time); sketch ignores the shipped aida dispatch subsystem (STORY-1917) and existing branch-update surfaces, proposing parallel ones without reconciliation. It was punted on: design-fork: Sketch-only lane complete per advisor comment dated 2026-11-06 17:28 UTC. Full architecture sketch posted on the spec and saved at docs/plans/2026-11-06-story-2571-advisor-operations-sketch.md; 267-script hashed inventory at docs/internal/agents/advisor-script-inventory.md. Advisor signoff is required before runtime code: approve grant succession, fixed host-operation transport, slot accounting and conflict recovery. BUG-2467 delegation and BUG-2468 runner integration must be verified before dependent runtime work; prompt-free auto-mode sweep remains unperformed. Inventory/hash/link checks and cargo fmt --all
+    -- --check passed. Native Refs declaration records documentation intent only; this punt remains a publication veto.. No triage reason was given.'
+  created_at: 2026-11-06 19:24:07.751557+00:00
+  modified_at: 2026-11-06 19:24:07.751557+00:00
   session_id: 3dd100c3-f8c0-44d9-ac4c-f9ff0eb32a27
 - id: 01a1b251-957e-7563-8a47-2b6acde26b6e
   author: joe
-  content: |-
-    REVIEW FINDINGS TO ADDRESS (PR #3526):
+  content: 'REVIEW FINDINGS TO ADDRESS (PR #3526):
+
     Verdict: CHANGES REQUESTED
+
     Reviewed commit: caaed1b527aa
+
     Recorded: 2026-11-06T18:43:24.662219920+00:00
+
     Findings:
-    1. major: docs/plans/2026-11-06-story-2571-advisor-operations-sketch.md 'Existing surfaces to reuse' + 'Proposed command surface' + 'Dispatch and publication' omit the shipped aida dispatch subsystem (STORY-1917, PR-3206: aida-cli-lib/src/dispatch.rs, dispatch_args.rs, dispatch_flow.rs, gate/dispatch_auth.rs). That subsystem already gives a sandboxed advisor a typed, mandate-authorized, deduplicated request queue (aida dispatch request impl|take|flow|review|train, list/show/cancel/tick) with a host-side executor (aida dispatch serve) that binds the advisor terminal's grant. The sketch instead proposes a parallel aida advisor dispatch add|status|run surface and a new host supervisor ledger. Revise it to extend aida dispatch (slot cap, queue/dependency conditions, per-request vendor, resume intent) or explain why a separate surface is needed, and add dispatch serve to the services that must re-bind on advisor grant rotation (AC2), since serve inherits the launching terminal's grant.
-    2. major: the 'Host merge and conflicts' section of the sketch proposes a new aida pr update-branch host job without reconciling it with existing branch-update surfaces: aida pr rebase (temp worktree + force-push-with-lease), review_watch_update.rs (gh pr update-branch with a conflict refusal, UpdateFailure::refused), forge.rs github_update_branch_argv (pinned expected head), and aida dispatch request flow, which already runs update-branch. State what is new (a local merge with a conflict report for PRs where GitHub's update-branch refuses) versus reused, and resolve the naming overlap: 'update-branch' already means GitHub's server-side merge in review-watch and dispatch flow.
-    3. minor: docs/internal/agents/advisor-script-inventory.md:49 and :253 mark stall-check.sh as move-to-aida 'coordinate with STORY-2476', but STORY-2476 (pipeline stall alarm) is already Completed. Either retire it as superseded, or name the stall-check behavior the shipped alarm does not cover.
-    4. cosmetic: the inventory snapshot is exact as of the commit (11:16), but two scripts appeared afterwards: launch-BUG-2469.sh (11:26) and review-watch-loop.sh (11:37, a new respawn loop around aida review watch that AC2's supervised review-watch should replace). The doc already says to recheck before migration; listing review-watch-loop.sh with launch-review-watch.sh under move-to-aida would keep the AC2 scope complete.
-    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
-  created_at: 2026-11-06T19:24:13.566445713Z
-  modified_at: 2026-11-06T19:24:13.566445713Z
+
+    1. major: docs/plans/2026-11-06-story-2571-advisor-operations-sketch.md ''Existing surfaces to reuse'' + ''Proposed command surface'' + ''Dispatch and publication'' omit the shipped aida dispatch subsystem (STORY-1917, PR-3206: aida-cli-lib/src/dispatch.rs, dispatch_args.rs, dispatch_flow.rs, gate/dispatch_auth.rs). That subsystem already gives a sandboxed advisor a typed, mandate-authorized, deduplicated request queue (aida dispatch request impl|take|flow|review|train, list/show/cancel/tick) with a host-side executor (aida dispatch serve) that binds the advisor terminal''s grant. The sketch instead proposes a parallel aida advisor dispatch add|status|run surface and a new host supervisor ledger. Revise it to extend aida dispatch (slot cap, queue/dependency conditions, per-request vendor, resume intent) or explain why a separate surface is needed, and add dispatch serve to the services that must re-bind on advisor grant rotation (AC2), since serve inherits the launching terminal''s grant.
+
+    2. major: the ''Host merge and conflicts'' section of the sketch proposes a new aida pr update-branch host job without reconciling it with existing branch-update surfaces: aida pr rebase (temp worktree + force-push-with-lease), review_watch_update.rs (gh pr update-branch with a conflict refusal, UpdateFailure::refused), forge.rs github_update_branch_argv (pinned expected head), and aida dispatch request flow, which already runs update-branch. State what is new (a local merge with a conflict report for PRs where GitHub''s update-branch refuses) versus reused, and resolve the naming overlap: ''update-branch'' already means GitHub''s server-side merge in review-watch and dispatch flow.
+
+    3. minor: docs/internal/agents/advisor-script-inventory.md:49 and :253 mark stall-check.sh as move-to-aida ''coordinate with STORY-2476'', but STORY-2476 (pipeline stall alarm) is already Completed. Either retire it as superseded, or name the stall-check behavior the shipped alarm does not cover.
+
+    4. cosmetic: the inventory snapshot is exact as of the commit (11:16), but two scripts appeared afterwards: launch-BUG-2469.sh (11:26) and review-watch-loop.sh (11:37, a new respawn loop around aida review watch that AC2''s supervised review-watch should replace). The doc already says to recheck before migration; listing review-watch-loop.sh with launch-review-watch.sh under move-to-aida would keep the AC2 scope complete.
+
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.'
+  created_at: 2026-11-06 19:24:13.566445+00:00
+  modified_at: 2026-11-06 19:24:13.566445+00:00
   session_id: 3dd100c3-f8c0-44d9-ac4c-f9ff0eb32a27
 - id: 01a1b255-e176-7fc1-8795-3ea52aeae767
   author: joe
-  content: 'Round 2 PR #3526: revised docs/plans/2026-11-06-story-2571-advisor-operations-sketch.md and docs/internal/agents/advisor-script-inventory.md per binding 2026-11-06 19:09 UTC advisor ruling. All four findings accepted: extend shipped STORY-1917 dispatch and its records/locks (slot cap, dependency conditions, per-request vendor, resume intent), include grant-bound dispatch serve in AC2 rebind, and remove parallel advisor dispatch/new supervisor ledger. Host-merge is the only new local branch mutation after server-update refusal, reuses pr rebase/review_watch_update/github_update_branch_argv mechanics, and refuses unpushed seat commits under STORY-2537. Retire stall-check as superseded by Completed STORY-2476. Add launch-BUG-2469 and review-watch-loop with hashes; supervised review-watch must survive per-PR refusals. Record changed host-merge hash separately from original snapshot. Validation passes: git diff --check, relative links, 269 unique inventory entries/disposition counts, later-arrival hashes, review coverage checks. Documentation only; runtime implementation still awaits signoff. Native seat leaves edits uncommitted for host publication; merge-hold remains intact.'
-  created_at: 2026-11-06T19:28:55.158174708Z
-  modified_at: 2026-11-06T19:28:55.158174708Z
+  content: 'Round 2 PR #3526: revised docs/plans/2026-11-06-story-2571-advisor-operations-sketch.md and docs/internal/agents/advisor-script-inventory.md per binding 2026-11-06 19:09 UTC advisor ruling. All four findings accepted: extend shipped STORY-1917 dispatch and its records/locks (slot cap, dependency conditions, per-request vendor, resume intent), include grant-bound dispatch serve in AC2 rebind, and remove parallel advisor dispatch/new supervisor ledger. Host-merge is the only new local branch mutation after server-update refusal, reuses pr rebase/review_watch_update/github_update_branch_argv mechanics, and refuses unpushed seat commits under STORY-2537. Retire stall-check as superseded by Completed STORY-2476. Add launch-BUG-2469 and review-watch-loop with hashes; supervised review-watch must survive per-PR refusals. Record changed host-merge hash separately from original snapshot. Validation passes: git diff --check, relative links, 269 unique inventory entries/disposition counts,
+    later-arrival hashes, review coverage checks. Documentation only; runtime implementation still awaits signoff. Native seat leaves edits uncommitted for host publication; merge-hold remains intact.'
+  created_at: 2026-11-06 19:28:55.158174+00:00
+  modified_at: 2026-11-06 19:28:55.158174+00:00
   session_id: 01a1b252dec0
 - id: 01a1b26f-0ef8-7041-9061-198585b8e09d
   author: joe
   content: 'ADVISOR SIGNOFF 12:58: sketch v2 (#3526 at 14bc7fc, reviewer-approved) is signed off: extend aida dispatch, aida pr host-merge as the only new branch mutation (it keeps the unpushed-seat guard), supervised review watch replacing launch-review-watch.sh and review-watch-loop.sh, and stall-check.sh retired. Mode guided -> drain. Implement in the sketch''s delivery order, one Refs PR per slice. Slice 1 is the supervised review-watch service; BUG-2471 (#3535) already covers per-PR refusal resilience, so build on it.'
-  created_at: 2026-11-06T19:56:25.207997686Z
-  modified_at: 2026-11-06T19:56:25.207997686Z
+  created_at: 2026-11-06 19:56:25.207997+00:00
+  modified_at: 2026-11-06 19:56:25.207997+00:00
   session_id: 3dd100c3-f8c0-44d9-ac4c-f9ff0eb32a27
 - id: 01a1b56a-bf12-7f41-9818-2b90640adb96
   author: joe
   content: 'Documentation-only follow-up under the pickup prompt: all four 19:09 UTC ruling changes were already present in this checkout. Reconciled the sketch and inventory with the later 19:56 UTC v2 signoff (14bc7fc), its supervised review-watch first-slice direction and one-Refs-PR-per-slice contract. Replaced stale claims that one PR refusal still exits watch with Completed BUG-2471 (landed PR #3536), verified against review_watch.rs. No runtime implementation or service migration in this lane. Validation passed: git diff --check, 269 unique hashed inventory entries and disposition totals, relative links, wrapper classifications and ruling coverage. Native-seat edits remain uncommitted for host publication.'
-  created_at: 2026-11-07T09:50:34.258700429Z
-  modified_at: 2026-11-07T09:50:34.258700429Z
+  created_at: 2026-11-07 09:50:34.258700+00:00
+  modified_at: 2026-11-07 09:50:34.258700+00:00
   session_id: 01a1b5696289
 - id: 01a1b572-b9c8-78d1-a16f-7bcd3fce21b7
   author: joe
   content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: Doc-only reconciliation with the v2 signoff is accurate except it cites the wrong landing PR for BUG-2471 (#3536 is BUG-2472; BUG-2471 landed as #3535, commit 37c695e3406), plus one stale ''proposed'' wording. AC1 verified (inventory present/updated); AC2-6 not applicable (Refs doc lane, no runtime claim). CI: rest/cli/lib/merge-hold pass; contracts+gates still pending at review time.. No triage reason was given.'
-  created_at: 2026-11-07T09:59:17.192981116Z
-  modified_at: 2026-11-07T09:59:17.192981116Z
+  created_at: 2026-11-07 09:59:17.192981+00:00
+  modified_at: 2026-11-07 09:59:17.192981+00:00
   session_id: 01a1b441-8158-7162-ad75-f7915b45ee33
   harness_version: 2.1.319 (Claude Code)
 - id: 01a1b572-d063-7810-b9fb-f337bab2efcf
   author: joe
-  content: |-
-    REVIEW FINDINGS TO ADDRESS (PR #3589):
+  content: 'REVIEW FINDINGS TO ADDRESS (PR #3589):
+
     Verdict: CHANGES REQUESTED
+
     Reviewed commit: 7460b2eca04e
+
     Recorded: 2026-11-07T09:55:03.453403007+00:00
+
     Findings:
-    1. minor: docs/plans/2026-11-06-story-2571-advisor-operations-sketch.md:136 and docs/internal/agents/advisor-script-inventory.md:57 say BUG-2471 landed via PR #3536. PR #3536 is BUG-2472 (train/* admission, commit a6e5865acc8). BUG-2471's fix is PR #3535 (commit 37c695e3406 on origin/main), which is also what the 19:56 UTC signoff comment cites ('BUG-2471 (#3535)'). Change both citations to #3535. (The AIDA linkage shipped_pr=3536 on BUG-2471 appears mis-attributed; do not use it as the source.)
-    2. cosmetic: docs/plans/2026-11-06-story-2571-advisor-operations-sketch.md:13 still says the inventory records 'every proposed disposition', but this PR's inventory intro (advisor-script-inventory.md:11-14) now says dispositions follow the v2 signoff. Change it to 'every signed-off disposition' (or similar) so the two docs agree.
-    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
-  created_at: 2026-11-07T09:59:22.979880566Z
-  modified_at: 2026-11-07T09:59:22.979880566Z
+
+    1. minor: docs/plans/2026-11-06-story-2571-advisor-operations-sketch.md:136 and docs/internal/agents/advisor-script-inventory.md:57 say BUG-2471 landed via PR #3536. PR #3536 is BUG-2472 (train/* admission, commit a6e5865acc8). BUG-2471''s fix is PR #3535 (commit 37c695e3406 on origin/main), which is also what the 19:56 UTC signoff comment cites (''BUG-2471 (#3535)''). Change both citations to #3535. (The AIDA linkage shipped_pr=3536 on BUG-2471 appears mis-attributed; do not use it as the source.)
+
+    2. cosmetic: docs/plans/2026-11-06-story-2571-advisor-operations-sketch.md:13 still says the inventory records ''every proposed disposition'', but this PR''s inventory intro (advisor-script-inventory.md:11-14) now says dispositions follow the v2 signoff. Change it to ''every signed-off disposition'' (or similar) so the two docs agree.
+
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.'
+  created_at: 2026-11-07 09:59:22.979880+00:00
+  modified_at: 2026-11-07 09:59:22.979880+00:00
   session_id: 01a1b441-8158-7162-ad75-f7915b45ee33
   harness_version: 2.1.319 (Claude Code)
 - id: 01a1b575-2bab-7ce1-a259-4916af1250bd
   author: joe
   content: 'Round 3 PR #3589: corrected BUG-2471 landing citations to PR #3535 in docs/plans/2026-11-06-story-2571-advisor-operations-sketch.md and docs/internal/agents/advisor-script-inventory.md. Verified against Git commit 37c695e3406 (#3535, BUG-2471), distinct from a6e5865acc8 (#3536, BUG-2472), and the 19:56 UTC signoff. Changed sketch introduction to every signed-off disposition. Both review findings addressed; documentation-only, three text replacements. Validation: git diff --check passes; reviewed complete diff. Edits remain uncommitted for native host publication; active merge hold unchanged.'
-  created_at: 2026-11-07T10:01:57.419729970Z
-  modified_at: 2026-11-07T10:01:57.419729970Z
+  created_at: 2026-11-07 10:01:57.419729+00:00
+  modified_at: 2026-11-07 10:01:57.419729+00:00
   session_id: 01a1b574555a
 - id: 01a1b783-3625-7912-8380-7beefd15a0cd
   author: joe
   content: 'ADVISOR 2026-11-07 12:35: running on a dell1 codex lane (log dell1:~/lanes/lane-STORY-2571.log). dell1 partition: do not pass to local fill-slots/auto-rework until its PR opens.'
-  created_at: 2026-11-07T19:36:32.037505329Z
-  modified_at: 2026-11-07T19:36:32.037505329Z
+  created_at: 2026-11-07 19:36:32.037505+00:00
+  modified_at: 2026-11-07 19:36:32.037505+00:00
   session_id: 01a1b76b-2fe7-7dd2-88d0-356fc8d96d04
   harness_version: 2.1.319 (Claude Code)
 - id: 01a1b7b5-b041-7240-9d97-6aaca7617610
   author: joe
   content: 'ADVISOR BRIEF 2026-11-07 13:40. The sketch and inventory are done (#3526, #3589; AC1 met). BUG-2467 and BUG-2468 are completed. NEXT = the first runtime slice per sketch ''Delivery and evidence gates'' step 1: supervised review-watch. ''aida advisor loops status|rebind'' runs review-watch as an AIDA-supervised service bound to the current advisor seat grant, re-binding on rotation (sketch ''Host supervisor and grant rotation''), building on BUG-2471. Scope this PR to review-watch only. Other loops follow as separate Refs PRs. Tests: rebind after rotation, a stale successor refused, and one PR''s refusal not stopping the service for other PRs. Refs STORY-2571. LIGHT gate.'
-  created_at: 2026-11-07T20:31:40.097516765Z
-  modified_at: 2026-11-07T20:31:40.097516765Z
+  created_at: 2026-11-07 20:31:40.097516+00:00
+  modified_at: 2026-11-07 20:31:40.097516+00:00
   session_id: 01a1b76b-2fe7-7dd2-88d0-356fc8d96d04
   harness_version: 2.1.319 (Claude Code)
 - id: 01a1b7c3-6a15-7e21-827c-278b103adfcc
   author: joe
   content: 'ADVISOR 2026-11-07 14:00: TASK-3368 (ProcIdentity observer, S6 of STORY-2537) is signed to run as an operation of STORY-2571''s supervised host service (sketch step 2), not as a separate daemon. Design the step-2 transport to carry it: one request per connection, SO_PEERPIDFD at accept, no ancillary fds.'
-  created_at: 2026-11-07T20:46:39.637448323Z
-  modified_at: 2026-11-07T20:46:39.637448323Z
+  created_at: 2026-11-07 20:46:39.637448+00:00
+  modified_at: 2026-11-07 20:46:39.637448+00:00
   session_id: 01a1b76b-2fe7-7dd2-88d0-356fc8d96d04
   harness_version: 2.1.319 (Claude Code)
 - id: 01a1b7eb-5951-7100-a638-0863c15c99fe
   author: joe
   content: 'Requirement from 2026-11-07 (advisor): the dispatch/slot-cap command (AC3) must know which HOST a spec''s lane runs on. Today auto-rework/fill-slots3 relaunch locally any spec with a change-request verdict, including specs whose lane runs on dell1 (TASK-1214 at 14:27; STORY-2640 relaunched locally). Leases are per host, so nothing refuses the duplicate. Record a host partition on the spec or lease, and have dispatch honour it.'
-  created_at: 2026-11-07T21:30:16.785411020Z
-  modified_at: 2026-11-07T21:30:16.785411020Z
+  created_at: 2026-11-07 21:30:16.785411+00:00
+  modified_at: 2026-11-07 21:30:16.785411+00:00
   session_id: 01a1b76b-2fe7-7dd2-88d0-356fc8d96d04
   harness_version: 2.1.319 (Claude Code)
 - id: 01a1b815-7ff5-7201-9bc4-86309cdc2636
   author: joe
   content: 'ADVISOR RULING 2026-11-07 15:20: the NEXT slice is the 13:40 ADVISOR BRIEF on this spec (supervised review-watch service, ''aida advisor loops status|rebind'', re-binding on rotation). The sketch and inventory are done; do not re-validate them. One PR, Refs STORY-2571. LIGHT gate.'
-  created_at: 2026-11-07T22:16:19.189602312Z
-  modified_at: 2026-11-07T22:16:19.189602312Z
+  created_at: 2026-11-07 22:16:19.189602+00:00
+  modified_at: 2026-11-07 22:16:19.189602+00:00
   session_id: 01a1b76b-2fe7-7dd2-88d0-356fc8d96d04
   harness_version: 2.1.319 (Claude Code)
 - id: 01a1b844-72ef-7ff3-9728-3f676f581df8
   author: joe
   content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: Slice-1 supervised review-watch (loops status|rebind, socket-attested rebind, stale/widening successor refusal) is sound in shape, but controller restarts leak live child grants and keyring keys, the launcher only rotates an existing binding with no sandbox-reachable bootstrap, the controller admission guard is untested, and there is no recovery path from a refused widening. AC1/3/4/5/6 not applicable to this Refs slice; AC2 covers review-watch only. CI still pending at review time.. No triage reason was given.'
-  created_at: 2026-11-07T23:07:36.047233833Z
-  modified_at: 2026-11-07T23:07:36.047233833Z
+  created_at: 2026-11-07 23:07:36.047233+00:00
+  modified_at: 2026-11-07 23:07:36.047233+00:00
   session_id: 01a1b646-c67d-7b43-98ff-3604a53f5d1f
   harness_version: 2.1.319 (Claude Code)
 - id: 01a1b844-9243-76b2-aedb-c8c7dc0a63d0
   author: joe
-  content: |-
-    REVIEW FINDINGS TO ADDRESS (PR #3640):
+  content: 'REVIEW FINDINGS TO ADDRESS (PR #3640):
+
     Verdict: CHANGES REQUESTED
+
     Reviewed commit: feeb923e1346
+
     Recorded: 2026-11-07T22:52:46.505451472+00:00
+
     Review comment: https://github.com/joemooney/aida/pull/3640#issuecomment-6714111607
+
     Findings:
-    1. major: aida-cli-lib/src/review_watch_service.rs tick() (try_wait exit branch ~L865-871 and Verdict::Dead branch ~L874-878) clears state.child_grant without seat_authority::revoke_by_id. Only the spawn-error branch revokes. Each controller restart (10 s backoff) mints a new review-watch-controller grant (advisor seat, reviewer delegation) bound to the deputy pid, and issue_child_from_with_delegation installs a session-keyring key with TTL = parent expiry. Result: (a) grants for dead controllers stay valid until the advisor grant expires and can be used by any deputy descendant that inherits the keyring and reads the id from service.json; (b) a crash-looping worker adds a kernel key about every 10 s. The per-uid key quota (maxkeys 200) runs out in about 30 min, and after that issuance refuses every child grant for the user (agent new, reviewer launches). Revoke the recorded child_grant whenever the worker is confirmed exited or dead. Add a test asserting the grant is revoked after a reaped exit.
+
+    1. major: aida-cli-lib/src/review_watch_service.rs tick() (try_wait exit branch ~L865-871 and Verdict::Dead branch ~L874-878) clears state.child_grant without seat_authority::revoke_by_id. Only the spawn-error branch revokes. Each controller restart (10 s backoff) mints a new review-watch-controller grant (advisor seat, reviewer delegation) bound to the deputy pid, and issue_child_from_with_delegation installs a session-keyring key with TTL = parent expiry. Result: (a) grants for dead controllers stay valid until the advisor grant expires and can be used by any deputy descendant that inherits the keyring and reads the id from service.json; (b) a crash-looping worker adds a kernel key about every 10 s. The per-uid key quota (maxkeys 200) runs out in about 30 min, and after that issuance refuses every child grant for the user (agent new, reviewer launches). Revoke the recorded child_grant whenever the worker is confirmed exited or dead. Add a test asserting the grant is revoked after a
+    reaped exit.
+
     2. minor: rebind_after_launch (review_watch_service.rs ~L957-982) returns Ok without binding when no service.json exists, and refuses when binding.subject != new grant subject. So the launcher never bootstraps the service. The first binding must come from "aida advisor loops rebind" inside the advisor session (subject = advisor handle), but that session is sandboxed and cannot reach the deputy socket, which is the case this spec exists for. A binding made from the operator terminal (subject = user) then never auto-rotates. Either let the trusted launcher establish or take over the binding for the advisor seat it just minted (with the same successor checks), or document the exact bootstrap and sandbox exemption in docs/cli/06-roles-sessions.md.
-    3. minor: no test sets CONTROLLER, so check_controller/check_controller_locked (the guard that makes a superseded controller stop admitting, tagged GlobalState so watch_changes stops) are never exercised. Neither is the select() call site at review_watch.rs:1329 or watch_change's new validate_child_delegation. story2571_pr_refusal_keeps_next_pr_and_next_pass_available drives watch_changes with a synthetic closure and only re-tests BUG-2471. Add a test where a controller-bound select() or watch_change after rebind returns a GlobalState error that stops the pass, and one where a per-PR refusal under the controller keeps the next PR. rebind_after_launch and the agent_launch.rs:7414 hook have no test either.
-    4. minor: Binding::succeeds refuses a widening successor with 'operator intervention required', but no operator command exists (no loops reset/unbind/stop). read() also refuses when service.json is missing after service-initialized exists. So the only recovery is deleting both files by hand, which is undocumented and not reachable from status output. Delegation can only ratchet down. Add an operator-TTY reset/unbind (or document the exact recovery) and name it in the refusal text.
+
+    3. minor: no test sets CONTROLLER, so check_controller/check_controller_locked (the guard that makes a superseded controller stop admitting, tagged GlobalState so watch_changes stops) are never exercised. Neither is the select() call site at review_watch.rs:1329 or watch_change''s new validate_child_delegation. story2571_pr_refusal_keeps_next_pr_and_next_pass_available drives watch_changes with a synthetic closure and only re-tests BUG-2471. Add a test where a controller-bound select() or watch_change after rebind returns a GlobalState error that stops the pass, and one where a per-PR refusal under the controller keeps the next PR. rebind_after_launch and the agent_launch.rs:7414 hook have no test either.
+
+    4. minor: Binding::succeeds refuses a widening successor with ''operator intervention required'', but no operator command exists (no loops reset/unbind/stop). read() also refuses when service.json is missing after service-initialized exists. So the only recovery is deleting both files by hand, which is undocumented and not reachable from status output. Delegation can only ratchet down. Add an operator-TTY reset/unbind (or document the exact recovery) and name it in the refusal text.
+
     5. cosmetic: "aida advisor loops status" always prints one human line and ignores the global --format json/toon advertised in its help (the sketch proposed status --json). The --deputy flag has an empty help string (cli_help_snapshot shows an empty "help"). tick() also rewrites and fsyncs service.json plus service-initialized plus the directory every second even when nothing changed.
-    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
-  created_at: 2026-11-07T23:07:44.067476362Z
-  modified_at: 2026-11-07T23:07:44.067476362Z
+
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.'
+  created_at: 2026-11-07 23:07:44.067476+00:00
+  modified_at: 2026-11-07 23:07:44.067476+00:00
   session_id: 01a1b646-c67d-7b43-98ff-3604a53f5d1f
   harness_version: 2.1.319 (Claude Code)
 - id: 01a1b865-5599-7653-8a25-ceabc74659ff
   author: joe
-  content: |
-    Round 4, PR #3640 (Refs STORY-2571): implemented all five requested changes. Confirmed reaped/dead controllers revoke the recorded child grant before clearing the receipt. The trusted launcher now requests default-deputy bootstrap without an existing service receipt and may rotate an operator binding to its new advisor handle under the existing successor rules. Added controller-bound select/pass, watch_change delegation, launch bootstrap/takeover, exit revocation, and unchanged-tick regressions. Documented exact host reset/recovery and linked it from refusal/status output. Status supports --json/global JSON and TOON; --deputy has help; no-op ticks do not replace state and heartbeat writes are limited to every two seconds, with initialization-marker sync only at creation.
+  content: 'Round 4, PR #3640 (Refs STORY-2571): implemented all five requested changes. Confirmed reaped/dead controllers revoke the recorded child grant before clearing the receipt. The trusted launcher now requests default-deputy bootstrap without an existing service receipt and may rotate an operator binding to its new advisor handle under the existing successor rules. Added controller-bound select/pass, watch_change delegation, launch bootstrap/takeover, exit revocation, and unchanged-tick regressions. Documented exact host reset/recovery and linked it from refusal/status output. Status supports --json/global JSON and TOON; --deputy has help; no-op ticks do not replace state and heartbeat writes are limited to every two seconds, with initialization-marker sync only at creation.
 
-    CI fixes: updated fixed-AIDA launch/role inventory counts, moved the new socket liveness probes to proc_identity, added all advisor-loops paths to the JSON audit with a real status probe, and corrected the writer inventory's unix::serve -> unix::serve_service rename. The gates log confirms lane_fixture_fails was expected nested fixture output; its enclosing 88-test suite passed. The actual gates failure was the writer inventory rename.
+
+    CI fixes: updated fixed-AIDA launch/role inventory counts, moved the new socket liveness probes to proc_identity, added all advisor-loops paths to the JSON audit with a real status probe, and corrected the writer inventory''s unix::serve -> unix::serve_service rename. The gates log confirms lane_fixture_fails was expected nested fixture output; its enclosing 88-test suite passed. The actual gates failure was the writer inventory rename.
+
 
     Static validation passed: rustfmt for all changed Rust files, portability ratchet, static CLI-manual flag guard, and store-writer inventory (3355 sinks / 293 operation mappings). Rust validation is currently untested=true: first story2571 job j20261107T231308771-2-0 timed out after 900 seconds during compilation without executing tests. Snapshot job j20261107T231410317-2-0 also timed out after 900 seconds during aida-cli-lib compilation without executing a test (both exits 124, no compiler diagnostic). The next job j20261107T231432764-2-0 (final spawn boundary ratchet) started at 23:43:10 UTC; role inventory, liveness ratchet, JSON audit, real lane fixture, and the latest nine service tests remain queued. No Rust test pass is claimed. The help snapshot has been updated manually; authoritative regeneration/verification remains pending. Repeated compilation timeout is the validation blocker for this handoff.
 
+
     Native-seat handoff: edits are uncommitted. Publication declaration recorded: [AI:codex] fix(advisor): revoke exited review-watch grants and repair rotation (Refs STORY-2571). No commit, push, PR creation, merge, review verdict or queue completion was performed. Existing merge hold remains for advisor review.
-  created_at: 2026-11-07T23:43:31.225763169Z
-  modified_at: 2026-11-07T23:43:31.225763169Z
+
+    '
+  created_at: 2026-11-07 23:43:31.225763+00:00
+  modified_at: 2026-11-07 23:43:31.225763+00:00
   session_id: 01a1b8464b27
 - id: 01a1b888-855a-74f3-bbbf-87f700e937cc
   author: joe
   content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: Round-4 fixes address all five prior findings, but the new exit-time revocation of the controller grant revokes in-flight reviewer grants (they are its children), so every rotation or controller restart strips authority from running reviews. CI still pending at review time (merge-hold-gate fail is the expected supervised hold). AC2 review-watch slice only; AC1 met earlier (advisor-script-inventory.md); AC3-6 not applicable to this Refs slice.. No triage reason was given.'
-  created_at: 2026-11-08T00:21:57.210073802Z
-  modified_at: 2026-11-08T00:21:57.210073802Z
+  created_at: 2026-11-08 00:21:57.210073+00:00
+  modified_at: 2026-11-08 00:21:57.210073+00:00
   session_id: 01a1b848-940b-7bd2-8acd-52e428b182b8
   harness_version: 2.1.319 (Claude Code)
 - id: 01a1b888-a0cb-7430-bde1-68612da5b34d
   author: joe
-  content: |-
-    REVIEW FINDINGS TO ADDRESS (PR #3640):
+  content: 'REVIEW FINDINGS TO ADDRESS (PR #3640):
+
     Verdict: CHANGES REQUESTED
+
     Reviewed commit: a7e36c13c93e
+
     Recorded: 2026-11-07T23:49:32.138743051+00:00
+
     Review comment: https://github.com/joemooney/aida/pull/3640#issuecomment-6714666381
+
     Findings:
-    1. major: review_watch_service.rs tick() L469-490 + revoke_controller L533: revoking the controller grant on confirmed exit also invalidates every reviewer grant the controller dispatched. watch_command (review_watch.rs:1828) keeps AIDA_SEAT_GRANT, so 'aida queue work PR-N --role reviewer' issues reviewer children whose parent is the controller grant, and grant_check revalidates every ancestor (seat_authority.rs:1175-1190, check_lifetime refuses revoked). Each advisor rotation (rebind -> controller superseded -> exit) and each controller crash-restart therefore revokes authority from reviews still in flight, so they cannot record verdicts. That breaks the docs claim 'Controller restarts preserve all ordinary PR-head reservations' (06-roles-sessions.md) and reconcile_reviews' intent not to disturb live review descendants. Fix: defer revocation until no live or ambiguous dispatcher/review attempt descends from that controller grant (sweep it on a later tick), or issue reviewer children from the bound advisor grant instead of the controller. Add a test: a reviewer child of the controller still validates after the controller exits and is reaped while its attempt is live.
-    2. minor: agent_launch.rs:7417 calls rebind_after_launch on every advisor launch. With no service receipt it always tries the 'default' deputy (review_watch_service.rs:611-614). An operator who runs no deputy, or does not use the service, gets 'review-watch rotation rebind refused: ... not running' on stderr at every advisor launch. Skip silently when no service receipt exists and no default deputy is running (current_queue / not_running), and print the warning only when a binding exists or a deputy answered with a refusal.
-    3. minor: Binding::succeeds (L55-68) accepts any same-principal, later-issued advisor grant with a delegation subset, and rebind_after_launch fires for every advisor-seat launch, including an advisor's own sub-advisor launched with a narrower --delegate-seat set (for example advisor,reviewer without implementer). That narrows the binding permanently. The next ordinary rotation with the usual wider set is then refused as 'widens delegation', and only the manual delete-receipts reset recovers. Either compare the successor against the binding's original root chain instead of the last accepted grant, refuse automatic takeover by a grant that descends from the currently bound grant, or have the launcher hook skip non-rotation launches. Add a test for sub-advisor launch followed by rotation.
-    4. cosmetic: AGENTS.md (prepended paragraph) and OVERVIEW.md (appended paragraph) carry per-change round notes ('revokes controller grants on confirmed exit', 'Status supports JSON/TOON'). CLAUDE.md asks for per-change notes in the PR body and an aida comment, not prepended AGENTS.md/OVERVIEW.md paragraphs, which conflict with every open PR. Keep the docs/cli/06-roles-sessions.md section and drop or fold the AGENTS.md/OVERVIEW.md paragraphs.
-    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
-  created_at: 2026-11-08T00:22:04.235599383Z
-  modified_at: 2026-11-08T00:22:04.235599383Z
+
+    1. major: review_watch_service.rs tick() L469-490 + revoke_controller L533: revoking the controller grant on confirmed exit also invalidates every reviewer grant the controller dispatched. watch_command (review_watch.rs:1828) keeps AIDA_SEAT_GRANT, so ''aida queue work PR-N --role reviewer'' issues reviewer children whose parent is the controller grant, and grant_check revalidates every ancestor (seat_authority.rs:1175-1190, check_lifetime refuses revoked). Each advisor rotation (rebind -> controller superseded -> exit) and each controller crash-restart therefore revokes authority from reviews still in flight, so they cannot record verdicts. That breaks the docs claim ''Controller restarts preserve all ordinary PR-head reservations'' (06-roles-sessions.md) and reconcile_reviews'' intent not to disturb live review descendants. Fix: defer revocation until no live or ambiguous dispatcher/review attempt descends from that controller grant (sweep it on a later tick), or issue reviewer children
+    from the bound advisor grant instead of the controller. Add a test: a reviewer child of the controller still validates after the controller exits and is reaped while its attempt is live.
+
+    2. minor: agent_launch.rs:7417 calls rebind_after_launch on every advisor launch. With no service receipt it always tries the ''default'' deputy (review_watch_service.rs:611-614). An operator who runs no deputy, or does not use the service, gets ''review-watch rotation rebind refused: ... not running'' on stderr at every advisor launch. Skip silently when no service receipt exists and no default deputy is running (current_queue / not_running), and print the warning only when a binding exists or a deputy answered with a refusal.
+
+    3. minor: Binding::succeeds (L55-68) accepts any same-principal, later-issued advisor grant with a delegation subset, and rebind_after_launch fires for every advisor-seat launch, including an advisor''s own sub-advisor launched with a narrower --delegate-seat set (for example advisor,reviewer without implementer). That narrows the binding permanently. The next ordinary rotation with the usual wider set is then refused as ''widens delegation'', and only the manual delete-receipts reset recovers. Either compare the successor against the binding''s original root chain instead of the last accepted grant, refuse automatic takeover by a grant that descends from the currently bound grant, or have the launcher hook skip non-rotation launches. Add a test for sub-advisor launch followed by rotation.
+
+    4. cosmetic: AGENTS.md (prepended paragraph) and OVERVIEW.md (appended paragraph) carry per-change round notes (''revokes controller grants on confirmed exit'', ''Status supports JSON/TOON''). CLAUDE.md asks for per-change notes in the PR body and an aida comment, not prepended AGENTS.md/OVERVIEW.md paragraphs, which conflict with every open PR. Keep the docs/cli/06-roles-sessions.md section and drop or fold the AGENTS.md/OVERVIEW.md paragraphs.
+
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.'
+  created_at: 2026-11-08 00:22:04.235599+00:00
+  modified_at: 2026-11-08 00:22:04.235599+00:00
   session_id: 01a1b848-940b-7bd2-8acd-52e428b182b8
   harness_version: 2.1.319 (Claude Code)
+- id: 01a1b891-ed75-7be0-b784-690a30523548
+  author: dirtlab
+  content: 'Native lane handoff: the starting checkout already contains the supervised review-watch service, advisor loops status/rebind, authenticated rotation relay, and per-PR refusal isolation. Added a regression in aida-cli-lib/src/review_watch_service.rs covering a revoked old parent, valid successor rebind, confirmed controller exit and child-grant revocation, restart backoff, retained unresolved PR reservations, and refusal of the old grant. Validation: lane job j20261108T002617628-2-0 ran cargo test --profile agent -p aida-cli-lib --lib -- story2571: 11 passed, 0 failed. rustfmt --check and git diff --check passed. Runtime behavior is unchanged. Edits left uncommitted for host publication; Refs STORY-2571, LIGHT gate.'
+  created_at: 2026-11-08 00:32:13.685978+00:00
+  modified_at: 2026-11-08 00:32:13.685978+00:00
+  session_id: 01a1b88bf3ec
+  harness_version: codex-cli 0.167.0
 - id: 01a1b8ca-2540-7821-8b9c-ed4c4e20626f
   author: joe
   content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: Round 3: since the a7e36c1 review only one test commit (eab43af) plus a main merge landed; no production or doc change addresses any of the four round-2 findings. The new test asserts the controller grant is revoked and reservations are unchanged, but does not check that in-flight reviewer grants survive. AC1 met earlier (advisor-script-inventory.md). AC2 is covered for review-watch only and is still partial because rotation strips in-flight reviews. AC3-6 not applicable to this Refs slice. CI (CI, merge-hold-gate) still pending at eab43af.. No triage reason was given.'
-  created_at: 2026-11-08T01:33:37.984213510Z
-  modified_at: 2026-11-08T01:33:37.984213510Z
+  created_at: 2026-11-08 01:33:37.984213+00:00
+  modified_at: 2026-11-08 01:33:37.984213+00:00
   session_id: 01a1b8be-8170-7fb2-89ab-ecb4c6eee98c
   harness_version: 2.1.319 (Claude Code)
 - id: 01a1b8ca-4c2e-7ab3-8bff-aa5cc4b1eaa5
   author: joe
-  content: |-
-    REVIEW FINDINGS TO ADDRESS (PR #3640):
+  content: 'REVIEW FINDINGS TO ADDRESS (PR #3640):
+
     Verdict: CHANGES REQUESTED
+
     Reviewed commit: eab43af4d5c6
+
     Recorded: 2026-11-08T00:38:02.790035214+00:00
+
     Findings:
-    1. major (unfixed from round 2): review_watch_service.rs tick() L469-490 calls revoke_controller (L533-538) on a confirmed controller exit or death. watch_command (review_watch.rs:1828-1846) still keeps AIDA_SEAT_GRANT, so reviewers dispatched via 'aida queue work PR-N --role reviewer' get child grants parented on the controller grant. grant_check walks every ancestor through check_lifetime (seat_authority.rs:1175-1190), so each rotation (rebind, superseded controller, exit) and each crash-restart revokes the authority of reviews still in flight, and they cannot record verdicts. The new test story2571_rotation_recovers_revoked_parent_after_controller_exit (L940) only asserts the controller grant is revoked and reservations are unchanged; it never checks a reviewer descendant. Fix: defer revocation until no live or ambiguous dispatcher/review descends from the controller grant, or issue reviewer children from the bound advisor grant. Add a test that a reviewer child of the controller still validates after the controller is reaped while its attempt is live.
-    2. minor (unfixed from round 2): agent_launch.rs:7417 calls rebind_after_launch on every advisor launch. With no service receipt, rebind_after_launch_with (review_watch_service.rs:605-615) always targets the 'default' deputy. An operator with no deputy running, or who does not use the service, sees 'review-watch rotation rebind refused: ... not running' on stderr at every advisor launch. Skip silently when no receipt exists and no default deputy is running; warn only when a binding exists or a deputy answered with a refusal.
-    3. minor (unfixed from round 2): Binding::succeeds (review_watch_service.rs:55-68) accepts any later, same-principal advisor grant whose delegations are a subset. rebind_after_launch fires on every advisor-seat launch, including a sub-advisor launched with a narrower --delegate-seat set, which permanently narrows the binding. The next normal rotation with the wider set is then refused as 'widens delegation', and only the manual receipt-deletion reset recovers. Compare against the original root chain, refuse takeover by a grant that descends from the bound grant, or skip non-rotation launches in the launcher hook. Add a test: sub-advisor launch followed by rotation.
-    4. cosmetic (unfixed from round 2): AGENTS.md (prepended paragraph, lines 1-5) and OVERVIEW.md (appended paragraph, ~L1810-1816) still carry per-change notes ('revokes controller grants on confirmed exit', 'Status supports JSON/TOON'). CLAUDE.md wants per-change notes in the PR body and an aida comment. Drop them or fold them into the docs/cli/06-roles-sessions.md section. Also, the OVERVIEW sentence describing exit-time revocation will be wrong once finding 1 is fixed.
-    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
-  created_at: 2026-11-08T01:33:47.950329997Z
-  modified_at: 2026-11-08T01:33:47.950329997Z
+
+    1. major (unfixed from round 2): review_watch_service.rs tick() L469-490 calls revoke_controller (L533-538) on a confirmed controller exit or death. watch_command (review_watch.rs:1828-1846) still keeps AIDA_SEAT_GRANT, so reviewers dispatched via ''aida queue work PR-N --role reviewer'' get child grants parented on the controller grant. grant_check walks every ancestor through check_lifetime (seat_authority.rs:1175-1190), so each rotation (rebind, superseded controller, exit) and each crash-restart revokes the authority of reviews still in flight, and they cannot record verdicts. The new test story2571_rotation_recovers_revoked_parent_after_controller_exit (L940) only asserts the controller grant is revoked and reservations are unchanged; it never checks a reviewer descendant. Fix: defer revocation until no live or ambiguous dispatcher/review descends from the controller grant, or issue reviewer children from the bound advisor grant. Add a test that a reviewer child of the controller
+    still validates after the controller is reaped while its attempt is live.
+
+    2. minor (unfixed from round 2): agent_launch.rs:7417 calls rebind_after_launch on every advisor launch. With no service receipt, rebind_after_launch_with (review_watch_service.rs:605-615) always targets the ''default'' deputy. An operator with no deputy running, or who does not use the service, sees ''review-watch rotation rebind refused: ... not running'' on stderr at every advisor launch. Skip silently when no receipt exists and no default deputy is running; warn only when a binding exists or a deputy answered with a refusal.
+
+    3. minor (unfixed from round 2): Binding::succeeds (review_watch_service.rs:55-68) accepts any later, same-principal advisor grant whose delegations are a subset. rebind_after_launch fires on every advisor-seat launch, including a sub-advisor launched with a narrower --delegate-seat set, which permanently narrows the binding. The next normal rotation with the wider set is then refused as ''widens delegation'', and only the manual receipt-deletion reset recovers. Compare against the original root chain, refuse takeover by a grant that descends from the bound grant, or skip non-rotation launches in the launcher hook. Add a test: sub-advisor launch followed by rotation.
+
+    4. cosmetic (unfixed from round 2): AGENTS.md (prepended paragraph, lines 1-5) and OVERVIEW.md (appended paragraph, ~L1810-1816) still carry per-change notes (''revokes controller grants on confirmed exit'', ''Status supports JSON/TOON''). CLAUDE.md wants per-change notes in the PR body and an aida comment. Drop them or fold them into the docs/cli/06-roles-sessions.md section. Also, the OVERVIEW sentence describing exit-time revocation will be wrong once finding 1 is fixed.
+
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.'
+  created_at: 2026-11-08 01:33:47.950329+00:00
+  modified_at: 2026-11-08 01:33:47.950329+00:00
   session_id: 01a1b8be-8170-7fb2-89ab-ecb4c6eee98c
   harness_version: 2.1.319 (Claude Code)
 - id: 01a1b8d1-d9dc-7b92-90ea-579a1d20991e
   author: joe
   content: 'Round 6: implementing the four current review findings. Confirmed controller exit will retain its grant/receipt until reservation reconciliation proves no unresolved or live/ambiguous review descendants remain; tests validate an actual reviewer child after reap, confirmed death, rotation and crash recovery. Automatic launch bootstrap will skip an unused service without a running default deputy; bound advisor descendants will be refused as successors while operator-to-advisor bootstrap remains supported. Removing per-change notes from AGENTS.md and OVERVIEW.md and updating the CLI lifecycle documentation. Targeted story2571 tests submitted to the lane runner.'
-  created_at: 2026-11-08T01:42:02.972386324Z
-  modified_at: 2026-11-08T01:42:02.972386324Z
+  created_at: 2026-11-08 01:42:02.972386+00:00
+  modified_at: 2026-11-08 01:42:02.972386+00:00
   session_id: 01a1b8ced5dc
 - id: 01a1b8e8-f78b-7a53-a10a-632719a277ab
   author: joe
   content: 'Evidence 2026-11-07 (advisor-106 #2): two helper loops failed silently while still ''running''. (1) auto-rework.sh kept its launch-time grant; once that grant lost dispatch authority, every ''queue rework'' failed and every spec was SKIPped as needs-triage for hours, so nothing reworked. (2) auto-train.sh exited at its HOURS deadline (18:18) and approved PRs stopped landing until it was restarted by hand. Both need what this story describes: AIDA-owned loops that renew their grant from the live seat and surface a dead or erroring loop in ''aida awaiting''. The relaunched advisor kept the same launcher pid (aida agent new), so the review watcher''s grant stayed valid across the rotation; restarting it at rotation is NOT required.'
-  created_at: 2026-11-08T02:07:17.899533562Z
-  modified_at: 2026-11-08T02:07:17.899533562Z
+  created_at: 2026-11-08 02:07:17.899533+00:00
+  modified_at: 2026-11-08 02:07:17.899533+00:00
   session_id: 01a1b8be-8170-7fb2-89ab-ecb4c6eee98c
   harness_version: 2.1.319 (Claude Code)
 - id: 01a1b8f2-5fe8-79d2-997e-593d0592ed57
   author: joe
-  content: 'Round 6 handoff: all four review findings addressed in review_watch_service.rs, docs/cli/06-roles-sessions.md, AGENTS.md and OVERVIEW.md. Controller grants/receipts survive confirmed exit while any active reservation or live/ambiguous review descendant remains; actual reviewer-child full-chain authority is tested after reaping, confirmed death, rotation and crash recovery. Unused-service launches without a running default deputy skip silently (including a connection race); bound-service errors and answered refusals remain visible. Sub-advisor descendants cannot replace an already bound advisor session; operator bootstrap and subsequent full-delegation rotation are tested. Removed the per-change root-document notes. Validation: both lane jobs j20261108T014145808-2-0 and j20261108T014344343-2-0 executed 13 story2571 tests, all passed, including socket authentication, stale successors and per-PR refusal isolation. ExecContext ratchet: 19 passed; trace-header fixtures: 9 passed; rustfmt, diff whitespace, trace headers, doc links/paths, static CLI manual, store writer inventory and CI gate audit passed. Full make check-ci-fast remains incomplete: its direct Cargo check and indirect TUI Cargo check were stopped under this seat instruction to use the lane runner for Cargo; host must run the full fast gate/CI. Codegraph was unreachable (doctor confirmed); no lane index was created. untested=false. Native publication declaration recorded: [AI:codex] fix(review-watch): preserve in-flight review grants and rotation bindings (Refs STORY-2571). Changes intentionally left uncommitted for host publication; no queue completion, review recording or merge/hold clearance performed.'
-  created_at: 2026-11-08T02:17:34.440382064Z
-  modified_at: 2026-11-08T02:17:34.440382064Z
+  content: 'Round 6 handoff: all four review findings addressed in review_watch_service.rs, docs/cli/06-roles-sessions.md, AGENTS.md and OVERVIEW.md. Controller grants/receipts survive confirmed exit while any active reservation or live/ambiguous review descendant remains; actual reviewer-child full-chain authority is tested after reaping, confirmed death, rotation and crash recovery. Unused-service launches without a running default deputy skip silently (including a connection race); bound-service errors and answered refusals remain visible. Sub-advisor descendants cannot replace an already bound advisor session; operator bootstrap and subsequent full-delegation rotation are tested. Removed the per-change root-document notes. Validation: both lane jobs j20261108T014145808-2-0 and j20261108T014344343-2-0 executed 13 story2571 tests, all passed, including socket authentication, stale successors and per-PR refusal isolation. ExecContext ratchet: 19 passed; trace-header fixtures: 9 passed;
+    rustfmt, diff whitespace, trace headers, doc links/paths, static CLI manual, store writer inventory and CI gate audit passed. Full make check-ci-fast remains incomplete: its direct Cargo check and indirect TUI Cargo check were stopped under this seat instruction to use the lane runner for Cargo; host must run the full fast gate/CI. Codegraph was unreachable (doctor confirmed); no lane index was created. untested=false. Native publication declaration recorded: [AI:codex] fix(review-watch): preserve in-flight review grants and rotation bindings (Refs STORY-2571). Changes intentionally left uncommitted for host publication; no queue completion, review recording or merge/hold clearance performed.'
+  created_at: 2026-11-08 02:17:34.440382+00:00
+  modified_at: 2026-11-08 02:17:34.440382+00:00
   session_id: 01a1b8ced5dc
 history:
 - id: 01a1b1c5-af09-7d01-81e9-eaaac083f223
   author: joe
-  timestamp: 2026-11-06T16:51:25.065775499Z
+  timestamp: 2026-11-06 16:51:25.065775+00:00
   session_id: b0a84e34-277c-4df6-b53c-43f4bbe2e84d
   changes:
   - field_name: status
@@ -489,24 +368,24 @@ history:
     new_value: Approved
 - id: 01a1b1e7-3719-7222-a38b-109937deae7f
   author: joe
-  timestamp: 2026-11-06T17:28:02.585792707Z
+  timestamp: 2026-11-06 17:28:02.585792+00:00
   session_id: 3dd100c3-f8c0-44d9-ac4c-f9ff0eb32a27
   changes: []
 - id: 01a1b20e-7f91-7ea3-a166-f7ddfdc104ec
   author: aida-session-start
-  timestamp: 2026-11-06T18:10:57.041427789Z
+  timestamp: 2026-11-06 18:10:57.041427+00:00
   changes:
   - field_name: status
     old_value: Approved
     new_value: InProgress
 - id: 01a1b20f-417c-7722-a997-8514c4ea48e9
   author: joe
-  timestamp: 2026-11-06T18:11:46.684759557Z
+  timestamp: 2026-11-06 18:11:46.684759+00:00
   session_id: 01a1b20e6fe2
   changes: []
 - id: 01a1b212-e3e4-75a0-9f85-fb4edbbfc706
   author: joe
-  timestamp: 2026-11-06T18:15:44.868409678Z
+  timestamp: 2026-11-06 18:15:44.868409+00:00
   session_id: 01a1b20e6fe2
   changes:
   - field_name: status
@@ -514,13 +393,13 @@ history:
     new_value: NeedsAttention
 - id: 01a1b22c-3beb-7e11-8f4c-d6b41e3bc33e
   author: joe
-  timestamp: 2026-11-06T18:43:25.803356013Z
+  timestamp: 2026-11-06 18:43:25.803356+00:00
   session_id: 01a1b229b68e
   harness_version: 2.1.319 (Claude Code)
   changes: []
 - id: 01a1b251-7ec7-79a3-9642-119faffe05af
   author: joe
-  timestamp: 2026-11-06T19:24:07.751536971Z
+  timestamp: 2026-11-06 19:24:07.751536+00:00
   session_id: 3dd100c3-f8c0-44d9-ac4c-f9ff0eb32a27
   changes:
   - field_name: status
@@ -528,19 +407,19 @@ history:
     new_value: Approved
 - id: 01a1b252-e7ca-7a62-8a08-bc5f5c51a896
   author: aida-session-start
-  timestamp: 2026-11-06T19:25:40.170258092Z
+  timestamp: 2026-11-06 19:25:40.170258+00:00
   changes:
   - field_name: status
     old_value: Approved
     new_value: InProgress
 - id: 01a1b26f-1aab-7762-ba4c-b7d0039d8b8a
   author: joe
-  timestamp: 2026-11-06T19:56:28.203075929Z
+  timestamp: 2026-11-06 19:56:28.203075+00:00
   session_id: 3dd100c3-f8c0-44d9-ac4c-f9ff0eb32a27
   changes: []
 - id: 01a1b54e-440f-7013-bbe5-78157b64294e
   author: joe
-  timestamp: 2026-11-07T09:19:27.759301039Z
+  timestamp: 2026-11-07 09:19:27.759301+00:00
   session_id: 01a1b441-8158-7162-ad75-f7915b45ee33
   harness_version: 2.1.319 (Claude Code)
   changes:
@@ -549,18 +428,18 @@ history:
     new_value: Approved
 - id: 01a1b551-98f7-7ab1-a8c9-caeebf34bf35
   author: joe
-  timestamp: 2026-11-07T09:23:06.103347133Z
+  timestamp: 2026-11-07 09:23:06.103347+00:00
   changes: []
 - id: 01a1b569-6b28-73b1-b93c-226f9a3f90e7
   author: aida-session-start
-  timestamp: 2026-11-07T09:49:07.240697392Z
+  timestamp: 2026-11-07 09:49:07.240697+00:00
   changes:
   - field_name: status
     old_value: Approved
     new_value: InProgress
 - id: 01a1b56e-ddf3-7c82-a440-b55867df455e
   author: aida-orchestrator
-  timestamp: 2026-11-07T09:55:04.307593211Z
+  timestamp: 2026-11-07 09:55:04.307593+00:00
   session_id: 01a1b56d34a3
   harness_version: 2.1.319 (Claude Code)
   changes:
@@ -569,7 +448,7 @@ history:
     new_value: NeedsAttention
 - id: 01a1b572-b9c8-78d1-a16f-7bb13e647baa
   author: joe
-  timestamp: 2026-11-07T09:59:17.192972912Z
+  timestamp: 2026-11-07 09:59:17.192972+00:00
   session_id: 01a1b441-8158-7162-ad75-f7915b45ee33
   harness_version: 2.1.319 (Claude Code)
   changes:
@@ -578,14 +457,14 @@ history:
     new_value: Approved
 - id: 01a1b574-5e1c-70f2-bad2-80539f8de6a9
   author: aida-session-start
-  timestamp: 2026-11-07T10:01:04.796251575Z
+  timestamp: 2026-11-07 10:01:04.796251+00:00
   changes:
   - field_name: status
     old_value: Approved
     new_value: InProgress
 - id: 01a1b836-a1c4-7933-843a-1e2a8ba6c234
   author: aida-orchestrator
-  timestamp: 2026-11-07T22:52:30.532721547Z
+  timestamp: 2026-11-07 22:52:30.532721+00:00
   session_id: 01a1b833ca8f
   harness_version: 2.1.319 (Claude Code)
   changes:
@@ -594,13 +473,13 @@ history:
     new_value: NeedsAttention
 - id: 01a1b836-e517-7321-99e9-15c530b89cdd
   author: joe
-  timestamp: 2026-11-07T22:52:47.767064118Z
+  timestamp: 2026-11-07 22:52:47.767064+00:00
   session_id: 01a1b833ca8f
   harness_version: 2.1.319 (Claude Code)
   changes: []
 - id: 01a1b844-72ef-7ff3-9728-3f541cf63191
   author: joe
-  timestamp: 2026-11-07T23:07:36.047211857Z
+  timestamp: 2026-11-07 23:07:36.047211+00:00
   session_id: 01a1b646-c67d-7b43-98ff-3604a53f5d1f
   harness_version: 2.1.319 (Claude Code)
   changes:
@@ -609,14 +488,14 @@ history:
     new_value: Approved
 - id: 01a1b846-56fd-7731-8252-d8e7096a9aa8
   author: aida-session-start
-  timestamp: 2026-11-07T23:09:39.965662089Z
+  timestamp: 2026-11-07 23:09:39.965662+00:00
   changes:
   - field_name: status
     old_value: Approved
     new_value: InProgress
 - id: 01a1b86a-dd37-7871-8f0f-a4ec1c143502
   author: aida-orchestrator
-  timestamp: 2026-11-07T23:49:33.623755376Z
+  timestamp: 2026-11-07 23:49:33.623755+00:00
   session_id: 01a1b8686e13
   harness_version: 2.1.319 (Claude Code)
   changes:
@@ -625,7 +504,7 @@ history:
     new_value: NeedsAttention
 - id: 01a1b888-855a-74f3-bbbf-87e75b2511cb
   author: joe
-  timestamp: 2026-11-08T00:21:57.210063003Z
+  timestamp: 2026-11-08 00:21:57.210063+00:00
   session_id: 01a1b848-940b-7bd2-8acd-52e428b182b8
   harness_version: 2.1.319 (Claude Code)
   changes:
@@ -634,14 +513,14 @@ history:
     new_value: Approved
 - id: 01a1b88b-6eb8-74d1-9bfd-a0dc3b4622f5
   author: aida-pr-open
-  timestamp: 2026-11-08T00:25:08.024369858Z
+  timestamp: 2026-11-08 00:25:08.024369+00:00
   changes:
   - field_name: status
     old_value: Approved
     new_value: InProgress
 - id: 01a1b897-4492-7c01-92d9-3c2e162efb51
   author: aida-orchestrator
-  timestamp: 2026-11-08T00:38:03.666590932Z
+  timestamp: 2026-11-08 00:38:03.666590+00:00
   session_id: 01a1b8960541
   harness_version: 2.1.319 (Claude Code)
   changes:
@@ -650,7 +529,7 @@ history:
     new_value: NeedsAttention
 - id: 01a1b8ca-2540-7821-8b9c-ed3b7c68de47
   author: joe
-  timestamp: 2026-11-08T01:33:37.984201015Z
+  timestamp: 2026-11-08 01:33:37.984201+00:00
   session_id: 01a1b8be-8170-7fb2-89ab-ecb4c6eee98c
   harness_version: 2.1.319 (Claude Code)
   changes:
@@ -659,14 +538,14 @@ history:
     new_value: Approved
 - id: 01a1b8ce-e365-7900-a295-a7ee8a0a1028
   author: aida-session-start
-  timestamp: 2026-11-08T01:38:48.805473468Z
+  timestamp: 2026-11-08 01:38:48.805473+00:00
   changes:
   - field_name: status
     old_value: Approved
     new_value: InProgress
 - id: 01a1b8fe-1695-72b0-a16e-51cdb8bf6d7e
   author: aida-orchestrator
-  timestamp: 2026-11-08T02:30:22.101603585Z
+  timestamp: 2026-11-08 02:30:22.101603+00:00
   session_id: 01a1b8fb4281
   harness_version: 2.1.319 (Claude Code)
   changes:
@@ -689,4 +568,4 @@ failure_reason:
   detail: 'Round 4: all four round-2/3 findings are addressed (reviewer children survive controller reap, silent skip with no deputy, sub-advisor refused as successor, AGENTS/OVERVIEW notes removed). But the new fix blocks controller restart until every review attempt in the store resolves, and an attempt in Superseding (or Reserved with no dispatcher recorded) can only be resolved by a live controller pass, so one rotation or crash at the wrong moment wedges the service for good. AC1 met earlier (docs/internal/agents/advisor-script-inventory.md, #3526/#3589). AC2 covers review-watch only and is partial. AC3-6 do not apply to this Refs slice. CI at 4c20ffe: cli-0/cli-1/rest/contracts pass; lib-0/lib-1/gates pending; merge-hold-gate fail is the expected supervised hold.'
   recovery_hint: address the review findings, move STORY-2571 back to In Progress, and clear the PR hold only after approval
   shelved_by: reviewer
-  shelved_at: 2026-11-08T02:30:22.101577198Z
+  shelved_at: 2026-11-08 02:30:22.101577+00:00
