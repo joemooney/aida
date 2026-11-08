@@ -3,12 +3,12 @@ spec_id: BUG-b6b1278890774ef993d2ebc327862470-255
 agreed_id: BUG-2490
 title: 'Store commit path commits git conflict markers: an autostash re-apply conflict in .aida-store is committed by the contained-session store commit, breaking every command that loads the object'
 description: 'Observed 2026-11-07 17:00 MST: local .aida-store commit 7124c0f (''reviewer: commit 2 store changes from the contained session'') contained ''<<<<<<< Updated upstream / ======= / >>>>>>> Stashed changes'' in objects/STORY/000/STORY-B6B1278890774EF993D2EBC327862470-565.yaml (modified_at only). Every store load then failed: ''Failed to parse .../STORY-...-565.yaml'' (aida queue rework, aida push). The advisor hand-fixed it in c02902bd108 before it reached origin. Cause: the store worktree inherits the operator''s global rebase.autoStash=true / merge.autoStash=true; a pull over a dirty store tree re-applied the autostash with a conflict (the stash stays in the list as stash@{0} autostash), and the contained-session store commit then staged and committed the markered file. Acceptance: (1) every git invocation on the store worktree passes -c rebase.autoStash=false -c merge.autoStash=false (or the store worktree config pins them false), so no autostash ever touches the store; (2) the store commit path refuses to commit any object that does not parse, or that contains conflict markers, naming the file; unmerged paths also refuse; (3) a regression test reproduces the autostash-conflict sequence and asserts refusal; (4) aida doctor flags a store object with conflict markers. LIGHT gate.'
-status: InProgress
+status: NeedsAttention
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-08T00:02:55.282155934Z
-modified_at: 2026-11-08T07:29:32.787027459Z
+modified_at: 2026-11-08T07:31:19.834662009Z
 req_type: Bug
 relationships:
 - rel_type:
@@ -122,6 +122,13 @@ comments:
   modified_at: 2026-11-08T07:28:02.536221502Z
   session_id: 01a1b8be-8170-7fb2-89ab-ecb4c6eee98c
   harness_version: 2.1.319 (Claude Code)
+- id: 01a1ba11-a09a-7290-af61-423bfad1cf1b
+  author: dirtlab
+  content: 'Native-seat handoff: added bug_2490_schema_invalid_objects_refuse_without_advancing_head in aida-core/src/git_ops/tests/store_hook_tests.rs. It checks malformed YAML and schema-invalid valid YAML through explicit worktree and staged commits, including repaired worktree versus invalid index, with named-file errors and unchanged HEAD. Lane job j20261108T072948265-2-0 executed the 4 existing BUG-2490 tests, all passed. Job j20261108T073035815-2-0 executed the new regression, passed. rustfmt and git diff --check passed. Edits remain uncommitted. BUG-2490 was explicitly punted to Needs Attention for unresolved round-3 finding 2 (semantic policy, comprehensive failed-pull fencing and dell1 stopgap removal); preserve the publication veto. Punt store update succeeded but its local signal file write failed with read-only filesystem, so the host must honor the persisted punt/status and this handoff. No publication or completion authorized. Codegraph unavailable; rg used for call-site confirmation.'
+  created_at: 2026-11-08T07:31:19.834662009Z
+  modified_at: 2026-11-08T07:31:19.834662009Z
+  session_id: 01a1ba0fa198
+  harness_version: codex-cli 0.167.0
 history:
 - id: 01a1b923-982d-7512-93a5-cd08923b4f98
   author: aida-session-start
@@ -226,6 +233,15 @@ history:
   session_id: 01a1ba0fa198
   harness_version: codex-cli 0.167.0
   changes: []
+- id: 01a1ba11-45b8-7493-aaf4-2dae1b3a2331
+  author: dirtlab
+  timestamp: 2026-11-08T07:30:56.568711046Z
+  session_id: 01a1ba0fa198
+  harness_version: codex-cli 0.167.0
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: NeedsAttention
 filed_at:
   code_sha: 2a7fe186bdcd718fa356e5e4d028a3b2ff13769d
   branch: main
@@ -235,3 +251,8 @@ filed_at:
   vendor: claude
   session: 01a1b848-940b-7bd2-8acd-52e428b182b8
   harness_version: 2.1.319 (Claude Code)
+attention_reason:
+  category: design-fork
+  detail: 'Round 3 review finding 2 remains unresolved: the requested upstream-scalars semantic pull policy differs from the existing field-level LWW, terminal-status and hypothesis-preservation resolver. CLAUDE.md requires advisor signoff for architecture changes; no advisor-approved policy or linked split is recorded. Comprehensive failed-pull write fencing and removal of the dell1 stopgap also remain incomplete. This round adds a schema-invalid commit refusal regression only. Preserve the existing merge hold and publication veto; do not publish as a complete fix.'
+  raised_by: implementer
+  raised_at: 2026-11-08T07:30:56.568685705Z
