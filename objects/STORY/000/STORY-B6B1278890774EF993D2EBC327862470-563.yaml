@@ -25,7 +25,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-07T19:45:35.836129088Z
-modified_at: 2026-11-08T17:34:57.575395521Z
+modified_at: 2026-11-08T17:35:05.881760773Z
 req_type: Story
 tags:
 - docs:impacted
@@ -286,6 +286,24 @@ comments:
   content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: Round-3 findings are fixed and the sandbox ruling is followed, but a passing lane whose PR head moved is now refused at publication (AC3), and cold-target lanes time out on the first gate and publish ungated (AC1). CI was still pending at review time.. No triage reason was given.'
   created_at: 2026-11-08T17:34:57.575393908Z
   modified_at: 2026-11-08T17:34:57.575393908Z
+  session_id: 01a1b9af-8230-75d2-82f8-667491cc010a
+  harness_version: 2.1.319 (Claude Code)
+- id: 01a1bc3a-642a-7ca1-9358-343e4d252b38
+  author: joe
+  content: |-
+    REVIEW FINDINGS TO ADDRESS (STORY-2640):
+    Verdict: CHANGES REQUESTED
+    Reviewed commit: 4a7126633fcc
+    Recorded: 2026-11-08T17:13:17.826271415+00:00
+    Findings:
+    1. [major] AC3 regression: a passing lane whose remote PR head moved is refused at publication. publish_queue_exit passes automatic=true, run_from_with_reconciliation merges the remote head into the seat when it is not an ancestor (TASK-2879, ship_from_seat.rs reconcile block), so staged.tip becomes the new merge commit, and check_import (ship_from_seat.rs:1669, lane_fast_gate.rs:1348) then requires tip == the gated head and bails. Scenario: a rework lane runs while gh pr update-branch or a merge from main moves the PR. Before this PR that lane published; now it pushes nothing, exits with an error and leaves the reconciled commit in the seat. No test covers reconcile with automatic=true. Fix: gate the reconciled tip, or publish it with an honest marker such as fast_gate=skipped(reconciled), and add that test.
+    2. [major] AC1 is defeated on cold targets. run_fast_gate (lane_job.rs:1815) passes SeedNote::new(None, ...), so the gate gets no reflink seed and no overlay; a lane on an overlay has its artifacts visible only inside the job namespace. The first fast-tier gate is cargo check -p aida-cli --no-default-features, and gates run in order, so a cold target spends the fixed 300s there. The implementer logged rc=124 on an empty target twice, and warm runs took 232-239s. gate_result maps that to skipped(timeout) with no repair, so none of the later ratchets (the failures this story targets) run and the head publishes. The round-3 skipped(timeout) remedy stopped burning the repair round but left the gate vacuous for those lanes. Fix: run the gate on the lane seed/overlay via seed_lane_target, or run no-build gates before cargo check; add a test that the gate job receives the seed.
+    3. [minor] A later non-verdict marker hides a known red. native_rounds (lane_fast_gate.rs:453-457) and pushed_round overwrite the marker with the retry result, so fail, then repair, then a retry timeout publishes fast_gate=skipped(timeout). infrastructure() deliberately keeps fail when repair_used is set, so the two paths disagree and the reviewer and advisor lose the red signal. Keep fail unless the retry reaches a real pass or fail, and test it.
+    4. [minor] Receipt read-modify-write has no lock. blocks_review reads a receipt with a dead owner or expired reservation, then release() re-reads and clears pending (lane_fast_gate.rs:163-181, 189-198). If a relaunched lane runs begin() between those steps, its new reservation is cleared and review-watch can dispatch a reviewer during its gate or repair. Hold a lock across begin/release, or make release compare the observed owner and reserved_at.
+    5. [cosmetic] Self-pushing standalone lanes ending Held, Punted or NoPr print fast_gate=skipped(pending) on the final result line, because result_line runs before Reservation::drop rewrites the marker to skipped(lane-ended) (standalone_implementer.rs result_line call). The lane has finished, so pending is wrong.
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
+  created_at: 2026-11-08T17:35:05.770479156Z
+  modified_at: 2026-11-08T17:35:05.770479156Z
   session_id: 01a1b9af-8230-75d2-82f8-667491cc010a
   harness_version: 2.1.319 (Claude Code)
 history:
