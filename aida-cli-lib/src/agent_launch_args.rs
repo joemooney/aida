@@ -648,6 +648,15 @@ pub enum SessionCommand {
         #[clap(long, hide = true, requires = "show")]
         rotated: bool,
 
+        // trace:STORY-2662 | ai:codex
+        /// Internal compaction snapshot; never requests rotation.
+        #[clap(long, hide = true, requires = "write", conflicts_with_all = ["final_", "rotated", "check"])]
+        snapshot: bool,
+
+        /// Read only the handoff text, without standing context.
+        #[clap(long, hide = true, requires = "show")]
+        body_only: bool,
+
         /// Manage the seat's repo-local standing orders
         /// (`.aida/standing-orders/<seat>.md`): `add "<text>"` appends a dated
         /// entry, `list` prints them. `--show` prints standing orders before

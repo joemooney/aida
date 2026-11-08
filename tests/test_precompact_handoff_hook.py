@@ -13,7 +13,7 @@ HOOK = ROOT / 'aida-core/templates/hooks/aida-precompact-handoff.sh'
 
 
 class PrecompactHandoff(unittest.TestCase):
-    def fixture(self, event='PreCompact', extra=None, fail=False, large=False, slow=False):
+    def fixture(self, event='PreCompact', extra=None, fail=False, large=False, slow=False, missing=False, rotated=False):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
             fake = root / 'aida'
@@ -25,12 +25,17 @@ with (p/'calls').open('a') as f: f.write(repr(args)+'\\n')
 if os.environ['FAIL'] == '1': sys.exit(1)
 if '--write' in args:
     (p/'packet').write_text(sys.stdin.read())
-elif '--show' in args: print('Next step: finish parser regression')
+elif '--show' in args:
+    if args[args.index('--seat')+1] == 'implementer':
+        print('MATCHED ROTATION' if '--rotated' in args else 'SIBLING PACKET')
+    elif os.environ['MISSING'] == '1': pass
+    elif '--body-only' in args: print('Next step: finish parser regression')
+    else: print('standing order '*2000 + 'Next step: finish parser regression')
 elif 'verdict' in args:
     if os.environ['SLOW'] == '1': time.sleep(20)
     print('Rework: validate parser')
 elif 'findings' in args:
-    print('finding: parser mismatch' if os.environ['LARGE'] == '0' else '界'*100000)
+    print('{"findings":[{"origin":"STORY-2662","title":"parser mismatch"},{"origin":"STORY-other","title":"unrelated finding"}]}' if os.environ['LARGE'] == '0' else '界'*100000)
 ''')
             fake.chmod(0o755)
             git = root / 'git'
@@ -39,7 +44,8 @@ elif 'findings' in args:
             env = dict(os.environ, PATH=directory+':'+os.environ['PATH'],
                        FIXTURE=directory, AIDA_SESSION_ROLE='implementer',
                        AIDA_ROTATION_SEAT='', AIDA_SESSION_SCOPE='STORY-2662',
-                       FAIL=str(int(fail)), LARGE=str(int(large)), SLOW=str(int(slow)))
+                       FAIL=str(int(fail)), LARGE=str(int(large)), SLOW=str(int(slow)),
+                       MISSING=str(int(missing)), AIDA_ROTATION_HANDOFF='matched.md' if rotated else '')
             payload = dict(hook_event_name=event, cwd=directory, session_id='fixture', trigger='auto')
             payload.update(extra or {})
             result = subprocess.run([str(HOOK)], input=json.dumps(payload), text=True,
@@ -55,6 +61,9 @@ elif 'findings' in args:
         self.assertIn("'--write', '-'", calls)
         self.assertLessEqual(len(packet.encode()), 10000)
         self.assertEqual(result.stdout, '')
+        self.assertNotIn('standing order', packet)
+        self.assertNotIn('SIBLING PACKET', packet)
+        self.assertNotIn('unrelated finding', packet)
 
     def test_compact_resume_injects_handoff(self):
         result, packet, calls = self.fixture('SessionStart', {'source': 'compact'})
@@ -62,10 +71,40 @@ elif 'findings' in args:
         self.assertEqual(packet, '')
         self.assertNotIn('--write', calls)
 
+    def test_startup_and_resume_never_inject_shared_latest(self):
+        for source in ['startup', 'resume']:
+            result, packet, calls = self.fixture('SessionStart', {'source': source})
+            self.assertEqual((result.stdout, packet, calls), ('', '', ''))
+
+    def test_packet_is_bound_to_session_and_cwd(self):
+        with tempfile.TemporaryDirectory() as cwd:
+            _, _, first = self.fixture(extra={'cwd': cwd})
+            _, _, same = self.fixture(extra={'cwd': cwd})
+            _, _, sibling = self.fixture(extra={'cwd': cwd, 'session_id': 'sibling'})
+        self.assertEqual(first.split('compact-')[1][:40], same.split('compact-')[1][:40])
+        self.assertIn('compact-', first)
+        self.assertIn('--snapshot', first)
+        self.assertIn('--body-only', first)
+        self.assertNotEqual(first.split('compact-')[1][:40], sibling.split('compact-')[1][:40])
+
+    def test_missing_snapshot_never_reads_siblings_shared_handoff(self):
+        _, packet, calls = self.fixture(missing=True)
+        self.assertIn('no session-bound prior handoff', packet)
+        self.assertNotIn("'--seat', 'implementer'", calls)
+        result, _, calls = self.fixture('SessionStart', {'source': 'compact'}, missing=True)
+        self.assertEqual(result.stdout, '')
+        self.assertNotIn("'--seat', 'implementer'", calls)
+
+    def test_first_snapshot_uses_only_matched_rotation_prior(self):
+        _, packet, calls = self.fixture(missing=True, rotated=True)
+        self.assertIn('MATCHED ROTATION', packet)
+        self.assertNotIn('SIBLING PACKET', packet)
+        self.assertIn('--rotated', calls)
+
     def test_large_output_is_bounded(self):
         result, packet, _ = self.fixture(large=True)
         self.assertEqual(result.returncode, 0)
-        self.assertIn('[truncated]', packet)
+        self.assertIn('findings unavailable or exceeded output cap', packet)
         self.assertLessEqual(len(packet.encode()), 10000)
 
     def test_failed_cli_does_not_block_compaction(self):
@@ -88,7 +127,7 @@ elif 'findings' in args:
             self.assertEqual(result.stdout, '')
 
     def test_wrong_event_or_invalid_cwd_never_writes(self):
-        for event, extra in [('Stop', {}), ('PreCompact', {'cwd': 'relative'})]:
+        for event, extra in [('Stop', {}), ('PreCompact', {'cwd': 'relative'}), ('PreCompact', {'session_id': None})]:
             result, packet, calls = self.fixture(event, extra)
             self.assertEqual(result.returncode, 0)
             self.assertEqual((packet, calls), ('', ''))

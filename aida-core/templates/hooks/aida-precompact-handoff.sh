@@ -5,6 +5,7 @@ No transcript scraping, model calls, forge probes, or new state directory.
 Every subprocess has a deadline and output cap; the entire hook has 12 seconds.
 """
 # trace:STORY-2662 | ai:codex
+import hashlib
 import json
 import os
 import re
@@ -74,10 +75,17 @@ def main():
     seat = os.environ.get('AIDA_ROTATION_SEAT') or os.environ.get('AIDA_SESSION_ROLE')
     if not seat or not re.fullmatch(r'[A-Za-z0-9_-]{1,64}', seat):
         return
-    handoff = ['aida', 'session', 'handoff', '--seat', seat]
+    sid = payload.get('session_id')
+    if not isinstance(sid, str) or not sid or len(sid) > 256:
+        return
+    # Separate seat within the existing handoff substrate: sibling lanes and
+    # deliberate rotation notes cannot replace this session's recovery packet.
+    snapshot_seat = 'compact-' + hashlib.sha256((cwd + '\0' + sid).encode()).hexdigest()[:40]
+    handoff = ['aida', 'session', 'handoff', '--seat', snapshot_seat]
     if event == 'SessionStart':
-        # Compact resumes and relaunches both receive the existing substrate note.
-        text = run(handoff + ['--show'], 8192)
+        if payload.get('source') != 'compact':
+            return
+        text = run(handoff + ['--show', '--body-only'], 12000)
         if text and not text.startswith('unknown ('):
             print(json.dumps({'hookSpecificOutput': {'hookEventName': event,
                             'additionalContext': text}}))
@@ -90,17 +98,35 @@ def main():
         spec = match.group(0).upper() if match else 'unknown'
     spec = spec[:160]
     verdict = run(['aida', 'review', 'verdict', spec]) if spec != 'unknown' else 'unknown (no spec pointer)'
-    findings = run(['aida', 'findings', 'list'])
-    prior = run(handoff + ['--show'], 2048)
+    rows = run(['aida', 'findings', 'list', '--json'], 65536)
+    try:
+        findings = json.dumps([row for row in json.loads(rows)['findings']
+                               if row.get('origin', '').upper() == spec.upper()], ensure_ascii=False)
+        encoded = findings.encode()
+        findings = encoded[:2048].decode('utf-8', errors='ignore')
+        if len(encoded) > 2048:
+            findings += '\n[truncated]'
+        if spec == 'unknown':
+            findings = 'unknown (no spec pointer)'
+    except (ValueError, KeyError, TypeError):
+        findings = 'unknown (findings unavailable or exceeded output cap)'
+    prior = run(handoff + ['--show', '--body-only'], 2048)
+    if not prior:
+        original = ['aida', 'session', 'handoff', '--seat', seat, '--show', '--body-only']
+        if os.environ.get('AIDA_ROTATION_HANDOFF'):
+            original.append('--rotated')
+            prior = run(original, 2048)
+        else:
+            prior = 'unknown (no session-bound prior handoff)'
     body = (f'# PreCompact recovery snapshot (Claude; informational, revalidate before action)\n'
             f'Spec pointer: {spec}\nBranch: {branch}\n'
-            f'Last verdict:\n{verdict}\nOpen findings (project-wide):\n{findings}\n'
+            f'Last verdict:\n{verdict}\nOpen findings (spec origin):\n{findings}\n'
             f'Prior handoff / next-action context:\n{prior}\n'
             f'Next step: inspect `aida show {spec}` and the working diff; reconcile the '
             'verdict and findings, then continue the active spec. Unknown evidence stays unknown.\n')
     # Safely below session handoff’s 16 KiB cap even with multibyte diagnostics.
     body = body.encode()[:10000].decode('utf-8', errors='ignore')
-    result = run(handoff + ['--write', '-'], 1024, body)
+    result = run(handoff + ['--snapshot', '--write', '-'], 1024, body)
     if result.startswith('unknown ('):
         print('AIDA PreCompact handoff unavailable: ' + result, file=sys.stderr)
 

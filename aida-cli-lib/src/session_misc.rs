@@ -984,6 +984,8 @@ pub(crate) fn session_handoff_seat(
     seat: Option<&str>,
     final_: bool,
     rotated: bool,
+    snapshot: bool,
+    body_only: bool,
 ) -> Result<()> {
     let seat = resolve_handoff_seat(seat)?;
     let project_root = main_worktree_root_from(&find_project_root()?);
@@ -996,12 +998,17 @@ pub(crate) fn session_handoff_seat(
             std::fs::read_to_string(src).with_context(|| format!("reading {src}"))?
         };
         // trace:STORY-B6B1278890774EF993D2EBC327862470-101 | ai:claude
-        let written = seat_rotation::write_handoff_by(
+        let written = seat_rotation::write_handoff_kind(
             &project_root,
             &seat,
             &body,
             chrono::Utc::now(),
             &seat_rotation::HandoffWriter::from_env(final_),
+            if snapshot {
+                "compact-snapshot"
+            } else {
+                "handoff"
+            },
         )?;
         println!(
             "Handoff written: {} ({} bytes)",
@@ -1035,6 +1042,13 @@ pub(crate) fn session_handoff_seat(
     } else {
         seat_rotation::read_latest_handoff(&project_root, &seat)?
     };
+    // trace:STORY-2662 | ai:codex
+    if body_only {
+        if let Some(text) = handoff {
+            print!("{text}");
+        }
+        return Ok(());
+    }
     // trace:STORY-1693 | ai:claude
     let standing = seat_rotation::render_standing_orders(&project_root, &seat)?;
     // STORY-1700: the active mandate, read live, prints first.

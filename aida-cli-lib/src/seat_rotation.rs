@@ -250,6 +250,18 @@ pub(crate) fn write_handoff_by(
     now: chrono::DateTime<chrono::Utc>,
     writer: &HandoffWriter,
 ) -> Result<HandoffWritten> {
+    write_handoff_kind(project_root, seat, body, now, writer, "handoff")
+}
+
+// trace:STORY-2662 | ai:codex
+pub(crate) fn write_handoff_kind(
+    project_root: &Path,
+    seat: &str,
+    body: &str,
+    now: chrono::DateTime<chrono::Utc>,
+    writer: &HandoffWriter,
+    event: &str,
+) -> Result<HandoffWritten> {
     let seat = sanitize_seat(seat)?;
     let body = body.trim();
     if body.is_empty() {
@@ -289,7 +301,7 @@ pub(crate) fn write_handoff_by(
     let mut record = serde_json::json!({
         "ts": now.to_rfc3339(),
         "seat": seat,
-        "event": "handoff",
+        "event": event,
         "path": path.strip_prefix(project_root).unwrap_or(&path).display().to_string(),
         "bytes": body.len(),
         "approx_tokens": body.len() / 4,

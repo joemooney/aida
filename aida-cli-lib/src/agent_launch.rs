@@ -285,12 +285,22 @@ pub(crate) fn handle_session_command(cmd: &SessionCommand) -> Result<()> {
             seat,
             final_,
             rotated,
+            snapshot,
+            body_only,
             standing_orders,
         } => {
             if let Some(args) = standing_orders {
                 session_handoff_standing_orders(args, seat.as_deref())
             } else if write.is_some() || *show {
-                session_handoff_seat(write.as_deref(), *show, seat.as_deref(), *final_, *rotated)
+                session_handoff_seat(
+                    write.as_deref(),
+                    *show,
+                    seat.as_deref(),
+                    *final_,
+                    *rotated,
+                    *snapshot,
+                    *body_only,
+                )
             } else {
                 session_handoff_check(*check)
             }

@@ -1,8 +1,3 @@
-Claude PreCompact recovery writes a bounded informational packet through
-`aida session handoff`; SessionStart reloads it. Codex PreCompact remains absent
-pending its trusted-hook test. See OVERVIEW.md.
-<!-- trace:STORY-2662 | ai:codex -->
-
 Review-watch records retained fast-exiting children before reaping. Incomplete
 legacy receipts use the existing reboot/TTL backstop. Caller capture requires
 verified local procfs and fails closed with host-retry guidance. See OVERVIEW.md.

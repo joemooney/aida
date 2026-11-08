@@ -784,3 +784,28 @@ fn rotation_evidence_refuses_fifo_symlinks_and_oversize_without_blocking() {
         "blocking FIFO open: {elapsed:?}"
     );
 }
+
+// trace:STORY-2662 | ai:codex
+#[test]
+fn compact_snapshot_does_not_request_rotation() {
+    let dir = tempfile::tempdir().unwrap();
+    let writer = crate::seat_rotation::HandoffWriter {
+        handle: Some("claude-advisor-08".into()),
+        native_session_id: Some("s1".into()),
+        generation: Some(1),
+        final_: false,
+    };
+    crate::seat_rotation::write_handoff_kind(
+        dir.path(),
+        "advisor",
+        "recover this session",
+        at(5),
+        &writer,
+        "compact-snapshot",
+    )
+    .unwrap();
+    let records = read_handoff_log(dir.path(), "advisor");
+    assert_eq!(records[0].event, "compact-snapshot");
+    assert!(fresh_handoff(&records, &run(Some("s1"))).is_none());
+    assert_eq!(decide(Some("s1"), 600, &records), RotationDecision::Exit);
+}
