@@ -23,7 +23,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-07T19:59:26.079479Z
-modified_at: 2026-11-08T12:36:48.434794121Z
+modified_at: 2026-11-08T12:36:54.404500912Z
 req_type: Story
 comments:
 - id: 01a1b798-f0d4-73b1-93d5-f84581f2d190
@@ -248,6 +248,22 @@ comments:
   content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: Round 6 fixes check out and AC0/AC2/AC3/AC4 plus the lane/unsandboxed separation ruling are met in code, but AC1 (second lane job shows sccache hits on primary and dell1) still has no evidence or amendment; one new minor server-lifecycle defect. CI cli-1/contracts/rest were still running at record time; merge-hold-gate fails by design.. It was punted on: blocked-dependency: Round-6 finding 1 is agreed and remains unresolved: AC1 requires two consecutive lane Cargo jobs using a launcher built from this branch, with final sccache statistics and second-job Rust hits greater than zero on both primary and dell1, or an advisor amendment. This native seat cannot obtain both-host evidence. Local findings 2-4 are addressed: wrapper-off is limited to recorded or sandboxed seats, the foreground lane server receives TMPDIR=/tmp with a dangling-TMPDIR regression, and documentation describes wrapper-off without a target override. Required validation is running. Preserve the publication veto and existing merge hold.. No triage reason was given.'
   created_at: 2026-11-08T12:36:48.434789280Z
   modified_at: 2026-11-08T12:36:48.434789280Z
+  session_id: 01a1b9af-8230-75d2-82f8-667491cc010a
+  harness_version: 2.1.319 (Claude Code)
+- id: 01a1bb29-639a-74a1-ac06-67c9d07d879e
+  author: joe
+  content: |-
+    REVIEW FINDINGS TO ADDRESS (PR #3657):
+    Verdict: CHANGES REQUESTED
+    Reviewed commit: f72bd01813fa
+    Recorded: 2026-11-08T12:34:09.498368127+00:00
+    Review comment: https://github.com/joemooney/aida/pull/3657#issuecomment-6721550489
+    Findings:
+    1. major/acceptance: AC1 is unverified at f72bd01813fa. It requires a second lane job on the same dependency set to show sccache hits (stats delta > 0) on the primary AND on dell1. The latest spec comment (round 6 handoff) confirms there are still no lane-job statistics from either host and no advisor amendment. A code change cannot close this, and another implementer round will return the same verdict. Fix: with a launcher built from this branch, run two consecutive 'aida lane job run' cargo jobs on each host and record both logs' 'lane sccache: final job statistics' output (second job Rust hits > 0) on the spec, or have the advisor record an amendment of AC1. Needs host/operator action.
+    2. minor/robustness: the TMPDIR=/tmp fix in SCCACHE_JOB_SCRIPT (aida-cli-lib/src/lane_job.rs:288) covers only the job's own server. Lane bwrap has no --unshare-pid (session.rs bwrap_confinement_args_inner), so the host cargo wrapper's sccache_dead_tmpdir (aida-host/bin/cargo:157-177, pgrep -x sccache plus /proc/PID/environ) still sees every sccache process on the host, including clients of other builds. A concurrent 'cargo test' client with TMPDIR=/dev/shm/cargo-tmp-*, or any TMPDIR under the real /tmp that is absent from the job's private tmpfs, makes the wrapper run --stop-server against this job's SCCACHE_SERVER_UDS and start a detached daemon (lines 218-223). The script's wait then covers only the already-stopped foreground server, so 'server exited before sandbox teardown' is printed while the daemon may still be draining, and --die-with-parent can lose the final cache writes that this lifecycle exists to keep. It also resets the job's statistics. Found by code reading, not reproduced at runtime. Fix: make the wrapper skip its restart branch when SCCACHE_SERVER_UDS is set (lane jobs own their server), or run cached lane jobs in a private PID namespace, and add a regression test for a foreign dead-TMPDIR process.
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
+  created_at: 2026-11-08T12:36:54.298569957Z
+  modified_at: 2026-11-08T12:36:54.298569957Z
   session_id: 01a1b9af-8230-75d2-82f8-667491cc010a
   harness_version: 2.1.319 (Claude Code)
 history:
