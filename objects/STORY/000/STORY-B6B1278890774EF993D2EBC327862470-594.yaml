@@ -1,0 +1,34 @@
+id: 01a1b990-2990-7a23-8f29-266f8aa13d44
+spec_id: STORY-b6b1278890774ef993d2ebc327862470-594
+agreed_id: STORY-2671
+title: 'Review PR-3652: [AI:codex] fix: Store commit path commits git conflict markers: an autostash re-apply conflict in .aida-store is committed by the contained-session store commit, breaking every command'
+description: |
+  Auto-filed by `aida pr auto-queue-review` (typically from /aida-pr) (session `01a1b977`) for branch `bug-b6b1278890774ef993d2ebc327862470-255`.
+
+  - PR: <https://github.com/joemooney/aida/pull/3652>
+  - Branch: `bug-b6b1278890774ef993d2ebc327862470-255` → `main`
+
+  ## Covers
+
+  - BUG-2490
+
+  ## Acceptance
+
+  - Generate a structured review prompt with `aida review prompt --pr 3652` and verify each spec's acceptance criteria.
+  - Approve and merge, or request changes by spec id.
+  - Mark this story `completed` once the PR is merged.
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-11-08T05:09:55.216246754Z
+modified_at: 2026-11-08T05:09:55.216246754Z
+req_type: Story
+filed_at:
+  code_sha: ff9b8c91808130e9bddf339d428915a5d551416e
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: efbd07d6c35
+  vendor: claude
+  session: 01a1b977c304
