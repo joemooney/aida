@@ -3,12 +3,12 @@ spec_id: TASK-b6b1278890774ef993d2ebc327862470-786
 agreed_id: TASK-3048
 title: 'STORY-2460 S2: agy adapter in the posture S1 selects (private runtime, auth hosts, argv order, all-tool confinement)'
 description: 'Per signoff Q3 and Q6, blocked on S1''s posture decision. Private writable agy runtime dir; exact auth host inventory; options placed before the final -p <prompt>; no blanket --dangerously-skip-permissions inside a claimed boundary; browser, URL and MCP tools disabled unless confined. Accept agy=<posture> only from trusted origin/main config, and fail closed otherwise. Acceptance: the conformance harness passes for agy.'
-status: InProgress
+status: NeedsAttention
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-04T17:54:51.353376Z
-modified_at: 2026-11-08T17:09:32.477736136Z
+modified_at: 2026-11-08T17:11:16.511843550Z
 req_type: Task
 tags:
 - area:containment
@@ -1312,6 +1312,15 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a1bc24-951f-7072-98c1-df49b2752588
+  author: dirtlab
+  timestamp: 2026-11-08T17:11:16.511854378Z
+  session_id: 01a1bc22f789
+  harness_version: codex-cli 0.167.0
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: NeedsAttention
 filed_at:
   code_sha: 6a331a8a5c91ca7485b695a076af44bdf9be3894
   branch: main
@@ -1320,3 +1329,8 @@ filed_at:
   aida_build_sha: e422daaa1a4
   vendor: claude
   session: 5bf140f7-38b2-4a04-9e8c-ccf69b1258f8
+attention_reason:
+  category: blocked-dependency
+  detail: 'Round-10 finding 1 at b108a2c explicitly identifies a CI wait state, no code defect and no implementer rework needed; it directs no new commit because a new head restarts CI. Preserve b108a2c and PR #3641. Run 42501596251 remains pending (lib-0, cli-0, cli-1 running; four other jobs queued at inspection). Dispute applying the generic produce-a-commit contract to this specific no-new-commit finding; request re-review at the same head after green CI. Finding 2 is an advisor confirmation gate: verify tools-off deny settings with permission bypass during the separate live AIDA-boundary C0-C4 run. No vendor model run or production unlock performed.'
+  raised_by: implementer
+  raised_at: 2026-11-08T17:11:16.511843550Z
