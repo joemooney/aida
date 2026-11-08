@@ -23,12 +23,12 @@ description: |
   2. `--fix` writes only user-level files (agents.toml, codex config section, cargo config) and is idempotent.
   3. `aida queue work --no-human` refuses an uncontained launch on a host whose containment checks fail.
   4. FAQ-151 is replaced by a pointer to the command plus the remaining manual steps (ssh, clone, login).
-status: InProgress
+status: Approved
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-07T19:59:40.192574Z
-modified_at: 2026-11-08T20:48:05.067732972Z
+modified_at: 2026-11-08T20:48:08.903013778Z
 req_type: Story
 comments:
 - id: 01a1b86c-54fb-76f0-b04b-0ed1c7c07cfb
@@ -499,6 +499,15 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a1bceb-2344-7911-b8a7-5fe8fd436e8f
+  author: joe
+  timestamp: 2026-11-08T20:48:09.028143367Z
+  session_id: 01a1bc93-77a0-7740-8b03-df4e3e8d1df5
+  harness_version: 2.1.319 (Claude Code)
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Approved
 filed_at:
   code_sha: 7a18c0d52a6a4e0822befd4c810cfed16b04b74c
   branch: main
