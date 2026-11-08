@@ -1232,27 +1232,29 @@ fn bug2450_observed_setup_refusals_retry_without_consuming_a_review() {
 // A released old checkout must not leave the current head parked after its
 // first setup refusal. The ordinary single retry can start its reviewer.
 // trace:BUG-2498 | ai:codex
-#[test]
-fn bug2498_review_worktree_release_allows_one_watch_setup_retry() {
+pub(crate) fn bug2498_review_worktree_release_allows_one_watch_setup_retry(
+    head: &str,
+    mut pickup: impl FnMut() -> Result<()>,
+    release: impl FnOnce(),
+) {
     let (_temp, store) = fixture();
-    let c = change(2498, 1, false);
+    let mut c = change(2457, 1, false);
+    c.head = head.to_string();
     let first = dispatch(select(&store, &c, None, 1).unwrap());
-    execute_reservation(
-        &store,
-        &c.key(),
-        &first.token,
-        |_| Ok(()),
-        |_| {
-            anyhow::bail!(
-                "branch `pr-2498` is held by worktree /tmp/aida-pr-2498 before pickup setup"
-            )
-        },
-    )
-    .unwrap_err();
+    execute_reservation(&store, &c.key(), &first.token, |_| Ok(()), |_| pickup()).unwrap_err();
+    release();
     let retry = dispatch(select(&store, &c, None, 1).unwrap());
     assert!(retry.setup_retry);
     assert_ne!(first.token, retry.token);
-    complete(&store, &c, &retry);
+    execute_reservation(&store, &c.key(), &retry.token, |_| Ok(()), |_| pickup()).unwrap();
+    assert_eq!(
+        store.load().unwrap().entries[&c.key()]
+            .attempts
+            .last()
+            .unwrap()
+            .phase,
+        Phase::Completed
+    );
     assert!(matches!(
         select(&store, &c, None, 1).unwrap(),
         Action::Skip(_)

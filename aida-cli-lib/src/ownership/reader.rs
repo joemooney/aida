@@ -112,7 +112,7 @@ pub(crate) fn lease_owner(root: &Path, lease: &crate::SessionLease) -> OwnerVerd
     }
 }
 
-/// Review cleanup also accepts an explicitly released review record. Closed
+/// Review cleanup also accepts a supervisor's lease-bound completion receipt. Closed
 /// records have no holder, so `lease_owner` intentionally cannot prove death.
 /// The caller must still guard the disposable tree and all its live holders.
 // trace:BUG-2498 | ai:codex
@@ -122,7 +122,7 @@ pub(crate) fn review_lease_ended(root: &Path, lease: &crate::SessionLease) -> bo
     }
     if let Ok(Some(record)) = lease_record(root, lease) {
         if matches!(record.key, WorkKey::Review { .. })
-            && matches!(record.phase, Phase::Closed { .. })
+            && matches!(&record.phase, Phase::Closed { why } if review_completion_matches(lease, why))
             && record.holder.is_none()
         {
             return true;
@@ -131,17 +131,94 @@ pub(crate) fn review_lease_ended(root: &Path, lease: &crate::SessionLease) -> bo
     matches!(lease_owner(root, lease), OwnerVerdict::Dead { .. })
 }
 
-/// Journal cleanup of a disposable review tree, accepting an explicit release
+// Bind completion to the entire lease, including its worker generation. A
+// best-effort acquire failure on a later same-head review cannot reuse it.
+// trace:BUG-2498 | ai:codex
+fn review_finished_reason(lease: &crate::SessionLease) -> Result<String> {
+    use sha2::{Digest, Sha256};
+    Ok(format!(
+        "review supervisor finished lease {}:{:x}",
+        lease.id,
+        Sha256::digest(toml::to_string(lease)?.as_bytes())
+    ))
+}
+
+// A completion receipt never overrides a still-live recorded worker, including
+// one whose cwd has left the review tree. Missing worker evidence is covered by
+// the supervisor receipt; foreign/unreadable recorded workers remain protected.
+// trace:BUG-2498 | ai:codex
+fn review_completion_matches(lease: &crate::SessionLease, why: &str) -> bool {
+    if !review_finished_reason(lease).is_ok_and(|expected| why == expected) {
+        return false;
+    }
+    if crate::leases::lease_holder_record(lease).is_some() {
+        return matches!(
+            crate::leases::lease_process_verdict(lease),
+            Ok(aida_core::proc_identity::Verdict::Dead(_))
+        );
+    }
+    lease.active_pid.is_none_or(|pid| {
+        aida_core::pid_observer::PidObserver::current().can_observe(lease.pid_namespace)
+            && aida_core::liveness::process_provably_dead(
+                pid,
+                lease.active_pid_start_time.as_deref(),
+            )
+    })
+}
+
+/// Called only after the standalone supervisor observed reviewer exit and
+/// collected its verdict. Keep positive completion evidence even when guarded
+/// teardown retains the tree. Missing/replaced ownership is never repaired here.
+// trace:BUG-2498 | ai:codex
+pub(crate) fn review_finished(root: &Path, lease: &crate::SessionLease) -> Result<()> {
+    use super::store::{Expect, OwnershipStore};
+    anyhow::ensure!(
+        crate::pr_lease_takeover::reviewer_target(lease).is_some(),
+        "not a review lease"
+    );
+    crate::session::with_lease_write_lock(root, || {
+        let current: crate::SessionLease = toml::from_str(&std::fs::read_to_string(
+            crate::lease_path(root, &lease.id),
+        )?)?;
+        anyhow::ensure!(
+            toml::to_string(&current)? == toml::to_string(lease)?,
+            "review lease changed before completion receipt"
+        );
+        let record = lease_record(root, lease)?
+            .ok_or_else(|| anyhow::anyhow!("review ownership missing"))?;
+        anyhow::ensure!(
+            matches!(record.key, WorkKey::Review { .. })
+                && matches!(record.phase, Phase::Reviewing { .. })
+                && record
+                    .holder
+                    .as_ref()
+                    .is_some_and(|h| h.session == lease.id),
+            "review ownership changed before completion receipt"
+        );
+        let why = review_finished_reason(lease)?;
+        OwnershipStore::for_project(root)?
+            .ok_or_else(|| anyhow::anyhow!("ownership store unavailable"))?
+            .update(
+                &record.key,
+                "review_finished",
+                Expect::Generation(record.generation),
+                |cur| super::ops::release(cur, &lease.id, &why),
+            )?;
+        Ok(())
+    })
+}
+
+/// Journal cleanup of a disposable review tree, accepting bound completion
 /// as well as the ordinary positive death proof.
 // trace:BUG-2498 | ai:codex
 pub(crate) fn journal_review_reclaim(root: &Path, lease: &crate::SessionLease) -> Result<()> {
     let record = lease_record(root, lease)?
         .ok_or_else(|| anyhow::anyhow!("ownership record missing; reclaim refused"))?;
-    // Explicitly closed review ownership already records its release. It
+    // Lease-bound supervisor completion already records its release. It
     // needs no death journal entry; tree safety remains the caller's job.
     // trace:BUG-2498 | ai:codex
     if matches!(record.key, WorkKey::Review { .. })
-        && matches!(record.phase, Phase::Closed { .. })
+        && matches!(&record.phase, Phase::Closed { why } if review_completion_matches(lease, why))
         && record.holder.is_none()
         && crate::pr_lease_takeover::reviewer_target(lease).is_some()
     {

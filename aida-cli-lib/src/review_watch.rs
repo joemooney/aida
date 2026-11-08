@@ -2962,6 +2962,11 @@ pub(crate) fn readiness_reports(root: &Path) -> Vec<(String, String)> {
 #[path = "tests/task_1993_review_watch_tests.rs"]
 mod tests;
 
+// Exercise watch dispatch against the real consecutive-head pickup fixture.
+// trace:BUG-2498 | ai:codex
+#[cfg(test)]
+pub(crate) use tests::bug2498_review_worktree_release_allows_one_watch_setup_retry;
+
 // Real process fixtures: Linux only. trace:TASK-1945 | ai:claude
 #[cfg(all(test, target_os = "linux"))]
 #[path = "tests/task_1945_review_watch_supersede_tests.rs"]

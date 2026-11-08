@@ -14439,7 +14439,16 @@ pub(crate) fn end_finished_review(
         .filter(|l| l.scope.eq_ignore_ascii_case(scope) && l.worktree_path == worktree)
         .map(|l| {
             let outcome = if verdict_collected {
-                crate::session_reap::reap_finished_review(project_root, &l)
+                // A witness-less Reviewing record cannot prove process death.
+                // The supervisor has observed exit and collected the verdict;
+                // retain that positive, lease-bound fact for the next pickup.
+                // trace:BUG-2498 | ai:codex
+                crate::session_reap::reap_finished_review(project_root, &l).map_err(|why| {
+                    match crate::ownership::reader::review_finished(project_root, &l) {
+                        Ok(()) => why,
+                        Err(error) => format!("{why}; completion receipt refused: {error:#}"),
+                    }
+                })
             } else {
                 Err("no verdict was collected; its review tree is kept for recovery".to_string())
             };

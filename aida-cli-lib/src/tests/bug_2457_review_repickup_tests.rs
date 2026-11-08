@@ -355,6 +355,7 @@ fn bug_2469_dead_review_reclaimed_only_when_new_head_covers_recorded_and_actual_
     assert!(queue_work(&storage).is_err());
     lease.active_pid = None;
     lease.creator_pid = None;
+    lease.holder_record = None;
     save(&lease);
     assert!(matches!(
         crate::ownership::reader::lease_owner(&fx.main, &lease),
@@ -440,8 +441,8 @@ fn bug_2469_dead_review_reclaimed_only_when_new_head_covers_recorded_and_actual_
     assert!(queue_work(&storage).is_err());
     assert!(lease_file.exists() && duplicate_file.exists());
     std::fs::remove_file(duplicate_file).unwrap();
-    // A finished review releases authoritative ownership before its old
-    // checkout/lease is cleaned up. This is not a dead-holder record.
+    // Production's stalled state: Reviewing, exact session, no witnesses.
+    // Neither an empty witness list nor an unrelated Closed record proves exit.
     // trace:BUG-2498 | ai:codex
     crate::ownership::dual::enable_for_test();
     crate::ownership::dual::lease_released(&fx.main, &lease.id, "review completed");
@@ -449,11 +450,34 @@ fn bug_2469_dead_review_reclaimed_only_when_new_head_covers_recorded_and_actual_
         crate::ownership::reader::lease_owner(&fx.main, &lease),
         crate::ownership::OwnerVerdict::Unknown { .. }
     ));
-    assert!(crate::ownership::reader::review_lease_ended(
+    assert!(!crate::ownership::reader::review_lease_ended(
         &fx.main, &lease
     ));
     assert!(crate::ownership::reader::journal_reclaim(&fx.main, &lease).is_err());
+    lease.active_pid = None;
+    lease.creator_pid = None;
+    save(&lease);
+    let record = crate::ownership::reader::lease_record(&fx.main, &lease)
+        .unwrap()
+        .unwrap();
+    assert!(matches!(
+        record.phase,
+        crate::ownership::Phase::Reviewing { .. }
+    ));
+    assert!(record.holder.unwrap().witnesses.is_empty());
+    assert!(!crate::ownership::reader::review_lease_ended(
+        &fx.main, &lease
+    ));
     std::fs::write(tree.join("pending"), "keep completed review notes").unwrap();
+    crate::queue_cmd::end_finished_review(&fx.main, "PR-2457", &tree, false);
+    assert!(!crate::ownership::reader::review_lease_ended(
+        &fx.main, &lease
+    ));
+    let ended = crate::queue_cmd::end_finished_review(&fx.main, "PR-2457", &tree, true);
+    assert!(ended[0].1.is_err());
+    assert!(crate::ownership::reader::review_lease_ended(
+        &fx.main, &lease
+    ));
     assert!(queue_work(&storage).is_err());
     assert!(lease_file.exists());
     std::fs::remove_file(tree.join("pending")).unwrap();
@@ -474,7 +498,46 @@ fn bug_2469_dead_review_reclaimed_only_when_new_head_covers_recorded_and_actual_
     let markers = tree.join(".aida/merge-holds");
     std::fs::create_dir_all(&markers).unwrap();
     std::fs::write(markers.join("PR-2457"), "review crashed with hold\n").unwrap();
-    queue_work(&storage).unwrap();
+    save(&lease); // the watcher sees the original witness-less Reviewing state
+    std::fs::write(tree.join("pending"), "retain until supervisor finishes").unwrap();
+    crate::review_watch::bug2498_review_worktree_release_allows_one_watch_setup_retry(
+        &next_head,
+        || queue_work(&storage),
+        || {
+            // Use the real supervisor completion path, not dual::lease_released.
+            let ended = crate::queue_cmd::end_finished_review(&fx.main, "PR-2457", &tree, true);
+            assert!(ended[0].1.is_err()); // dirty work is still retained
+            assert!(lease_file.exists());
+            assert!(crate::ownership::reader::review_lease_ended(
+                &fx.main, &lease
+            ));
+            let mut replacement = lease.clone();
+            replacement.id = "later-same-head-review".into();
+            assert!(!crate::ownership::reader::review_lease_ended(
+                &fx.main,
+                &replacement
+            ));
+            replacement = lease.clone();
+            replacement.active_pid = Some(std::process::id());
+            assert!(!crate::ownership::reader::review_lease_ended(
+                &fx.main,
+                &replacement
+            ));
+            // Even an otherwise matching receipt cannot override a recorded
+            // live worker outside the review cwd.
+            replacement.active_pid_start_time =
+                crate::process_probe::process_start_identity(std::process::id());
+            save(&replacement);
+            crate::ownership::reader::review_finished(&fx.main, &replacement).unwrap();
+            assert!(!crate::ownership::reader::review_lease_ended(
+                &fx.main,
+                &replacement
+            ));
+            save(&lease);
+            crate::queue_cmd::end_finished_review(&fx.main, "PR-2457", &tree, true);
+            std::fs::remove_file(tree.join("pending")).unwrap();
+        },
+    );
     assert!(crate::gate::merge_hold_core::read_hold(&fx.main, 2457).is_some());
     assert!(!lease_file.exists());
     let new_lease = crate::list_leases(&fx.main).remove(0);
