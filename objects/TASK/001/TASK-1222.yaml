@@ -28,7 +28,7 @@ priority: Low
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-09-13T22:07:45.944235Z
-modified_at: 2026-11-08T19:21:37.273498945Z
+modified_at: 2026-11-08T19:23:06.361705988Z
 req_type: Task
 tags:
 - cleanup
@@ -528,6 +528,18 @@ comments:
   modified_at: 2026-11-08T19:18:27.468624695Z
   session_id: 01a1bc93-77a0-7740-8b03-df4e3e8d1df5
   harness_version: 2.1.319 (Claude Code)
+- id: 01a1bc9d-46f9-7881-9de7-c6d6ce9c121e
+  author: dirtlab
+  content: |
+    Native handoff for advisor 2026-11-08 19:16 UTC CI rework: fixed the store-writer inventory mismatch in scripts/store-writers.toml. Ran --regenerate and reviewed its semantic diff: exactly two sink additions (save_scan_cursor persist/write_all) and two stale run sink removals. Preserved the existing reviewed host_only classification, atomic-replacement notes and runtime-only scan-hint restrictions. Retained existing row order/comments to avoid unrelated regeneration churn. All 293 operation mappings and every other writer record are unchanged (verified programmatically). Added TASK-1222 trace comments.
+
+    Validation: python3 scripts/check-store-writers.py passed (3391 sink sites, 293 operations); python3 -m unittest tests/test_store_writer_inventory.py executed 42 tests, all passed; git diff --check passed. make check-ci-fast failed at Check aida-cli without default features: it indirectly invoked Cargo and sccache could not write dep-info to the read-only target directory. No Rust test executed in this turn (untested=true for Rust). No runtime source changed.
+
+    Host follow-up: merge current main (Git metadata is read-only in this native seat), reconcile the inventory again if main changes it, and run full make check-ci-fast/CI. Existing merge-hold still requires separate authorized clearance. Changed file: scripts/store-writers.toml only, left uncommitted for host publication. No commit, push, PR creation, queue done, review record, ship, or host cleanup performed.
+  created_at: 2026-11-08T19:23:06.361705988Z
+  modified_at: 2026-11-08T19:23:06.361705988Z
+  session_id: 01a1bc9b5a00
+  harness_version: codex-cli 0.167.0
 history:
 - id: 01a1b7cd-7751-7262-8ad1-f0f9d2ef6d4d
   author: joe
