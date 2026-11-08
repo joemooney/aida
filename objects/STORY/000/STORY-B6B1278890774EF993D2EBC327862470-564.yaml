@@ -23,7 +23,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-07T19:59:26.079479Z
-modified_at: 2026-11-08T12:41:27.248423829Z
+modified_at: 2026-11-08T12:53:41.722345151Z
 req_type: Story
 comments:
 - id: 01a1b798-f0d4-73b1-93d5-f84581f2d190
@@ -266,6 +266,22 @@ comments:
   modified_at: 2026-11-08T12:36:54.298569957Z
   session_id: 01a1b9af-8230-75d2-82f8-667491cc010a
   harness_version: 2.1.319 (Claude Code)
+- id: 01a1bb38-c2da-7ba2-acf8-2f3e85aabbd3
+  author: dirtlab
+  content: |
+    Round 7 native implementer handoff:
+    Addressed review finding 2 using the reviewer-proposed private PID namespace alternative. lane_job_bwrap_argv adds --unshare-pid, with the existing fresh /proc mount. The host Cargo wrapper cannot see another build's sccache client with a dead/private TMPDIR, so that client cannot trigger the wrapper's server restart path against this job's foreground server. Durable design documentation updated in OVERVIEW.md.
+    Regression creates a foreign process named sccache with a nonexistent TMPDIR, verifies its comm and environment outside the sandbox, and checks that the production lane sandbox hides it. The opt-in env/binds regression also asserts the PID namespace flag. A separate live bubblewrap positive/negative check confirmed the foreign process is visible without --unshare-pid and hidden with it.
+    PASS resource-env job j20261108T123953998-2-0: 5 executed tests.
+    PASS final sccache job j20261108T124639308-2-0 (--nocapture): 4 executed tests, including the live foreign-dead-TMPDIR regression, no skip reported. Earlier sccache job j20261108T124002476-2-0 also passed 4 tests. untested=false.
+    PASS make check-ci-fast: all 43 fast-tier gates, exit 0, with umask 022 and RUSTC_WRAPPER=; log /tmp/story-2641-round7-fast-retry.log. Initial run caught a new direct environment read in the regression's optional skip check; replaced it with exec_context::Environment::capture and reran the full gate and sccache tests. Isolated environment ratchet also passed all 19 tests. Some passing guards print read-only FETCH_HEAD diagnostics.
+    PASS rustfmt --check and git diff --check.
+    Changed files: OVERVIEW.md; aida-cli-lib/src/session.rs; aida-cli-lib/src/tests/bug_2383_lane_job_tests.rs. All edits remain uncommitted. No commit, push, PR, queue completion, merge, or review verdict performed.
+    Finding 1 / AC1 is agreed and unresolved: host/operator must run two consecutive lane Cargo jobs with a launcher built from this branch on BOTH primary and dell1, retain both final statistics logs, and demonstrate second-job Rust hits > 0, or obtain a recorded advisor amendment. This seat does not supply that evidence. aida punt recorded Needs Attention and queued the store change for host commit, but its signal file was read-only. HOST MUST explicitly retain the publication veto and existing merge hold. Code/test success does not close AC1.
+  created_at: 2026-11-08T12:53:41.722345151Z
+  modified_at: 2026-11-08T12:53:41.722345151Z
+  session_id: 01a1bb2afe50
+  harness_version: codex-cli 0.167.0
 history:
 - id: 01a1b929-7921-7980-8202-36c2cc4f3845
   author: aida-session-start
