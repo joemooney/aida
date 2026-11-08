@@ -2,126 +2,192 @@ id: 01a1b798-2d7f-7d21-a26b-947530a339b7
 spec_id: STORY-b6b1278890774ef993d2ebc327862470-564
 agreed_id: STORY-2641
 title: 'Lane test jobs use the host''s sccache: bind a writable cache dir and reach the server inside the job bubblewrap'
-description: |
-  ## Problem
-  Lane test jobs run in bubblewrap with a cleared environment and a read-only cargo home. They appear not to use sccache: on the primary, sccache stats show 3 compile requests and 0 executed while lanes were active. Each seat clone therefore compiles every dependency cold. dell1's target dir is 76G.
+description: '## Problem
+
+  Lane test jobs run in bubblewrap with a cleared environment and a read-only cargo home. They appear not to use sccache: on the primary, sccache stats show 3 compile requests and 0 executed while lanes were active. Each seat clone therefore compiles every dependency cold. dell1''s target dir is 76G.
+
 
   ## Proposal
-  When the host's cargo config sets `build.rustc-wrapper` to sccache, the lane job profile:
+
+  When the host''s cargo config sets `build.rustc-wrapper` to sccache, the lane job profile:
+
   - passes `RUSTC_WRAPPER` (or keeps cargo config resolution) and a host-owned `SCCACHE_DIR`;
-  - binds that cache dir writable and makes the sccache server reachable (either the host's server socket or a per-job local server);
+
+  - binds that cache dir writable and makes the sccache server reachable (either the host''s server socket or a per-job local server);
+
   - keeps cargo home read-only and the job offline.
-  Seat code cannot poison the shared cache beyond what sccache's keying already allows; document that residual risk, or use a lane-only cache dir separate from the operator's.
+
+  Seat code cannot poison the shared cache beyond what sccache''s keying already allows; document that residual risk, or use a lane-only cache dir separate from the operator''s.
+
 
   ## Acceptance
+
   1. A second lane job building the same dependency set shows sccache cache hits (`sccache --show-stats` delta > 0) on the primary and on dell1.
+
   2. Without sccache configured, behaviour is unchanged.
-  3. Test: the job profile's env/bind set includes the cache dir and wrapper only when configured.
+
+  3. Test: the job profile''s env/bind set includes the cache dir and wrapper only when configured.
+
   4. The trust decision (shared or lane-only cache) is recorded on this spec before implementation.
+
+  '
 status: NeedsAttention
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
-created_at: 2026-11-07T19:59:26.079479533Z
-modified_at: 2026-11-08T06:03:37.466219064Z
+created_at: 2026-11-07 19:59:26.079479+00:00
+modified_at: 2026-11-08 06:03:37.466219+00:00
 req_type: Story
 comments:
 - id: 01a1b798-f0d4-73b1-93d5-f84581f2d190
   author: joe
   content: 'ADVISOR RULING 2026-11-07 12:55: lane-only cache. Lane jobs get their own SCCACHE_DIR (e.g. ~/.cache/aida/lane-sccache) and their own sccache server per host, never the operator''s cache. Reason: a writable shared cache lets seat-written code plant entries that the operator''s unsandboxed builds would consume. Lanes still share the cache with each other, which is where the hit rate is. Accepted residual risk: one lane can poison another lane''s cache, and lanes are contained and CI-gated anyway.'
-  created_at: 2026-11-07T20:00:16.084170480Z
-  modified_at: 2026-11-07T20:00:16.084170480Z
+  created_at: 2026-11-07 20:00:16.084170+00:00
+  modified_at: 2026-11-07 20:00:16.084170+00:00
   session_id: 01a1b76b-2fe7-7dd2-88d0-356fc8d96d04
   harness_version: 2.1.319 (Claude Code)
 - id: 01a1b866-25f4-76d0-aca0-a59ed1d01086
   author: joe
   content: 'ADVISOR RULING 2026-11-07 17:15 MST: absorb the STORY-2326 remainder. Add acceptance (0): spawn_agent (launch/spawn.rs:40) passes the declared SandboxResources instead of None, so SandboxResources::child_env (resources.rs:47) and VendorProfile::child_env(.., Some(resources)) have a production caller; production children get the seat''s declared CARGO_TARGET_DIR/RUSTC_WRAPPER, not the parent''s forwarded values. Then the sccache acceptance builds on that path. Test: one targeted cargo test -p aida-cli-lib --lib story_2326_resource_env + the new sccache test, plus make check-ci-fast.'
-  created_at: 2026-11-07T23:44:24.564772753Z
-  modified_at: 2026-11-07T23:44:24.564772753Z
+  created_at: 2026-11-07 23:44:24.564772+00:00
+  modified_at: 2026-11-07 23:44:24.564772+00:00
   session_id: 01a1b848-940b-7bd2-8acd-52e428b182b8
   harness_version: 2.1.319 (Claude Code)
 - id: 01a1b95e-9855-78f0-8112-7d3c5b379ade
   author: joe
   content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: STORY-2641 partial: SandboxResources::for_seat makes spawn_agent refuse clone seats with no recorded cargo target; AC1 cache-hit evidence missing. No triage reason was given.'
-  created_at: 2026-11-08T04:15:46.773329148Z
-  modified_at: 2026-11-08T04:15:46.773329148Z
+  created_at: 2026-11-08 04:15:46.773329+00:00
+  modified_at: 2026-11-08 04:15:46.773329+00:00
   session_id: 01a1b8be-8170-7fb2-89ab-ecb4c6eee98c
   harness_version: 2.1.319 (Claude Code)
 - id: 01a1b95e-b27b-7dd3-85c7-069fcb817f43
   author: joe
-  content: |-
-    REVIEW FINDINGS TO ADDRESS (PR #3657):
+  content: 'REVIEW FINDINGS TO ADDRESS (PR #3657):
+
     Verdict: CHANGES REQUESTED
+
     Reviewed commit: fa05511f0d45
+
     Recorded: 2026-11-08T03:53:49.430307072+00:00
+
     Findings:
-    1. major/correctness: launch/resources.rs:72-90 SandboxResources::for_seat returns Err('recorded seat has no private cargo target') whenever host_recorded_clone yields cargo_target_dir=None, and spawn_agent (launch/spawn.rs:39-43) propagates it with '?'. cargo_target_dir is None for every clone seat whose project had no target/ at seat start (session_start.rs:3207 detect_cargo_target_dir returns None for non-Rust projects or a fresh checkout), and also after a host 'cargo clean' removes target/worktrees/<seat> (seat_clone.rs:876 filter requires the dir to exist). Before this PR these launches worked; now every agent launch in such a seat fails. Fix: when the recorded clone has no target, return Ok(None) (or a resources value with no cargo override) instead of refusing, or recreate the target dir; add a test for a recorded clone without cargo_target_dir that still launches.
-    2. major/acceptance: AC1 (second lane job shows sccache hits, sccache --show-stats delta > 0, on primary and dell1) has no evidence on the spec or PR. The design runs a per-job server whose UDS lives in the job's private /tmp, so host stats cannot see it (OVERVIEW.md note rewrites the criterion unilaterally). Provide measured evidence from two consecutive lane jobs on each host (e.g. a job running 'sccache --show-stats' after the build, or cache-dir growth plus hit counts), or get an advisor amendment of AC1 recorded on STORY-2641. Also confirm cache writes survive the job's bwrap teardown: the server is killed when the job exits, which can drop sccache's asynchronous disk-cache puts for the last compiles.
-    3. minor/ux: lane_job.rs:839-852 prepare() fails the whole lane test runner when ~/.cache/aida/lane-sccache already exists with a mode other than 0700 (e.g. created by a plain mkdir) or a different owner, and the error 'lane sccache must be an owned private directory' omits the path and the fix. Include the path and a remedy (chmod 700 <path>), or fall back to running the job without sccache rather than losing the runner.
-    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
-  created_at: 2026-11-08T04:15:53.467470245Z
-  modified_at: 2026-11-08T04:15:53.467470245Z
+
+    1. major/correctness: launch/resources.rs:72-90 SandboxResources::for_seat returns Err(''recorded seat has no private cargo target'') whenever host_recorded_clone yields cargo_target_dir=None, and spawn_agent (launch/spawn.rs:39-43) propagates it with ''?''. cargo_target_dir is None for every clone seat whose project had no target/ at seat start (session_start.rs:3207 detect_cargo_target_dir returns None for non-Rust projects or a fresh checkout), and also after a host ''cargo clean'' removes target/worktrees/<seat> (seat_clone.rs:876 filter requires the dir to exist). Before this PR these launches worked; now every agent launch in such a seat fails. Fix: when the recorded clone has no target, return Ok(None) (or a resources value with no cargo override) instead of refusing, or recreate the target dir; add a test for a recorded clone without cargo_target_dir that still launches.
+
+    2. major/acceptance: AC1 (second lane job shows sccache hits, sccache --show-stats delta > 0, on primary and dell1) has no evidence on the spec or PR. The design runs a per-job server whose UDS lives in the job''s private /tmp, so host stats cannot see it (OVERVIEW.md note rewrites the criterion unilaterally). Provide measured evidence from two consecutive lane jobs on each host (e.g. a job running ''sccache --show-stats'' after the build, or cache-dir growth plus hit counts), or get an advisor amendment of AC1 recorded on STORY-2641. Also confirm cache writes survive the job''s bwrap teardown: the server is killed when the job exits, which can drop sccache''s asynchronous disk-cache puts for the last compiles.
+
+    3. minor/ux: lane_job.rs:839-852 prepare() fails the whole lane test runner when ~/.cache/aida/lane-sccache already exists with a mode other than 0700 (e.g. created by a plain mkdir) or a different owner, and the error ''lane sccache must be an owned private directory'' omits the path and the fix. Include the path and a remedy (chmod 700 <path>), or fall back to running the job without sccache rather than losing the runner.
+
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.'
+  created_at: 2026-11-08 04:15:53.467470+00:00
+  modified_at: 2026-11-08 04:15:53.467470+00:00
   session_id: 01a1b8be-8170-7fb2-89ab-ecb4c6eee98c
   harness_version: 2.1.319 (Claude Code)
 - id: 01a1b99b-829c-7090-bdcf-22c13b39f06a
   author: joe
-  content: |
-    Round 2 implementation evidence (Codex, 2026-11-08):
+  content: 'Round 2 implementation evidence (Codex, 2026-11-08):
+
     - Finding 1: missing recorded cargo target returns Ok(None). Regression executes /bin/true through spawn_agent for Claude/Codex/Agy with both an absent target declaration and a declared target removed by host clean. Existing resource-override test remains.
+
     - Finding 3: refusal includes the cache path, required uid/mode, shell-quoted chmod 700 remedy and owner-repair guidance. Regression checks refusal and successful retry after chmod.
+
     - CI failure: inventory the host Cargo config.toml read in lane_job.rs as other-file (one production site), not worktree policy.
+
     - Finding 2 durability: lane jobs now own a foreground sccache server, print final --show-stats inside the sandbox, request --stop-server, and wait for actual server exit before the sandbox ends. A delayed-write fixture checks that waiting outlives the shutdown response. Cargo failures keep their code; statistics/shutdown failures fail an otherwise successful job. Forced stops/timeouts still can interrupt cache writes.
-    - Measured real sccache 0.18.0 smoke on this seat's host (hostname imac): ran the production shell lifecycle twice with independent foreground servers, a shared private temporary disk cache, identical direct rustc --crate-type rlib --emit=link inputs and removed compiler outputs between runs. Run 1: 1 request executed, 1 Rust miss, 0 hits, 0 cache write errors, one cache file retained after server exit. Run 2: 1 request executed, 1 Rust hit, 0 misses, 0 cache write errors. Both exited 0 and printed server-exited-before-teardown. This establishes local disk persistence across actual server exits, NOT two lane cargo jobs or the two-host AC1.
-    AC1 remains open: no measurements from two consecutive lane Cargo jobs on primary AND dell1 are available in this native seat. No advisor amendment is claimed. Required follow-up: run the revised host launcher on both hosts with fresh build outputs and identical dependency inputs, retain each job's final stats, verify second-job Rust hits > 0 on each, and confirm cache survives bwrap exit. Existing merge hold stays in force.
-  created_at: 2026-11-08T05:22:18.908860866Z
-  modified_at: 2026-11-08T05:22:18.908860866Z
+
+    - Measured real sccache 0.18.0 smoke on this seat''s host (hostname imac): ran the production shell lifecycle twice with independent foreground servers, a shared private temporary disk cache, identical direct rustc --crate-type rlib --emit=link inputs and removed compiler outputs between runs. Run 1: 1 request executed, 1 Rust miss, 0 hits, 0 cache write errors, one cache file retained after server exit. Run 2: 1 request executed, 1 Rust hit, 0 misses, 0 cache write errors. Both exited 0 and printed server-exited-before-teardown. This establishes local disk persistence across actual server exits, NOT two lane cargo jobs or the two-host AC1.
+
+    AC1 remains open: no measurements from two consecutive lane Cargo jobs on primary AND dell1 are available in this native seat. No advisor amendment is claimed. Required follow-up: run the revised host launcher on both hosts with fresh build outputs and identical dependency inputs, retain each job''s final stats, verify second-job Rust hits > 0 on each, and confirm cache survives bwrap exit. Existing merge hold stays in force.
+
+    '
+  created_at: 2026-11-08 05:22:18.908860+00:00
+  modified_at: 2026-11-08 05:22:18.908860+00:00
   session_id: 01a1b994e1cb
 - id: 01a1b9a7-a158-71b0-b435-a5b54d64665a
   author: joe
-  content: |
-    Round 2 final validation / native handoff:
+  content: 'Round 2 final validation / native handoff:
+
     PASS: make check-ci-fast, all 43 fast-tier gates (exit 0), including CLI no-default-feature compile, TUI standalone checks, formatting, executable fixture ratchet, environment ratchet, writer inventory and trace-header gates. Log: /tmp/story-2641-check-ci-fast.log. The first attempt caught directory chmod literals in the new test; fixed the fixture to restore original private-directory permissions and reran the entire gate successfully.
+
     PASS: python3 -m unittest tests.test_executable_fixture_ratchet (7 tests).
+
     PASS: real sccache 0.18.0 lifecycle and cross-server disk-persistence smoke documented in the previous comment (second server: 1 Rust hit).
+
     untested=true for targeted Rust unit execution. Resource-env job j20261108T051635348-2267542-0 timed out at 900 seconds (exit 124), before any tests executed. Its log reports seed: overlay-stale because the primary rewrote the backing generation agent-9300e3b2a1667f94. Runner code caches that seed for the session. At handoff, sccache job j20261108T051829214-2331145-0 is compiling aida-cli-lib; inventory guard job j20261108T051905793-2-0 is queued. No passing Rust unit result is claimed. Host must prepare a fresh target/runner and rerun resource-env, story_2641_sccache and the config-trust inventory guard; use a larger explicit timeout if this warm-labelled target still requires a full lib-test build.
+
     Changed files: AGENTS.md; OVERVIEW.md; aida-cli-lib/src/launch/resources.rs; aida-cli-lib/src/lane_job.rs; aida-cli-lib/src/tests/story_2326_launch_tests.rs; aida-cli-lib/src/tests/bug_2383_lane_job_tests.rs; scripts/config-trust.toml. git diff --check passes. Edits are uncommitted under the native-seat contract. Refs publication declaration recorded, but the finding-2 punt and existing merge hold veto publication/completion until resolved. Finding 2 is agreed, not disputed; the two-host lane-job criterion has not been amended or waived.
-  created_at: 2026-11-08T05:35:33.208530418Z
-  modified_at: 2026-11-08T05:35:33.208530418Z
+
+    '
+  created_at: 2026-11-08 05:35:33.208530+00:00
+  modified_at: 2026-11-08 05:35:33.208530+00:00
   session_id: 01a1b994e1cb
 - id: 01a1b9b5-9fdb-7880-aac5-de17adedb70d
   author: joe
-  content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: Round-1 findings 1 and 3 fixed with tests; AC0/AC2/AC3/AC4 met. AC1 (measured sccache hits from two consecutive lane jobs on primary and dell1) still has no evidence, and the implementer says so; CI at head still pending.. It was punted on: blocked-dependency: Round 2 finding 2 remains open: AC1 requires measured cache hits from two consecutive lane Cargo jobs on both primary and dell1; this seat has only a real local cross-server persistence smoke (second server: 1 Rust hit), not the required two-host lane evidence. Targeted resource-env test timed out before execution at 900s and reported overlay-stale (primary rewrote agent-9300e3b2a1667f94); the session runner reuses that overlay. Host must prepare a fresh target/runner, rerun the targeted Rust tests and collect both-host lane statistics, or obtain an advisor amendment. Findings 1 and 3, server drain/statistics and the CI config inventory fix are left uncommitted; make check-ci-fast passes all 43 gates. Preserve the publication veto and existing merge hold.. No triage reason was given.'
-  created_at: 2026-11-08T05:50:50.331492916Z
-  modified_at: 2026-11-08T05:50:50.331492916Z
+  content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: Round-1 findings 1 and 3 fixed with tests; AC0/AC2/AC3/AC4 met. AC1 (measured sccache hits from two consecutive lane jobs on primary and dell1) still has no evidence, and the implementer says so; CI at head still pending.. It was punted on: blocked-dependency: Round 2 finding 2 remains open: AC1 requires measured cache hits from two consecutive lane Cargo jobs on both primary and dell1; this seat has only a real local cross-server persistence smoke (second server: 1 Rust hit), not the required two-host lane evidence. Targeted resource-env test timed out before execution at 900s and reported overlay-stale (primary rewrote agent-9300e3b2a1667f94); the session runner reuses that overlay. Host must prepare a fresh target/runner, rerun the targeted Rust tests and collect both-host lane statistics, or obtain an advisor amendment. Findings 1 and 3, server drain/statistics
+    and the CI config inventory fix are left uncommitted; make check-ci-fast passes all 43 gates. Preserve the publication veto and existing merge hold.. No triage reason was given.'
+  created_at: 2026-11-08 05:50:50.331492+00:00
+  modified_at: 2026-11-08 05:50:50.331492+00:00
   session_id: 01a1b9af-8230-75d2-82f8-667491cc010a
   harness_version: 2.1.319 (Claude Code)
 - id: 01a1b9b5-ba36-76a0-bcac-b82f58b673ff
   author: joe
-  content: |-
-    REVIEW FINDINGS TO ADDRESS (PR #3657):
+  content: 'REVIEW FINDINGS TO ADDRESS (PR #3657):
+
     Verdict: CHANGES REQUESTED
+
     Reviewed commit: dd487ec4d721
+
     Recorded: 2026-11-08T05:42:31.180206515+00:00
+
     Findings:
-    1. major/acceptance: AC1 is unverified. The spec needs a second lane job on the same dependency set to show sccache hits (stats delta > 0) on the primary AND on dell1. Spec comment 4 says AC1 is open: the only evidence is a direct rustc smoke run on host imac, not two lane cargo jobs. Fix: on each host, run two consecutive 'aida lane' cargo jobs with the revised launcher and record the 'lane sccache: final job statistics' output from both job logs (second job Rust hits > 0) on STORY-2641. Or get an advisor amendment of AC1 recorded on the spec. Needs host/operator action; a contained seat cannot produce it.
-    2. minor/docs: AGENTS.md:1-5 adds a per-change status paragraph ('Missing recorded cargo targets no longer block agent launches. Two-host cache-hit acceptance remains outstanding.'), and OVERVIEW.md:1836-1838 ends with 'AC1 still requires measured hits...'. The repo CLAUDE.md says per-change notes belong in the PR body and an aida comment, not in AGENTS.md/OVERVIEW.md (each prepend conflicts with every open PR). Status lines like 'remains outstanding' will go stale at merge. Fix: drop the AGENTS.md paragraph (or reduce it to a durable one-line design pointer) and remove the AC1 status sentence from OVERVIEW.md, keeping only the lane-cache design description.
-    3. cosmetic/correctness: launch/resources.rs:84-85 for_seat's 'host.ok_or_else(... pinned host root)' cannot be reached: recorded_clone_for(None, _) already returns None (seat_clone.rs:969), so host is always Some at that point. Fix: bind host once (let Some(host) = host else { return Ok(None) }) and pass it to host_recorded_clone directly.
-    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
-  created_at: 2026-11-08T05:50:57.078501709Z
-  modified_at: 2026-11-08T05:50:57.078501709Z
+
+    1. major/acceptance: AC1 is unverified. The spec needs a second lane job on the same dependency set to show sccache hits (stats delta > 0) on the primary AND on dell1. Spec comment 4 says AC1 is open: the only evidence is a direct rustc smoke run on host imac, not two lane cargo jobs. Fix: on each host, run two consecutive ''aida lane'' cargo jobs with the revised launcher and record the ''lane sccache: final job statistics'' output from both job logs (second job Rust hits > 0) on STORY-2641. Or get an advisor amendment of AC1 recorded on the spec. Needs host/operator action; a contained seat cannot produce it.
+
+    2. minor/docs: AGENTS.md:1-5 adds a per-change status paragraph (''Missing recorded cargo targets no longer block agent launches. Two-host cache-hit acceptance remains outstanding.''), and OVERVIEW.md:1836-1838 ends with ''AC1 still requires measured hits...''. The repo CLAUDE.md says per-change notes belong in the PR body and an aida comment, not in AGENTS.md/OVERVIEW.md (each prepend conflicts with every open PR). Status lines like ''remains outstanding'' will go stale at merge. Fix: drop the AGENTS.md paragraph (or reduce it to a durable one-line design pointer) and remove the AC1 status sentence from OVERVIEW.md, keeping only the lane-cache design description.
+
+    3. cosmetic/correctness: launch/resources.rs:84-85 for_seat''s ''host.ok_or_else(... pinned host root)'' cannot be reached: recorded_clone_for(None, _) already returns None (seat_clone.rs:969), so host is always Some at that point. Fix: bind host once (let Some(host) = host else { return Ok(None) }) and pass it to host_recorded_clone directly.
+
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.'
+  created_at: 2026-11-08 05:50:57.078501+00:00
+  modified_at: 2026-11-08 05:50:57.078501+00:00
   session_id: 01a1b9af-8230-75d2-82f8-667491cc010a
   harness_version: 2.1.319 (Claude Code)
+- id: 01a1b9c1-94b5-7221-837c-2ba14a4fc535
+  author: dirtlab
+  content: 'Round 3 native handoff:
+
+    - Addressed review finding 2: removed the per-change STORY-2641 paragraph from AGENTS.md and the outstanding-AC1 sentence from OVERVIEW.md; retained durable lane-cache design documentation.
+
+    - Addressed finding 3: SandboxResources::for_seat binds Some(host) once and calls host_recorded_clone directly, removing the unreachable pinned-host error.
+
+    - PASS resource-env lane job j20261108T055332383-2-0: cargo test --profile agent -p aida-cli-lib --lib -- story_2326_resource_env; 3 executed tests passed (vendor projection, recorded seat overrides, missing/removed target launch). Build finished in 8m37s on overlay agent-67df1a3a3f612254.
+
+    - PASS sccache lane job j20261108T055339461-2-0: cargo test --profile agent -p aida-cli-lib --lib -- story_2641_sccache; 3 executed tests passed (opt-in env/binds, cache diagnostic/remedy, shutdown waiting and cargo exit preservation).
+
+    - PASS make check-ci-fast: all 43 fast-tier gates, exit 0, with umask 022. Log /tmp/story-2641-round3-check-ci-fast-retry.log. Initial run under inherited umask 0002 failed unrelated mail-wake fixture directory permission checks; retry passed those fixtures and the full gate. Some gates print read-only FETCH_HEAD refresh errors but complete successfully using existing refs.
+
+    - PASS git diff --check. untested=false for the required targeted unit tests.
+
+    - Finding 1 is agreed and NOT resolved: no measured consecutive lane Cargo cache-hit evidence on primary and dell1, and no advisor waiver. A punt records this host/operator dependency and preserves the publication veto and existing merge hold. Punt command reported Needs Attention and queued the store change for host commit, but warned that the punt signal file could not be written (read-only filesystem); host must preserve this veto explicitly.
+
+    - Changed files: AGENTS.md, OVERVIEW.md, aida-cli-lib/src/launch/resources.rs. All edits uncommitted; no commit, push, PR, review record, or queue completion performed.
+
+    '
+  created_at: 2026-11-08 06:03:53.909673+00:00
+  modified_at: 2026-11-08 06:03:53.909673+00:00
+  session_id: 01a1b9b79ed2
+  harness_version: codex-cli 0.167.0
 history:
 - id: 01a1b929-7921-7980-8202-36c2cc4f3845
   author: aida-session-start
-  timestamp: 2026-11-08T03:17:45.377164198Z
+  timestamp: 2026-11-08 03:17:45.377164+00:00
   changes:
   - field_name: status
     old_value: Approved
     new_value: InProgress
 - id: 01a1b94a-839e-7cd0-912e-b148602a0dc3
   author: aida-orchestrator
-  timestamp: 2026-11-08T03:53:50.750836655Z
+  timestamp: 2026-11-08 03:53:50.750836+00:00
   session_id: 01a1b9486a7c
   harness_version: 2.1.319 (Claude Code)
   changes:
@@ -130,7 +196,7 @@ history:
     new_value: NeedsAttention
 - id: 01a1b95e-9855-78f0-8112-7d286a9dbdb2
   author: joe
-  timestamp: 2026-11-08T04:15:46.773313789Z
+  timestamp: 2026-11-08 04:15:46.773313+00:00
   session_id: 01a1b8be-8170-7fb2-89ab-ecb4c6eee98c
   harness_version: 2.1.319 (Claude Code)
   changes:
@@ -139,19 +205,19 @@ history:
     new_value: Approved
 - id: 01a1b994-edcb-7a11-9c5b-d33bf6660751
   author: aida-session-start
-  timestamp: 2026-11-08T05:15:07.595567315Z
+  timestamp: 2026-11-08 05:15:07.595567+00:00
   changes:
   - field_name: status
     old_value: Approved
     new_value: InProgress
 - id: 01a1b996-0337-78e1-ab17-f164c5d85a3a
   author: joe
-  timestamp: 2026-11-08T05:16:18.615927293Z
+  timestamp: 2026-11-08 05:16:18.615927+00:00
   session_id: 01a1b994e1cb
   changes: []
 - id: 01a1b9a7-bf12-7150-9c9d-88427ebd944e
   author: joe
-  timestamp: 2026-11-08T05:35:40.818771845Z
+  timestamp: 2026-11-08 05:35:40.818771+00:00
   session_id: 01a1b994e1cb
   changes:
   - field_name: status
@@ -159,13 +225,13 @@ history:
     new_value: NeedsAttention
 - id: 01a1b9ae-05fb-7b02-a88b-6ed283707865
   author: joe
-  timestamp: 2026-11-08T05:42:32.187842013Z
+  timestamp: 2026-11-08 05:42:32.187842+00:00
   session_id: 01a1b9ac8d52
   harness_version: 2.1.319 (Claude Code)
   changes: []
 - id: 01a1b9b5-9fdb-7880-aac5-de03f5772c46
   author: joe
-  timestamp: 2026-11-08T05:50:50.331474599Z
+  timestamp: 2026-11-08 05:50:50.331474+00:00
   session_id: 01a1b9af-8230-75d2-82f8-667491cc010a
   harness_version: 2.1.319 (Claude Code)
   changes:
@@ -174,14 +240,14 @@ history:
     new_value: Approved
 - id: 01a1b9b7-a7b4-7c42-bd87-9928bffb2bb5
   author: aida-session-start
-  timestamp: 2026-11-08T05:53:03.412539805Z
+  timestamp: 2026-11-08 05:53:03.412539+00:00
   changes:
   - field_name: status
     old_value: Approved
     new_value: InProgress
 - id: 01a1b9bb-0405-7f62-9180-05ff64152185
   author: dirtlab
-  timestamp: 2026-11-08T05:56:43.653723244Z
+  timestamp: 2026-11-08 05:56:43.653723+00:00
   session_id: 01a1b9b79ed2
   harness_version: codex-cli 0.167.0
   changes:
@@ -190,7 +256,7 @@ history:
     new_value: NeedsAttention
 - id: 01a1b9c1-55be-7a91-ab4a-1948f3e7f74d
   author: joe
-  timestamp: 2026-11-08T06:03:37.790136562Z
+  timestamp: 2026-11-08 06:03:37.790136+00:00
   session_id: 01a1b9bfa726
   harness_version: 2.1.319 (Claude Code)
   changes: []
@@ -207,7 +273,7 @@ attention_reason:
   category: blocked-dependency
   detail: 'Round-3 review finding 1 is agreed and remains blocked on host/operator evidence: AC1 requires two consecutive lane Cargo jobs with final sccache statistics and second-job Rust hits > 0 on both primary and dell1. This native seat cannot run jobs on both hosts, and no advisor amendment is recorded. Findings 2 and 3 are fixed locally: removed per-change status notes from AGENTS.md/OVERVIEW.md and bound the optional host before host_recorded_clone. Required targeted tests and make check-ci-fast are in progress; results will be recorded separately. Preserve the publication veto and existing merge hold.'
   raised_by: implementer
-  raised_at: 2026-11-08T05:56:43.653708070Z
+  raised_at: 2026-11-08 05:56:43.653708+00:00
 failure_reason:
   phase: reviewer
   phase_index: 3
@@ -215,4 +281,4 @@ failure_reason:
   detail: Head 3c2300f is only a merge from main on top of dd487ec; PR files are byte-identical to the round-2 review. AC0/AC2/AC3/AC4 met with tests; AC1 (two-host lane-job sccache hits) still unverified and none of the round-2 findings were addressed. CI at head pending.
   recovery_hint: address the review findings, move STORY-2641 back to In Progress, and clear the PR hold only after approval
   shelved_by: reviewer
-  shelved_at: 2026-11-08T06:03:37.466219064Z
+  shelved_at: 2026-11-08 06:03:37.466219+00:00
