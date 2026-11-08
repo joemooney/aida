@@ -8,7 +8,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-04T17:54:51.353376Z
-modified_at: 2026-11-08T14:06:48.241040702Z
+modified_at: 2026-11-08T14:39:11.430817921Z
 req_type: Task
 tags:
 - area:containment
@@ -652,6 +652,58 @@ comments:
   modified_at: 2026-11-08T14:05:40.016521335Z
   session_id: 01a1b9af-8230-75d2-82f8-667491cc010a
   harness_version: 2.1.319 (Claude Code)
+- id: 01a1bb99-5846-7821-aac3-061fefbe9152
+  author: dirtlab
+  content: |
+    TASK-3048 native implementer handoff — Refs only
+
+    Changes address the latest PR #3641 findings on top of the existing outer-only AGY implementation:
+    - Recovered run 42481515530 logs using an allowed /tmp gh cache. CI lib-1 failures were the role-launch inventory, final-spawn inventory and vendor-literal ratchet; rest failures were both headless launcher guardrails. Added the closed AGY diagnostic to the audited launch inventories, applied the shared headless wait/background policy, and moved its exact executable selector into vendor registry data.
+    - Added diagnostic refusal checks for absent trusted origin/main opt-in and an opt-in present only in the working tree.
+    - Replaced vendor-writable stderr egress measurement with a bounded bitmap on an unlinked host-only descriptor. It is excluded from bwrap pass_fds; successful connection recording precedes socket handoff. The host launcher writes host-egress.json only after reaping the helper; the report accepts only that channel and validates hosts against runtime policy. Forged stderr cannot supply measured hosts.
+    - Staged .agents extension masks in private launch state and preserved other entries through validated read-only handles. No new .agents/mcp_config.json, hooks.json or plugins directory is left in either checkout. Private source aliases are also read-only.
+    - Classified the new host evidence writer in the source-review writer inventory as host_only, without store authority. The focused inventory check reconciles 3377 sinks and 293 operation mappings.
+    - Egress refusals include the validated port. Gave runtime policy/live conformance its own documentation heading. Removed the duplicate API-key removal.
+
+    Changed files:
+    1. aida-cli-lib/src/containment/contained_host.py
+    2. aida-cli-lib/src/containment/tests/launch_tests.rs
+    3. aida-cli-lib/src/launch/agy.rs
+    4. aida-cli-lib/src/launch/contained.rs
+    5. aida-cli-lib/src/tests/bug_2398_codex_tool_env_tests.rs
+    6. aida-core/src/vendors/mod.rs
+    7. docs/cli/07-project-setup.md
+    8. docs/internal/testing/containment-conformance.md
+    9. scripts/containment/conformance.py
+    10. tests/test_containment_conformance.py
+    11. scripts/store-writers.toml
+
+    Validation:
+    - Python conformance suites: 62 passed. /tmp/task3048-python-final.log
+    - Final-source task_3048 run j20261108T141438647-2-0: 23 passed, 0 failed/ignored (including live synthetic wrapper controls).
+    - Broad bug_239 run j20261108T141101339-2-0: 51 passed, 5 failed. Both CI-failing launch inventories passed. The five other fixture failures cite absent matching agent/aida binary (three fixtures) or allocation-setting ownership/mode refusal (two). This broad run is NOT green; no claim that all fixtures were tested successfully.
+    - Vendor-literal ratchet job j20261108T141118562-2-0: 3 passed.
+    - Integration guardrail job j20261108T141130117-2-0: 3 passed. All five tests named in the recovered CI failures now pass locally.
+    - Initial make check-ci-fast stopped at unrelated Codex mail fixtures because shell umask 0002 created group-writable fixture state. The same 53-test fixture suite passes (one skipped) with umask 077. A subsequent gate run caught the missing new writer classification, now corrected. Final full gate rerun under umask 077: exit 0, all 44 gates passed. Cargo subcommands routed through launcher lane jobs via /tmp/task3048-cargo/cargo. Logs: /tmp/task3048-fast-review.log; /tmp/task3048-mail-fixtures.log; /tmp/task3048-fast-final.log.
+    - make check-ci-compile: compile-only launcher job j20261108T143329245-10-0 passed (exit 0); log /tmp/task3048-compile.log. No workspace tests run.
+    - git diff --check passed. Rust sources formatted.
+
+    Publication declaration recorded (no publication from this seat):
+    [AI:codex] fix(containment): close AGY review evidence and CI gaps (Refs TASK-3048)
+
+    Remaining/blockers:
+    - Host publication and a green forge CI run at the resulting head. This seat cannot commit/push or cause that post-publication run.
+    - Advisor fresh live AIDA-boundary C0-C4 report.json and measured token-refresh inventory, followed by a separately approved production-admission change.
+    - Previously recorded measured inference hosts=[daily-cloudcode-pa.googleapis.com]; measured refresh hosts=[]; candidate refresh hosts=[oauth2.googleapis.com] (installed-binary evidence only). No real model or refresh run was performed here.
+    - Adapter::require_conformance still refuses; auth_inventory_complete=false. TASK-3048 remains incomplete.
+
+    Edits remain uncommitted. No commit, push, PR creation, queue done, pr ship or review record performed.
+
+    Required LIGHT checks: untested=false. Full forge CI remains unverified until host publication. State: turn ended after this handoff.
+  created_at: 2026-11-08T14:39:11.430817921Z
+  modified_at: 2026-11-08T14:39:11.430817921Z
+  session_id: 01a1bb7bab9d
+  harness_version: codex-cli 0.167.0
 history:
 - id: 01a1a7b3-3699-7713-8ae7-69568c287956
   author: joe
