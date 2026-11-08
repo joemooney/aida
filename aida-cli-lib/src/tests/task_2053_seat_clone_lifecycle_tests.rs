@@ -2640,3 +2640,78 @@ fn bug_2473_unreadable_clone_keeps_diagnostic_and_never_claims_dirt() {
     assert!(clone.exists());
     assert!(!crate::list_leases(&fx.main).is_empty());
 }
+
+// trace:BUG-2491 | ai:codex
+#[cfg(target_os = "linux")]
+#[test]
+fn bug_2491_pushed_slice_tags_are_not_unpushed_work() {
+    if crate::test_env::run_path_isolated_test() {
+        return;
+    }
+    assert!(bwrap_live(), "requires live sandbox coverage");
+    let fx = fixture();
+    let clone = seat(&fx, "slice-tags", "b2491c0ffee1");
+    seat_commit(&clone, "published.txt");
+    git_ok(&clone, &["tag", "slice-00-r1"]);
+    git_ok(
+        &clone,
+        &[
+            "-c",
+            "user.name=Seat",
+            "-c",
+            "user.email=seat@example.com",
+            "tag",
+            "-a",
+            "slice-01-r1",
+            "-m",
+            "checkpoint",
+        ],
+    );
+    let checkpoint = git_ok(&clone, &["rev-parse", "HEAD"]);
+    seat_commit(&clone, "later-published.txt");
+    git_ok(&clone, &["push", "-q", "origin", "HEAD:refs/heads/feat"]);
+    // The finished lane can remain behind the published branch head.
+    git_ok(&clone, &["reset", "--hard", &checkpoint]);
+    // Model a finished lane with stale tracking refs; only the host can refresh.
+    git_ok(&clone, &["update-ref", "-d", "refs/remotes/origin/feat"]);
+    let facts = known(probe_counting_origin(
+        &fx.main,
+        &clone,
+        Some("feat"),
+        &[],
+        None,
+    ));
+    assert_eq!(facts.unpushed, 0, "{facts:?}");
+    // A checkpoint on an unpublished side history must still prevent teardown.
+    git_ok(&clone, &["checkout", "-q", "-b", "side"]);
+    seat_commit(&clone, "private.txt");
+    git_ok(&clone, &["tag", "slice-02-r1"]);
+    git_ok(&clone, &["checkout", "-q", "feat"]);
+    git_ok(&clone, &["branch", "-D", "side"]);
+    let facts = known(probe_counting_origin(
+        &fx.main,
+        &clone,
+        Some("feat"),
+        &[],
+        None,
+    ));
+    assert_eq!(facts.unpushed, 1, "{facts:?}");
+    assert!(
+        facts
+            .unpushed_refs
+            .iter()
+            .any(|r| r.contains("refs/tags/slice-02-r1")),
+        "{facts:?}"
+    );
+    assert!(matches!(
+        destroy(&fx.main, &clone, DestroyMode::KeepUnshipped, None).unwrap(),
+        Destroyed::Kept { .. }
+    ));
+    assert!(clone.exists());
+    git_ok(&clone, &["tag", "-d", "slice-02-r1"]);
+    assert!(matches!(
+        destroy(&fx.main, &clone, DestroyMode::KeepUnshipped, None).unwrap(),
+        Destroyed::Removed { .. }
+    ));
+    assert!(!clone.exists());
+}

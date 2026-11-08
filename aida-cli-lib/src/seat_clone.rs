@@ -2371,6 +2371,10 @@ exit 0
 /// too: each one main reaches is excused, and with it its ancestors.
 // trace:BUG-2224 | ai:claude
 // trace:BUG-B6B1278890774EF993D2EBC327862470-051 | ai:claude
+// Slice checkpoint tags follow the same reachability rule as other refs:
+// peel annotated tags to commits so published branch history excuses them,
+// while a checkpoint on unpublished history continues to protect the clone.
+// trace:BUG-2491 | ai:codex
 const REF_TIPS_SCRIPT: &str = concat!(
     "set -u\n",
     "git for-each-ref --format='%(if)%(*objectname)%(then)%(*objectname)%(else)%(objectname)%(end)' || exit 1\n",
