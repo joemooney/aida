@@ -18,7 +18,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-08T02:46:34.549817284Z
-modified_at: 2026-11-08T11:48:58.505793551Z
+modified_at: 2026-11-08T11:52:22.656080611Z
 req_type: Bug
 tags:
 - area:ci
@@ -223,6 +223,13 @@ comments:
   modified_at: 2026-11-08T11:46:56.018645339Z
   session_id: 01a1b9af-8230-75d2-82f8-667491cc010a
   harness_version: 2.1.319 (Claude Code)
+- id: 01a1bb00-9f80-7a50-80bb-e0561c6104cb
+  author: dirtlab
+  content: 'Round 6 rework: release --after-pr now uses the configured ci_absolute_ceiling_secs budget instead of 300 seconds; regression checks the production budget helper for default and configured roots. Shipped fire/orchestrate skill watchers are bounded at 540 seconds and distinguish pending holds from ordinary CI at timeout. Pipeline readiness still blocks on a pending gate, but clearance guidance now requires active/recorded-uncleared label evidence; fixtures cover empty, active, recorded-only and cleared labels. Criterion anchors now sit on a recognized shell Test 1 section (aida criteria recognizes all five); fixture evidence still does not establish live enforcement or mail delivery. Stale red/failing-hold comments corrected. Native Refs publication declaration recorded. Host MUST retitle PR #3651 to end (Refs BUG-2492), retain spec open for operator cutover evidence and wait for green CI at published head. Rust lane validation is running; shell fixtures, syntax, rustfmt and diff checks pass.'
+  created_at: 2026-11-08T11:52:22.656080611Z
+  modified_at: 2026-11-08T11:52:22.656080611Z
+  session_id: 01a1bafd1c50
+  harness_version: codex-cli 0.167.0
 history:
 - id: 01a1b90d-4bec-7bd0-9af1-86f501692f64
   author: joe

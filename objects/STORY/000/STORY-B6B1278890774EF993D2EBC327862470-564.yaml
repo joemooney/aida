@@ -23,7 +23,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-07T19:59:26.079479Z
-modified_at: 2026-11-08T11:47:19.716781568Z
+modified_at: 2026-11-08T11:55:01.735206135Z
 req_type: Story
 comments:
 - id: 01a1b798-f0d4-73b1-93d5-f84581f2d190
@@ -228,6 +228,21 @@ comments:
   modified_at: 2026-11-08T11:42:08.201074134Z
   session_id: 01a1b9af-8230-75d2-82f8-667491cc010a
   harness_version: 2.1.319 (Claude Code)
+- id: 01a1bb03-0ce7-7662-9eda-dbfba401ea69
+  author: dirtlab
+  content: |
+    Round 6 native handoff:
+    Addressed latest review findings 2-4. Wrapper-off without cargo resources now applies only to recorded clone seats or sandboxed/contained launches; ordinary unsandboxed primary and worktree launches preserve configured/inherited wrapper behavior. Regression covers all three vendors, primary/worktree paths and present/absent pinned host roots; existing recorded-seat and no-target regressions remain. The foreground lane cache server starts with TMPDIR=/tmp. Its lifecycle fixture supplies a nonexistent inherited TMPDIR and asserts the server sees /tmp, while retaining write-drain and cargo-exit checks. OVERVIEW now says clones without a target disable the wrapper without a target override.
+    PASS final resource-env job j20261108T115253435-2-0: 5 executed tests. Earlier resource-env job j20261108T114436162-2-0 also passed 5; rerun verifies the expanded final regression edited during the earlier build.
+    PASS sccache job j20261108T114441968-2-0: 3 executed tests. untested=false for required targeted Rust execution.
+    PASS make check-ci-fast: 43 gates, exit 0, with umask 022 and RUSTC_WRAPPER= (log /tmp/story-2641-round6-fast-wrapper-off.log). Initial ordinary invocation failed in the first Cargo gate because existing sccache failed writing lane dep-info with Read-only file system (log /tmp/story-2641-round6-fast.log). No operator server was stopped or changed. Some passing guards print read-only FETCH_HEAD diagnostics.
+    PASS rustfmt --check and git diff --check.
+    Changed files: OVERVIEW.md; aida-cli-lib/src/launch/spawn.rs; aida-cli-lib/src/lane_job.rs; aida-cli-lib/src/tests/story_2326_launch_tests.rs; aida-cli-lib/src/tests/bug_2383_lane_job_tests.rs.
+    Finding 1 / AC1 remains agreed and unresolved: host/operator must run two consecutive lane Cargo jobs with a launcher built from this branch on both primary and dell1, retain final statistics, and demonstrate second-job Rust hits > 0, or obtain a recorded advisor amendment. No cross-host cache-hit evidence is claimed. Punt moved the spec to Needs Attention and queued its store change for host commit, but the signal file was read-only. Host must explicitly preserve the publication veto and existing merge hold. All code edits remain uncommitted; no commit, push, PR, queue completion, merge or review verdict performed.
+  created_at: 2026-11-08T11:55:01.735206135Z
+  modified_at: 2026-11-08T11:55:01.735206135Z
+  session_id: 01a1baf8c3db
+  harness_version: codex-cli 0.167.0
 history:
 - id: 01a1b929-7921-7980-8202-36c2cc4f3845
   author: aida-session-start
