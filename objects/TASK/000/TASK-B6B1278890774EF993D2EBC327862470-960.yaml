@@ -8,7 +8,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-07T23:39:41.575597Z
-modified_at: 2026-11-08T07:33:37.242110451Z
+modified_at: 2026-11-08T07:35:04.744997297Z
 req_type: Task
 relationships:
 - rel_type: Child
@@ -167,6 +167,12 @@ comments:
   modified_at: 2026-11-08T07:31:45.871946722Z
   session_id: 01a1b8be-8170-7fb2-89ab-ecb4c6eee98c
   harness_version: 2.1.319 (Claude Code)
+- id: 01a1ba15-0f29-7bd0-a5e3-360f7cb162a6
+  author: joe
+  content: 'Round 6 / PR #3644: added ownership-liveness-legacy.json to pure-move ledger relocation; extended stale-path pre-write refusal and content/evidence preservation fixtures. Helper docstring and AGENTS.md/OVERVIEW.md document manual config-trust reader table relocation and store-writer/Git-maintenance regeneration commands. Validation: 15 crate-split tool tests and 2 ownership-liveness ratchet tests passed; crate-glob ratchet --base HEAD passed (220 imports, zero additions); git diff --check passed. No Rust changes or Cargo run. AC5 full next-head CI remains unverified until host publication; supervised merge hold remains. Changes left uncommitted under native-seat instructions. Codegraph unavailable (doctor reports unreachable index); no lane index initialized.'
+  created_at: 2026-11-08T07:35:04.744997297Z
+  modified_at: 2026-11-08T07:35:04.744997297Z
+  session_id: 01a1ba13b016
 history:
 - id: 01a1b862-2e0b-7a50-a4d0-25097c707b57
   author: joe
