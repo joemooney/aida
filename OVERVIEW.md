@@ -404,6 +404,19 @@ create/comment operations to recover confirmed writes without replay. See [the w
 <!-- trace:STORY-2479 trace:TASK-3096 | ai:codex -->
 <!-- trace:TASK-3114 | ai:codex -->
 
+### Pre-compaction recovery
+
+Claude's optional `PreCompact` hook writes a bounded recovery packet through
+`aida session handoff`, retaining pointers to work, verdicts, findings and the
+next step. One reusable slot per worktree and role stays inside the lane's
+write boundary and disappears with the worktree. Ordinary handoff reads expose
+the snapshot to relaunches; compact SessionStart injects it as potentially stale
+context. Deliberate rotation handoffs remain separate in the primary checkout.
+Unavailable evidence stays unknown and snapshot failures do not block work.
+Snapshots grant no completion, review or publication authority. Codex remains
+disabled pending its trusted-hook test.
+<!-- trace:STORY-2662 | ai:codex -->
+
 ### Agent launch migration
 
 `aida-cli-lib/src/launch/` resolves launch policy into `LaunchContext` and
@@ -1677,7 +1690,7 @@ and `/usr/bin/bwrap` are required. The host helper owns an isolated child-only
 session keyring, a private namespace tree, the CONNECT proxy, and the seccomp
 connect broker. Rust clears the helper environment and supplies an exact list;
 bubblewrap inherits it unchanged. API-key authentication uses `OPENAI_API_KEY`.
-Existing file-based ChatGPT login is admitted only for probed `codex-cli 0.166.0`:
+Existing file-based ChatGPT login is admitted only for probed `codex-cli 0.167.0`:
 the host pins a bounded, single-link, current-owner mode-0600 `auth.json`, reads
 access-token expiry and identity account routing, and requires grant lifetime
 plus a 300-second margin. A sealed memfd supplies only the access token, host ID
@@ -1685,6 +1698,12 @@ token and `refresh_token=""`, plus derived account routing and a generated
 delivery timestamp, through `--ro-bind-data` at a read-only private tmpfs auth
 leaf; no full cache or host refresh token enters the lane. Baseline lanes last
 at most one hour.
+Upgrade on the host with `npm i -g @openai/codex@0.167.0` and put its native
+executable first on PATH. The 0.167.0 executable pin and empty-HOME help fixture
+were refreshed together; the operator must rerun STORY-2593 conformance
+(`conformance-codex-aida`) against this pin for live proof.
+<!-- trace:TASK-3463 | ai:codex -->
+
 Unsupported versions, malformed or insufficient validity and keyring logins
 refuse. OAuth hosts are excluded from the effective ChatGPT lane allowlist;
 there is no renewal. The host supervisor enforces the absolute deadline and

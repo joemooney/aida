@@ -510,7 +510,13 @@ fn story_2254_bg_registers_actual_worker_pid_and_required_start() {
     let entry =
         agent_registry::register_detached_worker(root, "codex", pid, &start, row()).unwrap();
     assert_eq!(entry.pid, pid);
-    assert_eq!(entry.pid_start.as_deref(), Some(start.as_str()));
+    assert_eq!(
+        entry
+            .process_identity()
+            .map(|id| format!("linux-starttime:{}", id.starttime))
+            .as_deref(),
+        Some(start.as_str())
+    );
     assert_eq!(
         entry.pid_namespace,
         agent_registry::process_pid_namespace(pid)

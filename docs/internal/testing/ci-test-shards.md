@@ -13,6 +13,10 @@ gates never builds.
 when a lane fails or is cancelled. It succeeds only when the whole matrix does.
 The separate merge-hold workflow is unchanged.
 
+Optional dell1 routing for the four heavy shards is disabled by default. See
+[operator setup, trust gates and capacity acceptance](dell1-runner.md).
+<!-- trace:STORY-2672 | ai:codex -->
+
 - `lib-0` and `lib-1`: `aida-cli-lib` library unit tests, which form one test
   binary. Each lane lists the binary's tests and runs half of the top-level
   modules as libtest name filters. Filters match substrings, so modules whose
