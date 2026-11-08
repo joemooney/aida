@@ -4516,7 +4516,7 @@ mod dispatch_occupancy_tests {
     fn only_fresh_dispatch_accepts_a_holderless_unverified_namespace() {
         use aida_core::worktree_holders::{HoldKind, WorktreeHolder, WorktreeInUse};
         let mut refusal = WorktreeInUse {
-            worktree: "/tmp/owned".into(),
+            worktree: std::env::temp_dir().join("owned"),
             holders: vec![],
             unverified: Some("separate pid namespace".into()),
             pid_namespace: true,

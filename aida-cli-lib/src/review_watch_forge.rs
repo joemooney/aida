@@ -549,6 +549,8 @@ pub(super) fn sweep_probe_refs(root: &Path) -> usize {
             .flatten();
         // Fetch-worker artifacts are not work ownership. Legacy PID-only
         // ref names still need the worker's process-death check to be swept.
+        // This restored artifact-only compatibility site is inventoried in
+        // proc_identity_legacy_baseline.json as well as the ownership ratchet.
         // trace:STORY-2325 | ai:codex
         if probe_ref_in_use(&probe, now, mtime, |pid| {
             crate::process_probe::pid_is_alive(pid)
