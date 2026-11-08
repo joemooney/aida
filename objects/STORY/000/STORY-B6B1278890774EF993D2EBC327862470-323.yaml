@@ -8,7 +8,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-02T19:20:50.092491662Z
-modified_at: 2026-11-08T00:38:06.363516953Z
+modified_at: 2026-11-08T00:47:07.356095165Z
 req_type: Story
 tags:
 - architecture
@@ -651,6 +651,12 @@ comments:
   content: 'Validation update: first launcher run j20261108T001907802-3909145-0 timed out at 900 seconds during compilation, with no executed tests and no compiler error. Reviewer regression run j20261108T002111206-3928470-0 is now compiling only aida-cli-lib using cached dependencies; six-case run j20261108T002144304-3933255-0 is queued. A combined seven-case run j20261108T003427985-2-0 has been submitted with AIDA_CARGO_TIMEOUT=3600 to avoid repeating the seeded-build timeout if needed. Portability (including growth check), Python ownership ratchet (2 tests), rustfmt and diff checks pass. Native Refs publication subject recorded; edits remain uncommitted.'
   created_at: 2026-11-08T00:38:06.363516953Z
   modified_at: 2026-11-08T00:38:06.363516953Z
+  session_id: 01a1b8852a0f
+- id: 01a1b89f-905c-76c3-911b-d512ff8a4973
+  author: joe
+  content: 'Final round-7 CI follow-up validation on scoped tree: job j20261108T003427985-2-0 passed all 7 executed targeted Rust tests (0 failed, exit 0): BUG-2469 reviewer ownership fixture, process-identity inventory, BUG-307 no-origin-branch dead clean reclaim, unchanged leaked-probe-ref cleanup, Live/Unknown recovery inspection, fresh-dispatch namespace behavior, and Unknown conversation display. Separate prior runs passed the reviewer test (1) and other regressions (6). Initial 900-second compile timeout is superseded by these passing executed runs. Python ownership ratchet 2/2, portability plus origin/main allowlist-growth check, rustfmt, and diff check pass. Four files changed; mail activation and ownership-liveness-legacy.json untouched. Handoff: /home/joe/.aida/handoffs/story-2325-round7-ci-followup.txt. Refs native publication declaration recorded. Edits left uncommitted for host; all submitted lane jobs finished. Host publication/fresh CI and authorized merge-hold clearance remain. No story completion, Git mutation or merge authority claimed.'
+  created_at: 2026-11-08T00:47:07.356095165Z
+  modified_at: 2026-11-08T00:47:07.356095165Z
   session_id: 01a1b8852a0f
 history:
 - id: 01a19ed2-508b-7401-9865-70193fa0d0af
