@@ -17,7 +17,7 @@ priority: Low
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-08T02:58:18.689963065Z
-modified_at: 2026-11-08T16:30:31.492588225Z
+modified_at: 2026-11-08T16:30:34.729116248Z
 req_type: Story
 tags:
 - area:handoff
@@ -248,6 +248,28 @@ comments:
   content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: AC1, AC3 and AC4 are met in source and AC2''s bound and read paths work, but CI (rest) is red at this head and at all 7 checked heads since ea97268 while base is green, and the findings probe times out under fleet load.. No triage reason was given.'
   created_at: 2026-11-08T16:30:31.492586832Z
   modified_at: 2026-11-08T16:30:31.492586832Z
+  session_id: 01a1b9af-8230-75d2-82f8-667491cc010a
+  harness_version: 2.1.319 (Claude Code)
+- id: 01a1bbff-51d8-76c0-a536-b7eb888233b4
+  author: joe
+  content: |-
+    REVIEW FINDINGS TO ADDRESS (STORY-2662):
+    Verdict: CHANGES REQUESTED
+    Reviewed commit: 76f591e8a300
+    Recorded: 2026-11-08T16:06:07.361310499+00:00
+    Findings:
+    1. [blocker] CI (rest) 'Run tests' fails at 76f591e8a30 and at each of the 7 first-parent heads from ea97268 up, while base 48e3865 is green on the same job, so this looks PR-caused rather than a flake. The failing test name is not known to this reviewer: the job log download was refused by the seat's network sandbox, and annotations only say exit code 1. Read the rest job log (job 128781900879), fix the failing test, and confirm rest is green.
+    2. [major] Open findings are unknown under normal fleet load. aida-precompact-handoff.sh:138 caps 'aida findings list --json' at 6.5s; through the hook's own run() it returned 'unknown (command timed out)' 5 of 5 times at load 13-14 on 6 cores, and uncapped it took 7.57-8.77s. 'aida review verdict' took 2.73-3.50s against its 3s cap (hook:107), so the last verdict can be lost too. gh took about 0.6s, so time is available inside the 14s budget. Use a cheaper filtered read or rebalance the caps, and add a fixture above the current 5.4s maximum.
+    3. [minor] Reviewer seats lose the verdict although the PR is known. AIDA_SESSION_SCOPE is unset in this reviewer seat, so on branch pr-N hook:103-107 sets spec to 'unknown': the packet says 'Last verdict: unknown (no spec pointer)' and the next step says 'aida show unknown', while hook:115-117 has already derived PR-N. Use PR-N as the pointer when review_branch matches, and add a fixture.
+    4. [minor] The branch fallback regex at hook:104 accepts word suffixes, so branch bug-parser-fix gives 'Spec pointer: BUG-PARSER' and a next step of 'aida show BUG-PARSER'. The test covers only debug-parser. Require a digit-led or canonical-hash ID. Carried from the 11f8195 review, still present.
+    5. [minor] prune_compact_snapshots (seat_rotation.rs, called at session_misc.rs:1018) is effectively dead since snapshots moved into the owner's own worktree: the recorded owner is the worktree holding the slot, so NotFound needs a moved checkout, and no test reaches it. Remove it and its writer-inventory rows, or add a test. Carried from the 11f8195 review, still present.
+    6. [minor] session_misc.rs:1073 propagates read_latest_handoff errors with ?, so an unreadable or non-UTF-8 recovery snapshot makes ordinary 'aida session handoff --show' fail, including for a relaunch reading its real handoff. An optional snapshot should degrade to a warning (AC4). Carried from the 11f8195 review, still present.
+    7. [cosmetic] hook:133 reports review findings unknown when AIDA_SESSION_SCOPE already equals the branch's PR-N on a real head branch, because origins minus spec is then empty. Carried from the 11f8195 review.
+    8. [cosmetic] hook:83 and :90 pass the raw AIDA_SESSION_ROLE as --seat, while ordinary --show with no seat canonicalizes it (resolve_handoff_seat_from), so role 'dialog' writes a slot that the advisor --show never finds. Apply the same canonical name.
+    9. [cosmetic] OVERVIEW.md gains a 34-line section with per-change detail (probe timings, caps); CLAUDE.md limits OVERVIEW edits to real architecture changes. Trim it to the design and move the numbers to the PR or spec. Carried from the 11f8195 review.
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
+  created_at: 2026-11-08T16:30:34.456338892Z
+  modified_at: 2026-11-08T16:30:34.456338892Z
   session_id: 01a1b9af-8230-75d2-82f8-667491cc010a
   harness_version: 2.1.319 (Claude Code)
 history:
