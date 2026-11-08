@@ -18,7 +18,7 @@ priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-11-08T15:57:26.594450692Z
-modified_at: 2026-11-08T15:57:26.594450692Z
+modified_at: 2026-11-08T16:03:32.986419091Z
 req_type: Task
 tags:
 - from-advisor:STORY-2641
@@ -27,6 +27,14 @@ tags:
 - loop-guard
 - review-recurrence
 - severity:major
+comments:
+- id: 01a1bbe6-93fa-79b3-a25a-08f40e129d71
+  author: joe
+  content: 'Advisor 2026-11-08 ruling: no implementer requeue. AC1 is host evidence only (sccache stats delta on primary and dell1, from a launcher built from this branch); the advisor will run it.'
+  created_at: 2026-11-08T16:03:32.986419091Z
+  modified_at: 2026-11-08T16:03:32.986419091Z
+  session_id: 01a1bbab-762f-7cd2-8a36-4ea9f209afce
+  harness_version: 2.1.319 (Claude Code)
 history:
 - id: 01a1bbe4-5f65-77a2-a91c-38cf5a69dc96
   author: joe
