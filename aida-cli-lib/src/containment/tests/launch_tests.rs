@@ -3484,12 +3484,41 @@ fn task_3015_codex_config_preserves_ordinary_overrides() {
 
 #[test]
 // trace:TASK-3015 | ai:codex
+fn task_3015_codex_sandbox_checks_split_and_inline_values() {
+    for flag in ["--sandbox", "-s"] {
+        for value in ["workspace-write", "danger-full-access", "read-only", ""] {
+            for flags in [
+                vec![flag.to_string(), value.to_string()],
+                vec![format!("{flag}={value}")],
+            ] {
+                let original = [vec!["exec".into()], flags, vec!["prompt".into()]].concat();
+                let result = codex_argv(
+                    Path::new("/fixture/codex"),
+                    &bug_2487_codex_env(),
+                    &original,
+                    true,
+                );
+                if value == "workspace-write" {
+                    let (args, _) = result.unwrap();
+                    assert!(args.ends_with(&["exec".into(), "prompt".into()]));
+                } else {
+                    assert!(result.unwrap_err().to_string().contains("sandbox policy"));
+                }
+            }
+        }
+    }
+}
+
+#[test]
+// trace:TASK-3015 | ai:codex
 fn task_3015_codex_config_preserves_prompt_after_terminator() {
     for prompt in [
         "-c",
         "--config=approval_policy notes",
         "--ask-for-approval",
         "-P",
+        "--sandbox=danger-full-access",
+        "-s=danger-full-access",
     ] {
         let original = vec!["exec".into(), "--".into(), prompt.into()];
         let (args, _) = codex_argv(

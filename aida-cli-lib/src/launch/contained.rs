@@ -1522,10 +1522,28 @@ fn codex_argv(
             i += consumed;
             continue;
         }
-        if original[i] == "--sandbox"
-            && original.get(i + 1).map(String::as_str) == Some("workspace-write")
-        {
-            i += 2;
+        // trace:TASK-3015 | ai:codex — inline sandbox values must pass
+        // the same posture check as split values before flag validation.
+        let sandbox = if matches!(original[i].as_str(), "--sandbox" | "-s") {
+            Some((
+                original
+                    .get(i + 1)
+                    .context("contained Codex sandbox flag requires a value")?
+                    .as_str(),
+                2,
+            ))
+        } else {
+            original[i]
+                .strip_prefix("--sandbox=")
+                .or_else(|| original[i].strip_prefix("-s="))
+                .map(|value| (value, 1))
+        };
+        if let Some((value, consumed)) = sandbox {
+            anyhow::ensure!(
+                value == "workspace-write",
+                "contained Codex sandbox policy must be workspace-write"
+            );
+            i += consumed;
             continue;
         }
         anyhow::ensure!(
