@@ -12,7 +12,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-08T01:27:02.365575412Z
-modified_at: 2026-11-08T04:02:36.260623928Z
+modified_at: 2026-11-08T04:04:15.601674497Z
 req_type: Task
 tags:
 - carried-from:BUG-2487
@@ -32,6 +32,12 @@ comments:
   content: 'Implementation is prepared in the native seat, uncommitted: unpinned contained Codex argv now probes the selected native binary for version, root help, exec help and sandbox help, checks the value-taking -c/--config surface and generated flags, and refuses with path/version context. The verified ChatGPT pin retains fixture-only validation. Added a fake-binary regression covering missing root/exec flags, live exec flag refusal, cleared credentials/grants and pinned probe bypass; updated docs/cli/07-project-setup.md. Validation remains pending: the first two lane jobs timed out during compilation after 900 seconds and reported overlay-stale; the already queued rerun is compiling, and job j20261108T034926263-2-0 is queued with an explicit 1800-second timeout. No test has executed yet.'
   created_at: 2026-11-08T04:02:36.260623928Z
   modified_at: 2026-11-08T04:02:36.260623928Z
+  session_id: 01a1b9286562
+- id: 01a1b954-0c71-7410-be32-543206e953ac
+  author: joe
+  content: 'Validation completed on the final source: task_3000_unpinned_codex_checks_its_own_help_before_launch passed twice (1 executed test each; jobs j20261108T032351719-782790-0 and j20261108T034926263-2-0), and bug_2487_pinned_help_checks_production_argv_and_scopes passed (1 executed test; j20261108T040400611-1044642-0). rustfmt --check and git diff --check passed. The initial two build attempts timed out after 900 seconds; subsequent compilation completed in 14m53s and warm reruns completed normally. All runs reported the existing overlay-stale diagnostic. Changed files: aida-cli-lib/src/launch/contained.rs, aida-cli-lib/src/containment/tests/launch_tests.rs, docs/cli/07-project-setup.md. Native seat leaves changes uncommitted for host publication and queue completion; no implementation blockers remain.'
+  created_at: 2026-11-08T04:04:15.601674497Z
+  modified_at: 2026-11-08T04:04:15.601674497Z
   session_id: 01a1b9286562
 history:
 - id: 01a1b8dd-4eb0-7041-ba95-ef546f9a6965
