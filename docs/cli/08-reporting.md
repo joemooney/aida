@@ -71,7 +71,15 @@ The cache is disposable and non-canonical, and grants no lifecycle authority.
 ## Merge-hold gate and clearance limits
 
 The required `merge-hold-gate` check uses three forge labels. An active
-`aida:merge-hold` always fails. A persistent `aida:merge-hold-recorded` label
+`aida:merge-hold` always blocks merging. On GitHub, ordinary holds publish a
+`pending` commit status on the PR head under the required `merge-hold-gate`
+context; the publisher Actions job succeeds, avoiding failure mail for a hold.
+Label changes rerun the publisher without a push. Malformed evidence (including
+a clearance without a recorded hold) still publishes failure and fails the job.
+GitLab retains its failing-job gate.
+<!-- trace:BUG-2492 | ai:codex -->
+
+A persistent `aida:merge-hold-recorded` label
 means the PR was held previously; the check passes after release only when
 `aida:merge-hold-cleared` is also present. `aida merge-hold clear <pr>` keeps
 the existing human-at-an-interactive-terminal floor, writes the local JSON

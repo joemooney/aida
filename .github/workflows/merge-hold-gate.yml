@@ -2,15 +2,15 @@ name: merge-hold-gate
 
 # BUG-1167 / ADR-37 Layer 2 — the server-side, un-bypassable half.
 #
-# This check FAILS while a PR carries the `aida:merge-hold` label (which AIDA
-# applies to a supervised drive/guided/operator/decide/unset PR) and PASSES
+# This status stays PENDING while a PR carries the `aida:merge-hold` label (which AIDA
+# applies to a supervised drive/guided/operator/decide/unset PR) and succeeds
 # otherwise. Made a *required* status check in branch protection, it blocks even
 # a raw / stale-binary / web-UI `gh pr merge` that never touches AIDA's client
 # chokepoint — closing the concurrent-merger hole regardless of which binary the
 # merger runs. A drain-mode PR is never labelled, so it passes in seconds and its
 # auto-merge is untouched (the granularity the branch-protection concern needs).
-# The job is deliberately trivial (label inspection only, no build) so it never
-# stalls a PR waiting on a required check.
+# The job is deliberately trivial (label inspection only, no build). A held
+# status blocks merging without failing the Actions run or sending failure mail.
 #
 # To enforce: Settings -> Branches -> protect `main` -> Require status checks ->
 # add `merge-hold-gate`, with "Do not allow bypassing" / enforce_admins ON so the
@@ -22,7 +22,7 @@ name: merge-hold-gate
 # `aida:merge-hold-recorded` label and add `aida:merge-hold-cleared` after
 # writing the local clearance record and audit comment, so
 # dropping `aida:merge-hold` by hand leaves history without clearance and this
-# check still fails. This is a forge-side integrity check, not protection from
+# status stays pending. This is a forge-side integrity check, not protection from
 # an admin token running as the same user; see docs/cli/08-reporting.md.
 # Applying a hold drops `aida:merge-hold-cleared`, so `cleared` is present iff
 # the most recent hold has a recorded clearance; this makes label-only gate logic sound.
@@ -41,45 +41,76 @@ name: merge-hold-gate
 # against this file rather than against a copy of it. Keep the gate logic here.
 
 on:
-  pull_request:
+  pull_request_target:
     types: [opened, reopened, synchronize, labeled, unlabeled, edited]
 
-# Label/body reruns share the PR group so the replacement can report the gate.
+# Label/body reruns serialize by PR and inspect live metadata.
 # Keep this workflow separate from CI's cancellation group.
 # trace:TASK-3267 | ai:codex
 concurrency:
   group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.run_id }}
-  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+  cancel-in-progress: false
 
 permissions:
+  statuses: write
   contents: read
   pull-requests: read
   issues: read
 
 jobs:
-  merge-hold-gate:
+  publish-merge-hold-status:
     runs-on: ubuntu-latest
     steps:
       - name: Require recorded clearance for every previously held PR
         env:
-          LABELS: ${{ join(github.event.pull_request.labels.*.name, ',') }}
-          HEAD_REF: ${{ github.event.pull_request.head.ref }}
-          PR_BODY: ${{ github.event.pull_request.body }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
           REPO: ${{ github.repository }}
           GH_TOKEN: ${{ github.token }}
         run: |
+          # trace:BUG-2492 | ai:codex
+          # Target event grants fork PRs a status-writing token. Never check out
+          # or execute PR code; all PR-controlled data stays in quoted variables.
+          # Serialized runs read live metadata, so queued old events cannot
+          # overwrite a clearance with an obsolete label snapshot.
+          publish_status() {
+            gh api --method POST "repos/$REPO/statuses/$HEAD_SHA" \
+              -f context=merge-hold-gate -f state="$1" -f description="$2" \
+              -f target_url="$GITHUB_SERVER_URL/$REPO/actions/runs/$GITHUB_RUN_ID" >/dev/null
+          }
+          finish() {
+            result=$?
+            trap - EXIT
+            if [ "$result" -ne 0 ]; then
+              publish_status failure "Invalid merge-hold evidence; inspect gate run" || exit 1
+              exit "$result"
+            elif [ "$held" -eq 1 ]; then
+              publish_status pending "Merge held: awaiting recorded clearance"
+            else
+              publish_status success "No active hold; recorded clearance verified"
+            fi
+          }
+          held=0
+          trap finish EXIT
+          publish_status pending "Inspecting merge-hold labels"
+          pr=$(gh api "repos/$REPO/pulls/$PR_NUMBER")
+          HEAD_SHA=$(printf '%s' "$pr" | jq -er '.head.sha')
+          HEAD_REF=$(printf '%s' "$pr" | jq -er '.head.ref')
+          LABELS=$(printf '%s' "$pr" | jq -r '[.labels[].name] | join(",")')
+          PR_BODY=$(printf '%s' "$pr" | jq -r '.body // ""')
+          publish_status pending "Inspecting current PR head labels"
           # $1 = comma-joined labels, $2 = whose labels (for the message).
           check_labels() {
             has_label() {
               printf '%s' "$1" | tr ',' '\n' | grep -Fqx "$2"
             }
             if has_label "$1" aida:merge-hold; then
-              echo "::error::$2 has an active aida:merge-hold — a supervised spec (drive/guided/operator/decide/unset) requires a human/advisor review before merge. Release requires the human-gated \`aida merge-hold clear <pr>\` path or an eligible recorded Rework approval through \`aida merge-hold auto-release <pr>\`."
-              return 1
+              echo "::notice::$2 has an active aida:merge-hold — a supervised spec (drive/guided/operator/decide/unset) requires a human/advisor review before merge. Release requires the human-gated \`aida merge-hold clear <pr>\` path or an eligible recorded Rework approval through \`aida merge-hold auto-release <pr>\`."
+              held=1
             fi
             if has_label "$1" aida:merge-hold-recorded && ! has_label "$1" aida:merge-hold-cleared; then
-              echo "::error::$2 was held previously but has no recorded clearance; removing aida:merge-hold alone does not release it."
-              return 1
+              echo "::notice::$2 was held previously but has no recorded clearance; removing aida:merge-hold alone does not release it."
+              held=1
             fi
             if has_label "$1" aida:merge-hold-cleared && ! has_label "$1" aida:merge-hold-recorded; then
               echo "::error::$2 has a clearance label with no matching recorded hold."
@@ -135,4 +166,4 @@ jobs:
               echo "Merge-train members pass the merge-hold gate: $members"
               ;;
           esac
-          echo "Merge-hold gate passes: no active hold, or a recorded clearance exists."
+          echo "Merge-hold label inspection complete (held=$held)."

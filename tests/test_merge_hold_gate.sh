@@ -25,7 +25,7 @@ trap 'rm -rf "$work"' EXIT
 
 fail() {
   echo "FAIL: $*" >&2
-  exit 1
+  exit 99
 }
 
 # Extract the first literal block scalar that follows a key on/after $2 out of
@@ -59,6 +59,15 @@ PY
 [ -f "$github_workflow" ] || fail "missing $github_workflow"
 [ -f "$gitlab_template" ] || fail "missing $gitlab_template"
 
+# The publisher must not emit a successful check with the required status name,
+# and fork events must execute only trusted base workflow code.
+grep -Fq '  pull_request_target:' "$github_workflow" || fail 'fork status token unavailable'
+grep -Fq '  statuses: write' "$github_workflow" || fail 'status permission missing'
+grep -Fq '  cancel-in-progress: false' "$github_workflow" || fail 'publisher can be cancelled mid-write'
+if grep -Eq '^  merge-hold-gate:|uses:.*checkout' "$github_workflow"; then
+  fail 'publisher shadows the required context or checks out PR code'
+fi
+
 extract_block "$github_workflow" 'run: |' >"$work/github-gate.sh"
 extract_block "$gitlab_template" '- |' >"$work/gitlab-gate.sh"
 
@@ -70,10 +79,68 @@ for gate in "$work/github-gate.sh" "$work/gitlab-gate.sh"; do
   done
 done
 
+# trace:BUG-2492 | ai:codex
+# Fake only the API boundary; execute the shipped evaluator and publisher.
+mkdir -p "$work/bin"
+cat >"$work/bin/gh" <<'GH'
+#!/usr/bin/env bash
+set -eu
+[ "$1" = api ] || exit 2
+shift
+if [ "$1" = --method ]; then
+  [ "${STATUS_FAIL:-0}" = 0 ] || exit 1
+  printf '%s\n' "$*" >>"$STATUS_LOG"
+  exit 0
+fi
+case "$1" in
+  repos/o/r/pulls/1)
+    jq -n --arg labels "${LABELS:-}" --arg ref "${HEAD_REF:-feature/x}" --arg body "${PR_BODY:-}" \
+      '{head:{sha:"abc123456789",ref:$ref},labels:($labels|split(",")|map(select(length>0)|{name:.})),body:$body}'
+    exit ;;
+esac
+n=$(printf '%s' "$1" | sed -n 's#^repos/[^/]*/[^/]*/issues/\([0-9][0-9]*\)/labels$#\1#p')
+[ -n "$n" ] || exit 2
+var="MEMBER_LABELS_$n"
+[ "${!var+set}" = set ] || exit 1
+printf '%s\n' "${!var}"
+GH
+chmod +x "$work/bin/gh"
+export PATH="$work/bin:$PATH" REPO=o/r PR_NUMBER=1
+export HEAD_SHA=abc123456789
+export GITHUB_SERVER_URL=https://github.com GITHUB_RUN_ID=123
+export STATUS_LOG="$work/statuses"
+
+# Pending holds succeed as Actions jobs but continue to block required status.
+# Translate the final commit status into the existing pass/block fixture result.
+github_gate() {
+  : >"$STATUS_LOG"
+  local result=0 state
+  bash -e -o pipefail "$work/github-gate.sh" >/dev/null 2>&1 || result=$?
+  state=$(tail -n 1 "$STATUS_LOG")
+  [[ "$state" == *'repos/o/r/statuses/abc123456789'* ]] || fail 'status must target PR head SHA'
+  [[ "$state" == *'context=merge-hold-gate'* ]] || fail 'required context changed'
+  if [ -n "${WANT_STATE:-}" ]; then
+    [[ "$state" == *"state=$WANT_STATE "* ]] || fail "expected $WANT_STATE status, got $state"
+  fi
+  if [[ "$state" == *'state=pending'* ]]; then
+    [ "$result" = 0 ] || fail 'ordinary hold failed the Actions job'
+    return 1
+  elif [[ "$state" == *'state=failure'* ]]; then
+    [ "$result" != 0 ] || fail 'invalid evidence did not fail the Actions job'
+    return 1
+  fi
+  [[ "$state" == *'state=success'* ]] || fail 'missing final status'
+  [ "$result" = 0 ] || fail 'passing labels failed the Actions job'
+}
+
 # Run a shipped gate with the label set a forge would hand it.
 # $1 = gate script, $2 = env var name the gate reads, $3 = comma-joined labels.
 gate() {
-  env "$2=$3" bash -e -o pipefail "$1" >/dev/null 2>&1
+  if [ "$2" = LABELS ]; then
+    LABELS="$3" github_gate
+  else
+    env "$2=$3" bash -e -o pipefail "$1" >/dev/null 2>&1
+  fi
 }
 
 # Each case is "labels|expected exit|description".
@@ -82,6 +149,7 @@ cases=(
   'aida:merge-hold|1|an active hold fails even before the recorded label exists'
   'aida:merge-hold-recorded|1|dropping the active label by hand leaves history without clearance'
   'aida:merge-hold-recorded,aida:merge-hold-cleared|0|a recorded clearance releases a previously held PR'
+  'aida:merge-hold,aida:merge-hold-cleared|1|active hold with orphan clearance blocks'
   '|0|a PR that was never held passes'
   'aida:merge-hold-cleared|1|a clearance label with no recorded hold is forged and fails'
   'aida:merge-hold,aida:merge-hold-recorded,aida:merge-hold-cleared|1|a clearance label cannot release a still-active hold'
@@ -96,35 +164,40 @@ for spec in "${cases[@]}"; do
     script=$work/${target%%:*}
     var=${target#*:}
     got=0
+    WANT_STATE=success
+    if [ "$want" = 1 ]; then
+      WANT_STATE=pending
+      if [[ ",$labels," == *',aida:merge-hold-cleared,'* && ",$labels," != *',aida:merge-hold-recorded,'* ]]; then
+        WANT_STATE=failure
+      fi
+    fi
     gate "$script" "$var" "$labels" || got=$?
+    unset WANT_STATE
     [ "$got" = "$want" ] || fail "${target%%:*} with labels '$labels': expected exit $want, got $got ($desc)"
   done
 done
+
+# A status API error must fail the job instead of reporting successful publication.
+if STATUS_FAIL=1 LABELS= bash -e -o pipefail "$work/github-gate.sh" >/dev/null 2>&1; then
+  fail 'status API refusal was ignored'
+fi
 
 # STORY-1690 train mode (GitHub gate): a `train/*` PR passes only when its
 # body names its members and every member passes the same label rules. A fake
 # `gh` answers `gh api repos/<repo>/issues/<n>/labels` from MEMBER_LABELS_<n>
 # (unset = the API call fails).
 # trace:STORY-1690 | ai:claude
-mkdir -p "$work/bin"
-cat >"$work/bin/gh" <<'GH'
-#!/usr/bin/env bash
-[ "$1" = api ] || exit 2
-n=$(printf '%s' "$2" | sed -n 's#^repos/[^/]*/[^/]*/issues/\([0-9][0-9]*\)/labels$#\1#p')
-[ -n "$n" ] || exit 2
-var="MEMBER_LABELS_$n"
-[ "${!var+set}" = set ] || exit 1
-printf '%s\n' "${!var}"
-GH
-chmod +x "$work/bin/gh"
 grep -Fq 'aida-train-members:' "$work/github-gate.sh" || fail "extracted GitHub gate has no train mode"
 
 # $1 = head ref, $2 = PR body, then MEMBER_LABELS_<n>=... assignments.
 train_gate() {
   local ref=$1 body=$2
   shift 2
-  env PATH="$work/bin:$PATH" LABELS= HEAD_REF="$ref" PR_BODY="$body" REPO=o/r "$@" \
-    bash -e -o pipefail "$work/github-gate.sh" >/dev/null 2>&1
+  (
+    export LABELS= HEAD_REF="$ref" PR_BODY="$body"
+    for assignment in "$@"; do export "$assignment"; done
+    github_gate
+  )
 }
 
 a40=$(printf 'a%.0s' $(seq 40))
