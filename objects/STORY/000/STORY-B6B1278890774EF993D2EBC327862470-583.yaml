@@ -20,7 +20,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-08T02:56:36.206726Z
-modified_at: 2026-11-08T14:12:26.067446702Z
+modified_at: 2026-11-08T14:12:31.969276950Z
 req_type: Story
 tags:
 - architecture
@@ -187,6 +187,23 @@ comments:
   content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: Round-1 findings are all fixed and the slice-1 cap resolver is sound, but host status fails open from an isolated PID namespace (false free capacity), so request changes.. No triage reason was given.'
   created_at: 2026-11-08T14:12:26.067445220Z
   modified_at: 2026-11-08T14:12:26.067445220Z
+  session_id: 01a1b9af-8230-75d2-82f8-667491cc010a
+  harness_version: 2.1.319 (Claude Code)
+- id: 01a1bb80-efdb-7aa3-8025-a1e03745d727
+  author: joe
+  content: |-
+    REVIEW FINDINGS TO ADDRESS (PR #3680):
+    Verdict: CHANGES REQUESTED
+    Reviewed commit: dab39e29ad41
+    Recorded: 2026-11-08T14:09:42.701763806+00:00
+    Findings:
+    1. MAJOR aida-cli-lib/src/standalone_implementer.rs:604 host_status/observe_host_slots (and the Slot struct, about line 561) judge liveness with no PID-namespace check. Slot records only pid + start, unlike SessionLease.pid_namespace with PidObserver::can_observe (aida-core/src/pid_observer.rs:133). From a sandboxed seat (bwrap --unshare-pid; confirmed in this reviewer seat: shell pid 2, 6 visible processes, creator pid 1492575 absent from /proc), kill(pid,0) fails for every host launcher, so aida doctor --lane-host reports each live reservation as dead, occupied=0 and free=cap. That contradicts docs/cli/07-project-setup.md ('rather than a false free-slot count'), R5 (unknown is never counted free) and the sketch ('Never inspect remote PIDs through local procfs'/unknown retains occupancy). The slice's typed status is what placement will consume. Fix: stamp pid_namespace in Slot at acquire; when PidObserver::current().can_observe(slot.pid_namespace) is false, report state unknown and count it as occupied (or return an error). Apply the same guard in acquire_slot_in so its '_ => remove_file' arm never prunes a reservation it cannot observe, and in refuse_legacy_slots so an unobservable legacy slot is not treated as dead. Add a test with an injected isolated observer proving the refusal path.
+    2. MINOR aida-cli-lib/src/doctor_cmd.rs DoctorArgs.lane_host collides with open PR-3643 (STORY-2642), which adds the same --lane-host field with different semantics: readiness checks, --fix required, crate::lane_host::run. This PR declares conflicts_with fix and its help says 'not readiness admission'. Whichever lands second gets a duplicate-field conflict and a contradictory flag meaning. Coordinate one surface, for example capacity as a section/JSON field of the lane_host report, or a distinct flag for one of them, and document the chosen contract.
+    3. MINOR aida-cli-lib/src/pipeline_stall_signals.rs:93-101 compares a project-scoped implementer_count (leases/registry under root) against the now host-wide cap. When another clone on the host holds slots, under-cap alarms although admission would exit 34. Either use occupied from the host status for this comparison or label the detail/alarm as project-local.
+    4. COSMETIC aida-cli-lib/src/standalone_implementer.rs:726 and :736 record_slot_log and mark_slot_waiting now carry an unused _project_root parameter (round-1 item 8 moved rather than removed); drop it at callers :964, :1037, :1038. scripts/ownership-liveness-legacy.json:143 keeps the now-unused acquire_slot:process_identity_is_alive=1 entry, leaving ratchet headroom; remove it. docs/cli/03-work-autonomy.md:170-172 has over-long unwrapped lines.
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
+  created_at: 2026-11-08T14:12:31.835968241Z
+  modified_at: 2026-11-08T14:12:31.835968241Z
   session_id: 01a1b9af-8230-75d2-82f8-667491cc010a
   harness_version: 2.1.319 (Claude Code)
 history:
