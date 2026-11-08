@@ -8,7 +8,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-08T18:01:54.649358829Z
-modified_at: 2026-11-08T21:36:08.247114363Z
+modified_at: 2026-11-08T21:46:47.515744012Z
 req_type: Task
 relationships:
 - rel_type: Child
@@ -22,6 +22,13 @@ comments:
   modified_at: 2026-11-08T20:02:15.007572783Z
   session_id: 01a1bc93-77a0-7740-8b03-df4e3e8d1df5
   harness_version: 2.1.319 (Claude Code)
+- id: 01a1bd20-d35b-7da0-b6a2-2451393e44df
+  author: dirtlab
+  content: 'Implemented explicit NoChange propagation through host queue publication receipts, phase-1 lease discovery, advisor/queue resume, orchestration results, pipelined sidecars and batch/next-N summaries. Successful no-change seats pause with exit 0 and no shipped credit or NeedsAttention shelving; existing open PRs retain ordinary gates, and failed exits plus punt/hold retain precedence. Changed aida-cli-lib/src/{ship_from_seat,phase_driver,phase_driver_trait,auto_complete,drain_batch,drain_next_n}.rs, tests/{auto_complete_tests,bug_1629_phase1_recovery_tests,queue_work_tests}.rs, and docs/cli/04-git-lifecycle.md. Validation through lane jobs: task_3608 filter 4 passed (j20261108T214239870-2-0); queue_exit_tests filter 6 passed (j20261108T214509487-2-0). rustfmt --check for changed Rust files and git diff --check passed. No implementation blockers. Native seat handoff: edits remain uncommitted; host must commit/publish and complete queue after publication.'
+  created_at: 2026-11-08T21:46:47.515744012Z
+  modified_at: 2026-11-08T21:46:47.515744012Z
+  session_id: 01a1bd16b74e
+  harness_version: codex-cli 0.167.0
 history:
 - id: 01a1bc53-0ec9-7670-9674-41fd5fd9d861
   author: joe
