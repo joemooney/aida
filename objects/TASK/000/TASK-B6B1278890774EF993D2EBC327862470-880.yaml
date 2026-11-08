@@ -8,7 +8,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-06T13:39:53.442026Z
-modified_at: 2026-11-08T20:10:52.264568106Z
+modified_at: 2026-11-08T20:10:58.387641581Z
 req_type: Task
 tags:
 - architecture
@@ -1304,6 +1304,27 @@ comments:
   content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: Head fixes the MCP output-schema defect and stays gated, but zero-unrouted acceptance is unmet with no advisor ruling, CI has not started, and the merge hold is on.. It was punted on: design-fork: PR #3661 review comment 89 finding 2 requires advisor operation policy before the routing acceptance can be met: the inventory still reports 3173 unresolved writer rows and all 293 operations; only comment_add and title/description/priority spec_edit have typed routes. The v2 inventory requires blocked operation dispositions, and the approved plan permits UnsupportedOperation refusals while the binding ruling requires every inventoried writer to route. Please define whether explicit early refusals count as reconciled operations or require typed semantics/authority for each operation; do not clear blockers merely by relabeling. Finding 3 also retains the advisor/operator merge hold. This seat fixes only finding 1 (MCP success structuredContent schema) with a real-broker regression, not the full routing slice. Refs-only declaration recorded; edits uncommitted; no commit/push/PR/queue-done. Do not publish over this punt or existing hold, including if signal-file persistence fails. Tests continue and final validation will be recorded separately.. No triage reason was given.'
   created_at: 2026-11-08T20:10:52.264566143Z
   modified_at: 2026-11-08T20:10:52.264566143Z
+  session_id: 01a1bc93-77a0-7740-8b03-df4e3e8d1df5
+  harness_version: 2.1.319 (Claude Code)
+- id: 01a1bcc9-195f-71b2-99f3-6403c270980d
+  author: joe
+  content: |-
+    REVIEW FINDINGS TO ADDRESS (PR #3661):
+    Verdict: CHANGES REQUESTED
+    Reviewed commit: f5fb1bca6d8a
+    Recorded: 2026-11-08T19:54:27.644880613+00:00
+    Review comment: https://github.com/joemooney/aida/pull/3661#issuecomment-6726328594
+    Findings:
+    1. BLOCKING, needs an advisor ruling rather than more code (spec 'route every inventoried in-lane writer'; TASK-3223 comment 34 'zero unrouted writers for the mediated profile'). python3 scripts/check-store-writers.py --profile mediated at f5fb1bca6d8a exits 1 with 3173 writers and 293 operations unresolved; mediated_blockers counts every operation row, so it cannot reach zero by construction, and the 4 mediated_route records clear nothing. Only comment add and title/description/priority edit route (store_mutation_entry.rs translate_with_reader). Reads refuse, durable Git/event publication is outstanding, and resume is only refusal-tested. The advisor must authorize a staged partial with named follow-up owners or define the operation policy. No ruling is on the spec. Further rework rounds cannot resolve this. selected_store_profile (launch/contained.rs:800) correctly stays closed.
+    2. BLOCKING until CI reports: run 42516752069 at f5fb1bca6d8a is pending with zero jobs started, and merge state is BLOCKED. The last full pass is run 42507182557 at 114ee1f3865b, before the merge from main and this fix. make check-ci-fast (comment 34) has only an implementer report on the uncommitted change (comment 90).
+    3. BLOCKING until cleared by advisor or operator: aida:merge-hold is on this PR and merge-hold-gate (run 42516752100) is queued at this head. The reviewer cannot clear it.
+    4. PROCESS, carried, needs advisor attention: TASK-3223 is NeedsAttention under a no-publish punt, whose signal-file write failed (comment 75), yet commits have kept reaching this PR, most recently f5fb1bca6d8a at 12:46 -07:00. publication_veto (aida-cli-lib/src/ship_from_seat.rs:567) reads only signal and hold files, not persisted NeedsAttention, so a failed signal write fails open. This code is outside this PR's diff. Confirm the publication was authorized and repair the veto.
+    5. MINOR, new, non-blocking: aida-core/src/db/git_backend.rs:2750-2765 mutate_canonical pushes a FieldChange for title and description unconditionally, while priority (added by this PR) records only on a real change. A mediated edit that repeats the current title or description writes a history entry with old_value == new_value and bumps modified_at. Compare before pushing, as the priority arm does, and add a regression.
+    6. COSMETIC, carried: the PR body still says 'comment_add and title/description spec_edit'; the branch also routes priority. Update it before any publication.
+    7. COSMETIC, new: aida-cli-lib/src/store_mutation_entry.rs:63 root() repeats ensure!(root.join("objects").is_dir()) directly after a find() with the same predicate, so the check and its message are dead code.
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
+  created_at: 2026-11-08T20:10:58.271411323Z
+  modified_at: 2026-11-08T20:10:58.271411323Z
   session_id: 01a1bc93-77a0-7740-8b03-df4e3e8d1df5
   harness_version: 2.1.319 (Claude Code)
 history:
