@@ -1,5 +1,6 @@
 id: 01a1ba61-5a10-7083-9259-941e841cd6e5
 spec_id: TASK-b6b1278890774ef993d2ebc327862470-982
+agreed_id: TASK-3014
 title: 'non-blocking (cosmetic): contained.rs:1459-1467 scans the terminal prompt as if…'
 description: |-
   Non-blocking finding carried forward from an APPROVED review verdict on BUG-2495, which has since completed — recorded here so it keeps a queryable home once the verdict record stops being read.
@@ -20,6 +21,13 @@ tags:
 - finding-hash:2fcd143e
 - from-review:PR-3672
 - kind:carried-forward
+history:
+- id: 01a1ba73-e7fc-7741-b064-d5526d451cde
+  author: joe
+  timestamp: 2026-11-08T09:18:40.636357196Z
+  session_id: 01a1b9af-8230-75d2-82f8-667491cc010a
+  harness_version: 2.1.319 (Claude Code)
+  changes: []
 filed_at:
   code_sha: 5cbe14e5fc6be0d87709049b48f3b7eaeab77808
   branch: main
