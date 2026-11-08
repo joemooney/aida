@@ -1367,6 +1367,45 @@ fn bug_2490_pending_checks_only_dirty_objects_and_names_invalid_path() {
 
 // trace:BUG-2490 | ai:codex
 #[test]
+fn bug_2490_schema_invalid_objects_refuse_without_advancing_head() {
+    let dir = tempfile::tempdir().unwrap();
+    let (_main, store) = bug_1929_main_with_store(dir.path());
+    let path = "objects/STORY/000/STORY-invalid.yaml";
+    std::fs::create_dir_all(store.join("objects/STORY/000")).unwrap();
+    let req = crate::models::Requirement::new("valid".into(), String::new());
+    let valid = serde_yaml::to_string(&req).unwrap();
+    std::fs::write(store.join(path), &valid).unwrap();
+    add(&store, &[path]).unwrap();
+    commit(&store, "base").unwrap();
+    let head = head_sha(&store).unwrap();
+
+    // Valid YAML is insufficient: the committed bytes must deserialize as a
+    // requirement. Exercise both explicit worktree and staged-blob commits.
+    for invalid in ["title: [unterminated", "title: []\n"] {
+        std::fs::write(store.join(path), invalid).unwrap();
+        let error = commit_paths(&store, "invalid worktree", &[path])
+            .unwrap_err()
+            .to_string();
+        assert!(
+            error.contains(path) && error.contains("does not parse"),
+            "{error}"
+        );
+        assert_eq!(head_sha(&store).unwrap(), head);
+        add(&store, &[path]).unwrap();
+        // Repairing the worktree cannot hide invalid bytes in the index.
+        std::fs::write(store.join(path), &valid).unwrap();
+        let error = commit(&store, "invalid index").unwrap_err().to_string();
+        assert!(
+            error.contains(path) && error.contains("does not parse"),
+            "{error}"
+        );
+        assert_eq!(head_sha(&store).unwrap(), head);
+        add(&store, &[path]).unwrap();
+    }
+}
+
+// trace:BUG-2490 | ai:codex
+#[test]
 fn bug_2490_bulk_staged_objects_support_batch_and_unusual_names() {
     let dir = tempfile::tempdir().unwrap();
     let (_main, store) = bug_1929_main_with_store(dir.path());
