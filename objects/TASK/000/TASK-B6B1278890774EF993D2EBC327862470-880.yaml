@@ -8,7 +8,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-06T13:39:53.442026Z
-modified_at: 2026-11-08T15:59:30.319274908Z
+modified_at: 2026-11-08T15:59:38.561766610Z
 req_type: Task
 tags:
 - architecture
@@ -1105,6 +1105,27 @@ comments:
   content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: Head 4387ae4fad6e fixes the store-locator and oversized-MCP findings, but zero-unrouted acceptance is still unmet (3171 writers, 293 operations), the operation-policy fork has no ruling, CI is still running, and PR metadata is unchanged.. It was punted on: design-fork: Round 21 findings 1-3 accepted; no finding disputed. Binding zero-unrouted acceptance still fails (3171 writer sites and 293 operation mappings at 4769cc5d759a). Advisor must define the remaining operation policy, including whether early UnsupportedOperation counts as reconciled and how reads are admitted, or authorize a staged partial and follow-up ownership. Keep selected_store_profile closed; own_claim/queue_done remain TASK-3326. Aggregate make check-ci-fast requires a host run; CI remains in progress and merge-hold needs human/advisor clearance. Advisor must investigate publication of 2588cb1c1fd6, 409a1990ad5d and 4769cc5d759a despite saved punt vetoes and confirm host publication authority. Findings 5-6 have uncommitted restriction documentation/regression and bounded MCP oversized-line recovery edits; these do not satisfy full S2 routing acceptance. This punt and existing holds remain publication vetoes. No ship declaration, commit, push, PR mutation or queue completion is authorized by this handoff.. No triage reason was given.'
   created_at: 2026-11-08T15:59:30.319272729Z
   modified_at: 2026-11-08T15:59:30.319272729Z
+  session_id: 01a1b9af-8230-75d2-82f8-667491cc010a
+  harness_version: 2.1.319 (Claude Code)
+- id: 01a1bbe2-ff6e-7f41-8f33-7ef584faf41e
+  author: joe
+  content: |-
+    REVIEW FINDINGS TO ADDRESS (PR #3661):
+    Verdict: CHANGES REQUESTED
+    Reviewed commit: 4387ae4fad6e
+    Recorded: 2026-11-08T15:48:42.857130944+00:00
+    Review comment: https://github.com/joemooney/aida/pull/3661#issuecomment-6723583515
+    Findings:
+    1. BLOCKING acceptance gap, needs an advisor ruling rather than more code (spec 'route every inventoried in-lane writer'; ruling in TASK-3223 comment 34: 'zero unrouted writers for the mediated profile'). Re-run at this head: python3 scripts/check-store-writers.py --profile mediated exits 1 with 3171 writers and 293 operations unresolved. mediated_blockers counts every operation row, so it cannot reach zero by construction. store_mutation_entry.rs translate_with_reader refuses every command except comment add and title/description edit, including reads such as show and list, and mediated_mcp_response (mcp.rs:9188) serves only add_comment and update_requirement, so a mediated lane could not read the store through CLI or MCP once the gate opens. selected_store_profile (launch/contained.rs:800) correctly stays closed. Either re-scope this PR as a staged partial with a follow-up owning the rest, or define the operation policy, including whether explicit early UnsupportedOperation counts as reconciled.
+    2. BLOCKING until CI reports: at 4387ae4fad6e CI run 42496043147 has all seven jobs in progress, so nothing has CI evidence at this head, including the two guards that failed in lib-1 at 4769cc5d759a and the new oversized-MCP and staged-root tests. Comment 76 records untested=true for final-source Rust because the lane job timed out (exit 124). make check-ci-fast has no aggregate result and ruling comment 34 names it as acceptance, so it needs a host run. merge-hold-gate fails because aida:merge-hold is set; that is the expected hold and needs advisor or operator clearance, not a code fix.
+    3. PROCESS, needs advisor attention: the operation-policy fork still has no recorded ruling, and TASK-3223 is needs-attention. Comment 76 (15:40:16Z) says 'No ship declaration, commit, push' and that punt/hold vetoes remain, yet 4387ae4fad6 was committed at 15:40:49Z, 33 seconds later, and published. This is the fourth instance after 2588cb1c1fd6, 409a1990ad5d and 4769cc5d759a. Comment 75 gives a concrete lead: persisted NeedsAttention produces no signal file when AIDA_PUNT_SIGNAL_FILE is unset, and publication_veto (ship_from_seat.rs) reads signal/hold files. Confirm whether this publication was authorized or the veto is failing open.
+    4. PR metadata, unfixed: the title still says 'report unresolved mediated routing evidence' and the body is only the seat-publication line, while the diff adds early dispatch in main_entry, a SEQPACKET client, a mediated MCP server, host routing and role enforcement. Apply the corrected title and body from TASK-3223 comment 74. Commits 4387ae4fad6, 4769cc5d759, 409a1990ad5, 2588cb1c1fd, 7bb74c41a80, e88fe1f3543 and 30eb320657c use a subject claiming full routing and raw-write denial, so the squash must use the corrected title with an empty body.
+    5. UNVERIFIED acceptance detail: the spec requires the read-only boundary to hold for 'ancestor grants, symlinks, primary-checkout launches and resume included'. mediated_store_tests.rs covers ancestor grants, symlinks and linked layouts, but has no case mentioning resume, and docs/internal/security/store-mutation-writers.md does not address it. Add a resume-path test for the mediated profile, or record that resume is owned elsewhere.
+    6. MINOR, new at this head: mediated_store_tests.rs:178 now binds crate::kernel::resolve_aida_exe() as /run/aida-test-client, and the fixture at line 466 runs it with libtest arguments (--exact ... --ignored). resolve_aida_exe goes through aida_bin::process, which honours AIDA_BIN under an aida ancestor and also applies the test-only fake, so it can name the production CLI rather than this test binary; the fixture then fails on an unknown --exact. aida_bin.rs:312 documents current_executable_path() for exactly this exact-test re-exec without falling back to the production CLI, and containment/tests/codex_auth_tests.rs:738 already uses it. Use that helper; it also avoids the raw current_exe guard.
+    7. MINOR: mediated_mcp_response (mcp.rs:9235) passes host refusals through McpError::classify, whose patterns do not match the wire tokens Unauthorized, Expired, Revoked, UnsupportedOperation or InvalidRequest, so they all report code Internal instead of PermissionDenied or InvalidArg. OutcomeUnknown is also Internal, indistinguishable from a definite failure except by message text. An MCP caller cannot branch on the refusal type. Map the closed wire vocabulary explicitly and assert it in store_mutation_mcp_tests.rs.
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
+  created_at: 2026-11-08T15:59:38.350311293Z
+  modified_at: 2026-11-08T15:59:38.350311293Z
   session_id: 01a1b9af-8230-75d2-82f8-667491cc010a
   harness_version: 2.1.319 (Claude Code)
 history:
