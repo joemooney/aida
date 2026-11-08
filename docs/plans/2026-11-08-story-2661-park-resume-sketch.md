@@ -6,12 +6,22 @@ Status: proposed; advisor signoff required before implementation.
 The binding advisor ruling requires a sketch before code. This document is
 that review artifact, not an implementation or authorization to resume.
 
-This revision addresses review findings F1–F8 from commit `39ab419eb862`.
+This revision addresses F1–F8 and R1–R6 from commits `39ab419eb862` and
+`48811d8051db`. R1 requires a host metadata action and remains unresolved here.
 Publication must use a non-completing subject:
-`[AI:codex] docs(plans): clarify park and resume protocol (Refs STORY-2661)`.
+`[AI:codex] docs(plans): sketch park-on-ask resume-on-answer (Refs STORY-2661)`.
 AC1–4 remain unimplemented; merging this sketch must not complete the story.
 The native seat leaves edits uncommitted for the host to publish and must not
-rewrite the earlier commit or PR itself. Advisor signoff is still outstanding.
+rewrite the earlier commit or PR itself. The host/advisor must retitle PR #3666
+to that exact subject before publication/merge; a Refs commit alone does not fix
+the completing PR title. Advisor signoff is still outstanding.
+
+Initial scope decision (R2): parking plus **manual authorized resume only**.
+Answer arrival makes a wait ready and observable, but does not launch a child.
+AC2 remains open; this is not delivery of the automatic-resume story. A later
+advisor-approved service-delegation design is required for automatic dispatch.
+Admission and `aida awaiting` must say `manual_resume_required` before parking,
+including when a watcher is healthy; heartbeat is never launch authority.
 
 ## Existing seams and limits
 
@@ -26,7 +36,8 @@ and Codex resumes, but refuses AGY. The SPIKE-711 host results establish the
 AGY CLI surface, not integrated admission. The shared contained wrapper in
 `launch/contained.rs` explicitly refuses Codex resume/fork pending private-state
 lifecycle support (PR2), and also refuses Claude resume on that wrapper.
-Existing legacy Claude admission must be assessed separately.
+Legacy Claude admission is assessed in the path table below; it remains distinct
+from the shared private-state wrapper.
 
 ## Durable records and ownership
 
@@ -83,6 +94,31 @@ ownership and refuse reuse/removal until explicit cancellation or recovery.
 
 ## Park and exit handshake
 
+### Seat-to-host transport (new surfaces, R4)
+
+Propose `aida questions ask <SPEC> --park` using the existing question inputs.
+Before launch the host writes a private expected binding under
+`<main>/.aida/park-bindings/<lease-id>.json`, and supplies a read-only copy at
+`<seat>/.aida/park-binding.json`. The closed binding contains version, random
+launch token, lease ID, spec UUID, run ID and launch generation, following
+`native_publication.rs::Binding`. It is scoped to this launch, not a grant.
+The seat atomically writes `<seat>/.aida/park-intent.json` with that binding,
+wait UUID, question UUID and bounded question payload. It never writes host runtime
+state. Reject links, nonregular/multiply linked files, wrong owner/mode, oversized
+payloads, stale generations and token mismatches before accepting an intent.
+
+The live host supervisor polls that exact file at most every second, including
+while collecting vendor output. Under current authority it writes the canonical
+question plus binding through the existing store writer lock, then the host wait
+record, then `<seat>/.aida/park-receipt.json`. This host-mediated canonical write
+works when containment forbids direct store access; the seat needs only its own
+write root. The ask command waits at most 10 seconds for the matching receipt,
+then returns pending/failure guidance, never a false park acknowledgement.
+Retries reuse the wait UUID. Late receipts remain recoverable and the supervisor
+suppresses publication on any validated pending intent. Both canonical and runtime
+state must reconcile before acceptance; crashes after either write are visible.
+The receipt is host evidence, never accepted back as authority from the seat.
+
 1. An explicit blocking lane ask creates the canonical question and a durable
    park intent; do not infer blocking asks from arbitrary model prose. The CLI
    returns a stop-now receipt and the lane ends its current turn.
@@ -95,8 +131,16 @@ ownership and refuse reuse/removal until explicit cancellation or recovery.
 4. Failure to persist either side refuses the handshake with recovery guidance;
    a question alone does not release a live slot. A lane that fails to stop
    becomes `stop_timeout` if its managed vendor process group has not exited
-   within 60 seconds of durable park acceptance, or if it starts another model
-   turn after the stop receipt (whichever comes first). The supervising launcher
+   within 60 seconds after the ask command returns its accepted receipt.
+   This is a wall-clock safety deadline, not a claim to detect model turns.
+   A slow final response can time out; that is an operational failure requiring
+   recovery, not evidence of a second turn. No Claude, Codex or AGY stream parser
+   is assumed to identify turn boundaries in this slice. The one-turn stop is
+   a cooperative instruction for all three; a future per-vendor event contract
+   would need separate fixtures before enforcing a turn-count rule. The host
+   observes command completion via a bound seat completion marker written just
+   before CLI return; missing marker uses acceptance plus 10 seconds as a
+   conservative fallback and reports `stop_boundary_unknown`. The supervisor
    owns a monotonic deadline: at expiry it stops its verified child process group,
    gives it 5 seconds to exit, then kills that same group if necessary and reaps
    it. This is a proposed new supervisor behavior requiring advisor approval,
@@ -131,7 +175,8 @@ Introduce a host-only `aida lane resume-watch --project <main-root>` service,
 installed as a per-user systemd service with `Restart=on-failure` and enabled at
 login; surviving logout requires operator-enabled user lingering. This is a new
 service to implement, not an existing launcher loop. The short-lived launcher
-hands durable ownership to it before accepting an automatically resumable park.
+persists seat ownership in runtime records before exiting; the observer only
+reconciles these records and cannot take launch authority.
 The service holds one project-scoped singleton lock, scans waits at startup and
 at most every 5 seconds, and checks canonical store state without model polling.
 It never needs the exited launcher's PID to remain alive. Existing store sync
@@ -139,18 +184,35 @@ makes remote answers visible; the service does not invent a new remote sync or
 fetch authority. `aida awaiting` reports last scan, observed store revision and
 sync errors so an unsynced remote answer remains visibly awaiting local evidence.
 
-Park admission requires an observed service heartbeat younger than 15 seconds
-and a durable acknowledgement of the wait registration. Without this service,
-retain the ordinary question/manual escalation path and refuse automatic park.
-The service restarts and reconciles from durable records; if the machine or user
-manager is down no progress is promised. `aida awaiting` detects a stale heartbeat
-and names the service restart command; restored service scans all retained waits.
-The service itself consumes no model concurrency slot. Its child supervisor
-retains running-slot accounting until each launched child exits, even if the
-watch process restarts; ambiguous receipts retain capacity.
+This initial observer is optional for manual parking. It reports readiness and
+never spawns, even when launched from a delegator. Its systemd unit uses
+`KillMode=control-group`: it has no resumed children to preserve on restart.
+No service heartbeat can make a wait automatically resumable. `aida awaiting`
+reads canonical and runtime evidence directly even with the observer stopped,
+shows `manual_resume_required`, and shows stale scan/sync evidence separately.
 
-The consumer reconciles answered waits after restart, including
-an answer arriving before the original child exits. It acquires an ordinary
+### Per-child running-slot ownership (R3)
+
+`aida lane resume <wait-id>` is a foreground host supervisor, one process per
+wait. It acquires its own PID/start-identity slot via `acquire_slot`, before
+launching the vendor, and holds its guard through vendor exit/reaping; it never
+uses the observer PID for child slots. Observer restart cannot release these
+slots or kill these processes, which are outside the observer unit cgroup.
+Existing final-result-based slot discounting must be disabled for this managed
+resume until verified child exit; a vendor final message is not process exit.
+
+Supervisor death must not make a surviving child invisible to the cap. Before
+spawn persist an attempt reservation under the shared slot lock; after spawn
+bind the child PID/start identity. Extend slot reconciliation to count either
+live supervisor or child, and conservatively count unresolved spawn windows.
+This is a required slot schema/reader change, not existing `acquire_slot`
+behavior. All slot admission paths must count reservations under the same lock.
+Only verified child/group exit clears a reservation; ambiguous descendants
+require operator recovery. Tests must kill the supervisor and restart the
+observer with live children, then attempt admission at the cap.
+
+The observer reconciles readiness after restart, including
+an answer arriving before the original child exits. The manual resume supervisor acquires an ordinary
 running slot and the seat lock before `resume_ready -> resuming`. It rechecks
 current grant/parent validity, role, the resume predicate below, holds/punts,
 seat identity, branch/HEAD, vendor transcript availability, and the original containment posture.
@@ -158,26 +220,25 @@ The answer is data, never approval or grant renewal.
 
 ### Parent grant and overnight recovery
 
-The consumer may mint a child only using its own currently validated delegating
-parent seat grant, through `issue_launch_child` / `issue_child_for`. The original
-implementer's grant is not a delegator and is never resurrected. A service launched
-under an authorized integrator/advisor delegator can use that live parent only
-while its subject, roster, process binding, delegation scope and expiry validate.
-An ordinary systemd restart has no such authority by default. Do not copy a
-terminal token into a unit file or persist reusable tokens in wait records.
+Only the foreground manual resume command may mint a child, using its caller's
+currently validated delegating parent seat grant through `issue_launch_child` /
+`issue_child_for`. The watcher never mints one and has no credential handoff.
+The original implementer's grant is never resurrected. A systemd start or restart
+has no launch authority. Do not copy terminal tokens into units or wait records.
 
-Thus an overnight answer with no valid consumer parent becomes
+An answer is always `manual_resume_required`; a manual attempt without a valid
+parent becomes
 `blocked_authority`, retaining the answer and seat. `aida awaiting` must show
-this even when no consumer is running, plus the explicit recovery: an authorized
+this even when no observer is running, plus the explicit recovery: an authorized
 operator enters the permitted delegating role via `aida role enter <role>` in a
 live host shell, then runs the proposed `aida lane resume <wait-id>` command.
 That command claims the wait under the same per-wait lock/attempt protocol and
 supervises the resumed child under that caller's fresh parent grant. It does not
 renew the exited session or grant the daemon permanent authority. The watcher
-can continue observing without launch authority. Unattended overnight resume
+only observes; even a live delegator does not enable automatic spawning. Unattended overnight resume
 requires a separately approved service-delegation lifecycle; this sketch does
 not introduce one. Advisor acceptance of this manual authority recovery limit
-is required before claiming the initial automatic-resume scope.
+is required before implementing this manual-only partial slice.
 
 ### Status and resume predicate
 
@@ -189,7 +250,7 @@ a verified exited child, an unchanged answered question, a resolution that does
 not keep it parked/reject it, and `evaluate_unpark == Ready` for dependencies and
 other holds, plus all authority/seat/posture checks above. Do not call
 `maybe_autoqueue` or require its Approved-only predicate. A resolution changing
-status to Approved or any other status blocks automatic resume with a visible
+status to Approved or any other status blocks bound resume with a visible
 status-mismatch recovery reason; it never silently resets that status. Lost or
 changed bindings, terminal status and independent holds also refuse. Clearing
 such a block requires authorized recovery and revalidation, not an answer alone.
@@ -217,14 +278,28 @@ sessions. Cancellation retains history and requires explicit ownership release.
 
 | Vendor | Headless resume argv shape | Admission proposal |
 |---|---|---|
-| Claude | `claude -p --resume <session_id> <answer_prompt>` | Use existing admitted resume posture; shared-wrapper contained resume stays refused until private-state lifecycle support exists. |
+| Claude | `claude -p --resume <session_id> <answer_prompt>` | Legacy contained headless path only, with retained verified transcript as specified below; shared-wrapper private-state resume is excluded. |
 | Codex | `codex exec resume <session_id> <answer_prompt>` | Initially only paths without AIDA containment that already admit resume, including trusted native workspace-write posture where admitted. Native is reported as native sandbox, not AIDA-contained. |
 | AGY | `agy --conversation <session_id> --print=<answer_prompt>` | Implement the verified headless adapter and validate its normal launch admission before enabling park; no blanket removal of the existing refusal. |
+
+### Claude path decision (R5)
+
+| Launch path | Initial park eligibility | Transcript after exit |
+|---|---|---|
+| Default legacy AIDA-contained Claude using `session.rs::spawn_claude_headless_resume_granted` | Yes for manual resume after retained-transcript preflight; preserve contained flags, mailbox preparation and child grant checks. | Retain the exact session JSONL in the host Claude project store keyed by original seat cwd (`~/.claude/projects/<cwd-slug>/<sid>.jsonl`); retain seat ownership and prevent transcript cleanup while parked. |
+| Legacy lease-tree session listed under another checkout | Yes only after checked staging succeeds. | Use `stage_resume_transcript` into the retained lease-tree project store; require an actual verified destination, since the helper's missing-source success alone is insufficient. Conflicting bytes refuse. |
+| Shared `launch/contained.rs` private-state Claude wrapper | No. | Private config lifecycle is not retained by this proposal; existing resume refusal remains. Ordinary manual escalation only. |
+| Uncontained Claude | Only where ordinary launch policy already admits it. | Same exact-cwd transcript retention/preflight; no downgrade from containment. |
+
+Thus the default legacy contained Claude adapter is reachable in the manual
+slice, subject to integrated tests, but AC3 remains open until all three vendors
+have evidence. Transcript loss escalates before spawn. Codex AIDA-contained
+resume remains excluded until PR2; trusted native Codex is a distinct posture.
 
 These are identity/prompt shapes; approved model, permission, environment and
 output flags still come from the vendor registry and shared launch composers.
 Never drop inherited containment to make a resume work. In particular, contained
-Codex cannot enter an automatically resumable park in the initial slice. Refuse
+Codex under AIDA containment cannot enter the resumable park protocol in this slice. Refuse
 that mode before claiming park support, retain the human question through the
 ordinary manual escalation path, and explain the PR2 dependency. The same rule
 applies to any unsupported contained Claude or AGY surface. This scope restriction
@@ -242,7 +317,11 @@ Recorded fake-harness tests must exercise one resume per vendor with exact ID,
 answer and cwd; question persistence before exit; slot release only after exit;
 retained dirty seat; answer-before-exit; duplicate and batch answers; restart at
 each write/spawn boundary; uncertain delivery; lost seat/transcript; expired
-grant; consumer restart with no grant and fresh authorized manual resume;
+grant; observer restart with no grant and fresh authorized manual resume;
+observer restart with multiple live resumed children; supervisor death and cap
+reservation recovery; native and contained seat intent/receipt transport; stale
+binding tokens and interrupted canonical write; legacy contained Claude transcript
+staging, missing/conflicting transcripts and shared-wrapper refusal;
 remote-node answer synced after park; contained answerer without runtime access;
 lost wake hint; stopped/stale service and registration refusal; sync errors;
 legacy question migration; forced overwrite before/after answer; synced binding
@@ -256,6 +335,7 @@ answer, with no generic queue duplicate, and no publication while parked.
 
 Review decision requested: approve the durable host-owned park/outbox protocol,
 exclusive retained seat with a released running slot, and the initial admission
-limits above, including the new resume-watch service, explicit overnight authority
+limits above, including manual-only initial scope (AC2 open), observer-only
+resume-watch, per-child slot reservations, bound seat transport, explicit overnight authority
 recovery, canonical schema additions and bounded supervisor stop policy. No implementation
 should start until the advisor records signoff.
