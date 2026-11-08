@@ -43,6 +43,10 @@ pub struct CachedGitBackend {
     cache: Cache,
     // trace:BUG-2466 | ai:codex
     snapshot_only: bool,
+    // One fallback inventory and deadline for the entire snapshot operation,
+    // including UUID tree reads and ID resolution. trace:BUG-2466 | ai:codex
+    snapshot_deadline: Option<std::time::Instant>,
+    snapshot_paths: std::sync::OnceLock<Result<(std::collections::HashMap<Uuid, PathBuf>, bool)>>,
 }
 
 impl CachedGitBackend {
@@ -94,6 +98,8 @@ impl CachedGitBackend {
             inner,
             cache,
             snapshot_only: false,
+            snapshot_deadline: None,
+            snapshot_paths: Default::default(),
         };
         // trace:TASK-1526 | ai:codex
         // Constructors share the tolerant protocol; mutations recheck strictly.
@@ -116,6 +122,8 @@ impl CachedGitBackend {
             inner,
             cache,
             snapshot_only: false,
+            snapshot_deadline: None,
+            snapshot_paths: Default::default(),
         })
     }
 
@@ -123,11 +131,17 @@ impl CachedGitBackend {
     /// when the cache is cold, behind, or another refresher is failing.
     // trace:BUG-2466 | ai:codex
     pub fn with_inner_stale_snapshot(inner: GitBackend, cache_path: &Path) -> Result<Self> {
+        // Reserve time for explicit linkage (1.2 s) and rendering within the
+        // 5 s ceiling; opening the snapshot also consumes this shared allowance.
+        let deadline = std::time::Instant::now()
+            + super::cache::read_fallback_scan_budget().min(std::time::Duration::from_secs(3));
         let cache = Cache::open_stale_snapshot(cache_path)?;
         Ok(Self {
             inner,
             cache,
             snapshot_only: true,
+            snapshot_deadline: Some(deadline),
+            snapshot_paths: Default::default(),
         })
     }
 
@@ -286,7 +300,7 @@ impl CachedGitBackend {
         {
             return Ok(resolved);
         }
-        let deadline = std::time::Instant::now() + super::cache::read_fallback_scan_budget();
+        let deadline = self.fallback_deadline();
         crate::node_alias::resolve_literal_first(id, |id| {
             self.resolve_by_bounded_scan(
                 id,
@@ -320,8 +334,7 @@ impl CachedGitBackend {
                 super::cache_refresh::test_count("lookup_targeted_fallback");
                 // trace:TASK-b6b1278890774ef993d2ebc327862470-029 | ai:claude
                 // trace:TASK-b6b1278890774ef993d2ebc327862470-037 | ai:claude
-                let deadline =
-                    std::time::Instant::now() + super::cache::read_fallback_scan_budget();
+                let deadline = self.fallback_deadline();
                 return self.resolve_by_bounded_scan(id, deadline, &e);
             }
             Err(_) => {
@@ -505,57 +518,91 @@ impl CachedGitBackend {
     /// Snapshot-only readers stop parsing when the read fallback budget expires;
     /// targets not reached remain unknown to the caller.
     /// Each result is read from canonical YAML and its UUID checked. Create a new
-    /// reader after writes: the fallback file inventory is scoped to this reader.
+    /// reader after writes: ordinary fallback inventories are scoped to the reader;
+    /// pinned snapshot readers share one backend inventory and deadline.
     // trace:BUG-1678 | ai:codex
     pub fn requirement_reader(&self) -> impl Fn(&Uuid) -> Result<Option<Requirement>> + '_ {
-        self.requirement_reader_with_budget(
-            self.snapshot_only
-                .then(super::cache::read_fallback_scan_budget),
-        )
+        let local = std::sync::OnceLock::new();
+        move |id| self.read_with_inventory(id, &local, self.snapshot_deadline)
     }
 
-    // One budget for the shared fallback, never a new scan per relationship.
+    fn fallback_deadline(&self) -> std::time::Instant {
+        self.snapshot_deadline.unwrap_or_else(|| {
+            std::time::Instant::now() + super::cache::read_fallback_scan_budget()
+        })
+    }
+
+    /// A missing target is unknown only when the shared inventory was cut short.
     // trace:BUG-2466 | ai:codex
+    pub fn relationship_missing_label(&self) -> &'static str {
+        match self.snapshot_paths.get() {
+            Some(Ok((_, true))) => "missing",
+            Some(_) => "unknown",
+            None => "missing",
+        }
+    }
+
+    #[cfg(test)]
     fn requirement_reader_with_budget(
         &self,
         budget: Option<std::time::Duration>,
     ) -> impl Fn(&Uuid) -> Result<Option<Requirement>> + '_ {
-        use std::collections::HashMap;
-        use std::sync::OnceLock;
+        let paths = std::sync::OnceLock::new();
+        let deadline = budget.map(|b| std::time::Instant::now() + b);
+        move |id| self.read_with_inventory_local(id, &paths, deadline)
+    }
 
-        let paths: OnceLock<Result<HashMap<Uuid, PathBuf>>> = OnceLock::new();
+    fn read_with_inventory(
+        &self,
+        id: &Uuid,
+        local: &std::sync::OnceLock<Result<(std::collections::HashMap<Uuid, PathBuf>, bool)>>,
+        deadline: Option<std::time::Instant>,
+    ) -> Result<Option<Requirement>> {
+        let paths = if self.snapshot_only {
+            &self.snapshot_paths
+        } else {
+            local
+        };
+        self.read_with_inventory_local(id, paths, deadline)
+    }
+
+    fn read_with_inventory_local(
+        &self,
+        id: &Uuid,
+        paths: &std::sync::OnceLock<Result<(std::collections::HashMap<Uuid, PathBuf>, bool)>>,
+        deadline: Option<std::time::Instant>,
+    ) -> Result<Option<Requirement>> {
         let objects_root = self.inner.path().join("objects");
-        move |id| {
-            if let Ok(Some(spec_id)) = self.cache.spec_id_for_uuid(id) {
-                // A missing filename must not trigger the agreed-id full scan.
-                if let Ok(req) = crate::object_store::read_object(&objects_root, &spec_id) {
-                    if req.id == *id {
-                        return Ok(Some(req));
-                    }
+        if let Ok(Some(spec_id)) = self.cache.spec_id_for_uuid(id) {
+            if let Ok(req) = crate::object_store::read_object(&objects_root, &spec_id) {
+                if req.id == *id {
+                    return Ok(Some(req));
                 }
             }
-            let indexed = paths.get_or_init(|| {
-                let mut indexed = HashMap::new();
-                let deadline = budget.map(|b| std::time::Instant::now() + b);
-                for (_, path) in crate::object_store::list_objects_until(&objects_root, deadline)? {
-                    if deadline.is_some_and(|d| std::time::Instant::now() >= d) {
-                        break;
-                    }
-                    // Match find_by_uuid's tolerance for unreadable objects and
-                    // its deterministic first-match behavior for duplicate UUIDs.
-                    if let Ok(req) = crate::object_store::read_object_from_path(&path) {
-                        indexed.entry(req.id).or_insert(path);
-                    }
-                }
-                Ok(indexed)
-            });
-            let indexed = indexed.as_ref().map_err(|e| anyhow::anyhow!("{e:#}"))?;
-            Ok(indexed.get(id).and_then(|path| {
-                crate::object_store::read_object_from_path(path)
-                    .ok()
-                    .filter(|req| req.id == *id)
-            }))
         }
+        let indexed = paths.get_or_init(|| {
+            #[cfg(test)]
+            super::cache_refresh::test_count("snapshot_inventory_scan");
+            let mut indexed = std::collections::HashMap::new();
+            for (_, path) in crate::object_store::list_objects_until(&objects_root, deadline)? {
+                if deadline.is_some_and(|d| std::time::Instant::now() >= d) {
+                    break;
+                }
+                if let Ok(req) = crate::object_store::read_object_from_path(&path) {
+                    indexed.entry(req.id).or_insert(path);
+                }
+            }
+            Ok((
+                indexed,
+                !deadline.is_some_and(|d| std::time::Instant::now() >= d),
+            ))
+        });
+        let (indexed, _) = indexed.as_ref().map_err(|e| anyhow::anyhow!("{e:#}"))?;
+        Ok(indexed.get(id).and_then(|path| {
+            crate::object_store::read_object_from_path(path)
+                .ok()
+                .filter(|req| req.id == *id)
+        }))
     }
 
     /// The STORED status of `id`, from one targeted object read: the cache maps
@@ -4688,6 +4735,65 @@ mod tests {
         assert!(read(&target.id).unwrap().is_none());
         let control = reader.requirement_reader_with_budget(None);
         assert_eq!(control(&target.id).unwrap().unwrap().id, target.id);
+    }
+
+    // Tree traversal uses get_requirement once per child. Even separate readers
+    // on an empty projection must share the backend inventory. trace:BUG-2466 | ai:codex
+    #[test]
+    fn show_snapshot_tree_children_share_one_scan() {
+        use super::super::cache_refresh::test_counts;
+        let dir = tempdir().unwrap();
+        let (backend, store_root, _) = task_1515_backend(dir.path());
+        let children = backend.inner.load().unwrap().requirements;
+        drop(backend);
+        let reader = CachedGitBackend::with_inner_stale_snapshot(
+            GitBackend::new(&store_root).unwrap(),
+            &dir.path().join("missing.db"),
+        )
+        .unwrap();
+        test_counts();
+        for child in &children {
+            assert_eq!(
+                reader.get_requirement(&child.id).unwrap().unwrap().id,
+                child.id
+            );
+        }
+        assert_eq!(test_counts().get("snapshot_inventory_scan"), Some(&1));
+        assert_eq!(reader.relationship_missing_label(), "missing");
+        assert!(reader.get_requirement(&Uuid::new_v4()).unwrap().is_none());
+        assert_eq!(reader.relationship_missing_label(), "missing");
+    }
+
+    // Exhaustion is invocation-wide, including newly created readers; cached
+    // positive targets remain readable. trace:BUG-2466 | ai:codex
+    #[test]
+    fn show_snapshot_shared_deadline_labels_partial_targets_unknown() {
+        let dir = tempdir().unwrap();
+        let (backend, store_root, cache_path) = task_1515_backend(dir.path());
+        let cached = backend
+            .get_requirement_unambiguous("FR-1-001")
+            .unwrap()
+            .unwrap();
+        drop(backend);
+        let target = sample_req("TASK-9002", "Uncached target");
+        crate::object_store::write_object(&store_root.join("objects"), &target).unwrap();
+        let mut reader = CachedGitBackend::with_inner_stale_snapshot(
+            GitBackend::new(&store_root).unwrap(),
+            &cache_path,
+        )
+        .unwrap();
+        reader.snapshot_deadline = Some(std::time::Instant::now());
+        assert!(reader.requirement_reader()(&target.id).unwrap().is_none());
+        assert_eq!(reader.relationship_missing_label(), "unknown");
+        assert!(reader.get_requirement(&target.id).unwrap().is_none());
+        assert_eq!(
+            reader.get_requirement(&cached.id).unwrap().unwrap().id,
+            cached.id
+        );
+        assert_eq!(
+            reader.fallback_deadline(),
+            reader.snapshot_deadline.unwrap()
+        );
     }
 
     // trace:BUG-2466 | ai:codex

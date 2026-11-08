@@ -6892,7 +6892,7 @@ fn run_show(
                                     }),
                                     _ => serde_json::json!({
                                         "id": rel.target_id.to_string(),
-                                        "status": "unknown",
+                                        "status": backend.relationship_missing_label(),
                                         "satisfied": false,
                                     }),
                                 })
@@ -7163,9 +7163,11 @@ fn run_show(
                                                     satisfied,
                                                 )
                                             }
-                                            None => {
-                                                (target.to_string(), "unknown".to_string(), false)
-                                            }
+                                            None => (
+                                                target.to_string(),
+                                                backend.relationship_missing_label().to_string(),
+                                                false,
+                                            ),
                                         };
                                         if !satisfied {
                                             unsatisfied += 1;
@@ -7489,10 +7491,11 @@ fn run_show(
                                                 t.title
                                             ),
                                             None => println!(
-                                                "  {} {} {} (unknown)",
+                                                "  {} {} {} ({})",
                                                 crate::glyph(crate::glyphs::Glyph::SubArrow),
                                                 phrase.cyan(),
-                                                rel.target_id.to_string().dimmed()
+                                                rel.target_id.to_string().dimmed(),
+                                                backend.relationship_missing_label()
                                             ),
                                         }
                                     }
@@ -7587,7 +7590,11 @@ fn run_show(
                                                 matches!(b.status, RequirementStatus::Completed);
                                             (b.friendly_id(), format!("{}", b.status), satisfied)
                                         }
-                                        None => (target.to_string(), "unknown".to_string(), false),
+                                        None => (
+                                            target.to_string(),
+                                            backend.relationship_missing_label().to_string(),
+                                            false,
+                                        ),
                                     };
                                     if !satisfied {
                                         unsatisfied += 1;

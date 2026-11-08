@@ -202,7 +202,7 @@ def check_in(binary, temp):
     metadata_file.write_text(metadata_file.read_text() + "\n")
     require(run(["git", "add", "metadata.yaml"], store, env))
     require(run(["git", "-c", "maintenance.auto=false", "-c", "gc.auto=0", "commit", "-qm", "external metadata"], store, env))
-    for flags in ([], ["--no-git"], ["--format", "toon"], ["--format", "human"], ["--card", "--format", "human"]):
+    for flags in ([], ["--tree"], ["--no-git"], ["--format", "toon"], ["--format", "human"], ["--card", "--format", "human"]):
         calls.unlink(missing_ok=True)
         result = require(run([binary, "show", spec, *flags], root, slow_env, timeout=6))
         assert "canonical title" in result.stdout
