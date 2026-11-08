@@ -1,0 +1,29 @@
+id: 01a1ba61-5a10-7083-9259-941e841cd6e5
+spec_id: TASK-b6b1278890774ef993d2ebc327862470-982
+title: 'non-blocking (cosmetic): contained.rs:1459-1467 scans the terminal prompt as if…'
+description: |-
+  Non-blocking finding carried forward from an APPROVED review verdict on BUG-2495, which has since completed — recorded here so it keeps a queryable home once the verdict record stops being read.
+
+  non-blocking (cosmetic): contained.rs:1459-1467 scans the terminal prompt as if it were a flag: a prompt that is exactly --ask-for-approval=never is silently dropped and exactly -a or --ask-for-approval is refused as a missing value, contrary to validate_codex_flags' documented opaque-prompt rule. Implausible input; bound the rewrite to option positions.
+
+  PR: #3672
+  Reviewed sha: e0ccdac2422d8f24d8a506059cd3ada37dd10203
+status: Draft
+priority: Medium
+owner: joe
+feature: Uncategorized
+created_at: 2026-11-08T08:58:24.656989718Z
+modified_at: 2026-11-08T08:58:24.656989718Z
+req_type: Task
+tags:
+- carried-from:BUG-2495
+- finding-hash:2fcd143e
+- from-review:PR-3672
+- kind:carried-forward
+filed_at:
+  code_sha: 5cbe14e5fc6be0d87709049b48f3b7eaeab77808
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 08cbf8a3fe7
+  vendor: claude
