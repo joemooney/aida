@@ -3,12 +3,12 @@ spec_id: BUG-b6b1278890774ef993d2ebc327862470-260
 agreed_id: BUG-2495
 title: 'Contained Codex launch refuses its own posture: --ask-for-approval is a top-level flag in codex-cli 0.166.0, not an exec flag'
 description: 'STORY-2593 conformance run 2026-11-07 22:50 (out=/home/joe/.aida/conformance-codex-aida-1794116556) failed every check C0-C4 with launch exit 1: ''contained Codex exec flag --ask-for-approval is unsupported by pinned codex-cli 0.166.0''. In 0.166.0 ''-a/--ask-for-approval'' is declared only in top-level ''codex --help''; ''codex exec --help'' lacks it. CODEX_NATIVE_POSTURE (codex_native_sandbox.rs:56) emits it after exec, and launch/contained.rs validate_codex_flags checks every arg against the recorded exec help (codex_0166_help.json), so the contained path refuses its own posture. FIX (same pattern as BUG-2487''s -P -> -c default_permissions): in launch/contained.rs codex_argv, rewrite ''--ask-for-approval V'' / ''--ask-for-approval=V'' / ''-a V'' into ''-c approval_policy="V"'' before validate_codex_flags; refuse any value other than ''never'' (ADR-31). Do not change the 0.166.0 pin or the help fixture. ACCEPTANCE: unit test in the contained launch tests that a site argv ''exec --sandbox workspace-write --ask-for-approval never <prompt>'' passes codex_argv and yields ''-c approval_policy="never"'' and no --ask-for-approval; a value other than never is refused. Gate LIGHT: one targeted cargo test -p aida-cli-lib <filter> + make check-ci-fast.'
-status: InProgress
+status: Completed
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-08T05:52:44.068560018Z
-modified_at: 2026-11-08T06:50:04.549222441Z
+modified_at: 2026-11-08T08:58:15.503561567Z
 req_type: Bug
 relationships:
 - rel_type: Blocks
@@ -80,6 +80,20 @@ history:
   timestamp: 2026-11-08T06:50:05.755037155Z
   session_id: 01a1b9c0edf0
   changes: []
+- id: 01a1ba61-35e2-77d3-b3e9-84c83ae0305c
+  author: aida-auto-bump
+  timestamp: 2026-11-08T08:58:15.394829435Z
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Completed
+processing_record:
+- id: 01a1ba61-364f-70f1-acc8-6e75586c9f67
+  timestamp: 2026-11-08T08:58:15.503557092Z
+  agent: aida
+  commit_sha: 5cbe14e5fc6be0d87709049b48f3b7eaeab77808
+  summary: 'Source review passes all BUG-2495 acceptance: codex_argv rewrites all three approval spellings to -c approval_policy="never" and refuses other or missing values, pin and fixture unchanged. CI WAIT STATE: run 42456313319 was still queued at record time, so no CI evidence exists at this head; PR CI must be green before ship. Cargo was not run by this reviewer per review-watch policy.'
+  review_verdict: approved
 filed_at:
   code_sha: 08cbf8a3fe7e5cef1171627f2b6edb446abc6539
   branch: main
@@ -89,3 +103,7 @@ filed_at:
   vendor: claude
   session: 01a1b9af-8230-75d2-82f8-667491cc010a
   harness_version: 2.1.319 (Claude Code)
+implementation_info:
+  implemented: false
+  completed_at: 2026-11-08T08:58:15.394824911Z
+  completion_sha: 5cbe14e5fc6be0d87709049b48f3b7eaeab77808
