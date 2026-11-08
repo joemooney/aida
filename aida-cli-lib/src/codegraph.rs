@@ -41,11 +41,29 @@ pub(crate) fn primary_index_link(
 }
 
 pub(crate) fn scan(root: &Path) -> Vec<DoctorFinding> {
+    // Project intent, not an installed binary or leftover index, opts into
+    // diagnostics. Resolve intent on main while probing access from the seat.
+    if !project_uses_codegraph(root)
+        && !project_uses_codegraph(&crate::main_worktree_root_from(root))
+    {
+        return Vec::new();
+    }
     assess(
         root,
         crate::which_binary("codegraph").is_some(),
         SystemTime::now(),
     )
+}
+
+fn project_uses_codegraph(root: &Path) -> bool {
+    std::fs::read_to_string(root.join(".gitignore")).is_ok_and(|body| {
+        body.lines().any(|line| {
+            matches!(
+                line.trim(),
+                ".codegraph" | ".codegraph/" | "/.codegraph" | "/.codegraph/"
+            )
+        })
+    })
 }
 
 fn finding(id: &str, summary: String, action: &str) -> DoctorFinding {
@@ -62,7 +80,7 @@ fn finding(id: &str, summary: String, action: &str) -> DoctorFinding {
 /// the database mtime for freshness; a WAL write can be newer than its db.
 fn assess(root: &Path, binary_present: bool, now: SystemTime) -> Vec<DoctorFinding> {
     let mut findings = Vec::new();
-    // A new host without either tool or index still needs setup guidance.
+    // An opted-in project on a new host still needs setup guidance.
     // trace:STORY-2630 | ai:codex
     if !binary_present {
         findings.push(finding(
@@ -70,6 +88,11 @@ fn assess(root: &Path, binary_present: bool, now: SystemTime) -> Vec<DoctorFindi
             "codegraph is missing from PATH".into(),
             "Install codegraph on this host; maintain its index in the primary checkout.",
         ));
+        if std::fs::symlink_metadata(root.join(".codegraph"))
+            .is_err_and(|error| error.kind() == std::io::ErrorKind::NotFound)
+        {
+            return findings;
+        }
     }
     let path = root.join(INDEX);
     let reachable = (|| -> Result<SystemTime> {
@@ -183,7 +206,7 @@ mod tests {
         let absent = assess(root, false, SystemTime::now());
         assert_eq!(
             absent.iter().map(|f| f.id.as_str()).collect::<Vec<_>>(),
-            ["missing", "unreachable"]
+            ["missing"]
         );
         assert_eq!(assess(root, true, SystemTime::now())[0].id, "unreachable");
         assert!(
@@ -209,6 +232,28 @@ mod tests {
         );
         std::fs::write(root.join(INDEX), "not sqlite").unwrap();
         assert_eq!(assess(root, true, SystemTime::now())[0].id, "unreachable");
+    }
+
+    #[test]
+    fn doctor_requires_project_opt_in() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        aida_core::git_ops::init(root).unwrap();
+        // Neither host installation nor an incidental index opts a project in.
+        assert!(scan(root).is_empty());
+        index(root);
+        assert!(scan(root).is_empty());
+        std::fs::write(root.join(".gitignore"), "# .codegraph\n!.codegraph\n").unwrap();
+        assert!(scan(root).is_empty());
+        for declaration in [".codegraph", ".codegraph/", "/.codegraph", "/.codegraph/"] {
+            std::fs::write(root.join(".gitignore"), format!("{declaration}\n")).unwrap();
+            assert!(project_uses_codegraph(root));
+        }
+        std::fs::remove_dir_all(root.join(".codegraph")).unwrap();
+        assert!(
+            !scan(root).is_empty(),
+            "opted-in projects need setup guidance"
+        );
     }
 
     #[test]

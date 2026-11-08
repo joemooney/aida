@@ -85,6 +85,60 @@ The host published this investigation at `ae96e54ce1a4` on Slice 1's PR
 any punt or merge hold. Unit tests validate Slice 1 behavior; they do not
 satisfy AC2 or AC5.
 
+## Completing-slice review handoff (2026-11-08 UTC)
+
+PR-body evidence for the host publisher (PR #3632): inspected local
+`origin/main` at `2a7fe186bdcd718fa356e5e4d028a3b2ff13769d`; no fetch or
+publication was performed by this native seat.
+
+- AC1: routing implementation is present on main in
+  `codegraph::primary_index_link` and `worktree_gc::link_worktree_runtime_state`.
+  It links an existing primary index without copying it. Runtime success is
+  unverified in this seat: neither the seat nor `/home/dirtlab/ai/aida` has a
+  `.codegraph` entry. Routing code alone does not establish AC2 or AC5.
+- AC2: not verified complete. No codegraph-specific read grant was found in
+  main's containment/launch code. The earlier read-only client/WAL blocker
+  above remains unresolved; this change adds no access grant. Host provisioning
+  and the supported read-only client decision remain required before completion.
+- AC3: main already contains the navigation guidance in the shared dispatch
+  master and AGENTS.md, with template-equality and assembled-prompt tests.
+- AC4: existing missing/stale/unreachable probes are retained, now gated on
+  an explicit `.codegraph` ignore rule in the invoking or primary checkout's
+  `.gitignore`. Unrelated projects stay silent even with an incidental index.
+  Missing tool plus absent index produces one setup finding. Broken links
+  and other access errors still receive reachability diagnostics.
+- AC5: open. From this seat's working directory, the actual command and output
+  were:
+
+  ```console
+  $ codegraph callers primary_index_link
+  /bin/bash: line 1: codegraph: command not found
+  ```
+
+  This is a failed attempt, not successful seat-call evidence. The host must
+  supply the tool and primary index, then capture a successful read-only call.
+
+Keep a `Refs STORY-2630` publication subject until AC2 and AC5 are demonstrated;
+this rework cannot honestly complete the story. Existing punts/holds remain
+publication vetoes. BUG-2486's #3613 commit `47e379ad6e` is already an ancestor
+of this lane HEAD; the host must still refresh/rebase before pushing.
+
+Validation limitation: `make sync-templates` and `make check-templates` were
+attempted with `-o sync-agent-skills` / `-o check-agent-skills`; recursive Make
+did not inherit those exclusions, attempted local Cargo and failed in sccache
+(exit 254). Neither full target passed. The host must run both full targets.
+The direct template-hook check, rustfmt and whitespace check passed.
+
+The launcher job `j20261108T000943538-2-0` executed
+`cargo test --profile agent -p aida-cli-lib --lib -- codegraph::tests`:
+8 passed, 0 failed (exit 0). This includes the opted-out regression, all
+doctor probes, primary routing and prompt/template checks. It does not prove
+AC2 or AC5. STORY-2630 was punted to Needs Attention for those dependencies;
+the CLI persisted that status but reported that its punt signal file could
+not be written on the read-only filesystem. The host must honor the persisted
+punt even without that signal. A Refs publication declaration was recorded;
+it does not clear this veto.
+
 ## Slice 1 clone exclude regression
 
 Runtime-exclude repair in a private clone must use its real `.git/info/exclude`
