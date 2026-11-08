@@ -160,6 +160,7 @@ pub static PROFILES: [VendorProfile; 3] = [
             events: &[
                 "PreToolUse",
                 "PostToolUse",
+                "PreCompact", // STORY-2662: Claude only; Codex trusted-hook test pending.
                 "SessionStart",
                 "UserPromptSubmit",
                 "Notification",
