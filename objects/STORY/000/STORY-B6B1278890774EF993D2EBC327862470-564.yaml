@@ -23,7 +23,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-07T19:59:26.079479Z
-modified_at: 2026-11-08T13:18:17.148324052Z
+modified_at: 2026-11-08T13:24:09.115830223Z
 req_type: Story
 comments:
 - id: 01a1b798-f0d4-73b1-93d5-f84581f2d190
@@ -562,6 +562,12 @@ history:
   - field_name: status
     old_value: InProgress
     new_value: NeedsAttention
+- id: 01a1bb54-a56e-7440-8078-399f1fbece1b
+  author: joe
+  timestamp: 2026-11-08T13:24:09.198730289Z
+  session_id: 01a1bb51daf8
+  harness_version: 2.1.319 (Claude Code)
+  changes: []
 filed_at:
   code_sha: 7a18c0d52a6a4e0822befd4c810cfed16b04b74c
   branch: main
@@ -576,3 +582,11 @@ attention_reason:
   detail: 'Round-8 finding 1 remains agreed and unresolved: AC1 needs consecutive lane Cargo cache-hit statistics on both primary and dell1 using this branch launcher, or an advisor amendment. Findings 2/3: removed private PID namespace locally to preserve host queue ticket identity and unchanged no-cache behavior; live ticket regression added. The separate sccache restart race requires the host wrapper aida-host/bin/cargo to skip its restart branch when SCCACHE_SERVER_UDS is set. That file is not in this repository and cannot be fixed in this seat; host must apply and test that companion fix before publication. Preserve publication veto and existing merge hold. Validation running; results follow.'
   raised_by: implementer
   raised_at: 2026-11-08T13:10:32.382770673Z
+failure_reason:
+  phase: reviewer
+  phase_index: 3
+  kind: verdict:request-changes
+  detail: Round 8 removes --unshare-pid and restores AC2 and the host queue, but that reopens the sccache restart race from round 6, and AC1 (lane-job cache hits on primary and dell1) still has no evidence or amendment. AC0/AC2/AC3/AC4 met in code. CI had no job results at this head when recorded (CI run pending, merge-hold-gate queued); no local cargo run.
+  recovery_hint: address the review findings, move STORY-2641 back to In Progress, and clear the PR hold only after approval
+  shelved_by: reviewer
+  shelved_at: 2026-11-08T13:24:09.115830223Z
