@@ -8,7 +8,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-07T22:12:10.371157002Z
-modified_at: 2026-11-08T00:30:08.456846680Z
+modified_at: 2026-11-08T00:42:38.045195757Z
 req_type: Task
 relationships:
 - rel_type: Child
@@ -116,6 +116,12 @@ history:
   - field_name: status
     old_value: InProgress
     new_value: NeedsAttention
+- id: 01a1b89b-74b1-7be3-950a-0d85741aaf21
+  author: joe
+  timestamp: 2026-11-08T00:42:38.129588454Z
+  session_id: 01a1b898e4f4
+  harness_version: 2.1.319 (Claude Code)
+  changes: []
 filed_at:
   code_sha: 77bc9e4e4d38b978afaaf602dd8300419c320ea7
   branch: main
@@ -135,7 +141,7 @@ failure_reason:
   phase: reviewer
   phase_index: 3
   kind: verdict:request-changes
-  detail: 'Rework round made no changes: the head only merges main (2a7fe186) into the branch. All three round-1 findings are still open, and the help-golden guard fails again.'
+  detail: 'Verbatim move is correct and cmdkit''s only named crate:: edge is now spec_arg, but the Help-Golden trailer is still missing (gates guard fails deterministically), the SCC acceptance is unmet (326->326) while the commit uses a completing (TASK-3425) trailer, and per-change status was prepended to AGENTS.md/OVERVIEW.md.'
   recovery_hint: address the review findings, move TASK-3425 back to In Progress, and clear the PR hold only after approval
   shelved_by: reviewer
-  shelved_at: 2026-11-07T23:39:24.384388135Z
+  shelved_at: 2026-11-08T00:42:38.045195757Z
