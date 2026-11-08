@@ -8,11 +8,19 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-08T05:25:50.443321273Z
-modified_at: 2026-11-08T05:25:50.443321273Z
+modified_at: 2026-11-08T06:07:56.234596203Z
 req_type: Story
 tags:
 - area:ci
 - needs-operator
+comments:
+- id: 01a1b9c5-474a-7750-af04-2ae07bbfd01a
+  author: joe
+  content: 'Advisor ruling 2026-11-07 23:08: APPROVED WITH CONSTRAINTS. Correction to the description: joemooney/aida is PUBLIC, not private. A self-hosted runner on a public repo can execute fork-PR code, and dell1''s dirtlab account holds Codex auth and AIDA grants. Required: (1) a dedicated unprivileged runner user on dell1 with no access to ~dirtlab, ~/.codex, ~/.aida or ssh keys; (2) ephemeral JIT runner (one job then re-register) or containerised; (3) self-hosted jobs gated in ci.yml to push events and same-repo PRs (github.event.pull_request.head.repo.full_name == github.repository), hosted fallback for everything else; (4) repo setting ''require approval for all outside collaborators''; (5) runner cores capped so CI does not starve dell1 lanes (e.g. a cgroup/cpuset of 8 of 20). Registration token is an operator act (gh api .../actions/runners/registration-token): the lane prepares scripts and ci.yml; operator registers. Security floor: reviewer must be independent and check (3) explicitly.'
+  created_at: 2026-11-08T06:07:56.234596203Z
+  modified_at: 2026-11-08T06:07:56.234596203Z
+  session_id: 01a1b9af-8230-75d2-82f8-667491cc010a
+  harness_version: 2.1.319 (Claude Code)
 filed_at:
   code_sha: ff9b8c91808130e9bddf339d428915a5d551416e
   branch: main
