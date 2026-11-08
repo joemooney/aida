@@ -7,7 +7,10 @@ import uuid
 # Linux UAPI: a kernel-held sender pidfd closes the queued-packet PID reuse race.
 SO_PASSPIDFD, SCM_PIDFD = 76, 4
 MUTATION_LIMIT = 65536
-# Canonical schemas are staged until Git/oplog publication is transactional.
+# Compatibility sessions retain the read-only S1 contract. The launch owner
+# supplies the selected profile over private configuration, never a request.
+# Production mediated admission remains gated until the routing audit and
+# Git/oplog publication are complete.
 MUTATION_VERBS = ('session_probe', 'request_status')
 CANONICAL_VERBS = ('comment_add', 'spec_edit')
 # trace:TASK-3223 | ai:codex
@@ -223,6 +226,10 @@ class StoreMutationSession:
     Read-only dedupe is local; mutation decisions and retries belong to Rust.
     """
     def __init__(self, binding, identity, authorize):
+        profile = binding.get('store_profile', 'compatibility')
+        if profile not in ('compatibility', 'mediated'):
+            raise MutationRefusal('InvalidRequest')
+        self.permitted_verbs = MUTATION_VERBS + (CANONICAL_VERBS if profile == 'mediated' else ())
         self.epoch = mutation_uuid(binding['epoch'])
         self.address = ('/run/aida-mutation/%s/service' % self.epoch).encode()
         self.binding = binding
@@ -266,7 +273,7 @@ class StoreMutationSession:
         if not self.identity.check(*credentials, sender_fd=sender_fd):
             raise MutationRefusal('Unauthorized')
         request = mutation_request(raw)
-        if request['op'] not in MUTATION_VERBS:
+        if request['op'] not in self.permitted_verbs:
             raise MutationRefusal('UnsupportedOperation')
         if request['launch_epoch'] != self.epoch:
             raise MutationRefusal('Unauthorized')
@@ -285,7 +292,7 @@ class StoreMutationSession:
             raise MutationRefusal('Busy')
         if request['op'] == 'session_probe':
             result = dict(challenge=request['data']['challenge'], specs=self.binding['specs'],
-                          role=self.binding['role'], permitted_verbs=list(MUTATION_VERBS))
+                          role=self.binding['role'], permitted_verbs=list(self.permitted_verbs))
             self.probed = True
         elif request['op'] == 'request_status':
             if request['data']['request_id'] in self.accepted:

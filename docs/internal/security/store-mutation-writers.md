@@ -54,8 +54,18 @@ mutation into an output panic.
 Unsupported commands/tools refuse before ordinary dispatch. Neither transport
 falls back to direct persistence or retries uncertain delivery with a new UUID.
 
+The admitted store-write profile now travels as a typed argument from the launch
+owner to the Rust authority session and as private configuration to its Python
+broker. Compatibility sessions independently refuse canonical writes in both
+layers. Staged mediated sessions route `comment_add` and `spec_edit` to the
+canonical redo handler; neither packet fields nor child environment assignments
+can widen a compatibility session. Broker probes advertise that session's verbs.
+Host routing tests cover owned-comment persistence, exact replay, changed-payload
+conflicts and revocation before replay. These are synthetic host tests; they do
+not establish the live same-lane acceptance test or Git/oplog publication.
+
 This is staged routing, **not production admission or completed S2a evidence**.
-The launcher and host mutation verbs remain gated. The inventory still requires
+The production launcher remains gated before session preparation. The inventory still requires
 operation-by-operation reconciliation; the early refusal boundary does not
 reclassify its unresolved rows. Remaining work includes the other CLI/MCP
 writer families, host publication integration, contained-Codex profile selection

@@ -58,21 +58,42 @@ fn read_operation(host: &mut UnixStream) -> Result<HostRequest> {
     host.read_exact(&mut bytes)?;
     Ok(serde_json::from_slice(&bytes)?)
 }
-fn host_operation(
-    root: &Path,
-    binding: &str,
+/// Fixed launch-owner inputs; no field is sourced from a mutation packet.
+#[derive(Clone, Copy)]
+struct HostContext<'a> {
+    profile: crate::contained_boundary::StoreWriteProfile,
+    root: &'a Path,
+    binding: &'a str,
     epoch: uuid::Uuid,
-    specs: &[String],
-    author: &str,
+    specs: &'a [String],
+    author: &'a str,
+}
+fn host_operation(
+    context: &HostContext<'_>,
     request: &HostRequest,
     mut authorize: impl FnMut() -> Result<()>,
 ) -> Result<serde_json::Value> {
+    let HostContext {
+        profile,
+        root,
+        binding,
+        epoch,
+        specs,
+        author,
+    } = *context;
     use aida_core::db::{canonical_mutation::CanonicalOperation as Op, redo};
     anyhow::ensure!(
         request.version == 1 && request.launch_epoch == epoch,
         "Unauthorized"
     );
-    anyhow::ensure!(request.op == "request_status", "UnsupportedOperation");
+    // The broker's advertised verbs are not authority. Independently enforce
+    // the host-selected profile before parsing or touching canonical state.
+    anyhow::ensure!(
+        request.op == "request_status"
+            || (profile == crate::contained_boundary::StoreWriteProfile::Mediated
+                && matches!(request.op.as_str(), "comment_add" | "spec_edit")),
+        "UnsupportedOperation"
+    );
     let op: HostOperation =
         serde_json::from_value(serde_json::json!({"op":request.op,"data":request.data}))
             .map_err(|_| anyhow::anyhow!("InvalidRequest"))?;
@@ -153,7 +174,11 @@ pub(super) struct Session {
     worker: Arc<Mutex<Option<String>>>,
 }
 impl Session {
-    pub(super) fn prepare(child: &std::process::Command, root: &Path) -> Result<Self> {
+    pub(super) fn prepare(
+        child: &std::process::Command,
+        root: &Path,
+        profile: crate::contained_boundary::StoreWriteProfile,
+    ) -> Result<Self> {
         use crate::gate::seat_authority::{self, GrantCheck};
         let explicit = |key: &str| {
             child.get_envs().find_map(|(k, v)| {
@@ -252,7 +277,11 @@ impl Session {
         let parent = grant.parent_grant_id;
         let worker = Arc::new(Mutex::new(None::<String>));
         let bound_worker = worker.clone();
-        let config = serde_json::json!({"epoch":epoch,"specs":specs,"role":role,
+        let store_profile = match profile {
+            crate::contained_boundary::StoreWriteProfile::Compatibility => "compatibility",
+            crate::contained_boundary::StoreWriteProfile::Mediated => "mediated",
+        };
+        let config = serde_json::json!({"epoch":epoch,"specs":specs,"role":role,"store_profile":store_profile,
             "policy_version":1,"build":env!("CARGO_PKG_VERSION"),"authority_fd":helper.as_raw_fd()});
         let host_epoch = uuid::Uuid::parse_str(&epoch)?;
         let host_specs = specs.clone();
@@ -322,7 +351,7 @@ impl Session {
                         // late byte can become a later authority response.
                         let _ = host.set_read_timeout(Some(Duration::from_secs(5)));
                         let Ok(request) = read_operation(&mut host) else { break; };
-                        let result = host_operation(root_path(&store), &host_binding, host_epoch, &host_specs, &subject, &request, || {
+                        let result = host_operation(&HostContext { profile, root: root_path(&store), binding: &host_binding, epoch: host_epoch, specs: &host_specs, author: &subject }, &request, || {
                             match valid() { Some(b'Y') => Ok(()), Some(b'E') => anyhow::bail!("Expired"), Some(b'R') => anyhow::bail!("Revoked"), _ => anyhow::bail!("Unauthorized") }
                         });
                         let reply = match result {
@@ -511,6 +540,85 @@ mod tests {
 #[cfg(test)]
 mod owner_tests;
 
+// The production launcher still refuses the mediated profile. Exercise its
+// staged host routing independently so opening that gate later cannot silently
+// retain the S1 refusal or widen compatibility sessions.
+// trace:TASK-3223 | ai:codex
+#[cfg(test)]
+#[test]
+fn mediated_host_routes_owned_comment_and_revalidates_authority_before_replay() {
+    use crate::contained_boundary::StoreWriteProfile::{Compatibility, Mediated};
+    use aida_core::{db::redo, object_store};
+    let tmp = tempfile::tempdir().unwrap();
+    let root = tmp.path();
+    aida_core::git_ops::init(root).unwrap();
+    aida_core::allocation_authority::write_mode(
+        root,
+        aida_core::allocation_authority::AllocationRole::Root,
+        None,
+    )
+    .unwrap();
+    let mut row = aida_core::Requirement::new("host route".into(), "description".into());
+    row.spec_id = Some("TASK-3223".into());
+    let path = object_store::object_path(&root.join("objects"), "TASK-3223").unwrap();
+    std::fs::create_dir_all(path.parent().unwrap()).unwrap();
+    std::fs::write(&path, serde_yaml::to_string(&row).unwrap()).unwrap();
+    let before = std::fs::read(&path).unwrap();
+    let epoch = uuid::Uuid::new_v4();
+    let mut request = HostRequest {
+        version: 1,
+        launch_epoch: epoch,
+        request_id: uuid::Uuid::new_v4(),
+        op: "comment_add".into(),
+        data: serde_json::json!({"spec_id":"TASK-3223", "expected_revision":redo::hash(&before), "content":"one routed comment"}),
+    };
+    let scopes = [row.id.to_string()];
+    let context = HostContext {
+        profile: Mediated,
+        root,
+        binding: "fixed",
+        epoch,
+        specs: &scopes,
+        author: "bound author",
+    };
+    // Even a fully formed canonical request in S1 cannot reach authorization.
+    let error = host_operation(
+        &HostContext {
+            profile: Compatibility,
+            ..context
+        },
+        &request,
+        || panic!("compatibility mutation reached authorization"),
+    )
+    .unwrap_err();
+    assert_eq!(error.to_string(), "UnsupportedOperation");
+    // Ownership is checked independently of any client supplied target ID.
+    let error = host_operation(
+        &HostContext {
+            specs: &[],
+            ..context
+        },
+        &request,
+        || Ok(()),
+    )
+    .unwrap_err();
+    assert_eq!(error.to_string(), "Unauthorized");
+    assert_eq!(std::fs::read(&path).unwrap(), before);
+    let first = host_operation(&context, &request, || Ok(())).unwrap();
+    let replay = host_operation(&context, &request, || Ok(())).unwrap();
+    assert_eq!(first, replay);
+    let after: aida_core::Requirement =
+        serde_yaml::from_slice(&std::fs::read(&path).unwrap()).unwrap();
+    assert_eq!(after.comments.len(), 1);
+    assert_eq!(after.comments[0].author, "bound author");
+    assert_eq!(after.comments[0].content, "one routed comment");
+    let error = host_operation(&context, &request, || anyhow::bail!("Revoked")).unwrap_err();
+    assert_eq!(error.to_string(), "Revoked");
+    request.data["content"] = serde_json::json!("different retry");
+    let error = host_operation(&context, &request, || Ok(())).unwrap_err();
+    assert_eq!(error.to_string(), "Conflict");
+}
+
 #[cfg(test)]
 #[test]
 fn staged_writes_cannot_reach_host_mutation_or_authorization() {
@@ -530,11 +638,14 @@ fn staged_writes_cannot_reach_host_mutation_or_authorization() {
             data: serde_json::json!({}),
         };
         let error = host_operation(
-            Path::new("/nonexistent-store"),
-            "binding",
-            uuid::Uuid::nil(),
-            &[],
-            "author",
+            &HostContext {
+                profile: crate::contained_boundary::StoreWriteProfile::Compatibility,
+                root: Path::new("/nonexistent-store"),
+                binding: "binding",
+                epoch: uuid::Uuid::nil(),
+                specs: &[],
+                author: "author",
+            },
             &request,
             || panic!("staged writes must not reach authority or store access"),
         )
@@ -568,7 +679,7 @@ fn request_status_real_authority_is_read_only_and_preserves_local_results() {
                 } else {
                     assert_eq!(byte, [b'M']);
                     let request = read_operation(&mut host).unwrap();
-                    let result = host_operation(&root, "fixed", request.launch_epoch, &[], "author", &request, || Ok(())).unwrap();
+                    let result = host_operation(&HostContext { profile: crate::contained_boundary::StoreWriteProfile::Compatibility, root: &root, binding: "fixed", epoch: request.launch_epoch, specs: &[], author: "author" }, &request, || Ok(())).unwrap();
                     assert_eq!(result, serde_json::json!({"state":"unknown"}));
                     let wire = serde_json::to_vec(&serde_json::json!({"launch_epoch":request.launch_epoch,"request_id":request.request_id,"result":result})).unwrap();
                     host.write_all(&(wire.len() as u32).to_be_bytes()).unwrap();

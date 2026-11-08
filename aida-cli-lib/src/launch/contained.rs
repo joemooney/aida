@@ -894,6 +894,7 @@ impl PreparedLaunch {
             Some(store_mutation::Session::prepare(
                 child,
                 &std::fs::canonicalize(root)?,
+                store_profile,
             )?)
         } else {
             None

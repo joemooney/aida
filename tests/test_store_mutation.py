@@ -176,6 +176,27 @@ class StoreMutationTests(unittest.TestCase):
         self.assertEqual(probe['result']['permitted_verbs'], ['session_probe', 'request_status'])
         self.assertEqual(len(self.service.accepted), 1)
 
+    def test_profile_is_private_session_configuration_not_mutation_data(self):
+        for invalid in ('', 'unknown', True, None, ['mediated']):
+            with self.subTest(profile=invalid), self.assertRaisesRegex(Refusal, 'InvalidRequest'):
+                Service(dict(self.binding, store_profile=invalid), self.identity, self.authorize)
+        # Selecting mediation in one session cannot widen a sibling S1 session.
+        mediated = Service(dict(self.binding, store_profile='mediated'), self.identity, self.authorize)
+        self.addCleanup(mediated.close)
+        probe = self.request()
+        response = json.loads(mediated.dispatch(self.wire(probe), self.credentials))
+        self.assertEqual(response['result']['permitted_verbs'],
+                         ['session_probe', 'request_status', 'comment_add', 'spec_edit'])
+        self.assertEqual(self.dispatch(self.request())['result']['permitted_verbs'],
+                         ['session_probe', 'request_status'])
+        # Neither S2b verb acquires a route through this profile.
+        for op in ('own_claim', 'queue_done'):
+            with self.assertRaisesRegex(Refusal, 'UnsupportedOperation'):
+                mediated.dispatch(self.wire(self.request(op)), self.credentials)
+        data = dict(spec_id='TASK-1', expected_revision='a' * 64, content='hello',
+                    store_profile='mediated')
+        self.refuses('InvalidRequest', self.request('comment_add', data))
+
     def test_multiline_canonical_schemas_reject_only_other_controls(self):
         for text in ('first\n\tsecond', 'bad\r', 'bad\x00', 'bad\x7f', 'bad\x85'):
             for op, extra in [('comment_add', {'content': text}),
@@ -193,7 +214,8 @@ class StoreMutationTests(unittest.TestCase):
         authority = ns['MutationAuthority'](helper)
         self.addCleanup(helper.close)
         self.addCleanup(host.close)
-        self.service.authorize = authority
+        self.service = Service(dict(self.binding, store_profile='mediated'), self.identity, authority)
+        self.addCleanup(self.service.close)
         request = self.request('comment_add', dict(spec_id='TASK-1', expected_revision='a' * 64, content='one comment'))
         seen, errors = [], []
         def exact(n):
@@ -219,10 +241,10 @@ class StoreMutationTests(unittest.TestCase):
                 errors.append(error)
         thread = threading.Thread(target=responder); thread.start()
         try:
-            # Exercise staged framing only; production admission remains disabled.
-            with patch.dict(ns, MUTATION_VERBS=ns['MUTATION_VERBS'] + ns['CANONICAL_VERBS']):
-                first = self.dispatch(request)
-                self.assertEqual(self.dispatch(request), first)
+            # Private host selection, without changing protocol globals.
+            # Production launcher admission remains gated.
+            first = self.dispatch(request)
+            self.assertEqual(self.dispatch(request), first)
         finally:
             thread.join(4)
         self.assertFalse(thread.is_alive())
