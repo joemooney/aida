@@ -31,6 +31,17 @@ enum HostOperation {
         expected_revision: String,
         content: String,
     },
+    CommentEdit {
+        spec_id: String,
+        expected_revision: String,
+        comment_id: uuid::Uuid,
+        content: String,
+    },
+    CommentDelete {
+        spec_id: String,
+        expected_revision: String,
+        comment_id: uuid::Uuid,
+    },
     SpecEdit {
         spec_id: String,
         expected_revision: String,
@@ -85,6 +96,26 @@ fn host_operation(
             spec_id,
             expected_revision,
             content,
+        },
+        HostOperation::CommentEdit {
+            spec_id,
+            expected_revision,
+            comment_id,
+            content,
+        } => Op::CommentEdit {
+            spec_id,
+            expected_revision,
+            comment_id,
+            content,
+        },
+        HostOperation::CommentDelete {
+            spec_id,
+            expected_revision,
+            comment_id,
+        } => Op::CommentDelete {
+            spec_id,
+            expected_revision,
+            comment_id,
         },
         HostOperation::SpecEdit {
             spec_id,
@@ -514,7 +545,14 @@ mod owner_tests;
 #[cfg(test)]
 #[test]
 fn staged_writes_cannot_reach_host_mutation_or_authorization() {
-    for op in ["comment_add", "spec_edit", "own_claim", "queue_done"] {
+    for op in [
+        "comment_add",
+        "comment_edit",
+        "comment_delete",
+        "spec_edit",
+        "own_claim",
+        "queue_done",
+    ] {
         let request = HostRequest {
             version: 1,
             launch_epoch: uuid::Uuid::nil(),

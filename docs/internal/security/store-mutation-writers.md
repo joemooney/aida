@@ -30,6 +30,17 @@ Comment body files are opened read-only without following symlinks and with
 nonblocking I/O; only regular UTF-8 files up to 16 KiB are accepted. The lane
 sends their literal text, never a path, to the host. Stdin, editor, author, relay
 and parent semantics remain unsupported.
+The staged CLI also translates `comment edit --req-id ... --comment-id ...`
+with `--content` or `--body-file`, and `comment delete`. Comment UUID prefixes
+resolve against the canonical preimage used for the expected revision; the host
+accepts only the resolved UUID and refuses a stale revision or missing comment.
+Edits preserve the original comment author and support nested replies, using
+the same model helpers as ordinary CLI persistence. Replays of the same typed
+delete request return its durable result even after the comment is gone; a new
+CLI invocation does not replay an earlier request. Interactive and stdin edits
+refuse before ordinary dispatch. These verbs remain disabled at both production
+service gates; this staging does not change the unresolved inventory counts or
+authorize profile cutover. MCP advertisement is unchanged.
 Unsupported commands/tools refuse before ordinary dispatch. Neither transport
 falls back to direct persistence or retries uncertain delivery with a new UUID.
 

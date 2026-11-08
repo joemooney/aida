@@ -9,7 +9,7 @@ SO_PASSPIDFD, SCM_PIDFD = 76, 4
 MUTATION_LIMIT = 65536
 # Canonical schemas are staged until Git/oplog publication is transactional.
 MUTATION_VERBS = ('session_probe', 'request_status')
-CANONICAL_VERBS = ('comment_add', 'spec_edit')
+CANONICAL_VERBS = ('comment_add', 'comment_edit', 'comment_delete', 'spec_edit')
 # trace:TASK-3223 | ai:codex
 MUTATION_ERRORS = frozenset(('InvalidRequest', 'UnsupportedVersion', 'UnsupportedOperation',
                             'Unauthorized', 'Expired', 'Revoked', 'Conflict', 'Busy',
@@ -72,16 +72,24 @@ def mutation_request(raw):
             mutation_uuid(obj['data']['request_id'])
         else:
             data = obj['data']
-            keys = {'spec_id', 'expected_revision', 'content' if obj['op'] == 'comment_add' else 'fields'}
+            keys = {'spec_id', 'expected_revision'}
+            if obj['op'] in ('comment_add', 'comment_edit'):
+                keys.add('content')
+            if obj['op'] in ('comment_edit', 'comment_delete'):
+                keys.add('comment_id')
+            if obj['op'] == 'spec_edit':
+                keys.add('fields')
             if set(data) != keys or not isinstance(data['spec_id'], str) or not 1 <= len(data['spec_id']) <= 128:
                 raise ValueError('target')
             revision = data['expected_revision']
             if not isinstance(revision, str) or len(revision) != 64 or any(c not in '0123456789abcdef' for c in revision):
                 raise ValueError('revision')
-            if obj['op'] == 'comment_add':
+            if obj['op'] in ('comment_edit', 'comment_delete'):
+                mutation_uuid(data['comment_id'])
+            if obj['op'] in ('comment_add', 'comment_edit'):
                 if not isinstance(data['content'], str) or not data['content']:
                     raise ValueError('comment')
-            else:
+            elif obj['op'] == 'spec_edit':
                 fields = data['fields']
                 if not isinstance(fields, dict) or not fields or not set(fields) <= {'title', 'description'}:
                     raise ValueError('fields')

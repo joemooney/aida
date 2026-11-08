@@ -2739,6 +2739,23 @@ impl GitBackend {
                     comment_id = Some(c.id);
                     next.add_comment(c);
                 }
+                CanonicalOperation::CommentEdit {
+                    comment_id: id,
+                    content,
+                    ..
+                } => {
+                    let comment = next.find_comment_mut(id).context("Conflict")?;
+                    comment.content = content.clone();
+                    comment.touch();
+                    next.modified_at = chrono::Utc::now();
+                    comment_id = Some(*id);
+                }
+                CanonicalOperation::CommentDelete { comment_id: id, .. } => {
+                    next.delete_comment(id)
+                        .map_err(|_| anyhow::anyhow!("Conflict"))?;
+                    next.modified_at = chrono::Utc::now();
+                    comment_id = Some(*id);
+                }
                 CanonicalOperation::SpecEdit { fields, .. } => {
                     let mut changes = Vec::new();
                     if let Some(title) = &fields.title {

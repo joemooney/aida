@@ -80,7 +80,7 @@ fn run(client: &Client, env: &Environment, argv: &[String], cwd: &Path) -> Resul
         return crate::mcp::run_mediated_mcp_server(client, env, &root(&matches, cwd)?);
     }
     let (tool, payload) = translate(name, args, cwd)?;
-    let action = if tool == "add_comment" {
+    let action = if matches!(tool, "add_comment" | "edit_comment" | "delete_comment") {
         crate::StakeholderAction::Comment
     } else {
         crate::StakeholderAction::EditRequirement
@@ -91,7 +91,22 @@ fn run(client: &Client, env: &Environment, argv: &[String], cwd: &Path) -> Resul
             "UnsupportedOperation"
         );
     }
-    let result = client.mcp(&root(&matches, cwd)?, tool, &payload)?;
+    let store = root(&matches, cwd)?;
+    let result = if matches!(tool, "edit_comment" | "delete_comment") {
+        let content = if tool == "edit_comment" {
+            Some(payload["text"].as_str().context("InvalidRequest")?)
+        } else {
+            None
+        };
+        client.change_comment(
+            &store,
+            payload["id"].as_str().context("InvalidRequest")?,
+            payload["comment_id"].as_str().context("InvalidRequest")?,
+            content,
+        )?
+    } else {
+        client.mcp(&store, tool, &payload)?
+    };
     println!("{}", serde_json::to_string(&result)?);
     Ok(())
 }
@@ -129,6 +144,32 @@ fn translate(name: &str, args: &clap::ArgMatches, cwd: &Path) -> Result<(&'stati
     match name {
         "comment" => {
             let (name, args) = args.subcommand().context("UnsupportedOperation")?;
+            if matches!(name, "edit" | "delete") {
+                explicit_fields(
+                    args,
+                    &["req_id", "comment_id", "content", "body_file"],
+                    command
+                        .find_subcommand(name)
+                        .context("UnsupportedOperation")?,
+                )?;
+                let id = args.get_one::<String>("req_id").context("InvalidRequest")?;
+                let comment = args
+                    .get_one::<String>("comment_id")
+                    .context("InvalidRequest")?;
+                let mut payload = json!({"id":id,"comment_id":comment});
+                if name == "delete" {
+                    return Ok(("delete_comment", payload));
+                }
+                let text = match args.get_one::<PathBuf>("body_file") {
+                    Some(path) => comment_file(&cwd.join(path))?,
+                    None => args
+                        .get_one::<String>("content")
+                        .context("UnsupportedOperation: provide --content or --body-file")?
+                        .clone(),
+                };
+                payload["text"] = json!(text);
+                return Ok(("edit_comment", payload));
+            }
             ensure!(name == "add", "UnsupportedOperation");
             explicit_fields(
                 args,
@@ -275,5 +316,48 @@ mod tests {
         let name = std::ffi::CString::new(fifo.as_os_str().as_encoded_bytes()).unwrap();
         assert_eq!(unsafe { libc::mkfifo(name.as_ptr(), 0o600) }, 0);
         assert!(comment_file(&fifo).is_err());
+    }
+
+    #[test]
+    fn existing_comment_translation_never_drops_interactive_or_stdin_semantics() {
+        let id = uuid::Uuid::new_v4().to_string();
+        for (verb, extra, expected) in [
+            (
+                "edit",
+                vec!["--content", "replacement"],
+                Some("edit_comment"),
+            ),
+            ("delete", vec![], Some("delete_comment")),
+            ("edit", vec!["--stdin"], None),
+            ("edit", vec!["--interactive"], None),
+            ("edit", vec![], None),
+        ] {
+            let mut argv = vec![
+                "aida",
+                "comment",
+                verb,
+                "--req-id",
+                "TASK-1",
+                "--comment-id",
+                &id,
+            ];
+            argv.extend(extra);
+            let matches = crate::command_registry::built_command()
+                .try_get_matches_from(argv)
+                .unwrap();
+            let (name, args) = matches.subcommand().unwrap();
+            match expected {
+                Some(tool) => {
+                    let (actual, payload) = translate(name, args, Path::new("/missing")).unwrap();
+                    assert_eq!(actual, tool);
+                    assert_eq!(payload["id"], "TASK-1");
+                    assert_eq!(payload["comment_id"], id);
+                    if verb == "edit" {
+                        assert_eq!(payload["text"], "replacement");
+                    }
+                }
+                None => assert!(translate(name, args, Path::new("/missing")).is_err()),
+            }
+        }
     }
 }

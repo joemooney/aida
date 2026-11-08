@@ -57,6 +57,36 @@ impl Client {
         self.mutate(Uuid::new_v4(), &operation)
     }
 
+    /// Resolve comment prefixes against the exact revision sent to the host.
+    /// The host applies the UUID only after its revision compare succeeds.
+    pub(crate) fn change_comment(
+        &self,
+        root: &std::path::Path,
+        id: &str,
+        query: &str,
+        content: Option<&str>,
+    ) -> Result<Value> {
+        let sid = aida_core::object_store::canonical_spec_id(id);
+        let bytes = aida_core::db::redo::object_bytes(root, &sid)?;
+        let row = serde_yaml::from_slice(&bytes)?;
+        let comment_id = crate::rel_cards::resolve_comment_uuid(&row, query)?;
+        let expected_revision = aida_core::db::redo::hash(&bytes);
+        let operation = match content {
+            Some(content) => CanonicalOperation::CommentEdit {
+                spec_id: sid,
+                expected_revision,
+                comment_id,
+                content: content.into(),
+            },
+            None => CanonicalOperation::CommentDelete {
+                spec_id: sid,
+                expected_revision,
+                comment_id,
+            },
+        };
+        self.mutate(Uuid::new_v4(), &operation)
+    }
+
     pub(crate) fn edit(
         &self,
         root: &std::path::Path,
@@ -159,7 +189,7 @@ fn validate_result(op: &str, data: &Value, result: &Value) -> Result<()> {
                     .all(|b| b.is_ascii_digit() || (b'a'..=b'f').contains(&b)),
             "OutcomeUnknown"
         );
-        if op == "comment_add" {
+        if matches!(op, "comment_add" | "comment_edit" | "comment_delete") {
             ensure!(
                 result["comment_id"]
                     .as_str()
@@ -167,6 +197,9 @@ fn validate_result(op: &str, data: &Value, result: &Value) -> Result<()> {
                     .is_some(),
                 "OutcomeUnknown"
             );
+            if op != "comment_add" {
+                ensure!(result["comment_id"] == data["comment_id"], "OutcomeUnknown");
+            }
         } else {
             ensure!(
                 op == "spec_edit" && result["comment_id"].is_null(),
