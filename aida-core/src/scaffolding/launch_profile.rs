@@ -10,6 +10,7 @@ pub const RECIPE: &str = include_str!("../../templates/launch-profile.toml");
 mod tests {
     use super::*;
 
+    // trace:STORY-1486.generated_profile_preserves_approval_prompts | ai:codex
     #[test]
     fn generated_profile_preserves_approval_prompts() {
         let value: toml::Value = toml::from_str(RECIPE).unwrap();
@@ -20,6 +21,7 @@ mod tests {
         assert!(RECIPE.contains("target/debug/aida"));
         assert!(RECIPE.contains("target/release/aida"));
     }
+    // trace:STORY-1486.acc62716 | ai:codex
     #[test]
     fn scaffold_recipe_is_portable_across_project_locations() {
         use crate::scaffolding::{ScaffoldConfig, Scaffolder};

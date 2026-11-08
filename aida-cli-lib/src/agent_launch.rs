@@ -404,7 +404,8 @@ pub(crate) fn handle_agent_command(cmd: &AgentCommand) -> Result<()> {
             | AgentNewCommand::Antigravity { role, cwd, .. }) = command;
             let root = child_role_project_root(cwd.as_deref())?;
             crate::launch_permission_profile::validate_recipe(&root)?;
-            let seat = crate::gate::seat_authority::current_seat(&root);
+            let seat = crate::stakeholder_role::active_stakeholder_role()
+                .or_else(|| crate::gate::seat_authority::current_seat(&root));
             print!(
                 "{}",
                 crate::launch_permission_profile::git_policy(
@@ -6207,7 +6208,7 @@ pub(crate) fn render_agent_launch_noexec(
         .exists()
     {
         out.push_str(&crate::launch_permission_profile::render_roots(
-            &plan.project_root,
+            &plan.launch_cwd,
             &aida.path,
         )?);
     }
@@ -7971,14 +7972,39 @@ pub(crate) static AGENT: crate::command_registry::CommandReg =
         name: "agent",
         help_after: "compete",
         command: <AgentArgs as clap::CommandFactory>::command,
-        policy: |_| crate::command_registry::CmdPolicy {
-            stakeholder: crate::stakeholder_role::StakeholderAction::Write,
-            per_write_auto_push: false,
-            skip_role_restore_prompt: false,
-            team_identity_write: false,
-        },
+        policy: agent_cli_policy,
         run: crate::command_registry::Handler::Store(run_agent),
     };
+
+// Only an explicitly selected vendor's no-exec path is a read. Real launches,
+// implicit vendor selection and malformed invocations retain the write gate.
+// trace:STORY-1486 | ai:codex
+fn agent_cli_policy(matches: &clap::ArgMatches) -> crate::command_registry::CmdPolicy {
+    let preview =
+        <AgentArgs as clap::FromArgMatches>::from_arg_matches(matches).is_ok_and(|args| {
+            matches!(
+                args.inner,
+                AgentCommand::New {
+                    command: Some(
+                        AgentNewCommand::Claude { noexec: true, .. }
+                            | AgentNewCommand::Codex { noexec: true, .. }
+                            | AgentNewCommand::Antigravity { noexec: true, .. }
+                    ),
+                    ..
+                }
+            )
+        });
+    crate::command_registry::CmdPolicy {
+        stakeholder: if preview {
+            crate::stakeholder_role::StakeholderAction::Read
+        } else {
+            crate::stakeholder_role::StakeholderAction::Write
+        },
+        per_write_auto_push: false,
+        skip_role_restore_prompt: false,
+        team_identity_write: false,
+    }
+}
 
 // trace:TASK-1793 | ai:codex
 #[cfg(test)]

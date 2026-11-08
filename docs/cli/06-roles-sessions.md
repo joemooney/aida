@@ -217,13 +217,22 @@ than local absolute paths. `aida agent new <vendor> --no-exec --verbose` resolve
 the recipe into separate writable and read-only root lists. Project source,
 Git administrative directories (including the common directory shared by linked
 worktrees), project state, store, cache and build output are listed separately.
+The project root in this declaration is the actual launch directory, including
+an explicit linked-worktree `--cwd`. Unavailable Git metadata is reported without
+preventing a preview; it never establishes a writable AIDA checkout identity.
 An AIDA source checkout is read-only for consumer repositories; it is writable
 for AIDA development only when the resolved Git common-directory identities
-match. Standalone installations infer no source checkout. Both
+match. Promoted dev builds resolve their source checkout from the existing
+`.promoted` receipt beside the executable and verify repository identity.
+Standalone installations without source evidence infer no source checkout. Both
 `target/debug/aida` and `target/release/aida` locations are covered without
 regenerating the recipe; ordinary approval rules still apply to execution.
 
-Development seats declare Git-write policy; guest seats declare read-only.
+Development seats declare Git-write policy; guest and requester seats declare
+read-only. A stakeholder parent label can only downgrade the declaration,
+including when the child requests a development seat. Explicit-vendor
+`--no-exec` previews are reads available to stakeholder seats; actual agent
+launches retain the existing stakeholder write gate.
 `aida agent new <vendor> --git-read-only` explicitly downgrades the declaration.
 The launch output prints the mode and reason, including in dry previews. These
 are declarations, **not enforced Git or filesystem restrictions** on current

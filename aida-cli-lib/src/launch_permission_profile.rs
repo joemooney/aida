@@ -4,29 +4,40 @@ use aida_core::scaffolding::launch_profile::{PROFILE_PATH, RECIPE};
 use anyhow::{bail, Context, Result};
 use std::path::{Path, PathBuf};
 
-/// A role request is not a grant. A guest parent remains read-only even when
+/// A role request is not a grant. A stakeholder parent remains read-only even when
 /// requesting a development child; ordinary launch delegation still validates it.
 pub(crate) fn git_policy(requested: Option<&str>, parent: Option<&str>, downgrade: bool) -> String {
-    let guest = [requested, parent]
+    let stakeholder = [requested, parent]
         .into_iter()
         .flatten()
-        .any(|seat| seat.eq_ignore_ascii_case("guest"));
+        .find(|seat| crate::stakeholder_role::is_stakeholder_role(&seat.to_ascii_lowercase()));
     let (mode, reason) = if downgrade {
         ("read-only", "explicit --git-read-only downgrade")
-    } else if guest {
-        ("read-only", "guest seat")
+    } else if let Some(seat) = stakeholder {
+        (
+            "read-only",
+            if seat.eq_ignore_ascii_case("guest") {
+                "guest seat"
+            } else {
+                "requester seat"
+            },
+        )
     } else {
         (
             "write",
             "development baseline; ordinary seat/delegation gates still apply",
         )
     };
-    format!("git_policy: {mode} ({reason}; requested seat: {}; validated parent seat: {})\n  declared, not enforced by current adapters; no approval exemptions\n",
+    format!("git_policy: {mode} ({reason}; requested seat: {}; parent seat (validated grant or restrictive stakeholder label): {})\n  declared, not enforced by current adapters; no approval exemptions\n",
         requested.unwrap_or("default"), parent.unwrap_or("none"))
 }
 
 fn git_path(root: &Path, arg: &str) -> Result<PathBuf> {
     let output = std::process::Command::new("git")
+        .env_remove("GIT_DIR")
+        .env_remove("GIT_COMMON_DIR")
+        .env_remove("GIT_WORK_TREE")
+        .env_remove("GIT_INDEX_FILE")
         .arg("-C")
         .arg(root)
         .args(["rev-parse", "--path-format=absolute", arg])
@@ -60,11 +71,18 @@ fn planned(path: &Path) -> Result<PathBuf> {
 fn checkout(executable: &Path) -> Option<PathBuf> {
     // An installed standalone binary supplies no source-checkout identity.
     let executable = executable.canonicalize().ok()?;
-    executable
+    let ancestor = executable
         .ancestors()
         .skip(1)
         .find(|root| aida_core::scaffolding::is_aida_repository(root))
-        .map(Path::to_path_buf)
+        .map(Path::to_path_buf);
+    ancestor.or_else(|| {
+        // Promoted builds retain their source location beside the executable.
+        // This is discovery evidence only; repository identity is checked below.
+        let meta = crate::dev_build::read_promotion_meta(executable.parent()?)?;
+        let root = PathBuf::from(meta.repo?).canonicalize().ok()?;
+        aida_core::scaffolding::is_aida_repository(&root).then_some(root)
+    })
 }
 
 pub(crate) fn validate_recipe(project: &Path) -> Result<()> {
@@ -104,28 +122,40 @@ pub(crate) fn validate_recipe(project: &Path) -> Result<()> {
 pub(crate) fn render_roots(project: &Path, executable: &Path) -> Result<String> {
     validate_recipe(project)?;
     let project = project.canonicalize()?;
-    let git_dir = git_path(&project, "--git-dir")?;
-    let common = git_path(&project, "--git-common-dir")?;
+    let git_dir = git_path(&project, "--git-dir");
+    let common = git_path(&project, "--git-common-dir");
+    let mut diagnostics = String::new();
     let store = crate::store_sync::detect_distributed_store_from(&project)
         .unwrap_or_else(|| project.join(".aida-store"));
     let mut writable = vec![
         ("project", project.clone()),
-        ("git-dir", git_dir),
-        (
-            "git-common-dir (shared across linked worktrees)",
-            common.clone(),
-        ),
         ("project-state", planned(&project.join(".aida"))?),
         ("store", planned(&store)?),
         ("cache", planned(&project.join(".aida/cache-db"))?),
         ("build", planned(&project.join("target"))?),
     ];
+    match (&git_dir, &common) {
+        (Ok(dir), Ok(common)) => {
+            writable.push(("git-dir", dir.clone()));
+            writable.push((
+                "git-common-dir (shared across linked worktrees)",
+                common.clone(),
+            ));
+        }
+        _ => {
+            diagnostics.push_str("git metadata unavailable; no Git administrative roots declared\n")
+        }
+    }
     let mut read_only = Vec::new();
     let mut executables = vec![executable.to_path_buf()];
     let mut note = "standalone installation; no AIDA checkout inferred";
     if let Some(aida) = checkout(executable) {
         // Compare actual Git common directories, never directory names or role env.
-        let same_repo = git_path(&aida, "--git-common-dir")? == common;
+        let aida_common = git_path(&aida, "--git-common-dir");
+        let same_repo = matches!((&aida_common, &common), (Ok(a), Ok(b)) if a == b);
+        if aida_common.is_err() {
+            diagnostics.push_str("AIDA Git identity unavailable; checkout remains read-only\n");
+        }
         note = if same_repo {
             "verified AIDA repository identity"
         } else {
@@ -143,9 +173,9 @@ pub(crate) fn render_roots(project: &Path, executable: &Path) -> Result<String> 
     let overlaps = read_only
         .iter()
         .any(|read| writable.iter().any(|(_, write)| read.starts_with(write)));
-    let mut out = format!(
-        "launch_profile: declared roots, not applied confinement ({note})\nwritable_roots:\n"
-    );
+    let mut out = format!("launch_profile: declared roots, not applied confinement ({note})\n");
+    out.push_str(&diagnostics);
+    out.push_str("writable_roots:\n");
     for (kind, path) in writable {
         out.push_str(&format!("  {kind}: {}\n", path.display()));
     }
@@ -168,7 +198,7 @@ mod tests {
     use super::*;
     fn repo(path: &Path) {
         std::fs::create_dir_all(path).unwrap();
-        assert!(std::process::Command::new("git")
+        assert!(crate::test_git::git_command()
             .arg("init")
             .arg(path)
             .output()
@@ -194,6 +224,7 @@ mod tests {
         std::fs::write(&exe, "fixture").unwrap();
         exe
     }
+    // trace:STORY-1486.ac91839b | ai:codex
     #[test]
     fn consumer_profile_keeps_aida_checkout_read_only() {
         let tmp = tempfile::tempdir().unwrap();
@@ -210,6 +241,7 @@ mod tests {
         assert!(output.contains("target/release/aida"));
         assert!(!consumer.join(".aida").exists());
     }
+    // trace:STORY-1486.ac91839b | ai:codex
     #[test]
     fn aida_self_development_uses_verified_repo_identity() {
         let tmp = tempfile::tempdir().unwrap();
@@ -225,6 +257,7 @@ mod tests {
             .unwrap()
             .contains("consumer repository"));
     }
+    // trace:STORY-1486.ac325a99 | ai:codex
     #[test]
     fn declared_git_policy_reports_normal_guest_and_explicit_downgrade() {
         for (requested, parent, downgrade, mode, reason) in [
@@ -236,6 +269,20 @@ mod tests {
                 "development baseline",
             ),
             (Some("guest"), None, false, "read-only", "guest seat"),
+            (
+                Some("requester"),
+                None,
+                false,
+                "read-only",
+                "requester seat",
+            ),
+            (
+                Some("implementer"),
+                Some("requester"),
+                false,
+                "read-only",
+                "requester seat",
+            ),
             (
                 Some("implementer"),
                 Some("guest"),
@@ -300,6 +347,7 @@ mod tests {
         }
     }
 
+    // trace:STORY-1486.acc62dfa | ai:codex
     #[test]
     fn debug_release_switch_needs_no_rescaffold() {
         let tmp = tempfile::tempdir().unwrap();
@@ -341,7 +389,7 @@ mod tests {
         let root = tmp.path().join("primary");
         let exe = aida(&root);
         let git = |args: &[&str]| {
-            let output = std::process::Command::new("git")
+            let output = crate::test_git::git_command()
                 .arg("-C")
                 .arg(&root)
                 .args(args)
@@ -382,5 +430,106 @@ mod tests {
         let path = tmp.path().join("target");
         std::os::unix::fs::symlink(tmp.path().join("missing"), &path).unwrap();
         assert!(planned(&path).is_err());
+    }
+    #[test]
+    fn promoted_binary_discovers_validated_source_checkout() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path().join("source");
+        aida(&root);
+        let live = tmp.path().join("live");
+        std::fs::create_dir_all(&live).unwrap();
+        let exe = live.join("aida");
+        std::fs::write(&exe, "fixture").unwrap();
+        let meta = crate::dev_build::PromotionMeta {
+            sha: "fixture".into(),
+            allow_dirty: false,
+            promoted_at: "fixture".into(),
+            repo: Some(root.display().to_string()),
+        };
+        std::fs::write(
+            live.join(crate::dev_build::PROMOTED_FILE),
+            serde_json::to_vec(&meta).unwrap(),
+        )
+        .unwrap();
+        let consumer = tmp.path().join("consumer");
+        repo(&consumer);
+        let output = render_roots(&consumer, &exe).unwrap();
+        assert!(output.contains("consumer repository"), "{output}");
+        assert!(output.contains(&format!("read_only_roots:\n  {}\n", root.display())));
+        assert!(output.contains("target/debug/aida"));
+        assert!(output.contains("target/release/aida"));
+    }
+
+    #[test]
+    fn unavailable_git_metadata_keeps_preview_and_read_only_checkout() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path().join("source");
+        let exe = aida(&root);
+        std::fs::remove_dir_all(root.join(".git")).unwrap();
+        let consumer = tmp.path().join("consumer");
+        std::fs::create_dir_all(&consumer).unwrap();
+        let output = render_roots(&consumer, &exe).unwrap();
+        assert!(output.contains("git metadata unavailable"));
+        assert!(output.contains("AIDA Git identity unavailable"));
+        assert!(output.contains(&format!("read_only_roots:\n  {}\n", root.display())));
+        assert!(!output.contains("verified AIDA repository identity"));
+    }
+
+    #[test]
+    fn ambient_git_routing_cannot_forge_repository_identity() {
+        if crate::test_env::run_path_isolated_test() {
+            return;
+        }
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path().join("source");
+        let exe = aida(&root);
+        let consumer = tmp.path().join("consumer");
+        repo(&consumer);
+        let git_dir = root.join(".git");
+        let _env = crate::test_env::EnvVarsGuard::set(&[
+            ("GIT_DIR", git_dir.to_str().unwrap()),
+            ("GIT_COMMON_DIR", git_dir.to_str().unwrap()),
+            ("GIT_WORK_TREE", root.to_str().unwrap()),
+        ]);
+        let output = render_roots(&consumer, &exe).unwrap();
+        assert!(output.contains("consumer repository"), "{output}");
+        assert!(!output.contains("verified AIDA repository identity"));
+        assert!(output.contains(&format!("git-dir: {}", consumer.join(".git").display())));
+    }
+    #[test]
+    fn stakeholder_preview_is_read_but_real_launch_remains_refused() {
+        for vendor in ["claude", "codex", "antigravity"] {
+            for seat in ["guest", "requester"] {
+                let mut preview = crate::command_registry::try_parse_from([
+                    "aida",
+                    "agent",
+                    "new",
+                    vendor,
+                    "--no-exec",
+                    "--verbose",
+                ])
+                .unwrap();
+                crate::stakeholder_role::enforce_stakeholder_role_capabilities_for_role(
+                    &mut preview.command,
+                    seat,
+                )
+                .unwrap();
+                let mut launch = crate::command_registry::try_parse_from([
+                    "aida",
+                    "agent",
+                    "new",
+                    vendor,
+                    "--verbose",
+                ])
+                .unwrap();
+                assert!(
+                    crate::stakeholder_role::enforce_stakeholder_role_capabilities_for_role(
+                        &mut launch.command,
+                        seat,
+                    )
+                    .is_err()
+                );
+            }
+        }
     }
 }
