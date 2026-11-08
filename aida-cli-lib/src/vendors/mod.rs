@@ -341,6 +341,9 @@ mod tests {
 
 pub(crate) mod headless;
 
+// trace:BUG-2486 | ai:codex
+pub(crate) mod codex_auth_hints;
+
 // trace:BUG-2484 | ai:codex
 pub(crate) fn installed_codex_binary_diagnostic() -> Option<String> {
     let path = crate::which_binary(aida_core::vendors::LaunchVendor::Codex.as_str())?;

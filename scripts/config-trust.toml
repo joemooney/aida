@@ -970,6 +970,7 @@ sites = 1
 [keys.trusted.contained]
 allowed_hosts = "policy"
 read_allowlist = "policy"
+codex_min_grant_secs = "policy"
 
 # Generated private Codex config only; no branch-local authority read.
 # trace:STORY-2593 | ai:codex
