@@ -1,0 +1,21 @@
+id: 01a1bd08-0a1a-7723-b354-5026f52db424
+spec_id: BUG-b6b1278890774ef993d2ebc327862470-268
+agreed_id: BUG-2503
+title: aida role status offers --bind-pid for a managed agent session, but the resulting grant is refused and cannot be issued to the agent's handle
+description: 'Seen 2026-11-08. role status printed ''for aida role enter <seat> --bind-pid 2907980''. The operator ran it: the grant was issued to joe and rejected in the session (''issued to joe but this process runs as claude-advisor-106''). Issuing with AIDA_USER=claude-advisor-106 failed the team roster check for the advisor seat. So a running managed advisor has no way to renew an expiring grant short of a relaunch. Either make the bind usable for the session it names, or stop offering it and name the supported renewal.'
+status: Draft
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-11-08T21:19:43.130807780Z
+modified_at: 2026-11-08T21:19:43.130807780Z
+req_type: Bug
+filed_at:
+  code_sha: b57c1fab753d30430c7a544b781bd8c7d91da0d2
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: db2eb4c39e4
+  vendor: claude
+  session: 01a1bc93-77a0-7740-8b03-df4e3e8d1df5
+  harness_version: 2.1.319 (Claude Code)
