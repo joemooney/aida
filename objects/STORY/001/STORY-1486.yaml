@@ -23,7 +23,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-09-26T18:30:26.622729865Z
-modified_at: 2026-11-08T06:12:28.542522815Z
+modified_at: 2026-11-08T06:28:42.788759679Z
 req_type: Story
 tags:
 - agent-launch
@@ -444,6 +444,20 @@ comments:
   modified_at: 2026-11-08T01:52:15.784215529Z
   session_id: 01a1b8be-8170-7fb2-89ab-ecb4c6eee98c
   harness_version: 2.1.319 (Claude Code)
+- id: 01a1b9d8-4ca4-7200-ad68-e870264f12db
+  author: dirtlab
+  content: |
+    Implemented the operator-amended declared-policy scope of STORY-1486. Scaffold now emits a portable .aida/launch-profile.toml recipe without approval exemptions or bypass flags. Launch previews resolve writable/read-only roots, shared Git metadata, verified common-directory AIDA repository identity, standalone-install limits, and both debug/release executable locations. Agent-new accepts --git-read-only before/after vendor and reports normal/guest/explicit-downgrade policy and reason as declared, not enforced. Existing permission settings and authority/delegation gates remain unchanged. Recipe reads are bounded regular-file reads and unsupported recipes refuse before dispatch.
+
+    Changed files: aida-core/templates/launch-profile.toml; aida-core/src/scaffolding/launch_profile.rs; aida-core/src/scaffolding/mod.rs; aida-cli-lib/src/launch_permission_profile.rs; aida-cli-lib/src/agent_launch.rs; aida-cli-lib/src/agent_launch_args.rs; aida-cli-lib/src/lib.rs; docs/cli/06-roles-sessions.md.
+
+    Validation through aida lane job: cargo test --profile agent -p aida-cli-lib --lib -- launch_permission_profile (8 passed); cargo test --profile agent -p aida-cli-lib --lib -- noexec (7 passed); cargo test --profile agent -p aida-core --lib -- scaffolding::launch_profile (2 passed). rustfmt --check for changed Rust files and git diff --check passed. Full make check-templates was interrupted when it invoked Cargo internally, which the lane instructions prohibit; preceding symlink/mirror checks passed. codegraph was unavailable; used rg navigation, and doctor supplied no index diagnosis.
+
+    No implementation blockers. Native-seat handoff: edits are uncommitted; no commit/push/PR/ship/review-record/queue-done action performed. Host publication and queue completion follow process exit. Git/filesystem enforcement remains the explicitly excluded follow-up.
+  created_at: 2026-11-08T06:28:42.788759679Z
+  modified_at: 2026-11-08T06:28:42.788759679Z
+  session_id: 01a1b9c8ee66
+  harness_version: codex-cli 0.167.0
 history:
 - id: 01a12b8d-22bd-7ed1-a30b-21d8634b3184
   author: joe
