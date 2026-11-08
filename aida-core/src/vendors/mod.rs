@@ -110,8 +110,20 @@ pub enum SandboxSupport {
     OuterOnlyPendingConformance,
 }
 
+/// Installation policy; shared settings remain owned by the full scaffolder.
+// trace:STORY-2539 | ai:codex
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum HookBackend {
+    Settings,
+    Standalone,
+    NamedEntries,
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct HookLayout {
+    pub backend: HookBackend,
+    pub template: &'static str,
+    pub events: &'static [&'static str],
     pub wiring: &'static str,
     pub handlers: &'static str,
 }
@@ -143,6 +155,18 @@ pub static PROFILES: [VendorProfile; 3] = [
         executable: "claude",
         interactive_prompt: PromptTransport::Positional,
         hooks: HookLayout {
+            backend: HookBackend::Settings,
+            template: "settings.json",
+            events: &[
+                "PreToolUse",
+                "PostToolUse",
+                "SessionStart",
+                "UserPromptSubmit",
+                "Notification",
+                "SubagentStart",
+                "SubagentStop",
+                "Stop",
+            ],
             wiring: ".claude/settings.json",
             handlers: ".claude/hooks",
         },
@@ -160,6 +184,17 @@ pub static PROFILES: [VendorProfile; 3] = [
         executable: "codex",
         interactive_prompt: PromptTransport::Positional,
         hooks: HookLayout {
+            backend: HookBackend::Standalone,
+            template: "codex-hooks.json",
+            events: &[
+                "PreToolUse",
+                "PostToolUse",
+                "SessionStart",
+                "UserPromptSubmit",
+                "SubagentStart",
+                "SubagentStop",
+                "Stop",
+            ],
             wiring: ".codex/hooks.json",
             handlers: ".codex/hooks",
         },
@@ -177,6 +212,9 @@ pub static PROFILES: [VendorProfile; 3] = [
         executable: "agy",
         interactive_prompt: PromptTransport::Flag("--prompt-interactive"),
         hooks: HookLayout {
+            backend: HookBackend::NamedEntries,
+            template: "antigravity-hooks.json",
+            events: &["PreInvocation", "SessionStart"],
             wiring: ".agents/hooks.json",
             handlers: ".agents/hooks",
         },
@@ -215,3 +253,5 @@ impl VendorProfile {
 
 mod headless;
 pub mod headless_posture;
+
+pub mod hooks;

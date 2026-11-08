@@ -90,6 +90,7 @@ fn wrapper_launches_configured_vendor(vendor: &str, surface: &str) {
                 ("PATH", Some(&path)),
                 ("AIDA_CONTAINED", None),
                 ("AIDA_OS_WRAP", Some("0")),
+                ("AIDA_TRUST_PID_NAMESPACE", Some("1")),
                 ("AIDA_USER", Some("routing-fixture")),
                 ("AIDA_SESSION_ROLE", None),
                 (crate::gate::seat_authority::GRANT_ENV, None),
