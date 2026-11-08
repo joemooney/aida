@@ -3422,6 +3422,117 @@ fn bug_2487_codex_env() -> BTreeMap<String, String> {
 }
 
 #[test]
+// trace:TASK-3015 | ai:codex
+fn task_3015_codex_config_refuses_posture_overrides() {
+    for config in [
+        "approval_policy=\"on-request\"",
+        " approval_policy =\"never\"",
+        "sandbox_mode=\"danger-full-access\"",
+        "sandbox_workspace_write.network_access=true",
+        "shell_environment_policy.inherit=\"all\"",
+        "permissions.aida.network.enabled=true",
+        "default_permissions=\"other\"",
+    ] {
+        for flags in [
+            vec!["-c".to_string(), config.to_string()],
+            vec!["--config".to_string(), config.to_string()],
+            vec![format!("--config={config}")],
+            vec![format!("-c{config}")],
+            vec![format!("-c={config}")],
+        ] {
+            let original = [vec!["exec".into()], flags, vec!["prompt".into()]].concat();
+            let error = codex_argv(
+                Path::new("/fixture/codex"),
+                &bug_2487_codex_env(),
+                &original,
+                true,
+            )
+            .unwrap_err();
+            assert!(
+                error.to_string().contains("posture config override"),
+                "{error}"
+            );
+        }
+    }
+}
+
+#[test]
+// trace:TASK-3015 | ai:codex
+fn task_3015_codex_config_preserves_ordinary_overrides() {
+    for flags in [
+        vec!["-c", "model=\"example\""],
+        vec!["--config", "model=\"example\""],
+        vec!["--config=model=\"example\""],
+        vec!["-c=model=\"example\""],
+    ] {
+        let original: Vec<String> = ["exec"]
+            .into_iter()
+            .chain(flags)
+            .chain(["prompt"])
+            .map(String::from)
+            .collect();
+        let (args, _) = codex_argv(
+            Path::new("/fixture/codex"),
+            &bug_2487_codex_env(),
+            &original,
+            true,
+        )
+        .unwrap();
+        assert!(args.ends_with(&original));
+    }
+}
+
+#[test]
+// trace:TASK-3015 | ai:codex
+fn task_3015_codex_sandbox_checks_split_and_inline_values() {
+    for flag in ["--sandbox", "-s"] {
+        for value in ["workspace-write", "danger-full-access", "read-only", ""] {
+            for flags in [
+                vec![flag.to_string(), value.to_string()],
+                vec![format!("{flag}={value}")],
+            ] {
+                let original = [vec!["exec".into()], flags, vec!["prompt".into()]].concat();
+                let result = codex_argv(
+                    Path::new("/fixture/codex"),
+                    &bug_2487_codex_env(),
+                    &original,
+                    true,
+                );
+                if value == "workspace-write" {
+                    let (args, _) = result.unwrap();
+                    assert!(args.ends_with(&["exec".into(), "prompt".into()]));
+                } else {
+                    assert!(result.unwrap_err().to_string().contains("sandbox policy"));
+                }
+            }
+        }
+    }
+}
+
+#[test]
+// trace:TASK-3015 | ai:codex
+fn task_3015_codex_config_preserves_prompt_after_terminator() {
+    for prompt in [
+        "-c",
+        "--config=approval_policy notes",
+        "--ask-for-approval",
+        "-P",
+        "--sandbox=danger-full-access",
+        "-s=danger-full-access",
+    ] {
+        let original = vec!["exec".into(), "--".into(), prompt.into()];
+        let (args, _) = codex_argv(
+            Path::new("/fixture/codex"),
+            &bug_2487_codex_env(),
+            &original,
+            true,
+        )
+        .unwrap();
+        assert!(args.ends_with(&original));
+    }
+}
+
+#[test]
 // trace:BUG-2487 | ai:codex
 fn bug_2487_pinned_help_checks_production_argv_and_scopes() {
     let recorded: serde_json::Value =

@@ -357,6 +357,7 @@ pub(crate) fn handle_agent_command(cmd: &AgentCommand) -> Result<()> {
             role,
             spec,
             delegate_seats,
+            git_read_only,
         } => {
             let mut resolved;
             let command = if let Some(command) = command {
@@ -406,7 +407,12 @@ pub(crate) fn handle_agent_command(cmd: &AgentCommand) -> Result<()> {
                 }
                 &resolved
             };
-            dispatch_agent_new(command)
+            // Resolve this declaration independently of approval posture. It grants no authority.
+            // trace:STORY-1486 | ai:codex
+            let options = crate::vendors::launch_preview_options(command);
+            let root = child_role_project_root(options.cwd.as_deref())?;
+            crate::launch_permission_profile::validate_recipe(&root)?;
+            dispatch_agent_new(command, *git_read_only)
         }
         AgentCommand::Register {
             pid,
@@ -1201,7 +1207,7 @@ pub(crate) fn pick_agent_type_interactively() -> Result<Option<AgentNewCommand>>
 /// out of `handle_agent_command` so both the explicit `aida agent new <type>`
 /// path and the interactive picker share one code path.
 // trace:TASK-837 | ai:claude
-pub(crate) fn dispatch_agent_new(cmd: &AgentNewCommand) -> Result<()> {
+pub(crate) fn dispatch_agent_new(cmd: &AgentNewCommand, git_read_only: bool) -> Result<()> {
     // trace:STORY-2215 | ai:claude
     let (AgentNewCommand::Claude { grant_inline, .. }
     | AgentNewCommand::Codex { grant_inline, .. }
@@ -1269,7 +1275,8 @@ pub(crate) fn dispatch_agent_new(cmd: &AgentNewCommand) -> Result<()> {
             ),
             AgentDefaultFlagOptions::new(!*no_default_flags, extra_flags.clone(), model.clone())
                 .rotating(*rotate)
-                .delegating(delegate_seats.clone()),
+                .delegating(delegate_seats.clone())
+                .declaring_git_policy(git_read_only),
             name.clone(),
             description.clone(),
             *bg,
@@ -1335,7 +1342,8 @@ pub(crate) fn dispatch_agent_new(cmd: &AgentNewCommand) -> Result<()> {
                     model.clone(),
                 )
                 .rotating(*rotate)
-                .delegating(delegate_seats.clone()),
+                .delegating(delegate_seats.clone())
+                .declaring_git_policy(git_read_only),
                 name: name.clone(),
                 description: description.clone(),
                 no_mail_wake: *no_mail_wake,
@@ -1399,7 +1407,8 @@ pub(crate) fn dispatch_agent_new(cmd: &AgentNewCommand) -> Result<()> {
             // trace:STORY-B6B1278890774EF993D2EBC327862470-150 | ai:claude
             AgentDefaultFlagOptions::new(!*no_default_flags, extra_flags.clone(), model.clone())
                 .rotating(*rotate)
-                .delegating(delegate_seats.clone()),
+                .delegating(delegate_seats.clone())
+                .declaring_git_policy(git_read_only),
             name.clone(),
             description.clone(),
             *no_mail_wake,
@@ -1451,7 +1460,8 @@ pub(crate) fn dispatch_agent_new(cmd: &AgentNewCommand) -> Result<()> {
                 !*no_duplicate_check,
             ),
             AgentDefaultFlagOptions::new(!*no_default_flags, extra_flags.clone(), None)
-                .delegating(delegate_seats.clone()),
+                .delegating(delegate_seats.clone())
+                .declaring_git_policy(git_read_only),
             name.clone(),
             description.clone(),
         ),
@@ -1852,6 +1862,9 @@ pub(crate) struct AgentDefaultFlagOptions {
     // trace:STORY-B6B1278890774EF993D2EBC327862470-101 | ai:claude
     pub(crate) rotate: bool,
     pub(crate) delegate_seats: Vec<String>,
+    // Only agent-new CLI declarations; other callers retain their existing output.
+    // trace:STORY-1486 | ai:codex
+    pub(crate) declared_git_read_only: Option<bool>,
 }
 
 impl AgentDefaultFlagOptions {
@@ -1866,7 +1879,14 @@ impl AgentDefaultFlagOptions {
             model_override,
             rotate: false,
             delegate_seats: Vec::new(),
+            declared_git_read_only: None,
         }
+    }
+
+    // trace:STORY-1486 | ai:codex
+    fn declaring_git_policy(mut self, downgrade: bool) -> Self {
+        self.declared_git_read_only = Some(downgrade);
+        self
     }
 
     // trace:BUG-2467 | ai:codex
@@ -2720,6 +2740,16 @@ pub(crate) fn agent_new_claude(
             return Ok(());
         }
     };
+    // The picker has now resolved the child seat; never report the raw CLI role.
+    // trace:STORY-1486 | ai:codex
+    crate::launch_permission_profile::print_git_policy(
+        &child_role_project_root(cwd)?,
+        role.as_deref(),
+        flag_options.declared_git_read_only,
+        noexec,
+        verbose,
+        show_prompt || context.show,
+    );
     // SPIKE-34: when `--bg` is set, append it to the argv so `claude --bg`
     // dispatches the session to the background supervisor instead of
     // running foreground in this terminal. Forces the bg-aware dispatch
@@ -2859,6 +2889,16 @@ pub(crate) fn agent_new_codex_wake(
             return Ok(());
         }
     };
+    // The picker has now resolved the child seat; never report the raw CLI role.
+    // trace:STORY-1486 | ai:codex
+    crate::launch_permission_profile::print_git_policy(
+        &child_role_project_root(cwd)?,
+        role.as_deref(),
+        flag_options.declared_git_read_only,
+        noexec,
+        verbose,
+        show_prompt || context.show,
+    );
     // BUG-2007: a codex TUI attached to the shared app-server daemon runs its
     // hooks (and tools) with the daemon's environment, i.e. whichever shell
     // first started the daemon, so the child got another session's role and
@@ -2946,6 +2986,16 @@ pub(crate) fn agent_new_antigravity(
             return Ok(());
         }
     };
+    // The picker has now resolved the child seat; never report the raw CLI role.
+    // trace:STORY-1486 | ai:codex
+    crate::launch_permission_profile::print_git_policy(
+        &child_role_project_root(cwd)?,
+        role.as_deref(),
+        flag_options.declared_git_read_only,
+        noexec,
+        verbose,
+        show_prompt || context.show,
+    );
     let mut default_args = Vec::new();
     if bypass_sandbox {
         default_args.push("--dangerously-skip-permissions".to_string());
@@ -3108,16 +3158,6 @@ pub(crate) fn agent_new_with_config_wake(
     refuse_uncontained_child_of_contained_parent(&config)?;
     guard_interactive_claude_dontask(config.agent_type, &config.default_args)?;
 
-    // STORY-495: surface the one-time faithful-launcher pointer when a Claude
-    // launch lands on the native posture (no `--permission-mode` in the argv).
-    // A forced/explicit bypass (incl. `--bg`) injects the flag, so this no-ops
-    // for those paths.
-    if config.agent_type == "claude"
-        && !config.default_args.iter().any(|a| a == "--permission-mode")
-    {
-        maybe_show_faithful_launcher_notice();
-    }
-
     // BUG-408: `--show-context` is a PURE PREVIEW. Render the launch-context
     // snapshot from a dry plan and return without launching — no `session_start`,
     // so no worktree, no lease, no spec status flip. Previously this fell through
@@ -3158,6 +3198,18 @@ pub(crate) fn agent_new_with_config_wake(
             true,
             context.enabled,
         );
+    }
+
+    // Previews return before the notice writes its first-use marker.
+    // trace:STORY-1486 | ai:codex
+    // STORY-495: surface the one-time faithful-launcher pointer when a Claude
+    // launch lands on the native posture (no `--permission-mode` in the argv).
+    // A forced/explicit bypass (incl. `--bg`) injects the flag, so this no-ops
+    // for those paths.
+    if config.agent_type == "claude"
+        && !config.default_args.iter().any(|a| a == "--permission-mode")
+    {
+        maybe_show_faithful_launcher_notice();
     }
 
     // Check ownership before any bypass/resume prompt; previews above remain pure.
@@ -3477,16 +3529,6 @@ pub(crate) fn agent_new_bg_dispatch(
         refuse_bg_under_os_wrap(&config, &project_root)?;
     }
 
-    // STORY-495: surface the one-time faithful-launcher pointer when a Claude
-    // launch lands on the native posture (no `--permission-mode` in the argv).
-    // A forced/explicit bypass (incl. `--bg`) injects the flag, so this no-ops
-    // for those paths.
-    if config.agent_type == "claude"
-        && !config.default_args.iter().any(|a| a == "--permission-mode")
-    {
-        maybe_show_faithful_launcher_notice();
-    }
-
     // BUG-408: `--show-context` is a PURE PREVIEW. Render the launch-context
     // snapshot from a dry plan and return without launching — no `session_start`,
     // so no worktree, no lease, no spec status flip. Previously this fell through
@@ -3525,6 +3567,18 @@ pub(crate) fn agent_new_bg_dispatch(
             false,
             context.enabled,
         );
+    }
+
+    // Previews return before the notice writes its first-use marker.
+    // trace:STORY-1486 | ai:codex
+    // STORY-495: surface the one-time faithful-launcher pointer when a Claude
+    // launch lands on the native posture (no `--permission-mode` in the argv).
+    // A forced/explicit bypass (incl. `--bg`) injects the flag, so this no-ops
+    // for those paths.
+    if config.agent_type == "claude"
+        && !config.default_args.iter().any(|a| a == "--permission-mode")
+    {
+        maybe_show_faithful_launcher_notice();
     }
 
     // Check ownership before any bypass/resume prompt; previews above remain pure.
@@ -6246,6 +6300,20 @@ pub(crate) fn render_agent_launch_noexec(
     if aida.stale {
         out.push_str("aida_build_stale: alternate build is newer than selected build\n");
     }
+    // trace:STORY-1486 | ai:codex
+    if plan
+        .project_root
+        .join(aida_core::scaffolding::launch_profile::PROFILE_PATH)
+        .exists()
+    {
+        if plan.current_spec.is_some() {
+            out.push_str("launch_profile_scope: primary checkout until launch; the spec's dedicated worktree and Git administrative roots are resolved during actual launch\n");
+        }
+        out.push_str(&crate::launch_permission_profile::render_roots(
+            &plan.launch_cwd,
+            &aida.path,
+        )?);
+    }
     out.push_str("permission_posture:\n");
     let confirm = bypass_confirm::load(&plan.project_root);
     out.push_str(&format!(
@@ -8081,14 +8149,35 @@ pub(crate) static AGENT: crate::command_registry::CommandReg =
         name: "agent",
         help_after: "compete",
         command: <AgentArgs as clap::CommandFactory>::command,
-        policy: |_| crate::command_registry::CmdPolicy {
-            stakeholder: crate::stakeholder_role::StakeholderAction::Write,
-            per_write_auto_push: false,
-            skip_role_restore_prompt: false,
-            team_identity_write: false,
-        },
+        policy: agent_cli_policy,
         run: crate::command_registry::Handler::Store(run_agent),
     };
+
+// Only an explicitly selected vendor's no-exec path is a read. Real launches,
+// implicit vendor selection and malformed invocations retain the write gate.
+// trace:STORY-1486 | ai:codex
+fn agent_cli_policy(matches: &clap::ArgMatches) -> crate::command_registry::CmdPolicy {
+    let preview =
+        <AgentArgs as clap::FromArgMatches>::from_arg_matches(matches).is_ok_and(|args| match args
+            .inner
+        {
+            AgentCommand::New {
+                command: Some(command),
+                ..
+            } => *crate::vendors::launch_preview_options(&command).noexec,
+            _ => false,
+        });
+    crate::command_registry::CmdPolicy {
+        stakeholder: if preview {
+            crate::stakeholder_role::StakeholderAction::Read
+        } else {
+            crate::stakeholder_role::StakeholderAction::Write
+        },
+        per_write_auto_push: false,
+        skip_role_restore_prompt: false,
+        team_identity_write: false,
+    }
+}
 
 // trace:TASK-1793 | ai:codex
 #[cfg(test)]
