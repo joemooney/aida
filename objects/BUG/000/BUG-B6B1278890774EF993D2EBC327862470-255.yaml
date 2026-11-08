@@ -8,7 +8,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-08T00:02:55.282155934Z
-modified_at: 2026-11-08T11:47:15.564138478Z
+modified_at: 2026-11-08T11:52:55.520033254Z
 req_type: Bug
 relationships:
 - rel_type:
@@ -527,6 +527,12 @@ history:
   - field_name: status
     old_value: InProgress
     new_value: NeedsAttention
+- id: 01a1bb01-203b-74f2-9714-e1af3aa879a2
+  author: joe
+  timestamp: 2026-11-08T11:52:55.611284352Z
+  session_id: 01a1bafea85b
+  harness_version: 2.1.319 (Claude Code)
+  changes: []
 filed_at:
   code_sha: 2a7fe186bdcd718fa356e5e4d028a3b2ff13769d
   branch: main
@@ -541,3 +547,11 @@ attention_reason:
   detail: 'Latest review of 0df9e76f5643 finding 1 explicitly requires advisor action: rule on the semantic merge policy and authorize remaining maybe_sync_pull/burndown failed-pull fencing and delete/modify handling here, or file and link a scope split. CLAUDE.md:19 requires advisor signoff for architecture changes; no ruling or linked split is recorded. This round fixes only finding 2, the stale dry-run ordering comment. Finding 3 remains the carried non-blocking doctor double scan. Preserve the merge hold and publication veto; do not publish as a complete BUG-2490 fix.'
   raised_by: implementer
   raised_at: 2026-11-08T11:47:15.564138478Z
+failure_reason:
+  phase: reviewer
+  phase_index: 3
+  kind: verdict:request-changes
+  detail: AC1-AC4 hold by source and named tests and the dry-run comment is fixed, but CI has not run at this head and operator scope has no advisor ruling or linked split. AC1 verified git_ops.rs:477-478 + store_hook_tests.rs:1290; AC2 verified validate_* + bug_2490 schema/pending tests; AC3 verified bug_2490_autostash_conflict_refuses_store_commit; AC4 verified bug_2490_doctor_reports_conflict_file_without_aborting; operator (a) semantic merge partial; operator (b) failed-pull fencing partial; stopgap removal unverified.
+  recovery_hint: address the review findings, move BUG-2490 back to In Progress, and clear the PR hold only after approval
+  shelved_by: reviewer
+  shelved_at: 2026-11-08T11:52:55.520033254Z
