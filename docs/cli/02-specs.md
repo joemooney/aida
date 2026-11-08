@@ -786,9 +786,10 @@ Spec and query checks read canonical objects strictly (or an explicit YAML
 store selected with the top-level `aida --file` option); archived SQLite stores
 must be migrated first.
 
-Deferral writes require this language, and the hourly `defer resurface` job
-evaluates stored conditions (see above). Legacy trigger migration and
-relay/recurrence integration remain separate slices.
+Deferral writes, conditional relay/seat handoffs, and `findings recur --until`
+require this language. The hourly `defer resurface` job evaluates their stored
+conditions (see above). Human decisions use `manual:<who>` with a non-empty
+`--reason` and retain the same hold policy as `aida defer`.
 <!-- trace:STORY-2402 | ai:codex -->
 
 
