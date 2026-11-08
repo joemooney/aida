@@ -18,7 +18,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-08T02:46:34.549817284Z
-modified_at: 2026-11-08T05:51:37.726564053Z
+modified_at: 2026-11-08T05:51:42.268277612Z
 req_type: Bug
 tags:
 - area:ci
@@ -96,6 +96,12 @@ comments:
   modified_at: 2026-11-08T05:42:45.618352279Z
   session_id: 01a1b8be-8170-7fb2-89ab-ecb4c6eee98c
   harness_version: 2.1.319 (Claude Code)
+- id: 01a1b9b6-6abc-71b0-b6ac-e353cd966f84
+  author: joe
+  content: 'Round 3: operator runbook remains the agreed live-evidence route. Reviewer observation at 71d1bbb84088 establishes bootstrap publishing pending with successful publisher and BLOCKED merge state; it does not establish raw gh/web refusal under app 15368 or label-only clearance on unchanged SHA. Updated internal runbook requires attaching all outputs on this spec before Completed. Follow-up TASK-b6b1278890774ef993d2ebc327862470-978 tracks removing temporary pull_request trigger, same-repo condition, and fixture assertions after cutover; draft filed through AIDA MCP after CLI ID allocation refused read-only Git metadata. Rust pending-hold consumer corrections and targeted tests are in progress.'
+  created_at: 2026-11-08T05:51:42.268277612Z
+  modified_at: 2026-11-08T05:51:42.268277612Z
+  session_id: 01a1b9b177e2
 history:
 - id: 01a1b90d-4bec-7bd0-9af1-86f501692f64
   author: joe
