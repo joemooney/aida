@@ -8,7 +8,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-07T23:40:15.306412624Z
-modified_at: 2026-11-08T19:48:24.375848269Z
+modified_at: 2026-11-08T20:03:50.502571014Z
 req_type: Task
 relationships:
 - rel_type: BlockedBy
@@ -425,6 +425,46 @@ comments:
   modified_at: 2026-11-08T19:44:11.505278599Z
   session_id: 01a1bc93-77a0-7740-8b03-df4e3e8d1df5
   harness_version: 2.1.319 (Claude Code)
+- id: 01a1bcc2-9266-7552-92e7-6fa5f55e86e5
+  author: mcp
+  content: |-
+    Round 6 native implementer handoff (edits uncommitted; turn ended after this handoff).
+
+    Findings 5 and 6 fixed:
+    - aida-cli-lib/src/trace.rs: classify_surface_line recognizes mcp_schema.rs as well as mcp.rs; updated probe documentation and added task trace.
+    - aida-cli-lib/src/tests/statusline_tests.rs: classifier coverage uses the real shared-schema and extracted-transport paths, retains legacy transport coverage and server/resource exclusions; hunk-scan regression now uses aida-cli-lib/src/mcp_schema.rs.
+    - aida-cli-lib/src/lib.rs: self-alias is #[cfg(test)], matching the test-only transport include.
+
+    Validation: untested=false (executed tests, broad run NOT green).
+    - Launcher j20261108T194755290-3134269-0, cargo test --profile agent -p aida-cli-lib --lib -- surface: 110 passed, 1 failed, exit 101. Both changed tests passed: statusline_tests::surface_detects_mcp_tool_only_in_mcp_file and statusline_tests::detect_new_public_surface_over_hunks. The other statusline surface tests passed too.
+    - Failure: status_sections::bug_2149_2150_standalone_reviewer_tests::bug2187_unrecorded_headless_review_surfaces_draft_and_record_command panics at test_exec.rs:75 because the matching CLI binary is absent from the lane target. This is not claimed as an established baseline failure or a clean full suite.
+    - Runner reported overlay-stale: primary rewrote a file of generation agent-05a39c831e676bb4 during this seat's build. Subsequent MCP job is rebuilding dependencies.
+    - rustfmt --check on all 3 changed Rust files and git diff --check: PASS.
+    - Source inventory: 58 literal descriptor names, all unique.
+    - Codegraph unreachable per aida doctor check codegraph; used rg/source fallback, no lane index mutations.
+
+    Incomplete launcher jobs at handoff (not claimed passed; poll with aida lane job wait ID):
+    - j20261108T194813867-3135888-0: aida-mcp --lib, RUNNING.
+    - j20261108T194815028-3135969-0: aida-cli --no-default-features check, QUEUED.
+    - j20261108T194923223-3141697-0: descriptor tests, QUEUED.
+    - j20261108T194924385-3141763-0: mcp_respawn tests, QUEUED.
+    - j20261108T194925549-3141869-0: tools_list_respects_profile, QUEUED.
+    - j20261108T200234909-3210534-0: narrow statusline_tests::surface rerun, QUEUED.
+    - j20261108T200236053-3210583-0: narrow statusline_tests::detect_new_public_surface rerun, QUEUED.
+
+    Unresolved findings 1-4 explicitly punted, not disputed:
+    1. AC5 requires dell1 clean-build comparison and cargo --timings evidence or an advisor amendment. Current seat reports hostname imac; no dell1 evidence is available or claimed.
+    2. AC3 still says 72 tools; preserved schema has 58. Advisor correction remains required. Local results do not replace final-head CI.
+    3. Host must correct completion trailers and PR disclosure if partial publication is later authorized. Git/PR metadata was not changed from this read-only seat.
+    4. Final-head green CI and recorded merge-hold clearance remain required; no clearance authority is granted by these fixes.
+
+    Punt succeeded: Needs Attention with the structured reason and publication veto. HOST MUST PRESERVE ALL EXISTING PUNT/HOLD VETOES; do not publish or complete until triage. No ship declaration, commit, push, PR operation, queue done, pr ship or review record performed. A draft implementer finding was filed successfully (tool returned SPEC-b6b1278890774ef993d2ebc327862470-024).
+
+    Concrete proposed metadata ONLY IF triage authorizes partial publication:
+    Title/subject: [AI:codex] fix(mcp): restore schema surface detection and limit test alias (Refs TASK-3429)
+    PR body: Extract MCP transport into aida-mcp with the binary-injected handler and shared schema below the crate boundary. Round 6 restores doc-suggest MCP descriptor detection at its new path and makes the cli-lib self-alias test-only. This remains a partial implementation: AC3 awaits advisor correction of the 72-versus-58 count; AC5 awaits dell1 timing evidence or amendment. It does not complete TASK-3429. The broad local surface run passed 110 tests and failed one missing-CLI-binary fixture; both changed regressions passed. Additional local jobs were incomplete at handoff. Final-head CI and recorded merge-hold clearance are outstanding.
+  created_at: 2026-11-08T20:03:50.502560296Z
+  modified_at: 2026-11-08T20:03:50.502560296Z
 history:
 - id: 01a1b862-7fc0-7e63-899e-5179ac0131ed
   author: joe
