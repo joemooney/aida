@@ -28,7 +28,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-07T19:59:40.192574Z
-modified_at: 2026-11-08T11:20:34.990929173Z
+modified_at: 2026-11-08T11:20:41.156065498Z
 req_type: Story
 comments:
 - id: 01a1b86c-54fb-76f0-b04b-0ed1c7c07cfb
@@ -182,6 +182,22 @@ comments:
   content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: Wait state, not a code defect: source meets all 4 ACs and head d4d3e775 fixes the lib-1 vendor ratchet failure, but CI run 42471112100 at e094830a has 6 of 7 jobs queued (19 runs queued repo-wide), so the required green shards do not exist yet. Re-launch a reviewer at this head once CI is green; no implementer change is requested for approval.. No triage reason was given.'
   created_at: 2026-11-08T11:20:34.990927624Z
   modified_at: 2026-11-08T11:20:34.990927624Z
+  session_id: 01a1b9af-8230-75d2-82f8-667491cc010a
+  harness_version: 2.1.319 (Claude Code)
+- id: 01a1bae3-9b58-7aa2-9e01-d678c4866883
+  author: joe
+  content: |-
+    REVIEW FINDINGS TO ADDRESS (PR #3643):
+    Verdict: CHANGES REQUESTED
+    Reviewed commit: e094830ac808
+    Recorded: 2026-11-08T10:32:43.105740729+00:00
+    Findings:
+    1. BLOCKER (approval only, wait state): CI unverified at head e094830ac808. Run 42471112100 had cli-1 in progress and lib-0, lib-1, cli-0, gates, rest, contracts queued after 10 minutes of bounded polling. Action: no code change; re-run the reviewer at this head once CI is green. If a shard fails, fix that shard only.
+    2. NON-BLOCKING, outside the advisor's CI-only scope; file as follow-up: lane_host.rs:256 binary row is required=true and compares the build SHA with the current project's origin/HEAD. A release install, or any project other than AIDA itself, can never match, so 'aida doctor --lane-host' can never exit 0 there and the fix hint ('aida dev build') does not apply. The spec says dev builds OR release; docs say release freshness is unverified, so that case should be advisory like auth-agy. No test covers it. Containment gating is unaffected (containment=false).
+    3. NON-BLOCKING, outside the advisor's CI-only scope; file as follow-up: lane_host.rs:159 posture uses only load_agents_contained, while queue_cmd.rs computes contained = sandbox || contained_env || contained_knob. 'queue work --no-human --sandbox' with agents.toml contained unset is therefore refused by preflight although the launch would be contained. Fails closed; inferred from source, not reproduced.
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
+  created_at: 2026-11-08T11:20:41.048894989Z
+  modified_at: 2026-11-08T11:20:41.048894989Z
   session_id: 01a1b9af-8230-75d2-82f8-667491cc010a
   harness_version: 2.1.319 (Claude Code)
 history:
