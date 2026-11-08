@@ -81,6 +81,12 @@ fn batch_ssh(command: &str) -> String {
     format!("{command} -o BatchMode=yes -o ConnectTimeout=5")
 }
 
+// trace:STORY-2642 | ai:codex
+fn is_dev_executable(exe: &Path, live_dir: Option<&Path>) -> bool {
+    exe.components().any(|part| part.as_os_str() == "target")
+        || live_dir.is_some_and(|live| exe == live.join("aida"))
+}
+
 fn binary_check(
     dev_build: bool,
     same_project: bool,
@@ -307,9 +313,9 @@ fn inspect(root: &Path, live_store: bool) -> Vec<Check> {
     let main = git(root, &["rev-parse", "refs/remotes/origin/HEAD"]);
     let built = crate::upgrade_release::build_git_sha();
     let source = Path::new(env!("CARGO_MANIFEST_DIR")).parent().unwrap();
-    let dev_build = std::env::current_exe()
-        .ok()
-        .is_some_and(|exe| exe.components().any(|part| part.as_os_str() == "target"));
+    let live_dir = crate::dev_build::default_live_dir().ok();
+    let dev_build = crate::aida_bin::current_executable_path()
+        .is_some_and(|exe| is_dev_executable(&exe, live_dir.as_deref()));
     let same_project = root.join("aida-cli-lib/build.rs").is_file()
         && git(
             root,
@@ -523,6 +529,27 @@ mod tests {
         assert!(matching_revision("abc123", Some("abc123456")));
     }
     #[test]
+    fn promoted_live_binary_checks_dev_freshness() {
+        let live = Path::new("/home/operator/.local/share/aida/live");
+        for exe in [
+            live.join("aida"),
+            Path::new("/repo/target/agent/aida").into(),
+        ] {
+            let dev = is_dev_executable(&exe, Some(live));
+            assert!(dev);
+            let stale = binary_check(dev, true, "abc", false, Some("def"));
+            assert!(stale.required && !stale.pass);
+            assert!(stale.fix.contains("aida dev build"));
+            assert!(binary_check(dev, true, "abc", false, Some("abcdef")).pass);
+            assert!(!binary_check(dev, false, "abc", false, Some("def")).required);
+        }
+        let custom = Path::new("/srv/aida-dev");
+        assert!(is_dev_executable(&custom.join("aida"), Some(custom)));
+        assert!(!is_dev_executable(Path::new("/usr/bin/aida"), Some(live)));
+        assert!(!is_dev_executable(&live.join("other"), Some(live)));
+    }
+
+    #[test]
     fn binary_release_and_foreign_project_are_advisory() {
         for (dev, same) in [(false, true), (false, false), (true, false)] {
             let row = binary_check(dev, same, "abc", false, Some("def"));
@@ -726,6 +753,7 @@ mod tests {
             "--force",
             "--all",
             "--heal",
+            "--lane-capacity",
             "--fix-sandbox",
             "--contradictions",
         ] {

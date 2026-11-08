@@ -844,7 +844,9 @@ when no enabled list is configured). Auth rows establish
 credential-source presence only, including Claude’s `CLAUDE_CONFIG_DIR` and
 `CLAUDE_CODE_OAUTH_TOKEN` overrides. Vendors without a supported credential probe
 (including AGY) emit an explicit advisory unverifiable note; log in manually. Binary comparison uses the locally known
-origin default-branch SHA only for development binaries built from this project.
+origin default-branch SHA only for development binaries built from this project,
+including the promoted live binary (`~/.local/share/aida/live/aida` by default,
+or the directory selected by `AIDA_DEV_LIVE_DIR`).
 Release installs and other projects receive an advisory unverified binary row.
 Store connectivity uses a bounded read-only probe against origin's `aida-store`
 branch, preserving `GIT_SSH_COMMAND` or `core.sshCommand` with batch-mode options.

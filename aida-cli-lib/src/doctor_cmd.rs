@@ -16126,7 +16126,7 @@ mod bug_1505_review_verdict_doctor_tests {
 pub(crate) struct DoctorArgs {
     /// Check this machine before running automated lanes.
     // trace:STORY-2642 | ai:codex
-    #[clap(long, conflicts_with_all = ["heal", "fix_sandbox", "contradictions", "yes", "category", "force", "all", "since", "dry_run", "mapping", "tree_only", "preserve", "contradictions_limit", "contradictions_offset"])]
+    #[clap(long, conflicts_with_all = ["lane_capacity", "heal", "fix_sandbox", "contradictions", "yes", "category", "force", "all", "since", "dry_run", "mapping", "tree_only", "preserve", "contradictions_limit", "contradictions_offset"])]
     pub lane_host: bool,
 
     /// Apply safe fixes after scanning. Without this, doctor is read-only.
