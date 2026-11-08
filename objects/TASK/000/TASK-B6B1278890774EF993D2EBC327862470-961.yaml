@@ -8,7 +8,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-07T23:40:15.306412624Z
-modified_at: 2026-11-08T18:19:35.727085901Z
+modified_at: 2026-11-08T18:19:38.637262386Z
 req_type: Task
 relationships:
 - rel_type: BlockedBy
@@ -260,6 +260,25 @@ comments:
   content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: Extraction is faithful and earlier ratchet findings are fixed, but AC5 timings and the AC3 72-vs-58 ruling are open, the completion trailer remains, seven source guards lost the moved MCP code, and CI has not run at head.. It was punted on: ambiguous-spec: Review findings 1 and 2 remain acceptance blockers: AC3 requires 72 unchanged MCP tools but the preserved shared descriptor surface contains 58 and no advisor ruling confirms the count; AC5 requires clean-build comparison and cargo --timings evidence on dell1, but this lane host is disrad-dvp98b3puw. Review remediation for findings 4-11 is implemented and targeted validation is underway. Do not publish or complete TASK-3429 until the count ruling and dell1 measurements are supplied; preserve all existing punt and hold vetoes.. No triage reason was given.'
   created_at: 2026-11-08T18:19:35.727084390Z
   modified_at: 2026-11-08T18:19:35.727084390Z
+  session_id: 01a1b9af-8230-75d2-82f8-667491cc010a
+  harness_version: 2.1.319 (Claude Code)
+- id: 01a1bc63-2c86-7820-ba16-8c7812fd586a
+  author: joe
+  content: |-
+    REVIEW FINDINGS TO ADDRESS (TASK-3429):
+    Verdict: CHANGES REQUESTED
+    Reviewed commit: f5688546213b
+    Recorded: 2026-11-08T18:12:36.100104617+00:00
+    Findings:
+    1. AC5 not met: TASK-3429 has no dell1 clean-build comparison or cargo --timings numbers (ruling 2); the 2026-11-08 18:06 handoff confirms it was not performed.
+    2. AC3 unresolved: the spec requires 72 unchanged tool names, but aida-cli-lib/src/mcp_schema.rs has 58 before and after this PR. The descriptor block is byte-identical to base apart from the new header, so the surface looks unchanged and 72 looks like a spec error, but no advisor ruling is recorded. The advisor must correct the number on the spec, and the tools/list and descriptor tests need a green CI result at the PR head.
+    3. Completion trailer still overclaims: the PR title and commit subjects end in (TASK-3429), which drives merge-time completion, while AC3 and AC5 are open, the spec is Needs Attention, and the latest handoff says no completion trailer is justified and publication is vetoed until triage. The PR body discloses none of this. Finish the criteria, or use (Refs TASK-3429) and disclose the partial scope.
+    4. Source guards silently lost the moved MCP code, the same class as round-2 finding 8: these scan only cli-lib/core/listed members and omit aida-mcp: gate/tests/task_2707_cache_authority_tests.rs:262 (cache_rows_never_grant_authority), gate/tests/story_1917_dispatch_exec_tests.rs:627 (grant-binding writes), tests/story_1418_completion_seam_tests.rs:31-33 (no_direct_completed_write_outside_the_seam), tests/resolve_aida_exe_tests.rs:49 (raw current-exe lookup), tests/bug_1670_stale_cache_callers_tests.rs:662, tests/task_2032_launcher_main_ratchet_tests.rs:111, and test_home.rs:887 (raw home lookup member list). The 7,692-line transport can now add those violations unguarded. Add aida-mcp to each scan, keeping existing budgets.
+    5. CI has not validated this head: CI run 42508338148 at f5688546213b is pending with 0 jobs, and the required suite includes the new aida-mcp tests. A green run at the final head is required before approval.
+    6. Minor stale paths: docs/product-integrations.md:29 still links the MCP implementation to the 9-line test stub although its generated page docs/showcase/integrations.html:27 was changed, so the source and generated page disagree; docs/internal/agents/aida-repository-guide.md tells readers to grep aida-cli/src/mcp.rs for the live tool list, which should now name aida-cli-lib/src/mcp_schema.rs.
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
+  created_at: 2026-11-08T18:19:38.502501018Z
+  modified_at: 2026-11-08T18:19:38.502501018Z
   session_id: 01a1b9af-8230-75d2-82f8-667491cc010a
   harness_version: 2.1.319 (Claude Code)
 history:
