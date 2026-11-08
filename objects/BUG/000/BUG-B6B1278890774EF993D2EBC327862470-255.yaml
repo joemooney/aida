@@ -8,7 +8,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-08T00:02:55.282155934Z
-modified_at: 2026-11-08T05:46:37.616042308Z
+modified_at: 2026-11-08T05:49:34.893093020Z
 req_type: Bug
 relationships:
 - rel_type:
@@ -92,6 +92,12 @@ comments:
   modified_at: 2026-11-08T05:26:52.446136059Z
   session_id: 01a1b8be-8170-7fb2-89ab-ecb4c6eee98c
   harness_version: 2.1.319 (Claude Code)
+- id: 01a1b9b4-792d-7100-81d4-a9571b6f0cc6
+  author: joe
+  content: 'Round 3 native-seat handoff: uncommitted edits in aida-core/src/git_ops/tests/store_hook_tests.rs add maintenance.auto=false/gc.auto=0 to both flagged raw Git sites; the baseline is unchanged. aida-cli-lib/src/doctor_cmd.rs removes the fixture whole-store save (unrelated metadata allocation authority); tolerant loading and store-objects assertions remain. aida-cli-lib/src/queue_cmd.rs now propagates the pre-pickup pull error before session setup; aida-cli/tests/queue_work_dry_run.rs adds a missing-local-remote regression asserting failure, unchanged Approved status/spec diff, leases and sibling worktrees. OVERVIEW.md now describes doctor reporting bad objects while continuing other checks. Validation: maintenance ratchet executed 8 tests, all passed; rustfmt --check and git diff --check passed. Rust validation untested=true: job j20261108T054315002-2648465-0 remains compiling aida-cli-lib; core job j20261108T054443947-2-0 and CLI job j20261108T054456983-2654691-0 were queued at handoff; none has an executed-test result yet. Finding 2 explicitly punted as design-fork: semantic merge policy and comprehensive failed-pull write fencing remain unresolved; this queue-path change is partial. Finding 4 considered but deferred because sharing loader diagnostics changes the loader/report API. No advisor split is claimed. No commit, push, PR action, queue completion, hold clearance or publication declaration was performed; preserve the punt/publication veto. The host must collect or rerun Rust results before treating these fixes as validated.'
+  created_at: 2026-11-08T05:49:34.893093020Z
+  modified_at: 2026-11-08T05:49:34.893093020Z
+  session_id: 01a1b9ad9f09
 history:
 - id: 01a1b923-982d-7512-93a5-cd08923b4f98
   author: aida-session-start
