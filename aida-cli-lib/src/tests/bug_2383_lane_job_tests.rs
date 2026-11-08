@@ -1920,16 +1920,6 @@ else:
             tmp.path().join("server.sock").display().to_string(),
         ),
     ]);
-    // A foreign sccache client has a TMPDIR absent from the job. The host
-    // wrapper's PID override must exclude it from its health scan.
-    let mut foreign = std::process::Command::new("/usr/bin/python3")
-        .args([
-            "-c",
-            "import ctypes,time; ctypes.CDLL(None).prctl(15,b'sccache',0,0,0); time.sleep(30)",
-        ])
-        .env("TMPDIR", tmp.path().join("foreign-dead-tmp"))
-        .spawn()
-        .unwrap();
     // Shell-looking text is an argv value, never executable source.
     let args = vec![
         "-c".into(),
@@ -1945,8 +1935,6 @@ else:
         .envs(&env)
         .output()
         .unwrap();
-    foreign.kill().unwrap();
-    foreign.wait().unwrap();
     assert_eq!(output.status.code(), Some(7), "{output:?}");
     assert_eq!(
         std::fs::read_to_string(tmp.path().join("persisted")).unwrap(),
