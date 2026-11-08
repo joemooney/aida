@@ -23,7 +23,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-07T19:59:26.079479Z
-modified_at: 2026-11-08T09:18:15.709371271Z
+modified_at: 2026-11-08T09:41:49.331827893Z
 req_type: Story
 comments:
 - id: 01a1b798-f0d4-73b1-93d5-f84581f2d190
@@ -278,6 +278,12 @@ history:
   - field_name: status
     old_value: InProgress
     new_value: NeedsAttention
+- id: 01a1ba89-18e7-71e1-bab5-3689c20fdc86
+  author: joe
+  timestamp: 2026-11-08T09:41:49.415394369Z
+  session_id: 01a1ba86ccc2
+  harness_version: 2.1.319 (Claude Code)
+  changes: []
 filed_at:
   code_sha: 7a18c0d52a6a4e0822befd4c810cfed16b04b74c
   branch: main
@@ -292,3 +298,11 @@ attention_reason:
   detail: 'Round-4 finding 1 is agreed and remains unresolved: AC1 requires two consecutive lane Cargo jobs with final sccache statistics and second-job Rust hits > 0 on both primary and dell1, or a recorded advisor amendment. This seat cannot obtain both-host evidence. Local findings 2 and 3 are fixed: reject relative sccache wrapper paths with regression cases and document the writable lane cache. Targeted resource-env and sccache tests each pass 3 executed tests. make check-ci-fast failed at its first Cargo gate because sccache could not write dep-info to the lane target (read-only filesystem). Preserve the publication veto and existing merge hold; host/operator action is required.'
   raised_by: implementer
   raised_at: 2026-11-08T09:02:58.644246597Z
+failure_reason:
+  phase: reviewer
+  phase_index: 3
+  kind: verdict:request-changes
+  detail: Round 4 fixes check out and AC0/AC2/AC3/AC4 are met in code, but AC1 (lane-job cache hits on primary and dell1) still has no evidence or amendment; the advisor's 02:18 server-isolation requirement is unproven, and CARGO_INCREMENTAL=0 reverses the agent profile's measured incremental decision. Code CI at head is still pending.
+  recovery_hint: address the review findings, move STORY-2641 back to In Progress, and clear the PR hold only after approval
+  shelved_by: reviewer
+  shelved_at: 2026-11-08T09:41:49.331827893Z
