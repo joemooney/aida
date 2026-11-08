@@ -8,7 +8,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-08T00:02:55.282155Z
-modified_at: 2026-11-08T15:26:00.610670411Z
+modified_at: 2026-11-08T15:30:50.366816416Z
 req_type: Bug
 relationships:
 - rel_type:
@@ -486,6 +486,17 @@ comments:
   modified_at: 2026-11-08T15:23:16.393174934Z
   session_id: 01a1b9af-8230-75d2-82f8-667491cc010a
   harness_version: 2.1.319 (Claude Code)
+- id: 01a1bbc8-a17e-7b53-bfe8-003793d31ef3
+  author: joe
+  content: |
+    Round 15 native-seat changes (uncommitted): finding 3 preserves the full structured rebase merge cause in ordinary anyhow Display, with a modify/delete regression checking the diagnosis, restored HEAD/branch/content and no active rebase after abort. Finding 4 routes alias, advisor-goal and allocation publication retries through pull_rebase_store_retry: it checks dirt under the shared store writer lock, refuses before fetch, explains that automatic stashing is disabled and requests host review/commit, preserving pending writer changes. Regression covers staged and unstaged changes and a successful clean retry. Finding 5 directly asserts both -c autoStash=false pairs in the hardening arguments for a linked store worktree and a custom store; code-tree scope remains covered. AGENTS.md and OVERVIEW.md describe these lasting invariants.
+
+    Finding 1 remains explicitly punted as design-fork/advisor-action. This implementer disputes treating an implementer policy replacement or an implementer-filed split as advisor approval. No merge-policy ruling or linked follow-up was invented; maybe_sync_pull/burndown failure fencing and modify/delete merge policy remain incomplete. Finding 2 remains blocked: gh pr checks at the current published head reported merge-hold-gate failed and seven CI checks pending. New edits have no published-head CI evidence. Finding 6 is considered and deferred as non-blocking: Storage::load delegates through the database backend and does not expose skipped-object diagnostics; eliminating the doctor-only double parse needs a loader/report interface change. It is not fixed in this slice.
+
+    Validation so far: all 8 git auto-maintenance ratchet tests pass; rustfmt --check on all changed Rust files and git diff --check pass. Lane Rust test job j20261108T152655388-2-0 is compiling; CLI feature-disabled check j20261108T152746012-1800403-0 is queued. Neither is yet a test pass. Preserve the punt/publication veto and merge hold. No commit, push, PR mutation, queue completion, ship declaration or review recording is performed by this seat.
+  created_at: 2026-11-08T15:30:50.366816416Z
+  modified_at: 2026-11-08T15:30:50.366816416Z
+  session_id: 01a1bbc30299
 history:
 - id: 01a1b923-982d-7512-93a5-cd08923b4f98
   author: aida-session-start
