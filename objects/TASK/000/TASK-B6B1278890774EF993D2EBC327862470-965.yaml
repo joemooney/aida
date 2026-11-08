@@ -17,7 +17,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-08T03:08:54.290380002Z
-modified_at: 2026-11-08T16:02:11.155801195Z
+modified_at: 2026-11-08T16:02:14.107028294Z
 req_type: Task
 tags:
 - area:architecture
@@ -28,6 +28,14 @@ relationships:
   target_id: 01a1b811-b403-7111-8654-b1da1b2c6c11
   created_at: 2026-11-08T03:09:22.931129841Z
   created_by: joe
+comments:
+- id: 01a1bbe5-5fdb-7341-a5d1-eefe1b29eab4
+  author: joe
+  content: 'Advisor 2026-11-08 ruling: sequence, do not relax acceptance 4. Requeue after PR-3641 and PR-3643 land (PR-3629 already merged); the re-exports can only drop once every importer is migrated.'
+  created_at: 2026-11-08T16:02:14.107028294Z
+  modified_at: 2026-11-08T16:02:14.107028294Z
+  session_id: 01a1bbab-762f-7cd2-8a36-4ea9f209afce
+  harness_version: 2.1.319 (Claude Code)
 history:
 - id: 01a1b921-d315-74a0-9c9a-0ca54df44ce6
   author: joe
