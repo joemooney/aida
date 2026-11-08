@@ -1,0 +1,34 @@
+id: 01a1b921-5e92-7f00-9152-3328d4dab40c
+spec_id: TASK-b6b1278890774ef993d2ebc327862470-965
+agreed_id: TASK-3448
+title: 'Crate-split PR2b: move consumer imports of the cmdkit framework types off command_registry and drop the re-exports, so the main SCC actually shrinks (TASK-3425''s deferred SCC acceptance)'
+description: |
+  Follow-up from TASK-3425 (PR-3635), ruled by the advisor 2026-11-07 20:20. TASK-3425 moved the 14 command-framework types into cmdkit.rs behind re-exports from command_registry.rs, with no caller import changes. Its measurement (docs/internal/testing/task-3425-cmdkit-rework.md) shows that re-exports alone cannot shrink the main SCC: consumers still import the types through command_registry, so the module graph still reaches the registry table (largest SCC 325 on main and on the branch). The SPIKE-713 plan's 29-module reduction needs caller import changes, which TASK-3425's no-churn acceptance forbade. The two criteria contradicted each other; this task owns the reduction.
+
+  Scope: change consumer imports of the cmdkit framework types from `crate::command_registry::X` to `crate::cmdkit::X` (mechanical, sed-able), then remove the re-exports from command_registry.rs that no longer have users.
+
+  Acceptance:
+  1. No production module imports a cmdkit framework type through command_registry; the re-exports are deleted (or kept only with a named remaining user).
+  2. The TASK-3425 measurement script, run on base and head, shows the largest SCC shrinks, and the doc records both numbers. The target is the plan's ~29-module reduction; a smaller result is acceptable if the doc names the edges that still hold modules in.
+  3. make check-ci-fast passes; the command-registry ratchet tests pass; help output unchanged (Help-Golden: unchanged).
+  4. Sequence: start after PR-3635 merges, and touch only import lines in files with no open PR, to avoid the SPIKE-713 conflict pattern.
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-11-08T03:08:54.290380002Z
+modified_at: 2026-11-08T03:08:54.290380002Z
+req_type: Task
+tags:
+- area:architecture
+- crate-split
+- from:TASK-3425
+filed_at:
+  code_sha: 049e5206de120518bb94fae84bf359f789e76236
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: dc41ee8da2f
+  vendor: claude
+  session: 01a1b8be-8170-7fb2-89ab-ecb4c6eee98c
+  harness_version: 2.1.319 (Claude Code)
