@@ -869,3 +869,39 @@ hostname = "box"
     )
     .is_none());
 }
+
+// trace:STORY-2325 | ai:codex
+#[test]
+fn dead_non_pr_tree_without_origin_branch_requires_remote_coverage_and_cleanliness() {
+    let mut tree = TreeReading::Read {
+        dirty: vec![],
+        unpushed: vec![],
+        head: Some("base".into()),
+    };
+    assert_eq!(
+        reclaim_dead_tree(&tree, None, true, &|_, _| false),
+        Reclaim::EndBySafeRule
+    );
+    assert!(matches!(
+        reclaim_dead_tree(&tree, None, false, &|_, _| false),
+        Reclaim::Keep(_)
+    ));
+    if let TreeReading::Read { dirty, .. } = &mut tree {
+        dirty.push("wip".into());
+    }
+    assert!(matches!(
+        reclaim_dead_tree(&tree, None, true, &|_, _| false),
+        Reclaim::Refuse(_)
+    ));
+    if let TreeReading::Read {
+        dirty, unpushed, ..
+    } = &mut tree
+    {
+        dirty.clear();
+        unpushed.push("local".into());
+    }
+    assert!(matches!(
+        reclaim_dead_tree(&tree, None, true, &|_, _| false),
+        Reclaim::Refuse(_)
+    ));
+}
