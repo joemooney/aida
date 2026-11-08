@@ -1622,6 +1622,10 @@ pub(crate) fn home_fixture_backend(root: &Path) -> Result<crate::GitBackend> {
         require_global(root)?;
     } else {
         crate::write_atomic(&setting, "version=1\nauthoritative=true\n")?;
+        // Fixture authority must satisfy the reader even under a shared-write umask.
+        // trace:BUG-2466 | ai:codex
+        use std::os::unix::fs::PermissionsExt;
+        std::fs::set_permissions(&setting, std::fs::Permissions::from_mode(0o600))?;
     }
     crate::GitBackend::new(root)
 }

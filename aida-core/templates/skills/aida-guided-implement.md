@@ -108,7 +108,7 @@ Read it **first-hand, yourself** — these commands are yours to run directly,
 not to delegate to a sub-agent (see *Work directly* above).
 
 ```bash
-aida show <SPEC>                  # title, description, ## Acceptance, comments, git linkage
+aida show <SPEC> --full           # title, description, ## Acceptance, comments, git linkage
 aida graph tree <SPEC>          # parent epic + siblings
 aida graph blocked-by <SPEC>    # what it waits on
 aida graph impact <SPEC>        # what depends on it (reverse closure — the blast radius)
