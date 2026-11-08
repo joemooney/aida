@@ -8,7 +8,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-08T00:02:55.282155934Z
-modified_at: 2026-11-08T11:44:19.012393870Z
+modified_at: 2026-11-08T11:44:21.308666100Z
 req_type: Bug
 relationships:
 - rel_type:
@@ -248,6 +248,22 @@ comments:
   content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: AC1-AC4 hold by source and named tests, and round-5 findings 2/3 are fixed; CI is still queued at this head so no test pass is claimed. Blocked on operator scope with no advisor ruling or linked split on BUG-2490. AC1 verified git_ops.rs:477-478 + store_hook_tests.rs:1290; AC2 verified validate_* + bug_2490 schema/pending tests; AC3 verified bug_2490_autostash_conflict_refuses_store_commit; AC4 verified bug_2490_doctor_reports_conflict_file_without_aborting; operator (a) semantic merge partial; operator (b) failed-pull fencing partial.. It was punted on: design-fork: Latest review finding 1 requires advisor action: rule on whether the existing LWW semantic merge policy satisfies the operator request, and authorize the remaining maybe_sync_pull/burndown failed-pull fencing and delete/modify policy here or record a linked split. CLAUDE.md requires advisor signoff for architecture changes; no ruling or split is recorded. This round fixes findings 2 and 3 only (launch preflights before pickup pull; visible sync merge notes). Preserve the existing merge hold and publication veto; do not publish as a complete fix.. No triage reason was given.'
   created_at: 2026-11-08T11:44:19.012387208Z
   modified_at: 2026-11-08T11:44:19.012387208Z
+  session_id: 01a1b9af-8230-75d2-82f8-667491cc010a
+  harness_version: 2.1.319 (Claude Code)
+- id: 01a1baf9-46c2-7630-a78b-04e328c7f4ef
+  author: joe
+  content: |-
+    REVIEW FINDINGS TO ADDRESS (BUG-2490):
+    Verdict: CHANGES REQUESTED
+    Reviewed commit: 0df9e76f5643
+    Recorded: 2026-11-08T11:43:14.850914227+00:00
+    Findings:
+    1. [major][scope][advisor-action] Operator scope on BUG-2490 (comment 2026-11-08T03:05Z, and the 05:26Z note to remove the dell1 stopgap when this lands) is still neither finished nor split, and BUG-2490 still links only STORY-2671. Open at this head: (a) maybe_sync_pull uses plain pull_rebase (aida-cli-lib/src/store_sync.rs:1719), so a same-spec two-node conflict still fails on --sync and burndown; (b) maybe_sync_pull prints 'Falling back to local view' (store_sync.rs:1768) and burndown ignores its result (burndown_run.rs:367, 748), then computes and drains on the stale view; (c) resolve_spec_conflict bails on delete/modify (aida-core/src/git_ops.rs:2618), which the dell1 stopgap resolves by keeping upstream, and that now makes pickup exit. The implementer has punted this for advisor action in every round and cannot clear it. Action: the advisor records the merge-policy ruling on BUG-2490 and either requires (a)-(c) here or files a linked follow-up, then re-requests review.
+    2. [cosmetic][docs] aida-cli-lib/src/queue_cmd.rs:13201-13203 still says the dry-run return sits before 'the pre-pickup pull'. This PR moved that pull to queue_cmd.rs:12585, ahead of this block and guarded by !dry_run, so the comment now misdescribes the order.
+    3. [minor][perf] Carried, non-blocking: a full 'aida doctor' run parses every store object twice, in the tolerant Storage::load and again in scan_store_objects (aida-cli-lib/src/doctor_cmd.rs:835). Take the bad-object list from the loader if practical.
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
+  created_at: 2026-11-08T11:44:21.186335381Z
+  modified_at: 2026-11-08T11:44:21.186335381Z
   session_id: 01a1b9af-8230-75d2-82f8-667491cc010a
   harness_version: 2.1.319 (Claude Code)
 history:
