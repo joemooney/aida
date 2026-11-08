@@ -1,0 +1,29 @@
+id: 01a1bd2f-3cdf-7953-9b65-2bc2214d0abd
+spec_id: TASK-b6b1278890774ef993d2ebc327862470-1020
+title: 'NON-BLOCKING, test gap: the end-to-end git_policy assertions in aida-cli/tests/…'
+description: |-
+  Non-blocking finding carried forward from an APPROVED review verdict on STORY-1486, which has since completed — recorded here so it keeps a queryable home once the verdict record stops being read.
+
+  NON-BLOCKING, test gap: the end-to-end git_policy assertions in aida-cli/tests/story_1486_launch_profile.rs launch claude only. The print sites for foreground codex and antigravity (aida-cli-lib/src/agent_launch.rs agent_new_codex_wake, agent_new_antigravity) and codex --bg (agent_codex_background.rs:582, 611) have parse coverage only, so a dropped print on those vendors would still pass.
+
+  PR: #3671
+  Reviewed sha: ad74c5720cbcbae3b3b4f4bf3ca48471829e4a9a
+status: Draft
+priority: Medium
+owner: joe
+feature: Uncategorized
+created_at: 2026-11-08T22:02:32.031813139Z
+modified_at: 2026-11-08T22:02:32.031813139Z
+req_type: Task
+tags:
+- carried-from:STORY-1486
+- finding-hash:ef74cf0f
+- from-review:PR-3671
+- kind:carried-forward
+filed_at:
+  code_sha: 65d5a89946c24177a8c3a0d6d076fcede9be9107
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: db2eb4c39e4
+  vendor: claude
