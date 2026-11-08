@@ -807,15 +807,6 @@ impl LaneJobs {
         Ok(())
     }
 
-    /// Give the child its lane's one public selector, the lease id in
-    /// `AIDA_SESSION_ID` (on the BUG-2398 Codex tool-shell whitelist), so
-    /// `aida lane job` resolves the runner through the lease. No path or
-    /// token is set.
-    // trace:BUG-2383 | ai:claude
-    pub(crate) fn apply_selector(&self, cmd: &mut std::process::Command) {
-        cmd.env("AIDA_SESSION_ID", &self.lease_id);
-    }
-
     /// Append one line to the lane's `jobs.log` and the launcher's stderr.
     fn log(&self, line: &str) {
         eprintln!("  lane job: {line}");
@@ -1469,26 +1460,7 @@ fn run_one_timed(
         use std::os::unix::process::CommandExt;
         cmd.process_group(0);
         if fast_gate_job(&job) {
-            // A headless harness can ignore or block terminal interrupts.
-            // Do not leak that process state into the gate's PTY fixtures.
-            // This affects only the sandbox child, never the host launcher.
-            // trace:STORY-2640 | ai:codex
-            unsafe {
-                cmd.pre_exec(|| {
-                    let mut signals: libc::sigset_t = std::mem::zeroed();
-                    libc::sigemptyset(&mut signals);
-                    for signal in [libc::SIGINT, libc::SIGQUIT] {
-                        if libc::signal(signal, libc::SIG_DFL) == libc::SIG_ERR {
-                            return Err(std::io::Error::last_os_error());
-                        }
-                        libc::sigaddset(&mut signals, signal);
-                    }
-                    if libc::sigprocmask(libc::SIG_UNBLOCK, &signals, std::ptr::null_mut()) != 0 {
-                        return Err(std::io::Error::last_os_error());
-                    }
-                    Ok(())
-                });
-            }
+            crate::launch::profile::prepare_fast_gate_signals(&mut cmd);
         }
     }
     let timeout = timeout(&job, seed.cold);

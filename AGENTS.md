@@ -1,3 +1,9 @@
+Host fast-gate receipts block review only while pending; queued repairs also
+require the exact live queue entry and a workable spec. Settled receipts permit
+later PR head moves. Repair infrastructure errors preserve known red results.
+Child lane selectors are projected by `launch/profile.rs`. See OVERVIEW.md.
+<!-- trace:STORY-2640 | ai:codex -->
+
 Review-watch records retained fast-exiting children before reaping. Incomplete
 legacy receipts use the existing reboot/TTL backstop. Caller capture requires
 verified local procfs and fails closed with host-retry guidance. See OVERVIEW.md.

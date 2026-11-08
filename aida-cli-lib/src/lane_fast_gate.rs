@@ -456,13 +456,13 @@ fn pushed_inner(
             let stamp = chrono::Utc::now()
                 .format("%Y-%m-%dT%H%M%S%.9fZ")
                 .to_string();
-            let brief = dir.join(format!("{}-{stamp}.md", req.display_id()));
+            let brief = dir.join(format!("{}-{stamp}.md", req.display_id())); // canonical-id: durable brief filename
             aida_core::write_atomic(
                 &brief,
                 crate::brief::render_agent_brief(
                     main,
                     vendor,
-                    &req.display_id(),
+                    &req.display_id(), // canonical-id: persisted brief spec identity
                     req,
                     &store,
                     &stamp,
@@ -644,6 +644,9 @@ mod tests {
             assert!(read(root, "lane").unwrap().unwrap().native_ready);
         }
         assert_eq!(repairs, 1);
+        published(root, "lane").unwrap();
+        assert!(!blocks_review(root, "lane", "later-operator-head").unwrap());
+        assert_eq!(marker(root, "lane"), "fail");
     }
 
     // trace:STORY-2640 | ai:codex
@@ -692,19 +695,26 @@ mod tests {
 
     // trace:STORY-2640 | ai:codex
     #[test]
-    fn fast_gate_self_published_green_allows_later_head() {
+    fn fast_gate_self_published_settled_result_allows_later_head() {
         let tmp = tempfile::tempdir().unwrap();
-        begin(tmp.path(), "lane").unwrap();
-        pushed_round(
-            tmp.path(),
-            "lane",
-            "published",
-            "pass",
-            || Ok(()),
-            || panic!("green needs no repair"),
-        )
-        .unwrap();
-        assert!(!blocks_review(tmp.path(), "lane", "merge-from-main").unwrap());
+        for result in ["pass", "fail"] {
+            begin(tmp.path(), result).unwrap();
+            // A red second round settles with its failure marker intact.
+            let mut receipt = read(tmp.path(), result).unwrap().unwrap();
+            receipt.repair_used = true;
+            write(tmp.path(), &receipt).unwrap();
+            assert!(!pushed_round(
+                tmp.path(),
+                result,
+                "published",
+                result,
+                || Ok(()),
+                || panic!("a settled round needs no repair"),
+            )
+            .unwrap());
+            assert!(!blocks_review(tmp.path(), result, "merge-from-main").unwrap());
+            assert_eq!(marker(tmp.path(), result), result);
+        }
     }
 
     // trace:STORY-2640 | ai:codex
@@ -1016,6 +1026,7 @@ mod tests {
             assert!(step.contains("sandbox"));
             assert!(step.contains("one") || step.contains("ONE"));
             assert!(step.contains("fast_gate="));
+            assert!(step.contains("skipped(<reason>)"));
         }
     }
 

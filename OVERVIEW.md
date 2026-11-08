@@ -1592,9 +1592,14 @@ Host fast gates use the offline, cleared-environment lane-job bubblewrap
 profile to run `make check-ci-fast`. Native publication gets one repair round
 before publishing; self-pushing lanes get one queued repair before review.
 Gate infrastructure and forge-annotation failures produce `fast_gate=skipped(...)`
-and preserve lane result reporting and normal cleanup. Held, punted and no-PR
+while preserving known `fast_gate=fail` evidence. Infrastructure failures after
+consuming a repair also retain `fail`. These errors preserve lane result
+reporting and normal cleanup. Held, punted and no-PR
 exits settle their reservations so later operator publication remains reviewable.
-A successfully queued red-gate repair keeps review blocked until its retry.
+A successfully queued red-gate repair keeps review blocked while its exact queue
+entry remains live and its spec remains workable. Removal, replacement, parking
+or a terminal status releases that hold. Settled receipts never block review
+because a later operator push or base-branch merge changed the PR head.
 The imported-head fence applies only to automatic host publication; operator
 `ship --from-seat` retains its existing recovery checks. Missing bubblewrap
 reports `skipped(no-sandbox)`; native seats also need bubblewrap for Git commit

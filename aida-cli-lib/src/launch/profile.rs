@@ -11,6 +11,42 @@ use aida_core::launch_policy::LaunchVendor;
 use anyhow::Result;
 use std::process::Command;
 
+impl crate::lane_job::LaneJobs {
+    /// Give the vendor child its lane's public lease selector, so
+    /// `aida lane job` resolves the host runner without a path or token.
+    /// Keep protected child identity projection inside the launcher.
+    // trace:BUG-2383 STORY-2640 STORY-2326 | ai:codex
+    pub(crate) fn apply_selector(&self, cmd: &mut Command) {
+        cmd.env("AIDA_SESSION_ID", &self.lease_id);
+    }
+}
+
+/// A headless harness can ignore or block terminal interrupts. Reset that
+/// state only in the sandboxed gate child so its PTY fixtures can receive them.
+// trace:STORY-2640 | ai:codex
+#[cfg(unix)]
+pub(crate) fn prepare_fast_gate_signals(cmd: &mut Command) {
+    use std::os::unix::process::CommandExt;
+    // SAFETY: the child hook uses only signal operations and stack data;
+    // it captures no state and does not allocate or acquire locks.
+    unsafe {
+        cmd.pre_exec(|| {
+            let mut signals: libc::sigset_t = std::mem::zeroed();
+            libc::sigemptyset(&mut signals);
+            for signal in [libc::SIGINT, libc::SIGQUIT] {
+                if libc::signal(signal, libc::SIG_DFL) == libc::SIG_ERR {
+                    return Err(std::io::Error::last_os_error());
+                }
+                libc::sigaddset(&mut signals, signal);
+            }
+            if libc::sigprocmask(libc::SIG_UNBLOCK, &signals, std::ptr::null_mut()) != 0 {
+                return Err(std::io::Error::last_os_error());
+            }
+            Ok(())
+        });
+    }
+}
+
 /// The effectful half of the vendor profile, keyed by the existing closed enum.
 // trace:STORY-2539 | ai:codex
 pub(crate) struct VendorProfile(&'static aida_core::vendors::VendorProfile);

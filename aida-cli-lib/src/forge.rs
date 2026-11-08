@@ -7444,7 +7444,15 @@ mod tests {
 pub(crate) fn annotate_fast_gate(main: &Path, pr: u64, head: &str, marker: &str) -> Result<()> {
     let gitlab = resolve_open_change_forge_kind(main) == ForgeKind::GitLab;
     let endpoint = format!("projects/:id/merge_requests/{pr}");
-    let mut get = std::process::Command::new(if gitlab { "glab" } else { "gh" });
+    // Keep the closed forge selection explicit to the launch-site ratchet.
+    let forge_command = || {
+        if gitlab {
+            std::process::Command::new("glab")
+        } else {
+            std::process::Command::new("gh")
+        }
+    };
+    let mut get = forge_command();
     get.current_dir(main);
     if gitlab {
         get.args(["api", "-X", "GET", &endpoint]);
@@ -7479,7 +7487,7 @@ pub(crate) fn annotate_fast_gate(main: &Path, pr: u64, head: &str, marker: &str)
     let text = fast_gate_body(body, head, marker);
     let file = tempfile::NamedTempFile::new()?;
     std::fs::write(file.path(), &text)?;
-    let mut edit = std::process::Command::new(if gitlab { "glab" } else { "gh" });
+    let mut edit = forge_command();
     edit.current_dir(main);
     if gitlab {
         edit.args(["api", "-X", "PUT", &endpoint, "-f"])
