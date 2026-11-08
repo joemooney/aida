@@ -6,6 +6,7 @@ import os
 import runpy
 from pathlib import Path
 import subprocess
+import sys
 import tempfile
 import unittest
 
@@ -130,6 +131,14 @@ elif 'findings' in args:
     def test_missing_optional_executable_stays_unknown(self):
         run = runpy.run_path(str(HOOK), run_name='fixture')['run']
         self.assertEqual(run(['/no/such/aida-hook-command']), 'unknown (command unavailable)')
+
+    def test_probe_closing_stdout_before_exit_stays_unknown(self):
+        run = runpy.run_path(str(HOOK), run_name='fixture')['run']
+        # EOF is not successful command completion. Preserve the packet when
+        # a probe closes its output stream but hangs before exiting.
+        result = run([sys.executable, '-c',
+                      'import os,time; os.close(1); time.sleep(20)'], timeout=.2)
+        self.assertEqual(result, 'unknown (command timed out)')
 
     def test_saturated_branch_list_stays_unknown(self):
         _, packet, _ = self.fixture(saturated=True)

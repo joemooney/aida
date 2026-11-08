@@ -45,7 +45,10 @@ def run(argv, limit=2048, body=None, timeout=3):
                     break
                 chunk = os.read(child.stdout.fileno(), min(1024, limit + 1 - len(data)))
                 if not chunk:
-                    rc = child.wait(timeout=max(.01, end - time.monotonic()))
+                    try:
+                        rc = child.wait(timeout=max(.01, end - time.monotonic()))
+                    except subprocess.TimeoutExpired:
+                        return 'unknown (command timed out)'
                     return data.decode('utf-8', errors='replace').strip() if rc == 0 else 'unknown (command refused)'
                 data.extend(chunk)
                 if len(data) > limit:
