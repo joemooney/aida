@@ -14,7 +14,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-08T08:58:22.319212958Z
-modified_at: 2026-11-08T18:45:56.613939745Z
+modified_at: 2026-11-08T18:45:59.474504246Z
 req_type: Task
 tags:
 - carried-from:BUG-2495
@@ -48,6 +48,23 @@ comments:
   content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: Contained Codex posture-key refusal is bypassed by the attached -c=key=value form; generated default_permissions is also still replaceable. No triage reason was given.'
   created_at: 2026-11-08T18:45:56.613937269Z
   modified_at: 2026-11-08T18:45:56.613937269Z
+  session_id: 01a1b9af-8230-75d2-82f8-667491cc010a
+  harness_version: 2.1.319 (Claude Code)
+- id: 01a1bc7b-4baa-7fc2-9e5a-fea3e105375f
+  author: joe
+  content: |-
+    REVIEW FINDINGS TO ADDRESS (TASK-3015):
+    Verdict: CHANGES REQUESTED
+    Reviewed commit: 94e074359b04
+    Recorded: 2026-11-08T18:40:21.341918451+00:00
+    Findings:
+    1. BLOCKING (authority bypass): aida-cli-lib/src/launch/contained.rs:1470 strips only "-c" from an attached config arg, so -c=approval_policy="on-request" yields value =approval_policy="on-request"; line 1473 takes the text before the first = and gets an empty key, which matches no protected prefix. validate_codex_flags_with_help (contained.rs:1657) accepts it as -c with an inline value, and clap strips the leading = (clap_builder parser.rs:980), so Codex applies the override. Same for sandbox_mode, sandbox_workspace_write.*, shell_environment_policy.*, permissions.*. Fix: strip one leading = after -c, or refuse every attached -c form as agent_codex_background.rs:189 does.
+    2. BLOCKING (test gap on the refusal path): task_3015_codex_config_refuses_posture_overrides (aida-cli-lib/src/containment/tests/launch_tests.rs:3435-3440) covers -c K=V, --config K=V, --config=K=V and -cK=V but not -c=K=V, the one attached short form that reaches Codex (-cK=V is already rejected by the flag validator). Add the -c=K=V variant for every protected key.
+    3. BLOCKING (same posture class): default_permissions is not protected. contained.rs:1448 generates -c default_permissions="aida" and site config is appended after it, while the prefix list at contained.rs:1475-1480 only matches keys starting with permissions. -c default_permissions="other" therefore passes, and with Codex applying -c overrides in order it replaces the generated profile, the same outcome the loop refuses for -P/--permission-profile and that the new comment says must not happen. Refuse default_permissions in the contained path and test all config forms. Later-wins is Codex behavior not reproduced locally (review ran no builds).
+    4. MINOR (regression): the new config scan at contained.rs:1459-1471 does not stop at --, while validate_codex_flags_with_help treats everything after -- as an opaque prompt. exec -- -c now fails with "requires a value", and exec -- "--config=approval_policy notes" is refused as a posture override; both were accepted before this PR. Stop config scanning at --.
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
+  created_at: 2026-11-08T18:45:59.338824855Z
+  modified_at: 2026-11-08T18:45:59.338824855Z
   session_id: 01a1b9af-8230-75d2-82f8-667491cc010a
   harness_version: 2.1.319 (Claude Code)
 history:
