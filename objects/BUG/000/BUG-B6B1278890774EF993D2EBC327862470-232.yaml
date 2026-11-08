@@ -21,7 +21,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-06T17:06:21.254759647Z
-modified_at: 2026-11-08T03:31:59.184617243Z
+modified_at: 2026-11-08T03:40:11.814989592Z
 req_type: Bug
 comments:
 - id: 01a1b1ff-81bd-7b80-8ed5-ea84e52557a5
@@ -100,6 +100,12 @@ comments:
   modified_at: 2026-11-07T23:51:43.106097250Z
   session_id: 01a1b848-940b-7bd2-8acd-52e428b182b8
   harness_version: 2.1.319 (Claude Code)
+- id: 01a1b93e-04a6-7392-8f01-d305475409b4
+  author: joe
+  content: 'Next-slice investigation (advisor 2026-11-07 17:35/17:45 MST ruling): paired live-binary show --no-git probes from this lane and the primary checkout recorded total/open.cache 397/52 ms and 348/53 ms respectively. This seat resolves .aida-store and .aida/cache-db to the shared primary paths, so a cold per-seat cache was not reproduced here. Code inspection found a concrete unbounded refresh wait: freshen_for_read passes show’s zero read budget to git_ops::is_ancestor_with_timeout, whose zero case waits indefinitely; an elected reader can then run try_incremental_update (Git diff plus changed-object reads) inline. In-progress edits bypass that entire protocol using a pinned read-only projection, defer stale context without refresh hints/workers, and omit default human/TOON/card linkage while retaining explicit full/verbose/JSON linkage. Added regressions assert default show invokes no git log, merge-base or diff and does not advance the cache stamp, with explicit-linkage positive controls; snapshot/cold-cache and held-writer tests cover stale/canonical behavior. Lane-runner validation is still running; acceptance 3 remains the unchanged 24-hour post-go-live guard window.'
+  created_at: 2026-11-08T03:40:11.814989592Z
+  modified_at: 2026-11-08T03:40:11.814989592Z
+  session_id: 01a1b9366f44
 history:
 - id: 01a1b1f4-7697-7833-aec1-9ed69cd01b42
   author: aida-session-start
