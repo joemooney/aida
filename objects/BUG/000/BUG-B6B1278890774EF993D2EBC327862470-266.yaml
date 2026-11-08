@@ -1,0 +1,28 @@
+id: 01a1bca1-470d-7e60-84dc-b1bf370a05c9
+spec_id: BUG-b6b1278890774ef993d2ebc327862470-266
+agreed_id: BUG-2501
+title: 'Store pull: semantic merge of concurrent object edits, and a failed pull stops store writes (split from BUG-2490)'
+description: |
+  Split from BUG-2490 by advisor ruling on 2026-11-08, carrying the scope from the operator's comment of 2026-11-08T03:05Z. PR #3652 ships the conflict-marker refusal; this spec carries the rest.
+
+  Acceptance:
+  1. Semantic merge for store objects (git merge driver or in-process on pull): scalars from upstream, comments and history unioned by id and sorted by timestamp, so concurrent edits to one spec from two nodes never conflict.
+  2. A failed store pull stops store writes instead of proceeding on a local view: queue_cmd.rs pre-pickup pull, store_sync.rs maybe_sync_pull fallback, and burndown_run.rs, which discards the result.
+  3. Retry sites that hold the writer lock then plain pull_rebase (git_ops.rs and store_sync.rs) report a dirty store accurately, not as 'remote unreachable'.
+  4. Remove the stopgaps noted on BUG-2490 when this lands.
+status: Approved
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-11-08T19:27:28.525198886Z
+modified_at: 2026-11-08T19:27:28.525198886Z
+req_type: Bug
+filed_at:
+  code_sha: db2eb4c39e46704132705ccb2b8300574ead41a6
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: eeec474c545
+  vendor: claude
+  session: 01a1bc93-77a0-7740-8b03-df4e3e8d1df5
+  harness_version: 2.1.319 (Claude Code)
