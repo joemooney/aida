@@ -15,7 +15,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-08T03:09:42.520017Z
-modified_at: 2026-11-08T18:56:22.965817382Z
+modified_at: 2026-11-08T19:03:02.817143843Z
 req_type: Bug
 tags:
 - area:lanes
@@ -182,6 +182,13 @@ comments:
   modified_at: 2026-11-08T18:48:44.862405767Z
   session_id: 01a1b9af-8230-75d2-82f8-667491cc010a
   harness_version: 2.1.319 (Claude Code)
+- id: 01a1bc8a-e9a1-70b3-83d0-f5f57c2e9870
+  author: dirtlab
+  content: 'Addressed latest review blocker: task_2712 host-publication raw-object read now uses crate::test_git::git_command(), without raising the maintenance baseline. Removed BUG-2493 per-change body-file notes from AGENTS.md and OVERVIEW.md; CLI documentation retains the user contract. Lane job j20261108T185221739-2-0 executed the changed task_2712 regression: 1 passed. Job j20261108T185339680-2-0 executed all BUG-2493 regressions: 3 passed. Maintenance ratchet: 8 passed; portability guard with allowlist-growth check passed; downstream CI Python fixtures: 130 + 44 + 23 passed; environment, crate-glob, store-writer, glyph, trace-header and docs-scheduling guards passed. rustfmt and git diff --check passed. Full make check-ci-fast was interrupted because its first fast step unexpectedly invokes Cargo directly; no full-CI claim. Codegraph unavailable, callers confirmed with rg. Three files remain uncommitted for host publication; no implementation blockers. Existing holds remain unchanged. No commit, push, PR action or queue completion performed.'
+  created_at: 2026-11-08T19:03:02.817143843Z
+  modified_at: 2026-11-08T19:03:02.817143843Z
+  session_id: 01a1bc7fecf9
+  harness_version: codex-cli 0.167.0
 history:
 - id: 01a1b9c3-7cea-7270-b22c-10e229024e5a
   author: aida-session-start
