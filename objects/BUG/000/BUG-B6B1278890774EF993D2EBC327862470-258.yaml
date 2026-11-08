@@ -10,12 +10,12 @@ description: |
   2. `aida ship --commit-pending` accepts a body (e.g. --commit-body-file or repeated --trailer) and keeps today's single-subject call unchanged.
   3. A native-lane fixture whose declaration includes `Help-Golden: unchanged` produces a host commit on which check-help-golden-cochange.sh exits 0.
   4. The lane pickup prompt names this surface where it lists commit-message trailers.
-status: InProgress
+status: NeedsAttention
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-08T03:09:42.520017Z
-modified_at: 2026-11-08T16:02:06.040486385Z
+modified_at: 2026-11-08T16:07:09.650255501Z
 req_type: Bug
 tags:
 - area:lanes
@@ -262,6 +262,15 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a1bbe9-e252-7af0-bd5a-4c648b0b84ec
+  author: aida-orchestrator
+  timestamp: 2026-11-08T16:07:09.650282941Z
+  session_id: 01a1bbe7e2e1
+  harness_version: 2.1.319 (Claude Code)
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: NeedsAttention
 filed_at:
   code_sha: 049e5206de120518bb94fae84bf359f789e76236
   branch: main
@@ -275,7 +284,7 @@ failure_reason:
   phase: reviewer
   phase_index: 3
   kind: verdict:request-changes
-  detail: 'AC1-AC4 are met by the implementation and exercised by PR tests (AC status: ac1d8a45 verified by bug_2493_declared_body_survives_host_commit_and_refs_downgrade + task_2712 raw-object assert; ac581f10 verified by task_2902_native_ship_message_records_only_and_dry_run_does_not_write via ship_messages, single-subject path unchanged; ac76636a verified by the bug_2493 fixture running check-help-golden-cochange.sh; acc3c05a verified by bug_2493_native_prompts_name_safe_body_file_surface). Bug protocol ''touches a test file'': met. Blocked because two new test lines violate the Rust portability ratchet, which the CI gates step will reject: that step failed at 53d95b4b1d and 1595572e54 with the same lines present (their logs were unreadable from this sandbox, so the causal link is from the scanner rules). CI at this head was still running at record time, 0 of 7 CI jobs concluded; merge-hold-gate red is the expected supervised hold, not a code defect. No local tests run per review policy.'
+  detail: 'AC1-AC4 are met but the portability blocker from the prior round is unfixed: head 7d2181f070 only merges main over 086c9cce2a, which failed CI (gates) at ''Check Rust test portability ratchet'' naming these test lines. AC status: ac1d8a45 verified by bug_2493_declared_body_survives_host_commit_and_refs_downgrade and the task_2712 raw-object assert; ac581f10 verified by task_2902_native_ship_message_records_only_and_dry_run_does_not_write via ship_messages, single-subject path unchanged; ac76636a verified by the bug_2493 fixture running check-help-golden-cochange.sh; acc3c05a verified by bug_2493_native_prompts_name_safe_body_file_surface. Bug protocol ''touches a test file'': met. Those tests were read, not run (no local cargo per review policy). CI at this head was still queued/running at record time; merge-hold-gate red is the supervised hold.'
   recovery_hint: address the review findings, move BUG-2493 back to In Progress, and clear the PR hold only after approval
   shelved_by: reviewer
-  shelved_at: 2026-11-08T12:54:54.169595Z
+  shelved_at: 2026-11-08T16:07:09.650255501Z
