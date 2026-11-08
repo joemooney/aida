@@ -1,0 +1,36 @@
+id: 01a1bbec-fe9e-7702-8377-ab544d1218ea
+spec_id: STORY-b6b1278890774ef993d2ebc327862470-603
+agreed_id: STORY-2680
+title: 'Review PR-3680: [AI:codex] feat(lanes): add host-local capacity and status (Refs STORY-2660)'
+description: |
+  Auto-filed by `aida pr auto-queue-review` (typically from /aida-pr) (session `01a1bbbb`) for branch `story-b6b1278890774ef993d2ebc327862470-583`.
+
+  - PR: <https://github.com/joemooney/aida/pull/3680>
+  - Branch: `story-b6b1278890774ef993d2ebc327862470-583` → `main`
+
+  ## Slice of (Refs only — not completed by this PR)
+
+  Commit subjects carry `(Refs SPEC-ID)`: this PR is one slice of a spec that a later PR completes. Review this slice against that spec's acceptance criteria.
+
+  - STORY-2660
+
+  ## Acceptance
+
+  - Generate a structured review prompt with `aida review prompt --pr 3680` and verify each spec's acceptance criteria.
+  - Approve and merge, or request changes by spec id.
+  - Mark this story `completed` once the PR is merged.
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-11-08T16:10:33.502503586Z
+modified_at: 2026-11-08T16:10:33.502503586Z
+req_type: Story
+filed_at:
+  code_sha: f5d29575a9f6be8c3a5a96cbaa3356dacadaeff7
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 48e3865999b
+  vendor: claude
+  session: 01a1bbbb051d
