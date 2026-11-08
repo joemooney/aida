@@ -3,12 +3,12 @@ spec_id: BUG-b6b1278890774ef993d2ebc327862470-255
 agreed_id: BUG-2490
 title: 'Store commit path commits git conflict markers: an autostash re-apply conflict in .aida-store is committed by the contained-session store commit, breaking every command that loads the object'
 description: 'Observed 2026-11-07 17:00 MST: local .aida-store commit 7124c0f (''reviewer: commit 2 store changes from the contained session'') contained ''<<<<<<< Updated upstream / ======= / >>>>>>> Stashed changes'' in objects/STORY/000/STORY-B6B1278890774EF993D2EBC327862470-565.yaml (modified_at only). Every store load then failed: ''Failed to parse .../STORY-...-565.yaml'' (aida queue rework, aida push). The advisor hand-fixed it in c02902bd108 before it reached origin. Cause: the store worktree inherits the operator''s global rebase.autoStash=true / merge.autoStash=true; a pull over a dirty store tree re-applied the autostash with a conflict (the stash stays in the list as stash@{0} autostash), and the contained-session store commit then staged and committed the markered file. Acceptance: (1) every git invocation on the store worktree passes -c rebase.autoStash=false -c merge.autoStash=false (or the store worktree config pins them false), so no autostash ever touches the store; (2) the store commit path refuses to commit any object that does not parse, or that contains conflict markers, naming the file; unmerged paths also refuse; (3) a regression test reproduces the autostash-conflict sequence and asserts refusal; (4) aida doctor flags a store object with conflict markers. LIGHT gate.'
-status: InProgress
+status: NeedsAttention
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-08T00:02:55.282155934Z
-modified_at: 2026-11-08T14:21:55.198758588Z
+modified_at: 2026-11-08T14:27:27.911074421Z
 req_type: Bug
 relationships:
 - rel_type:
@@ -378,6 +378,13 @@ comments:
   modified_at: 2026-11-08T14:20:04.427282095Z
   session_id: 01a1b9af-8230-75d2-82f8-667491cc010a
   harness_version: 2.1.319 (Claude Code)
+- id: 01a1bb8e-9c27-7821-8366-0950a44dac9b
+  author: dirtlab
+  content: 'Native-seat rework against b3b3a379f1c6: addressed review findings 3 and 5. Uncommitted files: aida-core/src/git_ops.rs shares abort-error reporting between rebase and all four existing union-merge abort sites, retaining original and recovery diagnostics; aida-core/src/git_ops/tests/store_hook_tests.rs adds a real merge refusal with a reference-transaction hook blocking abort, plus the existing successful-recovery control; OVERVIEW.md removes the per-change paragraph as requested. Final lane job j20261108T142655476-2-0 executed all 8 BUG-2490 core tests: passed. Earlier attempts exposed and corrected a compile typo and test-fixture hook/branch issues; final run is green. Writer inventory passed (3372 sinks/293 mappings); final rustfmt --check and git diff --check passed. Codegraph unavailable; rg used. Finding 1 remains explicitly punted for advisor merge-policy ruling or linked split; finding 2 requires host CI at final head; finding 4 remains non-blocking doctor double parsing. Needs Attention persisted successfully; punt signal file was read-only. Preserve existing hold and publication veto. No commit, push, PR, queue completion, ship declaration or review recording performed.'
+  created_at: 2026-11-08T14:27:27.911074421Z
+  modified_at: 2026-11-08T14:27:27.911074421Z
+  session_id: 01a1bb89800e
+  harness_version: codex-cli 0.167.0
 history:
 - id: 01a1b923-982d-7512-93a5-cd08923b4f98
   author: aida-session-start
@@ -728,6 +735,21 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a1bb8a-0894-78a0-8ab3-3d21983a8ccc
+  author: dirtlab
+  timestamp: 2026-11-08T14:22:27.988455424Z
+  session_id: 01a1bb89800e
+  harness_version: codex-cli 0.167.0
+  changes: []
+- id: 01a1bb8b-dcc6-7da3-9b44-dbaa2b687fb0
+  author: dirtlab
+  timestamp: 2026-11-08T14:24:27.846859505Z
+  session_id: 01a1bb89800e
+  harness_version: codex-cli 0.167.0
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: NeedsAttention
 filed_at:
   code_sha: 2a7fe186bdcd718fa356e5e4d028a3b2ff13769d
   branch: main
@@ -737,3 +759,8 @@ filed_at:
   vendor: claude
   session: 01a1b848-940b-7bd2-8acd-52e428b182b8
   harness_version: 2.1.319 (Claude Code)
+attention_reason:
+  category: design-fork
+  detail: 'Latest review of b3b3a379f1c6 finding 1 explicitly requires advisor action: record the semantic merge-policy ruling and require maybe_sync_pull/burndown failed-pull fencing and delete/modify handling here, or file and link a follow-up. No ruling or linked split is recorded. CLAUDE.md requires advisor signoff for architecture changes. This round addresses findings 3 and 5 (merge-abort diagnostics and OVERVIEW cleanup); it does not supply advisor authority. Preserve existing merge hold and publication veto. Finding 2 requires host CI at the final head; finding 4 remains non-blocking.'
+  raised_by: implementer
+  raised_at: 2026-11-08T14:24:27.846835767Z
