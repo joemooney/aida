@@ -48,6 +48,105 @@ fn git(repo: &Path, args: &[&str]) {
     assert!(status.success(), "git {args:?} failed");
 }
 
+// Exercise the real TTY picker rather than supplying --role before dispatch.
+// trace:STORY-1486 | ai:codex
+fn picked_role_policy(repo: &Path, home: &Path, path: &str, role: &str) {
+    use portable_pty::{native_pty_system, CommandBuilder, PtySize};
+    use std::io::{Read, Write};
+    use std::time::{Duration, Instant};
+    let mut cmd = CommandBuilder::new(env!("CARGO_BIN_EXE_aida"));
+    cmd.cwd(repo);
+    cmd.args(["agent", "new", "claude", "--no-exec", "--verbose"]);
+    cmd.env("HOME", home);
+    cmd.env("AIDA_HOME", home);
+    cmd.env("PATH", path);
+    cmd.env("TERM", "xterm");
+    for key in [
+        "AIDA_SESSION_ROLE",
+        "AIDA_SESSION_GRANT",
+        "AIDA_CONTAINED",
+        "AIDA_PERMISSION_MODE",
+        "AIDA_CONTAINMENT_POSTURE",
+        "AIDA_HEADLESS",
+        "AIDA_STORE",
+        "AIDA_STORE_PATH",
+        "AIDA_PROJECT_ROOT",
+        "AIDA_SESSION_PROJECT",
+        "GIT_DIR",
+        "GIT_COMMON_DIR",
+        "GIT_WORK_TREE",
+    ] {
+        cmd.env_remove(key);
+    }
+    let pair = native_pty_system()
+        .openpty(PtySize {
+            rows: 40,
+            cols: 160,
+            pixel_width: 0,
+            pixel_height: 0,
+        })
+        .unwrap();
+    let mut child = pair.slave.spawn_command(cmd).unwrap();
+    drop(pair.slave);
+    let mut reader = pair.master.try_clone_reader().unwrap();
+    let mut writer = pair.master.take_writer().unwrap();
+    let (send, receive) = std::sync::mpsc::channel();
+    let read = std::thread::spawn(move || {
+        let mut buf = [0; 4096];
+        while let Ok(n) = reader.read(&mut buf) {
+            if n == 0
+                || send
+                    .send(String::from_utf8_lossy(&buf[..n]).into_owned())
+                    .is_err()
+            {
+                break;
+            }
+        }
+    });
+    let started = Instant::now();
+    let mut output = String::new();
+    let mut selected = false;
+    let status = loop {
+        while let Ok(chunk) = receive.try_recv() {
+            output.push_str(&chunk);
+            if chunk.contains("\x1b[6n") {
+                writer.write_all(b"\x1b[1;1R").unwrap();
+            }
+        }
+        if !selected && output.contains("Select a role for the new claude agent:") {
+            assert!(
+                !output.contains("git_policy:"),
+                "policy preceded picker: {output}"
+            );
+            writer.write_all(format!("{role}\r").as_bytes()).unwrap();
+            selected = true;
+        }
+        if let Some(status) = child.try_wait().unwrap() {
+            break status;
+        }
+        if started.elapsed() > Duration::from_secs(15) {
+            child.kill().unwrap();
+            let _ = child.wait();
+            panic!("role picker did not finish: {output}");
+        }
+        std::thread::sleep(Duration::from_millis(20));
+    };
+    drop(writer);
+    drop(pair.master);
+    read.join().unwrap();
+    for chunk in receive.try_iter() {
+        output.push_str(&chunk);
+    }
+    assert!(status.success(), "{output}");
+    assert!(selected, "{output}");
+    assert!(output.contains("git_policy: read-only"), "{output}");
+    assert!(
+        output.contains(&format!("requested seat: {role}")),
+        "{output}"
+    );
+    assert!(!output.contains("git_policy: write"), "{output}");
+}
+
 // trace:STORY-1486.ac325a99 | ai:codex
 // trace:STORY-1486.ac91839b | ai:codex
 #[test]
@@ -150,6 +249,15 @@ fn noexec_verbose_prints_stakeholder_and_explicit_git_downgrades() {
         let stderr = String::from_utf8_lossy(&out.stderr);
         assert!(!stderr.contains("git_policy:"), "{stderr}");
         assert!(!stderr.contains("unexpected-agent-execution"), "{stderr}");
+    }
+    let roles = aida(&repo, &home, &path, &["role", "scaffold"]);
+    assert!(
+        roles.status.success(),
+        "{}",
+        String::from_utf8_lossy(&roles.stderr)
+    );
+    for role in ["guest", "requester"] {
+        picked_role_policy(&repo, &home, &path, role);
     }
     // Unresolvable declarations remain visible without preventing the preview.
     std::os::unix::fs::symlink(repo.join("missing"), repo.join("target")).unwrap();

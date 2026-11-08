@@ -578,6 +578,14 @@ pub(crate) fn agent_new_codex_bg(mut req: CodexBgRequest) -> Result<()> {
         if req.show_prompt {
             return print_agent_show_prompt(&req.prompt, &prompt_args);
         }
+        // trace:STORY-1486 | ai:codex
+        crate::launch_permission_profile::print_git_policy(
+            &project_root,
+            plan.role.as_deref(),
+            req.flag_options.declared_git_read_only,
+            true,
+            req.verbose,
+        );
         let mut preview = config.clone();
         preview.default_args = exec_args(&config.default_args, &[]);
         return print_agent_launch_noexec(
@@ -598,6 +606,14 @@ pub(crate) fn agent_new_codex_bg(mut req: CodexBgRequest) -> Result<()> {
         .clone()
         .or_else(|| existing_owner.as_ref().and_then(|lease| lease.role.clone()))
         .unwrap_or_else(|| agent_new_scope_role(&spec_id).to_string());
+    // trace:STORY-1486 | ai:codex
+    crate::launch_permission_profile::print_git_policy(
+        &project_root,
+        Some(&expected_role),
+        req.flag_options.declared_git_read_only,
+        false,
+        req.verbose,
+    );
     preflight_agent_new_delegation(&project_root, Some(&expected_role))?;
     crate::gate::seat_authority::validate_launch_delegable_seats(
         &project_root,

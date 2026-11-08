@@ -32,6 +32,27 @@ pub(crate) fn git_policy(requested: Option<&str>, parent: Option<&str>, downgrad
         requested.unwrap_or("default"), parent.unwrap_or("none"))
 }
 
+/// Called only after the launcher resolves its child role (including a TTY pick).
+// trace:STORY-1486 | ai:codex
+pub(crate) fn print_git_policy(
+    root: &Path,
+    role: Option<&str>,
+    downgrade: Option<bool>,
+    noexec: bool,
+    visible: bool,
+) {
+    if let Some(downgrade) = downgrade.filter(|_| visible) {
+        let parent = crate::stakeholder_role::active_stakeholder_role()
+            .or_else(|| crate::gate::seat_authority::current_seat(root));
+        let policy = git_policy(role, parent.as_deref(), downgrade);
+        if noexec {
+            print!("{policy}");
+        } else {
+            eprint!("{policy}");
+        }
+    }
+}
+
 fn git_path(root: &Path, arg: &str) -> Result<PathBuf> {
     let output = std::process::Command::new("git")
         .env_remove("GIT_DIR")

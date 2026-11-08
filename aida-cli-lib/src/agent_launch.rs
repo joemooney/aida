@@ -399,33 +399,10 @@ pub(crate) fn handle_agent_command(cmd: &AgentCommand) -> Result<()> {
             };
             // Resolve this declaration independently of approval posture. It grants no authority.
             // trace:STORY-1486 | ai:codex
-            let crate::vendors::LaunchPreviewOptions {
-                role,
-                cwd,
-                noexec,
-                verbose,
-                show_prompt,
-                show_context,
-            } = crate::vendors::launch_preview_options(command);
-            let root = child_role_project_root(cwd.as_deref())?;
+            let options = crate::vendors::launch_preview_options(command);
+            let root = child_role_project_root(options.cwd.as_deref())?;
             crate::launch_permission_profile::validate_recipe(&root)?;
-            let seat = crate::stakeholder_role::active_stakeholder_role()
-                .or_else(|| crate::gate::seat_authority::current_seat(&root));
-            // trace:STORY-1486 | ai:codex
-            // Prompt/context output is an exact payload, not a diagnostic surface.
-            if *verbose && !*show_prompt && !*show_context {
-                let policy = crate::launch_permission_profile::git_policy(
-                    role.as_deref(),
-                    seat.as_deref(),
-                    *git_read_only,
-                );
-                if *noexec {
-                    print!("{policy}");
-                } else {
-                    eprint!("{policy}");
-                }
-            }
-            dispatch_agent_new(command)
+            dispatch_agent_new(command, *git_read_only)
         }
         AgentCommand::Register {
             pid,
@@ -1215,7 +1192,7 @@ pub(crate) fn pick_agent_type_interactively() -> Result<Option<AgentNewCommand>>
 /// out of `handle_agent_command` so both the explicit `aida agent new <type>`
 /// path and the interactive picker share one code path.
 // trace:TASK-837 | ai:claude
-pub(crate) fn dispatch_agent_new(cmd: &AgentNewCommand) -> Result<()> {
+pub(crate) fn dispatch_agent_new(cmd: &AgentNewCommand, git_read_only: bool) -> Result<()> {
     // trace:STORY-2215 | ai:claude
     let (AgentNewCommand::Claude { grant_inline, .. }
     | AgentNewCommand::Codex { grant_inline, .. }
@@ -1283,7 +1260,8 @@ pub(crate) fn dispatch_agent_new(cmd: &AgentNewCommand) -> Result<()> {
             ),
             AgentDefaultFlagOptions::new(!*no_default_flags, extra_flags.clone(), model.clone())
                 .rotating(*rotate)
-                .delegating(delegate_seats.clone()),
+                .delegating(delegate_seats.clone())
+                .declaring_git_policy(git_read_only),
             name.clone(),
             description.clone(),
             *bg,
@@ -1349,7 +1327,8 @@ pub(crate) fn dispatch_agent_new(cmd: &AgentNewCommand) -> Result<()> {
                     model.clone(),
                 )
                 .rotating(*rotate)
-                .delegating(delegate_seats.clone()),
+                .delegating(delegate_seats.clone())
+                .declaring_git_policy(git_read_only),
                 name: name.clone(),
                 description: description.clone(),
                 no_mail_wake: *no_mail_wake,
@@ -1413,7 +1392,8 @@ pub(crate) fn dispatch_agent_new(cmd: &AgentNewCommand) -> Result<()> {
             // trace:STORY-B6B1278890774EF993D2EBC327862470-150 | ai:claude
             AgentDefaultFlagOptions::new(!*no_default_flags, extra_flags.clone(), model.clone())
                 .rotating(*rotate)
-                .delegating(delegate_seats.clone()),
+                .delegating(delegate_seats.clone())
+                .declaring_git_policy(git_read_only),
             name.clone(),
             description.clone(),
             *no_mail_wake,
@@ -1465,7 +1445,8 @@ pub(crate) fn dispatch_agent_new(cmd: &AgentNewCommand) -> Result<()> {
                 !*no_duplicate_check,
             ),
             AgentDefaultFlagOptions::new(!*no_default_flags, extra_flags.clone(), None)
-                .delegating(delegate_seats.clone()),
+                .delegating(delegate_seats.clone())
+                .declaring_git_policy(git_read_only),
             name.clone(),
             description.clone(),
         ),
@@ -1866,6 +1847,9 @@ pub(crate) struct AgentDefaultFlagOptions {
     // trace:STORY-B6B1278890774EF993D2EBC327862470-101 | ai:claude
     pub(crate) rotate: bool,
     pub(crate) delegate_seats: Vec<String>,
+    // Only agent-new CLI declarations; other callers retain their existing output.
+    // trace:STORY-1486 | ai:codex
+    pub(crate) declared_git_read_only: Option<bool>,
 }
 
 impl AgentDefaultFlagOptions {
@@ -1880,7 +1864,14 @@ impl AgentDefaultFlagOptions {
             model_override,
             rotate: false,
             delegate_seats: Vec::new(),
+            declared_git_read_only: None,
         }
+    }
+
+    // trace:STORY-1486 | ai:codex
+    fn declaring_git_policy(mut self, downgrade: bool) -> Self {
+        self.declared_git_read_only = Some(downgrade);
+        self
     }
 
     // trace:BUG-2467 | ai:codex
@@ -2734,6 +2725,15 @@ pub(crate) fn agent_new_claude(
             return Ok(());
         }
     };
+    // The picker has now resolved the child seat; never report the raw CLI role.
+    // trace:STORY-1486 | ai:codex
+    crate::launch_permission_profile::print_git_policy(
+        &child_role_project_root(cwd)?,
+        role.as_deref(),
+        flag_options.declared_git_read_only,
+        noexec,
+        verbose && !show_prompt && !context.show,
+    );
     // SPIKE-34: when `--bg` is set, append it to the argv so `claude --bg`
     // dispatches the session to the background supervisor instead of
     // running foreground in this terminal. Forces the bg-aware dispatch
@@ -2873,6 +2873,15 @@ pub(crate) fn agent_new_codex_wake(
             return Ok(());
         }
     };
+    // The picker has now resolved the child seat; never report the raw CLI role.
+    // trace:STORY-1486 | ai:codex
+    crate::launch_permission_profile::print_git_policy(
+        &child_role_project_root(cwd)?,
+        role.as_deref(),
+        flag_options.declared_git_read_only,
+        noexec,
+        verbose && !show_prompt && !context.show,
+    );
     // BUG-2007: a codex TUI attached to the shared app-server daemon runs its
     // hooks (and tools) with the daemon's environment, i.e. whichever shell
     // first started the daemon, so the child got another session's role and
@@ -2960,6 +2969,15 @@ pub(crate) fn agent_new_antigravity(
             return Ok(());
         }
     };
+    // The picker has now resolved the child seat; never report the raw CLI role.
+    // trace:STORY-1486 | ai:codex
+    crate::launch_permission_profile::print_git_policy(
+        &child_role_project_root(cwd)?,
+        role.as_deref(),
+        flag_options.declared_git_read_only,
+        noexec,
+        verbose && !show_prompt && !context.show,
+    );
     let mut default_args = Vec::new();
     if bypass_sandbox {
         default_args.push("--dangerously-skip-permissions".to_string());
