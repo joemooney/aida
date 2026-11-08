@@ -1,0 +1,29 @@
+id: 01a1b9ab-bd12-7f12-bc7c-e6ac25802441
+spec_id: TASK-b6b1278890774ef993d2ebc327862470-975
+title: 'minor/test-gap: no test exercises the real Stop relay glue (aida-capture-prompt…'
+description: |-
+  Non-blocking finding carried forward from an APPROVED review verdict on STORY-2653, which has since completed — recorded here so it keeps a queryable home once the verdict record stops being read.
+
+  minor/test-gap: no test exercises the real Stop relay glue (aida-capture-prompt.sh -> AIDA_HOOK_EVENT=Stop -> emit_notice_time_line Stop branch, status_awaiting.rs:1375-1419) or TurnMonitor's Codex registry-lookup session fallback; the fake-vendor test (story_101_rotation_launch_tests.rs:97) writes the turn-state JSON directly.
+
+  PR: #3656
+  Reviewed sha: ef8fe4711ae384368a84d935870d54910c1928de
+status: Draft
+priority: Medium
+owner: joe
+feature: Uncategorized
+created_at: 2026-11-08T05:40:02.450050053Z
+modified_at: 2026-11-08T05:40:02.450050053Z
+req_type: Task
+tags:
+- carried-from:STORY-2653
+- finding-hash:328cd2f9
+- from-review:PR-3656
+- kind:carried-forward
+filed_at:
+  code_sha: 08cbf8a3fe7e5cef1171627f2b6edb446abc6539
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: ff9b8c91808
+  vendor: claude
