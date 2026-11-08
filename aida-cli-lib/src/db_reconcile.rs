@@ -4675,6 +4675,7 @@ pub(crate) fn print_pull_summary(store_path: &std::path::Path, pre_sha: &str) {
     }
     println!(
         "  {}",
-        "Run `aida history --since \"5 min ago\" --events` for the full event stream.".dimmed()
+        // trace:TASK-1214 | ai:codex
+        "Run `aida history events --since \"5 min ago\"` for the full event stream.".dimmed()
     );
 }

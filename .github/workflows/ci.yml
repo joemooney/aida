@@ -938,6 +938,20 @@ jobs:
             python3 scripts/check-exec-context.py
           fi
 
+      # trace:TASK-3428 | ai:codex
+      - name: Crate glob import ratchet
+        if: matrix.shard == 'gates'
+        env:
+          CRATE_GLOBS_BASE: ${{ github.event.pull_request.base.sha || github.event.merge_group.base_sha || github.event.before }}
+        run: |
+          python3 -m unittest tests/test_crate_split_tools.py
+          if [ -n "$CRATE_GLOBS_BASE" ] && [ "$CRATE_GLOBS_BASE" != "0000000000000000000000000000000000000000" ]; then
+            git fetch --no-tags --depth=1 origin "$CRATE_GLOBS_BASE"
+            python3 scripts/check-crate-globs.py --base "$CRATE_GLOBS_BASE"
+          else
+            python3 scripts/check-crate-globs.py
+          fi
+
       # Inventory-only S1a; no service or permission changes. trace:TASK-3222 | ai:codex
       - name: Store writer inventory ratchet
         if: matrix.shard == 'gates'
