@@ -8,7 +8,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-08T00:02:55.282155934Z
-modified_at: 2026-11-08T14:20:02.029817936Z
+modified_at: 2026-11-08T14:20:04.547581893Z
 req_type: Bug
 relationships:
 - rel_type:
@@ -358,6 +358,24 @@ comments:
   content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: AC1-AC4 hold by source and named tests and round-10 findings 1-2 are fixed, but the operator''s pull-failure and delete/modify scope has no advisor ruling or linked split, and CI is still pending at this head.. It was punted on: design-fork: Round 10 finding 3 explicitly requires advisor action: record the semantic merge-policy ruling and require remaining maybe_sync_pull/burndown failed-pull fencing and delete/modify handling here, or file and link a scope split. No ruling or linked split is recorded; CLAUDE.md requires advisor signoff for architecture changes. Findings 1 and 2 are repaired in uncommitted edits with all three targeted tests passing. Finding 4 remains carried and non-blocking. Preserve the merge hold and publication veto; do not publish as a complete BUG-2490 fix.. No triage reason was given.'
   created_at: 2026-11-08T14:20:02.029816139Z
   modified_at: 2026-11-08T14:20:02.029816139Z
+  session_id: 01a1b9af-8230-75d2-82f8-667491cc010a
+  harness_version: 2.1.319 (Claude Code)
+- id: 01a1bb87-d7cb-7232-8d54-e87b5b85446f
+  author: joe
+  content: |-
+    REVIEW FINDINGS TO ADDRESS (BUG-2490):
+    Verdict: CHANGES REQUESTED
+    Reviewed commit: b3b3a379f1c6
+    Recorded: 2026-11-08T14:16:13.784127896+00:00
+    Findings:
+    1. [major][scope][advisor-action] Operator scope on BUG-2490 (comment 2026-11-08T03:05Z, stopgap note 05:26Z, advisor evidence 06:10 MST) is still neither finished nor split; BUG-2490 links only STORY-2671 and no ruling is recorded. Open at b3b3a379f1c6: (a) maybe_sync_pull still uses plain pull_rebase (aida-cli-lib/src/store_sync.rs:1719), so a same-spec conflict fails on --sync and burndown; (b) it prints 'Falling back to local view' (store_sync.rs:1768) and burndown discards its result with 'let _ =' (burndown_run.rs:367, 748), so a failed pull does not stop burndown's writes; (c) resolve_spec_conflict still bails on delete/modify (aida-core/src/git_ops.rs:2635), which the stopgap resolves by keeping upstream, and because pre-pickup pull is now fatal (queue_cmd.rs:12585) one such conflict stops every pickup without --no-pull. Another implementer round cannot clear this: the advisor must record the merge-policy ruling and either require (a)-(c) here or file a linked follow-up, then re-request review.
+    2. [major][ci][gate-state] All 8 checks at b3b3a379f1c6 (run 42488431776: cli-0, cli-1, lib-0, lib-1, gates, contracts, rest; merge-hold-gate) were still pending when this verdict was recorded, so no test named here has CI evidence at this head. Round-10 finding 1 (cli-0 red at 8ad379ae3152) is fixed by source reading only: abort_failed_store_rebase keeps both diagnostics and owned_rebase_abort_failure_is_reported_and_preserved was strengthened. Confirm green CI before any approval.
+    3. [minor][diagnostics] merge_union_onto discards a failed abort at the new validation refusal: 'let _ = git(repo, &["merge", "--abort"])' (aida-core/src/git_ops.rs:2852), and the same at :2857. Round 10 added abort_failed_store_rebase to preserve this diagnostic on the rebase path only, so a failed merge abort leaves the store mid-merge with no report. Non-blocking.
+    4. [minor][perf] Carried, non-blocking: doctor_multi_agent loads the whole store through Storage::load, then store_object_findings reads and parses every object again (aida-cli-lib/src/doctor_cmd.rs:828-836; about 7365 objects live). Doctor-only cost.
+    5. [cosmetic][docs] OVERVIEW.md:496-504 adds a per-change BUG-2490 paragraph, which the repository CLAUDE.md reserves for real architecture changes because each added paragraph conflicts with open PRs. docs/cli/07-project-setup.md already documents the doctor category; move the rest to the PR body or spec comment. Non-blocking.
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
+  created_at: 2026-11-08T14:20:04.427282095Z
+  modified_at: 2026-11-08T14:20:04.427282095Z
   session_id: 01a1b9af-8230-75d2-82f8-667491cc010a
   harness_version: 2.1.319 (Claude Code)
 history:
