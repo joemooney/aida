@@ -50,6 +50,22 @@ with sqlite3.connect(p / '.codegraph/codegraph.db') as db:
         self.addCleanup(lambda: host.snapshot and host.snapshot.cleanup())
         return host
 
+    def test_success_json_excludes_stderr_and_failure_retains_diagnostics(self):
+        self.upstream.write_text("#!/usr/bin/python3\nimport sys\nprint('{}')\nprint('warning', file=sys.stderr)\nsys.exit(int(sys.argv[2]))\n")
+        host = self.host()
+        result = host.query({"op": "callers", "symbol": "0"})
+        self.assertEqual(result["rc"], 0)
+        self.assertEqual(json.loads(result["output"]), {})
+        result = host.query({"op": "callers", "symbol": "1"})
+        self.assertEqual(result["rc"], 1)
+        self.assertIn("warning", result["output"])
+
+    def test_stderr_overflow_is_bounded_even_on_success(self):
+        self.upstream.write_text("#!/usr/bin/python3\nimport sys\nsys.stderr.write('x' * 4096)\n")
+        with mock.patch.object(proxy, "MAX_OUTPUT", 1024):
+            with self.assertRaisesRegex(ValueError, "output exceeds limit"):
+                self.host().query({"op": "callers", "symbol": "known"})
+
     def test_failed_descriptor_publication_cleans_temporary_file(self):
         directory = self.primary / ".codegraph"
         descriptor = directory / proxy.DESCRIPTOR
@@ -250,12 +266,14 @@ with sqlite3.connect(p / '.codegraph/codegraph.db') as db:
                 if time.monotonic() > deadline:
                     self.fail("query did not start")
                 time.sleep(0.01)
+            descriptor_path = self.primary / ".codegraph" / proxy.DESCRIPTOR
+            initial_observation = json.loads(descriptor_path.read_text())["observed_at"]
             for _ in range(3):
                 started = time.monotonic()
                 self.assertEqual(proxy.client({"op": "status"}, path)["rc"], 0)
                 self.assertLess(time.monotonic() - started, 0.25)
                 descriptor = json.loads((self.primary / ".codegraph" / proxy.DESCRIPTOR).read_text())
-                self.assertLess(time.time() - descriptor["observed_at"], 0.5)
+                self.assertEqual(descriptor["observed_at"], initial_observation)
                 time.sleep(0.1)
             query.join(5)
             self.assertFalse(query.is_alive())

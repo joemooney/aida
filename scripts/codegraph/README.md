@@ -136,9 +136,12 @@ shared navigation prompt describes query selection but does not install or
 select this client. Do not treat a native run as AIDA-contained evidence.
 
 Status requests bypass the query/backup lock. Up to sixteen bounded request
-workers isolate stalled peers, with a two-second request deadline. Excess
-connections are closed; callers can retry. Query lock acquisition is bounded
-at fifteen seconds. Heartbeats continue during backups and queries.
+workers isolate stalled peers, with a two-second request deadline. Status bypasses
+the work lock but shares worker capacity: with all sixteen workers occupied,
+connections (including doctor status probes) are closed; callers can retry. A
+doctor reachability failure can therefore indicate temporary saturation. Query lock acquisition is bounded
+at fifteen seconds. Heartbeats publish every three seconds during backups and queries. Client
+deadlines cover lock acquisition, backup and upstream execution (50 seconds).
 
 The service must be deployed and that live query must pass before a completing
 STORY-2630 trailer is appropriate.

@@ -127,7 +127,7 @@ fn probe_proxy(root: &Path) -> Result<()> {
         );
         let mut buffer = [0; 1024];
         match stream.read(&mut buffer) {
-            Ok(0) => anyhow::bail!("proxy closed without a status response"),
+            Ok(0) => anyhow::bail!("proxy closed without a status response (service may be saturated; retry)"),
             Ok(n) => body.extend_from_slice(&buffer[..n]),
             Err(e) if e.kind() == std::io::ErrorKind::WouldBlock => {
                 std::thread::sleep(Duration::from_millis(5));

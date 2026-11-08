@@ -185,21 +185,21 @@ class Host:
         # Even upstream migration/healing writes reach only the disposable host
         # snapshot, never primary or seat code. No shell or seat config is used.
         env = {"PATH": "/usr/bin:/bin", "HOME": str(self.state), "LANG": "C.UTF-8"}
-        with tempfile.TemporaryFile(dir=self.state) as output:
+        with tempfile.TemporaryFile(dir=self.state) as output, tempfile.TemporaryFile(dir=self.state) as diagnostics:
             process = subprocess.Popen(argv, cwd=self.snapshot.name, env=env,
                                        stdin=subprocess.DEVNULL, stdout=output,
-                                       stderr=subprocess.STDOUT, start_new_session=True)
+                                       stderr=diagnostics, start_new_session=True)
             deadline = time.monotonic() + QUERY_TIMEOUT
             try:
                 # Observe exit without reaping: retain the group leader PID
                 # until killpg so PID reuse cannot target another host group.
                 while os.waitid(os.P_PID, process.pid, os.WEXITED | os.WNOHANG | os.WNOWAIT) is None:
-                    if output.tell() > MAX_OUTPUT:
+                    if output.tell() + diagnostics.tell() > MAX_OUTPUT:
                         raise ValueError("query output exceeds limit")
                     if time.monotonic() >= deadline:
                         raise TimeoutError("codegraph query timed out")
                     time.sleep(0.02)
-                if output.tell() > MAX_OUTPUT:
+                if output.tell() + diagnostics.tell() > MAX_OUTPUT:
                     raise ValueError("query output exceeds limit")
             finally:
                 # Include descendants, even if the original child already exited.
@@ -209,7 +209,11 @@ class Host:
                     pass
                 process.wait()
             output.seek(0)
-            return {"rc": process.returncode, "output": output.read(MAX_OUTPUT).decode("utf-8", errors="replace"), **self.status()}
+            diagnostics.seek(0)
+            body = output.read(MAX_OUTPUT)
+            if process.returncode != 0:
+                body += diagnostics.read(MAX_OUTPUT)
+            return {"rc": process.returncode, "output": body.decode("utf-8", errors="replace"), **self.status()}
 
 
 def write_descriptor(directory, descriptor, data):
@@ -308,10 +312,13 @@ def serve(primary, state, upstream):
         identity = path.stat().st_ino
         refresher = threading.Thread(target=maintain)
         refresher.start()
+        next_heartbeat = 0.0
         try:
             while True:
-                data = {**host.status(), "socket": str(path), "observed_at": time.time()}
-                write_descriptor(directory, descriptor, data)
+                if time.monotonic() >= next_heartbeat:
+                    data = {**host.status(), "socket": str(path), "observed_at": time.time()}
+                    write_descriptor(directory, descriptor, data)
+                    next_heartbeat = time.monotonic() + 3
                 try:
                     conn, _ = server.accept()
                 except socket.timeout:
@@ -351,7 +358,7 @@ def client(request, socket_path):
         conn.settimeout(5)
         conn.connect(socket_path)
         send(conn, request)
-        return receive(conn, MAX_OUTPUT * 6 + 4096, timeout=2 * QUERY_TIMEOUT + 5)
+        return receive(conn, MAX_OUTPUT * 6 + 4096, timeout=3 * QUERY_TIMEOUT + 5)
 
 
 def main():
