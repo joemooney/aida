@@ -21,7 +21,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-06T17:06:21.254759647Z
-modified_at: 2026-11-08T09:02:53.525040704Z
+modified_at: 2026-11-08T11:53:56.484701446Z
 req_type: Bug
 comments:
 - id: 01a1b1ff-81bd-7b80-8ed5-ea84e52557a5
@@ -313,6 +313,13 @@ comments:
   modified_at: 2026-11-08T09:02:53.525040704Z
   session_id: 01a1ba5b8863
   harness_version: codex-cli 0.167.0
+- id: 01a1bb02-0e04-70d0-a84c-524df54eae12
+  author: joe
+  content: 'Advisor 2026-11-08 04:55: PR-3658 (skip default linkage + refresh-on-read) landed as c1aca0d93c0 with Refs, correctly: completion needs the post-fix evidence in acceptance. Next action: after 2026-11-09 05:00 compare the performance-guard 24h window for aida show (trips over budget, worst wall) with the 2026-11-06 baseline (105/677, worst 15876 ms); complete if under 10% and under the 5000 ms ceiling, otherwise reopen with the new waits.'
+  created_at: 2026-11-08T11:53:56.484701446Z
+  modified_at: 2026-11-08T11:53:56.484701446Z
+  session_id: 01a1b9af-8230-75d2-82f8-667491cc010a
+  harness_version: 2.1.319 (Claude Code)
 history:
 - id: 01a1b1f4-7697-7833-aec1-9ed69cd01b42
   author: aida-session-start
