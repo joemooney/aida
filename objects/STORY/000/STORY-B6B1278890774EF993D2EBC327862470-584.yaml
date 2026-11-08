@@ -13,12 +13,12 @@ description: |
   3. Works for Claude, Codex and AGY through their headless resume commands; one adapter test per vendor using a recorded fixture.
   4. A wait whose seat or session has been lost surfaces as an escalation, never a silent drop.
   Ref: docs/plans/2026-11-07-infinity-agent-architecture-deep-dive.md section 3.3 and the SPIKE-711 results table.
-status: InProgress
+status: NeedsAttention
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-08T02:58:08.667753563Z
-modified_at: 2026-11-08T07:14:40.509633023Z
+modified_at: 2026-11-08T07:16:45.730806560Z
 req_type: Story
 tags:
 - area:human-wait
@@ -213,6 +213,13 @@ comments:
   modified_at: 2026-11-08T07:13:30.373077175Z
   session_id: 01a1b8be-8170-7fb2-89ab-ecb4c6eee98c
   harness_version: 2.1.319 (Claude Code)
+- id: 01a1ba04-399c-7a91-8299-13e6d94469ea
+  author: dirtlab
+  content: 'Revised docs/plans/2026-11-08-story-2661-park-resume-sketch.md for F1-F8. F1: native host publication declaration recorded as [AI:codex] docs(plans): clarify park and resume protocol (Refs STORY-2661); host must use non-completing commit/PR metadata, no Git mutation from this seat. F2: proposed systemd resume-watch service, registration acknowledgement, heartbeat, restart and reconciliation. F3: canonical answered question is authoritative across synced nodes; outbox is a hint. F4: named live consumer parent grant and fresh authorized manual resume after expiry; unattended overnight delegation remains outside initial scope. F5: optional canonical question UUID and park binding schema, forced overwrite refusal and cancellation. F6: full answer note in prompt and fixtures. F7: InProgress retained and explicit resume predicate independent of Approved-only autoqueue. F8: one-turn cooperative stop, 60-second supervisor deadline plus 5-second termination grace, visible timeout escalation and conservative capacity accounting. Contained Codex remains excluded until PR2. Validation: git diff --check passed; docs-only revision, runtime tests not run. Codegraph executable unavailable; inspected sources with rg. No implementation, commit, push, PR edit or completion performed. Advisor signoff required on revised protocol and initial scope.'
+  created_at: 2026-11-08T07:16:41.500916719Z
+  modified_at: 2026-11-08T07:16:41.500916719Z
+  session_id: 01a1ba0256a0
+  harness_version: codex-cli 0.167.0
 history:
 - id: 01a1b9c5-1aa6-78e3-9355-9af12a0ce44c
   author: joe
@@ -261,6 +268,15 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a1ba04-4a22-7630-b8c3-22d7dcaaef2d
+  author: dirtlab
+  timestamp: 2026-11-08T07:16:45.730823932Z
+  session_id: 01a1ba0256a0
+  harness_version: codex-cli 0.167.0
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: NeedsAttention
 filed_at:
   code_sha: dc41ee8da2f44f88178936fc1a8e6cb7168a3de7
   branch: main
@@ -270,3 +286,8 @@ filed_at:
   vendor: claude
   session: 01a1b8be-8170-7fb2-89ab-ecb4c6eee98c
   harness_version: 2.1.319 (Claude Code)
+attention_reason:
+  category: design-fork
+  detail: Revised sketch addresses review findings F1-F8 at docs/plans/2026-11-08-story-2661-park-resume-sketch.md. Binding advisor ruling requires signoff before code. Please review new resume-watch service, canonical question binding, fresh-parent/manual overnight recovery limit, 60s stop deadline and initial uncontained-only Codex scope until PR2. F1 metadata repair requires host publication with recorded non-completing Refs subject; this native seat cannot rewrite commits or PR metadata. No findings disputed; edits remain uncommitted. Punt remains publication veto pending advisor decision.
+  raised_by: implementer
+  raised_at: 2026-11-08T07:16:45.730806560Z
