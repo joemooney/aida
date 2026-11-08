@@ -8,7 +8,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-06T13:39:53.442026096Z
-modified_at: 2026-11-07T19:36:13.298252969Z
+modified_at: 2026-11-08T03:33:22.987624318Z
 req_type: Task
 tags:
 - architecture
@@ -424,6 +424,13 @@ comments:
   created_at: 2026-11-07T19:36:13.298252969Z
   modified_at: 2026-11-07T19:36:13.298252969Z
   session_id: 01a1b76b-2fe7-7dd2-88d0-356fc8d96d04
+  harness_version: 2.1.319 (Claude Code)
+- id: 01a1b937-c7ab-7971-82c9-210fa5b783f8
+  author: joe
+  content: 'ADVISOR RULING 2026-11-07 20:35: S2a parts 1-2 have landed (#3584 redo + typed mutations; #3598 staged gated boundary; #3623 isolated staged caches). NEXT = S2a part 3, the routing slice: route the inventoried CLI/MCP store writers through the S1 mediation service under the mediated profile (one PR, Refs TASK-3223), and switch the gated mediated profile on for contained Codex lanes only once every inventoried writer routes. own_claim/queue_done stay with TASK-3326. Acceptance for this slice: the writer inventory script reports zero unrouted writers for the mediated profile; a contained-lane test proves a raw .aida-store object write is denied while a mediated comment_add succeeds; make check-ci-fast green. TASK-3223 completes when this slice lands with that evidence.'
+  created_at: 2026-11-08T03:33:22.987624318Z
+  modified_at: 2026-11-08T03:33:22.987624318Z
+  session_id: 01a1b8be-8170-7fb2-89ab-ecb4c6eee98c
   harness_version: 2.1.319 (Claude Code)
 history:
 - id: 01a1b116-742d-73c0-9064-1933f11e4c38
