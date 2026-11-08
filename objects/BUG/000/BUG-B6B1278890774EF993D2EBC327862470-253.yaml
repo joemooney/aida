@@ -20,7 +20,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-07T20:18:53.564500Z
-modified_at: 2026-11-08T20:19:45.635415104Z
+modified_at: 2026-11-08T20:19:53.649702273Z
 req_type: Bug
 relationships:
 - rel_type:
@@ -340,6 +340,22 @@ comments:
   content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: Both acceptance tests read correctly and four of five prior findings are fixed, but a non-contained queue-resume still strands seat signals after consuming host markers, a stale seat punt is re-mirrored after Claude advisor resumes, and CI at this head has not reported.. No triage reason was given.'
   created_at: 2026-11-08T20:19:45.635412984Z
   modified_at: 2026-11-08T20:19:45.635412984Z
+  session_id: 01a1bc93-77a0-7740-8b03-df4e3e8d1df5
+  harness_version: 2.1.319 (Claude Code)
+- id: 01a1bcd1-43c1-7130-b569-a9adaffcf7fe
+  author: joe
+  content: |-
+    REVIEW FINDINGS TO ADDRESS (BUG-2488):
+    Verdict: CHANGES REQUESTED
+    Reviewed commit: f0aea346d817
+    Recorded: 2026-11-08T20:05:43.518803731+00:00
+    Findings:
+    1. MAJOR (queue_cmd.rs:9065 publish_on_exit, :9072; session.rs:8301 signal_scope, :8399 provision_attempt_signals): the prior reconcile finding is only half fixed. Commit 863c60a25d7 added reconcile_signals to the drain's resume_implementer, but run_queue_resume_to_exit still reconciles only through publish_queue_exit, which requires contained=true. A leased Codex implementer resumed with contained=false still receives seat-local punt/hold paths and has both host markers deleted by provision_attempt_signals. A punt or 'aida pr hold' during that resume stays in the seat: the held re-entry check at queue_cmd.rs:12235 reads only the main marker and refuses, and the seat .aida/punts.jsonl record never reaches the host ledger. Call reconcile_signals after every implementer resume that received seat paths, before the !contained return, and add a test that a contained=false resume's hold reaches the main marker.
+    2. MINOR (phase_driver_trait.rs:3349 reconcile in resume_implementer; session.rs:7334 apply_seat_signals; session.rs:8392 provisioning sits after the Claude early return at :8264): new in 863c60a25d7. A drain implementer on any vendor now writes its punt to the seat. run_implementer mirrors it and removes only the host marker, leaving the seat copy. For a Claude resume, spawn_vendor_headless_resume_granted returns through spawn_claude_headless_resume_granted without provisioning, so the seat signal survives and the new reconcile writes the already-handled punt back to .aida/punt-signals on the host. The resumed session can then ship with a stale host punt marker left behind, which publication_veto reads as a live veto until the next attempt clears it. Clear the consumed seat signal when run_implementer consumes the punt, or provision before Claude resumes, and add a test that a resumed Claude lane leaves no host punt marker.
+    3. CI UNVERIFIED: run 42516278713 at f0aea346d817 is still pending with no jobs started, so the lib-1 fix (the watchdog test now uses resolve_aida_exe) has no green evidence. Confirm a green run at the new head. merge-hold-gate failing is the expected supervised hold, not a code defect.
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
+  created_at: 2026-11-08T20:19:53.409517422Z
+  modified_at: 2026-11-08T20:19:53.409517422Z
   session_id: 01a1bc93-77a0-7740-8b03-df4e3e8d1df5
   harness_version: 2.1.319 (Claude Code)
 history:
