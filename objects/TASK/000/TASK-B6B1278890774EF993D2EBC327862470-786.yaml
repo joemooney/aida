@@ -8,7 +8,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-04T17:54:51.353376614Z
-modified_at: 2026-11-08T00:25:13.543125126Z
+modified_at: 2026-11-08T00:28:02.332594374Z
 req_type: Task
 tags:
 - area:containment
@@ -730,6 +730,12 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a1b88e-1851-7180-a7be-8829456e9c86
+  author: joe
+  timestamp: 2026-11-08T00:28:02.513174412Z
+  session_id: 01a1b88d0e35
+  harness_version: 2.1.319 (Claude Code)
+  changes: []
 filed_at:
   code_sha: 6a331a8a5c91ca7485b695a076af44bdf9be3894
   branch: main
@@ -738,3 +744,11 @@ filed_at:
   aida_build_sha: e422daaa1a4
   vendor: claude
   session: 5bf140f7-38b2-4a04-9e8c-ccf69b1258f8
+failure_reason:
+  phase: reviewer
+  phase_index: 3
+  kind: verdict:request-changes
+  detail: Head d99077f only merges main (no PR-file changes since 9b8a249); every round-1 finding remains unaddressed. Ruling items 1-2 partial, item 4 dead native-permission data persists; CI still pending.
+  recovery_hint: address the review findings, move TASK-3048 back to In Progress, and clear the PR hold only after approval
+  shelved_by: reviewer
+  shelved_at: 2026-11-08T00:28:02.332594374Z
