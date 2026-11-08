@@ -10,12 +10,12 @@ description: |
   2. `aida ship --commit-pending` accepts a body (e.g. --commit-body-file or repeated --trailer) and keeps today's single-subject call unchanged.
   3. A native-lane fixture whose declaration includes `Help-Golden: unchanged` produces a host commit on which check-help-golden-cochange.sh exits 0.
   4. The lane pickup prompt names this surface where it lists commit-message trailers.
-status: InProgress
+status: Completed
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-08T03:09:42.520017Z
-modified_at: 2026-11-08T19:20:36.571528905Z
+modified_at: 2026-11-08T22:46:42.316388253Z
 req_type: Bug
 tags:
 - area:lanes
@@ -497,6 +497,20 @@ history:
   session_id: 01a1bc904ae5
   harness_version: codex-cli 0.167.0
   changes: []
+- id: 01a1bd57-ad47-76d3-ac21-422f365eea0f
+  author: aida-auto-bump
+  timestamp: 2026-11-08T22:46:42.247497195Z
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Completed
+processing_record:
+- id: 01a1bd57-ad8c-7e41-846a-7bb1296809c6
+  timestamp: 2026-11-08T22:46:42.316385499Z
+  agent: aida
+  commit_sha: 8a1c65ada62188631b1dc4a9689429d5de99da7f
+  summary: 'AC1-AC4 met; prior ratchet blockers fixed. ac1d8a45 verified by bug_2493_declared_body_survives_host_commit_and_refs_downgrade + task_2712 raw-object assert; ac581f10 verified by task_2902_native_ship_message_records_only_and_dry_run_does_not_write + bug_2493_body_file_errors_validate_usage_before_reading_and_name_path; ac76636a verified by the bug_2493 fixture running check-help-golden-cochange.sh; acc3c05a verified by bug_2493_native_prompts_name_safe_body_file_surface. Test source read; no local cargo. CI at this head: gates, contracts, rest, lib-0/1, cli-0/1 all success, incl. portability and git-maintenance ratchets; Build aggregator still queued at record time. merge-hold-gate red is the supervised hold, not a code defect, and stays for the human/advisor release path.'
+  review_verdict: approved
 filed_at:
   code_sha: 049e5206de120518bb94fae84bf359f789e76236
   branch: main
@@ -506,3 +520,7 @@ filed_at:
   vendor: claude
   session: 01a1b8be-8170-7fb2-89ab-ecb4c6eee98c
   harness_version: 2.1.319 (Claude Code)
+implementation_info:
+  implemented: false
+  completed_at: 2026-11-08T22:46:42.247492010Z
+  completion_sha: 8a1c65ada62188631b1dc4a9689429d5de99da7f
