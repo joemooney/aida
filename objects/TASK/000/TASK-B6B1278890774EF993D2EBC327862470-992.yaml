@@ -14,7 +14,7 @@ priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-11-08T12:41:40.584747246Z
-modified_at: 2026-11-08T15:25:11.821436562Z
+modified_at: 2026-11-08T15:25:18.535009760Z
 req_type: Task
 tags:
 - carried-from:TASK-3472
@@ -26,6 +26,14 @@ relationships:
   target_id: 01a1ba22-fb45-77b3-8aaa-626d7e65356e
   created_at: 2026-11-08T15:25:11.821432954Z
   created_by: joe
+comments:
+- id: 01a1bbc3-9147-7200-83bc-0fb8e682416b
+  author: joe
+  content: 'Advisor 2026-11-08, per the operator''s 2026-10-28 one-time ruling on non-blocking findings: accepted. No gate reads the trailer.'
+  created_at: 2026-11-08T15:25:18.535009760Z
+  modified_at: 2026-11-08T15:25:18.535009760Z
+  session_id: 01a1bbab-762f-7cd2-8a36-4ea9f209afce
+  harness_version: 2.1.319 (Claude Code)
 history:
 - id: 01a1bb7d-168b-7e12-85fc-94ea2b0889c9
   author: joe
