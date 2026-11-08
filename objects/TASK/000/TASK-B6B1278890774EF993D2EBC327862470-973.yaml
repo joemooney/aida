@@ -1,0 +1,29 @@
+id: 01a1b9ab-7b01-7bc2-b4ab-03e9d1189e73
+spec_id: TASK-b6b1278890774ef993d2ebc327862470-973
+title: 'minor: rotation_context (agent_rotation.rs ~L428-455) lists every PID carrying …'
+description: |-
+  Non-blocking finding carried forward from an APPROVED review verdict on STORY-2653, which has since completed — recorded here so it keeps a queryable home once the verdict record stops being read.
+
+  minor: rotation_context (agent_rotation.rs ~L428-455) lists every PID carrying the outgoing grant, including the dying vendor itself and the Stop hook chain (bash hook, timeout, aida awaiting), so the handoff's 'restart needed watchers' list is padded with processes that are not watchers; exclude self/ancestors and the launcher child.
+
+  PR: #3656
+  Reviewed sha: ef8fe4711ae384368a84d935870d54910c1928de
+status: Draft
+priority: Medium
+owner: joe
+feature: Uncategorized
+created_at: 2026-11-08T05:39:45.537322724Z
+modified_at: 2026-11-08T05:39:45.537322724Z
+req_type: Task
+tags:
+- carried-from:STORY-2653
+- finding-hash:c0c96e7a
+- from-review:PR-3656
+- kind:carried-forward
+filed_at:
+  code_sha: 08cbf8a3fe7e5cef1171627f2b6edb446abc6539
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: ff9b8c91808
+  vendor: claude
