@@ -1638,7 +1638,7 @@ fn task1993_pruning_keeps_consumed_rounds() {
 // trace:TASK-1993.ac9ef854 | ai:claude
 #[test]
 fn task1993_launch_revalidation_precedes_verdict_reset() {
-    let source = include_str!("../queue_cmd.rs");
+    let source = include_str!("../queue_cmd/work.rs");
     let check = source
         .find("crate::review_watch::reviewer_launch_context(&project_root, *pr)?;")
         .expect("watch revalidation in handle_queue_work");
