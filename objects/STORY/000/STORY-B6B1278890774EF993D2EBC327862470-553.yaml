@@ -3,12 +3,12 @@ spec_id: STORY-b6b1278890774ef993d2ebc327862470-553
 agreed_id: STORY-2630
 title: 'Lanes can actually use codegraph: seat clones resolve the primary index, AGENTS.md documents it, doctor and dell1 check it'
 description: 'Measured 2026-11-07: codegraph 1.6.0 is installed and indexed only at the primary checkout (/home/joe/ai/aida/.codegraph, synced every 15 min by codegraph-sync-aida.timer). Implementer and reviewer lanes run in seat clones (aida-worktrees/aida-seat-aida-*), where ''codegraph callers X'' fails with ''CodeGraph not initialized''. Of 837 headless lane logs in 3 days, 16 invoke codegraph and 422 use rg/grep. Only CLAUDE.md mentions codegraph; AGENTS.md (which Codex reads) and aida-core/templates say nothing, so Codex lanes, the majority, never hear of it. dell1 has no codegraph. Acceptance: (1) a lane in a seat clone or worktree gets a working codegraph without a per-clone index: lane env or wrapper passes -p <primary checkout>, or the seat setup links .codegraph read-only. (2) The contained boundary grants read-only access to that index and nothing writable. (3) The AGENTS.md template and the shared lane prompt carry one line on when to use callers/callees/impact and to confirm ''no callers'' with rg. Edit the template master, then sync-templates. (4) aida doctor reports codegraph missing, index stale (>1h) or unreachable from a seat. (5) Evidence: one codex lane log shows a successful codegraph call from a seat clone. Out of scope: indexing lane branches (main is fine for navigation).'
-status: InProgress
+status: NeedsAttention
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-07T15:34:33.363448208Z
-modified_at: 2026-11-08T07:18:16.146153493Z
+modified_at: 2026-11-08T07:22:34.574528065Z
 req_type: Story
 comments:
 - id: 01a1b6a6-52e1-70a0-a9c1-d32888979ca5
@@ -407,6 +407,59 @@ comments:
   modified_at: 2026-11-08T07:16:56.661492671Z
   session_id: 01a1b8be-8170-7fb2-89ab-ecb4c6eee98c
   harness_version: 2.1.319 (Claude Code)
+- id: 01a1ba09-9cce-7411-afa3-4562ea021e0f
+  author: dirtlab
+  content: |
+    Fix the reviewed proxy client routing boundary (Refs STORY-2630).
+
+    Origin/main evidence (08cbf8a3fe): AC1 routing is present in primary_index_link
+    and worktree runtime setup; AC3 navigation is present in the template master
+    and shared dispatch/code-navigation.md; AC4 missing/stale/unreachable findings
+    are present. AC2 and AC5 are not established by origin/main.
+
+    This rework removes automatic PATH injection from launch finalization entirely.
+    The seat-controlled .codegraph symlink can no longer select host-launched
+    executables. Use an explicitly reviewed absolute host proxy client inside the
+    seat shell for either native or AIDA-contained posture. No filesystem write
+    grant is added. Regression coverage supplies a redirected graph containing
+    fake codegraph and aida executables and verifies PATH is unchanged.
+    Descriptor publication cleans its temporary file if encoding or rename fails.
+    OVERVIEW now retains only durable architecture guidance.
+
+    Live acceptance attempted in this native Codex seat, 2026-11-08:
+    $ codegraph callers primary_index_link --json
+    /bin/bash: line 1: codegraph: command not found
+    $ aida doctor --lane-host --json
+    error: unexpected argument '--lane-host' found
+    Usage: aida doctor [OPTIONS] [COMMAND]
+    $ ls -ld .codegraph /home/dirtlab/ai/aida/.codegraph /home/dirtlab/.codegraph
+    Each path: No such file or directory
+
+    These are failed acceptance observations, not AC5 evidence. The primary checkout
+    and its future index/proxy state remain outside this seat's writable roots;
+    no live index exists here to verify readable bytes or denied write opens.
+    The host operator must provision the primary index, install the frozen reviewed
+    proxy per scripts/codegraph/README.md outside seat write roots, start its user
+    service, and provide the candidate AIDA binary. Then a contained Codex seat
+    must record a correct non-empty callers result, confirm it against source with
+    rg, report doctor --lane-host snapshot age, and capture actual read-only grant
+    evidence. Until then AC2/AC5 remain open and this is a Refs slice.
+
+    Known remaining review limitation: server queries and refresh are serialized;
+    the 250ms doctor probe can time out while the service is busy. No claim that
+    this minor finding is fixed. No index writes, commits, pushes, PR creation,
+    queue completion or review verdict were performed by this seat.
+
+    Validation:
+    - Python proxy suite: 12 discovered, 11 passed, 1 skipped (CodeGraph 1.6.0 absent).
+    - make sync-templates: portable .agents pack blocked by read-only filesystem;
+      host rerun required. make check-templates passes after the attempt.
+    - git diff --check passes.
+    - Rust launcher validation: pending; see final handoff.
+  created_at: 2026-11-08T07:22:34.574528065Z
+  modified_at: 2026-11-08T07:22:34.574528065Z
+  session_id: 01a1ba05a12a
+  harness_version: codex-cli 0.167.0
 history:
 - id: 01a1b6a6-1e2f-7932-a527-6de38b6d8545
   author: joe
@@ -658,6 +711,15 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a1ba09-2a98-7f41-ab40-748757a0d505
+  author: dirtlab
+  timestamp: 2026-11-08T07:22:05.336941540Z
+  session_id: 01a1ba05a12a
+  harness_version: codex-cli 0.167.0
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: NeedsAttention
 filed_at:
   code_sha: 122fea66d306d6739516983479c50201e9d0ae84
   branch: main
@@ -667,3 +729,8 @@ filed_at:
   vendor: claude
   session: 01a1b646-c67d-7b43-98ff-3604a53f5d1f
   harness_version: 2.1.319 (Claude Code)
+attention_reason:
+  category: blocked-dependency
+  detail: 'PR-3662 rework removes the blocking seat-controlled PATH injection and adds redirected-graph regression coverage. Host deployment is still a manual gate: this environment has no codegraph executable, primary .codegraph index, proxy service, or candidate doctor --lane-host binary. AC2 live read-only grant evidence and AC5 correct non-empty contained-seat query remain unavailable. Host operator must deploy the reviewed proxy per scripts/codegraph/README.md and capture acceptance output before completing publication. Minor finding 4 (busy serialized proxy versus short doctor probe) remains documented. Uncommitted changes and exact failed commands are in .aida/story-2630-handoff.txt and .aida/story-2630-pr-body.txt; do not complete STORY-2630 or widen index writes.'
+  raised_by: implementer
+  raised_at: 2026-11-08T07:22:05.336931563Z
