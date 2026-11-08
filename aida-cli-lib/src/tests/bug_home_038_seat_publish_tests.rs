@@ -2324,6 +2324,7 @@ fn task_2902_declared_subject_survives_host_commit_and_pr_title() {
 }
 
 // trace:BUG-2493 | ai:codex
+// This host-publication fixture invokes the Bash help-golden guard.
 #[cfg(unix)]
 #[test]
 fn bug_2493_declared_body_survives_host_commit_and_refs_downgrade() {
@@ -2670,6 +2671,10 @@ fn bug_2493_body_file_errors_validate_usage_before_reading_and_name_path() {
             vec!["ship", "-m", "subject", "--commit-body-file", path],
             false,
         ),
+        (
+            vec!["ship", "--from-seat", "seat", "--commit-body-file", path],
+            false,
+        ),
     ] {
         let error = crate::pr_cmd::ship_messages(&parse(argv), native).unwrap_err();
         assert_eq!(
@@ -2677,14 +2682,42 @@ fn bug_2493_body_file_errors_validate_usage_before_reading_and_name_path() {
             "--commit-body-file requires native -m or --from-seat --commit-pending"
         );
     }
-    let args = parse(vec!["ship", "-m", "subject", "--commit-body-file", path]);
-    let error = crate::pr_cmd::ship_messages(&args, true).unwrap_err();
-    assert!(error.to_string().contains("--commit-body-file"));
-    assert!(error.to_string().contains(path));
-    assert_eq!(
-        error.downcast_ref::<std::io::Error>().unwrap().kind(),
-        std::io::ErrorKind::NotFound
-    );
+    for (argv, native) in [
+        (
+            vec!["ship", "-m", "subject", "--commit-body-file", path],
+            true,
+        ),
+        (
+            vec![
+                "ship",
+                "--from-seat",
+                "seat",
+                "--commit-pending",
+                "subject",
+                "--commit-body-file",
+                path,
+            ],
+            false,
+        ),
+    ] {
+        let args = parse(argv);
+        for expected_kind in [
+            std::io::ErrorKind::NotFound,
+            std::io::ErrorKind::InvalidData,
+        ] {
+            if expected_kind == std::io::ErrorKind::InvalidData {
+                std::fs::write(&missing, [0xff]).unwrap();
+            }
+            let error = crate::pr_cmd::ship_messages(&args, native).unwrap_err();
+            assert!(error.to_string().contains("--commit-body-file"));
+            assert!(error.to_string().contains(path));
+            assert_eq!(
+                error.downcast_ref::<std::io::Error>().unwrap().kind(),
+                expected_kind
+            );
+        }
+        std::fs::remove_file(&missing).unwrap();
+    }
 }
 
 // trace:TASK-2902 trace:BUG-2459 | ai:codex

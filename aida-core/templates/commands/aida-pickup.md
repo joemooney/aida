@@ -26,6 +26,8 @@ Follow the workflow in `.claude/skills/aida-pickup/SKILL.md`:
    For an approved partial slice, first record its subject with
    `aida ship -m '[AI:codex] type(scope): subject (Refs ID)'`. This only records
    a lease-bound declaration; failed exits always retain Refs.
+   For a completing lane, declare
+   `aida ship -m '[AI:codex] type(scope): subject (ID)' --commit-body-file <UTF-8-file>`.
    For required commit-body trailers such as `Help-Golden: unchanged`, add
    `--commit-body-file <UTF-8-file>` to that declaration. Store the file outside
    the checkout (for example under `/tmp`) so host staging does not commit it. The host also accepts it
