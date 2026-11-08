@@ -597,7 +597,7 @@ fn task_2712_native_codex_seat_commit_ships_from_seat_without_seat_hooks() {
     let base = git_ok(&clone, &["rev-parse", "HEAD"]);
     // trace:BUG-2493 | ai:codex
     let message =
-        "fix: native codex seat (BUG-1)\n\n# Body stays verbatim\n\nHelp-Golden: unchanged";
+        "fix: native codex seat (BUG-1)\n\n# Body stays verbatim  \n\nHelp-Golden: unchanged\n\n";
 
     // A seat that moved off its lease's branch is refused; nothing commits.
     git_ok(&clone, &["checkout", "-q", "-b", "elsewhere"]);
@@ -642,7 +642,17 @@ fn task_2712_native_codex_seat_commit_ships_from_seat_without_seat_hooks() {
     let opened = forge.opened.lock().unwrap().clone();
     assert_eq!(opened.len(), 1);
     assert_eq!(opened[0].title, message.lines().next().unwrap());
-    assert_eq!(git_ok(&clone, &["log", "-1", "--format=%B"]), message);
+    // Read the object directly: git_ok trims whitespace and would conceal
+    // cleanup of the body or its final blank line.
+    // trace:BUG-2493 | ai:codex
+    let object = std::process::Command::new("git")
+        .args(["cat-file", "commit", "HEAD"])
+        .current_dir(&clone)
+        .output()
+        .unwrap();
+    assert!(object.status.success());
+    let object = String::from_utf8(object.stdout).unwrap();
+    assert_eq!(object.split_once("\n\n").unwrap().1, message);
     assert!(
         !sentinel.exists(),
         "a seat hook ran: {}",
