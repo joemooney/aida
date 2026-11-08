@@ -10,12 +10,12 @@ description: |
   2. A failed store pull stops store writes instead of proceeding on a local view: queue_cmd.rs pre-pickup pull, store_sync.rs maybe_sync_pull fallback, and burndown_run.rs, which discards the result.
   3. Retry sites that hold the writer lock then plain pull_rebase (git_ops.rs and store_sync.rs) report a dirty store accurately, not as 'remote unreachable'.
   4. Remove the stopgaps noted on BUG-2490 when this lands.
-status: Approved
+status: InProgress
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-08T19:27:28.525198886Z
-modified_at: 2026-11-08T20:57:43.406075932Z
+modified_at: 2026-11-08T20:59:30.228780895Z
 req_type: Bug
 comments:
 - id: 01a1bcd8-beaf-7582-aa0b-006077ac5867
@@ -108,6 +108,13 @@ history:
   - field_name: status
     old_value: NeedsAttention
     new_value: Approved
+- id: 01a1bcf5-8834-75b2-97b5-b6536856435d
+  author: aida-session-start
+  timestamp: 2026-11-08T20:59:30.228778958Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: InProgress
 filed_at:
   code_sha: db2eb4c39e46704132705ccb2b8300574ead41a6
   branch: main
