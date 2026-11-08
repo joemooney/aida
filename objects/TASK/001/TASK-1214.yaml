@@ -3,12 +3,12 @@ spec_id: TASK-1214
 agreed_id: TASK-1214
 title: Remove STORY-1028 hidden CLI aliases
 description: Remove the one-release hidden compatibility aliases for STORY-1028's mode-selecting flag migrations after the next minor release ships. Delete legacy parser flags, compatibility notes, and alias tests, then tighten the removed-flags guard if needed.
-status: InProgress
+status: NeedsAttention
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-09-12T03:06:57.441067647Z
-modified_at: 2026-11-08T00:05:08.598177029Z
+modified_at: 2026-11-08T00:11:02.799186787Z
 req_type: Task
 tags:
 - cli
@@ -120,3 +120,20 @@ history:
   session_id: 01a1b878c776
   harness_version: codex-cli 0.167.0
   changes: []
+- id: 01a1b87e-890f-71b1-ac95-78bc20a384ec
+  author: aida-orchestrator
+  timestamp: 2026-11-08T00:11:02.799207624Z
+  session_id: 01a1b87d9d5b
+  harness_version: 2.1.319 (Claude Code)
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: NeedsAttention
+failure_reason:
+  phase: reviewer
+  phase_index: 3
+  kind: verdict:request-changes
+  detail: 'Round-1 findings from the 910ac86 review are unaddressed: the only new commit is a merge from main. Alias removal across the 8 STORY-1028 families is complete, but the policy-parity fixture, a db_reconcile hint and the removed-flags guard still need the fixes.'
+  recovery_hint: address the review findings, move TASK-1214 back to In Progress, and clear the PR hold only after approval
+  shelved_by: reviewer
+  shelved_at: 2026-11-08T00:11:02.799186787Z
