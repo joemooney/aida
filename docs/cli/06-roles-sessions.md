@@ -752,13 +752,19 @@ old-generation admission before a replacement controller starts. The supervisor
 waits for confirmed exit and retains unknown process identities or ambiguous
 spawn receipts. Controller restarts preserve all ordinary PR-head reservations;
 a refusal for one PR still leaves the remaining PRs available. Exited
-controllers retain their grant and receipt while any review reservation or
-live or ambiguous descendant remains, so in-flight reviewers keep their
-authority. Status reports `waiting-for-reviews` after confirmed controller exit.
-After review reconciliation proves no unresolved attempts remain, the supervisor
-revokes the controller grant, clears its receipt and waits ten seconds before
-restarting. Deputy pause, stale heartbeat, authority loss or its existing
-mandate policy blocks admission. An expired
+controllers move their grants into `retired_grants` in the service receipt,
+so in-flight reviewers keep their authority. A replacement starts after the
+normal ten-second backoff even while review reservations remain unresolved.
+Restart reconciliation completes persisted supersede intent when every recorded
+process and group is confirmed gone; live or ambiguous attempts remain reserved
+for the replacement controller or operator recovery. In particular, a reservation
+with no dispatcher identity can hide a spawn whose receipt was lost and retains
+capacity, without blocking controller restart. Retired grants are revoked only
+when no unresolved reservation or live or ambiguous descendant remains. Because
+legacy reservations lack grant ancestry, this cleanup conservatively considers
+all attempts in the shared watcher store. Status lists `retired_controllers` and
+`review_blockers` (PR, attempt token and phase). Deputy pause, stale heartbeat,
+authority loss or its existing mandate policy blocks admission. An expired
 advisor binding reports `blocked-authority` until a valid successor rebinds.
 
 Service binding and controller receipts live in `review-watch/service.json`
@@ -777,9 +783,10 @@ must reset the binding from a host terminal:
 1. Pause the recorded deputy with `aida deputy shell pause --name NAME`.
    Inspect `aida advisor loops status`, `service.json`, `service.log` and the
    ordinary review receipts. Let any recorded controller exit and let the
-   supervisor observe it; with an intact receipt it revokes that controller's
-   grant and clears `worker` and `child_grant`. If the receipt is missing or
-   ambiguous, identify the controller from host process/grant records and
+   supervisor observe it; with an intact receipt it clears `worker` and
+   `child_grant` and retains the grant in `retired_grants` until reviews finish.
+   Wait for all retired grants to be revoked before resetting the receipt.
+   If the receipt is missing or ambiguous, identify the controller from host process/grant records and
    establish that it and its descendants have exited. Do not infer exit from
    missing or sandbox-invisible PIDs. If a surviving grant cannot be reconciled,
    wait for its parent advisor grant to expire before proceeding.

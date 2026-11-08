@@ -77,6 +77,9 @@ struct Service {
     /// None with child_grant present is an ambiguous spawn, never restartable.
     worker: Option<Identity>,
     child_grant: Option<String>,
+    /// Confirmed exited controllers whose review descendants may still run.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    retired_grants: Vec<String>,
     host_active: bool,
     host: Option<Identity>,
     checked_at: Option<DateTime<Utc>>,
@@ -168,6 +171,7 @@ pub(crate) fn rebind(root: &Path, deputy: &str, grant: &SeatGrant) -> Result<()>
             binding,
             worker: None,
             child_grant: None,
+            retired_grants: Vec::new(),
             host_active: true,
             host: None,
             checked_at: None,
@@ -183,12 +187,12 @@ pub(crate) fn command(action: &AdvisorLoopsCommand) -> Result<()> {
     match action {
         AdvisorLoopsCommand::Status { json } => {
             let Some(dir) = directory(&root, false)? else {
-                print_status("not-configured", None, *json)?;
+                print_status("not-configured", None, &[], *json)?;
                 return Ok(());
             };
             let _lock = dir.lock("admission.lock")?;
             let Some(state) = read(&dir)? else {
-                print_status("not-configured", None, *json)?;
+                print_status("not-configured", None, &[], *json)?;
                 return Ok(());
             };
             let status = if !host_fresh(&state) {
@@ -199,12 +203,10 @@ pub(crate) fn command(action: &AdvisorLoopsCommand) -> Result<()> {
                 "blocked-ambiguous-spawn"
             } else if state.worker.as_ref().is_some_and(Identity::alive) {
                 "running"
-            } else if state.child_grant.is_some() {
-                "waiting-for-reviews"
             } else {
                 "waiting-for-supervisor"
             };
-            print_status(status, Some(&state), *json)?;
+            print_status(status, Some(&state), &review_blockers(&dir)?, *json)?;
             Ok(())
         }
         AdvisorLoopsCommand::Rebind { deputy } => {
@@ -232,13 +234,20 @@ pub(crate) fn command(action: &AdvisorLoopsCommand) -> Result<()> {
 }
 
 // trace:STORY-2571 | ai:codex
-fn print_status(status: &str, state: Option<&Service>, json: bool) -> Result<()> {
+fn print_status(
+    status: &str,
+    state: Option<&Service>,
+    blockers: &[String],
+    json: bool,
+) -> Result<()> {
     let value = serde_json::json!({
         "service": "review-watch", "status": status,
         "deputy": state.map(|s| &s.deputy),
         "binding_issued_at": state.map(|s| s.binding.issued_at),
         "controller": state.and_then(|s| s.worker.as_ref().map(|w| w.pid)),
         "last_exit": state.and_then(|s| s.last_exit),
+        "retired_controllers": state.map(|s| s.retired_grants.len()).unwrap_or(0),
+        "review_blockers": blockers,
         "recovery": "docs/cli/06-roles-sessions.md#review-watch-service-recovery",
     });
     if json || crate::output_format_is_json() {
@@ -260,8 +269,8 @@ fn print_status(status: &str, state: Option<&Service>, json: bool) -> Result<()>
             );
         }
     } else {
-        println!("review-watch: {status}; deputy {}; binding issued {}; controller {}; last exit {}; recovery {}",
-            value["deputy"], value["binding_issued_at"], value["controller"], value["last_exit"], value["recovery"]);
+        println!("review-watch: {status}; deputy {}; binding issued {}; controller {}; last exit {}; retired controllers {}; review blockers {}; recovery {}",
+            value["deputy"], value["binding_issued_at"], value["controller"], value["last_exit"], value["retired_controllers"], value["review_blockers"], value["recovery"]);
     }
     Ok(())
 }
@@ -464,6 +473,21 @@ fn host_fresh(state: &Service) -> bool {
 }
 
 fn tick(root: &Path, deputy: &str, host_valid: bool, child: &mut Option<Child>) -> Result<()> {
+    tick_with_launcher(root, deputy, host_valid, child, |root, parent| {
+        crate::launch::review_watch_controller(root, &parent.id, &parent.subject)
+    })
+}
+
+// Keep the supervision/spawn boundary testable without running a CLI worker
+// inside the libtest image. Production always uses the fixed launcher above.
+// trace:STORY-2571 | ai:codex
+fn tick_with_launcher(
+    root: &Path,
+    deputy: &str,
+    host_valid: bool,
+    child: &mut Option<Child>,
+    launch: impl FnOnce(&Path, &SeatGrant) -> Result<(SeatGrant, Command)>,
+) -> Result<()> {
     let Some(dir) = directory(root, false)? else {
         return Ok(());
     };
@@ -499,10 +523,28 @@ fn tick(root: &Path, deputy: &str, host_valid: bool, child: &mut Option<Child>) 
             matches!(worker.verdict(), aida_core::proc_identity::Verdict::Dead(_))
         })
     };
-    if exited && revoke_controller(root, &dir, &state)? {
+    // Restart and grant revocation are independent: supersede progress may
+    // require a live controller. Unclaimed reservations can also hide
+    // a dispatcher spawned before its identity was persisted. Neither may
+    // block replacement, nor justify revoking possible reviewer descendants.
+    // trace:STORY-2571 | ai:codex
+    if exited {
+        if let Some(grant) = state.child_grant.take() {
+            state.retired_grants.push(grant);
+        }
         state.worker = None;
-        state.child_grant = None;
         state.retry_after = Utc::now() + chrono::Duration::seconds(10);
+    }
+    // Persist retirement before cleanup or spawn, including across failures.
+    if before != serde_json::to_vec(&state)? {
+        write(&dir, &state)?;
+    }
+    let before = serde_json::to_vec(&state)?;
+    if !state.retired_grants.is_empty() && reviews_finished(root, &dir)? {
+        for id in &state.retired_grants {
+            seat_authority::revoke_by_id(id)?;
+        }
+        state.retired_grants.clear();
     }
     if before != serde_json::to_vec(&state)? {
         write(&dir, &state)?;
@@ -515,8 +557,7 @@ fn tick(root: &Path, deputy: &str, host_valid: bool, child: &mut Option<Child>) 
         Err(_) => return Ok(()),
     };
     reconcile_reviews(root, &dir)?;
-    let (grant, mut command) =
-        crate::launch::review_watch_controller(root, &parent.id, &parent.subject)?;
+    let (grant, mut command) = launch(root, &parent)?;
     state.child_grant = Some(grant.id.clone());
     write(&dir, &state)?; // reserve before spawn; a crash retains ambiguity
     let log = dir.file("service.log", true)?;
@@ -544,24 +585,36 @@ fn tick(root: &Path, deputy: &str, host_valid: bool, child: &mut Option<Child>) 
     }
 }
 
-// Keep the receipt until all reviews are finished and revocation succeeds.
+// Retired grants protect reviews but never gate controller replacement.
 // Reservations do not record grant ancestry, so conservatively protect every
 // unresolved attempt, including unrecorded and unknown descendants.
 // trace:STORY-2571 | ai:codex
-fn revoke_controller(root: &Path, dir: &Directory, state: &Service) -> Result<bool> {
+fn reviews_finished(root: &Path, dir: &Directory) -> Result<bool> {
     reconcile_reviews(root, dir)?;
-    if let Some(bytes) = dir.read(STATE)? {
-        let reviews: State = serde_json::from_slice(&bytes)?;
-        if reviews.entries.values().flat_map(|e| &e.attempts).any(|a| {
-            active(a) || a.unrecorded_descendant() || a.recorded().iter().any(|p| p.alive())
-        }) {
-            return Ok(false);
-        }
-    }
-    if let Some(id) = &state.child_grant {
-        seat_authority::revoke_by_id(id)?;
-    }
-    Ok(true)
+    Ok(review_blockers(dir)?.is_empty())
+}
+
+// Expose the exact reservations retaining retired grants without disclosing
+// grant selectors. Unknown descendants remain blockers even after termination.
+// trace:STORY-2571 | ai:codex
+fn review_blockers(dir: &Directory) -> Result<Vec<String>> {
+    let Some(bytes) = dir.read(STATE)? else {
+        return Ok(Vec::new());
+    };
+    let reviews: State = serde_json::from_slice(&bytes)?;
+    Ok(reviews
+        .entries
+        .iter()
+        .flat_map(|(key, entry)| {
+            entry
+                .attempts
+                .iter()
+                .filter(|a| {
+                    active(a) || a.unrecorded_descendant() || a.recorded().iter().any(|p| p.alive())
+                })
+                .map(move |a| format!("{key}:{} ({:?})", a.token, a.phase))
+        })
+        .collect())
 }
 
 // Reuse the ordinary reservation recovery while holding admission.lock. A
@@ -589,6 +642,15 @@ fn reconcile_reviews(root: &Path, dir: &Directory) -> Result<()> {
     let mut state = store.load()?;
     let before = serde_json::to_vec(&state)?;
     store.reconcile_lost_dispatchers(&mut state);
+    // A crash after persisting supersede intent must not leave the service
+    // dependent on an old watcher pass. Finish only with the ordinary complete
+    // process/group proof; a replacement handles signals and ambiguous cases.
+    // trace:STORY-2571 | ai:codex
+    for attempt in state.entries.values_mut().flat_map(|e| &mut e.attempts) {
+        if attempt.phase == Phase::Superseding && confirm(attempt).is_ok() {
+            attempt.phase = Phase::Superseded;
+        }
+    }
     validate_state(&state, &store.repository)?;
     if before != serde_json::to_vec(&state)? {
         dir.write(STATE, &serde_json::to_vec_pretty(&state)?)?;
@@ -835,8 +897,8 @@ mod tests {
                     "reviewer must retain full-chain authority after controller exit"
                 );
                 assert_eq!(
-                    read(&dir).unwrap().unwrap().child_grant.as_ref(),
-                    Some(&grant.id)
+                    read(&dir).unwrap().unwrap().retired_grants,
+                    vec![grant.id.clone()]
                 );
                 // An unrecorded spawn is also protected across supervisor ticks.
                 let attempt = &mut reviews.entries.get_mut("PR-1").unwrap().attempts[0];
@@ -865,6 +927,129 @@ mod tests {
                     .unwrap()
                     .revoked_at
                     .is_some());
+            }
+        }
+    }
+
+    // Both crash windows previously prevented all replacement controllers.
+    // Exercise the real supervisor spawn boundary, retaining the old grant
+    // until the same descendant evidence used in production proves it safe.
+    // trace:STORY-2571 | ai:codex
+    #[test]
+    fn story2571_crash_mid_superseding_or_unpinned_reservation_restarts() {
+        for superseding in [true, false] {
+            let (temp, _guard, parent) = fixture();
+            let root = temp.path();
+            rebind(root, "default", &parent).unwrap();
+            let dir = directory(root, false).unwrap().unwrap();
+            let grant = seat_authority::issue_review_watch_child(root, &parent.id, &parent.subject)
+                .unwrap();
+            let reviewer = seat_authority::issue_child_from(
+                grant.clone(),
+                "reviewer",
+                "surviving-reviewer",
+                false,
+            )
+            .unwrap();
+            let mut process = Command::new("sh").args(["-c", "exit 7"]).spawn().unwrap();
+            let exited_identity = Identity::child(&process).unwrap();
+            process.wait().unwrap();
+            let mut state = read(&dir).unwrap().unwrap();
+            state.worker = Some(exited_identity.clone());
+            state.child_grant = Some(grant.id.clone());
+            write(&dir, &state).unwrap();
+
+            let store = Store::open(root, "github:github.com/owner/repo").unwrap();
+            let Action::Dispatch(reservation) = select(&store, &change(1), None, 2).unwrap() else {
+                panic!("expected reservation")
+            };
+            let mut reviews = store.load().unwrap();
+            if superseding {
+                let attempt = &mut reviews.entries.get_mut("PR-1").unwrap().attempts[0];
+                attempt.phase = Phase::Superseding;
+                attempt.identity = Some(exited_identity.clone());
+                attempt.reviewer_spawning = true;
+                attempt.reviewer = Some(Identity::current().unwrap());
+                attempt.supersede = Some(Supersede {
+                    by: change(2).head,
+                    requested_at: Utc::now(),
+                    term_at: None,
+                    kill_at: None,
+                    diagnostic: None,
+                });
+                dir.write(STATE, &serde_json::to_vec_pretty(&reviews).unwrap())
+                    .unwrap();
+            }
+            let mut controller = None;
+            tick(root, "default", true, &mut controller).unwrap();
+            let mut retired = read(&dir).unwrap().unwrap();
+            assert!(retired.worker.is_none());
+            assert!(retired.child_grant.is_none());
+            assert_eq!(retired.retired_grants, vec![grant.id.clone()]);
+            assert!(retired.retry_after > Utc::now());
+            assert!(controller.is_none());
+            assert!(review_blockers(&dir)
+                .unwrap()
+                .iter()
+                .any(|b| b.contains("PR-1") && b.contains(&reservation.token)));
+
+            // Advance the clock past normal backoff without sleeping. Exercise
+            // production supervision and spawn with a harmless controller;
+            // drive restart reconciliation explicitly below.
+            retired.retry_after = Utc::now() - chrono::Duration::seconds(1);
+            write(&dir, &retired).unwrap();
+            tick_with_launcher(root, "default", true, &mut controller, |root, parent| {
+                let grant =
+                    seat_authority::issue_review_watch_child(root, &parent.id, &parent.subject)?;
+                let mut command = Command::new("sh");
+                command.args(["-c", "exit 0"]);
+                Ok((grant, command))
+            })
+            .unwrap();
+            let running = read(&dir).unwrap().unwrap();
+            assert!(
+                controller.is_some(),
+                "unresolved attempts must permit replacement"
+            );
+            assert!(running.worker.is_some());
+            assert_ne!(running.child_grant.as_ref(), Some(&grant.id));
+            assert_eq!(running.retired_grants, vec![grant.id.clone()]);
+            assert!(
+                seat_authority::validated_grant(root, &reviewer.id, &reviewer.subject, Utc::now(),)
+                    .is_some(),
+                "replacement must preserve reviewer ancestry"
+            );
+            controller.as_mut().unwrap().wait().unwrap();
+
+            if superseding {
+                // The final reviewer has now exited. Restart reconciliation
+                // finishes persisted intent without needing the old watcher.
+                let attempt = &mut reviews.entries.get_mut("PR-1").unwrap().attempts[0];
+                attempt.reviewer = Some(exited_identity);
+                dir.write(STATE, &serde_json::to_vec_pretty(&reviews).unwrap())
+                    .unwrap();
+                tick(root, "default", false, &mut controller).unwrap();
+                assert_eq!(
+                    store.load().unwrap().entries["PR-1"].attempts[0].phase,
+                    Phase::Superseded
+                );
+                assert!(seat_authority::read_grant(&grant.id)
+                    .unwrap()
+                    .revoked_at
+                    .is_some());
+                assert!(read(&dir).unwrap().unwrap().retired_grants.is_empty());
+            } else {
+                // No dispatcher receipt could mean a spawn/persist crash.
+                // Keep that capacity and old grant, but never block restart.
+                tick(root, "default", false, &mut controller).unwrap();
+                assert_eq!(
+                    store.load().unwrap().entries["PR-1"].attempts[0].phase,
+                    Phase::Reserved
+                );
+                assert!(seat_authority::read_grant(&grant.id)
+                    .unwrap()
+                    .revoked_at
+                    .is_none());
             }
         }
     }
@@ -1179,12 +1364,10 @@ mod tests {
         tick(root, "default", true, &mut controller).unwrap();
         let rebound = read(&dir).unwrap().unwrap();
         assert_eq!(rebound.binding.validate(root).unwrap().id, next.id);
-        assert!(rebound.worker.is_some());
-        assert_eq!(rebound.child_grant.as_ref(), Some(&child.id));
-        assert!(
-            controller.is_none(),
-            "unresolved reviews precede replacement"
-        );
+        assert!(rebound.worker.is_none());
+        assert!(rebound.child_grant.is_none());
+        assert_eq!(rebound.retired_grants, vec![child.id.clone()]);
+        assert!(controller.is_none(), "restart observes ordinary backoff");
         reconcile_reviews(root, &dir).unwrap();
         assert_eq!(std::fs::read(dir.path().join(STATE)).unwrap(), reservations);
         let mut reviews = store.load().unwrap();
