@@ -205,7 +205,11 @@ fn run_bounded_with(mut command: Command, args: &[&str], budget: Duration) -> (O
 #[test]
 fn bug_1594_show_with_hung_forge_finishes_in_budget_and_says_timed_out() {
     let fx = fixture();
-    let (out, _elapsed) = run_bounded(&fx, &["--format", "human", "show", "TASK-1"], BUDGET);
+    let (out, _elapsed) = run_bounded(
+        &fx,
+        &["--format", "human", "show", "TASK-1", "--full"],
+        BUDGET,
+    );
     let stdout = String::from_utf8_lossy(&out.stdout);
     assert!(
         out.status.success(),
@@ -221,17 +225,14 @@ fn bug_1594_show_with_hung_forge_finishes_in_budget_and_says_timed_out() {
     assert!(!stdout.contains("no PR opened yet"), "{stdout}");
 }
 
-// STORY-1649: the default TOON `aida show` path now carries one `linkage:`
-// line. It must come from the cheap default-branch scan — never the full
-// `--all` walk or the forge lookup — so with the same hung `gh` the TOON
-// read stays inside the BUG-1594 budget and still prints the line.
-// trace:STORY-1649 | ai:claude
+// Explicit full TOON linkage remains bounded with a hung forge.
+// trace:BUG-2466 | ai:codex
 #[test]
-fn bug_1594_toon_show_default_path_with_linkage_stays_in_budget() {
+fn bug_1594_toon_show_full_path_with_linkage_stays_in_budget() {
     let fx = fixture();
     let mut command = aida_command(&fx.repo, &fx.home, &fx.gh);
     command.env("AIDA_AGENT_OUTPUT", "toon");
-    let (out, _elapsed) = run_bounded_with(command, &["show", "TASK-1"], BUDGET);
+    let (out, _elapsed) = run_bounded_with(command, &["show", "TASK-1", "--full"], BUDGET);
     let stdout = String::from_utf8_lossy(&out.stdout);
     assert!(
         out.status.success(),
