@@ -1,5 +1,112 @@
 use super::*;
 
+// trace:BUG-2490 | ai:codex
+#[test]
+fn bug_2490_store_hardening_disables_both_autostash_settings() {
+    let dir = tempfile::tempdir().unwrap();
+    let (main, store) = bug_1929_main_with_store(dir.path());
+    let custom = dir.path().join("custom-store");
+    std::fs::create_dir_all(custom.join("objects")).unwrap();
+    std::fs::write(custom.join("metadata.yaml"), "").unwrap();
+    for repo in [&store, &custom] {
+        let args = host_git_hardening(repo);
+        for setting in ["rebase.autoStash=false", "merge.autoStash=false"] {
+            assert!(
+                args.windows(2).any(|pair| pair == ["-c", setting]),
+                "{}: {args:?}",
+                repo.display()
+            );
+        }
+    }
+    assert!(!host_git_hardening(&main)
+        .iter()
+        .any(|arg| arg.contains("autoStash")));
+}
+
+// trace:BUG-2490 | ai:codex
+#[test]
+fn bug_2490_store_retry_preserves_pending_changes_and_explains_refusal() {
+    let dir = tempfile::tempdir().unwrap();
+    let (_main, store) = bug_1929_main_with_store(dir.path());
+    std::fs::write(store.join("pending.txt"), "base\n").unwrap();
+    add(&store, &["pending.txt"]).unwrap();
+    commit(&store, "seed pending file").unwrap();
+    let original_head = head_sha(&store).unwrap();
+    for staged in [false, true] {
+        std::fs::write(store.join("pending.txt"), "pending writer data\n").unwrap();
+        if staged {
+            add(&store, &["pending.txt"]).unwrap();
+        }
+        let status = git(&store, &["status", "--porcelain"]).unwrap().stdout;
+        // No such remote: the dirty guard must refuse before even fetching.
+        let error = pull_rebase_store_retry(&store, "missing-remote", "aida-store")
+            .unwrap_err()
+            .to_string();
+        assert!(error.contains("store publication retry refused"), "{error}");
+        assert!(error.contains("Automatic stashing is disabled"), "{error}");
+        assert!(error.contains("on the host"), "{error}");
+        assert_eq!(head_sha(&store).unwrap(), original_head);
+        assert_eq!(
+            git(&store, &["status", "--porcelain"]).unwrap().stdout,
+            status
+        );
+        assert_eq!(
+            std::fs::read_to_string(store.join("pending.txt")).unwrap(),
+            "pending writer data\n"
+        );
+        assert!(!rebase_in_progress(&store));
+        assert!(git(&store, &["stash", "list"]).unwrap().stdout.is_empty());
+    }
+    commit(&store, "finish pending write").unwrap();
+    pull_rebase_store_retry(&store, ".", "aida-store").unwrap();
+    assert!(!has_changes_checked(&store).unwrap());
+}
+
+// trace:BUG-2490 | ai:codex
+#[test]
+fn bug_2490_structured_rebase_refusal_retains_deleted_side_diagnosis() {
+    let dir = tempfile::tempdir().unwrap();
+    let (_main, store) = bug_1929_main_with_store(dir.path());
+    let path = "objects/STORY/000/STORY-deleted.yaml";
+    std::fs::create_dir_all(store.join("objects/STORY/000")).unwrap();
+    let mut spec = crate::models::Requirement::new("base".into(), String::new());
+    std::fs::write(store.join(path), serde_yaml::to_string(&spec).unwrap()).unwrap();
+    add(&store, &[path]).unwrap();
+    commit(&store, "base").unwrap();
+    assert!(
+        git(&store, &["checkout", "-b", "incoming"])
+            .unwrap()
+            .success
+    );
+    std::fs::remove_file(store.join(path)).unwrap();
+    add(&store, &[path]).unwrap();
+    commit(&store, "upstream deletes spec").unwrap();
+    assert!(git(&store, &["checkout", "aida-store"]).unwrap().success);
+    spec.title = "local edit".into();
+    std::fs::write(store.join(path), serde_yaml::to_string(&spec).unwrap()).unwrap();
+    add(&store, &[path]).unwrap();
+    commit(&store, "local modifies spec").unwrap();
+    let original_head = head_sha(&store).unwrap();
+    let error = rebase_auto_merge_onto(&store, "incoming")
+        .unwrap_err()
+        .to_string();
+    assert!(
+        error.contains(&format!("structured merge of `{path}` failed")),
+        "{error}"
+    );
+    assert!(
+        error.contains(&format!("one side deleted {path}; not auto-mergeable")),
+        "{error}"
+    );
+    assert_eq!(head_sha(&store).unwrap(), original_head);
+    assert_eq!(current_branch(&store).unwrap(), "aida-store");
+    assert!(!rebase_in_progress(&store));
+    assert_eq!(
+        std::fs::read_to_string(store.join(path)).unwrap(),
+        serde_yaml::to_string(&spec).unwrap()
+    );
+}
+
 // Store git ignores project hooks, even when they resolve in the store.
 // trace:BUG-1929 | ai:codex
 #[cfg(unix)]

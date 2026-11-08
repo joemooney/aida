@@ -1310,7 +1310,7 @@ pub(crate) fn push_store_after_id_allocation(
                     cfg.retry_max
                 );
                 sha = aida_core::db::with_store_write_lock(store_path, || {
-                    git_ops::pull_rebase(store_path, "origin", &branch)?;
+                    git_ops::pull_rebase_store_retry(store_path, "origin", &branch)?;
                     ensure_no_spec_id_collisions_canonical(store_path)?;
                     git_ops::head_sha(store_path)
                 })?;

@@ -2079,6 +2079,23 @@ pub fn pull_rebase(repo: &Path, remote: &str, branch: &str) -> Result<()> {
     })
 }
 
+/// Retry a rejected store publication without stashing or committing another
+/// writer's pending changes. The dirty check and pull share the store lock.
+// trace:BUG-2490 | ai:codex
+pub fn pull_rebase_store_retry(repo: &Path, remote: &str, branch: &str) -> Result<()> {
+    evidence::with_sync_lock(repo, || {
+        if has_changes_checked(repo)? {
+            anyhow::bail!(
+                "store publication retry refused: pending store changes at {}. \
+                 Automatic stashing is disabled; pending changes were preserved. \
+                 Review and commit the pending store changes on the host, then retry the command",
+                repo.display()
+            );
+        }
+        pull_rebase(repo, remote, branch)
+    })
+}
+
 fn rebase_onto(repo: &Path, target: &str) -> Result<()> {
     let result = git(repo, &["rebase", "--end-of-options", target])?;
     if !result.success {
@@ -2253,7 +2270,7 @@ fn rebase_auto_merge_onto(repo: &Path, target: &str) -> Result<StorePullOutcome>
                 Err(e) => {
                     return Err(abort_failed_store_rebase(
                         repo,
-                        e.context(format!("structured merge of `{path}` failed")),
+                        anyhow::anyhow!("structured merge of `{path}` failed: {e:#}"),
                     ));
                 }
             }
