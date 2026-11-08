@@ -71,6 +71,7 @@ impl Route {
                     epoch,
                     specs: &scopes,
                     author: "bound author",
+                    role: "implementer",
                 },
                 &request,
                 || Ok(()),

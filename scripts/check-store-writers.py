@@ -721,6 +721,9 @@ def main() -> int:
                         default="compatibility",
                         help="mediated additionally refuses unresolved routing evidence; never grants launch authority")
     args = parser.parse_args()
+    # trace:TASK-3223 | ai:codex
+    if args.candidates and args.profile == "mediated":
+        parser.error("--candidates cannot be combined with --profile mediated")
     try:
         if args.candidates:
             print(json.dumps(discover(args.root), indent=2, sort_keys=True))

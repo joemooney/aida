@@ -67,6 +67,7 @@ struct HostContext<'a> {
     epoch: uuid::Uuid,
     specs: &'a [String],
     author: &'a str,
+    role: &'a str,
 }
 fn host_operation(
     context: &HostContext<'_>,
@@ -80,6 +81,7 @@ fn host_operation(
         epoch,
         specs,
         author,
+        role,
     } = *context;
     use aida_core::db::{canonical_mutation::CanonicalOperation as Op, redo};
     anyhow::ensure!(
@@ -94,6 +96,20 @@ fn host_operation(
                 && matches!(request.op.as_str(), "comment_add" | "spec_edit")),
         "UnsupportedOperation"
     );
+    // trace:TASK-3223 | ai:codex
+    // Enforce the launch-bound role here; lane environment and packets cannot
+    // widen stakeholder permissions, including on durable-result replay.
+    let action = match request.op.as_str() {
+        "comment_add" => Some(crate::StakeholderAction::Comment),
+        "spec_edit" => Some(crate::StakeholderAction::EditRequirement),
+        _ => None,
+    };
+    if let Some(action) = action {
+        anyhow::ensure!(
+            crate::stakeholder_action_allowed(role, action),
+            "Unauthorized"
+        );
+    }
     let op: HostOperation =
         serde_json::from_value(serde_json::json!({"op":request.op,"data":request.data}))
             .map_err(|_| anyhow::anyhow!("InvalidRequest"))?;
@@ -351,7 +367,7 @@ impl Session {
                         // late byte can become a later authority response.
                         let _ = host.set_read_timeout(Some(Duration::from_secs(5)));
                         let Ok(request) = read_operation(&mut host) else { break; };
-                        let result = host_operation(&HostContext { profile, root: root_path(&store), binding: &host_binding, epoch: host_epoch, specs: &host_specs, author: &subject }, &request, || {
+                        let result = host_operation(&HostContext { profile, root: root_path(&store), binding: &host_binding, epoch: host_epoch, specs: &host_specs, author: &subject, role: &role }, &request, || {
                             match valid() { Some(b'Y') => Ok(()), Some(b'E') => anyhow::bail!("Expired"), Some(b'R') => anyhow::bail!("Revoked"), _ => anyhow::bail!("Unauthorized") }
                         });
                         let reply = match result {
@@ -582,7 +598,33 @@ fn mediated_host_routes_owned_comment_and_revalidates_authority_before_replay() 
         epoch,
         specs: &scopes,
         author: "bound author",
+        role: "implementer",
     };
+    // trace:TASK-3223 | ai:codex
+    // Direct host packets cannot bypass the bound stakeholder role, even with
+    // valid ownership and a current grant. Check both canonical verbs.
+    for role in ["guest", "requester"] {
+        for (op, data) in [
+            ("comment_add", request.data.clone()),
+            (
+                "spec_edit",
+                serde_json::json!({"spec_id":origin.to_ascii_uppercase(),
+                "expected_revision":redo::hash(&before), "fields":{"title":"forbidden"}}),
+            ),
+        ] {
+            let denied = HostRequest {
+                op: op.into(),
+                data,
+                version: request.version,
+                launch_epoch: epoch,
+                request_id: uuid::Uuid::new_v4(),
+            };
+            let error =
+                host_operation(&HostContext { role, ..context }, &denied, || Ok(())).unwrap_err();
+            assert_eq!(error.to_string(), "Unauthorized");
+            assert_eq!(std::fs::read(&path).unwrap(), before);
+        }
+    }
     // Even a fully formed canonical request in S1 cannot reach authorization.
     let error = host_operation(
         &HostContext {
@@ -609,6 +651,14 @@ fn mediated_host_routes_owned_comment_and_revalidates_authority_before_replay() 
     let first = host_operation(&context, &request, || Ok(())).unwrap();
     let replay = host_operation(&context, &request, || Ok(())).unwrap();
     assert_eq!(first, replay);
+    // trace:TASK-3223 | ai:codex
+    let committed = std::fs::read(&path).unwrap();
+    for role in ["guest", "requester"] {
+        let error =
+            host_operation(&HostContext { role, ..context }, &request, || Ok(())).unwrap_err();
+        assert_eq!(error.to_string(), "Unauthorized");
+        assert_eq!(std::fs::read(&path).unwrap(), committed);
+    }
     let after: aida_core::Requirement =
         serde_yaml::from_slice(&std::fs::read(&path).unwrap()).unwrap();
     assert_eq!(after.comments.len(), 1);
@@ -647,6 +697,7 @@ fn staged_writes_cannot_reach_host_mutation_or_authorization() {
                 epoch: uuid::Uuid::nil(),
                 specs: &[],
                 author: "author",
+                role: "implementer",
             },
             &request,
             || panic!("staged writes must not reach authority or store access"),
@@ -681,7 +732,7 @@ fn request_status_real_authority_is_read_only_and_preserves_local_results() {
                 } else {
                     assert_eq!(byte, [b'M']);
                     let request = read_operation(&mut host).unwrap();
-                    let result = host_operation(&HostContext { profile: crate::contained_boundary::StoreWriteProfile::Compatibility, root: &root, binding: "fixed", epoch: request.launch_epoch, specs: &[], author: "author" }, &request, || Ok(())).unwrap();
+                    let result = host_operation(&HostContext { profile: crate::contained_boundary::StoreWriteProfile::Compatibility, root: &root, binding: "fixed", epoch: request.launch_epoch, specs: &[], author: "author", role: "implementer" }, &request, || Ok(())).unwrap();
                     assert_eq!(result, serde_json::json!({"state":"unknown"}));
                     let wire = serde_json::to_vec(&serde_json::json!({"launch_epoch":request.launch_epoch,"request_id":request.request_id,"result":result})).unwrap();
                     host.write_all(&(wire.len() as u32).to_be_bytes()).unwrap();

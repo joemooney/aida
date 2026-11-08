@@ -15,6 +15,12 @@ shared boundary denying raw store writes is the enforcement boundary.
 The canonical redo transaction design was subsequently approved in
 [the S2 sketch](../../plans/2026-11-06-task-3223-mediated-transactions.md).
 
+The host independently enforces the launch-bound stakeholder role for canonical
+comment and edit requests, including direct packets and durable-result replay.
+Guest/requester restrictions do not depend on the lane's environment. Host tests
+verify both verbs refuse without changing the target object's bytes.
+<!-- trace:TASK-3223 | ai:codex -->
+
 ## Staged lane routing
 
 <!-- trace:TASK-3223 | ai:codex -->

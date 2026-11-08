@@ -27,6 +27,17 @@ def inventory(root, rows):
 
 
 class WriterInventoryTests(unittest.TestCase):
+    # trace:TASK-3223 | ai:codex
+    def test_candidates_cannot_silently_ignore_mediated_profile(self):
+        import subprocess
+        result = subprocess.run(
+            ["python3", str(guard.ROOT / "scripts/check-store-writers.py"),
+             "--candidates", "--profile", "mediated"],
+            capture_output=True, text=True, timeout=30)
+        self.assertEqual(result.returncode, 2)
+        self.assertIn("cannot be combined", result.stderr)
+        self.assertEqual(result.stdout, "")
+
     def setUp(self):
         self.tmp = tempfile.TemporaryDirectory()
         self.addCleanup(self.tmp.cleanup)

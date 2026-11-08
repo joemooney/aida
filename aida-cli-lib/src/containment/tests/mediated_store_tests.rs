@@ -464,7 +464,7 @@ db.close()
 config=dict(object={object:?}, endpoint={endpoint:?}, lane={lane:?})
 result=subprocess.run(['/run/aida-test-client', '--exact',
     'launch::contained::mediated_store_tests::mediated_profile_cli_child',
-    '--ignored', '--nocapture'], input=json.dumps(config), text=True,
+    '--ignored', '--nocapture', '--test-threads=2'], input=json.dumps(config), text=True,
     capture_output=True, timeout=10)
 assert result.returncode==0,(result.stdout,result.stderr)
 assert '1 passed' in result.stdout,result.stdout
