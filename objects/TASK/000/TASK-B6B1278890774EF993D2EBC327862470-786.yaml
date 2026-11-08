@@ -8,7 +8,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-04T17:54:51.353376Z
-modified_at: 2026-11-08T21:10:02.598589629Z
+modified_at: 2026-11-08T21:10:10.660304056Z
 req_type: Task
 tags:
 - area:containment
@@ -836,6 +836,21 @@ comments:
   content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: Round 11 at b8ad6c0 (1 commit behind main; merge-base diff; Refs-only slice under the 2026-11-07 16:40 ruling). One new defect: fa14947 commits .claude/settings.local.json. No other code defect found by inspection across the 20 files; b8ad6c0 kept main''s BUG-2497 chatgpt.com host in conformance.py. CI at this head is incomplete: cli-1 passed, lib-1 in progress, lib-0, cli-0, rest, gates, contracts queued; nearest full green is CI at b108a2c. All verified-by lines come from reading test source, not a run at this head. AC: R1 shared-boundary launch: verified by task_3048_diagnostic_prepare_uses_common_wrapper_and_keeps_production_closed. R1 bypass only with applied receipt: verified by task_3048_outer_only_candidate_requires_live_accepted_receipt. R1 no --sandbox, options before final -p: verified by task_3048_runtime_argv_accepts_only_the_site_prompt. R1 private runtime, read-only token and settings: verified by task_3048_live_private_runtime_preserves_read_only_credential and task_3048_private_runtime_pins_settings_and_credential_leaves. R1 no ~/.gemini inheritance: verified by the diagnostic prepare mask assertions. R1 MCP/browser/URL off: configuration verified by task_3048_runtime_policy_fails_closed_before_launch and the .agents mount assertions; advisor ruled the deny-only settings compliant 2026-11-08 19:26; AGY enforcement unverified, TASK-3049 live run. R2 hosts as data with trusted approval: verified by task_3048_diagnostic_hosts_do_not_open_production_admission. R2 unknown host named refusal: verified by task_3048_unlisted_host_is_named_before_dns. R2 host-only egress evidence: verified by task_3048_host_egress_bitmap_requires_successful_host_connection and test_host_egress_never_trusts_vendor_stderr. R2 measured refresh list: unverified, oauth2.googleapis.com is a static candidate, advisor live run. R3 native no credit, AIDA-only flip: verified by test_only_complete_aida_evidence_can_flip_whole_lane and test_late_refusal_withdraws_aggregate_credit_with_valid_receipt. R4 production refusal: verified by agy_adapter_keeps_unmeasured_policy_closed. Trusted origin/main posture only, fail closed: verified by the absent and working-tree-only refusal loop in the diagnostic prepare test. No blanket bypass: not-applicable-because superseded by the 2026-11-07 16:40 outer-only ruling. Conformance harness passes for agy: not-applicable-because Refs-only slice; the advisor live run is a separate step.. No triage reason was given.'
   created_at: 2026-11-08T21:10:02.598585725Z
   modified_at: 2026-11-08T21:10:02.598585725Z
+  session_id: 01a1bc93-77a0-7740-8b03-df4e3e8d1df5
+  harness_version: 2.1.319 (Claude Code)
+- id: 01a1bcff-4d6e-7280-a683-762d4aad1b27
+  author: joe
+  content: |-
+    REVIEW FINDINGS TO ADDRESS (PR #3641):
+    Verdict: CHANGES REQUESTED
+    Reviewed commit: b8ad6c075fc7
+    Recorded: 2026-11-08T21:03:37.370608883+00:00
+    Findings:
+    1. BLOCKING .claude/settings.local.json:1-5 (added by fa14947, not present at b108a2c or on origin/main): the per-user MCP trust file is now tracked. AIDA's own contract treats it as per-user and gitignored (aida-cli-lib/src/lib_part1.rs:2462-2471, BUG-484; aida-core/src/scaffolding/mod.rs:1111 and :2724). The repo .gitignore has no entry for it; only the operator's global ignore hides it, so git add -f or the seat bundle carried it in. Merged, every clone and worktree gets enabledMcpjsonServers [aida] pre-approved without that user's consent, and any local trust edit dirties the tree. It is unrelated to TASK-3048 and outside the advisor's 2026-11-08 19:26 brief (merge main, resolve conformance.py, no other code change). Fix: git rm --cached .claude/settings.local.json in one commit, and change nothing else.
+    2. BLOCKING, wait state, no code rework: CI at b8ad6c0 is incomplete (run 42521437717: cli-1 success, lib-1 in progress, lib-0, cli-0, rest, gates and contracts queued). The commit fixing the finding above creates a new head, so the green run must be at that head. merge-hold-gate failure is the expected supervised-spec hold and still needs its clearance.
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
+  created_at: 2026-11-08T21:10:10.542797085Z
+  modified_at: 2026-11-08T21:10:10.542797085Z
   session_id: 01a1bc93-77a0-7740-8b03-df4e3e8d1df5
   harness_version: 2.1.319 (Claude Code)
 history:
