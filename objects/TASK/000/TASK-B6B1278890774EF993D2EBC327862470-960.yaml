@@ -8,7 +8,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-07T23:39:41.575597Z
-modified_at: 2026-11-08T20:25:03.804375478Z
+modified_at: 2026-11-08T20:25:10.003343926Z
 req_type: Task
 relationships:
 - rel_type: Child
@@ -291,6 +291,23 @@ comments:
   content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: Import diff is sound on inspection, but AC5 is unverified: CI run 42518333560 is still queued at this head (wait state, no code defect found). No triage reason was given.'
   created_at: 2026-11-08T20:25:03.804373713Z
   modified_at: 2026-11-08T20:25:03.804373713Z
+  session_id: 01a1bc93-77a0-7740-8b03-df4e3e8d1df5
+  harness_version: 2.1.319 (Claude Code)
+- id: 01a1bcd6-180b-7e32-8fc9-a2cd17e29d29
+  author: joe
+  content: |-
+    REVIEW FINDINGS TO ADDRESS (PR #3695):
+    Verdict: CHANGES REQUESTED
+    Reviewed commit: 36ee76656d61
+    Recorded: 2026-11-08T20:11:56.639543185+00:00
+    Review comment: https://github.com/joemooney/aida/pull/3695#issuecomment-6726524080
+    Findings:
+    1. BLOCKING (wait state, not a code defect) AC5: CI run 42518333560 at 36ee76656d61 has lib-1 in progress and the other 6 shards queued, and make check-ci-fast was not run by the implementer. Prior run 42515877089 at 2ece9886b46b passed gates, lib-0, lib-1, rest and cli-0 but cancelled contracts and cli-1, so cli-1 and contracts have no result for this change. The merge of main shares no files with the 34 changed modules. Action: do not push or merge main just to answer this finding, because that restarts CI; re-run review when CI is green at this SHA and rework only if CI reports a failure.
+    2. MINOR non-blocking aida-cli-lib/src/deps_cmd.rs, lifecycle_cmd.rs, solo_cmd.rs: explicit imports still take crate::HashSet and crate::Result, which are private root aliases of std/anyhow names, so these modules keep a false dependency on lib.rs and break if the aliases are removed. Carried from the prior round; head 36ee76656d61 added only a merge of main.
+    3. COSMETIC non-blocking 18 run_* functions (e.g. driver_cmd.rs, gate_cmd.rs, verify_cmd.rs): where the glob was unused, a lone '// trace:TASK-3428' comment replaces it and annotates nothing. Carried from the prior round.
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
+  created_at: 2026-11-08T20:25:09.899294504Z
+  modified_at: 2026-11-08T20:25:09.899294504Z
   session_id: 01a1bc93-77a0-7740-8b03-df4e3e8d1df5
   harness_version: 2.1.319 (Claude Code)
 history:
