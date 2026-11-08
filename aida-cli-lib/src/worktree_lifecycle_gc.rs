@@ -34,6 +34,16 @@ fn git(root: &Path, args: &[&str]) -> Result<String> {
     Ok(String::from_utf8(out.stdout)?.trim_end().to_owned())
 }
 
+// Full refs avoid Git's ambiguous short names when a tag shares the branch name.
+// trace:TASK-1222.acfbfd06 | ai:codex
+fn linked_branch(path: &Path) -> Result<String> {
+    let reference = git(path, &["symbolic-ref", "--quiet", "HEAD"])?;
+    Ok(reference
+        .strip_prefix("refs/heads/")
+        .context("linked checkout does not name a local branch")?
+        .to_owned())
+}
+
 /// Logical bytes, without following symlinks (including a symlinked root).
 fn bytes(path: &Path) -> Result<u64> {
     bytes_until(path, Instant::now() + Duration::from_secs(5))
@@ -255,7 +265,7 @@ fn inspect_with(
             );
             row.branch = crate::seat_clone::checked_out_branch(path);
         } else {
-            row.branch = Some(git(path, &["symbolic-ref", "--quiet", "--short", "HEAD"])?);
+            row.branch = Some(linked_branch(path)?);
         }
         let branch = row
             .branch
@@ -476,12 +486,7 @@ fn remove_with(
         // evidence after those reads, directly before shared teardown.
         anyhow::ensure!(
             Some(git(&row.path, &["rev-parse", "HEAD^{commit}"])?).as_ref() == row.head.as_ref()
-                && Some(git(
-                    &row.path,
-                    &["symbolic-ref", "--quiet", "--short", "HEAD"]
-                )?)
-                .as_ref()
-                    == row.branch.as_ref()
+                && Some(linked_branch(&row.path)?).as_ref() == row.branch.as_ref()
                 && linked_clean(&row.path)?,
             "linked worktree changed before teardown"
         );
@@ -640,6 +645,12 @@ fn scheduled_scan(environment: &aida_core::exec_context::Environment) -> bool {
     environment.var("AIDA_SCHEDULE_CHILD") == Ok("1")
 }
 
+// Scheduled children can inherit a terminal from a manual schedule tick.
+// trace:TASK-1222.ac14b158 | ai:codex
+fn scan_requires_budget(autonomous: bool, scheduled: bool) -> bool {
+    autonomous || scheduled
+}
+
 // trace:TASK-1222 | ai:codex
 fn save_scan_cursor(cursor: &Path, scheduled: bool, last: Option<&Path>) -> Result<()> {
     if !scheduled {
@@ -675,7 +686,7 @@ pub(crate) fn run(apply: bool, json: bool, fail_on_findings: bool) -> Result<()>
         rotate_inventory(&mut inventory, after.as_deref());
     }
     let total = inventory.len();
-    let mut rows = if autonomous {
+    let mut rows = if scan_requires_budget(autonomous, scheduled) {
         scan_budgeted(inventory, Duration::from_secs(60), |(p, c)| {
             inspect(&main, &invoking, &p, c, &default)
         })
@@ -801,6 +812,62 @@ fn findings_summary(
 mod tests {
     use super::*;
     use crate::forge_observed::Observed;
+
+    #[test]
+    fn task_1222_branch_tag_collision_preserves_branch_identity() {
+        // trace:TASK-1222.acfbfd06 | ai:codex
+        // trace:TASK-1222.ac5418e8 | ai:codex
+        let (_tmp, main) = fixture();
+        let tree = linked(&main, "feature");
+        git_ok(&main, &["tag", "feature"]);
+        assert_eq!(linked_branch(&tree).unwrap(), "feature");
+        let row = inspect_with(&main, &tree, false, "origin/main", &mut absent);
+        assert!(row.eligible, "{}", row.reason);
+        assert_eq!(row.branch.as_deref(), Some("feature"));
+        assert!(remove_with(&main, &row, "origin/main", &[], &mut absent).unwrap());
+        assert!(!tree.exists());
+        assert!(git(&main, &["show-ref", "--verify", "refs/heads/feature"]).is_err());
+        assert!(git(&main, &["show-ref", "--verify", "refs/tags/feature"]).is_ok());
+
+        git_ok(&main, &["tag", "main"]);
+        git_ok(&main, &["checkout", "-qb", "host"]);
+        let protected_tree = main.parent().unwrap().join("protected");
+        git_ok(
+            &main,
+            &[
+                "worktree",
+                "add",
+                "-q",
+                protected_tree.to_str().unwrap(),
+                "refs/heads/main",
+            ],
+        );
+        // An explicit branch checkout keeps HEAD symbolic despite the tag collision.
+        git_ok(
+            &protected_tree,
+            &["symbolic-ref", "HEAD", "refs/heads/main"],
+        );
+        let protected = inspect_with(&main, &protected_tree, false, "origin/main", &mut absent);
+        assert!(!protected.eligible);
+        assert!(
+            protected.reason.contains("protected branch"),
+            "{}",
+            protected.reason
+        );
+    }
+
+    #[test]
+    fn task_1222_scheduled_terminal_scan_has_budget() {
+        // trace:TASK-1222.ac14b158 | ai:codex
+        for (autonomous, scheduled, expected) in [
+            (false, false, false),
+            (true, false, true),
+            (false, true, true),
+            (true, true, true),
+        ] {
+            assert_eq!(scan_requires_budget(autonomous, scheduled), expected);
+        }
+    }
 
     #[test]
     fn task_1222_caller_pool_reservations_and_freed_estimates() {
