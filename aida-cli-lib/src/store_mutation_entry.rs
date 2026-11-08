@@ -6,6 +6,8 @@ use aida_core::exec_context::Environment;
 use anyhow::{ensure, Context, Result};
 use clap::parser::ValueSource;
 use serde_json::{json, Value};
+use std::io::Read;
+use std::os::unix::fs::OpenOptionsExt;
 use std::path::{Path, PathBuf};
 
 pub(crate) fn entry(env: &Environment, argv: &[String], cwd: Option<&Path>) -> Option<Result<()>> {
@@ -77,7 +79,7 @@ fn run(client: &Client, env: &Environment, argv: &[String], cwd: &Path) -> Resul
     if name == "mcp-serve" {
         return crate::mcp::run_mediated_mcp_server(client, env, &root(&matches, cwd)?);
     }
-    let (tool, payload) = translate(name, args)?;
+    let (tool, payload) = translate(name, args, cwd)?;
     let action = if tool == "add_comment" {
         crate::StakeholderAction::Comment
     } else {
@@ -94,7 +96,32 @@ fn run(client: &Client, env: &Environment, argv: &[String], cwd: &Path) -> Resul
     Ok(())
 }
 
-fn translate(name: &str, args: &clap::ArgMatches) -> Result<(&'static str, Value)> {
+/// The lane sends text, never a pathname, to the host. Open nonblocking first
+/// so a FIFO cannot hang early dispatch; bound the read even if a regular file
+/// grows after metadata inspection. No editor or ordinary backend is started.
+// trace:TASK-3223 | ai:codex
+fn comment_file(path: &Path) -> Result<String> {
+    const LIMIT: u64 = 16384;
+    let file = std::fs::OpenOptions::new()
+        .read(true)
+        .custom_flags(libc::O_NOFOLLOW | libc::O_NONBLOCK)
+        .open(path)
+        .context("cannot open mediated comment body file")?;
+    let metadata = file.metadata()?;
+    ensure!(
+        metadata.is_file() && metadata.len() <= LIMIT,
+        "InvalidRequest: comment body must be a regular file of at most 16384 bytes"
+    );
+    let mut text = String::new();
+    file.take(LIMIT + 1).read_to_string(&mut text)?;
+    ensure!(
+        text.len() <= LIMIT as usize && !text.trim().is_empty(),
+        "InvalidRequest: comment body is empty or too large"
+    );
+    Ok(text)
+}
+
+fn translate(name: &str, args: &clap::ArgMatches, cwd: &Path) -> Result<(&'static str, Value)> {
     let command = crate::command_registry::built_command();
     let command = command
         .find_subcommand(name)
@@ -105,16 +132,20 @@ fn translate(name: &str, args: &clap::ArgMatches) -> Result<(&'static str, Value
             ensure!(name == "add", "UnsupportedOperation");
             explicit_fields(
                 args,
-                &["id", "content", "content_positional"],
+                &["id", "content", "content_positional", "body_file"],
                 command
                     .find_subcommand("add")
                     .context("UnsupportedOperation")?,
             )?;
             let id = args.get_one::<String>("id").context("InvalidRequest")?;
-            let text = args
-                .get_one::<String>("content")
-                .or_else(|| args.get_one::<String>("content_positional"))
-                .context("UnsupportedOperation: provide inline comment content")?;
+            let text = match args.get_one::<PathBuf>("body_file") {
+                Some(path) => comment_file(&cwd.join(path))?,
+                None => args
+                    .get_one::<String>("content")
+                    .or_else(|| args.get_one::<String>("content_positional"))
+                    .context("UnsupportedOperation: provide inline comment content or --body-file")?
+                    .clone(),
+            };
             Ok(("add_comment", json!({"id":id,"text":text})))
         }
         "edit" => {
@@ -180,7 +211,10 @@ mod tests {
                 .try_get_matches_from(argv)
                 .unwrap();
             let (name, args) = matches.subcommand().unwrap();
-            assert_eq!(translate(name, args).unwrap(), (tool, payload));
+            assert_eq!(
+                translate(name, args, Path::new("/missing")).unwrap(),
+                (tool, payload)
+            );
         }
         for argv in [
             vec![
@@ -209,7 +243,37 @@ mod tests {
                 .try_get_matches_from(argv)
                 .unwrap();
             let (name, args) = matches.subcommand().unwrap();
-            assert!(translate(name, args).is_err());
+            assert!(translate(name, args, Path::new("/missing")).is_err());
         }
+    }
+
+    #[test]
+    fn body_file_routes_literal_text_and_refuses_special_or_unbounded_inputs() {
+        let tmp = tempfile::tempdir().unwrap();
+        let path = tmp.path().join("body");
+        let text = "literal `command` $(command)\n\tsecond line";
+        std::fs::write(&path, text).unwrap();
+        let matches = crate::command_registry::built_command()
+            .try_get_matches_from(["aida", "comment", "add", "TASK-1", "--body-file", "body"])
+            .unwrap();
+        let (name, args) = matches.subcommand().unwrap();
+        assert_eq!(
+            translate(name, args, tmp.path()).unwrap(),
+            ("add_comment", json!({"id":"TASK-1", "text":text}))
+        );
+        for bytes in [vec![b'x'; 16385], vec![b' '; 20], vec![0xff]] {
+            std::fs::write(&path, bytes).unwrap();
+            assert!(translate(name, args, tmp.path()).is_err());
+        }
+        std::fs::write(&path, vec![b'x'; 16384]).unwrap();
+        assert_eq!(comment_file(&path).unwrap().len(), 16384);
+        assert!(comment_file(tmp.path()).is_err());
+        let link = tmp.path().join("link");
+        std::os::unix::fs::symlink(&path, &link).unwrap();
+        assert!(comment_file(&link).is_err());
+        let fifo = tmp.path().join("fifo");
+        let name = std::ffi::CString::new(fifo.as_os_str().as_encoded_bytes()).unwrap();
+        assert_eq!(unsafe { libc::mkfifo(name.as_ptr(), 0o600) }, 0);
+        assert!(comment_file(&fifo).is_err());
     }
 }

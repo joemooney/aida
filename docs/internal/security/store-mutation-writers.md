@@ -21,11 +21,15 @@ The canonical redo transaction design was subsequently approved in
 
 `store_mutation_entry.rs` selects an explicit mediated profile before CLI
 identity, telemetry, aliases, extension dispatch and cache setup. The bounded
-Rust SEQPACKET client supports inline `comment add` and title/description-only
-`edit`. Its separate MCP loop translates `add_comment` and `update_requirement`
+Rust SEQPACKET client supports inline or `--body-file` `comment add` and
+title/description-only `edit`. Its separate MCP loop translates `add_comment` and `update_requirement`
 without backend setup, agent-registry writes, mail acknowledgements or respawn.
 It retains MCP profile and stakeholder restrictions, narrows advertised input
 properties, and refuses extra fields rather than silently dropping semantics.
+Comment body files are opened read-only without following symlinks and with
+nonblocking I/O; only regular UTF-8 files up to 16 KiB are accepted. The lane
+sends their literal text, never a path, to the host. Stdin, editor, author, relay
+and parent semantics remain unsupported.
 Unsupported commands/tools refuse before ordinary dispatch. Neither transport
 falls back to direct persistence or retries uncertain delivery with a new UUID.
 
