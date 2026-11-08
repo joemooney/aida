@@ -487,9 +487,10 @@ Store Git commands override `rebase.autoStash` and `merge.autoStash` to `false`,
 so operator Git preferences cannot stash dirty store writes during sync. Store
 commits refuse unmerged paths, conflict-markered objects, and objects that fail
 requirement parsing, including staged bytes. The host's deferred-session commit
-checks before staging; `aida doctor` checks object integrity before loading the
-store and names the offending file. Resolve the conflict or restore valid object
-content before retrying; these checks do not repair or discard edits.
+checks before staging; `aida doctor` reports invalid objects by file name while
+continuing its other checks with the tolerantly loaded store. Resolve the conflict
+or restore valid object content before retrying; these checks do not repair or
+discard edits.
 <!-- trace:BUG-2490 | ai:codex -->
 
 - **Live worktree:** `.aida-store/` (gitignored on the main branch; populated by `aida init`)

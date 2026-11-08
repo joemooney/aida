@@ -514,6 +514,60 @@ fn no_launch_completion_text_is_codex_aware() {
     );
 }
 
+// trace:BUG-2490 | ai:codex
+#[test]
+fn bug_2490_failed_pull_stops_pickup_before_session_and_spec_writes() {
+    let base = tempfile::tempdir().unwrap();
+    let base_dir = base.path().canonicalize().unwrap();
+    let (repo, home, spec) = init_codex_only_project(&base_dir);
+    let store = repo.join(".aida-store");
+    // A local nonexistent endpoint fails deterministically without network IO.
+    git(
+        &store,
+        &[
+            "remote",
+            "add",
+            "origin",
+            base_dir.join("missing.git").to_str().unwrap(),
+        ],
+    );
+    let snapshot = || {
+        let out = test_git::git_command()
+            .current_dir(&store)
+            .args(["diff", "HEAD", "--", "objects"])
+            .output()
+            .unwrap();
+        assert!(out.status.success());
+        out.stdout
+    };
+    let objects_before = snapshot();
+    let sessions_before = list_session_files(&repo);
+    let siblings_before = sibling_worktrees(&base_dir);
+    let out = aida(&repo, &home)
+        .args(["queue", "work", &spec, "--no-launch"])
+        .output()
+        .unwrap();
+    let message = format!(
+        "{}{}",
+        String::from_utf8_lossy(&out.stdout),
+        String::from_utf8_lossy(&out.stderr)
+    );
+    assert!(!out.status.success(), "{message}");
+    assert!(
+        message.contains("pre-pickup pull failed; pickup stopped"),
+        "{message}"
+    );
+    assert!(!message.contains("proceeding with local view"), "{message}");
+    assert_eq!(
+        snapshot(),
+        objects_before,
+        "failed pickup changed spec objects"
+    );
+    assert_pickup_unstarted(&repo, &home, &spec);
+    assert_eq!(list_session_files(&repo), sessions_before);
+    assert_eq!(sibling_worktrees(&base_dir), siblings_before);
+}
+
 #[test]
 fn no_launch_with_custom_base_populates_submodules() {
     let base = tempfile::tempdir().expect("tempdir");

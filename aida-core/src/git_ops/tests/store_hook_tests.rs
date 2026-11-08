@@ -1206,7 +1206,14 @@ fn bug_2490_autostash_conflict_refuses_store_commit() {
     let raw = |args: &[&str]| {
         std::process::Command::new("git")
             .current_dir(&store)
-            .args(["-c", "core.hooksPath=/dev/null"])
+            .args([
+                "-c",
+                "core.hooksPath=/dev/null",
+                "-c",
+                "maintenance.auto=false",
+                "-c",
+                "gc.auto=0",
+            ])
             .args(args)
             .output()
             .unwrap()
@@ -1333,6 +1340,7 @@ fn bug_2490_pending_checks_only_dirty_objects_and_names_invalid_path() {
         .unwrap();
     assert!(raw.status.success());
     let raw = host_git_command(&store)
+        .args(["-c", "maintenance.auto=false", "-c", "gc.auto=0"])
         .args(["commit", "-qm", "legacy corruption"])
         .output()
         .unwrap();

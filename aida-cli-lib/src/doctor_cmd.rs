@@ -773,8 +773,9 @@ mod bug_2490_tests {
     #[test]
     fn bug_2490_doctor_flags_markered_object_and_continues_loading() {
         let dir = tempfile::tempdir().unwrap();
-        let backend = aida_core::GitBackend::new(dir.path()).unwrap();
-        aida_core::DatabaseBackend::save(&backend, &aida_core::RequirementsStore::new()).unwrap();
+        // Build the read-only fixture directly: a whole-store save allocates
+        // metadata IDs and requires writer authority unrelated to this scan.
+        aida_core::GitBackend::new(dir.path()).unwrap();
         let path = dir.path().join("objects/STORY/000/STORY-bad.yaml");
         std::fs::create_dir_all(path.parent().unwrap()).unwrap();
         std::fs::write(&path, "<<<<<<< Updated upstream\ntitle: conflict\n=======\ntitle: other\n>>>>>>> Stashed changes\n").unwrap();
