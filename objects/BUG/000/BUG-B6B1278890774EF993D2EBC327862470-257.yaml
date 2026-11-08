@@ -13,12 +13,12 @@ description: |
   3. The BUG-1693 label rules (recorded vs cleared, train members' labels) behave exactly as today: same pass/block outcome for every label combination (table test over the existing check_labels cases).
   4. A push to a held PR sends no "run failed" notification for this check.
   5. A genuinely malformed label state (clearance with no recorded hold) still FAILS, since that is a real error.
-status: InProgress
+status: NeedsAttention
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-08T02:46:34.549817284Z
-modified_at: 2026-11-08T04:52:51.358303138Z
+modified_at: 2026-11-08T04:54:40.095222713Z
 req_type: Bug
 tags:
 - area:ci
@@ -55,6 +55,12 @@ comments:
   content: 'Round 2 approach: address bootstrap with a temporary same-repository pull_request publisher alongside trusted pull_request_target, with explicit operator removal steps. Document GitHub same-name check/status conjunction and an operator cutover procedure verifying app_id 15368 with enforce_admins retained: legacy successful check plus pending status blocks raw merge and UI; label-only clearance succeeds on unchanged SHA; fresh SHA passes without a legacy check. Assert explicit success/pending/failure states in every train fixture and shared parser case. Expected files: .github/workflows/merge-hold-gate.yml, tests/test_merge_hold_gate.sh, docs/cli/08-reporting.md and a focused cutover runbook. Live GitHub verification is operator work after publication; local fixtures cannot establish app-pinned server behavior. Native seat will leave edits uncommitted for host publication.'
   created_at: 2026-11-08T04:52:51.358303138Z
   modified_at: 2026-11-08T04:52:51.358303138Z
+  session_id: 01a1b97f6957
+- id: 01a1b982-32df-71e3-8f7e-219f23116a5b
+  author: joe
+  content: 'Round 2 implementation ready for host commit: temporary same-repo pull_request bootstrap added alongside pull_request_target; docs/internal/testing/bug-2492-status-cutover.md assigns Joe the bootstrap, legacy collision, app_id 15368/enforce_admins checks, raw gh/UI refusal, unchanged-SHA label-only clearance, fresh-head status-only acceptance, evidence capture and bootstrap removal. GitHub official documentation requires both same-name check and status to pass; runbook links source and explicitly distinguishes docs from live evidence. Every train fixture now asserts success/pending/failure (including shared member parser cases). Validation passed: bash tests/test_merge_hold_gate.sh (8 label states x 2 gates, 36 train cases), bash -n, git diff --check. actionlint unavailable; no Rust changes or Cargo run needed. Shared codegraph index unreachable (doctor confirmed); rg verified shell call sites. Live operator verification remains outstanding by design; no protection changes or merge attempts made from seat. Four files changed, edits uncommitted per native-seat contract.'
+  created_at: 2026-11-08T04:54:40.095222713Z
+  modified_at: 2026-11-08T04:54:40.095222713Z
   session_id: 01a1b97f6957
 history:
 - id: 01a1b90d-4bec-7bd0-9af1-86f501692f64
@@ -104,6 +110,15 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a1b982-1403-7ee3-80dc-ef608840d4eb
+  author: aida-orchestrator
+  timestamp: 2026-11-08T04:54:32.195052871Z
+  session_id: 01a1b980b84f
+  harness_version: 2.1.319 (Claude Code)
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: NeedsAttention
 filed_at:
   code_sha: dc41ee8da2f44f88178936fc1a8e6cb7168a3de7
   branch: main
@@ -113,3 +128,11 @@ filed_at:
   vendor: claude
   session: 01a1b8be-8170-7fb2-89ab-ecb4c6eee98c
   harness_version: 2.1.319 (Claude Code)
+failure_reason:
+  phase: reviewer
+  phase_index: 3
+  kind: verdict:request-changes
+  detail: 'Round-1 findings unaddressed: head cb459142 = reviewed f81f2ac + main merge; the 3 PR files are byte-identical to round 1. Bootstrap/cutover blockers stand (head has no merge-hold-gate status or check run). AC: 1 unverified; 2 partial (cleared->success fixture; label-only same-SHA flip unverified); 3 verified non-train label table, train only by exit code; 4 verified non-train (pending hold -> job exit 0); 5 verified (orphan clearance -> failure). Protocol: touches a test file = met. CI was still running at review.'
+  recovery_hint: address the review findings, move BUG-2492 back to In Progress, and clear the PR hold only after approval
+  shelved_by: reviewer
+  shelved_at: 2026-11-08T04:54:32.195025678Z
