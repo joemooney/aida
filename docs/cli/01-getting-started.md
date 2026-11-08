@@ -99,23 +99,6 @@ An empty focused subtree does not mean the project has no open work.
 
 ### `aida show`
 
-`show` reads the requested spec from canonical YAML without opening the ID
-allocator. Its derived context comes from a pinned, read-only cache snapshot;
-it never refreshes, migrates, heals, or queues refresh work. Stale context is
-labelled `deferred`. Missing, incompatible or unreadable caches use an empty
-in-memory index. On an index miss, origin IDs read their named canonical
-object directly; agreed IDs use a bounded canonical scan. If that scan runs
-out of time, the result carries an incomplete-scan warning and may be not found.
-Use `aida cache refresh` to update the projection explicitly.
-
-Default human, TOON and card views skip Git linkage and run no Git history
-walk. Request `--full`, `--verbose`, `--json` or `--format json` for linkage;
-`--no-git` suppresses it in those views too. Optional Git linkage has a shared
-1.2-second deadline and reports partial or unknown evidence when it expires.
-Usage events split backend opening into `open.backend`, `open.location` and
-`open.cache` sub-spans for diagnosing remaining latency.
-<!-- trace:BUG-2466 | ai:codex -->
-
 **One line** — the full detail view of one spec.
 
 **Mental model.** Where `list` is breadth, `show` is depth on a single spec: its fields, description, acceptance criteria, relationships, and — with `--full`, `--verbose` or JSON output — its **git linkage** (the commits, files, branch, and PR that reference it). That git section is what makes `show` more than a database dump: it answers "what code actually serves this spec."
@@ -132,7 +115,25 @@ Usage events split backend opening into `open.backend`, `open.location` and
 - `-c/--comments` — inline the comment bodies (design discussion, doc seeds) rather than just the count.
 - `--raw` — print the description and comments as their markdown source. At an interactive terminal, human output renders that markdown: styled headings and emphasis, indented lists and code blocks, and tables drawn as aligned boxes that fit the terminal width. `AIDA_MARKDOWN=raw` does the same for every run.
 
-**The `linkage:` line (agent/TOON output).** Under `--format toon` (the agent surface), `show` carries one cheap `linkage:` line that checks only the default branch — `origin/<default>` first, then the local `<default>` (skipped when it is the same commit as, or behind, the remote). It is whitespace-separated `key=value` tokens, for example `linkage: shipped=true shipped_pr=53 commit=1a2b3c4 commits=1 files=2 on=origin/main`, or for nothing shipped yet `linkage: shipped=false commits=0 files=0 checked=origin/main+main detail=--format=json`. `shipped` is true when a commit message on that ref names the spec or a tracked file there carries a `trace:<ID>` comment; `detail=--format=json` points at the full linkage scan. `--no-git` drops the line.
+**Latency and caching.** `show` reads the requested spec from canonical YAML without opening the ID
+allocator. Its derived context comes from a pinned, read-only cache snapshot;
+it never refreshes, migrates, heals, or queues refresh work. Stale context is
+labelled `deferred`. Missing, incompatible or unreadable caches use an empty
+in-memory index. On an index miss, origin IDs read their named canonical
+object directly. After literal and node-alias lookups miss, a stale or unavailable
+projection uses a bounded canonical scan for agreed IDs. Fresh snapshot misses
+return without scanning. If a fallback scan runs out of time, the result carries an incomplete-scan warning and may be not found.
+Use `aida cache refresh` to update the projection explicitly.
+
+Default human, TOON and card views skip Git linkage and run no Git history
+walk. Request `--full`, `--verbose`, `--json` or `--format json` for linkage;
+`--no-git` suppresses it in those views too. Optional Git linkage has a shared
+1.2-second deadline and reports partial or unknown evidence when it expires.
+Usage events split backend opening into `open.backend`, `open.location` and
+`open.cache` sub-spans for diagnosing remaining latency.
+<!-- trace:BUG-2466 | ai:codex -->
+
+**The `linkage:` line (agent/TOON output).** With `--full` or `--verbose` under `--format toon` (the agent surface), `show` carries one cheap `linkage:` line that checks only the default branch — `origin/<default>` first, then the local `<default>` (skipped when it is the same commit as, or behind, the remote). It is whitespace-separated `key=value` tokens, for example `linkage: shipped=true shipped_pr=53 commit=1a2b3c4 commits=1 files=2 on=origin/main`, or for nothing shipped yet `linkage: shipped=false commits=0 files=0 checked=origin/main+main detail=--format=json`. `shipped` is true when a commit message on that ref names the spec or a tracked file there carries a `trace:<ID>` comment; `detail=--format=json` points at the full linkage scan. `--no-git` drops the line.
 
 **Gotchas.** The git-linkage section is the slow part; if `show` feels sluggish in a loop, you almost certainly want `--no-git`. Markdown is rendered only for a person at a terminal: piped output, `--format toon` and `--format json` always carry the source text unchanged, so scripts and agents never see the rendered form. Under `NO_COLOR` the layout stays and the styling goes.
 

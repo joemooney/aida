@@ -273,8 +273,22 @@ impl CachedGitBackend {
     // trace:BUG-1535 trace:BUG-1670 | ai:claude
     fn resolve_unambiguous(&self, id: &str, strict: bool) -> Result<Option<Requirement>> {
         // trace:STORY-B6B1278890774EF993D2EBC327862470-078 | ai:claude
-        crate::node_alias::resolve_literal_first(id, |id| {
+        let resolved = crate::node_alias::resolve_literal_first(id, |id| {
             self.resolve_unambiguous_exact(id, strict)
+        })?;
+        // Try both literal and expanded object/index lookups before paying for
+        // an agreed-ID scan. A current projection already answers agreed IDs.
+        // trace:BUG-2466 | ai:codex
+        if resolved.is_some() || strict || !self.snapshot_only || !self.cache_snapshot_is_stale()? {
+            return Ok(resolved);
+        }
+        let deadline = std::time::Instant::now() + super::cache::read_fallback_scan_budget();
+        crate::node_alias::resolve_literal_first(id, |id| {
+            self.resolve_by_bounded_scan(
+                id,
+                deadline,
+                &anyhow::anyhow!("ID absent from stale read-only cache snapshot"),
+            )
         })
     }
 
@@ -326,21 +340,7 @@ impl CachedGitBackend {
         // act on a guess.
         // trace:BUG-B6B1278890774EF993D2EBC327862470-018 | ai:claude
         if candidates.is_empty() && !strict {
-            let direct = self.inner.get_requirement_by_object_file(id)?;
-            // A snapshot may predate an agreed ID, or be an empty private
-            // fallback. Agreed IDs do not name object files; scan canonical
-            // objects within the existing read budget before declaring a miss.
-            // trace:BUG-2466 | ai:codex
-            if direct.is_none() && self.snapshot_only {
-                let deadline =
-                    std::time::Instant::now() + super::cache::read_fallback_scan_budget();
-                return self.resolve_by_bounded_scan(
-                    id,
-                    deadline,
-                    &anyhow::anyhow!("ID absent from read-only cache snapshot"),
-                );
-            }
-            return Ok(direct);
+            return self.inner.get_requirement_by_object_file(id);
         }
         if candidates.len() > 1 {
             // The cache said "ambiguous"; confirm against the canonical
@@ -443,6 +443,8 @@ impl CachedGitBackend {
             // BUG-97: a file that exists but will not parse is the real error.
             found.push(crate::object_store::read_object(&objects_root, &canonical)?);
         }
+        #[cfg(test)]
+        super::cache_refresh::test_count("read_id_store_scan");
         let (matches, complete) =
             crate::object_store::scan_id_matches_until(&objects_root, &canonical, deadline)?;
         found.extend(matches);
@@ -4564,6 +4566,51 @@ mod tests {
 
     // trace:BUG-2466 | ai:codex
     #[test]
+    fn show_snapshot_alias_and_fresh_miss_skip_store_scans() {
+        use super::super::cache_refresh::test_counts;
+        const NODE: &str = "b6b1278890774ef993d2ebc327862470";
+        let dir = tempdir().unwrap();
+        let (backend, store_root, cache_path) = task_1515_backend(dir.path());
+        let req = backend
+            .add_requirement(sample_req(&format!("BUG-{NODE}-018"), "Aliased"))
+            .unwrap();
+        drop(backend);
+        let mut aliases = crate::node_alias::NodeAliasMap::default();
+        aliases.set("HOME", NODE).unwrap();
+        let _guard = crate::node_alias::install_for_thread(aliases);
+        for stale in [false, true] {
+            if stale {
+                task_1515_external_retitle(&store_root, "gen1");
+            }
+            let reader = CachedGitBackend::with_inner_stale_snapshot(
+                GitBackend::new(&store_root).unwrap(),
+                &cache_path,
+            )
+            .unwrap();
+            assert_eq!(reader.cache_snapshot_is_stale().unwrap(), stale);
+            test_counts();
+            assert_eq!(
+                reader
+                    .get_requirement_unambiguous_for_read("BUG-HOME-018")
+                    .unwrap()
+                    .unwrap()
+                    .id,
+                req.id
+            );
+            if !stale {
+                assert!(reader
+                    .get_requirement_unambiguous_for_read("BUG-HOME-404")
+                    .unwrap()
+                    .is_none());
+            }
+            let counts = test_counts();
+            assert_eq!(counts.get("read_id_store_scan"), None, "{counts:?}");
+            assert_eq!(counts.get("agreed_id_store_scan"), None, "{counts:?}");
+        }
+    }
+
+    // trace:BUG-2466 | ai:codex
+    #[test]
     fn show_snapshot_resolves_agreed_id_missing_from_projection() {
         let dir = tempdir().unwrap();
         let (backend, store_root, stale_cache) = task_1515_backend(dir.path());
@@ -4587,10 +4634,15 @@ mod tests {
                 cache_path,
             )
             .unwrap();
+            super::super::cache_refresh::test_counts();
             let found = reader
                 .get_requirement_unambiguous_for_read("FR-9001")
                 .unwrap()
                 .expect("agreed ID must resolve without a current projection");
+            assert_eq!(
+                super::super::cache_refresh::test_counts().get("read_id_store_scan"),
+                Some(&1)
+            );
             assert_eq!(found.id, req.id);
             assert_eq!(found.spec_id, req.spec_id);
             assert_eq!(found.agreed_id, req.agreed_id);
