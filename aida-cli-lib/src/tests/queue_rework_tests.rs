@@ -2093,19 +2093,73 @@ fn bug_2502_rework_with_imported_review(punted: bool) {
 
 // trace:BUG-2502 | ai:codex
 #[test]
-fn bug_2502_loop_guard_requires_a_reviewer_request_changes_shelf() {
+fn bug_2502_loop_guard_requires_a_blocking_reviewer_shelf() {
     let mut req = parked("BUG-2502");
     assert!(
         !rework_is_review_shelf(&req),
         "CI failures are not repeat reviews"
     );
-    let failure = req.failure_reason.as_mut().unwrap();
-    failure.phase = "reviewer".into();
-    failure.kind = "verdict:request-changes".into();
-    assert!(
-        rework_is_review_shelf(&req),
-        "retain the repeated review guard"
-    );
+    for kind in [
+        "verdict:request-changes",
+        "verdict:rejected",
+        "verdict:reject",
+    ] {
+        let failure = req.failure_reason.as_mut().unwrap();
+        failure.phase = "reviewer".into();
+        failure.kind = kind.into();
+        assert!(rework_is_review_shelf(&req), "retain the guard for {kind}");
+    }
     req.status = RequirementStatus::Approved;
     assert!(!rework_is_review_shelf(&req));
+}
+
+// trace:BUG-2502 | ai:codex
+#[test]
+fn bug_2502_repeated_blocking_review_is_parked_before_requeue() {
+    for (kind, verdict) in [
+        ("verdict:request-changes", "RequestChanges"),
+        ("verdict:rejected", "Rejected"),
+        ("verdict:reject", "Rejected"),
+    ] {
+        let mut req = parked("BUG-2502");
+        let failure = req.failure_reason.as_mut().unwrap();
+        failure.phase = "reviewer".into();
+        failure.kind = kind.into();
+        let (tmp, storage) = story_1429_fixture(vec![req]);
+        let _seat = crate::test_env::AmbientGuard::hermetic_with_seat(tmp.path(), "advisor", &[]);
+        let verdicts = tmp.path().join(".aida/review-verdicts");
+        std::fs::create_dir_all(&verdicts).unwrap();
+        std::fs::write(
+            verdicts.join("BUG-2502.json"),
+            serde_json::json!({"verdict": verdict, "summary": "fix A", "findings": ["fix A"]})
+                .to_string(),
+        )
+        .unwrap();
+        let block = resolve_rework_findings(tmp.path(), "BUG-2502", "BUG-2502", None)
+            .unwrap()
+            .expect("fixture review is selected");
+        storage
+            .update_atomically(|store| {
+                let req = store.get_requirement_by_spec_id_mut("BUG-2502").unwrap();
+                req.add_comment(aida_core::Comment::new("reviewer".into(), block));
+            })
+            .unwrap();
+
+        // Parking precedes the external finding/brief commands. Their failure
+        // is allowed here; persisted state must prove the handler took the guard.
+        let _result = rework_as(&storage, "BUG-2502", None, false);
+        let store = storage.load().unwrap();
+        let req = store.get_requirement_by_spec_id("BUG-2502").unwrap();
+        assert_eq!(req.status, RequirementStatus::NeedsAttention, "{kind}");
+        assert!(
+            req.history
+                .iter()
+                .any(|entry| entry.author == aida_core::conflict::LOOP_GUARD_AUTHOR),
+            "the handler must have parked the repeated {kind} review"
+        );
+        assert!(
+            storage.queue_list("codex", true).unwrap().is_empty(),
+            "{kind}"
+        );
+    }
 }

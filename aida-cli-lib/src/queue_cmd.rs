@@ -8031,7 +8031,12 @@ pub(crate) fn rework_is_review_shelf(req: &Requirement) -> bool {
     req.status == RequirementStatus::NeedsAttention
         && req.attention_reason.is_none()
         && req.failure_reason.as_ref().is_some_and(|failure| {
-            failure.phase == "reviewer" && failure.kind == "verdict:request-changes"
+            // Review recording and drain shelving use different rejection slugs.
+            failure.phase == "reviewer"
+                && matches!(
+                    failure.kind.as_str(),
+                    "verdict:request-changes" | "verdict:rejected" | "verdict:reject"
+                )
         })
 }
 
