@@ -3,12 +3,12 @@ spec_id: TASK-b6b1278890774ef993d2ebc327862470-958
 agreed_id: TASK-3425
 title: 'Crate-split PR2: move the 14 command-framework types from command_registry.rs into cmdkit.rs, with a re-export (no import churn)'
 description: 'Plan: docs/plans/2026-11-07-aida-cli-lib-crate-split-deep-dive.md (PR #3633, SPIKE-713). Move the command-framework types the plan lists (section 5/7) into a new aida-cli-lib/src/cmdkit.rs; command_registry.rs re-exports them, so no caller import changes. The plan measures that this removes 29 modules from the main SCC. Acceptance: no caller edits; the dependency script from the plan (or rg) shows the reduced SCC; make check-ci-fast passes; and the command-registry ratchet tests pass. LIGHT gate.'
-status: NeedsAttention
+status: InProgress
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-07T22:12:10.371157002Z
-modified_at: 2026-11-08T05:00:43.208067510Z
+modified_at: 2026-11-08T05:00:53.764686659Z
 req_type: Task
 relationships:
 - rel_type: Child
@@ -143,6 +143,13 @@ comments:
   modified_at: 2026-11-08T05:00:43.208067510Z
   session_id: 01a1b8be-8170-7fb2-89ab-ecb4c6eee98c
   harness_version: 2.1.319 (Claude Code)
+- id: 01a1b987-e684-7cc0-a863-d30c590c7f32
+  author: joe
+  content: 'Returned from NeedsAttention to In Progress via `aida edit --status`. It was shelved on: reviewer/verdict:request-changes: Round 3 fixes the trailer/title (Refs), AGENTS.md/OVERVIEW.md, and evidence doc, and the Rust move is unchanged and green in CI lib/cli shards; but the head commit c5cbc87 again lacks the ''Help-Golden: unchanged'' body line, so the help co-change guard still exits 1 and CI (gates)/make check-ci-fast cannot pass.. It was punted on: blocked-dependency: Round-3 finding 1 and the remaining overall-green-CI part of finding 5 require host publication: native Git metadata is read-only and the aida ship -m API accepts only one subject line, so it cannot convey the required standalone Help-Golden: unchanged body trailer. Findings are not disputed on their merits. Three documentation files are fixed and uncommitted; PR #3635 title/body and native declaration use Refs TASK-3425. All six CI test shards at 67139bfb2d2 passed, including the golden and full library ratchets; CI gates fails specifically at the missing help trailer and merge hold remains red. Host must resolve the publication veto and explicitly commit the full message in docs/internal/testing/task-3425-cmdkit-rework.md, rerun make check-ci-fast, publish to the same branch and obtain green CI. Retain Refs and leave SCC acceptance open; draft follow-up allocation is also host-blocked. Do not repeat a subject-only host commit.. No triage reason was given.'
+  created_at: 2026-11-08T05:00:53.764678079Z
+  modified_at: 2026-11-08T05:00:53.764678079Z
+  session_id: 01a1b8be-8170-7fb2-89ab-ecb4c6eee98c
+  harness_version: 2.1.319 (Claude Code)
 history:
 - id: 01a1b811-df16-79c0-9152-0fbdcca89083
   author: joe
@@ -237,6 +244,15 @@ history:
   session_id: 01a1b9095eab
   harness_version: 2.1.319 (Claude Code)
   changes: []
+- id: 01a1b987-e684-7cc0-a863-d2f575aee49b
+  author: joe
+  timestamp: 2026-11-08T05:00:53.764650426Z
+  session_id: 01a1b8be-8170-7fb2-89ab-ecb4c6eee98c
+  harness_version: 2.1.319 (Claude Code)
+  changes:
+  - field_name: status
+    old_value: NeedsAttention
+    new_value: InProgress
 filed_at:
   code_sha: 77bc9e4e4d38b978afaaf602dd8300419c320ea7
   branch: main
@@ -246,17 +262,3 @@ filed_at:
   vendor: claude
   session: 01a1b76b-2fe7-7dd2-88d0-356fc8d96d04
   harness_version: 2.1.319 (Claude Code)
-attention_reason:
-  category: blocked-dependency
-  detail: 'Round-3 finding 1 and the remaining overall-green-CI part of finding 5 require host publication: native Git metadata is read-only and the aida ship -m API accepts only one subject line, so it cannot convey the required standalone Help-Golden: unchanged body trailer. Findings are not disputed on their merits. Three documentation files are fixed and uncommitted; PR #3635 title/body and native declaration use Refs TASK-3425. All six CI test shards at 67139bfb2d2 passed, including the golden and full library ratchets; CI gates fails specifically at the missing help trailer and merge hold remains red. Host must resolve the publication veto and explicitly commit the full message in docs/internal/testing/task-3425-cmdkit-rework.md, rerun make check-ci-fast, publish to the same branch and obtain green CI. Retain Refs and leave SCC acceptance open; draft follow-up allocation is also host-blocked. Do not repeat a subject-only host commit.'
-  lean: 'Host commits the ready documentation changes with the recorded Refs subject plus the separate Help-Golden: unchanged body line, then reruns the full gate and CI.'
-  raised_by: implementer
-  raised_at: 2026-11-08T02:40:10.897960158Z
-failure_reason:
-  phase: reviewer
-  phase_index: 3
-  kind: verdict:request-changes
-  detail: 'Round 3 fixes the trailer/title (Refs), AGENTS.md/OVERVIEW.md, and evidence doc, and the Rust move is unchanged and green in CI lib/cli shards; but the head commit c5cbc87 again lacks the ''Help-Golden: unchanged'' body line, so the help co-change guard still exits 1 and CI (gates)/make check-ci-fast cannot pass.'
-  recovery_hint: address the review findings, move TASK-3425 back to In Progress, and clear the PR hold only after approval
-  shelved_by: reviewer
-  shelved_at: 2026-11-08T02:44:02.247067450Z
