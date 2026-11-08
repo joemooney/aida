@@ -12,13 +12,21 @@ priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-11-08T01:27:02.365575412Z
-modified_at: 2026-11-08T01:27:02.365575412Z
+modified_at: 2026-11-08T03:05:59.444386597Z
 req_type: Task
 tags:
 - carried-from:BUG-2487
 - finding-hash:af563a6f
 - from-review:BUG-2487
 - kind:carried-forward
+comments:
+- id: 01a1b91e-b394-7c53-b0a6-e01299cb1a38
+  author: joe
+  content: 'ADVISOR RULING 2026-11-07 20:08: approved; it is live now (dell1 runs codex 0.167.0 while the -c default_permissions argv was validated only against the 0.166.0 help fixture). Acceptance: (1) before any contained Codex launch whose binary is not the pinned PROGRAM_SHA256 (API-key lanes, pinned_program None), AIDA runs that binary''s own --help / exec --help and validates the -c default_permissions surface against it, refusing with a message naming the binary path and version if the surface is absent; (2) a test with a fake codex binary whose help lacks the flag proves the refusal; (3) the pinned path is unchanged.'
+  created_at: 2026-11-08T03:05:59.444386597Z
+  modified_at: 2026-11-08T03:05:59.444386597Z
+  session_id: 01a1b8be-8170-7fb2-89ab-ecb4c6eee98c
+  harness_version: 2.1.319 (Claude Code)
 history:
 - id: 01a1b8dd-4eb0-7041-ba95-ef546f9a6965
   author: joe
