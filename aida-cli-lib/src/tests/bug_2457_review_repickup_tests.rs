@@ -233,8 +233,55 @@ fn bug_2469_dead_review_reclaimed_only_when_new_head_covers_recorded_and_actual_
     lease.creator_pid_start_time = None;
     lease.pid_namespace = crate::agent_registry::current_pid_namespace();
     let lease_file = crate::lease_path(&fx.main, &lease.id);
-    let save =
-        |l: &crate::SessionLease| std::fs::write(&lease_file, toml::to_string(l).unwrap()).unwrap();
+    // Reclaim reads ownership, not the legacy PID fields. Keep the fixture's
+    // authoritative review record in the same state as each simulated owner.
+    // trace:STORY-2325 | ai:codex
+    let save = |l: &crate::SessionLease| {
+        use crate::ownership::{Ownership, Phase, Witness, WitnessKind, WorkKey};
+        let at = chrono::Utc::now()
+            - chrono::Duration::days(if l.active_pid == Some(u32::MAX) { 2 } else { 0 });
+        let key = WorkKey::Review {
+            change: crate::ownership::dual::change(2457),
+            head: first_head.clone(),
+        };
+        let mut holder = crate::ownership::dual::holder_for_lease(
+            l,
+            &crate::ownership::dual::WriterFacts::here(),
+            at,
+        );
+        holder.witnesses = l
+            .active_pid
+            .map(|_| Witness {
+                admission: None,
+                kind: WitnessKind::Heartbeat { at, every_secs: 10 },
+                recorded_at: at,
+            })
+            .into_iter()
+            .collect();
+        crate::ownership::store::OwnershipStore::for_project(&fx.main)
+            .unwrap()
+            .unwrap()
+            .update(
+                &key,
+                "fixture",
+                crate::ownership::store::Expect::Any,
+                |_| {
+                    Some((
+                        Ownership {
+                            key: key.clone(),
+                            generation: 0,
+                            phase: Phase::Reviewing {
+                                head: first_head.clone(),
+                            },
+                            holder: Some(holder),
+                        },
+                        None,
+                    ))
+                },
+            )
+            .unwrap();
+        std::fs::write(&lease_file, toml::to_string(l).unwrap()).unwrap();
+    };
     let assert_retained_refusal = |reason: &str| {
         let before = std::fs::read(&lease_file).unwrap();
         let head = git_ok(&tree, &["rev-parse", "HEAD"]);
@@ -245,7 +292,7 @@ fn bug_2469_dead_review_reclaimed_only_when_new_head_covers_recorded_and_actual_
         assert_eq!(std::fs::read(&lease_file).unwrap(), before);
         assert_eq!(git_ok(&tree, &["rev-parse", "HEAD"]), head);
     };
-    save(&lease);
+    std::fs::write(&lease_file, toml::to_string(&lease).unwrap()).unwrap();
     assert!(lease.review_verb && !lease.claim_verb);
     assert!(
         crate::seat_clone::remote_missing_commits(&fx.main, &tree, false, &lease.branch).unwrap()
@@ -264,6 +311,11 @@ fn bug_2469_dead_review_reclaimed_only_when_new_head_covers_recorded_and_actual_
     assert!(matches!(
         crate::pr_lease_takeover::check_pr_lease(&fx.main, &lease, "missing-source-branch"),
         crate::pr_lease_takeover::PrLeaseCheck::NotProvable(_)
+    ));
+    save(&lease);
+    assert!(matches!(
+        crate::ownership::reader::lease_owner(&fx.main, &lease),
+        crate::ownership::OwnerVerdict::Dead { .. }
     ));
     let mut implementer = lease.clone();
     implementer.review_verb = false;
@@ -284,10 +336,18 @@ fn bug_2469_dead_review_reclaimed_only_when_new_head_covers_recorded_and_actual_
     // Live and unknown owners keep the tree and lease.
     lease.active_pid = Some(std::process::id());
     save(&lease);
+    assert!(matches!(
+        crate::ownership::reader::lease_owner(&fx.main, &lease),
+        crate::ownership::OwnerVerdict::Alive { .. }
+    ));
     assert!(queue_work(&storage).is_err());
     lease.active_pid = None;
     lease.creator_pid = None;
     save(&lease);
+    assert!(matches!(
+        crate::ownership::reader::lease_owner(&fx.main, &lease),
+        crate::ownership::OwnerVerdict::Unknown { .. }
+    ));
     assert!(queue_work(&storage).is_err());
     lease.active_pid = Some(u32::MAX);
     lease.creator_pid = Some(u32::MAX);
@@ -332,8 +392,19 @@ fn bug_2469_dead_review_reclaimed_only_when_new_head_covers_recorded_and_actual_
     );
     lease.pr_head_sha = None;
     save(&lease);
-    assert_retained_refusal("review lease has no recorded head");
-    lease.pr_head_sha = Some(first_head);
+    // Without a head the review key cannot be resolved: retain as Unknown
+    // before attempting the dead-review coverage checks.
+    let before = std::fs::read(&lease_file).unwrap();
+    assert!(matches!(
+        crate::ownership::reader::lease_owner(&fx.main, &lease),
+        crate::ownership::OwnerVerdict::Unknown { .. }
+    ));
+    assert!(queue_work(&storage)
+        .unwrap_err()
+        .to_string()
+        .contains("held by worktree"));
+    assert_eq!(std::fs::read(&lease_file).unwrap(), before);
+    lease.pr_head_sha = Some(first_head.clone());
     save(&lease);
     std::fs::write(tree.join("local"), "unpublished review fix").unwrap();
     git_ok(&tree, &["add", "local"]);
