@@ -3122,16 +3122,6 @@ pub(crate) fn agent_new_with_config_wake(
     refuse_uncontained_child_of_contained_parent(&config)?;
     guard_interactive_claude_dontask(config.agent_type, &config.default_args)?;
 
-    // STORY-495: surface the one-time faithful-launcher pointer when a Claude
-    // launch lands on the native posture (no `--permission-mode` in the argv).
-    // A forced/explicit bypass (incl. `--bg`) injects the flag, so this no-ops
-    // for those paths.
-    if config.agent_type == "claude"
-        && !config.default_args.iter().any(|a| a == "--permission-mode")
-    {
-        maybe_show_faithful_launcher_notice();
-    }
-
     // BUG-408: `--show-context` is a PURE PREVIEW. Render the launch-context
     // snapshot from a dry plan and return without launching — no `session_start`,
     // so no worktree, no lease, no spec status flip. Previously this fell through
@@ -3172,6 +3162,18 @@ pub(crate) fn agent_new_with_config_wake(
             true,
             context.enabled,
         );
+    }
+
+    // Previews return before the notice writes its first-use marker.
+    // trace:STORY-1486 | ai:codex
+    // STORY-495: surface the one-time faithful-launcher pointer when a Claude
+    // launch lands on the native posture (no `--permission-mode` in the argv).
+    // A forced/explicit bypass (incl. `--bg`) injects the flag, so this no-ops
+    // for those paths.
+    if config.agent_type == "claude"
+        && !config.default_args.iter().any(|a| a == "--permission-mode")
+    {
+        maybe_show_faithful_launcher_notice();
     }
 
     // Check ownership before any bypass/resume prompt; previews above remain pure.
@@ -3468,16 +3470,6 @@ pub(crate) fn agent_new_bg_dispatch(
     // trace:BUG-2169 | ai:claude
     refuse_bg_under_os_wrap(&config, &project_root)?;
 
-    // STORY-495: surface the one-time faithful-launcher pointer when a Claude
-    // launch lands on the native posture (no `--permission-mode` in the argv).
-    // A forced/explicit bypass (incl. `--bg`) injects the flag, so this no-ops
-    // for those paths.
-    if config.agent_type == "claude"
-        && !config.default_args.iter().any(|a| a == "--permission-mode")
-    {
-        maybe_show_faithful_launcher_notice();
-    }
-
     // BUG-408: `--show-context` is a PURE PREVIEW. Render the launch-context
     // snapshot from a dry plan and return without launching — no `session_start`,
     // so no worktree, no lease, no spec status flip. Previously this fell through
@@ -3516,6 +3508,18 @@ pub(crate) fn agent_new_bg_dispatch(
             false,
             context.enabled,
         );
+    }
+
+    // Previews return before the notice writes its first-use marker.
+    // trace:STORY-1486 | ai:codex
+    // STORY-495: surface the one-time faithful-launcher pointer when a Claude
+    // launch lands on the native posture (no `--permission-mode` in the argv).
+    // A forced/explicit bypass (incl. `--bg`) injects the flag, so this no-ops
+    // for those paths.
+    if config.agent_type == "claude"
+        && !config.default_args.iter().any(|a| a == "--permission-mode")
+    {
+        maybe_show_faithful_launcher_notice();
     }
 
     // Check ownership before any bypass/resume prompt; previews above remain pure.

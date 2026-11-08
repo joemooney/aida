@@ -1388,10 +1388,13 @@ aida show <SPEC-ID>
             "Portable agent launch root and Git policy declaration".to_string(),
             false,
         );
-        if artifact.exists {
-            overwrites.push(path);
-        } else {
-            new_files.push(path);
+        match &artifact.file_status {
+            FileStatus::New => new_files.push(path),
+            FileStatus::Modified { .. } | FileStatus::NoHeader => {
+                modified_files.push(artifact.path.clone())
+            }
+            FileStatus::OlderVersion { .. } => upgradeable_files.push(artifact.path.clone()),
+            FileStatus::Unmodified => overwrites.push(artifact.path.clone()),
         }
         new_dirs.insert(PathBuf::from(".aida"));
         artifacts.push(artifact);
