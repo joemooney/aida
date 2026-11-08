@@ -3,12 +3,12 @@ spec_id: TASK-b6b1278890774ef993d2ebc327862470-934
 agreed_id: TASK-3366
 title: 'STORY-2537 S4: ProcIdentity for the agent registry and mail-wake'
 description: 'Slice per the signed sketch docs/plans/2026-11-05-story-2537-proc-identity.md (lines ~189-224, ordering at ~305; advisor signoff 2026-11-06T03:48). Migrate this owner family to aida-core/src/proc_identity.rs (landed in #3483) and remove its legacy pid-only liveness checks. Keep the task_1750_liveness_primitive_guard_tests.rs ratchet non-growing and shrink it by the migrated sites. Test: the family''s namespace, pid-reuse and subreaper cases on the proc_identity matrix. LIGHT gate.'
-status: NeedsAttention
+status: Approved
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-07T10:45:58.443413275Z
-modified_at: 2026-11-08T03:09:34.444271469Z
+modified_at: 2026-11-08T04:17:09.336044282Z
 req_type: Task
 relationships:
 - rel_type: Child
@@ -174,6 +174,13 @@ comments:
   created_at: 2026-11-08T02:41:03.887372621Z
   modified_at: 2026-11-08T02:41:03.887372621Z
   session_id: 01a1b8f7a28f
+- id: 01a1b95f-dad8-7a00-ae71-292d407580f4
+  author: joe
+  content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: Round 3 fixes round-2 findings 1-5 in source (legacy rows now prove death, ancestor recapture, gate leaves, vendor ledger re-key, age cutoff dropped to match main), but PR CI run 42439611550 at b2b72f91 is red on lib-0 and lib-1 (Build aggregate fails) while main is green at merge base dc41ee8; LIGHT gate still unmet; AGENTS.md/OVERVIEW.md per-change paragraphs re-added.. No triage reason was given.'
+  created_at: 2026-11-08T04:17:09.336042728Z
+  modified_at: 2026-11-08T04:17:09.336042728Z
+  session_id: 01a1b8be-8170-7fb2-89ab-ecb4c6eee98c
+  harness_version: 2.1.319 (Claude Code)
 history:
 - id: 01a1b59d-9fb4-77d2-8894-d17d89775ce4
   author: joe
@@ -261,6 +268,15 @@ history:
   - field_name: status
     old_value: InProgress
     new_value: NeedsAttention
+- id: 01a1b95f-dad8-7a00-ae71-291df417d812
+  author: joe
+  timestamp: 2026-11-08T04:17:09.336031983Z
+  session_id: 01a1b8be-8170-7fb2-89ab-ecb4c6eee98c
+  harness_version: 2.1.319 (Claude Code)
+  changes:
+  - field_name: status
+    old_value: NeedsAttention
+    new_value: Approved
 filed_at:
   code_sha: 4803b66ade90fa4f6ccbcfb20f3af84d4aaf7886
   branch: main
@@ -270,11 +286,3 @@ filed_at:
   vendor: claude
   session: 01a1b441-8158-7162-ad75-f7915b45ee33
   harness_version: 2.1.319 (Claude Code)
-failure_reason:
-  phase: reviewer
-  phase_index: 3
-  kind: verdict:request-changes
-  detail: Round 3 fixes round-2 findings 1-5 in source (legacy rows now prove death, ancestor recapture, gate leaves, vendor ledger re-key, age cutoff dropped to match main), but PR CI run 42439611550 at b2b72f91 is red on lib-0 and lib-1 (Build aggregate fails) while main is green at merge base dc41ee8; LIGHT gate still unmet; AGENTS.md/OVERVIEW.md per-change paragraphs re-added.
-  recovery_hint: address the review findings, move TASK-3366 back to In Progress, and clear the PR hold only after approval
-  shelved_by: reviewer
-  shelved_at: 2026-11-08T03:09:34.444271469Z
