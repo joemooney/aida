@@ -15,6 +15,7 @@ import sys
 import tempfile
 import time
 from datetime import datetime, timezone
+from concurrent.futures import ThreadPoolExecutor
 
 DEADLINE = time.monotonic() + 14
 
@@ -80,7 +81,13 @@ def main():
     if not isinstance(cwd, str) or not os.path.isabs(cwd):
         return
     os.chdir(cwd)
-    seat = os.environ.get('AIDA_ROTATION_SEAT') or os.environ.get('AIDA_SESSION_ROLE')
+    # Match resolve_handoff_seat_from: rotation seats are literal; role aliases
+    # are canonicalized by the CLI when no explicit --seat is supplied.
+    rotation_seat = os.environ.get('AIDA_ROTATION_SEAT', '').strip()
+    role = os.environ.get('AIDA_SESSION_ROLE', '').strip()
+    if role.lower() in ('dialog', 'human', 'guest', 'requester'):
+        role = 'advisor' if role.lower() == 'dialog' else role.lower()
+    seat = rotation_seat or role
     if not seat or not re.fullmatch(r'[A-Za-z0-9_-]{1,64}', seat):
         return
     sid = payload.get('session_id')
@@ -97,22 +104,31 @@ def main():
                             'additionalContext': 'Recovery snapshot; may predate the latest compaction if its write failed. Revalidate before acting.\n' + text}}))
         return
     branch = run(['git', 'branch', '--show-current'], 256)
+    review_branch = re.fullmatch(r'pr-([1-9][0-9]*)', branch, re.I)
     spec = os.environ.get('AIDA_SESSION_SCOPE', '')
     spec_known = bool(spec)
     # Branch fallback is a pointer only; never grants completion/ownership credit.
     if not spec:
-        match = re.search(r'(?<![A-Za-z0-9])(?:STORY|TASK|BUG|SPIKE)-[A-Za-z0-9]+(?:-[0-9]+)?', branch, re.I)
-        spec = match.group(0).upper() if match else 'unknown'
+        match = re.search(r'(?<![A-Za-z0-9])(?:STORY|TASK|BUG|SPIKE)-(?:[a-f0-9]{32}-[0-9]+|[0-9]+(?:-[0-9]+)?)(?![A-Za-z0-9])', branch, re.I)
+        spec = ('PR-' + review_branch.group(1) if review_branch else
+                match.group(0).upper() if match else 'unknown')
     spec = spec[:160]
-    verdict = run(['aida', 'review', 'verdict', spec]) if spec != 'unknown' else 'unknown (no spec pointer)'
-    # Branch-scoped GitHub read: never infer absence from a fleet-wide page.
-    # Other forges remain explicitly unknown; compaction is optional.
-    # A failed lookup must not turn PR-keyed review findings into an empty set.
-    prs = run(['gh', 'pr', 'list', '--head', branch, '--state', 'open',
-               '--limit', '100', '--json', 'number,headRefName'], 65536, timeout=3)
+    # Independent bounded probes overlap so fleet-load latency does not consume
+    # the persistence reserve. Each child still obeys the shared hook deadline.
+    with ThreadPoolExecutor(max_workers=3) as probes:
+        verdict_probe = (probes.submit(run, ['aida', 'review', 'verdict', spec],
+                                      timeout=4.5) if spec != 'unknown' else None)
+        pr_probe = probes.submit(run, ['gh', 'pr', 'list', '--head', branch,
+                                      '--state', 'open', '--limit', '100',
+                                      '--json', 'number,headRefName'], 65536, timeout=3)
+        findings_probe = probes.submit(run, ['aida', 'findings', 'list', '--json'],
+                                       65536, timeout=10)
+        verdict = verdict_probe.result() if verdict_probe else 'unknown (no spec pointer)'
+        prs = pr_probe.result()
+        rows = findings_probe.result()
+    # Branch-scoped GitHub evidence; failed lookups never imply absence.
     origins = {spec.upper()}
     # Reviewer worktrees use pr-N rather than the forge head branch.
-    review_branch = re.fullmatch(r'pr-([1-9][0-9]*)', branch, re.I)
     if review_branch:
         origins.add('PR-' + review_branch.group(1))
     pr_known = False
@@ -127,15 +143,15 @@ def main():
                or type(entry.get('number')) is not int or entry['number'] <= 0
                for entry in entries):
             raise ValueError('invalid PR row')
+        matched_pr = False
         for entry in entries:
             if entry['headRefName'] == branch:
                 origins.add('PR-' + str(entry['number']))
-        pr_known = bool(origins - {spec.upper()}) and len(entries) < 100
+                matched_pr = True
+        pr_known = matched_pr and len(entries) < 100
     except (ValueError, KeyError, TypeError):
         pass
     pr_known = pr_known or bool(review_branch)
-    # Real stores need ~5 seconds; leave the remaining budget for persistence.
-    rows = run(['aida', 'findings', 'list', '--json'], 65536, timeout=6.5)
     try:
         evidence = json.loads(rows)
         if not isinstance(evidence, dict) or not isinstance(evidence.get('findings'), list):
@@ -161,11 +177,14 @@ def main():
     if os.environ.get('AIDA_ROTATION_HANDOFF'):
         prior = run(handoff + ['--show', '--body-only', '--rotated'], 2048)
     captured = datetime.now(timezone.utc).isoformat()
+    next_read = (f'inspect `aida review verdict {spec}`' if spec.startswith('PR-') else
+                 f'inspect `aida show {spec}`' if spec != 'unknown' else
+                 'identify the active spec from the session and branch')
     body = (f'# PreCompact recovery snapshot (Claude; informational, revalidate before action)\n'
             f'Captured: {captured}\nSpec pointer: {spec}\nBranch: {branch}\n'
             f'Last verdict:\n{verdict}\nOpen findings (spec / branch PR origin):\n{findings}\n'
             f'Prior handoff / next-action context:\n{prior}\n'
-            f'Next step: inspect `aida show {spec}` and the working diff; reconcile the '
+            f'Next step: {next_read} and the working diff; reconcile the '
             'verdict and findings, then continue the active spec. Unknown evidence stays unknown.\n')
     # Safely below session handoff’s 16 KiB cap even with multibyte diagnostics.
     body = body.encode()[:10000].decode('utf-8', errors='ignore')

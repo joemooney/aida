@@ -568,20 +568,21 @@ mod tests {
         assert_eq!(entries[0]["hooks"][0]["timeout"], 5);
     }
 
-    /// Disabling the role-context flag drops the SessionStart block
-    /// entirely (no empty array left behind). trace:TASK-20 | ai:claude
+    /// Disabling role context retains only compaction recovery.
+    /// trace:TASK-20 STORY-2662 | ai:codex
     #[test]
-    fn session_start_omitted_when_role_context_hook_disabled() {
+    fn session_start_retains_compact_recovery_when_role_context_hook_disabled() {
         let config = ScaffoldConfig {
             include_role_context_hook: false,
             ..Default::default()
         };
         let json = build(config);
         let v = parse_json(&json);
-        assert!(
-            v["hooks"]["SessionStart"].is_null(),
-            "SessionStart should be absent when the flag is off"
-        );
+        let entries = v["hooks"]["SessionStart"].as_array().unwrap();
+        assert_eq!(entries.len(), 1);
+        let command = entries[0]["hooks"][0]["command"].as_str().unwrap();
+        assert!(command.ends_with("/aida-precompact-handoff.sh"));
+        assert!(!json.contains("aida-role-context.sh"));
     }
 
     /// SubagentStart/Stop hooks capture harness worktree leases.

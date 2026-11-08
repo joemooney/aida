@@ -15,10 +15,10 @@ HOOK = ROOT / 'aida-core/templates/hooks/aida-precompact-handoff.sh'
 
 
 class PrecompactHandoff(unittest.TestCase):
-    def fixture(self, event='PreCompact', extra=None, fail=False, large=False, slow=False, missing=False, rotated=False, slow_findings=False, pr_fail=False, branch="story-2662", scope="STORY-2662", slow_pr=False, saturated=False, empty_pr=False, findings_response=None, pr_response=None):
+    def fixture(self, event='PreCompact', extra=None, fail=False, large=False, slow=False, missing=False, rotated=False, slow_findings=False, pr_fail=False, branch="story-2662", scope="STORY-2662", slow_pr=False, saturated=False, empty_pr=False, findings_response=None, pr_response=None, role="implementer", rotation_seat="", fleet_load=False):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
-            for flag, enabled in [('slow-findings', slow_findings), ('pr-fail', pr_fail), ('slow-pr', slow_pr), ('saturated', saturated), ('empty-pr', empty_pr)]:
+            for flag, enabled in [('slow-findings', slow_findings), ('pr-fail', pr_fail), ('slow-pr', slow_pr), ('saturated', saturated), ('empty-pr', empty_pr), ('fleet-load', fleet_load)]:
                 if enabled:
                     (root/flag).touch()
             fake = root / 'aida'
@@ -38,6 +38,7 @@ elif '--show' in args:
     else: print('standing order '*2000 + 'Next step: finish parser regression')
 elif 'verdict' in args:
     if os.environ['SLOW'] == '1': time.sleep(20)
+    if (p/'fleet-load').exists(): time.sleep(3.5)
     if (p/'slow-pr').exists(): time.sleep(1.66)
     print('Rework: validate parser')
 elif 'pr' in args:
@@ -49,6 +50,7 @@ elif 'pr' in args:
     print(__import__('json').dumps([{'headRefName': os.environ['FIXTURE_BRANCH'], 'number': 3655}] * (0 if (p/'empty-pr').exists() else 100 if (p/'saturated').exists() else 1)))
 elif 'findings' in args:
     if (p/'slow-findings').exists(): time.sleep(5.4)
+    if (p/'fleet-load').exists(): time.sleep(8.8)
     if 'FINDINGS_RESPONSE' in os.environ:
         print(os.environ['FINDINGS_RESPONSE'])
         sys.exit(0)
@@ -60,8 +62,8 @@ elif 'findings' in args:
             git.write_text('#!/bin/sh\nprintf "%s\\n" "$FIXTURE_BRANCH"\n')
             git.chmod(0o755)
             env = dict(PATH=directory+':'+os.defpath,
-                       FIXTURE=directory, AIDA_SESSION_ROLE='implementer',
-                       AIDA_ROTATION_SEAT='', AIDA_SESSION_SCOPE=scope, FIXTURE_BRANCH=branch,
+                       FIXTURE=directory, AIDA_SESSION_ROLE=role,
+                       AIDA_ROTATION_SEAT=rotation_seat, AIDA_SESSION_SCOPE=scope, FIXTURE_BRANCH=branch,
                        FAIL=str(int(fail)), LARGE=str(int(large)), SLOW=str(int(slow)),
                        MISSING=str(int(missing)), AIDA_ROTATION_HANDOFF='matched.md' if rotated else '')
             if findings_response is not None:
@@ -128,6 +130,35 @@ elif 'findings' in args:
         self.assertNotIn('Review findings unknown', packet)
         self.assertIn("'--head', 'story-2662'", calls)
 
+    def test_fleet_load_latencies_retain_verdict_and_findings(self):
+        import time
+        started = time.monotonic()
+        result, packet, _ = self.fixture(fleet_load=True)
+        self.assertEqual(result.returncode, 0)
+        self.assertIn('Rework: validate parser', packet)
+        self.assertIn('review regression', packet)
+        self.assertLess(time.monotonic() - started, 14)
+
+    def test_role_alias_matches_ordinary_handoff_lookup(self):
+        for event, extra in [('PreCompact', {}), ('SessionStart', {'source': 'compact'})]:
+            _, _, calls = self.fixture(event, extra, role=' DiALog ')
+            self.assertIn("'--seat', 'advisor'", calls)
+        _, _, calls = self.fixture(role='dialog', rotation_seat='custom')
+        self.assertIn("'--seat', 'custom'", calls)
+
+    def test_unscoped_reviewer_uses_pr_pointer_for_verdict_and_next_step(self):
+        _, packet, calls = self.fixture(branch='pr-3655', scope='', empty_pr=True)
+        self.assertIn('Spec pointer: PR-3655', packet)
+        self.assertIn("['review', 'verdict', 'PR-3655']", calls)
+        self.assertIn('aida review verdict PR-3655', packet)
+        self.assertNotIn('aida show unknown', packet)
+        self.assertIn('review regression', packet)
+
+    def test_pr_scope_is_known_even_when_it_matches_spec_origin(self):
+        _, packet, _ = self.fixture(scope='PR-3655')
+        self.assertIn('review regression', packet)
+        self.assertNotIn('Review findings unknown', packet)
+
     def test_missing_optional_executable_stays_unknown(self):
         run = runpy.run_path(str(HOOK), run_name='fixture')['run']
         self.assertEqual(run(['/no/such/aida-hook-command']), 'unknown (command unavailable)')
@@ -182,9 +213,17 @@ elif 'findings' in args:
         self.assertIn('may predate the latest compaction', context)
 
     def test_branch_fallback_does_not_match_inside_words(self):
-        _, packet, _ = self.fixture(branch='debug-parser', scope='')
-        self.assertIn('Spec pointer: unknown', packet)
-        self.assertNotIn('Spec pointer: BUG-PARSER', packet)
+        for branch in ['debug-parser', 'bug-parser-fix', 'task-alpha', 'bug-123abc']:
+            with self.subTest(branch=branch):
+                _, packet, _ = self.fixture(branch=branch, scope='')
+                self.assertIn('Spec pointer: unknown', packet)
+                self.assertNotIn('aida show unknown', packet)
+
+    def test_numeric_and_canonical_branch_pointers(self):
+        for branch, pointer in [('bug-123-fix', 'BUG-123'), ('task-1-042-fix', 'TASK-1-042'),
+                                ('story-b6b1278890774ef993d2ebc327862470-585', 'STORY-B6B1278890774EF993D2EBC327862470-585')]:
+            _, packet, _ = self.fixture(branch=branch, scope='')
+            self.assertIn('Spec pointer: ' + pointer, packet)
 
     def test_large_output_is_bounded(self):
         result, packet, _ = self.fixture(large=True)

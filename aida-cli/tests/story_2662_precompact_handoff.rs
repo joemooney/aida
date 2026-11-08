@@ -209,6 +209,39 @@ fn precompact_handoff_cli_round_trip() {
     assert_eq!(log.lines().count(), 1);
     let record: serde_json::Value = serde_json::from_str(log.trim()).unwrap();
     assert_eq!(record["event"], "compact-snapshot");
+    // Optional corrupt or unreadable recovery must not hide the real handoff.
+    let deliberate = repo.join("deliberate.md");
+    std::fs::write(&deliberate, "REAL HANDOFF").unwrap();
+    let written = aida(&repo, &home)
+        .args(["session", "handoff", "--seat", "implementer", "--write"])
+        .arg(&deliberate)
+        .output()
+        .unwrap();
+    assert!(written.status.success(), "{}", show(&written));
+    let latest = dirs[0].join("latest.md");
+    let saved = std::fs::read(&latest).unwrap();
+    for unreadable in [false, true] {
+        std::fs::remove_file(&latest).unwrap();
+        if unreadable {
+            // A directory reliably yields a read error even for privileged CI users.
+            std::fs::create_dir(&latest).unwrap();
+        } else {
+            std::fs::write(&latest, [0xff, 0xfe]).unwrap();
+        }
+        let shown = aida(&repo, &home)
+            .env("AIDA_SESSION_ROLE", "implementer")
+            .args(["session", "handoff", "--show"])
+            .output()
+            .unwrap();
+        assert!(shown.status.success(), "{}", show(&shown));
+        assert!(String::from_utf8_lossy(&shown.stdout).contains("REAL HANDOFF"));
+        assert!(String::from_utf8_lossy(&shown.stderr).contains("recovery snapshot unavailable"));
+        if unreadable {
+            std::fs::remove_dir(&latest).unwrap();
+        }
+    }
+    std::fs::write(&latest, saved).unwrap();
+    std::fs::remove_dir_all(repo.join(".aida/handoff/implementer")).unwrap();
     // Subdirectories resolve to the same worktree slot on relaunch.
     let subdir = repo.join("nested");
     std::fs::create_dir(&subdir).unwrap();

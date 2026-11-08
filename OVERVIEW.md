@@ -406,36 +406,15 @@ create/comment operations to recover confirmed writes without replay. See [the w
 
 ### Pre-compaction recovery
 
-Claude seats register a best-effort `PreCompact` hook that writes through
-`aida session handoff --write -`. The packet retains the spec pointer, branch,
-last recorded verdict, findings with the spec or branch PR as origin, matched rotation
-context and a recovery step. The CLI uses a reusable `compact-<hash>` seat derived
-from the Git worktree root and role within that worktree’s `.aida/handoff`. This
-keeps writes inside the contained lane boundary; deliberate rotation handoffs remain
-in the primary checkout. Each slot retains one packet and one diagnostic log row
-across native session generations and disappears when its worktree is removed. Read it with
-`aida session handoff --snapshot --show --body-only`; ordinary
-`aida session handoff --show` also includes the current worktree/role snapshot,
-so a relaunch can discover it. The paired `SessionStart` handler injects it only
-for `source=compact`, labelled potentially stale if the latest write failed;
-the packet carries its capture timestamp. Snapshot log events are excluded from
-rotation decisions; matched rotation notes remain separate. This is an
-informational snapshot: revalidate evidence before acting. It grants no review,
-completion or publication authority.
-
-The hook requires Python 3, an absolute payload cwd and a rotation seat or session
-role plus native session ID. It reads at most 64 KiB of hook JSON, caps the packet at 10,000 UTF-8 bytes,
-caps each command's output and time, and budgets 14 seconds overall (15 seconds
-in Claude's wiring). Missing tools, refused writes and unavailable evidence do
-not block compaction. GitHub PR discovery uses a branch-scoped read-only `gh pr list --head` query
-with a three-second deadline and saturation detection. Empty results stay unknown;
-review branches named `pr-N` retain their explicit PR origin. Unavailable PR evidence
-(including other forges) stays explicitly unknown. Unresolved branch-derived spec
-pointers also leave spec findings explicitly unknown. Findings receive
-a 6.5-second probe budget, with time reserved for persistence. Transcript files
-and custom compaction instructions are never read. Existing manual handoffs remain available without hooks. Codex has
-no registered PreCompact capability pending its trusted-hook test; other vendors
-retain their existing handoff behavior.
+Claude's optional `PreCompact` hook writes a bounded recovery packet through
+`aida session handoff`, retaining pointers to work, verdicts, findings and the
+next step. One reusable slot per worktree and role stays inside the lane's
+write boundary and disappears with the worktree. Ordinary handoff reads expose
+the snapshot to relaunches; compact SessionStart injects it as potentially stale
+context. Deliberate rotation handoffs remain separate in the primary checkout.
+Unavailable evidence stays unknown and snapshot failures do not block work.
+Snapshots grant no completion, review or publication authority. Codex remains
+disabled pending its trusted-hook test.
 <!-- trace:STORY-2662 | ai:codex -->
 
 ### Agent launch migration

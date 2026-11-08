@@ -1015,7 +1015,6 @@ pub(crate) fn session_handoff_seat(
         // trace:STORY-B6B1278890774EF993D2EBC327862470-101 | ai:claude
         let mut writer = seat_rotation::HandoffWriter::from_env(final_);
         if snapshot {
-            seat_rotation::prune_compact_snapshots(&project_root);
             writer.snapshot_owner = Some((cwd.clone(), role_seat.clone()));
         }
         let written = seat_rotation::write_handoff_kind(
@@ -1070,7 +1069,13 @@ pub(crate) fn session_handoff_seat(
     // Explicit body-only and rotated reads retain their exact-note semantics.
     // trace:STORY-2662 | ai:codex
     let handoff = if !snapshot && !rotated && !body_only {
-        let recovery = seat_rotation::read_latest_handoff(&cwd, &snapshot_seat)?;
+        let recovery = match seat_rotation::read_latest_handoff(&cwd, &snapshot_seat) {
+            Ok(recovery) => recovery,
+            Err(error) => {
+                eprintln!("Warning: recovery snapshot unavailable: {error:#}");
+                None
+            }
+        };
         match recovery {
             Some(text) => Some(format!(
                 "{}\nRecovery snapshot (may be stale; revalidate):\n{text}",
