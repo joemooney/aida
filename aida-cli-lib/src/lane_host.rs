@@ -664,6 +664,8 @@ mod tests {
             let stdout = String::from_utf8_lossy(&output.stdout);
             assert!(stdout.contains("FAIL agent-containment"), "{stdout}");
             assert!(stdout.contains("FAIL os-wrap"), "{stdout}");
+            assert!(stdout.contains("FAIL bubblewrap"), "{stdout}");
+            assert!(stdout.contains("FAIL codex-config"), "{stdout}");
             assert!(
                 stdout.contains("Fix: aida doctor --lane-host --fix"),
                 "{stdout}"
@@ -672,7 +674,7 @@ mod tests {
         }
         let root = tempfile::tempdir().unwrap();
         let home = tempfile::tempdir().unwrap();
-        let _ambient = crate::test_env::AmbientGuard::hermetic_and(
+        let mut ambient = crate::test_env::AmbientGuard::hermetic_and(
             root.path(),
             None,
             &[
@@ -711,29 +713,113 @@ mod tests {
             out.sort();
             out
         }
-        let before = snapshot(root.path());
-        for route in [
-            vec!["TASK-2642", "--no-human"],
-            vec!["--drain", "--no-human"],
+        // Commit only fixture policy so the Codex case passes its independent
+        // trusted-default-branch posture check. No real vendor is launched.
+        std::fs::create_dir(root.path().join(".aida")).unwrap();
+        std::fs::write(
+            root.path().join(".aida/config.toml"),
+            "[contained.vendors]\ncodex = 'native'\n",
+        )
+        .unwrap();
+        for args in [
+            vec!["add", ".aida/config.toml"],
+            vec![
+                "-c",
+                "user.name=fixture",
+                "-c",
+                "user.email=fixture@example.com",
+                "commit",
+                "-qm",
+                "fixture policy",
+            ],
+            vec!["update-ref", "refs/remotes/origin/main", "HEAD"],
+            vec![
+                "symbolic-ref",
+                "refs/remotes/origin/HEAD",
+                "refs/remotes/origin/main",
+            ],
         ] {
-            let mut argv = vec!["aida", "queue", "work"];
-            argv.extend(route);
-            let cli = crate::command_registry::try_parse_from(argv).unwrap();
-            let args = cli.command.registered::<crate::queue_cmd::QueueArgs>();
-            let err = crate::queue_cmd::handle_queue_command(
-                &args.inner,
-                &storage,
-                &root.path().join(".aida-store"),
-            )
-            .unwrap_err();
+            let output = crate::test_git::git_command()
+                .current_dir(root.path())
+                .args(args)
+                .output()
+                .unwrap();
             assert!(
-                err.to_string()
-                    .contains("lane host containment checks failed"),
-                "{err:#}"
+                output.status.success(),
+                "{}",
+                String::from_utf8_lossy(&output.stderr)
             );
-            assert_eq!(before, snapshot(root.path()));
-            assert!(!root.path().join(".aida").exists());
-            assert!(!root.path().join(".aida-store").exists());
+        }
+        let bin = home.path().join("bin");
+        std::fs::create_dir(&bin).unwrap();
+        let bwrap = bin.join("bwrap");
+        std::fs::write(&bwrap, "#!/bin/sh\nexit 0\n").unwrap();
+        use std::os::unix::fs::PermissionsExt;
+        std::fs::set_permissions(&bwrap, std::fs::Permissions::from_mode(0o700)).unwrap();
+        std::fs::create_dir(home.path().join(".aida")).unwrap();
+        let env = Environment::capture();
+        let git = std::env::split_paths(env.get("PATH").unwrap())
+            .map(|dir| dir.join("git"))
+            .find(|path| path.is_file())
+            .expect("fixture requires git");
+        std::os::unix::fs::symlink(git, bin.join("git")).unwrap();
+        ambient.set_key("PATH", &bin);
+        ambient.set_key("CODEX_HOME", home.path().join(".codex"));
+        let before = snapshot(root.path());
+        // Exercise each failure alone, through the actual fresh and drain
+        // dispatchers. Positive controls ensure another failed row cannot
+        // accidentally make the refusal test pass. trace:STORY-2642 | ai:codex
+        for (vendor, contained, wrap, have_bwrap, failed_id) in [
+            ("claude", false, "1", true, "agent-containment"),
+            ("claude", true, "0", true, "os-wrap"),
+            ("claude", true, "1", false, "bubblewrap"),
+            ("codex", true, "1", true, "codex-config"),
+        ] {
+            ambient.set_key("AIDA_HEADLESS_VENDOR", vendor);
+            ambient.set_key("AIDA_OS_WRAP", wrap);
+            std::fs::write(
+                home.path().join(".aida/agents.toml"),
+                format!("[agents]\ncontained = {contained}\n"),
+            )
+            .unwrap();
+            let hidden = bin.join("disabled-bwrap");
+            if !have_bwrap {
+                std::fs::rename(&bwrap, &hidden).unwrap();
+            }
+            let checks = containment_checks(root.path(), vendor);
+            let failures: Vec<_> = checks
+                .iter()
+                .filter(|c| c.containment && !c.pass)
+                .map(|c| c.id.as_str())
+                .collect();
+            assert_eq!(failures, vec![failed_id], "{vendor}: {checks:?}");
+            let home_before = snapshot(home.path());
+            for route in [
+                vec!["TASK-2642", "--no-human"],
+                vec!["--drain", "--no-human"],
+            ] {
+                let mut argv = vec!["aida", "queue", "work"];
+                argv.extend(route);
+                let cli = crate::command_registry::try_parse_from(argv).unwrap();
+                let args = cli.command.registered::<crate::queue_cmd::QueueArgs>();
+                let err = crate::queue_cmd::handle_queue_command(
+                    &args.inner,
+                    &storage,
+                    &root.path().join(".aida-store"),
+                )
+                .unwrap_err();
+                assert!(
+                    err.to_string()
+                        .contains("lane host containment checks failed"),
+                    "{err:#}"
+                );
+                assert_eq!(before, snapshot(root.path()));
+                assert_eq!(home_before, snapshot(home.path()));
+                assert!(!root.path().join(".aida-store").exists());
+            }
+            if !have_bwrap {
+                std::fs::rename(&hidden, &bwrap).unwrap();
+            }
         }
         for preview in ["--dry-run", "--no-launch", "--list-sessions"] {
             let cli = crate::command_registry::try_parse_from([
