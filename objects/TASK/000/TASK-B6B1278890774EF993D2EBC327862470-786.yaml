@@ -8,7 +8,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-04T17:54:51.353376Z
-modified_at: 2026-11-08T17:06:55.935074320Z
+modified_at: 2026-11-08T17:07:04.223769722Z
 req_type: Task
 tags:
 - area:containment
@@ -762,6 +762,21 @@ comments:
   content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: Round 10 at b108a2c (0 commits behind main; merge-base diff; Refs-only slice under the 2026-11-07 16:40 ruling). No code defect found by inspection across all 19 files. Not approved only because no CI result exists at this head: run 42501596251 has all 7 jobs queued behind about 8 older runs. Nearest evidence: run 42491060521 at 5695ca4 succeeded; the delta since is a5aed92 (one test extension, one doc line) plus a merge of main. Round-9 findings 2 and 3 are fixed. All verified-by lines come from reading test source, not from a run at this head. AC: R1 shared-boundary launch: verified by task_3048_diagnostic_prepare_uses_common_wrapper_and_keeps_production_closed. R1 bypass only with applied receipt: verified by task_3048_outer_only_candidate_requires_live_accepted_receipt. R1 no --sandbox, options before final -p: verified by task_3048_runtime_argv_accepts_only_the_site_prompt. R1 private runtime, read-only token and settings: verified by task_3048_live_private_runtime_preserves_read_only_credential and task_3048_private_runtime_pins_settings_and_credential_leaves. R1 no ~/.gemini inheritance: verified by the diagnostic prepare mask assertions. R1 MCP/browser/URL off: configuration verified by task_3048_runtime_policy_fails_closed_before_launch and the .agents mount assertions; AGY enforcement unverified, advisor live run. R2 hosts as data with trusted approval: verified by task_3048_diagnostic_hosts_do_not_open_production_admission. R2 unknown host named refusal: verified by task_3048_unlisted_host_is_named_before_dns. R2 host-only egress evidence: verified by task_3048_host_egress_bitmap_requires_successful_host_connection and test_host_egress_never_trusts_vendor_stderr. R2 measured refresh list: unverified, oauth2.googleapis.com is a static candidate, advisor live run. R3 native no credit, AIDA-only flip: verified by test_only_complete_aida_evidence_can_flip_whole_lane and test_late_refusal_withdraws_aggregate_credit_with_valid_receipt. R4 production refusal: verified by agy_adapter_keeps_unmeasured_policy_closed. Trusted origin/main posture only, fail closed: verified by the absent and working-tree-only refusal loop in the diagnostic prepare test. Retained .agents siblings read-only, symlink refused: verified by the a5aed92 extension of the diagnostic prepare test. No blanket bypass: not-applicable-because superseded by the 2026-11-07 16:40 outer-only ruling. Conformance harness passes for agy: not-applicable-because Refs-only slice; the advisor live run is a separate step.. No triage reason was given.'
   created_at: 2026-11-08T17:06:55.935071516Z
   modified_at: 2026-11-08T17:06:55.935071516Z
+  session_id: 01a1b9af-8230-75d2-82f8-667491cc010a
+  harness_version: 2.1.319 (Claude Code)
+- id: 01a1bc20-ba7d-7862-8bef-fbce7b0c701b
+  author: joe
+  content: |-
+    REVIEW FINDINGS TO ADDRESS (PR #3641):
+    Verdict: CHANGES REQUESTED
+    Reviewed commit: b108a2c06a87
+    Recorded: 2026-11-08T16:55:49.328849691+00:00
+    Findings:
+    1. BLOCKING, wait state, no code defect identified and no implementer rework needed: no CI test result exists at b108a2c. Run 42501596251 has lib-0, lib-1, cli-0, cli-1, rest, gates and contracts all queued. Needs a green run at this head, then a re-review or re-record at the same SHA. Do not push a commit to answer this finding; a new head restarts the CI wait. If the run goes red, fix those shards. merge-hold-gate failure is the expected supervised-spec hold and still needs its clearance.
+    2. Non-blocking, advisor question, aida-cli-lib/src/launch/contained.rs:516-521: the 2026-11-07 16:40 ruling says no native permissions settings file, while the wrapper passes --settings with permissions.deny for mcp, read_url and execute_url. It carries no allow rules or sandbox profile and is the only mechanism visible for the ruling tools-off requirement, so I read it as compliant; I found no advisor comment confirming that. Advisor should confirm at the live run, which must also show AGY honours these denies alongside --dangerously-skip-permissions.
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
+  created_at: 2026-11-08T17:07:03.933332008Z
+  modified_at: 2026-11-08T17:07:03.933332008Z
   session_id: 01a1b9af-8230-75d2-82f8-667491cc010a
   harness_version: 2.1.319 (Claude Code)
 history:
