@@ -104,13 +104,6 @@
   added_at: 2026-11-07T20:29:02.001481742Z
   for_role: human
 - user_id: role:human
-  requirement_id: 01a1aa02-ff22-7df1-a307-23aba18f6c6c
-  position: 25000
-  added_by: aida:defer-resurface
-  note: 'operator hold retained; spec:STORY-2492=completed: met (STORY-2492 is completed)'
-  added_at: 2026-11-07T20:29:02.001481742Z
-  for_role: human
-- user_id: role:human
   requirement_id: 019f065b-6f74-7682-859c-b8dfe86e9d1e
   position: 26000
   added_by: aida:defer-resurface
