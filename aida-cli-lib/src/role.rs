@@ -900,7 +900,7 @@ mod role_repair_tests;
 mod role_identity_tests;
 
 // trace:STORY-1133 | ai:codex
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub(crate) enum RoleInstanceKind {
     Driver,
     Companion,

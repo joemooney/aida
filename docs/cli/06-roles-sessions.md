@@ -73,7 +73,7 @@ Around that core sit the **launchers** and the **comms**. `aida agent new` and `
 | `aida role add` | Mints a direct grant for the new role (interactive TTY, seat in your roster) with no delegation set, and revokes the previous grant. If it cannot mint one, it creates the role as a label only and unsets the shell's grant variable. | Not applicable: the role name is required. |
 | `aida session new` | Issues no grant: `--role` only labels the session. The agent inherits the parent's grant from the environment. | Issues no grant. The agent inherits the parent's grant from the environment. |
 | `aida session resume` | Not applicable: there is no seat option. | Issues no grant. The resumed agent inherits the parent's grant from the environment. |
-| `aida agent new` | Removes the parent's grant from the agent's environment and issues a child grant for the `--role` seat. With `claude --bg`, the session runs under the agent's background daemon, outside the launcher's process tree, so no grant can be bound to it: an implementer seat runs ungranted (it needs none) and any other seat is refused before launch. `codex --bg` instead binds its own child grant to the detached worker through the gate. | No grant: the parent's grant is removed from the environment. With `--spec`, the session records a default seat (implementer, or reviewer for a PR) and the agent gets a child grant for it. When a seated launch finds no grant at all and you are at an interactive terminal (not headless, not inside an agent session or a contained seat), it asks whether to launch that seat under a one-time grant from you; see below. |
+| `aida agent new` | Removes the parent's grant from the agent's environment and issues a child grant for the `--role` seat. With native `claude --bg`, the session runs under the agent's background daemon, outside the launcher's process tree, so no grant can be bound to it: an implementer seat runs ungranted (it needs none) and any other seat is refused before launch. `codex --bg` instead binds its own child grant to the detached worker through the gate. | No grant: the parent's grant is removed from the environment. With `--spec`, the session records a default seat (implementer, or reviewer for a PR) and the agent gets a child grant for it. When a seated launch finds no grant at all and you are at an interactive terminal (not headless, not inside an agent session or a contained seat), it asks whether to launch that seat under a one-time grant from you; see below. |
 | `aida queue work` (drain phases also launch through it) | Issues a child grant for the seat. Two paths issue none and leave the parent's grant in the environment: a fresh `--no-human` launch that is not a PR review, and a resumed interactive PR review. | There is no seatless launch: it picks a seat from the queued items' routing, else implementer (reviewer for a PR), then behaves as in the previous column. |
 
 **Reach for it when**
@@ -359,11 +359,46 @@ than reconstruct its workflow. Ordinary prose and Claude prompts are preserved.
   The Stop relay appends bounded recent goal-tool evidence and a best-effort local procfs list of processes sharing the outgoing grant to the matched handoff. It does not rebind processes or transfer a vendor's private goal database. Include the active goal explicitly in your handoff; missing/truncated transcript evidence is reported as unknown and the new session must recover it before continuing. The process list contains PIDs and command names, never environment values or command arguments; unreadable processes can be absent. Restart required watchers under the new grant. The authored handoff retains its 16 KB cap; automatic context adds at most roughly 8 KB. <!-- trace:STORY-2653 | ai:codex -->
 
 - `new claude --permission-mode` / `--sandbox` — the same faithful-launcher posture as `session new`: omit for native (prompts), opt in explicitly, or `--sandbox` for contained mode.
+- With trusted `[contained.vendors] claude = "aida"`, contained `new claude --bg` uses an AIDA-owned detached supervisor running foreground print-mode Claude inside the shared wrapper. Dispatch succeeds only after receipt acceptance, binding the worker's own grant, registry registration and barrier release. The supervisor owns wrapper state, signals and grant revocation through exit. The returned attempt UUID selects `aida agent logs <attempt>` (snapshot) and `aida agent attach <attempt>` (read-only log follow; Ctrl+C detaches). Logs live under `.aida/claude-background/<attempt>/` in the launch project. `claude attach` is unavailable for these sessions: use AIDA attach or logs. AIDA reports this hint only when composing a vendor attach subcommand; invoking the vendor binary directly is outside AIDA interception. Rotation and resume remain refused. When the opt-in is unset, the existing native `claude --bg` path and vendor attach/log commands are unchanged. <!-- trace:TASK-3219 | ai:codex -->
 - Presentation env is NOT inherited — `AIDA_OUTPUT_FORMAT`, `AIDA_AGENT_OUTPUT`, `AIDA_GLYPHS`, `AIDA_QUIET`, and `AIDA_PUSH_QUIET` are how *your* shell wants output rendered, not how the spawned agent's shell should render — so every launch (direct, `--bg`, and any `[contained] os_wrap`-wrapped launch, across `claude`/`codex`/`agy`) strips them by default and lets the child decide its own output mode from its own TTY/piping. `[agents] inherit_env = ["AIDA_GLYPHS", …]` in `agents.toml` (same user-base/project precedence as `bypass`/`contained`) is the explicit, named opt-in when you genuinely want one preserved. `new --no-exec` and `--show-context` both print a `presentation_env:` / `Presentation env:` line naming exactly what was stripped and what was kept, so an intentional inheritance is never silent.
 - `new` (no `--role`, interactive) — the role picker's cursor starts on your active shell role (`AIDA_SESSION_ROLE`, e.g. from `aida role enter`) when it's in the project's role list, falling back to `implementer` otherwise; a non-interactive launch with no `--role` still always defaults to `implementer`. The optional agent-description prompt (shown for advisor/product launches) is explicitly labeled optional — blank Enter skips it. <!-- trace:TASK-1462 | ai:claude -->
 - `list` (aliases `ls` and `status`) — reports each registered seat as `busy` or `idle`. `busy` means this seat has work in flight; `idle` means its own process tree shows none. The evidence is the *age* of the seat's descendant processes, which leaves one case deliberately uncounted: a build the seat launched **detached** and then stopped attending to, whose start predates the seat's last heartbeat. So `idle` means "this seat has nothing in flight", not "nothing is running under this seat". The window is bounded the other way — a descendant that started after the last heartbeat keeps the seat `busy` for as long as it runs, however long that is. <!-- trace:BUG-1726 | ai:claude -->
 - `stop` — terminates the **registered seat pids only**, and signals no descendants: there is no process-group kill and no descendant walk on this path, so a `cargo`/`rustc` child the seat started is reparented to init and runs to completion. This is what makes a stale `idle` benign — such a build is *stranded*, never killed — but stranded is not free: an ownerless build still holds one of the host's cargo slots, with no seat left to read its result. After stopping a seat, check for leftover children yourself. <!-- trace:BUG-1726 | ai:claude -->
 - `pause` / `resume` — budget/rate-limit signalling for the fleet, distinct from `stop` (which terminates).
+
+### `aida agent logs`
+
+Print a snapshot of an AIDA-supervised background attempt's output:
+
+```bash
+aida agent logs <attempt>
+```
+
+The attempt must be the canonical UUID returned by dispatch. Unknown attempts,
+linked directories and logs, and directories or logs readable by other users
+are refused. At a terminal, valid UTF-8 text, tabs and newlines are preserved; other C0 controls, DEL, C1 controls and invalid UTF-8 bytes are displayed as `\xNN` byte escapes so worker output cannot issue terminal commands. Incomplete UTF-8 sequences are carried across reads and escaped at the end of the log. Redirected output preserves the original bytes. This command has no command-specific flags.
+
+### `aida agent attach`
+
+Follow the same log until the supervisor records its terminal result:
+
+```bash
+aida agent attach <attempt>
+```
+
+This is read-only log streaming; Ctrl+C detaches. A dead supervisor without a
+terminal result produces a diagnostic after the available log output. This
+command has no command-specific flags and uses the same private-attempt checks
+as logs. The final worker output is drained after observing the terminal marker.
+
+Attempts are retained for manual inspection; automatic pruning is not enabled.
+To reclaim space, remove an individual `.aida/claude-background/<attempt>/`
+directory only after its `ended` file exists and after saving any logs needed
+for diagnosis. Keep active attempts. For an attempt without a terminal result,
+first diagnose the failure and confirm that its recorded supervisor and worker
+have stopped and its launch resources have been recovered before removing it;
+retain the directory whenever ownership is uncertain.
+<!-- trace:TASK-3219 | ai:codex -->
 
 **Gotchas.** The startup context snapshot is *not* live — it's a point-in-time brief; an agent that only reads it will miss anything filed after it launched. The "one-shot, ships-a-PR-and-exits" lane is easy to mistake for the orchestrated drain — they are different tools with different guarantees. And `idle` describes the *seat*, not the machine: a detached build the seat started before its last heartbeat keeps running — and survives `aida agent stop` — while the seat reads `idle`.
 
