@@ -18,7 +18,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-08T02:58:08.667753563Z
-modified_at: 2026-11-08T09:31:24.754053865Z
+modified_at: 2026-11-08T09:31:27.257654519Z
 req_type: Story
 tags:
 - area:human-wait
@@ -348,6 +348,22 @@ comments:
   content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: R14-R17 are fixed in the sketch, but the PR title still completes STORY-2661 at squash merge with AC1-4 unimplemented (R1), and the resume predicate and doctor heal conflict with parked lanes (R18, R19).. It was punted on: design-fork: Sketch revised for R14-R17; no findings disputed. Binding ruling requires advisor signoff before code, including manual-only resume, AGY exclusion until verified mid-turn capture/admission, per-generation transport clearing and post-exit recovery ownership. R1 remains host/advisor metadata repair: retitle PR #3666 exactly to [AI:codex] docs(plans): sketch park-on-ask resume-on-answer (Refs STORY-2661). Seat edits cannot fix PR metadata; retain publication veto pending signoff and title repair.. No triage reason was given.'
   created_at: 2026-11-08T09:31:24.754052523Z
   modified_at: 2026-11-08T09:31:24.754052523Z
+  session_id: 01a1b8be-8170-7fb2-89ab-ecb4c6eee98c
+  harness_version: 2.1.319 (Claude Code)
+- id: 01a1ba7f-9a18-7363-9029-a355994fbde2
+  author: joe
+  content: |-
+    REVIEW FINDINGS TO ADDRESS (STORY-2661):
+    Verdict: CHANGES REQUESTED
+    Reviewed commit: 36109dcdd8c2
+    Recorded: 2026-11-08T09:25:22.881968757+00:00
+    Findings:
+    1. R1 BLOCKER (open since round 1): at head 36109dcdd8c2 PR #3666 is still titled '[AI:codex] feat: Park on ask, resume on answer... (STORY-2661)'. aida-cli-lib/src/pr_ship.rs:339-372 short-circuits only on a trailing '(Refs ...)' and otherwise takes completion ids from the title, so a squash merge completes the story with AC1-4 unimplemented, contradicting sketch:9 and sketch:13. Fix: retitle to exactly '[AI:codex] docs(plans): sketch park-on-ask resume-on-answer (Refs STORY-2661)'. This needs host or advisor metadata action; no seat commit clears it.
+    2. R18 A parked research lane can never resume. sketch:360 requires evaluate_unpark == Ready, but evaluate_unpark calls burndown::classify (questions.rs:822-860), which returns Parked for every spike regardless of answer state (burndown.rs:259-270). Spikes run in the research lane (queue_cmd.rs:10749), and the sketch admits non-implementer waits (sketch:341). So a spike lane can park, the human answers, and every resume attempt is refused. classify also rejects parking tags such as needs-human and operator-action (burndown.rs:175-191), which supervised lanes can legitimately carry. Fix: name a bound-resume predicate that reuses the dependency and hold checks without the type and lane classification, or refuse --park for ineligible spec types before intent submission. Add a spike-lane test for whichever is chosen.
+    3. R19 doctor heal can break the InProgress invariant of a parked lane. sketch:355-366 keeps a parked spec InProgress and refuses resume on any status change, and sketch:110-111 exempts only pickup and GC. The parked lane's owner has exited, so its lease is dead or reaped. doctor's spec-status-drift heal (doctor_cmd.rs:9060-9090) then reverts InProgress with no active lease to Approved unless spec_live_work finds a branch with an open PR or unmerged commits, and that heal is allowed in autonomous context (test safe_heal_proceeds_in_autonomous_context, doctor_cmd.rs:13002). A lane that parked with only dirty uncommitted edits has neither, so its spec returns to Approved: generic pickup is reopened and resume is refused as a status mismatch. The orphaned In-Progress surface (ps_integrate.rs:2185-2200) would also report the lane as abandoned. Fix: state that an open wait counts as live work for status-drift heal and orphan detection, and add a test that doctor heal leaves a parked spec InProgress.
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
+  created_at: 2026-11-08T09:31:27.128683715Z
+  modified_at: 2026-11-08T09:31:27.128683715Z
   session_id: 01a1b8be-8170-7fb2-89ab-ecb4c6eee98c
   harness_version: 2.1.319 (Claude Code)
 history:
