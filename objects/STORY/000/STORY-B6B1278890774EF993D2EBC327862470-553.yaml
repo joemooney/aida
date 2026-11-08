@@ -8,7 +8,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-07T15:34:33.363448208Z
-modified_at: 2026-11-08T07:22:34.574528065Z
+modified_at: 2026-11-08T07:26:04.982974448Z
 req_type: Story
 comments:
 - id: 01a1b6a6-52e1-70a0-a9c1-d32888979ca5
@@ -458,6 +458,13 @@ comments:
     - Rust launcher validation: pending; see final handoff.
   created_at: 2026-11-08T07:22:34.574528065Z
   modified_at: 2026-11-08T07:22:34.574528065Z
+  session_id: 01a1ba05a12a
+  harness_version: codex-cli 0.167.0
+- id: 01a1ba0c-d2b6-70a3-9190-9bb92ed06d43
+  author: dirtlab
+  content: 'Final validation: launcher codegraph::tests executed 11 tests, all passed; redirected-graph finalizer regression executed 1 test, passed. Python proxy suite executed 12 tests: 11 passed, 1 skipped because installed CodeGraph 1.6.0 is absent. make check-templates and git diff --check pass. make sync-templates refuses the read-only .agents portable pack; host rerun required. Seven source/doc/test files remain uncommitted; final handoff and PR-body draft updated under .aida/story-2630-{handoff,pr-body}.txt. AC2/AC5 deployment gate, minor busy-probe limitation, and recorded punt remain; the failed separate punt signal write must not be treated as permission to publish.'
+  created_at: 2026-11-08T07:26:04.982974448Z
+  modified_at: 2026-11-08T07:26:04.982974448Z
   session_id: 01a1ba05a12a
   harness_version: codex-cli 0.167.0
 history:
