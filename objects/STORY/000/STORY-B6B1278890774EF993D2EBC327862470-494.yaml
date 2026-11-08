@@ -22,12 +22,12 @@ description: |
   6. Evidence run: an advisor session under --permission-mode auto completes one full sweep (rebind loops, dispatch, host-merge, ship) with zero permission prompts and no bypass. Record the prompts it did hit.
 
   Non-goals: no new authority for the advisor, no waiving gates, no generic shell deputy beyond the existing script-deputy contract.
-status: NeedsAttention
+status: Approved
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-06T16:51:02.535818Z
-modified_at: 2026-11-08T11:26:20.129993592Z
+modified_at: 2026-11-08T15:58:25.408952698Z
 req_type: Story
 tags:
 - area:advisor
@@ -555,6 +555,13 @@ comments:
   modified_at: 2026-11-08T11:23:31.662926362Z
   session_id: 01a1b9af-8230-75d2-82f8-667491cc010a
   harness_version: 2.1.319 (Claude Code)
+- id: 01a1bbe1-e280-71b1-8968-34c1443cac29
+  author: joe
+  content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was punted on: ambiguous-spec: Binding advisor ruling 2026-11-08 03:10 UTC authorizes only the round-4 controller-restart major and explicitly requires parking if round 5 finds a new blocker. The round-5 review at cd6d6cb5301c acknowledges that major is fixed but raises a new major: repeated controller exits with unresolved attempts accumulate retired controller grants and kernel session keys until the per-uid key quota is exhausted. It also requests a recovery-doc release instruction. No advisor clarification authorizing that new scope is present; the subsequent rework carries no triage reason. Parking PR-3640 for explicit scope clarification rather than implementing a sixth round. Existing final-round implementation and tests are already committed in this checkout; no new file edits or publication declaration made.. No triage reason was given.'
+  created_at: 2026-11-08T15:58:25.408948378Z
+  modified_at: 2026-11-08T15:58:25.408948378Z
+  session_id: 01a1bbab-762f-7cd2-8a36-4ea9f209afce
+  harness_version: 2.1.319 (Claude Code)
 history:
 - id: 01a1b1c5-af09-7d01-81e9-eaaac083f223
   author: joe
@@ -848,6 +855,15 @@ history:
   - field_name: status
     old_value: InProgress
     new_value: NeedsAttention
+- id: 01a1bbe1-e280-71b1-8968-34bc7983d0e7
+  author: joe
+  timestamp: 2026-11-08T15:58:25.408939938Z
+  session_id: 01a1bbab-762f-7cd2-8a36-4ea9f209afce
+  harness_version: 2.1.319 (Claude Code)
+  changes:
+  - field_name: status
+    old_value: NeedsAttention
+    new_value: Approved
 execution_mode: drain
 filed_at:
   code_sha: 8dcb86ca85da4826cec197aeb85269210e910403
@@ -857,8 +873,3 @@ filed_at:
   aida_build_sha: 8dcb86ca85d
   vendor: claude
   session: b0a84e34-277c-4df6-b53c-43f4bbe2e84d
-attention_reason:
-  category: ambiguous-spec
-  detail: 'Binding advisor ruling 2026-11-08 03:10 UTC authorizes only the round-4 controller-restart major and explicitly requires parking if round 5 finds a new blocker. The round-5 review at cd6d6cb5301c acknowledges that major is fixed but raises a new major: repeated controller exits with unresolved attempts accumulate retired controller grants and kernel session keys until the per-uid key quota is exhausted. It also requests a recovery-doc release instruction. No advisor clarification authorizing that new scope is present; the subsequent rework carries no triage reason. Parking PR-3640 for explicit scope clarification rather than implementing a sixth round. Existing final-round implementation and tests are already committed in this checkout; no new file edits or publication declaration made.'
-  raised_by: implementer
-  raised_at: 2026-11-08T11:26:20.129993592Z
