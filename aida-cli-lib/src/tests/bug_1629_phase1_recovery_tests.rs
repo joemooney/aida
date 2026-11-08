@@ -1010,3 +1010,54 @@ fn bug_1769_advance_decision() {
     assert!(!advanced(Some(&S::Approved), None));
     assert!(!advanced(None, None));
 }
+
+// Host receipt -> child lease discovery -> real orchestration terminal result.
+// trace:TASK-3608 | ai:codex
+#[test]
+fn task_3608_host_no_change_survives_lease_discovery() {
+    let temp = tempfile::tempdir().unwrap();
+    let root = git_project(&temp);
+    let lane = "native-lease";
+    let key: String = lane.as_bytes().iter().map(|b| format!("{b:02x}")).collect();
+    let receipt = root.join(".aida/native-no-change").join(key);
+    std::fs::create_dir_all(receipt.parent().unwrap()).unwrap();
+    std::fs::write(&receipt, "no-change").unwrap();
+    let script = r#"cat > .aida/sessions/native-lease.toml <<EOF
+id = "native-lease"
+scope = "$spec"
+slug = "main"
+owner = "test"
+worktree_path = "$PWD"
+branch = "main"
+started_at = "2026-09-24T00:00:00Z"
+hostname = "test"
+EOF
+cat > .aida/sessions/native-lease.manifest.toml <<EOF
+session_id = "native-lease"
+planned_at = "2026-09-24T00:00:00Z"
+plan_source = "queue work"
+claude_session_id = "$sid"
+items = []
+EOF
+exit 0"#;
+    let stub = stub(&root, script, script);
+    let forge = crate::forge::fake::RecordingForge::new();
+    let mut d = driver(&root, "NFR-56", stub);
+    d.forge_factory = Some(forge.factory());
+    let result = crate::auto_complete::orchestrate(
+        &mut d,
+        "NFR-56",
+        crate::auto_complete::AutoCompleteVariant::Full,
+        true,
+        crate::auto_complete::EscalateMode::Blocks,
+    );
+    assert_eq!(result.exit_code, 0, "{result:?}");
+    assert!(result.no_change);
+    assert!(result.failed_phase.is_none());
+    assert!(result.shelved_reason.is_none());
+    assert!(result.shipped_spec_id.is_none());
+    assert!(
+        !receipt.exists(),
+        "the lease-scoped evidence is consumed once"
+    );
+}

@@ -490,6 +490,27 @@ pub(crate) fn post_exit_commit_reported(
     outcome
 }
 
+// trace:TASK-3608 | ai:codex
+#[derive(Debug, PartialEq, Eq)]
+pub(crate) enum QueueExitOutcome {
+    Continue,
+    NoChange,
+}
+
+// Host-only outcome, scoped to the lease and replaced at every publication exit.
+// trace:TASK-3608 | ai:codex
+fn no_change_path(main: &Path, lane: &str) -> std::path::PathBuf {
+    let key: String = lane.as_bytes().iter().map(|b| format!("{b:02x}")).collect();
+    crate::main_worktree_root_from(main)
+        .join(".aida/native-no-change")
+        .join(key)
+}
+
+// trace:TASK-3608 | ai:codex
+pub(crate) fn take_no_change(main: &Path, lane: &str) -> bool {
+    std::fs::remove_file(no_change_path(main, lane)).is_ok()
+}
+
 /// Queue-work publication runs in the host after the child and test runner
 /// have stopped, while the clone lease still vouches for the seat. Explicit
 /// punts and holds retain their publication veto, including in drain/resume.
@@ -500,7 +521,7 @@ pub(crate) fn publish_queue_exit(
     spec: &str,
     lane: &str,
     clean_exit: bool,
-) -> Result<()> {
+) -> Result<QueueExitOutcome> {
     let main = crate::main_worktree_root_from(main);
     let publish = || {
         run_at(
@@ -515,7 +536,13 @@ pub(crate) fn publish_queue_exit(
             },
         )
     };
-    publish_queue_exit_with(
+    let receipt = no_change_path(&main, lane);
+    match std::fs::remove_file(&receipt) {
+        Ok(()) => {}
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => {}
+        Err(e) => return Err(e.into()),
+    }
+    let outcome = publish_queue_exit_with(
         &main,
         spec,
         || post_exit_commit_reported(&main, tree, spec, lane, clean_exit),
@@ -533,7 +560,16 @@ pub(crate) fn publish_queue_exit(
                 ),
             )
         },
-    )
+    )?;
+    if clean_exit && outcome == QueueExitOutcome::NoChange {
+        std::fs::create_dir_all(receipt.parent().unwrap())?;
+        std::fs::write(receipt, b"no-change")?;
+    }
+    Ok(if clean_exit {
+        outcome
+    } else {
+        QueueExitOutcome::Continue
+    })
 }
 
 // These effects are injected at the publication boundary so tests exercise
@@ -546,10 +582,11 @@ fn publish_queue_exit_with(
     probe: impl FnOnce() -> crate::seat_clone::Probe,
     publish: impl Fn() -> Result<()>,
     notify: impl FnOnce() -> Result<()>,
-) -> Result<()> {
+) -> Result<QueueExitOutcome> {
     if publication_veto(main, spec) {
-        return Ok(());
+        return Ok(QueueExitOutcome::Continue);
     }
+    let no_change = std::cell::Cell::new(false);
     finish_queue_exit(commit(), &publish, || {
         match probe() {
             crate::seat_clone::Probe::Known(facts) if facts.unpushed > 0 => return publish(),
@@ -557,9 +594,19 @@ fn publish_queue_exit_with(
             | crate::seat_clone::Probe::HasSubmodules(why) => {
                 anyhow::bail!("could not inspect clean lane for pending publication: {why}")
             }
+            crate::seat_clone::Probe::Known(facts) if !facts.dirty.is_empty() => {
+                anyhow::bail!("clean lane still has pending file changes")
+            }
             _ => {}
         }
-        notify()
+        notify()?;
+        no_change.set(true);
+        Ok(())
+    })?;
+    Ok(if no_change.get() {
+        QueueExitOutcome::NoChange
+    } else {
+        QueueExitOutcome::Continue
     })
 }
 
@@ -847,7 +894,7 @@ mod queue_exit_tests {
         for unpushed in [0, 1] {
             let published = Cell::new(0);
             let notified = Cell::new(0);
-            publish_queue_exit_with(
+            let outcome = publish_queue_exit_with(
                 tmp.path(),
                 "STORY-2475",
                 || PostExitCommit::Clean,
@@ -867,6 +914,14 @@ mod queue_exit_tests {
                 },
             )
             .unwrap();
+            assert_eq!(
+                outcome,
+                if unpushed == 0 {
+                    QueueExitOutcome::NoChange
+                } else {
+                    QueueExitOutcome::Continue
+                }
+            );
             assert_eq!(published.get(), unpushed);
             assert_eq!(notified.get(), usize::from(unpushed == 0));
         }

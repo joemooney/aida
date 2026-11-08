@@ -303,6 +303,7 @@ pub(crate) fn batch_outcome_label(outcome: &auto_complete::BatchDrainOutcome) ->
         BatchDrainOutcome::Stalled => "stalled",
         BatchDrainOutcome::Mismatched { .. } => "mismatched",
         BatchDrainOutcome::Inconclusive => "inconclusive",
+        BatchDrainOutcome::NoChange => "no-change",
         BatchDrainOutcome::Held => "held",
         BatchDrainOutcome::DrainedWithShelved => "drained-with-shelved",
         BatchDrainOutcome::EnvironmentBlocked { .. } => "environment-blocked", // trace:BUG-1930 | ai:claude
@@ -1258,6 +1259,9 @@ pub(crate) fn emit_next_n_drain_summary(
         }
         // BUG-250: a member deliberately held its PR — pause for the gate.
         // trace:BUG-250 | ai:claude
+        BatchDrainOutcome::NoChange => {
+            eprintln!("drain stopped: no-change — nothing published");
+        }
         BatchDrainOutcome::Held => {
             let stopped = result.stopped_at.as_deref().unwrap_or("<spec>");
             eprintln!(

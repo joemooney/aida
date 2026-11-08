@@ -46,6 +46,7 @@ pub(crate) fn pipelined_child_result_sidecar_json(
         "inconclusive_reason": result.inconclusive_reason,
         "shelved": result.shelved_reason.is_some(),
         "held_reason": result.held_reason,
+        "no_change": result.no_change,
         // BUG-1930: the parent's consecutive-environmental-failure halt reads
         // the failure kind and reason; without them every pipelined member
         // looked like a non-environmental failure. trace:BUG-1930 | ai:claude
@@ -146,6 +147,10 @@ pub(crate) fn parse_pipelined_child_result_sidecar(
             .and_then(|v| v.as_str())
             .map(|s| s.to_string()),
         shelved_reason,
+        no_change: value
+            .get("no_change")
+            .and_then(|v| v.as_bool())
+            .unwrap_or(false),
         held_reason: value
             .get("held_reason")
             .and_then(|v| v.as_str())
@@ -2080,6 +2085,9 @@ pub(crate) fn emit_batch_chain_summary(
         }
         // BUG-250: a member deliberately held its PR — the chain pauses there
         // until the operator runs the gate and opens the PR. trace:BUG-250
+        BatchDrainOutcome::NoChange => {
+            eprintln!("drain stopped: no-change — nothing published");
+        }
         BatchDrainOutcome::Held => {
             let batch = result.stopped_batch.as_deref().unwrap_or("<batch>");
             let stopped = result.stopped_at.as_deref().unwrap_or("<spec>");
@@ -2417,6 +2425,9 @@ pub(crate) fn emit_batch_drain_summary(
         }
         // BUG-250: a member deliberately held its PR — the batch pauses there
         // for the operator's manual gate. trace:BUG-250 | ai:claude
+        BatchDrainOutcome::NoChange => {
+            eprintln!("drain stopped: no-change — nothing published");
+        }
         BatchDrainOutcome::Held => {
             let stopped = result.stopped_at.as_deref().unwrap_or("<spec>");
             eprintln!(

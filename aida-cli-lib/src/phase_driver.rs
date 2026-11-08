@@ -2800,6 +2800,15 @@ impl RealPhaseDriver {
     /// fallback and the BUG-257 `git ls-remote` narrowing. Mutates `self.branch`
     /// when the spec-id search recovers a swapped branch. trace:TASK-136
     pub(crate) fn detect_phase1_pr(&mut self, branch: &str) -> Phase1PrResolve {
+        self.detect_phase1_pr_after_exit(branch, false)
+    }
+
+    // trace:TASK-3608 | ai:codex
+    pub(crate) fn detect_phase1_pr_after_exit(
+        &mut self,
+        branch: &str,
+        native_no_change: bool,
+    ) -> Phase1PrResolve {
         // STORY-516: forge-routed branch lookup (view op). The inner spec-id
         // search (detect_open_pr_for_spec) is the LIST op — routed in a later
         // slice — so it stays PrLookup here. The BUG-444/BUG-257 narrowing
@@ -2847,6 +2856,10 @@ impl RealPhaseDriver {
                         );
                         Phase1PrResolve::Found(pr)
                     }
+                    // No publication occurred, so empty open-PR observations
+                    // cannot be a race with this seat creating a new PR.
+                    // trace:TASK-3608 | ai:codex
+                    PrLookup::NoOpenPr if native_no_change => Phase1PrResolve::NoPr,
                     // BUG-444: both the `--head` and `--search` lookups returned
                     // empty-BUT-SUCCESSFUL. These are eventually-consistent GitHub
                     // LIST queries (`--search` hits the search index, which lags PR

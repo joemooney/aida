@@ -760,6 +760,12 @@ impl auto_complete::PhaseDriver for RealPhaseDriver {
         // `claude --resume` with this exact cwd so Claude's project-slug
         // derivation finds the persisted session.
         self.implementer_worktree = Some(worktree_path.clone());
+        // Consume host evidence only for a successful child. Failed exits and
+        // punt/hold signals keep their existing classification precedence.
+        // trace:TASK-3608 | ai:codex
+        let native_no_change = crate::ship_from_seat::take_no_change(&self.project_root, &lease_id)
+            && watchdog_failure.is_none()
+            && matches!(&outcome, exit_signal::ExitOutcome::Natural(s) | exit_signal::ExitOutcome::Reaped(s) if s.success());
 
         // STORY-276: did the implementer punt? `aida punt` dropped the signal
         // file and the spec is now parked in NeedsAttention — there is no PR
@@ -874,6 +880,20 @@ impl auto_complete::PhaseDriver for RealPhaseDriver {
             }
         }
 
+        // A clean host-attested exit has nothing to publish. Look for an
+        // existing open PR before preflight, and never credit an older merge
+        // as work performed by this seat. Keep the observation for the normal
+        // PR path so rework still runs every gate.
+        // trace:TASK-3608 | ai:codex
+        let mut native_pr =
+            native_no_change.then(|| self.detect_phase1_pr_after_exit(&branch, true));
+        if matches!(
+            native_pr.as_ref(),
+            Some(Phase1PrResolve::NoPr | Phase1PrResolve::AlreadyMerged(_))
+        ) {
+            return Ok(auto_complete::ImplementerOutcome::NoChange);
+        }
+
         // TASK-1289: the orchestrator owns the publication boundary. Run the
         // configured commands exactly as CI defines them, in the implementer
         // worktree, before either accepting an agent-opened PR or exercising
@@ -976,7 +996,10 @@ impl auto_complete::PhaseDriver for RealPhaseDriver {
             auto_complete::gh_verify_backoff_schedule(self.drain_tuning.gh_verify_retries);
         let mut attempt = 0usize;
         let pr = loop {
-            match self.detect_phase1_pr(&branch) {
+            match native_pr
+                .take()
+                .unwrap_or_else(|| self.detect_phase1_pr(&branch))
+            {
                 Phase1PrResolve::Found(pr) => break Some(pr),
                 // BUG-709: the implementer already merged its own PR — the work
                 // shipped and the spec auto-bumped. Return a terminal
@@ -1093,6 +1116,11 @@ impl auto_complete::PhaseDriver for RealPhaseDriver {
                 Ok(auto_complete::ImplementerOutcome::PrOpened)
             }
             None => {
+                // Existing PRs above retain their normal rework/CI path.
+                // trace:TASK-3608 | ai:codex
+                if native_no_change {
+                    return Ok(auto_complete::ImplementerOutcome::NoChange);
+                }
                 // BUG-893: substrate-as-bouncer for the "implementer committed
                 // work but exited without opening a PR" gap. The committed HEAD
                 // lives in the implementer worktree; the main orchestrator
@@ -3309,13 +3337,27 @@ impl auto_complete::PhaseDriver for RealPhaseDriver {
         .and_then(|resume_id| {
             // TASK-2032: the orchestrator runs at the host project root.
             // trace:TASK-2032 | ai:claude
+            let target = session::HeadlessResume {
+                vendor,
+                session_id: &session_id,
+                resume_id: &resume_id,
+            };
+            if let Some(lease) = self.implementer_lease.as_deref() {
+                return crate::queue_cmd::run_queue_resume_to_exit(
+                    crate::seat_clone::launcher_main().as_deref(),
+                    &target,
+                    &prompt,
+                    &log_path,
+                    &worktree,
+                    &tee_opts,
+                    self.contained,
+                    "implementer",
+                    (&self.project_root, &self.spec, lease),
+                );
+            }
             session::spawn_vendor_headless_resume(
                 crate::seat_clone::launcher_main().as_deref(),
-                &session::HeadlessResume {
-                    vendor,
-                    session_id: &session_id,
-                    resume_id: &resume_id,
-                },
+                &target,
                 &prompt,
                 &log_path,
                 &worktree,
@@ -3380,6 +3422,19 @@ impl auto_complete::PhaseDriver for RealPhaseDriver {
             return Ok(ImplementerOutcome::Punted { reason });
         }
 
+        // trace:TASK-3608 | ai:codex
+        let native_no_change = self
+            .implementer_lease
+            .as_deref()
+            .is_some_and(|lease| crate::ship_from_seat::take_no_change(&self.project_root, lease));
+        let hold_path = punt::hold_signal_path(&self.project_root, &self.spec);
+        if let Some(signal) = punt::read_hold_signal(&hold_path) {
+            return Ok(ImplementerOutcome::Held {
+                reason: signal.reason,
+                branch: self.branch.clone().unwrap_or_default(),
+            });
+        }
+
         // A ship opens a PR — a spec-id lookup is branch-independent and
         // robust, with the recorded branch as a fallback.
         let pr =
@@ -3422,6 +3477,7 @@ impl auto_complete::PhaseDriver for RealPhaseDriver {
             };
         match pr {
             Some(pr) => Ok(self.adopt_resumed_pr(pr)),
+            None if native_no_change => Ok(ImplementerOutcome::NoChange),
             None => Err(PhaseFailure::of(
                 FailureKind::NoPr,
                 "the resumed implementer session exited but opened no PR — \

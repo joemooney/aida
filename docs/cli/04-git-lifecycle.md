@@ -166,6 +166,15 @@ pending work remains uncommitted. Post-exit trailers use the store's canonical
 display ID, never a friendly node alias.
 <!-- trace:TASK-2902 | ai:codex -->
 
+A successful native implementer exit with no pending files or unpublished commits
+records a host-side, lease-scoped no-change receipt. Fresh and resumed drains
+classify it after checking punt/hold signals. An existing open PR continues through
+ordinary gates; otherwise the drain reports `no-change`, exits 0 and pauses with
+no shipped credit or NeedsAttention shelving. No bundle is created for no-change.
+Failed exits cannot produce a no-change receipt. Pipelined child sidecars preserve
+this outcome for batch reporting.
+<!-- trace:TASK-3608 | ai:codex -->
+
 ---
 
 ### `aida pr`
