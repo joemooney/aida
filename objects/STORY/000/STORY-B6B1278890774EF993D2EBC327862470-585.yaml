@@ -17,7 +17,7 @@ priority: Low
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-08T02:58:18.689963065Z
-modified_at: 2026-11-08T10:57:28.047361265Z
+modified_at: 2026-11-08T11:04:02.735796713Z
 req_type: Story
 tags:
 - area:handoff
@@ -186,6 +186,20 @@ comments:
   created_at: 2026-11-08T08:46:08.517487051Z
   modified_at: 2026-11-08T08:46:08.517487051Z
   session_id: 01a1ba5101e1
+  harness_version: codex-cli 0.167.0
+- id: 01a1bad4-5faf-73c1-af8d-a5a561b3fed4
+  author: dirtlab
+  content: |
+    Native-seat verification and hardening complete. The branch already contains the Claude-only bounded PreCompact handoff implementation and prior review fixes, including worktree-local snapshot placement and explicit unknown PR absence. This pass found and fixed malformed findings response shapes aborting the hook before persistence: invalid envelopes, collections, rows and origin values now produce unknown evidence while still writing the bounded recovery packet.
+
+    Changed files: aida-core/templates/hooks/aida-precompact-handoff.sh; tests/test_precompact_handoff_hook.py. Edits remain uncommitted for the host publisher.
+
+    Validation: final-source Python hook suite 23 tests passed, including six malformed-response subcases. Lane-runner real CLI integration precompact_handoff_cli_round_trip passed (1 executed test), job j20261108T105828887-2-0; exercises local persistence, relaunch discovery, nested cwd, sibling isolation and read-only-primary write boundary. Lane-runner scaffolding::codex_hooks::tests::codex_hooks_match_settings passed (1 executed test), job j20261108T105853821-2-0. Template hook links, store-writer inventory reconciliation, trace-header check and git diff --check passed. Codegraph executable unavailable; doctor check reported total: 0, so source inspection used rg.
+
+    No implementation blockers. No live Claude compaction or full CI run in this seat. untested=false. Host owns commit, publication and queue completion; no commit, push, PR creation, PR ship, review verdict or queue-done performed here.
+  created_at: 2026-11-08T11:04:02.735796713Z
+  modified_at: 2026-11-08T11:04:02.735796713Z
+  session_id: 01a1bace541a
   harness_version: codex-cli 0.167.0
 history:
 - id: 01a1b9c5-3252-7530-8b0b-bbe2c3ac5581
