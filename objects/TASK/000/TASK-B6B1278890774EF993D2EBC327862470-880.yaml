@@ -8,7 +8,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-06T13:39:53.442026096Z
-modified_at: 2026-11-08T14:38:06.955529254Z
+modified_at: 2026-11-08T14:38:13.691366294Z
 req_type: Task
 tags:
 - architecture
@@ -946,6 +946,27 @@ comments:
   content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: Head 2588cb1c1fd6 fixes the three minor findings from the last round (MCP evidence, wire-verb validation, real lane client in the sandbox test), but the binding routing acceptance is still unmet (mediated inventory cannot reach zero), the design-fork punt has no ruling, CI has no results at this head, and the host does not enforce the guest/requester comment and edit refusal.. It was punted on: design-fork: PR #3661 review comment 64 findings 1 and 3 remain unresolved: the binding part-3 ruling requires every inventoried writer to route, but comment edit/delete lack an approved host ownership policy and intentionally refuse. Decide whether explicit refusal is acceptable at cutover or approve typed operation policies; do not count refusal as verified routing. This run fixes findings 5 and 6 and drives the real early CLI entrypoint/Rust lane client inside the sealed boundary for finding 7 (executed live test passed in primary and linked layouts). The mediated inventory still refuses with 3163 writer sites and 293 operations unresolved; production admission remains gated and own_claim/queue_done remain TASK-3326. make check-ci-fast is not verified as an aggregate; its Cargo checks require host execution under this seat rule. Existing merge hold and publication-under-punt questions require advisor/operator resolution. Edits remain uncommitted; this punt is a publication veto, not authorization to publish a partial slice.. No triage reason was given.'
   created_at: 2026-11-08T14:38:06.955527526Z
   modified_at: 2026-11-08T14:38:06.955527526Z
+  session_id: 01a1b9af-8230-75d2-82f8-667491cc010a
+  harness_version: 2.1.319 (Claude Code)
+- id: 01a1bb98-764d-7f91-9856-7ccf8ba027f0
+  author: joe
+  content: |-
+    REVIEW FINDINGS TO ADDRESS (PR #3661):
+    Verdict: CHANGES REQUESTED
+    Reviewed commit: 2588cb1c1fd6
+    Recorded: 2026-11-08T14:37:09.992672459+00:00
+    Review comment: https://github.com/joemooney/aida/pull/3661#issuecomment-6722808602
+    Findings:
+    1. BLOCKING acceptance gap, needs an advisor ruling rather than more code (spec description 'route every inventoried in-lane writer'; ruling in TASK-3223 comment 34). scripts/check-store-writers.py mediated_blockers counts every operation row, so --profile mediated cannot reach zero; the latest handoff (comment 65) reports 3163 writer sites and 293 operations unresolved and an expected refusal. The four mediated_route records are partial evidence only. store_mutation_entry.rs:203 refuses every command except comment add and title/description edit, including reads such as show and list, and mediated_mcp_response (mcp.rs, 'allowed') serves only add_comment and update_requirement, so a mediated lane could not read the store through CLI or MCP once the gate opens. Either re-scope this PR as a staged partial with a follow-up owning the rest, or define the operation policy, including whether explicit early UnsupportedOperation counts as reconciled.
+    2. BLOCKING until CI reports: at 2588cb1c1fd6 CI (lib-0, lib-1, cli-0, cli-1, rest, contracts) is queued and CI (gates) is in progress, so the new sandbox client test and every other test have no CI evidence at this head. make check-ci-fast is not shown green as an aggregate (comment 65 says the seat could not run it) and ruling comment 34 names it as acceptance. merge-hold-gate is FAILURE with aida:merge-hold set and needs advisor or operator clearance.
+    3. PROCESS, needs advisor attention: TASK-3223 is still needs-attention and the design-fork punt (comments 59, 61, 63, repeated in comment 65) has no recorded ruling. Comment 65 says the saved punt is a publication veto and 'No publication declaration follows this punt', yet 2588cb1c1fd6 was committed at 14:32:23Z, seconds after that comment, and published from the seat. Rule on the fork, and confirm whether publication under a saved punt is authorized or whether aida ship --from-seat should have refused.
+    4. PR metadata, unfixed: the title still says 'report unresolved mediated routing evidence' while the diff adds early dispatch in main_entry, a SEQPACKET client, a mediated MCP server, host routing of comment_add/spec_edit and refusal correlation. The body is only the seat-publication line. Rewrite both to describe staged, gated routing with no launch authority. Commits 2588cb1c1fd, 7bb74c41a80, e88fe1f3543 and 30eb320657c use a subject claiming full routing and raw-write denial, so the squash must use the corrected title with an empty body.
+    5. MAJOR authority gap, new finding, fix before admission: stakeholder limits are enforced only in the lane. store_mutation_entry.rs:95-100 and mediated_mcp_response apply stakeholder_action_allowed using AIDA_SESSION_ROLE from the lane's own environment (a missing role is allowed), and stakeholder_role.rs:36-37 denies Comment and EditRequirement to guest and requester. host_operation (store_mutation/mod.rs) checks only epoch, profile, grant validity and spec scope; Session::prepare knows the role but HostContext does not carry it. A guest or requester lane with an owned spec can unset the variable or write a comment_add packet to the endpoint and the host commits it, although the inventory gate for these rows says authority must be revalidated at the host write boundary. Add the bound role to HostContext, refuse before mutate_canonical, and add a host test where a guest or requester packet is Unauthorized with unchanged bytes; the only current refusal tests are lane-side (store_mutation_mcp_tests.rs:29).
+    6. MINOR test robustness: the sandbox driver in mediated_store_tests.rs parses replies with line.startswith(chr(123)) and requires exactly one. The child passes no --test-threads, and with one test thread (RUST_TEST_THREADS=1 or a single-CPU runner) libtest prints 'test NAME ... ' with no newline before the test body, so the JSON line would not start with an open brace and the assertion fails. Pass --test-threads=2 or match the JSON without relying on line position.
+    7. COSMETIC, unfixed: main() in scripts/check-store-writers.py handles --candidates before --profile, so 'check-store-writers.py --candidates --profile mediated' silently ignores the profile. Reject the combination or document it.
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
+  created_at: 2026-11-08T14:38:13.581822682Z
+  modified_at: 2026-11-08T14:38:13.581822682Z
   session_id: 01a1b9af-8230-75d2-82f8-667491cc010a
   harness_version: 2.1.319 (Claude Code)
 history:
