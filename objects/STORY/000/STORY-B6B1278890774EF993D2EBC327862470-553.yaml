@@ -3,12 +3,12 @@ spec_id: STORY-b6b1278890774ef993d2ebc327862470-553
 agreed_id: STORY-2630
 title: 'Lanes can actually use codegraph: seat clones resolve the primary index, AGENTS.md documents it, doctor and dell1 check it'
 description: 'Measured 2026-11-07: codegraph 1.6.0 is installed and indexed only at the primary checkout (/home/joe/ai/aida/.codegraph, synced every 15 min by codegraph-sync-aida.timer). Implementer and reviewer lanes run in seat clones (aida-worktrees/aida-seat-aida-*), where ''codegraph callers X'' fails with ''CodeGraph not initialized''. Of 837 headless lane logs in 3 days, 16 invoke codegraph and 422 use rg/grep. Only CLAUDE.md mentions codegraph; AGENTS.md (which Codex reads) and aida-core/templates say nothing, so Codex lanes, the majority, never hear of it. dell1 has no codegraph. Acceptance: (1) a lane in a seat clone or worktree gets a working codegraph without a per-clone index: lane env or wrapper passes -p <primary checkout>, or the seat setup links .codegraph read-only. (2) The contained boundary grants read-only access to that index and nothing writable. (3) The AGENTS.md template and the shared lane prompt carry one line on when to use callers/callees/impact and to confirm ''no callers'' with rg. Edit the template master, then sync-templates. (4) aida doctor reports codegraph missing, index stale (>1h) or unreachable from a seat. (5) Evidence: one codex lane log shows a successful codegraph call from a seat clone. Out of scope: indexing lane branches (main is fine for navigation).'
-status: NeedsAttention
+status: Approved
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-07T15:34:33.363448208Z
-modified_at: 2026-11-08T08:45:20.668481960Z
+modified_at: 2026-11-08T08:46:34.121744209Z
 req_type: Story
 comments:
 - id: 01a1b6a6-52e1-70a0-a9c1-d32888979ca5
@@ -607,6 +607,13 @@ comments:
   modified_at: 2026-11-08T08:38:06.569853314Z
   session_id: 01a1ba46c10c
   harness_version: codex-cli 0.167.0
+- id: 01a1ba56-8289-76a0-b52e-105e8c82551d
+  author: joe
+  content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: Refs slice (host query proxy) at 0e7667371077. Status/heartbeat responsiveness rework is sound and handoff doc removed. AC1 partial (proxy client not delivered to lanes); AC2 partial (native read-only only, contained posture unsupported per README:73); AC3 present on main but directs lanes to bare codegraph; AC4 implemented, client-routing check always fires under the documented deployment, tests pending CI; AC5 unverified (no live seat evidence; real-upstream test has only ever skipped). All 7 CI jobs queued at review time; merge-hold-gate is the supervised hold. Remaining blockers 1-3 need host/advisor action, not another seat rework.. It was punted on: blocked-dependency: PR-3662 findings 1-3 require host/advisor action: this seat has no codegraph executable, primary .codegraph index, deployed host proxy, or candidate doctor binary. Contained client/descriptor/socket admission and live non-empty callers evidence remain absent. Joe must provision/deploy the reviewed host-owned client outside seat write roots, deliver its exact command to lanes, validate contained read-only admission and AC5, and replace the PR boilerplate with AC1-AC5 status and exact evidence. The completing ruling cannot be satisfied from this seat; no completing publication is authorized. Local rework fixes findings 4-8 and 10 but does not grant index writes or claim AC2/AC5.. No triage reason was given.'
+  created_at: 2026-11-08T08:46:34.121740610Z
+  modified_at: 2026-11-08T08:46:34.121740610Z
+  session_id: 01a1b8be-8170-7fb2-89ab-ecb4c6eee98c
+  harness_version: 2.1.319 (Claude Code)
 history:
 - id: 01a1b6a6-1e2f-7932-a527-6de38b6d8545
   author: joe
@@ -935,6 +942,15 @@ history:
   session_id: 01a1ba528025
   harness_version: 2.1.319 (Claude Code)
   changes: []
+- id: 01a1ba56-8289-76a0-b52e-104a5530c938
+  author: joe
+  timestamp: 2026-11-08T08:46:34.121726033Z
+  session_id: 01a1b8be-8170-7fb2-89ab-ecb4c6eee98c
+  harness_version: 2.1.319 (Claude Code)
+  changes:
+  - field_name: status
+    old_value: NeedsAttention
+    new_value: Approved
 filed_at:
   code_sha: 122fea66d306d6739516983479c50201e9d0ae84
   branch: main
@@ -944,16 +960,3 @@ filed_at:
   vendor: claude
   session: 01a1b646-c67d-7b43-98ff-3604a53f5d1f
   harness_version: 2.1.319 (Claude Code)
-attention_reason:
-  category: blocked-dependency
-  detail: 'PR-3662 findings 1-3 require host/advisor action: this seat has no codegraph executable, primary .codegraph index, deployed host proxy, or candidate doctor binary. Contained client/descriptor/socket admission and live non-empty callers evidence remain absent. Joe must provision/deploy the reviewed host-owned client outside seat write roots, deliver its exact command to lanes, validate contained read-only admission and AC5, and replace the PR boilerplate with AC1-AC5 status and exact evidence. The completing ruling cannot be satisfied from this seat; no completing publication is authorized. Local rework fixes findings 4-8 and 10 but does not grant index writes or claim AC2/AC5.'
-  raised_by: implementer
-  raised_at: 2026-11-08T08:33:08.713604204Z
-failure_reason:
-  phase: reviewer
-  phase_index: 3
-  kind: verdict:request-changes
-  detail: Refs slice (host query proxy) at 0e7667371077. Status/heartbeat responsiveness rework is sound and handoff doc removed. AC1 partial (proxy client not delivered to lanes); AC2 partial (native read-only only, contained posture unsupported per README:73); AC3 present on main but directs lanes to bare codegraph; AC4 implemented, client-routing check always fires under the documented deployment, tests pending CI; AC5 unverified (no live seat evidence; real-upstream test has only ever skipped). All 7 CI jobs queued at review time; merge-hold-gate is the supervised hold. Remaining blockers 1-3 need host/advisor action, not another seat rework.
-  recovery_hint: address the review findings, move STORY-2630 back to In Progress, and clear the PR hold only after approval
-  shelved_by: reviewer
-  shelved_at: 2026-11-08T08:45:20.668481960Z
