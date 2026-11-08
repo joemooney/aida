@@ -23,7 +23,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-07T19:59:26.079479Z
-modified_at: 2026-11-08T11:42:01.836282257Z
+modified_at: 2026-11-08T11:42:08.311476509Z
 req_type: Story
 comments:
 - id: 01a1b798-f0d4-73b1-93d5-f84581f2d190
@@ -209,6 +209,23 @@ comments:
   content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: Round 5 fixes check out: AC0/AC2/AC3/AC4 and the advisor''s lane/unsandboxed separation are met in code, but AC1 (lane-job cache hits on primary and dell1) still has no evidence or amendment. Code CI at this head is still pending (only merge-hold-gate has reported, failing by design). Three smaller defects are listed.. It was punted on: blocked-dependency: Round-5 finding 1 is agreed and remains unresolved: AC1 requires two consecutive lane Cargo jobs with final sccache statistics and second-job Rust hits greater than zero on both primary and dell1, using a launcher built from this branch, or a recorded advisor amendment. This native seat cannot obtain both-host evidence. Findings 2-4 are fixed locally: no-resource seats disable the wrapper, lane cache preserves incremental compilation, and Cargo config precedence matches Cargo. Targeted tests and fast gates are running. Preserve the publication veto and existing merge hold.. No triage reason was given.'
   created_at: 2026-11-08T11:42:01.836280789Z
   modified_at: 2026-11-08T11:42:01.836280789Z
+  session_id: 01a1b9af-8230-75d2-82f8-667491cc010a
+  harness_version: 2.1.319 (Claude Code)
+- id: 01a1baf7-3f49-77e3-87cd-8c46000f465a
+  author: joe
+  content: |-
+    REVIEW FINDINGS TO ADDRESS (PR #3657):
+    Verdict: CHANGES REQUESTED
+    Reviewed commit: ccd5244e8faf
+    Recorded: 2026-11-08T11:38:29.981904237+00:00
+    Findings:
+    1. major/acceptance: AC1 is unverified at ccd5244e8faf. It requires a second lane job on the same dependency set to show sccache hits (stats delta > 0) on the primary AND on dell1. Round 5's handoff confirms there are still no lane-job statistics from either host and no advisor amendment. A code change cannot close this, and another implementer round will return the same verdict. Fix: with a launcher built from this branch, run two consecutive 'aida lane job run' cargo jobs on each host and record both logs' 'lane sccache: final job statistics' output (second job Rust hits > 0) on the spec, or have the advisor record an amendment of AC1. Needs host/operator action.
+    2. minor/correctness: aida-cli-lib/src/launch/spawn.rs:59-61 sets RUSTC_WRAPPER='' whenever resources is None, and for_seat returns None for every launch with no host_main or no recorded clone, not only seats (story_2326_resource_env_unrecorded_seat_disables_wrapper pins host_main=None). So on a host whose ~/.cargo/config.toml selects sccache, an advisor or other agent launched in the primary checkout or a linked worktree now builds with no wrapper, losing the cross-worktree dependency cache that config exists for, although the spec only covers lane jobs and sandboxed seats. Fix: apply the disable only to recorded seats or contained/sandboxed launches, and keep the seat regression tests; or have the advisor record on the spec that all agent launches run wrapper-off.
+    3. minor/robustness: SCCACHE_JOB_SCRIPT in aida-cli-lib/src/lane_job.rs:288 starts the foreground server with the job's TMPDIR, which HOST_ENV_ALLOWED forwards from the launcher, but the sandbox mounts a fresh tmpfs on /tmp, so a launcher TMPDIR under /tmp does not exist inside the job. The host cargo wrapper scrubs a missing TMPDIR only for its own process, so the server keeps the dangling value. Its sccache_dead_tmpdir check (pgrep plus /proc/PID/environ; lane bwrap has no --unshare-pid, so it also sees other jobs' servers) then treats the server as dead, runs --stop-server against this job's own UDS and restarts a daemon, which resets the statistics AC1 reads and detaches the server the script waits for. Not reproduced at runtime; depends on the launcher's TMPDIR. Fix: start the lane server with TMPDIR=/tmp in the script (or drop TMPDIR from the job env when it is not visible in the sandbox) and assert it in story_2641_sccache_lifecycle_waits_for_writes_and_preserves_cargo_exit.
+    4. cosmetic/docs: OVERVIEW.md's new STORY-2641 paragraph ends 'Recorded clones without a cargo target (including fresh/non-Rust seats and targets removed by host clean) launch without resource overrides.' Since round 5 they get RUSTC_WRAPPER='' from spawn.rs. Fix: say they launch with the wrapper disabled and no target override.
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
+  created_at: 2026-11-08T11:42:08.201074134Z
+  modified_at: 2026-11-08T11:42:08.201074134Z
   session_id: 01a1b9af-8230-75d2-82f8-667491cc010a
   harness_version: 2.1.319 (Claude Code)
 history:
