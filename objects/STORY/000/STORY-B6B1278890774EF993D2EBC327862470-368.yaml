@@ -29,7 +29,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-04T02:34:20.173245666Z
-modified_at: 2026-11-08T06:01:15.916464230Z
+modified_at: 2026-11-08T06:12:49.573767473Z
 req_type: Story
 relationships:
 - rel_type:
@@ -598,6 +598,13 @@ comments:
   modified_at: 2026-11-08T04:16:58.127800603Z
   session_id: 01a1b8be-8170-7fb2-89ab-ecb4c6eee98c
   harness_version: 2.1.319 (Claude Code)
+- id: 01a1b9c9-c125-7ef2-b557-a52ecd6119cb
+  author: dirtlab
+  content: 'S5 native-seat validation: inherited branch already contains typed conditional handoff and findings recurrence writers, shared parser admission, hourly deferral evaluation, recovery diagnostics and CLI policy contracts. Expanded story2402_s5_recur_conditions_resurface_and_manual_routes in aida-cli-lib/src/tests/story_2402_resurface_tests.rs to cover canonical PR/release/spec/query persistence, Unknown retention, met-condition resurfacing and preservation of recurrence evidence. Lane job j20261108T060234726-2-0: cargo test --profile agent -p aida-cli-lib --lib -- story2402_s5_ passed 4 tests, 0 failures, exit 0. git diff --check passed. Initial aida-cli --lib invocation had no library target; corrected crate run above is executed-test evidence. Derived-attention work untouched. Refs STORY-2402 native publication declaration recorded; edits remain uncommitted for host publication. Codegraph unavailable in lane; doctor check performed and rg used. No blockers.'
+  created_at: 2026-11-08T06:12:49.573767473Z
+  modified_at: 2026-11-08T06:12:49.573767473Z
+  session_id: 01a1b9bf1eaf
+  harness_version: codex-cli 0.167.0
 history:
 - id: 01a1a468-9c3a-76d2-ab8c-12bf6457966b
   author: joe

@@ -28,7 +28,7 @@ priority: Low
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-09-13T22:07:45.944235Z
-modified_at: 2026-11-08T06:07:58.270829432Z
+modified_at: 2026-11-08T06:12:55.379594641Z
 req_type: Task
 tags:
 - cleanup
@@ -181,6 +181,13 @@ comments:
   content: 'Rework diagnosis: downloaded completed CI run 42443611061. The gates failure was the portability ratchet at worktree_lifecycle_gc.rs TOON fixture hard-coded /tmp paths; replaced with a relative synthetic path. The bug-2383 lane_fixture_fails output was intentional negative-fixture evidence: its parent bug_2383_bwrap_real_cargo_test_job_reports_pass_and_fail_through_the_cli passed, and that suite reported 88 passed/0 failed. Contracts failed because the manual checker associated --fail-on-findings with aida session; the citation now names the full aida worktree gc command. The installed live CLI predates --apply/--fail-on-findings, so its manual run correctly identifies those two missing live flags; rerun against the freshly built candidate on the host. First new lane job j20261108T055751320-2-0 executed 16 TASK-1222 tests, all passed. Final reporting/trace rerun and separate launch-ratchet/monthly-retirement tests remain queued/running. No publication or cleanup performed.'
   created_at: 2026-11-08T06:07:58.270829432Z
   modified_at: 2026-11-08T06:07:58.270829432Z
+  session_id: 01a1b9bad3d8
+  harness_version: codex-cli 0.167.0
+- id: 01a1b9c9-d7d3-7291-bceb-8a3c9e597579
+  author: dirtlab
+  content: 'Native rework handoff: addressed all five latest review findings. Shared forge_read_command reuses the existing dynamic constructor without increasing the launch ledger; portability fixture uses a relative synthetic path; the manual names aida worktree gc --fail-on-findings explicitly; all four acceptance criteria have discovered test anchors (aida criteria reports no untested criteria or unanchored tests); removed the duplicate monthly GC job and route and updated docs/regressions; byte walk errors no longer veto eligibility, with bytes_complete in JSON/TOON and incomplete human estimates plus a forced-budget regression.\n\nFinal executed launcher tests: j20261108T060118310-2-0 passed 16/16 TASK-1222 tests; j20261108T055814745-2-0 passed the launch ratchet; j20261108T055844061-2-0 passed monthly-job retirement; j20261108T061139865-2-0 passed the updated unrelated-route regression. All exited 0 (19 final tests). Earlier TASK-1222 run also passed 16/16. Direct rustfmt, git diff --check, schedule TOML, portability and writer inventory checks pass. All 38 selected non-Cargo fast gates passed with standard umask and live Cargo/aida blocked. Five fast gates were excluded: no-default-features, TUI seam, Cargo formatting, speed tooling, containment conformance (interactive fixture); the earlier unadjusted gate attempt and indirect Cargo check were interrupted and are not pass claims. Changed chapter flag validation against the candidate help snapshot passes, as do 13 manual verifier tests and static flags. Full manual check against a newly built CLI and full make check-ci-fast remain host checks; the installed live binary lacks the new flags.\n\nChanged files: .aida/config.toml; OVERVIEW.md; aida-cli-lib/src/forge.rs; aida-cli-lib/src/worktree_lifecycle_gc.rs; aida-cli-lib/src/tests/maintenance_schedule_tests.rs; docs/cli/06-roles-sessions.md. No implementation blockers; untested=false. Edits remain uncommitted. No host cleanup, commit, push, PR creation, ship, review record or queue completion performed. Host publication and queue completion follow exit; operator --apply remains separate.'
+  created_at: 2026-11-08T06:12:55.379594641Z
+  modified_at: 2026-11-08T06:12:55.379594641Z
   session_id: 01a1b9bad3d8
   harness_version: codex-cli 0.167.0
 history:
