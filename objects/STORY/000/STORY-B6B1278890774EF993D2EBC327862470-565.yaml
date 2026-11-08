@@ -23,12 +23,12 @@ description: |
   2. `--fix` writes only user-level files (agents.toml, codex config section, cargo config) and is idempotent.
   3. `aida queue work --no-human` refuses an uncontained launch on a host whose containment checks fail.
   4. FAQ-151 is replaced by a pointer to the command plus the remaining manual steps (ssh, clone, login).
-status: InProgress
+status: NeedsAttention
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-07T19:59:40.192574Z
-modified_at: 2026-11-08T17:31:22.727481383Z
+modified_at: 2026-11-08T17:32:08.069633178Z
 req_type: Story
 comments:
 - id: 01a1b86c-54fb-76f0-b04b-0ed1c7c07cfb
@@ -412,6 +412,15 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a1bc37-ae05-7923-a173-7dc536526113
+  author: dirtlab
+  timestamp: 2026-11-08T17:32:08.069657903Z
+  session_id: 01a1bc36f190
+  harness_version: codex-cli 0.167.0
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: NeedsAttention
 filed_at:
   code_sha: 7a18c0d52a6a4e0822befd4c810cfed16b04b74c
   branch: main
@@ -421,3 +430,9 @@ filed_at:
   vendor: claude
   session: 01a1b76b-2fe7-7dd2-88d0-356fc8d96d04
   harness_version: 2.1.319 (Claude Code)
+attention_reason:
+  category: ambiguous-spec
+  detail: Binding advisor ruling limits this FINAL round to red CI fixture migration, four green test shards, and once-per-launch host preflight. These changes already exist at local/PR head 2315a95f766335239a99a4caf991409eb75d2473. Exact-head CI run 42502298817 has SUCCESS for lib-0, lib-1, cli-0, cli-1 and rest; gates/contracts remain in progress. Latest review at 2026-11-08 17:06 instead blocks on finding 1 (binary freshness diagnostic) and requests findings 2-6 (sandbox/auth/cache/SSH/fix reporting), all outside the binding Nothing else scope. Dispute implementing those findings in this round, not their technical merits. Advisor must resolve scope or route them to follow-ups before additional implementation. Existing merge-hold-gate fails; no clearance attempted. No source changes or publication performed.
+  lean: Accept exact-head four-shard success as CI-only ruling evidence; handle diagnostic findings separately and retain the existing hold until authorized review clearance.
+  raised_by: implementer
+  raised_at: 2026-11-08T17:32:08.069633178Z
