@@ -8,7 +8,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-07T23:40:15.306412624Z
-modified_at: 2026-11-08T17:03:32.485754443Z
+modified_at: 2026-11-08T17:08:04.126832569Z
 req_type: Task
 relationships:
 - rel_type: BlockedBy
@@ -32,6 +32,18 @@ comments:
     TASK-3429 is punted as ambiguous-spec: acceptance names 72 unchanged MCP tools, but the committed descriptor block has 58 literal tool names and tools/list only filters it. Preserve the current surface unless advisor identifies missing tools. The advisor-mandated prerequisite extraction is left uncommitted. aida punt persisted Needs Attention and its reason, but reported it could not write the punt signal file because the path is read-only; the host must retain the publication veto and must not publish or complete this item before triage.
   created_at: 2026-11-08T17:03:32.485754443Z
   modified_at: 2026-11-08T17:03:32.485754443Z
+  session_id: 01a1bc17e151
+  harness_version: codex-cli 0.167.0
+- id: 01a1bc21-a59e-7f61-837a-edb07d8b31a4
+  author: dirtlab
+  content: |
+    Native implementer handoff (partial prerequisite only; TASK-3429 remains Needs Attention). Changed aida-cli-lib/src/lib.rs, mcp.rs, mcp_cmd.rs, session_end.rs; added mcp_claim.rs and mcp_schema.rs. Shared claim-path naming and the complete tool-descriptor block now live below the intended transport crate boundary; MCP re-exports preserve its paths, while session cleanup and CLI tool printing call the shared modules directly. Trace TASK-3429 added. Descriptor block verified byte-identical against committed HEAD: 58 unique literal tool names. Respawn code unchanged.
+
+    Validation via launcher: cargo test --profile agent -p aida-cli-lib --lib -- descriptor: 19 passed, 0 failed; cargo test --profile agent -p aida-cli-lib --lib -- mcp_claim_path_is_case_insensitive_for_session_end_reaping: 1 passed, 0 failed. Broader -- mcp run: 162 passed, 40 failed with allocation-setting regular-file/ownership/shared-write trust refusals in fixtures; not claimed as a clean suite or established baseline failures. git diff --check passed. No new aida-mcp crate, registry injection, visibility widening or dell1 clean-build timing evidence yet.
+
+    Punt: acceptance says 72 unchanged tools but committed surface is 58; advisor must confirm the contract before continuing. aida punt saved Needs Attention/reason, but could not write its signal file (read-only filesystem). A separate draft finding was attempted but allocation refused because this clone has no node binding; this comment preserves the flag. Host must retain the publication veto. All edits uncommitted; no commit, push, PR, queue completion, review record or ship declaration performed.
+  created_at: 2026-11-08T17:08:04.126832569Z
+  modified_at: 2026-11-08T17:08:04.126832569Z
   session_id: 01a1bc17e151
   harness_version: codex-cli 0.167.0
 history:
