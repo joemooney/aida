@@ -8,7 +8,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-06T13:39:53.442026Z
-modified_at: 2026-11-08T19:46:28.391413382Z
+modified_at: 2026-11-08T19:54:27.846413244Z
 req_type: Task
 tags:
 - architecture
@@ -2330,6 +2330,12 @@ history:
   - field_name: status
     old_value: InProgress
     new_value: NeedsAttention
+- id: 01a1bcba-03db-7523-83dc-b26dd5c861a6
+  author: joe
+  timestamp: 2026-11-08T19:54:29.723532928Z
+  session_id: 01a1bcb69c2a
+  harness_version: 2.1.319 (Claude Code)
+  changes: []
 execution_mode: drive
 filed_at:
   code_sha: 50ce509da3f7edbd12ff6636fe996c9c3a65c68f
@@ -2348,7 +2354,7 @@ failure_reason:
   phase: reviewer
   phase_index: 3
   kind: verdict:request-changes
-  detail: 'Head only merges main over 114ee1f3865b: no new code defect, but the MCP output-schema defect is still unfixed, zero-unrouted acceptance is unmet with no advisor ruling, the merge hold fails and CI has not started.'
+  detail: Head fixes the MCP output-schema defect and stays gated, but zero-unrouted acceptance is unmet with no advisor ruling, CI has not started, and the merge hold is on.
   recovery_hint: address the review findings, move TASK-3223 back to In Progress, and clear the PR hold only after approval
   shelved_by: reviewer
-  shelved_at: 2026-11-08T19:40:54.476568Z
+  shelved_at: 2026-11-08T19:54:27.846413244Z

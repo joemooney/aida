@@ -23,7 +23,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-07T19:59:26.079479Z
-modified_at: 2026-11-08T19:50:57.555971695Z
+modified_at: 2026-11-08T19:55:02.431282146Z
 req_type: Story
 comments:
 - id: 01a1b798-f0d4-73b1-93d5-f84581f2d190
@@ -946,6 +946,12 @@ history:
   - field_name: status
     old_value: InProgress
     new_value: NeedsAttention
+- id: 01a1bcba-8405-7cf1-aabe-4dac79b5ddfb
+  author: joe
+  timestamp: 2026-11-08T19:55:02.533196997Z
+  session_id: 01a1bcb8b7a3
+  harness_version: 2.1.319 (Claude Code)
+  changes: []
 filed_at:
   code_sha: 7a18c0d52a6a4e0822befd4c810cfed16b04b74c
   branch: main
@@ -960,3 +966,11 @@ attention_reason:
   detail: 'Latest review finding 1 / AC1 is agreed and unresolved: requires two consecutive lane Cargo jobs using this branch launcher on BOTH primary and dell1, retained final sccache statistics, and second-job Rust hits greater than zero, or a recorded advisor amendment. This native seat cannot supply both-host evidence. Advisor AC0 resource wiring already exists. Removed the non-blocking test block and irrelevant SCCACHE_SERVER_UDS removal from finding 2. Route to host/operator or advisor; preserve existing merge hold and publication veto. Targeted validation is running and results will be reported separately.'
   raised_by: implementer
   raised_at: 2026-11-08T19:50:24.414268108Z
+failure_reason:
+  phase: reviewer
+  phase_index: 3
+  kind: verdict:request-changes
+  detail: AC1 (second lane job shows sccache hits on primary and dell1) still has no evidence or advisor amendment at fd899f640875. AC0/AC2/AC3/AC4 and the lane/unsandboxed separation ruling are met in source. Head adds only a test-only cleanup since round 13, and the full-diff sweep found no new defect. CI code jobs are queued at this head; no local cargo run.
+  recovery_hint: address the review findings, move STORY-2641 back to In Progress, and clear the PR hold only after approval
+  shelved_by: reviewer
+  shelved_at: 2026-11-08T19:55:02.431282146Z
