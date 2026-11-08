@@ -23,7 +23,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-09-26T18:30:26.622729865Z
-modified_at: 2026-11-08T13:33:51.478070553Z
+modified_at: 2026-11-08T13:33:54.977338875Z
 req_type: Story
 tags:
 - agent-launch
@@ -731,6 +731,22 @@ comments:
   content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: STORY-1486 PARTIAL: all five criteria match tests by source reading and no blocking code defect was found, but CI run 42484828405 at this head has assigned no jobs, so no test result confirms them. No cargo run, by policy.. No triage reason was given.'
   created_at: 2026-11-08T13:33:51.478066915Z
   modified_at: 2026-11-08T13:33:51.478066915Z
+  session_id: 01a1b9af-8230-75d2-82f8-667491cc010a
+  harness_version: 2.1.319 (Claude Code)
+- id: 01a1bb5d-9538-7ca0-ad59-7ebbe20098a8
+  author: joe
+  content: |-
+    REVIEW FINDINGS TO ADDRESS (STORY-1486):
+    Verdict: CHANGES REQUESTED
+    Reviewed commit: 807a93da120f
+    Recorded: 2026-11-08T13:31:17.961815465+00:00
+    Findings:
+    1. WAIT STATE, no code change needed: CI run 42484828405 at 807a93da120f was still pending with 0 jobs at 13:50 UTC behind a repo-wide runner backlog, and merge-hold-gate run 42484828369 was queued. No completed CI run exists for the round-7 changes, so the PTY test noexec_verbose_prints_stakeholder_and_explicit_git_downgrades (aida-cli/tests/story_1486_launch_profile.rs:153), its time budget, and the earlier cli-0 timeout in bug_2187_reviewer_record_identity::scrubbed_headless_reviewer_records_but_implementer_shell_refuses are unconfirmed. Re-review at this head when CI finishes; do not push a filler commit, which would restart CI.
+    2. NON-BLOCKING, minor: for a --spec launch, --no-exec --verbose declares the wrong project roots. prepare_agent_launch_dry (aida-cli-lib/src/agent_launch.rs:5574) sets launch_cwd to the project root, and render_agent_launch_noexec passes that to render_roots (agent_launch.rs:6243), so the preview lists the primary checkout as the writable project and git-dir while a real launch gets a dedicated worktree. Either label the preview as primary-checkout-until-launch or state the planned worktree. Can be a follow-up.
+    3. NON-BLOCKING, test gap: generated_profile_preserves_approval_prompts (aida-core/src/scaffolding/launch_profile.rs:17) scans RECIPE, not the generated artifact that includes the wrap_with_aida_header line. The header text holds no forbidden word today (mod.rs:596), so AC2 holds; asserting on artifact.content would match the criterion's wording.
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
+  created_at: 2026-11-08T13:33:54.872910370Z
+  modified_at: 2026-11-08T13:33:54.872910370Z
   session_id: 01a1b9af-8230-75d2-82f8-667491cc010a
   harness_version: 2.1.319 (Claude Code)
 history:
