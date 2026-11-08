@@ -1,0 +1,36 @@
+id: 01a1b8cb-6dcf-78d2-8460-45b258e5fa3c
+spec_id: STORY-b6b1278890774ef993d2ebc327862470-577
+agreed_id: STORY-2654
+title: 'Review PR-3644: [AI:codex] chore(crate-split): add glob ratchet and ledger relocation tooling (Refs TASK-3428)'
+description: |
+  Auto-filed by `aida pr auto-queue-review` (typically from /aida-pr) (session `01a1b8c5`) for branch `task-3428-d1705`.
+
+  - PR: <https://github.com/joemooney/aida/pull/3644>
+  - Branch: `task-3428-d1705` → `main`
+
+  ## Slice of (Refs only — not completed by this PR)
+
+  Commit subjects carry `(Refs SPEC-ID)`: this PR is one slice of a spec that a later PR completes. Review this slice against that spec's acceptance criteria.
+
+  - TASK-3428
+
+  ## Acceptance
+
+  - Generate a structured review prompt with `aida review prompt --pr 3644` and verify each spec's acceptance criteria.
+  - Approve and merge, or request changes by spec id.
+  - Mark this story `completed` once the PR is merged.
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-11-08T01:35:02.095094298Z
+modified_at: 2026-11-08T01:35:02.095094298Z
+req_type: Story
+filed_at:
+  code_sha: 2d1589ac325cca9366b218b577b7b0f41b2133d5
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 2782389cd8a
+  vendor: claude
+  session: 01a1b8c5953a
