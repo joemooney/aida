@@ -1,0 +1,29 @@
+id: 01a1bd2f-498a-74f1-8550-251d0f51933a
+spec_id: TASK-b6b1278890774ef993d2ebc327862470-1021
+title: 'NON-BLOCKING, cosmetic: render_roots (aida-cli-lib/src/launch_permission_profil…'
+description: |-
+  Non-blocking finding carried forward from an APPROVED review verdict on STORY-1486, which has since completed — recorded here so it keeps a queryable home once the verdict record stops being read.
+
+  NON-BLOCKING, cosmetic: render_roots (aida-cli-lib/src/launch_permission_profile.rs:188, 209-211) lists the resolved executable and then target/debug and target/release without deduplicating, so a binary run from either target directory appears twice under executable_locations.
+
+  PR: #3671
+  Reviewed sha: ad74c5720cbcbae3b3b4f4bf3ca48471829e4a9a
+status: Draft
+priority: Medium
+owner: joe
+feature: Uncategorized
+created_at: 2026-11-08T22:02:35.274987209Z
+modified_at: 2026-11-08T22:02:35.274987209Z
+req_type: Task
+tags:
+- carried-from:STORY-1486
+- finding-hash:e04bae0c
+- from-review:PR-3671
+- kind:carried-forward
+filed_at:
+  code_sha: 65d5a89946c24177a8c3a0d6d076fcede9be9107
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: db2eb4c39e4
+  vendor: claude
