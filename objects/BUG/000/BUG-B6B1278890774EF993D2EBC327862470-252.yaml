@@ -3,12 +3,12 @@ spec_id: BUG-b6b1278890774ef993d2ebc327862470-252
 agreed_id: BUG-2487
 title: Contained Codex exec passes '-P aida', which no codex exec accepts (sandbox-only flag); drop it from exec argv and keep the 0.166.0 pin
 description: 'launch/contained.rs:1397 adds ''-P aida'' (permission profile), which codex-cli only accepts from 0.167.0. launch/codex_auth.rs pins the contained binary to codex-cli 0.166.0 (SHA b8a11fed...), which rejects it: ''error: unexpected argument -P found''. So no binary can pass both the pin and the launch. Repro 2026-11-07 16:52Z, operator''s live conformance run (out=~/.aida/conformance-codex-aida-1794070266): the containment receipt was issued, then codex exited 2 on -P, and C0-C4 were all unknown. dell1 has codex 0.167.0 with -P. Acceptance: (1) the pin moves to codex-cli 0.167.0 with its probed SHA-256 for the npm vendored musl binary (re-probe per STORY-2593: version, no in-lane refresh, empty refresh_token behavior). (2) The launcher checks before launch that the pinned version supports every flag it passes, and fails closed naming the flag. (3) A test pairs the pin with the argv builder, so a future flag or pin change can''t drift apart again. (4) Docs name the supported codex version and the upgrade step (npm i -g @openai/codex@0.167.0).'
-status: InProgress
+status: Completed
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-07T16:53:03.893981953Z
-modified_at: 2026-11-08T00:21:04.879716576Z
+modified_at: 2026-11-08T01:26:52.450928194Z
 req_type: Bug
 relationships:
 - rel_type:
@@ -340,6 +340,22 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a1b8c3-f4fe-7512-a323-bbfd8426847a
+  author: aida-auto-bump
+  timestamp: 2026-11-08T01:26:52.414704058Z
+  session_id: 01a1b8be-8170-7fb2-89ab-ecb4c6eee98c
+  harness_version: 2.1.319 (Claude Code)
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Completed
+processing_record:
+- id: 01a1b8c3-f522-7ef2-8127-b40345f254e4
+  timestamp: 2026-11-08T01:26:52.450925290Z
+  agent: aida
+  commit_sha: 2d1589ac325cca9366b218b577b7b0f41b2133d5
+  summary: 'Re-scoped BUG-2487 met: exec selects profile via -c default_permissions="aida" (contained.rs:1445), -P only on sandbox preflight; validate_codex_flags fails closed naming the flag against the pinned 0.166.0 help fixture whose SHA is paired with PROGRAM_SHA256; builder/pin regression test plus opt-in live denied-write probe; 0.166.0 pin retained; CI green at 47f7c04.'
+  review_verdict: approved
 filed_at:
   code_sha: ac1f7e0a9c41def533605455baf8c1c7e64817a8
   branch: main
@@ -349,3 +365,7 @@ filed_at:
   vendor: claude
   session: 01a1b646-c67d-7b43-98ff-3604a53f5d1f
   harness_version: 2.1.319 (Claude Code)
+implementation_info:
+  implemented: false
+  completed_at: 2026-11-08T01:26:52.414699013Z
+  completion_sha: 2d1589ac325cca9366b218b577b7b0f41b2133d5
