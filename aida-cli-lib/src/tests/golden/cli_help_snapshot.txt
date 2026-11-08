@@ -17636,6 +17636,9 @@ Commands:
   help         Print this message or the help of the given subcommand(s)
 
 Options:
+      --git-read-only
+          Declare Git read-only policy for this launch (not enforced by current adapters)
+
       --role <ROLE>
           Role for a launch using the configured default vendor
 
@@ -17667,6 +17670,9 @@ Spawn Claude Code with project-correct cwd/env and registry tracking
 Usage: aida agent new claude [OPTIONS]
 
 Options:
+      --git-read-only
+          Declare Git read-only policy for this launch (not enforced by current adapters)
+
       --role <ROLE>
           Role propagated to the spawned Claude process as AIDA_SESSION_ROLE
 
@@ -17821,6 +17827,9 @@ Arguments:
           given
 
 Options:
+      --git-read-only
+          Declare Git read-only policy for this launch (not enforced by current adapters)
+
       --role <ROLE>
           Role propagated to the spawned Codex process as AIDA_SESSION_ROLE
 
@@ -17978,6 +17987,9 @@ Spawn Antigravity CLI with project-correct cwd/env and registry tracking
 Usage: aida agent new antigravity [OPTIONS]
 
 Options:
+      --git-read-only
+          Declare Git read-only policy for this launch (not enforced by current adapters)
+
       --role <ROLE>
           Role propagated to the spawned Antigravity process as AIDA_SESSION_ROLE
 
@@ -49149,6 +49161,11 @@ Working on aida itself
         "help": "Pin the output format regardless of whether stdout is a terminal: human = tables, toon = compact agent output, json = machine JSON. Default (unset) is human at a TTY, toon when piped/captured. Also settable via AIDA_OUTPUT_FORMAT (the flag wins)"
       },
       {
+        "name": "git-read-only",
+        "takes_value": false,
+        "help": "Declare Git read-only policy for this launch (not enforced by current adapters)"
+      },
+      {
         "name": "help",
         "takes_value": false,
         "help": "Print help (see more with '--help')"
@@ -49219,6 +49236,11 @@ Working on aida itself
         "name": "format",
         "takes_value": true,
         "help": "Pin the output format regardless of whether stdout is a terminal: human = tables, toon = compact agent output, json = machine JSON. Default (unset) is human at a TTY, toon when piped/captured. Also settable via AIDA_OUTPUT_FORMAT (the flag wins)"
+      },
+      {
+        "name": "git-read-only",
+        "takes_value": false,
+        "help": "Declare Git read-only policy for this launch (not enforced by current adapters)"
       },
       {
         "name": "grant-inline",
@@ -49403,6 +49425,11 @@ Working on aida itself
         "help": "Pin the output format regardless of whether stdout is a terminal: human = tables, toon = compact agent output, json = machine JSON. Default (unset) is human at a TTY, toon when piped/captured. Also settable via AIDA_OUTPUT_FORMAT (the flag wins)"
       },
       {
+        "name": "git-read-only",
+        "takes_value": false,
+        "help": "Declare Git read-only policy for this launch (not enforced by current adapters)"
+      },
+      {
         "name": "grant-inline",
         "takes_value": true,
         "help": "At a human terminal with no seat grant, `auto` offers to launch the seat under a one-time grant from you (your keystroke is the proof; nothing is exported to your shell). `no` refuses instead, as scripts expect"
@@ -49563,6 +49590,11 @@ Working on aida itself
         "name": "format",
         "takes_value": true,
         "help": "Pin the output format regardless of whether stdout is a terminal: human = tables, toon = compact agent output, json = machine JSON. Default (unset) is human at a TTY, toon when piped/captured. Also settable via AIDA_OUTPUT_FORMAT (the flag wins)"
+      },
+      {
+        "name": "git-read-only",
+        "takes_value": false,
+        "help": "Declare Git read-only policy for this launch (not enforced by current adapters)"
       },
       {
         "name": "grant-inline",

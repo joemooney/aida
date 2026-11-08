@@ -96,6 +96,16 @@ fn scrubbed_headless_reviewer_records_but_implementer_shell_refuses() {
     git(&fixture.repo, &["init", "-q", "-b", "main"]);
     // trace:BUG-2017 | ai:codex — explicit positive global-ID fixture.
     test_git::enroll_synthetic_home(&fixture.repo);
+    // Keep the allocation receipt private regardless of the runner's umask.
+    // trace:STORY-1486 | ai:codex
+    std::fs::set_permissions(
+        fixture
+            .repo
+            .join(".git")
+            .join(aida_core::allocation_authority::CONFIG_FILE),
+        std::fs::Permissions::from_mode(0o600),
+    )
+    .unwrap();
     git(&fixture.repo, &["config", "user.name", "Reviewer fixture"]);
     git(
         &fixture.repo,

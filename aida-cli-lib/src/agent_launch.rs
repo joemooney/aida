@@ -399,33 +399,14 @@ pub(crate) fn handle_agent_command(cmd: &AgentCommand) -> Result<()> {
             };
             // Resolve this declaration independently of approval posture. It grants no authority.
             // trace:STORY-1486 | ai:codex
-            let (AgentNewCommand::Claude {
+            let crate::vendors::LaunchPreviewOptions {
                 role,
                 cwd,
                 noexec,
                 verbose,
                 show_prompt,
                 show_context,
-                ..
-            }
-            | AgentNewCommand::Codex {
-                role,
-                cwd,
-                noexec,
-                verbose,
-                show_prompt,
-                show_context,
-                ..
-            }
-            | AgentNewCommand::Antigravity {
-                role,
-                cwd,
-                noexec,
-                verbose,
-                show_prompt,
-                show_context,
-                ..
-            }) = command;
+            } = crate::vendors::launch_preview_options(command);
             let root = child_role_project_root(cwd.as_deref())?;
             crate::launch_permission_profile::validate_recipe(&root)?;
             let seat = crate::stakeholder_role::active_stakeholder_role()
@@ -8011,18 +7992,14 @@ pub(crate) static AGENT: crate::command_registry::CommandReg =
 // trace:STORY-1486 | ai:codex
 fn agent_cli_policy(matches: &clap::ArgMatches) -> crate::command_registry::CmdPolicy {
     let preview =
-        <AgentArgs as clap::FromArgMatches>::from_arg_matches(matches).is_ok_and(|args| {
-            matches!(
-                args.inner,
-                AgentCommand::New {
-                    command: Some(
-                        AgentNewCommand::Claude { noexec: true, .. }
-                            | AgentNewCommand::Codex { noexec: true, .. }
-                            | AgentNewCommand::Antigravity { noexec: true, .. }
-                    ),
-                    ..
-                }
-            )
+        <AgentArgs as clap::FromArgMatches>::from_arg_matches(matches).is_ok_and(|args| match args
+            .inner
+        {
+            AgentCommand::New {
+                command: Some(command),
+                ..
+            } => *crate::vendors::launch_preview_options(&command).noexec,
+            _ => false,
         });
     crate::command_registry::CmdPolicy {
         stakeholder: if preview {

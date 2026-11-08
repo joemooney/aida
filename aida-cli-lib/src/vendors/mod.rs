@@ -3,6 +3,59 @@
 // trace:STORY-2539 | ai:codex
 use aida_core::vendors::{Background, SkillSyntax, VendorProfile};
 
+// Read-only projection for declaration rendering and preview classification.
+// trace:STORY-1486 | ai:codex
+pub(crate) struct LaunchPreviewOptions<'a> {
+    pub role: &'a Option<String>,
+    pub cwd: &'a Option<std::path::PathBuf>,
+    pub noexec: &'a bool,
+    pub verbose: &'a bool,
+    pub show_prompt: &'a bool,
+    pub show_context: &'a bool,
+}
+
+// trace:STORY-1486 | ai:codex
+pub(crate) fn launch_preview_options(
+    command: &crate::agent_launch::AgentNewCommand,
+) -> LaunchPreviewOptions<'_> {
+    use crate::agent_launch::AgentNewCommand;
+    let (AgentNewCommand::Claude {
+        role,
+        cwd,
+        noexec,
+        verbose,
+        show_prompt,
+        show_context,
+        ..
+    }
+    | AgentNewCommand::Codex {
+        role,
+        cwd,
+        noexec,
+        verbose,
+        show_prompt,
+        show_context,
+        ..
+    }
+    | AgentNewCommand::Antigravity {
+        role,
+        cwd,
+        noexec,
+        verbose,
+        show_prompt,
+        show_context,
+        ..
+    }) = command;
+    LaunchPreviewOptions {
+        role,
+        cwd,
+        noexec,
+        verbose,
+        show_prompt,
+        show_context,
+    }
+}
+
 fn with_args(head: String, args: &str) -> String {
     match args.trim() {
         "" => head,

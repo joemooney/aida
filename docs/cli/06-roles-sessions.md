@@ -217,8 +217,10 @@ than local absolute paths. `aida agent new <vendor> --no-exec --verbose` resolve
 the recipe into separate writable and read-only root lists. Project source,
 Git administrative directories (including the common directory shared by linked
 worktrees), project state, store, cache and build output are listed separately.
-The project root in this declaration is the actual launch directory, including
-an explicit linked-worktree `--cwd`. Unavailable Git metadata is reported without
+The project root in this declaration is the Git worktree containing the launch
+directory, including an explicit linked-worktree `--cwd` or a subdirectory.
+When Git is unavailable, it falls back to the launch directory.
+Unavailable Git metadata is reported without
 preventing a preview; it never establishes a writable AIDA checkout identity.
 An AIDA source checkout is read-only for consumer repositories; it is writable
 for AIDA development only when the resolved Git common-directory identities

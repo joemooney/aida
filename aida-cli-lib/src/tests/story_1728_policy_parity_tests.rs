@@ -13,6 +13,8 @@
 //! Rows corrected by hand after capture, each a deliberate policy change:
 //! - `session leases --prune-stale`: Read → Session. It releases stale
 //!   leases, including other clones' claims (TASK-1939).
+//! - `agent new <vendor> --no-exec`: Write → Read. Side-effect-free launch
+//!   declarations are available to stakeholder seats (STORY-1486).
 // trace:STORY-1728 | ai:claude
 
 use super::*;
