@@ -1,0 +1,29 @@
+id: 01a1bb2d-cbd9-78c0-9efe-e20ed78fdc0d
+spec_id: TASK-b6b1278890774ef993d2ebc327862470-993
+title: 'NON-BLOCKING, minor: aida-cli-lib/src/review_watch.rs:1329-1330 only adopts a n…'
+description: |-
+  Non-blocking finding carried forward from an APPROVED review verdict on TASK-3472, which has since completed — recorded here so it keeps a queryable home once the verdict record stops being read.
+
+  NON-BLOCKING, minor: aida-cli-lib/src/review_watch.rs:1329-1330 only adopts a new limit when no attempt is active. Restarting the watcher after this config lands (4) while reviews started at 2 are running makes every change refuse with 'use --max-concurrent 2' until those reviews drain. Self-heals, but the rollout path and message are misleading now that config, not the flag, sets the limit.
+
+  PR: #3674
+  Reviewed sha: c196dce0864b77ad45696bf8940b8ff8e367a4fc
+status: Draft
+priority: Medium
+owner: joe
+feature: Uncategorized
+created_at: 2026-11-08T12:41:43.129222138Z
+modified_at: 2026-11-08T12:41:43.129222138Z
+req_type: Task
+tags:
+- carried-from:TASK-3472
+- finding-hash:cef8ba92
+- from-review:PR-3674
+- kind:carried-forward
+filed_at:
+  code_sha: d68eb4ec071092cbe9a36eb356d033c613633453
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 92e7eb35446
+  vendor: claude
