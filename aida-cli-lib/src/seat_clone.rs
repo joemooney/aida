@@ -1878,9 +1878,9 @@ pub(crate) fn probe_until(
     }
     // The session's runtime links and build/cache output are not work.
     // trace:BUG-B6B1278890774EF993D2EBC327862470-051 | ai:claude
-    facts
-        .dirty
-        .retain(|line| !is_runtime_noise_entry(clone, line));
+    facts.dirty.retain(|line| {
+        !is_runtime_noise_entry(clone, line) && !is_mirrored_handshake_entry(main, clone, line)
+    });
     let base = pinned_base_until(main, clone, deadline).unwrap_or_default();
     // BUG-2224: a seat clone inherits refs (tags, `wip/*` branches) whose
     // commits the main checkout already holds; removing the clone loses none
@@ -2049,13 +2049,46 @@ pub(crate) fn is_runtime_noise_entry(clone: &Path, line: &str) -> bool {
         || path.starts_with(".aida/cache-db/")
         || path == ".aida/agents"
         || path.starts_with(".aida/agents/")
-        // Mirrored by the host before successful no-change lease cleanup.
-        // trace:BUG-2488 | ai:codex
-        || path == ".aida/punts.jsonl"
-        || path.starts_with(".aida/punt-signals/")
-        || path.starts_with(".aida/pr-holds/")
         || path == "target"
         || path.starts_with("target/")
+}
+
+/// Handshakes are disposable only when the host already retains their evidence.
+// trace:BUG-2488 | ai:codex
+pub(crate) fn is_mirrored_handshake_entry(main: &Path, clone: &Path, line: &str) -> bool {
+    let Some(path) = line.strip_prefix("? ") else {
+        return false;
+    };
+    if path != ".aida/punts.jsonl"
+        && !path.starts_with(".aida/punt-signals/")
+        && !path.starts_with(".aida/pr-holds/")
+    {
+        return false;
+    }
+    // Keep cleanup probes bounded even if a seat swaps a FIFO or symlink.
+    let read = aida_core::seat_clone_detect::read_regular_file;
+    let Some(text) = read(&clone.join(path)) else {
+        return false;
+    };
+    if path.starts_with(".aida/punt-signals/") || path.starts_with(".aida/pr-holds/") {
+        return read(&main.join(path)).is_some_and(|host| host == text);
+    }
+    let Some(host) = read(&crate::punt::ledger_path(main)) else {
+        return text.is_empty();
+    };
+    let existing: Vec<crate::punt::PuntRecord> = host
+        .lines()
+        .filter_map(|line| serde_json::from_str(line).ok())
+        .collect();
+    text.lines().all(|line| {
+        serde_json::from_str::<crate::punt::PuntRecord>(line).is_ok_and(|record| {
+            existing.iter().any(|r| {
+                r.spec.eq_ignore_ascii_case(&record.spec)
+                    && r.timestamp == record.timestamp
+                    && r.category == record.category
+            })
+        })
+    })
 }
 
 /// Bring origin's copy of `branch` into `main`'s `refs/remotes/origin/<branch>`

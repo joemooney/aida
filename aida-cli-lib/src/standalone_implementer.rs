@@ -664,6 +664,30 @@ pub(crate) fn provision_signals(worktree: &Path, spec: &str) -> Result<(PathBuf,
     Ok((punt, hold))
 }
 
+/// Start a new admitted attempt after held-resume policy has been checked.
+// trace:BUG-2488 | ai:codex
+pub(crate) fn provision_attempt_signals(
+    main: &Path,
+    tree: &Path,
+    spec: &str,
+) -> Result<(PathBuf, PathBuf)> {
+    provision_signals(main, spec)?;
+    provision_signals(tree, spec)
+}
+
+/// Install explicit seat paths rather than inheriting a host-only handshake.
+// trace:BUG-2488 | ai:codex
+pub(crate) fn apply_seat_signals(cmd: &mut std::process::Command, tree: &Path, spec: &str) {
+    cmd.env(
+        crate::punt::SIGNAL_FILE_ENV,
+        crate::punt::signal_path(tree, spec),
+    )
+    .env(
+        crate::punt::HOLD_SIGNAL_FILE_ENV,
+        crate::punt::hold_signal_path(tree, spec),
+    );
+}
+
 /// Reconcile seat-local runtime evidence before publication or lease cleanup.
 // trace:BUG-2488 | ai:codex
 pub(crate) fn reconcile_signals(main: &Path, tree: &Path, spec: &str) -> Result<()> {
@@ -717,10 +741,9 @@ pub(crate) fn run(launch: Launch<'_>) -> Result<()> {
     claim_spec(launch.project_root, launch.spec);
     let worktree = lease_worktree(launch.project_root, launch.lease_id);
     // A resumed/new attempt must not inherit the prior host-side veto.
-    // Held-resume admission has already consumed the persisted hold marker.
+    // Held-resume policy has already checked the persisted hold marker.
     // trace:BUG-2488 | ai:codex
-    provision_signals(&main_root, launch.spec)?;
-    let (punt_signal, hold_signal) = provision_signals(&worktree, launch.spec)?;
+    let (punt_signal, hold_signal) = provision_attempt_signals(&main_root, &worktree, launch.spec)?;
     // BUG-2383: the lane job runner, so the seat can run its tests here,
     // outside its 60-second tool-call cap. trace:BUG-2383 | ai:claude
     // trace:TASK-2902 | ai:codex

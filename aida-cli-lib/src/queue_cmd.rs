@@ -9065,11 +9065,15 @@ pub(crate) fn run_queue_resume_to_exit(
     let publish_on_exit = target.vendor == session::HeadlessVendor::Codex
         && contained
         && crate::canonical_role_name(role) == "implementer";
-    // A resumed attempt must not mirror the prior attempt's seat-local veto.
+    // Admission has checked the held-resume policy; consume both prior vetoes.
     // Do this once at admission, before the vendor can write fresh signals.
     // trace:BUG-2488 | ai:codex
     if publish_on_exit {
-        crate::standalone_implementer::provision_signals(tree, publication.1)?;
+        crate::standalone_implementer::provision_attempt_signals(
+            publication.0,
+            tree,
+            publication.1,
+        )?;
     }
     let status = session::spawn_vendor_headless_resume(
         host_main, target, prompt, log, tree, tee, contained, role,

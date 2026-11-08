@@ -6716,22 +6716,19 @@ pub(crate) fn run_vendor_headless_to_exit(
 ) -> Result<std::process::ExitStatus> {
     let drain_lane = drain_resume_lane(vendor, seat, lease_id, lane_tree);
     // trace:TASK-2902 | ai:codex
-    if vendor == HeadlessVendor::Codex {
-        if let Some((lease, (tree, _))) = implementer_job_lane(seat, lease_id, lane_tree) {
-            // Clear only the reused seat's previous attempt, before spawning.
-            // Host-side holds retain their independent publication veto.
-            // trace:BUG-2488 | ai:codex
-            let main = crate::main_worktree_root_from(&headless_worktree_root());
-            let scope = crate::list_leases(&main)
-                .into_iter()
-                .find(|l| l.id == lease)
-                .context("publication lease disappeared")?
-                .scope;
-            crate::standalone_implementer::provision_signals(tree, &scope)?;
-            crate::native_publication::prepare(
-                &crate::main_worktree_root_from(&headless_worktree_root()),
-                tree,
-            )?;
+    if let Some((lease, (tree, _))) = implementer_job_lane(seat, lease_id, lane_tree) {
+        // Admission has checked any persisted hold. Consume prior-attempt
+        // handshakes before this attempt creates its own.
+        // trace:BUG-2488 | ai:codex
+        let main = crate::main_worktree_root_from(&headless_worktree_root());
+        let scope = crate::list_leases(&main)
+            .into_iter()
+            .find(|l| l.id == lease)
+            .context("publication lease disappeared")?
+            .scope;
+        crate::standalone_implementer::provision_attempt_signals(&main, tree, &scope)?;
+        if vendor == HeadlessVendor::Codex {
+            crate::native_publication::prepare(&main, tree)?;
         }
     }
 
@@ -6926,13 +6923,23 @@ pub(crate) fn drain_lane_with_resume(
     );
     let launch_head = bg::seat_head(worktree);
     let signalled = || {
-        [
-            crate::punt::SIGNAL_FILE_ENV,
-            crate::punt::HOLD_SIGNAL_FILE_ENV,
-        ]
-        .iter()
-        .filter_map(std::env::var_os)
-        .any(|p| !p.is_empty() && Path::new(&p).exists())
+        // trace:BUG-2488 | ai:codex
+        let main = crate::main_worktree_root_from(worktree);
+        let seat_signal = crate::list_leases(&main)
+            .into_iter()
+            .find(|l| l.id == lease)
+            .is_some_and(|l| {
+                crate::punt::signal_path(worktree, &l.scope).exists()
+                    || crate::punt::hold_signal_path(worktree, &l.scope).exists()
+            });
+        seat_signal
+            || [
+                crate::punt::SIGNAL_FILE_ENV,
+                crate::punt::HOLD_SIGNAL_FILE_ENV,
+            ]
+            .iter()
+            .filter_map(std::env::var_os)
+            .any(|p| !p.is_empty() && Path::new(&p).exists())
     };
     let lane = bg::ResumeLoop {
         can_resume: true,
@@ -7311,6 +7318,22 @@ fn run_vendor_headless_child(
     // trace:STORY-1662 | ai:claude
     if let Some(customize) = hooks.customize {
         customize(&mut child_cmd);
+    }
+    // The drain parent carries host paths; the vendor can write only its seat.
+    // trace:BUG-2488 | ai:codex
+    if let Some(id) = lease_id
+        .filter(|_| lease_root.is_none() && crate::canonical_role_name(seat) == "implementer")
+    {
+        let main = crate::main_worktree_root_from(&headless_worktree_root());
+        let lease = crate::list_leases(&main)
+            .into_iter()
+            .find(|l| l.id == id)
+            .context("implementer lease disappeared before signal transport")?;
+        crate::standalone_implementer::apply_seat_signals(
+            &mut child_cmd,
+            &lease.worktree_path,
+            &lease.scope,
+        );
     }
     // trace:TASK-3225 | ai:codex — an explicit requirement cannot downgrade to native.
     crate::containment::launch::require_store_service_surface(&child_cmd, wrapper)?;
@@ -8254,6 +8277,22 @@ pub(crate) fn spawn_vendor_headless_resume_granted(
             cwd,
         )?;
     }
+    // Resolve before creating the tee or grant so a missing lease fails cleanly.
+    // trace:BUG-2488 | ai:codex
+    let signal_scope = if crate::canonical_role_name(seat) == "implementer" {
+        let main = host_main
+            .map(Path::to_path_buf)
+            .unwrap_or_else(|| crate::main_worktree_root_from(cwd));
+        Some(
+            crate::list_leases(&main)
+                .into_iter()
+                .find(|l| l.worktree_path == cwd)
+                .context("resumed implementer has no lease for signal transport")?
+                .scope,
+        )
+    } else {
+        None
+    };
     let effective_prompt = codex_inline_prompt(prompt).unwrap_or_else(|| prompt.to_string());
     if let Some(dir) = log_path.parent() {
         std::fs::create_dir_all(dir)
@@ -8307,6 +8346,10 @@ pub(crate) fn spawn_vendor_headless_resume_granted(
         .env("AIDA_DRIVE_ROOT", headless_worktree_root())
         .env("PATH", drive_path_env().unwrap_or_default())
         .envs(crate::headless_wait_envs(ceiling_key, &ceiling_value));
+    // trace:BUG-2488 | ai:codex
+    if let Some(scope) = signal_scope.as_deref() {
+        crate::standalone_implementer::apply_seat_signals(&mut cmd, cwd, scope);
+    }
     let mut handle_guard = child_reservation_guard();
     apply_resumed_child_agent_identity(&mut cmd, vendor, seat, target.session_id);
     apply_headless_harness_version(host_main, &mut cmd, vendor, cwd);

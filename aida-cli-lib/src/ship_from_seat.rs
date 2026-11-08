@@ -503,11 +503,8 @@ pub(crate) fn publish_queue_exit(
 ) -> Result<()> {
     let main = crate::main_worktree_root_from(main);
     // trace:BUG-2488 | ai:codex
-    if publication_veto(&main, spec) {
-        return Ok(());
-    }
     crate::standalone_implementer::reconcile_signals(&main, tree, spec)?;
-    if publication_veto(tree, spec) {
+    if publication_veto(&main, spec) || publication_veto(tree, spec) {
         return Ok(());
     }
     let no_change =

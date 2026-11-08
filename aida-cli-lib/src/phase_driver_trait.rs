@@ -760,6 +760,19 @@ impl auto_complete::PhaseDriver for RealPhaseDriver {
         // `claude --resume` with this exact cwd so Claude's project-slug
         // derivation finds the persisted session.
         self.implementer_worktree = Some(worktree_path.clone());
+        // Collect the writable-seat handshakes before the driver classifies exit.
+        // trace:BUG-2488 | ai:codex
+        crate::standalone_implementer::reconcile_signals(
+            &self.project_root,
+            &worktree_path,
+            &self.spec,
+        )
+        .map_err(|e| {
+            auto_complete::PhaseFailure::of(
+                auto_complete::FailureKind::Spawn,
+                format!("could not reconcile implementer signals: {e:#}"),
+            )
+        })?;
 
         // STORY-276: did the implementer punt? `aida punt` dropped the signal
         // file and the spec is now parked in NeedsAttention — there is no PR
