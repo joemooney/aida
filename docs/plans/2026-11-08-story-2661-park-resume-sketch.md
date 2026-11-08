@@ -161,7 +161,7 @@ cancel a wait. Refusal preserves InProgress, the question/binding, wait, dirty
 seat and existing queue state; it never manufactures a status-mismatch block
 for an otherwise eligible bound resume.
 
-### Closed inventory of reclaim doors (R22)
+### Closed inventory of reclaim doors (R22, R23)
 
 Retained ownership is a separate gate from PID lease liveness, status
 preflight and force flags. All of the following doors must consult the same
@@ -170,6 +170,8 @@ at their final mutation or claim boundary:
 
 | Door | Protected boundary |
 |---|---|
+| CLI `aida claim` (`claim.rs::handle_claim`, `persist_claim_status`) | Before creating or refreshing a scope lease and before changing status or `req.owner`. |
+| MCP `claim_task` (`mcp.rs::tool_claim_task`) | Before creating a scope lease, even after the original lane lease has been reaped. |
 | CLI metadata-only `aida queue rework` | Before status changes, queue insertion or routing. |
 | MCP `queue_rework` (`mcp.rs::tool_queue_rework_inner`) | Before status changes or queue writes, including explicit status overrides and `force: true`. |
 | CLI `aida queue rework --work` | Before queue/status writes and again before claiming or launching fresh work, even when status remains InProgress. |
@@ -192,6 +194,25 @@ releasing ownership allows ordinary reclaim. Bound resume itself verifies the
 exact wait/generation and uses its dedicated continuation admission; it is not
 an exemption available to fresh sessions. Explicit `aida edit --status` retains
 the already specified visible status-mismatch behavior.
+
+The two claim verbs refuse while retained ownership exists (R23); they are
+not advisory-only exceptions. CLI claim must not refresh an existing shell claim,
+create a lease, or overwrite `req.owner` through `claim_status` on a parked spec.
+MCP claim_task must not infer availability from an absent lease file. Both
+recheck retained ownership at their final claim boundary, serialized with park
+acceptance; the CLI status/owner write rechecks under the common lock order too.
+Uncertain evidence refuses without lease, status or owner mutation. Checked
+cancellation/completion is required before ordinary claims become available.
+
+Bound resume also checks `live_spec_claim_by_other`: a live scope claim by
+another session, including a legacy claim created before this gate, blocks
+resume visibly in `aida awaiting` as a claim conflict. Retained ownership stays
+intact; no claim is stolen, ignored or force-overridden. Recovery requires the
+other claimant's explicit release (or ordinary verified dead-claim cleanup),
+then a fresh checked bound-resume attempt. Releasing that conflicting claim
+must preserve the parked spec's status and owner under the unclaim rule above.
+The dedicated continuation may acquire its own lease only after validating the
+exact wait/generation and all existing authority and ownership gates.
 
 ## Park and exit handshake
 
@@ -639,6 +660,19 @@ preflight, unreadable/conflicting evidence, and checked cancellation: only the
 last permits ordinary reclaim. Verify refusal guidance names bound resume or
 checked cancellation, never force as a bypass. These are required future
 implementation tests; this sketch does not claim they have run.
+
+R23 regressions must exercise CLI `aida claim` and MCP `claim_task` separately
+on a parked InProgress spec after its lane lease is reaped. Each refuses and
+preserves `req.owner`, status, question/binding, wait and seat, without creating
+or refreshing a scope lease. Include an existing same-caller CLI claim refresh,
+park acceptance racing the lease creation and CLI owner-write boundaries,
+unreadable/conflicting ownership evidence, and checked cancellation; only
+checked ownership release restores ordinary claim behavior. Seed a legacy live
+claim by another session and verify bound resume refuses with an awaiting
+claim-conflict diagnostic and no child; explicit release preserves the parked
+owner/status and permits a fresh otherwise-authorized bound resume. No force
+flag may bypass either gate. These are future implementation regressions,
+not executed tests in this sketch-only revision.
 
 Publication metadata gate (R1): host/advisor must retitle PR #3666 exactly
 `[AI:codex] docs(plans): sketch park-on-ask resume-on-answer (Refs STORY-2661)`.
