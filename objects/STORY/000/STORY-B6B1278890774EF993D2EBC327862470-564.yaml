@@ -18,12 +18,12 @@ description: |
   2. Without sccache configured, behaviour is unchanged.
   3. Test: the job profile's env/bind set includes the cache dir and wrapper only when configured.
   4. The trust decision (shared or lane-only cache) is recorded on this spec before implementation.
-status: NeedsAttention
+status: Approved
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-07T19:59:26.079479Z
-modified_at: 2026-11-08T14:51:19.468894527Z
+modified_at: 2026-11-08T15:57:12.664775786Z
 req_type: Story
 comments:
 - id: 01a1b798-f0d4-73b1-93d5-f84581f2d190
@@ -457,6 +457,13 @@ comments:
   modified_at: 2026-11-08T14:51:19.468894527Z
   session_id: 01a1bb9bdccf
   harness_version: codex-cli 0.167.0
+- id: 01a1bbe0-c658-7fc0-8600-a7436dc2af5b
+  author: joe
+  content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was punted on: blocked-dependency: Latest review finding 1 / AC1 is agreed and unresolved: requires two consecutive lane Cargo jobs using this branch launcher on BOTH primary and dell1, retained final statistics and second-job Rust cache hits greater than zero, or a recorded advisor amendment. No source change can supply this host/operator evidence. Route to host/operator or advisor rather than implementer rework. Both targeted suites passed in this round (5 resource-env and 5 sccache tests); full fast gate is still running. Preserve publication veto and existing merge hold.. No triage reason was given.'
+  created_at: 2026-11-08T15:57:12.664769995Z
+  modified_at: 2026-11-08T15:57:12.664769995Z
+  session_id: 01a1bbab-762f-7cd2-8a36-4ea9f209afce
+  harness_version: 2.1.319 (Claude Code)
 history:
 - id: 01a1b929-7921-7980-8202-36c2cc4f3845
   author: aida-session-start
@@ -822,6 +829,15 @@ history:
   - field_name: status
     old_value: InProgress
     new_value: NeedsAttention
+- id: 01a1bbe0-c658-7fc0-8600-a734e084fd08
+  author: joe
+  timestamp: 2026-11-08T15:57:12.664756476Z
+  session_id: 01a1bbab-762f-7cd2-8a36-4ea9f209afce
+  harness_version: 2.1.319 (Claude Code)
+  changes:
+  - field_name: status
+    old_value: NeedsAttention
+    new_value: Approved
 filed_at:
   code_sha: 7a18c0d52a6a4e0822befd4c810cfed16b04b74c
   branch: main
@@ -831,8 +847,3 @@ filed_at:
   vendor: claude
   session: 01a1b76b-2fe7-7dd2-88d0-356fc8d96d04
   harness_version: 2.1.319 (Claude Code)
-attention_reason:
-  category: blocked-dependency
-  detail: 'Latest review finding 1 / AC1 is agreed and unresolved: requires two consecutive lane Cargo jobs using this branch launcher on BOTH primary and dell1, retained final statistics and second-job Rust cache hits greater than zero, or a recorded advisor amendment. No source change can supply this host/operator evidence. Route to host/operator or advisor rather than implementer rework. Both targeted suites passed in this round (5 resource-env and 5 sccache tests); full fast gate is still running. Preserve publication veto and existing merge hold.'
-  raised_by: implementer
-  raised_at: 2026-11-08T14:49:58.515187078Z
