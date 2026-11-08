@@ -2420,6 +2420,29 @@ fn task_2902_stale_invalid_and_mismatched_declarations_refuse_before_commit() {
             "{subject}"
         );
     }
+    // A seat can edit the JSON after declaration: the host must validate the
+    // body again before invoking its commit callback.
+    // trace:BUG-2493 | ai:codex
+    let subject = "fix: body validation (BUG-1)";
+    crate::native_publication::declare(&clone, None, subject, false).unwrap();
+    let mut declaration: serde_json::Value =
+        serde_json::from_slice(&std::fs::read(&path).unwrap()).unwrap();
+    declaration["body"] = serde_json::json!("Help-Golden: unchanged\n\0hidden");
+    std::fs::write(&path, serde_json::to_vec(&declaration).unwrap()).unwrap();
+    let head = git_ok(&clone, &["rev-parse", "HEAD"]);
+    let result = crate::ship_from_seat::post_exit_commit(
+        &fx.main,
+        &clone,
+        "BUG-1",
+        "test",
+        true,
+        &commit_never,
+    );
+    assert!(
+        matches!(result, crate::ship_from_seat::PostExitCommit::Failed(_)),
+        "{result:?}"
+    );
+    assert_eq!(git_ok(&clone, &["rev-parse", "HEAD"]), head);
     for scope in ["EPIC-1", "BUG-1 BUG-2", "unknown"] {
         let result = crate::ship_from_seat::post_exit_commit(
             &fx.main,
