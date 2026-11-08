@@ -14,7 +14,7 @@ priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-11-08T12:41:34.032211319Z
-modified_at: 2026-11-08T15:25:03.759074518Z
+modified_at: 2026-11-08T15:25:08.960903343Z
 req_type: Task
 tags:
 - carried-from:TASK-1214
@@ -26,6 +26,14 @@ relationships:
   target_id: 01a09395-1a21-7ca0-b624-e7c61ae1051d
   created_at: 2026-11-08T15:25:03.759071193Z
   created_by: joe
+comments:
+- id: 01a1bbc3-6be0-7913-b140-36090a07a8db
+  author: joe
+  content: 'Advisor 2026-11-08, per the operator''s 2026-10-28 one-time ruling on non-blocking findings: accepted. Comment drift only.'
+  created_at: 2026-11-08T15:25:08.960903343Z
+  modified_at: 2026-11-08T15:25:08.960903343Z
+  session_id: 01a1bbab-762f-7cd2-8a36-4ea9f209afce
+  harness_version: 2.1.319 (Claude Code)
 history:
 - id: 01a1bb7d-1722-7312-a1ea-8153a2d1f271
   author: joe
