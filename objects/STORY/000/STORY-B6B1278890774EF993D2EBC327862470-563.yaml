@@ -20,12 +20,12 @@ description: |
   3. A lane that passes behaves exactly as today, plus the marker.
   4. Tests cover: a gate fail followed by a fixed round, a fail that persists (publishes with fast_gate=fail), a timeout, and the Codex native-publication path.
   5. Advisor docs (rework-brief-craft step 6) say lanes are fast-gated by the host.
-status: InProgress
+status: NeedsAttention
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-07T19:45:35.836129088Z
-modified_at: 2026-11-08T18:40:18.577172785Z
+modified_at: 2026-11-08T18:46:27.034265432Z
 req_type: Story
 tags:
 - docs:impacted
@@ -581,6 +581,15 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a1bc7b-b7da-7872-ad4c-a8f38bf5364f
+  author: aida-orchestrator
+  timestamp: 2026-11-08T18:46:27.034290872Z
+  session_id: 01a1bc789a5c
+  harness_version: 2.1.319 (Claude Code)
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: NeedsAttention
 filed_at:
   code_sha: 7a18c0d52a6a4e0822befd4c810cfed16b04b74c
   branch: main
@@ -590,3 +599,11 @@ filed_at:
   vendor: claude
   session: 01a1b76b-2fe7-7dd2-88d0-356fc8d96d04
   harness_version: 2.1.319 (Claude Code)
+failure_reason:
+  phase: reviewer
+  phase_index: 3
+  kind: verdict:request-changes
+  detail: 'All three round-6 findings remain: the only commit since 31eadc2c2d76 merges main and changes no PR code. Three new minor findings. AC4 and AC5 verified; AC1-AC3 partial. Sandbox ruling followed. Reviewed from source; CI still pending at this head.'
+  recovery_hint: address the review findings, move STORY-2640 back to In Progress, and clear the PR hold only after approval
+  shelved_by: reviewer
+  shelved_at: 2026-11-08T18:46:27.034265432Z
