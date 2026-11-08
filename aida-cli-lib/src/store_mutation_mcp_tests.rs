@@ -175,3 +175,40 @@ fn mediated_mcp_oversized_lines_error_and_preserve_the_next_request() {
         }
     }
 }
+
+// trace:TASK-3223 | ai:codex
+#[test]
+fn mediated_mcp_closed_refusals_preserve_machine_codes_through_request_context() {
+    for (token, code, recoverable) in [
+        ("Unauthorized", "permission_denied", false),
+        ("Expired", "permission_denied", false),
+        ("Revoked", "permission_denied", false),
+        ("UnsupportedOperation", "invalid_arg", true),
+        ("UnsupportedVersion", "invalid_arg", true),
+        ("InvalidRequest", "invalid_arg", true),
+        ("Conflict", "conflict", false),
+        ("Busy", "conflict", false),
+        ("Unavailable", "io_error", false),
+        ("OutcomeUnknown", "outcome_unknown", false),
+    ] {
+        let error = anyhow::anyhow!("{token}")
+            .context("store service request 00000000-0000-0000-0000-000000000001");
+        let result = mediated_mcp_error("add_comment", &error).to_result_value();
+        assert_eq!(result["isError"], true);
+        assert_eq!(result["structuredError"]["code"], code, "{token}");
+        assert_eq!(result["structuredError"]["recoverable"], recoverable);
+        assert!(result["structuredError"]["message"]
+            .as_str()
+            .unwrap()
+            .contains(token));
+        assert!(result["structuredError"]["message"]
+            .as_str()
+            .unwrap()
+            .contains("00000000-0000-0000-0000-000000000001"));
+    }
+    let error = anyhow::anyhow!("unrecognized OutcomeUnknown diagnostic");
+    assert_eq!(
+        mediated_mcp_error("add_comment", &error).code,
+        McpErrorCode::Internal
+    );
+}

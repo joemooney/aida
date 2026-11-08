@@ -458,6 +458,8 @@ enum McpErrorCode {
     /// Filesystem / IO failure while reading or writing the substrate.
     /// Not recoverable by the caller without operator intervention.
     IoError,
+    /// Delivery or persistence could not be established; do not retry as a new request.
+    OutcomeUnknown,
     /// Anything we could not classify — treated as a server-side fault.
     Internal,
 }
@@ -471,6 +473,7 @@ impl McpErrorCode {
             McpErrorCode::Conflict => "conflict",
             McpErrorCode::PermissionDenied => "permission_denied",
             McpErrorCode::IoError => "io_error",
+            McpErrorCode::OutcomeUnknown => "outcome_unknown",
             McpErrorCode::Internal => "internal",
         }
     }
@@ -9169,6 +9172,30 @@ fn mediated_mcp_stream(
     }
 }
 
+// Match exact closed wire tokens through anyhow context, never message substrings.
+// Preserve request UUID/recovery guidance in the message, with a distinct
+// non-recoverable code for uncertain delivery or persistence.
+// trace:TASK-3223 | ai:codex
+fn mediated_mcp_error(tool: &str, error: &anyhow::Error) -> McpError {
+    let code = error
+        .chain()
+        .find_map(|cause| match cause.to_string().as_str() {
+            "Unauthorized" | "Expired" | "Revoked" => Some(McpErrorCode::PermissionDenied),
+            "InvalidRequest" | "UnsupportedVersion" | "UnsupportedOperation" => {
+                Some(McpErrorCode::InvalidArg)
+            }
+            "Conflict" | "Busy" => Some(McpErrorCode::Conflict),
+            "Unavailable" => Some(McpErrorCode::IoError),
+            "OutcomeUnknown" => Some(McpErrorCode::OutcomeUnknown),
+            _ => None,
+        });
+    let message = format!("{error:#}");
+    match code {
+        Some(code) => McpError::new(tool, code, message),
+        None => McpError::classify(tool, &message),
+    }
+}
+
 // trace:TASK-3223 | ai:codex
 fn mediated_mcp_response(
     client: &crate::store_mutation_client::Client,
@@ -9232,7 +9259,7 @@ fn mediated_mcp_response(
                     let text = value.to_string();
                     json!({"content":[{"type":"text","text":text}],"structuredContent":{"text":text}})
                 }
-                Err(error) => McpError::classify(name, &format!("{error:#}")).to_result_value(),
+                Err(error) => mediated_mcp_error(name, &error).to_result_value(),
             };
             JsonRpcResponse::success(id, result)
         }

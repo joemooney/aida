@@ -108,6 +108,23 @@ and the live same-lane raw-write-denial/mediated-comment positive. `own_claim`
 and `queue_done` remain unsupported under TASK-3326. Native compatibility and
 Claude launch selection are unchanged.
 
+Mediated resume remains gated alongside fresh launches. The regression
+`mediated_profile_resume_refuses_before_effects_in_primary_and_linked_layouts`
+passes Codex `exec resume` and `exec fork` through `PreparedLaunch::prepare`
+with explicit mediated/service selections in primary and symlinked linked
+layouts. It verifies refusal before private state/service setup and unchanged
+protected sentinels. This is refusal coverage, not a successful resume or
+sealed resumed-session claim. Contained Codex's separate argv validator also
+refuses resume/fork pending private-state lifecycle support; successful mediated
+resume needs that lifecycle work plus the same sealed profile before admission.
+
+Mediated MCP errors map exact host wire refusals through request context into
+stable `structuredError.code` values: Unauthorized/Expired/Revoked become
+`permission_denied`; InvalidRequest/UnsupportedVersion/UnsupportedOperation
+become `invalid_arg`; Conflict/Busy become `conflict`; Unavailable becomes
+`io_error`. OutcomeUnknown has a distinct non-recoverable `outcome_unknown`
+code and retains request identity and recovery guidance in its message.
+
 ## Checked-in contract
 
 <!-- trace:TASK-3223 | ai:codex -->

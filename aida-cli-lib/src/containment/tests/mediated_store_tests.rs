@@ -40,6 +40,32 @@ fn mediated_profile_admission_is_closed_before_any_launch_effect() {
     );
 }
 
+// The gated profile refuses resume before state, service or vendor setup.
+// This proves refusal only; successful mediated resume is not implemented.
+// trace:TASK-3223 | ai:codex
+#[test]
+fn mediated_profile_resume_refuses_before_effects_in_primary_and_linked_layouts() {
+    for linked in [false, true] {
+        let f = Fixture::new(linked);
+        for verb in ["resume", "fork"] {
+            let mut child = Command::new("codex");
+            child.args(["exec", verb, "test-session"]);
+            child.env("AIDA_HEADLESS", "1");
+            child.env("AIDA_STORE_MUTATION_PROFILE", "mediated");
+            child.env("AIDA_STORE_MUTATION_REQUIRED", "1");
+            let error = PreparedLaunch::prepare(&mut child, &f.lane, Some(&f.main))
+                .err()
+                .expect("mediated resume must refuse")
+                .to_string();
+            assert!(error.contains("mediated store profile is gated"), "{error}");
+            assert_eq!(std::fs::read_dir(&f.state).unwrap().count(), 0);
+            for path in &f.protected {
+                assert_eq!(std::fs::read(path.join("sentinel")).unwrap(), b"unchanged");
+            }
+        }
+    }
+}
+
 struct Fixture {
     _tmp: tempfile::TempDir,
     main: PathBuf,
@@ -175,7 +201,7 @@ fn run_in_profile_with_service(
         command
             .arg("--ro-bind")
             // trace:TASK-3223 | ai:codex
-            .arg(crate::kernel::resolve_aida_exe())
+            .arg(crate::aida_bin::current_executable_path().expect("exact-test executable"))
             .arg("/run/aida-test-client");
     }
     command.args(["--", "/usr/bin/python3", "-I", "-S", "-c", script]);
