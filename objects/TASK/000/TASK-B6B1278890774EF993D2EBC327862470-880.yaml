@@ -8,7 +8,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-06T13:39:53.442026096Z
-modified_at: 2026-11-08T05:05:40.734994160Z
+modified_at: 2026-11-08T05:05:48.764063842Z
 req_type: Task
 tags:
 - architecture
@@ -486,6 +486,23 @@ comments:
   content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: Refs-only mediated-profile diagnostic is a reasonable measuring tool, but it treats self-declared s2_typed/read_only writer labels as routed with no evidence check, its pass path is untested, CI is still pending, and the slice acceptance from the 2026-11-07 20:35 ruling is not met (expected for Refs, so TASK-3223 must stay open).. It was punted on: design-fork: Round-7 finding 5: dispute the obsolete sketch-only premise under the binding 2026-11-08 03:33 UTC ruling; staged boundary/private caches have landed. Routing acceptance remains unmet. Audit finds 3151 blocked sink candidates and all 293 operation mappings blocked; only comment_add/spec_edit schemas exist and production admission is intentionally disabled until Git/event publication. Need the operation-specific authority/publication sketch and advisor signoff required by CLAUDE.md:19 before replacing this with a generalized Storage/CLI forwarding protocol. This seat did not invent that protocol or enable mediation. own_claim/queue_done remain TASK-3326. New diagnostic edits and 44 passing inventory tests are uncommitted; /tmp/task3223-routing-handoff.md records evidence, host-only findings 1-4/6, and incomplete check-ci-fast. Preserve all holds and publication vetoes.. No triage reason was given.'
   created_at: 2026-11-08T05:05:40.734988116Z
   modified_at: 2026-11-08T05:05:40.734988116Z
+  session_id: 01a1b8be-8170-7fb2-89ab-ecb4c6eee98c
+  harness_version: 2.1.319 (Claude Code)
+- id: 01a1b98c-65f9-7253-8af4-fb1497e35da6
+  author: joe
+  content: |-
+    REVIEW FINDINGS TO ADDRESS (PR #3661):
+    Verdict: CHANGES REQUESTED
+    Reviewed commit: 669a291c098e
+    Recorded: 2026-11-08T04:26:14.226508732+00:00
+    Findings:
+    1. scripts/check-store-writers.py:634-639 mediated_blockers counts only disposition=='blocked' writers as unresolved. check() (line 568) accepts s2_typed and read_only (DISPOSITIONS, line 37) without requiring proof of routing, a test, or a reviewed operation. Relabeling one row in scripts/store-writers.toml from blocked to s2_typed makes the mediated profile report that writer resolved; the ratchet compares only the set of site keys, not dispositions. This contradicts the function's own docstring ('never infer routing from a sink map') and the doc's claim that reviewed operation policy and evidence are required first. For the mediated profile, treat only host_only and lane_private as resolved. Count s2_typed and read_only as unresolved until each row carries evidence the profile verifies (for example a non-empty, existing evidence_tests entry tied to a routed S2 operation), or refuse those labels outright under v2.
+    2. tests/test_store_writer_inventory.py:81-87 test_mediated_blockers_do_not_reclassify_host_only_sites covers host_only, lane_private and blocked only. No test covers s2_typed or read_only writer rows. No test covers the zero-blocker pass path of --profile mediated: exit 0, JSON report and then the compatibility summary line (check-store-writers.py:662-671). Add tests that pin how s2_typed and read_only are classified under the mediated profile, and the exit code and stdout shape when no blockers remain.
+    3. Slice acceptance from TASK-3223 comment 34 (advisor ruling 2026-11-07 20:35) is unmet. (a) The writer inventory script does not report zero unrouted writers for the mediated profile: 3444 blocked writer rows remain in scripts/store-writers.toml, and v2 check() (line 585) forces every operation to stay blocked, so the profile cannot pass by construction. (b) There is no contained-lane test proving a raw .aida-store object write is denied while a mediated comment_add succeeds. (c) make check-ci-fast is not shown green: every CI job except merge-hold-gate was pending at 669a291c098e. The subject is correctly Refs-only, so TASK-3223 must stay open and must not be completed from this PR.
+    4. PR publication versus the punt: TASK-3223 comment 36 records 'Turn ended after design-fork punt; NeedsAttention and publication veto retained ... host must not publish around punt', but this PR was opened via aida ship --from-seat. The PR body is only the bare 'Published from seat ...' line. Before merge, either an advisor or operator explicitly resolves the design-fork punt (operation-specific authority, transaction and publication design for the remaining writers) and authorizes this diagnostic-only publication, or the PR is closed. Either way, the PR body must state that it is diagnostic-only, Refs-only, conveys no launch authority, and that TASK-3223 stays open.
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
+  created_at: 2026-11-08T05:05:48.537046745Z
+  modified_at: 2026-11-08T05:05:48.537046745Z
   session_id: 01a1b8be-8170-7fb2-89ab-ecb4c6eee98c
   harness_version: 2.1.319 (Claude Code)
 history:
