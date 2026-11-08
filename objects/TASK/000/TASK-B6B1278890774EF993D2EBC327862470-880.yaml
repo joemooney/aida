@@ -8,7 +8,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-06T13:39:53.442026Z
-modified_at: 2026-11-08T15:40:16.091728667Z
+modified_at: 2026-11-08T15:48:43.083712854Z
 req_type: Task
 tags:
 - architecture
@@ -1981,6 +1981,12 @@ history:
   - field_name: status
     old_value: InProgress
     new_value: NeedsAttention
+- id: 01a1bbd9-00ae-7a60-85c0-1369e0798706
+  author: joe
+  timestamp: 2026-11-08T15:48:43.310512285Z
+  session_id: 01a1bbd4790b
+  harness_version: 2.1.319 (Claude Code)
+  changes: []
 execution_mode: drive
 filed_at:
   code_sha: 50ce509da3f7edbd12ff6636fe996c9c3a65c68f
@@ -1995,3 +2001,11 @@ attention_reason:
   detail: Round 21 findings 1-3 accepted; no finding disputed. Binding zero-unrouted acceptance still fails (3171 writer sites and 293 operation mappings at 4769cc5d759a). Advisor must define the remaining operation policy, including whether early UnsupportedOperation counts as reconciled and how reads are admitted, or authorize a staged partial and follow-up ownership. Keep selected_store_profile closed; own_claim/queue_done remain TASK-3326. Aggregate make check-ci-fast requires a host run; CI remains in progress and merge-hold needs human/advisor clearance. Advisor must investigate publication of 2588cb1c1fd6, 409a1990ad5d and 4769cc5d759a despite saved punt vetoes and confirm host publication authority. Findings 5-6 have uncommitted restriction documentation/regression and bounded MCP oversized-line recovery edits; these do not satisfy full S2 routing acceptance. This punt and existing holds remain publication vetoes. No ship declaration, commit, push, PR mutation or queue completion is authorized by this handoff.
   raised_by: implementer
   raised_at: 2026-11-08T15:25:55.942374917Z
+failure_reason:
+  phase: reviewer
+  phase_index: 3
+  kind: verdict:request-changes
+  detail: Head 4387ae4fad6e fixes the store-locator and oversized-MCP findings, but zero-unrouted acceptance is still unmet (3171 writers, 293 operations), the operation-policy fork has no ruling, CI is still running, and PR metadata is unchanged.
+  recovery_hint: address the review findings, move TASK-3223 back to In Progress, and clear the PR hold only after approval
+  shelved_by: reviewer
+  shelved_at: 2026-11-08T15:48:43.083712854Z
