@@ -2076,6 +2076,22 @@ pub(crate) fn archive_ended_entries(root: &Path, dry_run: bool) -> Result<usize>
 /// Load all currently live agent registry entries for the project.
 // trace:BUG-2010 | ai:antigravity
 pub(crate) fn load_live_entries(project_root: &Path) -> Vec<AgentRegistryEntry> {
+    load_live_identity_entries(project_root)
+        .into_iter()
+        .map(|mut entry| {
+            // Preserve the existing lease/display API transport. Identity consumers
+            // use load_live_identity_entries and retain the boot-qualified tuple.
+            // trace:TASK-3366 | ai:codex
+            if let Some(identity) = entry.process_identity() {
+                entry.pid_start = Some(identity.legacy_ticks_start());
+            }
+            entry
+        })
+        .collect()
+}
+
+// trace:TASK-3366 | ai:codex
+pub(crate) fn load_live_identity_entries(project_root: &Path) -> Vec<AgentRegistryEntry> {
     load_active_entries(project_root)
         .into_iter()
         .map(|(_, e)| e)
@@ -2093,7 +2109,7 @@ pub(crate) fn resolve_session_agent_for_lease(project_root: &Path) -> Option<Age
         return None;
     }
 
-    let live_entries = load_live_entries(project_root);
+    let live_entries = load_live_identity_entries(project_root);
     let current_pid = std::process::id();
 
     live_entries.into_iter().find(|entry| {
@@ -2581,7 +2597,10 @@ fn view_for(
     );
     let status = classify_status(&entry, pid_alive, ctx);
     let native_session_id = resumable_session_id(&entry);
-    let compatible_start = entry.process_identity().map(|id| id.legacy_ticks_start());
+    let compatible_start = entry
+        .process_identity()
+        .map(|id| id.legacy_ticks_start())
+        .or_else(|| entry.pid_start.clone());
     AgentRegistryView {
         id: entry.id,
         agent_type: entry.agent_type,
@@ -3724,6 +3743,7 @@ mod tests {
     fn proc_identity_s4_legacy_rows_prove_death_without_authorizing_liveness() {
         let pid = std::process::id();
         let identity = ProcIdentity::capture(pid).unwrap();
+        let root = TempDir::new().unwrap();
         let mut row = entry_with(pid, Utc::now());
         row.pid_namespace = None;
         for start in [
@@ -3736,6 +3756,10 @@ mod tests {
                 entry_process_verdict(&row),
                 Verdict::ForeignUnknown(_)
             ));
+            assert_eq!(
+                observed_liveness_from(root.path(), &row, PidObserver::current()),
+                row.pid_start.as_ref().map(|_| true),
+            );
         }
         row.pid_namespace = Some(identity.pidns_inode);
         row.pid_start = Some(format!("linux-starttime:{}", identity.starttime + 1));

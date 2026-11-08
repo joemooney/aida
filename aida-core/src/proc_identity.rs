@@ -205,15 +205,6 @@ pub fn observe_legacy_registry(pid: u32, start: Option<&str>, namespace: Option<
                         return Verdict::Dead(DeadReason::Reused);
                     }
                     return Verdict::Alive;
-                } else if chrono::DateTime::parse_from_rfc3339(recorded).is_ok() {
-                    // Historical wall-clock starts retain their existing comparison
-                    // adapter, after local coordinate admission. Advisory only.
-                    if crate::liveness::process_provably_dead(pid, Some(recorded)) {
-                        return Verdict::Dead(DeadReason::Reused);
-                    }
-                    if crate::liveness::process_identity_matches_strict(pid, recorded) {
-                        return Verdict::Alive;
-                    }
                 }
             }
             unknown()

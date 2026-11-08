@@ -1297,7 +1297,7 @@ fn review_lease_running(
     }
     has_worktree
         && live_agents
-            .get_or_insert_with(|| crate::agent_registry::load_live_entries(project_root))
+            .get_or_insert_with(|| crate::agent_registry::load_live_identity_entries(project_root))
             .iter()
             .any(|a| a.worktree_path.starts_with(&l.worktree_path))
 }

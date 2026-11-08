@@ -1,9 +1,3 @@
-Registry legacy rows retain negative-only death evidence for GC; incomplete
-identities never authorize mail-watch readers. Private inboxes can positively
-recapture matching self/ancestor rows, and native-session bindings survive
-namespace mismatch until explicit ending, without a heartbeat-age cutoff.
-<!-- trace:TASK-3366 | ai:codex -->
-
 Review-watch records retained fast-exiting children before reaping. Incomplete
 legacy receipts use the existing reboot/TTL backstop. Caller capture requires
 verified local procfs and fails closed with host-retry guidance. See OVERVIEW.md.

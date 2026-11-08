@@ -5,8 +5,10 @@ with `pid_namespace`, captured together through `ProcIdentity`. These local,
 unreplicated runtime files supply local provenance; they are not remote-node
 observations. Launcher/hook merges, heartbeat ownership and wake transitions
 compare the entire tuple. Foreign rows cannot be displaced by a colliding local
-PID. Missing boot/namespace or legacy timestamp/raw-tick records remain unknown
-for retention and cannot satisfy strict mail-wake or ancestry identity checks.
+PID. Incomplete legacy records cannot authorize strict mail-wake readers.
+Verified local absence, exit and raw-tick mismatch can still prove death;
+otherwise retention treats incomplete identity as unknown. Private inbox binding
+can positively recapture a matching local self or ancestor start.
 No passive inspection upgrades an old PID. A locally captured registration
 upgrades a legacy raw-tick row in place only when PID and ticks match and its
 namespace is matching or absent, preserving launcher metadata; failed coordinate capture asks for
@@ -42,7 +44,14 @@ remains alive, and an exited retained child remains dead. Cooperative holder
 admission stays with the authority consumers.
 
 Private inbox binding has a separate namespace visibility policy: a matching
-native session ID and a heartbeat at most five minutes old may retain binding
-when the full process identity observer reports NamespaceMismatch. Known-dead,
+native session ID may retain binding until explicit ending, without a heartbeat
+age cutoff, when the full process identity observer reports NamespaceMismatch. Known-dead,
 missing identity and other unknown verdicts refuse; CLAUDE_PID alone does not
 authorize this fallback. Strict host-side watched-mail remains Alive-only.
+
+Legacy wall-clock starts remain unknown for registry retention, even when a
+wall-clock comparison suggests PID reuse. Signal/display adapters retain the
+original start string so stop diagnostics can recommend GC without signalling.
+The compatibility live-entry API projects raw ticks; identity-aware production
+consumers use the full-tuple loader. Legacy raw-tick matches supply advisory
+listing evidence only; missing starts remain unknown.
