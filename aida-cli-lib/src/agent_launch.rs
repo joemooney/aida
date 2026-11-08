@@ -399,21 +399,51 @@ pub(crate) fn handle_agent_command(cmd: &AgentCommand) -> Result<()> {
             };
             // Resolve this declaration independently of approval posture. It grants no authority.
             // trace:STORY-1486 | ai:codex
-            let (AgentNewCommand::Claude { role, cwd, .. }
-            | AgentNewCommand::Codex { role, cwd, .. }
-            | AgentNewCommand::Antigravity { role, cwd, .. }) = command;
+            let (AgentNewCommand::Claude {
+                role,
+                cwd,
+                noexec,
+                verbose,
+                show_prompt,
+                show_context,
+                ..
+            }
+            | AgentNewCommand::Codex {
+                role,
+                cwd,
+                noexec,
+                verbose,
+                show_prompt,
+                show_context,
+                ..
+            }
+            | AgentNewCommand::Antigravity {
+                role,
+                cwd,
+                noexec,
+                verbose,
+                show_prompt,
+                show_context,
+                ..
+            }) = command;
             let root = child_role_project_root(cwd.as_deref())?;
             crate::launch_permission_profile::validate_recipe(&root)?;
             let seat = crate::stakeholder_role::active_stakeholder_role()
                 .or_else(|| crate::gate::seat_authority::current_seat(&root));
-            print!(
-                "{}",
-                crate::launch_permission_profile::git_policy(
+            // trace:STORY-1486 | ai:codex
+            // Prompt/context output is an exact payload, not a diagnostic surface.
+            if *verbose && !*show_prompt && !*show_context {
+                let policy = crate::launch_permission_profile::git_policy(
                     role.as_deref(),
                     seat.as_deref(),
-                    *git_read_only
-                )
-            );
+                    *git_read_only,
+                );
+                if *noexec {
+                    print!("{policy}");
+                } else {
+                    eprint!("{policy}");
+                }
+            }
             dispatch_agent_new(command)
         }
         AgentCommand::Register {

@@ -127,13 +127,24 @@ pub(crate) fn render_roots(project: &Path, executable: &Path) -> Result<String> 
     let mut diagnostics = String::new();
     let store = crate::store_sync::detect_distributed_store_from(&project)
         .unwrap_or_else(|| project.join(".aida-store"));
-    let mut writable = vec![
-        ("project", project.clone()),
-        ("project-state", planned(&project.join(".aida"))?),
-        ("store", planned(&store)?),
-        ("cache", planned(&project.join(".aida/cache-db"))?),
-        ("build", planned(&project.join("target"))?),
-    ];
+    let mut writable = vec![("project", project.clone())];
+    // Unavailable declaration inputs must not prevent an ordinary launch.
+    // Omit uncertain roots rather than presenting unresolved paths as writable.
+    // trace:STORY-1486 | ai:codex
+    for (kind, path) in [
+        ("project-state", project.join(".aida")),
+        ("store", store),
+        ("cache", project.join(".aida/cache-db")),
+        ("build", project.join("target")),
+    ] {
+        match planned(&path) {
+            Ok(root) => writable.push((kind, root)),
+            Err(error) => diagnostics.push_str(&format!(
+                "{kind} root unavailable ({}): {error:#}; no root declared\n",
+                path.display()
+            )),
+        }
+    }
     match (&git_dir, &common) {
         (Ok(dir), Ok(common)) => {
             writable.push(("git-dir", dir.clone()));
@@ -431,6 +442,22 @@ mod tests {
         std::os::unix::fs::symlink(tmp.path().join("missing"), &path).unwrap();
         assert!(planned(&path).is_err());
     }
+    // trace:STORY-1486 | ai:codex
+    #[test]
+    fn unresolved_declared_root_is_diagnostic() {
+        let tmp = tempfile::tempdir().unwrap();
+        let project = tmp.path().join("consumer");
+        repo(&project);
+        std::fs::create_dir_all(project.join(".aida")).unwrap();
+        std::fs::write(project.join(PROFILE_PATH), RECIPE).unwrap();
+        std::os::unix::fs::symlink(project.join("missing"), project.join("target")).unwrap();
+        let exe = aida(&tmp.path().join("source"));
+        let output = render_roots(&project, &exe).unwrap();
+        assert!(output.contains("build root unavailable"), "{output}");
+        assert!(!output.contains("  build:"), "{output}");
+        assert!(output.contains("project:"));
+    }
+
     #[test]
     fn promoted_binary_discovers_validated_source_checkout() {
         let tmp = tempfile::tempdir().unwrap();

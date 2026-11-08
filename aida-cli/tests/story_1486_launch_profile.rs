@@ -117,6 +117,38 @@ fn noexec_verbose_prints_stakeholder_and_explicit_git_downgrades() {
         aida_core::scaffolding::launch_profile::RECIPE,
     )
     .unwrap();
+    // trace:STORY-1486 | ai:codex
+    for extra in [vec!["--show-prompt"], vec!["--show-prompt", "--verbose"]] {
+        let mut args = vec!["agent", "new", "claude"];
+        args.extend(extra);
+        let out = aida(&repo, &home, &path, &args);
+        let stdout = String::from_utf8_lossy(&out.stdout);
+        assert!(
+            out.status.success(),
+            "{stdout}\n{}",
+            String::from_utf8_lossy(&out.stderr)
+        );
+        assert!(
+            stdout.starts_with("# AIDA agent launch preview — initial prompt only;"),
+            "{stdout}"
+        );
+        assert!(!stdout.contains("git_policy:"), "{stdout}");
+    }
+    // Unresolvable declarations remain visible without preventing the preview.
+    std::os::unix::fs::symlink(repo.join("missing"), repo.join("target")).unwrap();
+    let out = aida(
+        &repo,
+        &home,
+        &path,
+        &["agent", "new", "claude", "--no-exec", "--verbose"],
+    );
+    let stdout = String::from_utf8_lossy(&out.stdout);
+    assert!(
+        out.status.success(),
+        "{stdout}\n{}",
+        String::from_utf8_lossy(&out.stderr)
+    );
+    assert!(stdout.contains("build root unavailable"), "{stdout}");
     let linked = base.join("linked");
     git(
         &repo,
