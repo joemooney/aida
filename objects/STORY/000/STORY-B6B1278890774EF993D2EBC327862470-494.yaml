@@ -27,7 +27,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-06T16:51:02.535818Z
-modified_at: 2026-11-08T08:31:22.437091185Z
+modified_at: 2026-11-08T08:41:33.513218217Z
 req_type: Story
 tags:
 - area:advisor
@@ -525,6 +525,13 @@ comments:
   created_at: 2026-11-08T06:33:40.120743796Z
   modified_at: 2026-11-08T06:33:40.120743796Z
   session_id: 01a1b9bd094f
+- id: 01a1ba51-ec49-77e0-9eca-7fcd2a199dfa
+  author: dirtlab
+  content: 'Final-round validation follow-up, scoped only to PR-3640 round-4 major. The checkout already contained 43957bd258 (controller restart decoupled from retired-grant revocation). Added one regression in aida-cli-lib/src/review_watch_service.rs: story2571_restart_finishes_dead_superseding_before_launch verifies restart reconciliation reaches Superseded, revokes the old controller grant before replacement launch, observes backoff and starts a replacement. Lane job j20261108T083149236-2-0 executed the 14 existing story2571 tests: all passed. Follow-up j20261108T083319980-2-0 executed all 15 tests including the addition: all passed, zero failed. This covers crash-mid-Superseding, unpinned Reserved restart, reviewer grant survival, rotation, stale successor refusal and per-PR refusal isolation. rustfmt check, diff whitespace and trace-header check passed. untested=false. No production changes added in this follow-up; no new scope. Codegraph unavailable in this lane. Edits left uncommitted for the host launcher; no push, review record, queue completion or merge attempted.'
+  created_at: 2026-11-08T08:41:33.513218217Z
+  modified_at: 2026-11-08T08:41:33.513218217Z
+  session_id: 01a1ba48937f
+  harness_version: codex-cli 0.167.0
 history:
 - id: 01a1b1c5-af09-7d01-81e9-eaaac083f223
   author: joe
