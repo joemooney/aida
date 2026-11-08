@@ -17,12 +17,24 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-08T03:08:54.290380002Z
-modified_at: 2026-11-08T03:08:54.290380002Z
+modified_at: 2026-11-08T03:09:22.931132837Z
 req_type: Task
 tags:
 - area:architecture
 - crate-split
 - from:TASK-3425
+relationships:
+- rel_type: BlockedBy
+  target_id: 01a1b811-b403-7111-8654-b1da1b2c6c11
+  created_at: 2026-11-08T03:09:22.931129841Z
+  created_by: joe
+history:
+- id: 01a1b921-d315-74a0-9c9a-0ca54df44ce6
+  author: joe
+  timestamp: 2026-11-08T03:09:24.117313784Z
+  session_id: 01a1b8be-8170-7fb2-89ab-ecb4c6eee98c
+  harness_version: 2.1.319 (Claude Code)
+  changes: []
 filed_at:
   code_sha: 049e5206de120518bb94fae84bf359f789e76236
   branch: main
