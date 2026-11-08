@@ -3,12 +3,12 @@ spec_id: TASK-b6b1278890774ef993d2ebc327862470-980
 agreed_id: TASK-3472
 title: 'review watch: raise the hard 1..=2 reviewer concurrency cap to a configurable 1..=8 ([review_watch] max_concurrent)'
 description: 'Observed 2026-11-08 00:50: 28 open PRs, ~18 heads awaiting re-review, review watch capped at 2 concurrent reviews (review_watch.rs:46 value_parser range(1..=2) and validate_state (1..=2).contains at ~:1172; the skip message at ~:1398 names the cap). At ~20-30 min/review that is a 4-5 h queue while lanes idle on verdicts. The cap of 2 dates from reviewers sharing the 2 cargo slots; under the 2026-10-23 LIGHT ruling reviewers run no cargo, so reviews are model-bound only. CHANGE: --max-concurrent accepts 1..=8; default comes from [review_watch] max_concurrent in .aida/config.toml (default 2 when absent); validate_state accepts 1..=8 (existing state files with 1 or 2 stay valid); docs/cli help updated (help golden regenerated, Help-Golden trailer). Set this repo''s [review_watch] max_concurrent = 4. ACCEPTANCE: unit tests that 4 parses, 9 is refused, the config value is used when the flag is absent, and a state file with max_concurrent 4 validates. Gate LIGHT: one targeted cargo test -p aida-cli-lib review_watch + make check-ci-fast.'
-status: InProgress
+status: NeedsAttention
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-08T07:50:17.157189157Z
-modified_at: 2026-11-08T09:03:19.546993635Z
+modified_at: 2026-11-08T09:09:39.641648153Z
 req_type: Task
 comments:
 - id: 01a1ba23-1dfe-7172-aedd-5ca1e197357c
@@ -58,6 +58,15 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a1ba6b-a6b9-7630-80cc-5063444ab28b
+  author: aida-orchestrator
+  timestamp: 2026-11-08T09:09:39.641666722Z
+  session_id: 01a1ba69b8dd
+  harness_version: 2.1.319 (Claude Code)
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: NeedsAttention
 filed_at:
   code_sha: 08cbf8a3fe7e5cef1171627f2b6edb446abc6539
   branch: main
@@ -67,3 +76,11 @@ filed_at:
   vendor: claude
   session: 01a1b9af-8230-75d2-82f8-667491cc010a
   harness_version: 2.1.319 (Claude Code)
+failure_reason:
+  phase: reviewer
+  phase_index: 3
+  kind: verdict:request-changes
+  detail: Concurrency change itself meets TASK-3472, but the new config.toml read is not inventoried in scripts/config-trust.toml, so the BUG-1723 trust guard will fail; PR CI still pending at review time.
+  recovery_hint: address the review findings, move TASK-3472 back to In Progress, and clear the PR hold only after approval
+  shelved_by: reviewer
+  shelved_at: 2026-11-08T09:09:39.641648153Z
