@@ -3,12 +3,12 @@ spec_id: TASK-b6b1278890774ef993d2ebc327862470-880
 agreed_id: TASK-3223
 title: 'STORY-2561 S2: route CLI/MCP store writes through the mediation service and deny raw store writes in the shared boundary'
 description: 'Slice 2 of STORY-2561. Route every inventoried in-lane writer through the S1 service. In the shared AIDA bwrap boundary, make store objects, authority-bearing metadata and the shared derived cache read-only (ancestor grants, symlinks, primary-checkout launches and resume included), with lane-private or read-only derived caches where readers need them. The mediated profile is gated; Codex-native compatibility and its labels stay unchanged. Concurrency tests: stale base, concurrent mutation, and host failure after persist but before reply. Claude behavior is preserved.'
-status: NeedsAttention
+status: Approved
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-06T13:39:53.442026Z
-modified_at: 2026-11-08T16:35:17.720090702Z
+modified_at: 2026-11-08T16:57:32.749818642Z
 req_type: Task
 tags:
 - architecture
@@ -1162,6 +1162,13 @@ comments:
   created_at: 2026-11-08T16:24:37.645578437Z
   modified_at: 2026-11-08T16:24:37.645578437Z
   session_id: 01a1bbe9ff10
+- id: 01a1bc18-034d-7413-9334-67683ce900bf
+  author: joe
+  content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: Head af26575f93df closes last round''s resume, test-binary, MCP error-code and PR-metadata findings, and the code is sound as a gated staged slice; zero-unrouted acceptance is still unmet (3171 writers, 293 operations) with no advisor ruling, current-head CI has not run, and this head was published against a recorded no-publish handoff.. It was punted on: design-fork: Round 22 findings 1-3 accepted; none disputed. The mediated inventory still has 3171 writer sites and 293 operations unresolved. Advisor ruling is required on operation reconciliation, explicit UnsupportedOperation and read admission, or authorization of a staged partial with follow-up ownership. Keep production admission gated and own_claim/queue_done with TASK-3326. Source inspection confirms punt_done writes a signal only if AIDA_PUNT_SIGNAL_FILE is set, while ship_from_seat publication_veto checks only signal/hold files, not persisted NeedsAttention; this seat has that variable unset and neither friendly nor canonical main punt signal. Advisor must establish whether the four prior publications were authorized and repair the fail-open publication path as needed. Do not publish these edits over this punt or existing holds; no ship declaration is issued. PR 3661 title/body were corrected to comment 74 with an empty-squash-body instruction; no code was committed or pushed. Reviewed-head CI 4387ae4fad6e is now green, but final-source lane tests are still running and aggregate make check-ci-fast requires a host run. Human/advisor merge-hold clearance remains mandatory. Findings 5-7 have uncommitted resume-refusal coverage/documentation, exact-test executable selection and explicit machine-readable MCP error mapping. Full TASK-3223 acceptance remains unmet.. No triage reason was given.'
+  created_at: 2026-11-08T16:57:32.749810790Z
+  modified_at: 2026-11-08T16:57:32.749810790Z
+  session_id: 01a1b9af-8230-75d2-82f8-667491cc010a
+  harness_version: 2.1.319 (Claude Code)
 history:
 - id: 01a1b116-742d-73c0-9064-1933f11e4c38
   author: joe
@@ -2079,6 +2086,15 @@ history:
   session_id: 01a1bbff10cc
   harness_version: 2.1.319 (Claude Code)
   changes: []
+- id: 01a1bc18-0349-7161-acc1-e8619eb4437f
+  author: joe
+  timestamp: 2026-11-08T16:57:32.745767633Z
+  session_id: 01a1b9af-8230-75d2-82f8-667491cc010a
+  harness_version: 2.1.319 (Claude Code)
+  changes:
+  - field_name: status
+    old_value: NeedsAttention
+    new_value: Approved
 execution_mode: drive
 filed_at:
   code_sha: 50ce509da3f7edbd12ff6636fe996c9c3a65c68f
@@ -2088,16 +2104,3 @@ filed_at:
   aida_build_sha: dd852f74c3b
   vendor: claude
   session: b0a84e34-277c-4df6-b53c-43f4bbe2e84d
-attention_reason:
-  category: design-fork
-  detail: Round 22 findings 1-3 accepted; none disputed. The mediated inventory still has 3171 writer sites and 293 operations unresolved. Advisor ruling is required on operation reconciliation, explicit UnsupportedOperation and read admission, or authorization of a staged partial with follow-up ownership. Keep production admission gated and own_claim/queue_done with TASK-3326. Source inspection confirms punt_done writes a signal only if AIDA_PUNT_SIGNAL_FILE is set, while ship_from_seat publication_veto checks only signal/hold files, not persisted NeedsAttention; this seat has that variable unset and neither friendly nor canonical main punt signal. Advisor must establish whether the four prior publications were authorized and repair the fail-open publication path as needed. Do not publish these edits over this punt or existing holds; no ship declaration is issued. PR 3661 title/body were corrected to comment 74 with an empty-squash-body instruction; no code was committed or pushed. Reviewed-head CI 4387ae4fad6e is now green, but final-source lane tests are still running and aggregate make check-ci-fast requires a host run. Human/advisor merge-hold clearance remains mandatory. Findings 5-7 have uncommitted resume-refusal coverage/documentation, exact-test executable selection and explicit machine-readable MCP error mapping. Full TASK-3223 acceptance remains unmet.
-  raised_by: implementer
-  raised_at: 2026-11-08T16:11:47.725801749Z
-failure_reason:
-  phase: reviewer
-  phase_index: 3
-  kind: verdict:request-changes
-  detail: Head af26575f93df closes last round's resume, test-binary, MCP error-code and PR-metadata findings, and the code is sound as a gated staged slice; zero-unrouted acceptance is still unmet (3171 writers, 293 operations) with no advisor ruling, current-head CI has not run, and this head was published against a recorded no-publish handoff.
-  recovery_hint: address the review findings, move TASK-3223 back to In Progress, and clear the PR hold only after approval
-  shelved_by: reviewer
-  shelved_at: 2026-11-08T16:35:17.720090702Z
