@@ -6,3 +6,9 @@ last_by:
   vendor: claude
 result: done
 note: 'TASK-2708 seat: commit already on origin, only ignored files; dead sessions ended'
+due_since: 2026-11-08T10:42:18.898345894Z
+due_reason: on CronJobFailed:session-hygiene
+due_failure:
+  trip_id: session-hygiene@2026-11-08T10:35:43.200851361Z
+  job: session-hygiene
+  error: 'exit 1: '
