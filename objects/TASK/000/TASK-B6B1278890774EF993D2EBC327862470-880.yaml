@@ -3,12 +3,12 @@ spec_id: TASK-b6b1278890774ef993d2ebc327862470-880
 agreed_id: TASK-3223
 title: 'STORY-2561 S2: route CLI/MCP store writes through the mediation service and deny raw store writes in the shared boundary'
 description: 'Slice 2 of STORY-2561. Route every inventoried in-lane writer through the S1 service. In the shared AIDA bwrap boundary, make store objects, authority-bearing metadata and the shared derived cache read-only (ancestor grants, symlinks, primary-checkout launches and resume included), with lane-private or read-only derived caches where readers need them. The mediated profile is gated; Codex-native compatibility and its labels stay unchanged. Concurrency tests: stale base, concurrent mutation, and host failure after persist but before reply. Claude behavior is preserved.'
-status: InProgress
+status: NeedsAttention
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-06T13:39:53.442026Z
-modified_at: 2026-11-08T23:13:18.418619797Z
+modified_at: 2026-11-08T23:15:24.252723544Z
 req_type: Task
 tags:
 - architecture
@@ -2577,6 +2577,15 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a1bd71-f3dc-7580-a106-2c09774e5308
+  author: dirtlab
+  timestamp: 2026-11-08T23:15:24.252733684Z
+  session_id: 01a1bd6ffc1e
+  harness_version: codex-cli 0.167.0
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: NeedsAttention
 execution_mode: drive
 filed_at:
   code_sha: 50ce509da3f7edbd12ff6636fe996c9c3a65c68f
@@ -2586,3 +2595,9 @@ filed_at:
   aida_build_sha: dd852f74c3b
   vendor: claude
   session: b0a84e34-277c-4df6-b53c-43f4bbe2e84d
+attention_reason:
+  category: design-fork
+  detail: 'Current review comment 99 findings 1-2 explicitly require advisor policy: define which noncanonical host-only, lane-private, read-only and refused CLI/MCP operations can discharge inventory routing, or authorize a staged subset with follow-up owners. Reverified current source: mediated inventory exits 1, with 3186 writer sites and 293 operations unresolved and four partial routes. Inventory v2 requires every operation blocked; changing labels or counting blanket refusal as routing would weaken the binding zero-unrouted criterion. Only comment_add and title/description/priority spec_edit have typed host handlers. The repeated 20:35 ruling does not answer this classification fork. No finding disputed. Profile remains gated; own_claim/queue_done remain TASK-3326. No source edits, commits, push, PR operations or publication declaration. Preserve hold and punt publication vetoes.'
+  lean: Advisor should enumerate the admitted canonical-object operations and explicit host-only/private/refused exclusions; implement their typed policy-preserving routes and reviewed inventory schema, then enable contained Codex only after zero unresolved coverage.
+  raised_by: implementer
+  raised_at: 2026-11-08T23:15:24.252723544Z
