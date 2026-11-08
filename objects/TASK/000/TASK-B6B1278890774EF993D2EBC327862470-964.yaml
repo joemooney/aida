@@ -1,0 +1,29 @@
+id: 01a1b8c4-26b2-73e0-afc8-ab88ab20231a
+spec_id: TASK-b6b1278890774ef993d2ebc327862470-964
+title: 'Non-blocking (cosmetic): the denied-write proof (bug_2487_installed_exec_honour…'
+description: |-
+  Non-blocking finding carried forward from an APPROVED review verdict on BUG-2487, which has since completed — recorded here so it keeps a queryable home once the verdict record stops being read.
+
+  Non-blocking (cosmetic): the denied-write proof (bug_2487_installed_exec_honours_builder_profile) is opt-in via AIDA_REQUIRE_CODEX_INSTALLED_LIVE and skips in CI; only the fixture/argv regression is CI-enforced. Commit cfbecb41250 keeps its stale 're-pin to 0.167.0' subject in branch history; the squash must use the corrected PR title.
+  Reviewed sha: 47f7c04664a3d933f34005db763bb0f851b63191
+status: Draft
+priority: Medium
+owner: joe
+feature: Uncategorized
+created_at: 2026-11-08T01:27:05.138443285Z
+modified_at: 2026-11-08T01:27:05.138443285Z
+req_type: Task
+tags:
+- carried-from:BUG-2487
+- finding-hash:b338c908
+- from-review:BUG-2487
+- kind:carried-forward
+filed_at:
+  code_sha: 2d1589ac325cca9366b218b577b7b0f41b2133d5
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 2782389cd8a
+  vendor: claude
+  session: 01a1b8be-8170-7fb2-89ab-ecb4c6eee98c
+  harness_version: 2.1.319 (Claude Code)
