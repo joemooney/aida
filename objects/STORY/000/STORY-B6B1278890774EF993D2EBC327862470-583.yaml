@@ -20,7 +20,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-08T02:56:36.206726Z
-modified_at: 2026-11-08T16:09:49.678687106Z
+modified_at: 2026-11-08T19:02:49.063504084Z
 req_type: Story
 tags:
 - architecture
@@ -282,6 +282,13 @@ comments:
   created_at: 2026-11-08T16:09:49.678687106Z
   modified_at: 2026-11-08T16:09:49.678687106Z
   session_id: 01a1bbbb051d
+- id: 01a1bc8a-b3e7-78c0-9a27-ce3008788e1b
+  author: joe
+  content: 'Script behaviour to absorb, seen 2026-11-08: auto-rework tries each PR head once (seen[n:head]), so a lane ending without a push parks that PR silently; review-watch does not retry ''exited without completing''; a dell1 auth failure makes fill-slots fall back or report ''still starting'' with no lane running.'
+  created_at: 2026-11-08T19:02:49.063504084Z
+  modified_at: 2026-11-08T19:02:49.063504084Z
+  session_id: 01a1bbab-762f-7cd2-8a36-4ea9f209afce
+  harness_version: 2.1.319 (Claude Code)
 history:
 - id: 01a1b91a-2eb5-7142-b252-8d3eb8d49b14
   author: joe
