@@ -2616,6 +2616,14 @@ aida show <SPEC-ID>
             // Subagent harness worktree lease hooks (SubagentStart/SubagentStop).
             // trace:TASK-702 | ai:claude
             for (path, body, description) in [
+                // trace:STORY-2662 | ai:codex
+                (
+                    PathBuf::from(".claude/hooks/aida-precompact-handoff.sh"),
+                    include_str!("../../templates/hooks/aida-precompact-handoff.sh")
+                        .trim_end()
+                        .to_string(),
+                    "Claude PreCompact bounded session handoff".to_string(),
+                ),
                 (
                     PathBuf::from(".claude/hooks/aida-subagent-start.sh"),
                     self.generate_subagent_start_hook(),

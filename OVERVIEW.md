@@ -394,6 +394,26 @@ create/comment operations to recover confirmed writes without replay. See [the w
 <!-- trace:STORY-2479 trace:TASK-3096 | ai:codex -->
 <!-- trace:TASK-3114 | ai:codex -->
 
+### Pre-compaction recovery
+
+Claude seats register a best-effort `PreCompact` hook that writes through
+`aida session handoff --write -`. The packet retains the spec pointer, branch,
+last recorded verdict, project-wide pending findings, prior handoff context and
+a recovery step. Read it with `aida session handoff --show`; the paired
+`SessionStart` handler also injects it after compaction or relaunch. This is an
+informational snapshot: revalidate evidence before acting. It grants no review,
+completion or publication authority.
+
+The hook requires Python 3, an absolute payload cwd and a rotation seat or session
+role. It reads at most 64 KiB of hook JSON, caps the packet at 10,000 UTF-8 bytes,
+caps each command's output and time, and budgets 12 seconds overall (15 seconds
+in Claude's wiring). Missing tools, refused writes and unavailable evidence do
+not block compaction. Transcript files and custom compaction instructions are
+never read. Existing manual handoffs remain available without hooks. Codex has
+no registered PreCompact capability pending its trusted-hook test; other vendors
+retain their existing handoff behavior.
+<!-- trace:STORY-2662 | ai:codex -->
+
 ### Agent launch migration
 
 `aida-cli-lib/src/launch/` resolves launch policy into `LaunchContext` and
