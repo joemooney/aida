@@ -8,7 +8,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-07T23:39:41.575597Z
-modified_at: 2026-11-08T21:02:29.658651922Z
+modified_at: 2026-11-08T21:02:36.509290577Z
 req_type: Task
 relationships:
 - rel_type: Child
@@ -365,6 +365,23 @@ comments:
   content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: Import diff sound on full inspection; rounds 8 findings fixed. Blocked only by AC5: CI run 42521886122 at this head has not started (0 jobs, 24 runs queued). No code rework needed unless CI fails. AC1/AC3 remain later Refs slices.. No triage reason was given.'
   created_at: 2026-11-08T21:02:29.658647204Z
   modified_at: 2026-11-08T21:02:29.658647204Z
+  session_id: 01a1bc93-77a0-7740-8b03-df4e3e8d1df5
+  harness_version: 2.1.319 (Claude Code)
+- id: 01a1bcf8-5f37-72f3-ac5e-bea884c8b245
+  author: joe
+  content: |-
+    REVIEW FINDINGS TO ADDRESS (PR #3695):
+    Verdict: CHANGES REQUESTED
+    Reviewed commit: 4fa49369388b
+    Recorded: 2026-11-08T20:56:07.518971641+00:00
+    Review comment: https://github.com/joemooney/aida/pull/3695#issuecomment-6727012979
+    Findings:
+    1. BLOCKING (wait state, not a code defect) AC5: CI run 42521886122 at 4fa49369388b is pending with 0 jobs started and 24 runs queued repo-wide; merge-hold-gate is queued too, and make check-ci-fast was not run by the implementer. The prior full result is incomplete (run 42515877089 cancelled contracts and cli-1). Action: re-run review at this SHA when CI is green; rework only if CI reports a failure; do not push or merge main just to answer this, since that restarts CI.
+    2. MINOR non-blocking aida-cli-lib/src/usage_mcp_helpers.rs (AC1 scope, advisor amendment 2026-11-07 'skip files in open PRs'): the batch-2 file is also changed by open PR-3687 (TASK-3429), which is the same reason goal_cmd.rs was excluded. The hunks do not overlap (3687 touches lines 1 and 140+; this PR touches lines 3-8), so no conflict is expected. Action: none required beyond awareness of merge order; future batches should re-check open-PR footprints.
+    3. COSMETIC non-blocking PR title and first commit subject say '34 command modules' but the head retires globs in 39 modules plus two test files (ledger 220 to 179). Action: correct the title before squash so the merged subject is accurate.
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
+  created_at: 2026-11-08T21:02:36.343416885Z
+  modified_at: 2026-11-08T21:02:36.343416885Z
   session_id: 01a1bc93-77a0-7740-8b03-df4e3e8d1df5
   harness_version: 2.1.319 (Claude Code)
 history:
