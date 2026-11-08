@@ -859,20 +859,17 @@ pub(crate) fn run(launch: Launch<'_>) -> Result<()> {
     // trace:STORY-2475 | ai:codex
     let mut outcome = outcome;
     if publish_native && !matches!(outcome, Outcome::Punted { .. } | Outcome::Held { .. }) {
-        if let Err(error) = crate::ship_from_seat::publish_queue_exit(
+        crate::lane_fast_gate::publication_result(
             &main_root,
-            &worktree,
-            launch.spec,
-            launch.lease_id,
-            status.success(),
-        ) {
-            crate::lane_fast_gate::infrastructure(
+            launch.branch,
+            crate::ship_from_seat::publish_queue_exit(
                 &main_root,
-                launch.branch,
+                &worktree,
+                launch.spec,
                 launch.lease_id,
-                &error,
-            );
-        }
+                status.success(),
+            ),
+        )?;
         outcome = classify(None, None, || lookup_pr(launch.project_root, launch.branch));
     }
 

@@ -27,7 +27,18 @@ const PROGRESS_EVERY: Duration = Duration::from_secs(15);
 
 fn run_lane(matches: &clap::ArgMatches, _ctx: &crate::command_registry::DispatchCtx) -> Result<()> {
     let args = <LaneArgs as clap::FromArgMatches>::from_arg_matches(matches)?;
-    let LaneCommand::Job(job) = args.command;
+    let job = match args.command {
+        LaneCommand::Job(job) => job,
+        LaneCommand::FastGateRelease { branch } => {
+            let main = crate::main_worktree_root_from(&std::env::current_dir()?);
+            crate::lane_fast_gate::release(&main, &branch)?;
+            println!(
+                "{}",
+                crate::lane_fast_gate::result_line(&main, &branch, "review hold released:")
+            );
+            return Ok(());
+        }
+    };
     let code = match job {
         LaneJobCommand::Run { wait, tail, argv } => run_job(argv, wait, tail)?,
         LaneJobCommand::Wait { id, wait, tail } => wait_job(&id, wait, tail)?,

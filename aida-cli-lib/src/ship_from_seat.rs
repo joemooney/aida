@@ -543,35 +543,69 @@ pub(crate) fn publish_queue_exit(
         || crate::seat_clone::probe(&main, tree),
         publish,
         || {
-            // An unchanged rework can still have an existing PR. Its gate
-            // result must be visible before releasing review admission.
-            // trace:STORY-2640 | ai:codex
-            let branch = lease_branch(&recorded_seat(&main, tree)?)?.0;
-            crate::lane_fast_gate::publication_ready(&main, tree, &branch)?;
-            crate::lane_fast_gate::finish_publication(&main, &branch, || {
-                let (pr, _) = crate::standalone_implementer::lookup_pr(&main, &branch)
-                    .context("unchanged lane PR unavailable for fast gate annotation")?;
-                let head = crate::lane_fast_gate::head(&main, &branch)
-                    .context("fast gate head unavailable")?;
-                crate::lane_fast_gate::annotate(
-                    &main,
-                    pr,
-                    &head,
-                    &crate::lane_fast_gate::marker(&main, &branch),
-                )
-            })?;
-            advisor_request(
-                &main,
-                "Queue-work lane exited without changes",
-                &format!(
+            notify_unchanged_lane(
+                || {
+                    let branch = lease_branch(&recorded_seat(&main, tree)?)?.0;
+                    crate::lane_fast_gate::publication_ready(&main, tree, &branch)?;
+                    crate::lane_fast_gate::finish_publication(&main, &branch, || {
+                        let (pr, _) = crate::standalone_implementer::lookup_pr(&main, &branch)
+                            .context("unchanged lane PR unavailable for fast gate annotation")?;
+                        let head = crate::lane_fast_gate::head(&main, &branch)
+                            .context("fast gate head unavailable")?;
+                        crate::lane_fast_gate::annotate(
+                            &main,
+                            pr,
+                            &head,
+                            &crate::lane_fast_gate::marker(&main, &branch),
+                        )
+                    })
+                },
+                |gate| {
+                    advisor_request(
+                        &main,
+                        "Queue-work lane exited without changes",
+                        &format!(
                     "Codex queue-work lane {lane} for {spec} exited with no pending changes in {} \
                  (clean_exit={clean_exit}). Check its existing PR and failing checks; a still-red \
-                 PR needs a new rework assignment.",
+                 PR needs a new rework assignment. Fast-gate settlement: {gate:?}",
                     tree.display()
                 ),
+                    )
+                },
             )
         },
     )
+}
+
+// Always attempt advisor delivery, including when the gate refuses settlement.
+// trace:STORY-2640 | ai:codex
+fn notify_unchanged_lane(
+    gate: impl FnOnce() -> Result<()>,
+    notify: impl FnOnce(&Result<()>) -> Result<()>,
+) -> Result<()> {
+    let gate = gate();
+    let notice = notify(&gate);
+    gate.and(notice)
+}
+
+#[cfg(test)]
+mod fast_gate_notice_tests {
+    use super::*;
+
+    #[test]
+    fn unchanged_lane_notifies_advisor_even_when_gate_is_stale() {
+        let mut delivered = false;
+        let result = notify_unchanged_lane(
+            || anyhow::bail!("fast gate pending or stale"),
+            |gate| {
+                assert!(gate.as_ref().unwrap_err().to_string().contains("stale"));
+                delivered = true;
+                Ok(())
+            },
+        );
+        assert!(delivered);
+        assert!(result.is_err());
+    }
 }
 
 // These effects are injected at the publication boundary so tests exercise

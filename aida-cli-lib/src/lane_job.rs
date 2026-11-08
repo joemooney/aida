@@ -1989,22 +1989,20 @@ mod fast_gate_job_tests {
             read_rc(&lane.results, "host-gate").unwrap(),
             output,
         )));
-        assert_eq!(marker, "fail");
+        // trace:STORY-2640 | ai:codex — timeout is infrastructure, not source failure.
+        assert_eq!(marker, "skipped(timeout)");
         crate::lane_fast_gate::begin(tmp.path(), "lane").unwrap();
-        let mut repairs = 0;
         crate::lane_fast_gate::native_rounds(
             tmp.path(),
             "lane",
             || Ok(Some(("head".into(), marker.clone(), diagnostic.clone()))),
-            |prompt| {
-                repairs += 1;
-                assert!(prompt.contains("timed out"));
-                Ok(())
-            },
+            |_| panic!("a timeout must not consume a source repair"),
         )
         .unwrap();
-        assert_eq!(repairs, 1);
-        assert_eq!(crate::lane_fast_gate::marker(tmp.path(), "lane"), "fail");
+        assert_eq!(
+            crate::lane_fast_gate::marker(tmp.path(), "lane"),
+            "skipped(timeout)"
+        );
     }
 }
 

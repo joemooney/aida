@@ -2803,6 +2803,40 @@ fn story_2640_fast_gate_native_publishes_exact_checked_tip_and_releases_review()
         |_| panic!("green gate must not repair"),
     )
     .unwrap();
+    // A green gate must not turn a failed bundle/publication into a successful
+    // lane result. Exercise the same error wrapper used by all native exits.
+    // trace:STORY-2640 | ai:codex
+    let failed_deps = crate::ship_from_seat::Deps {
+        bundle: &|_, _, _| anyhow::bail!("bundle import refused"),
+        commit: &no_commit,
+        forge: &|_| Box::new(forge.clone()) as Box<dyn crate::forge::Forge>,
+        after_open: &|_, _| {},
+    };
+    let failed = crate::lane_fast_gate::publication_result(
+        &fx.main,
+        "native-gated",
+        crate::ship_from_seat::run_from_with_reconciliation(
+            &fx.main,
+            opts(&clone, false, false),
+            &failed_deps,
+            false,
+            true,
+        ),
+    );
+    assert!(format!("{:#}", failed.unwrap_err()).contains("bundle import refused"));
+    assert_eq!(
+        crate::lane_fast_gate::marker(&fx.main, "native-gated"),
+        "pass"
+    );
+    assert!(!crate::lane_fast_gate::blocks_review(&fx.main, "native-gated", &tip).unwrap());
+    assert!(forge.opened.lock().unwrap().is_empty());
+    crate::lane_fast_gate::native_rounds(
+        &fx.main,
+        "native-gated",
+        || Ok(Some((tip.clone(), "pass".into(), String::new()))),
+        |_| panic!("green gate must not repair"),
+    )
+    .unwrap();
     crate::ship_from_seat::run_from_with_reconciliation(
         &fx.main,
         opts(&clone, false, false),

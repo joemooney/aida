@@ -6846,23 +6846,23 @@ pub(crate) fn run_vendor_headless_to_exit(
     let status = result?;
     // trace:STORY-2475 | ai:codex
     if publish_native.get() {
-        if let Some((lease, (tree, _))) = implementer_job_lane(seat, lease_id, lane_tree) {
+        if let Some((lease, (tree, branch))) = implementer_job_lane(seat, lease_id, lane_tree) {
             let scope = crate::list_leases(&main_root)
                 .into_iter()
                 .find(|l| l.id == lease)
                 .context("publication lease disappeared")?
                 .scope;
-            if let Err(error) = crate::ship_from_seat::publish_queue_exit(
+            crate::lane_fast_gate::publication_result(
                 &main_root,
-                tree,
-                &scope,
-                lease,
-                status.success(),
-            ) {
-                if let Some((_, (_, branch))) = implementer_job_lane(seat, lease_id, lane_tree) {
-                    crate::lane_fast_gate::infrastructure(&main_root, branch, lease, &error);
-                }
-            }
+                branch,
+                crate::ship_from_seat::publish_queue_exit(
+                    &main_root,
+                    tree,
+                    &scope,
+                    lease,
+                    status.success(),
+                ),
+            )?;
         }
     }
     Ok(status)

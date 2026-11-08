@@ -9123,16 +9123,17 @@ pub(crate) fn run_queue_resume_to_exit(
         }
     }
     if publish_native {
-        if let Err(error) = crate::ship_from_seat::publish_queue_exit(
+        let result = crate::ship_from_seat::publish_queue_exit(
             publication.0,
             tree,
             publication.1,
             publication.2,
             status.success(),
-        ) {
-            if let Some(branch) = branch.as_deref() {
-                crate::lane_fast_gate::infrastructure(&main, branch, publication.2, &error);
-            }
+        );
+        if let Some(branch) = branch.as_deref() {
+            crate::lane_fast_gate::publication_result(&main, branch, result)?;
+        } else {
+            result?;
         }
     }
     Ok(status)

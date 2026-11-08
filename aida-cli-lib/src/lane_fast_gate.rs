@@ -14,6 +14,10 @@ struct Receipt {
     native_ready: bool,
     #[serde(default)]
     repair_queue: Option<aida_core::QueueEntry>,
+    #[serde(default)]
+    owner: Option<aida_core::proc_identity::ProcIdentity>,
+    #[serde(default)]
+    reserved_at: Option<chrono::DateTime<chrono::Utc>>,
 }
 
 fn path(main: &Path, branch: &str) -> PathBuf {
@@ -45,11 +49,15 @@ pub(crate) fn begin(main: &Path, branch: &str) -> Result<()> {
         repair_used: false,
         native_ready: false,
         repair_queue: None,
+        owner: None,
+        reserved_at: None,
     });
     if !receipt.pending {
         receipt.repair_used = false;
     }
     receipt.pending = true;
+    receipt.owner = aida_core::proc_identity::ProcIdentity::capture(std::process::id()).ok();
+    receipt.reserved_at = Some(chrono::Utc::now());
     receipt.native_ready = false;
     receipt.head = None;
     receipt.repair_queue = None;
@@ -83,7 +91,7 @@ impl Drop for Reservation {
     fn drop(&mut self) {
         let result = (|| -> Result<()> {
             if let Some(mut r) = read(&self.main, &self.branch)? {
-                if r.head.is_none() || r.native_ready {
+                if r.repair_queue.is_none() {
                     r.pending = false;
                     r.native_ready = false;
                     r.head = None;
@@ -109,12 +117,20 @@ impl Drop for Reservation {
 pub(crate) fn infrastructure(main: &Path, branch: &str, lease: &str, error: &anyhow::Error) {
     let result = (|| -> Result<()> {
         let marker = read(main, branch)?
-            .filter(|r| r.marker == "fail" || r.repair_used)
-            .map_or("skipped(infrastructure)", |_| "fail");
+            .map(|r| {
+                if r.marker == "pass" || r.marker == "fail" {
+                    r.marker
+                } else if r.repair_used {
+                    "fail".into()
+                } else {
+                    "skipped(infrastructure)".into()
+                }
+            })
+            .unwrap_or_else(|| "skipped(infrastructure)".into());
         eprintln!("fast_gate={marker}: {error:#}");
-        record_marker(main, lease, marker)?;
+        record_marker(main, lease, &marker)?;
         if let Some(mut r) = read(main, branch)? {
-            r.marker = marker.into();
+            r.marker = marker;
             write(main, &r)?;
         }
         Ok(())
@@ -136,6 +152,18 @@ pub(crate) fn blocks_review(main: &Path, branch: &str, _head: &str) -> Result<bo
     if !r.pending {
         return Ok(false);
     }
+    // A bounded backstop also covers legacy receipts and unobservable owners.
+    // trace:STORY-2640 | ai:codex
+    let reserved_at = r.reserved_at.or_else(|| {
+        std::fs::metadata(path(main, branch))
+            .and_then(|m| m.modified())
+            .ok()
+            .map(chrono::DateTime::<chrono::Utc>::from)
+    });
+    if reserved_at.is_some_and(|at| chrono::Utc::now() - at >= chrono::Duration::hours(24)) {
+        release(main, branch)?;
+        return Ok(false);
+    }
     if let Some(entry) = &r.repair_queue {
         let storage = crate::Storage::new(
             crate::detect_distributed_store_from(main)
@@ -143,7 +171,43 @@ pub(crate) fn blocks_review(main: &Path, branch: &str, _head: &str) -> Result<bo
         );
         return repair_queue_live(&storage, entry);
     }
+    if r.owner.as_ref().is_some_and(|owner| {
+        matches!(
+            aida_core::proc_identity::observe(owner, true),
+            aida_core::proc_identity::Verdict::Dead(_)
+        )
+    }) {
+        release(main, branch)?;
+        return Ok(false);
+    }
     Ok(true)
+}
+
+/// Operator recovery and abandoned-owner cleanup release admission, never grant
+/// publication authority or erase a known gate verdict.
+// trace:STORY-2640 | ai:codex
+pub(crate) fn release(main: &Path, branch: &str) -> Result<()> {
+    if let Some(mut r) = read(main, branch)? {
+        r.pending = false;
+        r.native_ready = false;
+        if r.marker == "skipped(pending)" {
+            r.marker = "skipped(lane-ended)".into();
+        }
+        write(main, &r)?;
+    }
+    Ok(())
+}
+
+/// Publication errors remain errors, with their gate evidence intact.
+// trace:STORY-2640 | ai:codex
+pub(crate) fn publication_result<T>(main: &Path, branch: &str, result: Result<T>) -> Result<T> {
+    if result.is_err() {
+        if let Err(error) = release(main, branch) {
+            eprintln!("fast gate publication cleanup: {error:#}");
+        }
+        eprintln!("{}", result_line(main, branch, "publication failed:"));
+    }
+    result
 }
 
 // Only the exact queued repair owns this review hold. A removed/replaced row,
@@ -193,9 +257,18 @@ fn veto(main: &Path, spec: &str) -> bool {
         || crate::punt::read_hold_signal(&crate::punt::hold_signal_path(main, spec)).is_some()
 }
 
+#[derive(Debug)]
+struct NativeCommitError(String);
+impl std::fmt::Display for NativeCommitError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "host post-exit commit failed: {}", self.0)
+    }
+}
+impl std::error::Error for NativeCommitError {}
+
 fn commit(main: &Path, tree: &Path, spec: &str, lease: &str, clean: bool) -> Result<bool> {
     match crate::ship_from_seat::post_exit_commit_reported(main, tree, spec, lease, clean) {
-        crate::ship_from_seat::PostExitCommit::Failed(why) => anyhow::bail!("{why}"),
+        crate::ship_from_seat::PostExitCommit::Failed(why) => Err(NativeCommitError(why).into()),
         crate::ship_from_seat::PostExitCommit::NotASeat => Ok(false),
         _ => Ok(true),
     }
@@ -247,11 +320,12 @@ fn attempt(
     Ok((head, marker, output))
 }
 
-// A timeout/refusal is red, so it receives the same single repair as any gate.
+// A timeout gives no source-failure evidence and must not consume a repair.
 pub(crate) fn gate_result(result: Option<(i32, String)>) -> (String, String) {
     match result {
         None => ("skipped(no-sandbox)".into(), String::new()),
         Some((0, output)) => ("pass".into(), output),
+        Some((crate::lane_job::TIMEOUT_RC, output)) => ("skipped(timeout)".into(), output),
         Some((_, output)) => ("fail".into(), output),
     }
 }
@@ -270,6 +344,9 @@ pub(crate) fn native(
 ) -> Result<bool> {
     match native_inner(main, tree, spec, lease, branch, clean, &mut repair) {
         Ok(ready) => Ok(ready),
+        Err(error) if error.is::<NativeCommitError>() => {
+            publication_result(main, branch, Err(error))
+        }
         Err(error) => Ok(native_error(main, branch, lease, &error, || {
             snapshot(main, tree, branch)
         })),
@@ -517,7 +594,8 @@ fn pushed_inner(
     )
 }
 
-// Keep review blocked through annotation and queue insertion, including errors.
+// Keep review blocked through annotation and queue insertion; failed insertion
+// settles the red receipt so infrastructure cannot wedge review forever.
 fn pushed_round(
     main: &Path,
     branch: &str,
@@ -533,7 +611,7 @@ fn pushed_round(
     receipt.pending = true;
     write(main, &receipt)?;
     if let Err(error) = annotate() {
-        if receipt.marker != "fail" {
+        if receipt.marker != "fail" && receipt.marker != "pass" {
             receipt.marker = "skipped(annotation)".into();
         }
         eprintln!("fast_gate={}: annotation failed: {error:#}", receipt.marker);
@@ -545,7 +623,14 @@ fn pushed_round(
         write(main, &receipt)?;
     }
     if queue {
-        receipt.repair_queue = queue_repair()?;
+        receipt.repair_queue = match queue_repair() {
+            Ok(entry) => entry,
+            Err(error) => {
+                receipt.pending = false;
+                write(main, &receipt)?;
+                return Err(error);
+            }
+        };
         receipt.repair_used = true;
         write(main, &receipt)?;
     } else {
@@ -580,6 +665,165 @@ mod tests {
     use crate::lane_job::{self, JobRequest};
     use std::collections::BTreeMap;
     use std::time::Duration;
+
+    // trace:STORY-2640 | ai:codex
+    #[test]
+    fn killed_host_releases_pending_review_hold_without_drop() {
+        let tmp = tempfile::tempdir().unwrap();
+        begin(tmp.path(), "lane").unwrap();
+        let mut child = std::process::Command::new("sleep")
+            .arg("5")
+            .spawn()
+            .unwrap();
+        let owner = aida_core::proc_identity::ProcIdentity::capture(child.id());
+        // Always reap the bounded child even when identity capture fails.
+        child.kill().unwrap();
+        child.wait().unwrap();
+        let mut r = read(tmp.path(), "lane").unwrap().unwrap();
+        r.owner = Some(owner.unwrap());
+        r.head = Some("published".into());
+        r.marker = "fail".into();
+        write(tmp.path(), &r).unwrap();
+        assert!(!blocks_review(tmp.path(), "lane", "published").unwrap());
+        assert_eq!(marker(tmp.path(), "lane"), "fail");
+        assert!(!read(tmp.path(), "lane").unwrap().unwrap().pending);
+    }
+
+    // trace:STORY-2640 | ai:codex
+    #[test]
+    fn expired_or_operator_released_receipt_cannot_wedge_review() {
+        let tmp = tempfile::tempdir().unwrap();
+        begin(tmp.path(), "lane").unwrap();
+        let mut r = read(tmp.path(), "lane").unwrap().unwrap();
+        r.reserved_at = Some(chrono::Utc::now() - chrono::Duration::hours(25));
+        write(tmp.path(), &r).unwrap();
+        assert!(!blocks_review(tmp.path(), "lane", "head").unwrap());
+        // Legacy receipts have neither timestamp nor owner: use file age.
+        std::fs::write(
+            path(tmp.path(), "lane"),
+            r#"{"branch":"lane","head":null,"marker":"fail","pending":true,"repair_used":false}"#,
+        )
+        .unwrap();
+        std::fs::File::options()
+            .write(true)
+            .open(path(tmp.path(), "lane"))
+            .unwrap()
+            .set_modified(std::time::SystemTime::now() - Duration::from_secs(25 * 3600))
+            .unwrap();
+        assert!(!blocks_review(tmp.path(), "lane", "head").unwrap());
+        begin(tmp.path(), "lane").unwrap();
+        assert!(blocks_review(tmp.path(), "lane", "head").unwrap());
+        release(tmp.path(), "lane").unwrap();
+        assert!(!blocks_review(tmp.path(), "lane", "head").unwrap());
+        assert!(!read(tmp.path(), "lane").unwrap().unwrap().native_ready);
+    }
+
+    // trace:STORY-2640 | ai:codex
+    #[test]
+    fn passing_gate_publication_failure_returns_error_and_preserves_pass() {
+        let tmp = tempfile::tempdir().unwrap();
+        let guard = reserve(tmp.path(), "lane").unwrap();
+        native_rounds(
+            tmp.path(),
+            "lane",
+            || Ok(Some(("head".into(), "pass".into(), String::new()))),
+            |_| panic!("green must not repair"),
+        )
+        .unwrap();
+        let result: Result<()> =
+            publication_result(tmp.path(), "lane", Err(anyhow::anyhow!("push refused")));
+        assert!(result.unwrap_err().to_string().contains("push refused"));
+        assert_eq!(marker(tmp.path(), "lane"), "pass");
+        assert!(result_line(tmp.path(), "lane", "publication failed:").contains("fast_gate=pass"));
+        infrastructure(
+            tmp.path(),
+            "lane",
+            "lease",
+            &anyhow::anyhow!("unrelated error"),
+        );
+        assert_eq!(marker(tmp.path(), "lane"), "pass");
+        assert!(!blocks_review(tmp.path(), "lane", "head").unwrap());
+        drop(guard);
+    }
+
+    // trace:STORY-2640 | ai:codex
+    #[test]
+    fn native_commit_failure_is_a_publication_error() {
+        let tmp = tempfile::tempdir().unwrap();
+        begin(tmp.path(), "lane").unwrap();
+        let error = crate::ship_from_seat::with_post_exit_step(
+            Box::new(|_, _, _, _, _| {
+                crate::ship_from_seat::PostExitCommit::Failed("commit refused".into())
+            }),
+            || commit(tmp.path(), tmp.path(), "STORY-2640", "lease", true),
+        )
+        .unwrap_err();
+        assert!(error.is::<NativeCommitError>());
+        let result: Result<bool> = publication_result(tmp.path(), "lane", Err(error));
+        assert!(result
+            .unwrap_err()
+            .to_string()
+            .contains("host post-exit commit failed"));
+        assert!(!blocks_review(tmp.path(), "lane", "head").unwrap());
+        if crate::session::bwrap_availability() == crate::session::BwrapAvailability::Ok {
+            begin(tmp.path(), "lane").unwrap();
+            let result = crate::ship_from_seat::with_post_exit_step(
+                Box::new(|_, _, _, _, _| {
+                    crate::ship_from_seat::PostExitCommit::Failed("commit refused".into())
+                }),
+                || {
+                    native(
+                        tmp.path(),
+                        tmp.path(),
+                        "STORY-2640",
+                        "lease",
+                        "lane",
+                        true,
+                        |_| panic!("commit failure must not start a repair"),
+                    )
+                },
+            );
+            assert!(result
+                .unwrap_err()
+                .to_string()
+                .contains("host post-exit commit failed"));
+            assert!(!blocks_review(tmp.path(), "lane", "head").unwrap());
+        }
+    }
+
+    // trace:STORY-2640 | ai:codex
+    #[test]
+    fn timeout_skips_without_consuming_the_repair_round() {
+        let tmp = tempfile::tempdir().unwrap();
+        begin(tmp.path(), "lane").unwrap();
+        native_rounds(
+            tmp.path(),
+            "lane",
+            || {
+                let (result, output) =
+                    gate_result(Some((lane_job::TIMEOUT_RC, "cold target timeout".into())));
+                Ok(Some(("head".into(), result, output)))
+            },
+            |_| panic!("timeout must not prompt for a source repair"),
+        )
+        .unwrap();
+        let r = read(tmp.path(), "lane").unwrap().unwrap();
+        assert_eq!(r.marker, "skipped(timeout)");
+        assert!(!r.repair_used);
+        assert!(r.native_ready);
+        begin(tmp.path(), "pushed").unwrap();
+        assert!(!pushed_round(
+            tmp.path(),
+            "pushed",
+            "head",
+            "skipped(timeout)",
+            || Ok(()),
+            || panic!("timeout must not queue a repair")
+        )
+        .unwrap());
+        assert!(!read(tmp.path(), "pushed").unwrap().unwrap().repair_used);
+        assert!(!blocks_review(tmp.path(), "pushed", "head").unwrap());
+    }
 
     // trace:STORY-b6b1278890774ef993d2ebc327862470-563.ac433911 | ai:codex
     // trace:STORY-b6b1278890774ef993d2ebc327862470-563.acb1c30b | ai:codex
@@ -924,21 +1168,14 @@ mod tests {
                 result == "fail"
             );
             assert_eq!(queued, result == "fail");
-            assert_eq!(
-                marker(tmp.path(), result),
-                if result == "fail" {
-                    "fail"
-                } else {
-                    "skipped(annotation)"
-                }
-            );
+            assert_eq!(marker(tmp.path(), result), result);
             drop(guard);
-            assert_eq!(blocks_review(tmp.path(), result, "head").unwrap(), queued);
+            assert!(!blocks_review(tmp.path(), result, "head").unwrap());
         }
     }
 
     #[test]
-    fn queue_error_keeps_review_blocked_without_consuming_repair() {
+    fn queue_error_settles_red_without_consuming_repair() {
         let tmp = tempfile::tempdir().unwrap();
         let guard = reserve(tmp.path(), "lane").unwrap();
         assert!(pushed_round(
@@ -950,8 +1187,10 @@ mod tests {
             || anyhow::bail!("queue unavailable"),
         )
         .is_err());
+        assert!(!blocks_review(tmp.path(), "lane", "head").unwrap());
+        assert_eq!(marker(tmp.path(), "lane"), "fail");
         drop(guard);
-        assert!(blocks_review(tmp.path(), "lane", "head").unwrap());
+        assert!(!blocks_review(tmp.path(), "lane", "head").unwrap());
         assert!(!read(tmp.path(), "lane").unwrap().unwrap().repair_used);
     }
 
@@ -989,7 +1228,7 @@ mod tests {
     // trace:STORY-b6b1278890774ef993d2ebc327862470-563.ac897346 | ai:codex
     // trace:STORY-b6b1278890774ef993d2ebc327862470-563.acb1c30b | ai:codex
     #[test]
-    fn native_publication_annotation_flake_releases_review_with_skipped_result() {
+    fn native_publication_annotation_flake_releases_review_with_known_result() {
         let tmp = tempfile::tempdir().unwrap();
         let main = tmp.path().join("host");
         let tree = tmp.path().join("seat");
@@ -1010,7 +1249,7 @@ mod tests {
         assert!(!blocks_review(&main, "main", &head).unwrap());
         assert_eq!(
             result_line(&main, "main", "implementer: pr=77"),
-            "implementer: pr=77 fast_gate=skipped(annotation)"
+            "implementer: pr=77 fast_gate=pass"
         );
     }
 
@@ -1066,7 +1305,8 @@ mod tests {
 }
 
 /// Annotation is informational: a forge flake cannot invalidate a checked
-/// publication or strand its lease. The local marker records that limitation.
+/// publication or strand its lease. Diagnostics record the annotation failure;
+/// a known gate verdict remains intact.
 // trace:STORY-2640 | ai:codex
 pub(crate) fn finish_publication(
     main: &Path,
@@ -1075,7 +1315,7 @@ pub(crate) fn finish_publication(
 ) -> Result<()> {
     if let Err(error) = annotate() {
         let mut r = read(main, branch)?.context("fast gate receipt disappeared")?;
-        if r.marker != "fail" {
+        if r.marker != "fail" && r.marker != "pass" {
             r.marker = "skipped(annotation)".into();
         }
         eprintln!("fast_gate={}: annotation failed: {error:#}", r.marker);
