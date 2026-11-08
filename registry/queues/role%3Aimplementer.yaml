@@ -119,12 +119,6 @@
   added_at: 2026-11-08T09:33:51.665666457Z
   for_role: implementer
 - user_id: role:implementer
-  requirement_id: 01a1ba22-fb45-77b3-8aaa-626d7e65356e
-  position: -259000
-  added_by: role:implementer
-  added_at: 2026-11-08T09:24:37.736301666Z
-  for_role: implementer
-- user_id: role:implementer
   requirement_id: 01a1b59d-782b-7d72-b712-0d08340b0a4b
   position: -258000
   added_by: role:implementer
@@ -143,12 +137,6 @@
   added_at: 2026-11-08T08:51:00.140509071Z
   for_role: implementer
 - user_id: role:implementer
-  requirement_id: 01a09395-1a21-7ca0-b624-e7c61ae1051d
-  position: -237000
-  added_by: role:implementer
-  added_at: 2026-11-08T08:19:40.424283951Z
-  for_role: implementer
-- user_id: role:implementer
   requirement_id: 01a1b7c2-260c-72f2-bcdf-5c1450362776
   position: -220000
   added_by: role:implementer
@@ -159,18 +147,6 @@
   position: -211000
   added_by: role:implementer
   added_at: 2026-11-08T06:47:17.800332076Z
-  for_role: implementer
-- user_id: role:implementer
-  requirement_id: 01a1b8c4-1bdd-78c2-9c50-56b2f410e810
-  position: -208000
-  added_by: role:implementer
-  added_at: 2026-11-08T06:34:28.012509593Z
-  for_role: implementer
-- user_id: role:implementer
-  requirement_id: 01a1b879-1be7-7313-8372-4853e5297f5d
-  position: -199000
-  added_by: role:implementer
-  added_at: 2026-11-08T05:47:08.325808980Z
   for_role: implementer
 - user_id: role:implementer
   requirement_id: 01a19db5-0aac-72e0-869f-fdee4a59db62
@@ -191,18 +167,6 @@
   added_at: 2026-11-08T02:47:10.988885366Z
   for_role: implementer
 - user_id: role:implementer
-  requirement_id: 01a1b811-b403-7111-8654-b1da1b2c6c11
-  position: -164000
-  added_by: role:implementer
-  added_at: 2026-11-08T02:19:33.119171964Z
-  for_role: implementer
-- user_id: role:implementer
-  requirement_id: 01a1b762-8851-7cd1-bdd4-5ff744ab4d01
-  position: -163000
-  added_by: role:implementer
-  added_at: 2026-11-08T02:00:41.533276771Z
-  for_role: implementer
-- user_id: role:implementer
   requirement_id: 01a1ae38-489b-7db0-b752-9a823300b6e5
   position: -157000
   added_by: role:implementer
@@ -219,12 +183,6 @@
   position: -53000
   added_by: role:implementer
   added_at: 2026-11-07T04:08:05.659132209Z
-  for_role: implementer
-- user_id: role:implementer
-  requirement_id: 01a1a977-b3b6-7502-a0ee-01f971e843f3
-  position: 7000
-  added_by: role:implementer
-  added_at: 2026-11-06T16:44:17.768741883Z
   for_role: implementer
 - user_id: role:implementer
   requirement_id: 01a1965c-3483-70e3-af35-1caaf7df3f96
@@ -295,19 +253,5 @@
   position: 607000
   added_by: role:implementer
   added_at: 2026-11-01T10:05:19.370127936Z
-  for_role: implementer
-  added_by_machine: imac
-- user_id: role:implementer
-  requirement_id: 01a1b814-f6e6-7562-ba73-77d8deaa2bfd
-  position: 608000
-  added_by: role:implementer
-  added_at: 2026-11-08T03:00:29.084245332Z
-  for_role: implementer
-  added_by_machine: imac
-- user_id: role:implementer
-  requirement_id: 01a1b8b8-c6b5-78a3-aa99-96228b120bb4
-  position: 615000
-  added_by: role:implementer
-  added_at: 2026-11-08T03:07:03.674389983Z
   for_role: implementer
   added_by_machine: imac
