@@ -3,12 +3,12 @@ spec_id: STORY-b6b1278890774ef993d2ebc327862470-419
 agreed_id: STORY-2493
 title: 'Cross-machine review from an untrusted (work) node: verdict and finding envelopes over the aida-intent channel'
 description: 'Deferred (operator 2026-11-04: do the trusted-node case STORY-2492 first). When the reviewing node must not write to the home store, findings come back as content, not IDs. Add kind=review-verdict (fixed fields: PR, head SHA, decision, blocking finding digests, reviewer node; no free text, automatic) and kind=finding (severity, blocking, title, body, home file/line; free text, so it passes the validator and sensitive-pattern check and needs operator sign-off at work) to the STORY-2479 envelope format, carried over the STORY-2480 return channel. Home processes findings into specs and receipts map digest → home ID. Merge stays blocked while a blocking digest is unprocessed or open. Depends on STORY-2479, STORY-2480, STORY-2492.'
-status: InProgress
+status: NeedsAttention
 priority: Low
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-05T04:41:25.538710401Z
-modified_at: 2026-11-08T09:35:37.849181034Z
+modified_at: 2026-11-08T09:36:24.646141440Z
 req_type: Story
 comments:
 - id: 01a1aa03-51be-7480-baec-91ac74908e0b
@@ -458,6 +458,21 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a1ba83-e7ca-7be3-b0c0-6e0a2a12b822
+  author: dirtlab
+  timestamp: 2026-11-08T09:36:09.162838073Z
+  session_id: 01a1ba83616f
+  harness_version: codex-cli 0.167.0
+  changes: []
+- id: 01a1ba84-2446-7402-90e5-c75c2bc04ef9
+  author: dirtlab
+  timestamp: 2026-11-08T09:36:24.646151014Z
+  session_id: 01a1ba83616f
+  harness_version: codex-cli 0.167.0
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: NeedsAttention
 filed_at:
   code_sha: d561213a36febec31d45921d3d43d4dc7590135e
   branch: main
@@ -466,3 +481,8 @@ filed_at:
   aida_build_sha: e1fc3f06903
   vendor: claude
   session: 5bf140f7-38b2-4a04-9e8c-ccf69b1258f8
+attention_reason:
+  category: design-fork
+  detail: 'F1 remains blocked on host/advisor action: retitle PR-3665 to [AI:codex] docs(plans): untrusted-node review return channel sketch (Refs STORY-2493), or add aida: no-complete to its body. Latest review explicitly says no branch commit can fix F1 and the sketch needs no changes. This native seat forbids PR edits and Git metadata writes. Implementation also requires advisor architecture signoff under CLAUDE.md for reviewer/session attestation, home verification and supersession authority; no signoff is recorded. Route to host/advisor rather than another implementer rework. Preserve publication veto; this design-only PR must not complete the unimplemented STORY-2493.'
+  raised_by: implementer
+  raised_at: 2026-11-08T09:36:24.646141440Z
