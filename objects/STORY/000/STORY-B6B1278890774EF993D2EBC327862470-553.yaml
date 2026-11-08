@@ -3,12 +3,12 @@ spec_id: STORY-b6b1278890774ef993d2ebc327862470-553
 agreed_id: STORY-2630
 title: 'Lanes can actually use codegraph: seat clones resolve the primary index, AGENTS.md documents it, doctor and dell1 check it'
 description: 'Measured 2026-11-07: codegraph 1.6.0 is installed and indexed only at the primary checkout (/home/joe/ai/aida/.codegraph, synced every 15 min by codegraph-sync-aida.timer). Implementer and reviewer lanes run in seat clones (aida-worktrees/aida-seat-aida-*), where ''codegraph callers X'' fails with ''CodeGraph not initialized''. Of 837 headless lane logs in 3 days, 16 invoke codegraph and 422 use rg/grep. Only CLAUDE.md mentions codegraph; AGENTS.md (which Codex reads) and aida-core/templates say nothing, so Codex lanes, the majority, never hear of it. dell1 has no codegraph. Acceptance: (1) a lane in a seat clone or worktree gets a working codegraph without a per-clone index: lane env or wrapper passes -p <primary checkout>, or the seat setup links .codegraph read-only. (2) The contained boundary grants read-only access to that index and nothing writable. (3) The AGENTS.md template and the shared lane prompt carry one line on when to use callers/callees/impact and to confirm ''no callers'' with rg. Edit the template master, then sync-templates. (4) aida doctor reports codegraph missing, index stale (>1h) or unreachable from a seat. (5) Evidence: one codex lane log shows a successful codegraph call from a seat clone. Out of scope: indexing lane branches (main is fine for navigation).'
-status: InProgress
+status: NeedsAttention
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-07T15:34:33.363448208Z
-modified_at: 2026-11-08T08:29:23.068140116Z
+modified_at: 2026-11-08T08:38:06.569853314Z
 req_type: Story
 comments:
 - id: 01a1b6a6-52e1-70a0-a9c1-d32888979ca5
@@ -571,6 +571,42 @@ comments:
   modified_at: 2026-11-08T08:28:10.547013145Z
   session_id: 01a1b8be-8170-7fb2-89ab-ecb4c6eee98c
   harness_version: 2.1.319 (Claude Code)
+- id: 01a1ba4e-c3e9-7922-9dd1-5b4e9c7e27bb
+  author: dirtlab
+  content: |
+    PR #3662 rework: host-query proxy reliability (Refs STORY-2630 only)
+
+    This is NOT a completing slice. The completing ruling is blocked on host deployment/admission. Punt remains a publication veto until advisor triage.
+
+    Against locally pinned origin/main 08cbf8a3fe: AC1 primary-index routing exists in codegraph::primary_index_link and worktree runtime setup. AC3 navigation guidance exists in the AGENTS template master/shared code-navigation template. AC4 missing/stale/unreachable diagnostics exist. This branch adds proxy snapshot-age reporting; this rework fixes busy-status false refusals and PATH-client false-green diagnostics. AC1's deployed proxy delivery, AC2 contained read-only admission, and AC5 live primary-index evidence remain OPEN.
+
+    Changed:
+    - scripts/codegraph/codegraph: bounded connection workers answer status independently of serialized queries/backups; heartbeat publication continues; retained snapshots serve queries during refresh failures with original age and refresh diagnostics; malformed non-object descriptors refuse without traceback.
+    - aida-cli-lib/src/codegraph.rs: bounded content comparison detects when PATH codegraph differs from the bundled proxy, without executing unknown tools.
+    - tests/test_codegraph_proxy.py: responsive status/heartbeat with a long query plus stalled peer; retained snapshot query and malformed descriptor regressions.
+    - scripts/codegraph/README.md: documents concurrency, retained snapshots and client-routing diagnostics.
+    - AGENTS.md and OVERVIEW.md: remove optional-proxy per-change paragraphs.
+    - docs/internal/testing/story-2630-rework-handoff.md: delete transient handoff from tracked documentation.
+
+    Exact native-seat observations:
+    $ codegraph callers primary_index_link
+    /bin/bash: line 1: codegraph: command not found
+    $ aida doctor --lane-host --json
+    error: unexpected argument '--lane-host' found
+
+    Usage: aida doctor [OPTIONS] [COMMAND]
+
+    For more information, try '--help'.
+
+    Neither the lane .codegraph nor /home/dirtlab/ai/aida/.codegraph exists. No successful primary-index caller query, actual read-only index grant, or AIDA-contained acceptance is claimed. No index write grants were added.
+
+    Host operator Joe owns provisioning/indexing the primary, deploying the reviewed proxy outside seat write roots, delivering the exact host client command to lanes, adding/reviewing AIDA-contained read-only client/descriptor/socket admission, and running the contained callers query plus candidate doctor --lane-host with exact outputs/grant evidence. Joe must apply this status to the actual PR body before re-review. This seat is prohibited from editing/publishing the PR or Git metadata. Rebase on current origin/main before any eventual push; rerun CI at the exact new head. Do not complete STORY-2630 on this evidence.
+
+    Validation: Python proxy suite 14 tests run, 13 passed and 1 skipped (real upstream CodeGraph absent). Synthetic read-only bwrap proxy query passed, but is not AC5. make check-templates, rustfmt check and git diff --check passed. make check-ci-fast interrupted at its unexpected Cargo invocation to honor lane-runner-only Cargo policy; no fast-gate pass claimed. Rust lane job j20261108T083141774-2-0 passed: cargo test --profile agent -p aida-cli-lib --lib -- codegraph::tests; 12 passed, 0 failed. All source edits remain uncommitted. No commit, push, PR edit, completion declaration, queue done, merge or review record was performed. aida punt persisted Needs Attention but could not write its separate signal file (read-only filesystem); the persisted punt and this handoff explicitly veto publication pending advisor triage.
+  created_at: 2026-11-08T08:38:06.569853314Z
+  modified_at: 2026-11-08T08:38:06.569853314Z
+  session_id: 01a1ba46c10c
+  harness_version: codex-cli 0.167.0
 history:
 - id: 01a1b6a6-1e2f-7932-a527-6de38b6d8545
   author: joe
@@ -884,6 +920,15 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a1ba4a-3869-7c60-bf65-0616499db978
+  author: dirtlab
+  timestamp: 2026-11-08T08:33:08.713613688Z
+  session_id: 01a1ba46c10c
+  harness_version: codex-cli 0.167.0
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: NeedsAttention
 filed_at:
   code_sha: 122fea66d306d6739516983479c50201e9d0ae84
   branch: main
@@ -893,3 +938,8 @@ filed_at:
   vendor: claude
   session: 01a1b646-c67d-7b43-98ff-3604a53f5d1f
   harness_version: 2.1.319 (Claude Code)
+attention_reason:
+  category: blocked-dependency
+  detail: 'PR-3662 findings 1-3 require host/advisor action: this seat has no codegraph executable, primary .codegraph index, deployed host proxy, or candidate doctor binary. Contained client/descriptor/socket admission and live non-empty callers evidence remain absent. Joe must provision/deploy the reviewed host-owned client outside seat write roots, deliver its exact command to lanes, validate contained read-only admission and AC5, and replace the PR boilerplate with AC1-AC5 status and exact evidence. The completing ruling cannot be satisfied from this seat; no completing publication is authorized. Local rework fixes findings 4-8 and 10 but does not grant index writes or claim AC2/AC5.'
+  raised_by: implementer
+  raised_at: 2026-11-08T08:33:08.713604204Z
