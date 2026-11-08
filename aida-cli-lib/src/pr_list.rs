@@ -334,10 +334,23 @@ pub(crate) fn github_rollup_ci_status_for(
         return "None".to_string();
     }
     let rows: Vec<crate::ci_gate::CheckRow> = rollup.iter().map(rollup_check_row).collect();
-    let refined = crate::ci_gate::classify_red(&rows, &[], cfg, false, held);
+    // trace:BUG-2492 | ai:codex — the listing has no release authority.
+    // Ship refuses an unconfirmed pending hold; here a transient label
+    // inspection remains Pending rather than claiming an actual CI failure.
+    let unconfirmed_pending_hold = |row: &crate::ci_gate::CheckRow| {
+        !held
+            && row.bucket == "pending"
+            && crate::ci_gate::check_name_eq(&row.name, crate::ci_gate::HOLD_GATE_CHECK)
+    };
+    let inspecting_hold = rows.iter().any(unconfirmed_pending_hold);
+    let classified_rows: Vec<_> = rows
+        .into_iter()
+        .filter(|row| !unconfirmed_pending_hold(row))
+        .collect();
+    let refined = crate::ci_gate::classify_red(&classified_rows, &[], cfg, false, held);
     if refined.is_real() {
         "Failing".to_string()
-    } else if refined.has_pending() {
+    } else if refined.has_pending() || inspecting_hold {
         "Pending".to_string()
     } else if refined.ignored_informational.is_empty() {
         "Passing".to_string()

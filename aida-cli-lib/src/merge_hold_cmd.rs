@@ -198,7 +198,7 @@ struct ClearTail<'a> {
 /// The forge half of `aida merge-hold clear N`, after the clearance is
 /// recorded and the marker removed. Returns the lines to print. A label that
 /// could not be dropped is never reported as dropped: the hold label keeps
-/// merge-hold-gate failing, so that is an error (non-zero exit) naming the
+/// merge-hold-gate blocking, so that is an error (non-zero exit) naming the
 /// retry. The forge calls and the release event are injected so each branch
 /// is testable.
 // trace:TASK-1951 trace:TASK-2152 | ai:claude
@@ -234,7 +234,7 @@ fn finish_clear(
         }
         if let Err(err) = &unlabel {
             anyhow::bail!(
-                "Removed the merge-hold marker on PR #{pr} and recorded the clearance, but the `aida:merge-hold` label could not be dropped ({err}); merge-hold-gate keeps failing until it is. Re-run `aida merge-hold clear {pr}` when the forge is reachable, or drop the label by hand."
+                "Removed the merge-hold marker on PR #{pr} and recorded the clearance, but the `aida:merge-hold` label could not be dropped ({err}); merge-hold-gate keeps blocking until it is. Re-run `aida merge-hold clear {pr}` when the forge is reachable, or drop the label by hand."
             );
         }
         lines.push(format!(

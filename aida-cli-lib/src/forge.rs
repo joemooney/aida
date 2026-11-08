@@ -2015,6 +2015,7 @@ impl GitHubForge {
             .context("could not invoke `gh` — is the GitHub CLI installed?")
     }
 
+    // trace:BUG-2492 | ai:codex — retain hold labels for coarse pending classification.
     fn ci_probe_evidence(&self, branch: &str) -> CiProbeEvidence {
         let out = self.gh(&[
             "pr",
@@ -2024,7 +2025,7 @@ impl GitHubForge {
             "--state",
             "open",
             "--json",
-            "number,headRefOid,statusCheckRollup",
+            "number,headRefOid,statusCheckRollup,labels",
             "--limit",
             "1",
         ]);

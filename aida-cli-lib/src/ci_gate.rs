@@ -155,7 +155,7 @@ impl CiGateConfig {
 /// What a red CI verdict really contains once each row is classified.
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub(crate) struct RedRefinement {
-    /// Red checks that gate the merge — any entry means CI really failed.
+    /// Checks that refuse the merge: actual failures or an unconfirmed hold.
     /// These are the resolved rows, including their owning run, rather than
     /// copied names so the detail and recovery hint share one source.
     // trace:BUG-1298 | ai:codex
@@ -165,9 +165,9 @@ pub(crate) struct RedRefinement {
     /// `merge-hold-gate` is pending or red and a local marker or confirmed forge label
     /// exists: the hold itself, released at merge — not a CI failure.
     pub(crate) hold_gate_is_the_hold: bool,
-    /// `merge-hold-gate` is red but NO local marker exists — a lingering label
-    /// (the marker was cleared without the label re-sync). Counted in `real`
-    /// as well; this flag lets the caller add the `aida merge-hold clear` hint.
+    /// `merge-hold-gate` blocks without a local marker or confirmed active
+    /// label. This includes uncleared recorded holds with a removed label.
+    /// Counted in `real` too; this flag adds the clearance recovery hint.
     pub(crate) hold_gate_label_lingering: bool,
     /// Relevant (non-ignored) checks still pending when classified.
     pub(crate) pending: Vec<String>,
@@ -206,7 +206,7 @@ impl RedRefinement {
         }
         if self.hold_gate_label_lingering {
             parts.push(format!(
-                "`{HOLD_GATE_CHECK}` is red but no local hold marker exists — the label is lingering; \
+                "`{HOLD_GATE_CHECK}` blocks without confirmed local hold authority — inspect recorded hold labels; \
                  `aida merge-hold clear {pr}` re-syncs it"
             ));
         }
@@ -239,12 +239,19 @@ pub(crate) fn classify_red(
     for row in rows {
         let informational = !is_required(&row.name) && cfg.is_informational(row);
         // trace:BUG-2492 | ai:codex — pending statuses are the supervised hold,
-        // not unfinished CI. Without confirmed hold evidence they still wait.
+        // not unfinished CI. Missing hold authority refuses rather than waiting
+        // indefinitely (including recorded holds whose active label was removed).
         if check_name_eq(&row.name, HOLD_GATE_CHECK)
             && (row.is_pending() || row.is_red())
             && (hold_marker_present || hold_label_present)
         {
             out.hold_gate_is_the_hold = true;
+            continue;
+        }
+        // trace:BUG-2492 | ai:codex
+        if row.is_pending() && check_name_eq(&row.name, HOLD_GATE_CHECK) {
+            out.hold_gate_label_lingering = true;
+            out.real.push(row.clone());
             continue;
         }
         if row.is_pending() {
@@ -776,10 +783,10 @@ mod tests {
                     label,
                 );
                 assert_eq!(r.hold_gate_is_the_hold, marker || label, "{r:?}");
-                assert_eq!(r.is_real(), build == "fail", "{r:?}");
+                assert_eq!(r.is_real(), build == "fail" || (!marker && !label), "{r:?}");
                 assert_eq!(
                     r.pending.contains(&HOLD_GATE_CHECK.to_string()),
-                    !marker && !label,
+                    false,
                     "{r:?}"
                 );
                 assert_eq!(
@@ -787,9 +794,39 @@ mod tests {
                     build == "pending",
                     "{r:?}"
                 );
-                assert!(!r.hold_gate_label_lingering);
+                assert_eq!(r.hold_gate_label_lingering, !marker && !label);
             }
         }
+    }
+
+    // trace:BUG-2492 | ai:codex
+    #[test]
+    fn bug2492_recorded_hold_without_active_label_refuses_without_wait() {
+        // BUG-1693: recorded-without-cleared publishes pending even after
+        // someone removes the active label. No marker/active label grants
+        // release authority; this must refuse instead of waiting forever.
+        let root = tempfile::tempdir().unwrap();
+        let forge = FakeForge {
+            registrations: std::cell::RefCell::new(vec![
+                crate::forge::CheckRegistration::Registered,
+            ]),
+            rows: Some(vec![row(HOLD_GATE_CHECK, "", "pending")]),
+            required: req(&[HOLD_GATE_CHECK]),
+            row_reads: std::cell::Cell::new(0),
+            registration_polls: std::cell::Cell::new(0),
+        };
+        let error = wait_for_ship_ci(
+            root.path(),
+            &forge,
+            &change(),
+            false,
+            false,
+            None,
+            Duration::ZERO,
+        )
+        .unwrap_err();
+        assert!(format!("{error:#}").contains("recorded hold labels"));
+        assert_eq!(forge.row_reads.get(), 1);
     }
 
     // Exercise the ship and drain polling boundaries with no time available:

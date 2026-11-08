@@ -473,7 +473,7 @@ fn bug2492_pending_hold_reaches_refinement_only_after_other_checks_settle() {
         serde_json::json!({"name":"merge-hold-gate","status":"PENDING"}),
     ] {
         for build in ["SUCCESS", "PENDING", "FAILURE"] {
-            let payload = serde_json::json!([{"number":42,"statusCheckRollup":[
+            let payload = serde_json::json!([{"number":42,"labels":[{"name":"aida:merge-hold"}],"statusCheckRollup":[
                 gate.clone(), {"context":"Build","state":build}
             ]}])
             .to_string();
@@ -493,5 +493,24 @@ fn bug2492_pending_hold_reaches_refinement_only_after_other_checks_settle() {
                 assert_eq!(failed_summary.contains("Build"), build == "FAILURE");
             }
         }
+    }
+}
+
+// trace:BUG-2492 | ai:codex
+#[test]
+fn bug2492_unconfirmed_pending_hold_is_not_red() {
+    for labels in [
+        serde_json::json!([]),
+        serde_json::json!([{"name":"aida:merge-hold-recorded"},{"name":"aida:merge-hold-cleared"}]),
+    ] {
+        let payload = serde_json::json!([{"number":42,"labels":labels,"statusCheckRollup":[
+            {"context":"merge-hold-gate","state":"PENDING"},
+            {"name":"Build","status":"COMPLETED","conclusion":"SUCCESS"}
+        ]}])
+        .to_string();
+        assert_eq!(
+            parse_ci_probe(&payload),
+            CiProbe::InProgress { pr_number: 42 }
+        );
     }
 }

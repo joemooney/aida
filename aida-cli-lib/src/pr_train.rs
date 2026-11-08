@@ -2167,7 +2167,7 @@ pub(crate) trait TrainForge {
     }
     /// Push `train`'s tip to `branch` and open its train PR.
     fn open(&mut self, train: &Built, branch: &str) -> Result<crate::forge::ChangeRef>;
-    /// BUG-2214: `train` lets the live wait tolerate a merge-hold-gate red
+    /// BUG-2214: `train` lets the live wait tolerate a merge-hold-gate blocker
     /// that is fully explained by admitted held members the mandate covers.
     fn wait_ci(&mut self, change: &crate::forge::ChangeRef, train: &Built) -> Result<CiVerdict>;
     // trace:STORY-2401 | ai:codex
@@ -2654,7 +2654,7 @@ impl TrainForge for LiveTrainForge<'_> {
         Ok(match ci_state {
             CiState::Success => CiVerdict::Green,
             other => {
-                // BUG-2214: ship tolerates a merge-hold-gate red while the
+                // BUG-2214: ship tolerates a merge-hold-gate blocker while the
                 // hold it will release is still armed (BUG-1180); the train
                 // does the same for admitted held members, re-verifying every
                 // member's live labels. trace:BUG-2214 | ai:claude

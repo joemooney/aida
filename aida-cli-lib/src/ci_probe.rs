@@ -347,8 +347,10 @@ pub(crate) fn watch_ci_for_context_with_forge(
 /// running", and a check still `IN_PROGRESS`/`QUEUED` might be the one that
 /// actually decides code health (e.g. the build), even while a fast-failing
 /// gate check has already concluded. The merge-hold gate's pending status
-/// is routed as coarse Red after other checks settle, so the caller can
-/// confirm the hold through ci_gate::refine_red; it never implies Green. Ending the wait on the gate's
+/// is routed as coarse Red after other checks settle only with confirmed
+/// active or uncleared recorded hold labels. Without that evidence the pending
+/// inspection stays InProgress for every caller; it never implies Green.
+/// Ending the wait on the gate's
 /// conclusion alone let a caller declare CI red — and emit a terminal wake —
 /// before the real build had even reported in. Waiting for every check to
 /// settle (apart from the hold routed to refinement) before returning Red or
@@ -410,6 +412,21 @@ pub(crate) fn parse_ci_probe(stdout: &str) -> CiProbe {
     // Tally check states. statusCheckRollup entries can be from
     // CheckRun (status=COMPLETED|IN_PROGRESS|QUEUED, conclusion=SUCCESS|FAILURE|...)
     // or StatusContext (state=SUCCESS|FAILURE|PENDING|ERROR). Handle both.
+    // trace:BUG-2492 | ai:codex — coarse consumers do not all refine Red.
+    // Only confirmed holds may turn a pending gate into a hold blocker.
+    let has_label = |name: &str| {
+        pr.get("labels")
+            .and_then(|v| v.as_array())
+            .is_some_and(|labels| {
+                labels.iter().any(|l| {
+                    l.as_str()
+                        .or_else(|| l.get("name").and_then(|v| v.as_str()))
+                        == Some(name)
+                })
+            })
+    };
+    let hold_evidence = has_label("aida:merge-hold")
+        || (has_label("aida:merge-hold-recorded") && !has_label("aida:merge-hold-cleared"));
     let mut any_in_progress = false;
     let mut failed: Vec<String> = Vec::new();
     for check in rollup {
@@ -427,7 +444,9 @@ pub(crate) fn parse_ci_probe(stdout: &str) -> CiProbe {
                         .get("name")
                         .and_then(|v| v.as_str())
                         .unwrap_or("check");
-                    if crate::ci_gate::check_name_eq(name, crate::ci_gate::HOLD_GATE_CHECK) {
+                    if hold_evidence
+                        && crate::ci_gate::check_name_eq(name, crate::ci_gate::HOLD_GATE_CHECK)
+                    {
                         failed.push(name.to_string());
                     } else {
                         any_in_progress = true;
@@ -457,7 +476,9 @@ pub(crate) fn parse_ci_probe(stdout: &str) -> CiProbe {
                         .get("context")
                         .and_then(|v| v.as_str())
                         .unwrap_or("status");
-                    if crate::ci_gate::check_name_eq(name, crate::ci_gate::HOLD_GATE_CHECK) {
+                    if hold_evidence
+                        && crate::ci_gate::check_name_eq(name, crate::ci_gate::HOLD_GATE_CHECK)
+                    {
                         failed.push(name.to_string());
                     } else {
                         any_in_progress = true;
