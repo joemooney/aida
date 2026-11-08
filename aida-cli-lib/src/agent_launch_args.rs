@@ -648,6 +648,15 @@ pub enum SessionCommand {
         #[clap(long, hide = true, requires = "show")]
         rotated: bool,
 
+        // trace:STORY-2662 | ai:codex
+        /// Read/write the worktree recovery snapshot; never requests rotation.
+        #[clap(long, hide = true, conflicts_with_all = ["final_", "rotated", "check"])]
+        snapshot: bool,
+
+        /// Read only the handoff text, without standing context.
+        #[clap(long, hide = true, requires = "show")]
+        body_only: bool,
+
         /// Manage the seat's repo-local standing orders
         /// (`.aida/standing-orders/<seat>.md`): `add "<text>"` appends a dated
         /// entry, `list` prints them. `--show` prints standing orders before
@@ -898,6 +907,19 @@ pub enum SessionManifestCommand {
 // trace:STORY-432 | ai:codex
 #[derive(Subcommand, Debug)]
 pub enum AgentCommand {
+    /// Read the log of an AIDA-supervised Claude background attempt.
+    // trace:TASK-3219 | ai:codex
+    Logs {
+        /// Background attempt UUID returned by dispatch.
+        attempt: String,
+    },
+    /// Follow an AIDA-supervised Claude log until exit (read-only; Ctrl+C detaches).
+    // trace:TASK-3219 | ai:codex
+    Attach {
+        /// Background attempt UUID returned by dispatch.
+        attempt: String,
+    },
+
     /// Launch a new agent process.
     ///
     /// This lane spawns an INTERACTIVE agent in the foreground and BLOCKS until that
@@ -1288,6 +1310,10 @@ pub enum AgentNewCommand {
         /// in `claude agents` (and `aida status`). When `--spec` is
         /// also passed, AIDA records the captured sessionId on the
         /// lease so the cross-substrate view links them automatically.
+        /// With trusted `[contained.vendors] claude = "aida"`, AIDA instead
+        /// supervises a foreground contained worker; use `aida agent logs`
+        /// or read-only `aida agent attach` with its returned attempt UUID.
+        /// Resume and rotation remain unavailable for that background path.
         /// Without `--bg`, the foreground launch path is unchanged.
         /// For non-interactive dispatch, first set `[agents] confirm_bypass = false`
         /// in `~/.aida/config.toml`; trusted project config can still require consent.
