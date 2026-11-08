@@ -18,12 +18,12 @@ description: |
   2. Without sccache configured, behaviour is unchanged.
   3. Test: the job profile's env/bind set includes the cache dir and wrapper only when configured.
   4. The trust decision (shared or lane-only cache) is recorded on this spec before implementation.
-status: InProgress
+status: NeedsAttention
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-07T19:59:26.079479Z
-modified_at: 2026-11-08T13:27:53.851709081Z
+modified_at: 2026-11-08T13:31:27.215914564Z
 req_type: Story
 comments:
 - id: 01a1b798-f0d4-73b1-93d5-f84581f2d190
@@ -609,6 +609,15 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a1bb5b-546f-7582-bf9d-c1318980b79e
+  author: dirtlab
+  timestamp: 2026-11-08T13:31:27.215929027Z
+  session_id: 01a1bb580ce9
+  harness_version: codex-cli 0.167.0
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: NeedsAttention
 filed_at:
   code_sha: 7a18c0d52a6a4e0822befd4c810cfed16b04b74c
   branch: main
@@ -618,3 +627,8 @@ filed_at:
   vendor: claude
   session: 01a1b76b-2fe7-7dd2-88d0-356fc8d96d04
   harness_version: 2.1.319 (Claude Code)
+attention_reason:
+  category: blocked-dependency
+  detail: 'Round-9 finding 1 is agreed and unresolved: AC1 requires two consecutive lane Cargo jobs using this branch launcher on BOTH primary and dell1, retaining final statistics and second-job Rust hits > 0, or a recorded advisor amendment. This native seat cannot provide both-host evidence. Findings 2-4 are being fixed locally: scope host-wrapper health checks with AIDA_SCCACHE_PIDS, degrade startup failure to direct compilation, simplify redundant ticket test. Required validation is running; final results will be recorded. Preserve publication veto and existing merge hold; code fixes do not close AC1.'
+  raised_by: implementer
+  raised_at: 2026-11-08T13:31:27.215914564Z
