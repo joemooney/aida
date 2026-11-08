@@ -17,7 +17,7 @@ priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-11-08T15:56:47.764277928Z
-modified_at: 2026-11-08T17:23:32.388353642Z
+modified_at: 2026-11-08T17:23:37.301729468Z
 req_type: Task
 tags:
 - from-advisor:STORY-1486
@@ -41,6 +41,13 @@ comments:
   content: 'Advisor 2026-11-08: the wait-state finding is obsolete; CI at 4649d63143c4 has now failed on the ExecContext ratchet. One more implementer round is authorized for that failure only.'
   created_at: 2026-11-08T16:03:35.462976931Z
   modified_at: 2026-11-08T16:03:35.462976931Z
+  session_id: 01a1bbab-762f-7cd2-8a36-4ea9f209afce
+  harness_version: 2.1.319 (Claude Code)
+- id: 01a1bc2f-e2d5-7423-92ff-4e37158ec8c7
+  author: joe
+  content: 'Advisor 2026-11-08: ruled; the wait-state finding is obsolete and one rework was authorized for the real CI failure.'
+  created_at: 2026-11-08T17:23:37.301729468Z
+  modified_at: 2026-11-08T17:23:37.301729468Z
   session_id: 01a1bbab-762f-7cd2-8a36-4ea9f209afce
   harness_version: 2.1.319 (Claude Code)
 history:
