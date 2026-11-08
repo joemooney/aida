@@ -8,7 +8,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-07T15:34:33.363448208Z
-modified_at: 2026-11-08T08:55:30.546543600Z
+modified_at: 2026-11-08T09:01:01.528722578Z
 req_type: Story
 comments:
 - id: 01a1b6a6-52e1-70a0-a9c1-d32888979ca5
@@ -1023,6 +1023,12 @@ history:
   - field_name: status
     old_value: InProgress
     new_value: NeedsAttention
+- id: 01a1ba63-bf40-71f2-8495-f765d73f3f73
+  author: joe
+  timestamp: 2026-11-08T09:01:01.632509068Z
+  session_id: 01a1ba61b4b8
+  harness_version: 2.1.319 (Claude Code)
+  changes: []
 filed_at:
   code_sha: 122fea66d306d6739516983479c50201e9d0ae84
   branch: main
@@ -1037,3 +1043,11 @@ attention_reason:
   detail: PR-3662 review findings 1-3 and 7 require host/advisor action. This native seat has no codegraph executable, primary .codegraph index, deployed proxy or candidate doctor binary; it cannot supply contained read-only admission or non-empty AC5 evidence. Joe must deploy/deliver the reviewed host client, validate contained grants, run real upstream and live callers/doctor commands, and replace PR boilerplate with AC status/evidence. Advisor must resolve the completing ruling versus Refs-only deferral and publication veto. Local fixes address findings 4-6; no completion is claimed.
   raised_by: implementer
   raised_at: 2026-11-08T08:51:40.338907263Z
+failure_reason:
+  phase: reviewer
+  phase_index: 3
+  kind: verdict:request-changes
+  detail: Refs slice (host query proxy) at 4ab8b385dc16; prior doctor-routing, socket-recovery and snapshot-cleanup findings fixed in source. AC1 partial (index link on main, proxy client not delivered to lanes); AC2 unverified (native read-only only, contained posture unsupported per README:73); AC3 partial (guidance present but points at bare codegraph); AC4 implemented with codegraph::tests, CI pending at this head; AC5 unverified (no live seat evidence, real-upstream test never run). 7 CI jobs pending, earlier CI runs cancelled, merge-hold-gate failing as the supervised hold. Findings 1-4 need host/advisor action, not another seat rework.
+  recovery_hint: address the review findings, move STORY-2630 back to In Progress, and clear the PR hold only after approval
+  shelved_by: reviewer
+  shelved_at: 2026-11-08T09:01:01.528722578Z
