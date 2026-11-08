@@ -1,0 +1,21 @@
+id: 01a1b879-1be7-7313-8372-4853e5297f5d
+spec_id: BUG-b6b1278890774ef993d2ebc327862470-256
+agreed_id: BUG-2491
+title: Force-claim treats a dead lane's local slice-* tags as unpushed work, so every rework of a finished contained lane refuses until the seat is ended by hand
+description: 'Observed 4 times on 2026-11-07 (dell1: TASK-3424, TASK-3425, TASK-1214 seats; BUG-2488 a variant). ''aida queue work SPEC --force-claim'' refuses: ''retained lease L and private clone P: its tree has commits origin lacks: 1 commit(s) on refs/tags/slice-00-r1 ... (+46 more). Diff stat: no tracked changes.'' The branch HEAD is an ancestor of (or equal to) origin''s PR head; the only ''unpushed'' refs are the lane''s own slice-NN-rN checkpoint tags. The advisor must run ''aida session end L --force --discard-unpushed'' and relaunch each time; auto-rework cannot proceed unattended. Acceptance: (1) the unpushed-work check ignores refs/tags/slice-* (lane checkpoint tags) when every tagged commit is reachable from the pushed branch head or is the branch''s own history; tags pointing at commits NOT reachable from origin still count; (2) when the remaining evidence is clean, force-claim ends the retained finished lease itself and proceeds; (3) regression test with a seat clone carrying slice tags and a clean pushed branch. LIGHT gate.'
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-11-08T00:05:07.175003336Z
+modified_at: 2026-11-08T00:05:07.175003336Z
+req_type: Bug
+filed_at:
+  code_sha: 2a7fe186bdcd718fa356e5e4d028a3b2ff13769d
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 2a7fe186bdc
+  vendor: claude
+  session: 01a1b848-940b-7bd2-8acd-52e428b182b8
+  harness_version: 2.1.319 (Claude Code)
