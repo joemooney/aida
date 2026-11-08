@@ -28,7 +28,7 @@ priority: Low
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-09-13T22:07:45.944235Z
-modified_at: 2026-11-08T17:04:19.924835276Z
+modified_at: 2026-11-08T17:04:26.280963302Z
 req_type: Task
 tags:
 - cleanup
@@ -346,6 +346,21 @@ comments:
   content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: No blocking code defect found at e2dea80e9fb2; verdict is a CI wait state: run 42500854537 is not terminal, and round-7 changes have no executed test evidence yet. Re-run a reviewer once CI is terminal.. No triage reason was given.'
   created_at: 2026-11-08T17:04:19.924828895Z
   modified_at: 2026-11-08T17:04:19.924828895Z
+  session_id: 01a1b9af-8230-75d2-82f8-667491cc010a
+  harness_version: 2.1.319 (Claude Code)
+- id: 01a1bc1e-4d7c-71e0-afc6-4c56e1cdd743
+  author: joe
+  content: |-
+    REVIEW FINDINGS TO ADDRESS (TASK-1222):
+    Verdict: CHANGES REQUESTED
+    Reviewed commit: e2dea80e9fb2
+    Recorded: 2026-11-08T16:46:27.537244167+00:00
+    Findings:
+    1. WAIT STATE, not a code change: CI run 42500854537 at e2dea80e9fb2 is not terminal (most jobs queued; previous full run took ~73 min). Round-7 code (scheduled-only cursor, GitHub pr-N alias lookup) has no executed test evidence: the lane's task_1222 run timed out while compiling (spec comment, untested=true). The last green run (42481511288) covers 6bb37c076d, not this head. Re-run an independent reviewer when CI is terminal; rework only if a job fails.
+    2. Non-blocking, minor: aida-cli-lib/src/tests/maintenance_schedule_tests.rs each_new_guard_job_trips_and_routes_on_failure_and_is_silent_when_clean had 'doctor check merged-agent-worktrees --fail-on-findings' removed without adding 'worktree gc --fail-on-findings', so the replacement weekly job is not in the trip/route/silent-when-clean coverage; task_1222_weekly_gc_reports_to_advisor_without_apply checks registration only. Add the command to that list.
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
+  created_at: 2026-11-08T17:04:24.956981876Z
+  modified_at: 2026-11-08T17:04:24.956981876Z
   session_id: 01a1b9af-8230-75d2-82f8-667491cc010a
   harness_version: 2.1.319 (Claude Code)
 history:
