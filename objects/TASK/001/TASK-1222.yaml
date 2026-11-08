@@ -23,12 +23,12 @@ description: |
   Deliberate sweep: for each stale branch/worktree, check the spec status — if Completed/merged-elsewhere, delete the branch + remove the worktree; if it holds genuine uncommitted work, salvage-commit or discard per a per-item decision. aida session reap already handles the finished+merged+exited class safely; this task is the long-tail the reap conservatively leaves (unfinished-spec or uncommitted-work worktrees, and pure branch cruft). Consider an aida worktree gc --older-than / --stale sweep if one doesn't cover it.
 
   Immediate: STORY-1006 + STORY-993 (both Completed) have uncommitted worktree changes — operator decision: salvage or discard, then remove those two worktrees.
-status: InProgress
+status: NeedsAttention
 priority: Low
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-09-13T22:07:45.944235Z
-modified_at: 2026-11-08T20:42:08.054334728Z
+modified_at: 2026-11-08T20:43:13.524756808Z
 req_type: Task
 tags:
 - cleanup
@@ -595,6 +595,13 @@ comments:
   modified_at: 2026-11-08T20:40:32.156244375Z
   session_id: 01a1bc93-77a0-7740-8b03-df4e3e8d1df5
   harness_version: 2.1.319 (Claude Code)
+- id: 01a1bce6-a0f4-7a93-9917-91dee77de38c
+  author: dirtlab
+  content: 'CI observation correction: the final bounded read shows reviewed-head run 42518333153 is now terminal, conclusion cancelled (cli-0 succeeded; other components cancelled; Build failed). Current-head runs 42521473050 and 42521473017 remain queued. The punt dependency is current-head terminal CI and fresh independent review, plus existing supervised hold clearance; no code changes requested or made.'
+  created_at: 2026-11-08T20:43:13.524756808Z
+  modified_at: 2026-11-08T20:43:13.524756808Z
+  session_id: 01a1bce597b9
+  harness_version: codex-cli 0.167.0
 history:
 - id: 01a1b7cd-7751-7262-8ad1-f0f9d2ef6d4d
   author: joe
@@ -1145,3 +1152,23 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a1bce6-1e9d-7b93-b478-713393b498ed
+  author: dirtlab
+  timestamp: 2026-11-08T20:42:40.157853386Z
+  session_id: 01a1bce597b9
+  harness_version: codex-cli 0.167.0
+  changes: []
+- id: 01a1bce6-8a4b-75e0-a59f-75931281cdc5
+  author: dirtlab
+  timestamp: 2026-11-08T20:43:07.723819432Z
+  session_id: 01a1bce597b9
+  harness_version: codex-cli 0.167.0
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: NeedsAttention
+attention_reason:
+  category: blocked-dependency
+  detail: 'Latest review finding 1 requests no code change, push or main merge until terminal CI and fresh independent review. Current head is 1725311184d4ad1677755195fe9ec1b9ff291f6f; its runs 42521473050 and 42521473017 are queued. Reviewed-head run 42518333153 is still queued with cancelled component jobs after the host advanced the branch. Preserve this head and obtain terminal CI plus independent review; existing supervised merge hold requires separate authorized clearance. Changed files: none; working tree clean; no local tests executed (untested=true). No publication or host cleanup performed.'
+  raised_by: implementer
+  raised_at: 2026-11-08T20:43:07.723798899Z
