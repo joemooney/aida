@@ -1,0 +1,29 @@
+id: 01a1bb2d-e907-7b81-8051-3c68f776a301
+spec_id: TASK-b6b1278890774ef993d2ebc327862470-996
+title: 'NON-BLOCKING, cosmetic: aida-core/templates/skills/aida-review.md:158 still say…'
+description: |-
+  Non-blocking finding carried forward from an APPROVED review verdict on TASK-3472, which has since completed — recorded here so it keeps a queryable home once the verdict record stops being read.
+
+  NON-BLOCKING, cosmetic: aida-core/templates/skills/aida-review.md:158 still says at most 3 reviewers at once per launcher, while review watch is now configured for 4. No code enforces 3; the two statements should be reconciled.
+
+  PR: #3674
+  Reviewed sha: c196dce0864b77ad45696bf8940b8ff8e367a4fc
+status: Draft
+priority: Medium
+owner: joe
+feature: Uncategorized
+created_at: 2026-11-08T12:41:50.599130080Z
+modified_at: 2026-11-08T12:41:50.599130080Z
+req_type: Task
+tags:
+- carried-from:TASK-3472
+- finding-hash:bf5397d4
+- from-review:PR-3674
+- kind:carried-forward
+filed_at:
+  code_sha: d68eb4ec071092cbe9a36eb356d033c613633453
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 92e7eb35446
+  vendor: claude
