@@ -8,7 +8,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-04T17:54:51.353376Z
-modified_at: 2026-11-08T14:05:33.153890132Z
+modified_at: 2026-11-08T14:05:40.122552227Z
 req_type: Task
 tags:
 - area:containment
@@ -631,6 +631,27 @@ comments:
   modified_at: 2026-11-08T13:55:59.633261604Z
   session_id: 01a1bb68fcd1
   harness_version: codex-cli 0.167.0
+- id: 01a1bb7a-a730-75b0-b887-716ba305cba6
+  author: joe
+  content: |-
+    REVIEW FINDINGS TO ADDRESS (PR #3641):
+    Verdict: CHANGES REQUESTED
+    Reviewed commit: 8a6439d0732a
+    Recorded: 2026-11-08T14:03:54.399243091+00:00
+    Review comment: https://github.com/joemooney/aida/pull/3641#issuecomment-6722454140
+    Findings:
+    1. BLOCKING CI: no green CI exists for this branch. Run 42481515530 at 66b5ab0 failed CI (lib-1), CI (rest) and Build (the aggregate 'Require every CI lane' step); c8690fc failed the same shards and none of the last 14 branch runs was green, while the last 6 main runs passed. 8a6439d only adds assertions to task_3048_live_private_runtime_preserves_read_only_credential, so it should not clear them. This reviewer could not read job logs (sandbox denies the log host), so the failing tests are unnamed: read the lib-1 and rest logs at the current head, fix or show the cause is unrelated, and get a green run. Do not rely on local task_3048 runs alone; 'cargo test --lib task_3048' does not cover what rest runs.
+    2. Minor, strict-tier test gap aida-cli-lib/src/containment/tests/launch_tests.rs:3992: prepare_runtime_diagnostic is only exercised with agy=aida committed in trusted policy. The spec requires accepting the posture only from trusted origin/main config and failing closed otherwise, and this is a new launch entry that passes --dangerously-skip-permissions. Add a refusal case where agy=aida is absent from the committed policy or present only as an uncommitted working-tree edit, and assert no plan is returned.
+    3. Minor scripts/containment/conformance.py:1037-1038: observed_egress_hosts is scraped from stderr.txt, which the lane also inherits, so a process running under the permission bypass can forge a 'proxy allowed <host>:443' line. The ruling needs a measured refresh list; take observed hosts from a host-only channel. (carried from rounds 6-7)
+    4. Minor aida-cli-lib/src/launch/contained.rs:1262-1283: runtime-policy vendors create empty .agents/mcp_config.json, .agents/hooks.json and .agents/plugins/ in the workspace and main checkout and never remove them, so a later git add -A can pick them up. Mask without creating host files, or exclude them from git. (carried from round 7)
+    5. Cosmetic aida-cli-lib/src/containment/contained_host.py:575: the refusal keys on (name, port) but logs only the name, so a listed host on a non-443 port is reported as UNLISTED. Include the port. (carried from rounds 6-7)
+    6. Cosmetic docs/cli/07-project-setup.md:700-718: the runtime-policy and hidden conformance-launch paragraphs sit under 'Model-free containment tracer', but conformance-launch runs the real AGY vendor. Give them their own heading. (carried from rounds 6-7)
+    7. Cosmetic aida-cli-lib/src/launch/contained.rs:1384-1389: OPENAI_API_KEY is removed in the runtime-policy loop and again unconditionally on the next statement. Drop it from the loop. (carried from rounds 6-7)
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
+  created_at: 2026-11-08T14:05:40.016521335Z
+  modified_at: 2026-11-08T14:05:40.016521335Z
+  session_id: 01a1b9af-8230-75d2-82f8-667491cc010a
+  harness_version: 2.1.319 (Claude Code)
 history:
 - id: 01a1a7b3-3699-7713-8ae7-69568c287956
   author: joe
