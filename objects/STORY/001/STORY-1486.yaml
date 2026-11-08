@@ -23,7 +23,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-09-26T18:30:26.622729Z
-modified_at: 2026-11-08T19:23:54.184647253Z
+modified_at: 2026-11-08T19:29:58.304290293Z
 req_type: Story
 tags:
 - agent-launch
@@ -917,6 +917,20 @@ comments:
   modified_at: 2026-11-08T19:18:32.443633565Z
   session_id: 01a1bc93-77a0-7740-8b03-df4e3e8d1df5
   harness_version: 2.1.319 (Claude Code)
+- id: 01a1bca3-9020-78a0-ad16-d69a90b0f627
+  author: dirtlab
+  content: |
+    Addressed the latest advisor CI rework (2026-11-08 19:17 UTC). HEAD 3e06b52ac0 already includes the main merge. Regenerated the store-writer inventory and reviewed both new sites: handle_agent_command's validate_recipe wrapper and validate_recipe's OpenOptions::new. The latter uses read(true), O_NOFOLLOW/O_NONBLOCK, regular-file/16 KiB bounds, and version validation, without write/create/truncate. Classified these two specific sites read_only; other launch mutation sites retain their existing classifications. Preserved unrelated inventory rows and trace comments after regeneration.
+
+    Changed files: scripts/store-writers.toml only (two rows and trace comments). Validation: python3 scripts/check-store-writers.py passed, 3389 sink sites / 293 operation mappings; python3 -m unittest tests/test_store_writer_inventory.py passed all 42 tests; git diff --check passed. make check-ci-fast failed at its first step, Check aida-cli without default features: sccache could not write target/debug dep-info on a read-only filesystem; remaining fast gates did not run.
+
+    Rust validation: initial lane job j20261108T192504353-2-0 used aida-cli --lib, which has no library target (exit 101). Corrected job j20261108T192519461-2-0 runs cargo test --profile agent -p aida-cli-lib --lib launch_permission_profile and is still compiling dependencies at handoff, with no executed-test result. untested=true. Host can collect with aida lane job wait j20261108T192519461-2-0. No runtime Rust code changed.
+
+    Codegraph unavailable; doctor confirms missing PATH tool. Source review used rg and direct reads. Native seat: edits uncommitted; no commit, push, PR creation, queue done, ship or review record. Host publication, successful CI, fresh review and authorized clearance of existing holds remain outstanding; this handoff does not clear publication vetoes.
+  created_at: 2026-11-08T19:29:58.304290293Z
+  modified_at: 2026-11-08T19:29:58.304290293Z
+  session_id: 01a1bc9d71b1
+  harness_version: codex-cli 0.167.0
 history:
 - id: 01a12b8d-22bd-7ed1-a30b-21d8634b3184
   author: joe
