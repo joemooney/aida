@@ -20,7 +20,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-07T20:18:53.564500Z
-modified_at: 2026-11-08T16:43:26.829998068Z
+modified_at: 2026-11-08T17:15:06.750865776Z
 req_type: Bug
 relationships:
 - rel_type:
@@ -212,6 +212,14 @@ comments:
   modified_at: 2026-11-08T13:02:47.631884Z
   session_id: 01a1bb3a66c0
   harness_version: codex-cli 0.167.0
+- id: 01a1bc28-187e-7e63-afb8-0ca1dfd53a80
+  author: joe
+  content: |
+    Round 5 changes for findings 1 and 2: unleased Codex implementer resumes remain supported and explicitly clear inherited punt/hold paths; leased resumes compare canonical cwd/lease paths. Extended the existing resume regression with no-lease signal assertions and a symlinked leased resume. Shared punt/hold path lookup now recognizes ASCII case variants, retaining legacy origin-ID spellings, with a regression covering mixed-case lease signals, publication veto, host mirroring/drain reads, and attempt cleanup. Reconciliation no longer requires a missing/retired seat path to canonicalize, addressing the phase-1 recovery and missing-seat publication-veto regressions. Replaced session.rs's raw Git builder with host_git_command. Regenerated/reviewed the writer inventory (one added phase-driver reconcile wrapper, two stale provision wrapper rows removed; other changes are ordering).
+    Validation: rustfmt checks and git diff --check pass; python3 scripts/check-store-writers.py passes (3393 sites); python3 tests/test_store_writer_inventory.py passes all 42 tests. Rust validation incomplete, untested=true: initial invocation used the binary package incorrectly; corrected library run caught a helper-return-type mistake that is now fixed. The subsequent resume-routing build timed out after 900 seconds before any test executed, and reported overlay-stale because the primary rewrote generation agent-7646b0c9277103a0. The phase-recovery run is compiling against that same generation at handoff; clone-Git ratchet, publication-veto and BUG-2488 retry runs remain queued. Host needs a fresh build generation and executed-test results/full CI. No green full-suite claim. The supervised merge-hold remains unchanged. Native-seat edits are uncommitted for host publication.
+  created_at: 2026-11-08T17:15:06.750865776Z
+  modified_at: 2026-11-08T17:15:06.750865776Z
+  session_id: 01a1bc0b114a
 history:
 - id: 01a1b7ad-9096-7320-bbe8-fc34c8e11c09
   author: aida-session-start

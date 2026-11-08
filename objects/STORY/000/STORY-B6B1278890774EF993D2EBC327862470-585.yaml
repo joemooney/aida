@@ -17,7 +17,7 @@ priority: Low
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-08T02:58:18.689963065Z
-modified_at: 2026-11-08T16:46:22.460084204Z
+modified_at: 2026-11-08T17:15:17.661191161Z
 req_type: Story
 tags:
 - area:handoff
@@ -277,6 +277,12 @@ comments:
   content: 'Round 6 addresses findings 1–9. Downloaded job 128781900879 logs: failure is the old SessionStart-is-absent assertion, now replaced with recovery-present / role-context-absent assertions. Hook independent evidence reads run concurrently within the unchanged 14s deadline (findings 10s, verdict 4.5s, GitHub 3s, persistence reserve unchanged). Added simultaneous 8.8s findings / 3.5s verdict fixture, unscoped pr-N verdict routing, strict numeric/canonical branch IDs, PR scope equality, and dialog canonicalization fixtures. Removed unreachable prune_compact_snapshots and its inventory mappings. Ordinary show warns on optional recovery read failures; CLI fixture now covers invalid UTF-8 and directory read failures while preserving a real handoff. OVERVIEW reduced to the recovery architecture. Claude only; no Codex hook enabled. Validation so far: 30 Python hook tests and 42 writer-inventory tests pass; writer-inventory checker, hook symlink check, rustfmt check and diff whitespace check pass. Rust settings and CLI transport tests submitted to the lane runner. Full GitHub rest rerun requires host publication; merge hold remains untouched. Native seat leaves all edits uncommitted for host publication.'
   created_at: 2026-11-08T16:46:22.460084204Z
   modified_at: 2026-11-08T16:46:22.460084204Z
+  session_id: 01a1bc08d0b3
+- id: 01a1bc28-431d-7382-80a0-d2916749a5be
+  author: joe
+  content: 'Round 6 final validation: lane job j20261108T164328323-2-0 executed all 15 scaffolding::settings::tests successfully, including the corrected role-context-disabled assertion and Claude-only registration. Python hook fixtures: 30 passed. Writer inventory fixtures: 42 passed; inventory reconciliation, hook link check, rustfmt --check on all four changed Rust files and git diff --check passed. CLI job j20261108T164335718-2187959-0 timed out during compilation at 900s. Retried through the lane runner with AIDA_CARGO_TIMEOUT=1800: j20261108T170538356-2-0 executed precompact_handoff_cli_round_trip successfully (1 passed, 0 failed), including invalid UTF-8 and directory-read recovery errors while retaining the real handoff. The runner reported overlay-stale because the primary rewrote a file in shared generation agent-7646b0c9277103a0; this caveat applies to local integration evidence and clean GitHub CI must verify the published head. Full CI (rest) cannot be confirmed before host publication. Merge hold remains unchanged. All nine findings have edits and regressions; no disputed finding or new punt. Nine files remain uncommitted under the native-seat contract. Publication declaration recorded: [AI:codex] fix(handoff): address round six recovery regressions (STORY-2662).'
+  created_at: 2026-11-08T17:15:17.661191161Z
+  modified_at: 2026-11-08T17:15:17.661191161Z
   session_id: 01a1bc08d0b3
 history:
 - id: 01a1b9c5-3252-7530-8b0b-bbe2c3ac5581

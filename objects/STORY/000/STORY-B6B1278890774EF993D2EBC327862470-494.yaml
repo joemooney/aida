@@ -22,12 +22,12 @@ description: |
   6. Evidence run: an advisor session under --permission-mode auto completes one full sweep (rebind loops, dispatch, host-merge, ship) with zero permission prompts and no bypass. Record the prompts it did hit.
 
   Non-goals: no new authority for the advisor, no waiving gates, no generic shell deputy beyond the existing script-deputy contract.
-status: InProgress
+status: NeedsAttention
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-06T16:51:02.535818Z
-modified_at: 2026-11-08T17:07:19.866247762Z
+modified_at: 2026-11-08T17:15:12.455072371Z
 req_type: Story
 tags:
 - area:advisor
@@ -877,6 +877,15 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a1bc28-2ec7-7011-8a9e-2f138cb12082
+  author: aida-orchestrator
+  timestamp: 2026-11-08T17:15:12.455097638Z
+  session_id: 01a1bc25a9c0
+  harness_version: 2.1.319 (Claude Code)
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: NeedsAttention
 execution_mode: drain
 filed_at:
   code_sha: 8dcb86ca85da4826cec197aeb85269210e910403
@@ -886,3 +895,11 @@ filed_at:
   aida_build_sha: 8dcb86ca85d
   vendor: claude
   session: b0a84e34-277c-4df6-b53c-43f4bbe2e84d
+failure_reason:
+  phase: reviewer
+  phase_index: 3
+  kind: verdict:request-changes
+  detail: 'Round 6: both round-5 findings are addressed (MAX_RETIRED_GRANTS=4 caps retained controllers; the recovery doc names --release). One regression from the same change: invalidating a retired controller''s key at retirement strands a dispatcher that has not yet minted its reviewer child, because the orphan loses both its deputy ancestry and the key. The cap already bounds the key leak, so removing the invalidation loop is the likely fix. Found by source reading, not reproduced (reviewer runs no cargo). AC1 met earlier; AC2 covers review-watch only and is partial; AC3-6 do not apply to this Refs slice. CI at e0b079e all pending.'
+  recovery_hint: address the review findings, move STORY-2571 back to In Progress, and clear the PR hold only after approval
+  shelved_by: reviewer
+  shelved_at: 2026-11-08T17:15:12.455072371Z
