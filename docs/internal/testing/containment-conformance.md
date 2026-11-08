@@ -433,6 +433,19 @@ Payload files live outside the workspace on the production read-only host view.
 Native file-tool attempts remain separate observations. The command does not
 request the auto-complete pipeline, CI, PR publication, or queue completion.
 
+The disposable Codex policy allows `api.openai.com`, `chatgpt.com` and
+`allow.fixture.test` only; authentication hosts and `deny.fixture.test` remain
+excluded. After launch acceptance and containment-receipt validation, a Codex
+invocation without a `turn.completed` event in `.aida/headless-logs/*.jsonl` produces
+`run_status: "invalid-run"`, reason `vendor-turn-not-completed`, and a nonzero
+harness exit. A vendor log over 4 MiB instead produces reason
+`vendor-log-oversize`; its completion evidence cannot be inspected within the cap.
+Earlier launch or receipt refusals exit nonzero with `unsupported_reason` and
+may have no `run_status` field. AGY requires a completed exact-command payload receipt. Reports
+retain measured failures and unknown checks for diagnosis; an invalid run earns
+no production-launch credit.
+<!-- trace:BUG-2497 | ai:codex -->
+
 Reports name `boundary=aida`, the fixture policy commit (`trusted_policy_sha`),
 the AIDA binary SHA256 (`aida_binary_sha256`), and the SHA256 of the serialized,
 host-validated `ContainmentReceipt` (`containment_receipt_sha256`). The launcher
