@@ -5,10 +5,10 @@ last_by:
   session: 01a1b358-7de9-72a0-b4a1-1a909992fa05
   vendor: claude
 result: done
-note: 'advisor: unread [request] from dirtlab, 38m old: Queue-work lane exited without changes'
+note: 'advisor: unread [request] from dirtlab, 51m old: Queue-work lane exited without changes; advisor: unread [request] from dirtlab, 51m old: Rework merge conflicts require Claude; advisor: unread [request] from dirtlab, 51m old: Queue-work lane exited without changes; advisor: unread [request] from dirtlab, 48m old: Rework merge conflicts require Claude; advisor: unread [request] from review-watch, 45m old: PR-3641 behind `main` with overlap; update-branch conflicts'
 due_since: 2026-11-08T01:21:11.545860007Z
 due_reason: on CronJobFired:mail-backlog-guard-route-advisor
 due_failure:
-  trip_id: mail-backlog-guard-route-advisor@2026-11-08T19:52:56Z
+  trip_id: mail-backlog-guard-route-advisor@2026-11-08T20:29:47Z
   job: mail-backlog
-  error: 'advisor: unread [request] from dirtlab, 38m old: Queue-work lane exited without changes'
+  error: 'advisor: unread [request] from dirtlab, 51m old: Queue-work lane exited without changes; advisor: unread [request] from dirtlab, 51m old: Rework merge conflicts require Claude; advisor: unread [request] from dirtlab, 51m old: Queue-work lane exited without changes; advisor: unread [request] from dirtlab, 48m old: Rework merge conflicts require Claude; advisor: unread [request] from review-watch, 45m old: PR-3641 behind `main` with overlap; update-branch conflicts'
