@@ -1326,8 +1326,10 @@ fn select(
     store.transaction(&key, |state| {
         store.reconcile_lost_dispatchers(state);
         let total = state.entries.values().flat_map(|e| &e.attempts).filter(|a| active(a)).count();
-        if total == 0 { state.max_concurrent = max; }
-        anyhow::ensure!(state.max_concurrent == max, "another watcher uses a different concurrency limit; use --max-concurrent {}", state.max_concurrent);
+        // Apply this watcher's limit under the admission lock. Existing reviews
+        // count against a changed cap without needing to drain first.
+        // trace:BUG-2496 | ai:codex
+        state.max_concurrent = max;
         let repository = state.repository.clone();
         let holders = capacity_holders(state);
         let entry = state.entries.entry(key.clone()).or_default();

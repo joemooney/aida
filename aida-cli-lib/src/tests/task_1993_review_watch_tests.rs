@@ -256,7 +256,6 @@ fn task1993_global_capacity_includes_ambiguous_reservations_and_configuration() 
     let (_temp, store) = fixture();
     let c = change(1, 1, false);
     let a = dispatch(select(&store, &c, None, 1).unwrap());
-    assert!(select(&store, &change(2, 2, false), None, 2).is_err());
     assert!(matches!(
         select(&store, &change(2, 2, false), None, 1).unwrap(),
         Action::Skip(_)
@@ -268,6 +267,42 @@ fn task1993_global_capacity_includes_ambiguous_reservations_and_configuration() 
         select(&store, &change(4, 4, false), None, 2).unwrap(),
         Action::Skip(_)
     ));
+}
+
+// trace:BUG-2496 | ai:codex
+#[test]
+fn bug2496_changed_capacity_applies_with_active_reviews() {
+    let (temp, store) = fixture();
+    for id in 1..=2 {
+        let c = change(id, id, false);
+        let attempt = dispatch(select(&store, &c, None, 2).unwrap());
+        store
+            .transition(&c.key(), &attempt.token, Phase::Running)
+            .unwrap();
+    }
+    let restarted = Store::open(temp.path(), &store.repository).unwrap();
+    let third = change(3, 3, false);
+    let attempt = dispatch(select(&restarted, &third, None, 4).unwrap());
+    restarted
+        .transition(&third.key(), &attempt.token, Phase::Running)
+        .unwrap();
+    assert_eq!(restarted.load().unwrap().max_concurrent, 4);
+
+    let Action::Skip(reason) = select(&restarted, &change(4, 4, false), None, 2).unwrap() else {
+        panic!("lowered cap admitted a fourth review");
+    };
+    assert!(reason.contains("global reviewer capacity (2)"), "{reason}");
+    let state = restarted.load().unwrap();
+    assert_eq!(state.max_concurrent, 2);
+    assert_eq!(
+        state
+            .entries
+            .values()
+            .flat_map(|e| &e.attempts)
+            .filter(|a| active(a))
+            .count(),
+        3
+    );
 }
 
 // trace:TASK-1993.ac55aab8 | ai:claude
