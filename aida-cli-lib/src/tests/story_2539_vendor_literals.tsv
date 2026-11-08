@@ -329,8 +329,6 @@ aida-cli-lib/src/init_cmd.rs|detected_agent_selection|literal:codex	1
 aida-cli-lib/src/init_cmd.rs|impl(AgentSelection:)::names|literal:antigravity	1
 aida-cli-lib/src/init_cmd.rs|impl(AgentSelection:)::names|literal:claude	1
 aida-cli-lib/src/init_cmd.rs|impl(AgentSelection:)::names|literal:codex	1
-aida-cli-lib/src/init_cmd.rs|maybe_repair_codex_hooks_on_reinit|literal:antigravity	1
-aida-cli-lib/src/init_cmd.rs|maybe_repair_codex_hooks_on_reinit|literal:codex	1
 aida-cli-lib/src/init_cmd.rs|maybe_scaffold_codex_prompts_on_init|literal:codex	1
 aida-cli-lib/src/init_cmd.rs|parse_agent_selection|literal:agy	1
 aida-cli-lib/src/init_cmd.rs|parse_agent_selection|literal:antigravity	1
