@@ -3,12 +3,12 @@ spec_id: TASK-b6b1278890774ef993d2ebc327862470-880
 agreed_id: TASK-3223
 title: 'STORY-2561 S2: route CLI/MCP store writes through the mediation service and deny raw store writes in the shared boundary'
 description: 'Slice 2 of STORY-2561. Route every inventoried in-lane writer through the S1 service. In the shared AIDA bwrap boundary, make store objects, authority-bearing metadata and the shared derived cache read-only (ancestor grants, symlinks, primary-checkout launches and resume included), with lane-private or read-only derived caches where readers need them. The mediated profile is gated; Codex-native compatibility and its labels stay unchanged. Concurrency tests: stale base, concurrent mutation, and host failure after persist but before reply. Claude behavior is preserved.'
-status: InProgress
+status: NeedsAttention
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-06T13:39:53.442026Z
-modified_at: 2026-11-08T15:22:47.980185533Z
+modified_at: 2026-11-08T15:26:27.118874553Z
 req_type: Task
 tags:
 - architecture
@@ -1055,6 +1055,22 @@ comments:
   modified_at: 2026-11-08T15:21:26.572840634Z
   session_id: 01a1b9af-8230-75d2-82f8-667491cc010a
   harness_version: 2.1.319 (Claude Code)
+- id: 01a1bbc4-9d2e-7343-816e-2842933f01f5
+  author: joe
+  content: |-
+    Round 21 finding 4 host metadata handoff (no seat PR mutation):
+    Correct PR #3661 title and eventual squash subject to:
+    [AI:codex] fix(store-mutation): stage gated CLI and MCP routing without launch authority (Refs TASK-3223)
+    Set the squash body explicitly empty, so prior full-routing subjects cannot enter main as completion evidence.
+
+    Proposed PR body:
+    Stages early CLI dispatch, a bounded SEQPACKET client and an isolated mediated MCP loop for comment_add and title/description spec_edit. Host routing validates launch-bound authority, including normalized guest/requester roles. Adds regressions for staged store-location refusals and oversized MCP request recovery. The production mediated launch gate remains closed; these changes grant no launch authority.
+    Full routing is incomplete: the mediated inventory still reports unresolved writers and operations, CLI/MCP reads are not routed, and durable publication remains outstanding. own_claim/queue_done belong to TASK-3326. TASK-3223 stays open. Advisor operation-policy and publication-under-punt rulings, a host make check-ci-fast run, completed CI evidence and human/advisor merge-hold clearance remain required. Existing punt and holds remain publication vetoes; this proposed metadata is not authorization to publish.
+
+    The exact title above is also the proposed host commit subject only if the advisor separately resolves the publication veto. No aida ship declaration is issued while punted.
+  created_at: 2026-11-08T15:26:27.118874553Z
+  modified_at: 2026-11-08T15:26:27.118874553Z
+  session_id: 01a1bbc13bf1
 history:
 - id: 01a1b116-742d-73c0-9064-1933f11e4c38
   author: joe
@@ -1928,6 +1944,14 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a1bbc4-2366-7e51-bdc9-62020d6b591b
+  author: joe
+  timestamp: 2026-11-08T15:25:55.942392573Z
+  session_id: 01a1bbc13bf1
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: NeedsAttention
 execution_mode: drive
 filed_at:
   code_sha: 50ce509da3f7edbd12ff6636fe996c9c3a65c68f
@@ -1937,3 +1961,8 @@ filed_at:
   aida_build_sha: dd852f74c3b
   vendor: claude
   session: b0a84e34-277c-4df6-b53c-43f4bbe2e84d
+attention_reason:
+  category: design-fork
+  detail: Round 21 findings 1-3 accepted; no finding disputed. Binding zero-unrouted acceptance still fails (3171 writer sites and 293 operation mappings at 4769cc5d759a). Advisor must define the remaining operation policy, including whether early UnsupportedOperation counts as reconciled and how reads are admitted, or authorize a staged partial and follow-up ownership. Keep selected_store_profile closed; own_claim/queue_done remain TASK-3326. Aggregate make check-ci-fast requires a host run; CI remains in progress and merge-hold needs human/advisor clearance. Advisor must investigate publication of 2588cb1c1fd6, 409a1990ad5d and 4769cc5d759a despite saved punt vetoes and confirm host publication authority. Findings 5-6 have uncommitted restriction documentation/regression and bounded MCP oversized-line recovery edits; these do not satisfy full S2 routing acceptance. This punt and existing holds remain publication vetoes. No ship declaration, commit, push, PR mutation or queue completion is authorized by this handoff.
+  raised_by: implementer
+  raised_at: 2026-11-08T15:25:55.942374917Z
