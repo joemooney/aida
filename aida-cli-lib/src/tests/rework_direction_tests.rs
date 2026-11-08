@@ -180,9 +180,11 @@ fn newer_brief_leads_and_supersedes_the_older_verdict_end_to_end() {
 }
 
 /// Finding 1: verdict T0 -> brief T1 -> ruling T2. The newer ruling must not
-/// hide the post-verdict brief; both are shown and the brief still leads.
+/// hide the post-verdict brief; both are shown, with the ruling leading and
+/// the brief labelled superseded. The brief still supersedes the verdict.
+// trace:BUG-2489 | ai:codex
 #[test]
-fn ruling_after_a_post_verdict_brief_does_not_hide_it() {
+fn ruling_after_a_post_verdict_brief_leads_without_hiding_it() {
     let _g = no_gate();
     let comments = vec![
         comment(90, FINDINGS),
@@ -194,13 +196,81 @@ fn ruling_after_a_post_verdict_brief_does_not_hide_it() {
     assert!(direction.ruling.is_some());
 
     let prompt = assemble(&item_plan(), Some(FINDINGS), &comments, None);
-    assert!(prompt.starts_with("ADVISOR BRIEF ("), "{prompt}");
-    let brief_at = prompt.find("merge main and push").unwrap();
+    assert!(prompt.starts_with("ADVISOR RULING ("), "{prompt}");
+    let brief_at = prompt.find("ADVISOR BRIEF (").unwrap();
     let ruling_at = prompt.find("ADVISOR RULING (").expect("ruling shown");
-    assert!(brief_at < ruling_at);
+    assert!(ruling_at < brief_at);
+    assert!(prompt[brief_at..].contains("EARLIER DIRECTION, superseded"));
+    assert!(!prompt[brief_at..].contains("This is your task"));
     assert!(prompt.contains("keep the config-only scope"));
     assert!(prompt.contains("SUPERSEDED CONTEXT"));
     assert!(!prompt.contains("AUTHORITATIVE TASK"));
+}
+
+/// Advisor direction is ordered by creation time, including nested replies,
+/// regardless of storage order. Only the newest comment gets binding wording.
+// trace:BUG-2489 | ai:codex
+#[test]
+fn newest_advisor_direction_is_binding_and_older_direction_is_background() {
+    let _g = no_gate();
+    for (newest, older, newest_label, older_label) in [
+        (
+            "ADVISOR BRIEF: NEXT = S5",
+            "Advisor ruling: fix exactly two CI gates, nothing else",
+            "ADVISOR BRIEF (",
+            "ADVISOR RULING (",
+        ),
+        (
+            "Advisor ruling: NEXT = S5",
+            "ADVISOR BRIEF: fix exactly two CI gates, nothing else",
+            "ADVISOR RULING (",
+            "ADVISOR BRIEF (",
+        ),
+    ] {
+        let mut parent = comment(120, "Earlier discussion");
+        parent.replies.push(comment(5, newest));
+        let comments = vec![parent, comment(60, older)];
+        let prompt = assemble(&item_plan(), None, &comments, None);
+        assert!(prompt.starts_with(newest_label), "{prompt}");
+        let older_at = prompt.find(older_label).expect("older direction retained");
+        assert!(prompt[..older_at].contains("binding"), "{prompt}");
+        assert!(
+            prompt[older_at..]
+                .contains("EARLIER DIRECTION, superseded by the newer advisor direction above"),
+            "{prompt}"
+        );
+        assert!(!prompt[older_at..].contains("binding"), "{prompt}");
+        assert!(!prompt[older_at..].contains(" wins"), "{prompt}");
+        assert_eq!(prompt.matches(newest).count(), 1, "{prompt}");
+        assert_eq!(prompt.matches(older).count(), 1, "{prompt}");
+    }
+}
+
+/// A newer brief does not revive an older ruling when the verdict remains
+/// authoritative over that brief.
+// trace:BUG-2489 | ai:codex
+#[test]
+fn pre_verdict_brief_keeps_older_ruling_as_background() {
+    let _g = no_gate();
+    let comments = vec![
+        comment(90, "Advisor ruling: obsolete scope"),
+        comment(60, "ADVISOR BRIEF: earlier plan"),
+        comment(5, FINDINGS),
+    ];
+    let prompt = assemble(&item_plan(), Some(FINDINGS), &comments, None);
+    let findings_at = prompt
+        .find("ITEMS STILL OPEN (AUTHORITATIVE TASK)")
+        .unwrap();
+    let brief_at = prompt.find("ADVISOR BRIEF (").unwrap();
+    let ruling_at = prompt.find("ADVISOR RULING (").unwrap();
+    assert!(findings_at < brief_at && brief_at < ruling_at, "{prompt}");
+    assert!(prompt[brief_at..].contains("the findings win"), "{prompt}");
+    assert!(
+        prompt[ruling_at..].contains("EARLIER DIRECTION, superseded"),
+        "{prompt}"
+    );
+    assert!(!prompt.contains("binding"), "{prompt}");
+    assert!(!prompt.contains("SUPERSEDED CONTEXT"), "{prompt}");
 }
 
 /// Finding 2: a brief OLDER than the last verdict must not override it. It
