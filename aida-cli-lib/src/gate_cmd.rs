@@ -276,7 +276,7 @@ fn run_gate(
     matches: &clap::ArgMatches,
     _ctx: &crate::command_registry::DispatchCtx,
 ) -> anyhow::Result<()> {
-    use crate::*;
+    // trace:TASK-3428 | ai:codex
     let args = <GateArgs as clap::FromArgMatches>::from_arg_matches(matches)?;
     let gate_cmd = &args.inner;
     return self::handle_gate_command(gate_cmd);

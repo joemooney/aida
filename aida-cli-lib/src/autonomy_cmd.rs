@@ -265,7 +265,7 @@ fn run_autonomy(
     matches: &clap::ArgMatches,
     _ctx: &crate::command_registry::DispatchCtx,
 ) -> anyhow::Result<()> {
-    use crate::*;
+    // trace:TASK-3428 | ai:codex
     let args = <AutonomyArgs as clap::FromArgMatches>::from_arg_matches(matches)?;
     let AutonomyArgs { command } = &args;
     return self::handle_autonomy_command(command.as_ref());

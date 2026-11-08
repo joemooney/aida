@@ -8,7 +8,11 @@
 use anyhow::Result;
 use colored::Colorize;
 
-use crate::*;
+// trace:TASK-3428 | ai:codex
+use crate::{
+    drain_lock, find_main_worktree_root, in_flight_lease_scopes, list_leases,
+    load_store_for_lookup, process_probe, read_queue_depth, LeaseState,
+};
 
 /// `aida health` — a fast, honest, at-a-glance vital-signs read.
 ///
@@ -127,7 +131,7 @@ pub(crate) fn handle_health_vitals_command(json: bool, brief: bool) -> Result<()
     let mut live_leases = 0usize;
     let mut stale_leases = 0usize;
     for l in list_leases(&project_root) {
-        match lease_state_for(&l, &live_sessions, now) {
+        match crate::leases::lease_state_for(&l, &live_sessions, now) {
             LeaseState::Live => live_leases += 1,
             LeaseState::Stale => stale_leases += 1,
             LeaseState::Unknown | LeaseState::Dormant => {}

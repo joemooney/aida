@@ -9,7 +9,12 @@
 //! `load_store_for_lookup`, `scan_trace_graph`) stay in `main.rs`, reached
 //! via `crate::`.
 
-use crate::*;
+use colored::Colorize;
+
+// trace:TASK-3428 | ai:codex
+use crate::{
+    find_project_root, load_store_for_lookup, scan_trace_graph, DepsCommand, HashSet, Result,
+};
 
 // trace:STORY-1728 | ai:claude
 #[path = "deps_cmd_args.rs"]

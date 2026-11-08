@@ -244,7 +244,7 @@ fn run_ultraplan(
     matches: &clap::ArgMatches,
     _ctx: &crate::command_registry::DispatchCtx,
 ) -> anyhow::Result<()> {
-    use crate::*;
+    // trace:TASK-3428 | ai:codex
     let args = <UltraplanArgs as clap::FromArgMatches>::from_arg_matches(matches)?;
     let UltraplanArgs {
         spec,

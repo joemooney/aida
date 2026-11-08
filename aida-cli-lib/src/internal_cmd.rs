@@ -241,7 +241,7 @@ fn run_internal(
     matches: &clap::ArgMatches,
     _ctx: &crate::command_registry::DispatchCtx,
 ) -> anyhow::Result<()> {
-    use crate::*;
+    // trace:TASK-3428 | ai:codex
     let args = <InternalArgs as clap::FromArgMatches>::from_arg_matches(matches)?;
     let InternalArgs { command } = &args;
     return self::handle_internal_command(command);
