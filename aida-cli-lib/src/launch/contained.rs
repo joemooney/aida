@@ -1335,6 +1335,7 @@ impl PreparedLaunch {
         }
         // API-key lanes share npm discovery, while only ChatGPT requires the pin.
         // trace:BUG-2484 | ai:codex
+        let program_is_pinned = pinned_program.is_some();
         let program = match pinned_program {
             Some(program) => program,
             None => {
@@ -1353,7 +1354,7 @@ impl PreparedLaunch {
         // trace:TASK-2708 | ai:claude — the vendor finishes only its own argv;
         // the requested-seat probe that follows is shared.
         let (args, mut preflight) = match vendor.auth {
-            VendorAuth::OpenAiApiKey => codex_argv(&program, &env, &original)?,
+            VendorAuth::OpenAiApiKey => codex_argv(&program, &env, &original, program_is_pinned)?,
             VendorAuth::ClaudeCredentialsFile => {
                 (claude_argv(&original, port, &allowed)?, Vec::new())
             }
@@ -1420,6 +1421,7 @@ fn codex_argv(
     program: &Path,
     env: &BTreeMap<String, String>,
     original: &[String],
+    program_is_pinned: bool,
 ) -> Result<(Vec<String>, Vec<String>)> {
     let mut final_child = Command::new(program);
     final_child.env_clear().envs(env);
@@ -1509,6 +1511,11 @@ fn codex_argv(
     let mut preflight = vec![program.to_string_lossy().into_owned()];
     preflight.extend(sandbox);
     preflight.push("--".into());
+    // trace:TASK-3000 | ai:codex — only the verified auth pin may use
+    // recorded help alone. API-key lanes must check the executable they run.
+    if !program_is_pinned {
+        validate_live_codex_flags(program, &args, &preflight[1..preflight.len() - 1])?;
+    }
     Ok((args, preflight))
 }
 
@@ -1526,6 +1533,11 @@ fn validate_codex_flags(args: &[String], scope: &str) -> Result<()> {
     let help = fixture[scope]
         .as_str()
         .context("missing pinned Codex help")?;
+    validate_codex_flags_with_help(args, scope, help, "pinned codex-cli 0.166.0")
+}
+
+// trace:TASK-3000 | ai:codex
+fn codex_help_options(help: &str) -> BTreeMap<&str, bool> {
     let mut options = BTreeMap::new();
     for line in help
         .lines()
@@ -1541,6 +1553,78 @@ fn validate_codex_flags(args: &[String], scope: &str) -> Result<()> {
             options.insert(flag.trim_end_matches(','), takes_value);
         }
     }
+    options
+}
+
+// trace:TASK-3000 | ai:codex
+fn validate_live_codex_flags(program: &Path, args: &[String], sandbox: &[String]) -> Result<()> {
+    // Do not project lane credentials, grants or tool environment into host
+    // help probes. Use private state and a bounded, model-free invocation.
+    let home = tempfile::tempdir()?;
+    let probe = |argv: &[&str]| -> Result<String> {
+        let mut command = Command::new(program);
+        command
+            .args(argv)
+            .env_clear()
+            .env("HOME", home.path())
+            .env("CODEX_HOME", home.path())
+            .current_dir(home.path())
+            .stdin(Stdio::null());
+        let crate::BoundedCommandOutput::Completed(output) =
+            crate::command_output_with_timeout_capped(command, Duration::from_secs(5), 128 * 1024)
+        else {
+            anyhow::bail!("Codex interface probe failed or timed out");
+        };
+        anyhow::ensure!(
+            output.status.success()
+                && output.stdout.len() <= 128 * 1024
+                && output.stderr.len() <= 128 * 1024,
+            "Codex interface probe failed or exceeded output limit"
+        );
+        Ok(String::from_utf8(output.stdout)?)
+    };
+    let version = probe(&["--version"])
+        .ok()
+        .filter(|v| v.trim().len() <= 256 && v.trim().lines().count() == 1)
+        .map(|v| v.trim().to_owned())
+        .filter(|v| !v.is_empty())
+        .unwrap_or_else(|| "version unavailable".into());
+    let identity = format!("{} ({version})", program.display());
+    let check = || -> Result<()> {
+        anyhow::ensure!(
+            version != "version unavailable",
+            "Codex version probe failed"
+        );
+        let root_help = probe(&["--help"])?;
+        let exec_help = probe(&["exec", "--help"])?;
+        // `default_permissions` is a config key, not a standalone flag.
+        // Both command surfaces must declare the value-taking -c override.
+        for (scope, help) in [("root", &root_help), ("exec", &exec_help)] {
+            let options = codex_help_options(help);
+            anyhow::ensure!(
+                options.get("-c") == Some(&true) && options.get("--config") == Some(&true),
+                "{scope} help lacks -c / --config <key=value> for default_permissions"
+            );
+        }
+        validate_codex_flags_with_help(args, "exec", &exec_help, &identity)?;
+        let sandbox_help = probe(&["sandbox", "--help"])?;
+        validate_codex_flags_with_help(sandbox, "sandbox", &sandbox_help, &identity)
+    };
+    check().with_context(|| {
+        format!(
+            "contained Codex refused: {identity}: cannot validate -c default_permissions surface"
+        )
+    })
+}
+
+// trace:TASK-3000 | ai:codex
+fn validate_codex_flags_with_help(
+    args: &[String],
+    scope: &str,
+    help: &str,
+    identity: &str,
+) -> Result<()> {
+    let options = codex_help_options(help);
     let mut command_seen = false;
     let mut i = 0;
     while i < args.len() {
@@ -1564,9 +1648,7 @@ fn validate_codex_flags(args: &[String], scope: &str) -> Result<()> {
             .split_once('=')
             .map_or((arg.as_str(), false), |(f, _)| (f, true));
         let takes_value = options.get(flag).with_context(|| {
-            format!(
-                "contained Codex {scope} flag {flag} is unsupported by pinned codex-cli 0.166.0"
-            )
+            format!("contained Codex {scope} flag {flag} is unsupported by {identity}")
         })?;
         anyhow::ensure!(
             !inline || *takes_value,
