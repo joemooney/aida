@@ -23,7 +23,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-07T19:59:26.079479Z
-modified_at: 2026-11-08T11:15:40.526863888Z
+modified_at: 2026-11-08T11:26:01.437992997Z
 req_type: Story
 comments:
 - id: 01a1b798-f0d4-73b1-93d5-f84581f2d190
@@ -189,6 +189,21 @@ comments:
   modified_at: 2026-11-08T11:11:39.114902078Z
   session_id: 01a1b9af-8230-75d2-82f8-667491cc010a
   harness_version: 2.1.319 (Claude Code)
+- id: 01a1bae8-7edd-7ad1-bde6-b695be340d1a
+  author: dirtlab
+  content: |
+    Round 5 native handoff:
+    Fixed latest review findings 2-4. spawn_agent explicitly disables RUSTC_WRAPPER for ordinary launches without declared resources, including missing/removed targets and unrecorded seats; fixtures and wrapper-environment handoffs retain their existing behavior. Tests assert wrapper-off for all three vendors. Existing lane test asserts private /tmp UDS, port 0, lane-only writable cache and no operator-cache bind; runtime cross-host isolation evidence is not claimed. Removed CARGO_INCREMENTAL from cache env and both allowlists, preserving profile.agent incremental=true. Cargo config selection now prefers extensionless config, with a conflicting-files regression.
+    PASS resource-env job j20261108T112201009-2-0: 4 executed tests. Initial job j20261108T111420235-2-0 executed 4 tests with one stale CARGO_INCREMENTAL expectation failing; corrected that expectation and reran successfully.
+    PASS sccache job j20261108T111424817-2-0: 3 executed tests.
+    PASS make check-ci-fast: all 43 fast-tier gates, exit 0, umask 022. Log /tmp/story-2641-round5-fast.log.
+    PASS git diff --check. untested=false for required targeted tests.
+    Changed files: aida-cli-lib/src/lane_job.rs; aida-cli-lib/src/launch/resources.rs; aida-cli-lib/src/launch/spawn.rs; aida-cli-lib/src/tests/bug_2383_lane_job_tests.rs; aida-cli-lib/src/tests/story_2326_launch_tests.rs; aida-cli-lib/src/tests/story_2326_profile_tests.rs; aida-core/src/launch_policy.rs.
+    AC1 / finding 1 is agreed and remains unresolved: no consecutive lane Cargo cache-hit evidence from both primary and dell1, and no advisor amendment. Host must run a launcher built from this branch twice on identical dependency inputs on each host and retain final stats with second-job Rust hits > 0. Punt recorded Needs Attention and store update queued for host commit, but punt signal file was read-only. Host must explicitly preserve the publication veto and existing merge hold. All edits remain uncommitted under native-seat contract; no push, PR, queue completion, ship merge or review verdict performed.
+  created_at: 2026-11-08T11:26:01.437992997Z
+  modified_at: 2026-11-08T11:26:01.437992997Z
+  session_id: 01a1badcd984
+  harness_version: codex-cli 0.167.0
 history:
 - id: 01a1b929-7921-7980-8202-36c2cc4f3845
   author: aida-session-start
