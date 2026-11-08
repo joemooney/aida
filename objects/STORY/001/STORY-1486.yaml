@@ -23,7 +23,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-09-26T18:30:26.622729865Z
-modified_at: 2026-11-08T10:58:53.304983047Z
+modified_at: 2026-11-08T11:04:30.226814483Z
 req_type: Story
 tags:
 - agent-launch
@@ -616,6 +616,30 @@ comments:
   modified_at: 2026-11-08T10:52:01.238706785Z
   session_id: 01a1b9af-8230-75d2-82f8-667491cc010a
   harness_version: 2.1.319 (Claude Code)
+- id: 01a1bad4-cb12-7100-8702-ff4e13744fbd
+  author: dirtlab
+  content: |
+    STORY-1486 round-5 native handoff. Downloaded and inspected CI run 42468010290 logs. cli-0 ran 226 tests: 225 passed, only bug_2187_reviewer_record_identity::scrubbed_headless_reviewer_records_but_implementer_shell_refuses timed out at 180.020s; its 15s budget caused the budget failure. STORY-1486 did not overrun its default budget, so no budget inflation. Local rerun initially exposed a separate deterministic allocation-receipt permission failure under the lane umask; fixture now sets mode 0600 explicitly. Both CLI tests now pass (reviewer 4.31s, story 1.08s). The historical CI timeout itself is not reproduced or conclusively explained. Attempted GitHub job rerun; GitHub returned HTTP 403 because the parent workflow is still running/queued.
+
+    Also inspected final other shards: lib-1 failed help snapshot and policy parity; lib-0 failed vendor ratchet; gates failed help-golden cochange. Fixed these branch regressions: regenerated and reviewed help snapshot (only new git-read-only option/catalog entries); manually corrected the three intended dry-preview Write -> Read fixture rows with rationale; projected common launch options through vendors/ rather than adding forbidden typed vendor debt in agent_launch.rs. Corrected docs to identify the Git worktree containing --cwd and the Git-unavailable launch-directory fallback.
+
+    Changed files: aida-cli-lib/src/agent_launch.rs; aida-cli-lib/src/vendors/mod.rs; aida-cli-lib/src/tests/golden/cli_help_snapshot.txt; aida-cli-lib/src/tests/golden/story_1728_main_policy.tsv; aida-cli-lib/src/tests/story_1728_policy_parity_tests.rs; aida-cli/tests/bug_2187_reviewer_record_identity.rs; docs/cli/06-roles-sessions.md.
+
+    Executed lane-runner validation:
+    - j20261108T105424182-2-0: word_labelled_criteria_can_be_traced, 1 passed.
+    - j20261108T105546328-2-0: help snapshot regeneration, 1 passed; j20261108T110205811-2-0: normal snapshot verification, 1 passed.
+    - j20261108T105558659-2-0: registered_policy_matches_mains_legacy_tables_for_every_verb, 1 passed.
+    - j20261108T105559842-2-0: vendor ratchet, 3 passed.
+    - j20261108T105638328-2-0: launch_permission_profile, 16 passed.
+    - j20261108T105653945-2-0: bug_2187_reviewer_record_identity and story_1486_launch_profile, 1 passed each.
+    - rustfmt --check on changed Rust files and git diff --check passed.
+    Codegraph unavailable; doctor supplied no codegraph diagnosis, navigation used rg.
+
+    All edits remain uncommitted as required by native launch. No commit, push, PR creation, queue completion, ship or review record performed. Host must commit/publish these changes, obtain fresh CI evidence and finish queue completion. Full CI remains unverified; local targeted checks pass. untested=false.
+  created_at: 2026-11-08T11:04:30.226814483Z
+  modified_at: 2026-11-08T11:04:30.226814483Z
+  session_id: 01a1baca9e02
+  harness_version: codex-cli 0.167.0
 history:
 - id: 01a12b8d-22bd-7ed1-a30b-21d8634b3184
   author: joe
