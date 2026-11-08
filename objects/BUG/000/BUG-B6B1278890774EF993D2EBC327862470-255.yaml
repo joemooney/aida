@@ -8,7 +8,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-08T00:02:55.282155Z
-modified_at: 2026-11-08T19:28:06.392916464Z
+modified_at: 2026-11-08T19:28:09.354338689Z
 req_type: Bug
 relationships:
 - rel_type:
@@ -607,6 +607,22 @@ comments:
   content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: AC1-AC4 hold by source and named tests, but CI lib-1 is red from this PR''s gate-inventory drift and the operator''s scope comment still has no advisor ruling or linked split.. No triage reason was given.'
   created_at: 2026-11-08T19:28:06.392909689Z
   modified_at: 2026-11-08T19:28:06.392909689Z
+  session_id: 01a1bc93-77a0-7740-8b03-df4e3e8d1df5
+  harness_version: 2.1.319 (Claude Code)
+- id: 01a1bca1-e5d7-78d3-bb73-39e3b4befd16
+  author: joe
+  content: |-
+    REVIEW FINDINGS TO ADDRESS (BUG-2490):
+    Verdict: CHANGES REQUESTED
+    Reviewed commit: 97247b86d408
+    Recorded: 2026-11-08T18:36:59.474299251+00:00
+    Findings:
+    1. [major][ci] CI lib-1 fails gate_orchestrators_reach_outside_only_through_their_frozen_inventory (story_1888_gate_paths_tests.rs:3692) and Build fails only at its 'Require every CI lane' aggregate step. Cause by source: this PR changes aida-cli-lib/src/gate/review_publication.rs:375 to call git_ops::pull_rebase_store_retry, while its frozen inventory (gate/orchestrator_leaves.rs:207) still lists aida_core::git_ops::pull_rebase and the PR does not touch that file. The inventory therefore has one unlisted path and one stale entry. The test says a new outside path needs a human merge of orchestrator_leaves.rs, so either get that human-merged change or reach the retry through a gate module. The job log host was blocked and local cargo was unavailable (read-only target dir), so the panic text itself was not read; the test name and line come from the launcher's CI excerpt.
+    2. [major][scope][advisor-action] Carried, re-verified at 97247b86d408. Operator scope on BUG-2490 (comment 2026-11-08T03:05Z, advisor evidence 13:16Z) is neither finished nor split: BUG-2490 links only STORY-2671 and no ruling is recorded. Open: (a) maybe_sync_pull still uses plain pull_rebase (aida-cli-lib/src/store_sync.rs:1720), so a same-spec conflict fails on --sync and burndown; (b) it prints 'Falling back to local view' (store_sync.rs:1769) and burndown discards the result with let _ = (burndown_run.rs:367, 748), so a failed pull does not stop burndown writes; (c) resolve_spec_conflict bails when one side deleted the file (aida-core/src/git_ops.rs:2678), and the now-fatal pre-pickup pull in aida-cli-lib/src/queue_cmd.rs means one such conflict stops every pickup without --no-pull. The implementer cannot clear this. The advisor must record the merge-policy ruling and either require (a)-(c) here or file a linked follow-up, then re-request review.
+    3. [minor][perf] Carried, non-blocking, deferred by the implementer: doctor_multi_agent loads the whole store, then store_object_findings reads and parses every object again (aida-cli-lib/src/doctor_cmd.rs:835-836). Doctor-only cost.
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
+  created_at: 2026-11-08T19:28:09.175641944Z
+  modified_at: 2026-11-08T19:28:09.175641944Z
   session_id: 01a1bc93-77a0-7740-8b03-df4e3e8d1df5
   harness_version: 2.1.319 (Claude Code)
 history:
