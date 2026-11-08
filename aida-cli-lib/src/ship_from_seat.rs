@@ -1789,7 +1789,7 @@ fn open_seat_pr(
         draft: false,
     };
     let change = crate::gate::ledger::open_change_bound(forge, main, req, &specs)
-        .context("could not open a forge change request")?;
+        .map_err(crate::forge::open_change_error)?;
     if change.id == 0 {
         anyhow::bail!(
             "the PR was created but its number could not be read: {}",
