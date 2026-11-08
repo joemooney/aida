@@ -3,12 +3,12 @@ spec_id: TASK-b6b1278890774ef993d2ebc327862470-961
 agreed_id: TASK-3429
 title: 'Crate-split PR12: extract aida-mcp crate (mcp.rs + schema) above aida-cli-lib, handler injected into REGISTRY from the bin'
 description: 'Per SPIKE-713 section 7 row 12 and advisor ruling 1 (aida-mcp is the first crate). Acceptance: (1) new aida-mcp crate holds mcp.rs and its schema; widened cli-lib items (~99) are pub with re-exports keeping paths; (2) aida mcp handler registered from the binary into command_registry::REGISTRY; (3) MCP surface byte-identical: tools/list golden tests pass unchanged and the 72 tool names are unchanged; (4) the respawn identity check (mcp.rs:201-267) still reads the same binary; (5) measured on dell1: clean build no slower than run-to-run spread (ruling 2), with the cargo --timings numbers on the spec.'
-status: InProgress
+status: NeedsAttention
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-07T23:40:15.306412624Z
-modified_at: 2026-11-08T16:57:42.221319368Z
+modified_at: 2026-11-08T17:02:17.350137404Z
 req_type: Task
 relationships:
 - rel_type: BlockedBy
@@ -52,6 +52,15 @@ history:
   session_id: 01a1bc17e151
   harness_version: codex-cli 0.167.0
   changes: []
+- id: 01a1bc1c-5b06-7e33-a4f1-ce6b53dd2c97
+  author: dirtlab
+  timestamp: 2026-11-08T17:02:17.350154868Z
+  session_id: 01a1bc17e151
+  harness_version: codex-cli 0.167.0
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: NeedsAttention
 filed_at:
   code_sha: 2a7fe186bdcd718fa356e5e4d028a3b2ff13769d
   branch: main
@@ -61,3 +70,9 @@ filed_at:
   vendor: claude
   session: 01a1b848-940b-7bd2-8acd-52e428b182b8
   harness_version: 2.1.319 (Claude Code)
+attention_reason:
+  category: ambiguous-spec
+  detail: Acceptance (3) requires 72 unchanged MCP tool names, but the committed mcp.rs descriptor block defines 58 tools and tools/list only filters that list. The safe prerequisite extraction from the advisor amendment is implemented without changing the descriptor block or claim naming. Please confirm whether the contract should preserve the current 58-tool surface or identify the missing 14 tools before the full crate extraction and timing acceptance.
+  lean: Preserve the existing 58-tool surface byte-for-byte and correct the stated count; do not add tools during a crate extraction.
+  raised_by: implementer
+  raised_at: 2026-11-08T17:02:17.350137404Z
