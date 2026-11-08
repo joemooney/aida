@@ -8,7 +8,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-04T17:54:51.353376Z
-modified_at: 2026-11-08T09:44:40.663605525Z
+modified_at: 2026-11-08T09:44:48.143410268Z
 req_type: Task
 tags:
 - area:containment
@@ -572,6 +572,23 @@ comments:
   content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: Round 4 at 9d8ab6c: all four prior findings are fixed, but the MCP/URL/browser denies are in a lane-writable settings.json while the permission bypass is on, and the deny-list refusal is untested. PR CI build jobs were still pending; merge-hold-gate failure is the expected supervised-spec hold, not a code defect. AC (comment 36 ruling; Refs-only slice): R1 shared-boundary launch: verified by task_3048_diagnostic_prepare_uses_common_wrapper_and_keeps_production_closed and test_agy_ready_publishes_only_after_shared_receipt. R1 bypass only with applied receipt: verified by task_3048_outer_only_candidate_requires_live_accepted_receipt. R1 no --sandbox/native profile: verified by task_3048_runtime_argv_accepts_only_the_site_prompt. R1 private runtime and read-only token by handle: verified by task_3048_live_private_runtime_preserves_read_only_credential. R1 no ~/.gemini inheritance: verified by the diagnostic prepare test mask assertion. R1 MCP/browser/URL off: unverified, denies configured but writable (finding 1) and AGY enforcement unmeasured. R2 hosts as data and approval check: verified by task_3048_diagnostic_hosts_do_not_open_production_admission. R2 unknown host named refusal: verified by task_3048_unlisted_host_is_named_before_dns. R2 measured refresh list: unverified, oauth2 host is candidate only and the spec records measured refresh hosts=[]. R3 native diagnostic no credit, AIDA-only flip: verified by test_only_complete_aida_evidence_can_flip_whole_lane. R4 require_conformance refuses: verified by agy_adapter_keeps_unmeasured_policy_closed. Description private runtime/argv order/trusted-config posture: verified by the tests above. Description ''no blanket bypass'': not-applicable-because superseded by the 2026-11-07 16:40 outer-only ruling. Acceptance ''conformance harness passes for agy'': not-applicable-because this PR is Refs-only and the advisor''s live run is a separate step. Tests: Rust/Python results are the implementer''s reported runs (comments 53-54); no local cargo per review policy and CI at this head not yet complete.. No triage reason was given.'
   created_at: 2026-11-08T09:44:40.663603771Z
   modified_at: 2026-11-08T09:44:40.663603771Z
+  session_id: 01a1b8be-8170-7fb2-89ab-ecb4c6eee98c
+  harness_version: 2.1.319 (Claude Code)
+- id: 01a1ba8b-d29e-7ce1-a4db-62a69a7222f6
+  author: joe
+  content: |-
+    REVIEW FINDINGS TO ADDRESS (PR #3641):
+    Verdict: CHANGES REQUESTED
+    Reviewed commit: 9d8ab6c4766d
+    Recorded: 2026-11-08T09:20:30.705307716+00:00
+    Findings:
+    1. BLOCKING aida-cli-lib/src/launch/contained.rs:472-482: the MCP/read_url/execute_url deny list lives only in settings.json inside the lane-writable private runtime. install_private_runtime calls profile.add(&source, true), and only the credential leaf gets a read-only bind (bind_runtime_credential, :488), so under --dangerously-skip-permissions the terminal or file tool can overwrite ~/.gemini/antigravity-cli/settings.json and remove the denies for any later or re-reading agy process. Ruling item 1 (comment 36) requires MCP/browser/URL tools off, and C0-C4 would not detect this. Fix: bind settings.json read-only by handle over the writable runtime, as the credential is, and extend task_3048_live_private_runtime_preserves_read_only_credential (launch_tests.rs:2422 only reads it) to assert a write is refused with EACCES/EPERM/EROFS. Also correct containment-conformance.md ('Runtime state is private and writable') to name the exception.
+    2. Strict-tier test gap aida-cli-lib/src/containment/mod.rs:244-247: the new RuntimePolicy::validate refusal for a weakened tool_denies list has no test (rg tool_denies finds no test reference to the refusal; the validate cases at launch_tests.rs:2365-2374 do not vary it). It is the only guard keeping the three denies in the shipped descriptor. Add cases for empty, reordered or missing denies that assert the 'requires MCP, URL and browser tool denies' error.
+    3. Cosmetic aida-cli-lib/src/launch/contained.rs:941-942: the comment 'Explicit fixture entry only. No environment/config switch opens admission.' now sits above prepare_with_io, the shared entry for every launch, so it misdescribes the function, and it replaced the STORY-2593 trace comment explaining the binary pin. Restore that comment and keep the diagnostic note on prepare_runtime_diagnostic.
+    4. Cosmetic scripts/containment/conformance.py:948-951: for agy the interpreter selection and shlex.join result are computed and immediately overwritten by diagnostic_invocation; since interpreter is only ever used for that discarded value on agy, drop the /usr/bin/python3 branch so codex keeps sys.executable and agy has one code path.
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
+  created_at: 2026-11-08T09:44:48.030257007Z
+  modified_at: 2026-11-08T09:44:48.030257007Z
   session_id: 01a1b8be-8170-7fb2-89ab-ecb4c6eee98c
   harness_version: 2.1.319 (Claude Code)
 history:
