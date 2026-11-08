@@ -27,7 +27,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-06T16:51:02.535818766Z
-modified_at: 2026-11-08T00:21:57.210075576Z
+modified_at: 2026-11-08T00:22:04.472203776Z
 req_type: Story
 tags:
 - area:advisor
@@ -415,6 +415,24 @@ comments:
   content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: Round-4 fixes address all five prior findings, but the new exit-time revocation of the controller grant revokes in-flight reviewer grants (they are its children), so every rotation or controller restart strips authority from running reviews. CI still pending at review time (merge-hold-gate fail is the expected supervised hold). AC2 review-watch slice only; AC1 met earlier (advisor-script-inventory.md); AC3-6 not applicable to this Refs slice.. No triage reason was given.'
   created_at: 2026-11-08T00:21:57.210073802Z
   modified_at: 2026-11-08T00:21:57.210073802Z
+  session_id: 01a1b848-940b-7bd2-8acd-52e428b182b8
+  harness_version: 2.1.319 (Claude Code)
+- id: 01a1b888-a0cb-7430-bde1-68612da5b34d
+  author: joe
+  content: |-
+    REVIEW FINDINGS TO ADDRESS (PR #3640):
+    Verdict: CHANGES REQUESTED
+    Reviewed commit: a7e36c13c93e
+    Recorded: 2026-11-07T23:49:32.138743051+00:00
+    Review comment: https://github.com/joemooney/aida/pull/3640#issuecomment-6714666381
+    Findings:
+    1. major: review_watch_service.rs tick() L469-490 + revoke_controller L533: revoking the controller grant on confirmed exit also invalidates every reviewer grant the controller dispatched. watch_command (review_watch.rs:1828) keeps AIDA_SEAT_GRANT, so 'aida queue work PR-N --role reviewer' issues reviewer children whose parent is the controller grant, and grant_check revalidates every ancestor (seat_authority.rs:1175-1190, check_lifetime refuses revoked). Each advisor rotation (rebind -> controller superseded -> exit) and each controller crash-restart therefore revokes authority from reviews still in flight, so they cannot record verdicts. That breaks the docs claim 'Controller restarts preserve all ordinary PR-head reservations' (06-roles-sessions.md) and reconcile_reviews' intent not to disturb live review descendants. Fix: defer revocation until no live or ambiguous dispatcher/review attempt descends from that controller grant (sweep it on a later tick), or issue reviewer children from the bound advisor grant instead of the controller. Add a test: a reviewer child of the controller still validates after the controller exits and is reaped while its attempt is live.
+    2. minor: agent_launch.rs:7417 calls rebind_after_launch on every advisor launch. With no service receipt it always tries the 'default' deputy (review_watch_service.rs:611-614). An operator who runs no deputy, or does not use the service, gets 'review-watch rotation rebind refused: ... not running' on stderr at every advisor launch. Skip silently when no service receipt exists and no default deputy is running (current_queue / not_running), and print the warning only when a binding exists or a deputy answered with a refusal.
+    3. minor: Binding::succeeds (L55-68) accepts any same-principal, later-issued advisor grant with a delegation subset, and rebind_after_launch fires for every advisor-seat launch, including an advisor's own sub-advisor launched with a narrower --delegate-seat set (for example advisor,reviewer without implementer). That narrows the binding permanently. The next ordinary rotation with the usual wider set is then refused as 'widens delegation', and only the manual delete-receipts reset recovers. Either compare the successor against the binding's original root chain instead of the last accepted grant, refuse automatic takeover by a grant that descends from the currently bound grant, or have the launcher hook skip non-rotation launches. Add a test for sub-advisor launch followed by rotation.
+    4. cosmetic: AGENTS.md (prepended paragraph) and OVERVIEW.md (appended paragraph) carry per-change round notes ('revokes controller grants on confirmed exit', 'Status supports JSON/TOON'). CLAUDE.md asks for per-change notes in the PR body and an aida comment, not prepended AGENTS.md/OVERVIEW.md paragraphs, which conflict with every open PR. Keep the docs/cli/06-roles-sessions.md section and drop or fold the AGENTS.md/OVERVIEW.md paragraphs.
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
+  created_at: 2026-11-08T00:22:04.235599383Z
+  modified_at: 2026-11-08T00:22:04.235599383Z
   session_id: 01a1b848-940b-7bd2-8acd-52e428b182b8
   harness_version: 2.1.319 (Claude Code)
 history:
