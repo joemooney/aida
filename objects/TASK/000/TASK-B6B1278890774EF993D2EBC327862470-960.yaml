@@ -8,7 +8,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-07T23:39:41.575597710Z
-modified_at: 2026-11-08T00:00:45.848156999Z
+modified_at: 2026-11-08T00:03:03.091485281Z
 req_type: Task
 relationships:
 - rel_type: Child
@@ -42,6 +42,14 @@ history:
   session_id: 01a1b874d943
   harness_version: codex-cli 0.167.0
   changes: []
+- id: 01a1b877-3a2b-7153-967d-8c564811a822
+  author: dirtlab
+  timestamp: 2026-11-08T00:03:03.851451222Z
+  session_id: 01a1b874d943
+  harness_version: codex-cli 0.167.0
+  changes: []
+test_coverage_notes: Four Python unittest fixtures passed; repository glob ratchet with --base HEAD passed (220 imports); CI gate classification audit passed (81 classified); git diff --check passed. make check-ci-fast interrupted after discovering its fast-classified no-default-features gate directly invokes Cargo contrary to this native lane runner-only rule; full fast suite unvalidated. No Rust source changes.
+implementation_summary: 'First split slice prepared: root crate glob baseline and CI/fast gate; byte-identical path-ledger relocation helper for portability, ExecContext and glob ledgers. Refs publication declared. Explicit-import migration and lib_part1..6 module extraction remain outstanding.'
 filed_at:
   code_sha: 2a7fe186bdcd718fa356e5e4d028a3b2ff13769d
   branch: main
