@@ -1543,6 +1543,11 @@ pub(crate) fn preview_next_version(current: &str, bump: &str) -> Option<String> 
 }
 
 // trace:BUG-2492 | ai:codex
+pub(crate) fn after_pr_ci_budget(root: &std::path::Path) -> std::time::Duration {
+    std::time::Duration::from_secs(crate::ci_idle_timeout::ci_absolute_ceiling_secs(root))
+}
+
+// trace:BUG-2492 | ai:codex
 pub(crate) fn wait_after_pr_ci(
     root: &std::path::Path,
     forge: &dyn crate::forge::Forge,
@@ -1671,7 +1676,7 @@ pub(crate) fn handle_release(
             &merge_root,
             forge.as_ref(),
             &change_ref,
-            std::time::Duration::from_secs(300),
+            after_pr_ci_budget(&merge_root),
         ) {
             Ok(
                 crate::gate::dispatch_types::CiState::Success

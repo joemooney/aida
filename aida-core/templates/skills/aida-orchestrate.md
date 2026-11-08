@@ -370,10 +370,14 @@ Put the approved branches into one integration branch based on
 - Push the branch and open the PR with
   `gh pr create --base <default> --title "[AI:<tool>] chore(integrate): batch N - SPEC-A SPEC-B" --body "<spec list + each mechanical fix made in the batch>"`.
 - Wait in a Bash `run_in_background` job, e.g.
-  `gh pr checks N --required --watch --fail-fast` (in a repo with no required
+  `timeout 540 gh pr checks N --required --watch --fail-fast` (in a repo with no required
   checks, use plain `--watch` and report that). Never poll from the model.
   On GitLab or other forges, use the equivalent, or `/aida-integrate`'s forge
   probes.
+<!-- trace:BUG-2492 | ai:codex -->
+- On watcher timeout (exit 124), inspect current checks and hold labels. A
+  pending merge hold requires clearance; stop and report it. If ordinary CI
+  is still running, start another bounded watcher.
 - The ship gate accepts an approval only at the PR's exact head, recorded by
   a reviewer process. A batch PR's head is a new commit, so launch a reviewer
   for it (`aida queue work PR-N --role reviewer --no-human --vendor claude`, step 5) and wait
@@ -384,7 +388,7 @@ Put the approved branches into one integration branch based on
   In the PR body, end a line with `(SPEC-ID)` **only when this merge completes
   that spec**. For a slice, trailer the child task, never the parent.
 - **Never** use `--admin`. Never disable or edit required checks or branch
-  protection. If `merge-hold-gate` is red or a hold is set, stop and report.
+  protection. If `merge-hold-gate` is pending or failing, or a hold is set, stop and report.
 - **Verify MERGED** with `gh pr view N --json state` before touching specs.
   After a network error, re-check instead of assuming.
 - Run `aida pull` and confirm the specs auto-completed. `closure:pending` specs

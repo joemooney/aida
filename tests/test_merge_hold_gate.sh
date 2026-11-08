@@ -121,6 +121,7 @@ export STATUS_LOG="$work/statuses"
 # trace:BUG-b6b1278890774ef993d2ebc327862470-257.ac24a24e | ai:codex
 # Pending holds succeed as Actions jobs but continue to block required status.
 # Translate the final commit status into the existing pass/block fixture result.
+echo "Test 1: required status state and Actions exit fixtures (not live enforcement)"
 github_gate() {
   : >"$STATUS_LOG"
   local result=0 state

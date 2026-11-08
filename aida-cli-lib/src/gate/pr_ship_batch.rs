@@ -378,7 +378,7 @@ pub(crate) fn ci_from_rollup(
         .and_then(|r| r.as_array())
         .cloned()
         .unwrap_or_default();
-    // A held PR's red merge-hold-gate is the hold, which the confirm step
+    // A held PR's pending or legacy red merge-hold-gate is the hold, which the confirm step
     // offers to clear; it is not a CI failure. trace:STORY-1887 | ai:claude
     let status = crate::pr_list::github_rollup_ci_status_for(&rollup, cfg, held);
     if status == "Failing" {

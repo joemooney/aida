@@ -899,6 +899,26 @@ mod tests {
     #[test]
     fn bug2492_release_after_pr_pending_wait_is_bounded() {
         let root = tempfile::tempdir().unwrap();
+        // The production caller passes this configured ceiling, not a fixed
+        // five-minute timeout that would reject ordinary queued CI.
+        assert_eq!(
+            crate::upgrade_release::after_pr_ci_budget(root.path()),
+            Duration::from_secs(crate::ci_idle_timeout::ci_absolute_ceiling_secs(
+                root.path()
+            ))
+        );
+        std::fs::create_dir_all(root.path().join(".aida")).unwrap();
+        std::fs::write(
+            root.path().join(".aida/config.toml"),
+            "[drain]\nci_absolute = \"2h\"\n",
+        )
+        .unwrap();
+        assert_eq!(
+            crate::upgrade_release::after_pr_ci_budget(root.path()),
+            Duration::from_secs(crate::ci_idle_timeout::ci_absolute_ceiling_secs(
+                root.path()
+            ))
+        );
         let forge = FakeForge {
             registrations: std::cell::RefCell::new(vec![
                 crate::forge::CheckRegistration::Registered,

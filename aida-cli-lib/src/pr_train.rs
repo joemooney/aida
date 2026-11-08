@@ -566,7 +566,7 @@ pub(crate) fn hold_gate_tolerance(
 /// The member half of [`hold_gate_tolerance`], without its "every other row
 /// is green" half: a non-pass hold gate is explained by admitted held members
 /// whose live labels agree with the member gate. The train's readiness poll
-/// uses this while lanes still run (the hold gate fails within seconds, long
+/// uses this while lanes still run (the hold gate becomes pending within seconds, long
 /// before the lanes settle); readiness still needs every other row to settle
 /// green before it reports Green. Unreadable labels fail closed.
 // trace:BUG-2401 | ai:claude
@@ -2432,7 +2432,7 @@ impl LiveTrainForge<'_> {
         }
         let cfg = crate::ci_gate::read_ci_gate_config(&self.project_root);
         // Only the existing, live member-label proof may tolerate a hold. The
-        // hold gate fails seconds after the train opens, while lanes still
+        // hold gate becomes pending seconds after the train opens, while lanes still
         // run: admission is decided from the members' live labels alone, and
         // readiness still waits for every other row to settle green before
         // Green (BUG-2214's tolerance, decided once the others settle).
