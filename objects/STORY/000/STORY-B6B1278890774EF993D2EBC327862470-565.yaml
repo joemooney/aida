@@ -23,12 +23,12 @@ description: |
   2. `--fix` writes only user-level files (agents.toml, codex config section, cargo config) and is idempotent.
   3. `aida queue work --no-human` refuses an uncontained launch on a host whose containment checks fail.
   4. FAQ-151 is replaced by a pointer to the command plus the remaining manual steps (ssh, clone, login).
-status: NeedsAttention
+status: Approved
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-07T19:59:40.192574Z
-modified_at: 2026-11-08T05:54:06.933080291Z
+modified_at: 2026-11-08T06:38:36.739543241Z
 req_type: Story
 comments:
 - id: 01a1b86c-54fb-76f0-b04b-0ed1c7c07cfb
@@ -142,6 +142,13 @@ comments:
   created_at: 2026-11-08T05:40:15.295726640Z
   modified_at: 2026-11-08T05:40:15.295726640Z
   session_id: 01a1b9463f9a
+- id: 01a1b9e1-5cc3-79a2-ab8b-2432793252bf
+  author: joe
+  content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: Wait state, not a code defect: source meets all 4 ACs and the advisor-scoped CI rework (fixture migration to synthetic contained hosts, one preflight per launch) looks correct, but CI run 42451876563 at ee2020bb is still queued (0/7 jobs started) so the required green-shards evidence is absent. Re-launch a reviewer at this head once CI is green; no implementer change is requested.. No triage reason was given.'
+  created_at: 2026-11-08T06:38:36.739541696Z
+  modified_at: 2026-11-08T06:38:36.739541696Z
+  session_id: 01a1b8be-8170-7fb2-89ab-ecb4c6eee98c
+  harness_version: 2.1.319 (Claude Code)
 history:
 - id: 01a1b85d-3f02-70c2-a82d-cefccf97dc04
   author: aida-session-start
@@ -239,6 +246,15 @@ history:
   - field_name: status
     old_value: InProgress
     new_value: NeedsAttention
+- id: 01a1b9e1-5cc3-79a2-ab8b-24282ceae32d
+  author: joe
+  timestamp: 2026-11-08T06:38:36.739525542Z
+  session_id: 01a1b8be-8170-7fb2-89ab-ecb4c6eee98c
+  harness_version: 2.1.319 (Claude Code)
+  changes:
+  - field_name: status
+    old_value: NeedsAttention
+    new_value: Approved
 filed_at:
   code_sha: 7a18c0d52a6a4e0822befd4c810cfed16b04b74c
   branch: main
@@ -248,11 +264,3 @@ filed_at:
   vendor: claude
   session: 01a1b76b-2fe7-7dd2-88d0-356fc8d96d04
   harness_version: 2.1.319 (Claude Code)
-failure_reason:
-  phase: reviewer
-  phase_index: 3
-  kind: verdict:request-changes
-  detail: 'Wait state, not a code defect: source meets all 4 ACs and the advisor-scoped CI rework (fixture migration to synthetic contained hosts, one preflight per launch) looks correct, but CI run 42451876563 at ee2020bb is still queued (0/7 jobs started) so the required green-shards evidence is absent. Re-launch a reviewer at this head once CI is green; no implementer change is requested.'
-  recovery_hint: address the review findings, move STORY-2642 back to In Progress, and clear the PR hold only after approval
-  shelved_by: reviewer
-  shelved_at: 2026-11-08T05:54:06.933080291Z
