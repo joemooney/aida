@@ -8,7 +8,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-08T05:25:50.443321273Z
-modified_at: 2026-11-08T06:19:00.470682512Z
+modified_at: 2026-11-08T06:22:16.179937157Z
 req_type: Story
 tags:
 - area:ci
@@ -21,6 +21,14 @@ comments:
   modified_at: 2026-11-08T06:07:56.234596203Z
   session_id: 01a1b9af-8230-75d2-82f8-667491cc010a
   harness_version: 2.1.319 (Claude Code)
+- id: 01a1b9d2-6673-7cf0-a047-9c0e8b300c2c
+  author: dirtlab
+  content: |
+    Prepared the operator-only dell1 CI slice under the binding advisor ruling. Workflow routing is opt-in via AIDA_DELL1_CI=true and requires push OR (pull_request AND head.repo.full_name == github.repository), plus one of lib-0/lib-1/cli-0/cli-1; fork PRs, merge groups and other jobs use hosted runners. No automatic offline failover is claimed. Added a fresh one-job JIT launcher with unprivileged dedicated user, systemd home/privilege isolation, no operator environment projection, private tmp/IPC, shared eight-core slice, single-invocation lock and cleanup. Self-hosted CI does not execute the hosted sudo/AppArmor setup. Operator runbook covers public-repo approval setting, trusted installation, JIT registration, recovery and before/after queue-time measurement. Validation: 27 Python tests passed, including 420 routing combinations; shell syntax, gate classification (82 gates), docs scheduling and diff whitespace passed. No Rust changed and no cargo run. Live systemd/JIT isolation is not tested in this lane. Outstanding acceptance: independent reviewer explicitly checks event gate; operator provisions account/dependencies, verifies all-outside-collaborators approval setting, registers runner and smoke-tests isolation/cgroup, enables variable and measures wait-time impact. No registration, setting changes, commit, push or queue completion performed. Publication must use Refs STORY-2672 because live acceptance remains outstanding.
+  created_at: 2026-11-08T06:22:16.179937157Z
+  modified_at: 2026-11-08T06:22:16.179937157Z
+  session_id: 01a1b9cf5f89
+  harness_version: codex-cli 0.167.0
 history:
 - id: 01a1b9c5-53ea-79e1-9008-26e3abcd0e20
   author: joe
