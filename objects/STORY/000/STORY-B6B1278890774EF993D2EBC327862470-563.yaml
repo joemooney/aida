@@ -25,7 +25,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-07T19:45:35.836129088Z
-modified_at: 2026-11-08T18:38:07.427083819Z
+modified_at: 2026-11-08T18:38:14.871568989Z
 req_type: Story
 tags:
 - docs:impacted
@@ -367,6 +367,22 @@ comments:
   content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: All five round-5 findings are fixed and all five ACs have traced tests, but standalone lanes now skip child-grant revocation on error exits. CI is still queued at this head; reviewed from source only.. No triage reason was given.'
   created_at: 2026-11-08T18:38:07.427078198Z
   modified_at: 2026-11-08T18:38:07.427078198Z
+  session_id: 01a1b9af-8230-75d2-82f8-667491cc010a
+  harness_version: 2.1.319 (Claude Code)
+- id: 01a1bc74-348b-7953-bd43-e0e89f2eba22
+  author: joe
+  content: |-
+    REVIEW FINDINGS TO ADDRESS (STORY-2640):
+    Verdict: CHANGES REQUESTED
+    Reviewed commit: 31eadc2c2d76
+    Recorded: 2026-11-08T18:27:12.636498144+00:00
+    Findings:
+    1. [major] Child grant is no longer revoked on standalone error exits (regression of the BUG-2139 invariant). In standalone_implementer.rs run(), 'let mut finished = finished?' (line ~1149) and 'lane_fast_gate::native(...)?' (line ~1159) now return before revoke_standalone_implementer_grant(launch.child_grant) (line ~1179). On origin/main, finished? ran after the revoke. Scenario: a contained Codex lane hits a vendor spawn or loop error, a NativeCommitError, or an uninspectable seat (the path native_error now deliberately propagates); the launcher exits Err with the child's grant still live until expiry. session.rs keeps this right by gating inside the closure and revoking before result?. Fix: revoke on every exit (RAII guard, or capture the fast-gate Result and apply ? after the revoke), and add a test asserting a Grant-variant child is revoked on those paths; story_2640_fast_gate_real_lane_exit_paths_settle_reservations uses HeadlessChildGrant::Baseline and asserts only the marker.
+    2. [minor] A real gate result can be discarded while reading its output. run_fast_gate (lane_job.rs:~1805) uses File.take(1 MiB).read_to_string, which errors on any non-UTF-8 byte, including a multibyte character split at the 1 MiB cut. The rc was already read, but the Err goes attempt -> native_error -> infrastructure, so a red head becomes fast_gate=skipped(infrastructure), gets no repair round and publishes (AC1). Separately, output over 1 MiB keeps the FIRST 1 MiB, so tail(100) omits the failing gate named at the end and the repair prompt lacks it. Fix: read the last bytes of the file and decode lossily; test with non-UTF-8 and oversized output.
+    3. [minor] A self-pushing lane can report fast_gate=pass for a head that was not published. pushed_inner gates the seat HEAD, but a seat with an unpushed commit has HEAD != PR head; annotate_fast_gate then refuses on 'change head moved', and pushed_round keeps marker=pass (lane_fast_gate.rs:~677-688), so the result line claims pass for an unchecked PR head (spec: gate 'at the head it is about to publish'). Fix: compare the snapshot with the lookup_pr head first and report skipped(<reason>) on mismatch unless a known fail applies; add a test.
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
+  created_at: 2026-11-08T18:38:14.667836985Z
+  modified_at: 2026-11-08T18:38:14.667836985Z
   session_id: 01a1b9af-8230-75d2-82f8-667491cc010a
   harness_version: 2.1.319 (Claude Code)
 history:
