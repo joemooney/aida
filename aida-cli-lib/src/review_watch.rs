@@ -224,19 +224,19 @@ impl Identity {
     /// Capacity policy is separate from kernel process observation.
     // trace:TASK-3365 | ai:codex
     fn alive(&self) -> bool {
-        use aida_core::proc_identity::{UnknownReason, Verdict};
-        match self.verdict() {
+        self.alive_with_verdict(self.verdict())
+    }
+    // trace:TASK-3367 | ai:codex
+    fn alive_with_verdict(&self, verdict: aida_core::proc_identity::Verdict) -> bool {
+        use aida_core::proc_identity::Verdict;
+        match verdict {
             Verdict::Alive => true,
             Verdict::Dead(_) => false,
-            Verdict::ForeignUnknown(UnknownReason::MissingIdentity) => {
-                // Legacy/incomplete receipts retain the existing reboot/TTL
-                // backstop, rather than holding capacity forever.
+            // Every unknown observation uses the reservation backstop, including
+            // read failures in an otherwise observable local PID namespace.
+            Verdict::ForeignUnknown(_) => {
                 self.within_foreign_backstop(chrono::Utc::now(), boot_id().ok().as_deref())
             }
-            Verdict::ForeignUnknown(_) if !self.observable() => {
-                self.within_foreign_backstop(chrono::Utc::now(), boot_id().ok().as_deref())
-            }
-            Verdict::ForeignUnknown(_) => true,
         }
     }
 }
