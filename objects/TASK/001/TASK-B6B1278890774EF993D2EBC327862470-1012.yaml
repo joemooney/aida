@@ -1,5 +1,6 @@
 id: 01a1bca1-1bf5-7550-b5f2-7e80fd70180a
 spec_id: TASK-b6b1278890774ef993d2ebc327862470-1012
+agreed_id: TASK-3042
 title: 'Repeated unchanged review findings: TASK-3048'
 description: |-
   Identical reviewer findings recurred twice for TASK-3048; do not requeue a third implementer round until an advisor chooses a different implementer/seat or resolves the dispute.
@@ -26,6 +27,11 @@ tags:
 - loop-guard
 - review-recurrence
 - severity:major
+history:
+- id: 01a1bce1-560f-7cd1-a148-2b75f68bd208
+  author: joe
+  timestamp: 2026-11-08T20:37:26.671586936Z
+  changes: []
 filed_at:
   code_sha: db2eb4c39e46704132705ccb2b8300574ead41a6
   branch: main
