@@ -28,7 +28,7 @@ priority: Low
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-09-13T22:07:45.944235607Z
-modified_at: 2026-11-08T03:17:33.026382354Z
+modified_at: 2026-11-08T03:17:37.042103037Z
 req_type: Task
 tags:
 - cleanup
@@ -123,6 +123,25 @@ comments:
   content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: Lifecycle GC logic and fixtures are solid (AC1/AC2/AC4 largely verified), but the weekly job will likely time out on the target host instead of routing counts (AC3), the --yes --force repoint orphans the TASK-1596 guard remedy, and the --apply refusal gates are untested. CI was still pending at review time.. No triage reason was given.'
   created_at: 2026-11-08T03:17:33.026380727Z
   modified_at: 2026-11-08T03:17:33.026380727Z
+  session_id: 01a1b8be-8170-7fb2-89ab-ecb4c6eee98c
+  harness_version: 2.1.319 (Claude Code)
+- id: 01a1b929-57d5-7432-8863-aecf7d856b1d
+  author: joe
+  content: |-
+    REVIEW FINDINGS TO ADDRESS (TASK-1222):
+    Verdict: CHANGES REQUESTED
+    Reviewed commit: 1799cf44dbfb
+    Recorded: 2026-11-08T01:52:55.686069147+00:00
+    Findings:
+    1. MAJOR (AC3 ac14b158): the weekly job runs under SCHEDULED_COMMAND_TIMEOUT=120s (maintenance_schedule.rs:3853). run() (worktree_lifecycle_gc.rs:505) has no budget. For every tree it runs git status --untracked-files=all, a gh/glab lookup with a 15s timeout for non-ancestors, a sandboxed seat probe with a 30s deadline, origin ls-remote, and a recursive bytes() walk. On the host this PR targets (238 linked worktrees, 34 seat clones, 70G) the run will very likely exceed 120s. It would then route 'exit 124: timed out' instead of counts, and the job never reports the backlog that motivated it. Fix: add a soft budget that reports partial counts (like session_hygiene's SOFT_BUDGET), or a longer ceiling like HYGIENE_COMMAND_TIMEOUT, plus a test.
+    2. MAJOR (regression, AC2 'preserve existing safeguards'): worktree_gc.rs:550 sends 'aida worktree gc --yes --force' to the new lifecycle GC and deletes run_merged_agent_worktree_gc. But the TASK-1596 monthly guard still detects candidates with 'doctor check merged-agent-worktrees' (squash/landing-trailer aware, TASK-1534 batch-landed). Its route prompt (.aida/config.toml:328), AGENTS.md:444-446 and OVERVIEW.md:185-187 still tell the operator to run 'aida worktree gc --yes --force'. That command now applies a different candidate set: ancestry or exact PR head only, and no lease of any kind. So a guard trip recommends a remedy that leaves the flagged worktrees in place. Fix: update the guard, prompt and docs to the new semantics (or retire the monthly guard in favour of the weekly one), or keep a path that applies the doctor healer.
+    3. MINOR (Probe 5 authority gate, AC1 '--apply for operator removal'): no test covers the --apply refusal paths in run(). Untested: refusal inside a seat clone (worktree_lifecycle_gc.rs:497), refusal in autonomous/non-TTY/orchestrated contexts via doctor_running_autonomously (:500), and the legacy '--yes --force' => apply mapping (worktree_gc.rs:550). Only the scheduler's string allowlist is tested. Add tests proving that a headless/scheduled context with --apply (and with --yes --force) is refused before any removal.
+    4. MINOR: in the apply loop, 'row.removed = !row.path.try_exists()?' (worktree_lifecycle_gc.rs:526) uses '?'. A stat error after a partial teardown aborts run() midway. Rows already removed are then never reported (no JSON or human report, no failures count), so the operator loses the record of what was deleted. Treat the stat error as removed=false with a reason, and keep going.
+    5. MINOR (AC2 'uncertain evidence must retain work'): the linked-worktree cleanliness check is 'git status --porcelain --untracked-files=all' (worktree_lifecycle_gc.rs:192-203 and :398-407), which excludes gitignored files. Ignored but non-regenerable local state is therefore deleted without evidence it is disposable: .aida/ local state such as merge-hold markers (BUG-2176), review-verdict or prompt files, local .env and notes. Either check '--ignored' for non-regenerable paths (target/ excepted) or document the exclusion explicitly in docs/cli/06-roles-sessions.md.
+    6. MINOR (AC2/AC4 test coverage): the live-process-holder refusal (check_worktree_removal, worktree_lifecycle_gc.rs:249) and the mailbox-retention refusal or reopen path (retire_clone_checkout / reopen_quietly, :346-362) are never exercised by the new fixtures. AC2 requires that these safeguards are preserved for the new callers. Add at least one fixture where the GC must retain the tree: a held process, or a retention refusal that reopens mail.
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
+  created_at: 2026-11-08T03:17:36.853128851Z
+  modified_at: 2026-11-08T03:17:36.853128851Z
   session_id: 01a1b8be-8170-7fb2-89ab-ecb4c6eee98c
   harness_version: 2.1.319 (Claude Code)
 history:
