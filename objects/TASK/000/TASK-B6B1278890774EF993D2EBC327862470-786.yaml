@@ -3,12 +3,12 @@ spec_id: TASK-b6b1278890774ef993d2ebc327862470-786
 agreed_id: TASK-3048
 title: 'STORY-2460 S2: agy adapter in the posture S1 selects (private runtime, auth hosts, argv order, all-tool confinement)'
 description: 'Per signoff Q3 and Q6, blocked on S1''s posture decision. Private writable agy runtime dir; exact auth host inventory; options placed before the final -p <prompt>; no blanket --dangerously-skip-permissions inside a claimed boundary; browser, URL and MCP tools disabled unless confined. Accept agy=<posture> only from trusted origin/main config, and fail closed otherwise. Acceptance: the conformance harness passes for agy.'
-status: InProgress
+status: NeedsAttention
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-04T17:54:51.353376Z
-modified_at: 2026-11-08T19:35:43.605427750Z
+modified_at: 2026-11-08T19:36:42.390212450Z
 req_type: Task
 tags:
 - area:containment
@@ -1393,6 +1393,15 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a1bca9-ba96-7c90-a061-53dfffcd9bbe
+  author: joe
+  timestamp: 2026-11-08T19:36:42.390236274Z
+  session_id: 01a1bca8ba01
+  harness_version: 2.1.319 (Claude Code)
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: NeedsAttention
 filed_at:
   code_sha: 6a331a8a5c91ca7485b695a076af44bdf9be3894
   branch: main
@@ -1401,3 +1410,9 @@ filed_at:
   aida_build_sha: e422daaa1a4
   vendor: claude
   session: 5bf140f7-38b2-4a04-9e8c-ccf69b1258f8
+attention_reason:
+  category: blocked-dependency
+  detail: 'PR #3641: cannot complete the required merge of origin/main (db2eb4c39e4) into task-3048-r1650. In this lane git merge aborts because the sandbox denies writes to .claude/hooks/ (Read-only file system on aida-precompact-handoff.sh) and aida-core/templates/settings.json (Device or resource busy); main changes both. A fallback merge in a scratch worktree under TMPDIR was denied by the permission mode, and was not retried. No commit made, nothing pushed, HEAD still b108a2c06a87. merge-tree preview shows scripts/containment/conformance.py is the only content conflict. The failed merge left 3 untracked files in the lane (aida-cli/tests/story_2662_precompact_handoff.rs, aida-core/templates/hooks/aida-precompact-handoff.sh, tests/test_precompact_handoff_hook.py) which must be removed before re-merging. Not disputing any review finding: finding 1 is a CI wait, finding 2 was ruled compliant by the advisor.'
+  lean: Re-run this merge from a seat that can write those two paths, or have an operator approve the scratch-worktree merge; then resolve conformance.py keeping both sides' checks and run tests/test_containment_conformance.py plus make check-ci-fast.
+  raised_by: implementer
+  raised_at: 2026-11-08T19:36:42.390212450Z
