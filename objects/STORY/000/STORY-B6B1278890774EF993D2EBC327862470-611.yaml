@@ -1,0 +1,22 @@
+id: 01a1be06-a60d-7c53-af66-a417b4fff179
+spec_id: STORY-b6b1278890774ef993d2ebc327862470-611
+agreed_id: STORY-2688
+title: 'PR reconciler: one tested command maps every open PR to one state, next action and owner, and performs the mechanical actions'
+description: probe-pending
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-11-09T01:57:49.197822183Z
+modified_at: 2026-11-09T01:57:49.197822183Z
+req_type: Story
+tags:
+- area:orchestration
+filed_at:
+  code_sha: a7a14984cec5533987dfeccb70d1f91aaebbf22a
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 8a4a909a967
+  vendor: claude
+  session: 20abb7c3-8f9b-4a5e-b326-404921f3b450
