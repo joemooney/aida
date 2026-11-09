@@ -233,7 +233,8 @@ fn run_lint(
     matches: &clap::ArgMatches,
     _ctx: &crate::command_registry::DispatchCtx,
 ) -> anyhow::Result<()> {
-    use crate::*;
+    // trace:TASK-3428 | ai:codex
+    use crate::lint_constants;
     let args = <LintArgs as clap::FromArgMatches>::from_arg_matches(matches)?;
     let LintArgs {
         cmd,

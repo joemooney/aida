@@ -6,6 +6,7 @@
 //! two-tier run logic live in `aida_core::gates`; this module is presentation.
 //!
 //! trace:STORY-1427 | ai:claude
+// trace:TASK-3428 | ai:codex
 
 use anyhow::Result;
 use colored::Colorize;
@@ -276,7 +277,6 @@ fn run_gate(
     matches: &clap::ArgMatches,
     _ctx: &crate::command_registry::DispatchCtx,
 ) -> anyhow::Result<()> {
-    use crate::*;
     let args = <GateArgs as clap::FromArgMatches>::from_arg_matches(matches)?;
     let gate_cmd = &args.inner;
     return self::handle_gate_command(gate_cmd);
