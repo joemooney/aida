@@ -468,6 +468,9 @@ struct Reported {
 struct State {
     version: u8,
     repository: String,
+    // Diagnostic: limit of the last watcher to select under the lock. Each
+    // watcher applies its own configured cap; this is not a shared policy.
+    // trace:TASK-3735 | ai:codex
     max_concurrent: u8,
     entries: BTreeMap<String, Entry>,
 }
