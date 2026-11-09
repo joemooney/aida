@@ -17,7 +17,15 @@ use colored::Colorize;
 pub(crate) mod brief_cmd_args;
 pub(crate) use brief_cmd_args::*;
 
-use crate::*;
+// trace:TASK-3428 | ai:codex
+use crate::brief::{
+    ack_agent_brief, add_pending_brief, create_agent_brief, list_agent_briefs, read_agent_brief,
+};
+use crate::kernel::find_project_root;
+use crate::leases::list_leases;
+use crate::pr_lookup::{parse_pr_arg, resolve_pr_to_spec};
+use crate::{agent_registry, deep_link};
+use aida_core::{DatabaseBackend, RequirementsStore};
 
 // why: command-dispatch fn whose params mirror distinct CLI flags; bundling into a struct adds indirection without clarifying the call sites.
 #[allow(clippy::too_many_arguments)]
@@ -206,7 +214,6 @@ fn run_brief(
     matches: &clap::ArgMatches,
     ctx: &crate::command_registry::DispatchCtx,
 ) -> anyhow::Result<crate::command_registry::Flow> {
-    use crate::*;
     let args = <BriefArgs as clap::FromArgMatches>::from_arg_matches(matches)?;
     match &ctx.store {
         None => Ok(crate::command_registry::Flow::Continue),

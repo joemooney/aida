@@ -1,4 +1,10 @@
 use super::*;
+// trace:TASK-3428 | ai:codex
+use crate::{
+    agent_error_summary_help, agent_list_default_cap, build_list_fields_lines,
+    empty_list_hint_line, extract_aida_suggestion, non_interactive_confirm_from,
+    render_search_fields, review_may_launch_reviewer, toon, AGENT_LIST_DEFAULT_LIMIT,
+};
 
 // TASK-964: no `--fields` => the minimal default schema; an explicit list is
 // validated + ordered; an unknown field is rejected; the `req_type` alias

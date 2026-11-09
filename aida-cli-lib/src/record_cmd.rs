@@ -2,6 +2,7 @@
 //! processing-record trail stored on each requirement. Extracted verbatim from
 //! `main.rs` (SPIKE-78); no behavior change. The shared `print_processing_records`
 //! renderer stays in `main.rs` (reached via `crate::`).
+// trace:TASK-3428 | ai:codex
 
 use crate::print_processing_records;
 use aida_core::{DatabaseBackend, Storage};
@@ -162,7 +163,6 @@ fn run_record(
     matches: &clap::ArgMatches,
     ctx: &crate::command_registry::DispatchCtx,
 ) -> anyhow::Result<crate::command_registry::Flow> {
-    use crate::*;
     let args = <RecordArgs as clap::FromArgMatches>::from_arg_matches(matches)?;
     match &ctx.store {
         None => Ok(crate::command_registry::Flow::Continue),
