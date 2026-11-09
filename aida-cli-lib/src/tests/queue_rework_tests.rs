@@ -2170,26 +2170,51 @@ fn bug_2502_repeated_blocking_review_is_parked_before_requeue() {
             })
             .unwrap();
 
-        // Parking precedes the external finding/brief commands. Their failure
-        // is allowed here; persisted state must prove the handler took the guard.
-        let _result = rework_as(&storage, "BUG-2502", None, false);
+        let log = tmp.path().join("advisor-commands.log");
+        let fake = tmp.path().join("fake-aida");
+        crate::test_exec::write_executable(
+            &fake,
+            format!(
+                "#!/bin/sh\nprintf '%s\\n' \"$1 $2\" >> '{}'\n",
+                log.display()
+            ),
+        );
+        let _exe = crate::kernel::test_aida_exe::set(fake);
+        let before = storage.load().unwrap();
+        let before = before.get_requirement_by_spec_id("BUG-2502").unwrap();
+        let comments_before = before.comments.len();
+        rework_as(&storage, "BUG-2502", None, false).unwrap();
         let store = storage.load().unwrap();
         let req = store.get_requirement_by_spec_id("BUG-2502").unwrap();
         assert_eq!(req.status, RequirementStatus::NeedsAttention, "{kind}");
         assert!(
-            req.history
-                .iter()
-                .any(|entry| entry.author == aida_core::conflict::LOOP_GUARD_AUTHOR),
-            "the handler must have parked the repeated {kind} review"
-        );
-        assert!(
             storage.queue_list("codex", true).unwrap().is_empty(),
             "{kind}"
         );
-        // The first return-to-flight clears failure_reason. The guard's
-        // history must still prevent a third blind round on the next retry.
-        assert!(req.failure_reason.is_none(), "{kind}");
-        let _retry = rework_as(&storage, "BUG-2502", None, false);
+        assert!(
+            req.failure_reason.is_some(),
+            "review evidence retained: {kind}"
+        );
+        assert_eq!(
+            req.comments.len(),
+            comments_before,
+            "no return-to-flight audit"
+        );
+        // Simulate a legacy guard park whose return-to-flight cleared the
+        // failure marker. Durable guard history must still fence the retry.
+        storage
+            .update_atomically(|store| {
+                let req = store.get_requirement_by_spec_id_mut("BUG-2502").unwrap();
+                req.failure_reason = None;
+                req.status = RequirementStatus::Approved;
+                assert!(loop_guard_park(req));
+            })
+            .unwrap();
+        rework_as(&storage, "BUG-2502", None, false).unwrap();
+        assert_eq!(
+            std::fs::read_to_string(&log).unwrap(),
+            "findings add\nbrief advisor\nfindings add\nbrief advisor\n"
+        );
         assert_eq!(
             status_of(&storage, "BUG-2502"),
             RequirementStatus::NeedsAttention,
