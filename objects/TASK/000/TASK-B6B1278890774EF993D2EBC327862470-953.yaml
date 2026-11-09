@@ -2,356 +2,494 @@ id: 01a1b7c2-260c-72f2-bcdf-5c1450362776
 spec_id: TASK-b6b1278890774ef993d2ebc327862470-953
 agreed_id: TASK-3420
 title: 'STORY-2325 remainder: mail retention on message state, plus the last four direct liveness probes routed through the ownership judge'
-description: |
-  Follow-up split from STORY-2325 PR-D by the advisor ruling of 2026-11-07 13:50.
+description: 'Follow-up split from STORY-2325 PR-D by the advisor ruling of 2026-11-07 13:50.
+
 
   ## Part A: mail retention on message state (was ruling (2))
+
   Retirement of a mailbox source (session/seat teardown) checks message state, not the build/executable identity, with these rules:
+
   1. Delivered-but-unacknowledged mail: the source MAY retire only after the message is durably preserved in the canonical store (digested, readable by its logical reader afterwards). Before preservation: retain.
+
   2. Queued/undelivered mail: the source MUST be retained.
+
   3. The fresh writer-admission scan after fencing, under the lifecycle lock, stays MANDATORY (as in the signed sketch).
+
   Remove the build-identity gate only when 1-3 are implemented and tested (tests: unacked+preserved retires, unacked+unpreserved retains, queued retains, a writer admitted after fencing is caught by the scan).
 
+
   ## Part B: remaining direct liveness probes (rest of ruling (1))
+
   Route these through ownership::reader and remove them from scripts/ownership-liveness-legacy.json:
+
   (a) session_start.rs orphan_lease_to_adopt (stale_lease_recovery_for_lease); (b) session_start_with_receipt lease_is_live / probe_live_claude_sessions; (c) queue_cmd.rs queue/fill pickup filter (BUG-637) probes; (d) lane_liveness.rs review_lease_running.
+
   The ratchet baseline must shrink to zero entries for these paths.
 
+
   LIGHT gate. Parts A and B may be separate PRs (Refs this task; the last one completes it).
+
+  '
 status: Approved
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
-created_at: 2026-11-07T20:45:16.684639200Z
-modified_at: 2026-11-09T12:58:01.982990378Z
+created_at: 2026-11-07 20:45:16.684639+00:00
+modified_at: 2026-11-09 12:58:01.982990+00:00
 req_type: Task
 relationships:
 - rel_type: Child
   target_id: 01a19db5-0aac-72e0-869f-fdee4a59db62
-  created_at: 2026-11-07T20:45:32.820988462Z
+  created_at: 2026-11-07 20:45:32.820988+00:00
 - rel_type: Supersedes
   target_id: 01a1bca3-75d7-7b72-ba83-68ba56898a55
-  created_at: 2026-11-09T06:52:06.875896391Z
+  created_at: 2026-11-09 06:52:06.875896+00:00
   created_by: joe
 comments:
 - id: 01a1b9d7-9fcf-7c63-b740-4c0412df41b5
   author: dirtlab
-  content: |
-    Implemented the separately permitted Part B slice. Orphan adoption, session-start claim/reviewer conflict gates, queue pickup/fill and queue stale-base observations, and lane review progress now use ownership::reader. Missing/unreadable/replacement evidence retains ownership; only matching positive owner-death proof permits release. Removed all baseline entries for the four migrated caller functions. Part A mail retention is unchanged and remains required before task completion.
+  content: 'Implemented the separately permitted Part B slice. Orphan adoption, session-start claim/reviewer conflict gates, queue pickup/fill and queue stale-base observations, and lane review progress now use ownership::reader. Missing/unreadable/replacement evidence retains ownership; only matching positive owner-death proof permits release. Removed all baseline entries for the four migrated caller functions. Part A mail retention is unchanged and remains required before task completion.
+
 
     Changed files: aida-cli-lib/src/lane_liveness.rs, ownership/reader.rs, ownership/writer_tests.rs, queue_cmd.rs, session_start.rs, test_env.rs, tests/bug_2223_orphan_seat_reentry_tests.rs, tests/story_1688_lane_liveness_tests.rs; scripts/ownership-liveness-legacy.json. Adoption fixtures now provide ownership records. The shared synthetic HOME fixture writes its allocation setting mode 0600 so the existing trust check passes under a group-writable runner umask.
 
+
     Validation: lane job j20261108T062529533-2-0 executed cargo test --profile agent -p aida-cli-lib --lib -- task_3420 seat_clone::orphan_reentry_tests lane_liveness::tests: 51 passed, zero failed. Python ownership liveness ratchet: 2 passed. rustfmt --check and git diff --check passed. All four migrated caller baselines are empty. Codegraph was unavailable; rg used after doctor check.
 
+
     Native handoff: all edits uncommitted. Publication declaration recorded: [AI:codex] refactor(ownership): route remaining pickup and review probes through judge (Refs TASK-3420). No commit, push, PR creation, review record, ship-to-merge, or queue completion performed. No Part B blockers. Keep TASK-3420 In Progress for Part A; the final slice may complete it.
-  created_at: 2026-11-08T06:27:58.543251259Z
-  modified_at: 2026-11-08T06:27:58.543251259Z
+
+    '
+  created_at: 2026-11-08 06:27:58.543251+00:00
+  modified_at: 2026-11-08 06:27:58.543251+00:00
   session_id: 01a1b9c58192
   harness_version: codex-cli 0.167.0
 - id: 01a1b9f4-c80a-7402-8038-1984da95b7ce
   author: joe
   content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: Part B routes all four named probes through ownership::reader and the ratchet entries are gone, but lease_retained treats every Unknown as held. No current production lease reads Dead (27/27 Unknown), so crashed reviewers and crashed spec claims are retained forever, and --resume hints now disagree with adoption. CI was still pending at this head; Part A is out of scope for this Refs slice.. No triage reason was given.'
-  created_at: 2026-11-08T06:59:49.386016358Z
-  modified_at: 2026-11-08T06:59:49.386016358Z
+  created_at: 2026-11-08 06:59:49.386016+00:00
+  modified_at: 2026-11-08 06:59:49.386016+00:00
   session_id: 01a1b8be-8170-7fb2-89ab-ecb4c6eee98c
   harness_version: 2.1.319 (Claude Code)
 - id: 01a1b9f4-df8f-71f2-9ded-480703320ac2
   author: joe
-  content: |-
-    REVIEW FINDINGS TO ADDRESS (PR #3670):
+  content: 'REVIEW FINDINGS TO ADDRESS (PR #3670):
+
     Verdict: CHANGES REQUESTED
+
     Reviewed commit: 574bd8c21164
+
     Recorded: 2026-11-08T06:53:18.936249484+00:00
+
     Findings:
-    1. [major][blocker] TASK-1665 regression: review_lease_running can no longer report a crashed reviewer (lane_liveness.rs:1267, reader.rs:212). It is true unless the verdict is Dead, but production reviewer leases carry no witness: holder_for_lease builds witnesses only from lease_holder_record, and aida own show reports 'the holder records no witness' for PR-2906/2910/2913 and the current PR-3670/3671 reviewer leases. Any reviewer lease at the PR head therefore suppresses unpicked-ready-pr permanently. The new tests pass only because seed_lease_heartbeat writes a Heartbeat witness that no production lease writer uses. Fix: give reviewer leases an admitted witness or keep a provable crashed path, and test with the witness shape production writes.
-    2. [major][blocker] BUG-637 crash-deadlock is back in queue next/fill and session-start claims (queue_cmd.rs:4664, session_start.rs:2478). The old gate released LeaseState::Stale; lease_retained holds every Unknown. On the live store 21/21 stale leases read Unknown (no witness, unadmitted witness, or no record naming the session), including approved BUG-...-212/213/214 and in-progress TASK-2708, so those specs would be hidden from pickup until someone manually ends the lease. aida own migrate only adds records and cannot prove death, so the reader's suggested repair does not clear it. leases.rs:2382-2387 and 2433 still promise a crashed agent cannot lock its spec. Fix: define a reachable release path for crashed unadmitted holders, or get an advisor ruling that pickup must retain them and update those contracts.
-    3. [major][blocker] The --resume offer and the adoption gate now use different judges. orphan_lease_to_adopt (session_start.rs:999-1009) requires an ownership Dead verdict, but lease_adoption_refusal/adoptable_orphan_lease (leases.rs:4782-4825), which drive queue work --resume (queue_cmd.rs:12309) and scope_conflict_resume_hint, still use stale_lease_recovery_for_lease. For a StaleDirty lease with Unknown ownership, the hint offers --resume, then session start bails 'cannot re-enter' (session_start.rs:2145). This breaks the invariant documented at leases.rs:4778 and queue_cmd.rs:12035. Fix: route lease_adoption_refusal through the same owner verdict and add a test that hint and adoption agree.
+
+    1. [major][blocker] TASK-1665 regression: review_lease_running can no longer report a crashed reviewer (lane_liveness.rs:1267, reader.rs:212). It is true unless the verdict is Dead, but production reviewer leases carry no witness: holder_for_lease builds witnesses only from lease_holder_record, and aida own show reports ''the holder records no witness'' for PR-2906/2910/2913 and the current PR-3670/3671 reviewer leases. Any reviewer lease at the PR head therefore suppresses unpicked-ready-pr permanently. The new tests pass only because seed_lease_heartbeat writes a Heartbeat witness that no production lease writer uses. Fix: give reviewer leases an admitted witness or keep a provable crashed path, and test with the witness shape production writes.
+
+    2. [major][blocker] BUG-637 crash-deadlock is back in queue next/fill and session-start claims (queue_cmd.rs:4664, session_start.rs:2478). The old gate released LeaseState::Stale; lease_retained holds every Unknown. On the live store 21/21 stale leases read Unknown (no witness, unadmitted witness, or no record naming the session), including approved BUG-...-212/213/214 and in-progress TASK-2708, so those specs would be hidden from pickup until someone manually ends the lease. aida own migrate only adds records and cannot prove death, so the reader''s suggested repair does not clear it. leases.rs:2382-2387 and 2433 still promise a crashed agent cannot lock its spec. Fix: define a reachable release path for crashed unadmitted holders, or get an advisor ruling that pickup must retain them and update those contracts.
+
+    3. [major][blocker] The --resume offer and the adoption gate now use different judges. orphan_lease_to_adopt (session_start.rs:999-1009) requires an ownership Dead verdict, but lease_adoption_refusal/adoptable_orphan_lease (leases.rs:4782-4825), which drive queue work --resume (queue_cmd.rs:12309) and scope_conflict_resume_hint, still use stale_lease_recovery_for_lease. For a StaleDirty lease with Unknown ownership, the hint offers --resume, then session start bails ''cannot re-enter'' (session_start.rs:2145). This breaks the invariant documented at leases.rs:4778 and queue_cmd.rs:12035. Fix: route lease_adoption_refusal through the same owner verdict and add a test that hint and adoption agree.
+
     4. [major] Hot-path cost: lease_owner calls lease_record, which calls load_store_for_lookup and re-parses the whole store (GitBackend::load, 7,391 objects today) per lease, even for PR-scoped leases that never resolve a spec (reader.rs:68). live_spec_claim_by_other and lease_owning_spec call is_live before the scope match (leases.rs:2047, 2435), so queue next costs candidates x leases x full store load, session start costs one load per lease (27 today), and the queue stale-base loop (queue_cmd.rs:3093) also loads per lease. Previously this was one process probe plus an O(1) predicate. Fix: load lazily only for spec scopes and share one store/memo across the batch, or check scope before liveness.
+
     5. [minor] Coverage gap: task_3420 tests exercise lease_retained and orphan_lease_to_adopt, but no test drives the migrated decisions in session_start_with_receipt (claim gate, reviewer conflict is_live, adopted-orphan sweep) or the queue next filter with ownership records. The refusal paths for (b) and (c) are unproven at their call sites.
+
     6. [minor] CI unverified: lib-0, lib-1, cli-0, cli-1 and gates were still pending at 574bd8c21164 when this verdict was recorded; only rest, contracts and merge-hold-gate had passed. Confirm all lanes green at the rework head.
-    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
-  created_at: 2026-11-08T06:59:55.407242517Z
-  modified_at: 2026-11-08T06:59:55.407242517Z
+
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.'
+  created_at: 2026-11-08 06:59:55.407242+00:00
+  modified_at: 2026-11-08 06:59:55.407242+00:00
   session_id: 01a1b8be-8170-7fb2-89ab-ecb4c6eee98c
   harness_version: 2.1.319 (Claude Code)
 - id: 01a1b9fd-c46f-7390-9cc2-5886de94d5a3
   author: dirtlab
-  content: |
-    Native rework handoff: TASK-3420 remains Needs Attention under the recorded design-fork punt. Do not publish these edits while the punt is active. The punt command updated canonical status/reason successfully but reported that its local signal file was read-only; the host must preserve the veto from the store.
+  content: 'Native rework handoff: TASK-3420 remains Needs Attention under the recorded design-fork punt. Do not publish these edits while the punt is active. The punt command updated canonical status/reason successfully but reported that its local signal file was read-only; the host must preserve the veto from the store.
+
 
     Partial fix for PR #3670 finding 4: lease_record resolves the spec store lazily, avoiding full-store loads for PR/review and UUID keys. live_spec_claim_by_other and lease_owning_spec filter scope before ownership I/O and read each matching lease once. Changed files: aida-cli-lib/src/ownership/reader.rs, aida-cli-lib/src/leases.rs, aida-cli-lib/src/tests/task_957_claim_tests.rs, aida-cli-lib/src/tests/lease_enforcement_tests.rs. Regression tests assert unrelated lease owners are never read and matching owners are read once.
 
+
     Validation: lane job j20261108T070922080-2-0 executed cargo test --profile agent -p aida-cli-lib --lib -- task_3420 task_957_claim_tests lease_enforcement_tests: 29 passed, zero failed. Initial task_3420 run: 5 passed. python3 tests/test_ownership_liveness_ratchet.py: 2 passed. rustfmt --check for all four files and git diff --check passed. pytest was unavailable; the unittest entry point ran successfully. Codegraph executable unavailable, navigation confirmed via rg. untested=false for this partial fix; CI not verified.
 
+
     Outstanding: advisor ruling on crash-release of unadmitted legacy holders (findings 1/2), shared resume/adoption judgment (finding 3), production call-site coverage (finding 5), CI (finding 6), and Part A mail retention. No commit, push, PR, queue completion or review record performed. No publication declaration overrides the punt.
-  created_at: 2026-11-08T07:09:38.287549199Z
-  modified_at: 2026-11-08T07:09:38.287549199Z
+
+    '
+  created_at: 2026-11-08 07:09:38.287549+00:00
+  modified_at: 2026-11-08 07:09:38.287549+00:00
   session_id: 01a1b9f63136
   harness_version: codex-cli 0.167.0
 - id: 01a1ba0b-53dc-7d90-83c2-3f23d8f4d879
   author: joe
-  content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: Part B routes all four named probes through ownership::reader and the ratchet entries are gone, and the hot-path filter from finding 4 landed for the two scope matchers. But prior blockers 1-3 are unchanged at this head: lease_retained holds every Unknown, and aida own show --compare shows 22/22 holder-bearing leased/reviewing records Unknown, 0 Dead. The advisor ruling the implementer punted for is not on the spec. CI still queued; Part A is out of scope for this Refs slice.. It was punted on: design-fork: PR #3670 findings 1 and 2 require a crash-release path for legacy unadmitted leases. ownership::judge_witness explicitly requires cooperative admission (STORY-2537/BUG-2458); missing, refused and replacement bindings are Unknown, while lease_state_for retains a separate PID/worktree/TTL legacy release policy. Restoring that fallback in the ownership reader would choose a new authority policy and contradict its fail-closed contract. Request advisor ruling on whether legacy advisory/pickup observations may use that established policy, or require cooperative rebind/migration of production writers. Findings 3 and 5 and Part A remain outstanding; finding 4 has a local targeted performance fix under validation. Partial edits remain uncommitted; do not publish as completed rework.. No triage reason was given.'
-  created_at: 2026-11-08T07:24:26.972610677Z
-  modified_at: 2026-11-08T07:24:26.972610677Z
+  content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: Part B routes all four named probes through ownership::reader and the ratchet entries are gone, and the hot-path filter from finding 4 landed for the two scope matchers. But prior blockers 1-3 are unchanged at this head: lease_retained holds every Unknown, and aida own show --compare shows 22/22 holder-bearing leased/reviewing records Unknown, 0 Dead. The advisor ruling the implementer punted for is not on the spec. CI still queued; Part A is out of scope for this Refs slice.. It was punted on: design-fork: PR #3670 findings 1 and 2 require a crash-release path for legacy unadmitted leases. ownership::judge_witness explicitly requires cooperative admission (STORY-2537/BUG-2458); missing, refused and replacement bindings are Unknown, while lease_state_for retains a separate PID/worktree/TTL legacy release policy. Restoring that fallback in the ownership reader
+    would choose a new authority policy and contradict its fail-closed contract. Request advisor ruling on whether legacy advisory/pickup observations may use that established policy, or require cooperative rebind/migration of production writers. Findings 3 and 5 and Part A remain outstanding; finding 4 has a local targeted performance fix under validation. Partial edits remain uncommitted; do not publish as completed rework.. No triage reason was given.'
+  created_at: 2026-11-08 07:24:26.972610+00:00
+  modified_at: 2026-11-08 07:24:26.972610+00:00
   session_id: 01a1b8be-8170-7fb2-89ab-ecb4c6eee98c
   harness_version: 2.1.319 (Claude Code)
 - id: 01a1ba0b-6aa5-7da0-8fd8-bd063231464c
   author: joe
-  content: |-
-    REVIEW FINDINGS TO ADDRESS (PR #3670):
+  content: 'REVIEW FINDINGS TO ADDRESS (PR #3670):
+
     Verdict: CHANGES REQUESTED
+
     Reviewed commit: 7dfdb9e8601d
+
     Recorded: 2026-11-08T07:17:10.626209837+00:00
+
     Findings:
-    1. [major][blocker] TASK-1665 regression still present: review_lease_running (lane_liveness.rs:1268-1270) is lease_retained (reader.rs:215), true unless the verdict is Dead. Production reviewer holders carry no usable witness: holder_for_lease (dual.rs:220) builds witnesses only from lease_holder_record, and this review's own record reads '0 witness(es), unknown: the holder records no witness'. A crashed reviewer at the PR head therefore suppresses unpicked-ready-pr indefinitely. task_3420_review_lease_uses_recorded_ownership and reviewer_lease_uses_ownership_instead_of_registry_cwd pass only because seed_lease_heartbeat (cfg(test), reader.rs:182) writes a Heartbeat witness no production writer produces, and the TASK-2120 crashed-reviewer test was replaced by them. Fix: give reviewer leases an admitted witness or keep a provable crashed path, and test with the witness shape production writes.
-    2. [major][blocker] BUG-637 crash-deadlock is still back in queue next/fill and session-start claims (queue_cmd.rs:4664-4668, session_start.rs:2478-2482, 2686). The old gate released LeaseState::Stale; lease_retained holds every Unknown. aida own show --compare at review time: 13 'holder records no witness', 5 'holder admission unavailable', 4 NamespaceMismatch, 0 Dead, and it reports 16 leases where today's rule reads dead and the judge abstains. Those specs stay hidden from pickup until someone ends the lease by hand. The contract at leases.rs:2380-2385 ('a crashed/stale agent's lease must NOT permanently lock its spec', 'Callers pass lease_is_live') is now false. Fix: define a reachable release path for crashed unadmitted holders, or record the advisor ruling that pickup retains them and update those contracts.
-    3. [major][blocker] The --resume offer and the adoption gate still use different judges. orphan_lease_to_adopt (session_start.rs:999-1009) requires an ownership Dead verdict, while lease_adoption_refusal (leases.rs:4781) and adoptable_orphan_lease, which drive queue work --resume (queue_cmd.rs:12309) and scope_conflict_resume_hint (queue_cmd.rs:12041), still use stale_lease_recovery_for_lease. A StaleDirty lease with Unknown ownership is offered --resume, then session start bails 'cannot re-enter' (session_start.rs:2145). This breaks the invariant documented at leases.rs:4770-4773 ('a hint never offers a re-entry that refuses'). Fix: route lease_adoption_refusal through the same owner verdict and add a test that hint and adoption agree.
+
+    1. [major][blocker] TASK-1665 regression still present: review_lease_running (lane_liveness.rs:1268-1270) is lease_retained (reader.rs:215), true unless the verdict is Dead. Production reviewer holders carry no usable witness: holder_for_lease (dual.rs:220) builds witnesses only from lease_holder_record, and this review''s own record reads ''0 witness(es), unknown: the holder records no witness''. A crashed reviewer at the PR head therefore suppresses unpicked-ready-pr indefinitely. task_3420_review_lease_uses_recorded_ownership and reviewer_lease_uses_ownership_instead_of_registry_cwd pass only because seed_lease_heartbeat (cfg(test), reader.rs:182) writes a Heartbeat witness no production writer produces, and the TASK-2120 crashed-reviewer test was replaced by them. Fix: give reviewer leases an admitted witness or keep a provable crashed path, and test with the witness shape production writes.
+
+    2. [major][blocker] BUG-637 crash-deadlock is still back in queue next/fill and session-start claims (queue_cmd.rs:4664-4668, session_start.rs:2478-2482, 2686). The old gate released LeaseState::Stale; lease_retained holds every Unknown. aida own show --compare at review time: 13 ''holder records no witness'', 5 ''holder admission unavailable'', 4 NamespaceMismatch, 0 Dead, and it reports 16 leases where today''s rule reads dead and the judge abstains. Those specs stay hidden from pickup until someone ends the lease by hand. The contract at leases.rs:2380-2385 (''a crashed/stale agent''s lease must NOT permanently lock its spec'', ''Callers pass lease_is_live'') is now false. Fix: define a reachable release path for crashed unadmitted holders, or record the advisor ruling that pickup retains them and update those contracts.
+
+    3. [major][blocker] The --resume offer and the adoption gate still use different judges. orphan_lease_to_adopt (session_start.rs:999-1009) requires an ownership Dead verdict, while lease_adoption_refusal (leases.rs:4781) and adoptable_orphan_lease, which drive queue work --resume (queue_cmd.rs:12309) and scope_conflict_resume_hint (queue_cmd.rs:12041), still use stale_lease_recovery_for_lease. A StaleDirty lease with Unknown ownership is offered --resume, then session start bails ''cannot re-enter'' (session_start.rs:2145). This breaks the invariant documented at leases.rs:4770-4773 (''a hint never offers a re-entry that refuses''). Fix: route lease_adoption_refusal through the same owner verdict and add a test that hint and adoption agree.
+
     4. [minor] Prior finding 4 is only partly fixed. Lazy store resolution and scope-first filtering landed for live_spec_claim_by_other and lease_owning_spec, but the queue-list stale-base loop (queue_cmd.rs:3092-3098) calls lease_retained for every lease, before the cheap branch-empty/main check, and each spec-scoped lease does its own full load_store_for_lookup (GitBackend::load) because the OnceCell lives per lease_record call. The block comment at queue_cmd.rs:3082-3084 still calls this path cheap. Fix: move the branch filter first and share one store or memo across the batch.
+
     5. [minor] Coverage gap unchanged: the new tests exercise lease_retained, orphan_lease_to_adopt and closure-injected scope matchers, but none drives the migrated decisions in session_start_with_receipt (claim gate, reviewer conflict is_live, adopted-orphan sweep) or the queue next filter with ownership records. Refusal paths for Part B items (b) and (c) are unproven at their call sites.
+
     6. [minor] CI unverified: all seven CI jobs and merge-hold-gate were still queued at 7dfdb9e8601d when this verdict was recorded. Confirm green at the rework head.
-    7. [process] This head shipped while its own handoff said not to: the TASK-3420 comment of 2026-11-08T07:09 says 'Do not publish these edits while the punt is active', and the spec is still Needs Attention. No advisor ruling on crash-release of unadmitted holders appears on TASK-3420 or STORY-2325. Findings 1 and 2 need that ruling before another implementation round.
-    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
-  created_at: 2026-11-08T07:24:32.805355903Z
-  modified_at: 2026-11-08T07:24:32.805355903Z
+
+    7. [process] This head shipped while its own handoff said not to: the TASK-3420 comment of 2026-11-08T07:09 says ''Do not publish these edits while the punt is active'', and the spec is still Needs Attention. No advisor ruling on crash-release of unadmitted holders appears on TASK-3420 or STORY-2325. Findings 1 and 2 need that ruling before another implementation round.
+
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.'
+  created_at: 2026-11-08 07:24:32.805355+00:00
+  modified_at: 2026-11-08 07:24:32.805355+00:00
   session_id: 01a1b8be-8170-7fb2-89ab-ecb4c6eee98c
   harness_version: 2.1.319 (Claude Code)
 - id: 01a1bacb-1d41-7131-9b13-2c650cd42eab
   author: joe
   content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was punted on: design-fork: PR #3670 review blockers 1 and 2 remain unresolved: production legacy lease holders have no admitted witness, so ownership::reader retains Unknown indefinitely. Releasing them via legacy PID/worktree/TTL policy conflicts with the ownership reader fail-closed contract; requiring cooperative rebinding changes crash recovery and resume contracts. The spec contains the prior punt but no advisor ruling authorizing either policy. Finding 3 (resume hint/adoption consistency) depends on that choice: changing the hint alone suppresses existing legacy resume paths. Request advisor signoff on a reachable legacy crash-release/admission policy and its migration before continuing Part B rework. Part A mail retention remains outstanding. No code changes or publication authorized by this handoff.. No triage reason was given.'
-  created_at: 2026-11-08T10:53:55.905644605Z
-  modified_at: 2026-11-08T10:53:55.905644605Z
+  created_at: 2026-11-08 10:53:55.905644+00:00
+  modified_at: 2026-11-08 10:53:55.905644+00:00
   session_id: 01a1b9af-8230-75d2-82f8-667491cc010a
   harness_version: 2.1.319 (Claude Code)
 - id: 01a1bca3-3816-72a3-9242-ee596e508915
   author: joe
-  content: |
-    ADVISOR RULING 2026-11-08 (design fork from the #3670 punts; review findings 1-3, TASK-3017). Scope: the four migrated probes in Part B only.
+  content: 'ADVISOR RULING 2026-11-08 (design fork from the #3670 punts; review findings 1-3, TASK-3017). Scope: the four migrated probes in Part B only.
+
 
     1. A holder with an admitted witness is judged by the ownership reader as written. Live and Dead verdicts stand.
+
     2. An Unknown verdict whose only cause is a legacy unadmitted holder (no witness recorded, or holder admission unavailable) falls back to the pre-migration lease rule, so a crashed legacy holder is released exactly as it is on main today. Put this in ONE named reader function, with a comment that it is removed once every production holder writes a witness. Do not scatter it per call site.
+
     3. Every other Unknown cause, including NamespaceMismatch, stays retained. Dirty or unpushed work keeps its existing safeguards; the fallback never releases those.
+
     4. This keeps current behaviour for legacy holders and is no weakening of main. It does not change the fail-closed contract for admitted holders.
 
+
     Rework for #3670 (conflicting with main, so merge current main first):
+
     - Findings 1-2: implement the above, and test with the witness shape production actually writes, not seed_lease_heartbeat. Restore the crashed-reviewer coverage from TASK-2120.
+
     - Finding 3: route lease_adoption_refusal through the same verdict; add a test that hint and adoption agree.
+
     - Finding 4: move the branch filter first and share one store across the batch.
+
     - Finding 5: accepted as far as the tests above reach; no further call-site suite required.
+
     Part A (mail retention) stays out of this Refs slice. Different implementer per the repeated-findings rule. LIGHT gate: one targeted test plus make check-ci-fast.
-  created_at: 2026-11-08T19:29:35.766548822Z
-  modified_at: 2026-11-08T19:29:35.766548822Z
+
+    '
+  created_at: 2026-11-08 19:29:35.766548+00:00
+  modified_at: 2026-11-08 19:29:35.766548+00:00
   session_id: 01a1bc93-77a0-7740-8b03-df4e3e8d1df5
   harness_version: 2.1.319 (Claude Code)
 - id: 01a1bca3-53a6-7fd0-b781-fc2c833613d2
   author: joe
   content: Returned from NeedsAttention to Approved via `aida queue rework`. No triage reason was given.
-  created_at: 2026-11-08T19:29:42.822369798Z
-  modified_at: 2026-11-08T19:29:42.822369798Z
+  created_at: 2026-11-08 19:29:42.822369+00:00
+  modified_at: 2026-11-08 19:29:42.822369+00:00
   session_id: 01a1bc93-77a0-7740-8b03-df4e3e8d1df5
   harness_version: 2.1.319 (Claude Code)
 - id: 01a1bca6-72fd-7053-8225-a495b5c51c7e
   author: joe
   content: Returned from NeedsAttention to Approved via `aida edit --status`. No triage reason was given.
-  created_at: 2026-11-08T19:33:07.453267445Z
-  modified_at: 2026-11-08T19:33:07.453267445Z
+  created_at: 2026-11-08 19:33:07.453267+00:00
+  modified_at: 2026-11-08 19:33:07.453267+00:00
   session_id: 01a1bc93-77a0-7740-8b03-df4e3e8d1df5
   harness_version: 2.1.319 (Claude Code)
 - id: 01a1bec5-f60a-7823-8a03-2148a05da90b
   author: joe
   content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: Part B routes the probes through ownership::reader, but the head has only merges since the 2026-11-08 advisor ruling: the legacy-holder fallback, adoption-hint fix, batch fix and restored tests are all absent, and four queue_cmd ratchet entries remain. CI pending; Part A is out of scope for this Refs slice.. No triage reason was given.'
-  created_at: 2026-11-09T05:26:47.050911613Z
-  modified_at: 2026-11-09T05:26:47.050911613Z
+  created_at: 2026-11-09 05:26:47.050911+00:00
+  modified_at: 2026-11-09 05:26:47.050911+00:00
   session_id: 7aacb1ed-ebaa-4da4-a195-500864e99e7d
 - id: 01a1bf7a-e49a-7432-8887-c5a083c04fba
   author: joe
-  content: |-
-    REVIEW FINDINGS TO ADDRESS (PR #3670):
+  content: 'REVIEW FINDINGS TO ADDRESS (PR #3670):
+
     Verdict: CHANGES REQUESTED
+
     Reviewed commit: c053b4960ced
+
     Recorded: 2026-11-09T04:38:33.222300374+00:00
+
     Findings:
-    1. [major][blocker] Advisor ruling items 2 and 4 are not implemented (reader.rs:215-217). lease_retained is still true for every non-Dead verdict; there is no single named reader function that applies the pre-migration lease rule to an Unknown caused only by a legacy unadmitted holder (no witness recorded, or holder admission unavailable). Every migrated caller inherits this, including the direct lease_owner uses at session_start.rs:999-1009 and 2283-2294, which must go through the same function. Production holders carry no admitted witness: aida own show --compare at this head reports 19 leases today's rule reads dead while the judge abstains. Fix per ruling, removable once every production holder writes a witness; keep every other Unknown (including NamespaceMismatch) retained and keep the dirty/unpushed safeguards.
-    2. [major][blocker] TASK-1665 regression (lane_liveness.rs:1267-1270): a crashed legacy reviewer at the PR head suppresses unpicked-ready-pr indefinitely, because review_lease_running is lease_retained. Live example: PR-3703 @efc0e7eef5 reads 'unknown: the holder records no witness'.
+
+    1. [major][blocker] Advisor ruling items 2 and 4 are not implemented (reader.rs:215-217). lease_retained is still true for every non-Dead verdict; there is no single named reader function that applies the pre-migration lease rule to an Unknown caused only by a legacy unadmitted holder (no witness recorded, or holder admission unavailable). Every migrated caller inherits this, including the direct lease_owner uses at session_start.rs:999-1009 and 2283-2294, which must go through the same function. Production holders carry no admitted witness: aida own show --compare at this head reports 19 leases today''s rule reads dead while the judge abstains. Fix per ruling, removable once every production holder writes a witness; keep every other Unknown (including NamespaceMismatch) retained and keep the dirty/unpushed safeguards.
+
+    2. [major][blocker] TASK-1665 regression (lane_liveness.rs:1267-1270): a crashed legacy reviewer at the PR head suppresses unpicked-ready-pr indefinitely, because review_lease_running is lease_retained. Live example: PR-3703 @efc0e7eef5 reads ''unknown: the holder records no witness''.
+
     3. [major][blocker] BUG-637 crash-deadlock is back at queue_cmd/next.rs:171-175 and session_start.rs:2478-2482: a crashed legacy claim hides its spec from pickup and refuses session start until someone ends the lease by hand.
+
     4. [major][blocker] BUG-1205 regression (session_start.rs:2686): under headless, a conflicting lease whose legacy owner is gone now reads is_live=true, so the review pickup refuses as if the lease were LIVE instead of auto-ending it. Same root as the fallback; cover it with the fix.
+
     5. [major][blocker] Prior finding 3 is unfixed: lease_adoption_refusal (leases.rs:4781) still uses stale_lease_recovery_for_lease while orphan_lease_to_adopt (session_start.rs:999-1009) uses the ownership verdict, so a --resume hint (queue_cmd/work.rs, pr_lease_takeover.rs:286) can offer a re-entry that session start refuses, breaking the invariant at leases.rs:4770-4773. Route it through the same verdict and add the hint/adoption agreement test the ruling requires.
+
     6. [major][blocker] Tests do not use the witness shape production writes, as the ruling required. task_3420_review_lease_uses_recorded_ownership, reviewer_lease_uses_ownership_instead_of_registry_cwd, task_3420_pickup_retains_unknown_and_releases_only_matching_dead_owner and task_3420_orphan_adoption_requires_matching_owner_death rely on cfg(test) seed_lease_heartbeat (reader.rs:182), an admission-None Heartbeat that no production writer produces (dual.rs:220 builds witnesses only from lease_holder_record). The TASK-2120 crashed-reviewer test was deleted and not restored. Add tests with zero-witness and admission-unavailable holders, a crashed-reviewer case, and a NamespaceMismatch-stays-retained case.
-    7. [major][blocker] Acceptance 'the ratchet baseline must shrink to zero entries for these paths' is not met: scripts/ownership-liveness-legacy.json:112-115 still lists queue_cmd/list.rs and queue_cmd/next.rs handle_queue_command lease_state_for, probe_live_claude_sessions and lease_is_live, though no such calls remain in queue_cmd/. The queue_cmd split merge (a92785f1023) re-added them under the new paths; the ratchet only fails on growth, so CI will not catch it. Delete the four entries.
+
+    7. [major][blocker] Acceptance ''the ratchet baseline must shrink to zero entries for these paths'' is not met: scripts/ownership-liveness-legacy.json:112-115 still lists queue_cmd/list.rs and queue_cmd/next.rs handle_queue_command lease_state_for, probe_live_claude_sessions and lease_is_live, though no such calls remain in queue_cmd/. The queue_cmd split merge (a92785f1023) re-added them under the new paths; the ratchet only fails on growth, so CI will not catch it. Delete the four entries.
+
     8. [minor] Prior finding 4 is unfixed, and the ruling requires it: the queue-list stale-base loop (queue_cmd/list.rs:1873-1878) calls lease_retained before the cheap branch-empty/main check, and each spec-scoped lease does its own load_store_for_lookup because the OnceCell is per lease_record call. Move the branch filter first and share one store across the batch.
-    9. [minor] Stale contract comments: leases.rs:2380-2385 still says callers pass lease_is_live; reader.rs:1-2 says consumers never substitute PID or TTL heuristics, which the ruling's fallback makes false without an explicit exception; list.rs:1862-1864 still calls this path cheap and probed only for non-stale leases. Update with the fix.
-    10. [minor] scripts/store-writers.toml has unrelated merge churn: the TASK-1222 entries moved and the '# trace:TASK-1222' and '# ... trace:TASK-3223' comments were dropped (lines ~2185, ~3421, ~3722 of the diff). Restore main's version of those lines.
+
+    9. [minor] Stale contract comments: leases.rs:2380-2385 still says callers pass lease_is_live; reader.rs:1-2 says consumers never substitute PID or TTL heuristics, which the ruling''s fallback makes false without an explicit exception; list.rs:1862-1864 still calls this path cheap and probed only for non-stale leases. Update with the fix.
+
+    10. [minor] scripts/store-writers.toml has unrelated merge churn: the TASK-1222 entries moved and the ''# trace:TASK-1222'' and ''# ... trace:TASK-3223'' comments were dropped (lines ~2185, ~3421, ~3722 of the diff). Restore main''s version of those lines.
+
     11. [minor] CI unverified: all seven CI jobs and merge-hold-gate were pending at c053b4960ced when this verdict was recorded (mergeStateStatus BLOCKED). Confirm green at the rework head.
-    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
-  created_at: 2026-11-09T08:44:24.602667390Z
-  modified_at: 2026-11-09T08:44:24.602667390Z
+
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.'
+  created_at: 2026-11-09 08:44:24.602667+00:00
+  modified_at: 2026-11-09 08:44:24.602667+00:00
   session_id: 01a1beff-fc3b-78e2-93e2-9b0c283b0339
   harness_version: 2.1.319 (Claude Code)
 - id: 01a1bf93-a7c0-7972-9ab6-5116076acd31
   author: dirtlab
-  content: |
-    Part B rework only, per advisor ruling 2026-11-08; Part A remains excluded. Current main was already merged by the host (HEAD d551be920c, origin/main ancestor).
+  content: 'Part B rework only, per advisor ruling 2026-11-08; Part A remains excluded. Current main was already merged by the host (HEAD d551be920c, origin/main ancestor).
+
 
     Centralized temporary legacy compatibility in ownership::reader::LeaseReader::pickup_owner. Admitted owner verdicts stand; unreadable, replacement and namespace-unknown evidence retain ownership. Only missing/unadmitted legacy witness evidence uses the existing lease rule. Spec-store resolution failures retain. Queue stale-base filtering now precedes owner reads, with one lazy spec-store snapshot for the batch. Resume hints and actual orphan adoption share lease_adoption_refusal; adoption preserves contents and checks tree existence/registration. Removed obsolete adoption legacy-probe inventory entry.
 
+
     Tests use a cooperatively admitted real child through the production holder writer, cover Live/Dead/NamespaceMismatch and hint/adoption agreement, and restore crashed legacy reviewer coverage (TASK-2120).
+
 
     Validation: lane job j20261109T090716431-2-0, cargo test --profile agent -p aida-cli-lib --lib -- task_3420: 6 passed, 0 failed. python3 -m unittest tests.test_ownership_liveness_ratchet: 2 passed. git diff --check passed. make check-ci-fast FAILED in Codex mail wake fixtures (4 failures, 17 errors, 1 skipped), with health project directory must be owned without shared writes; preceding no-default-features and TUI checks passed. LIGHT gate remains incomplete; mail-wake fixture environment needs host attention. Codegraph unavailable (fixed executable missing; doctor reports missing from PATH); navigation used rg.
 
+
     Edits are uncommitted for native host publication. Changed: aida-cli-lib/src/leases.rs; aida-cli-lib/src/ownership/reader.rs; aida-cli-lib/src/ownership/writer_tests.rs; aida-cli-lib/src/queue_cmd/list.rs; aida-cli-lib/src/session_start.rs; aida-cli-lib/src/tests/bug_2223_orphan_seat_reentry_tests.rs; aida-cli-lib/src/tests/story_1688_lane_liveness_tests.rs; scripts/ownership-liveness-legacy.json.
-  created_at: 2026-11-09T09:11:27.424671915Z
-  modified_at: 2026-11-09T09:11:27.424671915Z
+
+    '
+  created_at: 2026-11-09 09:11:27.424671+00:00
+  modified_at: 2026-11-09 09:11:27.424671+00:00
   session_id: 01a1bf7f9926
   harness_version: codex-cli 0.167.0
 - id: 01a1bfb5-1e51-7e80-9f70-3521c56e9507
   author: joe
   content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: The advisor-ruling rework landed (named legacy fallback, shared hint/adoption gate, batch reader, admitted-witness tests), but the fallback is lease_is_live for every probe, which is not main''s rule at adoption or review progress: a Dormant legacy lease with a live or unrecorded owner becomes adoptable. The adopted-orphan sweep still bypasses the fallback, four queue_cmd ratchet entries remain, and CI is pending at this head. Part A is out of scope for this Refs slice.. No triage reason was given.'
-  created_at: 2026-11-09T09:48:00.465258980Z
-  modified_at: 2026-11-09T09:48:00.465258980Z
+  created_at: 2026-11-09 09:48:00.465258+00:00
+  modified_at: 2026-11-09 09:48:00.465258+00:00
 - id: 01a1bfb5-3c65-74c3-ba05-75ff47400d3a
   author: joe
-  content: |-
-    REVIEW FINDINGS TO ADDRESS (PR #3670):
+  content: 'REVIEW FINDINGS TO ADDRESS (PR #3670):
+
     Verdict: CHANGES REQUESTED
+
     Reviewed commit: ee03a9fcaed3
+
     Recorded: 2026-11-09T09:17:16.571266588+00:00
+
     Findings:
-    1. [major][blocker] Adoption is weaker than main for legacy holders, against ruling items 2 and 4 (reader.rs pickup_owner, leases.rs:4781-4787). pickup_owner turns lease_is_live=false into Dead, and lease_is_live is false for Dormant. Main's gate (orphan_adoption_refusal over stale_lease_recovery base_verdict) needed lease_owner_gone==Some(true). So a legacy lease with active_pid=None, no Claude in its tree, under 24h old and with a LIVE creator (main: Live, refused) or no recorded owner (main: UnknownLiveness, refused) is now adoptable, and both the --resume hint and session start accept it. No test covers this: a_live_lease_is_refused uses a seeded heartbeat. Fix: keep the single named reader function but apply each probe's own pre-migration rule, so adoption uses the stale-recovery verdict. Add zero-witness tests for live-creator and no-owner refusal.
-    2. [major][blocker] Prior finding 1/3 is unfixed at the adopted-orphan sweep (session_start.rs:2282-2289). It still calls lease_owner directly, so a crashed zero-witness sibling reads Unknown and refuses adoption with 'cannot be proven gone'; main released it through stale_lease_recovery. The ruling requires one reader fallback with no per-site divergence. Route it through that function using main's rule, not bare lease_is_live: the no-owner sibling test at bug_2223_orphan_seat_reentry_tests.rs:872-903 must keep refusing.
-    3. [major][blocker] TASK-2094 regression at review progress (lane_liveness.rs:1266-1269), also raised last round. Main counted any non-Stale state as running, plus a live agent-registry entry inside the worktree. The fallback now releases Dormant, and the registry arm is gone, so a live Codex or Antigravity reviewer on a legacy holder (Dormant, no Claude session) reads as crashed and raises a false unpicked-ready-pr. The test was inverted to assert this (task_3420_crashed_reviewer_uses_ownership_instead_of_registry_cwd, 'an unrelated registry process cannot override owner death'), and that assertion is against a legacy holder, not an owner-death proof. Fix: keep main's Stale-plus-registry rule for legacy holders and restore the positive registered-reviewer case; admitted holders stay judged as written.
-    4. [major][blocker] Acceptance 'the ratchet baseline must shrink to zero entries for these paths' is still not met: scripts/ownership-liveness-legacy.json:111-114 keeps the four queue_cmd/list.rs and queue_cmd/next.rs handle_queue_command entries, and rg finds no such calls in queue_cmd/. The ratchet fails only on growth, so CI will not catch it. Delete the four entries.
-    5. [major][blocker] LeaseReader::record (reader.rs:96-101) reports any unresolved label as an error, because reqs.get().is_none() is false as soon as resolve ran, even when the store loaded fine and the label simply isn't a spec. Free-form scopes such as harness-worktree therefore get Err, which is never legacy_unknown, so they are retained forever, unlike main. That also blocks the BUG-1205 auto-end at session_start.rs:2680 for such a scope and leaves a permanent stale-base row at queue_cmd/list.rs:1878. It also changes lease_record for other callers: agent_launch.rs:4552 had Ok(None)=>fresh, and now Err=>not fresh, so a fresh dispatch can be refused by its own lease. Fix: return Err only when the store itself failed to load (reqs is Some(None)); keep Ok(None) for a label absent from a loaded store; add a test.
+
+    1. [major][blocker] Adoption is weaker than main for legacy holders, against ruling items 2 and 4 (reader.rs pickup_owner, leases.rs:4781-4787). pickup_owner turns lease_is_live=false into Dead, and lease_is_live is false for Dormant. Main''s gate (orphan_adoption_refusal over stale_lease_recovery base_verdict) needed lease_owner_gone==Some(true). So a legacy lease with active_pid=None, no Claude in its tree, under 24h old and with a LIVE creator (main: Live, refused) or no recorded owner (main: UnknownLiveness, refused) is now adoptable, and both the --resume hint and session start accept it. No test covers this: a_live_lease_is_refused uses a seeded heartbeat. Fix: keep the single named reader function but apply each probe''s own pre-migration rule, so adoption uses the stale-recovery verdict. Add zero-witness tests for live-creator and no-owner refusal.
+
+    2. [major][blocker] Prior finding 1/3 is unfixed at the adopted-orphan sweep (session_start.rs:2282-2289). It still calls lease_owner directly, so a crashed zero-witness sibling reads Unknown and refuses adoption with ''cannot be proven gone''; main released it through stale_lease_recovery. The ruling requires one reader fallback with no per-site divergence. Route it through that function using main''s rule, not bare lease_is_live: the no-owner sibling test at bug_2223_orphan_seat_reentry_tests.rs:872-903 must keep refusing.
+
+    3. [major][blocker] TASK-2094 regression at review progress (lane_liveness.rs:1266-1269), also raised last round. Main counted any non-Stale state as running, plus a live agent-registry entry inside the worktree. The fallback now releases Dormant, and the registry arm is gone, so a live Codex or Antigravity reviewer on a legacy holder (Dormant, no Claude session) reads as crashed and raises a false unpicked-ready-pr. The test was inverted to assert this (task_3420_crashed_reviewer_uses_ownership_instead_of_registry_cwd, ''an unrelated registry process cannot override owner death''), and that assertion is against a legacy holder, not an owner-death proof. Fix: keep main''s Stale-plus-registry rule for legacy holders and restore the positive registered-reviewer case; admitted holders stay judged as written.
+
+    4. [major][blocker] Acceptance ''the ratchet baseline must shrink to zero entries for these paths'' is still not met: scripts/ownership-liveness-legacy.json:111-114 keeps the four queue_cmd/list.rs and queue_cmd/next.rs handle_queue_command entries, and rg finds no such calls in queue_cmd/. The ratchet fails only on growth, so CI will not catch it. Delete the four entries.
+
+    5. [major][blocker] LeaseReader::record (reader.rs:96-101) reports any unresolved label as an error, because reqs.get().is_none() is false as soon as resolve ran, even when the store loaded fine and the label simply isn''t a spec. Free-form scopes such as harness-worktree therefore get Err, which is never legacy_unknown, so they are retained forever, unlike main. That also blocks the BUG-1205 auto-end at session_start.rs:2680 for such a scope and leaves a permanent stale-base row at queue_cmd/list.rs:1878. It also changes lease_record for other callers: agent_launch.rs:4552 had Ok(None)=>fresh, and now Err=>not fresh, so a fresh dispatch can be refused by its own lease. Fix: return Err only when the store itself failed to load (reqs is Some(None)); keep Ok(None) for a label absent from a loaded store; add a test.
+
     6. [major] orphan_adoption_refusal (leases.rs:4752) now has no callers, only a doc reference at leases.rs:4768, so it is dead code on a -D warnings build. Reuse it for the adoption fix in the first finding or remove it and its doc reference.
-    7. [minor] Queue-list stale-base rows change for Dormant legacy leases (queue_cmd/list.rs:1878): main skipped only LeaseState::Stale, while lease_is_live also drops Dormant, so a parked non-Stale lease loses its behind-main row. This has the same root as the first finding: use that probe's own rule.
+
+    7. [minor] Queue-list stale-base rows change for Dormant legacy leases (queue_cmd/list.rs:1878): main skipped only LeaseState::Stale, while lease_is_live also drops Dormant, so a parked non-Stale lease loses its behind-main row. This has the same root as the first finding: use that probe''s own rule.
+
     8. [minor] The legacy fallback runs probe_live_claude_sessions per lease (reader.rs pickup_owner), so the queue-list loop now does up to N process-table scans where main did one. LeaseReader shares the store but not the scan; memoize it in a OnceCell alongside reqs.
+
     9. [minor] Ruling-required coverage is incomplete: the task_3420 tests cover zero-witness and admitted holders but no admission-unavailable holder (a Process witness with admission None, 5 live records at the last review), and none shows the fallback leaving dirty or unpushed safeguards intact. Add both.
-    10. [minor] Stale contract comments remain: leases.rs:2382-2386 ('callers pass lease_is_live'), queue_cmd/list.rs:1862-1864 ('only live (non-stale) leases', 'cheap'), queue_cmd/next.rs:78 ('no cwd/PID fallback', false for legacy holders), and lane_liveness.rs:1264-1265 ('without substituting a process in the same cwd', also false for legacy holders).
-    11. [minor] Prior finding 10 is unfixed: scripts/store-writers.toml still moves the TASK-1222 entries and drops the two '# trace:TASK-1222' comments and the '# Partial variant ... trace:TASK-3223' comment (main lines 3429, 3432, 3732). Restore main's version of those lines.
-    12. [minor] CI is unverified: all seven CI jobs were pending at ee03a9fcaed3 and merge-hold-gate had failed (mergeStateStatus BLOCKED). The implementer's own note reports make check-ci-fast failing in the Codex mail-wake fixtures. Confirm green at the rework head and state whether those failures come from this PR.
-    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
-  created_at: 2026-11-09T09:48:08.165029505Z
-  modified_at: 2026-11-09T09:48:08.165029505Z
+
+    10. [minor] Stale contract comments remain: leases.rs:2382-2386 (''callers pass lease_is_live''), queue_cmd/list.rs:1862-1864 (''only live (non-stale) leases'', ''cheap''), queue_cmd/next.rs:78 (''no cwd/PID fallback'', false for legacy holders), and lane_liveness.rs:1264-1265 (''without substituting a process in the same cwd'', also false for legacy holders).
+
+    11. [minor] Prior finding 10 is unfixed: scripts/store-writers.toml still moves the TASK-1222 entries and drops the two ''# trace:TASK-1222'' comments and the ''# Partial variant ... trace:TASK-3223'' comment (main lines 3429, 3432, 3732). Restore main''s version of those lines.
+
+    12. [minor] CI is unverified: all seven CI jobs were pending at ee03a9fcaed3 and merge-hold-gate had failed (mergeStateStatus BLOCKED). The implementer''s own note reports make check-ci-fast failing in the Codex mail-wake fixtures. Confirm green at the rework head and state whether those failures come from this PR.
+
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.'
+  created_at: 2026-11-09 09:48:08.165029+00:00
+  modified_at: 2026-11-09 09:48:08.165029+00:00
 - id: 01a1bfda-ff8e-7cb0-a8a1-b39b4992e5a0
   author: joe
   content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: Part B is nearly done: the per-probe legacy rules, shared adoption gate, sweep routing, ratchet shrink and store-error fix all landed. A lease with no ownership key but a holder_record is still retained forever, refusal reasons were collapsed and their tests rewritten, and CI has not run at this head. Part A is out of scope for this Refs slice.. No triage reason was given.'
-  created_at: 2026-11-09T10:29:22.958635373Z
-  modified_at: 2026-11-09T10:29:22.958635373Z
+  created_at: 2026-11-09 10:29:22.958635+00:00
+  modified_at: 2026-11-09 10:29:22.958635+00:00
 - id: 01a1bfdb-1ce9-7170-afb5-9efe8f319957
   author: joe
-  content: |-
-    REVIEW FINDINGS TO ADDRESS (PR #3670):
+  content: 'REVIEW FINDINGS TO ADDRESS (PR #3670):
+
     Verdict: CHANGES REQUESTED
+
     Reviewed commit: ab8a0363bc27
+
     Recorded: 2026-11-09T10:11:17.417917686+00:00
+
     Findings:
-    1. [major][blocker] Prior free-form-scope blocker is only half fixed (ownership/reader.rs:141). Ok(None) counts as legacy only when lease.holder_record.is_none(). key_for_lease returns None for a free-form scope, and for a review lease with no pr_head_sha, so no ownership record can ever exist for those leases. Session start stores a holder_record whenever it finds a Claude ancestor (session_start.rs:3338, leases.rs:357), so such a lease reads Unknown 'ownership record missing; run aida own migrate', which migrate cannot repair, and it is retained even after its holder dies. Main judged it through lease_state_for, which uses the exact holder verdict (leases.rs:1298). Effects: permanent stale-base row at queue_cmd/list.rs:1878, BUG-1205 auto-end refused at session_start.rs:2682, and a head-less crashed reviewer suppressing unpicked-ready-pr through the is_none_or at lane_liveness.rs:1349. From source reading; not executed. Fix: when key_for_lease yields no key, apply the probe's legacy rule regardless of holder_record, keeping Ok(None) on a keyed lease retained per ruling item 3. Add a test with a free-form scope and a dead admitted holder_record; task_3420_free_form_scope_is_not_a_store_failure covers only record() with no holder.
-    2. [major][blocker] Prior refusal-text blocker was resolved by changing the tests, not the code, although that finding said not to weaken the assertions. lease_adoption_refusal (leases.rs:4782-4788) collapses 'a live process still backs it' and 'it records no owning process, so it cannot be proven dead' into 'ownership holder is live or unknown', and bug_2223_orphan_seat_reentry_tests.rs:258, :393 and :444 were rewritten to expect that string. The operator's 'lease is not orphaned: <why>' message and the scope-conflict hint lose the distinction. The legacy path already has the report and can return orphan_adoption_refusal's reason. The adopted-orphan sweep has the same loss: a Live legacy sibling becomes Unknown and prints 'session whose owner cannot be proven gone' instead of 'live session' (session_start.rs:2281-2290). Fix: carry the specific reason out of the Adoption rule, for example in the Unknown why, and restore the 'live process' and 'no owning process' assertions for legacy holders. The doc at leases.rs:4768 ('orphan_adoption_refusal for lease itself') also needs updating.
-    3. [minor] Advisor ruling finding-4 item ('share one store across the batch') is still unmet in queue next (queue_cmd/next.rs:171-175). The closure calls lease_retained, which builds a new LeaseReader per matching lease, so each one reloads the requirement store and rescans the process table. This was raised last round and is unchanged. Create one LeaseReader before the candidate loop and call retained on it.
+
+    1. [major][blocker] Prior free-form-scope blocker is only half fixed (ownership/reader.rs:141). Ok(None) counts as legacy only when lease.holder_record.is_none(). key_for_lease returns None for a free-form scope, and for a review lease with no pr_head_sha, so no ownership record can ever exist for those leases. Session start stores a holder_record whenever it finds a Claude ancestor (session_start.rs:3338, leases.rs:357), so such a lease reads Unknown ''ownership record missing; run aida own migrate'', which migrate cannot repair, and it is retained even after its holder dies. Main judged it through lease_state_for, which uses the exact holder verdict (leases.rs:1298). Effects: permanent stale-base row at queue_cmd/list.rs:1878, BUG-1205 auto-end refused at session_start.rs:2682, and a head-less crashed reviewer suppressing unpicked-ready-pr through the is_none_or at lane_liveness.rs:1349. From source reading; not executed. Fix: when key_for_lease yields no key, apply the probe''s legacy
+    rule regardless of holder_record, keeping Ok(None) on a keyed lease retained per ruling item 3. Add a test with a free-form scope and a dead admitted holder_record; task_3420_free_form_scope_is_not_a_store_failure covers only record() with no holder.
+
+    2. [major][blocker] Prior refusal-text blocker was resolved by changing the tests, not the code, although that finding said not to weaken the assertions. lease_adoption_refusal (leases.rs:4782-4788) collapses ''a live process still backs it'' and ''it records no owning process, so it cannot be proven dead'' into ''ownership holder is live or unknown'', and bug_2223_orphan_seat_reentry_tests.rs:258, :393 and :444 were rewritten to expect that string. The operator''s ''lease is not orphaned: <why>'' message and the scope-conflict hint lose the distinction. The legacy path already has the report and can return orphan_adoption_refusal''s reason. The adopted-orphan sweep has the same loss: a Live legacy sibling becomes Unknown and prints ''session whose owner cannot be proven gone'' instead of ''live session'' (session_start.rs:2281-2290). Fix: carry the specific reason out of the Adoption rule, for example in the Unknown why, and restore the ''live process'' and ''no owning process'' assertions
+    for legacy holders. The doc at leases.rs:4768 (''orphan_adoption_refusal for lease itself'') also needs updating.
+
+    3. [minor] Advisor ruling finding-4 item (''share one store across the batch'') is still unmet in queue next (queue_cmd/next.rs:171-175). The closure calls lease_retained, which builds a new LeaseReader per matching lease, so each one reloads the requirement store and rescans the process table. This was raised last round and is unchanged. Create one LeaseReader before the candidate loop and call retained on it.
+
     4. [minor] review_lease_running (lane_liveness.rs:1266-1273) builds a new LeaseReader per matching lease, so the live-session scan and load_live_identity_entries run once per open PR with a review lease, where main memoized both across the snapshot. The check also runs before the cheap pr_head_sha filter (lane_liveness.rs:1347-1351). Share one reader across load_open_prs and test the head first.
-    5. [minor] The live-Claude-session case at review progress was deleted and not restored, though last round's finding asked for it. reviewer_lease_with_a_dead_creator_counts_a_live_claude_session_in_its_worktree covered the BUG-2206 path (dead creator, live Claude in the worktree: running; session elsewhere: not running). The rewritten tests cover only the registry arm. Add both cases by seeding LeaseReader.live.
+
+    5. [minor] The live-Claude-session case at review progress was deleted and not restored, though last round''s finding asked for it. reviewer_lease_with_a_dead_creator_counts_a_live_claude_session_in_its_worktree covered the BUG-2206 path (dead creator, live Claude in the worktree: running; session elsewhere: not running). The rewritten tests cover only the registry arm. Add both cases by seeding LeaseReader.live.
+
     6. [minor] CI is not verified at ab8a0363bc27: all seven CI jobs were still pending (0s) when this was recorded. merge-hold-gate fails on the expected supervised hold, which is a release gate and not a code defect. Confirm green at the rework head, including the make check-ci-fast mail-wake fixtures that the implementer reported failing and that the test_env.rs permission change appears aimed at.
-    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
-  created_at: 2026-11-09T10:29:30.473176004Z
-  modified_at: 2026-11-09T10:29:30.473176004Z
+
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.'
+  created_at: 2026-11-09 10:29:30.473176+00:00
+  modified_at: 2026-11-09 10:29:30.473176+00:00
 - id: 01a1c002-e9df-75c2-89e7-fedff0d9af1d
   author: joe
   content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: Part B is nearly done: free-form scopes, refusal reasons, shared batch readers and BUG-2206 coverage are fixed at this head, but a zero-witness lease handed off to a PR still bypasses the legacy fallback, refused captures diverge from main, and CI has not run. Part A is out of scope for this Refs slice.. No triage reason was given.'
-  created_at: 2026-11-09T11:12:58.847844779Z
-  modified_at: 2026-11-09T11:12:58.847844779Z
+  created_at: 2026-11-09 11:12:58.847844+00:00
+  modified_at: 2026-11-09 11:12:58.847844+00:00
 - id: 01a1c003-01be-7f80-b3ab-22a0d694840a
   author: joe
-  content: |-
-    REVIEW FINDINGS TO ADDRESS (PR #3670):
+  content: 'REVIEW FINDINGS TO ADDRESS (PR #3670):
+
     Verdict: CHANGES REQUESTED
+
     Reviewed commit: ee0ac5cafca0
+
     Recorded: 2026-11-09T10:47:45.812528656+00:00
+
     Review comment: https://github.com/joemooney/aida/pull/3670#issuecomment-6738133892
+
     Findings:
-    1. [major][blocker] Unfixed from last round: a zero-witness lease handed off to a PR bypasses the legacy fallback (ownership/reader.rs:147-155). The Ok(Some(record)) arm uses record.holder.as_ref().is_some_and(...), but handoff writes holder: None with Phase::InPr{handed_off_by} (ownership/ops.rs:79-88; migrate.rs:224). lease_owner_record rebuilds the holder from the lease (reader.rs:229-239); with no holder_record it has no witnesses, so judge_owner returns Unknown 'the holder records no witness' (judge.rs:174). That is ruling item 2's cause, yet legacy_unknown is false, so a crashed legacy holder is retained where main released it: BUG-637 pickup hide and session-start refusal (next.rs:171, session_start.rs:2470), BUG-1205 auto-end refused (session_start.rs:2682), stale-base row (list.rs:1878). This shape exists today: aida own show --compare reports 'expected (1): the work was handed to its PR; today's lease still names the seat'. From source reading; not executed. Fix: also treat holder None with Phase::InPr{handed_off_by: Some(id)}, id == lease.id, as legacy when lease_holder_record yields no admitted witness. Add a task_3420 test with that InPr shape covering crashed release and live retention; no task_3420 test builds it (writer_tests.rs InPr fixtures use handed_off_by: None).
-    2. [minor] A legacy holder whose capture was explicitly refused is retained where main applies the legacy rule (ownership/reader.rs:148). holder_for_lease (dual.rs:220) stores admission: Some(refused), so witnesses.all(admission.is_none()) is false and judge_witness returns Unknown 'holder refused: ...'. Main's lease_uses_holder_verdict (leases.rs:1364) excludes refused records so they 'retain their existing consumer policy', and ruling item 4 says the fallback keeps current behaviour for legacy holders. HolderRecord::capture is written at session start (session_start.rs:3338, leases.rs:357), and 5 records under .aida/ownership carry a refusal (not mapped to live leases). Fix: count a Process witness whose admission has refusal().is_some() as legacy and add a test, or get an advisor ruling that refused captures stay retained and record it in the reader comment.
+
+    1. [major][blocker] Unfixed from last round: a zero-witness lease handed off to a PR bypasses the legacy fallback (ownership/reader.rs:147-155). The Ok(Some(record)) arm uses record.holder.as_ref().is_some_and(...), but handoff writes holder: None with Phase::InPr{handed_off_by} (ownership/ops.rs:79-88; migrate.rs:224). lease_owner_record rebuilds the holder from the lease (reader.rs:229-239); with no holder_record it has no witnesses, so judge_owner returns Unknown ''the holder records no witness'' (judge.rs:174). That is ruling item 2''s cause, yet legacy_unknown is false, so a crashed legacy holder is retained where main released it: BUG-637 pickup hide and session-start refusal (next.rs:171, session_start.rs:2470), BUG-1205 auto-end refused (session_start.rs:2682), stale-base row (list.rs:1878). This shape exists today: aida own show --compare reports ''expected (1): the work was handed to its PR; today''s lease still names the seat''. From source reading; not executed. Fix: also
+    treat holder None with Phase::InPr{handed_off_by: Some(id)}, id == lease.id, as legacy when lease_holder_record yields no admitted witness. Add a task_3420 test with that InPr shape covering crashed release and live retention; no task_3420 test builds it (writer_tests.rs InPr fixtures use handed_off_by: None).
+
+    2. [minor] A legacy holder whose capture was explicitly refused is retained where main applies the legacy rule (ownership/reader.rs:148). holder_for_lease (dual.rs:220) stores admission: Some(refused), so witnesses.all(admission.is_none()) is false and judge_witness returns Unknown ''holder refused: ...''. Main''s lease_uses_holder_verdict (leases.rs:1364) excludes refused records so they ''retain their existing consumer policy'', and ruling item 4 says the fallback keeps current behaviour for legacy holders. HolderRecord::capture is written at session start (session_start.rs:3338, leases.rs:357), and 5 records under .aida/ownership carry a refusal (not mapped to live leases). Fix: count a Process witness whose admission has refusal().is_some() as legacy and add a test, or get an advisor ruling that refused captures stay retained and record it in the reader comment.
+
     3. [minor] CI is not verified at ee0ac5cafca0: all seven CI jobs were pending when this was recorded. merge-hold-gate fails on the expected supervised hold, a release gate and not a code defect. Confirm green at the rework head, including whether the make check-ci-fast mail-wake failures the implementer reported are resolved by the test_env.rs permission change.
-    4. [cosmetic] lease_adoption_refusal (leases.rs:4788-4795) matches the Unknown why against an exact string that the reader builds from orphan_adoption_refusal, so rewording that text silently drops the specific reason. Its fallback 'ownership holder is live or unknown' is reached only for Unknown, because Alive is handled above. Carry the reason in a typed value or shared constant and change the fallback to name unknown ownership.
-    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
-  created_at: 2026-11-09T11:13:04.958087094Z
-  modified_at: 2026-11-09T11:13:04.958087094Z
+
+    4. [cosmetic] lease_adoption_refusal (leases.rs:4788-4795) matches the Unknown why against an exact string that the reader builds from orphan_adoption_refusal, so rewording that text silently drops the specific reason. Its fallback ''ownership holder is live or unknown'' is reached only for Unknown, because Alive is handled above. Carry the reason in a typed value or shared constant and change the fallback to name unknown ownership.
+
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.'
+  created_at: 2026-11-09 11:13:04.958087+00:00
+  modified_at: 2026-11-09 11:13:04.958087+00:00
 - id: 01a1c03d-cfcc-7bf1-a223-227e6b4a0dac
   author: joe
-  content: |-
-    REVIEW FINDINGS TO ADDRESS (PR #3670):
+  content: 'REVIEW FINDINGS TO ADDRESS (PR #3670):
+
     Verdict: CHANGES REQUESTED
+
     Reviewed commit: c811a5871f46
+
     Recorded: 2026-11-09T11:38:25.580346184+00:00
+
     Review comment: https://github.com/joemooney/aida/pull/3670#issuecomment-6739128782
+
     Findings:
-    1. [major][blocker] Unfixed since last round: a zero-witness lease handed off to a PR bypasses the legacy fallback (aida-cli-lib/src/ownership/reader.rs:153). The Ok(Some(record)) arm uses record.holder.as_ref().is_some_and(...), which is false for the holder: None + Phase::InPr{handed_off_by: Some(lease.id)} shape that lease_owner_record rebuilds at reader.rs:228-239. With no holder_record the rebuilt holder has no witnesses, so judge_owner returns Unknown 'the holder records no witness' (ruling item 2's cause), legacy_unknown is false, and a crashed legacy holder is retained where main released it: pickup hide (queue_cmd/next.rs:171), session-start refusal (session_start.rs:2475), BUG-1205 auto-end (session_start.rs:2682), stale-base row (queue_cmd/list.rs:1878). From source reading; not executed. Fix: treat holder None with Phase::InPr{handed_off_by: Some(id)}, id == lease.id, as legacy when the lease yields no admitted witness, and add a task_3420 test with that shape covering crashed release and live retention.
-    2. [minor] Unfixed since last round, and it has a second site: a legacy holder whose capture was refused is retained where main applies the legacy rule. In Ok(Some) (ownership/reader.rs:155) holder_for_lease stores admission: Some(refused), so witnesses.all(admission.is_none()) is false and judge_witness returns Unknown 'holder refused'. In Ok(None) on a keyed lease (reader.rs:152) lease.holder_record.is_none() is false for a refused record, so it also stays retained. Main's lease_uses_holder_verdict (leases.rs:1362) sends refused records to the legacy rule, and ruling item 4 says the fallback keeps current behaviour for legacy holders. Fix both arms using refusal().is_some() with a test, or get an advisor ruling that refused captures stay retained and record it in the reader comment.
+
+    1. [major][blocker] Unfixed since last round: a zero-witness lease handed off to a PR bypasses the legacy fallback (aida-cli-lib/src/ownership/reader.rs:153). The Ok(Some(record)) arm uses record.holder.as_ref().is_some_and(...), which is false for the holder: None + Phase::InPr{handed_off_by: Some(lease.id)} shape that lease_owner_record rebuilds at reader.rs:228-239. With no holder_record the rebuilt holder has no witnesses, so judge_owner returns Unknown ''the holder records no witness'' (ruling item 2''s cause), legacy_unknown is false, and a crashed legacy holder is retained where main released it: pickup hide (queue_cmd/next.rs:171), session-start refusal (session_start.rs:2475), BUG-1205 auto-end (session_start.rs:2682), stale-base row (queue_cmd/list.rs:1878). From source reading; not executed. Fix: treat holder None with Phase::InPr{handed_off_by: Some(id)}, id == lease.id, as legacy when the lease yields no admitted witness, and add a task_3420 test with that shape covering
+    crashed release and live retention.
+
+    2. [minor] Unfixed since last round, and it has a second site: a legacy holder whose capture was refused is retained where main applies the legacy rule. In Ok(Some) (ownership/reader.rs:155) holder_for_lease stores admission: Some(refused), so witnesses.all(admission.is_none()) is false and judge_witness returns Unknown ''holder refused''. In Ok(None) on a keyed lease (reader.rs:152) lease.holder_record.is_none() is false for a refused record, so it also stays retained. Main''s lease_uses_holder_verdict (leases.rs:1362) sends refused records to the legacy rule, and ruling item 4 says the fallback keeps current behaviour for legacy holders. Fix both arms using refusal().is_some() with a test, or get an advisor ruling that refused captures stay retained and record it in the reader comment.
+
     3. [minor] CI is not verified at c811a5871f46: the CI and merge-hold-gate runs were queued with all jobs pending when this was recorded. Confirm green at the rework head, including whether the make check-ci-fast mail-wake failures the implementer reported are resolved by the test_env.rs permission change.
-    4. [cosmetic] Unfixed since last round: lease_adoption_refusal (leases.rs:4788-4795) matches the Unknown why against an exact string that the reader builds from orphan_adoption_refusal, so rewording that text silently drops the specific reason. The fallback 'ownership holder is live or unknown' is reached only for Unknown, because Alive is handled above. Carry the reason in a typed value or shared constant and make the fallback name unknown ownership.
+
+    4. [cosmetic] Unfixed since last round: lease_adoption_refusal (leases.rs:4788-4795) matches the Unknown why against an exact string that the reader builds from orphan_adoption_refusal, so rewording that text silently drops the specific reason. The fallback ''ownership holder is live or unknown'' is reached only for Unknown, because Alive is handled above. Carry the reason in a typed value or shared constant and make the fallback name unknown ownership.
+
     5. [cosmetic] New: the BUG-637 comment on lease_owning_spec (leases.rs:2385) now says callers use the ownership reader, but enforce_session_lease still passes lease_is_live (leases.rs:2488), which stays on the ratchet baseline. Reword the comment so it does not claim every caller moved.
-    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
-  created_at: 2026-11-09T12:17:18.796397523Z
-  modified_at: 2026-11-09T12:17:18.796397523Z
+
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.'
+  created_at: 2026-11-09 12:17:18.796397+00:00
+  modified_at: 2026-11-09 12:17:18.796397+00:00
 - id: 01a1c03d-d88d-7793-96cd-eb02a4355b2d
   author: joe
   content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: Part B still has no fix for last round''s findings: this head only merges main (Part B code unchanged since ee0ac5cafca0), so a zero-witness lease handed off to a PR is still retained where main releases it, refused captures still diverge from main, and CI has not finished. Part A is out of scope for this Refs slice.. No triage reason was given.'
-  created_at: 2026-11-09T12:17:21.037433902Z
-  modified_at: 2026-11-09T12:17:21.037433902Z
+  created_at: 2026-11-09 12:17:21.037433+00:00
+  modified_at: 2026-11-09 12:17:21.037433+00:00
 - id: 01a1c04a-31a9-7720-81df-ae4c6e6a3163
   author: dirtlab
-  content: |
-    Part B rework for PR #3670: fixed the two outstanding legacy compatibility gaps in the named ownership LeaseReader::pickup_owner reader. Matching holderless InPr handoffs reconstruct the production lease holder before classifying absent/refused admission. Missing keyed rows and persisted Process witnesses accept explicitly refused legacy captures, preserving the old consumer rules. Admitted holders, mismatched sessions, unreadable evidence and other Unknown verdicts retain their safeguards. Adoption diagnostics use a shared constant and accurately name unknown ownership; the BUG-637 comment distinguishes migrated callers from legacy enforcement.
+  content: 'Part B rework for PR #3670: fixed the two outstanding legacy compatibility gaps in the named ownership LeaseReader::pickup_owner reader. Matching holderless InPr handoffs reconstruct the production lease holder before classifying absent/refused admission. Missing keyed rows and persisted Process witnesses accept explicitly refused legacy captures, preserving the old consumer rules. Admitted holders, mismatched sessions, unreadable evidence and other Unknown verdicts retain their safeguards. Adoption diagnostics use a shared constant and accurately name unknown ownership; the BUG-637 comment distinguishes migrated callers from legacy enforcement.
+
     Changed files: aida-cli-lib/src/ownership/reader.rs, aida-cli-lib/src/ownership/writer_tests.rs, aida-cli-lib/src/leases.rs.
+
     Validation: lane job j20261109T122609362-2-0 ran cargo test --profile agent -p aida-cli-lib --lib -- task_3420: 10 passed, 0 failed, including TASK-2120 crashed-reviewer, adoption and new production-envelope handoff/refused capture tests. Initial run found two issues, corrected before the passing rerun. make check-ci-fast: 46 gates passed under umask 077. Initial default-umask run failed the mail-wake fixtures because temporary project directories allowed shared writes; rerunning with private creation permissions passed. rustfmt --check and git diff --check passed. untested=false.
+
     Main already merged at starting HEAD 40b876a29a. Codegraph client missing, confirmed with aida doctor check codegraph; used rg. Forge CI for these uncommitted edits remains for host publication. No implementation blockers. Part A remains out of scope; TASK-3420 must remain in progress.
+
     Native publication declaration recorded: [AI:codex] fix(ownership): preserve legacy handoff and refused-holder pickup (Refs TASK-3420).
+
     Edits left uncommitted. No commit, push, PR creation, queue completion, review verdict or merge attempted.
-  created_at: 2026-11-09T12:30:50.281099669Z
-  modified_at: 2026-11-09T12:30:50.281099669Z
+
+    '
+  created_at: 2026-11-09 12:30:50.281099+00:00
+  modified_at: 2026-11-09 12:30:50.281099+00:00
   session_id: 01a1c03f97d1
   harness_version: codex-cli 0.167.0
 - id: 01a1c05d-9bf0-7682-bb2c-c8cabcc28dff
   author: joe
-  content: |-
-    REVIEW FINDINGS TO ADDRESS (PR #3670):
+  content: 'REVIEW FINDINGS TO ADDRESS (PR #3670):
+
     Verdict: CHANGES REQUESTED
+
     Reviewed commit: 252c3e4ce1d4
+
     Recorded: 2026-11-09T12:35:57.192316066+00:00
+
     Review comment: https://github.com/joemooney/aida/pull/3670#issuecomment-6740212334
+
     Findings:
-    1. [major][blocker] Unfixed from last round: a review closed without a verdict suppresses unpicked-ready-pr at its head (aida-cli-lib/src/ownership/reader.rs pickup_owner, 'None => false' arm; load_open_prs in lane_liveness.rs). end_finished_review writes the review_finished receipt and keeps the lease on the no-verdict path (queue_cmd/work.rs:5867-5882); ops::release leaves holder None + Phase::Closed (ownership/ops.rs:108-118). lease_owner_record returns Unknown 'ownership record no longer names this session', legacy_unknown is false, so LegacyRule::Review retains it and the review counts as started. Main reads that lease through lease_state_for, where a dead creator with no live session is Stale (BUG-2206 arm, leases.rs), so the check fires there. The stale-base row at queue_cmd/list.rs (LegacyRule::NonStale) has the same cause. From source reading; not executed. Fix: inside the one named reader function, treat a WorkKey::Review record with holder None and Phase::Closed whose reason passes review_completion_matches as ended (review_lease_ended already has this logic), and add a task_3420 test: Closed by the bound receipt with no verdict releases; a mismatched receipt stays retained.
+
+    1. [major][blocker] Unfixed from last round: a review closed without a verdict suppresses unpicked-ready-pr at its head (aida-cli-lib/src/ownership/reader.rs pickup_owner, ''None => false'' arm; load_open_prs in lane_liveness.rs). end_finished_review writes the review_finished receipt and keeps the lease on the no-verdict path (queue_cmd/work.rs:5867-5882); ops::release leaves holder None + Phase::Closed (ownership/ops.rs:108-118). lease_owner_record returns Unknown ''ownership record no longer names this session'', legacy_unknown is false, so LegacyRule::Review retains it and the review counts as started. Main reads that lease through lease_state_for, where a dead creator with no live session is Stale (BUG-2206 arm, leases.rs), so the check fires there. The stale-base row at queue_cmd/list.rs (LegacyRule::NonStale) has the same cause. From source reading; not executed. Fix: inside the one named reader function, treat a WorkKey::Review record with holder None and Phase::Closed whose
+    reason passes review_completion_matches as ended (review_lease_ended already has this logic), and add a task_3420 test: Closed by the bound receipt with no verdict releases; a mismatched receipt stays retained.
+
     2. [minor] CI is not verified at 252c3e4ce1d4: run 42617722822 had all seven CI jobs still in progress when this was recorded. merge-hold-gate fails on the expected supervised hold, a release gate and not a code defect. Confirm green at the rework head.
+
     3. [minor] Test gap: the refused-capture arm accepts any admission with refusal().is_some(), and lease_holder_record also maps corrupt JSON and IdentityChanged to refused. Those stay retained only because the fallback re-enters lease_uses_holder_verdict through lease_state_for and lease_owner_gone (leases.rs:1298, 5274). task_3420_handoff_and_refused_capture_preserve_legacy_rules covers only an explicit EvidenceUnavailable refusal. Add a task_3420 case with a dead active_pid and (a) an unparsable holder_record, (b) an admitted record whose pid no longer matches, asserting retained under Pickup, NonStale, Review and not adoptable, so a later change to that guard cannot silently release them (ruling item 3).
+
     4. [cosmetic] Unfixed: review_lease_running (lane_liveness.rs:1268) is cfg(test)-only and copies the production check inline in load_open_prs, so task_3420_review_lease_uses_recorded_ownership exercises a wrapper production never calls. Have load_open_prs and the test share one helper taking the reader.
-    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
-  created_at: 2026-11-09T12:52:02.672231234Z
-  modified_at: 2026-11-09T12:52:02.672231234Z
+
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.'
+  created_at: 2026-11-09 12:52:02.672231+00:00
+  modified_at: 2026-11-09 12:52:02.672231+00:00
 - id: 01a1c05d-a604-7552-b096-afb467b97b82
   author: joe
   content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: Part B is almost done: handoff, refused captures, ratchet shrink and adoption gates are verified at this head, but a review closed with no verdict still stays retained at its head (TASK-1665 regression) and CI has not finished. Part A is out of scope for this Refs slice.. No triage reason was given.'
-  created_at: 2026-11-09T12:52:05.252560567Z
-  modified_at: 2026-11-09T12:52:05.252560567Z
+  created_at: 2026-11-09 12:52:05.252560+00:00
+  modified_at: 2026-11-09 12:52:05.252560+00:00
 history:
 - id: 01a1b7c2-6b69-7b02-bd8c-8f40aee2972d
   author: joe
-  timestamp: 2026-11-07T20:45:34.441762623Z
+  timestamp: 2026-11-07 20:45:34.441762+00:00
   session_id: 01a1b76b-2fe7-7dd2-88d0-356fc8d96d04
   harness_version: 2.1.319 (Claude Code)
   changes: []
 - id: 01a1b9c5-8d31-7e93-8544-8b88d8185adf
   author: aida-session-start
-  timestamp: 2026-11-08T06:08:14.129100430Z
+  timestamp: 2026-11-08 06:08:14.129100+00:00
   changes:
   - field_name: status
     old_value: Approved
     new_value: InProgress
 - id: 01a1b9c5-fd06-76a2-baf2-ca4cf34ffc89
   author: dirtlab
-  timestamp: 2026-11-08T06:08:42.758808100Z
+  timestamp: 2026-11-08 06:08:42.758808+00:00
   session_id: 01a1b9c58192
   harness_version: codex-cli 0.167.0
   changes: []
 - id: 01a1b9ee-d3b8-7022-977f-615721b9f368
   author: aida-orchestrator
-  timestamp: 2026-11-08T06:53:19.160017919Z
+  timestamp: 2026-11-08 06:53:19.160017+00:00
   session_id: 01a1b9ebaa26
   harness_version: 2.1.319 (Claude Code)
   changes:
@@ -360,7 +498,7 @@ history:
     new_value: NeedsAttention
 - id: 01a1b9f4-c809-73d3-9fc1-e492493f9676
   author: joe
-  timestamp: 2026-11-08T06:59:49.386001251Z
+  timestamp: 2026-11-08 06:59:49.386001+00:00
   session_id: 01a1b8be-8170-7fb2-89ab-ecb4c6eee98c
   harness_version: 2.1.319 (Claude Code)
   changes:
@@ -369,20 +507,20 @@ history:
     new_value: Approved
 - id: 01a1b9f6-36fc-7cb0-bef0-9b13ef252ef8
   author: aida-session-start
-  timestamp: 2026-11-08T07:01:23.324563651Z
+  timestamp: 2026-11-08 07:01:23.324563+00:00
   changes:
   - field_name: status
     old_value: Approved
     new_value: InProgress
 - id: 01a1b9f6-97a1-7cc0-8732-d2840d845496
   author: dirtlab
-  timestamp: 2026-11-08T07:01:48.065592127Z
+  timestamp: 2026-11-08 07:01:48.065592+00:00
   session_id: 01a1b9f63136
   harness_version: codex-cli 0.167.0
   changes: []
 - id: 01a1b9f8-46e8-7fb1-9331-ef6314ba68e5
   author: dirtlab
-  timestamp: 2026-11-08T07:03:38.472391239Z
+  timestamp: 2026-11-08 07:03:38.472391+00:00
   session_id: 01a1b9f63136
   harness_version: codex-cli 0.167.0
   changes:
@@ -391,13 +529,13 @@ history:
     new_value: NeedsAttention
 - id: 01a1ba04-b6e5-7713-a180-2be4e1a09274
   author: joe
-  timestamp: 2026-11-08T07:17:13.573052755Z
+  timestamp: 2026-11-08 07:17:13.573052+00:00
   session_id: 01a1ba02c754
   harness_version: 2.1.319 (Claude Code)
   changes: []
 - id: 01a1ba0b-53dc-7d90-83c2-3f175c3b123d
   author: joe
-  timestamp: 2026-11-08T07:24:26.972597770Z
+  timestamp: 2026-11-08 07:24:26.972597+00:00
   session_id: 01a1b8be-8170-7fb2-89ab-ecb4c6eee98c
   harness_version: 2.1.319 (Claude Code)
   changes:
@@ -406,20 +544,20 @@ history:
     new_value: Approved
 - id: 01a1ba0c-a79d-7360-9a9d-0683c4dbc105
   author: aida-session-start
-  timestamp: 2026-11-08T07:25:53.949028730Z
+  timestamp: 2026-11-08 07:25:53.949028+00:00
   changes:
   - field_name: status
     old_value: Approved
     new_value: InProgress
 - id: 01a1ba0c-f53e-7211-9c32-04259bd81baf
   author: dirtlab
-  timestamp: 2026-11-08T07:26:13.822072968Z
+  timestamp: 2026-11-08 07:26:13.822072+00:00
   session_id: 01a1ba0ca1df
   harness_version: codex-cli 0.167.0
   changes: []
 - id: 01a1ba0d-63d2-77e3-98fe-153302adcdbb
   author: dirtlab
-  timestamp: 2026-11-08T07:26:42.130813799Z
+  timestamp: 2026-11-08 07:26:42.130813+00:00
   session_id: 01a1ba0ca1df
   harness_version: codex-cli 0.167.0
   changes:
@@ -428,7 +566,7 @@ history:
     new_value: NeedsAttention
 - id: 01a1bacb-1d41-7131-9b13-2c51c41b139f
   author: joe
-  timestamp: 2026-11-08T10:53:55.905635993Z
+  timestamp: 2026-11-08 10:53:55.905635+00:00
   session_id: 01a1b9af-8230-75d2-82f8-667491cc010a
   harness_version: 2.1.319 (Claude Code)
   changes:
@@ -437,7 +575,7 @@ history:
     new_value: Approved
 - id: 01a1bacb-3a33-7db3-b535-9a45ddfa3790
   author: aida-loop-guard
-  timestamp: 2026-11-08T10:54:03.315367684Z
+  timestamp: 2026-11-08 10:54:03.315367+00:00
   session_id: 01a1b9af-8230-75d2-82f8-667491cc010a
   harness_version: 2.1.319 (Claude Code)
   changes:
@@ -446,7 +584,7 @@ history:
     new_value: NeedsAttention
 - id: 01a1bca3-53a6-7fd0-b781-fc1f70e33c01
   author: joe
-  timestamp: 2026-11-08T19:29:42.822355714Z
+  timestamp: 2026-11-08 19:29:42.822355+00:00
   session_id: 01a1bc93-77a0-7740-8b03-df4e3e8d1df5
   harness_version: 2.1.319 (Claude Code)
   changes:
@@ -455,7 +593,7 @@ history:
     new_value: Approved
 - id: 01a1bca3-6c0a-7e02-a7b7-51e0a6f38cc6
   author: aida-loop-guard
-  timestamp: 2026-11-08T19:29:49.066787838Z
+  timestamp: 2026-11-08 19:29:49.066787+00:00
   session_id: 01a1bc93-77a0-7740-8b03-df4e3e8d1df5
   harness_version: 2.1.319 (Claude Code)
   changes:
@@ -464,7 +602,7 @@ history:
     new_value: NeedsAttention
 - id: 01a1bca6-72fd-7053-8225-a487b1b7c3f5
   author: joe
-  timestamp: 2026-11-08T19:33:07.453263599Z
+  timestamp: 2026-11-08 19:33:07.453263+00:00
   session_id: 01a1bc93-77a0-7740-8b03-df4e3e8d1df5
   harness_version: 2.1.319 (Claude Code)
   changes:
@@ -473,14 +611,14 @@ history:
     new_value: Approved
 - id: 01a1bcae-26a0-70b3-85cb-0b568360fe91
   author: aida-session-start
-  timestamp: 2026-11-08T19:41:32.192344100Z
+  timestamp: 2026-11-08 19:41:32.192344+00:00
   changes:
   - field_name: status
     old_value: Approved
     new_value: InProgress
 - id: 01a1be99-cef6-7ca3-bc59-abdf8b5f17ed
   author: aida-orchestrator
-  timestamp: 2026-11-09T04:38:33.462830811Z
+  timestamp: 2026-11-09 04:38:33.462830+00:00
   session_id: 01a1be979966
   harness_version: 2.1.319 (Claude Code)
   changes:
@@ -489,7 +627,7 @@ history:
     new_value: NeedsAttention
 - id: 01a1bec5-f60a-7823-8a03-2137469bde36
   author: joe
-  timestamp: 2026-11-09T05:26:47.050902937Z
+  timestamp: 2026-11-09 05:26:47.050902+00:00
   session_id: 7aacb1ed-ebaa-4da4-a195-500864e99e7d
   changes:
   - field_name: status
@@ -497,25 +635,25 @@ history:
     new_value: Approved
 - id: 01a1bec6-180d-7ec0-b5c1-51d4fb1f2e50
   author: joe
-  timestamp: 2026-11-09T05:26:55.757185314Z
+  timestamp: 2026-11-09 05:26:55.757185+00:00
   session_id: 7aacb1ed-ebaa-4da4-a195-500864e99e7d
   changes: []
 - id: 01a1bf14-1a4f-7aa3-9339-d49f26793ae8
   author: joe
-  timestamp: 2026-11-09T06:52:08.143516250Z
+  timestamp: 2026-11-09 06:52:08.143516+00:00
   session_id: 01a1beff-fc3b-78e2-93e2-9b0c283b0339
   harness_version: 2.1.319 (Claude Code)
   changes: []
 - id: 01a1bf7f-9f30-7170-b997-32d7c11a5abf
   author: aida-session-start
-  timestamp: 2026-11-09T08:49:34.512485964Z
+  timestamp: 2026-11-09 08:49:34.512485+00:00
   changes:
   - field_name: status
     old_value: Approved
     new_value: InProgress
 - id: 01a1bf82-4c48-7dd3-bc8d-2ddf04c71feb
   author: aida-orchestrator
-  timestamp: 2026-11-09T08:52:29.896594341Z
+  timestamp: 2026-11-09 08:52:29.896594+00:00
   session_id: 01a1bf80e4d1
   harness_version: 2.1.319 (Claude Code)
   changes:
@@ -524,37 +662,37 @@ history:
     new_value: NeedsAttention
 - id: 01a1bf99-1185-7492-91ab-1626d0e99822
   author: joe
-  timestamp: 2026-11-09T09:17:22.181215699Z
+  timestamp: 2026-11-09 09:17:22.181215+00:00
   session_id: 01a1bf9619d7
   harness_version: 2.1.319 (Claude Code)
   changes: []
 - id: 01a1bfb5-1e51-7e80-9f70-35199f40fbe5
   author: joe
-  timestamp: 2026-11-09T09:48:00.465247918Z
+  timestamp: 2026-11-09 09:48:00.465247+00:00
   changes:
   - field_name: status
     old_value: NeedsAttention
     new_value: Approved
 - id: 01a1bfb5-4b18-7342-9369-bcc1ed7aca05
   author: joe
-  timestamp: 2026-11-09T09:48:11.928431987Z
+  timestamp: 2026-11-09 09:48:11.928431+00:00
   changes: []
 - id: 01a1bfb7-4153-73c1-9ef8-aceb86c00117
   author: aida-session-start
-  timestamp: 2026-11-09T09:50:20.499667098Z
+  timestamp: 2026-11-09 09:50:20.499667+00:00
   changes:
   - field_name: status
     old_value: Approved
     new_value: InProgress
 - id: 01a1bfbb-b314-7af3-89b4-2fbd180fe6ea
   author: joe
-  timestamp: 2026-11-09T09:55:11.764163692Z
+  timestamp: 2026-11-09 09:55:11.764163+00:00
   session_id: 01a1bfb98ded
   harness_version: 2.1.319 (Claude Code)
   changes: []
 - id: 01a1bfca-7014-7dc0-a43c-2961a76898f1
   author: aida-orchestrator
-  timestamp: 2026-11-09T10:11:17.652904003Z
+  timestamp: 2026-11-09 10:11:17.652904+00:00
   session_id: 01a1bfc6ab55
   harness_version: 2.1.319 (Claude Code)
   changes:
@@ -563,31 +701,31 @@ history:
     new_value: NeedsAttention
 - id: 01a1bfda-ff8e-7cb0-a8a1-b388515552a4
   author: joe
-  timestamp: 2026-11-09T10:29:22.958624951Z
+  timestamp: 2026-11-09 10:29:22.958624+00:00
   changes:
   - field_name: status
     old_value: NeedsAttention
     new_value: Approved
 - id: 01a1bfdb-2c74-7561-bc5e-dbb8f9cb7f36
   author: joe
-  timestamp: 2026-11-09T10:29:34.452151833Z
+  timestamp: 2026-11-09 10:29:34.452151+00:00
   changes: []
 - id: 01a1bfdd-c67f-7302-b714-19b1fd3f8c04
   author: aida-session-start
-  timestamp: 2026-11-09T10:32:24.959167228Z
+  timestamp: 2026-11-09 10:32:24.959167+00:00
   changes:
   - field_name: status
     old_value: Approved
     new_value: InProgress
 - id: 01a1bfe2-34eb-7ee3-9590-09ab499bec5e
   author: joe
-  timestamp: 2026-11-09T10:37:15.371825288Z
+  timestamp: 2026-11-09 10:37:15.371825+00:00
   session_id: 01a1bfdfa7f1
   harness_version: 2.1.319 (Claude Code)
   changes: []
 - id: 01a1bfeb-d482-7810-aa66-1ccbe5a2d0ca
   author: aida-orchestrator
-  timestamp: 2026-11-09T10:47:46.050517151Z
+  timestamp: 2026-11-09 10:47:46.050517+00:00
   session_id: 01a1bfe960bd
   harness_version: 2.1.319 (Claude Code)
   changes:
@@ -596,25 +734,25 @@ history:
     new_value: NeedsAttention
 - id: 01a1c002-e9df-75c2-89e7-fec282ba7478
   author: joe
-  timestamp: 2026-11-09T11:12:58.847836599Z
+  timestamp: 2026-11-09 11:12:58.847836+00:00
   changes:
   - field_name: status
     old_value: NeedsAttention
     new_value: Approved
 - id: 01a1c003-0f3f-7940-9c42-3c3eb65eaaa9
   author: joe
-  timestamp: 2026-11-09T11:13:08.415994734Z
+  timestamp: 2026-11-09 11:13:08.415994+00:00
   changes: []
 - id: 01a1c005-0407-7260-a4b7-a4ed8fcdd38a
   author: aida-session-start
-  timestamp: 2026-11-09T11:15:16.615178903Z
+  timestamp: 2026-11-09 11:15:16.615178+00:00
   changes:
   - field_name: status
     old_value: Approved
     new_value: InProgress
 - id: 01a1c01a-3697-7c82-8a22-b28d6af2cf01
   author: aida-orchestrator
-  timestamp: 2026-11-09T11:38:25.815525891Z
+  timestamp: 2026-11-09 11:38:25.815525+00:00
   session_id: 01a1c01808c0
   harness_version: 2.1.319 (Claude Code)
   changes:
@@ -623,25 +761,25 @@ history:
     new_value: NeedsAttention
 - id: 01a1c03d-d88d-7793-96cd-eaf193822f46
   author: joe
-  timestamp: 2026-11-09T12:17:21.037419145Z
+  timestamp: 2026-11-09 12:17:21.037419+00:00
   changes:
   - field_name: status
     old_value: NeedsAttention
     new_value: Approved
 - id: 01a1c03e-3878-71d1-84d8-532d286e6e0d
   author: joe
-  timestamp: 2026-11-09T12:17:45.592607637Z
+  timestamp: 2026-11-09 12:17:45.592607+00:00
   changes: []
 - id: 01a1c03f-9de1-75b2-a542-3e5af258085e
   author: aida-session-start
-  timestamp: 2026-11-09T12:19:17.089550179Z
+  timestamp: 2026-11-09 12:19:17.089550+00:00
   changes:
   - field_name: status
     old_value: Approved
     new_value: InProgress
 - id: 01a1c044-eed1-7422-8212-7747697a5791
   author: aida-orchestrator
-  timestamp: 2026-11-09T12:25:05.489582775Z
+  timestamp: 2026-11-09 12:25:05.489582+00:00
   session_id: 01a1c041e5f4
   harness_version: 2.1.319 (Claude Code)
   changes:
@@ -650,7 +788,7 @@ history:
     new_value: NeedsAttention
 - id: 01a1c04e-e175-7323-bf4c-7a88fa550633
   author: aida-orchestrator
-  timestamp: 2026-11-09T12:35:57.429976324Z
+  timestamp: 2026-11-09 12:35:57.429976+00:00
   session_id: 01a1c04ca45d
   harness_version: 2.1.319 (Claude Code)
   changes:
@@ -659,18 +797,25 @@ history:
     new_value: NeedsAttention
 - id: 01a1c05d-a604-7552-b096-afaf2eb4cbf3
   author: joe
-  timestamp: 2026-11-09T12:52:05.252548172Z
+  timestamp: 2026-11-09 12:52:05.252548+00:00
   changes:
   - field_name: status
     old_value: NeedsAttention
     new_value: Approved
 - id: 01a1c05d-b52e-7b50-a0d6-5539329501dd
   author: joe
-  timestamp: 2026-11-09T12:52:09.134992940Z
+  timestamp: 2026-11-09 12:52:09.134992+00:00
   changes: []
+- id: 01a1c05f-73c6-70f3-b897-83eb9ec4d708
+  author: aida-session-start
+  timestamp: 2026-11-09 12:54:03.462549+00:00
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: InProgress
 - id: 01a1c063-17d1-75f1-94a3-149cab8b543e
   author: joe
-  timestamp: 2026-11-09T12:58:02.065018402Z
+  timestamp: 2026-11-09 12:58:02.065018+00:00
   session_id: 01a1c06162ad
   harness_version: 2.1.319 (Claude Code)
   changes: []
@@ -690,4 +835,4 @@ failure_reason:
   detail: 'Part B is unchanged since 252c3e4ce1d4 (this head only merges main''s BUG-2500): routing, ratchet, handoff and refused-capture handling verify from source, but a review closed with no verdict is still retained at its head, a regression from main''s TASK-1665 behaviour. CI was still queued at d244eb389933 when recorded (GitHub Actions; a fresh review at the rework head covers it). Part A is out of scope for this Refs slice.'
   recovery_hint: address the review findings, move TASK-3420 back to In Progress, and clear the PR hold only after approval
   shelved_by: reviewer
-  shelved_at: 2026-11-09T12:58:01.982990378Z
+  shelved_at: 2026-11-09 12:58:01.982990+00:00
