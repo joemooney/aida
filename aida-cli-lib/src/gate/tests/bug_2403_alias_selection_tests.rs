@@ -650,3 +650,47 @@ fn bug_2403_retired_ids_bridge_only_with_the_same_uuid() {
     );
     assert!(SnapshotMaps::parse(Some("not = [toml"), None).is_err());
 }
+
+// trace:BUG-2507 | ai:codex
+#[test]
+fn bug_2507_rework_imports_large_ledger_findings_and_refuses_over_limit() {
+    let (_tmp, root) = root();
+    let _env = uncontained();
+    let pr = ChangeKey::pr(3708);
+    let large = format!("{}end of finding", "review finding ".repeat(100_000));
+    assert!(large.len() > 1024 * 1024);
+    append(
+        &root,
+        pr,
+        FRIENDLY,
+        record("request_changes", NEW_HEAD, &ts(-60), &[&large]),
+    );
+    let block = crate::queue_cmd::resolve_rework_findings(&root, FRIENDLY, NATIVE, None)
+        .expect("large ledger remains readable")
+        .expect("findings imported");
+    assert!(block.contains(&large));
+
+    let too_large = "x".repeat(crate::gate::ledger::checked::MAX_LINE_BYTES + 1);
+    append(
+        &root,
+        pr,
+        FRIENDLY,
+        record("request_changes", NEW_HEAD, &ts(-30), &[&too_large]),
+    );
+    assert!(
+        crate::queue_cmd::resolve_rework_findings(&root, FRIENDLY, NATIVE, None)
+            .unwrap()
+            .is_none(),
+        "must not import older findings"
+    );
+    let why = crate::gate::ledger::checked::read_change_events(
+        &root,
+        pr,
+        &mut crate::gate::ledger::checked::Budget::default(),
+    )
+    .expect_err("oversized current evidence must refuse")
+    .to_string();
+    assert!(why.contains("PR-3708.jsonl line 3"), "{why}");
+    assert!(why.contains("oversized"), "{why}");
+    assert!(why.contains("limit 8388608"), "{why}");
+}
