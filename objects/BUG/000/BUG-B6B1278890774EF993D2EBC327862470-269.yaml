@@ -8,7 +8,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-08T21:20:08.484660Z
-modified_at: 2026-11-09T11:10:21.539984041Z
+modified_at: 2026-11-09T11:10:28.866619930Z
 req_type: Bug
 comments:
 - id: 01a1beb1-ae7c-7c52-89a5-00a6bc02eeb0
@@ -121,6 +121,21 @@ comments:
   content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: Round 6: all round-4 findings are fixed and no authority fail-open was found, but the new orphan-restore sink is missing from the store-writer inventory (CI ratchet red at cab8e94f709), and the pending-work recovery text is also attached to unfinished-merge and wrong-branch refusals, where following it commits conflict markers. Spec: no formal acceptance criteria; dirty-resume fetch, ancestry and merge-tree refusal verified by source and tests; #3641/#3643 reproduction and sccache unverified (Refs only). Type protocol: touches a test file - met. CI at head still in progress, not used as evidence.. No triage reason was given.'
   created_at: 2026-11-09T11:10:21.539982740Z
   modified_at: 2026-11-09T11:10:21.539982740Z
+- id: 01a1c000-9f99-7530-8101-940884d7c254
+  author: joe
+  content: |-
+    REVIEW FINDINGS TO ADDRESS (PR #3715):
+    Verdict: CHANGES REQUESTED
+    Reviewed commit: b3a15003b9de
+    Recorded: 2026-11-09T10:43:56.706351569+00:00
+    Findings:
+    1. BLOCKING (CI gate): aida-cli-lib/src/session_start.rs:1643-1664 adds write_all and persist_noclobber sinks in impl Drop for SessionStartCleanup, and scripts/check-store-writers.py seeds on both, but the PR does not change scripts/store-writers.toml, which has no row for that item. CI run 42597070681 at cab8e94f709 failed exactly on 'Store writer inventory ratchet'; at 8ef4fa4d823 that step was skipped only because an earlier gate failed, so the ratchet is still unsatisfied. The new execute(...) status call in prepare_rework_merge (seat_clone.rs:2868) likely also needs a row: only prepare_rework_merge_with and finish_rework_merge are inventoried. Fix: run python3 scripts/check-store-writers.py --regenerate after merging main, review the added rows, commit them.
+    2. MINOR (blocking, unsafe guidance): seat_clone.rs:2867-2869 sets pending_resume from resume plus a non-empty status, and the map_err at :2906-2937 attaches the preserve-and-commit recovery to every error, including the two preflight refusals in prepare_rework_merge_with at :3065-3074 that fire before admission. Scenario: a dirty --resume on a linked worktree with an unfinished merge (MERGE_HEAD present, UU paths in status) refuses with 'already has an unfinished merge' but tells the operator to run git add -A and git commit, which marks conflicted paths resolved and records the merge with conflict markers. The same text on the 'not on the PR head branch' refusal commits pending work onto the wrong branch and merges origin/BRANCH into it. Before this PR both were plain refusals. Fix: emit commit-first recovery only for refusals after the preflight guards (fetch, behind-PR-head, merge-tree), with specific guidance for an unfinished merge or wrong branch; add a test through prepare_rework_merge for an unfinished-merge dirty resume asserting no add -A or commit-pending guidance.
+    3. MINOR (test gap): no test proves the admitted path in a real seat clone. bug_2504_dirty_resume_checks_fetched_heads_without_touching_edits exercises the clean merge-tree admission only through prepare_rework_merge_with on a plain repository, and bug_2504_recovery_matches_recorded_tree_kind (bug_home_038_seat_publish_tests.rs:3101-3104) only asserts refusal containing 'edits preserved', a phrase that also appears when merge-tree fails for sandbox reasons. A sandbox regression that breaks merge-tree in clones would over-refuse every contained dirty resume and stay green. Fix: add a case driving prepare_rework_merge(resume=true) on a recorded clone with a non-conflicting main advance and asserting Ok with pending files intact.
+    4. COSMETIC: seat_clone.rs:2931 formats '... before recovery. {recovery}. If a probe failed ...', so with an empty recovery (every clean or fresh refusal) the message reads 'before recovery. . If a probe failed'. Fix: include the separator only when recovery is non-empty.
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
+  created_at: 2026-11-09T11:10:28.761735446Z
+  modified_at: 2026-11-09T11:10:28.761735446Z
 history:
 - id: 01a1beaa-5bee-7821-b878-3b983c03f8ae
   author: joe
