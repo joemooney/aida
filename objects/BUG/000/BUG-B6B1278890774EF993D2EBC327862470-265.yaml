@@ -8,7 +8,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-08T19:02:09.839960883Z
-modified_at: 2026-11-08T20:39:22.885154044Z
+modified_at: 2026-11-09T01:50:43.010537625Z
 req_type: Bug
 relationships:
 - rel_type:
@@ -112,6 +112,12 @@ comments:
   created_at: 2026-11-08T20:26:03.595478261Z
   modified_at: 2026-11-08T20:26:03.595478261Z
   session_id: 01a1bcd53ee4
+- id: 01a1be00-2542-7fe2-ae76-d4465cacd80c
+  author: joe
+  content: 'Advisor ruling 2026-11-08 on the sketch in PR-3698: approved, single ''waiting'' verdict word with the fresh-review resume rule, not separate waiting-ci and host-action-required verdicts. Reason: both cases resume the same way, by a fresh review at the head, so two words add lifecycle states with no behaviour difference. Keep the launcher''s punt publication veto. Implement on the PR-3698 branch per the sketch''s validation section; the docs-only head must not merge alone. Do not add a resume service or prose classifier.'
+  created_at: 2026-11-09T01:50:43.010537625Z
+  modified_at: 2026-11-09T01:50:43.010537625Z
+  session_id: 20abb7c3-8f9b-4a5e-b326-404921f3b450
 history:
 - id: 01a1bcc0-f95b-7082-8ca7-a86211b6ddd8
   author: joe
