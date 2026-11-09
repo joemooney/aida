@@ -8,10 +8,17 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-09T01:58:54.698246911Z
-modified_at: 2026-11-09T01:58:54.698246911Z
+modified_at: 2026-11-09T02:03:21.073821769Z
 req_type: Story
 tags:
 - area:orchestration
+comments:
+- id: 01a1be0b-b671-7de0-a687-1b4ff6326c0a
+  author: joe
+  content: 'Advisor brief 2026-11-08 (operator approved launching now): smallest useful slice first, then ship. Build a tested host-side command that, during a merge, ports a PR''s hunks from a split source file into its destination modules: exact context match, unique destination only, refuse and report anything else, never guess. Add regeneration of scripts/store-writers.toml through its existing --regenerate path. Reference behaviour: 7 PRs today were ported this way, and failure cases to cover are a hunk with no unique destination and a moved symbol needing a re-export. Keep clear of queue_cmd/ and doctor_cmd.rs, where open PRs are landing. LIGHT gate: one targeted cargo test plus make check-ci-fast.'
+  created_at: 2026-11-09T02:03:21.073821769Z
+  modified_at: 2026-11-09T02:03:21.073821769Z
+  session_id: 20abb7c3-8f9b-4a5e-b326-404921f3b450
 filed_at:
   code_sha: a7a14984cec5533987dfeccb70d1f91aaebbf22a
   branch: main
