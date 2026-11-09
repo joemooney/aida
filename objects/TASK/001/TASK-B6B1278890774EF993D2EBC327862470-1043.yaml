@@ -66,7 +66,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-09T08:46:26.872629040Z
-modified_at: 2026-11-09T10:55:33.727076619Z
+modified_at: 2026-11-09T11:01:32.060030329Z
 req_type: Task
 relationships:
 - rel_type: Supersedes
@@ -152,6 +152,30 @@ comments:
     Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
   created_at: 2026-11-09T09:40:00.924651400Z
   modified_at: 2026-11-09T09:40:00.924651400Z
+- id: 01a1bff8-6f1c-74a0-8708-00272d012d45
+  author: dirtlab
+  content: |
+    TASK-3749 rework complete; native-seat edits remain uncommitted for host publication.
+
+    Addressed all four review findings:
+    1. Sweep selection uses canonical is_terminal_status and separately excludes Done. Completed/Superseded/Done rollover and retained de-duplication are tested. InProgress sweeps deliberately remain open to appended sections until closed.
+    2. AutoCompleteEvent::is_failure treats no-change as successful. Regression checks summarize totals and an empty failure histogram, protecting downstream metrics/usage failure consumers.
+    3. Findings --pr matches any contributing PR tag. Origin rendering lists all distinct origins deterministically. Multi-PR regression checks both matching PRs and an unrelated PR.
+    4. Missing/empty reviewed SHA omits the line; regression added.
+
+    Changed files:
+    aida-cli-lib/src/findings_gate.rs
+    aida-cli-lib/src/findings.rs
+    aida-cli-lib/src/auto_complete_telemetry.rs
+    aida-cli-lib/src/tests/story_1421_carry_forward_findings_tests.rs
+
+    Validation: lane job j20261109T105631715-2-0 (cargo test --profile agent -p aida-cli-lib --lib -- task_3749): 6 passed, 0 failed. Lane job j20261109T105713757-2-0 (cargo test --profile agent -p aida-cli-lib --lib -- findings::tests auto_complete_telemetry::tests story_1421_carry_forward_findings_tests): 60 passed, 0 failed. rustfmt --check on changed Rust files and git diff --check passed. untested=false.
+
+    No implementation blockers. Fixed codegraph executable unavailable; doctor confirms missing, so used rg/source inspection. No commit/push/PR/queue completion performed; host launcher owns publication and queue completion.
+  created_at: 2026-11-09T11:01:32.060030329Z
+  modified_at: 2026-11-09T11:01:32.060030329Z
+  session_id: 01a1bff29ec5
+  harness_version: codex-cli 0.167.0
 history:
 - id: 01a1bf7c-f894-7192-b380-ef25f53f2fb5
   author: joe
