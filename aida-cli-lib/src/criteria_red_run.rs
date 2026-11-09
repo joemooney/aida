@@ -942,7 +942,7 @@ mod tests {
     // trace:STORY-1386 | ai:claude
     #[test]
     fn queue_work_calls_the_hook_after_worktree_creation_before_launch() {
-        let src = include_str!("queue_cmd.rs");
+        let src = include_str!("queue_cmd/work.rs");
         let start = src.find("pub(crate) fn handle_queue_work(").unwrap();
         let body = &src[start..];
         let created = body

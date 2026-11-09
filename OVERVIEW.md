@@ -1,3 +1,10 @@
+Codegraph lane queries use a host proxy against a disposable SQLite backup;
+the primary index stays outside seat writable roots. The proxy requires host
+deployment, delivery of the reviewed absolute client path, and socket admission.
+Contained-seat acceptance remains outstanding. See the
+[deployment and acceptance guide](scripts/codegraph/README.md).
+<!-- trace:STORY-2630 | ai:codex -->
+
 `cmdkit` holds the command-framework types and shared output/stakeholder vocabulary;
 existing CLI, registry and stakeholder paths re-export them.
 <!-- trace:TASK-3425 | ai:codex -->
@@ -1611,8 +1618,9 @@ conflicting per-tool posture defaults and refuses posture passthrough flags;
 an explicit operator launch-posture override retains its existing precedence.
 A native child does not receive `AIDA_CONTAINED=1` or AIDA containment credit.
 Native `aida ship -m '<complete subject> (Refs ID)'` records a lease/spec-bound
-publication declaration for the host after exit. A fresh launch token prevents
-reuse across attempts and survives supervised rotations within an attempt;
+publication declaration for the host after exit. Completing lanes use `(ID)`.
+A fresh launch token prevents reuse across attempts and
+survives supervised rotations within an attempt;
 lease release removes the host binding. The declaration stays inside the seat's
 existing write boundary. The host refuses invalid, epic, multi-spec or mismatched
 lease scopes before commit or forge probes. Existing Refs PRs or inconclusive
