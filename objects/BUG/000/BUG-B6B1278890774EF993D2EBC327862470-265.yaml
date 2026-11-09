@@ -8,7 +8,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-08T19:02:09.839960883Z
-modified_at: 2026-11-09T07:00:25.103864422Z
+modified_at: 2026-11-09T07:34:12.829090256Z
 req_type: Bug
 relationships:
 - rel_type:
@@ -220,6 +220,20 @@ comments:
   modified_at: 2026-11-09T06:54:19.160941517Z
   session_id: 01a1beff-fc3b-78e2-93e2-9b0c283b0339
   harness_version: 2.1.319 (Claude Code)
+- id: 01a1bf3a-a05d-73b1-9b5a-a93714cae159
+  author: dirtlab
+  content: |
+    Native implementer handoff for the latest PR-3698 findings: newer recorded WAITING now supersedes older substantive refusal across spec/change keys; tied or unordered mixed evidence retains substantive work, with non-waiting tie policy preserved. A spec-keyed wait no longer hides multiple bound substantive refusals. Added timestamp-order and spec-wait/bound-refusal regressions. Removed the nested cwd-restoration impl that reset the source scanner's isolation guard; the isolated test restores cwd directly. Updated review command/skill synopses and standalone summary vocabulary to include waiting and fresh-review resumption.
+
+    Changed files: aida-cli-lib/src/queue_cmd/work.rs; aida-cli-lib/src/gate/tests/bug_2500_waiting_tests.rs; aida-cli-lib/src/reviewer_summary.rs; aida-core/templates/commands/aida-review.md; aida-core/templates/skills/aida-review.md.
+
+    Validation: lane job j20261109T070455557-2-0 executed cargo test --profile agent -p aida-cli-lib --lib -- bug_2500: 22 passed, 0 failed. Lane job j20261109T070330215-2-0 executed the exact no_unisolated_set_current_dir_in_test_code test: 1 passed, 0 failed. make check-ci-fast passed all 46 gates (umask 0022); its Cargo checks were routed through the lane runner on profile agent, jobs j20261109T070317837-127-0 and j20261109T071442409-450-0. git diff --check passed. untested=false.
+
+    Host follow-up: make sync-templates linked the review templates but failed at the portable .agents skill-pack sync with Read-only file system, as .agents is read-only in this native seat. Complete that sync on the host. Codegraph client unavailable; doctor reported missing, so navigation used rg. No design fork, automatic resume service or prose classifier added; launcher punt/hold publication veto unchanged. Edits remain uncommitted; no commit, push, PR creation, review recording, merge or queue completion performed.
+  created_at: 2026-11-09T07:34:12.829090256Z
+  modified_at: 2026-11-09T07:34:12.829090256Z
+  session_id: 01a1bf1ba948
+  harness_version: codex-cli 0.167.0
 history:
 - id: 01a1bcc0-f95b-7082-8ca7-a86211b6ddd8
   author: joe
