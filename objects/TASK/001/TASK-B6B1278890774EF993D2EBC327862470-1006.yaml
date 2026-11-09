@@ -8,7 +8,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-08T18:01:54.649358829Z
-modified_at: 2026-11-09T02:29:02.676627787Z
+modified_at: 2026-11-09T02:29:05.272530400Z
 req_type: Task
 relationships:
 - rel_type: Child
@@ -75,6 +75,23 @@ comments:
   content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: Round-2 fixes for the resume path hold, but the fresh path can still give false shipped credit after a transient lookup and can report no-change on a failed spec search; CI still pending at head.. No triage reason was given.'
   created_at: 2026-11-09T02:29:02.676626205Z
   modified_at: 2026-11-09T02:29:02.676626205Z
+  session_id: 20abb7c3-8f9b-4a5e-b326-404921f3b450
+- id: 01a1be23-45f6-7d91-88fb-91faee6104fa
+  author: joe
+  content: |-
+    REVIEW FINDINGS TO ADDRESS (TASK-3608):
+    Verdict: CHANGES REQUESTED
+    Reviewed commit: 9e7f9f64c79e
+    Recorded: 2026-11-09T02:09:24.110201531+00:00
+    Findings:
+    1. 1. False shipped credit on retry (blocking). phase_driver_trait.rs:1003 only uses the native_no_change observation once; every Retry re-probes through detect_phase1_pr(&branch), which passes native_no_change=false. So a host-attested no-change seat whose first lookup was transient, on a branch that is on origin with a previously merged PR, resolves AlreadyMerged and returns ImplementerOutcome::AlreadyMerged, reaching finish_success (auto_complete.rs:4215), which credits a ship. TASK-3608 requires no false shipped credit, and the comment at phase_driver_trait.rs:883 says never credit an older merge. Without a merged PR the same retry path ends Inconclusive instead of NoChange, and a Retry first observation also runs preflight, which the block is meant to skip. Fix: carry native_no_change through the retry loop and map AlreadyMerged to NoChange there. Add a test: first lookup transient, then merged PR on origin, asserting no_change and no shipped_spec_id.
+    2. 2. Fresh path reports no-change on a failed spec search (blocking). phase_driver.rs:2862 guards only PrLookup::NoOpenPr, but the fallthrough arm at :2878 returns Phase1PrResolve::NoPr whenever the branch is absent from origin, including when the spec search returned GhFailed, GhUnreachable or GhMissing. With a receipt, phase_driver_trait.rs:889-894 turns that into NoChange and exit 0, so a transient search failure can hide an existing PR on a swapped branch (the BUG-223 case the spec search exists for). This is round-1 finding 4 on the fresh path and contradicts docs/cli/04-git-lifecycle.md:187 (a failed or unreachable PR lookup cannot confirm no-change). Fix: in native mode a non-NoOpenPr spec lookup must Retry or end Inconclusive. Add a test: empty branch lookup, unreachable spec search, branch absent from origin.
+    3. 3. Teardown failure shelves a successful no-change (minor). phase_driver_trait.rs:894,1124,3495 use self.end_implementer_session()?, so a failing aida session end returns PhaseFailure::new (FailureKind::Failed, shelvable) after a confirmed no-change, parking the spec in NeedsAttention, which TASK-3608 forbids. The AlreadyMerged path (phase_driver_trait.rs:1005-1030, BUG-711) treats this teardown as best-effort with a warning; do the same here, and clear implementer_lease only if the session actually ended.
+    4. 4. Resume lookup changes non-native classification (minor). The rewritten lookup at phase_driver_trait.rs:3458-3491 applies to every resume, not only receipts. A CliFailed spec lookup was previously a PhaseFailure and is now Inconclusive (:3486), which pauses the drain instead of shelving and differs from the fresh path, where gh errors are Fail. An empty spec lookup with no recorded branch was previously FailureKind::NoPr and is now Inconclusive (:3464). Keep the Inconclusive mapping for receipt-bearing resumes only, or state the wider change on the spec and align the fresh path.
+    5. 5. Cosmetic. scripts/store-writers.toml:1304-1305 and :1935-1938 repeat the same trace comment 2 and 4 times. The new NoChange arms at drain_batch.rs:2088,2428 and drain_next_n.rs:1262 were inserted between the BUG-250 comment and its Held arm, so that comment now describes the wrong arm, and they carry no trace comment.
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
+  created_at: 2026-11-09T02:29:05.142077152Z
+  modified_at: 2026-11-09T02:29:05.142077152Z
   session_id: 20abb7c3-8f9b-4a5e-b326-404921f3b450
 history:
 - id: 01a1bc53-0ec9-7670-9674-41fd5fd9d861
