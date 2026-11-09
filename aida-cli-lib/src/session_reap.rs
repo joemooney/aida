@@ -27,9 +27,9 @@
 //! * **No force-kill.** A session whose process is still ALIVE is left entirely
 //!   untouched — its worktree is its cwd, and closing a live interactive agent is
 //!   the operator's job, never AIDA's. Detect-and-leave, never terminate.
-//! * **The worktree-GC safety checks are reused verbatim.** The final gate is the
-//!   very same `classify_agent_worktree` predicate `aida worktree gc` runs, so a
-//!   dirty worktree or one carrying unique unmerged commits is never removed.
+//! * **Doctor's merged-worktree safety checks are reused verbatim.** The final gate is the
+//!   `classify_agent_worktree` predicate used by doctor's merged-agent-worktrees
+//!   healer, so dirty worktrees and unique unmerged commits are never removed.
 //!
 //! Anything that is not provably reapable is SKIPPED with a reason — the pass
 //! defaults to preserve.
@@ -103,7 +103,7 @@ pub(crate) struct ReapFacts {
     // trace:BUG-1657 | ai:claude
     pub branch_checked_out_elsewhere: Option<String>,
     /// The worktree-GC safety facts, fed to the very same classifier
-    /// `aida worktree gc` uses for its dirty / merged / unique-commit gates.
+    /// doctor's merged-agent-worktrees healer uses for dirty / merged / unique-commit gates.
     pub worktree: AgentWorktreeFacts,
 }
 
