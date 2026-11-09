@@ -61,6 +61,16 @@ fn adopt(owns: &str, branch: &str, path: &Path) -> anyhow::Result<()> {
 
 /// [`adopt`], from a contained (`contained`) or uncontained launch.
 fn adopt_as(owns: &str, branch: &str, path: &Path, contained: bool) -> anyhow::Result<()> {
+    adopt_receipt(owns, branch, path, contained, false).map(|mut receipt| receipt.disarm())
+}
+
+fn adopt_receipt(
+    owns: &str,
+    branch: &str,
+    path: &Path,
+    contained: bool,
+    rollback: bool,
+) -> anyhow::Result<crate::session_start::SessionStartReceipt> {
     crate::session_start::session_start_with_receipt(
         owns,
         Some(branch),
@@ -81,11 +91,10 @@ fn adopt_as(owns: &str, branch: &str, path: &Path, contained: bool) -> anyhow::R
         /* self_claim */ true,
         /* review_coexistence */ None,
         /* contained_seat */ contained,
-        /* rollback_failed_setup */ false,
+        /* rollback_failed_setup */ rollback,
         crate::session_start::PathReentry::AdoptOrphan,
         None,
     )
-    .map(|mut receipt| receipt.disarm())
 }
 
 fn write_lease(main: &Path, lease: &crate::SessionLease) {
@@ -614,6 +623,15 @@ pub(super) fn queued_scope(
 ) -> (crate::Storage, impl Fn(aida_core::RequirementStatus)) {
     let store_root = main.join(".aida-store");
     let backend = crate::test_env::home_fixture_backend(&store_root).unwrap();
+    // Match allocation authority's file contract under the lane's shared-write umask.
+    // trace:BUG-2504 | ai:codex
+    use std::os::unix::fs::PermissionsExt;
+    let common = aida_core::allocation_authority::common_dir(&store_root).unwrap();
+    std::fs::set_permissions(
+        common.join(aida_core::allocation_authority::CONFIG_FILE),
+        std::fs::Permissions::from_mode(0o600),
+    )
+    .unwrap();
     let storage = crate::Storage::new(&store_root);
     std::fs::create_dir_all(store_root.join("registry")).unwrap();
     std::fs::write(
@@ -1141,5 +1159,57 @@ fn queue_recover_parks_wip_with_live_and_unknown_ownership_without_reclaim() {
             lease_before
         );
         assert_eq!(std::fs::read(&journal).ok(), journal_before);
+    }
+}
+
+// trace:BUG-2504 | ai:codex
+#[test]
+fn bug_2504_refused_adopted_dirty_launch_is_retryable() {
+    for orphan_still_present in [false, true] {
+        let fx = fixture();
+        clone_config(&fx.main, &fx.root);
+        let _ambient =
+            crate::test_env::AmbientGuard::hermetic_with_seat(&fx.main, "implementer", &[]);
+        let orphan = orphaned_clone(&fx.main, "TASK-2504");
+        let head = git_ok(&orphan.worktree_path, &["rev-parse", "HEAD"]);
+        let receipt = adopt_receipt(
+            "TASK-2504",
+            &orphan.branch,
+            &orphan.worktree_path,
+            true,
+            true,
+        )
+        .unwrap();
+        assert!(!crate::lease_path(&fx.main, &orphan.id).exists());
+        // Simulate adoption's warned removal failure: rollback must recognize the
+        // original record and still remove its successor and release its claim.
+        if orphan_still_present {
+            std::fs::write(
+                crate::lease_path(&fx.main, &orphan.id),
+                format!(
+                    "# older writer formatting\n{}",
+                    toml::to_string(&orphan).unwrap()
+                ),
+            )
+            .unwrap();
+        }
+        let (result, rolled_back) = crate::queue_cmd::run_pickup_launch(&fx.main, receipt, |_| {
+            anyhow::bail!("dirty resume merge admission refused before vendor launch")
+        });
+        assert!(result
+            .unwrap_err()
+            .to_string()
+            .contains("admission refused"));
+        assert!(rolled_back);
+        let remaining = crate::list_leases(&fx.main);
+        assert_eq!(remaining.len(), 1, "successor lease must be removed");
+        assert_eq!(remaining[0].id, orphan.id);
+        assert_eq!(
+            crate::leases::adoptable_orphan_lease(&fx.main, "TASK-2504").map(|l| l.id),
+            Some(orphan.id.clone())
+        );
+        assert_work_intact(&orphan.worktree_path, &orphan.branch, &head);
+        adopt("TASK-2504", &orphan.branch, &orphan.worktree_path).unwrap();
+        assert_work_intact(&orphan.worktree_path, &orphan.branch, &head);
     }
 }
