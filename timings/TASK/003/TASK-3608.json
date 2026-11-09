@@ -1,0 +1,91 @@
+{
+  "schema_version": 1,
+  "spec": "TASK-3608",
+  "publishes": [
+    {
+      "at": "2026-11-09T08:42:31.102532928Z",
+      "closed_by": "auto-bump"
+    }
+  ],
+  "events": [
+    {
+      "ts": "2026-11-08T22:42:09.560396785Z",
+      "spec": "TASK-3608",
+      "seat": "advisor",
+      "kind": {
+        "event": "SpecRequeued",
+        "via": "queue-rework",
+        "actor": "joe",
+        "from": "Needs Attention",
+        "to": "Approved"
+      }
+    },
+    {
+      "ts": "2026-11-09T02:29:03.633540537Z",
+      "spec": "TASK-3608",
+      "seat": "advisor",
+      "kind": {
+        "event": "SpecRequeued",
+        "via": "queue-rework",
+        "actor": "joe",
+        "from": "Needs Attention",
+        "to": "Approved"
+      }
+    },
+    {
+      "ts": "2026-11-09T03:08:34.304800546Z",
+      "spec": "TASK-3608",
+      "seat": "advisor",
+      "kind": {
+        "event": "SpecRequeued",
+        "via": "queue-rework",
+        "actor": "joe",
+        "from": "Needs Attention",
+        "to": "Approved"
+      }
+    },
+    {
+      "ts": "2026-11-09T03:48:37.625437905Z",
+      "spec": "TASK-3608",
+      "seat": "advisor",
+      "kind": {
+        "event": "SpecRequeued",
+        "via": "queue-rework",
+        "actor": "joe",
+        "from": "Needs Attention",
+        "to": "Approved"
+      }
+    },
+    {
+      "ts": "2026-11-09T04:30:50.148777742Z",
+      "spec": "TASK-3608",
+      "seat": "advisor",
+      "kind": {
+        "event": "SpecRequeued",
+        "via": "queue-rework",
+        "actor": "joe",
+        "from": "Needs Attention",
+        "to": "Approved"
+      }
+    },
+    {
+      "ts": "2026-11-09T08:41:48.852713516Z",
+      "spec": "TASK-3608",
+      "seat": "advisor",
+      "kind": {
+        "event": "PrMerged",
+        "pr": 3703
+      }
+    },
+    {
+      "ts": "2026-11-09T08:42:30.949625200Z",
+      "spec": "TASK-3608",
+      "kind": {
+        "event": "SpecCompleted",
+        "commit": "e60e97d0035e92f14a0b60c05e85859019365939",
+        "pr": 3703,
+        "closed_by": "auto-bump"
+      }
+    }
+  ]
+}
