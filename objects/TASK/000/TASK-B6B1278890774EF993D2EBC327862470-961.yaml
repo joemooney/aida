@@ -8,7 +8,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-07T23:40:15.306412624Z
-modified_at: 2026-11-09T07:06:26.990046273Z
+modified_at: 2026-11-09T07:09:17.242234942Z
 req_type: Task
 relationships:
 - rel_type: BlockedBy
@@ -559,6 +559,18 @@ comments:
   modified_at: 2026-11-09T06:35:47.951980225Z
   session_id: 01a1beff-fc3b-78e2-93e2-9b0c283b0339
   harness_version: 2.1.319 (Claude Code)
+- id: 01a1bf23-ce3a-7b30-a25f-b2eb6677286d
+  author: dirtlab
+  content: |
+    Native implementer rework handoff: fixed latest review finding 3. tests/test_git_maintenance_ratchet.py now includes aida-mcp in CRATES; tests/test_ownership_liveness_ratchet.py scans both cli-lib and aida-mcp, retaining existing exclusions. No baseline changes. Both edits remain uncommitted.
+    Validation: Python Git-maintenance ratchet 8 tests passed; ownership-liveness ratchet 2 tests passed. Synthetic temporary aida-mcp/src/probe.rs inputs independently confirmed both scanners discover new forbidden sites in the extracted crate. git diff --check passed. Prescribed codegraph executable absent; aida doctor check codegraph confirms missing tool; source search used.
+    Rust validation pending: launcher job j20261109T070743211-2-0 runs cargo test --profile agent -p aida-mcp --lib, still compiling dependencies at handoff. No executed Rust test result claimed; untested=true for this Cargo run. Continue with aida lane job wait j20261109T070743211-2-0.
+    Recorded native publication declaration: [AI:codex] test(mcp): extend source ratchets to extracted crate (Refs TASK-3429). No commit, push, PR mutation, queue completion, pr ship or review record performed.
+    Host must update PR-3687 body: extracted MCP transport/store handler into aida-mcp with binary injection; descriptors and claim naming remain in cli-lib. Preserve the advisor-corrected 58-tool surface. This ships as Refs and does not complete TASK-3429. AC5 dell1 clean-build cargo --timings evidence is still owed by the advisor after merge. Require green CI at the final published head, independent approval and applicable hold clearance. CI at inspected head 91e6c53598 was queued; no green result claimed. Existing holds remain effective. No CI watcher or notification wait remains in this turn.
+  created_at: 2026-11-09T07:09:17.242234942Z
+  modified_at: 2026-11-09T07:09:17.242234942Z
+  session_id: 01a1bf212848
+  harness_version: codex-cli 0.167.0
 history:
 - id: 01a1b862-7fc0-7e63-899e-5179ac0131ed
   author: joe
