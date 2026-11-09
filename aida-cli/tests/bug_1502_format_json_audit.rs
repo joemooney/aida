@@ -108,7 +108,9 @@ fn fixture() -> (
     );
     assert!(
         init.status.success(),
-        "{}",
+        "fixture init status={}\nstdout:\n{}\nstderr:\n{}",
+        init.status,
+        String::from_utf8_lossy(&init.stdout),
         String::from_utf8_lossy(&init.stderr)
     );
     std::fs::write(
@@ -461,15 +463,23 @@ fn unsupported_global_json_pin_errors_before_human_fallback() {
     );
 }
 
+// Exercise the exhaustive inventory independently of allocation, intake and
+// other stateful probes, so setup refusals cannot hide catalog drift.
+// trace:STORY-2640 | ai:codex
 #[test]
-fn checked_in_audit_is_exhaustive_and_every_honoured_probe_parses() {
-    // trace:TASK-1959 | ai:claude
-    let _checkout = support::CheckoutGuard::new();
-    let (_tmp, repo, home, spec) = fixture();
-    let catalog = json(
-        &aida(&repo, &home, &["help", "commands", "--json", "--hidden"]),
-        "command catalog",
-    );
+fn checked_in_audit_catalog_matches_without_store_setup() {
+    let tmp = tempfile::tempdir().unwrap();
+    let output = Command::new(env!("CARGO_BIN_EXE_aida"))
+        .args(["help", "commands", "--json", "--hidden"])
+        .env_clear()
+        .env("HOME", tmp.path())
+        .current_dir(tmp.path())
+        .output()
+        .unwrap();
+    assert_audit_catalog(&json(&output, "command catalog without store"));
+}
+
+fn assert_audit_catalog(catalog: &serde_json::Value) -> &'static str {
     let catalog_paths: BTreeSet<String> = catalog
         .as_array()
         .unwrap()
@@ -491,6 +501,20 @@ fn checked_in_audit_is_exhaustive_and_every_honoured_probe_parses() {
         .filter_map(|line| line.split_once('`').map(|(path, _)| path.to_string()))
         .collect();
     assert_eq!(catalog_paths, audit_paths, "regenerate the BUG-1502 audit");
+
+    audit
+}
+
+#[test]
+fn checked_in_audit_is_exhaustive_and_every_honoured_probe_parses() {
+    // trace:TASK-1959 | ai:claude
+    let _checkout = support::CheckoutGuard::new();
+    let (_tmp, repo, home, spec) = fixture();
+    let catalog = json(
+        &aida(&repo, &home, &["help", "commands", "--json", "--hidden"]),
+        "command catalog",
+    );
+    let audit = assert_audit_catalog(&catalog);
 
     let audit_outcomes: BTreeMap<String, String> = audit
         .lines()

@@ -6734,7 +6734,7 @@ pub(crate) fn run_vendor_headless_to_exit(
     // vendor), so the runner runs here. trace:BUG-2383 | ai:claude
     let main_root = crate::main_worktree_root_from(&headless_worktree_root());
     // trace:STORY-2640 | ai:codex
-    let _fast_gate = implementer_job_lane(seat, lease_id, lane_tree)
+    let mut _fast_gate = implementer_job_lane(seat, lease_id, lane_tree)
         .map(|(_, (_, branch))| {
             crate::lane_fast_gate::reserve(&main_root, branch)
                 .map(crate::lane_fast_gate::Reservation::with_result_line)
@@ -6815,26 +6815,33 @@ pub(crate) fn run_vendor_headless_to_exit(
                             Ok(status.success())
                         },
                     )?);
-                } else if let Some((pr, _)) =
-                    crate::standalone_implementer::lookup_pr(&main_root, branch)
-                {
-                    let queued = crate::lane_fast_gate::pushed(
-                        &main_root,
-                        tree,
-                        &scope,
-                        lease,
-                        branch,
-                        pr,
-                        vendor.as_str(),
-                    )?;
-                    eprintln!(
-                        "fast_gate={}",
-                        crate::lane_fast_gate::marker(&main_root, branch)
-                    );
-                    anyhow::ensure!(
-                        !queued,
-                        "fast gate failed; one rework round queued before review"
-                    );
+                } else {
+                    let actual_branch = _fast_gate
+                        .as_mut()
+                        .context("fast gate reservation missing")?
+                        .reconcile_branch(tree)?;
+                    let branch = actual_branch.as_str();
+                    if let Some((pr, _)) =
+                        crate::standalone_implementer::lookup_pr(&main_root, branch)
+                    {
+                        let queued = crate::lane_fast_gate::pushed(
+                            &main_root,
+                            tree,
+                            &scope,
+                            lease,
+                            branch,
+                            pr,
+                            vendor.as_str(),
+                        )?;
+                        eprintln!(
+                            "fast_gate={}",
+                            crate::lane_fast_gate::marker(&main_root, branch)
+                        );
+                        anyhow::ensure!(
+                            !queued,
+                            "fast gate failed; one rework round queued before review"
+                        );
+                    }
                 }
             }
             Ok::<_, anyhow::Error>(status)

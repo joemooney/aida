@@ -1021,7 +1021,7 @@ pub(crate) fn run(launch: Launch<'_>) -> Result<()> {
     // the lane reports untested=true. An unset os_wrap defaults on for this
     // lane's runner alone when bubblewrap works (BUG-2434).
     // trace:BUG-2434 | ai:claude
-    let _fast_gate = crate::lane_fast_gate::reserve(&main_root, launch.branch)?;
+    let mut _fast_gate = crate::lane_fast_gate::reserve(&main_root, launch.branch)?;
     let lane_jobs = crate::lane_job::offer(&main_root, &worktree, launch.lease_id);
     let prompt = format!(
         "{}{}{}",
@@ -1188,6 +1188,23 @@ pub(crate) fn run(launch: Launch<'_>) -> Result<()> {
                 Ok(result.success())
             },
         )?;
+        finished.verdict = classify(
+            crate::punt::read_signal(&punt_signal),
+            crate::punt::read_hold_signal(&hold_signal),
+            || lookup_pr(launch.project_root, launch.branch),
+        );
+    }
+    // trace:STORY-2640 | ai:codex
+    let actual_branch = if !host_published {
+        _fast_gate.reconcile_branch(&worktree)?
+    } else {
+        launch.branch.to_owned()
+    };
+    let launch = Launch {
+        branch: &actual_branch,
+        ..launch
+    };
+    if !host_published {
         finished.verdict = classify(
             crate::punt::read_signal(&punt_signal),
             crate::punt::read_hold_signal(&hold_signal),

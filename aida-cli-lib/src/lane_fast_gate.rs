@@ -98,6 +98,57 @@ pub(crate) struct Reservation {
     reserved_at: Option<chrono::DateTime<chrono::Utc>>,
 }
 impl Reservation {
+    /// Bind post-exit PR discovery and review admission to the actual branch,
+    /// just as the drain reconciles HEAD after an implementer returns.
+    // trace:STORY-2640 | ai:codex
+    pub(crate) fn reconcile_branch(&mut self, tree: &Path) -> Result<String> {
+        let branch = if crate::seat_clone::host_recorded_clone(&self.main, tree).is_some() {
+            match crate::seat_clone::probe(&self.main, tree) {
+                crate::seat_clone::Probe::Known(facts) => {
+                    facts.branch.context("fast gate seat is detached")?
+                }
+                _ => anyhow::bail!("cannot resolve fast gate seat branch"),
+            }
+        } else {
+            aida_core::git_ops::attached_branch(tree)?
+        };
+        self.rebind(&branch)?;
+        Ok(branch)
+    }
+
+    fn rebind(&mut self, branch: &str) -> Result<()> {
+        if branch == self.branch {
+            return Ok(());
+        }
+        // All migrations lock names in the same order. Keep the new branch
+        // reserved before settling the old one, and preserve the retry budget.
+        let (first, second) = if branch < self.branch.as_str() {
+            (branch, self.branch.as_str())
+        } else {
+            (self.branch.as_str(), branch)
+        };
+        let _first = receipt_lock(&self.main, first)?;
+        let _second = receipt_lock(&self.main, second)?;
+        let mut source =
+            read(&self.main, &self.branch)?.context("fast gate reservation disappeared")?;
+        anyhow::ensure!(
+            source.reserved_at == self.reserved_at,
+            "fast gate reservation was replaced"
+        );
+        if let Some(destination) = read(&self.main, branch)? {
+            anyhow::ensure!(
+                !destination.pending,
+                "actual branch already has a pending fast gate"
+            );
+            source.repair_used |= destination.repair_used;
+        }
+        source.branch = branch.into();
+        write(&self.main, &source)?;
+        release_locked(&self.main, &self.branch)?;
+        self.branch = branch.into();
+        Ok(())
+    }
+
     pub(crate) fn with_result_line(mut self) -> Self {
         self.report_result = true;
         self
@@ -859,6 +910,67 @@ pub(crate) fn check_import(main: &Path, branch: &str, tip: &str, automatic: bool
 
 #[cfg(test)]
 mod tests {
+    // trace:STORY-2640 | ai:codex
+    #[test]
+    fn fast_gate_branch_move_transfers_hold_retry_and_result_to_actual_branch() {
+        let tmp = tempfile::tempdir().unwrap();
+        let tree = tmp.path().join("seat");
+        std::fs::create_dir(&tree).unwrap();
+        for args in [
+            vec!["init", "-b", "fresh"],
+            vec![
+                "-c",
+                "user.name=Test",
+                "-c",
+                "user.email=test@example.com",
+                "commit",
+                "--allow-empty",
+                "-m",
+                "initial",
+            ],
+        ] {
+            assert!(crate::test_git::git_command()
+                .arg("-C")
+                .arg(&tree)
+                .args(args)
+                .status()
+                .unwrap()
+                .success());
+        }
+        let mut reservation = reserve(tmp.path(), "recorded").unwrap();
+        let mut receipt = read(tmp.path(), "recorded").unwrap().unwrap();
+        receipt.repair_used = true;
+        write(tmp.path(), &receipt).unwrap();
+        assert_eq!(reservation.reconcile_branch(&tree).unwrap(), "fresh");
+        assert!(!blocks_review(tmp.path(), "recorded").unwrap());
+        assert!(blocks_review(tmp.path(), "fresh").unwrap());
+        assert!(read(tmp.path(), "fresh").unwrap().unwrap().repair_used);
+        // A still-red rework on a fresh branch cannot buy another repair.
+        pushed_round(
+            tmp.path(),
+            "fresh",
+            "head",
+            "fail",
+            || Ok(()),
+            || panic!("second repair"),
+        )
+        .unwrap();
+        assert!(result_line(tmp.path(), "fresh", "implementer:").ends_with("fast_gate=fail"));
+        drop(reservation);
+        assert!(!blocks_review(tmp.path(), "fresh").unwrap());
+    }
+
+    // trace:STORY-2640 | ai:codex
+    #[test]
+    fn fast_gate_branch_move_refuses_to_replace_another_pending_lane() {
+        let tmp = tempfile::tempdir().unwrap();
+        let mut first = reserve(tmp.path(), "first").unwrap();
+        let _other = reserve(tmp.path(), "other").unwrap();
+        assert!(first.rebind("other").is_err());
+        assert!(blocks_review(tmp.path(), "first").unwrap());
+        assert!(blocks_review(tmp.path(), "other").unwrap());
+    }
+
     // trace:STORY-2640 | ai:codex
     #[test]
     fn fast_gate_drop_preserves_new_reservation_and_ordinary_branch_has_no_lock() {

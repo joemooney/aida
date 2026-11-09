@@ -467,6 +467,15 @@ pub(crate) fn run_queue_resume_to_exit(
     let mut status = session::spawn_vendor_headless_resume(
         host_main, target, prompt, log, tree, tee, contained, role,
     )?;
+    // trace:STORY-2640 | ai:codex
+    let branch = if implementing && !host_published {
+        match _fast_gate.as_mut() {
+            Some(reservation) => Some(reservation.reconcile_branch(tree)?),
+            None => branch,
+        }
+    } else {
+        branch
+    };
     if let Some(branch) = branch.as_deref() {
         if host_published {
             publish_native = crate::lane_fast_gate::native(
