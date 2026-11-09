@@ -23,7 +23,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-07T20:45:16.684639200Z
-modified_at: 2026-11-09T09:50:20.499670300Z
+modified_at: 2026-11-09T09:55:11.682634105Z
 req_type: Task
 relationships:
 - rel_type: Child
@@ -447,6 +447,12 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a1bfbb-b314-7af3-89b4-2fbd180fe6ea
+  author: joe
+  timestamp: 2026-11-09T09:55:11.764163692Z
+  session_id: 01a1bfb98ded
+  harness_version: 2.1.319 (Claude Code)
+  changes: []
 filed_at:
   code_sha: e278eeb1d8f95dadba5f6e9d8bfd41d10eac52c3
   branch: main
@@ -456,3 +462,11 @@ filed_at:
   vendor: claude
   session: 01a1b76b-2fe7-7dd2-88d0-356fc8d96d04
   harness_version: 2.1.319 (Claude Code)
+failure_reason:
+  phase: reviewer
+  phase_index: 3
+  kind: verdict:request-changes
+  detail: 'No rework since the last round: a2074c25aba only merges main over ee03a9fcaed, so all 12 prior findings stand, verified at this head. Two new blockers: two existing BUG-2223 tests assert refusal text that no code path can now produce (lib-0 failed at ee03a9fcaed), and queue next builds a fresh store reader per lease against the ruling. Part B routing exists but the legacy fallback does not apply each probe''s own rule. Part A is out of scope for this Refs slice.'
+  recovery_hint: address the review findings, move TASK-3420 back to In Progress, and clear the PR hold only after approval
+  shelved_by: reviewer
+  shelved_at: 2026-11-09T09:55:11.682634105Z
