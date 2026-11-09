@@ -27,7 +27,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-06T16:51:02.535818Z
-modified_at: 2026-11-09T02:21:42.102854664Z
+modified_at: 2026-11-09T02:21:48.304037566Z
 req_type: Story
 tags:
 - area:advisor
@@ -626,6 +626,23 @@ comments:
   content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: Round 7: STORY-2571 AC2 still partial. The round-6 major (retired-controller key invalidation strands pre-mint dispatchers) is unfixed at this head; the only new commit is a merge from main. The full sweep adds three minors: ordinary watcher behavior change before supersede, false blocked-deputy status from a sandboxed caller, and pre-spawn failure handling. Source review only, no Cargo; CI pending at the reviewed head.. It was punted on: ambiguous-spec: The binding user ruling limits this lane to the PR-3640 round-4 controller-restart major and requires parking on a new blocker. That fix is already present: confirmed exit retires the controller grant independently of unresolved attempts, replacement starts after backoff, and crash-mid-Superseding/unpinned-reservation regressions exercise the spawn boundary. The latest spec comment (2026-11-09 01:50 UTC) instead requests the round-6 retired-controller key-invalidation fix. This is a new blocker outside the binding user scope. I do not dispute the finding; removing the invalidation loop requires explicit scope clarification overriding the final-round restriction. No source changes or publication declaration.. No triage reason was given.'
   created_at: 2026-11-09T02:21:42.102849479Z
   modified_at: 2026-11-09T02:21:42.102849479Z
+  session_id: 20abb7c3-8f9b-4a5e-b326-404921f3b450
+- id: 01a1be1c-9b18-74c2-a8a8-ce4179784343
+  author: joe
+  content: |-
+    REVIEW FINDINGS TO ADDRESS (PR #3640):
+    Verdict: CHANGES REQUESTED
+    Reviewed commit: 2e8e517c123b
+    Recorded: 2026-11-09T01:58:13.006088274+00:00
+    Review comment: https://github.com/joemooney/aida/pull/3640#issuecomment-6730424002
+    Findings:
+    1. major: review_watch_service.rs tick_with_launcher L554-556 still invalidates every retired controller key immediately (round-6 finding, unchanged: e0b079e..HEAD adds only a merge from main and does not touch this file). The controller grant binding is [proc:<deputy>, key:<hash>] (seat_authority.rs issue_child_from_with_delegation). A dispatcher runs in its own process group (review_watch.rs L2612) and outlives the controller; after reparenting, presenter_tokens has no proc:<deputy>, and KEYCTL_INVALIDATE removes the key, so presenter_rejection refuses it and validate_child_delegation (review_watch.rs L2230) fails with no valid parent seat grant. A rotation therefore strands any dispatcher that has not minted its reviewer child; the attempt can reconcile to Phase::Exited and is not relaunched until a new head or --release. Fix per the 2026-11-08 advisor comment: remove the invalidation loop and let revoke_by_id invalidate at cleanup, since MAX_RETIRED_GRANTS already bounds retained keys at 4. Also change the test assertion at L910-914 (it currently requires the key to be gone), add a test that a retired key stays Held while an attempt is unresolved, and correct docs/cli/06-roles-sessions.md (Retirement immediately invalidates...).
+    2. minor: review_watch.rs watch_change L2510 adds validate_child_delegation for every watcher and runs it before supersede() and update::follow_up(). The comment at review_watch_service.rs L286 says ordinary invocations keep their existing behavior, and the comment at L2511 says an obsolete head is superseded before anything else. An ordinary watcher whose grant expires or is revoked mid-run now fails every PR before supersede, so reviews of obsolete heads are no longer cancelled and stale-head follow-up stops; before this change those paths ran without authority. Fix: apply the check only in controller scope, or move it to just before admission, and add an ordinary-watcher test that an obsolete head is still superseded after grant loss.
+    3. minor: review_watch_service.rs host_fresh L470-479 treats anything but Verdict::Alive as not fresh, so command() L202 reports blocked-deputy. The deputy identity is recorded in the host PID namespace; from a sandboxed advisor (the caller STORY-2571 targets) proc_identity::judge returns ForeignUnknown(NamespaceMismatch), so aida advisor loops status reports a healthy service as blocked-deputy. Controller liveness at L208 has the same ambiguity. Fix: report an explicit unknown or unverifiable status for ForeignUnknown (keep fail-closed admission in check_controller_locked) and add a foreign-namespace status test.
+    4. minor: review_watch_service.rs tick_with_launcher L579-588 handles failures between mint and spawn incorrectly. If dir.file(service.log) or log.try_clone fails after L581 persists child_grant, the receipt has child_grant set and worker None with no process ever spawned; L568 then blocks restart permanently as blocked-ambiguous-spawn and needs manual receipt recovery, and the grant is not revoked. If the L581 write itself fails, the minted grant and key are leaked and the next tick about 1 s later mints another, with no retry_after set, which can exhaust the per-uid key quota (the round-5 failure class). Fix: open the log before minting or persisting, revoke the grant and set retry_after on every pre-spawn failure, and add a test for each path.
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
+  created_at: 2026-11-09T02:21:48.184026381Z
+  modified_at: 2026-11-09T02:21:48.184026381Z
   session_id: 20abb7c3-8f9b-4a5e-b326-404921f3b450
 history:
 - id: 01a1b1c5-af09-7d01-81e9-eaaac083f223
