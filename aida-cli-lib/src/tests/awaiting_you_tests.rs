@@ -2180,6 +2180,15 @@ type ContributionFixture = (&'static str, fn(&mut AwaitingReport));
 
 fn contribution_fixtures() -> Vec<ContributionFixture> {
     vec![
+        // trace:TASK-3452 | ai:codex
+        ("ci_relay_skipped", |r| {
+            r.ci_relay_skipped.push(crate::ci_relay::SkippedAttempt {
+                sha: "a".repeat(40),
+                attempt: 1,
+                reason: "outside the 32-attempt revalidation window".into(),
+                command: format!("aida intent ci read --attempt 1 --sha {}", "a".repeat(40)),
+            });
+        }),
         ("prs", |r| {
             r.mergeable_prs.push(MergeablePrItem {
                 number: 1,
@@ -2845,4 +2854,33 @@ fn missing_required_check_is_not_awaiting_you() {
 fn unknown_required_check_set_is_not_awaiting_you() {
     let unknown = pr(2009, Some("MERGEABLE"), Some("unknown"), None);
     assert!(!is_awaiting_you(&unknown, false));
+}
+
+// trace:TASK-3452 | ai:codex
+#[test]
+fn ci_relay_skipped_names_exact_recovery_in_every_awaiting_view() {
+    let mut report = AwaitingReport::default();
+    let sha = "a".repeat(40);
+    let command = format!("aida intent ci read --attempt 1 --sha {sha}");
+    let reason = "outside the 32-attempt revalidation window";
+    report
+        .ci_relay_skipped
+        .push(crate::ci_relay::SkippedAttempt {
+            sha: sha.clone(),
+            attempt: 1,
+            reason: reason.into(),
+            command: command.clone(),
+        });
+    let mut human = Vec::new();
+    report.render(true, &mut human).unwrap();
+    for output in [
+        String::from_utf8(human).unwrap(),
+        report.render_agent_view(),
+        report.to_json().to_string(),
+    ] {
+        assert!(output.contains(&sha), "{output}");
+        assert!(output.contains(reason), "{output}");
+        assert!(output.contains(&command), "{output}");
+    }
+    assert_eq!(report.to_json()["ci_relay_skipped"][0]["attempt"], 1);
 }
