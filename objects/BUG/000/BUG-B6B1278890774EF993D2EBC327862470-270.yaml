@@ -8,7 +8,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-09T03:00:45.690194532Z
-modified_at: 2026-11-09T08:16:31.816513205Z
+modified_at: 2026-11-09T08:16:34.558008258Z
 req_type: Bug
 tags:
 - area:cli
@@ -83,6 +83,20 @@ comments:
   content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: Test characterization and head commit are sound, but the PR title still carries the completing ''fix: ... (BUG-2505)'' trailer, so merging would complete an unreproduced bug; the body also omits the non-repro.. It was punted on: missing-context: Findings 1/3 remain unresolved: exact tag and comma forms succeed; alternative argv refusals now have executed characterization coverage, but original six argv and unfiltered diagnostics are missing, so a production fix is unestablished. Refs-only publication declaration recorded. Required make check-ci-fast also failed on read-only sccache target writes; host must resolve/rerun before publication. Leave BUG-2505 open.. No triage reason was given.'
   created_at: 2026-11-09T08:16:31.816511904Z
   modified_at: 2026-11-09T08:16:31.816511904Z
+- id: 01a1bf61-688e-7b62-98fc-f4ee62de8425
+  author: joe
+  content: |-
+    REVIEW FINDINGS TO ADDRESS (BUG-2505):
+    Verdict: CHANGES REQUESTED
+    Reviewed commit: 98a687ca0b95
+    Recorded: 2026-11-09T08:11:48.455546849+00:00
+    Findings:
+    1. BLOCKING - PR title '[AI:codex] fix: aida add can exit without creating a spec ... (BUG-2505)': the head commit was corrected to 'test(cli): ... (Refs BUG-2505)', but the PR title was not. A squash merge takes completion from the title (aida-cli-lib/src/pr_ship.rs:355-374), so this merge would complete BUG-2505 although the report is unreproduced and no production code changed. The advisor ruling (spec comment 4) requires Refs. Fix: retitle to '[AI:codex] test(cli): characterize review-closeout tag refusals (Refs BUG-2505)', which pr_ship.rs:339-346 treats as non-completing. No code change or main merge needed.
+    2. BLOCKING - PR body contains only the seat publication line. It must state that this is characterization only, that the exact tag succeeds, that the six original calls were not reproduced or root-caused because their argv and output are unavailable, and that the space-separated (exit 1, diagnostic on stdout) and repeated --tags (exit 2, clap error on stderr) forms are candidate explanations only. Required by the advisor ruling and by the prior round's finding 2.
+    3. NON-BLOCKING, cosmetic - aida-cli/tests/bug_1770_tag_whitespace.rs:170: test name bug_2505_review_closeout_tag_creates_a_persisted_spec describes only the first loop; the second loop (:205-260) asserts refusals that create nothing. Rename it (e.g. bug_2505_review_closeout_tag_add_outcomes_by_argv_shape) or split it, in the same round if a commit is made anyway.
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
+  created_at: 2026-11-09T08:16:34.446264157Z
+  modified_at: 2026-11-09T08:16:34.446264157Z
 history:
 - id: 01a1beaa-5541-7fd1-9192-5cf255b115f3
   author: joe
