@@ -164,10 +164,18 @@ fn review_completion_matches(lease: &crate::SessionLease, why: &str) -> bool {
         );
     }
     lease.active_pid.is_none_or(|pid| {
-        aida_core::pid_observer::PidObserver::current().can_observe(lease.pid_namespace)
-            && aida_core::liveness::process_provably_dead(
-                pid,
-                lease.active_pid_start_time.as_deref(),
+        pid != 0
+            && aida_core::pid_observer::PidObserver::current().can_observe(lease.pid_namespace)
+            // Completion supplies the lifecycle authority; the shared observer
+            // only vetoes cleanup unless the recorded worker is provably gone.
+            // trace:BUG-2498 | ai:codex
+            && matches!(
+                aida_core::proc_identity::observe_legacy_registry(
+                    pid,
+                    lease.active_pid_start_time.as_deref(),
+                    lease.pid_namespace,
+                ),
+                aida_core::proc_identity::Verdict::Dead(_)
             )
     })
 }
