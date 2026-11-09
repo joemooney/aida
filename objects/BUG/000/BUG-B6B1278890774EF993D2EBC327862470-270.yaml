@@ -3,12 +3,12 @@ spec_id: BUG-b6b1278890774ef993d2ebc327862470-270
 agreed_id: BUG-2505
 title: aida add can exit without creating a spec when given a tag such as from:2026-11-08-review-closeout
 description: 'Observed 2026-11-08: six aida add calls with that tag created nothing, while the same calls with only area:orchestration succeeded. The error text was hidden by the caller''s output filter, so the cause is inferred from the difference. Reproduce with the tag and read the output first.'
-status: InProgress
+status: NeedsAttention
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-09T03:00:45.690194532Z
-modified_at: 2026-11-09T08:18:08.970121561Z
+modified_at: 2026-11-09T08:21:32.363756305Z
 req_type: Bug
 tags:
 - area:cli
@@ -97,6 +97,29 @@ comments:
     Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
   created_at: 2026-11-09T08:16:34.446264157Z
   modified_at: 2026-11-09T08:16:34.446264157Z
+- id: 01a1bf64-cdb1-74a3-8ac3-4c865f1a6d46
+  author: dirtlab
+  content: |
+    [AI:codex] test(cli): characterize review-closeout tag refusals (Refs BUG-2505)
+
+    This is characterization coverage only. No production fix is claimed. The exact tag from:2026-11-08-review-closeout succeeds alone and comma-joined with area:orchestration, creating canonical specs with the expected tags. The original six calls have not been reproduced or root-caused because their full argv and unfiltered output are unavailable. BUG-2505 must remain open.
+
+    Space-separated tags refuse with exit 1 and a whitespace diagnostic on stdout; repeated --tags refuses with exit 2 and a Clap diagnostic on stderr. Both leave the canonical object count unchanged. These argv shapes are candidate explanations only, not established causes of the original report.
+
+    Rename the characterization test to describe both successful and refused argv shapes.
+
+    HOST ACTION REQUIRED: update existing PR #3714 title to the subject above and replace its body with this explanation and validation results. The host publisher preserves descriptive existing titles and does not update existing PR bodies automatically, so the publication declaration alone does not repair these review blockers.
+  created_at: 2026-11-09T08:20:16.945013857Z
+  modified_at: 2026-11-09T08:20:16.945013857Z
+  session_id: 01a1bf62d408
+  harness_version: codex-cli 0.167.0
+- id: 01a1bf65-f44b-7642-bc40-3a1517b881b2
+  author: dirtlab
+  content: 'Final validation: lane job j20261109T081849991-2-0 executed renamed characterization test under cargo test --profile agent: 1 passed, 0 failed. Exact tag and comma combination persist specs; whitespace/repeated flag shapes refuse with expected streams and no writes. rustfmt --check and git diff --check passed. make check-ci-fast terminated at 55-second seat limit in feature-disabled Cargo check (exit 124), so gate remains incomplete. Punt queued to host store, but local punt signal write failed read-only filesystem; host must preserve the publication veto and keep the bug open. Only source edit is test rename; uncommitted. PR metadata still needs explicit host update; full text is in preceding spec comment.'
+  created_at: 2026-11-09T08:21:32.363756305Z
+  modified_at: 2026-11-09T08:21:32.363756305Z
+  session_id: 01a1bf62d408
+  harness_version: codex-cli 0.167.0
 history:
 - id: 01a1beaa-5541-7fd1-9192-5cf255b115f3
   author: joe
@@ -224,6 +247,15 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a1bf65-8b54-70e1-8348-6590d532ad76
+  author: dirtlab
+  timestamp: 2026-11-09T08:21:05.492542542Z
+  session_id: 01a1bf62d408
+  harness_version: codex-cli 0.167.0
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: NeedsAttention
 filed_at:
   code_sha: d73f4e6b86c9f6a85cc01a4aa9893b869252b3a9
   branch: main
@@ -232,3 +264,8 @@ filed_at:
   aida_build_sha: a7a14984cec
   vendor: claude
   session: 20abb7c3-8f9b-4a5e-b326-404921f3b450
+attention_reason:
+  category: missing-context
+  detail: 'Reported six calls remain unreproduced: exact tag succeeds, and original argv/output are unavailable. Latest review blockers 1 and 2 require host edits to existing PR #3714 title and body; this native seat is prohibited from editing PRs. Refs subject recorded and full replacement metadata saved in the spec comment and /tmp/bug-2505-publication-message.txt. Test renamed for finding 3. make check-ci-fast exceeded the bounded 55-second call at its feature-disabled Cargo check; host must rerun the gate before publication. Keep BUG-2505 open.'
+  raised_by: implementer
+  raised_at: 2026-11-09T08:21:05.492514752Z
