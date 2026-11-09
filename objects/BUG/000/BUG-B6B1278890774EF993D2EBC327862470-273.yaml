@@ -8,7 +8,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-09T16:08:47.776461877Z
-modified_at: 2026-11-09T16:15:36.727994559Z
+modified_at: 2026-11-09T16:19:26.766780267Z
 req_type: Bug
 comments:
 - id: 01a1c117-fb17-76d1-9f33-fb9c5cd3a5be
@@ -16,6 +16,13 @@ comments:
   content: Implemented reviewer guidance distinguishing review-dependent merge holds from independent external evidence across launch prompts, fallback role guidance and review templates. Added paired held-PR decision fixtures and prompt regression tests. Approval retains hold/merge authority boundaries; operator-only canaries remain WAITING. Formatting, diff whitespace and template checks pass; lane Rust test job is in progress. Native seat leaves edits uncommitted for host publication.
   created_at: 2026-11-09T16:15:36.727994559Z
   modified_at: 2026-11-09T16:15:36.727994559Z
+  session_id: 01a1c11482dc
+  harness_version: codex-cli 0.167.0
+- id: 01a1c11b-7dae-7c92-b15e-878fc604b7c3
+  author: dirtlab
+  content: 'Validation complete: lane job j20261109T161356082-2-0 executed both bug_2508 tests: 2 passed, 0 failed. rustfmt --check, git diff --check and make check-templates pass. make sync-templates refreshed linked mirrors but portable agent pack sync encountered the native read-only .agents boundary; no tracked mirror changes remain. Tests validate generated reviewer instructions and paired decision fixtures, not an end-to-end model execution.'
+  created_at: 2026-11-09T16:19:26.766780267Z
+  modified_at: 2026-11-09T16:19:26.766780267Z
   session_id: 01a1c11482dc
   harness_version: codex-cli 0.167.0
 history:
