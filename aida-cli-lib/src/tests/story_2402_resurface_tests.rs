@@ -7,6 +7,9 @@ use aida_core::RequirementStatus;
 struct Facts;
 impl ConditionFacts for Facts {
     fn spec_status(&self, id: &str) -> Result<Option<RequirementStatus>, String> {
+        if id == "TASK-999" {
+            return Err("spec store read failed".into());
+        }
         Ok((id == "TASK-1").then_some(RequirementStatus::Completed))
     }
     fn pr_merged(&self, _: u64) -> Option<bool> {
@@ -77,7 +80,7 @@ fn story2402_s4_verdicts_age_and_holds() {
         assert!(evidence.contains("unknown"));
         assert!(migration);
     }
-    assert!(action(&parked("spec:TASK-404=completed"), &Facts, now, 14).is_err());
+    assert!(action(&parked("spec:TASK-999=completed"), &Facts, now, 14).is_err());
 }
 
 #[test]
@@ -91,6 +94,14 @@ fn story2402_s4_changed_rows_are_not_overwritten() {
 
 #[test]
 fn story2402_s4_persistence_dry_run_routing_and_repeat() {
+    // Allocation metadata must stay private under a permissive host umask.
+    // trace:STORY-2402 | ai:codex
+    if crate::test_env::run_path_isolated_test() {
+        return;
+    }
+    unsafe {
+        libc::umask(0o077);
+    }
     let dir = tempfile::tempdir().unwrap();
     let init = crate::test_exec::output(
         crate::test_git::git_command()
@@ -159,7 +170,7 @@ fn story2402_s4_persistence_dry_run_routing_and_repeat() {
     assert!(backend.get_requirement(&hold.id).unwrap().unwrap().deferred);
     // Real evaluation errors fail while independent valid rows still progress.
     let invalid = backend
-        .add_requirement(parked("spec:TASK-404=completed"))
+        .add_requirement(parked("spec:TASK-999=completed"))
         .unwrap();
     let next = backend.add_requirement(parked("date:2026-01-01")).unwrap();
     assert!(sweep(&backend, &[invalid, next.clone()], &Facts, now, false, 14).is_err());
@@ -215,6 +226,14 @@ fn story2402_s4_cli_and_schedule() {
 // Exercise production's raw canonical snapshot against the targeted backend reader.
 #[test]
 fn story2402_s4_canonical_snapshot_and_legacy_only_run() {
+    // Allocation metadata must stay private under a permissive host umask.
+    // trace:STORY-2402 | ai:codex
+    if crate::test_env::run_path_isolated_test() {
+        return;
+    }
+    unsafe {
+        libc::umask(0o077);
+    }
     let dir = tempfile::tempdir().unwrap();
     let init = crate::test_exec::output(
         crate::test_git::git_command()
@@ -278,10 +297,18 @@ fn story2402_s4_canonical_snapshot_and_legacy_only_run() {
 }
 
 // The production snapshot and per-spec writer must preserve concurrent holds,
-// while a real evaluation failure still returns an error and allows progress.
+// while an unknown dependency stays parked and independent rows progress.
 // trace:STORY-2402 | ai:codex
 #[test]
 fn story2402_s4_canonical_stale_snapshot_and_evaluation_error() {
+    // Allocation metadata must stay private under a permissive host umask.
+    // trace:STORY-2402 | ai:codex
+    if crate::test_env::run_path_isolated_test() {
+        return;
+    }
+    unsafe {
+        libc::umask(0o077);
+    }
     let dir = tempfile::tempdir().unwrap();
     let init = crate::test_exec::output(
         crate::test_git::git_command()
@@ -320,12 +347,18 @@ fn story2402_s4_canonical_stale_snapshot_and_evaluation_error() {
     );
     assert!(backend.queue_list("role:human", true).unwrap().is_empty());
 
-    backend
+    let unknown = backend
         .add_requirement(parked("spec:TASK-404=completed"))
         .unwrap();
     let met = backend.add_requirement(parked("date:2000-01-01")).unwrap();
-    let error = run(dir.path(), &path, &backend, false, 14).unwrap_err();
-    assert!(error.to_string().contains("TASK-404"), "{error:#}");
+    run(dir.path(), &path, &backend, false, 14).unwrap();
+    assert!(
+        backend
+            .get_requirement(&unknown.id)
+            .unwrap()
+            .unwrap()
+            .deferred
+    );
     assert!(!backend.get_requirement(&met.id).unwrap().unwrap().deferred);
     assert!(backend.get_requirement(&held.id).unwrap().unwrap().deferred);
     assert!(backend
@@ -535,6 +568,12 @@ fn story2402_s5_recur_conditions_resurface_and_manual_routes() {
     assert!(current.deferred);
     sweep(&backend, &[current], &Facts, Utc::now(), false, 14).unwrap();
     assert!(!backend.get_requirement(&row.id).unwrap().unwrap().deferred);
+    let original_age = Utc::now() - chrono::Duration::days(15);
+    let mut aged = backend.get_requirement(&row.id).unwrap().unwrap();
+    aged.deferred = true;
+    aged.deferred_until = Some("date:2099-01-01".into());
+    aged.deferred_at = Some(original_age);
+    backend.update_requirement(&aged).unwrap();
     crate::findings_gate::handle_findings_recur(
         &backend,
         &path,
@@ -569,7 +608,7 @@ fn story2402_s5_recur_conditions_resurface_and_manual_routes() {
         false,
     )
     .unwrap();
-    let mut current = backend.get_requirement(&row.id).unwrap().unwrap();
+    let current = backend.get_requirement(&row.id).unwrap().unwrap();
     assert_eq!(current.deferred_until.as_deref(), Some("manual:joe"));
     assert_eq!(
         current.deferred_reason.as_deref(),
@@ -579,9 +618,7 @@ fn story2402_s5_recur_conditions_resurface_and_manual_routes() {
         crate::findings::finding_recurrence(&current.tags.iter().cloned().collect::<Vec<_>>()),
         recurrence,
     );
-    current.deferred_at = Some(Utc::now() - chrono::Duration::days(15));
-    backend.update_requirement(&current).unwrap();
-    let current = backend.get_requirement(&row.id).unwrap().unwrap();
+    assert_eq!(current.deferred_at, Some(original_age));
     sweep(&backend, &[current], &Facts, Utc::now(), false, 14).unwrap();
     assert!(backend.get_requirement(&row.id).unwrap().unwrap().deferred);
     assert_eq!(backend.queue_list("role:human", true).unwrap().len(), 1);
@@ -601,6 +638,18 @@ fn story2402_s5_handoff_cli_requires_write_and_spec() {
             "date:2026-01-01",
         ],
         vec!["aida", "session", "handoff", "--show", "--reason", "prose"],
+        vec![
+            "aida",
+            "session",
+            "handoff",
+            "--snapshot",
+            "--write",
+            "-",
+            "--spec",
+            "TASK-1",
+            "--until",
+            "date:2026-01-01",
+        ],
     ] {
         assert!(crate::command_registry::try_parse_from(args).is_err());
     }
@@ -669,7 +718,7 @@ fn story2402_s5_implementer_cannot_set_holds() {
     )
     .unwrap();
     assert!(init.status.success());
-    let _ambient =
+    let mut ambient =
         crate::test_env::AmbientGuard::hermetic_with_seat(dir.path(), "implementer", &[]);
     let path = dir.path().join(".aida-store");
     std::fs::create_dir_all(&path).unwrap();
@@ -718,4 +767,48 @@ fn story2402_s5_implementer_cannot_set_holds() {
         crate::store_push_pull::HANDOFF_PUSH_CALLS.with(|calls| calls.get()),
         0
     );
+
+    // Early session dispatch must refuse default team identity before parking
+    // even for a machine trigger that does not need hold-setting authority.
+    // trace:STORY-2402 | ai:codex
+    std::fs::create_dir_all(path.join("registry")).unwrap();
+    std::fs::write(path.join("registry/nodes.toml"),
+        "[[nodes]]\nid = 'remote'\nuser_id = 1\nhostname = 'other'\nregistered = '2026-01-01T00:00:00Z'\n").unwrap();
+    ambient.set_key("AIDA_USER", "default");
+    ambient.set_key("AIDA_TEAM_REQUIRE_USER", "1");
+    let error = crate::session_misc::session_handoff_seat(
+        Some(note.to_str().unwrap()),
+        false,
+        Some("implementer"),
+        false,
+        false,
+        Some("date:2026-01-01"),
+        Some(id),
+        None,
+        false,
+        false,
+    )
+    .unwrap_err();
+    assert!(format!("{error:#}").contains("AIDA_TEAM_REQUIRE_USER=1"));
+    assert_eq!(
+        serde_yaml::to_value(backend.get_requirement(&row.id).unwrap().unwrap()).unwrap(),
+        before
+    );
+    assert!(!dir
+        .path()
+        .join(".aida/handoff/implementer/latest.md")
+        .exists());
+    ambient.set_key("AIDA_USER", "distinct");
+    assert!(crate::status_awaiting::team_identity_write_guard(&path, true).is_ok());
+}
+
+// Unknown dependency IDs keep work parked without failing the hourly sweep.
+// trace:STORY-2402 | ai:codex
+#[test]
+fn story2402_s5_missing_spec_stays_parked() {
+    let row = parked("spec:TYPO-1=completed");
+    let (next, evidence, migration) = action(&row, &Facts, Utc::now(), 14).unwrap();
+    assert_eq!(next, Action::Keep);
+    assert!(evidence.contains("unknown"));
+    assert!(!migration);
 }

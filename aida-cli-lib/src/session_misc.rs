@@ -1019,17 +1019,20 @@ pub(crate) fn session_handoff_seat(
             std::fs::read_to_string(src).with_context(|| format!("reading {src}"))?
         };
         anyhow::ensure!(!body.trim().is_empty(), "handoff note is empty");
+        let mut resolved_spec = spec.map(str::to_string);
         let body = if let Some(ref condition) = condition {
             let spec =
                 spec.ok_or_else(|| anyhow::anyhow!("conditional handoffs require --spec"))?;
             let path = crate::store_sync::detect_distributed_store_from(&project_root).ok_or_else(
                 || anyhow::anyhow!("conditional handoffs require the canonical store"),
             )?;
+            crate::status_awaiting::team_identity_write_guard(&path, true)?;
             let backend = crate::queue_cmd::advance_backend(&path)?;
             let row = backend
                 .get_requirement_unambiguous(spec)?
                 .ok_or_else(|| anyhow::anyhow!("unknown handoff spec: {spec}"))?;
             let display_id = row.spec_id.as_deref().unwrap_or(spec);
+            resolved_spec = Some(display_id.to_string());
             let combined = format!("{body}\n\nRevisit {display_id} when {condition}.\n");
             anyhow::ensure!(
                 combined.trim().len() <= seat_rotation::HANDOFF_MAX_BYTES,
@@ -1070,7 +1073,7 @@ pub(crate) fn session_handoff_seat(
             // trace:STORY-2402 | ai:codex
             Some(condition) => format!(
                 "handoff note failed after deferring {} until {condition}; deferral remains saved; repair the note and retry",
-                spec.unwrap_or("?")
+                resolved_spec.as_deref().unwrap_or("?")
             ),
             None => "writing handoff note".to_string(),
         })?;

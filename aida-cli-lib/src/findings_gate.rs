@@ -1384,12 +1384,13 @@ pub(crate) fn handle_findings_recur(
 
     // These remain separate store writes. Never hide a persisted deferral if
     // the later recurrence write fails. trace:STORY-2402 | ai:codex
+    let resolved_id = req.spec_id.clone().unwrap_or_else(|| id.to_string());
     let recurrence_error = || match until {
         Some(condition) => format!(
-            "recurrence update failed after deferring {id} until {condition}; \
+            "recurrence update failed after deferring {resolved_id} until {condition}; \
              deferral remains saved; inspect the recurrence count before retrying"
         ),
-        None => format!("updating recurrence for {id}"),
+        None => format!("updating recurrence for {resolved_id}"),
     };
     if until.is_some() {
         crate::defer_cmd::defer_single(id, until, reason, backend, store_path)?;

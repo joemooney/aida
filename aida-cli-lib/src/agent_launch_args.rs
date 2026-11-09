@@ -663,7 +663,7 @@ pub enum SessionCommand {
 
         // trace:STORY-2662 | ai:codex
         /// Read/write the worktree recovery snapshot; never requests rotation.
-        #[clap(long, hide = true, conflicts_with_all = ["final_", "rotated", "check"])]
+        #[clap(long, hide = true, conflicts_with_all = ["final_", "rotated", "check", "until"])]
         snapshot: bool,
 
         /// Read only the handoff text, without standing context.

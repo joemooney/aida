@@ -32,7 +32,7 @@ pub(crate) fn defer_single(
     store_path: &std::path::Path,
 ) -> Result<()> {
     // Validate before any store or queue mutation. trace:STORY-2402 | ai:codex
-    let until = canonical_defer_condition(until, reason)?;
+    let until = crate::condition_cmd::canonical_condition(until, reason)?;
     if let Some(refusal) = set_hold_refusal(reason) {
         anyhow::bail!(refusal);
     }
@@ -110,13 +110,6 @@ pub(crate) fn defer_single(
         ),
     }
     Ok(())
-}
-
-/// Validate only explicitly supplied triggers. Bare re-deferral retains existing
-/// evidence; the one-time legacy trigger migration is complete.
-// trace:STORY-2402 | ai:codex
-fn canonical_defer_condition(until: Option<&str>, reason: Option<&str>) -> Result<Option<String>> {
-    crate::condition_cmd::canonical_condition(until, reason)
 }
 
 fn remove_deferred_queue_rows(

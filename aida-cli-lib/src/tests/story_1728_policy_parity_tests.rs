@@ -226,10 +226,12 @@ const S5_POLICY_INVOCATIONS: &[&str] = &[
 fn story2402_s5_policy_fixture_covers_conditional_writers() {
     let fixture = std::fs::read_to_string(fixture_path()).unwrap();
     for argv in S5_POLICY_INVOCATIONS {
+        // Parse the CLI once per invocation, not once per fixture line.
+        // CI run 42588996930 measured 53.980s with the repeated parsing.
+        // trace:STORY-2402 | ai:codex
+        let expected = format!("{argv}\t{}", answers(argv));
         assert!(
-            fixture
-                .lines()
-                .any(|line| line == format!("{argv}\t{}", answers(argv))),
+            fixture.lines().any(|line| line == expected),
             "missing S5 policy: {argv}"
         );
     }
