@@ -1649,7 +1649,8 @@ fn capture_dev_release_store(store: &std::path::Path, tag: &str) -> Result<(Stri
 // trace:TASK-1981 | ai:codex
 fn rebase_dev_release_store_snapshot(store: &std::path::Path, branch: &str) -> Result<String> {
     aida_core::db::with_store_write_lock(store, || {
-        aida_core::git_ops::pull_rebase(store, "origin", branch)?;
+        // trace:BUG-2490 | ai:codex — preserve pending changes during publication retry.
+        aida_core::git_ops::pull_rebase_store_retry(store, "origin", branch)?;
         aida_core::git_ops::head_sha(store)
     })
 }
@@ -2056,7 +2057,16 @@ mod task_1981_publication_tests {
         let seeded = fixture.advance("seed.txt");
         assert!(git_ops::push(&fixture.store, "origin", "main").unwrap());
         assert_eq!(fixture.remote_head(), seeded);
-        std::fs::write(fixture.store.join("objects/pending.yaml"), "pending").unwrap();
+        // trace:BUG-2490 | ai:codex — committed fixtures use valid requirement YAML.
+        std::fs::write(
+            fixture.store.join("objects/pending.yaml"),
+            serde_yaml::to_string(&aida_core::Requirement::new(
+                "pending".into(),
+                String::new(),
+            ))
+            .unwrap(),
+        )
+        .unwrap();
         seeded
     }
 

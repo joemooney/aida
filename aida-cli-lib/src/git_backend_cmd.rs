@@ -1328,6 +1328,8 @@ pub(crate) fn db_sync_local_window(
     let has_changes = aida_core::git_ops::has_changes_checked(store_path)?;
     if has_changes {
         let msg = message.unwrap_or("chore: sync pending changes");
+        // trace:BUG-2490 | ai:codex — staging must not resolve conflicts implicitly.
+        aida_core::git_ops::validate_pending_store_commit(store_path)?;
         aida_core::git_ops::add_all(store_path, ".")?;
         if aida_core::git_ops::commit(store_path, msg)? {
             println!("Committed: {}", msg);
@@ -1350,6 +1352,11 @@ pub(crate) fn db_sync_local_window(
         // is ever added. Mirrors `aida fetch --code-only`'s tolerance.
         // trace:BUG-432 | ai:claude
         println!("  No `origin` remote — skipping pull (local-only project).");
+    } else if pull && !aida_core::git_ops::probe_remote_branch(store_path, "origin", &branch)? {
+        // A configured remote can precede the store's first push. Only a
+        // successful query establishes this state; failed queries refuse sync.
+        // trace:BUG-2490 | ai:codex
+        println!("  No origin/{branch} branch yet — skipping pull (push to create it).");
     } else if pull {
         // Snapshot local state before pull for conflict detection.
         // trace:TASK-1717 | ai:claude — strict: an unreadable or unparsable
@@ -1358,19 +1365,31 @@ pub(crate) fn db_sync_local_window(
             .context("cannot sync: the local store did not read completely")?;
 
         println!("Pulling from origin/{}...", branch);
-        if let Err(e) = aida_core::git_ops::pull_rebase(store_path, "origin", &branch) {
-            // A failed rebase leaves the repo in a partial
-            // state — but only advise `git rebase --abort`
-            // when a rebase is actually in progress; a
-            // transient failure (e.g. a network 502) with no
-            // rebase in flight is a different situation.
-            // Reuses the same check as `aida pull`'s
-            // store-leg hint so both emission sites agree.
-            // trace:BUG-1500 | ai:claude
-            anyhow::bail!(
-                "Pull failed: {}",
-                crate::store_pull_failure_hint(store_path, &e.to_string())
-            );
+        // Use the established structured resolver, as in the ordinary store pull.
+        // trace:BUG-2490 | ai:codex
+        let outcome =
+            match aida_core::git_ops::pull_rebase_auto_merge(store_path, "origin", &branch) {
+                Ok(outcome) => outcome,
+                Err(e) => {
+                    // A failed rebase leaves the repo in a partial
+                    // state — but only advise `git rebase --abort`
+                    // when a rebase is actually in progress; a
+                    // transient failure (e.g. a network 502) with no
+                    // rebase in flight is a different situation.
+                    // Reuses the same check as `aida pull`'s
+                    // store-leg hint so both emission sites agree.
+                    // trace:BUG-1500 | ai:claude
+                    anyhow::bail!(
+                        "Pull failed: {}",
+                        crate::store_pull_failure_hint(store_path, &e.to_string())
+                    );
+                }
+            };
+        // trace:BUG-2490 | ai:codex — expose scalar resolution decisions during sync.
+        if let aida_core::git_ops::StorePullOutcome::AutoMerged { notes } = &outcome {
+            for note in notes {
+                println!("  {} {}", "auto-merged".cyan().bold(), note);
+            }
         }
         println!("  Pull complete.");
         let mut remote = RequirementsStore::default();
