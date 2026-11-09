@@ -1585,7 +1585,8 @@ fn prd_reentry_and_rotation_use_only_the_exact_ownership_holder() {
     assert!(reader::require_rotation_owner(dir.path(), "rotation").is_err());
 }
 
-/// Pickup predicates must retain missing, unreadable and replacement evidence.
+/// Pickup preserves the legacy lease rule while admitted production witnesses
+/// retain exact-generation and namespace safety.
 // trace:TASK-3420 | ai:codex
 #[test]
 fn task_3420_pickup_retains_unknown_and_releases_only_matching_dead_owner() {
@@ -1598,20 +1599,98 @@ fn task_3420_pickup_retains_unknown_and_releases_only_matching_dead_owner() {
         .status()
         .unwrap()
         .success());
-    let item = lease("pickup", "PR-3420", "");
+    let mut item = lease("pickup", "PR-3420", "");
+    item.active_pid = Some(u32::MAX);
     let key = WorkKey::Change {
         change: dual::change(3420),
     };
-    assert!(super::reader::lease_retained(root, &item));
-    super::reader::seed_lease_heartbeat(root, &item, key.clone(), true);
-    assert!(super::reader::lease_retained(root, &item));
-    super::reader::seed_lease_heartbeat(root, &item, key.clone(), false);
-    assert!(!super::reader::lease_retained(root, &item));
-    let mut replacement = item.clone();
-    replacement.id = "replacement".into();
-    super::reader::seed_lease_heartbeat(root, &replacement, key.clone(), false);
-    assert!(super::reader::lease_retained(root, &item));
+    assert!(
+        !super::reader::lease_retained(root, &item),
+        "crashed legacy holder releases"
+    );
     let store = OwnershipStore::for_project(root).unwrap().unwrap();
+    let legacy = dual::holder_for_lease(&item, &WriterFacts::here(), Utc::now());
+    assert!(legacy.witnesses.is_empty());
+    store
+        .update(&key, "legacy", Expect::Any, |_| {
+            Some((
+                Ownership {
+                    key: key.clone(),
+                    generation: 0,
+                    holder: Some(legacy),
+                    phase: Phase::Leased,
+                },
+                None,
+            ))
+        })
+        .unwrap();
+    assert!(
+        !super::reader::lease_retained(root, &item),
+        "legacy holder without witnesses uses the old lease rule"
+    );
+
+    let mut command = std::process::Command::new("sleep");
+    command.arg("30");
+    let capture = aida_core::proc_identity::prepare_command(&mut command).unwrap();
+    let mut child = command.spawn().unwrap();
+    let admission = capture.finish(&mut child);
+    admission.validate().unwrap();
+    item.active_pid = Some(child.id());
+    item.active_pid_start_time = crate::process_probe::process_start_identity(child.id());
+    item.hostname = crate::coordination::hostname();
+    item.pid_namespace = aida_core::process_probe::ProbeSource::system()
+        .pid_namespace(child.id())
+        .ok();
+    item.holder_record = Some(serde_json::to_string(&admission).unwrap());
+    let holder = dual::holder_for_lease(&item, &WriterFacts::here(), Utc::now());
+    assert!(
+        holder.witnesses.iter().any(|w| w.admission.is_some()),
+        "production witness must be admitted"
+    );
+    store
+        .update(&key, "test", Expect::Any, |_| {
+            Some((
+                Ownership {
+                    key: key.clone(),
+                    generation: 0,
+                    holder: Some(holder),
+                    phase: Phase::Leased,
+                },
+                None,
+            ))
+        })
+        .unwrap();
+    assert!(super::reader::lease_retained(root, &item));
+    child.kill().unwrap();
+    child.wait().unwrap();
+    assert!(!super::reader::lease_retained(root, &item));
+    item.worktree_path = root.to_path_buf();
+    item.tree_kind = crate::seat_clone::TreeKind::Clone;
+    assert!(
+        crate::leases::lease_adoption_refusal(root, &item).is_none(),
+        "dead hint and adoption agree"
+    );
+    store
+        .update(&key, "namespace", Expect::Any, |current| {
+            let mut changed = current.unwrap().clone();
+            let witness = &mut changed.holder.as_mut().unwrap().witnesses[0];
+            let mut admission = serde_json::to_value(witness.admission.as_ref().unwrap()).unwrap();
+            admission["identity"]["pidns_inode"] = serde_json::json!(1);
+            witness.admission = Some(serde_json::from_value(admission).unwrap());
+            if let WitnessKind::Process { pid_ns, .. } = &mut witness.kind {
+                *pid_ns = Some(1);
+            }
+            Some((changed, None))
+        })
+        .unwrap();
+    assert!(
+        matches!(super::reader::lease_owner(root, &item), OwnerVerdict::Unknown { why } if why.contains("NamespaceMismatch"))
+    );
+    assert!(super::reader::lease_retained(root, &item));
+    assert!(
+        crate::leases::lease_adoption_refusal(root, &item).is_some(),
+        "unknown hint and adoption agree"
+    );
     std::fs::write(store.path_for(&key), "corrupt").unwrap();
     assert!(super::reader::lease_retained(root, &item));
 }

@@ -4778,8 +4778,14 @@ pub(crate) fn lease_adoption_refusal(
     if lease.worktree_path.as_os_str().is_empty() {
         return Some("it records no tree");
     }
-    if let Some(why) = orphan_adoption_refusal(&stale_lease_recovery_for_lease(lease)) {
-        return Some(why);
+    // trace:TASK-3420 | ai:codex
+    if crate::ownership::reader::lease_retained(project_root, lease) {
+        return Some("ownership holder is live or unknown");
+    }
+    // Adoption preserves all tree contents; only existence and registration
+    // remain after the shared ownership verdict, without a second PID verdict.
+    if !lease.worktree_path.exists() {
+        return Some("its tree no longer exists");
     }
     let registered = || {
         aida_core::git_ops::host_git_command(project_root)

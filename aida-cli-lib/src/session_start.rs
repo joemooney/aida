@@ -996,16 +996,10 @@ pub(crate) fn orphan_lease_to_adopt(
             ));
         }
     }
+    // The resume hint and actual adoption share both ownership and tree gates.
     // trace:TASK-3420 | ai:codex
-    if !lease.worktree_path.exists() {
-        return refuse(format!("lease {id} tree no longer exists"));
-    }
-    let verdict = crate::ownership::reader::lease_owner(project_root, &lease);
-    if !matches!(verdict, crate::ownership::OwnerVerdict::Dead { .. }) {
-        return refuse(format!(
-            "lease {id} is not orphaned: {}",
-            crate::ownership::reader::owner_label(&verdict)
-        ));
+    if let Some(why) = crate::leases::lease_adoption_refusal(project_root, &lease) {
+        return refuse(format!("lease {id} is not orphaned: {why}"));
     }
     Ok(Some(lease))
 }

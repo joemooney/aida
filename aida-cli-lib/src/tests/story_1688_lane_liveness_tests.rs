@@ -1369,7 +1369,7 @@ fn linked_verdict_does_not_count_as_review_started() {
 // trace:TASK-3420 | ai:codex
 // trace:TASK-1955 | ai:claude (TASK-2094, TASK-1665)
 #[test]
-fn reviewer_lease_uses_ownership_instead_of_registry_cwd() {
+fn task_3420_crashed_reviewer_uses_ownership_instead_of_registry_cwd() {
     let tmp = tempfile::tempdir().unwrap();
     let root = tmp.path().canonicalize().unwrap();
     std::process::Command::new("git")
@@ -1400,7 +1400,8 @@ fn reviewer_lease_uses_ownership_instead_of_registry_cwd() {
         },
         head: HEAD_A.into(),
     };
-    crate::ownership::reader::seed_lease_heartbeat(&root, &review, key.clone(), false);
+    // trace:TASK-2120 trace:TASK-3420 | ai:codex
+    // Crashed legacy reviewer: production may have written no witness.
     let feed = prs_json(vec![gh_pr(
         2730,
         HEAD_A,
@@ -1486,7 +1487,10 @@ fn task_3420_review_lease_uses_recorded_ownership() {
     review.claim_verb = false;
     review.pr_head_sha = Some("head".into());
     let running = || review_lease_running(&root, &review);
-    assert!(running(), "missing evidence retains ownership");
+    assert!(
+        !running(),
+        "crashed legacy reviewer releases without a witness"
+    );
     let key = crate::ownership::WorkKey::Review {
         change: crate::ownership::ChangeId {
             forge: "origin".into(),

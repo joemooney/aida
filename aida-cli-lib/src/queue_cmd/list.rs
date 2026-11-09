@@ -1870,11 +1870,12 @@ pub(super) fn handle_queue_command(
                 {
                     // trace:TASK-3420 | ai:codex
                     let mut stale_base_rows: Vec<(String, String, String)> = Vec::new();
+                    let reader = crate::ownership::reader::LeaseReader::new(&root);
                     for l in list_leases(&root) {
-                        if !crate::ownership::reader::lease_retained(&root, &l) {
+                        if l.branch.is_empty() || l.branch == "main" {
                             continue;
                         }
-                        if l.branch.is_empty() || l.branch == "main" {
+                        if !reader.retained(&l) {
                             continue;
                         }
                         let Some(behind) = commits_behind_origin_main(&root, &l.branch) else {

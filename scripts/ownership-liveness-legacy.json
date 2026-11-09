@@ -67,7 +67,6 @@
   "aida-cli-lib/src/leases.rs:enforce_session_lease:lease_is_live": 1,
   "aida-cli-lib/src/leases.rs:enforce_session_lease:probe_live_claude_sessions": 1,
   "aida-cli-lib/src/leases.rs:implementer_retry_predecessor_recovery:stale_lease_recovery_for_lease": 1,
-  "aida-cli-lib/src/leases.rs:lease_adoption_refusal:stale_lease_recovery_for_lease": 1,
   "aida-cli-lib/src/leases.rs:lease_is_live:lease_state_for": 1,
   "aida-cli-lib/src/leases.rs:lease_owner_gone:lease_owner_process_gone": 1,
   "aida-cli-lib/src/leases.rs:lease_owner_gone:lease_process_verdict": 1,

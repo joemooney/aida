@@ -1,5 +1,5 @@
 //! Production ownership observations. Missing or unreadable evidence retains
-//! ownership; consumers never substitute PID, TTL or forge-body heuristics.
+//! ownership, except the explicitly scoped legacy pickup compatibility reader.
 // trace:STORY-2325 | ai:codex
 use super::{dual, HostFacts, OwnerVerdict, Ownership, Phase, WorkKey};
 use anyhow::Result;
@@ -65,23 +65,87 @@ pub(crate) fn ended_record(record: &Ownership) -> Option<String> {
 }
 
 pub(crate) fn lease_record(root: &Path, lease: &crate::SessionLease) -> Result<Option<Ownership>> {
-    // Resolve lazily: change/review keys and UUID scopes need no spec store.
+    LeaseReader::new(root).record(lease)
+}
+
+// trace:TASK-3420 | ai:codex
+pub(crate) struct LeaseReader<'a> {
+    root: &'a Path,
+    reqs: std::cell::OnceCell<Option<aida_core::RequirementsStore>>,
+}
+
+impl<'a> LeaseReader<'a> {
+    pub(crate) fn new(root: &'a Path) -> Self {
+        Self {
+            root,
+            reqs: std::cell::OnceCell::new(),
+        }
+    }
+
+    fn record(&self, lease: &crate::SessionLease) -> Result<Option<Ownership>> {
+        let resolve = |label: &str| {
+            uuid::Uuid::parse_str(label.trim())
+                .ok()
+                .map(crate::gate::canon::SpecKey)
+                .or_else(|| {
+                    self.reqs
+                        .get_or_init(|| crate::load_store_for_lookup(self.root))
+                        .as_ref()
+                        .and_then(|s| dual::spec_key_in_store(s, label))
+                })
+        };
+        let Some((key, _)) = dual::key_for_lease(lease, &resolve) else {
+            anyhow::ensure!(
+                self.reqs.get().is_none(),
+                "lease scope could not be resolved through the spec store"
+            );
+            return Ok(None);
+        };
+        load(self.root, &key)
+    }
+
+    pub(crate) fn retained(&self, lease: &crate::SessionLease) -> bool {
+        !matches!(self.pickup_owner(lease), OwnerVerdict::Dead { .. })
+    }
+
+    /// Temporary legacy compatibility for the four Part B pickup probes and
+    /// adoption. Remove once every production holder writes an admitted witness.
     // trace:TASK-3420 | ai:codex
-    let reqs = std::cell::OnceCell::new();
-    let resolve = |label: &str| {
-        uuid::Uuid::parse_str(label.trim())
-            .ok()
-            .map(crate::gate::canon::SpecKey)
-            .or_else(|| {
-                reqs.get_or_init(|| crate::load_store_for_lookup(root))
-                    .as_ref()
-                    .and_then(|s| dual::spec_key_in_store(s, label))
-            })
-    };
-    let Some((key, _)) = dual::key_for_lease(lease, &resolve) else {
-        return Ok(None);
-    };
-    load(root, &key)
+    fn pickup_owner(&self, lease: &crate::SessionLease) -> OwnerVerdict {
+        let record = self.record(lease);
+        let verdict = lease_owner_record(
+            lease,
+            record
+                .as_ref()
+                .map(Clone::clone)
+                .map_err(|e| anyhow::anyhow!("{e:#}")),
+        );
+        let legacy_unknown = match &record {
+            Ok(None) => lease.holder_record.is_none(),
+            Ok(Some(record)) => record.holder.as_ref().is_some_and(|holder| {
+                holder.session == lease.id
+                    && holder.witnesses.iter().all(|w| w.admission.is_none())
+                    && holder
+                        .witnesses
+                        .iter()
+                        .all(|w| matches!(w.kind, super::WitnessKind::Process { .. }))
+            }),
+            Err(_) => false,
+        };
+        if matches!(verdict, OwnerVerdict::Unknown { .. }) && legacy_unknown {
+            let live = crate::process_probe::probe_live_claude_sessions();
+            return if crate::leases::lease_is_live(&live, Utc::now())(lease) {
+                OwnerVerdict::Alive {
+                    witness: "legacy lease rule".into(),
+                }
+            } else {
+                OwnerVerdict::Dead {
+                    proof: "legacy lease rule".into(),
+                }
+            };
+        }
+        verdict
+    }
 }
 
 /// Re-entry must prove that this exact lease's holder ended. A different
@@ -89,7 +153,14 @@ pub(crate) fn lease_record(root: &Path, lease: &crate::SessionLease) -> Result<O
 /// found in the same cwd is not evidence about the recorded owner.
 // trace:STORY-2325 | ai:codex
 pub(crate) fn lease_owner(root: &Path, lease: &crate::SessionLease) -> OwnerVerdict {
-    match lease_record(root, lease) {
+    lease_owner_record(lease, lease_record(root, lease))
+}
+
+fn lease_owner_record(
+    lease: &crate::SessionLease,
+    record: Result<Option<Ownership>>,
+) -> OwnerVerdict {
+    match record {
         Ok(Some(record)) => match record.holder.as_ref() {
             Some(holder) if holder.session == lease.id => owner(&record),
             None if matches!(&record.phase, Phase::InPr { handed_off_by: Some(session), .. } if session == &lease.id) =>
@@ -209,9 +280,9 @@ pub(crate) fn seed_lease_heartbeat(
         .unwrap();
 }
 
-/// Pickup and review observations retain unknown owners; only positive death
-/// evidence permits treating their assignment as available.
+/// Pickup and review observations use the scoped legacy compatibility reader;
+/// admitted owners and non-legacy unknown evidence keep the ownership verdict.
 // trace:TASK-3420 | ai:codex
 pub(crate) fn lease_retained(root: &Path, lease: &crate::SessionLease) -> bool {
-    !matches!(lease_owner(root, lease), OwnerVerdict::Dead { .. })
+    LeaseReader::new(root).retained(lease)
 }

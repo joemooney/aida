@@ -1177,7 +1177,11 @@ fn task_3420_orphan_adoption_requires_matching_owner_death() {
             true,
         )
     };
-    assert!(adopt().is_err(), "missing ownership must retain the clone");
+    assert_eq!(
+        adopt().unwrap().unwrap().id,
+        lease.id,
+        "crashed legacy holder remains adoptable"
+    );
     crate::ownership::reader::seed_lease_heartbeat(&fx.main, &lease, key.clone(), true);
     assert!(adopt().is_err(), "live ownership must retain the clone");
     crate::ownership::reader::seed_lease_heartbeat(&fx.main, &lease, key.clone(), false);
