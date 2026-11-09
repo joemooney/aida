@@ -6,12 +6,12 @@ description: |
   Non-blocking note from the approved PR-3504 review (STORY-2480): process() (aida-cli-lib/src/ci_relay.rs:1019) skips an unverified latest-attempt result without saying so. A SHA whose result falls outside the newest-32 revalidation window keeps a pending native status until someone runs `aida intent ci read --attempt N --sha S` by hand.
 
   Acceptance: process() reports each skipped unverified latest attempt (SHA, attempt, reason "outside the 32-attempt revalidation window") in its human and JSON output and in `aida awaiting`, with the exact `aida intent ci read` command; a test with 33 attempts proves the report; no status is published for an unverified result (unchanged).
-status: NeedsAttention
+status: Approved
 priority: Low
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-08T03:38:52.682099Z
-modified_at: 2026-11-08T23:48:39.649748812Z
+modified_at: 2026-11-09T00:08:56.919784218Z
 req_type: Task
 tags:
 - area:ci-relay
@@ -203,6 +203,12 @@ comments:
   modified_at: 2026-11-08T23:44:23.889841Z
   session_id: 01a1bd82229d
   harness_version: codex-cli 0.167.0
+- id: 01a1bda2-f957-70d1-8a89-fdfc409e0ee8
+  author: joe
+  content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: PARTIAL: F14-F16 are fixed and acceptance holds in source, but F17 is still open: the new awaiting_skipped read_bounded calls are absent from the store-writer inventory, so the gates ratchet will fail; CI is still running at this head.. No triage reason was given.'
+  created_at: 2026-11-09T00:08:56.919777343Z
+  modified_at: 2026-11-09T00:08:56.919777343Z
+  session_id: 20abb7c3-8f9b-4a5e-b326-404921f3b450
 history:
 - id: 01a1bc6c-f8c6-7083-91af-c24f9a88e846
   author: aida-session-start
@@ -402,6 +408,14 @@ history:
   session_id: 01a1bd8e48f6
   harness_version: 2.1.319 (Claude Code)
   changes: []
+- id: 01a1bda2-f957-70d1-8a89-fdedfab4422f
+  author: joe
+  timestamp: 2026-11-09T00:08:56.919765860Z
+  session_id: 20abb7c3-8f9b-4a5e-b326-404921f3b450
+  changes:
+  - field_name: status
+    old_value: NeedsAttention
+    new_value: Approved
 filed_at:
   code_sha: 049e5206de120518bb94fae84bf359f789e76236
   branch: main
@@ -411,11 +425,3 @@ filed_at:
   vendor: claude
   session: 01a1b8be-8170-7fb2-89ab-ecb4c6eee98c
   harness_version: 2.1.319 (Claude Code)
-failure_reason:
-  phase: reviewer
-  phase_index: 3
-  kind: verdict:request-changes
-  detail: 'PARTIAL: F14-F16 are fixed and acceptance holds in source, but F17 is still open: the new awaiting_skipped read_bounded calls are absent from the store-writer inventory, so the gates ratchet will fail; CI is still running at this head.'
-  recovery_hint: address the review findings, move TASK-3452 back to In Progress, and clear the PR hold only after approval
-  shelved_by: reviewer
-  shelved_at: 2026-11-08T23:48:39.649748812Z
