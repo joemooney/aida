@@ -25,7 +25,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-07T19:45:35.836129088Z
-modified_at: 2026-11-09T06:03:24.030790266Z
+modified_at: 2026-11-09T06:13:06.677022599Z
 req_type: Story
 tags:
 - docs:impacted
@@ -663,6 +663,20 @@ comments:
   created_at: 2026-11-09T05:29:42.447925625Z
   modified_at: 2026-11-09T05:29:42.447925625Z
   session_id: 7aacb1ed-ebaa-4da4-a195-500864e99e7d
+- id: 01a1bef0-5ff5-78b3-8318-215400cbf840
+  author: dirtlab
+  content: |
+    Latest rework finding addressed; edits deliberately uncommitted for the native host launcher.
+
+    Changed file: aida-cli-lib/src/lane_fast_gate.rs. Self-pushing fast-gate repairs now use the existing metadata-only rework policy and persist Approved before queue insertion, allowing drains to claim the one repair round. Pickup establishes InProgress when it starts a worker. Completed/Rejected/Superseded remain untouched. Added an AC1 regression checking real drain eligibility across rework statuses and terminal preservation; expanded the persisted queue/receipt fixture to apply the production transition and verify eligibility while review remains blocked until the queued repair is removed/replaced/parked.
+
+    Validation: host lane job j20261109T060425742-2-0, cargo test --profile agent -p aida-cli-lib --lib -- fast_gate, exited 0: 49 passed, 0 failed, 1 ignored. The ignored real-main sandbox integration was not rerun in this narrow status fix; prior pass evidence remains recorded in the preceding handoff. Formatting, git diff --check, portability, writer inventory (3432 sites) and execution-context ledger (zero additions) passed. untested=false.
+
+    No code blocker found. Prescribed codegraph executable is absent; doctor confirms missing PATH tool, so navigation used rg. No commit, push, PR creation, queue completion, ship declaration, review verdict or hold clearance performed. Existing punt/hold signals remain publication vetoes.
+  created_at: 2026-11-09T06:13:06.677022599Z
+  modified_at: 2026-11-09T06:13:06.677022599Z
+  session_id: 01a1bee7761f
+  harness_version: codex-cli 0.167.0
 history:
 - id: 01a1b78d-2628-7313-92de-8804ac5f8f71
   author: aida-session-start
