@@ -12,12 +12,12 @@ description: |
   2. The TASK-3425 measurement script, run on base and head, shows the largest SCC shrinks, and the doc records both numbers. The target is the plan's ~29-module reduction; a smaller result is acceptable if the doc names the edges that still hold modules in.
   3. make check-ci-fast passes; the command-registry ratchet tests pass; help output unchanged (Help-Golden: unchanged).
   4. Sequence: start after PR-3635 merges, and touch only import lines in files with no open PR, to avoid the SPIKE-713 conflict pattern.
-status: InProgress
+status: NeedsAttention
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-08T03:08:54.290380002Z
-modified_at: 2026-11-09T00:27:43.121174478Z
+modified_at: 2026-11-09T00:28:58.827979588Z
 req_type: Task
 tags:
 - area:architecture
@@ -48,6 +48,50 @@ comments:
   created_at: 2026-11-09T00:26:08.892106527Z
   modified_at: 2026-11-09T00:26:08.892106527Z
   session_id: 20abb7c3-8f9b-4a5e-b326-404921f3b450
+- id: 01a1bdb5-495b-7c43-ba8c-45bc03f4180a
+  author: dirtlab
+  content: |
+    TASK-3448 preflight at HEAD 8a4a909a96 on 2026-11-08: no source edits made.
+
+    PR-3635 prerequisite is satisfied: landed as b9601840a1 via merge train #3660; TASK-3425 is Completed.
+
+    Acceptance 4 forbids touching files with open PRs. Live gh pr list/view file inventories reveal these overlaps with the 140 framework-consumer files:
+
+    PR #3703: aida-cli-lib/src/tests/bug_home_038_seat_publish_tests.rs
+
+    PR #3699: aida-cli-lib/src/burndown_run.rs, aida-cli-lib/src/requirements_cli.rs, aida-cli-lib/src/store_push_pull.rs, aida-cli-lib/src/store_sync.rs
+
+    PR #3695: aida-cli-lib/src/approvals_cmd.rs, aida-cli-lib/src/assign_cmd.rs, aida-cli-lib/src/autonomy_cmd.rs, aida-cli-lib/src/brief_cmd.rs, aida-cli-lib/src/changelog_cmd.rs, aida-cli-lib/src/decide_cmd.rs, aida-cli-lib/src/deps_cmd.rs, aida-cli-lib/src/derisk_cmd.rs, aida-cli-lib/src/digest_cmd.rs, aida-cli-lib/src/driver_cmd.rs, aida-cli-lib/src/feature_cmd.rs, aida-cli-lib/src/field_study_cmd.rs, aida-cli-lib/src/focus_cmd.rs, aida-cli-lib/src/gate_cmd.rs, aida-cli-lib/src/graph_cmd.rs, aida-cli-lib/src/health_vitals_cmd.rs, aida-cli-lib/src/human_cmd.rs, aida-cli-lib/src/import_export_cmd.rs, aida-cli-lib/src/import_plan_cmd.rs, aida-cli-lib/src/internal_cmd.rs, aida-cli-lib/src/lifecycle_cmd.rs, aida-cli-lib/src/lint_cmd.rs, aida-cli-lib/src/load_cmd.rs, aida-cli-lib/src/lock_cmd.rs, aida-cli-lib/src/manual.rs, aida-cli-lib/src/memories_cmd.rs, aida-cli-lib/src/protocol_cmd.rs, aida-cli-lib/src/rebase_cmd.rs, aida-cli-lib/src/record_cmd.rs, aida-cli-lib/src/rel_def_cmd.rs, aida-cli-lib/src/relationship_cmd.rs, aida-cli-lib/src/remote_cmd.rs, aida-cli-lib/src/review_cmd.rs, aida-cli-lib/src/rules_cmd.rs, aida-cli-lib/src/server_cmd.rs, aida-cli-lib/src/session_misc_cmd.rs, aida-cli-lib/src/skill_cmd.rs, aida-cli-lib/src/solo_cmd.rs, aida-cli-lib/src/store_cmd.rs, aida-cli-lib/src/team_cmd.rs, aida-cli-lib/src/terminal_cmd.rs, aida-cli-lib/src/triage_cmd.rs, aida-cli-lib/src/tui_entry.rs, aida-cli-lib/src/type_cmd.rs, aida-cli-lib/src/ultraplan_cmd.rs, aida-cli-lib/src/upgrade_cmd.rs, aida-cli-lib/src/verify_cmd.rs
+
+    PR #3692: aida-cli-lib/src/status_awaiting.rs, aida-cli-lib/src/statusbar_cmd.rs
+
+    PR #3687: aida-cli-lib/src/burndown_run.rs, aida-cli-lib/src/claim.rs, aida-cli-lib/src/config_cmd.rs, aida-cli-lib/src/findings_gate.rs, aida-cli-lib/src/git_backend_cmd.rs, aida-cli-lib/src/goal_cmd.rs, aida-cli-lib/src/history.rs, aida-cli-lib/src/leases.rs, aida-cli-lib/src/lib_part1.rs, aida-cli-lib/src/mcp.rs, aida-cli-lib/src/mcp_cmd.rs, aida-cli-lib/src/queue_misc.rs, aida-cli-lib/src/requirements_cli.rs, aida-cli-lib/src/store_sync.rs, aida-cli-lib/src/upgrade_release.rs, aida-cli-lib/src/worktree_gc.rs
+
+    PR #3670: aida-cli-lib/src/leases.rs
+
+    PR #3661: aida-cli-lib/src/lib_part1.rs, aida-cli-lib/src/mcp.rs
+
+    PR #3652: aida-cli-lib/src/db_cmd.rs, aida-cli-lib/src/doctor_cmd.rs, aida-cli-lib/src/git_backend_cmd.rs, aida-cli-lib/src/init_cmd.rs, aida-cli-lib/src/store_push_pull.rs, aida-cli-lib/src/store_sync.rs, aida-cli-lib/src/upgrade_release.rs
+
+    PR #3651: aida-cli-lib/src/merge_hold_cmd.rs, aida-cli-lib/src/upgrade_release.rs
+
+    PR #3647: aida-cli-lib/src/doctor_cmd.rs, aida-cli-lib/src/maintenance_schedule.rs, aida-cli-lib/src/worktree_gc.rs
+
+    PR #3640: aida-cli-lib/src/advisor_cmd_root.rs, aida-cli-lib/src/agent_launch.rs
+
+    PR #3639: aida-cli-lib/src/agent_launch.rs, aida-cli-lib/src/condition_cmd.rs, aida-cli-lib/src/defer_cmd.rs, aida-cli-lib/src/findings_gate.rs, aida-cli-lib/src/store_push_pull.rs
+
+    PR #3627: aida-cli-lib/src/lane_cmd.rs, aida-cli-lib/src/tests/bug_home_038_seat_publish_tests.rs
+
+    PR #3625: aida-cli-lib/src/tests/bug_home_038_seat_publish_tests.rs
+
+    Removing registry re-exports while leaving these consumers untouched would break compilation. A partial migration has not been approved. Resume after conflicting PRs land, or obtain advisor approval for coordinated import changes and a partial slice with named remaining re-export users.
+
+    Codegraph fixed host client is absent; aida doctor check codegraph confirms missing tool. No indexing attempted. Git working tree remains clean. No tests run because implementation is gated; untested=true. No publication declaration, commit, push, PR, review record or queue completion performed.
+  created_at: 2026-11-09T00:28:57.051632044Z
+  modified_at: 2026-11-09T00:28:57.051632044Z
+  session_id: 01a1bdb422db
+  harness_version: codex-cli 0.167.0
 history:
 - id: 01a1b921-d315-74a0-9c9a-0ca54df44ce6
   author: joe
@@ -98,6 +142,21 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a1bdb4-911c-7c30-b6ed-fe382c5c63c6
+  author: dirtlab
+  timestamp: 2026-11-09T00:28:09.884624172Z
+  session_id: 01a1bdb422db
+  harness_version: codex-cli 0.167.0
+  changes: []
+- id: 01a1bdb5-504b-77e3-9401-b7f54c974657
+  author: dirtlab
+  timestamp: 2026-11-09T00:28:58.827989036Z
+  session_id: 01a1bdb422db
+  harness_version: codex-cli 0.167.0
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: NeedsAttention
 filed_at:
   code_sha: 049e5206de120518bb94fae84bf359f789e76236
   branch: main
@@ -107,3 +166,9 @@ filed_at:
   vendor: claude
   session: 01a1b8be-8170-7fb2-89ab-ecb4c6eee98c
   harness_version: 2.1.319 (Claude Code)
+attention_reason:
+  category: blocked-dependency
+  detail: 'Acceptance 4 forbids touching files with open PRs. Live forge file inventories overlap framework consumers in PRs #3703, #3699, #3695, #3692, #3687, #3670, #3661, #3652, #3651, #3647, #3640, #3639, #3627 and #3625. Removing re-exports with these consumers unchanged breaks compilation. Full overlap evidence is recorded in the spec comment; no source edits made.'
+  lean: Resume after overlapping PRs land, or obtain advisor approval for coordinated import migration and a partial slice retaining named re-export users.
+  raised_by: implementer
+  raised_at: 2026-11-09T00:28:58.827979588Z
