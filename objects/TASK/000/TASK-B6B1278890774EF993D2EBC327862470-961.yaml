@@ -8,7 +8,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-07T23:40:15.306412624Z
-modified_at: 2026-11-08T20:34:11.692987505Z
+modified_at: 2026-11-09T02:43:44.929339224Z
 req_type: Task
 relationships:
 - rel_type: BlockedBy
@@ -513,6 +513,12 @@ comments:
   created_at: 2026-11-08T20:34:11.692987505Z
   modified_at: 2026-11-08T20:34:11.692987505Z
   session_id: 01a1bcdd2831
+- id: 01a1be30-b2a1-7482-854b-56e5c83761e9
+  author: joe
+  content: 'Advisor ruling 2026-11-08 on PR-3687. AC3: the 72 in the criterion is a spec error. tools/list on main and the PR''s mcp_schema.rs both expose the same 58 tool names (compared by extracting every name from each), so the requirement is those 58 unchanged. AC5: not waived; dell1 clean-build timing evidence is still owed, so PR-3687 ships as Refs and does not complete this task. Green CI at head and independent approval remain required. Advisor owns the timing run after merge.'
+  created_at: 2026-11-09T02:43:44.929339224Z
+  modified_at: 2026-11-09T02:43:44.929339224Z
+  session_id: 20abb7c3-8f9b-4a5e-b326-404921f3b450
 history:
 - id: 01a1b862-7fc0-7e63-899e-5179ac0131ed
   author: joe
