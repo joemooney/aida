@@ -1,0 +1,44 @@
+id: 01a1c107-38a3-79e1-bb3e-6ea8441cd9ed
+spec_id: STORY-b6b1278890774ef993d2ebc327862470-617
+agreed_id: STORY-2694
+title: Keep an approval across a clean merge from main when the PR's own change is identical
+description: |
+  ## Problem
+  Every landing moves main. A PR approved at head H then gets a merge from main (by the watcher or a host merge), the approval no longer matches, and it needs a full review and CI pass although its own change is identical. PR #3687 lost this race repeatedly on 2026-11-09. Each loss costs a merge, a roughly 40-minute CI pass and a review.
+
+  ## Sketch
+  Carry an APPROVED verdict from head H to a descendant head H2 only when all of these hold, checked mechanically by the host and recorded in the gate ledger:
+  1. Every commit between H and H2 is a merge whose non-PR parent is on main. A single-parent commit voids the carry.
+  2. Each such merge is conflict-free and unedited: its tree equals the tree `git merge-tree --write-tree` computes from its parents. This refuses an evil merge that hides edits in a merge commit, and it refuses every conflict resolution, which still gets a full review.
+  3. The PR's own change is unchanged: the diff from merge-base(H2, main) to H2 has the same patch-id as the approved diff.
+  4. The review did not name a condition tied to main's state.
+
+  Required CI still runs at H2 and must be green; the merge train still tests the stacked result. Only the human or agent review is skipped.
+
+  ## Acceptance
+  - A clean merge from main keeps the approval, with a ledger record naming H, H2 and the evidence.
+  - Refused with a stated reason: a conflict-resolved merge, a merge whose tree differs from the computed merge, an added non-merge commit, a changed patch-id.
+  - Merge-hold release and train admission accept a carried approval and no others.
+  - Tests cover each refusal, including an evil merge.
+
+  Safety-gate change: requires independent review and advisor signoff of this sketch before implementation. Operator agreed to the direction 2026-11-09.
+status: Draft
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-11-09T15:57:18.371798469Z
+modified_at: 2026-11-09T15:57:18.371798469Z
+req_type: Story
+tags:
+- architecture
+- area:merge-train
+- needs-sketch-signoff
+filed_at:
+  code_sha: e4eee38238fa4cb8e8c85dadaa4ed07894cfbeea
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: e4eee38238f
+  vendor: claude
+  session: 01a1beff-fc3b-78e2-93e2-9b0c283b0339
+  harness_version: 2.1.319 (Claude Code)
