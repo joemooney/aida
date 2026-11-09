@@ -8,7 +8,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-08T19:01:55.483195458Z
-modified_at: 2026-11-08T23:31:21.163434765Z
+modified_at: 2026-11-09T02:55:07.843106164Z
 req_type: Bug
 relationships:
 - rel_type:
@@ -75,6 +75,12 @@ comments:
     Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
   created_at: 2026-11-08T23:29:38.323849030Z
   modified_at: 2026-11-08T23:29:38.323849030Z
+  session_id: 20abb7c3-8f9b-4a5e-b326-404921f3b450
+- id: 01a1be3b-1e43-7ca2-ac85-3afab3eecf7e
+  author: joe
+  content: 'Advisor 2026-11-08, rework brief for PR-3702 at 8f015d63e5. Three rework lanes added only merge commits; this round must change the test or code. Two named failures at this head: (1) dev_build::dev_build_tests::dev_build_restamps_after_fast_forward_with_cached_git_watches, which matches plain Cargo status text and fails under CI''s forced colour: strip ANSI or set colour off in the fixture; (2) launch::story_2326_launch_ratchet_tests::story_2326_ambient_aida_inputs_have_a_disposition: give any new ambient AIDA input a disposition. Run those two filters, then make check-ci-fast, and do not merge main as the only change.'
+  created_at: 2026-11-09T02:55:07.843106164Z
+  modified_at: 2026-11-09T02:55:07.843106164Z
   session_id: 20abb7c3-8f9b-4a5e-b326-404921f3b450
 history:
 - id: 01a1bcc0-d868-7912-a616-acafbcb7dba5
