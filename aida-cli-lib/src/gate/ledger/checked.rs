@@ -25,8 +25,10 @@ use std::path::Path;
 pub(crate) const MAX_LEDGER_BYTES: u64 = 16 * 1024 * 1024;
 /// One `by-spec` index file.
 pub(crate) const MAX_INDEX_BYTES: u64 = 1024 * 1024;
-/// One ledger line.
-pub(crate) const MAX_LINE_BYTES: usize = 1024 * 1024;
+/// One ledger line, including full review findings and attestation payloads.
+/// Keep this below the unchanged file and aggregate selection budgets.
+// trace:BUG-2507 | ai:codex
+pub(crate) const MAX_LINE_BYTES: usize = 8 * 1024 * 1024;
 /// Changes one spec index may name.
 pub(crate) const MAX_CHANGES_PER_SPEC: usize = 256;
 /// Aggregate bytes one selection may read across every label.
@@ -201,7 +203,10 @@ fn parse_events(
             ))
         };
         if line.len() > MAX_LINE_BYTES {
-            return Err(bad("the line is oversized"));
+            return Err(bad(&format!(
+                "the line is oversized ({} bytes; limit {MAX_LINE_BYTES})",
+                line.len()
+            )));
         }
         budget.spend_event()?;
         let event: GateEvent =
