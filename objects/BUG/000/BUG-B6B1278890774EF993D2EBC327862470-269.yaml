@@ -8,7 +8,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-08T21:20:08.484660577Z
-modified_at: 2026-11-09T09:46:45.369753963Z
+modified_at: 2026-11-09T09:49:57.669227592Z
 req_type: Bug
 comments:
 - id: 01a1beb1-ae7c-7c52-89a5-00a6bc02eeb0
@@ -178,6 +178,12 @@ history:
   session_id: 01a1bfb3a19e
   harness_version: codex-cli 0.167.0
   changes: []
+- id: 01a1bfb6-e870-7a62-baa2-91397aab6b9a
+  author: joe
+  timestamp: 2026-11-09T09:49:57.744015655Z
+  session_id: 01a1bfb5b19f
+  harness_version: 2.1.319 (Claude Code)
+  changes: []
 filed_at:
   code_sha: b57c1fab753d30430c7a544b781bd8c7d91da0d2
   branch: main
@@ -187,3 +193,11 @@ filed_at:
   vendor: claude
   session: 01a1bc93-77a0-7740-8b03-df4e3e8d1df5
   harness_version: 2.1.319 (Claude Code)
+failure_reason:
+  phase: reviewer
+  phase_index: 3
+  kind: verdict:request-changes
+  detail: 'Round 3: head adds only a merge of main; the four PR files are unchanged from 35eabb02, so all round-2 findings stand, including the MAJOR host-Git-in-seat-clone recovery guidance. CI at head still pending.'
+  recovery_hint: address the review findings, move BUG-2504 back to In Progress, and clear the PR hold only after approval
+  shelved_by: reviewer
+  shelved_at: 2026-11-09T09:49:57.669227592Z
