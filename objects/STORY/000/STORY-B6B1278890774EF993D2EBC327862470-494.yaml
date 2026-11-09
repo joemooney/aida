@@ -27,7 +27,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-06T16:51:02.535818Z
-modified_at: 2026-11-09T02:23:28.499980523Z
+modified_at: 2026-11-09T03:09:22.610017875Z
 req_type: Story
 tags:
 - area:advisor
@@ -644,6 +644,12 @@ comments:
   created_at: 2026-11-09T02:21:48.184026381Z
   modified_at: 2026-11-09T02:21:48.184026381Z
   session_id: 20abb7c3-8f9b-4a5e-b326-404921f3b450
+- id: 01a1be48-28d3-7322-a341-9617dbec3db3
+  author: joe
+  content: 'Advisor ruling: PR-3640 round 7: implement these review findings; do not exit with no changes. (1) major: review_watch_service.rs L554-556 remove the loop invalidating each retired controller key; let revoke_by_id invalidate at cleanup; change the assertion near L910-914, add a key-retention test, fix the sentence in docs/cli/06-roles-sessions.md. (2) minor: review_watch.rs L2510, scope validate_child_delegation to the controller or just before admission, so ordinary watchers keep superseding obsolete heads. (3) minor: host_fresh L470-479 reports unknown, not blocked-deputy, for a foreign namespace; admission stays fail-closed. (4) minor: tick_with_launcher L579-588 open the log before minting, revoke the grant and set retry_after on every pre-spawn failure.'
+  created_at: 2026-11-09T03:09:22.515088412Z
+  modified_at: 2026-11-09T03:09:22.515088412Z
+  session_id: 7aacb1ed-ebaa-4da4-a195-500864e99e7d
 history:
 - id: 01a1b1c5-af09-7d01-81e9-eaaac083f223
   author: joe
