@@ -8,7 +8,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-09T04:05:37.821335038Z
-modified_at: 2026-11-09T06:29:06.624668076Z
+modified_at: 2026-11-09T06:30:47.772284087Z
 req_type: Bug
 history:
 - id: 01a1be7e-405e-7913-9338-8b3c4c4d4cbf
@@ -24,20 +24,19 @@ history:
   session_id: 01a1be7e3a2e
   harness_version: codex-cli 0.167.0
   changes: []
-- id: 01a1beff-056d-72c2-8086-eaefca822aff
+- id: 01a1bf00-90d4-7831-9ff5-34a9bd601f87
   author: aida-auto-bump
-  timestamp: 2026-11-09T06:29:06.541009972Z
+  timestamp: 2026-11-09T06:30:47.764078223Z
   changes:
   - field_name: status
     old_value: InProgress
     new_value: Completed
 processing_record:
-- id: 01a1beff-05c0-7340-b6be-f76f2362317d
-  timestamp: 2026-11-09T06:29:06.624618695Z
+- id: 01a1bf00-90dc-72a1-b845-aecca9ac90b3
+  timestamp: 2026-11-09T06:30:47.772282558Z
   agent: aida
   commit_sha: e853174564d8e99e57d92be4ff27106dd9b31825
-  summary: 'All BUG-2506 ACs met by source inspection (AC1 one-job.sh:25,48-54; AC2 rearm.sh:14,22-26; AC3 dell1-runner.md:58-61,89-91); type protocol ''PR touches a test file'' met. CI wait state: all 7 shards pending at record time, so the tests were read but not executed at this head (test_self_hosted_runner.py runs in the gates shard); merge must wait for green CI.'
-  review_verdict: approved
+  summary: Completed via merge e8531745
 filed_at:
   code_sha: 2ff9d1cefa275f068e4fa5db1becbb7a7d5d0c7f
   branch: main
@@ -48,5 +47,5 @@ filed_at:
   session: 7aacb1ed-ebaa-4da4-a195-500864e99e7d
 implementation_info:
   implemented: false
-  completed_at: 2026-11-09T06:29:06.541004929Z
+  completed_at: 2026-11-09T06:30:47.764075108Z
   completion_sha: e853174564d8e99e57d92be4ff27106dd9b31825
