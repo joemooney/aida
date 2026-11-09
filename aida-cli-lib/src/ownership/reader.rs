@@ -131,7 +131,8 @@ impl<'a> LeaseReader<'a> {
     }
 
     /// Temporary legacy compatibility for the four Part B pickup probes and
-    /// adoption. Remove once every production holder writes an admitted witness.
+    /// adoption, including explicitly refused legacy captures. Remove once every
+    /// production holder writes an admitted witness.
     // trace:TASK-3420 | ai:codex
     pub(crate) fn pickup_owner(
         &self,
@@ -146,18 +147,35 @@ impl<'a> LeaseReader<'a> {
                 .map(Clone::clone)
                 .map_err(|e| anyhow::anyhow!("{e:#}")),
         );
+        let unadmitted = |holder: &super::Holder| {
+            holder.witnesses.iter().all(|w| {
+                matches!(w.kind, super::WitnessKind::Process { .. })
+                    && w.admission.as_ref().is_none_or(|a| a.refusal().is_some())
+            })
+        };
         let legacy_unknown = match &record {
-            // Unkeyed leases cannot acquire an ownership row through migration.
-            // Their original rule already judges an admitted holder_record exactly.
-            Ok(None) => matches!(self.key(lease), Ok(None)) || lease.holder_record.is_none(),
-            Ok(Some(record)) => record.holder.as_ref().is_some_and(|holder| {
-                holder.session == lease.id
-                    && holder.witnesses.iter().all(|w| w.admission.is_none())
-                    && holder
-                        .witnesses
-                        .iter()
-                        .all(|w| matches!(w.kind, super::WitnessKind::Process { .. }))
-            }),
+            Ok(None) => {
+                matches!(self.key(lease), Ok(None))
+                    || unadmitted(&dual::holder_for_lease(
+                        lease,
+                        &dual::WriterFacts::here(),
+                        Utc::now(),
+                    ))
+            }
+            Ok(Some(record)) => match record.holder.as_ref() {
+                Some(holder) => holder.session == lease.id && unadmitted(holder),
+                None if matches!(&record.phase, Phase::InPr { handed_off_by: Some(id), .. } if id == &lease.id) =>
+                {
+                    // Handoff clears the holder; judge the same reconstructed
+                    // production envelope as lease_owner_record below.
+                    unadmitted(&dual::holder_for_lease(
+                        lease,
+                        &dual::WriterFacts::here(),
+                        Utc::now(),
+                    ))
+                }
+                None => false,
+            },
             Err(_) => false,
         };
         if matches!(verdict, OwnerVerdict::Unknown { .. }) && legacy_unknown {

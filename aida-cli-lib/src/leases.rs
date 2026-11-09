@@ -2381,9 +2381,9 @@ pub(crate) fn lease_owning_spec(
     store: &RequirementsStore,
     // BUG-637: liveness predicate. A spec-scoped claim only blocks an outbound
     // mutation while its holder is genuinely LIVE — a crashed/stale agent's
-    // lease must NOT permanently lock its spec (no crash-deadlock). Callers
-    // use the ownership reader with legacy pickup compatibility; tests of
-    // ancestry/scope matching alone pass `|_| true`.
+    // lease must NOT permanently lock its spec (no crash-deadlock). Migrated pickup
+    // callers use ownership with legacy compatibility; enforcement still uses
+    // lease_is_live. Tests of ancestry/scope matching alone pass `|_| true`.
     // trace:BUG-637 | ai:claude
     is_live: impl Fn(&SessionLease) -> bool,
 ) -> Option<SessionLease> {
@@ -4742,6 +4742,10 @@ fn stale_lease_recovery_with_live(
     }
 }
 
+// trace:TASK-3420 | ai:codex
+pub(crate) const LEGACY_UNKNOWN_OWNER_REASON: &str =
+    "it records no owning process, so it cannot be proven dead";
+
 /// BUG-2223: why a resumed pickup may not adopt this lease's tree in place,
 /// or `None` when it may: the owning process is verifiably gone and the tree
 /// is still on disk. Judged on the base verdict, like the BUG-908 retry:
@@ -4759,9 +4763,7 @@ pub(crate) fn orphan_adoption_refusal(report: &StaleLeaseRecoveryReport) -> Opti
             worktree_missing: true,
         } => Some("its tree no longer exists"),
         StaleLeaseRecovery::Live => Some("a live process still backs it"),
-        StaleLeaseRecovery::UnknownLiveness => {
-            Some("it records no owning process, so it cannot be proven dead")
-        }
+        StaleLeaseRecovery::UnknownLiveness => Some(LEGACY_UNKNOWN_OWNER_REASON),
     }
 }
 
@@ -4786,12 +4788,10 @@ pub(crate) fn lease_adoption_refusal(
         crate::ownership::OwnerVerdict::Alive { .. } => {
             return Some("a live process still backs it")
         }
-        crate::ownership::OwnerVerdict::Unknown { why }
-            if why == "it records no owning process, so it cannot be proven dead" =>
-        {
-            return Some("it records no owning process, so it cannot be proven dead");
+        crate::ownership::OwnerVerdict::Unknown { why } if why == LEGACY_UNKNOWN_OWNER_REASON => {
+            return Some(LEGACY_UNKNOWN_OWNER_REASON);
         }
-        _ => return Some("ownership holder is live or unknown"),
+        _ => return Some("ownership holder is unknown"),
     }
     // Adoption preserves all tree contents; only existence and registration
     // remain after the shared ownership verdict, without a second PID verdict.

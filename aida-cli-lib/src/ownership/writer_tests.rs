@@ -1818,3 +1818,83 @@ fn task_3420_legacy_rules_preserve_adoption_and_dormant_observations() {
         "keep me"
     );
 }
+
+// Production handoff removes the holder. Refused captures are also legacy,
+// both before the ownership row exists and after the writer persists it.
+// trace:TASK-3420 | ai:codex
+#[test]
+fn task_3420_handoff_and_refused_capture_preserve_legacy_rules() {
+    use super::reader::{LeaseReader, LegacyRule};
+    let tmp = tempfile::tempdir().unwrap();
+    let root = tmp.path();
+    let _ambient = crate::test_env::AmbientGuard::hermetic_with_seat(root, "implementer", &[]);
+    assert!(crate::test_git::git_command()
+        .args(["init", "-q"])
+        .current_dir(root)
+        .status()
+        .unwrap()
+        .success());
+    let store = OwnershipStore::for_project(root).unwrap().unwrap();
+    for refused in [false, true] {
+        for shape in 0..3 {
+            let n = 3430 + u64::from(refused) * 3 + shape;
+            let mut item = lease("legacy", &format!("PR-{n}"), "");
+            item.hostname = crate::coordination::hostname();
+            item.started_at = Utc::now() - chrono::Duration::days(2);
+            item.holder_record = refused.then(|| {
+                serde_json::to_string(&aida_core::proc_identity::HolderRecord::refused(
+                    aida_core::proc_identity::HolderRefusal::EvidenceUnavailable(
+                        "capture unavailable".into(),
+                    ),
+                ))
+                .unwrap()
+            });
+            let key = WorkKey::Change {
+                change: dual::change(n),
+            };
+            for alive in [false, true] {
+                item.active_pid = Some(if alive { std::process::id() } else { u32::MAX });
+                item.active_pid_start_time = item
+                    .active_pid
+                    .and_then(crate::process_probe::process_start_identity);
+                item.creator_pid = item.active_pid;
+                item.creator_pid_start_time = item.active_pid_start_time.clone();
+                if shape != 0 {
+                    let holder = (shape == 1)
+                        .then(|| dual::holder_for_lease(&item, &WriterFacts::here(), Utc::now()));
+                    store
+                        .update(&key, "test", Expect::Any, |_| {
+                            Some((
+                                Ownership {
+                                    key: key.clone(),
+                                    generation: 0,
+                                    holder,
+                                    phase: Phase::InPr {
+                                        change: dual::change(n),
+                                        handed_off_at: Utc::now(),
+                                        handed_off_by: Some(item.id.clone()),
+                                        head: "head".into(),
+                                    },
+                                },
+                                None,
+                            ))
+                        })
+                        .unwrap();
+                }
+                let reader = LeaseReader::new(root);
+                for rule in [
+                    LegacyRule::Pickup,
+                    LegacyRule::Adoption,
+                    LegacyRule::NonStale,
+                    LegacyRule::Review,
+                ] {
+                    assert_eq!(
+                        matches!(reader.pickup_owner(&item, rule), OwnerVerdict::Dead { .. }),
+                        !alive,
+                        "refused={refused} shape={shape} alive={alive}"
+                    );
+                }
+            }
+        }
+    }
+}
