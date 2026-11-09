@@ -33,12 +33,12 @@ description: |-
   - Refused with stated reason: conflict-resolved merge, evil merge, added non-merge commit, changed patch-id, no-carry marker, a refusal newer than the approval, an unrefreshable protected tip.
   - Rider ownership refusal and approval-authority checks unchanged.
   - Tests cover each refusal plus retargeting, head movement, a no-carry change on a cached proof, and an unavailable ledger write.
-status: InProgress
+status: NeedsAttention
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-09T15:57:18.371798469Z
-modified_at: 2026-11-09T21:27:56.630217862Z
+modified_at: 2026-11-09T21:36:34.735060996Z
 req_type: Story
 tags:
 - architecture
@@ -59,6 +59,20 @@ comments:
   modified_at: 2026-11-09T21:25:31.506158270Z
   session_id: 01a1beff-fc3b-78e2-93e2-9b0c283b0339
   harness_version: 2.1.319 (Claude Code)
+- id: 01a1c23b-0c6d-7ac0-820e-63ff7ef49b9d
+  author: dirtlab
+  content: 'Native-lane handoff note: reviewed Codegraph client /home/joe/ai/aida/.codegraph/proxy-state/bin/codegraph is absent; doctor reports missing. Used rg only. Host should deploy and supply the correct absolute reviewed client path. Filing the requested headless environment finding failed because this clone has no AIDA node binding; no finding object was written. Did not initialize or index Codegraph or acquire a node identity. The authentication design fork is captured by the punt. Independent freshness edits remain uncommitted in gate/review_carryover.rs and gate/tests/task_1960_carryover_tests.rs; lane tests pending.'
+  created_at: 2026-11-09T21:33:32.141458549Z
+  modified_at: 2026-11-09T21:33:32.141458549Z
+  session_id: 01a1c235a17f
+  harness_version: codex-cli 0.167.0
+- id: 01a1c23d-d5af-7312-a8a7-5c79a2604007
+  author: dirtlab
+  content: 'Final native-seat handoff: uncommitted edits in aida-cli-lib/src/gate/review_carryover.rs and aida-cli-lib/src/gate/tests/task_1960_carryover_tests.rs implement only the independent freshness prerequisite. Every production carry-over lookup refreshes protected default-branch identity and tip before cached-proof acceptance; failed fetches no longer fall through to a stale tracking ref. Five new regressions cover remote unavailability, fetch failure with a local tip, remote default change, remote tip advance, and identity-probe success followed by fetch failure. Final launcher job j20261109T213418726-2-0 executed gate::review_carryover::tests: 30 passed, 0 failed (exit 0). rustfmt --check on both files and git diff --check pass. The first run had one outdated error-category expectation, corrected before the final passing run. Authenticated no-carry policy, hold release, dispatch suppression and verdict display remain unimplemented; the design-fork punt and publication veto remain in force. No commit, push, PR, queue completion, review record or ship declaration performed.'
+  created_at: 2026-11-09T21:36:34.735060996Z
+  modified_at: 2026-11-09T21:36:34.735060996Z
+  session_id: 01a1c235a17f
+  harness_version: codex-cli 0.167.0
 history:
 - id: 01a1c233-af48-7011-9e22-fa81c9459065
   author: joe
@@ -88,6 +102,15 @@ history:
   session_id: 01a1c235a17f
   harness_version: codex-cli 0.167.0
   changes: []
+- id: 01a1c239-7eb9-72f1-943b-23e92ebadeee
+  author: dirtlab
+  timestamp: 2026-11-09T21:31:50.329021179Z
+  session_id: 01a1c235a17f
+  harness_version: codex-cli 0.167.0
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: NeedsAttention
 filed_at:
   code_sha: e4eee38238fa4cb8e8c85dadaa4ed07894cfbeea
   branch: main
@@ -97,3 +120,9 @@ filed_at:
   vendor: claude
   session: 01a1beff-fc3b-78e2-93e2-9b0c283b0339
   harness_version: 2.1.319 (Claude Code)
+attention_reason:
+  category: design-fork
+  detail: 'Authenticated no-carry needs a durable policy-binding design before new consumers can grant coverage. Local grant revalidation in gate/review_authority.rs::verified_authority_keys authenticates seat/time/binding/identity, not verdict policy; a mutable no_carry field (even in RecorderAttestation) could be removed while the approval still validates. Signed cross-node Receipt has a separate payload/schema. Fork: extend local recording receipts plus signed publication schema, or introduce a distinct authenticated reviewer-policy receipt. Both need migration and downgrade/removal rules, including marker changes after a cached proof. Current edits implement only the independent protected-base freshness fix; hold-release, dispatch suppression and verdict display remain unimplemented. Preserve publication veto until this fork is resolved.'
+  lean: Bind carry eligibility durably at approval recording for both grant and human reviewers, include it in signed remote receipt projections, and resolve that authenticated policy before every cached or fresh proof. Treat otherwise valid pre-policy attestations as eligible as required by the sketch; distinguish them from stripped newer policy.
+  raised_by: implementer
+  raised_at: 2026-11-09T21:31:50.329007231Z
