@@ -2,32 +2,43 @@ id: 01a1c107-38a3-79e1-bb3e-6ea8441cd9ed
 spec_id: STORY-b6b1278890774ef993d2ebc327862470-617
 agreed_id: STORY-2694
 title: Keep an approval across a clean merge from main when the PR's own change is identical
-description: |
+description: |-
   ## Problem
-  Every landing moves main. A PR approved at head H then gets a merge from main (by the watcher or a host merge), the approval no longer matches, and it needs a full review and CI pass although its own change is identical. PR #3687 lost this race repeatedly on 2026-11-09. Each loss costs a merge, a roughly 40-minute CI pass and a review.
+  Every landing moves main. A PR approved at head H then takes a clean merge from main, the approval no longer matches at the gates below, and it costs another review and CI pass although its own change is identical.
 
-  ## Sketch
-  Carry an APPROVED verdict from head H to a descendant head H2 only when all of these hold, checked mechanically by the host and recorded in the gate ledger:
-  1. Every commit between H and H2 is a merge whose non-PR parent is on main. A single-parent commit voids the carry.
-  2. Each such merge is conflict-free and unedited: its tree equals the tree `git merge-tree --write-tree` computes from its parents. This refuses an evil merge that hides edits in a merge commit, and it refuses every conflict resolution, which still gets a full review.
-  3. The PR's own change is unchanged: the diff from merge-base(H2, main) to H2 has the same patch-id as the approved diff.
-  4. The review did not name a condition tied to main's state.
+  ## Narrowed sketch (supersedes the original)
 
-  Required CI still runs at H2 and must be green; the merge train still tests the stacked result. Only the human or agent review is skipped.
+  Attested carry-over already exists (TASK-1960, STORY-080: `gate/review_carryover.rs`) and train admission honours it. It did not help on 2026-11-09 because merge-hold release requires an approval at the literal head and review dispatch selects on exact-head history. This story wires the existing proof into those gates. The proof rules stay; the only new eligibility restriction is the no-carry marker.
+
+  1. Merge-hold release (`refusal_release`, `gate/merge_hold_core.rs`): a refusal hold's release condition may be met by an APPROVED verdict at an older head when a stored carry-over proof covers approved -> current head. It must retain the check that no newer refusal exists. It reports coverage evidence and never records a verdict at the new head.
+  2. Review watch dispatch selection (`review_watch.rs` around the exact-head history check; readiness in `review_watch_ready.rs` already consults carry-over): do not dispatch a re-review for a head whose latest approval is covered by a carry-over proof. CI must still be green at the new head.
+  3. Surfacing: `aida review verdict PR-N` states "APPROVED at H, carried to H2 (proof ...)" so scripts and humans can see it.
+  4. Freshness fix, independent of the above: `stored_answer` trusts the local origin tip without fetching and a fetch failure falls through to the local tip. Gate callers that grant authority must fail closed when the protected tip cannot be refreshed.
+
+  Dropped from the original: "the review did not name a condition tied to main's state", which is not mechanically decidable from prose verdicts.
+
+  Accepted risk, stated plainly: a clean merge can combine with main to produce a semantic conflict that patch identity cannot see. TASK-1960 accepted this for the corpus gate; required CI at the new head and the stacked train CI are the mitigation. Security-critical or gate-touching PRs may be excluded by a reviewer via an explicit no-carry marker; legacy reviews remain carry-eligible because the existing gate already treats them so.
+
+  ## Conditions from independent design review (2026-11-09, binding)
+  - Suppressing dispatch requires an authorized approval plus corpus reconciliation, never merely an older APPROVED verdict or a stored proof; any standing non-approval or malformed/missing-SHA artifact refuses (`gate/merge_hold_core.rs` corpus carry-over).
+  - Keep the newer-refusal check, absorbed refusal obligations, and approval-authority validation before carry-over (`gate/approval.rs`). A proof authenticates no reviewer.
+  - The no-carry marker is authenticated and reviewer-controlled, checked before cached-proof acceptance in every consumer, and a marker change invalidates previously usable proofs.
+  - Freshness: refresh and validate protected branch identity and tip BEFORE accepting a cached or fresh proof.
+  - Merge binding: re-read the PR base and pin the merge to H2 while keeping H as the reviewed SHA.
+  - CI at H2 stays mandatory; dispatch suppression confers no readiness or merge authority.
+  - Legacy means an otherwise valid attested approval without the marker. Unattested legacy verdicts stay insufficient (`gate/ship.rs`).
 
   ## Acceptance
-  - A clean merge from main keeps the approval, with a ledger record naming H, H2 and the evidence.
-  - Refused with a stated reason: a conflict-resolved merge, a merge whose tree differs from the computed merge, an added non-merge commit, a changed patch-id.
-  - Merge-hold release and train admission accept a carried approval and no others.
-  - Tests cover each refusal, including an evil merge.
-
-  Safety-gate change: requires independent review and advisor signoff of this sketch before implementation. Operator agreed to the direction 2026-11-09.
+  - Clean merge from main: hold releases and no re-review dispatches, with a ledger proof naming H, H2 and base tip.
+  - Refused with stated reason: conflict-resolved merge, evil merge, added non-merge commit, changed patch-id, no-carry marker, a refusal newer than the approval, an unrefreshable protected tip.
+  - Rider ownership refusal and approval-authority checks unchanged.
+  - Tests cover each refusal plus retargeting, head movement, a no-carry change on a cached proof, and an unavailable ledger write.
 status: Draft
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-09T15:57:18.371798469Z
-modified_at: 2026-11-09T21:24:22.583943533Z
+modified_at: 2026-11-09T21:25:29.470114663Z
 req_type: Story
 tags:
 - architecture
@@ -41,6 +52,13 @@ comments:
   modified_at: 2026-11-09T21:24:22.583943533Z
   session_id: 01a1beff-fc3b-78e2-93e2-9b0c283b0339
   harness_version: 2.1.319 (Claude Code)
+history:
+- id: 01a1c233-af48-7011-9e22-fa81c9459065
+  author: joe
+  timestamp: 2026-11-09T21:25:29.544896398Z
+  session_id: 01a1beff-fc3b-78e2-93e2-9b0c283b0339
+  harness_version: 2.1.319 (Claude Code)
+  changes: []
 filed_at:
   code_sha: e4eee38238fa4cb8e8c85dadaa4ed07894cfbeea
   branch: main
