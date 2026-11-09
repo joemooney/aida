@@ -165,6 +165,40 @@ fn add_task(fixture: &Fixture, tags: &str) -> Output {
     )
 }
 
+// trace:BUG-2505 | ai:codex
+#[test]
+fn bug_2505_review_closeout_tag_creates_a_persisted_spec() {
+    let fixture = init_fixture();
+    for tags in [
+        "from:2026-11-08-review-closeout",
+        "area:orchestration,from:2026-11-08-review-closeout",
+        "area:orchestration",
+    ] {
+        let before = Storage::new(fixture.repo.join(".aida-store"))
+            .load()
+            .unwrap()
+            .requirements
+            .len();
+        let result = add_task(&fixture, tags);
+        assert!(
+            result.status.success(),
+            "add with {tags:?} failed: status={}\nstdout={}\nstderr={}",
+            result.status,
+            String::from_utf8_lossy(&result.stdout),
+            String::from_utf8_lossy(&result.stderr)
+        );
+        let store = Storage::new(fixture.repo.join(".aida-store"))
+            .load()
+            .unwrap();
+        assert_eq!(store.requirements.len(), before + 1);
+        let id = spec_id_from(&String::from_utf8_lossy(&result.stdout));
+        let mut expected: Vec<String> = tags.split(',').map(str::to_string).collect();
+        expected.sort();
+        assert_eq!(stored_tags(&fixture, &id), expected);
+        assert_eq!(stored_tag_yaml_items(&fixture, &id).len(), expected.len());
+    }
+}
+
 /// AC1 + AC6: a comma-separated argument yields N separate YAML list items, a
 /// space-separated one is refused, and the colon-namespaced control still
 /// round-trips. The control is the case BUG-1542 was filed against and
