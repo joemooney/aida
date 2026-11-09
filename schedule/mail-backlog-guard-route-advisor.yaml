@@ -1,14 +1,8 @@
 job: mail-backlog-guard-route-advisor
-last_run: 2026-11-07T00:15:25.364948257Z
+last_run: 2026-11-09T07:14:01.892887005Z
 last_by:
   seat: advisor
-  session: 01a1b358-7de9-72a0-b4a1-1a909992fa05
+  session: 01a1beff-fc3b-78e2-93e2-9b0c283b0339
   vendor: claude
 result: done
-note: 'advisor: unread [request] from dirtlab, 3h22m old: Queue-work lane exited without changes; advisor: unread [request] from dirtlab, 3h05m old: Queue-work lane exited without changes; advisor: unread [request] from dirtlab, 2h06m old: Queue-work lane exited without changes; advisor: unread [request] from review-watch, 116m old: PR-3699 behind `main` with overlap; update-branch conflicts; advisor: unread [request] from dirtlab, 68m old: Queue-work lane exited without changes; advisor: unread [request] from dirtlab, 61m old: Queue-work lane exited without changes; advisor: unread [request] from dirtlab, 43m old: Queue-work lane exited without changes'
-due_since: 2026-11-08T01:21:11.545860007Z
-due_reason: on CronJobFired:mail-backlog-guard-route-advisor
-due_failure:
-  trip_id: mail-backlog-guard-route-advisor@2026-11-09T06:28:03Z
-  job: mail-backlog
-  error: 'advisor: unread [request] from dirtlab, 3h22m old: Queue-work lane exited without changes; advisor: unread [request] from dirtlab, 3h05m old: Queue-work lane exited without changes; advisor: unread [request] from dirtlab, 2h06m old: Queue-work lane exited without changes; advisor: unread [request] from review-watch, 116m old: PR-3699 behind `main` with overlap; update-branch conflicts; advisor: unread [request] from dirtlab, 68m old: Queue-work lane exited without changes; advisor: unread [request] from dirtlab, 61m old: Queue-work lane exited without changes; advisor: unread [request] from dirtlab, 43m old: Queue-work lane exited without changes'
+note: 'Read 11 advisor requests: 10 lane-exited notices are covered by the rework relaunches with exact failure briefs; PR-3699 was closed.'
