@@ -198,6 +198,8 @@ fn emit_writes_targeted_commits_and_preserves_concurrent_spec() {
         .collect();
     assert_eq!(carried.len(), 1);
     assert!(carried[0].tags.contains("kind:finding-sweep"));
+    // trace:TASK-3777 | ai:codex
+    assert!(carried[0].description.starts_with("## Findings from "));
     assert!(carried[0].description.contains("F1: finding text"));
     assert!(carried[0].description.contains("F2: finding text"));
     assert!(carried[0]
