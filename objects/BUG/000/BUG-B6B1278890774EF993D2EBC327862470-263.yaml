@@ -8,7 +8,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-08T18:38:43.709546225Z
-modified_at: 2026-11-09T05:10:52.755778440Z
+modified_at: 2026-11-09T05:18:48.976756143Z
 req_type: Bug
 comments:
 - id: 01a1bc8c-5761-7180-b3a9-aa9efdae2409
@@ -117,6 +117,13 @@ comments:
   created_at: 2026-11-08T22:15:51.108472018Z
   modified_at: 2026-11-08T22:15:51.108472018Z
   session_id: 01a1bd3563f3
+  harness_version: codex-cli 0.167.0
+- id: 01a1bebe-aa90-72a1-977b-39bf16e85cf7
+  author: dirtlab
+  content: 'Revalidated current branch c9c9400ec6: BUG-2498 implementation and all recorded reviewer revisions are already present; no new source edits required. Lane runner executed seat_clone::review_repickup_tests (2 passed) and bug2450_observed_setup_refusals_retry_without_consuming_a_review (1 passed). These cover consecutive-head pickup, unsafe-tree refusal, merge-hold preservation, supervisor/supersede completion receipts and bounded watcher retry. Initial binary-crate invocation had no library target; a later bug2498 filter ran zero tests and is not counted. git diff --check passed; working tree clean. Codegraph client unavailable, confirmed by doctor; navigation used rg. No implementation blockers. Native handoff: no new changed files; existing branch commits remain for host publication and queue completion.'
+  created_at: 2026-11-09T05:18:48.976756143Z
+  modified_at: 2026-11-09T05:18:48.976756143Z
+  session_id: 01a1beb6f4ae
   harness_version: codex-cli 0.167.0
 history:
 - id: 01a1bc76-cd85-7f81-93f5-51ee03fadbe7
