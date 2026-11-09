@@ -37,12 +37,12 @@ description: |-
 
   ## Advisor ruling 2026-11-09 (resolves the design-fork punt)
   The reviewer-controlled no-carry marker is OUT of scope. It was an optional exclusion, not part of the safety argument (TASK-1960 carry-over runs without it), and authenticating it needs its own receipt design. It is filed separately as a Draft.
-status: NeedsAttention
+status: Approved
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-09T15:57:18.371798469Z
-modified_at: 2026-11-09T23:18:50.210274770Z
+modified_at: 2026-11-09T23:19:49.871414004Z
 req_type: Story
 tags:
 - architecture
@@ -110,6 +110,13 @@ comments:
   content: 'ADVISOR RULING (2026-11-09 23:25 UTC, resolves the design-fork punt): the authenticated no-carry marker is OUT of scope; review finding 3 is withdrawn and the marker tests in finding 5 are dropped. It moved to STORY-2696. Implement review findings 1, 2 and 4, and finding 5 minus marker tests, in this PR (#3744), on top of the freshness fix already there. Use the commit trailer (STORY-2694): this PR now completes the story.'
   created_at: 2026-11-09T23:18:50.210274770Z
   modified_at: 2026-11-09T23:18:50.210274770Z
+  session_id: 01a1beff-fc3b-78e2-93e2-9b0c283b0339
+  harness_version: 2.1.319 (Claude Code)
+- id: 01a1c29c-5d6f-7cb1-acb2-90ba77f701b0
+  author: joe
+  content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was punted on: design-fork: Rework finding 3 remains blocked by the unresolved authenticated-policy design fork recorded in comment 6. Inspected gate/review_authority.rs::verified_authority_keys: local seat validation authenticates grant/seat/time/binding, not verdict policy; removing a mutable no_carry field would still validate. gate/review_publication.rs::Receipt is strict canonical signed v1 with deny_unknown_fields and no policy binding. The approved narrowed wiring sketch does not decide the durable local policy receipt, signed publication schema migration, or downgrade/removal rules. Dispute implementing finding 3 as a plain verdict/attestation boolean: it violates the binding authenticated-marker and cached-proof invalidation conditions. Findings 1, 2 and 4 depend on that eligibility boundary; enabling them first would grant coverage without the required opt-out. Finding 5 cannot establish the authenticated-marker acceptance until this is decided. Existing publication veto retained. No source edits or test runs; checkout clean.. No triage reason was given.'
+  created_at: 2026-11-09T23:19:49.871409561Z
+  modified_at: 2026-11-09T23:19:49.871409561Z
   session_id: 01a1beff-fc3b-78e2-93e2-9b0c283b0339
   harness_version: 2.1.319 (Claude Code)
 history:
@@ -193,6 +200,15 @@ history:
   session_id: 01a1beff-fc3b-78e2-93e2-9b0c283b0339
   harness_version: 2.1.319 (Claude Code)
   changes: []
+- id: 01a1c29c-5d6f-7cb1-acb2-90adf74206d9
+  author: joe
+  timestamp: 2026-11-09T23:19:49.871398564Z
+  session_id: 01a1beff-fc3b-78e2-93e2-9b0c283b0339
+  harness_version: 2.1.319 (Claude Code)
+  changes:
+  - field_name: status
+    old_value: NeedsAttention
+    new_value: Approved
 filed_at:
   code_sha: e4eee38238fa4cb8e8c85dadaa4ed07894cfbeea
   branch: main
@@ -202,9 +218,3 @@ filed_at:
   vendor: claude
   session: 01a1beff-fc3b-78e2-93e2-9b0c283b0339
   harness_version: 2.1.319 (Claude Code)
-attention_reason:
-  category: design-fork
-  detail: 'Rework finding 3 remains blocked by the unresolved authenticated-policy design fork recorded in comment 6. Inspected gate/review_authority.rs::verified_authority_keys: local seat validation authenticates grant/seat/time/binding, not verdict policy; removing a mutable no_carry field would still validate. gate/review_publication.rs::Receipt is strict canonical signed v1 with deny_unknown_fields and no policy binding. The approved narrowed wiring sketch does not decide the durable local policy receipt, signed publication schema migration, or downgrade/removal rules. Dispute implementing finding 3 as a plain verdict/attestation boolean: it violates the binding authenticated-marker and cached-proof invalidation conditions. Findings 1, 2 and 4 depend on that eligibility boundary; enabling them first would grant coverage without the required opt-out. Finding 5 cannot establish the authenticated-marker acceptance until this is decided. Existing publication veto retained. No source edits or test runs; checkout clean.'
-  lean: Extend the approved sketch with a durable reviewer-policy receipt bound to change key, reviewed SHA, recorder authority and policy revision; authenticate signed publications under a versioned policy-aware schema; require the current policy revision before cached or fresh proof acceptance and fail closed on missing, mismatched, removed or downgraded new-policy receipts while explicitly distinguishing genuinely pre-policy attested approvals. Obtain advisor signoff for receipt storage, migration and downgrade rules before implementation.
-  raised_by: implementer
-  raised_at: 2026-11-09T22:03:04.275804648Z
