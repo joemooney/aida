@@ -2621,7 +2621,7 @@ pub struct ProcessingRecord {
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub punted: Vec<String>,
 
-    /// The reviewer's verdict (`Approved` / `RequestChanges` / `Rejected`),
+    /// The reviewer's verdict (`Approved` / `RequestChanges` / `Rejected` / `Waiting`),
     /// promoted from the gitignored `.aida/review-verdicts/<spec>.json`.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub review_verdict: Option<String>,

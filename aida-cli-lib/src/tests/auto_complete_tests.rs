@@ -8284,6 +8284,28 @@ fn scenario_all_green_batch_drains_clean() {
     );
 }
 
+/// trace:BUG-2500 | ai:codex
+#[test]
+fn bug_2500_waiting_stops_without_merge_or_implementer_retry() {
+    let mut driver = MockPhaseDriver::with_verdict(Verdict::Waiting);
+    let result = orchestrate(
+        &mut driver,
+        "BUG-2500",
+        AutoCompleteVariant::Full,
+        false,
+        EscalateMode::Blocks,
+    );
+    assert_eq!(result.exit_code, 0);
+    assert!(result.failure.is_none());
+    assert!(result.shelved_reason.is_none());
+    assert_eq!(result.escalation.unwrap().kind, EscalationKind::Waiting);
+    assert_eq!(
+        driver.calls,
+        vec![Phase::Implementer, Phase::Ci, Phase::Reviewer]
+    );
+    assert!(driver.recorded_merge_holds.is_empty());
+}
+
 // trace:TASK-3608 | ai:codex
 #[test]
 fn task_3608_fresh_and_resumed_no_change_reach_batch_classification() {

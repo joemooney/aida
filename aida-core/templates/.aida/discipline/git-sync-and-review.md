@@ -397,7 +397,7 @@ STORY-1425, TASK-1536) stayed parked. On 2026-10-01 I nearly recommended filing 
 non-interactive review mode on the strength of it. **The capability already exists:**
 
 ```
-aida review record <SPEC> --verdict approved|request-changes|rejected
+aida review record <SPEC> --verdict approved|request-changes|rejected|waiting
                           [--sha <SHA>] [--branch <BRANCH>] [--summary <TEXT>] [--finding <TEXT>]...
 ```
 

@@ -1642,6 +1642,8 @@ pub(crate) fn ci_state_is_green(pr: u64, state: crate::gate::dispatch_deps::CiSt
 // trace:STORY-1889 | ai:claude
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum FlowVerdict {
+    /// External evidence requires a fresh review, without implementer rework.
+    Waiting,
     /// An APPROVED verdict pinned to the head: `flow` may hand the PR to ship.
     Ship,
     /// CHANGES_REQUESTED or REJECTED: stop with the hold intact.
@@ -1655,6 +1657,7 @@ pub(crate) enum FlowVerdict {
 // trace:STORY-1889 | ai:claude
 pub(crate) fn flow_ship_decision(verdict: Option<VerdictKind>) -> FlowVerdict {
     match verdict {
+        Some(VerdictKind::Waiting) => FlowVerdict::Waiting,
         Some(VerdictKind::Approved) => FlowVerdict::Ship,
         Some(VerdictKind::RequestChanges | VerdictKind::Rejected) => FlowVerdict::ChangesRequested,
         _ => FlowVerdict::NoVerdict,
