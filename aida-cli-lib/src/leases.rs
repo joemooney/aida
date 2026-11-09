@@ -2045,12 +2045,12 @@ pub(crate) fn live_spec_claim_by_other<'a>(
                 return false;
             }
         }
-        if !is_live(l) {
-            return false;
-        }
+        // Scope filtering must precede ownership I/O on this hot path.
+        // trace:TASK-3420 | ai:codex
         spec_ids
             .iter()
             .any(|id| !id.is_empty() && l.scope.eq_ignore_ascii_case(id))
+            && is_live(l)
     })
 }
 
@@ -2379,9 +2379,9 @@ pub(crate) fn lease_owning_spec(
     store: &RequirementsStore,
     // BUG-637: liveness predicate. A spec-scoped claim only blocks an outbound
     // mutation while its holder is genuinely LIVE — a crashed/stale agent's
-    // lease must NOT permanently lock its spec (no crash-deadlock). Callers
-    // pass `lease_is_live(&live_sessions, now)`; the unit tests (which exercise
-    // ancestry/scope matching, not liveness) pass `|_| true`.
+    // lease must NOT permanently lock its spec (no crash-deadlock). Migrated pickup
+    // callers use ownership with legacy compatibility; enforcement still uses
+    // lease_is_live. Tests of ancestry/scope matching alone pass `|_| true`.
     // trace:BUG-637 | ai:claude
     is_live: impl Fn(&SessionLease) -> bool,
 ) -> Option<SessionLease> {
@@ -2427,23 +2427,15 @@ pub(crate) fn lease_owning_spec(
                 continue;
             }
         }
-        // BUG-637: a dead/stale claim doesn't own the scope anymore — skip it so a
-        // crashed agent can't permanently block edits to its spec.
-        // trace:BUG-637 | ai:claude
-        if !is_live(lease) {
-            continue;
-        }
+        // Filter by scope before reading ownership; unrelated leases can be
+        // numerous and spec-label resolution can load the requirement store.
+        // trace:TASK-3420 | ai:codex
         let scope_lc = lease.scope.to_ascii_lowercase();
-        // Direct id-form match (handles SPEC-ID + agreed-id forms).
-        if ancestor_ids.contains(&scope_lc) {
+        let matches_scope = ancestor_ids.contains(&scope_lc)
+            || target_spec_id.is_some_and(|tid| tid.eq_ignore_ascii_case(&lease.scope));
+        // BUG-637: a stale claim no longer owns its matching scope.
+        if matches_scope && is_live(lease) {
             return Some(lease.clone());
-        }
-        // The provided target_spec_id might equal the scope verbatim even
-        // when ancestor walking doesn't pick it up (e.g. agreed_id stripped).
-        if let Some(tid) = target_spec_id {
-            if tid.eq_ignore_ascii_case(&lease.scope) {
-                return Some(lease.clone());
-            }
         }
         // Path globs / free-form tags: no ancestry to walk → don't enforce.
     }
@@ -4748,6 +4740,10 @@ fn stale_lease_recovery_with_live(
     }
 }
 
+// trace:TASK-3420 | ai:codex
+pub(crate) const LEGACY_UNKNOWN_OWNER_REASON: &str =
+    "it records no owning process, so it cannot be proven dead";
+
 /// BUG-2223: why a resumed pickup may not adopt this lease's tree in place,
 /// or `None` when it may: the owning process is verifiably gone and the tree
 /// is still on disk. Judged on the base verdict, like the BUG-908 retry:
@@ -4765,13 +4761,11 @@ pub(crate) fn orphan_adoption_refusal(report: &StaleLeaseRecoveryReport) -> Opti
             worktree_missing: true,
         } => Some("its tree no longer exists"),
         StaleLeaseRecovery::Live => Some("a live process still backs it"),
-        StaleLeaseRecovery::UnknownLiveness => {
-            Some("it records no owning process, so it cannot be proven dead")
-        }
+        StaleLeaseRecovery::UnknownLiveness => Some(LEGACY_UNKNOWN_OWNER_REASON),
     }
 }
 
-/// BUG-2223: [`orphan_adoption_refusal`] for `lease` itself, also refusing a
+/// Shared ownership judgment for adoption, also refusing a
 /// lease that records no tree, or a linked worktree git no longer lists
 /// (session start re-enters a worktree only when `git worktree list` does).
 /// Every `--resume` hint a scope-conflict refusal gives is gated on this, so
@@ -4784,8 +4778,23 @@ pub(crate) fn lease_adoption_refusal(
     if lease.worktree_path.as_os_str().is_empty() {
         return Some("it records no tree");
     }
-    if let Some(why) = orphan_adoption_refusal(&stale_lease_recovery_for_lease(lease)) {
-        return Some(why);
+    // trace:TASK-3420 | ai:codex
+    match crate::ownership::reader::LeaseReader::new(project_root)
+        .pickup_owner(lease, crate::ownership::reader::LegacyRule::Adoption)
+    {
+        crate::ownership::OwnerVerdict::Dead { .. } => {}
+        crate::ownership::OwnerVerdict::Alive { .. } => {
+            return Some("a live process still backs it")
+        }
+        crate::ownership::OwnerVerdict::Unknown { why } if why == LEGACY_UNKNOWN_OWNER_REASON => {
+            return Some(LEGACY_UNKNOWN_OWNER_REASON);
+        }
+        _ => return Some("ownership holder is unknown"),
+    }
+    // Adoption preserves all tree contents; only existence and registration
+    // remain after the shared ownership verdict, without a second PID verdict.
+    if !lease.worktree_path.exists() {
+        return Some("its tree no longer exists");
     }
     let registered = || {
         aida_core::git_ops::host_git_command(project_root)

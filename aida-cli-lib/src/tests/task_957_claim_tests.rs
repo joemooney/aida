@@ -417,3 +417,20 @@ fn reap_views_root_claim_as_worktreeless() {
         elsewhere.worktree_path
     );
 }
+
+// trace:TASK-3420 | ai:codex
+#[test]
+fn task_3420_claim_scope_filters_before_owner_read() {
+    let leases = vec![
+        claim("unrelated", "TASK-1", None),
+        claim("matching", "TASK-2", None),
+    ];
+    let reads = std::cell::Cell::new(0);
+    let found = live_spec_claim_by_other(&leases, None, &["TASK-2"], |l| {
+        assert_eq!(l.id, "matching", "unrelated owners must not be read");
+        reads.set(reads.get() + 1);
+        true
+    });
+    assert_eq!(found.unwrap().id, "matching");
+    assert_eq!(reads.get(), 1);
+}
