@@ -2378,7 +2378,8 @@ pub(crate) fn rework_findings_block_for_spec(
     match resolve_rework_findings(project_root, display_id, spec_id, None) {
         Ok(block) => block,
         Err(why) => {
-            eprintln!("warning: no review findings imported for {display_id}: {why}");
+            // trace:BUG-2507 | ai:codex
+            eprintln!("warning: no review findings imported for {display_id}: {why}. Read the review comment before starting rework.");
             None
         }
     }
@@ -2464,7 +2465,7 @@ pub(crate) fn resolve_rework_findings(
                     ));
                 }
                 eprintln!(
-                    "warning: no review findings imported for {shown}: its current review cannot be selected ({reason})"
+                    "warning: no review findings imported for {shown}: its current review cannot be selected ({reason}). Read the review comment before starting rework."
                 );
                 return Ok(None);
             }
