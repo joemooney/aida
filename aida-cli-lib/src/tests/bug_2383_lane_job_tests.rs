@@ -1792,6 +1792,7 @@ fn story_2641_sccache_job_env_and_binds_are_opt_in_and_lane_only() {
     let parent = Environment::from_pairs([
         ("HOME".into(), tmp.path().as_os_str().to_owned()),
         ("SCCACHE_DIR".into(), "/operator/cache".into()),
+        ("SCCACHE_CONF".into(), "/operator/remote-config".into()),
         ("SCCACHE_SERVER_UDS".into(), "/operator/server".into()),
     ]);
     assert!(lane_sccache_env(&parent).is_empty());
@@ -1836,6 +1837,7 @@ fn story_2641_sccache_job_env_and_binds_are_opt_in_and_lane_only() {
     let env = lane.job_env(&job(&["cargo", "test", "--profile", "agent"]));
     let cache = tmp.path().join(".cache/aida/lane-sccache");
     assert_eq!(env["SCCACHE_DIR"], cache.display().to_string());
+    assert_eq!(env["SCCACHE_CONF"], "/dev/null");
     assert_eq!(env["RUSTC_WRAPPER"], "/host/bin/sccache");
     assert_eq!(env["CARGO_NET_OFFLINE"], "true");
     assert!(!env.contains_key("CARGO_INCREMENTAL"));

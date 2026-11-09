@@ -33,6 +33,8 @@ impl Sccache {
         if let Self::Lane { cache, socket, .. } = self {
             env.extend([
                 ("SCCACHE_DIR", cache.as_os_str().to_owned()),
+                // Ignore operator remote backends; lane jobs use only their disk cache.
+                ("SCCACHE_CONF", "/dev/null".into()),
                 ("SCCACHE_SERVER_UDS", socket.as_os_str().to_owned()),
                 // Unsupported UDS clients must never fall back to the operator's TCP server.
                 ("SCCACHE_SERVER_PORT", "0".into()),
