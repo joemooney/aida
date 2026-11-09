@@ -657,6 +657,38 @@ mod tests {
         )
     }
 
+    // trace:BUG-2490 | ai:codex
+    #[test]
+    fn bug_2490_timing_commit_preserves_unmerged_index() {
+        let (_g, _project, store) = git_fixture("BUG-9");
+        let rel = "timings/conflicted.json";
+        std::fs::create_dir_all(store.join("timings")).unwrap();
+        std::fs::write(store.join(rel), "<<<<<<< unresolved\n").unwrap();
+        let hash = store_git(&store, &["rev-parse", "HEAD:metadata.yaml"]);
+        let mut child = aida_core::git_ops::host_git_command(&store)
+            .args(["update-index", "--index-info"])
+            .stdin(std::process::Stdio::piped())
+            .spawn()
+            .unwrap();
+        use std::io::Write;
+        writeln!(
+            child.stdin.take().unwrap(),
+            "100644 {} 2\t{rel}",
+            hash.trim()
+        )
+        .unwrap();
+        assert!(child.wait().unwrap().success());
+        let before = store_git(&store, &["ls-files", "--unmerged"]);
+        let head = store_git(&store, &["rev-parse", "HEAD"]);
+        let error = commit_record(&store, "BUG-9", rel, "test").unwrap_err();
+        assert!(
+            error.to_string().contains("unmerged store paths"),
+            "{error:#}"
+        );
+        assert_eq!(store_git(&store, &["ls-files", "--unmerged"]), before);
+        assert_eq!(store_git(&store, &["rev-parse", "HEAD"]), head);
+    }
+
     // trace:BUG-2178 | ai:claude
     #[test]
     fn bug_2178_completion_leaves_store_worktree_clean() {

@@ -2573,6 +2573,89 @@ fn unreadable_status_fails_push_and_auto_push_without_false_success() {
     assert_eq!(fx.origin_head(), fx.head());
 }
 
+// trace:BUG-2490 | ai:codex
+#[test]
+fn bug_2490_db_sync_preserves_unmerged_non_object_index() {
+    let fx = fixture();
+    let path = "registry/queues/conflicted.yaml";
+    fx.write_store_file(path, "entries: []\n");
+    git(&fx.store, &["add", "-A"]);
+    git(&fx.store, &["commit", "-qm", "chore: conflict base"]);
+    let base = fx.head();
+    git(&fx.store, &["checkout", "-qb", "conflict-peer"]);
+    fx.write_store_file(path, "entries: [peer]\n");
+    git(&fx.store, &["commit", "-qam", "chore: peer"]);
+    let peer = fx.head();
+    git(&fx.store, &["checkout", "-q", "aida-store"]);
+    assert_eq!(fx.head(), base);
+    fx.write_store_file(path, "entries: [local]\n");
+    git(&fx.store, &["commit", "-qam", "chore: local"]);
+    assert!(!git_try(&fx.store, &["merge", "--no-edit", &peer])
+        .status
+        .success());
+    // Model an autostash conflict: unmerged stages without a merge in progress.
+    git(&fx.store, &["merge", "--quit"]);
+    let unmerged = git(&fx.store, &["ls-files", "--unmerged"]);
+    assert!(unmerged.contains(path), "{unmerged}");
+    let before = snapshot(&fx);
+    let out = fx.run(&["db", "sync"]);
+    let t = text(&out);
+    assert!(!out.status.success(), "{t}");
+    assert!(
+        t.contains("unmerged store paths") && t.contains(path),
+        "{t}"
+    );
+    assert_eq!(
+        snapshot(&fx),
+        before,
+        "refusal must preserve HEAD, index and files"
+    );
+    // Positive control: explicit resolution permits an ordinary sync commit.
+    fx.write_store_file(path, "entries: [local, peer]\n");
+    git(&fx.store, &["add", path]);
+    fx.run_ok(&["db", "sync"]);
+    assert!(git(&fx.store, &["ls-files", "--unmerged"]).is_empty());
+}
+
+// trace:BUG-2490 | ai:codex
+#[test]
+fn bug_2490_db_sync_preserves_unmerged_modify_delete_object() {
+    let fx = fixture();
+    let path = git(&fx.store, &["ls-files", "objects"])
+        .lines()
+        .find(|path| path.ends_with("TASK-1.yaml"))
+        .expect("fixture TASK-1 object")
+        .to_owned();
+    git(&fx.store, &["checkout", "-qb", "conflict-peer"]);
+    git(&fx.store, &["rm", &path]);
+    git(&fx.store, &["commit", "-qm", "chore: delete object"]);
+    let peer = fx.head();
+    git(&fx.store, &["checkout", "-q", "aida-store"]);
+    let object = std::fs::read_to_string(fx.store.join(&path)).unwrap();
+    fx.write_store_file(&path, &format!("{object}\n# local edit\n"));
+    git(&fx.store, &["commit", "-qam", "chore: modify object"]);
+    assert!(!git_try(&fx.store, &["merge", "--no-edit", &peer])
+        .status
+        .success());
+    git(&fx.store, &["merge", "--quit"]);
+    assert!(!std::fs::read_to_string(fx.store.join(&path))
+        .unwrap()
+        .contains("<<<<<<<"));
+    let before = snapshot(&fx);
+    let out = fx.run(&["db", "sync"]);
+    let t = text(&out);
+    assert!(!out.status.success(), "{t}");
+    assert!(
+        t.contains("unmerged store paths") && t.contains(&path),
+        "{t}"
+    );
+    assert_eq!(
+        snapshot(&fx),
+        before,
+        "marker-free conflicts must also survive refusal"
+    );
+}
+
 // ── Section 7 gaps ─────────────────────────────────────────────────────────
 
 /// Group 1: the rebase this sync started conflicts and its automatic abort
@@ -2595,6 +2678,14 @@ fn owned_rebase_abort_failure_is_reported_and_preserved() {
     let t = text(&out);
     assert!(!out.status.success(), "{t}");
     assert!(t.contains("rebase --abort` also failed"), "{t}");
+    assert!(
+        t.contains("notes/clash.txt"),
+        "original conflict missing: {t}"
+    );
+    assert!(
+        t.contains("T1717-ABORT-BLOCKED"),
+        "abort diagnostic missing: {t}"
+    );
     let git_dir = PathBuf::from(git(&fx.store, &["rev-parse", "--absolute-git-dir"]));
     assert!(
         git_dir.join("rebase-merge").exists() || git_dir.join("rebase-apply").exists(),
