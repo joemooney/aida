@@ -246,8 +246,9 @@ class LauncherRefusals(unittest.TestCase):
         import os
         import subprocess
         import tempfile
-        for stop_status in (0, 5, 1):
-            with self.subTest(stop_status=stop_status), tempfile.TemporaryDirectory() as directory:
+        # trace:TASK-3736 | ai:codex — slow setup must not hide a short service.
+        for stop_status, short_service in ((0, False), (5, False), (1, False), (0, True)):
+            with self.subTest(stop_status=stop_status, short_service=short_service), tempfile.TemporaryDirectory() as directory:
                 root = Path(directory)
                 jobs = root / 'jobs'
                 state = jobs / 'current'
@@ -291,6 +292,11 @@ class LauncherRefusals(unittest.TestCase):
                 script = script.replace('/opt/aida-actions-runner', str(dist))
                 script = script.replace('/var/lib/aida-ci-jobs', str(jobs))
                 script = script.replace('! -user root', f'! -user {os.getuid()}')
+                if short_service:
+                    script = script.replace('cp -a "$runner_source/." "$state/"',
+                                            'cp -a "$runner_source/." "$state/"\nSECONDS=20')
+                else:
+                    script = script.replace('runner_started=$SECONDS', 'runner_started=$((SECONDS - 10))')
                 for attempt in range(2):
                     result = subprocess.run(['bash', '-c', script], input='fresh-config\n',
                                             capture_output=True, text=True, timeout=5,
@@ -302,7 +308,11 @@ class LauncherRefusals(unittest.TestCase):
                         self.assertTrue((state / 'old-job').exists())
                         self.assertFalse(log.exists())
                     else:
-                        self.assertEqual(result.returncode, 0, result.stderr)
+                        if short_service:
+                            self.assertNotEqual(result.returncode, 0)
+                            self.assertIn('stopping re-registration', result.stderr)
+                        else:
+                            self.assertEqual(result.returncode, 0, result.stderr)
                         self.assertNotIn('stop-diagnostic', result.stderr)
                         self.assertFalse(state.exists(), 'job content must be removed on exit')
                         self.assertEqual(log.read_text().splitlines(), ['fresh-config'] * (attempt + 1))
