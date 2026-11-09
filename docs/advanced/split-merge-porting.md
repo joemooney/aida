@@ -11,7 +11,13 @@ python3 scripts/port-split-hunks.py --base <base-sha> --head <pr-head-sha> \
   --destination path/parent.rs --destination path/module.rs
 ```
 
-The default previews placements. Repeat with `--apply` to write them and run
+During an active merge, `--head` must equal `MERGE_HEAD` and `--base` must
+be the unique merge base of HEAD and that head. A wrong base refuses before
+writes, preventing replay of changes that belong to the destination branch.
+Outside a merge, the helper checks ancestry only; selecting the intended PR
+range remains the operator's responsibility.
+
+The default previews placements. Repeat with `--apply` to write them and, once source conflicts are staged as resolved, run
 `python3 scripts/check-store-writers.py --root <worktree> --regenerate`.
 Review the resulting source and inventory diff. New inventory sites retain the
 regenerator's blocked policy; regeneration grants no authority. The inventory
@@ -46,6 +52,14 @@ refuses it. Supply a surviving parent with matching context or handle the
 re-export manually, then validate compilation and behaviour. Exact textual
 placement alone does not establish Rust module correctness.
 
+For a conflicted destination, explicitly pass `--destination-conflict-side ours`
+(or `theirs`). The helper matches against that index stage and writes the ported
+result over the working conflict text. Include the surviving parent as a candidate
+to port exact parent hunks as well as module hunks. This discards the other side's
+conflict text in that destination: inspect the full PR diff for other changes and
+review the result before staging. Without an explicit side, conflicted destinations
+refuse before writes. Missing stage content also refuses.
+
 This command operates on working files only. It leaves the index and merge
 conflict entries untouched. After reviewing the diff, resolve any remaining
 conflict markers and stage the intended resolutions yourself. Use ordinary
@@ -53,7 +67,12 @@ merge handling for other PR files, renames, binary or mode-only changes.
 Destinations must be existing regular files without symlink components.
 CLI help golden regeneration is outside this initial inventory-only slice.
 
-Inventory regeneration runs after source writes. If it fails, the command
+Inventory regeneration runs after source writes only when no unmerged entries
+remain except `scripts/store-writers.toml`. Otherwise the command reports a deferred
+regeneration and exits successfully with the hunk edits retained. Resolve and stage
+the remaining source conflicts, then run the printed regeneration command (with
+`python3` if needed). A successful port with deferred regeneration is not a finished
+merge; the inventory still needs regeneration and review. If it fails, the command
 returns nonzero and retains the source edits and any inventory changes for
 inspection. Filesystem write failures may also leave partial writes; review
 and restore the worktree before retrying. Do not run concurrent writers on

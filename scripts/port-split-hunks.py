@@ -7,6 +7,7 @@ Host-side merge aid; never changes the index or resolves Git conflict entries.
 import argparse
 from pathlib import Path
 import re
+import shlex
 import subprocess
 import sys
 import tomllib
@@ -100,6 +101,7 @@ def main():
     parser.add_argument('--head', required=True, help='PR head commit')
     parser.add_argument('--source', required=True, help='original split file, relative to repository root')
     parser.add_argument('--destination', action='append', required=True, help='candidate module; repeat for every candidate, including surviving parent')
+    parser.add_argument('--destination-conflict-side', choices=['ours', 'theirs'], help='explicit index side for conflicted destinations; replaces their conflict-marked working text')
     parser.add_argument('--apply', action='store_true', help='write placements and regenerate store-writers inventory; default is preview')
     parser.add_argument('--inventory-baseline', type=Path, help='explicit reviewed version-2 inventory TOML for regeneration during a conflict')
     args = parser.parse_args()
@@ -115,15 +117,40 @@ def main():
             raise Refusal('source must be relative to root')
         # Resolve revisions separately so options cannot be injected as revisions.
         commits = [subprocess.check_output(['git', '-C', str(root), 'rev-parse', '--verify', '--end-of-options', rev + '^{commit}'], text=True).strip() for rev in (args.base, args.head)]
+        def git(*argv):
+            return subprocess.check_output(['git', '-C', str(root), *argv])
+        merge = subprocess.run(['git', '-C', str(root), 'rev-parse', '--verify', 'MERGE_HEAD'], capture_output=True)
+        if merge.returncode == 0:
+            if merge.stdout.decode().strip() != commits[1]:
+                raise Refusal('--head must be the active merge head')
+            bases = git('merge-base', '--all', 'HEAD', commits[1]).decode().splitlines()
+            if bases != [commits[0]]:
+                raise Refusal('--base must be the unique merge base of HEAD and --head')
+        elif subprocess.run(['git', '-C', str(root), 'merge-base', '--is-ancestor', *commits]).returncode != 0:
+            raise Refusal('--base must be an ancestor of --head')
         patch = subprocess.check_output(['git', '-C', str(root), 'diff', '--no-ext-diff', '--no-textconv', '--no-renames', '--no-color', '--unified=3', *commits, '--', ':(literal)' + args.source]).decode('utf-8')
         paths = {destination(root, value) for value in args.destination}
         files = {path: path.read_bytes().decode('utf-8').splitlines(keepends=True) for path in paths}
+        unmerged = {entry.split(b'\t', 1)[1].decode('utf-8')
+                    for entry in git('ls-files', '--unmerged', '-z').split(b'\0') if entry}
+        for path in paths:
+            relative = path.relative_to(root).as_posix()
+            if relative in unmerged:
+                if args.destination_conflict_side is None:
+                    raise Refusal(f'conflicted destination {relative}: select --destination-conflict-side explicitly')
+                stage = '2' if args.destination_conflict_side == 'ours' else '3'
+                files[path] = git('show', f':{stage}:{relative}').decode('utf-8').splitlines(keepends=True)
         changes = plan(parse_hunks(patch), files)
         for path in sorted(changes):
             print(f'{"port" if args.apply else "would port"}: {path.relative_to(root)}')
         if args.apply:
             for path, content in changes.items():
                 path.write_bytes(content.encode('utf-8'))
+            pending = sorted(unmerged - {'scripts/store-writers.toml'})
+            if pending:
+                print('Hunks written; inventory regeneration deferred until conflict entries are resolved and staged: ' + ', '.join(pending))
+                print('Then run ' + shlex.join([sys.executable, str(root / 'scripts/check-store-writers.py'), '--root', str(root), '--regenerate', *baseline_args]))
+                return 0
             print('Hunks written; regenerating inventory. On failure, edits remain for review.', flush=True)
             return subprocess.call([sys.executable, str(root / 'scripts/check-store-writers.py'), '--root', str(root), '--regenerate', *baseline_args])
         print('Preview only; use --apply to write and regenerate scripts/store-writers.toml.')

@@ -57,18 +57,20 @@ class PortSplitHunks(unittest.TestCase):
             inventory.write_text('version = 2\nwriter = []\noperation = []\n# base\n')
             src = root / 'aida-core/src'
             src.mkdir(parents=True)
-            first = ''.join(f'// first {i}\n' for i in range(8)) + 'pub fn first() {}\n'
+            first = ''.join(f'// first {i}\n' for i in range(8)) + 'pub fn first() {}\n' + ''.join(f'// first tail {i}\n' for i in range(8))
             second = ''.join(f'// second {i}\n' for i in range(8)) + 'pub fn moved() {}\n' + ''.join(f'// tail {i}\n' for i in range(8))
             source = src / 'source.rs'
+            (root / 'README').write_text('older base\n')
+            older = commit()
             source.write_text(first + second)
             base = commit()
             git('checkout', '-qb', 'pr')
             changed = second.replace('moved() {}', 'moved() { /* PR edit */ }')
-            source.write_text(first + changed)
+            source.write_text(first.replace('first() {}', 'first() { /* PR */ }') + changed)
             inventory.write_text(inventory.read_text().replace('# base', '# PR'))
             head = commit()
             git('checkout', '-qb', 'split', base)
-            source.write_text('mod first;\nmod moved;\npub use moved::moved;\n')
+            source.write_text(first + 'mod moved;\npub use moved::moved;\n')
             (src / 'first.rs').write_text(first)
             module = src / 'moved.rs'
             module.write_text(second)
@@ -82,7 +84,9 @@ class PortSplitHunks(unittest.TestCase):
             self.assertIn('<<<<<<<', inventory.read_text())
             command = [sys.executable, str(SCRIPT), '--root', str(root),
                        '--base', base, '--head', head, '--source', 'aida-core/src/source.rs',
-                       '--destination', 'aida-core/src/moved.rs', '--apply',
+                       '--destination', 'aida-core/src/moved.rs',
+                       '--destination', 'aida-core/src/source.rs',
+                       '--destination-conflict-side', 'ours', '--apply',
                        '--inventory-baseline', str(baseline)]
             # Bad policy evidence refuses before any hunk writes.
             baseline.write_text('<<<<<<< invalid\n')
@@ -90,11 +94,27 @@ class PortSplitHunks(unittest.TestCase):
             self.assertNotEqual(refused.returncode, 0)
             self.assertEqual(module.read_text(), second)
             baseline.write_text('version = 2\nwriter = []\noperation = []\n')
-            # Resolve the split parent explicitly; the helper never guesses wiring.
-            source.write_text('mod first;\nmod moved;\npub use moved::moved;\n')
+            # A wrong ancestor must not replay unrelated changes onto main.
+            wrong = subprocess.run([*command, '--base', older], capture_output=True, text=True)
+            self.assertNotEqual(wrong.returncode, 0)
+            self.assertIn('unique merge base', wrong.stderr)
+            self.assertEqual(module.read_text(), second)
+            implicit = command[:]
+            side = implicit.index('--destination-conflict-side')
+            del implicit[side:side + 2]
+            refused = subprocess.run(implicit, capture_output=True, text=True)
+            self.assertNotEqual(refused.returncode, 0)
+            self.assertIn('select --destination-conflict-side', refused.stderr)
+            self.assertEqual(module.read_text(), second)
             result = subprocess.run(command, capture_output=True, text=True)
             self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
             self.assertEqual(module.read_text(), changed)
+            self.assertIn('deferred', result.stdout)
+            self.assertIn('<<<<<<<', inventory.read_text())
+            self.assertEqual(source.read_text(), first.replace('first() {}', 'first() { /* PR */ }') + 'mod moved;\npub use moved::moved;\n')
+            git('add', 'aida-core/src/source.rs')
+            regenerated = subprocess.run([sys.executable, str(scripts / 'check-store-writers.py'), '--root', str(root), '--regenerate', '--baseline', str(baseline)], capture_output=True, text=True)
+            self.assertEqual(regenerated.returncode, 0, regenerated.stderr)
             self.assertEqual(tomllib.loads(inventory.read_text())['version'], 2)
             self.assertNotIn('<<<<<<<', inventory.read_text())
             git('add', '.')
