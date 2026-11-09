@@ -119,11 +119,17 @@ pub(crate) fn run(q: &Queue, cfg: &RunnerConfig, stop: &AtomicBool) -> Result<us
     q.ensure()?;
     let _lock = acquire_lock(q)?;
     // Under the lock: a stale socket belongs to a dead runner.
+    // trace:STORY-2571 | ai:codex
+    let service_host = crate::review_watch::service::HostAuthority::new(cfg);
+    let _services = cfg
+        .serve_socket
+        .then(|| crate::review_watch::service::Supervisor::start(q.clone(), service_host.clone()));
     let server = if cfg.serve_socket {
-        Some(super::socket::serve(
+        Some(super::socket::serve_service(
             q,
             cfg.probes.clone(),
             cfg.clock.clone(),
+            Some(service_host.clone()),
         )?)
     } else {
         None
@@ -185,6 +191,7 @@ pub(crate) fn run(q: &Queue, cfg: &RunnerConfig, stop: &AtomicBool) -> Result<us
                             }))
                         });
                         grant_id = new_id;
+                        service_host.refreshed(&grant_id);
                         last_refresh = now;
                         let _ = write_runner_info(q, cfg, &grant_id, now);
                         say(

@@ -33,6 +33,9 @@ mod notice;
 // gone, else routing it to the advisor. trace:BUG-2426 | ai:claude
 #[path = "review_watch_update.rs"]
 mod update;
+// trace:STORY-2571 | ai:codex
+#[path = "review_watch_service.rs"]
+pub(crate) mod service;
 
 #[derive(Args, Debug, Clone)]
 pub struct ReviewWatchArgs {
@@ -1324,6 +1327,8 @@ fn select(
         .overlap
         .context("base-branch overlap evidence is unknown")?;
     store.transaction(&key, |state| {
+        // trace:STORY-2571 | ai:codex
+        service::check_controller_locked(&store.root, &store.dir)?;
         store.reconcile_lost_dispatchers(state);
         let total = state.entries.values().flat_map(|e| &e.attempts).filter(|a| active(a)).count();
         // Apply this watcher's limit under the admission lock. Existing reviews
@@ -2250,6 +2255,7 @@ pub(crate) fn run_with_program(
     let mut children = Vec::<Dispatcher>::new();
     let mut reported_trains = BTreeSet::new();
     loop {
+        service::check_controller(&root)?;
         children.retain_mut(|d| match d.child.try_wait() {
             Ok(Some(status)) => {
                 if let Err(error) =
@@ -2500,6 +2506,8 @@ fn watch_change(
     mut change: forge::Change,
     program: Option<&Path>,
 ) -> Result<()> {
+    service::check_controller(root)?;
+    service::validate_controller_delegation(root)?;
     let key = change.key();
     // trace:STORY-2640 | ai:codex — reserve before the seat can open its PR.
     if let Some(branch) = change.head_branch.as_deref() {
@@ -2539,6 +2547,7 @@ fn watch_change(
     }
     repo.probe(root, &mut change)
         .context("base evidence refused")?;
+    crate::gate::seat_authority::validate_child_delegation(root, "reviewer")?;
     let action = select(
         store,
         &change,
