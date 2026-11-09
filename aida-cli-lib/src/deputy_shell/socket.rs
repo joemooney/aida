@@ -30,8 +30,10 @@ use serde::{Deserialize, Serialize};
 use super::attribution::Refusal;
 use super::{Queue, ShellJob};
 use crate::gate::seat_authority::SeatGrant;
+#[cfg(all(unix, test))]
+pub(crate) use unix::serve;
 #[cfg(unix)]
-pub(crate) use unix::{request, serve, Server};
+pub(crate) use unix::{request, serve_service, Server};
 
 /// How far up the process tree the ancestry walk goes.
 pub(crate) const MAX_ANCESTRY: usize = 64;
@@ -43,8 +45,17 @@ pub(crate) const SANDBOX_OPT_IN: &str = "this session's sandbox blocks unix sock
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(tag = "op", rename_all = "lowercase")]
 pub(crate) enum Request {
-    Submit { job: Box<ShellJob> },
-    Cancel { id: String },
+    Submit {
+        job: Box<ShellJob>,
+    },
+    Cancel {
+        id: String,
+    },
+    // trace:STORY-2571 | ai:codex
+    ReviewWatchRebind {
+        project: std::path::PathBuf,
+        grant: String,
+    },
 }
 
 /// The runner's one reply: accepted (with the job id) or refused.
@@ -348,7 +359,19 @@ mod unix {
     /// Bind `<queue>/submit.sock` and serve it on a thread. Call under the
     /// runner lock: a leftover socket from a dead runner is removed first (any
     /// other kind of file there is refused, never removed).
+    #[cfg(test)]
     pub(crate) fn serve(q: &Queue, probes: Probes, clock: Clock) -> Result<Server> {
+        serve_service(q, probes, clock, None)
+    }
+
+    // Only the operator-started runner supplies this trusted project/authority context.
+    // trace:STORY-2571 | ai:codex
+    pub(crate) fn serve_service(
+        q: &Queue,
+        probes: Probes,
+        clock: Clock,
+        service: Option<crate::review_watch::service::HostAuthority>,
+    ) -> Result<Server> {
         use std::os::unix::fs::{FileTypeExt, PermissionsExt};
         let path = q.socket_path();
         check_path_len(&path)?;
@@ -400,8 +423,9 @@ mod unix {
                     }
                     Ok((stream, _)) => {
                         let (q3, probes3, clock3) = (q2.clone(), probes.clone(), clock.clone());
+                        let service = service.clone();
                         live.push(std::thread::spawn(move || {
-                            let resp = serve_one(&q3, &probes3, &clock3, &stream);
+                            let resp = serve_one(&q3, &probes3, &clock3, &stream, service.as_ref());
                             reply(stream, &resp);
                         }));
                     }
@@ -436,7 +460,13 @@ mod unix {
 
     /// Handle one connection: who is it (kernel), what does it ask, and does
     /// its process ancestry run under the grant it names.
-    fn serve_one(q: &Queue, probes: &Probes, clock: &Clock, stream: &UnixStream) -> Response {
+    fn serve_one(
+        q: &Queue,
+        probes: &Probes,
+        clock: &Clock,
+        stream: &UnixStream,
+        service: Option<&crate::review_watch::service::HostAuthority>,
+    ) -> Response {
         let now = clock();
         let refuse = |r: Refusal, actor: &str, job: Option<&str>| {
             q.audit_event(now, "submit-refused", job, actor, |row| {
@@ -459,6 +489,9 @@ mod unix {
         // Pin the peer before anything is read from /proc about it.
         let pidfd = peer_pidfd(stream.as_raw_fd());
         let start = aida_core::liveness::process_start_identity(cred.pid);
+        // Service admission uses namespace-qualified evidence.
+        // trace:STORY-2571 | ai:codex
+        let service_peer = aida_core::proc_identity::ProcIdentity::capture(cred.pid).ok();
         let bytes = match read_request(stream, REQUEST_DEADLINE) {
             Ok(b) => b,
             Err(e) => {
@@ -488,6 +521,62 @@ mod unix {
         };
         let runner_uid = crate::deputy::current_uid();
         match req {
+            // This closed operation shares the existing pinned peer transport;
+            // it accepts neither scripts nor argv/environment overrides.
+            // trace:STORY-2571 | ai:codex
+            Request::ReviewWatchRebind { project, grant } => {
+                let result = (|| -> anyhow::Result<()> {
+                    let host = service.context("this deputy has no service authority")?;
+                    anyhow::ensure!(
+                        project == host.project,
+                        "service request names another project"
+                    );
+                    host.validate()?;
+                    let named = crate::gate::seat_authority::read_grant(&grant)?;
+                    let grant = crate::gate::seat_authority::validated_grant(
+                        &project,
+                        &grant,
+                        &named.subject,
+                        now,
+                    )
+                    .context("advisor grant does not validate")?;
+                    anyhow::ensure!(
+                        pidfd.as_ref().is_some_and(pidfd_running) && service_peer.is_some(),
+                        "service peer could not be pinned"
+                    );
+                    attest(
+                        cred,
+                        runner_uid,
+                        &grant,
+                        &ancestry(cred.pid),
+                        &|pid, start| {
+                            aida_core::proc_identity::ProcIdentity::capture(pid).is_ok_and(
+                                |identity| {
+                                    format!("linux-starttime:{}", identity.starttime) == start
+                                        && matches!(
+                                            aida_core::proc_identity::observe(&identity, true),
+                                            aida_core::proc_identity::Verdict::Alive
+                                        )
+                                },
+                            )
+                        },
+                    )
+                    .map_err(|r| anyhow::anyhow!(r.why))?;
+                    anyhow::ensure!(
+                        pidfd.as_ref().is_some_and(pidfd_running)
+                            && service_peer.as_ref().is_some_and(|identity| matches!(
+                                aida_core::proc_identity::observe(identity, true),
+                                aida_core::proc_identity::Verdict::Alive
+                            )),
+                        "service peer changed during attribution"
+                    );
+                    crate::review_watch::service::rebind(&project, &q.name, &grant)
+                })();
+                match result {
+                    Ok(()) => Response::accepted("review-watch"),
+                    Err(error) => refuse(refusal("service", format!("{error:#}")), "advisor", None),
+                }
+            }
             Request::Cancel { id } => {
                 if cred.uid != runner_uid {
                     return refuse(
@@ -610,7 +699,11 @@ mod unix {
             Err(e) => {
                 return Err(match e.raw_os_error() {
                     Some(libc::EPERM) | Some(libc::EACCES) | Some(libc::EAFNOSUPPORT) => {
-                        anyhow::anyhow!("{SANDBOX_OPT_IN} ({e})")
+                        if matches!(req, Request::ReviewWatchRebind { .. }) {
+                            anyhow::anyhow!("the sandbox blocks the service socket; retry `aida advisor loops rebind` from the host, or ask the operator for a narrow exemption for that command ({e})")
+                        } else {
+                            anyhow::anyhow!("{SANDBOX_OPT_IN} ({e})")
+                        }
                     }
                     Some(libc::ENOENT) | Some(libc::ECONNREFUSED) => not_running(),
                     _ => anyhow::anyhow!(
