@@ -1524,6 +1524,10 @@ pub(crate) fn enroll_synthetic_home(root: &Path) -> anyhow::Result<()> {
         aida_core::allocation_authority::require_global(&resolved)?;
     } else {
         aida_core::write_atomic(&setting, "version=1\nauthoritative=true\n")?;
+        // Match the core fixture: shared-write umasks must not invalidate authority.
+        // trace:STORY-2640 | ai:codex
+        use std::os::unix::fs::PermissionsExt;
+        std::fs::set_permissions(&setting, std::fs::Permissions::from_mode(0o600))?;
     }
     Ok(())
 }

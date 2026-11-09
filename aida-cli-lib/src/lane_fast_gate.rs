@@ -176,6 +176,26 @@ impl Reservation {
         Ok(branch)
     }
 
+    /// Exit reporting and lease cleanup survive unavailable branch evidence.
+    // trace:STORY-2640 | ai:codex
+    pub(crate) fn exit_branch(&mut self, tree: &Path) -> String {
+        match self.reconcile_branch(tree) {
+            Ok(branch) => branch,
+            Err(error) => {
+                eprintln!("fast_gate=skipped(branch): {error:#}");
+                if let Ok(Some(mut r)) = read(&self.main, &self.branch) {
+                    if r.marker != "fail" {
+                        r.marker = "skipped(branch)".into();
+                    }
+                    if let Err(error) = write(&self.main, &r) {
+                        eprintln!("fast gate branch marker: {error:#}");
+                    }
+                }
+                self.branch.clone()
+            }
+        }
+    }
+
     fn rebind(&mut self, branch: &str) -> Result<()> {
         if branch == self.branch {
             return Ok(());
@@ -447,7 +467,7 @@ pub(crate) fn marker(main: &Path, branch: &str) -> String {
         .unwrap_or_else(|| "skipped(no-result)".into())
 }
 
-fn veto(main: &Path, spec: &str) -> bool {
+pub(crate) fn veto(main: &Path, spec: &str) -> bool {
     crate::punt::read_signal(&crate::punt::signal_path(main, spec)).is_some()
         || crate::punt::read_hold_signal(&crate::punt::hold_signal_path(main, spec)).is_some()
 }
@@ -671,6 +691,12 @@ fn retry_marker<'a>(previous: &'a str, next: &'a str) -> &'a str {
 }
 
 fn repair_prompt(output: &str) -> String {
+    // Bound the entire failure excerpt well below Linux's single-argv limit.
+    let mut start = output.len().saturating_sub(16 * 1024);
+    while !output.is_char_boundary(start) {
+        start += 1;
+    }
+    let output = &output[start..];
     format!("The host's sandboxed make check-ci-fast failed. This is your ONE fast-gate fix round. Fix the failing gates below and finish. Native seats must leave edits uncommitted for host publication; retain all punt/hold instructions.\n{output}")
 }
 
@@ -721,7 +747,7 @@ fn pushed_inner(
     pr: u64,
     vendor: &str,
 ) -> Result<bool> {
-    if veto(main, spec) {
+    if veto(main, spec) || marker(main, branch) == "skipped(branch)" {
         return Ok(false);
     }
     let published_head = crate::standalone_implementer::lookup_pr(main, branch)
@@ -980,6 +1006,37 @@ pub(crate) fn check_import(main: &Path, branch: &str, tip: &str, automatic: bool
 #[cfg(test)]
 mod tests {
     // trace:STORY-2640 | ai:codex
+    // trace:STORY-2640 | ai:codex
+    #[test]
+    fn fast_gate_repair_prompt_bounds_multibyte_output_below_argv_limit() {
+        let output = "é".repeat(1024 * 1024) + "trailing failure";
+        let prompt = repair_prompt(&output);
+        assert!(prompt.len() < 20 * 1024);
+        assert!(prompt.ends_with("trailing failure"));
+        assert!(prompt.contains("ONE fast-gate fix round"));
+    }
+
+    // trace:STORY-2640 | ai:codex
+    #[test]
+    fn fast_gate_exit_branch_error_keeps_result_and_settles_on_drop() {
+        let tmp = tempfile::tempdir().unwrap();
+        let tree = tempfile::tempdir().unwrap();
+        let head = crate::test_git::commit_fixture(tree.path());
+        assert!(std::process::Command::new("git")
+            .arg("-C")
+            .arg(tree.path())
+            .args(["checkout", "--detach", &head])
+            .status()
+            .unwrap()
+            .success());
+        let mut reservation = reserve(tmp.path(), "lane").unwrap();
+        assert_eq!(reservation.exit_branch(tree.path()), "lane");
+        assert!(result_line(tmp.path(), "lane", "implementer: no-pr")
+            .ends_with("fast_gate=skipped(branch)"));
+        drop(reservation);
+        assert!(!blocks_review(tmp.path(), "lane").unwrap());
+    }
+
     #[test]
     fn fast_gate_prunes_only_settled_receipts_for_deleted_branches() {
         let tmp = tempfile::tempdir().unwrap();

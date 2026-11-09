@@ -1207,9 +1207,13 @@ impl auto_complete::PhaseDriver for RealPhaseDriver {
     fn fast_gate_blocks_review(&mut self) -> Result<bool, String> {
         let branch = match self.branch.clone() {
             Some(branch) if !branch.is_empty() => branch,
-            _ => match self.project_forge().change_for_spec(&self.spec) {
-                Ok(crate::forge::ChangeLookup::Found(pr)) if !pr.branch.is_empty() => pr.branch,
-                _ => return Ok(false),
+            _ => match fast_gate_lookup_branch(
+                self.project_forge()
+                    .change_for_spec(&self.spec)
+                    .map_err(|error| format!("fast gate PR lookup failed: {error:#}"))?,
+            )? {
+                Some(branch) => branch,
+                None => return Ok(false),
             },
         };
         crate::lane_fast_gate::blocks_review(
@@ -4290,4 +4294,31 @@ mod bug_1930_tests {
             failure.reason
         );
     }
+}
+
+// trace:STORY-2640 | ai:codex
+fn fast_gate_lookup_branch(lookup: crate::forge::ChangeLookup) -> Result<Option<String>, String> {
+    match lookup {
+        crate::forge::ChangeLookup::Found(pr) if !pr.branch.is_empty() => Ok(Some(pr.branch)),
+        crate::forge::ChangeLookup::NoChange => Ok(None),
+        other => Err(format!("fast gate PR lookup unavailable: {other:?}")),
+    }
+}
+
+#[cfg(test)]
+#[test]
+// trace:STORY-2640 | ai:codex
+fn fast_gate_unknown_forge_evidence_never_releases_review() {
+    use crate::forge::ChangeLookup;
+    for lookup in [
+        ChangeLookup::CliMissing,
+        ChangeLookup::CliFailed("auth".into()),
+        ChangeLookup::Unreachable("offline".into()),
+    ] {
+        assert!(fast_gate_lookup_branch(lookup).is_err());
+    }
+    assert_eq!(
+        fast_gate_lookup_branch(ChangeLookup::NoChange).unwrap(),
+        None
+    );
 }

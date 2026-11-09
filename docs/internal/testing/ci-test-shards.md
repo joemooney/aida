@@ -82,7 +82,7 @@ checkout fails rather than inheriting the enclosing checkout's Git discovery.
 `make check-ci-fast` reads workflow step bodies, runs source gates before Cargo
 compilation, and runs `cargo check` with the seeded `agent` profile. A cold
 target therefore cannot hide source-ratchet failures behind compilation. Host
-lane gates keep the five-minute sandbox deadline; timeout, runner refusal and
+lane gates keep the ten-minute sandbox deadline; timeout, runner refusal and
 signal termination report `skipped(<reason>)` without spending a source repair.
 A native publication that cannot recover a clean committed seat returns an error.
 <!-- trace:STORY-2640 | ai:codex -->

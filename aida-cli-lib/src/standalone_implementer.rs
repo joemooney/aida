@@ -1195,8 +1195,12 @@ pub(crate) fn run(launch: Launch<'_>) -> Result<()> {
         );
     }
     // trace:STORY-2640 | ai:codex
-    let actual_branch = if !host_published {
-        _fast_gate.reconcile_branch(&worktree)?
+    let actual_branch = if !host_published
+        && !matches!(
+            finished.verdict,
+            Outcome::Punted { .. } | Outcome::Held { .. }
+        ) {
+        _fast_gate.exit_branch(&worktree)
     } else {
         launch.branch.to_owned()
     };
@@ -1204,7 +1208,12 @@ pub(crate) fn run(launch: Launch<'_>) -> Result<()> {
         branch: &actual_branch,
         ..launch
     };
-    if !host_published {
+    if !host_published
+        && !matches!(
+            finished.verdict,
+            Outcome::Punted { .. } | Outcome::Held { .. }
+        )
+    {
         finished.verdict = classify(
             crate::punt::read_signal(&punt_signal),
             crate::punt::read_hold_signal(&hold_signal),

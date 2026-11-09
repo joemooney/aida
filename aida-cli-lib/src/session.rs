@@ -6797,6 +6797,7 @@ pub(crate) fn run_vendor_headless_to_exit(
                 else {
                     crate::lane_fast_gate::missing_lease(&main_root, Some(branch));
                     publish_native.set(false);
+                    anyhow::ensure!(!host_published, "publication lease {lease} is missing");
                     return Ok(status);
                 };
                 let scope = active_lease.scope;
@@ -6818,11 +6819,11 @@ pub(crate) fn run_vendor_headless_to_exit(
                             Ok(status.success())
                         },
                     )?);
-                } else {
+                } else if !crate::lane_fast_gate::veto(&main_root, &scope) {
                     let actual_branch = _fast_gate
                         .as_mut()
                         .context("fast gate reservation missing")?
-                        .reconcile_branch(tree)?;
+                        .exit_branch(tree);
                     let branch = actual_branch.as_str();
                     if let Some((pr, _)) =
                         crate::standalone_implementer::lookup_pr(&main_root, branch)

@@ -3320,3 +3320,47 @@ fn story_2640_fast_gate_missing_resume_lease_preserves_vendor_status() {
     .unwrap();
     assert_eq!(status.code(), Some(7));
 }
+
+// trace:STORY-2640 | ai:codex
+#[test]
+fn story_2640_fast_gate_missing_native_resume_lease_is_an_error() {
+    if crate::test_env::run_path_isolated_test() {
+        return;
+    }
+    let fx = fixture();
+    let vendor = fx.root.join("vendor");
+    crate::test_exec::write_executable(&vendor, "#!/bin/sh\nexit 7\n");
+    let _env = crate::test_env::AmbientGuard::hermetic_with_seat_and(
+        &fx.main,
+        "advisor",
+        &["implementer"],
+        &[
+            ("AIDA_OS_WRAP", Some("0")),
+            ("AIDA_CONTAINED", None),
+            ("AIDA_AGENT_CMD", Some(vendor.to_str().unwrap())),
+        ],
+    );
+    let _cwd = crate::session::contained_cwd_seam::pin(&fx.main);
+    let error = crate::queue_cmd::run_queue_resume_to_exit(
+        Some(&fx.main),
+        &crate::session::HeadlessResume {
+            vendor: crate::session::HeadlessVendor::Codex,
+            session_id: "test",
+            resume_id: "test",
+        },
+        "go",
+        &fx.root.join("log"),
+        &fx.main,
+        &crate::headless_tee::TeeOptions {
+            enabled: false,
+            label: None,
+        },
+        true,
+        "implementer",
+        (&fx.main, "BUG-1", "missing"),
+    )
+    .unwrap_err();
+    assert!(error
+        .to_string()
+        .contains("publication lease missing is missing"));
+}

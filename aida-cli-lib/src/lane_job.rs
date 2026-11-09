@@ -2076,7 +2076,7 @@ mod fast_gate_job_tests {
         // The primary target is read-only here; attempting to reflink it needs
         // a writable Cargo lock and silently produced cold validation before.
         // Derive the target from the running image without ambient env reads.
-        let executable = std::env::current_exe().unwrap();
+        let executable = crate::aida_bin::current_executable_path().expect("test executable");
         let profile = executable.parent().unwrap().parent().unwrap();
         assert_eq!(profile.file_name().unwrap(), "agent");
         let target = profile.parent().unwrap();

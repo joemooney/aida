@@ -458,6 +458,11 @@ pub(crate) fn run_queue_resume_to_exit(
             Some(lease.branch)
         } else {
             crate::lane_fast_gate::missing_lease(&main, None);
+            anyhow::ensure!(
+                !host_published,
+                "publication lease {} is missing",
+                publication.2
+            );
             publish_native = false;
             None
         }
@@ -468,14 +473,15 @@ pub(crate) fn run_queue_resume_to_exit(
         host_main, target, prompt, log, tree, tee, contained, role,
     )?;
     // trace:STORY-2640 | ai:codex
-    let branch = if implementing && !host_published {
-        match _fast_gate.as_mut() {
-            Some(reservation) => Some(reservation.reconcile_branch(tree)?),
-            None => branch,
-        }
-    } else {
-        branch
-    };
+    let branch =
+        if implementing && !host_published && !crate::lane_fast_gate::veto(&main, publication.1) {
+            match _fast_gate.as_mut() {
+                Some(reservation) => Some(reservation.exit_branch(tree)),
+                None => branch,
+            }
+        } else {
+            branch
+        };
     if let Some(branch) = branch.as_deref() {
         if host_published {
             publish_native = crate::lane_fast_gate::native(
