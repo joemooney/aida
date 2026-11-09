@@ -595,7 +595,9 @@ fn task_2712_native_codex_seat_commit_ships_from_seat_without_seat_hooks() {
     plant_hooks(&clone, &sentinel, &fx.root);
     std::fs::write(clone.join("native.txt"), "native seat\n").unwrap();
     let base = git_ok(&clone, &["rev-parse", "HEAD"]);
-    let message = "fix: native codex seat (BUG-1)";
+    // trace:BUG-2493 | ai:codex
+    let message =
+        "fix: native codex seat (BUG-1)\n\n# Body stays verbatim  \n\nHelp-Golden: unchanged\n\n";
 
     // A seat that moved off its lease's branch is refused; nothing commits.
     git_ok(&clone, &["checkout", "-q", "-b", "elsewhere"]);
@@ -639,7 +641,18 @@ fn task_2712_native_codex_seat_commit_ships_from_seat_without_seat_hooks() {
     assert_eq!(git_ok(&clone, &["status", "--porcelain"]), "");
     let opened = forge.opened.lock().unwrap().clone();
     assert_eq!(opened.len(), 1);
-    assert_eq!(opened[0].title, message);
+    assert_eq!(opened[0].title, message.lines().next().unwrap());
+    // Read the object directly: git_ok trims whitespace and would conceal
+    // cleanup of the body or its final blank line.
+    // trace:BUG-2493 | ai:codex
+    let object = crate::test_git::git_command()
+        .args(["cat-file", "commit", "HEAD"])
+        .current_dir(&clone)
+        .output()
+        .unwrap();
+    assert!(object.status.success());
+    let object = String::from_utf8(object.stdout).unwrap();
+    assert_eq!(object.split_once("\n\n").unwrap().1, message);
     assert!(
         !sentinel.exists(),
         "a seat hook ran: {}",
@@ -715,6 +728,7 @@ fn test_commit(
             "-c",
             "user.email=host@example.com",
             "commit",
+            "--cleanup=verbatim",
             "-qm",
             message,
         ],
@@ -2309,6 +2323,67 @@ fn task_2902_declared_subject_survives_host_commit_and_pr_title() {
     }
 }
 
+// trace:BUG-2493 | ai:codex
+// This host-publication fixture invokes the Bash help-golden guard.
+#[cfg(unix)]
+#[test]
+fn bug_2493_declared_body_survives_host_commit_and_refs_downgrade() {
+    use crate::ship_from_seat::{post_exit_commit, PostExitCommit};
+    let fx = fixture();
+    let clone = seat_with_publication_pending(&fx, "body", "c0ffee249301", "body");
+    let script =
+        Path::new(env!("CARGO_MANIFEST_DIR")).join("../scripts/check-help-golden-cochange.sh");
+    for clean in [true, false] {
+        let base = git_ok(&clone, &["rev-parse", "HEAD"]);
+        crate::native_publication::prepare(&fx.main, &clone).unwrap();
+        let body = "# Explanation with (BUG-2) in prose.  \n\nHelp-Golden: unchanged\n\n";
+        let message = format!("[AI:codex] fix: body (BUG-1)\n\n{body}");
+        crate::native_publication::declare(&clone, Some("BUG-1"), &message, false).unwrap();
+        let surface = clone.join("aida-cli-lib/src/example_args.rs");
+        std::fs::create_dir_all(surface.parent().unwrap()).unwrap();
+        std::fs::write(surface, format!("// changed {clean}")).unwrap();
+        let result = post_exit_commit(&fx.main, &clone, "BUG-1", "test", clean, &test_commit);
+        assert!(matches!(result, PostExitCommit::Committed(_)), "{result:?}");
+        // Inspect raw bytes so whitespace cleanup during declaration reading
+        // or Refs downgrade cannot hide behind git_ok's trimmed output.
+        // trace:BUG-2493 | ai:codex
+        let object = crate::test_git::git_command()
+            .args(["cat-file", "commit", "HEAD"])
+            .current_dir(&clone)
+            .output()
+            .unwrap();
+        assert!(object.status.success());
+        let object = String::from_utf8(object.stdout).unwrap();
+        let expected_subject = if clean {
+            "[AI:codex] fix: body (BUG-1)"
+        } else {
+            "[AI:codex] fix: body (Refs BUG-1)"
+        };
+        assert_eq!(
+            object.split_once("\n\n").unwrap().1,
+            format!("{expected_subject}\n\n{body}")
+        );
+        if !clean {
+            assert_eq!(
+                git_ok(&clone, &["log", "-1", "--format=%s"]),
+                "[AI:codex] fix: body (Refs BUG-1)"
+            );
+        }
+        let output = std::process::Command::new("bash")
+            .arg(&script)
+            .arg(&base)
+            .current_dir(&clone)
+            .output()
+            .unwrap();
+        assert!(
+            output.status.success(),
+            "{}",
+            String::from_utf8_lossy(&output.stderr)
+        );
+        assert!(String::from_utf8_lossy(&output.stdout).contains("allowed by"));
+    }
+}
+
 // trace:TASK-2902 | ai:codex
 #[test]
 fn task_2902_stale_invalid_and_mismatched_declarations_refuse_before_commit() {
@@ -2347,6 +2422,29 @@ fn task_2902_stale_invalid_and_mismatched_declarations_refuse_before_commit() {
             "{subject}"
         );
     }
+    // A seat can edit the JSON after declaration: the host must validate the
+    // body again before invoking its commit callback.
+    // trace:BUG-2493 | ai:codex
+    let subject = "fix: body validation (BUG-1)";
+    crate::native_publication::declare(&clone, None, subject, false).unwrap();
+    let mut declaration: serde_json::Value =
+        serde_json::from_slice(&std::fs::read(&path).unwrap()).unwrap();
+    declaration["body"] = serde_json::json!("Help-Golden: unchanged\n\0hidden");
+    std::fs::write(&path, serde_json::to_vec(&declaration).unwrap()).unwrap();
+    let head = git_ok(&clone, &["rev-parse", "HEAD"]);
+    let result = crate::ship_from_seat::post_exit_commit(
+        &fx.main,
+        &clone,
+        "BUG-1",
+        "test",
+        true,
+        &commit_never,
+    );
+    assert!(
+        matches!(result, crate::ship_from_seat::PostExitCommit::Failed(_)),
+        "{result:?}"
+    );
+    assert_eq!(git_ok(&clone, &["rev-parse", "HEAD"]), head);
     for scope in ["EPIC-1", "BUG-1 BUG-2", "unknown"] {
         let result = crate::ship_from_seat::post_exit_commit(
             &fx.main,
@@ -2481,8 +2579,182 @@ fn task_2902_native_ship_message_records_only_and_dry_run_does_not_write() {
     );
     assert_eq!(git_ok(&clone, &["rev-parse", "HEAD"]), base);
     assert_eq!(git_ok(&clone, &["status", "--porcelain"]), pending);
+    // trace:BUG-2493 | ai:codex
+    let body_file = fx.main.join("body.txt");
+    std::fs::write(&body_file, "Help-Golden: unchanged\n").unwrap();
+    let declare = command()
+        .try_get_matches_from([
+            "ship",
+            "-m",
+            subject,
+            "--commit-body-file",
+            body_file.to_str().unwrap(),
+        ])
+        .unwrap();
+    run(&declare, &ctx).unwrap();
+    assert_eq!(
+        crate::native_publication::read(&fx.main, &clone, "BUG-1")
+            .unwrap()
+            .unwrap(),
+        format!("{subject}\n\nHelp-Golden: unchanged\n")
+    );
+    let missing = command()
+        .try_get_matches_from(["ship", "--commit-body-file", body_file.to_str().unwrap()])
+        .unwrap();
+    assert!(run(&missing, &ctx).is_err());
+    let host = command()
+        .try_get_matches_from([
+            "ship",
+            "--from-seat",
+            clone.to_str().unwrap(),
+            "--commit-pending",
+            subject,
+            "--commit-body-file",
+            body_file.to_str().unwrap(),
+        ])
+        .unwrap();
+    use clap::FromArgMatches;
+    assert_eq!(
+        crate::pr_cmd::ShipArgs::from_arg_matches(&host)
+            .unwrap()
+            .commit_body_file,
+        Some(body_file.clone())
+    );
+    // Test the same assembly used to populate FromSeatOptions in run_ship.
+    let host_args = crate::pr_cmd::ShipArgs::from_arg_matches(&host).unwrap();
+    assert_eq!(
+        crate::pr_cmd::ship_messages(&host_args, false).unwrap(),
+        (None, Some(format!("{subject}\n\nHelp-Golden: unchanged\n")))
+    );
+    for argv in [
+        vec![
+            "ship",
+            "--from-seat",
+            clone.to_str().unwrap(),
+            "--commit-body-file",
+            body_file.to_str().unwrap(),
+        ],
+        vec![
+            "ship",
+            "-m",
+            subject,
+            "--commit-body-file",
+            body_file.to_str().unwrap(),
+        ],
+    ] {
+        let parsed = command().try_get_matches_from(argv).unwrap();
+        let args = crate::pr_cmd::ShipArgs::from_arg_matches(&parsed).unwrap();
+        assert!(crate::pr_cmd::ship_messages(&args, false)
+            .unwrap_err()
+            .to_string()
+            .contains("requires native -m or --from-seat --commit-pending"));
+    }
     let no_message = command().try_get_matches_from(["ship"]).unwrap();
     assert!(run(&no_message, &ctx).is_err());
+}
+
+// trace:BUG-2493 | ai:codex
+#[test]
+fn bug_2493_body_file_errors_validate_usage_before_reading_and_name_path() {
+    use clap::FromArgMatches;
+    let dir = tempfile::tempdir().unwrap();
+    let missing = dir.path().join("missing-body.txt");
+    let command = || (crate::pr_cmd::SHIP.command)();
+    let parse = |argv: Vec<&str>| {
+        let matches = command().try_get_matches_from(argv).unwrap();
+        crate::pr_cmd::ShipArgs::from_arg_matches(&matches).unwrap()
+    };
+    let path = missing.to_str().unwrap();
+    // trace:BUG-2493 | ai:codex
+    // An inline native body must not bypass the documented file surface.
+    for message in ["subject\n\nHelp-Golden: unchanged", "subject\rhidden"] {
+        let args = parse(vec!["ship", "-m", message]);
+        assert_eq!(
+            crate::pr_cmd::ship_messages(&args, true)
+                .unwrap_err()
+                .to_string(),
+            "native -m requires a single-line subject; use --commit-body-file for the body"
+        );
+    }
+    for (argv, native) in [
+        (vec!["ship", "--commit-body-file", path], true),
+        (
+            vec!["ship", "-m", "subject", "--commit-body-file", path],
+            false,
+        ),
+        (
+            vec!["ship", "--from-seat", "seat", "--commit-body-file", path],
+            false,
+        ),
+    ] {
+        let error = crate::pr_cmd::ship_messages(&parse(argv), native).unwrap_err();
+        assert_eq!(
+            error.to_string(),
+            "--commit-body-file requires native -m or --from-seat --commit-pending"
+        );
+    }
+    for (argv, native) in [
+        (
+            vec!["ship", "-m", "subject", "--commit-body-file", path],
+            true,
+        ),
+        (
+            vec![
+                "ship",
+                "--from-seat",
+                "seat",
+                "--commit-pending",
+                "subject",
+                "--commit-body-file",
+                path,
+            ],
+            false,
+        ),
+    ] {
+        let mut args = parse(argv);
+        for expected_kind in [
+            std::io::ErrorKind::NotFound,
+            std::io::ErrorKind::InvalidData,
+        ] {
+            if expected_kind == std::io::ErrorKind::InvalidData {
+                std::fs::write(&missing, [0xff]).unwrap();
+            }
+            let error = crate::pr_cmd::ship_messages(&args, native).unwrap_err();
+            assert!(error.to_string().contains("--commit-body-file"));
+            assert!(error.to_string().contains(path));
+            assert_eq!(
+                error.downcast_ref::<std::io::Error>().unwrap().kind(),
+                expected_kind
+            );
+        }
+        // trace:BUG-2493 | ai:codex
+        // Both authoring paths reject unsafe messages before publication.
+        std::fs::write(&missing, "Help-Golden: unchanged\n\0hidden").unwrap();
+        assert_eq!(
+            crate::pr_cmd::ship_messages(&args, native)
+                .unwrap_err()
+                .to_string(),
+            "commit body contains NUL"
+        );
+        std::fs::write(&missing, "Help-Golden: unchanged\n").unwrap();
+        let subject = args
+            .message
+            .as_mut()
+            .or(args.commit_pending.as_mut())
+            .unwrap();
+        subject.push_str("\nhidden subject");
+        assert_eq!(
+            crate::pr_cmd::ship_messages(&args, native)
+                .unwrap_err()
+                .to_string(),
+            if native {
+                "native -m requires a single-line subject; use --commit-body-file for the body"
+            } else {
+                "--commit-body-file requires a single-line subject"
+            }
+        );
+        std::fs::remove_file(&missing).unwrap();
+    }
 }
 
 // trace:TASK-2902 trace:BUG-2459 | ai:codex

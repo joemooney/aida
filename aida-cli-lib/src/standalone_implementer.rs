@@ -99,7 +99,7 @@ a design fork, run `aida punt`; to push the branch but hold the PR for a manual 
 /// Native seats finish through the host after the child exits, while the
 /// recorded lease still vouches for the work. This overrides the ordinary
 /// pickup shipping unit without weakening the live-owner check.
-// trace:TASK-2879 | ai:codex
+// trace:TASK-2879 trace:BUG-2493 | ai:codex
 pub(crate) const NATIVE_STOP_CONTRACT: &str = "\n\nStandalone native implementer launch: \
 Git metadata is read-only. Finish the edits and targeted tests, leave the edits uncommitted, \
 and write a final handoff listing changed files, validation results and blockers, then exit. \
@@ -107,8 +107,15 @@ Do not commit, push, open a PR or run `aida queue done` from this seat. After yo
 exits, the host launcher commits and publishes the PR; queue completion follows publication. \
 Do not run `aida pr ship` or `aida review record`. For a design fork or manual gate, \
 run `aida punt`; existing punt or hold signals remain publication vetoes. \
-For a partial slice, use `aida ship -m \"[AI:codex] type(scope): subject (Refs SPEC-ID)\"` \
-to declare the host publication subject; this records intent without publishing.";
+For a partial slice, use `aida ship -m \"[AI:codex] type(scope): subject (Refs SPEC-ID)\" \
+--commit-body-file <file>` to declare the host publication subject and optional body; \
+this records intent without publishing. \
+For a completing lane, use `aida ship -m \"[AI:codex] type(scope): subject (SPEC-ID)\" \
+--commit-body-file <file>` to declare completion with an optional body. \
+Omit `--commit-body-file <file>` when no body trailers are needed. \
+For required commit-body trailers such as `Help-Golden: unchanged`, write a UTF-8 file \
+outside the checkout (for example under `/tmp`) and add `--commit-body-file <file>` \
+to the declaration. Avoid body lines ending in `(ID)` groups, which can supply completion credit.";
 
 /// BUG-2383: how a standalone implementer runs its local tests. Appended to
 /// its prompt when the launcher's lane job runner is up.
