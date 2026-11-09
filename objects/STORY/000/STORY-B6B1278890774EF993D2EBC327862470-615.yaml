@@ -8,7 +8,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-09T01:58:54.698246911Z
-modified_at: 2026-11-09T08:47:13.988187733Z
+modified_at: 2026-11-09T08:55:15.999717940Z
 req_type: Story
 tags:
 - area:orchestration
@@ -122,6 +122,13 @@ comments:
   modified_at: 2026-11-09T08:47:13.988187733Z
   session_id: 01a1bf793425
   harness_version: codex-cli 0.167.0
+- id: 01a1bf84-d51f-77e2-ae6f-e6b3504a0f05
+  author: joe
+  content: 'PR-3709 review follow-ups for the advisor to file (the contained reviewer seat could not allocate spec IDs): (1) minor: regenerate the CLI help golden after merges, the remainder of this story, since PR-3709 is a non-completing (Refs) slice covering scripts/store-writers.toml only. (2) cosmetic: share one baseline validator between scripts/port-split-hunks.py and scripts/check-store-writers.py; only the porter checks operation and mediated_route.'
+  created_at: 2026-11-09T08:55:15.999717940Z
+  modified_at: 2026-11-09T08:55:15.999717940Z
+  session_id: 01a1bf7fd694
+  harness_version: 2.1.319 (Claude Code)
 history:
 - id: 01a1be0b-c26f-7e81-9cbb-17bbd5fc30b5
   author: joe
