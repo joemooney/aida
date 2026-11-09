@@ -3,12 +3,12 @@ spec_id: BUG-b6b1278890774ef993d2ebc327862470-265
 agreed_id: BUG-2500
 title: Reviewers record CHANGES REQUESTED for CI-wait or host-only items, burning implementer rounds and tripping the repeat-findings breaker
 description: '2026-11-08: PR-3671, PR-3651 and PR-3657 were parked by ''Repeated unchanged review findings'' where the findings were CI not yet run or host-only evidence; no code could close them. Expected: a distinct wait/host-action verdict that does not queue implementer rework or count as a repeat.'
-status: NeedsAttention
+status: Approved
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-08T19:02:09.839960883Z
-modified_at: 2026-11-09T02:19:33.703531007Z
+modified_at: 2026-11-09T02:54:06.777353516Z
 req_type: Bug
 relationships:
 - rel_type:
@@ -141,6 +141,12 @@ comments:
   created_at: 2026-11-09T01:51:16.123600964Z
   modified_at: 2026-11-09T01:51:16.123600964Z
   session_id: 20abb7c3-8f9b-4a5e-b326-404921f3b450
+- id: 01a1be3a-2fb9-7812-b4dc-5c75b1f6df88
+  author: joe
+  content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: Core waiting verdict is sound, but several status and routing paths still mishandle it (ship-ready/mergeable reporting, derived hold, reviewer routing at a moved head, merge closure), and the new early gates broaden refusals.. No triage reason was given.'
+  created_at: 2026-11-09T02:54:06.777350705Z
+  modified_at: 2026-11-09T02:54:06.777350705Z
+  session_id: 20abb7c3-8f9b-4a5e-b326-404921f3b450
 history:
 - id: 01a1bcc0-f95b-7082-8ca7-a86211b6ddd8
   author: joe
@@ -217,6 +223,14 @@ history:
   - field_name: status
     old_value: InProgress
     new_value: NeedsAttention
+- id: 01a1be3a-2fb9-7812-b4dc-5c6a8551bf5d
+  author: joe
+  timestamp: 2026-11-09T02:54:06.777342718Z
+  session_id: 20abb7c3-8f9b-4a5e-b326-404921f3b450
+  changes:
+  - field_name: status
+    old_value: NeedsAttention
+    new_value: Approved
 filed_at:
   code_sha: eeec474c545cbc8a354d386c8cb6d81460da7b9f
   branch: main
@@ -226,11 +240,3 @@ filed_at:
   vendor: claude
   session: 01a1bbab-762f-7cd2-8a36-4ea9f209afce
   harness_version: 2.1.319 (Claude Code)
-failure_reason:
-  phase: reviewer
-  phase_index: 3
-  kind: verdict:request-changes
-  detail: Core waiting verdict is sound, but several status and routing paths still mishandle it (ship-ready/mergeable reporting, derived hold, reviewer routing at a moved head, merge closure), and the new early gates broaden refusals.
-  recovery_hint: address the review findings, move BUG-2500 back to In Progress, and clear the PR hold only after approval
-  shelved_by: reviewer
-  shelved_at: 2026-11-09T02:19:33.703531007Z
