@@ -2,6 +2,7 @@
 //! (advisor code gate, no-verify-bypass recorder, automatic advisor-lock gate).
 //!
 //! Extracted verbatim from `main.rs` (SPIKE-78, pure-movement refactor).
+// trace:TASK-3428 | ai:codex
 
 use crate::cli;
 use crate::{
@@ -21,6 +22,11 @@ pub(crate) use internal_cmd_args::*;
 /// vendor-agnostic advisor-code-write gate (STORY-684).
 pub(crate) fn handle_internal_command(command: &cli::InternalCommand) -> Result<()> {
     match command {
+        // trace:TASK-3219 | ai:codex
+        cli::InternalCommand::ClaudeBgSupervise => {
+            crate::agent_launch::agent_claude_background::supervise_main()
+        }
+
         // trace:STORY-2254 | ai:claude
         cli::InternalCommand::CodexBgSupervise { attempt } => {
             crate::agent_launch::codex_bg_supervise_main(attempt)
@@ -236,7 +242,6 @@ fn run_internal(
     matches: &clap::ArgMatches,
     _ctx: &crate::command_registry::DispatchCtx,
 ) -> anyhow::Result<()> {
-    use crate::*;
     let args = <InternalArgs as clap::FromArgMatches>::from_arg_matches(matches)?;
     let InternalArgs { command } = &args;
     return self::handle_internal_command(command);

@@ -1901,6 +1901,19 @@ fn bug_051_runtime_links_and_build_output_are_not_work() {
     ] {
         assert!(!is_runtime_noise_entry(clone, work), "{work}");
     }
+    // trace:TASK-1222 | ai:codex
+    std::fs::create_dir_all(clone.join(".aida/sessions/nested")).unwrap();
+    std::fs::write(clone.join(".aida/sessions/ended.toml"), "lease").unwrap();
+    assert!(is_runtime_noise_entry(clone, "? .aida/sessions/ended.toml"));
+    for work in [
+        "? .aida/sessions/",
+        "? .aida/sessions/precious-notes",
+        "? .aida/sessions/nested/note.toml",
+        "? .aida/sessions/missing.toml",
+        "1 .M N... .aida/sessions/ended.toml",
+    ] {
+        assert!(!is_runtime_noise_entry(clone, work), "{work}");
+    }
     // A real `.aida-store` directory, not the link, still counts.
     let other = tempfile::tempdir().unwrap();
     std::fs::create_dir(other.path().join(".aida-store")).unwrap();
@@ -1908,6 +1921,61 @@ fn bug_051_runtime_links_and_build_output_are_not_work() {
     std::fs::create_dir(other.path().join(".codegraph")).unwrap();
     assert!(!is_runtime_noise_entry(other.path(), "? .codegraph/"));
     assert!(!is_runtime_noise_entry(clone, "1 .M N... .codegraph"));
+}
+
+// trace:TASK-1222 | ai:codex
+#[cfg(target_os = "linux")]
+#[test]
+fn task_1222_bwrap_probe_retains_precious_session_files() {
+    if !bwrap_live() {
+        return;
+    }
+    let fx = fixture();
+    let clone = seat(&fx, "session-files", "c0ffee001222");
+    // Creation ignores /.aida/* by default. Expose sessions here so status
+    // reaches the shared classifier, rather than hiding the precious file.
+    let exclude = clone.join(".git/info/exclude");
+    let mut rules = std::fs::read_to_string(&exclude).unwrap();
+    rules.push_str("\n!/.aida/sessions\n");
+    std::fs::write(exclude, rules).unwrap();
+    for directory in ["tests/__pycache__", ".claude"] {
+        std::fs::create_dir_all(clone.join(directory)).unwrap();
+    }
+    for file in [
+        "tests/__pycache__/fixture.cpython-313.pyc",
+        ".aida/team-onboarded",
+        ".aida/upstream-report-notice-version",
+        ".aida/.format-hint-shown",
+    ] {
+        std::fs::write(clone.join(file), "runtime").unwrap();
+    }
+    for file in [".bashrc", ".gitconfig", ".gitmodules"] {
+        std::fs::write(clone.join(file), "").unwrap();
+    }
+    std::os::unix::fs::symlink(fx.root.join("absent-skills"), clone.join(".claude/skills"))
+        .unwrap();
+    let sessions = clone.join(".aida/sessions");
+    // Exercise both the normal runtime symlink and a real local directory.
+    if std::fs::symlink_metadata(&sessions).is_ok() {
+        std::fs::remove_file(&sessions).unwrap();
+    }
+    std::os::unix::fs::symlink(fx.root.join("absent-sessions"), &sessions).unwrap();
+    assert!(known(probe(&fx.main, &clone)).dirty.is_empty());
+    std::fs::remove_file(&sessions).unwrap();
+    std::fs::create_dir_all(&sessions).unwrap();
+    std::fs::write(sessions.join("ended.toml"), "runtime lease").unwrap();
+    assert!(known(probe(&fx.main, &clone)).dirty.is_empty());
+    std::fs::write(sessions.join("precious-notes"), "keep this work").unwrap();
+    let facts = known(probe(&fx.main, &clone));
+    assert!(
+        facts
+            .dirty
+            .iter()
+            .any(|entry| entry.contains("precious-notes")),
+        "{facts:?}"
+    );
+    std::fs::remove_file(sessions.join("precious-notes")).unwrap();
+    assert!(known(probe(&fx.main, &clone)).dirty.is_empty());
 }
 
 /// A seat clone (lease `id`) whose one commit on `feat` was pushed to origin
@@ -2639,4 +2707,164 @@ fn bug_2473_unreadable_clone_keeps_diagnostic_and_never_claims_dirt() {
     assert!(error.contains("sandboxed"), "{error}");
     assert!(clone.exists());
     assert!(!crate::list_leases(&fx.main).is_empty());
+}
+
+// trace:BUG-2491 | ai:codex
+#[cfg(target_os = "linux")]
+#[test]
+fn bug_2491_pushed_slice_tags_are_not_unpushed_work() {
+    if crate::test_env::run_path_isolated_test() {
+        return;
+    }
+    assert!(bwrap_live(), "requires live sandbox coverage");
+    let fx = fixture();
+    let clone = seat(&fx, "slice-tags", "b2491c0ffee1");
+    seat_commit(&clone, "published.txt");
+    git_ok(&clone, &["tag", "slice-00-r1"]);
+    git_ok(
+        &clone,
+        &[
+            "-c",
+            "user.name=Seat",
+            "-c",
+            "user.email=seat@example.com",
+            "tag",
+            "-a",
+            "slice-01-r1",
+            "-m",
+            "checkpoint",
+        ],
+    );
+    let checkpoint = git_ok(&clone, &["rev-parse", "HEAD"]);
+    seat_commit(&clone, "later-published.txt");
+    seat_git(&clone, &["push", "-q", "origin", "HEAD:refs/heads/feat"]);
+    // The finished lane can remain behind the published branch head.
+    git_ok(&clone, &["reset", "--hard", &checkpoint]);
+    // Model a finished lane with stale tracking refs; only the host can refresh.
+    git_ok(&clone, &["update-ref", "-d", "refs/remotes/origin/feat"]);
+    let facts = known(probe_counting_origin(
+        &fx.main,
+        &clone,
+        Some("feat"),
+        &[],
+        None,
+    ));
+    assert_eq!(facts.unpushed, 0, "{facts:?}");
+    // Pre-squash checkpoint history is exempt on a clean, pushed head.
+    git_ok(&clone, &["checkout", "-q", "-b", "side"]);
+    seat_commit(&clone, "private.txt");
+    git_ok(&clone, &["tag", "slice-02-r1"]);
+    let unpublished = known(probe_counting_origin(
+        &fx.main,
+        &clone,
+        Some("feat"),
+        &[],
+        None,
+    ));
+    assert_eq!(unpublished.unpushed, 1, "{unpublished:?}");
+
+    git_ok(&clone, &["checkout", "-q", "feat"]);
+    git_ok(&clone, &["branch", "-D", "side"]);
+    let facts = known(probe_counting_origin(
+        &fx.main,
+        &clone,
+        Some("feat"),
+        &[],
+        None,
+    ));
+    assert_eq!(facts.unpushed, 0, "{facts:?}");
+    std::fs::write(clone.join("pending.txt"), "pending").unwrap();
+    let dirty = known(probe_counting_origin(
+        &fx.main,
+        &clone,
+        Some("feat"),
+        &[],
+        None,
+    ));
+    assert_eq!(dirty.unpushed, 1, "{dirty:?}");
+    assert!(dirty.unshipped());
+    std::fs::remove_file(clone.join("pending.txt")).unwrap();
+    // An ordinary tag on that same private history must still protect it.
+    git_ok(&clone, &["tag", "private-work", "slice-02-r1"]);
+    let facts = known(probe_counting_origin(
+        &fx.main,
+        &clone,
+        Some("feat"),
+        &[],
+        None,
+    ));
+    assert_eq!(facts.unpushed, 1, "{facts:?}");
+    assert!(
+        facts
+            .unpushed_refs
+            .iter()
+            .any(|r| r.contains("refs/tags/private-work")),
+        "{facts:?}"
+    );
+    assert!(matches!(
+        destroy(&fx.main, &clone, DestroyMode::KeepUnshipped, None).unwrap(),
+        Destroyed::Kept { .. }
+    ));
+    assert!(clone.exists());
+    git_ok(&clone, &["tag", "-d", "private-work"]);
+    assert!(matches!(
+        destroy(&fx.main, &clone, DestroyMode::KeepUnshipped, None).unwrap(),
+        Destroyed::Removed { .. }
+    ));
+    assert!(!clone.exists());
+}
+
+// trace:BUG-2491 | ai:codex
+#[cfg(target_os = "linux")]
+#[test]
+fn bug_2491_unborn_head_keeps_private_branch_work() {
+    if crate::test_env::run_path_isolated_test() {
+        return;
+    }
+    assert!(bwrap_live(), "requires live sandbox coverage");
+    let fx = fixture();
+    let clone = seat(&fx, "unborn-head", "b2491c0ffee2");
+    seat_commit(&clone, "private.txt");
+    seat_git(&clone, &["checkout", "--orphan", "unborn"]);
+    seat_git(&clone, &["rm", "-rf", "."]);
+    let facts = known(probe(&fx.main, &clone));
+    assert!(facts.dirty.is_empty(), "{facts:?}");
+    assert_eq!(facts.head, None, "{facts:?}");
+    assert_eq!(facts.unpushed, 1, "{facts:?}");
+    assert!(
+        facts
+            .unpushed_refs
+            .iter()
+            .any(|r| r.contains("refs/heads/feat")),
+        "{facts:?}"
+    );
+    assert!(matches!(
+        destroy(&fx.main, &clone, DestroyMode::KeepUnshipped, None).unwrap(),
+        Destroyed::Kept { .. }
+    ));
+    assert!(clone.exists());
+}
+
+// trace:BUG-2491 | ai:codex
+#[cfg(target_os = "linux")]
+#[test]
+fn bug_2491_published_checkpoints_need_no_salvage() {
+    if crate::test_env::run_path_isolated_test() {
+        return;
+    }
+    assert!(bwrap_live(), "requires live sandbox coverage");
+    let fx = fixture();
+    let clone = seat(&fx, "published-checkpoints", "b2491c0ffee3");
+    seat_commit(&clone, "published.txt");
+    seat_git(&clone, &["tag", "slice-00-r1"]);
+    seat_git(&clone, &["push", "-q", "origin", "HEAD:refs/heads/feat"]);
+    assert!(matches!(
+        destroy(&fx.main, &clone, DestroyMode::KeepUnshipped, None).unwrap(),
+        Destroyed::Removed { .. }
+    ));
+    assert!(!fx
+        .main
+        .join(".aida/salvage")
+        .join(clone.file_name().unwrap())
+        .exists());
 }

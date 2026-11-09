@@ -35,7 +35,15 @@ its descriptive publication subject before exiting: use
 `aida ship -m '[AI:codex] type(scope): subject (ID)'` for completed work, or
 `aida ship -m '[AI:codex] type(scope): subject (Refs ID)'` for an approved
 partial slice. In a native seat this only records a lease-bound declaration;
-the host commits and publishes after exit. Failed exits always retain Refs.
+the host commits and publishes after exit. For required commit-body trailers,
+write a UTF-8 body file outside the checkout (for example under `/tmp`) and add
+`--commit-body-file <file>` to the declaration
+(for example, a file containing `Help-Golden: unchanged`). The host also accepts
+`aida ship --from-seat <clone> --commit-pending '<subject>' --commit-body-file <file>`.
+The body is preserved after the subject. Avoid body lines ending in `(ID)` groups:
+those lines can also supply completion credit in squash commits.
+Failed exits always retain Refs.
+<!-- trace:BUG-2493 | ai:codex -->
 Publication refuses while another live process owns the seat; do not ask a deputy to bypass that refusal. A punt
 or manual hold remains a publication veto. Other postures keep the ordinary
 shipping workflow below.
@@ -347,13 +355,13 @@ card so its contract sits at the top of the terminal scrollback for the
 whole working session — no separate `aida show` in another shell:
 
 ```bash
-aida show <spec_id> --card
+aida show <spec_id> --card --full
 ```
 
 The card prints a header rule, the `id · type · priority · status`
 one-liner, key fields (feature, tags, parent, related specs), the spec's
 cached **Intent (AI-generated)** comprehension if one is fresh (TASK-838),
-the description trimmed to its lead summary, the acceptance criteria, and
+the full description and acceptance criteria (`--full` disables card truncation), and
 the git-linkage summary. The user can scroll up at any point to re-read
 the goal, and can catch a mismatch between the spec and how you're
 interpreting it early.

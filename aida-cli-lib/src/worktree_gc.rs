@@ -398,6 +398,11 @@ pub(crate) fn criterion_trace_suffix(suffix: &str) -> bool {
     {
         return false;
     }
+    // Minted compound labels are unambiguous; retain filename-word exclusions.
+    // trace:STORY-1486 | ai:codex
+    if suffix.starts_with(|c: char| c.is_ascii_alphabetic()) && suffix.contains(['_', '-']) {
+        return true;
+    }
     // STORY-1700: an explicit word label (`Durability: ...` in the spec's
     // acceptance) yields criterion id `<SPEC>.Durability`; accept that shape
     // (capitalised, letters only) so such a criterion can be traced at all.
@@ -2205,8 +2210,19 @@ pub(crate) fn handle_worktree_command(cmd: &WorktreeCommand) -> Result<()> {
         } => handle_worktree_enter(target, path.as_deref(), branch.as_deref()),
         WorktreeCommand::Exit => handle_worktree_exit(),
         WorktreeCommand::List { json } => handle_worktree_list(*json),
-        WorktreeCommand::Gc { yes, force, json } => {
-            doctor_cmd::run_merged_agent_worktree_gc(*yes, *force, *json)
+        WorktreeCommand::Gc {
+            yes,
+            force,
+            json,
+            apply,
+            fail_on_findings,
+        } => {
+            // trace:TASK-1222 | ai:codex — legacy flags remain an explicit apply.
+            worktree_lifecycle_gc::run(
+                worktree_lifecycle_gc::apply_requested(*apply, *yes, *force),
+                *json,
+                *fail_on_findings,
+            )
         }
         WorktreeCommand::Dismiss { path, category } => {
             worktree_dismiss::handle_dismiss(path.as_deref(), category.as_deref())
@@ -3803,5 +3819,33 @@ mod bug2396_worktree_next_tests {
         let out = outcome();
         let enter = worktree_next_lines("enter", "BUG-1", &out, true, HeadlessVendor::Claude);
         assert_eq!(enter, vec!["claude    # then /aida-implement BUG-1"]);
+    }
+}
+
+// trace:STORY-1486 | ai:codex
+#[cfg(test)]
+mod criterion_suffix_regressions {
+    #[test]
+    fn minted_underscore_criterion_is_preserved_in_trace() {
+        assert_eq!(
+            crate::parse_trace_id_token(
+                "trace:STORY-1486.generated_profile_preserves_approval_prompts | ai:codex"
+            ),
+            Some("STORY-1486.GENERATED_PROFILE_PRESERVES_APPROVAL_PROMPTS".into())
+        );
+        for suffix in ["rs", "TXT", "my_module.rs", "label.name"] {
+            assert_eq!(
+                crate::parse_trace_id_token(&format!("trace:STORY-1.{suffix}")),
+                Some("STORY-1".into())
+            );
+        }
+        assert_eq!(
+            crate::parse_trace_id_token("trace:STORY-1.ac12345."),
+            Some("STORY-1.AC12345".into())
+        );
+        assert!(super::criterion_trace_suffix("Vendor-neutral"));
+        for suffix in ["", "_label", "1label", "label/path", "label.name"] {
+            assert!(!super::criterion_trace_suffix(suffix), "{suffix}");
+        }
     }
 }

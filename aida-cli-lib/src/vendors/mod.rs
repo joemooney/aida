@@ -3,6 +3,24 @@
 // trace:STORY-2539 | ai:codex
 use aida_core::vendors::{Background, SkillSyntax, VendorProfile};
 
+// Read-only projection for declaration rendering and preview classification.
+// trace:STORY-1486 | ai:codex
+pub(crate) struct LaunchPreviewOptions<'a> {
+    pub cwd: &'a Option<std::path::PathBuf>,
+    pub noexec: &'a bool,
+}
+
+// trace:STORY-1486 | ai:codex
+pub(crate) fn launch_preview_options(
+    command: &crate::agent_launch::AgentNewCommand,
+) -> LaunchPreviewOptions<'_> {
+    use crate::agent_launch::AgentNewCommand;
+    let (AgentNewCommand::Claude { cwd, noexec, .. }
+    | AgentNewCommand::Codex { cwd, noexec, .. }
+    | AgentNewCommand::Antigravity { cwd, noexec, .. }) = command;
+    LaunchPreviewOptions { cwd, noexec }
+}
+
 fn with_args(head: String, args: &str) -> String {
     match args.trim() {
         "" => head,
@@ -52,6 +70,17 @@ pub(crate) fn launch_with_skill(
         ),
         SkillSyntax::Render => agent_new_cmd(profile, &format!("--spec {}", args.trim()), false),
     }
+}
+
+// trace:TASK-3219 | ai:codex
+pub(crate) fn supervised_background_name() -> &'static str {
+    aida_core::vendors::profile(aida_core::vendors::LaunchVendor::Claude).launch_name
+}
+pub(crate) fn supervised_background_hint(attempt: &str) -> String {
+    format!("AIDA background attempt {attempt}\n  logs: aida agent logs {attempt}\n  attach: aida agent attach {attempt}\n  claude attach is unavailable for AIDA-supervised sessions.")
+}
+pub(crate) fn background_attach_refusal() -> &'static str {
+    "claude attach is unavailable under the AIDA wrapper; use aida agent attach <attempt> or aida agent logs <attempt>"
 }
 
 #[cfg(test)]
@@ -366,3 +395,6 @@ pub(crate) fn codex_binary_diagnostic(path: &std::path::Path) -> String {
         ),
     }
 }
+
+// trace:STORY-2642 | ai:codex
+pub(crate) mod host_diagnostics;

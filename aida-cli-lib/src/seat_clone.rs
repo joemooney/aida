@@ -1030,6 +1030,8 @@ pub(crate) struct ProbeFacts {
     /// Commits reachable from any ref or stash entry that are on no
     /// `origin/*` ref, not in the clone's base and not reachable from a ref of
     /// the main checkout.
+    // Clean, published heads exempt slice checkpoint tags; teardown salvages them.
+    // trace:BUG-2491 | ai:codex
     pub(crate) unpushed: u64,
     /// The refs those commits are on, as `<count> commit(s) on <ref>` lines
     /// (seat-written names, escaped for display), for the refusal message.
@@ -1533,6 +1535,23 @@ pub(crate) fn remote_missing_commits_with_review_head(
         !is_clone || review_head.is_none(),
         "review coverage requires a linked worktree"
     );
+    remote_missing_commits_via(main, seat, is_clone, lease_branch, review_head, "--remotes")
+}
+
+/// GC requires origin coverage, rather than a secondary backup remote.
+// trace:TASK-1222 | ai:codex
+pub(crate) fn origin_missing_commits(main: &Path, seat: &Path, branch: &str) -> Result<u64> {
+    remote_missing_commits_via(main, seat, true, branch, None, "--remotes=origin")
+}
+
+fn remote_missing_commits_via(
+    main: &Path,
+    seat: &Path,
+    is_clone: bool,
+    lease_branch: &str,
+    review_head: Option<&str>,
+    remotes: &str,
+) -> Result<u64> {
     let deadline = Some(std::time::Instant::now() + std::time::Duration::from_secs(30));
     // A remote tip absent from the clone cannot excuse anything there. Git
     // failures (including a broken HEAD) refuse rather than guessing zero.
@@ -1554,6 +1573,51 @@ if [ "$#" -gt 0 ]; then
 fi
 printf '%s\n' "$negative" | git rev-list --stdin --count $head --branches --not --remotes
 "#;
+    let script = if remotes == "--remotes=origin" {
+        // Inherited host tags are not seat work. Exclude only an exact
+        // name/object match from positive roots, never from negative coverage:
+        // a seat branch at the same unpublished commit must still retain it.
+        // trace:TASK-1222 | ai:codex
+        let mut tags = aida_core::git_ops::host_git_command(main);
+        tags.args([
+            "for-each-ref",
+            "--format=%(objectname) %(refname)",
+            "refs/tags/",
+        ]);
+        let host_tags = run_bounded(tags, "", deadline).context("cannot read host tags")?;
+        let host_tags = host_tags.replace('\'', "'\"'\"'");
+        let positives = format!(
+            r#"host_tags='{host_tags}'
+positives=''
+refs=$(git for-each-ref --format='%(objectname) %(refname)')
+while read -r oid name; do
+  [ -n "$oid" ] || continue
+  case "$name" in
+    refs/tags/*)
+      if printf '%s\n' "$host_tags" | grep -Fqx -- "$oid $name"; then continue; fi ;;
+  esac
+  positives="$positives $oid"
+done <<EOF
+$refs
+EOF
+"#
+        );
+        // Preserve seat-created/moved tags, other refs and every stash entry.
+        // Secondary remotes never grant origin coverage to GC.
+        format!(
+            "set -eu\n{}\n{}\n{}",
+            GC_STASH_ENTRIES,
+            positives,
+            script
+                .replace("--branches", "$positives $s")
+                // Clone tracking refs are seat-writable. Only the negative
+                // OIDs corroborated through host origin refs/advertisement
+                // above may excuse a commit in the GC path.
+                .replace("--not --remotes", "")
+        )
+    } else {
+        script.to_string()
+    };
     let output = if is_clone {
         let out = run_sandboxed_until(
             seat,
@@ -1566,12 +1630,8 @@ printf '%s\n' "$negative" | git rev-list --stdin --count $head --branches --not 
         .map_err(|error| anyhow::anyhow!("{error}"))?;
         let out = String::from_utf8_lossy(&out);
         let (tips, candidates) = split_tips(&out);
-        let remote_tips = main_reachable_commits_via(
-            main,
-            tips.into_iter().chain(candidates),
-            deadline,
-            "--remotes",
-        );
+        let remote_tips =
+            main_reachable_commits_via(main, tips.into_iter().chain(candidates), deadline, remotes);
         let count_with = |tips: &[String]| -> Result<String> {
             let mut args: Vec<&std::ffi::OsStr> = vec![
                 "-c".as_ref(),
@@ -1594,7 +1654,12 @@ printf '%s\n' "$negative" | git rev-list --stdin --count $head --branches --not 
             let remaining = deadline
                 .unwrap()
                 .saturating_duration_since(std::time::Instant::now());
-            let heads = origin_head_oids(main, (remaining / 2).min(ORIGIN_REFRESH_CAP));
+            let timeout = (remaining / 2).min(ORIGIN_REFRESH_CAP);
+            let heads = if remotes == "--remotes=origin" {
+                origin_gc_oids(main, timeout)
+            } else {
+                origin_head_oids(main, timeout)
+            };
             if heads.is_empty() {
                 first
             } else {
@@ -1644,7 +1709,7 @@ printf '%s\n' "$negative" | git rev-list --stdin --count $head --branches --not 
         if has_head {
             cmd.arg("HEAD");
         }
-        cmd.args(["--not", "--remotes"]);
+        cmd.args(["--not", remotes]);
         if let Some(head) = review_head {
             cmd.arg(head);
         }
@@ -1864,6 +1929,12 @@ pub(crate) fn probe_until(
             "-c".as_ref(),
             UNPUSHED_COUNT_SCRIPT.as_ref(),
             "aida-seat-unpushed".as_ref(),
+            if facts.dirty.is_empty() {
+                "ignore-slice"
+            } else {
+                "keep-slice"
+            }
+            .as_ref(),
             base.as_ref(),
         ]
         .into_iter()
@@ -1973,18 +2044,64 @@ pub(crate) fn describe_status_entry(line: &str) -> String {
     described.unwrap_or_else(|| line.escape_debug().to_string())
 }
 
-/// Whether a probe `git status` entry is the session's runtime state or
-/// build/cache output rather than work: the `.aida-store` link to the
-/// primary's store, `.aida/cache-db` (and legacy `.aida/cache.db*`),
-/// `.aida/agents`, and `target/`. Only
-/// untracked entries qualify; `.aida-store` and `.codegraph` only while symlinks (read
-/// with metadata only; nothing in the clone is opened).
+/// Whether an untracked probe entry is disposable runtime state: shared
+/// store/codegraph links, agent/cache/build output, Python bytecode, notice
+/// markers, empty sandbox placeholders, Claude runtime links, session-env.sh,
+/// and the sessions symlink or direct regular `*.toml` lease files. Other
+/// session files remain work; tracked entries never qualify.
 // trace:BUG-B6B1278890774EF993D2EBC327862470-051 | ai:claude
 pub(crate) fn is_runtime_noise_entry(clone: &Path, line: &str) -> bool {
     let Some(path) = line.strip_prefix("? ") else {
         return false;
     };
     let path = path.trim_end_matches('/');
+    // Only known runtime links/caches and empty sandbox placeholders qualify.
+    // Genuine ignored state (holds, verdicts, credentials, notes) stays work.
+    // trace:TASK-1222 | ai:codex
+    // Python bytecode is regenerated by the gates. Keep arbitrary files even
+    // inside __pycache__, and never excuse tracked status entries (above).
+    if path.split('/').any(|part| part == "__pycache__") && path.ends_with(".pyc") {
+        return true;
+    }
+    // Presentation/onboarding receipts are disposable; brief.md and events.jsonl
+    // carry work context/audit evidence and intentionally remain protected.
+    if matches!(
+        path,
+        ".aida/team-onboarded"
+            | ".aida/upstream-report-notice-version"
+            | ".aida/.format-hint-shown"
+    ) {
+        return true;
+    }
+    if matches!(path, ".bashrc" | ".gitconfig" | ".gitmodules") {
+        return std::fs::symlink_metadata(clone.join(path))
+            .is_ok_and(|m| m.is_file() && m.len() == 0);
+    }
+    if path.starts_with(".claude/") {
+        let mut component = clone.join(path);
+        while component != clone.join(".claude") {
+            if std::fs::symlink_metadata(&component).is_ok_and(|m| m.is_symlink()) {
+                return true;
+            }
+            if !component.pop() {
+                break;
+            }
+        }
+    }
+    if path == ".aida/session-env.sh" {
+        return true;
+    }
+    // A real sessions directory can contain operator notes. Only the shared
+    // link or direct regular lease files are disposable; unknown state stays.
+    // trace:TASK-1222 | ai:codex
+    if path == ".aida/sessions" {
+        return std::fs::symlink_metadata(clone.join(path)).is_ok_and(|meta| meta.is_symlink());
+    }
+    if let Some(lease) = path.strip_prefix(".aida/sessions/") {
+        return !lease.contains('/')
+            && lease.ends_with(".toml")
+            && std::fs::symlink_metadata(clone.join(path)).is_ok_and(|meta| meta.is_file());
+    }
     // trace:STORY-2630 | ai:codex
     if matches!(path, ".aida-store" | ".codegraph") {
         return std::fs::symlink_metadata(clone.join(path))
@@ -2136,6 +2253,40 @@ const ORIGIN_HEADS_CAP: usize = 5_000;
 /// more than [`ORIGIN_HEADS_CAP`] branches.
 // trace:BUG-2415 | ai:claude
 pub(crate) fn origin_head_oids(main: &Path, timeout: std::time::Duration) -> Vec<String> {
+    origin_oids(
+        main,
+        timeout,
+        &["ls-remote", "--heads", "origin"],
+        ORIGIN_HEADS_CAP,
+    )
+}
+
+/// GC may corroborate a published source head through origin's PR/MR refs
+/// after squash-merge branch deletion. These are host-observed advertisements,
+/// never clone-written tracking refs; the separate lifecycle gate still applies.
+// trace:TASK-1222 | ai:codex
+fn origin_gc_oids(main: &Path, timeout: std::time::Duration) -> Vec<String> {
+    origin_oids(
+        main,
+        timeout,
+        &[
+            "ls-remote",
+            "--refs",
+            "origin",
+            "refs/heads/*",
+            "refs/pull/*/head",
+            "refs/merge-requests/*/head",
+        ],
+        50_000,
+    )
+}
+
+fn origin_oids(
+    main: &Path,
+    timeout: std::time::Duration,
+    args: &[&str],
+    cap: usize,
+) -> Vec<String> {
     if timeout.is_zero() {
         return Vec::new();
     }
@@ -2147,7 +2298,7 @@ pub(crate) fn origin_head_oids(main: &Path, timeout: std::time::Duration) -> Vec
             crate::forge::batch_mode_ssh_command(main),
         )
         .stdin(std::process::Stdio::null())
-        .args(["ls-remote", "--heads", "origin"]);
+        .args(args);
     let Some(out) = crate::command_output_with_timeout(cmd, timeout) else {
         return Vec::new();
     };
@@ -2162,7 +2313,7 @@ pub(crate) fn origin_head_oids(main: &Path, timeout: std::time::Duration) -> Vec
         .collect();
     oids.sort_unstable();
     oids.dedup();
-    if oids.len() > ORIGIN_HEADS_CAP {
+    if oids.len() > cap {
         return Vec::new();
     }
     oids
@@ -2371,6 +2522,10 @@ exit 0
 /// too: each one main reaches is excused, and with it its ancestors.
 // trace:BUG-2224 | ai:claude
 // trace:BUG-B6B1278890774EF993D2EBC327862470-051 | ai:claude
+// Clean, published branch heads may retire lane checkpoint tags even when
+// pre-squash checkpoints are unreachable from origin. Salvage still counts
+// every ref so those checkpoints are bundled before teardown.
+// trace:BUG-2491 | ai:codex
 const REF_TIPS_SCRIPT: &str = concat!(
     "set -u\n",
     "git for-each-ref --format='%(if)%(*objectname)%(then)%(*objectname)%(else)%(objectname)%(end)' || exit 1\n",
@@ -2382,10 +2537,13 @@ const REF_TIPS_SCRIPT: &str = concat!(
 /// candidate commits.
 const TIPS_SEPARATOR: &str = "--";
 
+// trace:TASK-1222 | ai:codex
+const GC_STASH_ENTRIES: &str = stash_entries_sh!();
+
 /// Inside the probe sandbox: how many commits the clone holds that origin
 /// does not: reachable from ANY ref (every branch, tag, HEAD) or stash entry,
-/// and not from `origin/*`, the pinned base (`$1`, or empty) or an excused
-/// head (`$2...`, full hex ids: a shipped head, or a tip main reaches; one the
+/// and not from `origin/*`, the pinned base (first positional argument, or empty) or an excused
+/// head (remaining full hex ids: a shipped head, or a tip main reaches; one the
 /// clone lacks is skipped). Submodules are not counted: [`probe`] keeps any
 /// clone that has one. The total is the first line; then, when it is not 0,
 /// `<count> <ref>` for each ref (a detached HEAD, every ref outside
@@ -2398,15 +2556,31 @@ const UNPUSHED_COUNT_SCRIPT: &str = concat!(
     // revisions; absent objects and tags never excuse work. Keep the large set
     // on stdin to rev-list rather than expanding it into each process's argv.
     // trace:BUG-2384 | ai:codex
+    // Only the clean-tree probe requests this exemption; salvage keeps all refs.
+    // trace:BUG-2491 | ai:codex
+    "ignore_slice=0\nslice_only=0\ncase $1 in ignore-slice) ignore_slice=1; shift;; keep-slice) shift;; slice-only) slice_only=1; shift;; esac\n",
     "base=$1\nshift\nshipped=''\n",
     "if [ \"$#\" -gt 0 ]; then\n",
     "  objects=$(printf '%s\\n' \"$@\" | git cat-file --batch-check='%(objectname) %(objecttype)') || exit 1\n",
     "  shipped=$(printf '%s\\n' \"$objects\" | awk '$2 == \"commit\" {print \"^\" $1}') || exit 1\n",
     "fi\n",
-    "total=$(printf '%s\\n' \"$shipped\" | git rev-list --stdin --count --all $s --not --remotes=origin ${base:+\"$base\"}) || exit 1\n",
+    "refs=$(git for-each-ref --format='%(refname)') || exit 1\n",
+    "head=\"\"\nif git rev-parse -q --verify HEAD^{commit} >/dev/null; then head=HEAD; fi\n",
+    "if [ \"$ignore_slice\" -eq 1 ] && [ -n \"$head\" ]; then\n",
+    "  n=$(printf '%s\\n' \"$shipped\" | git rev-list --stdin --count HEAD --not --remotes=origin ${base:+\"$base\"}) || exit 1\n",
+    "  if [ \"$n\" -eq 0 ]; then refs=$(printf '%s\\n' \"$refs\" | awk 'index($0, \"refs/tags/slice-\") != 1') || exit 1; fi\n",
+    "fi\n",
+    // Teardown only needs salvage for checkpoint history not already published.
+    // trace:BUG-2491 | ai:codex
+    "if [ \"$slice_only\" -eq 1 ]; then\n",
+    "  refs=$(printf '%s\\n' \"$refs\" | awk 'index($0, \"refs/tags/slice-\") == 1') || exit 1\n",
+    "  head=''; s=''\nfi\n",
+    // Blank lines terminate rev-list stdin, including an unborn HEAD.
+    // trace:BUG-2491 | ai:codex
+    "revisions=$(printf '%s\\n' \"$head\" \"$refs\" \"$shipped\" | sed '/^$/d') || exit 1\n",
+    "total=$(printf '%s\\n' \"$revisions\" | git rev-list --stdin --count $s --not --remotes=origin ${base:+\"$base\"}) || exit 1\n",
     "printf '%s\\n' \"$total\"\n",
     "if [ \"$total\" -eq 0 ]; then exit 0; fi\n",
-    "refs=$(git for-each-ref --format='%(refname)') || exit 1\n",
     "if ! git symbolic-ref -q HEAD >/dev/null && git rev-parse -q --verify HEAD >/dev/null; then\n",
     "  refs=\"HEAD\n$refs\"\n",
     "fi\n",
@@ -3542,6 +3716,8 @@ pub(crate) fn commit_pending(
             &[
                 os("commit"),
                 os("--no-verify"),
+                // trace:BUG-2493 | ai:codex
+                os("--cleanup=verbatim"),
                 os("-q"),
                 os("-m"),
                 message.as_ref(),
@@ -3849,7 +4025,40 @@ fn destroy_inner(
                 });
             }
         }
-        if facts.unshipped() {
+        // Unpublished checkpoint history needs a recoverable bundle before removal.
+        // Probe inside the same sandbox; unreadable evidence retains the clone.
+        // trace:BUG-2491 | ai:codex
+        let base = pinned_base(main, clone).unwrap_or_default();
+        let checkpoint_args: Vec<&std::ffi::OsStr> = [
+            "-c".as_ref(),
+            UNPUSHED_COUNT_SCRIPT.as_ref(),
+            "aida-seat-checkpoints".as_ref(),
+            "slice-only".as_ref(),
+            base.as_ref(),
+        ]
+        .into_iter()
+        .chain(
+            shipped
+                .iter()
+                .filter(|oid| is_full_oid(oid))
+                .map(|oid| oid.as_ref()),
+        )
+        .collect();
+        let checkpoints = match probe_run(clone, main, &checkpoint_args, "sh").and_then(|out| {
+            parse_unpushed_count(&out)
+                .map(|(n, _)| n > 0)
+                .ok_or_else(|| "invalid checkpoint count".to_string())
+        }) {
+            Ok(unpublished) => unpublished,
+            Err(why) => {
+                return Ok(Destroyed::Kept {
+                    reason: format!("checkpoint refs could not be read ({why})"),
+                    salvage: None,
+                    retention: None,
+                })
+            }
+        };
+        if facts.unshipped() || checkpoints {
             // A salvage that failed or was cut off keeps the clone: removing
             // it would lose what the patch does not hold.
             // trace:TASK-2053 | ai:claude
@@ -3863,7 +4072,7 @@ fn destroy_inner(
                     })
                 }
             }
-            if mode == DestroyMode::KeepUnshipped {
+            if mode == DestroyMode::KeepUnshipped && facts.unshipped() {
                 return Ok(Destroyed::Kept {
                     reason: unshipped_reason(&facts),
                     salvage: salvaged,

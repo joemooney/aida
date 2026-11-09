@@ -1,3 +1,10 @@
+Codegraph lane queries use a host proxy against a disposable SQLite backup;
+the primary index stays outside seat writable roots. The proxy requires host
+deployment, delivery of the reviewed absolute client path, and socket admission.
+Contained-seat acceptance remains outstanding. See the
+[deployment and acceptance guide](scripts/codegraph/README.md).
+<!-- trace:STORY-2630 | ai:codex -->
+
 `cmdkit` holds the command-framework types and shared output/stakeholder vocabulary;
 existing CLI, registry and stakeholder paths re-export them.
 <!-- trace:TASK-3425 | ai:codex -->
@@ -185,9 +192,9 @@ commits while fetching and pushing origin's SHA. See
 [git lifecycle](docs/cli/04-git-lifecycle.md#aida-pull).
 <!-- trace:BUG-1803 | ai:codex -->
 
-The project schedule runs a read-only merged-worktree guard every 30 days and
-routes failures to the advisor. The operator reviews `aida worktree gc` and
-runs `aida worktree gc --yes --force` at a TTY; forced cleanup stays outside
+The project schedule runs a weekly read-only lifecycle-worktree GC
+check and routes failures to the advisor. The operator reviews `aida worktree gc` and
+runs `aida worktree gc --apply` at a TTY; forced cleanup stays outside
 scheduled and headless jobs.
 <!-- trace:TASK-1596 | ai:codex -->
 
@@ -387,12 +394,35 @@ explicit regex rules refuse sensitive content without certifying sanitization.
 Manual-email export is a self-contained JSON attachment. Store-only transport
 retains its separate authority. Independently enrolled intake transport uses
 `aida-intake/` under the clone common Git directory, with a separate repository,
-worktree, index, object database, refs and permanent lock. Only `aida-intent`
-is transported; full incoming history is validated before fast-forward
-acceptance. Explicit processing stores immutable receipts and journals
+worktree, index, object database, refs and permanent lock. Legacy enrollment
+transports only `aida-intent`. Opt-in profile v2 pins a writer identity and role,
+one `aida-feedback-<producer-id>` observation branch and at most one authorized
+`aida-feedback-receipts-<processor-id>` branch. Producer and processor write only
+their respective orphan histories; readers validate each history independently
+before combining views. Receipts can validate without a local observation.
+Full incoming history is validated before fast-forward acceptance. V2 currently
+uses full validation rather than legacy checkpoints; writer protection is
+reported unverified. Protection probing/foreign-write refusal, receipt v2 identity
+and unknown-state reporting, and CI relay alignment remain later slices; v2
+refuses CI commands until that alignment. See [per-writer intake](docs/cli/02-specs.md#native-per-writer-intake-first-round-trip-slice).
+<!-- trace:STORY-2652 | ai:codex -->
+ Explicit processing stores immutable receipts and journals
 create/comment operations to recover confirmed writes without replay. See [the wire format and commands](docs/cli/02-specs.md#aida-intent-note-validate-and-export).
 <!-- trace:STORY-2479 trace:TASK-3096 | ai:codex -->
 <!-- trace:TASK-3114 | ai:codex -->
+
+### Pre-compaction recovery
+
+Claude's optional `PreCompact` hook writes a bounded recovery packet through
+`aida session handoff`, retaining pointers to work, verdicts, findings and the
+next step. One reusable slot per worktree and role stays inside the lane's
+write boundary and disappears with the worktree. Ordinary handoff reads expose
+the snapshot to relaunches; compact SessionStart injects it as potentially stale
+context. Deliberate rotation handoffs remain separate in the primary checkout.
+Unavailable evidence stays unknown and snapshot failures do not block work.
+Snapshots grant no completion, review or publication authority. Codex remains
+disabled pending its trusted-hook test.
+<!-- trace:STORY-2662 | ai:codex -->
 
 ### Agent launch migration
 
@@ -1588,8 +1618,9 @@ conflicting per-tool posture defaults and refuses posture passthrough flags;
 an explicit operator launch-posture override retains its existing precedence.
 A native child does not receive `AIDA_CONTAINED=1` or AIDA containment credit.
 Native `aida ship -m '<complete subject> (Refs ID)'` records a lease/spec-bound
-publication declaration for the host after exit. A fresh launch token prevents
-reuse across attempts and survives supervised rotations within an attempt;
+publication declaration for the host after exit. Completing lanes use `(ID)`.
+A fresh launch token prevents reuse across attempts and
+survives supervised rotations within an attempt;
 lease release removes the host binding. The declaration stays inside the seat's
 existing write boundary. The host refuses invalid, epic, multi-spec or mismatched
 lease scopes before commit or forge probes. Existing Refs PRs or inconclusive
@@ -1667,7 +1698,7 @@ and `/usr/bin/bwrap` are required. The host helper owns an isolated child-only
 session keyring, a private namespace tree, the CONNECT proxy, and the seccomp
 connect broker. Rust clears the helper environment and supplies an exact list;
 bubblewrap inherits it unchanged. API-key authentication uses `OPENAI_API_KEY`.
-Existing file-based ChatGPT login is admitted only for probed `codex-cli 0.166.0`:
+Existing file-based ChatGPT login is admitted only for probed `codex-cli 0.167.0`:
 the host pins a bounded, single-link, current-owner mode-0600 `auth.json`, reads
 access-token expiry and identity account routing, and requires grant lifetime
 plus a 300-second margin. A sealed memfd supplies only the access token, host ID
@@ -1675,6 +1706,12 @@ token and `refresh_token=""`, plus derived account routing and a generated
 delivery timestamp, through `--ro-bind-data` at a read-only private tmpfs auth
 leaf; no full cache or host refresh token enters the lane. Baseline lanes last
 at most one hour.
+Upgrade on the host with `npm i -g @openai/codex@0.167.0` and put its native
+executable first on PATH. The 0.167.0 executable pin and empty-HOME help fixture
+were refreshed together; the operator must rerun STORY-2593 conformance
+(`conformance-codex-aida`) against this pin for live proof.
+<!-- trace:TASK-3463 | ai:codex -->
+
 Unsupported versions, malformed or insufficient validity and keyring logins
 refuse. OAuth hosts are excluded from the effective ChatGPT lane allowlist;
 there is no renewal. The host supervisor enforces the absolute deadline and
@@ -1801,15 +1838,9 @@ liveness from creator metadata or a heartbeat. Foreign lease expiry remains a
 separate consumer policy. Ownership repair pins the recorded generation without
 recapturing today's process at an old PID.
 
-Review-watch receipts require a verified local procfs view. Caller capture
-fails closed on masked, hidepid, unverified or ancestor-coordinate views, with
-host-retry guidance; existing reservations remain held. Retained children may
-be recorded after exit but before reaping, when the PID cannot be reused.
-Missing legacy identity evidence uses the existing reboot/foreign-TTL backstop;
-undated legacy receipts still require reboot or operator recovery. Unknown
-identity never authorizes signalling, including orphaned group members adopted
-by an unrelated subreaper.
-<!-- trace:TASK-3365 | ai:codex -->
+Review-watch uses shared process identity observations with a separate
+reservation-expiry policy; unknown identity never authorizes signalling.
+<!-- trace:TASK-3367 | ai:codex -->
 
 The TASK-1750 ratchet inventories compatibility consumers in
 `proc_identity_legacy_baseline.json` and prevents new private PID/start

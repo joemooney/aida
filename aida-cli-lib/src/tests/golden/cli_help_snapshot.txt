@@ -1065,8 +1065,8 @@ Options:
           Pull from `origin/aida-store` before reading the requirement. See `aida list --sync`
 
       --no-git
-          Skip the git-linkage section (commits / files traced / branch / PR). Faster for read-only
-          contexts that only need the requirement fields
+          Suppress git linkage in full, verbose and JSON views. Default detail views already skip
+          linkage
 
   -v, --verbose
           Expand the git-linkage section: every referencing commit (not just the most recent 5) plus
@@ -1075,8 +1075,8 @@ Options:
       --card
           Render a compact, boxed "spec card" instead of the linear detail view: a header rule, an
           ID/type/priority/status one-liner, key fields, a truncated description, the acceptance
-          criteria, and the git-linkage summary. The /aida-pickup skill renders this at session
-          start so the spec's contract stays in terminal scrollback
+          criteria, and (with --full) the git-linkage summary. The /aida-pickup skill renders this
+          at session start so the spec's contract stays in terminal scrollback
 
       --format <FORMAT>
           Pin the output format regardless of whether stdout is a terminal: human = tables, toon =
@@ -8060,6 +8060,18 @@ Options:
           
           [default: 20]
 
+      --read-write
+          Trace-read-rate audit: classify logged commands into graph READS
+          (list/show/search/graph/why/history/queue list/…) vs graph WRITES (add/edit/comment
+          add/rel add/queue add/defer/archive/…) and report the read:write ratio over the window —
+          evidence for whether the intent graph is consulted, not just written
+
+      --cmd <shape>
+          With `events`: keep only events for this exact command shape (e.g. `queue list`)
+
+      --slower-than <Nms>
+          With `events`: keep only events whose `duration_ms` is at or above this threshold
+
       --format <FORMAT>
           Pin the output format regardless of whether stdout is a terminal: human = tables, toon =
           compact agent output, json = machine JSON. Default (unset) is human at a TTY, toon when
@@ -8073,18 +8085,6 @@ Options:
       --canonical-ids
           Show node-local spec IDs in their canonical form instead of the node's friendly label (for
           scripts). Also settable via AIDA_CANONICAL_IDS=1
-
-      --read-write
-          Trace-read-rate audit: classify logged commands into graph READS
-          (list/show/search/graph/why/history/queue list/…) vs graph WRITES (add/edit/comment
-          add/rel add/queue add/defer/archive/…) and report the read:write ratio over the window —
-          evidence for whether the intent graph is consulted, not just written
-
-      --cmd <shape>
-          With `events`: keep only events for this exact command shape (e.g. `queue list`)
-
-      --slower-than <Nms>
-          With `events`: keep only events whose `duration_ms` is at or above this threshold
 
   -h, --help
           Print help (see a summary with '-h')
@@ -9213,6 +9213,28 @@ Commands:
                            codex --bg` with its private control channel
   codex-bg-barrier         The detached Codex exec barrier (becomes the worker)
   help                     Print this message or the help of the given subcommand(s)
+
+Options:
+      --format <FORMAT>
+          Pin the output format regardless of whether stdout is a terminal: human = tables, toon =
+          compact agent output, json = machine JSON. Default (unset) is human at a TTY, toon when
+          piped/captured. Also settable via AIDA_OUTPUT_FORMAT (the flag wins)
+
+          Possible values:
+          - human: Human-readable tables / emoji (the interactive default at a TTY)
+          - toon:  Token-efficient TOON — the compact agent default when piped/captured
+          - json:  Machine JSON, for commands that support a JSON projection
+
+      --canonical-ids
+          Show node-local spec IDs in their canonical form instead of the node's friendly label (for
+          scripts). Also settable via AIDA_CANONICAL_IDS=1
+
+  -h, --help
+          Print help (see a summary with '-h')
+===== aida internal claude-bg-supervise
+AIDA-owned shared-wrapper Claude background supervisor
+
+Usage: aida internal claude-bg-supervise [OPTIONS]
 
 Options:
       --format <FORMAT>
@@ -10952,8 +10974,8 @@ Commands:
            session (you cd'd out, or the session was ended from another shell) still clears the env
            and the prompt segment — minus the cd. Only a shell carrying nothing is a no-op
   list     List AIDA-managed worktrees, each annotated with its `.aida/focus`
-  gc       Prune verified merged agent worktrees using the same safety checks as `aida doctor --heal
-           --category merged-agent-worktrees`
+  gc       Report ended seat clones and clean linked worktrees with merged/closed PRs or merged
+           branches. Dry run by default; --apply requires an operator terminal
   dismiss  Disposition a worktree whose content is undecidable (e.g. batched integration). Archives
            the branch tip under refs/archive/, removes the worktree and branch, and ledgers the
            operator decision
@@ -11128,18 +11150,24 @@ Options:
   -h, --help
           Print help (see a summary with '-h')
 ===== aida worktree gc
-Prune verified merged agent worktrees using the same safety checks as `aida doctor --heal --category
-merged-agent-worktrees`
+Report ended seat clones and clean linked worktrees with merged/closed PRs or merged branches. Dry
+run by default; --apply requires an operator terminal
 
 Usage: aida worktree gc [OPTIONS]
 
 Options:
+      --apply
+          Remove eligible trees after revalidation (operator terminal only)
+
+      --fail-on-findings
+          Exit nonzero when candidates await operator review (read-only guard)
+
   -y, --yes
-          Skip confirmation prompts
+          Legacy companion to --force; together they request removal
 
       --force
-          Permit destructive cleanup: remove verified merged worktrees and delete their local
-          branches. Still refused in unattended contexts
+          Legacy removal opt-in together with --yes. Uses the same operator-only gate and eligible
+          candidate set as --apply
 
       --json
           Emit machine-readable JSON
@@ -11498,7 +11526,7 @@ Usage: aida intent [OPTIONS] <ID>
 Commands:
   ci        Configure or run the restricted work CI return channel
   enroll    Enroll an independent pinned URL and reviewed deny patterns; no store required
-  publish   Commit a reviewed envelope and push only aida-intent; never force
+  publish   Commit a reviewed envelope and push only the enrolled producer branch
   pull      Fetch into quarantine, validate all history, then accept only a fast-forward
   list      List pending observations, or include processed observations with --all
   process   Explicitly keep pending, dismiss, create a draft task, or comment on a spec
@@ -11726,14 +11754,25 @@ Options:
       --remote <REMOTE>
           Explicit absolute local path, HTTPS URL, or SSH URL
 
+      --role <ROLE>
+          Opt into per-writer histories (omitting this preserves legacy enrollment)
+          
+          [possible values: producer, processor]
+
+      --writer-id <WRITER_ID>
+          Stable opaque writer ID; defaults to WORK binding or a clone-local UUID
+
+      --producer-id <PRODUCER_ID>
+          Producer to read; required for a processor, otherwise the writer itself
+
+      --receipt-writer <RECEIPT_WRITER>
+          Authorized receipt writer to read (repeatable; currently one processor)
+
       --reviewed
           Confirm review of the destination and policy, including an empty policy
 
       --deny-pattern <DENY_PATTERN>
           Reviewed regex refusing matching title or body text (repeatable)
-
-      --json
-          Emit machine-readable JSON
 
       --format <FORMAT>
           Pin the output format regardless of whether stdout is a terminal: human = tables, toon =
@@ -11745,6 +11784,9 @@ Options:
           - toon:  Token-efficient TOON — the compact agent default when piped/captured
           - json:  Machine JSON, for commands that support a JSON projection
 
+      --json
+          Emit machine-readable JSON
+
       --canonical-ids
           Show node-local spec IDs in their canonical form instead of the node's friendly label (for
           scripts). Also settable via AIDA_CANONICAL_IDS=1
@@ -11752,7 +11794,7 @@ Options:
   -h, --help
           Print help (see a summary with '-h')
 ===== aida intent publish
-Commit a reviewed envelope and push only aida-intent; never force
+Commit a reviewed envelope and push only the enrolled producer branch
 
 Usage: aida intent publish [OPTIONS]
 
@@ -12562,6 +12604,12 @@ Commands:
   help                      Print this message or the help of the given subcommand(s)
 
 Options:
+      --lane-host
+          Check this machine before running automated lanes
+
+      --lane-codegraph
+          Report the host codegraph snapshot age as seen from this lane
+
       --heal
           Apply safe fixes after scanning. Without this, doctor is read-only
 
@@ -12574,11 +12622,28 @@ Options:
       --json
           Emit machine-readable JSON
 
+      --lane-capacity
+          Read-only typed local lane capacity and reservations (not readiness admission)
+
       --force
           Permit riskier destructive fixes such as branch deletion
 
+      --format <FORMAT>
+          Pin the output format regardless of whether stdout is a terminal: human = tables, toon =
+          compact agent output, json = machine JSON. Default (unset) is human at a TTY, toon when
+          piped/captured. Also settable via AIDA_OUTPUT_FORMAT (the flag wins)
+
+          Possible values:
+          - human: Human-readable tables / emoji (the interactive default at a TTY)
+          - toon:  Token-efficient TOON — the compact agent default when piped/captured
+          - json:  Machine JSON, for commands that support a JSON projection
+
       --all
           Show older completed-without-commit findings individually
+
+      --canonical-ids
+          Show node-local spec IDs in their canonical form instead of the node's friendly label (for
+          scripts). Also settable via AIDA_CANONICAL_IDS=1
 
       --since <DATE_OR_REF>
           Exempt specs completed before this point from the completed-without-commit integrity
@@ -12594,21 +12659,7 @@ Options:
           Prints the sequence — sudo steps are clearly marked "run this yourself"; it never silently
           runs sudo. Runs the non-sudo availability re-probe as a smoke check
 
-      --format <FORMAT>
-          Pin the output format regardless of whether stdout is a terminal: human = tables, toon =
-          compact agent output, json = machine JSON. Default (unset) is human at a TTY, toon when
-          piped/captured. Also settable via AIDA_OUTPUT_FORMAT (the flag wins)
-
-          Possible values:
-          - human: Human-readable tables / emoji (the interactive default at a TTY)
-          - toon:  Token-efficient TOON — the compact agent default when piped/captured
-          - json:  Machine JSON, for commands that support a JSON projection
-
-      --canonical-ids
-          Show node-local spec IDs in their canonical form instead of the node's friendly label (for
-          scripts). Also settable via AIDA_CANONICAL_IDS=1
-
-      --fix <CATEGORY>
+      --fix [<CATEGORY>]
           Repair one category of store damage that needs a data migration. `id-collisions`: spec IDs
           that differ only by leading zeros are the same ID, so each collision keeps one spec on the
           number and gives the others a fresh ID, rewriting their mentions in the store, docs and
@@ -12616,7 +12667,7 @@ Options:
           agreed number of its type; local IDs keep resolving. Needs --dry-run (preview) or --yes
           (apply)
           
-          [possible values: id-collisions, agreed-ids]
+          [possible values: id-collisions, agreed-ids, lane-host]
 
       --dry-run
           With --fix: show the plan and write nothing to the store
@@ -14954,11 +15005,6 @@ Options:
           With `--write`: this is the last handoff of the run, so an `aida agent new --rotate`
           supervisor exits instead of relaunching
 
-      --standing-orders <ACTION> <TEXT>
-          Manage the seat's repo-local standing orders (`.aida/standing-orders/<seat>.md`): `add
-          "<text>"` appends a dated entry, `list` prints them. `--show` prints standing orders
-          before the handoff
-
       --format <FORMAT>
           Pin the output format regardless of whether stdout is a terminal: human = tables, toon =
           compact agent output, json = machine JSON. Default (unset) is human at a TTY, toon when
@@ -14972,6 +15018,11 @@ Options:
       --canonical-ids
           Show node-local spec IDs in their canonical form instead of the node's friendly label (for
           scripts). Also settable via AIDA_CANONICAL_IDS=1
+
+      --standing-orders <ACTION> <TEXT>
+          Manage the seat's repo-local standing orders (`.aida/standing-orders/<seat>.md`): `add
+          "<text>"` appends a dated entry, `list` prints them. `--show` prints standing orders
+          before the handoff
 
   -h, --help
           Print help (see a summary with '-h')
@@ -15427,7 +15478,8 @@ Reads substrate state only — spec status, branch-merged-ness, process liveness
 terminal output to guess whether an agent is finished, and it NEVER closes a running agent: a
 session whose process is still alive owns its worktree as its cwd, so it is skipped and reaped on a
 later pass once it exits on its own. Dirty worktrees, locked worktrees, and branches carrying unique
-unmerged commits are never removed — the same safety checks `aida worktree gc` applies.
+unmerged commits are never removed — the same safety checks as the doctor merged-agent-worktrees
+heal.
 
 A lease held on the main checkout (or another protected checkout) is never reaped, but it is
 RELEASED — the lease file only, never a file of the checkout — when the agent process it recorded
@@ -15901,6 +15953,10 @@ Options:
       --canonical-ids
           Show node-local spec IDs in their canonical form instead of the node's friendly label (for
           scripts). Also settable via AIDA_CANONICAL_IDS=1
+
+      --commit-body-file <FILE>
+          Read a UTF-8 commit body verbatim from this file. Use with native -m declarations or
+          --from-seat --commit-pending
 
   -h, --help
           Print help (see a summary with '-h')
@@ -16847,7 +16903,7 @@ Commands:
           (`aida burndown run`, `aida queue integrate`) are reported from the live drain lock — pid,
           start time, and spec set — even though they write no per-phase progress file. Prints `No
           drain in progress.` (exit 0) when none is running. A drain-state file whose orchestrator
-          process is no longer alive is reported as stale — `--clear` removes it
+          process is no longer alive is reported as stale — `aida drain clear` removes it
   clear   Remove a stale drain-state file
   tail    Stream the active drain log, using the same resolver and renderer as `aida tail drain`
   help    Print this message or the help of the given subcommand(s)
@@ -16996,7 +17052,7 @@ phase, and a prediction of what happens on session exit. Launcher-held drains (`
 `aida queue integrate`) are reported from the live drain lock — pid, start time, and spec set — even
 though they write no per-phase progress file. Prints `No drain in progress.` (exit 0) when none is
 running. A drain-state file whose orchestrator process is no longer alive is reported as stale —
-`--clear` removes it
+`aida drain clear` removes it
 
 Usage: aida drain status [OPTIONS]
 
@@ -17560,6 +17616,8 @@ Launch and track AI agent processes for this AIDA project
 Usage: aida agent [OPTIONS] <COMMAND>
 
 Commands:
+  logs             Read the log of an AIDA-supervised Claude background attempt
+  attach           Follow an AIDA-supervised Claude log until exit (read-only; Ctrl+C detaches)
   new              Launch a new agent process
   register         Register an already-running raw-launched agent process
   list             List active agent processes [aliases: ls]
@@ -17579,6 +17637,58 @@ Commands:
                    resumes or stops anything, and keeps the worktree, branch and lease
   list-roles       List the supported agent roles in the taxonomy
   help             Print this message or the help of the given subcommand(s)
+
+Options:
+      --format <FORMAT>
+          Pin the output format regardless of whether stdout is a terminal: human = tables, toon =
+          compact agent output, json = machine JSON. Default (unset) is human at a TTY, toon when
+          piped/captured. Also settable via AIDA_OUTPUT_FORMAT (the flag wins)
+
+          Possible values:
+          - human: Human-readable tables / emoji (the interactive default at a TTY)
+          - toon:  Token-efficient TOON — the compact agent default when piped/captured
+          - json:  Machine JSON, for commands that support a JSON projection
+
+      --canonical-ids
+          Show node-local spec IDs in their canonical form instead of the node's friendly label (for
+          scripts). Also settable via AIDA_CANONICAL_IDS=1
+
+  -h, --help
+          Print help (see a summary with '-h')
+===== aida agent logs
+Read the log of an AIDA-supervised Claude background attempt
+
+Usage: aida agent logs [OPTIONS] <ATTEMPT>
+
+Arguments:
+  <ATTEMPT>
+          Background attempt UUID returned by dispatch
+
+Options:
+      --format <FORMAT>
+          Pin the output format regardless of whether stdout is a terminal: human = tables, toon =
+          compact agent output, json = machine JSON. Default (unset) is human at a TTY, toon when
+          piped/captured. Also settable via AIDA_OUTPUT_FORMAT (the flag wins)
+
+          Possible values:
+          - human: Human-readable tables / emoji (the interactive default at a TTY)
+          - toon:  Token-efficient TOON — the compact agent default when piped/captured
+          - json:  Machine JSON, for commands that support a JSON projection
+
+      --canonical-ids
+          Show node-local spec IDs in their canonical form instead of the node's friendly label (for
+          scripts). Also settable via AIDA_CANONICAL_IDS=1
+
+  -h, --help
+          Print help (see a summary with '-h')
+===== aida agent attach
+Follow an AIDA-supervised Claude log until exit (read-only; Ctrl+C detaches)
+
+Usage: aida agent attach [OPTIONS] <ATTEMPT>
+
+Arguments:
+  <ATTEMPT>
+          Background attempt UUID returned by dispatch
 
 Options:
       --format <FORMAT>
@@ -17622,6 +17732,9 @@ Commands:
   help         Print this message or the help of the given subcommand(s)
 
 Options:
+      --git-read-only
+          Declare Git read-only policy for this launch (not enforced by current adapters)
+
       --role <ROLE>
           Role for a launch using the configured default vendor
 
@@ -17653,6 +17766,9 @@ Spawn Claude Code with project-correct cwd/env and registry tracking
 Usage: aida agent new claude [OPTIONS]
 
 Options:
+      --git-read-only
+          Declare Git read-only policy for this launch (not enforced by current adapters)
+
       --role <ROLE>
           Role propagated to the spawned Claude process as AIDA_SESSION_ROLE
 
@@ -17780,7 +17896,10 @@ Options:
           Dispatch to Claude Code's background supervisor via `claude --bg`. The session detaches
           from this terminal and shows up in `claude agents` (and `aida status`). When `--spec` is
           also passed, AIDA records the captured sessionId on the lease so the cross-substrate view
-          links them automatically. Without `--bg`, the foreground launch path is unchanged. For
+          links them automatically. With trusted `[contained.vendors] claude = "aida"`, AIDA instead
+          supervises a foreground contained worker; use `aida agent logs` or read-only `aida agent
+          attach` with its returned attempt UUID. Resume and rotation remain unavailable for that
+          background path. Without `--bg`, the foreground launch path is unchanged. For
           non-interactive dispatch, first set `[agents] confirm_bypass = false` in
           `~/.aida/config.toml`; trusted project config can still require consent. Then use: `aida
           agent new claude --bg --role implementer --spec <ID> --cwd <WORKTREE> --prompt-file <FILE>
@@ -17807,6 +17926,9 @@ Arguments:
           given
 
 Options:
+      --git-read-only
+          Declare Git read-only policy for this launch (not enforced by current adapters)
+
       --role <ROLE>
           Role propagated to the spawned Codex process as AIDA_SESSION_ROLE
 
@@ -17964,6 +18086,9 @@ Spawn Antigravity CLI with project-correct cwd/env and registry tracking
 Usage: aida agent new antigravity [OPTIONS]
 
 Options:
+      --git-read-only
+          Declare Git read-only policy for this launch (not enforced by current adapters)
+
       --role <ROLE>
           Role propagated to the spawned Antigravity process as AIDA_SESSION_ROLE
 
@@ -19033,9 +19158,6 @@ Commands:
   help   Print this message or the help of the given subcommand(s)
 
 Options:
-      --check
-          Compare current/sibling versions to latest release; report only, don't install
-
       --version <VERSION>
           Install a specific version instead of latest. Format: `v0.4.0`
 
@@ -20292,15 +20414,70 @@ Inspect the effective launch permission posture for managed agents
 Usage: aida config permissions [OPTIONS] <COMMAND>
 
 Commands:
-  probe  Run the fixed, model-free filesystem/supervisor containment tracer. This does not enable
-         vendor launches or change permission policy
-  show   Show the resolved per-agent posture and diagnostics. Read-only
-  set    Apply a named agent permission posture to local or user config files. `bypass` must be
-         confirmed by a person at an interactive terminal; it is refused when stdin or stdout is not
-         a terminal
-  help   Print this message or the help of the given subcommand(s)
+  runtime-policy  Print the runtime descriptor embedded in this binary. No launch authority
+  probe           Run the fixed, model-free filesystem/supervisor containment tracer. This does not
+                  enable vendor launches or change permission policy
+  show            Show the resolved per-agent posture and diagnostics. Read-only
+  set             Apply a named agent permission posture to local or user config files. `bypass`
+                  must be confirmed by a person at an interactive terminal; it is refused when stdin
+                  or stdout is not a terminal
+  help            Print this message or the help of the given subcommand(s)
 
 Options:
+      --format <FORMAT>
+          Pin the output format regardless of whether stdout is a terminal: human = tables, toon =
+          compact agent output, json = machine JSON. Default (unset) is human at a TTY, toon when
+          piped/captured. Also settable via AIDA_OUTPUT_FORMAT (the flag wins)
+
+          Possible values:
+          - human: Human-readable tables / emoji (the interactive default at a TTY)
+          - toon:  Token-efficient TOON — the compact agent default when piped/captured
+          - json:  Machine JSON, for commands that support a JSON projection
+
+      --canonical-ids
+          Show node-local spec IDs in their canonical form instead of the node's friendly label (for
+          scripts). Also settable via AIDA_CANONICAL_IDS=1
+
+  -h, --help
+          Print help (see a summary with '-h')
+===== aida config permissions conformance-launch
+Run the closed AGY conformance fixture through the shared AIDA wrapper. Diagnostic only: does not
+enable production AGY admission
+
+Usage: aida config permissions conformance-launch [OPTIONS] --fixture-root <FIXTURE_ROOT> --credential <CREDENTIAL>
+
+Options:
+      --fixture-root <FIXTURE_ROOT>
+          Fresh conformance fixture containing workspace, repository and payload
+
+      --credential <CREDENTIAL>
+          Absolute path to the existing AGY OAuth credential leaf
+
+      --format <FORMAT>
+          Pin the output format regardless of whether stdout is a terminal: human = tables, toon =
+          compact agent output, json = machine JSON. Default (unset) is human at a TTY, toon when
+          piped/captured. Also settable via AIDA_OUTPUT_FORMAT (the flag wins)
+
+          Possible values:
+          - human: Human-readable tables / emoji (the interactive default at a TTY)
+          - toon:  Token-efficient TOON — the compact agent default when piped/captured
+          - json:  Machine JSON, for commands that support a JSON projection
+
+      --canonical-ids
+          Show node-local spec IDs in their canonical form instead of the node's friendly label (for
+          scripts). Also settable via AIDA_CANONICAL_IDS=1
+
+  -h, --help
+          Print help (see a summary with '-h')
+===== aida config permissions runtime-policy
+Print the runtime descriptor embedded in this binary. No launch authority
+
+Usage: aida config permissions runtime-policy [OPTIONS] --vendor <VENDOR>
+
+Options:
+      --vendor <VENDOR>
+          Vendor whose embedded runtime descriptor to inspect
+
       --format <FORMAT>
           Pin the output format regardless of whether stdout is a terminal: human = tables, toon =
           compact agent output, json = machine JSON. Default (unset) is human at a TTY, toon when
@@ -21592,7 +21769,7 @@ Options:
           Seconds between discovery passes (default 10)
 
       --max-concurrent <MAX_CONCURRENT>
-          Maximum watcher-launched reviews across instances: one or two (default two)
+          Maximum watcher-launched reviews across instances: 1–8 (config default, otherwise 2)
 
       --vendor <VENDOR>
           Vendor: claude, codex, or agy; omit for ordinary queue-work selection
@@ -26491,6 +26668,18 @@ Options:
           --shipped, --to, --from, --opened, --status-changes, --comments or --oneline (adding
           --json does not change it)
 
+      --full
+          The complete edit/event trail — every status change, comment, tag edit, and field edit,
+          chronological newest-first. Equivalent to the `events` subcommand, but composes naturally
+          after a SPEC-ID: `aida history <SPEC-ID> --full`. Without it, a single spec (`--id` /
+          positional SPEC-ID) shows the shorter status-progression view instead of the full trail
+
+      --digest
+          The per-requirement digest: one row per requirement touched in the window, sorted by
+          last-touch time, with its current status ("what was I up to last session?"). This was the
+          default before the status flow; the output is unchanged. Honors --limit, --since, --until,
+          --author, --type and the archive/defer flags
+
       --format <FORMAT>
           Pin the output format regardless of whether stdout is a terminal: human = tables, toon =
           compact agent output, json = machine JSON. Default (unset) is human at a TTY, toon when
@@ -26501,21 +26690,9 @@ Options:
           - toon:  Token-efficient TOON — the compact agent default when piped/captured
           - json:  Machine JSON, for commands that support a JSON projection
 
-      --full
-          The complete edit/event trail — every status change, comment, tag edit, and field edit,
-          chronological newest-first. Equivalent to the `events` subcommand, but composes naturally
-          after a SPEC-ID: `aida history <SPEC-ID> --full`. Without it, a single spec (`--id` /
-          positional SPEC-ID) shows the shorter status-progression view instead of the full trail
-
       --canonical-ids
           Show node-local spec IDs in their canonical form instead of the node's friendly label (for
           scripts). Also settable via AIDA_CANONICAL_IDS=1
-
-      --digest
-          The per-requirement digest: one row per requirement touched in the window, sorted by
-          last-touch time, with its current status ("what was I up to last session?"). This was the
-          default before the status flow; the output is unchanged. Honors --limit, --since, --until,
-          --author, --type and the archive/defer flags
 
       --id <ID>
           Only show entries for this requirement (accepts a SPEC-ID, an agreed short ID, or the raw
@@ -26677,6 +26854,12 @@ Options:
           --shipped, --to, --from, --opened, --status-changes, --comments or --oneline (adding
           --json does not change it)
 
+      --full
+          The complete edit/event trail — every status change, comment, tag edit, and field edit,
+          chronological newest-first. Equivalent to the `events` subcommand, but composes naturally
+          after a SPEC-ID: `aida history <SPEC-ID> --full`. Without it, a single spec (`--id` /
+          positional SPEC-ID) shows the shorter status-progression view instead of the full trail
+
       --format <FORMAT>
           Pin the output format regardless of whether stdout is a terminal: human = tables, toon =
           compact agent output, json = machine JSON. Default (unset) is human at a TTY, toon when
@@ -26686,12 +26869,6 @@ Options:
           - human: Human-readable tables / emoji (the interactive default at a TTY)
           - toon:  Token-efficient TOON — the compact agent default when piped/captured
           - json:  Machine JSON, for commands that support a JSON projection
-
-      --full
-          The complete edit/event trail — every status change, comment, tag edit, and field edit,
-          chronological newest-first. Equivalent to the `events` subcommand, but composes naturally
-          after a SPEC-ID: `aida history <SPEC-ID> --full`. Without it, a single spec (`--id` /
-          positional SPEC-ID) shows the shorter status-progression view instead of the full trail
 
       --canonical-ids
           Show node-local spec IDs in their canonical form instead of the node's friendly label (for
@@ -26837,6 +27014,12 @@ Options:
           --shipped, --to, --from, --opened, --status-changes, --comments or --oneline (adding
           --json does not change it)
 
+      --full
+          The complete edit/event trail — every status change, comment, tag edit, and field edit,
+          chronological newest-first. Equivalent to the `events` subcommand, but composes naturally
+          after a SPEC-ID: `aida history <SPEC-ID> --full`. Without it, a single spec (`--id` /
+          positional SPEC-ID) shows the shorter status-progression view instead of the full trail
+
       --format <FORMAT>
           Pin the output format regardless of whether stdout is a terminal: human = tables, toon =
           compact agent output, json = machine JSON. Default (unset) is human at a TTY, toon when
@@ -26846,12 +27029,6 @@ Options:
           - human: Human-readable tables / emoji (the interactive default at a TTY)
           - toon:  Token-efficient TOON — the compact agent default when piped/captured
           - json:  Machine JSON, for commands that support a JSON projection
-
-      --full
-          The complete edit/event trail — every status change, comment, tag edit, and field edit,
-          chronological newest-first. Equivalent to the `events` subcommand, but composes naturally
-          after a SPEC-ID: `aida history <SPEC-ID> --full`. Without it, a single spec (`--id` /
-          positional SPEC-ID) shows the shorter status-progression view instead of the full trail
 
       --canonical-ids
           Show node-local spec IDs in their canonical form instead of the node's friendly label (for
@@ -26997,6 +27174,12 @@ Options:
           --shipped, --to, --from, --opened, --status-changes, --comments or --oneline (adding
           --json does not change it)
 
+      --full
+          The complete edit/event trail — every status change, comment, tag edit, and field edit,
+          chronological newest-first. Equivalent to the `events` subcommand, but composes naturally
+          after a SPEC-ID: `aida history <SPEC-ID> --full`. Without it, a single spec (`--id` /
+          positional SPEC-ID) shows the shorter status-progression view instead of the full trail
+
       --format <FORMAT>
           Pin the output format regardless of whether stdout is a terminal: human = tables, toon =
           compact agent output, json = machine JSON. Default (unset) is human at a TTY, toon when
@@ -27006,12 +27189,6 @@ Options:
           - human: Human-readable tables / emoji (the interactive default at a TTY)
           - toon:  Token-efficient TOON — the compact agent default when piped/captured
           - json:  Machine JSON, for commands that support a JSON projection
-
-      --full
-          The complete edit/event trail — every status change, comment, tag edit, and field edit,
-          chronological newest-first. Equivalent to the `events` subcommand, but composes naturally
-          after a SPEC-ID: `aida history <SPEC-ID> --full`. Without it, a single spec (`--id` /
-          positional SPEC-ID) shows the shorter status-progression view instead of the full trail
 
       --canonical-ids
           Show node-local spec IDs in their canonical form instead of the node's friendly label (for
@@ -27176,6 +27353,12 @@ Options:
           --shipped, --to, --from, --opened, --status-changes, --comments or --oneline (adding
           --json does not change it)
 
+      --full
+          The complete edit/event trail — every status change, comment, tag edit, and field edit,
+          chronological newest-first. Equivalent to the `events` subcommand, but composes naturally
+          after a SPEC-ID: `aida history <SPEC-ID> --full`. Without it, a single spec (`--id` /
+          positional SPEC-ID) shows the shorter status-progression view instead of the full trail
+
       --format <FORMAT>
           Pin the output format regardless of whether stdout is a terminal: human = tables, toon =
           compact agent output, json = machine JSON. Default (unset) is human at a TTY, toon when
@@ -27185,12 +27368,6 @@ Options:
           - human: Human-readable tables / emoji (the interactive default at a TTY)
           - toon:  Token-efficient TOON — the compact agent default when piped/captured
           - json:  Machine JSON, for commands that support a JSON projection
-
-      --full
-          The complete edit/event trail — every status change, comment, tag edit, and field edit,
-          chronological newest-first. Equivalent to the `events` subcommand, but composes naturally
-          after a SPEC-ID: `aida history <SPEC-ID> --full`. Without it, a single spec (`--id` /
-          positional SPEC-ID) shows the shorter status-progression view instead of the full trail
 
       --canonical-ids
           Show node-local spec IDs in their canonical form instead of the node's friendly label (for
@@ -27355,6 +27532,12 @@ Options:
           --shipped, --to, --from, --opened, --status-changes, --comments or --oneline (adding
           --json does not change it)
 
+      --full
+          The complete edit/event trail — every status change, comment, tag edit, and field edit,
+          chronological newest-first. Equivalent to the `events` subcommand, but composes naturally
+          after a SPEC-ID: `aida history <SPEC-ID> --full`. Without it, a single spec (`--id` /
+          positional SPEC-ID) shows the shorter status-progression view instead of the full trail
+
       --format <FORMAT>
           Pin the output format regardless of whether stdout is a terminal: human = tables, toon =
           compact agent output, json = machine JSON. Default (unset) is human at a TTY, toon when
@@ -27364,12 +27547,6 @@ Options:
           - human: Human-readable tables / emoji (the interactive default at a TTY)
           - toon:  Token-efficient TOON — the compact agent default when piped/captured
           - json:  Machine JSON, for commands that support a JSON projection
-
-      --full
-          The complete edit/event trail — every status change, comment, tag edit, and field edit,
-          chronological newest-first. Equivalent to the `events` subcommand, but composes naturally
-          after a SPEC-ID: `aida history <SPEC-ID> --full`. Without it, a single spec (`--id` /
-          positional SPEC-ID) shows the shorter status-progression view instead of the full trail
 
       --canonical-ids
           Show node-local spec IDs in their canonical form instead of the node's friendly label (for
@@ -27533,6 +27710,12 @@ Options:
           --shipped, --to, --from, --opened, --status-changes, --comments or --oneline (adding
           --json does not change it)
 
+      --full
+          The complete edit/event trail — every status change, comment, tag edit, and field edit,
+          chronological newest-first. Equivalent to the `events` subcommand, but composes naturally
+          after a SPEC-ID: `aida history <SPEC-ID> --full`. Without it, a single spec (`--id` /
+          positional SPEC-ID) shows the shorter status-progression view instead of the full trail
+
       --format <FORMAT>
           Pin the output format regardless of whether stdout is a terminal: human = tables, toon =
           compact agent output, json = machine JSON. Default (unset) is human at a TTY, toon when
@@ -27542,12 +27725,6 @@ Options:
           - human: Human-readable tables / emoji (the interactive default at a TTY)
           - toon:  Token-efficient TOON — the compact agent default when piped/captured
           - json:  Machine JSON, for commands that support a JSON projection
-
-      --full
-          The complete edit/event trail — every status change, comment, tag edit, and field edit,
-          chronological newest-first. Equivalent to the `events` subcommand, but composes naturally
-          after a SPEC-ID: `aida history <SPEC-ID> --full`. Without it, a single spec (`--id` /
-          positional SPEC-ID) shows the shorter status-progression view instead of the full trail
 
       --canonical-ids
           Show node-local spec IDs in their canonical form instead of the node's friendly label (for
@@ -27712,6 +27889,12 @@ Options:
           --shipped, --to, --from, --opened, --status-changes, --comments or --oneline (adding
           --json does not change it)
 
+      --full
+          The complete edit/event trail — every status change, comment, tag edit, and field edit,
+          chronological newest-first. Equivalent to the `events` subcommand, but composes naturally
+          after a SPEC-ID: `aida history <SPEC-ID> --full`. Without it, a single spec (`--id` /
+          positional SPEC-ID) shows the shorter status-progression view instead of the full trail
+
       --format <FORMAT>
           Pin the output format regardless of whether stdout is a terminal: human = tables, toon =
           compact agent output, json = machine JSON. Default (unset) is human at a TTY, toon when
@@ -27721,12 +27904,6 @@ Options:
           - human: Human-readable tables / emoji (the interactive default at a TTY)
           - toon:  Token-efficient TOON — the compact agent default when piped/captured
           - json:  Machine JSON, for commands that support a JSON projection
-
-      --full
-          The complete edit/event trail — every status change, comment, tag edit, and field edit,
-          chronological newest-first. Equivalent to the `events` subcommand, but composes naturally
-          after a SPEC-ID: `aida history <SPEC-ID> --full`. Without it, a single spec (`--id` /
-          positional SPEC-ID) shows the shorter status-progression view instead of the full trail
 
       --canonical-ids
           Show node-local spec IDs in their canonical form instead of the node's friendly label (for
@@ -27893,6 +28070,12 @@ Options:
           --shipped, --to, --from, --opened, --status-changes, --comments or --oneline (adding
           --json does not change it)
 
+      --full
+          The complete edit/event trail — every status change, comment, tag edit, and field edit,
+          chronological newest-first. Equivalent to the `events` subcommand, but composes naturally
+          after a SPEC-ID: `aida history <SPEC-ID> --full`. Without it, a single spec (`--id` /
+          positional SPEC-ID) shows the shorter status-progression view instead of the full trail
+
       --format <FORMAT>
           Pin the output format regardless of whether stdout is a terminal: human = tables, toon =
           compact agent output, json = machine JSON. Default (unset) is human at a TTY, toon when
@@ -27902,12 +28085,6 @@ Options:
           - human: Human-readable tables / emoji (the interactive default at a TTY)
           - toon:  Token-efficient TOON — the compact agent default when piped/captured
           - json:  Machine JSON, for commands that support a JSON projection
-
-      --full
-          The complete edit/event trail — every status change, comment, tag edit, and field edit,
-          chronological newest-first. Equivalent to the `events` subcommand, but composes naturally
-          after a SPEC-ID: `aida history <SPEC-ID> --full`. Without it, a single spec (`--id` /
-          positional SPEC-ID) shows the shorter status-progression view instead of the full trail
 
       --canonical-ids
           Show node-local spec IDs in their canonical form instead of the node's friendly label (for
@@ -32387,7 +32564,7 @@ Working on aida itself
       {
         "name": "card",
         "takes_value": false,
-        "help": "Render a compact, boxed \"spec card\" instead of the linear detail view: a header rule, an ID/type/priority/status one-liner, key fields, a truncated description, the acceptance criteria, and the git-linkage summary. The /aida-pickup skill renders this at session start so the spec's contract stays in terminal scrollback"
+        "help": "Render a compact, boxed \"spec card\" instead of the linear detail view: a header rule, an ID/type/priority/status one-liner, key fields, a truncated description, the acceptance criteria, and (with --full) the git-linkage summary. The /aida-pickup skill renders this at session start so the spec's contract stays in terminal scrollback"
       },
       {
         "name": "comments",
@@ -32427,7 +32604,7 @@ Working on aida itself
       {
         "name": "no-git",
         "takes_value": false,
-        "help": "Skip the git-linkage section (commits / files traced / branch / PR). Faster for read-only contexts that only need the requirement fields"
+        "help": "Suppress git linkage in full, verbose and JSON views. Default detail views already skip linkage"
       },
       {
         "name": "origin-prompt",
@@ -32566,16 +32743,6 @@ Working on aida itself
     "about": "Query the cross-spec relationship graph from a root spec. The default mode is the epic-rollup tree; other modes answer the transitive blocked-by / blocks and reverse-impact questions a flat per-feature spec tool structurally can't. Read-only. Pick at most one mode",
     "flags": [
       {
-        "name": "blocked-by",
-        "takes_value": false,
-        "help": "Transitive BlockedBy chain: every spec the root is directly or indirectly blocked by"
-      },
-      {
-        "name": "blocks",
-        "takes_value": false,
-        "help": "Transitive Blocks chain: every spec the root directly or indirectly blocks"
-      },
-      {
         "name": "canonical-ids",
         "takes_value": false,
         "help": "Show node-local spec IDs in their canonical form instead of the node's friendly label (for scripts). Also settable via AIDA_CANONICAL_IDS=1"
@@ -32601,19 +32768,9 @@ Working on aida itself
         "help": "Print help (see more with '--help')"
       },
       {
-        "name": "impact",
-        "takes_value": false,
-        "help": "Reverse impact: every spec that is (transitively) blocked by the root — what is at risk if the root slips"
-      },
-      {
         "name": "json",
         "takes_value": false,
         "help": "Emit the result as JSON for agents / scripts"
-      },
-      {
-        "name": "tree",
-        "takes_value": false,
-        "help": "Parent/Child descendants of the root with a status rollup — the epic-rollup view. The default when no mode flag is given"
       }
     ],
     "hidden": false
@@ -39440,11 +39597,6 @@ Working on aida itself
     "about": "Inspect locally-recorded CLI usage. Reads `~/.aida/usage.jsonl` (written one line per `aida ...` invocation when telemetry is enabled — opt out via `[telemetry] enabled = false` or `AIDA_TELEMETRY=0`). Default: top-20 most-used commands over the last 30 days",
     "flags": [
       {
-        "name": "auto-complete",
-        "takes_value": false,
-        "help": "Switch to the `--auto-complete` orchestrator telemetry view. Reads `~/.aida/auto-complete.jsonl` instead of the per-command usage log: a success/failure summary plus the recent phase failures and the Draft BUGs auto-filed for them"
-      },
-      {
         "name": "canonical-ids",
         "takes_value": false,
         "help": "Show node-local spec IDs in their canonical form instead of the node's friendly label (for scripts). Also settable via AIDA_CANONICAL_IDS=1"
@@ -39455,29 +39607,9 @@ Working on aida itself
         "help": "With `events`: keep only events for this exact command shape (e.g. `queue list`)"
       },
       {
-        "name": "errors",
-        "takes_value": false,
-        "help": "Show commands with the highest error rate (`exit_code != 0` over total invocations). UX-gap candidates"
-      },
-      {
-        "name": "events",
-        "takes_value": false,
-        "help": "Raw recent event stream: each invocation's ts, cmd, duration_ms, and exit_code, newest-first. Filter with --cmd / --slower-than; cap with --limit (default 25). Honors --since/--json"
-      },
-      {
-        "name": "failures",
-        "takes_value": false,
-        "help": "With `--auto-complete`: list every recent orchestrator failure in full (date, spec, failed phase, drafted BUG + its status)"
-      },
-      {
         "name": "format",
         "takes_value": true,
         "help": "Pin the output format regardless of whether stdout is a terminal: human = tables, toon = compact agent output, json = machine JSON. Default (unset) is human at a TTY, toon when piped/captured. Also settable via AIDA_OUTPUT_FORMAT (the flag wins)"
-      },
-      {
-        "name": "health",
-        "takes_value": false,
-        "help": "Show the deterministic project-health catalog: phase-failure distribution, reap-vs-kill breakdown, drain halt-rate, recovery latency, draft-inbox depth, and burn-down velocity. Reads the orchestrator telemetry log + headless session logs + the spec graph"
       },
       {
         "name": "help",
@@ -39495,11 +39627,6 @@ Working on aida itself
         "help": "Limit the number of rows returned. Default 20"
       },
       {
-        "name": "pattern",
-        "takes_value": false,
-        "help": "With `--auto-complete`: show which phases fail most often — the signal for where to invest orchestrator fixes"
-      },
-      {
         "name": "read-write",
         "takes_value": false,
         "help": "Trace-read-rate audit: classify logged commands into graph READS (list/show/search/graph/why/history/queue list/…) vs graph WRITES (add/edit/comment add/rel add/queue add/defer/archive/…) and report the read:write ratio over the window — evidence for whether the intent graph is consulted, not just written"
@@ -39513,16 +39640,6 @@ Working on aida itself
         "name": "slower-than",
         "takes_value": true,
         "help": "With `events`: keep only events whose `duration_ms` is at or above this threshold"
-      },
-      {
-        "name": "slowest",
-        "takes_value": false,
-        "help": "Performance lens: rank command shapes by latency (p50/p95/max + call count), slowest-first, from the captured `duration_ms`. The perf-debug view — e.g. `status` topped it at ~26s before its latency fix landed. Honors --since/--limit/--json"
-      },
-      {
-        "name": "unused",
-        "takes_value": true,
-        "help": "Show commands NOT used since this point (deprecation candidates). Same forms as `--since`. Mutually exclusive with --errors"
       }
     ],
     "hidden": false
@@ -40651,6 +40768,32 @@ Working on aida itself
     "path": [
       "aida",
       "internal",
+      "claude-bg-supervise"
+    ],
+    "about": "AIDA-owned shared-wrapper Claude background supervisor",
+    "flags": [
+      {
+        "name": "canonical-ids",
+        "takes_value": false,
+        "help": "Show node-local spec IDs in their canonical form instead of the node's friendly label (for scripts). Also settable via AIDA_CANONICAL_IDS=1"
+      },
+      {
+        "name": "format",
+        "takes_value": true,
+        "help": "Pin the output format regardless of whether stdout is a terminal: human = tables, toon = compact agent output, json = machine JSON. Default (unset) is human at a TTY, toon when piped/captured. Also settable via AIDA_OUTPUT_FORMAT (the flag wins)"
+      },
+      {
+        "name": "help",
+        "takes_value": false,
+        "help": "Print help (see more with '--help')"
+      }
+    ],
+    "hidden": true
+  },
+  {
+    "path": [
+      "aida",
+      "internal",
       "advisor-code-gate"
     ],
     "about": "Enforce the advisor-no-code-write invariant at the commit boundary. Called by the scaffolded git pre-commit hook so the gate binds any vendor's commit (Codex, raw terminal, headless), not just Claude. Exits non-zero (aborting the commit) when an advisor session stages code with no sanctioned-coding context",
@@ -41063,11 +41206,6 @@ Working on aida itself
         "help": "Show node-local spec IDs in their canonical form instead of the node's friendly label (for scripts). Also settable via AIDA_CANONICAL_IDS=1"
       },
       {
-        "name": "check",
-        "takes_value": false,
-        "help": "Preview the planned release (current → target version + the step sequence + repo/branch/tree state) without acting"
-      },
-      {
         "name": "format",
         "takes_value": true,
         "help": "Pin the output format regardless of whether stdout is a terminal: human = tables, toon = compact agent output, json = machine JSON. Default (unset) is human at a TTY, toon when piped/captured. Also settable via AIDA_OUTPUT_FORMAT (the flag wins)"
@@ -41076,21 +41214,6 @@ Working on aida itself
         "name": "help",
         "takes_value": false,
         "help": "Print help (see more with '--help')"
-      },
-      {
-        "name": "major",
-        "takes_value": false,
-        "help": "Bump the major version"
-      },
-      {
-        "name": "minor",
-        "takes_value": false,
-        "help": "Bump the minor version"
-      },
-      {
-        "name": "patch",
-        "takes_value": false,
-        "help": "Bump the patch version (default if no level is given)"
       },
       {
         "name": "skip-xplat-check",
@@ -42219,11 +42342,6 @@ Working on aida itself
         "help": "Show node-local spec IDs in their canonical form instead of the node's friendly label (for scripts). Also settable via AIDA_CANONICAL_IDS=1"
       },
       {
-        "name": "clear",
-        "takes_value": false,
-        "help": "Clear the current focus (remove `.aida/focus`)"
-      },
-      {
         "name": "format",
         "takes_value": true,
         "help": "Pin the output format regardless of whether stdout is a terminal: human = tables, toon = compact agent output, json = machine JSON. Default (unset) is human at a TTY, toon when piped/captured. Also settable via AIDA_OUTPUT_FORMAT (the flag wins)"
@@ -42232,11 +42350,6 @@ Working on aida itself
         "name": "help",
         "takes_value": false,
         "help": "Print help (see more with '--help')"
-      },
-      {
-        "name": "show",
-        "takes_value": false,
-        "help": "Show the current focus (the default when no SPEC is given)"
       }
     ],
     "hidden": false
@@ -42565,17 +42678,27 @@ Working on aida itself
       "worktree",
       "gc"
     ],
-    "about": "Prune verified merged agent worktrees using the same safety checks as `aida doctor --heal --category merged-agent-worktrees`",
+    "about": "Report ended seat clones and clean linked worktrees with merged/closed PRs or merged branches. Dry run by default; --apply requires an operator terminal",
     "flags": [
+      {
+        "name": "apply",
+        "takes_value": false,
+        "help": "Remove eligible trees after revalidation (operator terminal only)"
+      },
       {
         "name": "canonical-ids",
         "takes_value": false,
         "help": "Show node-local spec IDs in their canonical form instead of the node's friendly label (for scripts). Also settable via AIDA_CANONICAL_IDS=1"
       },
       {
+        "name": "fail-on-findings",
+        "takes_value": false,
+        "help": "Exit nonzero when candidates await operator review (read-only guard)"
+      },
+      {
         "name": "force",
         "takes_value": false,
-        "help": "Permit destructive cleanup: remove verified merged worktrees and delete their local branches. Still refused in unattended contexts"
+        "help": "Legacy removal opt-in together with --yes. Uses the same operator-only gate and eligible candidate set as --apply"
       },
       {
         "name": "format",
@@ -42595,7 +42718,7 @@ Working on aida itself
       {
         "name": "yes",
         "takes_value": false,
-        "help": "Skip confirmation prompts"
+        "help": "Legacy companion to --force; together they request removal"
       }
     ],
     "hidden": false
@@ -43223,6 +43346,16 @@ Working on aida itself
         "help": "Emit machine-readable JSON"
       },
       {
+        "name": "producer-id",
+        "takes_value": true,
+        "help": "Producer to read; required for a processor, otherwise the writer itself"
+      },
+      {
+        "name": "receipt-writer",
+        "takes_value": true,
+        "help": "Authorized receipt writer to read (repeatable; currently one processor)"
+      },
+      {
         "name": "remote",
         "takes_value": true,
         "help": "Explicit absolute local path, HTTPS URL, or SSH URL"
@@ -43231,6 +43364,16 @@ Working on aida itself
         "name": "reviewed",
         "takes_value": false,
         "help": "Confirm review of the destination and policy, including an empty policy"
+      },
+      {
+        "name": "role",
+        "takes_value": true,
+        "help": "Opt into per-writer histories (omitting this preserves legacy enrollment)"
+      },
+      {
+        "name": "writer-id",
+        "takes_value": true,
+        "help": "Stable opaque writer ID; defaults to WORK binding or a clone-local UUID"
       }
     ],
     "hidden": false
@@ -43241,7 +43384,7 @@ Working on aida itself
       "intent",
       "publish"
     ],
-    "about": "Commit a reviewed envelope and push only aida-intent; never force",
+    "about": "Commit a reviewed envelope and push only the enrolled producer branch",
     "flags": [
       {
         "name": "canonical-ids",
@@ -44157,6 +44300,21 @@ Working on aida itself
         "name": "json",
         "takes_value": false,
         "help": "Emit machine-readable JSON"
+      },
+      {
+        "name": "lane-capacity",
+        "takes_value": false,
+        "help": "Read-only typed local lane capacity and reservations (not readiness admission)"
+      },
+      {
+        "name": "lane-codegraph",
+        "takes_value": false,
+        "help": "Report the host codegraph snapshot age as seen from this lane"
+      },
+      {
+        "name": "lane-host",
+        "takes_value": false,
+        "help": "Check this machine before running automated lanes"
       },
       {
         "name": "mapping",
@@ -46498,6 +46656,11 @@ Working on aida itself
     "about": "Probe whether it is safer to start a fresh agent session or compact the current conversation. This is substrate-only: it can see live drains and this session's live leases, but not conversation-only residue",
     "flags": [
       {
+        "name": "body-only",
+        "takes_value": false,
+        "help": "Read only the handoff text, without standing context"
+      },
+      {
         "name": "canonical-ids",
         "takes_value": false,
         "help": "Show node-local spec IDs in their canonical form instead of the node's friendly label (for scripts). Also settable via AIDA_CANONICAL_IDS=1"
@@ -46536,6 +46699,11 @@ Working on aida itself
         "name": "show",
         "takes_value": false,
         "help": "Print the seat's standing orders (if any), then its latest handoff note (the seed for a fresh session)"
+      },
+      {
+        "name": "snapshot",
+        "takes_value": false,
+        "help": "Read/write the worktree recovery snapshot; never requests rotation"
       },
       {
         "name": "standing-orders",
@@ -47441,6 +47609,11 @@ Working on aida itself
         "name": "canonical-ids",
         "takes_value": false,
         "help": "Show node-local spec IDs in their canonical form instead of the node's friendly label (for scripts). Also settable via AIDA_CANONICAL_IDS=1"
+      },
+      {
+        "name": "commit-body-file",
+        "takes_value": true,
+        "help": "Read a UTF-8 commit body verbatim from this file. Use with native -m declarations or --from-seat --commit-pending"
       },
       {
         "name": "commit-pending",
@@ -48496,17 +48669,12 @@ Working on aida itself
       "drain",
       "status"
     ],
-    "about": "Show the active drain: the launching command, the members and their lifecycle state, the current phase, and a prediction of what happens on session exit. Launcher-held drains (`aida burndown run`, `aida queue integrate`) are reported from the live drain lock — pid, start time, and spec set — even though they write no per-phase progress file. Prints `No drain in progress.` (exit 0) when none is running. A drain-state file whose orchestrator process is no longer alive is reported as stale — `--clear` removes it",
+    "about": "Show the active drain: the launching command, the members and their lifecycle state, the current phase, and a prediction of what happens on session exit. Launcher-held drains (`aida burndown run`, `aida queue integrate`) are reported from the live drain lock — pid, start time, and spec set — even though they write no per-phase progress file. Prints `No drain in progress.` (exit 0) when none is running. A drain-state file whose orchestrator process is no longer alive is reported as stale — `aida drain clear` removes it",
     "flags": [
       {
         "name": "canonical-ids",
         "takes_value": false,
         "help": "Show node-local spec IDs in their canonical form instead of the node's friendly label (for scripts). Also settable via AIDA_CANONICAL_IDS=1"
-      },
-      {
-        "name": "clear",
-        "takes_value": false,
-        "help": "Remove a stale drain-state file (one whose orchestrator process is no longer running). Refuses while the drain is still live — a live orchestrator removes the file itself on exit"
       },
       {
         "name": "format",
@@ -49095,6 +49263,58 @@ Working on aida itself
     "path": [
       "aida",
       "agent",
+      "logs"
+    ],
+    "about": "Read the log of an AIDA-supervised Claude background attempt",
+    "flags": [
+      {
+        "name": "canonical-ids",
+        "takes_value": false,
+        "help": "Show node-local spec IDs in their canonical form instead of the node's friendly label (for scripts). Also settable via AIDA_CANONICAL_IDS=1"
+      },
+      {
+        "name": "format",
+        "takes_value": true,
+        "help": "Pin the output format regardless of whether stdout is a terminal: human = tables, toon = compact agent output, json = machine JSON. Default (unset) is human at a TTY, toon when piped/captured. Also settable via AIDA_OUTPUT_FORMAT (the flag wins)"
+      },
+      {
+        "name": "help",
+        "takes_value": false,
+        "help": "Print help (see more with '--help')"
+      }
+    ],
+    "hidden": false
+  },
+  {
+    "path": [
+      "aida",
+      "agent",
+      "attach"
+    ],
+    "about": "Follow an AIDA-supervised Claude log until exit (read-only; Ctrl+C detaches)",
+    "flags": [
+      {
+        "name": "canonical-ids",
+        "takes_value": false,
+        "help": "Show node-local spec IDs in their canonical form instead of the node's friendly label (for scripts). Also settable via AIDA_CANONICAL_IDS=1"
+      },
+      {
+        "name": "format",
+        "takes_value": true,
+        "help": "Pin the output format regardless of whether stdout is a terminal: human = tables, toon = compact agent output, json = machine JSON. Default (unset) is human at a TTY, toon when piped/captured. Also settable via AIDA_OUTPUT_FORMAT (the flag wins)"
+      },
+      {
+        "name": "help",
+        "takes_value": false,
+        "help": "Print help (see more with '--help')"
+      }
+    ],
+    "hidden": false
+  },
+  {
+    "path": [
+      "aida",
+      "agent",
       "new"
     ],
     "about": "Launch a new agent process",
@@ -49113,6 +49333,11 @@ Working on aida itself
         "name": "format",
         "takes_value": true,
         "help": "Pin the output format regardless of whether stdout is a terminal: human = tables, toon = compact agent output, json = machine JSON. Default (unset) is human at a TTY, toon when piped/captured. Also settable via AIDA_OUTPUT_FORMAT (the flag wins)"
+      },
+      {
+        "name": "git-read-only",
+        "takes_value": false,
+        "help": "Declare Git read-only policy for this launch (not enforced by current adapters)"
       },
       {
         "name": "help",
@@ -49149,7 +49374,7 @@ Working on aida itself
       {
         "name": "bg",
         "takes_value": false,
-        "help": "Dispatch to Claude Code's background supervisor via `claude --bg`. The session detaches from this terminal and shows up in `claude agents` (and `aida status`). When `--spec` is also passed, AIDA records the captured sessionId on the lease so the cross-substrate view links them automatically. Without `--bg`, the foreground launch path is unchanged. For non-interactive dispatch, first set `[agents] confirm_bypass = false` in `~/.aida/config.toml`; trusted project config can still require consent. Then use: `aida agent new claude --bg --role implementer --spec <ID> --cwd <WORKTREE> --prompt-file <FILE> --no-resume --permission-mode bypassPermissions`. An explicit owning cwd reuses its inactive same-role lease; it never takes over a live agent"
+        "help": "Dispatch to Claude Code's background supervisor via `claude --bg`. The session detaches from this terminal and shows up in `claude agents` (and `aida status`). When `--spec` is also passed, AIDA records the captured sessionId on the lease so the cross-substrate view links them automatically. With trusted `[contained.vendors] claude = \"aida\"`, AIDA instead supervises a foreground contained worker; use `aida agent logs` or read-only `aida agent attach` with its returned attempt UUID. Resume and rotation remain unavailable for that background path. Without `--bg`, the foreground launch path is unchanged. For non-interactive dispatch, first set `[agents] confirm_bypass = false` in `~/.aida/config.toml`; trusted project config can still require consent. Then use: `aida agent new claude --bg --role implementer --spec <ID> --cwd <WORKTREE> --prompt-file <FILE> --no-resume --permission-mode bypassPermissions`. An explicit owning cwd reuses its inactive same-role lease; it never takes over a live agent"
       },
       {
         "name": "canonical-ids",
@@ -49185,6 +49410,11 @@ Working on aida itself
         "name": "format",
         "takes_value": true,
         "help": "Pin the output format regardless of whether stdout is a terminal: human = tables, toon = compact agent output, json = machine JSON. Default (unset) is human at a TTY, toon when piped/captured. Also settable via AIDA_OUTPUT_FORMAT (the flag wins)"
+      },
+      {
+        "name": "git-read-only",
+        "takes_value": false,
+        "help": "Declare Git read-only policy for this launch (not enforced by current adapters)"
       },
       {
         "name": "grant-inline",
@@ -49369,6 +49599,11 @@ Working on aida itself
         "help": "Pin the output format regardless of whether stdout is a terminal: human = tables, toon = compact agent output, json = machine JSON. Default (unset) is human at a TTY, toon when piped/captured. Also settable via AIDA_OUTPUT_FORMAT (the flag wins)"
       },
       {
+        "name": "git-read-only",
+        "takes_value": false,
+        "help": "Declare Git read-only policy for this launch (not enforced by current adapters)"
+      },
+      {
         "name": "grant-inline",
         "takes_value": true,
         "help": "At a human terminal with no seat grant, `auto` offers to launch the seat under a one-time grant from you (your keystroke is the proof; nothing is exported to your shell). `no` refuses instead, as scripts expect"
@@ -49529,6 +49764,11 @@ Working on aida itself
         "name": "format",
         "takes_value": true,
         "help": "Pin the output format regardless of whether stdout is a terminal: human = tables, toon = compact agent output, json = machine JSON. Default (unset) is human at a TTY, toon when piped/captured. Also settable via AIDA_OUTPUT_FORMAT (the flag wins)"
+      },
+      {
+        "name": "git-read-only",
+        "takes_value": false,
+        "help": "Declare Git read-only policy for this launch (not enforced by current adapters)"
       },
       {
         "name": "grant-inline",
@@ -50228,11 +50468,6 @@ Working on aida itself
         "help": "Print help (see more with '--help')"
       },
       {
-        "name": "title",
-        "takes_value": false,
-        "help": "Emit the one-liner wrapped in an OSC terminal-title escape sequence (`ESC ] 2 ; <line> BEL`) instead of printing it to the body, so the AIDA role/queue/inbox segment rides the terminal title bar / tmux window name. This is the in-agent parity surface for clients (e.g. Codex CLI) whose built-in footer is a fixed field set and cannot run `aida statusline` as a command: wire `aida statusline title` into the shell prompt (`PROMPT_COMMAND` / `precmd`) and the AIDA segment shows in the terminal title during the agent session. Forces color off (an OSC title string carries no ANSI). Mutually exclusive with the `setup` subcommand"
-      },
-      {
         "name": "tmux-pane-pid",
         "takes_value": true,
         "help": "The tmux pane's shell pid (`#{pane_pid}`). A tmux `#(...)` render runs in tmux's own environment, so this is how it finds the agent session running in that pane and shows its handle"
@@ -50591,16 +50826,6 @@ Working on aida itself
         "name": "canonical-ids",
         "takes_value": false,
         "help": "Show node-local spec IDs in their canonical form instead of the node's friendly label (for scripts). Also settable via AIDA_CANONICAL_IDS=1"
-      },
-      {
-        "name": "check",
-        "takes_value": false,
-        "help": "Compare current/sibling versions to latest release; report only, don't install"
-      },
-      {
-        "name": "diff",
-        "takes_value": false,
-        "help": "When the dev build is ahead of the latest release tag, print a `git log --stat` of the unreleased commits so you can vet what `aida dev patch` would ship"
       },
       {
         "name": "format",
@@ -51982,6 +52207,75 @@ Working on aida itself
       "aida",
       "config",
       "permissions",
+      "conformance-launch"
+    ],
+    "about": "Run the closed AGY conformance fixture through the shared AIDA wrapper. Diagnostic only: does not enable production AGY admission",
+    "flags": [
+      {
+        "name": "canonical-ids",
+        "takes_value": false,
+        "help": "Show node-local spec IDs in their canonical form instead of the node's friendly label (for scripts). Also settable via AIDA_CANONICAL_IDS=1"
+      },
+      {
+        "name": "credential",
+        "takes_value": true,
+        "help": "Absolute path to the existing AGY OAuth credential leaf"
+      },
+      {
+        "name": "fixture-root",
+        "takes_value": true,
+        "help": "Fresh conformance fixture containing workspace, repository and payload"
+      },
+      {
+        "name": "format",
+        "takes_value": true,
+        "help": "Pin the output format regardless of whether stdout is a terminal: human = tables, toon = compact agent output, json = machine JSON. Default (unset) is human at a TTY, toon when piped/captured. Also settable via AIDA_OUTPUT_FORMAT (the flag wins)"
+      },
+      {
+        "name": "help",
+        "takes_value": false,
+        "help": "Print help (see more with '--help')"
+      }
+    ],
+    "hidden": true
+  },
+  {
+    "path": [
+      "aida",
+      "config",
+      "permissions",
+      "runtime-policy"
+    ],
+    "about": "Print the runtime descriptor embedded in this binary. No launch authority",
+    "flags": [
+      {
+        "name": "canonical-ids",
+        "takes_value": false,
+        "help": "Show node-local spec IDs in their canonical form instead of the node's friendly label (for scripts). Also settable via AIDA_CANONICAL_IDS=1"
+      },
+      {
+        "name": "format",
+        "takes_value": true,
+        "help": "Pin the output format regardless of whether stdout is a terminal: human = tables, toon = compact agent output, json = machine JSON. Default (unset) is human at a TTY, toon when piped/captured. Also settable via AIDA_OUTPUT_FORMAT (the flag wins)"
+      },
+      {
+        "name": "help",
+        "takes_value": false,
+        "help": "Print help (see more with '--help')"
+      },
+      {
+        "name": "vendor",
+        "takes_value": true,
+        "help": "Vendor whose embedded runtime descriptor to inspect"
+      }
+    ],
+    "hidden": true
+  },
+  {
+    "path": [
+      "aida",
+      "config",
+      "permissions",
       "probe"
     ],
     "about": "Run the fixed, model-free filesystem/supervisor containment tracer. This does not enable vendor launches or change permission policy",
@@ -53354,7 +53648,7 @@ Working on aida itself
       {
         "name": "max-concurrent",
         "takes_value": true,
-        "help": "Maximum watcher-launched reviews across instances: one or two (default two)"
+        "help": "Maximum watcher-launched reviews across instances: 1–8 (config default, otherwise 2)"
       },
       {
         "name": "once",
@@ -58258,11 +58552,6 @@ Working on aida itself
         "help": "The per-requirement digest: one row per requirement touched in the window, sorted by last-touch time, with its current status (\"what was I up to last session?\"). This was the default before the status flow; the output is unchanged. Honors --limit, --since, --until, --author, --type and the archive/defer flags"
       },
       {
-        "name": "events",
-        "takes_value": false,
-        "help": "Switch to per-event chronological mode — each commit's YAML diff is decoded into one event line per change (status transitions, comments added, tags edited, etc.). Slower than digest because it shells out to `git show` per file per commit; useful for inspecting one requirement closely with --id, less useful as a general overview. `--full` is the more discoverable spelling of the same mode"
-      },
-      {
         "name": "fields",
         "takes_value": true,
         "help": "Ordered event columns: commit,date,author,id,type,priority,title,kind,event, from,to,comment. Selects the full feed in human/TOON/JSON. Missing values are empty cells or JSON null; title/priority/comment are event-local"
@@ -58419,11 +58708,6 @@ Working on aida itself
         "help": "Show only deferred requirements (the primed/conditional shelf)"
       },
       {
-        "name": "events",
-        "takes_value": false,
-        "help": "Switch to per-event chronological mode — each commit's YAML diff is decoded into one event line per change (status transitions, comments added, tags edited, etc.). Slower than digest because it shells out to `git show` per file per commit; useful for inspecting one requirement closely with --id, less useful as a general overview. `--full` is the more discoverable spelling of the same mode"
-      },
-      {
         "name": "fields",
         "takes_value": true,
         "help": "Ordered event columns: commit,date,author,id,type,priority,title,kind,event, from,to,comment. Selects the full feed in human/TOON/JSON. Missing values are empty cells or JSON null; title/priority/comment are event-local"
@@ -58575,11 +58859,6 @@ Working on aida itself
         "help": "Show only deferred requirements (the primed/conditional shelf)"
       },
       {
-        "name": "events",
-        "takes_value": false,
-        "help": "Switch to per-event chronological mode — each commit's YAML diff is decoded into one event line per change (status transitions, comments added, tags edited, etc.). Slower than digest because it shells out to `git show` per file per commit; useful for inspecting one requirement closely with --id, less useful as a general overview. `--full` is the more discoverable spelling of the same mode"
-      },
-      {
         "name": "fields",
         "takes_value": true,
         "help": "Ordered event columns: commit,date,author,id,type,priority,title,kind,event, from,to,comment. Selects the full feed in human/TOON/JSON. Missing values are empty cells or JSON null; title/priority/comment are event-local"
@@ -58725,11 +59004,6 @@ Working on aida itself
         "name": "deferred",
         "takes_value": false,
         "help": "Show only deferred requirements (the primed/conditional shelf)"
-      },
-      {
-        "name": "events",
-        "takes_value": false,
-        "help": "Switch to per-event chronological mode — each commit's YAML diff is decoded into one event line per change (status transitions, comments added, tags edited, etc.). Slower than digest because it shells out to `git show` per file per commit; useful for inspecting one requirement closely with --id, less useful as a general overview. `--full` is the more discoverable spelling of the same mode"
       },
       {
         "name": "fields",
@@ -58881,11 +59155,6 @@ Working on aida itself
         "name": "deferred",
         "takes_value": false,
         "help": "Show only deferred requirements (the primed/conditional shelf)"
-      },
-      {
-        "name": "events",
-        "takes_value": false,
-        "help": "Switch to per-event chronological mode — each commit's YAML diff is decoded into one event line per change (status transitions, comments added, tags edited, etc.). Slower than digest because it shells out to `git show` per file per commit; useful for inspecting one requirement closely with --id, less useful as a general overview. `--full` is the more discoverable spelling of the same mode"
       },
       {
         "name": "fields",
@@ -59064,11 +59333,6 @@ Working on aida itself
         "help": "Show only deferred requirements (the primed/conditional shelf)"
       },
       {
-        "name": "events",
-        "takes_value": false,
-        "help": "Switch to per-event chronological mode — each commit's YAML diff is decoded into one event line per change (status transitions, comments added, tags edited, etc.). Slower than digest because it shells out to `git show` per file per commit; useful for inspecting one requirement closely with --id, less useful as a general overview. `--full` is the more discoverable spelling of the same mode"
-      },
-      {
         "name": "fields",
         "takes_value": true,
         "help": "Ordered event columns: commit,date,author,id,type,priority,title,kind,event, from,to,comment. Selects the full feed in human/TOON/JSON. Missing values are empty cells or JSON null; title/priority/comment are event-local"
@@ -59243,11 +59507,6 @@ Working on aida itself
         "name": "deferred",
         "takes_value": false,
         "help": "Show only deferred requirements (the primed/conditional shelf)"
-      },
-      {
-        "name": "events",
-        "takes_value": false,
-        "help": "Switch to per-event chronological mode — each commit's YAML diff is decoded into one event line per change (status transitions, comments added, tags edited, etc.). Slower than digest because it shells out to `git show` per file per commit; useful for inspecting one requirement closely with --id, less useful as a general overview. `--full` is the more discoverable spelling of the same mode"
       },
       {
         "name": "fields",
@@ -59426,11 +59685,6 @@ Working on aida itself
         "help": "Show only deferred requirements (the primed/conditional shelf)"
       },
       {
-        "name": "events",
-        "takes_value": false,
-        "help": "Switch to per-event chronological mode — each commit's YAML diff is decoded into one event line per change (status transitions, comments added, tags edited, etc.). Slower than digest because it shells out to `git show` per file per commit; useful for inspecting one requirement closely with --id, less useful as a general overview. `--full` is the more discoverable spelling of the same mode"
-      },
-      {
         "name": "fields",
         "takes_value": true,
         "help": "Ordered event columns: commit,date,author,id,type,priority,title,kind,event, from,to,comment. Selects the full feed in human/TOON/JSON. Missing values are empty cells or JSON null; title/priority/comment are event-local"
@@ -59605,11 +59859,6 @@ Working on aida itself
         "name": "deferred",
         "takes_value": false,
         "help": "Show only deferred requirements (the primed/conditional shelf)"
-      },
-      {
-        "name": "events",
-        "takes_value": false,
-        "help": "Switch to per-event chronological mode — each commit's YAML diff is decoded into one event line per change (status transitions, comments added, tags edited, etc.). Slower than digest because it shells out to `git show` per file per commit; useful for inspecting one requirement closely with --id, less useful as a general overview. `--full` is the more discoverable spelling of the same mode"
       },
       {
         "name": "fields",

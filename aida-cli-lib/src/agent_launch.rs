@@ -285,12 +285,22 @@ pub(crate) fn handle_session_command(cmd: &SessionCommand) -> Result<()> {
             seat,
             final_,
             rotated,
+            snapshot,
+            body_only,
             standing_orders,
         } => {
             if let Some(args) = standing_orders {
                 session_handoff_standing_orders(args, seat.as_deref())
             } else if write.is_some() || *show {
-                session_handoff_seat(write.as_deref(), *show, seat.as_deref(), *final_, *rotated)
+                session_handoff_seat(
+                    write.as_deref(),
+                    *show,
+                    seat.as_deref(),
+                    *final_,
+                    *rotated,
+                    *snapshot,
+                    *body_only,
+                )
             } else {
                 session_handoff_check(*check)
             }
@@ -347,6 +357,7 @@ pub(crate) fn handle_agent_command(cmd: &AgentCommand) -> Result<()> {
             role,
             spec,
             delegate_seats,
+            git_read_only,
         } => {
             let mut resolved;
             let command = if let Some(command) = command {
@@ -396,7 +407,12 @@ pub(crate) fn handle_agent_command(cmd: &AgentCommand) -> Result<()> {
                 }
                 &resolved
             };
-            dispatch_agent_new(command)
+            // Resolve this declaration independently of approval posture. It grants no authority.
+            // trace:STORY-1486 | ai:codex
+            let options = crate::vendors::launch_preview_options(command);
+            let root = child_role_project_root(options.cwd.as_deref())?;
+            crate::launch_permission_profile::validate_recipe(&root)?;
+            dispatch_agent_new(command, *git_read_only)
         }
         AgentCommand::Register {
             pid,
@@ -428,6 +444,8 @@ pub(crate) fn handle_agent_command(cmd: &AgentCommand) -> Result<()> {
         AgentCommand::Resume { agent } => agent_resume(agent),
         AgentCommand::Describe { agent, description } => agent_describe(agent, description),
         AgentCommand::Stop { name } => agent_stop(name),
+        AgentCommand::Logs { attempt } => agent_claude_background::logs(attempt, false),
+        AgentCommand::Attach { attempt } => agent_claude_background::logs(attempt, true),
         AgentCommand::ListRoles { json } => handle_agent_list_roles(*json),
         AgentCommand::Wake { command } => agent_wake(command),
         // trace:STORY-2254 | ai:claude
@@ -464,6 +482,9 @@ pub(crate) mod codex_bg_receipt;
 // trace:STORY-2254 | ai:claude
 #[path = "agent_codex_background.rs"]
 pub(crate) mod agent_codex_background;
+// trace:TASK-3219 | ai:codex
+#[path = "agent_claude_background.rs"]
+pub(crate) mod agent_claude_background;
 
 /// `aida internal codex-bg-supervise`.
 // trace:STORY-2254 | ai:claude
@@ -1186,7 +1207,7 @@ pub(crate) fn pick_agent_type_interactively() -> Result<Option<AgentNewCommand>>
 /// out of `handle_agent_command` so both the explicit `aida agent new <type>`
 /// path and the interactive picker share one code path.
 // trace:TASK-837 | ai:claude
-pub(crate) fn dispatch_agent_new(cmd: &AgentNewCommand) -> Result<()> {
+pub(crate) fn dispatch_agent_new(cmd: &AgentNewCommand, git_read_only: bool) -> Result<()> {
     // trace:STORY-2215 | ai:claude
     let (AgentNewCommand::Claude { grant_inline, .. }
     | AgentNewCommand::Codex { grant_inline, .. }
@@ -1254,7 +1275,8 @@ pub(crate) fn dispatch_agent_new(cmd: &AgentNewCommand) -> Result<()> {
             ),
             AgentDefaultFlagOptions::new(!*no_default_flags, extra_flags.clone(), model.clone())
                 .rotating(*rotate)
-                .delegating(delegate_seats.clone()),
+                .delegating(delegate_seats.clone())
+                .declaring_git_policy(git_read_only),
             name.clone(),
             description.clone(),
             *bg,
@@ -1320,7 +1342,8 @@ pub(crate) fn dispatch_agent_new(cmd: &AgentNewCommand) -> Result<()> {
                     model.clone(),
                 )
                 .rotating(*rotate)
-                .delegating(delegate_seats.clone()),
+                .delegating(delegate_seats.clone())
+                .declaring_git_policy(git_read_only),
                 name: name.clone(),
                 description: description.clone(),
                 no_mail_wake: *no_mail_wake,
@@ -1384,7 +1407,8 @@ pub(crate) fn dispatch_agent_new(cmd: &AgentNewCommand) -> Result<()> {
             // trace:STORY-B6B1278890774EF993D2EBC327862470-150 | ai:claude
             AgentDefaultFlagOptions::new(!*no_default_flags, extra_flags.clone(), model.clone())
                 .rotating(*rotate)
-                .delegating(delegate_seats.clone()),
+                .delegating(delegate_seats.clone())
+                .declaring_git_policy(git_read_only),
             name.clone(),
             description.clone(),
             *no_mail_wake,
@@ -1436,7 +1460,8 @@ pub(crate) fn dispatch_agent_new(cmd: &AgentNewCommand) -> Result<()> {
                 !*no_duplicate_check,
             ),
             AgentDefaultFlagOptions::new(!*no_default_flags, extra_flags.clone(), None)
-                .delegating(delegate_seats.clone()),
+                .delegating(delegate_seats.clone())
+                .declaring_git_policy(git_read_only),
             name.clone(),
             description.clone(),
         ),
@@ -1726,7 +1751,7 @@ pub(crate) struct AgentLaunchConfig {
 // trace:STORY-2539 | ai:codex
 pub(crate) use aida_core::vendors::PromptTransport as AgentPromptStyle;
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub(crate) struct AgentLaunchPlan {
     pub(crate) project_root: std::path::PathBuf,
     pub(crate) launch_cwd: std::path::PathBuf,
@@ -1760,7 +1785,7 @@ impl AgentContextOptions {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub(crate) struct AgentLaunchContext {
     pub(crate) path: std::path::PathBuf,
     pub(crate) token: String,
@@ -1837,6 +1862,9 @@ pub(crate) struct AgentDefaultFlagOptions {
     // trace:STORY-B6B1278890774EF993D2EBC327862470-101 | ai:claude
     pub(crate) rotate: bool,
     pub(crate) delegate_seats: Vec<String>,
+    // Only agent-new CLI declarations; other callers retain their existing output.
+    // trace:STORY-1486 | ai:codex
+    pub(crate) declared_git_read_only: Option<bool>,
 }
 
 impl AgentDefaultFlagOptions {
@@ -1851,7 +1879,14 @@ impl AgentDefaultFlagOptions {
             model_override,
             rotate: false,
             delegate_seats: Vec::new(),
+            declared_git_read_only: None,
         }
+    }
+
+    // trace:STORY-1486 | ai:codex
+    fn declaring_git_policy(mut self, downgrade: bool) -> Self {
+        self.declared_git_read_only = Some(downgrade);
+        self
     }
 
     // trace:BUG-2467 | ai:codex
@@ -2676,10 +2711,10 @@ pub(crate) fn agent_new_claude(
         let root = agent_launch_project_root_from(&find_aida_project_root_from(&base)?);
         crate::agent_config::load_agents_contained(&root)
     };
-    // Only the foreground owner may compose wrapper argv. Background remains refused.
+    // Fresh foreground and AIDA-supervised background launches own wrapper composition.
     // trace:TASK-3219 | ai:codex
     let wrapper_root = child_role_project_root(cwd)?;
-    let _wrapper_composition = (!bg && session::claude_uses_contained_wrapper(&wrapper_root)?)
+    let _wrapper_composition = (session::claude_uses_contained_wrapper(&wrapper_root)?)
         .then(session::ClaudeWrapperComposition::enter);
     let ClaudeNewPosture {
         mut default_args,
@@ -2705,11 +2740,21 @@ pub(crate) fn agent_new_claude(
             return Ok(());
         }
     };
+    // The picker has now resolved the child seat; never report the raw CLI role.
+    // trace:STORY-1486 | ai:codex
+    crate::launch_permission_profile::print_git_policy(
+        &child_role_project_root(cwd)?,
+        role.as_deref(),
+        flag_options.declared_git_read_only,
+        noexec,
+        verbose,
+        show_prompt || context.show,
+    );
     // SPIKE-34: when `--bg` is set, append it to the argv so `claude --bg`
     // dispatches the session to the background supervisor instead of
     // running foreground in this terminal. Forces the bg-aware dispatch
     // path below. trace:SPIKE-34 | ai:claude
-    if bg {
+    if bg && !(contained && session::claude_uses_contained_wrapper(&wrapper_root)?) {
         default_args.push("--bg".to_string());
     }
     let config = AgentLaunchConfig {
@@ -2844,6 +2889,16 @@ pub(crate) fn agent_new_codex_wake(
             return Ok(());
         }
     };
+    // The picker has now resolved the child seat; never report the raw CLI role.
+    // trace:STORY-1486 | ai:codex
+    crate::launch_permission_profile::print_git_policy(
+        &child_role_project_root(cwd)?,
+        role.as_deref(),
+        flag_options.declared_git_read_only,
+        noexec,
+        verbose,
+        show_prompt || context.show,
+    );
     // BUG-2007: a codex TUI attached to the shared app-server daemon runs its
     // hooks (and tools) with the daemon's environment, i.e. whichever shell
     // first started the daemon, so the child got another session's role and
@@ -2931,6 +2986,16 @@ pub(crate) fn agent_new_antigravity(
             return Ok(());
         }
     };
+    // The picker has now resolved the child seat; never report the raw CLI role.
+    // trace:STORY-1486 | ai:codex
+    crate::launch_permission_profile::print_git_policy(
+        &child_role_project_root(cwd)?,
+        role.as_deref(),
+        flag_options.declared_git_read_only,
+        noexec,
+        verbose,
+        show_prompt || context.show,
+    );
     let mut default_args = Vec::new();
     if bypass_sandbox {
         default_args.push("--dangerously-skip-permissions".to_string());
@@ -3037,7 +3102,7 @@ pub(crate) fn agent_new_with_config_wake(
     let project_root = agent_launch_project_root_from(&discovered_root);
     // This scope belongs only to fresh foreground agent-new, never resume/background.
     // trace:TASK-3219 | ai:codex
-    let wrapper = config.agent_type == "claude"
+    let wrapper = config.agent_type == crate::vendors::supervised_background_name()
         && config.contained
         && session::claude_uses_contained_wrapper(&project_root)?;
     enforce_agent_type_enabled(&project_root, config.agent_type)?;
@@ -3093,16 +3158,6 @@ pub(crate) fn agent_new_with_config_wake(
     refuse_uncontained_child_of_contained_parent(&config)?;
     guard_interactive_claude_dontask(config.agent_type, &config.default_args)?;
 
-    // STORY-495: surface the one-time faithful-launcher pointer when a Claude
-    // launch lands on the native posture (no `--permission-mode` in the argv).
-    // A forced/explicit bypass (incl. `--bg`) injects the flag, so this no-ops
-    // for those paths.
-    if config.agent_type == "claude"
-        && !config.default_args.iter().any(|a| a == "--permission-mode")
-    {
-        maybe_show_faithful_launcher_notice();
-    }
-
     // BUG-408: `--show-context` is a PURE PREVIEW. Render the launch-context
     // snapshot from a dry plan and return without launching — no `session_start`,
     // so no worktree, no lease, no spec status flip. Previously this fell through
@@ -3143,6 +3198,18 @@ pub(crate) fn agent_new_with_config_wake(
             true,
             context.enabled,
         );
+    }
+
+    // Previews return before the notice writes its first-use marker.
+    // trace:STORY-1486 | ai:codex
+    // STORY-495: surface the one-time faithful-launcher pointer when a Claude
+    // launch lands on the native posture (no `--permission-mode` in the argv).
+    // A forced/explicit bypass (incl. `--bg`) injects the flag, so this no-ops
+    // for those paths.
+    if config.agent_type == "claude"
+        && !config.default_args.iter().any(|a| a == "--permission-mode")
+    {
+        maybe_show_faithful_launcher_notice();
     }
 
     // Check ownership before any bypass/resume prompt; previews above remain pure.
@@ -3405,7 +3472,7 @@ pub(crate) fn agent_new_bg_dispatch(
     show_prompt: bool,
     verbose: bool,
     prompt: AgentPromptOptions,
-    resume: AgentResumeOptions,
+    mut resume: AgentResumeOptions,
     flag_options: AgentDefaultFlagOptions,
     name: Option<String>,
     description: Option<String>,
@@ -3416,6 +3483,27 @@ pub(crate) fn agent_new_bg_dispatch(
         .unwrap_or(std::env::current_dir()?);
     let discovered_root = find_aida_project_root_from(&base)?;
     let project_root = agent_launch_project_root_from(&discovered_root);
+    let wrapper = config.agent_type == crate::vendors::supervised_background_name()
+        && config.contained
+        && session::claude_uses_contained_wrapper(&project_root)?;
+    if wrapper {
+        // S3 starts fresh only. In particular an interactive background
+        // dispatcher must not offer the still-unwired resume picker.
+        resume.prompt_enabled = false;
+        anyhow::ensure!(
+            !flag_options.rotate,
+            "AIDA background launches do not support --rotate"
+        );
+        anyhow::ensure!(
+            resume.direct_target.is_none(),
+            "contained Claude resume waits for private-state lifecycle support"
+        );
+        anyhow::ensure!(
+            prompt.auto_prompt || prompt.explicit_prompt.is_some(),
+            "AIDA background launches need a prompt"
+        );
+    }
+    let _composition = wrapper.then(session::ClaudeWrapperComposition::enter);
     enforce_agent_type_enabled(&project_root, config.agent_type)?;
     let binary = find_executable_on_path(config.binary).ok_or_else(|| {
         anyhow::anyhow!(
@@ -3437,16 +3525,8 @@ pub(crate) fn agent_new_bg_dispatch(
     // or side effect: no claim, lease, clone or pin is made for a launch that
     // cannot run. `build_agent_new_bg_command` re-checks the planned tree.
     // trace:BUG-2169 | ai:claude
-    refuse_bg_under_os_wrap(&config, &project_root)?;
-
-    // STORY-495: surface the one-time faithful-launcher pointer when a Claude
-    // launch lands on the native posture (no `--permission-mode` in the argv).
-    // A forced/explicit bypass (incl. `--bg`) injects the flag, so this no-ops
-    // for those paths.
-    if config.agent_type == "claude"
-        && !config.default_args.iter().any(|a| a == "--permission-mode")
-    {
-        maybe_show_faithful_launcher_notice();
+    if !wrapper {
+        refuse_bg_under_os_wrap(&config, &project_root)?;
     }
 
     // BUG-408: `--show-context` is a PURE PREVIEW. Render the launch-context
@@ -3487,6 +3567,18 @@ pub(crate) fn agent_new_bg_dispatch(
             false,
             context.enabled,
         );
+    }
+
+    // Previews return before the notice writes its first-use marker.
+    // trace:STORY-1486 | ai:codex
+    // STORY-495: surface the one-time faithful-launcher pointer when a Claude
+    // launch lands on the native posture (no `--permission-mode` in the argv).
+    // A forced/explicit bypass (incl. `--bg`) injects the flag, so this no-ops
+    // for those paths.
+    if config.agent_type == "claude"
+        && !config.default_args.iter().any(|a| a == "--permission-mode")
+    {
+        maybe_show_faithful_launcher_notice();
     }
 
     // Check ownership before any bypass/resume prompt; previews above remain pure.
@@ -3573,19 +3665,24 @@ pub(crate) fn agent_new_bg_dispatch(
         plan.native_session_id.as_deref(),
     ));
     enforce_agent_singleton(&project_root, &plan, resume.duplicate_check)?;
-    let _description = resolve_agent_description(plan.role.as_deref(), description)?;
+    let description = resolve_agent_description(plan.role.as_deref(), description)?;
     // TASK-965: worktree-tangle spawn gate — refuse a fan-out into the primary
     // checkout. trace:TASK-965 | ai:claude
     assert_no_worktree_tangle(&plan, &project_root)?;
     let prompt_args = agent_initial_prompt_args(&config, &plan, &prompt);
 
     eprintln!(
-        "{} dispatching {} (stable name: {}) to Claude Code's background supervisor in {}",
+        "{} dispatching {} (stable name: {}) to {} in {}",
         crate::glyph(crate::glyphs::Glyph::FlowActive)
             .green()
             .bold(),
         config.agent_type,
         plan.name.cyan(),
+        if wrapper {
+            "AIDA's contained background supervisor"
+        } else {
+            "Claude Code's background supervisor"
+        },
         plan.launch_cwd.display().to_string().cyan()
     );
     if let Some(spec) = &plan.current_spec {
@@ -3626,11 +3723,31 @@ pub(crate) fn agent_new_bg_dispatch(
     // session keeps the project allow-list. Implementer lanes only: a review
     // seat must not run under the reviewed tree's own settings.
     // trace:BUG-B6B1278890774EF993D2EBC327862470-049 | ai:claude
-    if config.agent_type == "claude" {
+    if config.agent_type == "claude" && !wrapper {
         crate::claude_trust::report(&crate::claude_trust::ensure_role_seat_trusted(
             &plan.launch_cwd,
             plan.role.as_deref(),
         ));
+    }
+
+    // The native daemon path below remains unchanged when the opt-in is unset.
+    // trace:TASK-3219 | ai:codex
+    if wrapper {
+        agent_claude_background::dispatch(
+            &binary,
+            &config,
+            &plan,
+            launch_context.as_ref(),
+            &prompt_args,
+            description,
+            || {
+                handle_guard.disarm();
+                if let Some(receipt) = setup_receipt.as_mut() {
+                    receipt.disarm();
+                }
+            },
+        )?;
+        return Ok(());
     }
 
     let mut command = build_agent_new_bg_command(
@@ -6183,6 +6300,20 @@ pub(crate) fn render_agent_launch_noexec(
     if aida.stale {
         out.push_str("aida_build_stale: alternate build is newer than selected build\n");
     }
+    // trace:STORY-1486 | ai:codex
+    if plan
+        .project_root
+        .join(aida_core::scaffolding::launch_profile::PROFILE_PATH)
+        .exists()
+    {
+        if plan.current_spec.is_some() {
+            out.push_str("launch_profile_scope: primary checkout until launch; the spec's dedicated worktree and Git administrative roots are resolved during actual launch\n");
+        }
+        out.push_str(&crate::launch_permission_profile::render_roots(
+            &plan.launch_cwd,
+            &aida.path,
+        )?);
+    }
     out.push_str("permission_posture:\n");
     let confirm = bypass_confirm::load(&plan.project_root);
     out.push_str(&format!(
@@ -7321,16 +7452,52 @@ pub(crate) fn run_agent_generation(
     rotation: Option<RotationEnv<'_>>,
     on_spawn: impl FnOnce(),
 ) -> Result<GenerationExit> {
+    run_agent_generation_with_io(
+        binary,
+        config,
+        plan,
+        launch_context,
+        prompt_args,
+        description,
+        title,
+        verbose,
+        mail_wake,
+        rotation,
+        || {
+            on_spawn();
+            Ok(())
+        },
+        None,
+    )
+}
+
+// trace:TASK-3219 | ai:codex
+#[allow(clippy::too_many_arguments)]
+pub(crate) fn run_agent_generation_with_io(
+    binary: &std::path::Path,
+    config: &AgentLaunchConfig,
+    plan: &AgentLaunchPlan,
+    launch_context: Option<&AgentLaunchContext>,
+    prompt_args: &[String],
+    description: Option<String>,
+    title: bool,
+    verbose: bool,
+    mail_wake: Option<agent_registry::MailWake>,
+    rotation: Option<RotationEnv<'_>>,
+    on_spawn: impl FnOnce() -> Result<()>,
+    mut background_control: Option<&mut std::os::unix::net::UnixStream>,
+) -> Result<GenerationExit> {
+    let background = background_control.is_some();
     // trace:TASK-3219 | ai:codex
     let wrapper = config.agent_type == "claude"
         && config.contained
         && (session::composing_for_claude_wrapper()
             || session::claude_uses_contained_wrapper(&plan.launch_cwd)?);
     let _wrapper_composition = wrapper.then(session::ClaudeWrapperComposition::enter);
-    let terminal_io = wrapper
+    let terminal_io = (wrapper && !background)
         .then(crate::launch::contained::pty::host_stdio)
         .transpose()?;
-    let pty = wrapper
+    let pty = (wrapper && !background)
         .then(crate::launch::contained::pty::PrivatePty::open)
         .transpose()?;
     if let (Some(pty), Some((input, _))) = (&pty, &terminal_io) {
@@ -7500,19 +7667,33 @@ pub(crate) fn run_agent_generation(
         .stdin(std::process::Stdio::inherit())
         .stdout(std::process::Stdio::inherit())
         .stderr(std::process::Stdio::inherit());
+    if background {
+        anyhow::ensure!(
+            wrapper,
+            "background supervision requires the shared Claude wrapper"
+        );
+        crate::launch::control::background_print(&mut command, &plan.project_root);
+    }
     // Keep the wrapper owner alive through registry binding, release and wait.
     // trace:TASK-3219 | ai:codex
     // Capture before spawn: a fast SessionStart hook may publish its notice immediately.
     let generation_started_at = chrono::Utc::now();
     let mut contained = if wrapper {
-        Some(
+        Some(if background {
+            crate::containment::launch::PreparedLaunch::prepare(
+                &mut command,
+                &plan.launch_cwd,
+                crate::seat_clone::launcher_main().as_deref(),
+            )?
+            .spawn(std::process::Stdio::inherit())?
+        } else {
             crate::containment::launch::PreparedLaunch::prepare_interactive(
                 &mut command,
                 &plan.launch_cwd,
                 crate::seat_clone::launcher_main().as_deref(),
             )?
-            .spawn_interactive(pty.as_ref().expect("interactive PTY"))?,
-        )
+            .spawn_interactive(pty.as_ref().expect("interactive PTY"))?
+        })
     } else {
         None
     };
@@ -7550,7 +7731,7 @@ pub(crate) fn run_agent_generation(
         crate::launch::contained::pty::before_release(grant, run.receipt().worker_pid())?;
     } else {
         grant_rollback.disarm();
-        on_spawn.take().expect("spawn callback")();
+        on_spawn.take().expect("spawn callback")()?;
     }
     // BUG-1918: this launcher made the claim; record the worker it spawned.
     // trace:BUG-1918 | ai:claude
@@ -7642,11 +7823,24 @@ pub(crate) fn run_agent_generation(
             entry.id
         })
     });
+    let mut _background_registry = None;
     let registered = if let Some(run) = contained.as_mut() {
         let id = register.take().expect("registry callback")()?;
+        if background {
+            _background_registry = Some(agent_claude_background::RegistryEnd {
+                root: plan.project_root.clone(),
+                pid: child_pid,
+                armed: true,
+            });
+        }
+        if let Some(control) = background_control.as_mut() {
+            agent_claude_background::before_release(control)?;
+        }
         run.release()?;
-        grant_rollback.disarm();
-        on_spawn.take().expect("spawn callback")();
+        on_spawn.take().expect("spawn callback")()?;
+        if !background {
+            grant_rollback.disarm();
+        }
         Some(id)
     } else {
         None
@@ -7673,9 +7867,14 @@ pub(crate) fn run_agent_generation(
         },
         || {
             if let Some(run) = contained.as_mut() {
-                let (input, output) = terminal_io.expect("terminal endpoints");
-                pty.expect("private PTY")
-                    .wait(&mut run.child, input, output)
+                let status = if background {
+                    run.child.wait().map_err(anyhow::Error::from)
+                } else {
+                    let (input, output) = terminal_io.expect("terminal endpoints");
+                    pty.expect("private PTY")
+                        .wait(&mut run.child, input, output)
+                };
+                status
                     .and_then(|status| run.vendor_exit(status))
                     .map_err(std::io::Error::other)
             } else {
@@ -7712,7 +7911,14 @@ pub(crate) fn run_agent_generation(
         match agent_registry::mark_agent_ended(&plan.project_root, config.agent_type, child_pid) {
             // The ended row keeps the session id the child's hook recorded.
             // trace:STORY-B6B1278890774EF993D2EBC327862470-150 | ai:claude
-            Ok(row) => row.and_then(|row| row.native_session_id.or(row.claude_session_id)),
+            Ok(row) => {
+                // Normal teardown succeeded; retain the guard only on errors.
+                // trace:TASK-3219 | ai:codex
+                if let Some(guard) = _background_registry.as_mut() {
+                    guard.armed = false;
+                }
+                row.and_then(|row| row.native_session_id.or(row.claude_session_id))
+            }
             Err(err) => {
                 eprintln!(
                     "{} failed to mark agent registry entry ended for {}#{}: {err}",
@@ -7943,14 +8149,35 @@ pub(crate) static AGENT: crate::command_registry::CommandReg =
         name: "agent",
         help_after: "compete",
         command: <AgentArgs as clap::CommandFactory>::command,
-        policy: |_| crate::command_registry::CmdPolicy {
-            stakeholder: crate::stakeholder_role::StakeholderAction::Write,
-            per_write_auto_push: false,
-            skip_role_restore_prompt: false,
-            team_identity_write: false,
-        },
+        policy: agent_cli_policy,
         run: crate::command_registry::Handler::Store(run_agent),
     };
+
+// Only an explicitly selected vendor's no-exec path is a read. Real launches,
+// implicit vendor selection and malformed invocations retain the write gate.
+// trace:STORY-1486 | ai:codex
+fn agent_cli_policy(matches: &clap::ArgMatches) -> crate::command_registry::CmdPolicy {
+    let preview =
+        <AgentArgs as clap::FromArgMatches>::from_arg_matches(matches).is_ok_and(|args| match args
+            .inner
+        {
+            AgentCommand::New {
+                command: Some(command),
+                ..
+            } => *crate::vendors::launch_preview_options(&command).noexec,
+            _ => false,
+        });
+    crate::command_registry::CmdPolicy {
+        stakeholder: if preview {
+            crate::stakeholder_role::StakeholderAction::Read
+        } else {
+            crate::stakeholder_role::StakeholderAction::Write
+        },
+        per_write_auto_push: false,
+        skip_role_restore_prompt: false,
+        team_identity_write: false,
+    }
+}
 
 // trace:TASK-1793 | ai:codex
 #[cfg(test)]

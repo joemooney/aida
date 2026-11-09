@@ -52,6 +52,7 @@ mod auto_complete;
 mod auto_complete_telemetry;
 mod autonomy_cmd;
 mod autopilot;
+mod launch_permission_profile;
 // trace:TASK-1018 | ai:claude — durable execution audit + one-command reversal.
 mod autopilot_audit;
 mod autopilot_intake;
@@ -210,6 +211,7 @@ mod docs_sweep;
 // trace:STORY-B6B1278890774EF993D2EBC327862470-105 | ai:claude
 mod doctor_backfill_agreed;
 mod doctor_cmd;
+mod lane_host;
 // trace:BUG-B6B1278890774EF993D2EBC327862470-046 | ai:claude
 mod doctor_renumber;
 // trace:STORY-1462 | ai:claude — runaway-seat watchdog doctor category.
@@ -278,6 +280,9 @@ mod status_sections;
 mod statusline_root;
 // trace:STORY-B6B1278890774EF993D2EBC327862470-097 | ai:claude
 mod store_local;
+// trace:TASK-3223 | ai:codex
+mod store_mutation_client;
+mod store_mutation_entry;
 mod store_push_pull;
 mod store_sync;
 mod supervise_cmd;
@@ -741,6 +746,8 @@ mod workflow_hints;
 mod worktree;
 // trace:TASK-634 | ai:claude — pure WorktreeCreate/Remove payload → lease record.
 mod worktree_lease;
+// trace:TASK-1222 | ai:codex — dry-run-first seat/worktree lifecycle GC.
+mod worktree_lifecycle_gc;
 // trace:TASK-1562 | ai:claude — `aida worktree reclaim`: stale target/ cache reclaim.
 mod worktree_reclaim;
 // trace:TASK-2325 | ai:claude — agent scratch outside target/ (job tmp, session scratch, build caches).

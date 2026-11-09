@@ -312,22 +312,6 @@ on = ["CronJobFailed:session-hygiene"]
 prompt = "The hourly hygiene pass kept something it must not touch on its own. The routed trip evidence names each item and the act it needs: salvage or discard uncommitted work in a dead session's worktree, activate mail retention so a finished session can be reaped, or rerun a failed step by hand. Never force-reap or delete a dirty worktree to clear it."
 enabled = true
 
-# Monthly read-only check after the merged-worktree backlog slowed pr ship.
-# Cleanup needs a human at a TTY; never schedule worktree gc --force.
-# trace:TASK-1596 | ai:codex
-[[schedule.jobs]]
-name = "merged-worktrees-guard"
-command = "doctor check merged-agent-worktrees --fail-on-findings"
-every = "30d"
-enabled = true
-
-[[schedule.jobs]]
-name = "merged-worktrees-guard-route"
-seats = ["advisor"]
-on = ["CronJobFailed:merged-worktrees-guard"]
-prompt = "Merged agent worktrees are accumulating. Review the routed trip evidence and `aida doctor check merged-agent-worktrees`. Ask the operator to review `aida worktree gc` (dry run), then run `aida worktree gc --yes --force` at an interactive TTY to clean up. Force is refused in unattended contexts; do not run forced cleanup from a scheduled job or headless seat."
-enabled = true
-
 # STORY-1462: the runaway-seat watchdog. BUG-1589 (2026-09-21): two seats
 # answered a mail tick every ~7-10s (~460 wakes and ~700M tokens an hour
 # each) and nobody noticed for ~24h. This job reads new bytes of this
@@ -536,6 +520,8 @@ block_primary_commits = true
 # green. Names are this project's own: AIDA's `build-result` job, which
 # requires every CI lane. A test pins it to .github/workflows/ci.yml.
 [review_watch]
+# trace:TASK-3472 | ai:codex
+max_concurrent = 4
 required_checks = ["Build (ubuntu-latest)"]
 
 # STORY-1917: execute pending `take` and `impl` dispatch requests outside any
@@ -575,3 +561,17 @@ mode = "report"
 max_files = 20
 # The glossary source is a template master; its .aida/ mirror is regenerated.
 regenerate = ["make sync-templates"]
+
+# trace:TASK-1222 | ai:codex — weekly report; removal remains operator-only.
+[[schedule.jobs]]
+name = "worktree-lifecycle-gc"
+command = "worktree gc --fail-on-findings"
+every = "7d"
+enabled = true
+
+[[schedule.jobs]]
+name = "worktree-lifecycle-gc-route"
+seats = ["advisor"]
+on = ["CronJobFailed:worktree-lifecycle-gc"]
+prompt = "Review the weekly lifecycle GC counts and bytes in the routed dry-run evidence. Run aida worktree gc --json for current per-item reasons; non-TTY scans have a 60-second budget and start at the sorted head, so their window may differ from the rotating weekly scan and omit candidates counted in the routed evidence; eligible means no session lease or lock, a clean idle checkout, and either linked ancestry or a matching merged/closed PR head (seat clones also need all local commits on origin). The operator reviews the dry-run and runs aida worktree gc --apply at an interactive terminal. Never auto-apply or discard retained work."
+enabled = true

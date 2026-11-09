@@ -55,12 +55,13 @@ fn agent_entry(
     worktree: PathBuf,
 ) -> agent_registry::AgentRegistryEntry {
     let now = chrono::Utc::now();
+    let captured = aida_core::proc_identity::ProcIdentity::capture(pid).ok();
     agent_registry::AgentRegistryEntry {
         id: format!("{agent_type}-{pid}"),
         agent_type: agent_type.to_string(),
         pid,
-        pid_start: crate::process_probe::process_start_identity(pid),
-        pid_namespace: crate::agent_registry::current_pid_namespace(),
+        pid_start: captured.as_ref().map(|id| id.legacy().start),
+        pid_namespace: captured.as_ref().map(|id| id.pidns_inode),
         name: Some(name.to_string()),
         description: None,
         tty: None,
@@ -177,9 +178,19 @@ fn test_session_start_mints_factory_lane_lease_with_agent_pid_and_session_leases
     assert_eq!(lease.scope, "TASK-2010");
     assert_eq!(lease.owner, lane_name);
     assert_eq!(lease.creator_pid, Some(live_pid));
-    assert_eq!(lease.creator_pid_start_time, agent.pid_start);
+    assert_eq!(
+        lease.creator_pid_start_time,
+        agent
+            .process_identity()
+            .map(|id| format!("linux-starttime:{}", id.starttime))
+    );
     assert_eq!(lease.active_pid, Some(live_pid));
-    assert_eq!(lease.active_pid_start_time, agent.pid_start);
+    assert_eq!(
+        lease.active_pid_start_time,
+        agent
+            .process_identity()
+            .map(|id| format!("linux-starttime:{}", id.starttime))
+    );
 
     // Verify Blocker 2: agent registry entry was updated with current_spec and worktree_path
     let entries = agent_registry::load_entries(&root);
@@ -726,6 +737,7 @@ fn test_queue_work_respects_no_launch_for_calling_lane_attribution() {
     std::env::set_current_dir(&root).unwrap();
     let res = crate::queue_cmd::handle_queue_work(
         &storage,
+        None,
         crate::test_env::HERMETIC_TEST_USER,
         Some("TASK-3000"),
         None,
@@ -784,7 +796,7 @@ fn test_queue_work_respects_no_launch_for_calling_lane_attribution() {
         "lease for TASK-3000 active_pid must be calling lane A's pid under --no-launch"
     );
     assert_eq!(
-        lease_y.active_pid_start_time, lane_a.pid_start,
+        lease_y.active_pid_start_time, lane_a.process_identity().map(|id| format!("linux-starttime:{}", id.starttime)),
         "lease for TASK-3000 active_pid_start_time must match calling lane A's start time under --no-launch"
     );
 
@@ -985,6 +997,7 @@ fn test_main_checkout_session_does_not_revive_dead_harness_lease() {
 /// must not be reported stale in `aida ps` and must not appear in "Orphaned In-Progress specs".
 // trace:BUG-2010 | ai:antigravity
 #[test]
+#[cfg(target_os = "linux")]
 fn test_live_factory_lane_not_reported_stale_when_lease_pid_differs() {
     let tmp = tempfile::tempdir().unwrap();
     let wt = tmp.path().join("worktree-2010");
@@ -1001,14 +1014,23 @@ fn test_live_factory_lane_not_reported_stale_when_lease_pid_differs() {
         Some("BUG-2010"),
         wt.clone(),
     );
-    let live_agents = vec![agent.clone()];
+    // Exercise the persisted-row loader used by ps: the compatibility loader
+    // projects raw ticks and would lose the identity required by lease matching.
+    // trace:TASK-3366 | ai:codex
+    agent_registry::write_entry(tmp.path(), &agent).unwrap();
+    let live_agents = agent_registry::load_live_identity_entries(tmp.path());
+    assert_eq!(live_agents.len(), 1);
+    assert_eq!(live_agents[0].process_identity(), agent.process_identity());
 
     // The lease was minted with the factory lane owner and active_pid = agent.pid,
     // but creator_pid was a transient process (e.g. 99999) that died.
     let mut lease = ps_lease("lease-2010", "BUG-2010", lane_name, wt.clone());
     lease.creator_pid = Some(99999);
     lease.active_pid = Some(live_pid);
-    lease.active_pid_start_time = agent.pid_start.clone();
+    lease.active_pid_start_time = agent
+        .process_identity()
+        .map(|id| format!("linux-starttime:{}", id.starttime));
+    lease.pid_namespace = agent.pid_namespace;
 
     let row = PsRow {
         lease: lease.clone(),

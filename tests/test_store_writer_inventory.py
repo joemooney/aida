@@ -27,6 +27,17 @@ def inventory(root, rows):
 
 
 class WriterInventoryTests(unittest.TestCase):
+    # trace:TASK-3223 | ai:codex
+    def test_candidates_cannot_silently_ignore_mediated_profile(self):
+        import subprocess
+        result = subprocess.run(
+            ["python3", str(guard.ROOT / "scripts/check-store-writers.py"),
+             "--candidates", "--profile", "mediated"],
+            capture_output=True, text=True, timeout=30)
+        self.assertEqual(result.returncode, 2)
+        self.assertIn("cannot be combined", result.stderr)
+        self.assertEqual(result.stdout, "")
+
     def setUp(self):
         self.tmp = tempfile.TemporaryDirectory()
         self.addCleanup(self.tmp.cleanup)
@@ -53,6 +64,191 @@ class WriterInventoryTests(unittest.TestCase):
 
     def test_unchanged_evidence_passes(self):
         self.assertEqual([], guard.check(self.root))
+
+    # trace:TASK-3223 | ai:codex
+    def partial_route(self):
+        self.put("aida-cli-lib/src/store_mutation/service.py",
+                 "CANONICAL_VERBS = ('comment_add', 'spec_edit')\n")
+        self.put("aida-cli-lib/src/mcp.rs", '''
+            impl Server {
+                fn dispatch() { match tool_name { "edit" => self.tool_edit(args), } }
+                fn tool_edit() { opaque.call(); }
+            }
+        ''')
+        guard.regenerate(self.root)
+        return dict(operation="mcp:edit", wire_operation="spec_edit",
+                    scope="title only", remaining="status unsupported",
+                    entrypoint="aida_cli_lib::mcp::Server::tool_edit",
+                    client="aida_cli_lib::mcp::Server::tool_edit",
+                    host="aida_core::writer::write_edit_atomically",
+                    evidence_tests=["aida-core/src/writer.rs"])
+
+    def append_route(self, route):
+        with (self.root / guard.INVENTORY).open("a") as target:
+            target.write("\nmediated_route = [{ " + ", ".join(
+                f"{key} = {json.dumps(value)}" for key, value in route.items()) + " }]\n")
+
+    def test_partial_routes_survive_regeneration_without_clearing_blockers(self):
+        import tomllib
+        route = self.partial_route()
+        self.append_route(route)
+        target = self.root / guard.INVENTORY
+        before = guard.mediated_blockers(tomllib.loads(target.read_text()))
+        guard.regenerate(self.root)
+        data = tomllib.loads(target.read_text())
+        self.assertEqual([route], data["mediated_route"])
+        self.assertEqual(before, guard.mediated_blockers(data))
+        self.assertIn("mcp:edit", before["operation"])
+        self.assertEqual([], guard.check(self.root))
+
+    def test_partial_route_missing_functions_evidence_or_operation_refuses(self):
+        import copy
+        import tomllib
+        route = self.partial_route()
+        data = tomllib.loads((self.root / guard.INVENTORY).read_text())
+        scanned = guard.scan(self.root)
+        for field, value in (("entrypoint", "missing"), ("client", "missing"),
+                             ("host", "missing"), ("operation", "mcp:missing"),
+                             ("evidence_tests", ["missing.rs"]),
+                             ("evidence_tests", ["../outside"]),
+                             ("evidence_tests", "not-an-array"),
+                             ("scope", []), ("remaining", "")):
+            with self.subTest(field=field, value=value):
+                changed = copy.deepcopy(route)
+                changed[field] = value
+                data["mediated_route"] = [changed]
+                self.assertTrue(guard.check_routes(self.root, data, scanned))
+        data["mediated_route"] = [route, route]
+        self.assertTrue(guard.check_routes(self.root, data, scanned))
+
+    def test_partial_route_wire_operation_must_be_supported_by_broker(self):
+        import tomllib
+        route = self.partial_route()
+        self.append_route(route)
+        data = tomllib.loads((self.root / guard.INVENTORY).read_text())
+        scanned = guard.scan(self.root)
+        self.assertEqual([], guard.check_routes(self.root, data, scanned))
+        for verb in ("spec_edti", "own_claim", "queue_done", "session_probe"):
+            with self.subTest(verb=verb):
+                data["mediated_route"][0]["wire_operation"] = verb
+                self.assertTrue(any("unsupported wire operation" in error
+                                    for error in guard.check_routes(self.root, data, scanned)))
+        data["mediated_route"][0]["wire_operation"] = "spec_edit"
+        # Validation is tied to the current broker vocabulary, not a copied list.
+        self.put("aida-cli-lib/src/store_mutation/service.py",
+                 "CANONICAL_VERBS = ('comment_add',)\n")
+        self.assertTrue(guard.check_routes(self.root, data, scanned))
+        for source in ("", "CANONICAL_VERBS = calculate()", "CANONICAL_VERBS = 'spec_edit'",
+                       "CANONICAL_VERBS = ('spec_edit', 'spec_edit')", "invalid python !"):
+            with self.subTest(source=source):
+                self.put("aida-cli-lib/src/store_mutation/service.py", source)
+                self.assertTrue(any("wire vocabulary unavailable" in error
+                                    for error in guard.check_routes(self.root, data, scanned)))
+        (self.root / "aida-cli-lib/src/store_mutation/service.py").unlink()
+        self.assertTrue(guard.check_routes(self.root, data, scanned))
+
+    def test_partial_routes_are_reported_without_admitting_the_profile(self):
+        import subprocess
+        import sys
+        route = self.partial_route()
+        self.append_route(route)
+        result = subprocess.run(
+            [sys.executable, str(Path(guard.__file__)), "--root", str(self.root),
+             "--profile", "mediated"], capture_output=True, text=True, timeout=30)
+        self.assertEqual(1, result.returncode, result.stderr)
+        report = json.loads(result.stdout)
+        self.assertEqual([route], report["partial_routes"])
+        self.assertIn(route["operation"], report["unresolved"]["operation"])
+        self.assertIn("keep production admission gated", result.stderr)
+
+    # trace:TASK-3223 | ai:codex
+    def test_reconciled_inventory_does_not_mean_mediated_routing(self):
+        import subprocess
+        import sys
+        self.put("aida-cli-lib/src/mcp.rs", '''
+            impl Server {
+                fn dispatch() { match tool_name {
+                    "unknown" => self.tool_unknown(args),
+                } }
+                fn tool_unknown() { opaque.call(); }
+            }
+        ''')
+        guard.regenerate(self.root)
+        self.assertEqual([], guard.check(self.root))
+        result = subprocess.run(
+            [sys.executable, str(Path(guard.__file__)), "--root", str(self.root),
+             "--profile", "mediated"], capture_output=True, text=True, timeout=30)
+        self.assertEqual(1, result.returncode, result.stderr)
+        report = json.loads(result.stdout)
+        self.assertGreater(report["counts"]["writer"], 0)
+        # An empty lexical sink mapping must still block cutover.
+        self.assertIn("mcp:unknown", report["unresolved"]["operation"])
+        self.assertIn("keep production admission gated", result.stderr)
+
+    def test_mediated_blockers_do_not_reclassify_host_only_sites(self):
+        report = guard.mediated_blockers(dict(writer=[
+            dict(id="host", disposition="host_only"),
+            dict(id="cache", disposition="lane_private"),
+            dict(id="raw", disposition="blocked"),
+        ], operation=[dict(id="cli:edit", disposition="blocked")]))
+        self.assertEqual(dict(writer=["raw"], operation=["cli:edit"]), report)
+
+    # trace:TASK-3223 | ai:codex
+    def test_mediated_writer_labels_cannot_substitute_for_routing_evidence(self):
+        import subprocess
+        import sys
+        path = self.root / guard.INVENTORY
+        original = path.read_text()
+        for disposition in ("s2_typed", "read_only"):
+            with self.subTest(disposition=disposition):
+                path.write_text(original.replace('disposition = "blocked"',
+                                                 f'disposition = "{disposition}"'))
+                # These are valid compatibility classifications, but v2 has
+                # no verified route evidence for either classification.
+                self.assertEqual([], guard.check(self.root))
+                result = subprocess.run(
+                    [sys.executable, str(Path(guard.__file__)), "--root", str(self.root),
+                     "--profile", "mediated"], capture_output=True, text=True, timeout=30)
+                self.assertEqual(1, result.returncode, result.stderr)
+                report = json.loads(result.stdout)
+                self.assertEqual(sorted(guard.discover(self.root)),
+                                 report["unresolved"]["writer"])
+                self.assertEqual(len(report["unresolved"]["writer"]),
+                                 report["counts"]["writer"])
+                self.assertIn("keep production admission gated", result.stderr)
+
+    def test_mediated_operations_cannot_escape_using_writer_classifications(self):
+        for disposition in ("blocked", "s2_typed", "read_only", "host_only", "lane_private", None):
+            with self.subTest(disposition=disposition):
+                report = guard.mediated_blockers(dict(
+                    writer=[dict(id="unknown", disposition=disposition)],
+                    operation=[dict(id="cli:edit", disposition=disposition)]))
+                self.assertEqual(["cli:edit"], report["operation"])
+                self.assertEqual([] if disposition in ("host_only", "lane_private")
+                                 else ["unknown"], report["writer"])
+
+    def test_mediated_zero_blocker_exit_and_output(self):
+        import subprocess
+        import sys
+        path = self.root / guard.INVENTORY
+        original = path.read_text()
+        for disposition in ("host_only", "lane_private"):
+            with self.subTest(disposition=disposition):
+                path.write_text(original.replace('disposition = "blocked"',
+                                                 f'disposition = "{disposition}"'))
+                result = subprocess.run(
+                    [sys.executable, str(Path(guard.__file__)), "--root", str(self.root),
+                     "--profile", "mediated"], capture_output=True, text=True, timeout=30)
+                self.assertEqual(0, result.returncode, result.stderr)
+                self.assertEqual("", result.stderr)
+                lines = result.stdout.splitlines()
+                self.assertEqual(2, len(lines), result.stdout)
+                self.assertEqual(dict(profile="mediated", counts=dict(writer=0, operation=0),
+                                      unresolved=dict(writer=[], operation=[])), json.loads(lines[0]))
+                self.assertEqual(
+                    f"store-writers: {len(guard.discover(self.root))} sink sites reconciled; "
+                    "0 operation mappings with explicit S2 cutover blockers; no runtime authority granted",
+                    lines[1])
 
     def test_raw_fs_writer_mutant(self):
         self.put("aida-cli-lib/src/new_raw.rs", '''
@@ -362,7 +558,7 @@ class WriterInventoryTests(unittest.TestCase):
         self.assertIn('bare sweep call', row['resolution_note'])
 
     def test_queue_done_maps_only_concrete_arm(self):
-        self.put('aida-cli-lib/src/queue_cmd.rs', '''
+        self.put('aida-cli-lib/src/queue_cmd/done.rs', '''
             fn handle_queue_command() {
                 match cmd {
                     QueueCommand::Add { id } => { std::fs::rename(a, b); },

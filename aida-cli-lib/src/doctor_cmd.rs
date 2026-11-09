@@ -525,24 +525,6 @@ mod task_190_tests {
     }
 }
 
-/// Ergonomic `aida worktree gc` front door for the existing squash-aware
-/// merged-agent-worktree healer. Keep this as a thin wrapper so every caller
-/// uses the same scan, destructive-heal gate, and dirty-worktree refusal.
-// trace:TASK-1145 | ai:codex
-pub(crate) fn run_merged_agent_worktree_gc(yes: bool, force: bool, json: bool) -> Result<()> {
-    doctor_multi_agent(DoctorRunOptions {
-        heal: true,
-        yes,
-        category: Some("merged-agent-worktrees".to_string()),
-        json,
-        force,
-        all: false,
-        since: None,
-        fail_on_findings: false,
-        quiet_output: false,
-    })
-}
-
 /// One-line result of the post-ship GC. Names the worktrees it passed over for
 /// want of a local merge signal (a full `aida doctor` run may still reclaim
 /// them through the forge lookup) and, when the time budget ran out, how many
@@ -8440,7 +8422,7 @@ fn doctor_context_is_autonomous(stdin_is_tty: bool, orchestrated: bool) -> bool 
 /// STORY-666: live-signal wrapper for [`doctor_context_is_autonomous`] — reads
 /// the real TTY state + the corroborated orchestrator verdict for `project_root`.
 // trace:STORY-666 | ai:claude
-fn doctor_running_autonomously(project_root: &std::path::Path) -> bool {
+pub(crate) fn doctor_running_autonomously(project_root: &std::path::Path) -> bool {
     let orchestrated = orchestrator::detect(project_root).is_orchestrated();
     doctor_context_is_autonomous(std::io::stdin().is_terminal(), orchestrated)
 }
@@ -10420,6 +10402,36 @@ mod story_462_doctor_tests {
                     .count(),
                 1
             );
+        }
+    }
+
+    // trace:STORY-2660 | ai:codex
+    #[test]
+    fn host_capacity_doctor_flags_parse_and_refuse_mutation() {
+        let cli = crate::command_registry::try_parse_from([
+            "aida",
+            "doctor",
+            "--lane-capacity",
+            "--json",
+        ])
+        .unwrap();
+        let DoctorArgs {
+            lane_capacity,
+            json,
+            ..
+        } = cli.command.registered::<DoctorArgs>()
+        else {
+            panic!("doctor args")
+        };
+        assert!(lane_capacity && json);
+        for flag in ["--heal", "--fix-sandbox", "--contradictions"] {
+            assert!(crate::command_registry::try_parse_from([
+                "aida",
+                "doctor",
+                "--lane-capacity",
+                flag
+            ])
+            .is_err());
         }
     }
 
@@ -16094,6 +16106,16 @@ mod bug_1505_review_verdict_doctor_tests {
 #[derive(clap::Parser, Debug)]
 #[clap(name = "doctor")]
 pub(crate) struct DoctorArgs {
+    /// Check this machine before running automated lanes.
+    // trace:STORY-2642 | ai:codex
+    #[clap(long, conflicts_with_all = ["lane_capacity", "heal", "fix_sandbox", "contradictions", "yes", "category", "force", "all", "since", "dry_run", "mapping", "tree_only", "preserve", "contradictions_limit", "contradictions_offset"])]
+    pub lane_host: bool,
+
+    /// Report the host codegraph snapshot age as seen from this lane.
+    // trace:STORY-2630 | ai:claude
+    #[clap(long, conflicts_with_all = ["lane_host", "heal", "fix", "fix_sandbox", "contradictions"])]
+    pub lane_codegraph: bool,
+
     /// Apply safe fixes after scanning. Without this, doctor is read-only.
     #[clap(long)]
     pub heal: bool,
@@ -16109,6 +16131,11 @@ pub(crate) struct DoctorArgs {
     /// Emit machine-readable JSON.
     #[clap(long)]
     pub json: bool,
+
+    /// Read-only typed local lane capacity and reservations (not readiness admission).
+    // trace:STORY-2660 | ai:codex
+    #[clap(long, conflicts_with_all = ["heal", "fix", "fix_sandbox", "contradictions", "category"])]
+    pub lane_capacity: bool,
 
     /// Permit riskier destructive fixes such as branch deletion.
     #[clap(long)]
@@ -16151,7 +16178,7 @@ pub(crate) struct DoctorArgs {
     /// resolving. Needs --dry-run (preview) or --yes (apply).
     // trace:BUG-B6B1278890774EF993D2EBC327862470-046 | ai:claude
     // trace:STORY-B6B1278890774EF993D2EBC327862470-105 | ai:claude
-    #[clap(long, value_name = "CATEGORY", value_parser = ["id-collisions", "agreed-ids"])]
+    #[clap(long, value_name = "CATEGORY", num_args = 0..=1, default_missing_value = "lane-host", value_parser = ["id-collisions", "agreed-ids", "lane-host"])]
     pub fix: Option<String>,
 
     /// With --fix: show the plan and write nothing to the store.
@@ -16208,6 +16235,8 @@ fn run_doctor(
 ) -> anyhow::Result<()> {
     let args = <DoctorArgs as clap::FromArgMatches>::from_arg_matches(matches)?;
     let DoctorArgs {
+        lane_host,
+        lane_codegraph,
         heal,
         yes,
         category,
@@ -16224,8 +16253,56 @@ fn run_doctor(
         contradictions,
         contradictions_limit,
         contradictions_offset,
+        lane_capacity,
         cmd,
     } = &args;
+    // trace:STORY-2642 | ai:codex
+    if *lane_host {
+        if fix.as_deref().is_some_and(|v| v != "lane-host") || *dry_run || cmd.is_some() {
+            anyhow::bail!("use `aida doctor --lane-host [--fix]` for host setup");
+        }
+        let root = crate::main_worktree_root_from(&crate::find_project_root()?);
+        return crate::lane_host::run(&root, fix.is_some(), *json);
+    }
+    if fix.as_deref() == Some("lane-host") {
+        anyhow::bail!("bare --fix requires --lane-host; store repairs require a category");
+    }
+    // No store refresh, host mutation or arbitrary subprocess for this report.
+    // trace:STORY-2630 | ai:codex
+    if *lane_codegraph {
+        anyhow::ensure!(
+            cmd.is_none() && category.is_none(),
+            "--lane-codegraph is a standalone report"
+        );
+        let root = crate::find_project_root()?;
+        let report = crate::codegraph::lane_host_report(&root)?;
+        if *json {
+            println!("{}", serde_json::to_string_pretty(&report)?);
+        } else {
+            println!(
+                "codegraph host snapshot: {}s old; captured {}s ago; host observation {}s ago; {}",
+                report["snapshot_age_seconds"],
+                report["snapshot_captured_age_seconds"],
+                report["host_observation_age_seconds"],
+                report["index_access"].as_str().unwrap_or("unknown")
+            );
+            if !report["refresh_error"].is_null() {
+                println!("snapshot refresh error: {}", report["refresh_error"]);
+            }
+            if !report["query_error"].is_null() {
+                println!("query service unreachable: {}", report["query_error"]);
+            }
+        }
+        return Ok(());
+    }
+    // trace:STORY-2660 | ai:codex
+    if *lane_capacity {
+        anyhow::ensure!(
+            cmd.is_none(),
+            "--lane-capacity cannot be combined with a doctor subcommand"
+        );
+        return crate::standalone_implementer::doctor_host_status(&find_project_root()?, *json);
+    }
     // trace:BUG-B6B1278890774EF993D2EBC327862470-046 | ai:claude
     if let Some(category) = fix.as_deref() {
         if *json {

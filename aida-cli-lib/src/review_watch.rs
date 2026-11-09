@@ -34,7 +34,7 @@ mod notice;
 #[path = "review_watch_update.rs"]
 mod update;
 
-#[derive(Args, Debug)]
+#[derive(Args, Debug, Clone)]
 pub struct ReviewWatchArgs {
     /// Discover and dispatch once, then leave admitted reviews running.
     #[arg(long)]
@@ -42,9 +42,10 @@ pub struct ReviewWatchArgs {
     /// Seconds between discovery passes (default 10).
     #[arg(long, default_value_t = 10, value_parser = clap::value_parser!(u64).range(1..=3600), hide_default_value = true)]
     pub interval: u64,
-    /// Maximum watcher-launched reviews across instances: one or two (default two).
-    #[arg(long, default_value_t = 2, value_parser = clap::value_parser!(u8).range(1..=2), hide_default_value = true)]
-    pub max_concurrent: u8,
+    /// Maximum watcher-launched reviews across instances: 1–8 (config default, otherwise 2).
+    // trace:TASK-3472 | ai:codex
+    #[arg(long, value_parser = clap::value_parser!(u8).range(1..=8))]
+    pub max_concurrent: Option<u8>,
     /// Vendor: claude, codex, or agy; omit for ordinary queue-work selection.
     #[arg(long, value_parser = ["claude", "codex", "agy"], hide_possible_values = true)]
     pub vendor: Option<String>,
@@ -223,19 +224,19 @@ impl Identity {
     /// Capacity policy is separate from kernel process observation.
     // trace:TASK-3365 | ai:codex
     fn alive(&self) -> bool {
-        use aida_core::proc_identity::{UnknownReason, Verdict};
-        match self.verdict() {
+        self.alive_with_verdict(self.verdict())
+    }
+    // trace:TASK-3367 | ai:codex
+    fn alive_with_verdict(&self, verdict: aida_core::proc_identity::Verdict) -> bool {
+        use aida_core::proc_identity::Verdict;
+        match verdict {
             Verdict::Alive => true,
             Verdict::Dead(_) => false,
-            Verdict::ForeignUnknown(UnknownReason::MissingIdentity) => {
-                // Legacy/incomplete receipts retain the existing reboot/TTL
-                // backstop, rather than holding capacity forever.
+            // Every unknown observation uses the reservation backstop, including
+            // read failures in an otherwise observable local PID namespace.
+            Verdict::ForeignUnknown(_) => {
                 self.within_foreign_backstop(chrono::Utc::now(), boot_id().ok().as_deref())
             }
-            Verdict::ForeignUnknown(_) if !self.observable() => {
-                self.within_foreign_backstop(chrono::Utc::now(), boot_id().ok().as_deref())
-            }
-            Verdict::ForeignUnknown(_) => true,
         }
     }
 }
@@ -1169,7 +1170,7 @@ fn validate_state(state: &State, repository: &str) -> Result<()> {
     anyhow::ensure!(
         state.version == 1
             && state.repository == repository
-            && (1..=2).contains(&state.max_concurrent)
+            && (1..=8).contains(&state.max_concurrent)
             // Pruning keeps this to open changes plus live attempts; the
             // forge discovery bound is 1000 rows. trace:TASK-1993 | ai:claude
             && state.entries.len() <= MAX_ENTRIES,
@@ -1325,8 +1326,10 @@ fn select(
     store.transaction(&key, |state| {
         store.reconcile_lost_dispatchers(state);
         let total = state.entries.values().flat_map(|e| &e.attempts).filter(|a| active(a)).count();
-        if total == 0 { state.max_concurrent = max; }
-        anyhow::ensure!(state.max_concurrent == max, "another watcher uses a different concurrency limit; use --max-concurrent {}", state.max_concurrent);
+        // Apply this watcher's limit under the admission lock. Existing reviews
+        // count against a changed cap without needing to drain first.
+        // trace:BUG-2496 | ai:codex
+        state.max_concurrent = max;
         let repository = state.repository.clone();
         let holders = capacity_holders(state);
         let entry = state.entries.entry(key.clone()).or_default();
@@ -2178,6 +2181,33 @@ pub(crate) fn reviewer_status_on_spawn(
     child.wait()
 }
 
+// trace:TASK-3472 | ai:codex
+fn resolve_max_concurrent(root: &Path, flag: Option<u8>) -> Result<u8> {
+    if let Some(max) = flag {
+        anyhow::ensure!((1..=8).contains(&max), "review concurrency must be 1..=8");
+        return Ok(max);
+    }
+    let path = root.join(".aida/config.toml");
+    let text = match std::fs::read_to_string(&path) {
+        Ok(text) => text,
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(2),
+        Err(error) => return Err(error).with_context(|| format!("read {}", path.display())),
+    };
+    let config: toml::Value =
+        toml::from_str(&text).with_context(|| format!("parse {}", path.display()))?;
+    let Some(value) = config
+        .get("review_watch")
+        .and_then(|s| s.get("max_concurrent"))
+    else {
+        return Ok(2);
+    };
+    let max = value
+        .as_integer()
+        .filter(|max| (1..=8).contains(max))
+        .context("`[review_watch] max_concurrent` must be an integer in 1..=8")?;
+    Ok(max as u8)
+}
+
 pub(crate) fn run(args: &ReviewWatchArgs) -> Result<()> {
     run_with_program(args, &std::env::current_dir()?, None).map(|_| ())
 }
@@ -2207,6 +2237,11 @@ pub(crate) fn run_with_program(
         println!("{key}: released {released} recorded review attempt(s); its current head can be reviewed again.");
         return Ok(Vec::new());
     }
+    // Resolve once per watcher, before discovery or admission.
+    // trace:TASK-3472 | ai:codex
+    let mut resolved = args.clone();
+    resolved.max_concurrent = Some(resolve_max_concurrent(&root, args.max_concurrent)?);
+    let args = &resolved;
     // trace:TASK-1955 | ai:claude (TASK-1-413)
     let swept = forge::sweep_probe_refs(&root);
     if swept > 0 {
@@ -2497,7 +2532,13 @@ fn watch_change(
     }
     repo.probe(root, &mut change)
         .context("base evidence refused")?;
-    let action = select(store, &change, args.vendor.clone(), args.max_concurrent)?;
+    let action = select(
+        store,
+        &change,
+        args.vendor.clone(),
+        args.max_concurrent
+            .context("unresolved review concurrency")?,
+    )?;
     record_skip(
         store,
         &change,

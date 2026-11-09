@@ -377,6 +377,45 @@ def evaluate(writes, before, after, nonce, results, receipts, terminal_receipt=F
     return checks
 
 
+# trace:BUG-2497 | ai:codex
+def finish_run(root, report, logs):
+    """Persist observations even when the vendor never completes its probe turn."""
+    completed = False
+    oversize = False
+    for log in logs:
+        if not log.is_file():
+            continue
+        if log.stat().st_size > 4 * 1024 * 1024:
+            oversize = True
+            continue
+        for line in log.read_text(errors="replace").splitlines():
+            try:
+                row = json.loads(line)
+            except ValueError:
+                continue
+            if isinstance(row, dict) and row.get("type") == "turn.completed":
+                completed = True
+    # AGY's completed exact-command receipt is the available completion evidence.
+    if report["vendor"] == "agy":
+        completed = report["verified_terminal_receipt"]
+    elif oversize:
+        completed = False
+    reason = "vendor-log-oversize" if oversize else "vendor-turn-not-completed"
+    report["run_status"] = "completed" if completed else "invalid-run"
+    report["invalid_run_reason"] = None if completed else reason
+    if not completed:
+        report["production_launcher_credit"] = False
+        report["shared_boundary_credit"] = False
+        report["whole_lane_pass"] = False
+    write_json(root / "report.json", report)
+    print(json.dumps({"report": str(root / "report.json"),
+                      "run_status": report["run_status"],
+                      "checks": {k: v["status"] for k, v in report["checks"].items()},
+                      "whole_lane_pass": report.get("whole_lane_pass", False)}), flush=True)
+    if not completed:
+        raise ValueError(f"invalid-run: {reason}; inspect vendor logs")
+
+
 def terminal_receipts(log, invocation):
     """Only completed execution-tool events can corroborate payload diagnostics.
 
@@ -497,6 +536,12 @@ def bounded_launch(argv, workspace, env, root, seconds, pass_fds=(), on_tick=Non
 # trace:TASK-3131 | ai:codex
 def aida_refuse(root, report, reason):
     report["unsupported_reason"] = reason
+    # A late cleanup/setup refusal must also withdraw previously computed
+    # aggregate credit; retain individual observations for diagnosis.
+    # trace:TASK-3048 | ai:codex
+    report["whole_lane_pass"] = False
+    report["production_launcher_credit"] = False
+    report["shared_boundary_credit"] = False
     for check in report["checks"].values():
         check["unsupported_reason"] = reason
         if report["containment_receipt_sha256"] is None:
@@ -646,15 +691,26 @@ def continuation_terminated(_signum, _frame):
     raise ValueError("aida-boundary-continuation-timeout: cleanup requested")
 
 
-# trace:BUG-2470 | ai:codex
-def fixture_policy(config):
+# trace:BUG-2470 TASK-3048 | ai:codex
+def fixture_policy(config, vendor="codex", runtime=None):
     """Merge experiment policy into init's config without duplicating tables."""
     policy = tomllib.loads(config.read_text())
-    policy.setdefault("agents", {}).update(contained=True, vendor="codex")
+    policy.setdefault("agents", {}).update(contained=True, vendor=vendor)
     contained = policy.setdefault("contained", {})
+    # trace:BUG-2497 | ai:codex
     # Replace, never extend: init's default hosts must not weaken C3's denial.
-    contained["allowed_hosts"] = ["api.openai.com", "allow.fixture.test"]
-    contained.setdefault("vendors", {})["codex"] = "aida"
+    contained["allowed_hosts"] = ["api.openai.com", "chatgpt.com", "allow.fixture.test"]
+    if vendor == "agy":
+        # The binary under test owns its descriptor, independently of this
+        # script's checkout. Never fall back to local source on query failure.
+        if not isinstance(runtime, dict) or not isinstance(runtime.get("auth_hosts"), list):
+            raise ValueError("fixture-runtime-policy-unavailable")
+        hosts = runtime["auth_hosts"]
+        if not hosts or any(not isinstance(h, str) or not re.fullmatch(r"[a-z0-9]+(?:[.-][a-z0-9]+)*", h)
+                            for h in hosts):
+            raise ValueError("fixture-runtime-policy-invalid-auth-hosts")
+        contained["allowed_hosts"] = [*hosts, "allow.fixture.test"]
+    contained.setdefault("vendors", {})[vendor] = "aida"
 
     # TOML inline tables let us retain all parsed init values using only the
     # standard library. Comments need not survive in this disposable fixture.
@@ -675,23 +731,19 @@ def fixture_policy(config):
     config.write_text(rendered)
 
 
+# trace:TASK-3048 | ai:codex
 def run_aida(args):
-    if args.vendor != "codex":
-        # The signed outer-only posture is not permission to run the native
-        # diagnostic with bypass flags or to claim a shared-wrapper receipt.
-        # trace:TASK-3048 | ai:codex
-        if args.vendor == "agy":
-            raise ValueError("aida-boundary-unsupported-vendor: agy; outer-only adapter requires "
-                             "auth inventory, mediated-write policy and integrated conformance")
+    if args.vendor not in ("codex", "agy"):
         raise ValueError(f"aida-boundary-unsupported-vendor: {args.vendor}")
     # Refuse hidden output before creating files or invoking grant setup.
     # trace:TASK-3194 | ai:codex
     root = args.output.resolve()
     if any(root.is_relative_to(p.resolve()) for p in (Path("/tmp"), Path("/run"))):
         raise ValueError("fixture-output-hidden-by-production-tmpfs: use a fresh directory under ~/.aida")
+    credential_home = Path.home()
     aida, vendor = shutil.which("aida"), shutil.which(args.vendor)
     if not aida or not vendor:
-        raise ValueError("aida-boundary-missing-executable: aida and codex required")
+        raise ValueError("aida-boundary-missing-executable: aida and selected vendor required")
     aida, vendor = Path(aida).resolve(), Path(vendor).resolve()
     try:
         root.mkdir(mode=0o700)  # Fresh only; never reuse another run's authority.
@@ -706,7 +758,7 @@ def run_aida(args):
               "trusted_policy_sha": None, "containment_receipt_sha256": None,
               "setup": [], "checks": {k: {"status": "unknown"} for k in ("C0", "C1", "C2", "C3", "C4")},
               "whole_lane_pass": False, "production_launcher_credit": False,
-              "evidence_claim": "production launcher under a committed disposable fixture policy selecting codex=aida"}
+              "evidence_claim": f"shared AIDA boundary under a committed disposable fixture policy selecting {args.vendor}=aida"}
     env = {k: v for k, v in os.environ.items() if not k.startswith("GIT_")}
     # Relocate authority/roles/queues together; roles use HOME while seat
     # authority uses AIDA_HOME. Preserve the real vendor credential location
@@ -729,7 +781,15 @@ def run_aida(args):
         config = repo / ".aida/config.toml"
         # init owns the store and authority formats. Only fixture policy and
         # experiment instructions are authored here, never seat/lease files.
-        fixture_policy(config)
+        runtime = None
+        if args.vendor == "agy":
+            try:
+                runtime = json.loads(setup([aida, "config", "permissions", "runtime-policy",
+                                            "--vendor", args.vendor], "runtime-policy"))
+            except (ValueError, TypeError) as error:
+                raise ValueError("fixture-runtime-policy-query-failed") from error
+            report["runtime_policy"] = runtime
+        fixture_policy(config, args.vendor, runtime)
         skill = repo / ".agents/skills/aida-pickup/SKILL.md"
         skill.parent.mkdir(parents=True)
         invocation = shlex.join([sys.executable, str(root / "payload/runner.py"),
@@ -759,7 +819,11 @@ def run_aida(args):
                 print(roster.stdout, file=sys.stderr, end="")
                 aida_refuse(root, report, "fixture-roster-allow-seat-refused")
         block = fixture_role_enter(aida, repo, env, root, report, "advisor")
-        write_json(root / "aida-state.json", {"report": report, "aida": str(aida), "timeout": args.timeout})
+        state = {"report": report, "aida": str(aida), "timeout": args.timeout}
+        if args.vendor == "agy":
+            state["credential_source"] = str(credential_home / runtime["relative"] / runtime["credential"])
+            (authority / runtime["relative"]).mkdir(parents=True, mode=0o700)
+        write_json(root / "aida-state.json", state)
         script = continuation_script(block, root, "--aida-setup")
         # Use the production eval channel including key adoption in the same
         # terminal session. Never synthesize a TTY or clear managed identity.
@@ -862,6 +926,61 @@ def setup_aida(root):
         raise
 
 
+# Host-written evidence is separate from inherited vendor stderr.
+# trace:TASK-3048 | ai:codex
+def host_egress_evidence(root, report):
+    """Only the host launcher writes this file after reaping the vendor."""
+    if report["vendor"] != "agy":
+        return []
+    try:
+        hosts = json.loads((root / "host-egress.json").read_text())
+    except (OSError, ValueError) as error:
+        raise ValueError("host-egress-evidence-unavailable") from error
+    approved = report["runtime_policy"]["auth_hosts"]
+    if not isinstance(hosts, list) or any(not isinstance(h, str) or h not in approved for h in hosts):
+        raise ValueError("host-egress-evidence-invalid")
+    return sorted(set(hosts))
+
+
+# Only the AIDA-boundary evidence can ever supply this signal. Unknown checks
+# (including unmeasured lifecycle controls) continue to refuse whole-lane credit.
+# This report cannot change the Rust production-admission gate.
+# trace:TASK-3048 | ai:codex
+def aida_whole_lane_pass(report):
+    return bool(report.get("boundary") == "aida" and report.get("shared_boundary_credit")
+                and not report.get("unsupported_reason")
+                and set(report.get("checks", {})) == {"C0", "C1", "C2", "C3", "C4"}
+                and all(row.get("status") == "pass" for row in report["checks"].values()))
+
+
+# Keep vendor propagation testable independently of expensive fixture setup.
+# trace:TASK-3048 | ai:codex
+def queue_work_argv(aida, spec, vendor, workspace):
+    return [aida, "queue", "work", spec, "--role", "implementer", "--vendor", vendor,
+            "--no-human=both", "--sandbox", "--no-pull", "--base", "main",
+            "--branch", "probe", "--path", str(workspace)]
+
+
+# Match Rust's shell_quote_diagnostic byte-for-byte, including non-ASCII paths.
+# trace:TASK-3048 | ai:codex
+def diagnostic_invocation(runner, manifest):
+    def quote(value):
+        value = str(value)
+        if value and re.fullmatch(r"[a-zA-Z0-9_@%+=:,./-]+", value):
+            return value
+        return "'" + value.replace("'", "'\"'\"'") + "'"
+    return "/usr/bin/python3 " + quote(runner) + " --await-payload " + quote(manifest)
+
+
+def aida_fixture_argv(aida, spec, vendor, workspace, credential=None):
+    if vendor == "agy":
+        if not credential:
+            raise ValueError("fixture-agy-credential-source-missing")
+        return [aida, "config", "permissions", "conformance-launch", "--fixture-root",
+                str(workspace.parent), "--credential", credential]
+    return queue_work_argv(aida, spec, vendor, workspace)
+
+
 # trace:BUG-2465 | ai:codex
 def continue_aida(root):
     state = json.loads((root / "aida-state.json").read_text())
@@ -889,7 +1008,12 @@ def continue_aida(root):
         shutil.copyfile(__file__, runner)
         runner.chmod(0o444)
         manifest = payload_dir / "manifest.json"
-        invocation = shlex.join([sys.executable, str(runner), "--await-payload", str(manifest)])
+        if report["vendor"] == "agy":
+            invocation = diagnostic_invocation(runner, manifest)
+            fixture_command(["git", "worktree", "add", "-b", "probe", str(workspace), "main"],
+                            repo, env, report, "diagnostic-worktree")
+        else:
+            invocation = shlex.join([sys.executable, str(runner), "--await-payload", str(manifest)])
         observed = {}
         def ready():
             if observed or not (workspace / ".git").is_file():
@@ -919,9 +1043,7 @@ def continue_aida(root):
             temporary.chmod(0o444)
             temporary.replace(manifest)
             observed["payload_hashes"] = (digest(runner), digest(manifest))
-        argv = [aida, "queue", "work", spec, "--role", "implementer", "--vendor", "codex",
-                "--no-human=both", "--sandbox", "--no-pull", "--base", "main",
-                "--branch", "probe", "--path", str(workspace)]
+        argv = aida_fixture_argv(aida, spec, report["vendor"], workspace, state.get("credential_source"))
         write_json(root / "argv.json", argv)
         # A new process group permits bounded cleanup while retaining the
         # operator's terminal session to which the production grant is bound.
@@ -931,7 +1053,9 @@ def continue_aida(root):
         if not observed:
             raise ValueError("fixture-production-launch-not-accepted: inspect stdout.jsonl and stderr.txt")
         results = None
-        for log in (repo / ".aida/headless-logs").glob("*.jsonl"):
+        logs = ([root / "stdout.jsonl"] if report["vendor"] == "agy" else
+                (repo / ".aida/headless-logs").glob("*.jsonl"))
+        for log in logs:
             results = next(terminal_receipts(log, invocation), None)
             if results is not None:
                 break
@@ -964,11 +1088,14 @@ def continue_aida(root):
                       parent_receipts=parent_receipts, vendor_receipts=network.receipts,
                       payload_protection="production boundary read-only parent outside workspace",
                       unsupported_reason=None)
-        report["production_launcher_credit"] = bool(report["containment_receipt_sha256"] and results and integrity)
+        report["shared_boundary_credit"] = bool(report["containment_receipt_sha256"] and results and integrity)
+        report["production_launcher_credit"] = report["shared_boundary_credit"] and report["vendor"] != "agy"
+        report["observed_egress_hosts"] = host_egress_evidence(root, report)
+        report["production_admission"] = "closed" if report["vendor"] == "agy" else "unchanged"
+        report["whole_lane_pass"] = aida_whole_lane_pass(report)
         if not report["containment_receipt_sha256"]:
             aida_refuse(root, report, "production-containment-receipt-unavailable")
-        write_json(root / "report.json", report)
-        print(json.dumps({"report": str(root / "report.json"), "checks": {k: v["status"] for k, v in checks.items()}, "whole_lane_pass": False}), flush=True)
+        finish_run(root, report, list((repo / ".aida/headless-logs").glob("*.jsonl")))
     except (KeyboardInterrupt, ValueError, OSError, subprocess.SubprocessError) as error:
         aida_refuse(root, report, "harness-interrupted: SIGINT"
                         if isinstance(error, KeyboardInterrupt) else str(error))
@@ -1131,8 +1258,7 @@ def run(args):
                   "whole_lane_pass": False, "production_launcher_credit": False,
                   "unsupported_reason": unsupported,
                   "agy_posture": "aida outer-only (native_layer=none); applied ContainmentReceipt required" if args.vendor == "agy" else None}
-        write_json(root / "report.json", report)
-        print(json.dumps({"report": str(root / "report.json"), "checks": {k: v["status"] for k, v in checks.items()}, "whole_lane_pass": False}), flush=True)
+        finish_run(root, report, [root / "stdout.jsonl"])
     finally:
         network.close()
 
