@@ -4739,3 +4739,40 @@ fn retired_steal_refuses_rework_before_store_or_ruling_mutation() {
     );
     assert!(!root.exists());
 }
+
+// trace:BUG-2500 | ai:codex
+#[test]
+fn bug_2500_waiting_pickup_checks_every_member_and_preserves_exemptions() {
+    let _env = crate::test_env::EnvVarsGuard::apply(&[("AIDA_CONTAINED", None)]);
+    let tmp = tempfile::tempdir().unwrap();
+    let plan = plan_with(
+        QueueWorkMode::Cluster,
+        "EPIC-1",
+        vec![
+            resolved("BUG-1", entry(Uuid::new_v4(), Some("implementer"), None)),
+            resolved("BUG-2500", entry(Uuid::new_v4(), Some("implementer"), None)),
+        ],
+    );
+    crate::gate::review_verdict::record_verdict(
+        tmp.path(),
+        "BUG-2500",
+        Some("waiting"),
+        Some("aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"),
+        None,
+        Some("Host: operator must supply probe evidence; resume with a fresh review"),
+        &[],
+        "reviewer",
+    )
+    .unwrap();
+    assert!(refuse_waiting_pickup(tmp.path(), &plan, "implementer", false, false, false).is_err());
+    for (role, listing, plan_only, guided) in [
+        ("reviewer", false, false, false),
+        ("implementer", true, false, false),
+        ("implementer", false, true, false),
+        ("implementer", false, false, true),
+    ] {
+        assert!(refuse_waiting_pickup(tmp.path(), &plan, role, listing, plan_only, guided).is_ok());
+    }
+    assert!(!tmp.path().join(".aida/queue").exists());
+    assert!(!tmp.path().join(".aida/merge-holds").exists());
+}

@@ -2435,6 +2435,64 @@ pub(crate) fn resolve_rework_findings(
     spec_id: &str,
     open_change: Option<&str>,
 ) -> Result<Option<String>, String> {
+    resolve_rework_review(project_root, display_id, spec_id, open_change).map_err(|error| {
+        match error {
+            ReworkReviewError::Waiting(why) | ReworkReviewError::Unavailable(why) => why,
+        }
+    })
+}
+
+// trace:BUG-2500 | ai:codex
+pub(crate) fn refuse_waiting_review(
+    root: &Path,
+    display: &str,
+    spec: &str,
+    change: Option<&str>,
+) -> Result<(), String> {
+    match resolve_rework_review(root, display, spec, change) {
+        Err(ReworkReviewError::Waiting(why)) => Err(why),
+        // Existing call sites retain their own unavailable-evidence policy.
+        _ => Ok(()),
+    }
+}
+
+// trace:BUG-2500 | ai:codex
+pub(crate) fn refuse_waiting_pickup(
+    root: &Path,
+    plan: &QueueWorkPlan,
+    role: &str,
+    list_sessions: bool,
+    plan_only: bool,
+    guided: bool,
+) -> Result<(), String> {
+    if role.eq_ignore_ascii_case("reviewer") || list_sessions || plan_only || guided {
+        return Ok(());
+    }
+    for entry in &plan.entries {
+        let display = if plan.entries.len() == 1 {
+            &plan.anchor_display
+        } else {
+            &entry.spec_id
+        };
+        let open = spec_open_change_key(root, &[display, &entry.spec_id]);
+        refuse_waiting_review(root, display, &entry.spec_id, open.as_deref())?;
+    }
+    Ok(())
+}
+
+// trace:BUG-2500 | ai:codex
+#[derive(Debug)]
+enum ReworkReviewError {
+    Waiting(String),
+    Unavailable(String),
+}
+
+fn resolve_rework_review(
+    project_root: &Path,
+    display_id: &str,
+    spec_id: &str,
+    open_change: Option<&str>,
+) -> Result<Option<String>, ReworkReviewError> {
     use crate::gate::review_alias::{select_verdict, spec_labels, AliasSelection};
     use crate::gate::review_verdict::RecordedVerdict;
     let ids = [display_id, spec_id];
@@ -2459,9 +2517,9 @@ pub(crate) fn resolve_rework_findings(
                     .unwrap_or_default()
                     .to_string();
                 if unavailable.fail_closed().is_some() {
-                    return Err(format!(
+                    return Err(ReworkReviewError::Unavailable(format!(
                         "a request-changes review of {shown} exists but its current review cannot be selected ({reason})"
-                    ));
+                    )));
                 }
                 eprintln!(
                     "warning: no review findings imported for {shown}: its current review cannot be selected ({reason})"
@@ -2482,9 +2540,9 @@ pub(crate) fn resolve_rework_findings(
                 match crate::gate::review_verdict::parse_recorded_verdict(&current.body) {
                     Some(v) => Some((key.to_string(), v)),
                     None => {
-                        return Err(format!(
+                        return Err(ReworkReviewError::Unavailable(format!(
                             "the review recorded for {key} (the open pull request of {shown}) cannot be read"
-                        ))
+                        )))
                     }
                 }
             }
@@ -2507,7 +2565,7 @@ pub(crate) fn resolve_rework_findings(
                 // The spec's own record answers, as before BUG-2430.
                 bound.clear();
             } else if bound.len() > 1 {
-                return Err(format!(
+                return Err(ReworkReviewError::Unavailable(format!(
                     "{} changes each hold a current refusal for {shown} ({})",
                     bound.len(),
                     bound
@@ -2515,7 +2573,7 @@ pub(crate) fn resolve_rework_findings(
                         .map(|(k, _)| k.as_str())
                         .collect::<Vec<_>>()
                         .join(", ")
-                ));
+                )));
             }
             bound.pop()
         }
@@ -2540,9 +2598,10 @@ pub(crate) fn resolve_rework_findings(
         crate::review_verdict_display::rework_findings_comment(&shown, &shown, v)
     };
     // trace:BUG-2500 | ai:codex
-    let refuse_wait = |v: &RecordedVerdict| -> Result<(), String> {
+    let refuse_wait = |v: &RecordedVerdict| -> Result<(), ReworkReviewError> {
         if v.kind == crate::gate::review_verdict::VerdictKind::Waiting && !v.is_closed() {
-            return Err(format!("{shown}: WAITING — {}. Resume with a fresh review at the current head; no implementer rework is queued.", v.summary.as_deref().unwrap_or("external evidence required")));
+            let why = format!("{shown}: WAITING — {}. Resume with a fresh review at the current head; no implementer rework is queued.", v.summary.as_deref().unwrap_or("external evidence required"));
+            return Err(ReworkReviewError::Waiting(why));
         }
         Ok(())
     };
@@ -3831,21 +3890,15 @@ pub(crate) fn handle_queue_work(
     let (role, role_origin, warnings) = infer_queue_work_role(&plan, role_override);
     let project_root = find_main_worktree_root()?;
     // trace:BUG-2500 | ai:codex — admission precedes calibration and setup.
-    if !role.eq_ignore_ascii_case("reviewer") && !list_sessions {
-        let spec_id = plan
-            .entries
-            .first()
-            .map(|e| e.spec_id.as_str())
-            .unwrap_or(&plan.anchor_display);
-        let open = spec_open_change_key(&project_root, &[&plan.anchor_display, spec_id]);
-        resolve_rework_findings(
-            &project_root,
-            &plan.anchor_display,
-            spec_id,
-            open.as_deref(),
-        )
-        .map_err(|why| anyhow::anyhow!(why))?;
-    }
+    refuse_waiting_pickup(
+        &project_root,
+        &plan,
+        &role,
+        list_sessions,
+        plan_only,
+        guided,
+    )
+    .map_err(|why| anyhow::anyhow!(why))?;
     // trace:BUG-2451 | ai:codex — session listing allocates nothing.
     let rework_pr = if list_sessions {
         None

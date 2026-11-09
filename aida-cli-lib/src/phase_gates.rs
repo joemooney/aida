@@ -480,10 +480,20 @@ pub(crate) fn sibling_verdict_sweep_for_phase3(
             let candidate = read_verdict_file_for_head(path, None)?;
             match candidate {
                 auto_complete::ReviewerOutcome::Verdict(
-                    auto_complete::Verdict::RequestChanges
-                    | auto_complete::Verdict::Rejected
-                    | auto_complete::Verdict::Waiting,
+                    auto_complete::Verdict::RequestChanges | auto_complete::Verdict::Rejected,
                 ) => blocking = Some(candidate),
+                // trace:BUG-2500 | ai:codex — waits cannot hide substantive findings.
+                auto_complete::ReviewerOutcome::Verdict(auto_complete::Verdict::Waiting)
+                    if !matches!(
+                        blocking,
+                        Some(auto_complete::ReviewerOutcome::Verdict(
+                            auto_complete::Verdict::RequestChanges
+                                | auto_complete::Verdict::Rejected
+                        ))
+                    ) =>
+                {
+                    blocking = Some(candidate);
+                }
                 auto_complete::ReviewerOutcome::EscalatedToHuman { .. } if blocking.is_none() => {
                     blocking = Some(candidate);
                 }

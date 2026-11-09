@@ -421,12 +421,13 @@ pub fn corpus_hold_at_head(
         // A blocker recorded against this exact head. `reconcile` only
         // accumulates recordings whose sha matches, so a verdict left behind at
         // an older head reaches `Ok(None)` below and holds nothing.
-        Ok(Some(kind)) if kind.blocks_done() => {
+        // trace:BUG-2500 | ai:codex — waiting is not a derived Rework hold.
+        Ok(Some(kind)) if kind.requires_changes() => {
             let blocking: Vec<RecordedVerdict> = live
                 .iter()
                 .filter_map(|body| parse_recorded_verdict(body))
                 .filter(|v| {
-                    v.kind.blocks_done()
+                    v.kind.requires_changes()
                         && v.reviewed_sha
                             .as_deref()
                             .is_some_and(|sha| same_reviewed_sha(sha, current_sha))
@@ -2888,7 +2889,8 @@ pub fn close_verdict_on_merge(
     let Some(raw_verdict) = obj.get("verdict").and_then(|v| v.as_str()) else {
         return Ok(false);
     };
-    if !VerdictKind::parse(raw_verdict).requires_changes() {
+    // trace:BUG-2500 | ai:codex — merge closure includes external waits.
+    if !VerdictKind::parse(raw_verdict).blocks_done() {
         return Ok(false);
     }
     let already_closed = obj
@@ -3060,9 +3062,6 @@ pub fn review_actionability(
     let Some(v) = verdict else {
         return ReviewActionability::NeedsReview;
     };
-    if v.kind == VerdictKind::Waiting {
-        return ReviewActionability::Waiting;
-    }
     // Closure and parsed approval labels cannot confer review authority.
     // Keep closed refusal lifecycle handling below, without laundering an
     // unattested approval through that shortcut.
@@ -3093,7 +3092,10 @@ pub fn review_actionability(
     if relation != TipRelation::AtReviewedSha {
         return ReviewActionability::NeedsReview;
     }
-    if v.kind.blocks_done() {
+    // trace:BUG-2500 | ai:codex — a moved head needs ordinary review.
+    if v.kind == VerdictKind::Waiting {
+        ReviewActionability::Waiting
+    } else if v.kind.blocks_done() {
         ReviewActionability::AwaitingRework
     } else {
         ReviewActionability::Resolved
@@ -3131,6 +3133,9 @@ pub fn queue_done_verdict_gate(
     let Some(v) = verdict else {
         return VerdictGate::Proceed;
     };
+    if v.is_closed() && v.kind == VerdictKind::Waiting {
+        return VerdictGate::Proceed;
+    }
     // trace:BUG-2500 | ai:codex
     if v.kind == VerdictKind::Waiting {
         return VerdictGate::Refuse(vec![
