@@ -640,7 +640,7 @@ impl Fixture {
         // acknowledges its model-free preflight separately from the child
         // invocation whose exit/publication this fixture observes.
         // trace:STORY-2475 | ai:codex
-        let preflight = if mode == 2 && vendor == crate::session::HeadlessVendor::Codex {
+        let preflight = if mode >= 2 && vendor == crate::session::HeadlessVendor::Codex {
             "for arg in \"$@\"; do\n\
              if [ \"$arg\" = sandbox ]; then\n\
              test -n \"$AIDA_SESSION_GRANT\" || exit 42\n\
@@ -670,7 +670,7 @@ impl Fixture {
             ("AIDA_TEE_HEADLESS", Some("0")),
             (crate::gate::seat_authority::GRANT_ENV, None),
         ]);
-        if mode == 2 {
+        if mode >= 2 {
             let subject = "story-2475-fixture";
             env.set_key("AIDA_USER", subject);
             env.set_key("AIDA_SESSION_ROLE", "advisor");
@@ -681,6 +681,173 @@ impl Fixture {
                 &["implementer"],
             );
             env.set_key(crate::gate::seat_authority::GRANT_ENV, parent);
+        }
+        if mode >= 3 {
+            use crate::auto_complete::{self as ac, PhaseDriver};
+            let lease_path = crate::lease_path(&self.project, &self.lease);
+            let mut lease = std::fs::read_to_string(&lease_path)?;
+            lease.push_str("vendor_session_id = \"fixture-thread\"\n");
+            std::fs::write(&lease_path, lease)?;
+            let end = self.path("end-session");
+            crate::test_exec::write_executable(
+                &end,
+                format!("#!/bin/sh\nrm -f '{}'\n", lease_path.display()),
+            );
+            let mut real = crate::RealPhaseDriver::new(
+                self.project.clone(),
+                "STORY-9".into(),
+                "test".into(),
+                None,
+                true,
+                None,
+                crate::AutonomyMode::Default,
+                "token".into(),
+                false,
+                false,
+                false,
+                false,
+                ac::LifecycleSkip::default(),
+                ac::AutoCompleteVariant::Full,
+            );
+            real.aida_exe = end;
+            real.contained = contained;
+            real.implementer_session = Some("019e0000-0000-7000-8000-000000000044".into());
+            real.implementer_vendor = Some(vendor);
+            real.implementer_lease = Some(self.lease.clone());
+            real.implementer_worktree = Some(self.worktree.clone());
+            real.branch = Some("claude/story-9".into());
+            let mut forge = crate::forge::fake::RecordingForge::new();
+            forge.open_for_branch = match mode {
+                4 => crate::forge::ChangeLookup::Found(crate::forge::ChangeRef {
+                    id: 4242,
+                    url: "https://example.invalid/4242".into(),
+                    branch: "claude/story-9".into(),
+                    base: "main".into(),
+                    title: None,
+                }),
+                5 => crate::forge::ChangeLookup::Unreachable("network unavailable".into()),
+                10 => crate::forge::ChangeLookup::CliFailed("malformed response".into()),
+                _ => crate::forge::ChangeLookup::NoChange,
+            };
+            // Non-receipt resumes retain their pre-existing failure classification.
+            // trace:TASK-3608 | ai:codex
+            if mode == 11 {
+                forge.open_for_spec =
+                    crate::forge::ChangeLookup::CliFailed("malformed response".into());
+            }
+            if mode == 12 {
+                real.branch = None;
+            }
+            real.forge_factory = Some(forge.factory());
+            // Exercise the real advisor-resume method inside final orchestration.
+            // Only the later CI/review/merge phases are outside this fixture.
+            struct ResumeDriver(crate::RealPhaseDriver);
+            impl PhaseDriver for ResumeDriver {
+                fn run_implementer(&mut self) -> Result<ac::ImplementerOutcome, ac::PhaseFailure> {
+                    Ok(ac::ImplementerOutcome::Punted {
+                        reason: "decision".into(),
+                    })
+                }
+                fn run_advisor(&mut self) -> Result<ac::AdvisorOutcome, ac::PhaseFailure> {
+                    Ok(ac::AdvisorOutcome::Resolved {
+                        answer: "continue".into(),
+                        reasoning: "test decision".into(),
+                    })
+                }
+                fn resume_implementer(
+                    &mut self,
+                    answer: &str,
+                ) -> Result<ac::ImplementerOutcome, ac::PhaseFailure> {
+                    self.0.resume_implementer(answer)
+                }
+                fn finish_ci(&mut self) -> Result<(), ac::PhaseFailure> {
+                    Ok(())
+                }
+                fn run_reviewer(&mut self) -> Result<ac::ReviewerOutcome, ac::PhaseFailure> {
+                    panic!("through-CI only")
+                }
+                fn merge(&mut self) -> Result<(), ac::PhaseFailure> {
+                    panic!("through-CI only")
+                }
+                fn pull(&mut self) -> Result<(), ac::PhaseFailure> {
+                    panic!("through-CI only")
+                }
+                fn build(&mut self) -> Result<(), ac::PhaseFailure> {
+                    panic!("through-CI only")
+                }
+                fn hint_context(&self) -> ac::HintContext {
+                    self.0.hint_context()
+                }
+            }
+            let mut d = ResumeDriver(real);
+            let result = ac::orchestrate(
+                &mut d,
+                "STORY-9",
+                ac::AutoCompleteVariant::ThroughCi,
+                true,
+                ac::EscalateMode::Blocks,
+            );
+            match mode {
+                3 => {
+                    assert!(result.no_change, "{result:?}");
+                    // Follow the real resumed result through drain persistence.
+                    // trace:TASK-3608 | ai:codex
+                    crate::drain_state::DrainState::new_single("STORY-9", "test", false)
+                        .write(&self.project)
+                        .unwrap();
+                    crate::drain_state::set_member_result(&self.project, "STORY-9", &result, None);
+                    let persisted = crate::drain_state::DrainState::read(&self.project).unwrap();
+                    assert_eq!(
+                        persisted.members[0].state,
+                        crate::drain_state::STATE_NO_CHANGE
+                    );
+                    assert!(persisted.members[0].finished_at.is_some());
+
+                    assert_eq!(result.exit_code, 0);
+                    assert!(result.shipped_spec_id.is_none());
+                    assert!(
+                        !lease_path.exists(),
+                        "no-change releases the seat immediately"
+                    );
+                }
+                4 => {
+                    assert!(!result.no_change, "{result:?}");
+                    assert!(result.failure.is_none(), "{result:?}");
+                    assert_eq!(d.0.pr_number, Some(4242));
+                }
+                5 | 10 => {
+                    assert!(result.inconclusive_reason.is_some(), "{result:?}");
+                    assert!(!result.no_change);
+                }
+                11 | 12 => {
+                    let failure = result.failure.as_ref().expect("ordinary resume failure");
+                    assert_eq!(
+                        failure.kind,
+                        if mode == 11 {
+                            ac::FailureKind::Failed
+                        } else {
+                            ac::FailureKind::NoPr
+                        },
+                        "{result:?}"
+                    );
+                    assert!(!result.no_change);
+                    assert!(result.inconclusive_reason.is_none());
+                }
+                6 | 7 => {
+                    let failure = result.failure.as_ref().expect("failed publication/child");
+                    assert_eq!(failure.kind, ac::FailureKind::Failed, "{result:?}");
+                    assert!(failure.kind.is_shelvable());
+                    assert!(!result.no_change);
+                }
+                8 => assert!(result.punt_reason.is_some(), "{result:?}"),
+                9 => assert!(result.held_reason.is_some(), "{result:?}"),
+                _ => unreachable!(),
+            }
+            assert!(!crate::ship_from_seat::take_no_change(
+                &self.project,
+                &self.lease
+            ));
+            return Ok(());
         }
         let grant = crate::gate::seat_authority::HeadlessChildGrant::Baseline {
             cause: "test".into(),
@@ -704,6 +871,7 @@ impl Fixture {
                     "implementer",
                     &grant,
                     Some((&self.worktree, "claude/story-9")),
+                    true,
                 )?
             } else {
                 crate::queue_cmd::run_queue_resume_to_exit(
@@ -720,6 +888,7 @@ impl Fixture {
                     contained,
                     "implementer",
                     (&self.project, "STORY-9", &self.lease),
+                    true,
                 )?
             };
             anyhow::ensure!(status.success(), "mock child failed");
@@ -1115,7 +1284,7 @@ fn story_2475_all_codex_lane_exits_publish_after_child_exit() {
             // Reproduce the CI refusal: resumes validate policy in the seat,
             // so an unrelated empty repository must not inherit the host opt-in.
             // trace:STORY-2475 | ai:codex
-            if mode == 2 && vendor == HeadlessVendor::Codex && contained {
+            if mode >= 2 && vendor == HeadlessVendor::Codex && contained {
                 let error = fx
                     .run_mode(&child, vendor, contained, mode)
                     .expect_err("an unprovisioned seat has no trusted native policy");
@@ -1290,4 +1459,96 @@ printf '%s\n' '{"spec":"STORY-9","branch":"claude/story-9","reason":"new hold"}'
         &aida_core::RequirementStatus::Done,
         true,
     ));
+}
+
+// Real resume routing, child launch and receipt classification through the
+// advisor branch of orchestrate; later phases stop at the through-CI boundary.
+// trace:TASK-3608 | ai:codex
+#[cfg(target_os = "linux")]
+#[test]
+fn task_3608_real_resume_receipts_precedence_and_forge_errors() {
+    if crate::test_env::run_path_isolated_test() {
+        return;
+    }
+    use crate::ship_from_seat::{
+        record_queue_exit, with_post_exit_step, PostExitCommit, QueueExitOutcome,
+    };
+    for mode in 3..=12 {
+        let fx = Fixture::new("task3608resume");
+        fx.git(&fx.project, &["init", "-q", "-b", "main"]);
+        std::fs::write(
+            fx.project.join(".aida/config.toml"),
+            "[forge]\nprovider = \"pure-git\"\n[contained.vendors]\ncodex = \"native\"\n",
+        )
+        .unwrap();
+        fx.git(&fx.project, &["add", ".aida/config.toml"]);
+        fx.git(&fx.project, &["commit", "-qm", "native policy"]);
+        fx.git(
+            &fx.project,
+            &["update-ref", "refs/remotes/origin/main", "HEAD"],
+        );
+        std::fs::remove_dir_all(&fx.worktree).unwrap();
+        fx.git(
+            &fx.project,
+            &[
+                "clone",
+                "-q",
+                fx.project.to_str().unwrap(),
+                fx.worktree.to_str().unwrap(),
+            ],
+        );
+        fx.git(&fx.worktree, &["checkout", "-qb", "claude/story-9"]);
+        let _pin = crate::seat_clone::LauncherMainPin::new(&fx.project);
+        let main = fx.project.clone();
+        let lease = fx.lease.clone();
+        let marker = fx.path("child-exited");
+        let expected_marker = marker.clone();
+        let child = format!(
+            "touch '{}'\nexit {}",
+            marker.display(),
+            if mode == 7 { 1 } else { 0 }
+        );
+        with_post_exit_step(
+            Box::new(move |_, _, _, _, _| {
+                assert!(expected_marker.exists());
+                if mode == 6 {
+                    return PostExitCommit::Failed("bundle export refused".into());
+                }
+                // Inject the host no-change observation using the production writer,
+                // leaving the real queue-resume route to deliver it to the driver.
+                if mode < 11 {
+                    record_queue_exit(&main, &lease, true, true, || Ok(QueueExitOutcome::NoChange))
+                        .unwrap();
+                }
+                if mode == 8 {
+                    crate::punt::write_signal(
+                        &crate::punt::signal_path(&main, "STORY-9"),
+                        &crate::punt::PuntSignal {
+                            spec: "STORY-9".into(),
+                            category: aida_core::PuntCategory::DesignFork,
+                            detail: "decision".into(),
+                            lean: None,
+                        },
+                    )
+                    .unwrap();
+                }
+                if mode == 9 {
+                    crate::punt::write_hold_signal(
+                        &crate::punt::hold_signal_path(&main, "STORY-9"),
+                        &crate::punt::HoldSignal {
+                            spec: "STORY-9".into(),
+                            branch: "claude/story-9".into(),
+                            reason: Some("manual gate".into()),
+                            spec_key: None,
+                        },
+                    )
+                    .unwrap();
+                }
+                PostExitCommit::NotASeat
+            }),
+            || fx.run_mode(&child, crate::session::HeadlessVendor::Codex, true, mode),
+        )
+        .unwrap();
+        assert!(marker.exists());
+    }
 }
