@@ -9,12 +9,12 @@ description: |-
 
   PR: #3671
   Reviewed sha: ad74c5720cbcbae3b3b4f4bf3ca48471829e4a9a
-status: Draft
+status: Superseded
 priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-11-08T22:02:35.274987209Z
-modified_at: 2026-11-08T22:02:35.274987209Z
+modified_at: 2026-11-09T06:50:07.753521618Z
 req_type: Task
 tags:
 - carried-from:STORY-1486
@@ -26,6 +26,15 @@ history:
   author: joe
   timestamp: 2026-11-08T22:46:15.373602460Z
   changes: []
+- id: 01a1bf12-4409-7800-8b53-cdbae3dd93ed
+  author: joe
+  timestamp: 2026-11-09T06:50:07.753518226Z
+  session_id: 01a1beff-fc3b-78e2-93e2-9b0c283b0339
+  harness_version: 2.1.319 (Claude Code)
+  changes:
+  - field_name: status
+    old_value: Draft
+    new_value: Superseded
 filed_at:
   code_sha: 65d5a89946c24177a8c3a0d6d076fcede9be9107
   branch: main
