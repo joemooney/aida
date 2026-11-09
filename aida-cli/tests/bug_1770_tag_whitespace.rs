@@ -197,6 +197,67 @@ fn bug_2505_review_closeout_tag_creates_a_persisted_spec() {
         assert_eq!(stored_tags(&fixture, &id), expected);
         assert_eq!(stored_tag_yaml_items(&fixture, &id).len(), expected.len());
     }
+
+    // These two alternative argv shapes reproduce a refusal, not a failure
+    // caused by the date-like tag. Keep the diagnostics visible and prove
+    // neither refusal writes an object. The original filing's argv is unknown,
+    // so this characterizes possible causes without claiming to fix the report.
+    for (tag_args, exit_code, diagnostic) in [
+        (
+            vec![
+                "--tags",
+                "area:orchestration from:2026-11-08-review-closeout",
+            ],
+            1,
+            "contains whitespace",
+        ),
+        (
+            vec![
+                "--tags",
+                "area:orchestration",
+                "--tags",
+                "from:2026-11-08-review-closeout",
+            ],
+            2,
+            "cannot be used multiple times",
+        ),
+    ] {
+        let storage = Storage::new(fixture.repo.join(".aida-store"));
+        let before = storage.load().unwrap().requirements.len();
+        let mut args = vec![
+            "add",
+            "--title",
+            "BUG-2505 refused tag fixture",
+            "--type",
+            "task",
+            "--status",
+            "approved",
+        ];
+        args.extend(tag_args);
+        let result = aida(&fixture, &args);
+        let stdout = String::from_utf8_lossy(&result.stdout);
+        let stderr = String::from_utf8_lossy(&result.stderr);
+        assert_eq!(
+            result.status.code(),
+            Some(exit_code),
+            "unexpected exit for {args:?}: stdout={stdout}\nstderr={stderr}"
+        );
+        // Application errors use the non-TTY structured stdout renderer;
+        // Clap rejects repeated flags earlier and writes its error to stderr.
+        // A caller filtering stdout can therefore hide the whitespace refusal.
+        if exit_code == 1 {
+            assert!(stdout.contains(diagnostic), "stdout={stdout}");
+            assert!(stderr.is_empty(), "stderr={stderr}");
+        } else {
+            assert!(stderr.contains(diagnostic), "stderr={stderr}");
+            assert!(stdout.is_empty(), "stdout={stdout}");
+        }
+        assert_eq!(
+            storage.load().unwrap().requirements.len(),
+            before,
+            "refused argv must not create a spec: {args:?}"
+        );
+    }
 }
 
 /// AC1 + AC6: a comma-separated argument yields N separate YAML list items, a
