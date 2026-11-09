@@ -887,6 +887,14 @@ impl Intake {
     }
 
     pub(super) fn files(&self) -> Result<BTreeMap<String, Vec<u8>>> {
+        let files = self.files_without_display_refresh()?;
+        self.refresh_ci_skipped(&files);
+        Ok(files)
+    }
+
+    // Process reports and refreshes the same inventory once, after loading it.
+    // trace:TASK-3452 | ai:codex
+    pub(super) fn files_without_display_refresh(&self) -> Result<BTreeMap<String, Vec<u8>>> {
         let mut files = BTreeMap::new();
         for branch in self.profile.branches() {
             if let Some(tip) = self.branch_tip(branch)? {
@@ -901,6 +909,16 @@ impl Intake {
             }
         }
         Ok(files)
+    }
+
+    // Reuse admission evidence; refreshing display data adds no remote probes.
+    // trace:TASK-3452 | ai:codex
+    pub(super) fn refresh_ci_skipped(&self, files: &BTreeMap<String, Vec<u8>>) {
+        if let Some(snapshot) = self.ci_snapshot.borrow().as_ref() {
+            if let Err(error) = crate::ci_relay::record_skipped(self, files, &snapshot.requests) {
+                eprintln!("warning: could not refresh CI skipped-result display: {error}");
+            }
+        }
     }
 
     /// Append one immutable file and publish it before the accepted branch
