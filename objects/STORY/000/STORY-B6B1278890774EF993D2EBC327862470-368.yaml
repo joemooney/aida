@@ -29,7 +29,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-04T02:34:20.173245Z
-modified_at: 2026-11-09T11:52:29.937229346Z
+modified_at: 2026-11-09T12:19:58.238444995Z
 req_type: Story
 relationships:
 - rel_type:
@@ -868,6 +868,21 @@ comments:
   modified_at: 2026-11-09T11:46:24.116831Z
   session_id: 01a1c016b2da
   harness_version: codex-cli 0.167.0
+- id: 01a1c040-3e30-76a2-b46d-8496baf2c5e9
+  author: joe
+  content: |-
+    REVIEW FINDINGS TO ADDRESS (PR #3639):
+    Verdict: CHANGES REQUESTED
+    Reviewed commit: 438f65c95af9
+    Recorded: 2026-11-09T11:52:28.972774354+00:00
+    Findings:
+    1. minor (regression): the unconditional None arm of the with_context at aida-cli-lib/src/session_misc.rs:1078 wraps every plain 'session handoff --write' failure in 'writing handoff note'. Agent mode renders only the first line of the Debug-formatted error (agent_error_summary_help, aida-cli-lib/src/lib_part1.rs:661-667), so an over-cap note now reports 'writing handoff note' and loses 'handoff note is N bytes; the cap is ...', the instruction an agent needs to shrink it. Add context only when a condition is present, and add a test that a non-conditional over-cap handoff still leads with the cap message.
+    2. minor (regression): the same masking at aida-cli-lib/src/findings_gate.rs:1393. A plain 'findings recur' with no --until now reports 'updating recurrence for <id>' as the agent-mode summary in place of the store error. Apply recurrence_error only when until is Some.
+    3. minor (incomplete-fix): 'findings recur --until' does not auto-push a saved deferral when the later recurrence write fails. The post-dispatch push at aida-cli-lib/src/git_backend_cmd.rs:1623 runs only on success, while session handoff pushes before note I/O for exactly this reason (session_misc.rs:1044-1049). Push after defer_single in handle_findings_recur, or document that the deferral stays local until the next store push in docs/cli/03-work-autonomy.md.
+    4. BLOCKING (CI gate): run 42611723023 had not finished at 438f65c95af9 when this verdict was recorded (gates in progress, 6 jobs queued), so the lib-1 time-budget fix is unproven. The rework push needs a green run at its own head. merge-hold-gate is red by design for this supervised spec and is not an implementer item.
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
+  created_at: 2026-11-09T12:19:58.128833577Z
+  modified_at: 2026-11-09T12:19:58.128833577Z
 history:
 - id: 01a1a468-9c3a-76d2-ab8c-12bf6457966b
   author: joe
