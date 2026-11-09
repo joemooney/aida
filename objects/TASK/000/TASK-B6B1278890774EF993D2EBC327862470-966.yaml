@@ -322,6 +322,22 @@ comments:
   created_at: 2026-11-09 00:38:42.616292+00:00
   modified_at: 2026-11-09 00:38:42.616292+00:00
   session_id: 20abb7c3-8f9b-4a5e-b326-404921f3b450
+- id: 01a1bdc8-6c0c-7a70-92d5-e8437b8f4485
+  author: dirtlab
+  content: 'Addressed latest review findings F17-F19. Regenerated/reviewed the store-writer inventory after the existing main merge and retained only the two missing blocked caller/sink entries (awaiting_skipped and collect_awaiting_report_with_mail_facts), preserving unrelated inventory formatting and policy. Non-Git projects now skip relay-cache lookup silently while existing/damaged Git identities retain diagnostics. CI exact reads load inventory without an early display refresh, then refresh once after verification. Added a non-Git Rust regression and an exact-read warning-count assertion in the history integration tests.
+
+
+    Changed files: aida-cli-lib/src/ci_relay.rs; scripts/store-writers.toml; tests/test_work_ci_relay.py.
+
+
+    Validation: lane cargo test --profile agent -p aida-cli-lib --lib -- ci_relay::tests passed 4 executed tests; lane CLI build passed. Python 33-attempt integration passed (28.369s); warm-history integration passed (32.107s), both against the newly built lane overlay binary. Store-writer ratchet passed (3408 sinks, 293 operation mappings); all 42 inventory tests passed. rustfmt, Python syntax and git diff --check passed. Initial integration invocations used a sandbox-only binary path and failed fixture setup; corrected to the overlay output before successful runs. Optional standalone non-Git CLI probes could not initialize their temporary project, so no CLI-level result is claimed for those; the non-Git library test passed.
+
+
+    Native handoff: three source/test/inventory files remain uncommitted for host publication. No implementation blockers. CI at the eventual published head remains host-side validation; no commit/push/PR/review-record/queue-done was attempted. Codegraph client is unavailable, confirmed with doctor; navigation used rg.'
+  created_at: 2026-11-09 00:49:51.116760+00:00
+  modified_at: 2026-11-09 00:49:51.116760+00:00
+  session_id: 01a1bdbf69d0
+  harness_version: codex-cli 0.167.0
 history:
 - id: 01a1bc6c-f8c6-7083-91af-c24f9a88e846
   author: aida-session-start
