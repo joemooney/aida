@@ -8,10 +8,17 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-09T01:57:49.197822183Z
-modified_at: 2026-11-09T01:58:13.035147210Z
+modified_at: 2026-11-09T02:43:49.101663439Z
 req_type: Story
 tags:
 - area:orchestration
+comments:
+- id: 01a1be30-c2ed-7f73-9f91-ec895c4f11e1
+  author: joe
+  content: 'Sketch (advisor 2026-11-08), for review before implementation. One pure function classify(PrFacts) -> PrState, where PrFacts is open/closed, mergeable, head SHA, verdict and kind at that head, CI result at that head, hold state, lane running. Closed state set: Gone, Conflict, RedCi, NeedsVerdict, CiPendingThenVerdict, NeedsRework, NeedsRuling, ApprovedCiPending, ReadyForTrain. Each state maps to one action and owner. reconcile runs the mechanical actions (update branch, release a re-review, queue rework, enqueue train); idempotency comes from a durable action ledger keyed (pr, head, action), replacing in-memory seen sets. Judgment states only route to a seat. Slices: S1 classify plus aida pr state read-only table, with table-driven tests; S2 ledger and reconcile --dry-run; S3 execute and retire auto-train, auto-rework and review-watch-loop. Open fork: train selection stays in aida pr train, with the reconciler only nominating. Needs advisor signoff by an independent read before S2.'
+  created_at: 2026-11-09T02:43:49.101663439Z
+  modified_at: 2026-11-09T02:43:49.101663439Z
+  session_id: 20abb7c3-8f9b-4a5e-b326-404921f3b450
 history:
 - id: 01a1be07-037f-7533-9b8f-9af4ceb825a2
   author: joe
