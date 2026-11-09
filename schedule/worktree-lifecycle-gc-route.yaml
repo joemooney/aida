@@ -1,0 +1,7 @@
+job: worktree-lifecycle-gc-route
+due_since: 2026-11-09T03:07:38.344500811Z
+due_reason: on CronJobFailed:worktree-lifecycle-gc
+due_failure:
+  trip_id: worktree-lifecycle-gc@2026-11-09T03:04:45.976716334Z
+  job: worktree-lifecycle-gc
+  error: 'exit 127: this aida binary does not support the command of scheduled job ''worktree-lifecycle-gc'': unknown scheduled task command ''worktree gc --fail-on-findings''; valid commands: defer resurface, cache verify, cache refresh --history --if-behind, cache refresh --if-requested, session reap, session hygiene, queue gc, notify check, doctor, doctor check performance --fail-on-findings, fetch --code-only, store compact, store gc, doctor check remote-drift --fail-on-findings, doctor check stale-remote-branches --fail-on-findings, doctor check runaway-seats --fail-on-findings, doctor check disk-headroom --fail-on-findings, doctor check codex-mail-wake --fail-on-findings, doctor check merged-agent-worktrees --fail-on-findings, fleet drive --tick, dispatch tick, docs sweep, doctor check relay-stall --fail-on-findings, doctor check lane-liveness, lane-liveness, doctor check mail-backlog, mail-backlog, remote mirror-sync, shift tick, dev build --if-main-green, remote reconcile --execute'
