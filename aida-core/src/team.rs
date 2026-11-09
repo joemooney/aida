@@ -434,7 +434,8 @@ pub fn set_allowed_seats_cas(
             crate::db::with_store_write_lock(store_root, || -> anyhow::Result<Option<String>> {
                 // Step 1: pull latest (skip first attempt / solo).
                 if attempt > 0 && !local_only {
-                    git_ops::pull_rebase(store_root, "origin", &branch)?;
+                    // trace:BUG-2490 | ai:codex
+                    git_ops::pull_rebase_store_retry(store_root, "origin", &branch)?;
                 }
 
                 // Step 2: load → migrate any stray integer keys to the person key →
@@ -513,7 +514,8 @@ fn update_seats_cas(
         let committed_sha =
             crate::db::with_store_write_lock(store_root, || -> anyhow::Result<Option<String>> {
                 if attempt > 0 && !local_only {
-                    git_ops::pull_rebase(store_root, "origin", &branch)?;
+                    // trace:BUG-2490 | ai:codex
+                    git_ops::pull_rebase_store_retry(store_root, "origin", &branch)?;
                 }
                 // trace:BUG-2209 | ai:claude — merge this member only.
                 let nodes = load_node_roster(store_root);
@@ -582,7 +584,8 @@ pub fn unset_role_cas(store_root: &Path, user_id: &str) -> std::io::Result<bool>
             crate::db::with_store_write_lock(store_root, || -> anyhow::Result<Option<String>> {
                 // Step 1: pull latest (skip first attempt / solo).
                 if attempt > 0 && !local_only {
-                    git_ops::pull_rebase(store_root, "origin", &branch)?;
+                    // trace:BUG-2490 | ai:codex
+                    git_ops::pull_rebase_store_retry(store_root, "origin", &branch)?;
                 }
 
                 // Step 2: load → remove the key. No-op (and no commit) if absent.
