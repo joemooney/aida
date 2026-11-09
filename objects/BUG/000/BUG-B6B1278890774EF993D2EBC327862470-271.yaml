@@ -1,0 +1,20 @@
+id: 01a1be7b-a99d-79f1-998b-15d5e25a9f70
+spec_id: BUG-b6b1278890774ef993d2ebc327862470-271
+agreed_id: BUG-2506
+title: 'dell1 CI runner: launcher parent dir mode 0711 makes the Actions runner exit at start, and rearm.sh re-registers in a tight loop'
+description: 'Found running the STORY-2672 runbook on dell1 2026-11-08. scripts/runner/one-job.sh line 24 creates /var/lib/aida-ci-jobs with mode 0711. The .NET Actions runner needs read on each parent of its work dir and exits: ''Permission to read the directory contents is required for /var/lib/aida-ci-jobs/current and each directory up the hierarchy''. It exits zero-looking, so scripts/runner/rearm.sh immediately generates a new JIT config: 25 launches and 18+ orphan offline registrations in about 25 seconds before the advisor stopped it and deleted them. AC1: one-job.sh creates the root-owned parent 0755 while current stays 0700 owned by aida-ci, with a test asserting both modes. AC2: rearm.sh stops (or backs off) when a runner exits within a few seconds of start, so an instantly failing runner cannot loop registrations, with a test. AC3: docs/internal/testing/dell1-runner.md states the parent mode and rationale. Do not change the event/repo routing gate. Reference STORY-2672 security floor.'
+status: Approved
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-11-09T04:05:37.821335038Z
+modified_at: 2026-11-09T04:05:37.821335038Z
+req_type: Bug
+filed_at:
+  code_sha: 2ff9d1cefa275f068e4fa5db1becbb7a7d5d0c7f
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: a7a14984cec
+  vendor: claude
+  session: 7aacb1ed-ebaa-4da4-a195-500864e99e7d
