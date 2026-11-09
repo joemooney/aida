@@ -1,0 +1,49 @@
+id: 01a1c128-b15f-7a41-93b8-94877cd89088
+spec_id: STORY-b6b1278890774ef993d2ebc327862470-618
+agreed_id: STORY-2695
+title: 'dell1 CI runner: pass all shards, run parallel slots, and persist per-slot incremental builds with a PR/main cache split'
+description: |
+  ## Evidence (smoke run 42650619081, 2026-11-09, one PR routed to dell1, routing then turned off)
+  Dell1 shard wall time versus six recent hosted runs: cli-0 275s (hosted 407-595s), cli-1 236s (375-492s), lib-0 784s (762-1116s), lib-1 459s (731-1158s). Compile is about 4.5 minutes of every lib shard: 36% of lib-0 and 58% of lib-1. Serial execution took 29.5 minutes for four shards.
+  Baseline hosted queue: median 378s per heavy shard.
+
+  ## Blockers before routing can stay on
+  Seven tests pass on hosted and fail under the hardened runner unit, all environmental (for example `Operation not permitted`):
+  - contained_boundary::bug_2418_task_2772_lane_cargo_tests (2: lane_build_paths_never_reach_cargo_home, lane_build_paths_are_only_the_slot_pair)
+  - seat_clone::lifecycle_tests::task_2053_bwrap_probe_runs_no_seat_filter_and_reads_only_the_seat_view
+  - gate::mandate::story_1698_mandate_tests (2: exclusion_writer_refuses_invalid_ledger_without_appending, task_1790_exclusions_require_private_owned_regular_file)
+  - regen::score::tests::confined_environment_hides_original_source_and_refuses_exposed_system_roots
+  - launch::contained::tests::task_2708_live_host_udp_named_send_refused
+  Fix the unit, the test assumptions or both. Do not weaken or skip a containment test to get green.
+
+  ## Scope, one PR touching scripts/runner/one-job.sh and ci.yml
+  1. Parallel slots: 2 or 3 concurrent one-job runners, each with its own job directory, lock and rearm loop, inside the shared aida-ci.slice core budget.
+  2. Persistent per-slot incremental Rust build cache, owned by aida-ci and never holding credentials.
+  3. Cache trust split: same-repository PR jobs use a PR cache; main pushes and merge-train runs never read it and use a separate cache or build clean. A job must not be able to influence what a main or train build compiles.
+
+  This deliberately amends the runner rule that no previous job files survive locally. The operator accepted that risk on 2026-11-09 with the separation above. Fork PRs remain on hosted runners.
+
+  ## Acceptance
+  - All heavy shards pass on dell1 with AIDA_REQUIRE_BWRAP_LIVE=1, with no containment test removed or skipped.
+  - Two jobs run concurrently without sharing a job directory or cache slot; the slot cap holds.
+  - A test proves a PR job cannot write to the main/train cache.
+  - Runbook updated. After activation, compare queue time and end-to-end run time against this baseline, and roll back the variable if wait increases.
+status: Draft
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-11-09T16:33:51.967266330Z
+modified_at: 2026-11-09T16:33:51.967266330Z
+req_type: Story
+tags:
+- area:ci
+- needs-sketch-signoff
+filed_at:
+  code_sha: e4eee38238fa4cb8e8c85dadaa4ed07894cfbeea
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: e4eee38238f
+  vendor: claude
+  session: 01a1beff-fc3b-78e2-93e2-9b0c283b0339
+  harness_version: 2.1.319 (Claude Code)
