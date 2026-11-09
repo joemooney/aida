@@ -172,6 +172,12 @@ pub(crate) struct RealPhaseDriver {
     // trace:STORY-2326 | ai:codex
     #[cfg(test)]
     pub(crate) aida_exe: std::path::PathBuf,
+    // Keep real retry/watchdog control flow in tests without production waits.
+    // trace:TASK-3608 | ai:codex
+    #[cfg(test)]
+    pub(crate) retry_wait: Option<std::time::Duration>,
+    #[cfg(test)]
+    pub(crate) watchdog_poll: Option<std::time::Duration>,
     /// STORY-263: headless mode. `Some` → the reviewer phase is launched
     /// headless (`claude -p`); the implementer phase stays interactive in
     /// this cut (STORY-276 wires it). `None` → fully interactive.
@@ -671,6 +677,10 @@ impl RealPhaseDriver {
             ci_terminal_green: None,
             #[cfg(test)]
             aida_exe: resolve_aida_exe(),
+            #[cfg(test)]
+            retry_wait: None,
+            #[cfg(test)]
+            watchdog_poll: None,
             no_human,
             autonomy_mode,
             exit_cfg: exit_signal::ExitSignalConfig::from_env(),

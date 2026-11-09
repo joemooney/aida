@@ -428,6 +428,15 @@ impl auto_complete::PhaseDriver for RealPhaseDriver {
                 self.drain_tuning.idle_config(),
                 auto_complete::Phase::Implementer,
             );
+            // trace:TASK-3608 | ai:codex
+            #[cfg(test)]
+            let wd = {
+                let mut wd = wd;
+                if let Some(poll) = self.watchdog_poll {
+                    wd.poll_every = poll;
+                }
+                wd
+            };
             // STORY-726: a headless implementer with teeing off (`--no-tee-headless`
             // / `AIDA_TEE_HEADLESS=0`) runs in TOTAL silence until it exits or the
             // watchdog kills it — the operator can't tell "thinking hard" from
@@ -897,6 +906,9 @@ impl auto_complete::PhaseDriver for RealPhaseDriver {
                 if !matches!(native_pr, Some(Phase1PrResolve::Retry(_))) {
                     break;
                 }
+                // trace:TASK-3608 | ai:codex
+                #[cfg(test)]
+                let wait = self.retry_wait.unwrap_or(wait);
                 std::thread::sleep(wait);
                 native_pr = Some(self.detect_phase1_pr_after_exit(&branch, true));
             }

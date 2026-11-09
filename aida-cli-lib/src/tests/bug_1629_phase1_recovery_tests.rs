@@ -1098,8 +1098,11 @@ exit 0"#;
             }
             Box::new(current)
         }));
-        // Exhaust branch-error cases immediately; modes 1 and 6 exercise
-        // recovery through the real retry loop without more 30-second waits.
+        // Exercise the real retry loop with a driver-local wait override;
+        // unrelated tests and production retain the normal backoff schedule.
+        // trace:TASK-3608 | ai:codex
+        d.retry_wait = Some(std::time::Duration::from_millis(1));
+        // Exhaust branch-error cases immediately; modes 1 and 6 recover.
         d.drain_tuning.gh_verify_retries = if matches!(mode, 4 | 5) { 0 } else { 1 };
         // A confirmed no-change must bypass even a failing preflight.
 
@@ -1271,6 +1274,9 @@ exit 0"#;
     let script = script.replace("exit 0", "sleep 90");
     let exe = stub(&root, &script, &script);
     let mut d = driver(&root, "NFR-56", exe);
+    // Poll after the stub has published its lease, then trip the real ceiling.
+    // trace:TASK-3608 | ai:codex
+    d.watchdog_poll = Some(std::time::Duration::from_millis(100));
     d.drain_tuning.ceiling = std::time::Duration::from_millis(1);
     d.lifecycle_skip.no_preflight = true;
     d.forge_factory = Some(crate::forge::fake::RecordingForge::new().factory());
