@@ -107,7 +107,7 @@ fn gitlab_review_story_title_round_trips_to_gitlab_forge() {
     );
     assert_eq!(title, "Review MR-1: some MR title");
 
-    // What `derive_scope_from_entry` (queue_cmd.rs) does with a
+    // What `derive_scope_from_entry` (queue_cmd/work.rs) does with a
     // "Review <LABEL>: …" title: strip the prefix, take the first token,
     // parse it back through the same `parse_review_scope` it uses.
     let rest = title.strip_prefix("Review ").unwrap();

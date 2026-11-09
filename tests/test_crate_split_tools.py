@@ -73,6 +73,30 @@ class CrateSplitTools(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, 'may only shrink'):
             self.run_globs(root)
 
+    # trace:TASK-3426 | ai:codex
+    def test_directory_split_conserves_the_retired_file_budget(self):
+        root = self.repository()
+        (root / 'old.rs').unlink()
+        (root / 'old').mkdir()
+        for name in ('mod', 'work'):
+            (root / f'old/{name}.rs').write_text('use crate::*;\n')
+        self.git(root, 'add', '-A')
+        self.write_globs(root, {'old/mod.rs': 1, 'old/work.rs': 1})
+        self.run_globs(root)
+        (root / 'old/work.rs').write_text('use crate::*;\n' * 2)
+        self.write_globs(root, {'old/mod.rs': 1, 'old/work.rs': 2})
+        with self.assertRaisesRegex(ValueError, 'may only shrink'):
+            self.run_globs(root)
+
+    def test_directory_split_cannot_borrow_from_a_retained_source(self):
+        root = self.repository()
+        (root / 'old').mkdir()
+        (root / 'old/work.rs').write_text('use crate::*;\n')
+        self.git(root, 'add', '-A')
+        self.write_globs(root, {'old.rs': 2, 'old/work.rs': 1})
+        with self.assertRaisesRegex(ValueError, 'may only shrink'):
+            self.run_globs(root)
+
     def test_base_refuses_same_count_swap_without_a_rename(self):
         root = self.repository()
         (root / 'old.rs').write_text('fn retired() {}\n')

@@ -25,6 +25,8 @@ fn aida(fx: &Fixture) -> Command {
     cmd.env("HOME", &fx.home);
     cmd.env("AIDA_HOME", &fx.home);
     cmd.env("AIDA_TELEMETRY", "0");
+    cmd.env_remove("AIDA_OS_WRAP");
+    cmd.env_remove("AIDA_CONTAINED");
     let path = std::env::join_paths(
         std::iter::once(fx.bin.clone())
             .chain(std::env::split_paths(&std::env::var_os("PATH").unwrap())),
@@ -103,6 +105,7 @@ fn fixture() -> Fixture {
     for dir in [&repo, &home, &bin] {
         std::fs::create_dir_all(dir).unwrap();
     }
+    support::contained_lane_host(&home, &bin);
     let claude = bin.join("claude");
     std::fs::write(
         &claude,
@@ -190,6 +193,15 @@ fn settle(fx: &Fixture) {
 /// give the repo a local `origin` carrying `refs/pull/7/head` so the review
 /// checkout resolves without a forge.
 fn queue_review_story(fx: &Fixture) {
+    support::contained_lane_project(&fx.repo);
+    git(
+        &fx.repo,
+        &["add", "-f", ".aida/config.toml", ".claude/settings.json"],
+    );
+    git(
+        &fx.repo,
+        &["commit", "-q", "-m", "contained reviewer fixture policy"],
+    );
     let origin = fx.base.join("origin.git");
     git(
         &fx.base,
@@ -309,13 +321,13 @@ fn clear_dump(fx: &Fixture) {
     let _ = std::fs::remove_file(&fx.dump);
 }
 
-fn fresh_headless(fx: &Fixture, grant: Option<&str>, contained: bool) -> Output {
+fn fresh_headless(fx: &Fixture, grant: Option<&str>, contained_parent: bool) -> Output {
     clear_dump(fx);
     let mut cmd = aida(fx);
     if let Some(grant) = grant {
         cmd.env("AIDA_SESSION_GRANT", grant);
     }
-    if contained {
+    if contained_parent {
         cmd.env("AIDA_CONTAINED", "1");
     }
     // The launcher's own session purpose must never reach the child.
@@ -357,14 +369,18 @@ fn contained_fresh_headless_child_gets_its_own_implementer_grant() {
     );
 }
 
-/// The uncontained fresh headless path behaves the same way.
+/// A host-admitted fresh launch also issues its own child grant.
 #[test]
-fn uncontained_fresh_headless_child_gets_its_own_implementer_grant() {
+fn host_admitted_fresh_headless_child_gets_its_own_implementer_grant() {
     let fx = fixture();
     let out = fresh_headless(&fx, Some(&fx.advisor), false);
     let log = text(&out);
     assert_eq!(out.status.code(), Some(97), "launch reached: {log}");
-    assert!(!child_env(&fx).contains_key("AIDA_CONTAINED"), "{log}");
+    assert_eq!(
+        child_env(&fx).get("AIDA_CONTAINED").map(String::as_str),
+        Some("1"),
+        "{log}"
+    );
     assert_own_child_grant(&fx, &fx.advisor, "implementer", &log);
 }
 
