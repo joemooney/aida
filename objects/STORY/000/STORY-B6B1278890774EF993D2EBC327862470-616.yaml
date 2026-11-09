@@ -1,0 +1,22 @@
+id: 01a1be07-cc83-7900-9e33-d3abe58167be
+spec_id: STORY-b6b1278890774ef993d2ebc327862470-616
+agreed_id: STORY-2693
+title: 'Open-PR collision checks: detect duplicate CLI flags across open PRs and order trains by file overlap'
+description: 'Problem: on 2026-11-08 PR-3643 and PR-3662 both defined aida doctor --lane-host with different meanings, found only at merge conflict, and each landed train created new conflicts in waiting PRs. Requirement: a check compares CLI surface additions across open PRs and flags collisions to the advisor early; train selection orders members to minimise file overlap with the remaining approved PRs. Acceptance: two fixture PRs adding one flag name are reported before either merges; ordering is deterministic and tested.'
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-11-09T01:59:04.579891982Z
+modified_at: 2026-11-09T01:59:04.579891982Z
+req_type: Story
+tags:
+- area:orchestration
+filed_at:
+  code_sha: a7a14984cec5533987dfeccb70d1f91aaebbf22a
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 8a4a909a967
+  vendor: claude
+  session: 20abb7c3-8f9b-4a5e-b326-404921f3b450
