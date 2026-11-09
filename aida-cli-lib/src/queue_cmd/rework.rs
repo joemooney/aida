@@ -577,6 +577,53 @@ pub(crate) fn handle_queue_rework(
         .clone()
         .or_else(|| req.spec_id.clone())
         .unwrap_or_else(|| "???".to_string());
+    // BUG-1277: look for a prior entry for this spec across EVERY queue
+    // file, not just the invoking user's own — a previous `rework`/`add`
+    // may already have routed it to a shared role queue, and both the
+    // route-inheritance fallback below and the move-not-duplicate step
+    // after it need to find it wherever it actually lives.
+    // trace:BUG-1277 | ai:claude
+    // BUG-1427: retain every matching identity. Rework promises a move, so a
+    // stale duplicate in a third queue must not survive merely because it was
+    // not the first match returned by queue_users(). trace:BUG-1427 | ai:codex
+    let existing_entries_elsewhere: Vec<(String, aida_core::QueueEntry)> = storage
+        .queue_users()?
+        .into_iter()
+        .map(|candidate_user| {
+            let entry = storage
+                .queue_list(&candidate_user, true)?
+                .into_iter()
+                .find(|entry| entry.requirement_id == req_id);
+            Ok(entry.map(|entry| (candidate_user, entry)))
+        })
+        .collect::<Result<Vec<_>>>()?
+        .into_iter()
+        .flatten()
+        .collect();
+
+    // Route resolution: --for wins; otherwise rework preserves the existing
+    // queue route so reviewer-requested fixups stay visible to the intended
+    // role. If there is no usable prior route, default to implementer.
+    // trace:BUG-851 | ai:codex
+    let for_role_resolved: Option<String> = match for_role {
+        Some("any") => None,
+        Some(role) => Some(canonical_role_name(role)),
+        None => existing_entries_elsewhere
+            .first()
+            .and_then(|(_, entry)| entry.for_role.as_deref())
+            .filter(|role| !role.trim().is_empty())
+            .map(canonical_role_name)
+            .or_else(|| Some("implementer".to_string())),
+    };
+
+    // trace:BUG-2500 | ai:codex — refuse before status, comments or queue writes.
+    if for_role_resolved.as_deref() != Some("reviewer") {
+        if let Ok(root) = find_project_root() {
+            let open = spec_open_change_key(&root, &[display_id.as_str(), spec_id.as_str()]);
+            refuse_waiting_review(&root, &display_id, &spec_id, open.as_deref())
+                .map_err(|why| anyhow::anyhow!(why))?;
+        }
+    }
     let title = req.title.clone();
     let current_status = req.status.clone();
 
@@ -937,45 +984,6 @@ pub(crate) fn handle_queue_rework(
             );
         }
     }
-
-    // BUG-1277: look for a prior entry for this spec across EVERY queue
-    // file, not just the invoking user's own — a previous `rework`/`add`
-    // may already have routed it to a shared role queue, and both the
-    // route-inheritance fallback below and the move-not-duplicate step
-    // after it need to find it wherever it actually lives.
-    // trace:BUG-1277 | ai:claude
-    // BUG-1427: retain every matching identity. Rework promises a move, so a
-    // stale duplicate in a third queue must not survive merely because it was
-    // not the first match returned by queue_users(). trace:BUG-1427 | ai:codex
-    let existing_entries_elsewhere: Vec<(String, aida_core::QueueEntry)> = storage
-        .queue_users()?
-        .into_iter()
-        .map(|candidate_user| {
-            let entry = storage
-                .queue_list(&candidate_user, true)?
-                .into_iter()
-                .find(|entry| entry.requirement_id == req_id);
-            Ok(entry.map(|entry| (candidate_user, entry)))
-        })
-        .collect::<Result<Vec<_>>>()?
-        .into_iter()
-        .flatten()
-        .collect();
-
-    // Route resolution: --for wins; otherwise rework preserves the existing
-    // queue route so reviewer-requested fixups stay visible to the intended
-    // role. If there is no usable prior route, default to implementer.
-    // trace:BUG-851 | ai:codex
-    let for_role_resolved: Option<String> = match for_role {
-        Some("any") => None,
-        Some(role) => Some(canonical_role_name(role)),
-        None => existing_entries_elsewhere
-            .first()
-            .and_then(|(_, entry)| entry.for_role.as_deref())
-            .filter(|role| !role.trim().is_empty())
-            .map(canonical_role_name)
-            .or_else(|| Some("implementer".to_string())),
-    };
 
     // BUG-1277: a rework routed to a role (the default — see above) must
     // land where a batch drain actually reads it: the role's shared queue

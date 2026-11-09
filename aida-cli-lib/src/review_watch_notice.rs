@@ -133,7 +133,7 @@ fn findings_due<'a>(
     history
         .keys
         .iter()
-        .filter(|key| on_head(key) && kind(key).blocks_done())
+        .filter(|key| on_head(key) && kind(key).requires_changes())
         .collect()
 }
 

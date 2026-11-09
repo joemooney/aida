@@ -1348,3 +1348,12 @@ A later `aida ship` from that detached seat restores its leased branch only if
 both HEAD and the branch still equal the recorded PR head and Git permits the
 checkout. A moved branch or another session's handoff refuses recovery.
 <!-- trace:STORY-2325 | ai:codex -->
+
+<!-- trace:BUG-2500 | ai:codex -->
+A review blocked solely on external CI or host evidence records `waiting`
+(displayed `WAITING`), with a summary naming the dependency, responsible actor
+and resume condition, and no substantive findings. Code defects still require
+`request-changes`. Waiting blocks completion and merge without implementer
+rework, repeat-findings credit or a Rework hold. Existing holds remain intact.
+Only a fresh recorded review at the current head ends the wait; green CI or
+a changed head alone does not. There is no automatic resume service.

@@ -2404,7 +2404,7 @@ pub(crate) fn rework_findings_block_for_spec(
 /// forge names exactly one. A failed lookup is `None`: the ledger bindings
 /// still answer, and an unknown PR never binds a review to the spec.
 // trace:BUG-2430 | ai:claude
-pub(crate) fn spec_open_change_key(project_root: &std::path::Path, ids: &[&str]) -> Option<String> {
+pub fn spec_open_change_key(project_root: &std::path::Path, ids: &[&str]) -> Option<String> {
     let forge = Ok(crate::forge::resolve_forge_kind(project_root));
     let mut ids: Vec<String> = ids.iter().map(|s| s.trim().to_string()).collect();
     ids.dedup();
@@ -2451,6 +2451,80 @@ pub(crate) fn resolve_rework_findings(
     spec_id: &str,
     open_change: Option<&str>,
 ) -> Result<Option<String>, String> {
+    resolve_rework_review(project_root, display_id, spec_id, open_change).map_err(|error| {
+        match error {
+            ReworkReviewError::Waiting(why) | ReworkReviewError::Unavailable(why) => why,
+        }
+    })
+}
+
+// trace:BUG-2500 | ai:codex
+pub fn refuse_waiting_review(
+    root: &Path,
+    display: &str,
+    spec: &str,
+    change: Option<&str>,
+) -> Result<(), String> {
+    match resolve_rework_review(root, display, spec, change) {
+        Err(ReworkReviewError::Waiting(why)) => Err(why),
+        // Existing call sites retain their own unavailable-evidence policy.
+        _ => Ok(()),
+    }
+}
+
+// trace:BUG-2500 | ai:codex
+pub(crate) fn refuse_waiting_pickup(
+    root: &Path,
+    plan: &QueueWorkPlan,
+    role: &str,
+    list_sessions: bool,
+    plan_only: bool,
+    guided: bool,
+) -> Result<(), String> {
+    if role.eq_ignore_ascii_case("reviewer") || list_sessions || plan_only || guided {
+        return Ok(());
+    }
+    for entry in &plan.entries {
+        let display = if plan.entries.len() == 1 {
+            &plan.anchor_display
+        } else {
+            &entry.spec_id
+        };
+        let open = spec_open_change_key(root, &[display, &entry.spec_id]);
+        refuse_waiting_review(root, display, &entry.spec_id, open.as_deref())?;
+    }
+    Ok(())
+}
+
+// trace:BUG-2500 | ai:codex
+#[derive(Debug)]
+enum ReworkReviewError {
+    Waiting(String),
+    Unavailable(String),
+}
+
+// Preserve a known wait even when competing records cannot be ordered. An
+// unavailable-evidence warning must never turn a known wait into admission.
+// trace:BUG-2500 | ai:codex
+fn waiting_rework_error(
+    shown: &str,
+    verdict: &crate::gate::review_verdict::RecordedVerdict,
+) -> Result<(), ReworkReviewError> {
+    if verdict.kind == crate::gate::review_verdict::VerdictKind::Waiting && !verdict.is_closed() {
+        return Err(ReworkReviewError::Waiting(format!(
+            "{shown}: WAITING — {}. Resume with a fresh review at the current head; no implementer rework is queued.",
+            verdict.summary.as_deref().unwrap_or("external evidence required")
+        )));
+    }
+    Ok(())
+}
+
+fn resolve_rework_review(
+    project_root: &Path,
+    display_id: &str,
+    spec_id: &str,
+    open_change: Option<&str>,
+) -> Result<Option<String>, ReworkReviewError> {
     use crate::gate::review_alias::{select_verdict, spec_labels, AliasSelection};
     use crate::gate::review_verdict::RecordedVerdict;
     let ids = [display_id, spec_id];
@@ -2470,14 +2544,53 @@ pub(crate) fn resolve_rework_findings(
             }
             AliasSelection::Absent => None,
             unavailable => {
+                // Substantive findings remain actionable even beside a wait.
+                // Inspect all candidates before refusing a waiting-only review.
+                // trace:BUG-2500 | ai:codex
+                let mut candidates = Vec::new();
+                for label in &labels {
+                    if let Some(current) =
+                        crate::gate::review_verdict::current_verdict(project_root, label)
+                    {
+                        if let Some(v) =
+                            crate::gate::review_verdict::parse_recorded_verdict(&current.body)
+                        {
+                            candidates.push((label.clone(), v));
+                        }
+                    }
+                }
+                for (key, v) in crate::gate::review_verdict::list_active_verdicts(project_root) {
+                    if change_verdict_bound_to(project_root, &key, &labels)
+                        || open_change.is_some_and(|change| change.eq_ignore_ascii_case(&key))
+                    {
+                        candidates.push((key, v));
+                    }
+                }
+                if candidates.iter().any(|(_, v)| {
+                    !v.is_closed() && v.kind == crate::gate::review_verdict::VerdictKind::Waiting
+                }) {
+                    let findings = candidates
+                        .iter()
+                        .filter(|(_, v)| !v.is_closed() && v.kind.requires_changes())
+                        .filter_map(|(key, v)| {
+                            crate::review_verdict_display::rework_findings_comment(&shown, key, v)
+                        })
+                        .collect::<Vec<_>>();
+                    if !findings.is_empty() {
+                        return Ok(Some(findings.join("\n\n")));
+                    }
+                    for (_, v) in &candidates {
+                        waiting_rework_error(&shown, v)?;
+                    }
+                }
                 let reason = unavailable
                     .unavailable_reason()
                     .unwrap_or_default()
                     .to_string();
                 if unavailable.fail_closed().is_some() {
-                    return Err(format!(
+                    return Err(ReworkReviewError::Unavailable(format!(
                         "a request-changes review of {shown} exists but its current review cannot be selected ({reason})"
-                    ));
+                    )));
                 }
                 eprintln!(
                     "warning: no review findings imported for {shown}: its current review cannot be selected ({reason}). Read the review comment before starting rework."
@@ -2498,9 +2611,9 @@ pub(crate) fn resolve_rework_findings(
                 match crate::gate::review_verdict::parse_recorded_verdict(&current.body) {
                     Some(v) => Some((key.to_string(), v)),
                     None => {
-                        return Err(format!(
+                        return Err(ReworkReviewError::Unavailable(format!(
                             "the review recorded for {key} (the open pull request of {shown}) cannot be read"
-                        ))
+                        )))
                     }
                 }
             }
@@ -2519,11 +2632,43 @@ pub(crate) fn resolve_rework_findings(
                 .filter(|(_, verdict)| verdict.kind.blocks_done())
                 .filter(|(key, _)| change_verdict_bound_to(project_root, key, &labels))
                 .collect::<Vec<_>>();
+            // A wait cannot hide actionable findings in another bound change.
+            // trace:BUG-2500 | ai:codex
+            if bound.len() > 1
+                && (bound.iter().any(|(_, v)| {
+                    !v.is_closed() && v.kind == crate::gate::review_verdict::VerdictKind::Waiting
+                }) || spec_keyed.as_ref().is_some_and(|(v, _)| {
+                    !v.is_closed() && v.kind == crate::gate::review_verdict::VerdictKind::Waiting
+                }))
+            {
+                let mut findings = bound
+                    .iter()
+                    .filter(|(_, v)| !v.is_closed() && v.kind.requires_changes())
+                    .filter_map(|(key, v)| {
+                        crate::review_verdict_display::rework_findings_comment(&shown, key, v)
+                    })
+                    .collect::<Vec<_>>();
+                if let Some((v, _)) = &spec_keyed {
+                    if !v.is_closed() && v.kind.requires_changes() {
+                        if let Some(block) = crate::review_verdict_display::rework_findings_comment(
+                            &shown, &shown, v,
+                        ) {
+                            findings.push(block);
+                        }
+                    }
+                }
+                if !findings.is_empty() {
+                    return Ok(Some(findings.join("\n\n")));
+                }
+                for (_, v) in &bound {
+                    waiting_rework_error(&shown, v)?;
+                }
+            }
             if bound.len() > 1 && spec_keyed.is_some() {
                 // The spec's own record answers, as before BUG-2430.
                 bound.clear();
             } else if bound.len() > 1 {
-                return Err(format!(
+                return Err(ReworkReviewError::Unavailable(format!(
                     "{} changes each hold a current refusal for {shown} ({})",
                     bound.len(),
                     bound
@@ -2531,7 +2676,7 @@ pub(crate) fn resolve_rework_findings(
                         .map(|(k, _)| k.as_str())
                         .collect::<Vec<_>>()
                         .join(", ")
-                ));
+                )));
             }
             bound.pop()
         }
@@ -2555,21 +2700,42 @@ pub(crate) fn resolve_rework_findings(
     let render_spec = |v: &RecordedVerdict| {
         crate::review_verdict_display::rework_findings_comment(&shown, &shown, v)
     };
+    // trace:BUG-2500 | ai:codex
+    let refuse_wait = |v: &RecordedVerdict| waiting_rework_error(&shown, v);
     Ok(match (spec_keyed, change_keyed) {
         (None, None) => None,
-        (Some((v, _)), None) => render_spec(&v),
-        (None, Some((key, v))) => render_change(&key, &v),
+        (Some((v, _)), None) => {
+            refuse_wait(&v)?;
+            render_spec(&v)
+        }
+        (None, Some((key, v))) => {
+            refuse_wait(&v)?;
+            render_change(&key, &v)
+        }
         (Some((sv, s_at)), Some((key, cv))) => {
             let c_at = change_time(&key, &cv);
+            // A wait carries no findings and must not replace substantive work.
+            // trace:BUG-2500 | ai:codex
+            let mixed_wait = !sv.is_closed()
+                && !cv.is_closed()
+                && ((sv.kind == crate::gate::review_verdict::VerdictKind::Waiting
+                    && cv.kind.requires_changes())
+                    || (cv.kind == crate::gate::review_verdict::VerdictKind::Waiting
+                        && sv.kind.requires_changes()));
             let change_newer = match (s_at, c_at) {
-                (Some(s), Some(c)) => c > s,
+                // A fresh review supersedes older evidence, including code
+                // findings. Only tied or unordered evidence needs priority.
+                (Some(s), Some(c)) if s != c || !mixed_wait => c > s,
+                _ if mixed_wait => cv.kind.requires_changes(),
                 // Unordered: fail closed toward the refusal so its findings
                 // are not dropped.
                 _ => cv.kind.blocks_done() && !sv.kind.blocks_done(),
             };
             if change_newer {
+                refuse_wait(&cv)?;
                 render_change(&key, &cv)
             } else {
+                refuse_wait(&sv)?;
                 render_spec(&sv)
             }
         }
@@ -2871,7 +3037,7 @@ pub(crate) fn preflight_queue_work_branch(
     preflight_queue_work_branch_adopting(root, branch, None)
 }
 
-/// A finished or crashed review may leave its disposable checkout. A dead
+/// A finished or crashed review may leave its disposable checkout. An ended
 /// reviewer lease additionally requires current forge-head coverage.
 /// Retire only the default review tree, so ordinary occupied branches
 /// and explicitly placed worktrees retain the usual refusal.
@@ -2901,9 +3067,9 @@ pub(crate) fn retire_idle_review_worktree(
     if !candidate {
         return Ok(());
     }
-    // A crashed review has no verdict to trigger ordinary lease release.
-    // Only one exact, provably dead reviewer owner can be reclaimed here.
-    // trace:BUG-2469 | ai:codex
+    // A finished review may already have released ownership; a crashed one
+    // needs positive death proof. Only one exact reviewer lease is eligible.
+    // trace:BUG-2498 BUG-2469 | ai:codex
     let leases: Vec<_> = list_leases(root)
         .into_iter()
         .filter(|l| l.branch == branch || l.worktree_path == path)
@@ -2915,10 +3081,7 @@ pub(crate) fn retire_idle_review_worktree(
                 && crate::worktree::canonical_or_self(&lease.worktree_path)
                     == crate::worktree::canonical_or_self(&path)
                 && crate::pr_lease_takeover::reviewer_target(lease) == Some((forge, n))
-                && matches!(
-                    crate::ownership::reader::lease_owner(root, lease),
-                    crate::ownership::OwnerVerdict::Dead { .. }
-                ) =>
+                && crate::ownership::reader::review_lease_ended(root, lease) =>
         {
             Some(lease)
         }
@@ -2974,7 +3137,7 @@ pub(crate) fn retire_idle_review_worktree(
         if let Err(reason) = eligible {
             anyhow::bail!(
                 "branch `{branch}` is held by worktree {} before pickup setup. \
-                 Dead reviewer lease {} was not reclaimed: {reason:#}. \
+                 Ended reviewer lease {} was not reclaimed: {reason:#}. \
                  Keep this checkout; inspect its review head and unpublished commits, then retry pickup.",
                 path.display(),
                 lease.id
@@ -3019,13 +3182,12 @@ pub(crate) fn retire_idle_review_worktree(
         Err(e) => return Err(e.into()),
     }
     // Revalidate the owner and exact lease before tearing down its tree.
+    // trace:BUG-2498 | ai:codex
     // trace:BUG-2469 | ai:codex
     if let Some(lease) = reclaim {
         anyhow::ensure!(
-            matches!(
-                crate::ownership::reader::lease_owner(root, lease),
-                crate::ownership::OwnerVerdict::Dead { .. }
-            ) && Some(std::fs::read(crate::lease_path(root, &lease.id))?) == lease_snapshot
+            crate::ownership::reader::review_lease_ended(root, lease)
+                && Some(std::fs::read(crate::lease_path(root, &lease.id))?) == lease_snapshot
                 && working_tree_clean(&path) == Some(true),
             "review ownership or working tree changed before retirement"
         );
@@ -3041,7 +3203,7 @@ pub(crate) fn retire_idle_review_worktree(
     }
     // trace:STORY-2325 | ai:codex
     if let Some(lease) = reclaim {
-        crate::ownership::reader::journal_reclaim(root, lease).with_context(|| {
+        crate::ownership::reader::journal_review_reclaim(root, lease).with_context(|| {
             format!(
                 "ownership reclaim could not end lease {}; inspect `aida session end {}`",
                 lease.id, lease.id
@@ -3831,6 +3993,16 @@ pub(crate) fn handle_queue_work(
     // lease creation, or status writes. Shell roles route; grants authorize.
     let (role, role_origin, warnings) = infer_queue_work_role(&plan, role_override);
     let project_root = find_main_worktree_root()?;
+    // trace:BUG-2500 | ai:codex — admission precedes calibration and setup.
+    refuse_waiting_pickup(
+        &project_root,
+        &plan,
+        &role,
+        list_sessions,
+        plan_only,
+        guided,
+    )
+    .map_err(|why| anyhow::anyhow!(why))?;
     // trace:BUG-2451 | ai:codex — session listing allocates nothing.
     let rework_pr = if list_sessions {
         None
@@ -5852,10 +6024,10 @@ pub(crate) fn release_refused_review_lease(
 /// A standalone reviewer has exited: once its verdict is on the ledger, its
 /// review (`scope` over this review's own `worktree`) is reaped — tree,
 /// lease, and review branch — so neither the lease nor the tree blocks the
-/// next review of the PR. With no verdict collected, the tree is what the
-/// recovery text points at, so the review is kept; a review the reap refuses
-/// (dirty tree, unpushed commits, a live holder) keeps its lease, which is how
-/// the dead-reviewer reap tears the tree down after the PR merges. Returns
+/// next review of the PR. Exit records a lease-bound completion receipt even
+/// without a verdict. The retained tree and lease remain available for recovery;
+/// next-head pickup may retire them once clean, published and idle. A refused
+/// reap also retains them under the same guards. Returns
 /// `(lease id, Ok(outcome) | Err(why kept))` per matching lease.
 // trace:BUG-b6b1278890774ef993d2ebc327862470-024 | ai:claude
 pub(crate) fn end_finished_review(
@@ -5868,10 +6040,22 @@ pub(crate) fn end_finished_review(
         .into_iter()
         .filter(|l| l.scope.eq_ignore_ascii_case(scope) && l.worktree_path == worktree)
         .map(|l| {
+            // Exit is positive lifecycle evidence even when no verdict exists.
+            // Write before teardown; mail-retention stamps preserve this binding.
+            // trace:BUG-2498 | ai:codex
+            let receipt = crate::ownership::reader::review_finished(project_root, &l);
             let outcome = if verdict_collected {
-                crate::session_reap::reap_finished_review(project_root, &l)
+                crate::session_reap::reap_finished_review(project_root, &l).map_err(|why| {
+                    match receipt {
+                        Ok(()) => why,
+                        Err(error) => format!("{why}; completion receipt refused: {error:#}"),
+                    }
+                })
             } else {
-                Err("no verdict was collected; its review tree is kept for recovery".to_string())
+                Err(match receipt {
+                    Ok(()) => "no verdict was collected; review exit recorded for guarded next-head cleanup".to_string(),
+                    Err(error) => format!("no verdict was collected; completion receipt refused: {error:#}"),
+                })
             };
             (l.id, outcome)
         })
