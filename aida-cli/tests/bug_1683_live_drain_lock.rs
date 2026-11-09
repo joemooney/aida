@@ -122,7 +122,10 @@ impl Fixture {
         text
     }
     fn new() -> Self {
-        let tmp = tempfile::tempdir_in(env!("CARGO_MANIFEST_DIR")).unwrap();
+        // Keep synthetic repositories outside the enclosing private seat clone,
+        // whose production Git refusal also covers descendant paths.
+        // trace:STORY-2642 | ai:codex
+        let tmp = tempfile::tempdir().unwrap();
         let root = tmp.path().canonicalize().unwrap();
         let mut f = Self {
             _tmp: tmp,
@@ -136,9 +139,10 @@ impl Fixture {
         for p in [&f.repo, &f.home, &f.bin] {
             std::fs::create_dir_all(p).unwrap();
         }
+        support::contained_lane_host(&f.home, &f.bin);
         git(&f.repo, &["init", "-q", "-b", "main"]);
-        // trace:BUG-2017 | ai:codex — this fixture owns a TempDir inside
-        // the workspace. Confine authority to that guard, never the real clone.
+        // trace:BUG-2017 | ai:codex — this fixture owns a synthetic TempDir.
+        // Confine authority to that guard, never the real clone.
         let common = aida_core::allocation_authority::common_dir(&f.repo).unwrap();
         assert!(common.starts_with(&root));
         use std::io::Write;
@@ -159,6 +163,7 @@ impl Fixture {
             "--no-agent-config",
             "--no-roles",
         ]);
+        support::contained_lane_project(&f.repo);
         let added = f.ok(&[
             "add",
             "--type",
