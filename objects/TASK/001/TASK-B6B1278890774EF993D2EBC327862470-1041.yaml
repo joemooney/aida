@@ -1,0 +1,29 @@
+id: 01a1bf79-7d94-75a2-9bb9-578795a37129
+spec_id: TASK-b6b1278890774ef993d2ebc327862470-1041
+title: 'Non-blocking (test gap): no fresh-path test combines a receipt with a punt sign…'
+description: |-
+  Non-blocking finding carried forward from an APPROVED review verdict on TASK-3608, which has since completed — recorded here so it keeps a queryable home once the verdict record stops being read.
+
+  Non-blocking (test gap): no fresh-path test combines a receipt with a punt signal, hold signal or natural non-zero exit; only the watchdog case is covered. Code order at phase_driver_trait.rs:772-889 looks correct by inspection.
+
+  PR: #3703
+  Reviewed sha: 3c3b0a7a5c013b00fe265b2198306f0cbf82ce50
+status: Draft
+priority: Medium
+owner: joe
+feature: Uncategorized
+created_at: 2026-11-09T08:42:52.692761737Z
+modified_at: 2026-11-09T08:42:52.692761737Z
+req_type: Task
+tags:
+- carried-from:TASK-3608
+- finding-hash:89fb1b92
+- from-review:PR-3703
+- kind:carried-forward
+filed_at:
+  code_sha: e60e97d0035e92f14a0b60c05e85859019365939
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 0cbb78cbced
+  vendor: claude
