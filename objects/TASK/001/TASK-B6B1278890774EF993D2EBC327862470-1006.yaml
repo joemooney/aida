@@ -8,7 +8,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-08T18:01:54.649358Z
-modified_at: 2026-11-09T07:05:04.733420564Z
+modified_at: 2026-11-09T07:19:46.360627688Z
 req_type: Task
 relationships:
 - rel_type: Child
@@ -164,6 +164,13 @@ comments:
   modified_at: 2026-11-09T06:54:00.782771479Z
   session_id: 01a1beff-fc3b-78e2-93e2-9b0c283b0339
   harness_version: 2.1.319 (Claude Code)
+- id: 01a1bf2d-67b8-7423-8a85-6b239487f7dd
+  author: dirtlab
+  content: 'Addressed latest advisor timing failure: added per-driver cfg(test) retry-wait and watchdog-poll injection, defaulting to production timing. The receipt/lease-discovery fixture now retries after 1ms; the real watchdog fixture polls at 100ms while retaining actual child launch, termination, receipt consumption and failure classification. Changed aida-cli-lib/src/phase_driver.rs, phase_driver_trait.rs, tests/bug_1629_phase1_recovery_tests.rs. Validation: lane job j20261109T070616506-2-0 executed all 9 task_3608 tests successfully in 2.87s total (previously the two named tests took 91.2s and 30.2s). No-default-features check passed in j20261109T070635215-2-0; TUI all-targets check passed in j20261109T070647106-2-0. Fast gate equivalent: all 44 non-Cargo gates passed using CI runner commands with changed-file rustfmt substituted for cargo fmt; two compile gates delegated to the above lane jobs. TUI direct-dependency manifest seam passed; the full cargo metadata/tree seam was not run under the no-direct-Cargo seat rule. First fast-gate attempt exposed mail-wake fixture directory-mode failures under host umask; rerun with umask 077 passed. git diff --check and changed-file rustfmt passed. Codegraph fixed client unavailable; doctor reports missing, used rg. No implementation blockers; untested=false. Native handoff: edits uncommitted, no push/PR/queue completion/ship/verdict actions; host must commit and publish the fix.'
+  created_at: 2026-11-09T07:19:46.360627688Z
+  modified_at: 2026-11-09T07:19:46.360627688Z
+  session_id: 01a1bf1f80ea
+  harness_version: codex-cli 0.167.0
 history:
 - id: 01a1bc53-0ec9-7670-9674-41fd5fd9d861
   author: joe
