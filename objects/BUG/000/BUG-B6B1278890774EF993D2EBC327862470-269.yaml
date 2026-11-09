@@ -8,7 +8,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-08T21:20:08.484660Z
-modified_at: 2026-11-09T12:36:49.695268005Z
+modified_at: 2026-11-09T13:05:03.757308393Z
 req_type: Bug
 comments:
 - id: 01a1beb1-ae7c-7c52-89a5-00a6bc02eeb0
@@ -159,6 +159,21 @@ comments:
   modified_at: 2026-11-09T12:28:10.440170699Z
   session_id: 01a1beff-fc3b-78e2-93e2-9b0c283b0339
   harness_version: 2.1.319 (Claude Code)
+- id: 01a1c069-86a8-7022-a268-1794df78ed1e
+  author: joe
+  content: |-
+    REVIEW FINDINGS TO ADDRESS (PR #3715):
+    Verdict: CHANGES REQUESTED
+    Reviewed commit: 27f0368e4550
+    Recorded: 2026-11-09T12:36:49.175661642+00:00
+    Review comment: https://github.com/joemooney/aida/pull/3715#issuecomment-6740231078
+    Findings:
+    1. MINOR (blocking, broken documented command, unchanged since round 8): docs/cli/06-roles-sessions.md:829 tells the operator to run 'aida ship --from-seat PATH --spec SPEC --commit-pending ...'. aida ship takes SPEC positionally ('aida ship [OPTIONS] [SPEC]'); running it fails with "error: unexpected argument '--spec' found" (reproduced). This is the documented recovery for recorded clones, where host Git is forbidden. Last touched by 3153f44f808; the later commits are merges of main only, so the 2026-11-09 advisor ruling on BUG-2504 was not applied. Fix: write 'aida ship SPEC --from-seat PATH --commit-pending ...' and change nothing else.
+    2. COSMETIC (non-blocking, sweep per advisor ruling): bug_2504_recovery_matches_recorded_tree_kind (aida-cli-lib/src/tests/bug_home_038_seat_publish_tests.rs:3064-3067) returns early on bwrap_live_or_skip before the tree-kind loop, so the linked-worktree case, which needs no bwrap, is also skipped where bwrap is unavailable.
+    3. COSMETIC (non-blocking, sweep per advisor ruling): the branch and MERGE_HEAD preflights in prepare_rework_merge (aida-cli-lib/src/seat_clone.rs:2868-2877) duplicate the same checks at the top of prepare_rework_merge_with, so the inner refusals are reachable only from unit tests.
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
+  created_at: 2026-11-09T13:05:03.656949406Z
+  modified_at: 2026-11-09T13:05:03.656949406Z
 history:
 - id: 01a1beaa-5bee-7821-b878-3b983c03f8ae
   author: joe
