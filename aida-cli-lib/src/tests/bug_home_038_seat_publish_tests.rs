@@ -3818,3 +3818,67 @@ fn bug_2488_consumed_drain_punt_is_not_replayed_after_claude_resume() {
     crate::standalone_implementer::reconcile_signals(main.path(), tree.path(), spec).unwrap();
     assert!(crate::punt::signal_path(main.path(), spec).exists());
 }
+
+// trace:BUG-2488 | ai:codex
+#[test]
+fn bug_2488_claude_resume_does_not_resurrect_cleared_hold() {
+    let fx = fixture();
+    let clone = leased_clone(&fx, "claude-hold-resume", "c0ffee248898");
+    let lease = crate::lease_path(&fx.main, "c0ffee248898");
+    let body = std::fs::read_to_string(&lease)
+        .unwrap()
+        .replace("TASK-2053", "BUG-2488");
+    std::fs::write(lease, body).unwrap();
+    let spec = "BUG-2488";
+    let (_, hold) = crate::standalone_implementer::provision_signals(&clone, spec).unwrap();
+    crate::punt::write_hold_signal(
+        &hold,
+        &crate::punt::HoldSignal {
+            spec: spec.into(),
+            branch: "claude-hold-resume".into(),
+            reason: None,
+            spec_key: None,
+        },
+    )
+    .unwrap();
+    crate::standalone_implementer::reconcile_signals(&fx.main, &clone, spec).unwrap();
+    let mut cmd = std::process::Command::new("claude");
+    crate::session::prepare_resume_attempt_signals(Some(&fx.main), &clone, "implementer", &mut cmd)
+        .unwrap();
+    // PR-open cleanup has consumed the host marker. Exit reconciliation must
+    // not restore the prior attempt's seat marker.
+    assert!(!crate::punt::hold_signal_path(&fx.main, spec).exists());
+    crate::standalone_implementer::reconcile_signals(&fx.main, &clone, spec).unwrap();
+    assert!(!crate::punt::hold_signal_path(&fx.main, spec).exists());
+    assert!(!hold.exists());
+}
+
+// trace:BUG-2488 | ai:codex
+#[test]
+fn bug_2488_cleanup_removes_all_case_spellings() {
+    let main = tempfile::tempdir().unwrap();
+    let tree = tempfile::tempdir().unwrap();
+    for root in [main.path(), tree.path()] {
+        for directory in ["punt-signals", "pr-holds"] {
+            let directory = root.join(".aida").join(directory);
+            std::fs::create_dir_all(&directory).unwrap();
+            for name in ["BUG-2488.json", "bug-2488.json"] {
+                std::fs::write(directory.join(name), "{}").unwrap();
+            }
+        }
+    }
+    crate::standalone_implementer::provision_attempt_signals(main.path(), tree.path(), "BUG-2488")
+        .unwrap();
+    for root in [main.path(), tree.path()] {
+        assert!(!crate::punt::signal_path(root, "BUG-2488").exists());
+        assert!(!crate::punt::hold_signal_path(root, "BUG-2488").exists());
+    }
+    // Punt consumption uses the same cleanup and retains holds.
+    let directory = tree.path().join(".aida/punt-signals");
+    for name in ["BUG-2488.json", "bug-2488.json"] {
+        std::fs::write(directory.join(name), "{}").unwrap();
+    }
+    crate::standalone_implementer::consume_punt_signal(main.path(), tree.path(), "BUG-2488")
+        .unwrap();
+    assert!(!crate::punt::signal_path(tree.path(), "BUG-2488").exists());
+}

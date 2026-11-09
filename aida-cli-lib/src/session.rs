@@ -8223,6 +8223,13 @@ pub(crate) fn spawn_claude_headless_resume_granted(
         // trace:TASK-2631 | ai:codex
         cmd.env("AIDA_CONTAINMENT_POSTURE", "none");
     }
+    // Consume prior-attempt markers only after resume preparation succeeds.
+    // trace:BUG-2488 | ai:codex
+    if let Err(error) = prepare_resume_attempt_signals(host_main, cwd, seat, &mut cmd) {
+        tee.stop();
+        revoke_headless_child_grant(&child_grant.id);
+        return Err(error);
+    }
     // A watch-launched reviewer is recorded before the wait. trace:TASK-1993 | ai:claude
     let status = reviewer_status_with_handle_guard(cmd.stdout(Stdio::from(log)), &mut handle_guard)
         .context("failed to spawn claude")?;
@@ -8230,6 +8237,32 @@ pub(crate) fn spawn_claude_headless_resume_granted(
     // trace:BUG-B6B1278890774EF993D2EBC327862470-151 | ai:claude
     record_headless_session_end(cwd, session_id);
     Ok((status, child_grant.id))
+}
+
+// trace:BUG-2488 | ai:codex
+pub(crate) fn prepare_resume_attempt_signals(
+    host_main: Option<&Path>,
+    cwd: &Path,
+    seat: &str,
+    cmd: &mut std::process::Command,
+) -> Result<()> {
+    if crate::canonical_role_name(seat) != "implementer" {
+        return Ok(());
+    }
+    let main = host_main
+        .map(Path::to_path_buf)
+        .unwrap_or_else(|| crate::main_worktree_root_from(cwd));
+    let canonical = cwd.canonicalize()?;
+    if let Some(lease) = crate::list_leases(&main)
+        .into_iter()
+        .find(|lease| lease.worktree_path.canonicalize().ok().as_ref() == Some(&canonical))
+    {
+        let (punt, hold) =
+            crate::standalone_implementer::provision_attempt_signals(&main, cwd, &lease.scope)?;
+        cmd.env(crate::punt::SIGNAL_FILE_ENV, punt)
+            .env(crate::punt::HOLD_SIGNAL_FILE_ENV, hold);
+    }
+    Ok(())
 }
 
 /// BUG-2386: what a headless resume continues — the vendor that recorded the

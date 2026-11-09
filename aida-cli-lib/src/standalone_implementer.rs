@@ -1002,12 +1002,25 @@ fn prepare_signal_paths(worktree: &Path, spec: &str) -> Result<[(PathBuf, std::f
 fn clear_signal_paths(paths: &[(PathBuf, std::fs::File)]) -> Result<()> {
     use std::os::fd::AsRawFd;
     for (path, parent) in paths {
-        let pinned = PathBuf::from(format!("/proc/self/fd/{}", parent.as_raw_fd()))
-            .join(path.file_name().context("invalid signal filename")?);
-        match std::fs::remove_file(pinned) {
-            Ok(()) => {}
-            Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
-            Err(error) => return Err(error.into()),
+        let pinned = PathBuf::from(format!("/proc/self/fd/{}", parent.as_raw_fd()));
+        let name = path.file_name().context("invalid signal filename")?;
+        // Clear every spelling through the pinned parent, including entries
+        // hidden by the exact-name preference in signal_path.
+        // trace:BUG-2488 | ai:codex
+        for entry in std::fs::read_dir(&pinned)? {
+            let entry = entry?;
+            if !entry
+                .file_name()
+                .as_encoded_bytes()
+                .eq_ignore_ascii_case(name.as_encoded_bytes())
+            {
+                continue;
+            }
+            match std::fs::remove_file(pinned.join(entry.file_name())) {
+                Ok(()) => {}
+                Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
+                Err(error) => return Err(error.into()),
+            }
         }
     }
     Ok(())

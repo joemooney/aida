@@ -1628,21 +1628,9 @@ forge evidence downgrade declared completion to Refs; failed exits always use
 Refs. Punt/hold vetoes take precedence. See the
 [native publication handshake](docs/cli/04-git-lifecycle.md#aida-ship).
 <!-- trace:TASK-2902 | ai:codex -->
-Standalone lanes write punt/hold handshakes inside their writable seat. After
-exit the host mirrors those markers and the spec's punt ledger records to the
-main checkout before publication or lease cleanup, preserving held-resume and
-advisor visibility. Successful native exits with no commits beyond the pinned
-base report `implementer: no-change` without bundling; a clean, readable seat
-then releases its lease. Failed exits still request advisor attention.
-Host reads of seat signals and ledgers pin every parent directory and use
-bounded, nonblocking, no-follow regular-file reads (64 KiB). Unsafe or
-unreadable seat evidence refuses publication and retains the seat. Signal
-provisioning unlinks through pinned parents; a symlinked `.aida` or handshake
-directory refuses before host markers are consumed. Prior-attempt hold/punt
-markers survive policy and publication-preparation refusals, and are consumed
-immediately before the admitted child spawn. Mirroring compares signals through
-case-insensitive signal paths; host-owned ledgers have no seat-size cap.
-Standalone punts retain exit 32; no-change exits 0.
+Lanes write punt/hold handshakes inside their writable seat; the host mirrors
+those markers and the spec's punt ledger to preserve publication vetoes,
+held-resume admission and advisor visibility.
 <!-- trace:BUG-2488 | ai:codex -->
 
 Permission reports, doctor, launch output and statusline distinguish the posture;
