@@ -110,6 +110,10 @@ pub(crate) fn you_channels(report: &awaiting_you::AwaitingReport) -> Vec<(usize,
         if n == 1 { singular } else { plural }.to_string()
     }
     let mut v: Vec<(usize, String)> = Vec::new();
+    // trace:TASK-3452 | ai:codex
+    if !report.ci_relay_skipped.is_empty() {
+        v.push((report.ci_relay_skipped.len(), "CI exact reads".into()));
+    }
     // trace:STORY-2336 | ai:codex
     if !report.idle_eligible.is_empty() {
         v.push((report.idle_eligible.len(), "idle eligible".into()));
@@ -453,6 +457,7 @@ mod tests {
     #[test]
     fn you_channels_flattens_every_populated_channel_with_counts() {
         let report = AwaitingReport {
+            ci_relay_skipped: Vec::new(),
             idle_eligible: Vec::new(),
             review_watch_skipped: Vec::new(),
             mergeable_prs: vec![MergeablePrItem {
