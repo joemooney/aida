@@ -3,12 +3,12 @@ spec_id: BUG-b6b1278890774ef993d2ebc327862470-273
 agreed_id: BUG-2508
 title: Reviewer records WAITING on a supervised merge hold that only an APPROVED verdict can release, deadlocking the PR
 description: 'Observed 2026-11-09 on PRs 3715, 3670, 3627, 3687 after PR 3698 (BUG-2500) added WAITING verdicts. The merge hold''s release condition is a fresh APPROVED verdict at the current head, but the reviewer found no defects and recorded WAITING on merge-hold-gate and human/advisor clearance, so neither side can move. Requirement: a red merge-hold-gate whose release condition is this review''s own APPROVED verdict must not produce WAITING; the reviewer records APPROVED when it finds no actionable defects. WAITING remains for genuine external evidence such as operator canaries. Acceptance: fixture with a held PR, green required CI and no findings yields APPROVED; a held PR with outstanding operator-only evidence still yields WAITING; test covers both.'
-status: InProgress
+status: Completed
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-09T16:08:47.776461877Z
-modified_at: 2026-11-09T16:19:26.766780267Z
+modified_at: 2026-11-09T17:48:45.332509214Z
 req_type: Bug
 comments:
 - id: 01a1c117-fb17-76d1-9f33-fb9c5cd3a5be
@@ -46,6 +46,20 @@ history:
   session_id: 01a1c11482dc
   harness_version: codex-cli 0.167.0
   changes: []
+- id: 01a1c16d-4127-7cd2-bbd8-20ed5e64470e
+  author: aida-auto-bump
+  timestamp: 2026-11-09T17:48:45.223750128Z
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Completed
+processing_record:
+- id: 01a1c16d-4194-74e0-bbee-3eb6eba607fa
+  timestamp: 2026-11-09T17:48:45.332505301Z
+  agent: aida
+  commit_sha: 5667773635e682468ce689611aa26c70220be9ba
+  summary: 'Full-sweep PASS: all three BUG-2508 acceptance criteria verified by paired decision fixtures, prompt regression tests and green PR CI; BUG-2508 (bug protocol): met via new inline unit tests; no actionable findings.'
+  review_verdict: approved
 filed_at:
   code_sha: e4eee38238fa4cb8e8c85dadaa4ed07894cfbeea
   branch: main
@@ -55,3 +69,7 @@ filed_at:
   vendor: claude
   session: 01a1beff-fc3b-78e2-93e2-9b0c283b0339
   harness_version: 2.1.319 (Claude Code)
+implementation_info:
+  implemented: false
+  completed_at: 2026-11-09T17:48:45.223744218Z
+  completion_sha: 5667773635e682468ce689611aa26c70220be9ba
