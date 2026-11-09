@@ -66,7 +66,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-09T08:46:26.872629040Z
-modified_at: 2026-11-09T11:35:27.549112885Z
+modified_at: 2026-11-09T12:14:50.214557831Z
 req_type: Task
 relationships:
 - rel_type: Supersedes
@@ -176,6 +176,18 @@ comments:
   modified_at: 2026-11-09T11:01:32.060030329Z
   session_id: 01a1bff29ec5
   harness_version: codex-cli 0.167.0
+- id: 01a1c03b-8b06-7ae3-b9af-3762150f119b
+  author: joe
+  content: |-
+    REVIEW FINDINGS TO ADDRESS (TASK-3749):
+    Verdict: CHANGES REQUESTED
+    Reviewed commit: 392b416ed0a0
+    Recorded: 2026-11-09T11:35:27.099056057+00:00
+    Findings:
+    1. scripts/store-writers.toml:651 and the inventory generally: the PR replaces add_requirement in try_emit_nonblocking_findings_on_completion (aida-cli-lib/src/findings_gate.rs:2061-2140) with update_atomically and add_requirement_with_id, but the only inventory row for that function is still its add_requirement sink and the PR does not touch scripts/store-writers.toml. scripts/check-store-writers.py reports that as a stale row plus new unlisted sinks, and "Store writer inventory ratchet" (CI gates, step 82, job 129121698107) failed at 8c219ea996ff with this same code; the head merge changed none of it. Run python3 scripts/check-store-writers.py --regenerate after merging main, delete the stale add_requirement row, and give the two new rows the correct lock, gate and disposition.
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
+  created_at: 2026-11-09T12:14:50.118428051Z
+  modified_at: 2026-11-09T12:14:50.118428051Z
 history:
 - id: 01a1bf7c-f894-7192-b380-ef25f53f2fb5
   author: joe
