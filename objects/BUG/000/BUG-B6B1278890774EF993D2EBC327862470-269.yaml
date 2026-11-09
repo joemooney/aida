@@ -8,7 +8,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-08T21:20:08.484660577Z
-modified_at: 2026-11-09T05:04:38.012707932Z
+modified_at: 2026-11-09T05:07:29.761486623Z
 req_type: Bug
 comments:
 - id: 01a1beb1-ae7c-7c52-89a5-00a6bc02eeb0
@@ -17,6 +17,13 @@ comments:
     Implementation slice: found dirty-resume admission in prepare_rework_merge_with returned an empty conflict list before fetching or checking either remote head. It now fetches and validates the PR head, then admits pending-edit resumes only when fetched main is already an ancestor of seated HEAD. Otherwise it refuses before vendor launch with host recovery guidance, preserving edits. Fresh clean conflict routing to Claude is unchanged. Added real-Git regression coverage and updated CLI docs. Publication declared with Refs BUG-2504: original PR #3641/#3643 incidents and the reported check-ci-fast/sccache issue have not been reproduced or established as this cause. Targeted lane test job j20261109T050219155-2-0 is running; validation result will follow. No commit/push/queue completion from this native seat. Codegraph fixed executable is absent; doctor confirms missing tool.
   created_at: 2026-11-09T05:04:38.012707932Z
   modified_at: 2026-11-09T05:04:38.012707932Z
+  session_id: 01a1beadca03
+  harness_version: codex-cli 0.167.0
+- id: 01a1beb4-4d61-77d3-ba68-db42ef765216
+  author: dirtlab
+  content: 'Validation: lane job j20261109T050219155-2-0 ran cargo test --profile agent -p aida-cli-lib --lib -- rework_merge_tests: 10 passed, 0 failed, including bug_2504_dirty_resume_checks_fetched_heads_without_touching_edits. rustfmt and git diff --check pass. Initial aida-cli --lib invocation had no library target and was corrected. Changes remain uncommitted in seat_clone.rs and docs/cli/06-roles-sessions.md. Refs publication declaration retained; BUG-2504 remains In Progress pending original-incident and sccache investigation.'
+  created_at: 2026-11-09T05:07:29.761486623Z
+  modified_at: 2026-11-09T05:07:29.761486623Z
   session_id: 01a1beadca03
   harness_version: codex-cli 0.167.0
 history:
