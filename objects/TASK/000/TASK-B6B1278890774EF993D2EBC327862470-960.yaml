@@ -3,12 +3,12 @@ spec_id: TASK-b6b1278890774ef993d2ebc327862470-960
 agreed_id: TASK-3428
 title: 'Crate-split PR4: explicit imports instead of use crate::* in non-in-flight files, a glob-import ratchet, dissolve lib_part1..6.rs, and relocate-ledger-paths.py'
 description: 'Per SPIKE-713 deep dive section 7 row 4 and advisor rulings 3 and 8 (2026-11-07). Acceptance: (1) replace use crate::*; with explicit imports in every file not owned by an in-flight spec (section 7 list; about 85 of 104), no behavior change; (2) a ratchet (same shape as scripts/check-exec-context.py) forbids new glob crate imports, wired into make check-ci-fast and CI gates; (3) lib_part1..6.rs (lib.rs:772-777) dissolved into real modules, closing the TASK-1538 condition; (4) scripts/relocate-ledger-paths.py rewrites path-keyed ledgers (including scripts/portability-allowlist.txt and exec-context-legacy.json) for pure moves, with a test; (5) make check-ci-fast green. Split into two PRs if over ~40 files.'
-status: Approved
+status: InProgress
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-07T23:39:41.575597Z
-modified_at: 2026-11-09T00:21:42.394695332Z
+modified_at: 2026-11-09T00:22:55.868137264Z
 req_type: Task
 relationships:
 - rel_type: Child
@@ -971,6 +971,13 @@ history:
   - field_name: status
     old_value: NeedsAttention
     new_value: Approved
+- id: 01a1bdaf-c67c-7ca0-a1eb-c32d7e74648b
+  author: aida-session-start
+  timestamp: 2026-11-09T00:22:55.868133828Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: InProgress
 test_coverage_notes: 'Launcher cargo test --profile agent -p aida-cli-lib --lib -- command_registry passed: 32 executed tests, zero failures (j20261108T235124587-2-0). Launcher cargo check --profile agent -p aida-cli --no-default-features passed (j20261108T235531390-2-0). Earlier compile attempts exposed missing explicit bindings and traits; all corrected before the passing runs. 17 crate-split Python fixtures pass. Glob ratchet against HEAD passes at 164; ExecContext 1239 sites, store-writer 3400 sinks / 293 mappings, portability guard and growth check, and all 84 CI gate classifications pass. All 12 Rust files preserve every non-import token and avoid the owning plan exclusions and inspected open-PR footprints; touched-file rustfmt and git diff --check pass. Full make check-ci-fast remains host validation because its direct Cargo calls conflict with this seat runner-only rule. Codegraph unavailable (doctor confirmed); used rg/source inspection. Edits uncommitted, Refs declaration recorded, no queue completion.'
 implementation_summary: 'Next Refs import-cleanup slice removes 18 root crate globs from 12 files outside the owning plan exclusions, current open-PR footprints, and prior 15-adapter batch: assign_cmd, driver_cmd, graph_cmd, import_export_cmd, machine_readiness, manual, relationship_cmd, review_cmd, store_cmd, team_cmd, terminal_cmd and upgrade_cmd. Explicit imports include DatabaseBackend and Colorize traits; unused globs are removed. The checked-out baseline shrinks from 182 to 164. All non-import Rust tokens match HEAD. Tooling landed earlier; remaining import batches and lib_part1..6 dissolution remain outstanding. TASK-3428 stays In Progress; native Refs publication declaration recorded for host publication.'
 filed_at:
