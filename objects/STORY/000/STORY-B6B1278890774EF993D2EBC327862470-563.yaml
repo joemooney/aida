@@ -20,12 +20,12 @@ description: |
   3. A lane that passes behaves exactly as today, plus the marker.
   4. Tests cover: a gate fail followed by a fixed round, a fail that persists (publishes with fast_gate=fail), a timeout, and the Codex native-publication path.
   5. Advisor docs (rework-brief-craft step 6) say lanes are fast-gated by the host.
-status: InProgress
+status: NeedsAttention
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-07T19:45:35.836129088Z
-modified_at: 2026-11-09T02:10:30.386291644Z
+modified_at: 2026-11-09T02:30:45.514049885Z
 req_type: Story
 tags:
 - docs:impacted
@@ -595,6 +595,40 @@ comments:
   created_at: 2026-11-09T02:08:37.861434623Z
   modified_at: 2026-11-09T02:08:37.861434623Z
   session_id: 20abb7c3-8f9b-4a5e-b326-404921f3b450
+- id: 01a1be24-bdf2-7bc3-ba8c-059dcf7710a4
+  author: dirtlab
+  content: |
+    STORY-2640 rework handoff for reviewed head f3898c95c865. All edits remain uncommitted for the native host launcher.
+
+    Finding 1: read GitHub run 42547226360 job 128934827251 logs using a writable gh cache. The sole cli-0 failure was checked_in_audit_is_exhaustive_and_every_honoured_probe_parses at its catalog equality assertion: the catalog had aida lane fast-gate-release, but the audit omitted it. Added that exact row. Extracted the same exhaustive assertion into a store-free CLI integration test so unrelated fixture setup cannot conceal catalog drift. Retained improved fixture-init stdout/status diagnostics. lib-0, lib-1, cli-1, gates, contracts and rest all finished success at that reviewed head.
+
+    Finding 3: standalone, drain and queue-resume self-pushing exits now reconcile the actual attached seat branch before PR lookup and gating. Private clones use the existing sandboxed seat probe. Reservation migration locks branch names in order, reserves the destination before releasing the original branch, preserves the consumed repair credit, refuses an already-pending destination and follows the actual branch for cleanup/result reporting. Native publication continues using its existing branch authority. New regressions cover a moved Git branch, review holds, result markers, retry-budget preservation and conflicting pending reservations.
+
+    Changed files:
+    - aida-cli-lib/src/lane_fast_gate.rs
+    - aida-cli-lib/src/queue_cmd/work.rs
+    - aida-cli-lib/src/session.rs
+    - aida-cli-lib/src/standalone_implementer.rs
+    - aida-cli/tests/bug_1502_format_json_audit.rs
+    - docs/internal/cli-format-json-audit.md
+
+    Validation:
+    - j20261109T021249038-2-0: cargo test --profile agent -p aida-cli-lib --lib -- fast_gate: 47 passed, 1 ignored, exit 0. Includes the two new branch-move tests and existing publication/timeout/repair/drain regressions.
+    - j20261109T023004139-2-0: cargo test --profile agent -p aida-cli --test bug_1502_format_json_audit -- checked_in_audit_catalog_matches_without_store_setup: 1 passed, exit 0.
+    - rustfmt --check, git diff --check, portability, execution-context ledger (zero additions) and store-writer inventory (3420 sinks) pass.
+    - untested=false for executed targeted Cargo tests.
+
+    Finding 2: actually ran the ignored real-main integration through the host Cargo runner, j20261109T021304535-2-0. It used the production seeded fast-gate dispatch and bubblewrap profile on committed origin/main a7a14984cec5533987dfeccb70d1f91aaebbf22a. Recorded: real sandbox fast_gate=fail, rc=2, elapsed=175.040825325s. It failed Run shipped full-access launch refusal fixtures because tests/test_bug_1688_shipped_launch_refusals.sh could not find rg. This was not a 300s timeout. The full gate still has no pass evidence: the host must make ripgrep available on the runner PATH, then rerun and record a passing marker/elapsed time. The installed direct make submission still refuses as Cargo-only; no unsandboxed fallback was used. This manual validation remains a publication veto.
+
+    Local full JSON-audit replay was blocked before the assertion by fixture permissions under the lane shared umask (allocation binding, then intake private Git directory). Temporary fixture permission experiments were reverted; production trust checks were not relaxed. The exact catalog assertion independently passes in the new integration test.
+
+    Finding 4 remains deferred: settled JSON receipts and permanent lock sidecars are not collected. Removing sidecars without coordinating existing waiters can split lock identity; no unsafe unlink-based cleanup was added.
+
+    Codegraph fixed host executable is unavailable in this environment; navigation used rg. No commit, push, PR creation, queue done, ship declaration or review record performed. Existing punt/hold vetoes remain in force.
+  created_at: 2026-11-09T02:30:41.394783118Z
+  modified_at: 2026-11-09T02:30:41.394783118Z
+  session_id: 01a1be123d0b
+  harness_version: codex-cli 0.167.0
 history:
 - id: 01a1b78d-2628-7313-92de-8804ac5f8f71
   author: aida-session-start
@@ -938,6 +972,15 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a1be24-ce0a-7943-80f8-78562fde422e
+  author: dirtlab
+  timestamp: 2026-11-09T02:30:45.514063008Z
+  session_id: 01a1be123d0b
+  harness_version: codex-cli 0.167.0
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: NeedsAttention
 filed_at:
   code_sha: 7a18c0d52a6a4e0822befd4c810cfed16b04b74c
   branch: main
@@ -947,3 +990,8 @@ filed_at:
   vendor: claude
   session: 01a1b76b-2fe7-7dd2-88d0-356fc8d96d04
   harness_version: 2.1.319 (Claude Code)
+attention_reason:
+  category: blocked-dependency
+  detail: 'Latest CI audit omission and actual-branch fast-gate bypass are fixed in uncommitted edits; 47 fast-gate regressions and the exhaustive CLI catalog test pass. Required real-main sandbox gate ran on a7a14984: fast_gate=fail rc=2 elapsed=175.04s because rg is absent from runner PATH. Host must provide ripgrep and record a passing seeded gate; direct make submission remains Cargo-only. Finding 4 receipt/lock cleanup remains deferred to avoid unsafe lock-inode deletion. Manual validation remains a publication veto.'
+  raised_by: implementer
+  raised_at: 2026-11-09T02:30:45.514049885Z
