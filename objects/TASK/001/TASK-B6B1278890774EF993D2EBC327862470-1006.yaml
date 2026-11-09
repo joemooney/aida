@@ -8,7 +8,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-08T18:01:54.649358Z
-modified_at: 2026-11-09T06:37:48.136531931Z
+modified_at: 2026-11-09T06:54:00.782771479Z
 req_type: Task
 relationships:
 - rel_type: Child
@@ -157,6 +157,13 @@ comments:
   modified_at: 2026-11-09T06:37:48.136531931Z
   session_id: 01a1bf010a45
   harness_version: codex-cli 0.167.0
+- id: 01a1bf15-d24e-7fe2-8d04-2e4f769efdf5
+  author: joe
+  content: 'ADVISOR RUBBIN: CI has failed this same check on repeated pushes; pushing again without fixing it will fail again. Do not merge main or push until this exact failure is fixed. #3703: step Test time budget fails, not a test. task_3608_host_no_change_survives_lease_discovery takes 91.2s and task_3608_receipt_cannot_override_watchdog 30.2s against the 10s limit for unbudgeted tests. Make them fast (they are waiting on real timers; inject the clock or shorten the poll/watchdog interval). Do not add budget entries for a 91s test. Local gate: one targeted cargo test --profile agent -p aida-cli-lib <filter> plus make check-ci-fast, then push; run long cargo in background.'
+  created_at: 2026-11-09T06:54:00.782771479Z
+  modified_at: 2026-11-09T06:54:00.782771479Z
+  session_id: 01a1beff-fc3b-78e2-93e2-9b0c283b0339
+  harness_version: 2.1.319 (Claude Code)
 history:
 - id: 01a1bc53-0ec9-7670-9674-41fd5fd9d861
   author: joe
