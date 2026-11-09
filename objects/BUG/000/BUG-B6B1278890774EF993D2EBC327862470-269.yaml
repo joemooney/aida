@@ -3,119 +3,96 @@ spec_id: BUG-b6b1278890774ef993d2ebc327862470-269
 agreed_id: BUG-2504
 title: Queue-work rework lanes exit with no changes or nothing to publish on a conflicting PR instead of resolving the conflict
 description: 'Seen 2026-11-08 on #3641 and #3643: lanes briefed to merge main and resolve exited with no pending changes or pushed a head that still conflicted, and the advisor had to hand merge. Reported each time only as ''Queue-work lane exited without changes''. Lanes also reported check-ci-fast cannot run in the native sandbox (sccache cannot write dep-info on a read-only filesystem), which may share a cause.'
-status: InProgress
+status: NeedsAttention
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
-created_at: 2026-11-08 21:20:08.484660+00:00
-modified_at: 2026-11-09 09:49:57.669227+00:00
+created_at: 2026-11-08T21:20:08.484660Z
+modified_at: 2026-11-09T10:00:24.423083072Z
 req_type: Bug
 comments:
 - id: 01a1beb1-ae7c-7c52-89a5-00a6bc02eeb0
   author: dirtlab
-  content: 'Implementation slice: found dirty-resume admission in prepare_rework_merge_with returned an empty conflict list before fetching or checking either remote head. It now fetches and validates the PR head, then admits pending-edit resumes only when fetched main is already an ancestor of seated HEAD. Otherwise it refuses before vendor launch with host recovery guidance, preserving edits. Fresh clean conflict routing to Claude is unchanged. Added real-Git regression coverage and updated CLI docs. Publication declared with Refs BUG-2504: original PR #3641/#3643 incidents and the reported check-ci-fast/sccache issue have not been reproduced or established as this cause. Targeted lane test job j20261109T050219155-2-0 is running; validation result will follow. No commit/push/queue completion from this native seat. Codegraph fixed executable is absent; doctor confirms missing tool.
-
-    '
-  created_at: 2026-11-09 05:04:38.012707+00:00
-  modified_at: 2026-11-09 05:04:38.012707+00:00
+  content: |
+    Implementation slice: found dirty-resume admission in prepare_rework_merge_with returned an empty conflict list before fetching or checking either remote head. It now fetches and validates the PR head, then admits pending-edit resumes only when fetched main is already an ancestor of seated HEAD. Otherwise it refuses before vendor launch with host recovery guidance, preserving edits. Fresh clean conflict routing to Claude is unchanged. Added real-Git regression coverage and updated CLI docs. Publication declared with Refs BUG-2504: original PR #3641/#3643 incidents and the reported check-ci-fast/sccache issue have not been reproduced or established as this cause. Targeted lane test job j20261109T050219155-2-0 is running; validation result will follow. No commit/push/queue completion from this native seat. Codegraph fixed executable is absent; doctor confirms missing tool.
+  created_at: 2026-11-09T05:04:38.012707Z
+  modified_at: 2026-11-09T05:04:38.012707Z
   session_id: 01a1beadca03
   harness_version: codex-cli 0.167.0
 - id: 01a1beb4-4d61-77d3-ba68-db42ef765216
   author: dirtlab
   content: 'Validation: lane job j20261109T050219155-2-0 ran cargo test --profile agent -p aida-cli-lib --lib -- rework_merge_tests: 10 passed, 0 failed, including bug_2504_dirty_resume_checks_fetched_heads_without_touching_edits. rustfmt and git diff --check pass. Initial aida-cli --lib invocation had no library target and was corrected. Changes remain uncommitted in seat_clone.rs and docs/cli/06-roles-sessions.md. Refs publication declaration retained; BUG-2504 remains In Progress pending original-incident and sccache investigation.'
-  created_at: 2026-11-09 05:07:29.761486+00:00
-  modified_at: 2026-11-09 05:07:29.761486+00:00
+  created_at: 2026-11-09T05:07:29.761486Z
+  modified_at: 2026-11-09T05:07:29.761486Z
   session_id: 01a1beadca03
   harness_version: codex-cli 0.167.0
 - id: 01a1bedf-f60f-7242-bbd6-5af08f669e3b
   author: joe
   content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: Partial: fetched-head validation is correct and unit-tested, but the new dirty-resume refusal strands adopted orphan seats by deleting their lease in launch rollback, and it over-refuses non-conflicting PRs behind main.. No triage reason was given.'
-  created_at: 2026-11-09 05:55:10.991028+00:00
-  modified_at: 2026-11-09 05:55:10.991028+00:00
+  created_at: 2026-11-09T05:55:10.991028Z
+  modified_at: 2026-11-09T05:55:10.991028Z
   session_id: 7aacb1ed-ebaa-4da4-a195-500864e99e7d
 - id: 01a1bf7a-bf36-7b41-b489-79be2882b1c8
   author: joe
-  content: 'REVIEW FINDINGS TO ADDRESS (PR #3715):
-
+  content: |-
+    REVIEW FINDINGS TO ADDRESS (PR #3715):
     Verdict: CHANGES REQUESTED
-
     Reviewed commit: 6034cc970990
-
     Recorded: 2026-11-09T05:11:49.226868961+00:00
-
     Findings:
-
-    1. Dirty --resume of an orphaned seat loses the lease when the new refusal fires, contradicting "edits were preserved ... before retrying". aida-cli-lib/src/seat_clone.rs:3043-3057 now returns Err for dirty resumes (fetch failure, behind PR head, or main not incorporated), and this runs inside run_pickup_launch before agent start (queue_cmd/work.rs:5002, 5934). On the adopted-orphan path, session_start.rs:3438-3441 has already deleted the orphan lease, cleanup.lease_id is the successor (3429-3431), and SessionStartCleanup::drop removes the successor (session_start.rs:1636-1637) while leaving the unowned tree. Result: dirty tree on disk with no lease record; adoptable_orphan_lease (leases.rs:4816) returns None on retry, so --resume can no longer adopt it, and pickup either bails at session_start.rs:2201 "already exists" or resumes elsewhere. Before this PR the dirty path returned Ok and never reached rollback. Fix: keep or restore the orphan lease when a resume refusal rolls back (or
-    run admission before the lease swap), and add a test driving an adopted dirty orphan through a refused launch that asserts retry can still adopt it.
-
+    1. Dirty --resume of an orphaned seat loses the lease when the new refusal fires, contradicting "edits were preserved ... before retrying". aida-cli-lib/src/seat_clone.rs:3043-3057 now returns Err for dirty resumes (fetch failure, behind PR head, or main not incorporated), and this runs inside run_pickup_launch before agent start (queue_cmd/work.rs:5002, 5934). On the adopted-orphan path, session_start.rs:3438-3441 has already deleted the orphan lease, cleanup.lease_id is the successor (3429-3431), and SessionStartCleanup::drop removes the successor (session_start.rs:1636-1637) while leaving the unowned tree. Result: dirty tree on disk with no lease record; adoptable_orphan_lease (leases.rs:4816) returns None on retry, so --resume can no longer adopt it, and pickup either bails at session_start.rs:2201 "already exists" or resumes elsewhere. Before this PR the dirty path returned Ok and never reached rollback. Fix: keep or restore the orphan lease when a resume refusal rolls back (or run admission before the lease swap), and add a test driving an adopted dirty orphan through a refused launch that asserts retry can still adopt it.
     2. The main-ancestry gate at seat_clone.rs:3052-3058 over-refuses: it applies to every dirty resume regardless of vendor or whether the PR conflicts, so any single commit landing on main blocks resuming pending work. BUG-2504 concerns conflicting PRs and native children that cannot write Git metadata, yet a non-conflicting PR merely behind main, or a vendor/seat able to write Git metadata, is now refused where it was admitted before, with a native-lane reason that may not apply. Fix: limit refusal to the case that needs host preparation (for example a host-side no-write merge probe showing conflicts, and/or the vendor/seat capability), or record explicitly on the spec why every behind-main dirty resume must stop, and test the admitted case.
-
     3. Refusal guidance on dirty resumes is not actionable. seat_clone.rs:3054-3056 says "Recover the pending work on the host and prepare the main merge" but names no command, and host preparation cannot run while the seat is dirty, so the operator must first commit or move the edits; the sibling conflict refusal (queue_cmd/work.rs:488-491) gives an exact command. Separately, the behind-PR-head message at seat_clone.rs:3044-3046 ("retry pickup with its current head") is newly reachable for dirty resumes, where retrying cannot help because nothing advances a dirty seat; the new test pins it at line ~3392 of the PR version. Fix: give concrete recovery steps for both dirty cases and match docs/cli/06-roles-sessions.md:818-822.
-
-    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.'
-  created_at: 2026-11-09 08:44:15.030588+00:00
-  modified_at: 2026-11-09 08:44:15.030588+00:00
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
+  created_at: 2026-11-09T08:44:15.030588Z
+  modified_at: 2026-11-09T08:44:15.030588Z
   session_id: 01a1beff-fc3b-78e2-93e2-9b0c283b0339
   harness_version: 2.1.319 (Claude Code)
 - id: 01a1bf8f-bfb9-7ee0-b8c3-c55a60f11cc2
   author: dirtlab
-  content: 'Addressed all three PR #3715 review findings. Failed adopted-seat launch setup now restores the original orphan lease atomically without replacing concurrent records before removing its successor; a regression drives a refused run_pickup_launch and then successfully adopts the same dirty tree again. Dirty resume now uses a committed-tree merge-tree probe, admitting a non-conflicting main advance while refusing conflicts/probe failures without changing HEAD, index or pending files. Behind-PR-head and dirty-main refusal messages include host add/commit/fetch/merge/retry commands, with matching CLI docs.
-
+  content: |
+    Addressed all three PR #3715 review findings. Failed adopted-seat launch setup now restores the original orphan lease atomically without replacing concurrent records before removing its successor; a regression drives a refused run_pickup_launch and then successfully adopts the same dirty tree again. Dirty resume now uses a committed-tree merge-tree probe, admitting a non-conflicting main advance while refusing conflicts/probe failures without changing HEAD, index or pending files. Behind-PR-head and dirty-main refusal messages include host add/commit/fetch/merge/retry commands, with matching CLI docs.
 
     Changed files: aida-cli-lib/src/seat_clone.rs; aida-cli-lib/src/session_start.rs; aida-cli-lib/src/tests/bug_2223_orphan_seat_reentry_tests.rs; docs/cli/06-roles-sessions.md. The orphan suite initially had seven fixture setup failures under lane umask 0002; its queued_scope fixture now restricts its synthetic allocation setting to 0600, satisfying the existing reader contract without changing production checks.
 
-
     Validation through the lane runner: focused bug_2504 job j20261109T084922160-2-0: 2 passed; rework_merge_tests job j20261109T085050878-2-0: 10 passed; final orphan_reentry_tests job j20261109T090112104-2-0: 21 passed. rustfmt --check and git diff --check pass. Codegraph fixed client is absent and doctor reports missing tool; navigation used rg.
 
-
     Edits remain uncommitted for host publication. Recorded native declaration: [AI:codex] fix(queue): preserve adopted seats on rework refusal (Refs BUG-2504). No commit, push, PR creation, queue completion, review verdict or PR ship performed from this seat. BUG-2504 remains In Progress: original #3641/#3643 reproduction and the reported check-ci-fast/sccache issue remain unverified; this is the requested review-fix slice.
-
-    '
-  created_at: 2026-11-09 09:07:11.417764+00:00
-  modified_at: 2026-11-09 09:07:11.417764+00:00
+  created_at: 2026-11-09T09:07:11.417764Z
+  modified_at: 2026-11-09T09:07:11.417764Z
   session_id: 01a1bf7dcc97
   harness_version: codex-cli 0.167.0
 - id: 01a1bfae-e7c3-7380-befe-1c390a3ba818
   author: joe
   content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: Prior findings 1 and 2 are fixed (orphan lease restored; merge-tree probe admits clean main advances), but the rewritten recovery guidance sends operators to run host Git in seat-writable clones, violating the seat_clone trust boundary; two smaller defects also need rework. CI at head still queued.. No triage reason was given.'
-  created_at: 2026-11-09 09:41:13.283547+00:00
-  modified_at: 2026-11-09 09:41:13.283547+00:00
+  created_at: 2026-11-09T09:41:13.283547Z
+  modified_at: 2026-11-09T09:41:13.283547Z
 - id: 01a1bfaf-0109-76a0-a372-5cee53f5f699
   author: joe
-  content: 'REVIEW FINDINGS TO ADDRESS (PR #3715):
-
+  content: |-
+    REVIEW FINDINGS TO ADDRESS (PR #3715):
     Verdict: CHANGES REQUESTED
-
     Reviewed commit: 35eabb02fa9f
-
     Recorded: 2026-11-09T09:12:17.191004092+00:00
-
     Findings:
-
-    1. MAJOR (security): the new recovery guidance directs host Git into seat-controlled clones. seat_clone.rs:3045-3048 and 3055-3058, and docs/cli/06-roles-sessions.md:821-826, tell the operator to run `git -C <seat> add -A/commit/fetch origin/merge` on the host. prepare_rework_merge handles private clones (seat_clone.rs:2817, 2836-2840), and the module contract at seat_clone.rs:12-16 says this module is the only code that may run git with a seat clone as repository because the clone .git/config, hooks/ and info/ are seat-writable, so host git there would run seat-planted configuration outside the sandbox. The same function sets hooks/fsmonitor off and fetches only from main ("never through a seat-controlled origin", :2871). Scenario: a contained seat plants .git/hooks/pre-commit or core.fsmonitor, the resume is refused, the operator pastes the commands, and seat code runs unsandboxed on the host. Fix: replace with a sandboxed AIDA recovery path (or add one) for clones, or give distinct
-    safe guidance for clones vs linked worktrees; update the docs and pin the wording in a test. The commands also keep <seat>/<PR-branch> placeholders although prepare_rework_merge knows tree and branch.
-
+    1. MAJOR (security): the new recovery guidance directs host Git into seat-controlled clones. seat_clone.rs:3045-3048 and 3055-3058, and docs/cli/06-roles-sessions.md:821-826, tell the operator to run `git -C <seat> add -A/commit/fetch origin/merge` on the host. prepare_rework_merge handles private clones (seat_clone.rs:2817, 2836-2840), and the module contract at seat_clone.rs:12-16 says this module is the only code that may run git with a seat clone as repository because the clone .git/config, hooks/ and info/ are seat-writable, so host git there would run seat-planted configuration outside the sandbox. The same function sets hooks/fsmonitor off and fetches only from main ("never through a seat-controlled origin", :2871). Scenario: a contained seat plants .git/hooks/pre-commit or core.fsmonitor, the resume is refused, the operator pastes the commands, and seat code runs unsandboxed on the host. Fix: replace with a sandboxed AIDA recovery path (or add one) for clones, or give distinct safe guidance for clones vs linked worktrees; update the docs and pin the wording in a test. The commands also keep <seat>/<PR-branch> placeholders although prepare_rework_merge knows tree and branch.
     2. MINOR: the behind-PR-head context at seat_clone.rs:3044-3049 is now shared by clean and fresh paths, not only dirty resumes. It sits after the dirty/resume split, so a clean seat is told to `git add -A` and `git commit` (commit exits non-zero: nothing to commit), and a fresh non-resume pickup is told to retry with `--resume`, which has no prior session to resume. The previous text (retry pickup with current head) was right for those paths. Fix: emit the commit-first recovery only when resume && dirty, keep re-pickup guidance otherwise, and test the clean case.
-
     3. MINOR: rollback mis-handles an orphan record that was never removed. session_start.rs:3463-3465 sets cleanup.adopted_orphan before remove_session_lease_record_only, whose failure is only warned at :3467. On a later refusal, Drop (:1642-1658) hits persist_noclobber AlreadyExists because the orphan file still exists, prints "retained successor lease" and returns: the successor lease stays beside the orphan on one tree, and revert_claim_write, release_branch and release_claim_receipt are skipped. Before this PR that path removed the successor and left the orphan intact. Fix: set adopted_orphan only after a successful removal (or treat an already-present identical orphan as restored), and add a test for it; no test currently covers the restore-failure branch.
-
     4. COSMETIC: bug_2504_dirty_resume_checks_fetched_heads_without_touching_edits (seat_clone.rs:3428) loops over a one-element array with a constant expected string; a plain block would be clearer.
-
-    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.'
-  created_at: 2026-11-09 09:41:19.753220+00:00
-  modified_at: 2026-11-09 09:41:19.753220+00:00
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
+  created_at: 2026-11-09T09:41:19.753220Z
+  modified_at: 2026-11-09T09:41:19.753220Z
 - id: 01a1bfbb-6fcc-7980-81da-37273851e7da
   author: dirtlab
-  content: 'Latest PR #3715 review fixes implemented: replaced unsafe host-Git-in-seat guidance with sandboxed aida ship --from-seat/--commit-pending recovery and the fresh Claude route; clean/fresh behind-head pickups retain simple current-head retry guidance; rollback recognizes an unchanged orphan already on disk and removes its successor; removed the single-element test loop. Diagnostics name the actual seat path and branch. Regression exercises existing-orphan rollback, checks exactly one remaining lease, and successfully re-adopts the dirty tree. Changed files: aida-cli-lib/src/seat_clone.rs, aida-cli-lib/src/session_start.rs, aida-cli-lib/src/tests/bug_2223_orphan_seat_reentry_tests.rs, docs/cli/06-roles-sessions.md. Lane validation: bug_2504 job j20261109T094836651-2-0: 2 passed; final rework_merge_tests j20261109T094910074-2-0: 10 passed; final orphan_reentry_tests j20261109T094914213-2-0: 21 passed. Touched-file rustfmt --check and git diff --check pass. Codegraph client absent,
-    doctor confirms missing tool; used rg. Edits uncommitted for host publication; Refs BUG-2504 declaration recorded. No commit/push/PR/queue completion/review verdict from seat. Original incidents and sccache issue remain unverified; spec remains In Progress. MCP comment tool unavailable under approval policy; used CLI.'
-  created_at: 2026-11-09 09:54:54.540621+00:00
-  modified_at: 2026-11-09 09:54:54.540621+00:00
+  content: 'Latest PR #3715 review fixes implemented: replaced unsafe host-Git-in-seat guidance with sandboxed aida ship --from-seat/--commit-pending recovery and the fresh Claude route; clean/fresh behind-head pickups retain simple current-head retry guidance; rollback recognizes an unchanged orphan already on disk and removes its successor; removed the single-element test loop. Diagnostics name the actual seat path and branch. Regression exercises existing-orphan rollback, checks exactly one remaining lease, and successfully re-adopts the dirty tree. Changed files: aida-cli-lib/src/seat_clone.rs, aida-cli-lib/src/session_start.rs, aida-cli-lib/src/tests/bug_2223_orphan_seat_reentry_tests.rs, docs/cli/06-roles-sessions.md. Lane validation: bug_2504 job j20261109T094836651-2-0: 2 passed; final rework_merge_tests j20261109T094910074-2-0: 10 passed; final orphan_reentry_tests j20261109T094914213-2-0: 21 passed. Touched-file rustfmt --check and git diff --check pass. Codegraph client absent, doctor confirms missing tool; used rg. Edits uncommitted for host publication; Refs BUG-2504 declaration recorded. No commit/push/PR/queue completion/review verdict from seat. Original incidents and sccache issue remain unverified; spec remains In Progress. MCP comment tool unavailable under approval policy; used CLI.'
+  created_at: 2026-11-09T09:54:54.540621Z
+  modified_at: 2026-11-09T09:54:54.540621Z
   session_id: 01a1bfb3a19e
   harness_version: codex-cli 0.167.0
 history:
 - id: 01a1beaa-5bee-7821-b878-3b983c03f8ae
   author: joe
-  timestamp: 2026-11-09 04:56:38.126334+00:00
+  timestamp: 2026-11-09T04:56:38.126334Z
   session_id: 7aacb1ed-ebaa-4da4-a195-500864e99e7d
   changes:
   - field_name: status
@@ -123,20 +100,20 @@ history:
     new_value: Approved
 - id: 01a1bead-d066-7661-8a34-e850a270f7a1
   author: aida-session-start
-  timestamp: 2026-11-09 05:00:24.550676+00:00
+  timestamp: 2026-11-09T05:00:24.550676Z
   changes:
   - field_name: status
     old_value: Approved
     new_value: InProgress
 - id: 01a1beae-222b-7290-9be6-0598aa70a98b
   author: dirtlab
-  timestamp: 2026-11-09 05:00:45.483651+00:00
+  timestamp: 2026-11-09T05:00:45.483651Z
   session_id: 01a1beadca03
   harness_version: codex-cli 0.167.0
   changes: []
 - id: 01a1beb8-44ef-7a82-93ef-17c94ba9847e
   author: aida-orchestrator
-  timestamp: 2026-11-09 05:11:49.743813+00:00
+  timestamp: 2026-11-09T05:11:49.743813Z
   session_id: 01a1beb61413
   harness_version: 2.1.319 (Claude Code)
   changes:
@@ -145,7 +122,7 @@ history:
     new_value: NeedsAttention
 - id: 01a1bedf-f60f-7242-bbd6-5ae9f032c17f
   author: joe
-  timestamp: 2026-11-09 05:55:10.991011+00:00
+  timestamp: 2026-11-09T05:55:10.991011Z
   session_id: 7aacb1ed-ebaa-4da4-a195-500864e99e7d
   changes:
   - field_name: status
@@ -153,25 +130,25 @@ history:
     new_value: Approved
 - id: 01a1bee0-1abf-7cf3-b886-3c67f8502f02
   author: joe
-  timestamp: 2026-11-09 05:55:20.383413+00:00
+  timestamp: 2026-11-09T05:55:20.383413Z
   session_id: 7aacb1ed-ebaa-4da4-a195-500864e99e7d
   changes: []
 - id: 01a1bf7d-d2d2-73f1-8207-3377dc495c5e
   author: aida-session-start
-  timestamp: 2026-11-09 08:47:36.658660+00:00
+  timestamp: 2026-11-09T08:47:36.658660Z
   changes:
   - field_name: status
     old_value: Approved
     new_value: InProgress
 - id: 01a1bf7e-2bda-7fc3-b70d-ed7504b1d6d5
   author: dirtlab
-  timestamp: 2026-11-09 08:47:59.450836+00:00
+  timestamp: 2026-11-09T08:47:59.450836Z
   session_id: 01a1bf7dcc97
   harness_version: codex-cli 0.167.0
   changes: []
 - id: 01a1bf80-b077-7883-a1fe-e5ed416ebcac
   author: aida-orchestrator
-  timestamp: 2026-11-09 08:50:44.471560+00:00
+  timestamp: 2026-11-09T08:50:44.471560Z
   session_id: 01a1bf7f4ed0
   harness_version: 2.1.319 (Claude Code)
   changes:
@@ -180,40 +157,49 @@ history:
     new_value: NeedsAttention
 - id: 01a1bf94-6c84-7dd0-a89e-b984231fb741
   author: joe
-  timestamp: 2026-11-09 09:12:17.796046+00:00
+  timestamp: 2026-11-09T09:12:17.796046Z
   session_id: 01a1bf92375a
   harness_version: 2.1.319 (Claude Code)
   changes: []
 - id: 01a1bfae-e7c3-7380-befe-1c2948642606
   author: joe
-  timestamp: 2026-11-09 09:41:13.283536+00:00
+  timestamp: 2026-11-09T09:41:13.283536Z
   changes:
   - field_name: status
     old_value: NeedsAttention
     new_value: Approved
 - id: 01a1bfaf-0f4c-7951-b595-cefa01496339
   author: joe
-  timestamp: 2026-11-09 09:41:23.404457+00:00
+  timestamp: 2026-11-09T09:41:23.404457Z
   changes: []
 - id: 01a1bfb3-a756-7640-979f-eb7f2ebe9716
   author: aida-session-start
-  timestamp: 2026-11-09 09:46:24.470679+00:00
+  timestamp: 2026-11-09T09:46:24.470679Z
   changes:
   - field_name: status
     old_value: Approved
     new_value: InProgress
 - id: 01a1bfb3-fbf7-72b1-89fa-3e64c8efa838
   author: dirtlab
-  timestamp: 2026-11-09 09:46:46.135623+00:00
+  timestamp: 2026-11-09T09:46:46.135623Z
   session_id: 01a1bfb3a19e
   harness_version: codex-cli 0.167.0
   changes: []
 - id: 01a1bfb6-e870-7a62-baa2-91397aab6b9a
   author: joe
-  timestamp: 2026-11-09 09:49:57.744015+00:00
+  timestamp: 2026-11-09T09:49:57.744015Z
   session_id: 01a1bfb5b19f
   harness_version: 2.1.319 (Claude Code)
   changes: []
+- id: 01a1bfc0-7867-7f73-af1f-470c747e6640
+  author: aida-orchestrator
+  timestamp: 2026-11-09T10:00:24.423103809Z
+  session_id: 01a1bfbd772a
+  harness_version: 2.1.319 (Claude Code)
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: NeedsAttention
 filed_at:
   code_sha: b57c1fab753d30430c7a544b781bd8c7d91da0d2
   branch: main
@@ -227,7 +213,7 @@ failure_reason:
   phase: reviewer
   phase_index: 3
   kind: verdict:request-changes
-  detail: 'Round 3: head adds only a merge of main; the four PR files are unchanged from 35eabb02, so all round-2 findings stand, including the MAJOR host-Git-in-seat-clone recovery guidance. CI at head still pending.'
+  detail: 'Round 4: all round-2 findings are fixed and no fail-open was found, but the new dirty-resume refusals prescribe aida ship --from-seat for linked-worktree seats too, where that command always refuses, leaving no working recovery. CI at head still in progress, so not used as evidence.'
   recovery_hint: address the review findings, move BUG-2504 back to In Progress, and clear the PR hold only after approval
   shelved_by: reviewer
-  shelved_at: 2026-11-09 09:49:57.669227+00:00
+  shelved_at: 2026-11-09T10:00:24.423083072Z
