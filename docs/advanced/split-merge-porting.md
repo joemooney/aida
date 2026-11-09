@@ -2,11 +2,11 @@
 
 <!-- trace:STORY-2692 | ai:codex -->
 
-Run the host-side helper from the merge worktree with the PR's original base
+Run the host-side helper from the merge worktree with the PR's current merge base
 and head commits and an explicit list of candidate destination files:
 
 ```sh
-python3 scripts/port-split-hunks.py --base <base-sha> --head <pr-head-sha> \
+python3 scripts/port-split-hunks.py --base "$(git merge-base HEAD MERGE_HEAD)" --head <pr-head-sha> \
   --source path/original.rs \
   --destination path/parent.rs --destination path/module.rs
 ```
@@ -37,7 +37,7 @@ the existing `check-store-writers.py --regenerate --baseline <path>` path.
 Regeneration preserves that baseline's matching policy rows, scans the merged
 source and replaces the conflicted working inventory. Review policy changes on
 the other merge side separately: the helper never selects or combines policy
-evidence for you. A missing or invalid explicit baseline refuses.
+evidence for you. A missing, invalid or empty explicit baseline refuses; reviewed writer rows are required.
 
 Every hunk's complete old text (removed lines plus three-line diff context)
 must occur exactly once across all supplied destinations. Matching uses the

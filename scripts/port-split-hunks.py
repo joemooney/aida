@@ -17,12 +17,18 @@ class Refusal(ValueError):
     pass
 
 
+def git_lines(text):
+    """Git lines end only at LF; preserve every other character exactly."""
+    parts = text.split("\n")
+    return [part + "\n" for part in parts[:-1]] + ([parts[-1]] if parts[-1] else [])
+
+
 def parse_hunks(patch):
     """Retain exact line endings, including Git's missing-newline markers."""
     hunks = []
     old, new = None, None
     expected = None
-    for line in patch.splitlines(keepends=True):
+    for line in git_lines(patch):
         if line.startswith('@@ '):
             match = re.fullmatch(r'@@ -\d+(?:,(\d+))? \+\d+(?:,(\d+))? @@[^\n]*\n?', line)
             if not match:
@@ -104,6 +110,8 @@ def validate_inventory(data):
     """Reject malformed policy evidence before any source writes."""
     if data.get('version') != 2:
         raise Refusal('inventory baseline must be version 2')
+    if not data.get('writer'):
+        raise Refusal('inventory baseline must contain writer rows; empty policy refused')
     for kind, required in (
             ('writer', ('id', 'path', 'item', 'sink', 'lock', 'gate', 'disposition',
                         'proposed_operation', 'evidence_tests')),
@@ -180,8 +188,10 @@ def main():
         inventory = root / 'scripts/store-writers.toml'
         if args.inventory_baseline is None and inventory.exists():
             validate_inventory(tomllib.loads(inventory.read_text()))
+        if args.apply:
+            destination(root, 'scripts/check-store-writers.py')
         paths = {destination(root, value) for value in args.destination}
-        files = {path: path.read_bytes().decode('utf-8').splitlines(keepends=True) for path in paths}
+        files = {path: git_lines(path.read_bytes().decode('utf-8')) for path in paths}
         unmerged = {entry.split(b'\t', 1)[1].decode('utf-8')
                     for entry in git('ls-files', '--unmerged', '-z').split(b'\0') if entry}
         for path in paths:
@@ -190,7 +200,7 @@ def main():
                 if args.destination_conflict_side is None:
                     raise Refusal(f'conflicted destination {relative}: select --destination-conflict-side explicitly')
                 stage = '2' if args.destination_conflict_side == 'ours' else '3'
-                files[path] = git('show', f':{stage}:{relative}').decode('utf-8').splitlines(keepends=True)
+                files[path] = git_lines(git('show', f':{stage}:{relative}').decode('utf-8'))
         changes = plan(parse_hunks(patch), files)
         for path in sorted(changes):
             print(f'{"port" if args.apply else "would port"}: {path.relative_to(root)}')

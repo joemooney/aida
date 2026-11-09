@@ -32,12 +32,61 @@ class PortSplitHunks(unittest.TestCase):
         with self.assertRaisesRegex(PORT.Refusal, 'possible replay'):
             PORT.plan([(['tail\n'], ['tail\n', 'added\n'])],
                       {'module': ['tail\n', 'added\n']})
-        for data in ({'version': 2, 'writer': {}},
+        for data in ({'version': 2}, {'version': 2, 'writer': []},
+                     {'version': 2, 'writer': {}},
                      {'version': 2, 'writer': [{'item': 'broken'}]},
                      {'version': 2, 'operation': ['broken']},
                      {'version': 2, 'mediated_route': 'broken'}):
             with self.assertRaises(PORT.Refusal):
                 PORT.validate_inventory(data)
+
+    def test_git_line_boundaries(self):
+        for separator in ('\v', '\f', '\x85', '\u2028', '\u2029', '\r'):
+            text = f'foo{separator}bar\n'
+            self.assertEqual(PORT.git_lines(text), [text])
+            with self.assertRaises(PORT.Refusal):
+                PORT.plan([(['bar\n'], ['new\n'])], {'module': PORT.git_lines(text)})
+            patch = f'@@ -1 +1 @@\n-{text}+replacement\n'
+            self.assertEqual(PORT.parse_hunks(patch), [([text], ['replacement\n'])])
+
+    def test_merged_main_base_and_nonancestor_refusals(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            def git(*args):
+                return subprocess.check_output(['git', '-C', str(root), *args], stderr=subprocess.STDOUT).decode().strip()
+            def commit():
+                git('add', '.')
+                git('-c', 'user.name=Fixture', '-c', 'user.email=fixture@example.invalid', 'commit', '-qm', 'fixture')
+                return git('rev-parse', 'HEAD')
+            git('init', '-q')
+            (root / 'source.rs').write_text('old\n')
+            original = commit()
+            git('checkout', '-qb', 'mainline')
+            (root / 'main-only').write_text('main update\n')
+            updated = commit()
+            git('checkout', '-qb', 'pr', original)
+            (root / 'source.rs').write_text('new\n')
+            pr = commit()
+            command = [sys.executable, str(SCRIPT), '--root', str(root), '--source', 'source.rs', '--destination', 'module.rs']
+            (root / 'module.rs').write_text('old\n')
+            refused = subprocess.run([*command, '--base', updated, '--head', pr], capture_output=True, text=True)
+            self.assertNotEqual(refused.returncode, 0)
+            self.assertIn('must be an ancestor', refused.stderr)
+            git('-c', 'user.name=Fixture', '-c', 'user.email=fixture@example.invalid', 'merge', '--no-edit', 'mainline')
+            head = git('rev-parse', 'HEAD')
+            git('checkout', 'mainline')
+            # Simulate the active merge before committing its clean result.
+            git('merge', '--no-commit', '--no-ff', 'pr')
+            refused = subprocess.run([*command, '--base', original, '--head', head], capture_output=True, text=True)
+            self.assertNotEqual(refused.returncode, 0)
+            self.assertIn('unique merge base', refused.stderr)
+            valid = subprocess.run([*command, '--base', updated, '--head', head], capture_output=True, text=True)
+            self.assertEqual(valid.returncode, 0, valid.stderr)
+            # Missing regenerator refuses before source edits.
+            refused = subprocess.run([*command, '--base', updated, '--head', head, '--apply'], capture_output=True, text=True)
+            self.assertNotEqual(refused.returncode, 0)
+            self.assertIn('existing regular file', refused.stderr)
+            self.assertEqual((root / 'module.rs').read_text(), 'old\n')
 
     def test_missing_newline_and_malformed_patch(self):
         patch = '@@ -1 +1 @@\n-old\n\\ No newline at end of file\n+new\n\\ No newline at end of file\n'
@@ -75,6 +124,16 @@ class PortSplitHunks(unittest.TestCase):
             (root / 'README').write_text('older base\n')
             older = commit()
             source.write_text(first + second)
+            # A populated reviewed policy row survives regeneration.
+            writer = src / 'writer.rs'
+            writer.write_text('pub fn persist() { std::fs::write("file", "body").unwrap(); }\n')
+            spec = importlib.util.spec_from_file_location('guard', SCRIPT.parent / 'check-store-writers.py')
+            guard = importlib.util.module_from_spec(spec)
+            spec.loader.exec_module(guard)
+            guard.regenerate(root)
+            inventory.write_text(inventory.read_text().replace('caller-owned; inspect enclosing item before cutover', 'reviewed fixture lock'))
+            inventory.write_text(inventory.read_text() + '# base\n')
+            reviewed = inventory.read_text()
             base = commit()
             git('checkout', '-qb', 'pr')
             changed = second.replace('moved() {}', 'moved() { /* PR edit */ }')
@@ -110,7 +169,18 @@ class PortSplitHunks(unittest.TestCase):
             self.assertNotEqual(refused.returncode, 0)
             self.assertIn('incomplete inventory writer', refused.stderr)
             self.assertEqual(module.read_text(), second)
-            baseline.write_text('version = 2\nwriter = []\noperation = []\n')
+            baseline.write_text(reviewed)
+            for empty in ('version = 2\n', 'version = 2\nwriter = []\n'):
+                baseline.write_text(empty)
+                refused = subprocess.run(command, capture_output=True, text=True)
+                self.assertNotEqual(refused.returncode, 0)
+                self.assertIn('empty policy refused', refused.stderr)
+                self.assertEqual(module.read_text(), second)
+            baseline.write_text(reviewed)
+            wrong_head = subprocess.run([*command, '--head', base], capture_output=True, text=True)
+            self.assertNotEqual(wrong_head.returncode, 0)
+            self.assertIn('--head must be', wrong_head.stderr)
+            self.assertEqual(module.read_text(), second)
             # A wrong ancestor must not replay unrelated changes onto main.
             wrong = subprocess.run([*command, '--base', older], capture_output=True, text=True)
             self.assertNotEqual(wrong.returncode, 0)
@@ -134,12 +204,13 @@ class PortSplitHunks(unittest.TestCase):
             self.assertEqual(regenerated.returncode, 0, regenerated.stderr)
             self.assertEqual(tomllib.loads(inventory.read_text())['version'], 2)
             self.assertNotIn('<<<<<<<', inventory.read_text())
+            self.assertIn('reviewed fixture lock', inventory.read_text())
             git('add', '.')
             git('commit', '-qm', 'resolve split merge')
             self.assertEqual(len(git('rev-list', '--parents', '-n', '1', 'HEAD').split()), 3)
             # Repository workflow: merge the split main branch INTO the PR.
             git('checkout', 'pr')
-            baseline.write_text('version = 2\nwriter = []\noperation = []\n')
+            baseline.write_text(reviewed)
             merge = subprocess.run(['git', '-C', str(root), 'merge', '--no-commit', split_tip], capture_output=True)
             self.assertEqual(merge.returncode, 1)
             reverse = command[:]

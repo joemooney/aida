@@ -45,6 +45,11 @@ class WriterInventoryTests(unittest.TestCase):
         with self.assertRaises(OSError):
             guard.regenerate(self.root, self.root / 'missing.toml')
         self.assertEqual(target.read_bytes(), before)
+        for empty in ('version = 2\n', 'version = 2\nwriter = []\n'):
+            baseline.write_text(empty)
+            with self.assertRaisesRegex(ValueError, "empty policy refused"):
+                guard.regenerate(self.root, baseline)
+            self.assertEqual(target.read_bytes(), before)
 
     # trace:TASK-3223 | ai:codex
     def test_candidates_cannot_silently_ignore_mediated_profile(self):

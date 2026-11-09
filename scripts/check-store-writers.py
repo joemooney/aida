@@ -668,6 +668,8 @@ def regenerate(root, baseline=None):
     old = tomllib.loads(source.read_text()) if baseline is not None or source.exists() else {}
     if baseline is not None and old.get("version") != 2:
         raise ValueError("inventory baseline must be version 2")
+    if baseline is not None and not old.get("writer"):
+        raise ValueError("inventory baseline must contain writer rows; empty policy refused")
     prior = {site_id(r["path"], r["item"], r["sink"]): r for r in old.get("writer", []) if "item" in r}
     scanned = scan(root)
     lines = ["# Source-review evidence only; no runtime authority. trace:TASK-3222 | ai:codex", "version = 2", "", "writer = ["]
