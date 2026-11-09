@@ -30972,8 +30972,35 @@ Run cargo builds and tests through the launcher of a headless lane
 Usage: aida lane [OPTIONS] <COMMAND>
 
 Commands:
-  job   Hand cargo runs to the lane's launcher, outside the tool-call time limit
-  help  Print this message or the help of the given subcommand(s)
+  fast-gate-release  Release a host fast-gate review hold without granting publication authority
+  job                Hand cargo runs to the lane's launcher, outside the tool-call time limit
+  help               Print this message or the help of the given subcommand(s)
+
+Options:
+      --format <FORMAT>
+          Pin the output format regardless of whether stdout is a terminal: human = tables, toon =
+          compact agent output, json = machine JSON. Default (unset) is human at a TTY, toon when
+          piped/captured. Also settable via AIDA_OUTPUT_FORMAT (the flag wins)
+
+          Possible values:
+          - human: Human-readable tables / emoji (the interactive default at a TTY)
+          - toon:  Token-efficient TOON — the compact agent default when piped/captured
+          - json:  Machine JSON, for commands that support a JSON projection
+
+      --canonical-ids
+          Show node-local spec IDs in their canonical form instead of the node's friendly label (for
+          scripts). Also settable via AIDA_CANONICAL_IDS=1
+
+  -h, --help
+          Print help (see a summary with '-h')
+===== aida lane fast-gate-release
+Release a host fast-gate review hold without granting publication authority
+
+Usage: aida lane fast-gate-release [OPTIONS] <BRANCH>
+
+Arguments:
+  <BRANCH>
+          Exact lane branch whose receipt should be settled
 
 Options:
       --format <FORMAT>
@@ -62873,6 +62900,32 @@ Working on aida itself
       "lane"
     ],
     "about": "Run cargo builds and tests through the launcher of a headless lane",
+    "flags": [
+      {
+        "name": "canonical-ids",
+        "takes_value": false,
+        "help": "Show node-local spec IDs in their canonical form instead of the node's friendly label (for scripts). Also settable via AIDA_CANONICAL_IDS=1"
+      },
+      {
+        "name": "format",
+        "takes_value": true,
+        "help": "Pin the output format regardless of whether stdout is a terminal: human = tables, toon = compact agent output, json = machine JSON. Default (unset) is human at a TTY, toon when piped/captured. Also settable via AIDA_OUTPUT_FORMAT (the flag wins)"
+      },
+      {
+        "name": "help",
+        "takes_value": false,
+        "help": "Print help (see more with '--help')"
+      }
+    ],
+    "hidden": false
+  },
+  {
+    "path": [
+      "aida",
+      "lane",
+      "fast-gate-release"
+    ],
+    "about": "Release a host fast-gate review hold without granting publication authority",
     "flags": [
       {
         "name": "canonical-ids",

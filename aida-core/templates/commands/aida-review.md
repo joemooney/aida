@@ -23,7 +23,7 @@ Follow the workflow in `.claude/skills/aida-review/SKILL.md`:
 2. `aida review prompt --pr N --write .aida/review-prompt-pr-N.md` to generate the per-spec checklist (STORY-67)
 3. Walk each spec: read the diff against acceptance criteria, run the test plan, post a ✅ PASS / ⚠️ PARTIAL / ❌ FAIL verdict with evidence; use WAITING when only external CI or host evidence is missing
 4. Fix-forward mechanical issues (fmt drift, cfg-gated tests, typos) as small commits; never fix-forward semantic gaps
-5. Gate on CI green. If required CI or host evidence is unavailable, record `waiting` with dependency, responsible actor and resume condition, omit `--finding`, then stop for a fresh review at the current head.
+5. Gate on required CI green, applying the merge-hold exception in the review decision fixtures below before selecting a verdict. If required CI or host evidence is unavailable, record `waiting` with dependency, responsible actor and resume condition, omit `--finding`, then stop for a fresh review at the current head.
 6. **Record the verdict FIRST** — before the PR comment, before any merge, before exit.
    This is the orchestrator's phase-3 → phase-4 handshake; a review that skips it reads as
    "the review did not complete" no matter how good the prose verdict was, and the PR comment
@@ -60,3 +60,13 @@ and resume condition, and no substantive findings. Code defects still require
 rework, repeat-findings credit or a Rework hold. Existing holds remain intact.
 Only a fresh recorded review at the current head ends the wait; green CI or
 a changed head alone does not. There is no automatic resume service.
+
+<!-- trace:BUG-2508 | ai:codex -->
+A red merge-hold-gate or supervised human/advisor clearance that this review's own fresh APPROVED verdict can release is not external evidence: record approved when required CI is otherwise green and there are no actionable defects. Approval does not release the hold or authorize merge; leave clearance to the authorized actor. Outstanding independent evidence, such as an operator-only canary, still requires waiting even on a held PR.
+
+Review decision fixtures (same current head, no actionable defects):
+
+| Required CI | Hold release condition | Outstanding independent evidence | Verdict |
+| --- | --- | --- | --- |
+| Green except merge-hold-gate | This review’s fresh APPROVED verdict, then authorized clearance | None | APPROVED |
+| Green except merge-hold-gate | This review’s fresh APPROVED verdict, then authorized clearance | Operator-only canary result | WAITING |
