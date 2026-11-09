@@ -66,7 +66,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-09T08:46:26.872629040Z
-modified_at: 2026-11-09T12:20:55.226948785Z
+modified_at: 2026-11-09T12:22:11.628510983Z
 req_type: Task
 relationships:
 - rel_type: Supersedes
@@ -193,6 +193,23 @@ comments:
   content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: Both acceptance criteria are met in code and tests, but the store writer inventory was not updated for the new sweep write path, which fails the CI gates job; CI at this head was still queued.. No triage reason was given.'
   created_at: 2026-11-09T12:14:52.299751275Z
   modified_at: 2026-11-09T12:14:52.299751275Z
+- id: 01a1c042-47ac-7ec0-8fe7-7c23c56dc39d
+  author: dirtlab
+  content: |
+    TASK-3749 latest review rework complete. Changed only scripts/store-writers.toml; edits remain uncommitted for the host launcher.
+
+    Ran python3 scripts/check-store-writers.py --regenerate against the merged branch, removed the stale try_emit_nonblocking_findings_on_completion/add_requirement row, and reviewed the two new add_requirement_with_id/update_atomically rows. Both document the CachedGitBackend store writer lock across selection, source/hash de-duplication, in-memory allocation and targeted persistence/cache update; approved completion verdict, open-sweep selection and provenance checks are explicit. Both retain blocked B08 mediated-routing disposition with TASK-3223 ownership: this inventory update grants no runtime authority. Removed regeneration-only row reordering so the final diff is four lines.
+
+    Validation:
+    - python3 scripts/check-store-writers.py: pass, 3431 sink sites and 293 operation mappings reconciled.
+    - python3 tests/test_store_writer_inventory.py: 54 passed.
+    - Lane job j20261109T121718754-2-0, cargo test --profile agent -p aida-cli-lib --lib -- task_3749: 6 executed tests passed, 0 failed, exit 0.
+    - git diff --check: pass.
+    untested=false. No implementation blockers. Codegraph client unavailable at mandated fixed path; doctor confirms missing. No commit, push, PR, review record, ship or queue completion performed from this seat. Host launcher owns publication and subsequent queue completion. Earlier comments retain the full Part 2 resolutions for the PR body.
+  created_at: 2026-11-09T12:22:11.628510983Z
+  modified_at: 2026-11-09T12:22:11.628510983Z
+  session_id: 01a1c03d29ce
+  harness_version: codex-cli 0.167.0
 history:
 - id: 01a1bf7c-f894-7192-b380-ef25f53f2fb5
   author: joe
