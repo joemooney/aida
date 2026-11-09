@@ -11,11 +11,7 @@
 use anyhow::Result;
 use colored::Colorize;
 
-// trace:TASK-3428 | ai:codex
-use crate::{
-    canonical_role_name, current_user_id, find_project_root, list_roles, team, truncate,
-    TeamCommand, HUMAN_ROUTE,
-};
+use crate::*;
 
 /// `aida team` — the roster of every node/clone sharing this store, joined with
 /// the `coordination/` claims each currently holds.
@@ -378,7 +374,7 @@ fn run_team(
     matches: &clap::ArgMatches,
     ctx: &crate::command_registry::DispatchCtx,
 ) -> anyhow::Result<crate::command_registry::Flow> {
-    // trace:TASK-3428 | ai:codex
+    use crate::*;
     let args = <TeamArgs as clap::FromArgMatches>::from_arg_matches(matches)?;
     match &ctx.store {
         None => Ok(crate::command_registry::Flow::Continue),

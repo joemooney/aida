@@ -3,15 +3,6 @@
 
 use anyhow::Result;
 
-use aida_core::Storage;
-// trace:TASK-3428 | ai:codex
-use crate::{
-    cli, find_project_root, forge, generate_review_prompt, handle_review_claim,
-    handle_review_classes, handle_review_list, handle_review_normalize_shas, handle_review_record,
-    handle_review_spec, handle_review_stranded, handle_review_verdict_show, mass_change,
-    rules_sync, ReviewCommand,
-};
-
 // trace:STORY-1728 | ai:claude
 #[path = "review_cmd_args.rs"]
 pub(crate) mod review_cmd_args;
@@ -72,6 +63,7 @@ fn run_review(
     matches: &clap::ArgMatches,
     ctx: &crate::command_registry::DispatchCtx,
 ) -> anyhow::Result<crate::command_registry::Flow> {
+    use crate::*;
     let args = <ReviewArgs as clap::FromArgMatches>::from_arg_matches(matches)?;
     match &ctx.store {
         None => Ok(crate::command_registry::Flow::Continue),
@@ -175,7 +167,7 @@ pub(crate) fn handle_review_command(
     cmd: &crate::ReviewCommand,
     storage: &crate::Storage,
 ) -> anyhow::Result<()> {
-    // trace:TASK-3428 | ai:codex
+    use crate::*;
     match cmd {
         ReviewCommand::Authorship { pr, specs } => {
             crate::gate::review_publication::publish_checkout_authorship(

@@ -282,7 +282,7 @@ fn run_driver(
     matches: &clap::ArgMatches,
     _ctx: &crate::command_registry::DispatchCtx,
 ) -> anyhow::Result<()> {
-    // trace:TASK-3428 | ai:codex
+    use crate::*;
     let args = <DriverArgs as clap::FromArgMatches>::from_arg_matches(matches)?;
     let cmd = &args.inner;
     return self::handle_driver_command(cmd);

@@ -11,12 +11,7 @@
 //! and the `git_describe_latest_tag` / `git_commits_since_tag` repo probes.
 
 use crate::process_retry::RetryEtxtbsy;
-// trace:TASK-3428 | ai:codex
-use crate::{
-    build_banner, confirm, current_version, detect_install_method, find_aida_repo_above,
-    git_commits_since_tag, git_describe_latest_tag, normalize_upgrade_mode, release_target,
-    strip_v, InstallMethod,
-};
+use crate::*;
 use anyhow::{Context, Result};
 use colored::Colorize;
 
