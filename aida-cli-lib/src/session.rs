@@ -6683,6 +6683,7 @@ pub(crate) fn exec_vendor_headless(
     seat: &str,
     child_grant: &crate::gate::seat_authority::HeadlessChildGrant,
     lane_tree: Option<(&Path, &str)>,
+    record_no_change: bool,
 ) -> Result<()> {
     let status = run_vendor_headless_to_exit(
         host_main,
@@ -6696,6 +6697,7 @@ pub(crate) fn exec_vendor_headless(
         seat,
         child_grant,
         lane_tree,
+        record_no_change,
     )?;
     std::process::exit(status.code().unwrap_or(1));
 }
@@ -6716,6 +6718,7 @@ pub(crate) fn run_vendor_headless_to_exit(
     seat: &str,
     child_grant: &crate::gate::seat_authority::HeadlessChildGrant,
     lane_tree: Option<(&Path, &str)>,
+    record_no_change: bool,
 ) -> Result<std::process::ExitStatus> {
     let drain_lane = drain_resume_lane(vendor, seat, lease_id, lane_tree);
     // trace:TASK-2902 | ai:codex
@@ -6798,12 +6801,13 @@ pub(crate) fn run_vendor_headless_to_exit(
                 .find(|l| l.id == lease)
                 .context("publication lease disappeared")?
                 .scope;
-            crate::ship_from_seat::publish_queue_exit(
+            crate::ship_from_seat::publish_queue_exit_recorded(
                 &main_root,
                 tree,
                 &scope,
                 lease,
                 status.success(),
+                record_no_change,
             )?;
         }
     }

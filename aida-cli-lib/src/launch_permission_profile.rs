@@ -207,7 +207,11 @@ pub(crate) fn render_roots(project: &Path, executable: &Path) -> Result<String> 
             read_only.push(aida.clone());
         }
         for profile in ["debug", "release"] {
-            executables.push(aida.join("target").join(profile).join("aida"));
+            // trace:TASK-3735 | ai:codex
+            let candidate = aida.join("target").join(profile).join("aida");
+            if !executables.contains(&candidate) {
+                executables.push(candidate);
+            }
         }
     }
     let mut overlap_notes = String::new();
@@ -420,6 +424,13 @@ mod tests {
             let output = render_roots(&consumer, &exe).unwrap();
             assert!(output.contains("target/debug/aida"));
             assert!(output.contains("target/release/aida"));
+            // trace:TASK-3735 | ai:codex
+            let locations = output
+                .split("executable_locations (ordinary approval rules apply):\n")
+                .nth(1)
+                .unwrap();
+            assert_eq!(locations.matches("target/debug/aida").count(), 1);
+            assert_eq!(locations.matches("target/release/aida").count(), 1);
             assert!(output.contains("consumer repository"));
         }
         assert_eq!(

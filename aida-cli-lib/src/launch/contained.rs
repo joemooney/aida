@@ -1740,13 +1740,13 @@ fn codex_argv(
             i += consumed;
             continue;
         }
+        // Sandbox flags were consumed and validated above.
+        // trace:TASK-3735 | ai:codex
         anyhow::ensure!(
             !matches!(
                 original[i].as_str(),
                 "--dangerously-bypass-approvals-and-sandbox"
                     | "--full-auto"
-                    | "--sandbox"
-                    | "-s"
                     | "-P"
                     | "--permission-profile"
             ),
