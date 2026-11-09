@@ -2507,7 +2507,7 @@ fn watch_change(
     program: Option<&Path>,
 ) -> Result<()> {
     service::check_controller(root)?;
-    crate::gate::seat_authority::validate_child_delegation(root, "reviewer")?;
+    service::validate_controller_delegation(root)?;
     let key = change.key();
     // An obsolete head is superseded before anything else, whether or not
     // the new head is stale or overlapping. trace:TASK-1945 | ai:claude
@@ -2540,6 +2540,7 @@ fn watch_change(
     }
     repo.probe(root, &mut change)
         .context("base evidence refused")?;
+    crate::gate::seat_authority::validate_child_delegation(root, "reviewer")?;
     let action = select(
         store,
         &change,

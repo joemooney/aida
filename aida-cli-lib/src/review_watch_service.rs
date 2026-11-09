@@ -199,8 +199,8 @@ pub(crate) fn command(action: &AdvisorLoopsCommand) -> Result<()> {
                 print_status("not-configured", None, &[], *json)?;
                 return Ok(());
             };
-            let status = if !host_fresh(&state) {
-                "blocked-deputy"
+            let status = if let Some(status) = host_refusal(&state) {
+                status
             } else if state.binding.validate(&root).is_err() {
                 "blocked-authority"
             } else if state.child_grant.is_some() && state.worker.is_none() {
@@ -292,6 +292,16 @@ pub(super) fn check_controller(root: &Path) -> Result<()> {
     let dir = directory(root, false)?.context("review-watch service state disappeared")?;
     let _lock = dir.lock("admission.lock")?;
     check_controller_locked(root, &dir)
+}
+
+// Service controllers validate delegation before per-PR work. Ordinary
+// watchers may still finish superseding obsolete heads after authority narrows.
+// trace:STORY-2571 | ai:codex
+pub(super) fn validate_controller_delegation(root: &Path) -> Result<()> {
+    if CONTROLLER.with(|id| id.borrow().is_some()) {
+        seat_authority::validate_child_delegation(root, "reviewer")?;
+    }
+    Ok(())
 }
 
 // Called while ordinary review admission already holds admission.lock. Rebind
@@ -467,15 +477,27 @@ impl Drop for Supervisor {
 // A dead, unknown, paused or stalled deputy cannot lend remembered authority
 // to a surviving controller. The heartbeat carries no independent authority.
 // trace:STORY-2571 | ai:codex
+fn host_refusal(state: &Service) -> Option<&'static str> {
+    if !state.host_active {
+        return Some("blocked-deputy");
+    }
+    match state.host.as_ref().map(Identity::verdict) {
+        Some(aida_core::proc_identity::Verdict::Alive) => {
+            if state.checked_at.is_some_and(|at| {
+                at <= Utc::now() && Utc::now() - at < chrono::Duration::seconds(5)
+            }) {
+                None
+            } else {
+                Some("blocked-deputy")
+            }
+        }
+        Some(aida_core::proc_identity::Verdict::Dead(_)) => Some("blocked-deputy"),
+        _ => Some("unknown"),
+    }
+}
+
 fn host_fresh(state: &Service) -> bool {
-    state.host_active
-        && state
-            .checked_at
-            .is_some_and(|at| at <= Utc::now() && Utc::now() - at < chrono::Duration::seconds(5))
-        && state
-            .host
-            .as_ref()
-            .is_some_and(|host| matches!(host.verdict(), aida_core::proc_identity::Verdict::Alive))
+    host_refusal(state).is_none()
 }
 
 fn tick(root: &Path, deputy: &str, host_valid: bool, child: &mut Option<Child>) -> Result<()> {
@@ -546,14 +568,6 @@ fn tick_with_launcher(
     if before != serde_json::to_vec(&state)? {
         write(&dir, &state)?;
     }
-    // Free kernel quota for keys still reachable by this launcher now, but
-    // retain the records: reviewer ancestry checks lifetime, roster and
-    // delegation, not possession of an ancestor's key. Retry after a crash
-    // between persisting retirement and invalidation, including old receipts.
-    // trace:STORY-2571 | ai:codex
-    for id in &state.retired_grants {
-        crate::grant_keyring::invalidate(id);
-    }
     let before = serde_json::to_vec(&state)?;
     if !state.retired_grants.is_empty() && reviews_finished(root, &dir)? {
         for id in &state.retired_grants {
@@ -575,17 +589,42 @@ fn tick_with_launcher(
         Ok(parent) => parent,
         Err(_) => return Ok(()),
     };
-    reconcile_reviews(root, &dir)?;
-    let (grant, mut command) = launch(root, &parent)?;
-    state.child_grant = Some(grant.id.clone());
-    write(&dir, &state)?; // reserve before spawn; a crash retains ambiguity
-    let log = dir.file("service.log", true)?;
-    command
-        .current_dir(root)
-        .args(["advisor", "loops", "worker"])
-        .stdin(Stdio::null())
-        .stdout(log.try_clone()?)
-        .stderr(log);
+    // Prepare fallible I/O before minting authority. Every failed attempt
+    // backs off; a minted grant is revoked if reservation persistence fails.
+    // trace:STORY-2571 | ai:codex
+    let mut minted = None;
+    let prepared = (|| {
+        reconcile_reviews(root, &dir)?;
+        let log = dir.file("service.log", true)?;
+        let stdout = log.try_clone()?;
+        let (grant, mut command) = launch(root, &parent)?;
+        minted = Some(grant.id.clone());
+        state.child_grant = Some(grant.id.clone());
+        write(&dir, &state)?; // reserve before spawn; a crash retains ambiguity
+        command
+            .current_dir(root)
+            .args(["advisor", "loops", "worker"])
+            .stdin(Stdio::null())
+            .stdout(stdout)
+            .stderr(log);
+        Ok::<_, anyhow::Error>((grant, command))
+    })();
+    let (grant, mut command) = match prepared {
+        Ok(prepared) => prepared,
+        Err(error) => {
+            state.retry_after = Utc::now() + chrono::Duration::seconds(10);
+            let revoked = minted.as_ref().map(|id| seat_authority::revoke_by_id(id));
+            if revoked.as_ref().is_none_or(|result| result.is_ok()) {
+                state.child_grant = None;
+            }
+            let saved = write(&dir, &state);
+            if let Some(result) = revoked {
+                result?;
+            }
+            saved?;
+            return Err(error);
+        }
+    };
     match command.spawn() {
         Ok(process) => {
             // Keep the handle even if recording fails: never reap first and
@@ -595,10 +634,14 @@ fn tick_with_launcher(
             write(&dir, &state)
         }
         Err(error) => {
-            seat_authority::revoke_by_id(&grant.id)?;
-            state.child_grant = None;
+            let revoked = seat_authority::revoke_by_id(&grant.id);
+            if revoked.is_ok() {
+                state.child_grant = None;
+            }
             state.retry_after = Utc::now() + chrono::Duration::seconds(10);
-            write(&dir, &state)?;
+            let saved = write(&dir, &state);
+            revoked?;
+            saved?;
             Err(error.into())
         }
     }
@@ -809,6 +852,193 @@ mod tests {
         }
     }
 
+    // Foreign process coordinates are uncertainty, never deputy death evidence.
+    // trace:STORY-2571 | ai:codex
+    #[test]
+    fn story2571_foreign_host_is_unknown_and_refuses_admission() {
+        let (temp, _guard, parent) = fixture();
+        rebind(temp.path(), "default", &parent).unwrap();
+        let dir = directory(temp.path(), false).unwrap().unwrap();
+        let mut state = read(&dir).unwrap().unwrap();
+        let mut host = Identity::current().unwrap();
+        host.pid_namespace = Some(u64::MAX);
+        state.host = Some(host);
+        state.checked_at = Some(Utc::now());
+        assert_eq!(host_refusal(&state), Some("unknown"));
+        assert!(!host_fresh(&state));
+        state.checked_at = Some(Utc::now() - chrono::Duration::seconds(30));
+        assert_eq!(host_refusal(&state), Some("unknown"));
+        state.host_active = false;
+        assert_eq!(host_refusal(&state), Some("blocked-deputy"));
+    }
+
+    // Retiring a controller must not invalidate keys inherited by descendants.
+    // trace:STORY-2571 | ai:codex
+    #[test]
+    fn story2571_retired_controller_key_survives_until_reviews_finish() {
+        let (temp, _guard, parent) = fixture();
+        let root = temp.path();
+        rebind(root, "default", &parent).unwrap();
+        let dir = directory(root, false).unwrap().unwrap();
+        let store = Store::open(root, "github:github.com/owner/repo").unwrap();
+        assert!(matches!(
+            select(&store, &change(1), None, 2).unwrap(),
+            Action::Dispatch(_)
+        ));
+        let grant =
+            seat_authority::issue_review_watch_child(root, &parent.id, &parent.subject).unwrap();
+        let reviewer = seat_authority::issue_child_from(
+            grant.clone(),
+            "reviewer",
+            "key-retention-reviewer",
+            false,
+        )
+        .unwrap();
+        let mut state = read(&dir).unwrap().unwrap();
+        state.retired_grants.push(grant.id.clone());
+        write(&dir, &state).unwrap();
+        tick(root, "default", false, &mut None).unwrap();
+        if crate::grant_keyring::available() {
+            for id in [&grant.id, &reviewer.id] {
+                assert!(matches!(
+                    crate::grant_keyring::read(id),
+                    crate::grant_keyring::KeyRead::Held(_)
+                ));
+            }
+        }
+        assert!(seat_authority::read_grant(&grant.id)
+            .unwrap()
+            .revoked_at
+            .is_none());
+        store.release("PR-1").unwrap();
+        tick(root, "default", false, &mut None).unwrap();
+        assert!(seat_authority::read_grant(&grant.id)
+            .unwrap()
+            .revoked_at
+            .is_some());
+        assert!(!matches!(
+            crate::grant_keyring::read(&grant.id),
+            crate::grant_keyring::KeyRead::Held(_)
+        ));
+        seat_authority::revoke_by_id(&reviewer.id).unwrap();
+    }
+
+    // Ordinary watchers can advance old supersede work after losing delegation.
+    // trace:STORY-2571 | ai:codex
+    #[test]
+    fn story2571_ordinary_watcher_supersedes_without_delegation() {
+        let (temp, mut guard, _parent) = fixture();
+        let root = temp.path();
+        for args in [
+            vec!["init", "-q"],
+            vec![
+                "remote",
+                "add",
+                "origin",
+                "https://github.com/owner/repo.git",
+            ],
+        ] {
+            assert!(Command::new("git")
+                .current_dir(root)
+                .args(args)
+                .status()
+                .unwrap()
+                .success());
+        }
+        let repo = forge::Repository::load(root).unwrap();
+        let store = Store::open(root, &repo.identity).unwrap();
+        assert!(matches!(
+            select(&store, &change(1), None, 2).unwrap(),
+            Action::Dispatch(_)
+        ));
+        let mut reviews = store.load().unwrap();
+        let attempt = &mut reviews.entries.get_mut("PR-1").unwrap().attempts[0];
+        attempt.phase = Phase::Superseding;
+        attempt.supersede = Some(Supersede {
+            by: change(2).head,
+            requested_at: Utc::now(),
+            term_at: None,
+            kill_at: None,
+            diagnostic: None,
+        });
+        store
+            .dir
+            .write(STATE, &serde_json::to_vec_pretty(&reviews).unwrap())
+            .unwrap();
+        guard.set_key(seat_authority::GRANT_ENV, "missing-grant");
+        assert!(seat_authority::validate_child_delegation(root, "reviewer").is_err());
+        watch_change(
+            root,
+            &repo,
+            &store,
+            &ReviewWatchArgs {
+                once: true,
+                interval: 10,
+                max_concurrent: Some(2),
+                vendor: None,
+                release: None,
+                launch_reservation: None,
+            },
+            &mut Vec::new(),
+            &update::AuthorLiveness::default(),
+            change(1),
+            None,
+        )
+        .unwrap();
+        assert!(store.load().unwrap().entries["PR-1"].attempts[0]
+            .supersede
+            .as_ref()
+            .unwrap()
+            .diagnostic
+            .is_some());
+    }
+
+    // Failures before spawn must never spin or leak newly minted authority.
+    // trace:STORY-2571 | ai:codex
+    #[test]
+    fn story2571_pre_spawn_failures_back_off_and_revoke() {
+        for failure in ["log", "launch", "reservation", "spawn"] {
+            let (temp, _guard, parent) = fixture();
+            let root = temp.path();
+            rebind(root, "default", &parent).unwrap();
+            let dir = directory(root, false).unwrap().unwrap();
+            if failure == "log" {
+                std::fs::create_dir(dir.path().join("service.log")).unwrap();
+            }
+            let mut minted = None;
+            let mut child = None;
+            let result = tick_with_launcher(root, "default", true, &mut child, |root, parent| {
+                assert_ne!(failure, "log", "log failure must precede minting");
+                if failure == "launch" {
+                    anyhow::bail!("launcher failed");
+                }
+                let grant =
+                    seat_authority::issue_review_watch_child(root, &parent.id, &parent.subject)?;
+                minted = Some(grant.id.clone());
+                if failure == "reservation" {
+                    // Replacing the receipt with a directory makes reservation and
+                    // recovery persistence fail; revocation must still happen.
+                    std::fs::remove_file(dir.path().join(SERVICE))?;
+                    std::fs::create_dir(dir.path().join(SERVICE))?;
+                }
+                Ok((grant, Command::new("/nonexistent/aida-review-watch-test")))
+            });
+            assert!(result.is_err());
+            assert!(child.is_none());
+            if let Some(id) = minted {
+                assert!(seat_authority::read_grant(&id)
+                    .unwrap()
+                    .revoked_at
+                    .is_some());
+            }
+            if failure != "reservation" {
+                let state = read(&dir).unwrap().unwrap();
+                assert!(state.child_grant.is_none());
+                assert!(state.retry_after > Utc::now());
+            }
+        }
+    }
+
     #[test]
     #[cfg(target_os = "linux")]
     fn story2571_reaped_exit_and_confirmed_dead_revoke_controller_grant() {
@@ -851,11 +1081,11 @@ mod tests {
         }
     }
 
-    // Repeated startup exits behind an unclaimed reservation must free keys
+    // Repeated startup exits behind an unclaimed reservation retain keys
     // and stop growing retained ancestry, without revoking a live reviewer.
     // trace:STORY-2571 | ai:codex
     #[test]
-    fn story2571_repeated_controller_exits_bound_retired_grants_and_keys() {
+    fn story2571_repeated_controller_exits_retain_keys_until_cleanup() {
         let (temp, _guard, parent) = fixture();
         let root = temp.path();
         rebind(root, "default", &parent).unwrap();
@@ -908,10 +1138,12 @@ mod tests {
             assert!(state.retired_grants.len() <= MAX_RETIRED_GRANTS);
             assert!(state.child_grant.is_none());
             for id in &grants {
-                assert!(!matches!(
-                    crate::grant_keyring::read(id),
-                    crate::grant_keyring::KeyRead::Held(_)
-                ));
+                if crate::grant_keyring::available() {
+                    assert!(matches!(
+                        crate::grant_keyring::read(id),
+                        crate::grant_keyring::KeyRead::Held(_)
+                    ));
+                }
                 assert!(seat_authority::read_grant(id).unwrap().revoked_at.is_none());
             }
             let reviewer = reviewer.as_ref().unwrap();
@@ -943,6 +1175,12 @@ mod tests {
         // revoke the retired records before admission resumes.
         assert_eq!(store.release("PR-1").unwrap(), 1);
         tick_with_launcher(root, "default", true, &mut controller, |root, parent| {
+            for id in &grants {
+                assert!(!matches!(
+                    crate::grant_keyring::read(id),
+                    crate::grant_keyring::KeyRead::Held(_)
+                ));
+            }
             assert!(grants
                 .iter()
                 .all(|id| seat_authority::read_grant(id).unwrap().revoked_at.is_some()));

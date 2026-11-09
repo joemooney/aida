@@ -882,14 +882,12 @@ waits for confirmed exit and retains unknown process identities or ambiguous
 spawn receipts. Controller restarts preserve all ordinary PR-head reservations;
 a refusal for one PR still leaves the remaining PRs available. Exited
 controllers move their grants into `retired_grants` in the service receipt,
-so in-flight reviewers keep their authority. Retirement immediately invalidates
-any controller kernel key reachable by the supervisor; reviewer ancestry uses
-the retained grant record, not that key. A replacement starts after the normal
+so in-flight reviewers keep their authority. Retirement retains the controller kernel key until cleanup revokes the grant,
+so descendants that inherited the session keyring keep their own keys. A replacement starts after the normal
 ten-second backoff even while review reservations remain unresolved, until four retired controller
 grants are pending. At that cap, status reports `blocked-retired-controllers`
 and replacement waits for review reconciliation or operator recovery. This bounds
-retained grants during repeated startup failures, including when key invalidation
-is unavailable to the supervisor.
+retained grants during repeated startup failures.
 Restart reconciliation completes persisted supersede intent when every recorded
 process and group is confirmed gone; live or ambiguous attempts remain reserved
 for the replacement controller or operator recovery. In particular, a reservation
