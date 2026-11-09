@@ -33,7 +33,7 @@ Use this skill when:
 
 ## Core Philosophy
 
-**A PR merges only when every covered spec passes its acceptance criteria.** A verdict isn't a vibe-check — each spec gets a structured pass/partial/fail with evidence (diff hunks, test names, CI output). Partial counts as "not yet"; the implementer iterates, the reviewer re-runs.
+**A PR merges only when every covered spec passes its acceptance criteria.** A verdict isn't a vibe-check — each spec gets a structured pass/partial/fail with evidence (diff hunks, test names, CI output). Partial code findings require implementer rework. Missing external CI or host evidence alone requires `waiting`, with the dependency, responsible actor and resume condition, and no substantive findings. Stop and resume through a fresh recorded review at the current head.
 
 ## Autonomy mode — `$AIDA_ZEN` (STORY-287)
 
@@ -315,7 +315,7 @@ implementer iterates); a wrongly-fix-forwarded logic change is not.
    lightweight after-the-fact review of the reviewer's own commit. Do not
    invent an `Approved-with-fixforward` verdict tier — the verdict file
    (step 6a) still routes through the existing `Approved` /
-   `RequestChanges` / `Rejected` enum.
+   `RequestChanges` / `Rejected` / `Waiting` enum.
 
 ### What this policy is NOT
 
@@ -687,6 +687,9 @@ aida orchestrator status               # `orchestrated` → also STOP before mer
 - every spec ✅ PASS → `Approved`
 - any ⚠️ PARTIAL (acceptance not fully met, but fixable) → `RequestChanges`
 - any ❌ FAIL (a spec is fundamentally unmet / broken) → `Rejected`
+- external CI or host evidence alone, with no substantive findings → `waiting`;
+  name the dependency, responsible actor and resume condition in the summary.
+  Stop before merge or rework routing; resume only with a fresh review at the head.
 
 **Stamp the `mode`.** Corroborate orchestrator context with `aida
 orchestrator status` — a bare `AIDA_AUTO_COMPLETE` env var is not proof (an
@@ -713,7 +716,7 @@ contained reviewer cannot write.
 ```bash
 aida review record <SPEC-ID> --pr <N> --verdict approved \
   --sha <FULL-REVIEWED-SHA> --summary "<one-line rationale>"
-# For a blocking verdict, use request-changes or rejected and repeat:
+# For substantive findings, use request-changes or rejected and repeat:
 # --finding "<concrete finding>" for each finding.
 ```
 
@@ -728,12 +731,13 @@ object while preserving all provenance fields and retained rounds; this is
 metadata enrichment, not another act of review. `comment_url` is added in
 step 7a after the PR comment is posted.
 
-- `verdict` — canonical approved, request-changes, or rejected.
+- `verdict` — canonical approved, request-changes, rejected, or waiting.
 - `summary` — a one-line rationale.
 - `recorded_by` and `recorded_at` — stamped by the writer for this act of review.
 - `reviewed_sha` — the exact reviewed commit supplied with `--sha`.
 - `findings` — supplied through repeated `--finding`; omitted findings preserve
-  prior findings according to the recorder's existing contract.
+  prior findings according to the recorder's existing contract, except `waiting`,
+  which requires no substantive findings and clears inherited findings.
 - `comment_url` — added in step 7a; omit before the comment is posted.
 - `merge` — **escalation handshake.** Normally omit this field. Set it to
   `escalated-to-human` only when, under a headless `--no-human` drain, the
@@ -903,7 +907,7 @@ orchestrator-headless reviewer's verdict is read by phase 4. trace:BUG-280
   *Standalone headless mode (`AIDA_HEADLESS=1`, `aida orchestrator status` ≠ `orchestrated`) — trace:BUG-280:*
 
   ```
-  ✓ Verdict written: <Approved|RequestChanges|Rejected> → .aida/review-verdicts/PR-<N>.json
+  ✓ Verdict written: <Approved|RequestChanges|Rejected|Waiting> → .aida/review-verdicts/PR-<N>.json
   ✓ Reviewer session is done — under --no-human the reviewer does not merge.
 
   ▶ The session will exit (sentinel touched). A human merges later by reading
@@ -1039,6 +1043,10 @@ under `--no-human=both` and crashes the session — BUG-280's exact failure
 mode. trace:BUG-280
 
 **Synthesize the overall verdict** from the per-spec verdicts recorded in step 3 — same routing as the 6a verdict file: every covered spec ✅ PASS → *positive*; any ⚠️ PARTIAL or ❌ FAIL → *negative*; no per-spec verdicts reached (e.g. `--merge-only`) → *abstention*.
+
+**If the verdict is `waiting`, stop here.** Post the dependency and resume
+condition without a formal request-changes review, implementer rework, or merge.
+A fresh review at the head resumes after evidence arrives.
 
 **If the verdict is positive, record the formal approval before asking about the merge** — see "Approve path" below. Recording it here, *before* the merge question, means `gh reviewDecision` flips to `APPROVED` even when the user defers the merge: TASK-250's State 3 ("reviewed + approved, awaiting merge") reads exactly that signal, so an approved-but-unmerged PR displays correctly instead of falling back to "start review". trace:TASK-278 | ai:claude
 
@@ -1264,7 +1272,7 @@ when there is a "want me to X?" question the advisor must decide; use
 `--intent fyi` for a clean APPROVE/merge with nothing outstanding:
 
 ```bash
-aida mailbox send --to advisor --intent request "Review of PR-<N> finished — verdict: <Approved|RequestChanges|Rejected>.
+aida mailbox send --to advisor --intent request "Review of PR-<N> finished — verdict: <Approved|RequestChanges|Rejected|Waiting>.
 
 Covered specs: <SPEC-IDS + per-spec PASS/PARTIAL/FAIL>
 Flagged findings: <one line each — what, where (file:line), severity; or 'none'>
@@ -1337,3 +1345,12 @@ merge has already landed; the hand-off is the courier-replacement, not a gate.
 - **Spec's acceptance criteria are vague**: <!-- kind:design-fork --> ⚠️ PARTIAL by default and ask the user to either tighten the spec or accept the gap explicitly. Don't let vagueness leak through as PASS. This is a `kind:design-fork` — surface it even under `$AIDA_ZEN`.
 - **Implementer pushes new commits mid-review**: re-run step 2 (`aida review prompt --pr N` again) so the checklist matches the latest range. Verdicts on stale code are worse than none.
 - **PR already merged but new commits arrive on the branch (BUG-88)**: don't treat them as extending the original PR. The commits live on `origin/<branch>` but won't reach `main` without a fresh PR. Verify with `gh pr list --head <branch> --state open` before continuing; if empty + `--state merged` returns a hit, ask the implementer to open a follow-up PR (or cherry-pick onto a new branch off `origin/main`) before reviewing further.
+
+<!-- trace:BUG-2500 | ai:codex -->
+A review blocked solely on external CI or host evidence records `waiting`
+(displayed `WAITING`), with a summary naming the dependency, responsible actor
+and resume condition, and no substantive findings. Code defects still require
+`request-changes`. Waiting blocks completion and merge without implementer
+rework, repeat-findings credit or a Rework hold. Existing holds remain intact.
+Only a fresh recorded review at the current head ends the wait; green CI or
+a changed head alone does not. There is no automatic resume service.

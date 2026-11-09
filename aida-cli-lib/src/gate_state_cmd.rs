@@ -41,6 +41,7 @@ fn parse_change(raw: &str) -> Result<ChangeKey> {
 /// The category a verdict compares on.
 pub(crate) fn verdict_category(v: &Verdict) -> &'static str {
     match v {
+        Verdict::Waiting { .. } => "waiting",
         Verdict::Absent => "absent",
         Verdict::Approved { .. } => "approved",
         Verdict::ChangesRequested { .. } => "changes-requested",
@@ -153,9 +154,16 @@ pub(crate) fn today_verdict(
         .any(|v| v.kind.approves() && !v.is_closed());
     let refused = candidates
         .iter()
-        .any(|v| v.kind.blocks_done() && !v.is_closed());
+        .any(|v| v.kind.requires_changes() && !v.is_closed());
     if refused {
         return "changes-requested";
+    }
+    // trace:BUG-2500 | ai:codex
+    if candidates
+        .iter()
+        .any(|v| v.kind == crate::gate::review_verdict::VerdictKind::Waiting && !v.is_closed())
+    {
+        return "waiting";
     }
     match ship::approval_head_refusal(candidates, Some(head)) {
         // An implementer-seat approval is refused by today's authority
@@ -206,6 +214,10 @@ fn today_answer(
 
 fn describe_verdict(v: &Verdict) -> String {
     match v {
+        Verdict::Waiting { seq, summary } => format!(
+            "waiting (event {seq}): {}; fresh review required",
+            summary.as_deref().unwrap_or("external evidence")
+        ),
         Verdict::Absent => "absent".into(),
         Verdict::Approved {
             seq,
@@ -248,6 +260,7 @@ fn describe_refusal(r: &Refusal) -> String {
         Refusal::UnsafeEvidence { reason } => format!("unsafe evidence: {reason}"),
         Refusal::HoldOpen => "a merge hold is open".into(),
         Refusal::ChangesRequested => "changes requested".into(),
+        Refusal::Waiting => "waiting: external evidence; fresh review required".into(),
         Refusal::UnrecognizedVerdict => "an unrecognized verdict answers".into(),
         Refusal::StaleApproval => "the approval does not cover the head".into(),
         Refusal::NoApproval => "no approval recorded".into(),
@@ -424,3 +437,31 @@ pub(crate) fn run_state(raw: &str, with_compare: bool, json: bool) -> Result<()>
 #[cfg(test)]
 #[path = "tests/story_2324_gate_state_cmd_tests.rs"]
 mod tests;
+
+// trace:BUG-2500 | ai:codex
+#[cfg(test)]
+#[test]
+fn bug_2500_today_category_preserves_waiting_and_substantive_priority() {
+    use crate::gate::review_verdict::{RecordedVerdict, VerdictKind};
+    let waiting = RecordedVerdict {
+        kind: VerdictKind::Waiting,
+        ..Default::default()
+    };
+    assert_eq!(
+        today_verdict(&[waiting.clone()], "head", |_| None),
+        "waiting"
+    );
+    let substantive = RecordedVerdict {
+        kind: VerdictKind::RequestChanges,
+        ..Default::default()
+    };
+    for candidates in [
+        vec![waiting.clone(), substantive.clone()],
+        vec![substantive, waiting],
+    ] {
+        assert_eq!(
+            today_verdict(&candidates, "head", |_| None),
+            "changes-requested"
+        );
+    }
+}

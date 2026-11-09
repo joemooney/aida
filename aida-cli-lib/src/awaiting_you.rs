@@ -323,6 +323,8 @@ pub(crate) fn review_relation(reviewed: Option<&str>, head: Option<&str>) -> Rev
 // trace:BUG-1549 | ai:claude
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum BlockedReason {
+    // trace:BUG-2500 | ai:codex
+    Waiting,
     /// The refusal was recorded against the current head.
     AtHead,
     /// The refusal cannot be pinned to a commit (no sha, a sha too short to
@@ -335,6 +337,7 @@ impl BlockedReason {
     // trace:BUG-1739 | ai:claude
     pub(crate) fn as_wire_str(self) -> &'static str {
         match self {
+            Self::Waiting => "waiting",
             Self::AtHead => "at_head",
             Self::Unverifiable => "unverifiable",
         }
@@ -508,7 +511,7 @@ pub(crate) fn classify_pr_review(
     // obstruction for a later PR on the same spec. trace:BUG-1529 | ai:claude
     let refusals: Vec<_> = candidates
         .iter()
-        .filter(|v| v.kind.blocks_done() && !v.is_closed())
+        .filter(|v| v.kind.requires_changes() && !v.is_closed())
         .collect();
     let approvals: Vec<_> = candidates.iter().filter(|v| v.kind.approves()).collect();
 
@@ -537,6 +540,26 @@ pub(crate) fn classify_pr_review(
                 reason,
                 reviewed_sha: sha(r),
                 recorded_at: r.recorded_at.clone(),
+            }),
+        };
+    }
+
+    // trace:BUG-2500 | ai:codex — a push never clears an external wait.
+    if let Some(v) = candidates
+        .iter()
+        .filter(|v| {
+            v.kind == crate::gate::review_verdict::VerdictKind::Waiting
+                && !v.is_closed()
+                && !superseded(v)
+        })
+        .max_by_key(|v| recorded_instant(v))
+    {
+        return PrReviewDecision {
+            suppressed: true,
+            row: Some(PrReviewRow::Blocked {
+                reason: BlockedReason::Waiting,
+                reviewed_sha: sha(v),
+                recorded_at: v.recorded_at.clone(),
             }),
         };
     }
@@ -2478,7 +2501,7 @@ impl AwaitingReport {
             // classify_pr_review already read; "age unknown" (PRIN-5) when
             // recorded_at was never captured.
             let age = match item.reason {
-                BlockedReason::AtHead => {
+                BlockedReason::Waiting | BlockedReason::AtHead => {
                     blocked_age_label(item.recorded_at.as_deref(), chrono::Utc::now())
                 }
                 BlockedReason::Unverifiable => {
@@ -2486,6 +2509,9 @@ impl AwaitingReport {
                 }
             };
             match item.reason {
+                BlockedReason::Waiting => writeln!(w,
+                    "  PR-{}{} WAITING — external evidence required; resume with a fresh review at the current head",
+                    item.pr, spec)?,
                 BlockedReason::AtHead => writeln!(
                     w,
                     "  {} PR-{}{} blocked — changes requested at the current head {} — {}",
@@ -3006,6 +3032,9 @@ impl AwaitingReport {
                     crate::gate::review_verdict::ReviewActionability::NeedsReview => {
                         ("👀", "needs-review")
                     }
+                    crate::gate::review_verdict::ReviewActionability::Waiting => {
+                        ("wait", "waiting")
+                    }
                     crate::gate::review_verdict::ReviewActionability::AwaitingRework => {
                         ("🔧", "awaiting-rework")
                     }
@@ -3228,7 +3257,7 @@ impl AwaitingReport {
                     // Unverifiable: rework-since is unknown, so no overdue claim.
                     "overdue": match i.reason {
                         BlockedReason::AtHead => age.map(|a| a.overdue),
-                        BlockedReason::Unverifiable => None,
+                        BlockedReason::Waiting | BlockedReason::Unverifiable => None,
                     },
                 })
             }).collect::<Vec<_>>(),

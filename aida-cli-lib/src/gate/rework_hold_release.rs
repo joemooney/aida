@@ -291,7 +291,7 @@ fn eligible(
             kind != rv::VerdictKind::Unknown,
             "ambiguous retained verdict provenance"
         );
-        if kind.blocks_done() {
+        if kind.requires_changes() {
             let at = timestamp(round.get("recorded_at"), "arming refusal")?;
             ensure!(
                 approved_at > at,

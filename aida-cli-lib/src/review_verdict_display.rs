@@ -35,7 +35,7 @@ pub fn rework_findings_comment(
     review_ref: &str,
     verdict: &RecordedVerdict,
 ) -> Option<String> {
-    if !verdict.kind.blocks_done() {
+    if !verdict.kind.requires_changes() {
         return None;
     }
     let mut out = format!(

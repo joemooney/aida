@@ -57,7 +57,7 @@ fn reasons(
         reasons.push(format!("required check failed: {}", check.name));
     }
     for verdict in verdicts.iter().filter(|v| {
-        v.kind.blocks_done()
+        v.kind.requires_changes()
             && v.closed_by_merge.is_none()
             && v.reviewed_sha.as_deref().is_some_and(|sha| {
                 crate::gate::review_verdict::same_reviewed_sha(sha, &state.head_ref_oid)
