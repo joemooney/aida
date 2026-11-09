@@ -4,11 +4,6 @@ and claim naming stay below that boundary. CLI-local MCP tests include the
 transport source to retain private fixtures. See OVERVIEW.md.
 <!-- trace:TASK-3429 | ai:codex -->
 
-Review-watch records retained fast-exiting children before reaping. Incomplete
-legacy receipts use the existing reboot/TTL backstop. Caller capture requires
-verified local procfs and fails closed with host-retry guidance. See OVERVIEW.md.
-<!-- trace:TASK-3365 | ai:codex -->
-
 CI freshness compares pinned workflow content: the GitHub `.github/workflows`
 tree or GitLab `.gitlab-ci.yml` blob. Equal digests avoid stale-definition
 refusals, including edits followed by reverts; the separate behind-base gate
