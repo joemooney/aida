@@ -1647,6 +1647,12 @@ held-resume admission and advisor visibility.
 Permission reports, doctor, launch output and statusline distinguish the posture;
 `AIDA_CONTAINMENT_POSTURE` stamps actual child posture for display only.
 
+Host fast gates run `make check-ci-fast` in the offline, cleared-environment
+lane-job bubblewrap sandbox with a fixed ten-minute timeout. Native publication gets one repair round before
+publishing; self-pushing lanes get one queued repair before review. Seat scripts
+never run unsandboxed, and missing bubblewrap reports `skipped(no-sandbox)`.
+<!-- trace:STORY-2640 | ai:codex -->
+
 The contained permission preset (`aida config permissions set contained`) writes
 `sandbox_workspace_write.writable_roots = []` for Codex. Reapplying it clears
 legacy write grants to `~/.cargo`, `~/.rustup` and `~/.aida` in project or user
