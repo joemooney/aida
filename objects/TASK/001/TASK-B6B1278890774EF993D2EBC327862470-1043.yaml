@@ -61,12 +61,12 @@ description: |
   ## Acceptance
   1. A merge with N non-blocking findings adds no new specs when a sweep spec is open, and exactly one when none is; a test covers both and hash de-duplication.
   2. Every Part 2 section is fixed or answered in the PR body.
-status: Approved
+status: InProgress
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-09T08:46:26.872629040Z
-modified_at: 2026-11-09T12:14:56.103483381Z
+modified_at: 2026-11-09T12:16:37.789558144Z
 req_type: Task
 relationships:
 - rel_type: Supersedes
@@ -318,6 +318,13 @@ history:
   author: joe
   timestamp: 2026-11-09T12:14:56.223168263Z
   changes: []
+- id: 01a1c03d-2f9d-77e1-a7c8-6359dacb7d5f
+  author: aida-session-start
+  timestamp: 2026-11-09T12:16:37.789556186Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: InProgress
 filed_at:
   code_sha: e60e97d0035e92f14a0b60c05e85859019365939
   branch: main
