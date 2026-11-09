@@ -15,12 +15,12 @@ description: |
   ## Acceptance
   - A test for the native-seat punt that reaches the host and suppresses publication.
   - A test for a no-commit seat that yields `no-change` without invoking bundle.
-status: InProgress
+status: Completed
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-07T20:18:53.564500Z
-modified_at: 2026-11-09T11:53:31.562622098Z
+modified_at: 2026-11-09T14:32:21.873190287Z
 req_type: Bug
 relationships:
 - rel_type:
@@ -957,6 +957,19 @@ history:
   session_id: 01a1c0231cec
   harness_version: codex-cli 0.167.0
   changes: []
+- id: 01a1c0b9-746d-7aa3-9d5c-d14bd343aa16
+  author: aida-auto-bump
+  timestamp: 2026-11-09T14:32:21.869758956Z
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Completed
+processing_record:
+- id: 01a1c0b9-7471-7313-afd8-a5e13062915f
+  timestamp: 2026-11-09T14:32:21.873189430Z
+  agent: aida
+  commit_sha: e4eee38238fa4cb8e8c85dadaa4ed07894cfbeea
+  summary: Completed via merge e4eee382
 filed_at:
   code_sha: 7a18c0d52a6a4e0822befd4c810cfed16b04b74c
   branch: main
@@ -966,3 +979,7 @@ filed_at:
   vendor: claude
   session: 01a1b76b-2fe7-7dd2-88d0-356fc8d96d04
   harness_version: 2.1.319 (Claude Code)
+implementation_info:
+  implemented: false
+  completed_at: 2026-11-09T14:32:21.869755785Z
+  completion_sha: e4eee38238fa4cb8e8c85dadaa4ed07894cfbeea
