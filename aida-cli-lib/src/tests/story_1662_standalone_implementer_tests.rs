@@ -1102,9 +1102,13 @@ fn bug_2493_native_prompts_name_safe_body_file_surface() {
         "aida ship -m \"[AI:codex] type(scope): subject (SPEC-ID)\" --commit-body-file <file>"
     ));
     assert!(
-        include_str!("../../../aida-core/templates/commands/aida-pickup.md").contains(
-            "aida ship -m '[AI:codex] type(scope): subject (ID)' --commit-body-file <UTF-8-file>"
-        )
+        include_str!("../../../aida-core/templates/commands/aida-pickup.md")
+            .contains("aida ship -m '[AI:codex] type(scope): subject (ID)'")
+    );
+    // trace:TASK-3735 | ai:codex
+    assert!(
+        include_str!("../../../aida-core/templates/commands/aida-pickup.md")
+            .contains("Omit `--commit-body-file <UTF-8-file>` when no body trailers are needed.")
     );
     for text in [
         NATIVE_STOP_CONTRACT,
