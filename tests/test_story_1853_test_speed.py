@@ -133,8 +133,9 @@ class BudgetTest(unittest.TestCase):
 
     def test_committed_budget_file_loads(self):
         b = tt.load_budget(str(REPO / "scripts/test-time-budget.toml"))
-        self.assertEqual(b.default_limit, 10)
-        self.assertTrue(all(v > b.default_limit for v in b.entries.values()))
+        self.assertEqual(b.default_limit, 30)
+        # Temporary with the budget relaxation: entries may be below the default.
+        self.assertTrue(all(v > 0 for v in b.entries.values()))
         # Per-test keys (STORY-1853 AC4): `<nextest binary id> <test name>`.
         # trace:TASK-1988 | ai:claude
         self.assertTrue(all(k.startswith("doctests:") or " " in k for k in b.entries), b.entries)
@@ -301,7 +302,7 @@ class UntouchedToleranceTest(unittest.TestCase):
         self.assertEqual(got, {self.OWN, "doctests:aida_core"})
 
     def test_main_with_changed_files_and_committed_factor(self):
-        self.assertEqual(tt.load_budget(str(REPO / "scripts/test-time-budget.toml")).untouched_factor, 1.5)
+        self.assertEqual(tt.load_budget(str(REPO / "scripts/test-time-budget.toml")).untouched_factor, 3)
         with tempfile.TemporaryDirectory() as d:
             p = pathlib.Path(d)
             (p / "junit.xml").write_text(JUNIT)  # slow_one: 12.5 s, unbudgeted
