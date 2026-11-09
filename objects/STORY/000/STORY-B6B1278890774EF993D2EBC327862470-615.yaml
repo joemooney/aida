@@ -3,12 +3,12 @@ spec_id: STORY-b6b1278890774ef993d2ebc327862470-615
 agreed_id: STORY-2692
 title: 'Mechanical merge support: regenerate inventories and snapshots instead of merging them, and carry PR edits across file splits'
 description: 'Problem: on 2026-11-08 PR-3685 split queue_cmd.rs and conflicted eight PRs the same way; scripts/store-writers.toml and the CLI help golden also conflicted repeatedly though they are generated. Hand scripts resolved most of it. Requirement: generated files are regenerated after merging rather than merged; a tested tool ports a PR''s hunks across a recorded file split with exact-match only, reporting anything it cannot place. Acceptance: fixture PRs across a split merge without hand edits; an inexact hunk is refused, never guessed.'
-status: InProgress
+status: NeedsAttention
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-09T01:58:54.698246911Z
-modified_at: 2026-11-09T04:55:57.637723104Z
+modified_at: 2026-11-09T05:00:05.088695919Z
 req_type: Story
 tags:
 - area:orchestration
@@ -173,6 +173,15 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a1bead-8460-7be0-8326-ecf02e71d335
+  author: aida-orchestrator
+  timestamp: 2026-11-09T05:00:05.088719082Z
+  session_id: 01a1beab58b3
+  harness_version: 2.1.319 (Claude Code)
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: NeedsAttention
 filed_at:
   code_sha: a7a14984cec5533987dfeccb70d1f91aaebbf22a
   branch: main
@@ -181,3 +190,11 @@ filed_at:
   aida_build_sha: 8a4a909a967
   vendor: claude
   session: 20abb7c3-8f9b-4a5e-b326-404921f3b450
+failure_reason:
+  phase: reviewer
+  phase_index: 3
+  kind: verdict:request-changes
+  detail: 'No rework since round 3: head 58fa521 only merges main, and all seven b430b19 defects remain (main-into-PR merges refused, end-of-file hunks duplicate on re-run, bare baselines discard policy, preflight gaps, story-closing title without the CLI help golden). One new line-splitting defect. Source-only review, no local tests; all 8 PR CI jobs still pending.'
+  recovery_hint: address the review findings, move STORY-2692 back to In Progress, and clear the PR hold only after approval
+  shelved_by: reviewer
+  shelved_at: 2026-11-09T05:00:05.088695919Z
