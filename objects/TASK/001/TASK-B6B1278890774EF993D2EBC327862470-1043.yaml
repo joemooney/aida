@@ -61,7 +61,7 @@ description: |
   ## Acceptance
   1. A merge with N non-blocking findings adds no new specs when a sweep spec is open, and exactly one when none is; a test covers both and hash de-duplication.
   2. Every Part 2 section is fixed or answered in the PR body.
-status: InProgress
+status: NeedsAttention
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
@@ -275,6 +275,15 @@ history:
   session_id: 01a1bff29ec5
   harness_version: codex-cli 0.167.0
   changes: []
+- id: 01a1bff6-d5b7-7603-805d-2d7277713895
+  author: aida-orchestrator
+  timestamp: 2026-11-09T10:59:47.255713137Z
+  session_id: 01a1bff52f55
+  harness_version: 2.1.319 (Claude Code)
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: NeedsAttention
 filed_at:
   code_sha: e60e97d0035e92f14a0b60c05e85859019365939
   branch: main
