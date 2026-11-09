@@ -92,6 +92,9 @@ pub(super) fn handle_queue_command(
             let leased_head =
                 leased_implementer_queue_head(&raw_entries, &store, &user_id, self_lease.as_ref());
 
+            let lease_reader = project_root_for_leases
+                .as_ref()
+                .map(|root| crate::ownership::reader::LeaseReader::new(root));
             let next_entry = leased_head.or_else(|| {
                 raw_entries
                     .iter()
@@ -169,9 +172,9 @@ pub(super) fn handle_queue_command(
                             req.spec_id.as_deref(),
                             &store,
                             |lease| {
-                                project_root_for_leases.as_ref().is_none_or(|root| {
-                                    crate::ownership::reader::lease_retained(root, lease)
-                                })
+                                lease_reader
+                                    .as_ref()
+                                    .is_none_or(|reader| reader.retained(lease))
                             },
                         );
                         match owner {

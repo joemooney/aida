@@ -81,6 +81,7 @@ pub(crate) struct LeaseReader<'a> {
     root: &'a Path,
     reqs: std::cell::OnceCell<Option<aida_core::RequirementsStore>>,
     live: std::cell::OnceCell<Vec<crate::process_probe::LiveSession>>,
+    registry: std::cell::OnceCell<Vec<crate::agent_registry::AgentRegistryEntry>>,
 }
 
 impl<'a> LeaseReader<'a> {
@@ -89,10 +90,11 @@ impl<'a> LeaseReader<'a> {
             root,
             reqs: std::cell::OnceCell::new(),
             live: std::cell::OnceCell::new(),
+            registry: std::cell::OnceCell::new(),
         }
     }
 
-    fn record(&self, lease: &crate::SessionLease) -> Result<Option<Ownership>> {
+    fn key(&self, lease: &crate::SessionLease) -> Result<Option<WorkKey>> {
         let resolve = |label: &str| {
             uuid::Uuid::parse_str(label.trim())
                 .ok()
@@ -111,7 +113,14 @@ impl<'a> LeaseReader<'a> {
             );
             return Ok(None);
         };
-        load(self.root, &key)
+        Ok(Some(key))
+    }
+
+    fn record(&self, lease: &crate::SessionLease) -> Result<Option<Ownership>> {
+        match self.key(lease)? {
+            Some(key) => load(self.root, &key),
+            None => Ok(None),
+        }
     }
 
     pub(crate) fn retained(&self, lease: &crate::SessionLease) -> bool {
@@ -138,7 +147,9 @@ impl<'a> LeaseReader<'a> {
                 .map_err(|e| anyhow::anyhow!("{e:#}")),
         );
         let legacy_unknown = match &record {
-            Ok(None) => lease.holder_record.is_none(),
+            // Unkeyed leases cannot acquire an ownership row through migration.
+            // Their original rule already judges an admitted holder_record exactly.
+            Ok(None) => matches!(self.key(lease), Ok(None)) || lease.holder_record.is_none(),
             Ok(Some(record)) => record.holder.as_ref().is_some_and(|holder| {
                 holder.session == lease.id
                     && holder.witnesses.iter().all(|w| w.admission.is_none())
@@ -159,10 +170,19 @@ impl<'a> LeaseReader<'a> {
                 LegacyRule::Adoption => {
                     let report = crate::leases::stale_lease_recovery_for_lease_with(lease, live);
                     match report.base_verdict {
-                        crate::StaleLeaseRecovery::ReclaimableClean {
-                            worktree_missing: true,
-                        } => false,
-                        _ => crate::leases::orphan_adoption_refusal(&report).is_some(),
+                        crate::StaleLeaseRecovery::Live => {
+                            return OwnerVerdict::Alive {
+                                witness: "a live process still backs it".into(),
+                            }
+                        }
+                        crate::StaleLeaseRecovery::UnknownLiveness => {
+                            return OwnerVerdict::Unknown {
+                                why: crate::leases::orphan_adoption_refusal(&report)
+                                    .unwrap()
+                                    .into(),
+                            }
+                        }
+                        _ => false,
                     }
                 }
                 LegacyRule::NonStale | LegacyRule::Review => {
@@ -171,7 +191,11 @@ impl<'a> LeaseReader<'a> {
                         crate::LeaseState::Stale
                     ) || (matches!(rule, LegacyRule::Review)
                         && !lease.worktree_path.as_os_str().is_empty()
-                        && crate::agent_registry::load_live_identity_entries(self.root)
+                        && self
+                            .registry
+                            .get_or_init(|| {
+                                crate::agent_registry::load_live_identity_entries(self.root)
+                            })
                             .iter()
                             .any(|a| a.worktree_path.starts_with(&lease.worktree_path)))
                 }
@@ -334,6 +358,14 @@ pub(crate) fn lease_retained(root: &Path, lease: &crate::SessionLease) -> bool {
 #[test]
 fn task_3420_free_form_scope_is_not_a_store_failure() {
     let root = tempfile::tempdir().unwrap();
+    assert!(std::process::Command::new("git")
+        .args(["init", "-q"])
+        .current_dir(root.path())
+        .status()
+        .unwrap()
+        .success());
+    let _ambient =
+        crate::test_env::AmbientGuard::hermetic_with_seat(root.path(), "implementer", &[]);
     let lease: crate::SessionLease = toml::from_str(
         r#"id = "free-form"
 scope = "harness-worktree"
@@ -353,7 +385,97 @@ hostname = "test"
         .ok()
         .unwrap();
     assert!(reader.record(&lease).unwrap().is_none());
+    let mut command = std::process::Command::new("sleep");
+    command.arg("30");
+    let capture = aida_core::proc_identity::prepare_command(&mut command).unwrap();
+    let mut child = command.spawn().unwrap();
+    let admission = capture.finish(&mut child);
+    admission.validate().unwrap();
+    let mut lease = lease;
+    lease.active_pid = Some(child.id());
+    lease.active_pid_start_time = crate::process_probe::process_start_identity(child.id());
+    lease.hostname = crate::coordination::hostname();
+    lease.pid_namespace = dual::WriterFacts::here().pid_ns;
+    lease.holder_record = Some(serde_json::to_string(&admission).unwrap());
+    child.kill().unwrap();
+    child.wait().unwrap();
+    for scope in ["harness-worktree", "PR-3420"] {
+        lease.scope = scope.into();
+        lease.review_verb = scope.starts_with("PR-");
+        for rule in [
+            LegacyRule::Pickup,
+            LegacyRule::NonStale,
+            LegacyRule::Review,
+            LegacyRule::Adoption,
+        ] {
+            assert!(
+                matches!(reader.pickup_owner(&lease, rule), OwnerVerdict::Dead { .. }),
+                "unkeyed dead admitted holder: {scope}"
+            );
+        }
+    }
+    // A resolvable key with missing ownership evidence is a different Unknown:
+    // the unkeyed compatibility path must not release it.
+    lease.scope = "PR-3420".into();
+    lease.review_verb = false;
+    assert!(reader.record(&lease).unwrap().is_none());
+    assert!(reader.retained(&lease));
+    lease.scope = "harness-worktree".into();
     let failed = LeaseReader::new(root.path());
     failed.reqs.set(None).ok().unwrap();
     assert!(failed.record(&lease).is_err());
+}
+
+/// The pre-migration reviewer rule attributes a live Claude session to its
+/// worktree even after the creator crashes; a session elsewhere cannot retain it.
+// trace:TASK-3420 trace:BUG-2206 | ai:codex
+#[cfg(test)]
+#[test]
+fn task_3420_legacy_reviewer_live_claude_worktree() {
+    let root = tempfile::tempdir().unwrap();
+    let _ambient =
+        crate::test_env::AmbientGuard::hermetic_with_seat(root.path(), "implementer", &[]);
+    let tree = root.path().join("review");
+    std::fs::create_dir(&tree).unwrap();
+    let mut lease: crate::SessionLease = toml::from_str(
+        r#"id = "review-legacy"
+scope = "PR-3420"
+slug = "review"
+owner = "test@example.com"
+worktree_path = ""
+branch = ""
+started_at = "2026-11-09T00:00:00Z"
+hostname = "test"
+"#,
+    )
+    .unwrap();
+    lease.worktree_path = tree.clone();
+    lease.hostname = crate::coordination::hostname();
+    lease.review_verb = true;
+    lease.creator_pid = Some(u32::MAX);
+    for (cwd, retained) in [(tree, true), (root.path().join("elsewhere"), false)] {
+        let reader = LeaseReader::new(root.path());
+        reader
+            .reqs
+            .set(Some(aida_core::RequirementsStore::default()))
+            .ok()
+            .unwrap();
+        reader
+            .live
+            .set(vec![crate::process_probe::LiveSession {
+                pid: u32::MAX - 1,
+                cwd,
+                jsonl: None,
+                stale_cwd: false,
+            }])
+            .ok()
+            .unwrap();
+        assert_eq!(
+            !matches!(
+                reader.pickup_owner(&lease, LegacyRule::Review),
+                OwnerVerdict::Dead { .. }
+            ),
+            retained
+        );
+    }
 }

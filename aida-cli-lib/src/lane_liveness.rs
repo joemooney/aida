@@ -1264,6 +1264,7 @@ fn rollup_green_at(
 /// A review remains assigned until its exact recorded holder is proven dead.
 /// Legacy holders retain the prior non-stale and registered-reviewer rules.
 // trace:TASK-3420 | ai:codex
+#[cfg(test)]
 fn review_lease_running(project_root: &Path, l: &crate::leases::SessionLease) -> bool {
     // trace:TASK-3420 | ai:codex
     !matches!(
@@ -1307,6 +1308,7 @@ fn load_open_prs(
         }
     };
     let mut verdict_shas: Option<Vec<String>> = None;
+    let lease_reader = crate::ownership::reader::LeaseReader::new(project_root);
     // trace:TASK-1955 | ai:claude (TASK-2030)
     let required = crate::status_prs::required_status_checks(project_root);
     for pr in list {
@@ -1346,10 +1348,13 @@ fn load_open_prs(
         // trace:TASK-3420 | ai:codex
         let review_lease = leases.iter().any(|l| {
             l.scope.eq_ignore_ascii_case(&scope)
-                && review_lease_running(project_root, l)
                 && l.pr_head_sha
                     .as_deref()
                     .is_none_or(|sha| crate::gate::review_verdict::same_reviewed_sha(sha, head))
+                && !matches!(
+                    lease_reader.pickup_owner(l, crate::ownership::reader::LegacyRule::Review),
+                    crate::ownership::OwnerVerdict::Dead { .. }
+                )
         });
         let review_started = review_lease
             || (checks_green_at.is_some()

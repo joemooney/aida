@@ -255,7 +255,7 @@ fn a_live_lease_is_refused() {
         start("TASK-2224", Some(&orphan.branch), Some(&clone), true, true).unwrap_err()
     );
     assert!(err.contains("is not orphaned"), "{err}");
-    assert!(err.contains("ownership holder is live or unknown"), "{err}");
+    assert!(err.contains("live process"), "{err}");
     assert_eq!(lease_for(&fx.main, "TASK-2224").id, orphan.id);
     assert_work_intact(&clone, &orphan.branch, &head);
 }
@@ -390,7 +390,7 @@ fn the_conflict_hint_offers_resume_only_when_resume_adopts() {
     std::fs::remove_dir_all(fx.main.join(".aida/ownership")).unwrap();
     let refusal = crate::leases::lease_adoption_refusal(&fx.main, &no_pid);
     assert!(
-        refusal.is_some_and(|why| why.contains("ownership holder is live or unknown")),
+        refusal.is_some_and(|why| why.contains("no owning process")),
         "{refusal:?}"
     );
     let hint = crate::queue_cmd::scope_conflict_resume_hint(scope, &no_pid.id, refusal, None, true);
@@ -441,7 +441,7 @@ fn adopting_an_orphan_still_refuses_a_live_lease_on_the_scope() {
             .expect("the live lease is still swept");
     assert_eq!(next.id, live.id);
     assert!(crate::leases::lease_adoption_refusal(&fx.main, &next)
-        .is_some_and(|w| w.contains("ownership holder is live or unknown")));
+        .is_some_and(|w| w.contains("live process")));
 
     let err = format!("{:#}", adopt(scope, &orphan.branch, &clone).unwrap_err());
     assert!(err.contains(&live.id[..8]), "{err}");

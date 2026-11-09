@@ -4765,7 +4765,7 @@ pub(crate) fn orphan_adoption_refusal(report: &StaleLeaseRecoveryReport) -> Opti
     }
 }
 
-/// BUG-2223: [`orphan_adoption_refusal`] for `lease` itself, also refusing a
+/// Shared ownership judgment for adoption, also refusing a
 /// lease that records no tree, or a linked worktree git no longer lists
 /// (session start re-enters a worktree only when `git worktree list` does).
 /// Every `--resume` hint a scope-conflict refusal gives is gated on this, so
@@ -4779,12 +4779,19 @@ pub(crate) fn lease_adoption_refusal(
         return Some("it records no tree");
     }
     // trace:TASK-3420 | ai:codex
-    if !matches!(
-        crate::ownership::reader::LeaseReader::new(project_root)
-            .pickup_owner(lease, crate::ownership::reader::LegacyRule::Adoption),
-        crate::ownership::OwnerVerdict::Dead { .. }
-    ) {
-        return Some("ownership holder is live or unknown");
+    match crate::ownership::reader::LeaseReader::new(project_root)
+        .pickup_owner(lease, crate::ownership::reader::LegacyRule::Adoption)
+    {
+        crate::ownership::OwnerVerdict::Dead { .. } => {}
+        crate::ownership::OwnerVerdict::Alive { .. } => {
+            return Some("a live process still backs it")
+        }
+        crate::ownership::OwnerVerdict::Unknown { why }
+            if why == "it records no owning process, so it cannot be proven dead" =>
+        {
+            return Some("it records no owning process, so it cannot be proven dead");
+        }
+        _ => return Some("ownership holder is live or unknown"),
     }
     // Adoption preserves all tree contents; only existence and registration
     // remain after the shared ownership verdict, without a second PID verdict.
