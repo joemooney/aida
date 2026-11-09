@@ -20,7 +20,13 @@ pub(crate) use load_cmd_args::*;
 use aida_core::{RequirementStatus, Storage};
 
 use crate::cli::LoadCommand;
-use crate::*;
+// trace:TASK-3428 | ai:codex
+use crate::kernel::{current_user_id, find_project_root};
+use crate::queue_misc::{
+    effort_display_id, print_effort_load_for_requirements, queued_requirement_ids,
+};
+use crate::worktree_gc::main_worktree_root_from;
+use crate::{calibration, effort_calibration};
 
 fn is_backlog_status(status: &RequirementStatus) -> bool {
     matches!(
@@ -166,7 +172,6 @@ fn run_load(
     matches: &clap::ArgMatches,
     ctx: &crate::command_registry::DispatchCtx,
 ) -> anyhow::Result<crate::command_registry::Flow> {
-    use crate::*;
     let args = <LoadArgs as clap::FromArgMatches>::from_arg_matches(matches)?;
     match &ctx.store {
         None => Ok(crate::command_registry::Flow::Continue),

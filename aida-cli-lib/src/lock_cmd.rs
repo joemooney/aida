@@ -17,7 +17,8 @@ pub(crate) mod lock_cmd_args;
 pub(crate) use lock_cmd_args::*;
 
 use crate::cli::LockCommand;
-use crate::*;
+// trace:TASK-3428 | ai:codex
+use crate::{agent_output_mode, find_project_root, toon, worktree_lock};
 
 // TASK-661 (ADR-3): per-scope disposition/triage lease. The authority gate
 // (`has_advisor_authority`) decides WHO may dispose; this lease enforces HOW
