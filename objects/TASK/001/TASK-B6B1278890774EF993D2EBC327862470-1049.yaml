@@ -1,0 +1,29 @@
+id: 01a1c025-3035-7c70-9abe-59da4f3ec1b9
+spec_id: TASK-b6b1278890774ef993d2ebc327862470-1049
+title: 'Minor, test gap, aida-cli-lib/src/ownership/reader.rs:77-91: the observe_legacy…'
+description: |-
+  Non-blocking finding carried forward from an APPROVED review verdict on BUG-2498, which has since completed — recorded here so it keeps a queryable home once the verdict record stops being read.
+
+  Minor, test gap, aida-cli-lib/src/ownership/reader.rs:77-91: the observe_legacy_registry branch added for the proc_identity guard is exercised only with active_pid None or a live PID. No test shows a receipt accepted for a recorded worker that is provably Dead, or refused for a recorded PID with no start identity.
+
+  PR: #3693
+  Reviewed sha: 668a2156be9497f6840deab13e357e594daa5ea4
+status: Draft
+priority: Medium
+owner: joe
+feature: Uncategorized
+created_at: 2026-11-09T11:50:25.077479596Z
+modified_at: 2026-11-09T11:50:25.077479596Z
+req_type: Task
+tags:
+- carried-from:BUG-2498
+- finding-hash:fa0d6186
+- from-review:PR-3693
+- kind:carried-forward
+filed_at:
+  code_sha: 81044beb98c0d870ebd63fd9006b759e2bb090f9
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: ef853db64e2
+  vendor: claude
