@@ -6180,14 +6180,6 @@ pub(crate) fn drain_batch_single_branch(
             }
         }
         let result = driver.run_member_through_ci(&head);
-        // HALT-on-failure: a phase failure, OR any non-ship outcome (punt /
-        // escalation / inconclusive / hold / shipped-mismatch), means this
-        // member did not cleanly land on the shared branch. In a coupled
-        // single-branch drain we cannot stack later members on a branch missing
-        // this one's work, so STOP — prior commits stay on the branch, the
-        // failed member is parked `NeedsAttention` by the driver. This is the
-        // deliberate inverse of EPIC-28's shelve-and-continue (correct only for
-        // INDEPENDENT members). trace:TASK-1003 | ai:claude
         // trace:TASK-3608 | ai:codex — nothing to stack or credit as committed.
         if result.no_change {
             return SingleBranchResult {
@@ -6198,6 +6190,15 @@ pub(crate) fn drain_batch_single_branch(
                 exit_code: 0,
             };
         }
+        // HALT-on-failure: a phase failure, OR any non-ship outcome (punt /
+        // escalation / inconclusive / hold / shipped-mismatch), means this
+        // member did not cleanly land on the shared branch. In a coupled
+        // single-branch drain we cannot stack later members on a branch missing
+        // this one's work, so STOP — prior commits stay on the branch, the
+        // failed member is parked `NeedsAttention` by the driver. This is the
+        // deliberate inverse of EPIC-28's shelve-and-continue (correct only for
+        // INDEPENDENT members). trace:TASK-1003 | ai:claude
+        // trace:TASK-3749 | ai:codex
         let unclean = result.punt_reason.is_some()
             || result.escalation.is_some()
             || result.inconclusive_reason.is_some()

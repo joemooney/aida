@@ -1637,7 +1637,8 @@ pub(crate) fn handle_auto_complete_single_branch(
             // same command resumes from the next member. trace:TASK-1137
             auto_complete::SingleBranchOutcome::Paused => {
                 eprintln!(
-                    "{} paused before {} — {} member{} committed on {} (no cluster pull \
+                    // trace:TASK-3749 | ai:codex
+                    "{} paused at {} — {} member{} committed on {} (no cluster pull \
                      request yet)",
                     crate::glyph(crate::glyphs::Glyph::InfoAlt).cyan().bold(),
                     result.stopped_at.as_deref().unwrap_or("the next member"),

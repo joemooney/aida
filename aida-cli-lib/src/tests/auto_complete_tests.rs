@@ -7188,6 +7188,7 @@ struct MockSingleBranch {
     fail: std::collections::HashSet<String>,
     /// Members whose through-CI run PUNTS (clean exit, no ship), by id.
     punt: std::collections::HashSet<String>,
+    no_change: bool,
     /// Commits accumulated on the shared branch, in order (no-reset witness).
     branch_commits: Vec<String>,
     /// How many times the cluster Reviewer/Merge ran (no-intermediate-merge
@@ -7209,6 +7210,7 @@ impl MockSingleBranch {
             queue: members.iter().map(|s| s.to_string()).collect(),
             fail: std::collections::HashSet::new(),
             punt: std::collections::HashSet::new(),
+            no_change: false,
             branch_commits: Vec::new(),
             cluster_finishes: 0,
             cluster_members: Vec::new(),
@@ -7236,6 +7238,11 @@ impl SingleBranchDriver for MockSingleBranch {
         self.queue.first().cloned()
     }
     fn run_member_through_ci(&mut self, spec: &str) -> OrchestrationResult {
+        if self.no_change {
+            let mut result = OrchestrationResult::ok();
+            result.no_change = true;
+            return result;
+        }
         if self.fail.contains(spec) {
             // Phase-2 (CI) failure — member NOT committed, NOT popped.
             return OrchestrationResult::failed(Phase::Ci);
@@ -8318,4 +8325,18 @@ fn task_3608_resumed_existing_pr_still_ships() {
     let result = drain_batch(&mut driver, None, None);
     assert_eq!(result.outcome, BatchDrainOutcome::Drained);
     assert_eq!(result.shipped, vec!["TASK-3608"]);
+}
+
+// trace:TASK-3749 | ai:codex
+#[test]
+fn task_3749_single_branch_no_change_pauses_without_commit_or_cluster() {
+    let mut driver = MockSingleBranch::new(&["A", "B"]);
+    driver.no_change = true;
+    let result = drain_batch_single_branch(&mut driver, None);
+    assert_eq!(result.outcome, SingleBranchOutcome::Paused);
+    assert_eq!(result.stopped_at.as_deref(), Some("A"));
+    assert_eq!(result.exit_code, 0);
+    assert!(result.committed.is_empty());
+    assert!(driver.branch_commits.is_empty());
+    assert_eq!(driver.cluster_finishes, 0);
 }

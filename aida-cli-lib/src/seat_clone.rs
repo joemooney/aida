@@ -1881,6 +1881,11 @@ pub(crate) fn probe_until(
             "--branch".as_ref(),
             "--untracked-files=all".as_ref(),
             "--ignore-submodules=none".as_ref(),
+            // Match commit_pending: the host marker is never seat work.
+            // trace:TASK-3749 | ai:codex
+            "--".as_ref(),
+            ".".as_ref(),
+            format!(":(exclude){MARKER_RELATIVE}").as_ref(),
         ],
         "git",
     ) {

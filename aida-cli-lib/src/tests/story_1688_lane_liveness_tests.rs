@@ -1600,3 +1600,17 @@ fn linked_worktree_hold_waits_from_the_primary_placement_event() {
         .expect("the linked worktree sees the primary's hold");
     assert_eq!(hold.waiting_since, placed_at);
 }
+
+// trace:TASK-3749 | ai:codex
+#[test]
+fn task_3749_no_change_drain_member_is_finished_work() {
+    let tmp = tempfile::tempdir().unwrap();
+    let root = tmp.path();
+    let dead = dead_pid();
+    let mut drain = crate::drain_state::DrainState::new_batch("night", &["TASK-20".into()]);
+    drain.orchestrator_pid = dead.0;
+    drain.orchestrator_pid_start = dead.1;
+    drain.members[0].state = crate::drain_state::STATE_NO_CHANGE.into();
+    drain.write(root).unwrap();
+    assert!(findings_at(root, Utc::now(), &no_prs).is_empty());
+}
