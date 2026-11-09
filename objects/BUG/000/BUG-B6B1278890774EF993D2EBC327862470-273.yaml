@@ -1,0 +1,21 @@
+id: 01a1c111-bda0-7403-a974-84e4a7ad04c1
+spec_id: BUG-b6b1278890774ef993d2ebc327862470-273
+agreed_id: BUG-2508
+title: Reviewer records WAITING on a supervised merge hold that only an APPROVED verdict can release, deadlocking the PR
+description: 'Observed 2026-11-09 on PRs 3715, 3670, 3627, 3687 after PR 3698 (BUG-2500) added WAITING verdicts. The merge hold''s release condition is a fresh APPROVED verdict at the current head, but the reviewer found no defects and recorded WAITING on merge-hold-gate and human/advisor clearance, so neither side can move. Requirement: a red merge-hold-gate whose release condition is this review''s own APPROVED verdict must not produce WAITING; the reviewer records APPROVED when it finds no actionable defects. WAITING remains for genuine external evidence such as operator canaries. Acceptance: fixture with a held PR, green required CI and no findings yields APPROVED; a held PR with outstanding operator-only evidence still yields WAITING; test covers both.'
+status: Draft
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-11-09T16:08:47.776461877Z
+modified_at: 2026-11-09T16:08:47.776461877Z
+req_type: Bug
+filed_at:
+  code_sha: e4eee38238fa4cb8e8c85dadaa4ed07894cfbeea
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: e4eee38238f
+  vendor: claude
+  session: 01a1beff-fc3b-78e2-93e2-9b0c283b0339
+  harness_version: 2.1.319 (Claude Code)
