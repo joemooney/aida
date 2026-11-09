@@ -819,6 +819,10 @@ edits preserves them and fetches both heads. After verifying the PR head is
 incorporated, the host probes committed trees with `git merge-tree --write-tree`.
 A clean probe admits pending work even when main has advanced. A conflicting or
 failed probe refuses without changing the index, HEAD or pending files.
+The preservation commands below apply only after branch and unfinished-merge
+preflight checks pass. A wrong-branch refusal requires restoring the recorded
+branch; an unfinished merge requires inspection and resolution or abort before
+retrying. Do not stage unresolved files or commit pending work on the wrong branch.
 Never run host Git inside a seat clone: its configuration and hooks are
 seat-controlled. After the lane exits, inspect `aida session leases --all`
 for the recorded path and scope. For recorded clones, preserve and publish pending work through

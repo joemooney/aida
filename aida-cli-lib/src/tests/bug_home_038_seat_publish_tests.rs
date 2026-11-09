@@ -3131,3 +3131,85 @@ fn bug_2504_recovery_matches_recorded_tree_kind() {
         }
     }
 }
+
+// trace:BUG-2504 | ai:codex
+#[test]
+fn bug_2504_rework_preflight_has_no_commit_recovery() {
+    let fx = fixture();
+    git_ok(&fx.main, &["branch", "feat"]);
+    let tree = fx.root.join("linked-preflight");
+    git_ok(
+        &fx.main,
+        &["worktree", "add", tree.to_str().unwrap(), "feat"],
+    );
+    std::fs::write(tree.join("README.md"), "PR version\n").unwrap();
+    git_ok(&tree, &["commit", "-qam", "PR diverges"]);
+    std::fs::write(fx.main.join("README.md"), "main version\n").unwrap();
+    git_ok(&fx.main, &["commit", "-qam", "main diverges"]);
+    let merge = crate::test_git::git_command()
+        .arg("-C")
+        .arg(&tree)
+        .args(["merge", "main"])
+        .output()
+        .unwrap();
+    assert!(!merge.status.success());
+    assert!(git_ok(&tree, &["status", "--porcelain"]).contains("UU README.md"));
+    std::fs::write(tree.join("pending"), "preserve me\n").unwrap();
+    let head = git_ok(&tree, &["rev-parse", "HEAD"]);
+    let conflicted_contents = std::fs::read(tree.join("README.md")).unwrap();
+    for branch in ["feat", "other"] {
+        let message = format!(
+            "{:#}",
+            prepare_rework_merge(&fx.main, &tree, branch, true).unwrap_err()
+        );
+        assert!(
+            message.contains(if branch == "feat" {
+                "unfinished merge"
+            } else {
+                "not on the PR head branch"
+            }),
+            "{message}"
+        );
+        assert!(!message.contains("add -A"), "{message}");
+        assert!(!message.contains("commit-pending"), "{message}");
+        assert!(!message.contains(". ."), "{message}");
+    }
+    assert!(git_ok(&tree, &["status", "--porcelain"]).contains("UU README.md"));
+    assert_eq!(
+        std::fs::read(tree.join("README.md")).unwrap(),
+        conflicted_contents
+    );
+    assert_eq!(git_ok(&tree, &["rev-parse", "HEAD"]), head);
+    assert_eq!(
+        std::fs::read_to_string(tree.join("pending")).unwrap(),
+        "preserve me\n"
+    );
+}
+
+// trace:BUG-2504 | ai:codex
+#[test]
+fn bug_2504_recorded_clone_admits_clean_main_advance() {
+    if !bwrap_live_or_skip() {
+        return;
+    }
+    let fx = fixture();
+    git_ok(&fx.main, &["branch", "feat"]);
+    git_ok(&fx.main, &["push", "-q", "origin", "feat"]);
+    let tree = leased_clone(&fx, "admission", "c0ffee250401");
+    std::fs::write(fx.main.join("main-only"), "new main file\n").unwrap();
+    git_ok(&fx.main, &["add", "main-only"]);
+    git_ok(&fx.main, &["commit", "-qm", "main advances cleanly"]);
+    git_ok(&fx.main, &["push", "-q", "origin", "main"]);
+    std::fs::write(tree.join("pending"), "preserve me\n").unwrap();
+    let head = git_ok(&tree, &["rev-parse", "HEAD"]);
+    let status = git_ok(&tree, &["status", "--porcelain"]);
+    assert!(prepare_rework_merge(&fx.main, &tree, "feat", true)
+        .unwrap()
+        .is_empty());
+    assert_eq!(git_ok(&tree, &["rev-parse", "HEAD"]), head);
+    assert_eq!(git_ok(&tree, &["status", "--porcelain"]), status);
+    assert_eq!(
+        std::fs::read_to_string(tree.join("pending")).unwrap(),
+        "preserve me\n"
+    );
+}

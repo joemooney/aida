@@ -2862,6 +2862,19 @@ pub(crate) fn prepare_rework_merge(
             }
         }
     };
+    // Preflight refusals must never recommend staging unresolved files or
+    // committing pending work onto a branch other than the recorded PR branch.
+    // trace:BUG-2504 | ai:codex
+    anyhow::ensure!(
+        execute(&["symbolic-ref", "--short", "HEAD"])? == branch,
+        "rework seat {} is not on the PR head branch {branch}; inspect `aida session leases --all` and restore the recorded branch through the appropriate seat recovery path before retrying",
+        tree.display()
+    );
+    anyhow::ensure!(
+        execute(&["rev-parse", "-q", "--verify", "MERGE_HEAD"]).is_err(),
+        "rework seat {} already has an unfinished merge; inspect and resolve or abort that merge through the appropriate seat recovery path before retrying; do not stage unresolved files",
+        tree.display()
+    );
     // Recovery depends on the host's recorded tree kind, never seat configuration.
     // trace:BUG-2504 | ai:codex
     let pending_resume = resume
@@ -2927,9 +2940,14 @@ pub(crate) fn prepare_rework_merge(
         } else {
             String::new()
         };
+        let recovery = if recovery.is_empty() {
+            String::new()
+        } else {
+            format!(" {recovery}.")
+        };
         error.context(format!(
             "rework preparation for seat {} on branch {branch}; inspect its scope with \
-             `aida session leases --all` before recovery. {recovery}. \
+             `aida session leases --all` before recovery.{recovery} \
              If a probe failed without reporting conflicts, diagnose that failure before retrying; \
              confirmed conflicts can use a fresh `aida queue work SPEC --vendor claude --fresh --no-human`",
             tree.display()
