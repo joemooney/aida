@@ -2539,10 +2539,23 @@ pub(crate) fn resolve_rework_findings(
     let render_spec = |v: &RecordedVerdict| {
         crate::review_verdict_display::rework_findings_comment(&shown, &shown, v)
     };
+    // trace:BUG-2500 | ai:codex
+    let refuse_wait = |v: &RecordedVerdict| -> Result<(), String> {
+        if v.kind == crate::gate::review_verdict::VerdictKind::Waiting && !v.is_closed() {
+            return Err(format!("{shown}: WAITING — {}. Resume with a fresh review at the current head; no implementer rework is queued.", v.summary.as_deref().unwrap_or("external evidence required")));
+        }
+        Ok(())
+    };
     Ok(match (spec_keyed, change_keyed) {
         (None, None) => None,
-        (Some((v, _)), None) => render_spec(&v),
-        (None, Some((key, v))) => render_change(&key, &v),
+        (Some((v, _)), None) => {
+            refuse_wait(&v)?;
+            render_spec(&v)
+        }
+        (None, Some((key, v))) => {
+            refuse_wait(&v)?;
+            render_change(&key, &v)
+        }
         (Some((sv, s_at)), Some((key, cv))) => {
             let c_at = change_time(&key, &cv);
             let change_newer = match (s_at, c_at) {
@@ -2552,8 +2565,10 @@ pub(crate) fn resolve_rework_findings(
                 _ => cv.kind.blocks_done() && !sv.kind.blocks_done(),
             };
             if change_newer {
+                refuse_wait(&cv)?;
                 render_change(&key, &cv)
             } else {
+                refuse_wait(&sv)?;
                 render_spec(&sv)
             }
         }
@@ -3815,6 +3830,22 @@ pub(crate) fn handle_queue_work(
     // lease creation, or status writes. Shell roles route; grants authorize.
     let (role, role_origin, warnings) = infer_queue_work_role(&plan, role_override);
     let project_root = find_main_worktree_root()?;
+    // trace:BUG-2500 | ai:codex — admission precedes calibration and setup.
+    if !role.eq_ignore_ascii_case("reviewer") && !list_sessions {
+        let spec_id = plan
+            .entries
+            .first()
+            .map(|e| e.spec_id.as_str())
+            .unwrap_or(&plan.anchor_display);
+        let open = spec_open_change_key(&project_root, &[&plan.anchor_display, spec_id]);
+        resolve_rework_findings(
+            &project_root,
+            &plan.anchor_display,
+            spec_id,
+            open.as_deref(),
+        )
+        .map_err(|why| anyhow::anyhow!(why))?;
+    }
     // trace:BUG-2451 | ai:codex — session listing allocates nothing.
     let rework_pr = if list_sessions {
         None

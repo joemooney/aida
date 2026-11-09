@@ -769,3 +769,7 @@ mod bug_2403_alias_selection_tests;
 #[cfg(test)]
 #[path = "tests/bug_2430_rework_change_key_tests.rs"]
 mod bug_2430_rework_change_key_tests;
+
+#[cfg(test)]
+#[path = "tests/bug_2500_waiting_tests.rs"]
+mod bug_2500_waiting_tests;

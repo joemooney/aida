@@ -508,7 +508,7 @@ pub(crate) fn classify_pr_review(
     // obstruction for a later PR on the same spec. trace:BUG-1529 | ai:claude
     let refusals: Vec<_> = candidates
         .iter()
-        .filter(|v| v.kind.blocks_done() && !v.is_closed())
+        .filter(|v| v.kind.requires_changes() && !v.is_closed())
         .collect();
     let approvals: Vec<_> = candidates.iter().filter(|v| v.kind.approves()).collect();
 
@@ -3005,6 +3005,9 @@ impl AwaitingReport {
                 let (glyph, label) = match q.state {
                     crate::gate::review_verdict::ReviewActionability::NeedsReview => {
                         ("👀", "needs-review")
+                    }
+                    crate::gate::review_verdict::ReviewActionability::Waiting => {
+                        ("wait", "waiting")
                     }
                     crate::gate::review_verdict::ReviewActionability::AwaitingRework => {
                         ("🔧", "awaiting-rework")

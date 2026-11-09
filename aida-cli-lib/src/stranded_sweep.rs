@@ -59,7 +59,7 @@ pub(crate) fn classify_stranded(
     relation: TipRelation,
 ) -> StrandedConditions {
     let verdict_refusing_at_head = verdict
-        .map(|v| v.kind.blocks_done() && matches!(relation, TipRelation::AtReviewedSha))
+        .map(|v| v.kind.requires_changes() && matches!(relation, TipRelation::AtReviewedSha))
         .unwrap_or(false);
     StrandedConditions {
         status_not_moved: status_is_done,

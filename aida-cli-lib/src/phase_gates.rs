@@ -461,6 +461,9 @@ pub(crate) fn sibling_verdict_sweep_for_phase3(
             | Some(crate::gate::review_verdict::VerdictKind::Rejected) => {
                 auto_complete::ReviewerOutcome::Verdict(auto_complete::Verdict::RequestChanges)
             }
+            Some(crate::gate::review_verdict::VerdictKind::Waiting) => {
+                auto_complete::ReviewerOutcome::Verdict(auto_complete::Verdict::Waiting)
+            }
             Some(crate::gate::review_verdict::VerdictKind::Unknown) | None => {
                 return Err(auto_complete::PhaseFailure::of(
                     auto_complete::FailureKind::NoVerdict,
@@ -477,7 +480,9 @@ pub(crate) fn sibling_verdict_sweep_for_phase3(
             let candidate = read_verdict_file_for_head(path, None)?;
             match candidate {
                 auto_complete::ReviewerOutcome::Verdict(
-                    auto_complete::Verdict::RequestChanges | auto_complete::Verdict::Rejected,
+                    auto_complete::Verdict::RequestChanges
+                    | auto_complete::Verdict::Rejected
+                    | auto_complete::Verdict::Waiting,
                 ) => blocking = Some(candidate),
                 auto_complete::ReviewerOutcome::EscalatedToHuman { .. } if blocking.is_none() => {
                     blocking = Some(candidate);
@@ -557,6 +562,9 @@ pub(crate) fn sibling_verdict_sweep_for_phase3(
                 Some(crate::gate::review_verdict::VerdictKind::RequestChanges)
                 | Some(crate::gate::review_verdict::VerdictKind::Rejected) => {
                     auto_complete::ReviewerOutcome::Verdict(auto_complete::Verdict::RequestChanges)
+                }
+                Some(crate::gate::review_verdict::VerdictKind::Waiting) => {
+                    auto_complete::ReviewerOutcome::Verdict(auto_complete::Verdict::Waiting)
                 }
                 Some(crate::gate::review_verdict::VerdictKind::Unknown) | None => {
                     return Err(auto_complete::PhaseFailure::of(
@@ -848,6 +856,7 @@ pub(crate) fn outcome_of_verdict_body(
         Some(crate::gate::review_verdict::VerdictKind::Approved) => "approved",
         Some(crate::gate::review_verdict::VerdictKind::RequestChanges) => "request-changes",
         Some(crate::gate::review_verdict::VerdictKind::Rejected) => "rejected",
+        Some(crate::gate::review_verdict::VerdictKind::Waiting) => "waiting",
         _ => raw,
     };
     auto_complete::Verdict::parse(selected)

@@ -2,7 +2,9 @@
 
 <!-- trace:BUG-2500 | ai:codex -->
 
-Status: proposed; master sign-off required before publication/implementation.
+Status: approved by advisor ruling 2026-11-09 01:50 UTC: single `waiting`
+verdict and fresh-review resume rule. Implementation must accompany this sketch;
+the docs-only head must not merge alone. Launcher punt publication veto remains.
 
 ## Problem and observed code paths
 
@@ -71,12 +73,11 @@ Run targeted tests through `aida lane job run -- cargo test --profile agent
 `make check-ci-fast`, per the advisor's LIGHT gate. No implementation or
 test execution is claimed by this sketch.
 
-## Decision needed
+## Advisor decision
 
-Approve the single `waiting` vocabulary and fresh-review resume rule above,
-or choose separate `waiting-ci` and `host-action-required` verdicts with
-their resume rules before implementation. This is the repository's explicit
-sketch-first gate for orchestrator semantics and cross-cutting lifecycle
-vocabulary (AGENTS.md, Sketch-First Protocol). The existing advisor comment
-approves lane work and a LIGHT validation gate, but does not approve this
-design. The native launcher must retain the punt publication veto.
+The binding ruling of 2026-11-09 01:50 UTC approves one `waiting` verdict
+and the fresh-review resume rule. Separate waiting-ci and host-action-required
+words were declined because both resume by a fresh review at the head.
+Implement on the PR-3698 branch with the validation above; the docs-only head
+must not merge alone. Retain the launcher's punt publication veto. No resume
+service or historical prose classifier is authorized.

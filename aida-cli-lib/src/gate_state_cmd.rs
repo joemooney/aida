@@ -41,6 +41,7 @@ fn parse_change(raw: &str) -> Result<ChangeKey> {
 /// The category a verdict compares on.
 pub(crate) fn verdict_category(v: &Verdict) -> &'static str {
     match v {
+        Verdict::Waiting { .. } => "waiting",
         Verdict::Absent => "absent",
         Verdict::Approved { .. } => "approved",
         Verdict::ChangesRequested { .. } => "changes-requested",
@@ -206,6 +207,10 @@ fn today_answer(
 
 fn describe_verdict(v: &Verdict) -> String {
     match v {
+        Verdict::Waiting { seq, summary } => format!(
+            "waiting (event {seq}): {}; fresh review required",
+            summary.as_deref().unwrap_or("external evidence")
+        ),
         Verdict::Absent => "absent".into(),
         Verdict::Approved {
             seq,
@@ -248,6 +253,7 @@ fn describe_refusal(r: &Refusal) -> String {
         Refusal::UnsafeEvidence { reason } => format!("unsafe evidence: {reason}"),
         Refusal::HoldOpen => "a merge hold is open".into(),
         Refusal::ChangesRequested => "changes requested".into(),
+        Refusal::Waiting => "waiting: external evidence; fresh review required".into(),
         Refusal::UnrecognizedVerdict => "an unrecognized verdict answers".into(),
         Refusal::StaleApproval => "the approval does not cover the head".into(),
         Refusal::NoApproval => "no approval recorded".into(),

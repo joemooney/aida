@@ -240,13 +240,13 @@ pub(crate) fn blocking_rework_verdict(
     pr: u32,
 ) -> Option<crate::gate::review_verdict::RecordedVerdict> {
     if let Some(verdict) = crate::gate::review_verdict::read_recorded_verdict(project_root, spec)
-        .filter(|verdict| verdict.kind.blocks_done())
+        .filter(|verdict| verdict.kind.requires_changes())
     {
         return Some(verdict);
     }
     let pr_id = format!("PR-{pr}");
     crate::gate::review_verdict::read_recorded_verdict(project_root, &pr_id)
-        .filter(|verdict| verdict.kind.blocks_done())
+        .filter(|verdict| verdict.kind.requires_changes())
 }
 
 /// Count how many commits `branch` is ahead of the repo's DEFAULT branch, and
@@ -473,6 +473,7 @@ pub(crate) fn reviewer_row_actionability(
         return crate::gate::review_verdict::ReviewActionability::NeedsReview;
     }
     let mut saw_rework = false;
+    let mut saw_waiting = false;
     for spec_id in &covered {
         let verdict = crate::gate::review_verdict::read_recorded_verdict_any(
             project_root,
@@ -513,12 +514,15 @@ pub(crate) fn reviewer_row_actionability(
             crate::gate::review_verdict::ReviewActionability::NeedsReview => {
                 return crate::gate::review_verdict::ReviewActionability::NeedsReview;
             }
+            crate::gate::review_verdict::ReviewActionability::Waiting => saw_waiting = true,
             crate::gate::review_verdict::ReviewActionability::AwaitingRework => saw_rework = true,
             crate::gate::review_verdict::ReviewActionability::Resolved => {}
         }
     }
     if saw_rework {
         crate::gate::review_verdict::ReviewActionability::AwaitingRework
+    } else if saw_waiting {
+        crate::gate::review_verdict::ReviewActionability::Waiting
     } else {
         crate::gate::review_verdict::ReviewActionability::Resolved
     }

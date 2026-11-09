@@ -57,7 +57,7 @@ pub(crate) fn place_collected_refusal(
     collected: &crate::gate::review_verdict::CollectedVerdict,
 ) -> std::io::Result<bool> {
     let kind = collected.verdict.kind;
-    if !kind.blocks_done() {
+    if !kind.requires_changes() {
         return Ok(false);
     }
     let key = collected

@@ -1165,13 +1165,18 @@ pub(crate) fn corpus_merge_gate_carrying(
     };
     match rv::reconcile_artifacts_for_sha(live.iter().map(|(_, b)| b.as_str()), head) {
         Ok(Some(kind)) if kind.approves() => CorpusMergeGate::Clear,
+        // trace:BUG-2500 | ai:codex — blocking evidence is not a Rework hold.
+        Ok(Some(rv::VerdictKind::Waiting)) => CorpusMergeGate::Refuse {
+            message: format!("PR-{pr}: WAITING on external evidence; resume with a fresh recorded review at the current head"),
+            arm: None,
+        },
         Ok(Some(kind)) => {
             // A blocker recorded against this exact head — the definite case
             // the mirrors are armed from, whatever producer wrote the file.
             let blocking = live.iter().find_map(|(key, body)| {
                 rv::parse_recorded_verdict(body)
                     .filter(|v| {
-                        v.kind.blocks_done()
+                        v.kind.requires_changes()
                             && v.reviewed_sha
                                 .as_deref()
                                 .is_some_and(|s| rv::same_reviewed_sha(s, head))

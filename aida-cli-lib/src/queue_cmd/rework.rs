@@ -547,6 +547,12 @@ pub(crate) fn handle_queue_rework(
         .clone()
         .or_else(|| req.spec_id.clone())
         .unwrap_or_else(|| "???".to_string());
+    // trace:BUG-2500 | ai:codex — refuse before status, comments or queue writes.
+    if let Ok(root) = find_project_root() {
+        let open = spec_open_change_key(&root, &[display_id.as_str(), spec_id.as_str()]);
+        resolve_rework_findings(&root, &display_id, &spec_id, open.as_deref())
+            .map_err(|why| anyhow::anyhow!(why))?;
+    }
     let title = req.title.clone();
     let current_status = req.status.clone();
 
