@@ -2963,6 +2963,7 @@ fn task_2902_launch_paths_clear_and_provision_before_spawn() {
                 "implementer",
                 &grant,
                 Some((&clone, "launches")),
+                true,
             )
             .err(),
             "resume" => crate::session::spawn_vendor_headless_resume_granted(

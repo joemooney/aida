@@ -152,6 +152,9 @@ pub const AMBIENT_AIDA_KEYS: &[&str] = &[
 /// This conservative inventory also includes production writes/prefix literals.
 // trace:STORY-2326 | ai:codex
 pub const DROPPED_AIDA_KEYS: &[&str] = &[
+    // Build-local invalidation input, supplied by dev_build_command only.
+    // trace:BUG-2499 | ai:codex
+    "AIDA_DEV_BUILD_HEAD",
     "AIDA_AGENT_CMD",
     "AIDA_ADD_NO_REMOTE_SYNC",
     "AIDA_ADVISOR_HANDSHAKE",
@@ -545,7 +548,8 @@ impl EnvPolicy {
     /// `decisions` are already validated launcher inputs, never ambient values.
     /// Omitted Decided keys are absent, including when present in the parent.
     /// Forwarded owned keys may also be explicitly replaced or removed.
-    /// Declared cargo resources may override only the two fixed cargo keys.
+    /// Declared cargo resources may override only the fixed build keys.
+    // trace:STORY-2641 | ai:codex
     pub fn project(
         &self,
         parent: &crate::exec_context::Environment,

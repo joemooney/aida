@@ -20,8 +20,9 @@ unsafe_entry=$(find "$runner_source" \( ! -user root -o \( ! -type l -a -perm /0
 [ -z "$unsafe_entry" ] || refuse "distribution must be root-owned and not writable"
 IFS= read -r jit || refuse "missing JIT configuration"
 [ -n "$jit" ] || refuse "empty JIT configuration"
-# Only one invocation may run; the user must traverse the root-owned parent.
-install -d -m 0711 /var/lib/aida-ci-jobs
+# The .NET runner requires read access to every parent of its work directory.
+# trace:BUG-2506 | ai:codex
+install -d -o root -g root -m 0755 /var/lib/aida-ci-jobs
 # Cache versions include absolute HOME/workspace paths. Keep those stable while
 # removing all previous job content under the exclusive launcher lock.
 state=/var/lib/aida-ci-jobs/current
@@ -46,6 +47,9 @@ trap 'exit 143' TERM
 rm -rf -- "$state"
 install -d -m 0700 "$state"
 cp -a "$runner_source/." "$state/"
+# cp -a also copies the distribution directory mode; restore job privacy.
+# trace:BUG-2506 | ai:codex
+chmod 0700 "$state"
 mkdir "$state/home"
 chown -R "$runner_user:$runner_user" "$state"
 # Every invocation shares an eight-core quota. The service also has a fixed
