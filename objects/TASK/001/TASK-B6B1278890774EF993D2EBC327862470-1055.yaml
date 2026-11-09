@@ -75,7 +75,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-09T14:27:09.447287877Z
-modified_at: 2026-11-09T14:29:58.655259452Z
+modified_at: 2026-11-09T14:30:05.371110329Z
 req_type: Task
 tags:
 - kind:finding-sweep
@@ -115,6 +115,10 @@ relationships:
 - rel_type: Supersedes
   target_id: 01a1c058-377a-7ad3-ad7e-2da74f3b713c
   created_at: 2026-11-09T14:29:58.655246368Z
+  created_by: joe
+- rel_type: Supersedes
+  target_id: 01a1c058-2d35-7670-a132-1135fb909f33
+  created_at: 2026-11-09T14:30:05.371106253Z
   created_by: joe
 history:
 - id: 01a1c0b6-74fb-78d2-acb7-61129f10e8e8
@@ -168,6 +172,12 @@ history:
 - id: 01a1c0b7-49f1-7871-98ee-61efe5edc062
   author: joe
   timestamp: 2026-11-09T14:29:59.921949109Z
+  session_id: 01a1beff-fc3b-78e2-93e2-9b0c283b0339
+  harness_version: 2.1.319 (Claude Code)
+  changes: []
+- id: 01a1c0b7-6456-75b1-afd0-ab5a302c4d89
+  author: joe
+  timestamp: 2026-11-09T14:30:06.678052291Z
   session_id: 01a1beff-fc3b-78e2-93e2-9b0c283b0339
   harness_version: 2.1.319 (Claude Code)
   changes: []
