@@ -127,17 +127,9 @@ fn init_git_canonical_test_store() -> (tempfile::TempDir, std::path::PathBuf, st
     (tmp, project_root, store_dir)
 }
 
-/// BUG-1506: `try_emit_nonblocking_findings_on_completion` must write each
-/// successor finding through the SAME targeted, single-object
-/// `DatabaseBackend::add_requirement` path `aida add` itself uses on the
-/// git-canonical store — never a full-store load-then-save (the old
-/// `CachedGitBackend::update_atomically` shape this replaced), which would
-/// silently drop a spec written concurrently by another session in between.
-/// This reproduces that scenario directly: a spec is added to the store
-/// through its own backend handle (standing in for a concurrent `aida add`)
-/// BEFORE the emit call, and must still be present after it, alongside both
-/// new findings landing via their own targeted `add TASK-…` commits.
-// trace:STORY-1421 trace:BUG-1506 | ai:claude
+/// A locked sweep creation preserves unrelated objects and carries N findings
+/// in one new spec. Re-observing the verdict is idempotent.
+// trace:TASK-3749 trace:BUG-1506 | ai:codex
 #[test]
 fn emit_writes_targeted_commits_and_preserves_concurrent_spec() {
     use aida_core::db::DatabaseBackend;
@@ -198,20 +190,26 @@ fn emit_writes_targeted_commits_and_preserves_concurrent_spec() {
         concurrent_spec_id
     );
 
-    // Both new findings landed, tagged back to the source spec.
+    // Both findings landed in one sweep, tagged back to the source spec.
     let all = check_backend.list_requirements(true).unwrap();
     let carried: Vec<_> = all
         .iter()
         .filter(|r| r.tags.iter().any(|t| t == "carried-from:STORY-9821"))
         .collect();
-    assert_eq!(carried.len(), 2);
+    assert_eq!(carried.len(), 1);
+    assert!(carried[0].tags.contains("kind:finding-sweep"));
+    assert!(carried[0].description.contains("F1: finding text"));
+    assert!(carried[0].description.contains("F2: finding text"));
+    assert!(carried[0]
+        .description
+        .contains("Reviewed sha: deadbeefcafe"));
+    assert_eq!(all.len(), 2, "N findings create exactly one sweep");
     for req in &carried {
         assert!(req.tags.iter().any(|t| t.starts_with("finding-hash:")));
         assert!(req.tags.iter().any(|t| t == "from-review:PR-7"));
     }
 
-    // One targeted `add SPEC-ID` commit per new finding, no bulk chore
-    // commit — mirrors the BUG-1506 auto-bump assertion.
+    // The transaction writes only changed objects; no bulk chore save.
     let new_subjects = run_git(
         &store_dir,
         &["log", "--format=%s", &format!("{}..HEAD", seed_head)],
@@ -236,4 +234,98 @@ fn emit_writes_targeted_commits_and_preserves_concurrent_spec() {
         refiled, 0,
         "a re-run must not refile already-carried findings"
     );
+}
+
+// trace:TASK-3749 | ai:codex
+#[test]
+fn task_3749_existing_sweep_appends_and_deduplicates() {
+    use aida_core::db::DatabaseBackend;
+    let (_tmp, root, store) = init_git_canonical_test_store();
+    let backend = crate::test_env::home_fixture_backend(&store)
+        .unwrap()
+        .with_dispenser(load_dispenser(&store).unwrap());
+    let mut sweep = aida_core::Requirement::new("Existing sweep".into(), "Prior findings".into());
+    sweep.tags.insert("kind:finding-sweep".into());
+    let sweep = backend.add_requirement(sweep).unwrap();
+    let path = crate::gate::review_verdict::verdict_path(&root, "TASK-9821");
+    std::fs::create_dir_all(path.parent().unwrap()).unwrap();
+    for (findings, expected) in [
+        (r#"["first", "second", "first"]"#, 2),
+        (r#"["first", "second", "third"]"#, 1),
+        (r#"["first", "second", "third"]"#, 0),
+    ] {
+        std::fs::write(
+            &path,
+            format!(
+                r#"{{"verdict":"approved","findings":{findings},"reviewed_sha":"review-head"}}"#
+            ),
+        )
+        .unwrap();
+        assert_eq!(
+            try_emit_nonblocking_findings_on_completion(&root, &store, "TASK-9821", "", Some(42))
+                .unwrap(),
+            expected
+        );
+        let rows = backend.list_requirements(true).unwrap();
+        assert_eq!(rows.len(), 1, "open sweep must be reused");
+        assert_eq!(rows[0].id, sweep.id);
+        assert!(rows[0].description.starts_with("Prior findings"));
+        assert!(rows[0].description.contains("PR: #42"));
+        assert!(rows[0].description.contains("Reviewed sha: review-head"));
+        assert_eq!(rows[0].description.matches("\nfirst\n").count(), 1);
+    }
+}
+
+// trace:TASK-3749 | ai:codex
+#[test]
+fn task_3749_sweep_keys_preserve_source_scope_and_closed_sweeps_roll_over() {
+    use aida_core::db::DatabaseBackend;
+    for status in [
+        aida_core::RequirementStatus::Completed,
+        aida_core::RequirementStatus::Superseded,
+        aida_core::RequirementStatus::Done,
+    ] {
+        let (_tmp, root, store) = init_git_canonical_test_store();
+        let backend = crate::test_env::home_fixture_backend(&store)
+            .unwrap()
+            .with_dispenser(load_dispenser(&store).unwrap());
+        for (source, text) in [
+            ("TASK-9821", "first"),
+            ("TASK-9822", "second"),
+            ("TASK-9822", "first"),
+        ] {
+            let path = crate::gate::review_verdict::verdict_path(&root, source);
+            std::fs::create_dir_all(path.parent().unwrap()).unwrap();
+            std::fs::write(
+                path,
+                format!(r#"{{"verdict":"approved","findings":["{text}"]}}"#),
+            )
+            .unwrap();
+            assert_eq!(
+                try_emit_nonblocking_findings_on_completion(&root, &store, source, "", Some(42))
+                    .unwrap(),
+                1
+            );
+        }
+        let rows = backend.list_requirements(true).unwrap();
+        assert_eq!(rows.len(), 1);
+        let mut closed = rows[0].clone();
+        assert!(!closed.description.contains("Reviewed sha:"));
+        closed.status = status;
+        backend.update_requirement(&closed).unwrap();
+        // Completed sweeps retain de-duplication, but new text needs a new sweep.
+        assert_eq!(
+            try_emit_nonblocking_findings_on_completion(&root, &store, "TASK-9822", "", Some(42))
+                .unwrap(),
+            0
+        );
+        let path = crate::gate::review_verdict::verdict_path(&root, "TASK-9822");
+        std::fs::write(path, r#"{"verdict":"approved","findings":["third"]}"#).unwrap();
+        assert_eq!(
+            try_emit_nonblocking_findings_on_completion(&root, &store, "TASK-9822", "", Some(42))
+                .unwrap(),
+            1
+        );
+        assert_eq!(backend.list_requirements(true).unwrap().len(), 2);
+    }
 }
