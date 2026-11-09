@@ -3,12 +3,12 @@ spec_id: BUG-b6b1278890774ef993d2ebc327862470-270
 agreed_id: BUG-2505
 title: aida add can exit without creating a spec when given a tag such as from:2026-11-08-review-closeout
 description: 'Observed 2026-11-08: six aida add calls with that tag created nothing, while the same calls with only area:orchestration succeeded. The error text was hidden by the caller''s output filter, so the cause is inferred from the difference. Reproduce with the tag and read the output first.'
-status: InProgress
+status: NeedsAttention
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-09T03:00:45.690194532Z
-modified_at: 2026-11-09T05:00:36.172364313Z
+modified_at: 2026-11-09T05:02:26.385300128Z
 req_type: Bug
 tags:
 - area:cli
@@ -18,6 +18,13 @@ comments:
   content: 'Investigation: the reported exact tag from:2026-11-08-review-closeout, together with area:orchestration, succeeds through the installed CLI using an isolated --file YAML store and persists both tags. No tag-specific rejection found in the canonical add parser (parse_tag_list permits colons/digits/hyphens). Added a canonical Git-store CLI regression covering the exact tag alone, combined tags, and area-only control; lane job j20261109T045922335-2-0 is compiling. Original six failing commands, exit codes and unfiltered stderr are absent, so root cause is not yet established. No production behavior change is justified by current evidence.'
   created_at: 2026-11-09T05:00:36.172364313Z
   modified_at: 2026-11-09T05:00:36.172364313Z
+  session_id: 01a1beabc9ac
+  harness_version: codex-cli 0.167.0
+- id: 01a1beaf-a089-72f1-a289-04c3b85e1ca4
+  author: dirtlab
+  content: 'Validation complete: lane job j20261109T045922335-2-0 executed bug_2505_review_closeout_tag_creates_a_persisted_spec successfully (1 passed, 0 failed). Each of the exact tag alone, area:orchestration plus the exact tag, and the area-only control created one additional canonical Git-store object with exact tags. Installed CLI YAML-store reproduction also succeeded. git diff --check passed. Only change: regression coverage in aida-cli/tests/bug_1770_tag_whitespace.rs; no production fix because failure is unreproduced. Need original full failing argv, exit status, unfiltered stdout/stderr, and CLI build identity to continue.'
+  created_at: 2026-11-09T05:02:23.369375302Z
+  modified_at: 2026-11-09T05:02:23.369375302Z
   session_id: 01a1beabc9ac
   harness_version: codex-cli 0.167.0
 history:
@@ -42,6 +49,15 @@ history:
   session_id: 01a1beabc9ac
   harness_version: codex-cli 0.167.0
   changes: []
+- id: 01a1beaf-ac51-74a0-acc1-e890f02ddae9
+  author: dirtlab
+  timestamp: 2026-11-09T05:02:26.385314387Z
+  session_id: 01a1beabc9ac
+  harness_version: codex-cli 0.167.0
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: NeedsAttention
 filed_at:
   code_sha: d73f4e6b86c9f6a85cc01a4aa9893b869252b3a9
   branch: main
@@ -50,3 +66,8 @@ filed_at:
   aida_build_sha: a7a14984cec
   vendor: claude
   session: 20abb7c3-8f9b-4a5e-b326-404921f3b450
+attention_reason:
+  category: missing-context
+  detail: Exact reported tag succeeds in both isolated installed-CLI YAML-store reproduction and executed canonical Git-store CLI regression (1 passed). Original six failing commands and unfiltered diagnostics are missing; need argv, exit codes, stdout/stderr and CLI build identity to establish root cause. Regression test left uncommitted for handoff; no production behavior changed.
+  raised_by: implementer
+  raised_at: 2026-11-09T05:02:26.385300128Z
