@@ -3,12 +3,12 @@ spec_id: BUG-b6b1278890774ef993d2ebc327862470-270
 agreed_id: BUG-2505
 title: aida add can exit without creating a spec when given a tag such as from:2026-11-08-review-closeout
 description: 'Observed 2026-11-08: six aida add calls with that tag created nothing, while the same calls with only area:orchestration succeeded. The error text was hidden by the caller''s output filter, so the cause is inferred from the difference. Reproduce with the tag and read the output first.'
-status: Approved
+status: InProgress
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-09T03:00:45.690194532Z
-modified_at: 2026-11-09T06:03:11.050242118Z
+modified_at: 2026-11-09T06:05:05.211234181Z
 req_type: Bug
 tags:
 - area:cli
@@ -83,6 +83,13 @@ history:
   timestamp: 2026-11-09T06:03:11.129598197Z
   session_id: 7aacb1ed-ebaa-4da4-a195-500864e99e7d
   changes: []
+- id: 01a1bee9-073b-75d1-aead-ca71f4fb8200
+  author: aida-session-start
+  timestamp: 2026-11-09T06:05:05.211223075Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: InProgress
 filed_at:
   code_sha: d73f4e6b86c9f6a85cc01a4aa9893b869252b3a9
   branch: main
