@@ -1037,6 +1037,7 @@ pub(crate) fn handle_queue_rework(
     if work {
         handle_queue_work(
             storage,
+            None,
             &user_id,
             Some(&spec_id),
             permission_mode,

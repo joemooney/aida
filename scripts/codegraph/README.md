@@ -98,7 +98,7 @@ directories before its first backup; symbolic links are preserved. Do not run `s
 
 ## Doctor and acceptance
 
-`aida doctor --lane-host [--json]` reports primary-index age, snapshot capture
+`aida doctor --lane-codegraph [--json]` reports primary-index age, snapshot capture
 age, host observation age, and refresh errors from the host-owned descriptor.
 The report includes a bounded status round trip (`query_reachable`), which
 is not evidence of a successful graph query. Normal `doctor check codegraph`
@@ -111,7 +111,7 @@ also compares the client at the resolved primary checkout’s
 an absent or different deployed client on a lane produces a `client-routing`
 finding directing the operator to select the reviewed host client. A lane with
 a valid deployed client and no PATH client does not receive upstream-install advice.
-Before deployment, or with a dangling descriptor link, `--lane-host` names the
+Before deployment, or with a dangling descriptor link, `--lane-codegraph` names the
 descriptor path and asks the host to deploy or repair the proxy and lane link,
 while preserving the underlying OS error.
 The primary host keeps upstream on PATH for index maintenance and skips this
@@ -128,7 +128,7 @@ implement and validate its read-only client/descriptor/socket admission. Run:
 
 ```sh
 /home/joe/ai/aida/.codegraph/proxy-state/bin/codegraph callers primary_index_link --json
-aida doctor --lane-host --json
+aida doctor --lane-codegraph --json
 ```
 
 Paste exact command/output into the PR body. Confirm callers includes
