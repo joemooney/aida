@@ -15,7 +15,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-08T19:27:28.525198886Z
-modified_at: 2026-11-09T08:43:57.090613946Z
+modified_at: 2026-11-09T08:44:04.737553469Z
 req_type: Bug
 comments:
 - id: 01a1bcd8-beaf-7582-aa0b-006077ac5867
@@ -268,6 +268,28 @@ comments:
   content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: Head changes no PR file since the last review, so all five prior findings stand, and CI is red on PR-caused failures. AC1 partial (verified scalars/sets; nested replies lost), AC2 partial (verified pickup/burndown refusal; no-store-branch remote hard-fails), AC3 partial (verified allocation/sync; suggest_free_node_id swallows the refusal), AC4 unverified (external host action, Refs stays). Protocol: PR touches a test file: met.. It was punted on: blocked-dependency: Binding advisor ruling requires a fresh branch from current main and reference-only use of bug-b6b1278890774ef993d2ebc327862470-266. This native seat is instead on that reference branch at e5282fa5ef with prior BUG-2501 changes and main merges already committed (16 files differ from origin/main aaf9ac1436). Git metadata is read-only by launch contract; cannot create or switch branches or reset this history. Host must provision a fresh current-main seat/new publication branch, retaining archive/bug-2501-pr3699 only as reference, and relaunch BUG-2501. No source edits or publication declaration made in this attempt. Latest review findings remain to address: configured remote without a store branch, nested comment replies/edits lost by union, locked plain pull in suggest_free_node_id, and missing dirty-refusal regressions. Preserve main pull_rebase_store_retry and BUG-2490 checks unchanged. AC4 host stopgap retirement remains outstanding.. No triage reason was given.'
   created_at: 2026-11-09T08:43:57.090612571Z
   modified_at: 2026-11-09T08:43:57.090612571Z
+  session_id: 01a1beff-fc3b-78e2-93e2-9b0c283b0339
+  harness_version: 2.1.319 (Claude Code)
+- id: 01a1bf7a-9698-7dd3-a080-05cd970e5bf8
+  author: joe
+  content: |-
+    REVIEW FINDINGS TO ADDRESS (PR #3717):
+    Verdict: CHANGES REQUESTED
+    Reviewed commit: e5282fa5ef94
+    Recorded: 2026-11-09T08:17:28.225362203+00:00
+    Findings:
+    1. [major][test-regression][AC2] aida-cli/tests/task_1717_store_writer_lock.rs:1120 read_sync_pull_holds_the_lock_and_leaves_foreign_rebase_alone fails in CI cli-0. It asserts the '--sync pull failed' warning that store_sync.rs maybe_sync_pull no longer prints: a pre-existing rebase now bails with 'store pull refused: rebase already in progress'. Update the assertion to the new refusal, keep the check that the foreign rebase-merge/owner file survives, and assert a non-zero exit.
+    2. [major][ci-gate] CI (gates) fails the portability ratchet with new findings. aida-cli-lib/src/store_push_pull.rs:1901 'if err_display.contains("uncommitted changes") || ...' matches the prose-classification rule and is not allowlisted. Classify on a typed refusal instead; git_ops.rs is_dirty_store_refusal also classifies on message text and should use the same typed error. The 'lane_fixture_fails' panic in that job's excerpt is the intentional nested fixture of bug_2383_seat_target_overlay_tests.rs, not a failure to fix.
+    3. [major][test-regression] CI lib-1 fails lane_liveness::tests::reviewer_session_lease_counts_as_review_started (story_1688_lane_liveness_tests.rs:1093, session_start unwrap) and seat_clone::orphan_reentry_tests::queue_work_resume_adopts_the_orphan_end_to_end (bug_2223_orphan_seat_reentry_tests.rs:703, adopt_as error lacks NeedsAttention). Main is green at the merged base aaf9ac1436. Both go through session_start, so the likely cause is a refusal newly propagated on that path (for example coordination.rs refresh_store), but the reviewer could not read the panic text because job logs are blocked in the review sandbox. Diagnose from the logs and fix without weakening either test.
+    4. [major][regression][AC2] aida-cli-lib/src/store_sync.rs:1703 maybe_sync_pull skips only a missing origin. With origin configured but no store branch yet, fetch_rebase_target fails with 'store fetch failed' and the function returns Err, so aida burndown run (including dry-run, burndown_run.rs:358) and every --sync read die on that store. Add the probe_remote_branch skip used by 'aida db sync --pull' (git_backend_cmd.rs), let a failed query still refuse, and test it. Required by the advisor ruling of 2026-11-09.
+    5. [major][correctness][AC1] aida-core/src/conflict.rs merge_spec_upstream calls union_comments with base first, and union_comments (conflict.rs:764) keeps the first copy per id. A comment present in base therefore keeps its base content: a reply nested by either node, a reaction, or an upstream edit is silently lost when the object conflicts. Merge per id so replies and reactions union recursively and content comes from upstream, and add a nested-reply regression (current tests use flat comments). Required by the advisor ruling of 2026-11-09.
+    6. [minor][correctness][AC3] aida-core/src/git_ops.rs:5807 suggest_free_node_id holds the store write lock, calls pull_rebase and discards every error except is_sync_refusal. A tracked-dirty store's refusal is swallowed and the probe answers from a possibly stale registry. Propagate is_dirty_store_refusal as coordination.rs and db_block.rs now do.
+    7. [minor][test-coverage][AC3] The dirty-refusal propagation at aida-cli-lib/src/coordination.rs:572 refresh_store and aida-cli-lib/src/db_block.rs:233 pull_unless_refused has no test executing it. It also changes coordination.rs:1170, where a dirty store now blocks the release path that 'let _ = refresh_store(...)?' used to tolerate. Restore the dirty lock-claim and block-pull regressions from the PR-3699 rework and assert the intended release behavior.
+    8. [minor][test-coverage][AC1] Advisor comment of 2026-11-09 06:00Z asks the resolver to cover two hosts recording the same completion. No test does, and entries with distinct ids are all kept by the union, so duplicate completion history is possible. Add that case and assert the intended result. The same comment's schema concern looks covered by construction because resolve_spec_conflict serializes a typed Requirement; a test of that is optional.
+    9. [cosmetic][docs][AC1] docs/internal/testing/multi-user-test-cases.md MU-204 (lines 127-131) still says scalars resolve last-write-wins by modified_at and that merged status is the LWW winner. The pull path now takes upstream scalars.
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
+  created_at: 2026-11-09T08:44:04.632132906Z
+  modified_at: 2026-11-09T08:44:04.632132906Z
   session_id: 01a1beff-fc3b-78e2-93e2-9b0c283b0339
   harness_version: 2.1.319 (Claude Code)
 history:
