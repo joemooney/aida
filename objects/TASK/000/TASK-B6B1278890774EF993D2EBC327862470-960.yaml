@@ -8,7 +8,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-07T23:39:41.575597Z
-modified_at: 2026-11-09T00:22:55.868137264Z
+modified_at: 2026-11-09T00:26:40.700097867Z
 req_type: Task
 relationships:
 - rel_type: Child
@@ -978,8 +978,13 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a1bdb3-3513-70b2-9d11-37bf478d2abe
+  author: joe
+  timestamp: 2026-11-09T00:26:40.787303029Z
+  session_id: 01a1bdafbd39
+  changes: []
 test_coverage_notes: 'Launcher cargo test --profile agent -p aida-cli-lib --lib -- command_registry passed: 32 executed tests, zero failures (j20261108T235124587-2-0). Launcher cargo check --profile agent -p aida-cli --no-default-features passed (j20261108T235531390-2-0). Earlier compile attempts exposed missing explicit bindings and traits; all corrected before the passing runs. 17 crate-split Python fixtures pass. Glob ratchet against HEAD passes at 164; ExecContext 1239 sites, store-writer 3400 sinks / 293 mappings, portability guard and growth check, and all 84 CI gate classifications pass. All 12 Rust files preserve every non-import token and avoid the owning plan exclusions and inspected open-PR footprints; touched-file rustfmt and git diff --check pass. Full make check-ci-fast remains host validation because its direct Cargo calls conflict with this seat runner-only rule. Codegraph unavailable (doctor confirmed); used rg/source inspection. Edits uncommitted, Refs declaration recorded, no queue completion.'
-implementation_summary: 'Next Refs import-cleanup slice removes 18 root crate globs from 12 files outside the owning plan exclusions, current open-PR footprints, and prior 15-adapter batch: assign_cmd, driver_cmd, graph_cmd, import_export_cmd, machine_readiness, manual, relationship_cmd, review_cmd, store_cmd, team_cmd, terminal_cmd and upgrade_cmd. Explicit imports include DatabaseBackend and Colorize traits; unused globs are removed. The checked-out baseline shrinks from 182 to 164. All non-import Rust tokens match HEAD. Tooling landed earlier; remaining import batches and lib_part1..6 dissolution remain outstanding. TASK-3428 stays In Progress; native Refs publication declaration recorded for host publication.'
+implementation_summary: 'Round 14 scope correction restores the 12-module batch from 4e32c5de630 to pre-batch contents and restores its 12 ledger rows (18 imports), reducing PR #3695 to 40 files: 37 modules, two test files and ledger. Remaining glob debt is 181. Deferred changes remain in branch history and /tmp/task-3428-round14-deferred-imports.patch for a separate Refs PR, with import-source and module-trace polish required there. Removed code contains all findings 3-5. Corrected PR title to 37 modules. Refs host publication declaration recorded; no local commit, push, merge or queue completion. TASK-3428 remains In Progress; remaining imports and lib_part dissolution are later slices.'
 filed_at:
   code_sha: 2a7fe186bdcd718fa356e5e4d028a3b2ff13769d
   branch: main
