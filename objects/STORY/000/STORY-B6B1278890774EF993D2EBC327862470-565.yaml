@@ -28,8 +28,13 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-07T19:59:40.192574Z
-modified_at: 2026-11-08T23:15:00.243576960Z
+modified_at: 2026-11-09T06:51:59.864763226Z
 req_type: Story
+relationships:
+- rel_type: Supersedes
+  target_id: 01a1bca0-1553-7353-b7e2-7956b884523a
+  created_at: 2026-11-09T06:51:59.864758847Z
+  created_by: joe
 comments:
 - id: 01a1b86c-54fb-76f0-b04b-0ed1c7c07cfb
   author: dirtlab
@@ -592,6 +597,12 @@ history:
   author: joe
   timestamp: 2026-11-08T22:37:05.512363945Z
   session_id: 01a1bd458887
+  harness_version: 2.1.319 (Claude Code)
+  changes: []
+- id: 01a1bf13-fef8-7203-8020-97b987432129
+  author: joe
+  timestamp: 2026-11-09T06:52:01.144224509Z
+  session_id: 01a1beff-fc3b-78e2-93e2-9b0c283b0339
   harness_version: 2.1.319 (Claude Code)
   changes: []
 filed_at:
