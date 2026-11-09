@@ -8,7 +8,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-09T03:00:45.690194532Z
-modified_at: 2026-11-09T06:03:00.017590006Z
+modified_at: 2026-11-09T06:03:11.050242118Z
 req_type: Bug
 tags:
 - area:cli
@@ -78,6 +78,11 @@ history:
   - field_name: status
     old_value: NeedsAttention
     new_value: Approved
+- id: 01a1bee7-4999-77c1-ac4c-4a5cbc097489
+  author: joe
+  timestamp: 2026-11-09T06:03:11.129598197Z
+  session_id: 7aacb1ed-ebaa-4da4-a195-500864e99e7d
+  changes: []
 filed_at:
   code_sha: d73f4e6b86c9f6a85cc01a4aa9893b869252b3a9
   branch: main
