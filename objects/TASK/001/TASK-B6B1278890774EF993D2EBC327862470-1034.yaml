@@ -36,7 +36,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-09T06:49:35.077353670Z
-modified_at: 2026-11-09T07:11:30.211580410Z
+modified_at: 2026-11-09T07:34:54.257859869Z
 req_type: Task
 relationships:
 - rel_type: Supersedes
@@ -55,6 +55,14 @@ relationships:
   target_id: 01a1beff-280d-7fc0-9d89-46095954693d
   created_at: 2026-11-09T06:51:20.456835161Z
   created_by: joe
+comments:
+- id: 01a1bf3b-4231-7ff0-b7cf-3533a0810d0b
+  author: dirtlab
+  content: 'Implemented all four sweep sections in the native seat; edits remain uncommitted for host publication. TASK-3057: real CLI coverage now exercises foreground Codex/Antigravity and both Codex background policy print sites. TASK-3059: contained Codex and native background launches refuse config-profile flags and profile/profiles config keys. TASK-3063: host reading a native publication declaration rewrites completion-bearing body trailers to Refs; regression verifies direct forge squash credit and failed-exit downgrade, and lifecycle docs describe the boundary. TASK-HOME-1032 (relationship TASK-3068): one-job launcher measures service lifetime after setup and before cleanup; slow-copy/immediate-exit regression passes. Validation: cargo test --profile agent -p aida-cli-lib --lib -- task_3736 passed 4 executed tests (lane job j20261109T071846583-2-0); cargo test --profile agent -p aida-cli --test story_1486_launch_profile -- noexec_verbose_prints_stakeholder_and_explicit_git_downgrades passed 1 executed test (j20261109T071424087-2-0); python3 -m unittest tests/test_self_hosted_runner.py passed 15 tests; touched Rust formatting, bash syntax and git diff whitespace checks passed. No implementation blockers. Codegraph was unavailable on this host; doctor confirmed missing and navigation used rg. No commit, push, PR, review record, or queue completion performed.'
+  created_at: 2026-11-09T07:34:54.257859869Z
+  modified_at: 2026-11-09T07:34:54.257859869Z
+  session_id: 01a1bf25432d
+  harness_version: codex-cli 0.167.0
 history:
 - id: 01a1bf13-1677-7732-ab21-be2591fc35dd
   author: joe
