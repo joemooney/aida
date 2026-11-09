@@ -3,12 +3,12 @@ spec_id: BUG-b6b1278890774ef993d2ebc327862470-267
 agreed_id: BUG-2502
 title: 'aida queue rework prints ''status: Needs Attention -> Approved'' but the spec stays needs-attention, so lanes are refused as needs-triage'
 description: 'Seen 2026-11-08 on TASK-1222, STORY-1486, TASK-3048, STORY-2642, TASK-3420: metadata-only queue rework printed the Approved transition, aida show still reported needs-attention, and fill-slots launches failed with ''not pickable for fresh work: needs-triage''. An explicit aida edit --status approved fixed each one. Possibly a punt signal or cache overlay reasserting the status. Auto-rework depends on this path.'
-status: Approved
+status: InProgress
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-08T19:37:15.450252326Z
-modified_at: 2026-11-09T02:44:01.581031550Z
+modified_at: 2026-11-09T02:45:37.831655311Z
 req_type: Bug
 comments:
 - id: 01a1bcc0-2ddb-79f0-b763-2d703d44589a
@@ -156,6 +156,13 @@ history:
   - field_name: status
     old_value: NeedsAttention
     new_value: Approved
+- id: 01a1be32-6ba7-7910-8633-9e753a93795f
+  author: aida-session-start
+  timestamp: 2026-11-09T02:45:37.831654095Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: InProgress
 filed_at:
   code_sha: db2eb4c39e46704132705ccb2b8300574ead41a6
   branch: main
