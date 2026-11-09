@@ -3,12 +3,12 @@ spec_id: TASK-b6b1278890774ef993d2ebc327862470-1056
 agreed_id: TASK-3778
 title: Temporarily relax the CI test-time budget so trains stop ejecting on timing noise
 description: 'Operator direction 2026-11-09: relax the timing gate and revisit after the open items clear. Trains eject passing PRs for sub-2s overruns (PR 3731: 11.7s against the 10s limit with all 8077 tests passing). EXACT CHANGE in scripts/test-time-budget.toml only: set default_limit = 30 and untouched_factor = 3, and add a comment above them saying this is temporary, tied to TASK-3665, and to be restored once the open list clears. Do not change scripts/test-timings.py, its tests or per-test entries. If a test asserts the shipped default_limit value, update only that value. Acceptance: make check-ci-fast passes; a 12s unbudgeted test no longer fails the budget step.'
-status: NeedsAttention
+status: Approved
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-09T16:48:10.459066565Z
-modified_at: 2026-11-09T17:12:55.094967122Z
+modified_at: 2026-11-09T17:12:57.610023731Z
 req_type: Task
 comments:
 - id: 01a1c14c-71cb-73f3-a66a-aebc13a35ed4
@@ -24,6 +24,11 @@ comments:
     Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
   created_at: 2026-11-09T17:12:54.987320875Z
   modified_at: 2026-11-09T17:12:54.987320875Z
+- id: 01a1c14c-7c0a-7833-99f5-eb4046766725
+  author: joe
+  content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: Two deterministic Python gate assertion failures remain after the budget relaxation; CI is pending.. It was punted on: ambiguous-spec: Requested config is implemented and the synthetic 12-second unbudgeted test passes. Acceptance conflicts with the explicit restriction allowing only the shipped default_limit assertion value to change: tests/test_story_1853_test_speed.py:137 requires all per-test budgets greater than default_limit (existing entries are below 30), and :304 hardcodes untouched_factor=1.5 instead of requested 3. Python suite: 27 run, 2 failures. make check-ci-fast was interrupted when it invoked direct cargo check, prohibited by lane instructions. Edits remain uncommitted.. No triage reason was given.'
+  created_at: 2026-11-09T17:12:57.610019596Z
+  modified_at: 2026-11-09T17:12:57.610019596Z
 history:
 - id: 01a1c138-1631-79f1-9cb6-d815027a735d
   author: aida-session-start
@@ -51,6 +56,13 @@ history:
   author: joe
   timestamp: 2026-11-09T16:54:37.704256010Z
   changes: []
+- id: 01a1c14c-7c09-70a1-a735-8e6121d6cea5
+  author: joe
+  timestamp: 2026-11-09T17:12:57.609990185Z
+  changes:
+  - field_name: status
+    old_value: NeedsAttention
+    new_value: Approved
 filed_at:
   code_sha: e4eee38238fa4cb8e8c85dadaa4ed07894cfbeea
   branch: main
@@ -60,17 +72,3 @@ filed_at:
   vendor: claude
   session: 01a1beff-fc3b-78e2-93e2-9b0c283b0339
   harness_version: 2.1.319 (Claude Code)
-attention_reason:
-  category: ambiguous-spec
-  detail: 'Requested config is implemented and the synthetic 12-second unbudgeted test passes. Acceptance conflicts with the explicit restriction allowing only the shipped default_limit assertion value to change: tests/test_story_1853_test_speed.py:137 requires all per-test budgets greater than default_limit (existing entries are below 30), and :304 hardcodes untouched_factor=1.5 instead of requested 3. Python suite: 27 run, 2 failures. make check-ci-fast was interrupted when it invoked direct cargo check, prohibited by lane instructions. Edits remain uncommitted.'
-  lean: Authorize the two additional stale test assertion updates while retaining all per-test entries, then rerun the suite and fast gates with Cargo routed through the launcher.
-  raised_by: implementer
-  raised_at: 2026-11-09T16:51:39.666874854Z
-failure_reason:
-  phase: reviewer
-  phase_index: 3
-  kind: verdict:request-changes
-  detail: Two deterministic Python gate assertion failures remain after the budget relaxation; CI is pending.
-  recovery_hint: address the review findings, move TASK-3778 back to In Progress, and clear the PR hold only after approval
-  shelved_by: reviewer
-  shelved_at: 2026-11-09T16:54:37.575696918Z
