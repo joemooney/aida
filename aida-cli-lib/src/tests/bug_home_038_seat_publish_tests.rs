@@ -3058,3 +3058,76 @@ fn task_2902_launch_paths_clear_and_provision_before_spawn() {
         "generation-one declaration"
     );
 }
+
+// trace:BUG-2504 | ai:codex
+#[test]
+fn bug_2504_recovery_matches_recorded_tree_kind() {
+    if !bwrap_live_or_skip() {
+        return;
+    }
+    for clone in [false, true] {
+        for behind_head in [false, true] {
+            let fx = fixture();
+            git_ok(&fx.main, &["branch", "feat"]);
+            git_ok(&fx.main, &["push", "-q", "origin", "feat"]);
+            let tree = if clone {
+                leased_clone(&fx, "recovery", "c0ffee250400")
+            } else {
+                let tree = fx.root.join("linked-recovery");
+                git_ok(
+                    &fx.main,
+                    &["worktree", "add", tree.to_str().unwrap(), "feat"],
+                );
+                tree
+            };
+            // Diverge main from the seat, or advance the remote PR head.
+            if !behind_head {
+                std::fs::write(tree.join("README.md"), "PR version\n").unwrap();
+                git_ok(&tree, &["commit", "-qam", "PR diverges"]);
+            }
+            std::fs::write(fx.main.join("README.md"), "remote version\n").unwrap();
+            git_ok(&fx.main, &["commit", "-qam", "remote advances"]);
+            git_ok(
+                &fx.main,
+                &[
+                    "push",
+                    "-q",
+                    "origin",
+                    if behind_head { "HEAD:feat" } else { "main" },
+                ],
+            );
+            std::fs::write(tree.join("pending"), "preserve me\n").unwrap();
+            let head = git_ok(&tree, &["rev-parse", "HEAD"]);
+            let error = prepare_rework_merge(&fx.main, &tree, "feat", true).unwrap_err();
+            let message = format!("{error:#}");
+            assert!(message.contains("edits preserved"), "{message}");
+            assert!(message.contains(tree.to_str().unwrap()), "{message}");
+            if clone {
+                assert!(message.contains("aida ship --from-seat"), "{message}");
+                assert!(!message.contains("git -C"), "{message}");
+            } else {
+                assert!(message.contains("git -C"), "{message}");
+                assert!(message.contains("merge origin/feat"), "{message}");
+                assert!(!message.contains("aida ship --from-seat"), "{message}");
+            }
+            assert_eq!(git_ok(&tree, &["rev-parse", "HEAD"]), head);
+            assert_eq!(
+                std::fs::read_to_string(tree.join("pending")).unwrap(),
+                "preserve me\n"
+            );
+            if behind_head {
+                std::fs::remove_file(tree.join("pending")).unwrap();
+                let message = format!(
+                    "{:#}",
+                    prepare_rework_merge(&fx.main, &tree, "feat", false).unwrap_err()
+                );
+                assert!(
+                    message.contains("retry pickup with its current head"),
+                    "{message}"
+                );
+                assert!(!message.contains("--commit-pending"), "{message}");
+                assert!(!message.contains("add -A"), "{message}");
+            }
+        }
+    }
+}

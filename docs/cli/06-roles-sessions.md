@@ -821,15 +821,23 @@ A clean probe admits pending work even when main has advanced. A conflicting or
 failed probe refuses without changing the index, HEAD or pending files.
 Never run host Git inside a seat clone: its configuration and hooks are
 seat-controlled. After the lane exits, inspect `aida session leases --all`
-for the recorded path and scope. Preserve and publish pending work through
+for the recorded path and scope. For recorded clones, preserve and publish pending work through
 `aida ship --from-seat PATH --spec SPEC --commit-pending 'fix: preserve rework (Refs SPEC)'`,
 substituting the recorded path and spec ID. This runs clone Git in AIDA's
 sandbox and retains publication gates; a refusal is not successful publication.
-Once publication succeeds, start a fresh `aida queue work SPEC --vendor claude --fresh --no-human`
+For linked worktrees, after the lane exits, use host Git in the recorded worktree:
+`git -C PATH add -A`, `git -C PATH commit -m "fix: preserve rework (Refs SPEC)"`,
+then `git -C PATH fetch origin`, `git -C PATH merge origin/BRANCH` and
+`git -C PATH merge origin/main`. Resolve any conflicts, commit the resolution,
+and retry pickup with `--resume`. The clone-only `ship --from-seat` command
+does not support linked worktrees.
+If a probe fails without reporting conflicts, diagnose its error before retrying.
+For confirmed conflicts, once publication succeeds, start a fresh `aida queue work SPEC --vendor claude --fresh --no-human`
 for conflict resolution. A clean seat behind the PR head needs a fresh pickup
 from the current head, without a pending-work commit or `--resume`.
 A failed adopted-seat launch restores its orphan lease so that retry can adopt
-the same tree. A native child cannot write Git metadata.
+the same tree. Host preparation is required for native children because their
+sandbox makes Git metadata read-only.
 An unfinished merge still refuses. Clean resumes use the normal merge and
 conflict checks.
 <!-- trace:BUG-2504 | ai:codex -->

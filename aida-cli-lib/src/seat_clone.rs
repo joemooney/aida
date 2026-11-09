@@ -2862,6 +2862,11 @@ pub(crate) fn prepare_rework_merge(
             }
         }
     };
+    // Recovery depends on the host's recorded tree kind, never seat configuration.
+    // trace:BUG-2504 | ai:codex
+    let pending_resume = resume
+        && execute(&["status", "--porcelain", "--untracked-files=all"])
+            .is_ok_and(|status| !status.is_empty());
     prepare_rework_merge_with(
         &execute,
         branch,
@@ -2898,12 +2903,37 @@ pub(crate) fn prepare_rework_merge(
             Ok((base, pr_head))
         },
     )
-    .with_context(|| {
-        format!(
+    .map_err(|error| {
+        let recovery = if pending_resume {
+            if clone.is_some() {
+                format!(
+                    "After the lane exits, preserve pending work through AIDA's sandboxed \
+                     `aida ship --from-seat {} --commit-pending 'fix: preserve rework (Refs SPEC-ID)'`. \
+                     Do not run host Git in the seat clone. After successful publication, retry \
+                     a fresh pickup from branch {branch}",
+                    tree.display()
+                )
+            } else {
+                format!(
+                    "After the lane exits, preserve pending work in the linked worktree with \
+                     `git -C {0} add -A` and \
+                     `git -C {0} commit -m 'fix: preserve rework (Refs SPEC-ID)'`; then run \
+                     `git -C {0} fetch origin`, `git -C {0} merge origin/{branch}` and \
+                     `git -C {0} merge origin/main`. Resolve any reported conflicts, commit \
+                     the resolution, and retry pickup with --resume",
+                    tree.display()
+                )
+            }
+        } else {
+            String::new()
+        };
+        error.context(format!(
             "rework preparation for seat {} on branch {branch}; inspect its scope with \
-         `aida session leases --all` before recovery",
+             `aida session leases --all` before recovery. {recovery}. \
+             If a probe failed without reporting conflicts, diagnose that failure before retrying; \
+             confirmed conflicts can use a fresh `aida queue work SPEC --vendor claude --fresh --no-human`",
             tree.display()
-        )
+        ))
     })
 }
 
@@ -3051,10 +3081,7 @@ fn prepare_rework_merge_with(
     // Dirty seats need preservation; clean/fresh pickups need only a current head.
     // trace:BUG-2504 | ai:codex
     execute(&["merge-base", "--is-ancestor", &pr_head, "HEAD"]).context(if resume && dirty {
-        "seated rework branch is behind the PR head; edits preserved. Use AIDA's \
-             sandboxed `aida ship --from-seat` recovery with `--commit-pending` and a \
-             `(Refs SPEC-ID)` message after the lane exits; do not run host Git in the seat. \
-             Then prepare a fresh pickup from the current PR head"
+        "seated rework branch is behind the PR head; edits preserved"
     } else {
         "seated rework branch is behind the PR head; retry pickup with its current head"
     })?;
@@ -3063,11 +3090,7 @@ fn prepare_rework_merge_with(
     // trace:BUG-2504 | ai:codex
     if resume && dirty {
         execute(&["merge-tree", "--write-tree", "HEAD", &base]).context(
-            "could not prove a clean main merge for the dirty rework resume; edits preserved. \
-             After the lane exits, preserve pending work through AIDA's sandboxed \
-             `aida ship --from-seat` with `--commit-pending` and a `(Refs SPEC-ID)` message. \
-             Do not run host Git in the seat. Once publication succeeds, retry a fresh \
-             `aida queue work` with `--vendor claude --fresh --no-human` to resolve conflicts",
+            "could not prove a clean main merge for the dirty rework resume; edits preserved",
         )?;
         return Ok(Vec::new());
     }
@@ -3480,10 +3503,7 @@ mod rework_merge_tests {
         )
         .unwrap_err();
         let guidance = format!("{why:#}");
-        assert!(guidance.contains("aida ship --from-seat"));
-        assert!(guidance.contains("--commit-pending"));
-        assert!(guidance.contains("--vendor claude --fresh --no-human"));
-        assert!(!guidance.contains("git -C"));
+        assert!(guidance.contains("edits preserved"));
         assert_eq!(execute(&["rev-parse", "HEAD"]).unwrap(), pr_head);
         assert_eq!(execute(&["status", "--porcelain"]).unwrap(), status);
         assert_eq!(

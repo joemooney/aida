@@ -1168,7 +1168,10 @@ fn bug_2504_refused_adopted_dirty_launch_is_retryable() {
         if orphan_still_present {
             std::fs::write(
                 crate::lease_path(&fx.main, &orphan.id),
-                toml::to_string_pretty(&orphan).unwrap(),
+                format!(
+                    "# older writer formatting\n{}",
+                    toml::to_string(&orphan).unwrap()
+                ),
             )
             .unwrap();
         }
