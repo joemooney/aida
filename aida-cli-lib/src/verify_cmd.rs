@@ -1,4 +1,5 @@
 //! Explicit built-in host verification. trace:STORY-1673 | ai:codex
+// trace:TASK-3428 | ai:codex
 
 use crate::cli::VerifyCommand;
 use aida_core::constraints::{verify_constraints, ConstraintResult, Status};
@@ -436,7 +437,6 @@ fn run_verify(
     matches: &clap::ArgMatches,
     ctx: &crate::command_registry::DispatchCtx,
 ) -> anyhow::Result<()> {
-    use crate::*;
     let args = <VerifyArgs as clap::FromArgMatches>::from_arg_matches(matches)?;
     let cmd = &args.inner;
     return self::handle_verify_command(

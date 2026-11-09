@@ -434,7 +434,9 @@ fn commit_with_fault(
     let bytes = encode(&d)?;
     ensure!(bytes.len() <= LIMIT, "decision too large");
     let path = dir.join(format!("{}.pending", name(&d)));
-    ensure!(!present(&path)?, "OutcomeUnknown");
+    if present(&path)? {
+        return Err(OutcomeUnknown(path).into());
+    }
     replace_with_fault(&path, &bytes, fault).map_err(|_| OutcomeUnknown(path.clone()))?; // file AND directory fsynced before any canonical write
     let accepted = (|| -> Result<()> {
         fault("journal")?;

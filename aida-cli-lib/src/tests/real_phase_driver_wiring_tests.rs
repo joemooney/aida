@@ -3142,10 +3142,12 @@ fn bug_2185_project_with_store(
 /// The store writes a BUG-2185 child makes: a lease release (a deletion,
 /// which has no modification time) and a new object.
 // trace:BUG-2185 | ai:claude
+// trace:BUG-2490 | ai:codex — committed fixtures use valid requirement YAML.
 fn bug_2185_child_store_writes(store_root: &std::path::Path) -> String {
     format!(
-        "rm '{s}/coordination/leases/held.toml'\nmkdir -p '{s}/objects'\nprintf 'n: 1\\n' > '{s}/objects/new.yaml'\n",
-        s = store_root.display()
+        "rm '{s}/coordination/leases/held.toml'\nmkdir -p '{s}/objects'\nprintf '%s' '{object}' > '{s}/objects/new.yaml'\n",
+        s = store_root.display(),
+        object = serde_yaml::to_string(&aida_core::Requirement::new("child".into(), String::new())).unwrap().replace("'", "'\"'\"'")
     )
 }
 
