@@ -8,7 +8,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-08T19:37:15.450252326Z
-modified_at: 2026-11-09T02:43:59.111934866Z
+modified_at: 2026-11-09T02:44:01.581031550Z
 req_type: Bug
 comments:
 - id: 01a1bcc0-2ddb-79f0-b763-2d703d44589a
@@ -63,6 +63,21 @@ comments:
   content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: Root-cause fix and both prior findings are addressed, but the narrowed predicate makes the BUG-1213 loop guard one-shot: re-running rework on a guard-parked spec now requeues it.. No triage reason was given.'
   created_at: 2026-11-09T02:43:59.111931328Z
   modified_at: 2026-11-09T02:43:59.111931328Z
+  session_id: 20abb7c3-8f9b-4a5e-b326-404921f3b450
+- id: 01a1be30-f332-78c1-8d8f-26a7446b21ac
+  author: joe
+  content: |-
+    REVIEW FINDINGS TO ADDRESS (BUG-2502):
+    Verdict: CHANGES REQUESTED
+    Reviewed commit: 5112d7bcb0b1
+    Recorded: 2026-11-09T02:22:21.024926635+00:00
+    Findings:
+    1. aida-cli-lib/src/queue_cmd/rework.rs:847 (rework_is_review_shelf) makes the BUG-1213 loop guard one-shot. On a genuine repeat, return_to_flight -> clear_shelve_markers (requeue.rs:117) has already taken failure_reason, and loop_guard_park (rework.rs:347) only sets the status, so the guard-parked spec is NeedsAttention with no failure_reason and no attention_reason. The next identical 'aida queue rework' still computes recurred=true, but the predicate is now false, so it falls through to Approved plus requeue: the third blind round the guard's own note forbids. Before this PR that rerun re-parked. Keep guard-parked specs parked (for example make loop_guard_park retain or restore the reviewer failure marker, or have the predicate also accept a spec whose latest status entry is authored by LOOP_GUARD_AUTHOR), and leave a deliberate advisor exit such as aida edit.
+    2. aida-cli-lib/src/tests/queue_rework_tests.rs:2117 bug_2502_repeated_blocking_review_is_parked_before_requeue stops after the first park, so no test covers the second rework of a guard-parked spec. Extend it: after the park, call rework_as again with the same verdict and assert status stays NeedsAttention and the queue stays empty.
+    3. Non-blocking: on the genuine guard path rework.rs still prints the 'status: Needs Attention -> Approved' line (via emit_requeued) before parking the spec back, so the transition message this bug is titled after remains untrue there, softened only by the later 'escalated to advisor' line. Worth deferring the success line until after the guard decision, or wording it as provisional.
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
+  created_at: 2026-11-09T02:44:01.458401265Z
+  modified_at: 2026-11-09T02:44:01.458401265Z
   session_id: 20abb7c3-8f9b-4a5e-b326-404921f3b450
 history:
 - id: 01a1bcc0-76ed-7d22-8b7b-93e7daa2feca
