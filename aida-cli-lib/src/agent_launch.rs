@@ -288,6 +288,9 @@ pub(crate) fn handle_session_command(cmd: &SessionCommand) -> Result<()> {
             snapshot,
             body_only,
             standing_orders,
+            until,
+            spec,
+            reason,
         } => {
             if let Some(args) = standing_orders {
                 session_handoff_standing_orders(args, seat.as_deref())
@@ -298,6 +301,9 @@ pub(crate) fn handle_session_command(cmd: &SessionCommand) -> Result<()> {
                     seat.as_deref(),
                     *final_,
                     *rotated,
+                    until.as_deref(),
+                    spec.as_deref(),
+                    reason.as_deref(),
                     *snapshot,
                     *body_only,
                 )
@@ -8076,9 +8082,10 @@ pub(crate) static SESSION: crate::command_registry::CommandReg =
 fn session_cli_policy(matches: &clap::ArgMatches) -> crate::command_registry::CmdPolicy {
     use crate::cli::SessionCommand;
     use crate::stakeholder_role::StakeholderAction;
-    let read = <SessionArgs as clap::FromArgMatches>::from_arg_matches(matches).is_ok_and(|args| {
+    let args = <SessionArgs as clap::FromArgMatches>::from_arg_matches(matches);
+    let read = args.as_ref().is_ok_and(|args| {
         matches!(
-            args.inner,
+            &args.inner,
             SessionCommand::Leases {
                 prune_stale: false,
                 ..
@@ -8091,7 +8098,11 @@ fn session_cli_policy(matches: &clap::ArgMatches) -> crate::command_registry::Cm
         } else {
             StakeholderAction::Session
         },
-        per_write_auto_push: false,
+        // Conditional handoffs mutate the canonical spec and dequeue it.
+        // trace:STORY-2402 | ai:codex
+        per_write_auto_push: args.as_ref().is_ok_and(|args| {
+            matches!(&args.inner, SessionCommand::Handoff { until: Some(_), .. })
+        }),
         skip_role_restore_prompt: false,
         team_identity_write: true,
     }

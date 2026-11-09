@@ -328,7 +328,7 @@ spec doesn't uniquely identify which comment you mean. Run `aida comment list
 
 **Gotchas.** Because defer is a view-flag, a deferred spec keeps its status — a deferred Approved spec is still Approved, just hidden. And like archive, it won't show in default `list` until you `undefer` (or pass `--deferred`/`--all`) — the same "where did my spec go?" surprise, so reach for `--all` when something's missing.
 
-Supplied triggers must use `spec:<spec-id>=completed`, `pr:<number>=merged`, `release:>=<version>`, `date:<YYYY-MM-DD>`, `query:<filters> count<op><n>`, or `manual:<who>`. Free text is refused. A manual condition requires a non-empty `--reason`; the existing product/advisor/operator authority gate still applies to reasoned holds. A bare re-deferral preserves the previous trigger and timestamp. Existing free-text triggers remain readable pending migration. Question answers that park work store typed consequences canonically; prose consequences become `manual:<resolver>` with the original text retained in a comment. An empty or whitespace-only consequence preserves an existing trigger, or defaults to `manual:<resolver>` if none exists, without adding an empty comment. Resolver identities that cannot form a valid manual condition (for example, empty names or names with internal whitespace) use the parseable fallback `manual:operator`; any prose comment retains its original author. In the TUI, blank condition input issues a bare defer, and rejected conditions show the CLI diagnostic in the status line.
+Supplied triggers must use `spec:<spec-id>=completed`, `pr:<number>=merged`, `release:>=<version>`, `date:<YYYY-MM-DD>`, `query:<filters> count<op><n>`, or `manual:<who>`. Free text is refused. A manual condition requires a non-empty `--reason`; the existing product/advisor/operator authority gate still applies to reasoned holds. A bare re-deferral preserves the previous trigger and timestamp. The one-time free-text trigger migration has been applied; any remaining unparseable trigger stays parked for repair. Question answers that park work store typed consequences canonically; prose consequences become `manual:<resolver>` with the original text retained in a comment. An empty or whitespace-only consequence preserves an existing trigger, or defaults to `manual:<resolver>` if none exists, without adding an empty comment. Resolver identities that cannot form a valid manual condition (for example, empty names or names with internal whitespace) use the parseable fallback `manual:operator`; any prose comment retains its original author. In the TUI, blank condition input issues a bare defer, and rejected conditions show the CLI diagnostic in the status line.
 
 **Chains with** — `defer --until` parks it; `undefer` or the hourly `defer resurface` sweep brings it back to the ready set.
 
@@ -337,20 +337,23 @@ Supplied triggers must use `spec:<spec-id>=completed`, `pr:<number>=merged`, `re
 Evaluates typed conditions on deferred/parked specs without changing lifecycle
 status. A met condition clears a plain deferral and records the observation in
 an audit comment. Met operator holds go to `aida human` for a decision and stay
-held. Manual conditions older than 14 days also route to that queue;
+held. Manual conditions on deferrals older than 14 days also route to that queue;
+changing the trigger preserves the original deferral timestamp, so replacing an
+older trigger with a manual condition may route it on the next hourly sweep.
 `--manual-age-days N` changes the threshold. Existing queue rows are not duplicated.
 Removing a queue row without lifting the hold or changing the condition allows
 it to be routed again on the next sweep. Missing timestamps or triggers
-stay parked, and archived specs are skipped. Use `--dry-run` to preview actions
+stay parked. A condition naming an unknown spec ID also stays parked as Unknown;
+store read failures still fail the sweep. Archived specs are skipped. Use `--dry-run` to preview actions
 without writing specs or queues.
 
 Unknown observations (including failed forge/release probes) are reported and
 left parked, with a successful exit. Free-text and unparseable triggers are
 also Unknown and remain unchanged, including invalid typed syntax such as
-`spec:` or `date:bad`; the run reports `N deferrals awaiting typed-condition
-migration` as information. A store containing only these unmigrated triggers
-exits successfully without writing objects or queues. Only real evaluation errors
-(such as a spec condition naming a spec that does not exist) and store/internal errors
+`spec:` or `date:bad`; the run reports `N deferrals with unparseable triggers
+requiring repair` as information. A store containing only these triggers
+exits successfully without writing objects or queues. Unknown spec IDs also stay
+parked successfully. Only real evaluation errors and store/internal errors
 produce a nonzero exit after the remaining specs are checked. Concurrently edited specs
 are retained for a later sweep. This repository registers the sweep hourly as
 the timer-only `defer-resurface` job and routes job failures to the advisor.
@@ -835,9 +838,10 @@ Spec and query checks read canonical objects strictly (or an explicit YAML
 store selected with the top-level `aida --file` option); archived SQLite stores
 must be migrated first.
 
-Deferral writes require this language, and the hourly `defer resurface` job
-evaluates stored conditions (see above). Legacy trigger migration and
-relay/recurrence integration remain separate slices.
+Deferral writes, conditional relay/seat handoffs, and `findings recur --until`
+require this language. The hourly `defer resurface` job evaluates their stored
+conditions (see above). Human decisions use `manual:<who>` with a non-empty
+reason and retain the same hold policy as `aida defer`.
 <!-- trace:STORY-2402 | ai:codex -->
 
 

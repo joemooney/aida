@@ -13,6 +13,8 @@
 //! Rows corrected by hand after capture, each a deliberate policy change:
 //! - `session leases --prune-stale`: Read → Session. It releases stale
 //!   leases, including other clones' claims (TASK-1939).
+//! - Conditional session handoffs auto-push their spec deferral; conditional
+//!   recurrence requires a distinct team identity like `defer` (STORY-2402).
 //! - `agent new <vendor> --no-exec`: Write → Read. Side-effect-free launch
 //!   declarations are available to stakeholder seats (STORY-1486).
 //!
@@ -210,4 +212,28 @@ fn registered_policy_matches_mains_legacy_tables_for_every_verb() {
         diverged.join("\n")
     );
     assert_eq!(checked, want.len());
+}
+
+// trace:STORY-2402 | ai:codex
+const S5_POLICY_INVOCATIONS: &[&str] = &[
+    "findings recur --until date:2026-01-01 TASK-1",
+    "findings recur --reason hold --until manual:joe TASK-1",
+    "session handoff --until date:2026-01-01 --write TASK-1 --spec TASK-1",
+    "session handoff --spec TASK-1 --write TASK-1 --until date:2026-01-01",
+    "session handoff --reason hold --until manual:joe --spec TASK-1 --write TASK-1",
+];
+
+#[test]
+fn story2402_s5_policy_fixture_covers_conditional_writers() {
+    let fixture = std::fs::read_to_string(fixture_path()).unwrap();
+    for argv in S5_POLICY_INVOCATIONS {
+        // Parse the CLI once per invocation, not once per fixture line.
+        // CI run 42588996930 measured 53.980s with the repeated parsing.
+        // trace:STORY-2402 | ai:codex
+        let expected = format!("{argv}\t{}", answers(argv));
+        assert!(
+            fixture.lines().any(|line| line == expected),
+            "missing S5 policy: {argv}"
+        );
+    }
 }
