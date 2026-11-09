@@ -8,6 +8,7 @@
 //! `resolve_current_session_id`, the `plan_review_warning` decision + the
 //! `PLAN_REVIEW_PENDING_TAG` const it shares with `aida queue work`) stay in
 //! `main.rs` and are reached via `crate::`.
+// trace:TASK-3428 | ai:codex
 
 use anyhow::Result;
 use colored::Colorize;
@@ -236,7 +237,6 @@ fn run_import_plan(
     matches: &clap::ArgMatches,
     ctx: &crate::command_registry::DispatchCtx,
 ) -> anyhow::Result<crate::command_registry::Flow> {
-    use crate::*;
     let args = <ImportPlanArgs as clap::FromArgMatches>::from_arg_matches(matches)?;
     match &ctx.store {
         None => Ok(crate::command_registry::Flow::Continue),

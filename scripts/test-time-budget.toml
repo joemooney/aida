@@ -38,6 +38,11 @@ untouched_factor = 1.5
 "aida-cli-lib defer_resurface::tests::story2402_s4_persistence_dry_run_routing_and_repeat" = 25
 "aida-cli-lib defer_resurface::tests::story2402_s5_recur_conditions_resurface_and_manual_routes" = 25
 "aida-cli-lib command_registry::story_1728_policy_parity_tests::story2402_s5_policy_fixture_covers_conditional_writers" = 45
+# PR #3652 run 42495648136, cli-0 job 128777376052: 11.182s.
+# Real remote/store setup plus queue pickup; retain the missing-branch control.
+# Measured time x2, rounded up to 5s, following the budget convention above.
+# trace:BUG-2490 | ai:codex
+"aida-cli::queue_work_dry_run bug_2490_missing_remote_store_branch_does_not_stop_pickup" = 25
 # PR #3628 run 42428425690, CI (cli-0) job 128571688822 measured
 # 11.912s for real logs/attach CLI and PTY probes, 10.692s for two native
 # agent-new previews. Max x2 rounded up to 5s; retain both verbs' coverage.

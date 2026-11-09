@@ -499,12 +499,14 @@ pub(crate) fn db_sync_push_leg(
         Ok(false) => {
             println!("  Push rejected. Pulling and retrying...");
             let sha = aida_core::db::with_store_write_lock(store_path, || {
-                aida_core::git_ops::pull_rebase(store_path, &upstream, branch).map_err(|e| {
-                    anyhow::anyhow!(
-                        "Pull failed: {}",
-                        crate::store_pull_failure_hint(store_path, &e.to_string())
-                    )
-                })?;
+                // trace:BUG-2490 | ai:codex — preserve pending changes during publication retry.
+                aida_core::git_ops::pull_rebase_store_retry(store_path, &upstream, branch)
+                    .map_err(|e| {
+                        anyhow::anyhow!(
+                            "Pull failed: {}",
+                            crate::store_pull_failure_hint(store_path, &e.to_string())
+                        )
+                    })?;
                 crate::ensure_no_spec_id_collisions_canonical(store_path)?;
                 aida_core::git_ops::head_sha(store_path)
             })?;

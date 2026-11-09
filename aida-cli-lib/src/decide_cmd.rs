@@ -8,6 +8,7 @@
 //! machinery is shared with the `questions` command and stays in `main.rs`;
 //! this module holds only the thin dispatch handler. Extracted verbatim from
 //! `main.rs` (SPIKE-78); no behavior change.
+// trace:TASK-3428 | ai:codex
 
 use anyhow::Result;
 use colored::Colorize;
@@ -103,7 +104,6 @@ fn run_decide(
     matches: &clap::ArgMatches,
     ctx: &crate::command_registry::DispatchCtx,
 ) -> anyhow::Result<crate::command_registry::Flow> {
-    use crate::*;
     let args = <DecideArgs as clap::FromArgMatches>::from_arg_matches(matches)?;
     match &ctx.store {
         None => Ok(crate::command_registry::Flow::Continue),

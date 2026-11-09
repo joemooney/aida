@@ -155,7 +155,8 @@ pub fn enroll_root(store_root: &Path, node: &str) -> Result<EnrollOutcome> {
     for attempt in 0..MAX_RETRIES {
         let committed = crate::db::with_store_write_lock(store_root, || {
             if attempt > 0 && !local_only {
-                git_ops::pull_rebase(store_root, &remote, &branch)?;
+                // trace:BUG-2490 | ai:codex
+                git_ops::pull_rebase_store_retry(store_root, &remote, &branch)?;
             }
             if enroll_preflight(store_root, node)? == EnrollOutcome::AlreadyRoot {
                 return Ok(None);
@@ -458,7 +459,8 @@ pub fn record_pools(
     for attempt in 0..MAX_RETRIES {
         let committed = crate::db::with_store_write_lock(store_root, || {
             if attempt > 0 && !local_only {
-                git_ops::pull_rebase(store_root, remote, &branch)?;
+                // trace:BUG-2490 | ai:codex
+                git_ops::pull_rebase_store_retry(store_root, remote, &branch)?;
             }
             let new_pools = plan(store_root)?;
             if new_pools.is_empty() {
