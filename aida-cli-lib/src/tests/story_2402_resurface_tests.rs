@@ -452,7 +452,9 @@ fn story2402_s5_recur_conditions_resurface_and_manual_routes() {
             false,
             Some(trigger),
             Some(id),
-            reason
+            reason,
+            false,
+            false,
         )
         .is_err());
         assert_eq!(
@@ -470,7 +472,9 @@ fn story2402_s5_recur_conditions_resurface_and_manual_routes() {
         false,
         Some("date:2026-01-01"),
         Some(id),
-        None
+        None,
+        false,
+        false,
     )
     .is_err());
     assert!(!backend.get_requirement(&row.id).unwrap().unwrap().deferred);
@@ -490,6 +494,8 @@ fn story2402_s5_recur_conditions_resurface_and_manual_routes() {
         Some("date:2026-01-01"),
         Some(id),
         None,
+        false,
+        false,
     )
     .unwrap_err();
     assert_eq!(
@@ -512,6 +518,8 @@ fn story2402_s5_recur_conditions_resurface_and_manual_routes() {
         Some("date:2026-01-01"),
         Some(id),
         None,
+        false,
+        false,
     )
     .unwrap();
     assert_eq!(
@@ -557,6 +565,8 @@ fn story2402_s5_recur_conditions_resurface_and_manual_routes() {
         Some("manual:joe"),
         Some(id),
         Some("handoff needs judgement"),
+        false,
+        false,
     )
     .unwrap();
     let mut current = backend.get_requirement(&row.id).unwrap().unwrap();
@@ -690,6 +700,8 @@ fn story2402_s5_implementer_cannot_set_holds() {
             Some("manual:joe"),
             Some(id),
             Some("review required"),
+            false,
+            false,
         ),
     ] {
         assert!(format!("{:#}", result.unwrap_err()).contains("may set an operator hold"));

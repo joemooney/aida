@@ -656,7 +656,7 @@ fn write_slot(dir: &std::path::Path, pid: u32, spec: &str) {
     std::fs::create_dir_all(dir).unwrap();
     std::fs::write(
         dir.join(format!("{pid}.json")),
-        format!(r#"{{"pid":{pid},"start":"t","spec":"{spec}"}}"#),
+        serde_json::json!({"pid":pid,"start":"t","spec":spec,"pid_namespace":aida_core::pid_observer::current_pid_namespace()}).to_string(),
     )
     .unwrap();
 }
@@ -717,7 +717,7 @@ fn cap_ignores_a_launcher_whose_child_logged_its_final_result() {
     let slot_with_log = |pid: u32, spec: &str, log: &std::path::Path| {
         std::fs::write(
             dir.join(format!("{pid}.json")),
-            serde_json::json!({"pid": pid, "start": "t", "spec": spec, "log": log}).to_string(),
+            serde_json::json!({"pid": pid, "start": "t", "spec": spec, "log": log, "pid_namespace":aida_core::pid_observer::current_pid_namespace()}).to_string(),
         )
         .unwrap();
     };
@@ -742,26 +742,7 @@ fn cap_ignores_a_launcher_whose_child_logged_its_final_result() {
     assert!(format!("{err:#}").contains("STORY-3"));
 }
 
-// trace:STORY-1662.AC7 | ai:claude
-#[test]
-fn cap_comes_from_config_with_a_default_of_three() {
-    let tmp = tempfile::tempdir().unwrap();
-    std::fs::create_dir_all(tmp.path().join(".aida")).unwrap();
-    assert_eq!(configured_cap(tmp.path()), DEFAULT_CAP);
-    assert_eq!(DEFAULT_CAP, 3);
-    std::fs::write(
-        tmp.path().join(".aida/config.toml"),
-        "[queue]\nstandalone_implementer_cap = 5\n",
-    )
-    .unwrap();
-    assert_eq!(configured_cap(tmp.path()), 5);
-    std::fs::write(
-        tmp.path().join(".aida/config.toml"),
-        "[queue]\nstandalone_implementer_cap = 0\n",
-    )
-    .unwrap();
-    assert_eq!(configured_cap(tmp.path()), DEFAULT_CAP);
-}
+// Capacity precedence and invalid host policy are covered beside the resolver.
 
 // ── Authorship and the Q1 ledger note ─────────────────────────────────────
 
@@ -1106,4 +1087,32 @@ fn task_2879_native_stop_hands_pending_work_to_host() {
     }
     assert!(!NATIVE_STOP_CONTRACT.contains("when your PR is open"));
     assert!(STOP_CONTRACT.contains("when your PR is open"));
+}
+
+// trace:BUG-2493 | ai:codex
+#[cfg(unix)]
+#[test]
+fn bug_2493_native_prompts_name_safe_body_file_surface() {
+    assert!(NATIVE_STOP_CONTRACT
+        .contains("Omit `--commit-body-file <file>` when no body trailers are needed."));
+    assert!(NATIVE_STOP_CONTRACT.contains(
+        "aida ship -m \"[AI:codex] type(scope): subject (Refs SPEC-ID)\" --commit-body-file <file>"
+    ));
+    assert!(NATIVE_STOP_CONTRACT.contains(
+        "aida ship -m \"[AI:codex] type(scope): subject (SPEC-ID)\" --commit-body-file <file>"
+    ));
+    assert!(
+        include_str!("../../../aida-core/templates/commands/aida-pickup.md").contains(
+            "aida ship -m '[AI:codex] type(scope): subject (ID)' --commit-body-file <UTF-8-file>"
+        )
+    );
+    for text in [
+        NATIVE_STOP_CONTRACT,
+        include_str!("../../../aida-core/templates/skills/aida-pickup.md"),
+        include_str!("../../../aida-core/templates/commands/aida-pickup.md"),
+    ] {
+        assert!(text.contains("--commit-body-file"));
+        assert!(text.contains("/tmp"));
+        assert!(text.contains("Help-Golden: unchanged"));
+    }
 }

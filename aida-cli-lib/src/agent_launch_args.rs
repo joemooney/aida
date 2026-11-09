@@ -661,6 +661,15 @@ pub enum SessionCommand {
         #[clap(long, hide = true, requires = "show")]
         rotated: bool,
 
+        // trace:STORY-2662 | ai:codex
+        /// Read/write the worktree recovery snapshot; never requests rotation.
+        #[clap(long, hide = true, conflicts_with_all = ["final_", "rotated", "check"])]
+        snapshot: bool,
+
+        /// Read only the handoff text, without standing context.
+        #[clap(long, hide = true, requires = "show")]
+        body_only: bool,
+
         /// Manage the seat's repo-local standing orders
         /// (`.aida/standing-orders/<seat>.md`): `add "<text>"` appends a dated
         /// entry, `list` prints them. `--show` prints standing orders before
@@ -945,6 +954,10 @@ pub enum AgentCommand {
     // `aida agent new` opens an arrow-key agent-type picker instead of
     // erroring to clap help (mirrors `aida human`/`aida solo`).
     New {
+        /// Declare Git read-only policy for this launch (not enforced by current adapters).
+        // trace:STORY-1486 | ai:codex
+        #[clap(long, global = true)]
+        git_read_only: bool,
         /// Role for a launch using the configured default vendor.
         #[clap(long)]
         role: Option<String>,

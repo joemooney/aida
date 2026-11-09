@@ -75,7 +75,7 @@ agent new antigravity --name TASK-1	Write	false	false	false
 agent new antigravity --no-context	Write	false	false	false
 agent new antigravity --no-default-flags	Write	false	false	false
 agent new antigravity --no-duplicate-check	Write	false	false	false
-agent new antigravity --no-exec	Write	false	false	false
+agent new antigravity --no-exec	Read	false	false	false
 agent new antigravity --no-prompt	Write	false	false	false
 agent new antigravity --no-resume	Write	false	false	false
 agent new antigravity --no-title	Write	false	false	false
@@ -99,7 +99,7 @@ agent new claude --name TASK-1	Write	false	false	false
 agent new claude --no-context	Write	false	false	false
 agent new claude --no-default-flags	Write	false	false	false
 agent new claude --no-duplicate-check	Write	false	false	false
-agent new claude --no-exec	Write	false	false	false
+agent new claude --no-exec	Read	false	false	false
 agent new claude --no-prompt	Write	false	false	false
 agent new claude --no-resume	Write	false	false	false
 agent new claude --no-title	Write	false	false	false
@@ -125,7 +125,7 @@ agent new codex --name TASK-1	Write	false	false	false
 agent new codex --no-context	Write	false	false	false
 agent new codex --no-default-flags	Write	false	false	false
 agent new codex --no-duplicate-check	Write	false	false	false
-agent new codex --no-exec	Write	false	false	false
+agent new codex --no-exec	Read	false	false	false
 agent new codex --no-prompt	Write	false	false	false
 agent new codex --no-resume	Write	false	false	false
 agent new codex --no-title	Write	false	false	false
