@@ -1,0 +1,79 @@
+id: 01a1bf7c-c238-7140-bb8f-b399d86f018c
+spec_id: TASK-b6b1278890774ef993d2ebc327862470-1043
+agreed_id: TASK-3749
+title: 'Sweep 3 and stop the faucet: non-blocking findings append to one open sweep spec instead of filing a spec each'
+description: |
+  Two parts, one PR.
+
+  ## Part 1: stop filing one spec per non-blocking finding
+  Non-blocking review findings are auto-filed as one Draft spec each at merge (tag kind:carried-forward), so every approved merge grows the open list: PR #3703 alone filed eight. Change the carry-forward so a merge appends its findings as a section on the single open sweep spec (tag kind:finding-sweep), creating that spec only when none is open. Keep the finding text, source PR, reviewed sha and finding hash, and keep hash de-duplication.
+
+  ## Part 2: fix these findings
+
+  ### TASK-HOME-1035
+  Non-blocking (minor): aida-cli-lib/src/lane_liveness.rs:1020 treats only completed and failed as finished, so a no-change member counts as open work. Visible while pipelined siblings run or after an orchestrator crash leaves the drain-state file. Add STATE_NO_CHANGE to the filter.
+
+  PR: #3703
+  Reviewed sha: 3c3b0a7a5c013b00fe265b2198306f0cbf82ce50
+
+  ### TASK-HOME-1036
+  Non-blocking (minor): aida-cli-lib/src/drain_batch.rs:1638 single-branch Paused output says 'paused before <spec>', but after a no-change member (auto_complete.rs:6191) that spec already ran. The auto_complete.rs:6191 arm has no test.
+
+  PR: #3703
+  Reviewed sha: 3c3b0a7a5c013b00fe265b2198306f0cbf82ce50
+
+  ### TASK-HOME-1037
+  Non-blocking (minor): aida-cli-lib/src/phase_driver_trait.rs:3460 still classifies a resume as Punted when the spec stays NeedsAttention, so a clean no-change resume that skips the prompted status flip reports a re-punt rather than NoChange. The resume fixture never sets NeedsAttention.
+
+  PR: #3703
+  Reviewed sha: 3c3b0a7a5c013b00fe265b2198306f0cbf82ce50
+
+  ### TASK-HOME-1038
+  Non-blocking (minor): aida-cli-lib/src/drain_next_n.rs:1385 logs a no-change run as outcome success in auto-complete telemetry.
+
+  PR: #3703
+  Reviewed sha: 3c3b0a7a5c013b00fe265b2198306f0cbf82ce50
+
+  ### TASK-HOME-1039
+  Non-blocking (minor, carried from the prior round, not re-verified here): aida-cli-lib/src/ship_from_seat.rs:627 dirty bail uses seat_clone::probe, which does not exclude .aida/seat-clone.toml while commit_pending does.
+
+  PR: #3703
+  Reviewed sha: 3c3b0a7a5c013b00fe265b2198306f0cbf82ce50
+
+  ### TASK-HOME-1040
+  Non-blocking (test risk): task_3608_receipt_cannot_override_watchdog (bug_1629_phase1_recovery_tests.rs) now relies on the stub publishing its lease within the 100ms watchdog poll with a 1ms ceiling. It passed in CI, but a heavily loaded runner could trip the watchdog before the lease exists.
+
+  PR: #3703
+  Reviewed sha: 3c3b0a7a5c013b00fe265b2198306f0cbf82ce50
+
+  ### TASK-HOME-1041
+  Non-blocking (test gap): no fresh-path test combines a receipt with a punt signal, hold signal or natural non-zero exit; only the watchdog case is covered. Code order at phase_driver_trait.rs:772-889 looks correct by inspection.
+
+  PR: #3703
+  Reviewed sha: 3c3b0a7a5c013b00fe265b2198306f0cbf82ce50
+
+  ### TASK-HOME-1042
+  Cosmetic: the no_change block at aida-cli-lib/src/auto_complete.rs:6191 splits the TASK-1003 comment from the let unclean it describes.
+
+  PR: #3703
+  Reviewed sha: 3c3b0a7a5c013b00fe265b2198306f0cbf82ce50
+
+  ## Acceptance
+  1. A merge with N non-blocking findings adds no new specs when a sweep spec is open, and exactly one when none is; a test covers both and hash de-duplication.
+  2. Every Part 2 section is fixed or answered in the PR body.
+status: Approved
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-11-09T08:46:26.872629040Z
+modified_at: 2026-11-09T08:46:26.872629040Z
+req_type: Task
+filed_at:
+  code_sha: e60e97d0035e92f14a0b60c05e85859019365939
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 0cbb78cbced
+  vendor: claude
+  session: 01a1beff-fc3b-78e2-93e2-9b0c283b0339
+  harness_version: 2.1.319 (Claude Code)
