@@ -23,7 +23,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-07T20:45:16.684639200Z
-modified_at: 2026-11-09T06:52:06.875900241Z
+modified_at: 2026-11-09T08:44:24.714373187Z
 req_type: Task
 relationships:
 - rel_type: Child
@@ -162,6 +162,30 @@ comments:
   created_at: 2026-11-09T05:26:47.050911613Z
   modified_at: 2026-11-09T05:26:47.050911613Z
   session_id: 7aacb1ed-ebaa-4da4-a195-500864e99e7d
+- id: 01a1bf7a-e49a-7432-8887-c5a083c04fba
+  author: joe
+  content: |-
+    REVIEW FINDINGS TO ADDRESS (PR #3670):
+    Verdict: CHANGES REQUESTED
+    Reviewed commit: c053b4960ced
+    Recorded: 2026-11-09T04:38:33.222300374+00:00
+    Findings:
+    1. [major][blocker] Advisor ruling items 2 and 4 are not implemented (reader.rs:215-217). lease_retained is still true for every non-Dead verdict; there is no single named reader function that applies the pre-migration lease rule to an Unknown caused only by a legacy unadmitted holder (no witness recorded, or holder admission unavailable). Every migrated caller inherits this, including the direct lease_owner uses at session_start.rs:999-1009 and 2283-2294, which must go through the same function. Production holders carry no admitted witness: aida own show --compare at this head reports 19 leases today's rule reads dead while the judge abstains. Fix per ruling, removable once every production holder writes a witness; keep every other Unknown (including NamespaceMismatch) retained and keep the dirty/unpushed safeguards.
+    2. [major][blocker] TASK-1665 regression (lane_liveness.rs:1267-1270): a crashed legacy reviewer at the PR head suppresses unpicked-ready-pr indefinitely, because review_lease_running is lease_retained. Live example: PR-3703 @efc0e7eef5 reads 'unknown: the holder records no witness'.
+    3. [major][blocker] BUG-637 crash-deadlock is back at queue_cmd/next.rs:171-175 and session_start.rs:2478-2482: a crashed legacy claim hides its spec from pickup and refuses session start until someone ends the lease by hand.
+    4. [major][blocker] BUG-1205 regression (session_start.rs:2686): under headless, a conflicting lease whose legacy owner is gone now reads is_live=true, so the review pickup refuses as if the lease were LIVE instead of auto-ending it. Same root as the fallback; cover it with the fix.
+    5. [major][blocker] Prior finding 3 is unfixed: lease_adoption_refusal (leases.rs:4781) still uses stale_lease_recovery_for_lease while orphan_lease_to_adopt (session_start.rs:999-1009) uses the ownership verdict, so a --resume hint (queue_cmd/work.rs, pr_lease_takeover.rs:286) can offer a re-entry that session start refuses, breaking the invariant at leases.rs:4770-4773. Route it through the same verdict and add the hint/adoption agreement test the ruling requires.
+    6. [major][blocker] Tests do not use the witness shape production writes, as the ruling required. task_3420_review_lease_uses_recorded_ownership, reviewer_lease_uses_ownership_instead_of_registry_cwd, task_3420_pickup_retains_unknown_and_releases_only_matching_dead_owner and task_3420_orphan_adoption_requires_matching_owner_death rely on cfg(test) seed_lease_heartbeat (reader.rs:182), an admission-None Heartbeat that no production writer produces (dual.rs:220 builds witnesses only from lease_holder_record). The TASK-2120 crashed-reviewer test was deleted and not restored. Add tests with zero-witness and admission-unavailable holders, a crashed-reviewer case, and a NamespaceMismatch-stays-retained case.
+    7. [major][blocker] Acceptance 'the ratchet baseline must shrink to zero entries for these paths' is not met: scripts/ownership-liveness-legacy.json:112-115 still lists queue_cmd/list.rs and queue_cmd/next.rs handle_queue_command lease_state_for, probe_live_claude_sessions and lease_is_live, though no such calls remain in queue_cmd/. The queue_cmd split merge (a92785f1023) re-added them under the new paths; the ratchet only fails on growth, so CI will not catch it. Delete the four entries.
+    8. [minor] Prior finding 4 is unfixed, and the ruling requires it: the queue-list stale-base loop (queue_cmd/list.rs:1873-1878) calls lease_retained before the cheap branch-empty/main check, and each spec-scoped lease does its own load_store_for_lookup because the OnceCell is per lease_record call. Move the branch filter first and share one store across the batch.
+    9. [minor] Stale contract comments: leases.rs:2380-2385 still says callers pass lease_is_live; reader.rs:1-2 says consumers never substitute PID or TTL heuristics, which the ruling's fallback makes false without an explicit exception; list.rs:1862-1864 still calls this path cheap and probed only for non-stale leases. Update with the fix.
+    10. [minor] scripts/store-writers.toml has unrelated merge churn: the TASK-1222 entries moved and the '# trace:TASK-1222' and '# ... trace:TASK-3223' comments were dropped (lines ~2185, ~3421, ~3722 of the diff). Restore main's version of those lines.
+    11. [minor] CI unverified: all seven CI jobs and merge-hold-gate were pending at c053b4960ced when this verdict was recorded (mergeStateStatus BLOCKED). Confirm green at the rework head.
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
+  created_at: 2026-11-09T08:44:24.602667390Z
+  modified_at: 2026-11-09T08:44:24.602667390Z
+  session_id: 01a1beff-fc3b-78e2-93e2-9b0c283b0339
+  harness_version: 2.1.319 (Claude Code)
 history:
 - id: 01a1b7c2-6b69-7b02-bd8c-8f40aee2972d
   author: joe
