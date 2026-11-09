@@ -356,7 +356,11 @@ pub(crate) fn post_exit_commit(
     }
     // trace:TASK-2902 | ai:codex
     // Every exit path honors vetoes before resolving or inspecting intent.
-    if publication_veto(&main, spec) {
+    let seat_veto = match seat_publication_veto(tree, spec) {
+        Ok(veto) => veto,
+        Err(e) => return PostExitCommit::Failed(format!("{e:#}")),
+    };
+    if publication_veto(&main, spec) || seat_veto {
         eprintln!("Native publication vetoed for {spec} by punt/hold; pending work remains uncommitted in {}", tree.display());
         return PostExitCommit::Clean;
     }
@@ -540,7 +544,15 @@ pub(crate) fn publish_queue_exit_recorded(
 ) -> Result<QueueExitOutcome> {
     record_queue_exit(main, lane, clean_exit, record, || {
         let main = crate::main_worktree_root_from(main);
+        // trace:BUG-2488 | ai:codex
+        crate::standalone_implementer::reconcile_signals(&main, tree, spec)?;
+        if publication_veto(&main, spec) || seat_publication_veto(tree, spec)? {
+            return Ok(QueueExitOutcome::Continue);
+        }
+        let no_change =
+            || -> Result<bool> { Ok(!crate::seat_clone::has_commits_beyond_base(&main, tree)?) };
         let publish = || {
+            require_lease_branch_work(&main, tree)?;
             run_at(
                 &main,
                 FromSeatOptions {
@@ -560,6 +572,10 @@ pub(crate) fn publish_queue_exit_recorded(
             || crate::seat_clone::probe(&main, tree),
             publish,
             || {
+                if skip_unchanged_notice(clean_exit, no_change)? {
+                    eprintln!("implementer: no-change (seat has no commits beyond its base)");
+                    return Ok(());
+                }
                 advisor_request(
                     &main,
                     "Queue-work lane exited without changes",
@@ -602,10 +618,36 @@ pub(crate) fn record_queue_exit(
     })
 }
 
+// Invoked only when the exit probe found committed or unpushed work.
+// trace:BUG-2488 | ai:codex
+pub(crate) fn require_lease_branch_work(main: &Path, tree: &Path) -> Result<()> {
+    if !crate::seat_clone::has_commits_beyond_base(main, tree)? {
+        anyhow::bail!("seat has unpublished work outside its leased branch; retain the seat and inspect its local branches");
+    }
+    Ok(())
+}
+
+// Failed exits must still ask the advisor even when no work was produced.
+// trace:BUG-2488 | ai:codex
+fn skip_unchanged_notice(
+    clean_exit: bool,
+    no_change: impl FnOnce() -> Result<bool>,
+) -> Result<bool> {
+    Ok(clean_exit && no_change()?)
+}
+
+#[cfg(test)]
+#[test]
+fn bug_2488_failed_unchanged_exit_retains_advisor_notice() {
+    assert!(!skip_unchanged_notice(false, || panic!("failed exit must notify")).unwrap());
+    assert!(skip_unchanged_notice(true, || Ok(true)).unwrap());
+    assert!(!skip_unchanged_notice(true, || Ok(false)).unwrap());
+}
+
 // These effects are injected at the publication boundary so tests exercise
 // the same veto, probe and dispatch as all three lane exit paths.
 // trace:STORY-2475 | ai:codex
-fn publish_queue_exit_with(
+pub(crate) fn publish_queue_exit_with(
     main: &Path,
     spec: &str,
     commit: impl FnOnce() -> PostExitCommit,
@@ -638,6 +680,14 @@ fn publish_queue_exit_with(
     } else {
         QueueExitOutcome::Continue
     })
+}
+
+// trace:BUG-2488 | ai:codex
+fn seat_publication_veto(tree: &Path, spec: &str) -> Result<bool> {
+    // Read both even if the first veto is present, so unsafe evidence refuses.
+    let punt = crate::punt::read_seat_signal(tree, spec)?;
+    let hold = crate::punt::read_seat_hold_signal(tree, spec)?;
+    Ok(punt.is_some() || hold.is_some())
 }
 
 // trace:TASK-2902 | ai:codex
@@ -912,6 +962,86 @@ mod queue_exit_tests {
             .unwrap();
             // Also cover the public boundary with actual on-disk signals.
             publish_queue_exit(main, &main.join("missing-seat"), spec, "lane", true).unwrap();
+        }
+    }
+
+    // trace:BUG-2488 | ai:codex
+    #[test]
+    fn bug_2488_case_variant_resume_signals_veto_publication_and_reach_driver() {
+        for hold in [false, true] {
+            let main = tempfile::tempdir().unwrap();
+            let tree = tempfile::tempdir().unwrap();
+            let lease_scope = "TASK-b6b1278890774ef993d2ebc327862470-941";
+            let publication_scope = lease_scope.to_ascii_uppercase();
+            crate::standalone_implementer::provision_attempt_signals(
+                main.path(),
+                tree.path(),
+                &publication_scope,
+            )
+            .unwrap();
+            let mut cmd = std::process::Command::new("unused");
+            crate::standalone_implementer::apply_seat_signals(&mut cmd, tree.path(), lease_scope);
+            let key = if hold {
+                crate::punt::HOLD_SIGNAL_FILE_ENV
+            } else {
+                crate::punt::SIGNAL_FILE_ENV
+            };
+            let path = std::path::PathBuf::from(
+                cmd.get_envs().find(|(k, _)| *k == key).unwrap().1.unwrap(),
+            );
+            if hold {
+                crate::punt::write_hold_signal(
+                    &path,
+                    &crate::punt::HoldSignal {
+                        spec: lease_scope.into(),
+                        branch: "resume".into(),
+                        reason: None,
+                        spec_key: None,
+                    },
+                )
+                .unwrap();
+            } else {
+                crate::punt::write_signal(
+                    &path,
+                    &crate::punt::PuntSignal {
+                        spec: lease_scope.into(),
+                        category: aida_core::PuntCategory::DesignFork,
+                        detail: "manual decision".into(),
+                        lean: None,
+                    },
+                )
+                .unwrap();
+            }
+            assert!(publication_veto(tree.path(), &publication_scope));
+            // The public boundary would fail preparing publication in this non-repo
+            // fixture if the case-variant signal were missed.
+            publish_queue_exit(main.path(), tree.path(), &publication_scope, "resume", true)
+                .unwrap();
+            assert!(publication_veto(main.path(), &publication_scope));
+            // The drain reads the mirrored signal using its own spec spelling.
+            if hold {
+                assert!(
+                    crate::punt::read_hold_signal(&crate::punt::hold_signal_path(
+                        main.path(),
+                        &publication_scope
+                    ))
+                    .is_some()
+                );
+            } else {
+                assert!(crate::punt::read_signal(&crate::punt::signal_path(
+                    main.path(),
+                    &publication_scope
+                ))
+                .is_some());
+            }
+            crate::standalone_implementer::provision_attempt_signals(
+                main.path(),
+                tree.path(),
+                &publication_scope,
+            )
+            .unwrap();
+            assert!(!publication_veto(main.path(), lease_scope));
+            assert!(!publication_veto(tree.path(), lease_scope));
         }
     }
 
@@ -1671,6 +1801,13 @@ fn run_from_with_reconciliation(
                 None => eprintln!("  the seat had no pending work to commit"),
             }
         }
+    }
+    // trace:BUG-2488 | ai:codex
+    // An unchanged seat cannot produce a nonempty bundle. Inspect before
+    // invoking the bundler, including direct host publication retries.
+    if !crate::seat_clone::branch_has_commits_beyond_base(&seat, &branch)? {
+        println!("implementer: no-change (seat has no commits beyond its base)");
+        return Ok(());
     }
     let bytes = (deps.bundle)(&main, &seat.root, &branch)?;
     let mut staged = stage_bundle(&main, &branch, &bytes, opts.dry_run)?;

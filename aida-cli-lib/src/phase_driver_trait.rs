@@ -787,6 +787,19 @@ impl auto_complete::PhaseDriver for RealPhaseDriver {
         // `claude --resume` with this exact cwd so Claude's project-slug
         // derivation finds the persisted session.
         self.implementer_worktree = Some(worktree_path.clone());
+        // Collect the writable-seat handshakes before the driver classifies exit.
+        // trace:BUG-2488 | ai:codex
+        crate::standalone_implementer::reconcile_signals(
+            &self.project_root,
+            &worktree_path,
+            &self.spec,
+        )
+        .map_err(|e| {
+            auto_complete::PhaseFailure::of(
+                auto_complete::FailureKind::Spawn,
+                format!("could not reconcile implementer signals: {e:#}"),
+            )
+        })?;
         // Consume host evidence only for a successful child. Failed exits and
         // punt/hold signals keep their existing classification precedence.
         // trace:TASK-3608 | ai:codex
@@ -808,7 +821,18 @@ impl auto_complete::PhaseDriver for RealPhaseDriver {
         // branch is reconciled from the worktree HEAD now so a resume +
         // PR-lookup has it. trace:STORY-276, STORY-306 | ai:claude
         if let Some(signal) = punt::read_signal(&punt_signal) {
-            let _ = std::fs::remove_file(&punt_signal);
+            // trace:BUG-2488 | ai:codex
+            crate::standalone_implementer::consume_punt_signal(
+                &self.project_root,
+                &worktree_path,
+                &self.spec,
+            )
+            .map_err(|e| {
+                auto_complete::PhaseFailure::of(
+                    auto_complete::FailureKind::Internal,
+                    format!("could not consume implementer punt: {e:#}"),
+                )
+            })?;
             self.branch = Some(reconcile_orchestrated_branch(
                 &self.project_root,
                 &lease_id,
@@ -3442,6 +3466,16 @@ impl auto_complete::PhaseDriver for RealPhaseDriver {
                 )
             }
         })?;
+        // A resumed implementer may punt again, including on a failed exit.
+        // Mirror its ledger before any status/outage classification returns.
+        // trace:BUG-2488 | ai:codex
+        crate::standalone_implementer::reconcile_signals(&self.project_root, &worktree, &self.spec)
+            .map_err(|e| {
+                PhaseFailure::of(
+                    FailureKind::Internal,
+                    format!("advisor tier: could not reconcile implementer signals: {e}"),
+                )
+            })?;
         // Consume stale evidence even when the child failed; it cannot be
         // reused by a later resume.
         let native_no_change = self
