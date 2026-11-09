@@ -3,12 +3,12 @@ spec_id: BUG-b6b1278890774ef993d2ebc327862470-270
 agreed_id: BUG-2505
 title: aida add can exit without creating a spec when given a tag such as from:2026-11-08-review-closeout
 description: 'Observed 2026-11-08: six aida add calls with that tag created nothing, while the same calls with only area:orchestration succeeded. The error text was hidden by the caller''s output filter, so the cause is inferred from the difference. Reproduce with the tag and read the output first.'
-status: NeedsAttention
+status: Approved
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-09T03:00:45.690194532Z
-modified_at: 2026-11-09T07:12:32.873822792Z
+modified_at: 2026-11-09T07:12:39.361110749Z
 req_type: Bug
 tags:
 - area:cli
@@ -45,6 +45,13 @@ comments:
   content: 'ADVISOR RULING: the last round pushed only merges from main, so these findings are unaddressed. Do not merge main or push until the code changes. #3714: the PR adds only a test and never reproduces or root-causes aida add exiting without a spec for a tag like from:2026-11-08-review-closeout. Reproduce it, fix the cause. If it cannot be reproduced, say so and change the title to Refs so merge does not complete the bug. Local gate: one targeted cargo test --profile agent plus make check-ci-fast, then push.'
   created_at: 2026-11-09T07:12:32.873822792Z
   modified_at: 2026-11-09T07:12:32.873822792Z
+  session_id: 01a1beff-fc3b-78e2-93e2-9b0c283b0339
+  harness_version: 2.1.319 (Claude Code)
+- id: 01a1bf26-e3c1-7143-b7c6-dbdb4f51c1c6
+  author: joe
+  content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was punted on: missing-context: Reported failure remains unreproduced: existing canonical-store acceptance test rerun passed (1 executed, 0 failed), including exact tag and area-only control. Requeue supplied no original failing argv, exit statuses, unfiltered stdout/stderr or CLI build identity. Need that evidence to root-cause; no production edits justified. Prior reviewer rejected test-only completion. Preserve publication veto.. No triage reason was given.'
+  created_at: 2026-11-09T07:12:39.361108361Z
+  modified_at: 2026-11-09T07:12:39.361108361Z
   session_id: 01a1beff-fc3b-78e2-93e2-9b0c283b0339
   harness_version: 2.1.319 (Claude Code)
 history:
@@ -125,6 +132,15 @@ history:
   - field_name: status
     old_value: InProgress
     new_value: NeedsAttention
+- id: 01a1bf26-e3c1-7143-b7c6-dbce8f36bf86
+  author: joe
+  timestamp: 2026-11-09T07:12:39.361094186Z
+  session_id: 01a1beff-fc3b-78e2-93e2-9b0c283b0339
+  harness_version: 2.1.319 (Claude Code)
+  changes:
+  - field_name: status
+    old_value: NeedsAttention
+    new_value: Approved
 filed_at:
   code_sha: d73f4e6b86c9f6a85cc01a4aa9893b869252b3a9
   branch: main
@@ -133,8 +149,3 @@ filed_at:
   aida_build_sha: a7a14984cec
   vendor: claude
   session: 20abb7c3-8f9b-4a5e-b326-404921f3b450
-attention_reason:
-  category: missing-context
-  detail: 'Reported failure remains unreproduced: existing canonical-store acceptance test rerun passed (1 executed, 0 failed), including exact tag and area-only control. Requeue supplied no original failing argv, exit statuses, unfiltered stdout/stderr or CLI build identity. Need that evidence to root-cause; no production edits justified. Prior reviewer rejected test-only completion. Preserve publication veto.'
-  raised_by: implementer
-  raised_at: 2026-11-09T06:11:04.434675974Z
