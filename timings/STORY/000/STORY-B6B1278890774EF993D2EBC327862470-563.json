@@ -1,0 +1,115 @@
+{
+  "schema_version": 1,
+  "spec": "STORY-B6B1278890774EF993D2EBC327862470-563",
+  "publishes": [
+    {
+      "at": "2026-11-09T19:25:03.217051936Z",
+      "closed_by": "auto-bump"
+    }
+  ],
+  "events": [
+    {
+      "ts": "2026-11-07T20:18:32.114538951Z",
+      "spec": "STORY-b6b1278890774ef993d2ebc327862470-563",
+      "seat": "advisor",
+      "kind": {
+        "event": "DispositionChanged",
+        "before": "Approved",
+        "after": "Approved"
+      }
+    },
+    {
+      "ts": "2026-11-07T21:15:54.149021021Z",
+      "spec": "STORY-b6b1278890774ef993d2ebc327862470-563",
+      "seat": "advisor",
+      "kind": {
+        "event": "PhaseEntered",
+        "idx": 1,
+        "slug": "implementer",
+        "attempt": 1
+      }
+    },
+    {
+      "ts": "2026-11-07T22:08:02.184475935Z",
+      "spec": "STORY-b6b1278890774ef993d2ebc327862470-563",
+      "seat": "advisor",
+      "kind": {
+        "event": "PhaseEntered",
+        "idx": 1,
+        "slug": "implementer",
+        "attempt": 1
+      }
+    },
+    {
+      "ts": "2026-11-08T02:48:35.244526314Z",
+      "spec": "STORY-b6b1278890774ef993d2ebc327862470-563",
+      "seat": "advisor",
+      "kind": {
+        "event": "PhaseEntered",
+        "idx": 1,
+        "slug": "implementer",
+        "attempt": 1
+      }
+    },
+    {
+      "ts": "2026-11-09T04:08:33.171341136Z",
+      "spec": "STORY-b6b1278890774ef993d2ebc327862470-563",
+      "seat": "advisor",
+      "kind": {
+        "event": "DispositionChanged",
+        "before": "Approved",
+        "after": "Approved"
+      }
+    },
+    {
+      "ts": "2026-11-09T05:29:52.027038084Z",
+      "spec": "STORY-b6b1278890774ef993d2ebc327862470-563",
+      "seat": "advisor",
+      "kind": {
+        "event": "DispositionChanged",
+        "before": "Approved",
+        "after": "Approved"
+      }
+    },
+    {
+      "ts": "2026-11-09T05:54:44.260178514Z",
+      "spec": "STORY-b6b1278890774ef993d2ebc327862470-563",
+      "seat": "advisor",
+      "kind": {
+        "event": "DispositionChanged",
+        "before": "Approved",
+        "after": "Approved"
+      }
+    },
+    {
+      "ts": "2026-11-09T08:32:19.415335375Z",
+      "spec": "STORY-b6b1278890774ef993d2ebc327862470-563",
+      "seat": "advisor",
+      "kind": {
+        "event": "DispositionChanged",
+        "before": "Approved",
+        "after": "Approved"
+      }
+    },
+    {
+      "ts": "2026-11-09T12:33:46.926794044Z",
+      "spec": "STORY-b6b1278890774ef993d2ebc327862470-563",
+      "seat": "advisor",
+      "kind": {
+        "event": "DispositionChanged",
+        "before": "Approved",
+        "after": "Approved"
+      }
+    },
+    {
+      "ts": "2026-11-09T19:25:03.072762682Z",
+      "spec": "STORY-b6b1278890774ef993d2ebc327862470-563",
+      "kind": {
+        "event": "SpecCompleted",
+        "commit": "6485f58d928384fe040e58b4a6d3be19849703f1",
+        "pr": 3627,
+        "closed_by": "auto-bump"
+      }
+    }
+  ]
+}
