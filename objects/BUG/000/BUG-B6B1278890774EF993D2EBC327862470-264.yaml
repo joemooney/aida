@@ -3,12 +3,12 @@ spec_id: BUG-b6b1278890774ef993d2ebc327862470-264
 agreed_id: BUG-2499
 title: aida dev build --clean keeps a stale AIDA_BUILD_GIT_SHA stamp, so promotion refuses until --clean=full
 description: 'On dell1 2026-11-08, after a fast-forward to 48e3865999, aida dev build and aida dev build --clean both produced a binary stamped sha efdcfc64cf built 2026-11-07 16:42, and promotion refused it (''staged build does not match HEAD''). --clean=full fixed it. Expected: a ff merge or --clean re-stamps the binary.'
-status: NeedsAttention
+status: Completed
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-08T19:01:55.483195458Z
-modified_at: 2026-11-09T03:06:38.798771084Z
+modified_at: 2026-11-09T05:27:37.935142045Z
 req_type: Bug
 relationships:
 - rel_type:
@@ -232,6 +232,19 @@ history:
   - field_name: status
     old_value: InProgress
     new_value: NeedsAttention
+- id: 01a1bec6-bcc9-7b02-81ef-eab15b0b00d7
+  author: aida-auto-bump
+  timestamp: 2026-11-09T05:27:37.929315851Z
+  changes:
+  - field_name: status
+    old_value: NeedsAttention
+    new_value: Completed
+processing_record:
+- id: 01a1bec6-bccf-77a3-85e5-b8cd5604bc71
+  timestamp: 2026-11-09T05:27:37.935141151Z
+  agent: aida
+  commit_sha: 1dc5af9077e9c945410b176c84044f588f4530fb
+  summary: Completed via merge 1dc5af90
 filed_at:
   code_sha: eeec474c545cbc8a354d386c8cb6d81460da7b9f
   branch: main
@@ -241,11 +254,7 @@ filed_at:
   vendor: claude
   session: 01a1bbab-762f-7cd2-8a36-4ea9f209afce
   harness_version: 2.1.319 (Claude Code)
-failure_reason:
-  phase: reviewer
-  phase_index: 3
-  kind: verdict:request-changes
-  detail: 'Stamp fix is sound by inspection, but this head adds only merge commits: both named CI failures from 8f015d63e5 are still in the code, so the fix cannot pass CI.'
-  recovery_hint: address the review findings, move BUG-2499 back to In Progress, and clear the PR hold only after approval
-  shelved_by: reviewer
-  shelved_at: 2026-11-09T03:02:44.512597055Z
+implementation_info:
+  implemented: false
+  completed_at: 2026-11-09T05:27:37.929312514Z
+  completion_sha: 1dc5af9077e9c945410b176c84044f588f4530fb
