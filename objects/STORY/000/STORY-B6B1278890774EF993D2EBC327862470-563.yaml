@@ -20,7 +20,7 @@ description: |
   3. A lane that passes behaves exactly as today, plus the marker.
   4. Tests cover: a gate fail followed by a fixed round, a fail that persists (publishes with fast_gate=fail), a timeout, and the Codex native-publication path.
   5. Advisor docs (rework-brief-craft step 6) say lanes are fast-gated by the host.
-status: InProgress
+status: NeedsAttention
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
@@ -1107,6 +1107,15 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a1beec-f92b-7db0-96a8-62efbbb23824
+  author: aida-orchestrator
+  timestamp: 2026-11-09T06:09:23.755181544Z
+  session_id: 01a1bee9a0b4
+  harness_version: 2.1.319 (Claude Code)
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: NeedsAttention
 filed_at:
   code_sha: 7a18c0d52a6a4e0822befd4c810cfed16b04b74c
   branch: main
