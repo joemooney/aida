@@ -8,7 +8,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-07T23:40:15.306412Z
-modified_at: 2026-11-09T16:00:29.106294354Z
+modified_at: 2026-11-09T16:01:34.175615316Z
 req_type: Task
 relationships:
 - rel_type: BlockedBy
@@ -610,6 +610,13 @@ comments:
   content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: Extraction and final-head CI pass; restore reviewed policy metadata in 16 relocated writer rows and disclose Refs-only scope. AC5 remains advisor-owned after merge.. No triage reason was given.'
   created_at: 2026-11-09T15:58:10.371628205Z
   modified_at: 2026-11-09T15:58:10.371628205Z
+- id: 01a1c10b-1fdf-7113-abb3-d17a00799ef0
+  author: dirtlab
+  content: 'Native rework handoff: restored lock, gate and proposed_operation verbatim from origin/main for all 16 relocated MCP writer rows in scripts/store-writers.toml. Verified every other field unchanged, including blocked dispositions and blockers. Python store-writer inventory tests: 54 passed. Refs-only native publication declaration recorded. No Rust production changes or Cargo test run this round (untested=true for Rust). Host PR-3687 body must disclose: extracted MCP transport/store handler into aida-mcp with binary injection; shared descriptors and claim naming remain in cli-lib; unchanged 58-tool surface; Refs-only delivery keeps TASK-3429 open; AC5 dell1 clean-build cargo --timings evidence remains advisor-owned after merge. Preserve Refs title. Final published head still requires green CI, independent approval and applicable hold clearance. All edits uncommitted; no commit, push, PR mutation, queue done, pr ship or review record performed.'
+  created_at: 2026-11-09T16:01:34.175615316Z
+  modified_at: 2026-11-09T16:01:34.175615316Z
+  session_id: 01a1c10a1bdf
+  harness_version: codex-cli 0.167.0
 history:
 - id: 01a1b862-7fc0-7e63-899e-5179ac0131ed
   author: joe
