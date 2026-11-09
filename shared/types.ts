@@ -893,7 +893,7 @@ decisions?: Array<string>,
  */
 punted?: Array<string>,
 /**
- * The reviewer's verdict (`Approved` / `RequestChanges` / `Rejected`),
+ * The reviewer's verdict (`Approved` / `RequestChanges` / `Rejected` / `Waiting`),
  * promoted from the gitignored `.aida/review-verdicts/<spec>.json`.
  */
 review_verdict?: string | null, };

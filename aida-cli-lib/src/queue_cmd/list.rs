@@ -43,6 +43,9 @@ pub(crate) fn reviewer_state_chip(
         crate::gate::review_verdict::ReviewActionability::NeedsReview => {
             format!("[{}]", "needs-review".yellow().bold())
         }
+        crate::gate::review_verdict::ReviewActionability::Waiting => {
+            format!("[{}]", "waiting".yellow())
+        }
         crate::gate::review_verdict::ReviewActionability::AwaitingRework => {
             format!("[{}]", "awaiting-rework".blue())
         }

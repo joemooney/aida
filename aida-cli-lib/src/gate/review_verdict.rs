@@ -12,7 +12,7 @@
 //! The fix is the smallest structure that lets a gate *read* the verdict:
 //! per-spec JSON at `.aida/review-verdicts/<SPEC>.json` carrying
 //!
-//!   - `verdict`   — the verdict word (approved / request-changes / rejected)
+//!   - `verdict`   — the verdict word (approved / request-changes / rejected / waiting)
 //!   - `reviewed_sha` — the commit the reviewer actually looked at
 //!   - `reviewed_branch` / `recorded_at` / `summary` — context for humans
 //!   - `findings` — concrete reviewer findings for rework handoff
@@ -58,6 +58,9 @@ pub enum VerdictKind {
     RequestChanges,
     /// The reviewer rejected the work outright — blocking.
     Rejected,
+    /// External dependency; only a fresh review resumes this work.
+    // trace:BUG-2500 | ai:codex
+    Waiting,
     /// An unrecognised or ambiguous verdict word (including a qualified
     /// approval). NEVER approving (PRIN-5: absent or unreadable evidence is
     /// not good evidence) — every gate that asks "was this approved?" answers
@@ -85,6 +88,7 @@ impl VerdictKind {
             "requestchanges" | "requestedchanges" | "changes" | "changesrequested"
             | "needschanges" | "partial" => VerdictKind::RequestChanges,
             "rejected" | "reject" | "fail" | "failed" | "blocked" => VerdictKind::Rejected,
+            "waiting" => VerdictKind::Waiting,
             _ => VerdictKind::Unknown,
         }
     }
@@ -98,6 +102,7 @@ impl VerdictKind {
             VerdictKind::Approved => Some("approved"),
             VerdictKind::RequestChanges => Some("request-changes"),
             VerdictKind::Rejected => Some("rejected"),
+            VerdictKind::Waiting => Some("waiting"),
             VerdictKind::Unknown => None,
         }
     }
@@ -114,14 +119,21 @@ impl VerdictKind {
             VerdictKind::Approved => "APPROVED",
             VerdictKind::RequestChanges => "CHANGES REQUESTED",
             VerdictKind::Rejected => "REJECTED",
+            VerdictKind::Waiting => "WAITING",
             VerdictKind::Unknown => "UNKNOWN",
         }
     }
 
-    /// Does this verdict block "mark it done" until the branch moves on?
+    /// Does this verdict block completion? Waiting requires a fresh review.
     /// `Unknown` is not an explicit refusal (it is not reported as one), but
     /// gates must still treat it as not-approving — see [`Self::approves`].
     pub fn blocks_done(&self) -> bool {
+        self.requires_changes() || *self == VerdictKind::Waiting
+    }
+
+    /// Only substantive refusals authorize implementer rework.
+    // trace:BUG-2500 | ai:codex
+    pub fn requires_changes(&self) -> bool {
         matches!(self, VerdictKind::RequestChanges | VerdictKind::Rejected)
     }
 }
@@ -337,7 +349,7 @@ impl RecordedVerdict {
 /// filesystem-only module).
 // trace:BUG-1529 | ai:claude
 pub fn is_outstanding_refusal(verdict: &RecordedVerdict, spec_completed: bool) -> bool {
-    verdict.kind.blocks_done() && !verdict.is_closed() && !spec_completed
+    verdict.kind.requires_changes() && !verdict.is_closed() && !spec_completed
 }
 
 /// BUG-1773: a rework hold DERIVED from the verdict corpus, for a PR that has
@@ -409,12 +421,13 @@ pub fn corpus_hold_at_head(
         // A blocker recorded against this exact head. `reconcile` only
         // accumulates recordings whose sha matches, so a verdict left behind at
         // an older head reaches `Ok(None)` below and holds nothing.
-        Ok(Some(kind)) if kind.blocks_done() => {
+        // trace:BUG-2500 | ai:codex — waiting is not a derived Rework hold.
+        Ok(Some(kind)) if kind.requires_changes() => {
             let blocking: Vec<RecordedVerdict> = live
                 .iter()
                 .filter_map(|body| parse_recorded_verdict(body))
                 .filter(|v| {
-                    v.kind.blocks_done()
+                    v.kind.requires_changes()
                         && v.reviewed_sha
                             .as_deref()
                             .is_some_and(|sha| same_reviewed_sha(sha, current_sha))
@@ -997,6 +1010,8 @@ pub fn reconcile_artifacts_for_sha<'a>(
     let mut approvals = Vec::new();
     let mut blockers = Vec::new();
     let mut rejected = false;
+    let mut waiting = false;
+    let mut changes = false;
     for recording in effective {
         let kind = VerdictKind::parse(recording["verdict"].as_str().unwrap());
         let reviewer = recording
@@ -1010,6 +1025,11 @@ pub fn reconcile_artifacts_for_sha<'a>(
             VerdictKind::Approved => approvals.push(reviewer),
             VerdictKind::RequestChanges | VerdictKind::Rejected => {
                 rejected |= kind == VerdictKind::Rejected;
+                changes = true;
+                blockers.push(reviewer);
+            }
+            VerdictKind::Waiting => {
+                waiting = true;
                 blockers.push(reviewer);
             }
             VerdictKind::Unknown => unreachable!(),
@@ -1032,8 +1052,10 @@ pub fn reconcile_artifacts_for_sha<'a>(
     }
     if rejected {
         Ok(Some(VerdictKind::Rejected))
-    } else if !blockers.is_empty() {
+    } else if changes {
         Ok(Some(VerdictKind::RequestChanges))
+    } else if waiting {
+        Ok(Some(VerdictKind::Waiting))
     } else if !approvals.is_empty() {
         Ok(Some(VerdictKind::Approved))
     } else {
@@ -1658,6 +1680,15 @@ pub(crate) fn build_verdict_object(
     findings: &[String],
     recorded_by: &str,
 ) -> std::io::Result<serde_json::Map<String, serde_json::Value>> {
+    // trace:BUG-2500 | ai:codex
+    if verdict.is_some_and(|v| VerdictKind::parse(v) == VerdictKind::Waiting)
+        && (summary.is_none_or(|s| s.trim().is_empty()) || !findings.is_empty())
+    {
+        return Err(std::io::Error::new(
+            std::io::ErrorKind::InvalidInput,
+            "waiting requires a dependency/actor/resume summary and no substantive findings",
+        ));
+    }
     // Fix-day 2026-10-07: newly authored records need actual recorder
     // provenance. Historical missing metadata is never inferred here.
     if recorded_by.trim().is_empty() {
@@ -1768,7 +1799,16 @@ pub(crate) fn build_verdict_object(
         .filter(|s| !s.is_empty())
         .map(|s| serde_json::Value::String(s.to_string()))
         .collect();
-    if !findings.is_empty() {
+    if verdict_word.as_deref() == Some("waiting") {
+        for key in [
+            "findings",
+            "blocking_findings",
+            "finding_classes",
+            "inherited_findings",
+        ] {
+            obj.remove(key);
+        }
+    } else if !findings.is_empty() {
         obj.insert("findings".to_string(), serde_json::Value::Array(findings));
         // STORY-1417: `finding_classes` is positional against `findings`, so
         // new findings invalidate the old classes. A caller that has classes
@@ -2849,6 +2889,7 @@ pub fn close_verdict_on_merge(
     let Some(raw_verdict) = obj.get("verdict").and_then(|v| v.as_str()) else {
         return Ok(false);
     };
+    // trace:BUG-2500 | ai:codex — merge closure includes external waits.
     if !VerdictKind::parse(raw_verdict).blocks_done() {
         return Ok(false);
     }
@@ -2977,6 +3018,8 @@ pub enum ReviewActionability {
     /// current head. The spec still needs attention — criterion 2 — but the
     /// attention is rework by the implementer, not a fresh review.
     AwaitingRework,
+    /// External evidence is pending; resume with a fresh review.
+    Waiting,
     /// A non-blocking verdict (approved) covers the exact current head.
     /// Nothing further is owed to the reviewer role for this head.
     Resolved,
@@ -2990,6 +3033,7 @@ impl ReviewActionability {
         match self {
             ReviewActionability::NeedsReview => "needs-review",
             ReviewActionability::AwaitingRework => "awaiting-rework",
+            ReviewActionability::Waiting => "waiting",
             ReviewActionability::Resolved => "resolved",
         }
     }
@@ -3048,7 +3092,10 @@ pub fn review_actionability(
     if relation != TipRelation::AtReviewedSha {
         return ReviewActionability::NeedsReview;
     }
-    if v.kind.blocks_done() {
+    // trace:BUG-2500 | ai:codex — a moved head needs ordinary review.
+    if v.kind == VerdictKind::Waiting {
+        ReviewActionability::Waiting
+    } else if v.kind.blocks_done() {
         ReviewActionability::AwaitingRework
     } else {
         ReviewActionability::Resolved
@@ -3086,6 +3133,16 @@ pub fn queue_done_verdict_gate(
     let Some(v) = verdict else {
         return VerdictGate::Proceed;
     };
+    if v.is_closed() && v.kind == VerdictKind::Waiting {
+        return VerdictGate::Proceed;
+    }
+    // trace:BUG-2500 | ai:codex
+    if v.kind == VerdictKind::Waiting {
+        return VerdictGate::Refuse(vec![
+            format!("{display_id}: WAITING — {}", v.summary.as_deref().unwrap_or("external evidence required")),
+            "Resume with a fresh recorded review at the current head; CI green or an advanced head alone does not clear waiting.".to_string(),
+        ]);
+    }
     // An approval without a commit is not authorization for any particular
     // head. Fail closed for every verdict kind, including APPROVED: otherwise
     // a legacy hand-written file silently bypasses the post-review SHA guard.
@@ -3123,7 +3180,7 @@ pub fn queue_done_verdict_gate(
                 summary_line(v),
                 "A review gate that cannot classify the verdict must not wave work through. \
                  Record a fresh, recognised verdict against the current head: `aida review \
-                 record` accepts approved, request-changes, or rejected."
+                 record` accepts approved, request-changes, rejected, or waiting."
                     .to_string(),
             ]
             .into_iter()
