@@ -8,7 +8,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-08T19:02:09.839960883Z
-modified_at: 2026-11-09T06:22:00.589674211Z
+modified_at: 2026-11-09T06:53:56.944015230Z
 req_type: Bug
 relationships:
 - rel_type:
@@ -206,6 +206,13 @@ comments:
   created_at: 2026-11-09T05:48:59.605749168Z
   modified_at: 2026-11-09T05:48:59.605749168Z
   session_id: 7aacb1ed-ebaa-4da4-a195-500864e99e7d
+- id: 01a1bf15-c350-7f30-a644-8e5d3bbcffbc
+  author: joe
+  content: 'ADVISOR RUBBIN: CI has failed this same check on repeated pushes; pushing again without fixing it will fail again. Do not merge main or push until this exact failure is fixed. #3698: CI fails test_env::tests::no_unisolated_set_current_dir_in_test_code (test_env.rs:1013): a test this PR touches calls set_current_dir without the isolation helper. Use the helper from test_env. Also fix the last review''s over-correction: an older refusal must not beat a newer WAITING. Local gate: one targeted cargo test --profile agent -p aida-cli-lib <filter> plus make check-ci-fast, then push; run long cargo in background.'
+  created_at: 2026-11-09T06:53:56.944015230Z
+  modified_at: 2026-11-09T06:53:56.944015230Z
+  session_id: 01a1beff-fc3b-78e2-93e2-9b0c283b0339
+  harness_version: 2.1.319 (Claude Code)
 history:
 - id: 01a1bcc0-f95b-7082-8ca7-a86211b6ddd8
   author: joe
