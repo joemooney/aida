@@ -66,7 +66,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-09T08:46:26.872629040Z
-modified_at: 2026-11-09T09:39:57.147084271Z
+modified_at: 2026-11-09T09:40:01.027329574Z
 req_type: Task
 relationships:
 - rel_type: Supersedes
@@ -137,6 +137,21 @@ comments:
   content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: Part 1 and all eight Part 2 items are implemented, but the sweep selector reuses terminal Superseded/Done sweeps, and the TASK-HOME-1038 fix makes no-change runs count as failures in telemetry; two smaller defects also listed.. No triage reason was given.'
   created_at: 2026-11-09T09:39:57.147082002Z
   modified_at: 2026-11-09T09:39:57.147082002Z
+- id: 01a1bfad-cd1c-7012-a12b-42295fdbcf76
+  author: joe
+  content: |-
+    REVIEW FINDINGS TO ADDRESS (TASK-3749):
+    Verdict: CHANGES REQUESTED
+    Reviewed commit: 5bda7f6b8265
+    Recorded: 2026-11-09T09:20:59.727043371+00:00
+    Findings:
+    1. aida-cli-lib/src/findings_gate.rs:2095-2099: the open-sweep selector excludes only Completed and Rejected, so a Superseded sweep (a terminal status; see aida_core::conflict::is_terminal_status and lifecycle State::is_terminal) is reused, and findings are appended to a closed spec that no open lens shows. A Done sweep, about to be auto-bumped to Completed, has the same loss. Superseding is how this project already closes finding batches (TASK-HOME-1035..1042). Select with the canonical terminal check and also exclude Done, then decide whether an InProgress sweep should keep receiving sections, and add a Superseded/Done rollover test (task_3749_sweep_keys_preserve_source_scope_and_closed_sweeps_roll_over covers only Completed).
+    2. aida-cli-lib/src/drain_next_n.rs:1387 (TASK-HOME-1038 fix) introduces a regression: AutoCompleteEvent::is_failure at aida-cli-lib/src/auto_complete_telemetry.rs:102 is outcome != "success", so a clean exit-0 no-change run now counts as failed in summarize, failure_histogram (cause "unknown"), metrics.rs:532 drain_failed and the aida usage drains failures list (usage_cmd.rs:1405, "(no detail)"). Before this PR it counted as success. Teach is_failure/summarize that no-change is not a failure and add a test; is_failure_distinguishes_outcome does not cover it.
+    3. aida-cli-lib/src/findings.rs:182: finding_pr uses find_map over tags and returns one arbitrary from-review:PR-N (tags come from a HashSet). A sweep now carries one such tag per contributing PR, so aida findings list --pr N (findings.rs:556) misses the sweep for every PR but one, and finding_origin labels it with one arbitrary PR. This contradicts the new doc comment that source stays queryable; N-valued tags were impossible under one-spec-per-finding. Match any from-review:PR-N tag for the --pr filter, and add a multi-PR test.
+    4. Cosmetic, aida-cli-lib/src/findings_gate.rs:2123: writes a blank "Reviewed sha: " line when the verdict has no reviewed_sha; the replaced code omitted the line when empty.
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
+  created_at: 2026-11-09T09:40:00.924651400Z
+  modified_at: 2026-11-09T09:40:00.924651400Z
 history:
 - id: 01a1bf7c-f894-7192-b380-ef25f53f2fb5
   author: joe
