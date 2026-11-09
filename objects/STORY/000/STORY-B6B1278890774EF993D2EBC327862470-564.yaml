@@ -23,7 +23,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-07T19:59:26.079479Z
-modified_at: 2026-11-08T21:29:57.753385657Z
+modified_at: 2026-11-09T02:15:56.350121035Z
 req_type: Story
 comments:
 - id: 01a1b798-f0d4-73b1-93d5-f84581f2d190
@@ -1044,6 +1044,12 @@ history:
   - field_name: status
     old_value: Approved
     new_value: NeedsAttention
+- id: 01a1be17-3d26-7083-8450-75d2e3f7231d
+  author: joe
+  timestamp: 2026-11-09T02:15:56.454246600Z
+  session_id: 01a1be1371b6
+  harness_version: 2.1.319 (Claude Code)
+  changes: []
 filed_at:
   code_sha: 7a18c0d52a6a4e0822befd4c810cfed16b04b74c
   branch: main
@@ -1053,3 +1059,11 @@ filed_at:
   vendor: claude
   session: 01a1b76b-2fe7-7dd2-88d0-356fc8d96d04
   harness_version: 2.1.319 (Claude Code)
+failure_reason:
+  phase: reviewer
+  phase_index: 3
+  kind: verdict:request-changes
+  detail: AC1 (second lane job shows sccache hits on primary and dell1) still has no evidence or advisor amendment at 9b202e3a37b4; AC0/AC2/AC3/AC4 and the lane/unsandboxed separation are met in source. Two small new findings. Code CI still in progress at this head; merge-hold-gate fails by design. No local cargo run.
+  recovery_hint: address the review findings, move STORY-2641 back to In Progress, and clear the PR hold only after approval
+  shelved_by: reviewer
+  shelved_at: 2026-11-09T02:15:56.350121035Z
