@@ -108,9 +108,25 @@ pub(crate) fn resolve_next_n_head(
     Vec<(String, String)>,
     Vec<(String, String)>,
 ) {
+    resolve_next_n_head_excluding(storage, user_id, role_override, &[])
+}
+
+// trace:STORY-2640 | ai:codex
+#[allow(clippy::type_complexity)]
+fn resolve_next_n_head_excluding(
+    storage: &Storage,
+    user_id: &str,
+    role_override: Option<&str>,
+    excluded: &[String],
+) -> (
+    Option<AutoCompleteHeadPick>,
+    Vec<(String, String)>,
+    Vec<(String, String)>,
+) {
     let effective_role = effective_auto_complete_role(role_override);
     match auto_complete_head_candidates_with_roles(storage, user_id, Some(&effective_role)) {
-        Ok(candidates) => {
+        Ok(mut candidates) => {
+            candidates.retain(|candidate| !excluded.contains(&candidate.id));
             let pick = pick_auto_complete_head_for_role(&candidates, &effective_role).unwrap();
             let (role_skipped, blocked_skipped) = match &pick {
                 Some(pick) => (pick.role_skipped.clone(), pick.blocked_skipped.clone()),
@@ -565,8 +581,17 @@ impl auto_complete::BatchDriver for RealNextNDriver<'_> {
     }
 
     fn next_head(&mut self) -> Option<String> {
-        let (pick, role_skipped, blocked_skipped) =
-            resolve_next_n_head(self.storage, &self.user_id, self.role_override.as_deref());
+        self.next_head_excluding(&[])
+    }
+
+    // trace:STORY-2640 | ai:codex
+    fn next_head_excluding(&mut self, excluded: &[String]) -> Option<String> {
+        let (pick, role_skipped, blocked_skipped) = resolve_next_n_head_excluding(
+            self.storage,
+            &self.user_id,
+            self.role_override.as_deref(),
+            excluded,
+        );
         for (spec, role) in &role_skipped {
             if self.seen_role_skips.insert(spec.clone()) {
                 eprintln!("skipped {spec} — routed for {role}");

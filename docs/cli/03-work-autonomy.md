@@ -231,6 +231,21 @@ The same recipe is embedded in every phase-failure comment, so the reader who de
 
 ### `aida lane`
 
+The host runs each lane's `make check-ci-fast` in the lane-job sandbox.
+A source failure gets one repair round; a timeout reports
+`fast_gate=skipped(timeout)` without consuming that round. A retry that times out
+retains an earlier `fast_gate=fail`. Gate jobs reuse the lane target seed and
+overlay. If host publication merges a concurrently advanced PR head after the
+gate, it reports `fast_gate=skipped(reconciled)` (or retains a known failure)
+for that published merge. A host process that
+exits or is killed releases its unqueued review hold on the next review-watch
+check. Pending receipts have a 24-hour backstop, including legacy receipts
+(measured from file modification time). Queued repairs hold review only while
+the exact queue entry and a workable spec remain live, within that backstop.
+An operator can settle a stuck receipt with
+`aida lane fast-gate-release <branch>` from the host checkout. This retains the
+gate verdict and grants no publication or merge authority.
+
 **A headless implementer runs its local tests through its launcher.** A
 headless tool call is capped at 60 seconds, and a process it detaches dies
 with the call, so the launcher runs a lane job runner for as long as it waits.
