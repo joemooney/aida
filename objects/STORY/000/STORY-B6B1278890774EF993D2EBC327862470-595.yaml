@@ -8,7 +8,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-08T05:25:50.443321273Z
-modified_at: 2026-11-09T16:34:01.090248503Z
+modified_at: 2026-11-09T16:34:03.178891480Z
 req_type: Story
 tags:
 - area:ci
@@ -178,6 +178,13 @@ comments:
   created_at: 2026-11-09T04:05:52.316573868Z
   modified_at: 2026-11-09T04:05:52.316573868Z
   session_id: 7aacb1ed-ebaa-4da4-a195-500864e99e7d
+- id: 01a1c128-dd2a-7b61-9abf-3505c9a3bb44
+  author: joe
+  content: 'Smoke run 42650619081 on dell1 2026-11-09: shards roughly twice as fast as hosted but 7 tests fail under the hardened unit, and one runner is serial. Routing is off. Remaining work is in the follow-up spec.'
+  created_at: 2026-11-09T16:34:03.178891480Z
+  modified_at: 2026-11-09T16:34:03.178891480Z
+  session_id: 01a1beff-fc3b-78e2-93e2-9b0c283b0339
+  harness_version: 2.1.319 (Claude Code)
 history:
 - id: 01a1b9c5-53ea-79e1-9008-26e3abcd0e20
   author: joe
