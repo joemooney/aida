@@ -6110,6 +6110,9 @@ pub(crate) fn lane_job_bwrap_argv(
     args: Vec<String>,
 ) -> Vec<String> {
     let mut full = bwrap_confinement_args_inner(seat, rw, read_allowlist);
+    // Keep host PID identity: the shared Cargo slot queue checks ticket
+    // liveness with kill -0 and names tickets using the wrapper's PID.
+    // trace:STORY-2641 | ai:codex
     full.push(program.to_string());
     full.extend(args);
     full
