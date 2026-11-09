@@ -459,6 +459,8 @@ enum McpErrorCode {
     /// Filesystem / IO failure while reading or writing the substrate.
     /// Not recoverable by the caller without operator intervention.
     IoError,
+    /// Delivery or persistence could not be established; do not retry as a new request.
+    OutcomeUnknown,
     /// Anything we could not classify — treated as a server-side fault.
     Internal,
 }
@@ -472,6 +474,7 @@ impl McpErrorCode {
             McpErrorCode::Conflict => "conflict",
             McpErrorCode::PermissionDenied => "permission_denied",
             McpErrorCode::IoError => "io_error",
+            McpErrorCode::OutcomeUnknown => "outcome_unknown",
             McpErrorCode::Internal => "internal",
         }
     }
@@ -7345,6 +7348,227 @@ pub fn run_mcp_server(storage: &Storage, project_root: PathBuf) -> Result<()> {
 
     eprintln!("AIDA MCP server stopped");
     Ok(())
+}
+
+/// The gated profile uses the same JSON-RPC wire types but never constructs a
+/// backend, registers/touches an agent, applies lane environment, prepares ACKs,
+/// or starts a respawn worker. Unsupported tools cannot reach ordinary dispatch.
+// trace:TASK-3223 | ai:codex
+pub fn run_mediated_mcp_server(
+    client: &aida_cli_lib::store_mutation_client::Client,
+    env: &aida_core::exec_context::Environment,
+    store: &Path,
+) -> Result<()> {
+    use anyhow::Context;
+    let configured = match env.var("AIDA_MCP_PROFILE") {
+        Ok(value) => Some(value.to_owned()),
+        Err(aida_core::exec_context::EnvLookupError::NonUnicode) => {
+            anyhow::bail!("invalid MCP profile")
+        }
+        Err(_) => {
+            let path = store
+                .parent()
+                .context("invalid store root")?
+                .join(".aida/config.toml");
+            match std::fs::read_to_string(path) {
+                Ok(text) => {
+                    let config = toml::from_str::<toml::Value>(&text)?;
+                    config
+                        .get("mcp")
+                        .and_then(|m| m.get("profile"))
+                        .map(|profile| {
+                            profile
+                                .as_str()
+                                .map(str::to_owned)
+                                .context("invalid MCP profile")
+                        })
+                        .transpose()?
+                }
+                Err(e) if e.kind() == io::ErrorKind::NotFound => None,
+                Err(e) => return Err(e.into()),
+            }
+        }
+    };
+    // Unknown explicit profiles fail closed rather than silently widening.
+    let profile = match configured.as_deref() {
+        Some(value) => McpProfile::from_token(value).context("invalid MCP profile")?,
+        None => McpProfile::Full,
+    };
+    let role = aida_cli_lib::store_mutation_client::session_role(env)?;
+    let stdin = io::stdin();
+    let mut input = stdin.lock();
+    let stdout = io::stdout();
+    let mut output = stdout.lock();
+    mediated_mcp_stream(
+        client,
+        store,
+        profile,
+        role.as_deref(),
+        &mut input,
+        &mut output,
+    )
+}
+
+// trace:TASK-3223 | ai:codex
+fn mediated_mcp_stream(
+    client: &aida_cli_lib::store_mutation_client::Client,
+    store: &Path,
+    profile: McpProfile,
+    role: Option<&str>,
+    input: &mut impl io::BufRead,
+    output: &mut impl io::Write,
+) -> Result<()> {
+    use std::io::Read;
+    loop {
+        let mut line = Vec::new();
+        let n = (&mut *input).take(65537).read_until(b'\n', &mut line)?;
+        if n == 0 {
+            return Ok(());
+        }
+        if n > 65536 {
+            // Drain without growing the request buffer. The limit may have
+            // consumed the newline already; never discard the next request.
+            if line.last() != Some(&b'\n') {
+                loop {
+                    let available = input.fill_buf()?;
+                    if available.is_empty() {
+                        break;
+                    }
+                    let newline = available.iter().position(|byte| *byte == b'\n');
+                    let consumed = newline.map_or(available.len(), |index| index + 1);
+                    input.consume(consumed);
+                    if newline.is_some() {
+                        break;
+                    }
+                }
+            }
+            deliver(
+                output,
+                JsonRpcResponse::error(
+                    Value::Null,
+                    -32600,
+                    "Oversized mediated MCP request".into(),
+                ),
+            )?;
+            continue;
+        }
+        if line.iter().all(u8::is_ascii_whitespace) {
+            continue;
+        }
+        let response = match serde_json::from_slice::<JsonRpcRequest>(&line) {
+            Ok(request) => mediated_mcp_response(client, store, profile, role, &request),
+            Err(_) => Some(JsonRpcResponse::error(
+                Value::Null,
+                -32700,
+                "Parse error".into(),
+            )),
+        };
+        if let Some(response) = response {
+            deliver(output, response)?;
+        }
+    }
+}
+
+// Match exact closed wire tokens through anyhow context, never message substrings.
+// Preserve request UUID/recovery guidance in the message, with a distinct
+// non-recoverable code for uncertain delivery or persistence.
+// trace:TASK-3223 | ai:codex
+fn mediated_mcp_error(tool: &str, error: &anyhow::Error) -> McpError {
+    let code = error
+        .chain()
+        .find_map(|cause| match cause.to_string().as_str() {
+            "Unauthorized" | "Expired" | "Revoked" => Some(McpErrorCode::PermissionDenied),
+            "InvalidRequest" | "UnsupportedVersion" | "UnsupportedOperation" => {
+                Some(McpErrorCode::InvalidArg)
+            }
+            "Conflict" | "Busy" => Some(McpErrorCode::Conflict),
+            "Unavailable" => Some(McpErrorCode::IoError),
+            "OutcomeUnknown" => Some(McpErrorCode::OutcomeUnknown),
+            _ => None,
+        });
+    let message = format!("{error:#}");
+    match code {
+        Some(code) => McpError::new(tool, code, message),
+        None => McpError::classify(tool, &message),
+    }
+}
+
+// trace:TASK-3223 | ai:codex
+fn mediated_mcp_response(
+    client: &aida_cli_lib::store_mutation_client::Client,
+    store: &Path,
+    profile: McpProfile,
+    role: Option<&str>,
+    request: &JsonRpcRequest,
+) -> Option<JsonRpcResponse> {
+    if request.id.is_none() {
+        return None;
+    }
+    let id = request.id.clone().unwrap();
+    if request.jsonrpc != "2.0" {
+        return Some(JsonRpcResponse::error(id, -32600, "Invalid Request".into()));
+    }
+    let allowed = |name: &str| {
+        matches!(name, "add_comment" | "update_requirement")
+            && tool_in_profile(name, profile)
+            && role.is_none_or(|role| stakeholder_tool_allowed(role, name))
+    };
+    Some(match request.method.as_str() {
+        "initialize" => JsonRpcResponse::success(
+            id,
+            json!({
+                "protocolVersion":"2024-11-05", "capabilities":{"tools":{}},
+                "serverInfo":{"name":"aida","version":env!("CARGO_PKG_VERSION")}
+            }),
+        ),
+        "ping" => JsonRpcResponse::success(id, json!({})),
+        "tools/list" => {
+            let mut tools = tool_descriptors_for_profile(profile);
+            tools
+                .as_array_mut()
+                .unwrap()
+                .retain(|t| t["name"].as_str().is_some_and(allowed));
+            for tool in tools.as_array_mut().unwrap() {
+                let fields: &[&str] = if tool["name"] == "add_comment" {
+                    &["id", "text"]
+                } else {
+                    // trace:TASK-3223 | ai:codex
+                    tool["description"] = json!(
+                        "Update an owned requirement's title, description or priority through the mediated store service. At least one edit field is required."
+                    );
+                    &["id", "title", "description", "priority"]
+                };
+                tool["inputSchema"]["properties"]
+                    .as_object_mut()
+                    .unwrap()
+                    .retain(|key, _| fields.contains(&key.as_str()));
+                tool["inputSchema"]["additionalProperties"] = json!(false);
+            }
+            JsonRpcResponse::success(id, json!({"tools":tools}))
+        }
+        "resources/list" => JsonRpcResponse::success(id, json!({"resources":[]})),
+        "resources/templates/list" => JsonRpcResponse::success(id, json!({"resourceTemplates":[]})),
+        "tools/call" => {
+            let name = request.params["name"].as_str().unwrap_or("");
+            let result = if allowed(name) {
+                client.mcp(store, name, &request.params["arguments"])
+            } else {
+                Err(anyhow::anyhow!("UnsupportedOperation"))
+            };
+            let result = match result {
+                Ok(value) => {
+                    // Mirror the advertised text envelope after the mutation
+                    // commits, so schema-validating clients can accept success.
+                    // trace:TASK-3223 | ai:codex
+                    let content = json!([{"type":"text","text":value.to_string()}]);
+                    json!({"content":content,"structuredContent":{"content":content}})
+                }
+                Err(error) => mediated_mcp_error(name, &error).to_result_value(),
+            };
+            JsonRpcResponse::success(id, result)
+        }
+        _ => JsonRpcResponse::error(id, -32601, "Method not found".into()),
+    })
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]

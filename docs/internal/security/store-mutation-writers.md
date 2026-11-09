@@ -12,10 +12,152 @@ A passing inventory guard is neither C2 evidence nor permission to enable a
 mutation verb. Per the advisor's 2026-11-06 20:29 UTC ruling, this inventory is
 a best-effort static ratchet; completeness is not a merge gate. TASK-3223's
 shared boundary denying raw store writes is the enforcement boundary.
-S2 still needs separate approval for the recoverable transaction
-that couples mutation and dedupe outcome.
+The canonical redo transaction design was subsequently approved in
+[the S2 sketch](../../plans/2026-11-06-task-3223-mediated-transactions.md).
+
+The host independently enforces the launch-bound stakeholder role for canonical
+comment and edit requests, including direct packets and durable-result replay.
+Guest/requester restrictions do not depend on the lane's environment. Host tests
+verify both verbs refuse without changing the target object's bytes.
+<!-- trace:TASK-3223 | ai:codex -->
+
+## Staged lane routing
+
+<!-- trace:TASK-3223 | ai:codex -->
+
+`store_mutation_entry.rs` selects an explicit mediated profile before CLI
+identity, telemetry, aliases, extension dispatch and cache setup. The bounded
+Rust SEQPACKET client supports inline, `--body-file` or bounded `--stdin`
+`comment add` and title/description/priority-only `edit`. Its separate MCP loop translates
+`add_comment` and `update_requirement` without backend setup, agent-registry
+writes, mail acknowledgements or respawn. It retains MCP profile and stakeholder
+restrictions, narrows advertised input properties, and refuses extra fields
+rather than silently dropping semantics. Non-Unicode session roles and CLI
+arguments refuse; explicitly configured non-string MCP profiles also refuse.
+Priority edits use the same owned-spec, host role and redo checks as title edits.
+The closed broker and Rust schemas accept high/medium/low (case insensitive,
+with the CLI's `med` alias); invalid or null values refuse before persistence.
+A same-request replay returns its durable result without another history entry;
+stale revisions refuse. This extends a partial route and does not discharge
+whole-operation inventory blockers or enable production admission.
+
+Comment body files are opened read-only without following symlinks and with
+nonblocking I/O; only regular UTF-8 files up to 16 KiB are accepted. Stdin has
+the same size, UTF-8 and nonempty-content checks. The lane sends literal text,
+never a path, to the host. Editor, author, relay and parent semantics remain
+unsupported. Top-level `--file`, output-format, verbose and canonical-ID options
+refuse rather than silently changing their ordinary meaning. Store discovery
+walks cwd ancestors read-only; it never constructs a backend or shared cache.
+This staged dispatcher requires a literal `.aida-store/objects` directory (or
+`.aida-store` symlink) at or above cwd. It does not yet use the ordinary
+`store_path` configuration or main-worktree fallback. A custom store location
+or plain linked worktree without that link refuses with “mediated operations
+require an existing canonical store”; no store is created. The host uses its
+own pinned store root and checks the expected revision and owned UUID under
+the writer lock; the lane's resolved path is never sent to the host. A different
+discovered store produces conflict or not-found when those checks do not match.
+
+MCP request lines are limited to 64 KiB including the newline. An oversized
+line is drained through its newline with bounded memory, receives JSON-RPC
+error -32600 with a null ID, and the server continues with the next request.
+
+Before hashing a preimage, the client resolves native and agreed IDs from
+canonical objects. Origin IDs first use their direct object path, without
+scanning unrelated objects or checking agreed-ID collisions. Agreed IDs require
+strict enumeration: incomplete enumeration, unreadable or malformed objects,
+identity mismatches and ambiguous matches refuse. The wire request names the
+origin-keyed canonical object and hashes the exact bounded no-follow read; the
+host independently revalidates its revision and owned UUID under the writer
+lock. Client SEQPACKET fixtures cover agreed and origin IDs through comment-add,
+spec-edit and MCP translation with synthetic replies. Separate routed tests use
+the production client, broker and host handler with synthetic launch identity;
+they cover stale revisions, competing mutations and replay after a lost reply.
+Neither fixture establishes production admission.
+
+Mediated comment edit/delete are unsupported: rewriting an existing comment
+requires an advisor-approved ownership policy. Their closed schemas and host
+handlers are absent; ordinary compatibility commands are unchanged. Each
+invocation uses a new request UUID, included in transport error context for host
+recovery. Only uncertain outcomes carry no-repeat guidance; definite refusals
+retain the request identity without that warning. There is no client status/retry command, and uncertain delivery is
+never automatically retried. A closed stdout consumer does not turn a committed
+mutation into an output panic.
+Unsupported commands/tools refuse before ordinary dispatch. Neither transport
+falls back to direct persistence or retries uncertain delivery with a new UUID.
+
+The admitted store-write profile now travels as a typed argument from the launch
+owner to the Rust authority session and as private configuration to its Python
+broker. Compatibility sessions independently refuse canonical writes in both
+layers. Staged mediated sessions route `comment_add` and `spec_edit` to the
+canonical redo handler; neither packet fields nor child environment assignments
+can widen a compatibility session. Broker probes advertise that session's verbs.
+Host routing tests cover owned-comment persistence, exact replay, changed-payload
+conflicts and revocation before replay. The client/broker/host routed tests also exercise
+concurrent writes, stale bases and lost replies with synthetic launch identity.
+They do not establish Git/oplog publication or production admission.
+
+The filesystem boundary fixture runs the early CLI entrypoint and Rust lane
+client in a child test process inside the sealed bwrap namespace. That process
+first proves a raw canonical-object overwrite is denied, then invokes
+`comment add` through the production Python broker, Rust host handler and redo
+persistence. The client validates reply correlation and result schema; the
+sandbox driver compares the returned revision with installed bytes. The parent
+independently verifies the single comment and host-bound author. Both primary
+checkout and linked-store layouts retain the raw create/append/rename negatives
+and writable private-cache control.
+This fixture supplies synthetic launch ancestry and authority; it does not run
+the production launch admission or establish real-vendor containment evidence.
+
+This is staged routing, **not production admission or completed S2a evidence**.
+The production launcher remains gated before session preparation. The inventory still requires
+operation-by-operation reconciliation; the early refusal boundary does not
+reclassify its unresolved rows. Remaining work includes the other CLI/MCP
+writer families, host publication integration, contained-Codex profile selection
+and the live same-lane raw-write-denial/mediated-comment positive. `own_claim`
+and `queue_done` remain unsupported under TASK-3326. Native compatibility and
+Claude launch selection are unchanged.
+
+Mediated resume remains gated alongside fresh launches. The regression
+`mediated_profile_resume_refuses_before_effects_in_primary_and_linked_layouts`
+passes Codex `exec resume` and `exec fork` through `PreparedLaunch::prepare`
+with explicit mediated/service selections in primary and symlinked linked
+layouts. It verifies refusal before private state/service setup and unchanged
+protected sentinels. This is refusal coverage, not a successful resume or
+sealed resumed-session claim. Contained Codex's separate argv validator also
+refuses resume/fork pending private-state lifecycle support; successful mediated
+resume needs that lifecycle work plus the same sealed profile before admission.
+
+Mediated MCP errors map exact host wire refusals through request context into
+stable `structuredError.code` values: Unauthorized/Expired/Revoked become
+`permission_denied`; InvalidRequest/UnsupportedVersion/UnsupportedOperation
+become `invalid_arg`; Conflict/Busy become `conflict`; Unavailable becomes
+`io_error`. OutcomeUnknown has a distinct non-recoverable `outcome_unknown`
+code and retains request identity and recovery guidance in its message.
 
 ## Checked-in contract
+
+<!-- trace:TASK-3223 | ai:codex -->
+
+The additive `mediated_route` array records the implemented variants of
+`cli:comment add`, `cli:edit`, `mcp:add_comment` and `mcp:update_requirement`.
+Each record names its wire operation, supported scope, remaining unsupported
+semantics, early entrypoint, client, host handler and evidence files. The guard
+checks that the operation is registered, its wire verb belongs to the broker
+`CANONICAL_VERBS` vocabulary, all three functions exist, and evidence paths are
+safe existing files. The vocabulary is parsed as literal data without executing
+service code; a missing or malformed declaration refuses route validation.
+MCP routes cite `store_mutation_mcp_tests.rs` for their dispatcher coverage.
+Regeneration preserves these reviewed records; new operations receive no route
+automatically. This is source-review evidence, not proof of runtime
+authorization or test execution.
+
+`--profile mediated` includes these records as `partial_routes` alongside its
+unresolved counts. They do **not** clear writer or operation blockers: a
+title/description/priority edit route cannot certify status, ownership or tag edits, and
+a literal-text comment route cannot certify parent, relay or author semantics.
+Production admission remains gated until the remaining inventory is reconciled
+and routed. This partial reconciliation does not meet the advisor's zero
+unrouted-writers acceptance condition.
 
 [`scripts/store-writers.toml`](../../../scripts/store-writers.toml) is review
 evidence, **not an allow-list** and not a second requirements database.
@@ -70,6 +212,22 @@ for row in rows:
     print(row['id'], len(row['sites']), row['blocker'], sep=' | ')
 PY
 ```
+
+For the TASK-3223 routing slice, run
+`python3 scripts/check-store-writers.py --profile mediated`. It first checks
+source reconciliation, then prints JSON listing unresolved writer sites and
+operation IDs and exits nonzero while any remain. The default compatibility
+check still validates inventory reconciliation only. Neither result grants
+launch authority. Version 2 requires every operation mapping to remain blocked.
+Only `host_only` and `lane_private` writer rows are excluded from unresolved
+counts. The compatibility labels `s2_typed` and `read_only` remain unresolved
+under the mediated profile: v2 does not verify evidence for either label.
+Every operation mapping remains unresolved regardless of its disposition.
+The routing implementation must introduce reviewed operation policy and evidence
+before this profile check can certify zero unresolved mappings. This diagnostic
+does not implement routing, prove runtime coverage, or exempt TASK-3326 writers
+from their existing blockers.
+<!-- trace:TASK-3223 | ai:codex -->
 
 ## Source-checked boundary families
 

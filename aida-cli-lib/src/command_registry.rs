@@ -415,6 +415,31 @@ pub(crate) fn run_mcp_handler(
     handler(matches, ctx)
 }
 
+// trace:TASK-3429 TASK-3223 | ai:claude
+/// Gated mcp-serve transport supplied by the binary; absent means refuse.
+pub type MediatedMcpHandler = fn(
+    &crate::store_mutation_client::Client,
+    &aida_core::exec_context::Environment,
+    &std::path::Path,
+) -> anyhow::Result<()>;
+static MEDIATED_MCP_HANDLER: std::sync::OnceLock<MediatedMcpHandler> = std::sync::OnceLock::new();
+/// Install the gated transport used when a mediated session runs mcp-serve.
+pub fn register_mediated_mcp_handler(handler: MediatedMcpHandler) {
+    MEDIATED_MCP_HANDLER
+        .set(handler)
+        .expect("mediated MCP handler already installed");
+}
+pub(crate) fn run_mediated_mcp_handler(
+    client: &crate::store_mutation_client::Client,
+    env: &aida_core::exec_context::Environment,
+    store: &std::path::Path,
+) -> anyhow::Result<()> {
+    let handler = MEDIATED_MCP_HANDLER
+        .get()
+        .ok_or_else(|| anyhow::anyhow!("MCP transport not registered by binary"))?;
+    handler(client, env, store)
+}
+
 // trace:TASK-3429 | ai:codex
 #[cfg(test)]
 #[test]

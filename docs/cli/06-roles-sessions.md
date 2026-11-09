@@ -184,6 +184,59 @@ An inherited reviewer route, an unrelated anchor, or unavailable change metadata
 does not authorize coexistence.
 <!-- trace:TASK-1801 | ai:codex -->
 
+<!-- trace:TASK-1222 | ai:codex -->
+`aida worktree gc` previews lifecycle cleanup across linked worktrees and private
+`aida-seat-*` clones in the configured worktree parent. `--json` reports per-item
+reasons, candidate/retained counts, and estimated logical bytes reclaimable or
+freed. It does not delete by default. After reviewing the preview, an operator
+can run `aida worktree gc --apply` at an interactive host terminal; scheduled
+and unattended contexts refuse removal. The legacy `--yes --force` combination
+also requests removal through the same gate. Unattended scans have a soft budget
+and report partial counts plus the number of deferred entries; a partial scheduled
+scan routes to the advisor. A runtime cursor resumes after the last inspected path
+on the next scheduled scan, so each weekly report advances by its inspected count.
+Ad-hoc previews (including piped `--json` runs) start at the sorted inventory
+head and leave the weekly cursor unchanged.
+Interactive host scans inspect the full inventory.
+Byte walks are bounded; incomplete estimates are flagged and do not affect eligibility. Byte totals are lower bounds when estimates are incomplete.
+The weekly report replaces the former monthly guard.
+
+A candidate must have no remaining session lease (even a dead-process lease
+must first be ended/reaped), no operator or Git worktree lock, no uncommitted
+or untracked work. Linked worktrees also retain ignored local state, except
+regenerable target output, Python `.pyc` files under `__pycache__`, AIDA runtime
+links/caches, notice/onboarding markers and empty sandbox placeholders.
+Ignored `.aida/brief.md` and `.aida/events.jsonl` remain protected as work context
+and audit evidence, along with notes, holds and review verdicts.
+Seat clone probes do not inspect ignored files. All candidates require
+no live filesystem holders. The invoking checkout, pool reservations and live pool
+owners are retained. Main, default/store branches,
+detached checkouts, submodules, and unreadable evidence stay protected. Linked
+worktrees qualify when their HEAD is an ancestor of the default branch or an
+exact same-repository merged/closed PR head. Seat clones additionally require a
+matching host base pin and object-store binding, an exact merged/closed PR head,
+and **all local branches, seat-created or moved tags, HEAD and stash entries
+covered by host-verified origin evidence**. Tags with the exact same name and
+object ID on the host are inherited host history and excluded from seat work;
+a secondary remote, a seat-written tracking ref or a host-only branch cannot
+excuse unpushed commits. Origin-advertised PR/MR head refs can
+cover a published head after a squash merge deletes its source branch. An open
+PR on a reused branch prevents the PR-based cleanup proof. Missing forge evidence
+retains the tree. GC also conservatively includes every clone tracking ref as
+local history to preserve. A stale tracking ref whose commits are no longer
+advertised by origin can therefore retain an otherwise eligible clone; the
+operator must review and prune stale tracking refs before retrying. GC never
+prunes them automatically. <!-- trace:TASK-1222 | ai:codex -->
+Reviewer checkouts named `pr-N` resolve GitHub PR N directly;
+the response must still match that number, repository and exact checkout HEAD.
+
+Before removal, GC rechecks identity, HEAD, branch, ownership and eligibility,
+then uses the existing mailbox-retention and process-holder teardown guards.
+Linked local branch refs are compare-deleted only if unchanged and no longer
+checked out. The weekly `worktree-lifecycle-gc` scheduled job runs only the
+preview (`aida worktree gc --fail-on-findings`), routing counts and byte estimates to the advisor
+when candidates need operator review; it never applies cleanup.
+
 **Chains with** — `aida queue work` ([Chapter 3](03-work-autonomy.md)) leases under the hood; `aida session start --launch` is the manual equivalent. After review + merge, `aida session end` tears the worktree down. Cross-reference `aida agent new` for the multi-process launcher.
 
 ---

@@ -525,24 +525,6 @@ mod task_190_tests {
     }
 }
 
-/// Ergonomic `aida worktree gc` front door for the existing squash-aware
-/// merged-agent-worktree healer. Keep this as a thin wrapper so every caller
-/// uses the same scan, destructive-heal gate, and dirty-worktree refusal.
-// trace:TASK-1145 | ai:codex
-pub(crate) fn run_merged_agent_worktree_gc(yes: bool, force: bool, json: bool) -> Result<()> {
-    doctor_multi_agent(DoctorRunOptions {
-        heal: true,
-        yes,
-        category: Some("merged-agent-worktrees".to_string()),
-        json,
-        force,
-        all: false,
-        since: None,
-        fail_on_findings: false,
-        quiet_output: false,
-    })
-}
-
 /// One-line result of the post-ship GC. Names the worktrees it passed over for
 /// want of a local merge signal (a full `aida doctor` run may still reclaim
 /// them through the forge lookup) and, when the time budget ran out, how many
@@ -8440,7 +8422,7 @@ fn doctor_context_is_autonomous(stdin_is_tty: bool, orchestrated: bool) -> bool 
 /// STORY-666: live-signal wrapper for [`doctor_context_is_autonomous`] — reads
 /// the real TTY state + the corroborated orchestrator verdict for `project_root`.
 // trace:STORY-666 | ai:claude
-fn doctor_running_autonomously(project_root: &std::path::Path) -> bool {
+pub(crate) fn doctor_running_autonomously(project_root: &std::path::Path) -> bool {
     let orchestrated = orchestrator::detect(project_root).is_orchestrated();
     doctor_context_is_autonomous(std::io::stdin().is_terminal(), orchestrated)
 }
