@@ -55,12 +55,12 @@ description: |
 
   ## Acceptance
   Every section above is fixed or explicitly answered in the PR body; behavior is unchanged except where a finding requires it.
-status: InProgress
+status: Completed
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-09T06:49:26.752480304Z
-modified_at: 2026-11-09T07:23:22.071443572Z
+modified_at: 2026-11-09T08:42:25.710752720Z
 req_type: Task
 relationships:
 - rel_type: Supersedes
@@ -172,6 +172,20 @@ history:
   session_id: 01a1bf22ec82
   harness_version: codex-cli 0.167.0
   changes: []
+- id: 01a1bf79-13eb-7f01-9709-1867912544f5
+  author: aida-auto-bump
+  timestamp: 2026-11-09T08:42:25.643770299Z
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Completed
+processing_record:
+- id: 01a1bf79-142e-7a32-9c7b-54539c656a49
+  timestamp: 2026-11-09T08:42:25.710750123Z
+  agent: aida
+  commit_sha: ee76515e8cc1ff5f70fa2878c920b509b3974fb5
+  summary: 'All eight bundled cosmetic findings are fixed; behavior changes only in the executable_locations dedup the finding required. CI green at head. Non-blocking note: TASK-3061 is resolved by a diagnostic relabel with its rationale on the spec, not in the PR body.'
+  review_verdict: approved
 filed_at:
   code_sha: aaf9ac1436f0a0e82bae99d64e8a84742f30fe1c
   branch: main
@@ -181,3 +195,7 @@ filed_at:
   vendor: claude
   session: 01a1beff-fc3b-78e2-93e2-9b0c283b0339
   harness_version: 2.1.319 (Claude Code)
+implementation_info:
+  implemented: false
+  completed_at: 2026-11-09T08:42:25.643764458Z
+  completion_sha: ee76515e8cc1ff5f70fa2878c920b509b3974fb5
