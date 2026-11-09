@@ -3,6 +3,15 @@ use super::*;
 use crate::db::{canonical_mutation::CanonicalOperation, with_store_write_lock, GitBackend};
 
 fn fixture(root: &Path) -> (Decision, CanonicalOperation) {
+    // Provision authority through the private-file writer so a group-writable
+    // runner umask cannot invalidate the fixture before transaction tests run.
+    crate::git_ops::init(root).unwrap();
+    crate::allocation_authority::write_mode(
+        root,
+        crate::allocation_authority::AllocationRole::Root,
+        None,
+    )
+    .unwrap();
     crate::allocation_authority::home_fixture_backend(root).unwrap();
     fs::create_dir_all(root.join("objects")).unwrap();
     let mut row = crate::Requirement::new("before".into(), "description".into());
@@ -51,6 +60,7 @@ fn fixture(root: &Path) -> (Decision, CanonicalOperation) {
         op,
     )
 }
+
 fn child(root: &Path, checkpoint: &str) -> std::process::ExitStatus {
     let mut command = std::process::Command::new(std::env::current_exe().unwrap());
     command
@@ -269,7 +279,7 @@ fn corrupt_decision_and_unknown_format_refuse_before_writer() {
     }
 }
 #[test]
-fn canonical_comment_edit_stale_and_concurrent_requests() {
+fn canonical_comment_add_and_spec_edit_are_revision_bound() {
     let tmp = tempfile::tempdir().unwrap();
     let root = tmp.path();
     let (_, op) = fixture(root);
@@ -300,6 +310,7 @@ fn canonical_comment_edit_stale_and_concurrent_requests() {
         spec_id: "TASK-1".into(),
         expected_revision: results[0]["revision"].as_str().unwrap().into(),
         fields: super::super::canonical_mutation::EditFields {
+            priority: None,
             title: Some("updated".into()),
             description: None,
         },
@@ -467,6 +478,7 @@ fn locked_hypothesis_description_cannot_be_edited() {
         spec_id: "TASK-1".into(),
         expected_revision: hash(&before),
         fields: super::super::canonical_mutation::EditFields {
+            priority: None,
             title: None,
             description: Some("rewritten hypothesis".into()),
         },
@@ -597,6 +609,7 @@ fn multiline_comment_and_description_preserve_tabs_and_reject_other_controls() {
         spec_id: "TASK-1".into(),
         expected_revision: result["revision"].as_str().unwrap().into(),
         fields: super::super::canonical_mutation::EditFields {
+            priority: None,
             title: None,
             description: Some("paragraph one\n\tparagraph two".into()),
         },
@@ -624,6 +637,28 @@ fn multiline_comment_and_description_preserve_tabs_and_reject_other_controls() {
         assert!(op.validate().is_err());
         assert!(edit.validate().is_err());
     }
+}
+
+#[test]
+fn pending_collision_is_typed_unknown_and_preserves_evidence() {
+    let tmp = tempfile::tempdir().unwrap();
+    let root = tmp.path();
+    let (d, _) = fixture(root);
+    with_store_write_lock(root, || {
+        // Inject after lock-entry recovery: commit must never overwrite an
+        // unexpected decision, or classify its outcome as safe to repeat.
+        let path = journal(root)?.join(format!("{}.pending", name(&d)));
+        let evidence = encode(&d)?;
+        fs::write(&path, &evidence)?;
+        let error = commit(root, d.clone()).unwrap_err();
+        assert_eq!(error.downcast_ref::<OutcomeUnknown>().unwrap().0, path);
+        assert_eq!(fs::read(&path)?, evidence);
+        for image in &d.images {
+            assert_eq!(hash(&object_bytes(root, &image.spec_id)?), image.before);
+        }
+        Ok(())
+    })
+    .unwrap();
 }
 
 #[test]
@@ -847,4 +882,105 @@ fn initialized_journal_recovery_does_not_resolve_git_excludes_again() {
         Ok(())
     })
     .unwrap();
+}
+
+// trace:TASK-3223 | ai:codex
+#[test]
+fn priority_edit_replays_once_and_refuses_stale_or_invalid_requests() {
+    let tmp = tempfile::tempdir().unwrap();
+    let root = tmp.path();
+    let (_, comment) = fixture(root);
+    let epoch = uuid::Uuid::new_v4();
+    let request = uuid::Uuid::new_v4();
+    let backend = GitBackend::new(root).unwrap();
+    let edit = |priority: &str| CanonicalOperation::SpecEdit {
+        spec_id: "TASK-1".into(),
+        expected_revision: comment.target().1.into(),
+        fields: super::super::canonical_mutation::EditFields {
+            title: None,
+            description: None,
+            priority: Some(priority.into()),
+        },
+    };
+    // Pick a different priority regardless of the fixture's default.
+    let before: crate::Requirement =
+        serde_yaml::from_slice(&object_bytes(root, "TASK-1").unwrap()).unwrap();
+    let (value, expected) = if before.priority == crate::RequirementPriority::High {
+        ("med", crate::RequirementPriority::Medium)
+    } else {
+        ("HIGH", crate::RequirementPriority::High)
+    };
+    let op = edit(value);
+    let result = backend
+        .mutate_canonical("fixed", epoch, request, "bound author", &op, || Ok(()))
+        .unwrap();
+    let installed = object_bytes(root, "TASK-1").unwrap();
+    let row: crate::Requirement = serde_yaml::from_slice(&installed).unwrap();
+    assert_eq!(row.priority, expected);
+    assert_eq!(row.title, before.title);
+    assert_eq!(row.description, before.description);
+    assert_eq!(hash(&installed), result["revision"].as_str().unwrap());
+    assert_eq!(
+        backend
+            .mutate_canonical("fixed", epoch, request, "bound author", &op, || Ok(()))
+            .unwrap(),
+        result
+    );
+    assert_eq!(object_bytes(root, "TASK-1").unwrap(), installed);
+    for (op, reason) in [
+        (edit("low"), "Conflict"),
+        (edit("urgent"), "InvalidRequest"),
+    ] {
+        assert!(backend
+            .mutate_canonical(
+                "fixed",
+                epoch,
+                uuid::Uuid::new_v4(),
+                "bound author",
+                &op,
+                || Ok(())
+            )
+            .unwrap_err()
+            .to_string()
+            .contains(reason));
+        assert_eq!(object_bytes(root, "TASK-1").unwrap(), installed);
+    }
+}
+
+// trace:TASK-3223 | ai:codex
+#[test]
+fn repeated_text_edit_preserves_history_and_modified_timestamp() {
+    for (title, description) in [(true, false), (false, true), (true, true)] {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        let (_, comment) = fixture(root);
+        let before: crate::Requirement =
+            serde_yaml::from_slice(&object_bytes(root, "TASK-1").unwrap()).unwrap();
+        let operation = CanonicalOperation::SpecEdit {
+            spec_id: "TASK-1".into(),
+            expected_revision: comment.target().1.into(),
+            fields: super::super::canonical_mutation::EditFields {
+                title: title.then(|| before.title.clone()),
+                description: description.then(|| before.description.clone()),
+                priority: None,
+            },
+        };
+        GitBackend::new(root)
+            .unwrap()
+            .mutate_canonical(
+                "fixed",
+                uuid::Uuid::new_v4(),
+                uuid::Uuid::new_v4(),
+                "bound author",
+                &operation,
+                || Ok(()),
+            )
+            .unwrap();
+        let after: crate::Requirement =
+            serde_yaml::from_slice(&object_bytes(root, "TASK-1").unwrap()).unwrap();
+        assert_eq!(after.title, before.title);
+        assert_eq!(after.description, before.description);
+        assert_eq!(after.history.len(), before.history.len());
+        assert_eq!(after.modified_at, before.modified_at);
+    }
 }

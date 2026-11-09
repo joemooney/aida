@@ -20,6 +20,10 @@ use std::time::{Duration, Instant};
 pub(crate) mod pty;
 #[path = "../store_mutation/mod.rs"]
 mod store_mutation;
+// Shared real-broker fixture for the MCP success-envelope regression.
+// trace:TASK-3223 | ai:codex
+#[cfg(test)]
+pub(crate) use store_mutation::routed_tests::Route as MediatedTestRoute;
 
 #[path = "codex_auth.rs"]
 pub(crate) mod codex_auth;
@@ -980,6 +984,7 @@ impl PreparedLaunch {
             Some(store_mutation::Session::prepare(
                 child,
                 &std::fs::canonicalize(root)?,
+                store_profile,
             )?)
         } else {
             None
