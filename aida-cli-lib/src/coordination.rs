@@ -572,7 +572,12 @@ pub(crate) fn sanitize_scope(scope: &str) -> String {
 fn refresh_store(store_root: &Path, branch: &str) -> Result<std::result::Result<(), String>> {
     match aida_core::git_ops::pull_rebase(store_root, "origin", branch) {
         Ok(()) => Ok(Ok(())),
-        Err(e) if aida_core::git_ops::is_sync_refusal(&e) => Err(e),
+        Err(e)
+            if aida_core::git_ops::is_sync_refusal(&e)
+                || aida_core::git_ops::is_dirty_store_refusal(&e) =>
+        {
+            Err(e)
+        }
         Err(e) => Ok(Err(e.to_string())),
     }
 }
@@ -1699,6 +1704,66 @@ pub(crate) fn release_lock_claim(store_root: &Path, kind: LockKind, clone_path: 
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    // trace:BUG-2501 | ai:codex
+    #[test]
+    fn dirty_store_refuses_claim_and_preserves_release() {
+        let dir = tempfile::tempdir().unwrap();
+        let store = dir.path().join("store");
+        let remote = dir.path().join("remote.git");
+        let git = |root: &Path, args: &[&str]| {
+            let out = crate::test_git::git_command()
+                .arg("-C")
+                .arg(root)
+                .args(args)
+                .output()
+                .unwrap();
+            assert!(out.status.success(), "{out:?}");
+        };
+        git(dir.path(), &["init", "--bare", remote.to_str().unwrap()]);
+        aida_core::git_ops::init(&store).unwrap();
+        aida_core::git_ops::configure_user(&store, "Test", "test@example.com").unwrap();
+        std::fs::write(store.join("seed"), "seed").unwrap();
+        aida_core::git_ops::add(&store, &["seed"]).unwrap();
+        aida_core::git_ops::commit(&store, "seed").unwrap();
+        git(
+            &store,
+            &["remote", "add", "origin", remote.to_str().unwrap()],
+        );
+        let branch = aida_core::git_ops::current_branch(&store).unwrap();
+        assert!(aida_core::git_ops::push(&store, "origin", &branch).unwrap());
+        assert!(matches!(
+            acquire_lock_claim(&store, LockKind::Solo, dir.path(), "test", 1800, false).unwrap(),
+            LockAcquireOutcome::Acquired
+        ));
+        assert!(matches!(
+            acquire_claim(&store, "TASK-2501", dir.path(), "test", false, false).unwrap(),
+            AcquireOutcome::Acquired
+        ));
+        let lease = claim_path(&store, "TASK-2501");
+        let lease_before = std::fs::read(&lease).unwrap();
+        let claim = lock_claim_path(&store, LockKind::Solo);
+        let before = std::fs::read(&claim).unwrap();
+        let head = aida_core::git_ops::head_sha(&store).unwrap();
+        std::fs::write(store.join("seed"), "pending").unwrap();
+        let err = acquire_lock_claim(&store, LockKind::Drain, dir.path(), "test", 1800, false)
+            .unwrap_err();
+        assert!(aida_core::git_ops::is_dirty_store_refusal(&err), "{err:#}");
+        assert!(!lock_claim_path(&store, LockKind::Drain).exists());
+        release_lock_claim(&store, LockKind::Solo, dir.path());
+        assert_eq!(std::fs::read(&claim).unwrap(), before);
+        release_claim(&store, "TASK-2501", dir.path());
+        let err = release_stale_foreign_claim(&store, "TASK-2501", "foreign", "old").unwrap_err();
+        assert!(aida_core::git_ops::is_dirty_store_refusal(&err), "{err:#}");
+        assert_eq!(std::fs::read(&lease).unwrap(), lease_before);
+        assert_eq!(aida_core::git_ops::head_sha(&store).unwrap(), head);
+        assert_eq!(
+            std::fs::read_to_string(store.join("seed")).unwrap(),
+            "pending"
+        );
+        let err = aida_core::git_ops::suggest_free_node_id(&store, "NEW").unwrap_err();
+        assert!(aida_core::git_ops::is_dirty_store_refusal(&err), "{err:#}");
+    }
 
     /// A PROCESS-BACKED foreign claim (slice-2 drain/solo shape): its pid
     /// faithfully tracks liveness, so the same-host pid probe is exact.

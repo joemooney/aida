@@ -1524,9 +1524,9 @@ pub(crate) fn enroll_synthetic_home(root: &Path) -> anyhow::Result<()> {
         aida_core::allocation_authority::require_global(&resolved)?;
     } else {
         aida_core::write_atomic(&setting, "version=1\nauthoritative=true\n")?;
-        // Synthetic authority must satisfy the production reader even when
-        // the lane inherits a group-writable umask.
-        // trace:TASK-3749 | ai:codex
+        // The allocation reader refuses shared writes. Synthetic authority must
+        // satisfy that contract even under a collaborative host's umask 0002.
+        // trace:TASK-3749 BUG-2502 | ai:codex
         #[cfg(unix)]
         {
             use std::os::unix::fs::PermissionsExt;
