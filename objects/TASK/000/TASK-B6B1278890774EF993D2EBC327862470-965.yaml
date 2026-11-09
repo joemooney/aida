@@ -17,7 +17,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-08T03:08:54.290380002Z
-modified_at: 2026-11-09T00:26:05.011449963Z
+modified_at: 2026-11-09T00:26:08.892106527Z
 req_type: Task
 tags:
 - area:architecture
@@ -41,6 +41,12 @@ comments:
   content: 'Returned from NeedsAttention to Approved via `aida edit --status`. It was punted on: blocked-dependency: Acceptance 4 forbids changes in files with open PRs, but acceptance 1 requires migrating framework references in these files: aida-cli-lib/src/config_cmd.rs (PR #3641); aida-cli-lib/src/usage_cmd.rs (PR #3629); aida-cli-lib/src/doctor_cmd.rs (PR #3643); aida-cli-lib/src/leases.rs (PR #3634); aida-cli-lib/src/defer_cmd.rs (PR #3639); aida-cli-lib/src/git_backend_cmd.rs (PR #3658); aida-cli-lib/src/worktree_gc.rs (PR #3647); aida-cli-lib/src/lib_part1.rs (PR #3628); aida-cli-lib/src/agent_launch.rs (PR #3619); aida-cli-lib/src/condition_cmd.rs (PR #3639); aida-cli-lib/src/queue_cmd.rs (PR #3619); aida-cli-lib/src/advisor_cmd_root.rs (PR #3640); aida-cli-lib/src/drain_cmd.rs (PR #3629); aida-cli-lib/src/upgrade_release.rs (PR #3629); aida-cli-lib/src/maintenance_schedule.rs (PR #3647); aida-cli-lib/src/internal_cmd.rs (PR #3628); aida-cli-lib/src/focus_cmd.rs (PR #3629); aida-cli-lib/src/cli.rs (PR #3629); aida-cli-lib/src/init_cmd.rs (PR #3643); aida-cli-lib/src/graph_cmd.rs (PR #3629); aida-cli-lib/src/requirements_cli.rs (PR #3658); aida-cli-lib/src/statusline_cmd.rs (PR #3629); aida-cli-lib/src/findings_gate.rs (PR #3639); aida-cli-lib/src/status_awaiting.rs (PR #3656); aida-cli-lib/src/history.rs (PR #3629); aida-cli-lib/src/upgrade_cmd.rs (PR #3629); aida-cli-lib/src/tests/bug_home_038_seat_publish_tests.rs (PR #3625). Most consumers also use fully qualified command_registry::Type paths in signatures/expressions rather than use imports, requiring changes beyond literal import lines. PR #3635 prerequisite is satisfied: train #3660 landed b9601840a1, present in this seat HEAD ff9b8c9180. No source edits or tests performed. codegraph executable unavailable; rg used and aida doctor check codegraph returned total: 0. Need advisor scope/sequencing ruling before migration; retaining existing re-exports is necessary while blocked consumers remain.. No triage reason was given.'
   created_at: 2026-11-09T00:26:05.011442984Z
   modified_at: 2026-11-09T00:26:05.011442984Z
+  session_id: 20abb7c3-8f9b-4a5e-b326-404921f3b450
+- id: 01a1bdb2-b87c-7bb1-89b2-c063f9085bda
+  author: joe
+  content: 'Advisor 2026-11-08: PR-3641 and PR-3643 have landed, so per the earlier sequencing ruling this is requeued. Acceptance 4 stands: the re-exports drop only once every importer is migrated.'
+  created_at: 2026-11-09T00:26:08.892106527Z
+  modified_at: 2026-11-09T00:26:08.892106527Z
   session_id: 20abb7c3-8f9b-4a5e-b326-404921f3b450
 history:
 - id: 01a1b921-d315-74a0-9c9a-0ca54df44ce6
