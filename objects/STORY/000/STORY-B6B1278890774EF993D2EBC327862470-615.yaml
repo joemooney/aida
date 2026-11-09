@@ -8,7 +8,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-09T01:58:54.698246911Z
-modified_at: 2026-11-09T02:04:53.574617730Z
+modified_at: 2026-11-09T02:20:09.548636318Z
 req_type: Story
 tags:
 - area:orchestration
@@ -19,6 +19,17 @@ comments:
   created_at: 2026-11-09T02:03:21.073821769Z
   modified_at: 2026-11-09T02:03:21.073821769Z
   session_id: 20abb7c3-8f9b-4a5e-b326-404921f3b450
+- id: 01a1be1b-19cc-7e70-a683-448da28e6230
+  author: dirtlab
+  content: |
+    Implemented the advisor's smallest host-side merge slice. scripts/port-split-hunks.py reads an explicit PR base/head and split source, preflights every textual hunk against explicitly supplied destinations, requires exactly one exact occurrence, refuses absent/ambiguous/overlapping/context-free hunks before writes, defaults to preview, and invokes the existing check-store-writers.py --regenerate path after --apply. No inferred imports, visibility edits or re-exports; docs explain manual API wiring and index/conflict resolution. Regenerated the inventory and retained exactly one new blocked sink row, preserving unrelated review notes.
+    Changed files: scripts/port-split-hunks.py; scripts/store-writers.toml; tests/test_port_split_hunks.py; aida-cli/tests/story_2692_split_merge.rs; docs/advanced/split-merge-porting.md. Protected queue_cmd/ and doctor_cmd.rs untouched.
+    Validation: launcher job j20261109T020630871-2-0, cargo test --profile agent -p aida-cli --test story_2692_split_merge -- split_merge_host_fixtures: 1 executed test passed. Python suite: 3 tests passed, including seven synthetic PR ports, missing/ambiguous/overlapping placements, newline preservation, unplaceable re-export, preview, regeneration dispatch/failure and symlink refusal. make check-ci-fast: 46 gates passed with umask 0022. Initial default-0002 run failed unrelated mail-wake security fixtures; subsequent run identified the missing inventory row, now regenerated. git diff --check passed.
+    Native-seat handoff: edits left uncommitted; no push, PR, queue completion, review verdict or merge performed. No outstanding implementation blockers. Host publication remains pending. Suggested subject: [AI:codex] feat(merge): port exact PR hunks across file splits (STORY-2692).
+  created_at: 2026-11-09T02:20:09.548636318Z
+  modified_at: 2026-11-09T02:20:09.548636318Z
+  session_id: 01a1be0d1996
+  harness_version: codex-cli 0.167.0
 history:
 - id: 01a1be0b-c26f-7e81-9cbb-17bbd5fc30b5
   author: joe
