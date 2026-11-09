@@ -655,8 +655,8 @@ findings promote --reason TASK-1 TASK-1	Finding	true	false	false
 findings promote --to TASK-1 TASK-1	Finding	true	false	false
 findings promote TASK-1	Finding	true	false	false
 findings recur --note TASK-1 TASK-1	Finding	true	false	false
-findings recur --reason hold --until manual:joe TASK-1	Finding	true	false	false
-findings recur --until date:2026-01-01 TASK-1	Finding	true	false	false
+findings recur --reason hold --until manual:joe TASK-1	Finding	true	false	true
+findings recur --until date:2026-01-01 TASK-1	Finding	true	false	true
 findings recur TASK-1	Finding	true	false	false
 focus	Write	false	false	false
 focus clear	Write	false	false	false

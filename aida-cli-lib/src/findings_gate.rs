@@ -2316,6 +2316,11 @@ fn findings_cli_policy(matches: &clap::ArgMatches) -> crate::command_registry::C
         },
         per_write_auto_push: matches!(cmd, Some(Some(c)) if !matches!(c, FindingsCommand::List { .. } | FindingsCommand::Classes { .. })),
         skip_role_restore_prompt: false,
-        team_identity_write: false,
+        // Conditional recurrence parks and dequeues work just like `defer`.
+        // trace:STORY-2402 | ai:codex
+        team_identity_write: matches!(
+            cmd,
+            Some(Some(FindingsCommand::Recur { until: Some(_), .. }))
+        ),
     }
 }

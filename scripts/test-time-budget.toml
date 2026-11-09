@@ -32,6 +32,10 @@ default_limit = 10
 untouched_factor = 1.5
 
 [budget]
+# PR #3639 run 42624915706 at 3ea7d7003e44 measured 10.2s.
+# Measured time x2 rounded up to 5s, following the budget convention above.
+# trace:STORY-2402 | ai:codex
+"aida-cli-lib defer_resurface::tests::story2402_s4_canonical_snapshot_and_legacy_only_run" = 25
 # PR #3639 CI run 42464033547 (0ffefda), artifacts test-timings-lib-0/1:
 # measured 10.448s, 10.332s and 20.060s; max x2 rounded up to 5s.
 # trace:STORY-2402 | ai:codex

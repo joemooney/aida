@@ -13,7 +13,8 @@
 //! Rows corrected by hand after capture, each a deliberate policy change:
 //! - `session leases --prune-stale`: Read → Session. It releases stale
 //!   leases, including other clones' claims (TASK-1939).
-//! - Conditional session handoffs auto-push their spec deferral (STORY-2402).
+//! - Conditional session handoffs auto-push their spec deferral; conditional
+//!   recurrence requires a distinct team identity like `defer` (STORY-2402).
 //! - `agent new <vendor> --no-exec`: Write → Read. Side-effect-free launch
 //!   declarations are available to stakeholder seats (STORY-1486).
 //!

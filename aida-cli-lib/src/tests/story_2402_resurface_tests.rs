@@ -830,8 +830,44 @@ fn story2402_s5_implementer_cannot_set_holds() {
         .path()
         .join(".aida/handoff/implementer/latest.md")
         .exists());
+    // Exercise the registered policy through the same guard as store dispatch.
+    // Refusal must precede both the recurrence increment and deferral write.
+    // trace:STORY-2402 | ai:codex
+    let cli = crate::command_registry::try_parse_from([
+        "aida",
+        "findings",
+        "recur",
+        id,
+        "--until",
+        "date:2026-01-01",
+    ])
+    .unwrap();
+    let recur = || {
+        crate::status_awaiting::maybe_team_identity_guard(&path, &cli.command)?;
+        crate::findings_gate::handle_findings_recur(
+            &backend,
+            &path,
+            id,
+            None,
+            Some("date:2026-01-01"),
+            None,
+        )
+    };
+    let error = recur().unwrap_err();
+    assert!(format!("{error:#}").contains("AIDA_TEAM_REQUIRE_USER=1"));
+    assert_eq!(
+        serde_yaml::to_value(backend.get_requirement(&row.id).unwrap().unwrap()).unwrap(),
+        before
+    );
     ambient.set_key("AIDA_USER", "distinct");
-    assert!(crate::status_awaiting::team_identity_write_guard(&path, true).is_ok());
+    recur().unwrap();
+    let current = backend.get_requirement(&row.id).unwrap().unwrap();
+    assert!(current.deferred);
+    assert_eq!(current.deferred_until.as_deref(), Some("date:2026-01-01"));
+    assert_eq!(
+        crate::findings::finding_recurrence(&current.tags.iter().cloned().collect::<Vec<_>>()),
+        2
+    );
 }
 
 // Unknown dependency IDs keep work parked without failing the hourly sweep.
