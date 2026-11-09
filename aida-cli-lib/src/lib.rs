@@ -280,6 +280,9 @@ mod status_sections;
 mod statusline_root;
 // trace:STORY-B6B1278890774EF993D2EBC327862470-097 | ai:claude
 mod store_local;
+// trace:TASK-3223 | ai:codex
+mod store_mutation_client;
+mod store_mutation_entry;
 mod store_push_pull;
 mod store_sync;
 mod supervise_cmd;
@@ -743,6 +746,8 @@ mod workflow_hints;
 mod worktree;
 // trace:TASK-634 | ai:claude — pure WorktreeCreate/Remove payload → lease record.
 mod worktree_lease;
+// trace:TASK-1222 | ai:codex — dry-run-first seat/worktree lifecycle GC.
+mod worktree_lifecycle_gc;
 // trace:TASK-1562 | ai:claude — `aida worktree reclaim`: stale target/ cache reclaim.
 mod worktree_reclaim;
 // trace:TASK-2325 | ai:claude — agent scratch outside target/ (job tmp, session scratch, build caches).
