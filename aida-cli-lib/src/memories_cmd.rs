@@ -185,7 +185,8 @@ fn run_memories(
     matches: &clap::ArgMatches,
     ctx: &crate::command_registry::DispatchCtx,
 ) -> anyhow::Result<crate::command_registry::Flow> {
-    use crate::*;
+    // trace:TASK-3428 | ai:codex
+    use crate::{memories_cmd, MemoriesCommand};
     let args = <MemoriesArgs as clap::FromArgMatches>::from_arg_matches(matches)?;
     match &ctx.store {
         None => {

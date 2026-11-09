@@ -6,6 +6,7 @@
 //! The `RequirementType` enum and the `add_requirement_type` store method live
 //! in `aida-core`; the `glyph` / `glyphs` helpers stay in `main.rs` and are
 //! reached via `crate::`.
+// trace:TASK-3428 | ai:codex
 
 use anyhow::Result;
 use colored::Colorize;
@@ -115,7 +116,6 @@ fn run_type(
     matches: &clap::ArgMatches,
     ctx: &crate::command_registry::DispatchCtx,
 ) -> anyhow::Result<crate::command_registry::Flow> {
-    use crate::*;
     let args = <TypeArgs as clap::FromArgMatches>::from_arg_matches(matches)?;
     match &ctx.store {
         None => Ok(crate::command_registry::Flow::Continue),

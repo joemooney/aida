@@ -4,6 +4,8 @@
 
 use super::task970_agent_output_tests::fields_summary;
 use super::*;
+// trace:TASK-3428 | ai:codex
+use crate::{build_list_fields_lines, list_fields_help, search_fields_help};
 
 #[test]
 fn fields_split_on_commas_and_or_whitespace() {
