@@ -3,12 +3,12 @@ spec_id: BUG-b6b1278890774ef993d2ebc327862470-270
 agreed_id: BUG-2505
 title: aida add can exit without creating a spec when given a tag such as from:2026-11-08-review-closeout
 description: 'Observed 2026-11-08: six aida add calls with that tag created nothing, while the same calls with only area:orchestration succeeded. The error text was hidden by the caller''s output filter, so the cause is inferred from the difference. Reproduce with the tag and read the output first.'
-status: NeedsAttention
+status: Approved
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-09T03:00:45.690194532Z
-modified_at: 2026-11-09T08:11:49.064526407Z
+modified_at: 2026-11-09T08:16:31.816513205Z
 req_type: Bug
 tags:
 - area:cli
@@ -78,6 +78,11 @@ comments:
   modified_at: 2026-11-09T07:25:58.181167737Z
   session_id: 01a1bf295d8a
   harness_version: codex-cli 0.167.0
+- id: 01a1bf61-5e48-7381-861c-b5d48f428e86
+  author: joe
+  content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: Test characterization and head commit are sound, but the PR title still carries the completing ''fix: ... (BUG-2505)'' trailer, so merging would complete an unreproduced bug; the body also omits the non-repro.. It was punted on: missing-context: Findings 1/3 remain unresolved: exact tag and comma forms succeed; alternative argv refusals now have executed characterization coverage, but original six argv and unfiltered diagnostics are missing, so a production fix is unestablished. Refs-only publication declaration recorded. Required make check-ci-fast also failed on read-only sccache target writes; host must resolve/rerun before publication. Leave BUG-2505 open.. No triage reason was given.'
+  created_at: 2026-11-09T08:16:31.816511904Z
+  modified_at: 2026-11-09T08:16:31.816511904Z
 history:
 - id: 01a1beaa-5541-7fd1-9192-5cf255b115f3
   author: joe
@@ -187,6 +192,13 @@ history:
   session_id: 01a1bf5b9ae9
   harness_version: 2.1.319 (Claude Code)
   changes: []
+- id: 01a1bf61-5e48-7381-861c-b5ca99f433d7
+  author: joe
+  timestamp: 2026-11-09T08:16:31.816497135Z
+  changes:
+  - field_name: status
+    old_value: NeedsAttention
+    new_value: Approved
 filed_at:
   code_sha: d73f4e6b86c9f6a85cc01a4aa9893b869252b3a9
   branch: main
@@ -195,16 +207,3 @@ filed_at:
   aida_build_sha: a7a14984cec
   vendor: claude
   session: 20abb7c3-8f9b-4a5e-b326-404921f3b450
-attention_reason:
-  category: missing-context
-  detail: 'Findings 1/3 remain unresolved: exact tag and comma forms succeed; alternative argv refusals now have executed characterization coverage, but original six argv and unfiltered diagnostics are missing, so a production fix is unestablished. Refs-only publication declaration recorded. Required make check-ci-fast also failed on read-only sccache target writes; host must resolve/rerun before publication. Leave BUG-2505 open.'
-  raised_by: implementer
-  raised_at: 2026-11-09T07:26:01.826356737Z
-failure_reason:
-  phase: reviewer
-  phase_index: 3
-  kind: verdict:request-changes
-  detail: 'Test characterization and head commit are sound, but the PR title still carries the completing ''fix: ... (BUG-2505)'' trailer, so merging would complete an unreproduced bug; the body also omits the non-repro.'
-  recovery_hint: address the review findings, move BUG-2505 back to In Progress, and clear the PR hold only after approval
-  shelved_by: reviewer
-  shelved_at: 2026-11-09T08:11:49.064526407Z
