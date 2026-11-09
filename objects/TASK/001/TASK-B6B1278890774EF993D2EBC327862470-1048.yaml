@@ -1,0 +1,29 @@
+id: 01a1c025-25ef-7552-a7ec-f92d9ccfb19a
+spec_id: TASK-b6b1278890774ef993d2ebc327862470-1048
+title: 'Minor, aida-cli-lib/src/ownership/reader.rs:124: review_finished calls Ownershi…'
+description: |-
+  Non-blocking finding carried forward from an APPROVED review verdict on BUG-2498, which has since completed — recorded here so it keeps a queryable home once the verdict record stops being read.
+
+  Minor, aida-cli-lib/src/ownership/reader.rs:124: review_finished calls OwnershipStore::for_project directly and skips the process_contained refusal in dual::store_for (dual.rs:275), whose comment says a write from a seat clone lands in the clone's own directory. Add the same refusal.
+
+  PR: #3693
+  Reviewed sha: 668a2156be9497f6840deab13e357e594daa5ea4
+status: Draft
+priority: Medium
+owner: joe
+feature: Uncategorized
+created_at: 2026-11-09T11:50:22.447316925Z
+modified_at: 2026-11-09T11:50:22.447316925Z
+req_type: Task
+tags:
+- carried-from:BUG-2498
+- finding-hash:0b9e89f2
+- from-review:PR-3693
+- kind:carried-forward
+filed_at:
+  code_sha: 81044beb98c0d870ebd63fd9006b759e2bb090f9
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: ef853db64e2
+  vendor: claude
