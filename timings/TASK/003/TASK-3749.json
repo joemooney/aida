@@ -3,46 +3,13 @@
   "spec": "TASK-3749",
   "publishes": [
     {
-      "at": "2026-11-09T13:19:18.096659995Z",
+      "at": "2026-11-09T13:19:13.014497481Z",
       "closed_by": "auto-bump"
     }
   ],
   "events": [
     {
-      "ts": "2026-11-09T09:39:58.109124989Z",
-      "spec": "TASK-3749",
-      "seat": "advisor",
-      "kind": {
-        "event": "SpecRequeued",
-        "via": "queue-rework",
-        "actor": "joe",
-        "from": "Needs Attention",
-        "to": "Approved"
-      }
-    },
-    {
-      "ts": "2026-11-09T12:14:53.411800Z",
-      "spec": "TASK-3749",
-      "seat": "advisor",
-      "kind": {
-        "event": "SpecRequeued",
-        "via": "queue-rework",
-        "actor": "joe",
-        "from": "Needs Attention",
-        "to": "Approved"
-      }
-    },
-    {
-      "ts": "2026-11-09T13:18:55.569293346Z",
-      "spec": "TASK-3749",
-      "seat": "advisor",
-      "kind": {
-        "event": "PrMerged",
-        "pr": 3724
-      }
-    },
-    {
-      "ts": "2026-11-09T13:19:17.945078683Z",
+      "ts": "2026-11-09T13:19:12.957846286Z",
       "spec": "TASK-3749",
       "kind": {
         "event": "SpecCompleted",

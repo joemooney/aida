@@ -3,12 +3,12 @@ spec_id: BUG-b6b1278890774ef993d2ebc327862470-269
 agreed_id: BUG-2504
 title: Queue-work rework lanes exit with no changes or nothing to publish on a conflicting PR instead of resolving the conflict
 description: 'Seen 2026-11-08 on #3641 and #3643: lanes briefed to merge main and resolve exited with no pending changes or pushed a head that still conflicted, and the advisor had to hand merge. Reported each time only as ''Queue-work lane exited without changes''. Lanes also reported check-ci-fast cannot run in the native sandbox (sccache cannot write dep-info on a read-only filesystem), which may share a cause.'
-status: Approved
+status: InProgress
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-08T21:20:08.484660Z
-modified_at: 2026-11-09T13:26:53.868400586Z
+modified_at: 2026-11-09T13:28:07.124080089Z
 req_type: Bug
 comments:
 - id: 01a1beb1-ae7c-7c52-89a5-00a6bc02eeb0
@@ -379,10 +379,13 @@ history:
   author: joe
   timestamp: 2026-11-09T13:05:10.717080497Z
   changes: []
-- id: 01a1c07d-84ff-7f63-94cb-34c5739238a4
-  author: joe
-  timestamp: 2026-11-09T13:26:53.951697251Z
-  changes: []
+- id: 01a1c07e-a2d4-7822-af18-dc5220c74230
+  author: aida-session-start
+  timestamp: 2026-11-09T13:28:07.124078412Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: InProgress
 filed_at:
   code_sha: b57c1fab753d30430c7a544b781bd8c7d91da0d2
   branch: main
