@@ -8,7 +8,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-07T23:40:15.306412624Z
-modified_at: 2026-11-09T07:09:17.242234942Z
+modified_at: 2026-11-09T13:17:36.327439731Z
 req_type: Task
 relationships:
 - rel_type: BlockedBy
@@ -571,6 +571,13 @@ comments:
   modified_at: 2026-11-09T07:09:17.242234942Z
   session_id: 01a1bf212848
   harness_version: codex-cli 0.167.0
+- id: 01a1c075-02c7-7a60-8b75-5fc1f89d897c
+  author: joe
+  content: |-
+    CI FAILURES at 3e0a1ccf8ee4 (run 42620288414). Fix exactly these before pushing; a push without a code change for them will fail again and must not be made:
+    (no test lines extracted; open run 42620288414)
+  created_at: 2026-11-09T13:17:36.327439731Z
+  modified_at: 2026-11-09T13:17:36.327439731Z
 history:
 - id: 01a1b862-7fc0-7e63-899e-5179ac0131ed
   author: joe
