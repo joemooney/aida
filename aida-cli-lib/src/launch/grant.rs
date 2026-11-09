@@ -70,3 +70,37 @@ pub(crate) fn assign_advisor_child(
     )?;
     Ok(grant)
 }
+
+/// A fixed host-supervised controller uses explicit persisted parent authority,
+/// rather than the deputy's ambient selector. Keep identity/seat projection in
+/// the shared launch owner.
+// trace:STORY-2571 | ai:codex
+pub(crate) fn review_watch_controller(
+    root: &Path,
+    parent_id: &str,
+    parent_subject: &str,
+) -> Result<(SeatGrant, std::process::Command)> {
+    let grant = seat_authority::issue_review_watch_child(root, parent_id, parent_subject)?;
+    let command = (|| {
+        let mut command = super::control_child()?;
+        super::assign_seat(
+            &mut command,
+            aida_core::launch_policy::LaunchKind::Fresh,
+            super::SeatDecision::Child {
+                role: "advisor",
+                grant: &grant.id,
+            },
+        )?;
+        command
+            .env("AIDA_USER", &grant.subject)
+            .env("AIDA_AGENT_NAME", &grant.subject);
+        Ok(command)
+    })();
+    match command {
+        Ok(command) => Ok((grant, command)),
+        Err(error) => {
+            let _ = seat_authority::revoke_by_id(&grant.id);
+            Err(error)
+        }
+    }
+}

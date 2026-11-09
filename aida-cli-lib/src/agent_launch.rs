@@ -7641,6 +7641,16 @@ pub(crate) fn run_agent_generation_with_io(
                 grant: Some(&grant.id),
             },
         )?;
+        // The fresh grant exists and is bound to this launcher before the
+        // rotation relay asks the host to replace its prior service binding.
+        // trace:STORY-2571 | ai:codex
+        if canonical_role_name(role) == "advisor" {
+            if let Err(error) =
+                crate::review_watch::service::rebind_after_launch(&plan.project_root, &grant)
+            {
+                eprintln!("review-watch rotation rebind refused: {error:#}; from the operator host advisor terminal run `aida advisor loops rebind` (add --deputy NAME for a named deputy), then relaunch the advisor");
+            }
+        }
     } else if wrapper {
         // Make the existing implicit baseline explicit; never inherit a parent's selector.
         crate::launch::assign_seat(
