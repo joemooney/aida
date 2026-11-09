@@ -60,7 +60,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-09T06:49:26.752480304Z
-modified_at: 2026-11-09T07:08:53.826514507Z
+modified_at: 2026-11-09T07:11:16.698491586Z
 req_type: Task
 relationships:
 - rel_type: Supersedes
@@ -95,6 +95,14 @@ relationships:
   target_id: 01a1bec5-d4f6-7143-badc-760fb05ece54
   created_at: 2026-11-09T06:50:53.803564013Z
   created_by: joe
+comments:
+- id: 01a1bf25-a0da-7c81-9074-1186f17d3a86
+  author: dirtlab
+  content: 'Implemented all eight bundled findings: TASK-3043 relabels snapshot ownership as log-only diagnostics; TASK-3056 deduplicates executable locations with debug/release regression assertions; TASK-3058 removes unreachable sandbox denylist arms; TASK-3060 removes completing-form notes from AGENTS.md/OVERVIEW.md while retaining lifecycle documentation; TASK-3061 documents persisted max_concurrent as the last selecting watcher diagnostic, preserving per-watcher admission behavior; TASK-3062 makes the body-file flag optional in the pickup master and updates its regression; TASK-3064 delegates the already-verified guard to verify_ci_read; TASK-3067 describes build-script reruns and CLI-library/server recompilation. Native lane edits remain uncommitted for host publication. Targeted lane tests are running; template sync/check hit read-only target errors in their implicit Cargo invocation.'
+  created_at: 2026-11-09T07:11:16.698491586Z
+  modified_at: 2026-11-09T07:11:16.698491586Z
+  session_id: 01a1bf22ec82
+  harness_version: codex-cli 0.167.0
 history:
 - id: 01a1bf12-3d5d-7450-af72-7b705154b22a
   author: joe
