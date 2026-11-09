@@ -8,7 +8,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-08T19:01:55.483195458Z
-modified_at: 2026-11-09T03:02:44.512597055Z
+modified_at: 2026-11-09T03:06:38.798771084Z
 req_type: Bug
 relationships:
 - rel_type:
@@ -82,6 +82,13 @@ comments:
   created_at: 2026-11-09T02:55:07.843106164Z
   modified_at: 2026-11-09T02:55:07.843106164Z
   session_id: 20abb7c3-8f9b-4a5e-b326-404921f3b450
+- id: 01a1be45-a94e-7d72-8478-922151df95d2
+  author: dirtlab
+  content: 'Rework implemented: regression probe explicitly sets CARGO_TERM_COLOR=never so Fresh/Compiling assertions survive CI forced colour; AIDA_DEV_BUILD_HEAD is classified as an operation-local dropped child input; dev docs acknowledge recompilation when alternating dev builds with plain Cargo. Changed files: aida-cli-lib/src/tests/dev_build_tests.rs, aida-core/src/launch_policy.rs, docs/cli/11-dev.md. Validation: lane jobs j20261109T025733450-2-0 and j20261109T025739032-2-0 each executed the named regression/ambient-input test, 1 passed each. Regression submission used CARGO_TERM_COLOR=always. Feature-disabled CLI check and TUI all-targets check passed in lane jobs j20261109T025826985-2-0 and j20261109T025833832-2-0. All 44 non-compile fast gates passed with umask 022 (host umask 0002 caused unrelated mail-wake fixture permission failures on first run); compile gates delegated separately. TUI workspace manifest dependency graph has no CLI-lib edge; canonical cargo metadata/tree seam subchecks not run because direct Cargo is forbidden in this seat. rustfmt and git diff --check passed. Codegraph unavailable. Edits uncommitted for host launcher; published-head lib-0/lib-1 CI remains host validation.'
+  created_at: 2026-11-09T03:06:38.798771084Z
+  modified_at: 2026-11-09T03:06:38.798771084Z
+  session_id: 01a1be3c035b
+  harness_version: codex-cli 0.167.0
 history:
 - id: 01a1bcc0-d868-7912-a616-acafbcb7dba5
   author: joe
