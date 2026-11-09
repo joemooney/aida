@@ -515,7 +515,7 @@ fn verify(receipt: &Receipt, signed: &Signed, roster: &Roster) -> Result<()> {
     ensure!(
         matches!(
             receipt.decision.as_str(),
-            "approved" | "request-changes" | "rejected"
+            "approved" | "request-changes" | "rejected" | "waiting"
         ),
         "unsupported receipt decision"
     );

@@ -110,7 +110,7 @@ pub enum ReviewCommand {
         #[clap(value_parser = crate::spec_arg::spec_id)]
         spec: String,
 
-        /// The verdict: approved, request-changes, or rejected.
+        /// The verdict: approved, request-changes, rejected, or waiting.
         #[clap(long, value_name = "VERDICT")]
         verdict: String,
 

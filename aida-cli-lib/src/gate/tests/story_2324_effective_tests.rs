@@ -884,3 +884,37 @@ fn foreign_uuid_sequences_are_separate_and_display_labels_are_normalized() {
     let s = state(&[r], &["BUG-2403"], &view(events), HEAD_A);
     assert!(matches!(s.decision, Decision::Mergeable { .. }), "{s:?}");
 }
+
+/// trace:BUG-2500 | ai:codex
+#[test]
+fn bug_2500_ledger_waiting_blocks_both_heads_until_fresh_review() {
+    let r = subject();
+    for label in [Some("BUG-2403"), None] {
+        let mut waiting = verdict_ev(1, label, "waiting", HEAD_A);
+        if let EventBody::Verdict { record } = &mut waiting.body {
+            record.insert(
+                "summary".into(),
+                "CI: required Build pending; reviewer resumes at this head after settlement".into(),
+            );
+        }
+        for head in [HEAD_A, HEAD_B] {
+            let s = state(
+                &[r.clone()],
+                &["BUG-2403"],
+                &view(vec![waiting.clone()]),
+                head,
+            );
+            assert!(matches!(s.verdict, Verdict::Waiting { .. }));
+            assert!(refusals(&s).contains(&Refusal::Waiting));
+            assert_eq!(s.hold, Hold::None);
+        }
+        let fresh = verdict_ev(2, label, "approved", HEAD_B);
+        let s = state(
+            &[r.clone()],
+            &["BUG-2403"],
+            &view(vec![waiting, fresh]),
+            HEAD_B,
+        );
+        assert!(matches!(s.decision, Decision::Mergeable { .. }));
+    }
+}
