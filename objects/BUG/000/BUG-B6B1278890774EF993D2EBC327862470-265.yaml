@@ -8,7 +8,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-08T19:02:09.839960883Z
-modified_at: 2026-11-09T02:54:06.777353516Z
+modified_at: 2026-11-09T02:54:09.385537666Z
 req_type: Bug
 relationships:
 - rel_type:
@@ -146,6 +146,26 @@ comments:
   content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: Core waiting verdict is sound, but several status and routing paths still mishandle it (ship-ready/mergeable reporting, derived hold, reviewer routing at a moved head, merge closure), and the new early gates broaden refusals.. No triage reason was given.'
   created_at: 2026-11-09T02:54:06.777350705Z
   modified_at: 2026-11-09T02:54:06.777350705Z
+  session_id: 20abb7c3-8f9b-4a5e-b326-404921f3b450
+- id: 01a1be3a-3965-77a3-b19a-654622faa287
+  author: joe
+  content: |-
+    REVIEW FINDINGS TO ADDRESS (BUG-2500):
+    Verdict: CHANGES REQUESTED
+    Reviewed commit: 088641d618d1
+    Recorded: 2026-11-09T02:19:33.114636099+00:00
+    Findings:
+    1. aida-cli-lib/src/awaiting_you.rs:511 classify_pr_review now filters refusals by requires_changes() with no Waiting branch. A PR with only a WAITING verdict at head returns suppressed=false and no row, so it stays in the mergeable set with no blocked row. With a same-reviewer approval under the sibling alias at that head it is classified mergeable, and idle_eligible.rs:180 reports it ship-ready. Sketch item 4 requires waiting to be preserved through status output and to stop before merge. Required: treat an open Waiting as suppressing, with a distinct row, and add a classify_pr_review table case plus an idle_eligible case.
+    2. aida-cli-lib/src/gate/review_verdict.rs:424 and :429 corpus_hold_at_head still uses blocks_done(), so a WAITING at the current head yields a CorpusHold that awaiting_you.rs:1685 reports as a derived Rework hold. Sketch item 4 and the docs say waiting never produces a Rework hold. The hold-arming sites were audited but this derived-hold view was missed. Required: use requires_changes() here and test that Waiting yields None.
+    3. aida-cli-lib/src/gate/review_verdict.rs:3063 review_actionability returns Waiting before the tip-relation check, so a waiting verdict at an older head stays Waiting after the implementer pushes. Reviewer routing counts only NeedsReview (queue_cmd/list.rs:661 and :1209, awaiting_you.rs:2356), so the moved head drops out of the reviewer's work. Sketch item 5 says a changed head needs ordinary current-head review. Required: return Waiting only at AtReviewedSha (NeedsReview otherwise), keeping the gate refusal, with a test across tip relations.
+    4. aida-cli-lib/src/gate/review_verdict.rs:2891 close_verdict_on_merge changed to requires_changes(), so a merge never closes a WAITING record, leaving the !is_closed() checks in refuse_wait (queue_cmd/work.rs) and is_open_refusal dead for it. Example: spec key WAITING, PR key approved fresh and merged; the spec-keyed WAITING stays open, so queue_done_verdict_gate and resolve_rework_findings refuse that spec indefinitely. Required: close waiting on merge as blocks_done() did, and test it.
+    5. aida-cli-lib/src/queue_cmd/rework.rs:552 propagates every resolve_rework_findings error before mutation, while the existing call at rework.rs:812 deliberately downgrades those errors to a warning and continues. Unselectable reviews and multiple bound refusals (work.rs ambiguity error) now abort queue rework, unrelated to waiting. It also runs before for_role is considered, so a --for reviewer route is refused with 'no implementer rework is queued'. Required: refuse only the waiting outcome, for implementer routes, e.g. a typed waiting result or dedicated helper, with a test that the warning path still proceeds.
+    6. aida-cli-lib/src/queue_cmd/work.rs:3836 early admission gate differs from the launch path at work.rs:4190: it lacks the !plan_only && !guided filter, so plan-only and guided pickups that previously bypassed resolve errors are now refused for any error, without the existing 'refusing to launch ... Read the review' guidance. It also checks only plan.entries.first(), so a multi-entry plan whose later spec is WAITING still launches implementer work, against sketch item 3. Required: match the existing filters, limit the early refusal to waiting, and check every plan entry, with a multi-entry test.
+    7. aida-cli-lib/src/phase_gates.rs:482 headless-no-head sibling sweep assigns blocking = Some(candidate) for RequestChanges, Rejected and Waiting alike, so the last candidate wins. A RequestChanges candidate followed by a Waiting candidate returns Waiting, which stops as an escalation without implementer rework. Sketch item 4 says a wait cannot conceal substantive findings. Required: never let Waiting replace a substantive blocker, with a test for both candidate orders.
+    8. aida-cli-lib/src/gate_state_cmd.rs:157 today's-category probe still returns changes-requested for any open blocks_done() verdict, including Waiting, while verdict_category returns waiting at gate_state_cmd.rs:44. The gate-state comparison therefore reports a false mismatch for every waiting PR. Required: give the probe a waiting category before the refused check, with a test.
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
+  created_at: 2026-11-09T02:54:09.253276273Z
+  modified_at: 2026-11-09T02:54:09.253276273Z
   session_id: 20abb7c3-8f9b-4a5e-b326-404921f3b450
 history:
 - id: 01a1bcc0-f95b-7082-8ca7-a86211b6ddd8
