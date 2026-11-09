@@ -8,7 +8,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-08T18:38:43.709546225Z
-modified_at: 2026-11-09T06:24:37.341525026Z
+modified_at: 2026-11-09T06:53:53.304193086Z
 req_type: Bug
 comments:
 - id: 01a1bc8c-5761-7180-b3a9-aa9efdae2409
@@ -132,6 +132,13 @@ comments:
   modified_at: 2026-11-09T06:24:37.341525026Z
   session_id: 01a1bef59242
   harness_version: codex-cli 0.167.0
+- id: 01a1bf15-b518-7173-a74b-86a8e42fe652
+  author: joe
+  content: 'ADVISOR RUBBIN: CI has failed this same check on repeated pushes; pushing again without fixing it will fail again. Do not merge main or push until this exact failure is fixed. #3693: CI (lib-1) fails task_1750_liveness_primitive_guard_tests::proc_identity_legacy_decisions_do_not_expand: aida-cli-lib/src/ownership/reader.rs adds 1 new private process identity decision. Fix: route that decision through proc_identity; do not raise the baseline. Local gate: one targeted cargo test --profile agent -p aida-cli-lib <filter> plus make check-ci-fast, then push; run long cargo in background.'
+  created_at: 2026-11-09T06:53:53.304193086Z
+  modified_at: 2026-11-09T06:53:53.304193086Z
+  session_id: 01a1beff-fc3b-78e2-93e2-9b0c283b0339
+  harness_version: 2.1.319 (Claude Code)
 history:
 - id: 01a1bc76-cd85-7f81-93f5-51ee03fadbe7
   author: aida-session-start
