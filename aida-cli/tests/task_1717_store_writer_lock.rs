@@ -1117,7 +1117,12 @@ fn read_sync_pull_holds_the_lock_and_leaves_foreign_rebase_alone() {
     std::fs::create_dir_all(git_dir.join("rebase-merge")).unwrap();
     std::fs::write(git_dir.join("rebase-merge/owner"), "someone else\n").unwrap();
     let out = fx.run(&["list", "--sync"]);
-    assert!(text(&out).contains("--sync pull failed"), "{}", text(&out));
+    assert!(!out.status.success(), "{}", text(&out));
+    assert!(
+        text(&out).contains("store rebase in progress"),
+        "{}",
+        text(&out)
+    );
     assert!(
         git_dir.join("rebase-merge/owner").exists(),
         "a rebase this command did not start is not aborted"

@@ -2078,10 +2078,9 @@ pub fn pull_rebase(repo: &Path, remote: &str, branch: &str) -> Result<()> {
             !rebase_in_progress(repo),
             "store pull refused: rebase already in progress; resolve or abort it before retrying"
         );
-        anyhow::ensure!(
-            !has_tracked_changes_checked(repo)?,
-            "store pull refused: uncommitted changes; commit or stash the store before retrying"
-        );
+        if has_tracked_changes_checked(repo)? {
+            return Err(DirtyStoreRefusal("store pull refused: uncommitted changes; commit or stash the store before retrying".into()).into());
+        }
         let gate = evidence::preflight(repo, &target)?;
         // trace:BUG-2501 | ai:codex
         if let StorePullOutcome::AutoMerged { notes } = rebase_auto_merge_onto(repo, &target)? {
@@ -2118,15 +2117,12 @@ pub fn has_tracked_changes_checked(repo: &Path) -> Result<bool> {
 
 /// Pending tracked writes need operator action, never an offline fallback.
 // trace:BUG-2501 | ai:codex
+#[derive(Debug, thiserror::Error)]
+#[error("{0}")]
+pub struct DirtyStoreRefusal(pub String);
+
 pub fn is_dirty_store_refusal(error: &anyhow::Error) -> bool {
-    error.chain().any(|cause| {
-        cause
-            .to_string()
-            .contains("store pull refused: uncommitted changes")
-            || cause
-                .to_string()
-                .contains("store publication retry refused: pending store changes")
-    })
+    error.downcast_ref::<DirtyStoreRefusal>().is_some()
 }
 
 /// Retry a rejected store publication without stashing or committing another
@@ -2135,12 +2131,13 @@ pub fn is_dirty_store_refusal(error: &anyhow::Error) -> bool {
 pub fn pull_rebase_store_retry(repo: &Path, remote: &str, branch: &str) -> Result<()> {
     evidence::with_sync_lock(repo, || {
         if has_changes_checked(repo)? {
-            anyhow::bail!(
+            return Err(DirtyStoreRefusal(format!(
                 "store publication retry refused: pending store changes at {}. \
                  Automatic stashing is disabled; pending changes were preserved. \
                  Review and commit the pending store changes on the host, then retry the command",
                 repo.display()
-            );
+            ))
+            .into());
         }
         pull_rebase(repo, remote, branch)
     })
@@ -2208,10 +2205,9 @@ pub fn pull_rebase_auto_merge(repo: &Path, remote: &str, branch: &str) -> Result
             !rebase_in_progress(repo),
             "store pull refused: rebase already in progress; resolve or abort it before retrying"
         );
-        anyhow::ensure!(
-            !has_tracked_changes_checked(repo)?,
-            "store pull refused: uncommitted changes; commit or stash the store before retrying"
-        );
+        if has_tracked_changes_checked(repo)? {
+            return Err(DirtyStoreRefusal("store pull refused: uncommitted changes; commit or stash the store before retrying".into()).into());
+        }
         let gate = evidence::preflight(repo, &target)?;
         let outcome = rebase_auto_merge_onto(repo, &target)?;
         if let Some(gate) = gate {
@@ -5805,7 +5801,7 @@ pub fn suggest_free_node_id(aida_repo: &Path, requested: &str) -> Result<NodeIdP
             // Offline stays best-effort; a refused sync stops the probe.
             // trace:BUG-2017 | ai:claude
             if let Err(e) = pull_rebase(aida_repo, "origin", &branch) {
-                if is_sync_refusal(&e) {
+                if is_sync_refusal(&e) || is_dirty_store_refusal(&e) {
                     return Err(e);
                 }
             }

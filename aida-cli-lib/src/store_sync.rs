@@ -1264,7 +1264,7 @@ fn pull_store_allocation_retry(
                 anyhow::bail!(
                     "store allocation pull failed after {} attempt(s): {}",
                     retry_max,
-                    crate::store_pull_failure_hint(store_path, &e.to_string())
+                    crate::store_pull_failure_hint(store_path, &e)
                 );
             }
         }
@@ -1719,6 +1719,9 @@ pub(crate) fn maybe_sync_pull(store_path: &std::path::Path) -> Result<()> {
         }
         let branch = aida_core::git_ops::current_branch(store_path)
             .unwrap_or_else(|_| "aida-store".to_string());
+        if !aida_core::git_ops::probe_remote_branch(store_path, "origin", &branch)? {
+            return Ok(SyncPull::NoBranch);
+        }
         eprintln!("{} pulling origin/{} (--sync)", "→".dimmed(), branch);
         Ok(
             match aida_core::git_ops::pull_rebase(store_path, "origin", &branch) {
@@ -1739,8 +1742,9 @@ pub(crate) fn maybe_sync_pull(store_path: &std::path::Path) -> Result<()> {
         )
     });
     match pulled {
+        Ok(SyncPull::NoBranch) => {}
         Ok(SyncPull::Dirty) => {
-            anyhow::bail!("store pull refused: uncommitted changes; commit or stash the store before retrying");
+            return Err(aida_core::git_ops::DirtyStoreRefusal("store pull refused: uncommitted changes; commit or stash the store before retrying".into()).into());
         }
         Ok(SyncPull::Pulled) => {
             // Best-effort: refresh the statusline freshness signal so
@@ -1764,6 +1768,7 @@ pub(crate) fn maybe_sync_pull(store_path: &std::path::Path) -> Result<()> {
 /// Outcome of `maybe_sync_pull`'s locked window.
 // trace:TASK-1717 | ai:claude
 enum SyncPull {
+    NoBranch,
     Dirty,
     Pulled,
     Failed(anyhow::Error),
@@ -1975,6 +1980,38 @@ mod pull_failure_tests {
         assert_eq!(std::fs::read_to_string(repo.join("seed")).unwrap(), "dirty");
     }
 
+    // trace:BUG-2501 | ai:codex
+    #[test]
+    fn sync_pull_skips_remote_without_store_branch() {
+        let temp = tempfile::tempdir().unwrap();
+        let repo = temp.path().join("store");
+        let remote = temp.path().join("remote.git");
+        std::fs::create_dir_all(&repo).unwrap();
+        aida_core::git_ops::init(&repo).unwrap();
+        aida_core::git_ops::configure_user(&repo, "Test", "test@example.com").unwrap();
+        std::fs::write(repo.join("seed"), "seed").unwrap();
+        aida_core::git_ops::add(&repo, &["seed"]).unwrap();
+        aida_core::git_ops::commit(&repo, "seed").unwrap();
+        let git = |args: &[&str]| {
+            let out = crate::test_git::git_command()
+                .arg("-C")
+                .arg(&repo)
+                .args(args)
+                .output()
+                .unwrap();
+            assert!(out.status.success(), "{out:?}");
+        };
+        git(&["init", "--bare", remote.to_str().unwrap()]);
+        git(&["remote", "add", "origin", remote.to_str().unwrap()]);
+        let head = aida_core::git_ops::head_sha(&repo).unwrap();
+        maybe_sync_pull(&repo).unwrap();
+        // A remote with other branches is also a normal first-store-publication state.
+        git(&["push", "origin", "HEAD:refs/heads/unrelated"]);
+        maybe_sync_pull(&repo).unwrap();
+        assert_eq!(aida_core::git_ops::head_sha(&repo).unwrap(), head);
+        assert!(!aida_core::git_ops::rebase_in_progress(&repo));
+    }
+
     #[test]
     fn sync_pull_refuses_dirty_store_and_unreachable_remote() {
         let temp = tempfile::tempdir().unwrap();
@@ -1997,8 +2034,11 @@ mod pull_failure_tests {
             .unwrap();
         assert!(output.status.success());
         std::fs::write(repo.join("seed"), "dirty").unwrap();
-        let error = maybe_sync_pull(repo).unwrap_err().to_string();
-        assert!(error.contains("uncommitted changes"), "{error}");
+        let error = maybe_sync_pull(repo).unwrap_err();
+        assert!(
+            aida_core::git_ops::is_dirty_store_refusal(&error),
+            "{error}"
+        );
         let hint = crate::store_pull_failure_hint(repo, &error);
         assert!(hint.contains("commit or stash"), "{hint}");
         assert!(!hint.contains("git rebase --abort"), "{hint}");
