@@ -1584,3 +1584,317 @@ fn prd_reentry_and_rotation_use_only_the_exact_ownership_holder() {
     ));
     assert!(reader::require_rotation_owner(dir.path(), "rotation").is_err());
 }
+
+/// Pickup preserves the legacy lease rule while admitted production witnesses
+/// retain exact-generation and namespace safety.
+// trace:TASK-3420 | ai:codex
+#[test]
+fn task_3420_pickup_retains_unknown_and_releases_only_matching_dead_owner() {
+    let tmp = tempfile::tempdir().unwrap();
+    let root = tmp.path();
+    let _ambient = crate::test_env::AmbientGuard::hermetic_with_seat(root, "implementer", &[]);
+    assert!(std::process::Command::new("git")
+        .args(["init", "-q"])
+        .current_dir(root)
+        .status()
+        .unwrap()
+        .success());
+    let mut item = lease("pickup", "PR-3420", "");
+    item.active_pid = Some(u32::MAX);
+    let key = WorkKey::Change {
+        change: dual::change(3420),
+    };
+    assert!(
+        !super::reader::lease_retained(root, &item),
+        "crashed legacy holder releases"
+    );
+    let store = OwnershipStore::for_project(root).unwrap().unwrap();
+    let legacy = dual::holder_for_lease(&item, &WriterFacts::here(), Utc::now());
+    assert!(legacy.witnesses.is_empty());
+    store
+        .update(&key, "legacy", Expect::Any, |_| {
+            Some((
+                Ownership {
+                    key: key.clone(),
+                    generation: 0,
+                    holder: Some(legacy),
+                    phase: Phase::Leased,
+                },
+                None,
+            ))
+        })
+        .unwrap();
+    assert!(
+        !super::reader::lease_retained(root, &item),
+        "legacy holder without witnesses uses the old lease rule"
+    );
+
+    let mut command = std::process::Command::new("sleep");
+    command.arg("30");
+    let capture = aida_core::proc_identity::prepare_command(&mut command).unwrap();
+    let mut child = command.spawn().unwrap();
+    let admission = capture.finish(&mut child);
+    admission.validate().unwrap();
+    item.active_pid = Some(child.id());
+    item.active_pid_start_time = crate::process_probe::process_start_identity(child.id());
+    item.hostname = crate::coordination::hostname();
+    item.pid_namespace = aida_core::process_probe::ProbeSource::system()
+        .pid_namespace(child.id())
+        .ok();
+    item.holder_record = Some(serde_json::to_string(&admission).unwrap());
+    let holder = dual::holder_for_lease(&item, &WriterFacts::here(), Utc::now());
+    assert!(
+        holder.witnesses.iter().any(|w| w.admission.is_some()),
+        "production witness must be admitted"
+    );
+    store
+        .update(&key, "test", Expect::Any, |_| {
+            Some((
+                Ownership {
+                    key: key.clone(),
+                    generation: 0,
+                    holder: Some(holder),
+                    phase: Phase::Leased,
+                },
+                None,
+            ))
+        })
+        .unwrap();
+    assert!(super::reader::lease_retained(root, &item));
+    child.kill().unwrap();
+    child.wait().unwrap();
+    assert!(!super::reader::lease_retained(root, &item));
+    item.worktree_path = root.to_path_buf();
+    item.tree_kind = crate::seat_clone::TreeKind::Clone;
+    assert!(
+        crate::leases::lease_adoption_refusal(root, &item).is_none(),
+        "dead hint and adoption agree"
+    );
+    store
+        .update(&key, "namespace", Expect::Any, |current| {
+            let mut changed = current.unwrap().clone();
+            let witness = &mut changed.holder.as_mut().unwrap().witnesses[0];
+            let mut admission = serde_json::to_value(witness.admission.as_ref().unwrap()).unwrap();
+            admission["identity"]["pidns_inode"] = serde_json::json!(1);
+            witness.admission = Some(serde_json::from_value(admission).unwrap());
+            if let WitnessKind::Process { pid_ns, .. } = &mut witness.kind {
+                *pid_ns = Some(1);
+            }
+            Some((changed, None))
+        })
+        .unwrap();
+    assert!(
+        matches!(super::reader::lease_owner(root, &item), OwnerVerdict::Unknown { why } if why.contains("NamespaceMismatch"))
+    );
+    assert!(super::reader::lease_retained(root, &item));
+    assert!(
+        crate::leases::lease_adoption_refusal(root, &item).is_some(),
+        "unknown hint and adoption agree"
+    );
+    std::fs::write(store.path_for(&key), "corrupt").unwrap();
+    assert!(super::reader::lease_retained(root, &item));
+}
+
+/// Each migrated observation preserves its own legacy rule; ownership Unknown
+/// from absent admission must never make a live or unrecorded owner adoptable.
+// trace:TASK-3420 | ai:codex
+#[test]
+fn task_3420_legacy_rules_preserve_adoption_and_dormant_observations() {
+    use super::reader::{LeaseReader, LegacyRule};
+    let tmp = tempfile::tempdir().unwrap();
+    let root = tmp.path();
+    let _ambient = crate::test_env::AmbientGuard::hermetic_with_seat(root, "implementer", &[]);
+    assert!(std::process::Command::new("git")
+        .args(["init", "-q"])
+        .current_dir(root)
+        .status()
+        .unwrap()
+        .success());
+    let mut item = lease("legacy", "PR-3421", "");
+    item.started_at = Utc::now();
+    item.hostname = crate::coordination::hostname();
+    item.worktree_path = root.join("tree");
+    std::fs::create_dir(&item.worktree_path).unwrap();
+    item.tree_kind = crate::seat_clone::TreeKind::Clone;
+    item.active_pid = None;
+    item.active_pid_start_time = None;
+    item.creator_pid = None;
+    item.creator_pid_start_time = None;
+    let reader = LeaseReader::new(root);
+    for creator in [None, Some(std::process::id())] {
+        item.creator_pid = creator;
+        item.creator_pid_start_time =
+            creator.and_then(crate::process_probe::process_start_identity);
+        assert!(!matches!(
+            reader.pickup_owner(&item, LegacyRule::Adoption),
+            OwnerVerdict::Dead { .. }
+        ));
+        assert!(crate::leases::lease_adoption_refusal(root, &item).is_some());
+        assert!(!matches!(
+            reader.pickup_owner(&item, LegacyRule::NonStale),
+            OwnerVerdict::Dead { .. }
+        ));
+        assert!(!matches!(
+            reader.pickup_owner(&item, LegacyRule::Review),
+            OwnerVerdict::Dead { .. }
+        ));
+    }
+    item.creator_pid = Some(u32::MAX);
+    item.creator_pid_start_time = None;
+    let key = WorkKey::Change {
+        change: dual::change(3421),
+    };
+    let mut holder = dual::holder_for_lease(&item, &WriterFacts::here(), Utc::now());
+    // Production legacy process envelope: identity recorded, admission absent.
+    holder.witnesses = vec![Witness {
+        admission: None,
+        kind: WitnessKind::Process {
+            host: crate::coordination::hostname(),
+            id: ProcessIdentity {
+                pid: u32::MAX,
+                start: format!("linux:{BOOT}:9"),
+            },
+            pid_ns: WriterFacts::here().pid_ns,
+        },
+        recorded_at: Utc::now(),
+    }];
+    OwnershipStore::for_project(root)
+        .unwrap()
+        .unwrap()
+        .update(&key, "test", Expect::Any, |_| {
+            Some((
+                Ownership {
+                    key: key.clone(),
+                    generation: 0,
+                    holder: Some(holder),
+                    phase: Phase::Leased,
+                },
+                None,
+            ))
+        })
+        .unwrap();
+    assert!(matches!(
+        reader::lease_owner(root, &item),
+        OwnerVerdict::Unknown { .. }
+    ));
+    assert!(matches!(
+        reader.pickup_owner(&item, LegacyRule::Adoption),
+        OwnerVerdict::Dead { .. }
+    ));
+    // Adoption preserves dirty contents and commits lacking an origin.
+    let git = |args: &[&str]| {
+        let out = crate::test_git::git_command()
+            .args(args)
+            .current_dir(&item.worktree_path)
+            .output()
+            .unwrap();
+        assert!(
+            out.status.success(),
+            "{}",
+            String::from_utf8_lossy(&out.stderr)
+        );
+        out.stdout
+    };
+    git(&["init", "-q"]);
+    std::fs::write(item.worktree_path.join("committed"), "unpushed").unwrap();
+    git(&["add", "committed"]);
+    git(&[
+        "-c",
+        "user.name=Test",
+        "-c",
+        "user.email=test@example.com",
+        "-c",
+        "core.hooksPath=/dev/null",
+        "commit",
+        "-qm",
+        "local only",
+    ]);
+    let head = git(&["rev-parse", "HEAD"]);
+    std::fs::write(item.worktree_path.join("dirty"), "keep me").unwrap();
+    assert!(crate::leases::lease_adoption_refusal(root, &item).is_none());
+    assert_eq!(git(&["rev-parse", "HEAD"]), head);
+    assert_eq!(
+        std::fs::read_to_string(item.worktree_path.join("dirty")).unwrap(),
+        "keep me"
+    );
+}
+
+// Production handoff removes the holder. Refused captures are also legacy,
+// both before the ownership row exists and after the writer persists it.
+// trace:TASK-3420 | ai:codex
+#[test]
+fn task_3420_handoff_and_refused_capture_preserve_legacy_rules() {
+    use super::reader::{LeaseReader, LegacyRule};
+    let tmp = tempfile::tempdir().unwrap();
+    let root = tmp.path();
+    let _ambient = crate::test_env::AmbientGuard::hermetic_with_seat(root, "implementer", &[]);
+    assert!(crate::test_git::git_command()
+        .args(["init", "-q"])
+        .current_dir(root)
+        .status()
+        .unwrap()
+        .success());
+    let store = OwnershipStore::for_project(root).unwrap().unwrap();
+    for refused in [false, true] {
+        for shape in 0..3 {
+            let n = 3430 + u64::from(refused) * 3 + shape;
+            let mut item = lease("legacy", &format!("PR-{n}"), "");
+            item.hostname = crate::coordination::hostname();
+            item.started_at = Utc::now() - chrono::Duration::days(2);
+            item.holder_record = refused.then(|| {
+                serde_json::to_string(&aida_core::proc_identity::HolderRecord::refused(
+                    aida_core::proc_identity::HolderRefusal::EvidenceUnavailable(
+                        "capture unavailable".into(),
+                    ),
+                ))
+                .unwrap()
+            });
+            let key = WorkKey::Change {
+                change: dual::change(n),
+            };
+            for alive in [false, true] {
+                item.active_pid = Some(if alive { std::process::id() } else { u32::MAX });
+                item.active_pid_start_time = item
+                    .active_pid
+                    .and_then(crate::process_probe::process_start_identity);
+                item.creator_pid = item.active_pid;
+                item.creator_pid_start_time = item.active_pid_start_time.clone();
+                if shape != 0 {
+                    let holder = (shape == 1)
+                        .then(|| dual::holder_for_lease(&item, &WriterFacts::here(), Utc::now()));
+                    store
+                        .update(&key, "test", Expect::Any, |_| {
+                            Some((
+                                Ownership {
+                                    key: key.clone(),
+                                    generation: 0,
+                                    holder,
+                                    phase: Phase::InPr {
+                                        change: dual::change(n),
+                                        handed_off_at: Utc::now(),
+                                        handed_off_by: Some(item.id.clone()),
+                                        head: "head".into(),
+                                    },
+                                },
+                                None,
+                            ))
+                        })
+                        .unwrap();
+                }
+                let reader = LeaseReader::new(root);
+                for rule in [
+                    LegacyRule::Pickup,
+                    LegacyRule::Adoption,
+                    LegacyRule::NonStale,
+                    LegacyRule::Review,
+                ] {
+                    assert_eq!(
+                        matches!(reader.pickup_owner(&item, rule), OwnerVerdict::Dead { .. }),
+                        !alive,
+                        "refused={refused} shape={shape} alive={alive}"
+                    );
+                }
+            }
+        }
+    }
+}
