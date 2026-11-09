@@ -23,7 +23,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-07T20:45:16.684639200Z
-modified_at: 2026-11-09T09:11:27.424671915Z
+modified_at: 2026-11-09T09:17:22.040936448Z
 req_type: Task
 relationships:
 - rel_type: Child
@@ -395,6 +395,12 @@ history:
   - field_name: status
     old_value: InProgress
     new_value: NeedsAttention
+- id: 01a1bf99-1185-7492-91ab-1626d0e99822
+  author: joe
+  timestamp: 2026-11-09T09:17:22.181215699Z
+  session_id: 01a1bf9619d7
+  harness_version: 2.1.319 (Claude Code)
+  changes: []
 filed_at:
   code_sha: e278eeb1d8f95dadba5f6e9d8bfd41d10eac52c3
   branch: main
@@ -408,7 +414,7 @@ failure_reason:
   phase: reviewer
   phase_index: 3
   kind: verdict:request-changes
-  detail: 'Part B routes the probes through ownership::reader, but this head adds only a merge of main: the 2026-11-08 advisor ruling is still unimplemented (no legacy-holder fallback, adoption hint on a different judge, no batch fix, no production-shape tests) and four queue_cmd ratchet entries remain. CI pending at this head; Part A is out of scope for this Refs slice.'
+  detail: 'The advisor-ruling rework landed (named legacy fallback, shared hint/adoption gate, batch reader, admitted-witness tests), but the fallback is lease_is_live for every probe, which is not main''s rule at adoption or review progress: a Dormant legacy lease with a live or unrecorded owner becomes adoptable. The adopted-orphan sweep still bypasses the fallback, four queue_cmd ratchet entries remain, and CI is pending at this head. Part A is out of scope for this Refs slice.'
   recovery_hint: address the review findings, move TASK-3420 back to In Progress, and clear the PR hold only after approval
   shelved_by: reviewer
-  shelved_at: 2026-11-09T08:52:29.896574292Z
+  shelved_at: 2026-11-09T09:17:22.040936448Z
