@@ -133,7 +133,7 @@ class BudgetTest(unittest.TestCase):
 
     def test_committed_budget_file_loads(self):
         b = tt.load_budget(str(REPO / "scripts/test-time-budget.toml"))
-        self.assertEqual(b.default_limit, 10)
+        self.assertEqual(b.default_limit, 30)
         self.assertTrue(all(v > b.default_limit for v in b.entries.values()))
         # Per-test keys (STORY-1853 AC4): `<nextest binary id> <test name>`.
         # trace:TASK-1988 | ai:claude
