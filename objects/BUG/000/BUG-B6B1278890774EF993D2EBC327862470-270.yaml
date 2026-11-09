@@ -8,7 +8,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-09T03:00:45.690194532Z
-modified_at: 2026-11-09T06:11:04.434675974Z
+modified_at: 2026-11-09T07:12:32.873822792Z
 req_type: Bug
 tags:
 - area:cli
@@ -40,6 +40,13 @@ comments:
   modified_at: 2026-11-09T06:11:01.187109974Z
   session_id: 01a1bee8fa4d
   harness_version: codex-cli 0.167.0
+- id: 01a1bf26-ca69-74e2-b751-769b3f52dad3
+  author: joe
+  content: 'ADVISOR RULING: the last round pushed only merges from main, so these findings are unaddressed. Do not merge main or push until the code changes. #3714: the PR adds only a test and never reproduces or root-causes aida add exiting without a spec for a tag like from:2026-11-08-review-closeout. Reproduce it, fix the cause. If it cannot be reproduced, say so and change the title to Refs so merge does not complete the bug. Local gate: one targeted cargo test --profile agent plus make check-ci-fast, then push.'
+  created_at: 2026-11-09T07:12:32.873822792Z
+  modified_at: 2026-11-09T07:12:32.873822792Z
+  session_id: 01a1beff-fc3b-78e2-93e2-9b0c283b0339
+  harness_version: 2.1.319 (Claude Code)
 history:
 - id: 01a1beaa-5541-7fd1-9192-5cf255b115f3
   author: joe
