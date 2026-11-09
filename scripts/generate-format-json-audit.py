@@ -17,6 +17,8 @@ from pathlib import Path
 
 
 VERIFIED = {
+    # trace:STORY-2571 | ai:codex
+    "aida advisor loops status": "advisor loops status (not configured)",
     # trace:STORY-2402 | ai:codex
     "aida condition check": "condition check manual:joe",
     # Local attachments always emit JSON; validate also has a --json projection.
