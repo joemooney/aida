@@ -8,7 +8,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-06T13:39:53.442026Z
-modified_at: 2026-11-08T23:48:42.135958677Z
+modified_at: 2026-11-09T01:50:40.369938910Z
 req_type: Task
 tags:
 - architecture
@@ -1432,6 +1432,12 @@ comments:
     Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
   created_at: 2026-11-08T23:46:08.005869083Z
   modified_at: 2026-11-08T23:46:08.005869083Z
+  session_id: 20abb7c3-8f9b-4a5e-b326-404921f3b450
+- id: 01a1be00-1af1-7da0-a928-9f0c9c402702
+  author: joe
+  content: 'Advisor ruling 2026-11-08 on PR-3661 findings 1-2: staged partial authorized. PR-3661 ships as Refs and does not complete this task. The zero-unrouted criterion stays open here and is not waived; mediated_blockers counting every operation row means it cannot reach zero in this slice. Reason: the launch gate stays closed (selected_store_profile refuses the mediated profile), so merging grants no runtime authority. Follow-up owners: TASK-3326 for multi-root claim/queue participants, TASK-3224 for real-vendor proof of the shared-boundary profile, remaining operation routing stays on this task. Reviewer: judge the slice against this ruling; CI green at head and independent approval are still required.'
+  created_at: 2026-11-09T01:50:40.369938910Z
+  modified_at: 2026-11-09T01:50:40.369938910Z
   session_id: 20abb7c3-8f9b-4a5e-b326-404921f3b450
 history:
 - id: 01a1b116-742d-73c0-9064-1933f11e4c38
