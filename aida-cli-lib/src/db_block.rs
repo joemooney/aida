@@ -232,7 +232,12 @@ pub(crate) fn fold_run(run: &[&aida_core::AgreedIdBlock]) -> MergedBlockRow {
 // trace:BUG-2017 | ai:claude
 fn pull_unless_refused(store_path: &std::path::Path, remote: &str, branch: &str) -> Result<()> {
     match aida_core::git_ops::pull_rebase(store_path, remote, branch) {
-        Err(e) if aida_core::git_ops::is_sync_refusal(&e) => Err(e),
+        Err(e)
+            if aida_core::git_ops::is_sync_refusal(&e)
+                || aida_core::git_ops::is_dirty_store_refusal(&e) =>
+        {
+            Err(e)
+        }
         _ => Ok(()),
     }
 }
@@ -1862,6 +1867,47 @@ mod task_1930_tests {
             (mig_start, mig_end),
             (501, 600),
             "doctor_migrate_counter_scope_in_store must re-read blocks.yaml inside lock and start above fresh highest_end=500"
+        );
+    }
+}
+
+// trace:BUG-2501 | ai:codex
+#[cfg(test)]
+mod dirty_pull_tests {
+    #[test]
+    fn dirty_store_refuses_block_pull() {
+        let dir = tempfile::tempdir().unwrap();
+        let repo = dir.path().join("store");
+        let remote = dir.path().join("remote.git");
+        let git = |args: &[&str]| {
+            let out = crate::test_git::git_command()
+                .arg("-C")
+                .arg(&repo)
+                .args(args)
+                .output()
+                .unwrap();
+            assert!(out.status.success(), "{out:?}");
+        };
+        aida_core::git_ops::init(&repo).unwrap();
+        aida_core::git_ops::configure_user(&repo, "Test", "test@example.com").unwrap();
+        std::fs::write(repo.join("seed"), "seed").unwrap();
+        aida_core::git_ops::add(&repo, &["seed"]).unwrap();
+        aida_core::git_ops::commit(&repo, "seed").unwrap();
+        git(&["init", "--bare", remote.to_str().unwrap()]);
+        git(&["remote", "add", "origin", remote.to_str().unwrap()]);
+        let branch = aida_core::git_ops::current_branch(&repo).unwrap();
+        assert!(aida_core::git_ops::push(&repo, "origin", &branch).unwrap());
+        let head = aida_core::git_ops::head_sha(&repo).unwrap();
+        std::fs::write(repo.join("seed"), "pending").unwrap();
+        let error = super::pull_unless_refused(&repo, "origin", &branch).unwrap_err();
+        assert!(
+            aida_core::git_ops::is_dirty_store_refusal(&error),
+            "{error:#}"
+        );
+        assert_eq!(aida_core::git_ops::head_sha(&repo).unwrap(), head);
+        assert_eq!(
+            std::fs::read_to_string(repo.join("seed")).unwrap(),
+            "pending"
         );
     }
 }

@@ -3,7 +3,7 @@ description: Run /aida-review.
 ---
 # AIDA Review
 
-Drive a PR review to completion — checklist, verdicts, fix-forward, merge, mark-complete.
+Drive a PR review through checklist and verdict; record waiting for external evidence, or proceed to merge and completion after approval.
 
 ## Usage
 
@@ -21,18 +21,18 @@ Follow the workflow in `.claude/skills/aida-review/SKILL.md`:
 1. Resolve the PR number from the active session lease's scope, or accept `--pr N`
 1a. `aida review claim --pr N` to mark PR-N under review, so a merge surface refuses to land it before your verdict; `aida review record` (step 6) clears it
 2. `aida review prompt --pr N --write .aida/review-prompt-pr-N.md` to generate the per-spec checklist (STORY-67)
-3. Walk each spec: read the diff against acceptance criteria, run the test plan, post a ✅ PASS / ⚠️ PARTIAL / ❌ FAIL verdict with evidence
+3. Walk each spec: read the diff against acceptance criteria, run the test plan, post a ✅ PASS / ⚠️ PARTIAL / ❌ FAIL verdict with evidence; use WAITING when only external CI or host evidence is missing
 4. Fix-forward mechanical issues (fmt drift, cfg-gated tests, typos) as small commits; never fix-forward semantic gaps
-5. Gate on CI green (`gh run watch` if a run is in-flight)
+5. Gate on CI green. If required CI or host evidence is unavailable, record `waiting` with dependency, responsible actor and resume condition, omit `--finding`, then stop for a fresh review at the current head.
 6. **Record the verdict FIRST** — before the PR comment, before any merge, before exit.
    This is the orchestrator's phase-3 → phase-4 handshake; a review that skips it reads as
    "the review did not complete" no matter how good the prose verdict was, and the PR comment
    is only its human-facing projection. Run:
 
    ```
-   aida review record <SPEC> --pr N --verdict approved|request-changes|rejected \
+   aida review record <SPEC> --pr N --verdict approved|request-changes|rejected|waiting \
      --summary "one line of why" \
-     --finding "concrete issue for the rework implementer"
+     [--finding "concrete issue for the rework implementer"]
    ```
 
    The verb writes both the spec verdict and the handshake file
@@ -40,7 +40,7 @@ Follow the workflow in `.claude/skills/aida-review/SKILL.md`:
    out into another directory, which is exactly the case where a hand-written file lands
    somewhere the orchestrator never looks. (Hand-writing the JSON — `{"verdict": "Approved",
    "summary": "…", "mode": "orchestrator-phase-3", "findings": []}`, verdict one of `Approved` /
-   `RequestChanges` / `Rejected` — still works, but only from the original repository root.)
+   `RequestChanges` / `Rejected` / `waiting` — still works, but only from the original repository root.)
    Under a headless drain, when a merge needs a human (irreversible migration, uncertain
    provenance), add `"merge": "escalated-to-human"` to the handshake file instead of merging.
 7. Post a consolidated review comment with the verdict table
@@ -51,3 +51,12 @@ Follow the workflow in `.claude/skills/aida-review/SKILL.md`:
 11. Hand off — the user runs `aida session end` themselves from outside the worktree
 
 Pairs with `/aida-pr` (implementer side) and `/aida-code-review` (orthogonal exhaustive audit — NOT a substitute).
+
+<!-- trace:BUG-2500 | ai:codex -->
+A review blocked solely on external CI or host evidence records `waiting`
+(displayed `WAITING`), with a summary naming the dependency, responsible actor
+and resume condition, and no substantive findings. Code defects still require
+`request-changes`. Waiting blocks completion and merge without implementer
+rework, repeat-findings credit or a Rework hold. Existing holds remain intact.
+Only a fresh recorded review at the current head ends the wait; green CI or
+a changed head alone does not. There is no automatic resume service.

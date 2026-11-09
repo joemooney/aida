@@ -172,6 +172,16 @@ pub(crate) struct RealPhaseDriver {
     // trace:STORY-2326 | ai:codex
     #[cfg(test)]
     pub(crate) aida_exe: std::path::PathBuf,
+    // Keep real retry/watchdog control flow in tests without production waits.
+    // trace:TASK-3608 | ai:codex
+    #[cfg(test)]
+    pub(crate) retry_wait: Option<std::time::Duration>,
+    #[cfg(test)]
+    pub(crate) watchdog_poll: Option<std::time::Duration>,
+    // Synchronize the receipt/watchdog fixture with child lease publication.
+    // trace:TASK-3749 | ai:codex
+    #[cfg(test)]
+    pub(crate) watchdog_ready: Option<std::path::PathBuf>,
     /// STORY-263: headless mode. `Some` → the reviewer phase is launched
     /// headless (`claude -p`); the implementer phase stays interactive in
     /// this cut (STORY-276 wires it). `None` → fully interactive.
@@ -671,6 +681,12 @@ impl RealPhaseDriver {
             ci_terminal_green: None,
             #[cfg(test)]
             aida_exe: resolve_aida_exe(),
+            #[cfg(test)]
+            retry_wait: None,
+            #[cfg(test)]
+            watchdog_poll: None,
+            #[cfg(test)]
+            watchdog_ready: None,
             no_human,
             autonomy_mode,
             exit_cfg: exit_signal::ExitSignalConfig::from_env(),
@@ -2602,6 +2618,23 @@ impl RealPhaseDriver {
         ensure_implementer_branch_pushed(worktree, branch, self.json)
     }
 
+    // Cleanup cannot turn confirmed no-change into NeedsAttention.
+    // Retain the lease identifier when manual recovery is needed.
+    // trace:TASK-3608 | ai:codex
+    pub(crate) fn end_no_change_session(&mut self) {
+        match self.end_implementer_session() {
+            Ok(()) => self.implementer_lease = None,
+            Err(e) => {
+                if !self.json {
+                    eprintln!(
+                        "no-change confirmed, but ending the implementer session failed ({}); release it manually: aida session end",
+                        e.reason
+                    );
+                }
+            }
+        }
+    }
+
     /// End the implementer session: `aida session end <lease> --yes --skip-ci`.
     /// Releases the lease, returns the warm-pool worktree to idle, and (only
     /// when an OPEN PR still exists on the branch) auto-queues the `Review
@@ -2800,6 +2833,15 @@ impl RealPhaseDriver {
     /// fallback and the BUG-257 `git ls-remote` narrowing. Mutates `self.branch`
     /// when the spec-id search recovers a swapped branch. trace:TASK-136
     pub(crate) fn detect_phase1_pr(&mut self, branch: &str) -> Phase1PrResolve {
+        self.detect_phase1_pr_after_exit(branch, false)
+    }
+
+    // trace:TASK-3608 | ai:codex
+    pub(crate) fn detect_phase1_pr_after_exit(
+        &mut self,
+        branch: &str,
+        native_no_change: bool,
+    ) -> Phase1PrResolve {
         // STORY-516: forge-routed branch lookup (view op). The inner spec-id
         // search (detect_open_pr_for_spec) is the LIST op — routed in a later
         // slice — so it stays PrLookup here. The BUG-444/BUG-257 narrowing
@@ -2847,6 +2889,20 @@ impl RealPhaseDriver {
                         );
                         Phase1PrResolve::Found(pr)
                     }
+                    // No publication occurred, so empty open-PR observations
+                    // cannot be a race with this seat creating a new PR.
+                    // trace:TASK-3608 | ai:codex
+                    PrLookup::NoOpenPr if native_no_change => Phase1PrResolve::NoPr,
+                    // Failed spec searches cannot exclude a PR on a swapped branch.
+                    // trace:TASK-3608 | ai:codex
+                    ref other if native_no_change => Phase1PrResolve::Retry(match other {
+                        PrLookup::GhFailed(why) | PrLookup::GhUnreachable(why) => {
+                            format!("could not confirm an empty spec PR search: {why}")
+                        }
+                        _ => "could not confirm an empty spec PR search: forge CLI unavailable"
+                            .into(),
+                    }),
+
                     // BUG-444: both the `--head` and `--search` lookups returned
                     // empty-BUT-SUCCESSFUL. These are eventually-consistent GitHub
                     // LIST queries (`--search` hits the search index, which lags PR
@@ -2907,6 +2963,18 @@ impl RealPhaseDriver {
                 Phase1PrResolve::Fail(auto_complete::PhaseFailure::of(
                     auto_complete::FailureKind::MissingTool,
                     "`gh` is not on PATH — auto-complete needs it to track the PR",
+                ))
+            }
+            // A receipt proves no publication by this seat, not the absence
+            // of an existing PR (possibly on a swapped branch). Never narrow
+            // a failed lookup to NoPr using origin presence in this case.
+            // trace:TASK-3608 | ai:codex
+            crate::forge::ChangeLookup::CliFailed(why)
+            | crate::forge::ChangeLookup::Unreachable(why)
+                if native_no_change =>
+            {
+                Phase1PrResolve::Retry(format!(
+                    "could not confirm an empty branch PR lookup for `{branch}`: {why}"
                 ))
             }
             crate::forge::ChangeLookup::CliFailed(why) => {

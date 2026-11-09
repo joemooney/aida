@@ -303,6 +303,7 @@ pub(crate) fn batch_outcome_label(outcome: &auto_complete::BatchDrainOutcome) ->
         BatchDrainOutcome::Stalled => "stalled",
         BatchDrainOutcome::Mismatched { .. } => "mismatched",
         BatchDrainOutcome::Inconclusive => "inconclusive",
+        BatchDrainOutcome::NoChange => "no-change",
         BatchDrainOutcome::Held => "held",
         BatchDrainOutcome::DrainedWithShelved => "drained-with-shelved",
         BatchDrainOutcome::EnvironmentBlocked { .. } => "environment-blocked", // trace:BUG-1930 | ai:claude
@@ -1256,6 +1257,10 @@ pub(crate) fn emit_next_n_drain_summary(
                 "→".dimmed()
             );
         }
+        // trace:TASK-3608 | ai:codex
+        BatchDrainOutcome::NoChange => {
+            eprintln!("drain stopped: no-change — nothing published");
+        }
         // BUG-250: a member deliberately held its PR — pause for the gate.
         // trace:BUG-250 | ai:claude
         BatchDrainOutcome::Held => {
@@ -1377,7 +1382,10 @@ pub(crate) fn record_auto_complete_run(
         spec_id: spec.to_string(),
         started_at: started_at.to_rfc3339(),
         completed_at: completed_at.to_rfc3339(),
-        outcome: if result.exit_code == 0 {
+        // trace:TASK-3749 | ai:codex
+        outcome: if result.no_change {
+            "no-change".to_string()
+        } else if result.exit_code == 0 {
             "success".to_string()
         } else {
             "failed".to_string()

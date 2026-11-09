@@ -670,9 +670,10 @@ fn fill_branches(sessions: &mut [SessionMeta]) {
     }
 }
 
+// trace:BUG-2488 | ai:codex — status discovery also observes the host Git boundary.
 fn resolve_branch(cwd: &str) -> Option<String> {
-    let out = std::process::Command::new("git")
-        .args(["-C", cwd, "branch", "--show-current"])
+    let out = aida_core::git_ops::host_git_command(Path::new(cwd))
+        .args(["branch", "--show-current"])
         .output()
         .ok()?;
     if !out.status.success() {
@@ -6683,6 +6684,7 @@ pub(crate) fn exec_vendor_headless(
     seat: &str,
     child_grant: &crate::gate::seat_authority::HeadlessChildGrant,
     lane_tree: Option<(&Path, &str)>,
+    record_no_change: bool,
 ) -> Result<()> {
     let status = run_vendor_headless_to_exit(
         host_main,
@@ -6696,6 +6698,7 @@ pub(crate) fn exec_vendor_headless(
         seat,
         child_grant,
         lane_tree,
+        record_no_change,
     )?;
     std::process::exit(status.code().unwrap_or(1));
 }
@@ -6716,16 +6719,16 @@ pub(crate) fn run_vendor_headless_to_exit(
     seat: &str,
     child_grant: &crate::gate::seat_authority::HeadlessChildGrant,
     lane_tree: Option<(&Path, &str)>,
+    record_no_change: bool,
 ) -> Result<std::process::ExitStatus> {
     let drain_lane = drain_resume_lane(vendor, seat, lease_id, lane_tree);
     // trace:TASK-2902 | ai:codex
-    if vendor == HeadlessVendor::Codex {
-        if let Some((_, (tree, _))) = implementer_job_lane(seat, lease_id, lane_tree) {
-            crate::native_publication::prepare(
-                &crate::main_worktree_root_from(&headless_worktree_root()),
-                tree,
-            )?;
+    if let Some((_, (tree, _))) = implementer_job_lane(seat, lease_id, lane_tree) {
+        let main = crate::main_worktree_root_from(&headless_worktree_root());
+        if vendor == HeadlessVendor::Codex {
+            crate::native_publication::prepare(&main, tree)?;
         }
+        // Prior-attempt signals remain until the final spawn boundary below.
     }
 
     // BUG-2383: the drain's phase-1 implementer gets the standalone launch's
@@ -6758,6 +6761,23 @@ pub(crate) fn run_vendor_headless_to_exit(
                         child_grant.env_value(),
                         &HeadlessChildHooks {
                             customize: Some(apply_lane_env),
+                            before_spawn: Some(&|| {
+                                if !resume {
+                                    if let Some((lease, (tree, _))) =
+                                        implementer_job_lane(seat, lease_id, lane_tree)
+                                    {
+                                        let scope = crate::list_leases(&main_root)
+                                            .into_iter()
+                                            .find(|l| l.id == lease)
+                                            .context("publication lease disappeared")?
+                                            .scope;
+                                        crate::standalone_implementer::provision_attempt_signals(
+                                            &main_root, tree, &scope,
+                                        )?;
+                                    }
+                                }
+                                Ok(())
+                            }),
                             resume,
                             hold_reap: hold,
                             ..HeadlessChildHooks::default()
@@ -6798,12 +6818,13 @@ pub(crate) fn run_vendor_headless_to_exit(
                 .find(|l| l.id == lease)
                 .context("publication lease disappeared")?
                 .scope;
-            crate::ship_from_seat::publish_queue_exit(
+            crate::ship_from_seat::publish_queue_exit_recorded(
                 &main_root,
                 tree,
                 &scope,
                 lease,
                 status.success(),
+                record_no_change,
             )?;
         }
     }
@@ -6919,13 +6940,23 @@ pub(crate) fn drain_lane_with_resume(
     );
     let launch_head = bg::seat_head(worktree);
     let signalled = || {
-        [
-            crate::punt::SIGNAL_FILE_ENV,
-            crate::punt::HOLD_SIGNAL_FILE_ENV,
-        ]
-        .iter()
-        .filter_map(std::env::var_os)
-        .any(|p| !p.is_empty() && Path::new(&p).exists())
+        // trace:BUG-2488 | ai:codex
+        let main = crate::main_worktree_root_from(worktree);
+        let seat_signal = crate::list_leases(&main)
+            .into_iter()
+            .find(|l| l.id == lease)
+            .is_some_and(|l| {
+                crate::punt::signal_path(worktree, &l.scope).exists()
+                    || crate::punt::hold_signal_path(worktree, &l.scope).exists()
+            });
+        seat_signal
+            || [
+                crate::punt::SIGNAL_FILE_ENV,
+                crate::punt::HOLD_SIGNAL_FILE_ENV,
+            ]
+            .iter()
+            .filter_map(std::env::var_os)
+            .any(|p| !p.is_empty() && Path::new(&p).exists())
     };
     let lane = bg::ResumeLoop {
         can_resume: true,
@@ -7153,6 +7184,8 @@ pub(crate) fn scrub_launcher_session_env(cmd: &mut std::process::Command) {
 pub(crate) struct HeadlessChildHooks<'a> {
     pub(crate) customize: Option<&'a dyn Fn(&mut std::process::Command)>,
     pub(crate) on_spawn: Option<&'a dyn Fn(u32)>,
+    /// Consume prior-attempt markers only after command policy/prepare succeeds.
+    pub(crate) before_spawn: Option<&'a dyn Fn() -> Result<()>>,
     /// BUG-044: `--resume` the existing `session_id` instead of starting it
     /// (Claude only; the launcher never asks another vendor to resume).
     pub(crate) resume: bool,
@@ -7305,6 +7338,22 @@ fn run_vendor_headless_child(
     if let Some(customize) = hooks.customize {
         customize(&mut child_cmd);
     }
+    // The drain parent carries host paths; the vendor can write only its seat.
+    // trace:BUG-2488 | ai:codex
+    if let Some(id) = lease_id
+        .filter(|_| lease_root.is_none() && crate::canonical_role_name(seat) == "implementer")
+    {
+        let main = crate::main_worktree_root_from(&headless_worktree_root());
+        let lease = crate::list_leases(&main)
+            .into_iter()
+            .find(|l| l.id == id)
+            .context("implementer lease disappeared before signal transport")?;
+        crate::standalone_implementer::apply_seat_signals(
+            &mut child_cmd,
+            &lease.worktree_path,
+            &lease.scope,
+        );
+    }
     // trace:TASK-3225 | ai:codex — an explicit requirement cannot downgrade to native.
     crate::containment::launch::require_store_service_surface(&child_cmd, wrapper)?;
     // BUG-050: name the lane's processes, so its launcher finds the build it
@@ -7335,12 +7384,15 @@ fn run_vendor_headless_child(
         // a dropped ContainedChild kills the wrapper.
         let mut registered = false;
         let result = (|| -> Result<std::process::ExitStatus> {
-            let mut run = crate::containment::launch::PreparedLaunch::prepare(
+            let prepared = crate::containment::launch::PreparedLaunch::prepare(
                 &mut child_cmd,
                 &headless_worktree_root(),
                 host_main,
-            )?
-            .spawn(Stdio::from(log))?;
+            )?;
+            if let Some(before_spawn) = hooks.before_spawn {
+                before_spawn()?;
+            }
+            let mut run = prepared.spawn(Stdio::from(log))?;
             anyhow::ensure!(
                 containment_applied(vendor, true, Some(run.receipt())),
                 "missing applied receipt"
@@ -7388,6 +7440,12 @@ fn run_vendor_headless_child(
     // trace:STORY-2537 trace:BUG-2458 | ai:codex
     #[cfg(target_os = "linux")]
     let holder_capture = aida_core::proc_identity::prepare_command(&mut child_cmd)?;
+    if let Some(before_spawn) = hooks.before_spawn {
+        if let Err(error) = before_spawn() {
+            tee.stop();
+            return Err(error);
+        }
+    }
     let mut child = child_cmd
         .stdout(Stdio::from(log))
         .spawn_retrying_etxtbsy()
@@ -8172,6 +8230,13 @@ pub(crate) fn spawn_claude_headless_resume_granted(
         // trace:TASK-2631 | ai:codex
         cmd.env("AIDA_CONTAINMENT_POSTURE", "none");
     }
+    // Consume prior-attempt markers only after resume preparation succeeds.
+    // trace:BUG-2488 | ai:codex
+    if let Err(error) = prepare_resume_attempt_signals(host_main, cwd, seat, &mut cmd) {
+        tee.stop();
+        revoke_headless_child_grant(&child_grant.id);
+        return Err(error);
+    }
     // A watch-launched reviewer is recorded before the wait. trace:TASK-1993 | ai:claude
     let status = reviewer_status_with_handle_guard(cmd.stdout(Stdio::from(log)), &mut handle_guard)
         .context("failed to spawn claude")?;
@@ -8179,6 +8244,32 @@ pub(crate) fn spawn_claude_headless_resume_granted(
     // trace:BUG-B6B1278890774EF993D2EBC327862470-151 | ai:claude
     record_headless_session_end(cwd, session_id);
     Ok((status, child_grant.id))
+}
+
+// trace:BUG-2488 | ai:codex
+pub(crate) fn prepare_resume_attempt_signals(
+    host_main: Option<&Path>,
+    cwd: &Path,
+    seat: &str,
+    cmd: &mut std::process::Command,
+) -> Result<()> {
+    if crate::canonical_role_name(seat) != "implementer" {
+        return Ok(());
+    }
+    let main = host_main
+        .map(Path::to_path_buf)
+        .unwrap_or_else(|| crate::main_worktree_root_from(cwd));
+    let canonical = cwd.canonicalize()?;
+    if let Some(lease) = crate::list_leases(&main)
+        .into_iter()
+        .find(|lease| lease.worktree_path.canonicalize().ok().as_ref() == Some(&canonical))
+    {
+        let (punt, hold) =
+            crate::standalone_implementer::provision_attempt_signals(&main, cwd, &lease.scope)?;
+        cmd.env(crate::punt::SIGNAL_FILE_ENV, punt)
+            .env(crate::punt::HOLD_SIGNAL_FILE_ENV, hold);
+    }
+    Ok(())
 }
 
 /// BUG-2386: what a headless resume continues — the vendor that recorded the
@@ -8247,6 +8338,21 @@ pub(crate) fn spawn_vendor_headless_resume_granted(
             cwd,
         )?;
     }
+    // Unleased resumes remain supported; only leased implementers receive the
+    // seat-local handshake. Resolve aliases before comparing runtime paths.
+    // trace:BUG-2488 | ai:codex
+    let signal_scope = if crate::canonical_role_name(seat) == "implementer" {
+        let main = host_main
+            .map(Path::to_path_buf)
+            .unwrap_or_else(|| crate::main_worktree_root_from(cwd));
+        let canonical_cwd = cwd.canonicalize()?;
+        crate::list_leases(&main)
+            .into_iter()
+            .find(|l| l.worktree_path.canonicalize().ok().as_ref() == Some(&canonical_cwd))
+            .map(|l| l.scope)
+    } else {
+        None
+    };
     let effective_prompt = codex_inline_prompt(prompt).unwrap_or_else(|| prompt.to_string());
     if let Some(dir) = log_path.parent() {
         std::fs::create_dir_all(dir)
@@ -8300,6 +8406,13 @@ pub(crate) fn spawn_vendor_headless_resume_granted(
         .env("AIDA_DRIVE_ROOT", headless_worktree_root())
         .env("PATH", drive_path_env().unwrap_or_default())
         .envs(crate::headless_wait_envs(ceiling_key, &ceiling_value));
+    // trace:BUG-2488 | ai:codex — an unleased resume must not inherit a
+    // launcher-only path outside its writable tree.
+    cmd.env_remove(crate::punt::SIGNAL_FILE_ENV)
+        .env_remove(crate::punt::HOLD_SIGNAL_FILE_ENV);
+    if let Some(scope) = signal_scope.as_deref() {
+        crate::standalone_implementer::apply_seat_signals(&mut cmd, cwd, scope);
+    }
     let mut handle_guard = child_reservation_guard();
     apply_resumed_child_agent_identity(&mut cmd, vendor, seat, target.session_id);
     apply_headless_harness_version(host_main, &mut cmd, vendor, cwd);
@@ -8315,6 +8428,20 @@ pub(crate) fn spawn_vendor_headless_resume_granted(
         tee.stop();
         revoke_headless_child_grant(&child_grant.id);
         return Err(error);
+    }
+    // A refused resume must retain the persisted hold so admission can retry.
+    // trace:BUG-2488 | ai:codex
+    if let Some(scope) = signal_scope.as_deref() {
+        let main = host_main
+            .map(Path::to_path_buf)
+            .unwrap_or_else(|| crate::main_worktree_root_from(cwd));
+        if let Err(error) =
+            crate::standalone_implementer::provision_attempt_signals(&main, cwd, scope)
+        {
+            tee.stop();
+            revoke_headless_child_grant(&child_grant.id);
+            return Err(error);
+        }
     }
     let status = reviewer_status_with_handle_guard(cmd.stdout(Stdio::from(log)), &mut handle_guard)
         .context("failed to spawn codex")?;

@@ -61,7 +61,14 @@ pub(crate) enum Verdict {
         carried_over: bool,
     },
     /// An open refusal answers.
-    ChangesRequested { seq: u64, findings: Vec<String> },
+    ChangesRequested {
+        seq: u64,
+        findings: Vec<String>,
+    },
+    Waiting {
+        seq: u64,
+        summary: Option<String>,
+    },
     /// The approval does not cover the head.
     Stale {
         seq: u64,
@@ -70,16 +77,22 @@ pub(crate) enum Verdict {
         reason: String,
     },
     /// The newest record's verdict word is not recognised: never approves.
-    Unrecognized { seq: u64, raw: String },
+    Unrecognized {
+        seq: u64,
+        raw: String,
+    },
     /// The evidence cannot be read safely.
-    Unsafe { reason: String },
+    Unsafe {
+        reason: String,
+    },
 }
 
 impl Verdict {
     fn rank(&self) -> u8 {
         match self {
-            Self::Unsafe { .. } => 5,
-            Self::ChangesRequested { .. } => 4,
+            Self::Unsafe { .. } => 6,
+            Self::ChangesRequested { .. } => 5,
+            Self::Waiting { .. } => 4,
             Self::Unrecognized { .. } => 3,
             Self::Stale { .. } => 2,
             Self::Approved { .. } => 1,
@@ -129,6 +142,7 @@ pub(crate) enum Refusal {
     },
     HoldOpen,
     ChangesRequested,
+    Waiting,
     UnrecognizedVerdict,
     StaleApproval,
     NoApproval,
@@ -263,6 +277,10 @@ fn sequence_verdict(
             seq: newest.seq,
             findings: v.findings.clone(),
         },
+        VerdictKind::Waiting => Verdict::Waiting {
+            seq: newest.seq,
+            summary: v.summary.clone(),
+        },
         VerdictKind::Unknown => Verdict::Unrecognized {
             seq: newest.seq,
             raw: v.raw.clone(),
@@ -278,6 +296,12 @@ fn sequence_verdict(
                     }
             });
             if let Some((e, Some(r))) = later_refusal {
+                if r.kind == VerdictKind::Waiting {
+                    return Verdict::Waiting {
+                        seq: e.seq,
+                        summary: r.summary.clone(),
+                    };
+                }
                 return Verdict::ChangesRequested {
                     seq: e.seq,
                     findings: r.findings.clone(),
@@ -496,6 +520,7 @@ pub(crate) fn effective_gate_state(
             matches!(
                 v,
                 Verdict::ChangesRequested { .. }
+                    | Verdict::Waiting { .. }
                     | Verdict::Unrecognized { .. }
                     | Verdict::Unsafe { .. }
             )
@@ -585,6 +610,7 @@ pub(crate) fn effective_gate_state(
     }
     match &verdict {
         Verdict::ChangesRequested { .. } => refusals.push(Refusal::ChangesRequested),
+        Verdict::Waiting { .. } => refusals.push(Refusal::Waiting),
         Verdict::Unrecognized { .. } => refusals.push(Refusal::UnrecognizedVerdict),
         Verdict::Stale { .. } => refusals.push(Refusal::StaleApproval),
         Verdict::Absent => refusals.push(Refusal::NoApproval),

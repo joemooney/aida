@@ -3034,14 +3034,20 @@ pub(crate) fn collect_unshipped_work_items_bounded(
                 let spec_completed = status_by_spec
                     .get(&c.spec_id.to_ascii_uppercase())
                     .is_some_and(|status| status.as_str() == "completed");
-                (sha_matches && crate::gate::review_verdict::is_outstanding_refusal(&verdict, spec_completed))
+                // trace:BUG-2500 | ai:codex — reporting must retain external waits.
+                (sha_matches && (crate::gate::review_verdict::is_outstanding_refusal(&verdict, spec_completed)
+                    || (!spec_completed && !verdict.is_closed()
+                        && verdict.kind == crate::gate::review_verdict::VerdictKind::Waiting)))
                     .then_some(verdict)
             });
             let recovery = if let Some(verdict) = &outstanding_verdict {
-                format!(
+                if verdict.kind == crate::gate::review_verdict::VerdictKind::Waiting {
+                    format!("WAITING: {}; resume with a fresh review at this head",
+                        verdict.summary.as_deref().unwrap_or("external evidence required"))
+                } else { format!(
                     "do not ship — this commit carries an unresolved reviewer verdict ({}); resolve the review first",
                     verdict.raw
-                )
+                ) }
             } else if c.possible_review_snapshot {
                 // BUG-1531: name-shaped like a review snapshot but the forge
                 // never confirmed it — kept visible, no ship hint (PRIN-5).
@@ -4300,6 +4306,51 @@ exit 1
             !row.recovery.contains("aida pr ship"),
             "an unverified row must carry no ship hint: {row:?}"
         );
+    }
+
+    // trace:BUG-2500 | ai:codex
+    #[test]
+    fn bug_2500_unshipped_waiting_tip_requires_fresh_review() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        init_repo(root);
+        branch_with_commit(root, "bug-2500-work", "BUG-2500");
+        let tip = git_output_checked(root, &["rev-parse", "bug-2500-work"]).unwrap();
+        let dir = root.join(".aida/review-verdicts");
+        std::fs::create_dir_all(&dir).unwrap();
+        let path = dir.join("BUG-2500.json");
+        for (verdict, closed, waits) in [
+            ("waiting", false, true),
+            ("approved", false, false),
+            ("waiting", true, false),
+        ] {
+            std::fs::write(
+                &path,
+                serde_json::json!({
+                    "verdict": verdict, "reviewed_sha":tip.trim(),
+                    "summary":"Host: run probe; resume with evidence",
+                    "closed_by_merge": if closed { Some("merge-sha") } else { None },
+                })
+                .to_string(),
+            )
+            .unwrap();
+            let rows =
+                collect_unshipped_work_items(root, &[summary("BUG-2500", "Done")], true, false);
+            let row = rows
+                .iter()
+                .find(|row| row.branch == "bug-2500-work")
+                .unwrap();
+            if waits {
+                assert!(
+                    row.recovery.contains("WAITING") && row.recovery.contains("fresh review"),
+                    "{row:?}"
+                );
+                assert!(row.recovery.contains("Host:"));
+                assert!(!row.recovery.contains("aida pr ship"));
+            } else {
+                assert!(row.recovery.contains("aida pr ship"), "{row:?}");
+            }
+        }
     }
 
     // BUG-1531 criterion 3 + 6: a refusal binds to a COMMIT, not to a PR

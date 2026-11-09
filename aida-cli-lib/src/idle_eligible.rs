@@ -473,6 +473,28 @@ mod tests {
         )
         .unwrap();
     }
+    // trace:BUG-2500 | ai:codex
+    #[test]
+    fn bug_2500_waiting_is_never_ship_ready_with_sibling_approval() {
+        let t = setup();
+        let root = t.path();
+        verdict(root, "waiting", "abcdef1234");
+        std::fs::write(
+            root.join(".aida/review-verdicts/BUG-2500.json"),
+            serde_json::json!({"verdict":"approved", "reviewed_sha":"abcdef1234",
+                "recorded_at":"2026-11-03T04:40:00Z"})
+            .to_string(),
+        )
+        .unwrap();
+        assert!(local_kind(root, 42, "abcdef1234", "work (BUG-2500)", "topic").is_none());
+        assert!(current(
+            root,
+            snapshot("abcdef1234", "pass"),
+            &Cache::default(),
+            now()
+        )
+        .is_empty());
+    }
     #[test]
     fn idle_eligible_review_becomes_due_and_resets_on_head_or_action() {
         let t = setup();

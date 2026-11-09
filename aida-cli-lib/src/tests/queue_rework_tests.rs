@@ -2025,3 +2025,281 @@ fn rework_ruling_is_recorded_as_a_tagged_spec_comment() {
     assert_eq!(ruling.content, "Advisor ruling: widen to the test");
     assert!(crate::queue_cmd::record_rework_ruling(&storage, "BUG-021", "  ").is_err());
 }
+
+/// trace:BUG-2500 | ai:codex
+#[test]
+fn bug_2500_repeated_waiting_rework_leaves_status_comments_and_queue_unchanged() {
+    if crate::test_env::run_path_isolated_test() {
+        return;
+    }
+    let _guard = crate::test_env::env_lock();
+    let prev_cwd = std::env::current_dir().unwrap();
+    let tmp = tempfile::tempdir().unwrap();
+    let root = tmp.path();
+    std::fs::create_dir(root.join(".git")).unwrap();
+    let store_root = root.join(".aida-store");
+    let backend = crate::test_env::home_fixture_backend(&store_root).unwrap();
+    // Keep the synthetic authority setting private under the host shared-write umask.
+    use std::os::unix::fs::PermissionsExt;
+    let common = aida_core::allocation_authority::common_dir(&store_root).unwrap();
+    std::fs::set_permissions(
+        common.join(aida_core::allocation_authority::CONFIG_FILE),
+        std::fs::Permissions::from_mode(0o600),
+    )
+    .unwrap();
+    let storage = Storage::new(&store_root);
+    let mut req = req_for_test("BUG-2500", RequirementStatus::Done);
+    req.title = "external evidence wait".to_string();
+    let mut store = aida_core::RequirementsStore::default();
+    store.requirements.push(req);
+    backend.save(&store).unwrap();
+    crate::gate::review_verdict::record_verdict(
+        root,
+        "BUG-2500",
+        Some("waiting"),
+        Some("34031ff4a06c1d24c08846619f87aaa66b31dec7"),
+        None,
+        Some("Host: operator runs probe; resume review with its evidence"),
+        &[],
+        "reviewer",
+    )
+    .unwrap();
+    let before = storage.load().unwrap();
+    std::env::set_current_dir(root).unwrap();
+    let results: Vec<_> = (0..3)
+        .map(|_| {
+            handle_queue_rework(
+                &storage,
+                "BUG-2500",
+                false,
+                Some("implementer"),
+                false,
+                None,
+                Some("retry"),
+                false,
+                false,
+                false,
+                None,
+                true,
+                Some("codex"),
+            )
+        })
+        .collect();
+    std::env::set_current_dir(prev_cwd).unwrap();
+    for result in results {
+        assert!(result.unwrap_err().to_string().contains("WAITING"));
+    }
+    let after = storage.load().unwrap();
+    let before_req = before.get_requirement_by_spec_id("BUG-2500").unwrap();
+    let after_req = after.get_requirement_by_spec_id("BUG-2500").unwrap();
+    assert_eq!(before_req.status, after_req.status);
+    assert_eq!(before_req.comments.len(), after_req.comments.len());
+    assert_eq!(before.requirements.len(), after.requirements.len());
+    assert!(storage.queue_list("codex", true).unwrap().is_empty());
+    assert!(storage
+        .queue_list("role:implementer", true)
+        .unwrap()
+        .is_empty());
+    assert!(crate::gate::merge_hold_core::read_hold(root, 3698).is_none());
+}
+
+// trace:BUG-2502 | ai:codex
+#[test]
+fn bug_2502_rework_of_punt_retains_approval_with_imported_review() {
+    bug_2502_rework_with_imported_review(true);
+}
+
+// trace:BUG-2502 | ai:codex
+#[test]
+fn bug_2502_rework_of_ci_shelf_retains_approval_with_imported_review() {
+    bug_2502_rework_with_imported_review(false);
+}
+
+// trace:BUG-2502 | ai:codex
+fn bug_2502_rework_with_imported_review(punted: bool) {
+    let (tmp, storage) = story_1429_fixture(vec![parked("BUG-2502")]);
+    let _seat = crate::test_env::AmbientGuard::hermetic_with_seat(tmp.path(), "advisor", &[]);
+    let verdicts = tmp.path().join(".aida/review-verdicts");
+    std::fs::create_dir_all(&verdicts).unwrap();
+    std::fs::write(
+        verdicts.join("BUG-2502.json"),
+        r#"{"verdict":"RequestChanges","summary":"fix A","findings":["fix A"]}"#,
+    )
+    .unwrap();
+    let block = resolve_rework_findings(tmp.path(), "BUG-2502", "BUG-2502", None)
+        .unwrap()
+        .expect("fixture review is selected");
+    storage
+        .update_atomically(|store| {
+            let req = store
+                .requirements
+                .iter_mut()
+                .find(|r| r.spec_id.as_deref() == Some("BUG-2502"))
+                .unwrap();
+            req.add_comment(aida_core::Comment::new("reviewer".into(), block));
+            if punted {
+                // A punt may coexist with a retained reviewer failure marker.
+                let failure = req.failure_reason.as_mut().unwrap();
+                failure.phase = "reviewer".into();
+                failure.kind = "verdict:request-changes".into();
+                req.attention_reason = Some(aida_core::AttentionReason {
+                    category: aida_core::PuntCategory::BlockedDependency,
+                    detail: "advisor decision required".into(),
+                    lean: None,
+                    raised_by: None,
+                    raised_at: chrono::Utc::now(),
+                });
+            }
+        })
+        .unwrap();
+    rework_as(&storage, "BUG-2502", None, false).unwrap();
+    assert_eq!(status_of(&storage, "BUG-2502"), RequirementStatus::Approved);
+    assert_eq!(storage.queue_list("codex", true).unwrap().len(), 1);
+    let store = storage.load().unwrap();
+    let req = store.get_requirement_by_spec_id("BUG-2502").unwrap();
+    assert!(req.attention_reason.is_none());
+    assert!(req.failure_reason.is_none());
+    assert_eq!(
+        req.comments
+            .iter()
+            .filter(|c| crate::review_verdict_display::is_findings_block(&c.content))
+            .count(),
+        1
+    );
+}
+
+// trace:BUG-2502 | ai:codex
+#[test]
+fn bug_2502_loop_guard_requires_a_blocking_reviewer_shelf() {
+    let mut req = parked("BUG-2502");
+    assert!(
+        !rework_is_review_shelf(&req),
+        "CI failures are not repeat reviews"
+    );
+    for kind in [
+        "verdict:request-changes",
+        "verdict:rejected",
+        "verdict:reject",
+    ] {
+        let failure = req.failure_reason.as_mut().unwrap();
+        failure.phase = "reviewer".into();
+        failure.kind = kind.into();
+        assert!(rework_is_review_shelf(&req), "retain the guard for {kind}");
+    }
+    req.status = RequirementStatus::Approved;
+    assert!(!rework_is_review_shelf(&req));
+}
+
+// trace:BUG-2502 | ai:codex
+#[test]
+fn bug_2502_deliberate_status_edit_exits_loop_guard_shelf() {
+    let mut req = parked("BUG-2502");
+    req.failure_reason = None;
+    req.status = RequirementStatus::Approved;
+    assert!(loop_guard_park(&mut req));
+    req.add_comment(aida_core::Comment::new(
+        "advisor".into(),
+        "investigating".into(),
+    ));
+    assert!(rework_is_review_shelf(&req));
+    aida_core::conflict::set_status_recorded(&mut req, RequirementStatus::Approved, "advisor");
+    assert!(!rework_is_review_shelf(&req));
+    aida_core::conflict::set_status_recorded(
+        &mut req,
+        RequirementStatus::NeedsAttention,
+        "advisor",
+    );
+    assert!(
+        !rework_is_review_shelf(&req),
+        "older loop history grants no shelf"
+    );
+}
+
+// trace:BUG-2502 | ai:codex
+#[test]
+fn bug_2502_repeated_blocking_review_is_parked_before_requeue() {
+    for (kind, verdict) in [
+        ("verdict:request-changes", "RequestChanges"),
+        ("verdict:rejected", "Rejected"),
+        ("verdict:reject", "Rejected"),
+    ] {
+        let mut req = parked("BUG-2502");
+        let failure = req.failure_reason.as_mut().unwrap();
+        failure.phase = "reviewer".into();
+        failure.kind = kind.into();
+        let (tmp, storage) = story_1429_fixture(vec![req]);
+        let _seat = crate::test_env::AmbientGuard::hermetic_with_seat(tmp.path(), "advisor", &[]);
+        let verdicts = tmp.path().join(".aida/review-verdicts");
+        std::fs::create_dir_all(&verdicts).unwrap();
+        std::fs::write(
+            verdicts.join("BUG-2502.json"),
+            serde_json::json!({"verdict": verdict, "summary": "fix A", "findings": ["fix A"]})
+                .to_string(),
+        )
+        .unwrap();
+        let block = resolve_rework_findings(tmp.path(), "BUG-2502", "BUG-2502", None)
+            .unwrap()
+            .expect("fixture review is selected");
+        storage
+            .update_atomically(|store| {
+                let req = store.get_requirement_by_spec_id_mut("BUG-2502").unwrap();
+                req.add_comment(aida_core::Comment::new("reviewer".into(), block));
+            })
+            .unwrap();
+
+        let log = tmp.path().join("advisor-commands.log");
+        let fake = tmp.path().join("fake-aida");
+        crate::test_exec::write_executable(
+            &fake,
+            format!(
+                "#!/bin/sh\nprintf '%s\\n' \"$1 $2\" >> '{}'\n",
+                log.display()
+            ),
+        );
+        let _exe = crate::kernel::test_aida_exe::set(fake);
+        let before = storage.load().unwrap();
+        let before = before.get_requirement_by_spec_id("BUG-2502").unwrap();
+        let comments_before = before.comments.len();
+        rework_as(&storage, "BUG-2502", None, false).unwrap();
+        let store = storage.load().unwrap();
+        let req = store.get_requirement_by_spec_id("BUG-2502").unwrap();
+        assert_eq!(req.status, RequirementStatus::NeedsAttention, "{kind}");
+        assert!(
+            storage.queue_list("codex", true).unwrap().is_empty(),
+            "{kind}"
+        );
+        assert!(
+            req.failure_reason.is_some(),
+            "review evidence retained: {kind}"
+        );
+        assert_eq!(
+            req.comments.len(),
+            comments_before,
+            "no return-to-flight audit"
+        );
+        // Simulate a legacy guard park whose return-to-flight cleared the
+        // failure marker. Durable guard history must still fence the retry.
+        storage
+            .update_atomically(|store| {
+                let req = store.get_requirement_by_spec_id_mut("BUG-2502").unwrap();
+                req.failure_reason = None;
+                req.status = RequirementStatus::Approved;
+                assert!(loop_guard_park(req));
+            })
+            .unwrap();
+        rework_as(&storage, "BUG-2502", None, false).unwrap();
+        assert_eq!(
+            std::fs::read_to_string(&log).unwrap(),
+            "findings add\nbrief advisor\nfindings add\nbrief advisor\n"
+        );
+        assert_eq!(
+            status_of(&storage, "BUG-2502"),
+            RequirementStatus::NeedsAttention,
+            "{kind}"
+        );
+        assert!(
+            storage.queue_list("codex", true).unwrap().is_empty(),
+            "{kind}"
+        );
+    }
+}

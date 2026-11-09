@@ -1066,6 +1066,12 @@ fn reviewer_session_lease_counts_as_review_started() {
     .unwrap()
     .trim()
     .to_string();
+    // The role fixture writes store data and config. Give the store its own
+    // Git identity so coordination never pulls the dirty parent code repo.
+    // trace:BUG-2501 | ai:codex
+    aida_core::git_ops::init(&root.join(".aida-store")).unwrap();
+    aida_core::git_ops::configure_user(&root.join(".aida-store"), "Test", "test@example.com")
+        .unwrap();
     let _ambient =
         crate::test_env::AmbientGuard::hermetic_with_seat_and(&root, "reviewer", &[], &[]);
     let worktree = root.join("review-wt");
@@ -1623,4 +1629,18 @@ fn bug2492_readiness_skips_pending_status_context_only_for_a_hold() {
         serde_json::json!({"__typename":"StatusContext", "context":"Other", "state":"PENDING"}),
     );
     assert_eq!(rollup_green_at(&rollup, true, None), None);
+}
+
+// trace:TASK-3749 | ai:codex
+#[test]
+fn task_3749_no_change_drain_member_is_finished_work() {
+    let tmp = tempfile::tempdir().unwrap();
+    let root = tmp.path();
+    let dead = dead_pid();
+    let mut drain = crate::drain_state::DrainState::new_batch("night", &["TASK-20".into()]);
+    drain.orchestrator_pid = dead.0;
+    drain.orchestrator_pid_start = dead.1;
+    drain.members[0].state = crate::drain_state::STATE_NO_CHANGE.into();
+    drain.write(root).unwrap();
+    assert!(findings_at(root, Utc::now(), &no_prs).is_empty());
 }

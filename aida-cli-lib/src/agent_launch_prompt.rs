@@ -116,12 +116,12 @@ fn default_body(agent_type: &str, seat: &str, spec: Option<&str>, ship: &str) ->
             "You are the reviewer seat: evaluate, do not implement. Review the open PR for {spec} \
              against its acceptance criteria, prioritising correctness and regression risk; run \
              targeted tests where useful. Record the verdict with `aida review record {spec} --pr \
-             <N> --verdict approved|request-changes|rejected --summary \"<why>\"`. Do not push fixes."
+             <N> --verdict approved|request-changes|rejected|waiting --summary \"<why>\"`. Use waiting only for external CI or host evidence: name the dependency, responsible actor and resume condition in the summary, with no substantive findings. Resume requires a fresh review at the current head. Code defects require request-changes. Do not push fixes."
         ),
         ("reviewer", None) => "You are the reviewer seat: evaluate, do not implement. No spec was \
              assigned at launch. Find the next PR awaiting review with \
              `aida queue next --for reviewer`, then record your verdict with \
-             `aida review record <ID> --pr <N> --verdict ...`. Do not push fixes."
+             `aida review record <ID> --pr <N> --verdict ...`. Use waiting only for external CI or host evidence: name the dependency, responsible actor and resume condition in the summary, with no substantive findings. Resume requires a fresh review at the current head. Code defects require request-changes. Do not push fixes."
             .to_string(),
         ("product", Some(spec)) => format!(
             "You are the product seat: intake, requirement quality, ordering and wave continuity. \

@@ -4842,6 +4842,40 @@ impl<'a> McpServer<'a> {
             }
         }
 
+        let existing_queue_entries = self
+            .storage
+            .queue_list(&user_id, true)
+            .map_err(|e| e.to_string())?;
+        let existing_queue_entry = existing_queue_entries
+            .iter()
+            .find(|entry| entry.requirement_id == req_id);
+
+        // Routing: `for` wins; otherwise preserve the current queue route,
+        // falling back to implementer for unrouted/unqueued rework.
+        // trace:EPIC-27 trace:BUG-851
+        let for_role: Option<String> = match args.get("for").and_then(|v| v.as_str()) {
+            Some("any") => None,
+            Some(role) => Some(crate::canonical_role_name(role)),
+            None => existing_queue_entry
+                .and_then(|entry| entry.for_role.as_deref())
+                .filter(|role| !role.trim().is_empty())
+                .map(crate::canonical_role_name)
+                .or_else(|| Some("implementer".to_string())),
+        };
+        // trace:BUG-2500 | ai:codex — admission precedes every mutation.
+        if for_role.as_deref() != Some("reviewer") {
+            let open = crate::queue_cmd::spec_open_change_key(
+                &project_root,
+                &[display.as_str(), spec_id.as_str()],
+            );
+            crate::queue_cmd::refuse_waiting_review(
+                &project_root,
+                &display,
+                &spec_id,
+                open.as_deref(),
+            )?;
+        }
+
         let mut summary = String::new();
         let mut reason_recorded = false;
         if let Some(ref new_status) = target_status {
@@ -4948,26 +4982,6 @@ impl<'a> McpServer<'a> {
                 .map_err(|e| e.to_string())?;
         }
 
-        let existing_queue_entries = self
-            .storage
-            .queue_list(&user_id, true)
-            .map_err(|e| e.to_string())?;
-        let existing_queue_entry = existing_queue_entries
-            .iter()
-            .find(|entry| entry.requirement_id == req_id);
-
-        // Routing: `for` wins; otherwise preserve the current queue route,
-        // falling back to implementer for unrouted/unqueued rework.
-        // trace:EPIC-27 trace:BUG-851
-        let for_role: Option<String> = match args.get("for").and_then(|v| v.as_str()) {
-            Some("any") => None,
-            Some(role) => Some(crate::canonical_role_name(role)),
-            None => existing_queue_entry
-                .and_then(|entry| entry.for_role.as_deref())
-                .filter(|role| !role.trim().is_empty())
-                .map(crate::canonical_role_name)
-                .or_else(|| Some("implementer".to_string())),
-        };
         let position = if tail {
             i64::MAX
         } else {

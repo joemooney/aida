@@ -3176,6 +3176,7 @@ fn drain_batch_held_pauses_without_shipping() {
                 inconclusive_reason: None,
                 shelved_reason: None,
                 held_reason: Some("PR held on `story-306` — SPIKE-7 smoke".to_string()),
+                no_change: false,
             }
         }
     }
@@ -3223,6 +3224,7 @@ fn drain_batch_inconclusive_pauses_without_advancing() {
                 inconclusive_reason: Some("GH API unreachable — cannot confirm PR".to_string()),
                 shelved_reason: None,
                 held_reason: None,
+                no_change: false,
             }
         }
     }
@@ -5259,6 +5261,7 @@ fn ok_result() -> OrchestrationResult {
         inconclusive_reason: None,
         shelved_reason: None,
         held_reason: None,
+        no_change: false,
     }
 }
 
@@ -5275,6 +5278,7 @@ fn fail_result(phase: Phase) -> OrchestrationResult {
         inconclusive_reason: None,
         shelved_reason: None,
         held_reason: None,
+        no_change: false,
     }
 }
 
@@ -5293,6 +5297,7 @@ fn punt_result() -> OrchestrationResult {
         inconclusive_reason: None,
         shelved_reason: None,
         held_reason: None,
+        no_change: false,
     }
 }
 
@@ -5312,6 +5317,7 @@ fn mismatch_result(shipped: &str) -> OrchestrationResult {
         inconclusive_reason: None,
         shelved_reason: None,
         held_reason: None,
+        no_change: false,
     }
 }
 
@@ -5342,6 +5348,7 @@ fn shelve_result(phase: Phase) -> OrchestrationResult {
         inconclusive_reason: None,
         shelved_reason: Some(fr),
         held_reason: None,
+        no_change: false,
     }
 }
 
@@ -5363,6 +5370,7 @@ fn escalated_result() -> OrchestrationResult {
         inconclusive_reason: None,
         shelved_reason: None,
         held_reason: None,
+        no_change: false,
     }
 }
 
@@ -7180,6 +7188,7 @@ struct MockSingleBranch {
     fail: std::collections::HashSet<String>,
     /// Members whose through-CI run PUNTS (clean exit, no ship), by id.
     punt: std::collections::HashSet<String>,
+    no_change: bool,
     /// Commits accumulated on the shared branch, in order (no-reset witness).
     branch_commits: Vec<String>,
     /// How many times the cluster Reviewer/Merge ran (no-intermediate-merge
@@ -7201,6 +7210,7 @@ impl MockSingleBranch {
             queue: members.iter().map(|s| s.to_string()).collect(),
             fail: std::collections::HashSet::new(),
             punt: std::collections::HashSet::new(),
+            no_change: false,
             branch_commits: Vec::new(),
             cluster_finishes: 0,
             cluster_members: Vec::new(),
@@ -7228,6 +7238,11 @@ impl SingleBranchDriver for MockSingleBranch {
         self.queue.first().cloned()
     }
     fn run_member_through_ci(&mut self, spec: &str) -> OrchestrationResult {
+        if self.no_change {
+            let mut result = OrchestrationResult::ok();
+            result.no_change = true;
+            return result;
+        }
         if self.fail.contains(spec) {
             // Phase-2 (CI) failure — member NOT committed, NOT popped.
             return OrchestrationResult::failed(Phase::Ci);
@@ -7573,6 +7588,7 @@ fn single_branch_empty_batch_is_clean_noop() {
 /// (phase-1 `run_implementer` and the advisor-resume `resume_implementer`).
 #[derive(Clone)]
 enum ImplStep {
+    NoChange,
     /// A PR was opened — the pipeline continues to CI.
     Pr,
     /// The headless implementer punted on a design-fork.
@@ -7691,6 +7707,7 @@ fn next_step<T: Clone>(steps: &[T], i: &mut usize) -> Option<T> {
 /// Map an `ImplStep` onto the driver's `ImplementerOutcome` result.
 fn impl_outcome(step: ImplStep) -> Result<ImplementerOutcome, PhaseFailure> {
     match step {
+        ImplStep::NoChange => Ok(ImplementerOutcome::NoChange),
         ImplStep::Pr => Ok(ImplementerOutcome::PrOpened),
         ImplStep::Punt(reason) => Ok(ImplementerOutcome::Punted { reason }),
         ImplStep::Inconclusive(reason) => Ok(ImplementerOutcome::Inconclusive {
@@ -8272,4 +8289,76 @@ fn scenario_all_green_batch_drains_clean() {
         result.shipped,
         vec!["TASK-A".to_string(), "TASK-B".to_string()],
     );
+}
+
+/// trace:BUG-2500 | ai:codex
+#[test]
+fn bug_2500_waiting_stops_without_merge_or_implementer_retry() {
+    let mut driver = MockPhaseDriver::with_verdict(Verdict::Waiting);
+    let result = orchestrate(
+        &mut driver,
+        "BUG-2500",
+        AutoCompleteVariant::Full,
+        false,
+        EscalateMode::Blocks,
+    );
+    assert_eq!(result.exit_code, 0);
+    assert!(result.failure.is_none());
+    assert!(result.shelved_reason.is_none());
+    assert_eq!(result.escalation.unwrap().kind, EscalationKind::Waiting);
+    assert_eq!(
+        driver.calls,
+        vec![Phase::Implementer, Phase::Ci, Phase::Reviewer]
+    );
+    assert!(driver.recorded_merge_holds.is_empty());
+}
+
+// trace:TASK-3608 | ai:codex
+#[test]
+fn task_3608_fresh_and_resumed_no_change_reach_batch_classification() {
+    for scenario in [
+        Scenario::builder().implementer(vec![ImplStep::NoChange]),
+        Scenario::builder()
+            .implementer(vec![ImplStep::Punt("decision".into())])
+            .advisor(vec![AdvisorStep::Resolve("leave unchanged".into())])
+            .resume(vec![ImplStep::NoChange]),
+    ] {
+        let mut driver =
+            ScenarioBatchDriver::new(vec![ScenarioBatchMember::new("TASK-3608", scenario)]);
+        let result = drain_batch(&mut driver, None, None);
+        assert_eq!(result.exit_code, 0);
+        assert_eq!(result.outcome, BatchDrainOutcome::NoChange);
+        assert_eq!(result.stopped_at.as_deref(), Some("TASK-3608"));
+        assert!(result.shipped.is_empty());
+        assert!(result.shelved.is_empty());
+        assert!(driver.shelved.is_empty());
+    }
+}
+
+// trace:TASK-3608 | ai:codex
+#[test]
+fn task_3608_resumed_existing_pr_still_ships() {
+    let scenario = Scenario::builder()
+        .implementer(vec![ImplStep::Punt("decision".into())])
+        .advisor(vec![AdvisorStep::Resolve("continue PR".into())])
+        .resume(vec![ImplStep::Pr]);
+    let mut driver =
+        ScenarioBatchDriver::new(vec![ScenarioBatchMember::new("TASK-3608", scenario)]);
+    let result = drain_batch(&mut driver, None, None);
+    assert_eq!(result.outcome, BatchDrainOutcome::Drained);
+    assert_eq!(result.shipped, vec!["TASK-3608"]);
+}
+
+// trace:TASK-3749 | ai:codex
+#[test]
+fn task_3749_single_branch_no_change_pauses_without_commit_or_cluster() {
+    let mut driver = MockSingleBranch::new(&["A", "B"]);
+    driver.no_change = true;
+    let result = drain_batch_single_branch(&mut driver, None);
+    assert_eq!(result.outcome, SingleBranchOutcome::Paused);
+    assert_eq!(result.stopped_at.as_deref(), Some("A"));
+    assert_eq!(result.exit_code, 0);
+    assert!(result.committed.is_empty());
+    assert!(driver.branch_commits.is_empty());
+    assert_eq!(driver.cluster_finishes, 0);
 }

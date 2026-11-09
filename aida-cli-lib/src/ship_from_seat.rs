@@ -356,7 +356,11 @@ pub(crate) fn post_exit_commit(
     }
     // trace:TASK-2902 | ai:codex
     // Every exit path honors vetoes before resolving or inspecting intent.
-    if publication_veto(&main, spec) {
+    let seat_veto = match seat_publication_veto(tree, spec) {
+        Ok(veto) => veto,
+        Err(e) => return PostExitCommit::Failed(format!("{e:#}")),
+    };
+    if publication_veto(&main, spec) || seat_veto {
         eprintln!("Native publication vetoed for {spec} by punt/hold; pending work remains uncommitted in {}", tree.display());
         return PostExitCommit::Clean;
     }
@@ -493,6 +497,27 @@ pub(crate) fn post_exit_commit_reported(
     outcome
 }
 
+// trace:TASK-3608 | ai:codex
+#[derive(Debug, PartialEq, Eq)]
+pub(crate) enum QueueExitOutcome {
+    Continue,
+    NoChange,
+}
+
+// Host-only outcome, scoped to the lease and replaced at every publication exit.
+// trace:TASK-3608 | ai:codex
+fn no_change_path(main: &Path, lane: &str) -> std::path::PathBuf {
+    let key: String = lane.as_bytes().iter().map(|b| format!("{b:02x}")).collect();
+    crate::main_worktree_root_from(main)
+        .join(".aida/native-no-change")
+        .join(key)
+}
+
+// trace:TASK-3608 | ai:codex
+pub(crate) fn take_no_change(main: &Path, lane: &str) -> bool {
+    std::fs::remove_file(no_change_path(main, lane)).is_ok()
+}
+
 /// Queue-work publication runs in the host after the child and test runner
 /// have stopped, while the clone lease still vouches for the seat. Explicit
 /// punts and holds retain their publication veto, including in drain/resume.
@@ -503,56 +528,137 @@ pub(crate) fn publish_queue_exit(
     spec: &str,
     lane: &str,
     clean_exit: bool,
-) -> Result<()> {
-    let main = crate::main_worktree_root_from(main);
-    let publish = || {
-        run_at(
-            &main,
-            FromSeatOptions {
-                clone: tree.to_path_buf(),
-                // trace:TASK-2902 | ai:codex — match the canonical post-exit trailer.
-                spec: Some(crate::native_publication::resolve_scope(&main, spec)?),
-                no_pr: false,
-                dry_run: false,
-                commit_pending: None,
-            },
-        )
-    };
-    publish_queue_exit_with(
-        &main,
-        spec,
-        || post_exit_commit_reported(&main, tree, spec, lane, clean_exit),
-        || crate::seat_clone::probe(&main, tree),
-        publish,
-        || {
-            advisor_request(
+) -> Result<QueueExitOutcome> {
+    publish_queue_exit_recorded(main, tree, spec, lane, clean_exit, false)
+}
+
+// Only drain callers need a durable handoff to lease discovery.
+// trace:TASK-3608 | ai:codex
+pub(crate) fn publish_queue_exit_recorded(
+    main: &Path,
+    tree: &Path,
+    spec: &str,
+    lane: &str,
+    clean_exit: bool,
+    record: bool,
+) -> Result<QueueExitOutcome> {
+    record_queue_exit(main, lane, clean_exit, record, || {
+        let main = crate::main_worktree_root_from(main);
+        // trace:BUG-2488 | ai:codex
+        crate::standalone_implementer::reconcile_signals(&main, tree, spec)?;
+        if publication_veto(&main, spec) || seat_publication_veto(tree, spec)? {
+            return Ok(QueueExitOutcome::Continue);
+        }
+        let no_change =
+            || -> Result<bool> { Ok(!crate::seat_clone::has_commits_beyond_base(&main, tree)?) };
+        let publish = || {
+            require_lease_branch_work(&main, tree)?;
+            run_at(
                 &main,
-                "Queue-work lane exited without changes",
-                &format!(
+                FromSeatOptions {
+                    clone: tree.to_path_buf(),
+                    // trace:TASK-2902 | ai:codex — match the canonical post-exit trailer.
+                    spec: Some(crate::native_publication::resolve_scope(&main, spec)?),
+                    no_pr: false,
+                    dry_run: false,
+                    commit_pending: None,
+                },
+            )
+        };
+        publish_queue_exit_with(
+            &main,
+            spec,
+            || post_exit_commit_reported(&main, tree, spec, lane, clean_exit),
+            || crate::seat_clone::probe(&main, tree),
+            publish,
+            || {
+                if skip_unchanged_notice(clean_exit, no_change)? {
+                    eprintln!("implementer: no-change (seat has no commits beyond its base)");
+                    return Ok(());
+                }
+                advisor_request(
+                    &main,
+                    "Queue-work lane exited without changes",
+                    &format!(
                     "Codex queue-work lane {lane} for {spec} exited with no pending changes in {} \
                  (clean_exit={clean_exit}). Check its existing PR and failing checks; a still-red \
                  PR needs a new rework assignment.",
                     tree.display()
                 ),
-            )
-        },
-    )
+                )
+            },
+        )
+    })
+}
+
+// Share the real writer/reader key and failure cleanup with boundary tests.
+// trace:TASK-3608 | ai:codex
+pub(crate) fn record_queue_exit(
+    main: &Path,
+    lane: &str,
+    clean_exit: bool,
+    record: bool,
+    publish: impl FnOnce() -> Result<QueueExitOutcome>,
+) -> Result<QueueExitOutcome> {
+    let receipt = no_change_path(main, lane);
+    match std::fs::remove_file(&receipt) {
+        Ok(()) => {}
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => {}
+        Err(e) => return Err(e.into()),
+    }
+    let outcome = publish()?;
+    if record && clean_exit && outcome == QueueExitOutcome::NoChange {
+        std::fs::create_dir_all(receipt.parent().unwrap())?;
+        std::fs::write(receipt, b"no-change")?;
+    }
+    Ok(if clean_exit {
+        outcome
+    } else {
+        QueueExitOutcome::Continue
+    })
+}
+
+// Invoked only when the exit probe found committed or unpushed work.
+// trace:BUG-2488 | ai:codex
+pub(crate) fn require_lease_branch_work(main: &Path, tree: &Path) -> Result<()> {
+    if !crate::seat_clone::has_commits_beyond_base(main, tree)? {
+        anyhow::bail!("seat has unpublished work outside its leased branch; retain the seat and inspect its local branches");
+    }
+    Ok(())
+}
+
+// Failed exits must still ask the advisor even when no work was produced.
+// trace:BUG-2488 | ai:codex
+fn skip_unchanged_notice(
+    clean_exit: bool,
+    no_change: impl FnOnce() -> Result<bool>,
+) -> Result<bool> {
+    Ok(clean_exit && no_change()?)
+}
+
+#[cfg(test)]
+#[test]
+fn bug_2488_failed_unchanged_exit_retains_advisor_notice() {
+    assert!(!skip_unchanged_notice(false, || panic!("failed exit must notify")).unwrap());
+    assert!(skip_unchanged_notice(true, || Ok(true)).unwrap());
+    assert!(!skip_unchanged_notice(true, || Ok(false)).unwrap());
 }
 
 // These effects are injected at the publication boundary so tests exercise
 // the same veto, probe and dispatch as all three lane exit paths.
 // trace:STORY-2475 | ai:codex
-fn publish_queue_exit_with(
+pub(crate) fn publish_queue_exit_with(
     main: &Path,
     spec: &str,
     commit: impl FnOnce() -> PostExitCommit,
     probe: impl FnOnce() -> crate::seat_clone::Probe,
     publish: impl Fn() -> Result<()>,
     notify: impl FnOnce() -> Result<()>,
-) -> Result<()> {
+) -> Result<QueueExitOutcome> {
     if publication_veto(main, spec) {
-        return Ok(());
+        return Ok(QueueExitOutcome::Continue);
     }
+    let no_change = std::cell::Cell::new(false);
     finish_queue_exit(commit(), &publish, || {
         match probe() {
             crate::seat_clone::Probe::Known(facts) if facts.unpushed > 0 => return publish(),
@@ -560,10 +666,28 @@ fn publish_queue_exit_with(
             | crate::seat_clone::Probe::HasSubmodules(why) => {
                 anyhow::bail!("could not inspect clean lane for pending publication: {why}")
             }
+            crate::seat_clone::Probe::Known(facts) if !facts.dirty.is_empty() => {
+                anyhow::bail!("clean lane still has pending file changes")
+            }
             _ => {}
         }
-        notify()
+        notify()?;
+        no_change.set(true);
+        Ok(())
+    })?;
+    Ok(if no_change.get() {
+        QueueExitOutcome::NoChange
+    } else {
+        QueueExitOutcome::Continue
     })
+}
+
+// trace:BUG-2488 | ai:codex
+fn seat_publication_veto(tree: &Path, spec: &str) -> Result<bool> {
+    // Read both even if the first veto is present, so unsafe evidence refuses.
+    let punt = crate::punt::read_seat_signal(tree, spec)?;
+    let hold = crate::punt::read_seat_hold_signal(tree, spec)?;
+    Ok(punt.is_some() || hold.is_some())
 }
 
 // trace:TASK-2902 | ai:codex
@@ -841,6 +965,147 @@ mod queue_exit_tests {
         }
     }
 
+    // trace:BUG-2488 | ai:codex
+    #[test]
+    fn bug_2488_case_variant_resume_signals_veto_publication_and_reach_driver() {
+        for hold in [false, true] {
+            let main = tempfile::tempdir().unwrap();
+            let tree = tempfile::tempdir().unwrap();
+            let lease_scope = "TASK-b6b1278890774ef993d2ebc327862470-941";
+            let publication_scope = lease_scope.to_ascii_uppercase();
+            crate::standalone_implementer::provision_attempt_signals(
+                main.path(),
+                tree.path(),
+                &publication_scope,
+            )
+            .unwrap();
+            let mut cmd = std::process::Command::new("unused");
+            crate::standalone_implementer::apply_seat_signals(&mut cmd, tree.path(), lease_scope);
+            let key = if hold {
+                crate::punt::HOLD_SIGNAL_FILE_ENV
+            } else {
+                crate::punt::SIGNAL_FILE_ENV
+            };
+            let path = std::path::PathBuf::from(
+                cmd.get_envs().find(|(k, _)| *k == key).unwrap().1.unwrap(),
+            );
+            if hold {
+                crate::punt::write_hold_signal(
+                    &path,
+                    &crate::punt::HoldSignal {
+                        spec: lease_scope.into(),
+                        branch: "resume".into(),
+                        reason: None,
+                        spec_key: None,
+                    },
+                )
+                .unwrap();
+            } else {
+                crate::punt::write_signal(
+                    &path,
+                    &crate::punt::PuntSignal {
+                        spec: lease_scope.into(),
+                        category: aida_core::PuntCategory::DesignFork,
+                        detail: "manual decision".into(),
+                        lean: None,
+                    },
+                )
+                .unwrap();
+            }
+            assert!(publication_veto(tree.path(), &publication_scope));
+            // The public boundary would fail preparing publication in this non-repo
+            // fixture if the case-variant signal were missed.
+            publish_queue_exit(main.path(), tree.path(), &publication_scope, "resume", true)
+                .unwrap();
+            assert!(publication_veto(main.path(), &publication_scope));
+            // The drain reads the mirrored signal using its own spec spelling.
+            if hold {
+                assert!(
+                    crate::punt::read_hold_signal(&crate::punt::hold_signal_path(
+                        main.path(),
+                        &publication_scope
+                    ))
+                    .is_some()
+                );
+            } else {
+                assert!(crate::punt::read_signal(&crate::punt::signal_path(
+                    main.path(),
+                    &publication_scope
+                ))
+                .is_some());
+            }
+            crate::standalone_implementer::provision_attempt_signals(
+                main.path(),
+                tree.path(),
+                &publication_scope,
+            )
+            .unwrap();
+            assert!(!publication_veto(main.path(), lease_scope));
+            assert!(!publication_veto(tree.path(), lease_scope));
+        }
+    }
+
+    // trace:TASK-3608 | ai:codex
+    #[test]
+    fn task_3608_receipt_writer_and_dirty_probe() {
+        use crate::seat_clone::{Probe, ProbeFacts};
+        let tmp = tempfile::tempdir().unwrap();
+        for clean in [false, true] {
+            for drain in [false, true] {
+                let outcome =
+                    record_queue_exit(tmp.path(), "lease/with spaces", clean, drain, || {
+                        publish_queue_exit_with(
+                            tmp.path(),
+                            "TASK-3608",
+                            || PostExitCommit::Clean,
+                            || Probe::Known(ProbeFacts::default()),
+                            || panic!("no bundle for clean no-change"),
+                            || Ok(()),
+                        )
+                    })
+                    .unwrap();
+                assert_eq!(
+                    outcome,
+                    if clean {
+                        QueueExitOutcome::NoChange
+                    } else {
+                        QueueExitOutcome::Continue
+                    }
+                );
+                assert_eq!(
+                    take_no_change(tmp.path(), "lease/with spaces"),
+                    clean && drain
+                );
+                assert!(!take_no_change(tmp.path(), "lease/with spaces"));
+            }
+        }
+        record_queue_exit(tmp.path(), "lane", true, true, || {
+            Ok(QueueExitOutcome::NoChange)
+        })
+        .unwrap();
+        let error = record_queue_exit(tmp.path(), "lane", true, true, || {
+            publish_queue_exit_with(
+                tmp.path(),
+                "TASK-3608",
+                || PostExitCommit::Clean,
+                || {
+                    Probe::Known(ProbeFacts {
+                        dirty: vec!["? pending".into()],
+                        ..Default::default()
+                    })
+                },
+                || panic!("dirty probe must refuse"),
+                || panic!("dirty must not notify"),
+            )
+        })
+        .unwrap_err();
+        assert!(error.to_string().contains("pending file changes"));
+        assert!(
+            !take_no_change(tmp.path(), "lane"),
+            "failed publication clears stale evidence"
+        );
+    }
+
     // trace:STORY-2475 | ai:codex
     #[test]
     fn story_2475_clean_unpushed_publishes_without_no_change_mail() {
@@ -850,7 +1115,7 @@ mod queue_exit_tests {
         for unpushed in [0, 1] {
             let published = Cell::new(0);
             let notified = Cell::new(0);
-            publish_queue_exit_with(
+            let outcome = publish_queue_exit_with(
                 tmp.path(),
                 "STORY-2475",
                 || PostExitCommit::Clean,
@@ -870,6 +1135,14 @@ mod queue_exit_tests {
                 },
             )
             .unwrap();
+            assert_eq!(
+                outcome,
+                if unpushed == 0 {
+                    QueueExitOutcome::NoChange
+                } else {
+                    QueueExitOutcome::Continue
+                }
+            );
             assert_eq!(published.get(), unpushed);
             assert_eq!(notified.get(), usize::from(unpushed == 0));
         }
@@ -1528,6 +1801,13 @@ fn run_from_with_reconciliation(
                 None => eprintln!("  the seat had no pending work to commit"),
             }
         }
+    }
+    // trace:BUG-2488 | ai:codex
+    // An unchanged seat cannot produce a nonempty bundle. Inspect before
+    // invoking the bundler, including direct host publication retries.
+    if !crate::seat_clone::branch_has_commits_beyond_base(&seat, &branch)? {
+        println!("implementer: no-change (seat has no commits beyond its base)");
+        return Ok(());
     }
     let bytes = (deps.bundle)(&main, &seat.root, &branch)?;
     let mut staged = stage_bundle(&main, &branch, &bytes, opts.dry_run)?;

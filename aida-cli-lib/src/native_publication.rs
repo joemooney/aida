@@ -297,9 +297,16 @@ pub(crate) fn read(main: &Path, tree: &Path, spec: &str) -> Result<Option<String
         !d.body.as_deref().unwrap_or("").contains('\0'),
         "commit body contains NUL"
     );
+    // Completion authority comes from the validated subject alone. Body
+    // trailers must stay references even when the forge appends a squash ID.
+    // trace:TASK-3736 | ai:codex
+    let body = d
+        .body
+        .as_deref()
+        .map(|body| crate::trailer_coverage::rewrite_body_trailers(body, |_| Some(())));
     Ok(Some(join_message(
         &format!("{prefix}({}{spec})", if completing { "" } else { "Refs " }),
-        d.body.as_deref(),
+        body.as_deref(),
     )))
 }
 
