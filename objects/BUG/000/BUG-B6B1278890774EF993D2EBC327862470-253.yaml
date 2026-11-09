@@ -20,7 +20,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-07T20:18:53.564500Z
-modified_at: 2026-11-09T06:21:53.055674051Z
+modified_at: 2026-11-09T06:27:29.300170593Z
 req_type: Bug
 relationships:
 - rel_type:
@@ -429,6 +429,13 @@ comments:
   created_at: 2026-11-09T05:26:18.634601869Z
   modified_at: 2026-11-09T05:26:18.634601869Z
   session_id: 01a1bebe3f22
+  harness_version: codex-cli 0.167.0
+- id: 01a1befd-8994-7671-99e4-06c9e103bc9e
+  author: dirtlab
+  content: 'Validation-only pickup at 2fd6e4d0b7: existing latest rework is present; no source edits needed. Confirmed resume attempt provisioning and all-case signal cleanup, with acceptance regressions passing. Lane job j20261109T062206688-2-0 executed 17 BUG-2488 regressions plus the watchdog child successfully (direct child entry intentionally ignored in parent). Lane job j20261109T062217788-2-0 executed all 7 resolve_aida_exe_tests successfully. Both jobs exited 0. Writer inventory reconciles 3432 sink sites; portability, git diff --check and acceptance tracing pass. untested=false. Changed files: none; working tree clean. Codegraph unavailable per doctor; used rg. Fresh CI and supervised merge-hold clearance remain host/reviewer work. TASK-3608 retains separate drain/queue-resume no-change propagation scope. No commit, push, PR creation, queue completion, pr ship or review record attempted.'
+  created_at: 2026-11-09T06:27:29.300170593Z
+  modified_at: 2026-11-09T06:27:29.300170593Z
+  session_id: 01a1bef80dda
   harness_version: codex-cli 0.167.0
 history:
 - id: 01a1b7ad-9096-7320-bbe8-fc34c8e11c09
