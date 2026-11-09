@@ -23,7 +23,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-07T20:45:16.684639200Z
-modified_at: 2026-11-09T11:12:58.847849367Z
+modified_at: 2026-11-09T11:13:05.067113491Z
 req_type: Task
 relationships:
 - rel_type: Child
@@ -257,6 +257,22 @@ comments:
   content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: Part B is nearly done: free-form scopes, refusal reasons, shared batch readers and BUG-2206 coverage are fixed at this head, but a zero-witness lease handed off to a PR still bypasses the legacy fallback, refused captures diverge from main, and CI has not run. Part A is out of scope for this Refs slice.. No triage reason was given.'
   created_at: 2026-11-09T11:12:58.847844779Z
   modified_at: 2026-11-09T11:12:58.847844779Z
+- id: 01a1c003-01be-7f80-b3ab-22a0d694840a
+  author: joe
+  content: |-
+    REVIEW FINDINGS TO ADDRESS (PR #3670):
+    Verdict: CHANGES REQUESTED
+    Reviewed commit: ee0ac5cafca0
+    Recorded: 2026-11-09T10:47:45.812528656+00:00
+    Review comment: https://github.com/joemooney/aida/pull/3670#issuecomment-6738133892
+    Findings:
+    1. [major][blocker] Unfixed from last round: a zero-witness lease handed off to a PR bypasses the legacy fallback (ownership/reader.rs:147-155). The Ok(Some(record)) arm uses record.holder.as_ref().is_some_and(...), but handoff writes holder: None with Phase::InPr{handed_off_by} (ownership/ops.rs:79-88; migrate.rs:224). lease_owner_record rebuilds the holder from the lease (reader.rs:229-239); with no holder_record it has no witnesses, so judge_owner returns Unknown 'the holder records no witness' (judge.rs:174). That is ruling item 2's cause, yet legacy_unknown is false, so a crashed legacy holder is retained where main released it: BUG-637 pickup hide and session-start refusal (next.rs:171, session_start.rs:2470), BUG-1205 auto-end refused (session_start.rs:2682), stale-base row (list.rs:1878). This shape exists today: aida own show --compare reports 'expected (1): the work was handed to its PR; today's lease still names the seat'. From source reading; not executed. Fix: also treat holder None with Phase::InPr{handed_off_by: Some(id)}, id == lease.id, as legacy when lease_holder_record yields no admitted witness. Add a task_3420 test with that InPr shape covering crashed release and live retention; no task_3420 test builds it (writer_tests.rs InPr fixtures use handed_off_by: None).
+    2. [minor] A legacy holder whose capture was explicitly refused is retained where main applies the legacy rule (ownership/reader.rs:148). holder_for_lease (dual.rs:220) stores admission: Some(refused), so witnesses.all(admission.is_none()) is false and judge_witness returns Unknown 'holder refused: ...'. Main's lease_uses_holder_verdict (leases.rs:1364) excludes refused records so they 'retain their existing consumer policy', and ruling item 4 says the fallback keeps current behaviour for legacy holders. HolderRecord::capture is written at session start (session_start.rs:3338, leases.rs:357), and 5 records under .aida/ownership carry a refusal (not mapped to live leases). Fix: count a Process witness whose admission has refusal().is_some() as legacy and add a test, or get an advisor ruling that refused captures stay retained and record it in the reader comment.
+    3. [minor] CI is not verified at ee0ac5cafca0: all seven CI jobs were pending when this was recorded. merge-hold-gate fails on the expected supervised hold, a release gate and not a code defect. Confirm green at the rework head, including whether the make check-ci-fast mail-wake failures the implementer reported are resolved by the test_env.rs permission change.
+    4. [cosmetic] lease_adoption_refusal (leases.rs:4788-4795) matches the Unknown why against an exact string that the reader builds from orphan_adoption_refusal, so rewording that text silently drops the specific reason. Its fallback 'ownership holder is live or unknown' is reached only for Unknown, because Alive is handled above. Carry the reason in a typed value or shared constant and change the fallback to name unknown ownership.
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
+  created_at: 2026-11-09T11:13:04.958087094Z
+  modified_at: 2026-11-09T11:13:04.958087094Z
 history:
 - id: 01a1b7c2-6b69-7b02-bd8c-8f40aee2972d
   author: joe
