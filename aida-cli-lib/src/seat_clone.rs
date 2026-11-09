@@ -3042,18 +3042,20 @@ fn prepare_rework_merge_with(
     );
     let (base, pr_head) = fetch_heads()?;
     execute(&["merge-base", "--is-ancestor", &pr_head, "HEAD"]).context(
-        "seated rework branch is behind the PR head; retry pickup with its current head",
+        "seated rework branch is behind the PR head; on the host, run `git -C <seat> add -A` \
+         and `git -C <seat> commit`, then `git -C <seat> fetch origin` and \
+         `git -C <seat> merge origin/<PR-branch>`; resolve and commit any conflicts, \
+         then retry `aida queue work <SPEC> --resume`",
     )?;
-    // A dirty resume must not silently bypass merge preparation and send a
-    // native child (whose Git metadata is read-only) out to merge main.
-    // Preserve its edits and admit it only when both fetched heads are already
-    // incorporated. The host must prepare any outstanding merge first.
+    // Probe committed trees without touching pending edits, the index or HEAD.
+    // A clean merge needs no host preparation before continuing pending work.
     // trace:BUG-2504 | ai:codex
     if resume && dirty {
-        execute(&["merge-base", "--is-ancestor", &base, "HEAD"]).context(
-            "rework resume has pending changes and has not incorporated origin/main; \
-             edits were preserved, no vendor launched. Recover the pending work on the host \
-             and prepare the main merge before retrying; a native lane cannot write Git metadata",
+        execute(&["merge-tree", "--write-tree", "HEAD", &base]).context(
+            "could not prove a clean main merge for the dirty rework resume; edits preserved. \
+             On the host, run `git -C <seat> add -A` and `git -C <seat> commit`, then \
+             `git -C <seat> fetch origin` and `git -C <seat> merge origin/main`; resolve \
+             and commit any conflicts, then retry `aida queue work <SPEC> --resume`",
         )?;
         return Ok(Vec::new());
     }
@@ -3415,14 +3417,15 @@ mod rework_merge_tests {
         execute(&["checkout", "main"]).unwrap();
         std::fs::write(fx.main.join("pending"), "keep these edits\n").unwrap();
         let status = execute(&["status", "--porcelain"]).unwrap();
-        for (base, remote, expected) in [
-            (
-                base.clone(),
-                head.clone(),
-                "has not incorporated origin/main",
-            ),
-            (head.clone(), base.clone(), "behind the PR head"),
-        ] {
+        prepare_rework_merge_with(
+            &execute,
+            "main",
+            true,
+            |_| panic!("must not publish"),
+            || Ok((base.clone(), head.clone())),
+        )
+        .expect("non-conflicting main advance admits pending work");
+        for (base, remote, expected) in [(head.clone(), base.clone(), "behind the PR head")] {
             let why = prepare_rework_merge_with(
                 &execute,
                 "main",
@@ -3449,6 +3452,27 @@ mod rework_merge_tests {
         )
         .unwrap_err();
         assert!(why.to_string().contains("fetch unavailable"));
+        std::fs::write(fx.main.join("main-update"), "PR change\n").unwrap();
+        execute(&["add", "main-update"]).unwrap();
+        execute(&["commit", "-m", "conflicting PR change"]).unwrap();
+        let pr_head = execute(&["rev-parse", "HEAD"]).unwrap();
+        let status = execute(&["status", "--porcelain"]).unwrap();
+        let why = prepare_rework_merge_with(
+            &execute,
+            "main",
+            true,
+            |_| panic!("must not publish"),
+            || Ok((base, pr_head.clone())),
+        )
+        .unwrap_err();
+        assert!(format!("{why:#}").contains("git -C <seat> commit"));
+        assert_eq!(execute(&["rev-parse", "HEAD"]).unwrap(), pr_head);
+        assert_eq!(execute(&["status", "--porcelain"]).unwrap(), status);
+        assert_eq!(
+            std::fs::read_to_string(fx.main.join("pending")).unwrap(),
+            "keep these edits\n"
+        );
+        assert!(execute(&["rev-parse", "-q", "--verify", "MERGE_HEAD"]).is_err());
     }
 
     // trace:STORY-2475 | ai:codex

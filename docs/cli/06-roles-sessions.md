@@ -815,10 +815,17 @@ the merge, sends the advisor a request, and routes a fresh launch to Claude.
 A conflicting Codex resume refuses with a fresh Claude launch command;
 a Codex thread cannot resume under another vendor. Fetch, merge, abort,
 mail, or vendor-preflight failures stop the launch. A resume with pending
-edits preserves them and fetches both heads. It skips the merge attempt only
-when the seated HEAD already incorporates the fetched PR head and main tip.
-Otherwise launch refuses: recover the pending work on the host and prepare
-the main merge before retrying. A native child cannot write Git metadata.
+edits preserves them and fetches both heads. After verifying the PR head is
+incorporated, the host probes committed trees with `git merge-tree --write-tree`.
+A clean probe admits pending work even when main has advanced. A conflicting or
+failed probe refuses without changing the index, HEAD or pending files.
+For recovery, on the host run `git -C <seat> add -A` and
+`git -C <seat> commit`, then `git -C <seat> fetch origin` and
+`git -C <seat> merge origin/main` (use `origin/<PR-branch>` when behind the
+PR head). Resolve and commit conflicts, then retry
+`aida queue work <SPEC> --resume`. A failed adopted-seat launch restores its
+orphan lease so that retry can adopt the same tree. A native child cannot write
+Git metadata.
 An unfinished merge still refuses. Clean resumes use the normal merge and
 conflict checks.
 <!-- trace:BUG-2504 | ai:codex -->
