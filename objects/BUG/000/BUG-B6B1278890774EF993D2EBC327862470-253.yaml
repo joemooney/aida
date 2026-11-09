@@ -20,7 +20,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-07T20:18:53.564500Z
-modified_at: 2026-11-09T02:38:49.844697486Z
+modified_at: 2026-11-09T02:48:08.280952163Z
 req_type: Bug
 relationships:
 - rel_type:
@@ -404,6 +404,13 @@ comments:
   created_at: 2026-11-09T02:37:05.348459420Z
   modified_at: 2026-11-09T02:37:05.348459420Z
   session_id: 20abb7c3-8f9b-4a5e-b326-404921f3b450
+- id: 01a1be34-b758-7171-869b-8fc9094d4aa0
+  author: dirtlab
+  content: 'Round-9 rework complete, uncommitted for host publication. Claude resumes clear prior seat/host signals immediately before spawn and receive seat-local signal paths; regression confirms cleared holds cannot be resurrected. Cleanup removes every ASCII-case-equivalent spelling through pinned parents; regressions cover provisioning and punt consumption. Restored both STORY-1486 inventory comments; shortened OVERVIEW. Changed: session.rs, standalone_implementer.rs, tests/bug_home_038_seat_publish_tests.rs, scripts/store-writers.toml, OVERVIEW.md. Validation: lane job j20261109T024527406-2-0 passed 17 BUG-2488 tests plus watchdog child; initial snapshot failed the new fixture before its lease-scope correction. Also passed 42 inventory tests, writer scanner, portability, rustfmt, diff check and criteria tracing. Runner reported overlay-stale after successful build due to primary seed rewrite. untested=false. Refs BUG-2488 native publication subject recorded. TASK-3608 remains separate. Fresh CI and supervised hold clearance remain host/reviewer work. No commit, push, PR creation or queue completion attempted.'
+  created_at: 2026-11-09T02:48:08.280952163Z
+  modified_at: 2026-11-09T02:48:08.280952163Z
+  session_id: 01a1be2bd8d4
+  harness_version: codex-cli 0.167.0
 history:
 - id: 01a1b7ad-9096-7320-bbe8-fc34c8e11c09
   author: aida-session-start
