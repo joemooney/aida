@@ -3,12 +3,12 @@ spec_id: BUG-b6b1278890774ef993d2ebc327862470-270
 agreed_id: BUG-2505
 title: aida add can exit without creating a spec when given a tag such as from:2026-11-08-review-closeout
 description: 'Observed 2026-11-08: six aida add calls with that tag created nothing, while the same calls with only area:orchestration succeeded. The error text was hidden by the caller''s output filter, so the cause is inferred from the difference. Reproduce with the tag and read the output first.'
-status: InProgress
+status: NeedsAttention
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-09T03:00:45.690194532Z
-modified_at: 2026-11-09T06:05:05.211234181Z
+modified_at: 2026-11-09T06:11:04.434675974Z
 req_type: Bug
 tags:
 - area:cli
@@ -33,6 +33,13 @@ comments:
   created_at: 2026-11-09T06:03:00.017587388Z
   modified_at: 2026-11-09T06:03:00.017587388Z
   session_id: 7aacb1ed-ebaa-4da4-a195-500864e99e7d
+- id: 01a1beee-75c3-7c73-8e0e-bfd512563da2
+  author: dirtlab
+  content: 'Rework validation: lane job j20261109T060549508-2-0 executed the existing bug_2505_review_closeout_tag_creates_a_persisted_spec acceptance test: 1 passed, 0 failed. Exact tag alone, combined with area:orchestration, and area-only control all persist canonical specs. Shared parse_tag_list/validate_tag_value accepts the reported punctuation; no production defect established. No files changed; git diff --check passed. Original failing argv, exit codes, unfiltered stdout/stderr and CLI build identity remain absent after requeue. Draft finding submission for that missing evidence refused because this clone lacks an AIDA node binding (no object written); recording the flag here instead. Fixed host codegraph client is absent and doctor confirms missing tooling. Do not complete or publish this as a fix; returning to missing-context punt.'
+  created_at: 2026-11-09T06:11:01.187109974Z
+  modified_at: 2026-11-09T06:11:01.187109974Z
+  session_id: 01a1bee8fa4d
+  harness_version: codex-cli 0.167.0
 history:
 - id: 01a1beaa-5541-7fd1-9192-5cf255b115f3
   author: joe
@@ -90,6 +97,21 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a1bee9-67d4-7380-bc82-4fc0fe6e076d
+  author: dirtlab
+  timestamp: 2026-11-09T06:05:29.940722744Z
+  session_id: 01a1bee8fa4d
+  harness_version: codex-cli 0.167.0
+  changes: []
+- id: 01a1beee-8272-7f43-bd2c-841f730b4913
+  author: dirtlab
+  timestamp: 2026-11-09T06:11:04.434702790Z
+  session_id: 01a1bee8fa4d
+  harness_version: codex-cli 0.167.0
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: NeedsAttention
 filed_at:
   code_sha: d73f4e6b86c9f6a85cc01a4aa9893b869252b3a9
   branch: main
@@ -98,3 +120,8 @@ filed_at:
   aida_build_sha: a7a14984cec
   vendor: claude
   session: 20abb7c3-8f9b-4a5e-b326-404921f3b450
+attention_reason:
+  category: missing-context
+  detail: 'Reported failure remains unreproduced: existing canonical-store acceptance test rerun passed (1 executed, 0 failed), including exact tag and area-only control. Requeue supplied no original failing argv, exit statuses, unfiltered stdout/stderr or CLI build identity. Need that evidence to root-cause; no production edits justified. Prior reviewer rejected test-only completion. Preserve publication veto.'
+  raised_by: implementer
+  raised_at: 2026-11-09T06:11:04.434675974Z
