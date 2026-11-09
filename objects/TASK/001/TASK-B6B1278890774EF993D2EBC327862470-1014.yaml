@@ -12,12 +12,12 @@ description: |-
   Findings:
   1. major: review_watch_service.rs tick_with_launcher L554-556 invalidates each retired controller's kernel key immediately, but a dispatcher can outlive the controller and still need that key. The controller grant binding is [proc:<deputy>, key:<hash>] (seat_authority.rs issue_child_from_with_delegation). The dispatcher is spawned with process_group(0) and is not killed on controller exit; once the controller dies it reparents away from the deputy (no subreaper in deputy code), so presenter_tokens no longer contains proc:<deputy>. With the key invalidated, presenter_rejection fails and current_grant returns None. Path: rotation makes check_controller_locked fail, the worker exits, and within about 1 s the tick invalidates the key while a dispatcher is in preflight or queue work has not yet reached issue_launch_child (session.rs:2209 / queue_cmd.rs:13946) or the L2228 validate_child_delegation. Result: the launch is refused with 'no valid parent seat grant is active'. Setup failures burn the single setup retry; a dispatcher refused before claiming its receipt is reconciled to Phase::Exited, which select() then skips ('not relaunched') until a new head or --release. The docs claim at 06-roles-sessions.md ('in-flight reviewers keep their authority') holds only after the reviewer child is minted, and no test covers a pre-mint dispatcher. Suggested fix: drop the retirement invalidation loop and let revoke_by_id invalidate at cleanup; MAX_RETIRED_GRANTS already bounds retained keys at 4, which resolves the round-5 quota finding. Update the test assertions at L910-914 and add a test that a retired controller's key stays held while an attempt is unresolved.
   Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
-status: Draft
+status: Superseded
 priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-11-08T19:38:12.963696227Z
-modified_at: 2026-11-08T19:38:12.963696227Z
+modified_at: 2026-11-09T06:52:17.205030931Z
 req_type: Task
 tags:
 - from-advisor:STORY-2571
@@ -31,6 +31,15 @@ history:
   author: joe
   timestamp: 2026-11-08T20:37:26.759159169Z
   changes: []
+- id: 01a1bf14-3db5-7593-88ba-8f39154a693c
+  author: joe
+  timestamp: 2026-11-09T06:52:17.205027212Z
+  session_id: 01a1beff-fc3b-78e2-93e2-9b0c283b0339
+  harness_version: 2.1.319 (Claude Code)
+  changes:
+  - field_name: status
+    old_value: Draft
+    new_value: Superseded
 filed_at:
   code_sha: db2eb4c39e46704132705ccb2b8300574ead41a6
   branch: main
