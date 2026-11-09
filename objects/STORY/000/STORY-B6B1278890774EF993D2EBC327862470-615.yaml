@@ -8,7 +8,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-09T01:58:54.698246911Z
-modified_at: 2026-11-09T07:12:36.810229620Z
+modified_at: 2026-11-09T07:12:55.704111266Z
 req_type: Story
 tags:
 - area:orchestration
@@ -75,6 +75,25 @@ comments:
   content: 'ADVISOR RULING: the last round pushed only merges from main, so these findings are unaddressed. Do not merge main or push until the code changes. #3709: an empty baseline must not erase policy; add refusal tests for base and head; use Refs in the title or add the CLI help golden. Local gate: one targeted cargo test --profile agent plus make check-ci-fast, then push.'
   created_at: 2026-11-09T07:12:36.810229620Z
   modified_at: 2026-11-09T07:12:36.810229620Z
+  session_id: 01a1beff-fc3b-78e2-93e2-9b0c283b0339
+  harness_version: 2.1.319 (Claude Code)
+- id: 01a1bf27-232d-79e0-852a-d929dcd383a0
+  author: joe
+  content: |-
+    REVIEW FINDINGS TO ADDRESS (STORY-2692):
+    Verdict: CHANGES REQUESTED
+    Reviewed commit: 91c3e2850ed3
+    Recorded: 2026-11-09T05:08:24.381697389+00:00
+    Findings:
+    1. Empty inventory baseline still erases reviewed policy (open since the last round). scripts/port-split-hunks.py:103-141 and scripts/check-store-writers.py:669 accept a baseline with no writer rows (`version = 2`, or `writer = []`). regenerate() then resets every site to blocked defaults and drops mediated_route with exit 0; the real inventory has 222 non-blocked writer rows and 4 mediated_route rows at risk. This contradicts the comment at check-store-writers.py:665-666 and docs/advanced/split-merge-porting.md:40. tests/test_port_split_hunks.py:113 and :142 still use that empty baseline as the happy path. Fix: refuse a baseline with no writer rows in both the porter and the --baseline path (the printed deferred command bypasses the porter), and use a populated baseline in the fixture with an assertion that policy survives.
+    2. CLI help golden is uncovered while the PR would close the story (open since round 2). The requirement says generated files are regenerated and names the CLI help golden; docs/advanced/split-merge-porting.md:69 scopes it out. The PR title still ends in `(STORY-2692)` and also claims "snapshots", and aida-cli-lib/src/pr_ship.rs:333-362 treats that trailer as completing. Fix: add regeneration of the golden, or retitle with a non-completing `(Refs STORY-2692)` trailer, drop the snapshots claim, and file the remainder as a follow-up spec.
+    3. Base and head refusal paths are still untested (open since the last round). tests/test_port_split_hunks.py:115-118 covers only a wrong ancestor during a merge. Nothing covers the wrong --head refusal (scripts/port-split-hunks.py:172-173), the non-ancestor refusal outside a merge (:177-178), or a PR that has merged main since forking, which is this repo's normal shape and changes which commit is the valid --base. Fix: add a refusal test for each path and a merged-main fixture.
+    4. Docs still contradict the base rule (open since the last round). docs/advanced/split-merge-porting.md:5-6 says to pass the PR original base, but :14-15 and scripts/port-split-hunks.py:174-176 require the unique merge base, so for a PR that has merged main the documented value refuses. Fix: say merge base at line 5 and show `git merge-base HEAD MERGE_HEAD`.
+    5. Minor, and more than a false refusal: str.splitlines breaks on characters that are not Git line ends (scripts/port-split-hunks.py:25, :184, :193; form feed, VT, NEL, U+2028, U+2029). In the patch this falsely refuses a valid hunk. In a destination it splits one line in two, so a hunk whose first old line is `bar\n` can match the tail of `foo<U+2028>bar\n`: an inexact mid-line placement, against the exact-match acceptance. Found by source inspection, not executed. Fix: split on \n only for patch and destinations, with a test.
+    6. Minor: the regenerator is not checked before writes. scripts/port-split-hunks.py:206 runs check-store-writers.py after hunks are written; if it is absent, Python exits 2 with source edits kept, and a retry then hits the replay refusal at :60-65. Requested last round; the other preflight items were fixed. Fix: refuse before writing when the regenerator is not a regular file, with a test.
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
+  created_at: 2026-11-09T07:12:55.597474097Z
+  modified_at: 2026-11-09T07:12:55.597474097Z
   session_id: 01a1beff-fc3b-78e2-93e2-9b0c283b0339
   harness_version: 2.1.319 (Claude Code)
 history:
