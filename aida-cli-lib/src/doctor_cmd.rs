@@ -16124,10 +16124,15 @@ mod bug_1505_review_verdict_doctor_tests {
 #[derive(clap::Parser, Debug)]
 #[clap(name = "doctor")]
 pub(crate) struct DoctorArgs {
-    /// Report the host codegraph snapshot age as seen from this lane.
-    // trace:STORY-2630 | ai:codex
-    #[clap(long, conflicts_with_all = ["heal", "fix", "fix_sandbox", "contradictions"])]
+    /// Check this machine before running automated lanes.
+    // trace:STORY-2642 | ai:codex
+    #[clap(long, conflicts_with_all = ["lane_capacity", "heal", "fix_sandbox", "contradictions", "yes", "category", "force", "all", "since", "dry_run", "mapping", "tree_only", "preserve", "contradictions_limit", "contradictions_offset"])]
     pub lane_host: bool,
+
+    /// Report the host codegraph snapshot age as seen from this lane.
+    // trace:STORY-2630 | ai:claude
+    #[clap(long, conflicts_with_all = ["lane_host", "heal", "fix", "fix_sandbox", "contradictions"])]
+    pub lane_codegraph: bool,
 
     /// Apply safe fixes after scanning. Without this, doctor is read-only.
     #[clap(long)]
@@ -16191,7 +16196,7 @@ pub(crate) struct DoctorArgs {
     /// resolving. Needs --dry-run (preview) or --yes (apply).
     // trace:BUG-B6B1278890774EF993D2EBC327862470-046 | ai:claude
     // trace:STORY-B6B1278890774EF993D2EBC327862470-105 | ai:claude
-    #[clap(long, value_name = "CATEGORY", value_parser = ["id-collisions", "agreed-ids"])]
+    #[clap(long, value_name = "CATEGORY", num_args = 0..=1, default_missing_value = "lane-host", value_parser = ["id-collisions", "agreed-ids", "lane-host"])]
     pub fix: Option<String>,
 
     /// With --fix: show the plan and write nothing to the store.
@@ -16249,6 +16254,7 @@ fn run_doctor(
     let args = <DoctorArgs as clap::FromArgMatches>::from_arg_matches(matches)?;
     let DoctorArgs {
         lane_host,
+        lane_codegraph,
         heal,
         yes,
         category,
@@ -16268,12 +16274,23 @@ fn run_doctor(
         lane_capacity,
         cmd,
     } = &args;
+    // trace:STORY-2642 | ai:codex
+    if *lane_host {
+        if fix.as_deref().is_some_and(|v| v != "lane-host") || *dry_run || cmd.is_some() {
+            anyhow::bail!("use `aida doctor --lane-host [--fix]` for host setup");
+        }
+        let root = crate::main_worktree_root_from(&crate::find_project_root()?);
+        return crate::lane_host::run(&root, fix.is_some(), *json);
+    }
+    if fix.as_deref() == Some("lane-host") {
+        anyhow::bail!("bare --fix requires --lane-host; store repairs require a category");
+    }
     // No store refresh, host mutation or arbitrary subprocess for this report.
     // trace:STORY-2630 | ai:codex
-    if *lane_host {
+    if *lane_codegraph {
         anyhow::ensure!(
             cmd.is_none() && category.is_none(),
-            "--lane-host is a standalone codegraph report"
+            "--lane-codegraph is a standalone report"
         );
         let root = crate::find_project_root()?;
         let report = crate::codegraph::lane_host_report(&root)?;
@@ -16296,7 +16313,6 @@ fn run_doctor(
         }
         return Ok(());
     }
-
     // trace:STORY-2660 | ai:codex
     if *lane_capacity {
         anyhow::ensure!(

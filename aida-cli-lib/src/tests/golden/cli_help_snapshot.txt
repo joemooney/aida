@@ -12599,6 +12599,9 @@ Commands:
 
 Options:
       --lane-host
+          Check this machine before running automated lanes
+
+      --lane-codegraph
           Report the host codegraph snapshot age as seen from this lane
 
       --heal
@@ -12619,9 +12622,6 @@ Options:
       --force
           Permit riskier destructive fixes such as branch deletion
 
-      --all
-          Show older completed-without-commit findings individually
-
       --format <FORMAT>
           Pin the output format regardless of whether stdout is a terminal: human = tables, toon =
           compact agent output, json = machine JSON. Default (unset) is human at a TTY, toon when
@@ -12631,6 +12631,9 @@ Options:
           - human: Human-readable tables / emoji (the interactive default at a TTY)
           - toon:  Token-efficient TOON — the compact agent default when piped/captured
           - json:  Machine JSON, for commands that support a JSON projection
+
+      --all
+          Show older completed-without-commit findings individually
 
       --canonical-ids
           Show node-local spec IDs in their canonical form instead of the node's friendly label (for
@@ -12650,7 +12653,7 @@ Options:
           Prints the sequence — sudo steps are clearly marked "run this yourself"; it never silently
           runs sudo. Runs the non-sudo availability re-probe as a smoke check
 
-      --fix <CATEGORY>
+      --fix [<CATEGORY>]
           Repair one category of store damage that needs a data migration. `id-collisions`: spec IDs
           that differ only by leading zeros are the same ID, so each collision keeps one spec on the
           number and gives the others a fresh ID, rewriting their mentions in the store, docs and
@@ -12658,7 +12661,7 @@ Options:
           agreed number of its type; local IDs keep resolving. Needs --dry-run (preview) or --yes
           (apply)
           
-          [possible values: id-collisions, agreed-ids]
+          [possible values: id-collisions, agreed-ids, lane-host]
 
       --dry-run
           With --fix: show the plan and write nothing to the store
@@ -20404,15 +20407,70 @@ Inspect the effective launch permission posture for managed agents
 Usage: aida config permissions [OPTIONS] <COMMAND>
 
 Commands:
-  probe  Run the fixed, model-free filesystem/supervisor containment tracer. This does not enable
-         vendor launches or change permission policy
-  show   Show the resolved per-agent posture and diagnostics. Read-only
-  set    Apply a named agent permission posture to local or user config files. `bypass` must be
-         confirmed by a person at an interactive terminal; it is refused when stdin or stdout is not
-         a terminal
-  help   Print this message or the help of the given subcommand(s)
+  runtime-policy  Print the runtime descriptor embedded in this binary. No launch authority
+  probe           Run the fixed, model-free filesystem/supervisor containment tracer. This does not
+                  enable vendor launches or change permission policy
+  show            Show the resolved per-agent posture and diagnostics. Read-only
+  set             Apply a named agent permission posture to local or user config files. `bypass`
+                  must be confirmed by a person at an interactive terminal; it is refused when stdin
+                  or stdout is not a terminal
+  help            Print this message or the help of the given subcommand(s)
 
 Options:
+      --format <FORMAT>
+          Pin the output format regardless of whether stdout is a terminal: human = tables, toon =
+          compact agent output, json = machine JSON. Default (unset) is human at a TTY, toon when
+          piped/captured. Also settable via AIDA_OUTPUT_FORMAT (the flag wins)
+
+          Possible values:
+          - human: Human-readable tables / emoji (the interactive default at a TTY)
+          - toon:  Token-efficient TOON — the compact agent default when piped/captured
+          - json:  Machine JSON, for commands that support a JSON projection
+
+      --canonical-ids
+          Show node-local spec IDs in their canonical form instead of the node's friendly label (for
+          scripts). Also settable via AIDA_CANONICAL_IDS=1
+
+  -h, --help
+          Print help (see a summary with '-h')
+===== aida config permissions conformance-launch
+Run the closed AGY conformance fixture through the shared AIDA wrapper. Diagnostic only: does not
+enable production AGY admission
+
+Usage: aida config permissions conformance-launch [OPTIONS] --fixture-root <FIXTURE_ROOT> --credential <CREDENTIAL>
+
+Options:
+      --fixture-root <FIXTURE_ROOT>
+          Fresh conformance fixture containing workspace, repository and payload
+
+      --credential <CREDENTIAL>
+          Absolute path to the existing AGY OAuth credential leaf
+
+      --format <FORMAT>
+          Pin the output format regardless of whether stdout is a terminal: human = tables, toon =
+          compact agent output, json = machine JSON. Default (unset) is human at a TTY, toon when
+          piped/captured. Also settable via AIDA_OUTPUT_FORMAT (the flag wins)
+
+          Possible values:
+          - human: Human-readable tables / emoji (the interactive default at a TTY)
+          - toon:  Token-efficient TOON — the compact agent default when piped/captured
+          - json:  Machine JSON, for commands that support a JSON projection
+
+      --canonical-ids
+          Show node-local spec IDs in their canonical form instead of the node's friendly label (for
+          scripts). Also settable via AIDA_CANONICAL_IDS=1
+
+  -h, --help
+          Print help (see a summary with '-h')
+===== aida config permissions runtime-policy
+Print the runtime descriptor embedded in this binary. No launch authority
+
+Usage: aida config permissions runtime-policy [OPTIONS] --vendor <VENDOR>
+
+Options:
+      --vendor <VENDOR>
+          Vendor whose embedded runtime descriptor to inspect
+
       --format <FORMAT>
           Pin the output format regardless of whether stdout is a terminal: human = tables, toon =
           compact agent output, json = machine JSON. Default (unset) is human at a TTY, toon when
@@ -44232,9 +44290,14 @@ Working on aida itself
         "help": "Read-only typed local lane capacity and reservations (not readiness admission)"
       },
       {
-        "name": "lane-host",
+        "name": "lane-codegraph",
         "takes_value": false,
         "help": "Report the host codegraph snapshot age as seen from this lane"
+      },
+      {
+        "name": "lane-host",
+        "takes_value": false,
+        "help": "Check this machine before running automated lanes"
       },
       {
         "name": "mapping",
@@ -52118,6 +52181,75 @@ Working on aida itself
         "name": "help",
         "takes_value": false,
         "help": "Print help (see more with '--help')"
+      }
+    ],
+    "hidden": true
+  },
+  {
+    "path": [
+      "aida",
+      "config",
+      "permissions",
+      "conformance-launch"
+    ],
+    "about": "Run the closed AGY conformance fixture through the shared AIDA wrapper. Diagnostic only: does not enable production AGY admission",
+    "flags": [
+      {
+        "name": "canonical-ids",
+        "takes_value": false,
+        "help": "Show node-local spec IDs in their canonical form instead of the node's friendly label (for scripts). Also settable via AIDA_CANONICAL_IDS=1"
+      },
+      {
+        "name": "credential",
+        "takes_value": true,
+        "help": "Absolute path to the existing AGY OAuth credential leaf"
+      },
+      {
+        "name": "fixture-root",
+        "takes_value": true,
+        "help": "Fresh conformance fixture containing workspace, repository and payload"
+      },
+      {
+        "name": "format",
+        "takes_value": true,
+        "help": "Pin the output format regardless of whether stdout is a terminal: human = tables, toon = compact agent output, json = machine JSON. Default (unset) is human at a TTY, toon when piped/captured. Also settable via AIDA_OUTPUT_FORMAT (the flag wins)"
+      },
+      {
+        "name": "help",
+        "takes_value": false,
+        "help": "Print help (see more with '--help')"
+      }
+    ],
+    "hidden": true
+  },
+  {
+    "path": [
+      "aida",
+      "config",
+      "permissions",
+      "runtime-policy"
+    ],
+    "about": "Print the runtime descriptor embedded in this binary. No launch authority",
+    "flags": [
+      {
+        "name": "canonical-ids",
+        "takes_value": false,
+        "help": "Show node-local spec IDs in their canonical form instead of the node's friendly label (for scripts). Also settable via AIDA_CANONICAL_IDS=1"
+      },
+      {
+        "name": "format",
+        "takes_value": true,
+        "help": "Pin the output format regardless of whether stdout is a terminal: human = tables, toon = compact agent output, json = machine JSON. Default (unset) is human at a TTY, toon when piped/captured. Also settable via AIDA_OUTPUT_FORMAT (the flag wins)"
+      },
+      {
+        "name": "help",
+        "takes_value": false,
+        "help": "Print help (see more with '--help')"
+      },
+      {
+        "name": "vendor",
+        "takes_value": true,
+        "help": "Vendor whose embedded runtime descriptor to inspect"
       }
     ],
     "hidden": true

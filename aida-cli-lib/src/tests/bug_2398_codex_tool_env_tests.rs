@@ -503,6 +503,14 @@ enum Finalization {
 /// launches would have been caught.
 // trace:BUG-b6b1278890774ef993d2ebc327862470-172.ac022c22 | ai:claude
 const LAUNCH_INVENTORY: &[(&str, usize, Finalization)] = &[
+    // trace:TASK-3048 | ai:codex — closed AGY fixture, shared wrapper only.
+    (
+        "launch/agy.rs",
+        1,
+        Finalization::NotACodexLaunch(
+            "closed AGY diagnostic; vendor selector validated before grant issuance",
+        ),
+    ),
     // STORY-2326: the fg/bg seat writes moved into launch::assign_seat; the
     // 2 grant writes plus 6 launcher calls (2 spawn_agent, 4 assign_seat).
     // TASK-3219: the extra seat assignment is Claude-wrapper-only; Codex
@@ -1799,6 +1807,8 @@ enum RoleRoute {
     /// A Codex launch that does not finalize yet; the reason names the
     /// follow-up. Moving an entry out of here is the fix, not editing it.
     KnownGap(&'static str),
+    /// Closed vendor diagnostic whose selector excludes Codex.
+    NotACodexLaunch(&'static str),
     /// `launch::assign_seat`, the one seat writer: it launches nothing
     /// itself, and every caller is counted at its own site.
     // trace:STORY-2326 | ai:claude
@@ -1834,6 +1844,12 @@ fn role_flagged_as_unlisted(rel: &str, src: &str) -> bool {
 /// here until it is audited for Codex finalization and recorded.
 // trace:BUG-2395 | ai:claude
 const ROLE_LAUNCH_SITES: &[(&str, usize, RoleRoute)] = &[
+    // trace:TASK-3048 | ai:codex
+    (
+        "launch/agy.rs",
+        1,
+        RoleRoute::NotACodexLaunch("AGY-only diagnostic uses shared wrapper and child grant"),
+    ),
     // STORY-2254: the detached Codex worker finalizes via prepare_launch.
     ("agent_codex_background.rs", 1, RoleRoute::LaunchInventory),
     // STORY-2326: the fg/bg lane seats, through 2 spawn_agent and 4
@@ -1920,7 +1936,9 @@ fn bug_2395_every_role_launch_site_is_inventoried() {
                     )),
                 "{rel} claims LAUNCH_INVENTORY finalization but is not finalized there"
             ),
-            RoleRoute::AidaChild(why) | RoleRoute::KnownGap(why) => assert!(!why.is_empty()),
+            RoleRoute::AidaChild(why)
+            | RoleRoute::KnownGap(why)
+            | RoleRoute::NotACodexLaunch(why) => assert!(!why.is_empty()),
             // The seat writer's callers are the launch sites: at least one
             // other inventoried file must call the launcher.
             RoleRoute::SeatWriter => assert!(
