@@ -144,11 +144,16 @@ the launcher commits that pending work in the seat clone. An operator can also
 commit and publish it with
 `aida ship <SPEC> --from-seat <clone> --commit-pending '<subject> (<SPEC>)'`.
 Both commands accept `--commit-body-file <file>` for an optional UTF-8 body,
-including required trailers such as `Help-Golden: unchanged`. The body is
-written verbatim after the subject and a blank line. Store body files outside the
-checkout (for example under `/tmp`) so host staging does not commit them. Avoid
-body lines ending in `(ID)` groups: those lines can also supply completion credit
-in squash commits. Failed exits preserve the body while retaining Refs.
+including required trailers such as `Help-Golden: unchanged`. The body follows
+the subject and a blank line. For native declarations, the host
+rewrites completion-bearing body trailers to `(Refs ID)` groups; only the
+validated subject grants completion credit. Other body text is preserved.
+<!-- trace:TASK-3736 | ai:codex -->
+
+Store body files outside the checkout (for example under `/tmp`) so host staging does not commit them. For
+direct `--commit-pending` messages, avoid body lines ending in `(ID)` groups:
+those lines can supply completion credit in squash commits. Failed exits retain
+Refs and preserve the sanitized declaration body.
 <!-- trace:BUG-2493 | ai:codex -->
 
 Either way the commit runs inside AIDA's own sandbox on the seat's leased
@@ -173,6 +178,24 @@ and hold signals veto publication before declaration validation and report that
 pending work remains uncommitted. Post-exit trailers use the store's canonical
 display ID, never a friendly node alias.
 <!-- trace:TASK-2902 | ai:codex -->
+
+A successful native implementer exit with no pending files or unpublished commits
+records a host-side, lease-scoped no-change receipt when launched by a drain.
+Standalone launches and explicit queue resumes do not retain receipts. Fresh and resumed drains
+classify it after checking punt/hold signals. An existing open PR continues through
+ordinary gates; otherwise the drain reports `no-change`, exits 0 and pauses with
+no shipped credit or NeedsAttention shelving. No bundle is created for no-change.
+Failed exits cannot produce a no-change receipt. Pipelined child sidecars preserve
+this outcome for batch reporting. Drain state records a finished `no-change` member
+without a PR or head binding; status excludes it from merged counts and last-ship
+reporting. Confirmed no-change attempts to end the implementer
+session immediately. Cleanup failures warn and retain the lease for manual recovery,
+without shelving the spec; punt, hold and inconclusive outcomes also retain it.
+Fresh no-change lookups keep that context through retries before running preflight,
+so an older merged PR cannot grant shipped credit.
+Resume publication failures are ordinary phase failures, not spawn failures.
+A failed or unreachable PR lookup cannot confirm no-change.
+<!-- trace:TASK-3608 | ai:codex -->
 
 ---
 

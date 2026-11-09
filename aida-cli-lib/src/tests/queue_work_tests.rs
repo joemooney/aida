@@ -4776,3 +4776,23 @@ fn bug_2500_waiting_pickup_checks_every_member_and_preserves_exemptions() {
     assert!(!tmp.path().join(".aida/queue").exists());
     assert!(!tmp.path().join(".aida/merge-holds").exists());
 }
+
+// trace:TASK-3608 | ai:codex
+#[test]
+fn task_3608_pipelined_sidecar_preserves_no_change() {
+    let mut written = crate::auto_complete::OrchestrationResult::ok();
+    written.no_change = true;
+    let json = crate::pipelined_child_result_sidecar_json(&written);
+    let read = crate::parse_pipelined_child_result_sidecar(&json).expect("valid sidecar");
+    assert!(read.no_change);
+    assert_eq!(read.exit_code, 0);
+    assert!(read.failed_phase.is_none());
+    assert!(read.shelved_reason.is_none());
+    let mut legacy = json;
+    legacy.as_object_mut().unwrap().remove("no_change");
+    assert!(
+        !crate::parse_pipelined_child_result_sidecar(&legacy)
+            .unwrap()
+            .no_change
+    );
+}

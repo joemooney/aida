@@ -26,7 +26,7 @@ Claude retains AIDA containment. Missing non-Claude vendor keys still refuse;
 unsupported native vendors refuse. See OVERVIEW.md.
 <!-- trace:TASK-2631 | ai:codex -->
 
-Native `aida ship -m '<subject> (ID)'` or `'<subject> (Refs ID)'` records a
+Native `aida ship -m '<subject> (Refs ID)'` records a
 lease-bound publication declaration for the host; failed exits stay Refs and
 punt/hold vetoes apply first. See the [publication handshake](docs/cli/04-git-lifecycle.md#aida-ship).
 <!-- trace:TASK-2902 | ai:codex -->
