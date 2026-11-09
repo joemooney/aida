@@ -23,7 +23,8 @@ fn run_derisk(
     matches: &clap::ArgMatches,
     _ctx: &crate::command_registry::DispatchCtx,
 ) -> anyhow::Result<()> {
-    use crate::*;
+    // trace:TASK-3428 | ai:codex
+    use crate::handle_derisk_command;
     let args = <DeriskArgs as clap::FromArgMatches>::from_arg_matches(matches)?;
     let DeriskArgs { spec } = &args;
     return handle_derisk_command(spec);

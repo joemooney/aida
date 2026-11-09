@@ -1,7 +1,8 @@
 //! `aida tui` entry: the cfg(feature = "tui") / stub pair (STORY-1488 slice 1).
 // trace:STORY-1488 | ai:claude
 
-use crate::*;
+// trace:TASK-3428 | ai:codex
+use anyhow::Result;
 
 /// EPIC-26: launch the AIDA TUI shell. Gated behind the `tui` feature
 /// (default-on as of STORY-137) — the `aida tui` subcommand stays visible
