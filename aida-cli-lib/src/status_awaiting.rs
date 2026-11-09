@@ -1219,6 +1219,8 @@ pub(crate) fn collect_awaiting_report_with_mail_facts(
 
     awaiting_you::AwaitingReport {
         idle_eligible,
+        // trace:TASK-3452 | ai:codex
+        ci_relay_skipped: crate::ci_relay::awaiting_skipped(project_root),
         // trace:BUG-2426 | ai:claude
         review_watch_skipped: awaiting_you::WatchSkippedItem::from_watcher(project_root),
         mergeable_prs,

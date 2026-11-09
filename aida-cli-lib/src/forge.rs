@@ -465,6 +465,22 @@ fn change_lookup_from_pr_lookup(pl: crate::PrLookup, branch: &str) -> ChangeLook
     }
 }
 
+/// Keep forge diagnostics visible to callers that render only Display.
+// trace:BUG-2494 | ai:codex
+pub(crate) fn open_change_error(error: anyhow::Error) -> anyhow::Error {
+    anyhow::anyhow!("could not open a forge change request: {error:#}")
+}
+
+// trace:BUG-2494 | ai:codex
+fn validate_github_change_title(title: &str) -> Result<()> {
+    let length = title.chars().count();
+    anyhow::ensure!(
+        length <= 256,
+        "GitHub pull request title is {length} characters; the limit is 256 characters. Shorten the commit subject before retrying"
+    );
+    Ok(())
+}
+
 /// Inputs to open a new change.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct OpenChange {
@@ -2117,6 +2133,8 @@ impl Forge for GitHubForge {
     }
 
     fn open_change(&self, req: OpenChange) -> Result<ChangeRef> {
+        // trace:BUG-2494 | ai:codex
+        validate_github_change_title(&req.title)?;
         let mut args = vec![
             "pr".to_string(),
             "create".to_string(),
@@ -5399,6 +5417,39 @@ mod story_1689_commit_ci_status_tests;
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    // trace:BUG-2494 | ai:codex
+    #[test]
+    fn open_change_failure_keeps_forge_reason_in_display() {
+        let cause = anyhow::anyhow!("GraphQL: title is too long (maximum is 256 characters)")
+            .context("gh pr create failed");
+        let message = open_change_error(cause).to_string();
+        assert!(message.contains("could not open a forge change request"));
+        assert!(message.contains("gh pr create failed"));
+        assert!(message.contains("GraphQL: title is too long (maximum is 256 characters)"));
+    }
+
+    // trace:BUG-2494 | ai:codex
+    #[test]
+    fn open_change_github_title_limit_reports_length_without_spawning() {
+        for character in ['a', '界'] {
+            assert!(validate_github_change_title(&character.to_string().repeat(256)).is_ok());
+            let forge = GitHubForge::new(Path::new("/nonexistent"));
+            let error = forge
+                .open_change(OpenChange {
+                    branch: "topic".into(),
+                    base: "main".into(),
+                    title: character.to_string().repeat(257),
+                    body: String::new(),
+                    draft: false,
+                })
+                .unwrap_err();
+            let message = open_change_error(error).to_string();
+            assert!(message.contains("257 characters"), "{message}");
+            assert!(message.contains("limit is 256 characters"), "{message}");
+            assert!(message.contains("Shorten the commit subject"), "{message}");
+        }
+    }
 
     // TASK-1241 / SPIKE-80: live round-trip of GitLabForge against a REAL GitLab.
     // #[ignore] — run explicitly:

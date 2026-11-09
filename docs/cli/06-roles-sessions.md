@@ -264,6 +264,47 @@ coordinators retain JSONL output. This evidence grants no sandbox conformance.
 
 **Bare `aida` is a shortcut.** Typing `aida` with no arguments at an interactive terminal inside an initialized AIDA project (one with `.aida/config.toml`, a legacy `requirements.db`, or a `.aida-store` worktree) opens the same agent picker as `aida agent new`. When output goes to an agent or a pipe, bare `aida` prints the `aida status` snapshot instead; outside a project, or when stdin is not a terminal, it shows the getting-started menu. `aida status`, `aida help`, and `aida agent new` themselves are unchanged. <!-- trace:TASK-1472 | ai:claude -->
 
+**Scaffolded launch policy.** `aida scaffold` generates
+`.aida/launch-profile.toml`, a portable recipe containing symbolic roots rather
+than local absolute paths. This is per-clone configuration: the default
+deny-by-default `.aida/*` Git ignore rule excludes it, so a fresh clone needs
+`aida scaffold` before it has a recipe. When the file is absent, launch previews
+omit the root declaration; they still report the verbose seat Git policy.
+<!-- trace:STORY-1486 | ai:codex -->
+
+`aida agent new <vendor> --no-exec --verbose` resolves
+the recipe into separate writable and read-only root lists. Project source,
+Git administrative directories (including the common directory shared by linked
+worktrees), project state, store, cache and build output are listed separately.
+The project root in this declaration is the Git worktree containing the launch
+directory, including an explicit linked-worktree `--cwd` or a subdirectory.
+When Git is unavailable, it falls back to the launch directory.
+Unavailable Git metadata is reported without
+preventing a preview; it never establishes a writable AIDA checkout identity.
+An AIDA source checkout is read-only for consumer repositories; it is writable
+for AIDA development only when the resolved Git common-directory identities
+match. Promoted dev builds resolve their source checkout from the existing
+`.promoted` receipt beside the executable and verify repository identity.
+Standalone installations without source evidence infer no source checkout. Both
+`target/debug/aida` and `target/release/aida` locations are covered without
+regenerating the recipe; ordinary approval rules still apply to execution.
+
+Development seats declare Git-write policy; guest and requester seats declare
+read-only. A stakeholder parent label can only downgrade the declaration,
+including when the child requests a development seat. Explicit-vendor
+`--no-exec` previews are reads available to stakeholder seats; actual agent
+launches retain the existing stakeholder write gate.
+`aida agent new <vendor> --git-read-only` explicitly downgrades the declaration.
+With `--verbose` or explicit `--git-read-only`, launches print the mode and reason to stderr; `--no-exec`
+previews print them to stdout. `--show-prompt` and `--show-context` omit these
+diagnostics. These are declarations, **not enforced Git or filesystem restrictions** on current
+adapters, and they grant no seat, delegation or publication authority. This
+recipe adds no approval exemptions or bypass flags and does not alter existing
+vendor permission settings. Enforcement requires a future backend. Unsupported
+recipe versions or malformed recipes refuse. Supported version-1 recipes tolerate
+template skew; the binary supplies the declaration semantics.
+<!-- trace:STORY-1486 | ai:codex -->
+
 **Native Codex finish.** Git metadata is read-only in a native seat. The
 implementer leaves tested edits uncommitted and exits with a handoff listing
 changed files, test results and blockers. For standalone `queue work`, the host

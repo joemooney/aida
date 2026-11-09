@@ -576,6 +576,7 @@ fn story_2593_production_prepare_uses_private_chatgpt_leaf() {
         unsafe { libc::getuid() },
         LaunchIo::Headless,
         &pin,
+        None,
     )
     .unwrap();
     assert!(plan.chatgpt_deadline.is_some());
@@ -655,6 +656,7 @@ fn story_2593_production_prepare_uses_private_chatgpt_leaf() {
         unsafe { libc::getuid() },
         LaunchIo::Headless,
         &pin,
+        None,
     )
     .unwrap();
     assert_eq!(capped.chatgpt_deadline, Some(exp - 300));
@@ -679,6 +681,7 @@ fn story_2593_production_prepare_uses_private_chatgpt_leaf() {
         unsafe { libc::getuid() },
         LaunchIo::Headless,
         &pin,
+        None,
     );
     assert!(match refused {
         Ok(_) => false,

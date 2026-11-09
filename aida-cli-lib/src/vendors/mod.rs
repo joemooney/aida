@@ -3,6 +3,24 @@
 // trace:STORY-2539 | ai:codex
 use aida_core::vendors::{Background, SkillSyntax, VendorProfile};
 
+// Read-only projection for declaration rendering and preview classification.
+// trace:STORY-1486 | ai:codex
+pub(crate) struct LaunchPreviewOptions<'a> {
+    pub cwd: &'a Option<std::path::PathBuf>,
+    pub noexec: &'a bool,
+}
+
+// trace:STORY-1486 | ai:codex
+pub(crate) fn launch_preview_options(
+    command: &crate::agent_launch::AgentNewCommand,
+) -> LaunchPreviewOptions<'_> {
+    use crate::agent_launch::AgentNewCommand;
+    let (AgentNewCommand::Claude { cwd, noexec, .. }
+    | AgentNewCommand::Codex { cwd, noexec, .. }
+    | AgentNewCommand::Antigravity { cwd, noexec, .. }) = command;
+    LaunchPreviewOptions { cwd, noexec }
+}
+
 fn with_args(head: String, args: &str) -> String {
     match args.trim() {
         "" => head,
@@ -377,3 +395,6 @@ pub(crate) fn codex_binary_diagnostic(path: &std::path::Path) -> String {
         ),
     }
 }
+
+// trace:STORY-2642 | ai:codex
+pub(crate) mod host_diagnostics;
