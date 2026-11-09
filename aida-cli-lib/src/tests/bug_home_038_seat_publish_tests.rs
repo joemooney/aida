@@ -3482,6 +3482,161 @@ fn story_2640_fast_gate_missing_native_resume_lease_is_an_error() {
         .contains("publication lease missing is missing"));
 }
 
+// trace:BUG-2504 | ai:codex
+#[test]
+fn bug_2504_recovery_matches_recorded_tree_kind() {
+    if !bwrap_live_or_skip() {
+        return;
+    }
+    for clone in [false, true] {
+        for behind_head in [false, true] {
+            let fx = fixture();
+            git_ok(&fx.main, &["branch", "feat"]);
+            git_ok(&fx.main, &["push", "-q", "origin", "feat"]);
+            let tree = if clone {
+                leased_clone(&fx, "recovery", "c0ffee250400")
+            } else {
+                let tree = fx.root.join("linked-recovery");
+                git_ok(
+                    &fx.main,
+                    &["worktree", "add", tree.to_str().unwrap(), "feat"],
+                );
+                tree
+            };
+            // Diverge main from the seat, or advance the remote PR head.
+            if !behind_head {
+                std::fs::write(tree.join("README.md"), "PR version\n").unwrap();
+                git_ok(&tree, &["commit", "-qam", "PR diverges"]);
+            }
+            std::fs::write(fx.main.join("README.md"), "remote version\n").unwrap();
+            git_ok(&fx.main, &["commit", "-qam", "remote advances"]);
+            git_ok(
+                &fx.main,
+                &[
+                    "push",
+                    "-q",
+                    "origin",
+                    if behind_head { "HEAD:feat" } else { "main" },
+                ],
+            );
+            std::fs::write(tree.join("pending"), "preserve me\n").unwrap();
+            let head = git_ok(&tree, &["rev-parse", "HEAD"]);
+            let error = prepare_rework_merge(&fx.main, &tree, "feat", true).unwrap_err();
+            let message = format!("{error:#}");
+            assert!(message.contains("edits preserved"), "{message}");
+            assert!(message.contains(tree.to_str().unwrap()), "{message}");
+            if clone {
+                assert!(message.contains("aida ship --from-seat"), "{message}");
+                assert!(!message.contains("git -C"), "{message}");
+            } else {
+                assert!(message.contains("git -C"), "{message}");
+                assert!(message.contains("merge origin/feat"), "{message}");
+                assert!(!message.contains("aida ship --from-seat"), "{message}");
+            }
+            assert_eq!(git_ok(&tree, &["rev-parse", "HEAD"]), head);
+            assert_eq!(
+                std::fs::read_to_string(tree.join("pending")).unwrap(),
+                "preserve me\n"
+            );
+            if behind_head {
+                std::fs::remove_file(tree.join("pending")).unwrap();
+                let message = format!(
+                    "{:#}",
+                    prepare_rework_merge(&fx.main, &tree, "feat", false).unwrap_err()
+                );
+                assert!(
+                    message.contains("retry pickup with its current head"),
+                    "{message}"
+                );
+                assert!(!message.contains("--commit-pending"), "{message}");
+                assert!(!message.contains("add -A"), "{message}");
+            }
+        }
+    }
+}
+
+// trace:BUG-2504 | ai:codex
+#[test]
+fn bug_2504_rework_preflight_has_no_commit_recovery() {
+    let fx = fixture();
+    git_ok(&fx.main, &["branch", "feat"]);
+    let tree = fx.root.join("linked-preflight");
+    git_ok(
+        &fx.main,
+        &["worktree", "add", tree.to_str().unwrap(), "feat"],
+    );
+    std::fs::write(tree.join("README.md"), "PR version\n").unwrap();
+    git_ok(&tree, &["commit", "-qam", "PR diverges"]);
+    std::fs::write(fx.main.join("README.md"), "main version\n").unwrap();
+    git_ok(&fx.main, &["commit", "-qam", "main diverges"]);
+    let merge = crate::test_git::git_command()
+        .arg("-C")
+        .arg(&tree)
+        .args(["merge", "main"])
+        .output()
+        .unwrap();
+    assert!(!merge.status.success());
+    assert!(git_ok(&tree, &["status", "--porcelain"]).contains("UU README.md"));
+    std::fs::write(tree.join("pending"), "preserve me\n").unwrap();
+    let head = git_ok(&tree, &["rev-parse", "HEAD"]);
+    let conflicted_contents = std::fs::read(tree.join("README.md")).unwrap();
+    for branch in ["feat", "other"] {
+        let message = format!(
+            "{:#}",
+            prepare_rework_merge(&fx.main, &tree, branch, true).unwrap_err()
+        );
+        assert!(
+            message.contains(if branch == "feat" {
+                "unfinished merge"
+            } else {
+                "not on the PR head branch"
+            }),
+            "{message}"
+        );
+        assert!(!message.contains("add -A"), "{message}");
+        assert!(!message.contains("commit-pending"), "{message}");
+        assert!(!message.contains(". ."), "{message}");
+    }
+    assert!(git_ok(&tree, &["status", "--porcelain"]).contains("UU README.md"));
+    assert_eq!(
+        std::fs::read(tree.join("README.md")).unwrap(),
+        conflicted_contents
+    );
+    assert_eq!(git_ok(&tree, &["rev-parse", "HEAD"]), head);
+    assert_eq!(
+        std::fs::read_to_string(tree.join("pending")).unwrap(),
+        "preserve me\n"
+    );
+}
+
+// trace:BUG-2504 | ai:codex
+#[test]
+fn bug_2504_recorded_clone_admits_clean_main_advance() {
+    if !bwrap_live_or_skip() {
+        return;
+    }
+    let fx = fixture();
+    git_ok(&fx.main, &["branch", "feat"]);
+    git_ok(&fx.main, &["push", "-q", "origin", "feat"]);
+    let tree = leased_clone(&fx, "admission", "c0ffee250401");
+    std::fs::write(fx.main.join("main-only"), "new main file\n").unwrap();
+    git_ok(&fx.main, &["add", "main-only"]);
+    git_ok(&fx.main, &["commit", "-qm", "main advances cleanly"]);
+    git_ok(&fx.main, &["push", "-q", "origin", "main"]);
+    std::fs::write(tree.join("pending"), "preserve me\n").unwrap();
+    let head = git_ok(&tree, &["rev-parse", "HEAD"]);
+    let status = git_ok(&tree, &["status", "--porcelain"]);
+    assert!(prepare_rework_merge(&fx.main, &tree, "feat", true)
+        .unwrap()
+        .is_empty());
+    assert_eq!(git_ok(&tree, &["rev-parse", "HEAD"]), head);
+    assert_eq!(git_ok(&tree, &["status", "--porcelain"]), status);
+    assert_eq!(
+        std::fs::read_to_string(tree.join("pending")).unwrap(),
+        "preserve me\n"
+    );
+}
+
 // trace:BUG-2488 | ai:codex
 // trace:BUG-b6b1278890774ef993d2ebc327862470-253.acc03424 | ai:codex
 // trace:BUG-b6b1278890774ef993d2ebc327862470-253.acf66e50 | ai:codex
