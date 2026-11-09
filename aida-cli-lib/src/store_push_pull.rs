@@ -569,6 +569,8 @@ pub(crate) fn auto_push_store_best_effort(store_path: &std::path::Path, reason: 
         // never read as "nothing pending".
         git_ops::protect_roster_advisors(store_path)?; // trace:BUG-2209 | ai:claude
         if git_ops::has_changes_checked(store_path)? {
+            // trace:BUG-2490 | ai:codex — retain unmerged stages on refusal.
+            git_ops::validate_pending_store_commit(store_path)?;
             git_ops::add_all(store_path, ".")
                 .and_then(|_| git_ops::commit(store_path, "chore: sync pending changes"))
                 .context("could not commit pending store changes")?;
