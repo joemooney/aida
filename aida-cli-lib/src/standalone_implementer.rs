@@ -1055,10 +1055,18 @@ pub(crate) fn provision_attempt_signals(
 /// Hold markers remain available for held-resume admission.
 // trace:BUG-2488 | ai:codex
 pub(crate) fn consume_punt_signal(main: &Path, tree: &Path, spec: &str) -> Result<()> {
-    let seat = prepare_signal_paths(tree, spec)?;
-    let host = prepare_signal_paths(main, spec)?;
-    clear_signal_paths(&seat[..1])?;
-    clear_signal_paths(&host[..1])
+    // Recovery receipts may refer to a workspace the child already removed.
+    // Consumption only unlinks existing punts; it must neither recreate that
+    // workspace nor require unrelated hold directories to be writable.
+    // trace:BUG-2488 | ai:codex
+    let mut paths = Vec::new();
+    for root in [tree, main] {
+        let path = crate::punt::signal_path(root, spec);
+        if let Some(parent) = crate::punt::seat_handshake_parent(root, &path, false)? {
+            paths.push((path, parent));
+        }
+    }
+    clear_signal_paths(&paths)
 }
 
 /// Install explicit seat paths rather than inheriting a host-only handshake.

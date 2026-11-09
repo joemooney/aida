@@ -3882,3 +3882,19 @@ fn bug_2488_cleanup_removes_all_case_spellings() {
         .unwrap();
     assert!(!crate::punt::signal_path(tree.path(), "BUG-2488").exists());
 }
+
+// trace:BUG-2488 | ai:codex
+#[test]
+fn bug_2488_punt_consumption_does_not_recreate_retired_workspace() {
+    let main = tempfile::tempdir().unwrap();
+    let tree = main.path().join("retired-seat");
+    let punt = crate::punt::signal_path(main.path(), "BUG-2488");
+    std::fs::create_dir_all(punt.parent().unwrap()).unwrap();
+    std::fs::write(&punt, "{}").unwrap();
+    // Consuming a punt must not traverse or create unrelated hold parents.
+    std::os::unix::fs::symlink("missing", main.path().join(".aida/pr-holds")).unwrap();
+    crate::standalone_implementer::consume_punt_signal(main.path(), &tree, "BUG-2488").unwrap();
+    assert!(!punt.exists());
+    assert!(!tree.exists());
+    assert!(main.path().join(".aida/pr-holds").is_symlink());
+}
