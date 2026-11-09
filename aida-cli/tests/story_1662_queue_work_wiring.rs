@@ -22,6 +22,8 @@ fn aida(repo: &Path, home: &Path, bin_dir: &Path) -> Command {
     cmd.env("HOME", home);
     cmd.env("AIDA_HOME", home);
     cmd.env("AIDA_TELEMETRY", "0");
+    cmd.env_remove("AIDA_OS_WRAP");
+    cmd.env_remove("AIDA_CONTAINED");
     let path = std::env::join_paths(
         std::iter::once(bin_dir.to_path_buf())
             .chain(std::env::split_paths(&std::env::var_os("PATH").unwrap())),
@@ -77,6 +79,7 @@ fn fixture(claude_body: &str, config_extra: &str) -> Fixture {
     for dir in [&repo, &home, &bin] {
         std::fs::create_dir_all(dir).unwrap();
     }
+    support::contained_lane_host(&home, &bin);
     let claude = bin.join("claude");
     std::fs::write(&claude, format!("#!/bin/sh\n{claude_body}\n")).unwrap();
     std::fs::set_permissions(&claude, std::fs::Permissions::from_mode(0o755)).unwrap();
