@@ -1818,10 +1818,11 @@ pub(crate) fn run_auto_complete(
     // the PR a phase discovered — into the drain-state file. For a batch drain
     // this leaves a member-by-member trail; for a single drain the file is
     // cleared just below, so this update only matters mid-run.
-    drain_state::set_member_outcome(
+    // trace:TASK-3608 | ai:codex
+    drain_state::set_member_result(
         &project_root,
         spec,
-        result.exit_code == 0,
+        &result,
         auto_complete::PhaseDriver::hint_context(&driver).pr_number,
     );
     write_pipelined_child_result_sidecar(&result);

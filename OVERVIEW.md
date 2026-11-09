@@ -1629,7 +1629,7 @@ conflicting per-tool posture defaults and refuses posture passthrough flags;
 an explicit operator launch-posture override retains its existing precedence.
 A native child does not receive `AIDA_CONTAINED=1` or AIDA containment credit.
 Native `aida ship -m '<complete subject> (Refs ID)'` records a lease/spec-bound
-publication declaration for the host after exit. Completing lanes use `(ID)`.
+publication declaration for the host after exit.
 A fresh launch token prevents reuse across attempts and
 survives supervised rotations within an attempt;
 lease release removes the host binding. The declaration stays inside the seat's

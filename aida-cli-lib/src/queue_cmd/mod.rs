@@ -77,6 +77,7 @@ pub(crate) use time_args::{
     parse_time_bound_at, AmbiguousLocalTime, TimeBoundOutOfRange, NAIVE_DATETIME_FORMATS,
 };
 mod work;
+pub(crate) use work::ResumePublicationFailure;
 pub(crate) use work::{
     append_reviewer_prompt_suffixes, append_reviewer_prompt_suffixes_with,
     append_standalone_reviewer_prompt_suffixes, append_untraced_criteria_prompt_block,

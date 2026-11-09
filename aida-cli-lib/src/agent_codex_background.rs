@@ -180,9 +180,15 @@ pub(crate) fn refuse_posture_overrides(args: &[String]) -> Result<()> {
                     || key.starts_with("approval")
                     || key.starts_with("shell_environment_policy")
                     || key.starts_with("permissions")
+                    // trace:TASK-3736 | ai:codex
+                    || key.starts_with("profile")
             }
             _ => {
-                arg.contains("danger-full-access")
+                // trace:TASK-3736 | ai:codex
+                arg == "--profile"
+                    || arg.starts_with("--profile=")
+                    || arg.starts_with("-p")
+                    || arg.contains("danger-full-access")
                     || arg.starts_with("--sandbox=")
                     || arg.starts_with("--ask-for-approval=")
                     || arg.starts_with("--config=")
