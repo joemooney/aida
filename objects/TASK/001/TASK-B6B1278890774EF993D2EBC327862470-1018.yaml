@@ -8,8 +8,16 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-08T21:19:56.393105400Z
-modified_at: 2026-11-08T21:19:56.393105400Z
+modified_at: 2026-11-09T16:45:20.436792356Z
 req_type: Task
+comments:
+- id: 01a1c133-32b4-71f0-9d0b-9ea545392432
+  author: joe
+  content: 'Advisor 2026-11-09: test-time-budget is ejecting trains on noise. PR #3731 ejected at 11.7s vs the 10s unbudgeted limit with all 8077 tests passing; PR #3732''s train had a 10.4s overrun and #3639 failed the same step repeatedly. Touched files get no tolerance, while untouched tests get 15s. Proposal: apply the same tolerance to touched tests so a train is never ejected for a sub-2s overrun, or make the budget a warning for train runs.'
+  created_at: 2026-11-09T16:45:20.436792356Z
+  modified_at: 2026-11-09T16:45:20.436792356Z
+  session_id: 01a1beff-fc3b-78e2-93e2-9b0c283b0339
+  harness_version: 2.1.319 (Claude Code)
 filed_at:
   code_sha: b57c1fab753d30430c7a544b781bd8c7d91da0d2
   branch: main
