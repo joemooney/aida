@@ -591,7 +591,7 @@ fn unresolvable_inputs_refuse() {
     ));
     assert!(matches!(
         prove_carry_over(repo, PR, "no-such-base", &approved, &h),
-        Err(CarryOverRefusal::Unresolvable { .. })
+        Err(CarryOverRefusal::Git { .. })
     ));
     assert!(matches!(
         prove(repo, "abc", &h),
@@ -1117,4 +1117,174 @@ fn corpus_carry_over_refuses_a_shaless_approval_or_an_unparseable_body() {
         corpus_gate(repo, &["BUG-9".to_string()], "main", &h).is_err(),
         "an unparseable live verdict beside the approval refuses"
     );
+}
+
+// Remote failures must not turn a locally cached success into authority.
+// trace:STORY-2694 | ai:codex
+#[test]
+fn cached_proof_refuses_when_protected_remote_is_unavailable() {
+    let _env = crate::test_env::EnvVarsGuard::apply(&[("AIDA_CONTAINED", None)]);
+    let (tmp, approved) = fixture();
+    let repo = tmp.path();
+    git(repo, &["merge", "--quiet", "--no-edit", "main"]);
+    let h = head(repo);
+    let site = CarryOverSite::new(repo, Some("main"));
+    carry_over_for_refusal(&site, PR, &moved(&approved, &h))
+        .unwrap()
+        .unwrap();
+    let count = proofs();
+    git(
+        repo,
+        &[
+            "remote",
+            "set-url",
+            "origin",
+            "/nonexistent/aida-carryover-origin",
+        ],
+    );
+    assert!(carry_over_for_refusal(&site, PR, &moved(&approved, &h))
+        .unwrap()
+        .is_err());
+    assert_eq!(proofs(), count, "no proof runs without refreshed identity");
+    assert_eq!(carry_events(repo, &h).len(), 1);
+}
+
+// ls-remote can succeed while fetching the branch fails. The local tracking
+// ref still exists, and must never serve as a fallback.
+// trace:STORY-2694 | ai:codex
+#[test]
+fn fresh_proof_refuses_failed_fetch_despite_local_tracking_tip() {
+    let (tmp, approved) = fixture();
+    let repo = tmp.path();
+    git(repo, &["merge", "--quiet", "--no-edit", "main"]);
+    let h = head(repo);
+    let tip = git(repo, &["rev-parse", "refs/remotes/origin/main"]);
+    git(tmp._origin.path(), &["update-ref", "-d", "refs/heads/main"]);
+    let why = prove(repo, &approved, &h).unwrap_err();
+    assert!(matches!(why, CarryOverRefusal::Git { .. }), "{why:?}");
+    assert_eq!(git(repo, &["rev-parse", "refs/remotes/origin/main"]), tip);
+}
+
+// A changed remote default invalidates a cached proof even while origin/main
+// and the PR base have stayed unchanged in this clone.
+// trace:STORY-2694 | ai:codex
+#[test]
+fn cached_proof_revalidates_remote_protected_identity() {
+    let _env = crate::test_env::EnvVarsGuard::apply(&[("AIDA_CONTAINED", None)]);
+    let (tmp, approved) = fixture();
+    let repo = tmp.path();
+    git(repo, &["merge", "--quiet", "--no-edit", "main"]);
+    let h = head(repo);
+    let site = CarryOverSite::new(repo, Some("main"));
+    carry_over_for_refusal(&site, PR, &moved(&approved, &h))
+        .unwrap()
+        .unwrap();
+    git(tmp._origin.path(), &["branch", "protected", "main"]);
+    git(
+        tmp._origin.path(),
+        &["symbolic-ref", "HEAD", "refs/heads/protected"],
+    );
+    let why = carry_over_for_refusal(&site, PR, &moved(&approved, &h))
+        .unwrap()
+        .unwrap_err();
+    assert!(
+        matches!(why, CarryOverRefusal::BaseNotProtected { .. }),
+        "{why:?}"
+    );
+}
+
+// A remote main advance must be fetched before deciding whether the ledger's
+// old base tip can be reused, even when no other process fetched this clone.
+// trace:STORY-2694 | ai:codex
+#[test]
+fn cached_proof_refreshes_remote_tip_before_reuse() {
+    let _env = crate::test_env::EnvVarsGuard::apply(&[("AIDA_CONTAINED", None)]);
+    let (tmp, approved) = fixture();
+    let repo = tmp.path();
+    git(repo, &["merge", "--quiet", "--no-edit", "main"]);
+    let h = head(repo);
+    let site = CarryOverSite::new(repo, Some("main"));
+    let (old, _) = carry_over_for_refusal(&site, PR, &moved(&approved, &h))
+        .unwrap()
+        .unwrap();
+    // Advance the remote independently so the clone's tracking ref stays stale.
+    let writer = tempfile::tempdir().unwrap();
+    git(
+        writer.path(),
+        &[
+            "clone",
+            "--quiet",
+            tmp._origin.path().to_str().unwrap(),
+            ".",
+        ],
+    );
+    git(
+        writer.path(),
+        &["config", "user.email", "aida@example.test"],
+    );
+    git(writer.path(), &["config", "user.name", "AIDA Test"]);
+    git(writer.path(), &["config", "commit.gpgsign", "false"]);
+    write(writer.path(), "remote-only.txt", "remote advance\n");
+    let new_tip = commit(writer.path(), "advance remote main");
+    publish_main(writer.path());
+    assert_eq!(
+        git(repo, &["rev-parse", "refs/remotes/origin/main"]),
+        old.base_tip
+    );
+    let count = proofs();
+    let (new, outcome) = carry_over_for_refusal(&site, PR, &moved(&approved, &h))
+        .unwrap()
+        .unwrap();
+    assert_eq!(new.base_tip, new_tip);
+    assert_eq!(outcome, Some(RecordOutcome::Written));
+    assert_eq!(proofs(), count + 1);
+    assert_eq!(carry_events(repo, &h).len(), 2);
+}
+
+// A successful identity probe does not excuse a subsequent fetch failure.
+// trace:STORY-2694 | ai:codex
+#[test]
+fn cached_proof_refuses_when_identity_probe_succeeds_but_fetch_fails() {
+    use std::os::unix::fs::PermissionsExt;
+    let _env = crate::test_env::EnvVarsGuard::apply(&[("AIDA_CONTAINED", None)]);
+    let (tmp, approved) = fixture();
+    let repo = tmp.path();
+    git(repo, &["merge", "--quiet", "--no-edit", "main"]);
+    let h = head(repo);
+    let site = CarryOverSite::new(repo, Some("main"));
+    carry_over_for_refusal(&site, PR, &moved(&approved, &h))
+        .unwrap()
+        .unwrap();
+    let count = proofs();
+    let control = tempfile::tempdir().unwrap();
+    let script = control.path().join("upload-pack");
+    let once = control.path().join("probed");
+    std::fs::write(
+        &script,
+        format!(
+            "#!/bin/sh\nif test -e '{}'; then exit 42; fi\n: > '{}'\nexec git-upload-pack \"$@\"\n",
+            once.display(),
+            once.display()
+        ),
+    )
+    .unwrap();
+    std::fs::set_permissions(&script, std::fs::Permissions::from_mode(0o700)).unwrap();
+    git(
+        repo,
+        &[
+            "config",
+            "remote.origin.uploadpack",
+            script.to_str().unwrap(),
+        ],
+    );
+    let why = carry_over_for_refusal(&site, PR, &moved(&approved, &h))
+        .unwrap()
+        .unwrap_err();
+    assert!(
+        matches!(&why, CarryOverRefusal::Git { detail } if detail.contains("fetch")),
+        "{why:?}"
+    );
+    assert!(once.exists(), "the first remote probe actually ran");
+    assert_eq!(proofs(), count);
+    assert_eq!(carry_events(repo, &h).len(), 1);
 }
