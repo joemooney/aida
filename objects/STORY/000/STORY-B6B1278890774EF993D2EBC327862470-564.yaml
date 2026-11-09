@@ -23,7 +23,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-07T19:59:26.079479Z
-modified_at: 2026-11-09T02:46:16.587631127Z
+modified_at: 2026-11-09T02:46:22.476898723Z
 req_type: Story
 comments:
 - id: 01a1b798-f0d4-73b1-93d5-f84581f2d190
@@ -546,6 +546,22 @@ comments:
   content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: AC1 (second lane job shows sccache hits on primary and dell1) still has no evidence or advisor amendment at 9b202e3a37b4; AC0/AC2/AC3/AC4 and the lane/unsandboxed separation are met in source. Two small new findings. Code CI still in progress at this head; merge-hold-gate fails by design. No local cargo run.. No triage reason was given.'
   created_at: 2026-11-09T02:46:16.587624904Z
   modified_at: 2026-11-09T02:46:16.587624904Z
+  session_id: 20abb7c3-8f9b-4a5e-b326-404921f3b450
+- id: 01a1be33-19a2-7d50-beeb-03037e1acc9a
+  author: joe
+  content: |-
+    REVIEW FINDINGS TO ADDRESS (PR #3657):
+    Verdict: CHANGES REQUESTED
+    Reviewed commit: 9b202e3a37b4
+    Recorded: 2026-11-09T02:15:55.405052794+00:00
+    Review comment: https://github.com/joemooney/aida/pull/3657#issuecomment-6730640228
+    Findings:
+    1. major/acceptance: AC1 is unverified at 9b202e3a37b4. It requires a second lane job on the same dependency set to show sccache hits (stats delta > 0) on the primary AND on dell1. The 47 spec comments and the PR comments hold no lane-job statistics from either host and no advisor amendment. A code change cannot close it, so route it to the host/operator or advisor, not implementer rework. Fix: with a launcher built from this branch, run two consecutive 'aida lane job run' cargo jobs on each host and record both logs' 'lane sccache: final job statistics' output (second job Rust hits > 0) on STORY-2641, or have the advisor record an amendment of AC1.
+    2. minor/correctness (plausible, not reproduced): aida-cli-lib/src/lane_job.rs:266-282 and the SCCACHE_JOB_SCRIPT server start do not neutralise the host sccache config file. The job keeps HOME and, in the default posture, a whole-filesystem read-only bind, so the lane server reads ~/.config/sccache/config. As I recall sccache's Config::load, it merges that file with the environment and prefers a configured remote backend (s3/redis/etc) over the SCCACHE_DIR disk cache, and the job sandbox does not unshare the network. An operator config with a remote backend would then send lane artifacts to the operator's cache, contrary to the 2026-11-07 lane-only ruling and the OVERVIEW claim 'never the operator's cache'. Fix: set SCCACHE_CONF to an empty or nonexistent lane-owned path in Sccache::env, add it to BUILD_ENV_ALLOWED, and assert it in story_2641_sccache_job_env_and_binds_are_opt_in_and_lane_only.
+    3. minor/simplification: aida-core/src/launch_policy.rs:565-574 widens EnvPolicy::project's declared-resource allowlist with SCCACHE_DIR, SCCACHE_SERVER_UDS, SCCACHE_SERVER_PORT and SCCACHE_IDLE_TIMEOUT, but no production caller can supply them: SandboxResources always resolves Sccache::Off and Sccache::Lane is only constructed in lane_job.rs:272, where only .env() is used. Only the unit test in story_2326_profile_tests.rs reaches it. Fix: drop the widening and the test's cached branch, or wire a real caller.
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
+  created_at: 2026-11-09T02:46:22.370917993Z
+  modified_at: 2026-11-09T02:46:22.370917993Z
   session_id: 20abb7c3-8f9b-4a5e-b326-404921f3b450
 history:
 - id: 01a1b929-7921-7980-8202-36c2cc4f3845
