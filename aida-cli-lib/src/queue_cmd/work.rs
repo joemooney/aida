@@ -2528,8 +2528,10 @@ fn resolve_rework_review(
             }
             AliasSelection::Absent => None,
             unavailable => {
-                // Inspect each current partition: fail_closed may retain a
-                // substantive refusal while another ambiguous alias is waiting.
+                // Substantive findings remain actionable even beside a wait.
+                // Inspect all candidates before refusing a waiting-only review.
+                // trace:BUG-2500 | ai:codex
+                let mut candidates = Vec::new();
                 for label in &labels {
                     if let Some(current) =
                         crate::gate::review_verdict::current_verdict(project_root, label)
@@ -2537,7 +2539,7 @@ fn resolve_rework_review(
                         if let Some(v) =
                             crate::gate::review_verdict::parse_recorded_verdict(&current.body)
                         {
-                            waiting_rework_error(&shown, &v)?;
+                            candidates.push((label.clone(), v));
                         }
                     }
                 }
@@ -2545,7 +2547,24 @@ fn resolve_rework_review(
                     if change_verdict_bound_to(project_root, &key, &labels)
                         || open_change.is_some_and(|change| change.eq_ignore_ascii_case(&key))
                     {
-                        waiting_rework_error(&shown, &v)?;
+                        candidates.push((key, v));
+                    }
+                }
+                if candidates.iter().any(|(_, v)| {
+                    !v.is_closed() && v.kind == crate::gate::review_verdict::VerdictKind::Waiting
+                }) {
+                    let findings = candidates
+                        .iter()
+                        .filter(|(_, v)| !v.is_closed() && v.kind.requires_changes())
+                        .filter_map(|(key, v)| {
+                            crate::review_verdict_display::rework_findings_comment(&shown, key, v)
+                        })
+                        .collect::<Vec<_>>();
+                    if !findings.is_empty() {
+                        return Ok(Some(findings.join("\n\n")));
+                    }
+                    for (_, v) in &candidates {
+                        waiting_rework_error(&shown, v)?;
                     }
                 }
                 let reason = unavailable
@@ -2597,7 +2616,32 @@ fn resolve_rework_review(
                 .filter(|(_, verdict)| verdict.kind.blocks_done())
                 .filter(|(key, _)| change_verdict_bound_to(project_root, key, &labels))
                 .collect::<Vec<_>>();
-            if bound.len() > 1 {
+            // A wait cannot hide actionable findings in another bound change.
+            // trace:BUG-2500 | ai:codex
+            if bound.len() > 1
+                && bound.iter().any(|(_, v)| {
+                    !v.is_closed() && v.kind == crate::gate::review_verdict::VerdictKind::Waiting
+                })
+            {
+                let mut findings = bound
+                    .iter()
+                    .filter(|(_, v)| !v.is_closed() && v.kind.requires_changes())
+                    .filter_map(|(key, v)| {
+                        crate::review_verdict_display::rework_findings_comment(&shown, key, v)
+                    })
+                    .collect::<Vec<_>>();
+                if let Some((v, _)) = &spec_keyed {
+                    if !v.is_closed() && v.kind.requires_changes() {
+                        if let Some(block) = crate::review_verdict_display::rework_findings_comment(
+                            &shown, &shown, v,
+                        ) {
+                            findings.push(block);
+                        }
+                    }
+                }
+                if !findings.is_empty() {
+                    return Ok(Some(findings.join("\n\n")));
+                }
                 for (_, v) in &bound {
                     waiting_rework_error(&shown, v)?;
                 }
@@ -2652,11 +2696,23 @@ fn resolve_rework_review(
         }
         (Some((sv, s_at)), Some((key, cv))) => {
             let c_at = change_time(&key, &cv);
-            let change_newer = match (s_at, c_at) {
-                (Some(s), Some(c)) => c > s,
-                // Unordered: fail closed toward the refusal so its findings
-                // are not dropped.
-                _ => cv.kind.blocks_done() && !sv.kind.blocks_done(),
+            // A wait carries no findings and must not replace substantive work.
+            // trace:BUG-2500 | ai:codex
+            let mixed_wait = !sv.is_closed()
+                && !cv.is_closed()
+                && ((sv.kind == crate::gate::review_verdict::VerdictKind::Waiting
+                    && cv.kind.requires_changes())
+                    || (cv.kind == crate::gate::review_verdict::VerdictKind::Waiting
+                        && sv.kind.requires_changes()));
+            let change_newer = if mixed_wait {
+                cv.kind.requires_changes()
+            } else {
+                match (s_at, c_at) {
+                    (Some(s), Some(c)) => c > s,
+                    // Unordered: fail closed toward the refusal so its findings
+                    // are not dropped.
+                    _ => cv.kind.blocks_done() && !sv.kind.blocks_done(),
+                }
             };
             if change_newer {
                 refuse_wait(&cv)?;

@@ -437,14 +437,11 @@ fn bug_2500_ambiguous_alias_waiting_refuses_admission() {
     let tmp = tempfile::tempdir().unwrap();
     let dir = tmp.path().join(".aida/review-verdicts");
     std::fs::create_dir_all(&dir).unwrap();
-    for (key, word) in [
-        ("BUG-2500", "request-changes"),
-        ("BUG-NATIVE-2500", "waiting"),
-    ] {
+    for (key, word) in [("BUG-2500", "waiting"), ("BUG-NATIVE-2500", "waiting")] {
         std::fs::write(
             dir.join(format!("{key}.json")),
             serde_json::json!({
-                "verdict": word, "reviewed_sha": HEAD, "summary": SUMMARY,
+                "verdict": word, "reviewed_sha": HEAD, "summary": format!("{SUMMARY} ({key})"),
                 "recorded_at": "2026-11-09T01:00:00Z"
             })
             .to_string(),
@@ -499,4 +496,131 @@ fn bug_2500_multiple_bound_waits_refuse_admission() {
         assert!(err.contains("WAITING"), "{err}");
         assert!(!tmp.path().join(".aida/queue").exists());
     }
+}
+
+// A wait beside code defects must not steal the implementer's actionable work.
+// trace:BUG-2500 | ai:codex
+#[test]
+fn bug_2500_mixed_waiting_imports_substantive_findings() {
+    let _env = crate::test_env::EnvVarsGuard::apply(&[("AIDA_CONTAINED", None)]);
+    for swapped in [false, true] {
+        for layout in ["aliases", "spec-change", "bound", "bound-with-spec"] {
+            let tmp = tempfile::tempdir().unwrap();
+            let (first, second) = if swapped {
+                ("request-changes", "waiting")
+            } else {
+                ("waiting", "request-changes")
+            };
+            let keys = match layout {
+                "aliases" => ["BUG-2500", "BUG-NATIVE-2500"],
+                "spec-change" => ["BUG-2500", "PR-3700"],
+                _ => ["PR-3700", "PR-3701"],
+            };
+            if layout == "bound-with-spec" {
+                rv::record_verdict(
+                    tmp.path(),
+                    "BUG-2500",
+                    Some("approved"),
+                    Some(HEAD),
+                    None,
+                    Some("older approval"),
+                    &[],
+                    "reviewer",
+                )
+                .unwrap();
+            }
+            for (key, word) in keys.into_iter().zip([first, second]) {
+                if layout == "aliases" {
+                    let dir = tmp.path().join(".aida/review-verdicts");
+                    std::fs::create_dir_all(&dir).unwrap();
+                    std::fs::write(dir.join(format!("{key}.json")), serde_json::json!({
+                        "verdict": word, "reviewed_sha": HEAD, "summary": SUMMARY,
+                        "findings": if word == "waiting" { vec![] } else { vec!["repair the code defect"] },
+                        "recorded_at": "2026-11-09T01:00:00Z"
+                    }).to_string()).unwrap();
+                } else {
+                    let findings = if word == "waiting" {
+                        vec![]
+                    } else {
+                        vec!["repair the code defect".into()]
+                    };
+                    rv::record_verdict(
+                        tmp.path(),
+                        key,
+                        Some(word),
+                        Some(HEAD),
+                        None,
+                        Some(SUMMARY),
+                        &findings,
+                        "reviewer",
+                    )
+                    .unwrap();
+                    if key.starts_with("PR-") {
+                        crate::gate::ledger::project::index_spec(
+                            &crate::gate::ledger::store_root(tmp.path()).unwrap(),
+                            "BUG-2500",
+                            crate::gate::ledger::ChangeKey::parse(key).unwrap(),
+                        )
+                        .unwrap();
+                    }
+                }
+            }
+            let native = if layout == "aliases" {
+                "BUG-NATIVE-2500"
+            } else {
+                "BUG-2500"
+            };
+            let change = (layout == "spec-change").then_some("PR-3700");
+            crate::queue_cmd::refuse_waiting_review(tmp.path(), "BUG-2500", native, change)
+                .unwrap();
+            let findings = resolve_rework_findings(tmp.path(), "BUG-2500", native, change)
+                .unwrap()
+                .expect(layout);
+            assert!(
+                findings.contains("repair the code defect"),
+                "{layout}: {findings}"
+            );
+            assert!(findings.contains("CHANGES REQUESTED"));
+            assert!(!findings.contains("Verdict: WAITING"));
+        }
+    }
+}
+
+#[test]
+fn bug_2500_fresh_spec_approval_clears_single_bound_wait() {
+    let _env = crate::test_env::EnvVarsGuard::apply(&[("AIDA_CONTAINED", None)]);
+    let tmp = tempfile::tempdir().unwrap();
+    rv::record_verdict(
+        tmp.path(),
+        "PR-3700",
+        Some("waiting"),
+        Some(HEAD),
+        None,
+        Some(SUMMARY),
+        &[],
+        "reviewer",
+    )
+    .unwrap();
+    crate::gate::ledger::project::index_spec(
+        &crate::gate::ledger::store_root(tmp.path()).unwrap(),
+        "BUG-2500",
+        crate::gate::ledger::ChangeKey::pr(3700),
+    )
+    .unwrap();
+    rv::record_verdict(
+        tmp.path(),
+        "BUG-2500",
+        Some("approved"),
+        Some(HEAD),
+        None,
+        Some("fresh review checked host evidence"),
+        &[],
+        "reviewer",
+    )
+    .unwrap();
+    assert_eq!(
+        resolve_rework_findings(tmp.path(), "BUG-2500", "BUG-2500", None),
+        Ok(None)
+    );
+    crate::queue_cmd::refuse_waiting_review(tmp.path(), "BUG-2500", "BUG-2500", None).unwrap();
 }

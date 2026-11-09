@@ -2680,6 +2680,26 @@ fn finish_punted(
     }
 }
 
+// trace:BUG-2500 | ai:codex
+fn escalation_recovery_hint(kind: EscalationKind) -> &'static str {
+    match kind {
+        EscalationKind::Waiting => {
+            "obtain the named external evidence, then record a fresh review at the current head"
+        }
+        _ => "left for a human — triage it with `aida findings list`",
+    }
+}
+
+#[test]
+fn bug_2500_waiting_recovery_requires_fresh_review() {
+    let hint = escalation_recovery_hint(EscalationKind::Waiting);
+    assert!(
+        hint.contains("external evidence") && hint.contains("fresh review at the current head")
+    );
+    assert!(!hint.contains("findings"));
+    assert!(escalation_recovery_hint(EscalationKind::DesignFork).contains("findings list"));
+}
+
 /// Print the escalation epilogue and build a *non-failure* terminal
 /// [`OrchestrationResult`] (STORY-306). Two tiers escalate to a human and
 /// share this path: the reviewer that will not auto-merge a PR
@@ -2773,7 +2793,7 @@ fn finish_escalated(
         eprintln!(
             "  {} {}",
             "→".dimmed(),
-            "left for a human — triage it with `aida findings list`".cyan()
+            escalation_recovery_hint(kind).cyan()
         );
         eprintln!();
         eprintln!(

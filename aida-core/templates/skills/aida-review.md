@@ -315,7 +315,7 @@ implementer iterates); a wrongly-fix-forwarded logic change is not.
    lightweight after-the-fact review of the reviewer's own commit. Do not
    invent an `Approved-with-fixforward` verdict tier — the verdict file
    (step 6a) still routes through the existing `Approved` /
-   `RequestChanges` / `Rejected` enum.
+   `RequestChanges` / `Rejected` / `Waiting` enum.
 
 ### What this policy is NOT
 
@@ -907,7 +907,7 @@ orchestrator-headless reviewer's verdict is read by phase 4. trace:BUG-280
   *Standalone headless mode (`AIDA_HEADLESS=1`, `aida orchestrator status` ≠ `orchestrated`) — trace:BUG-280:*
 
   ```
-  ✓ Verdict written: <Approved|RequestChanges|Rejected> → .aida/review-verdicts/PR-<N>.json
+  ✓ Verdict written: <Approved|RequestChanges|Rejected|Waiting> → .aida/review-verdicts/PR-<N>.json
   ✓ Reviewer session is done — under --no-human the reviewer does not merge.
 
   ▶ The session will exit (sentinel touched). A human merges later by reading
@@ -1272,7 +1272,7 @@ when there is a "want me to X?" question the advisor must decide; use
 `--intent fyi` for a clean APPROVE/merge with nothing outstanding:
 
 ```bash
-aida mailbox send --to advisor --intent request "Review of PR-<N> finished — verdict: <Approved|RequestChanges|Rejected>.
+aida mailbox send --to advisor --intent request "Review of PR-<N> finished — verdict: <Approved|RequestChanges|Rejected|Waiting>.
 
 Covered specs: <SPEC-IDS + per-spec PASS/PARTIAL/FAIL>
 Flagged findings: <one line each — what, where (file:line), severity; or 'none'>
