@@ -1,0 +1,90 @@
+id: 01a1c0b4-b007-7153-8655-e96fca15de5f
+spec_id: TASK-b6b1278890774ef993d2ebc327862470-1055
+agreed_id: TASK-3777
+title: 'Sweep 4: non-blocking findings from approved reviews of PRs #3693, #3696, #3698 and #3724'
+description: |
+  Fix these non-blocking findings from approved reviews in one PR. Each section keeps its source PR and reviewed sha. Do not widen scope; a finding already fixed on main needs only a note in the PR body.
+
+  ### TASK-3082
+  aida-cli-lib/src/queue_cmd/rework.rs:341 rework_is_review_shelf omits verdict:stranded, which 'aida review stranded --fix' writes under phase reviewer for a recovered refusing verdict (lib_part5.rs:2031-2036). If the findings match the previous round, the guard no longer parks and the spec is requeued; before this PR any NeedsAttention recurrence parked. Non-blocking: needs a stranded refusal plus identical consecutive findings. Add the kind and a predicate case.
+
+  PR: #3696
+  Reviewed sha: 0962bbf994546cd2a37ba281546f7da492132814
+
+  ### TASK-3083
+  aida-cli-lib/src/queue_cmd/rework.rs:723 now persists the findings comment before the flip at :818. If the flip fails with the spec still NeedsAttention (store write error or a killed process), failure_reason is retained, so a retry sees recurred=true and a review shelf at :730 and parks and escalates a major finding although no implementer round ran. Before this PR the flip came first. Non-blocking: needs a failure between two writes. Decide recurrence first and write the comment after the flip.
+
+  PR: #3696
+  Reviewed sha: 0962bbf994546cd2a37ba281546f7da492132814
+
+  ### TASK-3084
+  Cosmetic: comments describe the old ordering. rework.rs:927 says success is reported after the guard can re-park, but the guard now returns before the flip; the guard comment at about :731 and the rework_is_review_shelf doc still describe a return to NeedsAttention and a cleared marker, which now apply only to legacy parks (loop_guard_park is a status no-op from NeedsAttention, so no aida-loop-guard history entry is written).
+
+  PR: #3696
+  Reviewed sha: 0962bbf994546cd2a37ba281546f7da492132814
+
+  ### TASK-3085
+  Minor, aida-cli-lib/src/ownership/reader.rs:124: review_finished calls OwnershipStore::for_project directly and skips the process_contained refusal in dual::store_for (dual.rs:275), whose comment says a write from a seat clone lands in the clone's own directory. Add the same refusal.
+
+  PR: #3693
+  Reviewed sha: 668a2156be9497f6840deab13e357e594daa5ea4
+
+  ### TASK-3086
+  Minor, test gap, aida-cli-lib/src/ownership/reader.rs:77-91: the observe_legacy_registry branch added for the proc_identity guard is exercised only with active_pid None or a live PID. No test shows a receipt accepted for a recorded worker that is provably Dead, or refused for a recorded PID with no start identity.
+
+  PR: #3693
+  Reviewed sha: 668a2156be9497f6840deab13e357e594daa5ea4
+
+  ### TASK-3087
+  Cosmetic, aida-cli-lib/src/review_watch.rs:1736: finish_confirmed_review repeats the confirm() that advance already ran at the call site; a failure of the second call is reported as 'completion receipt refused'. Pass the proof in or drop the repeat.
+
+  PR: #3693
+  Reviewed sha: 668a2156be9497f6840deab13e357e594daa5ea4
+
+  ### TASK-3088
+  Cosmetic, scripts/store-writers.toml:3435 and 3733: regenerating the inventory dropped the hand comments '# trace:TASK-1222 ... cursor persistence moved' (twice) and '# Partial variant evidence only ... trace:TASK-3223', which are unrelated to this bug and still present on main.
+
+  PR: #3693
+  Reviewed sha: 668a2156be9497f6840deab13e357e594daa5ea4
+
+  ### TASK-3089
+  Minor, AC1 residual, aida-cli-lib/src/review_watch.rs:777-791: when queue work and the reviewer die without a terminal receipt (OOM, reboot, killed supervisor) the attempt goes Running to Exited with descendants_gone, and no completion receipt is written even though the captured review_lease is on the attempt. A clean, pushed, processless tree then still gets the 'held by worktree' refusal. Fail-closed. Leases stranded before this ships also need manual cleanup. Fix: call finish_confirmed_review on that transition.
+
+  PR: #3693
+  Reviewed sha: 668a2156be9497f6840deab13e357e594daa5ea4
+
+  ### TASK-3090
+  cosmetic (non-blocking): aida-cli-lib/src/pipeline_stall.rs:1141 compares reviewed_sha to head_sha by exact string instead of same_reviewed_sha (matching its sibling at :1213), so an abbreviated recorded sha hides the WAITING line, and verdict_ids can emit one WAITING line per alias.
+
+  PR: #3698
+  Reviewed sha: 5b46edd812855a6339a73ab83665fcb8a7700b04
+
+  ### TASK-3091
+  minor (non-blocking): aida-cli-lib/src/queue_cmd/integrate.rs:91 maps every non-approved reconcile result, including Waiting, to request_changes_pending, so aida integrate --run prints 'a RequestChanges review is pending' for a WAITING PR (burndown wave holds share classify_integration_action). The merge is correctly stopped and no rework is queued; only the operator-facing reason is wrong. Add a distinct waiting park reason.
+
+  PR: #3698
+  Reviewed sha: 5b46edd812855a6339a73ab83665fcb8a7700b04
+
+  ### TASK-HOME-1054
+  Cosmetic: aida-cli-lib/src/findings_gate.rs:2119 appends the first section to an empty description, so a newly created sweep's description starts with two blank lines. Skip the leading separator when the description is empty.
+
+  PR: #3724
+  Reviewed sha: da5047a5ebaa01d84607731b5f246637665506f8
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-11-09T14:27:09.447287877Z
+modified_at: 2026-11-09T14:27:09.447287877Z
+req_type: Task
+tags:
+- kind:finding-sweep
+filed_at:
+  code_sha: e4eee38238fa4cb8e8c85dadaa4ed07894cfbeea
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: c3dc94a29d2
+  vendor: claude
+  session: 01a1beff-fc3b-78e2-93e2-9b0c283b0339
+  harness_version: 2.1.319 (Claude Code)
