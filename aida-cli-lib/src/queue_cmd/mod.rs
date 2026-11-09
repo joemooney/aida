@@ -65,9 +65,9 @@ mod rework;
 pub(crate) use rework::{
     current_queue_route, drain_running, drain_running_notice, handle_queue_rework,
     handle_rework_entry, loop_guard_park, needs_attention_parks, park_reason_line,
-    record_rework_ruling, requeue_project_root, rework_smart_target, rework_target_for_mode,
-    rework_triage_loop, run_aida_interactive, run_rework, DrainRunning, ReworkArgs, ReworkFlags,
-    REWORK,
+    record_rework_ruling, requeue_project_root, rework_is_review_shelf, rework_smart_target,
+    rework_target_for_mode, rework_triage_loop, run_aida_interactive, run_rework, DrainRunning,
+    ReworkArgs, ReworkFlags, REWORK,
 };
 mod time_args;
 pub(crate) use time_args::{
