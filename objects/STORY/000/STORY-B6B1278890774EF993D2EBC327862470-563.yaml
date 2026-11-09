@@ -25,7 +25,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-07T19:45:35.836129088Z
-modified_at: 2026-11-09T08:32:07.611522466Z
+modified_at: 2026-11-09T08:32:14.655992788Z
 req_type: Story
 tags:
 - docs:impacted
@@ -696,6 +696,19 @@ comments:
   content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: All prior findings are addressed and AC4/AC5 verified from source, but fast_gate_namespaces misplaces --dir when the production sccache wrapper applies, so on an sccache host every gate exits non-zero and reports a false fail (AC1, AC3). Source review only; lib-1 and gates were still pending.. No triage reason was given.'
   created_at: 2026-11-09T08:32:07.611516065Z
   modified_at: 2026-11-09T08:32:07.611516065Z
+- id: 01a1bf6f-c0d9-70f3-81cb-61ddb031e64e
+  author: joe
+  content: |-
+    REVIEW FINDINGS TO ADDRESS (STORY-2640):
+    Verdict: CHANGES REQUESTED
+    Reviewed commit: 9eace0f49d91
+    Recorded: 2026-11-09T08:24:52.693248712+00:00
+    Findings:
+    1. [major] lane_job.rs fast_gate_namespaces inserts --dir <home> at args.len()-2, assuming the argv ends in 'make check-ci-fast'. run_one first calls cargo_with_cache_lifecycle, and when job_env has SCCACHE_DIR and SCCACHE_SERVER_UDS the program becomes /bin/sh -c SCCACHE_JOB_SCRIPT lane-sccache <timeout> <make> check-ci-fast. Production LaneJobs::for_lease adds those variables whenever cargo config sets rustc-wrapper to sccache, as this host's ~/.cargo/config.toml does. The insertion then lands inside the script's positional arguments, so the script's "$@" tries to execute --dir (expected exit 127), gate_result maps that to fail, the seat spends its one repair round on a false red, and the PR publishes fast_gate=fail; the HOME directory is also never created. fast_gate_real_main_target_passes_in_sandbox misses this because it replaces build_env with only CARGO_TARGET_DIR. Fix: add --dir before the program as part of the bubblewrap arguments, or do not apply the cache lifecycle to the make job, and add a test that builds the argv through the sccache path. Derived from source; not executed.
+    2. [minor] session.rs run_vendor_headless_to_exit: the new crate::lane_fast_gate::reserve(...).transpose()? returns before the BUG-2139 revoke of child_grant, so a reservation error (unwritable .aida/fast-gates, lock failure) leaves the issued grant live until its parent expires. standalone_implementer.rs got ChildGrantGuard for this reason; this launch path did not.
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
+  created_at: 2026-11-09T08:32:14.553496427Z
+  modified_at: 2026-11-09T08:32:14.553496427Z
 history:
 - id: 01a1b78d-2628-7313-92de-8804ac5f8f71
   author: aida-session-start
