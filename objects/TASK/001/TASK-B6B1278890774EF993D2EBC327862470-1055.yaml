@@ -75,7 +75,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-09T14:27:09.447287877Z
-modified_at: 2026-11-09T14:45:13.188995914Z
+modified_at: 2026-11-09T16:42:46.918879963Z
 req_type: Task
 tags:
 - kind:finding-sweep
@@ -132,6 +132,13 @@ comments:
   modified_at: 2026-11-09T14:45:13.188995914Z
   session_id: 01a1c0ba4e16
   harness_version: codex-cli 0.167.0
+- id: 01a1c130-db06-7b33-8c00-cf8dd94000b6
+  author: joe
+  content: 'ADVISOR BRIEF: PR #3731 was ejected from train PR #3733 only by the test-time budget (all 8077 tests passed). EXACT FIX: add an entry to scripts/test-time-budget.toml for aida-cli-lib findings_gate::story_1421_carry_forward_findings_tests::task_3749_sweep_keys_preserve_source_scope_and_closed_sweeps_roll_over, using the measured 11.7s plus the headroom the file''s other entries use. Change nothing else. Also keep this PR''s trailer.'
+  created_at: 2026-11-09T16:42:46.918879963Z
+  modified_at: 2026-11-09T16:42:46.918879963Z
+  session_id: 01a1beff-fc3b-78e2-93e2-9b0c283b0339
+  harness_version: 2.1.319 (Claude Code)
 history:
 - id: 01a1c0b6-74fb-78d2-acb7-61129f10e8e8
   author: joe
