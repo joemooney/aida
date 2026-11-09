@@ -426,6 +426,18 @@ pub(crate) fn preclaim_collision_check(
     PreclaimDecision::Proceed
 }
 
+// Preserve the distinction between a child that could not start and a host
+// publication failure after the child ran.
+// trace:TASK-3608 | ai:codex
+#[derive(Debug)]
+pub(crate) struct ResumePublicationFailure(pub anyhow::Error);
+impl std::fmt::Display for ResumePublicationFailure {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "resumed implementer publication failed: {:#}", self.0)
+    }
+}
+impl std::error::Error for ResumePublicationFailure {}
+
 /// Explicit queue resumes must publish before returning control to the
 /// launcher's process exit, under the same vendor/role gate as fresh lanes.
 // trace:STORY-2475 | ai:codex
@@ -440,6 +452,7 @@ pub(crate) fn run_queue_resume_to_exit(
     contained: bool,
     role: &str,
     publication: (&std::path::Path, &str, &str),
+    record_no_change: bool,
 ) -> Result<std::process::ExitStatus> {
     let status = session::spawn_vendor_headless_resume(
         host_main, target, prompt, log, tree, tee, contained, role,
@@ -448,13 +461,15 @@ pub(crate) fn run_queue_resume_to_exit(
         && contained
         && crate::canonical_role_name(role) == "implementer"
     {
-        crate::ship_from_seat::publish_queue_exit(
+        crate::ship_from_seat::publish_queue_exit_recorded(
             publication.0,
             tree,
             publication.1,
             publication.2,
             status.success(),
-        )?;
+            record_no_change,
+        )
+        .map_err(ResumePublicationFailure)?;
     }
     Ok(status)
 }
@@ -2378,7 +2393,8 @@ pub(crate) fn rework_findings_block_for_spec(
     match resolve_rework_findings(project_root, display_id, spec_id, None) {
         Ok(block) => block,
         Err(why) => {
-            eprintln!("warning: no review findings imported for {display_id}: {why}");
+            // trace:BUG-2507 | ai:codex
+            eprintln!("warning: no review findings imported for {display_id}: {why}. Read the review comment before starting rework.");
             None
         }
     }
@@ -2464,7 +2480,7 @@ pub(crate) fn resolve_rework_findings(
                     ));
                 }
                 eprintln!(
-                    "warning: no review findings imported for {shown}: its current review cannot be selected ({reason})"
+                    "warning: no review findings imported for {shown}: its current review cannot be selected ({reason}). Read the review comment before starting rework."
                 );
                 return Ok(None);
             }
@@ -5599,6 +5615,7 @@ pub(crate) fn handle_queue_work(
                         // trace:BUG-1808 | ai:claude — the seat the preflight validated.
                         &crate::canonical_role_name(&role),
                         (&project_root, &plan.scope, &lease.id),
+                        false,
                     )?;
                     std::process::exit(status.code().unwrap_or(1));
                 }
@@ -5726,6 +5743,7 @@ pub(crate) fn handle_queue_work(
                         // BUG-050: the lane's seat, for the resume safety net.
                         // trace:BUG-B6B1278890774EF993D2EBC327862470-050 | ai:claude
                         Some((&lease.worktree_path, &lease.branch)),
+                        preclaim_orchestrator_corroborated,
                     );
                 }
                 eprintln!(
