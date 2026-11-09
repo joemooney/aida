@@ -23,7 +23,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-07T20:45:16.684639200Z
-modified_at: 2026-11-09T11:38:25.815500493Z
+modified_at: 2026-11-09T12:17:18.897003237Z
 req_type: Task
 relationships:
 - rel_type: Child
@@ -273,6 +273,23 @@ comments:
     Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
   created_at: 2026-11-09T11:13:04.958087094Z
   modified_at: 2026-11-09T11:13:04.958087094Z
+- id: 01a1c03d-cfcc-7bf1-a223-227e6b4a0dac
+  author: joe
+  content: |-
+    REVIEW FINDINGS TO ADDRESS (PR #3670):
+    Verdict: CHANGES REQUESTED
+    Reviewed commit: c811a5871f46
+    Recorded: 2026-11-09T11:38:25.580346184+00:00
+    Review comment: https://github.com/joemooney/aida/pull/3670#issuecomment-6739128782
+    Findings:
+    1. [major][blocker] Unfixed since last round: a zero-witness lease handed off to a PR bypasses the legacy fallback (aida-cli-lib/src/ownership/reader.rs:153). The Ok(Some(record)) arm uses record.holder.as_ref().is_some_and(...), which is false for the holder: None + Phase::InPr{handed_off_by: Some(lease.id)} shape that lease_owner_record rebuilds at reader.rs:228-239. With no holder_record the rebuilt holder has no witnesses, so judge_owner returns Unknown 'the holder records no witness' (ruling item 2's cause), legacy_unknown is false, and a crashed legacy holder is retained where main released it: pickup hide (queue_cmd/next.rs:171), session-start refusal (session_start.rs:2475), BUG-1205 auto-end (session_start.rs:2682), stale-base row (queue_cmd/list.rs:1878). From source reading; not executed. Fix: treat holder None with Phase::InPr{handed_off_by: Some(id)}, id == lease.id, as legacy when the lease yields no admitted witness, and add a task_3420 test with that shape covering crashed release and live retention.
+    2. [minor] Unfixed since last round, and it has a second site: a legacy holder whose capture was refused is retained where main applies the legacy rule. In Ok(Some) (ownership/reader.rs:155) holder_for_lease stores admission: Some(refused), so witnesses.all(admission.is_none()) is false and judge_witness returns Unknown 'holder refused'. In Ok(None) on a keyed lease (reader.rs:152) lease.holder_record.is_none() is false for a refused record, so it also stays retained. Main's lease_uses_holder_verdict (leases.rs:1362) sends refused records to the legacy rule, and ruling item 4 says the fallback keeps current behaviour for legacy holders. Fix both arms using refusal().is_some() with a test, or get an advisor ruling that refused captures stay retained and record it in the reader comment.
+    3. [minor] CI is not verified at c811a5871f46: the CI and merge-hold-gate runs were queued with all jobs pending when this was recorded. Confirm green at the rework head, including whether the make check-ci-fast mail-wake failures the implementer reported are resolved by the test_env.rs permission change.
+    4. [cosmetic] Unfixed since last round: lease_adoption_refusal (leases.rs:4788-4795) matches the Unknown why against an exact string that the reader builds from orphan_adoption_refusal, so rewording that text silently drops the specific reason. The fallback 'ownership holder is live or unknown' is reached only for Unknown, because Alive is handled above. Carry the reason in a typed value or shared constant and make the fallback name unknown ownership.
+    5. [cosmetic] New: the BUG-637 comment on lease_owning_spec (leases.rs:2385) now says callers use the ownership reader, but enforce_session_lease still passes lease_is_live (leases.rs:2488), which stays on the ratchet baseline. Reword the comment so it does not claim every caller moved.
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
+  created_at: 2026-11-09T12:17:18.796397523Z
+  modified_at: 2026-11-09T12:17:18.796397523Z
 history:
 - id: 01a1b7c2-6b69-7b02-bd8c-8f40aee2972d
   author: joe
