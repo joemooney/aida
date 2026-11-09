@@ -1131,6 +1131,19 @@ fn pr_digest(
     if crate::pr_has_merge_hold(root, pr) || hold_gate_failed(row) {
         blockers.push(format!("merge hold; aida merge-hold auto-release {n} (eligible Rework approval) or human/advisor: aida merge-hold clear {n}"));
     }
+    // trace:BUG-2500 | ai:codex — waiting is distinct from missing review.
+    for verdict in verdict_ids(pr)
+        .iter()
+        .filter_map(|id| crate::gate::review_verdict::read_recorded_verdict(root, id))
+    {
+        if !verdict.is_closed()
+            && verdict.kind == crate::gate::review_verdict::VerdictKind::Waiting
+            && verdict.reviewed_sha.as_deref() == pr.head_sha.as_deref()
+        {
+            blockers.push(format!("WAITING: {}; resume with a fresh review at this head; aida queue work PR-{n} --role reviewer",
+                verdict.summary.as_deref().unwrap_or("external evidence required")));
+        }
+    }
     let checks: Vec<_> = ci_checks(row)
         .into_iter()
         .filter(|c| check_failed(c))
@@ -1725,6 +1738,44 @@ mod tests {
         .by_branch
         .remove("topic")
         .unwrap()
+    }
+    // trace:BUG-2500 | ai:codex
+    #[test]
+    fn bug_2500_pipeline_digest_preserves_waiting_dependency() {
+        let t = tempfile::tempdir().unwrap();
+        let root = t.path();
+        let dir = root.join(".aida/review-verdicts");
+        std::fs::create_dir_all(&dir).unwrap();
+        let p = pr();
+        for key in ["PR-42", "BUG-2500"] {
+            let mut p = p.clone();
+            p.title = "work (BUG-2500)".into();
+            let path = dir.join(format!("{key}.json"));
+            std::fs::write(
+                &path,
+                serde_json::json!({
+                    "verdict":"waiting", "reviewed_sha":"abcdef1234",
+                    "summary":"Host: operator must run probe; resume with evidence"
+                })
+                .to_string(),
+            )
+            .unwrap();
+            assert_eq!(pr_ready(root, &p), Some(false));
+            assert!(!current_rejection(root, &p));
+            let digest = pr_digest(root, &p, &serde_json::json!({}), Some(false), false).join("\n");
+            assert!(
+                digest.contains("WAITING")
+                    && digest.contains("Host:")
+                    && digest.contains("fresh review"),
+                "{digest}"
+            );
+            assert!(
+                !digest.contains("review missing")
+                    && !digest.contains("queue rework")
+                    && !digest.contains("ship-ready")
+            );
+            std::fs::remove_file(path).unwrap();
+        }
     }
     #[test]
     fn readiness_uses_current_head_verdict_without_idle_age_filter() {

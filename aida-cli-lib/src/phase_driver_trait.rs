@@ -2456,6 +2456,10 @@ impl auto_complete::PhaseDriver for RealPhaseDriver {
                         ),
                     ));
                 }
+                auto_complete::ReviewerOutcome::Verdict(auto_complete::Verdict::Waiting) => {
+                    return Err(auto_complete::PhaseFailure::of(auto_complete::FailureKind::VerdictWaiting,
+                        format!("agent gate `{}` is WAITING on external evidence; resume with a fresh review at the current head", gate.name)));
+                }
                 auto_complete::ReviewerOutcome::Verdict(auto_complete::Verdict::Approved) => {}
                 auto_complete::ReviewerOutcome::Verdict(verdict) => {
                     let reason = format!(
@@ -2490,6 +2494,9 @@ impl auto_complete::PhaseDriver for RealPhaseDriver {
                         }
                         auto_complete::Verdict::Rejected => {
                             auto_complete::FailureKind::VerdictReject
+                        }
+                        auto_complete::Verdict::Waiting => {
+                            auto_complete::FailureKind::VerdictWaiting
                         }
                         auto_complete::Verdict::Approved => auto_complete::FailureKind::Failed,
                     };

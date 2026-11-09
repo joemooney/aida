@@ -2026,6 +2026,83 @@ fn rework_ruling_is_recorded_as_a_tagged_spec_comment() {
     assert!(crate::queue_cmd::record_rework_ruling(&storage, "BUG-021", "  ").is_err());
 }
 
+/// trace:BUG-2500 | ai:codex
+#[test]
+fn bug_2500_repeated_waiting_rework_leaves_status_comments_and_queue_unchanged() {
+    if crate::test_env::run_path_isolated_test() {
+        return;
+    }
+    let _guard = crate::test_env::env_lock();
+    let prev_cwd = std::env::current_dir().unwrap();
+    let tmp = tempfile::tempdir().unwrap();
+    let root = tmp.path();
+    std::fs::create_dir(root.join(".git")).unwrap();
+    let store_root = root.join(".aida-store");
+    let backend = crate::test_env::home_fixture_backend(&store_root).unwrap();
+    // Keep the synthetic authority setting private under the host shared-write umask.
+    use std::os::unix::fs::PermissionsExt;
+    let common = aida_core::allocation_authority::common_dir(&store_root).unwrap();
+    std::fs::set_permissions(
+        common.join(aida_core::allocation_authority::CONFIG_FILE),
+        std::fs::Permissions::from_mode(0o600),
+    )
+    .unwrap();
+    let storage = Storage::new(&store_root);
+    let mut req = req_for_test("BUG-2500", RequirementStatus::Done);
+    req.title = "external evidence wait".to_string();
+    let mut store = aida_core::RequirementsStore::default();
+    store.requirements.push(req);
+    backend.save(&store).unwrap();
+    crate::gate::review_verdict::record_verdict(
+        root,
+        "BUG-2500",
+        Some("waiting"),
+        Some("34031ff4a06c1d24c08846619f87aaa66b31dec7"),
+        None,
+        Some("Host: operator runs probe; resume review with its evidence"),
+        &[],
+        "reviewer",
+    )
+    .unwrap();
+    let before = storage.load().unwrap();
+    std::env::set_current_dir(root).unwrap();
+    let results: Vec<_> = (0..3)
+        .map(|_| {
+            handle_queue_rework(
+                &storage,
+                "BUG-2500",
+                false,
+                Some("implementer"),
+                false,
+                None,
+                Some("retry"),
+                false,
+                false,
+                false,
+                None,
+                true,
+                Some("codex"),
+            )
+        })
+        .collect();
+    std::env::set_current_dir(prev_cwd).unwrap();
+    for result in results {
+        assert!(result.unwrap_err().to_string().contains("WAITING"));
+    }
+    let after = storage.load().unwrap();
+    let before_req = before.get_requirement_by_spec_id("BUG-2500").unwrap();
+    let after_req = after.get_requirement_by_spec_id("BUG-2500").unwrap();
+    assert_eq!(before_req.status, after_req.status);
+    assert_eq!(before_req.comments.len(), after_req.comments.len());
+    assert_eq!(before.requirements.len(), after.requirements.len());
+    assert!(storage.queue_list("codex", true).unwrap().is_empty());
+    assert!(storage
+        .queue_list("role:implementer", true)
+        .unwrap()
+        .is_empty());
+    assert!(crate::gate::merge_hold_core::read_hold(root, 3698).is_none());
+}
+
 // trace:BUG-2502 | ai:codex
 #[test]
 fn bug_2502_rework_of_punt_retains_approval_with_imported_review() {
