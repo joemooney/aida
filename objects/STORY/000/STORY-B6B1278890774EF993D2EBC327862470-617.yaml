@@ -33,12 +33,12 @@ description: |-
   - Refused with stated reason: conflict-resolved merge, evil merge, added non-merge commit, changed patch-id, no-carry marker, a refusal newer than the approval, an unrefreshable protected tip.
   - Rider ownership refusal and approval-authority checks unchanged.
   - Tests cover each refusal plus retargeting, head movement, a no-carry change on a cached proof, and an unavailable ledger write.
-status: Approved
+status: InProgress
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-09T15:57:18.371798469Z
-modified_at: 2026-11-09T22:00:08.582418659Z
+modified_at: 2026-11-09T22:02:00.294484248Z
 req_type: Story
 tags:
 - architecture
@@ -154,6 +154,13 @@ history:
   author: joe
   timestamp: 2026-11-09T22:00:08.668182128Z
   changes: []
+- id: 01a1c255-1ce6-7b72-ba2c-67a1037d93c1
+  author: aida-session-start
+  timestamp: 2026-11-09T22:02:00.294483655Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: InProgress
 filed_at:
   code_sha: e4eee38238fa4cb8e8c85dadaa4ed07894cfbeea
   branch: main
