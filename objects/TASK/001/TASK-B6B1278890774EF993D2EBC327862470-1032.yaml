@@ -1,0 +1,29 @@
+id: 01a1beff-280d-7fc0-9d89-46095954693d
+spec_id: TASK-b6b1278890774ef993d2ebc327862470-1032
+title: 'Non-blocking (minor): scripts/runner/rearm.sh:14,22 times gh API + one-job setu…'
+description: |-
+  Non-blocking finding carried forward from an APPROVED review verdict on BUG-2506, which has since completed — recorded here so it keeps a queryable home once the verdict record stops being read.
+
+  Non-blocking (minor): scripts/runner/rearm.sh:14,22 times gh API + one-job setup (cp -a) + cleanup rather than runner lifetime. The incident cadence (~1s/cycle) trips the 10s guard, but on a host where setup alone reaches 10s an instantly exiting runner would keep registering about once per cycle. Consider measuring runner lifetime or adding a consecutive-short-exit/backoff guard.
+
+  PR: #3712
+  Reviewed sha: 16f622b1a1eab9164ba57b3d2f19d73c1a674606
+status: Draft
+priority: Medium
+owner: joe
+feature: Uncategorized
+created_at: 2026-11-09T06:29:15.405805998Z
+modified_at: 2026-11-09T06:29:15.405805998Z
+req_type: Task
+tags:
+- carried-from:BUG-2506
+- finding-hash:16394cfc
+- from-review:PR-3712
+- kind:carried-forward
+filed_at:
+  code_sha: aaf9ac1436f0a0e82bae99d64e8a84742f30fe1c
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 19c492b2456
+  vendor: claude
