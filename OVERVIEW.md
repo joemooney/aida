@@ -1,9 +1,9 @@
-The post-release hold wait requires all rows named `merge-hold-gate` to pass.
-During status cutover, a successful legacy check run cannot end the wait while
-the same-name commit status is pending; a failed legacy check also keeps the
-wait open. Row order does not affect the result. Live enforcement and notification
-verification follow the operator [cutover procedure](docs/internal/testing/bug-2492-status-cutover.md).
-<!-- trace:BUG-2492 | ai:codex -->
+Codegraph lane queries use a host proxy against a disposable SQLite backup;
+the primary index stays outside seat writable roots. The proxy requires host
+deployment, delivery of the reviewed absolute client path, and socket admission.
+Contained-seat acceptance remains outstanding. See the
+[deployment and acceptance guide](scripts/codegraph/README.md).
+<!-- trace:STORY-2630 | ai:codex -->
 
 `cmdkit` holds the command-framework types and shared output/stakeholder vocabulary;
 existing CLI, registry and stakeholder paths re-export them.
@@ -1618,8 +1618,9 @@ conflicting per-tool posture defaults and refuses posture passthrough flags;
 an explicit operator launch-posture override retains its existing precedence.
 A native child does not receive `AIDA_CONTAINED=1` or AIDA containment credit.
 Native `aida ship -m '<complete subject> (Refs ID)'` records a lease/spec-bound
-publication declaration for the host after exit. A fresh launch token prevents
-reuse across attempts and survives supervised rotations within an attempt;
+publication declaration for the host after exit. Completing lanes use `(ID)`.
+A fresh launch token prevents reuse across attempts and
+survives supervised rotations within an attempt;
 lease release removes the host binding. The declaration stays inside the seat's
 existing write boundary. The host refuses invalid, epic, multi-spec or mismatched
 lease scopes before commit or forge probes. Existing Refs PRs or inconclusive
@@ -1837,15 +1838,9 @@ liveness from creator metadata or a heartbeat. Foreign lease expiry remains a
 separate consumer policy. Ownership repair pins the recorded generation without
 recapturing today's process at an old PID.
 
-Review-watch receipts require a verified local procfs view. Caller capture
-fails closed on masked, hidepid, unverified or ancestor-coordinate views, with
-host-retry guidance; existing reservations remain held. Retained children may
-be recorded after exit but before reaping, when the PID cannot be reused.
-Missing legacy identity evidence uses the existing reboot/foreign-TTL backstop;
-undated legacy receipts still require reboot or operator recovery. Unknown
-identity never authorizes signalling, including orphaned group members adopted
-by an unrelated subreaper.
-<!-- trace:TASK-3365 | ai:codex -->
+Review-watch uses shared process identity observations with a separate
+reservation-expiry policy; unknown identity never authorizes signalling.
+<!-- trace:TASK-3367 | ai:codex -->
 
 The TASK-1750 ratchet inventories compatibility consumers in
 `proc_identity_legacy_baseline.json` and prevents new private PID/start

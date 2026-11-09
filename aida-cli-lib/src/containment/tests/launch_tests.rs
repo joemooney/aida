@@ -591,6 +591,10 @@ fn task_3048_runtime_argv_accepts_only_the_site_prompt() {
             .count(),
         1
     );
+    assert_eq!(
+        args[args.iter().position(|a| a == "--settings").unwrap() + 1],
+        runtime.join("settings.json").to_string_lossy()
+    );
     for original in [
         vec![],
         vec!["-p"],
@@ -628,11 +632,12 @@ fn task_3048_outer_only_candidate_requires_live_accepted_receipt() {
         args.iter()
             .filter(|a| a.as_str() == "--dangerously-skip-permissions")
             .count(),
-        0
+        1
     );
-    assert!(args
-        .windows(2)
-        .any(|a| a[0] == "--settings" && Path::new(&a[1]) == runtime.join("settings.json")));
+    assert_eq!(
+        args[args.iter().position(|a| a == "--settings").unwrap() + 1],
+        runtime.join("settings.json").to_string_lossy()
+    );
     assert!(!args.iter().any(|a| a == "--sandbox" || a == "--mode"));
     assert!(crate::launch::agy::AGY
         .candidate_argv(Path::new("/"), prompt, Some(run.receipt()))
@@ -2269,11 +2274,10 @@ fn task_3194_receipt_diagnostic_pins_harness_line() {
 // No model calls or real credentials: exercise the shared filesystem inputs.
 // trace:TASK-3048 | ai:codex
 #[test]
-fn task_3048_private_runtime_pins_only_the_credential_leaf() {
+fn task_3048_private_runtime_pins_settings_and_credential_leaves() {
     use std::os::unix::fs::symlink;
     let home = tempfile::tempdir().unwrap();
     let state = tempfile::tempdir().unwrap();
-    let workspace = tempfile::tempdir().unwrap();
     let policy = crate::containment::runtime_policy("agy").unwrap();
     let host = home.path().join(&policy.relative);
     std::fs::create_dir_all(&host).unwrap();
@@ -2281,14 +2285,8 @@ fn task_3048_private_runtime_pins_only_the_credential_leaf() {
     let token = host.join(&policy.credential);
     std::fs::write(&token, "synthetic-credential").unwrap();
     let mut profile = WriteProfile::new();
-    let runtime = install_private_runtime(
-        &mut profile,
-        state.path(),
-        home.path(),
-        &policy,
-        workspace.path(),
-    )
-    .unwrap();
+    let runtime =
+        install_private_runtime(&mut profile, state.path(), home.path(), &policy).unwrap();
     assert_eq!(runtime, host);
     let source = state.path().join("vendor-runtime");
     assert_eq!(std::fs::metadata(&source).unwrap().mode() & 0o777, 0o700);
@@ -2297,7 +2295,7 @@ fn task_3048_private_runtime_pins_only_the_credential_leaf() {
             &std::fs::read(source.join("settings.json")).unwrap()
         )
         .unwrap(),
-        serde_json::json!({"permissions": {"allow": [format!("write_file({}/**)", workspace.path().display())]}})
+        runtime_tool_settings(&policy)
     );
     assert!(std::fs::read(source.join(&policy.credential))
         .unwrap()
@@ -2309,12 +2307,16 @@ fn task_3048_private_runtime_pins_only_the_credential_leaf() {
     assert!(profile.mounts[0].writable);
     assert_eq!(profile.mounts[0].path, host);
     assert!(!profile.mounts[1].writable);
-    assert_eq!(profile.mounts[1].path, token);
+    assert_eq!(profile.mounts[1].path, source.join("settings.json"));
+    assert!(!profile.mounts[2].writable);
+    assert_eq!(profile.mounts[2].path, runtime.join("settings.json"));
+    assert!(!profile.mounts[3].writable);
+    assert_eq!(profile.mounts[3].path, token);
     // Mount pins the original inode, even if the host replaces the pathname.
     std::fs::rename(&token, host.join("old-token")).unwrap();
     std::fs::write(&token, "replacement").unwrap();
     let mut pinned = String::new();
-    profile.mounts[1]
+    profile.mounts[3]
         .file
         .try_clone()
         .unwrap()
@@ -2374,6 +2376,19 @@ fn task_3048_runtime_policy_fails_closed_before_launch() {
     policy = crate::containment::runtime_policy("agy").unwrap();
     policy.raw_store_writes = true;
     assert!(policy.validate().is_err());
+    for denies in [
+        vec![],
+        vec!["read_url(*)", "mcp(*)", "execute_url(*)"],
+        vec!["mcp(*)", "read_url(*)"],
+    ] {
+        policy = crate::containment::runtime_policy("agy").unwrap();
+        policy.tool_denies = denies.into_iter().map(String::from).collect();
+        assert!(policy
+            .validate()
+            .unwrap_err()
+            .to_string()
+            .contains("requires MCP, URL and browser tool denies"));
+    }
 }
 
 // Uses the actual common process boundary with synthetic credentials, not AGY
@@ -2412,7 +2427,7 @@ fn task_3048_live_private_runtime_preserves_read_only_credential() {
         })
         .into();
     let workspace = tempfile::tempdir().unwrap();
-    let settings_json = policy.settings(workspace.path()).unwrap().to_string();
+    let settings_json = runtime_tool_settings(&policy).to_string();
     let runtime_json = serde_json::to_string(&runtime).unwrap();
     let leaf_json = serde_json::to_string(&policy.credential).unwrap();
     let protected_json = serde_json::to_string(&protected).unwrap();
@@ -2422,6 +2437,23 @@ fn task_3048_live_private_runtime_preserves_read_only_credential() {
 import pathlib,errno,subprocess,sys,json,os
 runtime=pathlib.Path({runtime_json})
 assert json.loads((runtime/'settings.json').read_text())=={settings_json}
+for settings in (runtime/'settings.json', pathlib.Path.home()/'vendor-runtime/settings.json'):
+    try:
+        settings.write_text('{{}}')
+        raise AssertionError(f'settings writable: {{settings}}')
+    except OSError as e:
+        assert e.errno in (errno.EACCES,errno.EPERM,errno.EROFS),e
+    # Writable parent directories must not allow replacing the pinned controls.
+    replacement=settings.parent/'replacement-settings.json'
+    replacement.write_text('{{}}')
+    for mutate in (settings.unlink, lambda: replacement.replace(settings)):
+        try:
+            mutate()
+            raise AssertionError(f'settings replaceable: {{settings}}')
+        except OSError as e:
+            assert e.errno in (errno.EACCES,errno.EPERM,errno.EROFS,errno.EBUSY),e
+        assert json.loads(settings.read_text())=={settings_json}
+    replacement.unlink()
 assert not (runtime/'host-plugin').exists()
 token=runtime/{leaf_json}
 assert token.read_text()=='synthetic-credential'
@@ -2491,14 +2523,7 @@ for name in ('file-helper','url-helper','stdio-server'):
     std::fs::create_dir_all(empty.join("antigravity-cli")).unwrap();
     plan.profile.add(&empty, false).unwrap();
     plan.profile.mounts.last_mut().unwrap().path = home.path().join(".gemini");
-    install_private_runtime(
-        &mut plan.profile,
-        plan._state.path(),
-        home.path(),
-        &policy,
-        workspace.path(),
-    )
-    .unwrap();
+    install_private_runtime(&mut plan.profile, plan._state.path(), home.path(), &policy).unwrap();
     bind_runtime_credential(
         &mut plan.profile,
         &runtime,
@@ -3422,6 +3447,117 @@ fn bug_2487_codex_env() -> BTreeMap<String, String> {
 }
 
 #[test]
+// trace:TASK-3015 | ai:codex
+fn task_3015_codex_config_refuses_posture_overrides() {
+    for config in [
+        "approval_policy=\"on-request\"",
+        " approval_policy =\"never\"",
+        "sandbox_mode=\"danger-full-access\"",
+        "sandbox_workspace_write.network_access=true",
+        "shell_environment_policy.inherit=\"all\"",
+        "permissions.aida.network.enabled=true",
+        "default_permissions=\"other\"",
+    ] {
+        for flags in [
+            vec!["-c".to_string(), config.to_string()],
+            vec!["--config".to_string(), config.to_string()],
+            vec![format!("--config={config}")],
+            vec![format!("-c{config}")],
+            vec![format!("-c={config}")],
+        ] {
+            let original = [vec!["exec".into()], flags, vec!["prompt".into()]].concat();
+            let error = codex_argv(
+                Path::new("/fixture/codex"),
+                &bug_2487_codex_env(),
+                &original,
+                true,
+            )
+            .unwrap_err();
+            assert!(
+                error.to_string().contains("posture config override"),
+                "{error}"
+            );
+        }
+    }
+}
+
+#[test]
+// trace:TASK-3015 | ai:codex
+fn task_3015_codex_config_preserves_ordinary_overrides() {
+    for flags in [
+        vec!["-c", "model=\"example\""],
+        vec!["--config", "model=\"example\""],
+        vec!["--config=model=\"example\""],
+        vec!["-c=model=\"example\""],
+    ] {
+        let original: Vec<String> = ["exec"]
+            .into_iter()
+            .chain(flags)
+            .chain(["prompt"])
+            .map(String::from)
+            .collect();
+        let (args, _) = codex_argv(
+            Path::new("/fixture/codex"),
+            &bug_2487_codex_env(),
+            &original,
+            true,
+        )
+        .unwrap();
+        assert!(args.ends_with(&original));
+    }
+}
+
+#[test]
+// trace:TASK-3015 | ai:codex
+fn task_3015_codex_sandbox_checks_split_and_inline_values() {
+    for flag in ["--sandbox", "-s"] {
+        for value in ["workspace-write", "danger-full-access", "read-only", ""] {
+            for flags in [
+                vec![flag.to_string(), value.to_string()],
+                vec![format!("{flag}={value}")],
+            ] {
+                let original = [vec!["exec".into()], flags, vec!["prompt".into()]].concat();
+                let result = codex_argv(
+                    Path::new("/fixture/codex"),
+                    &bug_2487_codex_env(),
+                    &original,
+                    true,
+                );
+                if value == "workspace-write" {
+                    let (args, _) = result.unwrap();
+                    assert!(args.ends_with(&["exec".into(), "prompt".into()]));
+                } else {
+                    assert!(result.unwrap_err().to_string().contains("sandbox policy"));
+                }
+            }
+        }
+    }
+}
+
+#[test]
+// trace:TASK-3015 | ai:codex
+fn task_3015_codex_config_preserves_prompt_after_terminator() {
+    for prompt in [
+        "-c",
+        "--config=approval_policy notes",
+        "--ask-for-approval",
+        "-P",
+        "--sandbox=danger-full-access",
+        "-s=danger-full-access",
+    ] {
+        let original = vec!["exec".into(), "--".into(), prompt.into()];
+        let (args, _) = codex_argv(
+            Path::new("/fixture/codex"),
+            &bug_2487_codex_env(),
+            &original,
+            true,
+        )
+        .unwrap();
+        assert!(args.ends_with(&original));
+    }
+}
+
+#[test]
 // trace:BUG-2487 | ai:codex
 fn bug_2487_pinned_help_checks_production_argv_and_scopes() {
     let recorded: serde_json::Value =
@@ -3846,6 +3982,294 @@ fn story_2326_wrapper_refuses_projected_commands_before_io() {
             "{error:#}"
         );
     }
+}
+
+// trace:TASK-3048 | ai:codex
+#[test]
+fn task_3048_diagnostic_hosts_do_not_open_production_admission() {
+    let policy = crate::containment::runtime_policy("agy").unwrap();
+    let mut approved = policy.auth_hosts.clone();
+    approved.push("allow.fixture.test".into());
+    let relay = runtime_relay_hosts(&policy, &approved, true).unwrap();
+    for host in &policy.auth_hosts {
+        assert!(relay.contains(host));
+    }
+    assert!(runtime_relay_hosts(&policy, &approved, false)
+        .unwrap_err()
+        .to_string()
+        .contains("inventory is incomplete"));
+    assert!(runtime_relay_hosts(&policy, &[], true)
+        .unwrap_err()
+        .to_string()
+        .contains("AGY_AUTH_HOST_UNAPPROVED"));
+    assert!(
+        crate::session::preflight_launch_vendor(crate::session::HeadlessVendor::Agy, false)
+            .unwrap_err()
+            .to_string()
+            .contains("fresh all-tool conformance")
+    );
+}
+
+// No DNS or real egress: exercise the actual host refusal and typed reply.
+// trace:TASK-3048 | ai:codex
+#[test]
+fn task_3048_unlisted_host_is_named_before_dns() {
+    let test = r#"
+a,b=socket.socketpair(socket.AF_UNIX,socket.SOCK_SEQPACKET)
+request=dict(version=1,method='CONNECT',host='unknown.fixture.test',port=443,
+             host_header='unknown.fixture.test:443',protocol='tcp')
+def no_dns(*args,**kwargs):
+    raise AssertionError('DNS attempted for unlisted host')
+socket.getaddrinfo=no_dns
+proxy_request(json.dumps(request).encode(),[b.detach()],{('oauth2.googleapis.com',443)},None)
+assert a.recv(128)==b'denied-v1'
+"#;
+    let output = Command::new("/usr/bin/python3")
+        .args(["-I", "-S", "-c", &format!("{COMMON}\n{HOST}\n{test}")])
+        .output()
+        .unwrap();
+    assert!(
+        output.status.success(),
+        "{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    assert!(String::from_utf8_lossy(&output.stderr)
+        .contains("CONTAINED_EGRESS_HOST_UNLISTED unknown.fixture.test"));
+}
+
+// Record only successfully connected destinations, never vendor log text.
+// trace:TASK-3048 | ai:codex
+#[test]
+fn task_3048_host_egress_bitmap_requires_successful_host_connection() {
+    let test = r#"
+import tempfile
+with tempfile.TemporaryFile() as evidence:
+    evidence.write(b'000')
+    evidence.flush()
+    listener=socket.socket()
+    listener.bind(('127.0.0.1',0))
+    listener.listen(1)
+    port=listener.getsockname()[1]
+    hosts=('allow.fixture.test','oauth2.googleapis.com')
+    for requested_port in (1,port):
+        a,b=socket.socketpair(socket.AF_UNIX,socket.SOCK_SEQPACKET)
+        request=dict(version=1,method='CONNECT',host=hosts[0],port=requested_port,
+                     host_header=hosts[0]+':'+str(requested_port),protocol='tcp')
+        proxy_request(json.dumps(request).encode(),[b.detach()],{(hosts[0],port)},
+                      (hosts[0],port,'127.0.0.1'),egress_fd=evidence.fileno(),egress_hosts=hosts)
+        if requested_port != port:
+            assert a.recv(128)==b'denied-v1'
+            assert os.pread(evidence.fileno(),3,0)==b'000'
+        else:
+            data,fds=receive(a)
+            assert data==b'tunnel-v1'
+            for fd in fds: os.close(fd)
+            assert os.pread(evidence.fileno(),3,0)==b'010'
+        a.close()
+    listener.close()
+"#;
+    let output = Command::new("/usr/bin/python3")
+        .args(["-I", "-S", "-c", &format!("{COMMON}\n{HOST}\n{test}")])
+        .output()
+        .unwrap();
+    assert!(
+        output.status.success(),
+        "{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    assert!(String::from_utf8_lossy(&output.stderr)
+        .contains("CONTAINED_EGRESS_HOST_UNLISTED allow.fixture.test:"));
+}
+
+// The actual prepare API, with a fake vendor and token. Never executes AGY.
+// trace:TASK-3048 | ai:codex
+#[test]
+fn task_3048_diagnostic_prepare_uses_common_wrapper_and_keeps_production_closed() {
+    if crate::test_env::run_path_isolated_test() {
+        return;
+    }
+    if let Err(error) = host_prerequisites() {
+        skip_under(live_required(), &format!("{error:#}"));
+        return;
+    }
+    let home = crate::home_dir().unwrap();
+    let root = tempfile::tempdir().unwrap();
+    let policy = crate::containment::runtime_policy("agy").unwrap();
+    trusted_policy(root.path(), "agy = \"aida\"");
+    let config = root.path().join(".aida/config.toml");
+    let text = std::fs::read_to_string(&config).unwrap().replace(
+        "[contained]\n",
+        &format!(
+            "[contained]\nallowed_hosts = {}\n",
+            serde_json::to_string(&policy.auth_hosts).unwrap()
+        ),
+    );
+    std::fs::write(&config, text).unwrap();
+    for args in [
+        vec!["add", ".aida/config.toml"],
+        vec!["commit", "-qm", "fixture auth approval"],
+        vec!["update-ref", "refs/remotes/origin/main", "HEAD"],
+    ] {
+        assert!(crate::test_git::git_command()
+            .arg("-C")
+            .arg(root.path())
+            .args(args)
+            .status()
+            .unwrap()
+            .success());
+    }
+    for path in crate::contained_boundary::contained_store_write_paths(root.path()) {
+        std::fs::create_dir_all(path).unwrap();
+    }
+    let runtime = home.join(&policy.relative);
+    std::fs::create_dir_all(&runtime).unwrap();
+    let source_home = tempfile::tempdir().unwrap();
+    let source = source_home.path().join(&policy.relative);
+    std::fs::create_dir_all(&source).unwrap();
+    let credential = source.join(&policy.credential);
+    std::fs::write(&credential, "synthetic-only").unwrap();
+    let bin = home.join("bin");
+    std::fs::create_dir_all(&bin).unwrap();
+    let program = bin.join("agy");
+    std::fs::write(&program, "#!/bin/sh\nexit 99\n").unwrap();
+    std::fs::set_permissions(&program, std::fs::Permissions::from_mode(0o700)).unwrap();
+    let mut child = Command::new(program);
+    child
+        .args(["-p", "fixture only"])
+        .env("AIDA_HEADLESS", "1")
+        .env("AIDA_SESSION_GRANT", "")
+        .env("AIDA_SESSION_ROLE", "companion")
+        .env("OPENAI_API_KEY", "must-not-reach-agy");
+    let refusal = PreparedLaunch::prepare(&mut child, root.path(), None)
+        .err()
+        .unwrap();
+    assert!(refusal.to_string().contains("inventory is incomplete"));
+    // Neither absence in origin/main nor a working-tree-only opt-in grants
+    // the diagnostic permission bypass. No plan may escape either refusal.
+    // trace:TASK-3048 | ai:codex
+    let approved_text = std::fs::read_to_string(&config).unwrap();
+    trusted_policy(root.path(), "");
+    for working_tree_opt_in in [false, true] {
+        if working_tree_opt_in {
+            std::fs::write(&config, &approved_text).unwrap();
+        }
+        let error =
+            PreparedLaunch::prepare_runtime_diagnostic(&mut child, root.path(), &credential)
+                .err()
+                .expect("untrusted posture returned a launch plan");
+        assert!(
+            format!("{error:#}").contains("requires trusted policy"),
+            "{error:#}"
+        );
+    }
+    trusted_policy(root.path(), "agy = \"aida\"");
+    std::fs::write(&config, &approved_text).unwrap();
+    for args in [
+        vec!["add", ".aida/config.toml"],
+        vec!["commit", "-qm", "restore approved hosts"],
+        vec!["update-ref", "refs/remotes/origin/main", "HEAD"],
+    ] {
+        assert!(crate::test_git::git_command()
+            .arg("-C")
+            .arg(root.path())
+            .args(args)
+            .status()
+            .unwrap()
+            .success());
+    }
+    // Retained siblings must survive the private extension mask as pinned,
+    // read-only mounts, including ordinary files alongside skill directories.
+    // trace:TASK-3048 | ai:codex
+    let skills = root.path().join(".agents/skills");
+    std::fs::create_dir_all(&skills).unwrap();
+    std::fs::write(skills.join("SKILL.md"), "fixture skill").unwrap();
+    let sibling = root.path().join(".agents/notes.txt");
+    std::fs::write(&sibling, "fixture notes").unwrap();
+    let plan = PreparedLaunch::prepare_runtime_diagnostic(&mut child, root.path(), &credential)
+        .unwrap_or_else(|e| panic!("diagnostic prepare: {e:#}"));
+    assert!(!plan
+        .command
+        .get_envs()
+        .any(|(k, v)| k == "OPENAI_API_KEY" && v.is_some()));
+    let cfg: serde_json::Value =
+        serde_json::from_str(&plan.command.get_args().nth(5).unwrap().to_string_lossy()).unwrap();
+    for host in &policy.auth_hosts {
+        assert!(cfg["allowed"]
+            .as_array()
+            .unwrap()
+            .contains(&serde_json::json!(host)));
+    }
+    let argv = cfg["argv"].as_array().unwrap();
+    assert!(argv.contains(&serde_json::json!("--dangerously-skip-permissions")));
+    assert!(!argv.contains(&serde_json::json!("--sandbox")));
+    let settings = argv.iter().position(|a| a == "--settings").unwrap();
+    assert_eq!(
+        argv[settings + 1].as_str().unwrap(),
+        runtime.join("settings.json").to_string_lossy()
+    );
+    let bound = plan
+        .profile
+        .mounts
+        .iter()
+        .find(|m| m.path == runtime.join(&policy.credential))
+        .unwrap();
+    assert!(!bound.writable);
+    assert_eq!(
+        bound.file.metadata().unwrap().ino(),
+        std::fs::metadata(&credential).unwrap().ino()
+    );
+    assert!(plan
+        .profile
+        .mounts
+        .iter()
+        .any(|m| m.path == source_home.path().join(".gemini") && !m.writable));
+    for name in [".agents/mcp_config.json", ".agents/hooks.json", ".mcp.json"] {
+        let mount = plan
+            .profile
+            .mounts
+            .iter()
+            .find(|m| m.path == root.path().join(name) && m.file.metadata().unwrap().len() == 2)
+            .unwrap();
+        let mut bytes = [0; 2];
+        mount.file.read_exact_at(&mut bytes, 0).unwrap();
+        assert_eq!(&bytes, b"{}");
+        assert!(!mount.writable);
+    }
+    for name in [
+        ".agents/mcp_config.json",
+        ".agents/hooks.json",
+        ".agents/plugins",
+    ] {
+        assert!(
+            !root.path().join(name).exists(),
+            "mask leaked host path: {name}"
+        );
+    }
+    for path in [&skills, &sibling] {
+        let mount = plan
+            .profile
+            .mounts
+            .iter()
+            .find(|m| m.path == *path)
+            .unwrap();
+        assert!(!mount.writable);
+        assert_eq!(
+            mount.file.metadata().unwrap().ino(),
+            std::fs::metadata(path).unwrap().ino()
+        );
+    }
+    drop(plan);
+    // A symlink sibling must refuse preparation, even when its target is a
+    // valid retained directory. No launch plan may escape this validation.
+    std::os::unix::fs::symlink(&skills, root.path().join(".agents/linked-skills")).unwrap();
+    let error = PreparedLaunch::prepare_runtime_diagnostic(&mut child, root.path(), &credential)
+        .err()
+        .expect("symlink sibling returned a launch plan");
+    assert!(
+        format!("{error:#}").contains("unsafe mount identity"),
+        "{error:#}"
+    );
+    assert!(crate::launch::agy::AGY.require_conformance().is_err());
 }
 
 /// S3 runs the real supervisor behind a dispatcher that exits, using synthetic
