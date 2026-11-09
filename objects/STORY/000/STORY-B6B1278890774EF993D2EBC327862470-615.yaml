@@ -3,12 +3,12 @@ spec_id: STORY-b6b1278890774ef993d2ebc327862470-615
 agreed_id: STORY-2692
 title: 'Mechanical merge support: regenerate inventories and snapshots instead of merging them, and carry PR edits across file splits'
 description: 'Problem: on 2026-11-08 PR-3685 split queue_cmd.rs and conflicted eight PRs the same way; scripts/store-writers.toml and the CLI help golden also conflicted repeatedly though they are generated. Hand scripts resolved most of it. Requirement: generated files are regenerated after merging rather than merged; a tested tool ports a PR''s hunks across a recorded file split with exact-match only, reporting anything it cannot place. Acceptance: fixture PRs across a split merge without hand edits; an inexact hunk is refused, never guessed.'
-status: Approved
+status: InProgress
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-09T01:58:54.698246911Z
-modified_at: 2026-11-09T04:54:42.543006563Z
+modified_at: 2026-11-09T04:55:57.637723104Z
 req_type: Story
 tags:
 - area:orchestration
@@ -166,6 +166,13 @@ history:
   timestamp: 2026-11-09T04:54:42.628407400Z
   session_id: 7aacb1ed-ebaa-4da4-a195-500864e99e7d
   changes: []
+- id: 01a1bea9-bdc5-7bd2-85a6-d63e1cfdb3f3
+  author: aida-session-start
+  timestamp: 2026-11-09T04:55:57.637721836Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: InProgress
 filed_at:
   code_sha: a7a14984cec5533987dfeccb70d1f91aaebbf22a
   branch: main
