@@ -77,7 +77,6 @@ pub(crate) use time_args::{
     parse_time_bound_at, AmbiguousLocalTime, TimeBoundOutOfRange, NAIVE_DATETIME_FORMATS,
 };
 mod work;
-pub use work::{refuse_waiting_review, spec_open_change_key};
 pub(crate) use work::ResumePublicationFailure;
 pub(crate) use work::{
     append_reviewer_prompt_suffixes, append_reviewer_prompt_suffixes_with,
@@ -108,19 +107,18 @@ pub(crate) use work::{
     queue_work_manual_continuation, queue_work_plan_wants_pr_head_branch, queue_work_role_mismatch,
     queue_work_self_claim, queued_supervised_mode, reclaim_exited_branch_clone,
     record_pickup_refusal, refuse_retired_steal, refuse_unpresentable_contained_reviewer,
-    refuse_waiting_pickup, refused_review_launch_releases_lease,
-    release_refused_review_lease, resolve_auto_complete_head, resolve_queue_work_plan,
-    resolve_queue_work_posture, resolve_rework_findings, resume_autocomplete_conflict_message,
-    retire_idle_review_worktree, review_calibration_spec_ids, review_calibration_spec_ids_in,
-    review_envelope_targets_pr, review_ref_from_verdict_filename, review_round_from_comments,
-    reviewer_from_pr_contract_suffix, reviewer_pickup_keeps_pr_scope, reviewer_preflight_pr_n,
-    reviewer_prompt_for_round, reviewer_spawn_instant, reviewer_vendor_exit_code,
-    reviewer_verdict_anchor_suffix, rework_conflict_route, rework_findings_block_for_spec,
-    rework_pickup_prompt, rework_pr_head_branch_override, rework_pr_head_matches_spec,
-    rework_role_input, rework_round_from_comments, ruling_comment_text, run_pickup_launch,
-    run_queue_resume_to_exit, run_standalone_reviewer, scope_conflict_resume_hint, spec_matches,
-    standalone_review_plan, standalone_review_pr_head,
-    standalone_reviewer_outcome, standalone_reviewer_record_anchor,
+    refuse_waiting_pickup, refused_review_launch_releases_lease, release_refused_review_lease,
+    resolve_auto_complete_head, resolve_queue_work_plan, resolve_queue_work_posture,
+    resolve_rework_findings, resume_autocomplete_conflict_message, retire_idle_review_worktree,
+    review_calibration_spec_ids, review_calibration_spec_ids_in, review_envelope_targets_pr,
+    review_ref_from_verdict_filename, review_round_from_comments, reviewer_from_pr_contract_suffix,
+    reviewer_pickup_keeps_pr_scope, reviewer_preflight_pr_n, reviewer_prompt_for_round,
+    reviewer_spawn_instant, reviewer_vendor_exit_code, reviewer_verdict_anchor_suffix,
+    rework_conflict_route, rework_findings_block_for_spec, rework_pickup_prompt,
+    rework_pr_head_branch_override, rework_pr_head_matches_spec, rework_role_input,
+    rework_round_from_comments, ruling_comment_text, run_pickup_launch, run_queue_resume_to_exit,
+    run_standalone_reviewer, scope_conflict_resume_hint, spec_matches, standalone_review_plan,
+    standalone_review_pr_head, standalone_reviewer_outcome, standalone_reviewer_record_anchor,
     standalone_summary_verdict_body, verdict_recorded_time, AgentLaunchMark,
     AutoCompleteHeadCandidate, AutoCompleteHeadPick, LeasePeek, NoReviewVerdict,
     PreclaimBranchState, PreclaimDecision, QueueFreshPickup, QueueWorkEntry, QueueWorkMode,
@@ -132,6 +130,7 @@ pub(crate) use work::{
     derive_queue_work_prompt, latest_ruling_comment, prepend_ruling,
     rework_pr_head_branch_from_lookup,
 };
+pub use work::{refuse_waiting_review, spec_open_change_key};
 
 /// `store_path` is the orphan-store path; the `--json` fast path opens a
 /// cache-backed backend from it to resolve titles via the SQLite cache rather
