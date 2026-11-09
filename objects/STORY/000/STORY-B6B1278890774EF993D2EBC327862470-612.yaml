@@ -8,10 +8,17 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-09T01:58:14.415127564Z
-modified_at: 2026-11-09T01:58:14.415127564Z
+modified_at: 2026-11-09T02:43:50.997551096Z
 req_type: Story
 tags:
 - area:orchestration
+comments:
+- id: 01a1be30-ca55-71f2-8dea-c6c6fdbb9176
+  author: joe
+  content: 'Sketch (advisor 2026-11-08), for review before implementation. New record NeedsRuling{question, spec, pr, head, raised_by, seat, raised_at} stored in the substrate, created by a design-fork punt or a reviewer verdict''s explicit needs-ruling field, never parsed from prose. Keyed (spec, question hash) so repeats add no new record. aida awaiting lists these first, oldest first, with age. Dispatch suppression: while one is open for a head, rework routing refuses with its id; a STORY-2688 NeedsRuling state does the same. aida rule <id> records the ruling comment, clears it and requeues exactly once. Open fork: whether an unruled record escalates to the operator after a fixed age. Depends on STORY-2688 S1. Needs advisor signoff by an independent read.'
+  created_at: 2026-11-09T02:43:50.997551096Z
+  modified_at: 2026-11-09T02:43:50.997551096Z
+  session_id: 20abb7c3-8f9b-4a5e-b326-404921f3b450
 filed_at:
   code_sha: a7a14984cec5533987dfeccb70d1f91aaebbf22a
   branch: main
