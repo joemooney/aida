@@ -1,5 +1,6 @@
 id: 01a1bf79-46cf-7783-8f76-4bdf320925a8
 spec_id: TASK-b6b1278890774ef993d2ebc327862470-1036
+agreed_id: TASK-3080
 title: 'Non-blocking (minor): aida-cli-lib/src/drain_batch.rs:1638 single-branch Paused…'
 description: |-
   Non-blocking finding carried forward from an APPROVED review verdict on TASK-3608, which has since completed — recorded here so it keeps a queryable home once the verdict record stops being read.
@@ -40,6 +41,10 @@ history:
   timestamp: 2026-11-09T08:46:45.481303614Z
   session_id: 01a1beff-fc3b-78e2-93e2-9b0c283b0339
   harness_version: 2.1.319 (Claude Code)
+  changes: []
+- id: 01a1bfa6-88bb-74e2-8084-b4bbfa953a1c
+  author: joe
+  timestamp: 2026-11-09T09:32:04.667027947Z
   changes: []
 filed_at:
   code_sha: e60e97d0035e92f14a0b60c05e85859019365939
