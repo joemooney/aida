@@ -66,7 +66,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-09T08:46:26.872629040Z
-modified_at: 2026-11-09T11:01:32.060030329Z
+modified_at: 2026-11-09T11:35:27.549112885Z
 req_type: Task
 relationships:
 - rel_type: Supersedes
@@ -284,6 +284,12 @@ history:
   - field_name: status
     old_value: InProgress
     new_value: NeedsAttention
+- id: 01a1c017-7e8c-76d3-ba69-b4e94d31ed43
+  author: joe
+  timestamp: 2026-11-09T11:35:27.628170953Z
+  session_id: 01a1c014c4fb
+  harness_version: 2.1.319 (Claude Code)
+  changes: []
 filed_at:
   code_sha: e60e97d0035e92f14a0b60c05e85859019365939
   branch: main
@@ -293,3 +299,11 @@ filed_at:
   vendor: claude
   session: 01a1beff-fc3b-78e2-93e2-9b0c283b0339
   harness_version: 2.1.319 (Claude Code)
+failure_reason:
+  phase: reviewer
+  phase_index: 3
+  kind: verdict:request-changes
+  detail: Both acceptance criteria are met in code and tests, but the store writer inventory was not updated for the new sweep write path, which fails the CI gates job; CI at this head was still queued.
+  recovery_hint: address the review findings, move TASK-3749 back to In Progress, and clear the PR hold only after approval
+  shelved_by: reviewer
+  shelved_at: 2026-11-09T11:35:27.549112885Z
