@@ -175,6 +175,7 @@ class LauncherRefusals(unittest.TestCase):
                             'dbus-run-session': 'missing tool: dbus-run-session'}[failure]
                 self.assertIn(expected, result.stderr)
 
+    # trace:BUG-2506 | ai:codex
     def test_rearm_generates_fresh_configs_and_stops_on_failure(self):
         import subprocess
         import tempfile
@@ -192,12 +193,36 @@ class LauncherRefusals(unittest.TestCase):
                 path.write_text('#!/bin/sh\n' + body + '\n')
                 path.chmod(0o755)
             script = (ROOT / 'scripts/runner/rearm.sh').read_text().replace('"$EUID"', '"1001"')
+            # Simulate a completed job without a wall-clock wait.
+            script = script.replace('started=$SECONDS', 'started=$((SECONDS - 10))')
             result = subprocess.run(['bash', '-c', script], capture_output=True,
                                     text=True, timeout=5,
                                     env={'PATH': f'{root}:/usr/bin:/bin'})
             self.assertNotEqual(result.returncode, 0)
             self.assertEqual(count.read_text().splitlines(), ['fresh-jit'] * 2)
             self.assertEqual(received.read_text().splitlines(), ['fresh-jit'] * 2)
+
+    # trace:BUG-2506 | ai:codex
+    def test_rearm_stops_after_immediate_successful_exit(self):
+        import subprocess
+        import tempfile
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            count = root / 'registrations'
+            for name, body in {
+                'gh': f'echo registered >> "{count}"; echo config',
+                'sudo': 'cat >/dev/null; exit 0',
+            }.items():
+                command = root / name
+                command.write_text('#!/bin/sh\n' + body + '\n')
+                command.chmod(0o755)
+            script = (ROOT / 'scripts/runner/rearm.sh').read_text().replace('"$EUID"', '"1001"')
+            result = subprocess.run(['bash', '-c', script], capture_output=True,
+                                    text=True, timeout=5,
+                                    env={'PATH': f'{root}:/usr/bin:/bin'})
+            self.assertNotEqual(result.returncode, 0)
+            self.assertIn('stopping re-registration', result.stderr)
+            self.assertEqual(count.read_text().splitlines(), ['registered'])
 
     def test_job_paths_are_stable_and_wiped_under_lock(self):
         launcher = (ROOT / 'scripts/runner/one-job.sh').read_text()
@@ -240,12 +265,19 @@ class LauncherRefusals(unittest.TestCase):
                 mocks = {
                     'id': 'echo 1001',
                     'flock': 'exit 0',
-                    'chown': 'exit 0',
+                    'chown': f'echo "$*" > "{root / "ownership"}"',
+                    # Assert the root ownership request, then use fixture ownership.
+                    'install': 'if [ "$2" = -o ]; then '
+                               '[ "$3" = root ] && [ "$4" = -g ] && [ "$5" = root ] || exit 98; '
+                               'shift 5; exec /usr/bin/install -d "$@"; fi; '
+                               'exec /usr/bin/install "$@"',
                     'systemctl': f'printf "%s\\n" "$*" >> "{controls}"; '
                                  f'[ "$1" != stop ] || {{ echo stop-diagnostic >&2; exit {stop_status}; }}',
                     'systemd-run': f'[ ! -e "{state}/old-job" ] || exit 92; '
                                    f'[ -f "{state}/run.sh" ] || exit 93; '
                                    f'[ -d "{state}/home" ] || exit 94; '
+                                   f'[ "$(stat -c %a "{jobs}")" = 755 ] || exit 95; '
+                                   f'[ "$(stat -c %a "{state}")" = 700 ] || exit 96; '
                                    f'printf "%s\\n" "$@" > "{arguments}"; '
                                    f'cat >> "{log}"',
                 }
@@ -287,6 +319,8 @@ class LauncherRefusals(unittest.TestCase):
                         self.assertIn('-i', unit_args)
                         self.assertIn(f'HOME={state}/home', unit_args)
                         self.assertNotIn('fresh-config', arguments.read_text())
+                        self.assertEqual((root / 'ownership').read_text().strip(),
+                                         f'-R aida-ci:aida-ci {state}')
                         self.assertIn('set-property --runtime aida-ci.slice CPUQuota=800% AllowedCPUs=0-7',
                                       controls.read_text().splitlines())
 
