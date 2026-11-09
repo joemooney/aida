@@ -325,7 +325,8 @@ pub(crate) fn write_handoff_kind(
         "bytes": body.len(),
         "approx_tokens": body.len() / 4,
     });
-    // Snapshot ownership is diagnostic retention metadata, never launch authority.
+    // Snapshot ownership is log-only diagnostic context, never retention or launch authority.
+    // trace:TASK-3735 | ai:codex
     // trace:STORY-2662 | ai:codex
     if let Some((worktree, role)) = &writer.snapshot_owner {
         record["worktree"] = serde_json::json!(worktree);
