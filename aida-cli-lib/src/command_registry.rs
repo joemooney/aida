@@ -454,3 +454,22 @@ fn mcp_handler_refuses_without_binary_registration() {
         .to_string()
         .contains("MCP transport not registered by binary"));
 }
+
+// trace:TASK-3429 | ai:codex
+#[cfg(test)]
+#[test]
+fn mediated_mcp_handler_refuses_without_binary_registration() {
+    let client = crate::store_mutation_client::Client::fixture(
+        "/nonexistent/mcp-registration-test/service".into(),
+        uuid::Uuid::nil(),
+    );
+    let env = aida_core::exec_context::Environment::default();
+    // No transport or store access is needed to diagnose missing registration.
+    let error = run_mediated_mcp_handler(
+        &client,
+        &env,
+        std::path::Path::new("/nonexistent/mcp-registration-test/store"),
+    )
+    .expect_err("mediated MCP must refuse without binary registration");
+    assert_eq!(error.to_string(), "MCP transport not registered by binary");
+}
