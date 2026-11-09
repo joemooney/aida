@@ -344,9 +344,13 @@ sites = 1
 channels = ["write", "probe"]
 sites = 2
 
-[readers."aida-cli-lib/src/queue_cmd.rs"]
+[readers."aida-cli-lib/src/queue_cmd/integrate.rs"]
 channels = ["worktree", "prose"]
-sites = 2
+sites = 1
+
+[readers."aida-cli-lib/src/queue_cmd/work.rs"]
+channels = ["worktree", "prose"]
+sites = 1
 
 [readers."aida-cli-lib/src/role_cmd.rs"]
 channels = ["worktree"]
@@ -989,3 +993,12 @@ sites = 1
 [readers."aida-cli-lib/src/lane_job.rs"]
 channels = ["other-file"]
 sites = 1
+# Lane host reads/writes user Cargo config, never project executable policy.
+# trace:STORY-2642 | ai:codex
+[readers."aida-cli-lib/src/lane_host.rs"]
+channels = ["home", "write"]
+sites = 2
+
+[readers."aida-cli-lib/src/vendors/host_diagnostics.rs"]
+channels = ["home"]
+sites = 2

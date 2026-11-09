@@ -1428,7 +1428,7 @@ fn story_2326_pr_b_compete_builds_real_templates_without_scanning_prompts() {
 // trace:STORY-2326 | ai:codex
 #[test]
 fn story_2326_queue_exec_assigns_child_seat_without_parent_role_export() {
-    let src = include_str!("../queue_cmd.rs");
+    let src = include_str!("../queue_cmd/work.rs");
     let body = src
         .split("pub(crate) fn handle_queue_work(")
         .nth(1)
