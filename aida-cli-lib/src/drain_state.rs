@@ -60,6 +60,9 @@ fn lock_snapshot(project_root: &Path) -> std::io::Result<std::fs::File> {
 pub(crate) const STATE_QUEUED: &str = "queued";
 /// Member state: the spec finished its full lifecycle successfully.
 pub(crate) const STATE_COMPLETED: &str = "completed";
+/// Member state: the seat exited successfully without publishing work.
+// trace:TASK-3608 | ai:codex
+pub(crate) const STATE_NO_CHANGE: &str = "no-change";
 /// Member state: the spec's lifecycle stopped on a phase failure.
 pub(crate) const STATE_FAILED: &str = "failed";
 
@@ -73,7 +76,7 @@ pub(crate) fn drain_state_path(project_root: &Path) -> PathBuf {
 pub(crate) struct DrainMember {
     /// The spec id, e.g. `STORY-301`.
     pub(crate) spec: String,
-    /// `queued` | `in-phase-N` | `completed` | `failed`.
+    /// `queued` | `in-phase-N` | `completed` | `no-change` | `failed`.
     pub(crate) state: String,
     /// The PR number once a phase has discovered it.
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -1182,6 +1185,35 @@ pub(crate) fn set_member_outcome(
     completed: bool,
     pr: Option<u32>,
 ) {
+    set_member_terminal_state(
+        project_root,
+        spec,
+        if completed {
+            STATE_COMPLETED
+        } else {
+            STATE_FAILED
+        },
+        pr,
+    );
+}
+
+/// Persist the semantic result rather than treating every clean exit as a ship.
+// trace:TASK-3608 | ai:codex
+pub(crate) fn set_member_result(
+    project_root: &Path,
+    spec: &str,
+    result: &crate::auto_complete::OrchestrationResult,
+    pr: Option<u32>,
+) {
+    if result.exit_code == 0 && result.no_change {
+        set_member_terminal_state(project_root, spec, STATE_NO_CHANGE, None);
+    } else {
+        set_member_outcome(project_root, spec, result.exit_code == 0, pr);
+    }
+}
+
+// trace:TASK-3608 | ai:codex
+fn set_member_terminal_state(project_root: &Path, spec: &str, outcome: &str, pr: Option<u32>) {
     let Ok(_snapshot_lock) = lock_snapshot(project_root) else {
         return;
     };
@@ -1189,12 +1221,11 @@ pub(crate) fn set_member_outcome(
         return;
     };
     if let Some(member) = state.members.iter_mut().find(|m| m.spec == spec) {
-        member.state = if completed {
-            STATE_COMPLETED
-        } else {
-            STATE_FAILED
+        member.state = outcome.to_string();
+        if outcome == STATE_NO_CHANGE {
+            member.pr = None;
+            member.head_sha = None;
         }
-        .to_string();
         if pr.is_some() {
             member.pr = pr;
         }
@@ -1212,7 +1243,7 @@ pub(crate) fn set_member_outcome(
     // `punt::append_failure_to_ledger` instead — the one disjoint SpecShelved
     // site, where the phase + kind are known — so it is NOT emitted here, to
     // avoid a double-emit. Best-effort. trace:TASK-988
-    if completed {
+    if outcome == STATE_COMPLETED {
         if let Some(pr) = pr {
             crate::events::emit(
                 project_root,
@@ -1432,6 +1463,10 @@ fn member_line(member: &DrainMember) -> String {
             glyph(crate::glyphs::Glyph::Check),
             "completed".green().to_string(),
         ),
+        STATE_NO_CHANGE => (
+            glyph(crate::glyphs::Glyph::Info),
+            "no-change".dimmed().to_string(),
+        ),
         STATE_FAILED => (
             glyph(crate::glyphs::Glyph::Cross),
             "failed".red().to_string(),
@@ -1516,7 +1551,10 @@ fn member_line_with_pacing(
         if !bits.is_empty() {
             line.push_str(&format!(" · {}", bits.join(" · ")));
         }
-    } else if matches!(member.state.as_str(), STATE_COMPLETED | STATE_FAILED) {
+    } else if matches!(
+        member.state.as_str(),
+        STATE_COMPLETED | STATE_FAILED | STATE_NO_CHANGE
+    ) {
         let mut bits = Vec::new();
         if let Some(finished_at) = member.finished_at.as_deref() {
             if let Some(time) = fmt_local_time(finished_at) {
@@ -2808,6 +2846,50 @@ mod tests {
         assert!(failed.finished_at.is_some());
         assert_eq!(read.current_phase, None);
         assert_eq!(read.phase_started_at, None);
+    }
+
+    // trace:TASK-3608 | ai:codex
+    #[test]
+    fn task_3608_no_change_persistence_has_no_merge_credit() {
+        let dir = tempfile::tempdir().unwrap();
+        let mut state = batch_state();
+        state.pipeline_depth = 2;
+        state.members[0].pr = Some(82);
+        state.members[0].head_sha = Some("old-head".into());
+        state.write(dir.path()).unwrap();
+        let mut result = crate::auto_complete::OrchestrationResult::ok();
+        result.no_change = true;
+        set_member_result(dir.path(), "STORY-301", &result, Some(82));
+        let read = DrainState::read(dir.path()).unwrap();
+        let member = &read.members[0];
+        assert_eq!(member.state, STATE_NO_CHANGE);
+        assert!(member.finished_at.is_some());
+        assert!(member.pr.is_none());
+        assert!(member.head_sha.is_none());
+        assert!(!member.is_running());
+        assert!(read.current_phase.is_none());
+        let human = render_human(&read, false);
+        assert!(human.contains("no-change"), "{human}");
+        assert!(human.contains("0 merged, 0 in flight"), "{human}");
+        assert!(!human.contains("last ship:"), "{human}");
+        let json: serde_json::Value =
+            serde_json::from_str(&render_json(&DrainStatus::Active(read))).unwrap();
+        assert_eq!(json["members"][0]["state"], STATE_NO_CHANGE);
+        assert!(json["pacing"]["last_ship"].is_null());
+
+        // A failure must take precedence even if no-change context is present.
+        result.exit_code = 1;
+        set_member_result(dir.path(), "STORY-301", &result, None);
+        assert_eq!(
+            DrainState::read(dir.path()).unwrap().members[0].state,
+            STATE_FAILED
+        );
+        result.no_change = false;
+        result.exit_code = 0;
+        set_member_result(dir.path(), "STORY-301", &result, Some(83));
+        let read = DrainState::read(dir.path()).unwrap();
+        assert_eq!(read.members[0].state, STATE_COMPLETED);
+        assert_eq!(read.members[0].pr, Some(83));
     }
 
     // set_phase / set_member_outcome / clear_run on a project with
