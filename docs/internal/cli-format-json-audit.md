@@ -798,6 +798,7 @@ hermetic audit. `JSON not honoured` means unsupported and explicitly rejected.
 | `aida deputy shell resume` | JSON not honoured | Explicitly rejected before dispatch (no local --json contract) |
 | `aida deputy shell ack` | JSON not honoured | Explicitly rejected before dispatch (no local --json contract) |
 | `aida lane` | JSON not honoured | Explicitly rejected before dispatch (no local --json contract) |
+| `aida lane fast-gate-release` | JSON not honoured | Explicitly rejected before dispatch (no local --json contract) |
 | `aida lane job` | JSON not honoured | Explicitly rejected before dispatch (no local --json contract) |
 | `aida lane job run` | JSON not honoured | Explicitly rejected before dispatch (no local --json contract) |
 | `aida lane job wait` | JSON not honoured | Explicitly rejected before dispatch (no local --json contract) |

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Run CI's Build-job gates locally, in CI's own order.
+"""Run CI's Build-job gates locally; fast source gates precede compilation.
 
 CI's Build job runs far more gates than the local check set documented in
 CLAUDE.md. Every gate an agent cannot run locally costs a full CI cycle plus a
@@ -76,10 +76,12 @@ COMPILE_LOCAL_ARGS = ["--no-run", "--profile", "agent"]
 # A local `make check-ci` runs CI's `cargo test` steps on the agent profile.
 # Automatic cache seeding builds that profile, while CI's default (debug) would
 # rebuild the workspace cold in each worktree and run unoptimized tests: the
-# 44-80 min local runs of 2026-10-18. Only `cargo test` is reshaped; the
+# 44-80 min local runs of 2026-10-18. Tests and checks use agent; the
 # `cargo build` steps stay debug because later gates run `target/debug/aida`.
 # trace:STORY-1853 | ai:claude
 LOCAL_TEST_PROFILE = "agent"
+# trace:STORY-2640 | ai:codex
+CARGO_CHECK_RE = re.compile(r"\bcargo check\b(?![^\n]*--profile)")
 CARGO_TEST_RE = re.compile(r"\bcargo test\b(?![^\n]*--profile)")
 RUN_ONLY_ARGS = {"--no-fail-fast"}
 RUN_ONLY_REDIRECT = ["<", "/dev/null"]
@@ -198,12 +200,13 @@ def derive_compile_command(source_name: str, source_command: str) -> str:
 
 
 def local_test_command(command: str) -> str:
-    """CI's step body with every `cargo test` moved to the local test profile."""
+    """CI's step body with Cargo tests and checks on the seeded agent profile."""
     # Resolve the CI-only matrix context to all lanes for explicit local full
     # runs; the compile tier uses --compile instead. trace:TASK-1949 | ai:codex
     if command.strip() == CI_TEST_LANES:
         return command.replace('"${{ matrix.shard }}"', 'all --profile agent')
-    return CARGO_TEST_RE.sub(f"cargo test --profile {LOCAL_TEST_PROFILE}", command)
+    command = CARGO_TEST_RE.sub(f"cargo test --profile {LOCAL_TEST_PROFILE}", command)
+    return CARGO_CHECK_RE.sub(f"cargo check --profile {LOCAL_TEST_PROFILE}", command)
 
 
 def load_derived(
@@ -321,7 +324,10 @@ def sccache_server_status() -> tuple[bool, str | None]:
     if not proc.is_dir():
         return False, None
     pids_env = os.environ.get("AIDA_SCCACHE_PIDS")
-    if pids_env:
+    # The lane wrapper's PID scope belongs to real procfs, not an explicitly
+    # injected synthetic process tree used by the detection fixtures.
+    # trace:STORY-2640 | ai:codex
+    if pids_env and proc == Path("/proc"):
         candidates = [proc / p for p in pids_env.split() if p.isdigit()]
     else:
         try:
@@ -599,7 +605,7 @@ def run_gate(root: Path, name: str, command: str, env: dict[str, str]) -> tuple[
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(
         prog="check-ci-gates.py",
-        description="Run CI's Build-job gates locally, in CI's own order.",
+        description="Run CI's Build-job gates locally; fast source gates precede compilation.",
     )
     parser.add_argument(
         "--tier",
@@ -654,6 +660,12 @@ def main(argv: list[str] | None = None) -> int:
 
     wanted = TIERS if args.tier == "all" else (args.tier,)
     plan = [(name, local_test_command(command)) for name, command in steps if tiers.get(name) in wanted]
+
+    # Run source ratchets before potentially cold compilation so a cold target
+    # cannot hide the failures the fast gate is meant to catch.
+    # trace:STORY-2640 | ai:codex
+    if args.tier == "fast":
+        plan.sort(key=lambda gate: bool(re.search(r"\bcargo (?:check|test|build)\b", gate[1])))
 
     # Every skip is printed with its reason, naming the gate. A skip nobody sees
     # is how the documented check set came to omit ~25 gates.
@@ -730,8 +742,8 @@ def run_plan(
             note = cargo_home_read_only_note(env) if fetch_error else None
             if note:
                 print(f"check-ci-gates: CARGO_HOME is read-only here; {note}", file=sys.stderr)
-            # Exit on the FIRST failure: CI's order is the cheapest order,
-            # and a second failure after the first is noise.
+            # Exit on the first failure; the fast plan puts source gates
+            # first so cold compilation cannot mask their failures.
             origin = (
                 "a local derivation of a CI step; see `make check-ci-list`."
                 if tier in DERIVED_TIERS
