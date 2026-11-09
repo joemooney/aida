@@ -8,7 +8,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-08T18:01:54.649358829Z
-modified_at: 2026-11-09T02:31:16.569003485Z
+modified_at: 2026-11-09T02:45:01.363249704Z
 req_type: Task
 relationships:
 - rel_type: Child
@@ -93,6 +93,13 @@ comments:
   created_at: 2026-11-09T02:29:05.142077152Z
   modified_at: 2026-11-09T02:29:05.142077152Z
   session_id: 20abb7c3-8f9b-4a5e-b326-404921f3b450
+- id: 01a1be31-dd33-78a3-8687-15ce5031682b
+  author: dirtlab
+  content: 'Round-3 rework: addressed all five latest review findings. Fresh receipt-bearing PR resolution retains native no-change context across retries before preflight; failed spec searches remain Retry/Inconclusive instead of confirming absence, and old merged PRs cannot grant shipped credit. Confirmed no-change teardown is best-effort and retains the lease on failure. Non-receipt resumes again classify CliFailed as Failed and missing-branch empty results as NoPr. Fixed duplicate inventory traces and Held/NoChange comment placement. Expanded real fresh orchestration coverage for transient-then-empty lookups with an old merged PR on origin, unreachable spec search with branch absent, and failed teardown; expanded real resume matrix for ordinary failure classifications. Validation: lane job j20261109T023349966-2-0 executed 8 TASK-3608 tests, all passed on corrected source; no-default-features check j20261109T023334956-2-0 passed; TUI all-targets check j20261109T023336102-2-0 passed. Store writer inventory 42 tests passed, cargo-timeout fixtures passed, rustfmt and git diff --check passed. Fast guard bodies: 41 passed; Codex mail wake fixtures failed with temporary project ownership/shared-write refusals (4 failures, 17 errors), unrelated to changed files; log /tmp/task3608-fast-gates.log. Earlier two test jobs failed compilation on a diagnostic Debug format, fixed before the passing run. Redundant later test runs remain launcher-managed. Eight changed files: phase_driver.rs, phase_driver_trait.rs, drain_batch.rs, drain_next_n.rs, tests/bug_044_headless_background_tests.rs, tests/bug_1629_phase1_recovery_tests.rs, docs/cli/04-git-lifecycle.md, scripts/store-writers.toml. Native handoff: edits uncommitted; no commit/push/PR/queue-done/ship/review-record performed. Host publication and authorized review remain required.'
+  created_at: 2026-11-09T02:45:01.363249704Z
+  modified_at: 2026-11-09T02:45:01.363249704Z
+  session_id: 01a1be24ea80
+  harness_version: codex-cli 0.167.0
 history:
 - id: 01a1bc53-0ec9-7670-9674-41fd5fd9d861
   author: joe
