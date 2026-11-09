@@ -3,12 +3,12 @@ spec_id: BUG-b6b1278890774ef993d2ebc327862470-265
 agreed_id: BUG-2500
 title: Reviewers record CHANGES REQUESTED for CI-wait or host-only items, burning implementer rounds and tripping the repeat-findings breaker
 description: '2026-11-08: PR-3671, PR-3651 and PR-3657 were parked by ''Repeated unchanged review findings'' where the findings were CI not yet run or host-only evidence; no code could close them. Expected: a distinct wait/host-action verdict that does not queue implementer rework or count as a repeat.'
-status: NeedsAttention
+status: Approved
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-08T19:02:09.839960883Z
-modified_at: 2026-11-09T03:46:02.084687856Z
+modified_at: 2026-11-09T04:06:07.934552722Z
 req_type: Bug
 relationships:
 - rel_type:
@@ -181,6 +181,12 @@ comments:
   modified_at: 2026-11-09T03:16:40.367096412Z
   session_id: 01a1be3b773b
   harness_version: codex-cli 0.167.0
+- id: 01a1be7c-1f3e-76b1-abe1-8a9a1118ab6d
+  author: joe
+  content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: All eight round-2 findings are fixed and the CLI paths are sound, but the MCP queue_rework door still queues implementer rework under an open WAITING, and two status surfaces lose the waiting state.. No triage reason was given.'
+  created_at: 2026-11-09T04:06:07.934551169Z
+  modified_at: 2026-11-09T04:06:07.934551169Z
+  session_id: 7aacb1ed-ebaa-4da4-a195-500864e99e7d
 history:
 - id: 01a1bcc0-f95b-7082-8ca7-a86211b6ddd8
   author: joe
@@ -281,6 +287,14 @@ history:
   - field_name: status
     old_value: InProgress
     new_value: NeedsAttention
+- id: 01a1be7c-1f3e-76b1-abe1-8a86c9ebe674
+  author: joe
+  timestamp: 2026-11-09T04:06:07.934543141Z
+  session_id: 7aacb1ed-ebaa-4da4-a195-500864e99e7d
+  changes:
+  - field_name: status
+    old_value: NeedsAttention
+    new_value: Approved
 filed_at:
   code_sha: eeec474c545cbc8a354d386c8cb6d81460da7b9f
   branch: main
@@ -290,11 +304,3 @@ filed_at:
   vendor: claude
   session: 01a1bbab-762f-7cd2-8a36-4ea9f209afce
   harness_version: 2.1.319 (Claude Code)
-failure_reason:
-  phase: reviewer
-  phase_index: 3
-  kind: verdict:request-changes
-  detail: All eight round-2 findings are fixed and the CLI paths are sound, but the MCP queue_rework door still queues implementer rework under an open WAITING, and two status surfaces lose the waiting state.
-  recovery_hint: address the review findings, move BUG-2500 back to In Progress, and clear the PR hold only after approval
-  shelved_by: reviewer
-  shelved_at: 2026-11-09T03:46:02.084687856Z
