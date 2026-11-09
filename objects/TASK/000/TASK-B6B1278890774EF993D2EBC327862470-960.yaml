@@ -8,7 +8,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-07T23:39:41.575597Z
-modified_at: 2026-11-09T00:21:36.068677526Z
+modified_at: 2026-11-09T00:21:42.394695332Z
 req_type: Task
 relationships:
 - rel_type: Child
@@ -493,6 +493,25 @@ comments:
   content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: Import diff sound on inspection (only imports/comments plus one qualified lease_state_for call; ledger 164 matches source), but 4e32c5d grew the PR back to 52 files against the advisor <=50 cap with no waiver, and CI at this head is still running (AC5 unverified). AC1-AC4 remainders belong to other Refs slices.. No triage reason was given.'
   created_at: 2026-11-09T00:21:36.068671171Z
   modified_at: 2026-11-09T00:21:36.068671171Z
+  session_id: 20abb7c3-8f9b-4a5e-b326-404921f3b450
+- id: 01a1bdae-a70f-7b81-8caf-2a9ae1a1835e
+  author: joe
+  content: |-
+    REVIEW FINDINGS TO ADDRESS (PR #3695):
+    Verdict: CHANGES REQUESTED
+    Reviewed commit: 4e32c5de6305
+    Recorded: 2026-11-09T00:02:01.994862155+00:00
+    Review comment: https://github.com/joemooney/aida/pull/3695#issuecomment-6729025732
+    Findings:
+    1. MAJOR scope (advisor amendment 2026-11-07 'Ship as 3-4 PRs of <=50 files'; spec 'split if over ~40 files'): gh pr diff 3695 lists 52 files. Round 12 cut this PR to 40 files specifically to resolve this finding; commit 4e32c5de630 then added 12 (assign, driver, graph, import_export, machine_readiness, manual, relationship, review, store, team, terminal, upgrade) and TASK-3428 has no waiver. It also pushed during the no-push wait state, restarting CI. Action: record an explicit advisor waiver on TASK-3428 (no push, no CI restart), or move those 12 modules to a follow-up Refs PR and restore their ledger rows.
+    2. BLOCKING wait state, not a code defect (AC5): CI run 42537659149 at 4e32c5de6305 has all 7 shards in progress (cli-0, cli-1, contracts, gates, lib-0, lib-1, rest) and no green run exists at this head; make check-ci-fast was not run by the implementer (runner-only seat). merge-hold-gate fails only because the supervised merge hold is active, which is the expected human/advisor gate and not a PR defect. Action: re-review once CI is green; rework only if CI fails.
+    3. MINOR, to be confirmed by CI (cargo fmt --all -- --check, ci.yml:870; not run locally under review policy): aida-cli-lib/src/graph_cmd.rs:434-436, relationship_cmd.rs:10-13 and review_cmd.rs:6-8 put 'use crate::...' after a non-crate use in the same blank-line group, separated only by a trace comment. rustfmt orders crate before external paths and no such ordering exists at the merge base in aida-cli-lib/src, so the fmt gate may fail. Action: if the gate fails, run cargo fmt on those three files or separate the groups with a blank line as deps_cmd.rs does.
+    4. MINOR non-blocking aida-cli-lib/src/relationship_cmd.rs:14-18: explicit imports take Result, Storage, RequirementStatus and RelationshipType through the crate root instead of anyhow and aida_core, recreating the false dependency on lib.rs aliases that round 8 finding 2 had fixed in deps_cmd, lifecycle_cmd and solo_cmd. Action: import them from anyhow and aida_core directly.
+    5. COSMETIC non-blocking: 8 lone '// trace:TASK-3428' comments in function bodies annotate nothing (assign_cmd.rs:183,259; driver_cmd.rs:285; import_export_cmd.rs:200,274; relationship_cmd.rs:342; review_cmd.rs:178; team_cmd.rs:381). This repeats round 8 finding 3, which moved 18 such markers to module headers. Action: move them to module headers.
+    6. COSMETIC non-blocking: PR title says 34 command modules, but the diff has 51 Rust files (49 modules, 2 test files) plus the ledger. Update the title. Merge order: scripts/crate-globs-legacy.json is also changed by open PR 3687, so whichever lands later must re-prune it or the exact-match glob ratchet fails.
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
+  created_at: 2026-11-09T00:21:42.287481884Z
+  modified_at: 2026-11-09T00:21:42.287481884Z
   session_id: 20abb7c3-8f9b-4a5e-b326-404921f3b450
 history:
 - id: 01a1b862-2e0b-7a50-a4d0-25097c707b57
