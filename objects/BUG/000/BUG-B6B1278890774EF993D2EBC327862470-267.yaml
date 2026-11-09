@@ -7,134 +7,110 @@ status: NeedsAttention
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
-created_at: 2026-11-08 19:37:15.450252+00:00
-modified_at: 2026-11-09 02:49:48.620831+00:00
+created_at: 2026-11-08T19:37:15.450252Z
+modified_at: 2026-11-09T07:12:34.881257657Z
 req_type: Bug
 comments:
 - id: 01a1bcc0-2ddb-79f0-b763-2d703d44589a
   author: joe
   content: 'Advisor triage 2026-11-08: approved for a dell1 lane, independent of the open PRs. LIGHT gate: one targeted test plus make check-ci-fast.'
-  created_at: 2026-11-08 20:01:13.691269+00:00
-  modified_at: 2026-11-08 20:01:13.691269+00:00
+  created_at: 2026-11-08T20:01:13.691269Z
+  modified_at: 2026-11-08T20:01:13.691269Z
   session_id: 01a1bc93-77a0-7740-8b03-df4e3e8d1df5
   harness_version: 2.1.319 (Claude Code)
 - id: 01a1bcd6-3b23-7453-af5a-f18e4e69e0c1
   author: dirtlab
-  content: 'BUG-2502 implementation handoff (native seat; edits uncommitted).
+  content: |
+    BUG-2502 implementation handoff (native seat; edits uncommitted).
 
-
-    Root cause confirmed in canonical history for all five reported specs: aida-loop-guard wrote Approved -> NeedsAttention after queue rework''s successful transition. The guard compared imported review text for every NeedsAttention pause, so a punt/CI pause carrying the same old review receipt was mistaken for another reviewer request-changes shelf.
-
+    Root cause confirmed in canonical history for all five reported specs: aida-loop-guard wrote Approved -> NeedsAttention after queue rework's successful transition. The guard compared imported review text for every NeedsAttention pause, so a punt/CI pause carrying the same old review receipt was mistaken for another reviewer request-changes shelf.
 
     Changed files:
-
     - aida-cli-lib/src/queue_cmd.rs: scope the repeated-findings repark to NeedsAttention with a reviewer/verdict:request-changes failure and no agent punt. Preserve the existing repeated-review guard for actual reviewer shelves; old imported findings remain deduplicated.
-
     - aida-cli-lib/src/tests/queue_rework_tests.rs: add real-store, handler-level regressions for metadata-only rework without a reason after CI and punt (including retained reviewer failure), asserting Approved persistence, queue insertion, marker clearing and no duplicated findings. Add positive guard eligibility coverage.
-
 
     Validation: git diff --check PASS; rustfmt --check --edition 2021 on both changed files PASS. untested=true: launcher job j20261108T201001386-2-0 (cargo test --profile agent -p aida-cli-lib --lib -- bug_2502) timed out after 900 seconds, exit 124, during dependency compilation; no executed-test result and no compiler errors reported. Full log: /home/dirtlab/ai/aida/.aida/lane-jobs/01a1bcc5c11d/j20261108T201001386-2-0.out. Host/CI must execute the new regressions (and the queue_rework_tests suite); a longer AIDA_CARGO_TIMEOUT may be needed for compilation on this target.
 
-
     codegraph is missing from PATH, confirmed by aida doctor check codegraph; navigation used rg. No commit, push, PR creation, queue done, pr ship or review record was performed. Host launcher owns publication and subsequent queue completion.
-
-    '
-  created_at: 2026-11-08 20:25:18.883634+00:00
-  modified_at: 2026-11-08 20:25:18.883634+00:00
+  created_at: 2026-11-08T20:25:18.883634Z
+  modified_at: 2026-11-08T20:25:18.883634Z
   session_id: 01a1bcc5c11d
   harness_version: codex-cli 0.167.0
 - id: 01a1bcf6-124b-7023-8e8f-4edd21d9747f
   author: joe
   content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: Root-cause fix is correct for all five reported specs, but the narrowed guard drops repeated Rejected reviews and its call site has no handler-level test.. No triage reason was given.'
-  created_at: 2026-11-08 21:00:05.579431+00:00
-  modified_at: 2026-11-08 21:00:05.579431+00:00
+  created_at: 2026-11-08T21:00:05.579431Z
+  modified_at: 2026-11-08T21:00:05.579431Z
   session_id: 01a1bc93-77a0-7740-8b03-df4e3e8d1df5
   harness_version: 2.1.319 (Claude Code)
 - id: 01a1bcf6-1acd-7f42-b84c-76fc826ae715
   author: joe
-  content: 'REVIEW FINDINGS TO ADDRESS (BUG-2502):
-
+  content: |-
+    REVIEW FINDINGS TO ADDRESS (BUG-2502):
     Verdict: CHANGES REQUESTED
-
     Reviewed commit: b808c73faeaf
-
     Recorded: 2026-11-08T20:47:40.461918011+00:00
-
     Findings:
-
     1. aida-cli-lib/src/queue_cmd.rs:8034 rework_is_review_shelf accepts only kind "verdict:request-changes", so a repeated identical Rejected review no longer trips the BUG-1213 loop guard. rework_findings_comment renders Rejected verdicts too (blocks_done covers RequestChanges | Rejected; review_verdict_display.rs:38), and before this PR any NeedsAttention recurrence parked. Now two identical Rejected shelves return the spec to Approved and requeue it with no escalation. Accept the reviewer rejection kinds as well; both spellings are written today: "verdict:rejected" (lib_part5.rs:3426, aida review record) and "verdict:reject" (auto_complete.rs:678, drain cause_slug). Add a predicate case for each.
-
     2. aida-cli-lib/src/tests/queue_rework_tests.rs:2095 bug_2502_loop_guard_requires_a_reviewer_request_changes_shelf only tests the predicate; no test proves handle_queue_rework still parks a genuine repeat review. Replacing the call at queue_cmd.rs:8552 with false would pass every BUG-2502 test, silently disabling the BUG-1213 guard. Add a handler-level case: reviewer shelf (phase reviewer, kind verdict:request-changes, no attention_reason) plus an already-imported identical findings block, asserting the spec ends NeedsAttention and is not queued. The park happens before the findings/brief subprocesses, so tolerate or stub their failure.
-
-    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.'
-  created_at: 2026-11-08 21:00:07.757137+00:00
-  modified_at: 2026-11-08 21:00:07.757137+00:00
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
+  created_at: 2026-11-08T21:00:07.757137Z
+  modified_at: 2026-11-08T21:00:07.757137Z
   session_id: 01a1bc93-77a0-7740-8b03-df4e3e8d1df5
   harness_version: 2.1.319 (Claude Code)
 - id: 01a1be30-ea07-7cb1-adc0-da14ed0ffb7a
   author: joe
   content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: Root-cause fix and both prior findings are addressed, but the narrowed predicate makes the BUG-1213 loop guard one-shot: re-running rework on a guard-parked spec now requeues it.. No triage reason was given.'
-  created_at: 2026-11-09 02:43:59.111931+00:00
-  modified_at: 2026-11-09 02:43:59.111931+00:00
+  created_at: 2026-11-09T02:43:59.111931Z
+  modified_at: 2026-11-09T02:43:59.111931Z
   session_id: 20abb7c3-8f9b-4a5e-b326-404921f3b450
 - id: 01a1be30-f332-78c1-8d8f-26a7446b21ac
   author: joe
-  content: 'REVIEW FINDINGS TO ADDRESS (BUG-2502):
-
+  content: |-
+    REVIEW FINDINGS TO ADDRESS (BUG-2502):
     Verdict: CHANGES REQUESTED
-
     Reviewed commit: 5112d7bcb0b1
-
     Recorded: 2026-11-09T02:22:21.024926635+00:00
-
     Findings:
-
-    1. aida-cli-lib/src/queue_cmd/rework.rs:847 (rework_is_review_shelf) makes the BUG-1213 loop guard one-shot. On a genuine repeat, return_to_flight -> clear_shelve_markers (requeue.rs:117) has already taken failure_reason, and loop_guard_park (rework.rs:347) only sets the status, so the guard-parked spec is NeedsAttention with no failure_reason and no attention_reason. The next identical ''aida queue rework'' still computes recurred=true, but the predicate is now false, so it falls through to Approved plus requeue: the third blind round the guard''s own note forbids. Before this PR that rerun re-parked. Keep guard-parked specs parked (for example make loop_guard_park retain or restore the reviewer failure marker, or have the predicate also accept a spec whose latest status entry is authored by LOOP_GUARD_AUTHOR), and leave a deliberate advisor exit such as aida edit.
-
+    1. aida-cli-lib/src/queue_cmd/rework.rs:847 (rework_is_review_shelf) makes the BUG-1213 loop guard one-shot. On a genuine repeat, return_to_flight -> clear_shelve_markers (requeue.rs:117) has already taken failure_reason, and loop_guard_park (rework.rs:347) only sets the status, so the guard-parked spec is NeedsAttention with no failure_reason and no attention_reason. The next identical 'aida queue rework' still computes recurred=true, but the predicate is now false, so it falls through to Approved plus requeue: the third blind round the guard's own note forbids. Before this PR that rerun re-parked. Keep guard-parked specs parked (for example make loop_guard_park retain or restore the reviewer failure marker, or have the predicate also accept a spec whose latest status entry is authored by LOOP_GUARD_AUTHOR), and leave a deliberate advisor exit such as aida edit.
     2. aida-cli-lib/src/tests/queue_rework_tests.rs:2117 bug_2502_repeated_blocking_review_is_parked_before_requeue stops after the first park, so no test covers the second rework of a guard-parked spec. Extend it: after the park, call rework_as again with the same verdict and assert status stays NeedsAttention and the queue stays empty.
-
-    3. Non-blocking: on the genuine guard path rework.rs still prints the ''status: Needs Attention -> Approved'' line (via emit_requeued) before parking the spec back, so the transition message this bug is titled after remains untrue there, softened only by the later ''escalated to advisor'' line. Worth deferring the success line until after the guard decision, or wording it as provisional.
-
-    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.'
-  created_at: 2026-11-09 02:44:01.458401+00:00
-  modified_at: 2026-11-09 02:44:01.458401+00:00
+    3. Non-blocking: on the genuine guard path rework.rs still prints the 'status: Needs Attention -> Approved' line (via emit_requeued) before parking the spec back, so the transition message this bug is titled after remains untrue there, softened only by the later 'escalated to advisor' line. Worth deferring the success line until after the guard decision, or wording it as provisional.
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
+  created_at: 2026-11-09T02:44:01.458401Z
+  modified_at: 2026-11-09T02:44:01.458401Z
   session_id: 20abb7c3-8f9b-4a5e-b326-404921f3b450
 - id: 01a1be39-38ef-7430-9d70-f9befa29b0ef
   author: dirtlab
-  content: 'BUG-2502 rework handoff: addressed latest blocking review findings 1 and 2, plus message finding 3. Native-seat edits remain uncommitted for host publication.
-
+  content: |
+    BUG-2502 rework handoff: addressed latest blocking review findings 1 and 2, plus message finding 3. Native-seat edits remain uncommitted for host publication.
 
     Changed files:
-
     - aida-cli-lib/src/queue_cmd/rework.rs: accept the latest status transition authored by aida-loop-guard as a reviewer shelf, even after return-to-flight cleared failure_reason. Ignore older guard history after deliberate status edits; retain punt/CI exclusions. Defer the successful status line until after the repeated-review decision so a repark cannot print a successful Approved transition.
-
     - aida-cli-lib/src/tests/queue_rework_tests.rs: retry handler-level rework after the first park for request-changes and both rejection spellings, asserting NeedsAttention and an empty queue. Add deliberate status-exit coverage, including a later non-review NeedsAttention transition and intervening comments.
 
-
     Validation:
-
     - cargo test --profile agent -p aida-cli-lib --lib -- bug_2502 via lane job j20261109T024623090-2-0: PASS, 5 executed tests.
-
     - cargo test --profile agent -p aida-cli-lib --lib -- queue_rework_tests via lane job j20261109T024809612-2-0: PASS, 56 executed tests, zero failures, final edits included.
-
     - rustfmt --check --edition 2021 on both edited files: PASS.
-
     - git diff --check: PASS.
-
     untested=false. Guard tests intentionally tolerate external finding/brief failure after asserting canonical parking; test harness prints unrecognized --title diagnostics. Launcher reported overlay-stale after successful tests (primary changed its seed in place).
 
-
-    Remaining validation: make check-ci-fast was attempted but interrupted (exit 130): its first fast step invokes Cargo through a helper despite the no-build description, contrary to this seat''s launcher-only Cargo requirement. Host must run the full fast gate. No Git metadata mutation, commit, push, PR creation, queue done, pr ship or review record performed. Host owns publication and queue completion. Codegraph fixed host client unavailable; doctor confirmed missing, source navigation used rg.
-
-    '
-  created_at: 2026-11-09 02:53:03.599382+00:00
-  modified_at: 2026-11-09 02:53:03.599382+00:00
+    Remaining validation: make check-ci-fast was attempted but interrupted (exit 130): its first fast step invokes Cargo through a helper despite the no-build description, contrary to this seat's launcher-only Cargo requirement. Host must run the full fast gate. No Git metadata mutation, commit, push, PR creation, queue done, pr ship or review record performed. Host owns publication and queue completion. Codegraph fixed host client unavailable; doctor confirmed missing, source navigation used rg.
+  created_at: 2026-11-09T02:53:03.599382Z
+  modified_at: 2026-11-09T02:53:03.599382Z
   session_id: 01a1be326531
   harness_version: codex-cli 0.167.0
+- id: 01a1bf26-d241-7ca3-9cd2-4383a10843e0
+  author: joe
+  content: 'ADVISOR RULING: the last round pushed only merges from main, so these findings are unaddressed. Do not merge main or push until the code changes. #3696: fix the one-shot BUG-1213 loop guard regression named in the verdict and add its missing test. Local gate: one targeted cargo test --profile agent plus make check-ci-fast, then push.'
+  created_at: 2026-11-09T07:12:34.881257657Z
+  modified_at: 2026-11-09T07:12:34.881257657Z
+  session_id: 01a1beff-fc3b-78e2-93e2-9b0c283b0339
+  harness_version: 2.1.319 (Claude Code)
 history:
 - id: 01a1bcc0-76ed-7d22-8b7b-93e7daa2feca
   author: joe
-  timestamp: 2026-11-08 20:01:32.397411+00:00
+  timestamp: 2026-11-08T20:01:32.397411Z
   session_id: 01a1bc93-77a0-7740-8b03-df4e3e8d1df5
   harness_version: 2.1.319 (Claude Code)
   changes:
@@ -143,20 +119,20 @@ history:
     new_value: Approved
 - id: 01a1bcc5-c761-7ff0-854f-f36f078c01e5
   author: aida-session-start
-  timestamp: 2026-11-08 20:07:20.673015+00:00
+  timestamp: 2026-11-08T20:07:20.673015Z
   changes:
   - field_name: status
     old_value: Approved
     new_value: InProgress
 - id: 01a1bcc6-24a4-7fa3-8a44-bdf253694bcb
   author: dirtlab
-  timestamp: 2026-11-08 20:07:44.548704+00:00
+  timestamp: 2026-11-08T20:07:44.548704Z
   session_id: 01a1bcc5c11d
   harness_version: codex-cli 0.167.0
   changes: []
 - id: 01a1bcea-b60e-7a23-b8ec-71d4bcaff23e
   author: aida-orchestrator
-  timestamp: 2026-11-08 20:47:41.070329+00:00
+  timestamp: 2026-11-08T20:47:41.070329Z
   session_id: 01a1bce5fa5c
   harness_version: 2.1.319 (Claude Code)
   changes:
@@ -165,7 +141,7 @@ history:
     new_value: NeedsAttention
 - id: 01a1bcf6-124b-7023-8e8f-4ec9a56cb3bf
   author: joe
-  timestamp: 2026-11-08 21:00:05.579415+00:00
+  timestamp: 2026-11-08T21:00:05.579415Z
   session_id: 01a1bc93-77a0-7740-8b03-df4e3e8d1df5
   harness_version: 2.1.319 (Claude Code)
   changes:
@@ -174,20 +150,20 @@ history:
     new_value: Approved
 - id: 01a1bcf7-c289-7fb3-a01b-e843843ff7bb
   author: aida-session-start
-  timestamp: 2026-11-08 21:01:56.233572+00:00
+  timestamp: 2026-11-08T21:01:56.233572Z
   changes:
   - field_name: status
     old_value: Approved
     new_value: InProgress
 - id: 01a1bcf8-258a-7801-90ed-f4cbac643839
   author: dirtlab
-  timestamp: 2026-11-08 21:02:21.578079+00:00
+  timestamp: 2026-11-08T21:02:21.578079Z
   session_id: 01a1bcf7bc7f
   harness_version: codex-cli 0.167.0
   changes: []
 - id: 01a1bcfd-615a-7351-857e-0861679abc28
   author: aida-orchestrator
-  timestamp: 2026-11-08 21:08:04.570581+00:00
+  timestamp: 2026-11-08T21:08:04.570581Z
   session_id: 01a1bcfc0d81
   harness_version: 2.1.319 (Claude Code)
   changes:
@@ -196,13 +172,13 @@ history:
     new_value: NeedsAttention
 - id: 01a1be1d-3bde-7462-8b55-21a4c482aa37
   author: joe
-  timestamp: 2026-11-09 02:22:29.342275+00:00
+  timestamp: 2026-11-09T02:22:29.342275Z
   session_id: 01a1be1b2db0
   harness_version: 2.1.319 (Claude Code)
   changes: []
 - id: 01a1be30-ea07-7cb1-adc0-da0da175b1e7
   author: joe
-  timestamp: 2026-11-09 02:43:59.111916+00:00
+  timestamp: 2026-11-09T02:43:59.111916Z
   session_id: 20abb7c3-8f9b-4a5e-b326-404921f3b450
   changes:
   - field_name: status
@@ -210,20 +186,20 @@ history:
     new_value: Approved
 - id: 01a1be32-6ba7-7910-8633-9e753a93795f
   author: aida-session-start
-  timestamp: 2026-11-09 02:45:37.831654+00:00
+  timestamp: 2026-11-09T02:45:37.831654Z
   changes:
   - field_name: status
     old_value: Approved
     new_value: InProgress
 - id: 01a1be32-c99b-7020-8bb2-3036c2889a80
   author: dirtlab
-  timestamp: 2026-11-09 02:46:01.883282+00:00
+  timestamp: 2026-11-09T02:46:01.883282Z
   session_id: 01a1be326531
   harness_version: codex-cli 0.167.0
   changes: []
 - id: 01a1be36-3f4c-7991-b08e-03261d5da17e
   author: aida-orchestrator
-  timestamp: 2026-11-09 02:49:48.620854+00:00
+  timestamp: 2026-11-09T02:49:48.620854Z
   session_id: 01a1be34b2d8
   harness_version: 2.1.319 (Claude Code)
   changes:
@@ -246,4 +222,4 @@ failure_reason:
   detail: 'The rework round landed only merge commits: the BUG-2502 diff at 3184c19ffdcb is unchanged from 5112d7bcb0b1, so the one-shot BUG-1213 loop guard regression and its missing test remain.'
   recovery_hint: address the review findings, move BUG-2502 back to In Progress, and clear the PR hold only after approval
   shelved_by: reviewer
-  shelved_at: 2026-11-09 02:49:48.620831+00:00
+  shelved_at: 2026-11-09T02:49:48.620831Z
