@@ -1,0 +1,29 @@
+id: 01a1c076-9905-7b03-9714-1905d11da6da
+spec_id: TASK-b6b1278890774ef993d2ebc327862470-1054
+title: 'Cosmetic: aida-cli-lib/src/findings_gate.rs:2119 appends the first section to a…'
+description: |-
+  Non-blocking finding carried forward from an APPROVED review verdict on TASK-3749, which has since completed — recorded here so it keeps a queryable home once the verdict record stops being read.
+
+  Cosmetic: aida-cli-lib/src/findings_gate.rs:2119 appends the first section to an empty description, so a newly created sweep's description starts with two blank lines. Skip the leading separator when the description is empty.
+
+  PR: #3724
+  Reviewed sha: da5047a5ebaa01d84607731b5f246637665506f8
+status: Draft
+priority: Medium
+owner: joe
+feature: Uncategorized
+created_at: 2026-11-09T13:19:20.325389751Z
+modified_at: 2026-11-09T13:19:20.325389751Z
+req_type: Task
+tags:
+- carried-from:TASK-3749
+- finding-hash:6a90012b
+- from-review:PR-3724
+- kind:carried-forward
+filed_at:
+  code_sha: c3dc94a29d20cd185a6739fd5b36facdf0513ab5
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 81044beb98c
+  vendor: claude
