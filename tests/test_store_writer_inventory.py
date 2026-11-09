@@ -27,6 +27,48 @@ def inventory(root, rows):
 
 
 class WriterInventoryTests(unittest.TestCase):
+    # trace:STORY-2692 | ai:codex
+    def test_explicit_merge_baseline_preserves_reviewed_policy(self):
+        import tomllib
+        target = self.root / guard.INVENTORY
+        baseline = self.root / 'reviewed.toml'
+        original = target.read_text().replace('fixture lock', 'reviewed baseline lock')
+        baseline.write_text(original)
+        target.write_text('<<<<<<< split\n=======\n>>>>>>> PR\n')
+        with self.assertRaises(ValueError):
+            guard.regenerate(self.root)
+        guard.regenerate(self.root, baseline)
+        rows = tomllib.loads(target.read_text())['writer']
+        self.assertTrue(rows)
+        self.assertTrue(all(row['lock'] == 'reviewed baseline lock' for row in rows))
+        before = target.read_bytes()
+        with self.assertRaises(OSError):
+            guard.regenerate(self.root, self.root / 'missing.toml')
+        self.assertEqual(target.read_bytes(), before)
+        for empty in ('version = 2\n', 'version = 2\nwriter = []\n'):
+            baseline.write_text(empty)
+            with self.assertRaisesRegex(ValueError, "empty policy refused"):
+                guard.regenerate(self.root, baseline)
+            self.assertEqual(target.read_bytes(), before)
+
+    def test_malformed_merge_baseline_refuses_without_policy_loss(self):
+        import tomllib
+        target = self.root / guard.INVENTORY
+        before = target.read_bytes()
+        baseline = self.root / 'reviewed.toml'
+        valid = tomllib.loads(before.decode())["writer"][0]
+        malformed = ["{a = 1}", '[{path = "x"}]']
+        # Use TOML inline rows, keeping failures about structure rather than syntax.
+        malformed += [
+            "[{" + ", ".join(f"{k} = {json.dumps(v)}" for k, v in valid.items() if k != field) + "}]"
+            for field in valid]
+        for rows in malformed:
+            with self.subTest(rows=rows):
+                baseline.write_text("version = 2\nwriter = " + rows + "\n")
+                with self.assertRaises(ValueError):
+                    guard.regenerate(self.root, baseline)
+                self.assertEqual(target.read_bytes(), before)
+
     # trace:TASK-3223 | ai:codex
     def test_candidates_cannot_silently_ignore_mediated_profile(self):
         import subprocess

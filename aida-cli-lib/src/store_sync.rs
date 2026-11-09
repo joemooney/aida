@@ -1221,14 +1221,24 @@ pub(crate) fn pull_store_before_id_allocation(
         }
     }
 
-    for attempt in 0..cfg.retry_max {
+    pull_store_allocation_retry(store_path, &branch, cfg.retry_max)
+}
+
+// trace:BUG-2501 | ai:codex — retain main's pending-change refusal at every retry.
+fn pull_store_allocation_retry(
+    store_path: &std::path::Path,
+    branch: &str,
+    retry_max: usize,
+) -> Result<()> {
+    use aida_core::git_ops;
+    for attempt in 0..retry_max {
         // trace:TASK-1717 | ai:claude — each attempt's rebase, its own
         // cleanup and the collision re-read of the result share one lock
         // window, so the allocator never starts from a store another writer
         // changed between the pull and the check.
         let pulled = aida_core::db::with_store_write_lock(store_path, || {
             // trace:BUG-2490 | ai:codex — preserve pending changes during allocation retries.
-            git_ops::pull_rebase_store_retry(store_path, "origin", &branch)?;
+            git_ops::pull_rebase_store_retry(store_path, "origin", branch)?;
             Ok(ensure_no_spec_id_collisions_canonical(store_path))
         });
         match pulled {
@@ -1238,22 +1248,23 @@ pub(crate) fn pull_store_before_id_allocation(
             // trace:BUG-2162 | ai:claude
             // trace:BUG-2017 | ai:claude
             Err(e) if git_ops::is_sync_refusal(&e) => return Err(e),
-            Err(e) if attempt + 1 < cfg.retry_max => {
+            Err(e) if git_ops::is_dirty_store_refusal(&e) => {
+                return Err(e).context("store allocation pull refused; commit or stash pending changes before retrying");
+            }
+            Err(e) if attempt + 1 < retry_max => {
                 eprintln!(
                     "{} store allocation pull failed ({}) — retrying ({}/{})",
                     "Warning:".yellow().bold(),
                     e,
                     attempt + 1,
-                    cfg.retry_max
+                    retry_max
                 );
             }
             Err(e) => {
                 anyhow::bail!(
-                    "store allocation pull failed after {} attempt(s): {}\n\
-                     To recover:\n  cd {} && git rebase --abort\n  aida db sync --pull",
-                    cfg.retry_max,
-                    e,
-                    store_path.display()
+                    "store allocation pull failed after {} attempt(s): {}",
+                    retry_max,
+                    crate::store_pull_failure_hint(store_path, &e)
                 );
             }
         }
@@ -1677,22 +1688,8 @@ pub(crate) fn cache_freshness_threshold_secs() -> u64 {
 
 /// STORY-78 Part 2: the implementation of `--sync` on read commands.
 /// Mirrors `aida db sync --pull` but without the commit-pending step
-/// (read commands have no pending work to commit) and without conflict
-/// detection (the caller is about to read the result anyway). Designed
-/// to NEVER fail the caller: every failure mode is converted to a
-/// warning and the command continues with the local view.
-///
-/// Failure modes handled here:
-///   - store missing / not a git repo → warn, skip
-///   - orphan store has uncommitted changes → warn, skip (pull --rebase
-///     would abort partway and leave weirder state than we started with)
-///   - offline / unreachable origin → warn, skip
-///   - any other git error during rebase → abort the rebase, warn, skip
-///
-/// On success, updates `~/.aida/cache/last-fetch.toml` so the statusline
-/// `cache:behind|?` indicator immediately reflects the pull (instead of
-/// waiting for STORY-79's background fetcher).
-/// trace:STORY-78 | ai:claude
+/// Failed pulls refuse the caller rather than authorizing a stale local write.
+/// trace:BUG-2501 | ai:codex
 pub(crate) fn maybe_sync_pull(store_path: &std::path::Path) -> Result<()> {
     if !aida_core::git_ops::is_git_repo(store_path) {
         eprintln!(
@@ -1702,19 +1699,29 @@ pub(crate) fn maybe_sync_pull(store_path: &std::path::Path) -> Result<()> {
         );
         return Ok(());
     }
+    // Local-only projects have no remote pull to fail.
+    if !aida_core::git_ops::probe_remote(store_path, "origin")? {
+        return Ok(());
+    }
     // trace:TASK-1717 | ai:claude — the dirty check, the pull --rebase and
     // the clean-up of a rebase THIS pull started run under the store write
     // lock. A rebase that was already in progress (someone else's recovery)
     // is reported and left alone, never aborted.
     let pulled = aida_core::db::with_store_write_lock(store_path, || {
+        if aida_core::git_ops::rebase_in_progress(store_path) {
+            anyhow::bail!("store pull refused: rebase already in progress; resolve or abort it before retrying");
+        }
         // A failing `git status` is a failed pull, not a clean tree.
-        match aida_core::git_ops::has_changes_checked(store_path) {
+        match aida_core::git_ops::has_tracked_changes_checked(store_path) {
             Ok(true) => return Ok(SyncPull::Dirty),
             Ok(false) => {}
             Err(e) => return Ok(SyncPull::Failed(e)),
         }
         let branch = aida_core::git_ops::current_branch(store_path)
             .unwrap_or_else(|_| "aida-store".to_string());
+        if !aida_core::git_ops::probe_remote_branch(store_path, "origin", &branch)? {
+            return Ok(SyncPull::NoBranch);
+        }
         eprintln!("{} pulling origin/{} (--sync)", "→".dimmed(), branch);
         Ok(
             match aida_core::git_ops::pull_rebase(store_path, "origin", &branch) {
@@ -1735,12 +1742,9 @@ pub(crate) fn maybe_sync_pull(store_path: &std::path::Path) -> Result<()> {
         )
     });
     match pulled {
+        Ok(SyncPull::NoBranch) => {}
         Ok(SyncPull::Dirty) => {
-            eprintln!(
-                "{} --sync: orphan store has uncommitted changes; skipping pull",
-                "Warning:".yellow().bold()
-            );
-            eprintln!("  Run `aida db sync --pull` manually after committing or stashing.");
+            return Err(aida_core::git_ops::DirtyStoreRefusal("store pull refused: uncommitted changes; commit or stash the store before retrying".into()).into());
         }
         Ok(SyncPull::Pulled) => {
             // Best-effort: refresh the statusline freshness signal so
@@ -1755,18 +1759,7 @@ pub(crate) fn maybe_sync_pull(store_path: &std::path::Path) -> Result<()> {
             aida_core::git_ops::opportunistic_store_gc(store_path);
         }
         Ok(SyncPull::Failed(e)) | Err(e) => {
-            let first_line = e
-                .to_string()
-                .lines()
-                .next()
-                .unwrap_or("unknown error")
-                .to_string();
-            eprintln!(
-                "{} --sync pull failed: {}",
-                "Warning:".yellow().bold(),
-                first_line
-            );
-            eprintln!("  Falling back to local view.");
+            return Err(e).context("store pull failed; refusing to continue with local view");
         }
     }
     Ok(())
@@ -1775,6 +1768,7 @@ pub(crate) fn maybe_sync_pull(store_path: &std::path::Path) -> Result<()> {
 /// Outcome of `maybe_sync_pull`'s locked window.
 // trace:TASK-1717 | ai:claude
 enum SyncPull {
+    NoBranch,
     Dirty,
     Pulled,
     Failed(anyhow::Error),
@@ -1961,4 +1955,100 @@ pub(crate) fn maybe_spawn_bg_fetch(project_root: &std::path::Path, store_path: &
         .stdout(std::process::Stdio::null())
         .stderr(std::process::Stdio::null())
         .spawn_retrying_etxtbsy();
+}
+
+#[cfg(test)]
+mod pull_failure_tests {
+    use super::*;
+
+    #[test]
+    fn allocation_retry_dirty_store_stops_before_fetch() {
+        let temp = tempfile::tempdir().unwrap();
+        let repo = temp.path();
+        aida_core::git_ops::init(repo).unwrap();
+        aida_core::git_ops::configure_user(repo, "Test", "test@example.com").unwrap();
+        std::fs::write(repo.join("seed"), "seed").unwrap();
+        aida_core::git_ops::add(repo, &["seed"]).unwrap();
+        aida_core::git_ops::commit(repo, "seed").unwrap();
+        std::fs::write(repo.join("seed"), "dirty").unwrap();
+        // No remote exists: any attempt to fetch or exhaust the retry loop
+        // would replace this actionable refusal with a different error.
+        let error = pull_store_allocation_retry(repo, "aida-store", 3).unwrap_err();
+        let message = error.to_string();
+        assert!(message.contains("commit or stash"), "{message}");
+        assert!(!message.contains("after 3 attempt"), "{message}");
+        assert_eq!(std::fs::read_to_string(repo.join("seed")).unwrap(), "dirty");
+    }
+
+    // trace:BUG-2501 | ai:codex
+    #[test]
+    fn sync_pull_skips_remote_without_store_branch() {
+        let temp = tempfile::tempdir().unwrap();
+        let repo = temp.path().join("store");
+        let remote = temp.path().join("remote.git");
+        std::fs::create_dir_all(&repo).unwrap();
+        aida_core::git_ops::init(&repo).unwrap();
+        aida_core::git_ops::configure_user(&repo, "Test", "test@example.com").unwrap();
+        std::fs::write(repo.join("seed"), "seed").unwrap();
+        aida_core::git_ops::add(&repo, &["seed"]).unwrap();
+        aida_core::git_ops::commit(&repo, "seed").unwrap();
+        let git = |args: &[&str]| {
+            let out = crate::test_git::git_command()
+                .arg("-C")
+                .arg(&repo)
+                .args(args)
+                .output()
+                .unwrap();
+            assert!(out.status.success(), "{out:?}");
+        };
+        git(&["init", "--bare", remote.to_str().unwrap()]);
+        git(&["remote", "add", "origin", remote.to_str().unwrap()]);
+        let head = aida_core::git_ops::head_sha(&repo).unwrap();
+        maybe_sync_pull(&repo).unwrap();
+        // A remote with other branches is also a normal first-store-publication state.
+        git(&["push", "origin", "HEAD:refs/heads/unrelated"]);
+        maybe_sync_pull(&repo).unwrap();
+        assert_eq!(aida_core::git_ops::head_sha(&repo).unwrap(), head);
+        assert!(!aida_core::git_ops::rebase_in_progress(&repo));
+    }
+
+    #[test]
+    fn sync_pull_refuses_dirty_store_and_unreachable_remote() {
+        let temp = tempfile::tempdir().unwrap();
+        let repo = temp.path();
+        aida_core::git_ops::init(repo).unwrap();
+        aida_core::git_ops::configure_user(repo, "Test", "test@example.com").unwrap();
+        std::fs::write(repo.join("seed"), "seed").unwrap();
+        aida_core::git_ops::add(repo, &["seed"]).unwrap();
+        aida_core::git_ops::commit(repo, "seed").unwrap();
+        // No origin is a supported local-only store, including pending edits.
+        maybe_sync_pull(repo).unwrap();
+        std::fs::write(repo.join("seed"), "dirty").unwrap();
+        maybe_sync_pull(repo).unwrap();
+        let output = crate::test_git::git_command()
+            .arg("-C")
+            .arg(repo)
+            .args(["remote", "add", "origin"])
+            .arg(temp.path().join("missing"))
+            .output()
+            .unwrap();
+        assert!(output.status.success());
+        std::fs::write(repo.join("seed"), "dirty").unwrap();
+        let error = maybe_sync_pull(repo).unwrap_err();
+        assert!(
+            aida_core::git_ops::is_dirty_store_refusal(&error),
+            "{error}"
+        );
+        let hint = crate::store_pull_failure_hint(repo, &error);
+        assert!(hint.contains("commit or stash"), "{hint}");
+        assert!(!hint.contains("git rebase --abort"), "{hint}");
+        assert_eq!(std::fs::read_to_string(repo.join("seed")).unwrap(), "dirty");
+        std::fs::write(repo.join("seed"), "seed").unwrap();
+        let error = maybe_sync_pull(repo).unwrap_err();
+        assert!(
+            error.to_string().contains("refusing to continue"),
+            "{error:#}"
+        );
+        assert!(!aida_core::git_ops::rebase_in_progress(repo));
+    }
 }
