@@ -42,7 +42,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-09T15:57:18.371798469Z
-modified_at: 2026-11-09T23:36:35.562830125Z
+modified_at: 2026-11-09T23:42:26.274664761Z
 req_type: Story
 tags:
 - architecture
@@ -133,6 +133,13 @@ comments:
     No implementation blockers. Supplied reviewed Codegraph client is absent and doctor reports missing; navigation used rg. Edits remain uncommitted for the host launcher. No commit, push, PR creation, queue done, pr ship or review record performed. Completing publication subject: [AI:codex] fix(review): carry approvals across clean base merges (STORY-2694).
   created_at: 2026-11-09T23:36:35.562830125Z
   modified_at: 2026-11-09T23:36:35.562830125Z
+  session_id: 01a1c29e17c0
+  harness_version: codex-cli 0.167.0
+- id: 01a1c2b1-0fe2-7e91-8200-4053144b4c47
+  author: dirtlab
+  content: 'Fast-gate fix round: changed only aida-cli-lib/src/tests/task_1945_review_watch_ready_tests.rs to invoke the fixture merge directly through crate::test_git::git_command, making the maintenance guard explicit to the ratchet. The exact failing CI step passed all 10 Python tests. Launcher job j20261109T234026957-2-0 executed the affected Rust regression: 1 passed, 0 failed. rustfmt --check and git diff --check pass. Edits remain uncommitted for host publication; no blockers.'
+  created_at: 2026-11-09T23:42:26.274664761Z
+  modified_at: 2026-11-09T23:42:26.274664761Z
   session_id: 01a1c29e17c0
   harness_version: codex-cli 0.167.0
 history:
