@@ -8,7 +8,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-08T21:20:08.484660577Z
-modified_at: 2026-11-09T09:41:13.283548478Z
+modified_at: 2026-11-09T09:41:19.859095757Z
 req_type: Bug
 comments:
 - id: 01a1beb1-ae7c-7c52-89a5-00a6bc02eeb0
@@ -67,6 +67,21 @@ comments:
   content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: Prior findings 1 and 2 are fixed (orphan lease restored; merge-tree probe admits clean main advances), but the rewritten recovery guidance sends operators to run host Git in seat-writable clones, violating the seat_clone trust boundary; two smaller defects also need rework. CI at head still queued.. No triage reason was given.'
   created_at: 2026-11-09T09:41:13.283547097Z
   modified_at: 2026-11-09T09:41:13.283547097Z
+- id: 01a1bfaf-0109-76a0-a372-5cee53f5f699
+  author: joe
+  content: |-
+    REVIEW FINDINGS TO ADDRESS (PR #3715):
+    Verdict: CHANGES REQUESTED
+    Reviewed commit: 35eabb02fa9f
+    Recorded: 2026-11-09T09:12:17.191004092+00:00
+    Findings:
+    1. MAJOR (security): the new recovery guidance directs host Git into seat-controlled clones. seat_clone.rs:3045-3048 and 3055-3058, and docs/cli/06-roles-sessions.md:821-826, tell the operator to run `git -C <seat> add -A/commit/fetch origin/merge` on the host. prepare_rework_merge handles private clones (seat_clone.rs:2817, 2836-2840), and the module contract at seat_clone.rs:12-16 says this module is the only code that may run git with a seat clone as repository because the clone .git/config, hooks/ and info/ are seat-writable, so host git there would run seat-planted configuration outside the sandbox. The same function sets hooks/fsmonitor off and fetches only from main ("never through a seat-controlled origin", :2871). Scenario: a contained seat plants .git/hooks/pre-commit or core.fsmonitor, the resume is refused, the operator pastes the commands, and seat code runs unsandboxed on the host. Fix: replace with a sandboxed AIDA recovery path (or add one) for clones, or give distinct safe guidance for clones vs linked worktrees; update the docs and pin the wording in a test. The commands also keep <seat>/<PR-branch> placeholders although prepare_rework_merge knows tree and branch.
+    2. MINOR: the behind-PR-head context at seat_clone.rs:3044-3049 is now shared by clean and fresh paths, not only dirty resumes. It sits after the dirty/resume split, so a clean seat is told to `git add -A` and `git commit` (commit exits non-zero: nothing to commit), and a fresh non-resume pickup is told to retry with `--resume`, which has no prior session to resume. The previous text (retry pickup with current head) was right for those paths. Fix: emit the commit-first recovery only when resume && dirty, keep re-pickup guidance otherwise, and test the clean case.
+    3. MINOR: rollback mis-handles an orphan record that was never removed. session_start.rs:3463-3465 sets cleanup.adopted_orphan before remove_session_lease_record_only, whose failure is only warned at :3467. On a later refusal, Drop (:1642-1658) hits persist_noclobber AlreadyExists because the orphan file still exists, prints "retained successor lease" and returns: the successor lease stays beside the orphan on one tree, and revert_claim_write, release_branch and release_claim_receipt are skipped. Before this PR that path removed the successor and left the orphan intact. Fix: set adopted_orphan only after a successful removal (or treat an already-present identical orphan as restored), and add a test for it; no test currently covers the restore-failure branch.
+    4. COSMETIC: bug_2504_dirty_resume_checks_fetched_heads_without_touching_edits (seat_clone.rs:3428) loops over a one-element array with a constant expected string; a plain block would be clearer.
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
+  created_at: 2026-11-09T09:41:19.753220804Z
+  modified_at: 2026-11-09T09:41:19.753220804Z
 history:
 - id: 01a1beaa-5bee-7821-b878-3b983c03f8ae
   author: joe
