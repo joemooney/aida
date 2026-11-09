@@ -697,6 +697,24 @@ pub(super) fn queued_scope(
 #[test]
 fn queue_work_resume_adopts_the_orphan_end_to_end() {
     let fx = fixture();
+    // Keep synthetic store writes in a separate repository; inheriting the
+    // parent code remote would turn config setup into a dirty-store refusal.
+    // trace:BUG-2501 | ai:codex
+    aida_core::git_ops::init(&fx.main.join(".aida-store")).unwrap();
+    aida_core::git_ops::configure_user(&fx.main.join(".aida-store"), "Test", "test@example.com")
+        .unwrap();
+    let store = fx.main.join(".aida-store");
+    crate::test_env::enroll_synthetic_home(&store).unwrap();
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        let common = aida_core::allocation_authority::common_dir(&store).unwrap();
+        std::fs::set_permissions(
+            common.join(aida_core::allocation_authority::CONFIG_FILE),
+            std::fs::Permissions::from_mode(0o600),
+        )
+        .unwrap();
+    }
     let _ambient = crate::test_env::AmbientGuard::hermetic_with_seat_and(
         &fx.main,
         "implementer",

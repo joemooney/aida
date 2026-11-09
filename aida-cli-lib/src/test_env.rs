@@ -1525,8 +1525,9 @@ pub(crate) fn enroll_synthetic_home(root: &Path) -> anyhow::Result<()> {
     } else {
         aida_core::write_atomic(&setting, "version=1\nauthoritative=true\n")?;
         // Match the production allocation-setting trust boundary even when
-        // the test runner inherits a group-writable umask.
-        // trace:TASK-3420 | ai:codex
+        // the test runner inherits a group-writable umask (such as 0002):
+        // the allocation reader refuses shared writes.
+        // trace:TASK-3420 trace:BUG-2502 | ai:codex
         use std::os::unix::fs::PermissionsExt;
         std::fs::set_permissions(&setting, std::fs::Permissions::from_mode(0o600))?;
     }

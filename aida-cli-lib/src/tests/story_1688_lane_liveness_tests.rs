@@ -1066,6 +1066,12 @@ fn reviewer_session_lease_counts_as_review_started() {
     .unwrap()
     .trim()
     .to_string();
+    // The role fixture writes store data and config. Give the store its own
+    // Git identity so coordination never pulls the dirty parent code repo.
+    // trace:BUG-2501 | ai:codex
+    aida_core::git_ops::init(&root.join(".aida-store")).unwrap();
+    aida_core::git_ops::configure_user(&root.join(".aida-store"), "Test", "test@example.com")
+        .unwrap();
     let _ambient =
         crate::test_env::AmbientGuard::hermetic_with_seat_and(&root, "reviewer", &[], &[]);
     let worktree = root.join("review-wt");
