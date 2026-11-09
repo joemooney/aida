@@ -151,17 +151,24 @@ class StoreMutationTests(unittest.TestCase):
     # trace:TASK-3223 | ai:codex
     def test_canonical_schemas_are_closed_and_cannot_select_authority(self):
         for op, extra in [('comment_add', {'content': 'hello'}),
-                          ('spec_edit', {'fields': {'title': 'updated'}})]:
+                          ('spec_edit', {'fields': {'title': 'updated'}}),
+                          ('spec_edit', {'fields': {'priority': 'HIGH'}}),
+                          ('spec_edit', {'fields': {'priority': 'med'}})]:
             data = dict(spec_id='TASK-1', expected_revision='a' * 64, **extra)
             self.assertEqual(parse(self.wire(self.request(op, data)))['data'], data)
             for field in ('author', 'path', 'status', 'grant', 'replacement'):
                 self.refuses('InvalidRequest', self.request(op, dict(data, **{field: 'x'})))
-        for fields in ({'status': 'Completed'}, {}, {'title': None}, {'title': ''},
+        for fields in ({'priority': 'urgent'}, {'priority': None}, {'priority': 1},
+                       {'status': 'Completed'}, {}, {'title': None}, {'title': ''},
                        {'title': None, 'description': 'text'},
                        {'title': 'title', 'description': None}):
             self.refuses('InvalidRequest', self.request('spec_edit', dict(spec_id='TASK-1', expected_revision='a' * 64, fields=fields)))
         self.refuses('InvalidRequest', self.request('comment_add', dict(spec_id='TASK-1', expected_revision='stale', content='hi')))
         self.refuses('InvalidRequest', self.request('comment_add', dict(spec_id='TASK-1', expected_revision='A' * 64, content='hi')))
+        for op in ('comment_edit', 'comment_delete'):
+            self.refuses('UnsupportedOperation', self.request(op, dict(
+                spec_id='TASK-1', expected_revision='a' * 64,
+                comment_id=str(uuid.uuid4()), content='replacement')))
 
     def test_staged_canonical_verbs_refuse_without_calling_host(self):
         for op, extra in [('comment_add', {'content': 'hello'}),
@@ -171,6 +178,27 @@ class StoreMutationTests(unittest.TestCase):
         probe = self.dispatch(self.request())
         self.assertEqual(probe['result']['permitted_verbs'], ['session_probe', 'request_status'])
         self.assertEqual(len(self.service.accepted), 1)
+
+    def test_profile_is_private_session_configuration_not_mutation_data(self):
+        for invalid in ('', 'unknown', True, None, ['mediated']):
+            with self.subTest(profile=invalid), self.assertRaisesRegex(Refusal, 'InvalidRequest'):
+                Service(dict(self.binding, store_profile=invalid), self.identity, self.authorize)
+        # Selecting mediation in one session cannot widen a sibling S1 session.
+        mediated = Service(dict(self.binding, store_profile='mediated'), self.identity, self.authorize)
+        self.addCleanup(mediated.close)
+        probe = self.request()
+        response = json.loads(mediated.dispatch(self.wire(probe), self.credentials))
+        self.assertEqual(response['result']['permitted_verbs'],
+                         ['session_probe', 'request_status', 'comment_add', 'spec_edit'])
+        self.assertEqual(self.dispatch(self.request())['result']['permitted_verbs'],
+                         ['session_probe', 'request_status'])
+        # Neither S2b verb acquires a route through this profile.
+        for op in ('own_claim', 'queue_done'):
+            with self.assertRaisesRegex(Refusal, 'UnsupportedOperation'):
+                mediated.dispatch(self.wire(self.request(op)), self.credentials)
+        data = dict(spec_id='TASK-1', expected_revision='a' * 64, content='hello',
+                    store_profile='mediated')
+        self.refuses('InvalidRequest', self.request('comment_add', data))
 
     def test_multiline_canonical_schemas_reject_only_other_controls(self):
         for text in ('first\n\tsecond', 'bad\r', 'bad\x00', 'bad\x7f', 'bad\x85'):
@@ -184,12 +212,35 @@ class StoreMutationTests(unittest.TestCase):
                         parse(self.wire(request))
 
     # trace:TASK-3223 | ai:codex
+    def test_oversized_post_operation_reply_is_unknown_not_unavailable(self):
+        class Authority:
+            def __init__(self):
+                self.operations = []
+
+            def __call__(self):
+                return None
+
+            def operation(self, request):
+                self.operations.append(request)
+                return {'committed': 'x' * 65536}
+
+        authority = Authority()
+        self.service = Service(dict(self.binding, store_profile='mediated'), self.identity, authority)
+        self.addCleanup(self.service.close)
+        request = self.request('comment_add', dict(
+            spec_id='TASK-1', expected_revision='a' * 64, content='one comment'))
+        self.refuses('OutcomeUnknown', request)
+        self.assertEqual(authority.operations, [request])
+        self.assertNotIn(request['request_id'], self.service.accepted)
+
+    # trace:TASK-3223 | ai:codex
     def test_mutations_use_correlated_framed_host_rpc_and_do_not_replay_locally(self):
         helper, host = socket.socketpair()
         authority = ns['MutationAuthority'](helper)
         self.addCleanup(helper.close)
         self.addCleanup(host.close)
-        self.service.authorize = authority
+        self.service = Service(dict(self.binding, store_profile='mediated'), self.identity, authority)
+        self.addCleanup(self.service.close)
         request = self.request('comment_add', dict(spec_id='TASK-1', expected_revision='a' * 64, content='one comment'))
         seen, errors = [], []
         def exact(n):
@@ -215,10 +266,10 @@ class StoreMutationTests(unittest.TestCase):
                 errors.append(error)
         thread = threading.Thread(target=responder); thread.start()
         try:
-            # Exercise staged framing only; production admission remains disabled.
-            with patch.dict(ns, MUTATION_VERBS=ns['MUTATION_VERBS'] + ns['CANONICAL_VERBS']):
-                first = self.dispatch(request)
-                self.assertEqual(self.dispatch(request), first)
+            # Private host selection, without changing protocol globals.
+            # Production launcher admission remains gated.
+            first = self.dispatch(request)
+            self.assertEqual(self.dispatch(request), first)
         finally:
             thread.join(4)
         self.assertFalse(thread.is_alive())
@@ -311,6 +362,32 @@ class StoreMutationTests(unittest.TestCase):
         finally:
             for client in clients:
                 client.close()
+
+    def test_poll_correlates_validated_refusals_and_leaves_bad_packets_unbound(self):
+        client = self.service.connect(os.getpid())
+        self.addCleanup(client.close)
+        client.settimeout(2)
+        request = self.request()
+        for error in ('Revoked', 'Unauthorized', 'Busy', 'Conflict'):
+            self.error = error
+            os.write(client.fileno(), self.wire(request))
+            self.service.poll()
+            reply = json.loads(client.recv(65536))
+            self.assertEqual(reply, dict(version=1, launch_epoch=self.epoch,
+                request_id=request['request_id'], outcome='error', error=error))
+        self.error = None
+        for raw in (b'bad-json', self.wire(dict(request, launch_epoch=str(uuid.uuid4())))):
+            os.write(client.fileno(), raw)
+            self.service.poll()
+            reply = json.loads(client.recv(65536))
+            self.assertIsNone(reply['request_id'])
+            self.assertEqual(reply['outcome'], 'error')
+        self.assertFalse(self.service.accepted)
+
+    def test_comment_schema_refuses_blank_text(self):
+        for text in ('', ' ', '\n\t', '\u2003'):
+            self.refuses('InvalidRequest', self.request('comment_add', dict(
+                spec_id='TASK-1', expected_revision='a' * 64, content=text)))
 
     def test_kernel_credentials_write_is_actual_sender_not_socketpair_creator(self):
         client = self.service.connect(os.getpid())
