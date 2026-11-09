@@ -1262,11 +1262,15 @@ fn rollup_green_at(
 }
 
 /// A review remains assigned until its exact recorded holder is proven dead.
-/// Unknown evidence retains it without substituting a process in the same cwd.
+/// Legacy holders retain the prior non-stale and registered-reviewer rules.
 // trace:TASK-3420 | ai:codex
 fn review_lease_running(project_root: &Path, l: &crate::leases::SessionLease) -> bool {
     // trace:TASK-3420 | ai:codex
-    crate::ownership::reader::lease_retained(project_root, l)
+    !matches!(
+        crate::ownership::reader::LeaseReader::new(project_root)
+            .pickup_owner(l, crate::ownership::reader::LegacyRule::Review),
+        crate::ownership::OwnerVerdict::Dead { .. }
+    )
 }
 
 /// Every `reviewed_sha` on record under `.aida/review-verdicts/`.

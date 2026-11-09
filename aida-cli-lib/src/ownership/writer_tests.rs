@@ -1694,3 +1694,127 @@ fn task_3420_pickup_retains_unknown_and_releases_only_matching_dead_owner() {
     std::fs::write(store.path_for(&key), "corrupt").unwrap();
     assert!(super::reader::lease_retained(root, &item));
 }
+
+/// Each migrated observation preserves its own legacy rule; ownership Unknown
+/// from absent admission must never make a live or unrecorded owner adoptable.
+// trace:TASK-3420 | ai:codex
+#[test]
+fn task_3420_legacy_rules_preserve_adoption_and_dormant_observations() {
+    use super::reader::{LeaseReader, LegacyRule};
+    let tmp = tempfile::tempdir().unwrap();
+    let root = tmp.path();
+    let _ambient = crate::test_env::AmbientGuard::hermetic_with_seat(root, "implementer", &[]);
+    assert!(std::process::Command::new("git")
+        .args(["init", "-q"])
+        .current_dir(root)
+        .status()
+        .unwrap()
+        .success());
+    let mut item = lease("legacy", "PR-3421", "");
+    item.started_at = Utc::now();
+    item.hostname = crate::coordination::hostname();
+    item.worktree_path = root.join("tree");
+    std::fs::create_dir(&item.worktree_path).unwrap();
+    item.tree_kind = crate::seat_clone::TreeKind::Clone;
+    item.active_pid = None;
+    item.active_pid_start_time = None;
+    item.creator_pid = None;
+    item.creator_pid_start_time = None;
+    let reader = LeaseReader::new(root);
+    for creator in [None, Some(std::process::id())] {
+        item.creator_pid = creator;
+        item.creator_pid_start_time =
+            creator.and_then(crate::process_probe::process_start_identity);
+        assert!(!matches!(
+            reader.pickup_owner(&item, LegacyRule::Adoption),
+            OwnerVerdict::Dead { .. }
+        ));
+        assert!(crate::leases::lease_adoption_refusal(root, &item).is_some());
+        assert!(!matches!(
+            reader.pickup_owner(&item, LegacyRule::NonStale),
+            OwnerVerdict::Dead { .. }
+        ));
+        assert!(!matches!(
+            reader.pickup_owner(&item, LegacyRule::Review),
+            OwnerVerdict::Dead { .. }
+        ));
+    }
+    item.creator_pid = Some(u32::MAX);
+    item.creator_pid_start_time = None;
+    let key = WorkKey::Change {
+        change: dual::change(3421),
+    };
+    let mut holder = dual::holder_for_lease(&item, &WriterFacts::here(), Utc::now());
+    // Production legacy process envelope: identity recorded, admission absent.
+    holder.witnesses = vec![Witness {
+        admission: None,
+        kind: WitnessKind::Process {
+            host: crate::coordination::hostname(),
+            id: ProcessIdentity {
+                pid: u32::MAX,
+                start: format!("linux:{BOOT}:9"),
+            },
+            pid_ns: WriterFacts::here().pid_ns,
+        },
+        recorded_at: Utc::now(),
+    }];
+    OwnershipStore::for_project(root)
+        .unwrap()
+        .unwrap()
+        .update(&key, "test", Expect::Any, |_| {
+            Some((
+                Ownership {
+                    key: key.clone(),
+                    generation: 0,
+                    holder: Some(holder),
+                    phase: Phase::Leased,
+                },
+                None,
+            ))
+        })
+        .unwrap();
+    assert!(matches!(
+        reader::lease_owner(root, &item),
+        OwnerVerdict::Unknown { .. }
+    ));
+    assert!(matches!(
+        reader.pickup_owner(&item, LegacyRule::Adoption),
+        OwnerVerdict::Dead { .. }
+    ));
+    // Adoption preserves dirty contents and commits lacking an origin.
+    let git = |args: &[&str]| {
+        let out = crate::test_git::git_command()
+            .args(args)
+            .current_dir(&item.worktree_path)
+            .output()
+            .unwrap();
+        assert!(
+            out.status.success(),
+            "{}",
+            String::from_utf8_lossy(&out.stderr)
+        );
+        out.stdout
+    };
+    git(&["init", "-q"]);
+    std::fs::write(item.worktree_path.join("committed"), "unpushed").unwrap();
+    git(&["add", "committed"]);
+    git(&[
+        "-c",
+        "user.name=Test",
+        "-c",
+        "user.email=test@example.com",
+        "-c",
+        "core.hooksPath=/dev/null",
+        "commit",
+        "-qm",
+        "local only",
+    ]);
+    let head = git(&["rev-parse", "HEAD"]);
+    std::fs::write(item.worktree_path.join("dirty"), "keep me").unwrap();
+    assert!(crate::leases::lease_adoption_refusal(root, &item).is_none());
+    assert_eq!(git(&["rev-parse", "HEAD"]), head);
+    assert_eq!(
+        std::fs::read_to_string(item.worktree_path.join("dirty")).unwrap(),
+        "keep me"
+    );
+}

@@ -1858,10 +1858,10 @@ pub(super) fn handle_queue_command(
             // TASK-101: base-freshness — flag any active session lease whose
             // branch has fallen behind origin/main, so the operator sees when
             // in-flight work is on a stale base *during* the session (not just
-            // at the queue-work/queue-done gates). Subtle by default; only live
-            // (non-stale) leases on a non-default branch are probed, and each
+            // at the queue-work/queue-done gates). Subtle by default; only retained
+            // (including legacy non-stale) leases on a non-default branch are probed, and each
             // row's `git rev-list --count` reads local refs — NO fetch here — so
-            // it's cheap + best-effort (a git miss just omits that row).
+            // it is best-effort (a git miss just omits that row).
             // trace:TASK-101 | ai:claude
             if !*in_flight_only {
                 if let Some(root) = find_main_worktree_root()
@@ -1875,7 +1875,10 @@ pub(super) fn handle_queue_command(
                         if l.branch.is_empty() || l.branch == "main" {
                             continue;
                         }
-                        if !reader.retained(&l) {
+                        if matches!(
+                            reader.pickup_owner(&l, crate::ownership::reader::LegacyRule::NonStale),
+                            crate::ownership::OwnerVerdict::Dead { .. }
+                        ) {
                             continue;
                         }
                         let Some(behind) = commits_behind_origin_main(&root, &l.branch) else {

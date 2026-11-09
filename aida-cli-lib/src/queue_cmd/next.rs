@@ -75,7 +75,7 @@ pub(super) fn handle_queue_command(
                 .unwrap_or(SessionEnforcement::Warn);
             let lease_filter_active =
                 !leases.is_empty() && enforcement_mode != SessionEnforcement::Off;
-            // Unknown ownership retains the assignment; no cwd/PID fallback.
+            // Unknown ownership retains the assignment except for legacy pickup compatibility.
             // trace:TASK-3420 | ai:codex
             let mut skipped_for_lease: Vec<(String, String)> = Vec::new();
             // STORY-333: track specs skipped by the pre-pickup gate so

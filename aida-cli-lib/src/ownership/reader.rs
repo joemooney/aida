@@ -69,9 +69,18 @@ pub(crate) fn lease_record(root: &Path, lease: &crate::SessionLease) -> Result<O
 }
 
 // trace:TASK-3420 | ai:codex
+#[derive(Clone, Copy)]
+pub(crate) enum LegacyRule {
+    Pickup,
+    Adoption,
+    NonStale,
+    Review,
+}
+
 pub(crate) struct LeaseReader<'a> {
     root: &'a Path,
     reqs: std::cell::OnceCell<Option<aida_core::RequirementsStore>>,
+    live: std::cell::OnceCell<Vec<crate::process_probe::LiveSession>>,
 }
 
 impl<'a> LeaseReader<'a> {
@@ -79,6 +88,7 @@ impl<'a> LeaseReader<'a> {
         Self {
             root,
             reqs: std::cell::OnceCell::new(),
+            live: std::cell::OnceCell::new(),
         }
     }
 
@@ -96,7 +106,7 @@ impl<'a> LeaseReader<'a> {
         };
         let Some((key, _)) = dual::key_for_lease(lease, &resolve) else {
             anyhow::ensure!(
-                self.reqs.get().is_none(),
+                !matches!(self.reqs.get(), Some(None)),
                 "lease scope could not be resolved through the spec store"
             );
             return Ok(None);
@@ -105,13 +115,20 @@ impl<'a> LeaseReader<'a> {
     }
 
     pub(crate) fn retained(&self, lease: &crate::SessionLease) -> bool {
-        !matches!(self.pickup_owner(lease), OwnerVerdict::Dead { .. })
+        !matches!(
+            self.pickup_owner(lease, LegacyRule::Pickup),
+            OwnerVerdict::Dead { .. }
+        )
     }
 
     /// Temporary legacy compatibility for the four Part B pickup probes and
     /// adoption. Remove once every production holder writes an admitted witness.
     // trace:TASK-3420 | ai:codex
-    fn pickup_owner(&self, lease: &crate::SessionLease) -> OwnerVerdict {
+    pub(crate) fn pickup_owner(
+        &self,
+        lease: &crate::SessionLease,
+        rule: LegacyRule,
+    ) -> OwnerVerdict {
         let record = self.record(lease);
         let verdict = lease_owner_record(
             lease,
@@ -133,11 +150,34 @@ impl<'a> LeaseReader<'a> {
             Err(_) => false,
         };
         if matches!(verdict, OwnerVerdict::Unknown { .. }) && legacy_unknown {
-            let live = crate::process_probe::probe_live_claude_sessions();
-            return if crate::leases::lease_is_live(&live, Utc::now())(lease) {
-                OwnerVerdict::Alive {
-                    witness: "legacy lease rule".into(),
+            let live = self
+                .live
+                .get_or_init(crate::process_probe::probe_live_claude_sessions);
+            let now = Utc::now();
+            let retained = match rule {
+                LegacyRule::Pickup => crate::leases::lease_is_live(live, now)(lease),
+                LegacyRule::Adoption => {
+                    let report = crate::leases::stale_lease_recovery_for_lease_with(lease, live);
+                    match report.base_verdict {
+                        crate::StaleLeaseRecovery::ReclaimableClean {
+                            worktree_missing: true,
+                        } => false,
+                        _ => crate::leases::orphan_adoption_refusal(&report).is_some(),
+                    }
                 }
+                LegacyRule::NonStale | LegacyRule::Review => {
+                    !matches!(
+                        crate::lease_state_for(lease, live, now),
+                        crate::LeaseState::Stale
+                    ) || (matches!(rule, LegacyRule::Review)
+                        && !lease.worktree_path.as_os_str().is_empty()
+                        && crate::agent_registry::load_live_identity_entries(self.root)
+                            .iter()
+                            .any(|a| a.worktree_path.starts_with(&lease.worktree_path)))
+                }
+            };
+            return if retained {
+                verdict
             } else {
                 OwnerVerdict::Dead {
                     proof: "legacy lease rule".into(),
@@ -285,4 +325,35 @@ pub(crate) fn seed_lease_heartbeat(
 // trace:TASK-3420 | ai:codex
 pub(crate) fn lease_retained(root: &Path, lease: &crate::SessionLease) -> bool {
     LeaseReader::new(root).retained(lease)
+}
+
+/// A successfully loaded store may legitimately contain no spec for a free-form
+/// scope. Only a failed store read makes resolution evidence unreadable.
+// trace:TASK-3420 | ai:codex
+#[cfg(test)]
+#[test]
+fn task_3420_free_form_scope_is_not_a_store_failure() {
+    let root = tempfile::tempdir().unwrap();
+    let lease: crate::SessionLease = toml::from_str(
+        r#"id = "free-form"
+scope = "harness-worktree"
+slug = "harness"
+owner = "test@example.com"
+worktree_path = ""
+branch = ""
+started_at = "2026-11-09T00:00:00Z"
+hostname = "test"
+"#,
+    )
+    .unwrap();
+    let reader = LeaseReader::new(root.path());
+    reader
+        .reqs
+        .set(Some(aida_core::RequirementsStore::default()))
+        .ok()
+        .unwrap();
+    assert!(reader.record(&lease).unwrap().is_none());
+    let failed = LeaseReader::new(root.path());
+    failed.reqs.set(None).ok().unwrap();
+    assert!(failed.record(&lease).is_err());
 }

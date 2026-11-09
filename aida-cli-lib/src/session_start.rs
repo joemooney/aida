@@ -2279,7 +2279,9 @@ pub(crate) fn session_start_with_receipt(
                 return None;
             }
             // trace:TASK-3420 | ai:codex
-            match crate::ownership::reader::lease_owner(&project_root, &l) {
+            match crate::ownership::reader::LeaseReader::new(&project_root)
+                .pickup_owner(&l, crate::ownership::reader::LegacyRule::Adoption)
+            {
                 crate::ownership::OwnerVerdict::Dead { .. } => None,
                 crate::ownership::OwnerVerdict::Alive { .. } => Some((l, "live session")),
                 crate::ownership::OwnerVerdict::Unknown { .. } => {

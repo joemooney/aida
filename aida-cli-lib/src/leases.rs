@@ -2382,8 +2382,8 @@ pub(crate) fn lease_owning_spec(
     // BUG-637: liveness predicate. A spec-scoped claim only blocks an outbound
     // mutation while its holder is genuinely LIVE — a crashed/stale agent's
     // lease must NOT permanently lock its spec (no crash-deadlock). Callers
-    // pass `lease_is_live(&live_sessions, now)`; the unit tests (which exercise
-    // ancestry/scope matching, not liveness) pass `|_| true`.
+    // use the ownership reader with legacy pickup compatibility; tests of
+    // ancestry/scope matching alone pass `|_| true`.
     // trace:BUG-637 | ai:claude
     is_live: impl Fn(&SessionLease) -> bool,
 ) -> Option<SessionLease> {
@@ -4779,7 +4779,11 @@ pub(crate) fn lease_adoption_refusal(
         return Some("it records no tree");
     }
     // trace:TASK-3420 | ai:codex
-    if crate::ownership::reader::lease_retained(project_root, lease) {
+    if !matches!(
+        crate::ownership::reader::LeaseReader::new(project_root)
+            .pickup_owner(lease, crate::ownership::reader::LegacyRule::Adoption),
+        crate::ownership::OwnerVerdict::Dead { .. }
+    ) {
         return Some("ownership holder is live or unknown");
     }
     // Adoption preserves all tree contents; only existence and registration

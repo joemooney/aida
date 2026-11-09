@@ -1364,12 +1364,12 @@ fn linked_verdict_does_not_count_as_review_started() {
     );
 }
 
-/// A positive owner-death proof permits review pickup. An unrelated registry
-/// process in the worktree cannot override that proof.
+/// Crashed legacy reviewers release while registered reviewers retain the PR.
+/// Admitted holder death is tested separately with a production witness.
 // trace:TASK-3420 | ai:codex
 // trace:TASK-1955 | ai:claude (TASK-2094, TASK-1665)
 #[test]
-fn task_3420_crashed_reviewer_uses_ownership_instead_of_registry_cwd() {
+fn task_3420_crashed_legacy_reviewer_and_registered_reviewer() {
     let tmp = tempfile::tempdir().unwrap();
     let root = tmp.path().canonicalize().unwrap();
     std::process::Command::new("git")
@@ -1456,8 +1456,8 @@ fn task_3420_crashed_reviewer_uses_ownership_instead_of_registry_cwd() {
     .unwrap();
     assert_eq!(
         ids(&findings_at(&root, now, &prs)),
-        ["lane-liveness:unpicked-ready-pr:PR-2730@a1b2c3d4"],
-        "an unrelated registry process cannot override owner death"
+        Vec::<String>::new(),
+        "a registered legacy reviewer still holds the PR"
     );
     crate::ownership::reader::seed_lease_heartbeat(&root, &review, key, true);
     assert!(

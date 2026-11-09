@@ -255,7 +255,7 @@ fn a_live_lease_is_refused() {
         start("TASK-2224", Some(&orphan.branch), Some(&clone), true, true).unwrap_err()
     );
     assert!(err.contains("is not orphaned"), "{err}");
-    assert!(err.contains("live ("), "{err}");
+    assert!(err.contains("ownership holder is live or unknown"), "{err}");
     assert_eq!(lease_for(&fx.main, "TASK-2224").id, orphan.id);
     assert_work_intact(&clone, &orphan.branch, &head);
 }
@@ -384,9 +384,13 @@ fn the_conflict_hint_offers_resume_only_when_resume_adopts() {
     no_pid.creator_pid = None;
     no_pid.creator_pid_start_time = None;
     write_lease(&fx.main, &no_pid);
+    // Legacy production holder without an ownership witness, rather than the
+    // dead synthetic heartbeat the initial orphan fixture installed.
+    // trace:TASK-3420 | ai:codex
+    std::fs::remove_dir_all(fx.main.join(".aida/ownership")).unwrap();
     let refusal = crate::leases::lease_adoption_refusal(&fx.main, &no_pid);
     assert!(
-        refusal.is_some_and(|why| why.contains("no owning process")),
+        refusal.is_some_and(|why| why.contains("ownership holder is live or unknown")),
         "{refusal:?}"
     );
     let hint = crate::queue_cmd::scope_conflict_resume_hint(scope, &no_pid.id, refusal, None, true);
@@ -422,6 +426,10 @@ fn adopting_an_orphan_still_refuses_a_live_lease_on_the_scope() {
     std::fs::create_dir_all(&live.worktree_path).unwrap();
     write_lease(&fx.main, &live);
     set_owner(&fx.main, &live, std::process::id());
+    // Both legacy sessions predate ownership admission. A single canonical
+    // record cannot represent two different session holders of the same spec.
+    // trace:TASK-3420 | ai:codex
+    std::fs::remove_dir_all(fx.main.join(".aida/ownership")).unwrap();
 
     assert_eq!(
         crate::leases::adoptable_orphan_lease(&fx.main, scope).map(|l| l.id),
@@ -433,7 +441,7 @@ fn adopting_an_orphan_still_refuses_a_live_lease_on_the_scope() {
             .expect("the live lease is still swept");
     assert_eq!(next.id, live.id);
     assert!(crate::leases::lease_adoption_refusal(&fx.main, &next)
-        .is_some_and(|w| w.contains("live process")));
+        .is_some_and(|w| w.contains("ownership holder is live or unknown")));
 
     let err = format!("{:#}", adopt(scope, &orphan.branch, &clone).unwrap_err());
     assert!(err.contains(&live.id[..8]), "{err}");
