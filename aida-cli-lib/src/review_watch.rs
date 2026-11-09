@@ -227,19 +227,19 @@ impl Identity {
     /// Capacity policy is separate from kernel process observation.
     // trace:TASK-3365 | ai:codex
     fn alive(&self) -> bool {
-        use aida_core::proc_identity::{UnknownReason, Verdict};
-        match self.verdict() {
+        self.alive_with_verdict(self.verdict())
+    }
+    // trace:TASK-3367 | ai:codex
+    fn alive_with_verdict(&self, verdict: aida_core::proc_identity::Verdict) -> bool {
+        use aida_core::proc_identity::Verdict;
+        match verdict {
             Verdict::Alive => true,
             Verdict::Dead(_) => false,
-            Verdict::ForeignUnknown(UnknownReason::MissingIdentity) => {
-                // Legacy/incomplete receipts retain the existing reboot/TTL
-                // backstop, rather than holding capacity forever.
+            // Every unknown observation uses the reservation backstop, including
+            // read failures in an otherwise observable local PID namespace.
+            Verdict::ForeignUnknown(_) => {
                 self.within_foreign_backstop(chrono::Utc::now(), boot_id().ok().as_deref())
             }
-            Verdict::ForeignUnknown(_) if !self.observable() => {
-                self.within_foreign_backstop(chrono::Utc::now(), boot_id().ok().as_deref())
-            }
-            Verdict::ForeignUnknown(_) => true,
         }
     }
 }
@@ -1331,8 +1331,10 @@ fn select(
         service::check_controller_locked(&store.root, &store.dir)?;
         store.reconcile_lost_dispatchers(state);
         let total = state.entries.values().flat_map(|e| &e.attempts).filter(|a| active(a)).count();
-        if total == 0 { state.max_concurrent = max; }
-        anyhow::ensure!(state.max_concurrent == max, "another watcher uses a different concurrency limit; use --max-concurrent {}", state.max_concurrent);
+        // Apply this watcher's limit under the admission lock. Existing reviews
+        // count against a changed cap without needing to drain first.
+        // trace:BUG-2496 | ai:codex
+        state.max_concurrent = max;
         let repository = state.repository.clone();
         let holders = capacity_holders(state);
         let entry = state.entries.entry(key.clone()).or_default();

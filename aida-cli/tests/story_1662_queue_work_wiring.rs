@@ -22,6 +22,8 @@ fn aida(repo: &Path, home: &Path, bin_dir: &Path) -> Command {
     cmd.env("HOME", home);
     cmd.env("AIDA_HOME", home);
     cmd.env("AIDA_TELEMETRY", "0");
+    cmd.env_remove("AIDA_OS_WRAP");
+    cmd.env_remove("AIDA_CONTAINED");
     let path = std::env::join_paths(
         std::iter::once(bin_dir.to_path_buf())
             .chain(std::env::split_paths(&std::env::var_os("PATH").unwrap())),
@@ -77,6 +79,7 @@ fn fixture(claude_body: &str, config_extra: &str) -> Fixture {
     for dir in [&repo, &home, &bin] {
         std::fs::create_dir_all(dir).unwrap();
     }
+    support::contained_lane_host(&home, &bin);
     let claude = bin.join("claude");
     std::fs::write(&claude, format!("#!/bin/sh\n{claude_body}\n")).unwrap();
     std::fs::set_permissions(&claude, std::fs::Permissions::from_mode(0o755)).unwrap();
@@ -88,6 +91,14 @@ fn fixture(claude_body: &str, config_extra: &str) -> Fixture {
     git(&repo, &["init", "-q", "-b", "main"]);
     // trace:BUG-2017 | ai:codex — explicit positive global-ID fixture.
     test_git::enroll_synthetic_home(&repo);
+    // The allocation reader refuses shared writes, independently of runner umask.
+    // trace:STORY-2660 | ai:codex
+    let common = aida_core::allocation_authority::common_dir(&repo).unwrap();
+    std::fs::set_permissions(
+        common.join(aida_core::allocation_authority::CONFIG_FILE),
+        std::fs::Permissions::from_mode(0o600),
+    )
+    .unwrap();
     git(&repo, &["config", "user.email", "t@t.t"]);
     git(&repo, &["config", "user.name", "t"]);
     git(&repo, &["commit", "-q", "--allow-empty", "-m", "init"]);
@@ -229,7 +240,7 @@ fn launch(fx: &Fixture, grant: &str) -> (Option<i32>, String, String) {
 fn cap_refusal_exits_34_and_leaves_no_lease_worktree_or_queue_row() {
     let fx = fixture("exit 97", "[queue]\nstandalone_implementer_cap = 1\n");
     // One live launcher (this test process) already holds the only slot.
-    let slots = fx.repo.join(".aida/standalone-implementers");
+    let slots = fx.home.join(".aida/standalone-implementers");
     std::fs::create_dir_all(&slots).unwrap();
     std::fs::write(slots.join(".lock"), "").unwrap();
     std::fs::write(
@@ -283,12 +294,68 @@ fn punting_child_exits_32_through_queue_work_with_authority_recorded() {
         "{ledger}"
     );
     // The slot is released when the launcher returns.
-    let held = std::fs::read_dir(fx.repo.join(".aida/standalone-implementers"))
+    let held = std::fs::read_dir(fx.home.join(".aida/standalone-implementers"))
         .map(|d| {
             d.flatten()
                 .filter(|e| e.path().extension().is_some_and(|x| x == "json"))
                 .count()
         })
-        .unwrap_or(0);
+        .expect("host-wide slot directory must have been created");
     assert_eq!(held, 0, "the concurrency slot outlived the launch");
+}
+
+// trace:STORY-2660 | ai:codex
+#[test]
+fn host_capacity_doctor_reads_real_host_and_project_config() {
+    let fx = fixture("exit 97", "[queue]\nstandalone_implementer_cap = 4\n");
+    let observe = || {
+        let out = aida(&fx.repo, &fx.home, &fx.bin)
+            .args(["doctor", "--lane-capacity", "--json"])
+            .output()
+            .unwrap();
+        assert!(out.status.success(), "{out:?}");
+        serde_json::from_slice::<serde_json::Value>(&out.stdout).unwrap()
+    };
+    let project = observe();
+    assert_eq!(project["cap"], 4);
+    assert_eq!(project["cap_source"], "project");
+    std::fs::create_dir_all(fx.home.join(".aida")).unwrap();
+    std::fs::write(
+        fx.home.join(".aida/host.toml"),
+        "[queue]\nstandalone_implementer_cap = 8\n[lane_host]\nallow_ungranted = true\n",
+    )
+    .unwrap();
+    let host = observe();
+    assert_eq!(host["schema_version"], 1);
+    assert_eq!(host["cap"], 8);
+    assert_eq!(host["cap_source"], "host");
+    assert!(host["nproc"].as_u64().unwrap() > 0);
+    assert!(host["warnings"][0]
+        .as_str()
+        .unwrap()
+        .contains("Legacy ungranted"));
+    assert_eq!(host["occupied"], 0);
+    assert_eq!(host["free"], 8);
+}
+
+// trace:STORY-2660 | ai:codex
+#[test]
+fn live_legacy_slot_refuses_before_setup() {
+    let fx = fixture("exit 97", "");
+    let slots = fx.repo.join(".aida/standalone-implementers");
+    std::fs::create_dir_all(&slots).unwrap();
+    std::fs::write(
+        slots.join("live.json"),
+        format!(
+            "{{\"pid\":{},\"spec\":\"STORY-OTHER\"}}",
+            std::process::id()
+        ),
+    )
+    .unwrap();
+    let grant = support::grant_seat(&fx.home, &fx.repo, "advisor", &["reviewer"]);
+    let before = snapshot(&fx);
+    let (code, stdout, stderr) = launch(&fx, &grant);
+    assert_ne!(code, Some(0));
+    assert!(format!("{stdout}{stderr}").contains("legacy checkout-local launcher"));
+    assert_unchanged(&before, &snapshot(&fx));
 }

@@ -67,9 +67,6 @@ pub(crate) const CAP_EXIT_CODE: i32 = 34;
 /// Unchanged blocked rework, queued for its one automatic retry.
 pub(crate) const EMPTY_REWORK_EXIT_CODE: i32 = empty_rework::EXIT_CODE;
 
-/// Default cap on concurrently running standalone implementers.
-pub(crate) const DEFAULT_CAP: usize = 3;
-
 /// Whether this `queue work` invocation is a standalone implementer launch:
 /// an implementer pickup of a spec scope, headless, and not a drain's own
 /// phase-1 child (which carries the orchestrator phase env or
@@ -102,7 +99,7 @@ a design fork, run `aida punt`; to push the branch but hold the PR for a manual 
 /// Native seats finish through the host after the child exits, while the
 /// recorded lease still vouches for the work. This overrides the ordinary
 /// pickup shipping unit without weakening the live-owner check.
-// trace:TASK-2879 | ai:codex
+// trace:TASK-2879 trace:BUG-2493 | ai:codex
 pub(crate) const NATIVE_STOP_CONTRACT: &str = "\n\nStandalone native implementer launch: \
 Git metadata is read-only. Finish the edits and targeted tests, leave the edits uncommitted, \
 and write a final handoff listing changed files, validation results and blockers, then exit. \
@@ -110,8 +107,15 @@ Do not commit, push, open a PR or run `aida queue done` from this seat. After yo
 exits, the host launcher commits and publishes the PR; queue completion follows publication. \
 Do not run `aida pr ship` or `aida review record`. For a design fork or manual gate, \
 run `aida punt`; existing punt or hold signals remain publication vetoes. \
-For a partial slice, use `aida ship -m \"[AI:codex] type(scope): subject (Refs SPEC-ID)\"` \
-to declare the host publication subject; this records intent without publishing.";
+For a partial slice, use `aida ship -m \"[AI:codex] type(scope): subject (Refs SPEC-ID)\" \
+--commit-body-file <file>` to declare the host publication subject and optional body; \
+this records intent without publishing. \
+For a completing lane, use `aida ship -m \"[AI:codex] type(scope): subject (SPEC-ID)\" \
+--commit-body-file <file>` to declare completion with an optional body. \
+Omit `--commit-body-file <file>` when no body trailers are needed. \
+For required commit-body trailers such as `Help-Golden: unchanged`, write a UTF-8 file \
+outside the checkout (for example under `/tmp`) and add `--commit-body-file <file>` \
+to the declaration. Avoid body lines ending in `(ID)` groups, which can supply completion credit.";
 
 /// BUG-2383: how a standalone implementer runs its local tests. Appended to
 /// its prompt when the launcher's lane job runner is up.
@@ -403,35 +407,178 @@ impl std::error::Error for StandaloneImplementerExit {}
 // --- Concurrency cap (signoff C2) ------------------------------------------
 //
 // Each running standalone launcher holds a slot file named for its pid under
-// the main checkout's `.aida/standalone-implementers/`. Counting and taking a
+// the host's `~/.aida/standalone-implementers/`, shared across clones. Counting and taking a
 // slot happen under one file lock, so two launchers starting together cannot
 // both see room for one. A slot whose process is gone is pruned, so a killed
 // launcher never holds a slot.
 
-fn slots_dir(project_root: &Path) -> PathBuf {
+fn legacy_slots_dir(project_root: &Path) -> PathBuf {
     crate::main_worktree_root_from(project_root)
         .join(".aida")
         .join("standalone-implementers")
 }
 
-/// `[queue] standalone_implementer_cap` from `.aida/config.toml`, or
-/// [`DEFAULT_CAP`]. A cap of 0 is read as the default.
-pub(crate) fn configured_cap(project_root: &Path) -> usize {
-    let root = crate::main_worktree_root_from(project_root);
-    crate::read_project_config_value(&root)
-        .and_then(|v| {
-            v.get("queue")
-                .and_then(|d| d.get("standalone_implementer_cap"))
-                .and_then(|n| n.as_integer())
+// trace:STORY-2660 | ai:codex
+fn host_home() -> Result<PathBuf> {
+    let environment = aida_core::exec_context::Environment::capture();
+    environment
+        .get("HOME")
+        .map(PathBuf::from)
+        .filter(|p| p.is_absolute())
+        .context("absolute HOME unavailable; cannot resolve host lane state")
+}
+
+fn slots_dir() -> Result<PathBuf> {
+    Ok(host_home()?.join(".aida/standalone-implementers"))
+}
+
+// A guard can release its reservation without the admission lock. A directory
+// entry may therefore disappear before it is opened; other read failures refuse.
+// trace:STORY-2660 | ai:codex
+fn read_slot(path: &Path) -> Result<Option<Slot>> {
+    let body = match std::fs::read(path) {
+        Ok(body) => body,
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Ok(None),
+        Err(e) => return Err(e).with_context(|| format!("reading reservation {}", path.display())),
+    };
+    serde_json::from_slice(&body).map(Some).with_context(|| {
+        format!(
+            "invalid reservation {}; host capacity unknown",
+            path.display()
+        )
+    })
+}
+
+/// Old launchers used checkout-local slots. Fail closed during the transition;
+/// only the owning old launcher may release its live reservation.
+fn refuse_legacy_slots(project_root: &Path) -> Result<()> {
+    refuse_legacy_slots_from(
+        project_root,
+        aida_core::pid_observer::PidObserver::current(),
+    )
+}
+
+fn refuse_legacy_slots_from(
+    project_root: &Path,
+    observer: aida_core::pid_observer::PidObserver,
+) -> Result<()> {
+    let dir = legacy_slots_dir(project_root);
+    let entries = match std::fs::read_dir(&dir) {
+        Ok(entries) => entries,
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Ok(()),
+        Err(e) => return Err(e).context("checking legacy lane slots"),
+    };
+    for entry in entries {
+        let path = entry?.path();
+        if path.extension().and_then(|v| v.to_str()) != Some("json") {
+            continue;
+        }
+        let Some(slot) = read_slot(&path)? else {
+            continue;
+        };
+        anyhow::ensure!(slot_liveness(&slot, observer, crate::ownership::local_slot_process_is_alive) == Some(false),
+            "legacy checkout-local launcher {} still holds {}; let it finish before using host-wide slots", slot.pid, path.display());
+    }
+    Ok(())
+}
+
+// trace:STORY-2660 | ai:codex
+#[derive(Debug, serde::Serialize)]
+pub(crate) struct HostCapacity {
+    pub cap: usize,
+    pub cap_source: &'static str,
+    pub nproc: usize,
+    pub allow_ungranted: bool,
+}
+
+/// Resolve host policy without changing tracked project configuration.
+fn resolve_host_capacity(
+    host: Option<&Path>,
+    project: Option<&toml::Value>,
+    nproc: usize,
+) -> Result<HostCapacity> {
+    let host = match host {
+        Some(path) => match std::fs::read_to_string(path) {
+            Ok(body) => Some(
+                body.parse::<toml::Value>()
+                    .with_context(|| format!("invalid host config {}", path.display()))?,
+            ),
+            Err(e) if e.kind() == std::io::ErrorKind::NotFound => None,
+            Err(e) => return Err(e).context("reading host.toml; refusing lane admission"),
+        },
+        None => None,
+    };
+    let host_cap = host
+        .as_ref()
+        .and_then(|v| v.get("queue"))
+        .map(|queue| {
+            anyhow::ensure!(queue.is_table(), "host.toml [queue] must be a table");
+            queue
+                .get("standalone_implementer_cap")
+                .map(|v| {
+                    v.as_integer()
+                        .and_then(|n| usize::try_from(n).ok())
+                        .filter(|n| *n > 0)
+                        .context("host.toml standalone_implementer_cap must be a positive integer")
+                })
+                .transpose()
         })
+        .transpose()?
+        .flatten();
+    let allow_ungranted = match host.as_ref().and_then(|v| v.get("lane_host")) {
+        Some(table) => {
+            anyhow::ensure!(table.is_table(), "host.toml [lane_host] must be a table");
+            table
+                .get("allow_ungranted")
+                .map(|v| {
+                    v.as_bool()
+                        .context("host.toml allow_ungranted must be boolean")
+                })
+                .transpose()?
+                .unwrap_or(false)
+        }
+        None => false,
+    };
+    let project_cap = project
+        .and_then(|v| v.get("queue"))
+        .and_then(|v| v.get("standalone_implementer_cap"))
+        .and_then(toml::Value::as_integer)
         .and_then(|n| usize::try_from(n).ok())
-        .filter(|n| *n > 0)
-        .unwrap_or(DEFAULT_CAP)
+        .filter(|n| *n > 0);
+    let (cap, cap_source) = if let Some(cap) = host_cap {
+        (cap, "host")
+    } else if let Some(cap) = project_cap {
+        (cap, "project")
+    } else {
+        ((nproc / 2).max(1), "cpu")
+    };
+    Ok(HostCapacity {
+        cap,
+        cap_source,
+        nproc,
+        allow_ungranted,
+    })
+}
+
+pub(crate) fn host_capacity(project_root: &Path) -> Result<HostCapacity> {
+    let home = host_home()?;
+    let root = crate::main_worktree_root_from(project_root);
+    let project = crate::read_project_config_value(&root);
+    let nproc = std::thread::available_parallelism()
+        .context("reading effective host CPU count")?
+        .get();
+    resolve_host_capacity(Some(&home.join(".aida/host.toml")), project.as_ref(), nproc)
+}
+
+pub(crate) fn configured_cap(project_root: &Path) -> Result<usize> {
+    Ok(host_capacity(project_root)?.cap)
 }
 
 #[derive(serde::Serialize, serde::Deserialize)]
 struct Slot {
     pid: u32,
+    #[serde(default)]
+    pid_namespace: Option<u64>,
     #[serde(default)]
     start: Option<String>,
     spec: String,
@@ -448,9 +595,165 @@ struct Slot {
     waiting: bool,
 }
 
+// Unknown PID visibility must retain capacity, even if a final log exists.
+// trace:STORY-2660 | ai:codex
+fn slot_liveness(
+    slot: &Slot,
+    observer: aida_core::pid_observer::PidObserver,
+    is_alive: impl Fn(u32, Option<&str>) -> bool,
+) -> Option<bool> {
+    observer
+        .can_observe(slot.pid_namespace)
+        .then(|| is_alive(slot.pid, slot.start.as_deref()))
+}
+
+// trace:STORY-2660 | ai:codex
+#[derive(serde::Serialize)]
+pub(crate) struct HostReservation {
+    pid: u32,
+    spec: Option<String>,
+    state: &'static str,
+    counted: bool,
+}
+
+#[derive(serde::Serialize)]
+pub(crate) struct HostStatus {
+    schema_version: u32,
+    #[serde(flatten)]
+    capacity: HostCapacity,
+    slot_scope: PathBuf,
+    pub(crate) occupied: usize,
+    free: usize,
+    reservations: Vec<HostReservation>,
+    warnings: Vec<String>,
+}
+
+/// Observes existing slot state only: no directories, locks or receipts created,
+/// and no dead reservations removed. A busy writer is an unknown observation.
+pub(crate) fn host_status(project_root: &Path) -> Result<HostStatus> {
+    refuse_legacy_slots(project_root)?;
+    observe_host_slots(slots_dir()?, host_capacity(project_root)?, |pid, start| {
+        crate::ownership::local_slot_process_is_alive(pid, start)
+    })
+}
+
+fn observe_host_slots(
+    dir: PathBuf,
+    capacity: HostCapacity,
+    is_alive: impl Fn(u32, Option<&str>) -> bool,
+) -> Result<HostStatus> {
+    observe_host_slots_from(
+        dir,
+        capacity,
+        is_alive,
+        aida_core::pid_observer::PidObserver::current(),
+    )
+}
+
+fn observe_host_slots_from(
+    dir: PathBuf,
+    capacity: HostCapacity,
+    is_alive: impl Fn(u32, Option<&str>) -> bool,
+    observer: aida_core::pid_observer::PidObserver,
+) -> Result<HostStatus> {
+    use fs2::FileExt;
+    let mut reservations = Vec::new();
+    let mut warnings = Vec::new();
+    if capacity.allow_ungranted {
+        warnings.push("Legacy ungranted pool placement opted in; no remote grant issuer (placement is not enabled in this slice)".into());
+    }
+    let mut lock = None;
+    match std::fs::read_dir(&dir) {
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => {}
+        Err(e) => return Err(e).context("reading host reservations"),
+        Ok(entries) => {
+            let file = std::fs::File::open(dir.join(".lock"))
+                .context("opening existing slot observation lock")?;
+            FileExt::try_lock_shared(&file)
+                .context("slot writer busy; host status unknown, retry")?;
+            lock = Some(file);
+            for entry in entries {
+                let path = entry?.path();
+                if path.extension().and_then(|v| v.to_str()) != Some("json") {
+                    continue;
+                }
+                let Some(slot) = read_slot(&path)? else {
+                    continue;
+                };
+                let live = slot_liveness(&slot, observer, &is_alive);
+                let finishing = !slot.waiting
+                    && slot
+                        .log
+                        .as_deref()
+                        .is_some_and(crate::headless_linger::log_has_final_result);
+                reservations.push(HostReservation {
+                    pid: slot.pid,
+                    spec: Some(slot.spec),
+                    state: if live.is_none() {
+                        "unknown"
+                    } else if live == Some(false) {
+                        "dead"
+                    } else if finishing {
+                        "finishing"
+                    } else {
+                        "running"
+                    },
+                    counted: live.is_none() || (live == Some(true) && !finishing),
+                });
+            }
+        }
+    }
+    reservations.sort_by_key(|r| r.pid);
+    let occupied = reservations.iter().filter(|r| r.counted).count();
+    let free = capacity.cap.saturating_sub(occupied);
+    drop(lock);
+    Ok(HostStatus {
+        schema_version: 1,
+        capacity,
+        slot_scope: dir,
+        occupied,
+        free,
+        reservations,
+        warnings,
+    })
+}
+
+pub(crate) fn doctor_host_status(project_root: &Path, json: bool) -> Result<()> {
+    let status = host_status(project_root)?;
+    if json {
+        println!("{}", serde_json::to_string_pretty(&status)?);
+    } else {
+        println!(
+            "Lane host capacity: {} (source: {}, nproc: {}); occupied: {}, free: {}",
+            status.capacity.cap,
+            status.capacity.cap_source,
+            status.capacity.nproc,
+            status.occupied,
+            status.free
+        );
+        println!("Slot scope: {}", status.slot_scope.display());
+        for r in &status.reservations {
+            println!(
+                "  pid {} {} {}",
+                r.pid,
+                r.spec.as_deref().unwrap_or("unknown"),
+                r.state
+            );
+        }
+        for warning in &status.warnings {
+            println!("WARNING: {warning}");
+        }
+        println!("Read-only local capacity observation; not a lane-host readiness or remote placement admission.");
+    }
+    Ok(())
+}
+
 /// Rewrite this process's slot with `edit`. Best effort.
-fn edit_own_slot(project_root: &Path, edit: impl FnOnce(&mut Slot)) {
-    let path = slots_dir(project_root).join(format!("{}.json", std::process::id()));
+fn edit_own_slot(edit: impl FnOnce(&mut Slot)) {
+    let Ok(dir) = slots_dir() else {
+        return;
+    };
+    let path = dir.join(format!("{}.json", std::process::id()));
     let Some(mut slot) = std::fs::read_to_string(&path)
         .ok()
         .and_then(|body| serde_json::from_str::<Slot>(&body).ok())
@@ -467,8 +770,8 @@ fn edit_own_slot(project_root: &Path, edit: impl FnOnce(&mut Slot)) {
 /// the slot once the child logs its final result. A new log clears the
 /// waiting mark: the resumed run is counted by its own log.
 // trace:BUG-B6B1278890774EF993D2EBC327862470-027 | ai:claude
-pub(crate) fn record_slot_log(project_root: &Path, log_path: &Path) {
-    edit_own_slot(project_root, |slot| {
+pub(crate) fn record_slot_log(log_path: &Path) {
+    edit_own_slot(|slot| {
         slot.log = Some(log_path.to_path_buf());
         slot.waiting = false;
     });
@@ -477,8 +780,8 @@ pub(crate) fn record_slot_log(project_root: &Path, log_path: &Path) {
 /// Mark this process's slot as waiting on its child's background run, so
 /// the cap keeps counting it while the logged final result says it ended.
 // trace:BUG-B6B1278890774EF993D2EBC327862470-044 | ai:claude
-pub(crate) fn mark_slot_waiting(project_root: &Path) {
-    edit_own_slot(project_root, |slot| slot.waiting = true);
+pub(crate) fn mark_slot_waiting() {
+    edit_own_slot(|slot| slot.waiting = true);
 }
 
 /// A held concurrency slot; released when dropped.
@@ -495,11 +798,13 @@ impl Drop for SlotGuard {
 /// Take a slot for this process, or refuse with [`CAP_EXIT_CODE`] when
 /// `cap` live launchers already hold one.
 pub(crate) fn acquire_slot(project_root: &Path, spec: &str, cap: usize) -> Result<SlotGuard> {
-    acquire_slot_with(project_root, spec, cap, std::process::id(), |pid, start| {
-        aida_core::liveness::process_identity_is_alive(pid, start)
+    refuse_legacy_slots(project_root)?;
+    acquire_slot_in(slots_dir()?, spec, cap, std::process::id(), |pid, start| {
+        crate::ownership::local_slot_process_is_alive(pid, start)
     })
 }
 
+#[cfg(test)]
 pub(crate) fn acquire_slot_with(
     project_root: &Path,
     spec: &str,
@@ -507,8 +812,35 @@ pub(crate) fn acquire_slot_with(
     pid: u32,
     is_alive: impl Fn(u32, Option<&str>) -> bool,
 ) -> Result<SlotGuard> {
+    acquire_slot_in(legacy_slots_dir(project_root), spec, cap, pid, is_alive)
+}
+
+fn acquire_slot_in(
+    dir: PathBuf,
+    spec: &str,
+    cap: usize,
+    pid: u32,
+    is_alive: impl Fn(u32, Option<&str>) -> bool,
+) -> Result<SlotGuard> {
+    acquire_slot_in_from(
+        dir,
+        spec,
+        cap,
+        pid,
+        is_alive,
+        aida_core::pid_observer::PidObserver::current(),
+    )
+}
+
+fn acquire_slot_in_from(
+    dir: PathBuf,
+    spec: &str,
+    cap: usize,
+    pid: u32,
+    is_alive: impl Fn(u32, Option<&str>) -> bool,
+    observer: aida_core::pid_observer::PidObserver,
+) -> Result<SlotGuard> {
     use fs2::FileExt;
-    let dir = slots_dir(project_root);
     std::fs::create_dir_all(&dir).with_context(|| format!("creating {}", dir.display()))?;
     let lock = std::fs::OpenOptions::new()
         .create(true)
@@ -519,19 +851,22 @@ pub(crate) fn acquire_slot_with(
     lock.lock_exclusive()
         .with_context(|| format!("locking {}", dir.display()))?;
     let mut running = Vec::new();
-    for entry in std::fs::read_dir(&dir)?.flatten() {
-        let path = entry.path();
+    for entry in std::fs::read_dir(&dir)? {
+        let path = entry?.path();
         if path.extension().and_then(|e| e.to_str()) != Some("json") {
             continue;
         }
-        let slot = std::fs::read_to_string(&path)
-            .ok()
-            .and_then(|body| serde_json::from_str::<Slot>(&body).ok());
+        let Some(slot) = read_slot(&path)? else {
+            continue;
+        };
         match slot {
+            slot if slot_liveness(&slot, observer, &is_alive).is_none() => {
+                running.push(slot.spec);
+            }
             // A launcher whose child already logged its final result is
             // finishing, not running: its slot stays but is not counted.
             // trace:BUG-B6B1278890774EF993D2EBC327862470-027 | ai:claude
-            Some(slot) if slot.pid != pid && is_alive(slot.pid, slot.start.as_deref()) => {
+            slot if slot.pid != pid && is_alive(slot.pid, slot.start.as_deref()) => {
                 // trace:BUG-B6B1278890774EF993D2EBC327862470-044 | ai:claude
                 let finishing = !slot.waiting
                     && slot
@@ -555,7 +890,7 @@ pub(crate) fn acquire_slot_with(
             code: CAP_EXIT_CODE,
             message: format!(
                 "{} standalone implementers are already running ({}); the cap is {cap} \
-                 (`[queue] standalone_implementer_cap` in .aida/config.toml). Wait for one to \
+                 (`[queue] standalone_implementer_cap` in ~/.aida/host.toml or .aida/config.toml). Wait for one to \
                  finish, then launch again. Nothing was set up for {spec}.",
                 running.len(),
                 running.join(", ")
@@ -563,8 +898,13 @@ pub(crate) fn acquire_slot_with(
         }));
     }
     let path = dir.join(format!("{pid}.json"));
+    anyhow::ensure!(
+        !path.exists(),
+        "reservation PID collision with unobservable owner; retry on the host"
+    );
     let slot = Slot {
         pid,
+        pid_namespace: aida_core::pid_observer::current_pid_namespace(),
         start: aida_core::liveness::process_start_identity(pid),
         spec: spec.to_string(),
         log: None,
@@ -694,7 +1034,7 @@ pub(crate) fn run(launch: Launch<'_>) -> Result<()> {
         .join("headless-logs")
         .join(format!("{}-{}.jsonl", launch.branch, launch.session_id));
     // trace:BUG-B6B1278890774EF993D2EBC327862470-027 | ai:claude
-    record_slot_log(launch.project_root, &log_path);
+    record_slot_log(&log_path);
     eprintln!(
         "{} {}",
         crate::glyph(crate::glyphs::Glyph::FlowActive)
@@ -767,8 +1107,8 @@ pub(crate) fn run(launch: Launch<'_>) -> Result<()> {
         lease_id: launch.lease_id,
         log_path: &log_path,
         // The lane is still working: keep its cap slot counted.
-        on_waiting: &|| mark_slot_waiting(launch.project_root),
-        on_log: &|log| record_slot_log(launch.project_root, log),
+        on_waiting: &|| mark_slot_waiting(),
+        on_log: &|log| record_slot_log(log),
     };
     // Published on the lease, so every vendor's tool shell finds it through
     // its public selector. trace:BUG-2383 | ai:claude
@@ -1030,3 +1370,219 @@ mod story_1662_standalone_implementer_tests;
 #[cfg(test)]
 #[path = "tests/bug_2436_finished_lane_lease_tests.rs"]
 mod bug_2436_finished_lane_lease_tests;
+
+// trace:STORY-2660 | ai:codex
+#[cfg(test)]
+mod host_capacity_tests {
+    use super::*;
+
+    #[test]
+    fn host_capacity_isolated_observer_retains_unknown_reservations() {
+        use aida_core::pid_observer::PidObserver;
+        let tmp = tempfile::tempdir().unwrap();
+        let dir = legacy_slots_dir(tmp.path());
+        std::fs::create_dir_all(&dir).unwrap();
+        std::fs::write(dir.join(".lock"), "").unwrap();
+        let observer = PidObserver {
+            namespace: Some(22),
+            isolated: true,
+        };
+        let log = tmp.path().join("finished.jsonl");
+        std::fs::write(&log, "{\"type\":\"result\",\"is_error\":false}\n").unwrap();
+        for namespace in [Some(11), None] {
+            let slot = Slot {
+                pid: 500,
+                pid_namespace: namespace,
+                start: None,
+                spec: "STORY-2660".into(),
+                log: Some(log.clone()),
+                waiting: false,
+            };
+            let path = dir.join("500.json");
+            let body = serde_json::to_string(&slot).unwrap();
+            std::fs::write(&path, &body).unwrap();
+            let probe = |_, _: Option<&str>| panic!("unobservable PID must not be probed");
+            let status = observe_host_slots_from(
+                dir.clone(),
+                resolve_host_capacity(None, None, 2).unwrap(),
+                probe,
+                observer,
+            )
+            .unwrap();
+            assert_eq!((status.occupied, status.free), (1, 0));
+            assert_eq!(status.reservations[0].state, "unknown");
+            let error = acquire_slot_in_from(dir.clone(), "STORY-OTHER", 1, 500, probe, observer)
+                .err()
+                .unwrap();
+            assert_eq!(
+                error
+                    .downcast_ref::<StandaloneImplementerExit>()
+                    .unwrap()
+                    .code,
+                CAP_EXIT_CODE
+            );
+            assert!(
+                acquire_slot_in_from(dir.clone(), "STORY-OTHER", 2, 500, probe, observer).is_err()
+            );
+            assert_eq!(std::fs::read_to_string(&path).unwrap(), body);
+            assert!(refuse_legacy_slots_from(tmp.path(), observer).is_err());
+        }
+        let visible = Slot {
+            pid: 500,
+            pid_namespace: Some(22),
+            start: None,
+            spec: "STORY-2660".into(),
+            log: None,
+            waiting: false,
+        };
+        assert_eq!(slot_liveness(&visible, observer, |_, _| false), Some(false));
+        assert_eq!(slot_liveness(&visible, observer, |_, _| true), Some(true));
+    }
+
+    #[test]
+    fn host_capacity_released_directory_entry_is_absent() {
+        let tmp = tempfile::tempdir().unwrap();
+        let guard = acquire_slot_in(tmp.path().into(), "STORY-2660", 1, 500, |_, _| true).unwrap();
+        let entry = std::fs::read_dir(tmp.path())
+            .unwrap()
+            .map(|e| e.unwrap().path())
+            .find(|p| p.extension().is_some_and(|e| e == "json"))
+            .unwrap();
+        drop(guard);
+        assert!(read_slot(&entry).unwrap().is_none());
+        assert_eq!(
+            observe_host_slots(
+                tmp.path().into(),
+                resolve_host_capacity(None, None, 2).unwrap(),
+                |_, _| true
+            )
+            .unwrap()
+            .free,
+            1
+        );
+        assert!(acquire_slot_in(tmp.path().into(), "STORY-2660", 1, 501, |_, _| true).is_ok());
+        std::fs::create_dir(&entry).unwrap();
+        assert!(read_slot(&entry).is_err(), "other read errors must refuse");
+    }
+
+    #[test]
+    fn host_capacity_precedence_and_cpu_default() {
+        let tmp = tempfile::tempdir().unwrap();
+        let path = tmp.path().join("host.toml");
+        let project: toml::Value = "[queue]\nstandalone_implementer_cap = 4".parse().unwrap();
+        let cpu = resolve_host_capacity(Some(&path), None, 20).unwrap();
+        assert_eq!((cpu.cap, cpu.cap_source, cpu.nproc), (10, "cpu", 20));
+        assert_eq!(resolve_host_capacity(None, None, 1).unwrap().cap, 1);
+        let configured = resolve_host_capacity(Some(&path), Some(&project), 20).unwrap();
+        assert_eq!((configured.cap, configured.cap_source), (4, "project"));
+        std::fs::write(
+            &path,
+            "[queue]\nstandalone_implementer_cap = 8\n[lane_host]\nallow_ungranted = true",
+        )
+        .unwrap();
+        let host = resolve_host_capacity(Some(&path), Some(&project), 20).unwrap();
+        assert_eq!(
+            (host.cap, host.cap_source, host.allow_ungranted),
+            (8, "host", true)
+        );
+        let zero: toml::Value = "[queue]\nstandalone_implementer_cap = 0".parse().unwrap();
+        assert_eq!(resolve_host_capacity(None, Some(&zero), 6).unwrap().cap, 3);
+    }
+
+    #[test]
+    fn host_capacity_status_is_read_only_and_matches_admission() {
+        let tmp = tempfile::tempdir().unwrap();
+        let dir = legacy_slots_dir(tmp.path());
+        let capacity = || resolve_host_capacity(None, None, 6).unwrap();
+        let empty = observe_host_slots(dir.clone(), capacity(), |_, _| true).unwrap();
+        assert_eq!((empty.occupied, empty.free), (0, 3));
+        assert!(
+            !dir.exists(),
+            "observation must not initialize runtime state"
+        );
+        let alive = |pid, _: Option<&str>| pid == 500;
+        let guard = acquire_slot_with(tmp.path(), "STORY-2660", 3, 500, alive).unwrap();
+        std::fs::write(
+            dir.join("99.json"),
+            &format!(
+                r#"{{"pid":99,"spec":"STORY-DEAD","pid_namespace":{}}}"#,
+                aida_core::pid_observer::current_pid_namespace().unwrap()
+            ),
+        )
+        .unwrap();
+        let status = observe_host_slots(dir.clone(), capacity(), alive).unwrap();
+        assert_eq!(
+            (status.occupied, status.free, status.reservations.len()),
+            (1, 2, 2)
+        );
+        assert!(dir.join("99.json").exists(), "read-only status never reaps");
+        let reduced = observe_host_slots(
+            dir.clone(),
+            resolve_host_capacity(None, None, 1).unwrap(),
+            alive,
+        )
+        .unwrap();
+        assert_eq!(reduced.free, 0);
+        let held = std::fs::File::open(dir.join(".lock")).unwrap();
+        fs2::FileExt::lock_exclusive(&held).unwrap();
+        assert!(observe_host_slots(dir.clone(), capacity(), alive).is_err());
+        fs2::FileExt::unlock(&held).unwrap();
+        std::fs::write(dir.join("broken.json"), "invalid").unwrap();
+        assert!(observe_host_slots(dir, capacity(), alive).is_err());
+        drop(guard);
+    }
+
+    #[test]
+    fn host_capacity_shared_slot_lock_enforces_cap_across_callers() {
+        let tmp = tempfile::tempdir().unwrap();
+        let dir = tmp.path().join("host-slots");
+        let alive = |_: u32, _: Option<&str>| true;
+        let first = acquire_slot_in(dir.clone(), "STORY-1", 1, 501, alive).unwrap();
+        assert!(acquire_slot_in(dir.clone(), "STORY-2", 1, 502, alive).is_err());
+        drop(first);
+        let second = acquire_slot_in(dir.clone(), "STORY-2", 1, 502, alive).unwrap();
+        std::fs::write(dir.join("unknown.json"), "bad").unwrap();
+        assert!(acquire_slot_in(dir, "STORY-3", 8, 503, alive).is_err());
+        drop(second);
+    }
+
+    #[test]
+    fn host_capacity_concurrent_callers_share_admission_lock() {
+        let tmp = tempfile::tempdir().unwrap();
+        let barrier = std::sync::Arc::new(std::sync::Barrier::new(6));
+        let handles: Vec<_> = (0..6)
+            .map(|n| {
+                let dir = tmp.path().join("shared-host-slots");
+                let barrier = barrier.clone();
+                std::thread::spawn(move || {
+                    barrier.wait();
+                    acquire_slot_in(dir, "STORY-2660", 2, 1000 + n, |_, _| true).ok()
+                })
+            })
+            .collect();
+        let guards: Vec<_> = handles.into_iter().map(|h| h.join().unwrap()).collect();
+        assert_eq!(guards.iter().filter(|g| g.is_some()).count(), 2);
+    }
+
+    #[test]
+    fn host_capacity_invalid_explicit_config_refuses() {
+        let tmp = tempfile::tempdir().unwrap();
+        let path = tmp.path().join("host.toml");
+        for body in [
+            "[",
+            "queue = 3",
+            "[queue]\nstandalone_implementer_cap = 0",
+            "[queue]\nstandalone_implementer_cap = -1",
+            "[queue]\nstandalone_implementer_cap = '8'",
+            "lane_host = false",
+            "[lane_host]\nallow_ungranted = 'true'",
+        ] {
+            std::fs::write(&path, body).unwrap();
+            assert!(
+                resolve_host_capacity(Some(&path), None, 20).is_err(),
+                "{body}"
+            );
+        }
+        assert!(resolve_host_capacity(Some(tmp.path()), None, 20).is_err());
+    }
+}

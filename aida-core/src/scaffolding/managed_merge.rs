@@ -56,6 +56,8 @@ pub fn slots_for_file(path: &Path) -> &'static [&'static str] {
         "settings.json" => &[
             "/hooks/PreToolUse",
             "/hooks/PostToolUse",
+            // trace:STORY-2662 | ai:codex
+            "/hooks/PreCompact",
             "/hooks/SessionStart",
             "/statusLine",
             // AIDA owns the MCP pre-approval slot in the committed settings.json

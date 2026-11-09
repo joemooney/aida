@@ -348,6 +348,9 @@ mod tests {
         );
         let store = RequirementsStore::default();
         let md = scaffolder.generate_agents_md(&store);
+        // trace:STORY-2630 | ai:codex
+        assert!(!md.contains("/home/joe/ai/aida"));
+        assert!(md.contains("absolute path supplied by this project"));
 
         assert!(md.contains("## Codex Operating Discipline"));
         assert!(md.contains("docs/agents/codex-mcp-setup.md"));

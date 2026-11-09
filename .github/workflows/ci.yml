@@ -327,6 +327,8 @@ jobs:
           command -v git
           command -v openssl
           python3 -m unittest tests/test_containment_conformance.py
+          # trace:STORY-2630 | ai:codex
+          python3 -m unittest tests/test_codegraph_proxy.py
 
       # Fixed read-only protocol and kernel-credential channel fixtures.
       # trace:TASK-3225 | ai:codex
@@ -827,6 +829,10 @@ jobs:
       - name: Mail notice hook JSON protocol
         if: matrix.shard == 'gates'
         run: python3 tests/test_mail_notice_hook.py
+
+      - name: PreCompact handoff hook protocol
+        if: matrix.shard == 'gates'
+        run: python3 tests/test_precompact_handoff_hook.py
 
       # Tool-only expiry notices: shell/JSON protocol needs no CLI build.
       # trace:BUG-2014 | ai:codex

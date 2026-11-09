@@ -21,6 +21,7 @@ mod codex_md;
 pub mod codex_prompts;
 mod hooks;
 pub mod inventory;
+pub mod launch_profile;
 mod managed_merge;
 pub mod mcp_translate;
 pub mod refresh;
@@ -1378,6 +1379,26 @@ aida show <SPEC-ID>
         let mut modified_files = Vec::new();
         let mut upgradeable_files = Vec::new();
 
+        // A declaration only: never translated into vendor approval exemptions.
+        // trace:STORY-1486 | ai:codex
+        let path = PathBuf::from(launch_profile::PROFILE_PATH);
+        let artifact = self.create_artifact(
+            path.clone(),
+            launch_profile::RECIPE.to_string(),
+            "Portable agent launch root and Git policy declaration".to_string(),
+            false,
+        );
+        match &artifact.file_status {
+            FileStatus::New => new_files.push(path),
+            FileStatus::Modified { .. } | FileStatus::NoHeader => {
+                modified_files.push(artifact.path.clone())
+            }
+            FileStatus::OlderVersion { .. } => upgradeable_files.push(artifact.path.clone()),
+            FileStatus::Unmodified => overwrites.push(artifact.path.clone()),
+        }
+        new_dirs.insert(PathBuf::from(".aida"));
+        artifacts.push(artifact);
+
         // README.md - Seed-class project starter. It is intentionally plain
         // markdown with no AIDA header, like CLAUDE.md/AGENTS.md.
         // trace:STORY-827 | ai:codex
@@ -2616,6 +2637,14 @@ aida show <SPEC-ID>
             // Subagent harness worktree lease hooks (SubagentStart/SubagentStop).
             // trace:TASK-702 | ai:claude
             for (path, body, description) in [
+                // trace:STORY-2662 | ai:codex
+                (
+                    PathBuf::from(".claude/hooks/aida-precompact-handoff.sh"),
+                    include_str!("../../templates/hooks/aida-precompact-handoff.sh")
+                        .trim_end()
+                        .to_string(),
+                    "Claude PreCompact bounded session handoff".to_string(),
+                ),
                 (
                     PathBuf::from(".claude/hooks/aida-subagent-start.sh"),
                     self.generate_subagent_start_hook(),
