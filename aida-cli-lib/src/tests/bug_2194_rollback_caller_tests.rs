@@ -72,6 +72,15 @@ fn fixture() -> Fixture {
         "version=1\nauthoritative=true\n",
     )
     .unwrap();
+    // trace:BUG-2501 | ai:codex — synthetic authority must satisfy the real trust check.
+    {
+        use std::os::unix::fs::PermissionsExt;
+        std::fs::set_permissions(
+            common.join(aida_core::allocation_authority::CONFIG_FILE),
+            std::fs::Permissions::from_mode(0o600),
+        )
+        .unwrap();
+    }
     let mut nodes = aida_core::NodeRegistry::default();
     nodes.nodes.push(aida_core::node::NodeRegistryEntry {
         id: "n1".into(),

@@ -68,7 +68,7 @@ Preserve local store commits and operational evidence before changing attachment
 
 ## Check freshness and unpublished store history
 
-Use `aida queue list --sync` for a one-shot pull before viewing the queue. When offline it warns and falls back to the local view; it cannot transfer a different machine's role-global queue.
+Use `aida queue list --sync` for a one-shot pull before viewing the queue. A failed pull from a configured remote stops the command; it cannot transfer a different machine's role-global queue.
 
 In the default orphan-branch layout, refresh the store's remote-tracking ref and inspect locally unpublished commits:
 

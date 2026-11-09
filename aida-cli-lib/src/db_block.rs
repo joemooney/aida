@@ -232,7 +232,12 @@ pub(crate) fn fold_run(run: &[&aida_core::AgreedIdBlock]) -> MergedBlockRow {
 // trace:BUG-2017 | ai:claude
 fn pull_unless_refused(store_path: &std::path::Path, remote: &str, branch: &str) -> Result<()> {
     match aida_core::git_ops::pull_rebase(store_path, remote, branch) {
-        Err(e) if aida_core::git_ops::is_sync_refusal(&e) => Err(e),
+        Err(e)
+            if aida_core::git_ops::is_sync_refusal(&e)
+                || aida_core::git_ops::is_dirty_store_refusal(&e) =>
+        {
+            Err(e)
+        }
         _ => Ok(()),
     }
 }

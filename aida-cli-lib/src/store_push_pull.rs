@@ -1897,6 +1897,11 @@ pub(crate) fn report_autostash_restore(
 // trace:BUG-1500 | ai:claude
 // trace:TASK-1604 | ai:codex
 pub(crate) fn store_pull_failure_hint(store_path: &std::path::Path, err_display: &str) -> String {
+    // trace:BUG-2501 | ai:codex — dirty refusals have no rebase to abort.
+    if err_display.contains("uncommitted changes") || err_display.contains("pending store changes")
+    {
+        return format!("{err_display}\n  Review and commit or stash pending store changes, then retry `aida db sync --pull`.");
+    }
     if aida_core::git_ops::rebase_in_progress(store_path) {
         format!(
             "{}\n  The orphan store is mid-rebase. To recover:\n    \
@@ -2474,7 +2479,7 @@ fn pull_store_leg_locked(
     // STORY-641 / MU-204: auto-reconcile conflicting spec objects instead
     // of stopping for manual resolution. Two clones editing the SAME spec
     // (each appending a HistoryEntry + a scalar edit) are structurally
-    // mergeable — history is unioned by id, scalars resolve LWW. The
+    // mergeable — history is unioned by id, scalars come from upstream. The
     // oplog and per-user queue registries (same user on two machines —
     // BUG-725) union the same way; other conflicts (blocks, nodes,
     // counters) still fall back to the manual path.

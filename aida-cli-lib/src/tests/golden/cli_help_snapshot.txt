@@ -911,7 +911,7 @@ Options:
       --sync
           Pull from `origin/aida-store` before listing. Opt-in freshness for collaborators /
           multi-session workflows; fast path stays default. No-op when the local orphan branch is
-          already current; warns and falls back to the local view when offline
+          already current; refuses to continue when a configured remote pull fails
 
       --all
           Include archived AND deferred requirements (the everything-escape-hatch). By default `aida
@@ -24644,7 +24644,7 @@ Options:
       --sync
           Pull from `origin/aida-store` before listing. Opt-in freshness for collaborators /
           multi-session workflows; fast path stays default. No-op when the local orphan branch is
-          already current; warns and falls back to the local view when offline
+          already current; refuses to continue when a configured remote pull fails
 
       --canonical-ids
           Show node-local spec IDs in their canonical form instead of the node's friendly label (for
@@ -32514,7 +32514,7 @@ Working on aida itself
       {
         "name": "sync",
         "takes_value": false,
-        "help": "Pull from `origin/aida-store` before listing. Opt-in freshness for collaborators / multi-session workflows; fast path stays default. No-op when the local orphan branch is already current; warns and falls back to the local view when offline"
+        "help": "Pull from `origin/aida-store` before listing. Opt-in freshness for collaborators / multi-session workflows; fast path stays default. No-op when the local orphan branch is already current; refuses to continue when a configured remote pull fails"
       },
       {
         "name": "tags",
@@ -56699,7 +56699,7 @@ Working on aida itself
       {
         "name": "sync",
         "takes_value": false,
-        "help": "Pull from `origin/aida-store` before listing. Opt-in freshness for collaborators / multi-session workflows; fast path stays default. No-op when the local orphan branch is already current; warns and falls back to the local view when offline"
+        "help": "Pull from `origin/aida-store` before listing. Opt-in freshness for collaborators / multi-session workflows; fast path stays default. No-op when the local orphan branch is already current; refuses to continue when a configured remote pull fails"
       },
       {
         "name": "tag",

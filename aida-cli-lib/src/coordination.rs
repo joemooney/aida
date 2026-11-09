@@ -572,7 +572,12 @@ pub(crate) fn sanitize_scope(scope: &str) -> String {
 fn refresh_store(store_root: &Path, branch: &str) -> Result<std::result::Result<(), String>> {
     match aida_core::git_ops::pull_rebase(store_root, "origin", branch) {
         Ok(()) => Ok(Ok(())),
-        Err(e) if aida_core::git_ops::is_sync_refusal(&e) => Err(e),
+        Err(e)
+            if aida_core::git_ops::is_sync_refusal(&e)
+                || aida_core::git_ops::is_dirty_store_refusal(&e) =>
+        {
+            Err(e)
+        }
         Err(e) => Ok(Err(e.to_string())),
     }
 }
