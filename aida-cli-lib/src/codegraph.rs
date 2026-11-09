@@ -483,18 +483,22 @@ mod tests {
 
     #[test]
     fn lane_host_doctor_flag_parses_and_conflicts_with_heal() {
-        let cli =
-            crate::command_registry::try_parse_from(["aida", "doctor", "--lane-host", "--json"])
-                .unwrap();
+        let cli = crate::command_registry::try_parse_from([
+            "aida",
+            "doctor",
+            "--lane-codegraph",
+            "--json",
+        ])
+        .unwrap();
         assert!(
             cli.command
                 .registered::<crate::doctor_cmd::DoctorArgs>()
-                .lane_host
+                .lane_codegraph
         );
         assert!(crate::command_registry::try_parse_from([
             "aida",
             "doctor",
-            "--lane-host",
+            "--lane-codegraph",
             "--heal"
         ])
         .is_err());

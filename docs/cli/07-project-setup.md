@@ -325,7 +325,7 @@ ID counters and other remotes are untouched by the transport.
 **Don't reach for it when** — you want a *content* lens (what specs exist, their status) — that's `list`/`status`. `doctor` checks *structural integrity*, not project state. And don't pass `--force` casually: it permits riskier destructive fixes (branch deletion).
 
 **Key options (rationale only).**
-- `--lane-host` — standalone, read-only CodeGraph proxy report from the invoking seat: source-index age, snapshot capture age, heartbeat age, refresh errors and a bounded socket status probe. Use `--json` for machine output. It requires a host-deployed proxy; it never provisions one or grants index writes. See [proxy deployment and live-seat acceptance](../../scripts/codegraph/README.md). <!-- trace:STORY-2630 | ai:codex -->
+- `--lane-codegraph` — standalone, read-only CodeGraph proxy report from the invoking seat: source-index age, snapshot capture age, heartbeat age, refresh errors and a bounded socket status probe. Use `--json` for machine output. It requires a host-deployed proxy; it never provisions one or grants index writes. See [proxy deployment and live-seat acceptance](../../scripts/codegraph/README.md). <!-- trace:STORY-2630 | ai:codex -->
 - `--heal` — the gate between *diagnose* and *repair*. Without it `doctor` never writes; with it, only **safe** fixes apply. This read-only-by-default posture is deliberate — you see the drift before anything changes.
 - `--force` — escalates to riskier fixes (e.g. branch deletion). The explicit "yes, I accept destructive repairs" opt-in; don't reach for it on a hunch.
 - `--since <date-or-ref>` — exempts specs completed before a cutoff (a time bound such as `30d`, `2w`, an ISO date at local midnight, or RFC3339, or else a git ref/tag) from the completed-without-commit check, to quiet noise on legacy history predating trace conventions. An invalid value is an error. The way you stop `doctor` nagging about pre-AIDA commits.
@@ -698,6 +698,26 @@ credentials or grants, with a five-second and 128 KiB per-stream limit per call.
 The SHA-256-pinned ChatGPT path retains its recorded-help validation.
 <!-- trace:TASK-3000 | ai:codex -->
 
+#### AGY runtime policy and live conformance
+
+`aida config permissions runtime-policy --vendor agy` prints the validated
+runtime descriptor embedded in the running AIDA binary as JSON, without opening
+the requirement store or starting a vendor. The host conformance fixture uses
+this descriptor for its auth host policy; a missing or malformed descriptor
+refuses setup instead of falling back to the script checkout. This inventory
+is candidate configuration, not measured refresh evidence or launch admission.
+<!-- trace:TASK-3048 | ai:codex -->
+
+The host-only AGY conformance harness uses the hidden
+`aida config permissions conformance-launch --fixture-root <run> --credential <leaf>`
+entry to measure the candidate through the shared AIDA wrapper. It accepts only
+the closed fixture prompt and retains normal child-grant, trusted-host and
+receipt checks. It does not open production AGY admission. The credential leaf
+is mounted read-only without inheriting the original `.gemini` configuration;
+MCP, URL and browser actions carry explicit deny controls. See the
+[conformance procedure](../internal/testing/containment-conformance.md#agy-outer-only-follow-up-2026-11-07-ruling).
+<!-- trace:TASK-3048 | ai:codex -->
+
 #### Model-free containment tracer
 
 `aida config permissions probe --vendor codex --json` runs a closed Linux
@@ -808,6 +828,58 @@ token expiry and host `codex login` guidance; an already shorter grant with an a
 token remains valid. `aida config show/menu` displays this trusted, read-only key.
 `aida doctor` reports remaining token life or “expired” without refreshing or exposing
 tokens, both unfiltered and under `--category permission-posture`.
+
+## Lane host readiness
+
+<!-- trace:STORY-2642 | ai:codex -->
+Run `aida doctor --lane-host` on a machine before starting automated lanes.
+It prints PASS/FAIL rows and a fix hint for each failure; `--json` emits the
+same checks as one array. Required failures exit nonzero. Advisory NOTE rows
+carry `required: false` in JSON and do not fail the command.
+`aida init` prints local checks without a live store-network probe or blocking setup.
+
+`aida doctor --lane-host --fix` applies the existing contained permission
+preset to the **user** agents and Codex config files, honoring `CODEX_HOME`
+for both config checks and writes (default `~/.codex`). It clears old extra
+Codex writable roots. It also configures Cargo to use an already installed
+`bin/sccache` under `CARGO_HOME` (default `~/.cargo`) when no rustc wrapper
+is configured. `RUSTC_WRAPPER` takes precedence; custom wrappers and the legacy
+Cargo `config` file are left for manual review. Repeating the fix
+preserves the resulting content. No system settings or project policy are
+written. Use `aida doctor --fix-sandbox` for the host-specific bubblewrap
+setup instructions and run any sudo commands yourself.
+
+Real `queue work --no-human` launches check containment before queue,
+lease or worktree changes, including drain routes, and honor an explicit
+`--sandbox` request. Dry-run previews remain read-only previews; `--no-launch` and `--list-sessions` also skip the gate.
+Contained parents skip host-file and nested bubblewrap probes; ordinary child
+admission still enforces inherited containment and vendor policy. Rework vendor
+rerouting is checked again before vendor spawn; a refusal at that later point
+may retain an allocated lease for recovery. The early check covers the selected
+vendor, not every future orchestrator phase; those phases retain their ordinary
+launch admission checks. The existing vendor admission checks still apply. A trusted
+native Codex opt-in is reported as “native sandbox, not AIDA-contained”.
+
+The report checks every enabled lane vendor (or the selected headless vendor
+when no enabled list is configured). Auth rows establish
+credential-source presence only, including Claude’s `CLAUDE_CONFIG_DIR` and
+`CLAUDE_CODE_OAUTH_TOKEN` overrides. Vendors without a supported credential probe
+(including AGY) emit an explicit advisory unverifiable note; log in manually. Binary comparison uses the locally known
+origin default-branch SHA only for development binaries built from this project,
+including the promoted live binary (`~/.local/share/aida/live/aida` by default,
+or the directory selected by `AIDA_DEV_LIVE_DIR`).
+Release installs and other projects receive an advisory unverified binary row.
+Store connectivity uses a bounded read-only probe against origin's `aida-store`
+branch, preserving `GIT_SSH_COMMAND` or `core.sshCommand` with batch-mode options.
+The cache check requires an executable `RUSTC_WRAPPER` or user Cargo
+`build.rustc-wrapper`; legacy `CARGO_HOME/config` takes precedence over
+`config.toml`. Lane-job cache reachability is a separate advisory note until an in-sandbox probe is available.
+A passing host report does not certify cache transport, token validity or every
+future orchestrator phase.
+
+Manual setup remains: configure SSH access and any required host/DNS entries,
+clone the project, put AIDA on the login-shell PATH, and log in to the selected
+vendor CLI. Fetch dependencies on the host before starting a lane.
 
 ### `aida doctor --lane-capacity` — host-local implementer capacity
 

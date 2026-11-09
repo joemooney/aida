@@ -3487,6 +3487,9 @@ pub(crate) fn refuse_retired_steal(steal: bool) -> Result<()> {
 #[allow(clippy::too_many_arguments)]
 pub(crate) fn handle_queue_work(
     storage: &Storage,
+    // Invocation-local host check from the dispatcher; direct callers pass None.
+    // A changed rework vendor still needs its own check. trace:STORY-2642 | ai:codex
+    mut preflight_vendor: Option<session::HeadlessVendor>,
     user_id: &str,
     arg: Option<&str>,
     permission_mode: Option<&str>,
@@ -3724,7 +3727,9 @@ pub(crate) fn handle_queue_work(
     // BUG-2386: a `--resume`'s recorded vendor and resumable id, resolved
     // once here (before any lease is minted) and reused by the launch arms.
     // trace:BUG-2386 | ai:claude
-    let mut resume_target: Option<(session::HeadlessVendor, String)> = None;
+    // Infer the recorded vendor type without adding vendor-ratchet debt.
+    // trace:STORY-2642 | ai:codex
+    let mut resume_target = None;
     let resolved_launch_vendor = if !list_sessions {
         let root = project_root_for_config
             .clone()
@@ -3757,6 +3762,16 @@ pub(crate) fn handle_queue_work(
         .map(load_agents_contained)
         .transpose()?
         .unwrap_or(false);
+    // trace:STORY-2642 | ai:codex — a resume uses its recorded vendor.
+    if crate::lane_host::needs_preflight(no_human, dry_run, no_launch, list_sessions)
+        && preflight_vendor != Some(launch_vendor)
+    {
+        let root = project_root_for_config
+            .as_deref()
+            .context("cannot resolve lane host root")?;
+        crate::lane_host::preflight(root, launch_vendor.as_str(), sandbox)?;
+        preflight_vendor = Some(launch_vendor);
+    }
     // trace:BUG-2146 | ai:claude
     let contained_env = session::aida_contained_env()?;
     // BUG-2166: a contained parent's env always wins (monotonic containment,
@@ -5011,6 +5026,14 @@ pub(crate) fn handle_queue_work(
                     },
                 )?;
             }
+        }
+        // Rework may select another vendor after the early host gate. Recheck
+        // its actual policy before spawning; ordinary cleanup retains the lease
+        // recovery path if this late check refuses. trace:STORY-2642 | ai:codex
+        if crate::lane_host::needs_preflight(no_human, dry_run, no_launch, list_sessions)
+            && preflight_vendor != Some(launch_vendor)
+        {
+            crate::lane_host::preflight(&project_root, launch_vendor.as_str(), sandbox)?;
         }
         let headless_vendor = no_human.then_some(launch_vendor);
 
@@ -7687,6 +7710,22 @@ pub(super) fn handle_queue_command(
             // operator-supplied value there. trace:TASK-578 | ai:claude
             let auto_complete = &drain_resolution.auto_complete;
             let no_human = &drain_resolution.no_human;
+            // trace:STORY-2642 | ai:codex
+            // Check before queue/lease/worktree mutations, including drain routes.
+            let preflight_vendor = if crate::lane_host::needs_preflight(
+                no_human.is_some(),
+                *dry_run,
+                *no_launch,
+                *list_sessions,
+            ) && resume.is_none()
+            {
+                let root = main_worktree_root_from(&find_project_root()?);
+                let lane_vendor = session::resolve_enabled_headless_vendor(&root)?;
+                crate::lane_host::preflight(&root, lane_vendor.as_str(), *sandbox)?;
+                Some(lane_vendor)
+            } else {
+                None
+            };
             // TASK-966: assemble the hard budget caps once, up front, so a bad
             // `--max-runtime` value bails before any drain work starts. The caps
             // are threaded into the multi-spec drain loops (nextN / batch /
@@ -8623,6 +8662,7 @@ pub(super) fn handle_queue_command(
             };
             handle_queue_work(
                 storage,
+                preflight_vendor,
                 &user_id,
                 resolved_id.as_deref().or(effective_id),
                 permission_mode.as_deref(),
