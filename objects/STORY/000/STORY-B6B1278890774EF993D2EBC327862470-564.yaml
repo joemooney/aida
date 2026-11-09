@@ -23,7 +23,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-07T19:59:26.079479Z
-modified_at: 2026-11-09T03:58:36.635010909Z
+modified_at: 2026-11-09T04:31:57.485668171Z
 req_type: Story
 comments:
 - id: 01a1b798-f0d4-73b1-93d5-f84581f2d190
@@ -584,6 +584,12 @@ comments:
   content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: AC1 (second lane job shows sccache hits on primary and dell1) still has no evidence or advisor amendment at 28e4b1fe1960; AC0, AC2, AC3 and AC4 are met in source and tests, and both findings from the previous round are fixed. Code CI is green; merge-hold-gate fails by design. No local cargo run.. It was punted on: blocked-dependency: Latest review finding 1 is agreed: AC1 still requires two consecutive lane Cargo jobs using a launcher built from this branch on both primary and dell1, with final statistics showing second-job Rust cache hits greater than zero, or an advisor amendment. This seat cannot produce both-host measurements. Findings 2 and 3 are fixed locally (SCCACHE_CONF=/dev/null and removal of unused vendor cache-policy widening); required validation is running. Preserve the publication veto and existing merge hold; route AC1 to host/operator or advisor rather than another implementer round.. No triage reason was given.'
   created_at: 2026-11-09T03:55:36.540892018Z
   modified_at: 2026-11-09T03:55:36.540892018Z
+  session_id: 7aacb1ed-ebaa-4da4-a195-500864e99e7d
+- id: 01a1be93-c42d-7e72-aab4-bb1542cd7660
+  author: joe
+  content: 'Advisor ruling 2026-11-08 on PR-3657. AC1 is NOT waived and is NOT amended: a second lane job showing sccache Rust hits > 0 on both the primary and dell1 is still required before STORY-2641 completes. PR-3657 ships as a Refs slice (its title already uses Refs, so merging completes nothing). Rationale: the evidence needs a launcher built from this code on each host, and swapping the live launcher under running lanes to collect it is riskier than collecting it from ordinary lanes once this is on main. Reviewer: treat AC1 as deferred by this ruling, as with TASK-3429 AC5, and judge the rest. Advisor owes after merge: record ''lane sccache: final job statistics'' from two consecutive lane jobs per host on this spec, confirming dell1''s wrapper honours AIDA_SCCACHE_PIDS. The cosmetic launch_policy.rs churn may be reverted when next touched.'
+  created_at: 2026-11-09T04:31:57.485668171Z
+  modified_at: 2026-11-09T04:31:57.485668171Z
   session_id: 7aacb1ed-ebaa-4da4-a195-500864e99e7d
 history:
 - id: 01a1b929-7921-7980-8202-36c2cc4f3845
