@@ -29,7 +29,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-04T02:34:20.173245666Z
-modified_at: 2026-11-09T08:44:29.208215124Z
+modified_at: 2026-11-09T08:44:35.386715352Z
 req_type: Story
 relationships:
 - rel_type:
@@ -792,6 +792,26 @@ comments:
   content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: WAIT STATE plus non-blocking defects: S5 source meets the trigger-half acceptance and a green run exists one merge earlier (42563547243 at b6c73a5c8fae), but CI run 42570932984 at head a7539190e0d9 is unfinished, so the green-at-head gate is unmet.. No triage reason was given.'
   created_at: 2026-11-09T08:44:29.208213235Z
   modified_at: 2026-11-09T08:44:29.208213235Z
+  session_id: 01a1beff-fc3b-78e2-93e2-9b0c283b0339
+  harness_version: 2.1.319 (Claude Code)
+- id: 01a1bf7b-0e43-7583-a044-04276a846081
+  author: joe
+  content: |-
+    REVIEW FINDINGS TO ADDRESS (PR #3639):
+    Verdict: CHANGES REQUESTED
+    Reviewed commit: a7539190e0d9
+    Recorded: 2026-11-09T06:15:42.568701240+00:00
+    Review comment: https://github.com/joemooney/aida/pull/3639#issuecomment-6733614433
+    Findings:
+    1. BLOCKING (gate wait, not a code defect): CI run 42570932984 has no result at reviewed head a7539190e0d9 (rest and lib-1 in progress; cli-0, cli-1, lib-0, contracts, gates queued). Run 42563547243 passed at the previous head b6c73a5c8fae, but this head merges 23 files from main (2598 insertions), overlapping agent_launch.rs, cli_help_snapshot.txt, docs/cli/06-roles-sessions.md and scripts/store-writers.toml, so that result does not carry over. No implementer change is needed for this item: re-run the review when the run completes, and act only if a job fails. merge-hold-gate is red by design for the supervised spec.
+    2. minor (untested-path, carried): a manual condition inherits the age of an older deferral. defer_single keeps the original deferred_at on a trigger update (aida-cli-lib/src/defer_cmd.rs:52-56) and defer_resurface::action measures the 14-day age from deferred_at (defer_resurface.rs:49). findings recur --until manual:<who> or session handoff --until manual:<who> on a row deferred more than 14 days ago reaches role:human on the next hourly sweep, not 14 days after the manual condition was set. story2402_s5_recur_conditions_resurface_and_manual_routes backdates deferred_at by hand, so it does not cover this. Restart the clock when the condition changes to manual, or document the age as the deferral's age, and add a story2402_s5_* case.
+    3. minor (fail-open guard gap): session handoff --until skips the AIDA_TEAM_REQUIRE_USER refusal that aida defer gets. SESSION is an Early handler, and the team-identity guard runs after Early dispatch returns (git_backend_cmd.rs, STORY-640 block; status_awaiting.rs:1899), so the spec write at session_misc.rs defer_single runs under a shared default identity even when the operator requires a distinct user. The policy row's team_identity_write bit is inert on this path.
+    4. minor (untested-path): canonical_condition (condition_cmd.rs) only parses, so findings recur --until spec:TYPO-1=completed or session handoff --until spec:TYPO-1=completed is admitted; Condition::evaluate then returns no spec has the ID (aida-core/src/condition.rs:521) and the hourly defer-resurface job exits failed every run until the row is repaired. Valid rows still progress. aida defer has the same gap, but this PR adds two more writers. Refuse an unknown spec ID at admission, or treat it as Unknown in the sweep.
+    5. minor (contract-drift): --snapshot does not conflict with --until (agent_launch_args.rs:625-667). session handoff --snapshot --write F --spec S --until C parks S but writes the Revisit line only to the private worktree recovery note, so the seat that should act on the trigger never reads it. Add snapshot to the until conflicts.
+    6. cosmetic: per_write_auto_push for SESSION (agent_launch.rs:8104) is inert because Early handlers return before the post-dispatch push; story2402_s5_conditional_handoff_auto_pushes checks only that bit, although HANDOFF_PUSH_CALLS covers the real call. Stale migration wording remains at docs/cli/02-specs.md:331 (Existing free-text triggers remain readable pending migration) and defer_resurface.rs:29,37 now that S3 is applied; recovery errors at session_misc.rs (spec.unwrap_or) and findings_gate.rs recurrence_error print the raw argument, not the resolved ID.
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
+  created_at: 2026-11-09T08:44:35.267570857Z
+  modified_at: 2026-11-09T08:44:35.267570857Z
   session_id: 01a1beff-fc3b-78e2-93e2-9b0c283b0339
   harness_version: 2.1.319 (Claude Code)
 history:
