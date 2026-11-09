@@ -8,7 +8,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-07T23:40:15.306412624Z
-modified_at: 2026-11-09T13:42:10.055921597Z
+modified_at: 2026-11-09T13:43:07.435061798Z
 req_type: Task
 relationships:
 - rel_type: BlockedBy
@@ -578,6 +578,13 @@ comments:
     (no test lines extracted; open run 42620288414)
   created_at: 2026-11-09T13:17:36.327439731Z
   modified_at: 2026-11-09T13:17:36.327439731Z
+- id: 01a1c08c-5fab-7612-be6a-26ea15a003f6
+  author: dirtlab
+  content: 'Native rework handoff: inspected CI run 42620288414 at 3e0a1ccf8ee4. Only CI (gates) failed, at Check formatting; the six other test lanes passed. Fixed the exact rustfmt diff in aida-cli-lib/src/queue_cmd/mod.rs (re-export ordering and wrapping only). Changed file remains uncommitted. Validation: rustfmt --edition 2021 --check --config skip_children=true aida-cli-lib/src/queue_cmd/mod.rs passed; git diff --check passed. untested=true this round: formatting-only change, no new Cargo test executed. Prior launcher job j20261109T070743211-2-0 still returned exit 75 when polled; no success claimed. Advisor ruling preserved: 58 unchanged tools, Refs-only delivery; AC5 dell1 clean-build cargo --timings evidence remains advisor-owned after merge. Host must disclose partial scope in PR-3687 body and obtain final-head green CI, independent approval and applicable hold clearance. No commit, push, PR mutation, queue done, pr ship or review record. No active wait remains.'
+  created_at: 2026-11-09T13:43:07.435061798Z
+  modified_at: 2026-11-09T13:43:07.435061798Z
+  session_id: 01a1c08b79b4
+  harness_version: codex-cli 0.167.0
 history:
 - id: 01a1b862-7fc0-7e63-899e-5179ac0131ed
   author: joe
