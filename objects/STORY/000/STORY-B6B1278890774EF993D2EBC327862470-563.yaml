@@ -25,7 +25,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-07T19:45:35.836129088Z
-modified_at: 2026-11-09T02:08:31.882914912Z
+modified_at: 2026-11-09T02:08:37.973344669Z
 req_type: Story
 tags:
 - docs:impacted
@@ -578,6 +578,22 @@ comments:
   content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: Source sweep of all 5 ACs found no blocking defect and the queue_cmd port matches the approved edits, but CI (cli-0) Run tests is red at this head while passing on main; lib-0 and gates were still running at record time.. It was punted on: blocked-dependency: Latest review findings 1 and 2 are fixed in uncommitted edits: regenerated help golden and non-retryable queued-fast-gate outcome with batch/nextN continuation; 45 fast-gate and 261 orchestrator tests passed. Finding 3 remains blocked: installed host runner still refuses make check-ci-fast as Cargo-only. Host must update runner and record a seeded committed-head sandbox gate marker and elapsed time, investigating the prior containment-conformance timeout. No unsandboxed fallback; this manual validation gate remains a publication veto.. No triage reason was given.'
   created_at: 2026-11-09T02:08:31.882908380Z
   modified_at: 2026-11-09T02:08:31.882908380Z
+  session_id: 20abb7c3-8f9b-4a5e-b326-404921f3b450
+- id: 01a1be10-8be5-7ca2-b51a-cc61480427a8
+  author: joe
+  content: |-
+    REVIEW FINDINGS TO ADDRESS (STORY-2640):
+    Verdict: CHANGES REQUESTED
+    Reviewed commit: f3898c95c865
+    Recorded: 2026-11-09T02:00:58.736047605+00:00
+    Findings:
+    1. [major, CI-blocking] CI (cli-0) failed in its Run tests step at f3898c95c865 (run 42547226360, job 128934827251; annotation: exit code 1). cli-0 passed on main at a7a14984 and on sibling branches, so treat it as caused by this head until shown otherwise. The failing test name is NOT known: the reviewer sandbox denied the job-log blob host, so read the job log first. Fix the test if the PR or the merge of main caused it. If the log shows an unrelated flake, rerun the job and say so on the spec. lib-0 and gates had not finished when this was recorded; check them too.
+    2. [minor] No real make check-ci-fast has passed through the host gate. fast_gate_real_main_target_passes_in_sandbox (aida-cli-lib/src/lane_job.rs) is #[ignore]d, and the last reported real run hit the fixed 300s limit during containment conformance (spec comment 2026-11-08 20:47). Source ratchets now run first, but gates after the limit would report skipped(timeout) on every lane. Once the new binary is installed, run it from the host on a seeded committed head, record marker and elapsed time, and adjust the budget or gate order if it exceeds 300s.
+    3. [minor] The receipt and PR lookup use the lease's recorded branch (session.rs run_vendor_headless_to_exit via implementer_job_lane; lane_fast_gate::pushed), while the drain reconciles the real branch from worktree HEAD (BUG-223, phase_driver_trait.rs reconcile_orchestrated_branch). A self-pushing seat that moved to a fresh branch has no PR on the recorded name, so no gate runs, the result reads fast_gate=skipped(lane-ended), and review admission is unheld on the real branch.
+    4. [cosmetic] Receipts are never collected: lane_fast_gate::path and receipt_lock leave one JSON and one .lock file under .aida/fast-gates per lane branch forever, and nothing removes them after a branch merges. Small, but unbounded; prune settled receipts when the lease or branch ends.
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
+  created_at: 2026-11-09T02:08:37.861434623Z
+  modified_at: 2026-11-09T02:08:37.861434623Z
   session_id: 20abb7c3-8f9b-4a5e-b326-404921f3b450
 history:
 - id: 01a1b78d-2628-7313-92de-8804ac5f8f71
