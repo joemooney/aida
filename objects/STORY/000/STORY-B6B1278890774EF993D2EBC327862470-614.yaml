@@ -1,0 +1,22 @@
+id: 01a1be07-877e-7093-8aab-d8b57ec2d8ba
+spec_id: STORY-b6b1278890774ef993d2ebc327862470-614
+agreed_id: STORY-2691
+title: 'Supervised advisor loops: run review watch, train and rework as services that adopt a renewed grant and alert when dispatch fails'
+description: 'Problem: on 2026-11-08 every review dispatch failed with no-valid-parent-seat-grant after a grant renewal, and nothing raised it until a manual inventory; recovery meant hand-killing parent processes. STORY-2571 covers review-watch grant rotation only. Requirement: these loops run under a supervisor, adopt a renewed grant without manual restart, leave in-progress trains alone, and report repeated dispatch failure through an operator-visible alert. Acceptance: renewing the grant restores dispatch with no manual step; N consecutive dispatch failures produce one alert.'
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-11-09T01:58:46.910276326Z
+modified_at: 2026-11-09T01:58:46.910276326Z
+req_type: Story
+tags:
+- area:orchestration
+filed_at:
+  code_sha: a7a14984cec5533987dfeccb70d1f91aaebbf22a
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 8a4a909a967
+  vendor: claude
+  session: 20abb7c3-8f9b-4a5e-b326-404921f3b450
