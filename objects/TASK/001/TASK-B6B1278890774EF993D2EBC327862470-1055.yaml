@@ -75,7 +75,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-09T14:27:09.447287877Z
-modified_at: 2026-11-09T23:23:22.791601663Z
+modified_at: 2026-11-09T23:30:27.954239204Z
 req_type: Task
 tags:
 - kind:finding-sweep
@@ -170,6 +170,13 @@ comments:
   modified_at: 2026-11-09T23:20:03.276035174Z
   session_id: 01a1beff-fc3b-78e2-93e2-9b0c283b0339
   harness_version: 2.1.319 (Claude Code)
+- id: 01a1c2a6-19f2-71f1-a686-c7203576da11
+  author: dirtlab
+  content: 'Applied binding 2026-11-09 advisor ruling only: preserve a distinct Waiting fact through local wave review probing and WavePrFacts, report the WAITING park reason, and retain fail-closed merge blocking for invalid/conflicting evidence. Lane runner validation: bug_1581_merge_block_tests 4 passed; task1169_integration_wait_tests 19 passed; git diff --check clean. No test-time-budget changes. Host publication retains Help-Golden: unchanged.'
+  created_at: 2026-11-09T23:30:27.954239204Z
+  modified_at: 2026-11-09T23:30:27.954239204Z
+  session_id: 01a1c29f9741
+  harness_version: codex-cli 0.167.0
 history:
 - id: 01a1c0b6-74fb-78d2-acb7-61129f10e8e8
   author: joe

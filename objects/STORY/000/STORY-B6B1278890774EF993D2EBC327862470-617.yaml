@@ -42,7 +42,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-09T15:57:18.371798469Z
-modified_at: 2026-11-09T23:22:40.283541078Z
+modified_at: 2026-11-09T23:36:35.562830125Z
 req_type: Story
 tags:
 - architecture
@@ -119,6 +119,22 @@ comments:
   modified_at: 2026-11-09T23:19:49.871409561Z
   session_id: 01a1beff-fc3b-78e2-93e2-9b0c283b0339
   harness_version: 2.1.319 (Claude Code)
+- id: 01a1c2ab-b5ea-7f90-a421-6909a207f2e6
+  author: dirtlab
+  content: |
+    Implemented advisor ruling for PR #3744: findings 1, 2 and 4, and finding 5 excluding withdrawn marker tests. Existing protected-base freshness fix retained. No-carry marker remains out of scope in STORY-2696.
+
+    Moved-head refusal-hold release and both watcher dispatch checks now use shared approval-authority and corpus reconciliation before applying durable carry-over evidence. Standing non-approvals, malformed/missing-SHA artifacts and unavailable proof persistence refuse coverage. Live adapters re-read head/base; release retains H as reviewed SHA and the existing merge pin binds H2. Existing absorbed obligations and rider ownership checks remain in place. Verdict display adds human coverage and a separate machine-readable coverage object without restamping or changing the existing actionability field.
+
+    Changed files: aida-cli-lib/src/gate/merge_hold_core.rs; aida-cli-lib/src/pr_cmd.rs; aida-cli-lib/src/review_watch.rs; aida-cli-lib/src/lib_part5.rs; aida-cli-lib/src/gate/tests/task_1960_carryover_tests.rs; aida-cli-lib/src/gate/tests/merge_hold_core_tests.rs; aida-cli-lib/src/tests/task_1945_review_watch_ready_tests.rs; docs/cli/06-roles-sessions.md.
+
+    Final executed lane tests: carry-over 34 passed (j20261109T233023729-2-0); watcher 157 passed (j20261109T233406896-2-0); merge-hold core 51 passed (j20261109T233001537-2-0); rider checks 3 passed (j20261109T233003663-2-0); absorbed-hold regression 1 passed (j20261109T233419990-2-0). The first watcher run failed a new test assertion that expected an empty runtime row; corrected it to accept the watcher's pruning of empty rows, then the full watcher suite passed. An initial story_1687 filter matched zero tests and was replaced with the executed specific regression. rustfmt --check and git diff --check pass. All four acceptance criteria are traced by aida criteria.
+
+    No implementation blockers. Supplied reviewed Codegraph client is absent and doctor reports missing; navigation used rg. Edits remain uncommitted for the host launcher. No commit, push, PR creation, queue done, pr ship or review record performed. Completing publication subject: [AI:codex] fix(review): carry approvals across clean base merges (STORY-2694).
+  created_at: 2026-11-09T23:36:35.562830125Z
+  modified_at: 2026-11-09T23:36:35.562830125Z
+  session_id: 01a1c29e17c0
+  harness_version: codex-cli 0.167.0
 history:
 - id: 01a1c233-af48-7011-9e22-fa81c9459065
   author: joe
