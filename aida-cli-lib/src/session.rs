@@ -11634,9 +11634,10 @@ mod tests {
             );
         }
         // The one production caller passes the lane's seat, not None.
-        let queue =
-            std::fs::read_to_string(Path::new(env!("CARGO_MANIFEST_DIR")).join("src/queue_cmd.rs"))
-                .unwrap();
+        let queue = std::fs::read_to_string(
+            Path::new(env!("CARGO_MANIFEST_DIR")).join("src/queue_cmd/work.rs"),
+        )
+        .unwrap();
         let call = queue
             .find("session::exec_vendor_headless(")
             .expect("queue lane launch");

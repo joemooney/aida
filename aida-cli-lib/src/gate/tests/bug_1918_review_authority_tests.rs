@@ -1271,7 +1271,7 @@ fn launched_worker_is_bound_by_the_real_launch_binding() {
             < launch.find("session::new_session_for_vendor(").unwrap(),
         "session start --launch exports the lease id before exec"
     );
-    let queue = include_str!("../../queue_cmd.rs");
+    let queue = include_str!("../../queue_cmd/work.rs");
     assert!(
         queue.find("export_worker_session_env(&lease.id)").unwrap()
             < queue.find("TASK-112: exec").unwrap(),

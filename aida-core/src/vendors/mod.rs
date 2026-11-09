@@ -256,3 +256,7 @@ mod headless;
 pub mod headless_posture;
 
 pub mod hooks;
+
+// Closed diagnostic selector; identity alone never grants admission.
+// trace:TASK-3048 | ai:codex
+pub const AGY_EXECUTABLE: &str = profile(LaunchVendor::Agy).executable;
