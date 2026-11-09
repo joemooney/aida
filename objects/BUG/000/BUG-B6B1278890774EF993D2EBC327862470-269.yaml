@@ -3,12 +3,12 @@ spec_id: BUG-b6b1278890774ef993d2ebc327862470-269
 agreed_id: BUG-2504
 title: Queue-work rework lanes exit with no changes or nothing to publish on a conflicting PR instead of resolving the conflict
 description: 'Seen 2026-11-08 on #3641 and #3643: lanes briefed to merge main and resolve exited with no pending changes or pushed a head that still conflicted, and the advisor had to hand merge. Reported each time only as ''Queue-work lane exited without changes''. Lanes also reported check-ci-fast cannot run in the native sandbox (sccache cannot write dep-info on a read-only filesystem), which may share a cause.'
-status: InProgress
+status: NeedsAttention
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-08T21:20:08.484660577Z
-modified_at: 2026-11-09T08:47:58.624165490Z
+modified_at: 2026-11-09T08:50:44.471538721Z
 req_type: Bug
 comments:
 - id: 01a1beb1-ae7c-7c52-89a5-00a6bc02eeb0
@@ -105,6 +105,15 @@ history:
   session_id: 01a1bf7dcc97
   harness_version: codex-cli 0.167.0
   changes: []
+- id: 01a1bf80-b077-7883-a1fe-e5ed416ebcac
+  author: aida-orchestrator
+  timestamp: 2026-11-09T08:50:44.471560668Z
+  session_id: 01a1bf7f4ed0
+  harness_version: 2.1.319 (Claude Code)
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: NeedsAttention
 filed_at:
   code_sha: b57c1fab753d30430c7a544b781bd8c7d91da0d2
   branch: main
@@ -114,3 +123,11 @@ filed_at:
   vendor: claude
   session: 01a1bc93-77a0-7740-8b03-df4e3e8d1df5
   harness_version: 2.1.319 (Claude Code)
+failure_reason:
+  phase: reviewer
+  phase_index: 3
+  kind: verdict:request-changes
+  detail: 'Unaddressed rework: the head only merges main onto 6034cc970990 (seat_clone.rs unchanged, no punt filed), so all three round-1 defects still reproduce from source. Fetched-head validation itself is correct and unit-tested.'
+  recovery_hint: address the review findings, move BUG-2504 back to In Progress, and clear the PR hold only after approval
+  shelved_by: reviewer
+  shelved_at: 2026-11-09T08:50:44.471538721Z
