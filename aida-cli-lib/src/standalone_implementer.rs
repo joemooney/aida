@@ -986,6 +986,18 @@ pub(crate) fn record_child_authority(
     crate::gate::review_authority::record_launch_authority(project_root, lease_id, launch);
 }
 
+// Revoke on setup, vendor and gate errors as well as successful completion.
+// trace:STORY-2640 trace:BUG-2139 | ai:codex
+pub(crate) struct ChildGrantGuard<'a>(
+    pub(crate) &'a crate::gate::seat_authority::HeadlessChildGrant,
+);
+
+impl Drop for ChildGrantGuard<'_> {
+    fn drop(&mut self) {
+        crate::session::revoke_standalone_implementer_grant(self.0);
+    }
+}
+
 /// Pin every handshake parent before consuming any prior-attempt marker.
 // trace:BUG-2488 | ai:codex
 fn prepare_signal_paths(worktree: &Path, spec: &str) -> Result<[(PathBuf, std::fs::File); 2]> {
@@ -1150,6 +1162,7 @@ pub(crate) fn classify_seat_no_change(
 /// Run the child, wait, classify, print the result line, and return the
 /// outcome's exit code (`Ok` only for an open PR).
 pub(crate) fn run(launch: Launch<'_>) -> Result<()> {
+    let child_grant_guard = ChildGrantGuard(launch.child_grant);
     let main_root = crate::main_worktree_root_from(launch.project_root);
     claim_spec(launch.project_root, launch.spec);
     let worktree = lease_worktree(launch.project_root, launch.lease_id);
@@ -1169,6 +1182,7 @@ pub(crate) fn run(launch: Launch<'_>) -> Result<()> {
     // the lane reports untested=true. An unset os_wrap defaults on for this
     // lane's runner alone when bubblewrap works (BUG-2434).
     // trace:BUG-2434 | ai:claude
+    let mut _fast_gate = crate::lane_fast_gate::reserve(&main_root, launch.branch)?;
     let lane_jobs = crate::lane_job::offer(&main_root, &worktree, launch.lease_id);
     let prompt = format!(
         "{}{}{}",
@@ -1274,66 +1288,121 @@ pub(crate) fn run(launch: Launch<'_>) -> Result<()> {
     let runner = lane_jobs
         .clone()
         .map(|lane| crate::lane_job::Runner::start_published(lane, &main_root));
-    let finished = lane.run(
-        prompt,
-        |prompt, log, resume, hold| {
-            crate::session::run_standalone_implementer_child(
-                // Bind the stamp to this launch's lease root, even uncontained.
-                // trace:STORY-2537 trace:BUG-2458 | ai:codex
-                launch.project_root,
-                launch.host_main,
-                launch.vendor,
-                prompt,
-                launch.session_id,
-                log,
-                &tee_opts,
-                launch.contained,
-                launch.lease_id,
-                launch.child_grant,
-                &crate::session::HeadlessChildHooks {
-                    customize: Some(&customize),
-                    on_spawn: Some(&on_spawn),
-                    resume,
-                    hold_reap: Some(hold),
-                    before_spawn: Some(&|| {
-                        if !resume {
-                            provision_attempt_signals(&main_root, &worktree, launch.spec)?;
-                        }
-                        Ok(())
-                    }),
-                },
-            )
-        },
-        || {
-            let (Ok(punt), Ok(hold)) = (
-                crate::punt::read_seat_signal(&worktree, launch.spec),
-                crate::punt::read_seat_hold_signal(&worktree, launch.spec),
-            ) else {
-                // Stop resuming on unsafe evidence. The mandatory reconciliation
-                // below returns its error before any publication or lease cleanup.
-                return (Outcome::NoPr, true);
-            };
-            let outcome = classify(punt, hold, || lookup_pr(launch.project_root, launch.branch));
-            let done = match &outcome {
-                Outcome::NoPr => false,
-                Outcome::NoChange => true,
-                Outcome::PrOpened { .. } => {
-                    !launch_seat.is_stale(&outcome, &bg::SeatState::read(&worktree, launch.branch))
-                }
-                Outcome::Punted { .. } | Outcome::Held { .. } => true,
-            };
-            (outcome, done)
-        },
-    );
+    let run_child = |prompt: &str, log: &Path, resume: bool, hold: &dyn Fn() -> bool| {
+        crate::session::run_standalone_implementer_child(
+            // Bind the stamp to this launch's lease root, even uncontained.
+            // trace:STORY-2537 trace:BUG-2458 | ai:codex
+            launch.project_root,
+            launch.host_main,
+            launch.vendor,
+            prompt,
+            launch.session_id,
+            log,
+            &tee_opts,
+            launch.contained,
+            launch.lease_id,
+            launch.child_grant,
+            &crate::session::HeadlessChildHooks {
+                customize: Some(&customize),
+                on_spawn: Some(&on_spawn),
+                resume,
+                hold_reap: Some(hold),
+                before_spawn: Some(&|| {
+                    if !resume {
+                        provision_attempt_signals(&main_root, &worktree, launch.spec)?;
+                    }
+                    Ok(())
+                }),
+            },
+        )
+    };
+    let finished = lane.run(prompt, &run_child, || {
+        let (Ok(punt), Ok(hold)) = (
+            crate::punt::read_seat_signal(&worktree, launch.spec),
+            crate::punt::read_seat_hold_signal(&worktree, launch.spec),
+        ) else {
+            // Stop resuming on unsafe evidence. The mandatory reconciliation
+            // below returns its error before any publication or lease cleanup.
+            return (Outcome::NoPr, true);
+        };
+        let outcome = classify(punt, hold, || lookup_pr(launch.project_root, launch.branch));
+        let done = match &outcome {
+            Outcome::NoPr => false,
+            Outcome::NoChange => true,
+            Outcome::PrOpened { .. } => {
+                !launch_seat.is_stale(&outcome, &bg::SeatState::read(&worktree, launch.branch))
+            }
+            Outcome::Punted { .. } | Outcome::Held { .. } => true,
+        };
+        (outcome, done)
+    });
+    // trace:STORY-2640 | ai:codex — keep the grant and runner through repair.
+    let mut finished = finished?;
+    reconcile_signals(&main_root, &worktree, launch.spec)?;
+    let host_published = launch.vendor == crate::session::HeadlessVendor::Codex && launch.contained;
+    let mut publish_native = host_published;
+    if host_published
+        && !matches!(
+            finished.verdict,
+            Outcome::Punted { .. } | Outcome::Held { .. }
+        )
+    {
+        publish_native = crate::lane_fast_gate::native(
+            &main_root,
+            &worktree,
+            launch.spec,
+            launch.lease_id,
+            launch.branch,
+            finished.status.success(),
+            |prompt| {
+                let log = log_path.with_extension("fast-fix.jsonl");
+                let result = run_child(prompt, &log, true, &|| false)?;
+                reconcile_signals(&main_root, &worktree, launch.spec)?;
+                finished.status = result;
+                Ok(result.success())
+            },
+        )?;
+        finished.verdict = classify(
+            crate::punt::read_seat_signal(&worktree, launch.spec)?,
+            crate::punt::read_seat_hold_signal(&worktree, launch.spec)?,
+            || lookup_pr(launch.project_root, launch.branch),
+        );
+    }
+    // trace:STORY-2640 | ai:codex
+    let actual_branch = if !host_published
+        && !matches!(
+            finished.verdict,
+            Outcome::Punted { .. } | Outcome::Held { .. }
+        ) {
+        _fast_gate.exit_branch(&worktree)
+    } else {
+        launch.branch.to_owned()
+    };
+    let launch = Launch {
+        branch: &actual_branch,
+        ..launch
+    };
+    if !host_published
+        && !matches!(
+            finished.verdict,
+            Outcome::Punted { .. } | Outcome::Held { .. }
+        )
+    {
+        finished.verdict = classify(
+            crate::punt::read_seat_signal(&worktree, launch.spec)?,
+            crate::punt::read_seat_hold_signal(&worktree, launch.spec)?,
+            || lookup_pr(launch.project_root, launch.branch),
+        );
+    }
     // trace:BUG-2383 | ai:claude
     let untested = runner.map(|r| r.stop().untested()).unwrap_or(true);
-    crate::session::revoke_standalone_implementer_grant(launch.child_grant);
+    drop(child_grant_guard);
     let bg::LoopEnd {
         status,
         verdict: outcome,
         resumes,
         log: run_log,
-    } = finished?;
+    } = finished;
     reconcile_signals(&main_root, &worktree, launch.spec)?;
     store_commit.commit();
 
@@ -1341,30 +1410,48 @@ pub(crate) fn run(launch: Launch<'_>) -> Result<()> {
     // or manual hold is an explicit instruction to leave publication alone.
     // trace:STORY-2475 | ai:codex
     let mut outcome = outcome;
-    if launch.vendor == crate::session::HeadlessVendor::Codex
-        && launch.contained
-        && !matches!(outcome, Outcome::Punted { .. } | Outcome::Held { .. })
-    {
-        crate::ship_from_seat::publish_queue_exit(
+    if publish_native && !matches!(outcome, Outcome::Punted { .. } | Outcome::Held { .. }) {
+        crate::lane_fast_gate::publication_result(
             &main_root,
-            &worktree,
-            launch.spec,
-            launch.lease_id,
-            status.success(),
+            launch.branch,
+            crate::ship_from_seat::publish_queue_exit(
+                &main_root,
+                &worktree,
+                launch.spec,
+                launch.lease_id,
+                status.success(),
+            ),
         )?;
         outcome = classify(None, None, || lookup_pr(launch.project_root, launch.branch));
         // trace:BUG-2488 | ai:codex
         outcome = classify_seat_no_change(outcome, status.success(), &main_root, &worktree)?;
     }
 
+    // trace:STORY-2640 | ai:codex
+    let mut fast_rework = false;
+    if let Outcome::PrOpened { pr, .. } = &outcome {
+        if !host_published {
+            fast_rework = crate::lane_fast_gate::pushed(
+                &main_root,
+                &worktree,
+                launch.spec,
+                launch.lease_id,
+                launch.branch,
+                *pr,
+                launch.vendor.as_str(),
+            )?;
+        }
+    }
     // trace:BUG-B6B1278890774EF993D2EBC327862470-044 | ai:claude
     // trace:BUG-B6B1278890774EF993D2EBC327862470-050 | ai:claude
     let seat = bg::SeatState::read(&worktree, launch.branch);
     // trace:BUG-2452 | ai:codex
     // Check before settlement turns a stale PR with leftover work into NoPr.
-    if let Some((pr, head, reason)) =
+    if let Some((pr, head, reason)) = if fast_rework {
+        None
+    } else {
         empty_rework::inspect(&main_root, launch.spec, &launch_seat, &outcome, &seat)?
-    {
+    } {
         let escalated = empty_rework::route(
             &main_root,
             launch.spec,
@@ -1374,7 +1461,10 @@ pub(crate) fn run(launch: Launch<'_>) -> Result<()> {
             &reason,
         )?;
         let action = if escalated { "punted" } else { "requeued" };
-        println!("implementer: empty-rework pr={pr} head={head} action={action}");
+        println!(
+            "implementer: empty-rework pr={pr} head={head} action={action} fast_gate={}",
+            crate::lane_fast_gate::marker(&main_root, launch.branch)
+        );
         return Err(anyhow::Error::new(StandaloneImplementerExit {
             code: if escalated {
                 PUNTED_EXIT_CODE
@@ -1386,7 +1476,11 @@ pub(crate) fn run(launch: Launch<'_>) -> Result<()> {
         }));
     }
     let (outcome, unshipped) = settle_outcome(outcome, &launch_seat, &seat);
-    let (line, code) = report(&outcome, status.code(), unshipped.as_ref());
+    let (line, mut code) = report(&outcome, status.code(), unshipped.as_ref());
+    if fast_rework {
+        code = EMPTY_REWORK_EXIT_CODE;
+    }
+    let line = crate::lane_fast_gate::result_line(&main_root, launch.branch, &line);
     // BUG-2436: end the finished lane's lease before the result line goes
     // out, so whoever reads it can launch the review at once.
     // trace:BUG-2436 | ai:claude
@@ -1413,35 +1507,42 @@ pub(crate) fn run(launch: Launch<'_>) -> Result<()> {
     if code == 0 {
         return Ok(());
     }
-    let message = match &outcome {
-        Outcome::Punted { .. } => format!(
-            "the implementer punted {}; see `aida show {} --comments`",
-            launch.spec, launch.spec
-        ),
-        Outcome::Held { branch } => {
-            format!("the implementer pushed `{branch}` and is holding the PR for a manual gate")
+    let message = if fast_rework {
+        format!(
+            "fast gate failed for {}; one repair round queued before review",
+            launch.spec
+        )
+    } else {
+        match &outcome {
+            Outcome::Punted { .. } => format!(
+                "the implementer punted {}; see `aida show {} --comments`",
+                launch.spec, launch.spec
+            ),
+            Outcome::Held { branch } => {
+                format!("the implementer pushed `{branch}` and is holding the PR for a manual gate")
+            }
+            _ => format!(
+                "the implementer exited ({}) without opening a PR for {}{}{}; its log is {}",
+                status
+                    .code()
+                    .map(|c| format!("code {c}"))
+                    .unwrap_or_else(|| "on a signal".to_string()),
+                launch.spec,
+                if resumes > 0 {
+                    format!(" after {resumes} automatic resume(s)")
+                } else {
+                    String::new()
+                },
+                match unshipped {
+                    Some(bg::Unshipped::UncommittedWork(n)) =>
+                        format!(", leaving {n} uncommitted path(s) in its worktree"),
+                    Some(bg::Unshipped::UnpushedCommits) =>
+                        ", leaving commits it did not push in its worktree".to_string(),
+                    None => String::new(),
+                },
+                run_log.display()
+            ),
         }
-        _ => format!(
-            "the implementer exited ({}) without opening a PR for {}{}{}; its log is {}",
-            status
-                .code()
-                .map(|c| format!("code {c}"))
-                .unwrap_or_else(|| "on a signal".to_string()),
-            launch.spec,
-            if resumes > 0 {
-                format!(" after {resumes} automatic resume(s)")
-            } else {
-                String::new()
-            },
-            match unshipped {
-                Some(bg::Unshipped::UncommittedWork(n)) =>
-                    format!(", leaving {n} uncommitted path(s) in its worktree"),
-                Some(bg::Unshipped::UnpushedCommits) =>
-                    ", leaving commits it did not push in its worktree".to_string(),
-                None => String::new(),
-            },
-            run_log.display()
-        ),
     };
     Err(anyhow::Error::new(StandaloneImplementerExit {
         vendor_exit: matches!(outcome, Outcome::NoPr) && code != NO_PR_EXIT_CODE,
@@ -1500,7 +1601,7 @@ pub(crate) fn is_run_pr(pr: &crate::OpenPrInfo, branch: &str) -> bool {
 /// The open PR whose head is the run's branch, with its head commit. A
 /// just-created PR may lag the forge's list queries by seconds, so a branch
 /// that reached origin gets two more looks before the run is called PR-less.
-fn lookup_pr(project_root: &Path, branch: &str) -> Option<(u64, Option<String>)> {
+pub(crate) fn lookup_pr(project_root: &Path, branch: &str) -> Option<(u64, Option<String>)> {
     lookup_pr_with(project_root, branch, 3)
 }
 
@@ -1547,6 +1648,50 @@ mod bug_2436_finished_lane_lease_tests;
 // trace:STORY-2660 | ai:codex
 #[cfg(test)]
 mod host_capacity_tests {
+    // trace:STORY-2640 trace:BUG-2139 | ai:codex
+    #[test]
+    fn fast_gate_standalone_errors_revoke_issued_child_grant() {
+        if crate::test_env::run_path_isolated_test() {
+            return;
+        }
+        let tmp = tempfile::tempdir().unwrap();
+        let _env = crate::test_env::AmbientGuard::hermetic_with_seat(
+            tmp.path(),
+            "advisor",
+            &["implementer"],
+        );
+        for failure in [
+            "vendor loop",
+            "native commit",
+            "uninspectable seat",
+            "fast gate reservation",
+        ] {
+            let child = crate::gate::seat_authority::issue_child(
+                tmp.path(),
+                "implementer",
+                crate::test_env::HERMETIC_TEST_USER,
+            )
+            .unwrap();
+            let id = child.id.clone();
+            let grant = crate::gate::seat_authority::HeadlessChildGrant::Issued(child);
+            let result: Result<()> = (|| {
+                let _guard = super::ChildGrantGuard(&grant);
+                if failure == "fast gate reservation" {
+                    std::fs::write(tmp.path().join(".aida/fast-gates"), "blocked").unwrap();
+                    crate::lane_fast_gate::reserve(tmp.path(), "lane")?;
+                    panic!("reservation unexpectedly succeeded");
+                }
+                Err(anyhow::anyhow!("{failure}"))?;
+                Ok(())
+            })();
+            assert!(result.is_err());
+            assert!(
+                !crate::gate::seat_authority::revoke_by_id(&id).unwrap(),
+                "grant still live after {failure}"
+            );
+        }
+    }
+
     use super::*;
 
     #[test]
