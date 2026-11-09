@@ -23,7 +23,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-07T20:45:16.684639200Z
-modified_at: 2026-11-09T12:19:17.089553132Z
+modified_at: 2026-11-09T12:30:50.281099669Z
 req_type: Task
 relationships:
 - rel_type: Child
@@ -295,6 +295,19 @@ comments:
   content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: Part B still has no fix for last round''s findings: this head only merges main (Part B code unchanged since ee0ac5cafca0), so a zero-witness lease handed off to a PR is still retained where main releases it, refused captures still diverge from main, and CI has not finished. Part A is out of scope for this Refs slice.. No triage reason was given.'
   created_at: 2026-11-09T12:17:21.037433902Z
   modified_at: 2026-11-09T12:17:21.037433902Z
+- id: 01a1c04a-31a9-7720-81df-ae4c6e6a3163
+  author: dirtlab
+  content: |
+    Part B rework for PR #3670: fixed the two outstanding legacy compatibility gaps in the named ownership LeaseReader::pickup_owner reader. Matching holderless InPr handoffs reconstruct the production lease holder before classifying absent/refused admission. Missing keyed rows and persisted Process witnesses accept explicitly refused legacy captures, preserving the old consumer rules. Admitted holders, mismatched sessions, unreadable evidence and other Unknown verdicts retain their safeguards. Adoption diagnostics use a shared constant and accurately name unknown ownership; the BUG-637 comment distinguishes migrated callers from legacy enforcement.
+    Changed files: aida-cli-lib/src/ownership/reader.rs, aida-cli-lib/src/ownership/writer_tests.rs, aida-cli-lib/src/leases.rs.
+    Validation: lane job j20261109T122609362-2-0 ran cargo test --profile agent -p aida-cli-lib --lib -- task_3420: 10 passed, 0 failed, including TASK-2120 crashed-reviewer, adoption and new production-envelope handoff/refused capture tests. Initial run found two issues, corrected before the passing rerun. make check-ci-fast: 46 gates passed under umask 077. Initial default-umask run failed the mail-wake fixtures because temporary project directories allowed shared writes; rerunning with private creation permissions passed. rustfmt --check and git diff --check passed. untested=false.
+    Main already merged at starting HEAD 40b876a29a. Codegraph client missing, confirmed with aida doctor check codegraph; used rg. Forge CI for these uncommitted edits remains for host publication. No implementation blockers. Part A remains out of scope; TASK-3420 must remain in progress.
+    Native publication declaration recorded: [AI:codex] fix(ownership): preserve legacy handoff and refused-holder pickup (Refs TASK-3420).
+    Edits left uncommitted. No commit, push, PR creation, queue completion, review verdict or merge attempted.
+  created_at: 2026-11-09T12:30:50.281099669Z
+  modified_at: 2026-11-09T12:30:50.281099669Z
+  session_id: 01a1c03f97d1
+  harness_version: codex-cli 0.167.0
 history:
 - id: 01a1b7c2-6b69-7b02-bd8c-8f40aee2972d
   author: joe
