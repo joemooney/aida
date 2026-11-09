@@ -8,7 +8,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-08T19:02:09.839960883Z
-modified_at: 2026-11-09T08:31:28.080978453Z
+modified_at: 2026-11-09T08:47:23.430273988Z
 req_type: Bug
 relationships:
 - rel_type:
@@ -253,6 +253,40 @@ comments:
     Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
   created_at: 2026-11-09T08:29:41.892335130Z
   modified_at: 2026-11-09T08:29:41.892335130Z
+- id: 01a1bf7d-9f26-7360-94a7-240b61a751d9
+  author: dirtlab
+  content: |
+    BUG-2500 / PR-3698 native implementer handoff
+
+    Addressed the latest review's three remaining findings:
+    - Shortened the review skill description from 263 to 230 bytes (budget unchanged at 240).
+    - Waiting has its own closing line requiring external evidence and a fresh review at the current head; added assertions for the actual closing-line helper used by finish_escalated.
+    - Added waiting to the Markdown/HTML product verdict lists and Rust/TypeScript ProcessingRecord documentation.
+
+    Changed files:
+    aida-cli-lib/src/auto_complete.rs
+    aida-core/src/models.rs
+    aida-core/templates/skills/aida-review.md
+    docs/what-is-aida.md
+    docs/what-is-aida.html
+    shared/types.ts
+
+    Executed lane tests:
+    j20261109T083214978-2-0: cargo test --profile agent -p aida-cli-lib --lib -- bug_2500: 22 passed, 0 failed.
+    j20261109T083222265-2-0: cargo test --profile agent -p aida-core --test context_budget -- repository_and_generated_scaffold_stay_inside_context_budgets: 1 passed, 0 failed.
+    j20261109T083223441-2-0: cargo test --profile agent -p aida-generate-types -- generated_types_match_checked_in_contract: 1 passed, 0 failed; verifies full generated output equals shared/types.ts. Built aida-generate-types through lane job j20261109T083330452-2-0 and executed that binary to regenerate shared/types.ts; output stayed identical to the tested contract.
+
+    Additional lane checks passed for aida-server, aida-cli-lib --features remote, aida-cli --no-default-features, and aida-tui --all-targets.
+
+    Validation: make check-ci-fast passed all 46 gates with umask 0022 and Cargo checks routed through the lane runner on profile agent (/tmp/bug2500-final-fast-0022.log). An initial run using the inherited umask failed mail-wake fixture directory-mode checks; the corrected full run passed. git diff --check passed.
+
+    Host follow-up: make sync-templates updated template links but the portable .agents skill pack refused with Read-only file system. Finish sync on host. Codegraph client is absent; doctor confirmed missing; used rg.
+
+    No new design fork, resume service, prose classifier, or publication-veto change. All six edits remain uncommitted. No commit, push, PR creation, review recording, merge, or queue completion performed. untested=false.
+  created_at: 2026-11-09T08:47:23.430273988Z
+  modified_at: 2026-11-09T08:47:23.430273988Z
+  session_id: 01a1bf6f058f
+  harness_version: codex-cli 0.167.0
 history:
 - id: 01a1bcc0-f95b-7082-8ca7-a86211b6ddd8
   author: joe
