@@ -8,7 +8,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-08T21:20:08.484660Z
-modified_at: 2026-11-09T11:28:45.670847175Z
+modified_at: 2026-11-09T12:28:10.440170699Z
 req_type: Bug
 comments:
 - id: 01a1beb1-ae7c-7c52-89a5-00a6bc02eeb0
@@ -152,6 +152,13 @@ comments:
   modified_at: 2026-11-09T11:21:17.105448500Z
   session_id: 01a1c0024ce2
   harness_version: codex-cli 0.167.0
+- id: 01a1c047-c148-7371-bbc1-a86477fc8212
+  author: joe
+  content: 'ADVISOR RULING (round cap): round 8''s only open finding is that the new recovery docs give an aida ship command with a --spec flag clap rejects. Next rework: correct that one command to the real syntax (check ''aida ship --help''), change nothing else. Anything else non-blocking goes to a sweep.'
+  created_at: 2026-11-09T12:28:10.440170699Z
+  modified_at: 2026-11-09T12:28:10.440170699Z
+  session_id: 01a1beff-fc3b-78e2-93e2-9b0c283b0339
+  harness_version: 2.1.319 (Claude Code)
 history:
 - id: 01a1beaa-5bee-7821-b878-3b983c03f8ae
   author: joe
