@@ -3036,16 +3036,27 @@ fn prepare_rework_merge_with(
         "rework seat already has an unfinished merge"
     );
     let dirty = !execute(&["status", "--porcelain", "--untracked-files=all"])?.is_empty();
-    // Resume preserves the existing lane's edits. A clean resume still gets
-    // the normal preparation and conflict refusal before launching.
-    if resume && dirty {
-        return Ok(Vec::new());
-    }
-    anyhow::ensure!(!dirty, "rework seat has pending changes; merge refused");
+    anyhow::ensure!(
+        resume || !dirty,
+        "rework seat has pending changes; merge refused"
+    );
     let (base, pr_head) = fetch_heads()?;
     execute(&["merge-base", "--is-ancestor", &pr_head, "HEAD"]).context(
         "seated rework branch is behind the PR head; retry pickup with its current head",
     )?;
+    // A dirty resume must not silently bypass merge preparation and send a
+    // native child (whose Git metadata is read-only) out to merge main.
+    // Preserve its edits and admit it only when both fetched heads are already
+    // incorporated. The host must prepare any outstanding merge first.
+    // trace:BUG-2504 | ai:codex
+    if resume && dirty {
+        execute(&["merge-base", "--is-ancestor", &base, "HEAD"]).context(
+            "rework resume has pending changes and has not incorporated origin/main; \
+             edits were preserved, no vendor launched. Recover the pending work on the host \
+             and prepare the main merge before retrying; a native lane cannot write Git metadata",
+        )?;
+        return Ok(Vec::new());
+    }
     let before = execute(&["rev-parse", "HEAD"])?;
     let files = finish_rework_merge(execute, &base)?;
     // Only publish the host-created merge of the fetched PR head and base.
@@ -3322,13 +3333,15 @@ mod rework_merge_tests {
         )
         .unwrap_err();
         assert!(why.to_string().contains("pending changes"));
-        // The same dirty seat resumes without touching the edits or fetching.
+        // A dirty resume still checks fresh remote heads before admission.
+        // trace:BUG-2504 | ai:codex
+        let current = execute(&["rev-parse", "HEAD"]).unwrap();
         assert!(prepare_rework_merge_with(
             &execute,
             "main",
             true,
             |_| panic!("must not publish"),
-            no_fetch
+            || Ok((current.clone(), current.clone())),
         )
         .unwrap()
         .is_empty());
@@ -3375,6 +3388,67 @@ mod rework_merge_tests {
         .unwrap_err();
         assert_eq!(why.to_string(), "fetch refused");
         assert!(!fx.main.join(".git/MERGE_HEAD").exists());
+    }
+
+    // trace:BUG-2504 | ai:codex
+    #[test]
+    fn bug_2504_dirty_resume_checks_fetched_heads_without_touching_edits() {
+        let fx = tests::fixture();
+        let execute = |args: &[&str]| -> Result<String> {
+            let out = crate::test_git::git_command()
+                .current_dir(&fx.main)
+                .args(args)
+                .output()?;
+            anyhow::ensure!(
+                out.status.success(),
+                "{}",
+                String::from_utf8_lossy(&out.stderr)
+            );
+            Ok(String::from_utf8_lossy(&out.stdout).trim().to_string())
+        };
+        let head = execute(&["rev-parse", "HEAD"]).unwrap();
+        execute(&["checkout", "-b", "new-main"]).unwrap();
+        std::fs::write(fx.main.join("main-update"), "main\n").unwrap();
+        execute(&["add", "."]).unwrap();
+        execute(&["commit", "-m", "main moved"]).unwrap();
+        let base = execute(&["rev-parse", "HEAD"]).unwrap();
+        execute(&["checkout", "main"]).unwrap();
+        std::fs::write(fx.main.join("pending"), "keep these edits\n").unwrap();
+        let status = execute(&["status", "--porcelain"]).unwrap();
+        for (base, remote, expected) in [
+            (
+                base.clone(),
+                head.clone(),
+                "has not incorporated origin/main",
+            ),
+            (head.clone(), base.clone(), "behind the PR head"),
+        ] {
+            let why = prepare_rework_merge_with(
+                &execute,
+                "main",
+                true,
+                |_| panic!("must not publish"),
+                || Ok((base, remote)),
+            )
+            .unwrap_err();
+            assert!(format!("{why:#}").contains(expected), "{why:#}");
+            assert_eq!(execute(&["rev-parse", "HEAD"]).unwrap(), head);
+            assert_eq!(execute(&["status", "--porcelain"]).unwrap(), status);
+            assert_eq!(
+                std::fs::read_to_string(fx.main.join("pending")).unwrap(),
+                "keep these edits\n"
+            );
+            assert!(execute(&["rev-parse", "-q", "--verify", "MERGE_HEAD"]).is_err());
+        }
+        let why = prepare_rework_merge_with(
+            &execute,
+            "main",
+            true,
+            |_| panic!("must not publish"),
+            || anyhow::bail!("fetch unavailable"),
+        )
+        .unwrap_err();
+        assert!(why.to_string().contains("fetch unavailable"));
     }
 
     // trace:STORY-2475 | ai:codex

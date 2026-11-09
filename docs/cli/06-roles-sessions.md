@@ -815,8 +815,13 @@ the merge, sends the advisor a request, and routes a fresh launch to Claude.
 A conflicting Codex resume refuses with a fresh Claude launch command;
 a Codex thread cannot resume under another vendor. Fetch, merge, abort,
 mail, or vendor-preflight failures stop the launch. A resume with pending
-edits preserves them and skips the merge attempt; an unfinished merge still
-refuses. Clean resumes use the normal merge and conflict checks.
+edits preserves them and fetches both heads. It skips the merge attempt only
+when the seated HEAD already incorporates the fetched PR head and main tip.
+Otherwise launch refuses: recover the pending work on the host and prepare
+the main merge before retrying. A native child cannot write Git metadata.
+An unfinished merge still refuses. Clean resumes use the normal merge and
+conflict checks.
+<!-- trace:BUG-2504 | ai:codex -->
 
 The conflict check runs after session setup has provisioned the seat and minted
 its lease, inside the pickup's launch rollback boundary. A fresh Codex pickup
