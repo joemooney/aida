@@ -25,7 +25,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-07T19:45:35.836129088Z
-modified_at: 2026-11-09T12:35:45.991020181Z
+modified_at: 2026-11-09T12:47:05.583978846Z
 req_type: Story
 tags:
 - docs:impacted
@@ -766,6 +766,34 @@ comments:
   content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: All five ACs trace to tests and last round''s sccache and grant findings are fixed from source, but CI lib-0 Run tests is red at this head while green on main and at 9eace0f; gates job was still running at record time.. No triage reason was given.'
   created_at: 2026-11-09T12:33:36.429076354Z
   modified_at: 2026-11-09T12:33:36.429076354Z
+- id: 01a1c059-136f-7ac3-9142-9d3030b9fd95
+  author: dirtlab
+  content: |
+    STORY-2640 rework handoff: edits remain uncommitted for the native host launcher.
+
+    Addressed all three latest findings. Fast-gate jobs retain host PID identity, matching Cargo jobs so the shared cargo-slot wrapper does not reap other lanes' live tickets; offline network and IPC namespaces remain. The sandbox argv regression asserts no PID namespace. Fast-gate lookup errors remain fail-closed inconclusive results but no longer set fast_gate_pending; a new regression proves they retain orchestration retry eligibility. Known queued repairs retain their existing nonretryable behavior.
+
+    Read CI run 42612352285 logs: the only failing test was headless_background::bug_044_headless_background_tests::task_3608_real_resume_receipts_precedence_and_forge_errors, with NativeCommitError incorrectly classified Spawn instead of Failed. The resume driver now recognizes the typed native commit failure as an ordinary publication failure. The existing real-resume regression passes without weakening its assertion. CI gates and every other test lane in that run passed.
+
+    Changed files:
+    - aida-cli-lib/src/auto_complete.rs
+    - aida-cli-lib/src/lane_fast_gate.rs
+    - aida-cli-lib/src/lane_job.rs
+    - aida-cli-lib/src/phase_driver_trait.rs
+    - aida-cli-lib/src/tests/auto_complete_tests.rs
+
+    Validation through host lane runner:
+    - j20261109T123720083-2-0: cargo test --profile agent -p aida-cli-lib --lib -- fast_gate: 55 passed, 0 failed, 2 ignored, exit 0.
+    - j20261109T123726601-2-0: cargo test --profile agent -p aida-cli-lib --lib -- task_3608_real_resume_receipts_precedence_and_forge_errors: 1 passed, exit 0.
+    - j20261109T123749228-2-0: explicitly executed fast_gate_lane_snapshot_passes_in_sandbox --ignored --nocapture: 1 passed, exit 0. Production seeded dispatch, production cache wrapper and bubblewrap ran make check-ci-fast against a temporary committed snapshot of HEAD 19d1c2bcc3bb plus the five edited files. All 46 fast-tier gates passed: fast_gate=pass rc=0 elapsed=310.581856448s. The printed head is the source parent, not the temporary snapshot commit. No unsandboxed gate ran.
+    - rustfmt --check, git diff --check, portability, store-writer inventory (3443 sink sites) and execution-context ledger (1239 sites; zero additions) pass.
+    untested=false.
+
+    No remaining code blocker identified. Codegraph is unavailable (doctor confirms missing tool); navigation used rg. Host must gate its actual publication head normally. No commit, push, PR creation, queue completion, ship declaration, review record or hold clearance performed. Existing punt/hold signals remain publication vetoes.
+  created_at: 2026-11-09T12:47:05.583978846Z
+  modified_at: 2026-11-09T12:47:05.583978846Z
+  session_id: 01a1c04eaeee
+  harness_version: codex-cli 0.167.0
 history:
 - id: 01a1b78d-2628-7313-92de-8804ac5f8f71
   author: aida-session-start
