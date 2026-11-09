@@ -2619,9 +2619,11 @@ fn resolve_rework_review(
             // A wait cannot hide actionable findings in another bound change.
             // trace:BUG-2500 | ai:codex
             if bound.len() > 1
-                && bound.iter().any(|(_, v)| {
+                && (bound.iter().any(|(_, v)| {
                     !v.is_closed() && v.kind == crate::gate::review_verdict::VerdictKind::Waiting
-                })
+                }) || spec_keyed.as_ref().is_some_and(|(v, _)| {
+                    !v.is_closed() && v.kind == crate::gate::review_verdict::VerdictKind::Waiting
+                }))
             {
                 let mut findings = bound
                     .iter()
@@ -2704,15 +2706,14 @@ fn resolve_rework_review(
                     && cv.kind.requires_changes())
                     || (cv.kind == crate::gate::review_verdict::VerdictKind::Waiting
                         && sv.kind.requires_changes()));
-            let change_newer = if mixed_wait {
-                cv.kind.requires_changes()
-            } else {
-                match (s_at, c_at) {
-                    (Some(s), Some(c)) => c > s,
-                    // Unordered: fail closed toward the refusal so its findings
-                    // are not dropped.
-                    _ => cv.kind.blocks_done() && !sv.kind.blocks_done(),
-                }
+            let change_newer = match (s_at, c_at) {
+                // A fresh review supersedes older evidence, including code
+                // findings. Only tied or unordered evidence needs priority.
+                (Some(s), Some(c)) if s != c || !mixed_wait => c > s,
+                _ if mixed_wait => cv.kind.requires_changes(),
+                // Unordered: fail closed toward the refusal so its findings
+                // are not dropped.
+                _ => cv.kind.blocks_done() && !sv.kind.blocks_done(),
             };
             if change_newer {
                 refuse_wait(&cv)?;

@@ -141,7 +141,7 @@ pub const MERGE_ESCALATED_TO_HUMAN: &str = "escalated-to-human";
 /// trace:BUG-226 | ai:claude
 #[derive(Debug, Clone, serde::Deserialize)]
 pub struct VerdictFile {
-    /// `Approved` | `RequestChanges` | `Rejected`.
+    /// `Approved` | `RequestChanges` | `Rejected` | `waiting`.
     pub verdict: String,
     /// One-line rationale.
     #[serde(default)]
@@ -190,7 +190,7 @@ pub fn parse_verdict_file(json: &str) -> Option<VerdictFile> {
 }
 
 /// Map a verdict-file `verdict` string to the PASS / CHANGES REQUESTED /
-/// FAIL vocabulary the per-spec checklist uses. Case-tolerant. Returns
+/// FAIL / WAITING vocabulary the per-spec checklist uses. Case-tolerant. Returns
 /// `None` for an unrecognised verdict so the caller can surface the raw
 /// string. trace:BUG-226 | ai:claude
 fn verdict_label(raw: &str) -> Option<&'static str> {

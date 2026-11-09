@@ -296,15 +296,8 @@ fn bug_2500_rework_waiting_preserves_store_but_reviewer_route_and_warning_procee
         return;
     }
     let _env = crate::test_env::EnvVarsGuard::apply(&[("AIDA_CONTAINED", None)]);
-    struct Restore(std::path::PathBuf);
-    impl Drop for Restore {
-        fn drop(&mut self) {
-            std::env::set_current_dir(&self.0).unwrap();
-        }
-    }
     let tmp = tempfile::tempdir().unwrap();
     let root = tmp.path();
-    let _cwd = Restore(std::env::current_dir().unwrap());
     std::fs::create_dir(root.join(".git")).unwrap();
     std::fs::create_dir(root.join(".aida")).unwrap();
     let store_root = root.join(".aida-store");
@@ -334,6 +327,7 @@ fn bug_2500_rework_waiting_preserves_store_but_reviewer_route_and_warning_procee
         "reviewer",
     )
     .unwrap();
+    let original_cwd = std::env::current_dir().unwrap();
     std::env::set_current_dir(root).unwrap();
     let before = serde_json::to_value(backend.load().unwrap()).unwrap();
     for _ in 0..3 {
@@ -430,6 +424,7 @@ fn bug_2500_rework_waiting_preserves_store_but_reviewer_route_and_warning_procee
         .unwrap()
         .iter()
         .any(|entry| entry.for_role.as_deref() == Some("implementer")));
+    std::env::set_current_dir(original_cwd).unwrap();
 }
 
 #[test]
@@ -504,9 +499,18 @@ fn bug_2500_multiple_bound_waits_refuse_admission() {
 fn bug_2500_mixed_waiting_imports_substantive_findings() {
     let _env = crate::test_env::EnvVarsGuard::apply(&[("AIDA_CONTAINED", None)]);
     for swapped in [false, true] {
-        for layout in ["aliases", "spec-change", "bound", "bound-with-spec"] {
+        for layout in [
+            "aliases",
+            "spec-change",
+            "bound",
+            "bound-with-spec",
+            "bound-with-wait",
+            "spec-wait-bound-refusals",
+        ] {
             let tmp = tempfile::tempdir().unwrap();
-            let (first, second) = if swapped {
+            let (first, second) = if layout == "spec-wait-bound-refusals" {
+                ("request-changes", "request-changes")
+            } else if swapped {
                 ("request-changes", "waiting")
             } else {
                 ("waiting", "request-changes")
@@ -516,21 +520,28 @@ fn bug_2500_mixed_waiting_imports_substantive_findings() {
                 "spec-change" => ["BUG-2500", "PR-3700"],
                 _ => ["PR-3700", "PR-3701"],
             };
-            if layout == "bound-with-spec" {
+            if matches!(
+                layout,
+                "bound-with-spec" | "bound-with-wait" | "spec-wait-bound-refusals"
+            ) {
                 rv::record_verdict(
                     tmp.path(),
                     "BUG-2500",
-                    Some("approved"),
+                    Some(if layout != "bound-with-spec" {
+                        "waiting"
+                    } else {
+                        "approved"
+                    }),
                     Some(HEAD),
                     None,
-                    Some("older approval"),
+                    Some(SUMMARY),
                     &[],
                     "reviewer",
                 )
                 .unwrap();
             }
             for (key, word) in keys.into_iter().zip([first, second]) {
-                if layout == "aliases" {
+                if layout == "aliases" || layout == "spec-change" {
                     let dir = tmp.path().join(".aida/review-verdicts");
                     std::fs::create_dir_all(&dir).unwrap();
                     std::fs::write(dir.join(format!("{key}.json")), serde_json::json!({
@@ -623,4 +634,34 @@ fn bug_2500_fresh_spec_approval_clears_single_bound_wait() {
         Ok(None)
     );
     crate::queue_cmd::refuse_waiting_review(tmp.path(), "BUG-2500", "BUG-2500", None).unwrap();
+}
+
+// A newer review supersedes findings; ties retain substantive work.
+// trace:BUG-2500 | ai:codex
+#[test]
+fn bug_2500_newer_wait_supersedes_older_refusal_across_keys() {
+    for swapped in [false, true] {
+        for newer_wait in [false, true] {
+            let tmp = tempfile::tempdir().unwrap();
+            let dir = tmp.path().join(".aida/review-verdicts");
+            std::fs::create_dir_all(&dir).unwrap();
+            for (index, key) in ["BUG-2500", "PR-3700"].into_iter().enumerate() {
+                let waiting = (index == 0) == swapped;
+                let newer = waiting == newer_wait;
+                std::fs::write(dir.join(format!("{key}.json")), serde_json::json!({
+                    "verdict": if waiting { "waiting" } else { "request-changes" },
+                    "reviewed_sha": HEAD, "summary": SUMMARY,
+                    "findings": if waiting { vec![] } else { vec!["repair the code defect"] },
+                    "recorded_at": if newer { "2026-11-09T02:00:00Z" } else { "2026-11-09T01:00:00Z" }
+                }).to_string()).unwrap();
+            }
+            let result =
+                resolve_rework_findings(tmp.path(), "BUG-2500", "BUG-2500", Some("PR-3700"));
+            if newer_wait {
+                assert!(result.unwrap_err().contains("WAITING"));
+            } else {
+                assert!(result.unwrap().unwrap().contains("repair the code defect"));
+            }
+        }
+    }
 }

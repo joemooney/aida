@@ -1,6 +1,6 @@
 ---
 name: aida-review
-description: Drive a PR review to completion — walk the per-spec checklist for the active PR, post pass/partial/fail verdicts, optionally fix-forward mechanical issues, gate on green CI, merge if green, and mark every covered spec Completed.
+description: Drive a PR review to completion — walk the per-spec checklist for the active PR, post pass/partial/fail verdicts or waiting for external evidence, optionally fix-forward mechanical issues, gate on green CI, merge if green, and mark every covered spec Completed.
 disable-model-invocation: true
 allowed-tools:
   - Bash
@@ -33,7 +33,7 @@ Use this skill when:
 
 ## Core Philosophy
 
-**A PR merges only when every covered spec passes its acceptance criteria.** A verdict isn't a vibe-check — each spec gets a structured pass/partial/fail with evidence (diff hunks, test names, CI output). Partial counts as "not yet"; the implementer iterates, the reviewer re-runs.
+**A PR merges only when every covered spec passes its acceptance criteria.** A verdict isn't a vibe-check — each spec gets a structured pass/partial/fail with evidence (diff hunks, test names, CI output). Partial code findings require implementer rework. Missing external CI or host evidence alone requires `waiting`, with the dependency, responsible actor and resume condition, and no substantive findings. Stop and resume through a fresh recorded review at the current head.
 
 ## Autonomy mode — `$AIDA_ZEN` (STORY-287)
 
