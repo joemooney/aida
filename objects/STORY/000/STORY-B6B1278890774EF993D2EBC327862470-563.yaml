@@ -25,7 +25,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-07T19:45:35.836129088Z
-modified_at: 2026-11-09T04:15:57.021896233Z
+modified_at: 2026-11-09T04:31:05.518052868Z
 req_type: Story
 tags:
 - docs:impacted
@@ -635,6 +635,28 @@ comments:
   created_at: 2026-11-09T04:08:01.883018330Z
   modified_at: 2026-11-09T04:08:01.883018330Z
   session_id: 7aacb1ed-ebaa-4da4-a195-500864e99e7d
+- id: 01a1be92-f92e-7ce1-98a3-9c2416e1bcbf
+  author: dirtlab
+  content: |
+    STORY-2640 rework handoff. Edits remain uncommitted for the native host launcher.
+
+    Required real-gate evidence is now available. Host Cargo job j20261109T041600364-2-0 executed the real committed origin/main head 2ff9d1cefa275f068e4fa5db1becbb7a7d5d0c7f using production fast-gate dispatch, bubblewrap, host-only results and the test job's warm lane target. Exact result: fast_gate=pass, rc=0, elapsed=348.075965213s; all 46 fast-tier gates passed. The ignored integration test executed and passed (1 passed). No unsandboxed gate was run.
+
+    The initial real-main replay j20261109T041027908-2-0 exposed two problems: its attempt to seed from the read-only primary target silently ran cold, and the complete gate exceeded the fixed 300-second budget (skipped(timeout), rc=124, 300.188s). The fixture now uses the running test image's already-built lane target and explicitly reports warm. Raised the fixed production gate budget to 600 seconds, with the exact-job regression and documentation updated; Cargo timeout overrides remain rejected for make jobs. The measured 348-second pass justifies the budget change.
+
+    Made the existing packaged ripgrep binary available as /home/dirtlab/.cargo/bin/rg, without overwriting an existing binary, so the host runner PATH can satisfy the shipped launch-refusal audit. This is a host dependency setup change outside the repository; future hosts still need ripgrep installed.
+
+    Receipt cleanup now opportunistically prunes settled JSON records for branches absent locally and on origin when the owner has ended. It locks and rechecks before removal and preserves pending repairs, live/unknown owners, and existing branches. Permanent lock sidecars intentionally remain: unlinking them can split lock identity for existing waiters. Thus the cosmetic request to collect lock sidecars is only partially addressed; their safe collection remains a separate limitation.
+
+    Changed files: aida-cli-lib/src/lane_fast_gate.rs, aida-cli-lib/src/lane_job.rs, scripts/store-writers.toml (one new sink row only), OVERVIEW.md.
+
+    Validation: final-source host job j20261109T042059861-2-0, cargo test --profile agent -p aida-cli-lib --lib -- fast_gate: 48 passed, 0 failed, 1 ignored (the real integration was executed separately above). Earlier cleanup regression run j20261109T041240154-2-0 also passed 48 tests. Writer-inventory Python fixtures: 52 passed. Formatting, diff whitespace, portability, writer inventory and execution-context ledger checks passed (zero new legacy context sites). Runner output warns overlay-stale because the primary rewrote a shared artifact generation; this warning is retained with the successful results. untested=false.
+
+    Existing PR merge-hold remains in place. This pass covers the committed main head above, not the lane's uncommitted edits; the updated host must gate its actual publication head normally. No commit, push, PR creation, queue completion, ship declaration, review verdict or hold clearance performed. Existing punt/hold signals remain publication vetoes.
+  created_at: 2026-11-09T04:31:05.518052868Z
+  modified_at: 2026-11-09T04:31:05.518052868Z
+  session_id: 01a1be7f965c
+  harness_version: codex-cli 0.167.0
 history:
 - id: 01a1b78d-2628-7313-92de-8804ac5f8f71
   author: aida-session-start
