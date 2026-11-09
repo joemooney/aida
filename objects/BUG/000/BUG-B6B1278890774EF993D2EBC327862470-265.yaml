@@ -8,7 +8,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-08T19:02:09.839960883Z
-modified_at: 2026-11-09T08:29:38.793004377Z
+modified_at: 2026-11-09T08:29:42.001226804Z
 req_type: Bug
 relationships:
 - rel_type:
@@ -239,6 +239,20 @@ comments:
   content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: Round-6 waiting logic is sound and prior ordering findings are closed, but this PR''s skill description breaks the context-budget test in CI (rest), and two earlier operator-text findings remain open. Five CI jobs were still pending at review; merge-hold-gate failure is the expected hold.. No triage reason was given.'
   created_at: 2026-11-09T08:29:38.793002287Z
   modified_at: 2026-11-09T08:29:38.793002287Z
+- id: 01a1bf6d-6c84-70c1-ad09-fb52d637f17f
+  author: joe
+  content: |-
+    REVIEW FINDINGS TO ADDRESS (BUG-2500):
+    Verdict: CHANGES REQUESTED
+    Reviewed commit: 296f675bcfe7
+    Recorded: 2026-11-09T08:12:19.408244942+00:00
+    Findings:
+    1. CI failure caused by this PR: aida-core/templates/skills/aida-review.md:3 frontmatter description grew to 263 bytes (skill_description_max_bytes is 240 in aida-core/templates/context-budget.toml), so aida-core/tests/context_budget.rs:53 repository_and_generated_scaffold_stay_inside_context_budgets fails in CI (rest) at 296f675bcfe7. Required: shorten the description to 240 bytes or fewer (for example, drop the added 'or waiting for external evidence' phrase, since the skill body already teaches waiting). Do not raise the budget.
+    2. Round-6 finding 3 still open, plan items 4-5: aida-cli-lib/src/auto_complete.rs:2800 finish_escalated prints 'escalated — drain continues, a human decides' for EscalationKind::Waiting, contradicting the recovery hint printed just above it (obtain the evidence, then record a fresh review). Required: give Waiting its own closing line and assert it; bug_2500_waiting_recovery_requires_fresh_review covers only the hint helper.
+    3. Round-6 finding 4 partly open, plan item 6: docs/what-is-aida.md:160 and docs/what-is-aida.html:687 still say 'approved, request-changes or rejected'; aida-core/src/models.rs:2624 and generated shared/types.ts:896 still list only Approved / RequestChanges / Rejected. Only the reviewer_summary.rs doc was fixed. Required: add waiting to all four and regenerate the types.
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
+  created_at: 2026-11-09T08:29:41.892335130Z
+  modified_at: 2026-11-09T08:29:41.892335130Z
 history:
 - id: 01a1bcc0-f95b-7082-8ca7-a86211b6ddd8
   author: joe
