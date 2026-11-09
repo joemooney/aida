@@ -15,7 +15,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-08T19:27:28.525198886Z
-modified_at: 2026-11-09T06:29:55.360108952Z
+modified_at: 2026-11-09T07:21:04.619672445Z
 req_type: Bug
 comments:
 - id: 01a1bcd8-beaf-7582-aa0b-006077ac5867
@@ -242,6 +242,27 @@ comments:
   created_at: 2026-11-09T06:27:04.051754295Z
   modified_at: 2026-11-09T06:27:04.051754295Z
   session_id: 7aacb1ed-ebaa-4da4-a195-500864e99e7d
+- id: 01a1bf2e-996b-7c31-851a-35bef196beeb
+  author: joe
+  content: |-
+    ADVISOR RULING: CI at e5282fa fails these exact checks; fix each before pushing, and do not push merge-only rounds. Also resolve the last review: maybe_sync_pull must not hard-fail a configured remote that has no store branch yet, and the upstream comment union must keep nested replies. This PR is the top priority: the store splits on nearly every merge until it lands. Failures:
+    error: new ratchet findings (non-portable test assumptions or prose classification):
+    ##[error]Process completed with exit code 1.
+            FAIL  aida-cli-lib lane_liveness::tests::reviewer_session_lease_counts_as_review_started
+            FAIL  aida-cli-lib seat_clone::orphan_reentry_tests::queue_work_resume_adopts_the_orphan_end_to_end
+            FAIL  aida-cli::task_1717_store_writer_lock read_sync_pull_holds_the_lock_and_leaves_foreign_rebase_alone
+        thread 'lane_liveness::tests::reviewer_session_lease_counts_as_review_started' (117725) panicked at aida-cli-lib/src/tests/story_1688_lane_liveness_tests.rs:1093:6:
+        thread 'read_sync_pull_holds_the_lock_and_leaves_foreign_rebase_alone' (267300) panicked at aida-cli/tests/task_1717_store_writer_lock.rs:1120:5:
+        thread 'seat_clone::orphan_reentry_tests::queue_work_resume_adopts_the_orphan_end_to_end' (172752) panicked at aida-cli-lib/src/tests/bug_2223_orphan_seat_reentry_tests.rs:703:5:
+    error: new ratchet findings (non-portable test assumptions or prose classification):
+        git show "$BASE:scripts/portability-allowlist.txt" >"$BASE_ALLOWLIST"
+        git show "$BASE:scripts/portability-rules.json" >"$BASE_RULES"
+      if git show "$BASE:scripts/check-portability-growth.py" >"$BASE_CHECK" 2>/dev/null; then
+    Move the code behind #[cfg(unix)] / #[cfg(target_os = "linux")], make it portable, or shrink/regenerate the baseline only for existing debt. For prose-classification: branch on a typed field (enum, ex
+  created_at: 2026-11-09T07:21:04.619672445Z
+  modified_at: 2026-11-09T07:21:04.619672445Z
+  session_id: 01a1beff-fc3b-78e2-93e2-9b0c283b0339
+  harness_version: 2.1.319 (Claude Code)
 history:
 - id: 01a1bcc3-bd29-7692-a764-d1e8c8dbaa00
   author: aida-session-start
