@@ -1,0 +1,18 @@
+{
+  "id": "648a23d4-0cc9-43ba-8722-b3955663251a",
+  "thread_id": "648a23d4-0cc9-43ba-8722-b3955663251a",
+  "from": "dirtlab",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1794201993708,
+  "body": "Codex queue-work lane 01a1bebe3f22 for BUG-b6b1278890774ef993d2ebc327862470-253 exited with no pending changes in /home/dirtlab/ai/aida-worktrees/aida-seat-aida-bug-b6b1278890774ef993d2ebc327862470-253 (clean_exit=true). Check its existing PR and failing checks; a still-red PR needs a new rework assignment.",
+  "subject": "Queue-work lane exited without changes",
+  "urgent": false,
+  "intent": "request",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "shell_user"
+}
