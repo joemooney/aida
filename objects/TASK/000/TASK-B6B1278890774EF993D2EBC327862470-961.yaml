@@ -3,924 +3,624 @@ spec_id: TASK-b6b1278890774ef993d2ebc327862470-961
 agreed_id: TASK-3429
 title: 'Crate-split PR12: extract aida-mcp crate (mcp.rs + schema) above aida-cli-lib, handler injected into REGISTRY from the bin'
 description: 'Per SPIKE-713 section 7 row 12 and advisor ruling 1 (aida-mcp is the first crate). Acceptance: (1) new aida-mcp crate holds mcp.rs and its schema; widened cli-lib items (~99) are pub with re-exports keeping paths; (2) aida mcp handler registered from the binary into command_registry::REGISTRY; (3) MCP surface byte-identical: tools/list golden tests pass unchanged and the 72 tool names are unchanged; (4) the respawn identity check (mcp.rs:201-267) still reads the same binary; (5) measured on dell1: clean build no slower than run-to-run spread (ruling 2), with the cargo --timings numbers on the spec.'
-status: InProgress
+status: NeedsAttention
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
-created_at: 2026-11-07 23:40:15.306412+00:00
-modified_at: 2026-11-09 13:43:07.435061+00:00
+created_at: 2026-11-07T23:40:15.306412Z
+modified_at: 2026-11-09T15:56:46.820536587Z
 req_type: Task
 relationships:
 - rel_type: BlockedBy
   target_id: 01a1b811-45b0-7c63-acfd-e38cf21293d4
-  created_at: 2026-11-07 23:40:23.786360+00:00
+  created_at: 2026-11-07T23:40:23.786360Z
   created_by: joe
 - rel_type: Child
   target_id: 01a13390-7b59-7570-a329-3542db098e83
-  created_at: 2026-11-07 23:40:30.726736+00:00
+  created_at: 2026-11-07T23:40:30.726736Z
 - rel_type:
     custom: implemented-by
   target_id: 01a1bcc3-3e29-7530-b5b6-0b122ede92db
-  created_at: 2026-11-08 20:05:32.671442+00:00
+  created_at: 2026-11-08T20:05:32.671442Z
   created_by: joe
 comments:
 - id: 01a1b86d-178f-7441-b6f6-91d6ac57ed71
   author: joe
   content: 'ADVISOR AMENDMENT 2026-11-07 17:45 MST: add acceptance (0): first move mcp::mcp_claim_path (used by session_end.rs:2129,2602) and mcp::tool_descriptors (used by mcp_cmd.rs:79) below the new crate boundary, so nothing in aida-cli-lib depends on aida-mcp.'
-  created_at: 2026-11-07 23:51:59.631224+00:00
-  modified_at: 2026-11-07 23:51:59.631224+00:00
+  created_at: 2026-11-07T23:51:59.631224Z
+  modified_at: 2026-11-07T23:51:59.631224Z
   session_id: 01a1b848-940b-7bd2-8acd-52e428b182b8
   harness_version: 2.1.319 (Claude Code)
 - id: 01a1bc1d-8085-7633-98de-316450eafe5f
   author: dirtlab
-  content: 'TASK-3429 is punted as ambiguous-spec: acceptance names 72 unchanged MCP tools, but the committed descriptor block has 58 literal tool names and tools/list only filters it. Preserve the current surface unless advisor identifies missing tools. The advisor-mandated prerequisite extraction is left uncommitted. aida punt persisted Needs Attention and its reason, but reported it could not write the punt signal file because the path is read-only; the host must retain the publication veto and must not publish or complete this item before triage.
-
-    '
-  created_at: 2026-11-08 17:03:32.485754+00:00
-  modified_at: 2026-11-08 17:03:32.485754+00:00
+  content: |
+    TASK-3429 is punted as ambiguous-spec: acceptance names 72 unchanged MCP tools, but the committed descriptor block has 58 literal tool names and tools/list only filters it. Preserve the current surface unless advisor identifies missing tools. The advisor-mandated prerequisite extraction is left uncommitted. aida punt persisted Needs Attention and its reason, but reported it could not write the punt signal file because the path is read-only; the host must retain the publication veto and must not publish or complete this item before triage.
+  created_at: 2026-11-08T17:03:32.485754Z
+  modified_at: 2026-11-08T17:03:32.485754Z
   session_id: 01a1bc17e151
   harness_version: codex-cli 0.167.0
 - id: 01a1bc21-a59e-7f61-837a-edb07d8b31a4
   author: dirtlab
-  content: 'Native implementer handoff (partial prerequisite only; TASK-3429 remains Needs Attention). Changed aida-cli-lib/src/lib.rs, mcp.rs, mcp_cmd.rs, session_end.rs; added mcp_claim.rs and mcp_schema.rs. Shared claim-path naming and the complete tool-descriptor block now live below the intended transport crate boundary; MCP re-exports preserve its paths, while session cleanup and CLI tool printing call the shared modules directly. Trace TASK-3429 added. Descriptor block verified byte-identical against committed HEAD: 58 unique literal tool names. Respawn code unchanged.
-
+  content: |
+    Native implementer handoff (partial prerequisite only; TASK-3429 remains Needs Attention). Changed aida-cli-lib/src/lib.rs, mcp.rs, mcp_cmd.rs, session_end.rs; added mcp_claim.rs and mcp_schema.rs. Shared claim-path naming and the complete tool-descriptor block now live below the intended transport crate boundary; MCP re-exports preserve its paths, while session cleanup and CLI tool printing call the shared modules directly. Trace TASK-3429 added. Descriptor block verified byte-identical against committed HEAD: 58 unique literal tool names. Respawn code unchanged.
 
     Validation via launcher: cargo test --profile agent -p aida-cli-lib --lib -- descriptor: 19 passed, 0 failed; cargo test --profile agent -p aida-cli-lib --lib -- mcp_claim_path_is_case_insensitive_for_session_end_reaping: 1 passed, 0 failed. Broader -- mcp run: 162 passed, 40 failed with allocation-setting regular-file/ownership/shared-write trust refusals in fixtures; not claimed as a clean suite or established baseline failures. git diff --check passed. No new aida-mcp crate, registry injection, visibility widening or dell1 clean-build timing evidence yet.
 
-
     Punt: acceptance says 72 unchanged tools but committed surface is 58; advisor must confirm the contract before continuing. aida punt saved Needs Attention/reason, but could not write its signal file (read-only filesystem). A separate draft finding was attempted but allocation refused because this clone has no node binding; this comment preserves the flag. Host must retain the publication veto. All edits uncommitted; no commit, push, PR, queue completion, review record or ship declaration performed.
-
-    '
-  created_at: 2026-11-08 17:08:04.126832+00:00
-  modified_at: 2026-11-08 17:08:04.126832+00:00
+  created_at: 2026-11-08T17:08:04.126832Z
+  modified_at: 2026-11-08T17:08:04.126832Z
   session_id: 01a1bc17e151
   harness_version: codex-cli 0.167.0
 - id: 01a1bc2a-614d-7bd3-8591-f6f499827066
   author: joe
   content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: Prerequisite only: claim-path and descriptor moves are clean, but no aida-mcp crate exists, so acceptance 1, 2 and 5 are unmet while the title and trailer claim the full extraction.. It was punted on: ambiguous-spec: Acceptance (3) requires 72 unchanged MCP tool names, but the committed mcp.rs descriptor block defines 58 tools and tools/list only filters that list. The safe prerequisite extraction from the advisor amendment is implemented without changing the descriptor block or claim naming. Please confirm whether the contract should preserve the current 58-tool surface or identify the missing 14 tools before the full crate extraction and timing acceptance.. No triage reason was given.'
-  created_at: 2026-11-08 17:17:36.461192+00:00
-  modified_at: 2026-11-08 17:17:36.461192+00:00
+  created_at: 2026-11-08T17:17:36.461192Z
+  modified_at: 2026-11-08T17:17:36.461192Z
   session_id: 01a1b9af-8230-75d2-82f8-667491cc010a
   harness_version: 2.1.319 (Claude Code)
 - id: 01a1bc2a-6b48-7073-8a22-2c5e1d2d4ce8
   author: joe
-  content: 'REVIEW FINDINGS TO ADDRESS (TASK-3429):
-
+  content: |-
+    REVIEW FINDINGS TO ADDRESS (TASK-3429):
     Verdict: CHANGES REQUESTED
-
     Reviewed commit: 6d1f3a24569b
-
     Recorded: 2026-11-08T17:15:55.084415641+00:00
-
     Findings:
-
     1. AC1 not met: no aida-mcp crate exists (no aida-mcp/ directory, no workspace member); mcp.rs remains at aida-cli-lib/src/mcp.rs and mcp_schema.rs is in aida-cli-lib; the ~99 widened items are not done. Only mcp_claim_path and tool_descriptors moved.
-
     2. AC2 not met: aida-cli-lib/src/command_registry.rs:108 still registers &crate::mcp::MCP_SERVE from the library; nothing injects the mcp handler into REGISTRY from the binary.
-
     3. AC5 not met: no dell1 clean-build cargo --timings numbers are on TASK-3429 (ruling 2).
-
     4. Title and commit subject 6d1f3a24569 claim the full extraction and end in the (TASK-3429) trailer, which drives merge-time completion, so merging would complete a spec with 3 unmet criteria. The PR body does not disclose the partial scope, and the spec comments of 2026-11-08 say it is punted Needs Attention and must not be published or completed before triage. Fix: finish the extraction under this trailer, or retitle as the prerequisite with (Refs TASK-3429) and keep the spec open.
-
     5. AC3 unresolved: the spec says 72 unchanged tool names but mcp_schema.rs has 58 literal tool names (implementer punt comment). The advisor must confirm the correct number on TASK-3429 before the surface criterion can be verified; tools/list goldens also have no green CI at this head yet.
-
-    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.'
-  created_at: 2026-11-08 17:17:39.016259+00:00
-  modified_at: 2026-11-08 17:17:39.016259+00:00
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
+  created_at: 2026-11-08T17:17:39.016259Z
+  modified_at: 2026-11-08T17:17:39.016259Z
   session_id: 01a1b9af-8230-75d2-82f8-667491cc010a
   harness_version: 2.1.319 (Claude Code)
 - id: 01a1bc40-87ca-7220-bf18-eda09ef7daa4
   author: dirtlab
-  content: 'TASK-3429 native implementer handoff (uncommitted)
-
+  content: |
+    TASK-3429 native implementer handoff (uncommitted)
 
     Implementation:
-
     - New aida-mcp workspace crate owns MCP stdio transport and full store handler.
-
     - Binary installs the store handler into the existing mcp-serve registry forwarder before parsing.
-
     - Shared descriptor helper and claim naming remain in cli-lib per advisor amendment; aida-mcp re-exports the schema module.
-
     - Existing helper paths retained with explicit public re-exports; supporting helper edits only change visibility, task traces, or formatting.
-
     - CLI-local test harness includes the extracted transport to keep existing private fixtures and test suites unchanged.
-
     - Respawn still probes the same resolved executable and uses CLI image build identity.
-
     - Relocated exact-site inventories preserve existing blockers and do not grant runtime authority.
 
-
     Validation (untested=false; executed tests, full suite not clean):
-
     - cargo check --profile agent -p aida-cli --no-default-features: PASS (j20261108T172514272-2-0 and j20261108T172615326-2-0).
-
     - cargo test --profile agent -p aida-cli-lib --lib -- mcp::: 118 passed, 39 failed. All 39 fail with allocation setting bounded-owned-regular-file/shared-write trust refusals. Not claimed as a clean suite or established baseline failures. Descriptor, profile, tools/list, and respawn tests passed in this run.
-
     - Python store-writer inventory tests: 42 passed.
-
     - Store-writer guard: 3385 sink sites and 293 operation mappings reconciled.
-
     - Exec-context inventory including untracked new crate source via read-only inventory augmentation: no new or stale sites.
-
     - Trace-header checks and git diff --check: PASS.
-
     - Direct installed-versus-rebuilt wire comparison unavailable because the rebuilt executable exists only in the launcher target overlay; no such comparison is claimed.
-
     - Shared schema byte-identical to HEAD: 58 unique tool names.
-
     - Respawn state/executable selection source comparison: identical except crate qualification.
-
     - cargo test --profile agent -p aida-cli --test task_1487_store_polish -- mcp_serve: PASS, 2 tests (j20261108T172836996-2-0), including a real JSON-RPC call.
-
     - cargo test --profile agent -p aida-cli-lib --lib -- descriptor: PASS, 19 tests (j20261108T172900165-2-0).
 
-
     Blockers / publication:
-
     - aida punt persisted Needs Attention and the reason. Punt signal could not be written: read-only filesystem. HOST MUST RETAIN THIS PUBLICATION VETO FROM THE SPEC/HANDOFF; no publication or completion until triage. No full-completion trailer is justified.
-
     - Review finding 5: AC3 says 72 unchanged tools, but committed surface has 58. No advisor confirmation is recorded. Preserve current surface; do not invent tools.
-
     - Review finding 3: AC5 requires clean-build comparisons and cargo --timings evidence on dell1; not performed from this unverified host context.
-
     - Broad MCP fixture failures remain unresolved; no claim of clean full MCP tests.
-
     - Draft finding filing refused: this clone has no AIDA node binding; no object was written. Preserve these flags in the spec comment instead.
-
     - No commit, push, PR, queue done, pr ship, review record, or publication declaration performed. Host must retain all punt/hold vetoes and avoid completing TASK-3429 while acceptance remains unmet.
 
-
     Changed files:
-
     AGENTS.md
-
     Cargo.lock
-
     Cargo.toml
-
     OVERVIEW.md
-
     aida-cli-lib/src/advisor_handshake.rs
-
     aida-cli-lib/src/agent_registry.rs
-
     aida-cli-lib/src/brief.rs
-
     aida-cli-lib/src/burndown_run.rs
-
     aida-cli-lib/src/cache_output.rs
-
     aida-cli-lib/src/claim.rs
-
     aida-cli-lib/src/cmdkit.rs
-
     aida-cli-lib/src/command_registry.rs
-
     aida-cli-lib/src/completion.rs
-
     aida-cli-lib/src/config_init.rs
-
     aida-cli-lib/src/findings_gate.rs
-
     aida-cli-lib/src/gate/mod.rs
-
     aida-cli-lib/src/gate/role_authority.rs
-
     aida-cli-lib/src/gate/seat_authority.rs
-
     aida-cli-lib/src/git_backend_cmd.rs
-
     aida-cli-lib/src/glyphs.rs
-
     aida-cli-lib/src/goal_cmd.rs
-
     aida-cli-lib/src/history.rs
-
     aida-cli-lib/src/kernel.rs
-
     aida-cli-lib/src/lane_env.rs
-
     aida-cli-lib/src/leases.rs
-
     aida-cli-lib/src/lib.rs
-
     aida-cli-lib/src/lib_part1.rs
-
     aida-cli-lib/src/lib_part3.rs
-
     aida-cli-lib/src/mailbox_resolver.rs
-
     aida-cli-lib/src/mailbox_store.rs
-
     aida-cli-lib/src/mailbox_view.rs
-
     aida-cli-lib/src/mcp.rs
-
     aida-cli-lib/src/mcp_serve.rs
-
     aida-cli-lib/src/plan_report.rs
-
     aida-cli-lib/src/process_retry.rs
-
     aida-cli-lib/src/queue_cmd.rs
-
     aida-cli-lib/src/queue_misc.rs
-
     aida-cli-lib/src/rel_cards.rs
-
     aida-cli-lib/src/requeue.rs
-
     aida-cli-lib/src/requirements_cli.rs
-
     aida-cli-lib/src/role.rs
-
     aida-cli-lib/src/session_misc.rs
-
     aida-cli-lib/src/stakeholder_role.rs
-
     aida-cli-lib/src/statusline_root.rs
-
     aida-cli-lib/src/store_sync.rs
-
     aida-cli-lib/src/tests/story_2539_vendor_literals.tsv
-
     aida-cli-lib/src/trace.rs
-
     aida-cli-lib/src/upgrade_release.rs
-
     aida-cli-lib/src/usage_mcp_helpers.rs
-
     aida-cli-lib/src/worker.rs
-
     aida-cli-lib/src/worktree_gc.rs
-
     aida-cli/Cargo.toml
-
     aida-cli/src/main.rs
-
     aida-mcp/Cargo.toml
-
     aida-mcp/src/lib.rs
-
     aida-mcp/src/mcp.rs
-
     aida-mcp/src/serve.rs
-
     scripts/check-store-writers.py
-
     scripts/check-trace-headers.py
-
     scripts/config-trust.toml
-
     scripts/exec-context-legacy.json
-
     scripts/store-writers.toml
-
-    '
-  created_at: 2026-11-08 17:41:48.106361+00:00
-  modified_at: 2026-11-08 17:41:48.106361+00:00
+  created_at: 2026-11-08T17:41:48.106361Z
+  modified_at: 2026-11-08T17:41:48.106361Z
   session_id: 01a1bc2bfe99
   harness_version: codex-cli 0.167.0
 - id: 01a1bc48-7652-7dd1-aeb6-d2605a606b6d
   author: joe
   content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: Extraction is faithful (AC0, 1, 2, 4 by source), but AC5 timings are absent, AC3 is unresolved, path-keyed ratchets were not migrated, one security audit test became vacuous, and CI at head is still queued.. It was punted on: ambiguous-spec: The aida-mcp transport extraction and binary-injected full store handler are implemented, with shared descriptors kept below the boundary per the advisor amendment. Review finding 5 remains unresolved: AC3 says 72 unchanged tools, but the committed schema is byte-identical and has 58 unique names; no advisor ruling confirms the count. Review finding 3 also remains unmet: AC5 requires dell1 clean-build cargo --timings comparisons, unavailable in this lane. Broad MCP tests ran 118 passed and 39 fixture allocation-trust refusals; do not claim a clean suite or complete/publish this spec until the contract and validation are resolved.. No triage reason was given.'
-  created_at: 2026-11-08 17:50:27.922192+00:00
-  modified_at: 2026-11-08 17:50:27.922192+00:00
+  created_at: 2026-11-08T17:50:27.922192Z
+  modified_at: 2026-11-08T17:50:27.922192Z
   session_id: 01a1b9af-8230-75d2-82f8-667491cc010a
   harness_version: 2.1.319 (Claude Code)
 - id: 01a1bc48-7fec-7021-9c02-44aaabbeaece
   author: joe
-  content: 'REVIEW FINDINGS TO ADDRESS (TASK-3429):
-
+  content: |-
+    REVIEW FINDINGS TO ADDRESS (TASK-3429):
     Verdict: CHANGES REQUESTED
-
     Reviewed commit: 6d6f869eb126
-
     Recorded: 2026-11-08T17:49:45.421364227+00:00
-
     Findings:
-
     1. AC5 not met: no dell1 clean-build comparison or cargo --timings numbers are on TASK-3429 (ruling 2); the implementer handoff confirms this was not performed.
-
     2. AC3 unresolved: the spec requires 72 unchanged tool names, aida-cli-lib/src/mcp_schema.rs defines 58, and no advisor ruling is recorded. The tools/list goldens also have no CI result at 6d6f869eb126 (all CI jobs queued). Needs an advisor ruling on the count plus green goldens.
-
-    3. Title and both commit subjects end in the (TASK-3429) completion trailer while AC5 and AC3 are open, the spec is Needs Attention, and the implementer''s handoff says no full-completion trailer is justified and publication is vetoed until triage. The PR body discloses none of this. Finish the criteria, or use (Refs TASK-3429) and disclose the partial scope.
-
+    3. Title and both commit subjects end in the (TASK-3429) completion trailer while AC5 and AC3 are open, the spec is Needs Attention, and the implementer's handoff says no full-completion trailer is justified and publication is vetoed until triage. The PR body discloses none of this. Finish the criteria, or use (Refs TASK-3429) and disclose the partial scope.
     4. Security audit test made vacuous: aida-cli-lib/src/config_cmd.rs:5639 (bug_1667_mcp_cannot_reach_the_posture_writer) uses include_str!("mcp.rs"), which now reads the 7-line include! stub, so the moved transport is no longer checked for posture-writer references. Point it at aida-mcp/src/mcp.rs and aida-mcp/src/serve.rs.
-
     5. Predicted red, from reading the code (not run): aida-cli-lib/src/tests/story_2326_launch_ratchet_tests.rs:53 still ledgers aida-cli-lib/src/mcp.rs at 1, but the stub has 0 markers and CRATES (line 12) omits aida-mcp, so launch_sites_outside_the_launcher_match_the_ledger fails. Add aida-mcp to CRATES and move the ledger key, so the respawn exec at aida-mcp/src/mcp.rs:298-306 stays governed.
-
     6. Predicted red, from reading the code (not run): aida-cli-lib/src/tests/task_2143_clone_git_ratchet_tests.rs:24 allowlists aida-cli-lib/src/mcp.rs, while workspace_sources now finds the raw git builder at aida-mcp/src/mcp.rs:6784 under an unlisted path, and the old key is no longer measured. Both are ratchet_violations. Move the key.
-
-    7. Predicted red CI gates, from reading the code (not run): scripts/crate-globs-legacy.json:79 expects 1 root glob in aida-cli-lib/src/mcp.rs, now 0 (ci.yml:963); scripts/portability-allowlist.txt:182-188 keys 7 prose-classification sites to the old path while they now sit in aida-mcp/src/mcp.rs (e.g. :511); scripts/doc-path-exceptions.json:135 keys the story-536 reference to mcp.rs while it now sits in aida-cli-lib/src/mcp_schema.rs:1524. make check-ci-fast is not in the implementer''s recorded validation.
-
-    8. Containment guard coverage gap: CRATES in aida-cli-lib/src/gate/tests/task_1752_grant_env_guard_tests.rs (grant env) and aida-cli-lib/src/tests/task_1750_liveness_primitive_guard_tests.rs, plus the required list in bug_1929_contained_store_tests.rs:1354, omit aida-mcp, though those guards claim to cover every crate''s production source. Authority-adjacent MCP code can now add a grant read or raw liveness probe unguarded. Add aida-mcp to each list.
-
-    9. The new root glob ''use aida_cli_lib::*'' at aida-mcp/src/serve.rs:9 replaces a counted ''use crate::*'', and scripts/check-crate-globs.py only counts crate::*, so the import debt leaves the ratchet instead of shrinking. Import the handful of needed names explicitly.
-
-    10. No test covers the new injection boundary directly: run_mcp_handler''s unregistered path (aida-cli-lib/src/command_registry.rs) has no refusal test, and aida-mcp has no tests of its own because the transport is only exercised through the cfg(test) include! copy in cli-lib. Add a refusal test and a serve-path test in the crate that ships.
-
+    7. Predicted red CI gates, from reading the code (not run): scripts/crate-globs-legacy.json:79 expects 1 root glob in aida-cli-lib/src/mcp.rs, now 0 (ci.yml:963); scripts/portability-allowlist.txt:182-188 keys 7 prose-classification sites to the old path while they now sit in aida-mcp/src/mcp.rs (e.g. :511); scripts/doc-path-exceptions.json:135 keys the story-536 reference to mcp.rs while it now sits in aida-cli-lib/src/mcp_schema.rs:1524. make check-ci-fast is not in the implementer's recorded validation.
+    8. Containment guard coverage gap: CRATES in aida-cli-lib/src/gate/tests/task_1752_grant_env_guard_tests.rs (grant env) and aida-cli-lib/src/tests/task_1750_liveness_primitive_guard_tests.rs, plus the required list in bug_1929_contained_store_tests.rs:1354, omit aida-mcp, though those guards claim to cover every crate's production source. Authority-adjacent MCP code can now add a grant read or raw liveness probe unguarded. Add aida-mcp to each list.
+    9. The new root glob 'use aida_cli_lib::*' at aida-mcp/src/serve.rs:9 replaces a counted 'use crate::*', and scripts/check-crate-globs.py only counts crate::*, so the import debt leaves the ratchet instead of shrinking. Import the handful of needed names explicitly.
+    10. No test covers the new injection boundary directly: run_mcp_handler's unregistered path (aida-cli-lib/src/command_registry.rs) has no refusal test, and aida-mcp has no tests of its own because the transport is only exercised through the cfg(test) include! copy in cli-lib. Add a refusal test and a serve-path test in the crate that ships.
     11. Minor: scripts/publish.sh:37-39 publish order omits aida-mcp although aida-cli now depends on it by version; docs/showcase/integrations.html:27 links the MCP implementation to the 7-line test stub.
-
-    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.'
-  created_at: 2026-11-08 17:50:30.380966+00:00
-  modified_at: 2026-11-08 17:50:30.380966+00:00
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
+  created_at: 2026-11-08T17:50:30.380966Z
+  modified_at: 2026-11-08T17:50:30.380966Z
   session_id: 01a1b9af-8230-75d2-82f8-667491cc010a
   harness_version: 2.1.319 (Claude Code)
 - id: 01a1bc57-271e-7532-8267-076ea8fb2abb
   author: dirtlab
-  content: 'TASK-3429 native rework handoff (uncommitted)
-
+  content: |
+    TASK-3429 native rework handoff (uncommitted)
 
     Changed files:
-
     OVERVIEW.md
-
     aida-cli-lib/src/command_registry.rs
-
     aida-cli-lib/src/config_cmd.rs
-
     aida-cli-lib/src/gate/tests/task_1752_grant_env_guard_tests.rs
-
     aida-cli-lib/src/mcp.rs
-
     aida-cli-lib/src/tests/bug_1929_contained_store_tests.rs
-
     aida-cli-lib/src/tests/node_alias_display_ratchet_tests.rs
-
     aida-cli-lib/src/tests/story_2326_launch_ratchet_tests.rs
-
     aida-cli-lib/src/tests/task_1750_liveness_primitive_guard_tests.rs
-
     aida-cli-lib/src/tests/task_2143_clone_git_ratchet_tests.rs
-
     aida-mcp/src/mcp.rs
-
     aida-mcp/src/serve.rs
-
     docs/showcase/integrations.html
-
     scripts/crate-globs-legacy.json
-
     scripts/doc-path-exceptions.json
-
     scripts/portability-allowlist.txt
-
     scripts/publish.sh
-
 
     Implemented review findings 4-11: posture audit reads extracted production sources; launch/Git ledgers retain moved sites; grant/liveness/store guard inventories include aida-mcp; stale static guard paths corrected; glob import removed with its retired budget; shipping-crate tools/list/serve tests and missing-registration refusal test added; publish order and showcase source link repaired.
 
-
     Acceptance remains blocked: advisor must resolve 72 requested tools versus 58 existing descriptors; dell1 clean build comparison/timings required. This host is disrad-dvp98b3puw. No new tools were invented. TASK-3429 is punted Needs Attention. Punt reason saved but separate signal write refused (read-only filesystem): HOST MUST RETAIN PUBLICATION VETO; no publication or completion until triage. No completion trailer justified.
-
 
     Draft finding creation refused because this clone has no AIDA node binding. check-ci-fast started Cargo despite no-build description; it was stopped and static gates run separately. No clean full-fast-CI claim.
 
-
     Additional validation finding fixed: display-ID ratchet lost four MCP sites after extraction. Extended its scan to aida-mcp while keeping BASELINE 169; rerun passed (33 tests).
 
-
     Validation (untested=false; executed through launcher, all final targeted runs green):
-
     - aida-mcp --lib: 2 passed, including shipping transport tools/list and serve wrapper (j20261108T175440856-2-0; earlier run also passed).
-
     - aida-cli-lib --lib -- mcp_handler_refuses_without_binary_registration: 1 passed (j20261108T175424987-2-0).
-
     - -- bug_1667_mcp_cannot_reach_the_posture_writer: 1 passed (j20261108T175431420-2-0).
-
     - -- ratchet: 33 passed (j20261108T180206017-2-0). Initial run: 32 passed, 1 failed; fixed missing MCP display-ID scan without lowering the budget.
-
-    - -- task_175: 16 passed (j20261108T180517602-2-0). Initial run: 15 passed, 1 failed; fixed explicit cfg(test) attributes on the CLI test stub''s child test modules.
-
+    - -- task_175: 16 passed (j20261108T180517602-2-0). Initial run: 15 passed, 1 failed; fixed explicit cfg(test) attributes on the CLI test stub's child test modules.
     - -- descriptor: 20 passed (j20261108T175639633-2-0).
-
     - -- tools_list_respects_profile: 1 passed (j20261108T175640782-2-0).
-
     - -- bug_1929_store_git_guard: 1 passed (j20261108T180606840-2-0).
-
     - -- bug_1985_host_status_guard: 1 passed (j20261108T180606842-2-0).
-
     - Static checks: crate glob ratchet and portability including growth against HEAD; documentation paths; ExecContext (1239 exact sites, zero additions); store writers (3385 sinks, 293 mappings); trace headers; git diff --check: PASS.
-
     - Schema source unchanged versus HEAD; count remains 58. No full CI/golden compatibility-suite or dell1 clean-build timing claim. Existing broader fixture failures documented by prior handoff were not rerun.
-
     - Test-generated agent-registry artifacts in aida-mcp/.aida and aida-cli-lib/.aida removed.
 
-
     No commit, push, PR, queue done, pr ship, review record or publication declaration performed. All source edits remain uncommitted. No pending launcher test jobs from this run. TASK-3429 remains Needs Attention with a publication veto until triage resolves the count and dell1 measurement requirements.
-
-    '
-  created_at: 2026-11-08 18:06:30.686610+00:00
-  modified_at: 2026-11-08 18:06:30.686610+00:00
+  created_at: 2026-11-08T18:06:30.686610Z
+  modified_at: 2026-11-08T18:06:30.686610Z
   session_id: 01a1bc49d0a1
   harness_version: codex-cli 0.167.0
 - id: 01a1bc63-21af-7ea3-aad4-63929995bbde
   author: joe
   content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: Extraction is faithful and earlier ratchet findings are fixed, but AC5 timings and the AC3 72-vs-58 ruling are open, the completion trailer remains, seven source guards lost the moved MCP code, and CI has not run at head.. It was punted on: ambiguous-spec: Review findings 1 and 2 remain acceptance blockers: AC3 requires 72 unchanged MCP tools but the preserved shared descriptor surface contains 58 and no advisor ruling confirms the count; AC5 requires clean-build comparison and cargo --timings evidence on dell1, but this lane host is disrad-dvp98b3puw. Review remediation for findings 4-11 is implemented and targeted validation is underway. Do not publish or complete TASK-3429 until the count ruling and dell1 measurements are supplied; preserve all existing punt and hold vetoes.. No triage reason was given.'
-  created_at: 2026-11-08 18:19:35.727084+00:00
-  modified_at: 2026-11-08 18:19:35.727084+00:00
+  created_at: 2026-11-08T18:19:35.727084Z
+  modified_at: 2026-11-08T18:19:35.727084Z
   session_id: 01a1b9af-8230-75d2-82f8-667491cc010a
   harness_version: 2.1.319 (Claude Code)
 - id: 01a1bc63-2c86-7820-ba16-8c7812fd586a
   author: joe
-  content: 'REVIEW FINDINGS TO ADDRESS (TASK-3429):
-
+  content: |-
+    REVIEW FINDINGS TO ADDRESS (TASK-3429):
     Verdict: CHANGES REQUESTED
-
     Reviewed commit: f5688546213b
-
     Recorded: 2026-11-08T18:12:36.100104617+00:00
-
     Findings:
-
     1. AC5 not met: TASK-3429 has no dell1 clean-build comparison or cargo --timings numbers (ruling 2); the 2026-11-08 18:06 handoff confirms it was not performed.
-
     2. AC3 unresolved: the spec requires 72 unchanged tool names, but aida-cli-lib/src/mcp_schema.rs has 58 before and after this PR. The descriptor block is byte-identical to base apart from the new header, so the surface looks unchanged and 72 looks like a spec error, but no advisor ruling is recorded. The advisor must correct the number on the spec, and the tools/list and descriptor tests need a green CI result at the PR head.
-
     3. Completion trailer still overclaims: the PR title and commit subjects end in (TASK-3429), which drives merge-time completion, while AC3 and AC5 are open, the spec is Needs Attention, and the latest handoff says no completion trailer is justified and publication is vetoed until triage. The PR body discloses none of this. Finish the criteria, or use (Refs TASK-3429) and disclose the partial scope.
-
     4. Source guards silently lost the moved MCP code, the same class as round-2 finding 8: these scan only cli-lib/core/listed members and omit aida-mcp: gate/tests/task_2707_cache_authority_tests.rs:262 (cache_rows_never_grant_authority), gate/tests/story_1917_dispatch_exec_tests.rs:627 (grant-binding writes), tests/story_1418_completion_seam_tests.rs:31-33 (no_direct_completed_write_outside_the_seam), tests/resolve_aida_exe_tests.rs:49 (raw current-exe lookup), tests/bug_1670_stale_cache_callers_tests.rs:662, tests/task_2032_launcher_main_ratchet_tests.rs:111, and test_home.rs:887 (raw home lookup member list). The 7,692-line transport can now add those violations unguarded. Add aida-mcp to each scan, keeping existing budgets.
-
     5. CI has not validated this head: CI run 42508338148 at f5688546213b is pending with 0 jobs, and the required suite includes the new aida-mcp tests. A green run at the final head is required before approval.
-
     6. Minor stale paths: docs/product-integrations.md:29 still links the MCP implementation to the 9-line test stub although its generated page docs/showcase/integrations.html:27 was changed, so the source and generated page disagree; docs/internal/agents/aida-repository-guide.md tells readers to grep aida-cli/src/mcp.rs for the live tool list, which should now name aida-cli-lib/src/mcp_schema.rs.
-
-    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.'
-  created_at: 2026-11-08 18:19:38.502501+00:00
-  modified_at: 2026-11-08 18:19:38.502501+00:00
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
+  created_at: 2026-11-08T18:19:38.502501Z
+  modified_at: 2026-11-08T18:19:38.502501Z
   session_id: 01a1b9af-8230-75d2-82f8-667491cc010a
   harness_version: 2.1.319 (Claude Code)
 - id: 01a1bc78-4f6d-7e93-bb98-9befb47e29de
   author: dirtlab
-  content: 'TASK-3429 native implementer handoff — review remediation, uncommitted
-
+  content: |
+    TASK-3429 native implementer handoff — review remediation, uncommitted
 
     Latest review findings 4 and 6 addressed:
-
     - All seven named source guards include aida-mcp, preserving existing budgets. Launcher-main detection also recognizes the external library qualification.
-
     - Completion scan asserts the extracted MCP transport and serve wrapper are visible.
-
     - Strict cache-authority scan initially caught the existing cache-status diagnostic implementation. Moved that helper into cli-lib/cache_output and retained a thin MCP wrapper, without exempting cache reads in transport authority code. Helper body matches HEAD after receiver substitution and formatting.
-
     - Both stale documentation paths corrected.
-
     - Fixed the existing misplaced TASK-3429 trace header in lib_part3; trace-header gate now passes.
 
-
     Changed files:
-
     aida-cli-lib/src/cache_output.rs
-
     aida-cli-lib/src/gate/tests/story_1917_dispatch_exec_tests.rs
-
     aida-cli-lib/src/gate/tests/task_2707_cache_authority_tests.rs
-
     aida-cli-lib/src/lib_part3.rs
-
     aida-cli-lib/src/test_home.rs
-
     aida-cli-lib/src/tests/bug_1670_stale_cache_callers_tests.rs
-
     aida-cli-lib/src/tests/resolve_aida_exe_tests.rs
-
     aida-cli-lib/src/tests/story_1418_completion_seam_tests.rs
-
     aida-cli-lib/src/tests/task_2032_launcher_main_ratchet_tests.rs
-
     aida-mcp/src/mcp.rs
-
     docs/internal/agents/aida-repository-guide.md
-
     docs/product-integrations.md
 
-
     Validation: untested=false. All Rust tests ran through the launcher using cargo test --profile agent.
-
     - Ratchets: 33 passed, final run j20261108T183210708-2-0 (initial run also 33 passed).
-
     - Completion seam: 14 passed, j20261108T182258984-2-0.
-
     - Destructive tolerant-cache guard: 1 passed, j20261108T182300160-2-0.
-
     - Raw executable lookup guard: 1 passed, j20261108T182301336-2-0.
-
     - Raw home lookup guard: 1 passed, j20261108T182302513-2-0.
-
     - Grant binding guard/runtime test: 1 passed, j20261108T182303704-2-0.
-
     - Strict cache-authority guard: 1 passed on final source, j20261108T183142263-2-0. Initial run failed on the now-moved informational cache-status implementation.
-
     - Shipping aida-mcp --lib: 2 passed, j20261108T182313686-2-0, including tools/list and serve wrapper.
-
     - Descriptor filter: 20 passed, j20261108T182314863-2-0.
-
     - tools_list_respects_profile: 1 passed, j20261108T182316041-2-0.
-
     - cache_status_reports_freshness: FAILED in fixture setup at mcp_tests.rs:4824, before calling the relocated helper: allocation setting must be a bounded owned regular file without shared writes. j20261108T183209334-2-0. No clean freshness-test/full-suite claim.
-
     - Store-writer inventory passes: 3385 sink sites, 293 operation mappings unchanged.
-
     - ExecContext inventory passes: 1239 exact sites, zero additions.
-
     - Documentation paths, trace headers, rustfmt checks for changed source, git diff --check: PASS.
-
     - Schema remains unchanged: 58 unique literal descriptor names.
-
     - Codegraph unavailable; aida doctor check codegraph confirms missing from PATH. Used rg fallback.
-
     - Removed only verified test-generated agent-registry artifacts under aida-mcp/.aida and aida-cli-lib/.aida.
-
     - No pending launcher jobs.
 
-
     Acceptance/publication blockers:
-
     Review finding 1 / AC5: dell1 clean-build comparisons and cargo --timings evidence remain absent. This host is disrad-dvp98b3puw.
-
     Review finding 2 / AC3: contract says 72 tools; preserved surface has 58; advisor correction is still absent.
-
     Review finding 5: no final-head CI result is established from this native lane.
-
     Review finding 3: no completion trailer is justified. Git metadata is read-only; this seat cannot rewrite PR/commit metadata.
-
 
     TASK-3429 was punted to Needs Attention with these reasons. Punt signal file write refused (read-only filesystem), but the reason/status persisted in the store. HOST MUST RETAIN PUBLICATION VETO from the spec and this handoff; no publication or completion until triage. Preserve existing holds/punts. If later triage authorizes partial publication, it must use Refs TASK-3429 and disclose incomplete acceptance.
 
-
     Draft finding creation refused because this clone has no AIDA node binding; this comment retains the conversational flag.
-
     No commit, push, PR creation, queue done, pr ship, review record or ship declaration performed. All source edits are uncommitted.
-
-    '
-  created_at: 2026-11-08 18:42:43.693451+00:00
-  modified_at: 2026-11-08 18:42:43.693451+00:00
+  created_at: 2026-11-08T18:42:43.693451Z
+  modified_at: 2026-11-08T18:42:43.693451Z
   session_id: 01a1bc645291
   harness_version: codex-cli 0.167.0
 - id: 01a1bc8c-711e-7701-a6f1-968403eb2e42
   author: joe
   content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: Extraction is faithful and prior guard findings are fixed, but AC5 timings and the AC3 72-vs-58 ruling are still open, the completion trailer remains, CI has not finished at head, and the gate-drift ratchet lost the moved code.. It was punted on: ambiguous-spec: Review findings 1 and 2 remain unresolved: AC3 names 72 tools but the unchanged descriptor surface has 58 and no advisor correction is recorded; AC5 requires dell1 clean-build comparison/timings, while this host is disrad-dvp98b3puw. Findings 4 and 6 source-guard/documentation fixes are implemented and targeted launcher tests are underway. Finding 3: do not use a completion trailer or publish until acceptance triage; Git metadata is read-only here. Preserve existing publication vetoes.. No triage reason was given.'
-  created_at: 2026-11-08 19:04:43.038660+00:00
-  modified_at: 2026-11-08 19:04:43.038660+00:00
+  created_at: 2026-11-08T19:04:43.038660Z
+  modified_at: 2026-11-08T19:04:43.038660Z
   session_id: 01a1b9af-8230-75d2-82f8-667491cc010a
   harness_version: 2.1.319 (Claude Code)
 - id: 01a1bc8c-8689-7ea0-88cc-bb5ca6680916
   author: joe
-  content: 'REVIEW FINDINGS TO ADDRESS (TASK-3429):
-
+  content: |-
+    REVIEW FINDINGS TO ADDRESS (TASK-3429):
     Verdict: CHANGES REQUESTED
-
     Reviewed commit: 48391eafe320
-
     Recorded: 2026-11-08T18:51:30.799496987+00:00
-
     Findings:
-
     1. AC5 not met: TASK-3429 has no dell1 clean-build comparison or cargo --timings numbers (ruling 2). The 2026-11-08 18:42 handoff confirms it was not performed (lane host is disrad-dvp98b3puw). Needs a dell1 run by someone with that host; the lane cannot satisfy it.
-
     2. AC3 unverified: the spec requires 72 unchanged tool names; aida-cli-lib/src/mcp_schema.rs has 58. From fn text_envelope_output_schema onward the block is byte-identical to the base mcp.rs, so the surface looks unchanged and 72 looks like a spec error, but no advisor ruling is recorded. The advisor must correct the number on the spec, and the tools/list and descriptor tests need a green CI result at the PR head.
-
     3. Completion trailer overclaims: the PR title and commit subjects end in (TASK-3429), which drives merge-time completion, while AC3 and AC5 are open and the spec is Needs Attention with a publication veto in the latest handoff. The PR body is one provenance line and discloses none of this. Finish the criteria, or use (Refs TASK-3429) and disclose the partial scope.
-
-    4. CI has not validated this head: at review time all 7 CI shards at 48391eafe320 were pending, so aida-mcp''s own tests (rest shard), the tools/list goldens and the respawn tests have no result. merge-hold-gate also failed at step ''Require recorded clearance for every previously held PR''; that needs a recorded clearance, not a code change. A green run at the final head is required before approval.
-
-    5. Gate-drift ratchet lost the moved code, the same class as the earlier guard findings: aida-cli-lib/src/tests/story_1888_gate_paths_tests.rs:331 SCANNED_ROOTS omits aida-mcp/src. Base mcp.rs was covered through aida-cli-lib/src. No current aida-mcp function matches authority_name (checked with the test''s regex over 182 functions), so this is a coverage gap, but a new gate-authority function or // mandate-gate marker in the 7.6k-line transport (which already calls advisor_authority_from and dispatch_authority_from) would go unflagged. Add aida-mcp/src to SCANNED_ROOTS.
-
+    4. CI has not validated this head: at review time all 7 CI shards at 48391eafe320 were pending, so aida-mcp's own tests (rest shard), the tools/list goldens and the respawn tests have no result. merge-hold-gate also failed at step 'Require recorded clearance for every previously held PR'; that needs a recorded clearance, not a code change. A green run at the final head is required before approval.
+    5. Gate-drift ratchet lost the moved code, the same class as the earlier guard findings: aida-cli-lib/src/tests/story_1888_gate_paths_tests.rs:331 SCANNED_ROOTS omits aida-mcp/src. Base mcp.rs was covered through aida-cli-lib/src. No current aida-mcp function matches authority_name (checked with the test's regex over 182 functions), so this is a coverage gap, but a new gate-authority function or // mandate-gate marker in the 7.6k-line transport (which already calls advisor_authority_from and dispatch_authority_from) would go unflagged. Add aida-mcp/src to SCANNED_ROOTS.
     6. Minor stale audit commands: docs/internal/security/store-mutation-writers.md:116-119 still scan aida-cli-lib/src/mcp.rs (now a 9-line test stub) and the rg roots on lines 116-118 omit aida-mcp/src, so the documented store-writer audit no longer sees the MCP transport. Replace with aida-mcp/src.
-
-    7. Minor lost rationale: the scripts/store-writers.toml diff drops four ''# trace:TASK-3366'' explanatory comments on the agent_registry.rs end_entry and mailbox_wake_run.rs watch_row wrapper entries while reordering them, unrelated to this move. Restore them.
-
-    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.'
-  created_at: 2026-11-08 19:04:48.521974+00:00
-  modified_at: 2026-11-08 19:04:48.521974+00:00
+    7. Minor lost rationale: the scripts/store-writers.toml diff drops four '# trace:TASK-3366' explanatory comments on the agent_registry.rs end_entry and mailbox_wake_run.rs watch_row wrapper entries while reordering them, unrelated to this move. Restore them.
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
+  created_at: 2026-11-08T19:04:48.521974Z
+  modified_at: 2026-11-08T19:04:48.521974Z
   session_id: 01a1b9af-8230-75d2-82f8-667491cc010a
   harness_version: 2.1.319 (Claude Code)
 - id: 01a1bc99-ab6e-7ba0-9eb2-05ed83786079
   author: dirtlab
-  content: 'TASK-3429 native implementer handoff: latest review findings 5, 6 and 7 fixed; all edits uncommitted.
-
+  content: |
+    TASK-3429 native implementer handoff: latest review findings 5, 6 and 7 fixed; all edits uncommitted.
 
     Changed files:
-
     - aida-cli-lib/src/tests/story_1888_gate_paths_tests.rs: include aida-mcp/src in SCANNED_ROOTS, restoring gate-authority and mandate-gate drift coverage lost during extraction. Added TASK-3429 trace.
-
     - docs/internal/security/store-mutation-writers.md: audit commands include aida-mcp/src and no longer target the CLI test stub for MCP dispatch.
-
     - scripts/store-writers.toml: restored the four original TASK-3366 rationale comments on end_entry/watch_row wrapper entries verbatim from 6d1f3a24569b. Inventory policy and sink entries unchanged.
 
-
     Validation: untested=false.
-
     - Launcher job j20261108T190729348-2-0: cargo test --profile agent -p aida-cli-lib --lib -- story_1888_gate_paths_tests: 52 passed, 0 failed.
-
     - Launcher job j20261108T190801203-2-0: cargo test --profile agent -p aida-mcp --lib: 2 passed, 0 failed, including shipping tools/list and serve wrapper. Existing dead-code warning emitted. Both jobs complete.
-
     - python3 -m unittest tests/test_store_writer_inventory.py: 42 passed.
-
     - python3 scripts/check-store-writers.py: PASS, 3385 sink sites and 293 operation mappings reconciled.
-
     - rustfmt --check for changed Rust source and git diff --check: PASS.
-
     - Codegraph unavailable; aida doctor check codegraph confirms missing from PATH. Used rg/source inspection fallback.
 
-
     Remaining review findings / blockers:
-
     1. AC5 requires clean-build comparison and cargo --timings on dell1. This lane is disrad-dvp98b3puw; no dell1 evidence is claimed. These launcher builds are not the requested benchmark.
-
     2. AC3 still says 72 tools versus the preserved 58-tool surface. No advisor correction is recorded. Local shipping tools/list is green; no final-head CI or full MCP-suite result is claimed.
-
     3. Completion trailers/PR metadata require host correction or completed acceptance; this seat cannot mutate Git metadata.
-
     4. Final-head CI and recorded merge-hold clearance remain host/reviewer gates, not code fixes or authority granted by this run.
-
 
     Ran aida punt explicitly naming unresolved findings 1-4 and local fixes 5-7. Needs Attention/reason persisted, but punt signal file write refused because its filesystem is read-only. HOST MUST PRESERVE THE PUBLICATION VETO from the spec and this handoff; do not publish or complete until triage. No partial-publication authorization is inferred from repeated requeue without a ruling. No ship declaration performed.
 
-
     Draft finding creation attempted per headless workflow; refused because this clone has no AIDA node binding, no metadata/object written. This comment preserves the flag. No commit, push, PR, queue done, pr ship or review record performed.
-
-    '
-  created_at: 2026-11-08 19:19:09.934363+00:00
-  modified_at: 2026-11-08 19:19:09.934363+00:00
+  created_at: 2026-11-08T19:19:09.934363Z
+  modified_at: 2026-11-08T19:19:09.934363Z
   session_id: 01a1bc8dee87
   harness_version: codex-cli 0.167.0
 - id: 01a1bcb0-8b8b-7750-be73-547ab1ace8a0
   author: joe
   content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: Extraction is faithful and earlier guard findings are fixed, but AC5 timings and the AC3 72-vs-58 ruling are still open, the completion trailer remains, CI has no result at head, merge-hold-gate fails, and aida doc suggest no longer sees MCP tool descriptors.. It was punted on: ambiguous-spec: Latest review findings 5, 6 and 7 are fixed locally: gate-drift scan includes aida-mcp, audit commands scan the transport, and four TASK-3366 rationale comments are restored. Findings 1 and 2 still block completion: AC5 requires dell1 clean-build timing evidence unavailable on disrad-dvp98b3puw; AC3 requires advisor correction of 72 tools versus the unchanged 58-tool surface. Findings 3 and 4 require host PR metadata, final-head CI and recorded hold clearance. Preserve existing publication vetoes; no completion trailer or publication until triage.. No triage reason was given.'
-  created_at: 2026-11-08 19:44:09.099346+00:00
-  modified_at: 2026-11-08 19:44:09.099346+00:00
+  created_at: 2026-11-08T19:44:09.099346Z
+  modified_at: 2026-11-08T19:44:09.099346Z
   session_id: 01a1bc93-77a0-7740-8b03-df4e3e8d1df5
   harness_version: 2.1.319 (Claude Code)
 - id: 01a1bcb0-94f1-7ee3-8ea5-97ca8774fb44
   author: joe
-  content: 'REVIEW FINDINGS TO ADDRESS (TASK-3429):
-
+  content: |-
+    REVIEW FINDINGS TO ADDRESS (TASK-3429):
     Verdict: CHANGES REQUESTED
-
     Reviewed commit: 0e7c2237ef71
-
     Recorded: 2026-11-08T19:33:30.660988988+00:00
-
     Findings:
-
     1. AC5 not met: TASK-3429 has no dell1 clean-build comparison or cargo --timings numbers (ruling 2). The 2026-11-08 19:19 handoff confirms none were taken (lane host is disrad-dvp98b3puw). Needs a run on dell1 by someone with that host, or an advisor amendment to the criterion.
-
     2. AC3 unverified: the spec requires 72 unchanged tool names; aida-cli-lib/src/mcp_schema.rs has 58. A normalized compare of base mcp.rs against aida-mcp/src/mcp.rs plus mcp_schema.rs shows no descriptor line lost, so 72 looks like a spec error, but no advisor correction is recorded on the spec. The advisor must correct the number, and the tools/list and descriptor tests need a green CI result at the head.
-
     3. Completion trailer overclaims: the PR title and commit subjects end in (TASK-3429), which drives merge-time completion, while AC3 and AC5 are open and the spec is Needs Attention with a publication veto in the 19:19 handoff. The PR body is one provenance line and discloses none of this. Finish the criteria, or retitle with (Refs TASK-3429) and disclose the partial scope.
-
     4. CI has not validated this head: CI run 42515164450 at 0e7c2237ef71 is still pending with no jobs reported, so the aida-mcp tests, tools/list goldens and respawn tests have no result. merge-hold-gate run 42515164436 failed at step Require recorded clearance for every previously held PR; that needs a recorded clearance, not a code change. A green run at the final head is required before approval.
-
     5. New regression from the descriptor move: aida-cli-lib/src/trace.rs:3807 classify_surface_line probes MCP tools only when file.ends_with(mcp.rs). tool_descriptors now lives in aida-cli-lib/src/mcp_schema.rs, which does not match, and aida-mcp/src/mcp.rs has no descriptors. A new tool added to the descriptor block is therefore no longer classified as PublicSurfaceKind::McpTool, so the public-surface scan behind aida doc suggest silently misses it. The statusline_tests.rs cases at lines 3208-3258 pass only because they use the literal path aida-cli/src/mcp.rs. Match mcp_schema.rs and add a test using the real path.
-
     6. Cosmetic: aida-cli-lib/src/lib.rs compiles extern crate self as aida_cli_lib unconditionally, but only the cfg(test) include of the transport in aida-cli-lib/src/mcp.rs needs it. Gate it on cfg(test) so production cli-lib does not carry a self-alias.
-
-    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.'
-  created_at: 2026-11-08 19:44:11.505278+00:00
-  modified_at: 2026-11-08 19:44:11.505278+00:00
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
+  created_at: 2026-11-08T19:44:11.505278Z
+  modified_at: 2026-11-08T19:44:11.505278Z
   session_id: 01a1bc93-77a0-7740-8b03-df4e3e8d1df5
   harness_version: 2.1.319 (Claude Code)
 - id: 01a1bcc2-9266-7552-92e7-6fa5f55e86e5
   author: mcp
-  content: 'Round 6 native implementer handoff (edits uncommitted; turn ended after this handoff).
-
+  content: |-
+    Round 6 native implementer handoff (edits uncommitted; turn ended after this handoff).
 
     Findings 5 and 6 fixed:
-
     - aida-cli-lib/src/trace.rs: classify_surface_line recognizes mcp_schema.rs as well as mcp.rs; updated probe documentation and added task trace.
-
     - aida-cli-lib/src/tests/statusline_tests.rs: classifier coverage uses the real shared-schema and extracted-transport paths, retains legacy transport coverage and server/resource exclusions; hunk-scan regression now uses aida-cli-lib/src/mcp_schema.rs.
-
     - aida-cli-lib/src/lib.rs: self-alias is #[cfg(test)], matching the test-only transport include.
 
-
     Validation: untested=false (executed tests, broad run NOT green).
-
     - Launcher j20261108T194755290-3134269-0, cargo test --profile agent -p aida-cli-lib --lib -- surface: 110 passed, 1 failed, exit 101. Both changed tests passed: statusline_tests::surface_detects_mcp_tool_only_in_mcp_file and statusline_tests::detect_new_public_surface_over_hunks. The other statusline surface tests passed too.
-
     - Failure: status_sections::bug_2149_2150_standalone_reviewer_tests::bug2187_unrecorded_headless_review_surfaces_draft_and_record_command panics at test_exec.rs:75 because the matching CLI binary is absent from the lane target. This is not claimed as an established baseline failure or a clean full suite.
-
-    - Runner reported overlay-stale: primary rewrote a file of generation agent-05a39c831e676bb4 during this seat''s build. Subsequent MCP job is rebuilding dependencies.
-
+    - Runner reported overlay-stale: primary rewrote a file of generation agent-05a39c831e676bb4 during this seat's build. Subsequent MCP job is rebuilding dependencies.
     - rustfmt --check on all 3 changed Rust files and git diff --check: PASS.
-
     - Source inventory: 58 literal descriptor names, all unique.
-
     - Codegraph unreachable per aida doctor check codegraph; used rg/source fallback, no lane index mutations.
 
-
     Incomplete launcher jobs at handoff (not claimed passed; poll with aida lane job wait ID):
-
     - j20261108T194813867-3135888-0: aida-mcp --lib, RUNNING.
-
     - j20261108T194815028-3135969-0: aida-cli --no-default-features check, QUEUED.
-
     - j20261108T194923223-3141697-0: descriptor tests, QUEUED.
-
     - j20261108T194924385-3141763-0: mcp_respawn tests, QUEUED.
-
     - j20261108T194925549-3141869-0: tools_list_respects_profile, QUEUED.
-
     - j20261108T200234909-3210534-0: narrow statusline_tests::surface rerun, QUEUED.
-
     - j20261108T200236053-3210583-0: narrow statusline_tests::detect_new_public_surface rerun, QUEUED.
 
-
     Unresolved findings 1-4 explicitly punted, not disputed:
-
     1. AC5 requires dell1 clean-build comparison and cargo --timings evidence or an advisor amendment. Current seat reports hostname imac; no dell1 evidence is available or claimed.
-
     2. AC3 still says 72 tools; preserved schema has 58. Advisor correction remains required. Local results do not replace final-head CI.
-
     3. Host must correct completion trailers and PR disclosure if partial publication is later authorized. Git/PR metadata was not changed from this read-only seat.
-
     4. Final-head green CI and recorded merge-hold clearance remain required; no clearance authority is granted by these fixes.
-
 
     Punt succeeded: Needs Attention with the structured reason and publication veto. HOST MUST PRESERVE ALL EXISTING PUNT/HOLD VETOES; do not publish or complete until triage. No ship declaration, commit, push, PR operation, queue done, pr ship or review record performed. A draft implementer finding was filed successfully (tool returned SPEC-b6b1278890774ef993d2ebc327862470-024).
 
-
     Concrete proposed metadata ONLY IF triage authorizes partial publication:
-
     Title/subject: [AI:codex] fix(mcp): restore schema surface detection and limit test alias (Refs TASK-3429)
-
-    PR body: Extract MCP transport into aida-mcp with the binary-injected handler and shared schema below the crate boundary. Round 6 restores doc-suggest MCP descriptor detection at its new path and makes the cli-lib self-alias test-only. This remains a partial implementation: AC3 awaits advisor correction of the 72-versus-58 count; AC5 awaits dell1 timing evidence or amendment. It does not complete TASK-3429. The broad local surface run passed 110 tests and failed one missing-CLI-binary fixture; both changed regressions passed. Additional local jobs were incomplete at handoff. Final-head CI and recorded merge-hold clearance are outstanding.'
-  created_at: 2026-11-08 20:03:50.502560+00:00
-  modified_at: 2026-11-08 20:03:50.502560+00:00
+    PR body: Extract MCP transport into aida-mcp with the binary-injected handler and shared schema below the crate boundary. Round 6 restores doc-suggest MCP descriptor detection at its new path and makes the cli-lib self-alias test-only. This remains a partial implementation: AC3 awaits advisor correction of the 72-versus-58 count; AC5 awaits dell1 timing evidence or amendment. It does not complete TASK-3429. The broad local surface run passed 110 tests and failed one missing-CLI-binary fixture; both changed regressions passed. Additional local jobs were incomplete at handoff. Final-head CI and recorded merge-hold clearance are outstanding.
+  created_at: 2026-11-08T20:03:50.502560Z
+  modified_at: 2026-11-08T20:03:50.502560Z
 - id: 01a1bcd8-5b07-78c0-b84e-a8c41ef69bba
   author: joe
   content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: Round-6 fixes are correct and the extraction is faithful, but AC5 timings and the AC3 72-vs-58 ruling are still open, the completion trailer remains, CI has no result at head, and merge-hold-gate fails.. It was punted on: ambiguous-spec: Round 6: findings 5 and 6 are fixed locally (MCP schema public-surface detection plus real-path regression coverage; self-alias restricted to cfg(test)). Findings 1 and 2 remain unresolved: AC5 needs dell1 clean-build comparisons and cargo --timings or advisor amendment; this seat reports hostname imac and has no dell1 evidence. AC3 still requires advisor correction of 72 tools versus the preserved 58-tool surface. Findings 3 and 4 require host PR/title/body correction to Refs TASK-3429 for any authorized partial publication, final-head green CI, and recorded merge-hold clearance. No completion credit is justified. Preserve all existing publication vetoes; repeated requeue with no ruling does not authorize publication.. No triage reason was given.'
-  created_at: 2026-11-08 20:27:38.119724+00:00
-  modified_at: 2026-11-08 20:27:38.119724+00:00
+  created_at: 2026-11-08T20:27:38.119724Z
+  modified_at: 2026-11-08T20:27:38.119724Z
   session_id: 01a1bc93-77a0-7740-8b03-df4e3e8d1df5
   harness_version: 2.1.319 (Claude Code)
 - id: 01a1bcd8-6e43-7ca1-a5db-a711d5ade315
   author: joe
-  content: 'REVIEW FINDINGS TO ADDRESS (TASK-3429):
-
+  content: |-
+    REVIEW FINDINGS TO ADDRESS (TASK-3429):
     Verdict: CHANGES REQUESTED
-
     Reviewed commit: 488164b2b3b3
-
     Recorded: 2026-11-08T20:11:28.390696303+00:00
-
     Findings:
-
     1. AC5 not met: TASK-3429 has no dell1 clean-build comparison or cargo --timings numbers (ruling 2). The 2026-11-08 13:03 handoff confirms none were taken and that seat was on host imac. Needs a run on dell1 by someone with that host, or an advisor amendment to the criterion; the implementer lane cannot satisfy it.
-
     2. AC3 unverified: the spec still requires 72 unchanged tool names; aida-cli-lib/src/mcp_schema.rs has 58 unique names. A normalized line compare of base mcp.rs against aida-mcp/src/mcp.rs plus the shared modules shows only qualification, reformatting and //! to // doc changes, so 72 looks like a spec error, but no advisor correction is recorded. The advisor must correct the number, and the tools/list and descriptor tests need a green CI result at the head.
-
     3. Completion trailer overclaims: the PR title and every commit subject end in (TASK-3429), which drives merge-time completion, while AC3 and AC5 are open and the spec is Needs Attention with a publication veto in the 13:03 handoff. The PR body is one provenance line and discloses none of this. Finish the criteria, or retitle with (Refs TASK-3429) and disclose the partial scope; the handoff already proposes the wording.
-
     4. CI has not validated this head: all 7 CI shards in run 42518226614 at 488164b2b3b3 are pending, so the aida-mcp tests, tools/list goldens, respawn tests and static gates have no result. The handoff also reports a broad local surface run with 1 failure (missing CLI binary fixture) and several launcher jobs incomplete. merge-hold-gate job 128845822557 fails on the active aida:merge-hold, which needs a recorded clearance, not a code change. A green run at the final head is required before approval.
-
-    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.'
-  created_at: 2026-11-08 20:27:43.043365+00:00
-  modified_at: 2026-11-08 20:27:43.043365+00:00
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
+  created_at: 2026-11-08T20:27:43.043365Z
+  modified_at: 2026-11-08T20:27:43.043365Z
   session_id: 01a1bc93-77a0-7740-8b03-df4e3e8d1df5
   harness_version: 2.1.319 (Claude Code)
 - id: 01a1bcde-5c6c-79f0-adde-977b19c05579
   author: joe
-  content: 'Round 7 final native-seat handoff. All four review findings are accepted, none disputed; punt succeeded and TASK-3429 is Needs Attention. No code edits are warranted by these remaining manual/evidence gates. Changed workspace files: none. No commit, push, PR mutation, queue done, pr ship, review record or ship publication declaration was performed. Git metadata is read-only by explicit seat instruction. The punt reported the store change queued for host commit; preserve that change and all publication vetoes.
-
+  content: |-
+    Round 7 final native-seat handoff. All four review findings are accepted, none disputed; punt succeeded and TASK-3429 is Needs Attention. No code edits are warranted by these remaining manual/evidence gates. Changed workspace files: none. No commit, push, PR mutation, queue done, pr ship, review record or ship publication declaration was performed. Git metadata is read-only by explicit seat instruction. The punt reported the store change queued for host commit; preserve that change and all publication vetoes.
 
     Evidence: HEAD 488164b2b3b3975d2875749fd09abe9033073282; hostname imac. Descriptor scan: 58 literal names, 58 unique. git diff --check passed; workspace clean. untested=true for this round: no newly executed cargo-test result. Prior round broad surface result remains 110 passed/1 failed (missing CLI fixture), not a green suite. All seven prior jobs were polled with --wait 1 and returned exit 75, still running: j20261108T194813867-3135888-0, j20261108T194815028-3135969-0, j20261108T194923223-3141697-0, j20261108T194924385-3141763-0, j20261108T194925549-3141869-0, j20261108T200234909-3210534-0, j20261108T200236053-3210583-0. No duplicate cargo work submitted.
 
-
     Read-only forge observation at this head: CI (cli-0) and CI (rest) SUCCESS; CI (cli-1) IN_PROGRESS; CI (lib-0), CI (lib-1), CI (gates), CI (contracts) QUEUED; merge-hold-gate FAILURE. Final-head green CI remains required. No CI wait remains active in this turn.
 
-
     Host/advisor actions required:
-
     1. Supply dell1 clean-build comparison with cargo --timings on the spec, or explicitly amend AC5.
-
     2. Correct AC3 via recorded advisor ruling (current preserved surface: 58; criterion: 72), then require green tools/list and descriptor tests at final head.
-
     3. Only if triage permits partial publication, change PR title/publication subject to: [AI:codex] refactor(mcp): extract transport with binary-injected handler (Refs TASK-3429). Do not rewrite existing commits from this seat. Proposed PR body: Extract MCP transport and the store handler into aida-mcp, inject the handler from the binary, and keep shared descriptors and claim naming below the crate boundary. This is a partial implementation and does not complete TASK-3429: AC3 awaits advisor resolution of 72 required versus 58 existing tool names; AC5 awaits dell1 clean-build timing evidence or amendment. Local validation is incomplete, including the previously reported missing CLI fixture failure and seven unfinished launcher jobs. Final-head CI and recorded merge-hold clearance remain outstanding. Publication remains vetoed pending triage.
-
     4. Obtain green final-head CI and eligible recorded merge-hold clearance through the authorized reviewer/human path. No code change or repeated requeue substitutes for clearance.
 
-
-    Do not automatically publish another completion-trailer commit or mark this spec complete. This round exits explicitly punted rather than silently passing through.'
-  created_at: 2026-11-08 20:34:11.692987+00:00
-  modified_at: 2026-11-08 20:34:11.692987+00:00
+    Do not automatically publish another completion-trailer commit or mark this spec complete. This round exits explicitly punted rather than silently passing through.
+  created_at: 2026-11-08T20:34:11.692987Z
+  modified_at: 2026-11-08T20:34:11.692987Z
   session_id: 01a1bcdd2831
 - id: 01a1be30-b2a1-7482-854b-56e5c83761e9
   author: joe
   content: 'Advisor ruling 2026-11-08 on PR-3687. AC3: the 72 in the criterion is a spec error. tools/list on main and the PR''s mcp_schema.rs both expose the same 58 tool names (compared by extracting every name from each), so the requirement is those 58 unchanged. AC5: not waived; dell1 clean-build timing evidence is still owed, so PR-3687 ships as Refs and does not complete this task. Green CI at head and independent approval remain required. Advisor owns the timing run after merge.'
-  created_at: 2026-11-09 02:43:44.929339+00:00
-  modified_at: 2026-11-09 02:43:44.929339+00:00
+  created_at: 2026-11-09T02:43:44.929339Z
+  modified_at: 2026-11-09T02:43:44.929339Z
   session_id: 20abb7c3-8f9b-4a5e-b326-404921f3b450
 - id: 01a1be8b-e672-7c81-af0a-5c44f443b8c8
   author: joe
   content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: Extraction is faithful and AC0-AC2 and AC4 hold by source, AC3 names match the advisor-corrected 58, AC5 is deferred by ruling; blocked because CI run 42559181777 is still queued at this head and the mediated-handler refusal path has no test.. It was punted on: ambiguous-spec: Round 7 explicitly accepts review findings 1-4; none is disputed. Finding 1 / AC5 requires dell1 clean-build comparisons and cargo --timings evidence or advisor amendment; current host is imac and no dell1 evidence is available. Finding 2 / AC3 still says 72 names while preserved schema has 58 unique literal names; advisor correction and final-head green descriptor/tools-list CI remain required. Finding 3 requires the host to change the PR title/publication subject to (Refs TASK-3429) and disclose partial scope if triage authorizes publication; Git metadata is read-only and this seat is forbidden PR mutation. Finding 4 remains open: at 488164b2b3b3 cli-0 and rest CI shards succeeded, cli-1 is in progress, lib-0/lib-1/gates/contracts queued, and merge-hold-gate failed. All seven prior local launcher jobs still return exit 75, so no new executed-test success is claimed. Do not complete or publish TASK-3429 until advisor triage and recorded hold clearance. Requeue without a ruling does not amend AC3/AC5 or revoke existing publication vetoes.. No triage reason was given.'
-  created_at: 2026-11-09 04:23:21.970889+00:00
-  modified_at: 2026-11-09 04:23:21.970889+00:00
+  created_at: 2026-11-09T04:23:21.970889Z
+  modified_at: 2026-11-09T04:23:21.970889Z
   session_id: 7aacb1ed-ebaa-4da4-a195-500864e99e7d
 - id: 01a1be8e-019f-71b3-917c-3054816b6960
   author: dirtlab
   content: 'Implementation approach for current review: add a focused regression for the mediated MCP handler missing-registration refusal, using inert client/environment inputs so no transport or store operation occurs. Validate with the launcher-run targeted command-registry tests. Preserve the advisor-corrected 58-tool surface and Refs-only scope; AC5 dell1 timing evidence remains advisor-owned after merge, and final-head CI plus independent approval remain host gates.'
-  created_at: 2026-11-09 04:25:39.999807+00:00
-  modified_at: 2026-11-09 04:25:39.999807+00:00
+  created_at: 2026-11-09T04:25:39.999807Z
+  modified_at: 2026-11-09T04:25:39.999807Z
   session_id: 01a1be8d6094
   harness_version: codex-cli 0.167.0
 - id: 01a1be92-895a-7f40-b08d-9ccded2450a1
   author: dirtlab
   content: 'Native implementer handoff: added command_registry::mediated_mcp_handler_refuses_without_binary_registration in aida-cli-lib/src/command_registry.rs. The regression uses inert fixture inputs and asserts the exact missing-binary-registration refusal, closing the latest code-level review gap. Validation: launcher job j20261109T042553084-2-0, cargo test --profile agent -p aida-cli-lib --lib -- command_registry::mediated_mcp_handler_refuses_without_binary_registration, exit 0: 1 passed, 0 failed (executed); untested=false. rustfmt --check and git diff --check passed. Descriptor-function source comparison against origin/main confirms 58 unique names in identical order. Prescribed codegraph client is missing; doctor confirms missing tool, so source search was used. Edits remain uncommitted; no commit, push, PR mutation, queue done, pr ship or review record. Advisor ruling honored: Refs-only partial publication, no task completion; AC5 dell1 clean-build timing remains owed by advisor after merge. Final-head green CI, independent approval and applicable hold clearance remain host gates. Turn ends with no active wait.'
-  created_at: 2026-11-09 04:30:36.890376+00:00
-  modified_at: 2026-11-09 04:30:36.890376+00:00
+  created_at: 2026-11-09T04:30:36.890376Z
+  modified_at: 2026-11-09T04:30:36.890376Z
   session_id: 01a1be8d6094
   harness_version: codex-cli 0.167.0
 - id: 01a1bec3-dd24-7702-bf7b-8b4bfb8f5b4b
   author: joe
   content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: Extraction is faithful: AC0-AC2 and AC4 hold by source, the 58 tool names match in order, AC5 is deferred by ruling. Blocked by a resurrected AGENTS.md paragraph from the last merge, no CI result at this head, and an undisclosed partial scope in the PR body.. No triage reason was given.'
-  created_at: 2026-11-09 05:24:29.604839+00:00
-  modified_at: 2026-11-09 05:24:29.604839+00:00
+  created_at: 2026-11-09T05:24:29.604839Z
+  modified_at: 2026-11-09T05:24:29.604839Z
   session_id: 7aacb1ed-ebaa-4da4-a195-500864e99e7d
 - id: 01a1bec6-813a-7d01-8b02-259a9ec311ab
   author: dirtlab
   content: 'Native rework handoff: removed the resurrected, unrelated TASK-3365 review-watch paragraph from AGENTS.md (only changed file, uncommitted). git diff --check passed. Static scan confirms all 58 unique schema tool names occur unchanged in origin/main transport, in identical order; initial function-boundary extraction scripts were invalid and are not validation evidence. untested=true this round: documentation-only change, no Cargo tests run. PR-3687 read-only observation at 2ea6e05b5605: all seven CI lanes and merge-hold-gate queued; no green final-head result claimed. Refs-only native publication declaration recorded; no commit, push, PR mutation, queue done, pr ship or review record. Host must update PR body to disclose: Extract MCP transport/store handler into aida-mcp with binary injection; shared descriptors and claim naming remain in cli-lib. This is partial delivery under advisor ruling: preserve the same 58 tool names; AC5 dell1 clean-build cargo --timings evidence remains owed, advisor-owned after merge. TASK-3429 stays open. Require green final-head CI, independent approval and applicable hold clearance. No active wait remains.'
-  created_at: 2026-11-09 05:27:22.682240+00:00
-  modified_at: 2026-11-09 05:27:22.682240+00:00
+  created_at: 2026-11-09T05:27:22.682240Z
+  modified_at: 2026-11-09T05:27:22.682240Z
   session_id: 01a1bec57add
   harness_version: codex-cli 0.167.0
 - id: 01a1bf05-256f-7c03-9baa-d6f30b9a2a92
   author: joe
   content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: Extraction is faithful and the resurrected AGENTS.md note is gone; AC0-AC2 and AC4 hold by source, the 58 tool names match, AC5 is deferred by ruling. Blocked on CI: run 42567458823 is still queued at this head, and the advisor ruling requires green CI. PR body and two ratchets remain open.. No triage reason was given.'
-  created_at: 2026-11-09 06:35:47.951980+00:00
-  modified_at: 2026-11-09 06:35:47.951980+00:00
+  created_at: 2026-11-09T06:35:47.951980Z
+  modified_at: 2026-11-09T06:35:47.951980Z
   session_id: 01a1beff-fc3b-78e2-93e2-9b0c283b0339
   harness_version: 2.1.319 (Claude Code)
 - id: 01a1bf23-ce3a-7b30-a25f-b2eb6677286d
   author: dirtlab
-  content: 'Native implementer rework handoff: fixed latest review finding 3. tests/test_git_maintenance_ratchet.py now includes aida-mcp in CRATES; tests/test_ownership_liveness_ratchet.py scans both cli-lib and aida-mcp, retaining existing exclusions. No baseline changes. Both edits remain uncommitted.
-
+  content: |
+    Native implementer rework handoff: fixed latest review finding 3. tests/test_git_maintenance_ratchet.py now includes aida-mcp in CRATES; tests/test_ownership_liveness_ratchet.py scans both cli-lib and aida-mcp, retaining existing exclusions. No baseline changes. Both edits remain uncommitted.
     Validation: Python Git-maintenance ratchet 8 tests passed; ownership-liveness ratchet 2 tests passed. Synthetic temporary aida-mcp/src/probe.rs inputs independently confirmed both scanners discover new forbidden sites in the extracted crate. git diff --check passed. Prescribed codegraph executable absent; aida doctor check codegraph confirms missing tool; source search used.
-
     Rust validation pending: launcher job j20261109T070743211-2-0 runs cargo test --profile agent -p aida-mcp --lib, still compiling dependencies at handoff. No executed Rust test result claimed; untested=true for this Cargo run. Continue with aida lane job wait j20261109T070743211-2-0.
-
     Recorded native publication declaration: [AI:codex] test(mcp): extend source ratchets to extracted crate (Refs TASK-3429). No commit, push, PR mutation, queue completion, pr ship or review record performed.
-
     Host must update PR-3687 body: extracted MCP transport/store handler into aida-mcp with binary injection; descriptors and claim naming remain in cli-lib. Preserve the advisor-corrected 58-tool surface. This ships as Refs and does not complete TASK-3429. AC5 dell1 clean-build cargo --timings evidence is still owed by the advisor after merge. Require green CI at the final published head, independent approval and applicable hold clearance. CI at inspected head 91e6c53598 was queued; no green result claimed. Existing holds remain effective. No CI watcher or notification wait remains in this turn.
-
-    '
-  created_at: 2026-11-09 07:09:17.242234+00:00
-  modified_at: 2026-11-09 07:09:17.242234+00:00
+  created_at: 2026-11-09T07:09:17.242234Z
+  modified_at: 2026-11-09T07:09:17.242234Z
   session_id: 01a1bf212848
   harness_version: codex-cli 0.167.0
 - id: 01a1c075-02c7-7a60-8b75-5fc1f89d897c
   author: joe
-  content: 'CI FAILURES at 3e0a1ccf8ee4 (run 42620288414). Fix exactly these before pushing; a push without a code change for them will fail again and must not be made:
-
-    (no test lines extracted; open run 42620288414)'
-  created_at: 2026-11-09 13:17:36.327439+00:00
-  modified_at: 2026-11-09 13:17:36.327439+00:00
+  content: |-
+    CI FAILURES at 3e0a1ccf8ee4 (run 42620288414). Fix exactly these before pushing; a push without a code change for them will fail again and must not be made:
+    (no test lines extracted; open run 42620288414)
+  created_at: 2026-11-09T13:17:36.327439Z
+  modified_at: 2026-11-09T13:17:36.327439Z
 - id: 01a1c08a-2400-76c3-b2b2-1b7f07f7a469
   author: joe
-  content: 'CI FAILURES at e13a29aeafbe (run 42624439819). Fix exactly these before pushing; a push without a code change for them will fail again and must not be made:
-
-    (no test lines extracted; open run 42624439819)'
-  created_at: 2026-11-09 13:40:41.088621+00:00
-  modified_at: 2026-11-09 13:40:41.088621+00:00
+  content: |-
+    CI FAILURES at e13a29aeafbe (run 42624439819). Fix exactly these before pushing; a push without a code change for them will fail again and must not be made:
+    (no test lines extracted; open run 42624439819)
+  created_at: 2026-11-09T13:40:41.088621Z
+  modified_at: 2026-11-09T13:40:41.088621Z
 - id: 01a1c08c-5fab-7612-be6a-26ea15a003f6
   author: dirtlab
   content: 'Native rework handoff: inspected CI run 42620288414 at 3e0a1ccf8ee4. Only CI (gates) failed, at Check formatting; the six other test lanes passed. Fixed the exact rustfmt diff in aida-cli-lib/src/queue_cmd/mod.rs (re-export ordering and wrapping only). Changed file remains uncommitted. Validation: rustfmt --edition 2021 --check --config skip_children=true aida-cli-lib/src/queue_cmd/mod.rs passed; git diff --check passed. untested=true this round: formatting-only change, no new Cargo test executed. Prior launcher job j20261109T070743211-2-0 still returned exit 75 when polled; no success claimed. Advisor ruling preserved: 58 unchanged tools, Refs-only delivery; AC5 dell1 clean-build cargo --timings evidence remains advisor-owned after merge. Host must disclose partial scope in PR-3687 body and obtain final-head green CI, independent approval and applicable hold clearance. No commit, push, PR mutation, queue done, pr ship or review record. No active wait remains.'
-  created_at: 2026-11-09 13:43:07.435061+00:00
-  modified_at: 2026-11-09 13:43:07.435061+00:00
+  created_at: 2026-11-09T13:43:07.435061Z
+  modified_at: 2026-11-09T13:43:07.435061Z
   session_id: 01a1c08b79b4
   harness_version: codex-cli 0.167.0
 history:
 - id: 01a1b862-7fc0-7e63-899e-5179ac0131ed
   author: joe
-  timestamp: 2026-11-07 23:40:25.408976+00:00
+  timestamp: 2026-11-07T23:40:25.408976Z
   session_id: 01a1b848-940b-7bd2-8acd-52e428b182b8
   harness_version: 2.1.319 (Claude Code)
   changes: []
 - id: 01a1b862-9ad3-7713-bf1d-beff13112b1d
   author: joe
-  timestamp: 2026-11-07 23:40:32.339745+00:00
+  timestamp: 2026-11-07T23:40:32.339745Z
   session_id: 01a1b848-940b-7bd2-8acd-52e428b182b8
   harness_version: 2.1.319 (Claude Code)
   changes: []
 - id: 01a1bc17-e72a-7cb3-aaa6-548946e79def
   author: aida-session-start
-  timestamp: 2026-11-08 16:57:25.546307+00:00
+  timestamp: 2026-11-08T16:57:25.546307Z
   changes:
   - field_name: status
     old_value: Approved
     new_value: InProgress
 - id: 01a1bc18-2b48-7d82-ad97-1060e7e540ad
   author: dirtlab
-  timestamp: 2026-11-08 16:57:42.984693+00:00
+  timestamp: 2026-11-08T16:57:42.984693Z
   session_id: 01a1bc17e151
   harness_version: codex-cli 0.167.0
   changes: []
 - id: 01a1bc1c-5b06-7e33-a4f1-ce6b53dd2c97
   author: dirtlab
-  timestamp: 2026-11-08 17:02:17.350154+00:00
+  timestamp: 2026-11-08T17:02:17.350154Z
   session_id: 01a1bc17e151
   harness_version: codex-cli 0.167.0
   changes:
@@ -929,13 +629,13 @@ history:
     new_value: NeedsAttention
 - id: 01a1bc28-e249-7b20-93fc-d945befea5ec
   author: joe
-  timestamp: 2026-11-08 17:15:58.409586+00:00
+  timestamp: 2026-11-08T17:15:58.409586Z
   session_id: 01a1bc275f2c
   harness_version: 2.1.319 (Claude Code)
   changes: []
 - id: 01a1bc2a-614d-7bd3-8591-f6e63fffee29
   author: joe
-  timestamp: 2026-11-08 17:17:36.461175+00:00
+  timestamp: 2026-11-08T17:17:36.461175Z
   session_id: 01a1b9af-8230-75d2-82f8-667491cc010a
   harness_version: 2.1.319 (Claude Code)
   changes:
@@ -944,20 +644,20 @@ history:
     new_value: Approved
 - id: 01a1bc2c-0a44-7ce1-8063-6d7f857980ab
   author: aida-session-start
-  timestamp: 2026-11-08 17:19:25.252410+00:00
+  timestamp: 2026-11-08T17:19:25.252410Z
   changes:
   - field_name: status
     old_value: Approved
     new_value: InProgress
 - id: 01a1bc2c-6463-74d3-8f09-a180f23e99fe
   author: dirtlab
-  timestamp: 2026-11-08 17:19:48.323898+00:00
+  timestamp: 2026-11-08T17:19:48.323898Z
   session_id: 01a1bc2bfe99
   harness_version: codex-cli 0.167.0
   changes: []
 - id: 01a1bc3f-f1d5-7361-a5cd-21fe4851ce3f
   author: dirtlab
-  timestamp: 2026-11-08 17:41:09.717610+00:00
+  timestamp: 2026-11-08T17:41:09.717610Z
   session_id: 01a1bc2bfe99
   harness_version: codex-cli 0.167.0
   changes:
@@ -966,13 +666,13 @@ history:
     new_value: NeedsAttention
 - id: 01a1bc47-d186-7280-a552-f32d07bdf1d8
   author: joe
-  timestamp: 2026-11-08 17:49:45.734927+00:00
+  timestamp: 2026-11-08T17:49:45.734927Z
   session_id: 01a1bc447bc3
   harness_version: 2.1.319 (Claude Code)
   changes: []
 - id: 01a1bc48-7652-7dd1-aeb6-d25674f6611d
   author: joe
-  timestamp: 2026-11-08 17:50:27.922177+00:00
+  timestamp: 2026-11-08T17:50:27.922177Z
   session_id: 01a1b9af-8230-75d2-82f8-667491cc010a
   harness_version: 2.1.319 (Claude Code)
   changes:
@@ -981,20 +681,20 @@ history:
     new_value: Approved
 - id: 01a1bc49-d694-7671-b418-c343dc8d2429
   author: aida-session-start
-  timestamp: 2026-11-08 17:51:58.100655+00:00
+  timestamp: 2026-11-08T17:51:58.100655Z
   changes:
   - field_name: status
     old_value: Approved
     new_value: InProgress
 - id: 01a1bc4a-290b-77b1-86dc-0132a53f53a5
   author: dirtlab
-  timestamp: 2026-11-08 17:52:19.211315+00:00
+  timestamp: 2026-11-08T17:52:19.211315Z
   session_id: 01a1bc49d0a1
   harness_version: codex-cli 0.167.0
   changes: []
 - id: 01a1bc4e-753c-7311-ae26-fedb46f5c992
   author: dirtlab
-  timestamp: 2026-11-08 17:57:00.860312+00:00
+  timestamp: 2026-11-08T17:57:00.860312Z
   session_id: 01a1bc49d0a1
   harness_version: codex-cli 0.167.0
   changes:
@@ -1003,13 +703,13 @@ history:
     new_value: NeedsAttention
 - id: 01a1bc5c-bbbd-74f1-9462-04a7c845a37d
   author: joe
-  timestamp: 2026-11-08 18:12:36.413860+00:00
+  timestamp: 2026-11-08T18:12:36.413860Z
   session_id: 01a1bc595755
   harness_version: 2.1.319 (Claude Code)
   changes: []
 - id: 01a1bc63-21af-7ea3-aad4-638dc81b5f4d
   author: joe
-  timestamp: 2026-11-08 18:19:35.727069+00:00
+  timestamp: 2026-11-08T18:19:35.727069Z
   session_id: 01a1b9af-8230-75d2-82f8-667491cc010a
   harness_version: 2.1.319 (Claude Code)
   changes:
@@ -1018,20 +718,20 @@ history:
     new_value: Approved
 - id: 01a1bc64-5841-7730-9cae-99f8f2b5ffbb
   author: aida-session-start
-  timestamp: 2026-11-08 18:20:55.233726+00:00
+  timestamp: 2026-11-08T18:20:55.233726Z
   changes:
   - field_name: status
     old_value: Approved
     new_value: InProgress
 - id: 01a1bc64-b357-7e92-a74f-e2d7f64dc6c2
   author: dirtlab
-  timestamp: 2026-11-08 18:21:18.551694+00:00
+  timestamp: 2026-11-08T18:21:18.551694Z
   session_id: 01a1bc645291
   harness_version: codex-cli 0.167.0
   changes: []
 - id: 01a1bc67-7708-7bb0-8b4d-370fa0df5387
   author: dirtlab
-  timestamp: 2026-11-08 18:24:19.720809+00:00
+  timestamp: 2026-11-08T18:24:19.720809Z
   session_id: 01a1bc645291
   harness_version: codex-cli 0.167.0
   changes:
@@ -1040,13 +740,13 @@ history:
     new_value: NeedsAttention
 - id: 01a1bc80-5bb3-7f32-8e7a-c52c4ddcb4ff
   author: joe
-  timestamp: 2026-11-08 18:51:31.123815+00:00
+  timestamp: 2026-11-08T18:51:31.123815Z
   session_id: 01a1bc7cfd79
   harness_version: 2.1.319 (Claude Code)
   changes: []
 - id: 01a1bc8c-711e-7701-a6f1-9673d52e5d74
   author: joe
-  timestamp: 2026-11-08 19:04:43.038649+00:00
+  timestamp: 2026-11-08T19:04:43.038649Z
   session_id: 01a1b9af-8230-75d2-82f8-667491cc010a
   harness_version: 2.1.319 (Claude Code)
   changes:
@@ -1055,20 +755,20 @@ history:
     new_value: Approved
 - id: 01a1bc8d-fa75-7060-b907-116d357b717f
   author: aida-session-start
-  timestamp: 2026-11-08 19:06:23.733780+00:00
+  timestamp: 2026-11-08T19:06:23.733780Z
   changes:
   - field_name: status
     old_value: Approved
     new_value: InProgress
 - id: 01a1bc8e-7531-71f1-9857-b2ee4c05835c
   author: dirtlab
-  timestamp: 2026-11-08 19:06:55.153720+00:00
+  timestamp: 2026-11-08T19:06:55.153720Z
   session_id: 01a1bc8dee87
   harness_version: codex-cli 0.167.0
   changes: []
 - id: 01a1bc8f-d593-7f71-9547-8c9d4c52591e
   author: dirtlab
-  timestamp: 2026-11-08 19:08:25.363324+00:00
+  timestamp: 2026-11-08T19:08:25.363324Z
   session_id: 01a1bc8dee87
   harness_version: codex-cli 0.167.0
   changes:
@@ -1077,19 +777,19 @@ history:
     new_value: NeedsAttention
 - id: 01a1bc94-5b62-71b0-aaf6-a2c1d28be0e5
   author: joe
-  timestamp: 2026-11-08 19:13:21.762082+00:00
+  timestamp: 2026-11-08T19:13:21.762082Z
   session_id: 01a1bc9239f0
   harness_version: 2.1.319 (Claude Code)
   changes: []
 - id: 01a1bca6-cee8-7702-909e-05888c5126ed
   author: joe
-  timestamp: 2026-11-08 19:33:30.984236+00:00
+  timestamp: 2026-11-08T19:33:30.984236Z
   session_id: 01a1bca3fe5a
   harness_version: 2.1.319 (Claude Code)
   changes: []
 - id: 01a1bcb0-8b8b-7750-be73-546d213d1563
   author: joe
-  timestamp: 2026-11-08 19:44:09.099324+00:00
+  timestamp: 2026-11-08T19:44:09.099324Z
   session_id: 01a1bc93-77a0-7740-8b03-df4e3e8d1df5
   harness_version: 2.1.319 (Claude Code)
   changes:
@@ -1098,14 +798,14 @@ history:
     new_value: Approved
 - id: 01a1bcb2-cc5a-7672-b6cd-43b0d736c7d3
   author: aida-session-start
-  timestamp: 2026-11-08 19:46:36.762862+00:00
+  timestamp: 2026-11-08T19:46:36.762862Z
   changes:
   - field_name: status
     old_value: Approved
     new_value: InProgress
 - id: 01a1bcb4-70b7-72f2-9442-4c43db5dd9cc
   author: joe
-  timestamp: 2026-11-08 19:48:24.375867+00:00
+  timestamp: 2026-11-08T19:48:24.375867Z
   session_id: 01a1bcb2c222
   changes:
   - field_name: status
@@ -1113,18 +813,18 @@ history:
     new_value: NeedsAttention
 - id: 01a1bcc4-26ae-7e32-9f0e-ad32685695e1
   author: joe
-  timestamp: 2026-11-08 20:05:33.998472+00:00
+  timestamp: 2026-11-08T20:05:33.998472Z
   session_id: 01a1bcb2c222
   changes: []
 - id: 01a1bcc9-b705-7d01-8aeb-6a5969c10ae9
   author: joe
-  timestamp: 2026-11-08 20:11:38.629305+00:00
+  timestamp: 2026-11-08T20:11:38.629305Z
   session_id: 01a1bcc7813b
   harness_version: 2.1.319 (Claude Code)
   changes: []
 - id: 01a1bcd8-5b07-78c0-b84e-a8b0865afc98
   author: joe
-  timestamp: 2026-11-08 20:27:38.119708+00:00
+  timestamp: 2026-11-08T20:27:38.119708Z
   session_id: 01a1bc93-77a0-7740-8b03-df4e3e8d1df5
   harness_version: 2.1.319 (Claude Code)
   changes:
@@ -1133,14 +833,14 @@ history:
     new_value: Approved
 - id: 01a1bcdd-36dc-7223-b65e-80d33a0b4f28
   author: aida-session-start
-  timestamp: 2026-11-08 20:32:56.540831+00:00
+  timestamp: 2026-11-08T20:32:56.540831Z
   changes:
   - field_name: status
     old_value: Approved
     new_value: InProgress
 - id: 01a1bcde-1429-7923-b0eb-05d38cdfd779
   author: joe
-  timestamp: 2026-11-08 20:33:53.193535+00:00
+  timestamp: 2026-11-08T20:33:53.193535Z
   session_id: 01a1bcdd2831
   changes:
   - field_name: status
@@ -1148,13 +848,13 @@ history:
     new_value: NeedsAttention
 - id: 01a1be7b-1bb2-7180-9ad2-17a92e7690cb
   author: joe
-  timestamp: 2026-11-09 04:05:01.490294+00:00
+  timestamp: 2026-11-09T04:05:01.490294Z
   session_id: 01a1be76be00
   harness_version: 2.1.319 (Claude Code)
   changes: []
 - id: 01a1be8b-e672-7c81-af0a-5c358c8ab275
   author: joe
-  timestamp: 2026-11-09 04:23:21.970871+00:00
+  timestamp: 2026-11-09T04:23:21.970871Z
   session_id: 7aacb1ed-ebaa-4da4-a195-500864e99e7d
   changes:
   - field_name: status
@@ -1162,19 +862,19 @@ history:
     new_value: Approved
 - id: 01a1be8c-0b28-7890-b9ed-e7fd7caa902c
   author: joe
-  timestamp: 2026-11-09 04:23:31.368181+00:00
+  timestamp: 2026-11-09T04:23:31.368181Z
   session_id: 7aacb1ed-ebaa-4da4-a195-500864e99e7d
   changes: []
 - id: 01a1be8d-669f-7680-955b-b72d9fe76fcd
   author: aida-session-start
-  timestamp: 2026-11-09 04:25:00.319047+00:00
+  timestamp: 2026-11-09T04:25:00.319047Z
   changes:
   - field_name: status
     old_value: Approved
     new_value: InProgress
 - id: 01a1be9a-bc00-76e3-b2bd-28246583859e
   author: aida-orchestrator
-  timestamp: 2026-11-09 04:39:34.144441+00:00
+  timestamp: 2026-11-09T04:39:34.144441Z
   session_id: 01a1be971f4b
   harness_version: 2.1.319 (Claude Code)
   changes:
@@ -1183,7 +883,7 @@ history:
     new_value: NeedsAttention
 - id: 01a1bec3-dd24-7702-bf7b-8b3d131fd003
   author: joe
-  timestamp: 2026-11-09 05:24:29.604832+00:00
+  timestamp: 2026-11-09T05:24:29.604832Z
   session_id: 7aacb1ed-ebaa-4da4-a195-500864e99e7d
   changes:
   - field_name: status
@@ -1191,19 +891,19 @@ history:
     new_value: Approved
 - id: 01a1bec4-0a6d-77c0-b90f-52e0cf15f644
   author: joe
-  timestamp: 2026-11-09 05:24:41.197660+00:00
+  timestamp: 2026-11-09T05:24:41.197660Z
   session_id: 7aacb1ed-ebaa-4da4-a195-500864e99e7d
   changes: []
 - id: 01a1bec5-80dc-7611-97dc-8119a637146b
   author: aida-session-start
-  timestamp: 2026-11-09 05:26:17.052554+00:00
+  timestamp: 2026-11-09T05:26:17.052554Z
   changes:
   - field_name: status
     old_value: Approved
     new_value: InProgress
 - id: 01a1becc-e4c3-7a23-b3ec-7ce36ca4b862
   author: aida-orchestrator
-  timestamp: 2026-11-09 05:34:21.379369+00:00
+  timestamp: 2026-11-09T05:34:21.379369Z
   session_id: 01a1bec96aa3
   harness_version: 2.1.319 (Claude Code)
   changes:
@@ -1212,7 +912,7 @@ history:
     new_value: NeedsAttention
 - id: 01a1bf05-256f-7c03-9baa-d6e02d263c4e
   author: joe
-  timestamp: 2026-11-09 06:35:47.951973+00:00
+  timestamp: 2026-11-09T06:35:47.951973Z
   session_id: 01a1beff-fc3b-78e2-93e2-9b0c283b0339
   harness_version: 2.1.319 (Claude Code)
   changes:
@@ -1221,29 +921,36 @@ history:
     new_value: Approved
 - id: 01a1bf21-352e-7812-9b28-d965385d74f3
   author: aida-session-start
-  timestamp: 2026-11-09 07:06:26.990028+00:00
+  timestamp: 2026-11-09T07:06:26.990028Z
   changes:
   - field_name: status
     old_value: Approved
     new_value: InProgress
 - id: 01a1c075-2114-79a0-97f1-d4f9fa5255f6
   author: joe
-  timestamp: 2026-11-09 13:17:44.084554+00:00
+  timestamp: 2026-11-09T13:17:44.084554Z
   changes:
   - field_name: status
     old_value: InProgress
     new_value: Approved
 - id: 01a1c075-320d-72b0-99f9-17b5806ce062
   author: joe
-  timestamp: 2026-11-09 13:17:48.429692+00:00
+  timestamp: 2026-11-09T13:17:48.429692Z
   changes: []
 - id: 01a1c08b-7f87-7011-96b7-bd682fb3756c
   author: aida-session-start
-  timestamp: 2026-11-09 13:42:10.055919+00:00
+  timestamp: 2026-11-09T13:42:10.055919Z
   changes:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a1c106-bd64-7ff2-8df9-374f5f4df61f
+  author: aida-orchestrator
+  timestamp: 2026-11-09T15:56:46.820563161Z
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: NeedsAttention
 filed_at:
   code_sha: 2a7fe186bdcd718fa356e5e4d028a3b2ff13769d
   branch: main
@@ -1253,3 +960,11 @@ filed_at:
   vendor: claude
   session: 01a1b848-940b-7bd2-8acd-52e428b182b8
   harness_version: 2.1.319 (Claude Code)
+failure_reason:
+  phase: reviewer
+  phase_index: 3
+  kind: verdict:request-changes
+  detail: Extraction and final-head CI pass; restore reviewed policy metadata in 16 relocated writer rows and disclose Refs-only scope. AC5 remains advisor-owned after merge.
+  recovery_hint: address the review findings, move TASK-3429 back to In Progress, and clear the PR hold only after approval
+  shelved_by: reviewer
+  shelved_at: 2026-11-09T15:56:46.820536587Z
