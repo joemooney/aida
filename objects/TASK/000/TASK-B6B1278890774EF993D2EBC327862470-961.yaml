@@ -8,7 +8,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-07T23:40:15.306412Z
-modified_at: 2026-11-09T17:27:06.933981482Z
+modified_at: 2026-11-09T17:42:09.592428929Z
 req_type: Task
 relationships:
 - rel_type: BlockedBy
@@ -617,6 +617,18 @@ comments:
   modified_at: 2026-11-09T16:01:34.175615316Z
   session_id: 01a1c10a1bdf
   harness_version: codex-cli 0.167.0
+- id: 01a1c167-3758-7401-b535-c2c690028315
+  author: joe
+  content: |-
+    REVIEW FINDINGS TO ADDRESS (TASK-3429):
+    Verdict: CHANGES REQUESTED
+    Reviewed commit: c0f7b2716e4c
+    Recorded: 2026-11-09T17:27:04.037975120+00:00
+    Findings:
+    1. [P3] PR-3687 body still contains only seat-publication provenance and omits the advisor-authorized partial scope (TASK-3429 ruling 2026-11-09T02:43:44Z). Host: update the body to describe the extracted MCP transport/store handler and binary injection, shared descriptors and claim naming retained in cli-lib, unchanged 58-tool surface, Refs-only delivery with TASK-3429 remaining open, and AC5 dell1 clean-build cargo --timings evidence owed by the advisor after merge. Preserve the Refs title. This is host PR metadata work; no further code-only rework is requested.
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
+  created_at: 2026-11-09T17:42:09.496890269Z
+  modified_at: 2026-11-09T17:42:09.496890269Z
 history:
 - id: 01a1b862-7fc0-7e63-899e-5179ac0131ed
   author: joe
