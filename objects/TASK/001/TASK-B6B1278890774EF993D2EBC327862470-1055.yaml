@@ -70,12 +70,12 @@ description: |
 
   PR: #3724
   Reviewed sha: da5047a5ebaa01d84607731b5f246637665506f8
-status: InProgress
+status: NeedsAttention
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-09T14:27:09.447287877Z
-modified_at: 2026-11-09T22:04:17.034797805Z
+modified_at: 2026-11-09T22:04:44.655715083Z
 req_type: Task
 tags:
 - kind:finding-sweep
@@ -279,6 +279,15 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a1c257-9eef-73f3-9f86-6c5e48fc32b7
+  author: dirtlab
+  timestamp: 2026-11-09T22:04:44.655723845Z
+  session_id: 01a1c2572d39
+  harness_version: codex-cli 0.167.0
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: NeedsAttention
 filed_at:
   code_sha: e4eee38238fa4cb8e8c85dadaa4ed07894cfbeea
   branch: main
@@ -288,3 +297,9 @@ filed_at:
   vendor: claude
   session: 01a1beff-fc3b-78e2-93e2-9b0c283b0339
   harness_version: 2.1.319 (Claude Code)
+attention_reason:
+  category: ambiguous-spec
+  detail: 'Binding advisor brief permits only the exact test-time budget entry, which is already present at 25 seconds in dfd52a39a3 with Help-Golden: unchanged. Review finding P2 TASK-3091 requests distinct burndown wave WAITING classification and a regression, outside the explicit Change nothing else scope. No new code changes made; resolve scope before resuming that finding.'
+  lean: Keep the existing budget fix and trailer; authorize TASK-3091 wave-path rework separately.
+  raised_by: implementer
+  raised_at: 2026-11-09T22:04:44.655715083Z
