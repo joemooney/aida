@@ -2180,6 +2180,7 @@ fn bug_2502_loop_guard_requires_a_blocking_reviewer_shelf() {
         "verdict:request-changes",
         "verdict:rejected",
         "verdict:reject",
+        "verdict:stranded", // trace:TASK-3777 | ai:codex
     ] {
         let failure = req.failure_reason.as_mut().unwrap();
         failure.phase = "reviewer".into();
@@ -2222,6 +2223,7 @@ fn bug_2502_repeated_blocking_review_is_parked_before_requeue() {
         ("verdict:request-changes", "RequestChanges"),
         ("verdict:rejected", "Rejected"),
         ("verdict:reject", "Rejected"),
+        ("verdict:stranded", "Rejected"),
     ] {
         let mut req = parked("BUG-2502");
         let failure = req.failure_reason.as_mut().unwrap();
@@ -2302,4 +2304,44 @@ fn bug_2502_repeated_blocking_review_is_parked_before_requeue() {
             "{kind}"
         );
     }
+}
+
+// A captured review must represent a successful return to flight; recording it
+// earlier makes a failed transition look like an implementer round on retry.
+// trace:TASK-3777 | ai:codex
+#[test]
+fn task_3777_findings_follow_successful_return_to_flight() {
+    let mut req = parked("TASK-3777");
+    let failure = req.failure_reason.as_mut().unwrap();
+    failure.phase = "reviewer".into();
+    failure.kind = "verdict:request-changes".into();
+    let (tmp, storage) = story_1429_fixture(vec![req]);
+    let _seat = crate::test_env::AmbientGuard::hermetic_with_seat(tmp.path(), "advisor", &[]);
+    let verdicts = tmp.path().join(".aida/review-verdicts");
+    std::fs::create_dir_all(&verdicts).unwrap();
+    std::fs::write(
+        verdicts.join("TASK-3777.json"),
+        serde_json::json!({"verdict": "RequestChanges", "summary": "fix A", "findings": ["fix A"]})
+            .to_string(),
+    )
+    .unwrap();
+    rework_as(&storage, "TASK-3777", None, false).unwrap();
+    let store = storage.load().unwrap();
+    let req = store.get_requirement_by_spec_id("TASK-3777").unwrap();
+    assert_eq!(req.status, RequirementStatus::Approved);
+    assert!(req.failure_reason.is_none());
+    let returned = req
+        .comments
+        .iter()
+        .position(|c| c.content.starts_with("Returned from NeedsAttention"))
+        .unwrap();
+    let findings = req
+        .comments
+        .iter()
+        .position(|c| crate::review_verdict_display::is_findings_block(&c.content))
+        .unwrap();
+    assert!(
+        returned < findings,
+        "findings must follow the successful transition audit"
+    );
 }

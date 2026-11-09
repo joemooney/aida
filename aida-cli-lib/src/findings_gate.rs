@@ -2113,8 +2113,12 @@ pub(crate) fn try_emit_nonblocking_findings_on_completion(
             });
         let req = &mut store.requirements[index];
         sweep_id = req.spec_id.clone();
+        // New sweeps start directly at their first section. trace:TASK-3777 | ai:codex
+        if !req.description.is_empty() {
+            req.description.push_str("\n\n");
+        }
         req.description
-            .push_str(&format!("\n\n## Findings from {spec_upper}\n"));
+            .push_str(&format!("## Findings from {spec_upper}\n"));
         if let Some(n) = pr_number {
             req.description.push_str(&format!("\nPR: #{n}\n"));
         }

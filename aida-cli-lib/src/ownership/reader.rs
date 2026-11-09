@@ -186,6 +186,11 @@ fn review_completion_matches(lease: &crate::SessionLease, why: &str) -> bool {
 // trace:BUG-2498 | ai:codex
 pub(crate) fn review_finished(root: &Path, lease: &crate::SessionLease) -> Result<()> {
     use super::store::{Expect, OwnershipStore};
+    // Seat clones cannot publish host ownership evidence. trace:TASK-3777 | ai:codex
+    anyhow::ensure!(
+        !crate::session::process_contained(),
+        "a contained seat never writes the ownership records"
+    );
     anyhow::ensure!(
         crate::pr_lease_takeover::reviewer_target(lease).is_some(),
         "not a review lease"
