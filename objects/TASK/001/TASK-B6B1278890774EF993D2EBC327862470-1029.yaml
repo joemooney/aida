@@ -1,0 +1,29 @@
+id: 01a1bdf3-8750-7602-816e-db987bf7b142
+spec_id: TASK-b6b1278890774ef993d2ebc327862470-1029
+title: 'MERGE-HOLD (no source change needed): merge-hold-gate is red only because of th…'
+description: |-
+  Non-blocking finding carried forward from an APPROVED review verdict on TASK-3452, which has since completed — recorded here so it keeps a queryable home once the verdict record stops being read.
+
+  MERGE-HOLD (no source change needed): merge-hold-gate is red only because of the supervised aida:merge-hold label; release needs the human-gated 'aida merge-hold clear 3692' path or an eligible 'aida merge-hold auto-release 3692'.
+
+  PR: #3692
+  Reviewed sha: 045f1aa47966d51c3f397a4a6fc46643da56f739
+status: Draft
+priority: Medium
+owner: joe
+feature: Uncategorized
+created_at: 2026-11-09T01:36:56.144538345Z
+modified_at: 2026-11-09T01:36:56.144538345Z
+req_type: Task
+tags:
+- carried-from:TASK-3452
+- finding-hash:2c10f92a
+- from-review:PR-3692
+- kind:carried-forward
+filed_at:
+  code_sha: a7a14984cec5533987dfeccb70d1f91aaebbf22a
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 8a4a909a967
+  vendor: claude
