@@ -18,7 +18,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-08T02:46:34.549817Z
-modified_at: 2026-11-09T02:11:01.037841239Z
+modified_at: 2026-11-09T05:16:23.360074548Z
 req_type: Bug
 tags:
 - area:ci
@@ -409,6 +409,12 @@ comments:
   created_at: 2026-11-08T20:35:22.113552672Z
   modified_at: 2026-11-08T20:35:22.113552672Z
   session_id: 01a1bcd062a8
+- id: 01a1bebc-71c0-7020-bbda-4142fb30fc26
+  author: joe
+  content: 'Advisor proxy 2026-11-08: PR-3651 CI is complete at 348f6f83e639; the one ''pending'' check is merge-hold-gate by design. Remaining blocker is the operator canary in docs/internal/testing/bug-2492-status-cutover.md, which names the operator at a human terminal for raw merge attempts, interactive merge-hold clear, web UI and notification observations. Not attempted by the advisor overnight; left for the operator.'
+  created_at: 2026-11-09T05:16:23.360074548Z
+  modified_at: 2026-11-09T05:16:23.360074548Z
+  session_id: 7aacb1ed-ebaa-4da4-a195-500864e99e7d
 history:
 - id: 01a1b90d-4bec-7bd0-9af1-86f501692f64
   author: joe
