@@ -3,22 +3,13 @@
   "spec": "TASK-3736",
   "publishes": [
     {
-      "at": "2026-11-09T09:32:20.138235830Z",
+      "at": "2026-11-09T09:32:41.822177890Z",
       "closed_by": "auto-bump"
     }
   ],
   "events": [
     {
-      "ts": "2026-11-09T09:31:55.159541148Z",
-      "spec": "TASK-3736",
-      "seat": "advisor",
-      "kind": {
-        "event": "PrMerged",
-        "pr": 3721
-      }
-    },
-    {
-      "ts": "2026-11-09T09:32:19.984503775Z",
+      "ts": "2026-11-09T09:32:41.779426628Z",
       "spec": "TASK-3736",
       "kind": {
         "event": "SpecCompleted",

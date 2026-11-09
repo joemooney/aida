@@ -36,7 +36,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-09T06:49:35.077353670Z
-modified_at: 2026-11-09T09:32:16.905753501Z
+modified_at: 2026-11-09T09:32:38.752149327Z
 req_type: Task
 relationships:
 - rel_type: Supersedes
@@ -101,20 +101,19 @@ history:
   session_id: 01a1bf25432d
   harness_version: codex-cli 0.167.0
   changes: []
-- id: 01a1bfa6-b832-7003-b3a2-ce98c8c25bae
+- id: 01a1bfa7-0dd1-7de3-afa9-b49f8c727075
   author: aida-auto-bump
-  timestamp: 2026-11-09T09:32:16.818191399Z
+  timestamp: 2026-11-09T09:32:38.737040546Z
   changes:
   - field_name: status
     old_value: InProgress
     new_value: Completed
 processing_record:
-- id: 01a1bfa6-b889-77b1-9e5f-238ae77e4376
-  timestamp: 2026-11-09T09:32:16.905749337Z
+- id: 01a1bfa7-0de0-7ef2-b16c-e9a67db19b65
+  timestamp: 2026-11-09T09:32:38.752146971Z
   agent: aida
   commit_sha: e1ada873ce26bca6abc7d425c90c7e4a38a3d0eb
-  summary: All four swept findings fixed with refusal-path tests; CI green at head; no defects in the merge-base diff.
-  review_verdict: approved
+  summary: Completed via merge e1ada873
 filed_at:
   code_sha: aaf9ac1436f0a0e82bae99d64e8a84742f30fe1c
   branch: main
@@ -126,5 +125,5 @@ filed_at:
   harness_version: 2.1.319 (Claude Code)
 implementation_info:
   implemented: false
-  completed_at: 2026-11-09T09:32:16.818186347Z
+  completed_at: 2026-11-09T09:32:38.737036445Z
   completion_sha: e1ada873ce26bca6abc7d425c90c7e4a38a3d0eb
