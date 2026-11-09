@@ -12599,6 +12599,9 @@ Commands:
 
 Options:
       --lane-host
+          Check this machine before running automated lanes
+
+      --lane-codegraph
           Report the host codegraph snapshot age as seen from this lane
 
       --heal
@@ -12619,9 +12622,6 @@ Options:
       --force
           Permit riskier destructive fixes such as branch deletion
 
-      --all
-          Show older completed-without-commit findings individually
-
       --format <FORMAT>
           Pin the output format regardless of whether stdout is a terminal: human = tables, toon =
           compact agent output, json = machine JSON. Default (unset) is human at a TTY, toon when
@@ -12631,6 +12631,9 @@ Options:
           - human: Human-readable tables / emoji (the interactive default at a TTY)
           - toon:  Token-efficient TOON — the compact agent default when piped/captured
           - json:  Machine JSON, for commands that support a JSON projection
+
+      --all
+          Show older completed-without-commit findings individually
 
       --canonical-ids
           Show node-local spec IDs in their canonical form instead of the node's friendly label (for
@@ -12650,7 +12653,7 @@ Options:
           Prints the sequence — sudo steps are clearly marked "run this yourself"; it never silently
           runs sudo. Runs the non-sudo availability re-probe as a smoke check
 
-      --fix <CATEGORY>
+      --fix [<CATEGORY>]
           Repair one category of store damage that needs a data migration. `id-collisions`: spec IDs
           that differ only by leading zeros are the same ID, so each collision keeps one spec on the
           number and gives the others a fresh ID, rewriting their mentions in the store, docs and
@@ -12658,7 +12661,7 @@ Options:
           agreed number of its type; local IDs keep resolving. Needs --dry-run (preview) or --yes
           (apply)
           
-          [possible values: id-collisions, agreed-ids]
+          [possible values: id-collisions, agreed-ids, lane-host]
 
       --dry-run
           With --fix: show the plan and write nothing to the store
@@ -44287,9 +44290,14 @@ Working on aida itself
         "help": "Read-only typed local lane capacity and reservations (not readiness admission)"
       },
       {
-        "name": "lane-host",
+        "name": "lane-codegraph",
         "takes_value": false,
         "help": "Report the host codegraph snapshot age as seen from this lane"
+      },
+      {
+        "name": "lane-host",
+        "takes_value": false,
+        "help": "Check this machine before running automated lanes"
       },
       {
         "name": "mapping",
