@@ -8,7 +8,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-08T21:20:08.484660Z
-modified_at: 2026-11-09T11:12:39.976874821Z
+modified_at: 2026-11-09T11:21:17.105448500Z
 req_type: Bug
 comments:
 - id: 01a1beb1-ae7c-7c52-89a5-00a6bc02eeb0
@@ -136,6 +136,22 @@ comments:
     Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
   created_at: 2026-11-09T11:10:28.761735446Z
   modified_at: 2026-11-09T11:10:28.761735446Z
+- id: 01a1c00a-8431-74d2-b6e1-fe9ee49710d9
+  author: dirtlab
+  content: |
+    Addressed latest PR #3715 review findings (reviewed b3a15003b9de): rework branch/unfinished-merge preflight now returns before pending-work preservation guidance is attached, so neither refusal prescribes add -A or commit-pending. Regression creates an actual conflicting linked-worktree merge with UU paths and verifies HEAD, conflict contents, unresolved status and pending files survive both preflight refusals. Added recorded-clone dirty-resume admission with a non-conflicting main advance and preserved pending files/HEAD/status. Empty recovery text no longer produces double punctuation. Docs scope preservation commands to post-preflight refusals.
+
+    Regenerated and reviewed writer inventory: four new blocked entries cover prepare_rework_merge's execute sink, its queue-work wrapper, and orphan rollback write_all/persist_noclobber; existing inventory policy and comments retained. No Git merge attempted from this native read-only-metadata seat.
+
+    Changed files: aida-cli-lib/src/seat_clone.rs; aida-cli-lib/src/tests/bug_home_038_seat_publish_tests.rs; docs/cli/06-roles-sessions.md; scripts/store-writers.toml.
+
+    Validation: final lane job j20261109T111756311-2-0 (cargo test --profile agent -p aida-cli-lib --lib -- bug_2504 --nocapture): 5 passed, no skip reported, including live recorded-clone admission and actual unfinished-merge preflight. Lane job j20261109T111602460-2-0 (rework_merge_tests): 10 passed. python3 scripts/check-store-writers.py passes (3429 sinks, 293 operation mappings); inventory unit suite: 52 passed. Touched-file rustfmt --check and git diff --check pass. Fixed codegraph executable absent; doctor confirms missing client, navigation used rg.
+
+    Edits remain uncommitted for host publication. Recorded declaration: [AI:codex] fix(queue): guard rework recovery guidance and inventory rollback (Refs BUG-2504). No commit/push/PR/queue completion/review verdict performed from this seat. Original #3641/#3643 reproduction and sccache issue remain unverified; BUG-2504 remains In Progress with Refs publication for this review-fix slice.
+  created_at: 2026-11-09T11:21:17.105448500Z
+  modified_at: 2026-11-09T11:21:17.105448500Z
+  session_id: 01a1c0024ce2
+  harness_version: codex-cli 0.167.0
 history:
 - id: 01a1beaa-5bee-7821-b878-3b983c03f8ae
   author: joe
