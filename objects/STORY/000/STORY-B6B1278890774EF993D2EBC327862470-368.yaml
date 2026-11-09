@@ -29,7 +29,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-04T02:34:20.173245Z
-modified_at: 2026-11-09T16:08:37.430339198Z
+modified_at: 2026-11-09T16:15:16.681977036Z
 req_type: Story
 relationships:
 - rel_type:
@@ -931,6 +931,17 @@ comments:
     Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
   created_at: 2026-11-09T16:06:29.249108173Z
   modified_at: 2026-11-09T16:06:29.249108173Z
+- id: 01a1c117-acc9-7c10-bbbd-808fccc44f30
+  author: dirtlab
+  content: |
+    S5 review rework against 8d48cc60bb42 (Refs STORY-2402), uncommitted for native host publication to existing PR #3639. Addressed latest review findings: conditional findings recur now sets team_identity_write; goldens updated; S5 regression exercises default-identity refusal with unchanged row and distinct-identity successful recurrence/deferral. Corrected sweep counter and unknown-spec successful-exit docs plus hourly failure-route repair guidance. Added 25s budget for story2402_s4_canonical_snapshot_and_legacy_only_run based on advisor-reported CI run 42624915706 measurement 10.2s, using existing max x2 rounded-to-5 convention.
+    Changed files: .aida/config.toml; aida-cli-lib/src/findings_gate.rs; aida-cli-lib/src/tests/golden/story_1728_main_policy.tsv; aida-cli-lib/src/tests/story_1728_policy_parity_tests.rs; aida-cli-lib/src/tests/story_2402_resurface_tests.rs; docs/cli/02-specs.md; scripts/test-time-budget.toml.
+    Validation: lane job j20261109T160952338-2-0 ran cargo test --profile agent -p aida-cli-lib --lib -- story2402_: 30 executed tests passed, 0 failed, including six S5 tests (10.46s execution). Lane job j20261109T161102304-2-0 ran registered_policy_matches_mains_legacy_tables_for_every_verb: 1 executed test passed (4.72s). Store writer inventory passed (3448 sites); ExecContext --base HEAD passed (1239 sites, zero additions); git diff --check passed. untested=false.
+    Codegraph fixed client unavailable; doctor confirmed missing, rg used. Full check-ci-fast not rerun in this seat because it invokes direct Cargo guards; targeted Cargo commands used the required lane runner. Host publication and green CI at the published head remain outstanding. Derived attention untouched. No commit, push, PR creation, queue done, merge or review verdict from this seat.
+  created_at: 2026-11-09T16:15:16.681977036Z
+  modified_at: 2026-11-09T16:15:16.681977036Z
+  session_id: 01a1c1118ef4
+  harness_version: codex-cli 0.167.0
 history:
 - id: 01a1a468-9c3a-76d2-ab8c-12bf6457966b
   author: joe
