@@ -1,0 +1,29 @@
+id: 01a1c005-8c74-7582-a15d-290f1f2988ff
+spec_id: TASK-b6b1278890774ef993d2ebc327862470-1044
+title: aida-cli-lib/src/queue_cmd/rework.rs:341 rework_is_review_shelf omits verdict:s…
+description: |-
+  Non-blocking finding carried forward from an APPROVED review verdict on BUG-2502, which has since completed — recorded here so it keeps a queryable home once the verdict record stops being read.
+
+  aida-cli-lib/src/queue_cmd/rework.rs:341 rework_is_review_shelf omits verdict:stranded, which 'aida review stranded --fix' writes under phase reviewer for a recovered refusing verdict (lib_part5.rs:2031-2036). If the findings match the previous round, the guard no longer parks and the spec is requeued; before this PR any NeedsAttention recurrence parked. Non-blocking: needs a stranded refusal plus identical consecutive findings. Add the kind and a predicate case.
+
+  PR: #3696
+  Reviewed sha: 0962bbf994546cd2a37ba281546f7da492132814
+status: Draft
+priority: Medium
+owner: joe
+feature: Uncategorized
+created_at: 2026-11-09T11:15:51.540343008Z
+modified_at: 2026-11-09T11:15:51.540343008Z
+req_type: Task
+tags:
+- carried-from:BUG-2502
+- finding-hash:f3f249a5
+- from-review:PR-3696
+- kind:carried-forward
+filed_at:
+  code_sha: ef853db64e26b62ee34ea5662eb0fe57823b41b4
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 090959c51d5
+  vendor: claude
