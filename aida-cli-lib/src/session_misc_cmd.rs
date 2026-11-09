@@ -11,7 +11,12 @@ use colored::Colorize;
 
 use crate::command_registry::{CmdPolicy, CommandReg};
 use crate::stakeholder_role::StakeholderAction;
-use crate::*;
+// trace:TASK-3428 | ai:codex
+use crate::{
+    agent_output_mode, agent_registry, bg_fetch_lock_path, canonical_role_name,
+    collect_mail_identity_facts_in, current_user_id, find_aida_project_root_from,
+    handle_fetch_command, main_worktree_root_from, whoami_view, write_last_fetch_entry,
+};
 
 pub(crate) fn whoami_user_source(
     aida_user: Option<&str>,
