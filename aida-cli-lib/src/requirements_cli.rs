@@ -4227,8 +4227,7 @@ pub(crate) struct ListArgs {
     /// Pull from `origin/aida-store` before listing. Opt-in
     /// freshness for collaborators / multi-session workflows;
     /// fast path stays default. No-op when the local orphan
-    /// branch is already current; warns and falls back to the
-    /// local view when offline.
+    /// branch is already current; refuses to continue when a configured remote pull fails.
     // trace:STORY-78 | ai:claude
     #[clap(long)]
     pub sync: bool,
@@ -4735,7 +4734,7 @@ fn run_list(
                         None => None,
                     };
                     // STORY-78: opt-in implicit sync-pull before reading. Quiet
-                    // on no-op (already current), warns + falls back on errors.
+                    // on no-op (already current), refuses on pull errors.
                     // Must run BEFORE the cache-backed list query because the
                     // cache rebuild on next read will pick up the new orphan
                     // HEAD. trace:STORY-78 | ai:claude

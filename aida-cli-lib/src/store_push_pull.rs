@@ -1907,7 +1907,15 @@ pub(crate) fn report_autostash_restore(
 // broken/corrupted store.
 // trace:BUG-1500 | ai:claude
 // trace:TASK-1604 | ai:codex
-pub(crate) fn store_pull_failure_hint(store_path: &std::path::Path, err_display: &str) -> String {
+pub(crate) fn store_pull_failure_hint(
+    store_path: &std::path::Path,
+    error: &anyhow::Error,
+) -> String {
+    let err_display = error.to_string();
+    // trace:BUG-2501 | ai:codex — dirty refusals have no rebase to abort.
+    if aida_core::git_ops::is_dirty_store_refusal(error) {
+        return format!("{err_display}\n  Review and commit or stash pending store changes, then retry `aida db sync --pull`.");
+    }
     if aida_core::git_ops::rebase_in_progress(store_path) {
         format!(
             "{}\n  The orphan store is mid-rebase. To recover:\n    \
@@ -2334,6 +2342,20 @@ mod bug_1626_push_fresh_state_tests {
 mod bug_1500_store_pull_hint_tests {
     use super::store_pull_failure_hint;
 
+    // trace:BUG-2501 | ai:codex
+    #[test]
+    fn dirty_hint_uses_typed_error_through_context() {
+        let tmp = tempfile::tempdir().unwrap();
+        let message = "store pull refused: uncommitted changes";
+        let typed = anyhow::Error::new(aida_core::git_ops::DirtyStoreRefusal(message.into()))
+            .context("refresh failed");
+        assert!(aida_core::git_ops::is_dirty_store_refusal(&typed));
+        assert!(store_pull_failure_hint(tmp.path(), &typed).contains("commit or stash"));
+        let prose = anyhow::anyhow!(message);
+        assert!(!aida_core::git_ops::is_dirty_store_refusal(&prose));
+        assert!(!store_pull_failure_hint(tmp.path(), &prose).contains("commit or stash"));
+    }
+
     // trace:BUG-1500 | ai:claude
     #[test]
     fn no_rebase_in_progress_does_not_suggest_abort() {
@@ -2341,7 +2363,7 @@ mod bug_1500_store_pull_hint_tests {
         // A plain non-repo directory: `rebase_in_progress` returns false
         // for it (no `.git` at all), the same as a repo that is simply
         // not mid-rebase — e.g. a transient network 502.
-        let hint = store_pull_failure_hint(tmp.path(), "connection reset (502)");
+        let hint = store_pull_failure_hint(tmp.path(), &anyhow::anyhow!("connection reset (502)"));
         assert!(
             !hint.contains("rebase --abort"),
             "hint should not advise `git rebase --abort` when no rebase is in progress: {hint}"
@@ -2359,7 +2381,7 @@ mod bug_1500_store_pull_hint_tests {
             "fatal: cannot lock ref HEAD: is at abc but expected def",
             "store fetch failed: invalid refspec",
         ] {
-            let hint = store_pull_failure_hint(tmp.path(), error);
+            let hint = store_pull_failure_hint(tmp.path(), &anyhow::anyhow!(error));
             assert!(hint.contains(error), "{hint}");
             assert!(!hint.contains("transient"), "{hint}");
             assert!(!hint.contains("rebase --abort"), "{hint}");
@@ -2385,7 +2407,7 @@ mod bug_1500_store_pull_hint_tests {
         // directory `rebase_in_progress` checks for.
         std::fs::create_dir(repo.join(".git").join("rebase-merge")).expect("mkdir rebase-merge");
 
-        let hint = store_pull_failure_hint(repo, "some pull error");
+        let hint = store_pull_failure_hint(repo, &anyhow::anyhow!("some pull error"));
         assert!(
             hint.contains("rebase --abort"),
             "hint should advise `git rebase --abort` when a rebase IS in progress: {hint}"
@@ -2402,7 +2424,7 @@ mod bug_1500_store_pull_hint_tests {
     #[test]
     fn db_sync_pull_bail_message_omits_abort_hint_without_rebase() {
         let tmp = tempfile::tempdir().expect("tempdir");
-        let hint = store_pull_failure_hint(tmp.path(), "connection reset (502)");
+        let hint = store_pull_failure_hint(tmp.path(), &anyhow::anyhow!("connection reset (502)"));
         let bail_message = format!("Pull failed: {}", hint);
         assert!(
             !bail_message.contains("rebase --abort"),
@@ -2424,7 +2446,7 @@ mod bug_1500_store_pull_hint_tests {
             .success());
         std::fs::create_dir(repo.join(".git").join("rebase-merge")).expect("mkdir rebase-merge");
 
-        let hint = store_pull_failure_hint(repo, "some pull error");
+        let hint = store_pull_failure_hint(repo, &anyhow::anyhow!("some pull error"));
         let bail_message = format!("Pull failed: {}", hint);
         assert!(
             bail_message.contains("rebase --abort"),
@@ -2485,7 +2507,7 @@ fn pull_store_leg_locked(
     // STORY-641 / MU-204: auto-reconcile conflicting spec objects instead
     // of stopping for manual resolution. Two clones editing the SAME spec
     // (each appending a HistoryEntry + a scalar edit) are structurally
-    // mergeable — history is unioned by id, scalars resolve LWW. The
+    // mergeable — history is unioned by id, scalars come from upstream. The
     // oplog and per-user queue registries (same user on two machines —
     // BUG-725) union the same way; other conflicts (blocks, nodes,
     // counters) still fall back to the manual path.
@@ -2496,7 +2518,7 @@ fn pull_store_leg_locked(
             eprintln!(
                 "  {} {}",
                 "Warning:".yellow().bold(),
-                store_pull_failure_hint(store_path, &e.to_string())
+                store_pull_failure_hint(store_path, &e)
             );
             return Err(format!("store leg pull_rebase failed: {}", e));
         }
