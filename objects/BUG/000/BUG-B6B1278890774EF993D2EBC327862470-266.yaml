@@ -15,7 +15,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-08T19:27:28.525198886Z
-modified_at: 2026-11-08T22:46:53.804688729Z
+modified_at: 2026-11-09T04:35:23.036508614Z
 req_type: Bug
 comments:
 - id: 01a1bcd8-beaf-7582-aa0b-006077ac5867
@@ -165,6 +165,12 @@ comments:
   modified_at: 2026-11-08T22:46:53.804688729Z
   session_id: 01a1bd4bfe5b
   harness_version: codex-cli 0.167.0
+- id: 01a1be96-e71c-7270-bf26-4e1036f848f1
+  author: joe
+  content: 'Advisor 2026-11-08: PR-3699 now conflicts with main after PR-3652 (BUG-2490) landed. Not a mechanical merge: both rewrote the store rebase engine in aida-core/src/git_ops.rs (about 400 lines each, four conflict hunks) and store_sync.rs. Rework plan: rebuild BUG-2501 on current main, keeping main''s pull_rebase_store_retry wrapper (refuses when changes are pending) and its callers, and put the structural auto-merge inside pull_rebase/rebase path. Also must fix the open review finding: conflict.rs merge_spec_upstream drops locally added tags, relationships and dependencies. Do not force the merge; store sync is canonical-data code.'
+  created_at: 2026-11-09T04:35:23.036508614Z
+  modified_at: 2026-11-09T04:35:23.036508614Z
+  session_id: 7aacb1ed-ebaa-4da4-a195-500864e99e7d
 history:
 - id: 01a1bcc3-bd29-7692-a764-d1e8c8dbaa00
   author: aida-session-start
