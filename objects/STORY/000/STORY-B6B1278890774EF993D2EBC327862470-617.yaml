@@ -42,7 +42,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-09T15:57:18.371798469Z
-modified_at: 2026-11-09T23:18:33.899805884Z
+modified_at: 2026-11-09T23:18:50.210274770Z
 req_type: Story
 tags:
 - architecture
@@ -105,6 +105,13 @@ comments:
   content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: Freshness prerequisite implemented, but required hold release, dispatch suppression, authenticated no-carry policy, verdict display and acceptance coverage are incomplete; CI pending.. It was punted on: design-fork: Authenticated no-carry needs a durable policy-binding design before new consumers can grant coverage. Local grant revalidation in gate/review_authority.rs::verified_authority_keys authenticates seat/time/binding/identity, not verdict policy; a mutable no_carry field (even in RecorderAttestation) could be removed while the approval still validates. Signed cross-node Receipt has a separate payload/schema. Fork: extend local recording receipts plus signed publication schema, or introduce a distinct authenticated reviewer-policy receipt. Both need migration and downgrade/removal rules, including marker changes after a cached proof. Current edits implement only the independent protected-base freshness fix; hold-release, dispatch suppression and verdict display remain unimplemented. Preserve publication veto until this fork is resolved.. No triage reason was given.'
   created_at: 2026-11-09T22:00:03.178058188Z
   modified_at: 2026-11-09T22:00:03.178058188Z
+- id: 01a1c29b-7462-7212-b70d-704208c5f391
+  author: joe
+  content: 'ADVISOR RULING (2026-11-09 23:25 UTC, resolves the design-fork punt): the authenticated no-carry marker is OUT of scope; review finding 3 is withdrawn and the marker tests in finding 5 are dropped. It moved to STORY-2696. Implement review findings 1, 2 and 4, and finding 5 minus marker tests, in this PR (#3744), on top of the freshness fix already there. Use the commit trailer (STORY-2694): this PR now completes the story.'
+  created_at: 2026-11-09T23:18:50.210274770Z
+  modified_at: 2026-11-09T23:18:50.210274770Z
+  session_id: 01a1beff-fc3b-78e2-93e2-9b0c283b0339
+  harness_version: 2.1.319 (Claude Code)
 history:
 - id: 01a1c233-af48-7011-9e22-fa81c9459065
   author: joe
