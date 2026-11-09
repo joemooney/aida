@@ -20,7 +20,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-07T20:18:53.564500Z
-modified_at: 2026-11-09T07:13:07.851046741Z
+modified_at: 2026-11-09T11:46:01.852701793Z
 req_type: Bug
 relationships:
 - rel_type:
@@ -451,6 +451,13 @@ comments:
   modified_at: 2026-11-09T07:13:07.851046741Z
   session_id: 01a1bf1a426e
   harness_version: codex-cli 0.167.0
+- id: 01a1c021-2bfc-7fe0-83d6-0d8c0b213dea
+  author: joe
+  content: |-
+    CI FAILURES at 3b225a4d570d (run 42607706879). Fix exactly these before pushing; a push without a code change for them will fail again and must not be made:
+    (no test lines extracted; open run 42607706879)
+  created_at: 2026-11-09T11:46:01.852701793Z
+  modified_at: 2026-11-09T11:46:01.852701793Z
 history:
 - id: 01a1b7ad-9096-7320-bbe8-fc34c8e11c09
   author: aida-session-start
