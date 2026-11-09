@@ -8,7 +8,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-08T19:37:15.450252Z
-modified_at: 2026-11-09T07:12:46.651256003Z
+modified_at: 2026-11-09T07:12:49.483917349Z
 req_type: Bug
 comments:
 - id: 01a1bcc0-2ddb-79f0-b763-2d703d44589a
@@ -112,6 +112,23 @@ comments:
   content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: The rework round landed only merge commits: the BUG-2502 diff at 3184c19ffdcb is unchanged from 5112d7bcb0b1, so the one-shot BUG-1213 loop guard regression and its missing test remain.. No triage reason was given.'
   created_at: 2026-11-09T07:12:46.651254528Z
   modified_at: 2026-11-09T07:12:46.651254528Z
+  session_id: 01a1beff-fc3b-78e2-93e2-9b0c283b0339
+  harness_version: 2.1.319 (Claude Code)
+- id: 01a1bf27-0ad3-7f70-a814-a86c0496ba29
+  author: joe
+  content: |-
+    REVIEW FINDINGS TO ADDRESS (BUG-2502):
+    Verdict: CHANGES REQUESTED
+    Reviewed commit: 3184c19ffdcb
+    Recorded: 2026-11-09T02:49:48.048077316+00:00
+    Findings:
+    1. aida-cli-lib/src/queue_cmd/rework.rs:847 (predicate at :320) still makes the BUG-1213 loop guard one-shot; unchanged since the review of 5112d7bcb0b1 (head 3184c19ffdcb only merges main). return_to_flight -> clear_shelve_markers (requeue.rs:117, :121) takes failure_reason before the guard runs, and loop_guard_park (rework.rs:347) sets only the status. The guard-parked spec is therefore NeedsAttention with failure_reason None, so the next identical 'aida queue rework' gets recurred=true (findings_recur_consecutively) but rework_is_review_shelf false, and it goes to Approved plus requeue: the third blind round the guard's note forbids. Before this PR that rerun re-parked. Fix: have loop_guard_park restore or retain the reviewer failure marker, or let the guard also accept a spec whose latest status entry is authored by LOOP_GUARD_AUTHOR; keep a deliberate advisor exit such as aida edit.
+    2. aida-cli-lib/src/tests/queue_rework_tests.rs:2117 bug_2502_repeated_blocking_review_is_parked_before_requeue stops after the first park, so nothing covers a second rework of a guard-parked spec. After the park, call rework_as again with the same verdict and assert the status stays NeedsAttention and queue_list stays empty, for each of the three verdict kinds.
+    3. aida-cli-lib/src/queue_cmd/rework.rs:710 and :781 run before the guard decision at :847, so on a genuine repeat the command emits the SpecRequeued event, writes the return-to-flight audit note, and prints 'status: Needs Attention -> Approved', then parks the spec back. That is the untrue transition line this bug is titled after, still present on the guard path and softened only by the later 'escalated to advisor' line. Decide recurrence before the flip, or defer the success line and event until after it.
+    4. Non-blocking test gap: aida-cli-lib/src/tests/queue_rework_tests.rs bug_2502_repeated_blocking_review_is_parked_before_requeue discards rework_as's Result and does not set crate::kernel::test_aida_exe, so it shells out to whichever real aida binary resolves, and nothing proves the advisor finding and brief are issued. Use test_aida_exe::set with a recording fake (as bug_2208_refs_only_review_tests.rs:247 does), then assert success and both subcommands.
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
+  created_at: 2026-11-09T07:12:49.363253224Z
+  modified_at: 2026-11-09T07:12:49.363253224Z
   session_id: 01a1beff-fc3b-78e2-93e2-9b0c283b0339
   harness_version: 2.1.319 (Claude Code)
 history:
