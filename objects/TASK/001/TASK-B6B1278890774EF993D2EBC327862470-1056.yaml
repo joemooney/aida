@@ -3,12 +3,12 @@ spec_id: TASK-b6b1278890774ef993d2ebc327862470-1056
 agreed_id: TASK-3778
 title: Temporarily relax the CI test-time budget so trains stop ejecting on timing noise
 description: 'Operator direction 2026-11-09: relax the timing gate and revisit after the open items clear. Trains eject passing PRs for sub-2s overruns (PR 3731: 11.7s against the 10s limit with all 8077 tests passing). EXACT CHANGE in scripts/test-time-budget.toml only: set default_limit = 30 and untouched_factor = 3, and add a comment above them saying this is temporary, tied to TASK-3665, and to be restored once the open list clears. Do not change scripts/test-timings.py, its tests or per-test entries. If a test asserts the shipped default_limit value, update only that value. Acceptance: make check-ci-fast passes; a 12s unbudgeted test no longer fails the budget step.'
-status: InProgress
+status: Completed
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-09T16:48:10.459066565Z
-modified_at: 2026-11-09T18:24:15.423901545Z
+modified_at: 2026-11-09T19:49:32.386287733Z
 req_type: Task
 comments:
 - id: 01a1c14c-71cb-73f3-a66a-aebc13a35ed4
@@ -119,6 +119,20 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a1c1db-d61d-7cf1-87be-629be126ccd5
+  author: aida-auto-bump
+  timestamp: 2026-11-09T19:49:32.317893047Z
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Completed
+processing_record:
+- id: 01a1c1db-d662-7f80-a318-b776724aa2ff
+  timestamp: 2026-11-09T19:49:32.386285509Z
+  agent: aida
+  commit_sha: be3a286fc4343bfd8380a99d3f1a98da5eab282e
+  summary: 'Full sweep: requested temporary limits and advisor-authorized assertions match; all acceptance criteria verified by source and CI gate evidence; required checks green; no actionable defects.'
+  review_verdict: approved
 filed_at:
   code_sha: e4eee38238fa4cb8e8c85dadaa4ed07894cfbeea
   branch: main
@@ -128,3 +142,7 @@ filed_at:
   vendor: claude
   session: 01a1beff-fc3b-78e2-93e2-9b0c283b0339
   harness_version: 2.1.319 (Claude Code)
+implementation_info:
+  implemented: false
+  completed_at: 2026-11-09T19:49:32.317887837Z
+  completion_sha: be3a286fc4343bfd8380a99d3f1a98da5eab282e
