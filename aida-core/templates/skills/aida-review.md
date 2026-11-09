@@ -642,7 +642,7 @@ gh run list --branch <pr-branch> --limit 1 --json status,conclusion,url
 gh run watch <run-id>
 ```
 
-Block merge until the latest run is `conclusion: success`. If CI is red:
+Separate review approval from merge readiness: apply the merge-hold exception in the review decision fixtures below before deriving the verdict. Block merge until required CI and hold gates pass. If CI is red for another reason:
 - <!-- kind:design-fork --> Walk the failure log: is it caused by this PR (block) or by an unrelated infra/flake (proceed with explicit user confirmation)? Accepting a red CI is risk acceptance — a `kind:design-fork`, surfaced even under `$AIDA_ZEN`.
 - If caused by this PR, surface to the user and pause — likely a fix-forward (step 5) is the right move.
 
@@ -687,7 +687,7 @@ aida orchestrator status               # `orchestrated` → also STOP before mer
 - every spec ✅ PASS → `Approved`
 - any ⚠️ PARTIAL (acceptance not fully met, but fixable) → `RequestChanges`
 - any ❌ FAIL (a spec is fundamentally unmet / broken) → `Rejected`
-- external CI or host evidence alone, with no substantive findings → `waiting`;
+- genuinely independent external CI or host evidence alone, with no substantive findings → `waiting` (apply the merge-hold exception below first);
   name the dependency, responsible actor and resume condition in the summary.
   Stop before merge or rework routing; resume only with a fresh review at the head.
 
@@ -1354,3 +1354,13 @@ and resume condition, and no substantive findings. Code defects still require
 rework, repeat-findings credit or a Rework hold. Existing holds remain intact.
 Only a fresh recorded review at the current head ends the wait; green CI or
 a changed head alone does not. There is no automatic resume service.
+
+<!-- trace:BUG-2508 | ai:codex -->
+A red merge-hold-gate or supervised human/advisor clearance that this review's own fresh APPROVED verdict can release is not external evidence: record approved when required CI is otherwise green and there are no actionable defects. Approval does not release the hold or authorize merge; leave clearance to the authorized actor. Outstanding independent evidence, such as an operator-only canary, still requires waiting even on a held PR.
+
+Review decision fixtures (same current head, no actionable defects):
+
+| Required CI | Hold release condition | Outstanding independent evidence | Verdict |
+| --- | --- | --- | --- |
+| Green except merge-hold-gate | This review’s fresh APPROVED verdict, then authorized clearance | None | APPROVED |
+| Green except merge-hold-gate | This review’s fresh APPROVED verdict, then authorized clearance | Operator-only canary result | WAITING |
