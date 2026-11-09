@@ -152,6 +152,9 @@ pub const AMBIENT_AIDA_KEYS: &[&str] = &[
 /// This conservative inventory also includes production writes/prefix literals.
 // trace:STORY-2326 | ai:codex
 pub const DROPPED_AIDA_KEYS: &[&str] = &[
+    // Build-local invalidation input, supplied by dev_build_command only.
+    // trace:BUG-2499 | ai:codex
+    "AIDA_DEV_BUILD_HEAD",
     "AIDA_AGENT_CMD",
     "AIDA_ADD_NO_REMOTE_SYNC",
     "AIDA_ADVISOR_HANDSHAKE",
