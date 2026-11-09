@@ -5969,3 +5969,73 @@ fn git_verbs_peek_and_return_commands() {
     let pull = server.tool_pull(&json!({ "store_only": true })).unwrap();
     assert!(pull.contains("aida pull --store-only"), "pull: {pull}");
 }
+
+// trace:BUG-2500 | ai:codex
+#[test]
+fn bug_2500_mcp_waiting_rework_refuses_before_writes_and_keeps_reviewer_route() {
+    let _env = crate::test_env::EnvVarsGuard::apply(&[
+        ("AIDA_SESSION_ROLE", None),
+        ("AIDA_CONTAINED", None),
+    ]);
+    let dir = tempdir().unwrap();
+    // The lane runner can inherit a group-writable umask. Allocation
+    // authority deliberately requires a private fixture configuration.
+    use aida_core::db::DatabaseBackend;
+    use std::os::unix::fs::PermissionsExt;
+    let store_dir = dir.path().join(".aida-store");
+    let seed = crate::test_env::home_fixture_backend(&store_dir).unwrap();
+    let common = aida_core::allocation_authority::common_dir(&store_dir).unwrap();
+    std::fs::set_permissions(
+        common.join(aida_core::allocation_authority::CONFIG_FILE),
+        std::fs::Permissions::from_mode(0o600),
+    )
+    .unwrap();
+    seed.save(&aida_core::RequirementsStore::new()).unwrap();
+    let storage = Box::leak(Box::new(Storage::new(&store_dir)));
+    let server = McpServer::new(storage, dir.path().to_path_buf());
+    let spec = seed_req(&server, "External review wait");
+    force_status(&server, &spec, RequirementStatus::Done);
+    let verdict_dir = dir.path().join(".aida/review-verdicts");
+    std::fs::create_dir_all(&verdict_dir).unwrap();
+    std::fs::write(
+        verdict_dir.join(format!("{spec}.json")),
+        json!({
+            "verdict":"waiting", "reviewed_sha":"abcdef1234",
+            "summary":"Host: operator must run probe; resume review with evidence"
+        })
+        .to_string(),
+    )
+    .unwrap();
+    let before = serde_json::to_value(server.storage.load().unwrap()).unwrap();
+    for route in [None, Some("implementer"), Some("any")] {
+        let mut args =
+            json!({"id":spec,"user":"wait-user","reason":"must stay unchanged","force":true});
+        if let Some(route) = route {
+            args["for"] = json!(route);
+        }
+        let error = server.tool_queue_rework_inner(&args).unwrap_err();
+        assert!(
+            error.contains("WAITING") && error.contains("Host:"),
+            "{error}"
+        );
+        assert_eq!(
+            serde_json::to_value(server.storage.load().unwrap()).unwrap(),
+            before
+        );
+        assert!(server
+            .storage
+            .queue_list("wait-user", true)
+            .unwrap()
+            .is_empty());
+    }
+    server
+        .tool_queue_rework_inner(&json!({"id":spec,"user":"wait-user","for":"reviewer"}))
+        .unwrap();
+    // Omitted routing preserves an existing reviewer route.
+    server
+        .tool_queue_rework_inner(&json!({"id":spec,"user":"wait-user"}))
+        .unwrap();
+    let entries = server.storage.queue_list("wait-user", true).unwrap();
+    assert_eq!(entries.len(), 1);
+    assert_eq!(entries[0].for_role.as_deref(), Some("reviewer"));
+}
