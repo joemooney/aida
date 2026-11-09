@@ -66,7 +66,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-09T08:46:26.872629040Z
-modified_at: 2026-11-09T08:54:06.723652258Z
+modified_at: 2026-11-09T09:15:53.644855417Z
 req_type: Task
 relationships:
 - rel_type: Supersedes
@@ -101,6 +101,37 @@ relationships:
   target_id: 01a1bf79-883c-7a41-bbcb-af7fc1ced895
   created_at: 2026-11-09T08:47:47.782455986Z
   created_by: joe
+comments:
+- id: 01a1bf97-b7ac-7602-9a82-47171a62d1f6
+  author: dirtlab
+  content: |
+    Implemented TASK-3749; native-seat handoff for host publication. All code edits remain uncommitted.
+
+    Carry-forward now selects an open, non-archived kind:finding-sweep task and appends one section per completion, creating exactly one Draft task only when no sweep is open. Selection, creation and hash de-duplication share the existing store writer transaction. Finding text, source spec/PR, reviewed SHA and hashes remain in the description/tags. Legacy per-source hashes are respected; new paired source/hash tags avoid cross-source false matches. Completed/rejected/archived sweeps are not reused, but retain de-duplication evidence.
+
+    Part 2 resolutions for the PR body:
+    - TASK-HOME-1035: STATE_NO_CHANGE is terminal for lane-liveness open-work selection; regression added.
+    - TASK-HOME-1036: single-branch output says paused at rather than paused before; the no-change arm is covered without commit/cluster credit.
+    - TASK-HOME-1037: a successful host-confirmed empty resume may retain NeedsAttention without being classified as a new punt. Explicit punt and hold signals retain precedence. Real resume fixture now seeds NeedsAttention.
+    - TASK-HOME-1038: auto-complete telemetry records no-change instead of success.
+    - TASK-HOME-1039: seat-clone status probe excludes the host marker using the same pathspec as commit_pending. Live probe regression unignores the marker and retains genuine dirty-file/unpushed controls.
+    - TASK-HOME-1040: watchdog fixture explicitly waits for child lease/manifest readiness, with a bounded ten-second readiness budget, instead of relying on 100ms scheduling. Production watchdog behavior is unchanged.
+    - TASK-HOME-1041: fresh-path host receipt tests now combine a receipt with punt, hold and natural nonzero exit. Failed exits cannot become NoChange; an early failed exit may retain its receipt.
+    - TASK-HOME-1042: restored the failure-policy comment immediately above let unclean.
+
+    Changed files under aida-cli-lib/src:
+    auto_complete.rs, drain_batch.rs, drain_next_n.rs, findings_gate.rs, lane_liveness.rs, phase_driver.rs, phase_driver_trait.rs, seat_clone.rs, test_env.rs.
+    Changed test files under aida-cli-lib/src/tests:
+    auto_complete_tests.rs, bug_044_headless_background_tests.rs, bug_1629_phase1_recovery_tests.rs, story_1421_carry_forward_findings_tests.rs, story_1688_lane_liveness_tests.rs, task_2053_seat_clone_lifecycle_tests.rs.
+    The shared synthetic-HOME fixture now writes its authority setting mode 0600 so this lane's 0002 umask cannot make it fail the production trust reader.
+
+    Validation: launcher job j20261109T091147810-2-0 exited 0; 20 passed, 0 failed. Command: cargo test --profile agent -p aida-cli-lib --lib -- story_1421_carry_forward_findings_tests task_3749 task_3608 task_2053_bwrap_probe_reads_clean_dirty_and_unpushed --nocapture. Live bwrap probe executed, no skip. rustfmt --check on all changed Rust files and git diff --check passed. untested=false.
+
+    No implementation blockers. Fixed codegraph client was unavailable and aida doctor check codegraph reported missing; navigation used rg/source inspection. No commit, push, PR, review record or queue completion performed from this seat. Host launcher owns publication and subsequent queue completion.
+  created_at: 2026-11-09T09:15:53.644855417Z
+  modified_at: 2026-11-09T09:15:53.644855417Z
+  session_id: 01a1bf83545f
+  harness_version: codex-cli 0.167.0
 history:
 - id: 01a1bf7c-f894-7192-b380-ef25f53f2fb5
   author: joe
