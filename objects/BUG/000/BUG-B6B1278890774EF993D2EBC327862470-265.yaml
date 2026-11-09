@@ -8,7 +8,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-08T19:02:09.839960883Z
-modified_at: 2026-11-09T05:06:39.520210355Z
+modified_at: 2026-11-09T05:11:06.783945182Z
 req_type: Bug
 relationships:
 - rel_type:
@@ -193,6 +193,13 @@ comments:
   created_at: 2026-11-09T05:01:32.513420494Z
   modified_at: 2026-11-09T05:01:32.513420494Z
   session_id: 7aacb1ed-ebaa-4da4-a195-500864e99e7d
+- id: 01a1beb7-9d1f-7570-853d-0832a25c0753
+  author: dirtlab
+  content: 'Native implementer handoff: fixed remaining waiting admission bypasses. Ambiguous spec aliases inspect their current partitions for an open WAITING; multiple bound change refusals preserve a known WAITING before the legacy unavailable-evidence warning path or spec fallback. Non-waiting unavailable evidence keeps its existing policy. Added ambiguity and multiple-bound-wait regressions; updated doctor recovery and unknown-verdict operator text to include waiting. Changed files: aida-cli-lib/src/queue_cmd/work.rs; gate/tests/bug_2500_waiting_tests.rs; gate/review_verdict.rs; doctor_cmd.rs. Validation: lane job j20261109T050936360-2-0 executed cargo test --profile agent -p aida-cli-lib --lib -- bug_2500: 18 passed, zero failed. make check-ci-fast: all 46 gates passed (umask 0022). git diff --check passed. Initial new alias fixture failed because its filename was lowercase; corrected to canonical uppercase before the passing run. untested=false. Edits left uncommitted for host publication on PR-3698; no commit, push, PR creation, review record, merge or queue completion performed. No implementation blockers. Existing punt/hold publication vetoes retained; no resume service or prose classifier added. Codegraph unavailable on host; used rg.'
+  created_at: 2026-11-09T05:11:06.783945182Z
+  modified_at: 2026-11-09T05:11:06.783945182Z
+  session_id: 01a1beafdda3
+  harness_version: codex-cli 0.167.0
 history:
 - id: 01a1bcc0-f95b-7082-8ca7-a86211b6ddd8
   author: joe
