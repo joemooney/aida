@@ -224,7 +224,118 @@ pub(crate) const HOST_ENV_ALLOWED: &[&str] = &[
 
 /// The seat build-environment variables a job gets (from
 /// [`crate::seat_clone::seat_build_env`]).
-pub(crate) const BUILD_ENV_ALLOWED: &[&str] = &["CARGO_TARGET_DIR", "RUSTC_WRAPPER"];
+pub(crate) const BUILD_ENV_ALLOWED: &[&str] = &[
+    "CARGO_TARGET_DIR",
+    "RUSTC_WRAPPER",
+    "SCCACHE_DIR",
+    "SCCACHE_CONF",
+    "SCCACHE_SERVER_UDS",
+    "SCCACHE_SERVER_PORT",
+    "SCCACHE_IDLE_TIMEOUT",
+];
+
+/// Host cargo config opts jobs into a lane-only cache. Never inherit the
+/// operator's wrapper/cache/server environment or consult seat cargo config.
+// trace:STORY-2641 | ai:codex
+fn lane_sccache_env(parent: &aida_core::exec_context::Environment) -> Vec<(String, String)> {
+    let Some(home) = parent.get("HOME").map(PathBuf::from) else {
+        return vec![];
+    };
+    let cargo = parent
+        .get("CARGO_HOME")
+        .map(PathBuf::from)
+        .unwrap_or_else(|| home.join(".cargo"));
+    let config = std::fs::read_to_string(cargo.join("config"))
+        .or_else(|_| std::fs::read_to_string(cargo.join("config.toml")));
+    let Some(wrapper) = config
+        .ok()
+        .and_then(|text| text.parse::<toml::Value>().ok())
+        .and_then(|config| {
+            config
+                .get("build")?
+                .get("rustc-wrapper")?
+                .as_str()
+                .map(str::to_owned)
+        })
+    else {
+        return vec![];
+    };
+    let wrapper_path = Path::new(&wrapper);
+    if (wrapper != "sccache" && !wrapper_path.is_absolute())
+        || wrapper_path.file_name().and_then(|s| s.to_str()) != Some("sccache")
+    {
+        return vec![];
+    }
+    let cache = home.join(".cache/aida/lane-sccache");
+    // Each job's bubblewrap mounts a fresh private /tmp. Keep the socket
+    // outside the shared writable cache, avoiding stale or lane-planted endpoints.
+    let socket = PathBuf::from("/tmp/aida-lane-sccache.sock");
+    crate::launch::resources::Sccache::Lane {
+        wrapper,
+        cache,
+        socket,
+    }
+    .env()
+    .into_iter()
+    .map(|(key, value)| (key.to_owned(), value.to_string_lossy().into_owned()))
+    .collect()
+}
+
+/// Keep the foreground cache server inside the sandbox until its pending
+/// disk writes finish. Cargo's exit code survives statistics/cleanup failures.
+/// All paths/argv are positional arguments, never interpolated shell source.
+// trace:STORY-2641 | ai:codex
+const SCCACHE_JOB_SCRIPT: &str = r#"
+# Bound orphan lifetime if the launcher dies, while allowing a full cold job.
+idle_timeout=$1
+shift
+TMPDIR=/tmp SCCACHE_NO_DAEMON=1 SCCACHE_START_SERVER=1 SCCACHE_IDLE_TIMEOUT="$idle_timeout" "$RUSTC_WRAPPER" &
+server=$!
+ready=0
+while [ ! -S "$SCCACHE_SERVER_UDS" ]; do
+    if ! kill -0 "$server" 2>/dev/null || [ "$ready" -ge 10 ]; then
+        echo 'lane sccache: server startup failed; running without cache' >&2
+        kill "$server" 2>/dev/null
+        wait "$server"
+        RUSTC_WRAPPER= AIDA_SCCACHE_PIDS= "$@"
+        exit $?
+    fi
+    ready=$((ready + 1))
+    sleep 1
+done
+# Restrict host-wrapper health checks to this job-owned server.
+AIDA_SCCACHE_PIDS="$server" "$@"
+rc=$?
+echo 'lane sccache: final job statistics'
+"$RUSTC_WRAPPER" --show-stats || { [ "$rc" -ne 0 ] || rc=1; }
+if ! "$RUSTC_WRAPPER" --stop-server; then
+    [ "$rc" -ne 0 ] || rc=1
+    kill "$server" 2>/dev/null
+fi
+wait "$server" || { [ "$rc" -ne 0 ] || rc=1; }
+echo 'lane sccache: server exited before sandbox teardown'
+exit "$rc"
+"#;
+
+fn cargo_with_cache_lifecycle(
+    cargo: &Path,
+    args: Vec<String>,
+    env: &BTreeMap<String, String>,
+) -> (String, Vec<String>) {
+    if env.contains_key("SCCACHE_DIR") && env.contains_key("SCCACHE_SERVER_UDS") {
+        let mut shell_args = vec![
+            "-c".into(),
+            SCCACHE_JOB_SCRIPT.into(),
+            "lane-sccache".into(),
+            MAX_TIMEOUT_SECS.to_string(),
+            cargo.to_string_lossy().into_owned(),
+        ];
+        shell_args.extend(args);
+        ("/bin/sh".into(), shell_args)
+    } else {
+        (cargo.to_string_lossy().into_owned(), args)
+    }
+}
 
 /// Whether the launcher's `key` reaches a job.
 pub(crate) fn host_key_allowed(key: &str) -> bool {
@@ -671,7 +782,7 @@ impl LaneJobs {
     /// `main_root`. The seat's build environment comes from its host-recorded
     /// clone record, else from the lease's cargo target directory.
     pub(crate) fn for_lease(main_root: &Path, seat: &Path, lease_id: &str) -> Self {
-        let build_env: Vec<(String, String)> =
+        let mut build_env: Vec<(String, String)> =
             if let Some(clone) = crate::seat_clone::host_recorded_clone(main_root, seat) {
                 crate::seat_clone::seat_build_env(&clone)
                     .into_iter()
@@ -685,6 +796,12 @@ impl LaneJobs {
                     .map(|dir| vec![("CARGO_TARGET_DIR".to_string(), dir.display().to_string())])
                     .unwrap_or_default()
             };
+        // trace:STORY-2641 | ai:codex
+        let parent = aida_core::exec_context::Environment::capture();
+        for (key, value) in lane_sccache_env(&parent) {
+            build_env.retain(|(existing, _)| existing != &key);
+            build_env.push((key, value));
+        }
         Self {
             seat: seat.to_path_buf(),
             inbox: seat.join(INBOX_RELATIVE),
@@ -749,9 +866,9 @@ impl LaneJobs {
     }
 
     /// The paths a job's sandbox may write besides the seat: its cargo
-    /// target and the host cargo wrapper's slot locks and slot log, so the
-    /// job queues for a slot with every other cargo on the host and its run
-    /// is recorded.
+    /// target, the optional lane-only sccache directory, and the host cargo
+    /// wrapper's slot locks and slot log, so the job queues for a slot with
+    /// every other cargo on the host and its run is recorded.
     ///
     /// Nothing in cargo home is writable. `bin/` holds the rustup proxies
     /// (`cargo`, `rustc`), `config.toml` can name a `build.rustc-wrapper`,
@@ -766,6 +883,10 @@ impl LaneJobs {
         let mut rw = Vec::new();
         if let Some(target) = self.target_dir() {
             rw.push(target);
+        }
+        // trace:STORY-2641 | ai:codex
+        if let Some(cache) = env.get("SCCACHE_DIR") {
+            rw.push(PathBuf::from(cache));
         }
         let home = env.get("HOME").map(PathBuf::from);
         let runtime = env
@@ -805,6 +926,24 @@ impl LaneJobs {
         }
         std::fs::create_dir_all(&self.inbox)
             .with_context(|| format!("create {}", self.inbox.display()))?;
+        // Only the host-selected lane cache is made writable; cargo home stays read-only.
+        // trace:STORY-2641 | ai:codex
+        if let Some((_, cache)) = self.build_env.iter().find(|(key, _)| key == "SCCACHE_DIR") {
+            use std::os::unix::fs::{DirBuilderExt, MetadataExt};
+            let mut builder = std::fs::DirBuilder::new();
+            builder.recursive(true).mode(0o700).create(cache)?;
+            let metadata = std::fs::symlink_metadata(cache)?;
+            anyhow::ensure!(
+                metadata.is_dir()
+                    && metadata.uid() == current_uid()
+                    && metadata.mode() & 0o7777 == 0o700,
+                "lane sccache directory {} must be owned by uid {} with mode 0700; \
+                 if you own it, run chmod 700 -- {}; otherwise ask its owner to repair or remove it",
+                cache,
+                current_uid(),
+                crate::shell_quote(cache)
+            );
+        }
         std::fs::create_dir_all(&self.results)
             .with_context(|| format!("create {}", self.results.display()))?;
         Ok(())
@@ -1386,7 +1525,7 @@ fn run_one_timed(
     ) else {
         return refuse(&format!("`{}` is not on the job's PATH", job.argv[0]));
     };
-    let args = job.argv[1..].to_vec();
+    let (job_program, args) = cargo_with_cache_lifecycle(&cargo, job.argv[1..].to_vec(), &env);
     // The sandbox binds the seat's cargo target with `--bind-try`, which
     // skips an absent path: on a cold (unseeded) target cargo would then
     // find it read-only and fail before compiling. The host creates it.
@@ -1407,7 +1546,7 @@ fn run_one_timed(
                 lane.sandbox == Sandbox::BwrapDefaultOn
                     || crate::session::os_wrap_enabled(&lane.seat),
                 &lane.sandbox_rw_paths(&env),
-                &cargo.to_string_lossy(),
+                &job_program,
                 args,
             ) {
                 Ok((program, mut args)) => {
@@ -1425,11 +1564,7 @@ fn run_one_timed(
             }
         }
         #[cfg(test)]
-        Sandbox::TestUnwrapped => (
-            cargo.to_string_lossy().into_owned(),
-            args,
-            "unwrapped (test fixture)",
-        ),
+        Sandbox::TestUnwrapped => (job_program, args, "unwrapped (test fixture)"),
     };
     let mut out = match std::fs::OpenOptions::new()
         .write(true)
