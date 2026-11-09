@@ -57,6 +57,12 @@ def plan(hunks, files):
     placements = {path: [] for path in files}
     errors = []
     for number, (old, new) in enumerate(hunks, 1):
+        if new and new != old and any(
+                lines[start:start + len(new)] == new
+                for lines in files.values()
+                for start in range(len(lines) - len(new) + 1)):
+            errors.append(f'hunk {number}: replacement already present; refusing possible replay')
+            continue
         matches = [(path, start) for path, lines in files.items()
                    for start in range(len(lines) - len(old) + 1)
                    if old and lines[start:start + len(old)] == old]
@@ -94,6 +100,47 @@ def destination(root, value):
     return path
 
 
+def validate_inventory(data):
+    """Reject malformed policy evidence before any source writes."""
+    if data.get('version') != 2:
+        raise Refusal('inventory baseline must be version 2')
+    for kind, required in (
+            ('writer', ('id', 'path', 'item', 'sink', 'lock', 'gate', 'disposition',
+                        'proposed_operation', 'evidence_tests')),
+            ('operation', ('id', 'surface', 'selector', 'lock', 'gate', 'disposition',
+                           'proposed_operation', 'evidence_tests'))):
+        rows = data.get(kind, [])
+        if not isinstance(rows, list):
+            raise Refusal(f'inventory {kind} must be an array of tables')
+        ids = set()
+        for row in rows:
+            if not isinstance(row, dict) or any(not row.get(key) for key in required):
+                raise Refusal(f'incomplete inventory {kind} row')
+            if any(not isinstance(row[key], str) for key in required if key != 'evidence_tests'):
+                raise Refusal(f'invalid inventory {kind} field type')
+            tests = row['evidence_tests']
+            if not isinstance(tests, list) or any(not isinstance(t, str) or not t for t in tests):
+                raise Refusal(f'invalid inventory {kind} evidence_tests')
+            if row['disposition'] not in {'s2_typed', 'host_only', 'lane_private', 'read_only', 'blocked'}:
+                raise Refusal(f'invalid inventory {kind} disposition')
+            if kind == 'writer':
+                path = Path(row['path'])
+                if path.is_absolute() or '..' in path.parts:
+                    raise Refusal('unsafe inventory writer path')
+                if row['id'] != '|'.join((row['path'], row['item'], row['sink'])):
+                    raise Refusal('inventory writer id must match site')
+            elif row['disposition'] != 'blocked':
+                raise Refusal('inventory operation must remain blocked')
+            if row['id'] in ids:
+                raise Refusal(f'duplicate inventory {kind} id: {row["id"]}')
+            ids.add(row['id'])
+            if row['disposition'] == 'blocked' and not row.get('blocker'):
+                raise Refusal(f'inventory {kind} blocked row needs blocker')
+    routes = data.get('mediated_route', [])
+    if not isinstance(routes, list) or any(not isinstance(row, dict) for row in routes):
+        raise Refusal('inventory mediated_route must be an array of tables')
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--root', type=Path, default=Path.cwd())
@@ -110,8 +157,7 @@ def main():
         baseline_args = []
         if args.inventory_baseline is not None:
             baseline = args.inventory_baseline.resolve(strict=True)
-            if tomllib.loads(baseline.read_text()).get('version') != 2:
-                raise Refusal('inventory baseline must be version 2')
+            validate_inventory(tomllib.loads(baseline.read_text()))
             baseline_args = ['--baseline', str(baseline)]
         if Path(args.source).is_absolute() or '..' in Path(args.source).parts:
             raise Refusal('source must be relative to root')
@@ -121,14 +167,19 @@ def main():
             return subprocess.check_output(['git', '-C', str(root), *argv])
         merge = subprocess.run(['git', '-C', str(root), 'rev-parse', '--verify', 'MERGE_HEAD'], capture_output=True)
         if merge.returncode == 0:
-            if merge.stdout.decode().strip() != commits[1]:
-                raise Refusal('--head must be the active merge head')
-            bases = git('merge-base', '--all', 'HEAD', commits[1]).decode().splitlines()
+            merge_head = merge.stdout.decode().strip()
+            current_head = git('rev-parse', 'HEAD').decode().strip()
+            if commits[1] not in (merge_head, current_head):
+                raise Refusal('--head must be HEAD or the active merge head')
+            bases = git('merge-base', '--all', current_head, merge_head).decode().splitlines()
             if bases != [commits[0]]:
-                raise Refusal('--base must be the unique merge base of HEAD and --head')
+                raise Refusal('--base must be the unique merge base of HEAD and MERGE_HEAD')
         elif subprocess.run(['git', '-C', str(root), 'merge-base', '--is-ancestor', *commits]).returncode != 0:
             raise Refusal('--base must be an ancestor of --head')
         patch = subprocess.check_output(['git', '-C', str(root), 'diff', '--no-ext-diff', '--no-textconv', '--no-renames', '--no-color', '--unified=3', *commits, '--', ':(literal)' + args.source]).decode('utf-8')
+        inventory = root / 'scripts/store-writers.toml'
+        if args.inventory_baseline is None and inventory.exists():
+            validate_inventory(tomllib.loads(inventory.read_text()))
         paths = {destination(root, value) for value in args.destination}
         files = {path: path.read_bytes().decode('utf-8').splitlines(keepends=True) for path in paths}
         unmerged = {entry.split(b'\t', 1)[1].decode('utf-8')

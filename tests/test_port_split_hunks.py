@@ -27,6 +27,18 @@ class PortSplitHunks(unittest.TestCase):
         with self.assertRaises(PORT.Refusal):
             PORT.plan([(['old\n'], ['new\n']), (['old\n'], ['again\n'])], files)
 
+    def test_replay_and_baseline_refusals(self):
+        # An EOF insertion leaves its old context intact; it must not duplicate.
+        with self.assertRaisesRegex(PORT.Refusal, 'possible replay'):
+            PORT.plan([(['tail\n'], ['tail\n', 'added\n'])],
+                      {'module': ['tail\n', 'added\n']})
+        for data in ({'version': 2, 'writer': {}},
+                     {'version': 2, 'writer': [{'item': 'broken'}]},
+                     {'version': 2, 'operation': ['broken']},
+                     {'version': 2, 'mediated_route': 'broken'}):
+            with self.assertRaises(PORT.Refusal):
+                PORT.validate_inventory(data)
+
     def test_missing_newline_and_malformed_patch(self):
         patch = '@@ -1 +1 @@\n-old\n\\ No newline at end of file\n+new\n\\ No newline at end of file\n'
         self.assertEqual(PORT.parse_hunks(patch), [(['old'], ['new'])])
@@ -75,7 +87,7 @@ class PortSplitHunks(unittest.TestCase):
             module = src / 'moved.rs'
             module.write_text(second)
             inventory.write_text(inventory.read_text().replace('# base', '# split'))
-            commit()
+            split_tip = commit()
             baseline = root / 'reviewed.toml'
             baseline.write_text(inventory.read_text())
             merge = subprocess.run(['git', '-C', str(root), 'merge', '--no-commit', 'pr'], capture_output=True)
@@ -92,6 +104,11 @@ class PortSplitHunks(unittest.TestCase):
             baseline.write_text('<<<<<<< invalid\n')
             refused = subprocess.run(command, capture_output=True, text=True)
             self.assertNotEqual(refused.returncode, 0)
+            self.assertEqual(module.read_text(), second)
+            baseline.write_text('version = 2\nwriter = [{item = "broken"}]\n')
+            refused = subprocess.run(command, capture_output=True, text=True)
+            self.assertNotEqual(refused.returncode, 0)
+            self.assertIn('incomplete inventory writer', refused.stderr)
             self.assertEqual(module.read_text(), second)
             baseline.write_text('version = 2\nwriter = []\noperation = []\n')
             # A wrong ancestor must not replay unrelated changes onto main.
@@ -120,6 +137,18 @@ class PortSplitHunks(unittest.TestCase):
             git('add', '.')
             git('commit', '-qm', 'resolve split merge')
             self.assertEqual(len(git('rev-list', '--parents', '-n', '1', 'HEAD').split()), 3)
+            # Repository workflow: merge the split main branch INTO the PR.
+            git('checkout', 'pr')
+            baseline.write_text('version = 2\nwriter = []\noperation = []\n')
+            merge = subprocess.run(['git', '-C', str(root), 'merge', '--no-commit', split_tip], capture_output=True)
+            self.assertEqual(merge.returncode, 1)
+            reverse = command[:]
+            reverse[reverse.index('ours')] = 'theirs'
+            result = subprocess.run(reverse, capture_output=True, text=True)
+            self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+            self.assertEqual(module.read_text(), changed)
+            self.assertIn('/* PR */', source.read_text())
+
 
     def test_seven_prs_and_reexport_refusal(self):
         with tempfile.TemporaryDirectory() as directory:

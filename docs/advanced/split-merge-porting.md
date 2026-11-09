@@ -11,7 +11,7 @@ python3 scripts/port-split-hunks.py --base <base-sha> --head <pr-head-sha> \
   --destination path/parent.rs --destination path/module.rs
 ```
 
-During an active merge, `--head` must equal `MERGE_HEAD` and `--base` must
+During an active merge, `--head` must equal either `HEAD` (merging main into the PR) or `MERGE_HEAD` (merging the PR into main) and `--base` must
 be the unique merge base of HEAD and that head. A wrong base refuses before
 writes, preventing replay of changes that belong to the destination branch.
 Outside a merge, the helper checks ancestry only; selecting the intended PR
@@ -31,7 +31,8 @@ git show <reviewed-commit>:scripts/store-writers.toml > /tmp/reviewed-writers.to
 # --apply --inventory-baseline /tmp/reviewed-writers.toml
 ```
 
-The helper validates that baseline before writing source and forwards it to
+The helper validates baseline version, row structure, required policy fields,
+writer identities and duplicate IDs before writing source and forwards it to
 the existing `check-store-writers.py --regenerate --baseline <path>` path.
 Regeneration preserves that baseline's matching policy rows, scans the merged
 source and replaces the conflicted working inventory. Review policy changes on
@@ -41,7 +42,7 @@ evidence for you. A missing or invalid explicit baseline refuses.
 Every hunk's complete old text (removed lines plus three-line diff context)
 must occur exactly once across all supplied destinations. Matching uses the
 original destination contents, including whitespace and final newlines.
-Missing, ambiguous, overlapping and context-free hunks refuse the whole plan
+Already-present replacement text refuses conservatively to prevent replay, including EOF insertions. Missing, ambiguous, overlapping and context-free hunks refuse the whole plan
 before any writes. Repeated matches within one file also refuse. Explicit
 candidate selection is the operator's responsibility; include every possible
 destination and the surviving parent module.
