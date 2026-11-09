@@ -13,7 +13,7 @@ fn story2402_s2_conditions_validate_and_canonicalize() {
         ("query:tag=ready count>=5", "query:tag=ready count>=5"),
     ] {
         assert_eq!(
-            canonical_defer_condition(Some(raw), None)
+            crate::condition_cmd::canonical_condition(Some(raw), None)
                 .unwrap()
                 .as_deref(),
             Some(canonical)
@@ -27,27 +27,40 @@ fn story2402_s2_conditions_validate_and_canonicalize() {
         "date:tomorrow",
     ] {
         assert!(
-            canonical_defer_condition(Some(raw), Some("explanation")).is_err(),
+            crate::condition_cmd::canonical_condition(Some(raw), Some("explanation")).is_err(),
             "{raw}"
         );
     }
     for reason in [None, Some(""), Some("  ")] {
-        assert!(canonical_defer_condition(Some("manual:joe"), reason)
-            .unwrap_err()
-            .to_string()
-            .contains("--reason"));
+        assert!(
+            crate::condition_cmd::canonical_condition(Some("manual:joe"), reason)
+                .unwrap_err()
+                .to_string()
+                .contains("--reason")
+        );
     }
     assert_eq!(
-        canonical_defer_condition(Some("manual:joe"), Some("decision pending"))
+        crate::condition_cmd::canonical_condition(Some("manual:joe"), Some("decision pending"))
             .unwrap()
             .as_deref(),
         Some("manual:joe")
     );
-    assert_eq!(canonical_defer_condition(None, None).unwrap(), None);
+    assert_eq!(
+        crate::condition_cmd::canonical_condition(None, None).unwrap(),
+        None
+    );
 }
 
 #[test]
 fn story2402_s2_refusal_precedes_writes_and_redefer_retains_evidence() {
+    // Allocation metadata must stay private under a permissive host umask.
+    // trace:STORY-2402 | ai:codex
+    if crate::test_env::run_path_isolated_test() {
+        return;
+    }
+    unsafe {
+        libc::umask(0o077);
+    }
     let dir = tempfile::tempdir().unwrap();
     let init = crate::test_exec::output(
         crate::test_git::git_command()

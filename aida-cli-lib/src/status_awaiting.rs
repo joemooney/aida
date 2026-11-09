@@ -1860,6 +1860,12 @@ pub(crate) fn maybe_team_identity_guard(
         return Ok(());
     }
 
+    team_identity_write_guard(store_path, is_write_command(command))
+}
+
+// Early handoff dispatch must enforce the same opt-in identity policy.
+// trace:STORY-2402 | ai:codex
+pub(crate) fn team_identity_write_guard(store_path: &std::path::Path, writes: bool) -> Result<()> {
     let our_clone = team::our_clone_path(store_path);
     let registry = team::load_roster(store_path);
     let team_context = team::is_team_context(&registry, &our_clone);
@@ -1899,7 +1905,6 @@ pub(crate) fn maybe_team_identity_guard(
         let require = std::env::var("AIDA_TEAM_REQUIRE_USER")
             .map(|v| v == "1" || v.eq_ignore_ascii_case("true"))
             .unwrap_or(false);
-        let writes = is_write_command(command);
         eprintln!(
             "{} This is a shared (team) store, but no distinct identity is set — you are \
              the BUG-89 '{}' fallback. A shared '{}' id collides queues + commit \

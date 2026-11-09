@@ -68,6 +68,14 @@ pub enum FindingsCommand {
         // trace:BUG-1294 | ai:claude
         #[clap(long, value_name = "TEXT", allow_hyphen_values = true)]
         note: Option<String>,
+        /// Park this finding until a typed condition is met.
+        // trace:STORY-2402 | ai:codex
+        #[clap(long, value_name = "CONDITION")]
+        until: Option<String>,
+
+        /// Explanation for an operator hold; required for manual:<who>.
+        #[clap(long, requires = "until")]
+        reason: Option<String>,
     },
 
     /// Count review findings per defect class across every recorded verdict,

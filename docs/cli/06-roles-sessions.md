@@ -1377,6 +1377,20 @@ both HEAD and the branch still equal the recorded PR head and Git permits the
 checkout. A moved branch or another session's handoff refuses recovery.
 <!-- trace:STORY-2325 | ai:codex -->
 
+Conditional relay/seat handoffs use
+`aida session handoff --seat advisor --write handoff.md --spec <spec-id> --until 'pr:42=merged'`.
+This parks the named spec using the same typed condition and hold policy as
+`aida defer`, and includes the canonical trigger in the handoff note. The
+hourly `defer-resurface` job evaluates that spec; a met condition resurfaces it.
+Conditional handoffs use the same per-write store auto-push policy as `aida defer`.
+The deferral is saved before the note: if note I/O fails, the error names the
+saved spec and trigger. Repair the note and retry; the deferral remains active.
+This does not automatically execute the handoff instructions or launch a seat.
+Free-text triggers are refused. Use `--until manual:<who> --reason '<explanation>'`
+for a human decision; this retains an operator hold and routes old manual
+conditions to the human queue after 14 days.
+<!-- trace:STORY-2402 | ai:codex -->
+
 <!-- trace:BUG-2500 | ai:codex -->
 A review blocked solely on external CI or host evidence records `waiting`
 (displayed `WAITING`), with a summary naming the dependency, responsible actor
