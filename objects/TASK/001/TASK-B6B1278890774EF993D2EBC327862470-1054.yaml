@@ -1,5 +1,6 @@
 id: 01a1c076-9905-7b03-9714-1905d11da6da
 spec_id: TASK-b6b1278890774ef993d2ebc327862470-1054
+agreed_id: TASK-3092
 title: 'Cosmetic: aida-cli-lib/src/findings_gate.rs:2119 appends the first section to a…'
 description: |-
   Non-blocking finding carried forward from an APPROVED review verdict on TASK-3749, which has since completed — recorded here so it keeps a queryable home once the verdict record stops being read.
@@ -40,6 +41,10 @@ history:
   timestamp: 2026-11-09T14:30:11.658872738Z
   session_id: 01a1beff-fc3b-78e2-93e2-9b0c283b0339
   harness_version: 2.1.319 (Claude Code)
+  changes: []
+- id: 01a1c16d-18a9-7613-ad0b-f9c5616ec0bc
+  author: joe
+  timestamp: 2026-11-09T17:48:34.857696732Z
   changes: []
 filed_at:
   code_sha: c3dc94a29d20cd185a6739fd5b36facdf0513ab5
