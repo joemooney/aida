@@ -1,3 +1,4 @@
+// trace:TASK-3429 | ai:codex
 //! Agent brief create/list/read/ack and pending-brief bookkeeping (STORY-1488 slice 1)
 // trace:STORY-1488 | ai:claude
 
@@ -999,7 +1000,7 @@ pub(crate) fn add_pending_brief(
 /// agent dir is the brief's parent, so we don't need the project root. Matches
 /// either the bare brief name or any path entry ending in it, so an
 /// absolute-vs-relative mismatch doesn't strand the entry.
-pub(crate) fn clear_pending_brief(brief_path: &std::path::Path) {
+pub fn clear_pending_brief(brief_path: &std::path::Path) {
     let Some(dir) = brief_path.parent() else {
         return;
     };

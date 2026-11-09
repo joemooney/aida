@@ -1,3 +1,4 @@
+// trace:TASK-3429 | ai:codex
 //! `aida claim` / `aida unclaim` — operator spec-scoped claim leases (STORY-1488 slice 1).
 // trace:STORY-1488 | ai:claude
 
@@ -93,7 +94,7 @@ pub(crate) fn without_own_claims(
 /// checkout). Never the primary checkout's branch: a worktree-less claim has
 /// no branch of its own.
 // trace:BUG-2143 | ai:claude
-pub(crate) fn claim_lease_branch(
+pub fn claim_lease_branch(
     worktree_path: &std::path::Path,
     project_root: &std::path::Path,
 ) -> String {

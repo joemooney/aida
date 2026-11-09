@@ -5655,7 +5655,9 @@ mod bug_1667_bypass_gate_tests {
     #[test]
     fn bug_1667_mcp_cannot_reach_the_posture_writer() {
         for (name, src) in [
-            ("mcp.rs", include_str!("mcp.rs")),
+            // trace:TASK-3429 | ai:codex
+            ("mcp.rs", include_str!("../../aida-mcp/src/mcp.rs")),
+            ("serve.rs", include_str!("../../aida-mcp/src/serve.rs")),
             ("mcp_translate.rs", include_str!("mcp_translate.rs")),
         ] {
             for needle in [

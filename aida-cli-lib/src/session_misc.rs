@@ -1,3 +1,4 @@
+// trace:TASK-3429 | ai:codex
 //! session prune/show/handoff/manifest and queue-work launch helpers (STORY-1488 slice 1)
 // trace:STORY-1488 | ai:claude
 
@@ -1449,7 +1450,7 @@ pub(crate) fn render_session_manifest(
 /// when no lease covers this shell or the manifest doesn't list the
 /// spec — most edits happen outside a planned cluster, so the path stays
 /// quiet by design. trace:STORY-98 | ai:claude
-pub(crate) fn update_manifest_for_status(spec_id: &str, canonical_status: &str) {
+pub fn update_manifest_for_status(spec_id: &str, canonical_status: &str) {
     let Ok(project_root) = find_project_root() else {
         return;
     };

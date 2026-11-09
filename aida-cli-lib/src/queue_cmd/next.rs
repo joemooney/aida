@@ -75,17 +75,8 @@ pub(super) fn handle_queue_command(
                 .unwrap_or(SessionEnforcement::Warn);
             let lease_filter_active =
                 !leases.is_empty() && enforcement_mode != SessionEnforcement::Off;
-            // BUG-637: probe liveness once so the queue filter only hides specs a
-            // LIVE foreign session is working — a crashed/stale claim must not keep
-            // a spec out of the queue forever (no crash-deadlock). Skip the probe
-            // entirely when the filter is inactive.
-            // trace:BUG-637 | ai:claude
-            let lease_live_now = chrono::Utc::now();
-            let lease_live_sessions = if lease_filter_active {
-                process_probe::probe_live_claude_sessions()
-            } else {
-                Vec::new()
-            };
+            // Unknown ownership retains the assignment except for legacy pickup compatibility.
+            // trace:TASK-3420 | ai:codex
             let mut skipped_for_lease: Vec<(String, String)> = Vec::new();
             // STORY-333: track specs skipped by the pre-pickup gate so
             // `queue next` can hint why (without a hint, an un-pickable
@@ -101,6 +92,9 @@ pub(super) fn handle_queue_command(
             let leased_head =
                 leased_implementer_queue_head(&raw_entries, &store, &user_id, self_lease.as_ref());
 
+            let lease_reader = project_root_for_leases
+                .as_ref()
+                .map(|root| crate::ownership::reader::LeaseReader::new(root));
             let next_entry = leased_head.or_else(|| {
                 raw_entries
                     .iter()
@@ -177,7 +171,11 @@ pub(super) fn handle_queue_command(
                             req.id,
                             req.spec_id.as_deref(),
                             &store,
-                            lease_is_live(&lease_live_sessions, lease_live_now),
+                            |lease| {
+                                lease_reader
+                                    .as_ref()
+                                    .is_none_or(|reader| reader.retained(lease))
+                            },
                         );
                         match owner {
                             None => true,

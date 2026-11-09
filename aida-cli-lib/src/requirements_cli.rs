@@ -1,3 +1,4 @@
+// trace:TASK-3429 | ai:codex
 //! requirement add/list/show/edit/delete handlers, status/priority/type parsing and `aida grep` (STORY-1488 slice 1)
 // trace:STORY-1488 | ai:claude
 
@@ -1249,7 +1250,7 @@ pub(crate) const TAGS_FLAG: &str = "--tags";
 /// worse failure than the blob, because it reads as authoritative.
 // trace:BUG-1770 | ai:claude
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub(crate) enum TagRepair {
+pub enum TagRepair {
     /// A comma-separated argument: `--tags a,b`.
     CommaFlag(&'static str),
     /// A repeatable single-value flag: `--add-tag a --add-tag b`.
@@ -1295,7 +1296,7 @@ impl TagRepair {
 /// store can only be named by reproducing it verbatim, and refusing that would
 /// leave the existing blobs unrepairable by the incremental form.
 // trace:BUG-1770 | ai:claude
-pub(crate) fn validate_tag_value(tag: &str, repair: TagRepair) -> anyhow::Result<()> {
+pub fn validate_tag_value(tag: &str, repair: TagRepair) -> anyhow::Result<()> {
     if !tag.chars().any(char::is_whitespace) {
         return Ok(());
     }
@@ -1440,7 +1441,7 @@ pub(crate) fn dropped_structural_tags(
     dropped
 }
 
-pub(crate) fn enforce_structural_tag_replacement(
+pub fn enforce_structural_tag_replacement(
     old_tags: &HashSet<String>,
     new_tags: &HashSet<String>,
     force: bool,
@@ -8213,7 +8214,7 @@ pub(crate) struct EditArgs {
 /// MCP `update_requirement`) asks this. A legacy `deferred:*` tag defers too:
 /// the spec reads `deferred` either way ([`crate::status_display::is_deferred`]).
 // trace:TASK-1955 | ai:claude
-pub(crate) fn deferred_status_edit_refusal(req: &aida_core::Requirement) -> Option<String> {
+pub fn deferred_status_edit_refusal(req: &aida_core::Requirement) -> Option<String> {
     let id = req.spec_id.clone().unwrap_or_else(|| req.id.to_string());
     if req.deferred {
         return Some(format!(

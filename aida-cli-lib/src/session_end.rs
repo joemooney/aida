@@ -2132,7 +2132,7 @@ pub(crate) fn session_end_with_discard_unpushed(
     // unlink above. trace:BUG-694 | ai:claude
     // It runs after the removal, so the BUG-483 peer check above sees this
     // session's own MCP claim; `without_own_claim` (BUG-1991) excludes it.
-    let mcp_claim = mcp::mcp_claim_path(&leases_dir(&project_root), &target.scope);
+    let mcp_claim = crate::mcp_claim::mcp_claim_path(&leases_dir(&project_root), &target.scope);
     match std::fs::remove_file(&mcp_claim) {
         Ok(_) => eprintln!(
             "{} mcp-claim reaped ({})",
@@ -2605,7 +2605,7 @@ pub(crate) fn session_end_stale_cwd_hint_lines(project_root: &std::path::Path) -
 /// (`mcp-claim.<scope>.toml`), if one exists and parses.
 // trace:BUG-1991 | ai:claude
 pub(crate) fn own_mcp_claim_id(project_root: &std::path::Path, scope: &str) -> Option<String> {
-    let path = mcp::mcp_claim_path(&leases_dir(project_root), scope);
+    let path = crate::mcp_claim::mcp_claim_path(&leases_dir(project_root), scope);
     let body = std::fs::read_to_string(path).ok()?;
     toml::from_str::<SessionLease>(&body).ok().map(|l| l.id)
 }
