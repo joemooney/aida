@@ -23,7 +23,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-07T20:45:16.684639Z
-modified_at: 2026-11-09T14:31:20.890388221Z
+modified_at: 2026-11-09T14:31:35.488480091Z
 req_type: Task
 relationships:
 - rel_type: Child
@@ -340,6 +340,20 @@ comments:
         thread 'status_sections::task_1750_liveness_primitive_guard_tests::proc_identity_legacy_decisions_do_not_expand' (302322) panicked at aida-cli-lib/src/tests/task_1750_liveness_primitive_guard_tests.rs:153:5:
   created_at: 2026-11-09T14:31:20.890388221Z
   modified_at: 2026-11-09T14:31:20.890388221Z
+- id: 01a1c0b8-bedb-7f13-9eef-f05424cb5977
+  author: joe
+  content: |-
+    REVIEW FINDINGS TO ADDRESS (PR #3670):
+    Verdict: CHANGES REQUESTED
+    Reviewed commit: 82195a1b1f52
+    Recorded: 2026-11-09T13:07:38.759924956+00:00
+    Findings:
+    1. [major][blocker] Unfixed from last round; the head commit only changes tests: a review closed without a verdict still suppresses unpicked-ready-pr at its head, and the stale-base row shares the cause (aida-cli-lib/src/ownership/reader.rs, the 'None => false' arm of pickup_owner). end_finished_review writes the review_finished receipt and keeps the lease on the no-verdict path (queue_cmd/work.rs:6046-6059); ops::release leaves holder None + Phase::Closed (ownership/ops.rs:108-118). lease_owner_record returns Unknown 'ownership record no longer names this session', legacy_unknown is false, so LegacyRule::Review keeps it and load_open_prs counts the review as started. Main reads that lease through lease_state_for, where a dead creator with no live session is Stale (BUG-2206 arm), so the check fires there. The receipt is positive proof the review ended, not an unresolved Unknown, so advisor ruling item 3 does not require retaining it. From source reading; not executed. Fix inside pickup_owner: treat a WorkKey::Review record with holder None and Phase::Closed whose reason passes review_completion_matches as Dead (review_lease_ended already has this logic), and add a task_3420 test: closed by the bound receipt with no verdict releases, a mismatched receipt stays retained. If you dispute this under ruling item 3, punt naming this finding instead.
+    2. [minor] Unfixed from last round: test gap on ruling item 3. The refused-capture arm accepts any admission with refusal().is_some(), and lease_holder_record also maps an unparsable holder_record and a recorded_holder mismatch to refused. Those stay retained only because the fallback re-enters lease_uses_holder_verdict through lease_state_for and lease_owner_gone (leases.rs:1299, 5274). task_3420_handoff_and_refused_capture_preserve_legacy_rules covers only an explicit EvidenceUnavailable refusal. Add a task_3420 case with a dead active_pid and (a) an unparsable holder_record, (b) an admitted record whose pid no longer matches, asserting retained under Pickup, NonStale, Review and not adoptable.
+    3. [cosmetic] Unfixed from last round: review_lease_running (lane_liveness.rs:1268) is cfg(test)-only and repeats the production check inline in load_open_prs, so task_3420_review_lease_uses_recorded_ownership exercises a wrapper production never calls. Have load_open_prs and the test share one helper taking the reader.
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
+  created_at: 2026-11-09T14:31:35.387349853Z
+  modified_at: 2026-11-09T14:31:35.387349853Z
 history:
 - id: 01a1b7c2-6b69-7b02-bd8c-8f40aee2972d
   author: joe
