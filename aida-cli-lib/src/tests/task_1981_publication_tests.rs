@@ -93,7 +93,9 @@ impl Fixture {
         std::fs::create_dir_all(peer.join(name).parent().unwrap()).unwrap();
         std::fs::write(peer.join(name), contents).unwrap();
         git_ops::add(&peer, &[name]).unwrap();
-        git_ops::commit(&peer, "remote advance").unwrap();
+        // Deliberately seed corrupt remote evidence as an older/foreign writer;
+        // the current store writer correctly refuses this object.
+        git_at(&peer, &["commit", "-qm", "remote advance"]);
         assert!(git_ops::push(&peer, "origin", "main").unwrap());
     }
 }

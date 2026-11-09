@@ -473,6 +473,9 @@ fn host_git_hardening_with(
     }
     for setting in [
         "diff.ignoreSubmodules=all",
+        // trace:BUG-2490 | ai:codex
+        "rebase.autoStash=false",
+        "merge.autoStash=false",
         "submodule.recurse=false",
         "fetch.recurseSubmodules=false",
     ] {
@@ -1431,7 +1434,18 @@ pub fn protect_roster_advisors(store: &Path) -> Result<Vec<String>> {
 
 /// Stage specific files.
 pub fn add(repo: &Path, paths: &[&str]) -> Result<()> {
-    refuse_embedded_repos(repo)?; // trace:BUG-1929 | ai:claude
+    // Preserve conflict stages before git add can implicitly resolve them.
+    // trace:BUG-2490 | ai:codex
+    if is_store_tree(repo) {
+        refuse_unmerged_store_paths(repo)?;
+    }
+    stage_resolved_paths(repo, paths)
+}
+
+// Only structured conflict resolvers may deliberately replace unmerged stages.
+// trace:BUG-2490 | ai:codex
+fn stage_resolved_paths(repo: &Path, paths: &[&str]) -> Result<()> {
+    refuse_embedded_repos(repo)?;
     ensure_index_lock_clear_for_write(repo, 10, 100)?;
     let mut args = vec!["add"];
     args.extend(paths);
@@ -1444,7 +1458,13 @@ pub fn add(repo: &Path, paths: &[&str]) -> Result<()> {
 
 /// Stage all changes (tracked and untracked) in a subdirectory.
 pub fn add_all(repo: &Path, subdir: &str) -> Result<()> {
-    refuse_embedded_repos(repo)?; // trace:BUG-1929 | ai:claude
+    // trace:BUG-1929 | ai:claude
+    refuse_embedded_repos(repo)?;
+    // Preserve conflict stages before git add can implicitly resolve them.
+    // trace:BUG-2490 | ai:codex
+    if is_store_tree(repo) {
+        refuse_unmerged_store_paths(repo)?;
+    }
     ensure_index_lock_clear_for_write(repo, 10, 100)?;
     let result = git_with_index_lock_retry(repo, &["add", "-A", subdir])?;
     if !result.success {
@@ -1504,7 +1524,7 @@ pub fn commit(repo: &Path, message: &str) -> Result<bool> {
     let redact = commit_redaction_args(public_email.as_deref());
     let mut argv: Vec<&str> = redact.iter().map(String::as_str).collect();
     argv.extend_from_slice(&["commit", "-m", message]);
-    let result = commit_with_lock_recovery(repo, &argv)?;
+    let result = commit_with_lock_recovery(repo, &argv, None)?;
     if result.success {
         Ok(true)
     } else if crate::external_tool_output::contains_any_case_insensitive(
@@ -1533,7 +1553,10 @@ pub fn commit_paths(repo: &Path, message: &str, paths: &[&str]) -> Result<()> {
     let mut argv: Vec<&str> = redact.iter().map(String::as_str).collect();
     argv.extend_from_slice(&["commit", "-q", "-m", message, "--"]);
     argv.extend_from_slice(paths);
-    let result = commit_with_lock_recovery(repo, &argv)?;
+    if is_store_tree(repo) {
+        validate_store_worktree_paths(repo, paths)?;
+    }
+    let result = commit_with_lock_recovery(repo, &argv, Some(paths))?;
     if !result.success {
         return Err(commit_failure::error(&result)); // trace:BUG-034 | ai:claude
     }
@@ -1544,7 +1567,14 @@ pub fn commit_paths(repo: &Path, message: &str, paths: &[&str]) -> Result<()> {
 /// git process holds) and clearing it again before each lock-contention
 /// retry, so an abandoned lock cannot fail every later store commit.
 // trace:BUG-034 | ai:claude
-fn commit_with_lock_recovery(repo: &Path, argv: &[&str]) -> Result<GitResult> {
+fn commit_with_lock_recovery(
+    repo: &Path,
+    argv: &[&str],
+    paths: Option<&[&str]>,
+) -> Result<GitResult> {
+    if is_store_tree(repo) {
+        validate_store_index_paths(repo, paths)?;
+    }
     ensure_index_lock_clear_for_write(repo, 10, 100)?;
     commit_failure::with_lock_backoff(
         || git(repo, argv),
@@ -2049,6 +2079,23 @@ pub fn pull_rebase(repo: &Path, remote: &str, branch: &str) -> Result<()> {
     })
 }
 
+/// Retry a rejected store publication without stashing or committing another
+/// writer's pending changes. The dirty check and pull share the store lock.
+// trace:BUG-2490 | ai:codex
+pub fn pull_rebase_store_retry(repo: &Path, remote: &str, branch: &str) -> Result<()> {
+    evidence::with_sync_lock(repo, || {
+        if has_changes_checked(repo)? {
+            anyhow::bail!(
+                "store publication retry refused: pending store changes at {}. \
+                 Automatic stashing is disabled; pending changes were preserved. \
+                 Review and commit the pending store changes on the host, then retry the command",
+                repo.display()
+            );
+        }
+        pull_rebase(repo, remote, branch)
+    })
+}
+
 fn rebase_onto(repo: &Path, target: &str) -> Result<()> {
     let result = git(repo, &["rebase", "--end-of-options", target])?;
     if !result.success {
@@ -2068,6 +2115,30 @@ fn rebase_onto(repo: &Path, target: &str) -> Result<()> {
         anyhow::bail!("git pull --rebase failed: {}", result.stderr);
     }
     Ok(())
+}
+
+/// Preserve both the original failure and failed automatic recovery diagnostics.
+// trace:BUG-2490 | ai:codex
+fn abort_failed_store_rebase(repo: &Path, error: anyhow::Error) -> anyhow::Error {
+    abort_failed_store_operation(repo, "rebase", error)
+}
+
+// trace:BUG-2490 | ai:codex
+fn abort_failed_store_operation(
+    repo: &Path,
+    operation: &str,
+    error: anyhow::Error,
+) -> anyhow::Error {
+    match git(repo, &[operation, "--abort"]) {
+        Ok(abort) if abort.success => error,
+        Ok(abort) => anyhow::anyhow!(
+            "{error:#}; automatic `git {operation} --abort` also failed: {}",
+            abort.stderr
+        ),
+        Err(abort) => {
+            anyhow::anyhow!("{error:#}; automatic `git {operation} --abort` also failed: {abort:#}")
+        }
+    }
 }
 
 /// Outcome of an auto-merging store-leg pull.
@@ -2139,6 +2210,10 @@ fn rebase_auto_merge_onto(repo: &Path, target: &str) -> Result<StorePullOutcome>
         let conflicted = unmerged_paths(repo)?;
         if conflicted.is_empty() {
             // No conflicts right now but still mid-rebase — let git advance.
+            // trace:BUG-2490 | ai:codex — continuation can create a store commit.
+            if let Err(error) = validate_store_index(repo) {
+                return Err(abort_failed_store_rebase(repo, error));
+            }
             let cont = git(repo, &["-c", "core.editor=true", "rebase", "--continue"])?;
             if !rebase_in_progress(repo) {
                 if cont.success || rebase_completed_ok(repo) {
@@ -2148,8 +2223,10 @@ fn rebase_auto_merge_onto(repo: &Path, target: &str) -> Result<StorePullOutcome>
                         StorePullOutcome::AutoMerged { notes }
                     });
                 }
-                let _ = git(repo, &["rebase", "--abort"]);
-                anyhow::bail!("git rebase --continue failed: {}", cont.stderr);
+                return Err(abort_failed_store_rebase(
+                    repo,
+                    anyhow::anyhow!("git rebase --continue failed: {}", cont.stderr),
+                ));
             }
             continue;
         }
@@ -2167,10 +2244,9 @@ fn rebase_auto_merge_onto(repo: &Path, target: &str) -> Result<StorePullOutcome>
                 && !is_queue_registry_path(path)
                 && !is_schedule_ledger_path(path)
             {
-                let _ = git(repo, &["rebase", "--abort"]);
-                anyhow::bail!(
+                return Err(abort_failed_store_rebase(repo, anyhow::anyhow!(
                     "conflict in non-mergeable path `{path}` — cannot auto-merge; falling back to manual resolution"
-                );
+                )));
             }
         }
 
@@ -2187,13 +2263,15 @@ fn rebase_auto_merge_onto(repo: &Path, target: &str) -> Result<StorePullOutcome>
             };
             match resolved {
                 Ok(note) => {
-                    add(repo, &[path])
+                    stage_resolved_paths(repo, &[path])
                         .with_context(|| format!("git add {path} after auto-merge"))?;
                     notes.push(note);
                 }
                 Err(e) => {
-                    let _ = git(repo, &["rebase", "--abort"]);
-                    anyhow::bail!("structured merge of `{path}` failed: {e}");
+                    return Err(abort_failed_store_rebase(
+                        repo,
+                        anyhow::anyhow!("structured merge of `{path}` failed: {e:#}"),
+                    ));
                 }
             }
         }
@@ -2201,13 +2279,19 @@ fn rebase_auto_merge_onto(repo: &Path, target: &str) -> Result<StorePullOutcome>
         // Continue the rebase with the resolved objects staged. Force a
         // no-op editor so `--continue` never blocks waiting for a commit
         // message on a TTY-less drain.
+        // trace:BUG-2490 | ai:codex
+        if let Err(error) = validate_store_index(repo) {
+            return Err(abort_failed_store_rebase(repo, error));
+        }
         let cont = git(repo, &["-c", "core.editor=true", "rebase", "--continue"])?;
         if !rebase_in_progress(repo) {
             if cont.success || rebase_completed_ok(repo) {
                 return Ok(StorePullOutcome::AutoMerged { notes });
             }
-            let _ = git(repo, &["rebase", "--abort"]);
-            anyhow::bail!("git rebase --continue failed: {}", cont.stderr);
+            return Err(abort_failed_store_rebase(
+                repo,
+                anyhow::anyhow!("git rebase --continue failed: {}", cont.stderr),
+            ));
         }
         // else: another conflicted commit ahead — loop and resolve it too.
     }
@@ -2408,6 +2492,7 @@ pub fn commit_pending_store_changes_on_host(store_path: &Path) -> Result<bool> {
         if !has_changes_checked(store_path)? {
             return Ok(false);
         }
+        validate_pending_store_commit(store_path)?;
         add_all(store_path, ".")?;
         commit(store_path, "chore: sync pending changes")
     })
@@ -2771,10 +2856,9 @@ fn merge_union_onto(repo: &Path, ref_: &str, message: &str) -> Result<StorePullO
             && !is_registry_nodes_path(path)
             && !is_schedule_ledger_path(path)
         {
-            let _ = git(repo, &["merge", "--abort"]);
-            anyhow::bail!(
+            return Err(abort_failed_store_operation(repo, "merge", anyhow::anyhow!(
                 "conflict in non-mergeable path `{path}` — cannot auto-union; resolve it manually in the store worktree"
-            );
+            )));
         }
     }
 
@@ -2795,20 +2879,31 @@ fn merge_union_onto(repo: &Path, ref_: &str, message: &str) -> Result<StorePullO
         };
         match resolved {
             Ok(note) => {
-                add(repo, &[path]).with_context(|| format!("git add {path} after auto-union"))?;
+                stage_resolved_paths(repo, &[path])
+                    .with_context(|| format!("git add {path} after auto-union"))?;
                 notes.push(note);
             }
             Err(e) => {
-                let _ = git(repo, &["merge", "--abort"]);
-                anyhow::bail!("structured union of `{path}` failed: {e}");
+                return Err(abort_failed_store_operation(
+                    repo,
+                    "merge",
+                    anyhow::anyhow!("structured union of `{path}` failed: {e}"),
+                ));
             }
         }
     }
 
+    // trace:BUG-2490 | ai:codex — resolved objects still require schema validation.
+    if let Err(error) = validate_store_index(repo) {
+        return Err(abort_failed_store_operation(repo, "merge", error));
+    }
     let commit = git(repo, &["-c", "core.editor=true", "commit", "--no-edit"])?;
     if !commit.success {
-        let _ = git(repo, &["merge", "--abort"]);
-        anyhow::bail!("committing the union merge failed: {}", commit.stderr);
+        return Err(abort_failed_store_operation(
+            repo,
+            "merge",
+            anyhow::anyhow!("committing the union merge failed: {}", commit.stderr),
+        ));
     }
     Ok(StorePullOutcome::AutoMerged { notes })
 }
@@ -4955,6 +5050,29 @@ pub fn remote_branch_exists(repo: &Path, remote: &str, branch: &str) -> bool {
     .unwrap_or(false)
 }
 
+/// A branch absence used to skip a pull must be confirmed by a successful
+/// remote query. Offline and unreadable remotes remain errors.
+// trace:BUG-2490 | ai:codex
+pub fn probe_remote_branch(repo: &Path, remote: &str, branch: &str) -> Result<bool> {
+    let result = remote_git(
+        repo,
+        remote,
+        &[
+            "ls-remote",
+            "--heads",
+            "--end-of-options",
+            remote,
+            &format!("refs/heads/{branch}"),
+        ],
+    )?;
+    anyhow::ensure!(
+        result.success,
+        "cannot inspect remote branch {remote}/{branch}: {}",
+        result.stderr.trim()
+    );
+    Ok(!result.stdout.trim().is_empty())
+}
+
 /// Resolve `<remote>/<branch>`'s head SHA via a single `git ls-remote` query,
 /// WITHOUT fetching any objects. One cheap network round-trip (refs only, no
 /// object transfer) — the building block for "is my local store already current
@@ -5749,10 +5867,11 @@ pub fn register_node_full_identity(
             || -> Result<(String, String, String)> {
                 // Step 1: Pull latest (skip on first attempt if no remote)
                 if attempt > 0 && !local_only {
-                    if let Err(e) = pull_rebase(aida_repo, "origin", &branch) {
+                    // trace:BUG-2490 | ai:codex — preserve pending changes before publication retry.
+                    if let Err(e) = pull_rebase_store_retry(aida_repo, "origin", &branch) {
                         eprintln!("Warning: pull failed (attempt {}): {}", attempt, e);
                         anyhow::bail!(
-                        "Cannot complete node registration: remote unreachable after {} attempts. Error: {}",
+                        "Cannot complete node registration: store pull failed after {} attempts. Error: {}",
                         attempt, e
                     );
                     }
@@ -5945,10 +6064,11 @@ pub fn register_node_remote_only(
         let committed_sha = crate::db::with_store_write_lock(aida_repo, || -> Result<String> {
             // Step 1: Pull latest (skip on first attempt if no remote)
             if attempt > 0 && !local_only {
-                if let Err(e) = pull_rebase(aida_repo, "origin", &branch) {
+                // trace:BUG-2490 | ai:codex — preserve pending changes before publication retry.
+                if let Err(e) = pull_rebase_store_retry(aida_repo, "origin", &branch) {
                     eprintln!("Warning: pull failed (attempt {}): {}", attempt, e);
                     anyhow::bail!(
-                        "Cannot complete remote-only node backfill: remote unreachable after {} attempts. Error: {}",
+                        "Cannot complete remote-only node backfill: store pull failed after {} attempts. Error: {}",
                         attempt, e
                     );
                 }
@@ -6079,9 +6199,10 @@ pub fn set_node_identity_field(
             || -> Result<Option<String>> {
                 // Step 1: pull latest (skip first attempt / solo).
                 if attempt > 0 && !local_only {
-                    if let Err(e) = pull_rebase(aida_repo, "origin", &branch) {
+                    // trace:BUG-2490 | ai:codex — preserve pending changes before publication retry.
+                    if let Err(e) = pull_rebase_store_retry(aida_repo, "origin", &branch) {
                         anyhow::bail!(
-                            "Cannot update node identity: remote unreachable after {} attempts. Error: {}",
+                            "Cannot update node identity: store pull failed after {} attempts. Error: {}",
                             attempt,
                             e
                         );
@@ -6210,7 +6331,8 @@ pub fn hijack_node(
                 aida_repo,
                 || -> Result<(HijackOutcome, String, Option<String>, String)> {
                     if attempt > 0 {
-                        pull_rebase(aida_repo, "origin", &branch)?;
+                        // trace:BUG-2490 | ai:codex — preserve pending changes before publication retry.
+                        pull_rebase_store_retry(aida_repo, "origin", &branch)?;
                     }
 
                     let mut registry = NodeRegistry::load(&registry_path).unwrap_or_default();
@@ -6382,7 +6504,8 @@ pub fn unregister_node(aida_repo: &Path, node_id: &str) -> Result<bool> {
         let committed_sha =
             crate::db::with_store_write_lock(aida_repo, || -> Result<Option<String>> {
                 if attempt > 0 {
-                    pull_rebase(aida_repo, "origin", &branch)?;
+                    // trace:BUG-2490 | ai:codex — preserve pending changes before publication retry.
+                    pull_rebase_store_retry(aida_repo, "origin", &branch)?;
                 }
 
                 let mut registry = NodeRegistry::load(&registry_path).unwrap_or_default();
@@ -7300,6 +7423,256 @@ pub fn load_requirements_strict(store: &Path) -> Result<Vec<crate::models::Requi
         .collect()
 }
 
+// trace:BUG-2490 | ai:codex
+fn validate_object_text(path: &str, text: &str) -> Result<()> {
+    if text.lines().any(|line| {
+        ["<<<<<<<", "=======", ">>>>>>>", "|||||||"]
+            .iter()
+            .any(|marker| line == *marker || line.starts_with(&format!("{marker} ")))
+    }) {
+        anyhow::bail!("store object {path} contains Git conflict markers; resolve the conflict before committing");
+    }
+    serde_yaml::from_str::<crate::models::Requirement>(text)
+        .with_context(|| format!("store object {path} does not parse"))?;
+    Ok(())
+}
+
+/// Full inventory for explicit diagnostics only. Hot commit paths validate
+/// their selected blobs instead of parsing the whole store.
+// trace:BUG-2490 | ai:codex
+pub fn store_object_findings(repo: &Path) -> Vec<(PathBuf, String)> {
+    let objects = repo.join("objects");
+    if !objects.exists() {
+        return Vec::new();
+    }
+    let paths = match crate::object_store::list_objects_strict(&objects) {
+        Ok(paths) => paths,
+        Err(e) => return vec![(objects, format!("{e:#}"))],
+    };
+    paths
+        .into_iter()
+        .filter_map(|(_, path)| {
+            let result = std::fs::read_to_string(&path)
+                .with_context(|| format!("cannot read store object {}", path.display()))
+                .and_then(|text| validate_object_text(&path.display().to_string(), &text));
+            result.err().map(|e| (path, format!("{e:#}")))
+        })
+        .collect()
+}
+
+/// Test helper for asserting the diagnostic inventory is empty.
+#[cfg(test)]
+// trace:BUG-2490 | ai:codex
+fn validate_store_objects(repo: &Path) -> Result<()> {
+    if let Some((_, error)) = store_object_findings(repo).into_iter().next() {
+        anyhow::bail!(error);
+    }
+    Ok(())
+}
+
+/// Validate before whole-tree staging can erase unmerged index stages.
+/// Call under the store writer lock, immediately before staging.
+// trace:BUG-2490 | ai:codex
+pub fn validate_pending_store_commit(repo: &Path) -> Result<()> {
+    validate_store_index(repo)?;
+    validate_pending_store_objects(repo)
+}
+
+// Pending sync stages all dirty/untracked files. --no-renames makes every
+// record one path, including rename destinations, without quoted-name parsing.
+// trace:BUG-2490 | ai:codex
+fn validate_pending_store_objects(repo: &Path) -> Result<()> {
+    let output = host_git_command(repo)
+        .args([
+            "status",
+            "--porcelain=v1",
+            "-z",
+            "--untracked-files=all",
+            "--no-renames",
+        ])
+        .output()?;
+    anyhow::ensure!(
+        output.status.success(),
+        "cannot inspect pending store objects"
+    );
+    for row in std::str::from_utf8(&output.stdout)?
+        .split('\0')
+        .filter(|r| !r.is_empty())
+    {
+        let path = row.get(3..).context("invalid store status record")?;
+        if is_spec_object_path(path) {
+            match std::fs::read_to_string(repo.join(path)) {
+                Ok(text) => validate_object_text(path, &text)?,
+                Err(e) if e.kind() == std::io::ErrorKind::NotFound => {}
+                Err(e) => {
+                    return Err(e).with_context(|| format!("cannot read store object {path}"))
+                }
+            }
+        }
+    }
+    Ok(())
+}
+
+// git commit -- <pathspec> uses worktree copies, including directory and glob
+// pathspecs. Inspect only their tracked/untracked matches; deletions are valid.
+// trace:BUG-2490 | ai:codex
+fn validate_store_worktree_paths(repo: &Path, paths: &[&str]) -> Result<()> {
+    let output = host_git_command(repo)
+        .args([
+            "ls-files",
+            "--cached",
+            "--others",
+            "--exclude-standard",
+            "-z",
+            "--",
+        ])
+        .args(paths)
+        .output()?;
+    anyhow::ensure!(output.status.success(), "cannot inspect store commit paths");
+    for path in std::str::from_utf8(&output.stdout)?
+        .split('\0')
+        .filter(|p| is_spec_object_path(p))
+    {
+        match std::fs::read_to_string(repo.join(path)) {
+            Ok(text) => validate_object_text(path, &text)?,
+            Err(e) if e.kind() == std::io::ErrorKind::NotFound => {}
+            Err(e) => return Err(e).with_context(|| format!("cannot read store object {path}")),
+        }
+    }
+    Ok(())
+}
+
+// Validate the actual staged bytes too: a clean worktree copy must not mask a
+// corrupt staged object. Unmerged entries refuse before any commit attempt.
+/// Refuse unmerged paths and invalid staged objects before staging can replace
+/// conflict stages. Call while holding the store writer lock.
+// trace:BUG-2490 | ai:codex
+pub fn validate_store_index(repo: &Path) -> Result<()> {
+    validate_store_index_paths(repo, None)
+}
+
+// trace:BUG-2490 | ai:codex
+fn refuse_unmerged_store_paths(repo: &Path) -> Result<()> {
+    let unmerged = git(repo, &["ls-files", "--unmerged"])?;
+    anyhow::ensure!(
+        unmerged.success,
+        "cannot inspect unmerged store paths: {}",
+        unmerged.stderr
+    );
+    anyhow::ensure!(
+        unmerged.stdout.is_empty(),
+        "unmerged store paths; resolve before committing: {}",
+        unmerged.stdout
+    );
+    Ok(())
+}
+
+fn validate_store_index_paths(repo: &Path, paths: Option<&[&str]>) -> Result<()> {
+    refuse_unmerged_store_paths(repo)?;
+    let mut command = host_git_command(repo);
+    command.args([
+        "diff",
+        "--cached",
+        "--name-only",
+        "--diff-filter=ACMRT",
+        "-z",
+        "--",
+    ]);
+    if let Some(paths) = paths {
+        command.args(paths);
+    }
+    let output = command.output()?;
+    if !output.status.success() {
+        anyhow::bail!(
+            "cannot inspect store index: {}",
+            String::from_utf8_lossy(&output.stderr)
+        );
+    }
+    let listing = std::str::from_utf8(&output.stdout)?;
+    let paths: Vec<_> = listing
+        .split('\0')
+        .filter(|p| is_spec_object_path(p))
+        .collect();
+    if paths.is_empty() {
+        return Ok(());
+    }
+    // Resolve index OIDs once, then read all blobs in one process. OIDs rather
+    // than :path requests also support filenames containing newlines.
+    // trace:BUG-2490 | ai:codex
+    let mut command = host_git_command(repo);
+    // Read the index once without expanding the dirty path set into argv.
+    // trace:BUG-2490 | ai:codex
+    command.args(["ls-files", "--stage", "-z"]);
+    let selected: std::collections::HashSet<_> = paths.into_iter().collect();
+    let index = command.output()?;
+    anyhow::ensure!(index.status.success(), "cannot list staged store objects");
+    let entries: Vec<_> = std::str::from_utf8(&index.stdout)?
+        .split('\0')
+        .filter(|row| !row.is_empty())
+        .map(|row| -> Result<_> {
+            let (meta, path) = row.split_once('\t').context("invalid index entry")?;
+            let oid = meta
+                .split_whitespace()
+                .nth(1)
+                .context("missing index OID")?;
+            Ok((oid, path))
+        })
+        .collect::<Result<Vec<_>>>()?
+        .into_iter()
+        .filter(|(_, path)| selected.contains(path))
+        .collect();
+    use std::io::{BufRead, Read, Write};
+    use std::process::Stdio;
+    let mut child = host_git_command(repo)
+        .args(["cat-file", "--batch"])
+        .stdin(Stdio::piped())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .spawn()?;
+    let mut input = child.stdin.take().context("missing batch stdin")?;
+    let requests = entries
+        .iter()
+        .map(|(oid, _)| format!("{oid}\n"))
+        .collect::<String>();
+    // Drain stdout while sending requests so a bulk commit cannot fill both
+    // pipes and deadlock. Closing stdin also makes empty/failed batches exit.
+    let output = std::thread::scope(|scope| -> Result<_> {
+        let writer = scope.spawn(move || input.write_all(requests.as_bytes()));
+        let output = child.wait_with_output()?;
+        writer
+            .join()
+            .map_err(|_| anyhow::anyhow!("batch input writer panicked"))??;
+        Ok(output)
+    })?;
+    anyhow::ensure!(
+        output.status.success(),
+        "cannot read staged store blobs: {}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    let mut blobs = std::io::Cursor::new(output.stdout);
+    for (_, path) in entries {
+        let mut header = String::new();
+        blobs.read_line(&mut header)?;
+        let fields: Vec<_> = header.split_whitespace().collect();
+        anyhow::ensure!(
+            fields.len() == 3 && fields[1] == "blob",
+            "cannot read staged store object {path}"
+        );
+        let size: usize = fields[2].parse()?;
+        let mut bytes = vec![0; size];
+        blobs.read_exact(&mut bytes)?;
+        let mut newline = [0];
+        blobs.read_exact(&mut newline)?;
+        anyhow::ensure!(newline == [b'\n'], "invalid batch delimiter for {path}");
+        validate_object_text(
+            path,
+            std::str::from_utf8(&bytes)
+                .with_context(|| format!("store object {path} is not UTF-8"))?,
+        )?;
+    }
+    Ok(())
+}
+
 /// Assign agreed ids to every object that lacks one, and commit the result.
 /// The whole run (counter read, object scan, writes, stage and commit) is one
 /// store-writer transaction; called from inside an enclosing one (a pull)
@@ -7550,7 +7923,8 @@ pub fn sync_objects(aida_repo: &Path, message: &str) -> Result<bool> {
             true => return Ok(true),
             false => {
                 sha = crate::db::with_store_write_lock(aida_repo, || {
-                    pull_rebase(aida_repo, "origin", &branch)?;
+                    // trace:BUG-2490 | ai:codex — preserve pending changes before publication retry.
+                    pull_rebase_store_retry(aida_repo, "origin", &branch)?;
                     head_sha(aida_repo)
                 })?;
             }
