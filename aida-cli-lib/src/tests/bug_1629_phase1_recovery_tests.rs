@@ -1015,14 +1015,20 @@ fn bug_1769_advance_decision() {
 // trace:TASK-3608 | ai:codex
 #[test]
 fn task_3608_host_no_change_survives_lease_discovery() {
-    let temp = tempfile::tempdir().unwrap();
-    let root = git_project(&temp);
-    let lane = "native-lease";
-    crate::ship_from_seat::record_queue_exit(&root, lane, true, true, || {
-        Ok(crate::ship_from_seat::QueueExitOutcome::NoChange)
-    })
-    .unwrap();
-    let script = r#"cat > .aida/sessions/native-lease.toml <<EOF
+    for mode in 0..4 {
+        let temp = tempfile::tempdir().unwrap();
+        let root = git_project(&temp);
+        if mode == 1 {
+            // The old retry path mistakes this already-merged remote branch
+            // for a publication by the current seat.
+            git(&root, &["remote", "add", "origin", root.to_str().unwrap()]);
+        }
+        let lane = "native-lease";
+        crate::ship_from_seat::record_queue_exit(&root, lane, true, true, || {
+            Ok(crate::ship_from_seat::QueueExitOutcome::NoChange)
+        })
+        .unwrap();
+        let script = r#"cat > .aida/sessions/native-lease.toml <<EOF
 id = "native-lease"
 scope = "$spec"
 slug = "main"
@@ -1040,27 +1046,72 @@ claude_session_id = "$sid"
 items = []
 EOF
 exit 0"#;
-    let stub = stub(&root, script, script);
-    let forge = crate::forge::fake::RecordingForge::new();
-    let mut d = driver(&root, "NFR-56", stub);
-    d.forge_factory = Some(forge.factory());
-    let result = crate::auto_complete::orchestrate(
-        &mut d,
-        "NFR-56",
-        crate::auto_complete::AutoCompleteVariant::Full,
-        true,
-        crate::auto_complete::EscalateMode::Blocks,
-    );
-    assert_eq!(result.exit_code, 0, "{result:?}");
-    assert!(result.no_change);
-    assert!(result.failed_phase.is_none());
-    assert!(result.shelved_reason.is_none());
-    assert!(result.shipped_spec_id.is_none());
-    assert!(
-        !crate::ship_from_seat::take_no_change(&root, lane),
-        "the lease-scoped evidence is consumed once"
-    );
-    assert!(list_leases(&root).is_empty(), "no-change releases the seat");
+        let stub = stub(&root, script, script);
+        if mode == 3 {
+            let body = std::fs::read_to_string(&stub).unwrap();
+            std::fs::write(&stub, body.replace("  rm -f", "  exit 1\n  rm -f")).unwrap();
+        }
+        let mut forge = crate::forge::fake::RecordingForge::new();
+        forge.merged_for_branch = crate::forge::ChangeLookup::Found(crate::forge::ChangeRef {
+            id: 4242,
+            url: "https://example.invalid/4242".into(),
+            branch: "main".into(),
+            base: "main".into(),
+            title: None,
+        });
+        let mut d = driver(&root, "NFR-56", stub);
+        let calls = std::sync::Arc::new(std::sync::atomic::AtomicUsize::new(0));
+        let observed = calls.clone();
+        d.forge_factory = Some(std::sync::Arc::new(move |_, _| {
+            let call = observed.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+            let mut current = forge.clone();
+            if mode == 1 && call == 1 {
+                current.open_for_branch =
+                    crate::forge::ChangeLookup::Unreachable("temporary".into());
+            }
+            if mode == 2 {
+                current.open_for_spec =
+                    crate::forge::ChangeLookup::Unreachable("search unavailable".into());
+            }
+            Box::new(current)
+        }));
+        d.drain_tuning.gh_verify_retries = 1;
+        // A confirmed no-change must bypass even a failing preflight.
+
+        let result = crate::auto_complete::orchestrate(
+            &mut d,
+            "NFR-56",
+            crate::auto_complete::AutoCompleteVariant::Full,
+            true,
+            crate::auto_complete::EscalateMode::Blocks,
+        );
+        assert_eq!(result.exit_code, 0, "{result:?}");
+        if mode == 2 {
+            assert!(!result.no_change, "{result:?}");
+            assert!(result.shipped_spec_id.is_none());
+            assert!(result.shelved_reason.is_none());
+            assert!(result.inconclusive_reason.is_some(), "{result:?}");
+            assert!(calls.load(std::sync::atomic::Ordering::SeqCst) >= 4);
+            continue;
+        }
+        assert!(result.no_change, "{result:?}");
+        if mode == 1 {
+            assert!(calls.load(std::sync::atomic::Ordering::SeqCst) >= 4);
+        }
+        assert!(result.failed_phase.is_none());
+        assert!(result.shelved_reason.is_none());
+        assert!(result.shipped_spec_id.is_none());
+        assert!(
+            !crate::ship_from_seat::take_no_change(&root, lane),
+            "the lease-scoped evidence is consumed once"
+        );
+        if mode == 3 {
+            assert!(!list_leases(&root).is_empty());
+            assert_eq!(d.implementer_lease.as_deref(), Some(lane));
+        } else {
+            assert!(list_leases(&root).is_empty(), "no-change releases the seat");
+        }
+    }
 }
 
 // trace:TASK-3608 | ai:codex

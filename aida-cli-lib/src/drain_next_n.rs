@@ -1257,11 +1257,12 @@ pub(crate) fn emit_next_n_drain_summary(
                 "→".dimmed()
             );
         }
-        // BUG-250: a member deliberately held its PR — pause for the gate.
-        // trace:BUG-250 | ai:claude
+        // trace:TASK-3608 | ai:codex
         BatchDrainOutcome::NoChange => {
             eprintln!("drain stopped: no-change — nothing published");
         }
+        // BUG-250: a member deliberately held its PR — pause for the gate.
+        // trace:BUG-250 | ai:claude
         BatchDrainOutcome::Held => {
             let stopped = result.stopped_at.as_deref().unwrap_or("<spec>");
             eprintln!(

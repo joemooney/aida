@@ -181,8 +181,11 @@ classify it after checking punt/hold signals. An existing open PR continues thro
 ordinary gates; otherwise the drain reports `no-change`, exits 0 and pauses with
 no shipped credit or NeedsAttention shelving. No bundle is created for no-change.
 Failed exits cannot produce a no-change receipt. Pipelined child sidecars preserve
-this outcome for batch reporting. Confirmed no-change ends the implementer
-session immediately; punt, hold and inconclusive outcomes retain it for recovery.
+this outcome for batch reporting. Confirmed no-change attempts to end the implementer
+session immediately. Cleanup failures warn and retain the lease for manual recovery,
+without shelving the spec; punt, hold and inconclusive outcomes also retain it.
+Fresh no-change lookups keep that context through retries before running preflight,
+so an older merged PR cannot grant shipped credit.
 Resume publication failures are ordinary phase failures, not spawn failures.
 A failed or unreachable PR lookup cannot confirm no-change.
 <!-- trace:TASK-3608 | ai:codex -->

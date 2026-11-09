@@ -729,6 +729,15 @@ impl Fixture {
                 10 => crate::forge::ChangeLookup::CliFailed("malformed response".into()),
                 _ => crate::forge::ChangeLookup::NoChange,
             };
+            // Non-receipt resumes retain their pre-existing failure classification.
+            // trace:TASK-3608 | ai:codex
+            if mode == 11 {
+                forge.open_for_spec =
+                    crate::forge::ChangeLookup::CliFailed("malformed response".into());
+            }
+            if mode == 12 {
+                real.branch = None;
+            }
             real.forge_factory = Some(forge.factory());
             // Exercise the real advisor-resume method inside final orchestration.
             // Only the later CI/review/merge phases are outside this fixture.
@@ -796,6 +805,20 @@ impl Fixture {
                 5 | 10 => {
                     assert!(result.inconclusive_reason.is_some(), "{result:?}");
                     assert!(!result.no_change);
+                }
+                11 | 12 => {
+                    let failure = result.failure.as_ref().expect("ordinary resume failure");
+                    assert_eq!(
+                        failure.kind,
+                        if mode == 11 {
+                            ac::FailureKind::Failed
+                        } else {
+                            ac::FailureKind::NoPr
+                        },
+                        "{result:?}"
+                    );
+                    assert!(!result.no_change);
+                    assert!(result.inconclusive_reason.is_none());
                 }
                 6 | 7 => {
                     let failure = result.failure.as_ref().expect("failed publication/child");
@@ -1398,7 +1421,7 @@ fn task_3608_real_resume_receipts_precedence_and_forge_errors() {
     use crate::ship_from_seat::{
         record_queue_exit, with_post_exit_step, PostExitCommit, QueueExitOutcome,
     };
-    for mode in 3..=10 {
+    for mode in 3..=12 {
         let fx = Fixture::new("task3608resume");
         fx.git(&fx.project, &["init", "-q", "-b", "main"]);
         std::fs::write(
@@ -1441,8 +1464,10 @@ fn task_3608_real_resume_receipts_precedence_and_forge_errors() {
                 }
                 // Inject the host no-change observation using the production writer,
                 // leaving the real queue-resume route to deliver it to the driver.
-                record_queue_exit(&main, &lease, true, true, || Ok(QueueExitOutcome::NoChange))
-                    .unwrap();
+                if mode < 11 {
+                    record_queue_exit(&main, &lease, true, true, || Ok(QueueExitOutcome::NoChange))
+                        .unwrap();
+                }
                 if mode == 8 {
                     crate::punt::write_signal(
                         &crate::punt::signal_path(&main, "STORY-9"),

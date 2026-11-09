@@ -2602,6 +2602,23 @@ impl RealPhaseDriver {
         ensure_implementer_branch_pushed(worktree, branch, self.json)
     }
 
+    // Cleanup cannot turn confirmed no-change into NeedsAttention.
+    // Retain the lease identifier when manual recovery is needed.
+    // trace:TASK-3608 | ai:codex
+    pub(crate) fn end_no_change_session(&mut self) {
+        match self.end_implementer_session() {
+            Ok(()) => self.implementer_lease = None,
+            Err(e) => {
+                if !self.json {
+                    eprintln!(
+                        "no-change confirmed, but ending the implementer session failed ({}); release it manually: aida session end",
+                        e.reason
+                    );
+                }
+            }
+        }
+    }
+
     /// End the implementer session: `aida session end <lease> --yes --skip-ci`.
     /// Releases the lease, returns the warm-pool worktree to idle, and (only
     /// when an OPEN PR still exists on the branch) auto-queues the `Review
@@ -2860,6 +2877,16 @@ impl RealPhaseDriver {
                     // cannot be a race with this seat creating a new PR.
                     // trace:TASK-3608 | ai:codex
                     PrLookup::NoOpenPr if native_no_change => Phase1PrResolve::NoPr,
+                    // Failed spec searches cannot exclude a PR on a swapped branch.
+                    // trace:TASK-3608 | ai:codex
+                    ref other if native_no_change => Phase1PrResolve::Retry(match other {
+                        PrLookup::GhFailed(why) | PrLookup::GhUnreachable(why) => {
+                            format!("could not confirm an empty spec PR search: {why}")
+                        }
+                        _ => "could not confirm an empty spec PR search: forge CLI unavailable"
+                            .into(),
+                    }),
+
                     // BUG-444: both the `--head` and `--search` lookups returned
                     // empty-BUT-SUCCESSFUL. These are eventually-consistent GitHub
                     // LIST queries (`--search` hits the search index, which lags PR

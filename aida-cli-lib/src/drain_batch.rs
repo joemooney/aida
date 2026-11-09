@@ -2083,11 +2083,12 @@ pub(crate) fn emit_batch_chain_summary(
                 shipped_list
             );
         }
-        // BUG-250: a member deliberately held its PR — the chain pauses there
-        // until the operator runs the gate and opens the PR. trace:BUG-250
+        // trace:TASK-3608 | ai:codex
         BatchDrainOutcome::NoChange => {
             eprintln!("drain stopped: no-change — nothing published");
         }
+        // BUG-250: a member deliberately held its PR — the chain pauses there
+        // until the operator runs the gate and opens the PR. trace:BUG-250
         BatchDrainOutcome::Held => {
             let batch = result.stopped_batch.as_deref().unwrap_or("<batch>");
             let stopped = result.stopped_at.as_deref().unwrap_or("<spec>");
@@ -2423,11 +2424,12 @@ pub(crate) fn emit_batch_drain_summary(
                 "→".dimmed()
             );
         }
-        // BUG-250: a member deliberately held its PR — the batch pauses there
-        // for the operator's manual gate. trace:BUG-250 | ai:claude
+        // trace:TASK-3608 | ai:codex
         BatchDrainOutcome::NoChange => {
             eprintln!("drain stopped: no-change — nothing published");
         }
+        // BUG-250: a member deliberately held its PR — the batch pauses there
+        // for the operator's manual gate. trace:BUG-250 | ai:claude
         BatchDrainOutcome::Held => {
             let stopped = result.stopped_at.as_deref().unwrap_or("<spec>");
             eprintln!(

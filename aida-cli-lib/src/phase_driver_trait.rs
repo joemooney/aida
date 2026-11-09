@@ -887,13 +887,38 @@ impl auto_complete::PhaseDriver for RealPhaseDriver {
         // trace:TASK-3608 | ai:codex
         let mut native_pr =
             native_no_change.then(|| self.detect_phase1_pr_after_exit(&branch, true));
-        if matches!(
-            native_pr.as_ref(),
-            Some(Phase1PrResolve::NoPr | Phase1PrResolve::AlreadyMerged(_))
-        ) {
-            self.end_implementer_session()?;
-            self.implementer_lease = None;
-            return Ok(auto_complete::ImplementerOutcome::NoChange);
+        // Resolve native observations before preflight, retaining the receipt
+        // context on every retry. Older merged PRs never grant this seat credit.
+        // trace:TASK-3608 | ai:codex
+        if native_no_change {
+            let schedule =
+                auto_complete::gh_verify_backoff_schedule(self.drain_tuning.gh_verify_retries);
+            for wait in schedule {
+                if !matches!(native_pr, Some(Phase1PrResolve::Retry(_))) {
+                    break;
+                }
+                std::thread::sleep(wait);
+                native_pr = Some(self.detect_phase1_pr_after_exit(&branch, true));
+            }
+            match native_pr.as_ref().unwrap() {
+                Phase1PrResolve::NoPr | Phase1PrResolve::AlreadyMerged(_) => {
+                    self.end_no_change_session();
+                    return Ok(auto_complete::ImplementerOutcome::NoChange);
+                }
+                Phase1PrResolve::Retry(reason) => {
+                    return Ok(auto_complete::ImplementerOutcome::Inconclusive {
+                        reason: reason.clone(),
+                        retry_hint: None,
+                    });
+                }
+                _ => {}
+            }
+        }
+
+        if matches!(native_pr, Some(Phase1PrResolve::Fail(_))) {
+            if let Some(Phase1PrResolve::Fail(failure)) = native_pr.take() {
+                return Err(failure);
+            }
         }
 
         // TASK-1289: the orchestrator owns the publication boundary. Run the
@@ -1000,7 +1025,7 @@ impl auto_complete::PhaseDriver for RealPhaseDriver {
         let pr = loop {
             match native_pr
                 .take()
-                .unwrap_or_else(|| self.detect_phase1_pr(&branch))
+                .unwrap_or_else(|| self.detect_phase1_pr_after_exit(&branch, native_no_change))
             {
                 Phase1PrResolve::Found(pr) => break Some(pr),
                 // BUG-709: the implementer already merged its own PR — the work
@@ -1121,8 +1146,7 @@ impl auto_complete::PhaseDriver for RealPhaseDriver {
                 // Existing PRs above retain their normal rework/CI path.
                 // trace:TASK-3608 | ai:codex
                 if native_no_change {
-                    self.end_implementer_session()?;
-                    self.implementer_lease = None;
+                    self.end_no_change_session();
                     return Ok(auto_complete::ImplementerOutcome::NoChange);
                 }
                 // BUG-893: substrate-as-bouncer for the "implementer committed
@@ -3460,6 +3484,7 @@ impl auto_complete::PhaseDriver for RealPhaseDriver {
                     .project_forge()
                     .change_for_branch(branch)
                     .unwrap_or_else(|e| crate::forge::ChangeLookup::CliFailed(format!("{e:#}"))),
+                None if !native_no_change => crate::forge::ChangeLookup::NoChange,
                 None => crate::forge::ChangeLookup::Unreachable(
                     "no recorded branch to confirm an empty lookup".into(),
                 ),
@@ -3480,6 +3505,11 @@ impl auto_complete::PhaseDriver for RealPhaseDriver {
                     "forge CLI is not on PATH — auto-complete needs it to track the PR",
                 ));
             }
+            crate::forge::ChangeLookup::CliFailed(why) if !native_no_change => {
+                return Err(PhaseFailure::new(format!(
+                    "could not look up the PR after the implementer resume: {why}"
+                )));
+            }
             other => {
                 return Ok(ImplementerOutcome::Inconclusive {
                     reason: format!(
@@ -3492,8 +3522,7 @@ impl auto_complete::PhaseDriver for RealPhaseDriver {
         match pr {
             Some(pr) => Ok(self.adopt_resumed_pr(pr)),
             None if native_no_change => {
-                self.end_implementer_session()?;
-                self.implementer_lease = None;
+                self.end_no_change_session();
                 Ok(ImplementerOutcome::NoChange)
             }
             None => Err(PhaseFailure::of(
