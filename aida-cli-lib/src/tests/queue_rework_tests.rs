@@ -532,7 +532,7 @@ fn metadata_rework_needs_attention_spec_becomes_pickable_queue_head() {
     // STORY-1353 half: Needs Attention -> Approved is a DISPOSITION, so
     // dispatch authority alone must not perform it. This is the hole BUG-1494
     // recorded -- queue rework was the way to move a shelved spec without the
-    // advisor ever ruling on it. The BUG-1470 F1 gate (queue_cmd.rs, at the
+    // advisor ever ruling on it. The BUG-1470 F1 gate (queue_cmd/rework.rs, at the
     // status flip) refuses this the SAME way it refuses an un-triaged Draft
     // (see `metadata_rework_of_a_draft_is_refused_without_advisor_authority`):
     // Ok(()), a printed hint, no status write, no queue entry -- NOT an Err.

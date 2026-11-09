@@ -53,12 +53,23 @@ def check_growth(expected, previous, base):
                 renamed[new] = old
         else:
             i += 1
+    # trace:TASK-3426 | ai:codex
+    # A file-to-directory split shares the retired file's budget across its
+    # own children; it cannot fund another directory or retain the old file.
+    splits = {}
+    for old, budget in previous.items():
+        prefix = old.removesuffix('.rs') + '/'
+        children = {p: n for p, n in expected.items() if p.startswith(prefix)}
+        if (old.endswith('.rs') and old not in expected and not (ROOT / old).exists()
+                and children and sum(children.values()) <= budget):
+            splits.update(children)
     for path, count in expected.items():
         if path in previous:
             allowed = count <= previous[path]
         else:
             old = renamed.get(path)
-            allowed = old in previous and old not in expected and count == previous[old]
+            allowed = (path in splits or
+                       old in previous and old not in expected and count == previous[old])
         if not allowed:
             raise ValueError('crate glob baseline may only shrink or follow same-count Git renames relative to base')
 
