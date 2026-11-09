@@ -84,7 +84,10 @@ fn init_codex_only_project(base_dir: &Path) -> (std::path::PathBuf, std::path::P
         .expect("run aida init");
     assert!(
         init.status.success(),
-        "aida init failed: {}",
+        // trace:BUG-2490 | ai:codex — preserve setup diagnostics in lane runs.
+        "aida init failed ({}): stdout={} stderr={}",
+        init.status,
+        String::from_utf8_lossy(&init.stdout),
         String::from_utf8_lossy(&init.stderr)
     );
     std::fs::write(
@@ -512,6 +515,180 @@ fn no_launch_completion_text_is_codex_aware() {
         out.contains("codex") && !out.contains("claude /aida-pickup"),
         "no-launch completion text should name codex or stay neutral, not hardcode claude:\n{out}"
     );
+}
+
+// trace:BUG-2490 | ai:codex
+#[test]
+fn bug_2490_missing_remote_store_branch_does_not_stop_pickup() {
+    // Cover both an empty origin and an origin with code but no store branch.
+    for has_code_branch in [false, true] {
+        let base = tempfile::tempdir().unwrap();
+        let base_dir = base.path().canonicalize().unwrap();
+        let (repo, home, spec) = init_codex_only_project(&base_dir);
+        let remote = base_dir.join("remote.git");
+        git(&base_dir, &["init", "--bare", remote.to_str().unwrap()]);
+        if has_code_branch {
+            git(&repo, &["push", remote.to_str().unwrap(), "main"]);
+        }
+        let store = repo.join(".aida-store");
+        git(
+            &store,
+            &["remote", "add", "origin", remote.to_str().unwrap()],
+        );
+        let out = aida(&repo, &home)
+            .args(["queue", "work", &spec, "--no-launch"])
+            .output()
+            .unwrap();
+        let message = format!(
+            "{}{}",
+            String::from_utf8_lossy(&out.stdout),
+            String::from_utf8_lossy(&out.stderr)
+        );
+        assert!(out.status.success(), "{message}");
+        assert!(message.contains("push to create it"), "{message}");
+        assert!(!message.contains("pre-pickup pull failed"), "{message}");
+    }
+}
+
+// trace:BUG-2490 | ai:codex
+#[test]
+fn bug_2490_failed_pull_stops_pickup_before_session_and_spec_writes() {
+    let base = tempfile::tempdir().unwrap();
+    let base_dir = base.path().canonicalize().unwrap();
+    let (repo, home, spec) = init_codex_only_project(&base_dir);
+    let store = repo.join(".aida-store");
+    // A local nonexistent endpoint fails deterministically without network IO.
+    git(
+        &store,
+        &[
+            "remote",
+            "add",
+            "origin",
+            base_dir.join("missing.git").to_str().unwrap(),
+        ],
+    );
+    let snapshot = || {
+        let out = test_git::git_command()
+            .current_dir(&store)
+            .args(["diff", "HEAD", "--", "objects"])
+            .output()
+            .unwrap();
+        assert!(out.status.success());
+        out.stdout
+    };
+    let objects_before = snapshot();
+    let sessions_before = list_session_files(&repo);
+    let siblings_before = sibling_worktrees(&base_dir);
+    let out = aida(&repo, &home)
+        .args(["queue", "work", &spec, "--no-launch"])
+        .output()
+        .unwrap();
+    let message = format!(
+        "{}{}",
+        String::from_utf8_lossy(&out.stdout),
+        String::from_utf8_lossy(&out.stderr)
+    );
+    assert!(!out.status.success(), "{message}");
+    assert!(
+        message.contains("pre-pickup pull failed; pickup stopped"),
+        "{message}"
+    );
+    assert!(!message.contains("proceeding with local view"), "{message}");
+    assert!(message.contains("--no-pull"), "{message}");
+    assert_eq!(
+        snapshot(),
+        objects_before,
+        "failed pickup changed spec objects"
+    );
+    assert_pickup_unstarted(&repo, &home, &spec);
+    assert_eq!(list_session_files(&repo), sessions_before);
+    assert_eq!(sibling_worktrees(&base_dir), siblings_before);
+}
+
+// trace:BUG-2490 | ai:codex
+#[test]
+fn bug_2490_same_spec_conflict_does_not_stop_pickup() {
+    let base = tempfile::tempdir().unwrap();
+    let base_dir = base.path().canonicalize().unwrap();
+    let (repo, home, spec) = init_codex_only_project(&base_dir);
+    let store = repo.join(".aida-store");
+    git(&store, &["add", "."]);
+    git(
+        &store,
+        &["commit", "--allow-empty", "-m", "fixture snapshot"],
+    );
+    let remote = base_dir.join("remote.git");
+    git(
+        &base_dir,
+        &[
+            "clone",
+            "--bare",
+            store.to_str().unwrap(),
+            remote.to_str().unwrap(),
+        ],
+    );
+    git(
+        &store,
+        &["remote", "add", "origin", remote.to_str().unwrap()],
+    );
+    let peer = base_dir.join("peer");
+    git(
+        &base_dir,
+        &["clone", remote.to_str().unwrap(), peer.to_str().unwrap()],
+    );
+    git(&peer, &["config", "user.email", "peer@example.test"]);
+    git(&peer, &["config", "user.name", "peer"]);
+    let files = test_git::git_command()
+        .current_dir(&store)
+        .args(["ls-files", "objects"])
+        .output()
+        .unwrap();
+    assert!(files.status.success());
+    let path = String::from_utf8(files.stdout)
+        .unwrap()
+        .lines()
+        .find(|p| {
+            std::fs::read_to_string(store.join(p))
+                .unwrap()
+                .contains("codex only queue work")
+        })
+        .expect("fixture object")
+        .to_string();
+    let original = std::fs::read_to_string(store.join(&path)).unwrap();
+    for (root, title) in [(&store, "local queue work"), (&peer, "peer queue work")] {
+        std::fs::write(
+            root.join(&path),
+            original.replace("codex only queue work", title),
+        )
+        .unwrap();
+        git(root, &["add", &path]);
+        git(root, &["commit", "-m", title]);
+    }
+    git(&peer, &["push", "origin", "HEAD"]);
+    let out = aida(&repo, &home)
+        .args(["queue", "work", &spec, "--no-launch"])
+        .output()
+        .unwrap();
+    let message = format!(
+        "{}{}",
+        String::from_utf8_lossy(&out.stdout),
+        String::from_utf8_lossy(&out.stderr)
+    );
+    assert!(out.status.success(), "{message}");
+    assert!(!message.contains("pre-pickup pull failed"), "{message}");
+    // trace:BUG-2490 | ai:codex — pickup must surface semantic resolution notes.
+    assert!(message.contains("auto-merged"), "{message}");
+    let show = aida(&repo, &home)
+        .args(["show", &spec, "--format", "json"])
+        .output()
+        .unwrap();
+    assert!(
+        show.status.success(),
+        "{}",
+        String::from_utf8_lossy(&show.stderr)
+    );
+    let value: serde_json::Value = serde_json::from_slice(&show.stdout).unwrap();
+    assert_eq!(value["status"], "In Progress");
 }
 
 #[test]
@@ -1405,12 +1582,22 @@ fn assert_pickup_unstarted(repo: &Path, home: &Path, spec: &str) {
 fn task_1337_delegation_refuses_before_any_pickup_mutation() {
     let base = tempfile::tempdir().unwrap();
     let (repo, home, spec) = init_codex_only_project(base.path());
+    // trace:BUG-2490 | ai:codex — delegation must refuse before even an offline pull.
+    git(
+        &repo.join(".aida-store"),
+        &[
+            "remote",
+            "add",
+            "origin",
+            base.path().join("missing.git").to_str().unwrap(),
+        ],
+    );
     let grant = support::grant_seat(&home, &repo, "implementer", &[]);
     let output = aida(&repo, &home)
         .env("AIDA_HOME", &home)
         .env("AIDA_SESSION_ROLE", "implementer")
         .env("AIDA_SESSION_GRANT", grant)
-        .args(["queue", "work", &spec, "--guided", "--fresh", "--no-pull"])
+        .args(["queue", "work", &spec, "--guided", "--fresh"])
         .output()
         .unwrap();
     let text = format!(
