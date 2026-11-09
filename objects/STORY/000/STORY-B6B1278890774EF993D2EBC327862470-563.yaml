@@ -25,7 +25,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-07T19:45:35.836129088Z
-modified_at: 2026-11-09T08:34:23.675721907Z
+modified_at: 2026-11-09T09:02:31.781497602Z
 req_type: Story
 tags:
 - docs:impacted
@@ -709,6 +709,34 @@ comments:
     Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
   created_at: 2026-11-09T08:32:14.553496427Z
   modified_at: 2026-11-09T08:32:14.553496427Z
+- id: 01a1bf8b-7b65-7a32-aaa9-12a68baac2ca
+  author: dirtlab
+  content: |
+    STORY-2640 latest-review rework handoff; all edits remain uncommitted for the native host launcher.
+
+    Addressed both findings against 9eace0f49d91. Fast-gate bubblewrap HOME creation now precedes the complete command, including the sccache lifecycle shell and positional arguments. Added a regression building the production sccache argv and proving its command suffix is preserved. The drain installs the existing child-grant guard before fallible publication setup and receipt reservation, and drops it at the prior revoke boundary; actual reservation failure is covered by the grant-revocation regression.
+
+    Preserving production cache settings in the real-main integration exposed a further false-red cause: the wrapper's AIDA_SCCACHE_PIDS scoped synthetic proc fixtures to a real server PID absent from their trees. The existing diagnostic now applies PID scope only to real /proc; explicitly injected synthetic trees are scanned independently. No new ambient environment access or test environment writer was added.
+
+    Validation:
+    - j20261109T083640438-2-0: cargo test --profile agent -p aida-cli-lib --lib -- fast_gate: 54 passed, 0 failed, 1 ignored, exit 0.
+    - With AIDA_SCCACHE_PIDS=999999, python3 -m unittest tests.test_bug_2135_sccache_tmpdir: 22 passed.
+    - j20261109T083652767-2-0: committed origin/main 0cbb78cbcedb05cd86b301f9a2ca1dd0fdacc010 failed the real sandbox gate at the synthetic-proc fixtures, fast_gate=fail rc=2 elapsed=327.57s. That failure motivated the diagnostic fix above.
+    - j20261109T085019191-2-0: explicitly executed the new ignored lane-snapshot integration: 1 passed, exit 0. It clones the lane's HEAD, applies the tracked working diff and commits only inside the temporary fixture, then runs production seeded fast-gate dispatch with production cache settings preserved, bubblewrap and host-only results. All 46 fast-tier gates passed: fast_gate=pass rc=0 elapsed=531.164954157s, including sccache fixtures and feature-disabled CLI check. The printed head 9eace0f49d91 is the snapshot's source parent, not the temporary snapshot commit. The real-main integration remains separate and unchanged in purpose.
+    - Formatting, git diff --check, portability, writer inventory (3432 sink sites), and execution-context ledger (1239 exact sites, zero additions) passed.
+    untested=false.
+
+    Changed files:
+    - aida-cli-lib/src/lane_job.rs
+    - aida-cli-lib/src/session.rs
+    - aida-cli-lib/src/standalone_implementer.rs
+    - scripts/check-ci-gates.py
+
+    No remaining code blocker identified. The installed direct make-job submission still refuses as Cargo-only; the passing full gate above ran through the host Cargo runner's production sandbox integration, without an unsandboxed fallback. The host must gate the actual final publication commit normally. No seat commit, push, PR creation, queue completion, ship declaration, review verdict or hold clearance performed. Existing punt/hold signals remain publication vetoes.
+  created_at: 2026-11-09T09:02:31.781497602Z
+  modified_at: 2026-11-09T09:02:31.781497602Z
+  session_id: 01a1bf71b2ea
+  harness_version: codex-cli 0.167.0
 history:
 - id: 01a1b78d-2628-7313-92de-8804ac5f8f71
   author: aida-session-start
