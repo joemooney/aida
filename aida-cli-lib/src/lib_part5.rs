@@ -1507,6 +1507,7 @@ pub(crate) fn handle_review_spec(
                 crate::gate::review_verdict::VerdictKind::Rejected => {
                     "REJECT".red().bold().to_string()
                 }
+                crate::gate::review_verdict::VerdictKind::Waiting => "WAITING".to_string(),
                 crate::gate::review_verdict::VerdictKind::Unknown => v.verdict.clone(),
             };
             println!("  {} {}", "Reviewer verdict:".bold(), label);
@@ -1711,7 +1712,7 @@ pub(crate) fn run_stranded_sweep(
         else {
             continue;
         };
-        if !verdict.kind.blocks_done() {
+        if !verdict.kind.requires_changes() {
             continue;
         }
         let Ok(Some(req)) = backend.get_requirement_by_spec_id(&spec_id) else {
@@ -1850,7 +1851,7 @@ pub(crate) fn run_stalled_sweep(
         else {
             continue;
         };
-        if !verdict.kind.blocks_done() {
+        if !verdict.kind.requires_changes() {
             continue;
         }
         let Ok(Some(req)) = backend.get_requirement_by_spec_id(&spec_id) else {
@@ -3017,7 +3018,15 @@ pub(crate) fn handle_review_record_at(
     let kind = crate::gate::review_verdict::VerdictKind::parse(verdict);
     if kind == crate::gate::review_verdict::VerdictKind::Unknown {
         anyhow::bail!(
-            "unrecognised verdict `{verdict}` — use one of: approved, request-changes, rejected"
+            "unrecognised verdict `{verdict}` — use one of: approved, request-changes, rejected, waiting"
+        );
+    }
+    // trace:BUG-2500 | ai:codex
+    if kind == crate::gate::review_verdict::VerdictKind::Waiting {
+        anyhow::ensure!(summary.is_some_and(|s| !s.trim().is_empty()), "waiting requires a summary naming the dependency, responsible actor and resume condition");
+        anyhow::ensure!(
+            findings.is_empty(),
+            "waiting cannot carry substantive findings; use request-changes"
         );
     }
     let branch = branch
@@ -3269,7 +3278,7 @@ pub(crate) fn handle_review_record_at(
     // later approval can release only an eligible Rework-only hold through
     // the recorded release seam below; all other kinds keep human clear.
     // trace:BUG-1452 trace:STORY-1687 | ai:codex
-    if kind.blocks_done() {
+    if kind.requires_changes() {
         let n = pr.ok_or_else(|| {
             anyhow::anyhow!(
                 "a refusing verdict must name `--pr <N>` so AIDA can protect the pull request"
@@ -3406,7 +3415,7 @@ pub(crate) fn handle_review_record_at(
             }
         }
     }
-    if kind.blocks_done() {
+    if kind.requires_changes() {
         let detail = summary
             .filter(|s| !s.trim().is_empty())
             .unwrap_or_else(|| kind.label());
@@ -4348,7 +4357,10 @@ pub(crate) fn handle_review_list(json: bool) -> Result<()> {
 
         let color = match actionability {
             crate::gate::review_verdict::ReviewActionability::Resolved => colored::Color::Green,
-            crate::gate::review_verdict::ReviewActionability::AwaitingRework => colored::Color::Red,
+            crate::gate::review_verdict::ReviewActionability::Waiting
+            | crate::gate::review_verdict::ReviewActionability::AwaitingRework => {
+                colored::Color::Red
+            }
             crate::gate::review_verdict::ReviewActionability::NeedsReview => colored::Color::Yellow,
         };
 

@@ -21997,7 +21997,7 @@ Arguments:
 
 Options:
       --verdict <VERDICT>
-          The verdict: approved, request-changes, or rejected
+          The verdict: approved, request-changes, rejected, or waiting
 
       --sha <SHA>
           Commit the review examined. Defaults to the branch tip (current HEAD) at the time of
@@ -54058,7 +54058,7 @@ Working on aida itself
       {
         "name": "verdict",
         "takes_value": true,
-        "help": "The verdict: approved, request-changes, or rejected"
+        "help": "The verdict: approved, request-changes, rejected, or waiting"
       }
     ],
     "hidden": false

@@ -379,6 +379,11 @@ fn task_2053_bwrap_probe_reads_clean_dirty_and_unpushed() {
     assert_eq!(facts.unpushed, 0, "{facts:?}");
     assert!(facts.dirty.is_empty(), "{facts:?}");
 
+    // Unignore the host marker: publication's commit and probe must agree.
+    // trace:TASK-3749 | ai:codex
+    std::fs::write(clone.join(".git/info/exclude"), "").unwrap();
+    assert!(known(probe(&fx.main, &clone)).dirty.is_empty());
+
     seat_commit(&clone, "a.txt");
     std::fs::write(clone.join("untracked.txt"), "u\n").unwrap();
     let facts = known(probe(&fx.main, &clone));

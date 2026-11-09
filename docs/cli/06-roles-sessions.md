@@ -1362,3 +1362,12 @@ Free-text triggers are refused. Use `--until manual:<who> --reason '<explanation
 for a human decision; this retains an operator hold and routes old manual
 conditions to the human queue after 14 days.
 <!-- trace:STORY-2402 | ai:codex -->
+
+<!-- trace:BUG-2500 | ai:codex -->
+A review blocked solely on external CI or host evidence records `waiting`
+(displayed `WAITING`), with a summary naming the dependency, responsible actor
+and resume condition, and no substantive findings. Code defects still require
+`request-changes`. Waiting blocks completion and merge without implementer
+rework, repeat-findings credit or a Rework hold. Existing holds remain intact.
+Only a fresh recorded review at the current head ends the wait; green CI or
+a changed head alone does not. There is no automatic resume service.
