@@ -119,6 +119,30 @@ fn set_owner(main: &Path, lease: &crate::SessionLease, pid: u32) {
     lease.active_pid = Some(pid);
     lease.active_pid_start_time = crate::process_probe::process_start_identity(pid);
     write_lease(main, &lease);
+    // Model the canonical ownership write independently of the legacy PID
+    // fields, so adoption fixtures exercise the production reader.
+    // trace:TASK-3420 | ai:codex
+    use aida_core::db::DatabaseBackend as _;
+    let backend = crate::test_env::home_fixture_backend(&main.join(".aida-store")).unwrap();
+    let store = backend.load().unwrap();
+    let req = store
+        .requirements
+        .into_iter()
+        .find(|r| r.spec_id.as_deref() == Some(&lease.scope))
+        .unwrap_or_else(|| {
+            let mut req = aida_core::Requirement::new("Adoption fixture".into(), String::new());
+            req.spec_id = Some(lease.scope.clone());
+            req.status = aida_core::RequirementStatus::Approved;
+            backend.add_requirement(req).unwrap()
+        });
+    crate::ownership::reader::seed_lease_heartbeat(
+        main,
+        &lease,
+        crate::ownership::WorkKey::Spec {
+            spec: crate::gate::canon::SpecKey(req.id),
+        },
+        pid == std::process::id(),
+    );
 }
 
 /// A pid that has exited: the orphaned worker.
@@ -369,6 +393,10 @@ fn the_conflict_hint_offers_resume_only_when_resume_adopts() {
     no_pid.creator_pid = None;
     no_pid.creator_pid_start_time = None;
     write_lease(&fx.main, &no_pid);
+    // Legacy production holder without an ownership witness, rather than the
+    // dead synthetic heartbeat the initial orphan fixture installed.
+    // trace:TASK-3420 | ai:codex
+    std::fs::remove_dir_all(fx.main.join(".aida/ownership")).unwrap();
     let refusal = crate::leases::lease_adoption_refusal(&fx.main, &no_pid);
     assert!(
         refusal.is_some_and(|why| why.contains("no owning process")),
@@ -407,6 +435,10 @@ fn adopting_an_orphan_still_refuses_a_live_lease_on_the_scope() {
     std::fs::create_dir_all(&live.worktree_path).unwrap();
     write_lease(&fx.main, &live);
     set_owner(&fx.main, &live, std::process::id());
+    // Both legacy sessions predate ownership admission. A single canonical
+    // record cannot represent two different session holders of the same spec.
+    // trace:TASK-3420 | ai:codex
+    std::fs::remove_dir_all(fx.main.join(".aida/ownership")).unwrap();
 
     assert_eq!(
         crate::leases::adoptable_orphan_lease(&fx.main, scope).map(|l| l.id),
@@ -782,7 +814,9 @@ fn queue_work_releases_a_dead_gone_tree_lease_without_force_claim() {
     );
 
     // Recordless and live ownership both retain the lease without a journal attempt.
-    // trace:STORY-2325 | ai:codex
+    // Remove the ownership evidence seeded by orphaned_worktree explicitly.
+    // trace:TASK-3420 | ai:codex
+    std::fs::remove_dir_all(fx.main.join(".aida/ownership")).unwrap();
     let error = queue_work(&storage, scope, Some("task-922710-next"), None, None).unwrap_err();
     assert!(
         format!("{error:#}").contains("aida own migrate --execute"),
@@ -1160,6 +1194,49 @@ fn queue_recover_parks_wip_with_live_and_unknown_ownership_without_reclaim() {
         );
         assert_eq!(std::fs::read(&journal).ok(), journal_before);
     }
+}
+
+// trace:TASK-3420 | ai:codex
+#[test]
+fn task_3420_orphan_adoption_requires_matching_owner_death() {
+    let fx = fixture();
+    clone_config(&fx.main, &fx.root);
+    let _ambient = crate::test_env::AmbientGuard::hermetic_with_seat(&fx.main, "implementer", &[]);
+    let mut lease = orphaned_clone(&fx.main, "TASK-3420");
+    // A change scope has a stable ownership key without a spec-store fixture.
+    lease.scope = "PR-3420".into();
+    write_lease(&fx.main, &lease);
+    let key = crate::ownership::WorkKey::Change {
+        change: crate::ownership::ChangeId {
+            forge: "origin".into(),
+            n: 3420,
+        },
+    };
+    let adopt = || {
+        crate::session_start::orphan_lease_to_adopt(
+            &fx.main,
+            &lease.worktree_path,
+            &lease.scope,
+            &lease.branch,
+            true,
+        )
+    };
+    assert_eq!(
+        adopt().unwrap().unwrap().id,
+        lease.id,
+        "crashed legacy holder remains adoptable"
+    );
+    crate::ownership::reader::seed_lease_heartbeat(&fx.main, &lease, key.clone(), true);
+    assert!(adopt().is_err(), "live ownership must retain the clone");
+    crate::ownership::reader::seed_lease_heartbeat(&fx.main, &lease, key.clone(), false);
+    assert_eq!(adopt().unwrap().unwrap().id, lease.id);
+    let mut replacement = lease.clone();
+    replacement.id = "replacement".into();
+    crate::ownership::reader::seed_lease_heartbeat(&fx.main, &replacement, key, false);
+    assert!(
+        adopt().is_err(),
+        "a replacement's death cannot release this clone"
+    );
 }
 
 // trace:BUG-2504 | ai:codex

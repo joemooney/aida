@@ -1528,7 +1528,7 @@ pub(crate) fn enroll_synthetic_home(root: &Path) -> anyhow::Result<()> {
         // satisfy that contract even under a collaborative host's umask 0002.
         // Match the core fixture: shared-write umasks must not invalidate authority.
         // trace:STORY-2640 | ai:codex
-        // trace:TASK-3749 BUG-2502 | ai:codex
+        // trace:TASK-3420 trace:TASK-3749 trace:BUG-2502 | ai:codex
         #[cfg(unix)]
         {
             use std::os::unix::fs::PermissionsExt;
