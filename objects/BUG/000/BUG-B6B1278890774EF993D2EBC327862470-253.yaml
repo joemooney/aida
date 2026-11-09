@@ -20,7 +20,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-07T20:18:53.564500Z
-modified_at: 2026-11-09T04:12:37.164268298Z
+modified_at: 2026-11-09T04:21:02.326836176Z
 req_type: Bug
 relationships:
 - rel_type:
@@ -410,6 +410,18 @@ comments:
   created_at: 2026-11-09T02:48:08.280952163Z
   modified_at: 2026-11-09T02:48:08.280952163Z
   session_id: 01a1be2bd8d4
+  harness_version: codex-cli 0.167.0
+- id: 01a1be89-c4f6-7120-a9f1-382ffcb30f29
+  author: dirtlab
+  content: |
+    Validation-only pickup at 2fd58deba7: latest round-9 rework is already present; no source edits needed. Confirmed Claude resume provisions prior seat/host markers before spawn; cleanup removes all ASCII-case-equivalent signal names through pinned parents; both STORY-1486 inventory comments are restored; OVERVIEW retains only the durable handshake statement.
+
+    Executed validation: lane job j20261109T041253030-2-0 passed 17 BUG-2488 tests plus the watchdog child (direct child entry intentionally ignored in parent); lane job j20261109T041314637-2-0 passed all 7 resolve_aida_exe_tests, including the previous CI-failing guard. Store-writer scanner reconciles 3428 sink sites. Portability guard, git diff --check and acceptance tracing pass; no untested or unanchored criteria. Both Rust jobs exited 0 and reported overlay-stale after the primary rewrote the shared seed generation.
+
+    untested=false. Changed files: none; working tree clean. Codegraph unavailable, confirmed by doctor; used rg. No commit, push, PR creation, queue completion, pr ship or review record attempted. Fresh CI and supervised merge-hold clearance remain host/reviewer work. TASK-3608 remains the separately split drain/queue-resume no-change propagation follow-up; no completion claimed for that scope.
+  created_at: 2026-11-09T04:21:02.326836176Z
+  modified_at: 2026-11-09T04:21:02.326836176Z
+  session_id: 01a1be81b154
   harness_version: codex-cli 0.167.0
 history:
 - id: 01a1b7ad-9096-7320-bbe8-fc34c8e11c09
