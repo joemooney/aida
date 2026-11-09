@@ -519,6 +519,18 @@ class WorkCiTests(unittest.TestCase):
                                       "--no-post-hooks", "--no-roles", "--no-agent-config", "--no-schedule"],
                                      cwd=fresh, env=awaiting_env, text=True, capture_output=True, timeout=f.cli_timeout, umask=0o022)
         self.assertEqual(initialized.returncode, 0, initialized.stderr + initialized.stdout)
+        # Healthy awaiting output must expose the same actionable inventory.
+        # trace:TASK-3452 | ai:codex
+        awaiting = subprocess.run([BINARY, "awaiting", "--json", "--no-ci"], cwd=fresh, env=awaiting_env, text=True, capture_output=True, timeout=f.cli_timeout, umask=0o022)
+        self.assertEqual(awaiting.returncode, 0, awaiting.stderr + awaiting.stdout)
+        self.assertEqual(json.loads(awaiting.stdout)["ci_relay_skipped"], reported["skipped"])
+        for output_format in ("human", "toon"):
+            awaiting = subprocess.run([BINARY, "awaiting", "--format", output_format, "--no-ci"], cwd=fresh, env=awaiting_env, text=True, capture_output=True, timeout=f.cli_timeout, umask=0o022)
+            self.assertEqual(awaiting.returncode, 0, awaiting.stderr + awaiting.stdout)
+            for row in reported["skipped"]:
+                self.assertIn(row["sha"], awaiting.stdout)
+                self.assertIn(row["reason"], awaiting.stdout)
+                self.assertIn(row["command"], awaiting.stdout)
         display_index = f.private(fresh) / "ci-skipped-results.json"
         saved_index = display_index.read_bytes()
         display_index.write_text("invalid json")
