@@ -1,0 +1,29 @@
+id: 01a1c025-3afe-7e92-b169-6c8b5888f946
+spec_id: TASK-b6b1278890774ef993d2ebc327862470-1050
+title: 'Cosmetic, scripts/store-writers.toml:3435 and 3733: regenerating the inventory …'
+description: |-
+  Non-blocking finding carried forward from an APPROVED review verdict on BUG-2498, which has since completed — recorded here so it keeps a queryable home once the verdict record stops being read.
+
+  Cosmetic, scripts/store-writers.toml:3435 and 3733: regenerating the inventory dropped the hand comments '# trace:TASK-1222 ... cursor persistence moved' (twice) and '# Partial variant evidence only ... trace:TASK-3223', which are unrelated to this bug and still present on main.
+
+  PR: #3693
+  Reviewed sha: 668a2156be9497f6840deab13e357e594daa5ea4
+status: Draft
+priority: Medium
+owner: joe
+feature: Uncategorized
+created_at: 2026-11-09T11:50:27.838865114Z
+modified_at: 2026-11-09T11:50:27.838865114Z
+req_type: Task
+tags:
+- carried-from:BUG-2498
+- finding-hash:a0e685ed
+- from-review:PR-3693
+- kind:carried-forward
+filed_at:
+  code_sha: 81044beb98c0d870ebd63fd9006b759e2bb090f9
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: ef853db64e2
+  vendor: claude
