@@ -8,7 +8,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-08T18:01:54.649358Z
-modified_at: 2026-11-09T04:38:03.942743604Z
+modified_at: 2026-11-09T04:44:49.012704604Z
 req_type: Task
 relationships:
 - rel_type: Child
@@ -132,6 +132,17 @@ comments:
   created_at: 2026-11-09T04:30:49.244333948Z
   modified_at: 2026-11-09T04:30:49.244333948Z
   session_id: 7aacb1ed-ebaa-4da4-a195-500864e99e7d
+- id: 01a1be9f-89f4-77d3-a37a-22683f906b35
+  author: dirtlab
+  content: |
+    Round-6 rework fixes the remaining false completed/merged credit in drain state. run_auto_complete now persists the semantic orchestration result: clean NoChange becomes a finished no-change member, clears PR/head bindings, and emits no completed-PR wake. Status renders no-change as terminal and excludes it from merged counts and last-ship reporting. Failed exits retain precedence and ordinary completed PRs retain their existing state/event path. Extended real fresh and resumed orchestration tests through drain persistence; added persistence/rendering, stale-binding, failed-exit and ordinary-completion controls. Updated lifecycle docs.
+    Changed files: aida-cli-lib/src/drain_gate.rs; aida-cli-lib/src/drain_state.rs; aida-cli-lib/src/tests/bug_044_headless_background_tests.rs; aida-cli-lib/src/tests/bug_1629_phase1_recovery_tests.rs; docs/cli/04-git-lifecycle.md.
+    Validation: final-source lane job j20261109T043606992-2-0 executed 9 TASK-3608 tests, all passed. No-default-features check j20261109T043459508-2-0 passed; aida-tui all-targets check j20261109T043500644-2-0 passed. Changed-file rustfmt, git diff --check and TUI manifest dependency seam passed. Fast gates split to respect no-direct-Cargo policy: 42/43 non-Cargo gates passed; Codex mail wake fixtures failed with temporary project ownership/shared-write refusals (4 failures, 17 errors). Full gate diagnostics: /tmp/task3608-gates.log and /tmp/task3608-gate-results.json. A duplicate bounded containment run timed out; the other run passed. Lane jobs warned overlay-stale after a primary seed rewrite, but completed successfully. Codegraph fixed host client is absent; doctor confirmed missing, navigation used rg.
+    No implementation blockers. Native handoff: five edited files remain uncommitted. Host must commit and publish, then complete queue after publication and required review. No commit, push, PR creation, queue done, PR ship or review record performed. untested=false.
+  created_at: 2026-11-09T04:44:49.012704604Z
+  modified_at: 2026-11-09T04:44:49.012704604Z
+  session_id: 01a1be9404a0
+  harness_version: codex-cli 0.167.0
 history:
 - id: 01a1bc53-0ec9-7670-9674-41fd5fd9d861
   author: joe
@@ -322,6 +333,12 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a1be94-6d0c-71c3-ab08-8f449c380f98
+  author: dirtlab
+  timestamp: 2026-11-09T04:32:40.716271300Z
+  session_id: 01a1be9404a0
+  harness_version: codex-cli 0.167.0
+  changes: []
 - id: 01a1be99-5bf9-75d3-b414-070626528644
   author: joe
   timestamp: 2026-11-09T04:38:04.025468129Z
@@ -333,11 +350,3 @@ filed_at:
   aida_build_sha: e1c46e7f769
   vendor: codex
   session: 01a1bc4dcf8e
-failure_reason:
-  phase: reviewer
-  phase_index: 3
-  kind: verdict:request-changes
-  detail: 'Blocking finding from the prior round is unfixed: no source changed since 04b5678 (merge from main only), so a no-change member is still credited as completed/merged in drain state; CI still queued at head and merge-hold-gate failing.'
-  recovery_hint: address the review findings, move TASK-3608 back to In Progress, and clear the PR hold only after approval
-  shelved_by: reviewer
-  shelved_at: 2026-11-09T04:38:03.942743604Z
