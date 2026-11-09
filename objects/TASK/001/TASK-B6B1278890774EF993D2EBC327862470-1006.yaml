@@ -3,12 +3,12 @@ spec_id: TASK-b6b1278890774ef993d2ebc327862470-1006
 agreed_id: TASK-3608
 title: Propagate native-seat no-change through queue-resume and drain outcomes
 description: 'Split from PR #3625 round-6 finding 4 for advisor triage. publish_queue_exit currently prints implementer: no-change and returns (), while ImplementerOutcome lacks NoChange. Trace run_vendor_headless_to_exit, run_queue_resume_to_exit and phase_driver_trait lease discovery through final drain classification. Preserve failed-exit and punt/hold precedence. Add an explicit NoChange outcome to phase 1, resume and batch reporting; a successful no-commit seat must exit 0 without bundle, no-PR failure, NeedsAttention shelving or false shipped credit. Include fresh and resumed drain tests that reach final classification and keep an existing PR/rework path intact. This work has not been implemented by the BUG-2488 round-6 security fix. Advisor: approve and route this split as permitted by review finding 4.'
-status: InProgress
+status: Completed
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-08T18:01:54.649358Z
-modified_at: 2026-11-09T07:19:46.360627688Z
+modified_at: 2026-11-09T08:42:23.254111259Z
 req_type: Task
 relationships:
 - rel_type: Child
@@ -427,8 +427,26 @@ history:
   session_id: 01a1bf1f80ea
   harness_version: codex-cli 0.167.0
   changes: []
+- id: 01a1bf79-0a51-7640-be38-cbc7d0f9cbda
+  author: aida-auto-bump
+  timestamp: 2026-11-09T08:42:23.185631346Z
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Completed
+processing_record:
+- id: 01a1bf79-0a96-7b41-b9ac-595efebe5d82
+  timestamp: 2026-11-09T08:42:23.254109068Z
+  agent: aida
+  commit_sha: e60e97d0035e92f14a0b60c05e85859019365939
+  summary: 'Code review passes at 3c3b0a7a5c0: every TASK-3608 criterion is met by source and tests. CI''s seven test and gate jobs are green at this head, including the test-time-budget fix; Build (ubuntu-latest) was still queued when recorded, so merge must wait for it. merge-hold-gate is red only because the hold is active. No local tests run, per review-watch policy.'
+  review_verdict: approved
 filed_at:
   aida_version: 0.16.0
   aida_build_sha: e1c46e7f769
   vendor: codex
   session: 01a1bc4dcf8e
+implementation_info:
+  implemented: false
+  completed_at: 2026-11-09T08:42:23.185626227Z
+  completion_sha: e60e97d0035e92f14a0b60c05e85859019365939
