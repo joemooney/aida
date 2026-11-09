@@ -60,7 +60,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-09T06:49:26.752480304Z
-modified_at: 2026-11-09T07:11:16.698491586Z
+modified_at: 2026-11-09T07:23:22.071443572Z
 req_type: Task
 relationships:
 - rel_type: Supersedes
@@ -101,6 +101,13 @@ comments:
   content: 'Implemented all eight bundled findings: TASK-3043 relabels snapshot ownership as log-only diagnostics; TASK-3056 deduplicates executable locations with debug/release regression assertions; TASK-3058 removes unreachable sandbox denylist arms; TASK-3060 removes completing-form notes from AGENTS.md/OVERVIEW.md while retaining lifecycle documentation; TASK-3061 documents persisted max_concurrent as the last selecting watcher diagnostic, preserving per-watcher admission behavior; TASK-3062 makes the body-file flag optional in the pickup master and updates its regression; TASK-3064 delegates the already-verified guard to verify_ci_read; TASK-3067 describes build-script reruns and CLI-library/server recompilation. Native lane edits remain uncommitted for host publication. Targeted lane tests are running; template sync/check hit read-only target errors in their implicit Cargo invocation.'
   created_at: 2026-11-09T07:11:16.698491586Z
   modified_at: 2026-11-09T07:11:16.698491586Z
+  session_id: 01a1bf22ec82
+  harness_version: codex-cli 0.167.0
+- id: 01a1bf30-b257-78f2-9da6-90290094f8e2
+  author: dirtlab
+  content: 'Final validation: lane job j20261109T070949261-2-0 passed debug_release_switch_needs_no_rescaffold (1 executed test); lane job j20261109T071016885-2-0 passed bug_2493_native_prompts_name_safe_body_file_surface (1 executed test). git diff --check and python3 scripts/check-template-hooks.py passed. Full make sync-templates/check-templates hit read-only target-directory errors in their implicit portable-skill Cargo step; template links were synced and hook links validate. Codegraph missing per doctor. All ten changed files remain uncommitted for host publication; queue completion intentionally deferred to host. TASK-3061 disposition for PR body: retain the serialized max_concurrent for compatibility and explicitly document it as last-watcher diagnostic metadata, preserving existing per-watcher admission behavior.'
+  created_at: 2026-11-09T07:23:22.071443572Z
+  modified_at: 2026-11-09T07:23:22.071443572Z
   session_id: 01a1bf22ec82
   harness_version: codex-cli 0.167.0
 history:
