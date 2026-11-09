@@ -25,7 +25,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-07T19:45:35.836129088Z
-modified_at: 2026-11-09T11:29:24.790663586Z
+modified_at: 2026-11-09T12:33:16.562566846Z
 req_type: Story
 tags:
 - docs:impacted
@@ -737,6 +737,16 @@ comments:
   modified_at: 2026-11-09T09:02:31.781497602Z
   session_id: 01a1bf71b2ea
   harness_version: codex-cli 0.167.0
+- id: 01a1c04c-6d12-7e43-831e-8bfff1baec55
+  author: joe
+  content: |-
+    CI FAILURES at 19d1c2bcc3bb (run 42612352285). Fix exactly these before pushing; a push without a code change for them will fail again and must not be made:
+    error: test run failed
+            FAIL  aida-cli-lib headless_background::bug_044_headless_background_tests::task_3608_real_resume_receipts_precedence_and_forge_errors
+        thread 'headless_background::bug_044_headless_background_tests::task_3608_real_resume_receipts_precedence_and_forge_errors' (130081) panicked at aida-cli-lib/src/test_env.rs:109:5:
+        thread 'headless_background::bug_044_headless_background_tests::task_3608_real_resume_receipts_precedence_and_forge_errors' (130090) panicked at aida-cli-lib/src/tests/bug_044_headless_background_tests.rs:838:21:
+  created_at: 2026-11-09T12:33:16.562566846Z
+  modified_at: 2026-11-09T12:33:16.562566846Z
 history:
 - id: 01a1b78d-2628-7313-92de-8804ac5f8f71
   author: aida-session-start
