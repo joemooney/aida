@@ -2,16 +2,18 @@ id: 01a1b93c-cf8a-7d22-86c0-b725b24e025a
 spec_id: TASK-b6b1278890774ef993d2ebc327862470-966
 agreed_id: TASK-3452
 title: 'Work CI relay: report (don''t silently skip) a latest attempt that is outside the 32-attempt revalidation window, naming the exact ''aida intent ci read'' command'
-description: |
-  Non-blocking note from the approved PR-3504 review (STORY-2480): process() (aida-cli-lib/src/ci_relay.rs:1019) skips an unverified latest-attempt result without saying so. A SHA whose result falls outside the newest-32 revalidation window keeps a pending native status until someone runs `aida intent ci read --attempt N --sha S` by hand.
+description: 'Non-blocking note from the approved PR-3504 review (STORY-2480): process() (aida-cli-lib/src/ci_relay.rs:1019) skips an unverified latest-attempt result without saying so. A SHA whose result falls outside the newest-32 revalidation window keeps a pending native status until someone runs `aida intent ci read --attempt N --sha S` by hand.
+
 
   Acceptance: process() reports each skipped unverified latest attempt (SHA, attempt, reason "outside the 32-attempt revalidation window") in its human and JSON output and in `aida awaiting`, with the exact `aida intent ci read` command; a test with 33 attempts proves the report; no status is published for an unverified result (unchanged).
+
+  '
 status: Approved
 priority: Low
 owner: joe.mooney@gmail.com
 feature: Uncategorized
-created_at: 2026-11-08T03:38:52.682099Z
-modified_at: 2026-11-09T00:44:18.901615873Z
+created_at: 2026-11-08 03:38:52.682099+00:00
+modified_at: 2026-11-09 00:44:18.901615+00:00
 req_type: Task
 tags:
 - area:ci-relay
@@ -19,256 +21,324 @@ tags:
 comments:
 - id: 01a1bc81-a38a-7853-8159-1e6a18910552
   author: dirtlab
-  content: |
-    Implemented TASK-3452. CI process human/JSON output reports every unverified latest-per-SHA result with SHA, attempt, the outside-the-32-attempt-window reason, and exact aida intent ci read command. A bounded display-only local cache feeds awaiting human/agent/JSON views and the status meter; intake reads and exact revalidation refresh it. Unverified receipt publication remains refused.
+  content: 'Implemented TASK-3452. CI process human/JSON output reports every unverified latest-per-SHA result with SHA, attempt, the outside-the-32-attempt-window reason, and exact aida intent ci read command. A bounded display-only local cache feeds awaiting human/agent/JSON views and the status meter; intake reads and exact revalidation refresh it. Unverified receipt publication remains refused.
+
 
     Changed files: aida-cli-lib/src/ci_relay.rs, intent_intake.rs, awaiting_you.rs, status_awaiting.rs, statusbar_cmd.rs, tests/awaiting_you_tests.rs; tests/test_work_ci_relay.py.
 
+
     Validation: lane CLI agent build passed; ci_relay::tests: 3 passed (including the 33-attempt and cold/warm-history CLI regressions); awaiting_you::tests: 84 passed; rustfmt, Python syntax and git diff whitespace checks passed. The initial compile fixture omission and zero-match awaiting filter were corrected before these passing runs.
 
+
     Native handoff: edits are uncommitted for host publication and subsequent queue completion. No implementation blockers. Codegraph is unavailable on this host; navigation used rg after doctor confirmed the missing tool.
-  created_at: 2026-11-08T18:52:55.050097Z
-  modified_at: 2026-11-08T18:52:55.050097Z
+
+    '
+  created_at: 2026-11-08 18:52:55.050097+00:00
+  modified_at: 2026-11-08 18:52:55.050097+00:00
   session_id: 01a1bc6cecb1
   harness_version: codex-cli 0.167.0
 - id: 01a1bc88-54c6-70f2-83c4-56247870fb5c
   author: joe
   content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: PARTIAL: record_skipped reports already-published attempts as needing action, so aida awaiting raises recurring false alarms after any validator change; CI still queued at review time.. No triage reason was given.'
-  created_at: 2026-11-08T19:00:13.638242Z
-  modified_at: 2026-11-08T19:00:13.638242Z
+  created_at: 2026-11-08 19:00:13.638242+00:00
+  modified_at: 2026-11-08 19:00:13.638242+00:00
   session_id: 01a1b9af-8230-75d2-82f8-667491cc010a
   harness_version: 2.1.319 (Claude Code)
 - id: 01a1bc88-5f38-77c0-af8e-64efb9d94ddd
   author: joe
-  content: |-
-    REVIEW FINDINGS TO ADDRESS (TASK-3452):
+  content: 'REVIEW FINDINGS TO ADDRESS (TASK-3452):
+
     Verdict: CHANGES REQUESTED
+
     Reviewed commit: cb8f6e76f358
+
     Recorded: 2026-11-08T18:59:11.538815129+00:00
+
     Findings:
-    1. F1 (blocking, aida-cli-lib/src/ci_relay.rs record_skipped): an unverified latest attempt is reported without checking its ci-status-<attempt>.json marker. process() treats a marker matching r.digest as already handled, but verification proof is lost on any cold pass: validator_prefix (intent_intake.rs:289) hashes ci_relay.rs, intent_intake.rs and three other sources, so routine upgrades discard the checkpoint. Every already-published latest attempt older than the newest 32 then appears in aida awaiting, its total and the status meter as needing a manual exact read, and returns after the next validator change. The spec's problem is a result that keeps a pending native status; these do not. Fix: exclude rows whose marker equals r.digest, and add a test with a cold pass over a published old attempt.
+
+    1. F1 (blocking, aida-cli-lib/src/ci_relay.rs record_skipped): an unverified latest attempt is reported without checking its ci-status-<attempt>.json marker. process() treats a marker matching r.digest as already handled, but verification proof is lost on any cold pass: validator_prefix (intent_intake.rs:289) hashes ci_relay.rs, intent_intake.rs and three other sources, so routine upgrades discard the checkpoint. Every already-published latest attempt older than the newest 32 then appears in aida awaiting, its total and the status meter as needing a manual exact read, and returns after the next validator change. The spec''s problem is a result that keeps a pending native status; these do not. Fix: exclude rows whose marker equals r.digest, and add a test with a cold pass over a published old attempt.
+
     2. F2 (minor, ci_relay.rs process): the skipped list prints only through report(), so bail paths after it is computed (Uncertain native CI status publication, CI status processing identity conflict, Retained CI request changed, publish_status errors) exit without reporting skipped attempts in human or JSON output, while acceptance says process reports each one. Emit the report on these paths or before the fallible loop, keeping JSON to one parseable object.
+
     3. F3 (minor, test gap, ci_relay.rs awaiting_skipped and status_awaiting.rs:1223): no test exercises the real path from the on-disk cache to aida awaiting. The Python test reads the cache files directly and awaiting_you_tests builds the report by hand, so a path or schema mismatch in awaiting_skipped would be swallowed by unwrap_or_default. Add a CLI or unit regression that loads a real cache through awaiting_skipped.
+
     4. F4 (likely CI failure, unconfirmed because CI had not started; ci_relay.rs task3452_history_window_reports_skipped_attempts): the new lib test runs three Python history scenarios of 33-35 attempts in series but has no entry in scripts/test-time-budget.toml (default_limit 10s, over-limit touched tests fail the build) and no nextest override (.config/nextest.toml kills at 180s). Its precedent aida_sized_relay_native_statuses_reach_required_pr_and_train_gates has both. tests/test_work_ci_relay.py already runs in the contracts shard (ci.yml:510). Remove the wrapper or budget it.
+
     5. F5 (minor, ci_relay.rs awaiting_skipped): more than 82 parts bails and unwrap_or_default turns that into an empty list, while record_skipped writes any number of parts; profile.branches() merges several histories, each capped at 8192 files. The display then silently loses every row, which is the silent skip this spec removes. Cap the written rows with an explicit overflow indication.
+
     6. F6 (cosmetic, aida-cli-lib/src/awaiting_you.rs render_agent_view, render, summary sites): the new CI blocks were inserted between an existing // trace:BUG-2426 comment and the code it annotates, so that trace now labels TASK-3452 code and those blocks lack their own trace:TASK-3452 comment. Move the new blocks above the BUG-2426 comment and trace them.
-    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
-  created_at: 2026-11-08T19:00:16.312976Z
-  modified_at: 2026-11-08T19:00:16.312976Z
+
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.'
+  created_at: 2026-11-08 19:00:16.312976+00:00
+  modified_at: 2026-11-08 19:00:16.312976+00:00
   session_id: 01a1b9af-8230-75d2-82f8-667491cc010a
   harness_version: 2.1.319 (Claude Code)
 - id: 01a1bc95-2c0d-79a2-a452-2bb36b4a48cc
   author: dirtlab
   content: 'Validated existing implementation at cb8f6e76f3; no additional source edits needed. Lane jobs: cargo build --profile agent -p aida-cli passed; cargo test --profile agent -p aida-cli-lib --lib ci_relay_skipped_names_exact_recovery_in_every_awaiting_view passed (1 executed); cargo test --profile agent -p aida-cli-lib --lib task3452_history_window_reports_skipped_attempts passed (1 executed, wraps 33-attempt plus cold/warm Python regressions, 92.28s). Initial history run lacked the CLI binary; rerun after building passed. Codegraph unavailable (doctor confirms missing PATH tool); used rg. Native seat leaves queue completion/publication to host.'
-  created_at: 2026-11-08T19:14:15.181137Z
-  modified_at: 2026-11-08T19:14:15.181137Z
+  created_at: 2026-11-08 19:14:15.181137+00:00
+  modified_at: 2026-11-08 19:14:15.181137+00:00
   session_id: 01a1bc89d9d2
   harness_version: codex-cli 0.167.0
 - id: 01a1bcb2-7a64-75c2-a868-cab5b249c19f
   author: dirtlab
-  content: |-
-    Addressed review findings F1-F6. Matching ci-status digest markers suppress false exact-read alarms after cold validator passes. process retains skipped rows in human output and a single JSON object on publication errors. Added a real on-disk awaiting_skipped regression with 83 cache parts; removed the arbitrary 82-part reader and cleanup ceiling, so larger legitimate histories remain fully visible without truncation. Added nextest and test-time budgets for the history wrapper and restored trace attribution around review-watch blocks. Python regressions cover publication refusal output and already-published old attempts after validator invalidation; unverified results still publish no statuses.
+  content: 'Addressed review findings F1-F6. Matching ci-status digest markers suppress false exact-read alarms after cold validator passes. process retains skipped rows in human output and a single JSON object on publication errors. Added a real on-disk awaiting_skipped regression with 83 cache parts; removed the arbitrary 82-part reader and cleanup ceiling, so larger legitimate histories remain fully visible without truncation. Added nextest and test-time budgets for the history wrapper and restored trace attribution around review-watch blocks. Python regressions cover publication refusal output and already-published old attempts after validator invalidation; unverified results still publish no statuses.
+
 
     Changed files: aida-cli-lib/src/ci_relay.rs; aida-cli-lib/src/awaiting_you.rs; tests/test_work_ci_relay.py; scripts/test-time-budget.toml; .config/nextest.toml.
 
+
     Validation: lane cargo build --profile agent -p aida-cli passed. Final ci_relay::tests run passed 4 executed Rust tests (history wrapper runs the 33-attempt and cold/warm Python scenarios), 86.74s. Awaiting render regression passed 1 executed test. rustfmt, git diff --check, Python AST and TOML parsing passed. Initial run needed the CLI binary; a later test fixture fetch-log isolation failure was corrected before the passing rerun.
 
-    Native handoff: source edits remain uncommitted; host launcher owns commit/publication and queue completion. No implementation blockers. codegraph unavailable, confirmed by doctor; navigation used rg. untested=false.
-  created_at: 2026-11-08T19:46:15.780580Z
-  modified_at: 2026-11-08T19:46:15.780580Z
+
+    Native handoff: source edits remain uncommitted; host launcher owns commit/publication and queue completion. No implementation blockers. codegraph unavailable, confirmed by doctor; navigation used rg. untested=false.'
+  created_at: 2026-11-08 19:46:15.780580+00:00
+  modified_at: 2026-11-08 19:46:15.780580+00:00
   session_id: 01a1bca00da3
   harness_version: codex-cli 0.167.0
 - id: 01a1bcc7-1a9d-7393-81da-e34a997ae4e8
   author: joe
   content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: PARTIAL: F1-F6 are fixed and acceptance holds on a home clone, but Work clones raise the same false exact-read alarms F1 removed, and prior F7 is still open. CI was queued at review time.. No triage reason was given.'
-  created_at: 2026-11-08T20:08:47.517889Z
-  modified_at: 2026-11-08T20:08:47.517889Z
+  created_at: 2026-11-08 20:08:47.517889+00:00
+  modified_at: 2026-11-08 20:08:47.517889+00:00
   session_id: 01a1bc93-77a0-7740-8b03-df4e3e8d1df5
   harness_version: 2.1.319 (Claude Code)
 - id: 01a1bcc7-23c2-7e13-b613-d965047ddb7a
   author: joe
-  content: |-
-    REVIEW FINDINGS TO ADDRESS (TASK-3452):
+  content: 'REVIEW FINDINGS TO ADDRESS (TASK-3452):
+
     Verdict: CHANGES REQUESTED
+
     Reviewed commit: 2819edec063c
+
     Recorded: 2026-11-08T19:52:43.580865025+00:00
+
     Findings:
+
     1. F8 (blocking, aida-cli-lib/src/intent_intake.rs:904 and ci_relay.rs record_skipped/awaiting_skipped): the F1 fix depends on ci-status-<attempt>.json, but only process() writes those markers and process() is home-only (ci_relay.rs CiCommand::Process refuses p.role != home). Work clones also load ci_snapshot, through poll -> intake.append -> sync/files -> ci_admit, so files() calls record_skipped there. On a Work clone with more than 32 retained attempts, any cold pass (every validator change) therefore caches every old latest attempt as needing an exact read, and aida awaiting, its total and the status meter show them even though home already published them. The exact read cannot publish from Work either. Fix: write the cache only for the home role and make Work clones report none (clear any stale cache), with a Python regression using a work-profile clone and more than 32 attempts.
+
     2. F7 (minor, still open from the previous round; intent_intake.rs:905, ci_relay.rs process record_skipped call, ci_relay.rs CiCommand::Read record_skipped call): the cache is commented display-only, yet a record_skipped failure propagates with ? out of Intake::files() (which serves append, pull and list), out of process() before any publication, and out of an exact read that has already verified. A failed display-cache write therefore aborts intake operations and blocks native status publication for current verified results. Make the refresh best-effort (warn and continue) at these sites, with a test. In process(), the skipped rows must still be computed and reported when only the cache write fails.
+
     3. F9 (minor, ci_relay.rs CiCommand::Read, the Snapshot::load added before record_skipped): every exact read now runs Snapshot::load and an ls-remote against home_remote, even when the attempt was already verified and verify_ci_read did no work. Before this PR a re-read of a verified attempt needed no home contact, so an unreachable home remote now fails a read that used to succeed, before any row prints. Refresh only when this read actually verified something, reusing the snapshot verify_ci_read already loaded.
+
     4. F10 (cosmetic, docs/agents/work-ci-relay.md:251 and :319-321): the docs still say Home processing skips unverified results, with no mention of the report or aida awaiting, and that CI commands emit one object with a message field on success and that refusals remain nonzero exits. ci process --json now adds a skipped array on success and prints {error, skipped} on stdout on refusal. Document the skipped field, the error object and the awaiting row.
-    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
-  created_at: 2026-11-08T20:08:49.858290Z
-  modified_at: 2026-11-08T20:08:49.858290Z
+
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.'
+  created_at: 2026-11-08 20:08:49.858290+00:00
+  modified_at: 2026-11-08 20:08:49.858290+00:00
   session_id: 01a1bc93-77a0-7740-8b03-df4e3e8d1df5
   harness_version: 2.1.319 (Claude Code)
 - id: 01a1bce4-0839-7180-9a0e-adb0556a2771
   author: dirtlab
-  content: |
-    Addressed review findings F7-F10. Recovery notices are Home-only; Work refreshes clear stale cache parts, and awaiting suppresses Work caches even before refresh. Display-cache persistence warns and continues, preserving computed skipped rows in process output and allowing pull, exact reads and verified native status publication. Exact reads refresh only after new verification and reuse the admission snapshot instead of loading another remote snapshot. Updated operator docs for awaiting, skipped JSON fields and publication-refusal error objects.
+  content: 'Addressed review findings F7-F10. Recovery notices are Home-only; Work refreshes clear stale cache parts, and awaiting suppresses Work caches even before refresh. Display-cache persistence warns and continues, preserving computed skipped rows in process output and allowing pull, exact reads and verified native status publication. Exact reads refresh only after new verification and reuse the admission snapshot instead of loading another remote snapshot. Updated operator docs for awaiting, skipped JSON fields and publication-refusal error objects.
+
 
     Changed files: aida-cli-lib/src/ci_relay.rs; aida-cli-lib/src/intent_intake.rs; tests/test_work_ci_relay.py; docs/agents/work-ci-relay.md.
 
+
     Validation: lane cargo build --profile agent -p aida-cli passed. Final lane cargo test --profile agent -p aida-cli-lib --lib -- ci_relay::tests:: passed 4 executed tests in 94.03s; the wrapper runs 33-attempt and cold/warm-history Python regressions, including a Work clone, broken display-cache writes with positive verified publication, and exact-read CI probe counts. Real on-disk awaiting reader test also checks stale Work-cache suppression. Python syntax and git diff --check passed; Rust files formatted with rustfmt. Initial compile timed out at 900s; subsequent build passed. First history run exposed an overly broad test probe counter including intake sync; narrowed the assertion to CI retained refs before the final passing run.
 
+
     Native handoff: edits are uncommitted for host publication and subsequent queue completion. No remaining implementation blockers. codegraph is unavailable; used rg after the missing executable. untested=false.
-  created_at: 2026-11-08T20:40:23.353554Z
-  modified_at: 2026-11-08T20:40:23.353554Z
+
+    '
+  created_at: 2026-11-08 20:40:23.353554+00:00
+  modified_at: 2026-11-08 20:40:23.353554+00:00
   session_id: 01a1bcc84523
   harness_version: codex-cli 0.167.0
 - id: 01a1bd05-dcff-7a01-ba2c-9db17ae24714
   author: joe
   content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: PARTIAL: acceptance and F7-F10 hold in source, but the PR''s new Rust wrapper test turns two CI jobs red (lib-1 raw-exe ratchet, gates nextest waiver pin), and exact-read rows can name a command that refuses.. No triage reason was given.'
-  created_at: 2026-11-08T21:17:20.511907Z
-  modified_at: 2026-11-08T21:17:20.511907Z
+  created_at: 2026-11-08 21:17:20.511907+00:00
+  modified_at: 2026-11-08 21:17:20.511907+00:00
   session_id: 01a1bc93-77a0-7740-8b03-df4e3e8d1df5
   harness_version: 2.1.319 (Claude Code)
 - id: 01a1bd05-e8d6-7893-b497-015670e489f7
   author: joe
-  content: |-
-    REVIEW FINDINGS TO ADDRESS (TASK-3452):
+  content: 'REVIEW FINDINGS TO ADDRESS (TASK-3452):
+
     Verdict: CHANGES REQUESTED
+
     Reviewed commit: cb1e41f9aae3
+
     Recorded: 2026-11-08T21:13:42.136488985+00:00
+
     Findings:
+
     1. F11 (blocking, aida-cli-lib/src/ci_relay.rs:1193): task3452_history_window_reports_skipped_attempts calls std::env::current_exe() directly. The ratchet orchestrator_leases::resolve_aida_exe_tests::no_cli_source_outside_the_resolver_uses_raw_current_executable_lookup (resolve_aida_exe_tests.rs:65) allows zero such calls outside aida_bin.rs and kernel.rs, so CI (lib-1) job 128856792750 fails at cb1e41f9aae3. Do not add an allowance. Resolve the binary like the sibling test at aida-cli-lib/src/tests/task_1945_commit_ci_tests.rs:353 (AIDA_TEST_BIN, then CARGO_TARGET_DIR/debug/aida), or drop the wrapper per F12.
-    2. F12 (blocking, .config/nextest.toml:68-72 and scripts/test-time-budget.toml:36): the new whole-runner, extended-timeout override and 480s budget break tests/test_ci_test_shards.py test_nextest_gates_the_test_lanes, which pins the non-serial overrides to exactly the aida_sized relay test (:307-318) so no new test inherits that waiver. That step (STORY-1853 test-speed tooling tests) failed in CI (gates) job 128856792618; the job log was not downloadable here, so this is from the failed step name plus the assertion in source. Preferred fix: remove the Rust wrapper, override and budget entry, since the Python regressions already run in the contracts shard (.github/workflows/ci.yml:510, python3 tests/test_work_ci_relay.py); check that step's full_ci condition covers this change. Otherwise make the test fit the ordinary limits. Do not widen the pin without advisor agreement. The 480 entry also lacks the measured evidence the budget file requires (a 94s run was reported).
+
+    2. F12 (blocking, .config/nextest.toml:68-72 and scripts/test-time-budget.toml:36): the new whole-runner, extended-timeout override and 480s budget break tests/test_ci_test_shards.py test_nextest_gates_the_test_lanes, which pins the non-serial overrides to exactly the aida_sized relay test (:307-318) so no new test inherits that waiver. That step (STORY-1853 test-speed tooling tests) failed in CI (gates) job 128856792618; the job log was not downloadable here, so this is from the failed step name plus the assertion in source. Preferred fix: remove the Rust wrapper, override and budget entry, since the Python regressions already run in the contracts shard (.github/workflows/ci.yml:510, python3 tests/test_work_ci_relay.py); check that step''s full_ci condition covers this change. Otherwise make the test fit the ordinary limits. Do not widen the pin without advisor agreement. The 480 entry also lacks the measured evidence the budget file requires (a 94s run was reported).
+
     3. F13 (minor, aida-cli-lib/src/ci_relay.rs record_skipped): every unverified latest attempt is labelled outside the revalidation window with an exact-read command, including a receipt that exact read refuses. check_history_bounds shows this at total=35: attempt 2 (job not-in-home) is counted in reported[skipped], then ci read --attempt 2 is refused. The row stays in aida awaiting, its total and the status meter with no working recovery. Either record a distinct state and reason when exact verification has refused, or document the operator path for an unrecoverable row, with a regression.
-    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
-  created_at: 2026-11-08T21:17:23.542184Z
-  modified_at: 2026-11-08T21:17:23.542184Z
+
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.'
+  created_at: 2026-11-08 21:17:23.542184+00:00
+  modified_at: 2026-11-08 21:17:23.542184+00:00
   session_id: 01a1bc93-77a0-7740-8b03-df4e3e8d1df5
   harness_version: 2.1.319 (Claude Code)
 - id: 01a1bd11-2669-76f3-b0d0-6defb65cdad0
   author: dirtlab
-  content: |-
-    Addressed review findings F11-F13. Removed the duplicate Rust Python-history wrapper, its raw current_exe lookup, extended nextest waiver and 480s budget. The Python regression remains in the contracts shard; full_ci covers the changed source/test/config files. Documented recovery when exact verification refuses: inspect audit/refusal, repair pipeline/configuration, then issue a new globally unused attempt for the same SHA. Cold/warm regressions prove the new request removes the refused old row from process output and awaiting cache, with only the expected pending status and no publication from the unverified receipt.
+  content: 'Addressed review findings F11-F13. Removed the duplicate Rust Python-history wrapper, its raw current_exe lookup, extended nextest waiver and 480s budget. The Python regression remains in the contracts shard; full_ci covers the changed source/test/config files. Documented recovery when exact verification refuses: inspect audit/refusal, repair pipeline/configuration, then issue a new globally unused attempt for the same SHA. Cold/warm regressions prove the new request removes the refused old row from process output and awaiting cache, with only the expected pending status and no publication from the unverified receipt.
+
 
     Changed files: aida-cli-lib/src/ci_relay.rs; .config/nextest.toml; scripts/test-time-budget.toml; docs/agents/work-ci-relay.md; tests/test_work_ci_relay.py.
 
+
     Validation: lane cargo test ci_relay::tests:: passed 3 executed tests; lane executable lookup ratchet passed 1 executed test; lane cargo build -p aida-cli passed. Against the lane overlay binary, 33-attempt regression passed; final cold/warm-history regressions passed 2 tests in 45.57s. CI shard tooling passed 25 tests. Python syntax, TOML parsing and git diff --check passed. Initial Python run used an older installed binary; corrected to lane overlay binary. New recovery assertions initially overlooked the expected request pending status; corrected and rerun successfully.
 
-    Native handoff: five files remain uncommitted; host owns publication and queue completion. No remaining implementation blockers. codegraph unavailable (doctor confirms missing); used rg. untested=false.
-  created_at: 2026-11-08T21:29:40.201465Z
-  modified_at: 2026-11-08T21:29:40.201465Z
+
+    Native handoff: five files remain uncommitted; host owns publication and queue completion. No remaining implementation blockers. codegraph unavailable (doctor confirms missing); used rg. untested=false.'
+  created_at: 2026-11-08 21:29:40.201465+00:00
+  modified_at: 2026-11-08 21:29:40.201465+00:00
   session_id: 01a1bd07c41f
   harness_version: codex-cli 0.167.0
 - id: 01a1bd4c-bc0b-7900-a70b-cd255575e808
   author: joe
   content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: PARTIAL: F1-F13 hold in source, but CI has not started at this head (14 runs queued), so the 33-attempt test has no CI evidence; one minor new finding (F14).. No triage reason was given.'
-  created_at: 2026-11-08T22:34:45.131794Z
-  modified_at: 2026-11-08T22:34:45.131794Z
+  created_at: 2026-11-08 22:34:45.131794+00:00
+  modified_at: 2026-11-08 22:34:45.131794+00:00
   session_id: 20abb7c3-8f9b-4a5e-b326-404921f3b450
 - id: 01a1bd4c-c519-70d3-8167-6de1006f44da
   author: joe
-  content: |-
-    REVIEW FINDINGS TO ADDRESS (TASK-3452):
+  content: 'REVIEW FINDINGS TO ADDRESS (TASK-3452):
+
     Verdict: CHANGES REQUESTED
+
     Reviewed commit: 032060ebedbc
+
     Recorded: 2026-11-08T21:36:34.375628886+00:00
+
     Findings:
-    1. F14 (minor, aida-cli-lib/src/ci_relay.rs record_skipped and its call in process()): record_skipped reads ci-status-<attempt>.json for every unverified latest attempt and propagates a read error with ?, and process() calls it with ? before the publication loop. Before this PR unverified rows hit continue before any marker read. A marker Private::read refuses (over 64 KiB, or a failed file check) on one old attempt now aborts process() and blocks native status publication for current verified results, which the display report must not do (F7's rule). Treat a marker read failure as not published, or warn and continue, so the row is still reported, with a regression.
+
+    1. F14 (minor, aida-cli-lib/src/ci_relay.rs record_skipped and its call in process()): record_skipped reads ci-status-<attempt>.json for every unverified latest attempt and propagates a read error with ?, and process() calls it with ? before the publication loop. Before this PR unverified rows hit continue before any marker read. A marker Private::read refuses (over 64 KiB, or a failed file check) on one old attempt now aborts process() and blocks native status publication for current verified results, which the display report must not do (F7''s rule). Treat a marker read failure as not published, or warn and continue, so the row is still reported, with a regression.
+
     2. CI-WAIT (not a code defect, no source change needed for this item): CI run 42525515063 at 032060ebedbc was still pending with no jobs when this review ended, behind 14 queued runs, so test_33_attempts_report_unverified_latest_result and the other acceptance tests have no CI result at this head. The last head where contracts ran green (2819edec063c) predates the current Python changes. merge-hold-gate is red only because of the supervised hold, which is expected. Re-review needs a green CI run at the head.
-    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
-  created_at: 2026-11-08T22:34:47.449910Z
-  modified_at: 2026-11-08T22:34:47.449910Z
+
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.'
+  created_at: 2026-11-08 22:34:47.449910+00:00
+  modified_at: 2026-11-08 22:34:47.449910+00:00
   session_id: 20abb7c3-8f9b-4a5e-b326-404921f3b450
 - id: 01a1bd80-bdba-7f83-a4e7-9b849305f6de
   author: joe
-  content: |-
-    REVIEW FINDINGS TO ADDRESS (TASK-3452):
+  content: 'REVIEW FINDINGS TO ADDRESS (TASK-3452):
+
     Verdict: CHANGES REQUESTED
+
     Reviewed commit: 4cbaa4d7dd9c
+
     Recorded: 2026-11-08T22:39:39.577130292+00:00
+
     Findings:
+
     1. F14 (minor, still open, aida-cli-lib/src/ci_relay.rs:857 and :944): record_skipped reads ci-status-<attempt>.json with ? for every unverified latest attempt, and process() calls record_skipped with ? before the publication loop. Private::read (aida-core/src/transport_private.rs:116) refuses a marker over 64 KiB or one failing its file check, so one bad marker on an old attempt aborts process() and blocks native status publication for current verified results. The rework since the last review added no commit touching any PR file. Treat a marker read failure as not published, or warn and continue, so the row is still reported, and add a Python regression (for example a directory or an oversize file at ci-status-<old>.json, then assert a current verified result still publishes).
+
     2. F15 (minor, new, aida-cli-lib/src/ci_relay.rs:930): awaiting_skipped ends in read().unwrap_or_default(), so a damaged index or any one unreadable part empties the whole awaiting list with no warning, which is the silent skip this spec removes. record_skipped warns only on the write side, and only on the intake commands, not in aida awaiting. Either keep the rows that do parse and report the damage, or warn on stderr from the awaiting path, with a regression.
-    3. F16 (cosmetic, new): when the display cache is broken, process() warns twice, once through Intake::files() refresh_ci_skipped (intent_intake.rs:913) and once from record_skipped (ci_relay.rs:875), because both compute and write the cache in one run. docs/agents/work-ci-relay.md:268 also runs past the file's wrap width.
+
+    3. F16 (cosmetic, new): when the display cache is broken, process() warns twice, once through Intake::files() refresh_ci_skipped (intent_intake.rs:913) and once from record_skipped (ci_relay.rs:875), because both compute and write the cache in one run. docs/agents/work-ci-relay.md:268 also runs past the file''s wrap width.
+
     4. CI-WAIT (no source change needed): CI run 42531076990 at 4cbaa4d7dd9c was still queued with every job pending when this review ended, so test_33_attempts_report_unverified_latest_result (acceptance item 4) and the other new tests have no CI result at this head. Re-review needs a green run at the new head.
-    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
-  created_at: 2026-11-08T23:31:33.434958Z
-  modified_at: 2026-11-08T23:31:33.434958Z
+
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.'
+  created_at: 2026-11-08 23:31:33.434958+00:00
+  modified_at: 2026-11-08 23:31:33.434958+00:00
   session_id: 20abb7c3-8f9b-4a5e-b326-404921f3b450
 - id: 01a1bd8c-7f51-7fb2-90ff-9ebf5a83fe3e
   author: dirtlab
-  content: |-
-    Addressed latest review findings F14-F16. A refused old publication marker warns and is treated as lacking publication evidence, preserving its skipped row while current verified results can publish. Awaiting now warns on damaged display indexes or unreadable parts instead of silently hiding cache failures. Process loads inventory without refreshing display state twice, eliminating duplicate cache-write warnings. Wrapped the operator documentation line.
+  content: 'Addressed latest review findings F14-F16. A refused old publication marker warns and is treated as lacking publication evidence, preserving its skipped row while current verified results can publish. Awaiting now warns on damaged display indexes or unreadable parts instead of silently hiding cache failures. Process loads inventory without refreshing display state twice, eliminating duplicate cache-write warnings. Wrapped the operator documentation line.
+
 
     Changed files: aida-cli-lib/src/ci_relay.rs; aida-cli-lib/src/intent_intake.rs; tests/test_work_ci_relay.py; docs/agents/work-ci-relay.md.
 
+
     Validation: lane cargo test --profile agent -p aida-cli-lib --lib -- ci_relay::tests:: passed 3 executed tests; lane cargo build --profile agent -p aida-cli passed. Against the newly built lane overlay binary, the 33-attempt regression passed (29.08s), cold history passed (25.33s), and warm history passed (25.33s), including refused old marker/current verified publication, damaged-index and missing-part awaiting stderr, and one cache-refresh warning. CI shard tooling passed 25 tests. Rustfmt, Python AST parsing and git diff --check passed. Initial Python selector and fixture umask errors were corrected before passing runs.
 
-    Native handoff: four files remain uncommitted for host commit/publication and queue completion. No implementation blockers. Green CI at the published head remains host/reviewer work; this seat cannot publish or wait for that future head. Codegraph unavailable (doctor confirms missing); used rg. untested=false.
-  created_at: 2026-11-08T23:44:23.889841Z
-  modified_at: 2026-11-08T23:44:23.889841Z
+
+    Native handoff: four files remain uncommitted for host commit/publication and queue completion. No implementation blockers. Green CI at the published head remains host/reviewer work; this seat cannot publish or wait for that future head. Codegraph unavailable (doctor confirms missing); used rg. untested=false.'
+  created_at: 2026-11-08 23:44:23.889841+00:00
+  modified_at: 2026-11-08 23:44:23.889841+00:00
   session_id: 01a1bd82229d
   harness_version: codex-cli 0.167.0
 - id: 01a1bda2-f957-70d1-8a89-fdfc409e0ee8
   author: joe
   content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: PARTIAL: F14-F16 are fixed and acceptance holds in source, but F17 is still open: the new awaiting_skipped read_bounded calls are absent from the store-writer inventory, so the gates ratchet will fail; CI is still running at this head.. No triage reason was given.'
-  created_at: 2026-11-09T00:08:56.919777343Z
-  modified_at: 2026-11-09T00:08:56.919777343Z
+  created_at: 2026-11-09 00:08:56.919777+00:00
+  modified_at: 2026-11-09 00:08:56.919777+00:00
   session_id: 20abb7c3-8f9b-4a5e-b326-404921f3b450
 - id: 01a1bda3-0388-74a3-b191-60f13dfa6d3e
   author: joe
-  content: |-
-    REVIEW FINDINGS TO ADDRESS (TASK-3452):
+  content: 'REVIEW FINDINGS TO ADDRESS (TASK-3452):
+
     Verdict: CHANGES REQUESTED
+
     Reviewed commit: 9cc719e689a5
+
     Recorded: 2026-11-08T23:48:39.490518521+00:00
+
     Findings:
-    1. F17 (blocking, still open, aida-cli-lib/src/ci_relay.rs:929,934,938 awaiting_skipped and scripts/store-writers.toml): the PR diff does not touch the inventory and head 9cc719e689a5 has no row for awaiting_skipped. read_bounded is a wrapper (inventory row observation_envelope.rs|read_bounded|OpenOptions::new), and the existing row ci_relay.rs|run|wrapper:aida_cli_lib::observation_envelope::read_bounded shows the same call form is detected, so scripts/check-store-writers.py reports 'unclassified writer/caller sink site (addition)' for ci_relay.rs|awaiting_skipped|wrapper:aida_cli_lib::observation_envelope::read_bounded. Because awaiting_skipped becomes a wrapper, its explicit-path caller status_awaiting.rs collect_awaiting_report_with_mail_facts (and that function's explicit-path callers) need rows too. 'Store writer inventory ratchet' was the only failed step in CI (gates) of run 42531076990 at 4cbaa4d7dd9c. The 9cc719e689a5 run has not reached that step; this attribution is from reading the script and inventory, which was not executed per the no-local-checks review policy. Fix: run python3 scripts/check-store-writers.py --regenerate after merging main, review the new blocked rows and commit them, or read these files without a wrapper sink.
+
+    1. F17 (blocking, still open, aida-cli-lib/src/ci_relay.rs:929,934,938 awaiting_skipped and scripts/store-writers.toml): the PR diff does not touch the inventory and head 9cc719e689a5 has no row for awaiting_skipped. read_bounded is a wrapper (inventory row observation_envelope.rs|read_bounded|OpenOptions::new), and the existing row ci_relay.rs|run|wrapper:aida_cli_lib::observation_envelope::read_bounded shows the same call form is detected, so scripts/check-store-writers.py reports ''unclassified writer/caller sink site (addition)'' for ci_relay.rs|awaiting_skipped|wrapper:aida_cli_lib::observation_envelope::read_bounded. Because awaiting_skipped becomes a wrapper, its explicit-path caller status_awaiting.rs collect_awaiting_report_with_mail_facts (and that function''s explicit-path callers) need rows too. ''Store writer inventory ratchet'' was the only failed step in CI (gates) of run 42531076990 at 4cbaa4d7dd9c. The 9cc719e689a5 run has not reached that step; this attribution is from
+    reading the script and inventory, which was not executed per the no-local-checks review policy. Fix: run python3 scripts/check-store-writers.py --regenerate after merging main, review the new blocked rows and commit them, or read these files without a wrapper sink.
+
     2. CI-WAIT (no source change needed): CI run 42536638749 at 9cc719e689a5 was still in progress when this review ended (gates at Build all packages), so test_33_attempts_report_unverified_latest_result and the tests added in the latest commit have no result at this head. merge-hold-gate is red only because of the supervised hold, which is expected and needs the human-gated clear or eligible auto-release. Re-review needs a green run at the new head.
-    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
-  created_at: 2026-11-09T00:08:59.528963840Z
-  modified_at: 2026-11-09T00:08:59.528963840Z
+
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.'
+  created_at: 2026-11-09 00:08:59.528963+00:00
+  modified_at: 2026-11-09 00:08:59.528963+00:00
   session_id: 20abb7c3-8f9b-4a5e-b326-404921f3b450
 - id: 01a1bdad-662f-75a3-b72f-4c4024f56049
   author: dirtlab
   content: 'Native implementer handoff: branch already contains skipped latest-attempt reporting in process human/JSON and awaiting. Added uncommitted tests/test_work_ci_relay.py assertions that the 33-attempt scenario exposes identical skipped inventory in awaiting JSON and SHA/reason/exact recovery command in human and TOON output. Validation: lane cargo test --profile agent -p aida-cli-lib --lib -- ci_relay::tests passed 3 executed tests; lane cargo build --profile agent -p aida-cli --bin aida passed; focused 33-attempt Python integration test against lane-built binary passed (31.026s); py_compile and git diff --check passed. No implementation blockers. Leaving edits uncommitted for host publication; no queue completion from native seat.'
-  created_at: 2026-11-09T00:20:20.143504094Z
-  modified_at: 2026-11-09T00:20:20.143504094Z
+  created_at: 2026-11-09 00:20:20.143504+00:00
+  modified_at: 2026-11-09 00:20:20.143504+00:00
   session_id: 01a1bda499fc
   harness_version: codex-cli 0.167.0
 - id: 01a1bdbe-286e-7c61-bb48-09588b79e356
   author: joe
   content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: PARTIAL: TASK-3452 acceptance holds in source and tests, but F17 is still unfixed: awaiting_skipped has no store-writer inventory row, the ratchet failed at 9cc719e689a5, and the only commit since is test-only.. No triage reason was given.'
-  created_at: 2026-11-09T00:38:38.446853433Z
-  modified_at: 2026-11-09T00:38:38.446853433Z
+  created_at: 2026-11-09 00:38:38.446853+00:00
+  modified_at: 2026-11-09 00:38:38.446853+00:00
   session_id: 20abb7c3-8f9b-4a5e-b326-404921f3b450
 - id: 01a1bdbe-38b8-7d93-8a52-4feccf600a38
   author: joe
-  content: |-
-    REVIEW FINDINGS TO ADDRESS (TASK-3452):
+  content: 'REVIEW FINDINGS TO ADDRESS (TASK-3452):
+
     Verdict: CHANGES REQUESTED
+
     Reviewed commit: 2ccba8ef179f
+
     Recorded: 2026-11-09T00:25:33.353504031+00:00
+
     Findings:
-    1. F17 (blocking, third round open, aida-cli-lib/src/ci_relay.rs awaiting_skipped read_bounded calls and scripts/store-writers.toml): 2ccba8ef179f only adds Python assertions, and scripts/store-writers.toml at this head still has no awaiting_skipped row. CI run 42536638749 at 9cc719e689a5 failed the step 'Store writer inventory ratchet' in CI (gates). The same step is still pending at this head, and no file it reads has changed. Job logs are unreadable from this sandbox, so the row names are inferred from scripts/check-store-writers.py: ci_relay.rs|awaiting_skipped|wrapper:aida_cli_lib::observation_envelope::read_bounded, plus status_awaiting.rs|collect_awaiting_report_with_mail_facts for the call to the new wrapper and its explicit-path callers. Fix: after merging main, run python3 scripts/check-store-writers.py --regenerate, review and commit the new blocked rows, or read these files without a wrapper sink.
-    2. F18 (minor, still open, aida-cli-lib/src/ci_relay.rs awaiting_skipped, common_dir call): aida_core::allocation_authority::common_dir bails with 'allocation requires a clone-local Git identity' when no ancestor has .git, and the read closure reports that as 'could not read CI skipped-result display cache'. Every aida awaiting/status collection in a non-Git project then warns on stderr, although no relay can exist there and the comment says missing caches are normal. Found by reading the code, not reproduced. Fix: return an empty list silently when there is no Git identity, keep the warning for real damage, and add a non-Git test.
+
+    1. F17 (blocking, third round open, aida-cli-lib/src/ci_relay.rs awaiting_skipped read_bounded calls and scripts/store-writers.toml): 2ccba8ef179f only adds Python assertions, and scripts/store-writers.toml at this head still has no awaiting_skipped row. CI run 42536638749 at 9cc719e689a5 failed the step ''Store writer inventory ratchet'' in CI (gates). The same step is still pending at this head, and no file it reads has changed. Job logs are unreadable from this sandbox, so the row names are inferred from scripts/check-store-writers.py: ci_relay.rs|awaiting_skipped|wrapper:aida_cli_lib::observation_envelope::read_bounded, plus status_awaiting.rs|collect_awaiting_report_with_mail_facts for the call to the new wrapper and its explicit-path callers. Fix: after merging main, run python3 scripts/check-store-writers.py --regenerate, review and commit the new blocked rows, or read these files without a wrapper sink.
+
+    2. F18 (minor, still open, aida-cli-lib/src/ci_relay.rs awaiting_skipped, common_dir call): aida_core::allocation_authority::common_dir bails with ''allocation requires a clone-local Git identity'' when no ancestor has .git, and the read closure reports that as ''could not read CI skipped-result display cache''. Every aida awaiting/status collection in a non-Git project then warns on stderr, although no relay can exist there and the comment says missing caches are normal. Found by reading the code, not reproduced. Fix: return an empty list silently when there is no Git identity, keep the warning for real damage, and add a non-Git test.
+
     3. F19 (cosmetic, new, aida-cli-lib/src/ci_relay.rs CiCommand::Read and intent_intake.rs refresh_ci_skipped): an exact read of an unverified attempt refreshes the display cache twice, once in intake.files() and once after verify_ci_read, so a broken cache prints the refresh warning twice. This is the F16 duplicate that was fixed only for process(). Found by reading the code.
+
     4. CI-WAIT (no source change needed): CI run 42539680421 at 2ccba8ef179f was still in progress when this review ended (gates at Build all packages), so the 33-attempt test and the new awaiting assertions have no result at this head. merge-hold-gate is red only because of the supervised hold, which needs the human-gated clear or an eligible auto-release. Re-review needs a green run at the new head.
-    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
-  created_at: 2026-11-09T00:38:42.616292855Z
-  modified_at: 2026-11-09T00:38:42.616292855Z
+
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.'
+  created_at: 2026-11-09 00:38:42.616292+00:00
+  modified_at: 2026-11-09 00:38:42.616292+00:00
   session_id: 20abb7c3-8f9b-4a5e-b326-404921f3b450
 history:
 - id: 01a1bc6c-f8c6-7083-91af-c24f9a88e846
   author: aida-session-start
-  timestamp: 2026-11-08T18:30:20.614153Z
+  timestamp: 2026-11-08 18:30:20.614153+00:00
   changes:
   - field_name: status
     old_value: Approved
     new_value: InProgress
 - id: 01a1bc6d-8b8d-7063-b5e1-b3df30d363b9
   author: dirtlab
-  timestamp: 2026-11-08T18:30:58.189555Z
+  timestamp: 2026-11-08 18:30:58.189555+00:00
   session_id: 01a1bc6cecb1
   harness_version: codex-cli 0.167.0
   changes: []
 - id: 01a1bc87-62d2-7490-84f2-e165357dbbc7
   author: aida-orchestrator
-  timestamp: 2026-11-08T18:59:11.698949Z
+  timestamp: 2026-11-08 18:59:11.698949+00:00
   session_id: 01a1bc83fb83
   harness_version: 2.1.319 (Claude Code)
   changes:
@@ -277,7 +347,7 @@ history:
     new_value: NeedsAttention
 - id: 01a1bc88-54c6-70f2-83c4-561d6f475f04
   author: joe
-  timestamp: 2026-11-08T19:00:13.638227Z
+  timestamp: 2026-11-08 19:00:13.638227+00:00
   session_id: 01a1b9af-8230-75d2-82f8-667491cc010a
   harness_version: 2.1.319 (Claude Code)
   changes:
@@ -286,20 +356,20 @@ history:
     new_value: Approved
 - id: 01a1bc89-e642-7563-a21c-97f90cc64c8a
   author: aida-session-start
-  timestamp: 2026-11-08T19:01:56.418399Z
+  timestamp: 2026-11-08 19:01:56.418399+00:00
   changes:
   - field_name: status
     old_value: Approved
     new_value: InProgress
 - id: 01a1bc8a-6b20-7153-8803-9cbeee0cd140
   author: dirtlab
-  timestamp: 2026-11-08T19:02:30.432451Z
+  timestamp: 2026-11-08 19:02:30.432451+00:00
   session_id: 01a1bc89d9d2
   harness_version: codex-cli 0.167.0
   changes: []
 - id: 01a1bc9e-84b6-70a2-8799-0faa83a499f1
   author: joe
-  timestamp: 2026-11-08T19:24:27.702713Z
+  timestamp: 2026-11-08 19:24:27.702713+00:00
   session_id: 01a1bc93-77a0-7740-8b03-df4e3e8d1df5
   harness_version: 2.1.319 (Claude Code)
   changes:
@@ -308,20 +378,20 @@ history:
     new_value: Approved
 - id: 01a1bca0-1a57-73c2-8ff1-43ee9c68c445
   author: aida-session-start
-  timestamp: 2026-11-08T19:26:11.543477Z
+  timestamp: 2026-11-08 19:26:11.543477+00:00
   changes:
   - field_name: status
     old_value: Approved
     new_value: InProgress
 - id: 01a1bca0-9485-7ed0-a699-7a48021d8a20
   author: dirtlab
-  timestamp: 2026-11-08T19:26:42.821056Z
+  timestamp: 2026-11-08 19:26:42.821056+00:00
   session_id: 01a1bca00da3
   harness_version: codex-cli 0.167.0
   changes: []
 - id: 01a1bca3-e384-7c50-a8cf-6a664ed6eeaf
   author: aida-orchestrator
-  timestamp: 2026-11-08T19:30:19.652357Z
+  timestamp: 2026-11-08 19:30:19.652357+00:00
   session_id: 01a1bca1ddaf
   harness_version: 2.1.319 (Claude Code)
   changes:
@@ -330,13 +400,13 @@ history:
     new_value: NeedsAttention
 - id: 01a1bcb8-9dfe-7363-b6f9-fbbc9cda6be4
   author: joe
-  timestamp: 2026-11-08T19:52:58.110388Z
+  timestamp: 2026-11-08 19:52:58.110388+00:00
   session_id: 01a1bcb5641e
   harness_version: 2.1.319 (Claude Code)
   changes: []
 - id: 01a1bcc7-1a9d-7393-81da-e3352eaf041b
   author: joe
-  timestamp: 2026-11-08T20:08:47.517873Z
+  timestamp: 2026-11-08 20:08:47.517873+00:00
   session_id: 01a1bc93-77a0-7740-8b03-df4e3e8d1df5
   harness_version: 2.1.319 (Claude Code)
   changes:
@@ -345,20 +415,20 @@ history:
     new_value: Approved
 - id: 01a1bcc8-5122-7583-9ba2-9cd898c3eea6
   author: aida-session-start
-  timestamp: 2026-11-08T20:10:07.010836Z
+  timestamp: 2026-11-08 20:10:07.010836+00:00
   changes:
   - field_name: status
     old_value: Approved
     new_value: InProgress
 - id: 01a1bcc8-a9e2-7f23-880c-dc93c8cc635f
   author: dirtlab
-  timestamp: 2026-11-08T20:10:29.730738Z
+  timestamp: 2026-11-08 20:10:29.730738+00:00
   session_id: 01a1bcc84523
   harness_version: codex-cli 0.167.0
   changes: []
 - id: 01a1bd02-88a9-7e31-aa55-4a1410d17bdc
   author: aida-orchestrator
-  timestamp: 2026-11-08T21:13:42.313406Z
+  timestamp: 2026-11-08 21:13:42.313406+00:00
   session_id: 01a1bd006a63
   harness_version: 2.1.319 (Claude Code)
   changes:
@@ -367,7 +437,7 @@ history:
     new_value: NeedsAttention
 - id: 01a1bd05-dcff-7a01-ba2c-9dacde4bd557
   author: joe
-  timestamp: 2026-11-08T21:17:20.511896Z
+  timestamp: 2026-11-08 21:17:20.511896+00:00
   session_id: 01a1bc93-77a0-7740-8b03-df4e3e8d1df5
   harness_version: 2.1.319 (Claude Code)
   changes:
@@ -376,20 +446,20 @@ history:
     new_value: Approved
 - id: 01a1bd07-cac7-7233-bf5f-fdf4dc925ed1
   author: aida-session-start
-  timestamp: 2026-11-08T21:19:26.919774Z
+  timestamp: 2026-11-08 21:19:26.919774+00:00
   changes:
   - field_name: status
     old_value: Approved
     new_value: InProgress
 - id: 01a1bd08-210a-7100-b674-75112d6a494f
   author: dirtlab
-  timestamp: 2026-11-08T21:19:49.002859Z
+  timestamp: 2026-11-08 21:19:49.002859+00:00
   session_id: 01a1bd07c41f
   harness_version: codex-cli 0.167.0
   changes: []
 - id: 01a1bd17-78e7-7f32-9a87-a06955ebfcff
   author: aida-orchestrator
-  timestamp: 2026-11-08T21:36:34.535910Z
+  timestamp: 2026-11-08 21:36:34.535910+00:00
   session_id: 01a1bd1457e7
   harness_version: 2.1.319 (Claude Code)
   changes:
@@ -398,7 +468,7 @@ history:
     new_value: NeedsAttention
 - id: 01a1bd4c-bc0b-7900-a70b-cd15ae79ab9b
   author: joe
-  timestamp: 2026-11-08T22:34:45.131768Z
+  timestamp: 2026-11-08 22:34:45.131768+00:00
   session_id: 20abb7c3-8f9b-4a5e-b326-404921f3b450
   changes:
   - field_name: status
@@ -406,39 +476,39 @@ history:
     new_value: Approved
 - id: 01a1bd4e-1884-7d30-a0e9-94d824dd302d
   author: aida-session-start
-  timestamp: 2026-11-08T22:36:14.340492Z
+  timestamp: 2026-11-08 22:36:14.340492+00:00
   changes:
   - field_name: status
     old_value: Approved
     new_value: InProgress
 - id: 01a1bd4e-7d39-7792-b8cc-dd8763a7c7fa
   author: dirtlab
-  timestamp: 2026-11-08T22:36:40.121548Z
+  timestamp: 2026-11-08 22:36:40.121548+00:00
   session_id: 01a1bd4e0bc9
   harness_version: codex-cli 0.167.0
   changes: []
 - id: 01a1bd51-3b24-71c3-bc26-9f3138b99139
   author: joe
-  timestamp: 2026-11-08T22:39:39.812264Z
+  timestamp: 2026-11-08 22:39:39.812264+00:00
   session_id: 01a1bd4f894b
   harness_version: 2.1.319 (Claude Code)
   changes: []
 - id: 01a1bd82-28fd-7c42-8911-14e0f7cd6729
   author: aida-session-start
-  timestamp: 2026-11-08T23:33:06.429626Z
+  timestamp: 2026-11-08 23:33:06.429626+00:00
   changes:
   - field_name: status
     old_value: Approved
     new_value: InProgress
 - id: 01a1bd82-8968-7bc2-9f27-9f4c5d95d1e3
   author: dirtlab
-  timestamp: 2026-11-08T23:33:31.112143Z
+  timestamp: 2026-11-08 23:33:31.112143+00:00
   session_id: 01a1bd82229d
   harness_version: codex-cli 0.167.0
   changes: []
 - id: 01a1bd86-2a56-7523-a4d8-f2c92862e303
   author: aida-orchestrator
-  timestamp: 2026-11-08T23:37:28.918156Z
+  timestamp: 2026-11-08 23:37:28.918156+00:00
   session_id: 01a1bd83c83f
   harness_version: 2.1.319 (Claude Code)
   changes:
@@ -447,13 +517,13 @@ history:
     new_value: NeedsAttention
 - id: 01a1bd90-66b1-7b71-a090-d82707d45f29
   author: joe
-  timestamp: 2026-11-08T23:48:39.729381146Z
+  timestamp: 2026-11-08 23:48:39.729381+00:00
   session_id: 01a1bd8e48f6
   harness_version: 2.1.319 (Claude Code)
   changes: []
 - id: 01a1bda2-f957-70d1-8a89-fdedfab4422f
   author: joe
-  timestamp: 2026-11-09T00:08:56.919765860Z
+  timestamp: 2026-11-09 00:08:56.919765+00:00
   session_id: 20abb7c3-8f9b-4a5e-b326-404921f3b450
   changes:
   - field_name: status
@@ -461,26 +531,26 @@ history:
     new_value: Approved
 - id: 01a1bda4-9ff0-7890-ad68-9df6f2a0eb1a
   author: aida-session-start
-  timestamp: 2026-11-09T00:10:45.104770600Z
+  timestamp: 2026-11-09 00:10:45.104770+00:00
   changes:
   - field_name: status
     old_value: Approved
     new_value: InProgress
 - id: 01a1bda5-088a-7ca3-be04-7b94736b76e8
   author: dirtlab
-  timestamp: 2026-11-09T00:11:11.882613793Z
+  timestamp: 2026-11-09 00:11:11.882613+00:00
   session_id: 01a1bda499fc
   harness_version: codex-cli 0.167.0
   changes: []
 - id: 01a1bda8-93ec-7111-9614-d0e0a72a04d6
   author: joe
-  timestamp: 2026-11-09T00:15:04.172167335Z
+  timestamp: 2026-11-09 00:15:04.172167+00:00
   session_id: 01a1bda632bb
   harness_version: 2.1.319 (Claude Code)
   changes: []
 - id: 01a1bdb2-2ebb-7012-8942-313cf7b42e78
   author: aida-orchestrator
-  timestamp: 2026-11-09T00:25:33.627938216Z
+  timestamp: 2026-11-09 00:25:33.627938+00:00
   session_id: 01a1bdb033ed
   harness_version: 2.1.319 (Claude Code)
   changes:
@@ -489,15 +559,22 @@ history:
     new_value: NeedsAttention
 - id: 01a1bdbe-286e-7c61-bb48-09402148b171
   author: joe
-  timestamp: 2026-11-09T00:38:38.446843200Z
+  timestamp: 2026-11-09 00:38:38.446843+00:00
   session_id: 20abb7c3-8f9b-4a5e-b326-404921f3b450
   changes:
   - field_name: status
     old_value: NeedsAttention
     new_value: Approved
+- id: 01a1bdbf-6f87-7aa3-b1d9-eebb3ec22f7c
+  author: aida-session-start
+  timestamp: 2026-11-09 00:40:02.183684+00:00
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: InProgress
 - id: 01a1bdc3-5aa5-78e1-881d-797fde550d7e
   author: joe
-  timestamp: 2026-11-09T00:44:18.981326655Z
+  timestamp: 2026-11-09 00:44:18.981326+00:00
   session_id: 01a1bdc12c46
   harness_version: 2.1.319 (Claude Code)
   changes: []
@@ -517,4 +594,4 @@ failure_reason:
   detail: 'PARTIAL: all six TASK-3452 acceptance items hold in source and tests, but F17 is still unfixed: the store-writer ratchet failed at the previous head and this head only merges main; F18 and F19 also remain open.'
   recovery_hint: address the review findings, move TASK-3452 back to In Progress, and clear the PR hold only after approval
   shelved_by: reviewer
-  shelved_at: 2026-11-09T00:44:18.901615873Z
+  shelved_at: 2026-11-09 00:44:18.901615+00:00
