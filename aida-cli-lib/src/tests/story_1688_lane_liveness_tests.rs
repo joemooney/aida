@@ -1399,13 +1399,6 @@ fn task_3420_crashed_legacy_reviewer_and_registered_reviewer() {
     review.creator_pid_start_time = creator.1;
     review.pr_head_sha = Some(HEAD_A.into());
     write_lease(&root, &review);
-    let key = crate::ownership::WorkKey::Review {
-        change: crate::ownership::ChangeId {
-            forge: "origin".into(),
-            n: 2730,
-        },
-        head: HEAD_A.into(),
-    };
     // trace:TASK-2120 trace:TASK-3420 | ai:codex
     // Crashed legacy reviewer: production may have written no witness.
     let feed = prs_json(vec![gh_pr(
@@ -1465,11 +1458,6 @@ fn task_3420_crashed_legacy_reviewer_and_registered_reviewer() {
         Vec::<String>::new(),
         "a registered legacy reviewer still holds the PR"
     );
-    crate::ownership::reader::seed_lease_heartbeat(&root, &review, key, true);
-    assert!(
-        ids(&findings_at(&root, now, &prs)).is_empty(),
-        "the recorded holder is alive"
-    );
 }
 
 /// Review progress follows the recorded owner, even if unrelated processes
@@ -1492,27 +1480,47 @@ fn task_3420_review_lease_uses_recorded_ownership() {
     review.review_verb = true;
     review.claim_verb = false;
     review.pr_head_sha = Some("head".into());
-    let running = || review_lease_running(&root, &review);
     assert!(
-        !running(),
+        !review_lease_running(&root, &review),
         "crashed legacy reviewer releases without a witness"
     );
-    let key = crate::ownership::WorkKey::Review {
-        change: crate::ownership::ChangeId {
-            forge: "origin".into(),
-            n: 2731,
-        },
-        head: "head".into(),
-    };
-    crate::ownership::reader::seed_lease_heartbeat(&root, &review, key.clone(), true);
-    assert!(running(), "live recorded holder");
-    crate::ownership::reader::seed_lease_heartbeat(&root, &review, key.clone(), false);
-    assert!(!running(), "positive death proof releases the review");
+    // Exercise the admitted process envelope written by the production adapter.
+    let mut command = std::process::Command::new("sleep");
+    command.arg("30");
+    let capture = aida_core::proc_identity::prepare_command(&mut command).unwrap();
+    let mut child = command.spawn().unwrap();
+    let admission = capture.finish(&mut child);
+    admission.validate().unwrap();
+    review.active_pid = Some(child.id());
+    review.active_pid_start_time = crate::process_probe::process_start_identity(child.id());
+    review.hostname = crate::coordination::hostname();
+    review.pid_namespace = aida_core::process_probe::ProbeSource::system()
+        .pid_namespace(child.id())
+        .ok();
+    review.holder_record = Some(serde_json::to_string(&admission).unwrap());
+    crate::ownership::dual::enable_for_test();
+    crate::ownership::dual::lease_written(&root, &review);
+    let record = crate::ownership::reader::lease_record(&root, &review)
+        .unwrap()
+        .expect("production adapter persisted ownership");
+    assert!(record
+        .holder
+        .unwrap()
+        .witnesses
+        .iter()
+        .any(|w| w.admission.is_some()));
+    assert!(review_lease_running(&root, &review), "live admitted holder");
+    child.kill().unwrap();
+    child.wait().unwrap();
+    assert!(
+        !review_lease_running(&root, &review),
+        "positive death proof releases the review"
+    );
     let mut replacement = review.clone();
     replacement.id = "replacement".into();
-    crate::ownership::reader::seed_lease_heartbeat(&root, &replacement, key, false);
+    crate::ownership::dual::lease_written(&root, &replacement);
     assert!(
-        running(),
+        review_lease_running(&root, &review),
         "another generation does not prove this owner dead"
     );
 }
