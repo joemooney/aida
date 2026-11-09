@@ -20,7 +20,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-07T20:18:53.564500Z
-modified_at: 2026-11-09T02:36:58.613505532Z
+modified_at: 2026-11-09T02:37:05.458150236Z
 req_type: Bug
 relationships:
 - rel_type:
@@ -386,6 +386,23 @@ comments:
   content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: Both acceptance tests read correctly, but this head only merges main: the hold-resurrection and two-spelling findings from the last round remain, two reviewed store-writers trace comments are dropped, and CI is incomplete.. No triage reason was given.'
   created_at: 2026-11-09T02:36:58.613501896Z
   modified_at: 2026-11-09T02:36:58.613501896Z
+  session_id: 20abb7c3-8f9b-4a5e-b326-404921f3b450
+- id: 01a1be2a-99c4-7392-b3d1-eb126c1de97d
+  author: joe
+  content: |-
+    REVIEW FINDINGS TO ADDRESS (BUG-2488):
+    Verdict: CHANGES REQUESTED
+    Reviewed commit: 0f4e6968974a
+    Recorded: 2026-11-09T02:16:30.102847257+00:00
+    Findings:
+    1. MINOR regression, unfixed from the previous round (queue_cmd/work.rs:450 reconcile for every implementer vendor; pr_cmd.rs:8470 clears only the host marker; session.rs:8266 Claude resume returns before provision_attempt_signals): a cleared hold marker is resurrected. A Claude lane holds, so the marker is in the seat and mirrored to the host; queue work --resume on Claude never provisions, so the seat copy survives; the resumed child opens the PR and auto-queue-review removes the host marker (TASK-630); on child exit reconcile_signals rewrites it from the stale seat copy, and held re-entry then admits another --resume on a spec whose PR is open. Fix: clear the seat copy when the hold ends, or consume seat markers before a Claude resume so reconcile mirrors only markers from this attempt. Add a test: held seat marker, host marker cleared, reconcile after resume leaves no host marker.
+    2. MINOR, unfixed from the previous round (punt.rs case_insensitive_signal_path; standalone_implementer.rs:1002 clear_signal_paths): lookup returns one spelling, so clearing removes one file. With two ASCII-case spellings present, provision or consume removes the exact file and the next signal_path resolves to the survivor, so publication_veto sees a prior-attempt marker and silently suppresses publication. Fix: clear every ASCII-case-equal entry in the pinned directory, and add a two-spelling test.
+    3. MINOR (scripts/store-writers.toml): the PR deletes both "# trace:STORY-1486 | ai:codex — reviewed read-only validation" comments (origin/main has 2, head has 0), although the round-8 handoff says existing comments are preserved and round 6 restored comments. The deletion is unrelated to BUG-2488. Fix: restore both comments; the codegraph row reorder is harmless.
+    4. COSMETIC (OVERVIEW.md:1631-1646): the new paragraph is a per-change note (64 KiB read bound, exit 32, retained-marker details). CLAUDE.md puts per-change notes in the PR body and an aida comment, and reserves OVERVIEW.md for real architecture changes. Fix: reduce it to one or two sentences stating that handshakes live in the seat and the host mirrors them, or drop it.
+    5. CI INCOMPLETE at verdict time: run 42549544268 at 0f4e6968974a is queued/in progress with no job finished, so there is no green evidence at this head. Confirm a full green run at the next head. merge-hold-gate failing is the expected supervised hold, not a code defect.
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
+  created_at: 2026-11-09T02:37:05.348459420Z
+  modified_at: 2026-11-09T02:37:05.348459420Z
   session_id: 20abb7c3-8f9b-4a5e-b326-404921f3b450
 history:
 - id: 01a1b7ad-9096-7320-bbe8-fc34c8e11c09
