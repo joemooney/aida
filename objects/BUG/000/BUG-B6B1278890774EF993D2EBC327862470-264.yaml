@@ -3,12 +3,12 @@ spec_id: BUG-b6b1278890774ef993d2ebc327862470-264
 agreed_id: BUG-2499
 title: aida dev build --clean keeps a stale AIDA_BUILD_GIT_SHA stamp, so promotion refuses until --clean=full
 description: 'On dell1 2026-11-08, after a fast-forward to 48e3865999, aida dev build and aida dev build --clean both produced a binary stamped sha efdcfc64cf built 2026-11-07 16:42, and promotion refused it (''staged build does not match HEAD''). --clean=full fixed it. Expected: a ff merge or --clean re-stamps the binary.'
-status: Approved
+status: InProgress
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-08T19:01:55.483195458Z
-modified_at: 2026-11-09T02:55:17.370193154Z
+modified_at: 2026-11-09T02:56:07.987133924Z
 req_type: Bug
 relationships:
 - rel_type:
@@ -203,6 +203,13 @@ history:
   timestamp: 2026-11-09T02:55:17.508916637Z
   session_id: 20abb7c3-8f9b-4a5e-b326-404921f3b450
   changes: []
+- id: 01a1be3c-0933-7081-ba64-9e3e8453b59f
+  author: aida-session-start
+  timestamp: 2026-11-09T02:56:07.987117012Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: InProgress
 filed_at:
   code_sha: eeec474c545cbc8a354d386c8cb6d81460da7b9f
   branch: main
