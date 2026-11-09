@@ -1580,6 +1580,23 @@ pub(crate) fn remote_missing_commits_with_review_head(
         !is_clone || review_head.is_none(),
         "review coverage requires a linked worktree"
     );
+    remote_missing_commits_via(main, seat, is_clone, lease_branch, review_head, "--remotes")
+}
+
+/// GC requires origin coverage, rather than a secondary backup remote.
+// trace:TASK-1222 | ai:codex
+pub(crate) fn origin_missing_commits(main: &Path, seat: &Path, branch: &str) -> Result<u64> {
+    remote_missing_commits_via(main, seat, true, branch, None, "--remotes=origin")
+}
+
+fn remote_missing_commits_via(
+    main: &Path,
+    seat: &Path,
+    is_clone: bool,
+    lease_branch: &str,
+    review_head: Option<&str>,
+    remotes: &str,
+) -> Result<u64> {
     let deadline = Some(std::time::Instant::now() + std::time::Duration::from_secs(30));
     // A remote tip absent from the clone cannot excuse anything there. Git
     // failures (including a broken HEAD) refuse rather than guessing zero.
@@ -1601,6 +1618,51 @@ if [ "$#" -gt 0 ]; then
 fi
 printf '%s\n' "$negative" | git rev-list --stdin --count $head --branches --not --remotes
 "#;
+    let script = if remotes == "--remotes=origin" {
+        // Inherited host tags are not seat work. Exclude only an exact
+        // name/object match from positive roots, never from negative coverage:
+        // a seat branch at the same unpublished commit must still retain it.
+        // trace:TASK-1222 | ai:codex
+        let mut tags = aida_core::git_ops::host_git_command(main);
+        tags.args([
+            "for-each-ref",
+            "--format=%(objectname) %(refname)",
+            "refs/tags/",
+        ]);
+        let host_tags = run_bounded(tags, "", deadline).context("cannot read host tags")?;
+        let host_tags = host_tags.replace('\'', "'\"'\"'");
+        let positives = format!(
+            r#"host_tags='{host_tags}'
+positives=''
+refs=$(git for-each-ref --format='%(objectname) %(refname)')
+while read -r oid name; do
+  [ -n "$oid" ] || continue
+  case "$name" in
+    refs/tags/*)
+      if printf '%s\n' "$host_tags" | grep -Fqx -- "$oid $name"; then continue; fi ;;
+  esac
+  positives="$positives $oid"
+done <<EOF
+$refs
+EOF
+"#
+        );
+        // Preserve seat-created/moved tags, other refs and every stash entry.
+        // Secondary remotes never grant origin coverage to GC.
+        format!(
+            "set -eu\n{}\n{}\n{}",
+            GC_STASH_ENTRIES,
+            positives,
+            script
+                .replace("--branches", "$positives $s")
+                // Clone tracking refs are seat-writable. Only the negative
+                // OIDs corroborated through host origin refs/advertisement
+                // above may excuse a commit in the GC path.
+                .replace("--not --remotes", "")
+        )
+    } else {
+        script.to_string()
+    };
     let output = if is_clone {
         let out = run_sandboxed_until(
             seat,
@@ -1613,12 +1675,8 @@ printf '%s\n' "$negative" | git rev-list --stdin --count $head --branches --not 
         .map_err(|error| anyhow::anyhow!("{error}"))?;
         let out = String::from_utf8_lossy(&out);
         let (tips, candidates) = split_tips(&out);
-        let remote_tips = main_reachable_commits_via(
-            main,
-            tips.into_iter().chain(candidates),
-            deadline,
-            "--remotes",
-        );
+        let remote_tips =
+            main_reachable_commits_via(main, tips.into_iter().chain(candidates), deadline, remotes);
         let count_with = |tips: &[String]| -> Result<String> {
             let mut args: Vec<&std::ffi::OsStr> = vec![
                 "-c".as_ref(),
@@ -1641,7 +1699,12 @@ printf '%s\n' "$negative" | git rev-list --stdin --count $head --branches --not 
             let remaining = deadline
                 .unwrap()
                 .saturating_duration_since(std::time::Instant::now());
-            let heads = origin_head_oids(main, (remaining / 2).min(ORIGIN_REFRESH_CAP));
+            let timeout = (remaining / 2).min(ORIGIN_REFRESH_CAP);
+            let heads = if remotes == "--remotes=origin" {
+                origin_gc_oids(main, timeout)
+            } else {
+                origin_head_oids(main, timeout)
+            };
             if heads.is_empty() {
                 first
             } else {
@@ -1691,7 +1754,7 @@ printf '%s\n' "$negative" | git rev-list --stdin --count $head --branches --not 
         if has_head {
             cmd.arg("HEAD");
         }
-        cmd.args(["--not", "--remotes"]);
+        cmd.args(["--not", remotes]);
         if let Some(head) = review_head {
             cmd.arg(head);
         }
@@ -2026,18 +2089,64 @@ pub(crate) fn describe_status_entry(line: &str) -> String {
     described.unwrap_or_else(|| line.escape_debug().to_string())
 }
 
-/// Whether a probe `git status` entry is the session's runtime state or
-/// build/cache output rather than work: the `.aida-store` link to the
-/// primary's store, `.aida/cache-db` (and legacy `.aida/cache.db*`),
-/// `.aida/agents`, and `target/`. Only
-/// untracked entries qualify; `.aida-store` and `.codegraph` only while symlinks (read
-/// with metadata only; nothing in the clone is opened).
+/// Whether an untracked probe entry is disposable runtime state: shared
+/// store/codegraph links, agent/cache/build output, Python bytecode, notice
+/// markers, empty sandbox placeholders, Claude runtime links, session-env.sh,
+/// and the sessions symlink or direct regular `*.toml` lease files. Other
+/// session files remain work; tracked entries never qualify.
 // trace:BUG-B6B1278890774EF993D2EBC327862470-051 | ai:claude
 pub(crate) fn is_runtime_noise_entry(clone: &Path, line: &str) -> bool {
     let Some(path) = line.strip_prefix("? ") else {
         return false;
     };
     let path = path.trim_end_matches('/');
+    // Only known runtime links/caches and empty sandbox placeholders qualify.
+    // Genuine ignored state (holds, verdicts, credentials, notes) stays work.
+    // trace:TASK-1222 | ai:codex
+    // Python bytecode is regenerated by the gates. Keep arbitrary files even
+    // inside __pycache__, and never excuse tracked status entries (above).
+    if path.split('/').any(|part| part == "__pycache__") && path.ends_with(".pyc") {
+        return true;
+    }
+    // Presentation/onboarding receipts are disposable; brief.md and events.jsonl
+    // carry work context/audit evidence and intentionally remain protected.
+    if matches!(
+        path,
+        ".aida/team-onboarded"
+            | ".aida/upstream-report-notice-version"
+            | ".aida/.format-hint-shown"
+    ) {
+        return true;
+    }
+    if matches!(path, ".bashrc" | ".gitconfig" | ".gitmodules") {
+        return std::fs::symlink_metadata(clone.join(path))
+            .is_ok_and(|m| m.is_file() && m.len() == 0);
+    }
+    if path.starts_with(".claude/") {
+        let mut component = clone.join(path);
+        while component != clone.join(".claude") {
+            if std::fs::symlink_metadata(&component).is_ok_and(|m| m.is_symlink()) {
+                return true;
+            }
+            if !component.pop() {
+                break;
+            }
+        }
+    }
+    if path == ".aida/session-env.sh" {
+        return true;
+    }
+    // A real sessions directory can contain operator notes. Only the shared
+    // link or direct regular lease files are disposable; unknown state stays.
+    // trace:TASK-1222 | ai:codex
+    if path == ".aida/sessions" {
+        return std::fs::symlink_metadata(clone.join(path)).is_ok_and(|meta| meta.is_symlink());
+    }
+    if let Some(lease) = path.strip_prefix(".aida/sessions/") {
+        return !lease.contains('/')
+            && lease.ends_with(".toml")
+            && std::fs::symlink_metadata(clone.join(path)).is_ok_and(|meta| meta.is_file());
+    }
     // trace:STORY-2630 | ai:codex
     if matches!(path, ".aida-store" | ".codegraph") {
         return std::fs::symlink_metadata(clone.join(path))
@@ -2235,6 +2344,40 @@ const ORIGIN_HEADS_CAP: usize = 5_000;
 /// more than [`ORIGIN_HEADS_CAP`] branches.
 // trace:BUG-2415 | ai:claude
 pub(crate) fn origin_head_oids(main: &Path, timeout: std::time::Duration) -> Vec<String> {
+    origin_oids(
+        main,
+        timeout,
+        &["ls-remote", "--heads", "origin"],
+        ORIGIN_HEADS_CAP,
+    )
+}
+
+/// GC may corroborate a published source head through origin's PR/MR refs
+/// after squash-merge branch deletion. These are host-observed advertisements,
+/// never clone-written tracking refs; the separate lifecycle gate still applies.
+// trace:TASK-1222 | ai:codex
+fn origin_gc_oids(main: &Path, timeout: std::time::Duration) -> Vec<String> {
+    origin_oids(
+        main,
+        timeout,
+        &[
+            "ls-remote",
+            "--refs",
+            "origin",
+            "refs/heads/*",
+            "refs/pull/*/head",
+            "refs/merge-requests/*/head",
+        ],
+        50_000,
+    )
+}
+
+fn origin_oids(
+    main: &Path,
+    timeout: std::time::Duration,
+    args: &[&str],
+    cap: usize,
+) -> Vec<String> {
     if timeout.is_zero() {
         return Vec::new();
     }
@@ -2246,7 +2389,7 @@ pub(crate) fn origin_head_oids(main: &Path, timeout: std::time::Duration) -> Vec
             crate::forge::batch_mode_ssh_command(main),
         )
         .stdin(std::process::Stdio::null())
-        .args(["ls-remote", "--heads", "origin"]);
+        .args(args);
     let Some(out) = crate::command_output_with_timeout(cmd, timeout) else {
         return Vec::new();
     };
@@ -2261,7 +2404,7 @@ pub(crate) fn origin_head_oids(main: &Path, timeout: std::time::Duration) -> Vec
         .collect();
     oids.sort_unstable();
     oids.dedup();
-    if oids.len() > ORIGIN_HEADS_CAP {
+    if oids.len() > cap {
         return Vec::new();
     }
     oids
@@ -2484,6 +2627,9 @@ const REF_TIPS_SCRIPT: &str = concat!(
 /// The line [`REF_TIPS_SCRIPT`] prints between the ref tips and the
 /// candidate commits.
 const TIPS_SEPARATOR: &str = "--";
+
+// trace:TASK-1222 | ai:codex
+const GC_STASH_ENTRIES: &str = stash_entries_sh!();
 
 /// Inside the probe sandbox: how many commits the clone holds that origin
 /// does not: reachable from ANY ref (every branch, tag, HEAD) or stash entry,
