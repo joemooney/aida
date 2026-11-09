@@ -2115,6 +2115,31 @@ fn bug_2502_loop_guard_requires_a_blocking_reviewer_shelf() {
 
 // trace:BUG-2502 | ai:codex
 #[test]
+fn bug_2502_deliberate_status_edit_exits_loop_guard_shelf() {
+    let mut req = parked("BUG-2502");
+    req.failure_reason = None;
+    req.status = RequirementStatus::Approved;
+    assert!(loop_guard_park(&mut req));
+    req.add_comment(aida_core::Comment::new(
+        "advisor".into(),
+        "investigating".into(),
+    ));
+    assert!(rework_is_review_shelf(&req));
+    aida_core::conflict::set_status_recorded(&mut req, RequirementStatus::Approved, "advisor");
+    assert!(!rework_is_review_shelf(&req));
+    aida_core::conflict::set_status_recorded(
+        &mut req,
+        RequirementStatus::NeedsAttention,
+        "advisor",
+    );
+    assert!(
+        !rework_is_review_shelf(&req),
+        "older loop history grants no shelf"
+    );
+}
+
+// trace:BUG-2502 | ai:codex
+#[test]
 fn bug_2502_repeated_blocking_review_is_parked_before_requeue() {
     for (kind, verdict) in [
         ("verdict:request-changes", "RequestChanges"),
@@ -2156,6 +2181,19 @@ fn bug_2502_repeated_blocking_review_is_parked_before_requeue() {
                 .iter()
                 .any(|entry| entry.author == aida_core::conflict::LOOP_GUARD_AUTHOR),
             "the handler must have parked the repeated {kind} review"
+        );
+        assert!(
+            storage.queue_list("codex", true).unwrap().is_empty(),
+            "{kind}"
+        );
+        // The first return-to-flight clears failure_reason. The guard's
+        // history must still prevent a third blind round on the next retry.
+        assert!(req.failure_reason.is_none(), "{kind}");
+        let _retry = rework_as(&storage, "BUG-2502", None, false);
+        assert_eq!(
+            status_of(&storage, "BUG-2502"),
+            RequirementStatus::NeedsAttention,
+            "{kind}"
         );
         assert!(
             storage.queue_list("codex", true).unwrap().is_empty(),

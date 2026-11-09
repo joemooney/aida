@@ -316,18 +316,31 @@ pub(crate) fn needs_attention_parks(store: &aida_core::RequirementsStore) -> Vec
 /// Only a reviewer shelf can complete the repeated-review loop. A punt or CI
 /// pause may retain the same imported review while an advisor resolves a new
 /// obstacle; replaying that receipt must not undo the triage decision.
+/// A loop-guard park remains a review shelf until a deliberate status edit;
+/// returning to flight has already cleared its original failure marker.
 // trace:BUG-2502 | ai:codex
 pub(crate) fn rework_is_review_shelf(req: &Requirement) -> bool {
     req.status == RequirementStatus::NeedsAttention
         && req.attention_reason.is_none()
-        && req.failure_reason.as_ref().is_some_and(|failure| {
-            // Review recording and drain shelving use different rejection slugs.
-            failure.phase == "reviewer"
-                && matches!(
-                    failure.kind.as_str(),
-                    "verdict:request-changes" | "verdict:rejected" | "verdict:reject"
-                )
-        })
+        && (req
+            .history
+            .iter()
+            .rev()
+            .find(|entry| {
+                entry
+                    .changes
+                    .iter()
+                    .any(|change| change.field_name == "status")
+            })
+            .is_some_and(|entry| entry.author == aida_core::conflict::LOOP_GUARD_AUTHOR)
+            || req.failure_reason.as_ref().is_some_and(|failure| {
+                // Review recording and drain shelving use different rejection slugs.
+                failure.phase == "reviewer"
+                    && matches!(
+                        failure.kind.as_str(),
+                        "verdict:request-changes" | "verdict:rejected" | "verdict:reject"
+                    )
+            }))
 }
 
 /// The BUG-1213 loop guard's write: return the spec to NeedsAttention after
@@ -778,13 +791,6 @@ pub(crate) fn handle_queue_rework(
             }
             record_role_activity(&spec_id, "rework");
             update_manifest_for_status(&spec_id, &format!("{:?}", new_status));
-            println!(
-                "{} {} status: {} → {}",
-                crate::glyph(crate::glyphs::Glyph::Check).green(),
-                display_id.bold(),
-                current_status.to_string().dimmed(),
-                new_status.to_string().cyan(),
-            );
         }
     }
 
@@ -907,6 +913,20 @@ pub(crate) fn handle_queue_rework(
                 );
                 return Ok(());
             }
+        }
+    }
+
+    // Report success only after the repeated-review guard can re-park the spec.
+    // trace:BUG-2502 | ai:codex
+    if let Some(ref new_status) = target_status {
+        if new_status != &current_status {
+            println!(
+                "{} {} status: {} → {}",
+                crate::glyph(crate::glyphs::Glyph::Check).green(),
+                display_id.bold(),
+                current_status.to_string().dimmed(),
+                new_status.to_string().cyan(),
+            );
         }
     }
 
