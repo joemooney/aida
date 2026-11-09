@@ -15,7 +15,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-08T19:27:28.525198886Z
-modified_at: 2026-11-09T05:07:07.103767201Z
+modified_at: 2026-11-09T05:25:37.372384558Z
 req_type: Bug
 comments:
 - id: 01a1bcd8-beaf-7582-aa0b-006077ac5867
@@ -189,6 +189,47 @@ comments:
   created_at: 2026-11-09T05:04:27.388919936Z
   modified_at: 2026-11-09T05:04:27.388919936Z
   session_id: 7aacb1ed-ebaa-4da4-a195-500864e99e7d
+- id: 01a1bec4-e5dc-7c63-922c-e40321debbc3
+  author: dirtlab
+  content: |
+    BUG-2501 native rebuild handoff. Source edits remain uncommitted.
+
+    Rebuilt from current main 504b9039dd, using archived af8599f5a2 only as reference; no merge of the superseded PR. Main's pull_rebase_store_retry body and pending-change refusal are byte-for-byte unchanged. Main's conflict-marker validators and BUG-2490 test file are unchanged. Main already fences pickup before implicit queue writes; that ordering is retained and exercised.
+
+    Changed files:
+    - aida-core/src/conflict.rs: upstream scalar policy with three-way tags, relationships and dependencies, ordered append-only evidence and preserved hypothesis evidence; regression for the open set-loss finding.
+    - aida-core/src/git_ops.rs: ordinary pulls share structural rebase resolution and emit merge notes; preserve symmetric reconciliation, refusal of unknown/deletion conflicts, index validation and abort diagnostics; stop failed continuation without new conflicts, and abort fallible resolution/staging/continuation paths. Ordinary pulls allow untracked metadata; the publication retry wrapper retains its stricter main policy.
+    - aida-core/src/git_ops/tests/bug_2501_pull_tests.rs: real two-clone set retention, scalar/evidence merge, failing-hook abort/restore and dirty/untracked admission regression.
+    - aida-cli-lib/src/store_sync.rs: failed pulls refuse stale local continuation; local-only stores still work; pending allocation retries stop immediately with accurate recovery context. Added executed failure and allocation-retry regressions.
+    - aida-cli-lib/src/store_push_pull.rs, coordination.rs and db_block.rs: accurate dirty recovery hints and refusal propagation instead of unreachable/local-only outcomes.
+    - aida-cli-lib/src/burndown_run.rs: initial and residual sync errors stop queueing, integration and follow-up.
+    - aida-cli-lib/src/tests/bug_2451_pickup_entry_tests.rs: pickup-before-write and initial/residual burndown failure assertions.
+    - aida-cli-lib/src/tests/bug_2194_rollback_caller_tests.rs: synthetic allocation authority explicitly mode 0600; rollback assertions unchanged.
+    - aida-cli-lib/src/queue_cmd_args.rs, requirements_cli.rs, tests/golden/cli_help_snapshot.txt, docs/advanced/multi-node.md and docs/cli/10-storage.md: help and policy descriptions.
+    - scripts/store-writers.toml: move allocation pull inventory to extracted retry helper and retain host-only lock restrictions, without changing unrelated rows/comments.
+
+    Executed validation:
+    - Core pull suite: 8 passed, j20261109T051017876-2-0.
+    - Unmodified BUG-2490 suite: 12 passed, j20261109T051305109-2-0.
+    - CLI sync/allocation failure suite: 2 passed, j20261109T051306283-2-0.
+    - CLI help golden: 1 passed, j20261109T051307462-2-0.
+    - Final pickup/burndown suite: 2 passed, j20261109T051549436-2-0 (includes initial and residual burndown refusal).
+    - Roster revocation conflict: 1 passed, j20261109T051913246-2-0.
+    - Rollback caller suite: 6 passed, j20261109T052225240-2-0; assertions unchanged. untested=false for the targeted work.
+    - Store writer inventory: 3420 sites / 293 mappings; 52 inventory fixtures passed. Git maintenance ratchet 8 passed; ownership liveness ratchet 2 passed. Store mutation tests 30 passed; trace-header fixtures 9 passed, with no stranding violations. rustfmt and git diff --check passed.
+    - First core run caught a copied fixture delimiter error, corrected before successful core runs. First rollback run failed before assertions because shared-write fixture permissions violated the allocation trust check; only fixture permissions were corrected.
+    - make check-ci-fast was interrupted when its current fast tier unexpectedly invoked Cargo directly; no full fast-gate or published-head CI result claimed. All claimed Rust execution used the lane job runner. Codegraph client is absent (doctor confirmed); navigation used rg without changing the shared index.
+
+    Host dependencies / incomplete acceptance:
+    1. Satisfy the advisor's fresh-branch publication requirement; do not revive PR-3699. The seat's HEAD started exactly at main but its branch label remains bug-b6b1278890774ef993d2ebc327862470-266. Git metadata is read-only here, so branch creation/renaming is a host action.
+    2. AC4 remains incomplete: deploy the corrected binary, then retire the dell1 stopgaps. /tmp/BUG-2501-remove-stopgaps.patch passes patch --dry-run -d /home/dirtlab -p1. It replaces wrapper calls with fail-closed ordinary sync and deletes store-sync.sh and store-resolve.py. These host files are outside the writable roots. Keep Refs and completion credit withheld until retirement is confirmed.
+
+    Recorded lease-bound native publication declaration: [AI:codex] fix(store): rebuild structural pulls on main and stop failed sync writes (Refs BUG-2501).
+    No commit, push, PR creation, queue done, pr ship or review record performed. Existing hold/punt vetoes remain in force.
+  created_at: 2026-11-09T05:25:37.372384558Z
+  modified_at: 2026-11-09T05:25:37.372384558Z
+  session_id: 01a1beb3ee5d
+  harness_version: codex-cli 0.167.0
 history:
 - id: 01a1bcc3-bd29-7692-a764-d1e8c8dbaa00
   author: aida-session-start
