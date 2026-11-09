@@ -29,7 +29,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-04T02:34:20.173245Z
-modified_at: 2026-11-09T13:48:06.524889108Z
+modified_at: 2026-11-09T13:48:24.127114898Z
 req_type: Story
 relationships:
 - rel_type:
@@ -897,6 +897,21 @@ comments:
     test-timings: BUDGET: aida-cli-lib defer_resurface::tests::story2402_s4_canonical_snapshot_and_legacy_only_run: 10.2s with no budget entry (limit 10s for an unbudgeted test). Make it faster, or add it to scripts/test-time-budget.to
   created_at: 2026-11-09T13:48:06.524889108Z
   modified_at: 2026-11-09T13:48:06.524889108Z
+- id: 01a1c091-3457-74d3-be0e-470a96f0d65d
+  author: joe
+  content: |-
+    REVIEW FINDINGS TO ADDRESS (PR #3639):
+    Verdict: CHANGES REQUESTED
+    Reviewed commit: 3791bd00b8af
+    Recorded: 2026-11-09T12:36:49.232312826+00:00
+    Findings:
+    1. minor (contract-drift, unfixed from the 108063acebe round): 'findings recur --until' parks and dequeues a spec without the team identity guard that 'aida defer' applies. findings_cli_policy sets team_identity_write: false (aida-cli-lib/src/findings_gate.rs:2321), is_write_command reads that policy (status_awaiting.rs:1835), and golden rows story_1728_main_policy.tsv pin it false while 'defer' rows are true. With AIDA_TEAM_REQUIRE_USER=1 under the default identity, 'aida defer X --until date:...' is refused and 'aida findings recur X --until date:...' succeeds. This PR added the guard to conditional handoffs for this reason (session_misc.rs team_identity_write_guard call). Set team_identity_write when until is Some, update the golden rows, and add a refusal test for recur.
+    2. minor (contract-drift, new): docs/cli/02-specs.md:353-356 contradicts this PR's sweep. It still says the run reports 'N deferrals awaiting typed-condition migration' (defer_resurface.rs:197 now prints 'N deferrals with unparseable triggers requiring repair') and still lists 'a spec condition naming a spec that does not exist' as a nonzero-exit error, while defer_resurface.rs:181-188 and the new text a few lines above now keep that case parked as Unknown. Update both sentences.
+    3. cosmetic (stale prompt, unfixed from the 108063acebe round): .aida/config.toml:305, the defer-resurface-route prompt, still says unparseable triggers stay parked 'awaiting typed-condition migration'. This PR changes the wording to 'repair required' and the docs say the migration has been applied, so the advisor routed by this job gets outdated guidance.
+    4. BLOCKING (CI gate, wait state): CI has not finished at 3791bd00b8af (lib-0, cli-1, rest, gates and contracts in progress; lib-1 and cli-0 queued when this verdict was recorded), so the green-at-head gate is unmet and no test named above has CI evidence at this head. merge-hold-gate is red by design for this supervised spec and is not an implementer item.
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
+  created_at: 2026-11-09T13:48:24.023430530Z
+  modified_at: 2026-11-09T13:48:24.023430530Z
 history:
 - id: 01a1a468-9c3a-76d2-ab8c-12bf6457966b
   author: joe
