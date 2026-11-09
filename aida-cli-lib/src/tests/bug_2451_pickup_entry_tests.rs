@@ -243,6 +243,7 @@ fn queue_work_sync(
 ) -> anyhow::Result<()> {
     crate::queue_cmd::handle_queue_work(
         storage,
+        None,
         crate::test_env::HERMETIC_TEST_USER,
         Some("BUG-2451"),
         None,

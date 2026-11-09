@@ -26,6 +26,8 @@ pub(crate) const DEFAULT_CAP: usize = 5;
 /// signal, so a quiet `aida status` stays quiet.
 #[derive(Debug, Default, Clone)]
 pub(crate) struct AwaitingReport {
+    // trace:TASK-3452 | ai:codex
+    pub ci_relay_skipped: Vec<crate::ci_relay::SkippedAttempt>,
     // trace:STORY-2336 | ai:codex
     pub idle_eligible: Vec<crate::idle_eligible::IdleEligibleItem>,
     /// Open changes `aida review watch` is skipping without reviewing them,
@@ -1879,6 +1881,8 @@ impl AwaitingReport {
     // trace:BUG-1739 | ai:claude
     pub(crate) fn contributions(&self) -> Vec<(&'static str, usize)> {
         vec![
+            // trace:TASK-3452 | ai:codex
+            ("ci_relay_skipped", self.ci_relay_skipped.len()),
             ("prs", self.mergeable_prs.len()),
             ("idle_eligible", self.idle_eligible.len()),
             // trace:BUG-2426 | ai:claude
@@ -2054,6 +2058,28 @@ impl AwaitingReport {
             "reviewer_actionable: {} of {} routed",
             self.reviewer_actionable_count(),
             self.reviewer_queue_items.len()
+        );
+        // trace:TASK-3452 | ai:codex
+        let ci_rows: Vec<Vec<String>> = self
+            .ci_relay_skipped
+            .iter()
+            .map(|item| {
+                vec![
+                    item.sha.clone(),
+                    item.attempt.to_string(),
+                    item.reason.clone(),
+                    item.command.clone(),
+                ]
+            })
+            .collect();
+        let _ = writeln!(
+            out,
+            "{}",
+            crate::toon::table_raw(
+                "ci_relay_skipped",
+                &["sha", "attempt", "reason", "command"],
+                &ci_rows
+            )
         );
         // trace:BUG-2426 | ai:claude
         let skipped: Vec<Vec<String>> = self
@@ -2580,6 +2606,15 @@ impl AwaitingReport {
             budget -= 1;
         }
 
+        // trace:TASK-3452 | ai:codex
+        for item in &self.ci_relay_skipped {
+            if budget == 0 {
+                overflow += 1;
+                continue;
+            }
+            writeln!(w, "  {}", item.message())?;
+            budget -= 1;
+        }
         // trace:BUG-2426 | ai:claude
         for item in &self.review_watch_skipped {
             if budget == 0 {
@@ -3095,6 +3130,8 @@ impl AwaitingReport {
         serde_json::json!({
             "total": self.total(),
             "idle_eligible": self.idle_eligible,
+            // trace:TASK-3452 | ai:codex
+            "ci_relay_skipped": self.ci_relay_skipped,
             // trace:BUG-2426 | ai:claude
             "review_watch_skipped": self.review_watch_skipped,
             "mergeable_prs": self.mergeable_prs.iter().map(|p| serde_json::json!({
@@ -3337,6 +3374,13 @@ impl AwaitingReport {
         }
         if !self.idle_eligible.is_empty() {
             parts.push(format!("{} idle eligible", self.idle_eligible.len()));
+        }
+        // trace:TASK-3452 | ai:codex
+        if !self.ci_relay_skipped.is_empty() {
+            parts.push(format!(
+                "{} CI results need exact read",
+                self.ci_relay_skipped.len()
+            ));
         }
         // trace:BUG-2426 | ai:claude
         if !self.review_watch_skipped.is_empty() {

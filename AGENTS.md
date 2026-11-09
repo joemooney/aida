@@ -26,8 +26,9 @@ Claude retains AIDA containment. Missing non-Claude vendor keys still refuse;
 unsupported native vendors refuse. See OVERVIEW.md.
 <!-- trace:TASK-2631 | ai:codex -->
 
-Native `aida ship -m '<subject> (Refs ID)'` records a lease-bound publication
-declaration for the host; failed exits stay Refs and punt/hold vetoes apply first.
+Native `aida ship -m '<subject> (ID)'` or `'<subject> (Refs ID)'` records a
+lease-bound publication declaration for the host; failed exits stay Refs and
+punt/hold vetoes apply first. See the [publication handshake](docs/cli/04-git-lifecycle.md#aida-ship).
 <!-- trace:TASK-2902 | ai:codex -->
 
 `aida pr hold` preserves Git lookup diagnostics instead of calling every
@@ -435,9 +436,9 @@ commits while fetching and pushing origin's SHA. See
 [git lifecycle](docs/cli/04-git-lifecycle.md#aida-pull).
 <!-- trace:BUG-1803 | ai:codex -->
 
-The project schedule runs a read-only merged-worktree guard every 30 days and
-routes failures to the advisor. The operator reviews `aida worktree gc` and
-runs `aida worktree gc --yes --force` at a TTY; forced cleanup stays outside
+The project schedule runs a weekly read-only lifecycle GC report and
+routes findings and partial scans to the advisor. The operator reviews `aida worktree gc` and
+runs `aida worktree gc --apply` at a TTY; cleanup stays outside
 scheduled and headless jobs.
 <!-- trace:TASK-1596 | ai:codex -->
 
@@ -469,7 +470,7 @@ next agent.
 
 ## Project Orientation
 
-For code navigation, use `codegraph callers <symbol>`, `codegraph callees <symbol>` or `codegraph impact <symbol>` against the shared primary-checkout index (main, not your lane branch); confirm “no callers” with `rg`, since large or unindexed files can be absent. Never run `codegraph init`, `index` or `sync` from a lane. Use `aida doctor check codegraph` to diagnose missing tools or unreachable/stale indexes.
+For code navigation, use the reviewed host client `/home/joe/ai/aida/.codegraph/proxy-state/bin/codegraph callers <symbol>` (or `callees <symbol>` / `impact <symbol>` with that same absolute executable) against the shared primary-checkout index (main, not your lane branch); confirm “no callers” with `rg`, since large or unindexed files can be absent. Never run `codegraph init`, `index` or `sync` from a lane. Use `aida doctor check codegraph` to diagnose missing tools or unreachable/stale indexes. The host must deploy this fixed client path before use; do not derive an executable from the seat’s `.codegraph` link. AIDA-contained and AF_UNIX-denied seats still require separate admission and acceptance.
 <!-- trace:STORY-2630 | ai:codex -->
 
 AIDA is an agent-collaboration substrate: stable spec IDs, typed

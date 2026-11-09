@@ -4,6 +4,7 @@
 //! module just maps the subcommand variant to a `ChangelogOptions` and calls
 //! `changelog::run`.
 // trace:TASK-299 | ai:claude
+// trace:TASK-3428 | ai:codex
 
 use anyhow::Result;
 
@@ -85,7 +86,6 @@ fn run_changelog(
     matches: &clap::ArgMatches,
     _ctx: &crate::command_registry::DispatchCtx,
 ) -> anyhow::Result<()> {
-    use crate::*;
     let args = <ChangelogArgs as clap::FromArgMatches>::from_arg_matches(matches)?;
     let cl_cmd = &args.inner;
     return self::handle_changelog_command(cl_cmd);

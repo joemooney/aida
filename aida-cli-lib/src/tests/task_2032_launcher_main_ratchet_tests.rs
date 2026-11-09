@@ -16,11 +16,11 @@ const ENTRY_POINTS: &[(&str, &str)] = &[
     // Launch entry points that chdir into a seat: checked below to resolve
     // the host main BEFORE their chdir.
     ("session_start.rs", "session_start_with_receipt"),
-    ("queue_cmd.rs", "handle_queue_work"),
+    ("queue_cmd/work.rs", "handle_queue_work"),
     // `queue work --no-launch` hints, rendered before any chdir.
-    ("queue_cmd.rs", "headless_launch_hint"),
-    ("queue_cmd.rs", "deferred_interactive_launch_hint"),
-    ("queue_cmd.rs", "build_queue_work_claude_command"),
+    ("queue_cmd/work.rs", "headless_launch_hint"),
+    ("queue_cmd/work.rs", "deferred_interactive_launch_hint"),
+    ("queue_cmd/work.rs", "build_queue_work_claude_command"),
     // Host-cwd entry wrappers in the session module.
     ("session.rs", "spawn_vendor_headless_with_seat"),
     ("session.rs", "spawn_codex_headless_fork"),
@@ -65,7 +65,7 @@ const CHDIR_ENTRY_POINTS: &[(&str, &str, &str)] = &[
         concat!("std::env::", "set_current_dir", "(&worktree_path)"),
     ),
     (
-        "queue_cmd.rs",
+        "queue_cmd/work.rs",
         "handle_queue_work",
         concat!("std::env::", "set_current_dir", "(&lease.worktree_path)"),
     ),
@@ -86,9 +86,21 @@ fn production_calls(src: &Path) -> Vec<(String, String, usize)> {
         .map(|e| e.path())
         .filter(|p| p.extension().is_some_and(|x| x == "rs"))
         .collect();
+    if src.join("queue_cmd").is_dir() {
+        files.extend(
+            std::fs::read_dir(src.join("queue_cmd"))
+                .unwrap()
+                .map(|e| e.unwrap().path())
+                .filter(|p| p.extension().is_some_and(|x| x == "rs")),
+        );
+    }
     files.sort();
     for path in files {
-        let name = path.file_name().unwrap().to_string_lossy().into_owned();
+        let name = path
+            .strip_prefix(src)
+            .unwrap()
+            .to_string_lossy()
+            .into_owned();
         let text = std::fs::read_to_string(&path).unwrap();
         let lines: Vec<&str> = text.lines().collect();
         let mut current = String::new();

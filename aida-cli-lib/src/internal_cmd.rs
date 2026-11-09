@@ -2,6 +2,7 @@
 //! (advisor code gate, no-verify-bypass recorder, automatic advisor-lock gate).
 //!
 //! Extracted verbatim from `main.rs` (SPIKE-78, pure-movement refactor).
+// trace:TASK-3428 | ai:codex
 
 use crate::cli;
 use crate::{
@@ -241,7 +242,6 @@ fn run_internal(
     matches: &clap::ArgMatches,
     _ctx: &crate::command_registry::DispatchCtx,
 ) -> anyhow::Result<()> {
-    use crate::*;
     let args = <InternalArgs as clap::FromArgMatches>::from_arg_matches(matches)?;
     let InternalArgs { command } = &args;
     return self::handle_internal_command(command);
