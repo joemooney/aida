@@ -60,17 +60,27 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-09T06:49:26.752480304Z
-modified_at: 2026-11-09T06:50:04.762381087Z
+modified_at: 2026-11-09T06:50:11.372987917Z
 req_type: Task
 relationships:
 - rel_type: Supersedes
   target_id: 01a1bc9e-7695-7562-8f0d-d9022e32d9e6
   created_at: 2026-11-09T06:50:04.762376065Z
   created_by: joe
+- rel_type: Supersedes
+  target_id: 01a1bd2f-498a-74f1-8550-251d0f51933a
+  created_at: 2026-11-09T06:50:11.372983580Z
+  created_by: joe
 history:
 - id: 01a1bf12-3d5d-7450-af72-7b705154b22a
   author: joe
   timestamp: 2026-11-09T06:50:06.045055538Z
+  session_id: 01a1beff-fc3b-78e2-93e2-9b0c283b0339
+  harness_version: 2.1.319 (Claude Code)
+  changes: []
+- id: 01a1bf12-5732-7452-a7e3-ba6abb8959aa
+  author: joe
+  timestamp: 2026-11-09T06:50:12.658110108Z
   session_id: 01a1beff-fc3b-78e2-93e2-9b0c283b0339
   harness_version: 2.1.319 (Claude Code)
   changes: []
