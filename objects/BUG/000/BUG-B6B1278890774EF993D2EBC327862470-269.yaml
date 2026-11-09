@@ -8,7 +8,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-08T21:20:08.484660577Z
-modified_at: 2026-11-09T08:50:44.471538721Z
+modified_at: 2026-11-09T09:07:11.417764697Z
 req_type: Bug
 comments:
 - id: 01a1beb1-ae7c-7c52-89a5-00a6bc02eeb0
@@ -48,6 +48,20 @@ comments:
   modified_at: 2026-11-09T08:44:15.030588328Z
   session_id: 01a1beff-fc3b-78e2-93e2-9b0c283b0339
   harness_version: 2.1.319 (Claude Code)
+- id: 01a1bf8f-bfb9-7ee0-b8c3-c55a60f11cc2
+  author: dirtlab
+  content: |
+    Addressed all three PR #3715 review findings. Failed adopted-seat launch setup now restores the original orphan lease atomically without replacing concurrent records before removing its successor; a regression drives a refused run_pickup_launch and then successfully adopts the same dirty tree again. Dirty resume now uses a committed-tree merge-tree probe, admitting a non-conflicting main advance while refusing conflicts/probe failures without changing HEAD, index or pending files. Behind-PR-head and dirty-main refusal messages include host add/commit/fetch/merge/retry commands, with matching CLI docs.
+
+    Changed files: aida-cli-lib/src/seat_clone.rs; aida-cli-lib/src/session_start.rs; aida-cli-lib/src/tests/bug_2223_orphan_seat_reentry_tests.rs; docs/cli/06-roles-sessions.md. The orphan suite initially had seven fixture setup failures under lane umask 0002; its queued_scope fixture now restricts its synthetic allocation setting to 0600, satisfying the existing reader contract without changing production checks.
+
+    Validation through the lane runner: focused bug_2504 job j20261109T084922160-2-0: 2 passed; rework_merge_tests job j20261109T085050878-2-0: 10 passed; final orphan_reentry_tests job j20261109T090112104-2-0: 21 passed. rustfmt --check and git diff --check pass. Codegraph fixed client is absent and doctor reports missing tool; navigation used rg.
+
+    Edits remain uncommitted for host publication. Recorded native declaration: [AI:codex] fix(queue): preserve adopted seats on rework refusal (Refs BUG-2504). No commit, push, PR creation, queue completion, review verdict or PR ship performed from this seat. BUG-2504 remains In Progress: original #3641/#3643 reproduction and the reported check-ci-fast/sccache issue remain unverified; this is the requested review-fix slice.
+  created_at: 2026-11-09T09:07:11.417764697Z
+  modified_at: 2026-11-09T09:07:11.417764697Z
+  session_id: 01a1bf7dcc97
+  harness_version: codex-cli 0.167.0
 history:
 - id: 01a1beaa-5bee-7821-b878-3b983c03f8ae
   author: joe
