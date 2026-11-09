@@ -146,6 +146,8 @@ pub(crate) fn render_advisor_handoff(
 pub(crate) fn handle_advisor_command(cmd: &crate::AdvisorCommand) -> anyhow::Result<()> {
     use crate::*;
     match cmd {
+        // trace:STORY-2571 | ai:codex
+        AdvisorCommand::Loops(action) => crate::review_watch::service::command(action),
         AdvisorCommand::Register {
             uuid,
             vendor,

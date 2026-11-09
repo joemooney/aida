@@ -825,14 +825,19 @@ pub(crate) fn handle_queue_rework(
         // BUG-2430: a review keyed by the spec's open PR counts too.
         // trace:BUG-2430 | ai:claude
         let open_change = spec_open_change_key(&root, &[display_id.as_str(), spec_id.as_str()]);
-        let findings =
-            match resolve_rework_findings(&root, &display_id, &spec_id, open_change.as_deref()) {
-                Ok(block) => block,
-                Err(why) => {
-                    eprintln!("warning: no review findings imported for {display_id}: {why}");
-                    None
-                }
-            };
+        let findings = match resolve_rework_findings(
+            &root,
+            &display_id,
+            &spec_id,
+            open_change.as_deref(),
+        ) {
+            Ok(block) => block,
+            Err(why) => {
+                // trace:BUG-2507 | ai:codex
+                eprintln!("warning: no review findings imported for {display_id}: {why}. Read the review comment before starting rework.");
+                None
+            }
+        };
         if let Some(block) = findings {
             let author = get_default_author();
             let comment = aida_core::Comment::new(author, block.clone());

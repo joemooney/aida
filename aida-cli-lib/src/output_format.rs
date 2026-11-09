@@ -1,7 +1,18 @@
 //! Output format configurations (STORY-1488 slice 1)
 // trace:STORY-1488 | ai:claude
 
-use crate::*;
+// trace:TASK-3428 | ai:codex
+use crate::cli::OutputFormat;
+use crate::kernel::find_project_root;
+use crate::leases::list_leases;
+use crate::worktree_gc::find_main_worktree_root;
+use crate::{
+    build_list_fields_lines_with, format_weight, resolve_agent_mode, toon_status_token,
+    TOON_LIST_DEFAULT_FIELDS, TOON_LIST_FIELD_ALIASES, TOON_LIST_KNOWN_FIELDS,
+};
+use crate::{headless_tail, tail_cmd};
+use anyhow::Result;
+use std::io::IsTerminal;
 
 /// TASK-970: the agent-ergonomics output gate. Two AIDA surfaces lean toward
 /// agent-friendly output when the caller is a non-interactive agent rather than

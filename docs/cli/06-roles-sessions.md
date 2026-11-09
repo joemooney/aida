@@ -184,6 +184,59 @@ An inherited reviewer route, an unrelated anchor, or unavailable change metadata
 does not authorize coexistence.
 <!-- trace:TASK-1801 | ai:codex -->
 
+<!-- trace:TASK-1222 | ai:codex -->
+`aida worktree gc` previews lifecycle cleanup across linked worktrees and private
+`aida-seat-*` clones in the configured worktree parent. `--json` reports per-item
+reasons, candidate/retained counts, and estimated logical bytes reclaimable or
+freed. It does not delete by default. After reviewing the preview, an operator
+can run `aida worktree gc --apply` at an interactive host terminal; scheduled
+and unattended contexts refuse removal. The legacy `--yes --force` combination
+also requests removal through the same gate. Unattended scans have a soft budget
+and report partial counts plus the number of deferred entries; a partial scheduled
+scan routes to the advisor. A runtime cursor resumes after the last inspected path
+on the next scheduled scan, so each weekly report advances by its inspected count.
+Ad-hoc previews (including piped `--json` runs) start at the sorted inventory
+head and leave the weekly cursor unchanged.
+Interactive host scans inspect the full inventory.
+Byte walks are bounded; incomplete estimates are flagged and do not affect eligibility. Byte totals are lower bounds when estimates are incomplete.
+The weekly report replaces the former monthly guard.
+
+A candidate must have no remaining session lease (even a dead-process lease
+must first be ended/reaped), no operator or Git worktree lock, no uncommitted
+or untracked work. Linked worktrees also retain ignored local state, except
+regenerable target output, Python `.pyc` files under `__pycache__`, AIDA runtime
+links/caches, notice/onboarding markers and empty sandbox placeholders.
+Ignored `.aida/brief.md` and `.aida/events.jsonl` remain protected as work context
+and audit evidence, along with notes, holds and review verdicts.
+Seat clone probes do not inspect ignored files. All candidates require
+no live filesystem holders. The invoking checkout, pool reservations and live pool
+owners are retained. Main, default/store branches,
+detached checkouts, submodules, and unreadable evidence stay protected. Linked
+worktrees qualify when their HEAD is an ancestor of the default branch or an
+exact same-repository merged/closed PR head. Seat clones additionally require a
+matching host base pin and object-store binding, an exact merged/closed PR head,
+and **all local branches, seat-created or moved tags, HEAD and stash entries
+covered by host-verified origin evidence**. Tags with the exact same name and
+object ID on the host are inherited host history and excluded from seat work;
+a secondary remote, a seat-written tracking ref or a host-only branch cannot
+excuse unpushed commits. Origin-advertised PR/MR head refs can
+cover a published head after a squash merge deletes its source branch. An open
+PR on a reused branch prevents the PR-based cleanup proof. Missing forge evidence
+retains the tree. GC also conservatively includes every clone tracking ref as
+local history to preserve. A stale tracking ref whose commits are no longer
+advertised by origin can therefore retain an otherwise eligible clone; the
+operator must review and prune stale tracking refs before retrying. GC never
+prunes them automatically. <!-- trace:TASK-1222 | ai:codex -->
+Reviewer checkouts named `pr-N` resolve GitHub PR N directly;
+the response must still match that number, repository and exact checkout HEAD.
+
+Before removal, GC rechecks identity, HEAD, branch, ownership and eligibility,
+then uses the existing mailbox-retention and process-holder teardown guards.
+Linked local branch refs are compare-deleted only if unchanged and no longer
+checked out. The weekly `worktree-lifecycle-gc` scheduled job runs only the
+preview (`aida worktree gc --fail-on-findings`), routing counts and byte estimates to the advisor
+when candidates need operator review; it never applies cleanup.
+
 **Chains with** — `aida queue work` ([Chapter 3](03-work-autonomy.md)) leases under the hood; `aida session start --launch` is the manual equivalent. After review + merge, `aida session end` tears the worktree down. Cross-reference `aida agent new` for the multi-process launcher.
 
 ---
@@ -794,6 +847,102 @@ This host step replaces the advisor's manual auto-publish workaround.
 <!-- trace:STORY-2475 | ai:codex -->
 
 ## Watching for new review heads
+
+For an advisor service that follows grant rotation, start the operator's
+`aida deputy shell run` in its ordinary advisor terminal, then launch the
+advisor through `aida agent new ... --role advisor`. The trusted host launcher
+bootstraps review-watch on a running default deputy before entering the sandbox;
+subsequent launches use the deputy recorded in the service receipt. It can
+replace an operator-terminal binding with the advisor handle it just minted,
+subject to the same principal, newer issuance and non-widening successor checks.
+When no service receipt exists and no default deputy is running, launches skip
+rebind silently. Sub-advisors cannot take over their ancestor session's binding.
+No socket exemption is needed inside the advisor sandbox for this path.
+
+For a named deputy, first run `aida advisor loops rebind --deputy NAME` in the
+operator's advisor terminal before launching the advisor. Manual rebind from
+an advisor session is also available when that session has host socket access.
+The advisor grant must allow both `advisor` and `reviewer` child seats; the
+controller receives only reviewer delegation. `aida advisor loops status`
+reports the persisted binding, controller and blocked state without exposing
+grant handles; `--json` and `--format json` emit the same JSON document, and
+`--format toon` emits structured fields. Status also names the recovery guide.
+
+Rebind is a fixed operation on the deputy's authenticated socket, subject to
+its normal host-access restrictions. The host checks the peer's process
+binding, project, roster, complete parent chain, expiry and delegation. It
+refuses an older successor or a successor that widens the accepted delegation.
+The advisor launcher requests this same authenticated operation after creating
+a fresh grant, including each rotation. A failed automatic rebind prints host
+recovery guidance; advisor registration alone grants no service authority.
+
+The deputy supervises review-watch independently of script jobs. A rebind stops
+old-generation admission before a replacement controller starts. The supervisor
+waits for confirmed exit and retains unknown process identities or ambiguous
+spawn receipts. Controller restarts preserve all ordinary PR-head reservations;
+a refusal for one PR still leaves the remaining PRs available. Exited
+controllers move their grants into `retired_grants` in the service receipt,
+so in-flight reviewers keep their authority. Retirement retains the controller kernel key until cleanup revokes the grant,
+so descendants that inherited the session keyring keep their own keys. A replacement starts after the normal
+ten-second backoff even while review reservations remain unresolved, until four retired controller
+grants are pending. At that cap, status reports `blocked-retired-controllers`
+and replacement waits for review reconciliation or operator recovery. This bounds
+retained grants during repeated startup failures.
+Restart reconciliation completes persisted supersede intent when every recorded
+process and group is confirmed gone; live or ambiguous attempts remain reserved
+for the replacement controller or operator recovery. In particular, a reservation
+with no dispatcher identity can hide a spawn whose receipt was lost and retains
+capacity, without blocking controller restart. Retired grants are revoked only
+when no unresolved reservation or live or ambiguous descendant remains. Because
+legacy reservations lack grant ancestry, this cleanup conservatively considers
+all attempts in the shared watcher store. Status lists `retired_controllers` and
+`review_blockers` (PR, attempt token and phase). Deputy pause, stale heartbeat,
+authority loss or its existing mandate policy blocks admission. An expired
+advisor binding reports `blocked-authority` until a valid successor rebinds.
+
+Service binding and controller receipts live in `review-watch/service.json`
+under the existing admission lock; controller diagnostics are in
+`review-watch/service.log`. If a spawn receipt is ambiguous or the initialized
+service receipt disappears, use the recovery procedure below. This service
+covers review-watch; rework, train and dispatch serve retain their existing
+interfaces.
+
+### Review-watch service recovery
+
+Delegation deliberately only narrows during ordinary rotation. To accept a
+wider grant, change deputy, or recover a missing service receipt, the operator
+must reset the binding from a host terminal:
+
+1. Pause the recorded deputy with `aida deputy shell pause --name NAME`.
+   Inspect `aida advisor loops status`, `service.json`, `service.log` and the
+   ordinary review receipts. Let any recorded controller exit and let the
+   supervisor observe it; with an intact receipt it clears `worker` and
+   `child_grant` and retains the grant in `retired_grants` until reviews finish.
+   If `review_blockers` lists an orphaned reservation (including one with no
+   dispatcher identity), first confirm from host evidence that no descendant
+   survives, then run `aida review watch --release PR-N` for that reservation.
+   Release clears it only when no recorded process is alive; missing dispatcher
+   identity alone does not establish that an unrecorded descendant has exited.
+   Wait for all retired grants to be revoked before resetting the receipt.
+   If the receipt is missing or ambiguous, identify the controller from host process/grant records and
+   establish that it and its descendants have exited. Do not infer exit from
+   missing or sandbox-invisible PIDs. If a surviving grant cannot be reconciled,
+   wait for its parent advisor grant to expire before proceeding.
+2. Stop the operator-started deputy with Ctrl-C in its host terminal. Confirm
+   no controller remains. Keep the ordinary `state.json`, `initialized`,
+   history and dispatcher receipts: those still fence live review descendants.
+3. From the main checkout, remove only the service binding receipts:
+   `rm -f .aida/review-watch/service.json .aida/review-watch/service-initialized`.
+   Do not delete the directory or ordinary review reservations.
+4. Restart the deputy, bind it using the intended advisor grant with
+   `aida advisor loops rebind --deputy NAME` from the operator's advisor
+   terminal, then launch the new advisor. Check `aida advisor loops status`.
+
+This manual reset is not an automated stop command. Unknown process evidence
+must be resolved before removing service receipts. The supervisor checks every
+second, refreshes its heartbeat every two seconds, and writes unchanged blocked
+state only when it changes; the initialization marker is synced only at creation.
+<!-- trace:STORY-2571 | ai:codex -->
 
 `aida review watch` discovers open, non-draft GitHub PRs or GitLab MRs and
 starts ordinary attested reviewers as soon as a head is eligible. It does not

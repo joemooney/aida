@@ -324,9 +324,11 @@ sites = 3
 channels = ["worktree", "write"]
 sites = 1
 
+# Ordinary and staged MCP profile reads select only a closed policy tier.
+# trace:TASK-3223 | ai:codex
 [readers."aida-cli-lib/src/mcp.rs"]
 channels = ["worktree"]
-sites = 1
+sites = 2
 
 [readers."aida-cli-lib/src/mcp_translate.rs"]
 channels = ["other-file"]
@@ -989,6 +991,10 @@ codex_min_grant_secs = "policy"
 channels = ["write"]
 sites = 1
 
+# STORY-2641: host Cargo config selects the lane wrapper; never seat config.
+[readers."aida-cli-lib/src/lane_job.rs"]
+channels = ["other-file"]
+sites = 1
 # Lane host reads/writes user Cargo config, never project executable policy.
 # trace:STORY-2642 | ai:codex
 [readers."aida-cli-lib/src/lane_host.rs"]

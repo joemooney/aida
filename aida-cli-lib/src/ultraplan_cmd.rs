@@ -11,6 +11,7 @@
 //! `read_reserved_paths`) is shared with `aida compete` and stays in `main.rs`,
 //! reached here via `crate::`. Extracted verbatim from `main.rs` (SPIKE-78); no
 //! behavior change.
+// trace:TASK-3428 | ai:codex
 
 use anyhow::Result;
 use colored::Colorize;
@@ -244,7 +245,6 @@ fn run_ultraplan(
     matches: &clap::ArgMatches,
     _ctx: &crate::command_registry::DispatchCtx,
 ) -> anyhow::Result<()> {
-    use crate::*;
     let args = <UltraplanArgs as clap::FromArgMatches>::from_arg_matches(matches)?;
     let UltraplanArgs {
         spec,

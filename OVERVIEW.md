@@ -192,9 +192,9 @@ commits while fetching and pushing origin's SHA. See
 [git lifecycle](docs/cli/04-git-lifecycle.md#aida-pull).
 <!-- trace:BUG-1803 | ai:codex -->
 
-The project schedule runs a read-only merged-worktree guard every 30 days and
-routes failures to the advisor. The operator reviews `aida worktree gc` and
-runs `aida worktree gc --yes --force` at a TTY; forced cleanup stays outside
+The project schedule runs a weekly read-only lifecycle-worktree GC
+check and routes failures to the advisor. The operator reviews `aida worktree gc` and
+runs `aida worktree gc --apply` at a TTY; forced cleanup stays outside
 scheduled and headless jobs.
 <!-- trace:TASK-1596 | ai:codex -->
 
@@ -1846,3 +1846,28 @@ The TASK-1750 ratchet inventories compatibility consumers in
 `proc_identity_legacy_baseline.json` and prevents new private PID/start
 decisions. See the signed
 [process identity sketch](docs/plans/2026-11-05-story-2537-proc-identity.md).
+
+<!-- trace:STORY-2641 | ai:codex -->
+Lane test jobs opt into sccache when the host Cargo home's `config.toml`
+(or legacy `config`) selects `build.rustc-wrapper = "sccache"` or an absolute
+path ending in `sccache`. Jobs use `~/.cache/aida/lane-sccache`, never the
+operator's cache. Each job starts a foreground server inside its sandbox with a
+Unix-domain socket in private `/tmp`. The job prints final `sccache --show-stats`, requests
+`--stop-server`, and waits for the server process before sandbox teardown so
+pending local cache writes can drain. The Cargo wrapper receives only the job's
+server PID for health checks, excluding foreign clients with inaccessible temp
+directories. If startup fails, the job warns and runs Cargo with the cache
+disabled. Shutdown/statistics failures fail an
+otherwise successful job; Cargo failures retain their exit code. Timeouts and
+forced lane stops can still interrupt cache writes. Jobs share cached artifacts
+but have separate servers. Jobs retain host PID identity for the shared Cargo
+slot queue, whose tickets use process IDs and host liveness checks. Cargo home
+remains read-only and Cargo stays offline. One lane can poison another lane's
+cache; this is accepted for contained, CI-gated lanes, and grants no access to
+operator builds. Host sccache statistics do not measure these separate servers;
+cache-hit acceptance must inspect the lane server's statistics on each host.
+Agent children receive their host-recorded seat target and disabled wrapper
+through declared launch resources rather than parent build-environment values.
+The lane job runner alone opts into the lane cache. Recorded clones without a
+cargo target (including fresh/non-Rust seats and targets removed by host clean)
+launch with the wrapper disabled and no target override.

@@ -2445,6 +2445,7 @@ the queue, close delivered epics). Subcommands manage the live-advisor registrat
 Usage: aida advisor [OPTIONS] [COMMAND]
 
 Commands:
+  loops       Supervised advisor services (currently review-watch only)
   register    Record the current Claude or Codex session as the live advisor — writes
               `~/.aida/advisor.toml`. With no `--uuid`, reads `CODEX_THREAD_ID` (a Codex thread,
               which `advisor watch` forks with `codex exec fork`), else `CLAUDE_CODE_SESSION_ID`
@@ -2476,6 +2477,105 @@ Options:
           Bare spec-ids from the worklist, one per line — usable in `$(...)` / xargs (mirrors `aida
           human --short`). Ignored when a subcommand is given
 
+      --format <FORMAT>
+          Pin the output format regardless of whether stdout is a terminal: human = tables, toon =
+          compact agent output, json = machine JSON. Default (unset) is human at a TTY, toon when
+          piped/captured. Also settable via AIDA_OUTPUT_FORMAT (the flag wins)
+
+          Possible values:
+          - human: Human-readable tables / emoji (the interactive default at a TTY)
+          - toon:  Token-efficient TOON — the compact agent default when piped/captured
+          - json:  Machine JSON, for commands that support a JSON projection
+
+      --canonical-ids
+          Show node-local spec IDs in their canonical form instead of the node's friendly label (for
+          scripts). Also settable via AIDA_CANONICAL_IDS=1
+
+  -h, --help
+          Print help (see a summary with '-h')
+===== aida advisor loops
+Supervised advisor services (currently review-watch only)
+
+Usage: aida advisor loops [OPTIONS] <COMMAND>
+
+Commands:
+  status  Show review-watch's persisted binding and controller receipt
+  rebind  Bind review-watch to this advisor grant through the operator's deputy
+  help    Print this message or the help of the given subcommand(s)
+
+Options:
+      --format <FORMAT>
+          Pin the output format regardless of whether stdout is a terminal: human = tables, toon =
+          compact agent output, json = machine JSON. Default (unset) is human at a TTY, toon when
+          piped/captured. Also settable via AIDA_OUTPUT_FORMAT (the flag wins)
+
+          Possible values:
+          - human: Human-readable tables / emoji (the interactive default at a TTY)
+          - toon:  Token-efficient TOON — the compact agent default when piped/captured
+          - json:  Machine JSON, for commands that support a JSON projection
+
+      --canonical-ids
+          Show node-local spec IDs in their canonical form instead of the node's friendly label (for
+          scripts). Also settable via AIDA_CANONICAL_IDS=1
+
+  -h, --help
+          Print help (see a summary with '-h')
+===== aida advisor loops status
+Show review-watch's persisted binding and controller receipt
+
+Usage: aida advisor loops status [OPTIONS]
+
+Options:
+      --json
+          Emit the persisted service status as JSON
+
+      --format <FORMAT>
+          Pin the output format regardless of whether stdout is a terminal: human = tables, toon =
+          compact agent output, json = machine JSON. Default (unset) is human at a TTY, toon when
+          piped/captured. Also settable via AIDA_OUTPUT_FORMAT (the flag wins)
+
+          Possible values:
+          - human: Human-readable tables / emoji (the interactive default at a TTY)
+          - toon:  Token-efficient TOON — the compact agent default when piped/captured
+          - json:  Machine JSON, for commands that support a JSON projection
+
+      --canonical-ids
+          Show node-local spec IDs in their canonical form instead of the node's friendly label (for
+          scripts). Also settable via AIDA_CANONICAL_IDS=1
+
+  -h, --help
+          Print help (see a summary with '-h')
+===== aida advisor loops rebind
+Bind review-watch to this advisor grant through the operator's deputy
+
+Usage: aida advisor loops rebind [OPTIONS]
+
+Options:
+      --deputy <DEPUTY>
+          Name of the operator-started deputy
+          
+          [default: default]
+
+      --format <FORMAT>
+          Pin the output format regardless of whether stdout is a terminal: human = tables, toon =
+          compact agent output, json = machine JSON. Default (unset) is human at a TTY, toon when
+          piped/captured. Also settable via AIDA_OUTPUT_FORMAT (the flag wins)
+
+          Possible values:
+          - human: Human-readable tables / emoji (the interactive default at a TTY)
+          - toon:  Token-efficient TOON — the compact agent default when piped/captured
+          - json:  Machine JSON, for commands that support a JSON projection
+
+      --canonical-ids
+          Show node-local spec IDs in their canonical form instead of the node's friendly label (for
+          scripts). Also settable via AIDA_CANONICAL_IDS=1
+
+  -h, --help
+          Print help (see a summary with '-h')
+===== aida advisor loops worker
+Usage: aida advisor loops worker [OPTIONS]
+
+Options:
       --format <FORMAT>
           Pin the output format regardless of whether stdout is a terminal: human = tables, toon =
           compact agent output, json = machine JSON. Default (unset) is human at a TTY, toon when
@@ -10974,8 +11074,8 @@ Commands:
            session (you cd'd out, or the session was ended from another shell) still clears the env
            and the prompt segment — minus the cd. Only a shell carrying nothing is a no-op
   list     List AIDA-managed worktrees, each annotated with its `.aida/focus`
-  gc       Prune verified merged agent worktrees using the same safety checks as `aida doctor --heal
-           --category merged-agent-worktrees`
+  gc       Report ended seat clones and clean linked worktrees with merged/closed PRs or merged
+           branches. Dry run by default; --apply requires an operator terminal
   dismiss  Disposition a worktree whose content is undecidable (e.g. batched integration). Archives
            the branch tip under refs/archive/, removes the worktree and branch, and ledgers the
            operator decision
@@ -11150,18 +11250,24 @@ Options:
   -h, --help
           Print help (see a summary with '-h')
 ===== aida worktree gc
-Prune verified merged agent worktrees using the same safety checks as `aida doctor --heal --category
-merged-agent-worktrees`
+Report ended seat clones and clean linked worktrees with merged/closed PRs or merged branches. Dry
+run by default; --apply requires an operator terminal
 
 Usage: aida worktree gc [OPTIONS]
 
 Options:
+      --apply
+          Remove eligible trees after revalidation (operator terminal only)
+
+      --fail-on-findings
+          Exit nonzero when candidates await operator review (read-only guard)
+
   -y, --yes
-          Skip confirmation prompts
+          Legacy companion to --force; together they request removal
 
       --force
-          Permit destructive cleanup: remove verified merged worktrees and delete their local
-          branches. Still refused in unattended contexts
+          Legacy removal opt-in together with --yes. Uses the same operator-only gate and eligible
+          candidate set as --apply
 
       --json
           Emit machine-readable JSON
@@ -15472,7 +15578,8 @@ Reads substrate state only — spec status, branch-merged-ness, process liveness
 terminal output to guess whether an agent is finished, and it NEVER closes a running agent: a
 session whose process is still alive owns its worktree as its cwd, so it is skipped and reaped on a
 later pass once it exits on its own. Dirty worktrees, locked worktrees, and branches carrying unique
-unmerged commits are never removed — the same safety checks `aida worktree gc` applies.
+unmerged commits are never removed — the same safety checks as the doctor merged-agent-worktrees
+heal.
 
 A lease held on the main checkout (or another protected checkout) is never reaped, but it is
 RELEASED — the lease file only, never a file of the checkout — when the agent process it recorded
@@ -33946,6 +34053,123 @@ Working on aida itself
     "path": [
       "aida",
       "advisor",
+      "loops"
+    ],
+    "about": "Supervised advisor services (currently review-watch only)",
+    "flags": [
+      {
+        "name": "canonical-ids",
+        "takes_value": false,
+        "help": "Show node-local spec IDs in their canonical form instead of the node's friendly label (for scripts). Also settable via AIDA_CANONICAL_IDS=1"
+      },
+      {
+        "name": "format",
+        "takes_value": true,
+        "help": "Pin the output format regardless of whether stdout is a terminal: human = tables, toon = compact agent output, json = machine JSON. Default (unset) is human at a TTY, toon when piped/captured. Also settable via AIDA_OUTPUT_FORMAT (the flag wins)"
+      },
+      {
+        "name": "help",
+        "takes_value": false,
+        "help": "Print help (see more with '--help')"
+      }
+    ],
+    "hidden": false
+  },
+  {
+    "path": [
+      "aida",
+      "advisor",
+      "loops",
+      "status"
+    ],
+    "about": "Show review-watch's persisted binding and controller receipt",
+    "flags": [
+      {
+        "name": "canonical-ids",
+        "takes_value": false,
+        "help": "Show node-local spec IDs in their canonical form instead of the node's friendly label (for scripts). Also settable via AIDA_CANONICAL_IDS=1"
+      },
+      {
+        "name": "format",
+        "takes_value": true,
+        "help": "Pin the output format regardless of whether stdout is a terminal: human = tables, toon = compact agent output, json = machine JSON. Default (unset) is human at a TTY, toon when piped/captured. Also settable via AIDA_OUTPUT_FORMAT (the flag wins)"
+      },
+      {
+        "name": "help",
+        "takes_value": false,
+        "help": "Print help (see more with '--help')"
+      },
+      {
+        "name": "json",
+        "takes_value": false,
+        "help": "Emit the persisted service status as JSON"
+      }
+    ],
+    "hidden": false
+  },
+  {
+    "path": [
+      "aida",
+      "advisor",
+      "loops",
+      "rebind"
+    ],
+    "about": "Bind review-watch to this advisor grant through the operator's deputy",
+    "flags": [
+      {
+        "name": "canonical-ids",
+        "takes_value": false,
+        "help": "Show node-local spec IDs in their canonical form instead of the node's friendly label (for scripts). Also settable via AIDA_CANONICAL_IDS=1"
+      },
+      {
+        "name": "deputy",
+        "takes_value": true,
+        "help": "Name of the operator-started deputy"
+      },
+      {
+        "name": "format",
+        "takes_value": true,
+        "help": "Pin the output format regardless of whether stdout is a terminal: human = tables, toon = compact agent output, json = machine JSON. Default (unset) is human at a TTY, toon when piped/captured. Also settable via AIDA_OUTPUT_FORMAT (the flag wins)"
+      },
+      {
+        "name": "help",
+        "takes_value": false,
+        "help": "Print help (see more with '--help')"
+      }
+    ],
+    "hidden": false
+  },
+  {
+    "path": [
+      "aida",
+      "advisor",
+      "loops",
+      "worker"
+    ],
+    "about": "",
+    "flags": [
+      {
+        "name": "canonical-ids",
+        "takes_value": false,
+        "help": "Show node-local spec IDs in their canonical form instead of the node's friendly label (for scripts). Also settable via AIDA_CANONICAL_IDS=1"
+      },
+      {
+        "name": "format",
+        "takes_value": true,
+        "help": "Pin the output format regardless of whether stdout is a terminal: human = tables, toon = compact agent output, json = machine JSON. Default (unset) is human at a TTY, toon when piped/captured. Also settable via AIDA_OUTPUT_FORMAT (the flag wins)"
+      },
+      {
+        "name": "help",
+        "takes_value": false,
+        "help": "Print help (see more with '--help')"
+      }
+    ],
+    "hidden": true
+  },
+  {
+    "path": [
+      "aida",
+      "advisor",
       "register"
     ],
     "about": "Record the current Claude or Codex session as the live advisor — writes `~/.aida/advisor.toml`. With no `--uuid`, reads `CODEX_THREAD_ID` (a Codex thread, which `advisor watch` forks with `codex exec fork`), else `CLAUDE_CODE_SESSION_ID` (Claude Code sets it on every session). A Codex session started from a Claude session inherits both, and the Codex thread is the one running here. Pass `--uuid <id>` to register a specific session id, with `--vendor codex` for a Codex thread",
@@ -42671,17 +42895,27 @@ Working on aida itself
       "worktree",
       "gc"
     ],
-    "about": "Prune verified merged agent worktrees using the same safety checks as `aida doctor --heal --category merged-agent-worktrees`",
+    "about": "Report ended seat clones and clean linked worktrees with merged/closed PRs or merged branches. Dry run by default; --apply requires an operator terminal",
     "flags": [
+      {
+        "name": "apply",
+        "takes_value": false,
+        "help": "Remove eligible trees after revalidation (operator terminal only)"
+      },
       {
         "name": "canonical-ids",
         "takes_value": false,
         "help": "Show node-local spec IDs in their canonical form instead of the node's friendly label (for scripts). Also settable via AIDA_CANONICAL_IDS=1"
       },
       {
+        "name": "fail-on-findings",
+        "takes_value": false,
+        "help": "Exit nonzero when candidates await operator review (read-only guard)"
+      },
+      {
         "name": "force",
         "takes_value": false,
-        "help": "Permit destructive cleanup: remove verified merged worktrees and delete their local branches. Still refused in unattended contexts"
+        "help": "Legacy removal opt-in together with --yes. Uses the same operator-only gate and eligible candidate set as --apply"
       },
       {
         "name": "format",
@@ -42701,7 +42935,7 @@ Working on aida itself
       {
         "name": "yes",
         "takes_value": false,
-        "help": "Skip confirmation prompts"
+        "help": "Legacy companion to --force; together they request removal"
       }
     ],
     "hidden": false
