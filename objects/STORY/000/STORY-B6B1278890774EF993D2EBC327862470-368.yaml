@@ -24,12 +24,12 @@ description: |-
   - **Dependencies:** consumes STORY-2325 (owner) and STORY-2324 (effective gate state), so the attention half lands after them. The trigger half can land now.
 
   Acceptance (trigger half): (1) deferred_until, relay handoff conditionals and recurrence escalation take a typed condition (spec:X=completed, pr:N=merged, release:>=V, date:, query:count>=n, manual:<who>); (2) a one-time rewrite converts existing free-text deferral triggers where they parse and marks the rest manual; (3) an hourly scheduled job un-defers specs whose condition is true and routes manual conditions older than 14 days to aida human; (4) new free-text deferrals are refused unless explicitly manual. Architecture: the implementer posts a file:line sketch with the slice plan on this spec for advisor signoff before code.
-status: InProgress
+status: Completed
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-04T02:34:20.173245Z
-modified_at: 2026-11-09T16:15:16.681977036Z
+modified_at: 2026-11-09T21:06:23.342290881Z
 req_type: Story
 relationships:
 - rel_type:
@@ -1762,6 +1762,20 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a1c222-31a9-7603-aef4-6ae40479c00c
+  author: aida-auto-bump
+  timestamp: 2026-11-09T21:06:23.273157479Z
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Completed
+processing_record:
+- id: 01a1c222-31ee-7ab2-9935-3eb9ddd15f53
+  timestamp: 2026-11-09T21:06:23.342288382Z
+  agent: aida
+  commit_sha: dd90f009f6168ebf48d8d5830920ae8e192cfdae
+  summary: 'S5 full sweep: typed handoff and recurrence triggers satisfy the approved slice; prior findings resolved, no actionable defects; required CI green. Derived attention remains out of scope.'
+  review_verdict: approved
 filed_at:
   code_sha: 0754a362d797d2d9b246b4609456735b5486095d
   branch: main
@@ -1770,11 +1784,7 @@ filed_at:
   aida_build_sha: 0f1624a8b38
   vendor: claude
   session: 04f971d5-7365-46ed-b777-d4ff41d730ed
-failure_reason:
-  phase: reviewer
-  phase_index: 3
-  kind: verdict:request-changes
-  detail: S5 acceptance verified; three defects remain. Build CI green; supervised hold remains.
-  recovery_hint: address the review findings, move STORY-2402 back to In Progress, and clear the PR hold only after approval
-  shelved_by: reviewer
-  shelved_at: 2026-11-09T16:02:33.665275704Z
+implementation_info:
+  implemented: false
+  completed_at: 2026-11-09T21:06:23.273152268Z
+  completion_sha: dd90f009f6168ebf48d8d5830920ae8e192cfdae
