@@ -1481,7 +1481,7 @@ fn task_3420_review_lease_uses_recorded_ownership() {
     review.claim_verb = false;
     review.pr_head_sha = Some("head".into());
     assert!(
-        !review_lease_running(&root, &review),
+        !review_lease_running(&crate::ownership::reader::LeaseReader::new(&root), &review),
         "crashed legacy reviewer releases without a witness"
     );
     // Exercise the admitted process envelope written by the production adapter.
@@ -1509,18 +1509,21 @@ fn task_3420_review_lease_uses_recorded_ownership() {
         .witnesses
         .iter()
         .any(|w| w.admission.is_some()));
-    assert!(review_lease_running(&root, &review), "live admitted holder");
+    assert!(
+        review_lease_running(&crate::ownership::reader::LeaseReader::new(&root), &review),
+        "live admitted holder"
+    );
     child.kill().unwrap();
     child.wait().unwrap();
     assert!(
-        !review_lease_running(&root, &review),
+        !review_lease_running(&crate::ownership::reader::LeaseReader::new(&root), &review),
         "positive death proof releases the review"
     );
     let mut replacement = review.clone();
     replacement.id = "replacement".into();
     crate::ownership::dual::lease_written(&root, &replacement);
     assert!(
-        review_lease_running(&root, &review),
+        review_lease_running(&crate::ownership::reader::LeaseReader::new(&root), &review),
         "another generation does not prove this owner dead"
     );
 }
