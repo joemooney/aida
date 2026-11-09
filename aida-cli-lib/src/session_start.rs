@@ -1454,6 +1454,9 @@ pub(crate) struct SessionStartCleanup {
     clone: Option<crate::seat_clone::CreatedClone>,
     clone_git_identity: Option<(u64, u64)>,
     lease_id: Option<String>,
+    // Restore adopted ownership if admission fails after the lease swap.
+    // trace:BUG-2504 | ai:codex
+    adopted_orphan: Option<SessionLease>,
     // The exact status/owner write this invocation owns, including owner-only changes.
     // trace:BUG-2188 TASK-2326 | ai:codex
     claim_write: Option<crate::claim::ClaimStatusChange>,
@@ -1475,6 +1478,7 @@ impl SessionStartCleanup {
             clone: None,
             clone_git_identity: None,
             lease_id: None,
+            adopted_orphan: None,
             claim_write: None,
             armed: true,
             owner_check: None,
@@ -1632,6 +1636,37 @@ impl Drop for SessionStartCleanup {
         }
         if !self.release_tree() {
             return;
+        }
+        // Restore before deleting the successor: a refusal must remain retryable.
+        // trace:BUG-2504 | ai:codex
+        if let Some(orphan) = &self.adopted_orphan {
+            let path = lease_path(&self.root, &orphan.id);
+            let restored = (|| -> Result<()> {
+                // Publish a complete record without replacing any concurrent record.
+                use std::io::Write;
+                let mut pending =
+                    tempfile::NamedTempFile::new_in(path.parent().context("orphan lease parent")?)?;
+                pending.write_all(toml::to_string_pretty(orphan)?.as_bytes())?;
+                pending.as_file().sync_all()?;
+                // Removal may have failed during adoption. The same lease identity
+                // already on disk is restored regardless of writer formatting.
+                // trace:BUG-2504 | ai:codex
+                if let Err(error) = pending.persist_noclobber(&path) {
+                    if error.error.kind() != std::io::ErrorKind::AlreadyExists || {
+                        let existing: SessionLease =
+                            toml::from_str(&std::fs::read_to_string(&path)?)?;
+                        existing.id != orphan.id || existing.worktree_path != orphan.worktree_path
+                    } {
+                        return Err(error.into());
+                    }
+                }
+                crate::ownership::dual::lease_written(&self.root, orphan);
+                Ok(())
+            })();
+            if let Err(error) = restored {
+                eprintln!("launch cleanup retained successor lease: could not restore adopted lease: {error:#}; inspect `aida session leases --all`");
+                return;
+            }
         }
         if let Some(id) = &self.lease_id {
             if !remove_session_lease_record_only(&self.root, id) {
@@ -3436,6 +3471,9 @@ pub(crate) fn session_start_with_receipt(
     // is written, so the tree is never unleased; the tree itself stays.
     // trace:BUG-2223 | ai:claude
     if let Some(orphan) = &adopted_orphan {
+        if let Some(cleanup) = rollback.as_mut() {
+            cleanup.adopted_orphan = Some(orphan.clone());
+        }
         aggregate_session_activity_into_roles(&project_root, &orphan.id);
         if !remove_session_lease_record_only(&project_root, &orphan.id) {
             // Not `aida session end`: that would tear down the adopted tree.
