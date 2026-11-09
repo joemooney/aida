@@ -27,7 +27,8 @@ fn run_remote(
     matches: &clap::ArgMatches,
     _ctx: &crate::command_registry::DispatchCtx,
 ) -> anyhow::Result<()> {
-    use crate::*;
+    // trace:TASK-3428 | ai:codex
+    use crate::{find_project_root, mirror_guard, remote_create, store_local};
     let args = <RemoteArgs as clap::FromArgMatches>::from_arg_matches(matches)?;
     let remote_cmd = &args.inner;
     let project_root =
