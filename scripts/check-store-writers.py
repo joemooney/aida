@@ -446,10 +446,14 @@ def operations(root, scanned=None):
                 handler = run.group(1) if run else "<unresolved-handler>"
                 entry = qualified(handler, path) if "::" in handler else module + "::" + handler
                 resolve("cli", name.group(1), [entry])
-        if path == "aida-cli-lib/src/mcp.rs":
+        if path in {"aida-cli-lib/src/mcp.rs", "aida-mcp/src/mcp.rs"}:
             for match in re.finditer(r'"([a-z_]+)"\s*=>\s*self\s*\.\s*(tool_\w+)', source):
                 item = next((item for _, _, item in parsed[path] if item.split("::")[-1] == match.group(2)), match.group(2))
                 resolve("mcp", match.group(1), [function_identity(path, item)])
+    # trace:TASK-3429 | ai:codex — the binary injects the extracted handler.
+    if "aida-mcp/src/serve.rs" in files and "cli:mcp-serve" in result:
+        resolve("cli", "mcp-serve", ["aida_cli_lib::mcp_serve::run_mcp_serve", "aida_mcp::serve::run_mcp_serve"],
+                "Binary-injected MCP handler; receiver and callback edges remain explicit cutover blockers.")
     # Enumerate every immediate operation of the core writing command groups,
     # including unresolved routes. Never treat missing lexical edges as reads.
     groups = {"QueueCommand": "queue", "CommentCommand": "comment",
@@ -505,7 +509,7 @@ def operations(root, scanned=None):
                 [f"aida_cli_lib::defer_resurface::{name}" for name in ("run", "sweep")],
                 "Reviewed run_defer -> defer_resurface::run -> sweep route, including the bare sweep call; atomic spec updates and human-queue writes remain blocked for TASK-3223 authority and receiver review.")
     # Explicit reviewed receiver/import edges, never global bare-name propagation.
-    mcp_path = "aida-cli-lib/src/mcp.rs"
+    mcp_path = "aida-mcp/src/mcp.rs" if "aida-mcp/src/mcp.rs" in files else "aida-cli-lib/src/mcp.rs"
     if mcp_path in files:
         for selector in ("queue_add", "queue_rework"):
             if "mcp:" + selector not in result:

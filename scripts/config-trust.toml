@@ -326,7 +326,7 @@ sites = 1
 
 # Ordinary and staged MCP profile reads select only a closed policy tier.
 # trace:TASK-3223 | ai:codex
-[readers."aida-cli-lib/src/mcp.rs"]
+[readers."aida-mcp/src/mcp.rs"]
 channels = ["worktree"]
 sites = 2
 

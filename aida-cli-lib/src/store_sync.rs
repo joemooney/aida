@@ -1,3 +1,4 @@
+// trace:TASK-3429 | ai:codex
 //! distributed store detection and attach, store sync and ID allocation config (STORY-1488 slice 1)
 // trace:STORY-1488 | ai:claude
 
@@ -174,7 +175,7 @@ pub(crate) fn run_on_distributed_store(
 /// root) and double-nested the store. `project_root_from_store_hint` derives
 /// the real root from it instead.
 // trace:TASK-1487 | ai:claude
-pub(crate) fn mcp_serve_project_root(
+pub fn mcp_serve_project_root(
     store_path: &std::path::Path,
     project_root_hint: Option<&std::path::Path>,
     cwd_project_root: Option<std::path::PathBuf>,

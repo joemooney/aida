@@ -2493,7 +2493,7 @@ pub(crate) fn rework_findings_block_for_spec(
 /// forge names exactly one. A failed lookup is `None`: the ledger bindings
 /// still answer, and an unknown PR never binds a review to the spec.
 // trace:BUG-2430 | ai:claude
-pub(crate) fn spec_open_change_key(project_root: &std::path::Path, ids: &[&str]) -> Option<String> {
+pub fn spec_open_change_key(project_root: &std::path::Path, ids: &[&str]) -> Option<String> {
     let forge = Ok(crate::forge::resolve_forge_kind(project_root));
     let mut ids: Vec<String> = ids.iter().map(|s| s.trim().to_string()).collect();
     ids.dedup();
@@ -2548,7 +2548,7 @@ pub(crate) fn resolve_rework_findings(
 }
 
 // trace:BUG-2500 | ai:codex
-pub(crate) fn refuse_waiting_review(
+pub fn refuse_waiting_review(
     root: &Path,
     display: &str,
     spec: &str,

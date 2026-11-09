@@ -37,6 +37,16 @@ untouched_factor = 3
 # PR #3731 / train PR #3733 measured 11.7s; x2 rounded up to 5s.
 # trace:TASK-3777 | ai:codex
 "aida-cli-lib findings_gate::story_1421_carry_forward_findings_tests::task_3749_sweep_keys_preserve_source_scope_and_closed_sweeps_roll_over" = 25
+# PR #3639 run 42624915706 at 3ea7d7003e44 measured 10.2s.
+# Measured time x2 rounded up to 5s, following the budget convention above.
+# trace:STORY-2402 | ai:codex
+"aida-cli-lib defer_resurface::tests::story2402_s4_canonical_snapshot_and_legacy_only_run" = 25
+# PR #3639 CI run 42464033547 (0ffefda), artifacts test-timings-lib-0/1:
+# measured 10.448s, 10.332s and 20.060s; max x2 rounded up to 5s.
+# trace:STORY-2402 | ai:codex
+"aida-cli-lib defer_resurface::tests::story2402_s4_persistence_dry_run_routing_and_repeat" = 25
+"aida-cli-lib defer_resurface::tests::story2402_s5_recur_conditions_resurface_and_manual_routes" = 25
+"aida-cli-lib command_registry::story_1728_policy_parity_tests::story2402_s5_policy_fixture_covers_conditional_writers" = 45
 # PR #3652 run 42495648136, cli-0 job 128777376052: 11.182s.
 # Real remote/store setup plus queue pickup; retain the missing-branch control.
 # Measured time x2, rounded up to 5s, following the budget convention above.

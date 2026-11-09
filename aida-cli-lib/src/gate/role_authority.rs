@@ -1,3 +1,4 @@
+// trace:TASK-3429 | ai:codex
 //! Seat authority decisions: which role, terminal or orchestrator context
 //! holds advisor, hold, dispatch and integrity-floor authority (STORY-1889).
 //! The inputs (effective role, TTY probe, orchestrator detection) are
@@ -28,7 +29,7 @@ use crate::worktree_gc::find_main_worktree_root;
 /// token matching the live drain-state run, which a bare agent cannot forge, so
 /// the TASK-647/ADR-3 gate still blocks an un-orchestrated agent.
 /// trace:BUG-460 trace:TASK-647 | ai:claude
-pub(crate) fn advisor_authority_from(role: &str, is_tty: bool, orchestrated: bool) -> bool {
+pub fn advisor_authority_from(role: &str, is_tty: bool, orchestrated: bool) -> bool {
     let _ = is_tty; // TTY is used to issue a grant, never as authority by itself.
     role == "advisor" || orchestrated
 }
@@ -46,7 +47,7 @@ pub(crate) fn hold_authority_from(role: &str, is_tty: bool, _orchestrated: bool)
 /// may dispatch; a corroborated live orchestrator may continue its own routing.
 /// Implementers and reviewers remain consumers of routed work.
 // trace:STORY-1353 | ai:codex
-pub(crate) fn dispatch_authority_from(role: &str, orchestrated: bool) -> bool {
+pub fn dispatch_authority_from(role: &str, orchestrated: bool) -> bool {
     matches!(role, "product" | "advisor" | "integrator") || orchestrated
 }
 
@@ -57,7 +58,7 @@ pub(crate) fn integrity_floor_authority_from(human_present: bool) -> bool {
     human_present
 }
 
-pub(crate) fn has_advisor_authority() -> bool {
+pub fn has_advisor_authority() -> bool {
     if current_role_instance_is_companion() {
         return false;
     }
