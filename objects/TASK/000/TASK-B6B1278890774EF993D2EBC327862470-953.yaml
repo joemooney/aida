@@ -23,7 +23,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-07T20:45:16.684639200Z
-modified_at: 2026-11-09T08:52:29.896574292Z
+modified_at: 2026-11-09T09:11:27.424671915Z
 req_type: Task
 relationships:
 - rel_type: Child
@@ -186,6 +186,22 @@ comments:
   modified_at: 2026-11-09T08:44:24.602667390Z
   session_id: 01a1beff-fc3b-78e2-93e2-9b0c283b0339
   harness_version: 2.1.319 (Claude Code)
+- id: 01a1bf93-a7c0-7972-9ab6-5116076acd31
+  author: dirtlab
+  content: |
+    Part B rework only, per advisor ruling 2026-11-08; Part A remains excluded. Current main was already merged by the host (HEAD d551be920c, origin/main ancestor).
+
+    Centralized temporary legacy compatibility in ownership::reader::LeaseReader::pickup_owner. Admitted owner verdicts stand; unreadable, replacement and namespace-unknown evidence retain ownership. Only missing/unadmitted legacy witness evidence uses the existing lease rule. Spec-store resolution failures retain. Queue stale-base filtering now precedes owner reads, with one lazy spec-store snapshot for the batch. Resume hints and actual orphan adoption share lease_adoption_refusal; adoption preserves contents and checks tree existence/registration. Removed obsolete adoption legacy-probe inventory entry.
+
+    Tests use a cooperatively admitted real child through the production holder writer, cover Live/Dead/NamespaceMismatch and hint/adoption agreement, and restore crashed legacy reviewer coverage (TASK-2120).
+
+    Validation: lane job j20261109T090716431-2-0, cargo test --profile agent -p aida-cli-lib --lib -- task_3420: 6 passed, 0 failed. python3 -m unittest tests.test_ownership_liveness_ratchet: 2 passed. git diff --check passed. make check-ci-fast FAILED in Codex mail wake fixtures (4 failures, 17 errors, 1 skipped), with health project directory must be owned without shared writes; preceding no-default-features and TUI checks passed. LIGHT gate remains incomplete; mail-wake fixture environment needs host attention. Codegraph unavailable (fixed executable missing; doctor reports missing from PATH); navigation used rg.
+
+    Edits are uncommitted for native host publication. Changed: aida-cli-lib/src/leases.rs; aida-cli-lib/src/ownership/reader.rs; aida-cli-lib/src/ownership/writer_tests.rs; aida-cli-lib/src/queue_cmd/list.rs; aida-cli-lib/src/session_start.rs; aida-cli-lib/src/tests/bug_2223_orphan_seat_reentry_tests.rs; aida-cli-lib/src/tests/story_1688_lane_liveness_tests.rs; scripts/ownership-liveness-legacy.json.
+  created_at: 2026-11-09T09:11:27.424671915Z
+  modified_at: 2026-11-09T09:11:27.424671915Z
+  session_id: 01a1bf7f9926
+  harness_version: codex-cli 0.167.0
 history:
 - id: 01a1b7c2-6b69-7b02-bd8c-8f40aee2972d
   author: joe
