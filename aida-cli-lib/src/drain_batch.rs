@@ -30,6 +30,7 @@ pub(crate) fn pipelined_child_result_sidecar_json(
     let escalation = result.escalation.as_ref().map(|e| {
         serde_json::json!({
             "kind": match e.kind {
+                auto_complete::EscalationKind::Waiting => "waiting",
                 auto_complete::EscalationKind::MergeDecision => "merge-decision",
                 auto_complete::EscalationKind::DesignFork => "design-fork",
                 auto_complete::EscalationKind::SupervisedMerge => "supervised-merge",
@@ -85,6 +86,7 @@ pub(crate) fn parse_pipelined_child_result_sidecar(
         .and_then(auto_complete::Phase::from_index);
     let escalation = value.get("escalation").and_then(|v| {
         let kind = match v.get("kind").and_then(|k| k.as_str())? {
+            "waiting" => auto_complete::EscalationKind::Waiting,
             "merge-decision" => auto_complete::EscalationKind::MergeDecision,
             "design-fork" => auto_complete::EscalationKind::DesignFork,
             "supervised-merge" => auto_complete::EscalationKind::SupervisedMerge,
@@ -1650,7 +1652,8 @@ pub(crate) fn handle_auto_complete_single_branch(
             // same command resumes from the next member. trace:TASK-1137
             auto_complete::SingleBranchOutcome::Paused => {
                 eprintln!(
-                    "{} paused before {} — {} member{} committed on {} (no cluster pull \
+                    // trace:TASK-3749 | ai:codex
+                    "{} paused at {} — {} member{} committed on {} (no cluster pull \
                      request yet)",
                     crate::glyph(crate::glyphs::Glyph::InfoAlt).cyan().bold(),
                     result.stopped_at.as_deref().unwrap_or("the next member"),

@@ -473,6 +473,9 @@ pub(crate) enum FailureKind {
     /// typed shelve cause, not a crash.
     // trace:STORY-974 | ai:codex
     VerdictRequestChanges,
+    /// External evidence only; never an implementer retry or shelf.
+    // trace:BUG-2500 | ai:codex
+    VerdictWaiting,
     /// Phase 3: the reviewer produced a Rejected verdict. This is a typed
     /// shelve cause, not a crash.
     // trace:STORY-974 | ai:codex
@@ -674,6 +677,7 @@ impl FailureKind {
     /// old dedupe tags/tests, but new FailureReason/SpecShelved rows use this.
     pub(crate) fn cause_slug(self) -> &'static str {
         match self {
+            Self::VerdictWaiting => "verdict:waiting",
             Self::VerdictRequestChanges => "verdict:request-changes",
             Self::VerdictReject => "verdict:reject",
             Self::ReviewerWrote => "reviewer-wrote",
@@ -717,6 +721,7 @@ impl FailureKind {
     // trace:BUG-1930 | ai:claude
     pub(crate) fn from_cause_slug(slug: &str) -> Option<Self> {
         Some(match slug {
+            "verdict:waiting" => Self::VerdictWaiting,
             "verdict:request-changes" => Self::VerdictRequestChanges,
             "verdict:reject" => Self::VerdictReject,
             "reviewer-wrote" => Self::ReviewerWrote,
@@ -750,6 +755,7 @@ impl FailureKind {
 /// trace:STORY-246 | ai:claude
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum Verdict {
+    Waiting,
     Approved,
     RequestChanges,
     Rejected,
@@ -768,12 +774,14 @@ impl Verdict {
             VerdictKind::Approved => Some(Self::Approved),
             VerdictKind::RequestChanges => Some(Self::RequestChanges),
             VerdictKind::Rejected => Some(Self::Rejected),
+            VerdictKind::Waiting => Some(Self::Waiting),
             VerdictKind::Unknown => None,
         }
     }
 
     pub(crate) fn label(self) -> &'static str {
         match self {
+            Self::Waiting => "Waiting",
             Self::Approved => "Approved",
             Self::RequestChanges => "RequestChanges",
             Self::Rejected => "Rejected",
@@ -1367,6 +1375,9 @@ pub(crate) enum ReviewerOutcome {
 /// trace:STORY-306 | ai:claude
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum EscalationKind {
+    /// External evidence; fresh review resumes without implementer retries.
+    // trace:BUG-2500 | ai:codex
+    Waiting,
     /// The reviewer escalated a merge decision (phase 3).
     MergeDecision,
     /// The headless advisor escalated a punted design-fork (phase 1 tier).
@@ -2695,6 +2706,41 @@ fn finish_punted(
     }
 }
 
+// trace:BUG-2500 | ai:codex
+fn escalation_recovery_hint(kind: EscalationKind) -> &'static str {
+    match kind {
+        EscalationKind::Waiting => {
+            "obtain the named external evidence, then record a fresh review at the current head"
+        }
+        _ => "left for a human — triage it with `aida findings list`",
+    }
+}
+
+// trace:BUG-2500 | ai:codex
+fn escalation_closing_line(kind: EscalationKind) -> &'static str {
+    match kind {
+        EscalationKind::Waiting => {
+            "waiting — obtain the named external evidence, then record a fresh review at the current head; drain continues"
+        }
+        _ => "escalated — drain continues, a human decides",
+    }
+}
+
+#[test]
+fn bug_2500_waiting_recovery_requires_fresh_review() {
+    let hint = escalation_recovery_hint(EscalationKind::Waiting);
+    assert!(
+        hint.contains("external evidence") && hint.contains("fresh review at the current head")
+    );
+    assert!(!hint.contains("findings"));
+    let closing = escalation_closing_line(EscalationKind::Waiting);
+    assert!(closing.contains("waiting") && closing.contains("external evidence"));
+    assert!(closing.contains("fresh review at the current head"));
+    assert!(!closing.contains("a human decides"));
+    assert!(escalation_closing_line(EscalationKind::MergeDecision).contains("a human decides"));
+    assert!(escalation_recovery_hint(EscalationKind::DesignFork).contains("findings list"));
+}
+
 /// Print the escalation epilogue and build a *non-failure* terminal
 /// [`OrchestrationResult`] (STORY-306). Two tiers escalate to a human and
 /// share this path: the reviewer that will not auto-merge a PR
@@ -2743,7 +2789,7 @@ fn finish_escalated(
     // The escalation surfaced in a specific phase — phase 3 for a merge
     // decision, phase 1 (the punt) for a design-fork.
     let phase = match kind {
-        EscalationKind::MergeDecision => Phase::Reviewer,
+        EscalationKind::Waiting | EscalationKind::MergeDecision => Phase::Reviewer,
         EscalationKind::DesignFork => Phase::Implementer,
         // trace:BUG-727 | ai:claude
         EscalationKind::SupervisedMerge => Phase::Merge,
@@ -2773,6 +2819,9 @@ fn finish_escalated(
         );
     } else {
         let what = match kind {
+            EscalationKind::Waiting => {
+                "review is WAITING; resume with a fresh review at the current head"
+            }
             EscalationKind::MergeDecision => "the reviewer escalated the merge decision to a human",
             EscalationKind::DesignFork => "the advisor escalated a design-fork to a human",
             // trace:BUG-727 | ai:claude
@@ -2785,14 +2834,15 @@ fn finish_escalated(
         eprintln!(
             "  {} {}",
             "→".dimmed(),
-            "left for a human — triage it with `aida findings list`".cyan()
+            escalation_recovery_hint(kind).cyan()
         );
         eprintln!();
         eprintln!(
-            "{} {} escalated ({}) — drain continues, a human decides",
+            "{} {} ({}) {}",
             "⏸".yellow().bold(),
             spec.bold(),
-            fmt_duration(elapsed)
+            fmt_duration(elapsed),
+            escalation_closing_line(kind)
         );
     }
     OrchestrationResult {
@@ -4627,11 +4677,19 @@ pub(crate) fn orchestrate_with_resume(
                         events_root.as_deref(),
                     );
                 }
+                // trace:BUG-2500 | ai:codex
+                Ok(ReviewerOutcome::Verdict(Verdict::Waiting)) => {
+                    durations.push((Phase::Reviewer, phase_start.elapsed().as_millis()));
+                    return finish_escalated(spec, json, &start, durations, EscalationKind::Waiting,
+                        "WAITING: external evidence required; resume with a fresh recorded review at the current head",
+                        driver.events_root().as_deref());
+                }
                 Ok(ReviewerOutcome::Verdict(verdict)) if verdict != Verdict::Approved => {
                     durations.push((Phase::Reviewer, phase_start.elapsed().as_millis()));
                     let kind = match verdict {
                         Verdict::RequestChanges => FailureKind::VerdictRequestChanges,
                         Verdict::Rejected => FailureKind::VerdictReject,
+                        Verdict::Waiting => unreachable!("waiting stops before retries"),
                         Verdict::Approved => FailureKind::Failed,
                     };
                     let f = PhaseFailure::of(
@@ -4657,6 +4715,17 @@ pub(crate) fn orchestrate_with_resume(
     }
 
     if let Err(f) = driver.run_agent_gates() {
+        if f.kind == FailureKind::VerdictWaiting {
+            return finish_escalated(
+                spec,
+                json,
+                &start,
+                durations,
+                EscalationKind::Waiting,
+                &f.reason,
+                driver.events_root().as_deref(),
+            );
+        }
         let f = failure_with_retry_attempt(driver, &f, 0);
         return resolve_phase_failure(driver, Phase::Reviewer, spec, json, &start, &f, durations);
     }
@@ -6285,14 +6354,6 @@ pub(crate) fn drain_batch_single_branch(
             }
         }
         let result = driver.run_member_through_ci(&head);
-        // HALT-on-failure: a phase failure, OR any non-ship outcome (punt /
-        // escalation / inconclusive / hold / shipped-mismatch), means this
-        // member did not cleanly land on the shared branch. In a coupled
-        // single-branch drain we cannot stack later members on a branch missing
-        // this one's work, so STOP — prior commits stay on the branch, the
-        // failed member is parked `NeedsAttention` by the driver. This is the
-        // deliberate inverse of EPIC-28's shelve-and-continue (correct only for
-        // INDEPENDENT members). trace:TASK-1003 | ai:claude
         // trace:TASK-3608 | ai:codex — nothing to stack or credit as committed.
         if result.no_change {
             return SingleBranchResult {
@@ -6303,6 +6364,15 @@ pub(crate) fn drain_batch_single_branch(
                 exit_code: 0,
             };
         }
+        // HALT-on-failure: a phase failure, OR any non-ship outcome (punt /
+        // escalation / inconclusive / hold / shipped-mismatch), means this
+        // member did not cleanly land on the shared branch. In a coupled
+        // single-branch drain we cannot stack later members on a branch missing
+        // this one's work, so STOP — prior commits stay on the branch, the
+        // failed member is parked `NeedsAttention` by the driver. This is the
+        // deliberate inverse of EPIC-28's shelve-and-continue (correct only for
+        // INDEPENDENT members). trace:TASK-1003 | ai:claude
+        // trace:TASK-3749 | ai:codex
         let unclean = result.punt_reason.is_some()
             || result.escalation.is_some()
             || result.inconclusive_reason.is_some()

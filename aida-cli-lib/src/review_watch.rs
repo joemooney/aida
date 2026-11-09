@@ -1168,7 +1168,9 @@ impl History {
     ) -> impl Iterator<Item = crate::gate::review_verdict::RecordingKey> + '_ {
         self.keys
             .iter()
-            .filter(|key| crate::gate::review_verdict::VerdictKind::parse(&key.2).blocks_done())
+            .filter(|key| {
+                crate::gate::review_verdict::VerdictKind::parse(&key.2).requires_changes()
+            })
             .cloned()
     }
     fn blocking(&self) -> usize {

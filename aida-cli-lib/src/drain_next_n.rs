@@ -1407,7 +1407,10 @@ pub(crate) fn record_auto_complete_run(
         spec_id: spec.to_string(),
         started_at: started_at.to_rfc3339(),
         completed_at: completed_at.to_rfc3339(),
-        outcome: if result.exit_code == 0 {
+        // trace:TASK-3749 | ai:codex
+        outcome: if result.no_change {
+            "no-change".to_string()
+        } else if result.exit_code == 0 {
             "success".to_string()
         } else {
             "failed".to_string()

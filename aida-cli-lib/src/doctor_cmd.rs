@@ -5468,7 +5468,7 @@ fn scan_review_verdicts(project_root: &std::path::Path) -> Vec<DoctorFinding> {
                     row.file, row.raw
                 ),
                 action: format!(
-                    "decide it by hand, then record a fresh verdict: `aida review record <SPEC> --verdict approved|request-changes|rejected --summary \"<why>\"` (file: .aida/review-verdicts/{})",
+                    "decide it by hand, then record a fresh verdict: `aida review record <SPEC> --verdict approved|request-changes|rejected|waiting --summary \"<why>\"` (file: .aida/review-verdicts/{})",
                     row.file
                 ),
                 safe_heal: false,

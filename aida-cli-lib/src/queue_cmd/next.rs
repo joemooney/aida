@@ -507,7 +507,7 @@ pub(super) fn handle_queue_command(
                         }
                         if let Some(v) = selection.fail_closed() {
                             let line = crate::review_verdict_display::verdict_notice_line(&v);
-                            if v.kind.blocks_done() {
+                            if v.kind.requires_changes() {
                                 println!("  {} {}", "Review verdict:".bold(), line.yellow().bold());
                                 println!(
                                     "  {} address it and commit — `aida queue done` will refuse \
