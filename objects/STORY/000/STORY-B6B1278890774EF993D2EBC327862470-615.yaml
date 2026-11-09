@@ -8,7 +8,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-09T01:58:54.698246911Z
-modified_at: 2026-11-09T03:10:19.667335008Z
+modified_at: 2026-11-09T03:20:12.647772294Z
 req_type: Story
 tags:
 - area:orchestration
@@ -36,6 +36,22 @@ comments:
   created_at: 2026-11-09T03:08:32.284235047Z
   modified_at: 2026-11-09T03:08:32.284235047Z
   session_id: 7aacb1ed-ebaa-4da4-a195-500864e99e7d
+- id: 01a1be52-1467-7aa1-884f-7b458cb8420f
+  author: dirtlab
+  content: |
+    Rework implements the binding advisor's smallest inventory-only slice. Added --inventory-baseline to the exact hunk porter and --baseline to the existing check-store-writers.py --regenerate path. An explicitly reviewed v2 TOML baseline allows regeneration over a conflicted working inventory; missing/invalid baseline evidence refuses. Matching reviewed policy survives and new sites retain the existing blocked defaults. Operator reviews policy on the other merge side; no automatic policy selection or API/re-export inference.
+
+    Added a real Git fixture: branch a PR, split a source into two modules on the other branch, perform a conflicting merge (source and inventory), reject invalid baseline before writes, port the exact PR hunk, regenerate with the real inventory scanner, stage and finish the disposable two-parent merge. Existing missing/ambiguous destination and unplaceable re-export refusals remain covered. Added inventory baseline policy preservation and missing-file refusal coverage. CLI help golden regeneration is outside the binding brief's initial slice, as documented.
+
+    Changed files: scripts/port-split-hunks.py; scripts/check-store-writers.py; tests/test_port_split_hunks.py; tests/test_store_writer_inventory.py; docs/advanced/split-merge-porting.md. queue_cmd/ and doctor_cmd.rs untouched. Regenerated scripts/store-writers.toml: semantic inventory unchanged, retained original review comments/order to avoid unrelated churn.
+
+    Validation: launcher job j20261109T031159469-2-0, cargo test --profile agent -p aida-cli --test story_2692_split_merge -- split_merge_host_fixtures: 1 executed test passed. Python porter suite: 4 passed. Inventory suite: 53 passed. make check-ci-fast with umask 0022: all 46 gates passed. git diff --check passed. Codegraph fixed host client absent; aida doctor check codegraph confirmed missing, used rg navigation.
+
+    Native-seat handoff: uncommitted edits ready for host publication; no commits, pushes, PR creation, queue completion, review verdict or merge in this seat. No implementation or validation blockers. Suggested partial-story subject: [AI:codex] fix(merge): regenerate conflicted inventory from explicit baseline (Refs STORY-2692).
+  created_at: 2026-11-09T03:20:12.647772294Z
+  modified_at: 2026-11-09T03:20:12.647772294Z
+  session_id: 01a1be490130
+  harness_version: codex-cli 0.167.0
 history:
 - id: 01a1be0b-c26f-7e81-9cbb-17bbd5fc30b5
   author: joe
