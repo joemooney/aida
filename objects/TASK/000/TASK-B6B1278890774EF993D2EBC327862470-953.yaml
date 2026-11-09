@@ -18,12 +18,12 @@ description: |
   The ratchet baseline must shrink to zero entries for these paths.
 
   LIGHT gate. Parts A and B may be separate PRs (Refs this task; the last one completes it).
-status: Approved
+status: InProgress
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-07T20:45:16.684639200Z
-modified_at: 2026-11-09T08:44:24.714373187Z
+modified_at: 2026-11-09T08:49:34.512488925Z
 req_type: Task
 relationships:
 - rel_type: Child
@@ -363,6 +363,13 @@ history:
   session_id: 01a1beff-fc3b-78e2-93e2-9b0c283b0339
   harness_version: 2.1.319 (Claude Code)
   changes: []
+- id: 01a1bf7f-9f30-7170-b997-32d7c11a5abf
+  author: aida-session-start
+  timestamp: 2026-11-09T08:49:34.512485964Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: InProgress
 filed_at:
   code_sha: e278eeb1d8f95dadba5f6e9d8bfd41d10eac52c3
   branch: main
