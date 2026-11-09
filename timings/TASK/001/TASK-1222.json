@@ -1,0 +1,285 @@
+{
+  "schema_version": 1,
+  "spec": "TASK-1222",
+  "publishes": [
+    {
+      "at": "2026-11-09T03:00:12.163014830Z",
+      "closed_by": "auto-bump"
+    }
+  ],
+  "events": [
+    {
+      "ts": "2026-11-07T20:57:41.763100635Z",
+      "spec": "TASK-1222",
+      "seat": "advisor",
+      "kind": {
+        "event": "DispositionChanged",
+        "before": "Approved",
+        "after": "Approved"
+      }
+    },
+    {
+      "ts": "2026-11-07T22:00:59.729277872Z",
+      "spec": "TASK-1222",
+      "seat": "advisor",
+      "kind": {
+        "event": "SpecRequeued",
+        "via": "edit",
+        "actor": "joe",
+        "from": "Needs Attention",
+        "to": "Approved"
+      }
+    },
+    {
+      "ts": "2026-11-07T22:00:59.785019468Z",
+      "spec": "TASK-1222",
+      "seat": "advisor",
+      "kind": {
+        "event": "DispositionChanged",
+        "before": "Needs Attention",
+        "after": "Approved"
+      }
+    },
+    {
+      "ts": "2026-11-07T22:28:57.992962551Z",
+      "spec": "TASK-1222",
+      "seat": "advisor",
+      "kind": {
+        "event": "PhaseEntered",
+        "idx": 1,
+        "slug": "implementer",
+        "attempt": 1
+      }
+    },
+    {
+      "ts": "2026-11-08T01:21:16.985525359Z",
+      "spec": "TASK-1222",
+      "kind": {
+        "event": "UnshippedWorkDetected",
+        "spec": "TASK-1222",
+        "branch": "origin/task-1222",
+        "first_seen": "2026-11-08T01:21:16.985435294+00:00"
+      }
+    },
+    {
+      "ts": "2026-11-08T03:17:35.748206570Z",
+      "spec": "TASK-1222",
+      "seat": "advisor",
+      "kind": {
+        "event": "SpecRequeued",
+        "via": "queue-rework",
+        "actor": "joe",
+        "from": "Needs Attention",
+        "to": "Approved"
+      }
+    },
+    {
+      "ts": "2026-11-08T07:29:44.453160588Z",
+      "spec": "TASK-1222",
+      "seat": "advisor",
+      "kind": {
+        "event": "SpecRequeued",
+        "via": "queue-rework",
+        "actor": "joe",
+        "from": "Needs Attention",
+        "to": "Approved"
+      }
+    },
+    {
+      "ts": "2026-11-08T11:17:59.139545288Z",
+      "spec": "TASK-1222",
+      "seat": "advisor",
+      "kind": {
+        "event": "SpecRequeued",
+        "via": "queue-rework",
+        "actor": "joe",
+        "from": "Needs Attention",
+        "to": "Approved"
+      }
+    },
+    {
+      "ts": "2026-11-08T12:13:32.947116349Z",
+      "spec": "TASK-1222",
+      "seat": "advisor",
+      "kind": {
+        "event": "SpecRequeued",
+        "via": "queue-rework",
+        "actor": "joe",
+        "from": "Needs Attention",
+        "to": "Approved"
+      }
+    },
+    {
+      "ts": "2026-11-08T13:11:28.397651522Z",
+      "spec": "TASK-1222",
+      "seat": "advisor",
+      "kind": {
+        "event": "SpecRequeued",
+        "via": "queue-rework",
+        "actor": "joe",
+        "from": "Needs Attention",
+        "to": "Approved"
+      }
+    },
+    {
+      "ts": "2026-11-08T16:19:42.004094937Z",
+      "spec": "TASK-1222",
+      "seat": "advisor",
+      "kind": {
+        "event": "PhaseEntered",
+        "idx": 1,
+        "slug": "implementer",
+        "attempt": 1
+      }
+    },
+    {
+      "ts": "2026-11-08T17:04:23.790221225Z",
+      "spec": "TASK-1222",
+      "seat": "advisor",
+      "kind": {
+        "event": "SpecRequeued",
+        "via": "queue-rework",
+        "actor": "joe",
+        "from": "Needs Attention",
+        "to": "Approved"
+      }
+    },
+    {
+      "ts": "2026-11-08T17:27:11.074805208Z",
+      "spec": "TASK-1222",
+      "seat": "advisor",
+      "kind": {
+        "event": "SpecRequeued",
+        "via": "queue-rework",
+        "actor": "joe",
+        "from": "Needs Attention",
+        "to": "Approved"
+      }
+    },
+    {
+      "ts": "2026-11-08T18:03:48.752496263Z",
+      "spec": "TASK-1222",
+      "seat": "advisor",
+      "kind": {
+        "event": "SpecRequeued",
+        "via": "queue-rework",
+        "actor": "joe",
+        "from": "Needs Attention",
+        "to": "Approved"
+      }
+    },
+    {
+      "ts": "2026-11-08T18:30:18.841676678Z",
+      "spec": "TASK-1222",
+      "seat": "advisor",
+      "kind": {
+        "event": "SpecRequeued",
+        "via": "queue-rework",
+        "actor": "joe",
+        "from": "Needs Attention",
+        "to": "Approved"
+      }
+    },
+    {
+      "ts": "2026-11-08T18:53:21.217637991Z",
+      "spec": "TASK-1222",
+      "seat": "advisor",
+      "kind": {
+        "event": "SpecRequeued",
+        "via": "queue-rework",
+        "actor": "joe",
+        "from": "Needs Attention",
+        "to": "Approved"
+      }
+    },
+    {
+      "ts": "2026-11-08T19:16:55.523452439Z",
+      "spec": "TASK-1222",
+      "seat": "advisor",
+      "kind": {
+        "event": "SpecRequeued",
+        "via": "queue-rework",
+        "actor": "joe",
+        "from": "Needs Attention",
+        "to": "Approved"
+      }
+    },
+    {
+      "ts": "2026-11-08T19:18:31.624513582Z",
+      "spec": "TASK-1222",
+      "seat": "advisor",
+      "kind": {
+        "event": "SpecRequeued",
+        "via": "edit",
+        "actor": "joe",
+        "from": "Needs Attention",
+        "to": "Approved"
+      }
+    },
+    {
+      "ts": "2026-11-08T19:18:31.663266016Z",
+      "spec": "TASK-1222",
+      "seat": "advisor",
+      "kind": {
+        "event": "DispositionChanged",
+        "before": "Needs Attention",
+        "after": "Approved"
+      }
+    },
+    {
+      "ts": "2026-11-08T19:51:25.921011165Z",
+      "spec": "TASK-1222",
+      "seat": "advisor",
+      "kind": {
+        "event": "SpecRequeued",
+        "via": "queue-rework",
+        "actor": "joe",
+        "from": "Needs Attention",
+        "to": "Approved"
+      }
+    },
+    {
+      "ts": "2026-11-08T20:40:31.083033234Z",
+      "spec": "TASK-1222",
+      "seat": "advisor",
+      "kind": {
+        "event": "SpecRequeued",
+        "via": "queue-rework",
+        "actor": "joe",
+        "from": "Needs Attention",
+        "to": "Approved"
+      }
+    },
+    {
+      "ts": "2026-11-08T21:07:18.139297147Z",
+      "spec": "TASK-1222",
+      "seat": "advisor",
+      "kind": {
+        "event": "SpecRequeued",
+        "via": "queue-rework",
+        "actor": "joe",
+        "from": "Needs Attention",
+        "to": "Approved"
+      }
+    },
+    {
+      "ts": "2026-11-09T02:59:39.361471264Z",
+      "spec": "TASK-1222",
+      "seat": "advisor",
+      "kind": {
+        "event": "PrMerged",
+        "pr": 3647
+      }
+    },
+    {
+      "ts": "2026-11-09T03:00:12.023205849Z",
+      "spec": "TASK-1222",
+      "kind": {
+        "event": "SpecCompleted",
+        "commit": "d73f4e6b86c9f6a85cc01a4aa9893b869252b3a9",
+        "pr": 3647,
+        "closed_by": "auto-bump"
+      }
+    }
+  ]
+}
