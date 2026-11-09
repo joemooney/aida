@@ -29,7 +29,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-04T02:34:20.173245Z
-modified_at: 2026-11-09T11:21:16.961751258Z
+modified_at: 2026-11-09T11:21:25.713542942Z
 req_type: Story
 relationships:
 - rel_type:
@@ -843,6 +843,24 @@ comments:
   modified_at: 2026-11-09T11:04:15.863298Z
   session_id: 01a1bff4d881
   harness_version: codex-cli 0.167.0
+- id: 01a1c00a-a55b-7820-9896-e37847f7f150
+  author: joe
+  content: |-
+    REVIEW FINDINGS TO ADDRESS (PR #3639):
+    Verdict: CHANGES REQUESTED
+    Reviewed commit: 18db09732023
+    Recorded: 2026-11-09T11:01:57.057804864+00:00
+    Review comment: https://github.com/joemooney/aida/pull/3639#issuecomment-6738411696
+    Findings:
+    1. BLOCKING (CI gate): CI run 42605132641 is 7/7 queued at 18db09732023, so the green-at-head gate is unmet. Separately, CI (lib-1) step 'Test time budget' failed at a7539190e0d9 (run 42570932984) and d5ee66d25315 (run 42588996930, job 129065685815), and nothing since addresses it: the only change is a merge from main touching 11 files, none of them this PR's tests or scripts/test-time-budget.toml. Expect the same failure. The over-budget test is NOT identified, because the reviewer sandbox cannot fetch job logs. Read the job log or the test-timings-lib-1 artifact. Candidates: scripts/test-time-budget.toml:40 budgets story2402_s5_recur_conditions_resurface_and_manual_routes at 25s from timings measured at 0ffefda, before later manual-handoff cases were added, and story2402_s5_implementer_cannot_set_holds has no entry so it gets the 10s default. Speed the test up or raise its entry with measured evidence. merge-hold-gate is red by design for the supervised spec and is not an implementer item.
+    2. minor (untested-path): a manual condition inherits the age of an older deferral. defer_single keeps the original deferred_at on a trigger update (aida-cli-lib/src/defer_cmd.rs:52-56) and defer_resurface::action measures the 14-day age from deferred_at (aida-cli-lib/src/defer_resurface.rs:49-51). findings recur --until manual:<who> or session handoff --until manual:<who> on a row deferred over 14 days ago reaches role:human on the next hourly sweep, not 14 days after the manual condition was set. The S5 test backdates deferred_at by hand, so it does not cover this. Restart the clock when the condition changes to manual, or document the age as the deferral's age, and add a story2402_s5_* case.
+    3. minor (fail-open guard gap): session handoff --until skips the AIDA_TEAM_REQUIRE_USER refusal that aida defer gets. SESSION is an Early handler and maybe_team_identity_guard only runs later at aida-cli-lib/src/git_backend_cmd.rs:1594, so defer_single at aida-cli-lib/src/session_misc.rs:1038 writes the spec under a shared default identity even when the operator requires a distinct user. Call the guard before the deferral and add a refusal test.
+    4. minor (untested-path): canonical_condition (aida-cli-lib/src/condition_cmd.rs:211) only parses, so findings recur --until spec:TYPO-1=completed or session handoff --until spec:TYPO-1=completed is admitted. Condition::evaluate then returns 'no spec has the ID' (aida-core/src/condition.rs:521) and the hourly defer-resurface job exits failed every run until the row is repaired; other rows still progress. aida defer has the same gap, but this PR adds two more writers. Refuse an unknown spec ID at admission, or treat it as Unknown in the sweep.
+    5. minor (contract-drift): --snapshot does not conflict with --until (aida-cli-lib/src/agent_launch_args.rs:625-667). session handoff --snapshot --write F --spec S --until C parks S but writes the Revisit line only to the private worktree recovery note, while docs/cli/06-roles-sessions.md says the handoff note carries the trigger. Add until to the snapshot conflicts and cover it in story2402_s5_handoff_cli_requires_write_and_spec.
+    6. cosmetic: (a) per_write_auto_push for SESSION (aida-cli-lib/src/agent_launch.rs:8103) is inert because Early handlers return before the post-dispatch push, and story2402_s5_conditional_handoff_auto_pushes checks only that bit; (b) stale migration wording at docs/cli/02-specs.md:331 ('remain readable pending migration') and aida-cli-lib/src/defer_resurface.rs:29,37,186 now that S3 is applied; (c) recovery errors print the raw argument rather than the resolved ID (session_misc.rs:1073, findings_gate.rs recurrence_error); (d) canonical_defer_condition (defer_cmd.rs:118) is a one-line wrapper and can be inlined.
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
+  created_at: 2026-11-09T11:21:25.595415475Z
+  modified_at: 2026-11-09T11:21:25.595415475Z
 history:
 - id: 01a1a468-9c3a-76d2-ab8c-12bf6457966b
   author: joe
