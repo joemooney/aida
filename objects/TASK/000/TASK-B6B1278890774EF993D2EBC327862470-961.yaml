@@ -8,7 +8,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-07T23:40:15.306412624Z
-modified_at: 2026-11-09T04:25:39.999807633Z
+modified_at: 2026-11-09T04:30:36.890376227Z
 req_type: Task
 relationships:
 - rel_type: BlockedBy
@@ -530,6 +530,13 @@ comments:
   content: 'Implementation approach for current review: add a focused regression for the mediated MCP handler missing-registration refusal, using inert client/environment inputs so no transport or store operation occurs. Validate with the launcher-run targeted command-registry tests. Preserve the advisor-corrected 58-tool surface and Refs-only scope; AC5 dell1 timing evidence remains advisor-owned after merge, and final-head CI plus independent approval remain host gates.'
   created_at: 2026-11-09T04:25:39.999807633Z
   modified_at: 2026-11-09T04:25:39.999807633Z
+  session_id: 01a1be8d6094
+  harness_version: codex-cli 0.167.0
+- id: 01a1be92-895a-7f40-b08d-9ccded2450a1
+  author: dirtlab
+  content: 'Native implementer handoff: added command_registry::mediated_mcp_handler_refuses_without_binary_registration in aida-cli-lib/src/command_registry.rs. The regression uses inert fixture inputs and asserts the exact missing-binary-registration refusal, closing the latest code-level review gap. Validation: launcher job j20261109T042553084-2-0, cargo test --profile agent -p aida-cli-lib --lib -- command_registry::mediated_mcp_handler_refuses_without_binary_registration, exit 0: 1 passed, 0 failed (executed); untested=false. rustfmt --check and git diff --check passed. Descriptor-function source comparison against origin/main confirms 58 unique names in identical order. Prescribed codegraph client is missing; doctor confirms missing tool, so source search was used. Edits remain uncommitted; no commit, push, PR mutation, queue done, pr ship or review record. Advisor ruling honored: Refs-only partial publication, no task completion; AC5 dell1 clean-build timing remains owed by advisor after merge. Final-head green CI, independent approval and applicable hold clearance remain host gates. Turn ends with no active wait.'
+  created_at: 2026-11-09T04:30:36.890376227Z
+  modified_at: 2026-11-09T04:30:36.890376227Z
   session_id: 01a1be8d6094
   harness_version: codex-cli 0.167.0
 history:
