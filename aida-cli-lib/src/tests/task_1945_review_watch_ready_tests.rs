@@ -1140,7 +1140,17 @@ fn live_approval_composition_refuses_on_the_corpus_after_an_approval() {
 fn carried_approval_suppresses_both_dispatch_checks_but_not_ci_readiness() {
     use crate::gate::review_carryover::tests::{consumer_coverage, fixture as repo_fixture, git};
     let (repo, approved) = repo_fixture();
-    git(repo.path(), &["merge", "--quiet", "--no-edit", "main"]);
+    let merge = crate::test_git::git_command()
+        .arg("-C")
+        .arg(repo.path())
+        .args(["merge", "--quiet", "--no-edit", "main"])
+        .output()
+        .unwrap();
+    assert!(
+        merge.status.success(),
+        "{}",
+        String::from_utf8_lossy(&merge.stderr)
+    );
     let h = git(repo.path(), &["rev-parse", "HEAD"]);
     let proof = consumer_coverage(repo.path(), &approved, &h).unwrap();
     let store = Store::open(repo.path(), "github:github.com/owner/repo").unwrap();
