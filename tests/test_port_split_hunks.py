@@ -34,11 +34,20 @@ class PortSplitHunks(unittest.TestCase):
                       {'module': ['tail\n', 'added\n']})
         for data in ({'version': 2}, {'version': 2, 'writer': []},
                      {'version': 2, 'writer': {}},
-                     {'version': 2, 'writer': [{'item': 'broken'}]},
-                     {'version': 2, 'operation': ['broken']},
-                     {'version': 2, 'mediated_route': 'broken'}):
+                     {'version': 2, 'writer': [{'item': 'broken'}]}):
             with self.assertRaises(PORT.Refusal):
                 PORT.validate_inventory(data)
+
+    def test_policy_validators_reached_with_populated_writer(self):
+        row = dict(id='x.rs|persist|save', path='x.rs', item='persist', sink='save',
+                   lock='reviewed', gate='reviewed', disposition='blocked',
+                   blocker='review needed', proposed_operation='none', evidence_tests=['fixture'])
+        for key, value, message in (
+                ('operation', ['broken'], 'incomplete inventory operation'),
+                ('mediated_route', 'broken', 'mediated_route must be')):
+            with self.subTest(key=key):
+                with self.assertRaisesRegex(PORT.Refusal, message):
+                    PORT.validate_inventory(dict(version=2, writer=[row], **{key: value}))
 
     def test_git_line_boundaries(self):
         for separator in ('\v', '\f', '\x85', '\u2028', '\u2029', '\r'):
@@ -177,6 +186,7 @@ class PortSplitHunks(unittest.TestCase):
                 self.assertIn('empty policy refused', refused.stderr)
                 self.assertEqual(module.read_text(), second)
             baseline.write_text(reviewed)
+            before_refusals = {path: path.read_bytes() for path in (source, module, inventory)}
             wrong_head = subprocess.run([*command, '--head', base], capture_output=True, text=True)
             self.assertNotEqual(wrong_head.returncode, 0)
             self.assertIn('--head must be', wrong_head.stderr)
@@ -185,6 +195,8 @@ class PortSplitHunks(unittest.TestCase):
             wrong = subprocess.run([*command, '--base', older], capture_output=True, text=True)
             self.assertNotEqual(wrong.returncode, 0)
             self.assertIn('unique merge base', wrong.stderr)
+            for path, content in before_refusals.items():
+                self.assertEqual(path.read_bytes(), content)
             self.assertEqual(module.read_text(), second)
             implicit = command[:]
             side = implicit.index('--destination-conflict-side')

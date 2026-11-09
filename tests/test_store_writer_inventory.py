@@ -51,6 +51,24 @@ class WriterInventoryTests(unittest.TestCase):
                 guard.regenerate(self.root, baseline)
             self.assertEqual(target.read_bytes(), before)
 
+    def test_malformed_merge_baseline_refuses_without_policy_loss(self):
+        import tomllib
+        target = self.root / guard.INVENTORY
+        before = target.read_bytes()
+        baseline = self.root / 'reviewed.toml'
+        valid = tomllib.loads(before.decode())["writer"][0]
+        malformed = ["{a = 1}", '[{path = "x"}]']
+        # Use TOML inline rows, keeping failures about structure rather than syntax.
+        malformed += [
+            "[{" + ", ".join(f"{k} = {json.dumps(v)}" for k, v in valid.items() if k != field) + "}]"
+            for field in valid]
+        for rows in malformed:
+            with self.subTest(rows=rows):
+                baseline.write_text("version = 2\nwriter = " + rows + "\n")
+                with self.assertRaises(ValueError):
+                    guard.regenerate(self.root, baseline)
+                self.assertEqual(target.read_bytes(), before)
+
     # trace:TASK-3223 | ai:codex
     def test_candidates_cannot_silently_ignore_mediated_profile(self):
         import subprocess
