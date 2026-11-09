@@ -693,6 +693,22 @@ impl Fixture {
                 &end,
                 format!("#!/bin/sh\nrm -f '{}'\n", lease_path.display()),
             );
+            // The advisor may leave the old status in place on an empty resume.
+            // trace:TASK-3749 | ai:codex
+            if mode == 3 {
+                crate::test_env::enroll_synthetic_home(&self.project)?;
+                let mut req = aida_core::Requirement::new("Resume".into(), String::new());
+                req.spec_id = Some("STORY-9".into());
+                req.status = aida_core::RequirementStatus::NeedsAttention;
+                aida_core::object_store::write_object(
+                    &self.project.join(".aida-store/objects"),
+                    &req,
+                )?;
+                assert_eq!(
+                    crate::phase_gates::spec_status(&self.project, "STORY-9"),
+                    Some(aida_core::RequirementStatus::NeedsAttention)
+                );
+            }
             let mut real = crate::RealPhaseDriver::new(
                 self.project.clone(),
                 "STORY-9".into(),

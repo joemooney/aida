@@ -1967,14 +1967,10 @@ pub(crate) fn findings_needing_a_successor(
         .collect()
 }
 
-/// STORY-1421: a non-blocking finding recorded on an APPROVED review verdict
-/// has no successor once its spec reaches a terminal state — every surface
-/// that would have surfaced it (reviewer queue, `aida awaiting`, the open
-/// lens) stops looking, and the finding survives only inside a verdict record
-/// keyed to a spec nobody reads any more. Called from the same completion
-/// path `auto_bump_done_to_completed` / `close_verdict_on_merge` (BUG-1529)
-/// already use, this gives each such finding a home in `aida findings` — the
-/// existing triage surface — instead of a new child spec on the graph.
+/// Preserve approved non-blocking findings after their source spec completes.
+/// Findings append to the open `kind:finding-sweep` task, creating one Draft
+/// sweep only when none is open. Source, review head and hashes stay queryable.
+/// trace:TASK-3749 | ai:codex
 ///
 /// Best-effort: emission must never fail the pull/bump it rides along with.
 /// Any error is logged to stderr and swallowed.
@@ -2004,25 +2000,9 @@ pub(crate) fn completion_verdict(
     crate::gate::review_verdict::read_recorded_verdict(project_root, spec_id)
 }
 
-/// Idempotent worker for [`emit_nonblocking_findings_on_completion`]. Keyed on
-/// the source spec plus a hash of the finding text (`carried-from:<SPEC>` +
-/// `finding-hash:<hex>` tags), so a re-run of the auto-bump scan over an
-/// already-completed spec never files the same finding twice. Returns the
-/// number of NEW findings filed.
-///
-/// BUG-1506: every new finding is created through `DatabaseBackend::
-/// add_requirement` — the SAME targeted, single-object write `aida add`
-/// itself uses on the git-canonical store (`git_backend_cmd.rs`'s add
-/// handler). It only ever reads store METADATA (counters) to assign the new
-/// spec_id, then writes exactly the one new object + a targeted `add
-/// SPEC-ID` commit; it never loads or overwrites the full requirements list.
-/// The old `CachedGitBackend::update_atomically` path this replaced does a
-/// full-store load-then-save, which would silently drop any spec a
-/// concurrent `aida add` wrote in between — exactly the class of bug
-/// BUG-1506 was filed over, and live here because this runs inside `aida
-/// pull`'s auto-bump, right after drain merges, when concurrent `aida add`
-/// is common.
-// trace:STORY-1421 trace:BUG-1506 | ai:claude
+/// Append approved findings to the open sweep in one locked transaction.
+/// Selection, de-duplication and creation share the store writer lock.
+// trace:TASK-3749 | ai:codex
 pub(crate) fn try_emit_nonblocking_findings_on_completion(
     project_root: &std::path::Path,
     store_path: &std::path::Path,
@@ -2078,67 +2058,85 @@ pub(crate) fn try_emit_nonblocking_findings_on_completion(
     };
     let reviewed_sha = verdict.reviewed_sha.clone().unwrap_or_default();
 
-    // Idempotency: gather the hashes already on file for this spec (one cheap
-    // tag-filtered cache query), then let the pure planner in
-    // `findings_needing_a_successor` decide which of THIS verdict's findings
-    // are genuinely new. A re-run over an already-completed spec (the
-    // auto-bump scan can re-observe old history) then files nothing.
-    // Strict: a snapshot served while another process writes the cache can
-    // miss a successor filed since, and this set is what prevents a duplicate.
-    // trace:BUG-1670 | ai:claude
-    let already_filed: std::collections::HashSet<String> = backend
-        .list_summaries_strict(&aida_core::ListFilter {
-            tags: vec![carried_from_tag.clone()],
-            archive: aida_core::ArchiveFilter::Both,
-            ..Default::default()
-        })?
-        .iter()
-        .flat_map(|r| r.tags.iter())
-        .filter(|t| t.starts_with("finding-hash:"))
-        .cloned()
-        .collect();
-    let to_file = findings_needing_a_successor(&verdict, &already_filed);
-
     let mut filed = 0usize;
-    for (text, hash_tag) in to_file {
-        const TITLE_MAX: usize = 80;
-        let first_line = text.lines().next().unwrap_or(text.as_str()).trim();
-        let title = if first_line.chars().count() > TITLE_MAX {
-            let truncated: String = first_line.chars().take(TITLE_MAX - 1).collect();
-            format!("{truncated}…")
-        } else {
-            first_line.to_string()
-        };
-
-        let mut note = format!(
-            "Non-blocking finding carried forward from an APPROVED review verdict \
-             on {spec_upper}, which has since completed — recorded here so it keeps \
-             a queryable home once the verdict record stops being read.\n\n{text}"
-        );
+    let mut sweep_id = None;
+    backend.update_atomically(|store| {
+        // Retain legacy per-source hashes, but use paired keys on sweeps so
+        // hashes from different source specs cannot form false matches.
+        let already_filed = store
+            .requirements
+            .iter()
+            .flat_map(|r| {
+                r.tags.iter().filter_map(|tag| {
+                    let prefix = format!("carried-finding:{spec_upper}:");
+                    if let Some(hash) = tag.strip_prefix(&prefix) {
+                        Some(format!("finding-hash:{hash}"))
+                    } else if !r.tags.contains("kind:finding-sweep")
+                        && r.tags.contains(&carried_from_tag)
+                        && tag.starts_with("finding-hash:")
+                    {
+                        Some(tag.clone())
+                    } else {
+                        None
+                    }
+                })
+            })
+            .collect();
+        let to_file = findings_needing_a_successor(&verdict, &already_filed);
+        if to_file.is_empty() {
+            return;
+        }
+        let index = store
+            .requirements
+            .iter()
+            .position(|r| {
+                !r.archived
+                    && r.tags.contains("kind:finding-sweep")
+                    // In-progress sweeps remain open to new sections until closed.
+                    // trace:TASK-3749 | ai:codex
+                    && !aida_core::conflict::is_terminal_status(&r.status)
+                    && r.status != aida_core::RequirementStatus::Done
+            })
+            .unwrap_or_else(|| {
+                let mut req = aida_core::Requirement::new(
+                    "Non-blocking review findings sweep".into(),
+                    String::new(),
+                );
+                req.req_type = aida_core::RequirementType::Task;
+                req.status = aida_core::RequirementStatus::Draft;
+                req.owner = get_default_author();
+                req.tags.insert("kind:finding-sweep".into());
+                aida_core::provenance::stamp_if_absent(&mut req);
+                let prefix = store.get_type_prefix(&req.req_type);
+                store.add_requirement_with_id(req, None, prefix.as_deref());
+                store.requirements.len() - 1
+            });
+        let req = &mut store.requirements[index];
+        sweep_id = req.spec_id.clone();
+        req.description
+            .push_str(&format!("\n\n## Findings from {spec_upper}\n"));
         if let Some(n) = pr_number {
-            note.push_str(&format!("\n\nPR: #{n}"));
+            req.description.push_str(&format!("\nPR: #{n}\n"));
         }
         if !reviewed_sha.is_empty() {
-            note.push_str(&format!("\nReviewed sha: {reviewed_sha}"));
+            req.description
+                .push_str(&format!("Reviewed sha: {reviewed_sha}\n"));
         }
-
-        let mut req = aida_core::Requirement::new(title, note);
-        req.req_type = aida_core::RequirementType::Task;
-        req.status = aida_core::RequirementStatus::Draft;
-        req.owner = get_default_author();
         req.tags.insert(review_tag.clone());
         req.tags.insert(carried_from_tag.clone());
-        req.tags.insert(hash_tag);
-        req.tags.insert("kind:carried-forward".to_string());
-        // `spec_id` left unset — the targeted `add_requirement` write below
-        // assigns it (reading only the store's small metadata/counters file,
-        // never the full requirements list).
-
-        let written = backend.add_requirement(req)?;
-
-        let display_id = written.spec_id.as_deref().unwrap_or("?");
-        record_role_activity(display_id, "findings-add");
-        filed += 1;
+        for (text, hash_tag) in to_file {
+            req.description
+                .push_str(&format!("\n### {hash_tag}\n\n{text}\n"));
+            let hash = hash_tag.strip_prefix("finding-hash:").unwrap();
+            req.tags
+                .insert(format!("carried-finding:{spec_upper}:{hash}"));
+            req.tags.insert(hash_tag);
+            filed += 1;
+        }
+        req.modified_at = chrono::Utc::now();
+    })?;
+    if let Some(id) = sweep_id {
+        record_role_activity(&id, "findings-add");
     }
     Ok(filed)
 }

@@ -449,7 +449,25 @@ impl auto_complete::PhaseDriver for RealPhaseDriver {
                 wd.with_heartbeat("implementer", &self.spec)
             }
         });
-        let mut wd_closure = watchdog.as_mut().map(|w| move || w.check());
+        // The fixture publishes a ready marker after its lease and manifest;
+        // its tiny ceiling must not race the child's first scheduling slice.
+        // A broken fixture still terminates within a bounded readiness budget.
+        // trace:TASK-3749 | ai:codex
+        #[cfg(test)]
+        let ready = self.watchdog_ready.clone();
+        #[cfg(test)]
+        let ready_started = std::time::Instant::now();
+        let mut wd_closure = watchdog.as_mut().map(|w| {
+            move || {
+                #[cfg(test)]
+                if ready.as_ref().is_some_and(|path| !path.exists())
+                    && ready_started.elapsed() < std::time::Duration::from_secs(10)
+                {
+                    return None;
+                }
+                w.check()
+            }
+        });
         let wd_dyn: Option<&mut dyn FnMut() -> Option<String>> = wd_closure
             .as_mut()
             .map(|c| c as &mut dyn FnMut() -> Option<String>);
@@ -3468,10 +3486,13 @@ impl auto_complete::PhaseDriver for RealPhaseDriver {
         // re-punt leaves the spec back in `NeedsAttention`.
         let resumed_punt = punt::read_signal(&punt::signal_path(&self.project_root, &self.spec));
         if resumed_punt.is_some()
-            || matches!(
+            // A retained NeedsAttention status is not a new punt when the
+            // host has confirmed this resume made no changes.
+            // trace:TASK-3749 | ai:codex
+            || (!native_no_change && matches!(
                 spec_status(&self.project_root, &self.spec),
                 Some(RequirementStatus::NeedsAttention)
-            )
+            ))
         {
             let reason = load_store_for_lookup(&self.project_root)
                 .and_then(|s| {
