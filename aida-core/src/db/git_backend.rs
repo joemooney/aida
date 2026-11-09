@@ -2694,7 +2694,7 @@ impl GitBackend {
 
     /// Plan canonical postimages without side effects, then durably decide and
     /// install them. Caller authorization runs inside the bounded writer lock.
-    /// Only title/description edits are admitted in this slice; lifecycle and
+    /// Only title/description/priority edits are admitted in this slice; lifecycle and
     /// multi-root commands require their own policy-preserving typed handlers.
     // trace:TASK-3223 | ai:codex
     pub fn mutate_canonical(
@@ -2725,7 +2725,13 @@ impl GitBackend {
             let before = redo::object_bytes(&self.root, sid)?;
             anyhow::ensure!(redo::hash(&before) == revision, "Conflict");
             let current: Requirement = serde_yaml::from_slice(&before)?;
-            anyhow::ensure!(current.spec_id.as_deref() == Some(sid), "Conflict");
+            anyhow::ensure!(
+                current
+                    .spec_id
+                    .as_deref()
+                    .is_some_and(|stored| stored.eq_ignore_ascii_case(sid)),
+                "Conflict"
+            );
             let mut next = current.clone();
             let context = crate::provenance::WriteContext {
                 session_id: Some(epoch.to_string()),
@@ -2741,7 +2747,11 @@ impl GitBackend {
                 }
                 CanonicalOperation::SpecEdit { fields, .. } => {
                     let mut changes = Vec::new();
-                    if let Some(title) = &fields.title {
+                    if let Some(title) = fields
+                        .title
+                        .as_ref()
+                        .filter(|title| **title != current.title)
+                    {
                         changes.push(crate::models::FieldChange {
                             field_name: "title".into(),
                             old_value: current.title.clone(),
@@ -2749,13 +2759,28 @@ impl GitBackend {
                         });
                         next.title = title.clone();
                     }
-                    if let Some(description) = &fields.description {
+                    if let Some(description) = fields
+                        .description
+                        .as_ref()
+                        .filter(|description| **description != current.description)
+                    {
                         changes.push(crate::models::FieldChange {
                             field_name: "description".into(),
                             old_value: current.description.clone(),
                             new_value: description.clone(),
                         });
                         next.description = description.clone();
+                    }
+                    // trace:TASK-3223 | ai:codex
+                    if let Some(priority) = fields.parsed_priority()? {
+                        if priority != current.priority {
+                            changes.push(crate::models::FieldChange {
+                                field_name: "priority".into(),
+                                old_value: current.priority.to_string(),
+                                new_value: priority.to_string(),
+                            });
+                            next.priority = priority;
+                        }
                     }
                     next.record_change(author.into(), changes);
                 }
