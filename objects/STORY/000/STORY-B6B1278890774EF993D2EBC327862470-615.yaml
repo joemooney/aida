@@ -3,12 +3,12 @@ spec_id: STORY-b6b1278890774ef993d2ebc327862470-615
 agreed_id: STORY-2692
 title: 'Mechanical merge support: regenerate inventories and snapshots instead of merging them, and carry PR edits across file splits'
 description: 'Problem: on 2026-11-08 PR-3685 split queue_cmd.rs and conflicted eight PRs the same way; scripts/store-writers.toml and the CLI help golden also conflicted repeatedly though they are generated. Hand scripts resolved most of it. Requirement: generated files are regenerated after merging rather than merged; a tested tool ports a PR''s hunks across a recorded file split with exact-match only, reporting anything it cannot place. Acceptance: fixture PRs across a split merge without hand edits; an inexact hunk is refused, never guessed.'
-status: NeedsAttention
+status: Approved
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-09T01:58:54.698246911Z
-modified_at: 2026-11-09T03:44:33.723845216Z
+modified_at: 2026-11-09T04:04:28.914389226Z
 req_type: Story
 tags:
 - area:orchestration
@@ -52,6 +52,12 @@ comments:
   modified_at: 2026-11-09T03:20:12.647772294Z
   session_id: 01a1be490130
   harness_version: codex-cli 0.167.0
+- id: 01a1be7a-9c72-7563-96d6-a5834a8cd36d
+  author: joe
+  content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: Round 2 from source: conflicted-inventory baseline and a real merge fixture landed, but wrong --base still reverts main, surviving-parent ports still refuse, inventory regenerates before conflicts resolve, fixture hand-edits the parent, and the story-closing title still omits the CLI help golden. No local tests run; CI was still pending (cli-1 pass; merge-hold-gate is the expected hold).. No triage reason was given.'
+  created_at: 2026-11-09T04:04:28.914386669Z
+  modified_at: 2026-11-09T04:04:28.914386669Z
+  session_id: 7aacb1ed-ebaa-4da4-a195-500864e99e7d
 history:
 - id: 01a1be0b-c26f-7e81-9cbb-17bbd5fc30b5
   author: joe
@@ -106,6 +112,14 @@ history:
   - field_name: status
     old_value: InProgress
     new_value: NeedsAttention
+- id: 01a1be7a-9c72-7563-96d6-a579e7317ee8
+  author: joe
+  timestamp: 2026-11-09T04:04:28.914365173Z
+  session_id: 7aacb1ed-ebaa-4da4-a195-500864e99e7d
+  changes:
+  - field_name: status
+    old_value: NeedsAttention
+    new_value: Approved
 filed_at:
   code_sha: a7a14984cec5533987dfeccb70d1f91aaebbf22a
   branch: main
@@ -114,11 +128,3 @@ filed_at:
   aida_build_sha: 8a4a909a967
   vendor: claude
   session: 20abb7c3-8f9b-4a5e-b326-404921f3b450
-failure_reason:
-  phase: reviewer
-  phase_index: 3
-  kind: verdict:request-changes
-  detail: 'Round 2 from source: conflicted-inventory baseline and a real merge fixture landed, but wrong --base still reverts main, surviving-parent ports still refuse, inventory regenerates before conflicts resolve, fixture hand-edits the parent, and the story-closing title still omits the CLI help golden. No local tests run; CI was still pending (cli-1 pass; merge-hold-gate is the expected hold).'
-  recovery_hint: address the review findings, move STORY-2692 back to In Progress, and clear the PR hold only after approval
-  shelved_by: reviewer
-  shelved_at: 2026-11-09T03:44:33.723845216Z
