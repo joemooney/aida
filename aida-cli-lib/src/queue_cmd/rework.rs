@@ -313,6 +313,36 @@ pub(crate) fn needs_attention_parks(store: &aida_core::RequirementsStore) -> Vec
     parks
 }
 
+/// Only a reviewer shelf can complete the repeated-review loop. A punt or CI
+/// pause may retain the same imported review while an advisor resolves a new
+/// obstacle; replaying that receipt must not undo the triage decision.
+/// A loop-guard park remains a review shelf until a deliberate status edit;
+/// returning to flight has already cleared its original failure marker.
+// trace:BUG-2502 | ai:codex
+pub(crate) fn rework_is_review_shelf(req: &Requirement) -> bool {
+    req.status == RequirementStatus::NeedsAttention
+        && req.attention_reason.is_none()
+        && (req
+            .history
+            .iter()
+            .rev()
+            .find(|entry| {
+                entry
+                    .changes
+                    .iter()
+                    .any(|change| change.field_name == "status")
+            })
+            .is_some_and(|entry| entry.author == aida_core::conflict::LOOP_GUARD_AUTHOR)
+            || req.failure_reason.as_ref().is_some_and(|failure| {
+                // Review recording and drain shelving use different rejection slugs.
+                failure.phase == "reviewer"
+                    && matches!(
+                        failure.kind.as_str(),
+                        "verdict:request-changes" | "verdict:rejected" | "verdict:reject"
+                    )
+            }))
+}
+
 /// The BUG-1213 loop guard's write: return the spec to NeedsAttention after
 /// identical review findings recurred.
 ///
@@ -657,6 +687,112 @@ pub(crate) fn handle_queue_rework(
         }
     }
 
+    // Decide recurrence before return-to-flight clears review evidence and
+    // emits its audit/event: a refused blind retry never leaves the shelf.
+    // trace:BUG-2502 | ai:codex
+    // A reviewer RequestChanges/Rejection is the actual acceptance delta for a
+    // rework pickup. Persist it onto the spec before queueing so every later
+    // pickup surface sees the same blocking context. trace:BUG-814 | ai:codex
+    if let Ok(root) = find_project_root() {
+        // BUG-2430: a review keyed by the spec's open PR counts too.
+        // trace:BUG-2430 | ai:claude
+        let open_change = spec_open_change_key(&root, &[display_id.as_str(), spec_id.as_str()]);
+        let findings = match resolve_rework_findings(
+            &root,
+            &display_id,
+            &spec_id,
+            open_change.as_deref(),
+        ) {
+            Ok(block) => block,
+            Err(why) => {
+                // trace:BUG-2507 | ai:codex
+                eprintln!("warning: no review findings imported for {display_id}: {why}. Read the review comment before starting rework.");
+                None
+            }
+        };
+        if let Some(block) = findings {
+            let author = get_default_author();
+            let comment = aida_core::Comment::new(author, block.clone());
+            // BUG-1213 (round 2): recurrence means the IMMEDIATELY PREVIOUS
+            // round's findings equal this round's — not "an identical block
+            // exists somewhere in history". A → B → A is progress, not a loop.
+            // trace:BUG-1213 | ai:claude
+            let mut recurred = false;
+            // Per-spec compare-and-swap, no whole-store write. trace:BUG-1612 | ai:claude
+            storage.update_spec_atomically(req, |r| {
+                recurred = findings_recur_consecutively(&r.comments, &block);
+                if !recurred {
+                    r.add_comment(comment);
+                }
+            })?;
+            if !recurred {
+                println!("  {} review findings captured as comment", "·".dimmed());
+            } else if rework_is_review_shelf(req) {
+                // BUG-1213: the same blocking findings produced two consecutive
+                // request-changes shelves. A third blind requeue is a loop, so
+                // return the spec to NeedsAttention and route an explicit
+                // advisor finding + brief instead.
+                // Per-spec compare-and-swap, no whole-store write. trace:BUG-1612 | ai:claude
+                // BUG-1632: the loop guard's decision is automated even when a
+                // person ran `queue rework`, so it records the transition under
+                // an automated author the BUG-1625 merge guard recognizes.
+                // trace:BUG-1632 | ai:claude
+                // BUG-1637: a spec that reached a terminal status meanwhile is
+                // left alone, and there is no loop left to escalate.
+                // trace:BUG-1637 | ai:claude
+                let mut parked = false;
+                storage.update_spec_atomically(req, |r| parked = loop_guard_park(r))?;
+                if !parked {
+                    println!(
+                        "  {} {display_id} reached a final status meanwhile; left it as it is",
+                        "·".dimmed()
+                    );
+                    return Ok(());
+                }
+                let note = format!(
+                    "Identical reviewer findings recurred twice for {display_id}; do not \
+                     requeue a third implementer round until an advisor chooses a different \
+                     implementer/seat or resolves the dispute.\n\n{block}"
+                );
+                // BUG-1199: every in-process `aida` subprocess resolves through the
+                // once-per-process resolver, never a raw executable lookup.
+                let exe = crate::aida_exe_path();
+                let finding_title = format!("Repeated unchanged review findings: {display_id}");
+                let finding = std::process::Command::new(&exe)
+                    .current_dir(&root)
+                    .args([
+                        "findings",
+                        "add",
+                        "--title",
+                        &finding_title,
+                        "--note",
+                        &note,
+                        "--severity",
+                        "major",
+                        "--linked-specs",
+                        &display_id,
+                        "--tags",
+                        "loop-guard,review-recurrence",
+                    ])
+                    .status_retrying_etxtbsy()?;
+                anyhow::ensure!(finding.success(), "could not file repeated-review finding");
+                let brief = std::process::Command::new(&exe)
+                    .current_dir(&root)
+                    .args(["brief", "advisor", &display_id, "--note", &note, "--notify"])
+                    .status_retrying_etxtbsy()?;
+                anyhow::ensure!(
+                    brief.success(),
+                    "could not write repeated-review advisor brief"
+                );
+                println!(
+                    "  {} identical review findings recurred — escalated to advisor; not re-queued",
+                    crate::glyph(crate::glyphs::Glyph::Warning).yellow().bold()
+                );
+                return Ok(());
+            }
+        }
+    }
+
     // Status flip (if any). STORY-1429: the target was computed from a status
     // read before this point, so the write re-checks it (compare-and-swap)
     // and changes nothing when the spec moved in between. Leaving
@@ -761,13 +897,6 @@ pub(crate) fn handle_queue_rework(
             }
             record_role_activity(&spec_id, "rework");
             update_manifest_for_status(&spec_id, &format!("{:?}", new_status));
-            println!(
-                "{} {} status: {} → {}",
-                crate::glyph(crate::glyphs::Glyph::Check).green(),
-                display_id.bold(),
-                current_status.to_string().dimmed(),
-                new_status.to_string().cyan(),
-            );
         }
     }
 
@@ -795,106 +924,17 @@ pub(crate) fn handle_queue_rework(
         );
     }
 
-    // A reviewer RequestChanges/Rejection is the actual acceptance delta for a
-    // rework pickup. Persist it onto the spec before queueing so every later
-    // pickup surface sees the same blocking context. trace:BUG-814 | ai:codex
-    if let Ok(root) = find_project_root() {
-        // BUG-2430: a review keyed by the spec's open PR counts too.
-        // trace:BUG-2430 | ai:claude
-        let open_change = spec_open_change_key(&root, &[display_id.as_str(), spec_id.as_str()]);
-        let findings = match resolve_rework_findings(
-            &root,
-            &display_id,
-            &spec_id,
-            open_change.as_deref(),
-        ) {
-            Ok(block) => block,
-            Err(why) => {
-                // trace:BUG-2507 | ai:codex
-                eprintln!("warning: no review findings imported for {display_id}: {why}. Read the review comment before starting rework.");
-                None
-            }
-        };
-        if let Some(block) = findings {
-            let author = get_default_author();
-            let comment = aida_core::Comment::new(author, block.clone());
-            // BUG-1213 (round 2): recurrence means the IMMEDIATELY PREVIOUS
-            // round's findings equal this round's — not "an identical block
-            // exists somewhere in history". A → B → A is progress, not a loop.
-            // trace:BUG-1213 | ai:claude
-            let mut recurred = false;
-            // Per-spec compare-and-swap, no whole-store write. trace:BUG-1612 | ai:claude
-            storage.update_spec_atomically(req, |r| {
-                recurred = findings_recur_consecutively(&r.comments, &block);
-                if !recurred {
-                    r.add_comment(comment);
-                }
-            })?;
-            if !recurred {
-                println!("  {} review findings captured as comment", "·".dimmed());
-            } else if current_status == RequirementStatus::NeedsAttention {
-                // BUG-1213: the same blocking findings produced two consecutive
-                // request-changes shelves. A third blind requeue is a loop, so
-                // return the spec to NeedsAttention and route an explicit
-                // advisor finding + brief instead.
-                // Per-spec compare-and-swap, no whole-store write. trace:BUG-1612 | ai:claude
-                // BUG-1632: the loop guard's decision is automated even when a
-                // person ran `queue rework`, so it records the transition under
-                // an automated author the BUG-1625 merge guard recognizes.
-                // trace:BUG-1632 | ai:claude
-                // BUG-1637: a spec that reached a terminal status meanwhile is
-                // left alone, and there is no loop left to escalate.
-                // trace:BUG-1637 | ai:claude
-                let mut parked = false;
-                storage.update_spec_atomically(req, |r| parked = loop_guard_park(r))?;
-                if !parked {
-                    println!(
-                        "  {} {display_id} reached a final status meanwhile; left it as it is",
-                        "·".dimmed()
-                    );
-                    return Ok(());
-                }
-                let note = format!(
-                    "Identical reviewer findings recurred twice for {display_id}; do not \
-                     requeue a third implementer round until an advisor chooses a different \
-                     implementer/seat or resolves the dispute.\n\n{block}"
-                );
-                // BUG-1199: every in-process `aida` subprocess resolves through the
-                // once-per-process resolver, never a raw executable lookup.
-                let exe = crate::aida_exe_path();
-                let finding_title = format!("Repeated unchanged review findings: {display_id}");
-                let finding = std::process::Command::new(&exe)
-                    .current_dir(&root)
-                    .args([
-                        "findings",
-                        "add",
-                        "--title",
-                        &finding_title,
-                        "--note",
-                        &note,
-                        "--severity",
-                        "major",
-                        "--linked-specs",
-                        &display_id,
-                        "--tags",
-                        "loop-guard,review-recurrence",
-                    ])
-                    .status_retrying_etxtbsy()?;
-                anyhow::ensure!(finding.success(), "could not file repeated-review finding");
-                let brief = std::process::Command::new(&exe)
-                    .current_dir(&root)
-                    .args(["brief", "advisor", &display_id, "--note", &note, "--notify"])
-                    .status_retrying_etxtbsy()?;
-                anyhow::ensure!(
-                    brief.success(),
-                    "could not write repeated-review advisor brief"
-                );
-                println!(
-                    "  {} identical review findings recurred — escalated to advisor; not re-queued",
-                    crate::glyph(crate::glyphs::Glyph::Warning).yellow().bold()
-                );
-                return Ok(());
-            }
+    // Report success only after the repeated-review guard can re-park the spec.
+    // trace:BUG-2502 | ai:codex
+    if let Some(ref new_status) = target_status {
+        if new_status != &current_status {
+            println!(
+                "{} {} status: {} → {}",
+                crate::glyph(crate::glyphs::Glyph::Check).green(),
+                display_id.bold(),
+                current_status.to_string().dimmed(),
+                new_status.to_string().cyan(),
+            );
         }
     }
 
