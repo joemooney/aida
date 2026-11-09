@@ -1,3 +1,4 @@
+// trace:TASK-3429 | ai:codex
 //! `aida goal` command cluster (TASK-242), lifted out of `main.rs` (SPIKE-78).
 //!
 //! Derives a machine-checkable `/goal` completion condition from AIDA metadata
@@ -26,9 +27,9 @@ use crate::forge::ForgeKind;
 
 /// One clause of a `/goal` completion condition: a human-readable
 /// statement plus an explicit, deterministic command to verify it.
-pub(crate) struct GoalClause {
+pub struct GoalClause {
     description: String,
-    pub(crate) verify: String,
+    pub verify: String,
     /// What the clause checks and its operand, so a stored goal can be
     /// evaluated (`aida goal advisor check`). trace:STORY-2243 | ai:claude
     kind: aida_core::advisor_goal::ClauseKind,
@@ -52,7 +53,7 @@ impl GoalClause {
 /// Bails when no condition flag is given. Project-aware callers pass the
 /// resolved forge so GitLab `/goal --pr` clauses say MR/glab rather than PR/gh.
 // trace:TASK-242 trace:TASK-1240 | ai:claude+codex
-pub(crate) fn build_goal_clauses_for_forge(
+pub fn build_goal_clauses_for_forge(
     batch: Option<&str>,
     epic: Option<&str>,
     spec: Option<&str>,
@@ -133,7 +134,7 @@ pub(crate) fn build_goal_clauses_for_forge(
 /// clause inlines its verification command so a Haiku-class evaluator
 /// can check it deterministically.
 // trace:TASK-242 | ai:claude
-pub(crate) fn assemble_goal_condition(clauses: &[GoalClause]) -> String {
+pub fn assemble_goal_condition(clauses: &[GoalClause]) -> String {
     clauses
         .iter()
         .map(|c| format!("{} (verify: {})", c.description, c.verify))

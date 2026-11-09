@@ -662,6 +662,8 @@ fn destructive_callers_do_not_use_tolerant_cache_reads() {
     let src_root = Path::new(env!("CARGO_MANIFEST_DIR")).join("src");
     let mut files = Vec::new();
     rust_sources(&src_root, &mut files);
+    // trace:TASK-3429 | ai:codex — retain coverage of the extracted transport.
+    rust_sources(&src_root.join("../../aida-mcp/src"), &mut files);
     assert!(files.len() > 10, "lint must see the crate sources");
     // The scanner must see real bodies: worker gc's strict read is found.
     let mut lib = std::fs::read_to_string(src_root.join("lib.rs")).unwrap();
@@ -679,7 +681,7 @@ fn destructive_callers_do_not_use_tolerant_cache_reads() {
     let mut hits = Vec::new();
     for f in &files {
         let src = std::fs::read_to_string(f).unwrap();
-        let rel = f.strip_prefix(&src_root).unwrap().display().to_string();
+        let rel = f.strip_prefix(&src_root).unwrap_or(f).display().to_string();
         hits.extend(lint_source(&rel, &src));
     }
     assert!(

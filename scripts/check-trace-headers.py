@@ -106,6 +106,7 @@ ALLOW_LIST = {
 
 SCAN_GLOBS = (
     "aida-cli-lib/src/**/*.rs",
+    "aida-mcp/src/**/*.rs",
     "aida-cli/src/**/*.rs",
     "aida-core/src/**/*.rs",
     "aida-tui/src/**/*.rs",

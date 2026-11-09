@@ -76,7 +76,7 @@ pub(crate) fn register_mcp_agent(name: &str, print_only: bool, force: bool) -> R
         println!("{}", serde_json::to_string_pretty(&pretty)?);
         println!();
         println!("Tools exposed:");
-        let descriptors = mcp::tool_descriptors();
+        let descriptors = crate::mcp_schema::tool_descriptors();
         if let Some(arr) = descriptors.as_array() {
             for tool in arr {
                 let n = tool.get("name").and_then(|v| v.as_str()).unwrap_or("?");

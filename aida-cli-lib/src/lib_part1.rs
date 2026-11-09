@@ -1,3 +1,4 @@
+// trace:TASK-3429 | ai:codex
 pub(crate) fn glyph(g: crate::glyphs::Glyph) -> &'static str {
     crate::glyphs::get(g, crate::find_project_root().ok().as_deref())
 }
@@ -892,7 +893,7 @@ pub(crate) fn search_fields_help() -> String {
 /// fractional part (`42`, not `42.0`); everything else uses the shortest
 /// round-trip float formatting (`0.75`).
 // trace:FR-283 | ai:claude
-pub(crate) fn format_weight(w: f64) -> String {
+pub fn format_weight(w: f64) -> String {
     if w.fract() == 0.0 && w.abs() < 1e15 {
         format!("{}", w as i64)
     } else {

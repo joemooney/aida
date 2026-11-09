@@ -1,3 +1,4 @@
+// trace:TASK-3429 | ai:codex
 //! plan report, skill lint, and ultraplan prompt assembly (STORY-1488 slice 1)
 // trace:STORY-1488 | ai:claude
 
@@ -109,7 +110,7 @@ pub(crate) struct PlanRefFix {
 /// confirmed drifted-ref fixes. Split out from `verify_plan` so both the CLI
 /// renderer (`verify_plan`) and the read-only MCP `plan_verify` tool compute
 /// from the same source of truth. trace:EPIC-27 | ai:claude
-pub(crate) struct PlanReport {
+pub struct PlanReport {
     pub(crate) sections: Vec<PlanFinding>,
     pub(crate) files: Vec<PlanFinding>,
     pub(crate) refs: Vec<PlanFinding>,
@@ -140,7 +141,7 @@ impl PlanReport {
 /// Walk up from the plan file to the enclosing git repo root. Paths inside
 /// a plan are repo-relative, so this is what we resolve them against. Falls
 /// back to the current directory when no `.git` is found.
-pub(crate) fn plan_repo_root(plan_file: &std::path::Path) -> std::path::PathBuf {
+pub fn plan_repo_root(plan_file: &std::path::Path) -> std::path::PathBuf {
     let start = plan_file
         .canonicalize()
         .ok()
@@ -281,7 +282,7 @@ pub(crate) fn plan_symbols_on_line(line: &str) -> Vec<String> {
 /// or exits — the rendering, `--fix` rewrite, and process exit live in the
 /// callers (`verify_plan` for the CLI, the `plan_verify` MCP tool for the
 /// server). trace:EPIC-27 | ai:claude
-pub(crate) fn compute_plan_report(content: &str, root: &std::path::Path) -> PlanReport {
+pub fn compute_plan_report(content: &str, root: &std::path::Path) -> PlanReport {
     use regex::Regex;
     let lines: Vec<&str> = content.lines().collect();
 
@@ -890,7 +891,7 @@ pub(crate) fn lint_skills(skill: Option<&std::path::Path>, json: bool, quiet: bo
 /// `plan_verify` MCP tool. Mirrors the CLI's grouped layout + verdict line but
 /// returns a string instead of printing, and never rewrites or exits (the MCP
 /// server must not mutate files or kill its own process). trace:EPIC-27
-pub(crate) fn render_plan_report_string(report: &PlanReport, plan_label: &str) -> String {
+pub fn render_plan_report_string(report: &PlanReport, plan_label: &str) -> String {
     use std::fmt::Write as _;
     let mut out = String::new();
     let _ = writeln!(out, "Verifying plan: {}", plan_label);
@@ -941,7 +942,7 @@ pub(crate) fn render_plan_report_string(report: &PlanReport, plan_label: &str) -
 /// harvesting their `trace:` comments. Returns `None` when no related spec
 /// contributes a named helper. Shared by `aida plan helpers` and the
 /// `aida ultraplan` prompt assembler. trace:TASK-94 TASK-113 | ai:claude
-pub(crate) fn build_reusable_helpers_section(
+pub fn build_reusable_helpers_section(
     store: &aida_core::RequirementsStore,
     project_root: &std::path::Path,
     target: &aida_core::models::Requirement,
@@ -1239,7 +1240,7 @@ pub(crate) fn assemble_punt_payload(
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
-pub(crate) struct ReservedPath {
+pub struct ReservedPath {
     pub(crate) path: String,
     pub(crate) reason: String,
 }
@@ -1250,9 +1251,7 @@ pub(crate) struct ReservedPathsFile {
     pub(crate) reservations: Vec<ReservedPath>,
 }
 
-pub(crate) fn read_reserved_paths(
-    project_root: &std::path::Path,
-) -> (Vec<ReservedPath>, Vec<String>) {
+pub fn read_reserved_paths(project_root: &std::path::Path) -> (Vec<ReservedPath>, Vec<String>) {
     let path = project_root.join(".aida").join("reserved-paths.toml");
     let Ok(body) = std::fs::read_to_string(&path) else {
         return (
@@ -1297,7 +1296,7 @@ pub(crate) fn reserved_paths_section(reservations: &[ReservedPath]) -> Option<St
     Some(out)
 }
 
-pub(crate) fn assemble_ultraplan_prompt(
+pub fn assemble_ultraplan_prompt(
     store: &aida_core::RequirementsStore,
     target: &aida_core::models::Requirement,
     helpers_section: Option<&str>,

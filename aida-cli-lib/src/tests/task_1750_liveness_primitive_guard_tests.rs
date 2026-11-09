@@ -4,9 +4,11 @@
 //! consumers until their receipt and policy migrations are complete.
 // trace:TASK-1750 trace:TASK-3367 | ai:codex
 
+// trace:TASK-3429 | ai:codex
 use std::path::{Path, PathBuf};
 
 const CRATES: &[&str] = &[
+    "aida-mcp",
     "aida-core",
     "aida-cli-lib",
     "aida-cli",

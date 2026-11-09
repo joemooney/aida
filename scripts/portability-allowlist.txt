@@ -179,13 +179,13 @@ unattributed	aida-tui/tests/launcher_intent.rs:&aida_tui::__test_only::Intent::L
 # `starts_with`/`==`/regex matches, and a lowered copy whose error-shaped
 # source is more than 12 lines above the match.
 prose-classification	aida-cli-lib/src/maintenance_schedule.rs:if stderr.contains("no crontab") {
-prose-classification	aida-cli-lib/src/mcp.rs:let code = if lower.contains("missing required parameter")
-prose-classification	aida-cli-lib/src/mcp.rs:|| lower.contains("cannot be empty")
-prose-classification	aida-cli-lib/src/mcp.rs:|| lower.contains("must be a string")
-prose-classification	aida-cli-lib/src/mcp.rs:|| lower.contains("must not contain")
-prose-classification	aida-cli-lib/src/mcp.rs:|| lower.contains("invalid punt category")
-prose-classification	aida-cli-lib/src/mcp.rs:|| lower.contains("invalid brief path")
-prose-classification	aida-cli-lib/src/mcp.rs:} else if lower.contains("unknown tool")
+prose-classification	aida-mcp/src/mcp.rs:let code = if lower.contains("missing required parameter")
+prose-classification	aida-mcp/src/mcp.rs:|| lower.contains("cannot be empty")
+prose-classification	aida-mcp/src/mcp.rs:|| lower.contains("must be a string")
+prose-classification	aida-mcp/src/mcp.rs:|| lower.contains("must not contain")
+prose-classification	aida-mcp/src/mcp.rs:|| lower.contains("invalid punt category")
+prose-classification	aida-mcp/src/mcp.rs:|| lower.contains("invalid brief path")
+prose-classification	aida-mcp/src/mcp.rs:} else if lower.contains("unknown tool")
 prose-classification	aida-cli-lib/src/rule_violation.rs:if m.contains("/// ")
 prose-classification	aida-cli-lib/src/rule_violation.rs:|| m.contains("doc comment")
 prose-classification	aida-cli-lib/src/rule_violation.rs:|| m.contains("doc-comment")
