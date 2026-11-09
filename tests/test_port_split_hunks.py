@@ -68,6 +68,10 @@ class PortSplitHunks(unittest.TestCase):
                 git('-c', 'user.name=Fixture', '-c', 'user.email=fixture@example.invalid', 'commit', '-qm', 'fixture')
                 return git('rev-parse', 'HEAD')
             git('init', '-q')
+            # Even --no-commit merges require a committer identity. Keep this
+            # fixture independent of the developer's global Git configuration.
+            git('config', 'user.name', 'Fixture')
+            git('config', 'user.email', 'fixture@example.invalid')
             (root / 'source.rs').write_text('old\n')
             original = commit()
             git('checkout', '-qb', 'mainline')
