@@ -8,7 +8,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-08T05:25:50.443321273Z
-modified_at: 2026-11-08T13:25:26.381342943Z
+modified_at: 2026-11-09T04:05:52.316573868Z
 req_type: Story
 tags:
 - area:ci
@@ -172,6 +172,12 @@ comments:
   modified_at: 2026-11-08T13:04:47.149805040Z
   session_id: 01a1b9af-8230-75d2-82f8-667491cc010a
   harness_version: 2.1.319 (Claude Code)
+- id: 01a1be7b-e23c-7753-8647-560dc571b6e6
+  author: joe
+  content: 'Runbook run 2026-11-08 with operator approval. Done: fork approval set to all_external_contributors; aida-ci user, packages, runner 2.338.2 (sha verified), launcher, slice, sudoers rule installed on dell1; probe passes under the unit properties. Baseline saved: median heavy-shard queue 378s over 60 jobs in 25 runs. Registration failed: launcher parent mode 0711 (see new bug); supervisor stopped, orphan registrations deleted, AIDA_DELL1_CI NOT set. Note: pre-existing /etc/sudoers.d/99-passwordless has bad mode; dell1 has no tmux so supervisor needs a detached session.'
+  created_at: 2026-11-09T04:05:52.316573868Z
+  modified_at: 2026-11-09T04:05:52.316573868Z
+  session_id: 7aacb1ed-ebaa-4da4-a195-500864e99e7d
 history:
 - id: 01a1b9c5-53ea-79e1-9008-26e3abcd0e20
   author: joe
