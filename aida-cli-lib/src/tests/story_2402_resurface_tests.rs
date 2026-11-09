@@ -418,6 +418,7 @@ fn story2402_s5_recur_conditions_resurface_and_manual_routes() {
             1
         );
     }
+    let recurrence_pushes = crate::store_push_pull::RECURRENCE_PUSH_CALLS.with(|calls| calls.get());
     crate::findings_gate::handle_findings_recur(
         &backend,
         &path,
@@ -427,6 +428,11 @@ fn story2402_s5_recur_conditions_resurface_and_manual_routes() {
         None,
     )
     .unwrap();
+    assert_eq!(
+        crate::store_push_pull::RECURRENCE_PUSH_CALLS.with(|calls| calls.get()),
+        recurrence_pushes + 1,
+        "saved recurrence deferral must reach auto-push before the recurrence update"
+    );
     let current = backend.get_requirement(&row.id).unwrap().unwrap();
     assert!(current.deferred);
     assert_eq!(
@@ -496,6 +502,32 @@ fn story2402_s5_recur_conditions_resurface_and_manual_routes() {
         );
         assert!(!dir.path().join(".aida/handoff/advisor/latest.md").exists());
     }
+    // Plain handoff failures must retain the actionable first-line diagnostic
+    // shown by agent mode. trace:STORY-2402 | ai:codex
+    std::fs::write(
+        &note,
+        "x".repeat(crate::seat_rotation::HANDOFF_MAX_BYTES + 1),
+    )
+    .unwrap();
+    let error = crate::session_misc::session_handoff_seat(
+        Some(note.to_str().unwrap()),
+        false,
+        Some("advisor"),
+        false,
+        false,
+        None,
+        None,
+        None,
+        false,
+        false,
+    )
+    .unwrap_err();
+    let rendered = format!("{error:?}");
+    let (summary, _) = crate::agent_error_summary_help(&rendered);
+    assert!(
+        summary.starts_with("handoff note is 16001 bytes; the cap is 16000"),
+        "{rendered}"
+    );
     std::fs::write(&note, "x".repeat(crate::seat_rotation::HANDOFF_MAX_BYTES)).unwrap();
     assert!(crate::session_misc::session_handoff_seat(
         Some(note.to_str().unwrap()),

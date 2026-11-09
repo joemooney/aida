@@ -840,6 +840,7 @@ mod mailbox_digest_autotrigger_tests;
 #[cfg(test)]
 thread_local! {
     pub(crate) static HANDOFF_PUSH_CALLS: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
+    pub(crate) static RECURRENCE_PUSH_CALLS: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
 }
 
 pub(crate) fn maybe_auto_push_store(
@@ -850,6 +851,10 @@ pub(crate) fn maybe_auto_push_store(
     #[cfg(test)]
     if reason == "conditional session handoff" && mode == StoreAutoPushMode::PerWrite {
         HANDOFF_PUSH_CALLS.with(|calls| calls.set(calls.get() + 1));
+    }
+    #[cfg(test)]
+    if reason == "conditional findings recurrence" && mode == StoreAutoPushMode::PerWrite {
+        RECURRENCE_PUSH_CALLS.with(|calls| calls.set(calls.get() + 1));
     }
     let project_root = store_path
         .parent()

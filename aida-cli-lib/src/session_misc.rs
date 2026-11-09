@@ -1068,14 +1068,14 @@ pub(crate) fn session_handoff_seat(
                 "handoff"
             },
         )
-        .with_context(|| match condition.as_deref() {
+        .map_err(|error| match condition.as_deref() {
             // The store write already succeeded; preserve that fact on I/O failure.
             // trace:STORY-2402 | ai:codex
-            Some(condition) => format!(
+            Some(condition) => error.context(format!(
                 "handoff note failed after deferring {} until {condition}; deferral remains saved; repair the note and retry",
                 resolved_spec.as_deref().unwrap_or("?")
-            ),
-            None => "writing handoff note".to_string(),
+            )),
+            None => error,
         })?;
         println!(
             "Handoff written: {} ({} bytes)",
