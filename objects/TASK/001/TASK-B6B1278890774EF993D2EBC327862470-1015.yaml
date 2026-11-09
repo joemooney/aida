@@ -19,12 +19,12 @@ description: |-
   6. COSMETIC, carried: the PR body still says 'comment_add and title/description spec_edit'; the branch also routes priority. Update it before any publication.
   7. COSMETIC, new: aida-cli-lib/src/store_mutation_entry.rs:63 root() repeats ensure!(root.join("objects").is_dir()) directly after a find() with the same predicate, so the check and its message are dead code.
   Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
-status: Draft
+status: Superseded
 priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-11-08T20:36:58.210059537Z
-modified_at: 2026-11-08T20:36:58.210059537Z
+modified_at: 2026-11-09T06:52:10.048172379Z
 req_type: Task
 tags:
 - from-advisor:TASK-3223
@@ -38,6 +38,15 @@ history:
   author: joe
   timestamp: 2026-11-08T20:37:26.750733531Z
   changes: []
+- id: 01a1bf14-21c0-7f82-b32f-6e95356f20d9
+  author: joe
+  timestamp: 2026-11-09T06:52:10.048168704Z
+  session_id: 01a1beff-fc3b-78e2-93e2-9b0c283b0339
+  harness_version: 2.1.319 (Claude Code)
+  changes:
+  - field_name: status
+    old_value: Draft
+    new_value: Superseded
 filed_at:
   code_sha: db2eb4c39e46704132705ccb2b8300574ead41a6
   branch: main
