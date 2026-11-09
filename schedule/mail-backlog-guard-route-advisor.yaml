@@ -5,4 +5,10 @@ last_by:
   session: 01a1beff-fc3b-78e2-93e2-9b0c283b0339
   vendor: claude
 result: done
-note: 'Read 11 advisor requests: 10 lane-exited notices are covered by the rework relaunches with exact failure briefs; PR-3699 was closed.'
+note: 'advisor: unread [request] from review-watch, 2h10m old: PR-3625 behind `main` with overlap; update-branch conflicts; advisor: unread [request] from review-watch, 2h04m old: PR-3698 behind `main` with overlap; update-branch conflicts; advisor: unread [request] from dirtlab, 111m old: Queue-work lane exited without changes; advisor: unread [request] from review-watch, 108m old: PR-3627 behind `main` with overlap; update-branch conflicts'
+due_since: 2026-11-09T10:53:52.591288010Z
+due_reason: on CronJobFired:mail-backlog-guard-route-advisor
+due_failure:
+  trip_id: mail-backlog-guard-route-advisor@2026-11-09T10:53:52Z
+  job: mail-backlog
+  error: 'advisor: unread [request] from review-watch, 2h10m old: PR-3625 behind `main` with overlap; update-branch conflicts; advisor: unread [request] from review-watch, 2h04m old: PR-3698 behind `main` with overlap; update-branch conflicts; advisor: unread [request] from dirtlab, 111m old: Queue-work lane exited without changes; advisor: unread [request] from review-watch, 108m old: PR-3627 behind `main` with overlap; update-branch conflicts'
