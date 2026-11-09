@@ -44,7 +44,7 @@ pub(crate) fn rework_smart_target(current: &RequirementStatus) -> Option<Require
 /// Metadata-only rework must leave the queued spec claimable.
 /// `InProgress` is only valid when this command immediately chains into
 /// `queue work`, which establishes the lease that backs that status.
-pub(crate) fn rework_target_for_mode(
+pub fn rework_target_for_mode(
     current: &RequirementStatus,
     launches_work: bool,
 ) -> Option<RequirementStatus> {
@@ -70,7 +70,7 @@ pub(crate) fn rework_target_for_mode(
 /// log for `storage`: the store's parent directory, falling back to the
 /// discovered project root.
 // trace:STORY-1429 | ai:claude
-pub(crate) fn requeue_project_root(storage: &Storage) -> std::path::PathBuf {
+pub fn requeue_project_root(storage: &Storage) -> std::path::PathBuf {
     storage
         .path()
         .parent()

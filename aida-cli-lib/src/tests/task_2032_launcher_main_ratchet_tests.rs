@@ -111,7 +111,10 @@ fn production_calls(src: &Path) -> Vec<(String, String, usize)> {
             if let Some(c) = fn_re.captures(line) {
                 current = c[1].to_string();
             }
-            if line.contains(CALL) && !line.trim_start().starts_with("//") {
+            // trace:TASK-3429 | ai:codex — external crates use the public library path.
+            if (line.contains(CALL) || line.contains("aida_cli_lib::seat_clone::launcher_main()"))
+                && !line.trim_start().starts_with("//")
+            {
                 calls.push((name.clone(), current.clone(), i + 1));
             }
         }
@@ -125,7 +128,9 @@ fn src_dir() -> std::path::PathBuf {
 
 #[test]
 fn task_2032_launcher_main_is_called_only_from_entry_points() {
-    let calls = production_calls(&src_dir());
+    // trace:TASK-3429 | ai:codex — retain coverage of the extracted transport.
+    let mut calls = production_calls(&src_dir());
+    calls.extend(production_calls(&src_dir().join("../../aida-mcp/src")));
     assert!(
         calls.len() >= 10,
         "the scan found too few calls ({}); did `launcher_main` move?",

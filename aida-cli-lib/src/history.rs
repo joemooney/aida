@@ -1,3 +1,4 @@
+// trace:TASK-3429 | ai:codex
 //! `aida history` — project event timeline decoded from the orphan branch.
 //!
 //! Walks `git log` on the `aida-store` orphan branch via shell-out,
@@ -228,7 +229,7 @@ fn transition_matches(from: &str, to: &str, opts: &HistoryOpts) -> bool {
 /// message starts with `invalid combination:` so MCP reports it as an
 /// invalid argument.
 // trace:TASK-1512 | ai:claude
-pub(crate) fn validate_transition_pair(
+pub fn validate_transition_pair(
     from: Option<&str>,
     to: Option<&str>,
     from_flag: &str,
@@ -251,7 +252,7 @@ pub(crate) fn validate_transition_pair(
 /// `in_progress`, `InProgress`, any case), plus `accepted` for Approved
 /// (the ADR spelling). An unknown value is an error naming the valid set.
 // trace:TASK-1512 | ai:claude
-pub(crate) fn resolve_status_filter(flag: &str, raw: &str) -> Result<String> {
+pub fn resolve_status_filter(flag: &str, raw: &str) -> Result<String> {
     if raw.trim().eq_ignore_ascii_case("accepted") {
         return Ok("Approved".to_string());
     }
@@ -1226,7 +1227,7 @@ pub fn collect_event_records(store_path: &Path, opts: &HistoryOpts) -> Result<Ev
 }
 
 // trace:STORY-1477 | ai:codex
-pub(crate) fn render_template_alias(
+pub fn render_template_alias(
     store_path: &Path,
     opts: &HistoryOpts,
     oneline: bool,
@@ -2810,7 +2811,7 @@ pub(crate) fn events_json(
 /// The history JSON document for already-built records; shared by the CLI
 /// (`--json`) and the MCP history tool so the two cannot drift.
 // trace:BUG-1631 | ai:claude
-pub(crate) fn records_json(
+pub fn records_json(
     records: &[HistoryEventRecord],
     window_exhausted: bool,
     source: &HistorySource,

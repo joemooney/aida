@@ -270,12 +270,13 @@ migrate derived state. Follow traits, wrappers, macros and deferred children.
 Registration and MCP dispatch selectors are reconciled separately from sinks;
 unresolved selectors are explicit operation blockers.
 
+<!-- trace:TASK-3429 | ai:codex -->
 ```bash
-rg -n 'update_atomically|update_spec_atomically|add_requirement_atomic|save_reporting|write_object|with_store_write_lock|\.save\(' aida-core/src aida-cli-lib/src aida-cli/src aida-server/src aida-tui/src
-rg -n 'fs::(write|rename|remove_file|create_dir_all|copy)|OpenOptions|File::create|write_atomic|write_all|execute_batch|transaction|queue_(add|remove|reorder)' aida-core/src aida-cli-lib/src aida-cli/src aida-server/src aida-tui/src
-rg -n 'write_cas|write_batch|register_node|acquire_claim|release_claim|digest_snapshot_to_canonical|publish_to_store|commit_record|git_ops::(add|commit|push)|pull_rebase|fast_forward_store' aida-core/src aida-cli-lib/src
-rg -n 'REGISTRY|CmdPolicy|Command::|tool_[a-z_]+|handoff|mailbox|deputy|claim|cache|migrat' aida-cli-lib/src/command_registry.rs aida-cli-lib/src/cli.rs aida-cli-lib/src/lib.rs aida-cli-lib/src/mcp.rs
-rg -n 'write_text|write_bytes|write\(|rename|replace|unlink|open\(|git (add|commit|push)|aida (add|edit|comment|queue)' scripts aida-core/templates aida-cli-lib/src/containment
+rg -n 'update_atomically|update_spec_atomically|add_requirement_atomic|save_reporting|write_object|with_store_write_lock|\.save\(' aida-core/src aida-cli-lib/src aida-cli/src aida-server/src aida-tui/src aida-mcp/src
+rg -n 'fs::(write|rename|remove_file|create_dir_all|copy)|OpenOptions|File::create|write_atomic|write_all|execute_batch|transaction|queue_(add|remove|reorder)' aida-core/src aida-cli-lib/src aida-cli/src aida-server/src aida-tui/src aida-mcp/src
+rg -n 'write_cas|write_batch|register_node|acquire_claim|release_claim|digest_snapshot_to_canonical|publish_to_store|commit_record|git_ops::(add|commit|push)|pull_rebase|fast_forward_store' aida-core/src aida-cli-lib/src aida-mcp/src
+rg -n 'REGISTRY|CmdPolicy|Command::|tool_[a-z_]+|handoff|mailbox|deputy|claim|cache|migrat' aida-cli-lib/src/command_registry.rs aida-cli-lib/src/cli.rs aida-cli-lib/src/lib.rs aida-mcp/src
+rg -n 'write_text|write_bytes|write\(|rename|replace|unlink|open\(|git (add|commit|push)|aida (add|edit|comment|queue)' scripts aida-core/templates aida-cli-lib/src/containment aida-mcp/src
 python3 scripts/check-store-writers.py --candidates > /tmp/store-writer-candidates.json
 python3 scripts/check-store-writers.py
 python3 -m unittest tests/test_store_writer_inventory.py

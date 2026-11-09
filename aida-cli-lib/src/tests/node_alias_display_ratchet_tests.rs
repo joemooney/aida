@@ -7,7 +7,7 @@
 
 use std::path::Path;
 
-/// Unmarked `.display_id()` occurrences in non-test `aida-cli-lib/src` code
+/// Unmarked `.display_id()` occurrences in non-test CLI and MCP code
 /// after the STORY-078 output migration. Lower it when you migrate more.
 // TASK-3426: splitting queue_cmd.rs exposes five existing production calls
 // previously hidden after its first inline test module (the scanner stops
@@ -85,7 +85,10 @@ fn scanner_skips_comments_markers_and_test_modules() {
 fn unmigrated_display_id_print_sites_only_go_down() {
     let src_root = Path::new(env!("CARGO_MANIFEST_DIR")).join("src");
     let mut hits = Vec::new();
-    walk(&src_root, &src_root, &mut hits);
+    // trace:TASK-3429 | ai:codex — keep moved MCP sites in the same budget.
+    let workspace = src_root.parent().unwrap().parent().unwrap();
+    walk(workspace, &src_root, &mut hits);
+    walk(workspace, &workspace.join("aida-mcp/src"), &mut hits);
     hits.sort();
     let total: usize = hits.iter().map(|(_, n)| n).sum();
     let listing = hits

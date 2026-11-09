@@ -1,3 +1,4 @@
+// trace:TASK-3429 | ai:codex
 //! Central glyph registry + ASCII-profile selector (Phase 1 of EPIC-45).
 //!
 //! AIDA's CLI output leans heavily on unicode/emoji glyphs (~2568 inline
@@ -46,7 +47,7 @@ use std::path::{Path, PathBuf};
 /// not-yet-consumed variants from warning until then. trace:STORY-628
 #[allow(dead_code)]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-pub(crate) enum Glyph {
+pub enum Glyph {
     /// Success / completed (✓).
     Check,
     /// Failure / rejected (✗).
@@ -583,7 +584,7 @@ pub(crate) fn active_profile(project_root: Option<&Path>) -> GlyphProfile {
 /// Provided for the phase-3 long-tail migration; phase 1's proof site
 /// (`status_display`) resolves the profile once instead. trace:STORY-628
 #[allow(dead_code)]
-pub(crate) fn get(glyph: Glyph, project_root: Option<&Path>) -> &'static str {
+pub fn get(glyph: Glyph, project_root: Option<&Path>) -> &'static str {
     glyph.render(active_profile(project_root))
 }
 
@@ -626,7 +627,7 @@ impl GlyphOverrides {
 
     /// The custom override string for `glyph`, if any. `None` → no override,
     /// caller falls through to the profile. trace:STORY-629
-    pub(crate) fn get(&self, glyph: Glyph) -> Option<&str> {
+    pub fn get(&self, glyph: Glyph) -> Option<&str> {
         self.map.get(&glyph).map(String::as_str)
     }
 

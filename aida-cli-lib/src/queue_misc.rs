@@ -1,3 +1,4 @@
+// trace:TASK-3429 | ai:codex
 //! queue helpers: batch tags, role and user filters, mail identity, effort load, stack/headless/worker commands (STORY-1488 slice 1)
 // trace:STORY-1488 | ai:claude
 
@@ -272,7 +273,7 @@ pub(crate) fn resolve_queue_work_batch<'a>(
 /// already has `AIDA_AGENT_NAME` — so adopting a stable mail identity never
 /// strands that seat's existing queue entries (BUG-1533 acceptance #6).
 // trace:BUG-1533 | ai:claude
-pub(crate) fn resolve_mail_sender_identity(
+pub fn resolve_mail_sender_identity(
     explicit: Option<&str>,
 ) -> (String, aida_core::mailbox::SenderSource) {
     // A headless child sends as its own handle, not its shared seat name.
@@ -327,7 +328,7 @@ pub(crate) fn resolve_mail_sender_identity_with(
 /// the role next to the agent id when both are known, mirroring how
 /// BUG-1533 recorded the id half of "who sent this".
 // trace:BUG-1592 | ai:claude
-pub(crate) fn resolve_mail_sender_role() -> Option<String> {
+pub fn resolve_mail_sender_role() -> Option<String> {
     std::env::var("AIDA_SESSION_ROLE")
         .ok()
         .map(|s| s.trim().to_string())
@@ -464,7 +465,7 @@ where
 /// `--for X` (non-"any") takes precedence over `--all` — that flag only
 /// suppresses the *default* active-role filter, not an explicit override.
 /// trace:BUG-87 | ai:claude
-pub(crate) fn resolve_queue_role_filter(
+pub fn resolve_queue_role_filter(
     role: Option<&str>,
     all: bool,
     session_role: Option<&str>,
@@ -485,7 +486,7 @@ pub(crate) fn resolve_queue_role_filter(
 
 /// Predicate: does a queue entry pass the resolved role filter?
 /// trace:BUG-87 | ai:claude
-pub(crate) fn entry_matches_role_filter(
+pub fn entry_matches_role_filter(
     for_role: Option<&str>,
     role_filter: Option<&str>,
     only_unrouted: bool,

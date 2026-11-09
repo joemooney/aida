@@ -82,7 +82,7 @@ fn run(client: &Client, env: &Environment, argv: &[String], cwd: &Path) -> Resul
     explicit_fields(&matches, &[], &command)?;
     let (name, args) = matches.subcommand().context("UnsupportedOperation")?;
     if name == "mcp-serve" {
-        return crate::mcp::run_mediated_mcp_server(client, env, &root(cwd)?);
+        return crate::command_registry::run_mediated_mcp_handler(client, env, &root(cwd)?);
     }
     let (tool, payload) = translate(name, args, cwd)?;
     let action = if tool == "add_comment" {
