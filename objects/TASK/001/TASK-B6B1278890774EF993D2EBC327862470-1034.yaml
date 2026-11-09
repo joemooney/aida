@@ -1,0 +1,49 @@
+id: 01a1bf11-c465-7073-adc0-9986abf30996
+spec_id: TASK-b6b1278890774ef993d2ebc327862470-1034
+agreed_id: TASK-3736
+title: 'Minor sweep 2: small behavior and test-gap findings from approved reviews'
+description: |
+  Bundled non-blocking review findings, swept together in one PR per operator direction 2026-11-08. Each section is the original finding verbatim; fix it or state in the PR why the code has since changed. One PR, no new follow-up specs.
+
+  ### TASK-3057
+  NON-BLOCKING, test gap: the end-to-end git_policy assertions in aida-cli/tests/story_1486_launch_profile.rs launch claude only. The print sites for foreground codex and antigravity (aida-cli-lib/src/agent_launch.rs agent_new_codex_wake, agent_new_antigravity) and codex --bg (agent_codex_background.rs:582, 611) have parse coverage only, so a dropped print on those vendors would still pass.
+
+  PR: #3671
+  Reviewed sha: ad74c5720cbcbae3b3b4f4bf3ca48471829e4a9a
+
+  ### TASK-3059
+  MINOR (non-blocking, outside the same-key-refusal scope): contained codex_argv still passes -p/--profile and -c profile=/profiles.* (aida-cli-lib/src/launch/contained.rs:1484-1490), so a config profile may carry posture; whether it can beat the generated settings is unverified. The background path has the same gap.
+
+  PR: #3689
+  Reviewed sha: ea14bd1cbb8339b2bc79711207bdc3771d50438f
+
+  ### TASK-3063
+  Non-blocking (minor, carried forward): a native-lane body line ending in a different spec, e.g. 'done (BUG-7)', is credited on a (#N) squash that bypasses aida pr ship (trailer_coverage.rs:34 commit_completion_ids); aida pr ship neutralizes it and the docs warn against it, but the host does not validate declared bodies. Ordinary lanes share this exposure, so a guard can follow separately.
+
+  PR: #3667
+  Reviewed sha: 5f64ea6609498dae663d8c205ce7ae62db056839
+
+  ### TASK-HOME-1032
+  Non-blocking (minor): scripts/runner/rearm.sh:14,22 times gh API + one-job setup (cp -a) + cleanup rather than runner lifetime. The incident cadence (~1s/cycle) trips the 10s guard, but on a host where setup alone reaches 10s an instantly exiting runner would keep registering about once per cycle. Consider measuring runner lifetime or adding a consecutive-short-exit/backoff guard.
+
+  PR: #3712
+  Reviewed sha: 16f622b1a1eab9164ba57b3d2f19d73c1a674606
+
+  ## Acceptance
+  Every section above is fixed or explicitly answered in the PR body; behavior is unchanged except where a finding requires it.
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-11-09T06:49:35.077353670Z
+modified_at: 2026-11-09T06:49:35.077353670Z
+req_type: Task
+filed_at:
+  code_sha: aaf9ac1436f0a0e82bae99d64e8a84742f30fe1c
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 19c492b2456
+  vendor: claude
+  session: 01a1beff-fc3b-78e2-93e2-9b0c283b0339
+  harness_version: 2.1.319 (Claude Code)
