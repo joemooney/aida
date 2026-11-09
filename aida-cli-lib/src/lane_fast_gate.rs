@@ -792,19 +792,7 @@ fn pushed_inner(
             let mut retryable = false;
             storage.update_atomically(|store| {
                 if let Some(live) = store.requirements.iter_mut().find(|r| r.id == req.id) {
-                    if !matches!(
-                        live.status,
-                        aida_core::RequirementStatus::Completed
-                            | aida_core::RequirementStatus::Rejected
-                            | aida_core::RequirementStatus::Superseded
-                    ) {
-                        aida_core::conflict::set_status_recorded(
-                            live,
-                            aida_core::RequirementStatus::InProgress,
-                            "fast-gate",
-                        );
-                        retryable = true;
-                    }
+                    retryable = prepare_queued_repair(live);
                 }
             })?;
             anyhow::ensure!(
@@ -832,6 +820,24 @@ fn pushed_inner(
             Ok(Some(entry))
         },
     )
+}
+
+// A queued repair has no new worker yet. Match metadata-only queue rework:
+// leave it Approved so drains can claim it, then let pickup set InProgress.
+// Terminal decisions remain untouched.
+// trace:STORY-2640 | ai:codex
+fn prepare_queued_repair(req: &mut aida_core::Requirement) -> bool {
+    use aida_core::RequirementStatus;
+    if matches!(
+        req.status,
+        RequirementStatus::Completed | RequirementStatus::Rejected | RequirementStatus::Superseded
+    ) {
+        return false;
+    }
+    if let Some(target) = crate::queue_cmd::rework_target_for_mode(&req.status, false) {
+        aida_core::conflict::set_status_recorded(req, target, "fast-gate");
+    }
+    true
 }
 
 // Keep review blocked through annotation and queue insertion; failed insertion
@@ -1547,6 +1553,35 @@ mod tests {
         }
     }
 
+    // trace:STORY-2640 AC1 | ai:codex
+    #[test]
+    fn fast_gate_self_push_repair_is_drain_claimable() {
+        use aida_core::RequirementStatus;
+        for status in [
+            RequirementStatus::InProgress,
+            RequirementStatus::Done,
+            RequirementStatus::Planned,
+            RequirementStatus::Approved,
+            RequirementStatus::NeedsAttention,
+        ] {
+            let mut req = aida_core::Requirement::new("Repair".into(), String::new());
+            req.status = status;
+            assert!(prepare_queued_repair(&mut req));
+            assert_eq!(req.status, RequirementStatus::Approved);
+            assert!(crate::queue_cmd::auto_complete_head_drivable(&req.status));
+        }
+        for status in [
+            RequirementStatus::Completed,
+            RequirementStatus::Rejected,
+            RequirementStatus::Superseded,
+        ] {
+            let mut req = aida_core::Requirement::new("Terminal".into(), String::new());
+            req.status = status.clone();
+            assert!(!prepare_queued_repair(&mut req));
+            assert_eq!(req.status, status);
+        }
+    }
+
     // trace:STORY-2640 | ai:codex
     #[test]
     fn fast_gate_queued_repair_releases_when_removed_replaced_or_parked() {
@@ -1596,12 +1631,19 @@ mod tests {
             "fail",
             || Ok(()),
             || {
+                storage.update_atomically(|store| {
+                    assert!(prepare_queued_repair(&mut store.requirements[0]));
+                })?;
                 storage.queue_add(entry.clone())?;
                 Ok(Some(entry.clone()))
             },
         )
         .unwrap();
         assert!(blocks_review(tmp.path(), "lane").unwrap());
+        let queued = storage.load().unwrap();
+        assert!(crate::queue_cmd::auto_complete_head_drivable(
+            &queued.requirements[0].status
+        ));
         storage.queue_remove(&entry.user_id, &req.id).unwrap();
         assert!(!blocks_review(tmp.path(), "lane").unwrap());
         let mut replacement = entry.clone();
