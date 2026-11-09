@@ -55,7 +55,11 @@ at a time; measure whether this actually improves train wait before expanding.
    same fresh `/dev` and `/proc` mounts as those tests; self-hosted jobs set
    `AIDA_REQUIRE_BWRAP_LIVE=1` so supported live-test failures cannot skip. There is
    no host credential/environment projection. Root owns the distribution and
-   job parent; each job gets a wiped home/work directory at the fixed
+   job parent (`/var/lib/aida-ci-jobs`, root:root mode 0755). The .NET runner
+   requires read access on every parent of its work directory; 0711 fails at
+   startup. The job directory `current` stays mode 0700 owned by `aida-ci`.
+   <!-- trace:BUG-2506 | ai:codex -->
+   Each job gets a wiped home/work directory at the fixed
    `/var/lib/aida-ci-jobs/current` path. The exclusive launcher lock prevents
    overlap. Stable absolute paths let main-branch pushes warm reusable dell1
    Rust caches; no previous job files survive locally. A shared slice caps
@@ -82,7 +86,9 @@ The JIT runner takes one job, exits and deregisters. The launcher stops its whol
 cgroup and deletes the disposable directory on exit. Idle listening has no
 local lifetime limit: a late pickup still gets the full 40-minute job timeout
 from `ci.yml`. A normal runner exit (job completion or clean idle retirement)
-re-arms; nonzero runner/service exits stop supervision for diagnosis. For continuous capacity, run the reviewed `scripts/runner/rearm.sh` in a
+re-arms only after at least 10 seconds of launcher runtime; a faster exit,
+even with status zero, stops supervision to prevent repeated JIT registrations.
+Nonzero runner/service exits also stop supervision for diagnosis. For continuous capacity, run the reviewed `scripts/runner/rearm.sh` in a
 foreground operator session (for example an operator-owned tmux session). It
 uses host-side gh credentials to generate each fresh configuration and invokes
 the installed root launcher through sudo. Credentials never enter the job.
