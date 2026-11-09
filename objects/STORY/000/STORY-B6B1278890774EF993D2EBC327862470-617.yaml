@@ -27,12 +27,20 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-09T15:57:18.371798469Z
-modified_at: 2026-11-09T15:57:18.371798469Z
+modified_at: 2026-11-09T21:24:22.583943533Z
 req_type: Story
 tags:
 - architecture
 - area:merge-train
 - needs-sketch-signoff
+comments:
+- id: 01a1c232-a9b7-7f13-82d2-251118b76cd1
+  author: joe
+  content: Independent Codex review on 2026-11-09 found the original sketch largely duplicates TASK-1960 carry-over (gate/review_carryover.rs), verdict UNSOUND as a semantic-preservation claim. Verified against the code. Narrowing to wiring the existing proof into merge-hold release and review watch; narrowed sketch going back for independent review.
+  created_at: 2026-11-09T21:24:22.583943533Z
+  modified_at: 2026-11-09T21:24:22.583943533Z
+  session_id: 01a1beff-fc3b-78e2-93e2-9b0c283b0339
+  harness_version: 2.1.319 (Claude Code)
 filed_at:
   code_sha: e4eee38238fa4cb8e8c85dadaa4ed07894cfbeea
   branch: main
