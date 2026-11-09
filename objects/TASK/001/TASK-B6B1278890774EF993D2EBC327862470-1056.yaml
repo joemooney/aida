@@ -1,0 +1,21 @@
+id: 01a1c135-cadb-7663-84a7-4cff7bb6d5aa
+spec_id: TASK-b6b1278890774ef993d2ebc327862470-1056
+agreed_id: TASK-3778
+title: Temporarily relax the CI test-time budget so trains stop ejecting on timing noise
+description: 'Operator direction 2026-11-09: relax the timing gate and revisit after the open items clear. Trains eject passing PRs for sub-2s overruns (PR 3731: 11.7s against the 10s limit with all 8077 tests passing). EXACT CHANGE in scripts/test-time-budget.toml only: set default_limit = 30 and untouched_factor = 3, and add a comment above them saying this is temporary, tied to TASK-3665, and to be restored once the open list clears. Do not change scripts/test-timings.py, its tests or per-test entries. If a test asserts the shipped default_limit value, update only that value. Acceptance: make check-ci-fast passes; a 12s unbudgeted test no longer fails the budget step.'
+status: Approved
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-11-09T16:48:10.459066565Z
+modified_at: 2026-11-09T16:48:10.459066565Z
+req_type: Task
+filed_at:
+  code_sha: e4eee38238fa4cb8e8c85dadaa4ed07894cfbeea
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: e4eee38238f
+  vendor: claude
+  session: 01a1beff-fc3b-78e2-93e2-9b0c283b0339
+  harness_version: 2.1.319 (Claude Code)
