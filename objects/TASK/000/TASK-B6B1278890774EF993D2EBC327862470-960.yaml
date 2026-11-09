@@ -8,7 +8,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-07T23:39:41.575597Z
-modified_at: 2026-11-09T00:33:12.707562293Z
+modified_at: 2026-11-09T00:38:46.632172043Z
 req_type: Task
 relationships:
 - rel_type: Child
@@ -513,6 +513,17 @@ comments:
   created_at: 2026-11-09T00:21:42.287481884Z
   modified_at: 2026-11-09T00:21:42.287481884Z
   session_id: 20abb7c3-8f9b-4a5e-b326-404921f3b450
+- id: 01a1bdbe-4579-7f82-bd4f-6359496e4db0
+  author: joe
+  content: |
+    Round 14 PR #3695 rework ready for host publication. Restored the 12-module batch from 4e32c5de630 to its pre-batch contents, including 12 ledger rows / 18 imports. Prospective PR is exactly 40 files: 37 modules, 2 tests and ledger; remaining glob count 181. This removes all import-order/alias and body-trace code cited in findings 3-5 from this PR. Deferred patch is preserved at /tmp/task-3428-round14-deferred-imports.patch and applies cleanly; follow-up must use direct anyhow/aida_core imports and module header traces. Do not add this batch back to #3695. Corrected existing PR title to 37 modules without pushing. PR #3687 remains open with shared ledger changes; later merger must rescan/prune.
+
+    Validation: launcher command_registry suite PASS (32 executed tests; full library test binary compiled), job j20261109T002347723-110306-0; launcher no-default-features CLI check PASS, job j20261109T002353591-110846-0. All 17 tooling fixtures, glob ratchet vs origin/main, ExecContext 1239 sites, store writer inventory 3406 sinks/293 mappings, 84-gate classification, portability guard/growth, retained Rust formatting and diff hygiene pass. All 12 restored modules byte-match their pre-batch parent. Reviewed-head CI run 42537659149 at 4e32c5de630 is completed SUCCESS, including all seven shards and aggregate Build. This is historical evidence; final published head still requires CI/re-review. Full make check-ci-fast remains host validation under runner-only Cargo rules; codegraph doctor reports unreachable.
+
+    Recorded native Refs publication declaration for the scope correction. All 13 edited files remain uncommitted for the host launcher; no push, merge, verdict, queue completion or merge-hold release. TASK-3428 remains In Progress. Supervised hold remains a human/advisor gate. Detailed files, recovery and validation: /tmp/task-3428-round14-handoff.md.
+  created_at: 2026-11-09T00:38:45.881747654Z
+  modified_at: 2026-11-09T00:38:45.881747654Z
+  session_id: 01a1bdafbd39
 history:
 - id: 01a1b862-2e0b-7a50-a4d0-25097c707b57
   author: joe
@@ -988,7 +999,12 @@ history:
   timestamp: 2026-11-09T00:33:12.800795090Z
   session_id: 01a1bdafbd39
   changes: []
-test_coverage_notes: 'Round 14: all 17 crate-split Python fixtures pass; glob ratchet vs origin/main passes at 181; ExecContext ledger 1239 sites, store-writer 3406 sinks/293 mappings, portability guard and growth check, all 84 CI classifications, retained-file rustfmt and diff hygiene pass. All 12 deferred modules byte-match the pre-batch parent; prospective PR is exactly 40 files. Reviewed-head CI run 42537659149 at 4e32c5de630 is completed SUCCESS (all seven shards and aggregate Build); final-head CI remains required. Launcher command_registry test j20261109T002347723-110306-0 is currently compiling and no-default-features check j20261109T002353591-110846-0 is queued; no Rust test pass claimed yet for this tree. Full make check-ci-fast remains unavailable under runner-only Cargo policy. Codegraph doctor reports unreachable. Final handoff /tmp/task-3428-round14-handoff.md will retain final launcher results.'
+- id: 01a1bdbe-48dc-77c2-8f9b-c4cc6eccbafb
+  author: joe
+  timestamp: 2026-11-09T00:38:46.748680607Z
+  session_id: 01a1bdafbd39
+  changes: []
+test_coverage_notes: 'Round 14 validation passed: launcher command_registry suite 32 executed tests / 0 failures (j20261109T002347723-110306-0), launcher no-default-features aida-cli check exit 0 (j20261109T002353591-110846-0), 17 Python tooling fixtures, glob ratchet vs origin/main at 181, ExecContext 1239 sites, store-writer 3406 sinks / 293 mappings, 84 CI gate classifications, portability guard/growth, retained Rust formatting and diff hygiene. Prospective PR exactly 40 files; all 12 deferred modules match pre-batch contents. Reviewed-head CI at 4e32c5de630 passed all seven shards and aggregate Build; final published head still requires CI and independent re-review. Full make check-ci-fast remains host validation under runner-only Cargo policy. Codegraph unreachable. Handoff: /tmp/task-3428-round14-handoff.md.'
 implementation_summary: 'Round 14 scope correction restores the 12-module batch from 4e32c5de630 to pre-batch contents and restores its 12 ledger rows (18 imports), reducing PR #3695 to 40 files: 37 modules, two test files and ledger. Remaining glob debt is 181. Deferred changes remain in branch history and /tmp/task-3428-round14-deferred-imports.patch for a separate Refs PR, with import-source and module-trace polish required there. Removed code contains all findings 3-5. Corrected PR title to 37 modules. Refs host publication declaration recorded; no local commit, push, merge or queue completion. TASK-3428 remains In Progress; remaining imports and lib_part dissolution are later slices.'
 filed_at:
   code_sha: 2a7fe186bdcd718fa356e5e4d028a3b2ff13769d
