@@ -8,7 +8,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-07T23:40:15.306412624Z
-modified_at: 2026-11-09T04:25:00.319077850Z
+modified_at: 2026-11-09T04:25:39.999807633Z
 req_type: Task
 relationships:
 - rel_type: BlockedBy
@@ -525,6 +525,13 @@ comments:
   created_at: 2026-11-09T04:23:21.970889047Z
   modified_at: 2026-11-09T04:23:21.970889047Z
   session_id: 7aacb1ed-ebaa-4da4-a195-500864e99e7d
+- id: 01a1be8e-019f-71b3-917c-3054816b6960
+  author: dirtlab
+  content: 'Implementation approach for current review: add a focused regression for the mediated MCP handler missing-registration refusal, using inert client/environment inputs so no transport or store operation occurs. Validate with the launcher-run targeted command-registry tests. Preserve the advisor-corrected 58-tool surface and Refs-only scope; AC5 dell1 timing evidence remains advisor-owned after merge, and final-head CI plus independent approval remain host gates.'
+  created_at: 2026-11-09T04:25:39.999807633Z
+  modified_at: 2026-11-09T04:25:39.999807633Z
+  session_id: 01a1be8d6094
+  harness_version: codex-cli 0.167.0
 history:
 - id: 01a1b862-7fc0-7e63-899e-5179ac0131ed
   author: joe
