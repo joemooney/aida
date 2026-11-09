@@ -32,6 +32,9 @@ default_limit = 10
 untouched_factor = 1.5
 
 [budget]
+# PR #3731 / train PR #3733 measured 11.7s; x2 rounded up to 5s.
+# trace:TASK-3777 | ai:codex
+"aida-cli-lib findings_gate::story_1421_carry_forward_findings_tests::task_3749_sweep_keys_preserve_source_scope_and_closed_sweeps_roll_over" = 25
 # PR #3652 run 42495648136, cli-0 job 128777376052: 11.182s.
 # Real remote/store setup plus queue pickup; retain the missing-branch control.
 # Measured time x2, rounded up to 5s, following the budget convention above.
