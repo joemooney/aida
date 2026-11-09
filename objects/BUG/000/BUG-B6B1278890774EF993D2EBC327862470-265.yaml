@@ -3,12 +3,12 @@ spec_id: BUG-b6b1278890774ef993d2ebc327862470-265
 agreed_id: BUG-2500
 title: Reviewers record CHANGES REQUESTED for CI-wait or host-only items, burning implementer rounds and tripping the repeat-findings breaker
 description: '2026-11-08: PR-3671, PR-3651 and PR-3657 were parked by ''Repeated unchanged review findings'' where the findings were CI not yet run or host-only evidence; no code could close them. Expected: a distinct wait/host-action verdict that does not queue implementer rework or count as a repeat.'
-status: NeedsAttention
+status: Approved
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-08T19:02:09.839960883Z
-modified_at: 2026-11-09T06:53:56.944015230Z
+modified_at: 2026-11-09T06:54:19.160943013Z
 req_type: Bug
 relationships:
 - rel_type:
@@ -211,6 +211,13 @@ comments:
   content: 'ADVISOR RUBBIN: CI has failed this same check on repeated pushes; pushing again without fixing it will fail again. Do not merge main or push until this exact failure is fixed. #3698: CI fails test_env::tests::no_unisolated_set_current_dir_in_test_code (test_env.rs:1013): a test this PR touches calls set_current_dir without the isolation helper. Use the helper from test_env. Also fix the last review''s over-correction: an older refusal must not beat a newer WAITING. Local gate: one targeted cargo test --profile agent -p aida-cli-lib <filter> plus make check-ci-fast, then push; run long cargo in background.'
   created_at: 2026-11-09T06:53:56.944015230Z
   modified_at: 2026-11-09T06:53:56.944015230Z
+  session_id: 01a1beff-fc3b-78e2-93e2-9b0c283b0339
+  harness_version: 2.1.319 (Claude Code)
+- id: 01a1bf16-1a18-7611-ba26-568f81b24b68
+  author: joe
+  content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: Round-5 waiting-beside-refusal fix over-corrects: an older refusal now beats a newer WAITING and queues implementer rework, one spec-keyed wait still hides bound refusals, and two prior operator-text items are only partly closed. PR CI is pending at this head; merge-hold-gate failure is the expected hold.. No triage reason was given.'
+  created_at: 2026-11-09T06:54:19.160941517Z
+  modified_at: 2026-11-09T06:54:19.160941517Z
   session_id: 01a1beff-fc3b-78e2-93e2-9b0c283b0339
   harness_version: 2.1.319 (Claude Code)
 history:
@@ -429,6 +436,15 @@ history:
   session_id: 01a1bef5ed0f
   harness_version: 2.1.319 (Claude Code)
   changes: []
+- id: 01a1bf16-1a18-7611-ba26-56779bd54abc
+  author: joe
+  timestamp: 2026-11-09T06:54:19.160931727Z
+  session_id: 01a1beff-fc3b-78e2-93e2-9b0c283b0339
+  harness_version: 2.1.319 (Claude Code)
+  changes:
+  - field_name: status
+    old_value: NeedsAttention
+    new_value: Approved
 filed_at:
   code_sha: eeec474c545cbc8a354d386c8cb6d81460da7b9f
   branch: main
@@ -438,11 +454,3 @@ filed_at:
   vendor: claude
   session: 01a1bbab-762f-7cd2-8a36-4ea9f209afce
   harness_version: 2.1.319 (Claude Code)
-failure_reason:
-  phase: reviewer
-  phase_index: 3
-  kind: verdict:request-changes
-  detail: 'Round-5 waiting-beside-refusal fix over-corrects: an older refusal now beats a newer WAITING and queues implementer rework, one spec-keyed wait still hides bound refusals, and two prior operator-text items are only partly closed. PR CI is pending at this head; merge-hold-gate failure is the expected hold.'
-  recovery_hint: address the review findings, move BUG-2500 back to In Progress, and clear the PR hold only after approval
-  shelved_by: reviewer
-  shelved_at: 2026-11-09T06:22:00.589674211Z
