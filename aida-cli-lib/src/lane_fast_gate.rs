@@ -56,6 +56,66 @@ fn receipt_lock(main: &Path, branch: &str) -> Result<std::fs::File> {
     Ok(file)
 }
 
+/// Forget settled receipts after their local and origin branches disappear.
+/// Keep lock sidecars permanently: an existing waiter may still hold their inode.
+/// Unknown Git evidence and pending repairs retain their receipt.
+// trace:STORY-2640 | ai:codex
+fn settled_owner_ended(receipt: &Receipt) -> bool {
+    !receipt.pending
+        && receipt.owner.as_ref().is_none_or(|owner| {
+            matches!(
+                aida_core::proc_identity::observe(owner, true),
+                aida_core::proc_identity::Verdict::Dead(_)
+            )
+        })
+}
+
+fn prune_settled(main: &Path) -> Result<()> {
+    let directory = main.join(".aida/fast-gates");
+    if !directory.is_dir() {
+        return Ok(());
+    }
+    let refs = std::process::Command::new("git")
+        .arg("-C")
+        .arg(main)
+        .args([
+            "for-each-ref",
+            "--format=%(refname)",
+            "refs/heads",
+            "refs/remotes",
+        ])
+        .output()?;
+    anyhow::ensure!(
+        refs.status.success(),
+        "fast gate branch inventory unavailable"
+    );
+    let refs = String::from_utf8(refs.stdout)?;
+    for entry in std::fs::read_dir(directory)? {
+        let entry = entry?;
+        if entry.path().extension().and_then(|v| v.to_str()) != Some("json") {
+            continue;
+        }
+        let candidate: Receipt = serde_json::from_slice(&std::fs::read(entry.path())?)?;
+        if !settled_owner_ended(&candidate) {
+            continue;
+        }
+        let local = format!("refs/heads/{}", candidate.branch);
+        let origin = format!("refs/remotes/origin/{}", candidate.branch);
+        if refs.lines().any(|r| r == local || r == origin) {
+            continue;
+        }
+        let _lock = receipt_lock(main, &candidate.branch)?;
+        // A concurrent pickup may have replaced the settled record while we
+        // waited. It must retain both its reservation and its repair credit.
+        if let Some(current) = read(main, &candidate.branch)? {
+            if settled_owner_ended(&current) && path(main, &current.branch) == entry.path() {
+                std::fs::remove_file(entry.path())?;
+            }
+        }
+    }
+    Ok(())
+}
+
 /// Reserve before the vendor can push. Existing retry credit survives relaunches.
 #[cfg(test)]
 pub(crate) fn begin(main: &Path, branch: &str) -> Result<()> {
@@ -155,6 +215,9 @@ impl Reservation {
     }
 }
 pub(crate) fn reserve(main: &Path, branch: &str) -> Result<Reservation> {
+    if let Err(error) = prune_settled(main) {
+        eprintln!("fast gate receipt cleanup deferred: {error:#}");
+    }
     let _lock = receipt_lock(main, branch)?;
     begin_locked(main, branch)?;
     Ok(Reservation {
@@ -912,6 +975,62 @@ pub(crate) fn check_import(main: &Path, branch: &str, tip: &str, automatic: bool
 mod tests {
     // trace:STORY-2640 | ai:codex
     #[test]
+    fn fast_gate_prunes_only_settled_receipts_for_deleted_branches() {
+        let tmp = tempfile::tempdir().unwrap();
+        assert!(crate::test_git::git_command()
+            .arg("-C")
+            .arg(tmp.path())
+            .args(["init", "-b", "main"])
+            .status()
+            .unwrap()
+            .success());
+        assert!(crate::test_git::git_command()
+            .arg("-C")
+            .arg(tmp.path())
+            .args([
+                "-c",
+                "user.name=Test",
+                "-c",
+                "user.email=test@example.com",
+                "commit",
+                "--allow-empty",
+                "-m",
+                "initial"
+            ])
+            .status()
+            .unwrap()
+            .success());
+        for branch in ["main", "deleted", "repair", "remote", "reporting"] {
+            begin(tmp.path(), branch).unwrap();
+            if branch != "repair" {
+                release(tmp.path(), branch).unwrap();
+                if branch != "reporting" {
+                    let mut receipt = read(tmp.path(), branch).unwrap().unwrap();
+                    receipt.owner = None;
+                    write(tmp.path(), &receipt).unwrap();
+                }
+            }
+        }
+        assert!(crate::test_git::git_command()
+            .arg("-C")
+            .arg(tmp.path())
+            .args(["update-ref", "refs/remotes/origin/remote", "HEAD"])
+            .status()
+            .unwrap()
+            .success());
+        prune_settled(tmp.path()).unwrap();
+        assert!(read(tmp.path(), "deleted").unwrap().is_none());
+        assert!(path(tmp.path(), "deleted").with_extension("lock").exists());
+        for branch in ["main", "repair", "remote", "reporting"] {
+            assert!(read(tmp.path(), branch).unwrap().is_some(), "{branch}");
+        }
+        // Cleanup must not unlink an inode another caller may be waiting on.
+        begin(tmp.path(), "deleted").unwrap();
+        assert!(blocks_review(tmp.path(), "deleted").unwrap());
+    }
+
+    // trace:STORY-2640 | ai:codex
+    #[test]
     fn fast_gate_branch_move_transfers_hold_retry_and_result_to_actual_branch() {
         let tmp = tempfile::tempdir().unwrap();
         let tree = tmp.path().join("seat");
@@ -1530,7 +1649,7 @@ mod tests {
             env: BTreeMap::new(),
         };
         assert!(lane_job::validate(&job).is_ok());
-        assert_eq!(lane_job::timeout_for(&job, true), Duration::from_secs(300));
+        assert_eq!(lane_job::timeout_for(&job, true), Duration::from_secs(600));
         assert!(!lane_job::runs_tests(&job));
         let tally = lane_job::Tally::default();
         tally.record_exit(&job, "test result: ok. 1 passed; 0 failed;".as_bytes());

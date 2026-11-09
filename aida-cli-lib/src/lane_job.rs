@@ -347,7 +347,10 @@ pub(crate) fn validate(job: &JobRequest) -> std::result::Result<(), String> {
 // trace:BUG-2383 | ai:claude
 pub(crate) fn timeout_for(job: &JobRequest, cold: bool) -> Duration {
     if fast_gate_job(job) {
-        return Duration::from_secs(300);
+        // A measured full sandbox gate exceeds five minutes on the shared host.
+        // Keep a fixed ten-minute bound independent of Cargo build overrides.
+        // trace:STORY-2640 | ai:codex
+        return Duration::from_secs(600);
     }
     let default = if cold {
         MAX_TIMEOUT_SECS
@@ -1934,14 +1937,16 @@ mod fast_gate_job_tests {
             "--detach".as_ref(),
             head.as_ref(),
         ]);
-        let target = tmp.path().join("target/worktrees/real-main");
-        let primary = crate::main_worktree_root_from(source).join("target");
-        let seeded = crate::seat_target_seed::seed_seat_target(
-            &primary,
-            &target,
-            crate::seat_target_seed::LOCK_WAIT,
-        );
-        eprintln!("real-main artifact seed: {seeded:?}");
+        // Reuse the test job's seeded target, already writable in its sandbox.
+        // The primary target is read-only here; attempting to reflink it needs
+        // a writable Cargo lock and silently produced cold validation before.
+        // Derive the target from the running image without ambient env reads.
+        let executable = std::env::current_exe().unwrap();
+        let profile = executable.parent().unwrap().parent().unwrap();
+        assert_eq!(profile.file_name().unwrap(), "agent");
+        let target = profile.parent().unwrap();
+        assert!(profile.join("deps").is_dir(), "test target must be warm");
+        eprintln!("real-main warm test target: {}", target.display());
         let mut lane = LaneJobs::for_lease(&tmp.path().join("host"), &seat, "real-main");
         lane.build_env = vec![("CARGO_TARGET_DIR".into(), target.display().to_string())];
         lane.sandbox = Sandbox::BwrapDefaultOn;

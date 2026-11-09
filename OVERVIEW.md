@@ -1632,7 +1632,7 @@ Permission reports, doctor, launch output and statusline distinguish the posture
 `AIDA_CONTAINMENT_POSTURE` stamps actual child posture for display only.
 
 Host fast gates run `make check-ci-fast` in the offline, cleared-environment
-lane-job bubblewrap sandbox. Native publication gets one repair round before
+lane-job bubblewrap sandbox with a fixed ten-minute timeout. Native publication gets one repair round before
 publishing; self-pushing lanes get one queued repair before review. Seat scripts
 never run unsandboxed, and missing bubblewrap reports `skipped(no-sandbox)`.
 <!-- trace:STORY-2640 | ai:codex -->
