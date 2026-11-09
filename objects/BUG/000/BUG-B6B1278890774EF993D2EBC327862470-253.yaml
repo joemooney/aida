@@ -20,7 +20,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-07T20:18:53.564500Z
-modified_at: 2026-11-09T06:27:29.300170593Z
+modified_at: 2026-11-09T06:53:54.977361734Z
 req_type: Bug
 relationships:
 - rel_type:
@@ -437,6 +437,13 @@ comments:
   modified_at: 2026-11-09T06:27:29.300170593Z
   session_id: 01a1bef80dda
   harness_version: codex-cli 0.167.0
+- id: 01a1bf15-bba1-75c1-88b0-361cbe6c7d9b
+  author: joe
+  content: 'ADVISOR RUBBIN: CI has failed this same check on repeated pushes; pushing again without fixing it will fail again. Do not merge main or push until this exact failure is fixed. #3625: CI fails orchestrator_leases::bug_1629_phase1_recovery_tests::bug_1629_refusal_file_of_a_leased_child_is_discarded (panic at bug_1629_phase1_recovery_tests.rs:674) and bug_1629_replacement_launch_that_keeps_its_lease_is_used (:220). Fix the regression these expose; do not weaken the tests. Also answer the last review''s open hold-resurrection and two-spelling findings, which the prior head left unchanged. Local gate: one targeted cargo test --profile agent -p aida-cli-lib <filter> plus make check-ci-fast, then push; run long cargo in background.'
+  created_at: 2026-11-09T06:53:54.977361734Z
+  modified_at: 2026-11-09T06:53:54.977361734Z
+  session_id: 01a1beff-fc3b-78e2-93e2-9b0c283b0339
+  harness_version: 2.1.319 (Claude Code)
 history:
 - id: 01a1b7ad-9096-7320-bbe8-fc34c8e11c09
   author: aida-session-start
