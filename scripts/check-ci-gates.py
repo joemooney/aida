@@ -324,7 +324,10 @@ def sccache_server_status() -> tuple[bool, str | None]:
     if not proc.is_dir():
         return False, None
     pids_env = os.environ.get("AIDA_SCCACHE_PIDS")
-    if pids_env:
+    # The lane wrapper's PID scope belongs to real procfs, not an explicitly
+    # injected synthetic process tree used by the detection fixtures.
+    # trace:STORY-2640 | ai:codex
+    if pids_env and proc == Path("/proc"):
         candidates = [proc / p for p in pids_env.split() if p.isdigit()]
     else:
         try:

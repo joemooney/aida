@@ -1526,6 +1526,7 @@ fn run_one_timed(
         return refuse(&format!("`{}` is not on the job's PATH", job.argv[0]));
     };
     let (job_program, args) = cargo_with_cache_lifecycle(&cargo, job.argv[1..].to_vec(), &env);
+    let command_len = 1 + args.len();
     // The sandbox binds the seat's cargo target with `--bind-try`, which
     // skips an absent path: on a cold (unseeded) target cargo would then
     // find it read-only and fail before compiling. The host creates it.
@@ -1553,7 +1554,7 @@ fn run_one_timed(
                     // trace:STORY-2640 | ai:codex — Cargo's offline flag alone
                     // cannot keep a Makefile's arbitrary children offline.
                     if fast_gate_job(&job) {
-                        args = fast_gate_namespaces(args, &lane.seat);
+                        args = fast_gate_namespaces(args, &lane.seat, command_len);
                     }
                     match overlay_wrapped(seed, program, args) {
                         Ok((program, args, how)) => (program, args, how),
@@ -1969,15 +1970,44 @@ fn run_seeded_fast_gate(lane: &LaneJobs, id: &str, job: JobRequest) {
 }
 
 // trace:STORY-2640 | ai:codex
+#[cfg(test)]
+#[test]
+fn fast_gate_sccache_command_keeps_home_in_bwrap_options() {
+    let seat = Path::new("/seat");
+    let env = BTreeMap::from([
+        ("SCCACHE_DIR".into(), "/cache".into()),
+        ("SCCACHE_SERVER_UDS".into(), "/cache/socket".into()),
+    ]);
+    let (program, command_args) = cargo_with_cache_lifecycle(
+        Path::new("/usr/bin/make"),
+        vec!["check-ci-fast".into()],
+        &env,
+    );
+    assert_eq!(program, "/bin/sh");
+    let command_len = 1 + command_args.len();
+    let mut command = vec![program.clone()];
+    command.extend(command_args.clone());
+    let wrapped = crate::session::lane_job_bwrap_argv(seat, &[], &[], &program, command_args);
+    let flags = fast_gate_namespaces(wrapped, seat, command_len);
+    let boundary = flags.len() - command_len;
+    assert_eq!(&flags[boundary..], command.as_slice());
+    assert_eq!(flags[boundary - 2], "--dir");
+    assert_eq!(
+        flags[boundary - 1],
+        fast_gate_home(seat).display().to_string()
+    );
+}
+
+// trace:STORY-2640 | ai:codex
 fn fast_gate_home(seat: &Path) -> PathBuf {
     seat.join(INBOX_RELATIVE).join("fast-gate-home")
 }
 
-fn fast_gate_namespaces(mut args: Vec<String>, seat: &Path) -> Vec<String> {
-    // This helper is only used for the exact two-argument make job. Create
+fn fast_gate_namespaces(mut args: Vec<String>, seat: &Path, command_len: usize) -> Vec<String> {
+    // Count the complete wrapped command, including the sccache shell. Create
     // HOME after mounts, inside bubblewrap, so seat symlinks cannot induce a
     // host-side mkdir outside the write boundary.
-    let command = args.len() - 2;
+    let command = args.len() - command_len;
     args.splice(
         command..command,
         ["--dir".into(), fast_gate_home(seat).display().to_string()],
@@ -2028,6 +2058,18 @@ mod fast_gate_job_tests {
     #[test]
     #[ignore = "requires bubblewrap and the real fast-tier tools; run explicitly"]
     fn fast_gate_real_main_target_passes_in_sandbox() {
+        real_target_passes_in_sandbox(false);
+    }
+
+    // Validate a native seat's uncommitted handoff without changing its Git metadata.
+    // trace:STORY-2640 | ai:codex
+    #[test]
+    #[ignore = "requires bubblewrap and the real fast-tier tools; run explicitly"]
+    fn fast_gate_lane_snapshot_passes_in_sandbox() {
+        real_target_passes_in_sandbox(true);
+    }
+
+    fn real_target_passes_in_sandbox(lane_snapshot: bool) {
         assert_eq!(
             crate::session::bwrap_availability(),
             crate::session::BwrapAvailability::Ok
@@ -2055,7 +2097,7 @@ mod fast_gate_job_tests {
             "-C".as_ref(),
             source.as_os_str(),
             "rev-parse".as_ref(),
-            "origin/main".as_ref(),
+            if lane_snapshot { "HEAD" } else { "origin/main" }.as_ref(),
         ]);
         git(&[
             "clone".as_ref(),
@@ -2072,6 +2114,39 @@ mod fast_gate_job_tests {
             "--detach".as_ref(),
             head.as_ref(),
         ]);
+        if lane_snapshot {
+            let patch = crate::test_git::git_command()
+                .arg("-C")
+                .arg(source)
+                .args(["diff", "HEAD", "--binary"])
+                .output()
+                .unwrap();
+            assert!(patch.status.success());
+            let patch_path = tmp.path().join("handoff.patch");
+            std::fs::write(&patch_path, patch.stdout).unwrap();
+            git(&[
+                "-C".as_ref(),
+                seat.as_os_str(),
+                "apply".as_ref(),
+                "--index".as_ref(),
+                patch_path.as_os_str(),
+            ]);
+            git(&[
+                "-C".as_ref(),
+                seat.as_os_str(),
+                "-c".as_ref(),
+                "user.name=Fast gate fixture".as_ref(),
+                "-c".as_ref(),
+                "user.email=fixture@example.invalid".as_ref(),
+                "-c".as_ref(),
+                "core.hooksPath=/dev/null".as_ref(),
+                "commit".as_ref(),
+                "--allow-empty".as_ref(),
+                "-m".as_ref(),
+                "native handoff snapshot".as_ref(),
+            ]);
+            eprintln!("real gate uses a temporary committed lane snapshot of {head}");
+        }
         // Reuse the test job's seeded target, already writable in its sandbox.
         // The primary target is read-only here; attempting to reflink it needs
         // a writable Cargo lock and silently produced cold validation before.
@@ -2083,7 +2158,11 @@ mod fast_gate_job_tests {
         assert!(profile.join("deps").is_dir(), "test target must be warm");
         eprintln!("real-main warm test target: {}", target.display());
         let mut lane = LaneJobs::for_lease(&tmp.path().join("host"), &seat, "real-main");
-        lane.build_env = vec![("CARGO_TARGET_DIR".into(), target.display().to_string())];
+        // Preserve the production cache wrapper while replacing only its target.
+        // trace:STORY-2640 | ai:codex
+        lane.build_env.retain(|(key, _)| key != "CARGO_TARGET_DIR");
+        lane.build_env
+            .push(("CARGO_TARGET_DIR".into(), target.display().to_string()));
         lane.sandbox = Sandbox::BwrapDefaultOn;
         lane.prepare().unwrap();
         check_fast_gate_results(&lane).unwrap();
@@ -2203,6 +2282,7 @@ mod fast_gate_job_tests {
                 vec!["check-ci-fast".into()],
             ),
             &lane.seat,
+            2,
         );
         for flag in ["--unshare-net", "--unshare-ipc", "--unshare-pid"] {
             assert!(flags.iter().any(|arg| arg == flag));

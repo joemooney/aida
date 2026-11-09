@@ -985,7 +985,9 @@ pub(crate) fn record_child_authority(
 
 // Revoke on setup, vendor and gate errors as well as successful completion.
 // trace:STORY-2640 trace:BUG-2139 | ai:codex
-struct ChildGrantGuard<'a>(&'a crate::gate::seat_authority::HeadlessChildGrant);
+pub(crate) struct ChildGrantGuard<'a>(
+    pub(crate) &'a crate::gate::seat_authority::HeadlessChildGrant,
+);
 
 impl Drop for ChildGrantGuard<'_> {
     fn drop(&mut self) {
@@ -1483,7 +1485,12 @@ mod host_capacity_tests {
             "advisor",
             &["implementer"],
         );
-        for failure in ["vendor loop", "native commit", "uninspectable seat"] {
+        for failure in [
+            "vendor loop",
+            "native commit",
+            "uninspectable seat",
+            "fast gate reservation",
+        ] {
             let child = crate::gate::seat_authority::issue_child(
                 tmp.path(),
                 "implementer",
@@ -1494,6 +1501,11 @@ mod host_capacity_tests {
             let grant = crate::gate::seat_authority::HeadlessChildGrant::Issued(child);
             let result: Result<()> = (|| {
                 let _guard = super::ChildGrantGuard(&grant);
+                if failure == "fast gate reservation" {
+                    std::fs::write(tmp.path().join(".aida/fast-gates"), "blocked").unwrap();
+                    crate::lane_fast_gate::reserve(tmp.path(), "lane")?;
+                    panic!("reservation unexpectedly succeeded");
+                }
                 Err(anyhow::anyhow!("{failure}"))?;
                 Ok(())
             })();

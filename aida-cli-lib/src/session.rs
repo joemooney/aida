@@ -6717,6 +6717,9 @@ pub(crate) fn run_vendor_headless_to_exit(
     child_grant: &crate::gate::seat_authority::HeadlessChildGrant,
     lane_tree: Option<(&Path, &str)>,
 ) -> Result<std::process::ExitStatus> {
+    // Revoke even when publication preparation or gate reservation fails.
+    // trace:STORY-2640 trace:BUG-2139 | ai:codex
+    let child_grant_guard = crate::standalone_implementer::ChildGrantGuard(child_grant);
     let drain_lane = drain_resume_lane(vendor, seat, lease_id, lane_tree);
     let host_published = vendor == HeadlessVendor::Codex && contained;
     let publish_native = std::cell::Cell::new(host_published);
@@ -6851,13 +6854,7 @@ pub(crate) fn run_vendor_headless_to_exit(
             Ok::<_, anyhow::Error>(status)
         },
     );
-    // BUG-2139: the child's grant dies with the child — on a normal or
-    // nonzero exit and on a spawn failure alike. A failed revoke only warns:
-    // the grant still expires with its parent, and the lease end/reap revokes
-    // it too.
-    if let Some(id) = child_grant.id() {
-        revoke_headless_child_grant(id);
-    }
+    drop(child_grant_guard);
     let status = result?;
     // trace:STORY-2475 | ai:codex
     if publish_native.get() {
