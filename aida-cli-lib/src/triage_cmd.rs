@@ -17,7 +17,11 @@ pub(crate) mod triage_cmd_args;
 pub(crate) use triage_cmd_args::*;
 
 use crate::cli::TriageCommand;
-use crate::*;
+// trace:TASK-3428 | ai:codex
+use crate::{
+    creator_shell_pid, current_user_id, find_project_root, hostname, identity_guard, process_probe,
+    triage_lease,
+};
 
 pub(crate) fn handle_triage_command(cmd: &TriageCommand) -> Result<()> {
     let project_root = find_project_root()?;

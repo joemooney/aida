@@ -1,3 +1,4 @@
+// trace:TASK-3428 | ai:codex
 use anyhow::{bail, Result};
 
 // trace:STORY-1728 | ai:claude
@@ -305,7 +306,6 @@ fn run_protocol(
     matches: &clap::ArgMatches,
     ctx: &crate::command_registry::DispatchCtx,
 ) -> anyhow::Result<crate::command_registry::Flow> {
-    use crate::*;
     let args = <ProtocolArgs as clap::FromArgMatches>::from_arg_matches(matches)?;
     match &ctx.store {
         None => Ok(crate::command_registry::Flow::Continue),
