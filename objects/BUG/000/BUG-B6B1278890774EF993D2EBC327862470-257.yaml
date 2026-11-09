@@ -18,7 +18,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-08T02:46:34.549817Z
-modified_at: 2026-11-09T05:16:23.360074548Z
+modified_at: 2026-11-09T08:22:08.316648768Z
 req_type: Bug
 tags:
 - area:ci
@@ -827,6 +827,12 @@ history:
   session_id: 01a1be0f0fc0
   harness_version: 2.1.319 (Claude Code)
   changes: []
+- id: 01a1bf66-810d-7a61-bd72-00f6ee663abb
+  author: joe
+  timestamp: 2026-11-09T08:22:08.397973572Z
+  session_id: 01a1bf63f834
+  harness_version: 2.1.319 (Claude Code)
+  changes: []
 filed_at:
   code_sha: dc41ee8da2f44f88178936fc1a8e6cb7168a3de7
   branch: main
@@ -845,7 +851,7 @@ failure_reason:
   phase: reviewer
   phase_index: 3
   kind: verdict:request-changes
-  detail: No new code defect found in a full-diff sweep, but CI is still running at this head and AC1, AC2 and AC4 still have no live evidence; neither blocker needs a code change.
+  detail: Exact-head CI is now green and a full-diff sweep found no code defect; the only blocker is the operator canary, because AC1 (raw/web refusal), AC2 and AC4 still have no live evidence.
   recovery_hint: address the review findings, move BUG-2492 back to In Progress, and clear the PR hold only after approval
   shelved_by: reviewer
-  shelved_at: 2026-11-09T02:11:01.037841239Z
+  shelved_at: 2026-11-09T08:22:08.316648768Z
