@@ -1,0 +1,29 @@
+id: 01a1c025-45c0-7e72-ae52-5619d2cf66d2
+spec_id: TASK-b6b1278890774ef993d2ebc327862470-1051
+title: 'Cosmetic, aida-cli-lib/src/review_watch.rs:1736: finish_confirmed_review repeat…'
+description: |-
+  Non-blocking finding carried forward from an APPROVED review verdict on BUG-2498, which has since completed — recorded here so it keeps a queryable home once the verdict record stops being read.
+
+  Cosmetic, aida-cli-lib/src/review_watch.rs:1736: finish_confirmed_review repeats the confirm() that advance already ran at the call site; a failure of the second call is reported as 'completion receipt refused'. Pass the proof in or drop the repeat.
+
+  PR: #3693
+  Reviewed sha: 668a2156be9497f6840deab13e357e594daa5ea4
+status: Draft
+priority: Medium
+owner: joe
+feature: Uncategorized
+created_at: 2026-11-09T11:50:30.592957981Z
+modified_at: 2026-11-09T11:50:30.592957981Z
+req_type: Task
+tags:
+- carried-from:BUG-2498
+- finding-hash:19029067
+- from-review:PR-3693
+- kind:carried-forward
+filed_at:
+  code_sha: 81044beb98c0d870ebd63fd9006b759e2bb090f9
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: ef853db64e2
+  vendor: claude
