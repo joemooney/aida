@@ -12,7 +12,7 @@
 //! The fix is the smallest structure that lets a gate *read* the verdict:
 //! per-spec JSON at `.aida/review-verdicts/<SPEC>.json` carrying
 //!
-//!   - `verdict`   — the verdict word (approved / request-changes / rejected)
+//!   - `verdict`   — the verdict word (approved / request-changes / rejected / waiting)
 //!   - `reviewed_sha` — the commit the reviewer actually looked at
 //!   - `reviewed_branch` / `recorded_at` / `summary` — context for humans
 //!   - `findings` — concrete reviewer findings for rework handoff
@@ -3180,7 +3180,7 @@ pub fn queue_done_verdict_gate(
                 summary_line(v),
                 "A review gate that cannot classify the verdict must not wave work through. \
                  Record a fresh, recognised verdict against the current head: `aida review \
-                 record` accepts approved, request-changes, or rejected."
+                 record` accepts approved, request-changes, rejected, or waiting."
                     .to_string(),
             ]
             .into_iter()

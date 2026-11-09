@@ -431,3 +431,72 @@ fn bug_2500_rework_waiting_preserves_store_but_reviewer_route_and_warning_procee
         .iter()
         .any(|entry| entry.for_role.as_deref() == Some("implementer")));
 }
+
+#[test]
+fn bug_2500_ambiguous_alias_waiting_refuses_admission() {
+    let tmp = tempfile::tempdir().unwrap();
+    let dir = tmp.path().join(".aida/review-verdicts");
+    std::fs::create_dir_all(&dir).unwrap();
+    for (key, word) in [
+        ("BUG-2500", "request-changes"),
+        ("BUG-NATIVE-2500", "waiting"),
+    ] {
+        std::fs::write(
+            dir.join(format!("{key}.json")),
+            serde_json::json!({
+                "verdict": word, "reviewed_sha": HEAD, "summary": SUMMARY,
+                "recorded_at": "2026-11-09T01:00:00Z"
+            })
+            .to_string(),
+        )
+        .unwrap();
+    }
+    let err =
+        crate::queue_cmd::refuse_waiting_review(tmp.path(), "BUG-2500", "BUG-NATIVE-2500", None)
+            .unwrap_err();
+    assert!(err.contains("WAITING") && err.contains("Host:"), "{err}");
+}
+
+#[test]
+fn bug_2500_multiple_bound_waits_refuse_admission() {
+    let _env = crate::test_env::EnvVarsGuard::apply(&[("AIDA_CONTAINED", None)]);
+    for spec_record in [false, true] {
+        let tmp = tempfile::tempdir().unwrap();
+        if spec_record {
+            rv::record_verdict(
+                tmp.path(),
+                "BUG-2500",
+                Some("approved"),
+                Some(HEAD),
+                None,
+                Some("older approval"),
+                &[],
+                "reviewer",
+            )
+            .unwrap();
+        }
+        for pr in [3700, 3701] {
+            rv::record_verdict(
+                tmp.path(),
+                &format!("PR-{pr}"),
+                Some("waiting"),
+                Some(HEAD),
+                None,
+                Some(SUMMARY),
+                &[],
+                "reviewer",
+            )
+            .unwrap();
+            crate::gate::ledger::project::index_spec(
+                &crate::gate::ledger::store_root(tmp.path()).unwrap(),
+                "BUG-2500",
+                crate::gate::ledger::ChangeKey::pr(pr),
+            )
+            .unwrap();
+        }
+        let err = crate::queue_cmd::refuse_waiting_review(tmp.path(), "BUG-2500", "BUG-2500", None)
+            .unwrap_err();
+        assert!(err.contains("WAITING"), "{err}");
+        assert!(!tmp.path().join(".aida/queue").exists());
+    }
+}

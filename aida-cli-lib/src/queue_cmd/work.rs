@@ -2487,6 +2487,22 @@ enum ReworkReviewError {
     Unavailable(String),
 }
 
+// Preserve a known wait even when competing records cannot be ordered. An
+// unavailable-evidence warning must never turn a known wait into admission.
+// trace:BUG-2500 | ai:codex
+fn waiting_rework_error(
+    shown: &str,
+    verdict: &crate::gate::review_verdict::RecordedVerdict,
+) -> Result<(), ReworkReviewError> {
+    if verdict.kind == crate::gate::review_verdict::VerdictKind::Waiting && !verdict.is_closed() {
+        return Err(ReworkReviewError::Waiting(format!(
+            "{shown}: WAITING — {}. Resume with a fresh review at the current head; no implementer rework is queued.",
+            verdict.summary.as_deref().unwrap_or("external evidence required")
+        )));
+    }
+    Ok(())
+}
+
 fn resolve_rework_review(
     project_root: &Path,
     display_id: &str,
@@ -2512,6 +2528,26 @@ fn resolve_rework_review(
             }
             AliasSelection::Absent => None,
             unavailable => {
+                // Inspect each current partition: fail_closed may retain a
+                // substantive refusal while another ambiguous alias is waiting.
+                for label in &labels {
+                    if let Some(current) =
+                        crate::gate::review_verdict::current_verdict(project_root, label)
+                    {
+                        if let Some(v) =
+                            crate::gate::review_verdict::parse_recorded_verdict(&current.body)
+                        {
+                            waiting_rework_error(&shown, &v)?;
+                        }
+                    }
+                }
+                for (key, v) in crate::gate::review_verdict::list_active_verdicts(project_root) {
+                    if change_verdict_bound_to(project_root, &key, &labels)
+                        || open_change.is_some_and(|change| change.eq_ignore_ascii_case(&key))
+                    {
+                        waiting_rework_error(&shown, &v)?;
+                    }
+                }
                 let reason = unavailable
                     .unavailable_reason()
                     .unwrap_or_default()
@@ -2561,6 +2597,11 @@ fn resolve_rework_review(
                 .filter(|(_, verdict)| verdict.kind.blocks_done())
                 .filter(|(key, _)| change_verdict_bound_to(project_root, key, &labels))
                 .collect::<Vec<_>>();
+            if bound.len() > 1 {
+                for (_, v) in &bound {
+                    waiting_rework_error(&shown, v)?;
+                }
+            }
             if bound.len() > 1 && spec_keyed.is_some() {
                 // The spec's own record answers, as before BUG-2430.
                 bound.clear();
@@ -2598,13 +2639,7 @@ fn resolve_rework_review(
         crate::review_verdict_display::rework_findings_comment(&shown, &shown, v)
     };
     // trace:BUG-2500 | ai:codex
-    let refuse_wait = |v: &RecordedVerdict| -> Result<(), ReworkReviewError> {
-        if v.kind == crate::gate::review_verdict::VerdictKind::Waiting && !v.is_closed() {
-            let why = format!("{shown}: WAITING — {}. Resume with a fresh review at the current head; no implementer rework is queued.", v.summary.as_deref().unwrap_or("external evidence required"));
-            return Err(ReworkReviewError::Waiting(why));
-        }
-        Ok(())
-    };
+    let refuse_wait = |v: &RecordedVerdict| waiting_rework_error(&shown, v);
     Ok(match (spec_keyed, change_keyed) {
         (None, None) => None,
         (Some((v, _)), None) => {
