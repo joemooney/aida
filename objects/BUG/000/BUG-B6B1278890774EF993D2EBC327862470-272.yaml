@@ -3,12 +3,12 @@ spec_id: BUG-b6b1278890774ef993d2ebc327862470-272
 agreed_id: BUG-2507
 title: Rework cannot import review findings when a gate-ledger line exceeds the reader's size limit
 description: '2026-11-08: aida queue rework BUG-2501 warned ''no review findings imported ... refusing gate-ledger entry PR-3708.jsonl line 2: the line is oversized''. A rework lane then starts without the reviewer''s findings, wasting a round. AC1: findings are imported when a ledger entry is large, either by bounding what writers record or by raising the limit with a test; a truly unreadable entry remains refused with a named reason. AC2: rework output states clearly when findings could not be imported so the operator or lane can read the review comment.'
-status: InProgress
+status: Completed
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-09T05:03:12.555202896Z
-modified_at: 2026-11-09T05:10:11.292272066Z
+modified_at: 2026-11-09T07:01:21.356690689Z
 req_type: Bug
 history:
 - id: 01a1beb6-7725-7e41-83ac-1ca29bb6231a
@@ -24,6 +24,20 @@ history:
   session_id: 01a1beb670fe
   harness_version: codex-cli 0.167.0
   changes: []
+- id: 01a1bf1c-8b08-7680-af6b-39c7f139a1c7
+  author: aida-auto-bump
+  timestamp: 2026-11-09T07:01:21.288408427Z
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Completed
+processing_record:
+- id: 01a1bf1c-8b4c-78b0-bb33-3939dd425a00
+  timestamp: 2026-11-09T07:01:21.356687872Z
+  agent: aida
+  commit_sha: 0cbb78cbcedb05cd86b301f9a2ca1dd0fdacc010
+  summary: 'BUG-2507 PASS: 8 MiB line limit imports large ledger entries with an over-limit refusal test; rework warnings name the review comment; CI green at head.'
+  review_verdict: approved
 filed_at:
   code_sha: 504b9039dd117da6379207544b80d0077b2f44cc
   branch: main
@@ -32,3 +46,7 @@ filed_at:
   aida_build_sha: a7a14984cec
   vendor: claude
   session: 7aacb1ed-ebaa-4da4-a195-500864e99e7d
+implementation_info:
+  implemented: false
+  completed_at: 2026-11-09T07:01:21.288402442Z
+  completion_sha: 0cbb78cbcedb05cd86b301f9a2ca1dd0fdacc010
