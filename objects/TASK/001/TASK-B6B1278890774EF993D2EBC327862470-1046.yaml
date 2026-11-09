@@ -1,0 +1,29 @@
+id: 01a1c005-a135-7a60-ab63-cc756a1f02af
+spec_id: TASK-b6b1278890774ef993d2ebc327862470-1046
+title: 'Cosmetic: comments describe the old ordering. rework.rs:927 says success is rep…'
+description: |-
+  Non-blocking finding carried forward from an APPROVED review verdict on BUG-2502, which has since completed — recorded here so it keeps a queryable home once the verdict record stops being read.
+
+  Cosmetic: comments describe the old ordering. rework.rs:927 says success is reported after the guard can re-park, but the guard now returns before the flip; the guard comment at about :731 and the rework_is_review_shelf doc still describe a return to NeedsAttention and a cleared marker, which now apply only to legacy parks (loop_guard_park is a status no-op from NeedsAttention, so no aida-loop-guard history entry is written).
+
+  PR: #3696
+  Reviewed sha: 0962bbf994546cd2a37ba281546f7da492132814
+status: Draft
+priority: Medium
+owner: joe
+feature: Uncategorized
+created_at: 2026-11-09T11:15:56.853874758Z
+modified_at: 2026-11-09T11:15:56.853874758Z
+req_type: Task
+tags:
+- carried-from:BUG-2502
+- finding-hash:1393c3c8
+- from-review:PR-3696
+- kind:carried-forward
+filed_at:
+  code_sha: ef853db64e26b62ee34ea5662eb0fe57823b41b4
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 090959c51d5
+  vendor: claude
