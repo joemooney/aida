@@ -20,12 +20,12 @@ description: |
   3. A lane that passes behaves exactly as today, plus the marker.
   4. Tests cover: a gate fail followed by a fixed round, a fail that persists (publishes with fast_gate=fail), a timeout, and the Codex native-publication path.
   5. Advisor docs (rework-brief-craft step 6) say lanes are fast-gated by the host.
-status: InProgress
+status: NeedsAttention
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-07T19:45:35.836129088Z
-modified_at: 2026-11-09T04:09:56.628704494Z
+modified_at: 2026-11-09T04:15:57.021896233Z
 req_type: Story
 tags:
 - docs:impacted
@@ -1019,6 +1019,15 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a1be85-1c5d-79e2-828b-e53962109a29
+  author: aida-orchestrator
+  timestamp: 2026-11-09T04:15:57.021919751Z
+  session_id: 01a1be818ecb
+  harness_version: 2.1.319 (Claude Code)
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: NeedsAttention
 filed_at:
   code_sha: 7a18c0d52a6a4e0822befd4c810cfed16b04b74c
   branch: main
@@ -1028,3 +1037,11 @@ filed_at:
   vendor: claude
   session: 01a1b76b-2fe7-7dd2-88d0-356fc8d96d04
   harness_version: 2.1.319 (Claude Code)
+failure_reason:
+  phase: reviewer
+  phase_index: 3
+  kind: verdict:request-changes
+  detail: 'Source sweep of all 5 ACs: AC4 and AC5 verified, AC1-AC3 partial. No PR source changed since the last reviewed head (main merge only), so its findings stand, led by no real gate run ever passing. CI pending; merge-hold-gate red from the aida:merge-hold label.'
+  recovery_hint: address the review findings, move STORY-2640 back to In Progress, and clear the PR hold only after approval
+  shelved_by: reviewer
+  shelved_at: 2026-11-09T04:15:57.021896233Z
