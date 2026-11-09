@@ -1,0 +1,29 @@
+id: 01a1c025-1864-75c0-b132-a239e3304a61
+spec_id: TASK-b6b1278890774ef993d2ebc327862470-1047
+title: 'Minor, AC1 residual, aida-cli-lib/src/review_watch.rs:777-791: when queue work …'
+description: |-
+  Non-blocking finding carried forward from an APPROVED review verdict on BUG-2498, which has since completed — recorded here so it keeps a queryable home once the verdict record stops being read.
+
+  Minor, AC1 residual, aida-cli-lib/src/review_watch.rs:777-791: when queue work and the reviewer die without a terminal receipt (OOM, reboot, killed supervisor) the attempt goes Running to Exited with descendants_gone, and no completion receipt is written even though the captured review_lease is on the attempt. A clean, pushed, processless tree then still gets the 'held by worktree' refusal. Fail-closed. Leases stranded before this ships also need manual cleanup. Fix: call finish_confirmed_review on that transition.
+
+  PR: #3693
+  Reviewed sha: 668a2156be9497f6840deab13e357e594daa5ea4
+status: Draft
+priority: Medium
+owner: joe
+feature: Uncategorized
+created_at: 2026-11-09T11:50:18.980906073Z
+modified_at: 2026-11-09T11:50:18.980906073Z
+req_type: Task
+tags:
+- carried-from:BUG-2498
+- finding-hash:22ff1acb
+- from-review:PR-3693
+- kind:carried-forward
+filed_at:
+  code_sha: 81044beb98c0d870ebd63fd9006b759e2bb090f9
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: ef853db64e2
+  vendor: claude
