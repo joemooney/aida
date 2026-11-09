@@ -8,7 +8,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-08T18:01:54.649358Z
-modified_at: 2026-11-09T05:36:05.129633368Z
+modified_at: 2026-11-09T05:44:09.301889918Z
 req_type: Task
 relationships:
 - rel_type: Child
@@ -142,6 +142,13 @@ comments:
   created_at: 2026-11-09T04:44:49.012704604Z
   modified_at: 2026-11-09T04:44:49.012704604Z
   session_id: 01a1be9404a0
+  harness_version: codex-cli 0.167.0
+- id: 01a1bed5-dd55-7eb1-addb-34490ac02e69
+  author: dirtlab
+  content: 'Native-seat verification: checkout already contains TASK-3608 implementation (including commit 1daecb0418); no source edits needed. Lane job j20261109T053825004-2-0 ran cargo test --profile agent -p aida-cli-lib --lib -- task_3608: 9 passed, 0 failed. Covers fresh/resumed final batch classification, existing PR, receipt/dirty probe, lease discovery, watchdog precedence, pipelined sidecar, and persisted no-change without merge credit. Working tree remains clean. Codegraph unavailable on this host; doctor reports missing. No commit, push, PR, or queue completion attempted from native seat.'
+  created_at: 2026-11-09T05:44:09.301889918Z
+  modified_at: 2026-11-09T05:44:09.301889918Z
+  session_id: 01a1becfe003
   harness_version: codex-cli 0.167.0
 history:
 - id: 01a1bc53-0ec9-7670-9674-41fd5fd9d861
@@ -357,6 +364,11 @@ history:
   author: joe
   timestamp: 2026-11-09T05:36:05.253760185Z
   session_id: 7aacb1ed-ebaa-4da4-a195-500864e99e7d
+- id: 01a1bed0-3fc1-7722-a78d-168d23645ccc
+  author: dirtlab
+  timestamp: 2026-11-09T05:38:01.281534418Z
+  session_id: 01a1becfe003
+  harness_version: codex-cli 0.167.0
   changes: []
 filed_at:
   aida_version: 0.16.0

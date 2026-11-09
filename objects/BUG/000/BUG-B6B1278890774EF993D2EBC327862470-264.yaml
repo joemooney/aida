@@ -8,7 +8,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-08T19:01:55.483195458Z
-modified_at: 2026-11-09T05:26:27.079202153Z
+modified_at: 2026-11-09T05:27:37.935142045Z
 req_type: Bug
 relationships:
 - rel_type:
@@ -239,6 +239,13 @@ history:
   - field_name: status
     old_value: NeedsAttention
     new_value: Completed
+- id: 01a1bec6-bcc9-7b02-81ef-eab15b0b00d7
+  author: aida-auto-bump
+  timestamp: 2026-11-09T05:27:37.929315851Z
+  changes:
+  - field_name: status
+    old_value: NeedsAttention
+    new_value: Completed
 processing_record:
 - id: 01a1bec5-a807-7b71-af5a-9d634b49e574
   timestamp: 2026-11-09T05:26:27.079198608Z
@@ -246,6 +253,11 @@ processing_record:
   commit_sha: 1dc5af9077e9c945410b176c84044f588f4530fb
   summary: HEAD as a Cargo env fingerprint re-stamps both binaries after a fast-forward and bare --clean; both earlier blockers are fixed and all CI build/test shards are green at this head. merge-hold-gate is red only because the supervised hold is still armed.
   review_verdict: approved
+- id: 01a1bec6-bccf-77a3-85e5-b8cd5604bc71
+  timestamp: 2026-11-09T05:27:37.935141151Z
+  agent: aida
+  commit_sha: 1dc5af9077e9c945410b176c84044f588f4530fb
+  summary: Completed via merge 1dc5af90
 filed_at:
   code_sha: eeec474c545cbc8a354d386c8cb6d81460da7b9f
   branch: main
@@ -257,5 +269,5 @@ filed_at:
   harness_version: 2.1.319 (Claude Code)
 implementation_info:
   implemented: false
-  completed_at: 2026-11-09T05:26:27.010597475Z
+  completed_at: 2026-11-09T05:27:37.929312514Z
   completion_sha: 1dc5af9077e9c945410b176c84044f588f4530fb

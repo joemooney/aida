@@ -545,6 +545,13 @@ comments:
   created_at: 2026-11-09T05:24:29.604839268Z
   modified_at: 2026-11-09T05:24:29.604839268Z
   session_id: 7aacb1ed-ebaa-4da4-a195-500864e99e7d
+- id: 01a1bec6-813a-7d01-8b02-259a9ec311ab
+  author: dirtlab
+  content: 'Native rework handoff: removed the resurrected, unrelated TASK-3365 review-watch paragraph from AGENTS.md (only changed file, uncommitted). git diff --check passed. Static scan confirms all 58 unique schema tool names occur unchanged in origin/main transport, in identical order; initial function-boundary extraction scripts were invalid and are not validation evidence. untested=true this round: documentation-only change, no Cargo tests run. PR-3687 read-only observation at 2ea6e05b5605: all seven CI lanes and merge-hold-gate queued; no green final-head result claimed. Refs-only native publication declaration recorded; no commit, push, PR mutation, queue done, pr ship or review record. Host must update PR body to disclose: Extract MCP transport/store handler into aida-mcp with binary injection; shared descriptors and claim naming remain in cli-lib. This is partial delivery under advisor ruling: preserve the same 58 tool names; AC5 dell1 clean-build cargo --timings evidence remains owed, advisor-owned after merge. TASK-3429 stays open. Require green final-head CI, independent approval and applicable hold clearance. No active wait remains.'
+  created_at: 2026-11-09T05:27:22.682240589Z
+  modified_at: 2026-11-09T05:27:22.682240589Z
+  session_id: 01a1bec57add
+  harness_version: codex-cli 0.167.0
 history:
 - id: 01a1b862-7fc0-7e63-899e-5179ac0131ed
   author: joe
