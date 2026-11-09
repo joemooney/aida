@@ -23,7 +23,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-07T20:45:16.684639200Z
-modified_at: 2026-11-09T09:48:00.465260338Z
+modified_at: 2026-11-09T09:48:08.281196938Z
 req_type: Task
 relationships:
 - rel_type: Child
@@ -207,6 +207,29 @@ comments:
   content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: The advisor-ruling rework landed (named legacy fallback, shared hint/adoption gate, batch reader, admitted-witness tests), but the fallback is lease_is_live for every probe, which is not main''s rule at adoption or review progress: a Dormant legacy lease with a live or unrecorded owner becomes adoptable. The adopted-orphan sweep still bypasses the fallback, four queue_cmd ratchet entries remain, and CI is pending at this head. Part A is out of scope for this Refs slice.. No triage reason was given.'
   created_at: 2026-11-09T09:48:00.465258980Z
   modified_at: 2026-11-09T09:48:00.465258980Z
+- id: 01a1bfb5-3c65-74c3-ba05-75ff47400d3a
+  author: joe
+  content: |-
+    REVIEW FINDINGS TO ADDRESS (PR #3670):
+    Verdict: CHANGES REQUESTED
+    Reviewed commit: ee03a9fcaed3
+    Recorded: 2026-11-09T09:17:16.571266588+00:00
+    Findings:
+    1. [major][blocker] Adoption is weaker than main for legacy holders, against ruling items 2 and 4 (reader.rs pickup_owner, leases.rs:4781-4787). pickup_owner turns lease_is_live=false into Dead, and lease_is_live is false for Dormant. Main's gate (orphan_adoption_refusal over stale_lease_recovery base_verdict) needed lease_owner_gone==Some(true). So a legacy lease with active_pid=None, no Claude in its tree, under 24h old and with a LIVE creator (main: Live, refused) or no recorded owner (main: UnknownLiveness, refused) is now adoptable, and both the --resume hint and session start accept it. No test covers this: a_live_lease_is_refused uses a seeded heartbeat. Fix: keep the single named reader function but apply each probe's own pre-migration rule, so adoption uses the stale-recovery verdict. Add zero-witness tests for live-creator and no-owner refusal.
+    2. [major][blocker] Prior finding 1/3 is unfixed at the adopted-orphan sweep (session_start.rs:2282-2289). It still calls lease_owner directly, so a crashed zero-witness sibling reads Unknown and refuses adoption with 'cannot be proven gone'; main released it through stale_lease_recovery. The ruling requires one reader fallback with no per-site divergence. Route it through that function using main's rule, not bare lease_is_live: the no-owner sibling test at bug_2223_orphan_seat_reentry_tests.rs:872-903 must keep refusing.
+    3. [major][blocker] TASK-2094 regression at review progress (lane_liveness.rs:1266-1269), also raised last round. Main counted any non-Stale state as running, plus a live agent-registry entry inside the worktree. The fallback now releases Dormant, and the registry arm is gone, so a live Codex or Antigravity reviewer on a legacy holder (Dormant, no Claude session) reads as crashed and raises a false unpicked-ready-pr. The test was inverted to assert this (task_3420_crashed_reviewer_uses_ownership_instead_of_registry_cwd, 'an unrelated registry process cannot override owner death'), and that assertion is against a legacy holder, not an owner-death proof. Fix: keep main's Stale-plus-registry rule for legacy holders and restore the positive registered-reviewer case; admitted holders stay judged as written.
+    4. [major][blocker] Acceptance 'the ratchet baseline must shrink to zero entries for these paths' is still not met: scripts/ownership-liveness-legacy.json:111-114 keeps the four queue_cmd/list.rs and queue_cmd/next.rs handle_queue_command entries, and rg finds no such calls in queue_cmd/. The ratchet fails only on growth, so CI will not catch it. Delete the four entries.
+    5. [major][blocker] LeaseReader::record (reader.rs:96-101) reports any unresolved label as an error, because reqs.get().is_none() is false as soon as resolve ran, even when the store loaded fine and the label simply isn't a spec. Free-form scopes such as harness-worktree therefore get Err, which is never legacy_unknown, so they are retained forever, unlike main. That also blocks the BUG-1205 auto-end at session_start.rs:2680 for such a scope and leaves a permanent stale-base row at queue_cmd/list.rs:1878. It also changes lease_record for other callers: agent_launch.rs:4552 had Ok(None)=>fresh, and now Err=>not fresh, so a fresh dispatch can be refused by its own lease. Fix: return Err only when the store itself failed to load (reqs is Some(None)); keep Ok(None) for a label absent from a loaded store; add a test.
+    6. [major] orphan_adoption_refusal (leases.rs:4752) now has no callers, only a doc reference at leases.rs:4768, so it is dead code on a -D warnings build. Reuse it for the adoption fix in the first finding or remove it and its doc reference.
+    7. [minor] Queue-list stale-base rows change for Dormant legacy leases (queue_cmd/list.rs:1878): main skipped only LeaseState::Stale, while lease_is_live also drops Dormant, so a parked non-Stale lease loses its behind-main row. This has the same root as the first finding: use that probe's own rule.
+    8. [minor] The legacy fallback runs probe_live_claude_sessions per lease (reader.rs pickup_owner), so the queue-list loop now does up to N process-table scans where main did one. LeaseReader shares the store but not the scan; memoize it in a OnceCell alongside reqs.
+    9. [minor] Ruling-required coverage is incomplete: the task_3420 tests cover zero-witness and admitted holders but no admission-unavailable holder (a Process witness with admission None, 5 live records at the last review), and none shows the fallback leaving dirty or unpushed safeguards intact. Add both.
+    10. [minor] Stale contract comments remain: leases.rs:2382-2386 ('callers pass lease_is_live'), queue_cmd/list.rs:1862-1864 ('only live (non-stale) leases', 'cheap'), queue_cmd/next.rs:78 ('no cwd/PID fallback', false for legacy holders), and lane_liveness.rs:1264-1265 ('without substituting a process in the same cwd', also false for legacy holders).
+    11. [minor] Prior finding 10 is unfixed: scripts/store-writers.toml still moves the TASK-1222 entries and drops the two '# trace:TASK-1222' comments and the '# Partial variant ... trace:TASK-3223' comment (main lines 3429, 3432, 3732). Restore main's version of those lines.
+    12. [minor] CI is unverified: all seven CI jobs were pending at ee03a9fcaed3 and merge-hold-gate had failed (mergeStateStatus BLOCKED). The implementer's own note reports make check-ci-fast failing in the Codex mail-wake fixtures. Confirm green at the rework head and state whether those failures come from this PR.
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
+  created_at: 2026-11-09T09:48:08.165029505Z
+  modified_at: 2026-11-09T09:48:08.165029505Z
 history:
 - id: 01a1b7c2-6b69-7b02-bd8c-8f40aee2972d
   author: joe
