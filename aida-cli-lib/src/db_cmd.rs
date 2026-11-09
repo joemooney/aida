@@ -504,7 +504,7 @@ pub(crate) fn db_sync_push_leg(
                     .map_err(|e| {
                         anyhow::anyhow!(
                             "Pull failed: {}",
-                            crate::store_pull_failure_hint(store_path, &e.to_string())
+                            crate::store_pull_failure_hint(store_path, &e)
                         )
                     })?;
                 crate::ensure_no_spec_id_collisions_canonical(store_path)?;

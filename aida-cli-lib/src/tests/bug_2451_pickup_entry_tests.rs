@@ -232,6 +232,15 @@ exit 0
 
 // trace:BUG-2451 | ai:codex
 fn queue_work(storage: &crate::Storage, list_sessions: bool) -> anyhow::Result<()> {
+    queue_work_sync(storage, list_sessions, true)
+}
+
+// trace:BUG-2501 | ai:codex
+fn queue_work_sync(
+    storage: &crate::Storage,
+    list_sessions: bool,
+    no_pull: bool,
+) -> anyhow::Result<()> {
     crate::queue_cmd::handle_queue_work(
         storage,
         None,
@@ -241,7 +250,7 @@ fn queue_work(storage: &crate::Storage, list_sessions: bool) -> anyhow::Result<(
         false,
         /* no_launch */ true,
         crate::queue_cmd::QueueWorkRoleInput::direct(Some("implementer")),
-        /* no_pull */ true,
+        no_pull,
         None,
         None,
         None,
@@ -322,4 +331,122 @@ esac
         assert!(error.contains("pass --branch explicitly"), "{error}");
         assert!(!error.contains("--branch-style"), "{error}");
     }
+}
+
+// trace:BUG-2501 | ai:codex
+fn bug_2501_private_allocation_setting(main: &Path) {
+    use std::os::unix::fs::PermissionsExt;
+    let store = main.join(".aida-store");
+    crate::test_env::enroll_synthetic_home(&store).unwrap();
+    let common = aida_core::allocation_authority::common_dir(&store).unwrap();
+    std::fs::set_permissions(
+        common.join(aida_core::allocation_authority::CONFIG_FILE),
+        std::fs::Permissions::from_mode(0o600),
+    )
+    .unwrap();
+}
+
+// trace:BUG-2501 | ai:codex
+#[test]
+fn bug_2501_pull_failure_stops_pickup_before_implicit_queue_write() {
+    let fx = fixture();
+    let mut ambient =
+        crate::test_env::AmbientGuard::hermetic_with_seat(&fx.main, "implementer", &[]);
+    let gh = forge_fixture(&fx.main, &fx.root, "");
+    ambient.set_key("AIDA_TEST_GH_BINARY", &gh);
+    bug_2501_private_allocation_setting(&fx.main);
+    let (storage, _) = super::orphan_reentry_tests::queued_scope(&fx.main, "BUG-2451");
+    let user = crate::test_env::HERMETIC_TEST_USER;
+    let row = storage.queue_list(user, false).unwrap().remove(0);
+    storage.queue_remove(user, &row.requirement_id).unwrap();
+    let before = storage
+        .load()
+        .unwrap()
+        .get_requirement_by_spec_id("BUG-2451")
+        .unwrap()
+        .clone();
+    let fake = fx.root.join("failing-aida");
+    crate::test_exec::write_executable(&fake, "#!/bin/sh\nexit 42\n");
+    let _exe = crate::kernel::test_aida_exe::set(fake);
+    let error = queue_work_sync(&storage, false, false).unwrap_err();
+    assert!(
+        error.to_string().contains("pre-pickup pull failed"),
+        "{error:#}"
+    );
+    assert!(storage.queue_list(user, false).unwrap().is_empty());
+    let after = storage
+        .load()
+        .unwrap()
+        .get_requirement_by_spec_id("BUG-2451")
+        .unwrap()
+        .clone();
+    assert_eq!(before.status, after.status);
+    assert_eq!(before.history, after.history);
+    assert!(crate::list_leases(&fx.main).is_empty());
+}
+
+// trace:BUG-2501 | ai:codex
+#[test]
+fn bug_2501_burndown_residual_refuses_failed_pull() {
+    let fx = fixture();
+    let _ambient = crate::test_env::AmbientGuard::hermetic_with_seat(&fx.main, "implementer", &[]);
+    forge_fixture(&fx.main, &fx.root, "");
+    bug_2501_private_allocation_setting(&fx.main);
+    let (storage, _) = super::orphan_reentry_tests::queued_scope(&fx.main, "BUG-2451");
+    std::fs::write(
+        fx.main.join(".aida/config.toml"),
+        "store_path = '.aida-store'\n",
+    )
+    .unwrap();
+    git_ok(storage.path(), &["add", "."]);
+    git_ok(
+        storage.path(),
+        &[
+            "-c",
+            "maintenance.auto=false",
+            "-c",
+            "gc.auto=0",
+            "-c",
+            "user.name=Test",
+            "-c",
+            "user.email=test@example.com",
+            "commit",
+            "-qm",
+            "fixture",
+        ],
+    );
+    git_ok(
+        storage.path(),
+        &[
+            "remote",
+            "add",
+            "origin",
+            fx.root.join("missing.git").to_str().unwrap(),
+        ],
+    );
+    let before = storage
+        .queue_list(crate::test_env::HERMETIC_TEST_USER, false)
+        .unwrap();
+    let initial = crate::burndown_run::handle_burndown_run(
+        "approved", None, None, None, None, None, true, false, false, true, None, None, false,
+    )
+    .unwrap_err();
+    assert!(
+        initial.to_string().contains("refusing to continue"),
+        "{initial:#}"
+    );
+    let error =
+        crate::burndown_run::probe_burndown_residual(&fx.main, "approved", None, None, &[], true)
+            .unwrap_err();
+    assert!(
+        error.to_string().contains("refusing to continue"),
+        "{error:#}"
+    );
+    assert_eq!(
+        storage
+            .queue_list(crate::test_env::HERMETIC_TEST_USER, false)
+            .unwrap()
+            .len(),
+        before.len()
+    );
 }
