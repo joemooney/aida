@@ -176,7 +176,8 @@ fn story_2254_bg_rejects_unsupported_requests_before_setup() {
 // trace:STORY-2254 | ai:claude
 // trace:STORY-b6b1278890774ef993d2ebc327862470-277.acf38ac0 | ai:claude
 #[test]
-fn story_2254_bg_permission_override_refused() {
+// trace:TASK-3736 | ai:codex
+fn task_3736_story_2254_bg_permission_override_refused() {
     let native: Vec<String> = [
         "--sandbox",
         "workspace-write",
@@ -188,6 +189,14 @@ fn story_2254_bg_permission_override_refused() {
     assert!(refuse_posture_overrides(&native).is_ok());
     for bad in [
         vec!["--dangerously-bypass-approvals-and-sandbox"],
+        // trace:TASK-3736 | ai:codex
+        vec!["--profile", "other"],
+        vec!["--profile=other"],
+        vec!["-p", "other"],
+        vec!["-pother"],
+        vec!["-p=other"],
+        vec!["-c", "profile=other"],
+        vec!["--config", "profiles.other.sandbox_mode=read-only"],
         vec!["--yolo"],
         vec!["--full-auto"],
         vec!["--sandbox", "danger-full-access"],

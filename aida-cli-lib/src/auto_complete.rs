@@ -954,6 +954,8 @@ pub(crate) struct HintContext {
 pub(crate) enum ImplementerOutcome {
     /// The implementer opened a PR — the pipeline continues to CI (phase 2).
     PrOpened,
+    /// Successful native seat with no changes or PR. trace:TASK-3608 | ai:codex
+    NoChange,
     /// The implementer punted on a design-fork. `reason` is the one-line punt
     /// summary (category + detail) surfaced in the run epilogue. The punt is
     /// already durably recorded by `aida punt` (status flip + ledger).
@@ -1506,6 +1508,9 @@ pub(crate) struct OrchestrationResult {
     /// Carries the one-line hold summary for the run epilogue + batch summary.
     /// `None` on every other path. trace:BUG-250 | ai:claude
     pub(crate) held_reason: Option<String>,
+    /// A successful native seat produced no publication and has no open PR.
+    /// Stops a drain without shipping credit or shelving. trace:TASK-3608 | ai:codex
+    pub(crate) no_change: bool,
 }
 
 impl OrchestrationResult {
@@ -1528,6 +1533,7 @@ impl OrchestrationResult {
             inconclusive_reason: None,
             shelved_reason: None,
             held_reason: None,
+            no_change: false,
         }
     }
 
@@ -1549,6 +1555,7 @@ impl OrchestrationResult {
             inconclusive_reason: None,
             shelved_reason: None,
             held_reason: None,
+            no_change: false,
         }
     }
 
@@ -2438,6 +2445,7 @@ pub(crate) fn finish_noop(
         inconclusive_reason: None,
         shelved_reason: None,
         held_reason: None,
+        no_change: false,
     }
 }
 
@@ -2496,6 +2504,7 @@ fn finish_success(
         inconclusive_reason: None,
         shelved_reason: None,
         held_reason: None,
+        no_change: false,
     }
 }
 
@@ -2604,6 +2613,7 @@ fn finish_through_ci_success(
         inconclusive_reason: None,
         shelved_reason: None,
         held_reason: None,
+        no_change: false,
     }
 }
 
@@ -2681,6 +2691,7 @@ fn finish_punted(
         inconclusive_reason: None,
         shelved_reason: None,
         held_reason: None,
+        no_change: false,
     }
 }
 
@@ -2800,6 +2811,7 @@ fn finish_escalated(
         inconclusive_reason: None,
         shelved_reason: None,
         held_reason: None,
+        no_change: false,
     }
 }
 
@@ -2893,6 +2905,7 @@ fn finish_inconclusive(
         inconclusive_reason: Some(reason.to_string()),
         shelved_reason: None,
         held_reason: None,
+        no_change: false,
     }
 }
 
@@ -2998,7 +3011,39 @@ fn finish_inconclusive_shelved(
         inconclusive_reason: None,
         shelved_reason,
         held_reason: None,
+        no_change: false,
     }
+}
+
+// trace:TASK-3608 | ai:codex
+fn finish_no_change(
+    spec: &str,
+    json: bool,
+    start: &Instant,
+    durations: Vec<(Phase, u128)>,
+) -> OrchestrationResult {
+    if json {
+        for phase in [Phase::Implementer.slug(), "auto-complete"] {
+            println!(
+                "{}",
+                phase_event(
+                    phase,
+                    "no-change",
+                    spec,
+                    start.elapsed().as_millis(),
+                    Some(0),
+                    &[]
+                )
+            );
+        }
+    } else {
+        eprintln!("{spec}: no-change — no work published");
+    }
+    let mut result = OrchestrationResult::ok();
+    result.no_change = true;
+    result.total_ms = start.elapsed().as_millis();
+    result.phase_durations = durations;
+    result
 }
 
 /// BUG-250: print the deliberate-PR-hold epilogue and build a clean *non-
@@ -3085,6 +3130,7 @@ fn finish_held(
         inconclusive_reason: None,
         shelved_reason: None,
         held_reason: Some(summary),
+        no_change: false,
     }
 }
 
@@ -3242,6 +3288,7 @@ fn finish_failure(
         inconclusive_reason: None,
         shelved_reason,
         held_reason: None,
+        no_change: false,
     }
 }
 
@@ -3313,6 +3360,7 @@ fn finish_reconciled(
         inconclusive_reason: None,
         shelved_reason: None,
         held_reason: None,
+        no_change: false,
     }
 }
 
@@ -3636,6 +3684,12 @@ fn resume_after_advisor(
             json,
             start,
             &f,
+            durations.to_vec(),
+        ))),
+        Ok(ImplementerOutcome::NoChange) => PuntFlow::Terminal(Box::new(finish_no_change(
+            spec,
+            json,
+            start,
             durations.to_vec(),
         ))),
         Ok(ImplementerOutcome::PrOpened) => PuntFlow::Proceed,
@@ -4184,6 +4238,10 @@ pub(crate) fn orchestrate_with_resume(
                             emit_done(Phase::Implementer, spec, json, start.elapsed().as_millis());
                         }
                     }
+                }
+                Ok(ImplementerOutcome::NoChange) => {
+                    durations.push((Phase::Implementer, phase_start.elapsed().as_millis()));
+                    return finish_no_change(spec, json, &start, durations);
                 }
                 Ok(ImplementerOutcome::PrOpened) => {
                     driver.capture_phase_done_pr();
@@ -4847,6 +4905,8 @@ pub(crate) fn orchestrate_with_resume(
 /// Why a [`drain_batch`] run stopped. trace:TASK-285 | ai:claude
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) enum BatchDrainOutcome {
+    /// Successful seat with nothing published. trace:TASK-3608 | ai:codex
+    NoChange,
     /// The batch is empty for the role — every queued member shipped.
     Drained,
     /// The `--max N` cap was reached with members still queued.
@@ -5259,7 +5319,7 @@ fn apply_batch_result(
             exit_code: 0,
         });
     }
-    if result.held_reason.is_some() {
+    if result.held_reason.is_some() || result.no_change {
         return Some(BatchDrainResult {
             shipped: shipped.clone(),
             punted: punted.clone(),
@@ -5267,7 +5327,11 @@ fn apply_batch_result(
             shelved: shelved.clone(),
             skipped: skipped.clone(),
             stopped_at: Some(head),
-            outcome: BatchDrainOutcome::Held,
+            outcome: if result.no_change {
+                BatchDrainOutcome::NoChange
+            } else {
+                BatchDrainOutcome::Held
+            },
             exit_code: 0,
         });
     }
@@ -5326,6 +5390,7 @@ fn record_result_after_latched_halt(
         return;
     };
     let reason = match &done.outcome {
+        BatchDrainOutcome::NoChange => "no-change — nothing published".to_string(),
         BatchDrainOutcome::Held => "held after the drain halted — PR left open".to_string(),
         BatchDrainOutcome::Inconclusive => {
             "inconclusive after the drain halted — left for retry".to_string()
@@ -5511,6 +5576,7 @@ pub(crate) fn drain_batch_pipelined_with_caps(
         let should_finish_serial = through_ci.exit_code == 0
             && through_ci.inconclusive_reason.is_none()
             && through_ci.held_reason.is_none()
+            && !through_ci.no_change
             && through_ci.shipped_spec_id.is_none()
             && through_ci.punt_reason.is_none()
             && through_ci.escalation.is_none();
@@ -5922,7 +5988,7 @@ fn drain_batch_with_caps_streak(
         // rather than falling through to the `shipped` bucket below (which
         // would falsely claim it shipped). The operator opens the PR and
         // re-runs the drain to continue. trace:BUG-250 | ai:claude
-        if result.held_reason.is_some() {
+        if result.held_reason.is_some() || result.no_change {
             return BatchDrainResult {
                 shipped,
                 punted,
@@ -5930,7 +5996,11 @@ fn drain_batch_with_caps_streak(
                 shelved,
                 skipped,
                 stopped_at: Some(head),
-                outcome: BatchDrainOutcome::Held,
+                outcome: if result.no_change {
+                    BatchDrainOutcome::NoChange
+                } else {
+                    BatchDrainOutcome::Held
+                },
                 exit_code: 0,
             };
         }
@@ -6213,6 +6283,16 @@ pub(crate) fn drain_batch_single_branch(
         // failed member is parked `NeedsAttention` by the driver. This is the
         // deliberate inverse of EPIC-28's shelve-and-continue (correct only for
         // INDEPENDENT members). trace:TASK-1003 | ai:claude
+        // trace:TASK-3608 | ai:codex — nothing to stack or credit as committed.
+        if result.no_change {
+            return SingleBranchResult {
+                committed,
+                cluster_members: Vec::new(),
+                stopped_at: Some(head),
+                outcome: SingleBranchOutcome::Paused,
+                exit_code: 0,
+            };
+        }
         let unclean = result.punt_reason.is_some()
             || result.escalation.is_some()
             || result.inconclusive_reason.is_some()
@@ -6527,7 +6607,7 @@ where
             // exactly like an inconclusive run — the held spec awaits the
             // operator's gate, so the chain stops cleanly rather than rolling
             // on to the next batch. trace:BUG-250 | ai:claude
-            BatchDrainOutcome::Held => {
+            outcome @ (BatchDrainOutcome::Held | BatchDrainOutcome::NoChange) => {
                 return BatchChainDrainResult {
                     steps,
                     shipped,
@@ -6537,7 +6617,7 @@ where
                     skipped,
                     stopped_batch: Some(batch_name.clone()),
                     stopped_at: result.stopped_at,
-                    outcome: BatchDrainOutcome::Held,
+                    outcome,
                     exit_code: result.exit_code,
                 };
             }

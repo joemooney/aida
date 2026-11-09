@@ -2367,7 +2367,8 @@ fn task_2902_declared_subject_survives_host_commit_and_pr_title() {
 // This host-publication fixture invokes the Bash help-golden guard.
 #[cfg(unix)]
 #[test]
-fn bug_2493_declared_body_survives_host_commit_and_refs_downgrade() {
+// trace:TASK-3736 | ai:codex
+fn task_3736_bug_2493_declared_body_survives_host_commit_and_refs_downgrade() {
     use crate::ship_from_seat::{post_exit_commit, PostExitCommit};
     let fx = fixture();
     let clone = seat_with_publication_pending(&fx, "body", "c0ffee249301", "body");
@@ -2376,7 +2377,8 @@ fn bug_2493_declared_body_survives_host_commit_and_refs_downgrade() {
     for clean in [true, false] {
         let base = git_ok(&clone, &["rev-parse", "HEAD"]);
         crate::native_publication::prepare(&fx.main, &clone).unwrap();
-        let body = "# Explanation with (BUG-2) in prose.  \n\nHelp-Golden: unchanged\n\n";
+        let body =
+            "# Explanation with (BUG-2) in prose.  \n\nHelp-Golden: unchanged\n\nDone (BUG-2)\n";
         let message = format!("[AI:codex] fix: body (BUG-1)\n\n{body}");
         crate::native_publication::declare(&clone, Some("BUG-1"), &message, false).unwrap();
         let surface = clone.join("aida-cli-lib/src/example_args.rs");
@@ -2401,7 +2403,23 @@ fn bug_2493_declared_body_survives_host_commit_and_refs_downgrade() {
         };
         assert_eq!(
             object.split_once("\n\n").unwrap().1,
-            format!("{expected_subject}\n\n{body}")
+            format!(
+                "{expected_subject}\n\n{}",
+                body.replace("Done (BUG-2)", "Done (Refs BUG-2)")
+            )
+        );
+        // A direct forge squash must never gain body completion credit.
+        // trace:TASK-3736 | ai:codex
+        let published_body = body.replace("Done (BUG-2)", "Done (Refs BUG-2)");
+        let squash = format!("{expected_subject} (#42)\n\n{published_body}");
+        let ids = crate::trailer_coverage::commit_completion_ids(&squash);
+        assert_eq!(
+            ids,
+            if clean {
+                vec!["BUG-1".to_string()]
+            } else {
+                Vec::new()
+            }
         );
         if !clean {
             assert_eq!(
@@ -3003,6 +3021,7 @@ fn task_2902_launch_paths_clear_and_provision_before_spawn() {
                 "implementer",
                 &grant,
                 Some((&clone, "launches")),
+                true,
             )
             .err(),
             "resume" => crate::session::spawn_vendor_headless_resume_granted(
@@ -3239,6 +3258,7 @@ fn story_2640_fast_gate_real_lane_exit_paths_settle_reservations() {
                 "implementer",
                 &grant,
                 Some((&clone, branch)),
+                true,
             )
             .err(),
             _ => crate::queue_cmd::run_queue_resume_to_exit(
@@ -3255,6 +3275,7 @@ fn story_2640_fast_gate_real_lane_exit_paths_settle_reservations() {
                 false,
                 "implementer",
                 (&fx.main, "BUG-1", lease),
+                false,
             )
             .err(),
         };
@@ -3316,6 +3337,7 @@ fn story_2640_fast_gate_missing_resume_lease_preserves_vendor_status() {
         false,
         "implementer",
         (&fx.main, "BUG-1", "missing"),
+        false,
     )
     .unwrap();
     assert_eq!(status.code(), Some(7));
@@ -3358,6 +3380,7 @@ fn story_2640_fast_gate_missing_native_resume_lease_is_an_error() {
         true,
         "implementer",
         (&fx.main, "BUG-1", "missing"),
+        false,
     )
     .unwrap_err();
     assert!(error

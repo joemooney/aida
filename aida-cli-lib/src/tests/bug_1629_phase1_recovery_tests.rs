@@ -1010,3 +1010,284 @@ fn bug_1769_advance_decision() {
     assert!(!advanced(Some(&S::Approved), None));
     assert!(!advanced(None, None));
 }
+
+// Host receipt -> child lease discovery -> real orchestration terminal result.
+// trace:TASK-3608 | ai:codex
+#[test]
+fn task_3608_host_no_change_survives_lease_discovery() {
+    for mode in 0..7 {
+        let temp = tempfile::tempdir().unwrap();
+        let root = git_project(&temp);
+        if mode == 1 {
+            // The old retry path mistakes this already-merged remote branch
+            // for a publication by the current seat.
+            git(&root, &["remote", "add", "origin", root.to_str().unwrap()]);
+        }
+        if mode >= 4 {
+            let origin = temp.path().join("empty-origin.git");
+            git(&root, &["init", "-q", "--bare", origin.to_str().unwrap()]);
+            git(
+                &root,
+                &["remote", "add", "origin", origin.to_str().unwrap()],
+            );
+            assert!(matches!(
+                super::probe_branch_on_origin(&root, "main"),
+                super::BranchOriginProbe::Absent
+            ));
+        }
+        let lane = "native-lease";
+        crate::ship_from_seat::record_queue_exit(&root, lane, true, true, || {
+            Ok(crate::ship_from_seat::QueueExitOutcome::NoChange)
+        })
+        .unwrap();
+        let script = r#"cat > .aida/sessions/native-lease.toml <<EOF
+id = "native-lease"
+scope = "$spec"
+slug = "main"
+owner = "test"
+worktree_path = "$PWD"
+branch = "main"
+started_at = "2026-09-24T00:00:00Z"
+hostname = "test"
+EOF
+cat > .aida/sessions/native-lease.manifest.toml <<EOF
+session_id = "native-lease"
+planned_at = "2026-09-24T00:00:00Z"
+plan_source = "queue work"
+claude_session_id = "$sid"
+items = []
+EOF
+exit 0"#;
+        let stub = stub(&root, script, script);
+        if mode == 3 {
+            let body = std::fs::read_to_string(&stub).unwrap();
+            std::fs::write(&stub, body.replace("  rm -f", "  exit 1\n  rm -f")).unwrap();
+        }
+        let mut forge = crate::forge::fake::RecordingForge::new();
+        forge.merged_for_branch = crate::forge::ChangeLookup::Found(crate::forge::ChangeRef {
+            id: 4242,
+            url: "https://example.invalid/4242".into(),
+            branch: "main".into(),
+            base: "main".into(),
+            title: None,
+        });
+        let mut d = driver(&root, "NFR-56", stub);
+        let calls = std::sync::Arc::new(std::sync::atomic::AtomicUsize::new(0));
+        let observed = calls.clone();
+        d.forge_factory = Some(std::sync::Arc::new(move |_, _| {
+            let call = observed.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+            let mut current = forge.clone();
+            if mode == 1 && call == 1 {
+                current.open_for_branch =
+                    crate::forge::ChangeLookup::Unreachable("temporary".into());
+            }
+            if mode == 2 {
+                current.open_for_spec =
+                    crate::forge::ChangeLookup::Unreachable("search unavailable".into());
+            }
+            // Never-pushed seats must not be shelved merely because the
+            // branch lookup failed; a recovered lookup can confirm no-change.
+            // trace:TASK-3608 | ai:codex
+            if mode == 4 || (mode == 6 && call == 1) {
+                current.open_for_branch =
+                    crate::forge::ChangeLookup::Unreachable("branch API unavailable".into());
+            }
+            if mode == 5 {
+                current.open_for_branch =
+                    crate::forge::ChangeLookup::CliFailed("branch request failed".into());
+            }
+            Box::new(current)
+        }));
+        // Exercise the real retry loop with a driver-local wait override;
+        // unrelated tests and production retain the normal backoff schedule.
+        // trace:TASK-3608 | ai:codex
+        d.retry_wait = Some(std::time::Duration::from_millis(1));
+        // Exhaust branch-error cases immediately; modes 1 and 6 recover.
+        d.drain_tuning.gh_verify_retries = if matches!(mode, 4 | 5) { 0 } else { 1 };
+        // A confirmed no-change must bypass even a failing preflight.
+
+        let result = crate::auto_complete::orchestrate(
+            &mut d,
+            "NFR-56",
+            crate::auto_complete::AutoCompleteVariant::Full,
+            true,
+            crate::auto_complete::EscalateMode::Blocks,
+        );
+        assert_eq!(result.exit_code, 0, "{result:?}");
+        if matches!(mode, 2 | 4 | 5) {
+            assert!(!result.no_change, "{result:?}");
+            assert!(result.shipped_spec_id.is_none());
+            assert!(result.shelved_reason.is_none());
+            assert!(result.inconclusive_reason.is_some(), "{result:?}");
+            let minimum_calls = if mode == 2 { 4 } else { 2 };
+            assert!(calls.load(std::sync::atomic::Ordering::SeqCst) >= minimum_calls);
+            continue;
+        }
+        assert!(result.no_change, "{result:?}");
+        // Follow the real fresh result through the drain's persistence boundary.
+        // trace:TASK-3608 | ai:codex
+        crate::drain_state::DrainState::new_single("NFR-56", "test", false)
+            .write(&root)
+            .unwrap();
+        crate::drain_state::set_member_result(&root, "NFR-56", &result, None);
+        let persisted = crate::drain_state::DrainState::read(&root).unwrap();
+        assert_eq!(
+            persisted.members[0].state,
+            crate::drain_state::STATE_NO_CHANGE
+        );
+        assert!(persisted.members[0].finished_at.is_some());
+
+        if matches!(mode, 1 | 6) {
+            assert!(calls.load(std::sync::atomic::Ordering::SeqCst) >= 4);
+        }
+        assert!(result.failed_phase.is_none());
+        assert!(result.shelved_reason.is_none());
+        assert!(result.shipped_spec_id.is_none());
+        assert!(
+            !crate::ship_from_seat::take_no_change(&root, lane),
+            "the lease-scoped evidence is consumed once"
+        );
+        if mode == 3 {
+            assert!(!list_leases(&root).is_empty());
+            assert_eq!(d.implementer_lease.as_deref(), Some(lane));
+        } else {
+            assert!(list_leases(&root).is_empty(), "no-change releases the seat");
+        }
+    }
+}
+
+// trace:TASK-3608 | ai:codex
+#[test]
+fn task_3608_fresh_receipt_keeps_existing_pr() {
+    let temp = tempfile::tempdir().unwrap();
+    let root = git_project(&temp);
+    crate::ship_from_seat::record_queue_exit(&root, "native-lease", true, true, || {
+        Ok(crate::ship_from_seat::QueueExitOutcome::NoChange)
+    })
+    .unwrap();
+    let script = r#"cat > .aida/sessions/native-lease.toml <<EOF
+id = "native-lease"
+scope = "$spec"
+slug = "main"
+owner = "test"
+worktree_path = "$PWD"
+branch = "main"
+started_at = "2026-09-24T00:00:00Z"
+hostname = "test"
+EOF
+cat > .aida/sessions/native-lease.manifest.toml <<EOF
+session_id = "native-lease"
+planned_at = "2026-09-24T00:00:00Z"
+plan_source = "queue work"
+claude_session_id = "$sid"
+items = []
+EOF
+exit 0"#;
+    let exe = stub(&root, script, script);
+    let mut forge = crate::forge::fake::RecordingForge::new();
+    forge.open_for_branch = crate::forge::ChangeLookup::Found(crate::forge::ChangeRef {
+        id: 4242,
+        url: "https://example.invalid/4242".into(),
+        branch: "main".into(),
+        base: "main".into(),
+        title: None,
+    });
+    let mut d = driver(&root, "NFR-56", exe);
+    d.forge_factory = Some(forge.factory());
+    d.lifecycle_skip.no_preflight = true;
+    use crate::auto_complete as ac;
+    struct ThroughCi<'a>(&'a mut RealPhaseDriver);
+    impl PhaseDriver for ThroughCi<'_> {
+        fn run_implementer(&mut self) -> Result<ImplementerOutcome, ac::PhaseFailure> {
+            self.0.run_implementer()
+        }
+        fn finish_ci(&mut self) -> Result<(), ac::PhaseFailure> {
+            Ok(())
+        }
+        fn run_reviewer(&mut self) -> Result<ac::ReviewerOutcome, ac::PhaseFailure> {
+            panic!("through-CI only")
+        }
+        fn merge(&mut self) -> Result<(), ac::PhaseFailure> {
+            panic!("through-CI only")
+        }
+        fn pull(&mut self) -> Result<(), ac::PhaseFailure> {
+            panic!("through-CI only")
+        }
+        fn build(&mut self) -> Result<(), ac::PhaseFailure> {
+            panic!("through-CI only")
+        }
+        fn hint_context(&self) -> ac::HintContext {
+            self.0.hint_context()
+        }
+    }
+    let result = ac::orchestrate(
+        &mut ThroughCi(&mut d),
+        "NFR-56",
+        ac::AutoCompleteVariant::ThroughCi,
+        true,
+        ac::EscalateMode::Blocks,
+    );
+    assert_eq!(result.exit_code, 0, "{result:?}");
+    assert!(
+        !result.no_change,
+        "the existing PR proceeds to CI: {result:?}"
+    );
+    assert!(result.failure.is_none(), "{result:?}");
+    assert_eq!(d.pr_number, Some(4242));
+}
+
+// A real watchdog termination must not turn an older receipt into success.
+// trace:TASK-3608 | ai:codex
+#[cfg(unix)]
+#[test]
+fn task_3608_receipt_cannot_override_watchdog() {
+    let temp = tempfile::tempdir().unwrap();
+    let root = git_project(&temp);
+    let origin = temp.path().join("empty-origin.git");
+    git(&root, &["init", "--bare", "-q", origin.to_str().unwrap()]);
+    git(
+        &root,
+        &["remote", "add", "origin", origin.to_str().unwrap()],
+    );
+    crate::ship_from_seat::record_queue_exit(&root, "native-lease", true, true, || {
+        Ok(crate::ship_from_seat::QueueExitOutcome::NoChange)
+    })
+    .unwrap();
+    let script = r#"cat > .aida/sessions/native-lease.toml <<EOF
+id = "native-lease"
+scope = "$spec"
+slug = "main"
+owner = "test"
+worktree_path = "$PWD"
+branch = "main"
+started_at = "2026-09-24T00:00:00Z"
+hostname = "test"
+EOF
+cat > .aida/sessions/native-lease.manifest.toml <<EOF
+session_id = "native-lease"
+planned_at = "2026-09-24T00:00:00Z"
+plan_source = "queue work"
+claude_session_id = "$sid"
+items = []
+EOF
+exit 0"#;
+    let script = script.replace("exit 0", "sleep 90");
+    let exe = stub(&root, &script, &script);
+    let mut d = driver(&root, "NFR-56", exe);
+    // Poll after the stub has published its lease, then trip the real ceiling.
+    // trace:TASK-3608 | ai:codex
+    d.watchdog_poll = Some(std::time::Duration::from_millis(100));
+    d.drain_tuning.ceiling = std::time::Duration::from_millis(1);
+    d.lifecycle_skip.no_preflight = true;
+    d.forge_factory = Some(crate::forge::fake::RecordingForge::new().factory());
+    let failure = d.run_implementer().unwrap_err();
+    assert_eq!(failure.kind, FailureKind::Watchdog, "{failure:?}");
+    assert!(!crate::ship_from_seat::take_no_change(
+        &root,
+        "native-lease"
+    ));
+    assert!(
+        d.implementer_lease.is_some(),
+        "failed seat is retained for recovery"
+    );
+}

@@ -493,6 +493,27 @@ pub(crate) fn post_exit_commit_reported(
     outcome
 }
 
+// trace:TASK-3608 | ai:codex
+#[derive(Debug, PartialEq, Eq)]
+pub(crate) enum QueueExitOutcome {
+    Continue,
+    NoChange,
+}
+
+// Host-only outcome, scoped to the lease and replaced at every publication exit.
+// trace:TASK-3608 | ai:codex
+fn no_change_path(main: &Path, lane: &str) -> std::path::PathBuf {
+    let key: String = lane.as_bytes().iter().map(|b| format!("{b:02x}")).collect();
+    crate::main_worktree_root_from(main)
+        .join(".aida/native-no-change")
+        .join(key)
+}
+
+// trace:TASK-3608 | ai:codex
+pub(crate) fn take_no_change(main: &Path, lane: &str) -> bool {
+    std::fs::remove_file(no_change_path(main, lane)).is_ok()
+}
+
 /// Queue-work publication runs in the host after the child and test runner
 /// have stopped, while the clone lease still vouches for the seat. Explicit
 /// punts and holds retain their publication veto, including in drain/resume.
@@ -503,81 +524,125 @@ pub(crate) fn publish_queue_exit(
     spec: &str,
     lane: &str,
     clean_exit: bool,
-) -> Result<()> {
-    let main = crate::main_worktree_root_from(main);
-    let publish = || {
-        // trace:STORY-2640 | ai:codex — all native exit surfaces share this fence.
-        let branch = lease_branch(&recorded_seat(&main, tree)?)?.0;
-        crate::lane_fast_gate::publication_ready(&main, tree, &branch)?;
-        run_at_with_fast_gate(
-            &main,
-            FromSeatOptions {
-                clone: tree.to_path_buf(),
-                // trace:TASK-2902 | ai:codex — match the canonical post-exit trailer.
-                spec: Some(crate::native_publication::resolve_scope(&main, spec)?),
-                no_pr: false,
-                dry_run: false,
-                commit_pending: None,
-            },
-            true,
-        )?;
-        crate::lane_fast_gate::finish_publication(&main, &branch, || {
-            let (pr, _) = crate::standalone_implementer::lookup_pr(&main, &branch)
-                .context("published PR unavailable for fast gate annotation")?;
-            let head = crate::lane_fast_gate::head(&main, &branch)
-                .context("fast gate head unavailable")?;
-            crate::lane_fast_gate::annotate(
+) -> Result<QueueExitOutcome> {
+    publish_queue_exit_recorded(main, tree, spec, lane, clean_exit, false)
+}
+
+// Only drain callers need a durable handoff to lease discovery.
+// trace:TASK-3608 | ai:codex
+pub(crate) fn publish_queue_exit_recorded(
+    main: &Path,
+    tree: &Path,
+    spec: &str,
+    lane: &str,
+    clean_exit: bool,
+    record: bool,
+) -> Result<QueueExitOutcome> {
+    record_queue_exit(main, lane, clean_exit, record, || {
+        let main = crate::main_worktree_root_from(main);
+        let publish = || {
+            // trace:STORY-2640 | ai:codex — all native exit surfaces share this fence.
+            let branch = lease_branch(&recorded_seat(&main, tree)?)?.0;
+            crate::lane_fast_gate::publication_ready(&main, tree, &branch)?;
+            run_at_with_fast_gate(
                 &main,
-                pr,
-                &head,
-                &crate::lane_fast_gate::marker(&main, &branch),
-            )
-        })?;
-        eprintln!(
-            "fast_gate={}",
-            crate::lane_fast_gate::marker(&main, &branch)
-        );
-        Ok(())
-    };
-    publish_queue_exit_with(
-        &main,
-        spec,
-        || post_exit_commit_reported(&main, tree, spec, lane, clean_exit),
-        || crate::seat_clone::probe(&main, tree),
-        publish,
-        || {
-            notify_unchanged_lane(
-                || {
-                    let branch = lease_branch(&recorded_seat(&main, tree)?)?.0;
-                    crate::lane_fast_gate::publication_ready(&main, tree, &branch)?;
-                    crate::lane_fast_gate::finish_publication(&main, &branch, || {
-                        let (pr, _) = crate::standalone_implementer::lookup_pr(&main, &branch)
-                            .context("unchanged lane PR unavailable for fast gate annotation")?;
-                        let head = crate::lane_fast_gate::head(&main, &branch)
-                            .context("fast gate head unavailable")?;
-                        crate::lane_fast_gate::annotate(
+                FromSeatOptions {
+                    clone: tree.to_path_buf(),
+                    // trace:TASK-2902 | ai:codex — match the canonical post-exit trailer.
+                    spec: Some(crate::native_publication::resolve_scope(&main, spec)?),
+                    no_pr: false,
+                    dry_run: false,
+                    commit_pending: None,
+                },
+                true,
+            )?;
+            crate::lane_fast_gate::finish_publication(&main, &branch, || {
+                let (pr, _) = crate::standalone_implementer::lookup_pr(&main, &branch)
+                    .context("published PR unavailable for fast gate annotation")?;
+                let head = crate::lane_fast_gate::head(&main, &branch)
+                    .context("fast gate head unavailable")?;
+                crate::lane_fast_gate::annotate(
+                    &main,
+                    pr,
+                    &head,
+                    &crate::lane_fast_gate::marker(&main, &branch),
+                )
+            })?;
+            eprintln!(
+                "fast_gate={}",
+                crate::lane_fast_gate::marker(&main, &branch)
+            );
+            Ok(())
+        };
+        publish_queue_exit_with(
+            &main,
+            spec,
+            || post_exit_commit_reported(&main, tree, spec, lane, clean_exit),
+            || crate::seat_clone::probe(&main, tree),
+            publish,
+            || {
+                notify_unchanged_lane(
+                    || {
+                        let branch = lease_branch(&recorded_seat(&main, tree)?)?.0;
+                        crate::lane_fast_gate::publication_ready(&main, tree, &branch)?;
+                        crate::lane_fast_gate::finish_publication(&main, &branch, || {
+                            let (pr, _) = crate::standalone_implementer::lookup_pr(&main, &branch)
+                                .context(
+                                    "unchanged lane PR unavailable for fast gate annotation",
+                                )?;
+                            let head = crate::lane_fast_gate::head(&main, &branch)
+                                .context("fast gate head unavailable")?;
+                            crate::lane_fast_gate::annotate(
+                                &main,
+                                pr,
+                                &head,
+                                &crate::lane_fast_gate::marker(&main, &branch),
+                            )
+                        })
+                    },
+                    |gate| {
+                        advisor_request(
                             &main,
-                            pr,
-                            &head,
-                            &crate::lane_fast_gate::marker(&main, &branch),
+                            "Queue-work lane exited without changes",
+                            &format!(
+                        "Codex queue-work lane {lane} for {spec} exited with no pending changes in {} \
+                     (clean_exit={clean_exit}). Check its existing PR and failing checks; a still-red \
+                     PR needs a new rework assignment. Fast-gate settlement: {gate:?}",
+                        tree.display()
+                    ),
                         )
-                    })
-                },
-                |gate| {
-                    advisor_request(
-                        &main,
-                        "Queue-work lane exited without changes",
-                        &format!(
-                    "Codex queue-work lane {lane} for {spec} exited with no pending changes in {} \
-                 (clean_exit={clean_exit}). Check its existing PR and failing checks; a still-red \
-                 PR needs a new rework assignment. Fast-gate settlement: {gate:?}",
-                    tree.display()
-                ),
-                    )
-                },
-            )
-        },
-    )
+                    },
+                )
+            },
+        )
+    })
+}
+
+// Share the real writer/reader key and failure cleanup with boundary tests.
+// trace:TASK-3608 | ai:codex
+pub(crate) fn record_queue_exit(
+    main: &Path,
+    lane: &str,
+    clean_exit: bool,
+    record: bool,
+    publish: impl FnOnce() -> Result<QueueExitOutcome>,
+) -> Result<QueueExitOutcome> {
+    let receipt = no_change_path(main, lane);
+    match std::fs::remove_file(&receipt) {
+        Ok(()) => {}
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => {}
+        Err(e) => return Err(e.into()),
+    }
+    let outcome = publish()?;
+    if record && clean_exit && outcome == QueueExitOutcome::NoChange {
+        std::fs::create_dir_all(receipt.parent().unwrap())?;
+        std::fs::write(receipt, b"no-change")?;
+    }
+    Ok(if clean_exit {
+        outcome
+    } else {
+        QueueExitOutcome::Continue
+    })
 }
 
 // Always attempt advisor delivery, including when the gate refuses settlement.
@@ -621,10 +686,11 @@ fn publish_queue_exit_with(
     probe: impl FnOnce() -> crate::seat_clone::Probe,
     publish: impl Fn() -> Result<()>,
     notify: impl FnOnce() -> Result<()>,
-) -> Result<()> {
+) -> Result<QueueExitOutcome> {
     if publication_veto(main, spec) {
-        return Ok(());
+        return Ok(QueueExitOutcome::Continue);
     }
+    let no_change = std::cell::Cell::new(false);
     finish_queue_exit(commit(), &publish, || {
         match probe() {
             crate::seat_clone::Probe::Known(facts) if facts.unpushed > 0 => return publish(),
@@ -632,9 +698,19 @@ fn publish_queue_exit_with(
             | crate::seat_clone::Probe::HasSubmodules(why) => {
                 anyhow::bail!("could not inspect clean lane for pending publication: {why}")
             }
+            crate::seat_clone::Probe::Known(facts) if !facts.dirty.is_empty() => {
+                anyhow::bail!("clean lane still has pending file changes")
+            }
             _ => {}
         }
-        notify()
+        notify()?;
+        no_change.set(true);
+        Ok(())
+    })?;
+    Ok(if no_change.get() {
+        QueueExitOutcome::NoChange
+    } else {
+        QueueExitOutcome::Continue
     })
 }
 
@@ -913,6 +989,67 @@ mod queue_exit_tests {
         }
     }
 
+    // trace:TASK-3608 | ai:codex
+    #[test]
+    fn task_3608_receipt_writer_and_dirty_probe() {
+        use crate::seat_clone::{Probe, ProbeFacts};
+        let tmp = tempfile::tempdir().unwrap();
+        for clean in [false, true] {
+            for drain in [false, true] {
+                let outcome =
+                    record_queue_exit(tmp.path(), "lease/with spaces", clean, drain, || {
+                        publish_queue_exit_with(
+                            tmp.path(),
+                            "TASK-3608",
+                            || PostExitCommit::Clean,
+                            || Probe::Known(ProbeFacts::default()),
+                            || panic!("no bundle for clean no-change"),
+                            || Ok(()),
+                        )
+                    })
+                    .unwrap();
+                assert_eq!(
+                    outcome,
+                    if clean {
+                        QueueExitOutcome::NoChange
+                    } else {
+                        QueueExitOutcome::Continue
+                    }
+                );
+                assert_eq!(
+                    take_no_change(tmp.path(), "lease/with spaces"),
+                    clean && drain
+                );
+                assert!(!take_no_change(tmp.path(), "lease/with spaces"));
+            }
+        }
+        record_queue_exit(tmp.path(), "lane", true, true, || {
+            Ok(QueueExitOutcome::NoChange)
+        })
+        .unwrap();
+        let error = record_queue_exit(tmp.path(), "lane", true, true, || {
+            publish_queue_exit_with(
+                tmp.path(),
+                "TASK-3608",
+                || PostExitCommit::Clean,
+                || {
+                    Probe::Known(ProbeFacts {
+                        dirty: vec!["? pending".into()],
+                        ..Default::default()
+                    })
+                },
+                || panic!("dirty probe must refuse"),
+                || panic!("dirty must not notify"),
+            )
+        })
+        .unwrap_err();
+        assert!(error.to_string().contains("pending file changes"));
+        assert!(
+            !take_no_change(tmp.path(), "lane"),
+            "failed publication clears stale evidence"
+        );
+    }
+
     // trace:STORY-2475 | ai:codex
     #[test]
     fn story_2475_clean_unpushed_publishes_without_no_change_mail() {
@@ -922,7 +1059,7 @@ mod queue_exit_tests {
         for unpushed in [0, 1] {
             let published = Cell::new(0);
             let notified = Cell::new(0);
-            publish_queue_exit_with(
+            let outcome = publish_queue_exit_with(
                 tmp.path(),
                 "STORY-2475",
                 || PostExitCommit::Clean,
@@ -942,6 +1079,14 @@ mod queue_exit_tests {
                 },
             )
             .unwrap();
+            assert_eq!(
+                outcome,
+                if unpushed == 0 {
+                    QueueExitOutcome::NoChange
+                } else {
+                    QueueExitOutcome::Continue
+                }
+            );
             assert_eq!(published.get(), unpushed);
             assert_eq!(notified.get(), usize::from(unpushed == 0));
         }

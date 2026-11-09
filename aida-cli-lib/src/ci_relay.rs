@@ -1200,9 +1200,9 @@ pub(crate) fn run(intake: &Intake, command: &CiCommand, json_format: bool) -> Re
                 let bytes = files
                     .get(path)
                     .context("No result for requested attempt/SHA")?;
-                if !intake.ci_verified(path) {
-                    intake.verify_ci_read(path, bytes)?;
-                }
+                // Verification already skips previously verified reads.
+                // trace:TASK-3735 | ai:codex
+                intake.verify_ci_read(path, bytes)?;
             }
             intake.refresh_ci_skipped(&files);
             let rows: Vec<_> = files.iter().filter(|(path, _)| path.starts_with("ci-results/")

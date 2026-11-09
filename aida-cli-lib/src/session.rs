@@ -6683,6 +6683,7 @@ pub(crate) fn exec_vendor_headless(
     seat: &str,
     child_grant: &crate::gate::seat_authority::HeadlessChildGrant,
     lane_tree: Option<(&Path, &str)>,
+    record_no_change: bool,
 ) -> Result<()> {
     let status = run_vendor_headless_to_exit(
         host_main,
@@ -6696,6 +6697,7 @@ pub(crate) fn exec_vendor_headless(
         seat,
         child_grant,
         lane_tree,
+        record_no_change,
     )?;
     std::process::exit(status.code().unwrap_or(1));
 }
@@ -6716,6 +6718,7 @@ pub(crate) fn run_vendor_headless_to_exit(
     seat: &str,
     child_grant: &crate::gate::seat_authority::HeadlessChildGrant,
     lane_tree: Option<(&Path, &str)>,
+    record_no_change: bool,
 ) -> Result<std::process::ExitStatus> {
     // Revoke even when publication preparation or gate reservation fails.
     // trace:STORY-2640 trace:BUG-2139 | ai:codex
@@ -6867,12 +6870,13 @@ pub(crate) fn run_vendor_headless_to_exit(
             crate::lane_fast_gate::publication_result(
                 &main_root,
                 branch,
-                crate::ship_from_seat::publish_queue_exit(
+                crate::ship_from_seat::publish_queue_exit_recorded(
                     &main_root,
                     tree,
                     &scope,
                     lease,
                     status.success(),
+                    record_no_change,
                 ),
             )?;
         }
