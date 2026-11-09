@@ -20,7 +20,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-07T20:18:53.564500Z
-modified_at: 2026-11-09T11:48:10.601753034Z
+modified_at: 2026-11-09T11:53:31.562622098Z
 req_type: Bug
 relationships:
 - rel_type:
@@ -458,6 +458,16 @@ comments:
     (no test lines extracted; open run 42607706879)
   created_at: 2026-11-09T11:46:01.852701793Z
   modified_at: 2026-11-09T11:46:01.852701793Z
+- id: 01a1c028-08aa-7332-9cf3-149998209f57
+  author: dirtlab
+  content: |
+    Fixed the exact failure from CI run 42607706879 at 3b225a4d570d: the store-writer inventory retained two old publish_queue_exit callers and one stale standalone caller. Updated the queue-resume and headless-session rows to publish_queue_exit_recorded and removed the stale standalone row. Kept the diff narrow and preserved existing inventory comments and policy fields. Changed file: scripts/store-writers.toml only.
+    Validation: inventory scanner reconciles 3441 sink sites; all 54 inventory mutation fixtures pass. Lane job j20261109T114907034-2-0 executed 18 BUG-2488 regressions plus the watchdog child successfully, exit 0, including hold resurrection and all-case spelling cleanup. Portability guard, CI gate classification audit (84 classified), whitespace check and criterion tracing pass; no untested or unanchored criteria. untested=false.
+    Full make check-ci-fast includes direct Cargo checks and therefore remains host work under this seat's explicit no-direct-Cargo rule. Fresh CI and supervised merge-hold clearance remain host/reviewer work. Codegraph missing per doctor; used rg. Edits remain uncommitted for host publication. No commit, push, PR creation, queue completion, pr ship or review record attempted.
+  created_at: 2026-11-09T11:53:31.562622098Z
+  modified_at: 2026-11-09T11:53:31.562622098Z
+  session_id: 01a1c0231cec
+  harness_version: codex-cli 0.167.0
 history:
 - id: 01a1b7ad-9096-7320-bbe8-fc34c8e11c09
   author: aida-session-start
@@ -941,6 +951,12 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a1c023-6f56-70e0-87be-e55fe29407e0
+  author: dirtlab
+  timestamp: 2026-11-09T11:48:30.166194932Z
+  session_id: 01a1c0231cec
+  harness_version: codex-cli 0.167.0
+  changes: []
 filed_at:
   code_sha: 7a18c0d52a6a4e0822befd4c810cfed16b04b74c
   branch: main
