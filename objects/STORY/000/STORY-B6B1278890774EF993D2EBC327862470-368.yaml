@@ -24,12 +24,12 @@ description: |-
   - **Dependencies:** consumes STORY-2325 (owner) and STORY-2324 (effective gate state), so the attention half lands after them. The trigger half can land now.
 
   Acceptance (trigger half): (1) deferred_until, relay handoff conditionals and recurrence escalation take a typed condition (spec:X=completed, pr:N=merged, release:>=V, date:, query:count>=n, manual:<who>); (2) a one-time rewrite converts existing free-text deferral triggers where they parse and marks the rest manual; (3) an hourly scheduled job un-defers specs whose condition is true and routes manual conditions older than 14 days to aida human; (4) new free-text deferrals are refused unless explicitly manual. Architecture: the implementer posts a file:line sketch with the slice plan on this spec for advisor signoff before code.
-status: InProgress
+status: NeedsAttention
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-04T02:34:20.173245666Z
-modified_at: 2026-11-09T06:04:54.314154878Z
+modified_at: 2026-11-09T06:15:49.041329682Z
 req_type: Story
 relationships:
 - rel_type:
@@ -1460,6 +1460,15 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a1bef2-da31-76c0-b947-8f0dbd8b136c
+  author: aida-orchestrator
+  timestamp: 2026-11-09T06:15:49.041358954Z
+  session_id: 01a1beea5e6d
+  harness_version: 2.1.319 (Claude Code)
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: NeedsAttention
 filed_at:
   code_sha: 0754a362d797d2d9b246b4609456735b5486095d
   branch: main
@@ -1468,3 +1477,11 @@ filed_at:
   aida_build_sha: 0f1624a8b38
   vendor: claude
   session: 04f971d5-7365-46ed-b777-d4ff41d730ed
+failure_reason:
+  phase: reviewer
+  phase_index: 3
+  kind: verdict:request-changes
+  detail: 'WAIT STATE plus non-blocking defects: S5 source meets the trigger-half acceptance and a green run exists one merge earlier (42563547243 at b6c73a5c8fae), but CI run 42570932984 at head a7539190e0d9 is unfinished, so the green-at-head gate is unmet.'
+  recovery_hint: address the review findings, move STORY-2402 back to In Progress, and clear the PR hold only after approval
+  shelved_by: reviewer
+  shelved_at: 2026-11-09T06:15:49.041329682Z
