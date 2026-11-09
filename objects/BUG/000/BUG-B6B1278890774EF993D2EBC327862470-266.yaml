@@ -15,7 +15,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-08T19:27:28.525198886Z
-modified_at: 2026-11-09T05:33:19.952928494Z
+modified_at: 2026-11-09T06:00:20.071950584Z
 req_type: Bug
 comments:
 - id: 01a1bcd8-beaf-7582-aa0b-006077ac5867
@@ -230,6 +230,12 @@ comments:
   modified_at: 2026-11-09T05:25:37.372384558Z
   session_id: 01a1beb3ee5d
   harness_version: codex-cli 0.167.0
+- id: 01a1bee4-ad67-7a82-9158-1fc831a56a35
+  author: joe
+  content: 'Advisor 2026-11-08 23:05 incident, for the rebuild''s test cases: the primary store diverged (ahead 39, behind 18) and db sync failed mid-rebase because both hosts auto-completed the same merged PRs. Resolved by hand: union of appended history/comments, later modified_at, de-duplicated timing events. A naive hunk union then broke one object: a history entry lost its trailing ''changes: []'' shared by git''s hunk, and one unparsable object made every aida read fail for about 2 minutes. Repaired in 77764f5c79b, pre-merge ref backup/store-20261108-2258. PR-3717''s resolver should cover: two hosts recording the same completion, and must validate merged objects against the real schema before committing; one bad object should not take down all reads.'
+  created_at: 2026-11-09T06:00:20.071950584Z
+  modified_at: 2026-11-09T06:00:20.071950584Z
+  session_id: 7aacb1ed-ebaa-4da4-a195-500864e99e7d
 history:
 - id: 01a1bcc3-bd29-7692-a764-d1e8c8dbaa00
   author: aida-session-start
