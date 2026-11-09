@@ -662,10 +662,45 @@ def check_routes(root, data, scanned):
     return errors
 
 
-def regenerate(root):
+def regenerate(root, baseline=None):
     """Keep reviewed site policy; new sites start blocked, never authorized."""
     target = root / INVENTORY
-    old = tomllib.loads(target.read_text()) if target.exists() else {}
+    # trace:STORY-2692 | ai:codex
+    # A merge operator must explicitly choose policy evidence; never interpret
+    # conflict sides or discard reviewed policy by starting from an empty map.
+    source = baseline if baseline is not None else target
+    old = tomllib.loads(source.read_text()) if baseline is not None or source.exists() else {}
+    if baseline is not None and old.get("version") != 2:
+        raise ValueError("inventory baseline must be version 2")
+    if baseline is not None and not old.get("writer"):
+        raise ValueError("inventory baseline must contain writer rows; empty policy refused")
+    if baseline is not None:
+        # Explicit merge evidence must not silently fall back to default policy.
+        rows = old["writer"]
+        if not isinstance(rows, list):
+            raise ValueError("inventory writer must be an array of tables")
+        required = ("id", "path", "item", "sink", "lock", "gate", "disposition",
+                    "proposed_operation", "evidence_tests")
+        seen = set()
+        for row in rows:
+            if not isinstance(row, dict) or any(not row.get(key) for key in required):
+                raise ValueError("incomplete inventory writer row")
+            if any(not isinstance(row[key], str) for key in required if key != "evidence_tests"):
+                raise ValueError("invalid inventory writer field type")
+            tests = row["evidence_tests"]
+            if not isinstance(tests, list) or any(not isinstance(t, str) or not t for t in tests):
+                raise ValueError("invalid inventory writer evidence_tests")
+            path = Path(row["path"])
+            if path.is_absolute() or ".." in path.parts:
+                raise ValueError("unsafe inventory writer path")
+            key = site_id(row["path"], row["item"], row["sink"])
+            if row["id"] != key or key in seen:
+                raise ValueError("invalid or duplicate inventory writer id")
+            seen.add(key)
+            if row["disposition"] not in {"s2_typed", "host_only", "lane_private", "read_only", "blocked"}:
+                raise ValueError("invalid inventory writer disposition")
+            if row["disposition"] == "blocked" and not row.get("blocker"):
+                raise ValueError("inventory writer blocked row needs blocker")
     prior = {site_id(r["path"], r["item"], r["sink"]): r for r in old.get("writer", []) if "item" in r}
     scanned = scan(root)
     lines = ["# Source-review evidence only; no runtime authority. trace:TASK-3222 | ai:codex", "version = 2", "", "writer = ["]
@@ -726,10 +761,13 @@ def main() -> int:
     parser.add_argument("--root", type=Path, default=ROOT)
     parser.add_argument("--candidates", action="store_true", help="print sink-site discovery evidence")
     parser.add_argument("--regenerate", action="store_true", help="reconcile sites after merging main; new sites remain blocked; review diff")
+    parser.add_argument("--baseline", type=Path, help="explicit reviewed inventory TOML used by --regenerate, even when the working inventory is conflicted")
     parser.add_argument("--profile", choices=("compatibility", "mediated"),
                         default="compatibility",
                         help="mediated additionally refuses unresolved routing evidence; never grants launch authority")
     args = parser.parse_args()
+    if args.baseline is not None and (not args.regenerate or args.candidates):
+        parser.error("--baseline requires --regenerate and cannot be combined with --candidates")
     # trace:TASK-3223 | ai:codex
     if args.candidates and args.profile == "mediated":
         parser.error("--candidates cannot be combined with --profile mediated")
@@ -737,7 +775,7 @@ def main() -> int:
         if args.candidates:
             print(json.dumps(discover(args.root), indent=2, sort_keys=True))
             return 0
-        scanned = regenerate(args.root) if args.regenerate else None
+        scanned = regenerate(args.root, args.baseline) if args.regenerate else None
         errors = check(args.root, scanned=scanned)
         if errors:
             print("store-writer inventory refused:\n" + "\n".join(errors) +

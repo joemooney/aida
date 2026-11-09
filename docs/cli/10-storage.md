@@ -24,6 +24,22 @@ What this means in practice: **a normal user needs almost none of the commands b
 
 The `aida-store` branch can also carry an `adoption/` namespace: `adoption/settings.toml` with shared, non-executable project settings and guidance documents. Each worktree projects one pinned revision of it into the git-ignored `.aida/` (see [`aida adoption`](07-project-setup.md#aida-adoption)), so a project can adopt AIDA without tracked configuration on its code branches. Settings are read from Git objects at one commit, never from a checkout, so a branch that moves mid-read cannot mix two revisions. The plane must be an orphan: one that shares history with the product branch is refused. Executable settings are not accepted there; they keep coming from the trusted default-branch config. Publishing plane content is an ordinary store write and goes through the same outbound checks as any other store change.
 
+### Concurrent object edits and pull failures
+
+Store pulls resolve conflicting object YAML in process. Scalars come from
+upstream; tags, relationships and dependencies use a three-way set merge that
+preserves additions and honors removals. Comments and history are unioned by
+ID and sorted by timestamp, and processing records are retained. Modify/delete
+conflicts still refuse. Symmetric reconciliation keeps its existing policy;
+hypothesis evidence checks and conflict-marker refusals remain in force.
+
+Pulls refuse pending tracked edits without autostashing; publication retries
+also retain their stricter pending-change check. Review and commit or stash
+pending changes before retrying. A failed pre-pickup or burndown pull stops the
+operation. `--sync` also returns an error instead of continuing with a stale
+local view. Local-only stores without an origin remote remain supported.
+<!-- trace:BUG-2501 | ai:codex -->
+
 ### Store sync and pre-registration
 
 Every store sync AIDA runs (the `aida pull` store leg, `aida db sync`, push-retry pulls, `aida remote reconcile` merges and fast-forwards, and the coordination refreshes behind claims and locks) checks [locked hypotheses](02-specs.md#pre-registering-a-hypothesis) on both sides before Git touches the store, and checks the result before reporting success. A clean Git merge is not enough on its own.

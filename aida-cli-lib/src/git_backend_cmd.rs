@@ -1381,7 +1381,7 @@ pub(crate) fn db_sync_local_window(
                     // trace:BUG-1500 | ai:claude
                     anyhow::bail!(
                         "Pull failed: {}",
-                        crate::store_pull_failure_hint(store_path, &e.to_string())
+                        crate::store_pull_failure_hint(store_path, &e)
                     );
                 }
             };
