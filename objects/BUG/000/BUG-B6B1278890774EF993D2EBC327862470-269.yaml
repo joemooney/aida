@@ -8,7 +8,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-08T21:20:08.484660577Z
-modified_at: 2026-11-09T05:55:20.273830462Z
+modified_at: 2026-11-09T08:44:15.136684828Z
 req_type: Bug
 comments:
 - id: 01a1beb1-ae7c-7c52-89a5-00a6bc02eeb0
@@ -32,6 +32,22 @@ comments:
   created_at: 2026-11-09T05:55:10.991028233Z
   modified_at: 2026-11-09T05:55:10.991028233Z
   session_id: 7aacb1ed-ebaa-4da4-a195-500864e99e7d
+- id: 01a1bf7a-bf36-7b41-b489-79be2882b1c8
+  author: joe
+  content: |-
+    REVIEW FINDINGS TO ADDRESS (PR #3715):
+    Verdict: CHANGES REQUESTED
+    Reviewed commit: 6034cc970990
+    Recorded: 2026-11-09T05:11:49.226868961+00:00
+    Findings:
+    1. Dirty --resume of an orphaned seat loses the lease when the new refusal fires, contradicting "edits were preserved ... before retrying". aida-cli-lib/src/seat_clone.rs:3043-3057 now returns Err for dirty resumes (fetch failure, behind PR head, or main not incorporated), and this runs inside run_pickup_launch before agent start (queue_cmd/work.rs:5002, 5934). On the adopted-orphan path, session_start.rs:3438-3441 has already deleted the orphan lease, cleanup.lease_id is the successor (3429-3431), and SessionStartCleanup::drop removes the successor (session_start.rs:1636-1637) while leaving the unowned tree. Result: dirty tree on disk with no lease record; adoptable_orphan_lease (leases.rs:4816) returns None on retry, so --resume can no longer adopt it, and pickup either bails at session_start.rs:2201 "already exists" or resumes elsewhere. Before this PR the dirty path returned Ok and never reached rollback. Fix: keep or restore the orphan lease when a resume refusal rolls back (or run admission before the lease swap), and add a test driving an adopted dirty orphan through a refused launch that asserts retry can still adopt it.
+    2. The main-ancestry gate at seat_clone.rs:3052-3058 over-refuses: it applies to every dirty resume regardless of vendor or whether the PR conflicts, so any single commit landing on main blocks resuming pending work. BUG-2504 concerns conflicting PRs and native children that cannot write Git metadata, yet a non-conflicting PR merely behind main, or a vendor/seat able to write Git metadata, is now refused where it was admitted before, with a native-lane reason that may not apply. Fix: limit refusal to the case that needs host preparation (for example a host-side no-write merge probe showing conflicts, and/or the vendor/seat capability), or record explicitly on the spec why every behind-main dirty resume must stop, and test the admitted case.
+    3. Refusal guidance on dirty resumes is not actionable. seat_clone.rs:3054-3056 says "Recover the pending work on the host and prepare the main merge" but names no command, and host preparation cannot run while the seat is dirty, so the operator must first commit or move the edits; the sibling conflict refusal (queue_cmd/work.rs:488-491) gives an exact command. Separately, the behind-PR-head message at seat_clone.rs:3044-3046 ("retry pickup with its current head") is newly reachable for dirty resumes, where retrying cannot help because nothing advances a dirty seat; the new test pins it at line ~3392 of the PR version. Fix: give concrete recovery steps for both dirty cases and match docs/cli/06-roles-sessions.md:818-822.
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
+  created_at: 2026-11-09T08:44:15.030588328Z
+  modified_at: 2026-11-09T08:44:15.030588328Z
+  session_id: 01a1beff-fc3b-78e2-93e2-9b0c283b0339
+  harness_version: 2.1.319 (Claude Code)
 history:
 - id: 01a1beaa-5bee-7821-b878-3b983c03f8ae
   author: joe
