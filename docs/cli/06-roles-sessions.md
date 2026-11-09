@@ -826,7 +826,7 @@ retrying. Do not stage unresolved files or commit pending work on the wrong bran
 Never run host Git inside a seat clone: its configuration and hooks are
 seat-controlled. After the lane exits, inspect `aida session leases --all`
 for the recorded path and scope. For recorded clones, preserve and publish pending work through
-`aida ship --from-seat PATH --spec SPEC --commit-pending 'fix: preserve rework (Refs SPEC)'`,
+`aida ship --from-seat PATH SPEC --commit-pending 'fix: preserve rework (Refs SPEC)'`,
 substituting the recorded path and spec ID. This runs clone Git in AIDA's
 sandbox and retains publication gates; a refusal is not successful publication.
 For linked worktrees, after the lane exits, use host Git in the recorded worktree:
