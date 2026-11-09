@@ -61,12 +61,12 @@ description: |
   ## Acceptance
   1. A merge with N non-blocking findings adds no new specs when a sweep spec is open, and exactly one when none is; a test covers both and hash de-duplication.
   2. Every Part 2 section is fixed or answered in the PR body.
-status: NeedsAttention
+status: Approved
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-09T08:46:26.872629040Z
-modified_at: 2026-11-09T12:14:50.214557831Z
+modified_at: 2026-11-09T12:14:52.299753589Z
 req_type: Task
 relationships:
 - rel_type: Supersedes
@@ -188,6 +188,11 @@ comments:
     Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
   created_at: 2026-11-09T12:14:50.118428051Z
   modified_at: 2026-11-09T12:14:50.118428051Z
+- id: 01a1c03b-938b-7850-a9e9-2f5e475b71bb
+  author: joe
+  content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: Both acceptance criteria are met in code and tests, but the store writer inventory was not updated for the new sweep write path, which fails the CI gates job; CI at this head was still queued.. No triage reason was given.'
+  created_at: 2026-11-09T12:14:52.299751275Z
+  modified_at: 2026-11-09T12:14:52.299751275Z
 history:
 - id: 01a1bf7c-f894-7192-b380-ef25f53f2fb5
   author: joe
@@ -302,6 +307,13 @@ history:
   session_id: 01a1c014c4fb
   harness_version: 2.1.319 (Claude Code)
   changes: []
+- id: 01a1c03b-938b-7850-a9e9-2f470255b838
+  author: joe
+  timestamp: 2026-11-09T12:14:52.299730472Z
+  changes:
+  - field_name: status
+    old_value: NeedsAttention
+    new_value: Approved
 filed_at:
   code_sha: e60e97d0035e92f14a0b60c05e85859019365939
   branch: main
@@ -311,11 +323,3 @@ filed_at:
   vendor: claude
   session: 01a1beff-fc3b-78e2-93e2-9b0c283b0339
   harness_version: 2.1.319 (Claude Code)
-failure_reason:
-  phase: reviewer
-  phase_index: 3
-  kind: verdict:request-changes
-  detail: Both acceptance criteria are met in code and tests, but the store writer inventory was not updated for the new sweep write path, which fails the CI gates job; CI at this head was still queued.
-  recovery_hint: address the review findings, move TASK-3749 back to In Progress, and clear the PR hold only after approval
-  shelved_by: reviewer
-  shelved_at: 2026-11-09T11:35:27.549112885Z
