@@ -1,0 +1,115 @@
+{
+  "schema_version": 1,
+  "spec": "BUG-2500",
+  "publishes": [
+    {
+      "at": "2026-11-09T12:46:01.995364370Z",
+      "closed_by": "auto-bump"
+    }
+  ],
+  "events": [
+    {
+      "ts": "2026-11-09T01:51:14.493458626Z",
+      "spec": "BUG-2500",
+      "seat": "advisor",
+      "kind": {
+        "event": "SpecRequeued",
+        "via": "queue-rework",
+        "actor": "joe",
+        "from": "Needs Attention",
+        "to": "Approved"
+      }
+    },
+    {
+      "ts": "2026-11-09T02:54:07.620236235Z",
+      "spec": "BUG-2500",
+      "seat": "advisor",
+      "kind": {
+        "event": "SpecRequeued",
+        "via": "queue-rework",
+        "actor": "joe",
+        "from": "Needs Attention",
+        "to": "Approved"
+      }
+    },
+    {
+      "ts": "2026-11-09T04:06:09.013029699Z",
+      "spec": "BUG-2500",
+      "seat": "advisor",
+      "kind": {
+        "event": "SpecRequeued",
+        "via": "queue-rework",
+        "actor": "joe",
+        "from": "Needs Attention",
+        "to": "Approved"
+      }
+    },
+    {
+      "ts": "2026-11-09T05:01:33.898243771Z",
+      "spec": "BUG-2500",
+      "seat": "advisor",
+      "kind": {
+        "event": "SpecRequeued",
+        "via": "queue-rework",
+        "actor": "joe",
+        "from": "Needs Attention",
+        "to": "Approved"
+      }
+    },
+    {
+      "ts": "2026-11-09T05:49:00.562740491Z",
+      "spec": "BUG-2500",
+      "seat": "advisor",
+      "kind": {
+        "event": "SpecRequeued",
+        "via": "queue-rework",
+        "actor": "joe",
+        "from": "Needs Attention",
+        "to": "Approved"
+      }
+    },
+    {
+      "ts": "2026-11-09T06:54:20.236967454Z",
+      "spec": "BUG-2500",
+      "seat": "advisor",
+      "kind": {
+        "event": "SpecRequeued",
+        "via": "queue-rework",
+        "actor": "joe",
+        "from": "Needs Attention",
+        "to": "Approved"
+      }
+    },
+    {
+      "ts": "2026-11-09T08:29:39.869057270Z",
+      "spec": "BUG-2500",
+      "seat": "advisor",
+      "kind": {
+        "event": "SpecRequeued",
+        "via": "queue-rework",
+        "actor": "joe",
+        "from": "Needs Attention",
+        "to": "Approved"
+      }
+    },
+    {
+      "ts": "2026-11-09T12:45:29.292817810Z",
+      "spec": "BUG-2500",
+      "seat": "advisor",
+      "kind": {
+        "event": "PrMerged",
+        "pr": 3698
+      }
+    },
+    {
+      "ts": "2026-11-09T12:46:01.849126469Z",
+      "spec": "BUG-2500",
+      "kind": {
+        "event": "SpecCompleted",
+        "commit": "268bb863612e4358ec550b3a74bc8b231dd7811f",
+        "pr": 3698,
+        "closed_by": "auto-bump"
+      }
+    }
+  ]
+}
