@@ -11,7 +11,7 @@ priority: Low
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-08T03:38:52.682099Z
-modified_at: 2026-11-09T00:38:38.446855005Z
+modified_at: 2026-11-09T00:38:42.719971617Z
 req_type: Task
 tags:
 - area:ci-relay
@@ -235,6 +235,22 @@ comments:
   content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: PARTIAL: TASK-3452 acceptance holds in source and tests, but F17 is still unfixed: awaiting_skipped has no store-writer inventory row, the ratchet failed at 9cc719e689a5, and the only commit since is test-only.. No triage reason was given.'
   created_at: 2026-11-09T00:38:38.446853433Z
   modified_at: 2026-11-09T00:38:38.446853433Z
+  session_id: 20abb7c3-8f9b-4a5e-b326-404921f3b450
+- id: 01a1bdbe-38b8-7d93-8a52-4feccf600a38
+  author: joe
+  content: |-
+    REVIEW FINDINGS TO ADDRESS (TASK-3452):
+    Verdict: CHANGES REQUESTED
+    Reviewed commit: 2ccba8ef179f
+    Recorded: 2026-11-09T00:25:33.353504031+00:00
+    Findings:
+    1. F17 (blocking, third round open, aida-cli-lib/src/ci_relay.rs awaiting_skipped read_bounded calls and scripts/store-writers.toml): 2ccba8ef179f only adds Python assertions, and scripts/store-writers.toml at this head still has no awaiting_skipped row. CI run 42536638749 at 9cc719e689a5 failed the step 'Store writer inventory ratchet' in CI (gates). The same step is still pending at this head, and no file it reads has changed. Job logs are unreadable from this sandbox, so the row names are inferred from scripts/check-store-writers.py: ci_relay.rs|awaiting_skipped|wrapper:aida_cli_lib::observation_envelope::read_bounded, plus status_awaiting.rs|collect_awaiting_report_with_mail_facts for the call to the new wrapper and its explicit-path callers. Fix: after merging main, run python3 scripts/check-store-writers.py --regenerate, review and commit the new blocked rows, or read these files without a wrapper sink.
+    2. F18 (minor, still open, aida-cli-lib/src/ci_relay.rs awaiting_skipped, common_dir call): aida_core::allocation_authority::common_dir bails with 'allocation requires a clone-local Git identity' when no ancestor has .git, and the read closure reports that as 'could not read CI skipped-result display cache'. Every aida awaiting/status collection in a non-Git project then warns on stderr, although no relay can exist there and the comment says missing caches are normal. Found by reading the code, not reproduced. Fix: return an empty list silently when there is no Git identity, keep the warning for real damage, and add a non-Git test.
+    3. F19 (cosmetic, new, aida-cli-lib/src/ci_relay.rs CiCommand::Read and intent_intake.rs refresh_ci_skipped): an exact read of an unverified attempt refreshes the display cache twice, once in intake.files() and once after verify_ci_read, so a broken cache prints the refresh warning twice. This is the F16 duplicate that was fixed only for process(). Found by reading the code.
+    4. CI-WAIT (no source change needed): CI run 42539680421 at 2ccba8ef179f was still in progress when this review ended (gates at Build all packages), so the 33-attempt test and the new awaiting assertions have no result at this head. merge-hold-gate is red only because of the supervised hold, which needs the human-gated clear or an eligible auto-release. Re-review needs a green run at the new head.
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
+  created_at: 2026-11-09T00:38:42.616292855Z
+  modified_at: 2026-11-09T00:38:42.616292855Z
   session_id: 20abb7c3-8f9b-4a5e-b326-404921f3b450
 history:
 - id: 01a1bc6c-f8c6-7083-91af-c24f9a88e846
