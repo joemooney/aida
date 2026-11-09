@@ -618,6 +618,15 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a1c044-eed1-7422-8212-7747697a5791
+  author: aida-orchestrator
+  timestamp: 2026-11-09T12:25:05.489582775Z
+  session_id: 01a1c041e5f4
+  harness_version: 2.1.319 (Claude Code)
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: NeedsAttention
 filed_at:
   code_sha: e278eeb1d8f95dadba5f6e9d8bfd41d10eac52c3
   branch: main
