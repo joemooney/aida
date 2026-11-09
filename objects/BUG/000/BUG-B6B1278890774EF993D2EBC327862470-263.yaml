@@ -3,12 +3,12 @@ spec_id: BUG-b6b1278890774ef993d2ebc327862470-263
 agreed_id: BUG-2498
 title: 'Review repickup still refused by a completed review''s aida-pr-N worktree: ''branch pr-N is held by worktree before pickup setup'', and review watch does not retry'
 description: 'BUG-2457, BUG-2469 and BUG-2428 are completed, but on 2026-11-08 the same stall hit PR-3662, 3669, 3652, 3661 and 3667 on the live binary. Each prior reviewer had finished: worktree clean, nothing unpushed, no process with its cwd there, lease still present. The next-head launch then fails with ''branch pr-N is held by worktree ... before pickup setup'' (e.g. .aida/review-watch/logs/PR-3667-e2b56895-cff6-42cb-8b23-624676627d0d.log) and review watch records ''not relaunched'', leaving that head unreviewed until an advisor ends the lease by hand. Acceptance: (1) a reviewer whose worktree is clean, fully pushed and has no live process no longer blocks the next head of that PR; the pre-pickup check releases it, preserving any merge-holds marker (BUG-2176); (2) dirty, unpushed or live worktrees are still refused; (3) a regression test drives two consecutive heads of one PR through the pickup path; (4) review watch retries once after such a release instead of parking the head.'
-status: InProgress
+status: Completed
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-08T18:38:43.709546225Z
-modified_at: 2026-11-09T07:09:26.280631807Z
+modified_at: 2026-11-09T11:50:13.640680718Z
 req_type: Bug
 comments:
 - id: 01a1bc8c-5761-7180-b3a9-aa9efdae2409
@@ -354,6 +354,20 @@ history:
   session_id: 01a1bf188da8
   harness_version: codex-cli 0.167.0
   changes: []
+- id: 01a1c025-031e-72c2-a74b-22ec48c0145a
+  author: aida-auto-bump
+  timestamp: 2026-11-09T11:50:13.534769085Z
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Completed
+processing_record:
+- id: 01a1c025-0388-76b0-8097-877be7017db9
+  timestamp: 2026-11-09T11:50:13.640678276Z
+  agent: aida
+  commit_sha: 81044beb98c0d870ebd63fd9006b759e2bb090f9
+  summary: AC2-AC4 met; AC1 met for normal exit and confirmed supersede, the paths behind the reported stall. Round-3 and CI blockers fixed. All build and test CI jobs pass at this head; merge-hold-gate red is the supervised hold, not a code failure. Five non-blocking findings, including a fail-closed AC1 residual when the supervisor crashes.
+  review_verdict: approved
 filed_at:
   code_sha: eeec474c545cbc8a354d386c8cb6d81460da7b9f
   branch: main
@@ -363,3 +377,7 @@ filed_at:
   vendor: claude
   session: 01a1bbab-762f-7cd2-8a36-4ea9f209afce
   harness_version: 2.1.319 (Claude Code)
+implementation_info:
+  implemented: false
+  completed_at: 2026-11-09T11:50:13.534763892Z
+  completion_sha: 81044beb98c0d870ebd63fd9006b759e2bb090f9
