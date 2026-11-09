@@ -485,6 +485,10 @@ pub(crate) fn run_queue_resume_to_exit(
     let mut status = session::spawn_vendor_headless_resume(
         host_main, target, prompt, log, tree, tee, contained, role,
     )?;
+    // trace:BUG-2488 | ai:codex
+    if implementing {
+        crate::standalone_implementer::reconcile_signals(publication.0, tree, publication.1)?;
+    }
     // trace:STORY-2640 | ai:codex
     let branch =
         if implementing && !host_published && !crate::lane_fast_gate::veto(&main, publication.1) {
@@ -514,6 +518,11 @@ pub(crate) fn run_queue_resume_to_exit(
                         tee,
                         contained,
                         role,
+                    )?;
+                    crate::standalone_implementer::reconcile_signals(
+                        publication.0,
+                        tree,
+                        publication.1,
                     )?;
                     Ok(status.success())
                 },
