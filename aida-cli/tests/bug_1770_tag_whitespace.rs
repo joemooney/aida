@@ -167,7 +167,7 @@ fn add_task(fixture: &Fixture, tags: &str) -> Output {
 
 // trace:BUG-2505 | ai:codex
 #[test]
-fn bug_2505_review_closeout_tag_creates_a_persisted_spec() {
+fn bug_2505_review_closeout_tag_add_outcomes_by_argv_shape() {
     let fixture = init_fixture();
     for tags in [
         "from:2026-11-08-review-closeout",
