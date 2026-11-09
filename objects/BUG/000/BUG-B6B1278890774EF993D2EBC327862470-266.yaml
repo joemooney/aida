@@ -15,7 +15,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-08T19:27:28.525198886Z
-modified_at: 2026-11-09T05:01:19.667675474Z
+modified_at: 2026-11-09T05:04:27.388919936Z
 req_type: Bug
 comments:
 - id: 01a1bcd8-beaf-7582-aa0b-006077ac5867
@@ -182,6 +182,12 @@ comments:
   content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: Head 63507647da0f only merges main into 85c74b231ed; none of the six round-2 findings were addressed, so the same CI-breaking regressions remain. AC1 and AC2 are implemented in source, AC3 is partial, AC4 is an open host action. CI at this head was still queued at review.. No triage reason was given.'
   created_at: 2026-11-09T05:00:59.799499199Z
   modified_at: 2026-11-09T05:00:59.799499199Z
+  session_id: 7aacb1ed-ebaa-4da4-a195-500864e99e7d
+- id: 01a1beb1-84fc-7ed1-ac71-fce5cde953d2
+  author: joe
+  content: 'Advisor proxy: old PR-3699 work archived at branch archive/bug-2501-pr3699 (af8599f5a2) for reference; use that ref, not the former branch name.'
+  created_at: 2026-11-09T05:04:27.388919936Z
+  modified_at: 2026-11-09T05:04:27.388919936Z
   session_id: 7aacb1ed-ebaa-4da4-a195-500864e99e7d
 history:
 - id: 01a1bcc3-bd29-7692-a764-d1e8c8dbaa00
