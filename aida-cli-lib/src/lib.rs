@@ -53,6 +53,7 @@ mod auto_complete;
 mod auto_complete_telemetry;
 mod autonomy_cmd;
 mod autopilot;
+mod launch_permission_profile;
 // trace:TASK-1018 | ai:claude — durable execution audit + one-command reversal.
 mod autopilot_audit;
 mod autopilot_intake;
@@ -211,6 +212,7 @@ mod docs_sweep;
 // trace:STORY-B6B1278890774EF993D2EBC327862470-105 | ai:claude
 mod doctor_backfill_agreed;
 mod doctor_cmd;
+mod lane_host;
 // trace:BUG-B6B1278890774EF993D2EBC327862470-046 | ai:claude
 mod doctor_renumber;
 // trace:STORY-1462 | ai:claude — runaway-seat watchdog doctor category.

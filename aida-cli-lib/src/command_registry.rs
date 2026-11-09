@@ -425,5 +425,7 @@ fn mcp_handler_refuses_without_binary_registration() {
         store: None,
     };
     let error = run_mcp_handler(&matches, &ctx).err().expect("must refuse");
-    assert!(error.to_string().contains("MCP transport not registered by binary"));
+    assert!(error
+        .to_string()
+        .contains("MCP transport not registered by binary"));
 }

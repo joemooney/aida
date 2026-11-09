@@ -1037,6 +1037,20 @@ struct CodexConfigPosture {
 // trace:STORY-1127 | ai:codex
 pub(crate) fn handle_config_permissions_command(cmd: &ConfigPermissionsCommand) -> Result<()> {
     match cmd {
+        // trace:TASK-3048 | ai:codex
+        ConfigPermissionsCommand::ConformanceLaunch {
+            fixture_root,
+            credential,
+        } => {
+            let parent = aida_core::exec_context::Environment::capture();
+            crate::launch::agy::diagnostic_launch(fixture_root, credential, &parent)?;
+        }
+        ConfigPermissionsCommand::RuntimePolicy { vendor } => {
+            println!(
+                "{}",
+                serde_json::to_string(&crate::containment::runtime_policy(vendor)?)?
+            );
+        }
         // trace:TASK-2705 | ai:codex
         ConfigPermissionsCommand::Probe { vendor, json } => {
             let project_root = main_worktree_root_from(&find_project_root()?);
@@ -1282,10 +1296,15 @@ fn permission_posture_paths(
             codex: project_root.join(".codex/config.toml"),
         }),
         PermissionPostureScope::User => {
+            // trace:STORY-2642 | ai:codex — write the same config Codex reads.
             let home = aida_home_dir().context("cannot resolve home directory")?;
             Ok(PermissionPosturePaths {
                 agents: home.join(".aida/agents.toml"),
-                codex: home.join(".codex/config.toml"),
+                codex: crate::vendors::host_diagnostics::codex_home(
+                    &home,
+                    &aida_core::exec_context::Environment::capture(),
+                )
+                .join("config.toml"),
             })
         }
     }
@@ -5712,6 +5731,7 @@ mod bug_1667_bypass_gate_tests {
         );
         for (name, source) in [
             ("doctor_cmd.rs", include_str!("doctor_cmd.rs")),
+            ("lane_host.rs", include_str!("lane_host.rs")),
             ("lib.rs", lib_src.as_str()),
         ] {
             let mut rest = source;
@@ -5859,8 +5879,11 @@ fn run_config(
     let args = <ConfigArgs as clap::FromArgMatches>::from_arg_matches(matches)?;
     // The closed diagnostic needs no requirement-store/cache write access.
     // trace:TASK-2705 | ai:codex
-    if let ConfigCommand::Permissions(command @ ConfigPermissionsCommand::Probe { .. }) =
-        &args.inner
+    if let ConfigCommand::Permissions(
+        command @ (ConfigPermissionsCommand::ConformanceLaunch { .. }
+        | ConfigPermissionsCommand::Probe { .. }
+        | ConfigPermissionsCommand::RuntimePolicy { .. }),
+    ) = &args.inner
     {
         return crate::command_registry::returned(handle_config_permissions_command(command));
     }
@@ -5982,11 +6005,12 @@ fn config_cli_policy(matches: &clap::ArgMatches) -> crate::command_registry::Cmd
     let args = <ConfigArgs as clap::FromArgMatches>::from_arg_matches(matches).ok();
     let inner = args.as_ref().map(|args| &args.inner);
     crate::command_registry::CmdPolicy {
-        // trace:TASK-2705 | ai:codex — only the closed probe is read-only.
+        // trace:TASK-2705 TASK-3048 | ai:codex — closed diagnostics are read-only.
         stakeholder: if matches!(
             inner,
             Some(ConfigCommand::Permissions(
                 ConfigPermissionsCommand::Probe { .. }
+                    | ConfigPermissionsCommand::RuntimePolicy { .. }
             ))
         ) {
             SA::Read
@@ -6034,4 +6058,31 @@ fn configure_allocation(command: &AllocationCommand) -> Result<()> {
         }
     }
     Ok(())
+}
+
+// Descriptor inspection is read-only and cannot admit a production launch.
+// trace:TASK-3048 | ai:codex
+#[cfg(test)]
+#[test]
+fn task_3048_runtime_descriptor_command_is_read_only() {
+    let matches = <ConfigArgs as clap::CommandFactory>::command()
+        .try_get_matches_from(["config", "permissions", "runtime-policy", "--vendor", "agy"])
+        .unwrap();
+    assert!(matches!(
+        config_cli_policy(&matches).stakeholder,
+        crate::stakeholder_role::StakeholderAction::Read
+    ));
+    assert!(
+        handle_config_permissions_command(&ConfigPermissionsCommand::RuntimePolicy {
+            vendor: "agy".into(),
+        })
+        .is_ok()
+    );
+    assert!(
+        handle_config_permissions_command(&ConfigPermissionsCommand::RuntimePolicy {
+            vendor: "unknown".into(),
+        })
+        .is_err()
+    );
+    assert!(crate::launch::agy::AGY.require_conformance().is_err());
 }

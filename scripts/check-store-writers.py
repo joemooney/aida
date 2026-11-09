@@ -531,7 +531,7 @@ def operations(root, scanned=None):
             if key in result:
                 result[key]["resolution_note"] = (f"tool_{selector} is PEEK-only: returns a CLI invocation without performing that mutation. "
                     "Keep blocked until the corresponding CLI operation and any incidental reads/cache effects are reconciled.")
-    queue_path = "aida-cli-lib/src/queue_cmd.rs"
+    queue_path = "aida-cli-lib/src/queue_cmd/done.rs"
     if queue_path in files:
         source, masked = files[queue_path]
         arm = re.search(r"QueueCommand::Done\s*\{[^}]*\}\s*=>\s*\{", masked)

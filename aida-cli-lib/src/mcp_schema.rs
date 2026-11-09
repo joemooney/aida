@@ -1681,4 +1681,3 @@ fn workflow_tool_descriptors() -> Value {
         }
     ])
 }
-
