@@ -34,6 +34,73 @@ class PortSplitHunks(unittest.TestCase):
             with self.assertRaises(PORT.Refusal):
                 PORT.parse_hunks(patch)
 
+    def test_real_split_merge_with_conflicted_inventory(self):
+        # trace:STORY-2692 | ai:codex
+        import shutil
+        import tomllib
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            def git(*args):
+                return subprocess.run(['git', '-C', str(root), *args],
+                                      capture_output=True, text=True, check=True).stdout.strip()
+            def commit():
+                git('add', '.')
+                git('commit', '-qm', 'fixture')
+                return git('rev-parse', 'HEAD')
+            git('init', '-q')
+            git('config', 'user.name', 'Fixture')
+            git('config', 'user.email', 'fixture@example.invalid')
+            scripts = root / 'scripts'
+            scripts.mkdir()
+            shutil.copy(SCRIPT.parent / 'check-store-writers.py', scripts)
+            inventory = scripts / 'store-writers.toml'
+            inventory.write_text('version = 2\nwriter = []\noperation = []\n# base\n')
+            src = root / 'aida-core/src'
+            src.mkdir(parents=True)
+            first = ''.join(f'// first {i}\n' for i in range(8)) + 'pub fn first() {}\n'
+            second = ''.join(f'// second {i}\n' for i in range(8)) + 'pub fn moved() {}\n' + ''.join(f'// tail {i}\n' for i in range(8))
+            source = src / 'source.rs'
+            source.write_text(first + second)
+            base = commit()
+            git('checkout', '-qb', 'pr')
+            changed = second.replace('moved() {}', 'moved() { /* PR edit */ }')
+            source.write_text(first + changed)
+            inventory.write_text(inventory.read_text().replace('# base', '# PR'))
+            head = commit()
+            git('checkout', '-qb', 'split', base)
+            source.write_text('mod first;\nmod moved;\npub use moved::moved;\n')
+            (src / 'first.rs').write_text(first)
+            module = src / 'moved.rs'
+            module.write_text(second)
+            inventory.write_text(inventory.read_text().replace('# base', '# split'))
+            commit()
+            baseline = root / 'reviewed.toml'
+            baseline.write_text(inventory.read_text())
+            merge = subprocess.run(['git', '-C', str(root), 'merge', '--no-commit', 'pr'], capture_output=True)
+            self.assertEqual(merge.returncode, 1)
+            self.assertIn('<<<<<<<', source.read_text())
+            self.assertIn('<<<<<<<', inventory.read_text())
+            command = [sys.executable, str(SCRIPT), '--root', str(root),
+                       '--base', base, '--head', head, '--source', 'aida-core/src/source.rs',
+                       '--destination', 'aida-core/src/moved.rs', '--apply',
+                       '--inventory-baseline', str(baseline)]
+            # Bad policy evidence refuses before any hunk writes.
+            baseline.write_text('<<<<<<< invalid\n')
+            refused = subprocess.run(command, capture_output=True, text=True)
+            self.assertNotEqual(refused.returncode, 0)
+            self.assertEqual(module.read_text(), second)
+            baseline.write_text('version = 2\nwriter = []\noperation = []\n')
+            # Resolve the split parent explicitly; the helper never guesses wiring.
+            source.write_text('mod first;\nmod moved;\npub use moved::moved;\n')
+            result = subprocess.run(command, capture_output=True, text=True)
+            self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+            self.assertEqual(module.read_text(), changed)
+            self.assertEqual(tomllib.loads(inventory.read_text())['version'], 2)
+            self.assertNotIn('<<<<<<<', inventory.read_text())
+            git('add', '.')
+            git('commit', '-qm', 'resolve split merge')
+            self.assertEqual(len(git('rev-list', '--parents', '-n', '1', 'HEAD').split()), 3)
+
     def test_seven_prs_and_reexport_refusal(self):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)

@@ -9,6 +9,7 @@ from pathlib import Path
 import re
 import subprocess
 import sys
+import tomllib
 
 
 class Refusal(ValueError):
@@ -100,9 +101,16 @@ def main():
     parser.add_argument('--source', required=True, help='original split file, relative to repository root')
     parser.add_argument('--destination', action='append', required=True, help='candidate module; repeat for every candidate, including surviving parent')
     parser.add_argument('--apply', action='store_true', help='write placements and regenerate store-writers inventory; default is preview')
+    parser.add_argument('--inventory-baseline', type=Path, help='explicit reviewed version-2 inventory TOML for regeneration during a conflict')
     args = parser.parse_args()
     try:
         root = args.root.resolve(strict=True)
+        baseline_args = []
+        if args.inventory_baseline is not None:
+            baseline = args.inventory_baseline.resolve(strict=True)
+            if tomllib.loads(baseline.read_text()).get('version') != 2:
+                raise Refusal('inventory baseline must be version 2')
+            baseline_args = ['--baseline', str(baseline)]
         if Path(args.source).is_absolute() or '..' in Path(args.source).parts:
             raise Refusal('source must be relative to root')
         # Resolve revisions separately so options cannot be injected as revisions.
@@ -117,7 +125,7 @@ def main():
             for path, content in changes.items():
                 path.write_bytes(content.encode('utf-8'))
             print('Hunks written; regenerating inventory. On failure, edits remain for review.', flush=True)
-            return subprocess.call([sys.executable, str(root / 'scripts/check-store-writers.py'), '--root', str(root), '--regenerate'])
+            return subprocess.call([sys.executable, str(root / 'scripts/check-store-writers.py'), '--root', str(root), '--regenerate', *baseline_args])
         print('Preview only; use --apply to write and regenerate scripts/store-writers.toml.')
         return 0
     except (OSError, ValueError, subprocess.CalledProcessError) as error:

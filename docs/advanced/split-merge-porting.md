@@ -15,9 +15,22 @@ The default previews placements. Repeat with `--apply` to write them and run
 `python3 scripts/check-store-writers.py --root <worktree> --regenerate`.
 Review the resulting source and inventory diff. New inventory sites retain the
 regenerator's blocked policy; regeneration grants no authority. The inventory
-must be parseable TOML before regeneration: if it has merge markers, first
-restore an explicitly reviewed inventory baseline using the host's normal
-merge procedure. The helper does not select a policy baseline for you.
+must be parseable TOML unless you supply `--inventory-baseline /path/reviewed.toml`.
+For a conflicted inventory, extract an explicitly selected policy baseline,
+review it, and pass it to the helper:
+
+```sh
+git show <reviewed-commit>:scripts/store-writers.toml > /tmp/reviewed-writers.toml
+# Add to the helper invocation:
+# --apply --inventory-baseline /tmp/reviewed-writers.toml
+```
+
+The helper validates that baseline before writing source and forwards it to
+the existing `check-store-writers.py --regenerate --baseline <path>` path.
+Regeneration preserves that baseline's matching policy rows, scans the merged
+source and replaces the conflicted working inventory. Review policy changes on
+the other merge side separately: the helper never selects or combines policy
+evidence for you. A missing or invalid explicit baseline refuses.
 
 Every hunk's complete old text (removed lines plus three-line diff context)
 must occur exactly once across all supplied destinations. Matching uses the
@@ -38,6 +51,7 @@ conflict entries untouched. After reviewing the diff, resolve any remaining
 conflict markers and stage the intended resolutions yourself. Use ordinary
 merge handling for other PR files, renames, binary or mode-only changes.
 Destinations must be existing regular files without symlink components.
+CLI help golden regeneration is outside this initial inventory-only slice.
 
 Inventory regeneration runs after source writes. If it fails, the command
 returns nonzero and retains the source edits and any inventory changes for

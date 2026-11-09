@@ -658,10 +658,16 @@ def check_routes(root, data, scanned):
     return errors
 
 
-def regenerate(root):
+def regenerate(root, baseline=None):
     """Keep reviewed site policy; new sites start blocked, never authorized."""
     target = root / INVENTORY
-    old = tomllib.loads(target.read_text()) if target.exists() else {}
+    # trace:STORY-2692 | ai:codex
+    # A merge operator must explicitly choose policy evidence; never interpret
+    # conflict sides or discard reviewed policy by starting from an empty map.
+    source = baseline if baseline is not None else target
+    old = tomllib.loads(source.read_text()) if baseline is not None or source.exists() else {}
+    if baseline is not None and old.get("version") != 2:
+        raise ValueError("inventory baseline must be version 2")
     prior = {site_id(r["path"], r["item"], r["sink"]): r for r in old.get("writer", []) if "item" in r}
     scanned = scan(root)
     lines = ["# Source-review evidence only; no runtime authority. trace:TASK-3222 | ai:codex", "version = 2", "", "writer = ["]
@@ -722,10 +728,13 @@ def main() -> int:
     parser.add_argument("--root", type=Path, default=ROOT)
     parser.add_argument("--candidates", action="store_true", help="print sink-site discovery evidence")
     parser.add_argument("--regenerate", action="store_true", help="reconcile sites after merging main; new sites remain blocked; review diff")
+    parser.add_argument("--baseline", type=Path, help="explicit reviewed inventory TOML used by --regenerate, even when the working inventory is conflicted")
     parser.add_argument("--profile", choices=("compatibility", "mediated"),
                         default="compatibility",
                         help="mediated additionally refuses unresolved routing evidence; never grants launch authority")
     args = parser.parse_args()
+    if args.baseline is not None and (not args.regenerate or args.candidates):
+        parser.error("--baseline requires --regenerate and cannot be combined with --candidates")
     # trace:TASK-3223 | ai:codex
     if args.candidates and args.profile == "mediated":
         parser.error("--candidates cannot be combined with --profile mediated")
@@ -733,7 +742,7 @@ def main() -> int:
         if args.candidates:
             print(json.dumps(discover(args.root), indent=2, sort_keys=True))
             return 0
-        scanned = regenerate(args.root) if args.regenerate else None
+        scanned = regenerate(args.root, args.baseline) if args.regenerate else None
         errors = check(args.root, scanned=scanned)
         if errors:
             print("store-writer inventory refused:\n" + "\n".join(errors) +

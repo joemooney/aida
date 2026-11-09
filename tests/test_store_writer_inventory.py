@@ -27,6 +27,25 @@ def inventory(root, rows):
 
 
 class WriterInventoryTests(unittest.TestCase):
+    # trace:STORY-2692 | ai:codex
+    def test_explicit_merge_baseline_preserves_reviewed_policy(self):
+        import tomllib
+        target = self.root / guard.INVENTORY
+        baseline = self.root / 'reviewed.toml'
+        original = target.read_text().replace('fixture lock', 'reviewed baseline lock')
+        baseline.write_text(original)
+        target.write_text('<<<<<<< split\n=======\n>>>>>>> PR\n')
+        with self.assertRaises(ValueError):
+            guard.regenerate(self.root)
+        guard.regenerate(self.root, baseline)
+        rows = tomllib.loads(target.read_text())['writer']
+        self.assertTrue(rows)
+        self.assertTrue(all(row['lock'] == 'reviewed baseline lock' for row in rows))
+        before = target.read_bytes()
+        with self.assertRaises(OSError):
+            guard.regenerate(self.root, self.root / 'missing.toml')
+        self.assertEqual(target.read_bytes(), before)
+
     # trace:TASK-3223 | ai:codex
     def test_candidates_cannot_silently_ignore_mediated_profile(self):
         import subprocess
