@@ -1,0 +1,29 @@
+id: 01a1bec5-d4f6-7143-badc-760fb05ece54
+spec_id: TASK-b6b1278890774ef993d2ebc327862470-1031
+title: 'COSMETIC, non-blocking: docs/cli/11-dev.md:26 says alternating with plain Cargo…'
+description: |-
+  Non-blocking finding carried forward from an APPROVED review verdict on BUG-2499, which has since completed — recorded here so it keeps a queryable home once the verdict record stops being read.
+
+  COSMETIC, non-blocking: docs/cli/11-dev.md:26 says alternating with plain Cargo or make build-fast 'can recompile the CLI and server build scripts'; the build scripts rerun and the aida-cli-lib and aida-server crates recompile, so the stated cost is understated. Unverified: promotion itself was not run end to end; the test proves the stamp equals short HEAD, which is what check_staged_sha compares.
+
+  PR: #3702
+  Reviewed sha: 89e9aa9191a6fbc7a1e6f59c3b7be138d4fbc9d9
+status: Draft
+priority: Medium
+owner: joe
+feature: Uncategorized
+created_at: 2026-11-09T05:26:38.582820251Z
+modified_at: 2026-11-09T05:26:38.582820251Z
+req_type: Task
+tags:
+- carried-from:BUG-2499
+- finding-hash:d594267a
+- from-review:PR-3702
+- kind:carried-forward
+filed_at:
+  code_sha: 19c492b24569f198162030ff77ccc198669fd03a
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: a7a14984cec
+  vendor: claude
