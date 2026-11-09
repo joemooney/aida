@@ -23,6 +23,7 @@ fn git_ok(repo: &std::path::Path, args: &[&str]) -> String {
 fn queue_work(storage: &crate::Storage) -> anyhow::Result<()> {
     crate::queue_cmd::handle_queue_work(
         storage,
+        None,
         crate::test_env::HERMETIC_TEST_USER,
         Some("PR-2457"),
         None,

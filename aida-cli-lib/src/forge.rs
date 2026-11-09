@@ -465,6 +465,22 @@ fn change_lookup_from_pr_lookup(pl: crate::PrLookup, branch: &str) -> ChangeLook
     }
 }
 
+/// Keep forge diagnostics visible to callers that render only Display.
+// trace:BUG-2494 | ai:codex
+pub(crate) fn open_change_error(error: anyhow::Error) -> anyhow::Error {
+    anyhow::anyhow!("could not open a forge change request: {error:#}")
+}
+
+// trace:BUG-2494 | ai:codex
+fn validate_github_change_title(title: &str) -> Result<()> {
+    let length = title.chars().count();
+    anyhow::ensure!(
+        length <= 256,
+        "GitHub pull request title is {length} characters; the limit is 256 characters. Shorten the commit subject before retrying"
+    );
+    Ok(())
+}
+
 /// Inputs to open a new change.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct OpenChange {
@@ -2117,6 +2133,8 @@ impl Forge for GitHubForge {
     }
 
     fn open_change(&self, req: OpenChange) -> Result<ChangeRef> {
+        // trace:BUG-2494 | ai:codex
+        validate_github_change_title(&req.title)?;
         let mut args = vec![
             "pr".to_string(),
             "create".to_string(),
@@ -4594,6 +4612,13 @@ pub(crate) fn is_full_commit_sha(sha: &str) -> bool {
 // trace:STORY-1689 | ai:claude
 const COMMIT_CI_API_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(30);
 
+// trace:TASK-1222 | ai:codex
+// Central constructor for read-only forge probes, inventoried separately from
+// mutation commands so command-trust audits can identify these call sites.
+fn forge_read_command(cli: &Path) -> Command {
+    Command::new(cli)
+}
+
 /// Run `<cli> api -X GET <endpoint>` in `root` for the commit-keyed reader;
 /// a spawn failure, timeout or non-zero exit is an `Err`.
 // trace:STORY-1689 | ai:claude
@@ -4603,7 +4628,7 @@ fn commit_ci_api(cli: &Path, root: &Path, endpoint: &str) -> Result<Vec<u8>> {
     // own durable checkpoint. Outside an active train this is a no-op.
     // trace:STORY-2401 | ai:codex
     crate::pr_train::before_train_forge_call("commit CI API read")?;
-    let mut command = Command::new(cli);
+    let mut command = forge_read_command(cli);
     command
         .args(["api", "-X", "GET", endpoint])
         .current_dir(root)
@@ -5392,6 +5417,39 @@ mod story_1689_commit_ci_status_tests;
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    // trace:BUG-2494 | ai:codex
+    #[test]
+    fn open_change_failure_keeps_forge_reason_in_display() {
+        let cause = anyhow::anyhow!("GraphQL: title is too long (maximum is 256 characters)")
+            .context("gh pr create failed");
+        let message = open_change_error(cause).to_string();
+        assert!(message.contains("could not open a forge change request"));
+        assert!(message.contains("gh pr create failed"));
+        assert!(message.contains("GraphQL: title is too long (maximum is 256 characters)"));
+    }
+
+    // trace:BUG-2494 | ai:codex
+    #[test]
+    fn open_change_github_title_limit_reports_length_without_spawning() {
+        for character in ['a', '界'] {
+            assert!(validate_github_change_title(&character.to_string().repeat(256)).is_ok());
+            let forge = GitHubForge::new(Path::new("/nonexistent"));
+            let error = forge
+                .open_change(OpenChange {
+                    branch: "topic".into(),
+                    base: "main".into(),
+                    title: character.to_string().repeat(257),
+                    body: String::new(),
+                    draft: false,
+                })
+                .unwrap_err();
+            let message = open_change_error(error).to_string();
+            assert!(message.contains("257 characters"), "{message}");
+            assert!(message.contains("limit is 256 characters"), "{message}");
+            assert!(message.contains("Shorten the commit subject"), "{message}");
+        }
+    }
 
     // TASK-1241 / SPIKE-80: live round-trip of GitLabForge against a REAL GitLab.
     // #[ignore] — run explicitly:
@@ -7436,5 +7494,213 @@ mod tests {
         assert_eq!(none.decision, ReviewDecision::None);
 
         assert!(parse_glab_mr_approvals("nope").is_err());
+    }
+}
+
+/// Read the exact branch incarnation's lifecycle for host GC. All rows must
+/// parse, no open PR may coexist, and a closed/merged same-repository row
+/// must pin this HEAD. A capped history is unknown, never deletion authority.
+// trace:TASK-1222 | ai:codex
+pub(crate) fn observe_gc_branch_closed(root: &Path, branch: &str, head: &str) -> Observed<bool> {
+    let kind = resolve_forge_kind(root);
+    let Some(binary) = crate::resolve_forge_cli(kind) else {
+        return Observed::Transient("forge CLI unavailable".into());
+    };
+    let mut cmd = forge_read_command(&binary);
+    cmd.current_dir(root).stdin(std::process::Stdio::null());
+    match kind {
+        ForgeKind::GitHub if gc_reviewer_pr_number(branch).is_some() => {
+            // Reviewer checkouts use a local alias, not the forge head ref.
+            cmd.args([
+                "pr",
+                "view",
+                &gc_reviewer_pr_number(branch).unwrap().to_string(),
+                "--json",
+                "number,state,headRefName,headRefOid,isCrossRepository",
+            ]);
+        }
+        ForgeKind::GitHub => {
+            cmd.args([
+                "pr",
+                "list",
+                "--head",
+                branch,
+                "--state",
+                "all",
+                "--limit",
+                "100",
+                "--json",
+                "state,headRefName,headRefOid,isCrossRepository",
+            ]);
+        }
+        ForgeKind::GitLab => {
+            cmd.args([
+                "api",
+                "-X",
+                "GET",
+                "projects/:id/merge_requests",
+                "-f",
+                &format!("source_branch={branch}"),
+                "-f",
+                "state=all",
+                "-f",
+                "per_page=100",
+            ]);
+        }
+        ForgeKind::None => return Observed::Known(false),
+    }
+    let Some(out) = crate::command_output_with_timeout(cmd, std::time::Duration::from_secs(15))
+    else {
+        return Observed::Transient("GC forge lookup timed out".into());
+    };
+    if !out.status.success() {
+        return Observed::Transient(format!(
+            "GC forge lookup failed: {}",
+            String::from_utf8_lossy(&out.stderr)
+        ));
+    }
+    let closed = match (kind, gc_reviewer_pr_number(branch)) {
+        (ForgeKind::GitHub, Some(number)) => parse_gc_reviewer_pr_closed(&out.stdout, number, head),
+        _ => parse_gc_branch_closed(&out.stdout, kind, branch, head),
+    };
+    match closed {
+        Some(value) => Observed::Known(value),
+        None => Observed::Transient("invalid or truncated GC forge history".into()),
+    }
+}
+
+// trace:TASK-1222 | ai:codex
+fn gc_reviewer_pr_number(branch: &str) -> Option<u64> {
+    let suffix = branch.strip_prefix("pr-")?;
+    let number: u64 = suffix.parse().ok()?;
+    (number > 0 && number.to_string() == suffix).then_some(number)
+}
+
+// Number lookup alone grants no authority: validate the response identity,
+// same-repository lifecycle and exact checked-out HEAD through the usual parser.
+// trace:TASK-1222 | ai:codex
+fn parse_gc_reviewer_pr_closed(body: &[u8], number: u64, head: &str) -> Option<bool> {
+    let row: serde_json::Value = serde_json::from_slice(body).ok()?;
+    if row.get("number")?.as_u64()? != number {
+        return None;
+    }
+    let branch = row.get("headRefName")?.as_str()?;
+    parse_gc_branch_closed(
+        &serde_json::to_vec(&vec![&row]).ok()?,
+        ForgeKind::GitHub,
+        branch,
+        head,
+    )
+}
+
+// trace:TASK-1222 | ai:codex
+fn parse_gc_branch_closed(body: &[u8], kind: ForgeKind, branch: &str, head: &str) -> Option<bool> {
+    let rows: Vec<serde_json::Value> = serde_json::from_slice(body).ok()?;
+    if rows.len() >= 100 {
+        return None;
+    }
+    let mut found = false;
+    let mut open = false;
+    for row in rows {
+        let state = row.get("state")?.as_str()?;
+        let (name, sha, same_repo, closed, is_open) = match kind {
+            ForgeKind::GitHub => (
+                row.get("headRefName")?.as_str()?,
+                row.get("headRefOid")?.as_str()?,
+                !row.get("isCrossRepository")?.as_bool()?,
+                matches!(state, "MERGED" | "CLOSED"),
+                state == "OPEN",
+            ),
+            ForgeKind::GitLab => (
+                row.get("source_branch")?.as_str()?,
+                row.get("sha")?.as_str()?,
+                row.get("source_project_id")?.as_u64()?
+                    == row.get("target_project_id")?.as_u64()?,
+                matches!(state, "merged" | "closed"),
+                matches!(state, "opened" | "locked"),
+            ),
+            ForgeKind::None => return None,
+        };
+        if name != branch || (!closed && !is_open) {
+            return None;
+        }
+        open |= is_open && same_repo;
+        found |= closed && same_repo && sha == head;
+    }
+    Some(found && !open)
+}
+
+#[cfg(test)]
+mod task_1222_gc_forge_tests {
+    use super::*;
+    #[test]
+    fn task_1222_gc_requires_exact_closed_head_and_no_open_incarnation() {
+        let row = serde_json::json!({"state":"MERGED", "headRefName":"task-1", "headRefOid":"abc", "isCrossRepository":false});
+        let parse = |rows: serde_json::Value| {
+            parse_gc_branch_closed(
+                &serde_json::to_vec(&rows).unwrap(),
+                ForgeKind::GitHub,
+                "task-1",
+                "abc",
+            )
+        };
+        assert_eq!(parse(serde_json::json!([row.clone()])), Some(true));
+        let mut closed = row.clone();
+        closed["state"] = "CLOSED".into();
+        assert_eq!(parse(serde_json::json!([closed])), Some(true));
+        let mut newer = row.clone();
+        newer["headRefOid"] = "def".into();
+        assert_eq!(parse(serde_json::json!([newer.clone()])), Some(false));
+        newer["state"] = "OPEN".into();
+        assert_eq!(parse(serde_json::json!([row.clone(), newer])), Some(false));
+        let mut fork = row.clone();
+        fork["isCrossRepository"] = true.into();
+        assert_eq!(parse(serde_json::json!([fork])), Some(false));
+        assert_eq!(parse(serde_json::json!([{}])), None);
+        assert_eq!(parse(serde_json::json!(vec![row; 100])), None);
+        assert_eq!(parse(serde_json::json!([])), Some(false));
+    }
+    #[test]
+    fn task_1222_gc_reviewer_alias_pins_number_repository_and_exact_head() {
+        // trace:TASK-1222.acfbfd06 | ai:codex
+        assert_eq!(gc_reviewer_pr_number("pr-3647"), Some(3647));
+        for branch in ["pr-0", "pr-01", "pr-+1", "pr-1-extra", "task-3647"] {
+            assert_eq!(gc_reviewer_pr_number(branch), None);
+        }
+        let row = serde_json::json!({"number":3647,"state":"MERGED", "headRefName":"task-1222", "headRefOid":"abc", "isCrossRepository":false});
+        let parse = |row: &serde_json::Value| {
+            parse_gc_reviewer_pr_closed(&serde_json::to_vec(row).unwrap(), 3647, "abc")
+        };
+        assert_eq!(parse(&row), Some(true));
+        for (field, value, expected) in [
+            ("state", serde_json::json!("CLOSED"), Some(true)),
+            ("state", serde_json::json!("OPEN"), Some(false)),
+            ("headRefOid", serde_json::json!("different"), Some(false)),
+            ("isCrossRepository", serde_json::json!(true), Some(false)),
+            ("number", serde_json::json!(3648), None),
+            ("headRefOid", serde_json::Value::Null, None),
+        ] {
+            let mut changed = row.clone();
+            changed[field] = value;
+            assert_eq!(parse(&changed), expected, "{field}");
+        }
+        assert_eq!(parse(&serde_json::json!({})), None);
+    }
+
+    #[test]
+    fn task_1222_gc_gitlab_requires_same_project_and_head() {
+        let row = serde_json::json!({"state":"closed", "source_branch":"task-1", "sha":"abc", "source_project_id":1,"target_project_id":1});
+        let parse = |rows: serde_json::Value| {
+            parse_gc_branch_closed(
+                &serde_json::to_vec(&rows).unwrap(),
+                ForgeKind::GitLab,
+                "task-1",
+                "abc",
+            )
+        };
+        assert_eq!(parse(serde_json::json!([row.clone()])), Some(true));
+        let mut fork = row;
+        fork["source_project_id"] = 2.into();
+        assert_eq!(parse(serde_json::json!([fork])), Some(false));
     }
 }

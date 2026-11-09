@@ -256,7 +256,6 @@ fn task1993_global_capacity_includes_ambiguous_reservations_and_configuration() 
     let (_temp, store) = fixture();
     let c = change(1, 1, false);
     let a = dispatch(select(&store, &c, None, 1).unwrap());
-    assert!(select(&store, &change(2, 2, false), None, 2).is_err());
     assert!(matches!(
         select(&store, &change(2, 2, false), None, 1).unwrap(),
         Action::Skip(_)
@@ -268,6 +267,42 @@ fn task1993_global_capacity_includes_ambiguous_reservations_and_configuration() 
         select(&store, &change(4, 4, false), None, 2).unwrap(),
         Action::Skip(_)
     ));
+}
+
+// trace:BUG-2496 | ai:codex
+#[test]
+fn bug2496_changed_capacity_applies_with_active_reviews() {
+    let (temp, store) = fixture();
+    for id in 1..=2 {
+        let c = change(id, id, false);
+        let attempt = dispatch(select(&store, &c, None, 2).unwrap());
+        store
+            .transition(&c.key(), &attempt.token, Phase::Running)
+            .unwrap();
+    }
+    let restarted = Store::open(temp.path(), &store.repository).unwrap();
+    let third = change(3, 3, false);
+    let attempt = dispatch(select(&restarted, &third, None, 4).unwrap());
+    restarted
+        .transition(&third.key(), &attempt.token, Phase::Running)
+        .unwrap();
+    assert_eq!(restarted.load().unwrap().max_concurrent, 4);
+
+    let Action::Skip(reason) = select(&restarted, &change(4, 4, false), None, 2).unwrap() else {
+        panic!("lowered cap admitted a fourth review");
+    };
+    assert!(reason.contains("global reviewer capacity (2)"), "{reason}");
+    let state = restarted.load().unwrap();
+    assert_eq!(state.max_concurrent, 2);
+    assert_eq!(
+        state
+            .entries
+            .values()
+            .flat_map(|e| &e.attempts)
+            .filter(|a| active(a))
+            .count(),
+        3
+    );
 }
 
 // trace:TASK-1993.ac55aab8 | ai:claude
@@ -1186,7 +1221,7 @@ fn bug2450_observed_setup_refusals_retry_without_consuming_a_review() {
         // trace:BUG-2498 | ai:codex
         (
             5,
-            "branch `pr-5` is held by worktree /tmp/aida-pr-5 before pickup setup",
+            "branch `pr-5` is held by worktree /worktrees/aida-pr-5 before pickup setup",
         ),
     ] {
         let (_temp, store) = fixture();
@@ -1765,7 +1800,7 @@ fn task1993_pruning_keeps_consumed_rounds() {
 // trace:TASK-1993.ac9ef854 | ai:claude
 #[test]
 fn task1993_launch_revalidation_precedes_verdict_reset() {
-    let source = include_str!("../queue_cmd.rs");
+    let source = include_str!("../queue_cmd/work.rs");
     let check = source
         .find("crate::review_watch::reviewer_launch_context(&project_root, *pr)?;")
         .expect("watch revalidation in handle_queue_work");

@@ -17,7 +17,8 @@ fn run_skill(
     matches: &clap::ArgMatches,
     _ctx: &crate::command_registry::DispatchCtx,
 ) -> anyhow::Result<()> {
-    use crate::*;
+    // trace:TASK-3428 | ai:codex
+    use crate::{find_project_root, lint_skills, SkillCommand};
     let args = <SkillArgs as clap::FromArgMatches>::from_arg_matches(matches)?;
     let skill_cmd = &args.inner;
     match skill_cmd {

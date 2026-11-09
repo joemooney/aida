@@ -9,7 +9,12 @@ use std::path::Path;
 
 /// Unmarked `.display_id()` occurrences in non-test `aida-cli-lib/src` code
 /// after the STORY-078 output migration. Lower it when you migrate more.
-const BASELINE: usize = 169;
+// TASK-3426: splitting queue_cmd.rs exposes five existing production calls
+// previously hidden after its first inline test module (the scanner stops
+// there). Main counted one queue call; the split counts six. No calls were
+// added: progress.rs contributes three, rework.rs and work.rs one each.
+// trace:TASK-3426 | ai:codex
+const BASELINE: usize = 174;
 
 const MARKER: &str = "canonical-id";
 

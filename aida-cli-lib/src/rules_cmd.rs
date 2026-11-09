@@ -4,6 +4,7 @@
 //! this module just maps the `RulesCommand::Sync` variant to a trace-graph
 //! scan and calls `rules_sync::sync` / `sync_review_md`.
 // trace:SPIKE-31 | ai:claude
+// trace:TASK-3428 | ai:codex
 
 use std::collections::HashSet;
 
@@ -140,7 +141,6 @@ fn run_rules(
     matches: &clap::ArgMatches,
     ctx: &crate::command_registry::DispatchCtx,
 ) -> anyhow::Result<crate::command_registry::Flow> {
-    use crate::*;
     let args = <RulesArgs as clap::FromArgMatches>::from_arg_matches(matches)?;
     match &ctx.store {
         None => Ok(crate::command_registry::Flow::Continue),

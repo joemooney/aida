@@ -3651,19 +3651,12 @@ fn command_table() -> &'static [(&'static [&'static str], ScheduledCommand)] {
                 hook_allowed: false,
             },
         ),
-        // Read-only monthly guard; forced cleanup stays with the operator.
-        // trace:TASK-1596 | ai:codex
+        // trace:TASK-1222 | ai:codex — dry-run only; never allow --apply.
         (
-            &["doctor check merged-agent-worktrees --fail-on-findings"],
+            &["worktree gc --fail-on-findings"],
             ScheduledCommand {
-                display: "doctor check merged-agent-worktrees --fail-on-findings",
-                args: &[
-                    "doctor",
-                    "check",
-                    "merged-agent-worktrees",
-                    "--json",
-                    "--fail-on-findings",
-                ],
+                display: "worktree gc --fail-on-findings",
+                args: &["worktree", "gc", "--json", "--fail-on-findings"],
                 hook_allowed: false,
             },
         ),
@@ -3864,7 +3857,11 @@ pub(crate) const HYGIENE_COMMAND_TIMEOUT: std::time::Duration = std::time::Durat
 /// The kill ceiling for one scheduled child.
 // trace:STORY-2351 | ai:claude
 fn command_timeout(command: &ScheduledCommand) -> std::time::Duration {
-    if command.display == "session hygiene" {
+    // trace:TASK-1222 | ai:codex — lifecycle scans emit partial counts before this ceiling.
+    if matches!(
+        command.display,
+        "session hygiene" | "worktree gc --fail-on-findings"
+    ) {
         HYGIENE_COMMAND_TIMEOUT
     } else {
         SCHEDULED_COMMAND_TIMEOUT
