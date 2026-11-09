@@ -70,12 +70,12 @@ description: |
 
   PR: #3724
   Reviewed sha: da5047a5ebaa01d84607731b5f246637665506f8
-status: InProgress
+status: NeedsAttention
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-09T14:27:09.447287877Z
-modified_at: 2026-11-09T16:44:51.866835736Z
+modified_at: 2026-11-09T22:00:55.779105046Z
 req_type: Task
 tags:
 - kind:finding-sweep
@@ -237,6 +237,13 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a1c254-20e3-7b63-ab19-88c188cac89d
+  author: aida-orchestrator
+  timestamp: 2026-11-09T22:00:55.779129261Z
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: NeedsAttention
 filed_at:
   code_sha: e4eee38238fa4cb8e8c85dadaa4ed07894cfbeea
   branch: main
@@ -246,3 +253,11 @@ filed_at:
   vendor: claude
   session: 01a1beff-fc3b-78e2-93e2-9b0c283b0339
   harness_version: 2.1.319 (Claude Code)
+failure_reason:
+  phase: reviewer
+  phase_index: 3
+  kind: verdict:request-changes
+  detail: Ten sweep fixes verified; TASK-3091 remains incomplete in burndown WAITING classification; required CI is green.
+  recovery_hint: address the review findings, move TASK-3777 back to In Progress, and clear the PR hold only after approval
+  shelved_by: reviewer
+  shelved_at: 2026-11-09T22:00:55.779105046Z
