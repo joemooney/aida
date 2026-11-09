@@ -302,7 +302,7 @@ enabled = true
 name = "defer-resurface-route"
 seats = ["advisor"]
 on = ["CronJobFailed:defer-resurface"]
-prompt = "The deferral sweep found a condition evaluation error or an internal read/write error. Unparseable triggers stay parked awaiting typed-condition migration. Inspect the reported specs and repair the evidence, then rerun aida defer resurface. Never lift an operator hold automatically."
+prompt = "The deferral sweep found a condition evaluation error or an internal read/write error. Unparseable triggers stay parked and require repair. Inspect the reported specs and repair the evidence, then rerun aida defer resurface. Never lift an operator hold automatically."
 enabled = true
 
 [[schedule.jobs]]

@@ -32,7 +32,7 @@ pub(crate) fn defer_single(
     store_path: &std::path::Path,
 ) -> Result<()> {
     // Validate before any store or queue mutation. trace:STORY-2402 | ai:codex
-    let until = canonical_defer_condition(until, reason)?;
+    let until = crate::condition_cmd::canonical_condition(until, reason)?;
     if let Some(refusal) = set_hold_refusal(reason) {
         anyhow::bail!(refusal);
     }
@@ -110,25 +110,6 @@ pub(crate) fn defer_single(
         ),
     }
     Ok(())
-}
-
-/// Validate only explicitly supplied triggers. Bare re-deferral retains existing
-/// evidence, including legacy text pending the separate migration slice.
-// trace:STORY-2402 | ai:codex
-fn canonical_defer_condition(until: Option<&str>, reason: Option<&str>) -> Result<Option<String>> {
-    use aida_core::condition::Condition;
-    let Some(raw) = until else { return Ok(None) };
-    let condition: Condition = raw.parse().map_err(|err| {
-        anyhow::anyhow!(
-            "invalid --until condition: {err}. For a human decision use manual:<who> with --reason"
-        )
-    })?;
-    if matches!(condition, Condition::Manual { .. })
-        && reason.is_none_or(|reason| reason.trim().is_empty())
-    {
-        anyhow::bail!("manual conditions require --reason with a non-empty explanation");
-    }
-    Ok(Some(condition.to_string()))
 }
 
 fn remove_deferred_queue_rows(
