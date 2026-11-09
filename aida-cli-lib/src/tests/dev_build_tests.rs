@@ -780,6 +780,9 @@ fn dev_build_restamps_after_fast_forward_with_cached_git_watches() {
     git(&f.layout.repo, &["commit", "-qm", "initial"]);
     let build = || {
         let output = dev_build_command(&f.layout)
+            // Keep status assertions stable under CI's forced colour output.
+            // trace:BUG-2499 | ai:codex
+            .env("CARGO_TERM_COLOR", "never")
             .arg("--verbose")
             .output()
             .unwrap();
