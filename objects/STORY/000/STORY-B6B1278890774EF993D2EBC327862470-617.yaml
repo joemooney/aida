@@ -38,7 +38,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-09T15:57:18.371798469Z
-modified_at: 2026-11-09T21:25:29.470114663Z
+modified_at: 2026-11-09T21:25:31.506158270Z
 req_type: Story
 tags:
 - architecture
@@ -50,6 +50,13 @@ comments:
   content: Independent Codex review on 2026-11-09 found the original sketch largely duplicates TASK-1960 carry-over (gate/review_carryover.rs), verdict UNSOUND as a semantic-preservation claim. Verified against the code. Narrowing to wiring the existing proof into merge-hold release and review watch; narrowed sketch going back for independent review.
   created_at: 2026-11-09T21:24:22.583943533Z
   modified_at: 2026-11-09T21:24:22.583943533Z
+  session_id: 01a1beff-fc3b-78e2-93e2-9b0c283b0339
+  harness_version: 2.1.319 (Claude Code)
+- id: 01a1c233-b6f2-7a11-b563-32afa3683ebd
+  author: joe
+  content: 'Sketch signed off by advisor 2026-11-09 after independent Codex design review (SIGN OFF WITH CHANGES); all its conditions are in the description. Architecture change: implement exactly this scope.'
+  created_at: 2026-11-09T21:25:31.506158270Z
+  modified_at: 2026-11-09T21:25:31.506158270Z
   session_id: 01a1beff-fc3b-78e2-93e2-9b0c283b0339
   harness_version: 2.1.319 (Claude Code)
 history:
