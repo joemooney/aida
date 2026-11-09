@@ -1,0 +1,77 @@
+{
+  "schema_version": 1,
+  "spec": "BUG-2498",
+  "publishes": [
+    {
+      "at": "2026-11-09T11:50:16.833740134Z",
+      "closed_by": "auto-bump"
+    }
+  ],
+  "events": [
+    {
+      "ts": "2026-11-08T19:17:17.917883511Z",
+      "spec": "BUG-2498",
+      "seat": "advisor",
+      "kind": {
+        "event": "SpecRequeued",
+        "via": "queue-rework",
+        "actor": "joe",
+        "from": "Needs Attention",
+        "to": "Approved"
+      }
+    },
+    {
+      "ts": "2026-11-08T20:06:15.535027593Z",
+      "spec": "BUG-2498",
+      "seat": "advisor",
+      "kind": {
+        "event": "SpecRequeued",
+        "via": "queue-rework",
+        "actor": "joe",
+        "from": "Needs Attention",
+        "to": "Approved"
+      }
+    },
+    {
+      "ts": "2026-11-08T21:04:53.476548031Z",
+      "spec": "BUG-2498",
+      "seat": "advisor",
+      "kind": {
+        "event": "SpecRequeued",
+        "via": "queue-rework",
+        "actor": "joe",
+        "from": "Needs Attention",
+        "to": "Approved"
+      }
+    },
+    {
+      "ts": "2026-11-09T06:30:54.130015535Z",
+      "spec": "BUG-2498",
+      "kind": {
+        "event": "UnshippedWorkDetected",
+        "spec": "BUG-2498",
+        "branch": "pr-3693",
+        "first_seen": "2026-11-09T06:30:54.129968518+00:00"
+      }
+    },
+    {
+      "ts": "2026-11-09T11:49:51.575581297Z",
+      "spec": "BUG-2498",
+      "seat": "advisor",
+      "kind": {
+        "event": "PrMerged",
+        "pr": 3693
+      }
+    },
+    {
+      "ts": "2026-11-09T11:50:16.697345335Z",
+      "spec": "BUG-2498",
+      "kind": {
+        "event": "SpecCompleted",
+        "commit": "81044beb98c0d870ebd63fd9006b759e2bb090f9",
+        "pr": 3693,
+        "closed_by": "auto-bump"
+      }
+    }
+  ]
+}
