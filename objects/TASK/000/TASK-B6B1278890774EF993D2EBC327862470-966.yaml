@@ -11,7 +11,7 @@ priority: Low
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-08T03:38:52.682099Z
-modified_at: 2026-11-09T00:08:56.919784218Z
+modified_at: 2026-11-09T00:08:59.635897924Z
 req_type: Task
 tags:
 - area:ci-relay
@@ -208,6 +208,20 @@ comments:
   content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: PARTIAL: F14-F16 are fixed and acceptance holds in source, but F17 is still open: the new awaiting_skipped read_bounded calls are absent from the store-writer inventory, so the gates ratchet will fail; CI is still running at this head.. No triage reason was given.'
   created_at: 2026-11-09T00:08:56.919777343Z
   modified_at: 2026-11-09T00:08:56.919777343Z
+  session_id: 20abb7c3-8f9b-4a5e-b326-404921f3b450
+- id: 01a1bda3-0388-74a3-b191-60f13dfa6d3e
+  author: joe
+  content: |-
+    REVIEW FINDINGS TO ADDRESS (TASK-3452):
+    Verdict: CHANGES REQUESTED
+    Reviewed commit: 9cc719e689a5
+    Recorded: 2026-11-08T23:48:39.490518521+00:00
+    Findings:
+    1. F17 (blocking, still open, aida-cli-lib/src/ci_relay.rs:929,934,938 awaiting_skipped and scripts/store-writers.toml): the PR diff does not touch the inventory and head 9cc719e689a5 has no row for awaiting_skipped. read_bounded is a wrapper (inventory row observation_envelope.rs|read_bounded|OpenOptions::new), and the existing row ci_relay.rs|run|wrapper:aida_cli_lib::observation_envelope::read_bounded shows the same call form is detected, so scripts/check-store-writers.py reports 'unclassified writer/caller sink site (addition)' for ci_relay.rs|awaiting_skipped|wrapper:aida_cli_lib::observation_envelope::read_bounded. Because awaiting_skipped becomes a wrapper, its explicit-path caller status_awaiting.rs collect_awaiting_report_with_mail_facts (and that function's explicit-path callers) need rows too. 'Store writer inventory ratchet' was the only failed step in CI (gates) of run 42531076990 at 4cbaa4d7dd9c. The 9cc719e689a5 run has not reached that step; this attribution is from reading the script and inventory, which was not executed per the no-local-checks review policy. Fix: run python3 scripts/check-store-writers.py --regenerate after merging main, review the new blocked rows and commit them, or read these files without a wrapper sink.
+    2. CI-WAIT (no source change needed): CI run 42536638749 at 9cc719e689a5 was still in progress when this review ended (gates at Build all packages), so test_33_attempts_report_unverified_latest_result and the tests added in the latest commit have no result at this head. merge-hold-gate is red only because of the supervised hold, which is expected and needs the human-gated clear or eligible auto-release. Re-review needs a green run at the new head.
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
+  created_at: 2026-11-09T00:08:59.528963840Z
+  modified_at: 2026-11-09T00:08:59.528963840Z
   session_id: 20abb7c3-8f9b-4a5e-b326-404921f3b450
 history:
 - id: 01a1bc6c-f8c6-7083-91af-c24f9a88e846
