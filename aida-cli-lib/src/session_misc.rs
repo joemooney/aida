@@ -984,10 +984,16 @@ pub(crate) fn session_handoff_seat(
     seat: Option<&str>,
     final_: bool,
     rotated: bool,
+    until: Option<&str>,
+    spec: Option<&str>,
+    reason: Option<&str>,
     snapshot: bool,
     body_only: bool,
 ) -> Result<()> {
-    let role_seat = resolve_handoff_seat(seat)?;
+    // Reject prose before reading stdin or changing handoff/store state.
+    // trace:STORY-2402 | ai:codex
+    let condition = crate::condition_cmd::canonical_condition(until, reason)?;
+    let role_seat = seat_rotation::sanitize_seat(&resolve_handoff_seat(seat)?)?;
     // trace:STORY-2662 | ai:codex
     let cwd = find_project_root()?.canonicalize()?;
     let snapshot_seat = seat_rotation::compact_snapshot_seat(&cwd, &role_seat);
@@ -1012,6 +1018,39 @@ pub(crate) fn session_handoff_seat(
         } else {
             std::fs::read_to_string(src).with_context(|| format!("reading {src}"))?
         };
+        anyhow::ensure!(!body.trim().is_empty(), "handoff note is empty");
+        let mut resolved_spec = spec.map(str::to_string);
+        let body = if let Some(ref condition) = condition {
+            let spec =
+                spec.ok_or_else(|| anyhow::anyhow!("conditional handoffs require --spec"))?;
+            let path = crate::store_sync::detect_distributed_store_from(&project_root).ok_or_else(
+                || anyhow::anyhow!("conditional handoffs require the canonical store"),
+            )?;
+            crate::status_awaiting::team_identity_write_guard(&path, true)?;
+            let backend = crate::queue_cmd::advance_backend(&path)?;
+            let row = backend
+                .get_requirement_unambiguous(spec)?
+                .ok_or_else(|| anyhow::anyhow!("unknown handoff spec: {spec}"))?;
+            let display_id = row.spec_id.as_deref().unwrap_or(spec);
+            resolved_spec = Some(display_id.to_string());
+            let combined = format!("{body}\n\nRevisit {display_id} when {condition}.\n");
+            anyhow::ensure!(
+                combined.trim().len() <= seat_rotation::HANDOFF_MAX_BYTES,
+                "conditional handoff exceeds the handoff size cap"
+            );
+            crate::defer_cmd::defer_single(spec, Some(&condition), reason, &backend, &path)?;
+            // Early handlers skip post-dispatch auto-push. Push the saved
+            // deferral before note I/O so a note failure still syncs it.
+            // trace:STORY-2402 | ai:codex
+            crate::maybe_auto_push_store(
+                &path,
+                crate::StoreAutoPushMode::PerWrite,
+                "conditional session handoff",
+            );
+            combined
+        } else {
+            body
+        };
         // trace:STORY-B6B1278890774EF993D2EBC327862470-101 | ai:claude
         let mut writer = seat_rotation::HandoffWriter::from_env(final_);
         if snapshot {
@@ -1028,7 +1067,16 @@ pub(crate) fn session_handoff_seat(
             } else {
                 "handoff"
             },
-        )?;
+        )
+        .map_err(|error| match condition.as_deref() {
+            // The store write already succeeded; preserve that fact on I/O failure.
+            // trace:STORY-2402 | ai:codex
+            Some(condition) => error.context(format!(
+                "handoff note failed after deferring {} until {condition}; deferral remains saved; repair the note and retry",
+                resolved_spec.as_deref().unwrap_or("?")
+            )),
+            None => error,
+        })?;
         println!(
             "Handoff written: {} ({} bytes)",
             written.path.display(),
