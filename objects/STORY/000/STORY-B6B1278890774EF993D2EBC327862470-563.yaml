@@ -25,7 +25,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-07T19:45:35.836129088Z
-modified_at: 2026-11-09T06:19:08.697775384Z
+modified_at: 2026-11-09T06:53:59.013981806Z
 req_type: Story
 tags:
 - docs:impacted
@@ -677,6 +677,13 @@ comments:
   modified_at: 2026-11-09T06:13:06.677022599Z
   session_id: 01a1bee7761f
   harness_version: codex-cli 0.167.0
+- id: 01a1bf15-cb65-7c00-b0e9-99e9e83af4b6
+  author: joe
+  content: 'ADVISOR RUBBIN: CI has failed this same check on repeated pushes; pushing again without fixing it will fail again. Do not merge main or push until this exact failure is fixed. #3627: CI fails (1) resolve_aida_exe_tests::no_cli_source_outside_the_resolver_uses_raw_current_executable_lookup: aida-cli-lib/src/lane_job.rs uses a raw current_exe lookup, use the resolver; (2) story_1662 stub_vendor_that_punts_exits_32...: expected exit 32, got 0, and the log shows refusing to publish because HEAD is detached. Then close the five open AC1-AC3 defects from the latest verdict in this one round. Local gate: one targeted cargo test --profile agent -p aida-cli-lib <filter> plus make check-ci-fast, then push; run long cargo in background.'
+  created_at: 2026-11-09T06:53:59.013981806Z
+  modified_at: 2026-11-09T06:53:59.013981806Z
+  session_id: 01a1beff-fc3b-78e2-93e2-9b0c283b0339
+  harness_version: 2.1.319 (Claude Code)
 history:
 - id: 01a1b78d-2628-7313-92de-8804ac5f8f71
   author: aida-session-start
