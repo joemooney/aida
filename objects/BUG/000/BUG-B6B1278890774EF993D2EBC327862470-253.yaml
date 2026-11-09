@@ -20,7 +20,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-07T20:18:53.564500Z
-modified_at: 2026-11-09T06:59:11.240997463Z
+modified_at: 2026-11-09T07:13:07.851046741Z
 req_type: Bug
 relationships:
 - rel_type:
@@ -444,6 +444,13 @@ comments:
   modified_at: 2026-11-09T06:53:54.977361734Z
   session_id: 01a1beff-fc3b-78e2-93e2-9b0c283b0339
   harness_version: 2.1.319 (Claude Code)
+- id: 01a1bf27-530b-7900-a41c-c3829a54ef5c
+  author: dirtlab
+  content: 'Fixed both CI regressions named in the latest advisor note without weakening tests: punt consumption now removes only existing punt files through pinned parents, leaving retired workspaces absent and unrelated hold parents untouched. Added a retired-workspace/hold-symlink regression and two writer inventory rows. Changed files: aida-cli-lib/src/standalone_implementer.rs; aida-cli-lib/src/tests/bug_home_038_seat_publish_tests.rs; scripts/store-writers.toml. Baseline job j20261109T065930247-2-0 reproduced both ENOENT failures. Patched job j20261109T070017361-3-0 passes both; group result 20 passed, six unchanged allocation-trust fixture setup failures at bug_1629_phase1_recovery_tests.rs:719. BUG-2488 job j20261109T070033050-2-0 passes 18 active tests plus watchdog child, including existing hold-resurrection and all-case-spelling regressions. 52 writer inventory tests, scanner (3434 sites), portability, rustfmt, whitespace and acceptance tracing pass. untested=false. make check-ci-fast was stopped because it invokes direct Cargo forbidden in this lane; full gate and fresh CI remain host work. Draft finding filing for the six fixture failures refused because this clone has no node binding; no finding created. Edits remain uncommitted for host publication. No commit/push/PR/queue completion/pr ship/review record attempted.'
+  created_at: 2026-11-09T07:13:07.851046741Z
+  modified_at: 2026-11-09T07:13:07.851046741Z
+  session_id: 01a1bf1a426e
+  harness_version: codex-cli 0.167.0
 history:
 - id: 01a1b7ad-9096-7320-bbe8-fc34c8e11c09
   author: aida-session-start
