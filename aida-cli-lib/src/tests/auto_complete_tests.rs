@@ -592,6 +592,7 @@ struct MockPhaseDriver {
     /// orchestrator must continue from this PR-only re-entry phase instead
     /// of retrying phase 1 or shelving.
     phase1_pr_recovery: Option<Phase>,
+    fast_gate_error: Option<String>,
     fast_gate_blocked: bool,
     fast_gate_block_after: Option<Phase>,
     /// BUG-1213: successful phase 1 that nevertheless left the rework PR
@@ -664,6 +665,7 @@ impl MockPhaseDriver {
             transient_retry_events: Vec::new(),
             recover_review_pr: None,
             phase1_pr_recovery: None,
+            fast_gate_error: None,
             fast_gate_blocked: false,
             fast_gate_block_after: None,
             harvest_gate_calls: 0,
@@ -1145,6 +1147,9 @@ impl PhaseDriver for MockPhaseDriver {
         Some(pr)
     }
     fn fast_gate_blocks_review(&mut self) -> Result<bool, String> {
+        if let Some(error) = &self.fast_gate_error {
+            return Err(error.clone());
+        }
         Ok(self.fast_gate_blocked
             || self
                 .fast_gate_block_after
@@ -8474,4 +8479,31 @@ fn task_3608_resumed_existing_pr_still_ships() {
     let result = drain_batch(&mut driver, None, None);
     assert_eq!(result.outcome, BatchDrainOutcome::Drained);
     assert_eq!(result.shipped, vec!["TASK-3608"]);
+}
+
+// trace:STORY-2640 | ai:codex
+#[test]
+fn fast_gate_lookup_error_remains_retryable_without_claiming_a_repair() {
+    let mut driver = MockPhaseDriver {
+        fast_gate_error: Some("forge unreachable".into()),
+        ..MockPhaseDriver::all_ok()
+    };
+    let result = orchestrate_with_resume(
+        &mut driver,
+        "STORY-2640",
+        AutoCompleteVariant::Full,
+        false,
+        EscalateMode::Blocks,
+        LifecycleSkip::none(),
+        false,
+        Phase::Ci,
+    );
+    assert!(driver.calls.is_empty());
+    assert!(result
+        .inconclusive_reason
+        .as_ref()
+        .unwrap()
+        .contains("forge unreachable"));
+    assert!(!result.fast_gate_pending);
+    assert!(crate::drive_robustness::is_retryable_orchestration(&result));
 }

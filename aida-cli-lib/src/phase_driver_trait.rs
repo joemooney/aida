@@ -3428,7 +3428,9 @@ impl auto_complete::PhaseDriver for RealPhaseDriver {
             )
         })
         .map_err(|e| {
-            if e.is::<crate::queue_cmd::ResumePublicationFailure>() {
+            if e.is::<crate::queue_cmd::ResumePublicationFailure>()
+                || e.is::<crate::lane_fast_gate::NativeCommitError>()
+            {
                 PhaseFailure::new(e.to_string())
             } else {
                 PhaseFailure::of(

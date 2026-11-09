@@ -473,7 +473,7 @@ pub(crate) fn veto(main: &Path, spec: &str) -> bool {
 }
 
 #[derive(Debug)]
-struct NativeCommitError(String);
+pub(crate) struct NativeCommitError(String);
 impl std::fmt::Display for NativeCommitError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "host post-exit commit failed: {}", self.0)

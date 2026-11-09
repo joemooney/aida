@@ -3398,10 +3398,16 @@ fn stop_for_fast_gate(
     start: &Instant,
     durations: &[(Phase, u128)],
 ) -> Option<OrchestrationResult> {
-    let reason = match driver.fast_gate_blocks_review() {
+    let (reason, pending) = match driver.fast_gate_blocks_review() {
         Ok(false) => return None,
-        Ok(true) => "fast gate repair is pending; leaving its queued round for pickup".to_string(),
-        Err(error) => format!("cannot establish fast gate repair state: {error}"),
+        Ok(true) => (
+            "fast gate repair is pending; leaving its queued round for pickup".to_string(),
+            true,
+        ),
+        Err(error) => (
+            format!("cannot establish fast gate repair state: {error}"),
+            false,
+        ),
     };
     let mut result = finish_inconclusive(
         spec,
@@ -3409,10 +3415,14 @@ fn stop_for_fast_gate(
         start,
         durations.to_vec(),
         &reason,
-        Some("complete the queued fast gate repair before resuming this PR"),
+        Some(if pending {
+            "complete the queued fast gate repair before resuming this PR"
+        } else {
+            "retry once the forge or network is reachable"
+        }),
         driver.hint_context().forge,
     );
-    result.fast_gate_pending = true;
+    result.fast_gate_pending = pending;
     Some(result)
 }
 

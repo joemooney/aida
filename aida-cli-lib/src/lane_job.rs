@@ -2012,10 +2012,10 @@ fn fast_gate_namespaces(mut args: Vec<String>, seat: &Path, command_len: usize) 
         command..command,
         ["--dir".into(), fast_gate_home(seat).display().to_string()],
     );
-    args.splice(
-        0..0,
-        ["--unshare-net", "--unshare-ipc", "--unshare-pid"].map(String::from),
-    );
+    // Shared cargo-slot tickets contain host PIDs; retain their identity so
+    // the wrapper cannot mistake other lanes for dead waiters.
+    // trace:STORY-2640 | ai:codex
+    args.splice(0..0, ["--unshare-net", "--unshare-ipc"].map(String::from));
     args
 }
 
@@ -2284,9 +2284,10 @@ mod fast_gate_job_tests {
             &lane.seat,
             2,
         );
-        for flag in ["--unshare-net", "--unshare-ipc", "--unshare-pid"] {
+        for flag in ["--unshare-net", "--unshare-ipc"] {
             assert!(flags.iter().any(|arg| arg == flag));
         }
+        assert!(!flags.iter().any(|arg| arg == "--unshare-pid"));
         let job = JobRequest {
             argv: vec!["make".into(), "check-ci-fast".into()],
             env: BTreeMap::new(),
