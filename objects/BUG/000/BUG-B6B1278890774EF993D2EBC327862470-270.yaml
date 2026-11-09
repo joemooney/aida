@@ -3,12 +3,12 @@ spec_id: BUG-b6b1278890774ef993d2ebc327862470-270
 agreed_id: BUG-2505
 title: aida add can exit without creating a spec when given a tag such as from:2026-11-08-review-closeout
 description: 'Observed 2026-11-08: six aida add calls with that tag created nothing, while the same calls with only area:orchestration succeeded. The error text was hidden by the caller''s output filter, so the cause is inferred from the difference. Reproduce with the tag and read the output first.'
-status: InProgress
+status: NeedsAttention
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-09T03:00:45.690194532Z
-modified_at: 2026-11-09T07:15:24.682099204Z
+modified_at: 2026-11-09T07:26:01.826356737Z
 req_type: Bug
 tags:
 - area:cli
@@ -71,6 +71,13 @@ comments:
   modified_at: 2026-11-09T07:12:42.017129504Z
   session_id: 01a1beff-fc3b-78e2-93e2-9b0c283b0339
   harness_version: 2.1.319 (Claude Code)
+- id: 01a1bf33-1425-79f3-a4e1-a6e340200aa2
+  author: dirtlab
+  content: 'Advisor rework: expanded the existing CLI characterization test with space-separated and repeated --tags argv, exact exit codes, diagnostic streams, and unchanged canonical-store counts. Executed lane job j20261109T072530160-2-0: 1 passed, 0 failed. Exact tag alone and comma combination persist specs. Space combination refuses with exit 1 and a whitespace diagnostic on structured stdout (stderr empty); repeated flags refuse with exit 2 and a Clap diagnostic on stderr (stdout empty). The initial test failed because it expected the whitespace diagnostic on stderr; corrected to characterize observed behavior. Output filtering could hide the stdout refusal, but original filing argv is still unavailable, so no production fix or root cause for the six original calls is established. Recorded native host subject: [AI:codex] test(cli): characterize review-closeout tag refusals (Refs BUG-2505). PR title/body must state characterization only and non-reproduction; do not complete this bug. rustfmt --check and git diff --check passed. make check-ci-fast failed in its no-default-features Cargo check: sccache could not write target dep-info, Read-only file system. Host must rerun that required gate before publication; no commit, push or main merge performed.'
+  created_at: 2026-11-09T07:25:58.181167737Z
+  modified_at: 2026-11-09T07:25:58.181167737Z
+  session_id: 01a1bf295d8a
+  harness_version: codex-cli 0.167.0
 history:
 - id: 01a1beaa-5541-7fd1-9192-5cf255b115f3
   author: joe
@@ -165,6 +172,15 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a1bf33-2262-72b2-af4d-5782af4df446
+  author: dirtlab
+  timestamp: 2026-11-09T07:26:01.826376482Z
+  session_id: 01a1bf295d8a
+  harness_version: codex-cli 0.167.0
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: NeedsAttention
 filed_at:
   code_sha: d73f4e6b86c9f6a85cc01a4aa9893b869252b3a9
   branch: main
@@ -173,3 +189,8 @@ filed_at:
   aida_build_sha: a7a14984cec
   vendor: claude
   session: 20abb7c3-8f9b-4a5e-b326-404921f3b450
+attention_reason:
+  category: missing-context
+  detail: 'Findings 1/3 remain unresolved: exact tag and comma forms succeed; alternative argv refusals now have executed characterization coverage, but original six argv and unfiltered diagnostics are missing, so a production fix is unestablished. Refs-only publication declaration recorded. Required make check-ci-fast also failed on read-only sccache target writes; host must resolve/rerun before publication. Leave BUG-2505 open.'
+  raised_by: implementer
+  raised_at: 2026-11-09T07:26:01.826356737Z
