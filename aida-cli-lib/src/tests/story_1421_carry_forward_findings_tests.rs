@@ -280,45 +280,52 @@ fn task_3749_existing_sweep_appends_and_deduplicates() {
 #[test]
 fn task_3749_sweep_keys_preserve_source_scope_and_closed_sweeps_roll_over() {
     use aida_core::db::DatabaseBackend;
-    let (_tmp, root, store) = init_git_canonical_test_store();
-    let backend = crate::test_env::home_fixture_backend(&store)
-        .unwrap()
-        .with_dispenser(load_dispenser(&store).unwrap());
-    for (source, text) in [
-        ("TASK-9821", "first"),
-        ("TASK-9822", "second"),
-        ("TASK-9822", "first"),
+    for status in [
+        aida_core::RequirementStatus::Completed,
+        aida_core::RequirementStatus::Superseded,
+        aida_core::RequirementStatus::Done,
     ] {
-        let path = crate::gate::review_verdict::verdict_path(&root, source);
-        std::fs::create_dir_all(path.parent().unwrap()).unwrap();
-        std::fs::write(
-            path,
-            format!(r#"{{"verdict":"approved","findings":["{text}"]}}"#),
-        )
-        .unwrap();
+        let (_tmp, root, store) = init_git_canonical_test_store();
+        let backend = crate::test_env::home_fixture_backend(&store)
+            .unwrap()
+            .with_dispenser(load_dispenser(&store).unwrap());
+        for (source, text) in [
+            ("TASK-9821", "first"),
+            ("TASK-9822", "second"),
+            ("TASK-9822", "first"),
+        ] {
+            let path = crate::gate::review_verdict::verdict_path(&root, source);
+            std::fs::create_dir_all(path.parent().unwrap()).unwrap();
+            std::fs::write(
+                path,
+                format!(r#"{{"verdict":"approved","findings":["{text}"]}}"#),
+            )
+            .unwrap();
+            assert_eq!(
+                try_emit_nonblocking_findings_on_completion(&root, &store, source, "", Some(42))
+                    .unwrap(),
+                1
+            );
+        }
+        let rows = backend.list_requirements(true).unwrap();
+        assert_eq!(rows.len(), 1);
+        let mut closed = rows[0].clone();
+        assert!(!closed.description.contains("Reviewed sha:"));
+        closed.status = status;
+        backend.update_requirement(&closed).unwrap();
+        // Completed sweeps retain de-duplication, but new text needs a new sweep.
         assert_eq!(
-            try_emit_nonblocking_findings_on_completion(&root, &store, source, "", Some(42))
+            try_emit_nonblocking_findings_on_completion(&root, &store, "TASK-9822", "", Some(42))
+                .unwrap(),
+            0
+        );
+        let path = crate::gate::review_verdict::verdict_path(&root, "TASK-9822");
+        std::fs::write(path, r#"{"verdict":"approved","findings":["third"]}"#).unwrap();
+        assert_eq!(
+            try_emit_nonblocking_findings_on_completion(&root, &store, "TASK-9822", "", Some(42))
                 .unwrap(),
             1
         );
+        assert_eq!(backend.list_requirements(true).unwrap().len(), 2);
     }
-    let rows = backend.list_requirements(true).unwrap();
-    assert_eq!(rows.len(), 1);
-    let mut closed = rows[0].clone();
-    closed.status = aida_core::RequirementStatus::Completed;
-    backend.update_requirement(&closed).unwrap();
-    // Completed sweeps retain de-duplication, but new text needs a new sweep.
-    assert_eq!(
-        try_emit_nonblocking_findings_on_completion(&root, &store, "TASK-9822", "", Some(42))
-            .unwrap(),
-        0
-    );
-    let path = crate::gate::review_verdict::verdict_path(&root, "TASK-9822");
-    std::fs::write(path, r#"{"verdict":"approved","findings":["third"]}"#).unwrap();
-    assert_eq!(
-        try_emit_nonblocking_findings_on_completion(&root, &store, "TASK-9822", "", Some(42))
-            .unwrap(),
-        1
-    );
-    assert_eq!(backend.list_requirements(true).unwrap().len(), 2);
 }

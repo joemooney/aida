@@ -2092,11 +2092,10 @@ pub(crate) fn try_emit_nonblocking_findings_on_completion(
             .position(|r| {
                 !r.archived
                     && r.tags.contains("kind:finding-sweep")
-                    && !matches!(
-                        r.status,
-                        aida_core::RequirementStatus::Completed
-                            | aida_core::RequirementStatus::Rejected
-                    )
+                    // In-progress sweeps remain open to new sections until closed.
+                    // trace:TASK-3749 | ai:codex
+                    && !aida_core::conflict::is_terminal_status(&r.status)
+                    && r.status != aida_core::RequirementStatus::Done
             })
             .unwrap_or_else(|| {
                 let mut req = aida_core::Requirement::new(
@@ -2119,8 +2118,10 @@ pub(crate) fn try_emit_nonblocking_findings_on_completion(
         if let Some(n) = pr_number {
             req.description.push_str(&format!("\nPR: #{n}\n"));
         }
-        req.description
-            .push_str(&format!("Reviewed sha: {reviewed_sha}\n"));
+        if !reviewed_sha.is_empty() {
+            req.description
+                .push_str(&format!("Reviewed sha: {reviewed_sha}\n"));
+        }
         req.tags.insert(review_tag.clone());
         req.tags.insert(carried_from_tag.clone());
         for (text, hash_tag) in to_file {
