@@ -1147,33 +1147,48 @@ fn queue_recover_parks_wip_with_live_and_unknown_ownership_without_reclaim() {
 // trace:BUG-2504 | ai:codex
 #[test]
 fn bug_2504_refused_adopted_dirty_launch_is_retryable() {
-    let fx = fixture();
-    clone_config(&fx.main, &fx.root);
-    let _ambient = crate::test_env::AmbientGuard::hermetic_with_seat(&fx.main, "implementer", &[]);
-    let orphan = orphaned_clone(&fx.main, "TASK-2504");
-    let head = git_ok(&orphan.worktree_path, &["rev-parse", "HEAD"]);
-    let receipt = adopt_receipt(
-        "TASK-2504",
-        &orphan.branch,
-        &orphan.worktree_path,
-        true,
-        true,
-    )
-    .unwrap();
-    assert!(!crate::lease_path(&fx.main, &orphan.id).exists());
-    let (result, rolled_back) = crate::queue_cmd::run_pickup_launch(&fx.main, receipt, |_| {
-        anyhow::bail!("dirty resume merge admission refused before vendor launch")
-    });
-    assert!(result
-        .unwrap_err()
-        .to_string()
-        .contains("admission refused"));
-    assert!(rolled_back);
-    assert_eq!(
-        crate::leases::adoptable_orphan_lease(&fx.main, "TASK-2504").map(|l| l.id),
-        Some(orphan.id.clone())
-    );
-    assert_work_intact(&orphan.worktree_path, &orphan.branch, &head);
-    adopt("TASK-2504", &orphan.branch, &orphan.worktree_path).unwrap();
-    assert_work_intact(&orphan.worktree_path, &orphan.branch, &head);
+    for orphan_still_present in [false, true] {
+        let fx = fixture();
+        clone_config(&fx.main, &fx.root);
+        let _ambient =
+            crate::test_env::AmbientGuard::hermetic_with_seat(&fx.main, "implementer", &[]);
+        let orphan = orphaned_clone(&fx.main, "TASK-2504");
+        let head = git_ok(&orphan.worktree_path, &["rev-parse", "HEAD"]);
+        let receipt = adopt_receipt(
+            "TASK-2504",
+            &orphan.branch,
+            &orphan.worktree_path,
+            true,
+            true,
+        )
+        .unwrap();
+        assert!(!crate::lease_path(&fx.main, &orphan.id).exists());
+        // Simulate adoption's warned removal failure: rollback must recognize the
+        // original record and still remove its successor and release its claim.
+        if orphan_still_present {
+            std::fs::write(
+                crate::lease_path(&fx.main, &orphan.id),
+                toml::to_string_pretty(&orphan).unwrap(),
+            )
+            .unwrap();
+        }
+        let (result, rolled_back) = crate::queue_cmd::run_pickup_launch(&fx.main, receipt, |_| {
+            anyhow::bail!("dirty resume merge admission refused before vendor launch")
+        });
+        assert!(result
+            .unwrap_err()
+            .to_string()
+            .contains("admission refused"));
+        assert!(rolled_back);
+        let remaining = crate::list_leases(&fx.main);
+        assert_eq!(remaining.len(), 1, "successor lease must be removed");
+        assert_eq!(remaining[0].id, orphan.id);
+        assert_eq!(
+            crate::leases::adoptable_orphan_lease(&fx.main, "TASK-2504").map(|l| l.id),
+            Some(orphan.id.clone())
+        );
+        assert_work_intact(&orphan.worktree_path, &orphan.branch, &head);
+        adopt("TASK-2504", &orphan.branch, &orphan.worktree_path).unwrap();
+        assert_work_intact(&orphan.worktree_path, &orphan.branch, &head);
+    }
 }

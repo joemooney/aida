@@ -2898,6 +2898,13 @@ pub(crate) fn prepare_rework_merge(
             Ok((base, pr_head))
         },
     )
+    .with_context(|| {
+        format!(
+            "rework preparation for seat {} on branch {branch}; inspect its scope with \
+         `aida session leases --all` before recovery",
+            tree.display()
+        )
+    })
 }
 
 /// Publish the prepared tip using only the trusted host origin. Clone objects
@@ -3041,21 +3048,26 @@ fn prepare_rework_merge_with(
         "rework seat has pending changes; merge refused"
     );
     let (base, pr_head) = fetch_heads()?;
-    execute(&["merge-base", "--is-ancestor", &pr_head, "HEAD"]).context(
-        "seated rework branch is behind the PR head; on the host, run `git -C <seat> add -A` \
-         and `git -C <seat> commit`, then `git -C <seat> fetch origin` and \
-         `git -C <seat> merge origin/<PR-branch>`; resolve and commit any conflicts, \
-         then retry `aida queue work <SPEC> --resume`",
-    )?;
+    // Dirty seats need preservation; clean/fresh pickups need only a current head.
+    // trace:BUG-2504 | ai:codex
+    execute(&["merge-base", "--is-ancestor", &pr_head, "HEAD"]).context(if resume && dirty {
+        "seated rework branch is behind the PR head; edits preserved. Use AIDA's \
+             sandboxed `aida ship --from-seat` recovery with `--commit-pending` and a \
+             `(Refs SPEC-ID)` message after the lane exits; do not run host Git in the seat. \
+             Then prepare a fresh pickup from the current PR head"
+    } else {
+        "seated rework branch is behind the PR head; retry pickup with its current head"
+    })?;
     // Probe committed trees without touching pending edits, the index or HEAD.
     // A clean merge needs no host preparation before continuing pending work.
     // trace:BUG-2504 | ai:codex
     if resume && dirty {
         execute(&["merge-tree", "--write-tree", "HEAD", &base]).context(
             "could not prove a clean main merge for the dirty rework resume; edits preserved. \
-             On the host, run `git -C <seat> add -A` and `git -C <seat> commit`, then \
-             `git -C <seat> fetch origin` and `git -C <seat> merge origin/main`; resolve \
-             and commit any conflicts, then retry `aida queue work <SPEC> --resume`",
+             After the lane exits, preserve pending work through AIDA's sandboxed \
+             `aida ship --from-seat` with `--commit-pending` and a `(Refs SPEC-ID)` message. \
+             Do not run host Git in the seat. Once publication succeeds, retry a fresh \
+             `aida queue work` with `--vendor claude --fresh --no-human` to resolve conflicts",
         )?;
         return Ok(Vec::new());
     }
@@ -3379,6 +3391,8 @@ mod rework_merge_tests {
         )
         .unwrap_err();
         assert!(why.to_string().contains("behind the PR head"));
+        assert!(!why.to_string().contains("commit-pending"));
+        assert!(!why.to_string().contains("--resume"));
         assert_eq!(execute(&["rev-parse", "HEAD"]).unwrap(), before);
         let why = prepare_rework_merge_with(
             &execute,
@@ -3425,16 +3439,16 @@ mod rework_merge_tests {
             || Ok((base.clone(), head.clone())),
         )
         .expect("non-conflicting main advance admits pending work");
-        for (base, remote, expected) in [(head.clone(), base.clone(), "behind the PR head")] {
+        {
             let why = prepare_rework_merge_with(
                 &execute,
                 "main",
                 true,
                 |_| panic!("must not publish"),
-                || Ok((base, remote)),
+                || Ok((head.clone(), base.clone())),
             )
             .unwrap_err();
-            assert!(format!("{why:#}").contains(expected), "{why:#}");
+            assert!(format!("{why:#}").contains("behind the PR head"), "{why:#}");
             assert_eq!(execute(&["rev-parse", "HEAD"]).unwrap(), head);
             assert_eq!(execute(&["status", "--porcelain"]).unwrap(), status);
             assert_eq!(
@@ -3465,7 +3479,11 @@ mod rework_merge_tests {
             || Ok((base, pr_head.clone())),
         )
         .unwrap_err();
-        assert!(format!("{why:#}").contains("git -C <seat> commit"));
+        let guidance = format!("{why:#}");
+        assert!(guidance.contains("aida ship --from-seat"));
+        assert!(guidance.contains("--commit-pending"));
+        assert!(guidance.contains("--vendor claude --fresh --no-human"));
+        assert!(!guidance.contains("git -C"));
         assert_eq!(execute(&["rev-parse", "HEAD"]).unwrap(), pr_head);
         assert_eq!(execute(&["status", "--porcelain"]).unwrap(), status);
         assert_eq!(

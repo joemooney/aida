@@ -1648,7 +1648,16 @@ impl Drop for SessionStartCleanup {
                     tempfile::NamedTempFile::new_in(path.parent().context("orphan lease parent")?)?;
                 pending.write_all(toml::to_string_pretty(orphan)?.as_bytes())?;
                 pending.as_file().sync_all()?;
-                pending.persist_noclobber(&path)?;
+                // Removal may have failed during adoption. An identical orphan
+                // already on disk is restored; a different record must be retained.
+                // trace:BUG-2504 | ai:codex
+                if let Err(error) = pending.persist_noclobber(&path) {
+                    if error.error.kind() != std::io::ErrorKind::AlreadyExists
+                        || std::fs::read(&path)? != toml::to_string_pretty(orphan)?.as_bytes()
+                    {
+                        return Err(error.into());
+                    }
+                }
                 crate::ownership::dual::lease_written(&self.root, orphan);
                 Ok(())
             })();

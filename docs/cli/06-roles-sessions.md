@@ -819,13 +819,17 @@ edits preserves them and fetches both heads. After verifying the PR head is
 incorporated, the host probes committed trees with `git merge-tree --write-tree`.
 A clean probe admits pending work even when main has advanced. A conflicting or
 failed probe refuses without changing the index, HEAD or pending files.
-For recovery, on the host run `git -C <seat> add -A` and
-`git -C <seat> commit`, then `git -C <seat> fetch origin` and
-`git -C <seat> merge origin/main` (use `origin/<PR-branch>` when behind the
-PR head). Resolve and commit conflicts, then retry
-`aida queue work <SPEC> --resume`. A failed adopted-seat launch restores its
-orphan lease so that retry can adopt the same tree. A native child cannot write
-Git metadata.
+Never run host Git inside a seat clone: its configuration and hooks are
+seat-controlled. After the lane exits, inspect `aida session leases --all`
+for the recorded path and scope. Preserve and publish pending work through
+`aida ship --from-seat PATH --spec SPEC --commit-pending 'fix: preserve rework (Refs SPEC)'`,
+substituting the recorded path and spec ID. This runs clone Git in AIDA's
+sandbox and retains publication gates; a refusal is not successful publication.
+Once publication succeeds, start a fresh `aida queue work SPEC --vendor claude --fresh --no-human`
+for conflict resolution. A clean seat behind the PR head needs a fresh pickup
+from the current head, without a pending-work commit or `--resume`.
+A failed adopted-seat launch restores its orphan lease so that retry can adopt
+the same tree. A native child cannot write Git metadata.
 An unfinished merge still refuses. Clean resumes use the normal merge and
 conflict checks.
 <!-- trace:BUG-2504 | ai:codex -->
