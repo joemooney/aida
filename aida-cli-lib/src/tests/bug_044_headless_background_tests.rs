@@ -790,6 +790,19 @@ impl Fixture {
             match mode {
                 3 => {
                     assert!(result.no_change, "{result:?}");
+                    // Follow the real resumed result through drain persistence.
+                    // trace:TASK-3608 | ai:codex
+                    crate::drain_state::DrainState::new_single("STORY-9", "test", false)
+                        .write(&self.project)
+                        .unwrap();
+                    crate::drain_state::set_member_result(&self.project, "STORY-9", &result, None);
+                    let persisted = crate::drain_state::DrainState::read(&self.project).unwrap();
+                    assert_eq!(
+                        persisted.members[0].state,
+                        crate::drain_state::STATE_NO_CHANGE
+                    );
+                    assert!(persisted.members[0].finished_at.is_some());
+
                     assert_eq!(result.exit_code, 0);
                     assert!(result.shipped_spec_id.is_none());
                     assert!(

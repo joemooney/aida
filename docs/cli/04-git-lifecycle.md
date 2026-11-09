@@ -181,7 +181,9 @@ classify it after checking punt/hold signals. An existing open PR continues thro
 ordinary gates; otherwise the drain reports `no-change`, exits 0 and pauses with
 no shipped credit or NeedsAttention shelving. No bundle is created for no-change.
 Failed exits cannot produce a no-change receipt. Pipelined child sidecars preserve
-this outcome for batch reporting. Confirmed no-change attempts to end the implementer
+this outcome for batch reporting. Drain state records a finished `no-change` member
+without a PR or head binding; status excludes it from merged counts and last-ship
+reporting. Confirmed no-change attempts to end the implementer
 session immediately. Cleanup failures warn and retain the lease for manual recovery,
 without shelving the spec; punt, hold and inconclusive outcomes also retain it.
 Fresh no-change lookups keep that context through retries before running preflight,

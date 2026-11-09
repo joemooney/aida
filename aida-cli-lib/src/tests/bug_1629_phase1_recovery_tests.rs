@@ -1121,6 +1121,19 @@ exit 0"#;
             continue;
         }
         assert!(result.no_change, "{result:?}");
+        // Follow the real fresh result through the drain's persistence boundary.
+        // trace:TASK-3608 | ai:codex
+        crate::drain_state::DrainState::new_single("NFR-56", "test", false)
+            .write(&root)
+            .unwrap();
+        crate::drain_state::set_member_result(&root, "NFR-56", &result, None);
+        let persisted = crate::drain_state::DrainState::read(&root).unwrap();
+        assert_eq!(
+            persisted.members[0].state,
+            crate::drain_state::STATE_NO_CHANGE
+        );
+        assert!(persisted.members[0].finished_at.is_some());
+
         if matches!(mode, 1 | 6) {
             assert!(calls.load(std::sync::atomic::Ordering::SeqCst) >= 4);
         }
