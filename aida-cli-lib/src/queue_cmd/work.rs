@@ -2951,7 +2951,7 @@ pub(crate) fn preflight_queue_work_branch(
     preflight_queue_work_branch_adopting(root, branch, None)
 }
 
-/// A finished or crashed review may leave its disposable checkout. A dead
+/// A finished or crashed review may leave its disposable checkout. An ended
 /// reviewer lease additionally requires current forge-head coverage.
 /// Retire only the default review tree, so ordinary occupied branches
 /// and explicitly placed worktrees retain the usual refusal.
@@ -2981,9 +2981,9 @@ pub(crate) fn retire_idle_review_worktree(
     if !candidate {
         return Ok(());
     }
-    // A crashed review has no verdict to trigger ordinary lease release.
-    // Only one exact, provably dead reviewer owner can be reclaimed here.
-    // trace:BUG-2469 | ai:codex
+    // A finished review may already have released ownership; a crashed one
+    // needs positive death proof. Only one exact reviewer lease is eligible.
+    // trace:BUG-2498 BUG-2469 | ai:codex
     let leases: Vec<_> = list_leases(root)
         .into_iter()
         .filter(|l| l.branch == branch || l.worktree_path == path)
@@ -2995,10 +2995,7 @@ pub(crate) fn retire_idle_review_worktree(
                 && crate::worktree::canonical_or_self(&lease.worktree_path)
                     == crate::worktree::canonical_or_self(&path)
                 && crate::pr_lease_takeover::reviewer_target(lease) == Some((forge, n))
-                && matches!(
-                    crate::ownership::reader::lease_owner(root, lease),
-                    crate::ownership::OwnerVerdict::Dead { .. }
-                ) =>
+                && crate::ownership::reader::review_lease_ended(root, lease) =>
         {
             Some(lease)
         }
@@ -3054,7 +3051,7 @@ pub(crate) fn retire_idle_review_worktree(
         if let Err(reason) = eligible {
             anyhow::bail!(
                 "branch `{branch}` is held by worktree {} before pickup setup. \
-                 Dead reviewer lease {} was not reclaimed: {reason:#}. \
+                 Ended reviewer lease {} was not reclaimed: {reason:#}. \
                  Keep this checkout; inspect its review head and unpublished commits, then retry pickup.",
                 path.display(),
                 lease.id
@@ -3099,13 +3096,12 @@ pub(crate) fn retire_idle_review_worktree(
         Err(e) => return Err(e.into()),
     }
     // Revalidate the owner and exact lease before tearing down its tree.
+    // trace:BUG-2498 | ai:codex
     // trace:BUG-2469 | ai:codex
     if let Some(lease) = reclaim {
         anyhow::ensure!(
-            matches!(
-                crate::ownership::reader::lease_owner(root, lease),
-                crate::ownership::OwnerVerdict::Dead { .. }
-            ) && Some(std::fs::read(crate::lease_path(root, &lease.id))?) == lease_snapshot
+            crate::ownership::reader::review_lease_ended(root, lease)
+                && Some(std::fs::read(crate::lease_path(root, &lease.id))?) == lease_snapshot
                 && working_tree_clean(&path) == Some(true),
             "review ownership or working tree changed before retirement"
         );
@@ -3121,7 +3117,7 @@ pub(crate) fn retire_idle_review_worktree(
     }
     // trace:STORY-2325 | ai:codex
     if let Some(lease) = reclaim {
-        crate::ownership::reader::journal_reclaim(root, lease).with_context(|| {
+        crate::ownership::reader::journal_review_reclaim(root, lease).with_context(|| {
             format!(
                 "ownership reclaim could not end lease {}; inspect `aida session end {}`",
                 lease.id, lease.id
@@ -5932,10 +5928,10 @@ pub(crate) fn release_refused_review_lease(
 /// A standalone reviewer has exited: once its verdict is on the ledger, its
 /// review (`scope` over this review's own `worktree`) is reaped — tree,
 /// lease, and review branch — so neither the lease nor the tree blocks the
-/// next review of the PR. With no verdict collected, the tree is what the
-/// recovery text points at, so the review is kept; a review the reap refuses
-/// (dirty tree, unpushed commits, a live holder) keeps its lease, which is how
-/// the dead-reviewer reap tears the tree down after the PR merges. Returns
+/// next review of the PR. Exit records a lease-bound completion receipt even
+/// without a verdict. The retained tree and lease remain available for recovery;
+/// next-head pickup may retire them once clean, published and idle. A refused
+/// reap also retains them under the same guards. Returns
 /// `(lease id, Ok(outcome) | Err(why kept))` per matching lease.
 // trace:BUG-b6b1278890774ef993d2ebc327862470-024 | ai:claude
 pub(crate) fn end_finished_review(
@@ -5948,10 +5944,22 @@ pub(crate) fn end_finished_review(
         .into_iter()
         .filter(|l| l.scope.eq_ignore_ascii_case(scope) && l.worktree_path == worktree)
         .map(|l| {
+            // Exit is positive lifecycle evidence even when no verdict exists.
+            // Write before teardown; mail-retention stamps preserve this binding.
+            // trace:BUG-2498 | ai:codex
+            let receipt = crate::ownership::reader::review_finished(project_root, &l);
             let outcome = if verdict_collected {
-                crate::session_reap::reap_finished_review(project_root, &l)
+                crate::session_reap::reap_finished_review(project_root, &l).map_err(|why| {
+                    match receipt {
+                        Ok(()) => why,
+                        Err(error) => format!("{why}; completion receipt refused: {error:#}"),
+                    }
+                })
             } else {
-                Err("no verdict was collected; its review tree is kept for recovery".to_string())
+                Err(match receipt {
+                    Ok(()) => "no verdict was collected; review exit recorded for guarded next-head cleanup".to_string(),
+                    Err(error) => format!("no verdict was collected; completion receipt refused: {error:#}"),
+                })
             };
             (l.id, outcome)
         })

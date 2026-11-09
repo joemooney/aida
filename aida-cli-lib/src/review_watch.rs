@@ -318,6 +318,10 @@ struct Attempt {
     // trace:STORY-2492 | ai:codex
     #[serde(default, skip_serializing_if = "Option::is_none")]
     admission_hub: Option<admission::Hub>,
+    // Exact pre-spawn lease; terminal process proof cannot release a replacement.
+    // trace:BUG-2498 | ai:codex
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    review_lease: Option<String>,
     head: String,
     token: String,
     vendor: Option<String>,
@@ -991,6 +995,22 @@ impl Store {
             );
             // The dispatcher may not have recorded this process yet.
             attempt.worker.get_or_insert(me);
+            // Capture before spawn while this worker owns the reservation.
+            // Missing/ambiguous legacy evidence never authorizes later release.
+            // trace:BUG-2498 | ai:codex
+            if !attempt.reviewer_spawning {
+                let leases: Vec<_> = crate::list_leases(&self.root)
+                    .into_iter()
+                    .filter(|l| {
+                        l.scope.eq_ignore_ascii_case(key)
+                            && l.pr_head_sha.as_deref() == Some(head)
+                            && crate::pr_lease_takeover::reviewer_target(l).is_some()
+                    })
+                    .collect();
+                if let [lease] = leases.as_slice() {
+                    attempt.review_lease = Some(toml::to_string(lease)?);
+                }
+            }
             attempt.reviewer_spawning = true;
             if reviewer.is_some() {
                 attempt.reviewer = reviewer;
@@ -1048,6 +1068,15 @@ impl Store {
                 && !attempt.reviewer_spawning
                 && attempt.descendants_gone();
             attempt.phase = if setup_failed { Phase::Failed } else { phase };
+            // Terminal history needs no full lease snapshot; keep bounded state
+            // proportional to active reviews, rather than every open change.
+            // trace:BUG-2498 | ai:codex
+            if matches!(
+                attempt.phase,
+                Phase::Completed | Phase::Exited | Phase::Failed
+            ) {
+                attempt.review_lease = None;
+            }
             // This diagnostic also identifies the setup conversion on the next
             // tick; ordinary Failed transitions remain freely retryable.
             // trace:TASK-3112 | ai:codex
@@ -1411,7 +1440,7 @@ fn select(
         // and spawn failures do not consume a retry; preserve an inherited one.
         // trace:TASK-3112 | ai:codex
         let setup_retry = entry.attempts.iter().any(|a| a.head == change.head && a.phase == Phase::Failed && (a.setup_retry || (!a.retryable_fetch && a.diagnostic.is_some())));
-        let attempt = Attempt { admission_hub: None, setup_retry, retryable_fetch: false, fetch_failures, head: change.head.clone(), token: uuid::Uuid::new_v4().to_string(), vendor, phase: Phase::Reserved, identity: None, diagnostic: None, dispatcher: None, spawning: false, worker: None, reviewer_spawning: false, reviewer: None, pgid: None, supersede: None };
+        let attempt = Attempt { review_lease: None, admission_hub: None, setup_retry, retryable_fetch: false, fetch_failures, head: change.head.clone(), token: uuid::Uuid::new_v4().to_string(), vendor, phase: Phase::Reserved, identity: None, diagnostic: None, dispatcher: None, spawning: false, worker: None, reviewer_spawning: false, reviewer: None, pgid: None, supersede: None };
         // Nothing is active here, so earlier terminal attempts are history only:
         // durable verdicts carry the rounds. trace:TASK-1993 | ai:claude
         entry.attempts.clear();
@@ -1628,6 +1657,18 @@ fn advance(store: &Store, key: &str, token: &str) -> Result<Option<String>> {
         };
         let cause = match confirm(a) {
             Ok(()) => {
+                // Process exit frees watcher capacity even when best-effort
+                // ownership evidence cannot be recorded. Pickup still requires
+                // a valid receipt before retiring the retained checkout.
+                // trace:BUG-2498 | ai:codex
+                if let Err(error) = finish_confirmed_review(&store.root, a) {
+                    let diagnostic = bounded_diagnostic(&format!(
+                        "review completion receipt refused; retained checkout requires recovery: {error:#}"
+                    ));
+                    eprintln!("{key}: {diagnostic}");
+                    a.diagnostic = Some(diagnostic);
+                }
+                a.review_lease = None;
                 a.phase = Phase::Superseded;
                 return Ok(None);
             }
@@ -1686,6 +1727,23 @@ fn advance(store: &Store, key: &str, token: &str) -> Result<Option<String>> {
         .and_then(|e| e.attempts.iter().find(|a| a.token == token))
         .filter(|a| a.phase == Phase::Superseding)
         .map(|a| hold_cause(&key, a)))
+}
+
+// A killed supervisor cannot collect a verdict. Its recorded pre-spawn lease
+// still receives completion evidence after every process is confirmed gone.
+// Tree, remote coverage and merge-hold guards remain in the pickup path.
+// trace:BUG-2498 | ai:codex
+fn finish_confirmed_review(root: &Path, attempt: &Attempt) -> Result<()> {
+    confirm(attempt).map_err(anyhow::Error::msg)?;
+    if let Some(snapshot) = &attempt.review_lease {
+        let lease: crate::SessionLease = toml::from_str(snapshot)?;
+        if crate::lease_path(root, &lease.id).exists()
+            && !crate::ownership::reader::review_lease_ended(root, &lease)
+        {
+            crate::ownership::reader::review_finished(root, &lease)?;
+        }
+    }
+    Ok(())
 }
 
 fn attempt_mut<'a>(state: &'a mut State, key: &str, token: &str) -> Option<&'a mut Attempt> {
@@ -2982,6 +3040,13 @@ pub(crate) fn readiness_reports(root: &Path) -> Vec<(String, String)> {
 #[cfg(test)]
 #[path = "tests/task_1993_review_watch_tests.rs"]
 mod tests;
+
+// Exercise watch dispatch against the real consecutive-head pickup fixture.
+// trace:BUG-2498 | ai:codex
+#[cfg(test)]
+pub(crate) use tests::{
+    bug2498_confirm_superseded, bug2498_review_worktree_release_allows_one_watch_setup_retry,
+};
 
 // Real process fixtures: Linux only. trace:TASK-1945 | ai:claude
 #[cfg(all(test, target_os = "linux"))]
