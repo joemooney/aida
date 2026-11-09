@@ -1288,3 +1288,200 @@ fn cached_proof_refuses_when_identity_probe_succeeds_but_fetch_fails() {
     assert_eq!(proofs(), count);
     assert_eq!(carry_events(repo, &h).len(), 1);
 }
+
+// trace:STORY-2694 | ai:codex
+pub(crate) fn consumer_coverage(
+    repo: &Path,
+    approved: &str,
+    head: &str,
+) -> Result<CarryOver, String> {
+    let v = approval(approved);
+    let bodies = vec![(
+        format!("PR-{PR}"),
+        serde_json::json!({
+            "verdict": "approved", "reviewed_sha": approved,
+        })
+        .to_string(),
+    )];
+    crate::gate::merge_hold_core::carried_approval(
+        PR,
+        head,
+        &[v.clone()],
+        &policy(&v),
+        &bodies,
+        &CarryOverSite::new(repo, Some("main")),
+    )
+}
+
+// trace:STORY-2694 | ai:codex
+// trace:STORY-b6b1278890774ef993d2ebc327862470-617.ac7f9646 | ai:codex
+// trace:STORY-b6b1278890774ef993d2ebc327862470-617.aca6d13e | ai:codex
+// trace:STORY-b6b1278890774ef993d2ebc327862470-617.acc08b36 | ai:codex
+#[test]
+fn consumer_clean_merge_releases_hold_with_original_review_and_durable_proof() {
+    use crate::gate::merge_hold_core as hold;
+    let (tmp, approved) = fixture();
+    let repo = tmp.path();
+    let h = clean_merge(repo);
+    let before = proofs();
+    let proof = consumer_coverage(repo, &approved, &h).unwrap();
+    assert_eq!(proofs(), before + 1, "consumers share one durable proof");
+    assert_eq!(proof.approved_sha, approved);
+    assert_eq!(proof.new_head, h);
+    assert_eq!(proof.base_tip, git(repo, &["rev-parse", "main"]));
+    assert_eq!(proof_event(repo, &h), Some(proof.clone()));
+    let record = hold::typed_hold(
+        PR,
+        hold::HoldReasonKind::Rework,
+        "findings",
+        Some(approved.clone()),
+    );
+    match hold::refusal_release_with_coverage(
+        &record,
+        hold::RefusalRelease::Held("old head".into()),
+        || consumer_coverage(repo, &approved, &h),
+    ) {
+        hold::RefusalRelease::Released(v) => assert_eq!(v.reviewed_sha, Some(approved)),
+        other => panic!("{other:?}"),
+    }
+    hold::validate_carried_change(&proof, &h, "main").unwrap();
+    assert!(hold::validate_carried_change(&proof, &h, "other").is_err());
+    assert!(hold::validate_carried_change(&proof, &"f".repeat(40), "main").is_err());
+    let pin = crate::gate::ship::refusal_release_pin(true, None, Some(&h), PR).unwrap();
+    assert_eq!(pin.as_deref(), Some(h.as_str()));
+    // Proof coverage grants no ownership clearance for a train rider.
+    let riders = vec![(99, Some(vec![(PR, h.clone())]))];
+    assert!(crate::pr_train::train_rider_refusal(PR, &riders, &[]).is_some());
+    assert!(crate::pr_train::train_rider_refusal(PR, &[], &riders).is_some());
+    assert!(crate::pr_train::train_rider_refusal(PR + 1, &riders, &[]).is_none());
+}
+
+// trace:STORY-2694 | ai:codex
+// trace:STORY-b6b1278890774ef993d2ebc327862470-617.aca6d13e | ai:codex
+#[test]
+fn consumer_carryover_refuses_standing_refusals_malformed_missing_sha_and_bad_authority() {
+    use crate::gate::merge_hold_core::carried_approval;
+    let (tmp, approved) = fixture();
+    let repo = tmp.path();
+    let h = clean_merge(repo);
+    // Even an existing valid proof never grants authority or hides a blocker.
+    consumer_coverage(repo, &approved, &h).unwrap();
+    let v = approval(&approved);
+    let site = CarryOverSite::new(repo, Some("main"));
+    for extra in [
+        serde_json::json!({"verdict":"request-changes", "reviewed_sha":h, "recorded_at":"2026-09-24T00:00:00Z"}).to_string(),
+        serde_json::json!({"verdict":"request-changes", "reviewed_sha":approved}).to_string(),
+        serde_json::json!({"verdict":"approved"}).to_string(),
+        "malformed".into(),
+    ] {
+        let bodies = vec![("PR-42".into(), serde_json::json!({"verdict":"approved", "reviewed_sha":approved}).to_string()),
+            ("TASK-1".into(), extra)];
+        assert!(carried_approval(PR, &h, &[v.clone()], &policy(&v), &bodies, &site).is_err());
+    }
+    let bodies = vec![(
+        "PR-42".into(),
+        serde_json::json!({"verdict":"approved", "reviewed_sha":approved}).to_string(),
+    )];
+    let mut p = policy(&v);
+    p.verified_authority.clear();
+    assert!(carried_approval(PR, &h, &[v.clone()], &p, &bodies, &site).is_err());
+    let mut p = policy(&v);
+    p.author_sessions = vec![crate::gate::ship::AuthorSession {
+        label: "author".into(),
+        tokens: v.attestation.as_ref().unwrap().identity.clone(),
+    }];
+    assert!(carried_approval(PR, &h, &[v], &p, &bodies, &site).is_err());
+}
+
+// trace:STORY-2694 | ai:codex
+// trace:STORY-b6b1278890774ef993d2ebc327862470-617.ac96a209 | ai:codex
+// trace:STORY-b6b1278890774ef993d2ebc327862470-617.acc08b36 | ai:codex
+#[test]
+fn consumer_carryover_refusal_matrix() {
+    for variant in ["conflict", "evil", "commit", "patch", "remote", "ledger"] {
+        let (tmp, approved) = fixture();
+        let repo = tmp.path();
+        let h = match variant {
+            "conflict" => {
+                git(repo, &["checkout", "--quiet", "main"]);
+                set_line(repo, "a.txt", 5, "main conflict");
+                commit(repo, "main conflict");
+                publish_main(repo);
+                git(repo, &["checkout", "--quiet", "pr"]);
+                git_may_fail(repo, &["merge", "--quiet", "--no-edit", "main"]);
+                write(repo, "a.txt", &lines(30, "resolved"));
+                commit(repo, "resolve conflict")
+            }
+            "evil" => evil_merge(repo, &approved),
+            "commit" => {
+                write(repo, "extra", "unreviewed");
+                commit(repo, "extra commit");
+                clean_merge(repo)
+            }
+            "patch" => {
+                git(repo, &["checkout", "--quiet", "main"]);
+                set_line(repo, "a.txt", 7, "nearby main change");
+                commit(repo, "nearby edit");
+                publish_main(repo);
+                git(repo, &["checkout", "--quiet", "pr"]);
+                clean_merge(repo)
+            }
+            _ => clean_merge(repo),
+        };
+        if variant == "remote" {
+            // Cache a valid proof first, then make its protected tip unavailable.
+            consumer_coverage(repo, &approved, &h).unwrap();
+            git(repo, &["remote", "set-url", "origin", "/no/such/origin"]);
+        }
+        if variant == "ledger" {
+            std::fs::create_dir_all(repo.join(".aida")).unwrap();
+            std::fs::write(crate::gate::ledger::ledger_dir(repo), "not a directory").unwrap();
+        }
+        let result = consumer_coverage(repo, &approved, &h);
+        assert!(result.is_err(), "{variant} must refuse");
+        use crate::gate::merge_hold_core as hold;
+        let record = hold::typed_hold(PR, hold::HoldReasonKind::Rework, "findings", Some(approved));
+        assert!(matches!(
+            hold::refusal_release_with_coverage(
+                &record,
+                hold::RefusalRelease::Held("old head".into()),
+                || result
+            ),
+            hold::RefusalRelease::Held(_)
+        ));
+    }
+}
+
+// trace:STORY-2694 | ai:codex
+// trace:STORY-b6b1278890774ef993d2ebc327862470-617.ac7f9646 | ai:codex
+#[test]
+fn consumer_verdict_display_exposes_coverage_without_restamping_or_writing() {
+    let (tmp, approved) = fixture();
+    let repo = tmp.path();
+    let h = clean_merge(repo);
+    record_corpus_verdict(repo, "PR-42", "approved", &approved);
+    let path = crate::gate::review_verdict::verdict_path(repo, "PR-42");
+    let before = std::fs::read(&path).unwrap();
+    let proof = consumer_coverage(repo, &approved, &h).unwrap();
+    let count = carry_events(repo, &h).len();
+    let (v, json, _) = crate::review_verdict_show_body_with_coverage(
+        repo,
+        "PR-42",
+        |_| crate::gate::review_verdict::TipRelation::Unknown,
+        |pr| {
+            assert_eq!(pr, PR);
+            Some(proof.clone())
+        },
+    )
+    .unwrap();
+    assert_eq!(v.reviewed_sha.as_deref(), Some(approved.as_str()));
+    assert_eq!(json["reviewed_sha"], approved);
+    assert_eq!(json["coverage"]["head_sha"], h);
+    assert_eq!(json["coverage"]["proof"]["base_tip"], proof.base_tip);
+    assert!(json["coverage"]["description"]
+        .as_str()
+        .unwrap()
+        .contains("carried to"));
+    assert_eq!(std::fs::read(path).unwrap(), before);
+    assert_eq!(carry_events(repo, &h).len(), count);
+}
