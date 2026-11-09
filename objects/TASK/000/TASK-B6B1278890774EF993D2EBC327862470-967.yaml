@@ -14,12 +14,12 @@ description: |-
   2. The sketch isn't recorded on the owning spec: TASK-3368 has only the advisor's lane comment, with no sketch or plan-pointer comment and no punt for advisor attention, and its status is still In Progress. The doc says it 'changes only this document and spec comments' (line 133) and 'punt TASK-3368 for advisor attention' (line 186). Add 'aida comment add TASK-3368' pointing to the plan doc and listing the advisor decisions, then punt or flag the task as the doc says.
   3. The PR body has only the ship boilerplate. The repo rule puts per-change notes in the PR body. Add a short summary: docs-only sketch, observation-only scope, open advisor decisions (per-message sender auth, sandbox transport).
   Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
-status: Draft
+status: Superseded
 priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-11-08T05:05:03.263624914Z
-modified_at: 2026-11-08T05:05:03.263624914Z
+modified_at: 2026-11-09T06:51:23.434792232Z
 req_type: Task
 tags:
 - from-advisor:TASK-3368
@@ -35,6 +35,15 @@ history:
   session_id: 01a1b8be-8170-7fb2-89ab-ecb4c6eee98c
   harness_version: 2.1.319 (Claude Code)
   changes: []
+- id: 01a1bf13-6baa-71f0-b064-0401e4a120dc
+  author: joe
+  timestamp: 2026-11-09T06:51:23.434788802Z
+  session_id: 01a1beff-fc3b-78e2-93e2-9b0c283b0339
+  harness_version: 2.1.319 (Claude Code)
+  changes:
+  - field_name: status
+    old_value: Draft
+    new_value: Superseded
 filed_at:
   code_sha: ff9b8c91808130e9bddf339d428915a5d551416e
   branch: main
