@@ -2690,6 +2690,16 @@ fn escalation_recovery_hint(kind: EscalationKind) -> &'static str {
     }
 }
 
+// trace:BUG-2500 | ai:codex
+fn escalation_closing_line(kind: EscalationKind) -> &'static str {
+    match kind {
+        EscalationKind::Waiting => {
+            "waiting — obtain the named external evidence, then record a fresh review at the current head; drain continues"
+        }
+        _ => "escalated — drain continues, a human decides",
+    }
+}
+
 #[test]
 fn bug_2500_waiting_recovery_requires_fresh_review() {
     let hint = escalation_recovery_hint(EscalationKind::Waiting);
@@ -2697,6 +2707,11 @@ fn bug_2500_waiting_recovery_requires_fresh_review() {
         hint.contains("external evidence") && hint.contains("fresh review at the current head")
     );
     assert!(!hint.contains("findings"));
+    let closing = escalation_closing_line(EscalationKind::Waiting);
+    assert!(closing.contains("waiting") && closing.contains("external evidence"));
+    assert!(closing.contains("fresh review at the current head"));
+    assert!(!closing.contains("a human decides"));
+    assert!(escalation_closing_line(EscalationKind::MergeDecision).contains("a human decides"));
     assert!(escalation_recovery_hint(EscalationKind::DesignFork).contains("findings list"));
 }
 
@@ -2797,10 +2812,11 @@ fn finish_escalated(
         );
         eprintln!();
         eprintln!(
-            "{} {} escalated ({}) — drain continues, a human decides",
+            "{} {} ({}) {}",
             "⏸".yellow().bold(),
             spec.bold(),
-            fmt_duration(elapsed)
+            fmt_duration(elapsed),
+            escalation_closing_line(kind)
         );
     }
     OrchestrationResult {
