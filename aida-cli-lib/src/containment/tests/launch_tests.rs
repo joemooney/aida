@@ -3448,7 +3448,8 @@ fn bug_2487_codex_env() -> BTreeMap<String, String> {
 
 #[test]
 // trace:TASK-3015 | ai:codex
-fn task_3015_codex_config_refuses_posture_overrides() {
+// trace:TASK-3736 | ai:codex
+fn task_3736_task_3015_codex_config_refuses_posture_overrides() {
     for config in [
         "approval_policy=\"on-request\"",
         " approval_policy =\"never\"",
@@ -3457,6 +3458,9 @@ fn task_3015_codex_config_refuses_posture_overrides() {
         "shell_environment_policy.inherit=\"all\"",
         "permissions.aida.network.enabled=true",
         "default_permissions=\"other\"",
+        // trace:TASK-3736 | ai:codex
+        "profile=\"other\"",
+        "profiles.other.sandbox_mode=\"danger-full-access\"",
     ] {
         for flags in [
             vec!["-c".to_string(), config.to_string()],
@@ -4644,4 +4648,29 @@ fn task_3219_background_entry_refuses_before_setup_and_native_argv() {
         cmd.get_args().collect::<Vec<_>>(),
         ["--bg", "--model", "sonnet", "attach", "prompt with spaces"].map(std::ffi::OsStr::new)
     );
+}
+
+// trace:TASK-3736 | ai:codex
+#[test]
+fn task_3736_contained_codex_refuses_profile_flags() {
+    for flag in [
+        vec!["-p", "other"],
+        vec!["--profile", "other"],
+        vec!["--profile=other"],
+        vec!["-pother"],
+        vec!["-p=other"],
+    ] {
+        let original: Vec<String> = ["exec"].into_iter().chain(flag).map(String::from).collect();
+        let error = codex_argv(
+            Path::new("/fixture/codex"),
+            &bug_2487_codex_env(),
+            &original,
+            true,
+        )
+        .unwrap_err();
+        assert!(
+            error.to_string().contains("config profile override"),
+            "{error}"
+        );
+    }
 }

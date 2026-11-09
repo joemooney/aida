@@ -58,6 +58,9 @@ systemctl start aida-ci.slice
 systemctl set-property --runtime aida-ci.slice CPUQuota=800% AllowedCPUs=0-7
 # Idle listening has no wall-clock limit. GitHub bounds execution from job
 # pickup via ci.yml timeout-minutes, independently of time spent waiting.
+# Measure only service lifetime, excluding copy/setup and EXIT cleanup.
+# trace:TASK-3736 | ai:codex
+runner_started=$SECONDS
 printf '%s\n' "$jit" | systemd-run --quiet --wait --pipe --collect \
     --unit="$unit" --slice=aida-ci.slice \
     -p User="$runner_user" -p Group="$runner_user" \
@@ -70,3 +73,9 @@ printf '%s\n' "$jit" | systemd-run --quiet --wait --pipe --collect \
     -p KillMode=control-group -p TimeoutStopSec=30 \
     /usr/bin/env -i HOME="$state/home" PATH=/usr/local/bin:/usr/bin:/bin \
     /bin/bash -c 'set -eu; IFS= read -r config; exec ./run.sh --jitconfig "$config"'
+
+runner_elapsed=$((SECONDS - runner_started))
+if [ "$runner_elapsed" -lt 10 ]; then
+    echo "Runner exited after ${runner_elapsed}s (under 10s); stopping re-registration." >&2
+    exit 1
+fi
