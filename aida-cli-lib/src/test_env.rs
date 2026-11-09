@@ -1524,12 +1524,14 @@ pub(crate) fn enroll_synthetic_home(root: &Path) -> anyhow::Result<()> {
         aida_core::allocation_authority::require_global(&resolved)?;
     } else {
         aida_core::write_atomic(&setting, "version=1\nauthoritative=true\n")?;
-        // Match the production allocation-setting trust boundary even when
-        // the test runner inherits a group-writable umask (such as 0002):
-        // the allocation reader refuses shared writes.
-        // trace:TASK-3420 trace:BUG-2502 | ai:codex
-        use std::os::unix::fs::PermissionsExt;
-        std::fs::set_permissions(&setting, std::fs::Permissions::from_mode(0o600))?;
+        // The allocation reader refuses shared writes. Synthetic authority must
+        // satisfy that contract even under a collaborative host's umask 0002.
+        // trace:TASK-3420 trace:TASK-3749 trace:BUG-2502 | ai:codex
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            std::fs::set_permissions(&setting, std::fs::Permissions::from_mode(0o600))?;
+        }
     }
     Ok(())
 }

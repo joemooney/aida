@@ -213,6 +213,8 @@ pub(crate) enum Outcome {
     Punted { reason: String },
     Held { branch: String },
     NoPr,
+    // trace:BUG-2488 | ai:codex
+    NoChange,
 }
 
 /// Classify a finished run the way the drain's phase 1 does: a punt signal
@@ -266,6 +268,7 @@ pub(crate) fn report(
         // trace:BUG-B6B1278890774EF993D2EBC327862470-044 | ai:claude
         // BUG-050: a stall leaves work in the seat; name it as the reason.
         // trace:BUG-B6B1278890774EF993D2EBC327862470-050 | ai:claude
+        Outcome::NoChange => ("implementer: no-change".into(), 0),
         Outcome::NoPr => (
             match unshipped {
                 Some(Unshipped::UncommittedWork(n)) => {
@@ -348,9 +351,9 @@ pub(crate) use crate::headless_background::{resume_log_path, SeatState, Unshippe
 /// hold, a stall, or a seat git cannot read keeps its lease.
 // trace:BUG-2436 | ai:claude
 pub(crate) fn finished_lease_ends(outcome: &Outcome, seat: &SeatState) -> bool {
-    matches!(outcome, Outcome::PrOpened { .. })
-        && seat.uncommitted == Some(0)
-        && seat.pushed_head().is_some()
+    seat.uncommitted == Some(0)
+        && (matches!(outcome, Outcome::NoChange)
+            || (matches!(outcome, Outcome::PrOpened { .. }) && seat.pushed_head().is_some()))
 }
 
 /// BUG-2436: end a finished lane's lease the way the drain's phase 2 does,
@@ -983,24 +986,180 @@ pub(crate) fn record_child_authority(
     crate::gate::review_authority::record_launch_authority(project_root, lease_id, launch);
 }
 
+/// Pin every handshake parent before consuming any prior-attempt marker.
+// trace:BUG-2488 | ai:codex
+fn prepare_signal_paths(worktree: &Path, spec: &str) -> Result<[(PathBuf, std::fs::File); 2]> {
+    let punt = crate::punt::signal_path(worktree, spec);
+    let hold = crate::punt::hold_signal_path(worktree, spec);
+    let punt_parent = crate::punt::seat_handshake_parent(worktree, &punt, true)?
+        .context("missing punt directory")?;
+    let hold_parent = crate::punt::seat_handshake_parent(worktree, &hold, true)?
+        .context("missing hold directory")?;
+    Ok([(punt, punt_parent), (hold, hold_parent)])
+}
+
+// trace:BUG-2488 | ai:codex
+fn clear_signal_paths(paths: &[(PathBuf, std::fs::File)]) -> Result<()> {
+    use std::os::fd::AsRawFd;
+    for (path, parent) in paths {
+        let pinned = PathBuf::from(format!("/proc/self/fd/{}", parent.as_raw_fd()));
+        let name = path.file_name().context("invalid signal filename")?;
+        // Clear every spelling through the pinned parent, including entries
+        // hidden by the exact-name preference in signal_path.
+        // trace:BUG-2488 | ai:codex
+        for entry in std::fs::read_dir(&pinned)? {
+            let entry = entry?;
+            if !entry
+                .file_name()
+                .as_encoded_bytes()
+                .eq_ignore_ascii_case(name.as_encoded_bytes())
+            {
+                continue;
+            }
+            match std::fs::remove_file(pinned.join(entry.file_name())) {
+                Ok(()) => {}
+                Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
+                Err(error) => return Err(error.into()),
+            }
+        }
+    }
+    Ok(())
+}
+
+/// Put the handshakes inside the leased seat's writable runtime directory.
+// trace:BUG-2488 | ai:codex
+#[cfg(test)]
+pub(crate) fn provision_signals(worktree: &Path, spec: &str) -> Result<(PathBuf, PathBuf)> {
+    let paths = prepare_signal_paths(worktree, spec)?;
+    clear_signal_paths(&paths)?;
+    Ok((paths[0].0.clone(), paths[1].0.clone()))
+}
+
+/// Start a new attempt after held-resume policy and command preflight succeed.
+// trace:BUG-2488 | ai:codex
+pub(crate) fn provision_attempt_signals(
+    main: &Path,
+    tree: &Path,
+    spec: &str,
+) -> Result<(PathBuf, PathBuf)> {
+    // Retain the same pinned parents through cleanup: re-opening the seat
+    // after consuming host markers could introduce a second refusal/race.
+    let seat = prepare_signal_paths(tree, spec)?;
+    let host = prepare_signal_paths(main, spec)?;
+    clear_signal_paths(&seat)?;
+    clear_signal_paths(&host)?;
+    Ok((seat[0].0.clone(), seat[1].0.clone()))
+}
+
+/// Consume both copies of a handled punt so an advisor resume cannot replay it.
+/// Hold markers remain available for held-resume admission.
+// trace:BUG-2488 | ai:codex
+pub(crate) fn consume_punt_signal(main: &Path, tree: &Path, spec: &str) -> Result<()> {
+    // Recovery receipts may refer to a workspace the child already removed.
+    // Consumption only unlinks existing punts; it must neither recreate that
+    // workspace nor require unrelated hold directories to be writable.
+    // trace:BUG-2488 | ai:codex
+    let mut paths = Vec::new();
+    for root in [tree, main] {
+        let path = crate::punt::signal_path(root, spec);
+        if let Some(parent) = crate::punt::seat_handshake_parent(root, &path, false)? {
+            paths.push((path, parent));
+        }
+    }
+    clear_signal_paths(&paths)
+}
+
+/// Install explicit seat paths rather than inheriting a host-only handshake.
+// trace:BUG-2488 | ai:codex
+pub(crate) fn apply_seat_signals(cmd: &mut std::process::Command, tree: &Path, spec: &str) {
+    cmd.env(
+        crate::punt::SIGNAL_FILE_ENV,
+        crate::punt::signal_path(tree, spec),
+    )
+    .env(
+        crate::punt::HOLD_SIGNAL_FILE_ENV,
+        crate::punt::hold_signal_path(tree, spec),
+    );
+}
+
+/// Reconcile seat-local runtime evidence before publication or lease cleanup.
+// trace:BUG-2488 | ai:codex
+pub(crate) fn reconcile_signals(main: &Path, tree: &Path, spec: &str) -> Result<()> {
+    // A retired/missing seat has no local evidence to mirror. Host-side signals
+    // still apply, including phase recovery after a child lost its workspace.
+    if main == tree
+        || matches!((main.canonicalize(), tree.canonicalize()), (Ok(a), Ok(b)) if a == b)
+    {
+        return Ok(());
+    }
+    if let Some(signal) = crate::punt::read_seat_signal(tree, spec)? {
+        crate::punt::write_signal(&crate::punt::signal_path(main, spec), &signal)?;
+    }
+    if let Some(signal) = crate::punt::read_seat_hold_signal(tree, spec)? {
+        crate::punt::write_hold_signal(&crate::punt::hold_signal_path(main, spec), &signal)?;
+    }
+    let mut existing = crate::punt::read_ledger(main);
+    for record in crate::punt::read_seat_ledger(tree)?
+        .into_iter()
+        .filter(|r| r.spec.eq_ignore_ascii_case(spec))
+    {
+        // Resolution rewrites the host record; the seat retains its open copy.
+        // Compare immutable identity so replay cannot reopen a resolved punt.
+        if !existing.iter().any(|r| {
+            r.spec.eq_ignore_ascii_case(&record.spec)
+                && r.timestamp == record.timestamp
+                && r.category == record.category
+        }) {
+            crate::punt::append_to_ledger(main, &record)?;
+            existing.push(record);
+        }
+    }
+    Ok(())
+}
+
+/// Classify only successful, unpublished native runs as unchanged.
+// trace:BUG-2488 | ai:codex
+pub(crate) fn classify_no_change(
+    outcome: Outcome,
+    success: bool,
+    has_commits: impl FnOnce() -> Result<bool>,
+) -> Result<Outcome> {
+    if matches!(outcome, Outcome::NoPr) && success && !has_commits()? {
+        Ok(Outcome::NoChange)
+    } else {
+        Ok(outcome)
+    }
+}
+
+/// Worktree fallback lanes retain their ordinary unpublished-work outcome.
+// trace:BUG-2488 | ai:codex
+pub(crate) fn classify_seat_no_change(
+    outcome: Outcome,
+    success: bool,
+    main: &Path,
+    tree: &Path,
+) -> Result<Outcome> {
+    if crate::seat_clone::host_recorded_clone(main, tree).is_none() {
+        return Ok(outcome);
+    }
+    classify_no_change(outcome, success, || {
+        crate::seat_clone::has_commits_beyond_base(main, tree)
+    })
+}
+
 /// Run the child, wait, classify, print the result line, and return the
 /// outcome's exit code (`Ok` only for an open PR).
 pub(crate) fn run(launch: Launch<'_>) -> Result<()> {
     let main_root = crate::main_worktree_root_from(launch.project_root);
     claim_spec(launch.project_root, launch.spec);
-    // Provision the punt and hold handshakes exactly as the drain's phase 1
-    // does: a fresh path under the main checkout, any stale file removed.
-    let punt_signal = crate::punt::signal_path(&main_root, launch.spec);
-    let hold_signal = crate::punt::hold_signal_path(&main_root, launch.spec);
-    for path in [&punt_signal, &hold_signal] {
-        if let Some(parent) = path.parent() {
-            let _ = std::fs::create_dir_all(parent);
-        }
-        let _ = std::fs::remove_file(path);
-    }
+    let worktree = lease_worktree(launch.project_root, launch.lease_id);
+    // Resolve transport now, but retain the prior veto until command policy
+    // and preparation have succeeded at the final spawn boundary.
+    // trace:BUG-2488 | ai:codex
+    let punt_signal = crate::punt::signal_path(&worktree, launch.spec);
+    let hold_signal = crate::punt::hold_signal_path(&worktree, launch.spec);
     // BUG-2383: the lane job runner, so the seat can run its tests here,
     // outside its 60-second tool-call cap. trace:BUG-2383 | ai:claude
-    let worktree = lease_worktree(launch.project_root, launch.lease_id);
     // trace:TASK-2902 | ai:codex
     if launch.vendor == crate::session::HeadlessVendor::Codex {
         crate::native_publication::prepare(&main_root, &worktree)?;
@@ -1136,17 +1295,28 @@ pub(crate) fn run(launch: Launch<'_>) -> Result<()> {
                     on_spawn: Some(&on_spawn),
                     resume,
                     hold_reap: Some(hold),
+                    before_spawn: Some(&|| {
+                        if !resume {
+                            provision_attempt_signals(&main_root, &worktree, launch.spec)?;
+                        }
+                        Ok(())
+                    }),
                 },
             )
         },
         || {
-            let outcome = classify(
-                crate::punt::read_signal(&punt_signal),
-                crate::punt::read_hold_signal(&hold_signal),
-                || lookup_pr(launch.project_root, launch.branch),
-            );
+            let (Ok(punt), Ok(hold)) = (
+                crate::punt::read_seat_signal(&worktree, launch.spec),
+                crate::punt::read_seat_hold_signal(&worktree, launch.spec),
+            ) else {
+                // Stop resuming on unsafe evidence. The mandatory reconciliation
+                // below returns its error before any publication or lease cleanup.
+                return (Outcome::NoPr, true);
+            };
+            let outcome = classify(punt, hold, || lookup_pr(launch.project_root, launch.branch));
             let done = match &outcome {
                 Outcome::NoPr => false,
+                Outcome::NoChange => true,
                 Outcome::PrOpened { .. } => {
                     !launch_seat.is_stale(&outcome, &bg::SeatState::read(&worktree, launch.branch))
                 }
@@ -1164,6 +1334,7 @@ pub(crate) fn run(launch: Launch<'_>) -> Result<()> {
         resumes,
         log: run_log,
     } = finished?;
+    reconcile_signals(&main_root, &worktree, launch.spec)?;
     store_commit.commit();
 
     // Publish before reading the final seat state or ending its lease. A punt
@@ -1182,6 +1353,8 @@ pub(crate) fn run(launch: Launch<'_>) -> Result<()> {
             status.success(),
         )?;
         outcome = classify(None, None, || lookup_pr(launch.project_root, launch.branch));
+        // trace:BUG-2488 | ai:codex
+        outcome = classify_seat_no_change(outcome, status.success(), &main_root, &worktree)?;
     }
 
     // trace:BUG-B6B1278890774EF993D2EBC327862470-044 | ai:claude
@@ -1220,7 +1393,7 @@ pub(crate) fn run(launch: Launch<'_>) -> Result<()> {
     if finished_lease_ends(&outcome, &seat) {
         if let Err(e) = end_finished_lease(launch.project_root, launch.lease_id) {
             eprintln!(
-                "{} the PR is open but lease {} was kept: {e:#}. End it with \
+                "{} the lane finished but lease {} was kept: {e:#}. End it with \
                  `aida session end {} --yes --skip-ci` so its review can start.",
                 "Warning:".yellow().bold(),
                 launch.lease_id,

@@ -449,7 +449,25 @@ impl auto_complete::PhaseDriver for RealPhaseDriver {
                 wd.with_heartbeat("implementer", &self.spec)
             }
         });
-        let mut wd_closure = watchdog.as_mut().map(|w| move || w.check());
+        // The fixture publishes a ready marker after its lease and manifest;
+        // its tiny ceiling must not race the child's first scheduling slice.
+        // A broken fixture still terminates within a bounded readiness budget.
+        // trace:TASK-3749 | ai:codex
+        #[cfg(test)]
+        let ready = self.watchdog_ready.clone();
+        #[cfg(test)]
+        let ready_started = std::time::Instant::now();
+        let mut wd_closure = watchdog.as_mut().map(|w| {
+            move || {
+                #[cfg(test)]
+                if ready.as_ref().is_some_and(|path| !path.exists())
+                    && ready_started.elapsed() < std::time::Duration::from_secs(10)
+                {
+                    return None;
+                }
+                w.check()
+            }
+        });
         let wd_dyn: Option<&mut dyn FnMut() -> Option<String>> = wd_closure
             .as_mut()
             .map(|c| c as &mut dyn FnMut() -> Option<String>);
@@ -769,6 +787,19 @@ impl auto_complete::PhaseDriver for RealPhaseDriver {
         // `claude --resume` with this exact cwd so Claude's project-slug
         // derivation finds the persisted session.
         self.implementer_worktree = Some(worktree_path.clone());
+        // Collect the writable-seat handshakes before the driver classifies exit.
+        // trace:BUG-2488 | ai:codex
+        crate::standalone_implementer::reconcile_signals(
+            &self.project_root,
+            &worktree_path,
+            &self.spec,
+        )
+        .map_err(|e| {
+            auto_complete::PhaseFailure::of(
+                auto_complete::FailureKind::Spawn,
+                format!("could not reconcile implementer signals: {e:#}"),
+            )
+        })?;
         // Consume host evidence only for a successful child. Failed exits and
         // punt/hold signals keep their existing classification precedence.
         // trace:TASK-3608 | ai:codex
@@ -790,7 +821,18 @@ impl auto_complete::PhaseDriver for RealPhaseDriver {
         // branch is reconciled from the worktree HEAD now so a resume +
         // PR-lookup has it. trace:STORY-276, STORY-306 | ai:claude
         if let Some(signal) = punt::read_signal(&punt_signal) {
-            let _ = std::fs::remove_file(&punt_signal);
+            // trace:BUG-2488 | ai:codex
+            crate::standalone_implementer::consume_punt_signal(
+                &self.project_root,
+                &worktree_path,
+                &self.spec,
+            )
+            .map_err(|e| {
+                auto_complete::PhaseFailure::of(
+                    auto_complete::FailureKind::Internal,
+                    format!("could not consume implementer punt: {e:#}"),
+                )
+            })?;
             self.branch = Some(reconcile_orchestrated_branch(
                 &self.project_root,
                 &lease_id,
@@ -3424,6 +3466,16 @@ impl auto_complete::PhaseDriver for RealPhaseDriver {
                 )
             }
         })?;
+        // A resumed implementer may punt again, including on a failed exit.
+        // Mirror its ledger before any status/outage classification returns.
+        // trace:BUG-2488 | ai:codex
+        crate::standalone_implementer::reconcile_signals(&self.project_root, &worktree, &self.spec)
+            .map_err(|e| {
+                PhaseFailure::of(
+                    FailureKind::Internal,
+                    format!("advisor tier: could not reconcile implementer signals: {e}"),
+                )
+            })?;
         // Consume stale evidence even when the child failed; it cannot be
         // reused by a later resume.
         let native_no_change = self
@@ -3468,10 +3520,13 @@ impl auto_complete::PhaseDriver for RealPhaseDriver {
         // re-punt leaves the spec back in `NeedsAttention`.
         let resumed_punt = punt::read_signal(&punt::signal_path(&self.project_root, &self.spec));
         if resumed_punt.is_some()
-            || matches!(
+            // A retained NeedsAttention status is not a new punt when the
+            // host has confirmed this resume made no changes.
+            // trace:TASK-3749 | ai:codex
+            || (!native_no_change && matches!(
                 spec_status(&self.project_root, &self.spec),
                 Some(RequirementStatus::NeedsAttention)
-            )
+            ))
         {
             let reason = load_store_for_lookup(&self.project_root)
                 .and_then(|s| {

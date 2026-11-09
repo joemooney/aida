@@ -454,13 +454,18 @@ pub(crate) fn run_queue_resume_to_exit(
     publication: (&std::path::Path, &str, &str),
     record_no_change: bool,
 ) -> Result<std::process::ExitStatus> {
+    let publish_on_exit = target.vendor == session::HeadlessVendor::Codex
+        && contained
+        && crate::canonical_role_name(role) == "implementer";
     let status = session::spawn_vendor_headless_resume(
         host_main, target, prompt, log, tree, tee, contained, role,
     )?;
-    if target.vendor == session::HeadlessVendor::Codex
-        && contained
-        && crate::canonical_role_name(role) == "implementer"
-    {
+    // Runtime evidence belongs to the host even when publication is disabled.
+    // trace:BUG-2488 | ai:codex
+    if crate::canonical_role_name(role) == "implementer" {
+        crate::standalone_implementer::reconcile_signals(publication.0, tree, publication.1)?;
+    }
+    if publish_on_exit {
         crate::ship_from_seat::publish_queue_exit_recorded(
             publication.0,
             tree,

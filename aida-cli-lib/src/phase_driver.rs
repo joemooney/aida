@@ -178,6 +178,10 @@ pub(crate) struct RealPhaseDriver {
     pub(crate) retry_wait: Option<std::time::Duration>,
     #[cfg(test)]
     pub(crate) watchdog_poll: Option<std::time::Duration>,
+    // Synchronize the receipt/watchdog fixture with child lease publication.
+    // trace:TASK-3749 | ai:codex
+    #[cfg(test)]
+    pub(crate) watchdog_ready: Option<std::path::PathBuf>,
     /// STORY-263: headless mode. `Some` → the reviewer phase is launched
     /// headless (`claude -p`); the implementer phase stays interactive in
     /// this cut (STORY-276 wires it). `None` → fully interactive.
@@ -681,6 +685,8 @@ impl RealPhaseDriver {
             retry_wait: None,
             #[cfg(test)]
             watchdog_poll: None,
+            #[cfg(test)]
+            watchdog_ready: None,
             no_human,
             autonomy_mode,
             exit_cfg: exit_signal::ExitSignalConfig::from_env(),

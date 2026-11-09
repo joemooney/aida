@@ -1011,6 +1011,8 @@ fn load_drain_lane(
         .filter(|m| {
             m.state != crate::drain_state::STATE_COMPLETED
                 && m.state != crate::drain_state::STATE_FAILED
+                // trace:TASK-3749 | ai:codex
+                && m.state != crate::drain_state::STATE_NO_CHANGE
         })
         .map(|m| m.spec.clone())
         .collect();
