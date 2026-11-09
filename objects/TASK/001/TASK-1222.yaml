@@ -23,12 +23,12 @@ description: |
   Deliberate sweep: for each stale branch/worktree, check the spec status — if Completed/merged-elsewhere, delete the branch + remove the worktree; if it holds genuine uncommitted work, salvage-commit or discard per a per-item decision. aida session reap already handles the finished+merged+exited class safely; this task is the long-tail the reap conservatively leaves (unfinished-spec or uncommitted-work worktrees, and pure branch cruft). Consider an aida worktree gc --older-than / --stale sweep if one doesn't cover it.
 
   Immediate: STORY-1006 + STORY-993 (both Completed) have uncommitted worktree changes — operator decision: salvage or discard, then remove those two worktrees.
-status: NeedsAttention
+status: Completed
 priority: Low
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-09-13T22:07:45.944235Z
-modified_at: 2026-11-08T21:10:23.388172689Z
+modified_at: 2026-11-09T03:00:05.198396129Z
 req_type: Task
 tags:
 - cleanup
@@ -1227,6 +1227,25 @@ history:
   - field_name: status
     old_value: InProgress
     new_value: NeedsAttention
+- id: 01a1be3f-a743-74a2-b563-756fe3636027
+  author: aida-auto-bump
+  timestamp: 2026-11-09T03:00:05.059876024Z
+  changes:
+  - field_name: status
+    old_value: NeedsAttention
+    new_value: Completed
+processing_record:
+- id: 01a1be3f-a7ce-78c1-ba31-40676bfa4980
+  timestamp: 2026-11-09T03:00:05.198391801Z
+  agent: 01a1bc93-77a0-7740-8b03-df4e3e8d1df5
+  brief_ref: .aida/agent-briefs/advisor/TASK-1222-2026-11-08T191704Z.md
+  commit_sha: d73f4e6b86c9f6a85cc01a4aa9893b869252b3a9
+  summary: All four TASK-1222 acceptance criteria verified against the diff and fixture tests; CI CLEAN at head except the expected supervised merge-hold gate. No defects found in the round-1 full sweep.
+  review_verdict: approved
+implementation_info:
+  implemented: false
+  completed_at: 2026-11-09T03:00:05.059871525Z
+  completion_sha: d73f4e6b86c9f6a85cc01a4aa9893b869252b3a9
 attention_reason:
   category: blocked-dependency
   detail: 'Latest review finding 1 explicitly requests no code change, push, main merge or commit-producing rework until terminal CI and fresh independent review. Verified current HEAD 1725311184d4ad1677755195fe9ec1b9ff291f6f and its CI run 42521473017 remains queued. Preserve the current head and queue position; obtain terminal CI then fresh independent review, with separate authorized clearance of the existing supervised hold. Changed files: none; working tree clean. No tests executed this turn (untested=true); no publication, queue completion or host cleanup performed.'
