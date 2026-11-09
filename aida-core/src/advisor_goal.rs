@@ -135,7 +135,7 @@ pub fn set_cas(store_root: &Path, goal: AdvisorGoal) -> Result<()> {
     for attempt in 0..MAX_RETRIES {
         let committed = crate::db::with_store_write_lock(store_root, || -> Result<String> {
             if attempt > 0 && !local_only {
-                git_ops::pull_rebase(store_root, "origin", &branch)?;
+                git_ops::pull_rebase_store_retry(store_root, "origin", &branch)?;
             }
             let mut log = load(store_root)?;
             log.goals.push(goal.clone());

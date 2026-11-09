@@ -1509,6 +1509,8 @@ pub(crate) fn which_binary(binary: &str) -> Option<std::path::PathBuf> {
 /// the normalizer) is structurally impossible now.
 // trace:BUG-1554 | ai:claude
 pub(crate) static DOCTOR_CATEGORY_ALIASES: &[(&[&str], &str)] = &[
+    // trace:BUG-2490 | ai:codex
+    (&["store-objects"], "store-objects"),
     (
         &["merge-hold", "merge-hold-integrity"],
         "merge-hold-integrity",
