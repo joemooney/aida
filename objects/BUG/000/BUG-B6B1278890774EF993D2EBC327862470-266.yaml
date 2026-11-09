@@ -15,7 +15,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-08T19:27:28.525198886Z
-modified_at: 2026-11-09T04:35:23.036508614Z
+modified_at: 2026-11-09T05:00:50.547722741Z
 req_type: Bug
 comments:
 - id: 01a1bcd8-beaf-7582-aa0b-006077ac5867
@@ -170,6 +170,12 @@ comments:
   content: 'Advisor 2026-11-08: PR-3699 now conflicts with main after PR-3652 (BUG-2490) landed. Not a mechanical merge: both rewrote the store rebase engine in aida-core/src/git_ops.rs (about 400 lines each, four conflict hunks) and store_sync.rs. Rework plan: rebuild BUG-2501 on current main, keeping main''s pull_rebase_store_retry wrapper (refuses when changes are pending) and its callers, and put the structural auto-merge inside pull_rebase/rebase path. Also must fix the open review finding: conflict.rs merge_spec_upstream drops locally added tags, relationships and dependencies. Do not force the merge; store sync is canonical-data code.'
   created_at: 2026-11-09T04:35:23.036508614Z
   modified_at: 2026-11-09T04:35:23.036508614Z
+  session_id: 7aacb1ed-ebaa-4da4-a195-500864e99e7d
+- id: 01a1beae-3595-7563-bb0d-84695f36f6d4
+  author: joe
+  content: 'Advisor ruling: Advisor proxy ruling 2026-11-08: PR-3699 is closed as superseded. Rebuild BUG-2501 on current main in a fresh branch, using branch bug-b6b1278890774ef993d2ebc327862470-266 only as reference. Keep main''s pull_rebase_store_retry wrapper and its pending-change refusal, and main''s BUG-2490 conflict-marker refusal, unchanged. Add the structural auto-merge inside the pull_rebase/rebase path. merge_spec_upstream must keep locally added tags, relationships and dependencies, with tests; the open review finding on conflict.rs:429 must be fixed. A failed pull must stop store writes per the spec. If git_ops.rs gets too large, ask rather than weakening a check.'
+  created_at: 2026-11-09T05:00:50.453624392Z
+  modified_at: 2026-11-09T05:00:50.453624392Z
   session_id: 7aacb1ed-ebaa-4da4-a195-500864e99e7d
 history:
 - id: 01a1bcc3-bd29-7692-a764-d1e8c8dbaa00
