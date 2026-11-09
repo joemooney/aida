@@ -595,7 +595,11 @@ class WorkCiTests(unittest.TestCase):
         f.statuses.clear()
         # Exact read revalidates only this old identity and persists its proof.
         old_attempt = 3 if warm else 1
-        rows = json.loads(f.cli(fresh, "ci", "read", "--attempt", str(old_attempt), "--sha", shas[old_attempt], "--json").stdout)
+        # Exact revalidation refreshes the broken display cache only once.
+        # trace:TASK-3452 | ai:codex
+        exact_read = f.cli(fresh, "ci", "read", "--attempt", str(old_attempt), "--sha", shas[old_attempt], "--json")
+        self.assertEqual(exact_read.stderr.count("could not refresh CI skipped-result display cache"), 1)
+        rows = json.loads(exact_read.stdout)
         self.assertEqual([row["verification"] for row in rows], ["verified"])
         self.assertEqual(source_fetches(), [shas[total], shas[old_attempt]])
         cache.rmdir()

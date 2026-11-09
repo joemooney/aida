@@ -917,6 +917,23 @@ fn cache_skipped(intake: &Intake, skipped: &[SkippedAttempt]) -> Result<()> {
 
 pub(crate) fn awaiting_skipped(root: &Path) -> Vec<SkippedAttempt> {
     let read = || -> Result<Vec<SkippedAttempt>> {
+        // A non-Git project has no relay cache. Preserve diagnostics for an
+        // existing but damaged Git identity, including dangling symlinks.
+        // trace:TASK-3452 | ai:codex
+        let mut has_git_identity = false;
+        for ancestor in root.ancestors() {
+            match fs::symlink_metadata(ancestor.join(".git")) {
+                Ok(_) => {
+                    has_git_identity = true;
+                    break;
+                }
+                Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
+                Err(error) => return Err(error.into()),
+            }
+        }
+        if !has_git_identity {
+            return Ok(Vec::new());
+        }
         let path = aida_core::allocation_authority::common_dir(root)?
             .join("aida-intake")
             .join(SKIPPED);
@@ -1173,7 +1190,9 @@ pub(crate) fn run(intake: &Intake, command: &CiCommand, json_format: bool) -> Re
                 bail!("Exact positive attempt and full lowercase SHA required");
             }
             intake.sync()?;
-            let files = intake.files()?;
+            // Refresh once after any exact verification changes its evidence.
+            // trace:TASK-3452 | ai:codex
+            let files = intake.files_without_display_refresh()?;
             let requested = attempt
                 .zip(sha.as_deref())
                 .map(|(n, sha)| format!("ci-results/{sha}/{n}.json"));
@@ -1183,9 +1202,9 @@ pub(crate) fn run(intake: &Intake, command: &CiCommand, json_format: bool) -> Re
                     .context("No result for requested attempt/SHA")?;
                 if !intake.ci_verified(path) {
                     intake.verify_ci_read(path, bytes)?;
-                    intake.refresh_ci_skipped(&files);
                 }
             }
+            intake.refresh_ci_skipped(&files);
             let rows: Vec<_> = files.iter().filter(|(path, _)| path.starts_with("ci-results/")
                 && requested.as_ref().is_none_or(|p| p == *path))
                 .map(|(path, bytes)| -> Result<Value> {
@@ -1248,6 +1267,13 @@ mod tests {
         assert_eq!(rows[82].attempt, 83);
         assert!(rows[82].message().contains(&rows[82].command));
         fs::write(dir.join(CONFIG), br#"{"role":"work"}"#).unwrap();
+        assert!(awaiting_skipped(temp.path()).is_empty());
+    }
+
+    // trace:TASK-3452 | ai:codex
+    #[test]
+    fn awaiting_non_git_project_has_no_skipped_results() {
+        let temp = tempfile::tempdir().unwrap();
         assert!(awaiting_skipped(temp.path()).is_empty());
     }
 
