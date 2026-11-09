@@ -70,12 +70,12 @@ description: |
 
   PR: #3724
   Reviewed sha: da5047a5ebaa01d84607731b5f246637665506f8
-status: NeedsAttention
+status: Approved
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-09T14:27:09.447287877Z
-modified_at: 2026-11-09T23:18:51.645970782Z
+modified_at: 2026-11-09T23:20:03.276040965Z
 req_type: Task
 tags:
 - kind:finding-sweep
@@ -161,6 +161,13 @@ comments:
   content: 'ADVISOR RULING (2026-11-09 23:25 UTC): the 16:42 UTC advisor brief about scripts/test-time-budget.toml is DONE and superseded; ignore it. Your task is the review finding on PR #3731 at 83982a2300: P2 TASK-3091: aida-cli-lib/src/burndown.rs:2450 hardcodes review_waiting=false. integrate_wave_prs at burndown_run.rs:887-895 still folds a current-head Waiting receipt through local_verdict_blocks_merge into request_changes=true, so wave_pr_action selects RequestChanges and reports the old incorrect reason. Propagate a distinct Waiting fact through the wave probe and WavePrFacts, keep fail-closed behaviour for unreadable or conflicting evidence, and add a wave-path regression asserting the WAITING reason rather than RequestChanges. Nothing else.'
   created_at: 2026-11-09T23:18:51.645970782Z
   modified_at: 2026-11-09T23:18:51.645970782Z
+  session_id: 01a1beff-fc3b-78e2-93e2-9b0c283b0339
+  harness_version: 2.1.319 (Claude Code)
+- id: 01a1c29c-91cc-7411-b5b9-e3e48558f739
+  author: joe
+  content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was punted on: ambiguous-spec: Binding advisor brief permits only the exact test-time budget entry, which is already present at 25 seconds in dfd52a39a3 with Help-Golden: unchanged. Review finding P2 TASK-3091 requests distinct burndown wave WAITING classification and a regression, outside the explicit Change nothing else scope. No new code changes made; resolve scope before resuming that finding.. No triage reason was given.'
+  created_at: 2026-11-09T23:20:03.276035174Z
+  modified_at: 2026-11-09T23:20:03.276035174Z
   session_id: 01a1beff-fc3b-78e2-93e2-9b0c283b0339
   harness_version: 2.1.319 (Claude Code)
 history:
@@ -295,6 +302,15 @@ history:
   - field_name: status
     old_value: InProgress
     new_value: NeedsAttention
+- id: 01a1c29c-91cc-7411-b5b9-e3dd1ee47fce
+  author: joe
+  timestamp: 2026-11-09T23:20:03.276016522Z
+  session_id: 01a1beff-fc3b-78e2-93e2-9b0c283b0339
+  harness_version: 2.1.319 (Claude Code)
+  changes:
+  - field_name: status
+    old_value: NeedsAttention
+    new_value: Approved
 filed_at:
   code_sha: e4eee38238fa4cb8e8c85dadaa4ed07894cfbeea
   branch: main
@@ -304,9 +320,3 @@ filed_at:
   vendor: claude
   session: 01a1beff-fc3b-78e2-93e2-9b0c283b0339
   harness_version: 2.1.319 (Claude Code)
-attention_reason:
-  category: ambiguous-spec
-  detail: 'Binding advisor brief permits only the exact test-time budget entry, which is already present at 25 seconds in dfd52a39a3 with Help-Golden: unchanged. Review finding P2 TASK-3091 requests distinct burndown wave WAITING classification and a regression, outside the explicit Change nothing else scope. No new code changes made; resolve scope before resuming that finding.'
-  lean: Keep the existing budget fix and trailer; authorize TASK-3091 wave-path rework separately.
-  raised_by: implementer
-  raised_at: 2026-11-09T22:04:44.655715083Z
