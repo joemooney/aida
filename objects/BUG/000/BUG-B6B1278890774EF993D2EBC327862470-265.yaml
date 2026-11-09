@@ -8,7 +8,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-08T19:02:09.839960883Z
-modified_at: 2026-11-09T02:55:32.206869976Z
+modified_at: 2026-11-09T03:16:40.367096412Z
 req_type: Bug
 relationships:
 - rel_type:
@@ -167,6 +167,20 @@ comments:
   created_at: 2026-11-09T02:54:09.253276273Z
   modified_at: 2026-11-09T02:54:09.253276273Z
   session_id: 20abb7c3-8f9b-4a5e-b326-404921f3b450
+- id: 01a1be4e-d72f-7060-84b1-f13fb3a6aad4
+  author: dirtlab
+  content: |
+    BUG-2500 native implementer handoff: addressed all eight findings on 088641d618. Waiting now suppresses mergeable/ship-ready reporting with a distinct status reason, creates no derived Rework hold, needs ordinary reviewer attention after head movement, and closes on merge. Typed waiting-only admission preserves existing unavailable-evidence warning behavior and reviewer/plan/guided exemptions; multi-entry pickup checks every member. Substantive sibling verdicts outrank waiting. Gate-state comparison retains the waiting category. Launcher punt publication veto unchanged; no resume service or prose classifier added.
+
+    Changed files (all under aida-cli-lib/src/): awaiting_you.rs; gate/review_verdict.rs; gate/tests/bug_2500_waiting_tests.rs; gate_state_cmd.rs; idle_eligible.rs; phase_gates.rs; queue_cmd/mod.rs; queue_cmd/rework.rs; queue_cmd/work.rs; tests/queue_work_tests.rs.
+
+    Validation: lane job j20261109T031243056-2-0 executed cargo test --profile agent -p aida-cli-lib --lib -- bug_2500: 13 passed, zero failures. All 46 fast-tier gates passed using scripts/check-ci-gates.py's existing plan, with its no-default-features cargo check dispatched through aida lane job run on the agent profile (job j20261109T030740649-62-0). Fast checks used umask 0022 because the inherited 0002 makes existing Codex mail fixtures group-writable and fail their ownership checks. git diff --check passed. Earlier test-fixture failures were corrected before the passing run. untested=false.
+
+    Edits left uncommitted for host publication on the existing PR-3698 branch, retaining Refs credit. No commit, push, PR creation, review recording, merge or queue completion performed. Codegraph was unavailable (doctor reported missing); source navigation used rg. No implementation blockers remain; existing punt/hold signals retain their normal veto authority.
+  created_at: 2026-11-09T03:16:40.367096412Z
+  modified_at: 2026-11-09T03:16:40.367096412Z
+  session_id: 01a1be3b773b
+  harness_version: codex-cli 0.167.0
 history:
 - id: 01a1bcc0-f95b-7082-8ca7-a86211b6ddd8
   author: joe
