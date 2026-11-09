@@ -1771,3 +1771,181 @@ fn story_2326_cleared_claude_compete_has_no_parent_seat() {
         );
     }
 }
+
+// trace:STORY-2641 | ai:codex
+#[test]
+fn story_2326_resource_env_spawn_uses_host_recorded_seat() {
+    let tmp = tempfile::tempdir().unwrap();
+    let host = tmp.path().join("host");
+    let seat = tmp.path().join("aida-seat-resources");
+    let target = host.join("target/worktrees/aida-seat-resources");
+    for dir in [
+        host.join(".git/objects"),
+        host.join(".aida/sessions"),
+        seat.join(".git/objects/info"),
+        seat.join(".aida"),
+        target.clone(),
+    ] {
+        std::fs::create_dir_all(dir).unwrap();
+    }
+    let marker = crate::seat_clone::SeatCloneMarker {
+        main: host.clone(),
+        branch: "seat-resources".into(),
+        base_sha: "fixture".into(),
+        origin_url: "fixture".into(),
+        pin: "fixture".into(),
+    };
+    std::fs::write(
+        seat.join(crate::seat_clone::MARKER_RELATIVE),
+        toml::to_string(&marker).unwrap(),
+    )
+    .unwrap();
+    std::fs::write(
+        seat.join(".git/objects/info/alternates"),
+        host.join(".git/objects").display().to_string(),
+    )
+    .unwrap();
+    std::fs::write(crate::lease_path(&host, "c0ffee2641"), format!(
+        "id = 'c0ffee2641'\nscope = 'STORY-2641'\nslug = 'resources'\nowner = 'test'\nworktree_path = {}\nbranch = 'seat-resources'\nstarted_at = '2026-11-07T00:00:00Z'\nhostname = 'test'\ntree_kind = 'clone'\ncargo_target_dir = {}\n",
+        aida_core::toml_quote::toml_string(&seat.display().to_string()),
+        aida_core::toml_quote::toml_string(&target.display().to_string()),
+    )).unwrap();
+    let _env = crate::test_env::EnvVarsGuard::apply(&[
+        ("CARGO_TARGET_DIR", Some("/parent/target")),
+        ("RUSTC_WRAPPER", Some("/parent/sccache")),
+    ]);
+    for vendor in [LaunchVendor::Claude, LaunchVendor::Codex, LaunchVendor::Agy] {
+        let mut req = request(ContainmentPosture::None, LaunchKind::Fresh, &[]);
+        req.vendor = vendor;
+        req.cwd = seat.clone();
+        req.host_main = Some(host.clone());
+        let ctx = LaunchContext::resolve_under(req, false).unwrap();
+        let cmd = spawn_agent(&ctx).unwrap();
+        let env: BTreeMap<_, _> = cmd.get_envs().collect();
+        assert_eq!(
+            env.get(OsStr::new("CARGO_TARGET_DIR")),
+            Some(&Some(target.as_os_str()))
+        );
+        assert_eq!(
+            env.get(OsStr::new("RUSTC_WRAPPER")),
+            Some(&Some(OsStr::new("")))
+        );
+    }
+}
+
+// trace:STORY-2641 | ai:codex
+#[test]
+fn story_2326_resource_env_spawn_without_recorded_target() {
+    let tmp = tempfile::tempdir().unwrap();
+    let host = tmp.path().join("host");
+    let seat = tmp.path().join("aida-seat-no-target");
+    for dir in [
+        host.join(".git/objects"),
+        host.join(".aida/sessions"),
+        seat.join(".git/objects/info"),
+        seat.join(".aida"),
+    ] {
+        std::fs::create_dir_all(dir).unwrap();
+    }
+    let marker = crate::seat_clone::SeatCloneMarker {
+        main: host.clone(),
+        branch: "seat-no-target".into(),
+        base_sha: "fixture".into(),
+        origin_url: "fixture".into(),
+        pin: "fixture".into(),
+    };
+    std::fs::write(
+        seat.join(crate::seat_clone::MARKER_RELATIVE),
+        toml::to_string(&marker).unwrap(),
+    )
+    .unwrap();
+    std::fs::write(
+        seat.join(".git/objects/info/alternates"),
+        host.join(".git/objects").display().to_string(),
+    )
+    .unwrap();
+    // Exercise both an absent declaration and a stale declaration after clean.
+    for target_line in [
+        String::new(),
+        format!(
+            "cargo_target_dir = {}\n",
+            aida_core::toml_quote::toml_string(
+                &host.join("target/worktrees/missing").display().to_string()
+            )
+        ),
+    ] {
+        std::fs::write(crate::lease_path(&host, "c0ffee2642"), format!(
+            "id = 'c0ffee2642'\nscope = 'STORY-2641'\nslug = 'no-target'\nowner = 'test'\nworktree_path = {}\nbranch = 'seat-no-target'\nstarted_at = '2026-11-07T00:00:00Z'\nhostname = 'test'\ntree_kind = 'clone'\n{}",
+            aida_core::toml_quote::toml_string(&seat.display().to_string()), target_line)).unwrap();
+        let clone = crate::seat_clone::host_recorded_clone(&host, &seat).unwrap();
+        assert!(clone.cargo_target_dir.is_none());
+        for vendor in [LaunchVendor::Claude, LaunchVendor::Codex, LaunchVendor::Agy] {
+            let mut req = request(ContainmentPosture::None, LaunchKind::Fresh, &[]);
+            req.vendor = vendor;
+            req.program = "/bin/true".into();
+            req.args.clear();
+            req.set_cwd = true;
+            req.cwd = seat.clone();
+            req.host_main = Some(host.clone());
+            let ctx = LaunchContext::resolve_under(req, false).unwrap();
+            let mut cmd = spawn_agent(&ctx).unwrap();
+            let env: BTreeMap<_, _> = cmd.get_envs().collect();
+            assert_eq!(
+                env.get(OsStr::new("RUSTC_WRAPPER")),
+                Some(&Some(OsStr::new("")))
+            );
+            assert!(cmd.status().unwrap().success());
+        }
+    }
+}
+
+// Unrecorded seats also must not use the operator's configured cache server.
+// trace:STORY-2641 | ai:codex
+#[test]
+fn story_2326_resource_env_unrecorded_seat_disables_wrapper() {
+    for vendor in [LaunchVendor::Claude, LaunchVendor::Codex, LaunchVendor::Agy] {
+        let mut req = request(ContainmentPosture::Native, LaunchKind::Fresh, &[]);
+        req.vendor = vendor;
+        req.host_main = None;
+        let ctx = LaunchContext::resolve_under(req, false).unwrap();
+        let cmd = spawn_agent(&ctx).unwrap();
+        let env: BTreeMap<_, _> = cmd.get_envs().collect();
+        assert_eq!(
+            env.get(OsStr::new("RUSTC_WRAPPER")),
+            Some(&Some(OsStr::new("")))
+        );
+    }
+}
+
+// Ordinary primary/worktree launches retain the configured operator wrapper.
+// trace:STORY-2641 | ai:codex
+#[test]
+fn story_2326_resource_env_unsandboxed_launch_preserves_wrapper() {
+    let _env =
+        crate::test_env::EnvVarsGuard::apply(&[("RUSTC_WRAPPER", Some("/operator/sccache"))]);
+    let tmp = tempfile::tempdir().unwrap();
+    let host = tmp.path().join("host");
+    let worktree = tmp.path().join("worktree");
+    for cwd in [&host, &worktree] {
+        std::fs::create_dir_all(cwd).unwrap();
+        for vendor in [LaunchVendor::Claude, LaunchVendor::Codex, LaunchVendor::Agy] {
+            for host_main in [None, Some(host.clone())] {
+                let mut req = request(ContainmentPosture::None, LaunchKind::Fresh, &[]);
+                req.vendor = vendor;
+                req.cwd = cwd.clone();
+                req.host_main = host_main;
+                let ctx = LaunchContext::resolve_under(req, false).unwrap();
+                let cmd = spawn_agent(&ctx).unwrap();
+                let env: BTreeMap<_, _> = cmd.get_envs().collect();
+                if super::profile::VendorProfile::for_vendor(vendor).clears_environment() {
+                    assert_eq!(
+                        env.get(OsStr::new("RUSTC_WRAPPER")),
+                        Some(&Some(OsStr::new("/operator/sccache")))
+                    );
+                } else {
+                    assert!(!env.contains_key(OsStr::new("RUSTC_WRAPPER")));
+                }
+            }
+        }
+    }
+}
