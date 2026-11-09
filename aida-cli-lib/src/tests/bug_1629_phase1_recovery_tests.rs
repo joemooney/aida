@@ -1015,13 +1015,25 @@ fn bug_1769_advance_decision() {
 // trace:TASK-3608 | ai:codex
 #[test]
 fn task_3608_host_no_change_survives_lease_discovery() {
-    for mode in 0..4 {
+    for mode in 0..7 {
         let temp = tempfile::tempdir().unwrap();
         let root = git_project(&temp);
         if mode == 1 {
             // The old retry path mistakes this already-merged remote branch
             // for a publication by the current seat.
             git(&root, &["remote", "add", "origin", root.to_str().unwrap()]);
+        }
+        if mode >= 4 {
+            let origin = temp.path().join("empty-origin.git");
+            git(&root, &["init", "-q", "--bare", origin.to_str().unwrap()]);
+            git(
+                &root,
+                &["remote", "add", "origin", origin.to_str().unwrap()],
+            );
+            assert!(matches!(
+                super::probe_branch_on_origin(&root, "main"),
+                super::BranchOriginProbe::Absent
+            ));
         }
         let lane = "native-lease";
         crate::ship_from_seat::record_queue_exit(&root, lane, true, true, || {
@@ -1073,9 +1085,22 @@ exit 0"#;
                 current.open_for_spec =
                     crate::forge::ChangeLookup::Unreachable("search unavailable".into());
             }
+            // Never-pushed seats must not be shelved merely because the
+            // branch lookup failed; a recovered lookup can confirm no-change.
+            // trace:TASK-3608 | ai:codex
+            if mode == 4 || (mode == 6 && call == 1) {
+                current.open_for_branch =
+                    crate::forge::ChangeLookup::Unreachable("branch API unavailable".into());
+            }
+            if mode == 5 {
+                current.open_for_branch =
+                    crate::forge::ChangeLookup::CliFailed("branch request failed".into());
+            }
             Box::new(current)
         }));
-        d.drain_tuning.gh_verify_retries = 1;
+        // Exhaust branch-error cases immediately; modes 1 and 6 exercise
+        // recovery through the real retry loop without more 30-second waits.
+        d.drain_tuning.gh_verify_retries = if matches!(mode, 4 | 5) { 0 } else { 1 };
         // A confirmed no-change must bypass even a failing preflight.
 
         let result = crate::auto_complete::orchestrate(
@@ -1086,16 +1111,17 @@ exit 0"#;
             crate::auto_complete::EscalateMode::Blocks,
         );
         assert_eq!(result.exit_code, 0, "{result:?}");
-        if mode == 2 {
+        if matches!(mode, 2 | 4 | 5) {
             assert!(!result.no_change, "{result:?}");
             assert!(result.shipped_spec_id.is_none());
             assert!(result.shelved_reason.is_none());
             assert!(result.inconclusive_reason.is_some(), "{result:?}");
-            assert!(calls.load(std::sync::atomic::Ordering::SeqCst) >= 4);
+            let minimum_calls = if mode == 2 { 4 } else { 2 };
+            assert!(calls.load(std::sync::atomic::Ordering::SeqCst) >= minimum_calls);
             continue;
         }
         assert!(result.no_change, "{result:?}");
-        if mode == 1 {
+        if matches!(mode, 1 | 6) {
             assert!(calls.load(std::sync::atomic::Ordering::SeqCst) >= 4);
         }
         assert!(result.failed_phase.is_none());

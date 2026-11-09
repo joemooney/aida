@@ -2949,6 +2949,18 @@ impl RealPhaseDriver {
                     "`gh` is not on PATH — auto-complete needs it to track the PR",
                 ))
             }
+            // A receipt proves no publication by this seat, not the absence
+            // of an existing PR (possibly on a swapped branch). Never narrow
+            // a failed lookup to NoPr using origin presence in this case.
+            // trace:TASK-3608 | ai:codex
+            crate::forge::ChangeLookup::CliFailed(why)
+            | crate::forge::ChangeLookup::Unreachable(why)
+                if native_no_change =>
+            {
+                Phase1PrResolve::Retry(format!(
+                    "could not confirm an empty branch PR lookup for `{branch}`: {why}"
+                ))
+            }
             crate::forge::ChangeLookup::CliFailed(why) => {
                 Phase1PrResolve::Fail(auto_complete::PhaseFailure::new(format!(
                     "could not look up the PR for `{branch}`: {why}"
