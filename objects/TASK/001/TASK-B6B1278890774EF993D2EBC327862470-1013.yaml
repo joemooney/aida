@@ -18,12 +18,12 @@ description: |-
   6. [minor] CI unverified: all seven CI jobs and merge-hold-gate were still queued at 7dfdb9e8601d when this verdict was recorded. Confirm green at the rework head.
   7. [process] This head shipped while its own handoff said not to: the TASK-3420 comment of 2026-11-08T07:09 says 'Do not publish these edits while the punt is active', and the spec is still Needs Attention. No advisor ruling on crash-release of unadmitted holders appears on TASK-3420 or STORY-2325. Findings 1 and 2 need that ruling before another implementation round.
   Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
-status: Draft
+status: Superseded
 priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-11-08T19:29:51.575328120Z
-modified_at: 2026-11-08T19:29:51.575328120Z
+modified_at: 2026-11-09T06:52:03.006860820Z
 req_type: Task
 tags:
 - from-advisor:TASK-3420
@@ -37,6 +37,15 @@ history:
   author: joe
   timestamp: 2026-11-08T20:37:26.730403452Z
   changes: []
+- id: 01a1bf14-063e-7973-9fe8-03773c96a6a9
+  author: joe
+  timestamp: 2026-11-09T06:52:03.006855935Z
+  session_id: 01a1beff-fc3b-78e2-93e2-9b0c283b0339
+  harness_version: 2.1.319 (Claude Code)
+  changes:
+  - field_name: status
+    old_value: Draft
+    new_value: Superseded
 filed_at:
   code_sha: db2eb4c39e46704132705ccb2b8300574ead41a6
   branch: main
