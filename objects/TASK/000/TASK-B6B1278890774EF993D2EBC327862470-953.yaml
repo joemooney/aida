@@ -23,7 +23,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-07T20:45:16.684639200Z
-modified_at: 2026-11-09T10:29:22.958636916Z
+modified_at: 2026-11-09T10:29:30.582968630Z
 req_type: Task
 relationships:
 - rel_type: Child
@@ -235,6 +235,23 @@ comments:
   content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: Part B is nearly done: the per-probe legacy rules, shared adoption gate, sweep routing, ratchet shrink and store-error fix all landed. A lease with no ownership key but a holder_record is still retained forever, refusal reasons were collapsed and their tests rewritten, and CI has not run at this head. Part A is out of scope for this Refs slice.. No triage reason was given.'
   created_at: 2026-11-09T10:29:22.958635373Z
   modified_at: 2026-11-09T10:29:22.958635373Z
+- id: 01a1bfdb-1ce9-7170-afb5-9efe8f319957
+  author: joe
+  content: |-
+    REVIEW FINDINGS TO ADDRESS (PR #3670):
+    Verdict: CHANGES REQUESTED
+    Reviewed commit: ab8a0363bc27
+    Recorded: 2026-11-09T10:11:17.417917686+00:00
+    Findings:
+    1. [major][blocker] Prior free-form-scope blocker is only half fixed (ownership/reader.rs:141). Ok(None) counts as legacy only when lease.holder_record.is_none(). key_for_lease returns None for a free-form scope, and for a review lease with no pr_head_sha, so no ownership record can ever exist for those leases. Session start stores a holder_record whenever it finds a Claude ancestor (session_start.rs:3338, leases.rs:357), so such a lease reads Unknown 'ownership record missing; run aida own migrate', which migrate cannot repair, and it is retained even after its holder dies. Main judged it through lease_state_for, which uses the exact holder verdict (leases.rs:1298). Effects: permanent stale-base row at queue_cmd/list.rs:1878, BUG-1205 auto-end refused at session_start.rs:2682, and a head-less crashed reviewer suppressing unpicked-ready-pr through the is_none_or at lane_liveness.rs:1349. From source reading; not executed. Fix: when key_for_lease yields no key, apply the probe's legacy rule regardless of holder_record, keeping Ok(None) on a keyed lease retained per ruling item 3. Add a test with a free-form scope and a dead admitted holder_record; task_3420_free_form_scope_is_not_a_store_failure covers only record() with no holder.
+    2. [major][blocker] Prior refusal-text blocker was resolved by changing the tests, not the code, although that finding said not to weaken the assertions. lease_adoption_refusal (leases.rs:4782-4788) collapses 'a live process still backs it' and 'it records no owning process, so it cannot be proven dead' into 'ownership holder is live or unknown', and bug_2223_orphan_seat_reentry_tests.rs:258, :393 and :444 were rewritten to expect that string. The operator's 'lease is not orphaned: <why>' message and the scope-conflict hint lose the distinction. The legacy path already has the report and can return orphan_adoption_refusal's reason. The adopted-orphan sweep has the same loss: a Live legacy sibling becomes Unknown and prints 'session whose owner cannot be proven gone' instead of 'live session' (session_start.rs:2281-2290). Fix: carry the specific reason out of the Adoption rule, for example in the Unknown why, and restore the 'live process' and 'no owning process' assertions for legacy holders. The doc at leases.rs:4768 ('orphan_adoption_refusal for lease itself') also needs updating.
+    3. [minor] Advisor ruling finding-4 item ('share one store across the batch') is still unmet in queue next (queue_cmd/next.rs:171-175). The closure calls lease_retained, which builds a new LeaseReader per matching lease, so each one reloads the requirement store and rescans the process table. This was raised last round and is unchanged. Create one LeaseReader before the candidate loop and call retained on it.
+    4. [minor] review_lease_running (lane_liveness.rs:1266-1273) builds a new LeaseReader per matching lease, so the live-session scan and load_live_identity_entries run once per open PR with a review lease, where main memoized both across the snapshot. The check also runs before the cheap pr_head_sha filter (lane_liveness.rs:1347-1351). Share one reader across load_open_prs and test the head first.
+    5. [minor] The live-Claude-session case at review progress was deleted and not restored, though last round's finding asked for it. reviewer_lease_with_a_dead_creator_counts_a_live_claude_session_in_its_worktree covered the BUG-2206 path (dead creator, live Claude in the worktree: running; session elsewhere: not running). The rewritten tests cover only the registry arm. Add both cases by seeding LeaseReader.live.
+    6. [minor] CI is not verified at ab8a0363bc27: all seven CI jobs were still pending (0s) when this was recorded. merge-hold-gate fails on the expected supervised hold, which is a release gate and not a code defect. Confirm green at the rework head, including the make check-ci-fast mail-wake fixtures that the implementer reported failing and that the test_env.rs permission change appears aimed at.
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
+  created_at: 2026-11-09T10:29:30.473176004Z
+  modified_at: 2026-11-09T10:29:30.473176004Z
 history:
 - id: 01a1b7c2-6b69-7b02-bd8c-8f40aee2972d
   author: joe
