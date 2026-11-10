@@ -5,15 +5,15 @@
 //! two non-failures read as "CI failed":
 //!
 //! - the supervised **merge-hold** itself — `merge-hold-gate` (ADR-37 Layer 2)
-//!   is *designed* to be red while `.aida/merge-holds/PR-<n>` exists, and
+//!   publishes pending (legacy publishers used red) while a hold exists, and
 //!   `aida pr ship` releases it at merge time; aborting on it at CI-watch time
 //!   made every supervised ship a two-command dance;
 //! - an **informational** matrix (TASK-1205's Windows/macOS jobs) that shares
 //!   the `Build (…)` job name with PR CI and differs only by workflow.
 //!
-//! This module re-reads the per-check rows through `gh` and classifies each red
-//! row. A red check is ignorable only when it is (a) `merge-hold-gate` while the
-//! local hold marker exists, or (b) NOT a branch-protection-required check AND
+//! This module re-reads the per-check rows through `gh`. A pending or red
+//! hold is ignorable only with a local marker or confirmed forge label.
+//! Other red checks are ignored only when NOT branch-protection-required AND
 //! matched by the `[ci]` informational allow-list. Everything else red is a real
 //! failure — so a repo with no branch protection and no allow-list keeps
 //! today's "any red fails" semantics (a literal required-only rule would have
@@ -27,7 +27,7 @@
 use std::path::Path;
 use std::time::{Duration, Instant};
 
-/// The ADR-37 Layer-2 required check whose red state IS the supervised hold.
+/// The ADR-37 Layer-2 required check whose pending (or legacy red) state IS the hold.
 pub(crate) const HOLD_GATE_CHECK: &str = "merge-hold-gate";
 
 /// One row of `gh pr checks <n> --json name,bucket,workflow,link`.
@@ -155,19 +155,19 @@ impl CiGateConfig {
 /// What a red CI verdict really contains once each row is classified.
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub(crate) struct RedRefinement {
-    /// Red checks that gate the merge — any entry means CI really failed.
+    /// Checks that refuse the merge: actual failures or an unconfirmed hold.
     /// These are the resolved rows, including their owning run, rather than
     /// copied names so the detail and recovery hint share one source.
     // trace:BUG-1298 | ai:codex
     pub(crate) real: Vec<CheckRow>,
     /// Red checks ignored because they are non-required AND informational.
     pub(crate) ignored_informational: Vec<String>,
-    /// `merge-hold-gate` is red and a local marker or confirmed forge label
+    /// `merge-hold-gate` is pending or red and a local marker or confirmed forge label
     /// exists: the hold itself, released at merge — not a CI failure.
     pub(crate) hold_gate_is_the_hold: bool,
-    /// `merge-hold-gate` is red but NO local marker exists — a lingering label
-    /// (the marker was cleared without the label re-sync). Counted in `real`
-    /// as well; this flag lets the caller add the `aida merge-hold clear` hint.
+    /// `merge-hold-gate` blocks without a local marker or confirmed active
+    /// label. This includes uncleared recorded holds with a removed label.
+    /// Counted in `real` too; this flag adds the clearance recovery hint.
     pub(crate) hold_gate_label_lingering: bool,
     /// Relevant (non-ignored) checks still pending when classified.
     pub(crate) pending: Vec<String>,
@@ -185,7 +185,7 @@ impl RedRefinement {
         let mut parts = Vec::new();
         if self.hold_gate_is_the_hold {
             parts.push(format!(
-                "`{HOLD_GATE_CHECK}` is red because PR-{pr} is under a supervised merge-hold — releasing at merge"
+                "`{HOLD_GATE_CHECK}` blocks because PR-{pr} is under a supervised merge-hold — releasing at merge"
             ));
         }
         if !self.ignored_informational.is_empty() {
@@ -206,7 +206,7 @@ impl RedRefinement {
         }
         if self.hold_gate_label_lingering {
             parts.push(format!(
-                "`{HOLD_GATE_CHECK}` is red but no local hold marker exists — the label is lingering; \
+                "`{HOLD_GATE_CHECK}` blocks without confirmed local hold authority — inspect recorded hold labels; \
                  `aida merge-hold clear {pr}` re-syncs it"
             ));
         }
@@ -232,12 +232,48 @@ pub(crate) fn classify_red(
     hold_marker_present: bool,
     hold_label_present: bool,
 ) -> RedRefinement {
+    classify_with_recorded_hold(
+        rows,
+        required,
+        cfg,
+        hold_marker_present,
+        hold_label_present,
+        false,
+    )
+}
+
+// trace:BUG-2492 | ai:codex
+fn classify_with_recorded_hold(
+    rows: &[CheckRow],
+    required: &[String],
+    cfg: &CiGateConfig,
+    hold_marker_present: bool,
+    hold_label_present: bool,
+    uncleared_recorded_hold: bool,
+) -> RedRefinement {
     // TASK-1287: an explicit `pr ship` may confirm a label-only supervised
     // hold even when no drain-created marker exists.
     let mut out = RedRefinement::default();
     let is_required = |name: &str| required.iter().any(|r| check_name_eq(r, name));
     for row in rows {
         let informational = !is_required(&row.name) && cfg.is_informational(row);
+        // trace:BUG-2492 | ai:codex — pending statuses are the supervised hold,
+        // not unfinished CI. Only an uncleared recorded hold without release
+        // authority refuses; an unheld inspection remains ordinary pending.
+        if check_name_eq(&row.name, HOLD_GATE_CHECK)
+            && (row.is_pending() || row.is_red())
+            && (hold_marker_present || hold_label_present)
+        {
+            out.hold_gate_is_the_hold = true;
+            continue;
+        }
+        // trace:BUG-2492 | ai:codex
+        if row.is_pending() && check_name_eq(&row.name, HOLD_GATE_CHECK) && uncleared_recorded_hold
+        {
+            out.hold_gate_label_lingering = true;
+            out.real.push(row.clone());
+            continue;
+        }
         if row.is_pending() {
             if !informational {
                 out.pending.push(row.name.clone());
@@ -248,12 +284,8 @@ pub(crate) fn classify_red(
             continue;
         }
         if check_name_eq(&row.name, HOLD_GATE_CHECK) {
-            if hold_marker_present || hold_label_present {
-                out.hold_gate_is_the_hold = true;
-            } else {
-                out.hold_gate_label_lingering = true;
-                out.real.push(row.clone());
-            }
+            out.hold_gate_label_lingering = true;
+            out.real.push(row.clone());
             continue;
         }
         if informational {
@@ -263,6 +295,34 @@ pub(crate) fn classify_red(
         }
     }
     out
+}
+
+// trace:BUG-2492 | ai:codex
+#[allow(clippy::too_many_arguments)]
+fn classify_live_rows(
+    project_root: &Path,
+    forge: &dyn crate::forge::Forge,
+    change: &crate::forge::ChangeRef,
+    rows: &[CheckRow],
+    required: &[String],
+    cfg: &CiGateConfig,
+    marker: bool,
+    label: bool,
+) -> anyhow::Result<RedRefinement> {
+    let needs_labels = !marker
+        && !label
+        && rows
+            .iter()
+            .any(|r| r.is_pending() && check_name_eq(&r.name, HOLD_GATE_CHECK));
+    let recorded = if needs_labels {
+        let (active, recorded, cleared) = forge.recorded_hold_labels(project_root, change)?;
+        active || (recorded && !cleared)
+    } else {
+        false
+    };
+    Ok(classify_with_recorded_hold(
+        rows, required, cfg, marker, label, recorded,
+    ))
 }
 
 /// Parse `gh pr checks --json name,bucket,workflow` output. `gh` exits
@@ -375,13 +435,16 @@ pub(crate) fn refine_red(
             }
             Err(error) => return Err(error),
         };
-        let r = classify_red(
+        let r = classify_live_rows(
+            project_root,
+            forge,
+            change,
             &rows,
             &required,
             &cfg,
             hold_marker_present,
             hold_label_present,
-        );
+        )?;
         if r.is_real() || !r.has_pending() || Instant::now() >= deadline {
             return Ok(r);
         }
@@ -435,13 +498,16 @@ pub(crate) fn wait_for_ship_ci(
                             change.id
                         )));
                     }
-                    let result = classify_red(
+                    let result = classify_live_rows(
+                        project_root,
+                        forge,
+                        change,
                         &rows,
                         &required,
                         &cfg,
                         hold_marker_present,
                         hold_label_present,
-                    );
+                    )?;
                     if result.is_real() {
                         return Err(ShipRefusal::CiRed.error(format!(
                             "CI is red on PR-{}: {}",
@@ -531,17 +597,20 @@ pub(crate) enum HoldGateState {
 }
 
 pub(crate) fn hold_gate_state(rows: &[CheckRow]) -> HoldGateState {
-    let Some(row) = rows
+    // During cutover, a legacy check run and a commit status can share this
+    // name. Both must pass before the post-release wait can finish.
+    // trace:BUG-2492 | ai:codex
+    let mut state = HoldGateState::Absent;
+    for row in rows
         .iter()
-        .find(|r| r.name.eq_ignore_ascii_case(HOLD_GATE_CHECK))
-    else {
-        return HoldGateState::Absent;
-    };
-    if row.bucket == "pass" {
-        HoldGateState::Green
-    } else {
-        HoldGateState::NotGreen
+        .filter(|r| r.name.eq_ignore_ascii_case(HOLD_GATE_CHECK))
+    {
+        if row.bucket != "pass" {
+            return HoldGateState::NotGreen;
+        }
+        state = HoldGateState::Green;
     }
+    state
 }
 
 #[cfg(test)]
@@ -571,6 +640,7 @@ mod tests {
                 required: vec![],
                 row_reads: std::cell::Cell::new(0),
                 registration_polls: std::cell::Cell::new(0),
+                labels: (false, false, false),
             };
             let root = tempfile::tempdir().unwrap();
             let start = Instant::now();
@@ -604,6 +674,7 @@ mod tests {
                 required: vec![],
                 row_reads: std::cell::Cell::new(0),
                 registration_polls: std::cell::Cell::new(0),
+                labels: (false, false, false),
             };
             let result = wait_for_ship_ci(
                 root.path(),
@@ -724,6 +795,7 @@ mod tests {
             required: vec![],
             row_reads: std::cell::Cell::new(0),
             registration_polls: std::cell::Cell::new(0),
+            labels: (false, false, false),
         };
         let mut forwarded = None;
         let result = crate::pr_cmd::ship_ci_handoff(
@@ -752,6 +824,199 @@ mod tests {
             (forge.row_reads.get(), forge.registration_polls.get()),
             (1, 1)
         );
+    }
+
+    // trace:BUG-2492 | ai:codex
+    #[test]
+    fn bug2492_pending_hold_needs_evidence_and_preserves_other_ci() {
+        for (marker, label) in [(true, false), (false, true), (true, true), (false, false)] {
+            for build in ["pass", "pending", "fail"] {
+                let rows = [
+                    row("Build", "CI", build),
+                    row(HOLD_GATE_CHECK, "", "pending"),
+                ];
+                let r = classify_red(
+                    &rows,
+                    &req(&[HOLD_GATE_CHECK]),
+                    &CiGateConfig::default(),
+                    marker,
+                    label,
+                );
+                assert_eq!(r.hold_gate_is_the_hold, marker || label, "{r:?}");
+                assert_eq!(r.is_real(), build == "fail", "{r:?}");
+                assert_eq!(
+                    r.pending.contains(&HOLD_GATE_CHECK.to_string()),
+                    !marker && !label,
+                    "{r:?}"
+                );
+                assert_eq!(
+                    r.pending.contains(&"Build".to_string()),
+                    build == "pending",
+                    "{r:?}"
+                );
+                assert!(!r.hold_gate_label_lingering);
+            }
+        }
+    }
+
+    // trace:BUG-2492 | ai:codex
+    #[test]
+    fn bug2492_recorded_hold_without_active_label_refuses_without_wait() {
+        // BUG-1693: recorded-without-cleared publishes pending even after
+        // someone removes the active label. No marker/active label grants
+        // release authority; this must refuse instead of waiting forever.
+        let root = tempfile::tempdir().unwrap();
+        for (recorded, cleared) in [(false, false), (true, true), (true, false)] {
+            let forge = FakeForge {
+                registrations: std::cell::RefCell::new(vec![
+                    crate::forge::CheckRegistration::Registered,
+                ]),
+                rows: Some(vec![row(HOLD_GATE_CHECK, "", "pending")]),
+                required: req(&[HOLD_GATE_CHECK]),
+                row_reads: std::cell::Cell::new(0),
+                registration_polls: std::cell::Cell::new(0),
+                labels: (false, recorded, cleared),
+            };
+            let error = wait_for_ship_ci(
+                root.path(),
+                &forge,
+                &change(),
+                false,
+                false,
+                Some(Duration::ZERO),
+                Duration::ZERO,
+            )
+            .unwrap_err();
+            assert_eq!(
+                crate::exit_code_for_error(&error),
+                if recorded && !cleared { 20 } else { 21 }
+            );
+            assert_eq!(forge.row_reads.get(), 1);
+            if recorded && !cleared {
+                assert!(format!("{error:#}").contains("recorded hold labels"));
+            }
+        }
+    }
+
+    // trace:BUG-2492 | ai:codex
+    #[test]
+    fn bug2492_release_after_pr_pending_wait_is_bounded() {
+        let root = tempfile::tempdir().unwrap();
+        // The production caller passes this configured ceiling, not a fixed
+        // five-minute timeout that would reject ordinary queued CI.
+        assert_eq!(
+            crate::upgrade_release::after_pr_ci_budget(root.path()),
+            Duration::from_secs(crate::ci_idle_timeout::ci_absolute_ceiling_secs(
+                root.path()
+            ))
+        );
+        std::fs::create_dir_all(root.path().join(".aida")).unwrap();
+        std::fs::write(
+            root.path().join(".aida/config.toml"),
+            "[drain]\nci_absolute = \"2h\"\n",
+        )
+        .unwrap();
+        assert_eq!(
+            crate::upgrade_release::after_pr_ci_budget(root.path()),
+            Duration::from_secs(crate::ci_idle_timeout::ci_absolute_ceiling_secs(
+                root.path()
+            ))
+        );
+        let forge = FakeForge {
+            registrations: std::cell::RefCell::new(vec![
+                crate::forge::CheckRegistration::Registered,
+            ]),
+            rows: Some(vec![row(HOLD_GATE_CHECK, "", "pending")]),
+            required: req(&[HOLD_GATE_CHECK]),
+            row_reads: std::cell::Cell::new(0),
+            registration_polls: std::cell::Cell::new(0),
+            labels: (false, false, false),
+        };
+        let error = crate::upgrade_release::wait_after_pr_ci(
+            root.path(),
+            &forge,
+            &change(),
+            Duration::ZERO,
+        )
+        .unwrap_err();
+        assert_eq!(crate::exit_code_for_error(&error), 21);
+        assert_eq!(forge.row_reads.get(), 1);
+    }
+
+    // trace:BUG-2492 | ai:codex
+    #[test]
+    fn bug2492_release_after_pr_active_only_hold_refuses_without_wait() {
+        let root = tempfile::tempdir().unwrap();
+        let forge = FakeForge {
+            registrations: std::cell::RefCell::new(vec![
+                crate::forge::CheckRegistration::Registered,
+            ]),
+            rows: Some(vec![row(HOLD_GATE_CHECK, "", "pending")]),
+            required: req(&[HOLD_GATE_CHECK]),
+            row_reads: std::cell::Cell::new(0),
+            registration_polls: std::cell::Cell::new(0),
+            labels: (true, false, false),
+        };
+        // A zero budget distinguishes an immediate hold refusal from timeout.
+        let error = crate::upgrade_release::wait_after_pr_ci(
+            root.path(),
+            &forge,
+            &change(),
+            Duration::ZERO,
+        )
+        .unwrap_err();
+        assert_eq!(crate::exit_code_for_error(&error), 20);
+        assert_eq!(forge.row_reads.get(), 1);
+    }
+
+    // Exercise the ship and drain polling boundaries with no time available:
+    // a confirmed pending hold must return immediately, not consume the budget.
+    // trace:BUG-2492 | ai:codex
+    #[test]
+    fn bug2492_pending_hold_releases_ship_and_refine_waits() {
+        let root = tempfile::tempdir().unwrap();
+        for (marker, label) in [(true, false), (false, true)] {
+            let forge = FakeForge {
+                registrations: std::cell::RefCell::new(vec![
+                    crate::forge::CheckRegistration::Registered,
+                ]),
+                rows: Some(vec![
+                    row("Build", "CI", "pass"),
+                    row(HOLD_GATE_CHECK, "", "pending"),
+                ]),
+                required: req(&[HOLD_GATE_CHECK]),
+                row_reads: std::cell::Cell::new(0),
+                registration_polls: std::cell::Cell::new(0),
+                labels: (false, false, false),
+            };
+            let result = wait_for_ship_ci(
+                root.path(),
+                &forge,
+                &change(),
+                marker,
+                label,
+                Some(Duration::ZERO),
+                Duration::ZERO,
+            )
+            .unwrap();
+            assert!(matches!(
+                result,
+                crate::gate::dispatch_types::CiState::Success
+            ));
+            let refined = refine_red(
+                root.path(),
+                &forge,
+                &change(),
+                marker,
+                label,
+                Duration::ZERO,
+                Duration::ZERO,
+            )
+            .unwrap();
+            assert!(refined.hold_gate_is_the_hold);
+            assert!(!refined.has_pending());
+            assert!(!refined.is_real());
+        }
     }
 
     #[test]
@@ -924,8 +1189,17 @@ mod tests {
         required: Vec<String>,
         row_reads: std::cell::Cell<usize>,
         registration_polls: std::cell::Cell<usize>,
+        labels: (bool, bool, bool),
     }
     impl crate::forge::Forge for FakeForge {
+        fn recorded_hold_labels(
+            &self,
+            _: &Path,
+            _: &crate::forge::ChangeRef,
+        ) -> anyhow::Result<(bool, bool, bool)> {
+            Ok(self.labels)
+        }
+
         fn authenticated_user_login(&self) -> anyhow::Result<String> {
             Ok("fake-user".into())
         }
@@ -1058,6 +1332,7 @@ mod tests {
             required: vec![HOLD_GATE_CHECK.into()],
             row_reads: std::cell::Cell::new(0),
             registration_polls: std::cell::Cell::new(0),
+            labels: (false, false, false),
         }
     }
 
@@ -1179,6 +1454,29 @@ mod tests {
         let body = &src[..src.find("#[cfg(test)]").unwrap()];
         assert!(!body.contains(concat!("Command::new(\"g", "h\")")));
         assert!(!body.contains(concat!("Command::new(\"gl", "ab\")")));
+    }
+
+    // trace:BUG-2492 | ai:codex
+    #[test]
+    fn hold_gate_state_requires_all_same_named_rows_to_pass() {
+        assert_eq!(hold_gate_state(&[]), HoldGateState::Absent);
+        for bucket in ["pending", "fail", "cancel", "skipping", "unknown", ""] {
+            let mut rows = vec![
+                row("merge-hold-gate", "legacy workflow", "pass"),
+                row("MERGE-HOLD-GATE", "", bucket),
+                row("Build", "CI", "pass"),
+            ];
+            for _ in 0..2 {
+                assert_eq!(hold_gate_state(&rows), HoldGateState::NotGreen, "{rows:?}");
+                rows.reverse();
+            }
+        }
+        let rows = vec![
+            row("merge-hold-gate", "legacy workflow", "pass"),
+            row("merge-hold-gate", "", "pass"),
+            row("Build", "CI", "pending"),
+        ];
+        assert_eq!(hold_gate_state(&rows), HoldGateState::Green);
     }
 
     #[test]

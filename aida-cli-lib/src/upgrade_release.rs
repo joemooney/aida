@@ -1212,6 +1212,29 @@ pub(crate) fn preview_next_version(current: &str, bump: &str) -> Option<String> 
     })
 }
 
+// trace:BUG-2492 | ai:codex
+pub(crate) fn after_pr_ci_budget(root: &std::path::Path) -> std::time::Duration {
+    std::time::Duration::from_secs(crate::ci_idle_timeout::ci_absolute_ceiling_secs(root))
+}
+
+// trace:BUG-2492 | ai:codex
+pub(crate) fn wait_after_pr_ci(
+    root: &std::path::Path,
+    forge: &dyn crate::forge::Forge,
+    change: &crate::forge::ChangeRef,
+    budget: std::time::Duration,
+) -> anyhow::Result<crate::gate::dispatch_types::CiState> {
+    crate::ci_gate::wait_for_ship_ci(
+        root,
+        forge,
+        change,
+        false,
+        false,
+        Some(budget),
+        std::time::Duration::from_secs(2),
+    )
+}
+
 pub(crate) fn handle_release(
     patch: bool,
     minor: bool,
@@ -1318,7 +1341,13 @@ pub(crate) fn handle_release(
             "{} waiting for {change_noun} #{n}'s checks…",
             crate::glyph(crate::glyphs::Glyph::Arrow).cyan().bold()
         );
-        match forge.watch_ci(&change_ref) {
+        // trace:BUG-2492 | ai:codex — a held status never settles by itself.
+        match wait_after_pr_ci(
+            &merge_root,
+            forge.as_ref(),
+            &change_ref,
+            after_pr_ci_budget(&merge_root),
+        ) {
             Ok(
                 crate::gate::dispatch_types::CiState::Success
                 | crate::gate::dispatch_types::CiState::None,
@@ -1329,8 +1358,9 @@ pub(crate) fn handle_release(
             Ok(state) => anyhow::bail!(
                 "{change_noun} #{n}'s checks did not pass ({state:?}) — not merging or releasing."
             ),
+            // trace:BUG-2492 | ai:codex — holds and red CI are refusals too.
             Err(e) => anyhow::bail!(
-                "could not watch {change_noun} #{n}'s checks via forge provider: {e:#}"
+                "{change_noun} #{n}'s checks did not pass — not merging or releasing: {e:#}"
             ),
         }
 
