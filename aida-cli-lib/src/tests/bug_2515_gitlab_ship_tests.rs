@@ -1,6 +1,5 @@
 //! trace:BUG-2515 | ai:codex
 use super::*;
-use std::os::unix::fs::PermissionsExt;
 
 #[test]
 fn bug_2515_gitlab_ci_detection() {
@@ -42,14 +41,11 @@ esac
 "#,
         calls.display()
     );
-    std::fs::write(bin.join("glab"), script).unwrap();
-    std::fs::set_permissions(bin.join("glab"), std::fs::Permissions::from_mode(0o755)).unwrap();
-    std::fs::write(
-        bin.join("gh"),
+    crate::test_exec::write_executable(&bin.join("glab"), script);
+    crate::test_exec::write_executable(
+        &bin.join("gh"),
         "#!/bin/sh\n[ \"$1\" = --version ] && exit 0\nexit 92\n",
-    )
-    .unwrap();
-    std::fs::set_permissions(bin.join("gh"), std::fs::Permissions::from_mode(0o755)).unwrap();
+    );
     let mut paths = vec![bin];
     paths.extend(std::env::split_paths(
         &std::env::var_os("PATH").unwrap_or_default(),
@@ -113,16 +109,14 @@ fn bug_2515_github_title_and_body_preserved() {
     )
     .unwrap();
     let gh = root.join("gh");
-    std::fs::write(
+    crate::test_exec::write_executable(
         &gh,
         r#"#!/bin/sh
 [ "$1" = --version ] && exit 0
 [ "$*" = 'pr view 7 --json title,body' ] || exit 93
 echo '{"title":"GitHub title","body":"GitHub body"}'
 "#,
-    )
-    .unwrap();
-    std::fs::set_permissions(&gh, std::fs::Permissions::from_mode(0o755)).unwrap();
+    );
     let mut paths = vec![root.to_path_buf()];
     paths.extend(std::env::split_paths(
         &std::env::var_os("PATH").unwrap_or_default(),
