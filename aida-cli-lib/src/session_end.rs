@@ -1,7 +1,27 @@
 //! `aida session end`, session-to-end resolution and the per-session env/cargo target dir (STORY-1488 slice 1)
 // trace:STORY-1488 | ai:claude
 
-use crate::*;
+use crate::worktree;
+use crate::{
+    agent_registry, aggregate_session_activity_into_roles, auto_queue_working_dir,
+    branch_commits_ahead_main, branch_unshipped_patch_count_default, change_lookup_for_branch,
+    ci_probe_with_forge, coordination, cross_role_queue_waiting, decide_ci_action,
+    detect_distributed_store_from, detect_merged_pr_for_branch_via_forge, dirty_gate_outcome,
+    find_main_worktree_root, find_project_root, humanize_age_secs, lease_covers_cwd, lease_path,
+    leases_dir, list_leases, looks_like_spec_id, lossless_prune_worktrees, main_worktree_root_from,
+    maybe_auto_push_store, maybe_digest_mailbox_best_effort, network_retry,
+    peer_lease_sharing_worktree, pr_number_from_scope, probe_live_claudes_in_worktree,
+    process_probe, punt, read_queue_role_counts, render_auto_queue_outcome, resolve_aida_exe,
+    salvage_worktree_patch, session, session_activity_path, session_end_cross_role_warning,
+    session_manifest, status_sections, try_auto_queue_pr_review, unlink_worktree_aida_runtime,
+    wait_for_ci_terminal, watch_ci_for_context_via_forge, workflow_hints, worktree_dirty_entries,
+    zen, AutoQueueOrigin, AutoQueueOutcome, AutoQueueStatus, CiAction, DirtyGateOutcome, PrLookup,
+    SessionLease, StoreAutoPushMode,
+};
+use aida_core::{RequirementStatus, Storage};
+use anyhow::Result;
+use colored::Colorize;
+use std::io::IsTerminal;
 
 /// trace:STORY-73 | ai:claude
 /// TASK-243: format the `Claude session: <id>… (last active …)` line for

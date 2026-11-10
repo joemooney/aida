@@ -2,7 +2,13 @@
 //! plan report, skill lint, and ultraplan prompt assembly (STORY-1488 slice 1)
 // trace:STORY-1488 | ai:claude
 
-use crate::*;
+use crate::{
+    extract_acceptance_section, find_project_root, punt, scan_trace_graph, ULTRAPLAN_STRUCTURE,
+};
+use anyhow::{Context, Result};
+use colored::Colorize;
+use serde::{Deserialize, Serialize};
+use std::collections::HashSet;
 
 /// One section the structured plan template expects. `hard` sections are
 /// errors when absent; the rest are warnings. Matched by case-insensitive

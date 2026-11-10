@@ -2,7 +2,25 @@
 //! burndown command, burndown run waves, wave PR integration and burndown config (STORY-1488 slice 1)
 // trace:STORY-1488 | ai:claude
 
-use crate::*;
+use crate::process_retry::RetryEtxtbsy;
+use crate::{
+    aida_exe_path, aida_home_dir, all_queued_added_at, all_queued_requirement_ids, burndown,
+    collect_open_prs, collect_open_prs_uncached, current_role_instance_is_companion,
+    current_user_id, detect_distributed_store_from, drain_lock, drive_robustness,
+    find_main_worktree_root, find_project_root, findings, forge, get_default_author, headless_tee,
+    humanize_relative, in_flight_lease_role_map, integrate, leases, list_leases, load_dispenser,
+    load_store_for_lookup, machine_readiness, main_worktree_root_from, maybe_sync_pull,
+    network_retry, pane_host, parse_requirement_type, process_probe, queue_cmd,
+    record_role_activity, session, shelve_spec_on_failure, spec_title_cell, status_cleanup,
+    truncate, wait_for_ci_terminal, CiProbe,
+};
+use crate::{pid_start_time, role, worktree};
+use aida_core::liveness::LeaseState;
+use aida_core::DatabaseBackend;
+use aida_core::RequirementStatus;
+use aida_core::{Requirement, RequirementType};
+use anyhow::{Context, Result};
+use colored::Colorize;
 
 // trace:STORY-1728 | ai:claude
 #[path = "burndown_run_args.rs"]
@@ -1644,7 +1662,7 @@ pub(crate) fn leased_spec_ids(project_root: &std::path::Path) -> std::collection
     let live = process_probe::probe_live_claude_sessions();
     list_leases(project_root)
         .into_iter()
-        .filter(|l| !matches!(lease_state_for(l, &live, now), LeaseState::Stale))
+        .filter(|l| !matches!(leases::lease_state_for(l, &live, now), LeaseState::Stale))
         .map(|l| l.scope)
         .collect()
 }
@@ -1733,7 +1751,7 @@ pub(crate) fn handle_burndown_status(json: bool) -> Result<()> {
     let live = process_probe::probe_live_claude_sessions();
     let in_flight: Vec<InFlightLease> = list_leases(&project_root)
         .into_iter()
-        .filter(|l| !matches!(lease_state_for(l, &live, now), LeaseState::Stale))
+        .filter(|l| !matches!(leases::lease_state_for(l, &live, now), LeaseState::Stale))
         .map(|l| InFlightLease {
             scope: l.scope.clone(),
             branch: l.branch.clone(),
