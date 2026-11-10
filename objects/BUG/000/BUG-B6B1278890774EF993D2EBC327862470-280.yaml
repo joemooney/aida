@@ -3,12 +3,12 @@ spec_id: BUG-b6b1278890774ef993d2ebc327862470-280
 agreed_id: BUG-2515
 title: aida pr ship on a GitLab-forge project calls gh directly and detects CI only from .github/workflows
 description: Reported from operator's work machine (Codex, GitLab project hello-work-0x), 2026-11-09. With forge.provider = "gitlab", 'aida pr ship 2' calls 'gh pr view' (aida-cli-lib/src/pr_cmd.rs:6917) and fails with no GitHub host, and CI detection only checks .github/workflows (pr_cmd.rs:6986), so GitLab CI (.gitlab-ci.yml) is skipped. Route MR metadata, CI wait and merge through the forge abstraction (glab for GitLab), detect .gitlab-ci.yml, and add GitLab-forge tests with a fake glab.
-status: NeedsAttention
+status: Approved
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-10T03:07:38.542859262Z
-modified_at: 2026-11-10T14:11:34.173893145Z
+modified_at: 2026-11-10T14:11:40.129065753Z
 req_type: Bug
 comments:
 - id: 01a1c3a1-bccc-7ef0-b6b7-2fdb52e783f5
@@ -209,6 +209,13 @@ comments:
   modified_at: 2026-11-10T14:11:34.173893145Z
   session_id: 01a1c39a-801a-7bd1-8da9-c955a6707f0b
   harness_version: 2.1.321 (Claude Code)
+- id: 01a1c5cc-dde1-73e1-add2-2bdf364cd55d
+  author: joe
+  content: 'Returned from NeedsAttention to Approved via `aida edit --status`. It was punted on: blocked-dependency: Accepted P1 stale queue_cmd import is already fixed by 270fa1b66c and retained at current head 1d38618552. No removed helper references remain; no new source edits warranted. Lane job j20261110T134458501-2-0 compiled successfully and executed all 3 bug_2515 tests: passed. git diff --check passes and checkout is clean. Latest CI failures remain status_sections standalone reviewer tests explicitly excluded by binding 07:05 advisor ruling; host/advisor resolution required. Full check-ci-fast remains host validation because direct Cargo conflicts with lane-only Cargo rules. Do not publish an empty repair.. No triage reason was given.'
+  created_at: 2026-11-10T14:11:40.129057565Z
+  modified_at: 2026-11-10T14:11:40.129057565Z
+  session_id: 01a1c39a-801a-7bd1-8da9-c955a6707f0b
+  harness_version: 2.1.321 (Claude Code)
 history:
 - id: 01a1c3a2-0b0e-7e70-890b-6fe8aaba4acd
   author: joe
@@ -382,6 +389,15 @@ history:
   - field_name: status
     old_value: InProgress
     new_value: NeedsAttention
+- id: 01a1c5cc-dde1-73e1-add2-2bce1483389a
+  author: joe
+  timestamp: 2026-11-10T14:11:40.129040680Z
+  session_id: 01a1c39a-801a-7bd1-8da9-c955a6707f0b
+  harness_version: 2.1.321 (Claude Code)
+  changes:
+  - field_name: status
+    old_value: NeedsAttention
+    new_value: Approved
 filed_at:
   code_sha: 838f14c3c2811c6b63da5d465700cff773c36190
   branch: main
@@ -391,8 +407,3 @@ filed_at:
   vendor: claude
   session: 01a1beff-fc3b-78e2-93e2-9b0c283b0339
   harness_version: 2.1.319 (Claude Code)
-attention_reason:
-  category: blocked-dependency
-  detail: 'Accepted P1 stale queue_cmd import is already fixed by 270fa1b66c and retained at current head 1d38618552. No removed helper references remain; no new source edits warranted. Lane job j20261110T134458501-2-0 compiled successfully and executed all 3 bug_2515 tests: passed. git diff --check passes and checkout is clean. Latest CI failures remain status_sections standalone reviewer tests explicitly excluded by binding 07:05 advisor ruling; host/advisor resolution required. Full check-ci-fast remains host validation because direct Cargo conflicts with lane-only Cargo rules. Do not publish an empty repair.'
-  raised_by: implementer
-  raised_at: 2026-11-10T13:49:18.234962007Z
