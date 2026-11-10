@@ -1,0 +1,21 @@
+id: 01a1c460-1369-7a03-80c3-ed17bd84dcb9
+spec_id: TASK-b6b1278890774ef993d2ebc327862470-1060
+agreed_id: TASK-3780
+title: 'Crate-split PR9a: lift doctor_cmd.rs''s 31 inline #[cfg(test)] blocks into src/tests/doctor_cmd_*_tests.rs (no production-line changes)'
+description: 'SPIKE-713 deep dive section 6 row doctor_cmd.rs, step 1 (PR9 in section 7). doctor_cmd.rs is 16.6k lines with 31 inline cfg(test) blocks interleaved from ~line 450. Move each block verbatim to aida-cli-lib/src/tests/doctor_cmd_<concern>_tests.rs wired with the STORY-770 pattern (#[cfg(test)] #[path = "tests/NAME.rs"] mod NAME;); widen to pub(crate) only the private items the moved tests reach. Acceptance: (1) no production line changes other than visibility widening (scripts/split-lib/verify_pr.sh-style multiset check or an equivalent diff audit in the PR body); (2) test count for the doctor suites unchanged (before/after cargo test --list counts in the PR body); (3) path-keyed ledgers updated with scripts/relocate-ledger-paths.py; (4) make check-ci-fast green. Prerequisite PR1 (TASK-3424) is complete. PR9b (doctor/ directory split) follows.'
+status: Draft
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-11-10T07:33:13.193495787Z
+modified_at: 2026-11-10T07:33:13.193495787Z
+req_type: Task
+filed_at:
+  code_sha: e682f76092e65c6556f7881fe8a5e0aa48516740
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: e682f76092e
+  vendor: claude
+  session: 01a1c39a-801a-7bd1-8da9-c955a6707f0b
+  harness_version: 2.1.321 (Claude Code)
