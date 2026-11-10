@@ -1399,6 +1399,13 @@ const SHA_R2: &str = "cd21a1dc0a9e2222222222222222222222222222";
 
 fn record_pr(root: &Path, pr: &str, verdict: &str, sha: &str, by: &str, findings: &[String]) {
     let path = verdict_path(root, pr);
+    // trace:STORY-2698 | ai:codex — explicitly clear resolved findings.
+    let clear = vec![String::new()];
+    let findings = if verdict == "approved" && findings.is_empty() {
+        &clear
+    } else {
+        findings
+    };
     record_verdict_at_path(
         root,
         &path,
@@ -1750,7 +1757,8 @@ fn bug_1505_reader_resolves_legacy_key_aliases() {
                      "reviewer":"claude advisor","date":"2026-09-19",
                      "blocking_findings":["f1"]}"#;
     let v = parse_recorded_verdict(legacy).unwrap();
-    assert_eq!(v.kind, VerdictKind::Approved);
+    // trace:STORY-2698 | ai:codex — unclassified legacy findings block.
+    assert_eq!(v.kind, VerdictKind::RequestChanges);
     assert_eq!(v.reviewed_sha.as_deref(), Some("c87ac9e4"));
     assert_eq!(v.recorded_by.as_deref(), Some("claude advisor"));
     assert_eq!(v.recorded_at.as_deref(), Some("2026-09-19"));

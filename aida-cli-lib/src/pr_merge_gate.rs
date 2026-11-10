@@ -325,8 +325,9 @@ mod task_168_pr_verdict_metadata_tests {
                 .body,
         )
         .unwrap();
-        // BUG-1505: the drain stamp canonicalizes the reviewer's spelling.
-        assert_eq!(value["verdict"], "approved");
+        // trace:STORY-2698 | ai:codex — stamping preserves findings, so legacy
+        // findings without an explicit disposition must fail closed.
+        assert_eq!(value["verdict"], "request-changes");
         assert_eq!(value["summary"], "clean");
         assert_eq!(value["findings"][0], "note");
         assert_eq!(value["mode"], "deep");

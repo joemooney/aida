@@ -1756,3 +1756,144 @@ fn carried_auto_release_case(failure: Option<&str>) {
         proof.base_tip
     );
 }
+
+// trace:STORY-2698 | ai:codex
+#[test]
+fn all_deferred_direct_and_collected_approvals_release_rework_hold() {
+    use crate::gate::ledger;
+    use aida_core::db::DatabaseBackend;
+    for collected in [false, true] {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        let _guard =
+            crate::test_env::AmbientGuard::hermetic_and(root, None, &[("AIDA_CONTAINED", None)]);
+        let store = root.join(".aida-store");
+        std::fs::create_dir_all(&store).unwrap();
+        for args in [
+            vec!["init", "--initial-branch=aida-store", "--quiet"],
+            vec!["config", "user.email", "test@example.com"],
+            vec!["config", "user.name", "Test"],
+            vec!["commit", "--allow-empty", "-m", "fixture"],
+        ] {
+            assert!(std::process::Command::new("git")
+                .args(args)
+                .current_dir(&store)
+                .output()
+                .unwrap()
+                .status
+                .success());
+        }
+        crate::test_env::enroll_synthetic_home(&store).unwrap();
+        std::fs::create_dir_all(root.join(".aida")).unwrap();
+        let config = root.join(".aida/config.toml");
+        let configure = || {
+            std::fs::write(
+                &config,
+                "[deployment]\nmode = \"distributed\"\nstore_path = \".aida-store\"\n",
+            )
+            .unwrap()
+        };
+        configure();
+        let backend = crate::test_env::home_fixture_backend(&store)
+            .unwrap()
+            .with_dispenser(crate::load_dispenser(&store).unwrap());
+        backend
+            .add_requirement(aida_core::Requirement::new("seed".into(), String::new()))
+            .unwrap();
+        let mut f = Fixture::new();
+        let key = "PR-37";
+        let path = rv::verdict_path(root, key);
+        mh::place_hold(root, &f.hold).unwrap();
+        let mut refusal = f.body["rounds"][0].as_object().unwrap().clone();
+        refusal.insert("verdict".into(), "request-changes".into());
+        ledger::record_verdict_at(&path, &refusal, None).unwrap();
+        f.body["findings"] = serde_json::json!(["bounded follow-up"]);
+        f.body["finding_dispositions"] = serde_json::json!([{"severity":"minor","disposition":"deferred","rationale":"safe later"}]);
+        f.body["reviewed_sha"] = HEAD.into();
+        if collected {
+            struct Checks;
+            impl rv::VerdictCollectionChecks for Checks {
+                fn check_record(
+                    &self,
+                    c: &rv::VerdictCandidate,
+                ) -> std::result::Result<(), String> {
+                    if c.verdict.reviewed_sha.as_deref() == Some(HEAD) {
+                        Ok(())
+                    } else {
+                        Err("wrong head".into())
+                    }
+                }
+                fn check_identity(&self, _: &str) -> std::result::Result<(), String> {
+                    Ok(())
+                }
+            }
+            // Leave room for filesystem mtime granularity; the old arming
+            // refusal is dated in October and cannot enter this launch.
+            let since = std::time::SystemTime::now() - std::time::Duration::from_secs(60);
+            f.body["recorded_at"] = chrono::Utc::now().to_rfc3339().into();
+            let worktree = root.join("reviewer");
+            let handoff = rv::verdict_path(&worktree, key);
+            std::fs::create_dir_all(handoff.parent().unwrap()).unwrap();
+            std::fs::write(&handoff, f.body.to_string()).unwrap();
+            // Fail after persisting the pending ledger barrier, then repair
+            // the sink and retry exactly the same launch/handoff.
+            std::fs::remove_file(&config).unwrap();
+            let collect =
+                || rv::collect_standalone_verdict(root, &worktree, &path, &[], since, &Checks);
+            let failure = collect().unwrap_err();
+            assert!(failure.contains("deferred findings pending"), "{failure}");
+            assert!(rv::read_recorded_verdict(root, key)
+                .unwrap()
+                .kind
+                .requires_changes());
+            let pending = ledger::project::newest_verdict_event(root, key).unwrap();
+            let pending_at: std::time::SystemTime = rv::ledger_order_time(&pending).unwrap().into();
+            assert!(
+                pending_at >= since,
+                "retry must reconcile the pending ledger candidate"
+            );
+            configure();
+            assert!(collect().unwrap().verdict.kind.approves());
+            assert!(collect().unwrap().verdict.kind.approves());
+        } else {
+            ledger::record_verdict_at(&path, f.body.as_object().unwrap(), None).unwrap();
+        }
+        let history = RetainedHistory::projected(root, key).unwrap();
+        assert!(!history.archived.iter().any(rv::delivery_pending));
+        let current = rv::current_verdict(root, key).unwrap();
+        let body = serde_json::from_str(&current.body).unwrap();
+        let release = eligible(
+            &f.hold,
+            &body,
+            &history,
+            HEAD,
+            &[Some(&f.req)],
+            &sa::GrantCheck::Valid(f.grant.clone()),
+            &no_mandate,
+            &held_check(),
+        )
+        .unwrap();
+        release_with(
+            root,
+            &f.hold,
+            &release,
+            &[],
+            || Ok(HEAD.into()),
+            |_| Ok(()),
+            || Ok(()),
+        )
+        .unwrap();
+        assert!(!mh::hold_is_open(root, 37));
+        let sweeps: Vec<_> = backend
+            .list_requirements(true)
+            .unwrap()
+            .into_iter()
+            .filter(|r| r.tags.contains("kind:finding-sweep"))
+            .collect();
+        assert_eq!(sweeps.len(), 1);
+        assert_eq!(
+            sweeps[0].description.matches("bounded follow-up").count(),
+            1
+        );
+    }
+}
