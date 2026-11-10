@@ -3,12 +3,12 @@ spec_id: SPEC-b6b1278890774ef993d2ebc327862470-024
 agreed_id: TASK-3052
 title: TASK-3429 needs advisor tool-count ruling and dell1 build timing evidence before completion
 description: 'Round 6 on PR #3687 at 0e7c2237ef71: AC3 still specifies 72 unchanged tools while the preserved descriptor block has 58; no advisor amendment is recorded. AC5 requires dell1 clean-build comparisons with cargo --timings or an advisor amendment; this seat reports hostname imac and has no dell1 evidence. Findings 5 and 6 have local fixes in aida-cli-lib/src/trace.rs, src/tests/statusline_tests.rs and src/lib.rs. Findings 1-4 are not resolved. aida punt succeeded and set Needs Attention with a publication veto. Host must preserve the veto and avoid completion credit. If triage authorizes partial publication, use a trailing (Refs TASK-3429), disclose the open criteria in PR body, obtain final-head CI and recorded merge-hold clearance.'
-status: Draft
+status: Rejected
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-08T19:48:57.053077318Z
-modified_at: 2026-11-10T14:27:48.729591344Z
+modified_at: 2026-11-10T14:27:51.210497291Z
 req_type: Task
 tags:
 - from-implementer:TASK-3429
@@ -27,6 +27,15 @@ history:
   author: joe
   timestamp: 2026-11-08T20:37:27.554032398Z
   changes: []
+- id: 01a1c5db-af2a-7672-8186-bfbf4e09656a
+  author: joe
+  timestamp: 2026-11-10T14:27:51.210493787Z
+  session_id: 01a1c530-c917-7f13-ab81-f6b5e1d1cd30
+  harness_version: 2.1.322 (Claude Code)
+  changes:
+  - field_name: status
+    old_value: Draft
+    new_value: Rejected
 filed_at:
   aida_version: 0.16.0
   aida_build_sha: eeec474c545
