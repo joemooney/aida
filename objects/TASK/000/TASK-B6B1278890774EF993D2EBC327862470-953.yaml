@@ -23,7 +23,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-07T20:45:16.684639Z
-modified_at: 2026-11-10T18:48:23.309559127Z
+modified_at: 2026-11-10T18:52:41.906660491Z
 req_type: Task
 relationships:
 - rel_type: Child
@@ -531,6 +531,13 @@ comments:
   modified_at: 2026-11-10T18:48:02.398992023Z
   session_id: 01a1c530-c917-7f13-ab81-f6b5e1d1cd30
   harness_version: 2.1.322 (Claude Code)
+- id: 01a1c6ce-2832-75d3-a76f-d3ebc20e77c7
+  author: dirtlab
+  content: 'Round 12 A1: current branch already contains generalized local original/handover sidecar ACK guard (f81cbd2e55). Added new original-relay sidecar-only regression with message-only canonical copy and strengthened later-run exclusion after UUID ACK. Both original-relay variants assert pre/post-refusal visibility, delivered_to and owned_delivery identity, later-run exclusion and UUID ACK continuity, then permit retirement after ACK. Validation: lane job j20261110T185144315-2-0, cargo test --profile agent -p aida-core --lib -- task3420: 13 passed. git diff --check passed. Changes left uncommitted for native host publication. Configured codegraph client absent; doctor reports missing.'
+  created_at: 2026-11-10T18:52:41.906660491Z
+  modified_at: 2026-11-10T18:52:41.906660491Z
+  session_id: 01a1c6cc9ddb
+  harness_version: codex-cli 0.167.0
 history:
 - id: 01a1b7c2-6b69-7b02-bd8c-8f40aee2972d
   author: joe

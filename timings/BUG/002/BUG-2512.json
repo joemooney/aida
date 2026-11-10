@@ -3,22 +3,13 @@
   "spec": "BUG-2512",
   "publishes": [
     {
-      "at": "2026-11-10T18:46:51.085385835Z",
+      "at": "2026-11-10T18:46:43.808635031Z",
       "closed_by": "auto-bump"
     }
   ],
   "events": [
     {
-      "ts": "2026-11-10T18:46:10.505471951Z",
-      "spec": "BUG-2512",
-      "seat": "advisor",
-      "kind": {
-        "event": "PrMerged",
-        "pr": 3798
-      }
-    },
-    {
-      "ts": "2026-11-10T18:46:50.935850122Z",
+      "ts": "2026-11-10T18:46:43.722153005Z",
       "spec": "BUG-2512",
       "kind": {
         "event": "SpecCompleted",
