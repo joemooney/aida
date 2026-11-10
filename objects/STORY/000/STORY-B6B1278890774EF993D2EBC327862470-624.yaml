@@ -8,7 +8,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-10T03:06:45.552915977Z
-modified_at: 2026-11-10T20:53:25.252381365Z
+modified_at: 2026-11-10T20:53:26.493066861Z
 req_type: Story
 comments:
 - id: 01a1c6fc-55c1-7890-a827-b867a3ee295d
@@ -30,6 +30,21 @@ comments:
   content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: Full sweep: required CI green; Python scaffold ignores declared runtime and runner scan aborts on an inaccessible candidate.. No triage reason was given.'
   created_at: 2026-11-10T20:53:25.252376889Z
   modified_at: 2026-11-10T20:53:25.252376889Z
+  session_id: 01a1c530-c917-7f13-ab81-f6b5e1d1cd30
+  harness_version: 2.1.322 (Claude Code)
+- id: 01a1c73c-b2d4-7c91-b8c4-92e1a66d155d
+  author: joe
+  content: |-
+    REVIEW FINDINGS TO ADDRESS (STORY-2701):
+    Verdict: CHANGES REQUESTED
+    Reviewed commit: dd7b44ed331a
+    Recorded: 2026-11-10T20:37:31.079174459+00:00
+    Findings:
+    1. [P2] aida-cli-lib/src/gitlab_project_create.rs:558: Respect project Python compatibility when generating CI. A valid pyproject.toml with requires-python >=3.13 (including projects scaffolded by uv on newer Python) receives image python:3.12 and pip install -e . therefore refuses before tests. Select a compatible interpreter from project metadata/pinning or provide an explicit compatible selection; add coverage for a newer declared Python requirement.
+    2. [P2] aida-cli-lib/src/gitlab_project_create.rs:675-677: Do not abort runner discovery on the first failed detail lookup. A project can list an inherited/group runner whose details this token cannot read followed by a compatible accessible project or instance runner; the ? on GET runners/id exits before considering the latter and incorrectly reports setup incomplete. Continue scanning independent candidates, retain per-runner unknown/error diagnostics, and report unavailable/unknown only if no compatible candidate can be positively verified. Cover a first-candidate 403 followed by a matching runner.
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
+  created_at: 2026-11-10T20:53:26.356469703Z
+  modified_at: 2026-11-10T20:53:26.356469703Z
   session_id: 01a1c530-c917-7f13-ab81-f6b5e1d1cd30
   harness_version: 2.1.322 (Claude Code)
 history:
