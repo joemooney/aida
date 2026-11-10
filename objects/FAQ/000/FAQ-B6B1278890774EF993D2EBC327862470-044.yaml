@@ -11,13 +11,13 @@ description: |
   - Install AIDA and vendor CLIs. Put ~/.local/bin on PATH in .profile and .bashrc; use a login shell for remote commands, for example `ssh dell1 'bash -lc "aida doctor --lane-host"'`.
   - Log in with the selected vendor CLI, for example `codex login`. Credential-source presence does not verify token validity; unsupported auth probes remain advisory.
   - Run any system-level install/userns/AppArmor commands printed by `aida doctor --fix-sandbox` yourself.
-  - Fetch dependencies on the host before starting lanes, and verify cache transport with a lane job. The doctor checks the configured executable Cargo wrapper; in-sandbox cache reachability remains advisory.
+  - Fetch dependencies on the host before starting lanes. The doctor requires a configured executable Cargo wrapper and runs a lane-job sandbox probe that starts a private sccache server, queries its transport, and writes/reads a temporary cache file. Sandbox, transport or write failures produce a required finding with a fix hint.
 status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-07T19:47:52.567998136Z
-modified_at: 2026-11-08T00:32:26.392612840Z
+modified_at: 2026-11-10T03:23:05.531030637Z
 req_type: Faq
 history:
 - id: 01a1b79c-1360-77b1-b44f-5c865f1ced63
@@ -42,6 +42,12 @@ history:
   author: dirtlab
   timestamp: 2026-11-08T00:32:30.164559442Z
   session_id: 01a1b88c6132
+  harness_version: codex-cli 0.167.0
+  changes: []
+- id: 01a1c37b-20ba-76f2-8f2c-32fef820a669
+  author: dirtlab
+  timestamp: 2026-11-10T03:23:08.858082385Z
+  session_id: 01a1c3775fff
   harness_version: codex-cli 0.167.0
   changes: []
 filed_at:
