@@ -8,7 +8,7 @@ priority: Low
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-07T10:46:47.827833836Z
-modified_at: 2026-11-10T02:24:32.351286926Z
+modified_at: 2026-11-10T02:24:34.074540414Z
 req_type: Task
 relationships:
 - rel_type: Child
@@ -194,6 +194,21 @@ comments:
   content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: Full five-file sweep: disabled slice respects signed scope, but raw executable lookup and lib.rs formatting fail required CI; two fixes needed.. It was punted on: blocked-dependency: Review finding 1 remains host-only: local HEAD d782a710e008 still ends (TASK-3368), contrary to the signed Refs-only slice. Git metadata is read-only in this native seat, so I cannot amend or replace that commit or verify publisher completion semantics. Advisor comment reports PR title/body and no-complete marker corrected host-side; finding 2 therefore needs no source edit. I dispute requiring an artificial code commit for these publication-only findings. Authorized publisher must ensure commit/squash metadata cannot grant completion and use (Refs TASK-3368). Disabled broker code is already present and unchanged. Manual rollout gate stays pending; preserve all punt/hold vetoes.. No triage reason was given.'
   created_at: 2026-11-10T02:24:32.351280123Z
   modified_at: 2026-11-10T02:24:32.351280123Z
+  session_id: 01a1beff-fc3b-78e2-93e2-9b0c283b0339
+  harness_version: 2.1.319 (Claude Code)
+- id: 01a1c345-7e8f-7733-b0a4-12f16a80e3a9
+  author: joe
+  content: |-
+    REVIEW FINDINGS TO ADDRESS (TASK-3368):
+    Verdict: CHANGES REQUESTED
+    Reviewed commit: d782a710e008
+    Recorded: 2026-11-10T01:37:13.580678939+00:00
+    Findings:
+    1. [P1] aida-cli-lib/src/proc_broker/tests.rs:301: std::env::current_exe() violates the raw executable lookup guard, which CI lib-1 job 129558823440 fails on this exact file (left 1/right 0). Use crate::aida_bin::current_executable_path() for the exact-test child, as test_env does; retain test-runner execution and do not weaken the guard. Validate cargo test -p aida-cli-lib no_cli_source_outside_the_resolver_uses_raw_current_executable_lookup and cargo test -p aida-cli-lib proc_broker::tests::inherited_connection_authenticates_actual_sender_and_exit.
+    2. [P1] aida-cli-lib/src/lib.rs:37-41: the new proc_broker module placement fails CI gates job 129558823976 Check formatting. Apply workspace formatting and retain the disabled-host explanation and TASK-3368 trace with proc_broker rather than leaving them above advisor when the declaration moves. Validate cargo fmt --all -- --check and the existing lib_part rustfmt check. Reviewer watch policy forbids local fixes, so implementer must repair this mechanical CI failure.
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
+  created_at: 2026-11-10T02:24:33.935498675Z
+  modified_at: 2026-11-10T02:24:33.935498675Z
   session_id: 01a1beff-fc3b-78e2-93e2-9b0c283b0339
   harness_version: 2.1.319 (Claude Code)
 history:
