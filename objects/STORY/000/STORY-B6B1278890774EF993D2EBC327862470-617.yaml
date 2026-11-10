@@ -42,7 +42,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-09T15:57:18.371798469Z
-modified_at: 2026-11-10T00:31:35.923210239Z
+modified_at: 2026-11-10T00:47:41.058180382Z
 req_type: Story
 tags:
 - architecture
@@ -165,6 +165,20 @@ comments:
   modified_at: 2026-11-10T00:21:43.710298961Z
   session_id: 01a1c2c957a5
   harness_version: codex-cli 0.167.0
+- id: 01a1c2ec-cb99-7e43-a55c-bc15c174d2f2
+  author: joe
+  content: |-
+    REVIEW FINDINGS TO ADDRESS (STORY-2694):
+    Verdict: CHANGES REQUESTED
+    Reviewed commit: 9afd43e12627
+    Recorded: 2026-11-10T00:31:33.160870841+00:00
+    Findings:
+    1. [P1] Complete carry-over through actual Rework auto-release (aida-cli-lib/src/pr_cmd.rs:2094; aida-cli-lib/src/gate/rework_hold_release.rs:239,347,930,994). For an otherwise eligible Rework hold with an authorized APPROVED verdict at H and clean-merge head H2, ship_refusal_release can now return Released, but auto_release_with first invokes approval_attested/drain_merge_approval_gate, which still rejects H as stale; eligible additionally requires sha == head, and the release-time corpus check uses corpus_merge_gate without carry-over. Thus aida merge-hold auto-release still refuses and the hold stays armed despite the acceptance requirement that clean merges release the hold without re-review. Thread validated, durable H-to-H2 coverage through this release path and both validation passes, keep H as the reviewed SHA and H2 as the clearance/head binding, and retain grant, sensitive-spec and absorbed-refusal checks. Add a regression through auto_release_with or the command that asserts actual hold-release ledger state at H2; consumer_clean_merge_releases_hold_with_original_review_and_durable_proof currently only checks RefusalRelease::Released and cannot catch this gap (STORY-2694 ac7f9646).
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
+  created_at: 2026-11-10T00:47:40.953210368Z
+  modified_at: 2026-11-10T00:47:40.953210368Z
+  session_id: 01a1beff-fc3b-78e2-93e2-9b0c283b0339
+  harness_version: 2.1.319 (Claude Code)
 history:
 - id: 01a1c233-af48-7011-9e22-fa81c9459065
   author: joe
