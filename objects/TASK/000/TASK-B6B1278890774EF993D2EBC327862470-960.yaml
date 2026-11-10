@@ -8,7 +8,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-07T23:39:41.575597Z
-modified_at: 2026-11-10T10:08:41.810685108Z
+modified_at: 2026-11-10T10:16:11.356584067Z
 req_type: Task
 relationships:
 - rel_type: Child
@@ -562,6 +562,12 @@ comments:
   content: 'Batch 2 prepared exactly per 2026-11-10 09:49/09:51 rulings: 36 authorized Rust files plus ledger; doctor_root.rs excluded; no other files, renames, qualified-call rewrites or non-import code/comment changes. Removed 52 globs, 130 -> 78, zero additions. Final launcher cargo check --profile agent -p aida-cli-lib --tests PASS, job j20261110T100254120-2-0 exit 0 (2m23s; overlay-stale seed warning). No executed Rust test claimed. All 17 tooling fixtures, ExecContext (1239), store writers (3480/294), portability, 84-gate classification, rustfmt, diff hygiene and exact-scope/import-only audits pass. BLOCKER: ownership-liveness ratchet rejects six new module-scope lease_state_for imports in burndown_run, plan_intent, ps_integrate, session_reap, status_awaiting and status_cmd. The ruling permits call rewrites only for import collisions, so no workaround was applied; punt recorded, Needs Attention, publication veto active. Lean: authorize batch-1-style qualification of existing calls through leases, without ratchet changes. make check-ci-fast stopped at first TUI seam gate (exit130) after detecting direct Cargo incompatible with runner-only policy; full gate unverified. Recorded requested Refs subject and Help-Golden unchanged body before punt, but do not publish until punt resolved. Uncommitted edits; no git metadata changes, queue completion or review verdict. Handoff with complete file list: /tmp/task3428-b2-handoff.md.'
   created_at: 2026-11-10T10:08:41.810685108Z
   modified_at: 2026-11-10T10:08:41.810685108Z
+  session_id: 01a1c4e56e04
+- id: 01a1c4f5-475c-7223-bf8e-1e515df50707
+  author: joe
+  content: 'One host fast-gate fix round per explicit user request: fixed the six ownership-liveness module-site additions by removing lease_state_for imports and qualifying 11 existing calls through leases::lease_state_for. Only burndown_run.rs, plan_intent.rs, ps_integrate.rs, session_reap.rs, status_awaiting.rs and status_cmd.rs changed. No ratchet ledger/policy changes; per-function probe counts preserved. Exact failing host gate now PASS: 10 git-maintenance/ownership-liveness tests, zero failures. Glob ratchet PASS at 78, rustfmt/diff hygiene and six-file/11-call scope audit PASS. untested=true: launcher cargo check --profile agent -p aida-cli-lib --tests job j20261110T101527176-3282969-0 refused before compilation, exit125: target overlay mount failed, special device overlay does not exist. Host must repair runner and recompile/rerun full make check-ci-fast. Existing punt, Needs Attention status and publication veto explicitly retained per user instruction despite the technical ratchet fix. Edits left uncommitted; no publication, queue completion or verdict. Handoff: /tmp/task3428-b2-fast-fix-handoff.md.'
+  created_at: 2026-11-10T10:16:11.356584067Z
+  modified_at: 2026-11-10T10:16:11.356584067Z
   session_id: 01a1c4e56e04
 history:
 - id: 01a1b862-2e0b-7a50-a4d0-25097c707b57
