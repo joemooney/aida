@@ -8,7 +8,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-10T03:06:53.745899716Z
-modified_at: 2026-11-10T16:06:06.380730345Z
+modified_at: 2026-11-10T16:06:25.202131636Z
 req_type: Bug
 history:
 - id: 01a1c5dc-be7b-7782-a9ad-5a6e068ae27e
@@ -27,6 +27,12 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a1c635-f214-7481-a8b8-429a86a97685
+  author: dirtlab
+  timestamp: 2026-11-10T16:06:26.580319821Z
+  session_id: 01a1c6359c9e
+  harness_version: codex-cli 0.167.0
+  changes: []
 filed_at:
   code_sha: 838f14c3c2811c6b63da5d465700cff773c36190
   branch: main
