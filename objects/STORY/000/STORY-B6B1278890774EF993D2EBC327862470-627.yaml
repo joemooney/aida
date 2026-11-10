@@ -8,7 +8,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-10T03:52:00.571796159Z
-modified_at: 2026-11-10T15:31:41.173213473Z
+modified_at: 2026-11-10T15:36:48.786961486Z
 req_type: Story
 comments:
 - id: 01a1c399-6840-7383-843e-9930f6eaa3f7
@@ -166,6 +166,18 @@ comments:
     Edits remain uncommitted for host publication. No commit, push, PR creation, merge, queue completion or review recording performed. S2/S3 remain outside this slice.
   created_at: 2026-11-10T15:31:41.173213473Z
   modified_at: 2026-11-10T15:31:41.173213473Z
+  session_id: 01a1c60ee993
+  harness_version: codex-cli 0.167.0
+- id: 01a1c61a-d192-76e0-8010-c6cf1cf5ed9c
+  author: dirtlab
+  content: |
+    One fast-gate fix round: added the missing aida-porcelain/src/main.rs|main|write_all inventory row in scripts/store-writers.toml. Reviewed both receivers: inherited stdout/stderr only, forwarding failed observational reader output. Classified read_only with existing failure passthrough and cross-binary parity evidence; no store/file handle, runtime authority, scanner exemption or behavior change.
+
+    Validation: python3 scripts/check-store-writers.py passed (3490 sink sites reconciled; 294 operation mappings); python3 -m unittest tests/test_store_writer_inventory.py passed (54 executed tests); git diff --check passed. Only scripts/store-writers.toml changed. No Cargo run needed for this inventory-only correction. The full fast gate was not rerun in this seat; the previously documented read-only containment fixture restriction still applies.
+
+    Edits remain uncommitted for host publication; no commit/push/PR/queue completion/review recording performed. Existing punt/hold vetoes remain in force.
+  created_at: 2026-11-10T15:36:48.786961486Z
+  modified_at: 2026-11-10T15:36:48.786961486Z
   session_id: 01a1c60ee993
   harness_version: codex-cli 0.167.0
 history:
