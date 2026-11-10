@@ -359,6 +359,32 @@ fn append_before_skill_line(prompt: String, block: &str) -> String {
     }
 }
 
+/// Distinguish absent evidence from a review that authoritatively cleared findings.
+// trace:BUG-2509 | ai:codex
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) enum ReviewResult<T> {
+    Available(T),
+    ClearedByApproval,
+    Unavailable,
+}
+
+impl ReviewResult<String> {
+    pub(crate) fn as_deref(&self) -> ReviewResult<&str> {
+        match self {
+            Self::Available(value) => ReviewResult::Available(value.as_str()),
+            Self::ClearedByApproval => ReviewResult::ClearedByApproval,
+            Self::Unavailable => ReviewResult::Unavailable,
+        }
+    }
+
+    pub(crate) fn findings(&self) -> Option<&str> {
+        match self {
+            Self::Available(value) => Some(value),
+            _ => None,
+        }
+    }
+}
+
 /// Everything the queue-work pickup prompt is built from, gathered by
 /// `handle_queue_work`.
 pub(crate) struct PickupInputs<'a> {
@@ -366,8 +392,8 @@ pub(crate) struct PickupInputs<'a> {
     pub role: &'a str,
     pub plan_only: bool,
     pub guided: bool,
-    /// The live review findings block, if the spec is in rework.
-    pub review_findings: Option<&'a str>,
+    /// Local review evidence; only Unavailable permits durable-comment fallback.
+    pub review_findings: ReviewResult<&'a str>,
     /// The spec's comments (replies included in the tree).
     pub spec_comments: &'a [aida_core::Comment],
     /// The rework PR's conflict with main, if any.
@@ -386,13 +412,15 @@ pub(crate) fn assemble_pickup_prompt(inputs: &PickupInputs<'_>) -> String {
     // Remote lanes may have no host gate ledger. Keep the durable hand-off
     // visible as well as using it to order advisor direction.
     // trace:BUG-2509 | ai:codex
-    let review_findings = inputs.review_findings.or_else(|| {
-        latest_matching(
+    let review_findings = match inputs.review_findings {
+        ReviewResult::Available(findings) => Some(findings),
+        ReviewResult::ClearedByApproval => None,
+        ReviewResult::Unavailable => latest_matching(
             inputs.spec_comments,
             crate::review_verdict_display::is_findings_block,
         )
-        .map(|comment| comment.content.as_str())
-    });
+        .map(|comment| comment.content.as_str()),
+    };
     let implementer_item = !inputs.role.eq_ignore_ascii_case("reviewer")
         && !inputs.plan_only
         && !inputs.guided
@@ -400,7 +428,14 @@ pub(crate) fn assemble_pickup_prompt(inputs: &PickupInputs<'_>) -> String {
     // Agent gates keep the findings in the base prompt: they get no lead.
     let gate = std::env::var("AIDA_AGENT_GATE_NAME").is_ok();
     let direction = if implementer_item && !gate {
-        resolve_direction(inputs.spec_comments, review_findings)
+        let mut direction = resolve_direction(inputs.spec_comments, review_findings);
+        // A local clearance also retires the historical verdict timestamp.
+        if matches!(inputs.review_findings, ReviewResult::ClearedByApproval) {
+            if let Some((_, standing)) = &mut direction.brief {
+                *standing = BriefStanding::Binding;
+            }
+        }
+        direction
     } else {
         AdvisorDirection::default()
     };

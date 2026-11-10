@@ -37,7 +37,9 @@ fn assemble(
         role: "implementer",
         plan_only: false,
         guided: false,
-        review_findings: findings,
+        review_findings: findings
+            .map(ReviewResult::Available)
+            .unwrap_or(ReviewResult::Unavailable),
         spec_comments: comments,
         conflict,
         ci_failures: None,
@@ -65,7 +67,7 @@ fn ci_failures_sit_below_the_leads_and_above_the_findings() {
         role: "implementer",
         plan_only: false,
         guided: false,
-        review_findings: Some(FINDINGS),
+        review_findings: ReviewResult::Available(FINDINGS),
         spec_comments: &comments,
         conflict: Some(&conflict),
         ci_failures: Some("CI FAILURES AT THE PR HEAD:\n- lib-0: some_test\n"),
@@ -614,4 +616,71 @@ fn detect_main_conflict_forecasts_through_fetch_and_merge_tree() {
         "the stale refs alone would still forecast a conflict"
     );
     assert_eq!(detect_main_conflict(&clone, 7, "pr-branch"), None);
+}
+
+// trace:BUG-2509 | ai:codex
+#[test]
+fn newer_local_approval_does_not_replay_durable_refusal_in_pickup() {
+    use crate::gate::ledger::{store, ChangeKey, EventBody, GateEvent};
+    let _env = crate::test_env::EnvVarsGuard::apply(&[
+        ("AIDA_AGENT_GATE_NAME", None),
+        ("AIDA_CONTAINED", None),
+    ]);
+    let root = tempfile::tempdir().unwrap();
+    let comments = vec![comment(60, REWORK_BRIEF), comment(30, FINDINGS)];
+    let plan = item_plan();
+    let render = || {
+        let review = crate::queue_cmd::resolve_rework_review(
+            root.path(),
+            "BUG-051",
+            "BUG-051",
+            Some("PR-3291"),
+        )
+        .unwrap();
+        assemble_pickup_prompt(&PickupInputs {
+            plan: &plan,
+            role: "implementer",
+            plan_only: false,
+            guided: false,
+            review_findings: review.as_deref(),
+            spec_comments: &comments,
+            conflict: None,
+            ci_failures: None,
+        })
+    };
+    // With no ledger, the durable refusal remains authoritative.
+    assert!(render().contains("ITEMS STILL OPEN (AUTHORITATIVE TASK)"));
+    for (kind, age, findings) in [
+        ("request_changes", 30, vec!["run the bwrap tests"]),
+        ("unknown", 10, vec![]),
+        ("approved", 5, vec![]),
+    ] {
+        let record = serde_json::json!({
+            "verdict": kind,
+            "reviewed_sha": "34031ff4a06c1d24c08846619f87aaa66b31dec7",
+            "recorded_by": "claude-reviewer",
+            "recorded_at": (Utc::now() - chrono::Duration::minutes(age)).to_rfc3339(),
+            "findings": findings,
+        })
+        .as_object()
+        .unwrap()
+        .clone();
+        let key = ChangeKey::pr(3291);
+        let mut event = GateEvent::new(key, EventBody::Verdict { record });
+        event.head = Some("34031ff4a06c1d24c08846619f87aaa66b31dec7".into());
+        store::append(root.path(), key, vec![event]).unwrap();
+        let prompt = render();
+        if kind != "approved" {
+            assert!(
+                prompt.contains("ITEMS STILL OPEN (AUTHORITATIVE TASK)"),
+                "{prompt}"
+            );
+            assert!(prompt.contains("OLDER CONTEXT"), "{prompt}");
+        } else {
+            assert!(!prompt.contains("run the bwrap tests"), "{prompt}");
+            assert!(!prompt.contains("ITEMS STILL OPEN"), "{prompt}");
+            assert!(!prompt.contains("OLDER CONTEXT"), "{prompt}");
+            assert!(prompt.contains("binding;"), "{prompt}");
+        }
+    }
 }

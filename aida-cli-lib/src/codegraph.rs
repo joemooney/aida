@@ -734,7 +734,7 @@ mod tests {
                     role,
                     plan_only: false,
                     guided: false,
-                    review_findings: None,
+                    review_findings: crate::rework_direction::ReviewResult::Unavailable,
                     spec_comments: &[],
                     conflict: None,
                     ci_failures: None,
