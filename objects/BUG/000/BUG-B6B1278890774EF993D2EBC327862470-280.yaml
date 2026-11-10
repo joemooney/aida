@@ -3,12 +3,12 @@ spec_id: BUG-b6b1278890774ef993d2ebc327862470-280
 agreed_id: BUG-2515
 title: aida pr ship on a GitLab-forge project calls gh directly and detects CI only from .github/workflows
 description: Reported from operator's work machine (Codex, GitLab project hello-work-0x), 2026-11-09. With forge.provider = "gitlab", 'aida pr ship 2' calls 'gh pr view' (aida-cli-lib/src/pr_cmd.rs:6917) and fails with no GitHub host, and CI detection only checks .github/workflows (pr_cmd.rs:6986), so GitLab CI (.gitlab-ci.yml) is skipped. Route MR metadata, CI wait and merge through the forge abstraction (glab for GitLab), detect .gitlab-ci.yml, and add GitLab-forge tests with a fake glab.
-status: InProgress
+status: NeedsAttention
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-10T03:07:38.542859262Z
-modified_at: 2026-11-10T08:14:27.013460759Z
+modified_at: 2026-11-10T08:19:57.117990415Z
 req_type: Bug
 comments:
 - id: 01a1c3a1-bccc-7ef0-b6b7-2fdb52e783f5
@@ -106,6 +106,13 @@ comments:
   modified_at: 2026-11-10T08:12:22.578896220Z
   session_id: 01a1c39a-801a-7bd1-8da9-c955a6707f0b
   harness_version: 2.1.321 (Claude Code)
+- id: 01a1c48a-dc3d-7d92-bb5f-616388a33d45
+  author: dirtlab
+  content: 'Current head 9905896784 revalidated without source edits: resolved-forge metadata migration and raw-gh count correction already present. Lane job j20261110T081510084-2-0: ratchet 1 passed; job j20261110T081604080-2-0: bug_2515 and bug_1957 11 passed. git diff --check passes. status_sections unchanged per ruling. Required make check-ci-fast blocked at TUI seam: direct Cargo stopped under lane rules; lane-runner wrapper rejected by fast-gate nested-aida guard. Host must run gate. Punt records manual validation blocker; no publication attempted.'
+  created_at: 2026-11-10T08:19:57.117990415Z
+  modified_at: 2026-11-10T08:19:57.117990415Z
+  session_id: 01a1c485cb4b
+  harness_version: codex-cli 0.167.0
 history:
 - id: 01a1c3a2-0b0e-7e70-890b-6fe8aaba4acd
   author: joe
@@ -194,6 +201,15 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a1c48a-c015-7653-ba51-4c573b4ec02c
+  author: dirtlab
+  timestamp: 2026-11-10T08:19:49.910001529Z
+  session_id: 01a1c485cb4b
+  harness_version: codex-cli 0.167.0
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: NeedsAttention
 filed_at:
   code_sha: 838f14c3c2811c6b63da5d465700cff773c36190
   branch: main
@@ -203,3 +219,9 @@ filed_at:
   vendor: claude
   session: 01a1beff-fc3b-78e2-93e2-9b0c283b0339
   harness_version: 2.1.319 (Claude Code)
+attention_reason:
+  category: blocked-dependency
+  detail: 'Current head 9905896784 already contains the forge metadata migration and exact-count ratchet correction; all 12 requested targeted tests pass. No source edits warranted under binding ruling excluding status_sections failures (STORY-2695 S1). Required make check-ci-fast cannot finish in this lane: TUI seam invokes cargo check directly, but local Cargo must use lane job runner; wrapper delegation is rejected by fast-gate nested-aida guard. Host validation/manual gate needed; do not publish an empty repair or change excluded tests.'
+  lean: Run make check-ci-fast on the host at 9905896784; route remaining status_sections CI failures to STORY-2695 S1 and re-review this existing head.
+  raised_by: implementer
+  raised_at: 2026-11-10T08:19:49.909993119Z
