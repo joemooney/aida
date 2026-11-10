@@ -8,7 +8,7 @@ priority: Low
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-10T03:07:15.181924192Z
-modified_at: 2026-11-10T18:07:08.780437776Z
+modified_at: 2026-11-10T18:36:41.845154628Z
 req_type: Task
 comments:
 - id: 01a1c674-cd0d-76a2-8159-4728d6fffd38
@@ -51,6 +51,15 @@ comments:
     Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
   created_at: 2026-11-10T18:02:38.153173691Z
   modified_at: 2026-11-10T18:02:38.153173691Z
+  session_id: 01a1c530-c917-7f13-ab81-f6b5e1d1cd30
+  harness_version: 2.1.322 (Claude Code)
+- id: 01a1c6bf-81f5-74c0-9389-8bcd8c3971db
+  author: joe
+  content: |-
+    CI FAILURES at 29b23be7d228 (run 42872616743). Fix exactly these before pushing; a push without a code change for them will fail again and must not be made:
+    FAIL flags — 2 cited --flag token(s) did not resolve to the cited command or its parent/child command subtree:
+  created_at: 2026-11-10T18:36:41.845154628Z
+  modified_at: 2026-11-10T18:36:41.845154628Z
   session_id: 01a1c530-c917-7f13-ab81-f6b5e1d1cd30
   harness_version: 2.1.322 (Claude Code)
 history:
