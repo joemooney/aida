@@ -3,12 +3,12 @@ spec_id: BUG-b6b1278890774ef993d2ebc327862470-285
 agreed_id: BUG-2520
 title: 'Script deputy refuses every job from a delegated advisor seat: grant issued to the seat handle, deputy runs as the operator'
 description: 'Since 2026-11-10 morning, ''aida deputy shell submit --file F --wait'' from the advisor seat (claude-advisor-111) is refused for every job, including a one-line echo probe (re-verified 2026-11-10 15:00 MST): refused:grant: Session grant 6205c611 (advisor) was rejected: it was issued to ''claude-advisor-111'' but this process runs as ''joe''. Restarting both deputies (09:14) did not help. Effect: no deputy hold clears, no local lanes, and operator-only acts (aida edit --mode, aida pr train for supervised specs) fall back to the operator by hand, which is exactly what the deputy exists to prevent. Expected: the deputy validates the grant''s delegation chain (principal joe -> advisor seat) rather than requiring the seat handle to equal the deputy process''s user. Acceptance: (1) a job submitted from a delegated advisor seat whose grant''s principal is the deputy''s user runs and returns its exit code; (2) a grant whose principal is a different user is still refused; (3) regression test covering both.'
-status: Approved
+status: InProgress
 priority: High
-owner: ''
+owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-10T22:02:08.404275451Z
-modified_at: 2026-11-10T22:45:49.333120137Z
+modified_at: 2026-11-10T22:49:39.252588303Z
 req_type: Bug
 history:
 - id: 01a1c7a3-9695-7391-b916-f063cc5d8821
@@ -20,6 +20,13 @@ history:
   - field_name: status
     old_value: Draft
     new_value: Approved
+- id: 01a1c7a7-18b4-70d0-bd98-1ac16151e1e6
+  author: aida-session-start
+  timestamp: 2026-11-10T22:49:39.252586800Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: InProgress
 filed_at:
   code_sha: a3d2ba258e4015854c6f615c6481beb672b8798c
   branch: main
