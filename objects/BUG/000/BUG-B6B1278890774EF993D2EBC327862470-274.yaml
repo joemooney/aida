@@ -8,7 +8,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-09T23:19:37.402958538Z
-modified_at: 2026-11-10T15:15:05.618782613Z
+modified_at: 2026-11-10T15:25:09.435356944Z
 req_type: Bug
 comments:
 - id: 01a1c4ae-da06-7200-aca3-d82b81889341
@@ -53,6 +53,13 @@ comments:
   modified_at: 2026-11-10T15:12:34.347453222Z
   session_id: 01a1c39a-801a-7bd1-8da9-c955a6707f0b
   harness_version: 2.1.321 (Claude Code)
+- id: 01a1c610-25bb-7ca2-9f74-8a3df3a07716
+  author: dirtlab
+  content: 'Addressed accepted P1 from PR-3789 per advisor ruling: pickup preserves Available/ClearedByApproval/Unavailable review evidence; durable fallback runs only for Unavailable. Explicit approval retires historical verdict timing. Added ledger-to-prompt regression for absent ledger, refusal plus older brief, unknown verdict, and newer approval. Validation: j20261110T151646259-2-0 ran 17 rework_direction tests, all passed; j20261110T151749168-2-0 ran 5 bug_2430 tests, all passed. Touched-file rustfmt checks and git diff --check passed. Edits remain uncommitted for native host publication.'
+  created_at: 2026-11-10T15:25:09.435356944Z
+  modified_at: 2026-11-10T15:25:09.435356944Z
+  session_id: 01a1c606e847
+  harness_version: codex-cli 0.167.0
 history:
 - id: 01a1c5dc-b09f-7163-9c1c-790850bc42af
   author: joe
