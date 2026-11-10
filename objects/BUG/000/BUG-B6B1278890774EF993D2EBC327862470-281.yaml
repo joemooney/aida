@@ -8,7 +8,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-10T03:07:46.884496242Z
-modified_at: 2026-11-10T09:01:56.724269154Z
+modified_at: 2026-11-10T09:16:46.860013558Z
 req_type: Bug
 comments:
 - id: 01a1c4af-2f66-7590-be69-dad5e180b9a4
@@ -18,6 +18,22 @@ comments:
   modified_at: 2026-11-10T08:59:37.702513797Z
   session_id: 01a1c39a-801a-7bd1-8da9-c955a6707f0b
   harness_version: 2.1.321 (Claude Code)
+- id: 01a1c4be-e38c-7d33-96d9-cd63af52a4a1
+  author: dirtlab
+  content: |
+    Implemented BUG-2516 under the 2026-11-10 advisor ruling. The default-branch commit scan and trailer/Refs filters were already forge-neutral; GitLab completion was blocked because the later open-change guard unconditionally reported UnsupportedForge. The guard now uses crate::forge::GitLabForge's glab-backed spec lookup, requiring two clear observations, while preserving GitHub's checked search and PureGit's default-branch-log completion. GitLab successful blank search responses are unavailable, not absence evidence. No GitLab pr ship changes.
+
+    Changed files: aida-cli-lib/src/db_reconcile.rs, forge.rs, reconcile_evidence.rs, tests/auto_bump_done_tests.rs. A local bare remote plus fake glab on PATH exercises the actual plain-pull handler: the completing squash trailer completes InProgress and stamps its default-branch SHA; Refs stays InProgress. Open MR, failed exit, empty response, malformed JSON, non-array and malformed/zero-ID rows preserve.
+
+    Validation: lane job j20261110T090937077-2-0 executed auto_bump_done_tests: 103 passed, including both BUG-2516 regressions and existing GitHub/PureGit cases. Lane job j20261110T091020559-2-0 executed reconcile_evidence: 11 passed. rustfmt --check on all four files and git diff --check passed. Initial fixture failures were corrected by supporting glab's --version sanity probe; the final 114 tests passed.
+
+    Broader validation limitation: make check-ci-fast stopped at unrelated Codex mail-wake fixtures with 'health project directory must be owned without shared writes' (4 failures, 17 errors). That nominally build-free target unexpectedly invoked cargo check; all targeted Cargo tests used the host lane runner. The documented host codegraph client was absent, so navigation used rg.
+
+    Native handoff: edits left uncommitted; host launcher must commit/publish and complete the queue after publication. No commit, push, PR, queue done, review record or pr ship was performed by this seat. untested=false.
+  created_at: 2026-11-10T09:16:46.860013558Z
+  modified_at: 2026-11-10T09:16:46.860013558Z
+  session_id: 01a1c4b14855
+  harness_version: codex-cli 0.167.0
 history:
 - id: 01a1c4af-3ce1-7db1-8f61-609deb96783e
   author: joe
