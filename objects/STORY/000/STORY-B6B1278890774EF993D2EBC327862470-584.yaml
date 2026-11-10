@@ -18,7 +18,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-08T02:58:08.667753563Z
-modified_at: 2026-11-10T04:24:18.654665335Z
+modified_at: 2026-11-10T04:36:33.253368291Z
 req_type: Story
 tags:
 - area:human-wait
@@ -563,6 +563,13 @@ comments:
   content: 'ADVISOR RULING (2026-11-10 04:00 UTC) — binding for the PR #3748 rework at head c261ce2712; supersedes the 01:44 UTC ruling. Fix exactly one finding: F1 [P2] aida-cli-lib/src/park_runtime.rs:155-169: WaitLock::acquire creates the final runtime directory but never syncs its pinned parent. Sync the pinned parent directory after creating the runtime directory (propagate failure), and add fault-injection or syscall-order test coverage for that directory-creation boundary next to the existing file-replacement tests. Push to the existing PR branch story-2661-park-s1. LIGHT gate: one targeted cargo test -p aida-cli-lib park_runtime plus make check-ci-fast.'
   created_at: 2026-11-10T04:00:18.290016912Z
   modified_at: 2026-11-10T04:00:18.290016912Z
+  session_id: 01a1c39a-801a-7bd1-8da9-c955a6707f0b
+  harness_version: 2.1.321 (Claude Code)
+- id: 01a1c3be-5565-7653-a446-4ab2a5448e53
+  author: joe
+  content: 'ADVISOR RULING (2026-11-10 04:36 UTC) — binding for PR #3748 rework at head a4ffa4349c; supersedes earlier rulings. Fix exactly one finding: F1 [P2] park_runtime.rs:173-177: the AlreadyExists path skips the parent fsync, so a retry or concurrent acquirer can write a record without the runtime directory entry ever being durable. Ruling: on EVERY WaitLock::acquire, after the runtime directory exists (created now or AlreadyExists), fsync the pinned parent before any record write; propagate failure. Do not track who created it. Change the test at tests/park_runtime_tests.rs:172-198 so the retry after an injected sync failure MUST sync the parent, and add a test that the AlreadyExists path syncs it. LIGHT gate: cargo test -p aida-cli-lib park_runtime + make check-ci-fast.'
+  created_at: 2026-11-10T04:36:33.253368291Z
+  modified_at: 2026-11-10T04:36:33.253368291Z
   session_id: 01a1c39a-801a-7bd1-8da9-c955a6707f0b
   harness_version: 2.1.321 (Claude Code)
 history:
