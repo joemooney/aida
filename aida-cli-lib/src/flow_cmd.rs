@@ -393,7 +393,7 @@ fn collect(
     Ok(rows)
 }
 fn run(matches: &clap::ArgMatches, _: &crate::cmdkit::DispatchCtx) -> Result<()> {
-    let FlowCommand::Report { since, until } = FlowArgs::from_arg_matches(matches)?.command;
+    let FlowCommand::Report { since, until, json } = FlowArgs::from_arg_matches(matches)?.command;
     let since = bound(&since)?;
     let until = until
         .as_deref()
@@ -422,7 +422,7 @@ fn run(matches: &clap::ArgMatches, _: &crate::cmdkit::DispatchCtx) -> Result<()>
         crate::forge::flow_report_read,
     )?;
     let report = json!({"since":since,"until":until,"prs":rows,"aggregate":aggregate(&rows),"notes":["Pushes are a commit-count proxy, not push events.","CI wall time uses startedAt to updatedAt for completed runs; queue time excluded, rerun history may be unavailable.","Train time is the longest merged train PR lifetime linked by local coverage evidence; absent evidence is unknown.","Missing ledger is unknown; verdict counts cover available local evidence only."]});
-    if crate::output_format_is_json() {
+    if json || crate::output_format_is_json() {
         println!("{}", serde_json::to_string_pretty(&report)?);
     } else {
         println!("PR     open_h pushes first_review_h approval_land_h train_h verdicts / CI runs / findings");
@@ -454,6 +454,26 @@ fn display(v: &Value) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+    // trace:STORY-2699 | ai:codex
+    #[test]
+    fn flow_json_projection_passes_dispatch_gate() {
+        for spelling in ["--format=json", "--json"] {
+            let mut argv: Vec<String> =
+                ["aida", "flow", "report", "--since", "2026-11-09", spelling]
+                    .into_iter()
+                    .map(str::to_string)
+                    .collect();
+            crate::json_capability_gate(&mut argv).unwrap();
+            let matches = crate::command_registry::built_command()
+                .try_get_matches_from(argv)
+                .unwrap();
+            let flow = matches.subcommand_matches("flow").unwrap();
+            assert!(matches!(
+                FlowArgs::from_arg_matches(flow).unwrap().command,
+                FlowCommand::Report { json: true, .. }
+            ));
+        }
+    }
     #[test]
     fn flow_registered_read_only_args() {
         let cmd = crate::command_registry::built_command();

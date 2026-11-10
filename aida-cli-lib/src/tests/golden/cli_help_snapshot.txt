@@ -2137,6 +2137,9 @@ Options:
       --until <UNTIL>
           Inclusive RFC3339 timestamp or YYYY-MM-DD (UTC); defaults to now
 
+      --json
+          Emit the report as JSON (same as --format json)
+
       --format <FORMAT>
           Pin the output format regardless of whether stdout is a terminal: human = tables, toon =
           compact agent output, json = machine JSON. Default (unset) is human at a TTY, toon when
@@ -33882,6 +33885,11 @@ Working on aida itself
         "name": "help",
         "takes_value": false,
         "help": "Print help (see more with '--help')"
+      },
+      {
+        "name": "json",
+        "takes_value": false,
+        "help": "Emit the report as JSON (same as --format json)"
       },
       {
         "name": "since",

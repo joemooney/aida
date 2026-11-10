@@ -794,7 +794,8 @@ current working directory, as they would for a shell lookup.
 <!-- trace:STORY-2699 | ai:codex -->
 `aida flow report --since 2026-11-09 --until 2026-11-10 --format json`
 reports GitHub PRs landed in the inclusive UTC window on local `origin/main`.
-Omit `--until` to use now, or `--format json` for a human table. Dates accept
+Omit `--until` to use now, or omit `--format json` for a human table.
+`--json` is equivalent to `--format json`. Dates accept
 `YYYY-MM-DD` or RFC3339. Fetch on the host beforehand when fresh history is
 needed; this command does not fetch, mutate the ledger, or change gates.
 As in the advisor baseline, landing uses the matching main commit’s committer

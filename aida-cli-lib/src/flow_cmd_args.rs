@@ -19,5 +19,8 @@ pub(crate) enum FlowCommand {
         /// Inclusive RFC3339 timestamp or YYYY-MM-DD (UTC); defaults to now.
         #[arg(long)]
         until: Option<String>,
+        /// Emit the report as JSON (same as --format json).
+        #[arg(long)]
+        json: bool,
     },
 }
