@@ -70,6 +70,15 @@ fn doctor(raw: &str, now: DateTime<Utc>, tz: &FixedOffset) -> Result<DateTime<Ut
 fn classified_flags() -> Vec<(&'static str, Kind)> {
     use Kind::*;
     vec![
+        // trace:STORY-2699 | ai:codex
+        (
+            "aida flow report --since",
+            NotATimeBound("absolute RFC3339 or UTC calendar-date reporting boundary; preserves the advisor baseline window semantics"),
+        ),
+        (
+            "aida flow report --until",
+            NotATimeBound("absolute RFC3339 or UTC calendar-date reporting boundary; preserves the advisor baseline window semantics"),
+        ),
         ("aida approvals --since", Shared(shared)),
         ("aida approvals --until", Shared(shared)),
         ("aida findings classes --since", Shared(shared)),

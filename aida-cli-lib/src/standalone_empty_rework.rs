@@ -1,6 +1,8 @@
 //! Detect an unchanged, still blocked PR before a standalone lane reports success.
 // trace:BUG-2452 | ai:codex
-use crate::*;
+use crate::launch;
+use aida_core::{RequirementStatus, Storage};
+use anyhow::{Context, Result};
 use std::path::Path;
 use std::process::Command;
 use std::time::Duration;

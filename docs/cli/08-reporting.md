@@ -800,3 +800,43 @@ current working directory, as they would for a shell lookup.
 
 <!-- trace:STORY-1673 | ai:codex -->
 <!-- trace:STORY-1673 | ai:claude -->
+
+## Flow report
+
+<!-- trace:STORY-2699 | ai:codex -->
+`aida flow report --since 2026-11-09 --until 2026-11-10 --format json`
+reports GitHub PRs landed in the inclusive UTC window on local `origin/main`.
+Omit `--until` to use now, or omit `--format json` for a human table.
+`--json` is equivalent to `--format json`. Dates accept
+`YYYY-MM-DD` or RFC3339. Fetch on the host beforehand when fresh history is
+needed; this command does not fetch, mutate the ledger, or change gates.
+As in the advisor baseline, landing uses the matching main commit’s committer
+timestamp and trailing `(#N)` PR number, rather than a separate forge merge
+timestamp; train-created commits can predate the actual merge.
+
+Per PR, the report includes open hours, pushes, verdict counts, first-review
+hours, approval-to-land hours, CI runs and classified change-request findings.
+As in the advisor baseline, **pushes means commit count**, a proxy rather than
+actual push events. Local ledger verdict records are walked recursively;
+findings deduplicate by their first 120 characters per PR. The first matching
+classifier wins: CI failure, metadata/title/trailer, scope incomplete, tests
+missing, conflict/merge, correctness defect, then other. Severity preserves the
+baseline's P0–P3, BLOCKER/BLOCKING, minor, nit and cosmetic labels; unmarked
+findings are UNTAGGED.
+
+Approval-to-land requires the latest recorded verdict to approve; a later
+refusal makes it unknown. CI hours run from `startedAt` to `updatedAt` for
+completed GitHub Actions runs associated with retained PR commits (including
+failed runs). This excludes queue time; GitHub's latest attempt may replace
+rerun history, and force-pushed-away commits are unavailable. Train coverage on a train PR links its members through `proof.sources`. Train
+hours are that train PR’s forge creation-to-merge duration; multiple linked
+trains remain visible and the longest merged duration supplies the aggregate.
+This does not measure queue admission. Missing train/ledger evidence is unknown, never zero.
+A missing ledger is explicitly marked; unreadable or malformed evidence and
+forge failures fail the report. Commit/run caps refuse potentially truncated
+answers. GitHub credentials and `gh` are required.
+
+Aggregate distributions include sample count, median (average of the middle
+pair for even samples), and nearest-rank p90 for each timing, pushes, and CI
+run durations. Null measurements are excluded. The report is observational;
+local evidence availability and the commit-count proxy limit comparisons.

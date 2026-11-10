@@ -13,7 +13,7 @@
 //!     end`, and a missing one is reported as a session id, not a branch.
 //!
 //! trace:BUG-b6b1278890774ef993d2ebc327862470-024 | ai:claude
-use crate::*;
+use crate::{lease_path, leases_dir, resolve_session_to_end, unique_prefix_len, SessionLease};
 
 fn lease_at(
     id: &str,

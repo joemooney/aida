@@ -1,7 +1,7 @@
 //! Host-capacity preflight for unattended drains.
 // trace:TASK-1298 | ai:codex
 
-use crate::*;
+use crate::{aida_exe_path, build_git_sha, find_project_root};
 use anyhow::Result;
 use colored::Colorize;
 use serde::Serialize;
