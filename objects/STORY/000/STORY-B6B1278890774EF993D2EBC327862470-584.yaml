@@ -13,12 +13,12 @@ description: |
   3. Works for Claude, Codex and AGY through their headless resume commands; one adapter test per vendor using a recorded fixture.
   4. A wait whose seat or session has been lost surfaces as an escalation, never a silent drop.
   Ref: docs/plans/2026-11-07-infinity-agent-architecture-deep-dive.md section 3.3 and the SPIKE-711 results table.
-status: InProgress
+status: NeedsAttention
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-08T02:58:08.667753563Z
-modified_at: 2026-11-10T15:11:55.461690907Z
+modified_at: 2026-11-10T15:14:03.735900924Z
 req_type: Story
 tags:
 - area:human-wait
@@ -1118,6 +1118,15 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a1c605-fd57-7712-b264-74327e42d27b
+  author: dirtlab
+  timestamp: 2026-11-10T15:14:03.735924306Z
+  session_id: 01a1c60401ee
+  harness_version: codex-cli 0.167.0
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: NeedsAttention
 filed_at:
   code_sha: dc41ee8da2f44f88178936fc1a8e6cb7168a3de7
   branch: main
@@ -1127,3 +1136,9 @@ filed_at:
   vendor: claude
   session: 01a1b8be-8170-7fb2-89ab-ecb4c6eee98c
   harness_version: 2.1.319 (Claude Code)
+attention_reason:
+  category: design-fork
+  detail: 'Slice-2 brief supersedes the sketch and requires answering to re-queue the spec with the answer in the brief, while deferring AC3/AC4 to slice 3. Need a binding decision on the queue ownership handoff: should this be a bound-resume queue entry retaining the original dirty seat/session (requiring the queue consumer and currently deferred vendor resume admission), or an ordinary fresh-lane queue entry after explicit checked release/transfer of retained ownership? The signed sketch explicitly suppresses generic autoqueue for bound waits and requires reclaim doors to refuse retained ownership, so ordinary enqueue alone cannot deliver AC2 safely. Current main has only the runtime-record foundation, no bound-resume queue consumer or checked release protocol. No source edits made; publication must remain vetoed pending this decision.'
+  lean: Use a bound-resume queue entry with the answer as data, preserving the original seat and session; explicitly include the minimum queue consumer and admitted Claude/native-Codex resume path in slice 2, while deferring AGY adapter coverage and lost-session escalation to slice 3.
+  raised_by: implementer
+  raised_at: 2026-11-10T15:14:03.735900924Z
