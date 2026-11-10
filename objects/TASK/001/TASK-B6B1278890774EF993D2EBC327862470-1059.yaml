@@ -8,7 +8,7 @@ priority: Low
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-10T03:07:15.181924192Z
-modified_at: 2026-11-10T18:02:42.697171913Z
+modified_at: 2026-11-10T18:07:08.780437776Z
 req_type: Task
 comments:
 - id: 01a1c674-cd0d-76a2-8159-4728d6fffd38
@@ -98,6 +98,10 @@ history:
   session_id: 01a1c530-c917-7f13-ab81-f6b5e1d1cd30
   harness_version: 2.1.322 (Claude Code)
   changes: []
+- id: 01a1c6a4-81cd-7ff0-9bcc-f14790c935cc
+  author: joe
+  timestamp: 2026-11-10T18:07:12.333419431Z
+  changes: []
 filed_at:
   code_sha: 838f14c3c2811c6b63da5d465700cff773c36190
   branch: main
@@ -107,3 +111,11 @@ filed_at:
   vendor: claude
   session: 01a1beff-fc3b-78e2-93e2-9b0c283b0339
   harness_version: 2.1.319 (Claude Code)
+failure_reason:
+  phase: reviewer
+  phase_index: 3
+  kind: verdict:request-changes
+  detail: Compact permission slice is coherent, but the advisor-required terminal spacing ratchet still has no CI invocation; broad glyph migration is explicitly deferred and seven CI jobs remain pending.
+  recovery_hint: address the review findings, move TASK-3779 back to In Progress, and clear the PR hold only after approval
+  shelved_by: reviewer
+  shelved_at: 2026-11-10T18:07:08.780437776Z
