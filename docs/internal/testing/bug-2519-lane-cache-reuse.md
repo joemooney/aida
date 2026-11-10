@@ -35,7 +35,24 @@ Upstream references:
 - https://github.com/mozilla/sccache/blob/main/docs/Rust.md
 - https://github.com/mozilla/sccache/issues/2652
 
+## Approved diagnostic slice
+
+The binding advisor ruling of 2026-11-10 16:39 UTC on PR-3796 at
+`12a88007` authorizes publication of this diagnostic as a **Refs BUG-2519**
+slice. It claims only acceptance clause `.ac289506`, covered by the advisory
+doctor check, its three-mode fixture and the advisory-status regression test.
+It does not claim completion of BUG-2519.
+
+This scope addresses the review request to distinguish the diagnostic from
+the production correction. The diagnostic leaves `lane_sccache_env`, job
+cache keys and the workspace/target layout unchanged.
+
 ## Remaining gate
+
+Root-cause confirmation (`.acfd7976`), the production fix and the second-job
+hit-rate evidence (`.ac91bf2f`) belong to the next slice. Per the same ruling,
+that slice must run on the **PRIMARY host** and is blocked until local lane
+jobs work again; BUG-2503 records the script-deputy grant refusal.
 
 The primary host and its reviewed codegraph client are unavailable in this
 seat. Acceptance still requires two comparable primary lane dependency builds
