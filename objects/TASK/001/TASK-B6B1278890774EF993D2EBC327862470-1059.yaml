@@ -7,92 +7,97 @@ status: Approved
 priority: Low
 owner: joe.mooney@gmail.com
 feature: Uncategorized
-created_at: 2026-11-10T03:07:15.181924192Z
-modified_at: 2026-11-10T20:15:35.253976408Z
+created_at: 2026-11-10 03:07:15.181924+00:00
+modified_at: 2026-11-10 20:15:35.253976+00:00
 req_type: Task
 comments:
 - id: 01a1c674-cd0d-76a2-8159-4728d6fffd38
   author: dirtlab
   content: 'Non-completing native slice: compact permissions rows and --verbose diagnostics implemented, with shared glyphs::terminal_marker helper plus a raw-output spacing ratchet. Remaining acceptance: migrate ten raw-marker occurrences retained in tests/terminal_glyph_padding_baseline.json and inventory dynamically composed registry markers/other terminal writers. Raw registry values intentionally retain their JSON/config/width semantics. Filing a draft follow-up failed because this clone has no node binding (no object written); this comment preserves the flag. Tests are running via the lane job runner. Publish with Refs TASK-3779 only.'
-  created_at: 2026-11-10T17:15:05.869241700Z
-  modified_at: 2026-11-10T17:15:05.869241700Z
+  created_at: 2026-11-10 17:15:05.869241+00:00
+  modified_at: 2026-11-10 17:15:05.869241+00:00
   session_id: 01a1c66dfde9
   harness_version: codex-cli 0.167.0
 - id: 01a1c676-865d-7340-918c-83745ab75597
   author: dirtlab
   content: 'Validation complete for this Refs-only slice: lane cargo tests terminal_marker_padding, permission_summary_row_keeps_refusal_compact, and help_surface_matches_golden_snapshot each executed one test and passed. Help snapshot initially failed for the missing verbose JSON flag inventory; corrected and rerun successfully. Python terminal-glyph ratchet: 2 passed. rustfmt check and git diff --check passed. All edits remain uncommitted. Publication declaration recorded with Refs TASK-3779; broad glyph migration remains incomplete as documented in the preceding comment.'
-  created_at: 2026-11-10T17:16:58.845726531Z
-  modified_at: 2026-11-10T17:16:58.845726531Z
+  created_at: 2026-11-10 17:16:58.845726+00:00
+  modified_at: 2026-11-10 17:16:58.845726+00:00
   session_id: 01a1c66dfde9
   harness_version: codex-cli 0.167.0
 - id: 01a1c68d-3857-77f1-8da5-d89e9fe7cd9e
   author: joe
   content: 'Advisor ruling PR-3803@686bac5b: accept P2; wire tests/test_terminal_glyph_padding.py into the CI gates lane and prove it fails on an unpadded literal.'
-  created_at: 2026-11-10T17:41:46.199009878Z
-  modified_at: 2026-11-10T17:41:46.199009878Z
+  created_at: 2026-11-10 17:41:46.199009+00:00
+  modified_at: 2026-11-10 17:41:46.199009+00:00
   session_id: 01a1c530-c917-7f13-ab81-f6b5e1d1cd30
   harness_version: 2.1.322 (Claude Code)
 - id: 01a1c6a0-4e41-7773-a73b-0d3e231eb9ca
   author: joe
   content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: Compact permission slice is coherent, but the new terminal glyph ratchet is not executed by CI; broad glyph migration remains explicitly deferred and seven CI jobs are pending.. No triage reason was given.'
-  created_at: 2026-11-10T18:02:36.993910100Z
-  modified_at: 2026-11-10T18:02:36.993910100Z
+  created_at: 2026-11-10 18:02:36.993910+00:00
+  modified_at: 2026-11-10 18:02:36.993910+00:00
   session_id: 01a1c530-c917-7f13-ab81-f6b5e1d1cd30
   harness_version: 2.1.322 (Claude Code)
 - id: 01a1c6a0-52c9-7643-8267-8c462475f9ab
   author: joe
-  content: |-
-    REVIEW FINDINGS TO ADDRESS (TASK-3779):
+  content: 'REVIEW FINDINGS TO ADDRESS (TASK-3779):
+
     Verdict: CHANGES REQUESTED
+
     Reviewed commit: 686bac5b7cd6
+
     Recorded: 2026-11-10T17:26:35.864189563+00:00
+
     Findings:
+
     1. [P2] tests/test_terminal_glyph_padding.py:55-60: Wire the new terminal glyph spacing ratchet into the checked-in CI gates lane (and any applicable test runner). Neither .github/workflows/ci.yml nor .gitlab-ci.yml nor another checked-in runner invokes this module, and CI enumerates Python modules explicitly rather than discovering tests/. Consequently new unpadded raw output can merge with green CI, so this slice does not provide its claimed forward ratchet. Add an explicit python3 -m unittest tests/test_terminal_glyph_padding.py CI step and verify a new offending output literal fails that step.
-    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
-  created_at: 2026-11-10T18:02:38.153173691Z
-  modified_at: 2026-11-10T18:02:38.153173691Z
+
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.'
+  created_at: 2026-11-10 18:02:38.153173+00:00
+  modified_at: 2026-11-10 18:02:38.153173+00:00
   session_id: 01a1c530-c917-7f13-ab81-f6b5e1d1cd30
   harness_version: 2.1.322 (Claude Code)
 - id: 01a1c6bf-81f5-74c0-9389-8bcd8c3971db
   author: joe
-  content: |-
-    CI FAILURES at 29b23be7d228 (run 42872616743). Fix exactly these before pushing; a push without a code change for them will fail again and must not be made:
-    FAIL flags — 2 cited --flag token(s) did not resolve to the cited command or its parent/child command subtree:
-  created_at: 2026-11-10T18:36:41.845154628Z
-  modified_at: 2026-11-10T18:36:41.845154628Z
+  content: 'CI FAILURES at 29b23be7d228 (run 42872616743). Fix exactly these before pushing; a push without a code change for them will fail again and must not be made:
+
+    FAIL flags — 2 cited --flag token(s) did not resolve to the cited command or its parent/child command subtree:'
+  created_at: 2026-11-10 18:36:41.845154+00:00
+  modified_at: 2026-11-10 18:36:41.845154+00:00
   session_id: 01a1c530-c917-7f13-ab81-f6b5e1d1cd30
   harness_version: 2.1.322 (Claude Code)
 - id: 01a1c6c7-6d3f-7f11-b36e-7860d8679d42
   author: joe
-  content: |-
-    CI FAILURES at 29b23be7d228 (run 42872616743). Fix exactly these before pushing; a push without a code change for them will fail again and must not be made:
-    FAIL flags — 2 cited --flag token(s) did not resolve to the cited command or its parent/child command subtree:
-  created_at: 2026-11-10T18:45:20.831072408Z
-  modified_at: 2026-11-10T18:45:20.831072408Z
+  content: 'CI FAILURES at 29b23be7d228 (run 42872616743). Fix exactly these before pushing; a push without a code change for them will fail again and must not be made:
+
+    FAIL flags — 2 cited --flag token(s) did not resolve to the cited command or its parent/child command subtree:'
+  created_at: 2026-11-10 18:45:20.831072+00:00
+  modified_at: 2026-11-10 18:45:20.831072+00:00
   session_id: 01a1c530-c917-7f13-ab81-f6b5e1d1cd30
   harness_version: 2.1.322 (Claude Code)
 - id: 01a1c6f1-8348-7f82-b249-5e49b188cb16
   author: joe
-  content: |-
-    CI FAILURES at 525df95774f4 (run 42879895432). Fix exactly these before pushing; a push without a code change for them will fail again and must not be made:
-    FAIL flags — 2 cited --flag token(s) did not resolve to the cited command or its parent/child command subtree:
-  created_at: 2026-11-10T19:31:18.984295038Z
-  modified_at: 2026-11-10T19:31:18.984295038Z
+  content: 'CI FAILURES at 525df95774f4 (run 42879895432). Fix exactly these before pushing; a push without a code change for them will fail again and must not be made:
+
+    FAIL flags — 2 cited --flag token(s) did not resolve to the cited command or its parent/child command subtree:'
+  created_at: 2026-11-10 19:31:18.984295+00:00
+  modified_at: 2026-11-10 19:31:18.984295+00:00
   session_id: 01a1c530-c917-7f13-ab81-f6b5e1d1cd30
   harness_version: 2.1.322 (Claude Code)
 - id: 01a1c714-9f74-7353-8822-cd546e535eb7
   author: joe
-  content: |-
-    CI FAILURES at 755c05d4223c (run 42888135301). Fix exactly these before pushing; a push without a code change for them will fail again and must not be made:
-    FAIL flags — 2 cited --flag token(s) did not resolve to the cited command or its parent/child command subtree:
-  created_at: 2026-11-10T20:09:39.956671519Z
-  modified_at: 2026-11-10T20:09:39.956671519Z
+  content: 'CI FAILURES at 755c05d4223c (run 42888135301). Fix exactly these before pushing; a push without a code change for them will fail again and must not be made:
+
+    FAIL flags — 2 cited --flag token(s) did not resolve to the cited command or its parent/child command subtree:'
+  created_at: 2026-11-10 20:09:39.956671+00:00
+  modified_at: 2026-11-10 20:09:39.956671+00:00
   session_id: 01a1c530-c917-7f13-ab81-f6b5e1d1cd30
   harness_version: 2.1.322 (Claude Code)
 history:
 - id: 01a1c5dc-eeb2-7bf0-b31e-daf1c2b86eee
   author: joe
-  timestamp: 2026-11-10T14:29:13.010791480Z
+  timestamp: 2026-11-10 14:29:13.010791+00:00
   session_id: 01a1c530-c917-7f13-ab81-f6b5e1d1cd30
   harness_version: 2.1.322 (Claude Code)
   changes:
@@ -101,27 +106,27 @@ history:
     new_value: Approved
 - id: 01a1c66e-044a-7502-a3b3-5dc6cc585cde
   author: aida-session-start
-  timestamp: 2026-11-10T17:07:41.258740009Z
+  timestamp: 2026-11-10 17:07:41.258740+00:00
   changes:
   - field_name: status
     old_value: Approved
     new_value: InProgress
 - id: 01a1c66e-5e20-7770-b5e1-2d9d3dc091b6
   author: dirtlab
-  timestamp: 2026-11-10T17:08:04.256083192Z
+  timestamp: 2026-11-10 17:08:04.256083+00:00
   session_id: 01a1c66dfde9
   harness_version: codex-cli 0.167.0
   changes: []
 - id: 01a1c67f-6aef-74b0-b5d1-e6e09b8c2a8f
   author: aida-orchestrator
-  timestamp: 2026-11-10T17:26:41.647687888Z
+  timestamp: 2026-11-10 17:26:41.647687+00:00
   changes:
   - field_name: status
     old_value: InProgress
     new_value: NeedsAttention
 - id: 01a1c6a0-4e41-7773-a73b-0d253b6d98aa
   author: joe
-  timestamp: 2026-11-10T18:02:36.993881789Z
+  timestamp: 2026-11-10 18:02:36.993881+00:00
   session_id: 01a1c530-c917-7f13-ab81-f6b5e1d1cd30
   harness_version: 2.1.322 (Claude Code)
   changes:
@@ -130,58 +135,65 @@ history:
     new_value: Approved
 - id: 01a1c6a0-64de-72e0-8be6-7b5156e3cb32
   author: joe
-  timestamp: 2026-11-10T18:02:42.782027124Z
+  timestamp: 2026-11-10 18:02:42.782027+00:00
   session_id: 01a1c530-c917-7f13-ab81-f6b5e1d1cd30
   harness_version: 2.1.322 (Claude Code)
   changes: []
 - id: 01a1c6a2-1f93-7601-bcfb-b39d214dfd26
   author: aida-session-start
-  timestamp: 2026-11-10T18:04:36.115420574Z
+  timestamp: 2026-11-10 18:04:36.115420+00:00
   changes:
   - field_name: status
     old_value: Approved
     new_value: InProgress
 - id: 01a1c6a4-81cd-7ff0-9bcc-f14790c935cc
   author: joe
-  timestamp: 2026-11-10T18:07:12.333419431Z
+  timestamp: 2026-11-10 18:07:12.333419+00:00
   changes: []
 - id: 01a1c6bf-a411-7ab0-9979-931b3b59283b
   author: joe
-  timestamp: 2026-11-10T18:36:50.577759360Z
+  timestamp: 2026-11-10 18:36:50.577759+00:00
   session_id: 01a1c530-c917-7f13-ab81-f6b5e1d1cd30
   harness_version: 2.1.322 (Claude Code)
   changes: []
 - id: 01a1c6c7-db39-70a2-9da4-b582fc7321dd
   author: joe
-  timestamp: 2026-11-10T18:45:48.985216978Z
-  session_id: 01a1c530-c917-7f13-ab81-f6b5e1d1cd30
-  harness_version: 2.1.322 (Claude Code)
-  changes: []
-- id: 01a1c6f1-a3ed-7a32-8402-67898b360e97
-  author: joe
-  timestamp: 2026-11-10T19:31:27.341641799Z
+  timestamp: 2026-11-10 18:45:48.985216+00:00
   session_id: 01a1c530-c917-7f13-ab81-f6b5e1d1cd30
   harness_version: 2.1.322 (Claude Code)
   changes: []
 - id: 01a1c6c9-4223-7c33-b340-c80dc1ad0f97
   author: aida-session-start
-  timestamp: 2026-11-10T18:47:20.867230216Z
+  timestamp: 2026-11-10 18:47:20.867230+00:00
   changes:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a1c6f1-a3ed-7a32-8402-67898b360e97
+  author: joe
+  timestamp: 2026-11-10 19:31:27.341641+00:00
+  session_id: 01a1c530-c917-7f13-ab81-f6b5e1d1cd30
+  harness_version: 2.1.322 (Claude Code)
+  changes: []
 - id: 01a1c714-bf3f-7f82-a22b-b1efcd2a6df4
   author: joe
-  timestamp: 2026-11-10T20:09:48.095562700Z
+  timestamp: 2026-11-10 20:09:48.095562+00:00
   session_id: 01a1c530-c917-7f13-ab81-f6b5e1d1cd30
   harness_version: 2.1.322 (Claude Code)
   changes:
   - field_name: status
     old_value: InProgress
     new_value: Approved
+- id: 01a1c716-d552-77e2-96c5-90cb8b339e9e
+  author: aida-session-start
+  timestamp: 2026-11-10 20:12:04.818397+00:00
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: InProgress
 - id: 01a1c71a-0bdc-74a0-b4c3-bec996c87746
   author: joe
-  timestamp: 2026-11-10T20:15:35.388809265Z
+  timestamp: 2026-11-10 20:15:35.388809+00:00
   changes: []
 filed_at:
   code_sha: 838f14c3c2811c6b63da5d465700cff773c36190
@@ -199,4 +211,4 @@ failure_reason:
   detail: Compact permission slice and CI ratchet wiring are coherent, but unchanged manual flag citations still break the required contracts gate; broad glyph migration remains deferred and current CI is pending.
   recovery_hint: address the review findings, move TASK-3779 back to In Progress, and clear the PR hold only after approval
   shelved_by: reviewer
-  shelved_at: 2026-11-10T20:15:35.253976408Z
+  shelved_at: 2026-11-10 20:15:35.253976+00:00
