@@ -8,7 +8,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-10T03:52:00.571796159Z
-modified_at: 2026-11-10T10:55:18.187711239Z
+modified_at: 2026-11-10T11:00:04.819809245Z
 req_type: Story
 comments:
 - id: 01a1c399-6840-7383-843e-9930f6eaa3f7
@@ -62,6 +62,13 @@ comments:
     make check-ci-fast failed. Rerun with umask 077 passed classifier inventory and mail-wake fixtures, then containment conformance had six errors creating temporary fixtures in read-only /home/dirtlab/.aida. Runner also reported read-only CARGO_HOME. Host must rerun the fast gate outside this native seat. Log: /tmp/story-2704-check-ci-fast.log. No Git metadata mutations, publication, queue completion or review recording performed. S2/S3 remain outside this slice.
   created_at: 2026-11-10T10:55:18.187711239Z
   modified_at: 2026-11-10T10:55:18.187711239Z
+  session_id: 01a1c515100e
+  harness_version: codex-cli 0.167.0
+- id: 01a1c51d-7653-7952-87d6-407d0568c656
+  author: dirtlab
+  content: 'Fast-gate fix round: removed direct os.environ reads from tests/test_porcelain_flow_parity.py. Git and report children now receive explicit fixture inputs, with a temporary HOME separate from the project snapshot. No ratchet ledger expansion. Explicit installed_builtin_parity passed through lane job j20261110T105950462-2-0. Edits remain uncommitted for host publication.'
+  created_at: 2026-11-10T11:00:04.819809245Z
+  modified_at: 2026-11-10T11:00:04.819809245Z
   session_id: 01a1c515100e
   harness_version: codex-cli 0.167.0
 history:
