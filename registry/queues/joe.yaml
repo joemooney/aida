@@ -68,3 +68,11 @@
   added_by: joe
   added_at: 2026-11-10T07:34:41.990834127Z
   for_role: advisor
+- user_id: joe
+  requirement_id: 01a1c484-f2d8-7a03-8bc2-ccef5deaf246
+  position: 1057000
+  added_by: joe
+  note: auto-queued by `aida pr` (01a1c468); covers 0 specs
+  added_at: 2026-11-10T08:13:42.948352189Z
+  for_role: reviewer
+  added_by_machine: imac
