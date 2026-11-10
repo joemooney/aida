@@ -646,6 +646,8 @@ mod reviewer_preflight;
 mod reviewer_summary;
 // trace:STORY-1417 | ai:claude
 mod review_classes;
+// trace:STORY-2698 | ai:codex
+mod review_risk;
 // trace:STORY-1889 | ai:claude — verdict rendering, outside the gate.
 mod review_verdict_display;
 // trace:BUG-B6B1278890774EF993D2EBC327862470-057 | ai:claude — what a rework pickup prompt leads with.
