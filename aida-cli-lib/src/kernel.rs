@@ -2,7 +2,17 @@
 //! aida-cli-lib core helpers (STORY-1488 slice 1)
 // trace:STORY-1488 | ai:claude
 
-use crate::*;
+use crate::process_retry::RetryEtxtbsy;
+use crate::{
+    aida_bin, build_banner, command_output_with_timeout_detail, config_parse_error_message,
+    config_path_for_project, is_executable, not_found, queue_cmd, resolve_aida_exe_from,
+    resolve_glab_binary, BoundedCommandOutput, Command,
+};
+use aida_core::{RequirementStatus, RequirementsStore};
+use anyhow::Result;
+use colored::Colorize;
+use std::io::IsTerminal;
+use uuid::Uuid;
 
 /// Get the default author from AIDA_AUTHOR environment variable or fall back to system user.
 /// Format recommendation: "ai:claude:username" for AI-assisted work

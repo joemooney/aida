@@ -1,7 +1,14 @@
 //! Autopilot subcommands and `aida intake` (STORY-1488 slice 1)
 // trace:STORY-1488 | ai:claude
 
-use crate::*;
+use crate::{
+    all_queued_requirement_ids, autopilot, autopilot_audit, backlog, comment_cmd, current_user_id,
+    find_plan_files_for_spec, find_project_root, intake, is_standing_artifact_type,
+    load_store_for_lookup, presence, session,
+};
+use aida_core::Storage;
+use anyhow::{Context, Result};
+use colored::Colorize;
 
 // trace:STORY-1728 | ai:claude
 #[path = "autopilot_intake_args.rs"]
