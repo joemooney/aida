@@ -1,7 +1,13 @@
 //! handle_db_check_collisions, handle_block_command, block auto-allocation (STORY-1488 slice 1)
 // trace:STORY-1488 | ai:claude
 
-use crate::*;
+use crate::{
+    add_remote_sync_disabled, config_parse_error_message, hostname, load_node_id,
+    read_agreed_counter, read_id_counter_scope, read_id_format_policy, run, BlockCommand,
+};
+
+use anyhow::{Context, Result};
+use colored::Colorize;
 
 /// Audit the store for pre-existing agreed-id collisions — two requirements
 /// claiming the same short id across their (spec_id, agreed_id) pair.

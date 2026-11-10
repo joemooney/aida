@@ -1,8 +1,17 @@
 //! Drain merge-approval gate, PR review-verdict stamping and spec-done-after-PR (STORY-1488 slice 1)
 // trace:STORY-1488 | ai:claude
 
+use crate::{
+    auto_complete, detect_distributed_store_from, ensure_pr_open_spec_attribution, fetch_branch,
+    git_rev_parse_quiet, load_dispenser, pr_open_done_flip, status_write_race_seam,
+    RealPhaseDriver,
+};
+
 use crate::gate::approval::*;
-use crate::*;
+use crate::phase_driver::AutonomyMode;
+use aida_core::DatabaseBackend;
+use anyhow::Result;
+use colored::Colorize;
 
 /// Accept a reconciliation-time CI result only when it is terminal green and
 /// belongs to the exact head the PR/MR metadata reports. The error deliberately
