@@ -23,7 +23,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-07T20:45:16.684639Z
-modified_at: 2026-11-10T16:01:45.028940542Z
+modified_at: 2026-11-10T16:21:54.524948705Z
 req_type: Task
 relationships:
 - rel_type: Child
@@ -389,6 +389,18 @@ comments:
   modified_at: 2026-11-10T16:01:45.028940542Z
   session_id: 01a1c530-c917-7f13-ab81-f6b5e1d1cd30
   harness_version: 2.1.322 (Claude Code)
+- id: 01a1c644-1adc-72d3-b037-4176a7d92be6
+  author: dirtlab
+  content: |
+    Part A implementation is ready in the native lane, uncommitted. Retirement checks queued delivery bindings and matching canonical message copies; verified canonical files/directories are fsynced before removal. The final writer-admission scan now runs after fencing under Lifecycle for every retirement, independently of activation/build identity. Existing crash/reopen and CLI fixtures are updated for message-state retention. docs/advanced/mailbox.md describes the behavior.
+
+    Validation so far: final aida-core mailbox_lifecycle run executed 175 tests, all passed (j20261110T161352610-2-0). Formatting and git diff --check pass. CLI C2 retention tests: initial compile j20261110T161527312-2-0 running; final-source rerun j20261110T161653058-2-0 queued. make check-ci-fast is retrying with a private test HOME and standard umask; Cargo checks are routed through the lane runner, whose TUI check j20261110T161618625-12-0 is queued. Earlier fast-gate attempts hit inherited group-writable fixture modes and then read-only ~/.aida fixture paths; no permission grants were changed. An optional full core run had 2249 passing tests, 62 failures outside mailbox lifecycle concerning fixture permissions, and 4 ignored tests.
+
+    No commit, push, PR, queue completion or review verdict was performed. Publication declaration follows final validation.
+  created_at: 2026-11-10T16:21:54.524948705Z
+  modified_at: 2026-11-10T16:21:54.524948705Z
+  session_id: 01a1c632c181
+  harness_version: codex-cli 0.167.0
 history:
 - id: 01a1b7c2-6b69-7b02-bd8c-8f40aee2972d
   author: joe

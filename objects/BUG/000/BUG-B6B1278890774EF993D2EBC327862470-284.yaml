@@ -19,7 +19,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-10T11:29:50.373967960Z
-modified_at: 2026-11-10T16:13:38.978013686Z
+modified_at: 2026-11-10T16:23:58.643683567Z
 req_type: Bug
 comments:
 - id: 01a1c63b-ee32-7502-886f-4dbf64e2d225
@@ -34,6 +34,23 @@ comments:
     Design fork for advisor/host: a stable sandbox-visible workspace and target layout could remove differing absolute paths, but needs a reviewed mount-policy sketch covering Git metadata protection, Cargo discovery/config, build-script outputs, debug paths and seat isolation. Alternative: evaluate an upstream Rust path-key normalization change with artifact-path correctness evidence. Local SCCACHE_BASEDIRS alone did not resolve the reproduction. No mount-policy or admission change has been made, and this bug must remain open pending design review and primary-host measurements.
   created_at: 2026-11-10T16:12:58.802143587Z
   modified_at: 2026-11-10T16:12:58.802143587Z
+  session_id: 01a1c636bdb5
+  harness_version: codex-cli 0.167.0
+- id: 01a1c645-ffb3-71f2-8be3-6a753ed03693
+  author: dirtlab
+  content: |
+    Final validation (all edits remain uncommitted):
+    - Lane job j20261110T161330487-2-0: cargo test --profile agent -p aida-cli-lib --lib -- cache_reuse: 2 passed, exit 0.
+    - Lane job j20261110T162129064-2-0: cargo test --profile agent -p aida-cli-lib --lib -- doctor_cache: 5 passed, exit 0, including synthetic and live bubblewrap transport controls.
+    - Initial job j20261110T160955712-2-0 had 3 passed / 2 failed because it compiled the earlier changed error prefix. The final source restores that prefix while retaining captured diagnostics; the complete doctor_cache rerun above passes.
+    - Direct real-sccache execution inside bubblewrap with the production server-lifecycle script reproduced two misses plus a same-cwd positive-control hit, emitted the expected cwd diagnostic and shut down the server before teardown.
+    - All three shell fixtures passed their expected cross-cwd / same-cwd / no-cache outcomes.
+    - rustfmt --check and git diff --check passed.
+    The lane runner reports overlay-stale because the primary rewrote a generation file in place. Both final targeted runs nevertheless executed successfully. These tests are diagnostic regression evidence, not the missing primary dependency-hit-rate acceptance result.
+
+    Changed files: aida-cli-lib/src/lane_job.rs, aida-cli-lib/src/lane_host.rs, docs/cli/07-project-setup.md, docs/internal/testing/bug-2519-lane-cache-reuse.md. BUG-2519 remains Needs Attention with its design-fork punt/publication veto. No commit, push, PR, completion declaration or queue completion was performed. Host/advisor must resolve the reviewed path-policy design and demonstrate >=50% second-job Rust hits on the primary before completion.
+  created_at: 2026-11-10T16:23:58.643683567Z
+  modified_at: 2026-11-10T16:23:58.643683567Z
   session_id: 01a1c636bdb5
   harness_version: codex-cli 0.167.0
 history:

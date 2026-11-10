@@ -8,8 +8,16 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-10T03:06:53.745899716Z
-modified_at: 2026-11-10T16:06:25.202131636Z
+modified_at: 2026-11-10T16:23:09.366029108Z
 req_type: Bug
+comments:
+- id: 01a1c645-3f36-7033-9dcf-0deda18596e3
+  author: dirtlab
+  content: 'Implemented project-configured validation via trusted default-branch [validation] format/test/fast_check commands. Launch prompts use project commands; the sandboxed host gate runs the configured shell command or records skipped(unconfigured) with a reason and committed head. Seat-submitted shell jobs remain refused. Added Python fixtures covering rendering, trusted config selection, pass/fail execution without Cargo.toml or Makefile, and unconfigured gate skipping. Validation: lane-run cargo tests passed (BUG-2512: 4; fast_gate: 56 passed, 2 ignored; config-trust inventory: 1). Targeted rustfmt checks and git diff --check passed. Edits remain uncommitted for host publication. Codegraph client unavailable; used rg after doctor confirmation.'
+  created_at: 2026-11-10T16:23:09.366029108Z
+  modified_at: 2026-11-10T16:23:09.366029108Z
+  session_id: 01a1c6359c9e
+  harness_version: codex-cli 0.167.0
 history:
 - id: 01a1c5dc-be7b-7782-a9ad-5a6e068ae27e
   author: joe
