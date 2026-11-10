@@ -3,12 +3,12 @@ spec_id: BUG-b6b1278890774ef993d2ebc327862470-281
 agreed_id: BUG-2516
 title: Merging a GitLab MR and running aida pull does not complete the spec named in the commit trailer
 description: 'Reported from operator''s work machine (Codex, GitLab project hello-work-0x), 2026-11-09. After ''glab mr merge 2 --squash'' and ''aida pull'', the spec stayed InProgress. Merge-time completion appears GitHub-specific (merged-PR lookup or squash-subject handling). Make completion forge-neutral: detect the merged MR through the forge abstraction and apply the trailer rules to the squash commit on the default branch. Test with a fake GitLab forge.'
-status: NeedsAttention
+status: Approved
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-10T03:07:46.884496242Z
-modified_at: 2026-11-10T20:49:15.957492282Z
+modified_at: 2026-11-10T20:57:55.241046870Z
 req_type: Bug
 comments:
 - id: 01a1c4af-2f66-7590-be69-dad5e180b9a4
@@ -163,6 +163,13 @@ comments:
   modified_at: 2026-11-10T20:40:47.107944167Z
   session_id: 01a1c530-c917-7f13-ab81-f6b5e1d1cd30
   harness_version: 2.1.322 (Claude Code)
+- id: 01a1c740-cd29-7d53-b6a6-67852d3cc826
+  author: joe
+  content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: Full sweep: required GitLab pagination and three second-page regressions remain absent; seven CI lanes pending. BUG-2516 (bug protocol): met, two test files touched.. No triage reason was given.'
+  created_at: 2026-11-10T20:57:55.241043231Z
+  modified_at: 2026-11-10T20:57:55.241043231Z
+  session_id: 01a1c530-c917-7f13-ab81-f6b5e1d1cd30
+  harness_version: 2.1.322 (Claude Code)
 history:
 - id: 01a1c4af-3ce1-7db1-8f61-609deb96783e
   author: joe
@@ -300,6 +307,15 @@ history:
   - field_name: status
     old_value: InProgress
     new_value: NeedsAttention
+- id: 01a1c740-cd29-7d53-b6a6-6770be79b766
+  author: joe
+  timestamp: 2026-11-10T20:57:55.241026559Z
+  session_id: 01a1c530-c917-7f13-ab81-f6b5e1d1cd30
+  harness_version: 2.1.322 (Claude Code)
+  changes:
+  - field_name: status
+    old_value: NeedsAttention
+    new_value: Approved
 filed_at:
   code_sha: 838f14c3c2811c6b63da5d465700cff773c36190
   branch: main
@@ -309,11 +325,3 @@ filed_at:
   vendor: claude
   session: 01a1beff-fc3b-78e2-93e2-9b0c283b0339
   harness_version: 2.1.319 (Claude Code)
-failure_reason:
-  phase: reviewer
-  phase_index: 3
-  kind: verdict:request-changes
-  detail: 'Full sweep: required GitLab pagination and three second-page regressions remain absent; seven CI lanes pending. BUG-2516 (bug protocol): met, two test files touched.'
-  recovery_hint: address the review findings, move BUG-2516 back to In Progress, and clear the PR hold only after approval
-  shelved_by: reviewer
-  shelved_at: 2026-11-10T20:49:15.957492282Z
