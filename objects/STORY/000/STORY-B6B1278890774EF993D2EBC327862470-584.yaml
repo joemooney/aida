@@ -18,7 +18,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-08T02:58:08.667753563Z
-modified_at: 2026-11-10T01:44:21.055434226Z
+modified_at: 2026-11-10T01:44:23.060464743Z
 req_type: Story
 tags:
 - area:human-wait
@@ -519,6 +519,13 @@ comments:
         thread 'tests::generated_types_match_checked_in_contract' (103846) panicked at aida-generate-types/src/main.rs:181:9:
   created_at: 2026-11-10T01:44:21.055434226Z
   modified_at: 2026-11-10T01:44:21.055434226Z
+  session_id: 01a1beff-fc3b-78e2-93e2-9b0c283b0339
+  harness_version: 2.1.319 (Claude Code)
+- id: 01a1c320-b514-7f01-92a4-8490b6183cab
+  author: joe
+  content: 'ADVISOR RULING (2026-11-10 01:50 UTC): PR #3748 rework = CI failures only. CI (rest) fails tests::generated_types_match_checked_in_contract (aida-generate-types/src/main.rs:181): regenerate the checked-in TypeScript types with aida-generate-types for the new park-record types and commit them. Also fix whatever CI (gates) and Build report at the same head. No other changes. Keep (Refs STORY-2661).'
+  created_at: 2026-11-10T01:44:23.060464743Z
+  modified_at: 2026-11-10T01:44:23.060464743Z
   session_id: 01a1beff-fc3b-78e2-93e2-9b0c283b0339
   harness_version: 2.1.319 (Claude Code)
 history:
