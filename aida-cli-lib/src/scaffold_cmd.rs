@@ -2193,8 +2193,8 @@ pub(crate) struct ScaffoldArgs {
 
 fn run_scaffold(
     matches: &clap::ArgMatches,
-    ctx: &crate::command_registry::DispatchCtx,
-) -> anyhow::Result<crate::command_registry::Flow> {
+    ctx: &crate::cmdkit::DispatchCtx,
+) -> anyhow::Result<crate::cmdkit::Flow> {
     use crate::*;
     let args = <ScaffoldArgs as clap::FromArgMatches>::from_arg_matches(matches)?;
     match &ctx.store {
@@ -2212,19 +2212,15 @@ fn run_scaffold(
                     },
             } = &args
             {
-                return crate::command_registry::returned(
-                    scaffold_cmd::run_scaffold_upgrade_git_hooks_at(
-                        project_root.as_deref(),
-                        *dry_run,
-                    ),
-                );
+                return crate::cmdkit::returned(scaffold_cmd::run_scaffold_upgrade_git_hooks_at(
+                    project_root.as_deref(),
+                    *dry_run,
+                ));
             }
-            Ok(crate::command_registry::Flow::Continue)
+            Ok(crate::cmdkit::Flow::Continue)
         }
-        Some(crate::command_registry::StoreCtx::Distributed { .. }) => {
-            Ok(crate::command_registry::Flow::Continue)
-        }
-        Some(crate::command_registry::StoreCtx::Git {
+        Some(crate::cmdkit::StoreCtx::Distributed { .. }) => Ok(crate::cmdkit::Flow::Continue),
+        Some(crate::cmdkit::StoreCtx::Git {
             store_path,
             backend,
         }) => {
@@ -2240,9 +2236,9 @@ fn run_scaffold(
                     self::handle_scaffold_command(scaffold_cmd, &storage, store_path)?;
                 }
             }
-            Ok(crate::command_registry::Flow::Continue)
+            Ok(crate::cmdkit::Flow::Continue)
         }
-        Some(crate::command_registry::StoreCtx::Legacy {
+        Some(crate::cmdkit::StoreCtx::Legacy {
             storage,
             requirements_path,
         }) => {
@@ -2254,22 +2250,21 @@ fn run_scaffold(
                     self::handle_scaffold_command(scaffold_cmd, &storage, &requirements_path)?;
                 }
             }
-            Ok(crate::command_registry::Flow::Continue)
+            Ok(crate::cmdkit::Flow::Continue)
         }
     }
 }
 
 // trace:STORY-1728 | ai:claude
-pub(crate) static SCAFFOLD: crate::command_registry::CommandReg =
-    crate::command_registry::CommandReg {
-        name: "scaffold",
-        help_after: "memories",
-        command: <ScaffoldArgs as clap::CommandFactory>::command,
-        policy: |_| crate::command_registry::CmdPolicy {
-            stakeholder: crate::stakeholder_role::StakeholderAction::Write,
-            per_write_auto_push: false,
-            skip_role_restore_prompt: false,
-            team_identity_write: false,
-        },
-        run: crate::command_registry::Handler::Store(run_scaffold),
-    };
+pub(crate) static SCAFFOLD: crate::cmdkit::CommandReg = crate::cmdkit::CommandReg {
+    name: "scaffold",
+    help_after: "memories",
+    command: <ScaffoldArgs as clap::CommandFactory>::command,
+    policy: |_| crate::cmdkit::CmdPolicy {
+        stakeholder: crate::stakeholder_role::StakeholderAction::Write,
+        per_write_auto_push: false,
+        skip_role_restore_prompt: false,
+        team_identity_write: false,
+    },
+    run: crate::cmdkit::Handler::Store(run_scaffold),
+};

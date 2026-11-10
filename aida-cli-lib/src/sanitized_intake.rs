@@ -5,7 +5,7 @@
 //! would use, resolved read-only (never by attaching a worktree). A write goes
 //! through the backend's prepared path, which rechecks everything.
 // trace:STORY-1742 | ai:claude
-use crate::command_registry::{DispatchCtx, Flow, StoreCtx};
+use crate::cmdkit::{DispatchCtx, Flow, StoreCtx};
 use crate::requirements_cli::{parse_requirement_type, resolve_description, AddArgs};
 use aida_core::transport_policy::PreviewVerdict;
 use aida_core::{DatabaseBackend, Requirement, RequirementPriority, RequirementStatus};

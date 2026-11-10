@@ -79,7 +79,9 @@ mod cli;
 #[cfg(feature = "remote")]
 mod client;
 // trace:TASK-3425 | ai:codex
-mod cmdkit;
+// Direct framework imports are also used by the MCP transport crate.
+// trace:TASK-3448 | ai:codex
+pub mod cmdkit;
 pub mod command_registry;
 mod comment_cmd;
 mod commit;

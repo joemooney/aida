@@ -189,25 +189,22 @@ pub(crate) struct LockArgs {
 // lease files (the same registry `aida session leases` uses) — no
 // requirement-store handle needed, same reasoning as `aida triage`
 // above. trace:STORY-711 | ai:claude
-fn run_lock(
-    matches: &clap::ArgMatches,
-    _ctx: &crate::command_registry::DispatchCtx,
-) -> anyhow::Result<()> {
+fn run_lock(matches: &clap::ArgMatches, _ctx: &crate::cmdkit::DispatchCtx) -> anyhow::Result<()> {
     let args = <LockArgs as clap::FromArgMatches>::from_arg_matches(matches)?;
     let lock_cmd = &args.inner;
     return self::handle_lock_command(lock_cmd);
 }
 
 // trace:STORY-1728 | ai:claude
-pub(crate) static LOCK: crate::command_registry::CommandReg = crate::command_registry::CommandReg {
+pub(crate) static LOCK: crate::cmdkit::CommandReg = crate::cmdkit::CommandReg {
     name: "lock",
     help_after: "terminal",
     command: <LockArgs as clap::CommandFactory>::command,
-    policy: |_| crate::command_registry::CmdPolicy {
+    policy: |_| crate::cmdkit::CmdPolicy {
         stakeholder: crate::stakeholder_role::StakeholderAction::Write,
         per_write_auto_push: false,
         skip_role_restore_prompt: false,
         team_identity_write: false,
     },
-    run: crate::command_registry::Handler::Early(run_lock),
+    run: crate::cmdkit::Handler::Early(run_lock),
 };

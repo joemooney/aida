@@ -32,9 +32,9 @@ fn task_1471_show_docs_child() {
     let matches = super::ShowArgs::command()
         .try_get_matches_from(["show", "STORY-1472", "--no-git"])
         .unwrap();
-    let ctx = crate::command_registry::DispatchCtx {
+    let ctx = crate::cmdkit::DispatchCtx {
         globals: None,
-        store: Some(crate::command_registry::StoreCtx::Git {
+        store: Some(crate::cmdkit::StoreCtx::Git {
             store_path: &store,
             backend: &backend,
         }),

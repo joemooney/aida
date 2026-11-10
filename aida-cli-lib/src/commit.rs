@@ -545,10 +545,7 @@ pub(crate) struct CommitCmdArgs {
 // `aida commit` is self-contained — git + the staged diff (for REQ-ID
 // inference), no requirements store. Dispatch before storage init like
 // goal / ultraplan. trace:STORY-663 | ai:claude
-fn run_commit(
-    matches: &clap::ArgMatches,
-    _ctx: &crate::command_registry::DispatchCtx,
-) -> anyhow::Result<()> {
+fn run_commit(matches: &clap::ArgMatches, _ctx: &crate::cmdkit::DispatchCtx) -> anyhow::Result<()> {
     use crate::*;
     let args = <CommitCmdArgs as clap::FromArgMatches>::from_arg_matches(matches)?;
     let CommitCmdArgs {
@@ -574,16 +571,15 @@ fn run_commit(
 }
 
 // trace:STORY-1728 | ai:claude
-pub(crate) static COMMIT: crate::command_registry::CommandReg =
-    crate::command_registry::CommandReg {
-        name: "commit",
-        help_after: "internal",
-        command: <CommitCmdArgs as clap::CommandFactory>::command,
-        policy: |_| crate::command_registry::CmdPolicy {
-            stakeholder: crate::stakeholder_role::StakeholderAction::Write,
-            per_write_auto_push: false,
-            skip_role_restore_prompt: false,
-            team_identity_write: false,
-        },
-        run: crate::command_registry::Handler::Early(run_commit),
-    };
+pub(crate) static COMMIT: crate::cmdkit::CommandReg = crate::cmdkit::CommandReg {
+    name: "commit",
+    help_after: "internal",
+    command: <CommitCmdArgs as clap::CommandFactory>::command,
+    policy: |_| crate::cmdkit::CmdPolicy {
+        stakeholder: crate::stakeholder_role::StakeholderAction::Write,
+        per_write_auto_push: false,
+        skip_role_restore_prompt: false,
+        team_identity_write: false,
+    },
+    run: crate::cmdkit::Handler::Early(run_commit),
+};
