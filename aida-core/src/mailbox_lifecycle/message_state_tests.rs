@@ -376,8 +376,10 @@ fn ack_relay(root: &Path, store: &Path, n: u8) {
     .unwrap();
 }
 
-#[test]
-fn task3420_original_relay_retains_uuid_identity_until_ack() {
+// A digest may leave the message only in canonical storage; its local sidecar
+// must still veto retirement and preserve the original run's delivery identity.
+// trace:TASK-3420 | ai:codex
+fn original_relay_retirement_roundtrip(with_message: bool) {
     let root = repo();
     let mut msg = message("original-relay");
     msg.to = crate::mailbox::Recipient::Agent("relay-a".into());
@@ -385,6 +387,9 @@ fn task3420_original_relay_retains_uuid_identity_until_ack() {
     crate::mailbox::write_local_message_with_deliveries(root.path(), &msg, Some(&sidecar)).unwrap();
     let store = preserve_canonical(root.path());
     assert!(!store.join("mailbox/.deliveries").exists());
+    if !with_message {
+        std::fs::remove_file(mailbox(root.path()).join("original-relay.json")).unwrap();
+    }
     let snapshot = |n| {
         logical_snapshot(
             &MailboxContext::resolve(root.path(), Some(&store)).unwrap(),
@@ -422,5 +427,18 @@ fn task3420_original_relay_retains_uuid_identity_until_ack() {
         acked.records[0].owned_delivery.as_ref(),
         Some(&sidecar.deliveries[0])
     );
+    let later = snapshot(2);
+    assert!(later.complete(), "{later:?}");
+    assert!(later.records.is_empty());
     retired(retire_source(root.path(), &opts()).unwrap());
+}
+
+#[test]
+fn task3420_original_relay_retains_uuid_identity_until_ack() {
+    original_relay_retirement_roundtrip(true);
+}
+
+#[test]
+fn task3420_original_relay_sidecar_only_retains_uuid_identity_until_ack() {
+    original_relay_retirement_roundtrip(false);
 }
