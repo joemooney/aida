@@ -6721,7 +6721,12 @@ pub(crate) fn run_vendor_headless_to_exit(
     lane_tree: Option<(&Path, &str)>,
     record_no_change: bool,
 ) -> Result<std::process::ExitStatus> {
+    // Revoke even when publication preparation or gate reservation fails.
+    // trace:STORY-2640 trace:BUG-2139 | ai:codex
+    let child_grant_guard = crate::standalone_implementer::ChildGrantGuard(child_grant);
     let drain_lane = drain_resume_lane(vendor, seat, lease_id, lane_tree);
+    let host_published = vendor == HeadlessVendor::Codex && contained;
+    let publish_native = std::cell::Cell::new(host_published);
     // trace:TASK-2902 | ai:codex
     if let Some((_, (tree, _))) = implementer_job_lane(seat, lease_id, lane_tree) {
         let main = crate::main_worktree_root_from(&headless_worktree_root());
@@ -6737,6 +6742,13 @@ pub(crate) fn run_vendor_headless_to_exit(
     // This process is the seat's host side (it launches the sandboxed
     // vendor), so the runner runs here. trace:BUG-2383 | ai:claude
     let main_root = crate::main_worktree_root_from(&headless_worktree_root());
+    // trace:STORY-2640 | ai:codex
+    let mut _fast_gate = implementer_job_lane(seat, lease_id, lane_tree)
+        .map(|(_, (_, branch))| {
+            crate::lane_fast_gate::reserve(&main_root, branch)
+                .map(crate::lane_fast_gate::Reservation::with_result_line)
+        })
+        .transpose()?;
     let result = with_implementer_jobs(
         &main_root,
         seat,
@@ -6799,36 +6811,93 @@ pub(crate) fn run_vendor_headless_to_exit(
                     |p, l, r, h| run_once(p, l, r, Some(h)),
                 ),
             };
-            result
+            // trace:STORY-2640 | ai:codex — gate before revoking the repair grant.
+            let mut status = result?;
+            if let Some((lease, (tree, branch))) = implementer_job_lane(seat, lease_id, lane_tree) {
+                let Some(active_lease) = crate::list_leases(&main_root)
+                    .into_iter()
+                    .find(|l| l.id == lease)
+                else {
+                    crate::lane_fast_gate::missing_lease(&main_root, Some(branch));
+                    publish_native.set(false);
+                    anyhow::ensure!(!host_published, "publication lease {lease} is missing");
+                    return Ok(status);
+                };
+                let scope = active_lease.scope;
+                if host_published {
+                    publish_native.set(crate::lane_fast_gate::native(
+                        &main_root,
+                        tree,
+                        &scope,
+                        lease,
+                        branch,
+                        status.success(),
+                        |p| {
+                            status = run_once(
+                                p,
+                                &log_path.with_extension("fast-fix.jsonl"),
+                                true,
+                                None,
+                            )?;
+                            Ok(status.success())
+                        },
+                    )?);
+                } else if !crate::lane_fast_gate::veto(&main_root, &scope) {
+                    let actual_branch = _fast_gate
+                        .as_mut()
+                        .context("fast gate reservation missing")?
+                        .exit_branch(tree);
+                    let branch = actual_branch.as_str();
+                    if let Some((pr, _)) =
+                        crate::standalone_implementer::lookup_pr(&main_root, branch)
+                    {
+                        let queued = crate::lane_fast_gate::pushed(
+                            &main_root,
+                            tree,
+                            &scope,
+                            lease,
+                            branch,
+                            pr,
+                            vendor.as_str(),
+                        )?;
+                        eprintln!(
+                            "fast_gate={}",
+                            crate::lane_fast_gate::marker(&main_root, branch)
+                        );
+                        anyhow::ensure!(
+                            !queued,
+                            "fast gate failed; one rework round queued before review"
+                        );
+                    }
+                }
+            }
+            Ok::<_, anyhow::Error>(status)
         },
     );
-    // BUG-2139: the child's grant dies with the child — on a normal or
-    // nonzero exit and on a spawn failure alike. A failed revoke only warns:
-    // the grant still expires with its parent, and the lease end/reap revokes
-    // it too.
-    if let Some(id) = child_grant.id() {
-        revoke_headless_child_grant(id);
-    }
+    drop(child_grant_guard);
     let status = result?;
     // trace:STORY-2475 | ai:codex
-    if vendor == HeadlessVendor::Codex && contained {
-        if let Some((lease, (tree, _))) = implementer_job_lane(seat, lease_id, lane_tree) {
+    if publish_native.get() {
+        if let Some((lease, (tree, branch))) = implementer_job_lane(seat, lease_id, lane_tree) {
             let scope = crate::list_leases(&main_root)
                 .into_iter()
                 .find(|l| l.id == lease)
                 .context("publication lease disappeared")?
                 .scope;
-            crate::ship_from_seat::publish_queue_exit_recorded(
+            crate::lane_fast_gate::publication_result(
                 &main_root,
-                tree,
-                &scope,
-                lease,
-                status.success(),
-                record_no_change,
+                branch,
+                crate::ship_from_seat::publish_queue_exit_recorded(
+                    &main_root,
+                    tree,
+                    &scope,
+                    lease,
+                    status.success(),
+                    record_no_change,
+                ),
             )?;
         }
     }
-
     Ok(status)
 }
 

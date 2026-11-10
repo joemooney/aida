@@ -15,7 +15,8 @@ use std::time::Duration;
 pub(crate) mod deputy_cmd_args;
 pub(crate) use deputy_cmd_args::*;
 
-use crate::command_registry::{CmdPolicy, CommandReg, Handler};
+// trace:TASK-3448 | ai:codex
+use crate::cmdkit::{CmdPolicy, CommandReg, Handler};
 use crate::deputy::{self, policy, JobBody, JobRecord, LedgerRow, Spool};
 use crate::stakeholder_role::StakeholderAction;
 
@@ -95,10 +96,7 @@ fn parse_secs(raw: &str, what: &str) -> Result<u64> {
         .with_context(|| format!("{what}: not a duration: {raw:?} (try 30m, 8h, 90s)"))
 }
 
-fn run_deputy(
-    matches: &clap::ArgMatches,
-    _ctx: &crate::command_registry::DispatchCtx,
-) -> Result<()> {
+fn run_deputy(matches: &clap::ArgMatches, _ctx: &crate::cmdkit::DispatchCtx) -> Result<()> {
     let args = <DeputyArgs as clap::FromArgMatches>::from_arg_matches(matches)?;
     let mut out = std::io::stdout();
     match args.command {

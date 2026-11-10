@@ -1,3 +1,4 @@
+// trace:TASK-3429 | ai:codex
 //! Upgrade and release: mode normalisation, SHA match classification, release/dev-release handlers, workspace version and install method (STORY-1488 slice 1)
 // trace:STORY-1488 | ai:claude
 
@@ -82,7 +83,7 @@ pub(crate) const DEFAULT_MAX_FAILURES: usize = 5;
 // Requester intake must remain a standalone Draft. Both the CLI and MCP gates
 // consume this list so relationship and grooming-field policy cannot drift.
 // trace:BUG-1211 | ai:codex
-pub(crate) const REQUESTER_INTAKE_FORBIDDEN_FIELDS: &[&str] = &["parent", "feature", "owner"];
+pub const REQUESTER_INTAKE_FORBIDDEN_FIELDS: &[&str] = &["parent", "feature", "owner"];
 
 // TASK-970: default row cap for a bare `aida list` in AGENT MODE. ~925
 // unbounded rows is a token blowout when an agent reads the listing as

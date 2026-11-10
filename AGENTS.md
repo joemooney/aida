@@ -1,3 +1,9 @@
+MCP transport and its store handler live in `aida-mcp`; the binary injects the
+handler into cli-lib's `mcp-serve` registration before parsing. Shared descriptors
+and claim naming stay below that boundary. CLI-local MCP tests include the
+transport source to retain private fixtures. See OVERVIEW.md.
+<!-- trace:TASK-3429 | ai:codex -->
+
 CI freshness compares pinned workflow content: the GitHub `.github/workflows`
 tree or GitLab `.gitlab-ci.yml` blob. Equal digests avoid stale-definition
 refusals, including edits followed by reverts; the separate behind-base gate

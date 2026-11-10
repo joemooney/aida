@@ -278,10 +278,7 @@ pub(crate) struct DriverArgs {
 }
 
 // `aida driver` reads/writes `.aida/drivers/` only. trace:STORY-1653 | ai:claude
-fn run_driver(
-    matches: &clap::ArgMatches,
-    _ctx: &crate::command_registry::DispatchCtx,
-) -> anyhow::Result<()> {
+fn run_driver(matches: &clap::ArgMatches, _ctx: &crate::cmdkit::DispatchCtx) -> anyhow::Result<()> {
     use crate::*;
     let args = <DriverArgs as clap::FromArgMatches>::from_arg_matches(matches)?;
     let cmd = &args.inner;
@@ -289,16 +286,15 @@ fn run_driver(
 }
 
 // trace:STORY-1728 | ai:claude
-pub(crate) static DRIVER: crate::command_registry::CommandReg =
-    crate::command_registry::CommandReg {
-        name: "driver",
-        help_after: "dev",
-        command: <DriverArgs as clap::CommandFactory>::command,
-        policy: |_| crate::command_registry::CmdPolicy {
-            stakeholder: crate::stakeholder_role::StakeholderAction::Write,
-            per_write_auto_push: false,
-            skip_role_restore_prompt: false,
-            team_identity_write: false,
-        },
-        run: crate::command_registry::Handler::Early(run_driver),
-    };
+pub(crate) static DRIVER: crate::cmdkit::CommandReg = crate::cmdkit::CommandReg {
+    name: "driver",
+    help_after: "dev",
+    command: <DriverArgs as clap::CommandFactory>::command,
+    policy: |_| crate::cmdkit::CmdPolicy {
+        stakeholder: crate::stakeholder_role::StakeholderAction::Write,
+        per_write_auto_push: false,
+        skip_role_restore_prompt: false,
+        team_identity_write: false,
+    },
+    run: crate::cmdkit::Handler::Early(run_driver),
+};

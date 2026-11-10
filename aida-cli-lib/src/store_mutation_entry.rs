@@ -82,7 +82,7 @@ fn run(client: &Client, env: &Environment, argv: &[String], cwd: &Path) -> Resul
     explicit_fields(&matches, &[], &command)?;
     let (name, args) = matches.subcommand().context("UnsupportedOperation")?;
     if name == "mcp-serve" {
-        return crate::mcp::run_mediated_mcp_server(client, env, &root(cwd)?);
+        return crate::command_registry::run_mediated_mcp_handler(client, env, &root(cwd)?);
     }
     let (tool, payload) = translate(name, args, cwd)?;
     let action = if tool == "add_comment" {
@@ -184,13 +184,29 @@ fn translate_with_reader(
             Ok(("add_comment", json!({"id":id,"text":text})))
         }
         "edit" => {
-            explicit_fields(args, &["id", "title", "description", "priority"], command)?;
+            explicit_fields(
+                args,
+                &["id", "title", "description", "priority", "weight"],
+                command,
+            )?;
             let id = args.get_one::<String>("id").context("InvalidRequest")?;
             let mut payload = json!({"id":id});
             for field in ["title", "description", "priority"] {
                 if let Some(value) = args.get_one::<String>(field) {
                     payload[field] = json!(value);
                 }
+            }
+            if let Some(value) = args.get_one::<String>("weight") {
+                payload["weight"] = if value.trim().is_empty() {
+                    serde_json::Value::Null
+                } else {
+                    let weight: f32 = value
+                        .trim()
+                        .parse()
+                        .context("InvalidRequest: weight must be finite")?;
+                    ensure!(weight.is_finite(), "InvalidRequest: weight must be finite");
+                    json!(weight)
+                };
             }
             ensure!(
                 payload.as_object().unwrap().len() > 1,
@@ -357,6 +373,16 @@ mod tests {
                 vec!["aida", "edit", "TASK-1", "--description", ""],
                 "update_requirement",
                 json!({"id":"TASK-1","description":""}),
+            ),
+            (
+                vec!["aida", "edit", "TASK-1", "--weight", "0.75"],
+                "update_requirement",
+                json!({"id":"TASK-1","weight":0.75}),
+            ),
+            (
+                vec!["aida", "edit", "TASK-1", "--weight", ""],
+                "update_requirement",
+                json!({"id":"TASK-1","weight":null}),
             ),
             (
                 vec!["aida", "edit", "TASK-1", "--priority", "med"],

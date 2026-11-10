@@ -85,6 +85,7 @@ pub(crate) fn sensitive(req: &aida_core::Requirement) -> Option<String> {
 pub(crate) struct Release {
     pub verdict: mh::VerdictRef,
     pub mandate: Option<String>,
+    pub coverage: Option<crate::gate::review_carryover::CarryOver>,
 }
 
 /// The outcome of one auto-release attempt that did not refuse.
@@ -179,6 +180,7 @@ fn timestamp(value: Option<&Value>, context: &str) -> Result<DateTime<FixedOffse
 /// `release_check` is merge-hold clear's release condition for this hold at
 /// `head` ([`crate::pr_cmd::ship_refusal_release`]) — the arming evidence
 /// when no round history survives (BUG-2216).
+#[cfg(test)]
 fn eligible(
     hold: &mh::MergeHoldRecord,
     body: &Value,
@@ -188,6 +190,31 @@ fn eligible(
     authority: &sa::GrantCheck,
     mandate: &dyn Fn() -> Result<String>,
     release_check: &mh::RefusalRelease,
+) -> Result<Release> {
+    eligible_with_coverage(
+        hold,
+        body,
+        history,
+        head,
+        specs,
+        authority,
+        mandate,
+        release_check,
+        None,
+    )
+}
+
+// trace:STORY-2694 | ai:codex
+fn eligible_with_coverage(
+    hold: &mh::MergeHoldRecord,
+    body: &Value,
+    history: &RetainedHistory,
+    head: &str,
+    specs: &[Option<&aida_core::Requirement>],
+    authority: &sa::GrantCheck,
+    mandate: &dyn Fn() -> Result<String>,
+    release_check: &mh::RefusalRelease,
+    coverage: Option<crate::gate::review_carryover::CarryOver>,
 ) -> Result<Release> {
     ensure!(
         !hold.legacy
@@ -237,7 +264,12 @@ fn eligible(
         .and_then(Value::as_str)
         .context("approval has no head SHA")?;
     ensure!(
-        head.len() == 40 && sha == head && crate::gate::kernel_deps::is_hex_sha(head),
+        head.len() == 40
+            && crate::gate::kernel_deps::is_hex_sha(head)
+            && (sha == head
+                || coverage.as_ref().is_some_and(|proof| proof.pr == hold.pr
+                    && proof.approved_sha == sha
+                    && proof.new_head == head)),
         "approval is at a stale or unverifiable head"
     );
     let grant = match authority {
@@ -329,13 +361,9 @@ fn eligible(
         Some(reason) => Some(mandate().map_err(|why| anyhow::anyhow!("{reason} ({why:#})"))?),
     };
     Ok(Release {
-        verdict: mh::VerdictRef::new(
-            &key,
-            Some(hold.pr),
-            Some(head.into()),
-            Some(reviewer.into()),
-        ),
+        verdict: mh::VerdictRef::new(&key, Some(hold.pr), Some(sha.into()), Some(reviewer.into())),
         mandate,
+        coverage,
     })
 }
 
@@ -396,8 +424,15 @@ fn release_with(
     labels: impl FnOnce() -> Result<()>,
 ) -> Result<()> {
     let verdict = &release.verdict;
+    // The clearance binds the live head; the verdict retains the reviewed head.
+    // trace:STORY-2694 | ai:codex
+    let target = release
+        .coverage
+        .as_ref()
+        .map(|p| p.new_head.as_str())
+        .or(verdict.reviewed_sha.as_deref());
     ensure!(
-        Some(validate()?.as_str()) == verdict.reviewed_sha.as_deref(),
+        Some(validate()?.as_str()) == target,
         "PR head moved before release"
     );
     // Every clearance read and write happens under the lock: an overlapping
@@ -420,6 +455,13 @@ fn release_with(
         let existing = state.authorized.clone().map(Value::Object);
         let same = existing.as_ref().is_some_and(|v| {
             v.get("cleared_by").and_then(Value::as_str) == Some(PRINCIPAL)
+                && v.get("target_head_sha").and_then(Value::as_str) == target
+                && v.get("approval_coverage")
+                    == release
+                        .coverage
+                        .as_ref()
+                        .map(mh::carried_approval_report)
+                        .as_ref()
                 && v.get("released_by_verdict") == serde_json::to_value(verdict).ok().as_ref()
                 && v.get("also_released_by")
                     .unwrap_or(&Value::Array(Vec::new()))
@@ -430,7 +472,7 @@ fn release_with(
                 .as_ref()
                 .is_some_and(|v| v.get("audit_comment_posted") == Some(&Value::Bool(true)));
         let mut approved_hold = hold.clone();
-        approved_hold.target_head_sha = verdict.reviewed_sha.clone();
+        approved_hold.target_head_sha = target.map(str::to_string);
         // trace:STORY-1697 trace:BUG-2123 | ai:claude
         let mut clearance = mh::clearance_for(
             &approved_hold,
@@ -438,6 +480,12 @@ fn release_with(
             Some(verdict.clone()),
             release.mandate.clone(),
         )?;
+        if let Some(proof) = &release.coverage {
+            clearance.insert(
+                "approval_coverage".into(),
+                mh::carried_approval_report(proof),
+            );
+        }
         if !also.is_empty() {
             clearance.insert("also_released_by".into(), also_json.clone());
         }
@@ -448,7 +496,7 @@ fn release_with(
                 root,
                 hold.pr,
                 crate::gate::ledger::EventBody::ReleaseAuthorized { clearance },
-                verdict.reviewed_sha.as_deref(),
+                target,
                 None,
             )?;
             Ok(())
@@ -467,6 +515,12 @@ fn release_with(
                     crate::gate::mandate::release_note(id)
                 ),
             };
+            let coverage_note = release.coverage.as_ref().map_or(String::new(), |proof| {
+                format!(
+                    " APPROVED at {}, carried to {} (proof base {} at {}).",
+                    proof.approved_sha, proof.new_head, proof.base_ref, proof.base_tip
+                )
+            });
             let answered = if also.is_empty() {
                 String::new()
             } else {
@@ -478,14 +532,14 @@ fn release_with(
                         .join(", ")
                 )
             };
-            comment(&format!("Recorded auto-release authorization: {} by {} at {}. Recorded clearance principal `{PRINCIPAL}`; all hold kinds are Rework and {specs}.{answered}",
+            comment(&format!("Recorded auto-release authorization: {} by {} at {}. Recorded clearance principal `{PRINCIPAL}`; all hold kinds are Rework and {specs}.{answered}{coverage_note}",
                 verdict.path(), verdict.recorded_by.as_deref().unwrap_or_default(), verdict.reviewed_sha.as_deref().unwrap_or_default()))?;
             authorize(true)?;
         }
         clearance.insert("audit_comment_posted".into(), Value::Bool(true));
         let second = validate().and_then(|head| {
             ensure!(
-                Some(head.as_str()) == verdict.reviewed_sha.as_deref(),
+                Some(head.as_str()) == target,
                 "PR head moved before release"
             );
             Ok(())
@@ -597,6 +651,8 @@ struct AutoReleaseIo<'a> {
     /// BUG-1918 attestation + head coverage ([`approval_attested`]).
     // trace:STORY-1697 | ai:claude
     approval_authority: &'a dyn Fn(&str) -> Result<()>,
+    /// Revalidated durable coverage, reconciled with the live corpus on every pass.
+    coverage: &'a dyn Fn(&str) -> Result<Option<crate::gate::review_carryover::CarryOver>>,
     /// The mandate covering a sensitive release, re-read on every call.
     mandate: &'a dyn Fn() -> Result<String>,
     /// BUG-2216: merge-hold clear's release condition for a hold at a head
@@ -737,6 +793,30 @@ pub(crate) fn auto_release(project: &Path, pr: u64) -> Result<Outcome> {
                     Some(head),
                 );
                 approval_attested(&candidates, &policy, head, pr)
+            },
+            coverage: &|head| {
+                let (candidates, policy) = crate::gate::approval::merge_approval_inputs(
+                    &[project, root.as_path()],
+                    &root,
+                    pr,
+                    &known_ids,
+                    None,
+                    Some(head),
+                );
+                if approval_attested(&candidates, &policy, head, pr).is_ok() {
+                    return Ok(None);
+                }
+                mh::live_carried_approval(
+                    &[project, root.as_path()],
+                    &root,
+                    pr,
+                    head,
+                    None,
+                    &known_ids,
+                    true,
+                )
+                .map(Some)
+                .map_err(anyhow::Error::msg)
             },
             mandate: &|| {
                 // TASK-2323: the BUG-2214 evidence fetch needs the head
@@ -924,8 +1004,13 @@ fn auto_release_with(
         // consult the mandate: the mandate lookup reads the mandate records
         // and writes the exclusion ledger, so nothing an unattested approval
         // triggers reaches it. trace:STORY-1697 | ai:claude
-        (io.approval_authority)(&head)?;
-        eligible(
+        let coverage = (io.coverage)(&head)?;
+        (io.approval_authority)(
+            coverage
+                .as_ref()
+                .map_or(head.as_str(), |p| p.approved_sha.as_str()),
+        )?;
+        eligible_with_coverage(
             hold,
             body,
             history,
@@ -935,6 +1020,7 @@ fn auto_release_with(
             io.mandate,
             // trace:BUG-2216 | ai:claude
             &(io.refusal_release)(hold, &head),
+            coverage,
         )
     };
     // BUG-2123: every arming refusal must be answered at this head. Each is
@@ -989,7 +1075,21 @@ fn auto_release_with(
             let bodies = (io.read_corpus)(&ids)?;
             ensure!(
                 matches!(
-                    mh::corpus_merge_gate(hold.pr, &bodies, Some(&head)),
+                    mh::corpus_merge_gate_carrying(hold.pr, &bodies, Some(&head), &|refusal| {
+                        let crate::gate::ship::ApprovalHeadRefusal::Moved {
+                            reviewed_sha,
+                            head_sha,
+                        } = refusal
+                        else {
+                            return None;
+                        };
+                        releases
+                            .iter()
+                            .filter_map(|r| r.coverage.as_ref())
+                            .find(|p| &p.approved_sha == reviewed_sha && &p.new_head == head_sha)
+                            .cloned()
+                            .map(Ok)
+                    }),
                     mh::CorpusMergeGate::Clear
                 ),
                 "verdict corpus still refuses this head"

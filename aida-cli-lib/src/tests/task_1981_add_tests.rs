@@ -60,9 +60,9 @@ fn task_1981_run_add_waits_for_sync_before_taking_blocks_lock_and_reloads_pointe
         let matches = (ADD.command)()
             .try_get_matches_from(["add", "--title", "barrier add", "--type", "task"])
             .unwrap();
-        let ctx = crate::command_registry::DispatchCtx {
+        let ctx = crate::cmdkit::DispatchCtx {
             globals: None,
-            store: Some(crate::command_registry::StoreCtx::Git {
+            store: Some(crate::cmdkit::StoreCtx::Git {
                 store_path: &contender,
                 backend: &cached,
             }),

@@ -329,6 +329,8 @@ fn mandate_status_with_an_unreadable_committed_layer_shows_the_floor_only() {
 /// The Rust source roots the ratchet scans, relative to the workspace root.
 const SCANNED_ROOTS: &[&str] = &[
     "aida-cli-lib/src",
+    // trace:TASK-3429 | ai:codex — retain coverage after transport extraction.
+    "aida-mcp/src",
     "aida-cli/src",
     "aida-core/src",
     "aida-server/src",

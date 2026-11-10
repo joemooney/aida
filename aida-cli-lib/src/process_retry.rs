@@ -1,3 +1,4 @@
+// trace:TASK-3429 | ai:codex
 //! Retry helpers for transient process spawn failures.
 //!
 //! On Unix, executing a file fails with `ETXTBSY` while any process holds it
@@ -54,7 +55,7 @@ pub(crate) fn command_status_retrying_etxtbsy(
 /// changing behaviour. `spawn_retrying_etxtbsy` is the method the free functions
 /// never had: without it a `.spawn()` site has no remedy at all.
 // trace:BUG-1735 | ai:claude
-pub(crate) trait RetryEtxtbsy {
+pub trait RetryEtxtbsy {
     fn output_retrying_etxtbsy(&mut self) -> std::io::Result<std::process::Output>;
     fn status_retrying_etxtbsy(&mut self) -> std::io::Result<std::process::ExitStatus>;
     fn spawn_retrying_etxtbsy(&mut self) -> std::io::Result<std::process::Child>;

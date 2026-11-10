@@ -310,6 +310,7 @@ fn canonical_comment_add_and_spec_edit_are_revision_bound() {
         spec_id: "TASK-1".into(),
         expected_revision: results[0]["revision"].as_str().unwrap().into(),
         fields: super::super::canonical_mutation::EditFields {
+            weight: None,
             priority: None,
             title: Some("updated".into()),
             description: None,
@@ -478,6 +479,7 @@ fn locked_hypothesis_description_cannot_be_edited() {
         spec_id: "TASK-1".into(),
         expected_revision: hash(&before),
         fields: super::super::canonical_mutation::EditFields {
+            weight: None,
             priority: None,
             title: None,
             description: Some("rewritten hypothesis".into()),
@@ -609,6 +611,7 @@ fn multiline_comment_and_description_preserve_tabs_and_reject_other_controls() {
         spec_id: "TASK-1".into(),
         expected_revision: result["revision"].as_str().unwrap().into(),
         fields: super::super::canonical_mutation::EditFields {
+            weight: None,
             priority: None,
             title: None,
             description: Some("paragraph one\n\tparagraph two".into()),
@@ -897,6 +900,7 @@ fn priority_edit_replays_once_and_refuses_stale_or_invalid_requests() {
         spec_id: "TASK-1".into(),
         expected_revision: comment.target().1.into(),
         fields: super::super::canonical_mutation::EditFields {
+            weight: None,
             title: None,
             description: None,
             priority: Some(priority.into()),
@@ -960,6 +964,7 @@ fn repeated_text_edit_preserves_history_and_modified_timestamp() {
             spec_id: "TASK-1".into(),
             expected_revision: comment.target().1.into(),
             fields: super::super::canonical_mutation::EditFields {
+                weight: None,
                 title: title.then(|| before.title.clone()),
                 description: description.then(|| before.description.clone()),
                 priority: None,

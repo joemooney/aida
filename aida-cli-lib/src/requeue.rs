@@ -1,3 +1,4 @@
+// trace:TASK-3429 | ai:codex
 //! The NeedsAttention -> back-in-flight transition.
 //!
 //! A drain parks a spec in NeedsAttention (a punt, an orchestrator shelve, or
@@ -41,7 +42,7 @@ const SHELVE_MARKER_TAGS: &[&str] = &["needs-human"];
 /// What [`clear_shelve_markers`] removed, for the caller's output and audit
 /// note.
 #[derive(Debug, Default, Clone, PartialEq, Eq)]
-pub(crate) struct ClearedMarkers {
+pub struct ClearedMarkers {
     /// Parking tags removed from the spec.
     pub removed_tags: Vec<String>,
     /// Escalation tags kept because no human was present to clear them. The
@@ -154,7 +155,7 @@ pub(crate) fn clear_shelve_markers(
 
 /// The one-line warning for a caller that flipped the status but could not
 /// clear the escalation. `None` when nothing was kept.
-pub(crate) fn kept_escalation_warning(id: &str, cleared: &ClearedMarkers) -> Option<String> {
+pub fn kept_escalation_warning(id: &str, cleared: &ClearedMarkers) -> Option<String> {
     if cleared.kept_tags.is_empty() {
         return None;
     }
@@ -189,7 +190,7 @@ pub(crate) fn requeue_command(id: &str) -> String {
 
 /// Who is returning a spec to flight, and through which door.
 #[derive(Debug, Clone)]
-pub(crate) struct ReturnCtx {
+pub struct ReturnCtx {
     /// The door as the audit note names it, e.g. "`aida queue rework`".
     pub via: String,
     /// The door as the `SpecRequeued` event names it, e.g. `queue-rework`.
@@ -225,7 +226,7 @@ impl ReturnCtx {
 
 /// What [`return_to_flight`] did to the copy it was handed.
 #[derive(Debug, Clone, PartialEq)]
-pub(crate) enum ReturnOutcome {
+pub enum ReturnOutcome {
     /// The status matched, the transition was applied and one audit note was
     /// written.
     Returned {
@@ -376,7 +377,7 @@ pub(crate) fn return_to_flight_in_backend<B: aida_core::DatabaseBackend>(
 /// their locked `update_atomically`, where the owner runs on the copy read
 /// under the lock.
 // trace:STORY-1429 | ai:claude
-pub(crate) fn return_to_flight_in_storage(
+pub fn return_to_flight_in_storage(
     storage: &aida_core::Storage,
     id: uuid::Uuid,
     expected: &RequirementStatus,
@@ -432,7 +433,7 @@ pub(crate) fn requeued_event(
 /// Emit `SpecRequeued` for an applied return. The transition is already
 /// committed; the event is telemetry, so a failed emit is only logged.
 // trace:STORY-1429 | ai:claude
-pub(crate) fn emit_requeued(
+pub fn emit_requeued(
     project_root: &std::path::Path,
     spec: &str,
     ctx: &ReturnCtx,
@@ -446,7 +447,7 @@ pub(crate) fn emit_requeued(
 /// The user-facing line for a return that changed nothing. `None` for an
 /// applied return.
 // trace:STORY-1429 | ai:claude
-pub(crate) fn unchanged_message(id: &str, outcome: &ReturnOutcome) -> Option<String> {
+pub fn unchanged_message(id: &str, outcome: &ReturnOutcome) -> Option<String> {
     match outcome {
         ReturnOutcome::Returned { .. } => None,
         ReturnOutcome::AlreadyInFlight { status, since } => Some(format!(

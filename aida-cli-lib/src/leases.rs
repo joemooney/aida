@@ -1,3 +1,4 @@
+// trace:TASK-3429 | ai:codex
 //! session leases: lease listing and gates, cross-clone leases, prune and force cleanup, shelve/phase-1 status flips and stale-lease recovery (STORY-1488 slice 1)
 // trace:STORY-1488 | ai:claude
 
@@ -920,7 +921,7 @@ pub(crate) fn all_queued_added_at(
 /// is a project-global axis so we union across all queue files. Returns an
 /// empty vec when the dir is absent or the spec sits in no queue (the
 /// caller omits the line in that case). trace:BUG-527
-pub(crate) fn queue_memberships_for(
+pub fn queue_memberships_for(
     project_root: &std::path::Path,
     requirement_id: &Uuid,
 ) -> Vec<(Option<String>, usize)> {
@@ -971,7 +972,7 @@ pub(crate) fn queue_memberships_for(
 /// Unrouted entries render as `general (pos N)`. Returns `None` when there
 /// are no memberships so the caller can omit the line entirely.
 /// trace:BUG-527
-pub(crate) fn format_queue_membership(memberships: &[(Option<String>, usize)]) -> Option<String> {
+pub fn format_queue_membership(memberships: &[(Option<String>, usize)]) -> Option<String> {
     if memberships.is_empty() {
         return None;
     }
@@ -2044,19 +2045,19 @@ pub(crate) fn live_spec_claim_by_other<'a>(
                 return false;
             }
         }
-        if !is_live(l) {
-            return false;
-        }
+        // Scope filtering must precede ownership I/O on this hot path.
+        // trace:TASK-3420 | ai:codex
         spec_ids
             .iter()
             .any(|id| !id.is_empty() && l.scope.eq_ignore_ascii_case(id))
+            && is_live(l)
     })
 }
 
 /// What the requeue lease gate found for a spec.
 // trace:STORY-1429 | ai:claude
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub(crate) enum RequeueLeaseCheck {
+pub enum RequeueLeaseCheck {
     /// No other session holds a live lease on the spec.
     Clear,
     /// Another session holds a live lease: requeueing would reset work a
@@ -2075,7 +2076,7 @@ impl RequeueLeaseCheck {
     /// The refusal text for `id`, or `None` when the gate is clear. It names
     /// the holder and the command that releases it. `--force` does not
     /// override it.
-    pub(crate) fn refusal(&self, id: &str) -> Option<String> {
+    pub fn refusal(&self, id: &str) -> Option<String> {
         match self {
             RequeueLeaseCheck::Clear => None,
             RequeueLeaseCheck::HeldByOther {
@@ -2124,7 +2125,7 @@ pub(crate) fn is_session_lease_file(name: &str) -> bool {
 /// staging match keeps the helper correct for a caller without that check.
 // trace:BUG-b6b1278890774ef993d2ebc327862470-012 | ai:claude
 // trace:TASK-b6b1278890774ef993d2ebc327862470-065 | ai:claude
-pub(crate) fn is_lease_companion(name: &str) -> bool {
+pub fn is_lease_companion(name: &str) -> bool {
     if name.ends_with(".activity.toml") || name.ends_with(".manifest.toml") {
         return true;
     }
@@ -2358,10 +2359,7 @@ pub(crate) fn requeue_lease_liveness(
 /// Run the requeue lease gate for `spec_ids` against the leases under
 /// `project_root`.
 // trace:STORY-1429 | ai:claude
-pub(crate) fn requeue_lease_gate(
-    project_root: &std::path::Path,
-    spec_ids: &[&str],
-) -> RequeueLeaseCheck {
+pub fn requeue_lease_gate(project_root: &std::path::Path, spec_ids: &[&str]) -> RequeueLeaseCheck {
     let listed = list_leases_strict(project_root, spec_ids);
     let self_lease = std::env::current_dir()
         .ok()
@@ -2381,9 +2379,9 @@ pub(crate) fn lease_owning_spec(
     store: &RequirementsStore,
     // BUG-637: liveness predicate. A spec-scoped claim only blocks an outbound
     // mutation while its holder is genuinely LIVE — a crashed/stale agent's
-    // lease must NOT permanently lock its spec (no crash-deadlock). Callers
-    // pass `lease_is_live(&live_sessions, now)`; the unit tests (which exercise
-    // ancestry/scope matching, not liveness) pass `|_| true`.
+    // lease must NOT permanently lock its spec (no crash-deadlock). Migrated pickup
+    // callers use ownership with legacy compatibility; enforcement still uses
+    // lease_is_live. Tests of ancestry/scope matching alone pass `|_| true`.
     // trace:BUG-637 | ai:claude
     is_live: impl Fn(&SessionLease) -> bool,
 ) -> Option<SessionLease> {
@@ -2429,23 +2427,15 @@ pub(crate) fn lease_owning_spec(
                 continue;
             }
         }
-        // BUG-637: a dead/stale claim doesn't own the scope anymore — skip it so a
-        // crashed agent can't permanently block edits to its spec.
-        // trace:BUG-637 | ai:claude
-        if !is_live(lease) {
-            continue;
-        }
+        // Filter by scope before reading ownership; unrelated leases can be
+        // numerous and spec-label resolution can load the requirement store.
+        // trace:TASK-3420 | ai:codex
         let scope_lc = lease.scope.to_ascii_lowercase();
-        // Direct id-form match (handles SPEC-ID + agreed-id forms).
-        if ancestor_ids.contains(&scope_lc) {
+        let matches_scope = ancestor_ids.contains(&scope_lc)
+            || target_spec_id.is_some_and(|tid| tid.eq_ignore_ascii_case(&lease.scope));
+        // BUG-637: a stale claim no longer owns its matching scope.
+        if matches_scope && is_live(lease) {
             return Some(lease.clone());
-        }
-        // The provided target_spec_id might equal the scope verbatim even
-        // when ancestor walking doesn't pick it up (e.g. agreed_id stripped).
-        if let Some(tid) = target_spec_id {
-            if tid.eq_ignore_ascii_case(&lease.scope) {
-                return Some(lease.clone());
-            }
         }
         // Path globs / free-form tags: no ancestry to walk → don't enforce.
     }
@@ -4750,6 +4740,10 @@ fn stale_lease_recovery_with_live(
     }
 }
 
+// trace:TASK-3420 | ai:codex
+pub(crate) const LEGACY_UNKNOWN_OWNER_REASON: &str =
+    "it records no owning process, so it cannot be proven dead";
+
 /// BUG-2223: why a resumed pickup may not adopt this lease's tree in place,
 /// or `None` when it may: the owning process is verifiably gone and the tree
 /// is still on disk. Judged on the base verdict, like the BUG-908 retry:
@@ -4767,13 +4761,11 @@ pub(crate) fn orphan_adoption_refusal(report: &StaleLeaseRecoveryReport) -> Opti
             worktree_missing: true,
         } => Some("its tree no longer exists"),
         StaleLeaseRecovery::Live => Some("a live process still backs it"),
-        StaleLeaseRecovery::UnknownLiveness => {
-            Some("it records no owning process, so it cannot be proven dead")
-        }
+        StaleLeaseRecovery::UnknownLiveness => Some(LEGACY_UNKNOWN_OWNER_REASON),
     }
 }
 
-/// BUG-2223: [`orphan_adoption_refusal`] for `lease` itself, also refusing a
+/// Shared ownership judgment for adoption, also refusing a
 /// lease that records no tree, or a linked worktree git no longer lists
 /// (session start re-enters a worktree only when `git worktree list` does).
 /// Every `--resume` hint a scope-conflict refusal gives is gated on this, so
@@ -4786,8 +4778,23 @@ pub(crate) fn lease_adoption_refusal(
     if lease.worktree_path.as_os_str().is_empty() {
         return Some("it records no tree");
     }
-    if let Some(why) = orphan_adoption_refusal(&stale_lease_recovery_for_lease(lease)) {
-        return Some(why);
+    // trace:TASK-3420 | ai:codex
+    match crate::ownership::reader::LeaseReader::new(project_root)
+        .pickup_owner(lease, crate::ownership::reader::LegacyRule::Adoption)
+    {
+        crate::ownership::OwnerVerdict::Dead { .. } => {}
+        crate::ownership::OwnerVerdict::Alive { .. } => {
+            return Some("a live process still backs it")
+        }
+        crate::ownership::OwnerVerdict::Unknown { why } if why == LEGACY_UNKNOWN_OWNER_REASON => {
+            return Some(LEGACY_UNKNOWN_OWNER_REASON);
+        }
+        _ => return Some("ownership holder is unknown"),
+    }
+    // Adoption preserves all tree contents; only existence and registration
+    // remain after the shared ownership verdict, without a second PID verdict.
+    if !lease.worktree_path.exists() {
+        return Some("its tree no longer exists");
     }
     let registered = || {
         aida_core::git_ops::host_git_command(project_root)
@@ -5124,16 +5131,14 @@ pub(crate) struct FasttrackArgs {
 
 fn run_fasttrack(
     matches: &clap::ArgMatches,
-    ctx: &crate::command_registry::DispatchCtx,
-) -> anyhow::Result<crate::command_registry::Flow> {
+    ctx: &crate::cmdkit::DispatchCtx,
+) -> anyhow::Result<crate::cmdkit::Flow> {
     use crate::*;
     let args = <FasttrackArgs as clap::FromArgMatches>::from_arg_matches(matches)?;
     match &ctx.store {
-        None => Ok(crate::command_registry::Flow::Continue),
-        Some(crate::command_registry::StoreCtx::Distributed { .. }) => {
-            Ok(crate::command_registry::Flow::Continue)
-        }
-        Some(crate::command_registry::StoreCtx::Git {
+        None => Ok(crate::cmdkit::Flow::Continue),
+        Some(crate::cmdkit::StoreCtx::Distributed { .. }) => Ok(crate::cmdkit::Flow::Continue),
+        Some(crate::cmdkit::StoreCtx::Git {
             store_path,
             backend,
         }) => {
@@ -5163,7 +5168,7 @@ fn run_fasttrack(
                     // not a filing. Dispatch it before the Add delegation.
                     // trace:TASK-905 | ai:claude
                     if let Some(crate::cli::FasttrackCommand::Status { json }) = command {
-                        return crate::command_registry::returned(handle_fasttrack_status(
+                        return crate::cmdkit::returned(handle_fasttrack_status(
                             store_path, backend, *json,
                         ));
                     }
@@ -5201,7 +5206,7 @@ fn run_fasttrack(
                     let add = crate::command_registry::try_parse_from(argv).map_err(|err| {
                         anyhow::anyhow!("fasttrack could not build its `aida add`: {err}")
                     })?;
-                    return crate::command_registry::returned(
+                    return crate::cmdkit::returned(
                         crate::git_backend_cmd::handle_git_backend_command(
                             store_path,
                             &add.command,
@@ -5209,9 +5214,9 @@ fn run_fasttrack(
                     );
                 }
             }
-            Ok(crate::command_registry::Flow::Continue)
+            Ok(crate::cmdkit::Flow::Continue)
         }
-        Some(crate::command_registry::StoreCtx::Legacy {
+        Some(crate::cmdkit::StoreCtx::Legacy {
             storage,
             requirements_path,
         }) => {
@@ -5227,25 +5232,24 @@ fn run_fasttrack(
                 );
                 }
             }
-            Ok(crate::command_registry::Flow::Continue)
+            Ok(crate::cmdkit::Flow::Continue)
         }
     }
 }
 
 // trace:STORY-1728 | ai:claude
-pub(crate) static FASTTRACK: crate::command_registry::CommandReg =
-    crate::command_registry::CommandReg {
-        name: "fasttrack",
-        help_after: "add",
-        command: <FasttrackArgs as clap::CommandFactory>::command,
-        policy: |_| crate::command_registry::CmdPolicy {
-            stakeholder: crate::stakeholder_role::StakeholderAction::Write,
-            per_write_auto_push: false,
-            skip_role_restore_prompt: false,
-            team_identity_write: false,
-        },
-        run: crate::command_registry::Handler::Store(run_fasttrack),
-    };
+pub(crate) static FASTTRACK: crate::cmdkit::CommandReg = crate::cmdkit::CommandReg {
+    name: "fasttrack",
+    help_after: "add",
+    command: <FasttrackArgs as clap::CommandFactory>::command,
+    policy: |_| crate::cmdkit::CmdPolicy {
+        stakeholder: crate::stakeholder_role::StakeholderAction::Write,
+        per_write_auto_push: false,
+        skip_role_restore_prompt: false,
+        team_identity_write: false,
+    },
+    run: crate::cmdkit::Handler::Store(run_fasttrack),
+};
 
 /// [`aida_core::liveness::lease_owner_process_gone`] for a lease, from this
 /// observer. Pids recorded in another PID namespace are not probed: such an

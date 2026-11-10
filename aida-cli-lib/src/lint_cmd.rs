@@ -229,10 +229,7 @@ pub(crate) struct LintArgs {
 // `aida lint` self-loads the store via `load_store_for_lookup` and scores
 // requirement text with the EARS heuristics — read-only, no shared storage
 // handle, no LLM. trace:TASK-0417 | ai:claude
-fn run_lint(
-    matches: &clap::ArgMatches,
-    _ctx: &crate::command_registry::DispatchCtx,
-) -> anyhow::Result<()> {
+fn run_lint(matches: &clap::ArgMatches, _ctx: &crate::cmdkit::DispatchCtx) -> anyhow::Result<()> {
     // trace:TASK-3428 | ai:codex
     use crate::lint_constants;
     let args = <LintArgs as clap::FromArgMatches>::from_arg_matches(matches)?;
@@ -255,15 +252,15 @@ fn run_lint(
 }
 
 // trace:STORY-1728 | ai:claude
-pub(crate) static LINT: crate::command_registry::CommandReg = crate::command_registry::CommandReg {
+pub(crate) static LINT: crate::cmdkit::CommandReg = crate::cmdkit::CommandReg {
     name: "lint",
     help_after: "history",
     command: <LintArgs as clap::CommandFactory>::command,
-    policy: |_| crate::command_registry::CmdPolicy {
+    policy: |_| crate::cmdkit::CmdPolicy {
         stakeholder: crate::stakeholder_role::StakeholderAction::Write,
         per_write_auto_push: false,
         skip_role_restore_prompt: false,
         team_identity_write: false,
     },
-    run: crate::command_registry::Handler::Early(run_lint),
+    run: crate::cmdkit::Handler::Early(run_lint),
 };

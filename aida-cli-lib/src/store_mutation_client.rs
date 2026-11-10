@@ -12,7 +12,7 @@ use uuid::Uuid;
 const LIMIT: usize = 65536;
 const TIMEOUT: Duration = Duration::from_secs(5);
 
-pub(crate) struct Client {
+pub struct Client {
     endpoint: String,
     epoch: Uuid,
 }
@@ -80,11 +80,11 @@ impl Client {
 
     /// Closed MCP translation: unknown fields and unsupported semantics refuse
     /// before opening the channel or reading the canonical preimage.
-    pub(crate) fn mcp(&self, root: &std::path::Path, name: &str, args: &Value) -> Result<Value> {
+    pub fn mcp(&self, root: &std::path::Path, name: &str, args: &Value) -> Result<Value> {
         let object = args.as_object().context("InvalidRequest")?;
         let allowed: &[&str] = match name {
             "add_comment" => &["id", "text"],
-            "update_requirement" => &["id", "title", "description", "priority"],
+            "update_requirement" => &["id", "title", "description", "priority", "weight"],
             _ => anyhow::bail!("UnsupportedOperation"),
         };
         ensure!(
@@ -195,7 +195,7 @@ fn canonical_preimage(root: &std::path::Path, id: &str) -> Result<(String, Vec<u
 
 /// Stakeholder filtering must distinguish a missing role from an invalid one.
 // trace:TASK-3223 | ai:codex
-pub(crate) fn session_role(env: &Environment) -> Result<Option<String>> {
+pub fn session_role(env: &Environment) -> Result<Option<String>> {
     match env.var("AIDA_SESSION_ROLE") {
         Ok(role) => Ok(Some(crate::canonical_role_name(role.trim()))),
         Err(aida_core::exec_context::EnvLookupError::Missing) => Ok(None),

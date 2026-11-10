@@ -1,3 +1,4 @@
+// trace:TASK-3429 | ai:codex
 //! Shared command registration types and dispatch context.
 //! The registry table and CLI parser remain in `command_registry`.
 // trace:TASK-3425 | ai:codex
@@ -32,7 +33,7 @@ pub enum OutputFormat {
 /// Keeping this decision independent of either transport prevents a new write
 /// path from silently widening guest/requester authority.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub(crate) enum StakeholderAction {
+pub enum StakeholderAction {
     Read,
     Intake,
     EditRequirement,
@@ -106,7 +107,7 @@ pub struct GlobalArgs {
 /// How a registered command runs.
 // trace:STORY-1728 | ai:claude
 #[derive(Clone, Copy)]
-pub(crate) enum Handler {
+pub enum Handler {
     /// Runs once, before project discovery and storage init, alongside the
     /// other store-less handlers, and always finishes the invocation there.
     Early(fn(&ArgMatches, &DispatchCtx) -> Result<()>),
@@ -122,7 +123,7 @@ pub(crate) enum Handler {
 /// Whether a store-phase handler finished the invocation.
 // trace:STORY-1728 | ai:claude
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub(crate) enum Flow {
+pub enum Flow {
     Return,
     Continue,
 }
@@ -183,13 +184,13 @@ pub(crate) fn refuse_global_format(ctx: &DispatchCtx, command: &str) -> Result<(
 
 /// A `return <Result<()>>` from a legacy dispatcher arm, as a `Flow`.
 // trace:STORY-1728 | ai:claude
-pub(crate) fn returned(result: Result<()>) -> Result<Flow> {
+pub fn returned(result: Result<()>) -> Result<Flow> {
     result.map(|()| Flow::Return)
 }
 
 /// The open store a store-phase handler runs against.
 // trace:STORY-1728 | ai:claude
-pub(crate) enum StoreCtx<'a> {
+pub enum StoreCtx<'a> {
     /// The git-canonical store, from `handle_git_backend_command`.
     Git {
         store_path: &'a std::path::Path,
@@ -215,7 +216,7 @@ pub(crate) enum StoreCtx<'a> {
 /// does not compile.
 // trace:STORY-1728 | ai:claude
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub(crate) struct CmdPolicy {
+pub struct CmdPolicy {
     /// What a guest/requester stakeholder role is attempting.
     pub stakeholder: StakeholderAction,
     /// Whether the command writes the store and so triggers per-write
@@ -230,7 +231,7 @@ pub(crate) struct CmdPolicy {
 
 /// What a registered handler receives besides its own `ArgMatches`.
 // trace:STORY-1728 | ai:claude
-pub(crate) struct DispatchCtx<'a> {
+pub struct DispatchCtx<'a> {
     /// The top-level options; `None` inside the git-backend dispatcher, which
     /// has never received them.
     pub globals: Option<&'a GlobalArgs>,
@@ -240,7 +241,7 @@ pub(crate) struct DispatchCtx<'a> {
 
 /// One command's complete registration.
 // trace:STORY-1728 | ai:claude
-pub(crate) struct CommandReg {
+pub struct CommandReg {
     /// The subcommand name; must equal the name `command()` builds.
     pub name: &'static str,
     /// The top-level command this one follows in help and the catalog; `""`

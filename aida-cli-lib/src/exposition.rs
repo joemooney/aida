@@ -895,7 +895,7 @@ pub(crate) struct ExplainArgs {
 // trace:EPIC-72 trace:TASK-1436 | ai:antigravity
 fn run_explain(
     matches: &clap::ArgMatches,
-    _ctx: &crate::command_registry::DispatchCtx,
+    _ctx: &crate::cmdkit::DispatchCtx,
 ) -> anyhow::Result<()> {
     use crate::*;
     let args = <ExplainArgs as clap::FromArgMatches>::from_arg_matches(matches)?;
@@ -910,16 +910,15 @@ fn run_explain(
 }
 
 // trace:STORY-1728 | ai:claude
-pub(crate) static EXPLAIN: crate::command_registry::CommandReg =
-    crate::command_registry::CommandReg {
-        name: "explain",
-        help_after: "why",
-        command: <ExplainArgs as clap::CommandFactory>::command,
-        policy: |_| crate::command_registry::CmdPolicy {
-            stakeholder: crate::stakeholder_role::StakeholderAction::Read,
-            per_write_auto_push: false,
-            skip_role_restore_prompt: false,
-            team_identity_write: false,
-        },
-        run: crate::command_registry::Handler::Early(run_explain),
-    };
+pub(crate) static EXPLAIN: crate::cmdkit::CommandReg = crate::cmdkit::CommandReg {
+    name: "explain",
+    help_after: "why",
+    command: <ExplainArgs as clap::CommandFactory>::command,
+    policy: |_| crate::cmdkit::CmdPolicy {
+        stakeholder: crate::stakeholder_role::StakeholderAction::Read,
+        per_write_auto_push: false,
+        skip_role_restore_prompt: false,
+        team_identity_write: false,
+    },
+    run: crate::cmdkit::Handler::Early(run_explain),
+};

@@ -153,12 +153,14 @@ class StoreMutationTests(unittest.TestCase):
         for op, extra in [('comment_add', {'content': 'hello'}),
                           ('spec_edit', {'fields': {'title': 'updated'}}),
                           ('spec_edit', {'fields': {'priority': 'HIGH'}}),
-                          ('spec_edit', {'fields': {'priority': 'med'}})]:
+                          ('spec_edit', {'fields': {'priority': 'med'}}),
+                          ('spec_edit', {'fields': {'weight': 0.75}}),
+                          ('spec_edit', {'fields': {'weight': None}})]:
             data = dict(spec_id='TASK-1', expected_revision='a' * 64, **extra)
             self.assertEqual(parse(self.wire(self.request(op, data)))['data'], data)
             for field in ('author', 'path', 'status', 'grant', 'replacement'):
                 self.refuses('InvalidRequest', self.request(op, dict(data, **{field: 'x'})))
-        for fields in ({'priority': 'urgent'}, {'priority': None}, {'priority': 1},
+        for fields in ({'weight': True}, {'weight': '42'}, {'weight': 1e100}, {'weight': float('inf')}, {'priority': 'urgent'}, {'priority': None}, {'priority': 1},
                        {'status': 'Completed'}, {}, {'title': None}, {'title': ''},
                        {'title': None, 'description': 'text'},
                        {'title': 'title', 'description': None}):

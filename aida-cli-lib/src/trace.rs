@@ -1,3 +1,4 @@
+// trace:TASK-3429 | ai:codex
 //! git linkage, trailer gate, trace check, diff coverage, and doc suggest (STORY-1488 slice 1)
 // trace:STORY-1488 | ai:claude
 
@@ -643,56 +644,56 @@ pub(crate) fn format_change_linkage(
 // trace:STORY-82 | ai:claude — `pub(crate)` so the MCP `show_requirement`
 // tool can reuse the same git-linkage collection `aida show` renders.
 #[derive(Debug)]
-pub(crate) struct GitLinkage {
+pub struct GitLinkage {
     /// (full_sha, short_sha, subject), newest first.
-    pub(crate) commits: Vec<(String, String, String)>,
+    pub commits: Vec<(String, String, String)>,
     /// (file, symbol) per trace comment — deduped and sorted.
-    pub(crate) files: Vec<(String, Option<String>)>,
+    pub files: Vec<(String, Option<String>)>,
     /// The newest referencing commit is an ancestor of main.
-    pub(crate) shipped: bool,
+    pub shipped: bool,
     /// Feature branch holding the work (in-flight case only).
-    pub(crate) branch: Option<String>,
+    pub branch: Option<String>,
     /// BUG-1528: other branches (besides `branch`) whose name matches the
     /// spec id and that also carry a referencing commit — a branch-crossing
     /// signal (e.g. `bug-1420-work` + `bug-1420-round2` both open). Rendered
     /// as a note so a reviewer sees the fan-out instead of one branch picked
     /// silently. Empty in the common single-branch case.
     // trace:BUG-1528 | ai:claude
-    pub(crate) other_branches: Vec<String>,
+    pub other_branches: Vec<String>,
     /// BUG-1594: `Some((scanned, total))` when the in-flight branch search
     /// stopped before walking every referencing commit (commit cap or wall-
     /// clock budget hit), so `branch`/`other_branches` may be incomplete.
     /// Rendered as an explicit note — partial linkage is never shown as
     /// complete (PRIN-5). `None` when the search covered every commit.
     // trace:BUG-1594 | ai:claude
-    pub(crate) branch_scan_truncated: Option<(usize, usize)>,
+    pub branch_scan_truncated: Option<(usize, usize)>,
     /// BUG-1594: the trace-comment walk hit its time budget, so `files` may
     /// be missing entries. Rendered as an explicit note (PRIN-5).
     // trace:BUG-1594 | ai:claude
-    pub(crate) files_scan_incomplete: bool,
+    pub files_scan_incomplete: bool,
     /// BUG-1993: the referencing-commit `git log --all` hit its time budget,
     /// so `commits` is empty and the shipped state is unknown. Rendered as an
     /// explicit note (PRIN-5), never as "no commits" or "not shipped".
     // trace:BUG-1993 | ai:claude
-    pub(crate) commits_scan_incomplete: bool,
+    pub commits_scan_incomplete: bool,
     /// BUG-1993: the shipped state is unknown — the commit scan or the
     /// `merge-base --is-ancestor` check did not finish in budget. `shipped`
     /// is `false` then, but renderers must read it as "unknown".
     // trace:BUG-1993 | ai:claude
-    pub(crate) shipped_unknown: bool,
+    pub shipped_unknown: bool,
     /// BUG-1993: the `git worktree list --porcelain` probe hit its time
     /// budget, so `worktree` is unknown rather than absent (PRIN-5).
     // trace:BUG-1993 | ai:antigravity
-    pub(crate) worktree_scan_incomplete: bool,
+    pub worktree_scan_incomplete: bool,
     /// Worktree path checked out at `branch`, if any.
-    pub(crate) worktree: Option<String>,
+    pub worktree: Option<String>,
     /// PR number parsed from a squash-merge subject (shipped case only).
-    pub(crate) shipped_pr: Option<u64>,
+    pub shipped_pr: Option<u64>,
     /// Workspace repo slug this linkage was scanned from (ADR-12 D5: the
     /// `origin.repo` join key qualifying commits/branch/PR). `None` in the
     /// single-repo case — rendering stays unqualified, unchanged.
     // trace:STORY-634 | ai:claude
-    pub(crate) repo: Option<String>,
+    pub repo: Option<String>,
 }
 
 impl GitLinkage {
@@ -700,7 +701,7 @@ impl GitLinkage {
     /// order. Empty when every scan finished, so `is_empty()` is the
     /// "linkage is complete" test the JSON and Markdown surfaces share.
     // trace:BUG-1993 | ai:claude
-    pub(crate) fn incomplete_notes(&self) -> Vec<String> {
+    pub fn incomplete_notes(&self) -> Vec<String> {
         let mut notes = Vec::new();
         if self.commits_scan_incomplete {
             notes.push(LINKAGE_COMMIT_SCAN_INCOMPLETE_NOTE.to_string());
@@ -725,7 +726,7 @@ impl GitLinkage {
     /// walk). Review-surface classifiers read this so a timed-out scan is
     /// "unknown", never "never pushed" (PRIN-5).
     // trace:BUG-1993 | ai:claude
-    pub(crate) fn unknown_reason(&self) -> Option<&'static str> {
+    pub fn unknown_reason(&self) -> Option<&'static str> {
         if self.shipped {
             return None;
         }
@@ -799,8 +800,7 @@ pub(crate) const LINKAGE_WORKTREE_LIST_TIMEOUT: std::time::Duration =
 // Four seconds of optional linkage alone exhausted the five-second response
 // ceiling under contention. Leave room for canonical lookup and cache context;
 // expired probes keep the existing partial/unknown evidence labels.
-pub(crate) const SHOW_LINKAGE_DEADLINE: std::time::Duration =
-    std::time::Duration::from_millis(1200);
+pub const SHOW_LINKAGE_DEADLINE: std::time::Duration = std::time::Duration::from_millis(1200);
 
 /// BUG-1993: what is left of a show linkage `deadline`, at most `cap`.
 // trace:BUG-1993 | ai:claude
@@ -1020,7 +1020,7 @@ fn filing_drift_hint_inner(
 /// branch/worktree/shipped state. gh-free by design: the in-flight
 /// open-PR lookup happens later, in [`print_git_linkage`].
 /// trace:TASK-241 | ai:claude
-pub(crate) fn collect_git_linkage(project_root: &std::path::Path, ids: &[String]) -> GitLinkage {
+pub fn collect_git_linkage(project_root: &std::path::Path, ids: &[String]) -> GitLinkage {
     collect_git_linkage_opts(project_root, ids, true)
 }
 
@@ -1031,7 +1031,7 @@ pub(crate) fn collect_git_linkage(project_root: &std::path::Path, ids: &[String]
 /// linkage unknown. Non-show callers use [`collect_git_linkage_opts`], which
 /// keeps the shared resolvers unbounded.
 // trace:BUG-1993 | ai:claude
-pub(crate) fn collect_git_linkage_until(
+pub fn collect_git_linkage_until(
     project_root: &std::path::Path,
     ids: &[String],
     deadline: std::time::Instant,
@@ -3805,12 +3805,13 @@ pub(crate) fn mcp_tool_name_in_line(line: &str) -> Option<&str> {
 }
 
 /// Classify a single ADDED diff line as new public surface, or `None`. PURE —
-/// the `file` path only selects the MCP-tool probe (limited to `mcp.rs`).
+/// the `file` path only selects the MCP-tool probe (`mcp.rs` or `mcp_schema.rs`).
 // trace:TASK-939 | ai:claude
+// trace:TASK-3429 | ai:codex
 pub(crate) fn classify_surface_line(file: &str, line: &str) -> Option<PublicSurfaceKind> {
-    // MCP tool descriptor — only in the MCP surface file. The server-name line
+    // MCP tool descriptor — in the transport or shared schema. The server-name line
     // (`"name": "aida"`) is excluded so it never reads as a new tool.
-    if file.ends_with("mcp.rs") {
+    if file.ends_with("mcp.rs") || file.ends_with("mcp_schema.rs") {
         if let Some(name) = mcp_tool_name_in_line(line) {
             if name != "aida" {
                 return Some(PublicSurfaceKind::McpTool);

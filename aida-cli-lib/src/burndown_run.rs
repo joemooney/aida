@@ -1,3 +1,4 @@
+// trace:TASK-3429 | ai:codex
 //! burndown command, burndown run waves, wave PR integration and burndown config (STORY-1488 slice 1)
 // trace:STORY-1488 | ai:claude
 
@@ -883,14 +884,15 @@ pub(crate) fn integrate_wave_prs(
         // either RequestChanges is a hard stop (never merge over a reviewer).
         let (forge_request_changes, mergeable, forge_head) =
             wave_pr_review_facts(project_root, pr.number);
-        let local_request_changes =
-            local_verdict_blocks_merge(project_root, pr.number, &pr.spec, forge_head.as_deref());
+        let local_review =
+            local_wave_review(project_root, pr.number, &pr.spec, forge_head.as_deref());
 
         let action = burndown::wave_pr_action(&burndown::WavePrFacts {
             supervision_label,
             wait_expired,
             ci,
-            request_changes: forge_request_changes || local_request_changes,
+            request_changes: forge_request_changes || local_review == LocalWaveReview::Blocked,
+            review_waiting: local_review == LocalWaveReview::Waiting,
             mergeable,
         });
 
@@ -1095,6 +1097,26 @@ pub(crate) fn local_verdict_blocks_merge(
     spec: &str,
     current_sha: Option<&str>,
 ) -> bool {
+    local_wave_review(project_root, pr_number, spec, current_sha) != LocalWaveReview::Clear
+}
+
+// trace:TASK-3777 | ai:codex
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum LocalWaveReview {
+    Clear,
+    Waiting,
+    Blocked,
+}
+
+// Preserve WAITING separately for wave reporting while every unproven receipt
+// remains a merge block, including the final irreversible-boundary recheck.
+// trace:TASK-3777 | ai:codex
+fn local_wave_review(
+    project_root: &std::path::Path,
+    pr_number: u64,
+    spec: &str,
+    current_sha: Option<&str>,
+) -> LocalWaveReview {
     // The merge chokepoint's own corpus: the PR and spec files, and the gate
     // ledger where it is newer or alone (M1: a collected verdict is ledger-only).
     // trace:TASK-1801 | ai:claude
@@ -1105,26 +1127,84 @@ pub(crate) fn local_verdict_blocks_merge(
         &[spec.to_string()],
     ) {
         Ok(found) => found.into_iter().map(|(_, body)| body).collect(),
-        Err(_) => return true,
+        Err(_) => return LocalWaveReview::Blocked,
     };
     if bodies.is_empty() {
-        return false;
+        return LocalWaveReview::Clear;
     }
     let Some(current_sha) = current_sha else {
-        return true;
+        return LocalWaveReview::Blocked;
     };
-    !matches!(
-        crate::gate::review_verdict::reconcile_artifacts_for_sha(
-            bodies.iter().map(String::as_str),
-            current_sha
-        ),
-        Ok(Some(crate::gate::review_verdict::VerdictKind::Approved))
-    )
+    match crate::gate::review_verdict::reconcile_artifacts_for_sha(
+        bodies.iter().map(String::as_str),
+        current_sha,
+    ) {
+        Ok(Some(crate::gate::review_verdict::VerdictKind::Approved)) => LocalWaveReview::Clear,
+        Ok(Some(crate::gate::review_verdict::VerdictKind::Waiting)) => LocalWaveReview::Waiting,
+        _ => LocalWaveReview::Blocked,
+    }
 }
 
 #[cfg(test)]
 mod bug_1581_merge_block_tests {
     use super::*;
+
+    // trace:TASK-3777 | ai:codex
+    #[test]
+    fn wave_waiting_receipt_reports_waiting_and_unproven_evidence_still_blocks() {
+        let root = tempfile::tempdir().unwrap();
+        let dir = root.path().join(".aida/review-verdicts");
+        std::fs::create_dir_all(&dir).unwrap();
+        let sha = "ac772eaca9d389fa762a232156df996023bfdf7a";
+        let path = dir.join("PR-3731.json");
+        let receipt = |verdict, reviewer| {
+            serde_json::json!({
+                "verdict": verdict, "reviewed_sha": sha, "recorded_by": reviewer,
+            })
+            .to_string()
+        };
+        std::fs::write(&path, receipt("Waiting", "reviewer-a")).unwrap();
+        let review = local_wave_review(root.path(), 3731, "TASK-3777", Some(sha));
+        assert_eq!(review, LocalWaveReview::Waiting);
+        let action = burndown::wave_pr_action(&burndown::WavePrFacts {
+            supervision_label: None,
+            wait_expired: None,
+            ci: integrate::CiState::Passing,
+            request_changes: review == LocalWaveReview::Blocked,
+            review_waiting: review == LocalWaveReview::Waiting,
+            mergeable: integrate::MergeableState::Mergeable,
+        });
+        assert_eq!(
+            action,
+            burndown::WavePrAction::Park(
+                integrate::ParkReason::ReviewWaiting.message().to_string()
+            )
+        );
+        assert!(local_verdict_blocks_merge(
+            root.path(),
+            3731,
+            "TASK-3777",
+            Some(sha)
+        ));
+        assert_eq!(
+            local_wave_review(root.path(), 3731, "TASK-3777", None),
+            LocalWaveReview::Blocked
+        );
+        std::fs::write(
+            dir.join("TASK-3777.json"),
+            receipt("Approved", "reviewer-b"),
+        )
+        .unwrap();
+        assert_eq!(
+            local_wave_review(root.path(), 3731, "TASK-3777", Some(sha)),
+            LocalWaveReview::Blocked
+        );
+        std::fs::write(&path, "invalid json").unwrap();
+        assert_eq!(
+            local_wave_review(root.path(), 3731, "TASK-3777", Some(sha)),
+            LocalWaveReview::Blocked
+        );
+    }
 
     // The top-level act follows every retained round even when that round's
     // clock is ahead. Unrelated-artifact opposition is covered separately.
@@ -2646,7 +2726,7 @@ pub(crate) const STANDING_ARTIFACT_TYPES: [&str; 6] = [
 ];
 
 // pub(crate) so the MCP status surface can mirror this exact exclusion (BUG-717).
-pub(crate) fn is_standing_artifact_type(req_type: &str) -> bool {
+pub fn is_standing_artifact_type(req_type: &str) -> bool {
     STANDING_ARTIFACT_TYPES
         .iter()
         .any(|s| req_type.eq_ignore_ascii_case(s))

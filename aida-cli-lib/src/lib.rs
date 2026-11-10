@@ -1,3 +1,4 @@
+// trace:TASK-3429 | ai:codex
 #![allow(warnings)]
 #![allow(clippy::all)]
 #![allow(clippy::doc_lazy_continuation)]
@@ -41,7 +42,7 @@ mod advisor_watch;
 mod agent_config;
 mod agent_launch;
 mod agent_launch_prompt;
-mod agent_registry;
+pub mod agent_registry;
 mod agent_registry_root;
 mod aida_bin;
 mod alias;
@@ -53,6 +54,10 @@ mod auto_complete_telemetry;
 mod autonomy_cmd;
 mod autopilot;
 mod launch_permission_profile;
+// Disabled host-only transport; no command or consumer is registered.
+// trace:TASK-3368 | ai:codex
+#[cfg(target_os = "linux")]
+mod proc_broker;
 // trace:TASK-1018 | ai:claude — durable execution audit + one-command reversal.
 mod autopilot_audit;
 mod autopilot_intake;
@@ -66,20 +71,22 @@ mod idle_eligible;
 mod burndown_run;
 mod bypass_confirm;
 mod cache_cmd;
-mod cache_output;
+pub mod cache_output;
 mod calibration;
 mod changelog;
 mod changelog_cmd;
 mod ci_idle_timeout;
 mod ci_probe;
-mod claim;
+pub mod claim;
 mod claude_agents;
 mod cli;
 #[cfg(feature = "remote")]
 mod client;
 // trace:TASK-3425 | ai:codex
-mod cmdkit;
-mod command_registry;
+// Direct framework imports are also used by the MCP transport crate.
+// trace:TASK-3448 | ai:codex
+pub mod cmdkit;
+pub mod command_registry;
 mod comment_cmd;
 mod commit;
 mod compete;
@@ -141,7 +148,7 @@ mod drain_failure_note;
 mod drain_gate;
 mod findings_gate;
 // trace:STORY-1889 | ai:claude — gate authority, all on the mandate floor.
-mod gate;
+pub mod gate;
 // trace:STORY-B6B1278890774EF993D2EBC327862470-099 | ai:claude
 mod deputy;
 mod deputy_cmd;
@@ -159,17 +166,19 @@ mod faq_topics;
 mod knowledge_list;
 // trace:BUG-1944 | ai:claude — live-work evidence + start-of-work status bump.
 // trace:STORY-1662 | ai:claude
-mod lane_env;
+pub mod lane_env;
 // trace:BUG-2383 | ai:claude — the lane job runner and `aida lane job`.
 mod lane_cmd;
 mod lane_job;
+// trace:STORY-2640 | ai:codex
+mod lane_fast_gate;
 // One agent launcher. trace:STORY-2326 | ai:claude
 mod launch;
-mod leases;
+pub mod leases;
 mod live_work;
 pub(crate) use live_work::try_auto_queue_pr_review;
 mod agent_handle;
-mod mailbox_resolver;
+pub mod mailbox_resolver;
 mod mailbox_root;
 // trace:STORY-1652 | ai:claude — terminal markdown rendering for human output.
 mod markdown_render;
@@ -223,7 +232,7 @@ mod drain_signal;
 mod freshness_gate;
 // trace:BUG-1622 | ai:claude — keeps user-supplied refs from reading as git options.
 mod git_arg_guard;
-mod git_backend_cmd;
+pub mod git_backend_cmd;
 pub(crate) mod intent_capture;
 mod machine_readiness;
 mod mcp_cmd;
@@ -234,7 +243,7 @@ mod protocol_cmd;
 mod ps_integrate;
 mod punt_done;
 mod questions;
-mod queue_cmd;
+pub mod queue_cmd;
 mod queue_misc;
 // trace:STORY-1688 | ai:antigravity
 mod lane_liveness;
@@ -252,9 +261,9 @@ pub(crate) mod codex_resume;
 // trace:STORY-HOME-128 | ai:claude
 mod mail_backlog;
 // trace:STORY-B6B1278890774EF993D2EBC327862470-100 | ai:claude
-mod advisor_handshake;
+pub mod advisor_handshake;
 mod remote_cmd;
-mod requirements_cli;
+pub mod requirements_cli;
 mod review_cmd;
 mod review_gates;
 // trace:STORY-1742 | ai:claude
@@ -281,10 +290,10 @@ mod statusline_root;
 // trace:STORY-B6B1278890774EF993D2EBC327862470-097 | ai:claude
 mod store_local;
 // trace:TASK-3223 | ai:codex
-mod store_mutation_client;
+pub mod store_mutation_client;
 mod store_mutation_entry;
 mod store_push_pull;
-mod store_sync;
+pub mod store_sync;
 mod supervise_cmd;
 mod supervisor;
 mod transport_profile;
@@ -394,7 +403,7 @@ mod mass_change;
 // trace:SPIKE-67 | ai:claude
 mod rule_violation;
 // trace:STORY-656 | ai:claude
-mod completion; // trace:STORY-1418 | ai:claude
+pub mod completion; // trace:STORY-1418 | ai:claude
 mod drain_resume;
 mod drain_state;
 mod drive_robustness;
@@ -417,7 +426,7 @@ mod events;
 mod exit_signal;
 mod external_import_bleed;
 mod feature_cmd;
-mod findings;
+pub mod findings;
 #[cfg(unix)]
 mod forwarded_signals;
 pub mod graded_review;
@@ -427,7 +436,7 @@ mod implementer_preflight;
 mod first_run;
 mod focus;
 mod focus_cmd;
-mod forge;
+pub mod forge;
 mod forge_confirmation;
 mod forge_observed;
 
@@ -462,8 +471,8 @@ mod interview;
 mod regen; // trace:TASK-1729 | ai:codex
            // trace:STORY-633 | ai:claude — toml_edit writer for `aida config glyph`.
 mod glyph_config;
-mod glyphs;
-mod goal_cmd;
+pub mod glyphs;
+pub mod goal_cmd;
 // trace:EPIC-36 | ai:claude — session-vs-drain misclassification-gap metric.
 // trace:BUG-B6B1278890774EF993D2EBC327862470-044 | ai:claude — resume a lane parked on its own background run.
 mod headless_background;
@@ -484,8 +493,8 @@ mod health;
 mod health_cmd;
 mod health_metrics;
 mod health_vitals_cmd;
-mod history;
-mod history_layout;
+pub mod history;
+pub mod history_layout;
 // trace:TASK-1507 | ai:claude
 mod history_cache;
 mod history_indexer;
@@ -507,7 +516,7 @@ mod child_store_commit;
 mod identity_guard;
 mod init_bootstrap;
 mod init_cmd;
-mod intake;
+pub mod intake;
 mod integrate;
 // trace:TASK-1050 | ai:claude — own-checkout guard for `aida integrate` (BUG-650).
 mod ci_gate;
@@ -521,14 +530,15 @@ mod intent;
 mod intent_intake;
 mod internal_cmd;
 mod observation_envelope;
+mod review_envelope;
 // Retire a tree's mail before it is removed or reused. trace:STORY-1843 | ai:claude
 mod mail_retention;
 mod mailbox_cmd;
-mod mailbox_store;
+pub mod mailbox_store;
 // trace:STORY-1843 | ai:claude
 // trace:TASK-3074 | ai:codex
 mod mailbox_action;
-mod mailbox_view;
+pub mod mailbox_view;
 // trace:TASK-2347 | ai:codex
 mod mail_wake;
 mod mailbox_wake;
@@ -537,7 +547,15 @@ mod mailbox_wake_run;
 mod main_checkout_drift;
 mod maintenance_schedule;
 mod manual;
+#[cfg(test)]
 mod mcp;
+pub mod mcp_serve;
+#[cfg(test)]
+extern crate self as aida_cli_lib;
+// Shared with the extracted MCP transport; CLI callers stay below that boundary.
+// trace:TASK-3429 | ai:codex
+pub mod mcp_claim;
+pub mod mcp_schema;
 mod mcp_translate;
 mod memories_cmd;
 mod merge_hold;
@@ -581,7 +599,7 @@ mod pr_train;
 mod presence;
 mod presence_cmd;
 mod process_probe;
-mod process_retry;
+pub mod process_retry;
 // BUG-HOME-048: title trailers complete only the specs a PR covers.
 mod trailer_coverage;
 use crate::process_retry::RetryEtxtbsy;
@@ -601,11 +619,11 @@ mod prompts;
 mod ship;
 mod ship_from_seat;
 // trace:STORY-384 | ai:claude — pure recovery-action decision for `queue recover`.
-mod punt;
+pub mod punt;
 mod queue_recover;
 // NeedsAttention -> back-in-flight: shelve-marker clearing + requeue hint.
 // trace:TASK-1311 | ai:claude
-mod requeue;
+pub mod requeue;
 // Read-side fallback so a `--for <role>` routing written into one user's queue
 // file is visible to whoever actually wears that role. trace:BUG-774 | ai:claude
 mod queue_role_fallback;
@@ -652,7 +670,7 @@ mod schedule;
 mod schedule_cmd;
 mod schedule_ledger;
 mod schedule_predicate;
-mod schema;
+pub mod schema;
 // trace:BUG-1934 | ai:claude
 mod codex_tool_env;
 mod grant_keyring;
@@ -676,7 +694,7 @@ mod server_cmd;
 mod session;
 // trace:STORY-993 | ai:claude
 mod session_liveness;
-mod session_manifest;
+pub mod session_manifest;
 mod session_misc_cmd;
 // trace:STORY-B6B1278890774EF993D2EBC327862470-098 | ai:claude
 mod whoami_view;
@@ -734,13 +752,13 @@ mod trusted_config;
 mod type_cmd;
 mod ultraplan_cmd;
 mod upgrade_cmd;
-mod usage;
+pub mod usage;
 mod usage_cmd;
 // trace:STORY-1673 | ai:codex
 mod verify_cmd;
 // trace:TASK-877 | ai:claude — user/project-defined `aida` command aliases.
 mod user_alias;
-mod worker;
+pub mod worker;
 mod workflow_hints;
 // trace:STORY-716 | ai:claude — `aida worktree` namespace (EPIC-55 workspace layer).
 mod worktree;
@@ -791,3 +809,63 @@ include!("lib_part6.rs");
 // trace:STORY-2539 | ai:codex
 #[path = "tests/story_2539_vendor_literal_ratchet_tests.rs"]
 mod story_2539_vendor_literal_ratchet_tests;
+
+// MCP application boundary; retain the established helper paths.
+// trace:TASK-3429 | ai:codex
+pub use brief::clear_pending_brief;
+pub use burndown_run::is_standing_artifact_type;
+pub use config_init::read_ultraplan_config;
+pub use config_init::UltraplanMode;
+pub use findings_gate::record_caller_status_transition;
+pub use kernel::canonical_role_name;
+pub use kernel::current_user_id;
+pub use kernel::find_project_root;
+pub use kernel::get_default_author;
+pub use kernel::home_dir;
+pub use kernel::is_terminal_status;
+pub use kernel::parse_days_arg;
+pub use kernel::resolve_aida_exe;
+pub use kernel::resolve_current_session_id;
+pub use leases::format_queue_membership;
+pub use leases::queue_memberships_for;
+pub use leases::requeue_lease_gate;
+pub use plan_report::assemble_ultraplan_prompt;
+pub use plan_report::build_reusable_helpers_section;
+pub use plan_report::compute_plan_report;
+pub use plan_report::plan_repo_root;
+pub use plan_report::read_reserved_paths;
+pub use plan_report::render_plan_report_string;
+pub use queue_cmd::rework_target_for_mode;
+pub use queue_misc::entry_matches_role_filter;
+pub use queue_misc::resolve_mail_sender_identity;
+pub use queue_misc::resolve_mail_sender_role;
+pub use queue_misc::resolve_queue_role_filter;
+pub use rel_cards::reject_cross_store_spec_ref;
+pub use rel_cards::relationship_terminal_ambiguity_warning;
+pub use requirements_cli::enforce_structural_tag_replacement;
+pub use requirements_cli::validate_tag_value;
+pub use requirements_cli::TagRepair;
+pub use role::record_role_activity;
+pub use session_misc::update_manifest_for_status;
+pub use stakeholder_role::active_stakeholder_role;
+pub use stakeholder_role::requester_intake_type_allowed;
+pub use stakeholder_role::stakeholder_action_allowed;
+pub use stakeholder_role::stakeholder_action_label;
+pub use stakeholder_role::stakeholder_mcp_read_allowed;
+pub use stakeholder_role::stakeholder_refusal_message;
+pub use statusline_root::statusline_project_root;
+pub use trace::collect_git_linkage;
+pub use trace::collect_git_linkage_until;
+pub use trace::SHOW_LINKAGE_DEADLINE;
+pub use upgrade_release::REQUESTER_INTAKE_FORBIDDEN_FIELDS;
+pub use usage_mcp_helpers::aggregate_events;
+pub use worktree_gc::for_target_requires_dispatch_authority;
+
+// Build identity belongs to the CLI image, including the extracted MCP transport.
+// trace:TASK-3429 | ai:codex
+pub const BUILD_GIT_SHA: &str = env!("AIDA_BUILD_GIT_SHA");
+pub const BUILD_GIT_DIRTY: &str = env!("AIDA_BUILD_GIT_DIRTY");
+pub use cmdkit::StakeholderAction;
+
+// trace:TASK-3429 | ai:codex
+pub use rel_cards::load_dispenser;

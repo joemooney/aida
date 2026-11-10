@@ -260,7 +260,15 @@ fn cache_rows_never_grant_authority() {
     );
 
     let src = Path::new(env!("CARGO_MANIFEST_DIR")).join("src");
-    let sources = authority_sources(&src);
+    // trace:TASK-3429 | ai:codex — retain coverage of the extracted transport.
+    let mut sources = authority_sources(&src);
+    let mcp = src.join("../../aida-mcp/src");
+    for entry in std::fs::read_dir(&mcp).unwrap() {
+        let path = entry.unwrap().path();
+        if path.extension().is_some_and(|ext| ext == "rs") {
+            sources.push(path);
+        }
+    }
     assert!(
         sources.len() > 30,
         "the authority module set shrank unexpectedly: {sources:?}"
@@ -272,7 +280,7 @@ fn cache_rows_never_grant_authority() {
         for (line, token) in cache_offenders(&text) {
             offenders.push(format!(
                 "{}:{line} names `{token}`",
-                path.strip_prefix(&src).unwrap().display()
+                path.strip_prefix(&src).unwrap_or(path).display()
             ));
         }
     }

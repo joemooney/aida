@@ -1,3 +1,4 @@
+// trace:TASK-3429 | ai:codex
 //! Findings command: promote, dismiss, add, recur, gate authority and promote-to-gate, reviewer-verdict and non-blocking findings (STORY-1488 slice 1)
 // trace:STORY-1488 | ai:claude
 
@@ -16,7 +17,7 @@ pub(crate) use findings_gate_args::*;
 /// change after an automated one leaves mixed history and the BUG-1625 merge
 /// guard lets the human win.
 // trace:BUG-1637 | ai:claude
-pub(crate) fn record_caller_status_transition(req: &mut Requirement, from: &RequirementStatus) {
+pub fn record_caller_status_transition(req: &mut Requirement, from: &RequirementStatus) {
     aida_core::conflict::record_status_transition(req, &get_default_author(), from);
 }
 
@@ -1177,9 +1178,19 @@ pub(crate) fn handle_findings_command(
             tags.as_deref(),
         )?,
 
-        FindingsCommand::Recur { id, note } => {
-            handle_findings_recur(backend, store_path, id, note.as_deref())?
-        }
+        FindingsCommand::Recur {
+            id,
+            note,
+            until,
+            reason,
+        } => handle_findings_recur(
+            backend,
+            store_path,
+            id,
+            note.as_deref(),
+            until.as_deref(),
+            reason.as_deref(),
+        )?,
         // trace:STORY-1417 | ai:claude
         FindingsCommand::Classes { since, json } => handle_review_classes(since.as_deref(), *json)?,
     }
@@ -1353,7 +1364,13 @@ pub(crate) fn handle_findings_recur(
     store_path: &std::path::Path,
     id: &str,
     note: Option<&str>,
+    until: Option<&str>,
+    reason: Option<&str>,
 ) -> Result<()> {
+    // Admission precedes both the recurrence bump and parking.
+    // trace:STORY-2402 | ai:codex
+    let condition = crate::condition_cmd::canonical_condition(until, reason)?;
+    let until = condition.as_deref();
     let mut req = backend
         .get_requirement_unambiguous(id)? // trace:TASK-1468 | ai:claude
         .ok_or_else(|| not_found::requirement_not_found(id, Some(store_path)))?;
@@ -1364,6 +1381,33 @@ pub(crate) fn handle_findings_recur(
              `aida findings recur` only bumps real findings. Re-file as an observation \
              with `aida findings add --note ...` if you meant to capture a new one."
         );
+    }
+
+    // These remain separate store writes. Never hide a persisted deferral if
+    // the later recurrence write fails. trace:STORY-2402 | ai:codex
+    let resolved_id = req.spec_id.clone().unwrap_or_else(|| id.to_string());
+    let recurrence_error = |error: anyhow::Error| match until {
+        Some(condition) => error.context(format!(
+            "recurrence update failed after deferring {resolved_id} until {condition}; \
+             deferral remains saved; inspect the recurrence count before retrying"
+        )),
+        None => error,
+    };
+    if until.is_some() {
+        crate::defer_cmd::defer_single(id, until, reason, backend, store_path)?;
+        // Dispatch auto-push only runs on success. Sync the saved deferral
+        // before the fallible recurrence update. trace:STORY-2402 | ai:codex
+        crate::maybe_auto_push_store(
+            store_path,
+            crate::StoreAutoPushMode::PerWrite,
+            "conditional findings recurrence",
+        );
+        // Reload the deferral so the recurrence write preserves it.
+        req = backend
+            .get_requirement_unambiguous(id)
+            .map_err(recurrence_error)?
+            .ok_or_else(|| anyhow::anyhow!("finding disappeared"))
+            .map_err(recurrence_error)?;
     }
 
     // Find and bump the existing counter; default to 2 when absent (the
@@ -1401,7 +1445,7 @@ pub(crate) fn handle_findings_recur(
         relayed_from: None,
     });
     req.modified_at = now;
-    backend.update_requirement(&req)?;
+    backend.update_requirement(&req).map_err(recurrence_error)?;
 
     let display_id = req.spec_id.as_deref().unwrap_or(id);
     println!("Recurred {} — recurrence count now ×{next}.", display_id);
@@ -2113,8 +2157,12 @@ pub(crate) fn try_emit_nonblocking_findings_on_completion(
             });
         let req = &mut store.requirements[index];
         sweep_id = req.spec_id.clone();
+        // New sweeps start directly at their first section. trace:TASK-3777 | ai:codex
+        if !req.description.is_empty() {
+            req.description.push_str("\n\n");
+        }
         req.description
-            .push_str(&format!("\n\n## Findings from {spec_upper}\n"));
+            .push_str(&format!("## Findings from {spec_upper}\n"));
         if let Some(n) = pr_number {
             req.description.push_str(&format!("\nPR: #{n}\n"));
         }
@@ -2273,6 +2321,11 @@ fn findings_cli_policy(matches: &clap::ArgMatches) -> crate::command_registry::C
         },
         per_write_auto_push: matches!(cmd, Some(Some(c)) if !matches!(c, FindingsCommand::List { .. } | FindingsCommand::Classes { .. })),
         skip_role_restore_prompt: false,
-        team_identity_write: false,
+        // Conditional recurrence parks and dequeues work just like `defer`.
+        // trace:STORY-2402 | ai:codex
+        team_identity_write: matches!(
+            cmd,
+            Some(Some(FindingsCommand::Recur { until: Some(_), .. }))
+        ),
     }
 }

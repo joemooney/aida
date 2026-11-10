@@ -1,3 +1,4 @@
+// trace:TASK-3429 | ai:codex
 //! Invocation-wide CLI cache labels. Arrays retain their existing wire shape.
 // trace:TASK-1526 | ai:codex
 use aida_core::db::cache_refresh::{cache_read_metadata, CacheReadScope};
@@ -84,7 +85,7 @@ fn footer_after_body(footer: &str, line_open: bool) -> String {
 }
 
 // trace:TASK-1526 | ai:codex
-pub(crate) fn json_pretty<T: serde::Serialize + ?Sized>(value: &T) -> serde_json::Result<String> {
+pub fn json_pretty<T: serde::Serialize + ?Sized>(value: &T) -> serde_json::Result<String> {
     let mut value = serde_json::to_value(value)?;
     if let Some(object) = value.as_object_mut() {
         let metadata = cache_read_metadata();
@@ -257,4 +258,66 @@ mod tests {
         assert!(!line_open());
         assert_eq!(footer_after_body("cache:", line_open()), "cache:");
     }
+}
+
+/// Render cache freshness diagnostics without making an authority decision.
+// trace:TASK-3429 | ai:codex
+pub fn mcp_cache_status(project_root: &std::path::Path) -> Result<String, String> {
+    let store_path = project_root.join(".aida-store");
+    if !store_path.exists() {
+        return Err(format!(
+            "no git-canonical store at {} — `cache status` applies to a distributed-mode \
+             project. Run `aida init` first.",
+            store_path.display()
+        ));
+    }
+    let cache_path = aida_core::CachedGitBackend::default_cache_path(&store_path);
+    // trace:TASK-1526 | ai:codex
+    let backend =
+        aida_core::CachedGitBackend::open(&store_path, &cache_path).map_err(|e| e.to_string())?;
+    backend
+        .ensure_cache_fresh_with_schema_retry()
+        .map_err(|e| e.to_string())?;
+    let cache = backend.cache();
+    let recorded_sha = cache
+        .source_head_sha()
+        .map_err(|e| e.to_string())?
+        .unwrap_or_default();
+    let actual_sha = aida_core::git_ops::head_sha(&store_path).unwrap_or_default();
+    let count = cache.requirement_count().map_err(|e| e.to_string())?;
+    let built_at = cache
+        .built_at()
+        .map_err(|e| e.to_string())?
+        .unwrap_or_else(|| "(never)".into());
+
+    let mut out = String::new();
+    out.push_str(&format!(
+        "Cache path:          {}\n",
+        cache.path().display()
+    ));
+    out.push_str(&format!("Cached requirements: {}\n", count));
+    out.push_str(&format!("Last built:          {}\n", built_at));
+    out.push_str(&format!(
+        "Cache HEAD SHA:      {}\n",
+        if recorded_sha.is_empty() {
+            "(none)".to_string()
+        } else {
+            recorded_sha.clone()
+        }
+    ));
+    out.push_str(&format!(
+        "Store HEAD SHA:      {}\n",
+        if actual_sha.is_empty() {
+            "(no git head — non-git store?)".to_string()
+        } else {
+            actual_sha.clone()
+        }
+    ));
+    let stale = recorded_sha != actual_sha || recorded_sha.is_empty();
+    if stale && !actual_sha.is_empty() {
+        out.push_str("Status:              STALE — run `aida cache rebuild`");
+    } else {
+        out.push_str("Status:              FRESH");
+    }
+    Ok(out)
 }

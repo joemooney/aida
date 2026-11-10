@@ -328,7 +328,7 @@ spec doesn't uniquely identify which comment you mean. Run `aida comment list
 
 **Gotchas.** Because defer is a view-flag, a deferred spec keeps its status — a deferred Approved spec is still Approved, just hidden. And like archive, it won't show in default `list` until you `undefer` (or pass `--deferred`/`--all`) — the same "where did my spec go?" surprise, so reach for `--all` when something's missing.
 
-Supplied triggers must use `spec:<spec-id>=completed`, `pr:<number>=merged`, `release:>=<version>`, `date:<YYYY-MM-DD>`, `query:<filters> count<op><n>`, or `manual:<who>`. Free text is refused. A manual condition requires a non-empty `--reason`; the existing product/advisor/operator authority gate still applies to reasoned holds. A bare re-deferral preserves the previous trigger and timestamp. Existing free-text triggers remain readable pending migration. Question answers that park work store typed consequences canonically; prose consequences become `manual:<resolver>` with the original text retained in a comment. An empty or whitespace-only consequence preserves an existing trigger, or defaults to `manual:<resolver>` if none exists, without adding an empty comment. Resolver identities that cannot form a valid manual condition (for example, empty names or names with internal whitespace) use the parseable fallback `manual:operator`; any prose comment retains its original author. In the TUI, blank condition input issues a bare defer, and rejected conditions show the CLI diagnostic in the status line.
+Supplied triggers must use `spec:<spec-id>=completed`, `pr:<number>=merged`, `release:>=<version>`, `date:<YYYY-MM-DD>`, `query:<filters> count<op><n>`, or `manual:<who>`. Free text is refused. A manual condition requires a non-empty `--reason`; the existing product/advisor/operator authority gate still applies to reasoned holds. A bare re-deferral preserves the previous trigger and timestamp. The one-time free-text trigger migration has been applied; any remaining unparseable trigger stays parked for repair. Question answers that park work store typed consequences canonically; prose consequences become `manual:<resolver>` with the original text retained in a comment. An empty or whitespace-only consequence preserves an existing trigger, or defaults to `manual:<resolver>` if none exists, without adding an empty comment. Resolver identities that cannot form a valid manual condition (for example, empty names or names with internal whitespace) use the parseable fallback `manual:operator`; any prose comment retains its original author. In the TUI, blank condition input issues a bare defer, and rejected conditions show the CLI diagnostic in the status line.
 
 **Chains with** — `defer --until` parks it; `undefer` or the hourly `defer resurface` sweep brings it back to the ready set.
 
@@ -337,20 +337,23 @@ Supplied triggers must use `spec:<spec-id>=completed`, `pr:<number>=merged`, `re
 Evaluates typed conditions on deferred/parked specs without changing lifecycle
 status. A met condition clears a plain deferral and records the observation in
 an audit comment. Met operator holds go to `aida human` for a decision and stay
-held. Manual conditions older than 14 days also route to that queue;
+held. Manual conditions on deferrals older than 14 days also route to that queue;
+changing the trigger preserves the original deferral timestamp, so replacing an
+older trigger with a manual condition may route it on the next hourly sweep.
 `--manual-age-days N` changes the threshold. Existing queue rows are not duplicated.
 Removing a queue row without lifting the hold or changing the condition allows
 it to be routed again on the next sweep. Missing timestamps or triggers
-stay parked, and archived specs are skipped. Use `--dry-run` to preview actions
+stay parked. A condition naming an unknown spec ID also stays parked as Unknown;
+store read failures still fail the sweep. Archived specs are skipped. Use `--dry-run` to preview actions
 without writing specs or queues.
 
 Unknown observations (including failed forge/release probes) are reported and
 left parked, with a successful exit. Free-text and unparseable triggers are
 also Unknown and remain unchanged, including invalid typed syntax such as
-`spec:` or `date:bad`; the run reports `N deferrals awaiting typed-condition
-migration` as information. A store containing only these unmigrated triggers
-exits successfully without writing objects or queues. Only real evaluation errors
-(such as a spec condition naming a spec that does not exist) and store/internal errors
+`spec:` or `date:bad`; the run reports `N deferrals with unparseable triggers
+requiring repair` as information. A store containing only these triggers
+exits successfully without writing objects or queues. Unknown spec IDs also stay
+parked successfully. Only real evaluation errors and store/internal errors
 produce a nonzero exit after the remaining specs are checked. Concurrently edited specs
 are retained for a later sweep. This repository registers the sweep hourly as
 the timer-only `defer-resurface` job and routes job failures to the advisor.
@@ -500,6 +503,60 @@ round-trips. `validate --json` reports the label, full checksum and
 These local commands do not publish. Enrolled intake transport is described
 below; backup-comment recovery remains a separate slice.
 <!-- doc-intent: shaped by STORY-2479 -->
+
+### Untrusted review returns
+
+<!-- trace:STORY-2493 | ai:codex -->
+`aida intent review-return --file input.json` generates an explicit finding or
+pending verdict without discovering a store, identity, logs or local paths.
+Input has exactly `version`, `kind`, `payload`, and an empty `checksum`; generation
+fills the checksum. `validate` and `export` also accept these closed envelopes.
+For example:
+
+```json
+{"version":1,"kind":"finding","payload":{"severity":"major","blocking":true,"title":"Missing error handling","body":"The failure is ignored.","file":"src/lib.rs","line":12},"checksum":""}
+```
+
+Finding severity uses the canonical values `major`, `minor`, `cosmetic`,
+`observation` or `note`. The file must
+be an explicit home-relative path with no empty, dot or parent components,
+backslashes, colons or control characters; the line is a positive 32-bit integer.
+Title/body limits match observations; paths are bounded at 4096 bytes.
+
+A `review-verdict` payload contains exactly `pr` (positive integer), `head_sha`
+(40 lowercase hex characters), `decision` (`approved`, `request-changes`,
+`rejected` or `waiting`), `blocking_findings` (at most 256 unique full lowercase
+SHA-256 digests), and `reviewer_node` (32 lowercase hex characters). Verdict
+publication requires per-writer enrollment: the node must match the enrolled
+producer writer ID. This match labels the source; it does not authenticate a
+reviewer or confer authority. Legacy enrollment still supports findings.
+
+The checksum hashes compact JSON fields `version`, `kind`, `payload`, in that
+order, excluding `checksum`. Finding payload fields hash in the example's order;
+verdict fields hash in the order listed above. Strings are not normalized.
+Unknown, duplicate, missing or mismatched fields refuse. Reads remain bounded
+regular-file reads, and every decoded string field is scanned against explicit
+reviewed deny patterns, including paths, enums, node IDs and digest strings.
+
+Publish with `aida intent publish --file envelope.json --reviewed`; findings
+require work-side operator review before this confirmation. Fixed-field verdicts
+can publish without `--reviewed`. Enrolled policy is
+rechecked before publication and on pull in quarantine. The independent transport
+retains immutable `findings/<digest>.json` and `review-verdicts/<digest>.json`
+paths; work operations never write canonical store refs.
+
+At home, pull and inspect with `intent list`, then explicitly run
+`aida intent process <full-digest> --action create`. Findings become draft tasks
+with canonical review-finding, severity, blocking and digest tags. The description
+retains the explicit home location. Receipts map the full digest and journal
+operation to the home UUID. Retry the same command after a receipt-push failure;
+the journal recovers the existing finding without filing it again. Imported
+findings support `pending` and `create`, not comment or transport dismissal.
+
+Verdicts remain pending data, with no processing action or merge-gate credit.
+Blocking-digest projection and home operator-attested approval are later slices;
+receiving an imported verdict currently neither adds a merge block nor approves
+merge. Existing review and merge gates continue to apply.
 
 ### Native per-writer intake (first-round-trip slice)
 
@@ -835,9 +892,10 @@ Spec and query checks read canonical objects strictly (or an explicit YAML
 store selected with the top-level `aida --file` option); archived SQLite stores
 must be migrated first.
 
-Deferral writes require this language, and the hourly `defer resurface` job
-evaluates stored conditions (see above). Legacy trigger migration and
-relay/recurrence integration remain separate slices.
+Deferral writes, conditional relay/seat handoffs, and `findings recur --until`
+require this language. The hourly `defer resurface` job evaluates their stored
+conditions (see above). Human decisions use `manual:<who>` with a non-empty
+reason and retain the same hold policy as `aida defer`.
 <!-- trace:STORY-2402 | ai:codex -->
 
 

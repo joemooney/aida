@@ -1,3 +1,4 @@
+// trace:TASK-3429 | ai:codex
 //! aida-cli-lib core helpers (STORY-1488 slice 1)
 // trace:STORY-1488 | ai:claude
 
@@ -5,7 +6,7 @@ use crate::*;
 
 /// Get the default author from AIDA_AUTHOR environment variable or fall back to system user.
 /// Format recommendation: "ai:claude:username" for AI-assisted work
-pub(crate) fn get_default_author() -> String {
+pub fn get_default_author() -> String {
     // One resolution shared with the store's write events.
     // trace:STORY-1674 | ai:claude
     aida_core::provenance::default_author()
@@ -66,7 +67,7 @@ pub(crate) fn prompt_yes_no(prompt: &str, default_yes: bool) -> Result<bool> {
 /// child` to refuse parenting under closed work, and to keep `aida show
 /// --tree` / `aida list --parent` views from accumulating mixed-status
 /// trees. trace:BUG-64 | ai:claude
-pub(crate) fn is_terminal_status(status: &RequirementStatus) -> bool {
+pub fn is_terminal_status(status: &RequirementStatus) -> bool {
     // TASK-741: "terminal" is single-sourced in the lifecycle model so the
     // archive invariant, the BUG-64 parent guard, and the diagram all read the
     // same definition. trace:TASK-741 | ai:claude
@@ -156,11 +157,11 @@ pub(crate) fn sh_single_quote(s: &str) -> String {
 /// roles). The implementation is gate-owned: dispatch authority compares seats
 /// with it.
 // trace:TASK-586 trace:TASK-b6b1278890774ef993d2ebc327862470-013 | ai:claude
-pub(crate) fn canonical_role_name(raw: &str) -> String {
+pub fn canonical_role_name(raw: &str) -> String {
     crate::gate::dispatch_deps::canonical_role_name(raw)
 }
 
-pub(crate) fn find_project_root() -> Result<std::path::PathBuf> {
+pub fn find_project_root() -> Result<std::path::PathBuf> {
     // BUG-1618: a test that pinned a hermetic project root (see
     // `test_env::AmbientGuard`) resolves here instead of walking up from the
     // process cwd, which inside a leased `aida worktree add` checkout reaches a
@@ -555,7 +556,7 @@ pub(crate) fn aida_home_dir() -> Option<std::path::PathBuf> {
 /// `dirs` crate (a source-scan test enforces it).
 // trace:BUG-1642 | ai:claude
 // trace:TASK-1513 | ai:claude
-pub(crate) fn home_dir() -> Option<std::path::PathBuf> {
+pub fn home_dir() -> Option<std::path::PathBuf> {
     #[cfg(test)]
     {
         crate::test_home::home_dir()
@@ -607,7 +608,7 @@ pub(crate) fn copy_to_clipboard(text: &str) -> bool {
 /// grammar (`30d`, `12h`, `2w`, `24 hours ago`, an ISO date or datetime in
 /// local time, or RFC3339). Returns an error on malformed input.
 // trace:TASK-1509 | ai:claude
-pub(crate) fn parse_days_arg(raw: &str) -> Result<chrono::Duration> {
+pub fn parse_days_arg(raw: &str) -> Result<chrono::Duration> {
     queue_cmd::parse_lookback(raw, "--since")
 }
 
@@ -618,7 +619,7 @@ pub(crate) fn parse_days_arg(raw: &str) -> Result<chrono::Duration> {
 /// a tracked session simply carry no session id. Stamping it lets tooling
 /// correlate a comment back to the session that produced it.
 // trace:TASK-330 | ai:claude
-pub(crate) fn resolve_current_session_id() -> Option<String> {
+pub fn resolve_current_session_id() -> Option<String> {
     for var in ["AIDA_SESSION_ID", "CLAUDE_CODE_SESSION_ID"] {
         if let Ok(val) = std::env::var(var) {
             let trimmed = val.trim();
@@ -634,7 +635,7 @@ pub(crate) fn resolve_current_session_id() -> Option<String> {
 /// [`crate::gate::kernel_deps::current_user_id`].
 // trace:TASK-b6b1278890774ef993d2ebc327862470-043 | ai:claude
 // Implemented on the floor (TASK-b6b1278890774ef993d2ebc327862470-024).
-pub(crate) fn current_user_id(user_override: Option<&str>) -> String {
+pub fn current_user_id(user_override: Option<&str>) -> String {
     crate::gate::kernel_deps::current_user_id(user_override)
 }
 
@@ -702,7 +703,7 @@ pub(crate) mod test_aida_exe {
     }
 }
 
-pub(crate) fn resolve_aida_exe() -> std::path::PathBuf {
+pub fn resolve_aida_exe() -> std::path::PathBuf {
     aida_exe_path()
 }
 

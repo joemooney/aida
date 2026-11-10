@@ -9,7 +9,7 @@
 #   2. Verify aida-core/Cargo.toml has all required metadata fields
 #   3. Verify aida-cli/Cargo.toml has all required metadata fields
 #   4. Verify aida-crate/Cargo.toml (the published `aida` umbrella crate)
-#   5. Decide on the publishing order (aida-core before aida-cli-lib before
+#   5. Decide on the publishing order (aida-core before aida-cli-lib before aida-mcp before
 #      aida-cli before the umbrella `aida` crate, since they depend on each other)
 #
 # Until then, this script is a stub that prints what *would* happen.
@@ -35,6 +35,7 @@ AIDA is not yet published to crates.io. To wire this up:
 
     cd aida-core   && cargo publish --features postgres,gitlab,github,jira
     cd ../aida-cli-lib && cargo publish --features remote
+    cd ../aida-mcp && cargo publish
     cd ../aida-cli && cargo publish --features remote
     cd ../aida-crate && cargo publish
 

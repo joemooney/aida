@@ -788,6 +788,20 @@ impl Store {
                     process.pid,
                     tail.as_deref().unwrap_or("no log output")
                 ));
+                // A lost supervisor still owes its captured lease completion.
+                // Confirm the whole attempt before publishing that evidence.
+                // trace:TASK-3777 | ai:codex
+                let diagnostic = if attempt.phase == Phase::Running {
+                    match confirm(attempt).map_err(anyhow::Error::msg)
+                        .and_then(|()| finish_confirmed_review(&self.root, attempt)) {
+                        Ok(()) => diagnostic,
+                        Err(error) => bounded_diagnostic(&format!(
+                            "{diagnostic}; review completion receipt refused; retained checkout requires recovery: {error:#}"
+                        )),
+                    }
+                } else {
+                    diagnostic
+                };
                 attempt.phase = Phase::Exited;
                 attempt.diagnostic = Some(diagnostic);
             }
@@ -1356,7 +1370,23 @@ fn select(
     vendor: Option<String>,
     max: u8,
 ) -> Result<Action> {
+    select_with_coverage(store, change, vendor, max, || {
+        dispatch_carried_approval(store, change)
+    })
+}
+
+// trace:STORY-2694 | ai:codex
+fn select_with_coverage(
+    store: &Store,
+    change: &forge::Change,
+    vendor: Option<String>,
+    max: u8,
+    coverage: impl FnOnce() -> Option<String>,
+) -> Result<Action> {
     let key = change.key();
+    // Resolve remote proof evidence before taking the shared runtime lock.
+    // Suppression is review coverage only: readiness still checks CI at H2.
+    let carried = coverage();
     let overlap = change
         .overlap
         .context("base-branch overlap evidence is unknown")?;
@@ -1435,6 +1465,7 @@ fn select(
             // trace:TASK-1945 | ai:claude
             return Ok(Action::Skip(format!("a review of an earlier head still holds this change ({holders}); it is superseded once the change is seen at a new head")));
         }
+        if let Some(reason) = &carried { return Ok(Action::Skip(reason.clone())); }
         if history.contains(&change.head) { return Ok(Action::Skip("head already has a recorded review".into())); }
         if history.blocking() >= 2 { return Ok(Action::Skip("two-round review cap reached; route further work to the advisor".into())); }
         if total >= usize::from(max) { return Ok(Action::Skip(format!("global reviewer capacity ({max}) is held by {holders}; a running review frees its slot when it exits, and an ambiguous one (dispatcher lost) stays reserved until an operator confirms it ended: check its log in .aida/review-watch/logs/ and `aida session leases --all`"))); }
@@ -1460,6 +1491,15 @@ fn select(
 /// one whose review exited unfinished is still probed.
 // trace:TASK-1955 | ai:claude (TASK-2064, TASK-1-411)
 fn probe_unneeded(store: &Store, change: &forge::Change) -> Result<Option<String>> {
+    probe_unneeded_with_coverage(store, change, || dispatch_carried_approval(store, change))
+}
+
+// trace:STORY-2694 | ai:codex
+fn probe_unneeded_with_coverage(
+    store: &Store,
+    change: &forge::Change,
+    coverage: impl FnOnce() -> Option<String>,
+) -> Result<Option<String>> {
     let key = change.key();
     let head = change.head.as_str();
     let recorded = store.transaction(&key, |state| {
@@ -1489,6 +1529,9 @@ fn probe_unneeded(store: &Store, change: &forge::Change) -> Result<Option<String
     if let Some((reason, false)) = &recorded {
         return Ok(Some(reason.clone()));
     }
+    if let Some(reason) = coverage() {
+        return Ok(Some(reason));
+    }
     let history = store.history(&key)?;
     if history.contains(head) {
         return Ok(Some("head already has a recorded review".into()));
@@ -1502,6 +1545,22 @@ fn probe_unneeded(store: &Store, change: &forge::Change) -> Result<Option<String
         ));
     }
     Ok(None)
+}
+
+// trace:STORY-2694 | ai:codex
+fn dispatch_carried_approval(store: &Store, change: &forge::Change) -> Option<String> {
+    let proof = crate::gate::merge_hold_core::live_carried_approval(
+        &[&store.root],
+        &store.root,
+        change.id,
+        &change.head,
+        Some(&change.base),
+        &[],
+        true,
+    )
+    .ok()?;
+    Some(format!("APPROVED at {}, carried to {} (proof base {} at {}); CI at the current head is still required",
+        proof.approved_sha, proof.new_head, proof.base_ref, proof.base_tip))
 }
 
 // trace:TASK-1993 | ai:claude
@@ -1736,7 +1795,8 @@ fn advance(store: &Store, key: &str, token: &str) -> Result<Option<String>> {
 // Tree, remote coverage and merge-hold guards remain in the pickup path.
 // trace:BUG-2498 | ai:codex
 fn finish_confirmed_review(root: &Path, attempt: &Attempt) -> Result<()> {
-    confirm(attempt).map_err(anyhow::Error::msg)?;
+    // Callers have already confirmed all recorded processes gone.
+    // trace:TASK-3777 | ai:codex
     if let Some(snapshot) = &attempt.review_lease {
         let lease: crate::SessionLease = toml::from_str(snapshot)?;
         if crate::lease_path(root, &lease.id).exists()
@@ -2572,6 +2632,13 @@ fn watch_change(
     service::check_controller(root)?;
     service::validate_controller_delegation(root)?;
     let key = change.key();
+    // trace:STORY-2640 | ai:codex — reserve before the seat can open its PR.
+    if let Some(branch) = change.head_branch.as_deref() {
+        if crate::lane_fast_gate::blocks_review(root, branch)? {
+            eprintln!("{key}: host fast gate or its single repair round is pending");
+            return Ok(());
+        }
+    }
     // An obsolete head is superseded before anything else, whether or not
     // the new head is stale or overlapping. trace:TASK-1945 | ai:claude
     if let Some(reason) = supersede(store, &change, || Ok(repo.change(root, change.id)?.head))? {

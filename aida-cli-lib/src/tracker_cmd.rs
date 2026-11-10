@@ -1886,13 +1886,13 @@ pub(crate) struct GitlabArgs {
 
 fn run_gitlab(
     matches: &clap::ArgMatches,
-    ctx: &crate::command_registry::DispatchCtx,
-) -> anyhow::Result<crate::command_registry::Flow> {
+    ctx: &crate::cmdkit::DispatchCtx,
+) -> anyhow::Result<crate::cmdkit::Flow> {
     use crate::*;
     let args = <GitlabArgs as clap::FromArgMatches>::from_arg_matches(matches)?;
     match &ctx.store {
-        None => Ok(crate::command_registry::Flow::Continue),
-        Some(crate::command_registry::StoreCtx::Distributed {
+        None => Ok(crate::cmdkit::Flow::Continue),
+        Some(crate::cmdkit::StoreCtx::Distributed {
             store_path,
             project_root_hint,
         }) => {
@@ -1904,13 +1904,13 @@ fn run_gitlab(
             // through a different signature (`&Storage`, not `&GitBackend`).
             // trace:TASK-1487 | ai:claude
             let _ = project_root_hint;
-            crate::command_registry::returned(crate::store_sync::run_tracker_command(
+            crate::cmdkit::returned(crate::store_sync::run_tracker_command(
                 store_path,
                 false,
                 |storage| self::handle_gitlab_command(&args.inner, storage),
             ))
         }
-        Some(crate::command_registry::StoreCtx::Git {
+        Some(crate::cmdkit::StoreCtx::Git {
             store_path,
             backend,
         }) => {
@@ -1919,7 +1919,7 @@ fn run_gitlab(
             let _ = (store_path, backend, &args);
             crate::git_backend_cmd::exit_unsupported_on_git_backend()
         }
-        Some(crate::command_registry::StoreCtx::Legacy {
+        Some(crate::cmdkit::StoreCtx::Legacy {
             storage,
             requirements_path,
         }) => {
@@ -1929,25 +1929,24 @@ fn run_gitlab(
                     self::handle_gitlab_command(gitlab_cmd, &storage)?;
                 }
             }
-            Ok(crate::command_registry::Flow::Continue)
+            Ok(crate::cmdkit::Flow::Continue)
         }
     }
 }
 
 // trace:STORY-1728 | ai:claude
-pub(crate) static GITLAB: crate::command_registry::CommandReg =
-    crate::command_registry::CommandReg {
-        name: "gitlab",
-        help_after: "scaffold",
-        command: <GitlabArgs as clap::CommandFactory>::command,
-        policy: |_| crate::command_registry::CmdPolicy {
-            stakeholder: crate::stakeholder_role::StakeholderAction::Write,
-            per_write_auto_push: false,
-            skip_role_restore_prompt: false,
-            team_identity_write: false,
-        },
-        run: crate::command_registry::Handler::Store(run_gitlab),
-    };
+pub(crate) static GITLAB: crate::cmdkit::CommandReg = crate::cmdkit::CommandReg {
+    name: "gitlab",
+    help_after: "scaffold",
+    command: <GitlabArgs as clap::CommandFactory>::command,
+    policy: |_| crate::cmdkit::CmdPolicy {
+        stakeholder: crate::stakeholder_role::StakeholderAction::Write,
+        per_write_auto_push: false,
+        skip_role_restore_prompt: false,
+        team_identity_write: false,
+    },
+    run: crate::cmdkit::Handler::Store(run_gitlab),
+};
 
 /// GitHub integration commands
 #[derive(clap::Parser, Debug)]
@@ -1960,13 +1959,13 @@ pub(crate) struct GithubArgs {
 
 fn run_github(
     matches: &clap::ArgMatches,
-    ctx: &crate::command_registry::DispatchCtx,
-) -> anyhow::Result<crate::command_registry::Flow> {
+    ctx: &crate::cmdkit::DispatchCtx,
+) -> anyhow::Result<crate::cmdkit::Flow> {
     use crate::*;
     let args = <GithubArgs as clap::FromArgMatches>::from_arg_matches(matches)?;
     match &ctx.store {
-        None => Ok(crate::command_registry::Flow::Continue),
-        Some(crate::command_registry::StoreCtx::Distributed {
+        None => Ok(crate::cmdkit::Flow::Continue),
+        Some(crate::cmdkit::StoreCtx::Distributed {
             store_path,
             project_root_hint,
         }) => {
@@ -1978,13 +1977,13 @@ fn run_github(
             // through a different signature (`&Storage`, not `&GitBackend`).
             // trace:TASK-1487 | ai:claude
             let _ = project_root_hint;
-            crate::command_registry::returned(crate::store_sync::run_tracker_command(
+            crate::cmdkit::returned(crate::store_sync::run_tracker_command(
                 store_path,
                 github_cli_policy(matches).per_write_auto_push,
                 |storage| self::handle_github_command(&args.inner, storage),
             ))
         }
-        Some(crate::command_registry::StoreCtx::Git {
+        Some(crate::cmdkit::StoreCtx::Git {
             store_path,
             backend,
         }) => {
@@ -1993,7 +1992,7 @@ fn run_github(
             let _ = (store_path, backend, &args);
             crate::git_backend_cmd::exit_unsupported_on_git_backend()
         }
-        Some(crate::command_registry::StoreCtx::Legacy {
+        Some(crate::cmdkit::StoreCtx::Legacy {
             storage,
             requirements_path,
         }) => {
@@ -2003,20 +2002,19 @@ fn run_github(
                     self::handle_github_command(github_cmd, &storage)?;
                 }
             }
-            Ok(crate::command_registry::Flow::Continue)
+            Ok(crate::cmdkit::Flow::Continue)
         }
     }
 }
 
 // trace:STORY-1728 | ai:claude
-pub(crate) static GITHUB: crate::command_registry::CommandReg =
-    crate::command_registry::CommandReg {
-        name: "github",
-        help_after: "gitlab",
-        command: <GithubArgs as clap::CommandFactory>::command,
-        policy: github_cli_policy,
-        run: crate::command_registry::Handler::Store(run_github),
-    };
+pub(crate) static GITHUB: crate::cmdkit::CommandReg = crate::cmdkit::CommandReg {
+    name: "github",
+    help_after: "gitlab",
+    command: <GithubArgs as clap::CommandFactory>::command,
+    policy: github_cli_policy,
+    run: crate::cmdkit::Handler::Store(run_github),
+};
 
 /// Jira integration commands
 #[derive(clap::Parser, Debug)]
@@ -2029,13 +2027,13 @@ pub(crate) struct JiraArgs {
 
 fn run_jira(
     matches: &clap::ArgMatches,
-    ctx: &crate::command_registry::DispatchCtx,
-) -> anyhow::Result<crate::command_registry::Flow> {
+    ctx: &crate::cmdkit::DispatchCtx,
+) -> anyhow::Result<crate::cmdkit::Flow> {
     use crate::*;
     let args = <JiraArgs as clap::FromArgMatches>::from_arg_matches(matches)?;
     match &ctx.store {
-        None => Ok(crate::command_registry::Flow::Continue),
-        Some(crate::command_registry::StoreCtx::Distributed {
+        None => Ok(crate::cmdkit::Flow::Continue),
+        Some(crate::cmdkit::StoreCtx::Distributed {
             store_path,
             project_root_hint,
         }) => {
@@ -2047,13 +2045,13 @@ fn run_jira(
             // through a different signature (`&Storage`, not `&GitBackend`).
             // trace:TASK-1487 | ai:claude
             let _ = project_root_hint;
-            crate::command_registry::returned(crate::store_sync::run_tracker_command(
+            crate::cmdkit::returned(crate::store_sync::run_tracker_command(
                 store_path,
                 jira_cli_policy(matches).per_write_auto_push,
                 |storage| self::handle_jira_command(&args.inner, storage),
             ))
         }
-        Some(crate::command_registry::StoreCtx::Git {
+        Some(crate::cmdkit::StoreCtx::Git {
             store_path,
             backend,
         }) => {
@@ -2062,7 +2060,7 @@ fn run_jira(
             let _ = (store_path, backend, &args);
             crate::git_backend_cmd::exit_unsupported_on_git_backend()
         }
-        Some(crate::command_registry::StoreCtx::Legacy {
+        Some(crate::cmdkit::StoreCtx::Legacy {
             storage,
             requirements_path,
         }) => {
@@ -2072,29 +2070,29 @@ fn run_jira(
                     self::handle_jira_command(jira_cmd, &storage)?;
                 }
             }
-            Ok(crate::command_registry::Flow::Continue)
+            Ok(crate::cmdkit::Flow::Continue)
         }
     }
 }
 
 // trace:STORY-1728 | ai:claude
-pub(crate) static JIRA: crate::command_registry::CommandReg = crate::command_registry::CommandReg {
+pub(crate) static JIRA: crate::cmdkit::CommandReg = crate::cmdkit::CommandReg {
     name: "jira",
     help_after: "github",
     command: <JiraArgs as clap::CommandFactory>::command,
     policy: jira_cli_policy,
-    run: crate::command_registry::Handler::Store(run_jira),
+    run: crate::cmdkit::Handler::Store(run_jira),
 };
 
 // Per-verb policy, carried over from the legacy stakeholder and per-write
 // auto-push tables. An unparseable invocation gets the fail-closed answer.
 // trace:STORY-1728 | ai:claude
-fn jira_cli_policy(matches: &clap::ArgMatches) -> crate::command_registry::CmdPolicy {
+fn jira_cli_policy(matches: &clap::ArgMatches) -> crate::cmdkit::CmdPolicy {
     use crate::cli::JiraCommand;
     use crate::stakeholder_role::StakeholderAction as SA;
     let args = <JiraArgs as clap::FromArgMatches>::from_arg_matches(matches).ok();
     let inner = args.as_ref().map(|args| &args.inner);
-    crate::command_registry::CmdPolicy {
+    crate::cmdkit::CmdPolicy {
         stakeholder: SA::Write,
         per_write_auto_push: matches!(inner, Some(JiraCommand::Pull { dry_run: false, .. })),
         skip_role_restore_prompt: false,
@@ -2105,12 +2103,12 @@ fn jira_cli_policy(matches: &clap::ArgMatches) -> crate::command_registry::CmdPo
 // Per-verb policy, carried over from the legacy stakeholder and per-write
 // auto-push tables. An unparseable invocation gets the fail-closed answer.
 // trace:STORY-1728 | ai:claude
-fn github_cli_policy(matches: &clap::ArgMatches) -> crate::command_registry::CmdPolicy {
+fn github_cli_policy(matches: &clap::ArgMatches) -> crate::cmdkit::CmdPolicy {
     use crate::cli::GitHubCommand;
     use crate::stakeholder_role::StakeholderAction as SA;
     let args = <GithubArgs as clap::FromArgMatches>::from_arg_matches(matches).ok();
     let inner = args.as_ref().map(|args| &args.inner);
-    crate::command_registry::CmdPolicy {
+    crate::cmdkit::CmdPolicy {
         stakeholder: SA::Write,
         per_write_auto_push: matches!(inner, Some(GitHubCommand::Pull { dry_run: false, .. })),
         skip_role_restore_prompt: false,

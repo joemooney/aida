@@ -177,6 +177,9 @@ pub(crate) struct PrIntegrationState {
     /// Sourced from BOTH the local `.aida/review-verdicts/` file AND the forge's
     /// `reviewDecision` (`CHANGES_REQUESTED`) — either one is a hard stop.
     pub request_changes_pending: bool,
+    /// External evidence is pending; resume review when it arrives.
+    // trace:TASK-3777 | ai:codex
+    pub review_waiting: bool,
     /// A local verdict artifact exists but cannot yield one trustworthy merge
     /// decision (conflicting independent reviews, malformed JSON, or another
     /// parser/provenance failure). Distinct from RequestChanges so the operator
@@ -258,6 +261,7 @@ pub(crate) enum ParkReason {
     /// A RequestChanges review verdict is pending — never merge over it
     /// (matches the known auto-merge-over-RequestChanges hazard).
     RequestChanges,
+    ReviewWaiting,
     /// Existing local review evidence is contradictory or unreadable.
     ReviewIntegrity,
     /// A real merge conflict — never auto-resolved.
@@ -276,6 +280,7 @@ impl ParkReason {
             ParkReason::RequestChanges => {
                 "a RequestChanges review is pending — not merging over it (parked for triage)"
             }
+            ParkReason::ReviewWaiting => "review is WAITING for external evidence (parked for fresh review)",
             ParkReason::ReviewIntegrity => {
                 "local review evidence conflicts or is unreadable — not selecting a winner (parked for reconciliation)"
             }
@@ -312,6 +317,9 @@ pub(crate) fn classify_integration_action(s: &PrIntegrationState) -> Integration
     }
     if s.request_changes_pending {
         return IntegrationAction::Park(ParkReason::RequestChanges);
+    }
+    if s.review_waiting {
+        return IntegrationAction::Park(ParkReason::ReviewWaiting);
     }
     if s.ci == CiState::Failing {
         return IntegrationAction::Park(ParkReason::CiRed);
@@ -1062,6 +1070,7 @@ mod tests {
             ci,
             request_changes_pending: rc,
             review_integrity_unproven: false,
+            review_waiting: false,
             mergeable: m,
         }
     }

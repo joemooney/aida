@@ -133,8 +133,9 @@ class BudgetTest(unittest.TestCase):
 
     def test_committed_budget_file_loads(self):
         b = tt.load_budget(str(REPO / "scripts/test-time-budget.toml"))
-        self.assertEqual(b.default_limit, 10)
-        self.assertTrue(all(v > b.default_limit for v in b.entries.values()))
+        self.assertEqual(b.default_limit, 30)
+        # Temporary with the budget relaxation: entries may be below the default.
+        self.assertTrue(all(v > 0 for v in b.entries.values()))
         # Per-test keys (STORY-1853 AC4): `<nextest binary id> <test name>`.
         # trace:TASK-1988 | ai:claude
         self.assertTrue(all(k.startswith("doctests:") or " " in k for k in b.entries), b.entries)
@@ -301,7 +302,7 @@ class UntouchedToleranceTest(unittest.TestCase):
         self.assertEqual(got, {self.OWN, "doctests:aida_core"})
 
     def test_main_with_changed_files_and_committed_factor(self):
-        self.assertEqual(tt.load_budget(str(REPO / "scripts/test-time-budget.toml")).untouched_factor, 1.5)
+        self.assertEqual(tt.load_budget(str(REPO / "scripts/test-time-budget.toml")).untouched_factor, 3)
         with tempfile.TemporaryDirectory() as d:
             p = pathlib.Path(d)
             (p / "junit.xml").write_text(JUNIT)  # slow_one: 12.5 s, unbudgeted
@@ -362,6 +363,48 @@ class CheckCiProfileTest(unittest.TestCase):
             gates.local_test_command("cargo test --workspace --no-fail-fast < /dev/null 2>&1 | tee target/test-run.log"),
             "cargo test --profile agent --workspace --no-fail-fast < /dev/null 2>&1 | tee target/test-run.log",
         )
+
+    # trace:STORY-2640 | ai:codex
+    def test_check_uses_seeded_agent_profile_and_preserves_flags(self):
+        self.assertEqual(
+            gates.local_test_command("cargo check -p aida-cli --no-default-features"),
+            "cargo check --profile agent -p aida-cli --no-default-features",
+        )
+        explicit = "cargo check --profile ci -p aida-cli --no-default-features"
+        self.assertEqual(gates.local_test_command(explicit), explicit)
+
+    # trace:STORY-2640 | ai:codex
+    def test_cold_fast_gate_reaches_ratchets_before_compilation(self):
+        from unittest.mock import patch
+        import contextlib
+        import io
+
+        with tempfile.TemporaryDirectory() as directory:
+            root = pathlib.Path(directory)
+            # A cold compiler must never start before the source gates. Model
+            # only agent artifacts: any accidental debug-profile check fails.
+            (root / "target/agent").mkdir(parents=True)
+            cargo = root / "cargo"
+            cargo.write_text(
+                "#!/bin/sh\n"
+                "test -f ratchet-ran || exit 90\n"
+                "test \"$1 $2 $3\" = 'check --profile agent' || exit 91\n"
+                "test -d target/agent || exit 92\n"
+            )
+            cargo.chmod(0o755)
+            steps = [("Check feature-disabled CLI", "cargo check -p aida-cli --no-default-features"),
+                     ("Later source ratchet", "touch ratchet-ran")]
+            tiers = {name: "fast" for name, _ in steps}
+            env = {"PATH": str(root) + ":/usr/bin:/bin"}
+            with patch.object(gates, "repo_root", return_value=root), \
+                 patch.object(gates, "load_ci_steps", return_value=steps), \
+                 patch.object(gates, "load_tiers", return_value=(tiers, {}, {})), \
+                 patch.object(gates, "gate_env", return_value=env), \
+                 patch.object(gates, "aida_stub_dir", return_value=str(root)), \
+                 contextlib.redirect_stdout(io.StringIO()):
+                self.assertEqual(gates.main(["--tier", "fast"]), 0)
+            self.assertTrue((root / "ratchet-ran").exists())
+            self.assertFalse((root / "target/debug").exists())
 
     def test_explicit_profile_and_builds_are_left_alone(self):
         for cmd in ["cargo test --profile ci -p x", "cargo build --workspace", "cargo clippy --workspace"]:

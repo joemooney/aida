@@ -1824,6 +1824,12 @@ Options:
       --note <TEXT>
           What you saw this time. Appended as a timestamped audit comment
 
+      --until <CONDITION>
+          Park this finding until a typed condition is met
+
+      --reason <REASON>
+          Explanation for an operator hold; required for manual:<who>
+
       --format <FORMAT>
           Pin the output format regardless of whether stdout is a terminal: human = tables, toon =
           compact agent output, json = machine JSON. Default (unset) is human at a TTY, toon when
@@ -11624,16 +11630,18 @@ Usage: aida intent [OPTIONS] <ID>
        aida intent ci <enroll|request|poll|process|read> ...
 
 Commands:
-  ci        Configure or run the restricted work CI return channel
-  enroll    Enroll an independent pinned URL and reviewed deny patterns; no store required
-  publish   Commit a reviewed envelope and push only the enrolled producer branch
-  pull      Fetch into quarantine, validate all history, then accept only a fast-forward
-  list      List pending observations, or include processed observations with --all
-  process   Explicitly keep pending, dismiss, create a draft task, or comment on a spec
-  note      Generate an observation envelope on stdout, without a spec or store
-  validate  Validate an envelope without creating a requirement. Does not certify sanitization
-  export    Validate and emit a self-contained JSON attachment on stdout for manual email
-  help      Print this message or the help of the given subcommand(s)
+  review-return  Generate a finding or pending verdict from explicit closed JSON input (empty
+                 checksum)
+  ci             Configure or run the restricted work CI return channel
+  enroll         Enroll an independent pinned URL and reviewed deny patterns; no store required
+  publish        Commit a reviewed envelope and push only the enrolled producer branch
+  pull           Fetch into quarantine, validate all history, then accept only a fast-forward
+  list           List pending observations, or include processed observations with --all
+  process        Explicitly keep pending, dismiss, create a draft task, or comment on a spec
+  note           Generate an observation envelope on stdout, without a spec or store
+  validate       Validate an envelope without creating a requirement. Does not certify sanitization
+  export         Validate and emit a self-contained JSON attachment on stdout for manual email
+  help           Print this message or the help of the given subcommand(s)
 
 Arguments:
   <ID>
@@ -11666,6 +11674,34 @@ Options:
 
       --json
           Machine-readable JSON (`{spec, audience, comprehension, generated_at, model, stale}`)
+
+  -h, --help
+          Print help (see a summary with '-h')
+===== aida intent review-return
+Generate a finding or pending verdict from explicit closed JSON input (empty checksum)
+
+Usage: aida intent review-return [OPTIONS] --file <FILE>
+
+Options:
+      --file <FILE>
+          Explicit JSON input, at most 128 KiB; checksum must be empty
+
+      --deny-pattern <DENY_PATTERN>
+          Refuse matching decoded string fields (regex, repeatable)
+
+      --format <FORMAT>
+          Pin the output format regardless of whether stdout is a terminal: human = tables, toon =
+          compact agent output, json = machine JSON. Default (unset) is human at a TTY, toon when
+          piped/captured. Also settable via AIDA_OUTPUT_FORMAT (the flag wins)
+
+          Possible values:
+          - human: Human-readable tables / emoji (the interactive default at a TTY)
+          - toon:  Token-efficient TOON — the compact agent default when piped/captured
+          - json:  Machine JSON, for commands that support a JSON projection
+
+      --canonical-ids
+          Show node-local spec IDs in their canonical form instead of the node's friendly label (for
+          scripts). Also settable via AIDA_CANONICAL_IDS=1
 
   -h, --help
           Print help (see a summary with '-h')
@@ -11903,7 +11939,7 @@ Options:
           Exact envelope JSON; omit to publish retained commits and receipts
 
       --reviewed
-          Required when adding an envelope. Omit --file to retry a pending push
+          Required for observation/finding text. Fixed verdicts need no confirmation
 
       --json
           Emit machine-readable JSON
@@ -15092,6 +15128,15 @@ Options:
       --write <FILE>
           Write a seat handoff note from FILE (`-` reads stdin) under `.aida/handoff/<seat>/` and
           update its `latest.md`. The note is capped at ~4k tokens because it seeds the next session
+
+      --until <CONDITION>
+          Typed condition for work parked by this handoff
+
+      --spec <SPEC>
+          Spec to resurface when the handoff condition is met
+
+      --reason <REASON>
+          Explanation for an operator hold; required for manual:<who>
 
       --show
           Print the seat's standing orders (if any), then its latest handoff note (the seed for a
@@ -30972,8 +31017,35 @@ Run cargo builds and tests through the launcher of a headless lane
 Usage: aida lane [OPTIONS] <COMMAND>
 
 Commands:
-  job   Hand cargo runs to the lane's launcher, outside the tool-call time limit
-  help  Print this message or the help of the given subcommand(s)
+  fast-gate-release  Release a host fast-gate review hold without granting publication authority
+  job                Hand cargo runs to the lane's launcher, outside the tool-call time limit
+  help               Print this message or the help of the given subcommand(s)
+
+Options:
+      --format <FORMAT>
+          Pin the output format regardless of whether stdout is a terminal: human = tables, toon =
+          compact agent output, json = machine JSON. Default (unset) is human at a TTY, toon when
+          piped/captured. Also settable via AIDA_OUTPUT_FORMAT (the flag wins)
+
+          Possible values:
+          - human: Human-readable tables / emoji (the interactive default at a TTY)
+          - toon:  Token-efficient TOON — the compact agent default when piped/captured
+          - json:  Machine JSON, for commands that support a JSON projection
+
+      --canonical-ids
+          Show node-local spec IDs in their canonical form instead of the node's friendly label (for
+          scripts). Also settable via AIDA_CANONICAL_IDS=1
+
+  -h, --help
+          Print help (see a summary with '-h')
+===== aida lane fast-gate-release
+Release a host fast-gate review hold without granting publication authority
+
+Usage: aida lane fast-gate-release [OPTIONS] <BRANCH>
+
+Arguments:
+  <BRANCH>
+          Exact lane branch whose receipt should be settled
 
 Options:
       --format <FORMAT>
@@ -33462,6 +33534,16 @@ Working on aida itself
         "name": "note",
         "takes_value": true,
         "help": "What you saw this time. Appended as a timestamped audit comment"
+      },
+      {
+        "name": "reason",
+        "takes_value": true,
+        "help": "Explanation for an operator hold; required for manual:<who>"
+      },
+      {
+        "name": "until",
+        "takes_value": true,
+        "help": "Park this finding until a typed condition is met"
       }
     ],
     "hidden": false
@@ -43312,6 +43394,42 @@ Working on aida itself
     "path": [
       "aida",
       "intent",
+      "review-return"
+    ],
+    "about": "Generate a finding or pending verdict from explicit closed JSON input (empty checksum)",
+    "flags": [
+      {
+        "name": "canonical-ids",
+        "takes_value": false,
+        "help": "Show node-local spec IDs in their canonical form instead of the node's friendly label (for scripts). Also settable via AIDA_CANONICAL_IDS=1"
+      },
+      {
+        "name": "deny-pattern",
+        "takes_value": true,
+        "help": "Refuse matching decoded string fields (regex, repeatable)"
+      },
+      {
+        "name": "file",
+        "takes_value": true,
+        "help": "Explicit JSON input, at most 128 KiB; checksum must be empty"
+      },
+      {
+        "name": "format",
+        "takes_value": true,
+        "help": "Pin the output format regardless of whether stdout is a terminal: human = tables, toon = compact agent output, json = machine JSON. Default (unset) is human at a TTY, toon when piped/captured. Also settable via AIDA_OUTPUT_FORMAT (the flag wins)"
+      },
+      {
+        "name": "help",
+        "takes_value": false,
+        "help": "Print help (see more with '--help')"
+      }
+    ],
+    "hidden": false
+  },
+  {
+    "path": [
+      "aida",
+      "intent",
       "ci"
     ],
     "about": "Configure or run the restricted work CI return channel",
@@ -43631,7 +43749,7 @@ Working on aida itself
       {
         "name": "reviewed",
         "takes_value": false,
-        "help": "Required when adding an envelope. Omit --file to retry a pending push"
+        "help": "Required for observation/finding text. Fixed verdicts need no confirmation"
       }
     ],
     "hidden": false
@@ -46903,6 +47021,11 @@ Working on aida itself
         "help": "Print help (see more with '--help')"
       },
       {
+        "name": "reason",
+        "takes_value": true,
+        "help": "Explanation for an operator hold; required for manual:<who>"
+      },
+      {
         "name": "rotated",
         "takes_value": false,
         "help": "With `--show`, inside a session `aida agent new --rotate` relaunched: show exactly the handoff its supervisor matched (`AIDA_ROTATION_HANDOFF`), not the seat's latest. The SessionStart hook's call"
@@ -46923,9 +47046,19 @@ Working on aida itself
         "help": "Read/write the worktree recovery snapshot; never requests rotation"
       },
       {
+        "name": "spec",
+        "takes_value": true,
+        "help": "Spec to resurface when the handoff condition is met"
+      },
+      {
         "name": "standing-orders",
         "takes_value": true,
         "help": "Manage the seat's repo-local standing orders (`.aida/standing-orders/<seat>.md`): `add \"<text>\"` appends a dated entry, `list` prints them. `--show` prints standing orders before the handoff"
+      },
+      {
+        "name": "until",
+        "takes_value": true,
+        "help": "Typed condition for work parked by this handoff"
       },
       {
         "name": "write",
@@ -62873,6 +63006,32 @@ Working on aida itself
       "lane"
     ],
     "about": "Run cargo builds and tests through the launcher of a headless lane",
+    "flags": [
+      {
+        "name": "canonical-ids",
+        "takes_value": false,
+        "help": "Show node-local spec IDs in their canonical form instead of the node's friendly label (for scripts). Also settable via AIDA_CANONICAL_IDS=1"
+      },
+      {
+        "name": "format",
+        "takes_value": true,
+        "help": "Pin the output format regardless of whether stdout is a terminal: human = tables, toon = compact agent output, json = machine JSON. Default (unset) is human at a TTY, toon when piped/captured. Also settable via AIDA_OUTPUT_FORMAT (the flag wins)"
+      },
+      {
+        "name": "help",
+        "takes_value": false,
+        "help": "Print help (see more with '--help')"
+      }
+    ],
+    "hidden": false
+  },
+  {
+    "path": [
+      "aida",
+      "lane",
+      "fast-gate-release"
+    ],
+    "about": "Release a host fast-gate review hold without granting publication authority",
     "flags": [
       {
         "name": "canonical-ids",

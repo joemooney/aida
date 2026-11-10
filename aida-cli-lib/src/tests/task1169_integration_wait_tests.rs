@@ -84,6 +84,7 @@ fn clean_facts() -> WavePrFacts {
         wait_expired: None,
         ci: CiState::Passing,
         request_changes: false,
+        review_waiting: false,
         mergeable: MergeableState::Mergeable,
     }
 }

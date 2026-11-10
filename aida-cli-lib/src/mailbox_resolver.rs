@@ -1,3 +1,4 @@
+// trace:TASK-3429 | ai:codex
 //! Live delivery resolution shared by explicit mail and comment mentions.
 //! Historical mailbox inspection deliberately does not require a live reader.
 // trace:STORY-1843 | ai:codex
@@ -6,7 +7,7 @@ use anyhow::{bail, Context, Result};
 use std::collections::{BTreeMap, BTreeSet, HashMap};
 use std::path::Path;
 
-pub(crate) struct RecipientDirectory {
+pub struct RecipientDirectory {
     project: std::path::PathBuf,
     agents: Vec<AgentRegistryEntry>,
     roles: BTreeMap<String, String>,
@@ -20,14 +21,14 @@ pub(crate) struct RecipientDirectory {
 }
 
 #[derive(Debug)]
-pub(crate) struct ResolvedRecipient {
-    pub(crate) address: String,
-    pub(crate) reader_notice: Option<String>,
+pub struct ResolvedRecipient {
+    pub address: String,
+    pub reader_notice: Option<String>,
     /// For a role address: the send-time reader snapshot (slice D1).
-    pub(crate) cohort: Option<CohortReaders>,
+    pub cohort: Option<CohortReaders>,
     /// For a relay label: the open run that owns it (slice D2b).
     // trace:STORY-1843 | ai:claude
-    pub(crate) relay_run: Option<aida_core::mailbox_delivery::RecipientUuid>,
+    pub relay_run: Option<aida_core::mailbox_delivery::RecipientUuid>,
 }
 
 /// The live and unverified readers of a role at send, split by whether
@@ -52,7 +53,7 @@ pub(crate) struct CohortReaders {
 /// (MCP callers cannot pass it, so their refusal never names it). Other
 /// addresses get no sidecar.
 // trace:STORY-1843 | ai:claude
-pub(crate) fn delivery_sidecar(
+pub fn delivery_sidecar(
     resolved: &ResolvedRecipient,
     message_id: &str,
     now_ms: i64,
@@ -183,7 +184,7 @@ impl RecipientDirectory {
     /// before it is resolved. Every other caller, including read-only
     /// previews, uses [`Self::load`], which never writes.
     // trace:STORY-1843 | ai:claude
-    pub(crate) fn load_for_send(project: &Path, store: &Path) -> Result<Self> {
+    pub fn load_for_send(project: &Path, store: &Path) -> Result<Self> {
         let reconciled = crate::relay_mail::reconcile_relay_runs(project);
         let mut directory = Self::load(project, store)?;
         if let Err(e) = reconciled {
@@ -288,7 +289,7 @@ impl RecipientDirectory {
     // These diagnostics are distinct from a group's reader notice: a skipped
     // record never establishes a recipient kind or contributes a live reader.
     // trace:STORY-1843 | ai:codex
-    pub(crate) fn warnings(&self) -> &[String] {
+    pub fn warnings(&self) -> &[String] {
         &self.warnings
     }
 
@@ -349,7 +350,7 @@ impl RecipientDirectory {
         }
     }
 
-    pub(crate) fn resolve(&self, target: &str) -> Result<ResolvedRecipient> {
+    pub fn resolve(&self, target: &str) -> Result<ResolvedRecipient> {
         self.resolve_with_context(target, false, false, false)
     }
 

@@ -73,8 +73,8 @@ pub(crate) struct HumanArgs {
 
 fn run_human(
     matches: &clap::ArgMatches,
-    ctx: &crate::command_registry::DispatchCtx,
-) -> anyhow::Result<crate::command_registry::Flow> {
+    ctx: &crate::cmdkit::DispatchCtx,
+) -> anyhow::Result<crate::cmdkit::Flow> {
     // trace:TASK-3428 | ai:codex
     use crate::{
         cli, handle_guided_human_review, handle_human_subcommand, handle_review_spec,
@@ -97,15 +97,13 @@ fn run_human(
             } = &args
             {
                 if human_subcommand_needs_no_storage(human_cmd) {
-                    return crate::command_registry::returned(handle_human_subcommand(human_cmd));
+                    return crate::cmdkit::returned(handle_human_subcommand(human_cmd));
                 }
             }
-            Ok(crate::command_registry::Flow::Continue)
+            Ok(crate::cmdkit::Flow::Continue)
         }
-        Some(crate::command_registry::StoreCtx::Distributed { .. }) => {
-            Ok(crate::command_registry::Flow::Continue)
-        }
-        Some(crate::command_registry::StoreCtx::Git {
+        Some(crate::cmdkit::StoreCtx::Distributed { .. }) => Ok(crate::cmdkit::Flow::Continue),
+        Some(crate::cmdkit::StoreCtx::Git {
             store_path,
             backend,
         }) => {
@@ -150,9 +148,9 @@ fn run_human(
                     }
                 },
             }
-            Ok(crate::command_registry::Flow::Continue)
+            Ok(crate::cmdkit::Flow::Continue)
         }
-        Some(crate::command_registry::StoreCtx::Legacy {
+        Some(crate::cmdkit::StoreCtx::Legacy {
             storage,
             requirements_path,
         }) => {
@@ -169,22 +167,21 @@ fn run_human(
                     );
                 }
             }
-            Ok(crate::command_registry::Flow::Continue)
+            Ok(crate::cmdkit::Flow::Continue)
         }
     }
 }
 
 // trace:STORY-1728 | ai:claude
-pub(crate) static HUMAN: crate::command_registry::CommandReg =
-    crate::command_registry::CommandReg {
-        name: "human",
-        help_after: "goal",
-        command: <HumanArgs as clap::CommandFactory>::command,
-        policy: |_| crate::command_registry::CmdPolicy {
-            stakeholder: crate::stakeholder_role::StakeholderAction::Write,
-            per_write_auto_push: false,
-            skip_role_restore_prompt: false,
-            team_identity_write: false,
-        },
-        run: crate::command_registry::Handler::Store(run_human),
-    };
+pub(crate) static HUMAN: crate::cmdkit::CommandReg = crate::cmdkit::CommandReg {
+    name: "human",
+    help_after: "goal",
+    command: <HumanArgs as clap::CommandFactory>::command,
+    policy: |_| crate::cmdkit::CmdPolicy {
+        stakeholder: crate::stakeholder_role::StakeholderAction::Write,
+        per_write_auto_push: false,
+        skip_role_restore_prompt: false,
+        team_identity_write: false,
+    },
+    run: crate::cmdkit::Handler::Store(run_human),
+};

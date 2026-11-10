@@ -3200,29 +3200,33 @@ fn surface_detects_named_subcommand() {
     );
 }
 
+// trace:TASK-3429 | ai:codex
 #[test]
 fn surface_detects_mcp_tool_only_in_mcp_file() {
-    // A snake_case tool name in mcp.rs is a new MCP tool.
-    assert_eq!(
-        classify_surface_line(
-            "aida-cli/src/mcp.rs",
-            "            \"name\": \"doc_suggest\","
-        ),
-        Some(PublicSurfaceKind::McpTool)
-    );
-    // Title-case resource titles are NOT tools.
-    assert_eq!(
-        classify_surface_line(
-            "aida-cli/src/mcp.rs",
-            "        \"name\": \"Project Summary\","
-        ),
-        None
-    );
-    // The server-name line is excluded.
-    assert_eq!(
-        classify_surface_line("aida-cli/src/mcp.rs", "            \"name\": \"aida\","),
-        None
-    );
+    // Preserve legacy transport coverage and recognize the extracted shared schema.
+    for file in [
+        "aida-cli/src/mcp.rs",
+        "aida-mcp/src/mcp.rs",
+        "aida-cli-lib/src/mcp_schema.rs",
+    ] {
+        assert_eq!(
+            classify_surface_line(file, "            \"name\": \"doc_suggest\","),
+            Some(PublicSurfaceKind::McpTool),
+            "{file}"
+        );
+        // Title-case resource titles are NOT tools.
+        assert_eq!(
+            classify_surface_line(file, "        \"name\": \"Project Summary\","),
+            None,
+            "{file}"
+        );
+        // The server-name line is excluded.
+        assert_eq!(
+            classify_surface_line(file, "            \"name\": \"aida\","),
+            None,
+            "{file}"
+        );
+    }
     // The same shape in a non-mcp file is not a tool.
     assert_eq!(
         classify_surface_line("aida-cli/src/other.rs", "    \"name\": \"doc_suggest\","),
@@ -3230,6 +3234,7 @@ fn surface_detects_mcp_tool_only_in_mcp_file() {
     );
 }
 
+// trace:TASK-3429 | ai:codex
 #[test]
 fn detect_new_public_surface_over_hunks() {
     let hunks = vec![
@@ -3244,7 +3249,7 @@ fn detect_new_public_surface_over_hunks() {
             removed: vec![],
         },
         ParsedHunk {
-            file: "aida-cli/src/mcp.rs".to_string(),
+            file: "aida-cli-lib/src/mcp_schema.rs".to_string(),
             new_start: 6100,
             added: vec!["            \"name\": \"doc_suggest\",".to_string()],
             removed: vec![],
@@ -3255,7 +3260,7 @@ fn detect_new_public_surface_over_hunks() {
     assert_eq!(hits[0].kind, PublicSurfaceKind::CliFlag);
     assert_eq!(hits[0].new_start, 2320);
     assert_eq!(hits[1].kind, PublicSurfaceKind::McpTool);
-    assert_eq!(hits[1].file, "aida-cli/src/mcp.rs");
+    assert_eq!(hits[1].file, "aida-cli-lib/src/mcp_schema.rs");
 }
 
 #[test]

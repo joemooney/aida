@@ -70,7 +70,7 @@ pub(crate) fn probe_pr_integration_state(
     // an existing artifact that is conflicting or unreadable is a block, not
     // the optimistic absence of RequestChanges.
     // trace:BUG-1581 | ai:codex
-    let (local_request_changes, review_integrity_unproven) = item
+    let (local_request_changes, review_waiting, review_integrity_unproven) = item
         .map(|i| {
             // The merge chokepoint's corpus, gate ledger included (M1).
             // trace:TASK-1801 | ai:claude
@@ -81,31 +81,35 @@ pub(crate) fn probe_pr_integration_state(
                 &[spec_id.to_string()],
             ) {
                 Ok(found) => found.into_iter().map(|(_, body)| body).collect(),
-                Err(_) => return (false, true),
+                Err(_) => return (false, false, true),
             };
             if bodies.is_empty() {
-                return (false, false);
+                return (false, false, false);
             }
             let Some(head) = i.head_sha.as_deref() else {
-                return (false, true);
+                return (false, false, true);
             };
             match crate::gate::review_verdict::reconcile_artifacts_for_sha(
                 bodies.iter().map(String::as_str),
                 head,
             ) {
                 Ok(Some(crate::gate::review_verdict::VerdictKind::Approved)) | Ok(None) => {
-                    (false, false)
+                    (false, false, false)
                 }
-                Ok(Some(_)) => (true, false),
-                Err(_) => (false, true),
+                // Waiting blocks integration without requesting implementation rework.
+                // trace:TASK-3777 | ai:codex
+                Ok(Some(crate::gate::review_verdict::VerdictKind::Waiting)) => (false, true, false),
+                Ok(Some(_)) => (true, false, false),
+                Err(_) => (false, false, true),
             }
         })
-        .unwrap_or((false, false));
+        .unwrap_or((false, false, false));
 
     integrate::PrIntegrationState {
         ci,
         request_changes_pending: forge_request_changes || local_request_changes,
         review_integrity_unproven,
+        review_waiting,
         mergeable,
     }
 }
@@ -245,6 +249,7 @@ mod bug_1581_integration_probe_tests {
             ("Approved", "Rejected", false),
             ("RequestChanges", "Approved", true),
             ("Rejected", "Approved", true),
+            ("Waiting", "Approved", false),
         ] {
             let root = tempfile::tempdir().unwrap();
             let path = verdict_path(root.path());
@@ -266,7 +271,12 @@ mod bug_1581_integration_probe_tests {
                 probe_pr_integration_state(root.path(), "BUG-1581", Some("bug-1581"), &snapshot());
             assert!(!state.review_integrity_unproven);
             assert_eq!(state.request_changes_pending, blocks);
-            let expected = if blocks {
+            assert_eq!(state.review_waiting, current == "Waiting");
+            let expected = if current == "Waiting" {
+                crate::integrate::IntegrationAction::Park(
+                    crate::integrate::ParkReason::ReviewWaiting,
+                )
+            } else if blocks {
                 crate::integrate::IntegrationAction::Park(
                     crate::integrate::ParkReason::RequestChanges,
                 )

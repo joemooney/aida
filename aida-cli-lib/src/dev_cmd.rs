@@ -2593,25 +2593,22 @@ pub(crate) struct DevArgs {
 // (Dev::Serve does interact with storage but spawns aida-server which
 // handles that itself; the wrapper just supervises the children.)
 // trace:EPIC-1-001 | ai:claude
-fn run_dev(
-    matches: &clap::ArgMatches,
-    _ctx: &crate::command_registry::DispatchCtx,
-) -> anyhow::Result<()> {
+fn run_dev(matches: &clap::ArgMatches, _ctx: &crate::cmdkit::DispatchCtx) -> anyhow::Result<()> {
     let args = <DevArgs as clap::FromArgMatches>::from_arg_matches(matches)?;
     let dev_cmd = &args.inner;
     return handle_dev_command(dev_cmd);
 }
 
 // trace:STORY-1728 | ai:claude
-pub(crate) static DEV: crate::command_registry::CommandReg = crate::command_registry::CommandReg {
+pub(crate) static DEV: crate::cmdkit::CommandReg = crate::cmdkit::CommandReg {
     name: "dev",
     help_after: "intent",
     command: <DevArgs as clap::CommandFactory>::command,
-    policy: |_| crate::command_registry::CmdPolicy {
+    policy: |_| crate::cmdkit::CmdPolicy {
         stakeholder: crate::stakeholder_role::StakeholderAction::Write,
         per_write_auto_push: false,
         skip_role_restore_prompt: false,
         team_identity_write: false,
     },
-    run: crate::command_registry::Handler::Early(run_dev),
+    run: crate::cmdkit::Handler::Early(run_dev),
 };

@@ -1,3 +1,4 @@
+// trace:TASK-3429 | ai:codex
 //! Agent process registry.
 //!
 //! STORY-431 (Phase 1) deliberately keeps process liveness separate from
@@ -83,7 +84,7 @@ impl PauseReason {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
-pub(crate) struct AgentRegistryEntry {
+pub struct AgentRegistryEntry {
     #[serde(deserialize_with = "proc_identity::deserialize_registry_id")]
     pub(crate) id: String,
     pub(crate) agent_type: String,
@@ -474,13 +475,13 @@ impl AgentGcReport {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub(crate) struct AgentBinaryIdentity {
+pub struct AgentBinaryIdentity {
     pub(crate) version: String,
     pub(crate) sha: String,
 }
 
 impl AgentBinaryIdentity {
-    pub(crate) fn new(version: String, sha: String) -> Self {
+    pub fn new(version: String, sha: String) -> Self {
         Self { version, sha }
     }
 }
@@ -741,7 +742,7 @@ fn find_launcher_ancestor_entry(
     })
 }
 
-pub(crate) fn touch_mcp_agent(
+pub fn touch_mcp_agent(
     project_root: &Path,
     binary: &AgentBinaryIdentity,
 ) -> Result<AgentRegistryEntry> {

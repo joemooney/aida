@@ -1,3 +1,4 @@
+// trace:TASK-3429 | ai:codex
 //! Own-audience mail views over the logical snapshot (STORY-1843 slice B2b).
 //!
 //! Every ordinary reader of "my mail" (CLI inbox/notice/latency, statusline,
@@ -68,7 +69,7 @@ pub(crate) enum Coverage {
 
 /// One reader's mail as the logical snapshot saw it.
 #[derive(Debug, Clone)]
-pub(crate) struct OwnMail {
+pub struct OwnMail {
     audience: ResolvedAudience,
     records: Vec<SnapshotRecord>,
     coverage: Coverage,
@@ -79,7 +80,7 @@ pub(crate) struct OwnMail {
 
 /// How a displayed record reads.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub(crate) enum ReadState {
+pub enum ReadState {
     Unread,
     Read,
     /// Covered only by a legacy timestamp watermark.
@@ -87,7 +88,7 @@ pub(crate) enum ReadState {
 }
 
 impl ReadState {
-    pub(crate) fn of(record: &SnapshotRecord) -> Self {
+    pub fn of(record: &SnapshotRecord) -> Self {
         match record.read {
             ReadEvidence::Unread => Self::Unread,
             ReadEvidence::Acknowledged { .. } => Self::Read,
@@ -95,7 +96,7 @@ impl ReadState {
         }
     }
 
-    pub(crate) fn as_str(self) -> &'static str {
+    pub fn as_str(self) -> &'static str {
         match self {
             Self::Unread => "unread",
             Self::Read => "read",
@@ -110,7 +111,7 @@ impl OwnMail {
     }
 
     /// Visible records, oldest first.
-    pub(crate) fn records(&self) -> &[SnapshotRecord] {
+    pub fn records(&self) -> &[SnapshotRecord] {
         &self.records
     }
 
@@ -127,7 +128,7 @@ impl OwnMail {
             .map_or(0, |(_, snapshot)| snapshot.pending_deliveries.len())
     }
 
-    pub(crate) fn is_partial(&self) -> bool {
+    pub fn is_partial(&self) -> bool {
         matches!(self.coverage, Coverage::Partial { .. })
     }
 
@@ -155,7 +156,7 @@ impl OwnMail {
     }
 
     /// One line naming why the view is partial, or `None` when complete.
-    pub(crate) fn partial_note(&self) -> Option<String> {
+    pub fn partial_note(&self) -> Option<String> {
         let Coverage::Partial { codes, conflicts } = &self.coverage else {
             return None;
         };
@@ -203,12 +204,12 @@ pub(crate) fn own_audience() -> ResolvedAudience {
 
 /// [`own_audience`] with the session lookup in the project at
 /// `project_root` (a long-lived server serving one project).
-pub(crate) fn own_audience_in(project_root: &Path) -> ResolvedAudience {
+pub fn own_audience_in(project_root: &Path) -> ResolvedAudience {
     ResolvedAudience::from_facts(&crate::collect_mail_identity_facts_in(Some(project_root)))
 }
 
 /// The limits for an explicit read (a command the reader ran on purpose).
-pub(crate) fn explicit_limits() -> ReadLimits {
+pub fn explicit_limits() -> ReadLimits {
     ReadLimits::explicit_read()
 }
 
@@ -236,7 +237,7 @@ pub(crate) fn read_own_mail(
 /// the pass is still capped. Status, statusline and TUI views never bind.
 // trace:STORY-1843 | ai:claude
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub(crate) enum BindWait {
+pub enum BindWait {
     Explicit,
     Notice,
 }
@@ -267,7 +268,7 @@ impl BindWait {
 /// does any error in a notice; what was not bound is retried on the next
 /// read (a debug line under `AIDA_DEBUG` says so).
 // trace:STORY-1843 | ai:claude
-pub(crate) fn read_own_mail_binding(
+pub fn read_own_mail_binding(
     project_root: &Path,
     store_root: &Path,
     audience: &ResolvedAudience,
@@ -419,7 +420,7 @@ pub(crate) enum Holder {
 /// an inbox or notice displays resolves here (ruling on F1, PR #2952). This
 /// checkout's and the canonical store's other mail stays resolvable as
 /// operator inspection, exactly as before B2b.
-pub(crate) struct Addressable {
+pub struct Addressable {
     messages: Vec<Message>,
     records: Vec<SnapshotRecord>,
     holders: HashMap<String, Holder>,
@@ -429,7 +430,7 @@ pub(crate) struct Addressable {
 impl Addressable {
     /// Every resolvable message: reconciled snapshot records first, then
     /// this checkout's and the store's other mail.
-    pub(crate) fn messages(&self) -> &[Message] {
+    pub fn messages(&self) -> &[Message] {
         &self.messages
     }
 
@@ -483,7 +484,7 @@ pub(crate) fn addressable(project_root: &Path, store_root: &Path) -> Addressable
 }
 
 /// [`Addressable`] for `audience`, read from the checkout `project_root`.
-pub(crate) fn addressable_for(
+pub fn addressable_for(
     project_root: &Path,
     store_root: &Path,
     audience: &ResolvedAudience,
@@ -547,7 +548,7 @@ pub(crate) fn addressable_for(
 /// about to deliver in full. Writes nothing; commit it with [`commit_ack`]
 /// only after the output was flushed. `Ok(None)`: nothing to acknowledge.
 // trace:STORY-1843 | ai:claude
-pub(crate) fn plan_ack(
+pub fn plan_ack(
     view: &OwnMail,
     displayed: &[&SnapshotRecord],
 ) -> std::result::Result<Option<AckPlan>, AckError> {
@@ -573,7 +574,7 @@ pub(crate) fn plan_ack(
 /// TASK-1271). In a local-only project, which has no anchor, the mirror is
 /// the acknowledgement and its failure is the commit's.
 // trace:STORY-1843 trace:TASK-1271 | ai:claude
-pub(crate) fn commit_ack(
+pub fn commit_ack(
     project_root: &Path,
     plan: AckPlan,
     current: &ResolvedAudience,

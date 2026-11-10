@@ -3,7 +3,7 @@
 // trace:TASK-1715 | ai:claude
 
 use super::*;
-use crate::command_registry::{DispatchCtx, Flow};
+use crate::cmdkit::{DispatchCtx, Flow};
 use crate::forge::ForgeKind;
 
 fn parsed_review_id(argv: &[&str]) -> String {

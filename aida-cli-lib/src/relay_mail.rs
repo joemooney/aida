@@ -1184,28 +1184,24 @@ pub(crate) fn handle_relay_mail_command(cmd: &RelayMailCommand) -> Result<()> {
 // The relay mail commands read and write only `.aida/agents/` records; no
 // requirement-store handle is needed.
 // trace:STORY-1843 | ai:claude
-fn run_relay_mail(
-    matches: &clap::ArgMatches,
-    _ctx: &crate::command_registry::DispatchCtx,
-) -> Result<()> {
+fn run_relay_mail(matches: &clap::ArgMatches, _ctx: &crate::cmdkit::DispatchCtx) -> Result<()> {
     let args = <RelayMailArgs as clap::FromArgMatches>::from_arg_matches(matches)?;
     handle_relay_mail_command(&args.inner)
 }
 
 // trace:STORY-1843 | ai:claude
-pub(crate) static RELAY_MAIL: crate::command_registry::CommandReg =
-    crate::command_registry::CommandReg {
-        name: "relay-mail",
-        help_after: "mailbox",
-        command: <RelayMailArgs as clap::CommandFactory>::command,
-        policy: |_| crate::command_registry::CmdPolicy {
-            stakeholder: crate::stakeholder_role::StakeholderAction::Write,
-            per_write_auto_push: false,
-            skip_role_restore_prompt: false,
-            team_identity_write: false,
-        },
-        run: crate::command_registry::Handler::Early(run_relay_mail),
-    };
+pub(crate) static RELAY_MAIL: crate::cmdkit::CommandReg = crate::cmdkit::CommandReg {
+    name: "relay-mail",
+    help_after: "mailbox",
+    command: <RelayMailArgs as clap::CommandFactory>::command,
+    policy: |_| crate::cmdkit::CmdPolicy {
+        stakeholder: crate::stakeholder_role::StakeholderAction::Write,
+        per_write_auto_push: false,
+        skip_role_restore_prompt: false,
+        team_identity_write: false,
+    },
+    run: crate::cmdkit::Handler::Early(run_relay_mail),
+};
 
 /// Test support: a stub relay controller. A `sleep` child that holds an
 /// exclusive lock on `path` through an inherited descriptor (fd 9, the

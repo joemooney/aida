@@ -45,6 +45,7 @@ pub(crate) fn pipelined_child_result_sidecar_json(
         "shipped_spec_id": result.shipped_spec_id,
         "escalation": escalation,
         "inconclusive_reason": result.inconclusive_reason,
+        "fast_gate_pending": result.fast_gate_pending,
         "shelved": result.shelved_reason.is_some(),
         "held_reason": result.held_reason,
         "no_change": result.no_change,
@@ -144,6 +145,10 @@ pub(crate) fn parse_pipelined_child_result_sidecar(
             .and_then(|v| v.as_str())
             .map(|s| s.to_string()),
         escalation,
+        fast_gate_pending: value
+            .get("fast_gate_pending")
+            .and_then(|v| v.as_bool())
+            .unwrap_or(false),
         inconclusive_reason: value
             .get("inconclusive_reason")
             .and_then(|v| v.as_str())
@@ -592,13 +597,21 @@ impl auto_complete::BatchDriver for RealBatchDriver<'_> {
     }
 
     fn next_head(&mut self) -> Option<String> {
+        self.next_head_excluding(&[])
+    }
+
+    // trace:STORY-2640 | ai:codex
+    fn next_head_excluding(&mut self, excluded: &[String]) -> Option<String> {
         match resolve_batch_members(
             self.storage,
             &self.user_id,
             &self.batch_name,
             self.role.as_deref(),
         ) {
-            Ok(members) => members.into_iter().next().map(|m| m.1),
+            Ok(members) => members
+                .into_iter()
+                .map(|m| m.1)
+                .find(|id| !excluded.contains(id)),
             Err(e) => {
                 // A store/queue read failure is not "batch drained" — surface
                 // it and stop rather than reporting a false clean drain.

@@ -1,3 +1,4 @@
+// trace:TASK-3429 | ai:codex
 //! Role State and Activities (STORY-1488 slice 1)
 // trace:STORY-1488 | ai:claude
 
@@ -454,7 +455,7 @@ pub(crate) fn maybe_prompt_role_restore(command: &Command) -> Result<()> {
 /// no-op if no role active or the role file is unwriteable). Called from
 /// the show/edit/add/comment paths so resuming a role surfaces what the
 /// user was working on last.
-pub(crate) fn record_role_activity(spec_id: &str, action: &str) {
+pub fn record_role_activity(spec_id: &str, action: &str) {
     let role_name = match std::env::var("AIDA_SESSION_ROLE") {
         Ok(n) if !n.is_empty() => n,
         _ => return,
@@ -1187,7 +1188,8 @@ pub(crate) fn default_role_guidance(role: &str) -> String {
         // A cold-booted reviewer must discover the durable writer here; hand-
         // writing JSON omits the provenance that makes approval enforceable.
         // trace:BUG-1467 | ai:codex
-        "reviewer" => "You are reviewing. Inspect the PR and linked spec, prioritize correctness/regression risks, run targeted tests when useful, and produce a clear verdict/finding rather than taking over implementation. Record the result through `aida review record <SPEC> --pr <N> --verdict approved|request-changes|rejected|waiting --summary \"<why>\"` (repeat `--finding` as needed); never hand-write verdict JSON. Use waiting for external CI or host evidence only, with a summary naming the dependency, responsible actor and resume condition, and no substantive findings. Resume requires a fresh review at the current head; code defects require request-changes.".to_string(),
+        // trace:BUG-2508 | ai:codex
+        "reviewer" => "You are reviewing. Inspect the PR and linked spec, prioritize correctness/regression risks, run targeted tests when useful, and produce a clear verdict/finding rather than taking over implementation. Record the result through `aida review record <SPEC> --pr <N> --verdict approved|request-changes|rejected|waiting --summary \"<why>\"` (repeat `--finding` as needed); never hand-write verdict JSON. Use waiting for external CI or host evidence only, with a summary naming the dependency, responsible actor and resume condition, and no substantive findings. A red merge-hold-gate or supervised human/advisor clearance that this review's own fresh APPROVED verdict can release is not external evidence: record approved when required CI is otherwise green and there are no actionable defects. Approval does not release the hold or authorize merge; leave clearance to the authorized actor. Outstanding independent evidence, such as an operator-only canary, still requires waiting even on a held PR. Resume requires a fresh review at the current head; code defects require request-changes.".to_string(),
         // The integrator seat's role-context prompt, mirroring the arms above.
         // Mechanical merge cascade only; escalate anything that turns on judgment.
         "integrator" => "You are integrating. Land finished work (Done specs with an open PR) on the default branch one PR at a time in dependency order: rebase stale branches, resolve MECHANICAL conflicts only, watch CI, squash-merge the green-and-reviewed PRs, delete merged branches, and run `aida pull` to auto-bump. Never make a design call — escalate design-judgment conflicts to the advisor and route missing-verdict PRs to the reviewer.".to_string(),

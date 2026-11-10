@@ -545,24 +545,24 @@ pub(crate) fn db_sync_push_leg(
 
 fn run_db(
     matches: &clap::ArgMatches,
-    ctx: &crate::command_registry::DispatchCtx,
-) -> anyhow::Result<crate::command_registry::Flow> {
+    ctx: &crate::cmdkit::DispatchCtx,
+) -> anyhow::Result<crate::cmdkit::Flow> {
     use crate::*;
     let args = <DbArgs as clap::FromArgMatches>::from_arg_matches(matches)?;
     match &ctx.store {
-        None => Ok(crate::command_registry::Flow::Continue),
+        None => Ok(crate::cmdkit::Flow::Continue),
         // The audit reads committed trees from the store path alone, before any
         // backend opens. trace:BUG-2017 | ai:claude
-        Some(crate::command_registry::StoreCtx::Distributed { store_path, .. }) => match &args {
+        Some(crate::cmdkit::StoreCtx::Distributed { store_path, .. }) => match &args {
             DbArgs {
                 inner: DbCommand::AuditIds(audit),
             } => {
                 crate::db_audit_ids::run(store_path, audit)?;
-                Ok(crate::command_registry::Flow::Return)
+                Ok(crate::cmdkit::Flow::Return)
             }
-            _ => Ok(crate::command_registry::Flow::Continue),
+            _ => Ok(crate::cmdkit::Flow::Continue),
         },
-        Some(crate::command_registry::StoreCtx::Git {
+        Some(crate::cmdkit::StoreCtx::Git {
             store_path,
             backend,
         }) => {
@@ -958,9 +958,9 @@ fn run_db(
                 }
                 _ => crate::git_backend_cmd::exit_unsupported_on_git_backend(),
             }
-            Ok(crate::command_registry::Flow::Continue)
+            Ok(crate::cmdkit::Flow::Continue)
         }
-        Some(crate::command_registry::StoreCtx::Legacy {
+        Some(crate::cmdkit::StoreCtx::Legacy {
             storage,
             requirements_path,
         }) => {
@@ -970,29 +970,29 @@ fn run_db(
                     self::handle_db_command(db_cmd, &requirements_path.to_path_buf())?;
                 }
             }
-            Ok(crate::command_registry::Flow::Continue)
+            Ok(crate::cmdkit::Flow::Continue)
         }
     }
 }
 
 // trace:STORY-1728 | ai:claude
-pub(crate) static DB: crate::command_registry::CommandReg = crate::command_registry::CommandReg {
+pub(crate) static DB: crate::cmdkit::CommandReg = crate::cmdkit::CommandReg {
     name: "db",
     help_after: "feature",
     command: <DbArgs as clap::CommandFactory>::command,
     policy: db_cli_policy,
-    run: crate::command_registry::Handler::Store(run_db),
+    run: crate::cmdkit::Handler::Store(run_db),
 };
 
 // Per-verb policy, carried over from the legacy stakeholder and per-write
 // auto-push tables. An unparseable invocation gets the fail-closed answer.
 // trace:STORY-1728 | ai:claude
-fn db_cli_policy(matches: &clap::ArgMatches) -> crate::command_registry::CmdPolicy {
+fn db_cli_policy(matches: &clap::ArgMatches) -> crate::cmdkit::CmdPolicy {
     use crate::cli::{BlockCommand, DbCommand};
     use crate::stakeholder_role::StakeholderAction as SA;
     let args = <DbArgs as clap::FromArgMatches>::from_arg_matches(matches).ok();
     let inner = args.as_ref().map(|args| &args.inner);
-    crate::command_registry::CmdPolicy {
+    crate::cmdkit::CmdPolicy {
         stakeholder: match inner {
             Some(
                 DbCommand::Path

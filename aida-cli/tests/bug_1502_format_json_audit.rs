@@ -33,6 +33,15 @@ fn aida_command_with_inherited(repo: &Path, home: &Path, inherited: &[(&str, &Pa
         "fixture repo must be a git checkout"
     );
     let mut command = Command::new(env!("CARGO_BIN_EXE_aida"));
+    // Restrict only the child, including its independent intake Git repository.
+    // trace:STORY-2493 | ai:codex
+    use std::os::unix::process::CommandExt;
+    unsafe {
+        command.pre_exec(|| {
+            libc::umask(0o077);
+            Ok(())
+        });
+    }
     command
         .current_dir(repo)
         .env("HOME", home)
@@ -108,7 +117,9 @@ fn fixture() -> (
     );
     assert!(
         init.status.success(),
-        "{}",
+        "fixture init status={}\nstdout:\n{}\nstderr:\n{}",
+        init.status,
+        String::from_utf8_lossy(&init.stdout),
         String::from_utf8_lossy(&init.stderr)
     );
     std::fs::write(
@@ -461,15 +472,23 @@ fn unsupported_global_json_pin_errors_before_human_fallback() {
     );
 }
 
+// Exercise the exhaustive inventory independently of allocation, intake and
+// other stateful probes, so setup refusals cannot hide catalog drift.
+// trace:STORY-2640 | ai:codex
 #[test]
-fn checked_in_audit_is_exhaustive_and_every_honoured_probe_parses() {
-    // trace:TASK-1959 | ai:claude
-    let _checkout = support::CheckoutGuard::new();
-    let (_tmp, repo, home, spec) = fixture();
-    let catalog = json(
-        &aida(&repo, &home, &["help", "commands", "--json", "--hidden"]),
-        "command catalog",
-    );
+fn checked_in_audit_catalog_matches_without_store_setup() {
+    let tmp = tempfile::tempdir().unwrap();
+    let output = Command::new(env!("CARGO_BIN_EXE_aida"))
+        .args(["help", "commands", "--json", "--hidden"])
+        .env_clear()
+        .env("HOME", tmp.path())
+        .current_dir(tmp.path())
+        .output()
+        .unwrap();
+    assert_audit_catalog(&json(&output, "command catalog without store"));
+}
+
+fn assert_audit_catalog(catalog: &serde_json::Value) -> &'static str {
     let catalog_paths: BTreeSet<String> = catalog
         .as_array()
         .unwrap()
@@ -491,6 +510,20 @@ fn checked_in_audit_is_exhaustive_and_every_honoured_probe_parses() {
         .filter_map(|line| line.split_once('`').map(|(path, _)| path.to_string()))
         .collect();
     assert_eq!(catalog_paths, audit_paths, "regenerate the BUG-1502 audit");
+
+    audit
+}
+
+#[test]
+fn checked_in_audit_is_exhaustive_and_every_honoured_probe_parses() {
+    // trace:TASK-1959 | ai:claude
+    let _checkout = support::CheckoutGuard::new();
+    let (_tmp, repo, home, spec) = fixture();
+    let catalog = json(
+        &aida(&repo, &home, &["help", "commands", "--json", "--hidden"]),
+        "command catalog",
+    );
+    let audit = assert_audit_catalog(&catalog);
 
     let audit_outcomes: BTreeMap<String, String> = audit
         .lines()
@@ -519,7 +552,22 @@ fn checked_in_audit_is_exhaustive_and_every_honoured_probe_parses() {
     let attachment = aida(&repo, &home, &note_args);
     let note_value = json(&attachment, "observation attachment");
     std::fs::write(repo.join("observation.json"), &attachment.stdout).unwrap();
+    // trace:STORY-2493 | ai:codex
+    std::fs::write(
+        repo.join("review-input.json"),
+        serde_json::to_vec(&serde_json::json!({
+            "version": 1, "kind": "finding", "payload": {
+                "severity": "major", "blocking": true, "title": "Finding",
+                "body": "Data", "file": "src/lib.rs", "line": 1
+            }, "checksum": ""
+        }))
+        .unwrap(),
+    )
+    .unwrap();
+    let review_args = ["intent", "review-return", "--file", "review-input.json"];
+    let review_value = json(&aida(&repo, &home, &review_args), "review attachment");
     let attachment_probes: &[(&str, &[&str])] = &[
+        ("aida intent review-return", &review_args),
         ("aida intent note", &note_args),
         (
             "aida intent export",
@@ -531,7 +579,11 @@ fn checked_in_audit_is_exhaustive_and_every_honoured_probe_parses() {
         via_format.extend(["--format", "json"]);
         assert_eq!(
             audit_json(&aida(&repo, &home, &via_format), path),
-            note_value
+            if *path == "aida intent review-return" {
+                review_value.clone()
+            } else {
+                note_value.clone()
+            }
         );
         assert!(audit.contains(&format!("| `{path}` | JSON honoured |")));
     }

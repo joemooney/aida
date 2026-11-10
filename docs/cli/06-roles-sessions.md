@@ -815,8 +815,36 @@ the merge, sends the advisor a request, and routes a fresh launch to Claude.
 A conflicting Codex resume refuses with a fresh Claude launch command;
 a Codex thread cannot resume under another vendor. Fetch, merge, abort,
 mail, or vendor-preflight failures stop the launch. A resume with pending
-edits preserves them and skips the merge attempt; an unfinished merge still
-refuses. Clean resumes use the normal merge and conflict checks.
+edits preserves them and fetches both heads. After verifying the PR head is
+incorporated, the host probes committed trees with `git merge-tree --write-tree`.
+A clean probe admits pending work even when main has advanced. A conflicting or
+failed probe refuses without changing the index, HEAD or pending files.
+The preservation commands below apply only after branch and unfinished-merge
+preflight checks pass. A wrong-branch refusal requires restoring the recorded
+branch; an unfinished merge requires inspection and resolution or abort before
+retrying. Do not stage unresolved files or commit pending work on the wrong branch.
+Never run host Git inside a seat clone: its configuration and hooks are
+seat-controlled. After the lane exits, inspect `aida session leases --all`
+for the recorded path and scope. For recorded clones, preserve and publish pending work through
+`aida ship --from-seat PATH SPEC --commit-pending 'fix: preserve rework (Refs SPEC)'`,
+substituting the recorded path and spec ID. This runs clone Git in AIDA's
+sandbox and retains publication gates; a refusal is not successful publication.
+For linked worktrees, after the lane exits, use host Git in the recorded worktree:
+`git -C PATH add -A`, `git -C PATH commit -m "fix: preserve rework (Refs SPEC)"`,
+then `git -C PATH fetch origin`, `git -C PATH merge origin/BRANCH` and
+`git -C PATH merge origin/main`. Resolve any conflicts, commit the resolution,
+and retry pickup with `--resume`. The clone-only `ship --from-seat` command
+does not support linked worktrees.
+If a probe fails without reporting conflicts, diagnose its error before retrying.
+For confirmed conflicts, once publication succeeds, start a fresh `aida queue work SPEC --vendor claude --fresh --no-human`
+for conflict resolution. A clean seat behind the PR head needs a fresh pickup
+from the current head, without a pending-work commit or `--resume`.
+A failed adopted-seat launch restores its orphan lease so that retry can adopt
+the same tree. Host preparation is required for native children because their
+sandbox makes Git metadata read-only.
+An unfinished merge still refuses. Clean resumes use the normal merge and
+conflict checks.
+<!-- trace:BUG-2504 | ai:codex -->
 
 The conflict check runs after session setup has provisioned the seat and minted
 its lease, inside the pickup's launch rollback boundary. A fresh Codex pickup
@@ -1110,6 +1138,22 @@ attempt. It stays refused while any recorded process is still running. An
 attempt recorded before process groups were kept gets per-process signals
 only, with no group sweep.
 
+An authorized approval at an older head can also suppress review dispatch after
+clean merges of the protected default branch. Both dispatch checks reconcile
+the live verdict corpus and require a durable carry-over proof naming the
+reviewed head, current head and refreshed base tip. Standing non-approvals,
+malformed or missing-SHA evidence, unavailable protected-tip refreshes, and
+unrecordable proofs do not suppress review. This grants no ship readiness:
+CI must pass at the current head, and merge holds still apply.
+
+A refusal hold's release condition can use the same coverage, while preserving
+the original reviewed SHA and every other clearance obligation. The merge
+remains pinned to the current head. `aida review verdict PR-N` reports
+“APPROVED at H, carried to H2” with the protected base tip; `--json` includes
+an optional `coverage` object with `reviewed_sha`, `head_sha` and the full
+`proof`. Reading the verdict does not record a new approval or proof.
+<!-- trace:STORY-2694 | ai:codex -->
+
 ### Ship-readiness report
 <!-- trace:TASK-1945 | ai:claude -->
 
@@ -1348,6 +1392,20 @@ A later `aida ship` from that detached seat restores its leased branch only if
 both HEAD and the branch still equal the recorded PR head and Git permits the
 checkout. A moved branch or another session's handoff refuses recovery.
 <!-- trace:STORY-2325 | ai:codex -->
+
+Conditional relay/seat handoffs use
+`aida session handoff --seat advisor --write handoff.md --spec <spec-id> --until 'pr:42=merged'`.
+This parks the named spec using the same typed condition and hold policy as
+`aida defer`, and includes the canonical trigger in the handoff note. The
+hourly `defer-resurface` job evaluates that spec; a met condition resurfaces it.
+Conditional handoffs use the same per-write store auto-push policy as `aida defer`.
+The deferral is saved before the note: if note I/O fails, the error names the
+saved spec and trigger. Repair the note and retry; the deferral remains active.
+This does not automatically execute the handoff instructions or launch a seat.
+Free-text triggers are refused. Use `--until manual:<who> --reason '<explanation>'`
+for a human decision; this retains an operator hold and routes old manual
+conditions to the human queue after 14 days.
+<!-- trace:STORY-2402 | ai:codex -->
 
 <!-- trace:BUG-2500 | ai:codex -->
 A review blocked solely on external CI or host evidence records `waiting`

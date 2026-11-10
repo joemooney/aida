@@ -1402,11 +1402,6 @@ fn run_sandboxed_as(
                 .map_err(|e| failed(format!("{e:#}")))?
         }
     };
-    let mut cmd = std::process::Command::new("bwrap");
-    cmd.args(sandbox)
-        .arg(program)
-        .args(args)
-        .stdin(std::process::Stdio::null());
     let timeout = deadline
         .map(|end| {
             end.saturating_duration_since(std::time::Instant::now())
@@ -1416,7 +1411,15 @@ fn run_sandboxed_as(
     if timeout.is_zero() {
         return Err(failed("the clone scan deadline elapsed".into()));
     }
-    match crate::command_output_with_timeout_capped(cmd, timeout, cap) {
+    let output = retry_readonly_mount_race(commit_identity.is_none(), timeout, |remaining| {
+        let mut cmd = std::process::Command::new("bwrap");
+        cmd.args(&sandbox)
+            .arg(program)
+            .args(args)
+            .stdin(std::process::Stdio::null());
+        crate::command_output_with_timeout_capped(cmd, remaining, cap)
+    });
+    match output {
         crate::BoundedCommandOutput::Completed(mut out) if out.stdout.len() as u64 > cap => {
             out.stdout.truncate(cap as usize);
             Err(SandboxFailure::Truncated(out.stdout))
@@ -1434,6 +1437,43 @@ fn run_sandboxed_as(
             "the sandboxed {program} did not finish within {timeout:?}"
         ))),
     }
+}
+
+// Bubblewrap can race a disappearing systemd credentials mount while making
+// the root bind read-only. Retry setup only, with the original time budget;
+// commit runs and arbitrary command failures must never be replayed.
+// trace:STORY-2493 | ai:codex
+fn retry_readonly_mount_race(
+    readonly: bool,
+    timeout: std::time::Duration,
+    mut run: impl FnMut(std::time::Duration) -> crate::BoundedCommandOutput,
+) -> crate::BoundedCommandOutput {
+    let start = std::time::Instant::now();
+    for attempt in 0..3 {
+        let remaining = timeout.saturating_sub(start.elapsed());
+        if remaining.is_zero() {
+            return crate::BoundedCommandOutput::TimedOut;
+        }
+        let output = run(remaining);
+        let retry = match &output {
+            crate::BoundedCommandOutput::Completed(out) if readonly && out.stdout.is_empty() => {
+                // Bubblewrap exposes this pre-exec mount failure only through stderr.
+                // external-prose-classifier: seat_clone::retry_readonly_mount_race
+                let stderr = String::from_utf8_lossy(&out.stderr);
+                out.status.code() == Some(1)
+                    && stderr.starts_with("bwrap: Can't bind mount /oldroot/ on /newroot/:")
+                    && stderr.contains(
+                        "Unable to apply mount flags: remount \"/newroot/run/credentials/",
+                    )
+                    && stderr.trim_end().ends_with("No such file or directory")
+            }
+            _ => false,
+        };
+        if !retry || attempt == 2 {
+            return output;
+        }
+    }
+    unreachable!()
 }
 
 /// [`run_sandboxed`] for a probe: text, at most [`PROBE_OUTPUT_CAP`].
@@ -2733,6 +2773,78 @@ pub(crate) fn merged_pr_heads_with_timeout(
         .collect()
 }
 
+#[cfg(test)]
+// trace:STORY-2493 | ai:codex
+mod mount_race_tests {
+    use super::*;
+    use crate::BoundedCommandOutput::{Completed, TimedOut};
+    use std::os::unix::process::ExitStatusExt;
+    use std::time::Duration;
+
+    const RACE: &str = "bwrap: Can't bind mount /oldroot/ on /newroot/: Unable to apply mount flags: remount \"/newroot/run/credentials/systemd-tmpfiles-clean.service\": No such file or directory\n";
+
+    fn output(code: i32, stdout: &[u8], stderr: &str) -> crate::BoundedCommandOutput {
+        Completed(std::process::Output {
+            status: std::process::ExitStatus::from_raw(code << 8),
+            stdout: stdout.to_vec(),
+            stderr: stderr.as_bytes().to_vec(),
+        })
+    }
+
+    #[test]
+    fn readonly_mount_race_retries_setup_with_shared_budget() {
+        let mut calls = 0;
+        let mut previous = Duration::from_secs(1);
+        let result = retry_readonly_mount_race(true, previous, |remaining| {
+            assert!(remaining <= previous);
+            previous = remaining;
+            calls += 1;
+            if calls == 1 {
+                output(1, b"", RACE)
+            } else {
+                output(0, b"probe facts", "")
+            }
+        });
+        assert_eq!(calls, 2);
+        assert!(
+            matches!(result, Completed(out) if out.status.success() && out.stdout == b"probe facts")
+        );
+    }
+
+    #[test]
+    fn readonly_mount_race_is_bounded_and_retains_failure() {
+        let mut calls = 0;
+        let result = retry_readonly_mount_race(true, Duration::from_secs(1), |_| {
+            calls += 1;
+            output(1, b"", RACE)
+        });
+        assert_eq!(calls, 3);
+        assert!(matches!(result, Completed(out) if out.stderr == RACE.as_bytes()));
+        let result = retry_readonly_mount_race(true, Duration::ZERO, |_| {
+            panic!("expired budget must not spawn")
+        });
+        assert!(matches!(result, TimedOut));
+    }
+
+    #[test]
+    fn mount_race_never_replays_commits_or_other_failures() {
+        for (readonly, code, stdout, stderr) in [
+            (false, 1, b"".as_slice(), RACE),
+            (true, 1, b"command ran".as_slice(), RACE),
+            (true, 2, b"".as_slice(), RACE),
+            (true, 1, b"".as_slice(), "bwrap: permission denied"),
+            (true, 1, b"".as_slice(), "git: command failed"),
+        ] {
+            let mut calls = 0;
+            let _ = retry_readonly_mount_race(readonly, Duration::from_secs(1), |_| {
+                calls += 1;
+                output(code, stdout, stderr)
+            });
+            assert_eq!(calls, 1, "{readonly}: {stderr}");
+        }
+    }
+}
+
 /// Inside the probe sandbox: a git bundle of every commit
 /// [`UNPUSHED_COUNT_SCRIPT`] counts, with all of the clone's refs, on stdout.
 // trace:TASK-2053 | ai:claude
@@ -2958,6 +3070,24 @@ pub(crate) fn prepare_rework_merge(
             }
         }
     };
+    // Preflight refusals must never recommend staging unresolved files or
+    // committing pending work onto a branch other than the recorded PR branch.
+    // trace:BUG-2504 | ai:codex
+    anyhow::ensure!(
+        execute(&["symbolic-ref", "--short", "HEAD"])? == branch,
+        "rework seat {} is not on the PR head branch {branch}; inspect `aida session leases --all` and restore the recorded branch through the appropriate seat recovery path before retrying",
+        tree.display()
+    );
+    anyhow::ensure!(
+        execute(&["rev-parse", "-q", "--verify", "MERGE_HEAD"]).is_err(),
+        "rework seat {} already has an unfinished merge; inspect and resolve or abort that merge through the appropriate seat recovery path before retrying; do not stage unresolved files",
+        tree.display()
+    );
+    // Recovery depends on the host's recorded tree kind, never seat configuration.
+    // trace:BUG-2504 | ai:codex
+    let pending_resume = resume
+        && execute(&["status", "--porcelain", "--untracked-files=all"])
+            .is_ok_and(|status| !status.is_empty());
     prepare_rework_merge_with(
         &execute,
         branch,
@@ -2994,6 +3124,43 @@ pub(crate) fn prepare_rework_merge(
             Ok((base, pr_head))
         },
     )
+    .map_err(|error| {
+        let recovery = if pending_resume {
+            if clone.is_some() {
+                format!(
+                    "After the lane exits, preserve pending work through AIDA's sandboxed \
+                     `aida ship --from-seat {} --commit-pending 'fix: preserve rework (Refs SPEC-ID)'`. \
+                     Do not run host Git in the seat clone. After successful publication, retry \
+                     a fresh pickup from branch {branch}",
+                    tree.display()
+                )
+            } else {
+                format!(
+                    "After the lane exits, preserve pending work in the linked worktree with \
+                     `git -C {0} add -A` and \
+                     `git -C {0} commit -m 'fix: preserve rework (Refs SPEC-ID)'`; then run \
+                     `git -C {0} fetch origin`, `git -C {0} merge origin/{branch}` and \
+                     `git -C {0} merge origin/main`. Resolve any reported conflicts, commit \
+                     the resolution, and retry pickup with --resume",
+                    tree.display()
+                )
+            }
+        } else {
+            String::new()
+        };
+        let recovery = if recovery.is_empty() {
+            String::new()
+        } else {
+            format!(" {recovery}.")
+        };
+        error.context(format!(
+            "rework preparation for seat {} on branch {branch}; inspect its scope with \
+             `aida session leases --all` before recovery.{recovery} \
+             If a probe failed without reporting conflicts, diagnose that failure before retrying; \
+             confirmed conflicts can use a fresh `aida queue work SPEC --vendor claude --fresh --no-human`",
+            tree.display()
+        ))
+    })
 }
 
 /// Publish the prepared tip using only the trusted host origin. Clone objects
@@ -3132,16 +3299,27 @@ fn prepare_rework_merge_with(
         "rework seat already has an unfinished merge"
     );
     let dirty = !execute(&["status", "--porcelain", "--untracked-files=all"])?.is_empty();
-    // Resume preserves the existing lane's edits. A clean resume still gets
-    // the normal preparation and conflict refusal before launching.
+    anyhow::ensure!(
+        resume || !dirty,
+        "rework seat has pending changes; merge refused"
+    );
+    let (base, pr_head) = fetch_heads()?;
+    // Dirty seats need preservation; clean/fresh pickups need only a current head.
+    // trace:BUG-2504 | ai:codex
+    execute(&["merge-base", "--is-ancestor", &pr_head, "HEAD"]).context(if resume && dirty {
+        "seated rework branch is behind the PR head; edits preserved"
+    } else {
+        "seated rework branch is behind the PR head; retry pickup with its current head"
+    })?;
+    // Probe committed trees without touching pending edits, the index or HEAD.
+    // A clean merge needs no host preparation before continuing pending work.
+    // trace:BUG-2504 | ai:codex
     if resume && dirty {
+        execute(&["merge-tree", "--write-tree", "HEAD", &base]).context(
+            "could not prove a clean main merge for the dirty rework resume; edits preserved",
+        )?;
         return Ok(Vec::new());
     }
-    anyhow::ensure!(!dirty, "rework seat has pending changes; merge refused");
-    let (base, pr_head) = fetch_heads()?;
-    execute(&["merge-base", "--is-ancestor", &pr_head, "HEAD"]).context(
-        "seated rework branch is behind the PR head; retry pickup with its current head",
-    )?;
     let before = execute(&["rev-parse", "HEAD"])?;
     let files = finish_rework_merge(execute, &base)?;
     // Only publish the host-created merge of the fetched PR head and base.
@@ -3418,13 +3596,15 @@ mod rework_merge_tests {
         )
         .unwrap_err();
         assert!(why.to_string().contains("pending changes"));
-        // The same dirty seat resumes without touching the edits or fetching.
+        // A dirty resume still checks fresh remote heads before admission.
+        // trace:BUG-2504 | ai:codex
+        let current = execute(&["rev-parse", "HEAD"]).unwrap();
         assert!(prepare_rework_merge_with(
             &execute,
             "main",
             true,
             |_| panic!("must not publish"),
-            no_fetch
+            || Ok((current.clone(), current.clone())),
         )
         .unwrap()
         .is_empty());
@@ -3460,6 +3640,8 @@ mod rework_merge_tests {
         )
         .unwrap_err();
         assert!(why.to_string().contains("behind the PR head"));
+        assert!(!why.to_string().contains("commit-pending"));
+        assert!(!why.to_string().contains("--resume"));
         assert_eq!(execute(&["rev-parse", "HEAD"]).unwrap(), before);
         let why = prepare_rework_merge_with(
             &execute,
@@ -3471,6 +3653,90 @@ mod rework_merge_tests {
         .unwrap_err();
         assert_eq!(why.to_string(), "fetch refused");
         assert!(!fx.main.join(".git/MERGE_HEAD").exists());
+    }
+
+    // trace:BUG-2504 | ai:codex
+    #[test]
+    fn bug_2504_dirty_resume_checks_fetched_heads_without_touching_edits() {
+        let fx = tests::fixture();
+        let execute = |args: &[&str]| -> Result<String> {
+            let out = crate::test_git::git_command()
+                .current_dir(&fx.main)
+                .args(args)
+                .output()?;
+            anyhow::ensure!(
+                out.status.success(),
+                "{}",
+                String::from_utf8_lossy(&out.stderr)
+            );
+            Ok(String::from_utf8_lossy(&out.stdout).trim().to_string())
+        };
+        let head = execute(&["rev-parse", "HEAD"]).unwrap();
+        execute(&["checkout", "-b", "new-main"]).unwrap();
+        std::fs::write(fx.main.join("main-update"), "main\n").unwrap();
+        execute(&["add", "."]).unwrap();
+        execute(&["commit", "-m", "main moved"]).unwrap();
+        let base = execute(&["rev-parse", "HEAD"]).unwrap();
+        execute(&["checkout", "main"]).unwrap();
+        std::fs::write(fx.main.join("pending"), "keep these edits\n").unwrap();
+        let status = execute(&["status", "--porcelain"]).unwrap();
+        prepare_rework_merge_with(
+            &execute,
+            "main",
+            true,
+            |_| panic!("must not publish"),
+            || Ok((base.clone(), head.clone())),
+        )
+        .expect("non-conflicting main advance admits pending work");
+        {
+            let why = prepare_rework_merge_with(
+                &execute,
+                "main",
+                true,
+                |_| panic!("must not publish"),
+                || Ok((head.clone(), base.clone())),
+            )
+            .unwrap_err();
+            assert!(format!("{why:#}").contains("behind the PR head"), "{why:#}");
+            assert_eq!(execute(&["rev-parse", "HEAD"]).unwrap(), head);
+            assert_eq!(execute(&["status", "--porcelain"]).unwrap(), status);
+            assert_eq!(
+                std::fs::read_to_string(fx.main.join("pending")).unwrap(),
+                "keep these edits\n"
+            );
+            assert!(execute(&["rev-parse", "-q", "--verify", "MERGE_HEAD"]).is_err());
+        }
+        let why = prepare_rework_merge_with(
+            &execute,
+            "main",
+            true,
+            |_| panic!("must not publish"),
+            || anyhow::bail!("fetch unavailable"),
+        )
+        .unwrap_err();
+        assert!(why.to_string().contains("fetch unavailable"));
+        std::fs::write(fx.main.join("main-update"), "PR change\n").unwrap();
+        execute(&["add", "main-update"]).unwrap();
+        execute(&["commit", "-m", "conflicting PR change"]).unwrap();
+        let pr_head = execute(&["rev-parse", "HEAD"]).unwrap();
+        let status = execute(&["status", "--porcelain"]).unwrap();
+        let why = prepare_rework_merge_with(
+            &execute,
+            "main",
+            true,
+            |_| panic!("must not publish"),
+            || Ok((base, pr_head.clone())),
+        )
+        .unwrap_err();
+        let guidance = format!("{why:#}");
+        assert!(guidance.contains("edits preserved"));
+        assert_eq!(execute(&["rev-parse", "HEAD"]).unwrap(), pr_head);
+        assert_eq!(execute(&["status", "--porcelain"]).unwrap(), status);
+        assert_eq!(
+            std::fs::read_to_string(fx.main.join("pending")).unwrap(),
+            "keep these edits\n"
+        );
+        assert!(execute(&["rev-parse", "-q", "--verify", "MERGE_HEAD"]).is_err());
     }
 
     // trace:STORY-2475 | ai:codex

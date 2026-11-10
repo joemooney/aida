@@ -1346,7 +1346,7 @@ pub(crate) fn bug2498_confirm_superseded(root: &Path, lease: &crate::SessionLeas
         })
         .unwrap();
     let live = store.load().unwrap().entries[&c.key()].attempts[0].clone();
-    assert!(finish_confirmed_review(root, &live).is_err());
+    assert!(confirm(&live).is_err());
     assert!(!crate::ownership::reader::review_lease_ended(root, lease));
     store
         .transaction(&c.key(), |state| {
@@ -1404,14 +1404,31 @@ pub(crate) fn bug2498_confirm_superseded(root: &Path, lease: &crate::SessionLeas
         &replacement
     ));
     assert!(!crate::ownership::reader::review_lease_ended(root, lease));
-    // Also exercise successful recording from the same stopped process state.
+    // A lost dispatcher must also publish the captured completion receipt.
+    // trace:TASK-3777 | ai:codex
+    store
+        .transaction(&c.key(), |state| {
+            let mut lost = stopped.clone();
+            lost.phase = Phase::Running;
+            lost.dispatcher = lost.identity.clone();
+            lost.spawning = false;
+            lost.reviewer_spawning = false;
+            *attempt_mut(state, &c.key(), &attempt.token).unwrap() = lost;
+            Ok(())
+        })
+        .unwrap();
+    std::fs::write(&lease_path, original).unwrap();
+    let mut state = store.load().unwrap();
+    store.reconcile_lost_dispatchers(&mut state);
+    assert_eq!(state.entries[&c.key()].attempts[0].phase, Phase::Exited);
+    assert!(crate::ownership::reader::review_lease_ended(root, lease));
+    // The supersession path can consume the same valid receipt idempotently.
     store
         .transaction(&c.key(), |state| {
             *attempt_mut(state, &c.key(), &attempt.token).unwrap() = stopped;
             Ok(())
         })
         .unwrap();
-    std::fs::write(&lease_path, original).unwrap();
     assert!(advance(&store, &c.key(), &attempt.token).unwrap().is_none());
     assert_eq!(
         store.load().unwrap().entries[&c.key()].attempts[0].phase,

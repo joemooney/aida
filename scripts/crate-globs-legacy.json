@@ -56,7 +56,6 @@
   "aida-cli-lib/src/maintenance_schedule.rs": 1,
   "aida-cli-lib/src/mandate.rs": 1,
   "aida-cli-lib/src/manual.rs": 1,
-  "aida-cli-lib/src/mcp.rs": 1,
   "aida-cli-lib/src/mcp_cmd.rs": 2,
   "aida-cli-lib/src/memory_doc.rs": 1,
   "aida-cli-lib/src/merge_hold_cmd.rs": 1,

@@ -2263,27 +2263,24 @@ pub(crate) struct WhyArgs {
 
 // STORY-547: `aida why <ID>` reads the requirement graph like burndown —
 // dispatch early, no shared storage handle needed. trace:STORY-547
-fn run_why(
-    matches: &clap::ArgMatches,
-    _ctx: &crate::command_registry::DispatchCtx,
-) -> anyhow::Result<()> {
+fn run_why(matches: &clap::ArgMatches, _ctx: &crate::cmdkit::DispatchCtx) -> anyhow::Result<()> {
     let args = <WhyArgs as clap::FromArgMatches>::from_arg_matches(matches)?;
     let WhyArgs { id, plain, json } = &args;
     return handle_why(id, *plain, *json);
 }
 
 // trace:STORY-1728 | ai:claude
-pub(crate) static WHY: crate::command_registry::CommandReg = crate::command_registry::CommandReg {
+pub(crate) static WHY: crate::cmdkit::CommandReg = crate::cmdkit::CommandReg {
     name: "why",
     help_after: "groom",
     command: <WhyArgs as clap::CommandFactory>::command,
-    policy: |_| crate::command_registry::CmdPolicy {
+    policy: |_| crate::cmdkit::CmdPolicy {
         stakeholder: crate::stakeholder_role::StakeholderAction::Read,
         per_write_auto_push: false,
         skip_role_restore_prompt: false,
         team_identity_write: false,
     },
-    run: crate::command_registry::Handler::Early(run_why),
+    run: crate::cmdkit::Handler::Early(run_why),
 };
 
 // trace:STORY-631 | ai:claude
@@ -2323,10 +2320,7 @@ pub(crate) struct IntentArgs {
 // read+write for generate), and may shell out to a headless `claude -p`
 // running `/aida-intent`. Like `aida why` / `aida intake`, it needs no
 // shared storage handle — dispatch early. trace:STORY-631 | ai:claude
-fn run_intent(
-    matches: &clap::ArgMatches,
-    _ctx: &crate::command_registry::DispatchCtx,
-) -> anyhow::Result<()> {
+fn run_intent(matches: &clap::ArgMatches, _ctx: &crate::cmdkit::DispatchCtx) -> anyhow::Result<()> {
     let args = <IntentArgs as clap::FromArgMatches>::from_arg_matches(matches)?;
     // trace:STORY-2479 | ai:codex
     if args.local.is_some() {
@@ -2376,7 +2370,7 @@ mod local_intent_dispatch_tests {
         ] {
             let cli = crate::command_registry::try_parse_from(args).unwrap();
             let crate::cli::Command::Registered(invocation) = cli.command;
-            let ctx = crate::command_registry::DispatchCtx {
+            let ctx = crate::cmdkit::DispatchCtx {
                 globals: Some(&cli.globals),
                 store: None,
             };
@@ -2390,19 +2384,18 @@ mod local_intent_dispatch_tests {
 }
 
 // trace:STORY-1728 | ai:claude
-pub(crate) static INTENT: crate::command_registry::CommandReg =
-    crate::command_registry::CommandReg {
-        name: "intent",
-        help_after: "worktree",
-        command: <IntentArgs as clap::CommandFactory>::command,
-        policy: |_| crate::command_registry::CmdPolicy {
-            stakeholder: crate::stakeholder_role::StakeholderAction::Write,
-            per_write_auto_push: false,
-            skip_role_restore_prompt: false,
-            team_identity_write: false,
-        },
-        run: crate::command_registry::Handler::Early(run_intent),
-    };
+pub(crate) static INTENT: crate::cmdkit::CommandReg = crate::cmdkit::CommandReg {
+    name: "intent",
+    help_after: "worktree",
+    command: <IntentArgs as clap::CommandFactory>::command,
+    policy: |_| crate::cmdkit::CmdPolicy {
+        stakeholder: crate::stakeholder_role::StakeholderAction::Write,
+        per_write_auto_push: false,
+        skip_role_restore_prompt: false,
+        team_identity_write: false,
+    },
+    run: crate::cmdkit::Handler::Early(run_intent),
+};
 
 // trace:STORY-656 | ai:claude
 /// Spec-quality tooling — checks you run ON a spec before work begins.
@@ -2416,8 +2409,8 @@ pub(crate) struct SpecArgs {
 
 fn run_spec(
     matches: &clap::ArgMatches,
-    ctx: &crate::command_registry::DispatchCtx,
-) -> anyhow::Result<crate::command_registry::Flow> {
+    ctx: &crate::cmdkit::DispatchCtx,
+) -> anyhow::Result<crate::cmdkit::Flow> {
     use crate::*;
     let args = <SpecArgs as clap::FromArgMatches>::from_arg_matches(matches)?;
     match &ctx.store {
@@ -2430,7 +2423,7 @@ fn run_spec(
                 inner: SpecCommand::Dryrun { id, ai, json },
             } = &args
             {
-                return crate::command_registry::returned(handle_spec_dryrun(id, *ai, *json));
+                return crate::cmdkit::returned(handle_spec_dryrun(id, *ai, *json));
             }
             // STORY-657: `aida spec interview <ID>` reuses dryrun's scorer to derive
             // clarifying questions, prompts the human (TTY) or emits them as JSON
@@ -2447,7 +2440,7 @@ fn run_spec(
                     },
             } = &args
             {
-                return crate::command_registry::returned(handle_spec_interview(
+                return crate::cmdkit::returned(handle_spec_interview(
                     id,
                     *apply,
                     *ai,
@@ -2455,12 +2448,10 @@ fn run_spec(
                     *json,
                 ));
             }
-            Ok(crate::command_registry::Flow::Continue)
+            Ok(crate::cmdkit::Flow::Continue)
         }
-        Some(crate::command_registry::StoreCtx::Distributed { .. }) => {
-            Ok(crate::command_registry::Flow::Continue)
-        }
-        Some(crate::command_registry::StoreCtx::Git {
+        Some(crate::cmdkit::StoreCtx::Distributed { .. }) => Ok(crate::cmdkit::Flow::Continue),
+        Some(crate::cmdkit::StoreCtx::Git {
             store_path,
             backend,
         }) => {
@@ -2469,7 +2460,7 @@ fn run_spec(
             let _ = (store_path, backend, &args);
             crate::git_backend_cmd::exit_unsupported_on_git_backend()
         }
-        Some(crate::command_registry::StoreCtx::Legacy {
+        Some(crate::cmdkit::StoreCtx::Legacy {
             storage,
             requirements_path,
         }) => {
@@ -2480,15 +2471,15 @@ fn run_spec(
 }
 
 // trace:STORY-1728 | ai:claude
-pub(crate) static SPEC: crate::command_registry::CommandReg = crate::command_registry::CommandReg {
+pub(crate) static SPEC: crate::cmdkit::CommandReg = crate::cmdkit::CommandReg {
     name: "spec",
     help_after: "focus",
     command: <SpecArgs as clap::CommandFactory>::command,
-    policy: |_| crate::command_registry::CmdPolicy {
+    policy: |_| crate::cmdkit::CmdPolicy {
         stakeholder: crate::stakeholder_role::StakeholderAction::Write,
         per_write_auto_push: false,
         skip_role_restore_prompt: false,
         team_identity_write: false,
     },
-    run: crate::command_registry::Handler::Store(run_spec),
+    run: crate::cmdkit::Handler::Store(run_spec),
 };

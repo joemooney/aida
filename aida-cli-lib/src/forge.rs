@@ -7520,6 +7520,100 @@ mod tests {
     }
 }
 
+// trace:STORY-2640 | ai:codex
+/// Preserve the existing PR body, with the marker bound to the forge head.
+pub(crate) fn annotate_fast_gate(main: &Path, pr: u64, head: &str, marker: &str) -> Result<()> {
+    let gitlab = resolve_open_change_forge_kind(main) == ForgeKind::GitLab;
+    let endpoint = format!("projects/:id/merge_requests/{pr}");
+    // Keep the closed forge selection explicit to the launch-site ratchet.
+    let forge_command = || {
+        if gitlab {
+            std::process::Command::new("glab")
+        } else {
+            std::process::Command::new("gh")
+        }
+    };
+    let mut get = forge_command();
+    get.current_dir(main);
+    if gitlab {
+        get.args(["api", "-X", "GET", &endpoint]);
+    } else {
+        get.args(["pr", "view", &pr.to_string(), "--json", "headRefOid,body"]);
+    }
+    let observed = crate::forge_observed::observe_gh_stdout(crate::command_output_with_timeout(
+        get,
+        std::time::Duration::from_secs(15),
+    ));
+    let stdout = observed.as_known().with_context(|| {
+        format!(
+            "fast gate change read refused: {}",
+            observed.unsettled_reason().unwrap_or("unknown")
+        )
+    })?;
+    let value: serde_json::Value = serde_json::from_str(stdout)?;
+    let actual_head = if gitlab {
+        value["sha"]
+            .as_str()
+            .or_else(|| value["diff_refs"]["head_sha"].as_str())
+    } else {
+        value["headRefOid"].as_str()
+    };
+    anyhow::ensure!(
+        actual_head == Some(head),
+        "change head moved before fast gate annotation"
+    );
+    let body = value[if gitlab { "description" } else { "body" }]
+        .as_str()
+        .context("change body unavailable")?;
+    let text = fast_gate_body(body, head, marker);
+    let file = tempfile::NamedTempFile::new()?;
+    std::fs::write(file.path(), &text)?;
+    let mut edit = forge_command();
+    edit.current_dir(main);
+    if gitlab {
+        edit.args(["api", "-X", "PUT", &endpoint, "-f"])
+            .arg(format!("description={text}"));
+    } else {
+        edit.args(["pr", "edit", &pr.to_string(), "--body-file"])
+            .arg(file.path());
+    }
+    let out = crate::command_output_with_timeout(edit, std::time::Duration::from_secs(15))
+        .context("fast gate change update timed out")?;
+    anyhow::ensure!(
+        out.status.success(),
+        "fast gate change update failed: {}",
+        String::from_utf8_lossy(&out.stderr)
+    );
+    Ok(())
+}
+
+// trace:STORY-2640 | ai:codex
+fn fast_gate_body(body: &str, head: &str, marker: &str) -> String {
+    const BEGIN: &str = "<!-- aida-fast-gate -->";
+    const END: &str = "<!-- /aida-fast-gate -->";
+    let section = format!("{BEGIN}\nfast_gate={marker} head={head}\n{END}");
+    if let Some(start) = body.find(BEGIN) {
+        if let Some(end) = body[start..].find(END) {
+            let end = start + end + END.len();
+            return format!("{}{}{}", &body[..start], section, &body[end..]);
+        }
+    }
+    format!("{body}\n{section}\n")
+}
+
+#[cfg(test)]
+mod fast_gate_tests {
+    #[test]
+    fn fast_gate_body_preserves_text_after_previous_annotation() {
+        let body = super::fast_gate_body("original", "old", "fail") + "later reviewer notes";
+        let updated = super::fast_gate_body(&body, "fixed", "pass");
+        assert!(updated.starts_with("original"));
+        assert!(updated.ends_with("later reviewer notes"));
+        assert!(updated.contains("fast_gate=pass head=fixed"));
+        assert!(!updated.contains("head=old"));
+    }
+}
+
 /// Read the exact branch incarnation's lifecycle for host GC. All rows must
 /// parse, no open PR may coexist, and a closed/merged same-repository row
 /// must pin this HEAD. A capped history is unknown, never deletion authority.

@@ -1161,10 +1161,13 @@ fn pr_digest(
     {
         if !verdict.is_closed()
             && verdict.kind == crate::gate::review_verdict::VerdictKind::Waiting
-            && verdict.reviewed_sha.as_deref() == pr.head_sha.as_deref()
+            // trace:TASK-3777 | ai:codex
+            && verdict.reviewed_sha.as_deref().zip(pr.head_sha.as_deref())
+                .is_some_and(|(reviewed, head)| crate::gate::review_verdict::same_reviewed_sha(reviewed, head))
         {
             blockers.push(format!("WAITING: {}; resume with a fresh review at this head; aida queue work PR-{n} --role reviewer",
                 verdict.summary.as_deref().unwrap_or("external evidence required")));
+            break; // One PR may have several verdict aliases. trace:TASK-3777 | ai:codex
         }
     }
     let checks: Vec<_> = ci_checks(row)
@@ -1809,7 +1812,10 @@ mod tests {
         let root = t.path();
         let dir = root.join(".aida/review-verdicts");
         std::fs::create_dir_all(&dir).unwrap();
-        let p = pr();
+        let mut p = pr();
+        // Both aliases and an abbreviated receipt still produce one blocker.
+        // trace:TASK-3777 | ai:codex
+        p.head_sha = Some("abcdef1234567890abcdef1234567890abcdef12".into());
         for key in ["PR-42", "BUG-2500"] {
             let mut p = p.clone();
             p.title = "work (BUG-2500)".into();
@@ -1837,7 +1843,7 @@ mod tests {
                     && !digest.contains("queue rework")
                     && !digest.contains("ship-ready")
             );
-            std::fs::remove_file(path).unwrap();
+            assert_eq!(digest.matches("WAITING:").count(), 1);
         }
     }
     #[test]

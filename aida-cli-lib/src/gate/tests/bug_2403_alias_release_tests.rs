@@ -162,6 +162,7 @@ fn release(root: &Path, io: Io<'_>) -> (Result<Outcome>, Vec<String>) {
         root,
         &hold,
         AutoReleaseIo {
+            coverage: &|_| Ok(None),
             live_head: &|| {
                 (io.on_read)(reads.get());
                 let i = reads.get().min(io.heads.len() - 1);

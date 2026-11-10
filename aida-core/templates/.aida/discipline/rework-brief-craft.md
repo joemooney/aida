@@ -17,16 +17,22 @@ A rework brief preserves a review finding across a cold session. It is not
    instead of pretending it is implementation detail.
 6. State the local gate, and only the local gate: ONE targeted
    `cargo test --profile agent -p <crate> <module filter>` run plus
-   `make check-ci-fast`, then push. `make test-touched` and
+   host fast-gating. The host runs `make check-ci-fast` as an offline,
+   sandboxed lane job; it never executes seat-written scripts unsandboxed.
+   Native lanes get one fix round before host publication. Self-pushing lanes
+   get one queued rework round before review dispatch. Results carry
+   `fast_gate=pass|fail|skipped(<reason>)` independently of `untested=true`.
+   `make test-touched` and
    `make check-ci-compile` only when the change touches shared test infra
    (`test_env`, `test_git`, ratchet baselines) or more than 10 files. A brief
    never orders `make check-ci`, `make check`, `cargo test --workspace` or an
    unfiltered `--lib` run; the full suite is CI's job. It never sets
    `AIDA_CARGO_NO_SLOT` and never wraps cargo in `timeout N`. It tells the
-   implementer to run long cargo in the background. On 2026-10-17 advisor
-   briefs ordered `make check-ci`, and fix-2725 ran `make check` with the slot
+   implementer to use `aida lane job run -- cargo ...` for long lane tests.
+   On 2026-10-17 advisor briefs ordered `make check-ci`, and fix-2725 ran `make check` with the slot
    limiter bypassed: 1h20m on a host where the targeted gate takes minutes.
    <!-- trace:STORY-1853 | ai:claude -->
+   <!-- trace:STORY-2640 | ai:codex -->
 7. When the brief names a cargo command, write its budget as
    `AIDA_CARGO_TIMEOUT=<dur> cargo ...` and tell the implementer to run anything
    that can exceed about 10 minutes in the tool's background mode. Never stack

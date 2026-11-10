@@ -30,7 +30,13 @@ fn rust_sources(dir: &Path, files: &mut Vec<PathBuf>) {
 fn scanned_files() -> Vec<(String, String)> {
     let cli_src = Path::new(env!("CARGO_MANIFEST_DIR")).join("src");
     let core_src = Path::new(env!("CARGO_MANIFEST_DIR")).join("../aida-core/src");
-    scanned_files_under(&[("aida-cli-lib", cli_src), ("aida-core", core_src)])
+    // trace:TASK-3429 | ai:codex — retain coverage of the extracted transport.
+    let mcp_src = cli_src.join("../../aida-mcp/src");
+    scanned_files_under(&[
+        ("aida-cli-lib", cli_src),
+        ("aida-core", core_src),
+        ("aida-mcp", mcp_src),
+    ])
 }
 
 /// Every non-test source under each labelled root, keyed `label/relative`.
@@ -671,6 +677,9 @@ fn the_scan_sees_the_routed_paths() {
     // trace:STORY-1728 | ai:claude — the edit handler moved to its module.
     assert!(files["aida-cli-lib/requirements_cli.rs"].contains(stamp));
     assert!(files.contains_key("aida-core/models.rs"));
+    // trace:TASK-3429 | ai:codex
+    assert!(files.contains_key("aida-mcp/mcp.rs"));
+    assert!(files.contains_key("aida-mcp/serve.rs"));
 }
 
 /// The seam emits exactly once on a real transition and not on a re-set.

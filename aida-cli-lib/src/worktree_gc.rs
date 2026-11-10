@@ -1,3 +1,4 @@
+// trace:TASK-3429 | ai:codex
 //! worktree GC, salvage, stranded-primary detection, and worktree/pool commands (STORY-1488 slice 1)
 // trace:STORY-1488 | ai:claude
 
@@ -1268,7 +1269,7 @@ pub(crate) fn for_route_is_request_only(for_role: &str) -> bool {
 // (advisor / human / reviewer). This scopes the TASK-647 gate to the act it was
 // meant to guard — committing the team to build — and lets `aida queue add
 // --for advisor` (a request for review) succeed from any role. trace:BUG-631
-pub(crate) fn for_target_requires_dispatch_authority(for_role: Option<&str>) -> bool {
+pub fn for_target_requires_dispatch_authority(for_role: Option<&str>) -> bool {
     match for_role {
         Some("any") => true,
         Some(role) => !for_route_is_request_only(role),
@@ -3758,7 +3759,7 @@ pub(crate) struct WorktreeArgs {
 // dispatches early. trace:STORY-716 | ai:claude
 fn run_worktree(
     matches: &clap::ArgMatches,
-    _ctx: &crate::command_registry::DispatchCtx,
+    _ctx: &crate::cmdkit::DispatchCtx,
 ) -> anyhow::Result<()> {
     // `add`/`enter` targets arrive canonical (`spec_arg::spec_id` value parser).
     let args = <WorktreeArgs as clap::FromArgMatches>::from_arg_matches(matches)?;
@@ -3767,19 +3768,18 @@ fn run_worktree(
 }
 
 // trace:STORY-1728 | ai:claude
-pub(crate) static WORKTREE: crate::command_registry::CommandReg =
-    crate::command_registry::CommandReg {
-        name: "worktree",
-        help_after: "spec",
-        command: <WorktreeArgs as clap::CommandFactory>::command,
-        policy: |_| crate::command_registry::CmdPolicy {
-            stakeholder: crate::stakeholder_role::StakeholderAction::Write,
-            per_write_auto_push: false,
-            skip_role_restore_prompt: false,
-            team_identity_write: false,
-        },
-        run: crate::command_registry::Handler::Early(run_worktree),
-    };
+pub(crate) static WORKTREE: crate::cmdkit::CommandReg = crate::cmdkit::CommandReg {
+    name: "worktree",
+    help_after: "spec",
+    command: <WorktreeArgs as clap::CommandFactory>::command,
+    policy: |_| crate::cmdkit::CmdPolicy {
+        stakeholder: crate::stakeholder_role::StakeholderAction::Write,
+        per_write_auto_push: false,
+        skip_role_restore_prompt: false,
+        team_identity_write: false,
+    },
+    run: crate::cmdkit::Handler::Early(run_worktree),
+};
 
 #[cfg(test)]
 mod bug2396_worktree_next_tests {

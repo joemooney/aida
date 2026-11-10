@@ -28,13 +28,23 @@ verify both verbs refuse without changing the target object's bytes.
 `store_mutation_entry.rs` selects an explicit mediated profile before CLI
 identity, telemetry, aliases, extension dispatch and cache setup. The bounded
 Rust SEQPACKET client supports inline, `--body-file` or bounded `--stdin`
-`comment add` and title/description/priority-only `edit`. Its separate MCP loop translates
+`comment add` and title/description/priority/weight-only `edit`. Its separate MCP loop translates
 `add_comment` and `update_requirement` without backend setup, agent-registry
 writes, mail acknowledgements or respawn. It retains MCP profile and stakeholder
 restrictions, narrows advertised input properties, and refuses extra fields
 rather than silently dropping semantics. Non-Unicode session roles and CLI
 arguments refuse; explicitly configured non-string MCP profiles also refuse.
-Priority edits use the same owned-spec, host role and redo checks as title edits.
+Priority and numeric weight edits use the same owned-spec, host role and redo
+checks as title edits. CLI `edit --weight` accepts finite f32 values and clears
+with an empty or whitespace-only string; MCP `update_requirement.weight` accepts
+a number or explicit null to clear. Missing weight leaves it unchanged. The
+wire schema distinguishes missing from null, rejects strings, booleans and
+out-of-range/non-finite values, and records bound-author weight history through
+the canonical redo transaction. Routed weight set/clear tests cover stale bases,
+concurrent changes, persistence before a lost reply, and same-request replay.
+This is a partial ranking-field slice; status, type, tags, ownership, links,
+creation, existing-comment mutations, claim/queue, findings, mail and the other
+inventoried writer families remain unresolved. The launch gate stays closed.
 The closed broker and Rust schemas accept high/medium/low (case insensitive,
 with the CLI's `med` alias); invalid or null values refuse before persistence.
 A same-request replay returns its durable result without another history entry;
@@ -153,7 +163,7 @@ authorization or test execution.
 
 `--profile mediated` includes these records as `partial_routes` alongside its
 unresolved counts. They do **not** clear writer or operation blockers: a
-title/description/priority edit route cannot certify status, ownership or tag edits, and
+title/description/priority/weight edit route cannot certify status, ownership or tag edits, and
 a literal-text comment route cannot certify parent, relay or author semantics.
 Production admission remains gated until the remaining inventory is reconciled
 and routed. This partial reconciliation does not meet the advisor's zero
@@ -270,12 +280,13 @@ migrate derived state. Follow traits, wrappers, macros and deferred children.
 Registration and MCP dispatch selectors are reconciled separately from sinks;
 unresolved selectors are explicit operation blockers.
 
+<!-- trace:TASK-3429 | ai:codex -->
 ```bash
-rg -n 'update_atomically|update_spec_atomically|add_requirement_atomic|save_reporting|write_object|with_store_write_lock|\.save\(' aida-core/src aida-cli-lib/src aida-cli/src aida-server/src aida-tui/src
-rg -n 'fs::(write|rename|remove_file|create_dir_all|copy)|OpenOptions|File::create|write_atomic|write_all|execute_batch|transaction|queue_(add|remove|reorder)' aida-core/src aida-cli-lib/src aida-cli/src aida-server/src aida-tui/src
-rg -n 'write_cas|write_batch|register_node|acquire_claim|release_claim|digest_snapshot_to_canonical|publish_to_store|commit_record|git_ops::(add|commit|push)|pull_rebase|fast_forward_store' aida-core/src aida-cli-lib/src
-rg -n 'REGISTRY|CmdPolicy|Command::|tool_[a-z_]+|handoff|mailbox|deputy|claim|cache|migrat' aida-cli-lib/src/command_registry.rs aida-cli-lib/src/cli.rs aida-cli-lib/src/lib.rs aida-cli-lib/src/mcp.rs
-rg -n 'write_text|write_bytes|write\(|rename|replace|unlink|open\(|git (add|commit|push)|aida (add|edit|comment|queue)' scripts aida-core/templates aida-cli-lib/src/containment
+rg -n 'update_atomically|update_spec_atomically|add_requirement_atomic|save_reporting|write_object|with_store_write_lock|\.save\(' aida-core/src aida-cli-lib/src aida-cli/src aida-server/src aida-tui/src aida-mcp/src
+rg -n 'fs::(write|rename|remove_file|create_dir_all|copy)|OpenOptions|File::create|write_atomic|write_all|execute_batch|transaction|queue_(add|remove|reorder)' aida-core/src aida-cli-lib/src aida-cli/src aida-server/src aida-tui/src aida-mcp/src
+rg -n 'write_cas|write_batch|register_node|acquire_claim|release_claim|digest_snapshot_to_canonical|publish_to_store|commit_record|git_ops::(add|commit|push)|pull_rebase|fast_forward_store' aida-core/src aida-cli-lib/src aida-mcp/src
+rg -n 'REGISTRY|CmdPolicy|Command::|tool_[a-z_]+|handoff|mailbox|deputy|claim|cache|migrat' aida-cli-lib/src/command_registry.rs aida-cli-lib/src/cli.rs aida-cli-lib/src/lib.rs aida-mcp/src
+rg -n 'write_text|write_bytes|write\(|rename|replace|unlink|open\(|git (add|commit|push)|aida (add|edit|comment|queue)' scripts aida-core/templates aida-cli-lib/src/containment aida-mcp/src
 python3 scripts/check-store-writers.py --candidates > /tmp/store-writer-candidates.json
 python3 scripts/check-store-writers.py
 python3 -m unittest tests/test_store_writer_inventory.py

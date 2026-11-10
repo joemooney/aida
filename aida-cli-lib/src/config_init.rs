@@ -1,3 +1,4 @@
+// trace:TASK-3429 | ai:codex
 //! `aida config` snapshot, status/priority input validation and init-time config writers (STORY-1488 slice 1)
 // trace:STORY-1488 | ai:claude
 
@@ -207,7 +208,7 @@ pub(crate) fn validate_and_restore_project_configs_after_pull(
 /// "frequently auto-pull" mode.
 /// trace:TASK-304 | ai:claude
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub(crate) enum UltraplanMode {
+pub enum UltraplanMode {
     /// `aida ultraplan` refuses with a configured-off message; no clipboard.
     Never,
     /// Default — preserves current behavior: the user runs `aida ultraplan
@@ -255,10 +256,10 @@ pub(crate) enum SuggestThreshold {
 /// so a project with no `[ultraplan]` block (or an unparseable one) keeps the
 /// opt-in behavior: `mode = on-demand`, threshold `spec-thinness`.
 /// trace:TASK-697 | ai:claude
-pub(crate) struct UltraplanConfig {
-    pub(crate) mode: UltraplanMode,
+pub struct UltraplanConfig {
+    pub mode: UltraplanMode,
     /// Which heuristic `suggested` mode applies. Defaults to `Thinness`.
-    pub(crate) threshold: SuggestThreshold,
+    pub threshold: SuggestThreshold,
 }
 
 impl Default for UltraplanConfig {
@@ -274,7 +275,7 @@ impl Default for UltraplanConfig {
 /// missing block, unparseable TOML, or unknown token values all fall back to
 /// the defaults — the suggestion layer is a soft feature, never load-bearing.
 /// trace:TASK-304 | ai:claude
-pub(crate) fn read_ultraplan_config(project_root: &std::path::Path) -> UltraplanConfig {
+pub fn read_ultraplan_config(project_root: &std::path::Path) -> UltraplanConfig {
     let mut cfg = UltraplanConfig::default();
     let path = config_path_for_project(project_root);
     let Ok(body) = std::fs::read_to_string(&path) else {

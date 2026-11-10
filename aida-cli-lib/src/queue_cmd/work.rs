@@ -454,27 +454,111 @@ pub(crate) fn run_queue_resume_to_exit(
     publication: (&std::path::Path, &str, &str),
     record_no_change: bool,
 ) -> Result<std::process::ExitStatus> {
-    let publish_on_exit = target.vendor == session::HeadlessVendor::Codex
-        && contained
-        && crate::canonical_role_name(role) == "implementer";
-    let status = session::spawn_vendor_headless_resume(
+    // trace:STORY-2640 | ai:codex — explicit resumes retain the same host gate.
+    let implementing = crate::canonical_role_name(role) == "implementer";
+    let host_published =
+        target.vendor == session::HeadlessVendor::Codex && contained && implementing;
+    let mut publish_native = host_published;
+    let main = crate::main_worktree_root_from(publication.0);
+    let mut _fast_gate = None;
+    let branch = if implementing {
+        if let Some(lease) = crate::list_leases(&main)
+            .into_iter()
+            .find(|l| l.id == publication.2)
+        {
+            _fast_gate =
+                Some(crate::lane_fast_gate::reserve(&main, &lease.branch)?.with_result_line());
+            Some(lease.branch)
+        } else {
+            crate::lane_fast_gate::missing_lease(&main, None);
+            anyhow::ensure!(
+                !host_published,
+                "publication lease {} is missing",
+                publication.2
+            );
+            publish_native = false;
+            None
+        }
+    } else {
+        None
+    };
+    let mut status = session::spawn_vendor_headless_resume(
         host_main, target, prompt, log, tree, tee, contained, role,
     )?;
-    // Runtime evidence belongs to the host even when publication is disabled.
     // trace:BUG-2488 | ai:codex
-    if crate::canonical_role_name(role) == "implementer" {
+    if implementing {
         crate::standalone_implementer::reconcile_signals(publication.0, tree, publication.1)?;
     }
-    if publish_on_exit {
-        crate::ship_from_seat::publish_queue_exit_recorded(
+    // trace:STORY-2640 | ai:codex
+    let branch =
+        if implementing && !host_published && !crate::lane_fast_gate::veto(&main, publication.1) {
+            match _fast_gate.as_mut() {
+                Some(reservation) => Some(reservation.exit_branch(tree)),
+                None => branch,
+            }
+        } else {
+            branch
+        };
+    if let Some(branch) = branch.as_deref() {
+        if host_published {
+            publish_native = crate::lane_fast_gate::native(
+                &main,
+                tree,
+                publication.1,
+                publication.2,
+                branch,
+                status.success(),
+                |p| {
+                    status = session::spawn_vendor_headless_resume(
+                        host_main,
+                        target,
+                        p,
+                        &log.with_extension("fast-fix.jsonl"),
+                        tree,
+                        tee,
+                        contained,
+                        role,
+                    )?;
+                    crate::standalone_implementer::reconcile_signals(
+                        publication.0,
+                        tree,
+                        publication.1,
+                    )?;
+                    Ok(status.success())
+                },
+            )?;
+        } else if let Some((pr, _)) = crate::standalone_implementer::lookup_pr(&main, branch) {
+            let queued = crate::lane_fast_gate::pushed(
+                &main,
+                tree,
+                publication.1,
+                publication.2,
+                branch,
+                pr,
+                target.vendor.as_str(),
+            )?;
+            eprintln!("fast_gate={}", crate::lane_fast_gate::marker(&main, branch));
+            anyhow::ensure!(
+                !queued,
+                "fast gate failed; one rework round queued before review"
+            );
+        }
+    }
+    if publish_native {
+        let result = crate::ship_from_seat::publish_queue_exit_recorded(
             publication.0,
             tree,
             publication.1,
             publication.2,
             status.success(),
             record_no_change,
-        )
-        .map_err(ResumePublicationFailure)?;
+        );
+        if let Some(branch) = branch.as_deref() {
+            crate::lane_fast_gate::publication_result(&main, branch, result)
+                .map_err(ResumePublicationFailure)?;
+        } else {
+            result.map_err(ResumePublicationFailure)?;
+        }
     }
     Ok(status)
 }
@@ -2409,7 +2493,7 @@ pub(crate) fn rework_findings_block_for_spec(
 /// forge names exactly one. A failed lookup is `None`: the ledger bindings
 /// still answer, and an unknown PR never binds a review to the spec.
 // trace:BUG-2430 | ai:claude
-pub(crate) fn spec_open_change_key(project_root: &std::path::Path, ids: &[&str]) -> Option<String> {
+pub fn spec_open_change_key(project_root: &std::path::Path, ids: &[&str]) -> Option<String> {
     let forge = Ok(crate::forge::resolve_forge_kind(project_root));
     let mut ids: Vec<String> = ids.iter().map(|s| s.trim().to_string()).collect();
     ids.dedup();
@@ -2464,7 +2548,7 @@ pub(crate) fn resolve_rework_findings(
 }
 
 // trace:BUG-2500 | ai:codex
-pub(crate) fn refuse_waiting_review(
+pub fn refuse_waiting_review(
     root: &Path,
     display: &str,
     spec: &str,

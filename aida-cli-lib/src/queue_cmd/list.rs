@@ -1861,24 +1861,27 @@ pub(super) fn handle_queue_command(
             // TASK-101: base-freshness — flag any active session lease whose
             // branch has fallen behind origin/main, so the operator sees when
             // in-flight work is on a stale base *during* the session (not just
-            // at the queue-work/queue-done gates). Subtle by default; only live
-            // (non-stale) leases on a non-default branch are probed, and each
+            // at the queue-work/queue-done gates). Subtle by default; only retained
+            // (including legacy non-stale) leases on a non-default branch are probed, and each
             // row's `git rev-list --count` reads local refs — NO fetch here — so
-            // it's cheap + best-effort (a git miss just omits that row).
+            // it is best-effort (a git miss just omits that row).
             // trace:TASK-101 | ai:claude
             if !*in_flight_only {
                 if let Some(root) = find_main_worktree_root()
                     .ok()
                     .or_else(|| find_project_root().ok())
                 {
-                    let now = chrono::Utc::now();
-                    let live = process_probe::probe_live_claude_sessions();
+                    // trace:TASK-3420 | ai:codex
                     let mut stale_base_rows: Vec<(String, String, String)> = Vec::new();
+                    let reader = crate::ownership::reader::LeaseReader::new(&root);
                     for l in list_leases(&root) {
-                        if matches!(lease_state_for(&l, &live, now), LeaseState::Stale) {
+                        if l.branch.is_empty() || l.branch == "main" {
                             continue;
                         }
-                        if l.branch.is_empty() || l.branch == "main" {
+                        if matches!(
+                            reader.pickup_owner(&l, crate::ownership::reader::LegacyRule::NonStale),
+                            crate::ownership::OwnerVerdict::Dead { .. }
+                        ) {
                             continue;
                         }
                         let Some(behind) = commits_behind_origin_main(&root, &l.branch) else {

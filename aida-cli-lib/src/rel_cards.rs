@@ -1,3 +1,4 @@
+// trace:TASK-3429 | ai:codex
 //! `aida rel` edge add/remove, relationship type matching and rows, tree, comment and card rendering (STORY-1488 slice 1)
 // trace:STORY-1488 | ai:claude
 
@@ -54,9 +55,7 @@ pub(crate) fn hostname() -> String {
 /// Load or create the distributed dispenser for a git-backed store.
 /// Reads node config from {store}/.aida/node.toml; defaults to node_id=1
 /// if no node registration has happened yet.
-pub(crate) fn load_dispenser(
-    store_path: &std::path::Path,
-) -> Result<aida_core::models::DispenserHandle> {
+pub fn load_dispenser(store_path: &std::path::Path) -> Result<aida_core::models::DispenserHandle> {
     use aida_core::dispenser::{FileDispenser, IdMode};
     use aida_core::node::NodeConfig;
 
@@ -580,7 +579,7 @@ pub(crate) fn looks_like_cross_store_spec_ref(s: &str) -> bool {
             .all(|c| c.is_ascii_uppercase() || c.is_ascii_digit() || c == '-')
 }
 
-pub(crate) fn reject_cross_store_spec_ref(raw: &str) -> Result<()> {
+pub fn reject_cross_store_spec_ref(raw: &str) -> Result<()> {
     if looks_like_cross_store_spec_ref(raw) {
         anyhow::bail!(
             "cross-store requirement reference `{raw}` cannot be resolved as a local graph edge. \
@@ -590,7 +589,7 @@ pub(crate) fn reject_cross_store_spec_ref(raw: &str) -> Result<()> {
     Ok(())
 }
 
-pub(crate) fn relationship_terminal_ambiguity_warning(
+pub fn relationship_terminal_ambiguity_warning(
     rel_type: &RelationshipType,
     source: &Requirement,
     target: &Requirement,

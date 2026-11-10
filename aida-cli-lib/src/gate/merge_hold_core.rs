@@ -914,7 +914,7 @@ pub(crate) enum RefusalRelease {
 /// (BUG-1566) — so pointing at ship alone sent agent seats in a loop between
 /// the two commands. The line names the CLEAR step first (clear → ship). It
 /// still names the human's one-step `aida pr ship`, because that path
-/// releases the hold AND pins the merge to the verdict's head (BUG-1532);
+/// releases the hold AND pins the merge to the covered current head;
 /// after a plain clear the ship falls back to the approval-gate pin.
 /// `short_sha` is the verdict's reviewed sha (already shortened) or `?`.
 // trace:TASK-1582 | ai:antigravity
@@ -923,7 +923,7 @@ pub(crate) fn release_met_next_action(pr: u64, key: &str, short_sha: &str) -> St
         "release condition MET: APPROVED for {key} at {short_sha} — the hold is still armed; \
          next: `aida merge-hold clear {pr}` (human, recorded), then `aida pr ship {pr}`. \
          A human at a terminal may instead run `aida pr ship {pr}` alone, which releases the \
-         hold and pins the merge to {short_sha}; agent seats are refused until it is cleared"
+         hold and pins the merge to the covered current head; agent seats are refused until it is cleared"
     )
 }
 
@@ -1040,6 +1040,153 @@ pub(crate) fn refusal_release(
             short_sha(sha)
         )),
     }
+}
+
+/// Human and machine coverage share the original review and the proven head.
+// trace:STORY-2694 | ai:codex
+pub(crate) fn carried_approval_report(
+    proof: &crate::gate::review_carryover::CarryOver,
+) -> serde_json::Value {
+    serde_json::json!({
+        "kind": "carried-approval", "reviewed_sha": proof.approved_sha,
+        "head_sha": proof.new_head, "proof": proof,
+        "description": format!("APPROVED at {}, carried to {} (proof base {} at {})",
+            proof.approved_sha, proof.new_head, proof.base_ref, proof.base_tip),
+    })
+}
+
+/// A carried approval answers a moved-head hold only after every coverage
+/// check succeeds. Exact-head release behavior remains with its original gate.
+// trace:STORY-2694 | ai:codex
+pub(crate) fn refusal_release_with_coverage(
+    record: &MergeHoldRecord,
+    exact: RefusalRelease,
+    coverage: impl FnOnce() -> Result<crate::gate::review_carryover::CarryOver, String>,
+) -> RefusalRelease {
+    if matches!(exact, RefusalRelease::Released(_)) {
+        return exact;
+    }
+    match coverage() {
+        Ok(proof) => carried_refusal_release(record, &proof),
+        Err(why) => {
+            let RefusalRelease::Held(original) = exact else {
+                unreachable!()
+            };
+            RefusalRelease::Held(format!("{original}; approval carry-over refused: {why}"))
+        }
+    }
+}
+
+/// Preserve H as the review identity; the ship caller pins its merge to H2.
+// trace:STORY-2694 | ai:codex
+pub(crate) fn carried_refusal_release(
+    record: &MergeHoldRecord,
+    proof: &crate::gate::review_carryover::CarryOver,
+) -> RefusalRelease {
+    eprintln!(
+        "  APPROVED at {}, carried to {} (proof base {} at {})",
+        proof.approved_sha, proof.new_head, proof.base_ref, proof.base_tip
+    );
+    RefusalRelease::Released(VerdictRef::new(
+        &refusal_verdict_keys(record)[0],
+        Some(record.pr),
+        Some(proof.approved_sha.clone()),
+        None,
+    ))
+}
+
+/// An authorized approval carried to `head`, with the entire live corpus
+/// reconciled before a durable proof can be applied. A proof authenticates
+/// content only; it never substitutes for reviewer authority.
+// trace:STORY-2694 | ai:codex
+pub(crate) fn carried_approval(
+    pr: u64,
+    head: &str,
+    candidates: &[crate::gate::review_verdict::RecordedVerdict],
+    policy: &crate::gate::ship::ShipApprovalPolicy,
+    bodies: &[(String, String)],
+    site: &crate::gate::review_carryover::CarryOverSite<'_>,
+) -> Result<crate::gate::review_carryover::CarryOver, String> {
+    if let Some(why) = crate::gate::ship::approval_authority_refusal(candidates, policy) {
+        return Err(crate::gate::ship::approval_authority_refusal_message(
+            pr, &why,
+        ));
+    }
+    let quiet = if site.append {
+        crate::gate::review_carryover::CarryOverSite::quiet(site.repo, site.base_branch)
+    } else {
+        crate::gate::review_carryover::CarryOverSite::read_only(site.repo, site.base_branch)
+    };
+    let prove = |refusal: &crate::gate::ship::ApprovalHeadRefusal| {
+        crate::gate::review_carryover::prove_for_refusal(&quiet, pr, refusal)
+    };
+    match corpus_merge_gate_carrying(pr, bodies, Some(head), &prove) {
+        CorpusMergeGate::Clear => {}
+        CorpusMergeGate::Refuse { message, .. } => return Err(message),
+    }
+    match crate::gate::approval::approval_decision(pr, candidates, Some(head), policy, Some(site))?
+    {
+        crate::gate::approval::HeadDecision::CarriedOver(proof, _) => Ok(proof),
+        crate::gate::approval::HeadDecision::Stale { message, .. } => Err(message),
+        _ => Err("no carried approval covers this head".into()),
+    }
+}
+
+/// Gather the same authority and corpus inputs as shipping. Non-quiet sites
+/// require the proof on the ledger before suppression or release succeeds.
+// trace:STORY-2694 | ai:codex
+pub(crate) fn live_carried_approval(
+    roots: &[&Path],
+    root: &Path,
+    pr: u64,
+    head: &str,
+    base: Option<&str>,
+    hints: &[String],
+    record_proof: bool,
+) -> Result<crate::gate::review_carryover::CarryOver, String> {
+    let (current_head, current_base) =
+        crate::gate::approval::carryover_change_identity(root, pr)
+            .map_err(|why| format!("carry-over change unavailable: {why}"))?;
+    if !crate::gate::review_verdict::same_reviewed_sha(head, &current_head)
+        || base.is_some_and(|base| base != current_base)
+    {
+        return Err("the PR head or base moved before approval carry-over evaluation".into());
+    }
+    let base = Some(current_base.as_str());
+    let (candidates, policy, mut ids) =
+        crate::gate::approval::merge_approval_subject(roots, root, pr, hints, None, Some(head));
+    ids.extend_from_slice(hints);
+    let bodies = corpus_gate_bodies(roots, pr, &ids)?;
+    let site = if record_proof {
+        crate::gate::review_carryover::CarryOverSite::new(root, base)
+    } else {
+        crate::gate::review_carryover::CarryOverSite::read_only(root, base)
+    };
+    let proof = carried_approval(pr, head, &candidates, &policy, &bodies, &site)?;
+    let (current_head, current_base) =
+        crate::gate::approval::carryover_change_identity(root, pr)
+            .map_err(|why| format!("carry-over change re-read unavailable: {why}"))?;
+    validate_carried_change(&proof, &current_head, &current_base)?;
+    Ok(proof)
+}
+
+// trace:STORY-2694 | ai:codex
+pub(crate) fn validate_carried_change(
+    proof: &crate::gate::review_carryover::CarryOver,
+    head: &str,
+    base: &str,
+) -> Result<(), String> {
+    if !crate::gate::review_verdict::same_reviewed_sha(&proof.new_head, head) {
+        return Err("the PR head moved during approval carry-over evaluation".into());
+    }
+    if let Some(why) = crate::gate::review_carryover::proven_base_refusal(
+        proof.pr,
+        &proof.base_branch(),
+        Some(base),
+    ) {
+        return Err(why);
+    }
+    Ok(())
 }
 
 // ── BUG-1774: the corpus-derived half of the merge chokepoint ───────────────

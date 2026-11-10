@@ -1,3 +1,4 @@
+// trace:TASK-3429 | ai:codex
 //! `aida goal` command cluster (TASK-242), lifted out of `main.rs` (SPIKE-78).
 //!
 //! Derives a machine-checkable `/goal` completion condition from AIDA metadata
@@ -26,9 +27,9 @@ use crate::forge::ForgeKind;
 
 /// One clause of a `/goal` completion condition: a human-readable
 /// statement plus an explicit, deterministic command to verify it.
-pub(crate) struct GoalClause {
+pub struct GoalClause {
     description: String,
-    pub(crate) verify: String,
+    pub verify: String,
     /// What the clause checks and its operand, so a stored goal can be
     /// evaluated (`aida goal advisor check`). trace:STORY-2243 | ai:claude
     kind: aida_core::advisor_goal::ClauseKind,
@@ -52,7 +53,7 @@ impl GoalClause {
 /// Bails when no condition flag is given. Project-aware callers pass the
 /// resolved forge so GitLab `/goal --pr` clauses say MR/glab rather than PR/gh.
 // trace:TASK-242 trace:TASK-1240 | ai:claude+codex
-pub(crate) fn build_goal_clauses_for_forge(
+pub fn build_goal_clauses_for_forge(
     batch: Option<&str>,
     epic: Option<&str>,
     spec: Option<&str>,
@@ -133,7 +134,7 @@ pub(crate) fn build_goal_clauses_for_forge(
 /// clause inlines its verification command so a Haiku-class evaluator
 /// can check it deterministically.
 // trace:TASK-242 | ai:claude
-pub(crate) fn assemble_goal_condition(clauses: &[GoalClause]) -> String {
+pub fn assemble_goal_condition(clauses: &[GoalClause]) -> String {
     clauses
         .iter()
         .map(|c| format!("{} (verify: {})", c.description, c.verify))
@@ -494,10 +495,7 @@ pub(crate) enum AdvisorGoalAction {
 
 // `aida goal` is a pure condition generator — no store needed.
 // trace:TASK-242 | ai:claude
-fn run_goal(
-    matches: &clap::ArgMatches,
-    _ctx: &crate::command_registry::DispatchCtx,
-) -> anyhow::Result<()> {
+fn run_goal(matches: &clap::ArgMatches, _ctx: &crate::cmdkit::DispatchCtx) -> anyhow::Result<()> {
     use crate::*;
     let args = <GoalArgs as clap::FromArgMatches>::from_arg_matches(matches)?;
     // trace:STORY-2243 | ai:claude
@@ -528,15 +526,15 @@ fn run_goal(
 }
 
 // trace:STORY-1728 | ai:claude
-pub(crate) static GOAL: crate::command_registry::CommandReg = crate::command_registry::CommandReg {
+pub(crate) static GOAL: crate::cmdkit::CommandReg = crate::cmdkit::CommandReg {
     name: "goal",
     help_after: "import-plan",
     command: <GoalArgs as clap::CommandFactory>::command,
-    policy: |_| crate::command_registry::CmdPolicy {
+    policy: |_| crate::cmdkit::CmdPolicy {
         stakeholder: crate::stakeholder_role::StakeholderAction::Read,
         per_write_auto_push: false,
         skip_role_restore_prompt: false,
         team_identity_write: false,
     },
-    run: crate::command_registry::Handler::Early(run_goal),
+    run: crate::cmdkit::Handler::Early(run_goal),
 };

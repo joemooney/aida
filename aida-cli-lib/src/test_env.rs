@@ -1526,7 +1526,9 @@ pub(crate) fn enroll_synthetic_home(root: &Path) -> anyhow::Result<()> {
         aida_core::write_atomic(&setting, "version=1\nauthoritative=true\n")?;
         // The allocation reader refuses shared writes. Synthetic authority must
         // satisfy that contract even under a collaborative host's umask 0002.
-        // trace:TASK-3749 BUG-2502 | ai:codex
+        // Match the core fixture: shared-write umasks must not invalidate authority.
+        // trace:STORY-2640 | ai:codex
+        // trace:TASK-3420 trace:TASK-3749 trace:BUG-2502 | ai:codex
         #[cfg(unix)]
         {
             use std::os::unix::fs::PermissionsExt;

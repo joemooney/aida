@@ -1,3 +1,4 @@
+// trace:TASK-3429 | ai:codex
 //! `aida queue` command cluster — `handle_queue_command` and the
 //! advance/progress/rework/work/recover/integrate handlers plus their
 //! queue-local helpers, extracted from `lib.rs` (SPIKE-78 / STORY-771;
@@ -65,15 +66,15 @@ mod rework;
 pub(crate) use rework::{
     current_queue_route, drain_running, drain_running_notice, handle_queue_rework,
     handle_rework_entry, loop_guard_park, needs_attention_parks, park_reason_line,
-    record_rework_ruling, requeue_project_root, rework_is_review_shelf, rework_smart_target,
-    rework_target_for_mode, rework_triage_loop, run_aida_interactive, run_rework, DrainRunning,
-    ReworkArgs, ReworkFlags, REWORK,
+    record_rework_ruling, rework_is_review_shelf, rework_smart_target, rework_triage_loop,
+    run_aida_interactive, run_rework, DrainRunning, ReworkArgs, ReworkFlags, REWORK,
 };
 mod time_args;
+pub use rework::{requeue_project_root, rework_target_for_mode};
+pub use time_args::parse_lookback;
 pub(crate) use time_args::{
-    is_definitive_time_bound_error, parse_lookback, parse_lookback_at, parse_since_arg,
-    parse_since_arg_at, parse_time_bound_at, AmbiguousLocalTime, TimeBoundOutOfRange,
-    NAIVE_DATETIME_FORMATS,
+    is_definitive_time_bound_error, parse_lookback_at, parse_since_arg, parse_since_arg_at,
+    parse_time_bound_at, AmbiguousLocalTime, TimeBoundOutOfRange, NAIVE_DATETIME_FORMATS,
 };
 mod work;
 pub(crate) use work::ResumePublicationFailure;
@@ -106,19 +107,18 @@ pub(crate) use work::{
     queue_work_manual_continuation, queue_work_plan_wants_pr_head_branch, queue_work_role_mismatch,
     queue_work_self_claim, queued_supervised_mode, reclaim_exited_branch_clone,
     record_pickup_refusal, refuse_retired_steal, refuse_unpresentable_contained_reviewer,
-    refuse_waiting_pickup, refuse_waiting_review, refused_review_launch_releases_lease,
-    release_refused_review_lease, resolve_auto_complete_head, resolve_queue_work_plan,
-    resolve_queue_work_posture, resolve_rework_findings, resume_autocomplete_conflict_message,
-    retire_idle_review_worktree, review_calibration_spec_ids, review_calibration_spec_ids_in,
-    review_envelope_targets_pr, review_ref_from_verdict_filename, review_round_from_comments,
-    reviewer_from_pr_contract_suffix, reviewer_pickup_keeps_pr_scope, reviewer_preflight_pr_n,
-    reviewer_prompt_for_round, reviewer_spawn_instant, reviewer_vendor_exit_code,
-    reviewer_verdict_anchor_suffix, rework_conflict_route, rework_findings_block_for_spec,
-    rework_pickup_prompt, rework_pr_head_branch_override, rework_pr_head_matches_spec,
-    rework_role_input, rework_round_from_comments, ruling_comment_text, run_pickup_launch,
-    run_queue_resume_to_exit, run_standalone_reviewer, scope_conflict_resume_hint, spec_matches,
-    spec_open_change_key, standalone_review_plan, standalone_review_pr_head,
-    standalone_reviewer_outcome, standalone_reviewer_record_anchor,
+    refuse_waiting_pickup, refused_review_launch_releases_lease, release_refused_review_lease,
+    resolve_auto_complete_head, resolve_queue_work_plan, resolve_queue_work_posture,
+    resolve_rework_findings, resume_autocomplete_conflict_message, retire_idle_review_worktree,
+    review_calibration_spec_ids, review_calibration_spec_ids_in, review_envelope_targets_pr,
+    review_ref_from_verdict_filename, review_round_from_comments, reviewer_from_pr_contract_suffix,
+    reviewer_pickup_keeps_pr_scope, reviewer_preflight_pr_n, reviewer_prompt_for_round,
+    reviewer_spawn_instant, reviewer_vendor_exit_code, reviewer_verdict_anchor_suffix,
+    rework_conflict_route, rework_findings_block_for_spec, rework_pickup_prompt,
+    rework_pr_head_branch_override, rework_pr_head_matches_spec, rework_role_input,
+    rework_round_from_comments, ruling_comment_text, run_pickup_launch, run_queue_resume_to_exit,
+    run_standalone_reviewer, scope_conflict_resume_hint, spec_matches, standalone_review_plan,
+    standalone_review_pr_head, standalone_reviewer_outcome, standalone_reviewer_record_anchor,
     standalone_summary_verdict_body, verdict_recorded_time, AgentLaunchMark,
     AutoCompleteHeadCandidate, AutoCompleteHeadPick, LeasePeek, NoReviewVerdict,
     PreclaimBranchState, PreclaimDecision, QueueFreshPickup, QueueWorkEntry, QueueWorkMode,
@@ -130,6 +130,7 @@ pub(crate) use work::{
     derive_queue_work_prompt, latest_ruling_comment, prepend_ruling,
     rework_pr_head_branch_from_lookup,
 };
+pub use work::{refuse_waiting_review, spec_open_change_key};
 
 /// `store_path` is the orphan-store path; the `--json` fast path opens a
 /// cache-backed backend from it to resolve titles via the SQLite cache rather
@@ -263,8 +264,8 @@ pub(crate) struct QueueArgs {
 
 fn run_queue(
     matches: &clap::ArgMatches,
-    ctx: &crate::command_registry::DispatchCtx,
-) -> anyhow::Result<crate::command_registry::Flow> {
+    ctx: &crate::cmdkit::DispatchCtx,
+) -> anyhow::Result<crate::cmdkit::Flow> {
     let args = <QueueArgs as clap::FromArgMatches>::from_arg_matches(matches)?;
     dispatch_queue_args(&args, ctx)
 }
@@ -275,15 +276,13 @@ fn run_queue(
 // trace:TASK-1715 | ai:claude
 pub(crate) fn dispatch_queue_args(
     args: &QueueArgs,
-    ctx: &crate::command_registry::DispatchCtx,
-) -> anyhow::Result<crate::command_registry::Flow> {
+    ctx: &crate::cmdkit::DispatchCtx,
+) -> anyhow::Result<crate::cmdkit::Flow> {
     use crate::*;
     match &ctx.store {
-        None => Ok(crate::command_registry::Flow::Continue),
-        Some(crate::command_registry::StoreCtx::Distributed { .. }) => {
-            Ok(crate::command_registry::Flow::Continue)
-        }
-        Some(crate::command_registry::StoreCtx::Git {
+        None => Ok(crate::cmdkit::Flow::Continue),
+        Some(crate::cmdkit::StoreCtx::Distributed { .. }) => Ok(crate::cmdkit::Flow::Continue),
+        Some(crate::cmdkit::StoreCtx::Git {
             store_path,
             backend,
         }) => {
@@ -306,9 +305,9 @@ pub(crate) fn dispatch_queue_args(
                     handle_queue_command(queue_cmd, &storage, store_path)?;
                 }
             }
-            Ok(crate::command_registry::Flow::Continue)
+            Ok(crate::cmdkit::Flow::Continue)
         }
-        Some(crate::command_registry::StoreCtx::Legacy {
+        Some(crate::cmdkit::StoreCtx::Legacy {
             storage,
             requirements_path,
         }) => {
@@ -318,30 +317,29 @@ pub(crate) fn dispatch_queue_args(
                     handle_queue_command(queue_cmd, &storage, &requirements_path)?;
                 }
             }
-            Ok(crate::command_registry::Flow::Continue)
+            Ok(crate::cmdkit::Flow::Continue)
         }
     }
 }
 
 // trace:STORY-1728 | ai:claude
-pub(crate) static QUEUE: crate::command_registry::CommandReg =
-    crate::command_registry::CommandReg {
-        name: "queue",
-        help_after: "grep",
-        command: <QueueArgs as clap::CommandFactory>::command,
-        policy: queue_cli_policy,
-        run: crate::command_registry::Handler::Store(run_queue),
-    };
+pub(crate) static QUEUE: crate::cmdkit::CommandReg = crate::cmdkit::CommandReg {
+    name: "queue",
+    help_after: "grep",
+    command: <QueueArgs as clap::CommandFactory>::command,
+    policy: queue_cli_policy,
+    run: crate::cmdkit::Handler::Store(run_queue),
+};
 
 // Per-verb policy, carried over from the legacy stakeholder and per-write
 // auto-push tables. An unparseable invocation gets the fail-closed answer.
 // trace:STORY-1728 | ai:claude
-pub(crate) fn queue_cli_policy(matches: &clap::ArgMatches) -> crate::command_registry::CmdPolicy {
+pub(crate) fn queue_cli_policy(matches: &clap::ArgMatches) -> crate::cmdkit::CmdPolicy {
     use crate::cli::QueueCommand;
     use crate::stakeholder_role::StakeholderAction as SA;
     let args = <QueueArgs as clap::FromArgMatches>::from_arg_matches(matches).ok();
     let inner = args.as_ref().map(|args| &args.inner);
-    crate::command_registry::CmdPolicy {
+    crate::cmdkit::CmdPolicy {
         stakeholder: if matches!(
             inner,
             Some(

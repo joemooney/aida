@@ -26,19 +26,30 @@ fn action(
     let Some(raw) = req.deferred_until.as_deref() else {
         return Ok((Action::Keep, "no condition recorded".into(), false));
     };
-    // Until the one-time migration lands, unparseable triggers are Unknown.
-    // They grant no action and must not turn the hourly job into a failure.
+    // Unparseable legacy triggers grant no action; retain them for repair.
     // trace:STORY-2402 | ai:codex
     let condition: Condition = match raw.parse() {
         Ok(condition) => condition,
         Err(_) => {
             return Ok((
                 Action::Keep,
-                "unknown (awaiting typed-condition migration)".into(),
+                "unknown (unparseable trigger; repair required)".into(),
                 true,
             ));
         }
     };
+    // A removed or mistyped dependency cannot establish that work is ready.
+    // Keep the sweep useful for other rows while this trigger awaits repair.
+    // trace:STORY-2402 | ai:codex
+    if let Condition::Spec { id, .. } = &condition {
+        if facts.spec_status(id).map_err(anyhow::Error::msg)?.is_none() {
+            return Ok((
+                Action::Keep,
+                format!("{condition}: unknown (no spec has the ID {id})"),
+                false,
+            ));
+        }
+    }
     let evaluation = condition.evaluate(facts)?;
     let action = match evaluation.verdict {
         Verdict::Met if req.deferred_reason.is_some() || req.tags.contains("operator-held") => {
@@ -183,7 +194,7 @@ fn sweep(
             errors.push(format!("{id}: {error:#}"));
         }
     }
-    println!("{awaiting_migration} deferrals awaiting typed-condition migration");
+    println!("{awaiting_migration} deferrals with unparseable triggers requiring repair");
     anyhow::ensure!(
         errors.is_empty(),
         "deferral sweep errors: {}",

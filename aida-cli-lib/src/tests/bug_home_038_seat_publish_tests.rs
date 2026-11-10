@@ -480,8 +480,9 @@ fn all_refs(repo: &Path) -> String {
 /// Ruling items 3–5: `--dry-run` imports nothing; a real run pushes the
 /// quarantined commit to the LEASE's branch on origin, deletes the
 /// quarantine ref, and opens the PR with the "published from seat" note.
+// trace:STORY-b6b1278890774ef993d2ebc327862470-563.ac897346 | ai:codex
 #[test]
-fn bug_home_038_from_seat_handler_pushes_lease_branch_and_opens_pr() {
+fn bug_home_038_from_seat_handler_pushes_lease_branch_and_opens_pr_with_fast_gate_receipt() {
     let fx = fixture();
     let (clone, tip) = seat_with_commit(
         &fx,
@@ -502,6 +503,8 @@ fn bug_home_038_from_seat_handler_pushes_lease_branch_and_opens_pr() {
         after_open: &|_, branch| opened_for.borrow_mut().push(branch.to_string()),
     };
 
+    // Operator recovery must work even with a pending receipt from an old lane.
+    crate::lane_fast_gate::begin(&fx.main, "seat-feat").unwrap();
     let before = all_refs(&fx.main);
     crate::ship_from_seat::run_from(&fx.main, opts(&clone, true, false), &deps).unwrap();
     assert_eq!(all_refs(&fx.main), before, "a dry run changed main's refs");
@@ -1888,6 +1891,7 @@ fn task_2879_run_at_reconciles_moved_origin_and_refuses_unsafe_merges() {
         return;
     }
     for case in [
+        "automatic",
         "merge",
         "live",
         "conflict",
@@ -1957,12 +1961,48 @@ fn task_2879_run_at_reconciles_moved_origin_and_refuses_unsafe_merges() {
             let hook = fx.origin.join("hooks/pre-receive");
             crate::test_exec::write_executable(&hook, "#!/bin/sh\nexit 1\n");
         }
-        let result = crate::ship_from_seat::run_at(&fx.main, opts(&clone, false, true));
+        let reservation = if case == "automatic" {
+            let reservation = crate::lane_fast_gate::reserve(&fx.main, branch).unwrap();
+            crate::lane_fast_gate::native_rounds(
+                &fx.main,
+                branch,
+                || Ok(Some((local.clone(), "pass".into(), String::new()))),
+                |_| panic!("green gate"),
+            )
+            .unwrap();
+            Some(reservation)
+        } else {
+            None
+        };
+        // trace:STORY-2640 | ai:codex — actual automatic reconciliation path.
+        let result = if case == "automatic" {
+            crate::ship_from_seat::run_from_with_reconciliation(
+                &fx.main,
+                opts(&clone, false, true),
+                &crate::ship_from_seat::Deps {
+                    bundle: &test_bundle,
+                    commit: &no_commit,
+                    forge: &|_| panic!("no PR requested"),
+                    after_open: &|_, _| {},
+                },
+                true,
+                true,
+            )
+        } else {
+            crate::ship_from_seat::run_at(&fx.main, opts(&clone, false, true))
+        };
+        if case == "automatic" {
+            assert_eq!(
+                crate::lane_fast_gate::marker(&fx.main, branch),
+                "skipped(reconciled)"
+            );
+        }
+        drop(reservation);
         if let Some(owner) = &mut owner {
             let _ = owner.kill();
             let _ = owner.wait();
         }
-        if case == "merge" {
+        if case == "merge" || case == "automatic" {
             result.unwrap();
             let head = git_ok(&clone, &["rev-parse", "HEAD"]);
             assert_eq!(
@@ -2570,10 +2610,10 @@ fn task_2902_native_ship_message_records_only_and_dry_run_does_not_write() {
     std::env::set_current_dir(&clone).unwrap();
     let base = git_ok(&clone, &["rev-parse", "HEAD"]);
     let pending = git_ok(&clone, &["status", "--porcelain"]);
-    let crate::command_registry::Handler::Early(run) = crate::pr_cmd::SHIP.run else {
+    let crate::cmdkit::Handler::Early(run) = crate::pr_cmd::SHIP.run else {
         panic!("ship is an early command");
     };
-    let ctx = crate::command_registry::DispatchCtx {
+    let ctx = crate::cmdkit::DispatchCtx {
         globals: None,
         store: None,
     };
@@ -3150,6 +3190,450 @@ fn task_2902_launch_paths_preserve_signals_on_refused_spawn() {
     assert_eq!(
         std::fs::read_to_string(&declaration).unwrap(),
         "generation-one declaration"
+    );
+}
+
+// Exercise the automatic import fence, real bundle/push/forge path and receipt
+// release together. Only the gate and forge I/O use injected test effects.
+// trace:STORY-b6b1278890774ef993d2ebc327862470-563.acb1c30b | ai:codex
+// trace:STORY-b6b1278890774ef993d2ebc327862470-563.ac897346 | ai:codex
+#[test]
+fn story_2640_fast_gate_native_publishes_exact_checked_tip_and_releases_review() {
+    let fx = fixture();
+    let (clone, tip) = seat_with_commit(
+        &fx,
+        "fast-gate",
+        "c0ffee264001",
+        "native-gated",
+        "fix: checked change (BUG-1)",
+    );
+    let forge = crate::forge::fake::RecordingForge {
+        opens_as: Some(77),
+        ..crate::forge::fake::RecordingForge::new()
+    };
+    let deps = crate::ship_from_seat::Deps {
+        bundle: &test_bundle,
+        commit: &no_commit,
+        forge: &|_| Box::new(forge.clone()) as Box<dyn crate::forge::Forge>,
+        after_open: &|_, _| {},
+    };
+    let reservation = crate::lane_fast_gate::reserve(&fx.main, "native-gated").unwrap();
+    crate::lane_fast_gate::native_rounds(
+        &fx.main,
+        "native-gated",
+        || Ok(Some((tip.clone(), "pass".into(), String::new()))),
+        |_| panic!("green gate must not repair"),
+    )
+    .unwrap();
+    // A green gate must not turn a failed bundle/publication into a successful
+    // lane result. Exercise the same error wrapper used by all native exits.
+    // trace:STORY-2640 | ai:codex
+    let failed_deps = crate::ship_from_seat::Deps {
+        bundle: &|_, _, _| anyhow::bail!("bundle import refused"),
+        commit: &no_commit,
+        forge: &|_| Box::new(forge.clone()) as Box<dyn crate::forge::Forge>,
+        after_open: &|_, _| {},
+    };
+    let failed = crate::lane_fast_gate::publication_result(
+        &fx.main,
+        "native-gated",
+        crate::ship_from_seat::run_from_with_reconciliation(
+            &fx.main,
+            opts(&clone, false, false),
+            &failed_deps,
+            false,
+            true,
+        ),
+    );
+    assert!(format!("{:#}", failed.unwrap_err()).contains("bundle import refused"));
+    assert_eq!(
+        crate::lane_fast_gate::marker(&fx.main, "native-gated"),
+        "pass"
+    );
+    assert!(!crate::lane_fast_gate::blocks_review(&fx.main, "native-gated").unwrap());
+    assert!(forge.opened.lock().unwrap().is_empty());
+    crate::lane_fast_gate::native_rounds(
+        &fx.main,
+        "native-gated",
+        || Ok(Some((tip.clone(), "pass".into(), String::new()))),
+        |_| panic!("green gate must not repair"),
+    )
+    .unwrap();
+    crate::ship_from_seat::run_from_with_reconciliation(
+        &fx.main,
+        opts(&clone, false, false),
+        &deps,
+        false,
+        true,
+    )
+    .unwrap();
+    crate::lane_fast_gate::finish_publication(&fx.main, "native-gated", || {
+        assert_eq!(forge.opened.lock().unwrap().len(), 1);
+        assert_eq!(
+            git_ok(&fx.origin, &["rev-parse", "refs/heads/native-gated"]),
+            tip
+        );
+        assert!(crate::lane_fast_gate::blocks_review(
+            &fx.main,
+            "native-gated"
+        )?);
+        Ok(())
+    })
+    .unwrap();
+    drop(reservation);
+    assert!(!crate::lane_fast_gate::blocks_review(&fx.main, "native-gated").unwrap());
+    assert_eq!(
+        crate::lane_fast_gate::result_line(&fx.main, "native-gated", "implementer: pr=77"),
+        "implementer: pr=77 fast_gate=pass"
+    );
+}
+
+// trace:STORY-b6b1278890774ef993d2ebc327862470-563.ac486725 | ai:codex
+#[test]
+fn story_2640_fast_gate_real_lane_exit_paths_settle_reservations() {
+    if crate::test_env::run_path_isolated_test() {
+        return;
+    }
+    use crate::session::{HeadlessResume, HeadlessVendor};
+    let fx = fixture();
+    let lease = "c0ffee264002";
+    let branch = "gate-exits";
+    let clone = seat_with_publication_pending(&fx, "gate-exits", lease, branch);
+    let _env = crate::test_env::AmbientGuard::hermetic_with_seat_and(
+        &fx.main,
+        "advisor",
+        &["implementer"],
+        &[
+            ("AIDA_OS_WRAP", Some("0")),
+            ("AIDA_CONTAINED", None),
+            ("AIDA_AGENT_CMD", Some("/aida-missing-test-vendor")),
+        ],
+    );
+    let _cwd = crate::session::contained_cwd_seam::pin(&fx.main);
+    let tee = crate::headless_tee::TeeOptions {
+        enabled: false,
+        label: None,
+    };
+    for path in ["standalone", "drain", "resume"] {
+        let child = crate::gate::seat_authority::issue_child(
+            &fx.main,
+            "implementer",
+            crate::test_env::HERMETIC_TEST_USER,
+        )
+        .unwrap();
+        let child_id = child.id.clone();
+        let grant = crate::gate::seat_authority::HeadlessChildGrant::Issued(child);
+        crate::lane_fast_gate::begin(&fx.main, branch).unwrap();
+        let error = match path {
+            "standalone" => {
+                crate::standalone_implementer::run(crate::standalone_implementer::Launch {
+                    project_root: &fx.main,
+                    vendor: HeadlessVendor::Codex,
+                    prompt: "go",
+                    session_id: "test",
+                    spec: "BUG-1",
+                    lease_id: lease,
+                    branch,
+                    contained: false,
+                    child_grant: &grant,
+                    host_main: Some(&fx.main),
+                })
+                .err()
+            }
+            "drain" => crate::session::run_vendor_headless_to_exit(
+                Some(&fx.main),
+                HeadlessVendor::Codex,
+                "go",
+                "test",
+                &fx.root.join("log"),
+                &tee,
+                false,
+                Some(lease),
+                "implementer",
+                &grant,
+                Some((&clone, branch)),
+                true,
+            )
+            .err(),
+            _ => crate::queue_cmd::run_queue_resume_to_exit(
+                Some(&fx.main),
+                &HeadlessResume {
+                    vendor: HeadlessVendor::Codex,
+                    session_id: "test",
+                    resume_id: "test",
+                },
+                "go",
+                &fx.root.join("log"),
+                &clone,
+                &tee,
+                false,
+                "implementer",
+                (&fx.main, "BUG-1", lease),
+                false,
+            )
+            .err(),
+        };
+        assert!(error.is_some(), "{path} must refuse the missing vendor");
+        if path != "resume" {
+            assert!(
+                !crate::gate::seat_authority::revoke_by_id(&child_id).unwrap(),
+                "{path} must already have revoked its child grant"
+            );
+        } else {
+            crate::gate::seat_authority::revoke_by_id(&child_id).unwrap();
+        }
+        assert_eq!(
+            crate::lane_fast_gate::marker(&fx.main, branch),
+            "skipped(lane-ended)",
+            "{path} must reach the real reservation boundary: {error:?}"
+        );
+        assert!(
+            !crate::lane_fast_gate::blocks_review(&fx.main, branch).unwrap(),
+            "{path} left a permanent review reservation"
+        );
+    }
+}
+
+// trace:STORY-2640 | ai:codex
+#[test]
+fn story_2640_fast_gate_missing_resume_lease_preserves_vendor_status() {
+    if crate::test_env::run_path_isolated_test() {
+        return;
+    }
+    let fx = fixture();
+    let vendor = fx.root.join("vendor");
+    crate::test_exec::write_executable(&vendor, "#!/bin/sh\nexit 7\n");
+    let _env = crate::test_env::AmbientGuard::hermetic_with_seat_and(
+        &fx.main,
+        "advisor",
+        &["implementer"],
+        &[
+            ("AIDA_OS_WRAP", Some("0")),
+            ("AIDA_CONTAINED", None),
+            ("AIDA_AGENT_CMD", Some(vendor.to_str().unwrap())),
+        ],
+    );
+    let _cwd = crate::session::contained_cwd_seam::pin(&fx.main);
+    let status = crate::queue_cmd::run_queue_resume_to_exit(
+        Some(&fx.main),
+        &crate::session::HeadlessResume {
+            vendor: crate::session::HeadlessVendor::Claude,
+            session_id: "test",
+            resume_id: "test",
+        },
+        "go",
+        &fx.root.join("log"),
+        &fx.main,
+        &crate::headless_tee::TeeOptions {
+            enabled: false,
+            label: None,
+        },
+        false,
+        "implementer",
+        (&fx.main, "BUG-1", "missing"),
+        false,
+    )
+    .unwrap();
+    assert_eq!(status.code(), Some(7));
+}
+
+// trace:STORY-2640 | ai:codex
+#[test]
+fn story_2640_fast_gate_missing_native_resume_lease_is_an_error() {
+    if crate::test_env::run_path_isolated_test() {
+        return;
+    }
+    let fx = fixture();
+    let vendor = fx.root.join("vendor");
+    crate::test_exec::write_executable(&vendor, "#!/bin/sh\nexit 7\n");
+    let _env = crate::test_env::AmbientGuard::hermetic_with_seat_and(
+        &fx.main,
+        "advisor",
+        &["implementer"],
+        &[
+            ("AIDA_OS_WRAP", Some("0")),
+            ("AIDA_CONTAINED", None),
+            ("AIDA_AGENT_CMD", Some(vendor.to_str().unwrap())),
+        ],
+    );
+    let _cwd = crate::session::contained_cwd_seam::pin(&fx.main);
+    let error = crate::queue_cmd::run_queue_resume_to_exit(
+        Some(&fx.main),
+        &crate::session::HeadlessResume {
+            vendor: crate::session::HeadlessVendor::Codex,
+            session_id: "test",
+            resume_id: "test",
+        },
+        "go",
+        &fx.root.join("log"),
+        &fx.main,
+        &crate::headless_tee::TeeOptions {
+            enabled: false,
+            label: None,
+        },
+        true,
+        "implementer",
+        (&fx.main, "BUG-1", "missing"),
+        false,
+    )
+    .unwrap_err();
+    assert!(error
+        .to_string()
+        .contains("publication lease missing is missing"));
+}
+
+// trace:BUG-2504 | ai:codex
+#[test]
+fn bug_2504_recovery_matches_recorded_tree_kind() {
+    if !bwrap_live_or_skip() {
+        return;
+    }
+    for clone in [false, true] {
+        for behind_head in [false, true] {
+            let fx = fixture();
+            git_ok(&fx.main, &["branch", "feat"]);
+            git_ok(&fx.main, &["push", "-q", "origin", "feat"]);
+            let tree = if clone {
+                leased_clone(&fx, "recovery", "c0ffee250400")
+            } else {
+                let tree = fx.root.join("linked-recovery");
+                git_ok(
+                    &fx.main,
+                    &["worktree", "add", tree.to_str().unwrap(), "feat"],
+                );
+                tree
+            };
+            // Diverge main from the seat, or advance the remote PR head.
+            if !behind_head {
+                std::fs::write(tree.join("README.md"), "PR version\n").unwrap();
+                git_ok(&tree, &["commit", "-qam", "PR diverges"]);
+            }
+            std::fs::write(fx.main.join("README.md"), "remote version\n").unwrap();
+            git_ok(&fx.main, &["commit", "-qam", "remote advances"]);
+            git_ok(
+                &fx.main,
+                &[
+                    "push",
+                    "-q",
+                    "origin",
+                    if behind_head { "HEAD:feat" } else { "main" },
+                ],
+            );
+            std::fs::write(tree.join("pending"), "preserve me\n").unwrap();
+            let head = git_ok(&tree, &["rev-parse", "HEAD"]);
+            let error = prepare_rework_merge(&fx.main, &tree, "feat", true).unwrap_err();
+            let message = format!("{error:#}");
+            assert!(message.contains("edits preserved"), "{message}");
+            assert!(message.contains(tree.to_str().unwrap()), "{message}");
+            if clone {
+                assert!(message.contains("aida ship --from-seat"), "{message}");
+                assert!(!message.contains("git -C"), "{message}");
+            } else {
+                assert!(message.contains("git -C"), "{message}");
+                assert!(message.contains("merge origin/feat"), "{message}");
+                assert!(!message.contains("aida ship --from-seat"), "{message}");
+            }
+            assert_eq!(git_ok(&tree, &["rev-parse", "HEAD"]), head);
+            assert_eq!(
+                std::fs::read_to_string(tree.join("pending")).unwrap(),
+                "preserve me\n"
+            );
+            if behind_head {
+                std::fs::remove_file(tree.join("pending")).unwrap();
+                let message = format!(
+                    "{:#}",
+                    prepare_rework_merge(&fx.main, &tree, "feat", false).unwrap_err()
+                );
+                assert!(
+                    message.contains("retry pickup with its current head"),
+                    "{message}"
+                );
+                assert!(!message.contains("--commit-pending"), "{message}");
+                assert!(!message.contains("add -A"), "{message}");
+            }
+        }
+    }
+}
+
+// trace:BUG-2504 | ai:codex
+#[test]
+fn bug_2504_rework_preflight_has_no_commit_recovery() {
+    let fx = fixture();
+    git_ok(&fx.main, &["branch", "feat"]);
+    let tree = fx.root.join("linked-preflight");
+    git_ok(
+        &fx.main,
+        &["worktree", "add", tree.to_str().unwrap(), "feat"],
+    );
+    std::fs::write(tree.join("README.md"), "PR version\n").unwrap();
+    git_ok(&tree, &["commit", "-qam", "PR diverges"]);
+    std::fs::write(fx.main.join("README.md"), "main version\n").unwrap();
+    git_ok(&fx.main, &["commit", "-qam", "main diverges"]);
+    let merge = crate::test_git::git_command()
+        .arg("-C")
+        .arg(&tree)
+        .args(["merge", "main"])
+        .output()
+        .unwrap();
+    assert!(!merge.status.success());
+    assert!(git_ok(&tree, &["status", "--porcelain"]).contains("UU README.md"));
+    std::fs::write(tree.join("pending"), "preserve me\n").unwrap();
+    let head = git_ok(&tree, &["rev-parse", "HEAD"]);
+    let conflicted_contents = std::fs::read(tree.join("README.md")).unwrap();
+    for branch in ["feat", "other"] {
+        let message = format!(
+            "{:#}",
+            prepare_rework_merge(&fx.main, &tree, branch, true).unwrap_err()
+        );
+        assert!(
+            message.contains(if branch == "feat" {
+                "unfinished merge"
+            } else {
+                "not on the PR head branch"
+            }),
+            "{message}"
+        );
+        assert!(!message.contains("add -A"), "{message}");
+        assert!(!message.contains("commit-pending"), "{message}");
+        assert!(!message.contains(". ."), "{message}");
+    }
+    assert!(git_ok(&tree, &["status", "--porcelain"]).contains("UU README.md"));
+    assert_eq!(
+        std::fs::read(tree.join("README.md")).unwrap(),
+        conflicted_contents
+    );
+    assert_eq!(git_ok(&tree, &["rev-parse", "HEAD"]), head);
+    assert_eq!(
+        std::fs::read_to_string(tree.join("pending")).unwrap(),
+        "preserve me\n"
+    );
+}
+
+// trace:BUG-2504 | ai:codex
+#[test]
+fn bug_2504_recorded_clone_admits_clean_main_advance() {
+    if !bwrap_live_or_skip() {
+        return;
+    }
+    let fx = fixture();
+    git_ok(&fx.main, &["branch", "feat"]);
+    git_ok(&fx.main, &["push", "-q", "origin", "feat"]);
+    let tree = leased_clone(&fx, "admission", "c0ffee250401");
+    std::fs::write(fx.main.join("main-only"), "new main file\n").unwrap();
+    git_ok(&fx.main, &["add", "main-only"]);
+    git_ok(&fx.main, &["commit", "-qm", "main advances cleanly"]);
+    git_ok(&fx.main, &["push", "-q", "origin", "main"]);
+    std::fs::write(tree.join("pending"), "preserve me\n").unwrap();
+    let head = git_ok(&tree, &["rev-parse", "HEAD"]);
+    let status = git_ok(&tree, &["status", "--porcelain"]);
+    assert!(prepare_rework_merge(&fx.main, &tree, "feat", true)
+        .unwrap()
+        .is_empty());
+    assert_eq!(git_ok(&tree, &["rev-parse", "HEAD"]), head);
+    assert_eq!(git_ok(&tree, &["status", "--porcelain"]), status);
+    assert_eq!(
+        std::fs::read_to_string(tree.join("pending")).unwrap(),
+        "preserve me\n"
     );
 }
 

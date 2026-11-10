@@ -107,7 +107,16 @@ fn classified_flags() -> Vec<(&'static str, Kind)> {
         ("aida doctor --since", Shared(doctor)),
         (
             "aida defer --until",
-            NotATimeBound("free-text revisit condition, not a time"),
+            NotATimeBound("typed revisit condition, not a shared time bound"),
+        ),
+        // trace:STORY-2402 | ai:codex
+        (
+            "aida findings recur --until",
+            NotATimeBound("typed revisit condition, not a shared time bound"),
+        ),
+        (
+            "aida session handoff --until",
+            NotATimeBound("typed revisit condition, not a shared time bound"),
         ),
         (
             "aida db reconcile-status --since",

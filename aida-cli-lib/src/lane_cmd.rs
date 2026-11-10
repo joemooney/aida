@@ -25,9 +25,36 @@ pub(crate) struct LaneArgs {
 /// keeps moving.
 const PROGRESS_EVERY: Duration = Duration::from_secs(15);
 
-fn run_lane(matches: &clap::ArgMatches, _ctx: &crate::command_registry::DispatchCtx) -> Result<()> {
+fn run_lane(matches: &clap::ArgMatches, _ctx: &crate::cmdkit::DispatchCtx) -> Result<()> {
     let args = <LaneArgs as clap::FromArgMatches>::from_arg_matches(matches)?;
-    let LaneCommand::Job(job) = args.command;
+    let job = match args.command {
+        LaneCommand::Job(job) => job,
+        LaneCommand::FastGateRelease { branch } => {
+            let cwd = std::env::current_dir()?;
+            let main = crate::main_worktree_root_from(&cwd);
+            let inputs = aida_core::exec_context::Environment::capture();
+            let lane_context = [
+                "AIDA_SESSION_ID",
+                "AIDA_HEADLESS",
+                "AIDA_CONTAINED",
+                crate::gate::seat_authority::GRANT_ENV,
+                crate::gate::seat_authority::GRANT_FILE_ENV,
+                crate::headless_background::LANE_MARKER_ENV,
+            ]
+            .iter()
+            .any(|key| inputs.get(key).is_some())
+                || crate::seat_clone::seat_clone_root(&cwd).is_some()
+                || crate::list_leases(&main)
+                    .iter()
+                    .any(|l| cwd.starts_with(&l.worktree_path));
+            crate::lane_fast_gate::operator_release(&main, &branch, lane_context)?;
+            println!(
+                "{}",
+                crate::lane_fast_gate::result_line(&main, &branch, "review hold released:")
+            );
+            return Ok(());
+        }
+    };
     let code = match job {
         LaneJobCommand::Run { wait, tail, argv } => run_job(argv, wait, tail)?,
         LaneJobCommand::Wait { id, wait, tail } => wait_job(&id, wait, tail)?,
@@ -178,15 +205,15 @@ pub(crate) fn wait_in(
 }
 
 // trace:BUG-2383 | ai:claude
-pub(crate) static LANE: crate::command_registry::CommandReg = crate::command_registry::CommandReg {
+pub(crate) static LANE: crate::cmdkit::CommandReg = crate::cmdkit::CommandReg {
     name: "lane",
     help_after: "lint",
     command: <LaneArgs as clap::CommandFactory>::command,
-    policy: |_| crate::command_registry::CmdPolicy {
+    policy: |_| crate::cmdkit::CmdPolicy {
         stakeholder: crate::stakeholder_role::StakeholderAction::BuildLoop,
         per_write_auto_push: false,
         skip_role_restore_prompt: true,
         team_identity_write: false,
     },
-    run: crate::command_registry::Handler::Early(run_lane),
+    run: crate::cmdkit::Handler::Early(run_lane),
 };

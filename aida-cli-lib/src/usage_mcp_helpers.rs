@@ -1,3 +1,4 @@
+// trace:TASK-3429 | ai:codex
 //! Shared usage-telemetry aggregation and MCP server launch/publish helpers (STORY-1488 slice 1)
 // trace:STORY-1488 | ai:claude
 
@@ -140,21 +141,21 @@ pub(crate) fn split_last_char(s: &str) -> (&str, &str) {
 // `crate::`, and `mcp.rs` (the MCP `usage` tool) also calls `aggregate_events`,
 // so they are shared, not single-consumer. trace:STORY-122 | ai:claude
 #[derive(Debug, Clone)]
-pub(crate) struct UsageRow {
-    pub(crate) cmd: String,
-    pub(crate) count: u32,
-    pub(crate) errors: u32,
-    pub(crate) total_ms: u64,
+pub struct UsageRow {
+    pub cmd: String,
+    pub count: u32,
+    pub errors: u32,
+    pub total_ms: u64,
     // BUG-699: the same stats restricted to a recent window, so a since-resolved
     // historical batch (e.g. `rel list` errors, a slow pre-cache `status`) can't
     // masquerade as current in the `since`-window aggregate.
-    pub(crate) recent_count: u32,
-    pub(crate) recent_errors: u32,
-    pub(crate) recent_total_ms: u64,
+    pub recent_count: u32,
+    pub recent_errors: u32,
+    pub recent_total_ms: u64,
 }
 
 impl UsageRow {
-    pub(crate) fn avg_ms(&self) -> u64 {
+    pub fn avg_ms(&self) -> u64 {
         if self.count == 0 {
             0
         } else {
@@ -168,7 +169,7 @@ impl UsageRow {
             self.recent_total_ms / u64::from(self.recent_count)
         }
     }
-    pub(crate) fn error_rate(&self) -> f64 {
+    pub fn error_rate(&self) -> f64 {
         if self.count == 0 {
             0.0
         } else {
@@ -177,7 +178,7 @@ impl UsageRow {
     }
 }
 
-pub(crate) fn aggregate_events(
+pub fn aggregate_events(
     events: &[usage::UsageEvent],
     since: chrono::DateTime<chrono::Utc>,
     recent_since: chrono::DateTime<chrono::Utc>,

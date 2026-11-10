@@ -553,7 +553,10 @@ pub(crate) fn publish_queue_exit_recorded(
             || -> Result<bool> { Ok(!crate::seat_clone::has_commits_beyond_base(&main, tree)?) };
         let publish = || {
             require_lease_branch_work(&main, tree)?;
-            run_at(
+            // trace:STORY-2640 | ai:codex — all native exit surfaces share this fence.
+            let branch = lease_branch(&recorded_seat(&main, tree)?)?.0;
+            crate::lane_fast_gate::publication_ready(&main, tree, &branch)?;
+            run_at_with_fast_gate(
                 &main,
                 FromSeatOptions {
                     clone: tree.to_path_buf(),
@@ -563,7 +566,25 @@ pub(crate) fn publish_queue_exit_recorded(
                     dry_run: false,
                     commit_pending: None,
                 },
-            )
+                true,
+            )?;
+            crate::lane_fast_gate::finish_publication(&main, &branch, || {
+                let (pr, _) = crate::standalone_implementer::lookup_pr(&main, &branch)
+                    .context("published PR unavailable for fast gate annotation")?;
+                let head = crate::lane_fast_gate::head(&main, &branch)
+                    .context("fast gate head unavailable")?;
+                crate::lane_fast_gate::annotate(
+                    &main,
+                    pr,
+                    &head,
+                    &crate::lane_fast_gate::marker(&main, &branch),
+                )
+            })?;
+            eprintln!(
+                "fast_gate={}",
+                crate::lane_fast_gate::marker(&main, &branch)
+            );
+            Ok(())
         };
         publish_queue_exit_with(
             &main,
@@ -576,15 +597,37 @@ pub(crate) fn publish_queue_exit_recorded(
                     eprintln!("implementer: no-change (seat has no commits beyond its base)");
                     return Ok(());
                 }
-                advisor_request(
-                    &main,
-                    "Queue-work lane exited without changes",
-                    &format!(
-                    "Codex queue-work lane {lane} for {spec} exited with no pending changes in {} \
-                 (clean_exit={clean_exit}). Check its existing PR and failing checks; a still-red \
-                 PR needs a new rework assignment.",
-                    tree.display()
-                ),
+                notify_unchanged_lane(
+                    || {
+                        let branch = lease_branch(&recorded_seat(&main, tree)?)?.0;
+                        crate::lane_fast_gate::publication_ready(&main, tree, &branch)?;
+                        crate::lane_fast_gate::finish_publication(&main, &branch, || {
+                            let (pr, _) = crate::standalone_implementer::lookup_pr(&main, &branch)
+                                .context(
+                                    "unchanged lane PR unavailable for fast gate annotation",
+                                )?;
+                            let head = crate::lane_fast_gate::head(&main, &branch)
+                                .context("fast gate head unavailable")?;
+                            crate::lane_fast_gate::annotate(
+                                &main,
+                                pr,
+                                &head,
+                                &crate::lane_fast_gate::marker(&main, &branch),
+                            )
+                        })
+                    },
+                    |gate| {
+                        advisor_request(
+                            &main,
+                            "Queue-work lane exited without changes",
+                            &format!(
+                        "Codex queue-work lane {lane} for {spec} exited with no pending changes in {} \
+                     (clean_exit={clean_exit}). Check its existing PR and failing checks; a still-red \
+                     PR needs a new rework assignment. Fast-gate settlement: {gate:?}",
+                        tree.display()
+                    ),
+                        )
+                    },
                 )
             },
         )
@@ -616,6 +659,37 @@ pub(crate) fn record_queue_exit(
     } else {
         QueueExitOutcome::Continue
     })
+}
+
+// Always attempt advisor delivery, including when the gate refuses settlement.
+// trace:STORY-2640 | ai:codex
+fn notify_unchanged_lane(
+    gate: impl FnOnce() -> Result<()>,
+    notify: impl FnOnce(&Result<()>) -> Result<()>,
+) -> Result<()> {
+    let gate = gate();
+    let notice = notify(&gate);
+    gate.and(notice)
+}
+
+#[cfg(test)]
+mod fast_gate_notice_tests {
+    use super::*;
+
+    #[test]
+    fn unchanged_lane_notifies_advisor_even_when_gate_is_stale() {
+        let mut delivered = false;
+        let result = notify_unchanged_lane(
+            || anyhow::bail!("fast gate pending or stale"),
+            |gate| {
+                assert!(gate.as_ref().unwrap_err().to_string().contains("stale"));
+                delivered = true;
+                Ok(())
+            },
+        );
+        assert!(delivered);
+        assert!(result.is_err());
+    }
 }
 
 // Invoked only when the exit probe found committed or unpushed work.
@@ -1631,6 +1705,11 @@ pub(crate) fn run(opts: FromSeatOptions) -> Result<()> {
 
 // trace:STORY-2475 | ai:codex
 pub(crate) fn run_at(cwd: &Path, opts: FromSeatOptions) -> Result<()> {
+    run_at_with_fast_gate(cwd, opts, false)
+}
+
+// trace:STORY-2640 | ai:codex
+fn run_at_with_fast_gate(cwd: &Path, opts: FromSeatOptions, automatic: bool) -> Result<()> {
     run_from_with_reconciliation(
         cwd,
         opts,
@@ -1643,6 +1722,7 @@ pub(crate) fn run_at(cwd: &Path, opts: FromSeatOptions) -> Result<()> {
             },
         },
         true,
+        automatic,
     )
 }
 
@@ -1729,17 +1809,18 @@ fn pin_remote_branch(main: &Path, branch: &str) -> Result<Option<RemoteBranchPin
 /// [`run`] from `cwd`.
 // trace:BUG-HOME-038 | ai:claude
 pub(crate) fn run_from(cwd: &Path, opts: FromSeatOptions, deps: &Deps<'_>) -> Result<()> {
-    run_from_with_reconciliation(cwd, opts, deps, false)
+    run_from_with_reconciliation(cwd, opts, deps, false, false)
 }
 
 // Reconciliation belongs after admission of the original bundle. Passing the
 // resolved spec here preserves explicit specs on otherwise unscoped branches.
 // trace:TASK-2879 | ai:codex
-fn run_from_with_reconciliation(
+pub(crate) fn run_from_with_reconciliation(
     cwd: &Path,
     opts: FromSeatOptions,
     deps: &Deps<'_>,
     reconcile: bool,
+    automatic: bool,
 ) -> Result<()> {
     if let Some(clone) = aida_core::seat_clone_detect::seat_clone_root(cwd) {
         anyhow::bail!(
@@ -1869,6 +1950,19 @@ fn run_from_with_reconciliation(
         return Ok(());
     }
 
+    if automatic && merged {
+        drop_quarantine_on_refusal(
+            &staged,
+            false,
+            crate::lane_fast_gate::reconciled_import(&main, &branch, tip),
+        )?;
+    }
+    // trace:STORY-2640 | ai:codex — bind evidence to the actual imported tip.
+    drop_quarantine_on_refusal(
+        &staged,
+        false,
+        crate::lane_fast_gate::check_import(&main, &branch, tip, automatic),
+    )?;
     eprintln!("  pushing {tip} to origin/{branch}");
     aida_core::git_ops::clear_sandbox_config_lock(&main);
     let push = aida_core::git_ops::host_git_command(&main)

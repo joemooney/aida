@@ -897,15 +897,7 @@ pub(crate) fn load_snapshot(
         &mut live_sessions,
         &mut snapshot,
     );
-    load_open_prs(
-        project_root,
-        &leases,
-        now,
-        policy,
-        prs,
-        &mut live_sessions,
-        &mut snapshot,
-    );
+    load_open_prs(project_root, &leases, now, policy, prs, &mut snapshot);
     load_human_holds(project_root, &mut snapshot);
     load_advisor_requests(project_root, &mut snapshot);
     load_orphaned_leases(
@@ -1274,37 +1266,18 @@ fn rollup_green_at(
     latest
 }
 
-/// Has the review this lease records started and not provably ended? Read
-/// with the live-session probe, so a reviewer still in its worktree after
-/// its creator shell exited counts (BUG-2206 reads a dead creator with no
-/// live session as Stale), and with the agent registry, so a Codex or
-/// Antigravity reviewer (no Claude session to probe) registered inside the
-/// worktree counts too. A crashed reviewer, Stale with neither, no longer
-/// suppresses the unpicked-ready-pr check (TASK-1665).
-// trace:TASK-1955 | ai:claude (TASK-2094, TASK-1665)
+/// A review remains assigned until its exact recorded holder is proven dead.
+/// Legacy holders retain the prior non-stale and registered-reviewer rules.
+// trace:TASK-3420 | ai:codex
 fn review_lease_running(
-    project_root: &Path,
+    reader: &crate::ownership::reader::LeaseReader<'_>,
     l: &crate::leases::SessionLease,
-    live_sessions: &mut Option<Vec<crate::process_probe::LiveSession>>,
-    live_agents: &mut Option<Vec<crate::agent_registry::AgentRegistryEntry>>,
-    now: DateTime<Utc>,
 ) -> bool {
-    let has_worktree = !l.worktree_path.as_os_str().is_empty();
-    let state = if has_worktree && l.active_pid.is_none() && l.worktree_path.exists() {
-        let live =
-            live_sessions.get_or_insert_with(crate::process_probe::probe_live_claude_sessions);
-        crate::lease_state_for(l, live, now)
-    } else {
-        crate::lease_state_for(l, &[], now)
-    };
-    if !matches!(state, crate::LeaseState::Stale) {
-        return true;
-    }
-    has_worktree
-        && live_agents
-            .get_or_insert_with(|| crate::agent_registry::load_live_identity_entries(project_root))
-            .iter()
-            .any(|a| a.worktree_path.starts_with(&l.worktree_path))
+    // trace:TASK-3420 | ai:codex
+    !matches!(
+        reader.pickup_owner(l, crate::ownership::reader::LegacyRule::Review),
+        crate::ownership::OwnerVerdict::Dead { .. }
+    )
 }
 
 /// Every `reviewed_sha` on record under `.aida/review-verdicts/`.
@@ -1324,10 +1297,8 @@ fn load_open_prs(
     now: DateTime<Utc>,
     policy: &LaneLivenessPolicy,
     prs: PrSource<'_>,
-    live_sessions: &mut Option<Vec<crate::process_probe::LiveSession>>,
     snapshot: &mut LaneLivenessSnapshot,
 ) {
-    let mut live_agents: Option<Vec<crate::agent_registry::AgentRegistryEntry>> = None;
     let raw = match prs(project_root) {
         Ok(raw) => raw,
         Err(err) => {
@@ -1343,6 +1314,7 @@ fn load_open_prs(
         }
     };
     let mut verdict_shas: Option<Vec<String>> = None;
+    let lease_reader = crate::ownership::reader::LeaseReader::new(project_root);
     // trace:TASK-1955 | ai:claude (TASK-2030)
     let required = crate::status_prs::required_status_checks(project_root);
     for pr in list {
@@ -1378,16 +1350,14 @@ fn load_open_prs(
             required.as_deref(),
         );
         let scope = format!("PR-{}", pr.number);
-        // A reviewer session (`aida queue work PR-<n> --role reviewer`) has a
-        // worktree and no agent pid, so the canonical state reads it Dormant
-        // until a live session is probed; either way the review has started.
-        // Only a Stale lease (worktree gone or past 24h) has not.
+        // The exact recorded owner controls whether this review remains assigned.
+        // trace:TASK-3420 | ai:codex
         let review_lease = leases.iter().any(|l| {
             l.scope.eq_ignore_ascii_case(&scope)
-                && review_lease_running(project_root, l, live_sessions, &mut live_agents, now)
                 && l.pr_head_sha
                     .as_deref()
                     .is_none_or(|sha| crate::gate::review_verdict::same_reviewed_sha(sha, head))
+                && review_lease_running(&lease_reader, l)
         });
         let review_started = review_lease
             || (checks_green_at.is_some()

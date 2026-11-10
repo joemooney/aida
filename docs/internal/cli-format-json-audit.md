@@ -323,6 +323,7 @@ hermetic audit. `JSON not honoured` means unsupported and explicitly rejected.
 | `aida worktree pool adopt` | COULD NOT VERIFY | Dedicated --json exists; needs command-specific state or external service |
 | `aida worktree pool destroy` | COULD NOT VERIFY | Dedicated --json exists; needs command-specific state or external service |
 | `aida intent` | COULD NOT VERIFY | Dedicated --json exists; needs command-specific state or external service |
+| `aida intent review-return` | JSON honoured | intent review-return --file review-input.json (JSON attachment) |
 | `aida intent ci` | COULD NOT VERIFY | Dedicated --json exists; needs command-specific state or external service |
 | `aida intent ci enroll` | COULD NOT VERIFY | Dedicated --json exists; needs command-specific state or external service |
 | `aida intent ci request` | COULD NOT VERIFY | Dedicated --json exists; needs command-specific state or external service |
@@ -798,6 +799,7 @@ hermetic audit. `JSON not honoured` means unsupported and explicitly rejected.
 | `aida deputy shell resume` | JSON not honoured | Explicitly rejected before dispatch (no local --json contract) |
 | `aida deputy shell ack` | JSON not honoured | Explicitly rejected before dispatch (no local --json contract) |
 | `aida lane` | JSON not honoured | Explicitly rejected before dispatch (no local --json contract) |
+| `aida lane fast-gate-release` | JSON not honoured | Explicitly rejected before dispatch (no local --json contract) |
 | `aida lane job` | JSON not honoured | Explicitly rejected before dispatch (no local --json contract) |
 | `aida lane job run` | JSON not honoured | Explicitly rejected before dispatch (no local --json contract) |
 | `aida lane job wait` | JSON not honoured | Explicitly rejected before dispatch (no local --json contract) |

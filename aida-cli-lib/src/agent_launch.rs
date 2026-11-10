@@ -288,6 +288,9 @@ pub(crate) fn handle_session_command(cmd: &SessionCommand) -> Result<()> {
             snapshot,
             body_only,
             standing_orders,
+            until,
+            spec,
+            reason,
         } => {
             if let Some(args) = standing_orders {
                 session_handoff_standing_orders(args, seat.as_deref())
@@ -298,6 +301,9 @@ pub(crate) fn handle_session_command(cmd: &SessionCommand) -> Result<()> {
                     seat.as_deref(),
                     *final_,
                     *rotated,
+                    until.as_deref(),
+                    spec.as_deref(),
+                    reason.as_deref(),
                     *snapshot,
                     *body_only,
                 )
@@ -8050,7 +8056,7 @@ pub(crate) struct SessionArgs {
 // trace:FR-1-043 | ai:claude
 fn run_session(
     matches: &clap::ArgMatches,
-    _ctx: &crate::command_registry::DispatchCtx,
+    _ctx: &crate::cmdkit::DispatchCtx,
 ) -> anyhow::Result<()> {
     let args = <SessionArgs as clap::FromArgMatches>::from_arg_matches(matches)?;
     let session_cmd = &args.inner;
@@ -8058,14 +8064,13 @@ fn run_session(
 }
 
 // trace:STORY-1728 | ai:claude
-pub(crate) static SESSION: crate::command_registry::CommandReg =
-    crate::command_registry::CommandReg {
-        name: "session",
-        help_after: "role",
-        command: <SessionArgs as clap::CommandFactory>::command,
-        policy: session_cli_policy,
-        run: crate::command_registry::Handler::Early(run_session),
-    };
+pub(crate) static SESSION: crate::cmdkit::CommandReg = crate::cmdkit::CommandReg {
+    name: "session",
+    help_after: "role",
+    command: <SessionArgs as clap::CommandFactory>::command,
+    policy: session_cli_policy,
+    run: crate::cmdkit::Handler::Early(run_session),
+};
 
 // The read-only verbs stay open to guest stakeholders; every other verb is
 // gated as Session. An unparseable invocation is not treated as a read.
@@ -8073,25 +8078,30 @@ pub(crate) static SESSION: crate::command_registry::CommandReg =
 // including other clones' claims, so it takes the Session gate too.
 // trace:STORY-1728 | ai:claude
 // trace:TASK-1939 | ai:claude
-fn session_cli_policy(matches: &clap::ArgMatches) -> crate::command_registry::CmdPolicy {
+fn session_cli_policy(matches: &clap::ArgMatches) -> crate::cmdkit::CmdPolicy {
     use crate::cli::SessionCommand;
     use crate::stakeholder_role::StakeholderAction;
-    let read = <SessionArgs as clap::FromArgMatches>::from_arg_matches(matches).is_ok_and(|args| {
+    let args = <SessionArgs as clap::FromArgMatches>::from_arg_matches(matches);
+    let read = args.as_ref().is_ok_and(|args| {
         matches!(
-            args.inner,
+            &args.inner,
             SessionCommand::Leases {
                 prune_stale: false,
                 ..
             } | SessionCommand::Show { .. }
         )
     });
-    crate::command_registry::CmdPolicy {
+    crate::cmdkit::CmdPolicy {
         stakeholder: if read {
             StakeholderAction::Read
         } else {
             StakeholderAction::Session
         },
-        per_write_auto_push: false,
+        // Conditional handoffs mutate the canonical spec and dequeue it.
+        // trace:STORY-2402 | ai:codex
+        per_write_auto_push: args.as_ref().is_ok_and(|args| {
+            matches!(&args.inner, SessionCommand::Handoff { until: Some(_), .. })
+        }),
         skip_role_restore_prompt: false,
         team_identity_write: true,
     }
@@ -8108,8 +8118,8 @@ pub(crate) struct AgentArgs {
 
 fn run_agent(
     matches: &clap::ArgMatches,
-    ctx: &crate::command_registry::DispatchCtx,
-) -> anyhow::Result<crate::command_registry::Flow> {
+    ctx: &crate::cmdkit::DispatchCtx,
+) -> anyhow::Result<crate::cmdkit::Flow> {
     use crate::*;
     let args = <AgentArgs as clap::FromArgMatches>::from_arg_matches(matches)?;
     match &ctx.store {
@@ -8118,14 +8128,12 @@ fn run_agent(
             // registry state directly; no requirement store handle needed.
             // trace:STORY-432 | ai:codex
             if let AgentArgs { inner: agent_cmd } = &args {
-                return crate::command_registry::returned(handle_agent_command(agent_cmd));
+                return crate::cmdkit::returned(handle_agent_command(agent_cmd));
             }
-            Ok(crate::command_registry::Flow::Continue)
+            Ok(crate::cmdkit::Flow::Continue)
         }
-        Some(crate::command_registry::StoreCtx::Distributed { .. }) => {
-            Ok(crate::command_registry::Flow::Continue)
-        }
-        Some(crate::command_registry::StoreCtx::Git {
+        Some(crate::cmdkit::StoreCtx::Distributed { .. }) => Ok(crate::cmdkit::Flow::Continue),
+        Some(crate::cmdkit::StoreCtx::Git {
             store_path,
             backend,
         }) => {
@@ -8133,12 +8141,12 @@ fn run_agent(
             let (store_path, backend) = (*store_path, *backend);
             match &args {
                 AgentArgs { inner: agent_cmd } => {
-                    return crate::command_registry::returned(handle_agent_command(agent_cmd));
+                    return crate::cmdkit::returned(handle_agent_command(agent_cmd));
                 }
             }
-            Ok(crate::command_registry::Flow::Continue)
+            Ok(crate::cmdkit::Flow::Continue)
         }
-        Some(crate::command_registry::StoreCtx::Legacy {
+        Some(crate::cmdkit::StoreCtx::Legacy {
             storage,
             requirements_path,
         }) => {
@@ -8148,25 +8156,24 @@ fn run_agent(
                     handle_agent_command(agent_cmd)?;
                 }
             }
-            Ok(crate::command_registry::Flow::Continue)
+            Ok(crate::cmdkit::Flow::Continue)
         }
     }
 }
 
 // trace:STORY-1728 | ai:claude
-pub(crate) static AGENT: crate::command_registry::CommandReg =
-    crate::command_registry::CommandReg {
-        name: "agent",
-        help_after: "compete",
-        command: <AgentArgs as clap::CommandFactory>::command,
-        policy: agent_cli_policy,
-        run: crate::command_registry::Handler::Store(run_agent),
-    };
+pub(crate) static AGENT: crate::cmdkit::CommandReg = crate::cmdkit::CommandReg {
+    name: "agent",
+    help_after: "compete",
+    command: <AgentArgs as clap::CommandFactory>::command,
+    policy: agent_cli_policy,
+    run: crate::cmdkit::Handler::Store(run_agent),
+};
 
 // Only an explicitly selected vendor's no-exec path is a read. Real launches,
 // implicit vendor selection and malformed invocations retain the write gate.
 // trace:STORY-1486 | ai:codex
-fn agent_cli_policy(matches: &clap::ArgMatches) -> crate::command_registry::CmdPolicy {
+fn agent_cli_policy(matches: &clap::ArgMatches) -> crate::cmdkit::CmdPolicy {
     let preview =
         <AgentArgs as clap::FromArgMatches>::from_arg_matches(matches).is_ok_and(|args| match args
             .inner
@@ -8177,7 +8184,7 @@ fn agent_cli_policy(matches: &clap::ArgMatches) -> crate::command_registry::CmdP
             } => *crate::vendors::launch_preview_options(&command).noexec,
             _ => false,
         });
-    crate::command_registry::CmdPolicy {
+    crate::cmdkit::CmdPolicy {
         stakeholder: if preview {
             crate::stakeholder_role::StakeholderAction::Read
         } else {

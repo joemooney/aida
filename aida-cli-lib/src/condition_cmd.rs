@@ -175,7 +175,7 @@ fn check(project_root: &Path, file: Option<&str>, text: &str, json: bool) -> any
 // trace:STORY-2402 | ai:claude
 fn run_condition(
     matches: &clap::ArgMatches,
-    ctx: &crate::command_registry::DispatchCtx,
+    ctx: &crate::cmdkit::DispatchCtx,
 ) -> anyhow::Result<()> {
     let args = <ConditionArgs as clap::FromArgMatches>::from_arg_matches(matches)?;
     match &args.inner {
@@ -192,19 +192,39 @@ fn run_condition(
 }
 
 // trace:STORY-2402 | ai:claude
-pub(crate) static CONDITION: crate::command_registry::CommandReg =
-    crate::command_registry::CommandReg {
-        name: "condition",
-        help_after: "undefer",
-        command: <ConditionArgs as clap::CommandFactory>::command,
-        policy: |_| crate::command_registry::CmdPolicy {
-            stakeholder: crate::stakeholder_role::StakeholderAction::Read,
-            per_write_auto_push: false,
-            skip_role_restore_prompt: false,
-            team_identity_write: false,
-        },
-        run: crate::command_registry::Handler::Early(run_condition),
-    };
+pub(crate) static CONDITION: crate::cmdkit::CommandReg = crate::cmdkit::CommandReg {
+    name: "condition",
+    help_after: "undefer",
+    command: <ConditionArgs as clap::CommandFactory>::command,
+    policy: |_| crate::cmdkit::CmdPolicy {
+        stakeholder: crate::stakeholder_role::StakeholderAction::Read,
+        per_write_auto_push: false,
+        skip_role_restore_prompt: false,
+        team_identity_write: false,
+    },
+    run: crate::cmdkit::Handler::Early(run_condition),
+};
+
+// Shared admission for deferrals, handoff triggers and recurrence.
+// trace:STORY-2402 | ai:codex
+pub(crate) fn canonical_condition(
+    until: Option<&str>,
+    reason: Option<&str>,
+) -> anyhow::Result<Option<String>> {
+    use aida_core::condition::Condition;
+    let Some(raw) = until else { return Ok(None) };
+    let condition: Condition = raw.parse().map_err(|err| {
+        anyhow::anyhow!(
+            "invalid --until condition: {err}. For a human decision use manual:<who> with --reason"
+        )
+    })?;
+    if matches!(condition, Condition::Manual { .. })
+        && reason.is_none_or(|reason| reason.trim().is_empty())
+    {
+        anyhow::bail!("manual conditions require --reason with a non-empty explanation");
+    }
+    Ok(Some(condition.to_string()))
+}
 
 #[cfg(test)]
 #[path = "tests/story_2402_condition_cmd_tests.rs"]

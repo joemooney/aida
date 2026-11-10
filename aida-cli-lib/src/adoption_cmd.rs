@@ -12,10 +12,7 @@ use aida_core::adoption_projection::{self, AdoptionState, Outcome, State};
 use anyhow::Result;
 use std::path::Path;
 
-fn run_adoption(
-    matches: &clap::ArgMatches,
-    _ctx: &crate::command_registry::DispatchCtx,
-) -> Result<()> {
+fn run_adoption(matches: &clap::ArgMatches, _ctx: &crate::cmdkit::DispatchCtx) -> Result<()> {
     let args = <AdoptionArgs as clap::FromArgMatches>::from_arg_matches(matches)?;
     let cwd = std::env::current_dir()?;
     match args.inner {
@@ -200,16 +197,15 @@ fn capitalized(text: &str) -> String {
 }
 
 // trace:STORY-1741 | ai:claude
-pub(crate) static ADOPTION: crate::command_registry::CommandReg =
-    crate::command_registry::CommandReg {
-        name: "adoption",
-        help_after: "init",
-        command: <AdoptionArgs as clap::CommandFactory>::command,
-        policy: |_| crate::command_registry::CmdPolicy {
-            stakeholder: crate::stakeholder_role::StakeholderAction::Write,
-            per_write_auto_push: false,
-            skip_role_restore_prompt: false,
-            team_identity_write: false,
-        },
-        run: crate::command_registry::Handler::Early(run_adoption),
-    };
+pub(crate) static ADOPTION: crate::cmdkit::CommandReg = crate::cmdkit::CommandReg {
+    name: "adoption",
+    help_after: "init",
+    command: <AdoptionArgs as clap::CommandFactory>::command,
+    policy: |_| crate::cmdkit::CmdPolicy {
+        stakeholder: crate::stakeholder_role::StakeholderAction::Write,
+        per_write_auto_push: false,
+        skip_role_restore_prompt: false,
+        team_identity_write: false,
+    },
+    run: crate::cmdkit::Handler::Early(run_adoption),
+};

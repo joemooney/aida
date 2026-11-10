@@ -996,7 +996,9 @@ pub(crate) fn orphan_lease_to_adopt(
             ));
         }
     }
-    if let Some(why) = orphan_adoption_refusal(&stale_lease_recovery_for_lease(&lease)) {
+    // The resume hint and actual adoption share both ownership and tree gates.
+    // trace:TASK-3420 | ai:codex
+    if let Some(why) = crate::leases::lease_adoption_refusal(project_root, &lease) {
         return refuse(format!("lease {id} is not orphaned: {why}"));
     }
     Ok(Some(lease))
@@ -1454,6 +1456,9 @@ pub(crate) struct SessionStartCleanup {
     clone: Option<crate::seat_clone::CreatedClone>,
     clone_git_identity: Option<(u64, u64)>,
     lease_id: Option<String>,
+    // Restore adopted ownership if admission fails after the lease swap.
+    // trace:BUG-2504 | ai:codex
+    adopted_orphan: Option<SessionLease>,
     // The exact status/owner write this invocation owns, including owner-only changes.
     // trace:BUG-2188 TASK-2326 | ai:codex
     claim_write: Option<crate::claim::ClaimStatusChange>,
@@ -1475,6 +1480,7 @@ impl SessionStartCleanup {
             clone: None,
             clone_git_identity: None,
             lease_id: None,
+            adopted_orphan: None,
             claim_write: None,
             armed: true,
             owner_check: None,
@@ -1632,6 +1638,37 @@ impl Drop for SessionStartCleanup {
         }
         if !self.release_tree() {
             return;
+        }
+        // Restore before deleting the successor: a refusal must remain retryable.
+        // trace:BUG-2504 | ai:codex
+        if let Some(orphan) = &self.adopted_orphan {
+            let path = lease_path(&self.root, &orphan.id);
+            let restored = (|| -> Result<()> {
+                // Publish a complete record without replacing any concurrent record.
+                use std::io::Write;
+                let mut pending =
+                    tempfile::NamedTempFile::new_in(path.parent().context("orphan lease parent")?)?;
+                pending.write_all(toml::to_string_pretty(orphan)?.as_bytes())?;
+                pending.as_file().sync_all()?;
+                // Removal may have failed during adoption. The same lease identity
+                // already on disk is restored regardless of writer formatting.
+                // trace:BUG-2504 | ai:codex
+                if let Err(error) = pending.persist_noclobber(&path) {
+                    if error.error.kind() != std::io::ErrorKind::AlreadyExists || {
+                        let existing: SessionLease =
+                            toml::from_str(&std::fs::read_to_string(&path)?)?;
+                        existing.id != orphan.id || existing.worktree_path != orphan.worktree_path
+                    } {
+                        return Err(error.into());
+                    }
+                }
+                crate::ownership::dual::lease_written(&self.root, orphan);
+                Ok(())
+            })();
+            if let Err(error) = restored {
+                eprintln!("launch cleanup retained successor lease: could not restore adopted lease: {error:#}; inspect `aida session leases --all`");
+                return;
+            }
         }
         if let Some(id) = &self.lease_id {
             if !remove_session_lease_record_only(&self.root, id) {
@@ -2268,22 +2305,23 @@ pub(crate) fn session_start_with_receipt(
         );
     }
     // ...and so does any other lease on the scope whose owner is still alive,
-    // with or without a live linked worktree: adoption bypasses the BUG-637
-    // live-claim gate's claude-process probe, so it checks owners itself.
-    // An owner whose liveness cannot be determined (no recorded pid) is
-    // treated as alive, the same rule queue work's conflict sweep applies.
+    // with or without a linked worktree. Adoption checks the recorded owner;
+    // unknown evidence retains ownership, as in the ordinary pickup gate.
     // trace:BUG-2223, TASK-b6b1278890774ef993d2ebc327862470-004 | ai:claude
     if let Some(orphan) = &adopted_orphan {
         let held = list_leases(&project_root).into_iter().find_map(|l| {
             if l.id == orphan.id || !l.scope.eq_ignore_ascii_case(owns) {
                 return None;
             }
-            match stale_lease_recovery_for_lease(&l).base_verdict {
-                StaleLeaseRecovery::Live => Some((l, "live session")),
-                StaleLeaseRecovery::UnknownLiveness => {
+            // trace:TASK-3420 | ai:codex
+            match crate::ownership::reader::LeaseReader::new(&project_root)
+                .pickup_owner(&l, crate::ownership::reader::LegacyRule::Adoption)
+            {
+                crate::ownership::OwnerVerdict::Dead { .. } => None,
+                crate::ownership::OwnerVerdict::Alive { .. } => Some((l, "live session")),
+                crate::ownership::OwnerVerdict::Unknown { .. } => {
                     Some((l, "session whose owner cannot be proven gone"))
                 }
-                _ => None,
             }
         });
         if let Some((live, what)) = held {
@@ -2467,21 +2505,19 @@ pub(crate) fn session_start_with_receipt(
             let self_lease = std::env::current_dir()
                 .ok()
                 .and_then(|cwd| active_lease_for_cwd(&project_root, &cwd));
-            let now = chrono::Utc::now();
-            let live = process_probe::probe_live_claude_sessions();
-            if let Some(claim) = live_spec_claim_by_other(
-                &leases,
-                self_lease.as_ref(),
-                &[owns],
-                lease_is_live(&live, now),
-            ) {
+            // trace:TASK-3420 | ai:codex
+            if let Some(claim) =
+                live_spec_claim_by_other(&leases, self_lease.as_ref(), &[owns], |lease| {
+                    crate::ownership::reader::lease_retained(&project_root, lease)
+                })
+            {
                 let claim_id_short: String = claim.id.chars().take(8).collect();
                 let started = claim
                     .started_at
                     .with_timezone(&chrono::Local)
                     .format("%H:%M");
                 anyhow::bail!(
-                    "`{owns}` is already claimed by session {claim_id_short} (live, started \
+                    "`{owns}` is already claimed by session {claim_id_short} (ownership retained, started \
                      {started}) — skipping to avoid duplicate work.\n  \
                      worktree: {}\n  \
                      If that session is wrong/abandoned, end it (`aida session end \
@@ -2677,8 +2713,8 @@ pub(crate) fn session_start_with_receipt(
                 // trace:BUG-1205 | ai:claude
                 let headless = std::env::var_os("AIDA_HEADLESS").is_some()
                     || !std::io::IsTerminal::is_terminal(&std::io::stdin());
-                let live_sessions = process_probe::probe_live_claude_sessions();
-                let is_live = lease_is_live(&live_sessions, chrono::Utc::now())(l);
+                // trace:TASK-3420 | ai:codex
+                let is_live = crate::ownership::reader::lease_retained(&project_root, l);
                 // BUG-2150: an explicit reviewer pickup coexists with the
                 // implementer's lease; another reviewer's lease still conflicts.
                 // trace:BUG-2150 | ai:claude
@@ -3436,6 +3472,9 @@ pub(crate) fn session_start_with_receipt(
     // is written, so the tree is never unleased; the tree itself stays.
     // trace:BUG-2223 | ai:claude
     if let Some(orphan) = &adopted_orphan {
+        if let Some(cleanup) = rollback.as_mut() {
+            cleanup.adopted_orphan = Some(orphan.clone());
+        }
         aggregate_session_activity_into_roles(&project_root, &orphan.id);
         if !remove_session_lease_record_only(&project_root, &orphan.id) {
             // Not `aida session end`: that would tear down the adopted tree.

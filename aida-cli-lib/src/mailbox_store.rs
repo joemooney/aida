@@ -1,3 +1,4 @@
+// trace:TASK-3429 | ai:codex
 //! Local layer of the hybrid inter-agent mailbox (STORY-493 slice 2).
 //!
 //! The fast, immediate layer: one JSON file per message under
@@ -27,7 +28,7 @@ pub(crate) fn mailbox_dir(project_root: &Path) -> PathBuf {
 /// Where a checkout's mailbox operations read and write their local layer.
 // trace:BUG-B6B1278890774EF993D2EBC327862470-031 | ai:claude
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub(crate) enum MailboxHome {
+pub enum MailboxHome {
     /// An ordinary checkout (main or linked worktree): its own `.aida/mailbox`,
     /// which the primary's logical view already reads.
     Checkout(PathBuf),
@@ -43,7 +44,7 @@ pub(crate) enum MailboxHome {
 
 impl MailboxHome {
     /// The project root whose `.aida/mailbox` this home uses.
-    pub(crate) fn root(&self) -> &Path {
+    pub fn root(&self) -> &Path {
         match self {
             Self::Checkout(root) | Self::UnverifiedClone(root) => root,
             Self::SeatPrimary(primary) => primary,
@@ -52,7 +53,7 @@ impl MailboxHome {
 
     /// The truthful delivery note for a send, `None` when the message is in
     /// a mailbox the primary checkout already reads.
-    pub(crate) fn send_note(&self) -> Option<String> {
+    pub fn send_note(&self) -> Option<String> {
         match self {
             Self::Checkout(_) => None,
             Self::SeatPrimary(primary) => Some(format!(
@@ -71,7 +72,7 @@ impl MailboxHome {
 
 /// Resolve the mailbox home for `project_root` (the store path's parent).
 // trace:BUG-B6B1278890774EF993D2EBC327862470-031 | ai:claude
-pub(crate) fn mailbox_home(project_root: &Path) -> MailboxHome {
+pub fn mailbox_home(project_root: &Path) -> MailboxHome {
     match crate::seat_clone::main_for(project_root) {
         crate::seat_clone::MainFor::NotAClone => MailboxHome::Checkout(project_root.to_path_buf()),
         crate::seat_clone::MainFor::Verified(primary) => MailboxHome::SeatPrimary(primary),
@@ -113,7 +114,7 @@ pub(crate) fn write_message(project_root: &Path, msg: &Message) -> Result<()> {
 
 /// [`write_message`] with the message's delivery sidecar (slice D1).
 // trace:STORY-1843 | ai:claude
-pub(crate) fn write_message_with_deliveries(
+pub fn write_message_with_deliveries(
     project_root: &Path,
     msg: &Message,
     deliveries: Option<&aida_core::mailbox_delivery::DeliverySidecar>,
@@ -188,12 +189,12 @@ fn read_canonical_messages_strict(store_root: &Path) -> Result<Vec<(Message, boo
 }
 
 /// Read every message in the LOCAL layer.
-pub(crate) fn read_local_messages(project_root: &Path) -> Result<Vec<Message>> {
+pub fn read_local_messages(project_root: &Path) -> Result<Vec<Message>> {
     read_messages_in(&mailbox_dir(project_root))
 }
 
 /// Read every message in the CANONICAL (orphan-store) layer.
-pub(crate) fn read_canonical_messages(store_root: &Path) -> Result<Vec<Message>> {
+pub fn read_canonical_messages(store_root: &Path) -> Result<Vec<Message>> {
     read_messages_in(&canonical_dir(store_root))
 }
 
@@ -412,7 +413,7 @@ pub(crate) const PARTIAL_EVIDENCE_NOTE: &str =
 /// the watermark leaves unread; a lookup that cannot be answered counts the
 /// message unread and makes the evidence [`partial`](Self::partial).
 // trace:STORY-1843 | ai:claude
-pub(crate) struct ReadEvidence {
+pub struct ReadEvidence {
     pub(crate) watermarks: std::collections::HashMap<String, i64>,
     receipts: aida_core::mailbox_logical::ReceiptInspector,
     watermarks_unreadable: bool,
@@ -422,7 +423,7 @@ impl ReadEvidence {
     /// Watermarks from `project_root`; receipts from every product worktree
     /// of its repository. A missing watermark directory is empty; an
     /// unreadable one is an error.
-    pub(crate) fn load(project_root: &Path) -> Result<Self> {
+    pub fn load(project_root: &Path) -> Result<Self> {
         let watermarks = read_all_watermarks(project_root)?;
         Ok(Self::with_watermarks(project_root, watermarks, false))
     }
@@ -459,7 +460,7 @@ impl ReadEvidence {
     /// Whether some read evidence could not be established: the watermarks
     /// were unreadable, or a receipt lookup could not be answered. Partial
     /// evidence only ever over-counts unread mail.
-    pub(crate) fn partial(&self) -> bool {
+    pub fn partial(&self) -> bool {
         self.watermarks_unreadable || self.receipts.partial()
     }
 
@@ -489,7 +490,7 @@ impl ReadEvidence {
     }
 
     /// Whether `key` has read `msg`: legacy watermark, else receipt.
-    pub(crate) fn read_by(&self, key: &str, msg: &Message) -> bool {
+    pub fn read_by(&self, key: &str, msg: &Message) -> bool {
         self.watermarked(key, msg) || self.receipted(key, msg)
     }
 

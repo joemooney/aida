@@ -132,7 +132,7 @@
     "reason": "Synthetic test fixture or generated output path; not a repository document."
   },
   {
-    "source": "aida-cli-lib/src/mcp.rs",
+    "source": "aida-cli-lib/src/mcp_schema.rs",
     "target": "docs/plans/2026-06-07-story-536.md",
     "count": 1,
     "reason": "Synthetic test fixture or generated output path; not a repository document."

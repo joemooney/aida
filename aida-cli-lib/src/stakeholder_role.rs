@@ -1,9 +1,10 @@
+// trace:TASK-3429 | ai:codex
 //! Stakeholder/requester role capability gates for CLI and MCP actions (STORY-1488 slice 1)
 // trace:STORY-1488 | ai:claude
 
 use crate::*;
 
-pub(crate) fn active_stakeholder_role() -> Option<String> {
+pub fn active_stakeholder_role() -> Option<String> {
     std::env::var("AIDA_SESSION_ROLE")
         .ok()
         .map(|role| canonical_role_name(role.trim()))
@@ -17,7 +18,7 @@ pub(crate) fn is_stakeholder_role(role: &str) -> bool {
 }
 
 // trace:TASK-1594 | ai:claude
-pub(crate) fn stakeholder_refusal_message(role: &str, action: &str) -> String {
+pub fn stakeholder_refusal_message(role: &str, action: &str) -> String {
     format!(
         "The '{role}' role is a least-privilege stakeholder role; refusing {action}. Ask an advisor to groom, route, or approve it."
     )
@@ -31,7 +32,7 @@ pub(crate) fn stakeholder_refusal(role: &str, action: &str) -> anyhow::Error {
 // trace:TASK-3425 | ai:codex
 pub(crate) use crate::cmdkit::StakeholderAction;
 
-pub(crate) fn stakeholder_action_allowed(role: &str, action: StakeholderAction) -> bool {
+pub fn stakeholder_action_allowed(role: &str, action: StakeholderAction) -> bool {
     match role {
         "guest" => action == StakeholderAction::Read,
         "requester" => matches!(action, StakeholderAction::Read | StakeholderAction::Intake),
@@ -39,7 +40,7 @@ pub(crate) fn stakeholder_action_allowed(role: &str, action: StakeholderAction) 
     }
 }
 
-pub(crate) fn stakeholder_action_label(action: StakeholderAction) -> &'static str {
+pub fn stakeholder_action_label(action: StakeholderAction) -> &'static str {
     match action {
         StakeholderAction::Read => "reads",
         StakeholderAction::Intake => "adding requirements",
@@ -65,7 +66,7 @@ pub(crate) fn stakeholder_action_label(action: StakeholderAction) -> &'static st
 /// narrower than the MCP `read-only` profile: that profile also contains
 /// command-producing helpers whose returned commands can mutate shared state.
 // trace:BUG-1197 | ai:codex
-pub(crate) fn stakeholder_mcp_read_allowed(tool_name: &str) -> bool {
+pub fn stakeholder_mcp_read_allowed(tool_name: &str) -> bool {
     matches!(
         tool_name,
         "list_requirements"
@@ -96,7 +97,7 @@ pub(crate) fn stakeholder_mcp_read_allowed(tool_name: &str) -> bool {
     )
 }
 
-pub(crate) fn requester_intake_type_allowed(type_name: &str) -> bool {
+pub fn requester_intake_type_allowed(type_name: &str) -> bool {
     parse_requirement_type(type_name)
         .map(|req_type| requester_add_type_allowed(&req_type))
         .unwrap_or(false)

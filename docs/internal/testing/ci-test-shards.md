@@ -79,7 +79,15 @@ Both store-attach guards compare Git's discovered top-level directory with
 `$PWD/.aida-store` before resetting the store. A plain directory inside the
 checkout fails rather than inheriting the enclosing checkout's Git discovery.
 
-`make check-ci-fast` still reads workflow step bodies. `make check-ci-compile`
+`make check-ci-fast` reads workflow step bodies, runs source gates before Cargo
+compilation, and runs `cargo check` with the seeded `agent` profile. A cold
+target therefore cannot hide source-ratchet failures behind compilation. Host
+lane gates keep the ten-minute sandbox deadline; timeout, runner refusal and
+signal termination report `skipped(<reason>)` without spending a source repair.
+A native publication that cannot recover a clean committed seat returns an error.
+<!-- trace:STORY-2640 | ai:codex -->
+
+`make check-ci-compile`
 uses the shard planner's `--compile --profile agent` mode to compile the whole
 workspace without running tests. An explicit full local check selects all lanes
 on the agent profile, under the same runner (`make test`, or one lane with

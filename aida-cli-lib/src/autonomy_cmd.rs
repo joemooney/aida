@@ -264,7 +264,7 @@ pub(crate) struct AutonomyArgs {
 // store. trace:STORY-439 | ai:claude
 fn run_autonomy(
     matches: &clap::ArgMatches,
-    _ctx: &crate::command_registry::DispatchCtx,
+    _ctx: &crate::cmdkit::DispatchCtx,
 ) -> anyhow::Result<()> {
     let args = <AutonomyArgs as clap::FromArgMatches>::from_arg_matches(matches)?;
     let AutonomyArgs { command } = &args;
@@ -272,16 +272,15 @@ fn run_autonomy(
 }
 
 // trace:STORY-1728 | ai:claude
-pub(crate) static AUTONOMY: crate::command_registry::CommandReg =
-    crate::command_registry::CommandReg {
-        name: "autonomy",
-        help_after: "punts",
-        command: <AutonomyArgs as clap::CommandFactory>::command,
-        policy: |_| crate::command_registry::CmdPolicy {
-            stakeholder: crate::stakeholder_role::StakeholderAction::Write,
-            per_write_auto_push: false,
-            skip_role_restore_prompt: false,
-            team_identity_write: false,
-        },
-        run: crate::command_registry::Handler::Early(run_autonomy),
-    };
+pub(crate) static AUTONOMY: crate::cmdkit::CommandReg = crate::cmdkit::CommandReg {
+    name: "autonomy",
+    help_after: "punts",
+    command: <AutonomyArgs as clap::CommandFactory>::command,
+    policy: |_| crate::cmdkit::CmdPolicy {
+        stakeholder: crate::stakeholder_role::StakeholderAction::Write,
+        per_write_auto_push: false,
+        skip_role_restore_prompt: false,
+        team_identity_write: false,
+    },
+    run: crate::cmdkit::Handler::Early(run_autonomy),
+};

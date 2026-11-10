@@ -1,0 +1,7875 @@
+// trace:TASK-3429 | ai:codex
+// trace:FR-0152 | ai:claude
+// trace:STORY-361 | ai:claude
+// trace:TASK-440 | ai:claude
+// MCP (Model Context Protocol) server for AIDA.
+//
+// Implements JSON-RPC 2.0 over stdio. Exposes two surfaces:
+//
+// 1. **Spec graph** (9 tools) — read/write the requirement
+//    store: `list_requirements`, `show_requirement`, `add_requirement`,
+//    `update_requirement`, `search_requirements`, `add_comment`,
+//    `add_relationship`, `list_features`, `history`.
+// 2. **Coordination** (STORY-361) — read/write the file substrate the
+//    AIDA orchestrator and skills already use:
+//    - **Punts** (`.aida/punts.jsonl` + `.aida/punts/`): `list_punts`,
+//      `read_punt`, `post_punt`, `resolve_punt`, `escalate_punt`.
+//    - **Findings** (draft requirements tagged `from-implementer:` /
+//      `from-review:`): `list_findings`, `file_finding`, `triage_finding`.
+//    - **Task claims** (`.aida/sessions/*.toml`): `claim_task`,
+//      `release_task`, `list_active_leases`.
+//    - **Worker directives** (`.aida/worker.cmd`): `post_directive`,
+//      `list_directives`, `ack_directive`.
+//    - **Agent briefs** (`.aida/agent-briefs/<agent>/`): `list_briefs`,
+//      `read_brief`, `ack_brief`.
+//
+// The coordination tools are the *MCP transport* over AIDA's
+// filesystem-canonical coordination substrate. The orchestrator still
+// reads/writes those files directly — these tools are the surface any
+// MCP-speaking agent (Codex, Cursor, …) can use to participate in the
+// same drains. See `docs/internal/architecture/mcp-coordination-surface.md`.
+//
+// # Output schemas (TASK-440 Path A + STORY-399 Path B)
+//
+// Every tool descriptor in `tool_descriptors()` carries an `outputSchema`
+// that documents the **MCP text-envelope** shape its responses take plus a
+// per-tool `description` summarizing what the text payload conveys.
+// Schema-driven clients (Codex, Cursor, …) get useful discoverability
+// instead of opaque-shape responses.
+//
+// **Path A (TASK-440)** declared those schemas. **Path B (STORY-399)** makes
+// successful responses *also* emit a `structuredContent` object matching the
+// declared schema, so schema-driven clients get a machine-readable result
+// without parsing the human text. The decision is **additive** (acceptance
+// option (a)): the `{ content: [{ type: "text", text: "..." }] }` text
+// envelope is preserved byte-for-byte for legacy text consumers (Claude
+// Code), and `structuredContent` is layered alongside it. Error responses
+// keep the STORY-401 `{ isError: true, structuredError: { … } }` shape and do
+// not carry `structuredContent`. See `handle_tools_call` and
+// `text_envelope_output_schema`.
+//
+// # Tool profiles (STORY-474)
+//
+// The full surface is gated behind a named **profile** — a capability tier
+// (`read-only` < `coordination` < `operator` < `admin`/`full`). `read-only`
+// excludes every write tool and is the recommended safe default for untrusted /
+// marketplace clients; the built-in default stays `full` for backwards
+// compatibility. Resolve order: `AIDA_MCP_PROFILE` env → `[mcp] profile` in
+// `.aida/config.toml` → `full`. The profile is enforced at BOTH `tools/list`
+// (advertise) and `tools/call` (reject above-tier calls). See `McpProfile`,
+// `tool_min_profile`, and `resolve_mcp_profile`.
+
+use aida_cli_lib::process_retry::RetryEtxtbsy;
+use std::cmp::Ordering;
+use std::ffi::OsString;
+use std::io::{self, BufRead, Write};
+use std::path::{Path, PathBuf};
+use std::process::Command;
+
+use anyhow::Result;
+use chrono::Utc;
+use serde::{Deserialize, Serialize};
+use serde_json::{json, Value};
+
+use aida_core::{
+    Comment, PuntCategory, RelationshipType, Requirement, RequirementPriority, RequirementStatus,
+    RequirementType, Storage,
+};
+
+use aida_cli_lib::agent_registry::{self, AgentBinaryIdentity};
+use aida_cli_lib::findings::{
+    build_findings_view, count_findings, finding_source, FindingsFilter, FROM_IMPLEMENTER_PREFIX,
+    FROM_REVIEW_PREFIX,
+};
+use aida_cli_lib::history::{self, HistoryOpts};
+use aida_cli_lib::punt::{self, append_to_ledger, ledger_path, read_ledger, PuntRecord};
+
+// Mirrors the full RequirementType taxonomy (aida-core models.rs, 19 variants).
+// The ADR / knowledge-graph family (principle, vision, constraint, decision,
+// term) and the change-request workflow type are first-class — keep this list in
+// sync with `parse_requirement_type` below and the `add_requirement` /
+// `update_requirement` schema enums. trace:TASK-716 | ai:claude
+const VALID_MCP_REQUIREMENT_TYPES: &str =
+    "functional, non-functional, system, user, change-request, bug, epic, story, task, spike, sprint, folder, meta, principle, vision, constraint, decision, term, doc, faq";
+
+/// BUG-591: the archive (STORY-441) + deferred (STORY-584) view-tier predicate,
+/// shared by `list_requirements` and `search_requirements` so the MCP read
+/// surface hides filed-away specs by default exactly like `aida list` /
+/// `aida search` (the STORY-82 "MCP mirrors CLI" contract). The three tiers are
+/// active (default) / deferred / archived; a row's tier is `archived` if
+/// `Requirement::archived`, else `deferred` if `intake::is_deferred` (flag set
+/// OR a legacy `deferred:*` parking tag), else `active`.
+///
+/// Filter resolution mirrors `aida list`:
+/// - default (no flags): admit only ACTIVE rows
+/// - `archived`: admit only archived rows (defer axis kept open so the audit is complete)
+/// - `deferred`: admit only deferred rows
+/// - `all` (highest precedence): admit every tier
+///
+/// trace:BUG-591 | ai:claude
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum ViewTierFilter {
+    /// Active rows only — neither archived nor deferred (the default view).
+    ActiveOnly,
+    /// Archived rows only.
+    ArchivedOnly,
+    /// Deferred rows only.
+    DeferredOnly,
+    /// Every tier (active + deferred + archived).
+    All,
+}
+
+impl ViewTierFilter {
+    /// Resolve the three boolean flags into a single tier filter, matching the
+    /// CLI precedence (`--all` wins over `--archived` over `--deferred`).
+    fn resolve(all: bool, archived: bool, deferred: bool) -> Self {
+        if all {
+            ViewTierFilter::All
+        } else if archived {
+            ViewTierFilter::ArchivedOnly
+        } else if deferred {
+            ViewTierFilter::DeferredOnly
+        } else {
+            ViewTierFilter::ActiveOnly
+        }
+    }
+
+    /// Whether this requirement passes the current view-tier filter.
+    fn admits(&self, r: &Requirement) -> bool {
+        let archived = r.archived;
+        let tags: Vec<String> = r.tags.iter().cloned().collect();
+        let deferred = aida_cli_lib::intake::is_deferred(r.deferred, &tags);
+        match self {
+            ViewTierFilter::All => true,
+            ViewTierFilter::ArchivedOnly => archived,
+            // A row can be both deferred and archived; archive is the stronger
+            // tier, so the deferred-only view excludes archived rows.
+            ViewTierFilter::DeferredOnly => deferred && !archived,
+            ViewTierFilter::ActiveOnly => !archived && !deferred,
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct McpBinaryIdentity {
+    version: String,
+    sha: String,
+    dirty: bool,
+}
+
+impl McpBinaryIdentity {
+    fn current() -> Self {
+        Self {
+            version: env!("CARGO_PKG_VERSION").to_string(),
+            sha: aida_cli_lib::BUILD_GIT_SHA.to_string(),
+            dirty: aida_cli_lib::BUILD_GIT_DIRTY == "1",
+        }
+    }
+
+    fn label(&self) -> String {
+        format!(
+            "{} sha {}{}",
+            self.version,
+            self.sha,
+            if self.dirty { "+dirty" } else { "" }
+        )
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct McpRespawnPlan {
+    exe: PathBuf,
+    argv: Vec<OsString>,
+    running: McpBinaryIdentity,
+    on_disk: McpBinaryIdentity,
+}
+
+struct McpRespawnState {
+    running: McpBinaryIdentity,
+    argv: Vec<OsString>,
+}
+
+impl McpRespawnState {
+    fn new() -> Self {
+        Self {
+            running: McpBinaryIdentity::current(),
+            argv: std::env::args_os().collect(),
+        }
+    }
+
+    fn check(&self) -> Option<McpRespawnPlan> {
+        let exe = aida_cli_lib::resolve_aida_exe();
+        let on_disk = query_aida_binary_identity(&exe)?;
+        if mcp_binary_is_newer_or_different(&self.running, &on_disk) {
+            Some(McpRespawnPlan {
+                exe,
+                argv: self.argv.clone(),
+                running: self.running.clone(),
+                on_disk,
+            })
+        } else {
+            None
+        }
+    }
+
+    fn respawn(&self, plan: McpRespawnPlan) -> Result<()> {
+        eprintln!(
+            "AIDA MCP server detected newer binary on disk; self-respawning (running: {}; disk: {})",
+            plan.running.label(),
+            plan.on_disk.label()
+        );
+        exec_mcp_respawn(plan)
+    }
+}
+
+fn strip_aida_program_prefix(output: &str) -> &str {
+    ["aida-cli ", "aida-server ", "aida "]
+        .iter()
+        .find_map(|prefix| output.strip_prefix(*prefix))
+        .unwrap_or(output)
+}
+
+fn parse_aida_binary_identity(output: &str) -> Option<McpBinaryIdentity> {
+    let banner = strip_aida_program_prefix(output.trim());
+    let version = banner
+        .split_whitespace()
+        .next()
+        .filter(|v| {
+            v.chars()
+                .next()
+                .map(|c| c.is_ascii_digit())
+                .unwrap_or(false)
+        })?
+        .to_string();
+    let sha = banner
+        .split("sha ")
+        .nth(1)
+        .and_then(|s| s.split([')', '+']).next())
+        .map(str::trim)
+        .filter(|s| !s.is_empty())
+        .unwrap_or("unknown")
+        .to_string();
+    Some(McpBinaryIdentity {
+        version,
+        sha,
+        dirty: banner.contains("+dirty"),
+    })
+}
+
+fn query_aida_binary_identity(exe: &Path) -> Option<McpBinaryIdentity> {
+    let out = Command::new(exe)
+        .arg("--version")
+        .output_retrying_etxtbsy()
+        .ok()?;
+    if !out.status.success() {
+        return None;
+    }
+    let stdout = String::from_utf8_lossy(&out.stdout);
+    parse_aida_binary_identity(&stdout)
+}
+
+fn compare_package_versions(a: &str, b: &str) -> Ordering {
+    let parse = |raw: &str| {
+        raw.split(['.', '-'])
+            .map(|part| part.parse::<u64>())
+            .collect::<Result<Vec<_>, _>>()
+    };
+    match (parse(a), parse(b)) {
+        (Ok(left), Ok(right)) => left.cmp(&right),
+        _ => a.cmp(b),
+    }
+}
+
+fn mcp_binary_is_newer_or_different(
+    running: &McpBinaryIdentity,
+    on_disk: &McpBinaryIdentity,
+) -> bool {
+    match compare_package_versions(&running.version, &on_disk.version) {
+        Ordering::Less => true,
+        Ordering::Greater => false,
+        Ordering::Equal => {
+            let both_sha_known = running.sha != "unknown" && on_disk.sha != "unknown";
+            both_sha_known && (running.sha != on_disk.sha || running.dirty != on_disk.dirty)
+        }
+    }
+}
+
+fn exec_mcp_respawn(plan: McpRespawnPlan) -> Result<()> {
+    let mut command = Command::new(&plan.exe);
+    if plan.argv.len() > 1 {
+        command.args(plan.argv.iter().skip(1));
+    }
+
+    #[cfg(unix)]
+    {
+        use std::os::unix::process::CommandExt;
+        let err = command.exec();
+        Err(anyhow::anyhow!(
+            "failed to exec MCP self-respawn via {}: {}",
+            plan.exe.display(),
+            err
+        ))
+    }
+
+    #[cfg(windows)]
+    {
+        command.spawn_retrying_etxtbsy().map_err(|e| {
+            anyhow::anyhow!(
+                "failed to spawn MCP self-respawn via {}: {}",
+                plan.exe.display(),
+                e
+            )
+        })?;
+        std::process::exit(0);
+    }
+}
+
+// ============================================================================
+// JSON-RPC 2.0 types
+// ============================================================================
+
+#[derive(Debug, Deserialize)]
+struct JsonRpcRequest {
+    jsonrpc: String,
+    method: String,
+    #[serde(default)]
+    params: Value,
+    id: Option<Value>,
+}
+
+#[derive(Debug, Serialize)]
+struct JsonRpcResponse {
+    jsonrpc: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    result: Option<Value>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    error: Option<JsonRpcError>,
+    id: Value,
+    /// This response's own prepared mail ACK (`read_inbox` with
+    /// `mark_seen`), committed by [`deliver`] only after the response line
+    /// was written and flushed. Never serialized, never shared between
+    /// responses.
+    // trace:STORY-1843 | ai:claude
+    #[serde(skip)]
+    after_flush: Option<PendingAck>,
+}
+
+/// A `read_inbox` ACK waiting for its response to be delivered.
+#[derive(Debug)]
+struct PendingAck {
+    project_root: PathBuf,
+    plan: aida_core::mailbox_lifecycle::ack::AckPlan,
+    /// The store the hello acks resolve their recipients through.
+    store_root: PathBuf,
+    /// The returned messages, so a hello among them is acked exactly as
+    /// `aida mailbox inbox` acks it.
+    shown: Vec<aida_core::mailbox::Message>,
+}
+
+/// Write one JSON-RPC response line and flush it; only then commit the
+/// response's own ACK plan (STORY-1843 B2c: post-flush ACK, the successor
+/// to BUG-1482's mark-before-output). A failed write or flush commits
+/// nothing. A failed commit sends no second JSON-RPC message: the response
+/// already said `ack: "requested"`, the messages stay unread for the next
+/// `read_inbox`, and stderr gets one line with no IDs or bodies.
+// trace:STORY-1843 | ai:claude
+fn deliver(out: &mut impl Write, mut response: JsonRpcResponse) -> io::Result<()> {
+    let pending = response.after_flush.take();
+    let json = serde_json::to_string(&response)?;
+    writeln!(out, "{}", json)?;
+    out.flush()?;
+    if let Some(PendingAck {
+        project_root,
+        plan,
+        store_root,
+        shown,
+    }) = pending
+    {
+        // Authority is re-resolved after the flush, before any lock.
+        let current = aida_cli_lib::mailbox_view::own_audience_in(&project_root);
+        if let Err(e) = aida_cli_lib::mailbox_view::commit_ack(&project_root, plan, &current) {
+            eprintln!(
+                "aida mcp: read_inbox mark_seen did not finish ({e:#}); call read_inbox with mark_seen again to show and record what is still unrecorded"
+            );
+        } else {
+            // Reading a hello is the advisor's ack of it, as in the CLI inbox.
+            // trace:STORY-B6B1278890774EF993D2EBC327862470-100 | ai:claude
+            let shown: Vec<&aida_core::mailbox::Message> = shown.iter().collect();
+            aida_cli_lib::advisor_handshake::ack_hellos(
+                &project_root,
+                &store_root,
+                &shown,
+                chrono::Utc::now(),
+            );
+        }
+    }
+    Ok(())
+}
+
+#[derive(Debug, Serialize)]
+struct JsonRpcError {
+    code: i64,
+    message: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    data: Option<Value>,
+}
+
+// ============================================================================
+// Stable MCP error shapes (STORY-401)
+// ============================================================================
+//
+// MCP clients (Codex, Cursor, future agents) need predictable, machine-readable
+// errors instead of free-form text. Every tool error path now renders into:
+//
+//   {
+//     "content": [{ "type": "text", "text": "<tool>: <code>: <message>" }],
+//     "isError": true,
+//     "structuredError": { "code", "message", "tool", "recoverable" }
+//   }
+//
+// `code` is a stable enum (`invalid_arg`, `not_found`, `conflict`, `io_error`,
+// `permission_denied`, `internal`) so clients can branch on it. The text
+// envelope stays additive and back-compatible — it's still `isError: true` with
+// a human-readable string that contains the underlying message.
+//
+// Tool functions keep returning `Result<String, String>`; the dispatch boundary
+// (`handle_tools_call`) classifies the error string into an `McpError` using the
+// `McpError::classify` heuristics. Centralizing here means a single, audited
+// mapping rather than 30 hand-edited error sites. trace:STORY-401 | ai:claude
+
+/// Stable, machine-readable error code shared across all MCP tools.
+///
+/// The string form is what lands in the `structuredError.code` field and in the
+/// `<tool>: <code>: <message>` text envelope, so these values are a contract —
+/// add new variants, never rename existing ones.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum McpErrorCode {
+    /// The caller passed a missing/blank/malformed argument. Recoverable: fix
+    /// the input and retry.
+    InvalidArg,
+    /// A referenced entity (spec, finding, lease, brief, tool, resource) does
+    /// not exist. Recoverable: the caller may retry with a valid identifier.
+    NotFound,
+    /// The request conflicts with current state (already exists, gated
+    /// transition, duplicate claim). Not recoverable by retrying the same input.
+    Conflict,
+    /// Permission/authority denied (e.g. MCP may not self-advance an
+    /// advisor-gated status). Not recoverable by retrying the same input.
+    PermissionDenied,
+    /// Filesystem / IO failure while reading or writing the substrate.
+    /// Not recoverable by the caller without operator intervention.
+    IoError,
+    /// Delivery or persistence could not be established; do not retry as a new request.
+    OutcomeUnknown,
+    /// Anything we could not classify — treated as a server-side fault.
+    Internal,
+}
+
+impl McpErrorCode {
+    /// Stable string identifier emitted in the envelope.
+    fn as_str(self) -> &'static str {
+        match self {
+            McpErrorCode::InvalidArg => "invalid_arg",
+            McpErrorCode::NotFound => "not_found",
+            McpErrorCode::Conflict => "conflict",
+            McpErrorCode::PermissionDenied => "permission_denied",
+            McpErrorCode::IoError => "io_error",
+            McpErrorCode::OutcomeUnknown => "outcome_unknown",
+            McpErrorCode::Internal => "internal",
+        }
+    }
+
+    /// Whether a client can plausibly retry after correcting its input.
+    /// `invalid_arg` / `not_found` are caller-fixable; the rest are structural.
+    fn recoverable(self) -> bool {
+        matches!(self, McpErrorCode::InvalidArg | McpErrorCode::NotFound)
+    }
+}
+
+/// A structured MCP tool error: a stable `code`, a one-line `message`, the
+/// originating `tool`, and a `recoverable` hint. trace:STORY-401 | ai:claude
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct McpError {
+    code: McpErrorCode,
+    message: String,
+    tool: String,
+}
+
+impl McpError {
+    fn new(tool: &str, code: McpErrorCode, message: impl Into<String>) -> Self {
+        Self {
+            code,
+            message: message.into(),
+            tool: tool.to_string(),
+        }
+    }
+
+    /// Classify a free-form error string (as produced by the tool functions)
+    /// into a stable `McpError`. The heuristics key off the well-known phrases
+    /// the tool functions use (`Missing required parameter`, `not found`,
+    /// `already exists`, gate-refusal text, …). Unknown shapes fall back to
+    /// `internal` so the envelope is always well-formed.
+    fn classify(tool: &str, raw: &str) -> Self {
+        let lower = raw.to_lowercase();
+        let code = if lower.contains("missing required parameter")
+            || lower.contains("cannot be empty")
+            || lower.contains("must be a string")
+            || lower.contains("must not contain")
+            || lower.starts_with("invalid ")
+            || lower.contains("invalid punt category")
+            || lower.contains("invalid brief path")
+            || lower.starts_with("unknown source")
+            || lower.starts_with("unknown action")
+        {
+            McpErrorCode::InvalidArg
+        } else if lower.contains("unknown tool")
+            || lower.contains("unknown resource")
+            || lower.contains("not found")
+        {
+            McpErrorCode::NotFound
+        } else if lower.contains("already exists")
+            || lower.contains("already acked")
+            || lower.contains("already claimed")
+            || lower.contains("conflict")
+        {
+            McpErrorCode::Conflict
+        } else if lower.contains("not advisor authority")
+            || lower.contains("advisor-gated")
+            || lower.contains("must not self-advance")
+            || lower.contains("refus")
+            || lower.contains("permission denied")
+            || lower.contains("not permitted")
+            || lower.contains("forbidden")
+        {
+            McpErrorCode::PermissionDenied
+        } else if lower.contains("io error")
+            || lower.contains("no such file")
+            || lower.contains("permission")
+            || lower.contains("os error")
+        {
+            McpErrorCode::IoError
+        } else {
+            McpErrorCode::Internal
+        };
+        Self::new(tool, code, raw.to_string())
+    }
+
+    /// Short, machine-friendly one-line text: `<tool>: <code>: <message>`.
+    /// This is what lands on the `content` text array (back-compatible: still a
+    /// string that contains the underlying message).
+    fn envelope_text(&self) -> String {
+        format!("{}: {}: {}", self.tool, self.code.as_str(), self.message)
+    }
+
+    /// The full MCP tools/call result value with `isError: true`, the text
+    /// content array, and the additive `structuredError` payload.
+    fn to_result_value(&self) -> Value {
+        json!({
+            "content": [{
+                "type": "text",
+                "text": self.envelope_text()
+            }],
+            "isError": true,
+            "structuredError": {
+                "code": self.code.as_str(),
+                "message": self.message,
+                "tool": self.tool,
+                "recoverable": self.code.recoverable()
+            }
+        })
+    }
+}
+
+impl JsonRpcResponse {
+    fn success(id: Value, result: Value) -> Self {
+        Self {
+            jsonrpc: "2.0".to_string(),
+            result: Some(result),
+            error: None,
+            id,
+            after_flush: None,
+        }
+    }
+
+    fn error(id: Value, code: i64, message: String) -> Self {
+        Self {
+            jsonrpc: "2.0".to_string(),
+            result: None,
+            error: Some(JsonRpcError {
+                code,
+                message,
+                data: None,
+            }),
+            id,
+            after_flush: None,
+        }
+    }
+}
+
+// ============================================================================
+// Lightweight lease projection
+// ============================================================================
+//
+// The canonical SessionLease lives in `main.rs` as a `pub(crate)` struct with
+// many fields. The MCP surface only needs a few; we read `.aida/sessions/*.toml`
+// directly with `#[serde(default)]` so unknown fields don't break us — and
+// crucially so the MCP server doesn't have to be rebuilt every time a new lease
+// field lands.
+
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+struct LightLease {
+    #[serde(default)]
+    id: String,
+    #[serde(default)]
+    scope: String,
+    #[serde(default)]
+    slug: String,
+    #[serde(default)]
+    owner: String,
+    #[serde(default)]
+    worktree_path: String,
+    #[serde(default)]
+    branch: String,
+    #[serde(default)]
+    started_at: String,
+    #[serde(default)]
+    hostname: String,
+    #[serde(default)]
+    role: Option<String>,
+    /// STORY-361: marks a lease that was created by the MCP `claim_task` tool
+    /// (as opposed to `aida session start`, which creates a worktree). MCP
+    /// claims are lightweight markers — `release_task` deletes them; other
+    /// AIDA commands ignore them.
+    #[serde(default)]
+    mcp_claim: bool,
+}
+
+fn leases_dir(project_root: &Path) -> PathBuf {
+    project_root.join(".aida").join("sessions")
+}
+
+// Preserve the transport path while session cleanup uses the shared helper.
+// trace:TASK-3429 | ai:codex
+pub use aida_cli_lib::mcp_claim::mcp_claim_path;
+
+fn canonicalize_worktree_arg(raw: &str) -> String {
+    let trimmed = raw.trim();
+    if trimmed.is_empty() {
+        return String::new();
+    }
+
+    Path::new(trimmed)
+        .canonicalize()
+        .unwrap_or_else(|_| PathBuf::from(trimmed))
+        .to_string_lossy()
+        .to_string()
+}
+
+/// Shell-quote a value for safe interpolation into a `Run:` command string
+/// returned by the PEEK tools. These command strings are DISPLAY-ONLY (the MCP
+/// server never executes them) — but the user copy-pastes them into a shell, so
+/// a value containing spaces, quotes, `$`, `;`, `&`, etc. would otherwise be
+/// mis-parsed or, worse, interpreted as separate arguments / metacharacters.
+/// POSIX single-quote rule: wrap in `'...'`, and escape any embedded single
+/// quote as `'\''`. A value that is already a "safe word" (alphanumerics plus a
+/// small set of shell-neutral punctuation) is returned bare to keep the common
+/// case readable. trace:TASK-712
+fn shell_quote_arg(s: &str) -> String {
+    let safe = !s.is_empty()
+        && s.bytes()
+            .all(|b| b.is_ascii_alphanumeric() || matches!(b, b'_' | b'-' | b'.' | b'/' | b'='));
+    if safe {
+        return s.to_string();
+    }
+    let mut out = String::with_capacity(s.len() + 2);
+    out.push('\'');
+    for ch in s.chars() {
+        if ch == '\'' {
+            out.push_str("'\\''");
+        } else {
+            out.push(ch);
+        }
+    }
+    out.push('\'');
+    out
+}
+
+fn list_leases(project_root: &Path) -> Vec<LightLease> {
+    let dir = leases_dir(project_root);
+    let Ok(entries) = std::fs::read_dir(&dir) else {
+        return Vec::new();
+    };
+    let mut out = Vec::new();
+    for entry in entries.flatten() {
+        let p = entry.path();
+        // Skip `.activity.toml` / `.manifest.toml` companions and staging files.
+        // trace:BUG-b6b1278890774ef993d2ebc327862470-012 | ai:claude
+        if p.extension().and_then(|s| s.to_str()) != Some("toml")
+            || p.file_name()
+                .and_then(|s| s.to_str())
+                .is_some_and(aida_cli_lib::leases::is_lease_companion)
+        {
+            continue;
+        }
+        if let Ok(content) = std::fs::read_to_string(&p) {
+            if let Ok(lease) = toml::from_str::<LightLease>(&content) {
+                if !lease.id.is_empty() {
+                    out.push(lease);
+                }
+            }
+        }
+    }
+    out.sort_by(|a, b| a.started_at.cmp(&b.started_at));
+    out
+}
+
+// ============================================================================
+// Role helpers — STORY-534 (EPIC-27)
+//
+// Like `LightLease`, `LightRole` is a tolerant projection of the role TOML the
+// CLI writes (`RoleState` in main.rs carries more fields than the MCP surface
+// needs). We read `.aida/roles/*.toml` and `~/.aida/roles/*.toml` directly with
+// `#[serde(default)]` so unknown / new fields don't break us and the MCP server
+// needn't rebuild every time a role field lands. Timestamps stay as raw RFC3339
+// strings — we only need to display them, not arithmetic on them (except a
+// best-effort "N ago"). trace:EPIC-27
+// ============================================================================
+
+#[derive(Debug, Clone, Deserialize, Default)]
+struct LightRole {
+    #[serde(default)]
+    name: String,
+    #[serde(default)]
+    purpose: Option<String>,
+    #[serde(default)]
+    created_at: Option<String>,
+    #[serde(default)]
+    last_active_at: String,
+    #[serde(default)]
+    working_directory: Option<String>,
+    #[serde(default)]
+    notes: Option<String>,
+    #[serde(default)]
+    global: bool,
+    #[serde(default)]
+    scope_tags: Vec<String>,
+    #[serde(default)]
+    scope_status: Option<String>,
+    #[serde(default)]
+    system_prompt: Option<String>,
+}
+
+/// Canonicalize a role name, mirroring main.rs's `canonical_role_name`:
+/// TASK-586 made `advisor` the canonical identifier; `dialog` is a deprecated,
+/// silently-accepted alias. trace:EPIC-27
+fn canonical_light_role_name(raw: &str) -> String {
+    if raw.eq_ignore_ascii_case("dialog") {
+        "advisor".to_string()
+    } else {
+        raw.to_string()
+    }
+}
+
+// trace:STORY-1473 | ai:codex
+/// The validated grant captured by this MCP server process. The role env is
+/// only a display hint and cannot authorize tools.
+fn role_active_env() -> Option<String> {
+    aida_cli_lib::gate::seat_authority::current_seat(&aida_cli_lib::statusline_project_root())
+}
+
+fn mcp_server_role_label() -> String {
+    role_active_env().unwrap_or_else(|| "(none)".to_string())
+}
+
+fn mcp_authority_line_for(server_role: Option<&str>, caller_role: Option<&str>) -> String {
+    // trace:BUG-1043 | ai:codex
+    let server_role = server_role
+        .map(canonical_light_role_name)
+        .filter(|r| !r.trim().is_empty())
+        .unwrap_or_else(|| "(none)".to_string());
+    let caller_role = caller_role
+        .map(canonical_light_role_name)
+        .filter(|r| !r.trim().is_empty())
+        .unwrap_or_else(|| "unknown over stdio MCP".to_string());
+    let advisor =
+        aida_cli_lib::gate::role_authority::advisor_authority_from(&server_role, false, false);
+    format!(
+        "MCP authority: server seat={} (advisor authority: {}); caller shell hint={}; enter advisor at a TTY, then restart the MCP server",
+        server_role,
+        if advisor { "yes" } else { "no" },
+        caller_role
+    )
+}
+
+fn mcp_authority_line() -> String {
+    mcp_authority_line_for(role_active_env().as_deref(), None)
+}
+
+fn mcp_advisor_refusal_guidance(caller_role: Option<&str>) -> String {
+    format!(
+        "{}. The MCP server uses its validated startup grant; a caller shell hint cannot elevate an already-running server. Enter advisor at a TTY, restart the MCP server, and reconnect the client.",
+        mcp_authority_line_for(role_active_env().as_deref(), caller_role)
+    )
+}
+
+fn project_roles_dir(project_root: &Path) -> PathBuf {
+    project_root.join(".aida").join("roles")
+}
+
+fn global_roles_dir() -> Option<PathBuf> {
+    aida_cli_lib::home_dir().map(|h| h.join(".aida").join("roles"))
+}
+
+/// List all roles for the project (and any global roles), newest-active first,
+/// de-duplicated by canonical name. Mirrors main.rs `list_roles`. trace:EPIC-27
+fn list_light_roles(project_root: &Path) -> Vec<LightRole> {
+    let mut roles: Vec<LightRole> = Vec::new();
+    for dir in [Some(project_roles_dir(project_root)), global_roles_dir()]
+        .into_iter()
+        .flatten()
+    {
+        let Ok(entries) = std::fs::read_dir(&dir) else {
+            continue;
+        };
+        for entry in entries.flatten() {
+            let p = entry.path();
+            if p.extension().and_then(|s| s.to_str()) != Some("toml") {
+                continue;
+            }
+            if let Ok(content) = std::fs::read_to_string(&p) {
+                if let Ok(mut role) = toml::from_str::<LightRole>(&content) {
+                    if role.name.is_empty() {
+                        continue;
+                    }
+                    role.name = canonical_light_role_name(&role.name);
+                    roles.push(role);
+                }
+            }
+        }
+    }
+    // Newest-active first, then drop the canonical-name duplicate (a machine
+    // mid-migration can have both `advisor.toml` and the legacy `dialog.toml`).
+    // trace:BUG-1116 | ai:codex
+    // Keep light-role recency consistent with the main role listing: newest
+    // stored activity first, with deterministic ordering for timestamp ties.
+    roles.sort_by(|a, b| {
+        b.last_active_at
+            .cmp(&a.last_active_at)
+            .then_with(|| a.name.cmp(&b.name))
+    });
+    let mut seen = std::collections::HashSet::new();
+    roles.retain(|r| seen.insert(r.name.clone()));
+    roles
+}
+
+/// Load a single role by (already-canonicalized) name, checking the project dir
+/// first, then the global dir; the legacy `dialog.toml` is accepted as the
+/// advisor role. trace:EPIC-27
+fn load_light_role(project_root: &Path, canonical: &str) -> Option<LightRole> {
+    let mut candidates = vec![canonical.to_string()];
+    if canonical == "advisor" {
+        candidates.push("dialog".to_string());
+    }
+    for cand in &candidates {
+        let mut paths: Vec<PathBuf> =
+            vec![project_roles_dir(project_root).join(format!("{}.toml", cand))];
+        if let Some(g) = global_roles_dir() {
+            paths.push(g.join(format!("{}.toml", cand)));
+        }
+        for path in paths {
+            if let Ok(content) = std::fs::read_to_string(&path) {
+                if let Ok(mut role) = toml::from_str::<LightRole>(&content) {
+                    role.name = canonical_light_role_name(&role.name);
+                    return Some(role);
+                }
+            }
+        }
+    }
+    None
+}
+
+/// Best-effort "N ago" for an RFC3339 timestamp string, mirroring main.rs's
+/// `humanize_relative`. Falls back to the raw string when it won't parse.
+/// trace:EPIC-27
+fn light_role_relative(rfc3339: &str) -> String {
+    let Ok(parsed) = chrono::DateTime::parse_from_rfc3339(rfc3339) else {
+        return rfc3339.to_string();
+    };
+    let now = chrono::Utc::now();
+    let secs = now
+        .signed_duration_since(parsed.with_timezone(&chrono::Utc))
+        .num_seconds();
+    if secs < 0 {
+        return "just now".to_string();
+    }
+    if secs < 60 {
+        return format!("{}s ago", secs);
+    }
+    let mins = secs / 60;
+    if mins < 60 {
+        return format!("{}m ago", mins);
+    }
+    let hours = mins / 60;
+    if hours < 24 {
+        return format!("{}h ago", hours);
+    }
+    format!("{}d ago", hours / 24)
+}
+
+// ============================================================================
+// MCP Server
+// ============================================================================
+
+struct McpServer<'a> {
+    storage: &'a Storage,
+    /// Project root for resolving `.aida/` coordination files. STORY-361.
+    project_root: PathBuf,
+    /// Active tool profile governing which tools are advertised + callable.
+    /// trace:STORY-474 | ai:claude
+    profile: McpProfile,
+    // trace:BUG-1197 | ai:codex
+    /// Persona envelope inherited from the launching session. Unlike an MCP
+    /// profile, this is not operator-configurable and can only narrow access.
+    stakeholder_role: Option<String>,
+}
+
+/// Helper to get the display spec_id from a Requirement
+fn spec_id(r: &Requirement) -> &str {
+    r.spec_id.as_deref().unwrap_or("?")
+}
+
+/// Install the store's friendly node-label map for this process, so tool
+/// spec-ID arguments accept `TYPE-<LABEL>-NNN` and rows show it.
+// trace:STORY-B6B1278890774EF993D2EBC327862470-078 | ai:claude
+fn install_node_aliases(storage: &Storage, project_root: &std::path::Path) {
+    let store_root = if storage.path().is_dir() {
+        storage.path().to_path_buf()
+    } else {
+        project_root.join(".aida-store")
+    };
+    aida_core::node_alias::install_from_store(&store_root);
+}
+
+/// A spec id as MCP rows show it: the canonical id stays first (agents act on
+/// it), followed by an additive `display_id` naming the friendly node label
+/// when one applies — `BUG-B6B1…-001 (display_id: BUG-HOME-001)`.
+// trace:STORY-B6B1278890774EF993D2EBC327862470-078 | ai:claude
+fn mcp_id_cell(canonical: &str) -> String {
+    let display = aida_core::node_alias::display_spec_id(canonical);
+    if display.eq_ignore_ascii_case(canonical) {
+        canonical.to_string()
+    } else {
+        format!("{canonical} (display_id: {display})")
+    }
+}
+
+/// STORY-82: render a `## Git linkage` Markdown section for a spec, reusing
+/// the same collection `aida show` walks (referencing commits, feature
+/// branch / worktree, shipped state, PR). `verbose` expands the per-commit
+/// and trace-file lists, matching `aida show --verbose`. Returns an empty
+/// string when there is no git context, so callers can append unconditionally.
+///
+/// TASK-2000: this is the MCP face of `aida show`, so it runs under the same
+/// one linkage deadline ([`aida_cli_lib::SHOW_LINKAGE_DEADLINE`]) the CLI show
+/// surfaces use: default-branch resolution, the worktree probe, and every
+/// per-call budget are clipped to it, and a scan it cuts short renders as
+/// unknown / incomplete below instead of stalling the tool call.
+// trace:STORY-82 trace:TASK-2000 | ai:claude
+pub(crate) fn render_git_linkage_md(project_root: &Path, spec_id: &str, verbose: bool) -> String {
+    let ids = vec![spec_id.to_string()];
+    let deadline = std::time::Instant::now() + aida_cli_lib::SHOW_LINKAGE_DEADLINE;
+    let linkage = aida_cli_lib::collect_git_linkage_until(project_root, &ids, deadline);
+
+    // BUG-1594 (PRIN-5): a bounded scan that stopped early is reported as
+    // partial, never as a complete (or empty) linkage. trace:BUG-1594 | ai:claude
+    // trace:BUG-1993 | ai:claude — commit-scan / shipped-check timeouts too.
+    let incomplete = linkage.incomplete_notes();
+    let incomplete_md: String = incomplete
+        .iter()
+        .map(|n| format!("- **Incomplete:** {n}\n"))
+        .collect();
+
+    if linkage.commits.is_empty() && linkage.files.is_empty() {
+        if !incomplete_md.is_empty() {
+            return format!("\n## Git linkage\n\n{incomplete_md}");
+        }
+        return "\n## Git linkage\n\nNo commits or trace comments reference this spec yet.\n"
+            .to_string();
+    }
+
+    let mut out = String::from("\n## Git linkage\n\n");
+
+    // trace:BUG-1993 | ai:claude — a timed-out check is unknown, not unshipped.
+    // trace:BUG-1993 | ai:claude — name WHICH scan timed out.
+    let state = if let Some(reason) = linkage.unknown_reason() {
+        format!("unknown ({reason})")
+    } else if linkage.shipped {
+        match linkage.shipped_pr {
+            Some(pr) => format!("shipped (merged via PR #{})", pr),
+            None => "shipped (merged to the default branch)".to_string(),
+        }
+    } else if let Some(branch) = &linkage.branch {
+        format!("in flight on branch `{}`", branch)
+    } else {
+        "referenced (not yet on the default branch)".to_string()
+    };
+    out.push_str(&format!("- **State:** {}\n", state));
+
+    if let Some(worktree) = &linkage.worktree {
+        out.push_str(&format!("- **Worktree:** {}\n", worktree));
+    }
+
+    out.push_str(&format!("- **Commits:** {}\n", linkage.commits.len()));
+    if verbose {
+        for (_, short, subject) in &linkage.commits {
+            out.push_str(&format!("  - {} {}\n", short, subject));
+        }
+    } else if let Some((_, short, subject)) = linkage.commits.first() {
+        out.push_str(&format!("  - latest: {} {}\n", short, subject));
+    }
+
+    out.push_str(&format!("- **Traced files:** {}\n", linkage.files.len()));
+    if verbose {
+        for (file, symbol) in &linkage.files {
+            match symbol {
+                Some(sym) => out.push_str(&format!("  - {} ({})\n", file, sym)),
+                None => out.push_str(&format!("  - {}\n", file)),
+            }
+        }
+    }
+    out.push_str(&incomplete_md);
+
+    out
+}
+
+/// The MCP `post_punt` status flip: `NeedsAttention` when the STORY-332
+/// transition guard allows it (from In Progress or Done), otherwise no change,
+/// so a terminal spec is never moved. Returns whether the status changed.
+///
+/// BUG-1632: an agent's punt is an automated write, so the flip is recorded in
+/// the status history under [`aida_core::conflict::MCP_PUNT_AUTHOR`]; the
+/// BUG-1625 merge guard then keeps a terminal status another clone reached
+/// meanwhile.
+// trace:BUG-334 trace:BUG-1632 | ai:claude
+pub(crate) fn mcp_punt_status_flip(req: &mut aida_core::Requirement) -> bool {
+    if aida_core::forbidden_attention_transition(
+        &req.status,
+        &aida_core::RequirementStatus::NeedsAttention,
+    )
+    .is_some()
+    {
+        return false;
+    }
+    let from = req.status.clone();
+    req.status = aida_core::RequirementStatus::NeedsAttention;
+    aida_core::conflict::record_status_transition(req, aida_core::conflict::MCP_PUNT_AUTHOR, &from);
+    req.modified_at = Utc::now();
+    true
+}
+
+impl<'a> McpServer<'a> {
+    fn new(storage: &'a Storage, project_root: PathBuf) -> Self {
+        // trace:STORY-474 | ai:claude — resolve the active profile from env /
+        // config at construction (no CLI override here; the override path is
+        // exercised via `with_profile`).
+        let profile = resolve_mcp_profile(&project_root, None);
+        Self {
+            storage,
+            project_root,
+            profile,
+            stakeholder_role: aida_cli_lib::active_stakeholder_role(),
+        }
+    }
+
+    /// Construct with an explicit profile, bypassing env/config resolution.
+    /// Used by tests and any future CLI `--profile` override. trace:STORY-474
+    #[cfg(test)]
+    fn with_profile(storage: &'a Storage, project_root: PathBuf, profile: McpProfile) -> Self {
+        Self {
+            storage,
+            project_root,
+            profile,
+            stakeholder_role: None,
+        }
+    }
+
+    #[cfg(test)]
+    fn with_profile_and_role(
+        storage: &'a Storage,
+        project_root: PathBuf,
+        profile: McpProfile,
+        stakeholder_role: &str,
+    ) -> Self {
+        Self {
+            storage,
+            project_root,
+            profile,
+            stakeholder_role: Some(stakeholder_role.to_string()),
+        }
+    }
+
+    fn handle_request(&self, req: &JsonRpcRequest) -> Option<JsonRpcResponse> {
+        let id = req.id.clone().unwrap_or(Value::Null);
+
+        let running = McpBinaryIdentity::current();
+        // STORY-435: heartbeat — every JSON-RPC request (tools/call,
+        // tools/list, ping, …) bumps the registry entry's last_active_at
+        // so `aida status` can compute busy/idle off recency.
+        // trace:STORY-435 | ai:claude
+        let _ = agent_registry::touch_mcp_agent(
+            &self.project_root,
+            &AgentBinaryIdentity::new(running.version, running.sha),
+        );
+
+        // Notifications (no id) don't get responses
+        if req.id.is_none() && req.method == "notifications/initialized" {
+            return None;
+        }
+
+        let response = match req.method.as_str() {
+            "initialize" => self.handle_initialize(&id),
+            "tools/list" => self.handle_tools_list(&id),
+            "tools/call" => self.handle_tools_call(&id, &req.params),
+            "resources/list" => self.handle_resources_list(&id),
+            "resources/templates/list" => self.handle_resources_templates_list(&id),
+            "resources/read" => self.handle_resources_read(&id, &req.params),
+            "ping" => JsonRpcResponse::success(id, json!({})),
+            _ => JsonRpcResponse::error(id, -32601, format!("Method not found: {}", req.method)),
+        };
+
+        Some(response)
+    }
+
+    fn handle_initialize(&self, id: &Value) -> JsonRpcResponse {
+        JsonRpcResponse::success(
+            id.clone(),
+            json!({
+                "protocolVersion": "2024-11-05",
+                "capabilities": {
+                    "tools": {},
+                    "resources": {}
+                },
+                "serverInfo": {
+                    "name": "aida",
+                    "version": env!("CARGO_PKG_VERSION")
+                }
+            }),
+        )
+    }
+
+    fn handle_tools_list(&self, id: &Value) -> JsonRpcResponse {
+        // trace:STORY-474 | ai:claude — advertise only the tools the active
+        // profile exposes, each tagged with the tier that admits it.
+        let mut tools = tool_descriptors_for_profile(self.profile);
+        if let Some(role) = self.stakeholder_role.as_deref() {
+            if let Some(descriptors) = tools.as_array_mut() {
+                descriptors.retain(|tool| {
+                    tool.get("name")
+                        .and_then(Value::as_str)
+                        .map(|name| stakeholder_tool_allowed(role, name))
+                        .unwrap_or(false)
+                });
+            }
+        }
+        JsonRpcResponse::success(id.clone(), json!({ "tools": tools }))
+    }
+
+    fn handle_tools_call(&self, id: &Value, params: &Value) -> JsonRpcResponse {
+        // Re-arm for each call, including calls that return early. A long-lived
+        // server must never inherit a previous call's stale observation.
+        // trace:TASK-1526 | ai:codex
+        let cache_scope = aida_core::db::cache_refresh::CacheReadScope::new();
+        // A long-lived server sees labels set or renamed since startup: the
+        // map is one small file, re-read per call.
+        // trace:STORY-B6B1278890774EF993D2EBC327862470-078 | ai:claude
+        install_node_aliases(self.storage, &self.project_root);
+        let tool_name = params.get("name").and_then(|v| v.as_str()).unwrap_or("");
+        let mut arguments = params.get("arguments").cloned().unwrap_or(json!({}));
+        // The response-scoped ACK plan a `read_inbox` call may prepare.
+        // trace:STORY-1843 | ai:claude
+        let mut after_flush: Option<PendingAck> = None;
+
+        // BUG-1197: the inherited persona is a hard boundary at call time, not
+        // merely a tools/list hint. This also protects against clients that
+        // cached a wider descriptor set before the server restarted.
+        if let Some(role) = self.stakeholder_role.as_deref() {
+            if is_known_tool(tool_name) && !stakeholder_tool_allowed(role, tool_name) {
+                return JsonRpcResponse::success(
+                    id.clone(),
+                    McpError::classify(
+                        tool_name,
+                        &aida_cli_lib::stakeholder_refusal_message(
+                            role,
+                            aida_cli_lib::stakeholder_action_label(stakeholder_mcp_action(
+                                tool_name,
+                            )),
+                        ),
+                    )
+                    .to_result_value(),
+                );
+            }
+            if role == "requester" && tool_name == "add_requirement" {
+                if let Err(message) = constrain_requester_intake(&mut arguments) {
+                    return JsonRpcResponse::success(
+                        id.clone(),
+                        McpError::classify(tool_name, &message).to_result_value(),
+                    );
+                }
+            }
+        }
+
+        // trace:STORY-474 | ai:claude — the profile is a real boundary, not just
+        // a discovery filter: reject a tool that exists but is above the active
+        // tier, even if a client calls it by name. Unknown tools fall through to
+        // the dispatch's own "Unknown tool" error below.
+        if !tool_name.is_empty()
+            && is_known_tool(tool_name)
+            && !tool_in_profile(tool_name, self.profile)
+        {
+            return JsonRpcResponse::success(
+                id.clone(),
+                McpError::classify(
+                    tool_name,
+                    &format!(
+                        "tool '{}' not permitted: requires the '{}' profile but the server is running the '{}' profile (set AIDA_MCP_PROFILE or [mcp] profile to widen the surface)",
+                        tool_name,
+                        tool_min_profile(tool_name).as_str(),
+                        self.profile.as_str()
+                    ),
+                )
+                .to_result_value(),
+            );
+        }
+
+        let result = match tool_name {
+            // Spec-graph tools
+            "list_requirements" => self.tool_list_requirements(&arguments),
+            "show_requirement" => self.tool_show_requirement(&arguments),
+            "add_requirement" => self.tool_add_requirement(&arguments),
+            "update_requirement" => self.tool_update_requirement(&arguments),
+            "search_requirements" => self.tool_search_requirements(&arguments),
+            "add_comment" => self.tool_add_comment(&arguments),
+            "add_relationship" => self.tool_add_relationship(&arguments),
+            "query_graph" => self.tool_query_graph(&arguments),
+            "send_message" => self.tool_send_message(&arguments),
+            "read_inbox" => self
+                .tool_read_inbox_planned(&arguments)
+                .map(|(text, plan)| {
+                    after_flush = plan;
+                    text
+                }),
+            "list_features" => self.tool_list_features(),
+            "history" => self.tool_history(&arguments),
+
+            // Coordination tools — STORY-361
+            // Punt channel (.aida/punts.jsonl + .aida/punts/)
+            "list_punts" => self.tool_list_punts(&arguments),
+            "read_punt" => self.tool_read_punt(&arguments),
+            "post_punt" => self.tool_post_punt(&arguments),
+            "resolve_punt" => self.tool_resolve_punt(&arguments),
+            "escalate_punt" => self.tool_escalate_punt(&arguments),
+
+            // Findings channel (draft requirements with from-* tags)
+            "list_findings" => self.tool_list_findings(&arguments),
+            "file_finding" => self.tool_file_finding(&arguments),
+            "triage_finding" => self.tool_triage_finding(&arguments),
+
+            // Task-claim channel (.aida/sessions/*.toml)
+            "claim_task" => self.tool_claim_task(&arguments),
+            "release_task" => self.tool_release_task(&arguments),
+            "list_active_leases" => self.tool_list_active_leases(),
+
+            // Worker-directive channel (.aida/worker.cmd)
+            "post_directive" => self.tool_post_directive(&arguments),
+            "list_directives" => self.tool_list_directives(),
+            "ack_directive" => self.tool_ack_directive(&arguments),
+
+            // Agent-brief channel (.aida/agent-briefs/<agent>/)
+            "list_briefs" => self.tool_list_briefs(&arguments),
+            "read_brief" => self.tool_read_brief(&arguments),
+            "ack_brief" => self.tool_ack_brief(&arguments),
+
+            // Queue tools — STORY-532 (EPIC-27). Mirror the `aida queue`
+            // CLI surface so agents can manage the work queue over MCP
+            // instead of shelling out. trace:EPIC-27
+            "queue_list" => self.tool_queue_list(&arguments),
+            "queue_add" => self.tool_queue_add(&arguments),
+            "queue_work" => self.tool_queue_work(&arguments),
+            "queue_done" => self.tool_queue_done(&arguments),
+            "queue_next" => self.tool_queue_next(&arguments),
+            "queue_progress" => self.tool_queue_progress(&arguments),
+            "queue_rework" => self.tool_queue_rework(&arguments),
+            "queue_move" => self.tool_queue_move(&arguments),
+            "queue_remove" => self.tool_queue_remove(&arguments),
+
+            // Session tools — STORY-533 (EPIC-27). Mirror the `aida session`
+            // CLI surface so agents can inspect scoped session leases +
+            // manifests over MCP. session_start / session_end are PEEKS — the
+            // launch / worktree-removal acts are subprocess-driven and stay
+            // CLI-only (the queue_work precedent). trace:EPIC-27
+            "session_leases" => self.tool_session_leases(&arguments),
+            "session_status" => self.tool_session_status(&arguments),
+            "session_manifest" => self.tool_session_manifest(&arguments),
+            "session_start" => self.tool_session_start(&arguments),
+            "session_end" => self.tool_session_end(&arguments),
+
+            // Role tools — STORY-534 (EPIC-27). Mirror the `aida role` CLI
+            // surface so agents can inspect the persona set over MCP.
+            // role_show / role_list read `.aida/roles/*.toml` (+ ~/.aida/roles)
+            // directly. role_enter / role_end are PEEKS — entering/ending a
+            // role sets the *shell's* `AIDA_SESSION_ROLE` (role identity is
+            // shell-keyed, like the queue user; see BUG-89), an act the
+            // stateless MCP server cannot perform for the caller, so they
+            // return the `aida role enter/end …` command instead (the
+            // queue_work / session_start PEEK precedent). trace:EPIC-27
+            "role_list" => self.tool_role_list(&arguments),
+            "role_show" => self.tool_role_show(&arguments),
+            "role_enter" => self.tool_role_enter(&arguments),
+            "role_end" => self.tool_role_end(&arguments),
+
+            // Workflow tools — STORY-536 (EPIC-27). The remaining CLI long
+            // tail: the read-only library mirrors (cache_status, plan_verify,
+            // plan_helpers, ultraplan_assemble, goal_derive, status_unified,
+            // usage_query) compute in-process from the same helpers the CLI
+            // uses (no subprocess to `aida`). db_sync / fetch / pull are git
+            // network + working-tree / store mutations driven by subprocess
+            // `git`; surfacing them as in-process MCP mutations would surprise
+            // the caller (working-tree changes, remote pushes), so they follow
+            // the queue_work / session_start PEEK precedent — they return the
+            // exact `aida …` command to run. trace:EPIC-27
+            "cache_status" => self.tool_cache_status(&arguments),
+            "plan_verify" => self.tool_plan_verify(&arguments),
+            "plan_helpers" => self.tool_plan_helpers(&arguments),
+            "ultraplan_assemble" => self.tool_ultraplan_assemble(&arguments),
+            "goal_derive" => self.tool_goal_derive(&arguments),
+            "status_unified" => self.tool_status_unified(&arguments),
+            "usage_query" => self.tool_usage_query(&arguments),
+            "db_sync" => self.tool_db_sync(&arguments),
+            "fetch" => self.tool_fetch(&arguments),
+            "pull" => self.tool_pull(&arguments),
+
+            // TASK-715: storable-substrate introspection. trace:TASK-715
+            "schema" => self.tool_schema(&arguments),
+
+            _ => Err(format!("Unknown tool: {}", tool_name)),
+        };
+
+        match result {
+            // STORY-399 (Path B): emit `structuredContent` matching the declared
+            // `outputSchema` alongside the text envelope. Additive — the text
+            // `content` array is preserved verbatim so legacy text consumers
+            // (Claude Code) keep working; schema-driven clients (Codex, Cursor)
+            // read the same logical payload out of `structuredContent` without
+            // parsing the human string. trace:STORY-399 | ai:claude
+            Ok(content) => {
+                let mut response = JsonRpcResponse::success(
+                    id.clone(),
+                    cache_labelled_tool_result(content, &cache_scope),
+                );
+                response.after_flush = after_flush;
+                response
+            }
+            // STORY-401: render the free-form tool error into a stable,
+            // machine-readable envelope — `isError: true`, a short
+            // `<tool>: <code>: <message>` text, and a `structuredError`
+            // payload clients can branch on. trace:STORY-401 | ai:claude
+            Err(e) => JsonRpcResponse::success(
+                id.clone(),
+                cache_labelled_result(
+                    McpError::classify(tool_name, &e).to_result_value(),
+                    &cache_scope,
+                ),
+            ),
+        }
+    }
+
+    fn handle_resources_list(&self, id: &Value) -> JsonRpcResponse {
+        JsonRpcResponse::success(
+            id.clone(),
+            json!({
+                "resources": [
+                    {
+                        "uri": "aida://project/summary",
+                        "name": "Project Summary",
+                        "description": "Project statistics and feature list",
+                        "mimeType": "text/plain"
+                    },
+                    {
+                        "uri": "aida://requirements/tree",
+                        "name": "Requirements Tree",
+                        "description": "Requirement hierarchy overview",
+                        "mimeType": "text/plain"
+                    },
+                    // EPIC-27 (STORY-535): live-state resources. These mirror the
+                    // read-only CLI surfaces (`aida queue list --in-flight-only`,
+                    // `aida session leases`) but as MCP *resources* — addressable
+                    // live state an agent can subscribe-poll rather than tool calls
+                    // it invokes. They back onto the SAME library helpers the CLI /
+                    // equivalent MCP tools use (no subprocess to `aida`).
+                    // trace:STORY-535 trace:EPIC-27
+                    {
+                        "uri": "aida://queue/in-flight",
+                        "name": "Queue — in-flight",
+                        "description": "Specs with a live session/MCP-claim lease, plus Done-awaiting-merge work",
+                        "mimeType": "text/plain"
+                    },
+                    {
+                        "uri": "aida://session/leases",
+                        "name": "Session leases",
+                        "description": "Active scoped session leases (who holds what right now)",
+                        "mimeType": "text/plain"
+                    },
+                    // TASK-715: the storable-substrate schema as a resource — the
+                    // catalog of storable object kinds an agent can read to
+                    // discover the shape natively (mirrors `aida schema --json`).
+                    // Per-object detail is the `aida://schema/{object}` template
+                    // below. Backs onto `aida_cli_lib::schema::catalog_json` (the same
+                    // value the CLI emits) — no subprocess to `aida`. Body is the
+                    // pretty JSON carried in the `text/plain` envelope all AIDA
+                    // resources use. trace:TASK-715
+                    {
+                        "uri": "aida://schema",
+                        "name": "Storable-object schema (catalog)",
+                        "description": "Catalog of storable object kinds (mirrors `aida schema --json`); per-object field/enum detail via aida://schema/{object}",
+                        "mimeType": "text/plain"
+                    }
+                ]
+            }),
+        )
+    }
+
+    /// EPIC-27 (STORY-535): advertise the parameterized live-state resources as
+    /// RFC-6570 URI templates. The MCP protocol carries these on a distinct
+    /// `resources/templates/list` method (separate from the concrete-URI
+    /// `resources/list`), so clients that understand templates can expand
+    /// `aida://pr/{n}` / `aida://batch/{name}` themselves; the matching read
+    /// logic lives in `handle_resources_read`. trace:STORY-535 trace:EPIC-27
+    fn handle_resources_templates_list(&self, id: &Value) -> JsonRpcResponse {
+        JsonRpcResponse::success(
+            id.clone(),
+            json!({
+                "resourceTemplates": [
+                    {
+                        "uriTemplate": "aida://pr/{n}",
+                        "name": "PR linkage",
+                        "description": "Spec/finding linkage for pull-request number N (git-canonical, gh-free)",
+                        "mimeType": "text/plain"
+                    },
+                    {
+                        "uriTemplate": "aida://batch/{name}",
+                        "name": "Batch progress",
+                        "description": "Progress buckets for the batch:<name> tag set",
+                        "mimeType": "text/plain"
+                    },
+                    // TASK-1278: byte-identical mirror of `aida protocol show`.
+                    // The optional second segment selects a lane overlay.
+                    {
+                        "uriTemplate": "aida://protocol/{type}",
+                        "name": "Resolved type protocol",
+                        "description": "Editable type protocol (mirrors aida protocol show <type>)",
+                        "mimeType": "text/plain"
+                    },
+                    {
+                        "uriTemplate": "aida://protocol/{type}/{lane}",
+                        "name": "Resolved type + lane protocol",
+                        "description": "Merged type and lane protocol with precedence labels",
+                        "mimeType": "text/plain"
+                    },
+                    // TASK-715: per-object schema detail. `aida://schema/requirement`
+                    // returns the reflection-derived field table + the four
+                    // controlled-vocabulary enums (status/type/priority/relationship)
+                    // in on-the-wire token form; every other catalog kind returns
+                    // its reflection-derived field table (TASK-714's registry).
+                    // Mirrors `aida schema <object> --json`.
+                    // trace:TASK-715
+                    {
+                        "uriTemplate": "aida://schema/{object}",
+                        "name": "Storable-object schema (detail)",
+                        "description": "Per-object field + controlled-vocabulary detail (mirrors `aida schema <object> --json`; Requirement is reflection-derived)",
+                        "mimeType": "text/plain"
+                    }
+                ]
+            }),
+        )
+    }
+
+    fn handle_resources_read(&self, id: &Value, params: &Value) -> JsonRpcResponse {
+        let uri = params.get("uri").and_then(|v| v.as_str()).unwrap_or("");
+
+        // EPIC-27 (STORY-535): static resources match by exact URI; the two
+        // parameterized templates are matched by prefix + a parsed tail, since
+        // the protocol layer has no built-in URI-template expander. The order
+        // matters only in that the exact matches are cheap string compares.
+        // trace:STORY-535 trace:EPIC-27
+        let result = match uri {
+            "aida://project/summary" => self.resource_project_summary(),
+            "aida://requirements/tree" => self.resource_requirements_tree(),
+            "aida://queue/in-flight" => self.resource_queue_in_flight(),
+            "aida://session/leases" => self.resource_session_leases(),
+            // TASK-715: `aida://schema` (exact) is the catalog; the
+            // `aida://schema/<object>` template is matched below after the
+            // exact-URI cases so the bare catalog URI wins. trace:TASK-715
+            "aida://schema" => self.resource_schema_catalog(),
+            _ => {
+                if let Some(path) = uri.strip_prefix("aida://protocol/") {
+                    self.resource_protocol(path)
+                } else if let Some(object) = uri.strip_prefix("aida://schema/") {
+                    self.resource_schema_object(object)
+                } else if let Some(n) = uri.strip_prefix("aida://pr/") {
+                    self.resource_pr(n)
+                } else if let Some(name) = uri.strip_prefix("aida://batch/") {
+                    self.resource_batch(name)
+                } else {
+                    Err(format!("Unknown resource: {}", uri))
+                }
+            }
+        };
+
+        match result {
+            Ok(content) => JsonRpcResponse::success(
+                id.clone(),
+                json!({
+                    "contents": [{
+                        "uri": uri,
+                        "mimeType": "text/plain",
+                        "text": content
+                    }]
+                }),
+            ),
+            Err(e) => JsonRpcResponse::error(id.clone(), -32602, e),
+        }
+    }
+
+    // ========================================================================
+    // Spec-graph tool implementations
+    // ========================================================================
+
+    // trace:STORY-82 | ai:claude
+    fn tool_list_requirements(&self, args: &Value) -> Result<String, String> {
+        let store = self.storage.load_for_read().map_err(|e| e.to_string())?;
+        let status_filter = args.get("status").and_then(|v| v.as_str());
+        let type_filter = args.get("type").and_then(|v| v.as_str());
+        let priority_filter = args.get("priority").and_then(|v| v.as_str());
+        let feature_filter = args.get("feature").and_then(|v| v.as_str());
+        // STORY-639: assignee filter — exact match, mirroring `aida list
+        // --assigned <user>`. trace:STORY-639 | ai:claude
+        let assignee_filter = args.get("assignee").and_then(|v| v.as_str());
+        // STORY-662: owner-or-assignee filter — exact match on EITHER, mirroring
+        // `aida list --user <name>`. trace:STORY-662 | ai:claude
+        let user_filter = args.get("user").and_then(|v| v.as_str());
+        // FR-283: numeric weight bounds, mirroring `aida list --min-weight` /
+        // `--max-weight`. Specs with no weight set fail a bounded query.
+        // trace:FR-283 | ai:claude
+        let min_weight = args.get("min_weight").and_then(|v| v.as_f64());
+        let max_weight = args.get("max_weight").and_then(|v| v.as_f64());
+        let limit = args.get("limit").and_then(|v| v.as_u64()).unwrap_or(50) as usize;
+
+        // STORY-82: tags filter — CSV, AND-match (a row must carry ALL of them),
+        // mirroring the `aida list --tags` semantic.
+        let tag_filters: Vec<String> = args
+            .get("tags")
+            .and_then(|v| v.as_str())
+            .map(|s| {
+                s.split(',')
+                    .map(|t| t.trim().to_string())
+                    .filter(|t| !t.is_empty())
+                    .collect()
+            })
+            .unwrap_or_default();
+
+        // STORY-82: batch filter — shorthand for the `batch:<NAME>` tag,
+        // matching `aida list --batch`.
+        let batch_tag = args
+            .get("batch")
+            .and_then(|v| v.as_str())
+            .map(|b| format!("batch:{}", b.trim()))
+            .filter(|b| b != "batch:");
+
+        // STORY-82: role/for filter — requirements don't carry a role field
+        // (that's a queue-routing concept), so we match a `role:<value>` tag
+        // on the spec. `for` is an accepted alias for `role`.
+        let role_tag = args
+            .get("role")
+            .or_else(|| args.get("for"))
+            .and_then(|v| v.as_str())
+            .map(|r| format!("role:{}", r.trim().to_ascii_lowercase()))
+            .filter(|r| r != "role:");
+
+        // STORY-82: parent filter — direct children of <parent>, found via the
+        // parent's outgoing `Parent` relationship edges (mirrors
+        // `aida list --parent`).
+        let parent_child_ids: Option<std::collections::HashSet<uuid::Uuid>> =
+            match args.get("parent").and_then(|v| v.as_str()) {
+                Some(parent_ref) => {
+                    let parent = store
+                        .get_requirement_by_spec_id(parent_ref)
+                        .ok_or_else(|| format!("parent '{}': requirement not found", parent_ref))?;
+                    Some(
+                        parent
+                            .relationships
+                            .iter()
+                            .filter(|rel| rel.rel_type == RelationshipType::Parent)
+                            .map(|rel| rel.target_id)
+                            .collect(),
+                    )
+                }
+                None => None,
+            };
+
+        // STORY-82: in_flight filter — restrict to specs with a live session
+        // or MCP-claim lease. Lease scopes are matched case-insensitively
+        // against the spec id (the lease `scope` records the owned spec/epic).
+        let in_flight_only = args
+            .get("in_flight")
+            .and_then(|v| v.as_bool())
+            .unwrap_or(false);
+        let in_flight_scopes: std::collections::HashSet<String> = if in_flight_only {
+            list_leases(&self.project_root)
+                .into_iter()
+                .map(|l| l.scope.to_ascii_lowercase())
+                .filter(|s| !s.is_empty())
+                .collect()
+        } else {
+            std::collections::HashSet::new()
+        };
+
+        // BUG-591: mirror the CLI's archive (STORY-441) + deferred (STORY-584)
+        // view tiers. The default view hides BOTH archived and deferred rows so
+        // an MCP agent's baseline picture matches `aida list` — the STORY-82
+        // "MCP mirrors CLI" contract. `archived` / `deferred` narrow to that one
+        // tier; `all` widens to the union of all three tiers. Resolved into the
+        // shared two-axis predicate below. trace:BUG-591 | ai:claude
+        let show_all = args.get("all").and_then(|v| v.as_bool()).unwrap_or(false);
+        let archived_only = args
+            .get("archived")
+            .and_then(|v| v.as_bool())
+            .unwrap_or(false);
+        let deferred_only = args
+            .get("deferred")
+            .and_then(|v| v.as_bool())
+            .unwrap_or(false);
+        let view = ViewTierFilter::resolve(show_all, archived_only, deferred_only);
+
+        let filtered: Vec<&Requirement> = store
+            .requirements
+            .iter()
+            .filter(|r| {
+                if let Some(status) = status_filter {
+                    // BUG-626: filter epics by their derived rollup status.
+                    // BUG-1174: honor CLI status aliases such as `open` so
+                    // MCP's JSON query surface shares the same work lens.
+                    if !mcp_status_filter_matches(&mcp_effective_status(&store, r), status) {
+                        return false;
+                    }
+                }
+                if let Some(type_name) = type_filter {
+                    if !mcp_filter_eq(&r.req_type.to_string(), type_name) {
+                        return false;
+                    }
+                }
+                if let Some(priority) = priority_filter {
+                    if !mcp_filter_eq(&r.priority.to_string(), priority) {
+                        return false;
+                    }
+                }
+                if let Some(feature) = feature_filter {
+                    if !r.feature.eq_ignore_ascii_case(feature) {
+                        return false;
+                    }
+                }
+                // STORY-639: exact assignee match. trace:STORY-639 | ai:claude
+                if let Some(assignee) = assignee_filter {
+                    if r.assignee.as_deref() != Some(assignee) {
+                        return false;
+                    }
+                }
+                // STORY-662: owner OR assignee match. trace:STORY-662 | ai:claude
+                if let Some(user) = user_filter {
+                    let owns = r.owner == user;
+                    let assigned = r.assignee.as_deref() == Some(user);
+                    if !owns && !assigned {
+                        return false;
+                    }
+                }
+                // FR-283: inclusive numeric weight bounds; an unset weight
+                // fails any bound (mirrors the CLI cache pushdown).
+                // trace:FR-283 | ai:claude
+                if let Some(min) = min_weight {
+                    match r.weight {
+                        Some(w) if f64::from(w) >= min => {}
+                        _ => return false,
+                    }
+                }
+                if let Some(max) = max_weight {
+                    match r.weight {
+                        Some(w) if f64::from(w) <= max => {}
+                        _ => return false,
+                    }
+                }
+                // AND-match every requested tag (case-sensitive, matching the CLI).
+                for want in &tag_filters {
+                    if !r.tags.contains(want) {
+                        return false;
+                    }
+                }
+                if let Some(b) = &batch_tag {
+                    if !r.tags.contains(b) {
+                        return false;
+                    }
+                }
+                if let Some(role) = &role_tag {
+                    let has_role = r.tags.iter().any(|t| t.eq_ignore_ascii_case(role));
+                    if !has_role {
+                        return false;
+                    }
+                }
+                if let Some(child_ids) = &parent_child_ids {
+                    if !child_ids.contains(&r.id) {
+                        return false;
+                    }
+                }
+                if in_flight_only {
+                    let sid = spec_id(r).to_ascii_lowercase();
+                    if sid == "?" || !in_flight_scopes.contains(&sid) {
+                        return false;
+                    }
+                }
+                // BUG-591: apply the same view-tier predicate the CLI uses so
+                // archived/deferred rows are hidden by default and surfaced only
+                // via the explicit filters. trace:BUG-591 | ai:claude
+                if !view.admits(r) {
+                    return false;
+                }
+                // BUG-1174: MCP's default active view and explicit
+                // `status: open` query are open-work lenses. An accepted ADR
+                // (`Decision` + `Approved`) is terminal in that lifecycle, so
+                // it must not inflate the implementable backlog. Explicit
+                // decision/status/archive/deferred/all queries keep the row
+                // reachable for audits, matching the CLI list lens.
+                if mcp_hides_accepted_decisions(status_filter, type_filter, view)
+                    && aida_core::lifecycle::is_accepted_decision(
+                        &r.req_type.to_string(),
+                        &mcp_effective_status(&store, r).to_string(),
+                    )
+                {
+                    return false;
+                }
+                true
+            })
+            .take(limit)
+            .collect();
+
+        if filtered.is_empty() {
+            return Ok("No requirements found matching the criteria.".to_string());
+        }
+
+        let mut output = format!("Found {} requirements:\n\n", filtered.len());
+        for r in &filtered {
+            output.push_str(&format!(
+                "- [{}] {} (Status: {}, Priority: {}, Type: {})\n",
+                mcp_id_cell(spec_id(r)),
+                r.title,
+                // BUG-626: surface the epic's derived rollup status.
+                mcp_effective_status(&store, r),
+                r.priority,
+                r.req_type
+            ));
+        }
+        Ok(output)
+    }
+
+    // trace:STORY-82 | ai:claude
+    fn tool_show_requirement(&self, args: &Value) -> Result<String, String> {
+        let id = args
+            .get("id")
+            .and_then(|v| v.as_str())
+            .ok_or("Missing required parameter: id")?;
+        // STORY-82: git linkage on by default, matching `aida show` (the
+        // CLI default; `aida show --no-git` suppresses it). `verbose`
+        // expands the section like `aida show --verbose`.
+        let include_git = args
+            .get("include_git")
+            .and_then(|v| v.as_bool())
+            .unwrap_or(true);
+        let verbose = args
+            .get("verbose")
+            .and_then(|v| v.as_bool())
+            .unwrap_or(false);
+
+        let store = self.storage.load_for_read().map_err(|e| e.to_string())?;
+        let req = store
+            .get_requirement_by_spec_id(id)
+            .ok_or_else(|| format!("Requirement '{}' not found", id))?;
+        let canonical_id = spec_id(req).to_string();
+        if args
+            .get("include_origin_prompt")
+            .and_then(Value::as_bool)
+            .unwrap_or(false)
+        {
+            let prompt = self
+                .storage
+                .read_origin_prompt(req.id)
+                .map_err(|e| e.to_string())?;
+            return Ok(prompt
+                .map(|p| p.explicit_view())
+                .unwrap_or_else(|| "No originating prompt captured".into()));
+        }
+
+        let mut output = format!(
+            "# {} — {}\n\n\
+             **Status:** {}\n\
+             **Priority:** {}\n\
+             **Type:** {}\n",
+            spec_id(req),
+            req.title,
+            // BUG-626: surface the epic's derived rollup status.
+            mcp_effective_status(&store, req),
+            req.priority,
+            req.req_type
+        );
+
+        // The heading keeps the canonical id; the friendly label is additive.
+        // trace:STORY-B6B1278890774EF993D2EBC327862470-078 | ai:claude
+        let display_id = req.friendly_id();
+        if !display_id.eq_ignore_ascii_case(&canonical_id) {
+            output.push_str(&format!("**Display ID:** {}\n", display_id));
+        }
+        if !req.feature.is_empty() {
+            output.push_str(&format!("**Feature:** {}\n", req.feature));
+        }
+        if !req.owner.is_empty() {
+            output.push_str(&format!("**Owner:** {}\n", req.owner));
+        }
+        // STORY-639: surface the assignee in show_requirement when set, mirroring
+        // the CLI `aida show`. trace:STORY-639 | ai:claude
+        if let Some(assignee) = req.assignee.as_deref() {
+            output.push_str(&format!("**Assignee:** {}\n", assignee));
+        }
+        // STORY-776: the advisor's dispatch classification, when groomed.
+        if let Some(mode) = req.execution_mode {
+            output.push_str(&format!("**Execution mode:** {}\n", mode));
+        }
+        // STORY-634: the multi-repo origin dimension, when set — mirrors
+        // `aida show`. trace:STORY-634 | ai:claude
+        if let Some(origin) = &req.origin {
+            output.push_str(&format!("**Origin:** {}\n", origin));
+        }
+        // FR-283: the numeric weight/score, when set — mirrors `aida show`.
+        if let Some(w) = req.weight {
+            output.push_str(&format!(
+                "**Weight:** {}\n",
+                aida_cli_lib::format_weight(f64::from(w))
+            ));
+        }
+        if !req.tags.is_empty() {
+            let tags: Vec<&String> = req.tags.iter().collect();
+            output.push_str(&format!(
+                "**Tags:** {}\n",
+                tags.iter()
+                    .map(|s| s.as_str())
+                    .collect::<Vec<_>>()
+                    .join(", ")
+            ));
+        }
+
+        output.push_str(&format!("\n## Description\n\n{}\n", req.description));
+
+        if !req.comments.is_empty() {
+            output.push_str(&format!("\n## Comments ({})\n\n", req.comments.len()));
+            for c in &req.comments {
+                // trace:BUG-1534 | ai:claude — "via X, originally Y" for relays.
+                let who =
+                    aida_core::mailbox::provenance_label(&c.author, c.relayed_from.as_deref());
+                output.push_str(&format!("- {}: {}\n", who, c.content));
+            }
+        }
+
+        if !req.relationships.is_empty() {
+            output.push_str(&format!(
+                "\n## Relationships ({})\n\n",
+                req.relationships.len()
+            ));
+            for rel in &req.relationships {
+                let target_label = store
+                    .requirements
+                    .iter()
+                    .find(|r| r.id == rel.target_id)
+                    .and_then(|r| r.spec_id.clone())
+                    .unwrap_or_else(|| rel.target_id.to_string());
+                output.push_str(&format!("- {} → {}\n", rel.rel_type, target_label));
+            }
+        }
+
+        // BUG-527: queue membership — mirror the `Queued:` line `aida show`
+        // surfaces (CLI/MCP parity, STORY-82). For-role + the 1-based
+        // position the operator sees on `aida queue list`; omitted entirely
+        // when the spec sits in no queue. trace:BUG-527
+        let memberships = aida_cli_lib::queue_memberships_for(&self.project_root, &req.id);
+        if let Some(value) = aida_cli_lib::format_queue_membership(&memberships) {
+            output.push_str(&format!("\n## Queued\n\n{}\n", value));
+        }
+
+        // STORY-82: git linkage — reuse the same collection `aida show`
+        // renders so MCP clients see commits / branch / PR / shipped state.
+        // Off when include_git=false (the `aida show --no-git` view).
+        if include_git {
+            output.push_str(&render_git_linkage_md(
+                &self.project_root,
+                &canonical_id,
+                verbose,
+            ));
+        }
+
+        Ok(output)
+    }
+
+    // trace:STORY-82 | ai:claude
+    fn tool_add_requirement(&self, args: &Value) -> Result<String, String> {
+        // trace:STORY-1468 | ai:codex — explicit reviewed input only, before mutation.
+        let origin_prompt =
+            if let Some(input) = args.get("origin_prompt").filter(|input| !input.is_null()) {
+                let object = input.as_object().ok_or("origin_prompt must be an object")?;
+                if object
+                    .keys()
+                    .any(|key| !matches!(key.as_str(), "text" | "redacted"))
+                {
+                    return Err(
+                        "origin_prompt contains an unknown field; allowed fields: text, redacted"
+                            .into(),
+                    );
+                }
+                self.storage
+                    .check_origin_prompt_support()
+                    .map_err(|e| e.to_string())?;
+                let text = input
+                    .get("text")
+                    .and_then(Value::as_str)
+                    .ok_or("origin_prompt.text must be a reviewed UTF-8 string")?;
+                let redacted = match input.get("redacted") {
+                    None | Some(Value::Null) => false,
+                    Some(Value::Bool(b)) => *b,
+                    _ => return Err("origin_prompt.redacted must be boolean".into()),
+                };
+                Some(
+                    aida_core::origin_prompt::OriginPrompt::reviewed(text.into(), redacted)
+                        .map_err(|e| e.to_string())?,
+                )
+            } else {
+                None
+            };
+
+        let title = args
+            .get("title")
+            .and_then(|v| v.as_str())
+            .ok_or("Missing required parameter: title")?;
+        let description = args
+            .get("description")
+            .and_then(|v| v.as_str())
+            .ok_or("Missing required parameter: description")?;
+
+        let type_arg = args.get("type").and_then(|v| v.as_str()).ok_or_else(|| {
+            format!(
+                "Missing required parameter: type. Valid types: {}",
+                VALID_MCP_REQUIREMENT_TYPES
+            )
+        })?;
+        let req_type = parse_requirement_type(type_arg).ok_or_else(|| {
+            format!(
+                "Invalid requirement type '{}'. Valid types: {}",
+                type_arg, VALID_MCP_REQUIREMENT_TYPES
+            )
+        })?;
+        let requested_status = args
+            .get("status")
+            .and_then(|v| v.as_str())
+            .and_then(parse_status)
+            .unwrap_or(RequirementStatus::Draft);
+        if requested_status == RequirementStatus::NeedsAttention {
+            return Err(
+                "cannot create a requirement with status `needs-attention` — \
+                 it is reached only by punting In-Progress work"
+                    .to_string(),
+            );
+        }
+        // TASK-647 (ADR-3): the MCP server is an intake surface used by agents
+        // (always non-interactive, and it may inherit an advisor role from the
+        // launching shell — so it cannot be trusted as advisor authority).
+        // Producing an approved+ spec is the advisor's triage decision, so MCP
+        // intake always lands `draft` regardless of the requested status; the
+        // result tells the agent it is queued for advisor triage.
+        // trace:TASK-647 | ai:claude
+        let intake_downgraded = matches!(
+            requested_status,
+            RequirementStatus::Approved
+                | RequirementStatus::Planned
+                | RequirementStatus::InProgress
+                | RequirementStatus::Done
+                | RequirementStatus::Completed
+        );
+        let status = if intake_downgraded {
+            RequirementStatus::Draft
+        } else {
+            requested_status
+        };
+        let priority = args
+            .get("priority")
+            .and_then(|v| v.as_str())
+            .and_then(parse_priority)
+            .unwrap_or(RequirementPriority::Medium);
+
+        let mut store = self.storage.load().map_err(|e| e.to_string())?;
+
+        // STORY-82: resolve an optional parent BEFORE allocating the new id,
+        // so a bad/terminal parent fails without leaving an orphan spec.
+        // Mirrors `aida add --parent`'s pre-resolution + terminal guard.
+        let parent_link: Option<(uuid::Uuid, String)> = match args
+            .get("parent")
+            .and_then(|v| v.as_str())
+        {
+            Some(parent_ref) => {
+                // TASK-1468: an ambiguous parent id refuses. trace:TASK-1468 | ai:claude
+                let parent = store
+                    .get_requirement_unambiguous(parent_ref)
+                    .map_err(|e| e.to_string())?
+                    .ok_or_else(|| {
+                        format!(
+                            "parent '{}' not found — refusing to create a child without a valid parent",
+                            parent_ref
+                        )
+                    })?;
+                if aida_cli_lib::is_terminal_status(&parent.status) {
+                    return Err(format!(
+                            "parent {} is {} — adding new children to a closed parent is usually a mistake.",
+                            parent.spec_id.as_deref().unwrap_or("?"),
+                            parent.status,
+                        ));
+                }
+                Some((parent.id, parent.spec_id.clone().unwrap_or_default()))
+            }
+            None => None,
+        };
+
+        let mut req = Requirement::new(title.to_string(), description.to_string());
+        req.req_type = req_type;
+        req.status = status;
+        req.priority = priority;
+
+        // STORY-82: optional feature category + owner (mirrors `aida add
+        // --feature` / `--owner`).
+        if let Some(feature) = args.get("feature").and_then(|v| v.as_str()) {
+            req.feature = feature.to_string();
+        }
+        if let Some(owner) = args.get("owner").and_then(|v| v.as_str()) {
+            req.owner = owner.to_string();
+        }
+        // FR-283: optional numeric weight/score (mirrors `aida add --weight`).
+        // trace:FR-283 | ai:claude
+        if let Some(v) = args.get("weight") {
+            if !v.is_null() {
+                let w = v
+                    .as_f64()
+                    .filter(|w| w.is_finite())
+                    .ok_or_else(|| format!("weight must be a finite number, got {v}"))?;
+                req.weight = Some(w as f32);
+            }
+        }
+
+        // Optional tags
+        if let Some(tag_arr) = args.get("tags").and_then(|v| v.as_array()) {
+            // BUG-1770: an MCP client is the caller most likely to hand a
+            // whole tag line in as one array element, and the blob it creates
+            // is invisible to every tag-keyed filter afterwards. Same rule as
+            // the CLI, phrased in this surface's own syntax.
+            // trace:BUG-1770 | ai:claude
+            for t in tag_arr {
+                if let Some(s) = t.as_str() {
+                    let trimmed = s.trim();
+                    if trimmed.is_empty() {
+                        continue;
+                    }
+                    aida_cli_lib::validate_tag_value(
+                        trimmed,
+                        aida_cli_lib::TagRepair::JsonArray("tags"),
+                    )
+                    .map_err(|e| e.to_string())?;
+                    req.tags.insert(trimmed.to_string());
+                }
+            }
+        }
+
+        // An enabled-WORK clone allocates only inside the backend's prepared
+        // add; a caller-side allocation plus whole-store save is refused.
+        // trace:STORY-1742 | ai:claude
+        #[cfg(unix)]
+        let work = self.storage.work_enrolled().map_err(|e| e.to_string())?;
+        #[cfg(not(unix))]
+        let work = false;
+        let mut parent_warning = None;
+        let new_spec_id = if let Some(prompt) = &origin_prompt {
+            let added = self
+                .storage
+                .add_with_origin_prompt(req, prompt)
+                .map_err(|e| e.to_string())?;
+            if let Some((parent_id, _)) = &parent_link {
+                let mut error = None;
+                let write_result = self.storage.update_atomically(|store| {
+                    error = store
+                        .add_relationship(parent_id, RelationshipType::Parent, &added.id, true)
+                        .err();
+                });
+                // Creation already succeeded. Never invite a duplicate filing on retry.
+                // trace:STORY-1468 | ai:codex
+                parent_warning = write_result.err().or(error).map(|_| {
+                    " (warning: requirement filed, but parent link failed; inspect and retry only the relationship)".to_string()
+                });
+            }
+            added.spec_id.unwrap_or_else(|| "?".into())
+        } else if work {
+            if parent_link.is_some() {
+                return Err("parent is not available while this clone's WORK transport \
+                     profile is enabled; add the requirement, then link it separately"
+                    .to_string());
+            }
+            #[cfg(unix)]
+            let added = self.storage.add_prepared(req).map_err(|e| e.to_string())?;
+            #[cfg(not(unix))]
+            let added = req;
+            added.spec_id.unwrap_or_else(|| "?".to_string())
+        } else {
+            let type_prefix = store.get_type_prefix(&req.req_type).ok_or_else(|| {
+                format!(
+                    "No configured ID prefix for requirement type '{}'",
+                    req.req_type
+                )
+            })?;
+            store.add_requirement_with_id(req, None, Some(type_prefix.as_str()));
+
+            let (new_spec_id, new_id) = store
+                .requirements
+                .last()
+                .map(|r| (r.spec_id.clone().unwrap_or_else(|| "?".to_string()), r.id))
+                .unwrap_or_else(|| ("?".to_string(), uuid::Uuid::nil()));
+
+            // STORY-82: link the parent (Parent→child on parent, Child→parent on
+            // the new req via the bidirectional inverse) once the id exists.
+            if let Some((parent_id, _parent_spec)) = &parent_link {
+                store
+                    .add_relationship(parent_id, RelationshipType::Parent, &new_id, true)
+                    .map_err(|e| e.to_string())?;
+            }
+
+            self.storage.save(&store).map_err(|e| e.to_string())?;
+            new_spec_id
+        };
+
+        // STORY-82: note the parent link in the result so the agent sees the
+        // edge landed.
+        let parent_note = if let Some(warning) = parent_warning {
+            warning
+        } else {
+            match &parent_link {
+                Some((_, parent_spec)) if !parent_spec.is_empty() => {
+                    format!(" (linked under {})", parent_spec)
+                }
+                _ => String::new(),
+            }
+        };
+
+        // TASK-647 (ADR-3): if a requested approved+ status was held back, say
+        // so in the result so the agent knows it is awaiting advisor triage.
+        if intake_downgraded {
+            Ok(format!(
+                "Requirement added: {} — {}{} (filed as draft, queued for advisor triage; \
+                 requested status needs advisor authority)",
+                new_spec_id, title, parent_note
+            ))
+        } else {
+            Ok(format!(
+                "Requirement added: {} — {}{}",
+                new_spec_id, title, parent_note
+            ))
+        }
+    }
+
+    // trace:STORY-82 | ai:claude
+    fn tool_update_requirement(&self, args: &Value) -> Result<String, String> {
+        // BUG-1535: every id lookup here refuses an ambiguous id (the error
+        // lists each candidate's unambiguous handle). trace:BUG-1535 | ai:claude
+        // (see mcp_status_gate_message below for the BUG-449 status gate)
+        let id = args
+            .get("id")
+            .and_then(|v| v.as_str())
+            .ok_or("Missing required parameter: id")?;
+
+        let mut store = self.storage.load().map_err(|e| e.to_string())?;
+
+        // STORY-82: resolve the target req id + (optional) parent up front,
+        // while we still hold a shared borrow, so the parent re-parent edge
+        // can be applied after the mutable field-edit borrow is dropped
+        // (the source and parent are two distinct records).
+        let target_id = store
+            .get_requirement_unambiguous(id)
+            .map_err(|e| e.to_string())?
+            .ok_or_else(|| format!("Requirement '{}' not found", id))?
+            .id;
+        let parent_link: Option<(uuid::Uuid, String)> = match args
+            .get("parent")
+            .and_then(|v| v.as_str())
+        {
+            Some(parent_ref) => {
+                let parent = store
+                    .get_requirement_unambiguous(parent_ref)
+                    .map_err(|e| e.to_string())?
+                    .ok_or_else(|| format!("parent '{}' not found", parent_ref))?;
+                if aida_cli_lib::is_terminal_status(&parent.status) {
+                    return Err(format!(
+                            "parent {} is {} — re-parenting under a closed parent is usually a mistake.",
+                            parent.spec_id.as_deref().unwrap_or("?"),
+                            parent.status,
+                        ));
+                }
+                if parent.id == target_id {
+                    return Err("a requirement cannot be its own parent".to_string());
+                }
+                Some((parent.id, parent.spec_id.clone().unwrap_or_default()))
+            }
+            None => None,
+        };
+
+        let req = store
+            .get_requirement_unambiguous_mut(id)
+            .map_err(|e| e.to_string())?
+            .ok_or_else(|| format!("Requirement '{}' not found", id))?;
+
+        let mut changes = Vec::new();
+        let mut force_dropped_structural_tags = Vec::new();
+
+        // STORY-82: title.
+        if let Some(title) = args.get("title").and_then(|v| v.as_str()) {
+            if title != req.title {
+                changes.push(format!("title: {} → {}", req.title, title));
+                req.title = title.to_string();
+            }
+        }
+
+        // STORY-82: type. Does not renumber the existing SPEC-ID.
+        if let Some(type_arg) = args.get("type").and_then(|v| v.as_str()) {
+            let new_type = parse_requirement_type(type_arg).ok_or_else(|| {
+                format!(
+                    "Invalid requirement type '{}'. Valid types: {}",
+                    type_arg, VALID_MCP_REQUIREMENT_TYPES
+                )
+            })?;
+            if new_type != req.req_type {
+                changes.push(format!("type: {} → {}", req.req_type, new_type));
+                req.req_type = new_type;
+            }
+        }
+
+        // STORY-82: priority.
+        if let Some(priority_arg) = args.get("priority").and_then(|v| v.as_str()) {
+            let new_priority = parse_priority(priority_arg).ok_or_else(|| {
+                format!(
+                    "Invalid priority '{}'. Valid: high, medium, low",
+                    priority_arg
+                )
+            })?;
+            if new_priority != req.priority {
+                changes.push(format!("priority: {} → {}", req.priority, new_priority));
+                req.priority = new_priority;
+            }
+        }
+
+        // STORY-82: tags — replace the set with the provided list.
+        if let Some(tag_arr) = args.get("tags").and_then(|v| v.as_array()) {
+            // BUG-1770: the MCP replace path needs the same rule as
+            // `aida edit --tags`. trace:BUG-1770 | ai:claude
+            let mut new_tags: std::collections::HashSet<String> = std::collections::HashSet::new();
+            for t in tag_arr {
+                if let Some(s) = t.as_str() {
+                    let trimmed = s.trim();
+                    if trimmed.is_empty() {
+                        continue;
+                    }
+                    aida_cli_lib::validate_tag_value(
+                        trimmed,
+                        aida_cli_lib::TagRepair::JsonArray("tags"),
+                    )
+                    .map_err(|e| e.to_string())?;
+                    new_tags.insert(trimmed.to_string());
+                }
+            }
+            // trace:BUG-1252 | ai:codex
+            let force = args.get("force").and_then(|v| v.as_bool()).unwrap_or(false)
+                || args
+                    .get("replace_tags")
+                    .and_then(|v| v.as_bool())
+                    .unwrap_or(false);
+            force_dropped_structural_tags =
+                aida_cli_lib::enforce_structural_tag_replacement(&req.tags, &new_tags, force)
+                    .map_err(|e| e.to_string())?;
+            if new_tags != req.tags {
+                changes.push("tags updated".to_string());
+                req.tags = new_tags;
+            }
+        }
+
+        if let Some(status) = args.get("status").and_then(|v| v.as_str()) {
+            if let Some(new_status) = parse_status(status) {
+                // A deferred spec reads `deferred`; refuse a status write
+                // nobody would see, as `aida edit` does.
+                // trace:TASK-1955 | ai:claude (slice 7 round-1 finding 5)
+                if let Some(msg) = aida_cli_lib::requirements_cli::deferred_status_edit_refusal(req)
+                {
+                    return Err(msg);
+                }
+                // BUG-449 (TASK-647/ADR-3 caller parity): MCP is not advisor
+                // authority (the launching shell isn't the advisor seat), so it
+                // must not self-advance a spec into a status that is the
+                // advisor's triage decision (Approved/Planned) or that is
+                // merge-driven (Completed/Released — set by a (SPEC-ID) commit
+                // landing on the default branch, STORY-86). add_requirement
+                // already downgrades these to Draft on intake; without the same
+                // gate here, add-then-update was a one-line bypass that let an
+                // agent self-mark Completed on uncommitted code. Implementer-
+                // legitimate transitions (InProgress/Done/NeedsAttention/Draft/
+                // Rejected) stay allowed. trace:BUG-449 | ai:claude
+                if new_status != req.status {
+                    // BUG-481: gate on the (current, requested) pair so a
+                    // Draft/NeedsAttention → InProgress/Done bypass is closed
+                    // while in-pipeline execution flips stay allowed.
+                    // trace:BUG-481 | ai:claude
+                    if let Some(msg) = mcp_status_gate_message(&req.status, &new_status) {
+                        return Err(msg);
+                    }
+                }
+                if let Some(msg) =
+                    aida_core::forbidden_attention_transition(&req.status, &new_status)
+                {
+                    return Err(msg);
+                }
+                changes.push(format!("status: {} → {}", req.status, new_status));
+                // BUG-1637: a caller-authored status write, recorded under the
+                // caller. trace:BUG-1637 | ai:claude
+                let from = std::mem::replace(&mut req.status, new_status);
+                aida_cli_lib::record_caller_status_transition(req, &from);
+            }
+        }
+
+        if let Some(desc) = args.get("description").and_then(|v| v.as_str()) {
+            changes.push("description updated".to_string());
+            req.description = desc.to_string();
+        }
+
+        // STORY-639: assignee. Mirrors the CLI assignee field edit. An empty
+        // string clears the assignee (the unassign equivalent). NOTE: unlike
+        // the CLI `aida assign`, this does NOT route the spec into the target
+        // user's queue — it only sets the field; use the queue_add tool to
+        // route. trace:STORY-639 | ai:claude
+        if let Some(assignee) = args.get("assignee").and_then(|v| v.as_str()) {
+            let new_assignee = if assignee.trim().is_empty() {
+                None
+            } else {
+                Some(assignee.trim().to_string())
+            };
+            if new_assignee != req.assignee {
+                changes.push(format!(
+                    "assignee: {} → {}",
+                    req.assignee.as_deref().unwrap_or("(none)"),
+                    new_assignee.as_deref().unwrap_or("(none)")
+                ));
+                req.assignee = new_assignee;
+            }
+        }
+
+        // FR-283: weight — the numeric score. A number sets it; an explicit
+        // JSON null clears it (mirrors the CLI `aida edit --weight ""` clear).
+        // trace:FR-283 | ai:claude
+        if let Some(v) = args.get("weight") {
+            if v.is_null() {
+                if req.weight.is_some() {
+                    changes.push("weight cleared".to_string());
+                    req.weight = None;
+                }
+            } else {
+                let w = v
+                    .as_f64()
+                    .filter(|w| w.is_finite())
+                    .ok_or_else(|| format!("weight must be a finite number or null, got {v}"))?
+                    as f32;
+                if req.weight != Some(w) {
+                    changes.push(format!(
+                        "weight: {} → {}",
+                        req.weight
+                            .map(|old| aida_cli_lib::format_weight(f64::from(old)))
+                            .unwrap_or_else(|| "(unset)".to_string()),
+                        aida_cli_lib::format_weight(f64::from(w))
+                    ));
+                    req.weight = Some(w);
+                }
+            }
+        }
+
+        // STORY-776: execution_mode — the advisor's routing classification.
+        // Same advisor-authority gate as the CLI `aida edit --mode`: an MCP
+        // seat holds it only when its process has a validated advisor grant.
+        // Non-advisor seats are refused, mirroring
+        // the BUG-449 status-gate principle. trace:STORY-776 | ai:claude
+        if let Some(mode_arg) = args.get("execution_mode").and_then(|v| v.as_str()) {
+            if !aida_cli_lib::gate::role_authority::has_advisor_authority() {
+                return Err(format!(
+                    "execution_mode is the advisor's routing classification — this MCP seat \
+                     lacks advisor authority. {} Have the advisor groom it (`aida groom`, or \
+                     `aida edit <id> --mode <m>`).",
+                    mcp_advisor_refusal_guidance(None)
+                ));
+            }
+            if mode_arg.trim().is_empty() {
+                if req.execution_mode.is_some() {
+                    changes.push("execution_mode cleared".to_string());
+                    req.execution_mode = None;
+                }
+            } else {
+                let parsed: aida_core::ExecutionMode = mode_arg.parse()?;
+                if req.execution_mode != Some(parsed) {
+                    changes.push(format!(
+                        "execution_mode: {} → {}",
+                        req.execution_mode
+                            .map(|m| m.to_string())
+                            .unwrap_or_else(|| "(unset)".to_string()),
+                        parsed
+                    ));
+                    req.execution_mode = Some(parsed);
+                }
+            }
+        }
+
+        // STORY-634 (ADR-12): origin — the multi-repo repo/component
+        // dimension. An empty string clears; otherwise "repo" or
+        // "repo/component", with the repo slug validated against the
+        // workspace manifest — same rule as the CLI `aida edit --origin`.
+        if let Some(origin_arg) = args.get("origin").and_then(|v| v.as_str()) {
+            if origin_arg.trim().is_empty() {
+                if req.origin.is_some() {
+                    changes.push("origin cleared".to_string());
+                    req.origin = None;
+                }
+            } else {
+                let parsed = aida_core::Origin::parse(origin_arg)?;
+                match aida_core::workspace::WorkspaceManifest::discover(&self.project_root) {
+                    Some((_, manifest)) => {
+                        let slugs = manifest.repo_slugs();
+                        if !slugs.iter().any(|s| s.eq_ignore_ascii_case(&parsed.repo)) {
+                            return Err(format!(
+                                "origin repo `{}` is not in the workspace manifest \
+                                 (known repos: {})",
+                                parsed.repo,
+                                slugs.join(", ")
+                            ));
+                        }
+                    }
+                    None => {
+                        return Err("origin needs a multi-repo workspace manifest \
+                             (.aida-workspace) to validate the repo slug against; \
+                             single-repo stores leave origin unset"
+                            .to_string());
+                    }
+                }
+                if req.origin.as_ref() != Some(&parsed) {
+                    changes.push(format!(
+                        "origin: {} → {}",
+                        req.origin
+                            .as_ref()
+                            .map(|o| o.to_string())
+                            .unwrap_or_else(|| "(unset)".to_string()),
+                        parsed
+                    ));
+                    req.origin = Some(parsed);
+                }
+            }
+        }
+
+        // STORY-82: re-parent — the mutable `req` borrow is dropped here, so we
+        // can mutate both the new parent and the target via add_relationship
+        // (Parent→child on parent, Child→parent inverse on the target).
+        if let Some((parent_id, parent_spec)) = &parent_link {
+            store
+                .add_relationship(parent_id, RelationshipType::Parent, &target_id, true)
+                .map_err(|e| e.to_string())?;
+            changes.push(format!(
+                "parent: linked under {}",
+                if parent_spec.is_empty() {
+                    "?"
+                } else {
+                    parent_spec.as_str()
+                }
+            ));
+        }
+
+        if changes.is_empty() {
+            return Ok(format!("No changes applied to {}", id));
+        }
+
+        if force_dropped_structural_tags.is_empty() {
+            self.storage.save(&store).map_err(|e| e.to_string())?;
+        } else {
+            self.storage
+                .save_with_commit_subject(
+                    &store,
+                    &format!(
+                        "update {id}: replaced tags, dropped: {}",
+                        force_dropped_structural_tags.join(", ")
+                    ),
+                )
+                .map_err(|e| e.to_string())?;
+        }
+        Ok(format!("Updated {}: {}", id, changes.join(", ")))
+    }
+
+    // trace:STORY-82 | ai:claude
+    fn tool_search_requirements(&self, args: &Value) -> Result<String, String> {
+        let query = args
+            .get("query")
+            .and_then(|v| v.as_str())
+            .ok_or("Missing required parameter: query")?;
+
+        let store = self.storage.load_for_read().map_err(|e| e.to_string())?;
+        let query_lower = query.to_lowercase();
+        // STORY-82: optional type/status narrowing (mirrors `aida search`).
+        let type_filter = args.get("type").and_then(|v| v.as_str());
+        let status_filter = args.get("status").and_then(|v| v.as_str());
+
+        // BUG-591: `aida search` inherits the same archive/deferred view-tier
+        // filtering as `aida list` — hide filed-away specs by default, surface
+        // them via archived/deferred/all. trace:BUG-591 | ai:claude
+        let show_all = args.get("all").and_then(|v| v.as_bool()).unwrap_or(false);
+        let archived_only = args
+            .get("archived")
+            .and_then(|v| v.as_bool())
+            .unwrap_or(false);
+        let deferred_only = args
+            .get("deferred")
+            .and_then(|v| v.as_bool())
+            .unwrap_or(false);
+        let view = ViewTierFilter::resolve(show_all, archived_only, deferred_only);
+
+        let matches: Vec<&Requirement> = store
+            .requirements
+            .iter()
+            .filter(|r| {
+                // STORY-476: external issue refs are searchable here too, so
+                // an MCP client can find a spec by its linear:/jira:/github:
+                // pointer — matching the CLI FTS surface.
+                let ref_match = r
+                    .external_refs
+                    .iter()
+                    .any(|er| er.to_lowercase().contains(&query_lower));
+                let text_match = ref_match
+                    || r.title.to_lowercase().contains(&query_lower)
+                    || r.description.to_lowercase().contains(&query_lower)
+                    || r.spec_id
+                        .as_deref()
+                        .unwrap_or("")
+                        .to_lowercase()
+                        .contains(&query_lower);
+                if !text_match {
+                    return false;
+                }
+                if let Some(type_name) = type_filter {
+                    if !mcp_filter_eq(&r.req_type.to_string(), type_name) {
+                        return false;
+                    }
+                }
+                if let Some(status) = status_filter {
+                    // BUG-626: filter epics by their derived rollup status.
+                    if !mcp_filter_eq(&mcp_effective_status(&store, r).to_string(), status) {
+                        return false;
+                    }
+                }
+                // BUG-591: hide archived/deferred rows by default, mirroring the
+                // CLI search view. trace:BUG-591 | ai:claude
+                if !view.admits(r) {
+                    return false;
+                }
+                true
+            })
+            .collect();
+
+        if matches.is_empty() {
+            return Ok(format!("No requirements found matching '{}'", query));
+        }
+
+        let mut output = format!("Found {} results for '{}':\n\n", matches.len(), query);
+        for r in &matches {
+            output.push_str(&format!(
+                "- [{}] {} ({})\n",
+                mcp_id_cell(spec_id(r)),
+                r.title,
+                r.status
+            ));
+        }
+        Ok(output)
+    }
+
+    /// MCP parity for `aida graph` — cross-spec relationship queries
+    /// (blocked-by / blocks chains, epic tree rollup, reverse impact) so any
+    /// MCP client converges on the same typed graph the CLI walks. Built on the
+    /// shared cycle-safe graph_walk primitive; read-only. The agent-facing half
+    /// of the moat: the query a flat per-feature spec store can't answer.
+    /// STORY-1028 moved CLI graph modes to subcommands; MCP keeps the existing
+    /// `mode` enum argument for schema stability.
+    // trace:STORY-489 | ai:claude
+    // trace:STORY-1028 | ai:codex
+    fn tool_query_graph(&self, args: &Value) -> Result<String, String> {
+        use aida_core::graph_walk::{status_rollup, walk_union, Direction};
+
+        let spec = args
+            .get("spec_id")
+            .and_then(|v| v.as_str())
+            .ok_or("Missing required parameter: spec_id")?;
+        let mode = args.get("mode").and_then(|v| v.as_str()).unwrap_or("tree");
+        let depth = args
+            .get("depth")
+            .and_then(|v| v.as_u64())
+            .map(|n| n as usize);
+        // FR-282: traverse arbitrary named relationship types (custom/built-in).
+        let follow: Vec<String> = args
+            .get("follow")
+            .and_then(|v| v.as_array())
+            .map(|a| {
+                a.iter()
+                    .filter_map(|x| x.as_str().map(str::to_string))
+                    .collect()
+            })
+            .unwrap_or_default();
+
+        let store = self.storage.load_for_read().map_err(|e| e.to_string())?;
+        let root = store
+            .get_requirement_by_spec_id(spec)
+            .ok_or_else(|| format!("Requirement '{}' not found", spec))?;
+        let root_id = root.id;
+        let root_label = root.display_id();
+
+        // Carry a canonical mode label so the output always echoes the
+        // hyphenated enum form even when an underscore alias was passed
+        // (review finding: don't leak `blocked_by` into the response). Each
+        // mode is a list of (rel_types, direction) walk legs; impact spans two
+        // so a unidirectionally-stored Blocks edge is still caught (BUG-411).
+        type WalkSpecs = Vec<(Vec<RelationshipType>, Direction)>;
+        let (specs, canonical_mode): (WalkSpecs, &str) = if !follow.is_empty() {
+            (
+                follow
+                    .iter()
+                    .map(|t| (vec![RelationshipType::from_str(t)], Direction::Outgoing))
+                    .collect(),
+                "follow",
+            )
+        } else {
+            match mode {
+                "blocked-by" | "blocked_by" => (
+                    vec![(vec![RelationshipType::BlockedBy], Direction::Outgoing)],
+                    "blocked-by",
+                ),
+                "blocks" => (
+                    vec![(vec![RelationshipType::Blocks], Direction::Outgoing)],
+                    "blocks",
+                ),
+                "impact" => (
+                    vec![
+                        (vec![RelationshipType::BlockedBy], Direction::Incoming),
+                        (vec![RelationshipType::Blocks], Direction::Outgoing),
+                    ],
+                    "impact",
+                ),
+                "tree" => (
+                    vec![(vec![RelationshipType::Child], Direction::Outgoing)],
+                    "tree",
+                ),
+                other => {
+                    return Err(format!(
+                        "unknown mode '{}': use tree, blocked-by, blocks, or impact",
+                        other
+                    ))
+                }
+            }
+        };
+
+        // TASK-1074: `tree` mode routes through the one shared rank-oriented
+        // subtree closure `aida graph tree` and `aida focus` use, so the MCP
+        // and CLI surfaces agree on membership; other modes keep their walk_union
+        // legs.
+        let result = if canonical_mode == "tree" {
+            aida_core::graph_walk::hierarchy_tree(&store, root_id, depth)
+        } else {
+            walk_union(&store, root_id, &specs, depth)
+        };
+        let nodes: Vec<Value> = result
+            .nodes
+            .iter()
+            .map(|nid| {
+                let r = store.get_requirement_by_id(nid);
+                json!({
+                    "id": r.map(|x| x.display_id()).unwrap_or_else(|| nid.to_string()),
+                    "title": r.map(|x| x.title.clone()),
+                    "status": r.map(|x| format!("{:?}", x.status)),
+                    "resolved": r.is_some(),
+                })
+            })
+            .collect();
+        let rollup = status_rollup(&store, &result.nodes);
+        // TASK-1526: same carrier as `aida graph --json` (graph_cmd.rs), which
+        // serializes this identical document through `json_pretty`.
+        // trace:TASK-1526 | ai:claude
+        aida_cli_lib::cache_output::json_pretty(&json!({
+            "root": root_label,
+            "mode": canonical_mode,
+            "count": result.nodes.len(),
+            "nodes": nodes,
+            "rollup": {
+                "total": rollup.total,
+                "completed": rollup.completed,
+                "done": rollup.done,
+                "in_progress": rollup.in_progress,
+                "remaining": rollup.remaining,
+                "shelved": rollup.shelved,
+                "rejected": rollup.rejected,
+            },
+        }))
+        .map_err(|e| e.to_string())
+    }
+
+    // TASK-538: MCP parity with `aida history events`.
+    // STORY-1028 moved the CLI event view to a subcommand; MCP keeps the
+    // `events` boolean so existing agent callers do not change shape.
+    // trace:STORY-1028 | ai:codex
+    fn tool_history(&self, args: &Value) -> Result<String, String> {
+        // trace:STORY-1477 | ai:codex
+        use aida_cli_lib::history_layout::{Layout, Templates};
+        let layout_arg = |key: &str| -> Result<Option<&str>, String> {
+            match args.get(key) {
+                None => Ok(None),
+                Some(Value::String(raw)) => Ok(Some(raw)),
+                _ => Err(format!("invalid {key}: expected a string")),
+            }
+        };
+        let template = layout_arg("template")?;
+        let fields = layout_arg("fields")?;
+        if (template.is_some() && fields.is_some())
+            || ((template.is_some() || fields.is_some())
+                && args.get("oneline").and_then(Value::as_bool) == Some(true))
+            || (template.is_some() && args.get("events").and_then(Value::as_bool) == Some(true))
+        {
+            return Err("invalid combination: template/fields are mutually exclusive, cannot combine with oneline; template cannot combine with explicit events".into());
+        }
+        let layout = template
+            .map(|raw| Templates::load(&self.project_root)?.resolve(raw))
+            .transpose()
+            .map_err(|e: anyhow::Error| format!("invalid template: {e:#}"))?;
+        let selected_fields = fields
+            .map(aida_cli_lib::history_layout::fields)
+            .transpose()
+            .map_err(|e| e.to_string())?;
+        let spec_id = args
+            .get("spec_id")
+            .and_then(|v| v.as_str())
+            .map(str::trim)
+            .filter(|s| !s.is_empty())
+            .map(str::to_string);
+        // BUG-588: the event ledger is keyed by spec_id, but a caller may pass
+        // the raw UUID (the id `show_requirement` returns). Resolve a UUID to
+        // its canonical spec_id so the filter matches — mirrors the CLI's
+        // `resolve_history_id_filter`. trace:BUG-588 | ai:claude
+        let spec_id = spec_id.map(|raw| {
+            if let Ok(uuid) = uuid::Uuid::parse_str(&raw) {
+                if let Ok(store) = self.storage.load_for_read() {
+                    if let Some(req) = store.requirements.iter().find(|r| r.id == uuid) {
+                        if let Some(sid) = &req.spec_id {
+                            return sid.clone();
+                        }
+                    }
+                }
+            }
+            raw
+        });
+        // TASK-882: reach CLI parity. Mirror `aida history`'s filter surface
+        // onto the MCP tool so an agent can ask the same questions the CLI can:
+        // --events/--type/--author/--since/--until/--limit/--shipped/--status-changes/
+        // --comments/--oneline. The string filters trim+empty-drop like spec_id.
+        // trace:TASK-882 | ai:claude
+        let str_arg = |key: &str| -> Option<String> {
+            args.get(key)
+                .and_then(|v| v.as_str())
+                .map(str::trim)
+                .filter(|s| !s.is_empty())
+                .map(str::to_string)
+        };
+        let bool_arg =
+            |key: &str| -> bool { args.get(key).and_then(|v| v.as_bool()).unwrap_or(false) };
+
+        let since = str_arg("since");
+        let until = str_arg("until");
+        let type_filter = str_arg("type");
+        let author_filter = str_arg("author");
+        let shipped_only = bool_arg("shipped");
+        // TASK-1512: CLI parity for `--to`/`--from`/`--opened`, with the same
+        // status spellings, the same refusal for an unknown status, and the
+        // same refusal to combine `shipped` (= `to: completed`) with `to` or
+        // `opened`. trace:TASK-1512 | ai:claude
+        let to_status = str_arg("to")
+            .map(|raw| history::resolve_status_filter("to", &raw))
+            .transpose()
+            .map_err(|e| e.to_string())?;
+        let from_status = str_arg("from")
+            .map(|raw| history::resolve_status_filter("from", &raw))
+            .transpose()
+            .map_err(|e| e.to_string())?;
+        let opened_only = bool_arg("opened");
+        // Both refusals start with `invalid ` so `McpErrorCode::classify`
+        // reports them as `invalid_arg`, not `internal`.
+        if shipped_only && (to_status.is_some() || opened_only) {
+            return Err(
+                "invalid combination: `shipped` is the same as `to: completed`; it cannot be combined with `to` or `opened`"
+                    .to_string(),
+            );
+        }
+        history::validate_transition_pair(
+            from_status.as_deref(),
+            to_status.as_deref(),
+            "from",
+            "to",
+        )
+        .map_err(|e| e.to_string())?;
+        // `--shipped` implies events mode, mirroring the CLI. The MCP default has
+        // always been events mode (the structured ledger), so `events` defaults
+        // true here and a caller passing `events: false` only matters for the
+        // digest-vs-events distinction the CLI surfaces.
+        let events_mode = layout.is_some()
+            || selected_fields.is_some()
+            || args.get("events").and_then(|v| v.as_bool()).unwrap_or(true)
+            || shipped_only
+            || opened_only
+            || to_status.is_some()
+            || from_status.is_some();
+        let status_changes_only = bool_arg("status_changes");
+        let comments_only = bool_arg("comments");
+        let oneline = bool_arg("oneline");
+        // `limit` caps decoded events; default preserves the historical 100.
+        let limit = args
+            .get("limit")
+            .and_then(|v| v.as_u64())
+            .map(|n| n as usize)
+            .filter(|&n| n > 0)
+            .unwrap_or(100);
+        // Walk at least 5x the limit (CLI events-mode default) so the cap is met.
+        let max_commits = (limit.saturating_mul(5)).max(500);
+
+        let opts = HistoryOpts {
+            limit,
+            max_commits,
+            // MCP exposes no `max_commits` override — the window here is
+            // always the computed default, so `window_exhausted` below is
+            // always meaningful as "the default window ran out."
+            // trace:BUG-1617 | ai:claude
+            max_commits_explicit: false,
+            events_mode,
+            id_filter: spec_id,
+            type_filter,
+            author_filter,
+            since,
+            until,
+            status_changes_only,
+            shipped_only,
+            to_status,
+            from_status,
+            opened_only,
+            comments_only,
+            oneline,
+            // MCP consumers expect the full event ledger, not the CLI's
+            // day-to-day archived/deferred-work filter. The ledger is therefore
+            // already equivalent to `aida history --all`; no `all` toggle is
+            // needed because nothing is hidden by default here.
+            archived_specs: std::collections::HashSet::new(),
+            archived_only_specs: None,
+            // STORY-584: same — no defer filtering on the MCP ledger.
+            deferred_specs: std::collections::HashSet::new(),
+            deferred_only_specs: None,
+            // STORY-737: the MCP ledger is the full event stream — keep META
+            // visible (the CLI-only default-view hide doesn't apply here).
+            exclude_meta: false,
+        };
+        if matches!(layout, Some(Layout::Full | Layout::Oneline)) {
+            return history::render_template_alias(
+                self.storage.path(),
+                &opts,
+                matches!(layout, Some(Layout::Oneline)),
+            )
+            .map_err(|e| e.to_string());
+        }
+        let records = history::collect_event_records(self.storage.path(), &opts)
+            .map_err(|e| e.to_string())?;
+        if let Some(fields) = &selected_fields {
+            return aida_cli_lib::history_layout::project_json(&records, fields)
+                .map_err(|e| e.to_string());
+        }
+        if let Some(Layout::Custom(template)) = &layout {
+            return template.render_records(&records).map_err(|e| e.to_string());
+        }
+        // BUG-1617: tell a caller when the default commit window ran out
+        // before `limit` events were found, so a short `events` array reads
+        // as "there may be more — widen the window" rather than "that's
+        // everything." trace:BUG-1617 | ai:claude
+        // TASK-1505 slice 2: additive provenance. `source` says whether the
+        // history index or a git walk answered; `index_tip` is the store
+        // commit an index answer reflects (null for a walk).
+        // trace:TASK-1508 | ai:claude
+        // BUG-1631: one JSON builder for MCP and `aida history --json`.
+        // trace:BUG-1631 | ai:claude
+        // TASK-1526: and one serializer, so the shared builder's "cannot drift"
+        // contract survives the cache label. An object output always carries
+        // `cache` in-band on BOTH surfaces; the envelope label and the trailing
+        // note are additive for MCP, not a substitute carrier.
+        // trace:TASK-1526 | ai:claude
+        aida_cli_lib::cache_output::json_pretty(&history::records_json(
+            &records.events,
+            records.window_exhausted,
+            &records.source,
+        ))
+        .map_err(|e| e.to_string())
+    }
+
+    /// The orphan-store root the canonical mailbox layer lives under — the
+    /// same path the CLI hands `handle_mailbox_command` (the storage path),
+    /// falling back to `<project>/.aida-store` when storage is a legacy file.
+    // trace:BUG-1534 | ai:claude
+    fn mailbox_store_root(&self) -> PathBuf {
+        let path = self.storage.path();
+        if path.is_dir() {
+            path.to_path_buf()
+        } else {
+            self.project_root.join(".aida-store")
+        }
+    }
+
+    /// The project root whose local mailbox layer the mail tools use: the
+    /// primary checkout when this server runs in a verified seat clone, as on
+    /// the CLI. trace:BUG-B6B1278890774EF993D2EBC327862470-031 | ai:claude
+    fn mailbox_root(&self) -> PathBuf {
+        aida_cli_lib::mailbox_store::mailbox_home(&self.project_root)
+            .root()
+            .to_path_buf()
+    }
+
+    /// MCP parity for `aida mailbox send` (STORY-493): send an inter-agent
+    /// peer message into the local layer. `to` a specific agent or
+    /// `broadcast: true` to all; `from` defaults to this server's identity.
+    // trace:STORY-493 trace:TASK-604 | ai:claude
+    fn tool_send_message(&self, args: &Value) -> Result<String, String> {
+        use aida_core::mailbox::{Message, Recipient};
+        let body = args
+            .get("body")
+            .and_then(|v| v.as_str())
+            .ok_or("Missing required parameter: body")?;
+        let broadcast = args
+            .get("broadcast")
+            .and_then(|v| v.as_bool())
+            .unwrap_or(false);
+        // Same canonical address and liveness refusal as the CLI.
+        // trace:STORY-1843 | ai:codex
+        let mut routing_warnings = Vec::new();
+        let resolution = if broadcast {
+            None
+        } else {
+            let target = args
+                .get("to")
+                .and_then(|v| v.as_str())
+                .ok_or("specify `to` (an agent) or `broadcast: true`")?;
+            let directory = aida_cli_lib::mailbox_resolver::RecipientDirectory::load_for_send(
+                &self.mailbox_root(),
+                &self.mailbox_store_root(),
+            )
+            .map_err(|e| e.to_string())?;
+            routing_warnings = directory.warnings().to_vec();
+            Some(directory.resolve(target).map_err(|error| {
+                if routing_warnings.is_empty() {
+                    error.to_string()
+                } else {
+                    format!("{error}\n{}", routing_warnings.join("\n"))
+                }
+            })?)
+        };
+        let recipient = resolution
+            .as_ref()
+            .map(|r| Recipient::Agent(r.address.clone()))
+            .unwrap_or(Recipient::Broadcast);
+        // trace:BUG-1533 | ai:claude — mirror the CLI's `--from` resolution:
+        // an explicit `from` argument wins, else the same session-identity
+        // precedence (agent name / AIDA_USER / role) as the CLI, never the
+        // BUG-89 queue-key order.
+        let explicit_from = args.get("from").and_then(|v| v.as_str());
+        let (from, from_source) = aida_cli_lib::resolve_mail_sender_identity(explicit_from);
+        // trace:BUG-1592 | ai:claude
+        let from_role = aida_cli_lib::resolve_mail_sender_role();
+        let id = uuid::Uuid::new_v4().to_string();
+        // BUG-557: mirror the CLI fix — `in_reply_to` must attach the reply to
+        // the target's thread, not open a new one. Precedence: explicit
+        // `thread` > the reply target's thread > a fresh thread. Resolved
+        // against the same logical snapshot `read_inbox` lists (STORY-1843),
+        // so every ID it returned resolves; a dangling reference falls back
+        // to a fresh thread. trace:BUG-557 trace:STORY-1843 | ai:claude
+        let in_reply_to = args
+            .get("in_reply_to")
+            .and_then(|v| v.as_str())
+            .map(str::to_string);
+        let thread_id = if let Some(t) = args.get("thread").and_then(|v| v.as_str()) {
+            t.to_string()
+        } else if let Some(target) = in_reply_to.as_deref() {
+            let book = aida_cli_lib::mailbox_view::addressable_for(
+                &self.mailbox_root(),
+                &self.mailbox_root().join(".aida-store"),
+                &aida_cli_lib::mailbox_view::own_audience_in(&self.mailbox_root()),
+            );
+            aida_core::mailbox::reply_target_thread(target, book.messages())
+                .unwrap_or_else(|| id.clone())
+        } else {
+            id.clone()
+        };
+        // STORY-539: light urgency flag, mirroring the CLI `--urgent`.
+        let urgent = args
+            .get("urgent")
+            .and_then(|v| v.as_bool())
+            .unwrap_or(false);
+        // TASK-782: intent marker, mirroring the CLI `--intent`. Default fyi;
+        // an unrecognized token is a hard error (parity with the CLI flag).
+        let intent = match args.get("intent").and_then(|v| v.as_str()) {
+            Some(s) => aida_core::mailbox::Intent::parse(s).ok_or_else(|| {
+                format!("invalid intent '{s}'; expected one of: fyi, request, handoff")
+            })?,
+            None => aida_core::mailbox::Intent::default(),
+        };
+        // trace:BUG-1461 | ai:claude — mirror the CLI `--subject` flag (BUG-1231),
+        // which the MCP schema/handler had never picked up.
+        let subject = args
+            .get("subject")
+            .and_then(|v| v.as_str())
+            .map(str::to_string);
+        // trace:BUG-1534 | ai:claude — same send-time guard as the CLI: a
+        // second-person body more than one seat reads is refused.
+        let allow_second_person = args
+            .get("allow_second_person")
+            .and_then(|v| v.as_bool())
+            .unwrap_or(false);
+        if !allow_second_person && !aida_core::mailbox::second_person_terms(body).is_empty() {
+            let local = aida_cli_lib::mailbox_store::read_local_messages(&self.mailbox_root())
+                .map_err(|e| e.to_string())?;
+            let canonical =
+                aida_cli_lib::mailbox_store::read_canonical_messages(&self.mailbox_store_root())
+                    .unwrap_or_default();
+            let recent = aida_core::mailbox::merge_dedup(&local, &canonical);
+            if let Some(reason) = aida_core::mailbox::second_person_multicast_refusal(
+                &recent,
+                &from,
+                &recipient,
+                body,
+                chrono::Utc::now().timestamp_millis(),
+            ) {
+                return Err(format!(
+                    "send refused: {reason}. Name the seat whose claim it is, or write one body per recipient; pass allow_second_person: true if the reader really is meant as you."
+                ));
+            }
+        }
+        let relayed_from = args
+            .get("relayed_from")
+            .and_then(|v| v.as_str())
+            .map(str::trim)
+            .filter(|r| !r.is_empty())
+            .map(str::to_string);
+        let msg = Message {
+            subject,
+            id: id.clone(),
+            thread_id: thread_id.clone(),
+            from,
+            to: recipient,
+            timestamp: chrono::Utc::now().timestamp_millis(),
+            in_reply_to,
+            body: body.to_string(),
+            urgent,
+            intent,
+            retracted: false,
+            deleted: false,
+            archived: false,
+            from_source,
+            from_role,
+            relayed_from,
+        };
+        // A role send records its send-time cohort, as on the CLI.
+        // trace:STORY-1843 | ai:claude
+        let (deliveries, delivery_warnings) = match &resolution {
+            Some(r) => {
+                aida_cli_lib::mailbox_resolver::delivery_sidecar(r, &id, msg.timestamp, false)
+                    .map_err(|e| e.to_string())?
+            }
+            None => (None, Vec::new()),
+        };
+        aida_cli_lib::mailbox_store::write_message_with_deliveries(
+            &self.mailbox_root(),
+            &msg,
+            deliveries.as_ref(),
+        )
+        .map_err(|e| e.to_string())?;
+        routing_warnings.extend(delivery_warnings);
+        if let Some(note) = resolution.and_then(|r| r.reader_notice) {
+            routing_warnings.push(note);
+        }
+        // trace:BUG-B6B1278890774EF993D2EBC327862470-031 | ai:claude
+        routing_warnings
+            .extend(aida_cli_lib::mailbox_store::mailbox_home(&self.project_root).send_note());
+        let notice = if routing_warnings.is_empty() {
+            String::new()
+        } else {
+            format!("\n{}", routing_warnings.join("\n"))
+        };
+        Ok(format!("Message sent: {id} (thread {thread_id}){notice}"))
+    }
+
+    /// MCP parity for `aida mailbox inbox` (STORY-493): an agent's inbox —
+    /// messages addressed to it + broadcasts (excluding its own sent),
+    /// oldest-first, as JSON. `agent` defaults to this server's identity.
+    /// With `mark_seen`, it returns the response's own prepared ACK plan,
+    /// which only [`deliver`] commits, after the response was flushed; the
+    /// tool itself writes nothing (STORY-1843 B2c).
+    // trace:STORY-493 trace:STORY-1843 | ai:claude
+    fn tool_read_inbox_planned(
+        &self,
+        args: &Value,
+    ) -> Result<(String, Option<PendingAck>), String> {
+        let unread_only = args
+            .get("unread")
+            .and_then(|v| v.as_bool())
+            .unwrap_or(false);
+        let mark_seen = args
+            .get("mark_seen")
+            .and_then(|v| v.as_bool())
+            .unwrap_or(false);
+        // STORY-1843: this server's verified audience, read as one logical
+        // view across the repository's worktrees and the canonical store
+        // (which keeps STORY-643's foreign-clone mail visible). `agent`
+        // narrows it to one of its own inboxes; naming any other inbox is a
+        // read-only inspection of this checkout and the store.
+        // trace:STORY-643 trace:STORY-1843 | ai:claude
+        let own = aida_cli_lib::mailbox_view::own_audience_in(&self.mailbox_root());
+        let requested = args.get("agent").and_then(|v| v.as_str());
+        let audience = match requested {
+            None => own,
+            Some(agent) => match own.narrowed_to(agent) {
+                Some(narrowed) => narrowed,
+                None => {
+                    return self
+                        .inspect_inbox(agent, unread_only, mark_seen)
+                        .map(|text| (text, None))
+                }
+            },
+        };
+        let store_root = self.mailbox_root().join(".aida-store");
+        // An explicit read takes queued role mail. trace:STORY-1843 | ai:claude
+        let view = aida_cli_lib::mailbox_view::read_own_mail_binding(
+            &self.mailbox_root(),
+            &store_root,
+            &audience,
+            &aida_cli_lib::mailbox_view::explicit_limits(),
+            aida_cli_lib::mailbox_view::BindWait::Explicit,
+        );
+        let shown: Vec<&aida_core::mailbox_logical::SnapshotRecord> = view
+            .records()
+            .iter()
+            .filter(|r| {
+                !unread_only
+                    || (!r.message.archived
+                        && aida_cli_lib::mailbox_view::ReadState::of(r)
+                            == aida_cli_lib::mailbox_view::ReadState::Unread)
+            })
+            .collect();
+        let messages: Vec<Value> = shown
+            .iter()
+            .map(|r| {
+                let mut entry = mcp_mail_entry(&r.message);
+                entry["read"] = json!(aida_cli_lib::mailbox_view::ReadState::of(r).as_str());
+                entry
+            })
+            .collect();
+        // Explicit ack only (STORY-585 #4: the default is a non-marking
+        // peek). STORY-1843 B2c: plan the ACK of exactly the returned
+        // messages; it is committed after this response is flushed, so the
+        // response can only say the ACK was requested, never committed.
+        // trace:STORY-585 trace:TASK-1271 trace:STORY-1843 | ai:codex,claude
+        let (plan, ack, ack_note) = if mark_seen {
+            match aida_cli_lib::mailbox_view::plan_ack(&view, &shown) {
+                Ok(Some(plan)) => (Some(plan), "requested", None),
+                Ok(None) => (None, "none", None),
+                Err(e) => (None, "refused", Some(e.to_string())),
+            }
+        } else {
+            (None, "none", None)
+        };
+        let text = serde_json::to_string_pretty(&json!({
+            "agent": audience.keys().collect::<Vec<_>>().join(" + "),
+            "count": messages.len(),
+            "unread": unread_only,
+            "partial": view.is_partial(),
+            "partial_note": view.partial_note(),
+            "ack": ack,
+            "ack_count": plan.as_ref().map_or(0, |p| p.len()),
+            "ack_note": ack_note,
+            "messages": messages,
+        }))
+        .map_err(|e| e.to_string())?;
+        Ok((
+            text,
+            plan.map(|plan| PendingAck {
+                project_root: self.mailbox_root(),
+                plan,
+                store_root,
+                shown: shown.iter().map(|r| r.message.clone()).collect(),
+            }),
+        ))
+    }
+
+    /// The tool's text alone: a direct call never acknowledges anything,
+    /// because only [`deliver`] commits a plan. Test-only.
+    #[cfg(test)]
+    fn tool_read_inbox(&self, args: &Value) -> Result<String, String> {
+        self.tool_read_inbox_planned(args).map(|(text, _)| text)
+    }
+
+    /// `read_inbox` through the real response boundary: dispatched as a
+    /// `tools/call`, delivered into a buffer by [`deliver`] (which commits
+    /// any ACK after the flush), and the tool's text returned. Test-only.
+    #[cfg(test)]
+    fn read_inbox_delivered(&self, args: Value) -> String {
+        let response = self.handle_tools_call(
+            &json!(1),
+            &json!({ "name": "read_inbox", "arguments": args }),
+        );
+        let mut out = Vec::new();
+        deliver(&mut out, response).unwrap();
+        let line: Value = serde_json::from_slice(&out).unwrap();
+        line["result"]["content"][0]["text"]
+            .as_str()
+            .expect("a text result")
+            .to_string()
+    }
+
+    /// `read_inbox` for an inbox this server does not hold: read-only, this
+    /// checkout and the canonical store only, never marked.
+    // trace:STORY-1843 | ai:claude
+    fn inspect_inbox(
+        &self,
+        agent: &str,
+        unread_only: bool,
+        mark_seen: bool,
+    ) -> Result<String, String> {
+        use aida_core::mailbox::inbox_for;
+        if mark_seen {
+            return Err(format!(
+                "mark_seen applies only to this session's own inboxes; `{agent}` is not one of them"
+            ));
+        }
+        let local = aida_cli_lib::mailbox_store::read_local_messages(&self.mailbox_root())
+            .map_err(|e| e.to_string())?;
+        let store_root = self.mailbox_root().join(".aida-store");
+        let canonical =
+            aida_cli_lib::mailbox_store::read_canonical_messages(&store_root).unwrap_or_default();
+        let all = aida_core::mailbox::merge_dedup(&local, &canonical);
+        // trace:STORY-1843 | ai:claude — a receipt in any worktree is a read.
+        let evidence = aida_cli_lib::mailbox_store::ReadEvidence::load(&self.mailbox_root())
+            .map_err(|e| e.to_string())?;
+        let messages: Vec<Value> = inbox_for(agent, &all)
+            .into_iter()
+            .filter(|m| !unread_only || !evidence.read_by(agent, m))
+            .map(mcp_mail_entry)
+            .collect();
+        serde_json::to_string_pretty(&json!({
+            "agent": agent,
+            "count": messages.len(),
+            "unread": unread_only,
+            "inspection": true,
+            "partial": evidence.partial(),
+            "messages": messages,
+        }))
+        .map_err(|e| e.to_string())
+    }
+
+    fn tool_add_comment(&self, args: &Value) -> Result<String, String> {
+        let id = args
+            .get("id")
+            .and_then(|v| v.as_str())
+            .ok_or("Missing required parameter: id")?;
+        let text = args
+            .get("text")
+            .and_then(|v| v.as_str())
+            .ok_or("Missing required parameter: text")?;
+
+        let mut store = self.storage.load().map_err(|e| e.to_string())?;
+        let req = store
+            .get_requirement_unambiguous_mut(id)
+            .map_err(|e| e.to_string())?
+            .ok_or_else(|| format!("Requirement '{}' not found", id))?;
+
+        // trace:TASK-330 | ai:claude — stamp the producing session (best-effort)
+        let comment = Comment::new("mcp".to_string(), text.to_string())
+            .with_session_id(aida_cli_lib::resolve_current_session_id())
+            // trace:BUG-1534 | ai:claude
+            .with_relayed_from(args.get("relayed_from").and_then(|v| v.as_str()));
+        req.add_comment(comment);
+
+        self.storage.save(&store).map_err(|e| e.to_string())?;
+        Ok(format!("Comment added to {}", id))
+    }
+
+    // trace:TASK-551 | ai:codex
+    fn tool_add_relationship(&self, args: &Value) -> Result<String, String> {
+        let spec_id = args
+            .get("spec_id")
+            .and_then(|v| v.as_str())
+            .ok_or("Missing required parameter: spec_id")?;
+        let target_spec_id = args
+            .get("target_spec_id")
+            .and_then(|v| v.as_str())
+            .ok_or("Missing required parameter: target_spec_id")?;
+        let relationship_type_raw = args
+            .get("relationship_type")
+            .and_then(|v| v.as_str())
+            .ok_or("Missing required parameter: relationship_type")?;
+        let bidirectional = args
+            .get("bidirectional")
+            .and_then(|v| v.as_bool())
+            .unwrap_or(false);
+        let force_parent = args
+            .get("force_parent")
+            .and_then(|v| v.as_bool())
+            .unwrap_or(false);
+
+        // trace:BUG-790 | ai:codex
+        aida_cli_lib::reject_cross_store_spec_ref(spec_id).map_err(|e| e.to_string())?;
+        aida_cli_lib::reject_cross_store_spec_ref(target_spec_id).map_err(|e| e.to_string())?;
+
+        let rel_type = parse_mcp_relationship_type(relationship_type_raw)?;
+        let mut store = self.storage.load().map_err(|e| e.to_string())?;
+        let source_req = store
+            .get_requirement_unambiguous(spec_id)
+            .map_err(|e| e.to_string())?
+            .ok_or_else(|| format!("Requirement '{}' not found", spec_id))?;
+        let target_req = store
+            .get_requirement_unambiguous(target_spec_id)
+            .map_err(|e| e.to_string())?
+            .ok_or_else(|| format!("Requirement '{}' not found", target_spec_id))?;
+
+        let source_id = source_req.id;
+        let target_id = target_req.id;
+        let source_title = source_req.title.clone();
+        let target_title = target_req.title.clone();
+
+        if !force_parent {
+            let parent_for_guard = match &rel_type {
+                RelationshipType::Child => Some(target_req),
+                RelationshipType::Parent => Some(source_req),
+                _ => None,
+            };
+            if let Some(parent) = parent_for_guard {
+                if aida_cli_lib::is_terminal_status(&parent.status) {
+                    return Err(format!(
+                        "parent {} is {} — adding new children to a closed parent is usually a mistake. Pass `force_parent: true` to override.",
+                        parent.spec_id.as_deref().unwrap_or("?"),
+                        parent.status,
+                    ));
+                }
+            }
+        }
+
+        let ambiguity_warning = aida_cli_lib::relationship_terminal_ambiguity_warning(
+            &rel_type, source_req, target_req,
+        );
+
+        store
+            .add_relationship(&source_id, rel_type.clone(), &target_id, bidirectional)
+            .map_err(|e| e.to_string())?;
+        self.storage.save(&store).map_err(|e| e.to_string())?;
+
+        let mut out = format!(
+            "Relationship added: {} ({}) --[{}]--> {} ({})",
+            spec_id, source_title, rel_type, target_spec_id, target_title
+        );
+        if bidirectional {
+            if let Some(inverse) = rel_type.inverse() {
+                out.push_str(&format!("; inverse added as {}", inverse));
+            }
+        }
+        if let Some(warning) = ambiguity_warning {
+            out.push_str(&format!("\nWarning: {warning}"));
+        }
+        Ok(out)
+    }
+
+    fn tool_list_features(&self) -> Result<String, String> {
+        let store = self.storage.load_for_read().map_err(|e| e.to_string())?;
+
+        if store.features.is_empty() {
+            return Ok("No features defined in this project.".to_string());
+        }
+
+        let mut output = format!("Features ({}):\n\n", store.features.len());
+        for f in &store.features {
+            output.push_str(&format!("- {} (prefix: {})\n", f.name, f.prefix));
+        }
+        Ok(output)
+    }
+
+    // ========================================================================
+    // STORY-361: Punt channel tools
+    // ========================================================================
+
+    fn tool_list_punts(&self, args: &Value) -> Result<String, String> {
+        let status_filter = args
+            .get("status")
+            .and_then(|v| v.as_str())
+            .map(|s| s.to_string());
+
+        let records = read_ledger(&self.project_root);
+        // BUG-674: the default view hides auto-filed session-end visibility
+        // warnings (they bury genuine decision-punts); `awaiting` is the OPEN
+        // set (excludes closed + noise); `all` shows everything.
+        // trace:BUG-674 | ai:claude
+        let filtered: Vec<&PuntRecord> = records
+            .iter()
+            .filter(|r| match status_filter.as_deref() {
+                None => !punt::is_session_end_noise(r),
+                Some("awaiting") => punt::is_open(r),
+                Some("all") => true,
+                Some(other) => r.resolution_path == other,
+            })
+            .collect();
+
+        if filtered.is_empty() {
+            return Ok("No punts found.".to_string());
+        }
+        let mut out = format!("Found {} punt(s):\n\n", filtered.len());
+        for r in &filtered {
+            out.push_str(&format!(
+                "- {} [{}] {}\n  resolution: {}  ({})\n",
+                r.spec,
+                r.category,
+                r.detail,
+                r.resolution_path,
+                r.timestamp.to_rfc3339(),
+            ));
+        }
+        Ok(out)
+    }
+
+    fn tool_read_punt(&self, args: &Value) -> Result<String, String> {
+        let spec = args
+            .get("spec_id")
+            .or_else(|| args.get("punt_id"))
+            .and_then(|v| v.as_str())
+            .ok_or("Missing required parameter: spec_id (or punt_id)")?;
+
+        let records = read_ledger(&self.project_root);
+        // Most recent record for the spec is the live one.
+        let record = records
+            .iter()
+            .rev()
+            .find(|r| r.spec.eq_ignore_ascii_case(spec))
+            .ok_or_else(|| format!("No punt found for spec '{}'", spec))?;
+
+        let body = serde_json::to_string_pretty(record).map_err(|e| e.to_string())?;
+        Ok(body)
+    }
+
+    fn tool_post_punt(&self, args: &Value) -> Result<String, String> {
+        let spec = args
+            .get("spec_id")
+            .and_then(|v| v.as_str())
+            .ok_or("Missing required parameter: spec_id")?;
+        let detail = args
+            .get("detail")
+            .or_else(|| args.get("reason"))
+            .and_then(|v| v.as_str())
+            .ok_or("Missing required parameter: detail (or reason)")?;
+        let category_raw = args
+            .get("category")
+            .and_then(|v| v.as_str())
+            .unwrap_or("design-fork");
+        let category = PuntCategory::from_str(category_raw)
+            .ok_or_else(|| format!("invalid punt category `{}`", category_raw))?;
+        let lean = args
+            .get("lean")
+            .and_then(|v| v.as_str())
+            .map(|s| s.to_string());
+        let raised_by = args
+            .get("raised_by")
+            .and_then(|v| v.as_str())
+            .map(|s| s.to_string())
+            .or_else(|| Some("mcp".to_string()));
+
+        // TASK-349: mirror the CLI `aida punt` nudge — a blocked-dependency
+        // punt that named a blocker spec should suggest recording the
+        // blocked-by graph edge, so the MCP and CLI surfaces don't drift.
+        // Computed before `lean` is moved into the record below. trace:TASK-349
+        let blocked_by_hint =
+            aida_cli_lib::punt::suggest_blocked_by(spec, category, detail, lean.as_deref())
+                .map(|s| s.suggested_command());
+
+        // TASK-1468: refuse an ambiguous spec id BEFORE the ledger write, so
+        // a punt is never recorded against — or flips — a guessed spec.
+        // trace:TASK-1468 | ai:claude
+        let mut store = self.storage.load().map_err(|e| e.to_string())?;
+        store
+            .get_requirement_unambiguous(spec)
+            .map_err(|e| e.to_string())?;
+
+        let record = PuntRecord {
+            timestamp: Utc::now(),
+            spec: spec.to_string(),
+            category,
+            detail: detail.to_string(),
+            lean,
+            raised_by,
+            resolution_path: "punted".to_string(),
+            classification: None,
+            escalation_reason: None,
+            answer: None,
+            answered_by: None,
+            decision: None,
+            principle_link: None,
+            calibration_pair: None,
+            paused_at: None,
+            resolved_at: None,
+        };
+
+        append_to_ledger(&self.project_root, &record).map_err(|e| e.to_string())?;
+
+        // BUG-334: a punt MEANS "I hit a fork I can't resolve — this spec
+        // needs attention", so flip the status to match the CLI `aida punt`
+        // (which already does this). The state machine only permits
+        // `InProgress → NeedsAttention` (forbidden_attention_transition
+        // guards it), so flip when the transition is legal and record-only
+        // otherwise — never erroring, since the punt ledger entry is already
+        // written. trace:BUG-334 | ai:claude
+        let flipped = match store
+            .get_requirement_unambiguous_mut(spec)
+            .map_err(|e| e.to_string())?
+        {
+            Some(req) => mcp_punt_status_flip(req),
+            None => false,
+        };
+        if flipped {
+            self.storage.save(&store).map_err(|e| e.to_string())?;
+        }
+
+        let mut out = if flipped {
+            format!("Punt recorded for {spec} [{category}]; spec flipped to NeedsAttention.")
+        } else {
+            format!(
+                "Punt recorded for {spec} [{category}]. Spec status unchanged \
+                 (only an In Progress spec auto-flips to NeedsAttention); flip \
+                 manually with `aida edit {spec} --status needs-attention` if needed."
+            )
+        };
+        // trace:TASK-349 | ai:claude
+        if let Some(cmd) = blocked_by_hint {
+            out.push_str(&format!(
+                "\nBlocked-dependency punt — record the graph edge: `{cmd}`"
+            ));
+        }
+        Ok(out)
+    }
+
+    fn tool_resolve_punt(&self, args: &Value) -> Result<String, String> {
+        let spec = args
+            .get("spec_id")
+            .or_else(|| args.get("punt_id"))
+            .and_then(|v| v.as_str())
+            .ok_or("Missing required parameter: spec_id (or punt_id)")?;
+        let answer = args
+            .get("answer")
+            .and_then(|v| v.as_str())
+            .ok_or("Missing required parameter: answer")?;
+        let reasoning = args
+            .get("reasoning")
+            .or_else(|| args.get("rationale"))
+            .and_then(|v| v.as_str())
+            .ok_or("Missing required parameter: reasoning (or rationale)")?;
+        let classification = args
+            .get("classification")
+            .and_then(|v| v.as_str())
+            .map(|s| s.to_string());
+
+        // BUG-674: resolve through the shared core so the MCP tool and the
+        // `aida punts resolve` CLI verb cannot drift — it writes the
+        // `PuntResponse` the orchestrator polls AND closes the open ledger
+        // record(s) so the triage count actually drops. trace:BUG-674 | ai:claude
+        let (path, closed) = punt::resolve_punt_core(
+            &self.project_root,
+            spec,
+            answer,
+            reasoning,
+            classification,
+            Some("mcp"),
+        )
+        .map_err(|e| e.to_string())?;
+
+        Ok(format!(
+            "Resolution written to {} — the orchestrator will resume the implementer with this answer.{}",
+            path.display(),
+            ledger_close_suffix(closed),
+        ))
+    }
+
+    fn tool_escalate_punt(&self, args: &Value) -> Result<String, String> {
+        let spec = args
+            .get("spec_id")
+            .or_else(|| args.get("punt_id"))
+            .and_then(|v| v.as_str())
+            .ok_or("Missing required parameter: spec_id (or punt_id)")?;
+        let reasoning = args
+            .get("reasoning")
+            .and_then(|v| v.as_str())
+            .ok_or("Missing required parameter: reasoning")?;
+        let escalation_reason = args
+            .get("escalation_reason")
+            .and_then(|v| v.as_str())
+            .map(|s| s.to_string());
+        let classification = args
+            .get("classification")
+            .and_then(|v| v.as_str())
+            .map(|s| s.to_string());
+
+        // BUG-674: escalate through the shared core (parity with `aida punts
+        // escalate`) — writes the escalation `PuntResponse` the orchestrator
+        // parks on AND closes the open ledger record(s) as escalated-to-human.
+        // trace:BUG-674 | ai:claude
+        let (path, closed) = punt::escalate_punt_core(
+            &self.project_root,
+            spec,
+            reasoning,
+            escalation_reason,
+            classification,
+            Some("mcp"),
+        )
+        .map_err(|e| e.to_string())?;
+
+        Ok(format!(
+            "Escalation written to {} — the orchestrator will park the spec for human triage.{}",
+            path.display(),
+            ledger_close_suffix(closed),
+        ))
+    }
+
+    // ========================================================================
+    // STORY-361: Findings channel tools
+    // ========================================================================
+
+    fn tool_list_findings(&self, args: &Value) -> Result<String, String> {
+        let pr = args.get("pr").and_then(|v| v.as_u64()).map(|n| n as u32);
+        let source = args.get("source").and_then(|v| v.as_str()).and_then(|s| {
+            match s.to_ascii_lowercase().as_str() {
+                "review" => Some(aida_cli_lib::findings::FindingSource::Review),
+                "implementer" => Some(aida_cli_lib::findings::FindingSource::Implementer),
+                _ => None,
+            }
+        });
+        let kind = args
+            .get("kind")
+            .and_then(|v| v.as_str())
+            .map(|s| s.to_string());
+
+        let store = self.storage.load_for_read().map_err(|e| e.to_string())?;
+
+        // Project Database into RequirementSummary shape that findings.rs expects.
+        let summaries = build_summaries(&store);
+        let filter = FindingsFilter { pr, source, kind };
+        let sections = build_findings_view(&summaries, &filter);
+        let total = count_findings(&sections);
+
+        if total == 0 {
+            return Ok("No findings match the filter.".to_string());
+        }
+
+        let mut out = format!("Found {} finding(s):\n\n", total);
+        for sec in &sections {
+            out.push_str(&format!("## From {}\n\n", sec.source.label()));
+            for g in &sec.groups {
+                out.push_str(&format!("### {}\n", g.origin));
+                for r in &g.rows {
+                    let kind_label = r
+                        .kind
+                        .as_deref()
+                        .map(|k| format!(" [{}]", k))
+                        .unwrap_or_default();
+                    out.push_str(&format!(
+                        "- {} {} ({}){}\n",
+                        r.display_id,
+                        r.title,
+                        r.severity.label(),
+                        kind_label,
+                    ));
+                }
+                out.push('\n');
+            }
+        }
+        Ok(out)
+    }
+
+    fn tool_file_finding(&self, args: &Value) -> Result<String, String> {
+        let title = args
+            .get("title")
+            .and_then(|v| v.as_str())
+            .ok_or("Missing required parameter: title")?;
+        let description = args
+            .get("description")
+            .and_then(|v| v.as_str())
+            .ok_or("Missing required parameter: description")?;
+        let source = args
+            .get("source")
+            .and_then(|v| v.as_str())
+            .unwrap_or("implementer");
+        // trace:TASK-437 | ai:claude — enforce the inputSchema contract.
+        // `spec_id` is a string SPEC-ID (e.g. "TASK-42"); `pr` is the bare integer.
+        // Loose clients used to pass `pr: "7"` and get `from-review:7` instead of
+        // `from-review:PR-7`, silently invisible to `aida findings list --pr 7`.
+        let origin = if let Some(v) = args.get("spec_id") {
+            let s = v
+                .as_str()
+                .ok_or("spec_id must be a string (e.g. \"TASK-42\")")?;
+            s.to_string()
+        } else if let Some(v) = args.get("pr") {
+            let n = v.as_u64().ok_or(
+                "pr must be an integer (the bare PR number, e.g. 7 — not \"7\" or \"PR-7\")",
+            )?;
+            format!("PR-{}", n)
+        } else {
+            return Err("Missing required parameter: spec_id (or pr)".to_string());
+        };
+        let kind = args
+            .get("kind")
+            .and_then(|v| v.as_str())
+            .map(|s| s.to_string());
+        let severity = args
+            .get("severity")
+            .and_then(|v| v.as_str())
+            .unwrap_or("minor");
+
+        let source_tag = match source.to_ascii_lowercase().as_str() {
+            "review" => format!("{}{}", FROM_REVIEW_PREFIX, origin),
+            "implementer" => format!("{}{}", FROM_IMPLEMENTER_PREFIX, origin),
+            other => return Err(format!("unknown source '{}'", other)),
+        };
+
+        let mut store = self.storage.load().map_err(|e| e.to_string())?;
+        let mut req = Requirement::new(title.to_string(), description.to_string());
+        req.req_type = RequirementType::Task;
+        req.status = RequirementStatus::Draft;
+        req.priority = RequirementPriority::Medium;
+        req.tags.insert(source_tag);
+        req.tags.insert(format!("severity:{}", severity));
+        if let Some(k) = kind {
+            req.tags.insert(format!("kind:{}", k));
+        }
+        store.requirements.push(req);
+        store.assign_spec_ids();
+        let new_id = store
+            .requirements
+            .last()
+            .and_then(|r| r.spec_id.clone())
+            .unwrap_or_else(|| "?".to_string());
+        self.storage.save(&store).map_err(|e| e.to_string())?;
+
+        Ok(format!("Finding filed: {} — {}", new_id, title))
+    }
+
+    fn tool_triage_finding(&self, args: &Value) -> Result<String, String> {
+        let id = args
+            .get("id")
+            .and_then(|v| v.as_str())
+            .ok_or("Missing required parameter: id")?;
+        let action = args
+            .get("action")
+            .and_then(|v| v.as_str())
+            .ok_or("Missing required parameter: action (promote|dismiss)")?;
+        let reason = args
+            .get("reason")
+            .and_then(|v| v.as_str())
+            .map(|s| s.to_string());
+
+        // TASK-681 (EPIC-38) caller-parity audit: promoting a finding sets it
+        // `Approved`, which is the advisor's triage decision — exactly the
+        // transition `mcp_status_gate_message` refuses on the
+        // update_requirement path (BUG-449). Without this gate,
+        // `triage_finding promote` was a one-tool bypass that let an untrusted
+        // MCP caller self-grant Approved status on a draft finding. Apply the
+        // same gate before mutating; `dismiss` (Rejected) is implementer-
+        // legitimate and stays allowed. The gate is keyed off the target
+        // status so it stays in lockstep if the gated-status set ever changes.
+        // trace:TASK-681 | ai:claude
+        let new_status = match action.to_ascii_lowercase().as_str() {
+            "promote" => RequirementStatus::Approved,
+            "dismiss" => RequirementStatus::Rejected,
+            other => return Err(format!("unknown action '{}'", other)),
+        };
+        // BUG-481: a finding is a Draft until triaged; promote → Approved is
+        // always-gated regardless of source, so the Draft source here is
+        // conservative-correct (dismiss → Rejected stays ungated).
+        if let Some(msg) = mcp_status_gate_message(&RequirementStatus::Draft, &new_status) {
+            return Err(msg);
+        }
+
+        let mut store = self.storage.load().map_err(|e| e.to_string())?;
+        // TASK-1468: refuse an ambiguous finding id. trace:TASK-1468 | ai:claude
+        let req = store
+            .get_requirement_unambiguous_mut(id)
+            .map_err(|e| e.to_string())?
+            .ok_or_else(|| format!("Finding '{}' not found", id))?;
+        let tags: Vec<String> = req.tags.iter().cloned().collect();
+        if finding_source(&tags).is_none() {
+            return Err(format!("{} is not a finding (no from-* tag)", id));
+        }
+
+        let verb = if new_status == RequirementStatus::Approved {
+            "promoted"
+        } else {
+            "dismissed"
+        };
+        // BUG-1637: a caller-authored triage, recorded under the caller.
+        // trace:BUG-1637 | ai:claude
+        let from = std::mem::replace(&mut req.status, new_status);
+        aida_cli_lib::record_caller_status_transition(req, &from);
+        if let Some(r) = reason {
+            req.add_comment(Comment::new(
+                "mcp".to_string(),
+                format!("{} via MCP: {}", verb, r),
+            ));
+        }
+
+        self.storage.save(&store).map_err(|e| e.to_string())?;
+        // BUG-590: emit the proper past tense ("dismissed"/"promoted") instead of
+        // blindly suffixing "d" to the raw action (which yielded "dismissd").
+        // `verb` is already the correct past-tense form. trace:BUG-590 | ai:claude
+        Ok(format!("Finding {} {}", id, verb))
+    }
+
+    // ========================================================================
+    // STORY-361: Task-claim channel tools
+    // ========================================================================
+
+    fn tool_claim_task(&self, args: &Value) -> Result<String, String> {
+        let spec_id_arg = args
+            .get("spec_id")
+            .and_then(|v| v.as_str())
+            .ok_or("Missing required parameter: spec_id")?;
+        let role = args
+            .get("role")
+            .and_then(|v| v.as_str())
+            .unwrap_or("implementer");
+        // TASK-474: optional `worktree_path` — the path of the agent's actual
+        // working directory (its `pwd`). An MCP server is launched in one
+        // place and stays there, so it cannot derive its caller's cwd from
+        // `self.project_root`; before this arg the lease always recorded the
+        // project root, which misrouted "this session owns scope X" hints
+        // in `aida add` to unrelated shells in the parent worktree.
+        // Empty / absent → record an empty `worktree_path` (advisory lock
+        // only; `lease_covers_cwd` skip-matches it so no cwd-based
+        // inference attaches to the lease). Non-empty paths are canonicalized
+        // at record-time so cwd comparisons don't drift on relative paths,
+        // symlinks, or `..` segments. trace:TASK-474 TASK-504 | ai:claude
+        let worktree_path_arg = args
+            .get("worktree_path")
+            .and_then(|v| v.as_str())
+            .map(canonicalize_worktree_arg)
+            .unwrap_or_default();
+
+        // First pass: surface non-MCP leases (e.g. `aida session start`) that
+        // cover this spec — those land at arbitrary filenames, so the
+        // create_new(true) atomic-create below can't see them.
+        let leases = list_leases(&self.project_root);
+        if let Some(existing) = leases
+            .iter()
+            .find(|l| l.scope.eq_ignore_ascii_case(spec_id_arg))
+        {
+            return Ok(format!(
+                "already_claimed by {} (lease {} since {})",
+                existing.owner, existing.id, existing.started_at
+            ));
+        }
+
+        // Mint a new lease_id (12-char uuid v7 prefix matches `aida session start`).
+        let id_long = uuid::Uuid::now_v7().to_string();
+        let id = id_long.replace('-', "")[..12].to_string();
+        let owner = std::env::var("USER").unwrap_or_else(|_| "mcp".to_string());
+        let hostname = hostname_or_unknown();
+        // BUG-2143: the claimed worktree's own branch, or none — never the
+        // primary checkout's `main`, which `aida session reap` protects forever.
+        // trace:BUG-2143 | ai:claude
+        let branch = aida_cli_lib::claim::claim_lease_branch(
+            std::path::Path::new(&worktree_path_arg),
+            &self.project_root,
+        );
+
+        let lease = LightLease {
+            id: id.clone(),
+            scope: spec_id_arg.to_string(),
+            slug: spec_id_arg.to_string(),
+            owner,
+            worktree_path: worktree_path_arg,
+            branch,
+            started_at: Utc::now().to_rfc3339(),
+            hostname,
+            role: Some(role.to_string()),
+            mcp_claim: true,
+        };
+
+        let dir = leases_dir(&self.project_root);
+        std::fs::create_dir_all(&dir).map_err(|e| e.to_string())?;
+        // trace:TASK-b6b1278890774ef993d2ebc327862470-271 | ai:claude
+        // Key the MCP claim file by spec_id (lower-cased) instead of lease_id,
+        // so two concurrent claim_task calls on the same spec target the same
+        // path. `create_new(true)` maps to O_EXCL|O_CREAT on POSIX and
+        // CREATE_NEW on Windows — atomically fails if the file already exists.
+        // That gives a single serialization point per spec, closing the TOCTOU
+        // window between the pre-scan above and the lease write.
+        let path = mcp_claim_path(&dir, spec_id_arg);
+        let body = toml::to_string(&lease).map_err(|e| e.to_string())?;
+        match std::fs::OpenOptions::new()
+            .write(true)
+            .create_new(true)
+            .open(&path)
+        {
+            Ok(mut f) => {
+                f.write_all(body.as_bytes()).map_err(|e| e.to_string())?;
+                f.sync_all().map_err(|e| e.to_string())?;
+            }
+            Err(e) if e.kind() == std::io::ErrorKind::AlreadyExists => {
+                // Another claim_task call won the race. Read the existing
+                // lease so the response matches the pre-scan format.
+                let body = std::fs::read_to_string(&path).map_err(|e| e.to_string())?;
+                let existing: LightLease = toml::from_str(&body).map_err(|e| e.to_string())?;
+                return Ok(format!(
+                    "already_claimed by {} (lease {} since {})",
+                    existing.owner, existing.id, existing.started_at
+                ));
+            }
+            Err(e) => return Err(e.to_string()),
+        }
+
+        Ok(format!("claimed: lease_id={}", id))
+    }
+
+    fn tool_release_task(&self, args: &Value) -> Result<String, String> {
+        let lease_id = args
+            .get("lease_id")
+            .and_then(|v| v.as_str())
+            .ok_or("Missing required parameter: lease_id")?;
+
+        // trace:TASK-b6b1278890774ef993d2ebc327862470-271 | ai:claude
+        // Lease files are no longer named `<lease_id>.toml` — MCP claims live
+        // at `mcp-claim.<spec>.toml`, and session-start leases use their own
+        // scheme. Scan the directory and match the embedded `id` field.
+        let dir = leases_dir(&self.project_root);
+        let entries =
+            std::fs::read_dir(&dir).map_err(|_| format!("lease '{}' not found", lease_id))?;
+        let mut found: Option<(PathBuf, LightLease)> = None;
+        for entry in entries.flatten() {
+            let p = entry.path();
+            // Skip `.activity.toml` / `.manifest.toml` companions and staging files.
+            // trace:BUG-b6b1278890774ef993d2ebc327862470-012 | ai:claude
+            if p.extension().and_then(|s| s.to_str()) != Some("toml")
+                || p.file_name()
+                    .and_then(|s| s.to_str())
+                    .is_some_and(aida_cli_lib::leases::is_lease_companion)
+            {
+                continue;
+            }
+            if let Ok(body) = std::fs::read_to_string(&p) {
+                if let Ok(l) = toml::from_str::<LightLease>(&body) {
+                    if l.id == lease_id {
+                        found = Some((p, l));
+                        break;
+                    }
+                }
+            }
+        }
+
+        let (path, lease) = found.ok_or_else(|| format!("lease '{}' not found", lease_id))?;
+
+        // Refuse to delete a non-MCP lease — the MCP surface only owns the
+        // lightweight claims it creates. Real `aida session start` leases must
+        // be released via `aida session end`.
+        if !lease.mcp_claim {
+            return Err(format!(
+                "lease '{}' is a real `aida session start` lease — use `aida session end {}` to release it",
+                lease_id, lease_id
+            ));
+        }
+
+        std::fs::remove_file(&path).map_err(|e| e.to_string())?;
+        Ok(format!("released: lease_id={}", lease_id))
+    }
+
+    fn tool_list_active_leases(&self) -> Result<String, String> {
+        let leases = list_leases(&self.project_root);
+        if leases.is_empty() {
+            return Ok("No active leases.".to_string());
+        }
+        let mut out = format!("Found {} active lease(s):\n\n", leases.len());
+        for l in &leases {
+            let claim_kind = if l.mcp_claim { "mcp" } else { "session" };
+            let role = l.role.as_deref().unwrap_or("?");
+            out.push_str(&format!(
+                "- {} scope={} role={} owner={} kind={} started_at={}\n",
+                l.id, l.scope, role, l.owner, claim_kind, l.started_at
+            ));
+        }
+        Ok(out)
+    }
+
+    // ========================================================================
+    // STORY-361: Worker-directive channel tools
+    // ========================================================================
+
+    fn tool_post_directive(&self, args: &Value) -> Result<String, String> {
+        let verb = args
+            .get("verb")
+            .and_then(|v| v.as_str())
+            .ok_or("Missing required parameter: verb (drain|pause|exit)")?;
+        // trace:TASK-b6b1278890774ef993d2ebc327862470-269 | ai:claude
+        // Validate the verb up front. The worker defensively maps unknown
+        // verbs to `pause`, but the caller deserves a clear error rather than
+        // a silently-misclassified "directive posted" success.
+        if !matches!(verb, "drain" | "pause" | "exit") {
+            return Err(format!(
+                "invalid directive verb `{}` (expected drain|pause|exit)",
+                verb
+            ));
+        }
+        let args_list = if let Some(v) = args.get("args") {
+            if let Some(arr) = v.as_array() {
+                arr.iter()
+                    .filter_map(|x| x.as_str())
+                    .map(|s| s.to_string())
+                    .collect::<Vec<_>>()
+            } else {
+                return Err(
+                    "Parameter `args` must be an array of strings (e.g. [\"arg\"])".to_string(),
+                );
+            }
+        } else {
+            Vec::new()
+        };
+
+        let mut line = verb.to_string();
+        if !args_list.is_empty() {
+            line.push(' ');
+            line.push_str(&args_list.join(" "));
+        }
+
+        let path = aida_cli_lib::worker::worker_cmd_path(&self.project_root);
+        if let Some(parent) = path.parent() {
+            std::fs::create_dir_all(parent).map_err(|e| e.to_string())?;
+        }
+        append_line(&path, &line).map_err(|e| e.to_string())?;
+        Ok(format!("directive posted: {}", line))
+    }
+
+    fn tool_list_directives(&self) -> Result<String, String> {
+        let path = aida_cli_lib::worker::worker_cmd_path(&self.project_root);
+        let directives = aida_cli_lib::worker::parse_directives(&path);
+        Ok(aida_cli_lib::worker::render_human(&directives))
+    }
+
+    fn tool_ack_directive(&self, args: &Value) -> Result<String, String> {
+        let index = args
+            .get("index")
+            .and_then(|v| v.as_u64())
+            .ok_or("Missing required parameter: index (0-based)")? as usize;
+
+        let path = aida_cli_lib::worker::worker_cmd_path(&self.project_root);
+        let body = std::fs::read_to_string(&path)
+            .map_err(|e| format!("reading {}: {}", path.display(), e))?;
+
+        // Keep blank/comment lines in place; only count non-comment, non-blank
+        // lines so the index aligns with `aida worker directives`.
+        let mut directive_count = 0usize;
+        let mut new_lines: Vec<String> = Vec::with_capacity(body.lines().count());
+        let mut removed: Option<String> = None;
+        for line in body.lines() {
+            let trimmed = line.trim();
+            if trimmed.is_empty() || trimmed.starts_with('#') {
+                new_lines.push(line.to_string());
+                continue;
+            }
+            if directive_count == index {
+                removed = Some(line.to_string());
+                directive_count += 1;
+                continue;
+            }
+            new_lines.push(line.to_string());
+            directive_count += 1;
+        }
+
+        let removed = removed.ok_or_else(|| {
+            format!(
+                "no directive at index {} (there are {} directive(s))",
+                index, directive_count
+            )
+        })?;
+
+        let mut new_body = new_lines.join("\n");
+        if !new_body.is_empty() && !new_body.ends_with('\n') {
+            new_body.push('\n');
+        }
+        write_atomic(&path, new_body.as_bytes()).map_err(|e| e.to_string())?;
+        Ok(format!("acked: {}", removed))
+    }
+
+    fn tool_list_briefs(&self, args: &Value) -> Result<String, String> {
+        let agent = optional_string(args, "agent")?;
+        if let Some(agent) = agent {
+            validate_brief_agent(agent)?;
+        }
+        let include_acked = args
+            .get("include_acked")
+            .and_then(|v| v.as_bool())
+            .unwrap_or(false);
+        let entries = collect_brief_refs(&self.project_root, agent, include_acked)?;
+        if entries.is_empty() {
+            return Ok("No briefs found.".to_string());
+        }
+        let mut out = format!("Found {} brief(s):", entries.len());
+        for entry in entries {
+            out.push_str(&format!(
+                "\n- path={} agent={} spec_id={} generated_at={} status={}",
+                entry.path, entry.agent, entry.spec_id, entry.generated_at, entry.status
+            ));
+            // STORY-711 slice 2: surface the authorizing advisor when present.
+            // trace:TASK-1140 | ai:claude
+            if let Some(by) = entry.authorized_by.as_deref() {
+                out.push_str(&format!(" authorized_by={by}"));
+            }
+        }
+        Ok(out)
+    }
+
+    fn tool_read_brief(&self, args: &Value) -> Result<String, String> {
+        let raw_path = required_string(args, "path")?;
+        let path = resolve_brief_path(&self.project_root, raw_path)?;
+        std::fs::read_to_string(&path)
+            .map_err(|e| format!("reading brief {}: {}", path.display(), e))
+    }
+
+    fn tool_ack_brief(&self, args: &Value) -> Result<String, String> {
+        let raw_path = required_string(args, "path")?;
+        let path = resolve_brief_path(&self.project_root, raw_path)?;
+        let acked_path = if path.extension().and_then(|e| e.to_str()) == Some("acked") {
+            path.clone()
+        } else {
+            let file_name = path
+                .file_name()
+                .and_then(|n| n.to_str())
+                .ok_or_else(|| format!("invalid brief path: {}", path.display()))?;
+            path.with_file_name(format!("{file_name}.acked"))
+        };
+
+        if acked_path.exists() {
+            return Ok(format!(
+                "already_acked: {}",
+                brief_display_path(&self.project_root, &acked_path)
+            ));
+        }
+        if !path.exists() {
+            return Err(format!("brief file not found: {}", raw_path));
+        }
+
+        let content = std::fs::read_to_string(&path)
+            .map_err(|e| format!("reading brief {}: {}", path.display(), e))?;
+        let content = if content.contains("\nstatus: pending\n") {
+            content.replacen("\nstatus: pending\n", "\nstatus: acked\n", 1)
+        } else {
+            content
+        };
+        write_atomic(&path, content.as_bytes()).map_err(|e| e.to_string())?;
+        match std::fs::rename(&path, &acked_path) {
+            Ok(()) => {
+                // TASK-502: keep the `.pending` sentinel in sync when an agent
+                // acks through MCP, same as the CLI ack path.
+                aida_cli_lib::clear_pending_brief(&path);
+                Ok(format!(
+                    "acked: {}",
+                    brief_display_path(&self.project_root, &acked_path)
+                ))
+            }
+            Err(_e) if acked_path.exists() => Ok(format!(
+                "already_acked: {}",
+                brief_display_path(&self.project_root, &acked_path)
+            )),
+            Err(e) => Err(format!(
+                "acking brief {} -> {}: {}",
+                path.display(),
+                acked_path.display(),
+                e
+            )),
+        }
+    }
+
+    // ========================================================================
+    // Queue tool implementations — STORY-532 (EPIC-27)
+    //
+    // These mirror the `aida queue <subcommand>` CLI surface so MCP-speaking
+    // agents can manage the work queue without shelling out. They reuse the
+    // same underlying `Storage::queue_*` library functions the CLI handlers
+    // call (no subprocess to `aida`), and resolve the queue `user_id` through
+    // `aida_cli_lib::current_user_id` exactly like the CLI — so MCP and CLI see the
+    // same queue (BUG-89 identity rule). trace:EPIC-27
+    // ========================================================================
+
+    /// Resolve the queue `user_id` the same way every CLI queue path does:
+    /// `user` arg → AIDA_USER → USER → USERNAME → "default". trace:EPIC-27
+    fn queue_user_id(&self, args: &Value) -> String {
+        aida_cli_lib::current_user_id(args.get("user").and_then(|v| v.as_str()))
+    }
+
+    /// Resolve a requirement by UUID or SPEC-ID (the CLI's two-step lookup).
+    /// trace:EPIC-27
+    ///
+    /// TASK-1468: every write tool resolves through here, so an id naming
+    /// more than one requirement refuses (the error lists each candidate's
+    /// unambiguous handle). Read-only tools use
+    /// [`Self::resolve_requirement_for_read`].
+    // trace:TASK-1468 | ai:claude
+    fn resolve_requirement<'s>(
+        store: &'s aida_core::RequirementsStore,
+        id: &str,
+    ) -> Result<&'s Requirement, String> {
+        store
+            .get_requirement_unambiguous(id)
+            .map_err(|e| e.to_string())?
+            .ok_or_else(|| format!("Requirement '{}' not found", id))
+    }
+
+    /// Read-only resolution: deterministic native-owner-first pick.
+    fn resolve_requirement_for_read<'s>(
+        store: &'s aida_core::RequirementsStore,
+        id: &str,
+    ) -> Result<&'s Requirement, String> {
+        if let Ok(uuid) = uuid::Uuid::parse_str(id) {
+            store.requirements.iter().find(|r| r.id == uuid)
+        } else {
+            store.get_requirement_by_spec_id(id)
+        }
+        .ok_or_else(|| format!("Requirement '{}' not found", id))
+    }
+
+    /// The id this server acts on (lease gates, events, command hints).
+    /// Prose rows wrap it in [`mcp_id_cell`] for the additive `display_id`.
+    fn display_id_of(req: &Requirement) -> String {
+        req.agreed_id
+            .clone()
+            .or_else(|| req.spec_id.clone())
+            .unwrap_or_else(|| "???".to_string())
+    }
+
+    // trace:EPIC-27
+    fn tool_queue_list(&self, args: &Value) -> Result<String, String> {
+        let user_id = self.queue_user_id(args);
+        let include_completed = args
+            .get("include_completed")
+            .and_then(|v| v.as_bool())
+            .unwrap_or(false);
+        let include_terminal = args
+            .get("include_terminal")
+            .and_then(|v| v.as_bool())
+            .unwrap_or(false);
+        let role = args.get("for").and_then(|v| v.as_str());
+        let all = args.get("all").and_then(|v| v.as_bool()).unwrap_or(false);
+
+        let entries = self
+            .storage
+            .queue_list(&user_id, include_completed)
+            .map_err(|e| e.to_string())?;
+        let store = self.storage.load_for_read().map_err(|e| e.to_string())?;
+
+        // Same role-filter resolution as `aida queue list` (BUG-87). MCP has
+        // no shell role context, so the active-role default is None — pass
+        // `for` to scope. trace:EPIC-27
+        let session_role = std::env::var("AIDA_SESSION_ROLE").ok();
+        let (role_filter, only_unrouted) =
+            aida_cli_lib::resolve_queue_role_filter(role, all, session_role.as_deref());
+
+        let mut lines: Vec<String> = Vec::new();
+        let mut shown = 0usize;
+        for entry in &entries {
+            if !aida_cli_lib::entry_matches_role_filter(
+                entry.for_role.as_deref(),
+                role_filter.as_deref(),
+                only_unrouted,
+            ) {
+                continue;
+            }
+            let req = store
+                .requirements
+                .iter()
+                .find(|r| r.id == entry.requirement_id);
+            // TASK-46: hide terminal-status entries unless include_terminal.
+            if let Some(r) = req {
+                if !include_terminal && aida_cli_lib::is_terminal_status(&r.status) {
+                    continue;
+                }
+            }
+            shown += 1;
+            let (disp, title, status) = match req {
+                Some(r) => (
+                    // trace:STORY-B6B1278890774EF993D2EBC327862470-078 | ai:claude
+                    mcp_id_cell(&Self::display_id_of(r)),
+                    r.title.clone(),
+                    r.status.to_string(),
+                ),
+                None => (
+                    entry.requirement_id.to_string(),
+                    "(unknown requirement)".to_string(),
+                    "?".to_string(),
+                ),
+            };
+            let routing = entry
+                .for_role
+                .as_deref()
+                .map(|r| format!(" [for:{}]", r))
+                .unwrap_or_default();
+            lines.push(format!(
+                "{}. [{}] {} ({}){}",
+                shown, disp, title, status, routing
+            ));
+        }
+
+        if shown == 0 {
+            return Ok(format!("Queue is empty for user '{}'.", user_id));
+        }
+        Ok(format!(
+            "Queue for '{}' ({} item{}):\n{}",
+            user_id,
+            shown,
+            if shown == 1 { "" } else { "s" },
+            lines.join("\n")
+        ))
+    }
+
+    // trace:EPIC-27 trace:BUG-480
+    fn tool_queue_add(&self, args: &Value) -> Result<String, String> {
+        // Queuing is dispatch, not disposition. A queued Draft remains
+        // undisposed and autonomous drains refuse it. trace:STORY-1353 | ai:codex
+        // The queue mechanics live in `tool_queue_add_inner` so tests (and any
+        // future advisor-corroborated caller) can seed the queue out-of-band,
+        // mirroring the `force_status` precedent. trace:BUG-480 | ai:claude
+        //
+        // BUG-631: scope the gate to DISPATCH-for-execution targets, matching the
+        // CLI `aida queue add`. Routing `for: advisor` (or `human`/`reviewer`) is
+        // a REQUEST for review/triage — open to any caller, since it does not
+        // dispatch execution. Only execution-dispatch routes (implementer,
+        // unknown/custom roles, and the unrouted default) keep the MCP gate.
+        // trace:BUG-631 | ai:claude
+        let for_arg = args.get("for").and_then(|v| v.as_str());
+        if aida_cli_lib::for_target_requires_dispatch_authority(for_arg) {
+            if let Some(msg) = mcp_queue_authority_message() {
+                return Err(msg);
+            }
+        }
+        self.tool_queue_add_inner(args)
+    }
+
+    // trace:EPIC-27 trace:BUG-480
+    fn tool_queue_add_inner(&self, args: &Value) -> Result<String, String> {
+        let id = required_string(args, "id")?;
+        let user_id = self.queue_user_id(args);
+        let top = args.get("top").and_then(|v| v.as_bool()).unwrap_or(false);
+        let note = args
+            .get("note")
+            .and_then(|v| v.as_str())
+            .map(|s| s.to_string());
+        let force = args.get("force").and_then(|v| v.as_bool()).unwrap_or(false);
+
+        // BUG-18 routing: `for` = "any" → unrouted; an explicit role routes;
+        // absent falls back to the active session role (if any). trace:EPIC-27
+        let for_role: Option<String> = match args.get("for").and_then(|v| v.as_str()) {
+            Some("any") => None,
+            Some(role) => Some(role.to_string()),
+            None => std::env::var("AIDA_SESSION_ROLE")
+                .ok()
+                .filter(|s| !s.is_empty()),
+        };
+        let for_scope = args
+            .get("scope")
+            .and_then(|v| v.as_str())
+            .map(|s| s.to_string());
+
+        let store = self.storage.load().map_err(|e| e.to_string())?;
+        let req = Self::resolve_requirement(&store, id)?;
+        let req_id = req.id;
+        let display = Self::display_id_of(req);
+        let spec_id = req.spec_id.clone().unwrap_or_else(|| "???".to_string());
+        let title = req.title.clone();
+
+        // TASK-45: refuse re-queueing terminal work without force.
+        if aida_cli_lib::is_terminal_status(&req.status) && !force {
+            return Err(format!(
+                "{} is {} — re-queueing closed work is usually a mistake. \
+                 Pass `force: true` if you really mean to re-queue it.",
+                display, req.status
+            ));
+        }
+
+        let position = if top {
+            let entries = self
+                .storage
+                .queue_list(&user_id, true)
+                .map_err(|e| e.to_string())?;
+            entries.first().map(|e| e.position - 1000).unwrap_or(1000)
+        } else {
+            i64::MAX // backend resolves to max+1000
+        };
+
+        let entry = aida_core::QueueEntry {
+            user_id: user_id.clone(),
+            requirement_id: req_id,
+            position,
+            added_by: user_id.clone(),
+            note,
+            added_at: chrono::Utc::now(),
+            for_role: for_role.clone(),
+            for_scope,
+            for_session: None,
+            added_by_machine: None,
+        };
+        self.storage.queue_add(entry).map_err(|e| e.to_string())?;
+        aida_cli_lib::record_role_activity(&spec_id, "queue-add");
+
+        let routing = for_role
+            .as_deref()
+            .map(|r| format!(" [for:{}]", r))
+            .unwrap_or_default();
+        Ok(format!(
+            "Added {} ({}) to queue{}",
+            mcp_id_cell(&display),
+            title,
+            routing
+        ))
+    }
+
+    // trace:EPIC-27
+    //
+    // `aida queue work` launches a Claude session in a fresh worktree — an
+    // act that cannot (and should not) happen inside the MCP server process.
+    // The MCP tool is therefore a metadata-only PEEK: it resolves the item
+    // that `aida queue work` WOULD pick up (the named id, or the head of the
+    // role queue) and returns it plus the routed role, so an agent can decide
+    // and then run the CLI to actually launch. This is the read-tier mirror
+    // of the resolver, not the launcher.
+    fn tool_queue_work(&self, args: &Value) -> Result<String, String> {
+        let user_id = self.queue_user_id(args);
+        let role = args.get("for").and_then(|v| v.as_str());
+        let all = args.get("all").and_then(|v| v.as_bool()).unwrap_or(false);
+        let store = self.storage.load().map_err(|e| e.to_string())?;
+
+        // Explicit id → resolve that specific spec.
+        if let Some(id) = args.get("id").and_then(|v| v.as_str()) {
+            let req = Self::resolve_requirement(&store, id)?;
+            let display = Self::display_id_of(req);
+            let entries = self
+                .storage
+                .queue_list(&user_id, false)
+                .map_err(|e| e.to_string())?;
+            let queued = entries.iter().find(|e| e.requirement_id == req.id);
+            return match queued {
+                Some(entry) => Ok(format!(
+                    "Pickup target: {} ({}) [status:{}{}]\nRun `aida queue work {}` to launch a session.",
+                    display,
+                    req.title,
+                    req.status,
+                    entry
+                        .for_role
+                        .as_deref()
+                        .map(|r| format!(", for:{}", r))
+                        .unwrap_or_default(),
+                    display
+                )),
+                None => Err(format!(
+                    "{} is {} and not currently queued — queue it first (`aida queue add {}`).",
+                    display, req.status, display
+                )),
+            };
+        }
+
+        // No id → peek the head of the (role-filtered) queue, mirroring the
+        // no-arg `aida queue work` head pickup. trace:EPIC-27
+        let entries = self
+            .storage
+            .queue_list(&user_id, false)
+            .map_err(|e| e.to_string())?;
+        let session_role = std::env::var("AIDA_SESSION_ROLE").ok();
+        let (role_filter, only_unrouted) =
+            aida_cli_lib::resolve_queue_role_filter(role, all, session_role.as_deref());
+        let head = entries
+            .iter()
+            .filter(|e| {
+                aida_cli_lib::entry_matches_role_filter(
+                    e.for_role.as_deref(),
+                    role_filter.as_deref(),
+                    only_unrouted,
+                )
+            })
+            .find(|e| {
+                store
+                    .requirements
+                    .iter()
+                    .find(|r| r.id == e.requirement_id)
+                    .map(|r| !aida_cli_lib::is_terminal_status(&r.status))
+                    .unwrap_or(true)
+            });
+        match head {
+            Some(entry) => {
+                let req = store
+                    .requirements
+                    .iter()
+                    .find(|r| r.id == entry.requirement_id);
+                let (disp, title, status) = match req {
+                    Some(r) => (
+                        mcp_id_cell(&Self::display_id_of(r)),
+                        r.title.clone(),
+                        r.status.to_string(),
+                    ),
+                    None => (entry.requirement_id.to_string(), String::new(), "?".into()),
+                };
+                Ok(format!(
+                    "Next pickup: {} ({}) [status:{}{}]\nRun `aida queue work` to launch a session.",
+                    disp,
+                    title,
+                    status,
+                    entry
+                        .for_role
+                        .as_deref()
+                        .map(|r| format!(", for:{}", r))
+                        .unwrap_or_default(),
+                ))
+            }
+            None => Ok("Queue is empty — nothing to pick up.".to_string()),
+        }
+    }
+
+    // trace:EPIC-27
+    fn tool_queue_done(&self, args: &Value) -> Result<String, String> {
+        let id = required_string(args, "id")?;
+        let user_id = self.queue_user_id(args);
+        let store = self.storage.load().map_err(|e| e.to_string())?;
+        let req = Self::resolve_requirement(&store, id)?;
+        let req_id = req.id;
+        let display = Self::display_id_of(req);
+        let spec_id = req.spec_id.clone().unwrap_or_else(|| "???".to_string());
+
+        // BUG-1611: the same lifecycle guard as the CLI `queue done`, through
+        // the shared decision, before any write. A Draft / NeedsAttention spec
+        // needs the server's approval authority; a closed spec is refused
+        // outright. trace:BUG-1611 | ai:claude
+        if let Some(refusal) = aida_cli_lib::queue_done_lifecycle_refusal(
+            &req.status,
+            mcp_caller_has_advisor_authority(),
+        ) {
+            return Err(aida_cli_lib::queue_done_lifecycle_refusal_message(
+                &display,
+                &req.status,
+                refusal,
+            ));
+        }
+
+        // STORY-86: queue done flips to Done (work finished on a branch), not
+        // Completed — the auto-bump on merge advances Done → Completed. Stamp
+        // implementation_info the same way the CLI path does. trace:EPIC-27
+        let now = chrono::Utc::now();
+        let completer = aida_cli_lib::get_default_author();
+        let source_tool = std::env::var("AIDA_AI_TOOL").ok().filter(|s| !s.is_empty());
+
+        // STORY-542: capture user-facing interface changes (the deterministic
+        // operator-digest source). MCP has no TTY, so it is flag-shaped only:
+        // string-array params `interface_cli` / `interface_mcp` / `interface_tui`
+        // / `interface_other`, or boolean `no_interface_change` to record an
+        // explicit "no impact" marker. Absent ⇒ left untouched, exactly like a
+        // non-interactive CLI `queue done`. trace:STORY-542 | ai:claude
+        let str_array = |key: &str| -> Vec<String> {
+            args.get(key)
+                .and_then(|v| v.as_array())
+                .map(|a| {
+                    a.iter()
+                        .filter_map(|v| v.as_str().map(|s| s.to_string()))
+                        .collect()
+                })
+                .unwrap_or_default()
+        };
+        let no_interface_change = args
+            .get("no_interface_change")
+            .and_then(|v| v.as_bool())
+            .unwrap_or(false);
+        let ic_cli = str_array("interface_cli");
+        let ic_mcp = str_array("interface_mcp");
+        let ic_tui = str_array("interface_tui");
+        let ic_other = str_array("interface_other");
+        let any_ic =
+            !ic_cli.is_empty() || !ic_mcp.is_empty() || !ic_tui.is_empty() || !ic_other.is_empty();
+        let captured_ic: Option<aida_core::InterfaceChanges> = if no_interface_change {
+            Some(aida_core::InterfaceChanges::default())
+        } else if any_ic {
+            Some(aida_core::InterfaceChanges {
+                cli: ic_cli,
+                mcp: ic_mcp,
+                tui: ic_tui,
+                other: ic_other,
+            })
+        } else {
+            None
+        };
+
+        // STORY-698: capture the verification steps the builder ran, into
+        // implementation_info.test_coverage_notes (the PR-body audit trail).
+        // MCP has no TTY, so it is flag-shaped only: a `test_plan` string array.
+        // Absent ⇒ left untouched, exactly like a non-interactive CLI
+        // `queue done` with no `--test-plan`. trace:STORY-698 | ai:claude
+        let test_plan = str_array("test_plan");
+        let captured_test_plan: Option<String> = if test_plan.is_empty() {
+            None
+        } else {
+            Some(test_plan.join("\n"))
+        };
+
+        // Per-spec compare-and-swap, no whole-store write. trace:BUG-1612 | ai:claude
+        self.storage
+            .update_spec_atomically(req, |r| {
+                // trace:BUG-1637 | ai:claude
+                let from = r.status.clone();
+                r.set_status_from_str("Done");
+                aida_cli_lib::record_caller_status_transition(r, &from);
+                r.modified_at = now;
+                let info = r
+                    .implementation_info
+                    .get_or_insert_with(aida_core::ImplementationInfo::default);
+                info.implemented = true;
+                info.implemented_at.get_or_insert(now);
+                if info.implemented_by.is_none() {
+                    info.implemented_by = Some(completer.clone());
+                }
+                if let Some(ref tool) = source_tool {
+                    info.source_tool.get_or_insert_with(|| tool.clone());
+                }
+                if let Some(ref tp) = captured_test_plan {
+                    info.test_coverage_notes = Some(tp.clone());
+                }
+                if let Some(ref ic) = captured_ic {
+                    r.interface_changes = Some(ic.clone());
+                }
+            })
+            .map_err(|e| e.to_string())?;
+        self.storage
+            .queue_remove(&user_id, &req_id)
+            .map_err(|e| e.to_string())?;
+        aida_cli_lib::record_role_activity(&spec_id, "done");
+        aida_cli_lib::update_manifest_for_status(&spec_id, "Done");
+
+        Ok(format!(
+            "{} marked done and removed from queue.",
+            mcp_id_cell(&display)
+        ))
+    }
+
+    // trace:EPIC-27
+    fn tool_queue_next(&self, args: &Value) -> Result<String, String> {
+        // `next` is "peek the head" — the same resolution as the no-id
+        // `queue_work` peek, so delegate to it. trace:EPIC-27
+        let mut peek_args = args.clone();
+        if let Some(obj) = peek_args.as_object_mut() {
+            obj.remove("id");
+        }
+        self.tool_queue_work(&peek_args)
+    }
+
+    // trace:EPIC-27
+    fn tool_queue_progress(&self, args: &Value) -> Result<String, String> {
+        let store = self.storage.load().map_err(|e| e.to_string())?;
+
+        // Resolve the spec set from a `batch:NAME` tag (the manifest/session
+        // source the CLI uses needs cwd + leases, which MCP has no handle on;
+        // batch + explicit spec ids are the portable axes). trace:EPIC-27
+        let specs: Vec<String> = if let Some(batch) = args.get("batch").and_then(|v| v.as_str()) {
+            let tag = format!("batch:{}", batch);
+            let members: Vec<String> = store
+                .requirements
+                .iter()
+                .filter(|r| r.tags.iter().any(|t| t.eq_ignore_ascii_case(&tag)))
+                .map(|r| r.display_id())
+                .collect();
+            if members.is_empty() {
+                return Ok(format!(
+                    "No requirements tagged `batch:{}` — tag members via update_requirement.",
+                    batch
+                ));
+            }
+            members
+        } else if let Some(arr) = args.get("specs").and_then(|v| v.as_array()) {
+            arr.iter()
+                .filter_map(|v| v.as_str().map(|s| s.to_string()))
+                .collect()
+        } else {
+            return Err(
+                "queue_progress needs `batch: <name>` or `specs: [<id>, ...]` to define the \
+                 set to report on (session-manifest progress is CLI-only)."
+                    .to_string(),
+            );
+        };
+
+        // Bucket by live status (same buckets as `aida queue progress`).
+        // trace:EPIC-27
+        let (mut shipped, mut in_flight, mut working, mut remaining) =
+            (Vec::new(), Vec::new(), Vec::new(), Vec::new());
+        for spec in &specs {
+            let Some(req) = store.get_requirement_by_spec_id(spec) else {
+                continue;
+            };
+            let disp = req.display_id();
+            match req.status {
+                RequirementStatus::Completed | RequirementStatus::Rejected => shipped.push(disp),
+                RequirementStatus::Done => in_flight.push(disp),
+                RequirementStatus::InProgress => working.push(disp),
+                _ => remaining.push(disp),
+            }
+        }
+        let total = shipped.len() + in_flight.len() + working.len() + remaining.len();
+        let fmt = |label: &str, items: &[String]| {
+            if items.is_empty() {
+                format!("{}: 0", label)
+            } else {
+                format!("{}: {} ({})", label, items.len(), items.join(", "))
+            }
+        };
+        Ok(format!(
+            "Progress ({} item{}):\n{}\n{}\n{}\n{}",
+            total,
+            if total == 1 { "" } else { "s" },
+            fmt("Shipped", &shipped),
+            fmt("In flight", &in_flight),
+            fmt("Working now", &working),
+            fmt("Remaining", &remaining),
+        ))
+    }
+
+    // trace:EPIC-27 trace:BUG-480
+    fn tool_queue_rework(&self, args: &Value) -> Result<String, String> {
+        // BUG-480: rework re-queues a spec for execution, so it needs the
+        // same DISPATCH authority as queue_add (product, advisor or
+        // integrator role, or a live orchestrator); a caller without it is
+        // refused here. Any status flip it entails is gated separately on
+        // advisor authority by `mcp_status_gate_message` in the inner
+        // handler. Mechanics live in `tool_queue_rework_inner`.
+        // trace:BUG-480 trace:TASK-1311 | ai:claude
+        if let Some(msg) = mcp_queue_authority_message() {
+            return Err(msg);
+        }
+        self.tool_queue_rework_inner(args)
+    }
+
+    // trace:EPIC-27 trace:BUG-480
+    fn tool_queue_rework_inner(&self, args: &Value) -> Result<String, String> {
+        let id = required_string(args, "id")?;
+        let user_id = self.queue_user_id(args);
+        let force = args.get("force").and_then(|v| v.as_bool()).unwrap_or(false);
+        let tail = args.get("tail").and_then(|v| v.as_bool()).unwrap_or(false);
+        let reason = args.get("reason").and_then(|v| v.as_str());
+        let status_override = args.get("status").and_then(|v| v.as_str());
+
+        let store = self.storage.load().map_err(|e| e.to_string())?;
+        let req = Self::resolve_requirement(&store, id)?;
+        let req_id = req.id;
+        let display = Self::display_id_of(req);
+        let spec_id = req.spec_id.clone().unwrap_or_else(|| "???".to_string());
+        let title = req.title.clone();
+        let current_status = req.status.clone();
+
+        // Smart target-status resolution (`--status` wins). trace:EPIC-27
+        let target_status: Option<RequirementStatus> = match status_override {
+            Some(s) => Some(parse_status(s).ok_or_else(|| format!("invalid status '{}'", s))?),
+            // MCP rework is metadata-only: keep the queued item claimable
+            // until a worker establishes a lease. trace:BUG-1470 | ai:codex
+            None => aida_cli_lib::rework_target_for_mode(&current_status, false),
+        };
+
+        // Terminal-status guard (mirrors the CLI). trace:EPIC-27
+        if matches!(
+            current_status,
+            RequirementStatus::Completed | RequirementStatus::Rejected
+        ) && !force
+        {
+            return Err(format!(
+                "{} is {} — re-opening closed work is usually a mistake. \
+                 Pass `force: true` if you really mean to rework it.",
+                display, current_status
+            ));
+        }
+        if matches!(current_status, RequirementStatus::InProgress) && !force {
+            return Err(format!(
+                "{} is already In Progress — pass `force: true` to re-queue it anyway.",
+                display
+            ));
+        }
+
+        // BUG-1611: the authority gate runs after the closed-work guard so a
+        // non-forced rework of a closed spec names the reopen first; a forced
+        // one still meets the (now terminal-aware) lifecycle guard here.
+        // trace:BUG-1611 | ai:claude
+        if let Some(ref new_status) = target_status {
+            if let Some(message) = mcp_status_gate_message(&current_status, new_status) {
+                return Err(message);
+            }
+        }
+
+        // STORY-1429: the lease gate, identical to the CLI door. A live lease
+        // held by another session refuses even with `force: true`; an unknown
+        // lease state refuses too. Runs before any write.
+        // trace:STORY-1429 | ai:claude
+        let flips = target_status.as_ref().is_some_and(|t| t != &current_status);
+        let project_root = aida_cli_lib::queue_cmd::requeue_project_root(self.storage);
+        if flips
+            && matches!(
+                current_status,
+                RequirementStatus::NeedsAttention | RequirementStatus::InProgress
+            )
+        {
+            let check = aida_cli_lib::requeue_lease_gate(
+                &project_root,
+                &[spec_id.as_str(), display.as_str()],
+            );
+            if let Some(msg) = check.refusal(&display) {
+                return Err(msg);
+            }
+        }
+
+        let existing_queue_entries = self
+            .storage
+            .queue_list(&user_id, true)
+            .map_err(|e| e.to_string())?;
+        let existing_queue_entry = existing_queue_entries
+            .iter()
+            .find(|entry| entry.requirement_id == req_id);
+
+        // Routing: `for` wins; otherwise preserve the current queue route,
+        // falling back to implementer for unrouted/unqueued rework.
+        // trace:EPIC-27 trace:BUG-851
+        let for_role: Option<String> = match args.get("for").and_then(|v| v.as_str()) {
+            Some("any") => None,
+            Some(role) => Some(aida_cli_lib::canonical_role_name(role)),
+            None => existing_queue_entry
+                .and_then(|entry| entry.for_role.as_deref())
+                .filter(|role| !role.trim().is_empty())
+                .map(aida_cli_lib::canonical_role_name)
+                .or_else(|| Some("implementer".to_string())),
+        };
+        // trace:BUG-2500 | ai:codex — admission precedes every mutation.
+        if for_role.as_deref() != Some("reviewer") {
+            let open = aida_cli_lib::queue_cmd::spec_open_change_key(
+                &project_root,
+                &[display.as_str(), spec_id.as_str()],
+            );
+            aida_cli_lib::queue_cmd::refuse_waiting_review(
+                &project_root,
+                &display,
+                &spec_id,
+                open.as_deref(),
+            )?;
+        }
+
+        let mut summary = String::new();
+        let mut reason_recorded = false;
+        if let Some(ref new_status) = target_status {
+            if new_status != &current_status {
+                if current_status == RequirementStatus::NeedsAttention {
+                    // STORY-1429: the one owner, applied to the one spec with
+                    // a status re-read before its targeted write. An MCP caller is never a human at a
+                    // terminal, so it never clears the advisor's escalation to
+                    // a human. trace:STORY-1429 trace:TASK-1311 | ai:claude
+                    let ctx = aida_cli_lib::requeue::ReturnCtx {
+                        via: "the `queue_rework` MCP tool".to_string(),
+                        via_slug: "mcp",
+                        author: aida_cli_lib::get_default_author(),
+                        clear_escalation: false,
+                        reason: reason.map(str::to_string),
+                        automated: false, // trace:BUG-1632 | ai:claude
+                    };
+                    let (outcome, _) = aida_cli_lib::requeue::return_to_flight_in_storage(
+                        self.storage,
+                        req_id,
+                        &current_status,
+                        new_status,
+                        &ctx,
+                    )
+                    .map_err(|e| e.to_string())?;
+                    match &outcome {
+                        aida_cli_lib::requeue::ReturnOutcome::Returned { cleared, .. } => {
+                            reason_recorded = true;
+                            aida_cli_lib::requeue::emit_requeued(
+                                &project_root,
+                                &display,
+                                &ctx,
+                                &outcome,
+                            );
+                            summary.push_str(&format!(
+                                "{} status: {} → {}\n",
+                                display, current_status, new_status
+                            ));
+                            if let Some(w) =
+                                aida_cli_lib::requeue::kept_escalation_warning(&display, cleared)
+                            {
+                                summary.push_str(&format!("Warning: {w}\n"));
+                            }
+                        }
+                        aida_cli_lib::requeue::ReturnOutcome::AlreadyInFlight { .. } => {
+                            return Ok(aida_cli_lib::requeue::unchanged_message(
+                                &display, &outcome,
+                            )
+                            .unwrap_or_default());
+                        }
+                        _ => {
+                            return Err(aida_cli_lib::requeue::unchanged_message(
+                                &display, &outcome,
+                            )
+                            .unwrap_or_default());
+                        }
+                    }
+                } else {
+                    let new_status = new_status.clone();
+                    let now = chrono::Utc::now();
+                    let mut moved_to: Option<RequirementStatus> = None;
+                    // Per-spec compare-and-swap under the store write lock; the
+                    // status recheck below runs on the copy read under it. trace:BUG-1612 | ai:claude
+                    self.storage
+                        .update_spec_atomically(req, |r| {
+                            // STORY-1429: compare-and-swap on the copy read
+                            // under the write. trace:STORY-1429 | ai:claude
+                            if r.status != current_status {
+                                moved_to = Some(r.status.clone());
+                                return;
+                            }
+                            r.set_status_from_str(&format!("{:?}", new_status));
+                            // BUG-1637: caller-authored. trace:BUG-1637 | ai:claude
+                            aida_cli_lib::record_caller_status_transition(r, &current_status);
+                            r.modified_at = now;
+                            // TASK-1477: the `queue_rework` MCP tool can also
+                            // reopen a Completed spec — clear the stale
+                            // completed_at so the next completion stamps a
+                            // fresh date. trace:TASK-1477 | ai:claude
+                            aida_cli_lib::completion::record_reopen(
+                                r,
+                                &current_status,
+                                Some(&project_root),
+                            );
+                        })
+                        .map_err(|e| e.to_string())?;
+                    if let Some(actual) = moved_to {
+                        return Err(format!(
+                            "{display} moved from {current_status} to {actual} while this \
+                             request ran; nothing was changed"
+                        ));
+                    }
+                    summary.push_str(&format!(
+                        "{} status: {} → {}\n",
+                        display, current_status, new_status
+                    ));
+                }
+                aida_cli_lib::record_role_activity(&spec_id, "rework");
+                aida_cli_lib::update_manifest_for_status(&spec_id, &format!("{:?}", new_status));
+            }
+        }
+
+        // Optional audit comment. STORY-1429: a reason already carried by the
+        // NeedsAttention audit note is not written a second time.
+        if let Some(reason_text) = reason.filter(|_| !reason_recorded) {
+            let author = aida_cli_lib::get_default_author();
+            let comment = aida_core::Comment::new(author, reason_text.to_string());
+            // Per-spec compare-and-swap, no whole-store write. trace:BUG-1612 | ai:claude
+            self.storage
+                .update_spec_atomically(req, |r| {
+                    r.add_comment(comment);
+                })
+                .map_err(|e| e.to_string())?;
+        }
+
+        let position = if tail {
+            i64::MAX
+        } else {
+            existing_queue_entries
+                .first()
+                .map(|entry| entry.position - 1000)
+                .unwrap_or(1000)
+        };
+        let entry = aida_core::QueueEntry {
+            user_id: user_id.clone(),
+            requirement_id: req_id,
+            position,
+            added_by: user_id.clone(),
+            note: reason.map(|r| r.to_string()),
+            added_at: chrono::Utc::now(),
+            for_role: for_role.clone(),
+            for_scope: None,
+            for_session: None,
+            added_by_machine: None,
+        };
+        self.storage.queue_add(entry).map_err(|e| e.to_string())?;
+        aida_cli_lib::record_role_activity(&spec_id, "queue-add");
+
+        let routing = for_role
+            .as_deref()
+            .map(|r| format!(" [for:{}]", r))
+            .unwrap_or_default();
+        summary.push_str(&format!(
+            "Queued {} ({}){}",
+            mcp_id_cell(&display),
+            title,
+            routing
+        ));
+        Ok(summary)
+    }
+
+    // trace:EPIC-27
+    fn tool_queue_move(&self, args: &Value) -> Result<String, String> {
+        let id = required_string(args, "id")?;
+        let user_id = self.queue_user_id(args);
+        let top = args.get("top").and_then(|v| v.as_bool()).unwrap_or(false);
+        let bottom = args
+            .get("bottom")
+            .and_then(|v| v.as_bool())
+            .unwrap_or(false);
+        let before = args.get("before").and_then(|v| v.as_str());
+        let after = args.get("after").and_then(|v| v.as_str());
+
+        let store = self.storage.load().map_err(|e| e.to_string())?;
+        let req = Self::resolve_requirement(&store, id)?;
+        let req_id = req.id;
+        let display = Self::display_id_of(req);
+
+        let entries = self
+            .storage
+            .queue_list(&user_id, true)
+            .map_err(|e| e.to_string())?;
+        if !entries.iter().any(|e| e.requirement_id == req_id) {
+            return Err(format!("{} is not in the queue.", display));
+        }
+
+        let new_position = if top {
+            entries.first().map(|e| e.position - 1000).unwrap_or(0)
+        } else if bottom {
+            entries.last().map(|e| e.position + 1000).unwrap_or(1000)
+        } else if let Some(before_id) = before {
+            let before_req = Self::resolve_requirement(&store, before_id)?;
+            if before_req.id == req_id {
+                return Err("`before` target is the same as the moved item".to_string());
+            }
+            entries
+                .iter()
+                .find(|e| e.requirement_id == before_req.id)
+                .ok_or_else(|| format!("{} is not in the queue", before_id))
+                .map(|e| e.position - 1)?
+        } else if let Some(after_id) = after {
+            let after_req = Self::resolve_requirement(&store, after_id)?;
+            if after_req.id == req_id {
+                return Err("`after` target is the same as the moved item".to_string());
+            }
+            entries
+                .iter()
+                .find(|e| e.requirement_id == after_req.id)
+                .ok_or_else(|| format!("{} is not in the queue", after_id))
+                .map(|e| e.position + 1)?
+        } else {
+            return Err(
+                "specify a destination: `top`, `bottom`, `before: <id>`, or `after: <id>`"
+                    .to_string(),
+            );
+        };
+
+        self.storage
+            .queue_reorder(&user_id, &[(req_id, new_position)])
+            .map_err(|e| e.to_string())?;
+        Ok(format!("Moved {} in queue.", mcp_id_cell(&display)))
+    }
+
+    // trace:EPIC-27
+    fn tool_queue_remove(&self, args: &Value) -> Result<String, String> {
+        let id = required_string(args, "id")?;
+        let user_id = self.queue_user_id(args);
+        let store = self.storage.load().map_err(|e| e.to_string())?;
+        let req = Self::resolve_requirement(&store, id)?;
+        let display = Self::display_id_of(req);
+        // BUG-529: `for` is a role FILTER on remove, mirroring the CLI's
+        // `aida queue remove --for`. `any` (or absent) → role-blind; otherwise
+        // remove only the entry queued for that role. trace:BUG-529 | ai:claude
+        let remove_role: Option<String> = match args.get("for").and_then(|v| v.as_str()) {
+            None | Some("any") => None,
+            Some(role) => Some(canonical_light_role_name(role)),
+        };
+        self.storage
+            .queue_remove_for_role(&user_id, &req.id, remove_role.as_deref())
+            .map_err(|e| e.to_string())?;
+        match remove_role.as_deref() {
+            Some(role) => Ok(format!("Removed {} from queue [role:{}].", display, role)),
+            None => Ok(format!("Removed {} from queue.", display)),
+        }
+    }
+
+    // ========================================================================
+    // Session tool implementations — STORY-533 (EPIC-27)
+    //
+    // These mirror the `aida session <subcommand>` CLI surface so MCP-speaking
+    // agents can inspect scoped session leases + manifests without shelling
+    // out. The three inspectors (leases / status / manifest) read the same
+    // `.aida/sessions/*.toml` files the CLI handlers read — no subprocess to
+    // `aida`. session_start / session_end are metadata-only PEEKS: the actual
+    // launch (worktree + `claude`) and teardown (worktree removal, claude
+    // process termination, PR detection) are subprocess-driven acts that
+    // cannot and should not happen inside the MCP server process, so the tools
+    // resolve/describe the work and instruct the caller to run the CLI to
+    // perform it. This follows the queue_work PEEK precedent (STORY-532).
+    // trace:EPIC-27
+    // ========================================================================
+
+    /// Resolve a `LightLease` by 8-char (or longer) id prefix, mirroring the
+    /// CLI's `find_lease_by_id_prefix`. trace:EPIC-27
+    fn resolve_lease_by_prefix<'l>(
+        leases: &'l [LightLease],
+        query: &str,
+    ) -> Result<&'l LightLease, String> {
+        let matches: Vec<&LightLease> = leases.iter().filter(|l| l.id.starts_with(query)).collect();
+        match matches.len() {
+            0 => Err(format!("no session lease matches id '{}'", query)),
+            1 => Ok(matches[0]),
+            _ => Err(format!(
+                "id prefix '{}' is ambiguous ({} leases match) — pass a longer prefix",
+                query,
+                matches.len()
+            )),
+        }
+    }
+
+    fn lease_short_id(l: &LightLease) -> &str {
+        l.id.get(..8).unwrap_or(&l.id)
+    }
+
+    // trace:EPIC-27 — mirrors `aida session leases`.
+    fn tool_session_leases(&self, args: &Value) -> Result<String, String> {
+        let all = args.get("all").and_then(|v| v.as_bool()).unwrap_or(false);
+        let leases = list_leases(&self.project_root);
+        if leases.is_empty() {
+            return Ok("(no active sessions)".to_string());
+        }
+        // Default view hides MCP-claim markers (they aren't `session start`
+        // leases) unless `all` is set, mirroring the CLI's bias toward
+        // real worktree-backed sessions. trace:EPIC-27
+        let mut lines: Vec<String> = Vec::new();
+        for l in &leases {
+            if !all && l.mcp_claim {
+                continue;
+            }
+            let role = l.role.as_deref().unwrap_or("?");
+            let kind = if l.mcp_claim { "mcp-claim" } else { "session" };
+            lines.push(format!(
+                "- {} scope={} branch={} role={} owner={} kind={} started_at={}",
+                Self::lease_short_id(l),
+                l.scope,
+                if l.branch.is_empty() { "?" } else { &l.branch },
+                role,
+                l.owner,
+                kind,
+                l.started_at
+            ));
+        }
+        if lines.is_empty() {
+            return Ok(
+                "(no worktree-backed sessions; pass `all: true` to include MCP claim markers)"
+                    .to_string(),
+            );
+        }
+        Ok(format!(
+            "Active session lease(s) ({}):\n{}",
+            lines.len(),
+            lines.join("\n")
+        ))
+    }
+
+    // trace:EPIC-27 — mirrors `aida session show` (the per-lease status view).
+    fn tool_session_status(&self, args: &Value) -> Result<String, String> {
+        let leases = list_leases(&self.project_root);
+        if leases.is_empty() {
+            return Ok(
+                "(no active sessions) — start one with `aida session start --owns <scope>`."
+                    .to_string(),
+            );
+        }
+        // MCP has no shell cwd/ancestor-PID context that maps to a worktree,
+        // so an `id` is required when more than one lease exists; a single
+        // lease is shown directly. trace:EPIC-27
+        let lease = match args.get("id").and_then(|v| v.as_str()) {
+            Some(q) => Self::resolve_lease_by_prefix(&leases, q)?,
+            None if leases.len() == 1 => &leases[0],
+            None => {
+                let ids: Vec<String> = leases
+                    .iter()
+                    .map(|l| format!("{} ({})", Self::lease_short_id(l), l.scope))
+                    .collect();
+                return Err(format!(
+                    "multiple active sessions — pass `id` to pick one: {}",
+                    ids.join(", ")
+                ));
+            }
+        };
+
+        let mut out = format!("Session {}\n", Self::lease_short_id(lease));
+        out.push_str(&format!("  scope: {}\n", lease.scope));
+        out.push_str(&format!(
+            "  branch: {}\n",
+            if lease.branch.is_empty() {
+                "?"
+            } else {
+                &lease.branch
+            }
+        ));
+        out.push_str(&format!(
+            "  worktree: {}\n",
+            if lease.worktree_path.is_empty() {
+                "?"
+            } else {
+                &lease.worktree_path
+            }
+        ));
+        out.push_str(&format!(
+            "  role: {}\n",
+            lease.role.as_deref().unwrap_or("?")
+        ));
+        out.push_str(&format!("  owner: {}\n", lease.owner));
+        out.push_str(&format!("  hostname: {}\n", lease.hostname));
+        out.push_str(&format!("  started_at: {}\n", lease.started_at));
+        out.push_str(&format!(
+            "  kind: {}",
+            if lease.mcp_claim {
+                "mcp-claim"
+            } else {
+                "session"
+            }
+        ));
+
+        // Surface manifest progress inline when one exists, matching
+        // `aida session show --plan`. trace:EPIC-27
+        let manifest_path =
+            aida_cli_lib::session_manifest::manifest_path(&self.project_root, &lease.id);
+        if let Ok(manifest) = aida_cli_lib::session_manifest::load(&manifest_path) {
+            if !manifest.items.is_empty() {
+                let done = manifest
+                    .items
+                    .iter()
+                    .filter(|it| it.completed_at.is_some())
+                    .count();
+                out.push_str(&format!(
+                    "\n  manifest: {}/{} item(s) completed",
+                    done,
+                    manifest.items.len()
+                ));
+            }
+        }
+        Ok(out)
+    }
+
+    // trace:EPIC-27 — mirrors `aida session manifest` (read of the planned
+    // cluster). The CLI `manifest` subcommand is write-side (write /
+    // mark-started / mark-completed); those marks happen automatically as
+    // `aida edit` / `queue done` run, and writing one needs the active lease's
+    // cwd context. The portable MCP mirror is the READ — render the planned
+    // cluster + per-item status for a resolvable session. trace:EPIC-27
+    fn tool_session_manifest(&self, args: &Value) -> Result<String, String> {
+        let leases = list_leases(&self.project_root);
+        if leases.is_empty() {
+            return Ok("(no active sessions) — no manifest to show.".to_string());
+        }
+        let lease = match args.get("id").and_then(|v| v.as_str()) {
+            Some(q) => Self::resolve_lease_by_prefix(&leases, q)?,
+            None if leases.len() == 1 => &leases[0],
+            None => {
+                let ids: Vec<String> = leases
+                    .iter()
+                    .map(|l| format!("{} ({})", Self::lease_short_id(l), l.scope))
+                    .collect();
+                return Err(format!(
+                    "multiple active sessions — pass `id` to pick one: {}",
+                    ids.join(", ")
+                ));
+            }
+        };
+        let manifest_path =
+            aida_cli_lib::session_manifest::manifest_path(&self.project_root, &lease.id);
+        let manifest = match aida_cli_lib::session_manifest::load(&manifest_path) {
+            Ok(m) => m,
+            Err(_) => {
+                return Ok(format!(
+                    "Session {} has no planned-cluster manifest yet (none written by /aida-pickup).",
+                    Self::lease_short_id(lease)
+                ));
+            }
+        };
+        if manifest.items.is_empty() {
+            return Ok(format!(
+                "Session {} manifest is empty.",
+                Self::lease_short_id(lease)
+            ));
+        }
+        let mut lines: Vec<String> = Vec::new();
+        // completed / started-not-completed / pending — same status markers as
+        // `aida session show --plan`, routed through the glyph registry so the
+        // ascii profile / [glyphs] overrides apply. `○` (pending) is not a
+        // registry glyph and stays literal. trace:EPIC-27 trace:TASK-840 | ai:claude
+        let root = aida_cli_lib::find_project_root().ok();
+        for it in &manifest.items {
+            let marker = if it.completed_at.is_some() {
+                aida_cli_lib::glyphs::get(aida_cli_lib::glyphs::Glyph::Check, root.as_deref())
+            } else if it.started_at.is_some() {
+                aida_cli_lib::glyphs::get(aida_cli_lib::glyphs::Glyph::InFlight, root.as_deref())
+            } else {
+                "○"
+            };
+            lines.push(format!("  {} {}", marker, it.spec_id));
+        }
+        let done = manifest
+            .items
+            .iter()
+            .filter(|it| it.completed_at.is_some())
+            .count();
+        Ok(format!(
+            "Session {} planned cluster ({}/{} done, source: {}):\n{}",
+            Self::lease_short_id(lease),
+            done,
+            manifest.items.len(),
+            manifest.plan_source,
+            lines.join("\n")
+        ))
+    }
+
+    // trace:EPIC-27
+    //
+    // `aida session start` creates a sibling git worktree on a fresh branch
+    // and (with `--launch`) execs `claude` inside it — subprocess-driven acts
+    // that cannot happen inside the MCP server process. The MCP tool is
+    // therefore a metadata-only PEEK: it validates the scope/role inputs and
+    // returns the exact CLI invocation the caller should run to actually
+    // start the session. This is the read-tier mirror of the resolver, not
+    // the launcher (the queue_work PEEK precedent). trace:EPIC-27
+    fn tool_session_start(&self, args: &Value) -> Result<String, String> {
+        let owns = required_string(args, "owns")?;
+        let role = args.get("role").and_then(|v| v.as_str());
+        let branch = args.get("branch").and_then(|v| v.as_str());
+        let launch = args
+            .get("launch")
+            .and_then(|v| v.as_bool())
+            .unwrap_or(false);
+
+        // Warn if the scope is already covered by a live lease (the CLI
+        // detects this too; we surface it so the caller doesn't double-start).
+        // trace:EPIC-27
+        let leases = list_leases(&self.project_root);
+        let existing = leases
+            .iter()
+            .find(|l| l.scope.eq_ignore_ascii_case(owns) && !l.mcp_claim);
+
+        // trace:TASK-712 — shell-quote user-supplied values interpolated into the
+        // copy-paste `Run:` command so spaces / metacharacters survive a paste.
+        let mut cmd = format!("aida session start --owns {}", shell_quote_arg(owns));
+        if let Some(b) = branch {
+            cmd.push_str(&format!(" --branch {}", shell_quote_arg(b)));
+        }
+        if let Some(r) = role {
+            cmd.push_str(&format!(" --role {}", shell_quote_arg(r)));
+        }
+        if launch {
+            cmd.push_str(" --launch");
+        }
+
+        let mut out = String::new();
+        if let Some(l) = existing {
+            out.push_str(&format!(
+                "Note: scope '{}' is already held by session {} (branch {}).\n",
+                owns,
+                Self::lease_short_id(l),
+                if l.branch.is_empty() { "?" } else { &l.branch }
+            ));
+        }
+        out.push_str(&format!(
+            "Starting a scoped session creates a worktree + lease{} — \
+             a subprocess act the MCP server does not perform.\nRun:\n  {}",
+            if launch {
+                " and launches a Claude session"
+            } else {
+                ""
+            },
+            cmd
+        ));
+        Ok(out)
+    }
+
+    // trace:EPIC-27
+    //
+    // `aida session end` removes the worktree (git subprocess), can terminate
+    // live `claude` processes, probes the PR + CI state, and files reviewer
+    // follow-ups — none of which can happen safely inside the MCP server
+    // process. The MCP tool is therefore a metadata-only PEEK: it resolves the
+    // lease that `aida session end` would target and returns the CLI command
+    // to run. trace:EPIC-27
+    fn tool_session_end(&self, args: &Value) -> Result<String, String> {
+        let leases = list_leases(&self.project_root);
+        if leases.is_empty() {
+            return Ok("(no active sessions) — nothing to end.".to_string());
+        }
+        // Resolve the target the same axes the CLI accepts: id prefix, or
+        // scope/spec match. MCP has no cwd-to-worktree mapping, so when none
+        // is given and more than one lease exists, ask the caller to pick.
+        // trace:EPIC-27
+        let id = args.get("id").and_then(|v| v.as_str());
+        let spec = args.get("spec").and_then(|v| v.as_str());
+        let lease: &LightLease = if let Some(q) = id {
+            Self::resolve_lease_by_prefix(&leases, q)?
+        } else if let Some(s) = spec {
+            let matches: Vec<&LightLease> = leases
+                .iter()
+                .filter(|l| l.scope.eq_ignore_ascii_case(s))
+                .collect();
+            match matches.len() {
+                0 => return Err(format!("no session lease owns spec '{}'", s)),
+                1 => matches[0],
+                _ => {
+                    let ids: Vec<String> = matches
+                        .iter()
+                        .map(|l| Self::lease_short_id(l).to_string())
+                        .collect();
+                    return Err(format!(
+                        "multiple leases own '{}' — disambiguate with `id`: {}",
+                        s,
+                        ids.join(", ")
+                    ));
+                }
+            }
+        } else if leases.len() == 1 {
+            &leases[0]
+        } else {
+            let ids: Vec<String> = leases
+                .iter()
+                .map(|l| format!("{} ({})", Self::lease_short_id(l), l.scope))
+                .collect();
+            return Err(format!(
+                "multiple active sessions — pass `id` or `spec` to pick one: {}",
+                ids.join(", ")
+            ));
+        };
+
+        let cmd = format!("aida session end {}", Self::lease_short_id(lease));
+        Ok(format!(
+            "Ending session {} (scope {}, branch {}) removes its worktree and lease — \
+             a subprocess act the MCP server does not perform.\nRun:\n  {}",
+            Self::lease_short_id(lease),
+            lease.scope,
+            if lease.branch.is_empty() {
+                "?"
+            } else {
+                &lease.branch
+            },
+            cmd
+        ))
+    }
+
+    // ========================================================================
+    // Role tool implementations — STORY-534 (EPIC-27)
+    //
+    // These mirror the `aida role <subcommand>` CLI surface so MCP-speaking
+    // agents can inspect the project's personas without shelling out. The two
+    // inspectors (list / show) read the role TOML files the CLI reads — under
+    // `.aida/roles/` and `~/.aida/roles/` — with no subprocess to `aida`.
+    //
+    // role_enter / role_end are metadata-only PEEKS: `aida role enter` /
+    // `aida role end` set/clear the *shell's* `AIDA_SESSION_ROLE` env var by
+    // emitting shell code the caller must `eval`. Role identity is therefore
+    // shell-keyed (the same way the queue user is shell-keyed — see the BUG-89
+    // queue-identity note), and the stateless MCP server process cannot mutate
+    // the calling agent's shell environment. So the tools validate the inputs
+    // and return the exact `aida role …` command to run, rather than mutating
+    // server-side state that would never reach the caller. This follows the
+    // queue_work / session_start PEEK precedent. trace:EPIC-27
+    // ========================================================================
+
+    // trace:EPIC-27 — mirrors `aida role list`.
+    fn tool_role_list(&self, _args: &Value) -> Result<String, String> {
+        let active = role_active_env();
+        let roles = list_light_roles(&self.project_root);
+        if roles.is_empty() {
+            return Ok(format!(
+                "(no roles defined for {}) — create one with `aida role add <name>` or install a starter set with `aida role scaffold`.",
+                self.project_root.display()
+            ));
+        }
+        let mut lines: Vec<String> = Vec::new();
+        for r in &roles {
+            let marker = if active.as_deref() == Some(r.name.as_str()) {
+                "*"
+            } else {
+                " "
+            };
+            let scope = if r.global { " [global]" } else { "" };
+            let purpose = r
+                .purpose
+                .as_deref()
+                .map(|p| format!(" — {}", p))
+                .unwrap_or_default();
+            lines.push(format!(
+                "{} {}{} last active {}{}",
+                marker,
+                r.name,
+                scope,
+                light_role_relative(&r.last_active_at),
+                purpose
+            ));
+        }
+        Ok(format!(
+            "Roles for {} ({}):\n{}",
+            self.project_root.display(),
+            lines.len(),
+            lines.join("\n")
+        ))
+    }
+
+    // trace:EPIC-27 — mirrors `aida role show [NAME]`. With no `name`, resolves
+    // the active role from `AIDA_SESSION_ROLE` like the CLI; errors when none
+    // is given and none is active.
+    fn tool_role_show(&self, args: &Value) -> Result<String, String> {
+        let resolved = match args.get("name").and_then(|v| v.as_str()) {
+            Some(n) => canonical_light_role_name(n),
+            None => role_active_env().ok_or_else(|| {
+                "No role active and no `name` given. Use role_list to see options.".to_string()
+            })?,
+        };
+        let role = load_light_role(&self.project_root, &resolved).ok_or_else(|| {
+            format!(
+                "No such role: {} — create it with `aida role add {}`, or see options with role_list.",
+                resolved, resolved
+            )
+        })?;
+        let mut out = format!("Role:        {}", role.name);
+        if role.global {
+            out.push_str(" [global]");
+        }
+        out.push('\n');
+        out.push_str(&format!(
+            "Purpose:     {}\n",
+            role.purpose.as_deref().unwrap_or("(none)")
+        ));
+        out.push_str(&format!(
+            "Created:     {}\n",
+            role.created_at.as_deref().unwrap_or("?")
+        ));
+        out.push_str(&format!(
+            "Last active: {} ({})\n",
+            role.last_active_at,
+            light_role_relative(&role.last_active_at)
+        ));
+        if let Some(d) = &role.working_directory {
+            out.push_str(&format!("Last cwd:    {}\n", d));
+        }
+        if let Some(n) = &role.notes {
+            out.push_str(&format!("Notes:       {}\n", n));
+        }
+        if !role.scope_tags.is_empty() || role.scope_status.is_some() {
+            let mut parts: Vec<String> = Vec::new();
+            if !role.scope_tags.is_empty() {
+                parts.push(format!("tags={}", role.scope_tags.join(",")));
+            }
+            if let Some(s) = &role.scope_status {
+                parts.push(format!("status={}", s));
+            }
+            out.push_str(&format!("Scope:       {}\n", parts.join(" ")));
+        }
+        if let Some(text) = &role.system_prompt {
+            let preview: String = text.lines().next().unwrap_or("").chars().take(80).collect();
+            let suffix = if text.chars().count() > preview.chars().count() {
+                "…"
+            } else {
+                ""
+            };
+            out.push_str(&format!(
+                "Addendum:    {} chars — {}{}\n",
+                text.len(),
+                preview,
+                suffix
+            ));
+        }
+        let active_marker = if role_active_env().as_deref() == Some(role.name.as_str()) {
+            "  (active in the CLI's shell)"
+        } else {
+            ""
+        };
+        out.push_str(&format!(
+            "Active:      {}{}",
+            role_active_env().as_deref().unwrap_or("(none)"),
+            active_marker
+        ));
+        Ok(out)
+    }
+
+    // trace:EPIC-27
+    //
+    // `aida role enter` sets the shell's `AIDA_SESSION_ROLE` env var (it emits
+    // shell code the caller `eval`s). The MCP server cannot mutate the calling
+    // agent's shell, so this is a metadata-only PEEK: it validates the role
+    // exists and returns the exact `aida role enter` command + the resolved
+    // role context. trace:EPIC-27
+    fn tool_role_enter(&self, args: &Value) -> Result<String, String> {
+        let name = required_string(args, "name")?;
+        let cd = args.get("cd").and_then(|v| v.as_bool()).unwrap_or(false);
+        let resolved = canonical_light_role_name(name);
+        let role = load_light_role(&self.project_root, &resolved).ok_or_else(|| {
+            format!(
+                "No such role: {} — create it with `aida role add {}`, or see options with role_list.",
+                resolved, resolved
+            )
+        })?;
+
+        // trace:TASK-712 — shell-quote the (user-derived) role name in the
+        // copy-paste `Run:` command.
+        let mut cmd = format!("aida role enter {}", shell_quote_arg(&resolved));
+        if cd {
+            cmd.push_str(" --cd");
+        }
+
+        let mut out = String::new();
+        if role_active_env().as_deref() == Some(resolved.as_str()) {
+            out.push_str(&format!(
+                "Note: role '{}' is already the active shell role.\n",
+                resolved
+            ));
+        }
+        let purpose = role
+            .purpose
+            .as_deref()
+            .map(|p| format!(" ({})", p))
+            .unwrap_or_default();
+        out.push_str(&format!(
+            "Entering a role sets the shell's active role (AIDA_SESSION_ROLE) — \
+             a shell-env act the MCP server does not perform for you.\n\
+             Resolved role: {}{}{}.\nRun:\n  {}",
+            resolved,
+            if role.global { " [global]" } else { "" },
+            purpose,
+            cmd
+        ));
+        Ok(out)
+    }
+
+    // trace:EPIC-27
+    //
+    // `aida role end` clears the shell's `AIDA_SESSION_ROLE` (it emits shell
+    // code the caller `eval`s). Same shell-env constraint as role_enter, so
+    // this is a metadata-only PEEK returning the command to run. trace:EPIC-27
+    fn tool_role_end(&self, _args: &Value) -> Result<String, String> {
+        let active = role_active_env();
+        let mut out = String::new();
+        match active.as_deref() {
+            Some(r) => out.push_str(&format!("Active shell role: {}.\n", r)),
+            None => out.push_str("No role appears active in the CLI's shell.\n"),
+        }
+        out.push_str(
+            "Ending a role clears the shell's active role (AIDA_SESSION_ROLE) — \
+             a shell-env act the MCP server does not perform for you.\nRun:\n  aida role end",
+        );
+        Ok(out)
+    }
+
+    // ========================================================================
+    // Workflow tool implementations — STORY-536 (EPIC-27)
+    //
+    // The remaining CLI long tail. The read-only mirrors compute in-process
+    // from the same library helpers the CLI handlers use (cache reads, the
+    // plan-lint pass, the ultraplan assembler, the goal-clause builder, the
+    // usage-log aggregator). db_sync / fetch / pull are git network +
+    // working-tree / store mutations driven by subprocess `git`; an in-process
+    // MCP mutation would surprise the caller (working-tree changes, remote
+    // pushes), so they follow the queue_work / session_start PEEK precedent —
+    // they return the exact `aida …` command to run. trace:EPIC-27
+    // ========================================================================
+
+    // trace:EPIC-27 — mirrors `aida cache status`. Reads the SQLite cache +
+    // the orphan store's HEAD SHA directly (no GitBackend construction).
+    // trace:TASK-3429 | ai:codex — cache reporting stays below the transport boundary.
+    fn tool_cache_status(&self, _args: &Value) -> Result<String, String> {
+        aida_cli_lib::cache_output::mcp_cache_status(&self.project_root)
+    }
+
+    // trace:EPIC-27 — read-only mirror of `aida plan verify <file>`. Runs the
+    // pure `compute_plan_report` lint pass and renders the report to a string;
+    // never rewrites the file (--fix) or exits the process.
+    fn tool_plan_verify(&self, args: &Value) -> Result<String, String> {
+        let file = required_string(args, "file")?;
+        // Resolve relative paths against the project root so callers can pass
+        // a repo-relative plan path.
+        let path = {
+            let p = Path::new(file);
+            if p.is_absolute() {
+                p.to_path_buf()
+            } else {
+                self.project_root.join(p)
+            }
+        };
+        let content = std::fs::read_to_string(&path)
+            .map_err(|e| format!("could not read plan file {}: {}", path.display(), e))?;
+        let root = aida_cli_lib::plan_repo_root(&path);
+        let report = aida_cli_lib::compute_plan_report(&content, &root);
+        Ok(aida_cli_lib::render_plan_report_string(
+            &report,
+            &path.display().to_string(),
+        ))
+    }
+
+    // trace:EPIC-27 — read-only mirror of `aida plan helpers <spec>`. Derives
+    // the `## Reusable helpers` section from the trace graph; the --append
+    // file write stays CLI-only.
+    fn tool_plan_helpers(&self, args: &Value) -> Result<String, String> {
+        let spec = required_string(args, "spec")?;
+        let store = self.storage.load().map_err(|e| e.to_string())?;
+        let target = Self::resolve_requirement_for_read(&store, spec)?;
+        let display = Self::display_id_of(target);
+        match aida_cli_lib::build_reusable_helpers_section(&store, &self.project_root, target) {
+            Some(mut md) => {
+                md.push_str(&format!(
+                    "\n_Generated by `aida plan helpers {display}` — verify before relying on it._\n"
+                ));
+                Ok(md)
+            }
+            None => Ok(format!(
+                "No reusable helpers derived for {display} — no related spec (sibling / \
+                 tag-mate / same-feature) carries a `trace:` comment that names a helper."
+            )),
+        }
+    }
+
+    // trace:EPIC-27 — read-only mirror of `aida ultraplan <spec> --stdout`.
+    // Assembles the prompt + warnings; clipboard / deep-link stays CLI-only.
+    fn tool_ultraplan_assemble(&self, args: &Value) -> Result<String, String> {
+        let spec = required_string(args, "spec")?;
+        let no_comments = args
+            .get("no_comments")
+            .and_then(|v| v.as_bool())
+            .unwrap_or(false);
+        // TASK-304: honor `[ultraplan] mode = "never"`.
+        if aida_cli_lib::read_ultraplan_config(&self.project_root).mode
+            == aida_cli_lib::UltraplanMode::Never
+        {
+            return Err(
+                "`aida ultraplan` is disabled for this project (`[ultraplan] mode = \"never\"` \
+                 in .aida/config.toml). Set mode = \"on-demand\" or \"suggested\" to re-enable."
+                    .to_string(),
+            );
+        }
+        let store = self.storage.load().map_err(|e| e.to_string())?;
+        let target = Self::resolve_requirement_for_read(&store, spec)?;
+        let helpers =
+            aida_cli_lib::build_reusable_helpers_section(&store, &self.project_root, target);
+        let (reservations, reservation_warnings) =
+            aida_cli_lib::read_reserved_paths(&self.project_root);
+        let (prompt, mut warnings) = aida_cli_lib::assemble_ultraplan_prompt(
+            &store,
+            target,
+            helpers.as_deref(),
+            !no_comments,
+            &reservations,
+        );
+        warnings.extend(reservation_warnings);
+        let mut out = prompt;
+        if !warnings.is_empty() {
+            out.push('\n');
+            for w in &warnings {
+                out.push_str(&format!("\nWarning: {}", w));
+            }
+        }
+        Ok(out)
+    }
+
+    // trace:EPIC-27 — mirrors `aida goal …`. Pure clause builder; copy /
+    // invoke / deep-link stays CLI-only.
+    fn tool_goal_derive(&self, args: &Value) -> Result<String, String> {
+        let batch = args.get("batch").and_then(|v| v.as_str());
+        let epic = args.get("epic").and_then(|v| v.as_str());
+        let spec = args.get("spec").and_then(|v| v.as_str());
+        let pr = args.get("pr").and_then(|v| v.as_u64());
+        let queue_empty = args.get("queue_empty").and_then(|v| v.as_str());
+        let forge = aida_cli_lib::forge::resolve_forge_kind(&self.project_root);
+        let clauses = aida_cli_lib::goal_cmd::build_goal_clauses_for_forge(
+            batch,
+            epic,
+            spec,
+            pr,
+            queue_empty,
+            forge,
+        )
+        .map_err(|e| e.to_string())?;
+        let condition = aida_cli_lib::goal_cmd::assemble_goal_condition(&clauses);
+        let mut out = format!("/goal {}\n\nverify each clause:", condition);
+        for c in &clauses {
+            out.push_str(&format!("\n  · {}", c.verify));
+        }
+        Ok(out)
+    }
+
+    // trace:EPIC-27 — a lightweight in-process status snapshot (no CI probe,
+    // no CachedGitBackend). The CI-bearing surface of `aida status` shells out
+    // to `gh` and stays CLI-only; this mirrors only the substrate-grounded
+    // parts the server can read directly (store counts, leases, queue depth).
+    fn tool_status_unified(&self, args: &Value) -> Result<String, String> {
+        let store = self.storage.load_for_read().map_err(|e| e.to_string())?;
+        // BUG-717: mirror the CLI work-view (`aida status` / `aida list`) —
+        // exclude standing-artifact / stateless types (vision / principle /
+        // term / constraint / folder / meta) so the MCP status count agrees
+        // with the CLI instead of counting the seeded META prompt-templates as
+        // requirements.
+        let work: Vec<_> = store
+            .requirements
+            .iter()
+            .filter(|r| !aida_cli_lib::is_standing_artifact_type(&r.req_type.to_string()))
+            .collect();
+        let by_status = |s: RequirementStatus| work.iter().filter(|r| r.status == s).count();
+
+        let mut out = String::from("Project status\n");
+        out.push_str(&format!("  {}\n", mcp_authority_line()));
+        out.push_str(&format!("  Total requirements: {}\n", work.len()));
+        out.push_str("  By status:\n");
+        for (label, status) in [
+            ("Draft", RequirementStatus::Draft),
+            ("Approved", RequirementStatus::Approved),
+            ("Planned", RequirementStatus::Planned),
+            ("In Progress", RequirementStatus::InProgress),
+            ("Needs Attention", RequirementStatus::NeedsAttention),
+            ("Done", RequirementStatus::Done),
+            ("Completed", RequirementStatus::Completed),
+            ("Rejected", RequirementStatus::Rejected),
+        ] {
+            let n = by_status(status);
+            if n > 0 {
+                out.push_str(&format!("    {:<16} {}\n", format!("{}:", label), n));
+            }
+        }
+
+        // Active session leases (worktree-backed only, matching the CLI bias).
+        let leases: Vec<_> = list_leases(&self.project_root)
+            .into_iter()
+            .filter(|l| !l.mcp_claim)
+            .collect();
+        out.push_str(&format!("  Active sessions: {}\n", leases.len()));
+        for l in &leases {
+            out.push_str(&format!(
+                "    - {} scope={} role={}\n",
+                Self::lease_short_id(l),
+                l.scope,
+                l.role.as_deref().unwrap_or("?")
+            ));
+        }
+
+        // Queue depth for the resolved user.
+        let user_id = self.queue_user_id(args);
+        let depth = self
+            .storage
+            .queue_list(&user_id, false)
+            .map(|e| e.len())
+            .unwrap_or(0);
+        out.push_str(&format!("  Queue depth ('{}'): {}\n", user_id, depth));
+
+        out.push_str(
+            "  Note: PR/CI rollup + awaiting-you gates need `gh` — run `aida status`, \
+             or read the aida://project/summary / aida://session/leases MCP resources.",
+        );
+        Ok(out)
+    }
+
+    // trace:EPIC-27 — read-only aggregation over the local usage telemetry log
+    // (`~/.aida/usage.jsonl`). Mirrors `aida usage` / `--errors` / `--unused`;
+    // the orchestrator-telemetry views (`--auto-complete`, `--health`) stay
+    // CLI-only.
+    fn tool_usage_query(&self, args: &Value) -> Result<String, String> {
+        let since_raw = args.get("since").and_then(|v| v.as_str()).unwrap_or("30d");
+        let unused_raw = args.get("unused").and_then(|v| v.as_str());
+        let errors_only = args
+            .get("errors")
+            .and_then(|v| v.as_bool())
+            .unwrap_or(false);
+        let limit = args
+            .get("limit")
+            .and_then(|v| v.as_u64())
+            .map(|n| n as usize)
+            .unwrap_or(20);
+
+        let events = aida_cli_lib::usage::read_events();
+        if events.is_empty() {
+            return Ok(
+                "Usage: (no events yet; the log fills as `aida …` commands run)".to_string(),
+            );
+        }
+        let now = chrono::Utc::now();
+        let since_window = aida_cli_lib::parse_days_arg(since_raw).map_err(|e| e.to_string())?;
+        let since = now - since_window;
+
+        // --unused: commands not seen since the cutoff.
+        if let Some(raw) = unused_raw {
+            // trace:TASK-1509 | ai:claude
+            let cutoff_window = aida_cli_lib::queue_cmd::parse_lookback(raw, "unused")
+                .map_err(|e| e.to_string())?;
+            let cutoff = now - cutoff_window;
+            let mut last_seen: std::collections::HashMap<String, chrono::DateTime<chrono::Utc>> =
+                std::collections::HashMap::new();
+            for ev in &events {
+                if let Ok(ts) = chrono::DateTime::parse_from_rfc3339(&ev.ts) {
+                    let ts = ts.with_timezone(&chrono::Utc);
+                    let cur = last_seen.entry(ev.cmd.clone()).or_insert(ts);
+                    if *cur < ts {
+                        *cur = ts;
+                    }
+                }
+            }
+            let mut stale: Vec<(String, chrono::DateTime<chrono::Utc>)> = last_seen
+                .into_iter()
+                .filter(|(_, ts)| *ts < cutoff)
+                .collect();
+            stale.sort_by_key(|(_, ts)| *ts);
+            let mut out = format!(
+                "Usage: commands NOT used in the last {} (deprecation candidates):",
+                raw
+            );
+            if stale.is_empty() {
+                out.push_str("\n  (none — everything we've seen has been used recently)");
+            } else {
+                for (cmd, ts) in stale.iter().take(limit) {
+                    out.push_str(&format!("\n  {:<24} last {}", cmd, ts.to_rfc3339()));
+                }
+                if stale.len() > limit {
+                    out.push_str(&format!(
+                        "\n  … {} more (raise `limit`)",
+                        stale.len() - limit
+                    ));
+                }
+            }
+            return Ok(out);
+        }
+
+        // BUG-699: recent sub-window (mirrors the CLI report).
+        let recent_since = std::cmp::max(since, now - chrono::Duration::days(7));
+        let by_cmd = aida_cli_lib::aggregate_events(&events, since, recent_since);
+        let mut rows: Vec<_> = by_cmd.into_values().collect();
+        if errors_only {
+            rows.retain(|r| r.errors > 0);
+            rows.sort_by(|a, b| {
+                b.error_rate()
+                    .partial_cmp(&a.error_rate())
+                    .unwrap_or(std::cmp::Ordering::Equal)
+                    .then_with(|| b.count.cmp(&a.count))
+            });
+        } else {
+            rows.sort_by(|a, b| b.count.cmp(&a.count));
+        }
+
+        let header = if errors_only {
+            format!("Usage: commands with errors in the last {}", since_raw)
+        } else {
+            format!("Usage: top commands in the last {}", since_raw)
+        };
+        let mut out = header;
+        out.push_str(&format!(
+            "\n  {:<24} {:>6} {:>6} {:>8}",
+            "cmd", "count", "errs", "avg_ms"
+        ));
+        if rows.is_empty() {
+            out.push_str("\n  (no qualifying events in the window — try a wider `since`)");
+            return Ok(out);
+        }
+        for row in rows.iter().take(limit) {
+            out.push_str(&format!(
+                "\n  {:<24} {:>6} {:>6} {:>8}",
+                row.cmd,
+                row.count,
+                row.errors,
+                row.avg_ms()
+            ));
+        }
+        if rows.len() > limit {
+            out.push_str(&format!(
+                "\n  … {} more (raise `limit`)",
+                rows.len() - limit
+            ));
+        }
+        Ok(out)
+    }
+
+    // trace:EPIC-27 — PEEK: `aida db sync` does git network I/O against the
+    // orphan store branch (fetch + rebase + push). Return the command to run.
+    fn tool_db_sync(&self, args: &Value) -> Result<String, String> {
+        let pull = args.get("pull").and_then(|v| v.as_bool()).unwrap_or(false);
+        let push = args.get("push").and_then(|v| v.as_bool()).unwrap_or(false);
+        let mut cmd = String::from("aida db sync");
+        if pull {
+            cmd.push_str(" --pull");
+        }
+        if push {
+            cmd.push_str(" --push");
+        }
+        if !pull && !push {
+            cmd.push_str(" --pull --push");
+        }
+        Ok(format!(
+            "Syncing the orphan `aida-store` branch does git network I/O (fetch + rebase + push) \
+             — a subprocess act the MCP server does not perform.\nRun:\n  {}",
+            cmd
+        ))
+    }
+
+    // trace:EPIC-27 — PEEK: `aida fetch` refreshes remote refs via subprocess
+    // `git`. Return the command to run.
+    fn tool_fetch(&self, args: &Value) -> Result<String, String> {
+        let code_only = args
+            .get("code_only")
+            .and_then(|v| v.as_bool())
+            .unwrap_or(false);
+        let store_only = args
+            .get("store_only")
+            .and_then(|v| v.as_bool())
+            .unwrap_or(false);
+        let quiet = args.get("quiet").and_then(|v| v.as_bool()).unwrap_or(false);
+        let mut cmd = String::from("aida fetch");
+        if code_only {
+            cmd.push_str(" --code-only");
+        }
+        if store_only {
+            cmd.push_str(" --store-only");
+        }
+        if quiet {
+            cmd.push_str(" --quiet");
+        }
+        Ok(format!(
+            "Fetching refreshes remote refs (code branch + orphan store) via git network I/O \
+             — a subprocess act the MCP server does not perform.\nRun:\n  {}",
+            cmd
+        ))
+    }
+
+    // trace:EPIC-27 — PEEK: `aida pull` mutates the working tree + local store
+    // and auto-bumps merged specs. Return the command to run.
+    fn tool_pull(&self, args: &Value) -> Result<String, String> {
+        let code_only = args
+            .get("code_only")
+            .and_then(|v| v.as_bool())
+            .unwrap_or(false);
+        let store_only = args
+            .get("store_only")
+            .and_then(|v| v.as_bool())
+            .unwrap_or(false);
+        let mut cmd = String::from("aida pull");
+        if code_only {
+            cmd.push_str(" --code-only");
+        }
+        if store_only {
+            cmd.push_str(" --store-only");
+        }
+        Ok(format!(
+            "Pulling mutates the working tree (code: git pull --ff-only) and the local store \
+             (rebase), then auto-bumps merged specs Done → Completed — a working-tree-mutating \
+             subprocess act the MCP server does not perform.\nRun:\n  {}",
+            cmd
+        ))
+    }
+
+    /// TASK-715: `schema` tool — read-only introspection of the storable
+    /// substrate for MCP clients that consume tools rather than resources. With
+    /// no `object`, returns the storable-object catalog; with `object`, returns
+    /// that object's detail (the reflection-derived field table for every
+    /// catalog kind; Requirement additionally carries the four
+    /// controlled-vocabulary enums). Mirrors `aida schema [<object>] --json` and the
+    /// `aida://schema[/{object}]` resources — all back onto
+    /// `aida_cli_lib::schema::{catalog_json, object_json}` so the surfaces can't drift.
+    /// trace:TASK-715 | ai:claude
+    fn tool_schema(&self, args: &Value) -> Result<String, String> {
+        let object = args
+            .get("object")
+            .and_then(|v| v.as_str())
+            .map(str::trim)
+            .filter(|s| !s.is_empty());
+        // `all: true` (with no `object`) is the full dump — the catalog with
+        // each kind's field/enum detail inlined, mirroring `aida schema --all
+        // --json`. trace:TASK-799 | ai:claude
+        let all = args.get("all").and_then(|v| v.as_bool()).unwrap_or(false);
+        // `explain: true` adds the explanatory layer — per-field
+        // example/provenance/description and each object's lifecycle block —
+        // mirroring `aida schema --explain`. trace:STORY-630 | ai:claude
+        let explain = args
+            .get("explain")
+            .and_then(|v| v.as_bool())
+            .unwrap_or(false);
+        let value = match object {
+            None if all => aida_cli_lib::schema::full_dump_json_explain(explain),
+            None => aida_cli_lib::schema::catalog_json_explain(explain),
+            Some(name) => {
+                aida_cli_lib::schema::object_json_explain(name, explain).ok_or_else(|| {
+                    format!(
+                    "Unknown schema object: {} (omit `object` for the catalog of storable kinds)",
+                    name
+                )
+                })?
+            }
+        };
+        serde_json::to_string_pretty(&value)
+            .map_err(|e| format!("failed to serialize schema: {}", e))
+    }
+
+    // ========================================================================
+    // Resource implementations
+    // ========================================================================
+
+    fn resource_project_summary(&self) -> Result<String, String> {
+        let store = self.storage.load_for_read().map_err(|e| e.to_string())?;
+
+        let total = store.requirements.len();
+        let by_status =
+            |s: RequirementStatus| store.requirements.iter().filter(|r| r.status == s).count();
+
+        let mut output = format!(
+            "# Project Summary\n\n\
+             **Total Requirements:** {}\n\
+             - Draft: {}\n\
+             - Approved: {}\n\
+             - Planned: {}\n\
+             - In Progress: {}\n\
+             - Needs Attention: {}\n\
+             - Done: {}\n\
+             - Completed: {}\n\
+             - Rejected: {}\n\n\
+             **{}**\n",
+            total,
+            by_status(RequirementStatus::Draft),
+            by_status(RequirementStatus::Approved),
+            by_status(RequirementStatus::Planned),
+            by_status(RequirementStatus::InProgress),
+            by_status(RequirementStatus::NeedsAttention),
+            by_status(RequirementStatus::Done),
+            by_status(RequirementStatus::Completed),
+            by_status(RequirementStatus::Rejected),
+            mcp_authority_line(),
+        );
+
+        if !store.features.is_empty() {
+            output.push_str(&format!("\n**Features ({}):**\n", store.features.len()));
+            for f in &store.features {
+                output.push_str(&format!("- {}\n", f.name));
+            }
+        }
+
+        Ok(output)
+    }
+
+    fn resource_requirements_tree(&self) -> Result<String, String> {
+        let store = self.storage.load_for_read().map_err(|e| e.to_string())?;
+
+        let mut output = "# Requirements Tree\n\n".to_string();
+
+        let mut by_feature: std::collections::BTreeMap<String, Vec<&Requirement>> =
+            std::collections::BTreeMap::new();
+        for r in &store.requirements {
+            let feature = if r.feature.is_empty() {
+                "Uncategorized".to_string()
+            } else {
+                r.feature.clone()
+            };
+            by_feature.entry(feature).or_default().push(r);
+        }
+
+        for (feature, reqs) in &by_feature {
+            output.push_str(&format!("## {}\n\n", feature));
+            for r in reqs {
+                output.push_str(&format!(
+                    "- [{}] {} ({})\n",
+                    mcp_id_cell(spec_id(r)),
+                    r.title,
+                    r.status
+                ));
+            }
+            output.push('\n');
+        }
+
+        Ok(output)
+    }
+
+    // ========================================================================
+    // EPIC-27 (STORY-535): live-state resources
+    //
+    // Each backs onto the SAME library helper its CLI / MCP-tool equivalent
+    // uses, with no subprocess to `aida`:
+    //  - `aida://queue/in-flight`  ← `list_leases` (the in-flight lease scopes,
+    //                                 same probe `queue_list`'s in_flight filter
+    //                                 + `aida queue list --in-flight-only` use)
+    //                                 + the Done-awaiting-merge status bucket.
+    //  - `aida://session/leases`   ← `list_leases` (mirrors `tool_list_active_leases`
+    //                                 / `aida session leases`).
+    //  - `aida://pr/{n}`           ← `aida_cli_lib::collect_git_linkage` + `from-review:PR-N`
+    //                                 finding tags (git-canonical, gh-free, mirroring
+    //                                 `aida show <spec>`'s git linkage).
+    //  - `aida://batch/{name}`     ← the `batch:<name>` tag set bucketed by status,
+    //                                 mirroring `tool_queue_progress` / `aida queue
+    //                                 progress --batch`.
+    // trace:STORY-535 trace:EPIC-27
+    // ========================================================================
+
+    /// `aida://queue/in-flight` — specs the queue considers actively in flight:
+    /// those held by a live session/MCP-claim lease (the `--in-flight-only`
+    /// axis), plus the Done-awaiting-merge bucket `aida queue list` appends so
+    /// freshly-shipped work stays visible until auto-bump. trace:STORY-535
+    fn resource_queue_in_flight(&self) -> Result<String, String> {
+        let store = self.storage.load_for_read().map_err(|e| e.to_string())?;
+
+        // Live lease scopes — the same set `tool_list_requirements`'s in_flight
+        // filter and `aida queue list --in-flight-only` derive. trace:STORY-535
+        let in_flight_scopes: std::collections::HashSet<String> = list_leases(&self.project_root)
+            .into_iter()
+            .map(|l| l.scope.to_ascii_lowercase())
+            .filter(|s| !s.is_empty())
+            .collect();
+
+        let mut in_flight: Vec<String> = Vec::new();
+        let mut awaiting_merge: Vec<String> = Vec::new();
+        for r in &store.requirements {
+            let sid = spec_id(r);
+            if sid != "?" && in_flight_scopes.contains(&sid.to_ascii_lowercase()) {
+                in_flight.push(format!("- [{}] {} ({})", sid, r.title, r.status));
+            }
+            // STORY-86: Done = finished on a branch, awaiting merge.
+            if r.status == RequirementStatus::Done {
+                awaiting_merge.push(format!("- [{}] {}", sid, r.title));
+            }
+        }
+
+        let mut output = "# Queue — in-flight\n\n".to_string();
+        output.push_str("## Live leases (in-flight)\n\n");
+        if in_flight.is_empty() {
+            output.push_str("_No specs held by a live session/MCP-claim lease._\n");
+        } else {
+            output.push_str(&in_flight.join("\n"));
+            output.push('\n');
+        }
+        output.push_str("\n## Done — awaiting merge\n\n");
+        if awaiting_merge.is_empty() {
+            output.push_str("_No Done specs awaiting merge._\n");
+        } else {
+            output.push_str(&awaiting_merge.join("\n"));
+            output.push('\n');
+        }
+        Ok(output)
+    }
+
+    /// `aida://session/leases` — active scoped session leases. Mirrors
+    /// `tool_list_active_leases` / `aida session leases`. trace:STORY-535
+    fn resource_session_leases(&self) -> Result<String, String> {
+        let leases = list_leases(&self.project_root);
+        let mut output = "# Session leases\n\n".to_string();
+        if leases.is_empty() {
+            output.push_str("_No active leases._\n");
+            return Ok(output);
+        }
+        output.push_str(&format!("{} active lease(s):\n\n", leases.len()));
+        for l in &leases {
+            let claim_kind = if l.mcp_claim { "mcp" } else { "session" };
+            let role = l.role.as_deref().unwrap_or("?");
+            output.push_str(&format!(
+                "- {} scope={} role={} owner={} kind={} started_at={}\n",
+                l.id, l.scope, role, l.owner, claim_kind, l.started_at
+            ));
+        }
+        Ok(output)
+    }
+
+    /// `aida://schema` — the storable-object catalog as pretty JSON. Mirrors
+    /// `aida schema --json`; backs onto `aida_cli_lib::schema::catalog_json` so the
+    /// MCP surface can't drift from the CLI. trace:TASK-715 | ai:claude
+    fn resource_schema_catalog(&self) -> Result<String, String> {
+        serde_json::to_string_pretty(&aida_cli_lib::schema::catalog_json())
+            .map_err(|e| format!("failed to serialize schema catalog: {}", e))
+    }
+
+    /// `aida://protocol/<type>[/<lane>]` uses the same core renderer as CLI.
+    // trace:TASK-1278 | ai:codex
+    fn resource_protocol(&self, path: &str) -> Result<String, String> {
+        let mut segments = path.split('/');
+        let req_type = segments
+            .next()
+            .filter(|s| !s.is_empty())
+            .ok_or_else(|| "Missing requirement type in protocol resource URI".to_string())?;
+        let lane = segments.next().filter(|s| !s.is_empty());
+        if segments.next().is_some() {
+            return Err(format!(
+                "Invalid protocol resource URI: aida://protocol/{path}"
+            ));
+        }
+        let store = self.storage.load_for_read().map_err(|e| e.to_string())?;
+        let protocol = aida_core::resolve_protocol(&store, req_type, lane)
+            .ok_or_else(|| format!("No type protocol found for `{req_type}`"))?;
+        if lane.is_some() && protocol.lane_protocol.is_none() {
+            return Err(format!(
+                "No lane protocol found for `{}`",
+                lane.unwrap_or_default()
+            ));
+        }
+        Ok(protocol.render())
+    }
+
+    /// `aida://schema/{object}` — per-object schema detail as pretty JSON.
+    /// Every catalog kind returns its reflection-derived field table;
+    /// `requirement` additionally carries the four controlled-vocabulary
+    /// enums; an unknown name is a -32602 error. Mirrors
+    /// `aida schema <object> --json`. trace:TASK-715 | ai:claude
+    fn resource_schema_object(&self, object: &str) -> Result<String, String> {
+        match aida_cli_lib::schema::object_json(object) {
+            Some(v) => serde_json::to_string_pretty(&v)
+                .map_err(|e| format!("failed to serialize schema for {}: {}", object, e)),
+            None => Err(format!(
+                "Unknown schema object: {} (try `aida://schema` for the catalog)",
+                object
+            )),
+        }
+    }
+
+    /// `aida://pr/{n}` — git-canonical, gh-free PR linkage for PR number N.
+    /// Resolves the spec(s) tied to the PR two ways, both substrate-local:
+    ///   1. squash-merge subject `(#N)` → the `(SPEC-ID)` in the same commit
+    ///      (via `aida_cli_lib::collect_git_linkage`'s `shipped_pr`), and
+    ///   2. review findings tagged `from-review:PR-N`.
+    ///      This mirrors the PR pointer `aida show <spec>` surfaces, without ever
+    ///      shelling out to `gh`. trace:STORY-535
+    fn resource_pr(&self, raw: &str) -> Result<String, String> {
+        let n: u64 = raw
+            .trim()
+            .parse()
+            .map_err(|_| format!("Invalid PR number in resource URI: aida://pr/{}", raw))?;
+        let store = self.storage.load_for_read().map_err(|e| e.to_string())?;
+
+        // Findings raised against PR-N (cheap, tag-only). trace:STORY-535
+        let mut findings: Vec<String> = store
+            .requirements
+            .iter()
+            .filter(|r| {
+                r.tags
+                    .iter()
+                    .any(|t| aida_cli_lib::findings::pr_number_from_tag(t) == Some(n as u32))
+            })
+            .map(|r| format!("- [{}] {} ({})", mcp_id_cell(spec_id(r)), r.title, r.status))
+            .collect();
+        findings.sort();
+
+        // Shipped specs whose squash-merge commit carries `(#N)`. We restrict
+        // the per-spec git probe to Done/Completed specs (the only ones that
+        // can carry a shipped PR), keeping the scan bounded. trace:STORY-535
+        let mut shipped: Vec<String> = Vec::new();
+        for r in &store.requirements {
+            if !matches!(
+                r.status,
+                RequirementStatus::Done | RequirementStatus::Completed
+            ) {
+                continue;
+            }
+            let sid = spec_id(r).to_string();
+            if sid == "?" {
+                continue;
+            }
+            let linkage =
+                aida_cli_lib::collect_git_linkage(&self.project_root, std::slice::from_ref(&sid));
+            if linkage.shipped_pr == Some(n) {
+                let pr = linkage
+                    .commits
+                    .first()
+                    .map(|(_, short, subj)| format!(" — {} {}", short, subj))
+                    .unwrap_or_default();
+                shipped.push(format!("- [{}] {} ({}){}", sid, r.title, r.status, pr));
+            }
+        }
+        shipped.sort();
+
+        let mut output = format!("# PR #{}\n\n", n);
+        output.push_str("## Shipped specs (squash-merge `(#N)`)\n\n");
+        if shipped.is_empty() {
+            output.push_str("_No merged spec references this PR number._\n");
+        } else {
+            output.push_str(&shipped.join("\n"));
+            output.push('\n');
+        }
+        output.push_str("\n## Review findings (`from-review:PR-N`)\n\n");
+        if findings.is_empty() {
+            output.push_str("_No review findings tagged against this PR._\n");
+        } else {
+            output.push_str(&findings.join("\n"));
+            output.push('\n');
+        }
+        Ok(output)
+    }
+
+    /// `aida://batch/{name}` — progress for the `batch:<name>` tag set, bucketed
+    /// by live status exactly like `tool_queue_progress` / `aida queue progress
+    /// --batch`. trace:STORY-535
+    fn resource_batch(&self, raw: &str) -> Result<String, String> {
+        let name = raw.trim();
+        if name.is_empty() {
+            return Err("Empty batch name in resource URI: aida://batch/<name>".to_string());
+        }
+        let store = self.storage.load_for_read().map_err(|e| e.to_string())?;
+        let tag = format!("batch:{}", name);
+
+        let (mut shipped, mut in_flight, mut working, mut remaining) =
+            (Vec::new(), Vec::new(), Vec::new(), Vec::new());
+        for r in &store.requirements {
+            if !r.tags.iter().any(|t| t.eq_ignore_ascii_case(&tag)) {
+                continue;
+            }
+            let disp = spec_id(r).to_string();
+            match r.status {
+                RequirementStatus::Completed | RequirementStatus::Rejected => shipped.push(disp),
+                RequirementStatus::Done => in_flight.push(disp),
+                RequirementStatus::InProgress => working.push(disp),
+                _ => remaining.push(disp),
+            }
+        }
+        let total = shipped.len() + in_flight.len() + working.len() + remaining.len();
+        if total == 0 {
+            return Ok(format!(
+                "# Batch `{}`\n\n_No requirements tagged `batch:{}`._\n",
+                name, name
+            ));
+        }
+        let fmt = |label: &str, items: &[String]| {
+            if items.is_empty() {
+                format!("- {}: 0", label)
+            } else {
+                format!("- {}: {} ({})", label, items.len(), items.join(", "))
+            }
+        };
+        Ok(format!(
+            "# Batch `{}`\n\n{} item{}:\n\n{}\n{}\n{}\n{}\n",
+            name,
+            total,
+            if total == 1 { "" } else { "s" },
+            fmt("Shipped", &shipped),
+            fmt("In flight", &in_flight),
+            fmt("Working now", &working),
+            fmt("Remaining", &remaining),
+        ))
+    }
+}
+
+// ============================================================================
+// Helpers
+// ============================================================================
+
+fn normalize_mcp_filter_token(s: &str) -> String {
+    s.chars()
+        .filter_map(|c| match c {
+            ' ' | '-' | '_' => None,
+            c if c.is_ascii_alphabetic() => Some(c.to_ascii_lowercase()),
+            c => Some(c),
+        })
+        .collect()
+}
+
+fn mcp_filter_eq(stored: &str, filter: &str) -> bool {
+    normalize_mcp_filter_token(stored) == normalize_mcp_filter_token(filter)
+}
+
+// trace:BUG-1174 | ai:codex
+fn mcp_status_filter_matches(stored: &RequirementStatus, filter: &str) -> bool {
+    if let Some(statuses) = RequirementStatus::expand_filter_token(filter) {
+        return statuses.iter().any(|s| {
+            normalize_mcp_filter_token(stored.cache_key()) == normalize_mcp_filter_token(s)
+        });
+    }
+    mcp_filter_eq(&stored.to_string(), filter)
+}
+
+// trace:BUG-1174 | ai:codex
+fn mcp_hides_accepted_decisions(
+    status_filter: Option<&str>,
+    type_filter: Option<&str>,
+    view: ViewTierFilter,
+) -> bool {
+    if view != ViewTierFilter::ActiveOnly {
+        return false;
+    }
+    if type_filter
+        .map(|t| mcp_filter_eq("decision", t))
+        .unwrap_or(false)
+    {
+        return false;
+    }
+    match status_filter {
+        None => true,
+        Some(status) => normalize_mcp_filter_token(status) == "open",
+    }
+}
+
+/// The status to surface for a requirement over MCP. For an EPIC this is the
+/// read-only rollup of its children (mirrors the CLI `effective_display_status`
+/// and the cache projection), so `list_requirements` / `show_requirement` agree
+/// with `aida list`. Every non-epic returns its stored status.
+// trace:BUG-626 | ai:claude
+fn mcp_effective_status(
+    store: &aida_core::RequirementsStore,
+    r: &Requirement,
+) -> RequirementStatus {
+    if r.req_type == RequirementType::Epic {
+        if let Some(derived) = aida_core::rollup::derive_epic_status(store, r.id) {
+            return derived;
+        }
+    }
+    r.status.clone()
+}
+
+fn parse_status(s: &str) -> Option<RequirementStatus> {
+    match normalize_mcp_filter_token(s).as_str() {
+        "draft" => Some(RequirementStatus::Draft),
+        "approved" => Some(RequirementStatus::Approved),
+        "planned" => Some(RequirementStatus::Planned),
+        "inprogress" => Some(RequirementStatus::InProgress),
+        "done" => Some(RequirementStatus::Done),
+        "completed" => Some(RequirementStatus::Completed),
+        "rejected" => Some(RequirementStatus::Rejected),
+        // trace:TASK-1176 | ai:claude — mirrors the CLI's status set.
+        "superseded" => Some(RequirementStatus::Superseded),
+        "needsattention" => Some(RequirementStatus::NeedsAttention),
+        _ => None,
+    }
+}
+
+// trace:TASK-1594 | ai:claude
+/// BUG-486: whether the current MCP caller holds advisor authority, routed
+/// through the SAME predicate the CLI uses (`advisor_authority_from`) so the two
+/// surfaces can't drift — the CLI↔MCP inconsistency *was* the bug. The MCP
+/// server runs non-TTY and is never orchestrator-corroborated, so the only axis
+/// that can grant authority here is the resolved role. Role resolution:
+/// `role_active_env()` (the validated grant via `current_seat()`) is the source.
+/// An agent that has not entered an advisor role resolves to non-advisor and is refused,
+/// matching the headless / non-TTY default. trace:BUG-486 | ai:claude
+fn mcp_caller_has_advisor_authority() -> bool {
+    // trace:BUG-486
+    let role = role_active_env().unwrap_or_default();
+    // is_tty = false, orchestrated = false: an MCP server is neither.
+    aida_cli_lib::gate::role_authority::advisor_authority_from(&role, false, false)
+}
+
+// trace:STORY-1353 | ai:codex
+fn mcp_caller_has_dispatch_authority() -> bool {
+    let role = role_active_env().unwrap_or_default();
+    aida_cli_lib::gate::role_authority::dispatch_authority_from(&role, false)
+}
+
+/// BUG-480 / BUG-486: the refusal message for MCP queue-for-execution tools
+/// (`queue_add` / `queue_rework`). Queue mutation is dispatch rather than
+/// advisor disposition. Returns `None` when the caller may proceed.
+// trace:BUG-486 trace:BUG-480 trace:STORY-1353 | ai:codex
+fn mcp_queue_authority_message() -> Option<String> {
+    mcp_queue_authority_message_for(mcp_caller_has_dispatch_authority())
+}
+
+/// Pure core of [`mcp_queue_authority_message`] (BUG-486): the queue-authority
+/// decision over an explicit dispatch capability, so it is unit-testable without
+/// mutating the process-global `AIDA_SESSION_ROLE` env. `None` = may proceed.
+/// trace:BUG-486 | ai:claude
+fn mcp_queue_authority_message_for(caller_has_dispatch: bool) -> Option<String> {
+    if caller_has_dispatch {
+        return None;
+    }
+    Some(
+        "Cannot queue work for execution via MCP: routing work needs dispatch authority \
+         (product, advisor, or integrator role). File the spec for advisor triage or ask a \
+         dispatch-capable seat to route it."
+            .to_string(),
+    )
+}
+
+/// BUG-449 / BUG-481 / BUG-486: status transitions an MCP caller may NOT make
+/// itself, with the message explaining why. `None` = the transition is allowed.
+/// Mirrors the `add_requirement` intake gate (TASK-647 / ADR-3) on the update
+/// path so `add`-then-`update` isn't a one-line bypass of advisor authority.
+///
+/// BUG-486: the *authority decision* now routes through the SAME predicate the
+/// CLI uses (`status_advance_requires_advisor_authority` + `advisor_authority_from`
+/// via `mcp_caller_has_advisor_authority`), so an MCP session that has entered an
+/// advisor role may make the advisor-gated transitions exactly as the CLI does
+/// under a validated session grant. Before BUG-486 this gate ignored the
+/// caller's role and refused unconditionally even for a genuine advisor session —
+/// the CLI↔MCP inconsistency the bug names. A caller WITHOUT advisor authority
+/// still hits the refusal.
+///
+/// The gate is keyed off the **(source, target) pair**, not the target alone
+/// (BUG-481). `Approved` / `Planned` are advisor-authority targets regardless of
+/// source — approving/planning is the advisor's triage decision. `InProgress` /
+/// `Done` are advisor-authority **only when the source is `Draft` or
+/// `NeedsAttention`** (advancing a never-triaged / punted spec straight into the
+/// execution pipeline is the intake-bypass the advisor gate exists to prevent);
+/// a spec *already* in the pipeline (e.g. `Approved → InProgress`, `InProgress →
+/// Done`) is an implementer-legitimate execution flip and stays allowed for
+/// everyone. `Completed` is **always** refused via MCP regardless of role — it
+/// is merge-driven (set by a `(SPEC-ID)` commit landing on the default branch),
+/// not a hand-set advisor act, so advisor authority does not unlock it.
+/// trace:BUG-449 trace:BUG-481 trace:BUG-486 | ai:claude
+fn mcp_status_gate_message(from: &RequirementStatus, to: &RequirementStatus) -> Option<String> {
+    mcp_status_gate_message_for(from, to, mcp_caller_has_advisor_authority())
+}
+
+/// Pure core of [`mcp_status_gate_message`] (BUG-486): the status-authority
+/// decision over an explicit `caller_is_advisor`, so the gate is unit-testable
+/// without mutating the process-global `AIDA_SESSION_ROLE` env. The wrapper
+/// resolves the caller's role via `mcp_caller_has_advisor_authority`.
+/// trace:BUG-486 | ai:claude
+fn mcp_status_gate_message_for(
+    from: &RequirementStatus,
+    to: &RequirementStatus,
+    caller_is_advisor: bool,
+) -> Option<String> {
+    // Completed is merge-driven, never hand-set via MCP — gate it before the
+    // advisor-authority check (advisor authority does not unlock it).
+    if matches!(to, RequirementStatus::Completed) {
+        return Some(format!(
+            "Cannot set status to {to} via MCP: this is set automatically when a \
+             (SPEC-ID) commit lands on the default branch (merge-driven auto-bump), not by hand. \
+             Mark the work `done` and let the merge promote it."
+        ));
+    }
+
+    // BUG-486 single source of truth: the same (from, to) predicate the CLI's
+    // `aida edit --status` path consults. Approved/Planned from any source, and
+    // InProgress/Done from a Draft/NeedsAttention source, are advisor-authority
+    // acts; everything else is an implementer-legitimate flip.
+    if !aida_cli_lib::status_advance_requires_advisor_authority(from, to) {
+        return None;
+    }
+
+    // The transition needs advisor authority — an entered advisor role permits it
+    // (resolved by the caller through the SAME predicate the CLI uses).
+    // trace:BUG-486
+    if caller_is_advisor {
+        return None;
+    }
+
+    // BUG-589: lead with the remediation that actually works for an MCP client.
+    // `role_enter` is PEEK-ONLY — it cannot set the shell's AIDA_SESSION_ROLE for
+    // the running MCP server, so it can never unlock this gate for the same
+    // session (steering an agent into role_enter just loops). The only working
+    // unlock for an MCP caller is launching `aida mcp-serve` with a valid grant;
+    // the fallback is to leave the status to the advisor (file it / have the
+    // advisor act). trace:STORY-1473
+    match to {
+        RequirementStatus::Approved | RequirementStatus::Planned => Some(format!(
+            "Cannot set status to {to} via MCP: approving or planning a spec is the \
+             advisor's triage decision and needs advisor authority. {} Otherwise file the spec and let the advisor promote it. \
+             (Note: the role_enter tool is peek-only — it cannot self-elevate this session, \
+             so it will NOT unlock the gate.)",
+            mcp_advisor_refusal_guidance(None)
+        )),
+        _ => Some(format!(
+            "Cannot advance {from} → {to} via MCP: moving an un-triaged or punted spec \
+             into the execution pipeline needs advisor authority. {} Otherwise let the advisor approve it first (it will then \
+             flip to {to} as implementation proceeds). (Note: the role_enter tool is peek-only \
+             — it cannot self-elevate this session, so it will NOT unlock the gate.)",
+            mcp_advisor_refusal_guidance(None)
+        )),
+    }
+}
+
+fn parse_priority(s: &str) -> Option<RequirementPriority> {
+    match normalize_mcp_filter_token(s).as_str() {
+        "high" => Some(RequirementPriority::High),
+        "medium" => Some(RequirementPriority::Medium),
+        "low" => Some(RequirementPriority::Low),
+        _ => None,
+    }
+}
+
+fn parse_requirement_type(s: &str) -> Option<RequirementType> {
+    match normalize_mcp_filter_token(s).as_str() {
+        "functional" => Some(RequirementType::Functional),
+        "nonfunctional" => Some(RequirementType::NonFunctional),
+        "system" => Some(RequirementType::System),
+        "user" => Some(RequirementType::User),
+        "changerequest" | "change" | "cr" => Some(RequirementType::ChangeRequest),
+        "bug" => Some(RequirementType::Bug),
+        "epic" => Some(RequirementType::Epic),
+        "story" => Some(RequirementType::Story),
+        "task" => Some(RequirementType::Task),
+        "spike" => Some(RequirementType::Spike),
+        "sprint" => Some(RequirementType::Sprint),
+        "folder" => Some(RequirementType::Folder),
+        "meta" => Some(RequirementType::Meta),
+        // ADR / knowledge-graph family (FR-1-074). trace:TASK-716 | ai:claude
+        "principle" | "prin" => Some(RequirementType::Principle),
+        "vision" | "vis" => Some(RequirementType::Vision),
+        "constraint" | "con" => Some(RequirementType::Constraint),
+        "decision" | "adr" => Some(RequirementType::Decision),
+        "term" | "glossary" => Some(RequirementType::Term),
+        "doc" => Some(RequirementType::Doc),
+        "faq" => Some(RequirementType::Faq),
+        _ => None,
+    }
+}
+
+// trace:TASK-551 | ai:codex trace:BUG-1602 | ai:claude
+fn parse_mcp_relationship_type(s: &str) -> Result<RelationshipType, String> {
+    let trimmed = s.trim();
+    if trimmed.is_empty() {
+        return Err(
+            "relationship_type must be non-empty (examples: parent, child, blocked-by, references)"
+                .to_string(),
+        );
+    }
+
+    // BUG-1602: delegate to the same shared parser `rel add` / `rel remove`
+    // use, so a spelling this tool accepts is exactly the same set the CLI
+    // accepts (and vice versa).
+    Ok(RelationshipType::parse_relationship_type(trimmed))
+}
+
+/// Read the current git branch under `project_root`. `None` on detached HEAD
+/// or git failure.
+#[allow(dead_code)] // Retain the existing helper during the transport extraction.
+fn current_branch_at(project_root: &Path) -> Option<String> {
+    let o = std::process::Command::new("git")
+        .arg("-C")
+        .arg(project_root)
+        .args(["symbolic-ref", "--short", "HEAD"])
+        .output()
+        .ok()?;
+    if !o.status.success() {
+        return None;
+    }
+    let s = String::from_utf8_lossy(&o.stdout).trim().to_string();
+    if s.is_empty() {
+        None
+    } else {
+        Some(s)
+    }
+}
+
+fn hostname_or_unknown() -> String {
+    std::env::var("HOSTNAME")
+        .or_else(|_| std::env::var("COMPUTERNAME"))
+        .unwrap_or_else(|_| "unknown".to_string())
+}
+
+/// Project a loaded `RequirementsStore` into the `RequirementSummary` shape
+/// that `findings.rs` expects. Keeps the projection logic in one place;
+/// mirrors the cache projection just well enough for the findings filter.
+fn build_summaries(store: &aida_core::RequirementsStore) -> Vec<aida_core::RequirementSummary> {
+    // STORY-632: compute deterministic in/out degree + heft once over the full
+    // graph so the MCP projection carries the same centrality as the cache.
+    // trace:STORY-632 | ai:claude
+    let degrees = aida_core::compute_degrees(store);
+    // TASK-902: project the blocked flag over the same full graph so the MCP
+    // summary carries it identically to the cache. trace:TASK-902 | ai:claude
+    let blocked = aida_core::compute_blocked(store);
+    store
+        .requirements
+        .iter()
+        .map(|r| {
+            let d = degrees.get(&r.id).copied().unwrap_or_default();
+            aida_core::RequirementSummary {
+                id: r.id,
+                spec_id: r.spec_id.clone(),
+                agreed_id: r.agreed_id.clone(),
+                title: r.title.clone(),
+                description: r.description.clone(),
+                status: format!("{}", r.status),
+                priority: format!("{}", r.priority),
+                owner: r.owner.clone(),
+                // trace:STORY-639 | ai:claude
+                assignee: r.assignee.clone(),
+                feature: r.feature.clone(),
+                req_type: format!("{}", r.req_type),
+                tags: r.tags.iter().cloned().collect(),
+                created_at: r.created_at.to_rfc3339(),
+                modified_at: r.modified_at.to_rfc3339(),
+                archived: r.archived,
+                // trace:STORY-441 | ai:claude
+                archived_at: r.archived_at.map(|dt| dt.to_rfc3339()),
+                // trace:STORY-584 | ai:claude
+                deferred: r.deferred,
+                deferred_at: r.deferred_at.map(|dt| dt.to_rfc3339()),
+                deferred_until: r.deferred_until.clone(),
+                deferred_reason: r.deferred_reason.clone(),
+                in_degree: d.in_degree,
+                out_degree: d.out_degree,
+                heft: d.heft,
+                // trace:TASK-902 | ai:claude
+                blocked: blocked.contains(&r.id),
+                // trace:TASK-1065 | ai:claude
+                has_pending_decision: r.decision_request.as_ref().is_some_and(|d| d.is_pending()),
+                // trace:STORY-776 | ai:claude
+                execution_mode: r.execution_mode.map(|m| m.to_string()),
+                // trace:FR-283 | ai:claude
+                weight: r.weight.map(|w| w as f64),
+                // trace:STORY-634 | ai:claude
+                origin: r.origin.as_ref().map(|o| o.to_string()),
+                // trace:TASK-1474 | ai:claude
+                completed_at: r
+                    .implementation_info
+                    .as_ref()
+                    .and_then(|i| i.completed_at)
+                    .map(|t| t.to_rfc3339()),
+                yaml_path: String::new(),
+            }
+        })
+        .collect()
+}
+
+/// Append `line` to `path`, creating the file if needed. One line per call,
+/// terminated with a newline. Uses `OpenOptions::append` so concurrent writers
+/// don't lose updates on POSIX (the kernel guarantees atomicity of a single
+/// small `write(2)` to an append-mode fd). We pre-concatenate the newline so
+/// the whole record lands in a single `write_all` — `writeln!` issues
+/// multiple `write_str` calls per format arg, and two concurrent writers can
+/// interleave the content + newline writes, producing a torn line.
+fn append_line(path: &Path, line: &str) -> std::io::Result<()> {
+    if let Some(parent) = path.parent() {
+        std::fs::create_dir_all(parent)?;
+    }
+    let mut buf = String::with_capacity(line.len() + 1);
+    buf.push_str(line);
+    buf.push('\n');
+    let mut f = std::fs::OpenOptions::new()
+        .create(true)
+        .append(true)
+        .open(path)?;
+    f.write_all(buf.as_bytes())?;
+    Ok(())
+}
+
+/// Write `bytes` to `path` atomically: write to a sibling `path.tmp-<uuid>` then
+/// `rename` over `path`. Crash mid-write leaves either the old file intact or
+/// the new file intact — never a torn write.
+/// Human-readable suffix noting how many ledger records a resolve/escalate
+/// closed (empty when none). Keeps the MCP resolve/escalate messages honest
+/// about the BUG-674 ledger-close side effect.
+fn ledger_close_suffix(closed: usize) -> String {
+    match closed {
+        0 => String::new(),
+        1 => " Closed 1 open ledger record.".to_string(),
+        n => format!(" Closed {n} open ledger records."),
+    }
+}
+
+fn write_atomic(path: &Path, bytes: &[u8]) -> std::io::Result<()> {
+    if let Some(parent) = path.parent() {
+        std::fs::create_dir_all(parent)?;
+    }
+    let tmp_name = format!(
+        ".{}.tmp-{}",
+        path.file_name()
+            .and_then(|n| n.to_str())
+            .unwrap_or("aida-tmp"),
+        uuid::Uuid::now_v7()
+    );
+    let tmp = path
+        .parent()
+        .unwrap_or_else(|| Path::new("."))
+        .join(tmp_name);
+    {
+        let mut f = std::fs::File::create(&tmp)?;
+        f.write_all(bytes)?;
+        f.sync_all()?;
+    }
+    std::fs::rename(&tmp, path)
+}
+
+// ============================================================================
+// Tool profiles — conservative safe-default surface (STORY-474)
+// ============================================================================
+
+// trace:STORY-474 | ai:claude
+//
+// MCP tool profiles let an operator expose a conservative slice of the tool
+// surface to an untrusted / exploratory / remote client while keeping the full
+// coordination + admin surface available to trusted agents. The profile is a
+// *capability tier*: each higher tier is a strict superset of the one below it.
+//
+//   read-only     — pure reads only (list/show/search/query/history/read_*).
+//                   Excludes EVERY write tool. The recommended marketplace /
+//                   untrusted-client default.
+//   coordination  — read-only + the file-substrate coordination writes an
+//                   agent needs to participate in a drain (post/resolve/escalate
+//                   punts, file/triage findings, claim/release tasks, post/ack
+//                   directives, ack briefs, send messages, add comments,
+//                   add relationships). No spec create/edit.
+//   operator      — coordination + spec-graph writes (add_requirement,
+//                   update_requirement). Full day-to-day surface.
+//   admin / full  — every tool. (Today `admin` == `full`; the name is reserved
+//                   so a future privileged-only tool can land at the admin tier
+//                   without churning the public profile vocabulary.)
+//
+// Resolution order (first match wins): `--profile <p>` CLI flag → `AIDA_MCP_PROFILE`
+// env → `[mcp] profile` in `.aida/config.toml` → the built-in default (`full`,
+// for backwards compatibility with existing trusted installs). Marketplace /
+// untrusted installs should set `profile = "read-only"` explicitly — see
+// `docs/agents/aida-mcp-install-matrix.md`.
+//
+// Gating happens in TWO places so the profile is a real security boundary, not
+// just a discovery hint: `tools/list` advertises only in-profile tools, and
+// `tools/call` REJECTS an out-of-profile tool with a stable error even if a
+// client calls it by name anyway.
+
+fn stakeholder_mcp_action(tool_name: &str) -> aida_cli_lib::StakeholderAction {
+    if tool_name == "add_requirement" {
+        aida_cli_lib::StakeholderAction::Intake
+    } else if aida_cli_lib::stakeholder_mcp_read_allowed(tool_name) {
+        aida_cli_lib::StakeholderAction::Read
+    } else {
+        // trace:TASK-1264 | ai:codex
+        match tool_name {
+            "update_requirement" => aida_cli_lib::StakeholderAction::EditRequirement,
+            name if name.starts_with("queue_") => aida_cli_lib::StakeholderAction::Queue,
+            "db_sync" => aida_cli_lib::StakeholderAction::Database,
+            name if name.starts_with("session_") => aida_cli_lib::StakeholderAction::Session,
+            name if name.starts_with("role_") => aida_cli_lib::StakeholderAction::Role,
+            "add_relationship" => aida_cli_lib::StakeholderAction::Relationship,
+            "add_comment" => aida_cli_lib::StakeholderAction::Comment,
+            _ => aida_cli_lib::StakeholderAction::Write,
+        }
+    }
+}
+
+fn stakeholder_tool_allowed(role: &str, tool_name: &str) -> bool {
+    aida_cli_lib::stakeholder_action_allowed(role, stakeholder_mcp_action(tool_name))
+}
+
+fn constrain_requester_intake(arguments: &mut Value) -> Result<(), String> {
+    let Some(object) = arguments.as_object_mut() else {
+        return Err("arguments must be an object".to_string());
+    };
+    // trace:BUG-1197 | ai:codex
+    // Requester intake may create a standalone draft, but it may not attach
+    // that draft to an existing graph node or assign its grooming metadata.
+    // `parent` is especially important: add_requirement materializes it as a
+    // relationship write, which would otherwise bypass the requester envelope.
+    if aida_cli_lib::REQUESTER_INTAKE_FORBIDDEN_FIELDS
+        .iter()
+        .any(|field| object.contains_key(*field))
+    {
+        return Err(aida_cli_lib::stakeholder_refusal_message(
+            "requester",
+            "setting parent, feature, or owner during intake",
+        ));
+    }
+    let queues_intake = object.get("queue").and_then(Value::as_bool) == Some(true)
+        || object.get("batch").is_some_and(|value| !value.is_null())
+        || object.get("for").is_some_and(|value| !value.is_null());
+    if queues_intake {
+        return Err(aida_cli_lib::stakeholder_refusal_message(
+            "requester",
+            "queueing intake",
+        ));
+    }
+    let type_name = match object.get("type") {
+        Some(Value::String(type_name)) => type_name.clone(),
+        Some(_) => return Err("type must be a string".to_string()),
+        None => "change-request".to_string(),
+    };
+    if !aida_cli_lib::requester_intake_type_allowed(&type_name) {
+        return Err(aida_cli_lib::stakeholder_refusal_message(
+            "requester",
+            "adding anything except change-request, bug, or user specs",
+        ));
+    }
+    object.insert("type".to_string(), json!(type_name));
+    object.insert("status".to_string(), json!("draft"));
+    let tags = object.entry("tags").or_insert_with(|| json!([]));
+    let Some(tags) = tags.as_array_mut() else {
+        return Err("tags must be an array".to_string());
+    };
+    if !tags.iter().any(|tag| {
+        tag.as_str()
+            .is_some_and(|tag| tag.eq_ignore_ascii_case("intake:requester"))
+    }) {
+        tags.push(json!("intake:requester"));
+    }
+    Ok(())
+}
+
+/// Capability tier governing which MCP tools are exposed. Ordered low→high;
+/// each tier admits every tool of the tiers below it. trace:STORY-474 | ai:claude
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+pub enum McpProfile {
+    /// Pure reads only — the conservative safe default for untrusted clients.
+    ReadOnly,
+    /// Reads + coordination-substrate writes (no spec create/edit).
+    Coordination,
+    /// Coordination + spec-graph writes (add/update requirement).
+    Operator,
+    /// Everything (reserved tier for future privileged-only tools).
+    Admin,
+    /// Everything — the built-in backwards-compatible default.
+    Full,
+}
+
+impl McpProfile {
+    /// Parse a profile token. Accepts hyphen / underscore / space spellings and
+    /// is case-insensitive. `admin` and `full` both expose every tool today.
+    /// Returns `None` for an unknown token so callers can fall back + warn.
+    pub fn from_token(s: &str) -> Option<Self> {
+        match s
+            .trim()
+            .to_ascii_lowercase()
+            .replace(['_', ' '], "-")
+            .as_str()
+        {
+            "read-only" | "readonly" | "ro" => Some(Self::ReadOnly),
+            "coordination" | "coord" => Some(Self::Coordination),
+            "operator" | "op" => Some(Self::Operator),
+            "admin" => Some(Self::Admin),
+            "full" | "all" => Some(Self::Full),
+            _ => None,
+        }
+    }
+
+    /// The canonical lowercase token for this profile.
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::ReadOnly => "read-only",
+            Self::Coordination => "coordination",
+            Self::Operator => "operator",
+            Self::Admin => "admin",
+            Self::Full => "full",
+        }
+    }
+}
+
+impl Default for McpProfile {
+    /// Backwards-compatible default: existing installs see the full surface.
+    /// Untrusted / marketplace installs should opt into `read-only` explicitly.
+    fn default() -> Self {
+        Self::Full
+    }
+}
+
+/// The minimum profile tier at which a given tool (by name) becomes available.
+/// This is the single source of truth for the profile→toolset mapping, kept as
+/// a pure fn so the selection logic is unit-testable without a server.
+///
+/// Unknown tool names map to `Admin` (the most restrictive non-`full` tier) so a
+/// newly-added tool is never accidentally exposed to a `read-only` client before
+/// it has been deliberately classified here. trace:STORY-474 | ai:claude
+pub fn tool_min_profile(tool_name: &str) -> McpProfile {
+    match tool_name {
+        // ---- Pure reads (read-only tier) ----
+        "list_requirements"
+        | "show_requirement"
+        | "search_requirements"
+        | "query_graph"
+        | "list_features"
+        | "history"
+        | "read_inbox"
+        | "list_punts"
+        | "read_punt"
+        | "list_findings"
+        | "list_active_leases"
+        | "list_directives"
+        | "list_briefs"
+        | "read_brief"
+        // STORY-532 (EPIC-27): pure-read queue tools (peek / list / resolve).
+        // queue_work over MCP is a metadata-only peek (it never launches a
+        // session — that is a CLI-only act), so it lives in the read tier.
+        // trace:EPIC-27
+        | "queue_list"
+        | "queue_next"
+        | "queue_progress"
+        | "queue_work"
+        // STORY-533 (EPIC-27): session tools are all read tier. The three
+        // inspectors (leases / status / manifest) are pure reads of
+        // `.aida/sessions/*`; session_start / session_end are metadata-only
+        // PEEKS (the launch / worktree-removal act is a subprocess-driven
+        // CLI-only act), so they never mutate substrate. trace:EPIC-27
+        | "session_leases"
+        | "session_status"
+        | "session_manifest"
+        | "session_start"
+        | "session_end"
+        // STORY-534 (EPIC-27): role tools are all read tier. role_list /
+        // role_show are pure reads of `.aida/roles/*` (+ ~/.aida/roles);
+        // role_enter / role_end are metadata-only PEEKS (entering/ending a
+        // role mutates the *shell's* env, a CLI-only act), so they never
+        // mutate substrate. trace:EPIC-27
+        | "role_list"
+        | "role_show"
+        | "role_enter"
+        | "role_end"
+        // STORY-536 (EPIC-27): workflow tools are all read tier. The library
+        // mirrors (cache_status / plan_verify / plan_helpers /
+        // ultraplan_assemble / goal_derive / status_unified / usage_query)
+        // are pure reads — they compute reports / prompts / conditions without
+        // mutating substrate. db_sync / fetch / pull are metadata-only PEEKS
+        // (they return the `aida …` command; the git network + working-tree /
+        // store mutation is a subprocess-driven CLI-only act), so they never
+        // mutate substrate either. trace:EPIC-27
+        | "cache_status"
+        | "plan_verify"
+        | "plan_helpers"
+        | "ultraplan_assemble"
+        | "goal_derive"
+        | "status_unified"
+        | "usage_query"
+        | "db_sync"
+        | "fetch"
+        | "pull"
+        // TASK-715: `schema` is a pure read of the (reflection-derived)
+        // storable-substrate shape — no store access, no mutation. trace:TASK-715
+        | "schema" => McpProfile::ReadOnly,
+
+        // ---- Coordination-substrate writes (coordination tier) ----
+        "add_comment" | "add_relationship" | "send_message" | "post_punt" | "resolve_punt"
+        | "escalate_punt" | "file_finding" | "triage_finding" | "claim_task" | "release_task"
+        | "post_directive" | "ack_directive" | "ack_brief"
+        // STORY-532 (EPIC-27): queue housekeeping (reorder / drop) mutates only
+        // the queue, not spec status — coordination tier. trace:EPIC-27
+        | "queue_move" | "queue_remove" => McpProfile::Coordination,
+
+        // ---- Spec-graph writes (operator tier) ----
+        // STORY-532 (EPIC-27): queue_add commits a spec to the execution
+        // pipeline (advisor-authority act) and queue_done / queue_rework flip
+        // spec status — all operator tier. trace:EPIC-27
+        "add_requirement" | "update_requirement" | "queue_add" | "queue_done"
+        | "queue_rework" => McpProfile::Operator,
+
+        // Unknown / not-yet-classified tools: gate at the most restrictive
+        // non-full tier so they never leak into a conservative profile.
+        _ => McpProfile::Admin,
+    }
+}
+
+/// True when `tool_name` is exposed under `profile`. trace:STORY-474 | ai:claude
+pub fn tool_in_profile(tool_name: &str, profile: McpProfile) -> bool {
+    profile >= tool_min_profile(tool_name)
+}
+
+/// True when `tool_name` is a tool AIDA actually serves (appears in
+/// `tool_descriptors()`). Used to distinguish "above your profile" from "no such
+/// tool" at call time. trace:STORY-474 | ai:claude
+pub fn is_known_tool(tool_name: &str) -> bool {
+    tool_descriptors()
+        .as_array()
+        .map(|arr| {
+            arr.iter()
+                .any(|t| t.get("name").and_then(|v| v.as_str()) == Some(tool_name))
+        })
+        .unwrap_or(false)
+}
+
+/// The set of tool names (in `tool_descriptors()` order) exposed under
+/// `profile`. Pure fn over the descriptor list — the unit-tested core of the
+/// profile→toolset selection. trace:STORY-474 | ai:claude
+// why: unit-tested pure core of profile→toolset selection; the production path filters descriptors inline, so the named helper is test-only today.
+#[allow(dead_code)]
+pub fn tool_names_for_profile(profile: McpProfile) -> Vec<String> {
+    tool_descriptors()
+        .as_array()
+        .map(|arr| {
+            arr.iter()
+                .filter_map(|t| t.get("name").and_then(|v| v.as_str()))
+                .filter(|n| tool_in_profile(n, profile))
+                .map(|n| n.to_string())
+                .collect()
+        })
+        .unwrap_or_default()
+}
+
+/// `tool_descriptors()` filtered to `profile`, with a `"profile"` metadata field
+/// added to each descriptor naming its minimum tier so schema-driven clients can
+/// see why a tool is (or isn't) present. trace:STORY-474 | ai:claude
+pub fn tool_descriptors_for_profile(profile: McpProfile) -> Value {
+    let arr = tool_descriptors()
+        .as_array()
+        .map(|a| a.to_vec())
+        .unwrap_or_default();
+    let filtered: Vec<Value> = arr
+        .into_iter()
+        .filter_map(|mut t| {
+            let name = t.get("name").and_then(|v| v.as_str())?.to_string();
+            if !tool_in_profile(&name, profile) {
+                return None;
+            }
+            if let Some(obj) = t.as_object_mut() {
+                obj.insert(
+                    "profile".to_string(),
+                    json!(tool_min_profile(&name).as_str()),
+                );
+            }
+            Some(t)
+        })
+        .collect();
+    json!(filtered)
+}
+
+/// Resolve the active MCP profile from (in order) an explicit override, the
+/// `AIDA_MCP_PROFILE` env var, `[mcp] profile` in `.aida/config.toml`, then the
+/// built-in default. An unknown token at any layer is ignored (falls through to
+/// the next source) so a typo never silently opens a wider surface than
+/// intended — it just keeps the previous resolution. trace:STORY-474 | ai:claude
+pub fn resolve_mcp_profile(project_root: &Path, override_token: Option<&str>) -> McpProfile {
+    if let Some(p) = override_token.and_then(McpProfile::from_token) {
+        return p;
+    }
+    if let Ok(env) = std::env::var("AIDA_MCP_PROFILE") {
+        if let Some(p) = McpProfile::from_token(&env) {
+            return p;
+        }
+    }
+    if let Ok(body) = std::fs::read_to_string(project_root.join(".aida").join("config.toml")) {
+        if let Ok(value) = toml::from_str::<toml::Value>(&body) {
+            if let Some(p) = value
+                .get("mcp")
+                .and_then(|t| t.get("profile"))
+                .and_then(|v| v.as_str())
+                .and_then(McpProfile::from_token)
+            {
+                return p;
+            }
+        }
+    }
+    McpProfile::default()
+}
+
+// trace:TASK-1526 | ai:codex
+fn cache_labelled_tool_result(
+    content: String,
+    scope: &aida_core::db::cache_refresh::CacheReadScope,
+) -> Value {
+    let content_array = json!([{ "type": "text", "text": content }]);
+    cache_labelled_result(
+        json!({ "content": content_array, "structuredContent": { "content": content_array } }),
+        scope,
+    )
+}
+
+// trace:TASK-1526 | ai:codex
+fn cache_labelled_result(
+    mut result: Value,
+    scope: &aida_core::db::cache_refresh::CacheReadScope,
+) -> Value {
+    if scope.touched() {
+        let note = scope
+            .stale()
+            .map(|s| s.note())
+            .unwrap_or_else(|| "note: cached results are current.".to_string());
+        result["content"]
+            .as_array_mut()
+            .unwrap()
+            .push(json!({"type": "text", "text": note}));
+        result["structuredContent"] =
+            json!({"content": result["content"], "cache": scope.metadata()});
+    }
+    result
+}
+
+// Keep the transport import path while the descriptors live below it.
+// trace:TASK-3429 | ai:codex
+pub use crate::mcp_schema::tool_descriptors;
+
+// ============================================================================
+// Entry point
+// ============================================================================
+
+/// Run the MCP server, reading JSON-RPC from stdin and writing to stdout.
+///
+/// `project_root` is the AIDA project root (parent of `.aida/`). The
+/// coordination tools (STORY-361) resolve their file paths under this root.
+pub fn run_mcp_server(storage: &Storage, project_root: PathBuf) -> Result<()> {
+    // STORY-1662 (signoff C2): a `claude --bg` lane spawns this server with
+    // the daemon's environment; take the lane's identity from its lease
+    // before any grant-gated tool reads the env. trace:STORY-1662 | ai:claude
+    if let Ok(cwd) = std::env::current_dir() {
+        aida_cli_lib::lane_env::apply_in_process(&project_root, &cwd);
+    }
+    // Friendly node labels resolve in every tool's spec-ID arguments.
+    // Each tools/call reloads the map too (a label set or renamed after
+    // startup applies without a respawn).
+    // trace:STORY-B6B1278890774EF993D2EBC327862470-078 | ai:claude
+    install_node_aliases(storage, &project_root);
+    let server = McpServer::new(storage, project_root);
+    let respawn = McpRespawnState::new();
+    let stdin = io::stdin();
+    let stdout = io::stdout();
+    let mut stdout = stdout.lock();
+
+    // trace:STORY-474 | ai:claude — surface the active profile on the stderr
+    // banner so an operator can confirm an untrusted client got the safe surface.
+    eprintln!(
+        "AIDA MCP server started (profile: {}, role: {})",
+        server.profile.as_str(),
+        mcp_server_role_label()
+    );
+
+    for line in stdin.lock().lines() {
+        let line = line?;
+        let line = line.trim();
+        if line.is_empty() {
+            continue;
+        }
+
+        let request: JsonRpcRequest = match serde_json::from_str(line) {
+            Ok(req) => req,
+            Err(e) => {
+                let error_response =
+                    JsonRpcResponse::error(Value::Null, -32700, format!("Parse error: {}", e));
+                let json = serde_json::to_string(&error_response)?;
+                writeln!(stdout, "{}", json)?;
+                stdout.flush()?;
+                if let Some(plan) = respawn.check() {
+                    respawn.respawn(plan)?;
+                }
+                continue;
+            }
+        };
+
+        if request.jsonrpc != "2.0" {
+            let error_response = JsonRpcResponse::error(
+                request.id.unwrap_or(Value::Null),
+                -32600,
+                "Invalid Request: jsonrpc must be \"2.0\"".to_string(),
+            );
+            let json = serde_json::to_string(&error_response)?;
+            writeln!(stdout, "{}", json)?;
+            stdout.flush()?;
+            if let Some(plan) = respawn.check() {
+                respawn.respawn(plan)?;
+            }
+            continue;
+        }
+
+        if let Some(response) = server.handle_request(&request) {
+            deliver(&mut stdout, response)?;
+            if let Some(plan) = respawn.check() {
+                respawn.respawn(plan)?;
+            }
+        }
+    }
+
+    eprintln!("AIDA MCP server stopped");
+    Ok(())
+}
+
+/// The gated profile uses the same JSON-RPC wire types but never constructs a
+/// backend, registers/touches an agent, applies lane environment, prepares ACKs,
+/// or starts a respawn worker. Unsupported tools cannot reach ordinary dispatch.
+// trace:TASK-3223 | ai:codex
+pub fn run_mediated_mcp_server(
+    client: &aida_cli_lib::store_mutation_client::Client,
+    env: &aida_core::exec_context::Environment,
+    store: &Path,
+) -> Result<()> {
+    use anyhow::Context;
+    let configured = match env.var("AIDA_MCP_PROFILE") {
+        Ok(value) => Some(value.to_owned()),
+        Err(aida_core::exec_context::EnvLookupError::NonUnicode) => {
+            anyhow::bail!("invalid MCP profile")
+        }
+        Err(_) => {
+            let path = store
+                .parent()
+                .context("invalid store root")?
+                .join(".aida/config.toml");
+            match std::fs::read_to_string(path) {
+                Ok(text) => {
+                    let config = toml::from_str::<toml::Value>(&text)?;
+                    config
+                        .get("mcp")
+                        .and_then(|m| m.get("profile"))
+                        .map(|profile| {
+                            profile
+                                .as_str()
+                                .map(str::to_owned)
+                                .context("invalid MCP profile")
+                        })
+                        .transpose()?
+                }
+                Err(e) if e.kind() == io::ErrorKind::NotFound => None,
+                Err(e) => return Err(e.into()),
+            }
+        }
+    };
+    // Unknown explicit profiles fail closed rather than silently widening.
+    let profile = match configured.as_deref() {
+        Some(value) => McpProfile::from_token(value).context("invalid MCP profile")?,
+        None => McpProfile::Full,
+    };
+    let role = aida_cli_lib::store_mutation_client::session_role(env)?;
+    let stdin = io::stdin();
+    let mut input = stdin.lock();
+    let stdout = io::stdout();
+    let mut output = stdout.lock();
+    mediated_mcp_stream(
+        client,
+        store,
+        profile,
+        role.as_deref(),
+        &mut input,
+        &mut output,
+    )
+}
+
+// trace:TASK-3223 | ai:codex
+fn mediated_mcp_stream(
+    client: &aida_cli_lib::store_mutation_client::Client,
+    store: &Path,
+    profile: McpProfile,
+    role: Option<&str>,
+    input: &mut impl io::BufRead,
+    output: &mut impl io::Write,
+) -> Result<()> {
+    use std::io::Read;
+    loop {
+        let mut line = Vec::new();
+        let n = (&mut *input).take(65537).read_until(b'\n', &mut line)?;
+        if n == 0 {
+            return Ok(());
+        }
+        if n > 65536 {
+            // Drain without growing the request buffer. The limit may have
+            // consumed the newline already; never discard the next request.
+            if line.last() != Some(&b'\n') {
+                loop {
+                    let available = input.fill_buf()?;
+                    if available.is_empty() {
+                        break;
+                    }
+                    let newline = available.iter().position(|byte| *byte == b'\n');
+                    let consumed = newline.map_or(available.len(), |index| index + 1);
+                    input.consume(consumed);
+                    if newline.is_some() {
+                        break;
+                    }
+                }
+            }
+            deliver(
+                output,
+                JsonRpcResponse::error(
+                    Value::Null,
+                    -32600,
+                    "Oversized mediated MCP request".into(),
+                ),
+            )?;
+            continue;
+        }
+        if line.iter().all(u8::is_ascii_whitespace) {
+            continue;
+        }
+        let response = match serde_json::from_slice::<JsonRpcRequest>(&line) {
+            Ok(request) => mediated_mcp_response(client, store, profile, role, &request),
+            Err(_) => Some(JsonRpcResponse::error(
+                Value::Null,
+                -32700,
+                "Parse error".into(),
+            )),
+        };
+        if let Some(response) = response {
+            deliver(output, response)?;
+        }
+    }
+}
+
+// Match exact closed wire tokens through anyhow context, never message substrings.
+// Preserve request UUID/recovery guidance in the message, with a distinct
+// non-recoverable code for uncertain delivery or persistence.
+// trace:TASK-3223 | ai:codex
+fn mediated_mcp_error(tool: &str, error: &anyhow::Error) -> McpError {
+    let code = error
+        .chain()
+        .find_map(|cause| match cause.to_string().as_str() {
+            "Unauthorized" | "Expired" | "Revoked" => Some(McpErrorCode::PermissionDenied),
+            "InvalidRequest" | "UnsupportedVersion" | "UnsupportedOperation" => {
+                Some(McpErrorCode::InvalidArg)
+            }
+            "Conflict" | "Busy" => Some(McpErrorCode::Conflict),
+            "Unavailable" => Some(McpErrorCode::IoError),
+            "OutcomeUnknown" => Some(McpErrorCode::OutcomeUnknown),
+            _ => None,
+        });
+    let message = format!("{error:#}");
+    match code {
+        Some(code) => McpError::new(tool, code, message),
+        None => McpError::classify(tool, &message),
+    }
+}
+
+// trace:TASK-3223 | ai:codex
+fn mediated_mcp_response(
+    client: &aida_cli_lib::store_mutation_client::Client,
+    store: &Path,
+    profile: McpProfile,
+    role: Option<&str>,
+    request: &JsonRpcRequest,
+) -> Option<JsonRpcResponse> {
+    if request.id.is_none() {
+        return None;
+    }
+    let id = request.id.clone().unwrap();
+    if request.jsonrpc != "2.0" {
+        return Some(JsonRpcResponse::error(id, -32600, "Invalid Request".into()));
+    }
+    let allowed = |name: &str| {
+        matches!(name, "add_comment" | "update_requirement")
+            && tool_in_profile(name, profile)
+            && role.is_none_or(|role| stakeholder_tool_allowed(role, name))
+    };
+    Some(match request.method.as_str() {
+        "initialize" => JsonRpcResponse::success(
+            id,
+            json!({
+                "protocolVersion":"2024-11-05", "capabilities":{"tools":{}},
+                "serverInfo":{"name":"aida","version":env!("CARGO_PKG_VERSION")}
+            }),
+        ),
+        "ping" => JsonRpcResponse::success(id, json!({})),
+        "tools/list" => {
+            let mut tools = tool_descriptors_for_profile(profile);
+            tools
+                .as_array_mut()
+                .unwrap()
+                .retain(|t| t["name"].as_str().is_some_and(allowed));
+            for tool in tools.as_array_mut().unwrap() {
+                let fields: &[&str] = if tool["name"] == "add_comment" {
+                    &["id", "text"]
+                } else {
+                    // trace:TASK-3223 | ai:codex
+                    tool["description"] = json!(
+                        "Update an owned requirement's title, description, priority or weight through the mediated store service. At least one edit field is required."
+                    );
+                    &["id", "title", "description", "priority", "weight"]
+                };
+                tool["inputSchema"]["properties"]
+                    .as_object_mut()
+                    .unwrap()
+                    .retain(|key, _| fields.contains(&key.as_str()));
+                tool["inputSchema"]["additionalProperties"] = json!(false);
+            }
+            JsonRpcResponse::success(id, json!({"tools":tools}))
+        }
+        "resources/list" => JsonRpcResponse::success(id, json!({"resources":[]})),
+        "resources/templates/list" => JsonRpcResponse::success(id, json!({"resourceTemplates":[]})),
+        "tools/call" => {
+            let name = request.params["name"].as_str().unwrap_or("");
+            let result = if allowed(name) {
+                client.mcp(store, name, &request.params["arguments"])
+            } else {
+                Err(anyhow::anyhow!("UnsupportedOperation"))
+            };
+            let result = match result {
+                Ok(value) => {
+                    // Mirror the advertised text envelope after the mutation
+                    // commits, so schema-validating clients can accept success.
+                    // trace:TASK-3223 | ai:codex
+                    let content = json!([{"type":"text","text":value.to_string()}]);
+                    json!({"content":content,"structuredContent":{"content":content}})
+                }
+                Err(error) => mediated_mcp_error(name, &error).to_result_value(),
+            };
+            JsonRpcResponse::success(id, result)
+        }
+        _ => JsonRpcResponse::error(id, -32601, "Method not found".into()),
+    })
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct BriefRef {
+    path: String,
+    agent: String,
+    spec_id: String,
+    generated_at: String,
+    status: String,
+    /// STORY-711 slice 2: the authorizing advisor's id, when the brief was
+    /// created with `--authorized-by`.
+    // trace:TASK-1140 | ai:claude
+    authorized_by: Option<String>,
+}
+
+fn brief_root(project_root: &Path) -> PathBuf {
+    project_root.join(".aida").join("agent-briefs")
+}
+
+fn required_string<'a>(args: &'a Value, key: &str) -> Result<&'a str, String> {
+    args.get(key)
+        .and_then(|v| v.as_str())
+        .ok_or_else(|| format!("Missing required parameter: {}", key))
+}
+
+fn optional_string<'a>(args: &'a Value, key: &str) -> Result<Option<&'a str>, String> {
+    match args.get(key) {
+        None => Ok(None),
+        Some(v) => v
+            .as_str()
+            .map(Some)
+            .ok_or_else(|| format!("Parameter `{}` must be a string", key)),
+    }
+}
+
+fn validate_brief_agent(agent: &str) -> Result<(), String> {
+    if agent.trim().is_empty() {
+        return Err("agent name cannot be empty".to_string());
+    }
+    if !agent
+        .chars()
+        .all(|c| c.is_ascii_alphanumeric() || matches!(c, '-' | '_' | '.'))
+    {
+        return Err(
+            "agent name must contain only ASCII letters, digits, '.', '_' or '-'".to_string(),
+        );
+    }
+    Ok(())
+}
+
+fn collect_brief_refs(
+    project_root: &Path,
+    for_agent: Option<&str>,
+    include_acked: bool,
+) -> Result<Vec<BriefRef>, String> {
+    let root = brief_root(project_root);
+    if !root.exists() {
+        return Ok(Vec::new());
+    }
+    let mut entries = Vec::new();
+    for agent_dir in
+        std::fs::read_dir(&root).map_err(|e| format!("reading {}: {}", root.display(), e))?
+    {
+        let agent_dir = agent_dir.map_err(|e| e.to_string())?;
+        let file_type = agent_dir.file_type().map_err(|e| e.to_string())?;
+        if !file_type.is_dir() {
+            continue;
+        }
+        let agent = agent_dir.file_name().to_string_lossy().to_string();
+        if for_agent.is_some_and(|want| want != agent) {
+            continue;
+        }
+        for file in std::fs::read_dir(agent_dir.path()).map_err(|e| e.to_string())? {
+            let file = file.map_err(|e| e.to_string())?;
+            if !file.file_type().map_err(|e| e.to_string())?.is_file() {
+                continue;
+            }
+            let path = file.path();
+            let name = file.file_name().to_string_lossy().to_string();
+            let suffix_acked = name.ends_with(".acked");
+            if !(name.ends_with(".md") || suffix_acked) {
+                continue;
+            }
+            let content = std::fs::read_to_string(&path).unwrap_or_default();
+            let fm_status = frontmatter_value(&content, "status");
+            let status = if suffix_acked || fm_status.as_deref() == Some("acked") {
+                "acked"
+            } else {
+                "pending"
+            };
+            if status == "acked" && !include_acked {
+                continue;
+            }
+            let spec_id = frontmatter_value(&content, "spec_id")
+                .unwrap_or_else(|| spec_id_from_brief_filename(&name).unwrap_or_default());
+            let generated_at = frontmatter_value(&content, "generated_at")
+                .unwrap_or_else(|| timestamp_from_brief_filename(&name).unwrap_or_default());
+            // trace:TASK-1140 | ai:claude
+            let authorized_by = frontmatter_value(&content, "authorized_by");
+            entries.push(BriefRef {
+                path: brief_display_path(project_root, &path),
+                agent: agent.clone(),
+                spec_id,
+                generated_at,
+                status: status.to_string(),
+                authorized_by,
+            });
+        }
+    }
+    entries.sort_by(|a, b| {
+        a.agent
+            .cmp(&b.agent)
+            .then(a.generated_at.cmp(&b.generated_at))
+            .then(a.path.cmp(&b.path))
+    });
+    Ok(entries)
+}
+
+fn frontmatter_value(content: &str, key: &str) -> Option<String> {
+    let mut lines = content.lines();
+    if lines.next()? != "---" {
+        return None;
+    }
+    let prefix = format!("{key}:");
+    for line in lines {
+        if line == "---" {
+            return None;
+        }
+        if let Some(raw) = line.strip_prefix(&prefix) {
+            return Some(raw.trim().trim_matches('\'').to_string());
+        }
+    }
+    None
+}
+
+fn spec_id_from_brief_filename(name: &str) -> Option<String> {
+    let name = name.strip_suffix(".acked").unwrap_or(name);
+    let name = name.strip_suffix(".md").unwrap_or(name);
+    let (spec, _) = name.split_once("-20")?;
+    Some(spec.to_string())
+}
+
+fn timestamp_from_brief_filename(name: &str) -> Option<String> {
+    let name = name.strip_suffix(".acked").unwrap_or(name);
+    let name = name.strip_suffix(".md").unwrap_or(name);
+    let (_, rest) = name.split_once("-20")?;
+    Some(format!("20{rest}"))
+}
+
+fn resolve_brief_path(project_root: &Path, raw_path: &str) -> Result<PathBuf, String> {
+    let raw = Path::new(raw_path);
+    if raw
+        .components()
+        .any(|c| matches!(c, std::path::Component::ParentDir))
+    {
+        return Err("brief path must not contain `..`".to_string());
+    }
+    let root = brief_root(project_root);
+    if !raw.is_absolute() {
+        let mut components = raw.components();
+        let expected = [".aida", "agent-briefs"];
+        for want in expected {
+            match components.next() {
+                Some(std::path::Component::Normal(got)) if got == want => {}
+                _ => {
+                    return Err(format!(
+                        "brief path must be under {}",
+                        brief_path_for_message(&root)
+                    ));
+                }
+            }
+        }
+        return Ok(project_root.join(raw));
+    }
+
+    let path = raw.to_path_buf();
+    // BUG-358: Windows CI can report temp roots through short-name aliases
+    // (`RUNNER~1`) while callers pass normal absolute paths. Canonicalize the
+    // comparable side instead of relying on lexical `Path::starts_with`.
+    let canonical_root = std::fs::canonicalize(&root).unwrap_or(root);
+    let canonical_path = if path.exists() {
+        std::fs::canonicalize(&path).unwrap_or(path.clone())
+    } else if let (Some(parent), Some(file_name)) = (path.parent(), path.file_name()) {
+        std::fs::canonicalize(parent)
+            .map(|parent| parent.join(file_name))
+            .unwrap_or_else(|_| path.clone())
+    } else {
+        path.clone()
+    };
+    if !canonical_path.starts_with(&canonical_root) {
+        return Err(format!(
+            "brief path must be under {}",
+            brief_path_for_message(&canonical_root)
+        ));
+    }
+    Ok(path)
+}
+
+fn brief_path_for_message(path: &Path) -> String {
+    path.to_string_lossy().replace('\\', "/")
+}
+
+fn brief_display_path(project_root: &Path, path: &Path) -> String {
+    path.strip_prefix(project_root)
+        .unwrap_or(path)
+        .to_string_lossy()
+        .replace('\\', "/")
+}
+
+// Touch the imports re-exported above to silence dead_code on builds where
+// the punt module's helpers happen to be unused (defensive against future
+// refactors). All five items are used in tool implementations.
+#[allow(dead_code)]
+fn _force_use() {
+    let _ = punt::SIGNAL_FILE_ENV;
+    let _ = ledger_path as fn(&Path) -> PathBuf;
+}
+
+// ============================================================================
+// Tests — STORY-361
+// ============================================================================
+
+/// One mailbox message as `read_inbox` JSON (STORY-493).
+// trace:STORY-493 | ai:claude
+fn mcp_mail_entry(m: &aida_core::mailbox::Message) -> Value {
+    use aida_core::mailbox::Recipient;
+    let to = match &m.to {
+        Recipient::Agent(a) => a.clone(),
+        Recipient::Broadcast => "all".to_string(),
+    };
+    let mut entry = json!({
+        "id": m.id,
+        "thread_id": m.thread_id,
+        "from": m.from,
+        // trace:BUG-1533 | ai:claude — which precedence tier
+        // resolved `from` at send time, so a reader can tell a
+        // real seat apart from the ambiguous shell-user/legacy
+        // fallback without inferring it from body prose.
+        "from_source": m.from_source.as_str(),
+        "from_attributed": m.from_source.is_attributed(),
+        "to": to,
+        "timestamp": m.timestamp,
+        "in_reply_to": m.in_reply_to,
+        "body": m.body,
+        "urgent": m.urgent,
+        "intent": m.intent.as_str(),
+    });
+    // trace:BUG-1461 | ai:claude — mirror the CLI: an explicit
+    // subject is present, an unset one is omitted (not null).
+    if let Some(subject) = &m.subject {
+        entry["subject"] = json!(subject);
+    }
+    // trace:BUG-1592 | ai:claude — mirror `from_source`: the
+    // sender's role when it was known at send time, omitted (not
+    // null) when it wasn't.
+    if let Some(from_role) = &m.from_role {
+        entry["from_role"] = json!(from_role);
+    }
+    // trace:BUG-1534 | ai:claude — the relayed claim's original seat.
+    if let Some(orig) = &m.relayed_from {
+        entry["relayed_from"] = json!(orig);
+    }
+    entry
+}
+
+// trace:TASK-3429 | ai:codex
+#[cfg(test)]
+mod extracted_transport_tests {
+    use super::*;
+
+    #[test]
+    fn tools_list_uses_shared_descriptors_in_shipping_crate() {
+        // tools/list is read-only and does not need an initialized store.
+        let storage = Storage::new(Path::new("/unused-mcp-tools-list"));
+        let server = McpServer::with_profile(&storage, PathBuf::new(), McpProfile::Full);
+        let request = serde_json::from_value(json!({
+            "jsonrpc": "2.0", "id": 17, "method": "tools/list"
+        }))
+        .unwrap();
+        let response = serde_json::to_value(server.handle_request(&request).unwrap()).unwrap();
+        assert_eq!(response["id"], 17);
+        let mut tools = response["result"]["tools"].clone();
+        for tool in tools.as_array_mut().unwrap() {
+            assert!(tool["profile"].is_string());
+            tool.as_object_mut().unwrap().remove("profile");
+        }
+        assert_eq!(tools, tool_descriptors());
+        assert!(response.get("error").is_none());
+    }
+}

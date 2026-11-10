@@ -1783,16 +1783,14 @@ pub(crate) struct UsageArgs {
 
 fn run_usage(
     matches: &clap::ArgMatches,
-    ctx: &crate::command_registry::DispatchCtx,
-) -> anyhow::Result<crate::command_registry::Flow> {
+    ctx: &crate::cmdkit::DispatchCtx,
+) -> anyhow::Result<crate::cmdkit::Flow> {
     use crate::*;
     let args = <UsageArgs as clap::FromArgMatches>::from_arg_matches(matches)?;
     match &ctx.store {
-        None => Ok(crate::command_registry::Flow::Continue),
-        Some(crate::command_registry::StoreCtx::Distributed { .. }) => {
-            Ok(crate::command_registry::Flow::Continue)
-        }
-        Some(crate::command_registry::StoreCtx::Git {
+        None => Ok(crate::cmdkit::Flow::Continue),
+        Some(crate::cmdkit::StoreCtx::Distributed { .. }) => Ok(crate::cmdkit::Flow::Continue),
+        Some(crate::cmdkit::StoreCtx::Git {
             store_path,
             backend,
         }) => {
@@ -1817,7 +1815,7 @@ fn run_usage(
                                 let root = project.clone().unwrap_or_else(|| {
                                     store_path.parent().unwrap_or(store_path).to_path_buf()
                                 });
-                                return crate::command_registry::returned(token_ledger::rebuild(
+                                return crate::cmdkit::returned(token_ledger::rebuild(
                                     &root,
                                     *json || output_format_is_json(),
                                 ));
@@ -1835,18 +1833,16 @@ fn run_usage(
                                         backend.get_requirement_by_spec_id(spec)?.ok_or_else(
                                             || anyhow::anyhow!("requirement not found: {spec}"),
                                         )?;
-                                    return crate::command_registry::returned(
-                                        crate::write_provenance::show(
-                                            store_path.parent().unwrap_or(store_path),
-                                            &req,
-                                            *json || output_format_is_json(),
-                                            *toon,
-                                        ),
-                                    );
+                                    return crate::cmdkit::returned(crate::write_provenance::show(
+                                        store_path.parent().unwrap_or(store_path),
+                                        &req,
+                                        *json || output_format_is_json(),
+                                        *toon,
+                                    ));
                                 }
 
                                 let root = store_path.parent().unwrap_or(store_path);
-                                return crate::command_registry::returned(token_ledger::show(
+                                return crate::cmdkit::returned(token_ledger::show(
                                     root,
                                     spec,
                                     group_by,
@@ -1877,7 +1873,7 @@ fn run_usage(
                     } else {
                         None
                     };
-                    return crate::command_registry::returned(self::handle_usage_command(
+                    return crate::cmdkit::returned(self::handle_usage_command(
                         since,
                         unused,
                         errors,
@@ -1898,9 +1894,9 @@ fn run_usage(
                     ));
                 }
             }
-            Ok(crate::command_registry::Flow::Continue)
+            Ok(crate::cmdkit::Flow::Continue)
         }
-        Some(crate::command_registry::StoreCtx::Legacy {
+        Some(crate::cmdkit::StoreCtx::Legacy {
             storage,
             requirements_path,
         }) => {
@@ -1922,7 +1918,7 @@ fn run_usage(
                             UsageCommand::Rebuild { project, json } => {
                                 let root = project.clone().unwrap_or(find_project_root()?);
                                 token_ledger::rebuild(&root, *json || output_format_is_json())?;
-                                return crate::command_registry::returned(Ok(()));
+                                return crate::cmdkit::returned(Ok(()));
                             }
                             UsageCommand::Show {
                                 spec,
@@ -1937,14 +1933,12 @@ fn run_usage(
                                     let req = store.get_requirement_by_spec_id(spec).ok_or_else(
                                         || anyhow::anyhow!("requirement not found: {spec}"),
                                     )?;
-                                    return crate::command_registry::returned(
-                                        crate::write_provenance::show(
-                                            &find_project_root()?,
-                                            req,
-                                            *json || output_format_is_json(),
-                                            *toon,
-                                        ),
-                                    );
+                                    return crate::cmdkit::returned(crate::write_provenance::show(
+                                        &find_project_root()?,
+                                        req,
+                                        *json || output_format_is_json(),
+                                        *toon,
+                                    ));
                                 }
 
                                 token_ledger::show(
@@ -1955,7 +1949,7 @@ fn run_usage(
                                     *json || output_format_is_json(),
                                     *toon,
                                 )?;
-                                return crate::command_registry::returned(Ok(()));
+                                return crate::cmdkit::returned(Ok(()));
                             }
                             _ => {}
                         }
@@ -2001,22 +1995,21 @@ fn run_usage(
                     )?;
                 }
             }
-            Ok(crate::command_registry::Flow::Continue)
+            Ok(crate::cmdkit::Flow::Continue)
         }
     }
 }
 
 // trace:STORY-1728 | ai:claude
-pub(crate) static USAGE: crate::command_registry::CommandReg =
-    crate::command_registry::CommandReg {
-        name: "usage",
-        help_after: "identity",
-        command: <UsageArgs as clap::CommandFactory>::command,
-        policy: |_| crate::command_registry::CmdPolicy {
-            stakeholder: crate::stakeholder_role::StakeholderAction::Read,
-            per_write_auto_push: false,
-            skip_role_restore_prompt: false,
-            team_identity_write: false,
-        },
-        run: crate::command_registry::Handler::Store(run_usage),
-    };
+pub(crate) static USAGE: crate::cmdkit::CommandReg = crate::cmdkit::CommandReg {
+    name: "usage",
+    help_after: "identity",
+    command: <UsageArgs as clap::CommandFactory>::command,
+    policy: |_| crate::cmdkit::CmdPolicy {
+        stakeholder: crate::stakeholder_role::StakeholderAction::Read,
+        per_write_auto_push: false,
+        skip_role_restore_prompt: false,
+        team_identity_write: false,
+    },
+    run: crate::cmdkit::Handler::Store(run_usage),
+};

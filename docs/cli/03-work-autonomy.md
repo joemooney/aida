@@ -231,6 +231,21 @@ The same recipe is embedded in every phase-failure comment, so the reader who de
 
 ### `aida lane`
 
+The host runs each lane's `make check-ci-fast` in the lane-job sandbox.
+A source failure gets one repair round; a timeout reports
+`fast_gate=skipped(timeout)` without consuming that round. A retry that times out
+retains an earlier `fast_gate=fail`. Gate jobs reuse the lane target seed and
+overlay. If host publication merges a concurrently advanced PR head after the
+gate, it reports `fast_gate=skipped(reconciled)` (or retains a known failure)
+for that published merge. A host process that
+exits or is killed releases its unqueued review hold on the next review-watch
+check. Pending receipts have a 24-hour backstop, including legacy receipts
+(measured from file modification time). Queued repairs hold review only while
+the exact queue entry and a workable spec remain live, within that backstop.
+An operator can settle a stuck receipt with
+`aida lane fast-gate-release <branch>` from the host checkout. This retains the
+gate verdict and grants no publication or merge authority.
+
 **A headless implementer runs its local tests through its launcher.** A
 headless tool call is capped at 60 seconds, and a process it detaches dies
 with the call, so the launcher runs a lane job runner for as long as it waits.
@@ -463,6 +478,18 @@ stale_after   = "2h"           # gap at/above this reads "stale"; "idle" between
 **Don't reach for it when** — the item is a *decision to make* (that's `questions`) rather than a *failure to triage*. Findings are about outcomes that went sideways; questions are about choices not yet made.
 
 **Counting defect classes.** `findings classes` answers "how often does this kind of defect recur?" from recorded review verdicts. A reviewer can tag each finding with a class from a small fixed vocabulary when recording a verdict (incomplete-fix, fail-open, absent-evidence-reads-as-good, untested-path, contract-drift, race, perf, portability, stale-base, scope-creep); this report counts them across every verdict, archived rounds included, each act of review once. Limit it to a recent window with `--since` (`30d`, `12h`, `2w`, `24 hours ago`, an ISO date at local midnight, or RFC3339) and get machine output with `--json`. Findings recorded before classes existed stay unclassified and are counted as such; free text is never classified after the fact, because a keyword match cannot tell an approval from a refusal. `aida review classes` prints the same report.
+
+To park a recurring finding until a machine-checkable trigger, use
+`aida findings recur <id> --until 'spec:<dependency-id>=completed' --note 'seen again'`.
+The recurrence counter still increments; the finding is deferred and the hourly
+`defer-resurface` job evaluates its trigger. Unknown observations retain the
+deferral. Free text is refused; `--until manual:<who>` requires a non-empty
+`--reason` and the same hold authority as `aida defer`. A reasoned hold is
+retained for human review even when its condition is met.
+Parking and incrementing recurrence are separate writes. If the recurrence
+write fails after parking succeeds, the error names the saved deferral and
+trigger. Inspect the recurrence count before retrying.
+<!-- trace:STORY-2402 | ai:codex -->
 
 **Gotchas.** A finding is the right home for a not-yet-confirmed pattern; promote it at recurrence (the counter survives in a `recurrence:N` tag).
 
