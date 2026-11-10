@@ -1402,11 +1402,6 @@ fn run_sandboxed_as(
                 .map_err(|e| failed(format!("{e:#}")))?
         }
     };
-    let mut cmd = std::process::Command::new("bwrap");
-    cmd.args(sandbox)
-        .arg(program)
-        .args(args)
-        .stdin(std::process::Stdio::null());
     let timeout = deadline
         .map(|end| {
             end.saturating_duration_since(std::time::Instant::now())
@@ -1416,7 +1411,15 @@ fn run_sandboxed_as(
     if timeout.is_zero() {
         return Err(failed("the clone scan deadline elapsed".into()));
     }
-    match crate::command_output_with_timeout_capped(cmd, timeout, cap) {
+    let output = retry_readonly_mount_race(commit_identity.is_none(), timeout, |remaining| {
+        let mut cmd = std::process::Command::new("bwrap");
+        cmd.args(&sandbox)
+            .arg(program)
+            .args(args)
+            .stdin(std::process::Stdio::null());
+        crate::command_output_with_timeout_capped(cmd, remaining, cap)
+    });
+    match output {
         crate::BoundedCommandOutput::Completed(mut out) if out.stdout.len() as u64 > cap => {
             out.stdout.truncate(cap as usize);
             Err(SandboxFailure::Truncated(out.stdout))
@@ -1434,6 +1437,43 @@ fn run_sandboxed_as(
             "the sandboxed {program} did not finish within {timeout:?}"
         ))),
     }
+}
+
+// Bubblewrap can race a disappearing systemd credentials mount while making
+// the root bind read-only. Retry setup only, with the original time budget;
+// commit runs and arbitrary command failures must never be replayed.
+// trace:STORY-2493 | ai:codex
+fn retry_readonly_mount_race(
+    readonly: bool,
+    timeout: std::time::Duration,
+    mut run: impl FnMut(std::time::Duration) -> crate::BoundedCommandOutput,
+) -> crate::BoundedCommandOutput {
+    let start = std::time::Instant::now();
+    for attempt in 0..3 {
+        let remaining = timeout.saturating_sub(start.elapsed());
+        if remaining.is_zero() {
+            return crate::BoundedCommandOutput::TimedOut;
+        }
+        let output = run(remaining);
+        let retry = match &output {
+            crate::BoundedCommandOutput::Completed(out) if readonly && out.stdout.is_empty() => {
+                // Bubblewrap exposes this pre-exec mount failure only through stderr.
+                // external-prose-classifier: seat_clone::retry_readonly_mount_race
+                let stderr = String::from_utf8_lossy(&out.stderr);
+                out.status.code() == Some(1)
+                    && stderr.starts_with("bwrap: Can't bind mount /oldroot/ on /newroot/:")
+                    && stderr.contains(
+                        "Unable to apply mount flags: remount \"/newroot/run/credentials/",
+                    )
+                    && stderr.trim_end().ends_with("No such file or directory")
+            }
+            _ => false,
+        };
+        if !retry || attempt == 2 {
+            return output;
+        }
+    }
+    unreachable!()
 }
 
 /// [`run_sandboxed`] for a probe: text, at most [`PROBE_OUTPUT_CAP`].
@@ -2731,6 +2771,78 @@ pub(crate) fn merged_pr_heads_with_timeout(
         .filter(|oid| is_full_oid(oid))
         .map(str::to_string)
         .collect()
+}
+
+#[cfg(test)]
+// trace:STORY-2493 | ai:codex
+mod mount_race_tests {
+    use super::*;
+    use crate::BoundedCommandOutput::{Completed, TimedOut};
+    use std::os::unix::process::ExitStatusExt;
+    use std::time::Duration;
+
+    const RACE: &str = "bwrap: Can't bind mount /oldroot/ on /newroot/: Unable to apply mount flags: remount \"/newroot/run/credentials/systemd-tmpfiles-clean.service\": No such file or directory\n";
+
+    fn output(code: i32, stdout: &[u8], stderr: &str) -> crate::BoundedCommandOutput {
+        Completed(std::process::Output {
+            status: std::process::ExitStatus::from_raw(code << 8),
+            stdout: stdout.to_vec(),
+            stderr: stderr.as_bytes().to_vec(),
+        })
+    }
+
+    #[test]
+    fn readonly_mount_race_retries_setup_with_shared_budget() {
+        let mut calls = 0;
+        let mut previous = Duration::from_secs(1);
+        let result = retry_readonly_mount_race(true, previous, |remaining| {
+            assert!(remaining <= previous);
+            previous = remaining;
+            calls += 1;
+            if calls == 1 {
+                output(1, b"", RACE)
+            } else {
+                output(0, b"probe facts", "")
+            }
+        });
+        assert_eq!(calls, 2);
+        assert!(
+            matches!(result, Completed(out) if out.status.success() && out.stdout == b"probe facts")
+        );
+    }
+
+    #[test]
+    fn readonly_mount_race_is_bounded_and_retains_failure() {
+        let mut calls = 0;
+        let result = retry_readonly_mount_race(true, Duration::from_secs(1), |_| {
+            calls += 1;
+            output(1, b"", RACE)
+        });
+        assert_eq!(calls, 3);
+        assert!(matches!(result, Completed(out) if out.stderr == RACE.as_bytes()));
+        let result = retry_readonly_mount_race(true, Duration::ZERO, |_| {
+            panic!("expired budget must not spawn")
+        });
+        assert!(matches!(result, TimedOut));
+    }
+
+    #[test]
+    fn mount_race_never_replays_commits_or_other_failures() {
+        for (readonly, code, stdout, stderr) in [
+            (false, 1, b"".as_slice(), RACE),
+            (true, 1, b"command ran".as_slice(), RACE),
+            (true, 2, b"".as_slice(), RACE),
+            (true, 1, b"".as_slice(), "bwrap: permission denied"),
+            (true, 1, b"".as_slice(), "git: command failed"),
+        ] {
+            let mut calls = 0;
+            let _ = retry_readonly_mount_race(readonly, Duration::from_secs(1), |_| {
+                calls += 1;
+                output(code, stdout, stderr)
+            });
+            assert_eq!(calls, 1, "{readonly}: {stderr}");
+        }
+    }
 }
 
 /// Inside the probe sandbox: a git bundle of every commit

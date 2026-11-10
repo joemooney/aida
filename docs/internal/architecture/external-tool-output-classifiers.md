@@ -41,6 +41,7 @@ numbers are emitted by the generator only as non-authoritative navigation aids.
 | `project_capabilities::gh_auth_status` |
 | `remote_create::gitlab_release_body_exists` |
 | `review_watch::update::update_refused_for_conflict` |
+| `seat_clone::retry_readonly_mount_race` |
 | `seat_occupancy::store::main_worktree_root_opt` |
 | `status_context::collect_pr_facts_uncached` |
 | `terminal_cmd::run_terminator_command` |
