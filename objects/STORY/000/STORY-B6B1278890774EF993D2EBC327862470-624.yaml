@@ -3,12 +3,12 @@ spec_id: STORY-b6b1278890774ef993d2ebc327862470-624
 agreed_id: STORY-2701
 title: 'aida init for GitLab: detect disabled CI/CD, offer to enable it with consent, scaffold a project pipeline, verify a runner'
 description: 'Reported from operator''s work machine (Codex, GitLab project hello-work-0x), 2026-11-09. ''aida init --gitlab'' creates the project but CI/CD stays disabled and no pipeline exists. The operator had to run glab api projects/N --method PUT --field builds_access_level=enabled and start a pipeline by hand. Improve init to: detect builds_access_level; offer to enable it with explicit consent; scaffold a minimal pipeline appropriate to the detected language (for example Python: install, test) with configurable runner tags; verify a runner is available; and report organizational restrictions plainly instead of overriding them.'
-status: Approved
+status: InProgress
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-10T03:06:45.552915977Z
-modified_at: 2026-11-10T20:53:32.215462095Z
+modified_at: 2026-11-10T20:55:03.603667663Z
 req_type: Story
 comments:
 - id: 01a1c6fc-55c1-7890-a827-b867a3ee295d
@@ -92,6 +92,13 @@ history:
   session_id: 01a1c530-c917-7f13-ab81-f6b5e1d1cd30
   harness_version: 2.1.322 (Claude Code)
   changes: []
+- id: 01a1c73e-2eb3-7a43-99d7-d922392a2bdf
+  author: aida-session-start
+  timestamp: 2026-11-10T20:55:03.603666732Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: InProgress
 filed_at:
   code_sha: 838f14c3c2811c6b63da5d465700cff773c36190
   branch: main
