@@ -504,6 +504,60 @@ These local commands do not publish. Enrolled intake transport is described
 below; backup-comment recovery remains a separate slice.
 <!-- doc-intent: shaped by STORY-2479 -->
 
+### Untrusted review returns
+
+<!-- trace:STORY-2493 | ai:codex -->
+`aida intent review-return --file input.json` generates an explicit finding or
+pending verdict without discovering a store, identity, logs or local paths.
+Input has exactly `version`, `kind`, `payload`, and an empty `checksum`; generation
+fills the checksum. `validate` and `export` also accept these closed envelopes.
+For example:
+
+```json
+{"version":1,"kind":"finding","payload":{"severity":"major","blocking":true,"title":"Missing error handling","body":"The failure is ignored.","file":"src/lib.rs","line":12},"checksum":""}
+```
+
+Finding severity uses the canonical values `major`, `minor`, `cosmetic`,
+`observation` or `note`. The file must
+be an explicit home-relative path with no empty, dot or parent components,
+backslashes, colons or control characters; the line is a positive 32-bit integer.
+Title/body limits match observations; paths are bounded at 4096 bytes.
+
+A `review-verdict` payload contains exactly `pr` (positive integer), `head_sha`
+(40 lowercase hex characters), `decision` (`approved`, `request-changes`,
+`rejected` or `waiting`), `blocking_findings` (at most 256 unique full lowercase
+SHA-256 digests), and `reviewer_node` (32 lowercase hex characters). Verdict
+publication requires per-writer enrollment: the node must match the enrolled
+producer writer ID. This match labels the source; it does not authenticate a
+reviewer or confer authority. Legacy enrollment still supports findings.
+
+The checksum hashes compact JSON fields `version`, `kind`, `payload`, in that
+order, excluding `checksum`. Finding payload fields hash in the example's order;
+verdict fields hash in the order listed above. Strings are not normalized.
+Unknown, duplicate, missing or mismatched fields refuse. Reads remain bounded
+regular-file reads, and every decoded string field is scanned against explicit
+reviewed deny patterns, including paths, enums, node IDs and digest strings.
+
+Publish with `aida intent publish --file envelope.json --reviewed`; findings
+require work-side operator review before this confirmation. Fixed-field verdicts
+can publish without `--reviewed`. Enrolled policy is
+rechecked before publication and on pull in quarantine. The independent transport
+retains immutable `findings/<digest>.json` and `review-verdicts/<digest>.json`
+paths; work operations never write canonical store refs.
+
+At home, pull and inspect with `intent list`, then explicitly run
+`aida intent process <full-digest> --action create`. Findings become draft tasks
+with canonical review-finding, severity, blocking and digest tags. The description
+retains the explicit home location. Receipts map the full digest and journal
+operation to the home UUID. Retry the same command after a receipt-push failure;
+the journal recovers the existing finding without filing it again. Imported
+findings support `pending` and `create`, not comment or transport dismissal.
+
+Verdicts remain pending data, with no processing action or merge-gate credit.
+Blocking-digest projection and home operator-attested approval are later slices;
+receiving an imported verdict currently neither adds a merge block nor approves
+merge. Existing review and merge gates continue to apply.
+
 ### Native per-writer intake (first-round-trip slice)
 
 <!-- trace:STORY-2652 | ai:codex -->

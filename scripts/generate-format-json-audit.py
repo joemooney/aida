@@ -23,6 +23,8 @@ VERIFIED = {
     "aida condition check": "condition check manual:joe",
     # Local attachments always emit JSON; validate also has a --json projection.
     # trace:STORY-2479 | ai:codex
+    # trace:STORY-2493 | ai:codex
+    "aida intent review-return": "intent review-return --file review-input.json (JSON attachment)",
     "aida intent note": "intent note --category observation --title title --file note.md (JSON attachment)",
     "aida intent validate": "intent validate --file observation.json",
     "aida intent export": "intent export --file observation.json (JSON attachment)",

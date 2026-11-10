@@ -155,6 +155,15 @@ pub(super) fn parse(bytes: &[u8], patterns: &[String]) -> Result<Envelope> {
 
 #[derive(Debug, Subcommand)]
 pub(crate) enum LocalCommand {
+    /// Generate a finding or pending verdict from explicit closed JSON input (empty checksum).
+    ReviewReturn {
+        /// Explicit JSON input, at most 128 KiB; checksum must be empty.
+        #[clap(long)]
+        file: PathBuf,
+        /// Refuse matching decoded string fields (regex, repeatable).
+        #[clap(long)]
+        deny_pattern: Vec<String>,
+    },
     /// Configure or use the independently enrolled intake branch.
     #[clap(flatten)]
     Intake(crate::intent_intake::IntakeCommand),
@@ -207,6 +216,12 @@ fn emit(envelope: &Envelope) -> Result<()> {
 
 pub(crate) fn run(command: &LocalCommand, json_format: bool) -> Result<()> {
     match command {
+        LocalCommand::ReviewReturn { file, deny_pattern } => {
+            let bytes = read_bounded(file, ENVELOPE_LIMIT)?;
+            let bytes = crate::review_envelope::generate(&bytes, deny_pattern)?;
+            std::io::stdout().lock().write_all(&bytes)?;
+            Ok(())
+        }
         LocalCommand::Intake(command) => crate::intent_intake::run(command, json_format),
         LocalCommand::Note {
             category,
@@ -233,27 +248,34 @@ pub(crate) fn run(command: &LocalCommand, json_format: bool) -> Result<()> {
             deny_pattern,
             json,
         } => {
-            let envelope = parse(&read_bounded(file, ENVELOPE_LIMIT)?, deny_pattern)?;
+            let bytes = read_bounded(file, ENVELOPE_LIMIT)?;
+            let (_, checksum) = crate::intent_intake::content_path(&bytes, deny_pattern)?;
+            let label = format!("INTENT-{}", &checksum[..12]);
             if *json || json_format {
                 println!(
                     "{}",
                     serde_json::json!({
-                        "valid": true, "label": envelope.label(), "checksum": envelope.checksum,
+                        "valid": true, "label": label, "checksum": checksum,
                         "sanitization_certified": false, "limitation": LIMITATION,
                     })
                 );
             } else {
-                println!(
-                    "{} valid\nSHA-256: {}\n{LIMITATION}",
-                    envelope.label(),
-                    envelope.checksum
-                );
+                println!("{} valid\nSHA-256: {}\n{LIMITATION}", label, checksum);
             }
             Ok(())
         }
         LocalCommand::Export { file, deny_pattern } => {
-            let envelope = parse(&read_bounded(file, ENVELOPE_LIMIT)?, deny_pattern)?;
-            emit(&envelope)
+            let bytes = read_bounded(file, ENVELOPE_LIMIT)?;
+            let (folder, checksum) = crate::intent_intake::content_path(&bytes, deny_pattern)?;
+            if folder == "observations" {
+                return emit(&parse(&bytes, deny_pattern)?);
+            }
+            let value = crate::review_envelope::parse(&bytes, deny_pattern)?;
+            std::io::stdout()
+                .lock()
+                .write_all(&serde_json::to_vec(&value)?)?;
+            eprintln!("INTENT-{}: {LIMITATION}", &checksum[..12]);
+            Ok(())
         }
     }
 }
@@ -287,7 +309,9 @@ pub(crate) fn local_entry() -> Option<Result<()>> {
             matches!(
                 arg.to_str(),
                 Some(
-                    "ci" | "note"
+                    "review-return"
+                        | "ci"
+                        | "note"
                         | "validate"
                         | "export"
                         | "enroll"

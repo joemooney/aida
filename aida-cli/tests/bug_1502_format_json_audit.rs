@@ -33,6 +33,15 @@ fn aida_command_with_inherited(repo: &Path, home: &Path, inherited: &[(&str, &Pa
         "fixture repo must be a git checkout"
     );
     let mut command = Command::new(env!("CARGO_BIN_EXE_aida"));
+    // Restrict only the child, including its independent intake Git repository.
+    // trace:STORY-2493 | ai:codex
+    use std::os::unix::process::CommandExt;
+    unsafe {
+        command.pre_exec(|| {
+            libc::umask(0o077);
+            Ok(())
+        });
+    }
     command
         .current_dir(repo)
         .env("HOME", home)
@@ -543,7 +552,22 @@ fn checked_in_audit_is_exhaustive_and_every_honoured_probe_parses() {
     let attachment = aida(&repo, &home, &note_args);
     let note_value = json(&attachment, "observation attachment");
     std::fs::write(repo.join("observation.json"), &attachment.stdout).unwrap();
+    // trace:STORY-2493 | ai:codex
+    std::fs::write(
+        repo.join("review-input.json"),
+        serde_json::to_vec(&serde_json::json!({
+            "version": 1, "kind": "finding", "payload": {
+                "severity": "major", "blocking": true, "title": "Finding",
+                "body": "Data", "file": "src/lib.rs", "line": 1
+            }, "checksum": ""
+        }))
+        .unwrap(),
+    )
+    .unwrap();
+    let review_args = ["intent", "review-return", "--file", "review-input.json"];
+    let review_value = json(&aida(&repo, &home, &review_args), "review attachment");
     let attachment_probes: &[(&str, &[&str])] = &[
+        ("aida intent review-return", &review_args),
         ("aida intent note", &note_args),
         (
             "aida intent export",
@@ -555,7 +579,11 @@ fn checked_in_audit_is_exhaustive_and_every_honoured_probe_parses() {
         via_format.extend(["--format", "json"]);
         assert_eq!(
             audit_json(&aida(&repo, &home, &via_format), path),
-            note_value
+            if *path == "aida intent review-return" {
+                review_value.clone()
+            } else {
+                note_value.clone()
+            }
         );
         assert!(audit.contains(&format!("| `{path}` | JSON honoured |")));
     }
