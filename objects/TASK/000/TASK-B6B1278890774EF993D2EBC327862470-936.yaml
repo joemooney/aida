@@ -8,7 +8,7 @@ priority: Low
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-07T10:46:47.827833836Z
-modified_at: 2026-11-10T01:36:43.813035961Z
+modified_at: 2026-11-10T01:36:45.223801162Z
 req_type: Task
 relationships:
 - rel_type: Child
@@ -162,6 +162,19 @@ comments:
   content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: Disabled broker source reviewed; completion-bearing publication violates signed Refs-only slice, PR change notes missing; CI pending.. It was punted on: other: Disabled broker slice 1 and protocol tests are ready; the signed manual rollout gate remains pending. Retain advisor routing and all publication/merge-hold vetoes. No consumer adapter or service enablement is authorized by these transport tests.. No triage reason was given.'
   created_at: 2026-11-10T01:36:43.813029859Z
   modified_at: 2026-11-10T01:36:43.813029859Z
+- id: 01a1c319-b81f-7602-85f2-ee2d6b5ac0d3
+  author: joe
+  content: |-
+    REVIEW FINDINGS TO ADDRESS (TASK-3368):
+    Verdict: CHANGES REQUESTED
+    Reviewed commit: d782a710e008
+    Recorded: 2026-11-10T01:15:26.476870990+00:00
+    Findings:
+    1. P1: PR #3747 title and HEAD d782a710e008 subject end (TASK-3368), granting completion intent despite the advisor 2026-11-10 slice-1 ruling and docs/internal/testing/task-3368-disabled-broker.md:7-8 requiring (Refs TASK-3368). Authorized publisher must correct PR title and publication/squash subject to (Refs TASK-3368), ensure branch commit metadata cannot grant completion, and preserve the pending manual gate and hold/punt.
+    2. P2: PR #3747 body contains only native-seat ship boilerplate. Add the AGENTS.md-required change summary: disabled-service scope, protocol/test coverage and evidence limits, pending CI/manual rollout gate, and TASK-3368 remaining open. The publication surface currently omits the signed slice limits.
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
+  created_at: 2026-11-10T01:36:45.087228335Z
+  modified_at: 2026-11-10T01:36:45.087228335Z
 history:
 - id: 01a1b59e-5972-7d63-967f-d8572322d9d1
   author: joe
