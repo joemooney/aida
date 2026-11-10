@@ -3,13 +3,23 @@ spec_id: STORY-b6b1278890774ef993d2ebc327862470-626
 agreed_id: STORY-2703
 title: 'External subcommands: aida <name> runs an aida-<name> executable, so reports and helpers ship as scripts'
 description: 'Operator request 2026-11-09: add custom commands quickly (for example the advisor''s Python flow report) without a Rust review cycle. ## Sketch (needs sketch signoff before implementation) 1. Unknown subcommand <name> resolves to an executable aida-<name> on PATH or in the user-level ~/.config/aida/commands/, like git and cargo external subcommands. Built-in commands always win; aida help lists discovered externals marked as external. 2. The child gets AIDA_ROOT, AIDA_STORE, AIDA_BIN and the active role in its environment, never grant secrets. 3. Stable data surfaces for scripts: existing --format json commands plus a read-only ledger export (aida gate ledger export --format json) so scripts never parse internal files. 4. Trust: project-local commands (.aida/commands/ in the repo) never run automatically; they need an explicit opt-in per project in user config, because a PR could otherwise add a script the operator later runs with full privileges. Contained lanes never resolve externals. ## Acceptance - Resolution order, built-in precedence and help listing tested. - Environment contract tested; no grant material passed. - Project-local commands refused without opt-in, and inside contained sessions. - Docs in docs/cli with a sample Python command.'
-status: Draft
+status: Rejected
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-10T03:41:53.967511011Z
-modified_at: 2026-11-10T03:41:53.967511011Z
+modified_at: 2026-11-10T03:43:34.626375116Z
 req_type: Story
+history:
+- id: 01a1c38d-d4e2-74c3-af25-5eb7ce61e9da
+  author: joe
+  timestamp: 2026-11-10T03:43:34.626366274Z
+  session_id: 01a1beff-fc3b-78e2-93e2-9b0c283b0339
+  harness_version: 2.1.319 (Claude Code)
+  changes:
+  - field_name: status
+    old_value: Draft
+    new_value: Rejected
 filed_at:
   code_sha: 838f14c3c2811c6b63da5d465700cff773c36190
   branch: main
