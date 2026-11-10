@@ -8,7 +8,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-10T03:52:00.571796159Z
-modified_at: 2026-11-10T08:33:22.707943036Z
+modified_at: 2026-11-10T08:58:15.175223815Z
 req_type: Story
 comments:
 - id: 01a1c399-6840-7383-843e-9930f6eaa3f7
@@ -23,6 +23,13 @@ comments:
   content: 'ADVISOR SKETCH SIGNOFF WITH CHANGES (2026-11-10 04:08 UTC, sketch PR #3759 docs/plans/2026-11-10-story-2704-porcelain-crate.md). Approved design: aida-porcelain workspace crate -> aida-core public APIs only (no aida-cli-lib dependency), argv[0] multi-call, read-only capability boundary, nested resolution only for one unknown child under a built-in parent, built-in wins during overlap. ADR-71 amendment ruled here: porcelain may link aida-core public read APIs and ships as a workspace companion binary (not only an independent distribution); record it on ADR-71 when it is accepted. Changes: (1) Slice it, one open PR at a time. S1 = crate + multi-call dispatch + aida-flow tenant moved from STORY-2699 + a public no-write aida-core gate-ledger reader + aida dev build staging/smoke/rollback/--install-links for the new binary and alias, plus the no-write fixture test. S2 = nested built-in-parent resolution + parent help listing + STORY-1641-adjacent black-box tests. S3 = release.yml archives, scripts/install.sh, upgrade_cmd tarball path, make install. (2) S1 starts only after STORY-2699 (#3757) lands; extract from the landed code. (3) The built-in flow registration is removed in S1 only if dev build installs aida-flow in the same PR; otherwise keep the built-in until S3. (4) Per STORY-2698, read-only tenants are LOW tier; S1 and S2 touch dispatch and dev build, so they are NORMAL tier. LIGHT local gate per slice.'
   created_at: 2026-11-10T04:08:04.135421883Z
   modified_at: 2026-11-10T04:08:04.135421883Z
+  session_id: 01a1c39a-801a-7bd1-8da9-c955a6707f0b
+  harness_version: 2.1.321 (Claude Code)
+- id: 01a1c4ad-ed07-74f1-b8c4-d2a80ec0f2ad
+  author: joe
+  content: 'ADVISOR RULING (2026-11-10 08:58 UTC) — binding brief for STORY-2704 SLICE 1 (supersedes the 03:56 UTC sketch-only brief; the sketch is signed off with changes, see the 04:13 UTC signoff comment). Implement S1 now, branching from main after #3772 lands: (1) new workspace crate aida-porcelain (one binary aida-porcelain) depending on aida-core public APIs only, never aida-cli-lib; (2) argv[0] multi-call dispatch by lexical basename: aida-porcelain and aida-flow, unknown names fail with usage; (3) move STORY-2699''s flow report (landed in #3757) into aida-porcelain/src/flow/ unchanged in output, flags, JSON and exit codes; (4) a public no-write aida-core gate-ledger reader replaces any private ledger file walk the flow report does; (5) aida dev build stages, smoke-tests, promotes, rolls back and --install-links the new binary plus the aida-flow relative symlink; (6) keep the built-in ''aida flow'' registration in this slice (built-in wins); removing it waits for S3 install coverage; (7) tests: multi-call dispatch, unknown argv0, flow report parity against the built-in on fixtures, and a no-write fixture test (store refs, tracked bytes and cache/queue/lease state unchanged). Out of scope: nested built-in-parent resolution (S2), release/install.sh/upgrade (S3). Title: [AI:codex] feat(porcelain): add aida-porcelain multi-call crate with flow tenant (Refs STORY-2704). LIGHT gate: cargo test -p aida-porcelain plus one cargo check --profile agent -p aida-cli --tests, then make check-ci-fast.'
+  created_at: 2026-11-10T08:58:15.175223815Z
+  modified_at: 2026-11-10T08:58:15.175223815Z
   session_id: 01a1c39a-801a-7bd1-8da9-c955a6707f0b
   harness_version: 2.1.321 (Claude Code)
 history:
