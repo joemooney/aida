@@ -118,16 +118,17 @@ fn default_body(agent_type: &str, seat: &str, spec: Option<&str>, ship: &str) ->
              shell/event watcher, never a model-side polling loop."
             .to_string(),
         // trace:BUG-2508 | ai:codex
+        // trace:STORY-2697 | ai:codex
         ("reviewer", Some(spec)) => format!(
             "You are the reviewer seat: evaluate, do not implement. Review the open PR for {spec} \
              against its acceptance criteria, prioritising correctness and regression risk; run \
              targeted tests where useful. Record the verdict with `aida review record {spec} --pr \
-             <N> --verdict approved|request-changes|rejected|waiting --summary \"<why>\"`. Use waiting only for external CI or host evidence: name the dependency, responsible actor and resume condition in the summary, with no substantive findings. A red merge-hold-gate or supervised human/advisor clearance that this review's own fresh APPROVED verdict can release is not external evidence: record approved when required CI is otherwise green and there are no actionable defects. Approval does not release the hold or authorize merge; leave clearance to the authorized actor. Outstanding independent evidence, such as an operator-only canary, still requires waiting even on a held PR. Resume requires a fresh review at the current head. Code defects require request-changes. Do not push fixes."
+             <N> --verdict approved|request-changes|rejected|waiting --summary \"<why>\"`. When there are no actionable defects, record APPROVED even if CI is pending or running; state \"CI pending at review time\" in the rationale. CI alone is not a reason for WAITING: readiness still requires exact-head CI, and landing still requires ship CI or stacked-tip CI. WAITING is reserved for independent external evidence (such as an operator-only canary), or a specific named test result on which the reviewer's judgment depends. Name the dependency, responsible actor and resume condition, with no substantive findings. A red merge-hold-gate or supervised human/advisor clearance that this review's own fresh APPROVED verdict can release is not external evidence: record approved when there are no actionable defects. Approval does not release the hold or authorize merge; leave clearance to the authorized actor. Outstanding independent evidence, such as an operator-only canary, still requires waiting even on a held PR. Resume requires a fresh review at the current head. Code defects require request-changes. Do not push fixes."
         ),
         ("reviewer", None) => "You are the reviewer seat: evaluate, do not implement. No spec was \
              assigned at launch. Find the next PR awaiting review with \
              `aida queue next --for reviewer`, then record your verdict with \
-             `aida review record <ID> --pr <N> --verdict ...`. Use waiting only for external CI or host evidence: name the dependency, responsible actor and resume condition in the summary, with no substantive findings. A red merge-hold-gate or supervised human/advisor clearance that this review's own fresh APPROVED verdict can release is not external evidence: record approved when required CI is otherwise green and there are no actionable defects. Approval does not release the hold or authorize merge; leave clearance to the authorized actor. Outstanding independent evidence, such as an operator-only canary, still requires waiting even on a held PR. Resume requires a fresh review at the current head. Code defects require request-changes. Do not push fixes."
+             `aida review record <ID> --pr <N> --verdict ...`. When there are no actionable defects, record APPROVED even if CI is pending or running; state \"CI pending at review time\" in the rationale. CI alone is not a reason for WAITING: readiness still requires exact-head CI, and landing still requires ship CI or stacked-tip CI. WAITING is reserved for independent external evidence (such as an operator-only canary), or a specific named test result on which the reviewer's judgment depends. Name the dependency, responsible actor and resume condition, with no substantive findings. A red merge-hold-gate or supervised human/advisor clearance that this review's own fresh APPROVED verdict can release is not external evidence: record approved when there are no actionable defects. Approval does not release the hold or authorize merge; leave clearance to the authorized actor. Outstanding independent evidence, such as an operator-only canary, still requires waiting even on a held PR. Resume requires a fresh review at the current head. Code defects require request-changes. Do not push fixes."
             .to_string(),
         ("product", Some(spec)) => format!(
             "You are the product seat: intake, requirement quality, ordering and wave continuity. \
@@ -209,12 +210,16 @@ mod bug_2508_tests {
             assert!(
                 prompt.contains("own fresh APPROVED verdict can release is not external evidence")
             );
-            assert!(prompt.contains("record approved when required CI is otherwise green"));
+            assert!(prompt.contains("record approved when there are no actionable defects"));
+            assert!(prompt.contains("CI pending at review time"));
+            assert!(prompt.contains("specific named test result"));
+            assert!(!prompt.contains("external CI or host evidence"));
             assert!(prompt.contains("operator-only canary, still requires waiting"));
             assert!(prompt.contains("Approval does not release the hold or authorize merge"));
         }
     }
 
+    // trace:STORY-2697 | ai:codex
     #[test]
     fn bug_2508_review_templates_carry_both_held_pr_fixtures() {
         for template in [
@@ -231,6 +236,12 @@ mod bug_2508_tests {
             assert!(rows[1].contains("fresh APPROVED verdict"));
             assert!(rows[1].ends_with("| Operator-only canary result | WAITING |"));
             assert!(template.contains("Approval does not release the hold or authorize merge"));
+            assert!(template.contains("CI pending at review time"));
+            assert!(!template.contains("external CI or host evidence"));
+            assert!(!template.contains("before Approving"));
+            assert!(!template.contains("Do **not** proceed to the Approved verdict"));
+            assert!(template.contains("| Pending or running | Fresh APPROVED verdict may release Rework hold | None | APPROVED |"));
+            assert!(template.contains("| Pending or running | Any | Specific named test result needed for judgment | WAITING |"));
         }
     }
 }

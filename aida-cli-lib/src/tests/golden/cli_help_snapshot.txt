@@ -22639,6 +22639,12 @@ Options:
           origin. When the group refuses push-to-create, the project is created through the GitLab
           API (needs a `glab` login for the host, else GITLAB_TOKEN)
 
+      --gitlab-enable-ci
+          Explicitly consent to enabling disabled GitLab project CI/CD
+
+      --gitlab-runner-tags <GITLAB_RUNNER_TAGS>
+          Runner tags for the generated GitLab pipeline (comma-separated)
+
       --centralized
           Initialize in legacy centralized mode (SQLite-canonical, single requirements.db).
           Deprecated — git-canonical is now the default
@@ -54808,6 +54814,16 @@ Working on aida itself
         "name": "gitlab",
         "takes_value": true,
         "help": "Also create the project on this GitLab host and group (HOST or HOST/GROUP; PRIVATE unless --public) and publish both legs there. With --github it becomes a mirror hub; alone it is origin. When the group refuses push-to-create, the project is created through the GitLab API (needs a `glab` login for the host, else GITLAB_TOKEN)"
+      },
+      {
+        "name": "gitlab-enable-ci",
+        "takes_value": false,
+        "help": "Explicitly consent to enabling disabled GitLab project CI/CD"
+      },
+      {
+        "name": "gitlab-runner-tags",
+        "takes_value": true,
+        "help": "Runner tags for the generated GitLab pipeline (comma-separated)"
       },
       {
         "name": "help",
