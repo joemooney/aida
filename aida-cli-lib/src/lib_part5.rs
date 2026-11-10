@@ -4206,6 +4206,10 @@ pub(crate) fn handle_review_verdict_show(spec: &str, json: bool) -> Result<()> {
                     crate::review_verdict_display::verdict_notice_line(&v)
                 );
                 println!("  {} {}", "actionability:".dimmed(), actionability);
+                // trace:STORY-2698 | ai:codex
+                if let Some(line) = crate::review_risk::notice(value.get("risk")) {
+                    println!("  {line}");
+                }
                 if let Some(coverage) = value
                     .get("coverage")
                     .and_then(|c| c.get("description"))
@@ -4350,6 +4354,17 @@ pub(crate) fn review_verdict_show_body_with_coverage(
                 "location": current.source.display(),
             }),
         );
+    }
+    // Read the assessment from the selected event, never recompute a historic
+    // verdict against today's tree or trust a reviewer-supplied risk field.
+    // trace:STORY-2698 | ai:codex
+    if let Some(obj) = value.as_object_mut() {
+        obj.remove("risk");
+        if let Some(risk) =
+            crate::review_risk::stored_for_display(project_root, key, &current.source, &v)
+        {
+            obj.insert("risk".into(), risk);
+        }
     }
     // The original verdict stays at H. Coverage is a separate, read-only
     // report with both commit identities and the protected-base evidence.

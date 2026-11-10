@@ -37,7 +37,9 @@ fn assemble(
         role: "implementer",
         plan_only: false,
         guided: false,
-        review_findings: findings,
+        review_findings: findings
+            .map(ReviewResult::Available)
+            .unwrap_or(ReviewResult::Unavailable),
         spec_comments: comments,
         conflict,
         ci_failures: None,
@@ -65,7 +67,7 @@ fn ci_failures_sit_below_the_leads_and_above_the_findings() {
         role: "implementer",
         plan_only: false,
         guided: false,
-        review_findings: Some(FINDINGS),
+        review_findings: ReviewResult::Available(FINDINGS),
         spec_comments: &comments,
         conflict: Some(&conflict),
         ci_failures: Some("CI FAILURES AT THE PR HEAD:\n- lib-0: some_test\n"),
@@ -376,6 +378,61 @@ fn brief_between_recorded_verdict_and_queue_rework_comment_leads() {
     assert!(!prompt.contains("SUPERSEDED CONTEXT"), "{prompt}");
 }
 
+// trace:BUG-2509 | ai:codex
+#[test]
+fn remote_lane_without_ledger_uses_durable_findings_and_recorded_time() {
+    let _g = no_gate();
+    let recorded_at = Utc::now() - chrono::Duration::minutes(30);
+    let findings = format!(
+        "REVIEW FINDINGS TO ADDRESS (PR #3177):\nRecorded: {}\n- fix remote pickup",
+        recorded_at.to_rfc3339()
+    );
+    // The hand-off is posted after both briefs. Its Recorded time, rather
+    // than its creation time, separates stale direction from current direction.
+    for (brief_age, standing) in [
+        (60, BriefStanding::PredatesVerdict),
+        (20, BriefStanding::SupersedesVerdict),
+    ] {
+        let mut parent = comment(120, "Review discussion");
+        parent.replies.push(comment(5, &findings));
+        let comments = vec![comment(brief_age, REWORK_BRIEF), parent];
+        let direction = resolve_direction(&comments, None);
+        assert_eq!(direction.brief.map(|(_, s)| s), Some(standing));
+        let prompt = assemble(&item_plan(), None, &comments, None);
+        assert_eq!(prompt.matches("fix remote pickup").count(), 1, "{prompt}");
+        assert!(!prompt.contains("binding;"), "{prompt}");
+        if standing == BriefStanding::PredatesVerdict {
+            assert!(
+                prompt.contains("ITEMS STILL OPEN (AUTHORITATIVE TASK)"),
+                "{prompt}"
+            );
+            assert!(prompt.contains("OLDER CONTEXT"), "{prompt}");
+            assert!(!prompt.contains("SUPERSEDED CONTEXT"), "{prompt}");
+        } else {
+            assert!(prompt.starts_with("ADVISOR BRIEF ("), "{prompt}");
+            assert!(prompt.contains("SUPERSEDED CONTEXT"), "{prompt}");
+        }
+    }
+}
+
+// trace:BUG-2509 | ai:codex
+#[test]
+fn remote_lane_untimed_findings_use_comment_time_and_ignore_quoted_markers() {
+    let comments = vec![comment(60, REWORK_BRIEF), comment(5, FINDINGS)];
+    assert_eq!(
+        resolve_direction(&comments, None).brief.map(|(_, s)| s),
+        Some(BriefStanding::PredatesVerdict)
+    );
+    let discussion = vec![
+        comment(60, REWORK_BRIEF),
+        comment(5, &format!("Discussion quoting: {FINDINGS}")),
+    ];
+    assert_eq!(
+        resolve_direction(&discussion, None).brief.map(|(_, s)| s),
+        Some(BriefStanding::Binding)
+    );
+}
+
 #[test]
 fn verdict_time_comes_from_the_recorded_line_or_comments() {
     let brief = vec![comment(60, "ADVISOR BRIEF: merge main")];
@@ -559,4 +616,71 @@ fn detect_main_conflict_forecasts_through_fetch_and_merge_tree() {
         "the stale refs alone would still forecast a conflict"
     );
     assert_eq!(detect_main_conflict(&clone, 7, "pr-branch"), None);
+}
+
+// trace:BUG-2509 | ai:codex
+#[test]
+fn newer_local_approval_does_not_replay_durable_refusal_in_pickup() {
+    use crate::gate::ledger::{store, ChangeKey, EventBody, GateEvent};
+    let _env = crate::test_env::EnvVarsGuard::apply(&[
+        ("AIDA_AGENT_GATE_NAME", None),
+        ("AIDA_CONTAINED", None),
+    ]);
+    let root = tempfile::tempdir().unwrap();
+    let comments = vec![comment(60, REWORK_BRIEF), comment(30, FINDINGS)];
+    let plan = item_plan();
+    let render = || {
+        let review = crate::queue_cmd::resolve_rework_review(
+            root.path(),
+            "BUG-051",
+            "BUG-051",
+            Some("PR-3291"),
+        )
+        .unwrap();
+        assemble_pickup_prompt(&PickupInputs {
+            plan: &plan,
+            role: "implementer",
+            plan_only: false,
+            guided: false,
+            review_findings: review.as_deref(),
+            spec_comments: &comments,
+            conflict: None,
+            ci_failures: None,
+        })
+    };
+    // With no ledger, the durable refusal remains authoritative.
+    assert!(render().contains("ITEMS STILL OPEN (AUTHORITATIVE TASK)"));
+    for (kind, age, findings) in [
+        ("request_changes", 30, vec!["run the bwrap tests"]),
+        ("unknown", 10, vec![]),
+        ("approved", 5, vec![]),
+    ] {
+        let record = serde_json::json!({
+            "verdict": kind,
+            "reviewed_sha": "34031ff4a06c1d24c08846619f87aaa66b31dec7",
+            "recorded_by": "claude-reviewer",
+            "recorded_at": (Utc::now() - chrono::Duration::minutes(age)).to_rfc3339(),
+            "findings": findings,
+        })
+        .as_object()
+        .unwrap()
+        .clone();
+        let key = ChangeKey::pr(3291);
+        let mut event = GateEvent::new(key, EventBody::Verdict { record });
+        event.head = Some("34031ff4a06c1d24c08846619f87aaa66b31dec7".into());
+        store::append(root.path(), key, vec![event]).unwrap();
+        let prompt = render();
+        if kind != "approved" {
+            assert!(
+                prompt.contains("ITEMS STILL OPEN (AUTHORITATIVE TASK)"),
+                "{prompt}"
+            );
+            assert!(prompt.contains("OLDER CONTEXT"), "{prompt}");
+        } else {
+            assert!(!prompt.contains("run the bwrap tests"), "{prompt}");
+            assert!(!prompt.contains("ITEMS STILL OPEN"), "{prompt}");
+            assert!(!prompt.contains("OLDER CONTEXT"), "{prompt}");
+            assert!(prompt.contains("binding;"), "{prompt}");
+        }
+    }
 }

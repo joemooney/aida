@@ -1165,6 +1165,20 @@ an optional `coverage` object with `reviewed_sha`, `head_sha` and the full
 `proof`. Reading the verdict does not record a new approval or proof.
 <!-- trace:STORY-2694 | ai:codex -->
 
+New gate-ledger verdict events also record a versioned advisory risk assessment,
+computed from the committed diff against the pinned protected-base tip. The tier
+is `FASTTRACK`, `STANDARD` or `STRICT`, with repository, base/head and reasons.
+Sensitive paths take precedence across the whole diff, including both rename
+paths. Version 1 also uses `STRICT` above 500 changed lines or 20 paths,
+for executable/symlink/submodule evidence and possible test-oracle weakening;
+unavailable or unsupported evidence is `STRICT`. `aida review verdict`
+shows the stored tier and reasons as advisory only; `--json` includes `risk`.
+Older records have no assessment. This does not change review depth, blocking
+rules, hold clearance, fast-track eligibility or train admission. Incoming
+reviewer-supplied tiers are not authoritative; the ledger writer computes its
+own evidence on each verdict.
+<!-- trace:STORY-2698 | ai:codex -->
+
 ### Ship-readiness report
 <!-- trace:TASK-1945 | ai:claude -->
 

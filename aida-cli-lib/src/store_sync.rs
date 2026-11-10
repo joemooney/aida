@@ -2,7 +2,18 @@
 //! distributed store detection and attach, store sync and ID allocation config (STORY-1488 slice 1)
 // trace:STORY-1488 | ai:claude
 
-use crate::*;
+use crate::process_retry::RetryEtxtbsy;
+use crate::{
+    aida_exe_path, aida_home_dir, branch_exists_anywhere, config_declares_distributed,
+    config_parse_error_message, config_path_for_project, git_backend_cmd, load_dispenser,
+    maybe_auto_push_store, sha_prefix_match, Command,
+};
+use aida_core::store_locate::StoreOverride;
+use aida_core::DatabaseBackend;
+use aida_core::{RequirementsStore, Storage};
+use anyhow::{Context, Result};
+use colored::Colorize;
+use uuid::Uuid;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum StoreAutoPushMode {

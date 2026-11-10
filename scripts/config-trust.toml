@@ -113,9 +113,9 @@ sites = 1
 # TASK-1930: doctor_migrate_counter_scope probes existence of .aida/config.toml
 # before the preview, and doctor_migrate_counter_scope_in_store re-reads/writes
 # [id_format] counter_scope = "global" under store_write_lock -> blocks.lock.
-[readers."aida-cli-lib/src/doctor_cmd.rs"]
-channels = ["worktree", "write", "probe"]
-sites = 2
+[readers."aida-cli-lib/src/doctor/store_repair.rs"]
+channels = ["probe"]
+sites = 1
 
 [readers."aida-cli-lib/src/doctor_root.rs"]
 channels = ["worktree"]
@@ -140,7 +140,7 @@ sites = 3
 
 [readers."aida-cli-lib/src/glyph_config.rs"]
 channels = ["worktree", "home", "write"]
-sites = 2
+sites = 1
 
 [readers."aida-cli-lib/src/glyphs.rs"]
 channels = ["worktree", "home"]
@@ -199,9 +199,10 @@ sites = 1
 channels = ["worktree", "probe"]
 sites = 3
 
+# TASK-3781: include the counter-scope writer relocated from doctor_cmd.
 [readers."aida-cli-lib/src/db_block.rs"]
-channels = ["worktree"]
-sites = 1
+channels = ["worktree", "write"]
+sites = 2
 
 # Distributed-store detection: an existence probe for a project root, the
 # walk-up that reads mode, and the [id_format] reader (policy values only).
@@ -1004,3 +1005,9 @@ sites = 2
 [readers."aida-cli-lib/src/vendors/host_diagnostics.rs"]
 channels = ["home"]
 sites = 2
+
+# trace:BUG-2512 | ai:codex
+[keys.trusted.validation]
+format = "command"
+test = "command"
+fast_check = "command"

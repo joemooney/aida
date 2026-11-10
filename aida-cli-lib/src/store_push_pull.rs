@@ -1,7 +1,25 @@
 //! `aida push`/`aida pull` handlers, mirror fan-out and stacked-branch rebase cascade (STORY-1488 slice 1)
 // trace:STORY-1488 | ai:claude
 
-use crate::*;
+use crate::{
+    active_reviewer_unmerged_pr, ahead_behind_vs_ref, auto_bump_done_to_completed_with,
+    auto_bump_enabled, auto_merge_gate_enabled, branch_behind_main, branch_exists_anywhere,
+    change_lookup_for_branch, clear_store_mirror_fanout_failure, commit, config_lookup,
+    detect_default_branch_ref, detect_merged_pr_for_branch_via_forge,
+    ensure_no_spec_id_collisions_canonical, extract_plan_followups, first_run, git_arg_guard,
+    gitlab_mirror_link, list_leases, local_main_already_at_origin, mailbox_store,
+    maybe_auto_archive_sweep, orphan_branch_sync_state, plural, print_auto_bump_summary,
+    print_pull_summary, prompt_yes_no, pull_code_start_line, pull_noop_warning, pull_skip_warning,
+    pull_store_start_line, read_store_sync_config, record_store_mirror_fanout_failure,
+    remote_create, schedule_cmd, snapshot_known_project_configs, stacks, touch_last_fetch_ok,
+    validate_and_restore_project_configs_after_pull, warn_if_periodic_auto_push,
+    warn_if_pulled_binary_stale, write_last_fetch_entry, PrLookup, StoreAutoPushMode,
+};
+use crate::{hostname, intent, leases, role, worktree, SessionLease};
+use aida_core::Storage;
+use anyhow::{Context, Result};
+use colored::Colorize;
+use std::io::IsTerminal;
 
 /// TASK-106: resolve the effective push scope. An explicit `--code-only`
 /// or `--store-only` always wins. When the user passes neither,
@@ -3905,7 +3923,7 @@ fn run_push(
     matches: &clap::ArgMatches,
     ctx: &crate::cmdkit::DispatchCtx,
 ) -> anyhow::Result<crate::cmdkit::Flow> {
-    use crate::*;
+    use crate::{handle_push_command, handle_push_dry_run, resolve_push_scope, PushArgs};
     let args = <PushArgs as clap::FromArgMatches>::from_arg_matches(matches)?;
     // Inspect local transport policy before storage init or ordinary push scope.
     // trace:STORY-1742 | ai:codex
@@ -4023,7 +4041,7 @@ fn run_fetch(
     matches: &clap::ArgMatches,
     ctx: &crate::cmdkit::DispatchCtx,
 ) -> anyhow::Result<crate::cmdkit::Flow> {
-    use crate::*;
+    use crate::{handle_fetch_command, FetchArgs};
     let args = <FetchArgs as clap::FromArgMatches>::from_arg_matches(matches)?;
     match &ctx.store {
         None => Ok(crate::cmdkit::Flow::Continue),
@@ -4143,7 +4161,7 @@ fn run_pull(
     matches: &clap::ArgMatches,
     ctx: &crate::cmdkit::DispatchCtx,
 ) -> anyhow::Result<crate::cmdkit::Flow> {
-    use crate::*;
+    use crate::{handle_pull_command, handle_pull_dry_run, PullArgs};
     let args = <PullArgs as clap::FromArgMatches>::from_arg_matches(matches)?;
     // A transport plan must never run the ordinary dry-run's fetch/lifecycle path.
     // trace:STORY-1742 | ai:codex

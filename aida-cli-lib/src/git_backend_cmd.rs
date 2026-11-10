@@ -6,10 +6,22 @@
 
 #![allow(clippy::too_many_arguments)]
 
+use crate::get_default_author;
+use crate::resolve_current_session_id;
+use aida_core::DatabaseBackend;
 use anyhow::{Context, Result};
 use serde::Serialize;
 
-use crate::*;
+use crate::{
+    command_triggers_per_write_auto_push, format_tags_inline, load_dispenser,
+    maybe_auto_push_store, maybe_team_identity_guard, not_found, report_cmd, status_display,
+    strip_ansi_color, toon_status_token, truncate, warn_if_periodic_auto_push, CacheCommand,
+    Command, StoreAutoPushMode,
+};
+use aida_core::{Requirement, RequirementType, RequirementsStore, Storage};
+use colored::Colorize;
+use std::io::IsTerminal;
+use uuid::Uuid;
 
 // trace:TASK-190 | ai:codex
 pub(crate) fn resolve_comment_body(
