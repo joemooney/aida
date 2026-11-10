@@ -8,7 +8,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-09T01:58:39.064485765Z
-modified_at: 2026-11-10T19:28:10.679935331Z
+modified_at: 2026-11-10T19:35:17.142031756Z
 req_type: Story
 tags:
 - area:orchestration
@@ -34,6 +34,13 @@ comments:
   modified_at: 2026-11-10T19:28:08.492978841Z
   session_id: 01a1c6ed6dd6
   harness_version: codex-cli 0.167.0
+- id: 01a1c6f5-2596-77a0-861d-05e4ce9daf48
+  author: joe
+  content: 'ADVISOR SIGNOFF WITH CHANGES (2026-11-10 12:45 MST) on the codex sketch above. APPROVED: (1) rework routing runs the shared pickability checks against the resulting live spec and refuses with a stable reason code, with return_to_flight as the only status writer; (2) one versioned host-owned lane result receipt from admission to publication, with closed variants pushed / no-change-with-reason / refused-before-start / punted / held / failed-after-start, where ''pushed'' requires an observed new head; (3) the attempt is recorded before admission, and ''started'' only after the spawn succeeds; (4) the child and publication enums stay internal, and all operator output derives from the receipt. AMENDMENTS: (a) refusal dedup does NOT get a new permanent lock: use the existing store writer lock (update_atomically) or an O_EXCL marker file. The identity is spec + PR head + reason code + policy fingerprint, so a new head naturally re-arms it. Markers older than 7 days are pruned. (b) Two slices. S1 = items 1-4 (pickability + receipt), with the tests listed above except dedup; title [AI:codex] feat(lanes): typed lane result receipt and pickability-checked rework routing (Refs STORY-2690). S2 = item 5 (notice dedup), which completes the story. Gate: LIGHT.'
+  created_at: 2026-11-10T19:35:17.142031756Z
+  modified_at: 2026-11-10T19:35:17.142031756Z
+  session_id: 01a1c530-c917-7f13-ab81-f6b5e1d1cd30
+  harness_version: 2.1.322 (Claude Code)
 history:
 - id: 01a1c5dd-0795-7ee0-b474-74b907f4c43a
   author: joe
