@@ -1,0 +1,36 @@
+id: 01a1c48d-f3c7-77c2-99f9-d4ecf255afae
+spec_id: STORY-b6b1278890774ef993d2ebc327862470-630
+agreed_id: STORY-2707
+title: 'Review PR-3770: [AI:codex] refactor(commands): replace crate globs in batch 1 (Refs TASK-3428)'
+description: |
+  Auto-filed by `aida pr auto-queue-review` (typically from /aida-pr) (session `01a1c462`) for branch `task-3428-globs-b1`.
+
+  - PR: <https://github.com/joemooney/aida/pull/3770>
+  - Branch: `task-3428-globs-b1` → `main`
+
+  ## Slice of (Refs only — not completed by this PR)
+
+  Commit subjects carry `(Refs SPEC-ID)`: this PR is one slice of a spec that a later PR completes. Review this slice against that spec's acceptance criteria.
+
+  - TASK-3428
+
+  ## Acceptance
+
+  - Generate a structured review prompt with `aida review prompt --pr 3770` and verify each spec's acceptance criteria.
+  - Approve and merge, or request changes by spec id.
+  - Mark this story `completed` once the PR is merged.
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-11-10T08:23:19.751803784Z
+modified_at: 2026-11-10T08:23:19.751803784Z
+req_type: Story
+filed_at:
+  code_sha: 5c0a841503d9f9fb84c893689f93f46f87738417
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: e682f76092e
+  vendor: claude
+  session: 01a1c462f833
