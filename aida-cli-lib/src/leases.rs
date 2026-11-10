@@ -2,7 +2,52 @@
 //! session leases: lease listing and gates, cross-clone leases, prune and force cleanup, shelve/phase-1 status flips and stale-lease recovery (STORY-1488 slice 1)
 // trace:STORY-1488 | ai:claude
 
-use crate::*;
+use crate::canonical_role_name;
+#[cfg(test)]
+use crate::mcp;
+use crate::{
+    acquire_review_lease_with_mode, apply_unbound_occupant, awaiting_you, build_running_work,
+    claim_worktree_path, classify_seat_activity, clear_worktree_session_leases,
+    collapse_salvageable_by_worktree, collect_blocked_seat_items, dispatch, dispatch_health_ps,
+    gather_running_work, harness_lease_without_pid_signal, humanize_duration_secs, is_own_claim,
+    leases, mail_identity_status_from_env, mark_lease_escalated_to_human, mark_lease_manual_enter,
+    orphaned_in_progress_items, pending_approval, ps_adopted_note, ps_apply_integration_standing,
+    ps_column_width, ps_display_role, ps_elapsed_secs, ps_integration_base_state,
+    ps_integration_overlay_candidate, ps_lease_is_main_checkout, ps_live_fanout_leases,
+    ps_live_in_worktree, ps_liveness_warning, ps_locked_by_cell, ps_manual_enter_secs,
+    ps_orphan_excluded_type, ps_orphan_excluded_type_str, ps_orphan_likely_fanout,
+    ps_orphan_verdict, ps_pid_liveness, ps_prune_orphans_with_occupant, ps_row_role,
+    ps_session_started_at, ps_started_cell, ps_unattributed_movement_note, ps_wrap_cell,
+    read_transcript_tail, role, running_work_spec_from_summary, seat_activity_with_marker,
+    session_reap, spec_scoped_lease, tail_cmd, worker, worktree, MailIdentityStatus, PsDispatch,
+    PsOrphan, PsRow, ReviewLeaseConflictMode, RunningWorkSpec, SeatActivity,
+    LONG_TOOL_CALL_THRESHOLD_SECS, PS_ADOPTED_SLACK_SECS, PS_ROLE_MAX_WIDTH, PS_ROLE_MIN_WIDTH,
+    PS_SPEC_MAX_WIDTH, PS_SPEC_MIN_WIDTH, PS_SUBAGENT_ROLE,
+};
+use crate::{
+    agent_registry, aggregate_session_activity_into_roles, auto_complete,
+    auto_complete_phase1_target_status, confirm, coordination, current_branch_at,
+    detect_default_branch_ref, detect_distributed_store_from, drain_state,
+    effective_display_status, find_main_worktree_root, find_orchestrated_lease, find_project_root,
+    git_arg_guard, glyph, hostname, in_flight_lease_role_map, load_dispenser, orchestrator,
+    process_probe, punt, queue_cmd, record_role_activity, requeue, session, session_manifest,
+    slugify, status_display, strip_toml_inline_comment, truncate, unique_prefix_len,
+    worktree_dirty_entries, worktree_lease,
+};
+use aida_core::liveness::{
+    classify_lease_state, classify_stale_lease_recovery, LeaseState, StaleLeaseRecovery,
+};
+use aida_core::liveness::{classify_spec_liveness, SpecLiveness};
+use aida_core::DatabaseBackend;
+use aida_core::{
+    write_atomic, RelationshipType, Requirement, RequirementStatus, RequirementType,
+    RequirementsStore, Storage,
+};
+use anyhow::{Context, Result};
+use colored::Colorize;
+use std::collections::HashSet;
+use std::io::IsTerminal;
+use uuid::Uuid;
 
 // trace:STORY-1728 | ai:claude
 #[path = "leases_args.rs"]
@@ -5133,7 +5178,7 @@ fn run_fasttrack(
     matches: &clap::ArgMatches,
     ctx: &crate::cmdkit::DispatchCtx,
 ) -> anyhow::Result<crate::cmdkit::Flow> {
-    use crate::*;
+    use crate::{fasttrack_lane_filing, handle_fasttrack_status, FasttrackArgs};
     let args = <FasttrackArgs as clap::FromArgMatches>::from_arg_matches(matches)?;
     match &ctx.store {
         None => Ok(crate::cmdkit::Flow::Continue),

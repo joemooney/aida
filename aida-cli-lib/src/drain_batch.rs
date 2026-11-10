@@ -1,8 +1,21 @@
 //! batch and single-branch drain drivers and cluster PRs (STORY-1488 slice 1)
 // trace:STORY-1488 | ai:claude
 
-use crate::*;
+use crate::current_branch_head_sha;
+use crate::process_retry::RetryEtxtbsy;
+use crate::{
+    aida_exe_path, auto_complete, branch_ahead_of, detect_open_pr_for_spec_via_forge, drain_caps,
+    drain_state, drain_summary, drive_robustness, emit_drain_cap_stop, entry_matches_role_filter,
+    events, finalize_drain_summary, find_main_worktree_root, find_project_root, last_drain,
+    maybe_digest_mailbox_best_effort, pr_ship, prompt_yes_no, queue_cmd, queue_role_fallback,
+    resolve_queue_role_filter, run_auto_complete, sum_headless_log_tokens, DrainTuning, PrLookup,
+    ResumeEntry, DEFAULT_MAX_FAILURES, DRAIN_CAP_EXIT_CODE,
+};
 use aida_core::git_ops::RemoteCredentialsExt as _;
+use aida_core::Storage;
+use anyhow::{Context, Result};
+use colored::Colorize;
+use std::io::IsTerminal;
 
 // Child-process batch pipelining preserves the existing per-spec engine while
 // passing the in-process outcome back to the parent scheduler.

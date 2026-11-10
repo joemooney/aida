@@ -1,7 +1,25 @@
 //! Spec dry-run/interview, `aida intent` and `aida why` handlers (STORY-1488 slice 1)
 // trace:STORY-1488 | ai:claude
 
-use crate::*;
+use crate::process_retry::RetryEtxtbsy;
+use crate::run;
+use crate::{
+    agent_output_mode, aida_exe_path, all_queued_requirement_ids, auto_complete_telemetry,
+    burndown, collect_git_linkage, collect_open_facts, collect_unblock_facts,
+    detect_distributed_store_from, detect_open_pr_for_spec, drain_state, dryrun,
+    effective_display_status, effective_needs_attention_lens_with_source, events,
+    filing_drift_hint, find_project_root, humanize_duration_secs, in_flight_lease_role_map,
+    in_flight_lease_scopes, intent, interview, lease_state_for, list_leases, load_dispenser,
+    load_store_for_lookup, process_probe, short_lease_id, spec_scoped_lease, status_display,
+    PrLookup, SpecCommand,
+};
+use aida_core::liveness::LeaseState;
+use aida_core::DatabaseBackend;
+use aida_core::{RelationshipType, Requirement, RequirementStatus};
+use anyhow::{Context, Result};
+use colored::Colorize;
+use std::io::IsTerminal;
+use uuid::Uuid;
 
 // trace:STORY-1728 | ai:claude
 #[path = "plan_intent_args.rs"]
@@ -2411,7 +2429,7 @@ fn run_spec(
     matches: &clap::ArgMatches,
     ctx: &crate::cmdkit::DispatchCtx,
 ) -> anyhow::Result<crate::cmdkit::Flow> {
-    use crate::*;
+    use crate::{handle_spec_dryrun, handle_spec_interview, SpecArgs, SpecCommand};
     let args = <SpecArgs as clap::FromArgMatches>::from_arg_matches(matches)?;
     match &ctx.store {
         None => {

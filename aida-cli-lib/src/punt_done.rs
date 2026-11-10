@@ -1,7 +1,15 @@
 //! `aida punt`/`aida done`/`aida punts` handlers, mention notifications and the completion crescendo (STORY-1488 slice 1)
 // trace:STORY-1488 | ai:claude
 
-use crate::*;
+use crate::{
+    advisor, agent_output_mode, completion, current_user_id, find_project_root, glyph,
+    mailbox_store, not_found, punt, record_caller_status_transition, record_role_activity,
+    status_advance_requires_advisor_authority, PuntsCommand, StakeholderAction,
+};
+use aida_core::DatabaseBackend;
+use aida_core::{forbidden_attention_transition, AttentionReason, RequirementStatus};
+use anyhow::Result;
+use colored::Colorize;
 
 // trace:STORY-1728 | ai:claude
 #[path = "punt_done_args.rs"]
@@ -1286,7 +1294,7 @@ fn run_done(
     matches: &clap::ArgMatches,
     ctx: &crate::cmdkit::DispatchCtx,
 ) -> anyhow::Result<crate::cmdkit::Flow> {
-    use crate::*;
+    use crate::{handle_done_command, DoneArgs};
     let args = <DoneArgs as clap::FromArgMatches>::from_arg_matches(matches)?;
     match &ctx.store {
         None => Ok(crate::cmdkit::Flow::Continue),
@@ -1370,7 +1378,7 @@ fn run_punt(
     matches: &clap::ArgMatches,
     ctx: &crate::cmdkit::DispatchCtx,
 ) -> anyhow::Result<crate::cmdkit::Flow> {
-    use crate::*;
+    use crate::{handle_punt_command, PuntArgs};
     let args = <PuntArgs as clap::FromArgMatches>::from_arg_matches(matches)?;
     match &ctx.store {
         None => Ok(crate::cmdkit::Flow::Continue),

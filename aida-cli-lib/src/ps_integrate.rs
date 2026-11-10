@@ -1,7 +1,30 @@
 //! ps rows, seat activity probes, running-work gathering, and integrate (STORY-1488 slice 1)
 // trace:STORY-1488 | ai:claude
 
-use crate::*;
+use crate::leases::LeaseStateGlyph;
+use crate::{
+    advance_backend, agent_output_mode, agent_registry, attributable_live_sessions, awaiting_you,
+    config_path_for_project, current_user_id, detect_distributed_store,
+    detect_distributed_store_from, detect_open_pr_for_spec_via_forge, detect_stranded_primary,
+    dispatch_health_ps, drain_lock, drain_state, driver_view, enforce_team_gate, find_project_root,
+    focus, humanize_duration_secs, inspector_pids, integrate, integrate_view,
+    is_agent_managed_worktree, lease_state_for, list_leases, load_store_for_lookup,
+    main_worktree_root_from, output_format_is_json, pending_approval, permissions, presence,
+    print_stranded_primary_banner, probe_resume_facts, process_probe, queue_cmd, session,
+    session_manifest, session_reap, spec_scoped_lease, tail_cmd, toon_status_token, truncate,
+    unique_prefix_len, worktree_lease, worktree_lock, PrLookup, SessionLease,
+};
+use crate::{
+    dispatch, hostname, lease_path, leases, leases_dir, mail_wake, ownership, role, worker,
+    worktree, zen,
+};
+use aida_core::liveness::LeaseState;
+use aida_core::DatabaseBackend;
+use aida_core::Storage;
+use anyhow::Result;
+use colored::Colorize;
+use std::collections::HashSet;
+use uuid::Uuid;
 
 /// The shortest unambiguous prefix of a lease id, for the `aida session end
 /// <id>` hint. Reuses the same disambiguation helper the `aida session leases`
