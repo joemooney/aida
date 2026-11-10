@@ -8,7 +8,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-10T03:52:00.571796159Z
-modified_at: 2026-11-10T18:30:48.253188727Z
+modified_at: 2026-11-10T18:35:09.434231114Z
 req_type: Story
 comments:
 - id: 01a1c399-6840-7383-843e-9930f6eaa3f7
@@ -305,6 +305,20 @@ comments:
   modified_at: 2026-11-10T18:29:03.407926412Z
   session_id: 01a1c530-c917-7f13-ab81-f6b5e1d1cd30
   harness_version: 2.1.322 (Claude Code)
+- id: 01a1c6bc-cc19-7e61-9bf3-224ebd962287
+  author: dirtlab
+  content: 'Round 4 follow-up: current branch already removes successful_reader_can_exceed_former_report_deadline (218f0aa583) and shares core output-format alias parsing (353ad9bf53). Added shared-parser regression coverage and explicit --format precedence parity for alias-pinned invalid-window and failed-reader errors. Core regression passed (1 executed test). Targeted multicall/parity validation is running. make check-ci-fast stops in unrelated Codex mail-wake ownership fixtures: health project directory must be owned without shared writes.'
+  created_at: 2026-11-10T18:33:44.217898352Z
+  modified_at: 2026-11-10T18:33:44.217898352Z
+  session_id: 01a1c6ba16ab
+  harness_version: codex-cli 0.167.0
+- id: 01a1c6be-18fa-7131-b0e2-20382467308e
+  author: dirtlab
+  content: 'Round 4 validation complete: shared output-format unit regression passed (1 test); builtin_porcelain_parity passed (1 test, 1.23s); multicall passed (2 tests, 0.01s). git diff --check passed. No delayed-reader test or time-budget exception exists. New uncommitted follow-up tests cover aliases/unknown format values and explicit format precedence on validation and reader failures. Fast gate remains blocked by unrelated Codex mail-wake ownership fixtures.'
+  created_at: 2026-11-10T18:35:09.434231114Z
+  modified_at: 2026-11-10T18:35:09.434231114Z
+  session_id: 01a1c6ba16ab
+  harness_version: codex-cli 0.167.0
 history:
 - id: 01a1c399-7102-7f81-9bb9-fd37379159d3
   author: joe
