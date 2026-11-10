@@ -8,7 +8,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-09T01:59:04.579891982Z
-modified_at: 2026-11-10T22:18:25.814148716Z
+modified_at: 2026-11-10T22:24:28.873389653Z
 req_type: Story
 tags:
 - area:orchestration
@@ -29,6 +29,13 @@ comments:
     No implementation blockers. Navigation fallback: the operator-supplied /home/joe/ai/aida/.codegraph/proxy-state/bin/codegraph is absent; aida doctor check codegraph reports missing. Host should deploy the reviewed client and supply the working absolute path. No commit, push, PR creation, review recording, shipping merge, or queue completion was attempted. Host publication and subsequent queue completion remain pending.
   created_at: 2026-11-10T22:18:25.814148716Z
   modified_at: 2026-11-10T22:18:25.814148716Z
+  session_id: 01a1c781eeab
+  harness_version: codex-cli 0.167.0
+- id: 01a1c790-0cc9-79a1-8779-fe7f0d736efe
+  author: dirtlab
+  content: 'Fast-gate fix round: added the three missing reviewed rows in scripts/store-writers.toml. Classified local Vec::truncate and Python str.replace as read_only; retained the train dispatch wrapper as blocked with existing dispatch/train authority gates. No runtime code changed. Validation: python3 scripts/check-store-writers.py passed (3484 sites, 294 operation mappings); python3 tests/test_store_writer_inventory.py passed 54 tests; git diff --check passed. Edits remain uncommitted for host publication; existing punt/hold signals remain unchanged.'
+  created_at: 2026-11-10T22:24:28.873389653Z
+  modified_at: 2026-11-10T22:24:28.873389653Z
   session_id: 01a1c781eeab
   harness_version: codex-cli 0.167.0
 history:
