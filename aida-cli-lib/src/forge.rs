@@ -3063,16 +3063,28 @@ impl Forge for GitLabForge {
     }
 
     fn change_for_spec(&self, spec: &str) -> Result<ChangeLookup> {
-        // STORY-509: the BUG-223 fallback — find the open MR whose title/body
-        // references `spec` when the branch-keyed lookup misses (branch swapped).
-        // BUG-639: via REST (`…?search=<spec>&state=opened`). The branch label is
-        // unknown from a spec search; the parser fills it from the MR's own
-        // source_branch. trace:STORY-509 trace:BUG-223 trace:BUG-639 | ai:claude
-        let out = self.glab_api_get(
-            "projects/:id/merge_requests",
-            &[("search", spec), ("state", "opened")],
-        );
-        Ok(glab_lookup_from_list_output(out, ""))
+        // GitLab search omits source_branch. Enumerate open MRs to exhaustion
+        // and match title/description/branch locally; any failed page is unknown.
+        // trace:BUG-2516 | ai:codex
+        for page in 1u64.. {
+            let page = page.to_string();
+            let out = self.glab_api_get(
+                "projects/:id/merge_requests",
+                &[("state", "opened"), ("per_page", "100"), ("page", &page)],
+            );
+            let count = out.as_ref().ok().and_then(|out| {
+                serde_json::from_slice::<serde_json::Value>(&out.stdout)
+                    .ok()
+                    .and_then(|rows| rows.as_array().map(Vec::len))
+            });
+            match glab_spec_lookup_from_list_output(out, spec) {
+                ChangeLookup::NoChange if count.is_some_and(|count| count >= 100) => continue,
+                answer => return Ok(answer),
+            }
+        }
+        Ok(ChangeLookup::CliFailed(
+            "GitLab pagination exhausted".into(),
+        ))
     }
 
     fn merged_change_for_branch(&self, branch: &str) -> Result<ChangeLookup> {
@@ -3964,6 +3976,57 @@ fn glab_lookup_from_list_output(
         Ok(_) => ChangeLookup::CliFailed("glab mr list JSON was not an array".to_string()),
         Err(e) => ChangeLookup::CliFailed(format!("could not parse glab mr list JSON: {e}")),
     }
+}
+
+/// Enumerate open MR ownership using case-insensitive spec-ID containment in
+/// title, description or source_branch (binding advisor ruling PR-3774 round 2).
+/// Every row must retain all ownership evidence; only an explicit null description
+/// means an empty body. The caller follows full pages before declaring absence.
+// trace:BUG-2516 | ai:codex
+fn glab_spec_lookup_from_list_output(
+    out: Result<std::process::Output>,
+    spec: &str,
+) -> ChangeLookup {
+    let out = match out {
+        Ok(out) if out.status.success() => out,
+        other => return glab_lookup_from_list_output(other, ""),
+    };
+    let rows = match serde_json::from_slice::<serde_json::Value>(&out.stdout) {
+        Ok(serde_json::Value::Array(rows)) => rows,
+        _ => return ChangeLookup::CliFailed("invalid GitLab search response".into()),
+    };
+    let spec = spec.to_ascii_lowercase();
+    let mut first = None;
+    for row in &rows {
+        let field = |name: &str| row.get(name).and_then(|v| v.as_str());
+        let description = match row.get("description") {
+            Some(serde_json::Value::Null) => Some(""),
+            Some(value) => value.as_str(),
+            None => None,
+        };
+        let (Some(_id), Some(title), Some(description), Some(branch)) = (
+            row.get("iid").and_then(|v| v.as_u64()).filter(|id| *id > 0),
+            field("title"),
+            description,
+            field("source_branch"),
+        ) else {
+            return ChangeLookup::CliFailed(
+                "GitLab search could not establish open-change evidence: incomplete ownership fields".into(),
+            );
+        };
+        if field("state").is_some_and(|state| !state.eq_ignore_ascii_case("opened")) {
+            continue;
+        }
+        if !spec.is_empty()
+            && [title, description, branch]
+                .iter()
+                .any(|text| text.to_ascii_lowercase().contains(&spec))
+            && first.is_none()
+        {
+            first = change_ref_from_glab_mr(row, "");
+        }
+    }
+    first.map_or(ChangeLookup::NoChange, ChangeLookup::Found)
 }
 
 /// Heuristic: does a `glab` stderr indicate a *transient* network/API outage
