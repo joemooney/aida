@@ -39,10 +39,18 @@ pub(crate) fn spawn_agent(ctx: &LaunchContext) -> Result<Command> {
     let resources = if ctx.fixture_override() || ctx.wrapper_environment() {
         None
     } else {
-        super::resources::SandboxResources::for_seat(ctx.exec(), ctx.host_main(), ctx.cwd())?
+        super::resources::SandboxResources::for_seat(
+            ctx.exec_context(),
+            ctx.host_main(),
+            ctx.cwd(),
+        )?
     };
     if profile.clears_environment() && !ctx.fixture_override() && !ctx.wrapper_environment() {
-        let env = profile.child_env(ctx.kind(), ctx.exec().environment(), resources.as_ref())?;
+        let env = profile.child_env(
+            ctx.kind(),
+            ctx.exec_context().environment(),
+            resources.as_ref(),
+        )?;
         cmd.env_clear().envs(env.pairs());
     }
     // Vendors that retain parent env still receive the seat-owned build values.

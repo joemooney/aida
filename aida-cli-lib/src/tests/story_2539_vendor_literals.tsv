@@ -344,9 +344,9 @@ aida-cli-lib/src/launch/contained.rs|impl(PreparedLaunch:)::prepare_with_io|lite
 aida-cli-lib/src/launch/context.rs|LaunchContext|typed:LaunchVendor	1
 aida-cli-lib/src/launch/context.rs|LaunchRefusal|typed:LaunchVendor	1
 aida-cli-lib/src/launch/context.rs|LaunchRequest|typed:LaunchVendor	1
-aida-cli-lib/src/launch/context.rs|impl(LaunchContext:)::resolve_with|literal:agy	1
-aida-cli-lib/src/launch/context.rs|impl(LaunchContext:)::resolve_with|typed:Agy	1
-aida-cli-lib/src/launch/context.rs|impl(LaunchContext:)::resolve_with|typed:LaunchVendor	1
+aida-cli-lib/src/launch/context.rs|impl(LaunchContext:)::resolve_inputs|literal:agy	1
+aida-cli-lib/src/launch/context.rs|impl(LaunchContext:)::resolve_inputs|typed:Agy	1
+aida-cli-lib/src/launch/context.rs|impl(LaunchContext:)::resolve_inputs|typed:LaunchVendor	1
 aida-cli-lib/src/launch/context.rs|impl(LaunchContext:)::vendor|typed:LaunchVendor	1
 aida-cli-lib/src/launch/context.rs|launch_vendor|typed:Agy	2
 aida-cli-lib/src/launch/context.rs|launch_vendor|typed:Claude	2

@@ -125,7 +125,7 @@ impl LaunchContext {
         Self::resolve_inputs(exec, req, parent_contained, agent_cmd)
     }
 
-    pub(crate) fn exec(&self) -> &ExecContext {
+    pub(crate) fn exec_context(&self) -> &ExecContext {
         &self.exec
     }
 
@@ -327,7 +327,7 @@ mod exec_context_tests {
                     let exec = fixture(Some(std::ffi::OsStr::new("off")), home);
                     let ctx = LaunchContext::resolve(&exec, request()).unwrap();
                     assert!(!ctx.parent_contained());
-                    assert_eq!(ctx.exec().home(), Some(Path::new(home)));
+                    assert_eq!(ctx.exec_context().home(), Some(Path::new(home)));
                     assert_eq!(
                         crate::glyph_config::config_path_for(
                             crate::glyph_config::Scope::User,
