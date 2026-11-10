@@ -3,12 +3,12 @@ spec_id: STORY-b6b1278890774ef993d2ebc327862470-622
 agreed_id: STORY-2699
 title: 'aida flow report: per-PR stage timings and change-request reasons from the gate ledger and forge'
 description: 'Productize the advisor''s ad hoc report (2026-11-09). For PRs landed in a window, report: open-to-land time, pushes, verdict counts by kind, time to first review, approval-to-land, CI wall time per run, train time, and blocking findings classified (CI failure, metadata, scope, tests missing, conflict, correctness, other) with severity. Output human table and --format json; aggregate medians and p90. Purpose: show where time goes and measure throughput changes (STORY-2694, STORY-2697, STORY-2695, risk-scaled review) against a baseline. Acceptance: fixture ledger plus fake forge test for each metric; documented in docs/cli.'
-status: InProgress
+status: Approved
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-10T03:05:48.772156134Z
-modified_at: 2026-11-10T04:10:17.515164030Z
+modified_at: 2026-11-10T04:15:56.267769414Z
 req_type: Story
 comments:
 - id: 01a1c36e-1e94-7e70-8f74-74786437eaa0
@@ -64,6 +64,13 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a1c3ab-75ec-78d3-b69b-6dfbba898f2a
+  author: joe
+  timestamp: 2026-11-10T04:15:56.396049491Z
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Approved
 filed_at:
   code_sha: 838f14c3c2811c6b63da5d465700cff773c36190
   branch: main
