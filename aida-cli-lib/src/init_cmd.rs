@@ -7151,6 +7151,24 @@ fn run_init(matches: &clap::ArgMatches, _ctx: &crate::cmdkit::DispatchCtx) -> an
                 e
             );
         }
+        // trace:BUG-2513 | ai:codex
+        let root = statusline_project_root();
+        let codex_selected = match agent.as_deref() {
+            Some(selection) => parse_agent_selection(selection)?.codex,
+            None => {
+                read_enabled_agent_selection(&root).is_some_and(|s| s.codex)
+                    || aida_core::agents_config::resolve_default_vendor(&root).as_deref()
+                        == Some(crate::vendors::native_setup::KEY)
+            }
+        };
+        if let Err(e) = config_cmd::offer_init_codex_native(
+            &root,
+            codex_selected,
+            std::io::stdin().is_terminal() && std::io::stdout().is_terminal(),
+            || crate::prompt_yes_no(crate::vendors::native_setup::PROMPT, false),
+        ) {
+            eprintln!("  Native sandbox opt-in skipped: {e}");
+        }
         if let Err(e) = config_cmd::maybe_offer_permission_posture_fix(&statusline_project_root()) {
             eprintln!(
                 "  {} agent permission posture check skipped: {}",
