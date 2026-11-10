@@ -19,7 +19,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-10T11:29:50.373967960Z
-modified_at: 2026-11-10T16:57:07.929647703Z
+modified_at: 2026-11-10T16:57:12.216655140Z
 req_type: Bug
 comments:
 - id: 01a1c63b-ee32-7502-886f-4dbf64e2d225
@@ -126,6 +126,12 @@ history:
   - field_name: status
     old_value: NeedsAttention
     new_value: Approved
+- id: 01a1c664-6b71-7642-b3ba-6fa81b3bb87a
+  author: joe
+  timestamp: 2026-11-10T16:57:12.305696420Z
+  session_id: 01a1c39a-801a-7bd1-8da9-c955a6707f0b
+  harness_version: 2.1.321 (Claude Code)
+  changes: []
 filed_at:
   code_sha: 0f2b06b24bdb187b1ba22dec1edf9f883fc540e7
   branch: main
