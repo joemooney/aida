@@ -23,7 +23,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-07T19:59:26.079479Z
-modified_at: 2026-11-10T07:53:20.790586548Z
+modified_at: 2026-11-10T08:33:04.457746529Z
 req_type: Story
 relationships:
 - rel_type: Supersedes
@@ -609,6 +609,13 @@ comments:
   content: 'AC1 evidence, dell1 half (advisor, 2026-11-10 07:53 UTC): lane STORY-2661 on dell1 (seat clone, launcher at main >= #3657), second lane job (make check-ci-fast after the targeted cargo test job j20261110T070755421-2-0): ''lane sccache: final job statistics'' Compile requests 65, Cache hits 56, Cache hits (Rust) 56, Cache location Local disk /home/dirtlab/.cache/aida/lane-sccache (dell1:~/lane-STORY-2661.log lines 165-195). Primary-host half pending: will be taken from TASK-3428 / TASK-3780 local lanes running now.'
   created_at: 2026-11-10T07:53:20.790586548Z
   modified_at: 2026-11-10T07:53:20.790586548Z
+  session_id: 01a1c39a-801a-7bd1-8da9-c955a6707f0b
+  harness_version: 2.1.321 (Claude Code)
+- id: 01a1c496-dfc9-7100-ab7a-df3532d1cae8
+  author: joe
+  content: 'AC1 primary-host attempt (advisor, 2026-11-10 08:33 UTC): NOT yet satisfied. Local lanes TASK-3428 and TASK-3780 final jobs (make check-ci-fast) show Cache hits (Rust) 0, Cache misses (Rust) 186 each, location /home/joe/.cache/aida/lane-sccache. That cache directory was created 2026-11-10 00:36 MST and both final jobs ran concurrently on it, so both were cold; this is not yet evidence of a defect. The next local lane''s make check-ci-fast is the deciding sample: Rust hits > 0 completes AC1; 0 again means a real primary-host defect (note primary routes cargo through the ~/.local/bin/cargo slot gate, dell1 does not), to be filed as a bug.'
+  created_at: 2026-11-10T08:33:04.457746529Z
+  modified_at: 2026-11-10T08:33:04.457746529Z
   session_id: 01a1c39a-801a-7bd1-8da9-c955a6707f0b
   harness_version: 2.1.321 (Claude Code)
 history:
