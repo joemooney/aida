@@ -3,12 +3,12 @@ spec_id: TASK-b6b1278890774ef993d2ebc327862470-1059
 agreed_id: TASK-3779
 title: 'Usability sweep: compact ''aida config permissions show'' and pad emoji glyphs in terminal output'
 description: 'Reported from operator''s work machine (Codex, GitLab project hello-work-0x), 2026-11-09. (1) ''aida config permissions show'' is too noisy: one summary row per vendor (tier, launch readiness, net effect) by default; the launch/scope detail lines and long refusal prose move under --verbose. (2) Where output prints an emoji or wide symbol, terminals often swallow the next character; always follow such glyphs with a space (two where the glyph is double-width ambiguous), via one shared helper, with a ratchet test over CLI output strings.'
-status: Approved
+status: InProgress
 priority: Low
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-10T03:07:15.181924192Z
-modified_at: 2026-11-10T18:45:43.226271338Z
+modified_at: 2026-11-10T18:47:20.867231029Z
 req_type: Task
 comments:
 - id: 01a1c674-cd0d-76a2-8159-4728d6fffd38
@@ -139,6 +139,13 @@ history:
   session_id: 01a1c530-c917-7f13-ab81-f6b5e1d1cd30
   harness_version: 2.1.322 (Claude Code)
   changes: []
+- id: 01a1c6c9-4223-7c33-b340-c80dc1ad0f97
+  author: aida-session-start
+  timestamp: 2026-11-10T18:47:20.867230216Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: InProgress
 filed_at:
   code_sha: 838f14c3c2811c6b63da5d465700cff773c36190
   branch: main
