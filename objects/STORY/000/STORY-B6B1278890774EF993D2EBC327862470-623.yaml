@@ -3,12 +3,12 @@ spec_id: STORY-b6b1278890774ef993d2ebc327862470-623
 agreed_id: STORY-2700
 title: aida init can create a new project in a named subdirectory of a workspace directory
 description: Reported from operator's work machine (Codex, GitLab project hello-work-0x), 2026-11-09. Running 'aida init --git-init' in a directory holding 100 child projects refuses (correctly) with a workspace warning, but there is no direct way to create a new project as a subdirectory. Add 'aida init <dir>' (create the directory if absent, git init it with --git-init, and initialize there), and make the workspace refusal suggest it with the exact command.
-status: InProgress
+status: Completed
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-10T03:06:04.091362856Z
-modified_at: 2026-11-10T19:29:12.457167990Z
+modified_at: 2026-11-10T21:02:59.127340198Z
 req_type: Story
 history:
 - id: 01a1c5dd-2ca4-7412-b820-be3ab9103cea
@@ -33,6 +33,20 @@ history:
   session_id: 01a1c6ef3d4a
   harness_version: codex-cli 0.167.0
   changes: []
+- id: 01a1c745-6ff2-76c0-9831-685499c688d8
+  author: aida-auto-bump
+  timestamp: 2026-11-10T21:02:59.058950048Z
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Completed
+processing_record:
+- id: 01a1c745-7037-7831-98d7-3940fb28cbe5
+  timestamp: 2026-11-10T21:02:59.127337435Z
+  agent: aida
+  commit_sha: 56c254c974342621b274d2216f4284802760c87a
+  summary: 'Full sweep: all STORY-2700 criteria verified by source and exact-head green PR CI; no actionable defects.'
+  review_verdict: approved
 filed_at:
   code_sha: 838f14c3c2811c6b63da5d465700cff773c36190
   branch: main
@@ -42,3 +56,7 @@ filed_at:
   vendor: claude
   session: 01a1beff-fc3b-78e2-93e2-9b0c283b0339
   harness_version: 2.1.319 (Claude Code)
+implementation_info:
+  implemented: false
+  completed_at: 2026-11-10T21:02:59.058944955Z
+  completion_sha: 56c254c974342621b274d2216f4284802760c87a
