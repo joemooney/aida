@@ -154,6 +154,8 @@ struct GhPr {
     review_decision: String,
     updated_at: String,
     status_check_rollup: Option<Vec<serde_json::Value>>,
+    #[serde(default)]
+    labels: Vec<serde_json::Value>,
 }
 
 fn pr_list_github(
@@ -168,7 +170,7 @@ fn pr_list_github(
             "--state",
             "open",
             "--json",
-            "number,url,headRefName,title,body,mergeable,reviewDecision,updatedAt,statusCheckRollup",
+            "number,url,headRefName,title,body,mergeable,reviewDecision,updatedAt,statusCheckRollup,labels",
         ])
         .output()
         .context("running gh pr list")?;
@@ -201,8 +203,13 @@ fn github_entries(
         };
         let rebase_needed = pr.mergeable == "CONFLICTING" || pr.mergeable == "UNKNOWN"; // GH often says UNKNOWN if it hasn't checked recently, but CONFLICTING is the main one. We can also check if behind? gh pr list doesn't give behind count easily without fields that cause n+1. We'll stick to CONFLICTING.
 
+        // trace:BUG-2492 | ai:codex — confirm the hold before tolerating pending.
+        let has_label = |name| pr.labels.iter().any(|label| label["name"] == name);
+        let held = has_label("aida:merge-hold")
+            || (has_label("aida:merge-hold-recorded") && !has_label("aida:merge-hold-cleared"));
         // trace:BUG-1935 | ai:claude
         let ci_status = match &pr.status_check_rollup {
+            Some(rollup) if held => github_rollup_ci_status_for(rollup, ci_cfg, true),
             Some(rollup) => github_rollup_ci_status(rollup, ci_cfg),
             None => "Unknown".to_string(),
         };
@@ -315,7 +322,7 @@ pub(crate) fn github_rollup_ci_status(
 }
 
 /// [`github_rollup_ci_status`] for a PR whose merge-hold state is known:
-/// with `held`, a red `merge-hold-gate` check is the hold (owned by the hold
+/// with `held`, a pending or legacy red `merge-hold-gate` check is the hold (owned by the hold
 /// clear), not a CI failure — the way `aida pr ship` classifies it.
 // trace:STORY-1887 | ai:claude
 pub(crate) fn github_rollup_ci_status_for(
@@ -327,10 +334,23 @@ pub(crate) fn github_rollup_ci_status_for(
         return "None".to_string();
     }
     let rows: Vec<crate::ci_gate::CheckRow> = rollup.iter().map(rollup_check_row).collect();
-    let refined = crate::ci_gate::classify_red(&rows, &[], cfg, false, held);
+    // trace:BUG-2492 | ai:codex — the listing has no release authority.
+    // Ship refuses an unconfirmed pending hold; here a transient label
+    // inspection remains Pending rather than claiming an actual CI failure.
+    let unconfirmed_pending_hold = |row: &crate::ci_gate::CheckRow| {
+        !held
+            && row.bucket == "pending"
+            && crate::ci_gate::check_name_eq(&row.name, crate::ci_gate::HOLD_GATE_CHECK)
+    };
+    let inspecting_hold = rows.iter().any(unconfirmed_pending_hold);
+    let classified_rows: Vec<_> = rows
+        .into_iter()
+        .filter(|row| !unconfirmed_pending_hold(row))
+        .collect();
+    let refined = crate::ci_gate::classify_red(&classified_rows, &[], cfg, false, held);
     if refined.is_real() {
         "Failing".to_string()
-    } else if refined.has_pending() {
+    } else if refined.has_pending() || inspecting_hold {
         "Pending".to_string()
     } else if refined.ignored_informational.is_empty() {
         "Passing".to_string()
@@ -590,6 +610,38 @@ mod tests {
             ]
         })
         .to_string()
+    }
+
+    // trace:BUG-2492 | ai:codex
+    #[test]
+    fn bug2492_pr_list_pending_hold_uses_labels_and_preserves_other_pending() {
+        for labels in [
+            serde_json::json!([]),
+            serde_json::json!([{"name":"aida:merge-hold"}]),
+            serde_json::json!([{"name":"aida:merge-hold-recorded"}]),
+            serde_json::json!([{"name":"aida:merge-hold-recorded"},{"name":"aida:merge-hold-cleared"}]),
+        ] {
+            let held = labels.as_array().unwrap().len() == 1;
+            for build in ["SUCCESS", "PENDING", "FAILURE"] {
+                let mut pr: serde_json::Value =
+                    serde_json::from_str(&gh_pr_json(42, "work", "topic", "")).unwrap();
+                pr["labels"] = labels.clone();
+                pr["statusCheckRollup"] = serde_json::json!([
+                    {"__typename":"StatusContext","context":"merge-hold-gate","state":"PENDING"},
+                    {"__typename":"StatusContext","context":"Build","state":build}
+                ]);
+                let entries =
+                    github_entries(gh_prs(&format!("[{pr}]")), &[], &CiGateConfig::default());
+                let expected = if build == "FAILURE" {
+                    "Failing"
+                } else if held && build == "SUCCESS" {
+                    "Passing"
+                } else {
+                    "Pending"
+                };
+                assert_eq!(entries[0].ci, expected, "{labels}: {build}");
+            }
+        }
     }
 
     #[test]

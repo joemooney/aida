@@ -112,7 +112,7 @@ pub(crate) enum CiProbe {
     InProgress { pr_number: u32 },
     /// All checks passed.
     Green { pr_number: u32 },
-    /// At least one check failed.
+    /// A check failed, or the hold gate needs hold-aware refinement.
     Red {
         pr_number: u32,
         failed_summary: String,
@@ -346,11 +346,15 @@ pub(crate) fn watch_ci_for_context_with_forge(
 /// an optional one — but it can always tell "concluded" from "still
 /// running", and a check still `IN_PROGRESS`/`QUEUED` might be the one that
 /// actually decides code health (e.g. the build), even while a fast-failing
-/// gate check (e.g. a supervised merge-hold marker check, which fails by
-/// construction) has already concluded. Ending the wait on the gate's
+/// gate check has already concluded. The merge-hold gate's pending status
+/// is routed as coarse Red after other checks settle only with confirmed
+/// active or uncleared recorded hold labels. Without that evidence the pending
+/// inspection stays InProgress for every caller; it never implies Green.
+/// Ending the wait on the gate's
 /// conclusion alone let a caller declare CI red — and emit a terminal wake —
 /// before the real build had even reported in. Waiting for every check to
-/// settle before returning Red or Green is the conservative, always-safe
+/// settle (apart from the hold routed to refinement) before returning Red or
+/// Green is the conservative, always-safe
 /// reading: it never reports a verdict while something is still pending or
 /// unknown (PRIN-5), at the cost of not fast-failing on an unrelated
 /// optional check while something else is still running.
@@ -408,6 +412,21 @@ pub(crate) fn parse_ci_probe(stdout: &str) -> CiProbe {
     // Tally check states. statusCheckRollup entries can be from
     // CheckRun (status=COMPLETED|IN_PROGRESS|QUEUED, conclusion=SUCCESS|FAILURE|...)
     // or StatusContext (state=SUCCESS|FAILURE|PENDING|ERROR). Handle both.
+    // trace:BUG-2492 | ai:codex — coarse consumers do not all refine Red.
+    // Only confirmed holds may turn a pending gate into a hold blocker.
+    let has_label = |name: &str| {
+        pr.get("labels")
+            .and_then(|v| v.as_array())
+            .is_some_and(|labels| {
+                labels.iter().any(|l| {
+                    l.as_str()
+                        .or_else(|| l.get("name").and_then(|v| v.as_str()))
+                        == Some(name)
+                })
+            })
+    };
+    let hold_evidence = has_label("aida:merge-hold")
+        || (has_label("aida:merge-hold-recorded") && !has_label("aida:merge-hold-cleared"));
     let mut any_in_progress = false;
     let mut failed: Vec<String> = Vec::new();
     for check in rollup {
@@ -418,7 +437,21 @@ pub(crate) fn parse_ci_probe(stdout: &str) -> CiProbe {
                 .and_then(|v| v.as_str())
                 .unwrap_or("");
             match status {
-                "IN_PROGRESS" | "QUEUED" | "PENDING" | "WAITING" => any_in_progress = true,
+                "IN_PROGRESS" | "QUEUED" | "PENDING" | "WAITING" => {
+                    // trace:BUG-2492 | ai:codex — let the hold-aware refiner
+                    // confirm this blocker after ordinary CI settles.
+                    let name = check
+                        .get("name")
+                        .and_then(|v| v.as_str())
+                        .unwrap_or("check");
+                    if hold_evidence
+                        && crate::ci_gate::check_name_eq(name, crate::ci_gate::HOLD_GATE_CHECK)
+                    {
+                        failed.push(name.to_string());
+                    } else {
+                        any_in_progress = true;
+                    }
+                }
                 "COMPLETED" => {
                     if matches!(
                         conclusion,
@@ -436,7 +469,21 @@ pub(crate) fn parse_ci_probe(stdout: &str) -> CiProbe {
         } else if let Some(state) = check.get("state").and_then(|v| v.as_str()) {
             // StatusContext shape
             match state {
-                "PENDING" | "EXPECTED" => any_in_progress = true,
+                "PENDING" | "EXPECTED" => {
+                    // trace:BUG-2492 | ai:codex — a pending hold is a blocker
+                    // to refine, not a build that will eventually finish.
+                    let name = check
+                        .get("context")
+                        .and_then(|v| v.as_str())
+                        .unwrap_or("status");
+                    if hold_evidence
+                        && crate::ci_gate::check_name_eq(name, crate::ci_gate::HOLD_GATE_CHECK)
+                    {
+                        failed.push(name.to_string());
+                    } else {
+                        any_in_progress = true;
+                    }
+                }
                 "FAILURE" | "ERROR" => {
                     let name = check
                         .get("context")
@@ -448,10 +495,10 @@ pub(crate) fn parse_ci_probe(stdout: &str) -> CiProbe {
             }
         }
     }
-    // BUG-1455: a check still running always keeps the verdict open, even
+    // BUG-1455: an ordinary check still running keeps the verdict open, even
     // when another check has already concluded a failure — a partial
     // rollup must never be read as terminal. Only once nothing is left
-    // running do concluded failures decide Red vs Green.
+    // running do failures and hold blockers decide Red vs Green.
     if any_in_progress {
         return CiProbe::InProgress { pr_number };
     }
@@ -532,8 +579,8 @@ pub(crate) fn ci_ceiling_verdict_from_rollup(rollup_json: &str) -> Option<CiProb
             }
         }
     }
-    // Review fix: the merge-hold gate fails BY CONSTRUCTION while a hold is
-    // active; it is never a real CI failure. At the ceiling it must not turn a
+    // The merge-hold gate stays pending (legacy publishers failed) while a
+    // hold is active; it is never evidence of a real CI failure. At the ceiling it must not turn a
     // held PR with a stuck check into ci-red. trace:TASK-1453 | ai:claude
     failed.retain(|name| !name.eq_ignore_ascii_case(crate::ci_gate::HOLD_GATE_CHECK));
     if failed.is_empty() {

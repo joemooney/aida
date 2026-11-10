@@ -566,7 +566,7 @@ pub(crate) fn hold_gate_tolerance(
 /// The member half of [`hold_gate_tolerance`], without its "every other row
 /// is green" half: a non-pass hold gate is explained by admitted held members
 /// whose live labels agree with the member gate. The train's readiness poll
-/// uses this while lanes still run (the hold gate fails within seconds, long
+/// uses this while lanes still run (the hold gate becomes pending within seconds, long
 /// before the lanes settle); readiness still needs every other row to settle
 /// green before it reports Green. Unreadable labels fail closed.
 // trace:BUG-2401 | ai:claude
@@ -2167,7 +2167,7 @@ pub(crate) trait TrainForge {
     }
     /// Push `train`'s tip to `branch` and open its train PR.
     fn open(&mut self, train: &Built, branch: &str) -> Result<crate::forge::ChangeRef>;
-    /// BUG-2214: `train` lets the live wait tolerate a merge-hold-gate red
+    /// BUG-2214: `train` lets the live wait tolerate a merge-hold-gate blocker
     /// that is fully explained by admitted held members the mandate covers.
     fn wait_ci(&mut self, change: &crate::forge::ChangeRef, train: &Built) -> Result<CiVerdict>;
     // trace:STORY-2401 | ai:codex
@@ -2432,7 +2432,7 @@ impl LiveTrainForge<'_> {
         }
         let cfg = crate::ci_gate::read_ci_gate_config(&self.project_root);
         // Only the existing, live member-label proof may tolerate a hold. The
-        // hold gate fails seconds after the train opens, while lanes still
+        // hold gate becomes pending seconds after the train opens, while lanes still
         // run: admission is decided from the members' live labels alone, and
         // readiness still waits for every other row to settle green before
         // Green (BUG-2214's tolerance, decided once the others settle).
@@ -2654,7 +2654,7 @@ impl TrainForge for LiveTrainForge<'_> {
         Ok(match ci_state {
             CiState::Success => CiVerdict::Green,
             other => {
-                // BUG-2214: ship tolerates a merge-hold-gate red while the
+                // BUG-2214: ship tolerates a merge-hold-gate blocker while the
                 // hold it will release is still armed (BUG-1180); the train
                 // does the same for admitted held members, re-verifying every
                 // member's live labels. trace:BUG-2214 | ai:claude
