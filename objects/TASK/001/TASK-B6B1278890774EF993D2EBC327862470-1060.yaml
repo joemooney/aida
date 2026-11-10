@@ -3,12 +3,12 @@ spec_id: TASK-b6b1278890774ef993d2ebc327862470-1060
 agreed_id: TASK-3780
 title: 'Crate-split PR9a: lift doctor_cmd.rs''s 31 inline #[cfg(test)] blocks into src/tests/doctor_cmd_*_tests.rs (no production-line changes)'
 description: 'SPIKE-713 deep dive section 6 row doctor_cmd.rs, step 1 (PR9 in section 7). doctor_cmd.rs is 16.6k lines with 31 inline cfg(test) blocks interleaved from ~line 450. Move each block verbatim to aida-cli-lib/src/tests/doctor_cmd_<concern>_tests.rs wired with the STORY-770 pattern (#[cfg(test)] #[path = "tests/NAME.rs"] mod NAME;); widen to pub(crate) only the private items the moved tests reach. Acceptance: (1) no production line changes other than visibility widening (scripts/split-lib/verify_pr.sh-style multiset check or an equivalent diff audit in the PR body); (2) test count for the doctor suites unchanged (before/after cargo test --list counts in the PR body); (3) path-keyed ledgers updated with scripts/relocate-ledger-paths.py; (4) make check-ci-fast green. Prerequisite PR1 (TASK-3424) is complete. PR9b (doctor/ directory split) follows.'
-status: InProgress
+status: Completed
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-10T07:33:13.193495787Z
-modified_at: 2026-11-10T14:26:46.161118283Z
+modified_at: 2026-11-10T14:26:48.247808526Z
 req_type: Task
 comments:
 - id: 01a1c47c-b4ca-74a0-9bba-654fe4096533
@@ -50,6 +50,15 @@ history:
   timestamp: 2026-11-10T07:42:26.546292062Z
   session_id: 01a1c4681114
   changes: []
+- id: 01a1c5da-b937-7700-9046-7c84a33b1fa2
+  author: joe
+  timestamp: 2026-11-10T14:26:48.247803604Z
+  session_id: 01a1c530-c917-7f13-ab81-f6b5e1d1cd30
+  harness_version: 2.1.322 (Claude Code)
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Completed
 filed_at:
   code_sha: e682f76092e65c6556f7881fe8a5e0aa48516740
   branch: main
@@ -59,3 +68,6 @@ filed_at:
   vendor: claude
   session: 01a1c39a-801a-7bd1-8da9-c955a6707f0b
   harness_version: 2.1.321 (Claude Code)
+implementation_info:
+  implemented: false
+  completed_at: 2026-11-10T14:26:48.247787824Z
