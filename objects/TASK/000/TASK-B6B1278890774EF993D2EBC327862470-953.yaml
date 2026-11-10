@@ -23,7 +23,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-07T20:45:16.684639Z
-modified_at: 2026-11-10T18:22:16.554895826Z
+modified_at: 2026-11-10T18:48:02.398992023Z
 req_type: Task
 relationships:
 - rel_type: Child
@@ -522,6 +522,15 @@ comments:
   modified_at: 2026-11-10T18:22:16.554895826Z
   session_id: 01a1c6af8da2
   harness_version: codex-cli 0.167.0
+- id: 01a1c6c9-e45e-7a82-95ae-9f01c64c1100
+  author: joe
+  content: |-
+    CI FAILURES at f81cbd2e55a6 (run 42875516520). Fix exactly these before pushing; a push without a code change for them will fail again and must not be made:
+    (no test lines extracted; open run 42875516520)
+  created_at: 2026-11-10T18:48:02.398992023Z
+  modified_at: 2026-11-10T18:48:02.398992023Z
+  session_id: 01a1c530-c917-7f13-ab81-f6b5e1d1cd30
+  harness_version: 2.1.322 (Claude Code)
 history:
 - id: 01a1b7c2-6b69-7b02-bd8c-8f40aee2972d
   author: joe
