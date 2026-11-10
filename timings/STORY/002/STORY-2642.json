@@ -1,0 +1,139 @@
+{
+  "schema_version": 1,
+  "spec": "STORY-2642",
+  "publishes": [
+    {
+      "at": "2026-11-10T05:55:41.089555609Z",
+      "closed_by": "auto-bump"
+    }
+  ],
+  "events": [
+    {
+      "ts": "2026-11-08T00:22:11.096694452Z",
+      "spec": "STORY-2642",
+      "seat": "advisor",
+      "kind": {
+        "event": "SpecRequeued",
+        "via": "queue-rework",
+        "actor": "joe",
+        "from": "Needs Attention",
+        "to": "Approved"
+      }
+    },
+    {
+      "ts": "2026-11-08T03:42:02.012326414Z",
+      "spec": "STORY-2642",
+      "seat": "advisor",
+      "kind": {
+        "event": "SpecRequeued",
+        "via": "queue-rework",
+        "actor": "joe",
+        "from": "Needs Attention",
+        "to": "Approved"
+      }
+    },
+    {
+      "ts": "2026-11-08T06:38:39.582645071Z",
+      "spec": "STORY-2642",
+      "seat": "advisor",
+      "kind": {
+        "event": "SpecRequeued",
+        "via": "queue-rework",
+        "actor": "joe",
+        "from": "Needs Attention",
+        "to": "Approved"
+      }
+    },
+    {
+      "ts": "2026-11-08T11:20:35.883033873Z",
+      "spec": "STORY-2642",
+      "seat": "advisor",
+      "kind": {
+        "event": "SpecRequeued",
+        "via": "queue-rework",
+        "actor": "joe",
+        "from": "Needs Attention",
+        "to": "Approved"
+      }
+    },
+    {
+      "ts": "2026-11-08T17:29:13.616489872Z",
+      "spec": "STORY-2642",
+      "seat": "advisor",
+      "kind": {
+        "event": "SpecRequeued",
+        "via": "queue-rework",
+        "actor": "joe",
+        "from": "Needs Attention",
+        "to": "Approved"
+      }
+    },
+    {
+      "ts": "2026-11-08T19:26:02.611741407Z",
+      "spec": "STORY-2642",
+      "seat": "advisor",
+      "kind": {
+        "event": "SpecRequeued",
+        "via": "queue-rework",
+        "actor": "joe",
+        "from": "Needs Attention",
+        "to": "Approved"
+      }
+    },
+    {
+      "ts": "2026-11-08T22:10:03.767102816Z",
+      "spec": "STORY-2642",
+      "seat": "advisor",
+      "kind": {
+        "event": "SpecRequeued",
+        "via": "queue-rework",
+        "actor": "joe",
+        "from": "Needs Attention",
+        "to": "Approved"
+      }
+    },
+    {
+      "ts": "2026-11-10T00:32:55.482167139Z",
+      "spec": "STORY-2642",
+      "seat": "advisor",
+      "kind": {
+        "event": "SpecRequeued",
+        "via": "queue-rework",
+        "actor": "joe",
+        "from": "Needs Attention",
+        "to": "Approved"
+      }
+    },
+    {
+      "ts": "2026-11-10T03:16:47.913747706Z",
+      "spec": "STORY-2642",
+      "seat": "advisor",
+      "kind": {
+        "event": "SpecRequeued",
+        "via": "queue-rework",
+        "actor": "joe",
+        "from": "Needs Attention",
+        "to": "Approved"
+      }
+    },
+    {
+      "ts": "2026-11-10T05:55:17.176231464Z",
+      "spec": "STORY-2642",
+      "seat": "advisor",
+      "kind": {
+        "event": "PrMerged",
+        "pr": 3750
+      }
+    },
+    {
+      "ts": "2026-11-10T05:55:40.929769179Z",
+      "spec": "STORY-2642",
+      "kind": {
+        "event": "SpecCompleted",
+        "commit": "47d48b4a7e0b8dbe47af89d29099d8fbb6e62839",
+        "pr": 3750,
+        "closed_by": "auto-bump"
+      }
+    }
+  ]
+}
