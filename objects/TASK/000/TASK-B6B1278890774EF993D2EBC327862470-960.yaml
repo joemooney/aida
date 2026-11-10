@@ -8,7 +8,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-07T23:39:41.575597Z
-modified_at: 2026-11-09T00:38:46.632172043Z
+modified_at: 2026-11-10T07:28:13.550747483Z
 req_type: Task
 relationships:
 - rel_type: Child
@@ -524,6 +524,13 @@ comments:
   created_at: 2026-11-09T00:38:45.881747654Z
   modified_at: 2026-11-09T00:38:45.881747654Z
   session_id: 01a1bdafbd39
+- id: 01a1c45b-80ee-7842-a521-8239a2aa114e
+  author: joe
+  content: 'ADVISOR RULING (2026-11-10 07:28 UTC) — binding brief for TASK-3428 batch 1 (next Refs slice after #3695 landed via train #3710). Discard the round-14 deferred patch: it no longer applies. Scope = EXACTLY these 38 files under aida-cli-lib/src/ (all free of open PRs at 07:40 UTC), plus scripts/crate-globs-legacy.json: tests/bug_013_review_record_sha_tests.rs statusline_root.rs usage_mcp_helpers.rs mcp_cmd.rs gate/tests/story_1405_review_marker_tests.rs standalone_empty_rework.rs machine_readiness.rs lane_env.rs orchestrator_cmd.rs stakeholder_role.rs queue_cmd/mod.rs team_cmd.rs zen_cmd.rs tests/bug_home_024_finished_lease_tests.rs memory_doc.rs mailbox_root.rs store_cmd.rs help.rs claim.rs relationship_cmd.rs sandbox_cmd.rs statusbar_cmd.rs shipped_linkage.rs doc_cmd.rs upgrade_cmd.rs kernel.rs agent_registry_root.rs scaffold_init.rs advisor_cmd_root.rs queue_misc.rs linkage_index.rs zen_drive_root.rs autopilot_intake.rs brief.rs node_cmd.rs config_init.rs statusline_cmd.rs plan_followups.rs . For each: replace ''use crate::*;'' with explicit ''use crate::{...};'' imports (rustfmt order), import anyhow/aida_core items directly from their crates, no other edits: no renames, no body changes, no qualified-call rewrites unless an import collision forces one (say which in the PR body). Then ratchet the ledger down for exactly these files (python3 scripts/check-crate-globs.py must report zero additions and the lower count). If a listed file proves to conflict with main when you start, drop it and say so; never add files. Title: [AI:codex] refactor(commands): replace crate globs in batch 1 (Refs TASK-3428). LIGHT gate: cargo check --profile agent -p aida-cli-lib --tests (compile is the real test for import-only changes), python3 scripts/check-crate-globs.py, make check-ci-fast. Reviewers: an import-only diff that compiles in CI is approvable; do not request changes for import style beyond rustfmt.'
+  created_at: 2026-11-10T07:28:13.550747483Z
+  modified_at: 2026-11-10T07:28:13.550747483Z
+  session_id: 01a1c39a-801a-7bd1-8da9-c955a6707f0b
+  harness_version: 2.1.321 (Claude Code)
 history:
 - id: 01a1b862-2e0b-7a50-a4d0-25097c707b57
   author: joe
