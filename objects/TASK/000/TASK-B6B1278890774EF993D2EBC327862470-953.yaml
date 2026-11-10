@@ -23,7 +23,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-07T20:45:16.684639Z
-modified_at: 2026-11-10T16:21:54.524948705Z
+modified_at: 2026-11-10T16:40:14.461748880Z
 req_type: Task
 relationships:
 - rel_type: Child
@@ -399,6 +399,48 @@ comments:
     No commit, push, PR, queue completion or review verdict was performed. Publication declaration follows final validation.
   created_at: 2026-11-10T16:21:54.524948705Z
   modified_at: 2026-11-10T16:21:54.524948705Z
+  session_id: 01a1c632c181
+  harness_version: codex-cli 0.167.0
+- id: 01a1c654-e37d-7f02-9898-afd06092d625
+  author: dirtlab
+  content: |
+    Part A implementation complete; Part B remains unchanged.
+
+    Mailbox retirement retains unbound queued deliveries and refuses messages without matching readable canonical copies. Canonical bytes and directories are fsynced before retirement. Delivery ownership remains readable from retained sidecars. Every retirement performs the fresh writer-admission scan after fencing under Lifecycle, independently of the activation record and its build identity. A scoped, dev-dependency-only scan fixture keeps CLI lifecycle tests deterministic; the default remains the production process scan.
+
+    Validation:
+    - aida-core mailbox_lifecycle: 175 passed; job j20261110T163144167-2-0.
+    - aida-cli-lib story_1843_c2: 15 passed; job j20261110T163120992-2-0.
+    - Clone cleanup/reopen regression: 1 passed; job j20261110T163428609-2-0.
+    - make check-ci-fast: all 46 gates passed. Cargo checks used the lane runner; the run used umask 022 and an isolated HOME under this checkout's ignored target directory to accommodate fixture path/permission requirements. Log: /tmp/task3420-check-ci-fast-workspace-home.log.
+    - rustfmt --check and git diff --check: passed.
+
+    Blockers: none for the required LIGHT gate. The host codegraph client was unavailable (doctor confirmed missing); navigation used rg.
+
+    Additional diagnostic: an earlier optional full-core run had 2249 passed, 62 failed, 4 ignored. Failures were outside mailbox lifecycle and reported fixture ownership/mode refusals under the inherited group-writable umask. That optional full run was not repeated; the final focused suites and all required fast gates passed. Initial CLI scan-dependent fixture failures were resolved with scoped test inventory evidence and the final CLI suites passed.
+
+    Changed files (uncommitted):
+    - aida-cli-lib/Cargo.toml
+    - aida-cli-lib/src/mail_retention.rs
+    - aida-cli-lib/src/tests/story_1843_c2_refusal_tests.rs
+    - aida-cli-lib/src/tests/story_1843_c2_seat_clone_retention_tests.rs
+    - aida-cli/tests/story_1843_c2_session_end_retention.rs
+    - aida-core/Cargo.toml
+    - aida-core/src/mailbox_lifecycle/activation.rs
+    - aida-core/src/mailbox_lifecycle/canonical_tests.rs
+    - aida-core/src/mailbox_lifecycle/guard.rs
+    - aida-core/src/mailbox_lifecycle/guard_tests.rs
+    - aida-core/src/mailbox_lifecycle/message_state_tests.rs
+    - aida-core/src/mailbox_lifecycle/mod.rs
+    - aida-core/src/mailbox_lifecycle/retire.rs
+    - aida-core/src/mailbox_lifecycle/tests.rs
+    - aida-core/src/mailbox_logical.rs
+    - docs/advanced/mailbox.md
+
+    Publication subject: [AI:codex] feat(mail): retention on message state (TASK-3420)
+    No commit, push, PR creation, queue completion, ship/merge action or review verdict was performed. The native ship command records publication intent for the host launcher only.
+  created_at: 2026-11-10T16:40:14.461748880Z
+  modified_at: 2026-11-10T16:40:14.461748880Z
   session_id: 01a1c632c181
   harness_version: codex-cli 0.167.0
 history:
