@@ -84,6 +84,31 @@ impl Attempt {
         std::fs::rename(&pending, &self.path).context("could not persist lane result receipt")
     }
 
+    // A provisional admission is not an implementer attempt once routing says
+    // otherwise. Remove it before any resolved-route admission gates run.
+    pub(crate) fn discard(self) -> Result<()> {
+        std::fs::remove_file(&self.path).context("could not discard provisional lane receipt")
+    }
+
+    pub(crate) fn resolve_scope(
+        &self,
+        spec: &str,
+        branch: Option<&str>,
+        pr: Option<u64>,
+    ) -> Result<()> {
+        {
+            let mut r = self.receipt.borrow_mut();
+            r.spec = spec.into();
+            if let Some(branch) = branch {
+                r.branch = Some(branch.into());
+            }
+            if let Some(pr) = pr {
+                r.pr = Some(pr);
+            }
+        }
+        self.persist()
+    }
+
     pub(crate) fn bind(
         &self,
         spec: &str,
@@ -289,6 +314,35 @@ impl Attempt {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn story_2690_resolved_head_and_inferred_rework_survive_admission_refusal() {
+        let tmp = tempfile::tempdir().unwrap();
+        for rework in [false, true] {
+            let a = Attempt::begin(tmp.path(), "queue-head", None).unwrap();
+            a.resolve_scope("STORY-2690", None, None).unwrap();
+            if rework {
+                a.resolve_scope("STORY-2690", Some("existing-rework"), Some(42))
+                    .unwrap();
+            }
+            a.finish_result(&Err(anyhow::anyhow!("operator hold or occupancy refusal")))
+                .unwrap();
+            let r: Receipt = serde_json::from_slice(&std::fs::read(&a.path).unwrap()).unwrap();
+            assert_eq!(r.spec, "STORY-2690");
+            assert_eq!(r.branch.as_deref(), rework.then_some("existing-rework"));
+            assert_eq!(r.pr, rework.then_some(42));
+            assert_eq!(r.result, Some(Kind::RefusedBeforeStart));
+        }
+    }
+
+    #[test]
+    fn story_2690_reviewer_route_discards_provisional_capture() {
+        let tmp = tempfile::tempdir().unwrap();
+        let a = Attempt::begin(tmp.path(), "PR-42", None).unwrap();
+        let path = a.path.clone();
+        a.discard().unwrap();
+        assert!(!path.exists());
+    }
 
     #[test]
     fn story_2690_admission_and_spawn_failures_are_distinct_and_durable() {

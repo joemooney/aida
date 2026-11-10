@@ -4796,3 +4796,50 @@ fn task_3608_pipelined_sidecar_preserves_no_change() {
             .no_change
     );
 }
+
+// trace:STORY-2690 | ai:codex
+#[test]
+fn story_2690_receipt_uses_queue_route_and_pr_scope() {
+    for shell in ["implementer", "advisor", "reviewer"] {
+        let _env = crate::test_env::EnvVarGuard::set("AIDA_SESSION_ROLE", shell);
+        for (scope, routed, explicit, expected) in [
+            ("STORY-2690", Some("reviewer"), None, false),
+            ("STORY-2690", Some("implementer"), None, true),
+            ("STORY-2690", None, None, true),
+            ("PR-42", None, None, false),
+            ("PR-42", None, Some("implementer"), false),
+        ] {
+            let e = resolved("STORY-2690", entry(Uuid::now_v7(), routed, None));
+            let plan = plan_with(QueueWorkMode::Item, scope, vec![e]);
+            let (role, _, _) = infer_queue_work_role(&plan, explicit);
+            let tmp = tempfile::tempdir().unwrap();
+            let mut attempt =
+                Some(crate::lane_result::Attempt::begin(tmp.path(), "queue-head", None).unwrap());
+            resolve_pickup_attempt(&mut attempt, &plan, &role, true, None).unwrap();
+            assert_eq!(attempt.is_some(), expected);
+            let receipts: Vec<_> = std::fs::read_dir(tmp.path().join(".aida/lane-results"))
+                .unwrap()
+                .collect();
+            assert_eq!(receipts.len(), usize::from(expected));
+            if let Some(attempt) = attempt {
+                attempt
+                    .finish_result(&Err(anyhow::anyhow!("preflight refusal")))
+                    .unwrap();
+                let path = receipts[0].as_ref().unwrap().path();
+                let receipt: serde_json::Value =
+                    serde_json::from_slice(&std::fs::read(path).unwrap()).unwrap();
+                assert_eq!(receipt["spec"], scope);
+                assert_eq!(receipt["result"], "refused-before-start");
+            }
+            assert_eq!(
+                crate::standalone_implementer::is_standalone_implementer(
+                    &role,
+                    plan.review_target.is_none(),
+                    true,
+                ),
+                expected,
+                "scope={scope}, routed={routed:?}, explicit={explicit:?}"
+            );
+        }
+    }
+}

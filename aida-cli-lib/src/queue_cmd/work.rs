@@ -3860,16 +3860,7 @@ pub(crate) fn handle_queue_work(
 ) -> Result<()> {
     // Record admission before any pickup gate; previews and interactive sessions
     // do not claim a headless lane attempt. trace:STORY-2690 | ai:codex
-    let attempt = if no_human
-        && resume.is_none()
-        && !dry_run
-        && !no_launch
-        && !list_sessions
-        && crate::standalone_implementer::is_standalone_implementer(
-            role_input.pickup.unwrap_or(&effective_role()),
-            true,
-            no_human,
-        ) {
+    let mut attempt = if no_human && resume.is_none() && !dry_run && !no_launch && !list_sessions {
         Some(crate::lane_result::Attempt::begin(
             &requeue_project_root(storage),
             arg.unwrap_or("queue-head"),
@@ -3942,6 +3933,12 @@ pub(crate) fn handle_queue_work(
                 None => return Err(e),
             },
         };
+
+        // Resolve once for both receipt applicability and the actual launch.
+        // Provisional capture above retains failures before a plan is available.
+        // trace:STORY-2690 | ai:codex
+        let (role, role_origin, warnings) = infer_queue_work_role(&plan, role_override);
+        resolve_pickup_attempt(&mut attempt, &plan, &role, no_human, branch_override)?;
 
         // Recheck the resolved anchor, including no-argument queue-head pickup.
         // This runs before launch resolution, calibration, worktree creation, or
@@ -4120,7 +4117,6 @@ pub(crate) fn handle_queue_work(
         // trace:TASK-1337 | ai:codex
         // Resolve role, branch, and delegation before calibration, cleanup, pull,
         // lease creation, or status writes. Shell roles route; grants authorize.
-        let (role, role_origin, warnings) = infer_queue_work_role(&plan, role_override);
         let project_root = find_main_worktree_root()?;
         // trace:BUG-2500 | ai:codex — admission precedes calibration and setup.
         refuse_waiting_pickup(
@@ -4154,6 +4150,14 @@ pub(crate) fn handle_queue_work(
             (plan.entries.len() == 1 && plan.review_target.is_none()).then(|| rework_pr.clone());
         let rework_branch_override = rework_pr.as_ref().map(|(_, branch)| branch.clone());
         let session_branch_override = branch_override.or(rework_branch_override.as_deref());
+        if let Some(attempt) = &attempt {
+            attempt.resolve_scope(
+                &plan.anchor_display,
+                session_branch_override,
+                rework_pr.as_ref().map(|(pr, _)| *pr),
+            )?;
+        } // trace:STORY-2690 | ai:codex
+
         // BUG-2223: an adopted orphan fixes the tree and branch; an explicit
         // --path or --branch naming another one refuses rather than guess.
         // trace:BUG-2223 | ai:claude
@@ -6172,6 +6176,30 @@ pub(crate) fn handle_queue_work(
         attempt.finish_result(&result)?;
     }
     result
+}
+
+// Bind admission to the same resolved role and scope used by launch.
+// trace:STORY-2690 | ai:codex
+pub(crate) fn resolve_pickup_attempt(
+    attempt: &mut Option<crate::lane_result::Attempt>,
+    plan: &QueueWorkPlan,
+    role: &str,
+    no_human: bool,
+    branch: Option<&str>,
+) -> Result<()> {
+    if !crate::standalone_implementer::is_standalone_implementer(
+        role,
+        plan.review_target.is_none(),
+        no_human,
+    ) {
+        if let Some(provisional) = attempt.take() {
+            provisional.discard()?;
+        }
+    }
+    if let Some(attempt) = attempt {
+        attempt.resolve_scope(&plan.anchor_display, branch, None)?;
+    }
+    Ok(())
 }
 
 /// Advisor comment 35: release the lease `lease_id` a failed pickup minted

@@ -194,7 +194,7 @@ pub(crate) use work::{
 };
 #[cfg(test)]
 pub(crate) use work::{
-    derive_queue_work_prompt, latest_ruling_comment, prepend_ruling,
+    derive_queue_work_prompt, latest_ruling_comment, prepend_ruling, resolve_pickup_attempt,
     rework_pr_head_branch_from_lookup,
 };
 pub use work::{refuse_waiting_review, spec_open_change_key};

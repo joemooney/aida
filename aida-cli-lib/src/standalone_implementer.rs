@@ -1191,6 +1191,9 @@ pub(crate) fn run_recorded(
             &owned
         }
     };
+    // Persist the known launch identity before any runner preflight can refuse.
+    // The later bind adds observed PR/head evidence. trace:STORY-2690 | ai:codex
+    attempt.resolve_scope(launch.spec, Some(launch.branch), None)?;
     let tree = lease_worktree(launch.project_root, launch.lease_id);
     let spec = launch.spec;
     let result = run(launch, attempt, on_started);
