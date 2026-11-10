@@ -3,12 +3,12 @@ spec_id: BUG-b6b1278890774ef993d2ebc327862470-278
 agreed_id: BUG-2513
 title: aida init does not configure [contained.vendors] codex = native, and the permissions check's green tick reads as 'ready'
 description: 'Reported from operator''s work machine (Codex, GitLab project hello-work-0x), 2026-11-09. After ''aida init'' a Codex project lacks [contained.vendors] codex = "native" in .aida/config.toml, so Codex launches are refused under containment. Init should offer it when Codex is a chosen vendor (explicit consent, stating that native sandboxing is weaker than AIDA containment). Separately, ''aida config permissions show'' ends with a green ''no dangerous permission-posture inconsistencies detected'' while Codex cannot launch; print a clear per-vendor launch readiness line (ready / refused: reason / fix command) distinct from the consistency check.'
-status: InProgress
+status: Approved
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-10T03:07:01.660083142Z
-modified_at: 2026-11-10T16:25:54.933314840Z
+modified_at: 2026-11-10T16:26:00.804253472Z
 req_type: Bug
 comments:
 - id: 01a1c60c-adfa-72f3-9f5c-b40df8817ee3
@@ -123,6 +123,15 @@ history:
   session_id: 01a1c6208c4d
   harness_version: codex-cli 0.167.0
   changes: []
+- id: 01a1c647-dd50-7851-a5bd-6c27860fd862
+  author: joe
+  timestamp: 2026-11-10T16:26:00.912156615Z
+  session_id: 01a1c39a-801a-7bd1-8da9-c955a6707f0b
+  harness_version: 2.1.321 (Claude Code)
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Approved
 filed_at:
   code_sha: 838f14c3c2811c6b63da5d465700cff773c36190
   branch: main
