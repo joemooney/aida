@@ -8,7 +8,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-10T03:05:48.772156134Z
-modified_at: 2026-11-10T03:29:58.055104544Z
+modified_at: 2026-11-10T04:10:17.515164030Z
 req_type: Story
 comments:
 - id: 01a1c36e-1e94-7e70-8f74-74786437eaa0
@@ -34,6 +34,19 @@ comments:
   modified_at: 2026-11-10T03:29:58.055104544Z
   session_id: 01a1c36f5087
   harness_version: codex-cli 0.167.0
+- id: 01a1c3a6-4a2b-7ec1-8931-7efe2d4972fb
+  author: joe
+  content: |-
+    CI FAILURES at 5112054f0a64 (run 42751337041). Fix exactly these before pushing; a push without a code change for them will fail again and must not be made:
+    error: test run failed
+            FAIL  aida-cli::bug_1502_format_json_audit checked_in_audit_catalog_matches_without_store_setup
+            FAIL  aida-cli::bug_1502_format_json_audit checked_in_audit_is_exhaustive_and_every_honoured_probe_parses
+            FAIL  aida-cli-lib queue_cmd::time_bound_flags_tests::every_time_bound_flag_is_classified
+        thread 'checked_in_audit_catalog_matches_without_store_setup' (25524) panicked at aida-cli/tests/bug_1502_format_json_audit.rs:503:5:
+        thread 'checked_in_audit_is_exhaustive_and_every_honoured_probe_parses' (25781) panicked at aida-cli/tests/bug_1502_format_json_audit.rs:503:5:
+        thread 'queue_cmd::time_bound_flags_tests::every_time_bound_flag_is_classified' (87292) panicked at aida-cli-lib/src/queue_cmd/../tests/time_bound_flags_tests.rs:191:5:
+  created_at: 2026-11-10T04:10:17.515164030Z
+  modified_at: 2026-11-10T04:10:17.515164030Z
 history:
 - id: 01a1c36e-2744-73f2-b7c1-ac1444e35832
   author: joe
