@@ -2,7 +2,32 @@
 //! worktree GC, salvage, stranded-primary detection, and worktree/pool commands (STORY-1488 slice 1)
 // trace:STORY-1488 | ai:claude
 
-use crate::*;
+use crate::{
+    canonical_role_name, claim, cli, drain_mode_agent_new_guard, effective_role, evaluator,
+    extract_acceptance_section, extract_aida_suggestion, find_project_root, findings, focus,
+    git_arg_guard, graded_review, help, home_dir, integrate, lease_path, leases, list_leases,
+    list_worktrees, mark_lease_manual_enter, parse_session_env, preclaim_branch_state,
+    preclaim_collision_check, process_probe, protocol_cmd, queue_cmd,
+    queue_work_plan_wants_pr_head_branch, resolve_aida_exe, resolve_default_branch_ref, role, run,
+    session_start, sh_single_quote, shell_single_quote, spec_matches, trusted_session_env,
+    worktree, worktree_dirty_entries, worktree_dismiss, worktree_lifecycle_gc, worktree_reclaim,
+    AgentLaunchPlan, DoctorFinding, HashSet, LeaseState, PreclaimBranchState, PreclaimDecision,
+    QueueWorkEntry, QueueWorkMode, QueueWorkPlan, SessionLease, SESSION_ENV_NAMES,
+};
+
+#[cfg(test)]
+use crate::mcp;
+
+use crate::agent_config::read_agents_string_from_file;
+use crate::config_init::drain_mode_agent_new_refusal;
+use crate::graded_review::AcceptanceCommandPolicy;
+use crate::pr_lookup::{OpenPrInfo, PrLookup};
+use crate::rel_cards::hostname;
+use crate::session_start::{pickup_worktree_path, resolve_pickup_workspace};
+use aida_core::{RequirementType, Storage};
+use anyhow::{Context, Result};
+use clap::Parser;
+use colored::Colorize;
 
 // trace:STORY-1728 | ai:claude
 #[path = "worktree_gc_args.rs"]
@@ -122,7 +147,7 @@ pub(crate) fn active_worktree_paths(project_root: &std::path::Path) -> HashSet<s
             continue;
         }
         if matches!(
-            lease_state_for(&lease, &live, now),
+            crate::leases::lease_state_for(&lease, &live, now),
             LeaseState::Live | LeaseState::Unknown
         ) {
             out.insert(canon(&lease.worktree_path));
@@ -988,7 +1013,7 @@ pub(crate) fn live_lease_count(
 ) -> usize {
     leases
         .iter()
-        .filter(|l| lease_state_for(l, live_sessions, now) == LeaseState::Live)
+        .filter(|l| crate::leases::lease_state_for(l, live_sessions, now) == LeaseState::Live)
         .count()
 }
 
