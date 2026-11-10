@@ -3,12 +3,12 @@ spec_id: STORY-b6b1278890774ef993d2ebc327862470-627
 agreed_id: STORY-2704
 title: 'Porcelain crate: area-grouped Rust convenience commands as one multi-call aida-porcelain extension, plus nested aida-<builtin>-<name> resolution'
 description: 'Operator direction 2026-11-09, under ADR-71 (core admits substrate capabilities; convenience ships as external aida-<name>, delivered by STORY-1641). ## Sketch (needs sketch signoff) 1. New workspace crate aida-porcelain producing one multi-call binary; installed (by aida dev build and release) under several aida-<name> names it dispatches on by argv[0]. Commands grouped by area modules (flow/metrics, review, queue, ...). Commands read state only through aida-core public APIs and documented --format json surfaces, never raw internal files. 2. Nested externals for BUILT-IN parents: when aida <builtin> <unknown> fails to match, resolve aida-<builtin>-<unknown> on PATH; built-in children always win; help for the parent lists them. External parents dispatch their own children. 3. Review: porcelain commands are read-only unless separately approved, which places them in the LOW tier of STORY-2698. 4. First tenant: move STORY-2699''s flow report here once the crate exists. ## Acceptance - Multi-call dispatch, install names and help listing tested. - Nested resolution: precedence, unknown-name error unchanged, help listing; regression tests beside aida-cli/tests/story_1641_external_subcommands.rs. - A porcelain command cannot mutate the store (test). - Docs in docs/cli.'
-status: NeedsAttention
+status: Approved
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-10T03:52:00.571796159Z
-modified_at: 2026-11-10T10:42:59.486288737Z
+modified_at: 2026-11-10T10:48:51.473972028Z
 req_type: Story
 comments:
 - id: 01a1c399-6840-7383-843e-9930f6eaa3f7
@@ -43,6 +43,13 @@ comments:
         thread 'gate::mandate_gates::story_1888_gate_paths_tests::no_unprotected_file_reexports_gate_items' (69579) panicked at aida-cli-lib/src/gate/../tests/story_1888_gate_paths_tests.rs:799:5:
   created_at: 2026-11-10T10:42:59.486288737Z
   modified_at: 2026-11-10T10:42:59.486288737Z
+  session_id: 01a1c39a-801a-7bd1-8da9-c955a6707f0b
+  harness_version: 2.1.321 (Claude Code)
+- id: 01a1c513-3011-73f1-bb49-72e109fe4034
+  author: joe
+  content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was punted on: other: Slice 1 implementation is ready in the native lane. Porcelain tests including installed-built-in parity (9 tests), dev-build regressions (87 tests), and cargo check --profile agent -p aida-cli --tests pass. Required make check-ci-fast cannot finish in this seat: with umask 0022, unchanged containment fixtures attempt TemporaryDirectory(dir=Path.home()/.aida) and fail with read-only filesystem. Host must run the full fast gate outside the lane before publication. Log: /tmp/story-2704-check-ci-fast.log. No commit or publication performed.. No triage reason was given.'
+  created_at: 2026-11-10T10:48:51.473967711Z
+  modified_at: 2026-11-10T10:48:51.473967711Z
   session_id: 01a1c39a-801a-7bd1-8da9-c955a6707f0b
   harness_version: 2.1.321 (Claude Code)
 history:
@@ -103,6 +110,15 @@ history:
   - field_name: status
     old_value: InProgress
     new_value: NeedsAttention
+- id: 01a1c513-3011-73f1-bb49-72de735f4078
+  author: joe
+  timestamp: 2026-11-10T10:48:51.473944490Z
+  session_id: 01a1c39a-801a-7bd1-8da9-c955a6707f0b
+  harness_version: 2.1.321 (Claude Code)
+  changes:
+  - field_name: status
+    old_value: NeedsAttention
+    new_value: Approved
 filed_at:
   code_sha: 838f14c3c2811c6b63da5d465700cff773c36190
   branch: main
@@ -112,8 +128,3 @@ filed_at:
   vendor: claude
   session: 01a1beff-fc3b-78e2-93e2-9b0c283b0339
   harness_version: 2.1.319 (Claude Code)
-attention_reason:
-  category: other
-  detail: 'Slice 1 implementation is ready in the native lane. Porcelain tests including installed-built-in parity (9 tests), dev-build regressions (87 tests), and cargo check --profile agent -p aida-cli --tests pass. Required make check-ci-fast cannot finish in this seat: with umask 0022, unchanged containment fixtures attempt TemporaryDirectory(dir=Path.home()/.aida) and fail with read-only filesystem. Host must run the full fast gate outside the lane before publication. Log: /tmp/story-2704-check-ci-fast.log. No commit or publication performed.'
-  raised_by: implementer
-  raised_at: 2026-11-10T10:08:12.452629212Z
