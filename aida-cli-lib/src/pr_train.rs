@@ -24,6 +24,8 @@
 #[path = "pr_train_journal.rs"]
 mod journal;
 pub(crate) use journal::TrainJournalBusy;
+#[path = "pr_train_overlap.rs"]
+mod overlap;
 #[path = "pr_train_verified.rs"]
 mod verified;
 pub(crate) use verified::VerifiedTrainMerge;
@@ -3948,13 +3950,8 @@ pub(crate) fn pr_train_handler_with_dispatch_ctx(
     }
     let mut members = Vec::new();
     let mut refused = Vec::new();
-    let mut waiting = Vec::new();
     for pr in candidates {
         crate::gate::dispatch_auth::checkpoint(dispatch_ctx, "pr train")?;
-        if members.len() >= opts.max.max(1) {
-            waiting.push(pr);
-            continue;
-        }
         let ownership_refusal = ownership_rider_refusal(&main_worktree, pr)?;
         if let Some(reason) =
             ownership_refusal.or_else(|| train_rider_refusal(pr, &open_trains, &leased_trains))
@@ -3981,6 +3978,42 @@ pub(crate) fn pr_train_handler_with_dispatch_ctx(
             }
         }
     }
+    // Gate all candidates before choosing a bounded train: waiting approved
+    // PRs must contribute to the overlap cost. trace:STORY-2693 | ai:codex
+    let main = fetch_base(&main_worktree, &base)?;
+    let mut files = std::collections::BTreeMap::new();
+    for member in &members {
+        let changed = git_raw(
+            &main_worktree,
+            &[
+                "diff",
+                "--no-renames",
+                "--name-only",
+                "-z",
+                &format!("{main}...{}", member.head),
+                "--",
+            ],
+        )?;
+        anyhow::ensure!(
+            changed.status.success(),
+            "could not read changed files for PR #{}: {}",
+            member.pr,
+            String::from_utf8_lossy(&changed.stderr)
+        );
+        files.insert(
+            member.pr,
+            changed
+                .stdout
+                .split(|b| *b == 0)
+                .filter(|p| !p.is_empty())
+                .map(|p| p.to_vec())
+                .collect(),
+        );
+    }
+    let order = overlap::order(&files);
+    members.sort_by_key(|m| order.iter().position(|pr| *pr == m.pr).unwrap());
+    let waiting: Vec<u64> = members.iter().skip(opts.max.max(1)).map(|m| m.pr).collect();
+    members.truncate(opts.max.max(1));
     if !waiting.is_empty() {
         let list: Vec<String> = waiting.iter().map(|p| format!("#{p}")).collect();
         println!(
@@ -3990,7 +4023,6 @@ pub(crate) fn pr_train_handler_with_dispatch_ctx(
             list.join(", ")
         );
     }
-    let main = fetch_base(&main_worktree, &base)?;
     let mut warnings = Vec::new();
     let mut dispatch_abort: Option<String> = None;
     let mut outcome = if opts.dry_run {
