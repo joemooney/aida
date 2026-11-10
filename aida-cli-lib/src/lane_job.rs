@@ -341,6 +341,10 @@ fn cargo_with_cache_lifecycle(
 // No Cargo build or seat-job submission is needed for this bounded diagnostic.
 // trace:STORY-2642 | ai:codex
 pub(crate) fn probe_cache(root: &Path) -> Result<()> {
+    anyhow::ensure!(
+        crate::session::os_wrap_explicit(root) != Some(false),
+        "OS wrapping is disabled; enable the lane sandbox before probing cache reachability"
+    );
     let parent = aida_core::exec_context::Environment::capture();
     let lane = LaneJobs {
         seat: root.into(),
@@ -371,7 +375,7 @@ pub(crate) fn probe_cache(root: &Path) -> Result<()> {
     );
     let (program, args) = crate::session::lane_job_wrapped_program_and_args(
         root,
-        crate::session::os_wrap_explicit(root) != Some(false),
+        true,
         &lane.sandbox_rw_paths(&env),
         &program,
         args,
@@ -418,6 +422,17 @@ fn doctor_cache_probe_refuses_uncached_fallback_and_checks_writes() {
     assert!(!run("123", "/bin/false"));
     assert!(run("123", "/bin/true"));
     assert_eq!(std::fs::read_dir(dir.path()).unwrap().count(), 0);
+}
+
+#[cfg(all(test, target_os = "linux"))]
+#[test]
+// trace:STORY-2642 | ai:codex
+fn doctor_cache_probe_refuses_disabled_sandbox_before_cache_setup() {
+    let root = tempfile::tempdir().unwrap();
+    let _env = crate::test_env::EnvVarsGuard::set(&[("AIDA_OS_WRAP", "0")]);
+    let error = probe_cache(root.path()).unwrap_err();
+    assert!(error.to_string().contains("OS wrapping is disabled"));
+    assert_eq!(std::fs::read_dir(root.path()).unwrap().count(), 0);
 }
 
 /// Whether the launcher's `key` reaches a job.
