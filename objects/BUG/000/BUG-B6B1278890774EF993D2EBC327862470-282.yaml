@@ -8,7 +8,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-10T06:40:07.764479561Z
-modified_at: 2026-11-10T11:10:21.526838267Z
+modified_at: 2026-11-10T11:15:44.128120198Z
 req_type: Bug
 comments:
 - id: 01a1c4af-35ea-7243-ac9f-f3b9d11983b0
@@ -60,6 +60,13 @@ comments:
   modified_at: 2026-11-10T11:02:33.229206416Z
   session_id: 01a1c39a-801a-7bd1-8da9-c955a6707f0b
   harness_version: 2.1.321 (Claude Code)
+- id: 01a1c52b-cb80-7920-9b2b-2e38db59c08b
+  author: dirtlab
+  content: 'Fixed the remaining CI failure at c2e2b87a7d: review_record_pr_handshake_honors_explicit_verdict_file now injects the pinned current PR head, verifies the change-bound PR-1706 ledger and spec-index discovery, and preserves the explicit parent handshake anchor with identical provenance. No production behavior changed in this follow-up. Lane job j20261110T111111817-2-0: cited handshake regression 1 passed. Lane job j20261110T111146276-2-0: all 5 BUG-2517 regressions passed (PR/MR lease routing, shared-spec isolation, moving head refusal, stale envelope refusal, historical foreign-copy filtering). Targeted rustfmt --check and git diff --check pass. One file edited and left uncommitted for native host publication; no implementation blockers. Host codegraph client unavailable; doctor reports missing.'
+  created_at: 2026-11-10T11:15:44.128120198Z
+  modified_at: 2026-11-10T11:15:44.128120198Z
+  session_id: 01a1c526d91b
+  harness_version: codex-cli 0.167.0
 history:
 - id: 01a1c4af-45a0-7a32-8edf-55980e6f5825
   author: joe
