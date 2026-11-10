@@ -8,7 +8,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-07T23:39:41.575597Z
-modified_at: 2026-11-10T11:16:12.083226307Z
+modified_at: 2026-11-10T11:23:12.911208953Z
 req_type: Task
 relationships:
 - rel_type: Child
@@ -598,6 +598,13 @@ comments:
   modified_at: 2026-11-10T11:05:18.214672054Z
   session_id: 01a1c51ef7e7
   harness_version: codex-cli 0.167.0
+- id: 01a1c532-a48f-7ce0-9da9-a36a31279d94
+  author: joe
+  content: 'Advisor ruling PR-3780@5c66d18c: code accepted; only the PR body must disclose the 11 lease_state_for qualifications and the test-only import.'
+  created_at: 2026-11-10T11:23:12.911208953Z
+  modified_at: 2026-11-10T11:23:12.911208953Z
+  session_id: 01a1c530-c917-7f13-ab81-f6b5e1d1cd30
+  harness_version: 2.1.322 (Claude Code)
 history:
 - id: 01a1b862-2e0b-7a50-a4d0-25097c707b57
   author: joe
