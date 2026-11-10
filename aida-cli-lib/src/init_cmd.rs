@@ -6852,6 +6852,15 @@ pub(crate) struct InitArgs {
     )]
     pub gitlab: Option<String>,
 
+    /// Explicitly consent to enabling disabled GitLab project CI/CD.
+    // trace:STORY-2701 | ai:codex
+    #[clap(long, requires = "gitlab")]
+    pub gitlab_enable_ci: bool,
+
+    /// Runner tags for the generated GitLab pipeline (comma-separated).
+    #[clap(long, requires = "gitlab", value_delimiter = ',')]
+    pub gitlab_runner_tags: Vec<String>,
+
     /// (deprecated, accepted for backwards compat) Initialize in
     /// distributed mode. Distributed is now the default, so this
     /// flag is a no-op. Use `--centralized` to opt out.
@@ -7033,6 +7042,8 @@ fn run_init(matches: &clap::ArgMatches, _ctx: &crate::cmdkit::DispatchCtx) -> an
         remote,
         forge,
         gitlab,
+        gitlab_enable_ci,
+        gitlab_runner_tags,
         id_width,
     } = &args;
     // STORY-757: the markdown-only first run — scaffold just a `specs/`
@@ -7063,6 +7074,8 @@ fn run_init(matches: &clap::ArgMatches, _ctx: &crate::cmdkit::DispatchCtx) -> an
                 remote: remote.clone(),
                 forge: forge.clone(),
                 github_repo: None,
+                gitlab_enable_ci: *gitlab_enable_ci,
+                gitlab_runner_tags: gitlab_runner_tags.clone(),
                 // trace:STORY-1656 | ai:claude
                 gitlab: gitlab
                     .as_deref()

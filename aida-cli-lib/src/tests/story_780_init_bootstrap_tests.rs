@@ -10,6 +10,8 @@ fn plain_plan(dir: std::path::PathBuf) -> BootstrapPlan {
         forge: None,
         github_repo: None,
         gitlab: None,
+        gitlab_enable_ci: false,
+        gitlab_runner_tags: Vec::new(),
     }
 }
 
