@@ -172,6 +172,7 @@ mod lane_cmd;
 mod lane_job;
 // trace:STORY-2640 | ai:codex
 mod lane_fast_gate;
+mod project_checks;
 // One agent launcher. trace:STORY-2326 | ai:claude
 mod launch;
 pub mod leases;

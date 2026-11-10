@@ -927,3 +927,24 @@ The advisor-approved legacy `[lane_host] allow_ungranted = true` opt-in is
 reported as a warning. It grants no new authority in this slice: host placement,
 SSH dispatch, a remote grant issuer, unified remote leases/ps, and script
 retirement remain follow-up work.
+
+### Project validation commands
+
+Set project-specific commands in the default branch's `.aida/config.toml`:
+
+```toml
+[validation]
+format = "ruff format ."
+test = "python3 -m unittest discover"
+fast_check = "python3 -m unittest discover"
+```
+
+Lane launch prompts name `format` and `test`. The host runs `fast_check` via
+`/bin/sh -c` in the lane's existing fast-gate sandbox before publication, with
+network and host IPC isolated and a ten-minute timeout. Commands run from the
+seat checkout. A failing check retains the existing single repair round.
+Missing or blank `fast_check` skips the gate with `skipped(unconfigured)` and a
+stated reason; no Makefile or Rust toolchain is assumed. Malformed configuration
+reports an infrastructure error instead of executing a command. These commands come only from trusted default-branch
+configuration; edits in a lane cannot select host gate commands.
+<!-- trace:BUG-2512 | ai:codex -->
