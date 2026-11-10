@@ -165,7 +165,8 @@ fn reader_fallback_and_failure_passthrough() {
 }
 
 // Environment aliases must select the same error channels as their canonical
-// formats, regardless of piped stdout or the agent-output fallback.
+// explicit formats, regardless of piped stdout or the agent-output fallback.
+// The explicit reference also verifies that the flag overrides an unknown env pin.
 #[test]
 fn environment_alias_error_parity() {
     let dir = tempfile::tempdir().unwrap();
@@ -176,8 +177,12 @@ fn environment_alias_error_parity() {
     )
     .unwrap();
     fs::set_permissions(&reader, fs::Permissions::from_mode(0o755)).unwrap();
-    let run = |format: &str, agent: &str, since: &str, reader: &Path| {
-        Command::new(env!("CARGO_BIN_EXE_aida-porcelain"))
+    let run = |format: &str, explicit: Option<&str>, agent: &str, since: &str, reader: &Path| {
+        let mut command = Command::new(env!("CARGO_BIN_EXE_aida-porcelain"));
+        if let Some(explicit) = explicit {
+            command.args(["--format", explicit]);
+        }
+        command
             .args(["flow", "report", "--since", since])
             .current_dir(dir.path())
             .env("AIDA_OUTPUT_FORMAT", format)
@@ -187,9 +192,11 @@ fn environment_alias_error_parity() {
             .unwrap()
     };
     for (alias, canonical, agent) in [
+        ("table", "human", "0"),
         ("table", "human", "1"),
         (" TABLE ", "human", "1"),
         ("agent", "toon", "0"),
+        ("agent", "toon", "1"),
         (" AgEnT ", "toon", "0"),
     ] {
         for (since, selected_reader, code) in [
@@ -197,8 +204,8 @@ fn environment_alias_error_parity() {
             ("2026-11-09", dir.path().join("missing-reader"), 1),
             ("2026-11-09", reader.clone(), 23),
         ] {
-            let aliased = run(alias, agent, since, &selected_reader);
-            let expected = run(canonical, agent, since, &selected_reader);
+            let aliased = run(alias, None, agent, since, &selected_reader);
+            let expected = run("unsupported", Some(canonical), agent, since, &selected_reader);
             assert_eq!(aliased.status.code(), Some(code));
             assert_eq!(aliased.status.code(), expected.status.code());
             assert_eq!(aliased.stdout, expected.stdout, "{alias}: {since}");
