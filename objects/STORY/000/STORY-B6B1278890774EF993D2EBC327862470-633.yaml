@@ -8,7 +8,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-10T22:04:54.061461738Z
-modified_at: 2026-11-10T22:21:09.681820855Z
+modified_at: 2026-11-10T22:21:11.164320892Z
 req_type: Story
 comments:
 - id: 01a1c781-4cf1-7c80-b086-89c5c5096ab6
@@ -111,6 +111,20 @@ comments:
   content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: STORY-2710 is not implemented: this PR contains only a proposed sketch; all five acceptance criteria remain unverified. CI gates/contracts are pending.. It was punted on: design-fork: Sketch-first gate: automatic watcher conflict dispatch changes orchestrator semantics and needs durable shared reservations across watcher and direct rework. Posted concrete sketch in spec comment and docs/plans/2026-11-10-story-2710-conflict-lane.md; master sign-off required before implementation.. No triage reason was given.'
   created_at: 2026-11-10T22:21:09.681818495Z
   modified_at: 2026-11-10T22:21:09.681818495Z
+  session_id: 01a1c530-c917-7f13-ab81-f6b5e1d1cd30
+  harness_version: 2.1.322 (Claude Code)
+- id: 01a1c78d-07ef-7550-8ab6-c71cf77d45af
+  author: joe
+  content: |-
+    REVIEW FINDINGS TO ADDRESS (STORY-2710):
+    Verdict: CHANGES REQUESTED
+    Reviewed commit: 67d115e25b02
+    Recorded: 2026-11-10T22:12:04.590425875+00:00
+    Findings:
+    1. [P1] docs/plans/2026-11-10-story-2710-conflict-lane.md:3-12,78-88 — Deliver the accepted story implementation and regression coverage, or obtain an explicit sketch-only scope before requesting story approval. The sole changed file is a proposed plan: review_watch_update::attempt still sends conflict failures to the advisor, and rework_direction::conflict_task still tells the lane to commit/push without a compile gate. There is no added generated-output registry/regeneration flow, mechanically-unresolvable repair notice with paths and per-head deduplication, or tests of the requested dispatch/regeneration/refusal behavior. Thus AC1-5 are not satisfied by this head. Obtain required master sketch sign-off before production implementation, then implement and verify all five criteria; do not mark STORY-2710 complete for this sketch alone.
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
+  created_at: 2026-11-10T22:21:11.023897514Z
+  modified_at: 2026-11-10T22:21:11.023897514Z
   session_id: 01a1c530-c917-7f13-ab81-f6b5e1d1cd30
   harness_version: 2.1.322 (Claude Code)
 history:
