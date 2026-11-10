@@ -8,7 +8,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-08T21:19:56.393105400Z
-modified_at: 2026-11-09T16:48:21.500490261Z
+modified_at: 2026-11-10T14:28:45.084436144Z
 req_type: Task
 comments:
 - id: 01a1c133-32b4-71f0-9d0b-9ea545392432
@@ -32,6 +32,13 @@ comments:
   modified_at: 2026-11-09T16:48:21.500490261Z
   session_id: 01a1beff-fc3b-78e2-93e2-9b0c283b0339
   harness_version: 2.1.319 (Claude Code)
+- id: 01a1c5dc-819c-7e21-a9b1-0917ae23e0b2
+  author: joe
+  content: 'ADVISOR: superseded by STORY-2695 (dell1 parallel cached CI runner) and STORY-2672 (dell1 self-hosted runner), which carry the capacity fix; the measurements here are kept as their baseline.'
+  created_at: 2026-11-10T14:28:45.084436144Z
+  modified_at: 2026-11-10T14:28:45.084436144Z
+  session_id: 01a1c530-c917-7f13-ab81-f6b5e1d1cd30
+  harness_version: 2.1.322 (Claude Code)
 filed_at:
   code_sha: b57c1fab753d30430c7a544b781bd8c7d91da0d2
   branch: main
