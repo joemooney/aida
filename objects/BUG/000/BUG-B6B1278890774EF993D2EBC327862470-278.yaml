@@ -8,7 +8,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-10T03:07:01.660083142Z
-modified_at: 2026-11-10T16:28:16.079002984Z
+modified_at: 2026-11-10T16:34:57.722201351Z
 req_type: Bug
 comments:
 - id: 01a1c60c-adfa-72f3-9f5c-b40df8817ee3
@@ -65,6 +65,13 @@ comments:
   modified_at: 2026-11-10T16:25:54.933314840Z
   session_id: 01a1c39a-801a-7bd1-8da9-c955a6707f0b
   harness_version: 2.1.321 (Claude Code)
+- id: 01a1c650-0e3a-79e2-918e-2a9731361b64
+  author: dirtlab
+  content: 'Addressed the latest CI failures on the existing advisor-approved selection fix. The stranded-liveness fixture now chooses a synthetic PID outside the inspector ancestry instead of hard-coded 4242, with a negative assertion preserving inspector exclusion. The setup manual now cites the full aida init --no-agent-config command so the manual verifier resolves its flag correctly. Validation: lane job j20261110T162940771-2-0 executed all 4 stranded-liveness tests successfully; j20261110T163008540-2-0 executed the conflicting-saved-settings init regression successfully. Setup manual runtime verification, rustfmt check, git diff --check and ExecContext ledger guard passed. Changed files: aida-cli-lib/src/tests/task977_stranded_liveness_tests.rs and docs/cli/07-project-setup.md. No implementation blocker; host codegraph client missing, diagnosed with doctor. Edits uncommitted for host publication.'
+  created_at: 2026-11-10T16:34:57.722201351Z
+  modified_at: 2026-11-10T16:34:57.722201351Z
+  session_id: 01a1c649e699
+  harness_version: codex-cli 0.167.0
 history:
 - id: 01a1c5dc-c560-7b10-85fe-1df64f0de2cf
   author: joe
