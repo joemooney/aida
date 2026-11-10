@@ -5155,7 +5155,13 @@ fn slice_subject_exclusion_is_scoped_to_rebased_commits() {
 // Fake GitLab search deliberately excludes source_branch, as the REST API does.
 // trace:BUG-2516 | ai:codex
 fn bug_2516_write_glab(bin: &std::path::Path, rows: &[serde_json::Value]) {
+    bug_2516_write_glab_pages(bin, rows, false);
+}
+
+// trace:BUG-2516 | ai:codex
+fn bug_2516_write_glab_pages(bin: &std::path::Path, rows: &[serde_json::Value], fail_second: bool) {
     let rows = serde_json::to_string(rows).unwrap();
+    let fail_second = if fail_second { "True" } else { "False" };
     crate::test_exec::write_executable(
         &bin.join("glab"),
         format!(
@@ -5171,7 +5177,11 @@ for arg in sys.argv[1:]:
     if arg.startswith('search='):
         term = arg.split('=', 1)[1].lower()
         rows = [r for r in rows if term in (r.get('title', '') + ' ' + (r.get('description') or '')).lower()]
-print(json.dumps(rows))
+page = int(next(arg.split('=', 1)[1] for arg in sys.argv if arg.startswith('page=')))
+if page == 2 and {fail_second}:
+    print('second page failed', file=sys.stderr)
+    sys.exit(1)
+print(json.dumps(rows[(page - 1) * 100:page * 100]))
 "#
         ),
     );
@@ -5206,13 +5216,20 @@ fn bug_2516_gitlab_pull_completion_trailers() {
     .unwrap();
     let bin = root.join("bin");
     std::fs::create_dir(&bin).unwrap();
-    bug_2516_write_glab(
-        &bin,
-        &[serde_json::json!({
+    bug_2516_write_glab(&bin, &{
+        let mut rows = vec![
+            serde_json::json!({
+                "iid": 2, "title": "unrelated", "description": "",
+                "source_branch": "other", "state": "opened"
+            });
+            99
+        ];
+        rows.push(serde_json::json!({
             "iid": 3, "title": "follow-up", "description": "",
             "source_branch": "fix/bug-2518-rework", "state": "opened"
-        })],
-    );
+        }));
+        rows
+    });
     let _path = crate::test_env::EnvVarGuard::prepend_path(&bin);
     seed_spec_at(&store_path, "BUG-2516", "InProgress");
     seed_spec_at(&store_path, "BUG-2517", "InProgress");
@@ -5348,5 +5365,20 @@ fn bug_2516_gitlab_search_requires_credit_across_whole_page() {
             Some(std::collections::BTreeMap::from([("BUG-2516".into(), 3)])),
         );
     }
-    check(vec![miss; 100], None);
+    // A full nonmatching page needs the empty second page to establish clear.
+    check(
+        vec![miss.clone(); 100],
+        Some(std::collections::BTreeMap::new()),
+    );
+    let mut rows = vec![miss; 100];
+    rows.push(serde_json::json!({
+        "iid": 3, "title": "follow-up", "description": "",
+        "source_branch": "fix/bug-2516-rework", "state": "opened"
+    }));
+    check(
+        rows.clone(),
+        Some(std::collections::BTreeMap::from([("BUG-2516".into(), 3)])),
+    );
+    bug_2516_write_glab_pages(&bin, &rows, true);
+    assert_eq!(specs_with_open_prs(&root, ["BUG-2516".into()]), None);
 }

@@ -2977,15 +2977,28 @@ impl Forge for GitLabForge {
     }
 
     fn change_for_spec(&self, spec: &str) -> Result<ChangeLookup> {
-        // GitLab search covers title/description, not source_branch. Enumerate
-        // open MRs so branch-only ownership also holds completion. A full page
-        // without a match remains unknown in the checked parser.
+        // GitLab search omits source_branch. Enumerate open MRs to exhaustion
+        // and match title/description/branch locally; any failed page is unknown.
         // trace:BUG-2516 | ai:codex
-        let out = self.glab_api_get(
-            "projects/:id/merge_requests",
-            &[("state", "opened"), ("per_page", "100")],
-        );
-        Ok(glab_spec_lookup_from_list_output(out, spec))
+        for page in 1u64.. {
+            let page = page.to_string();
+            let out = self.glab_api_get(
+                "projects/:id/merge_requests",
+                &[("state", "opened"), ("per_page", "100"), ("page", &page)],
+            );
+            let count = out.as_ref().ok().and_then(|out| {
+                serde_json::from_slice::<serde_json::Value>(&out.stdout)
+                    .ok()
+                    .and_then(|rows| rows.as_array().map(Vec::len))
+            });
+            match glab_spec_lookup_from_list_output(out, spec) {
+                ChangeLookup::NoChange if count.is_some_and(|count| count >= 100) => continue,
+                answer => return Ok(answer),
+            }
+        }
+        Ok(ChangeLookup::CliFailed(
+            "GitLab pagination exhausted".into(),
+        ))
     }
 
     fn merged_change_for_branch(&self, branch: &str) -> Result<ChangeLookup> {
@@ -3863,13 +3876,12 @@ fn glab_lookup_from_list_output(
 
 /// Open MRs are candidates, not completion credit. Reuse the GitHub
 /// reconciliation matcher across the entire page, with GitLab's field names.
-/// A full page without credit cannot establish absence beyond that page.
+/// The caller follows full pages before treating absence as authoritative.
 // trace:BUG-2516 | ai:codex
 fn glab_spec_lookup_from_list_output(
     out: Result<std::process::Output>,
     spec: &str,
 ) -> ChangeLookup {
-    const LIMIT: usize = 100;
     let out = match out {
         Ok(out) if out.status.success() => out,
         other => return glab_lookup_from_list_output(other, ""),
@@ -3894,8 +3906,8 @@ fn glab_spec_lookup_from_list_output(
             })
         })
         .collect();
-    use crate::reconcile_evidence::{parse_open_change_page, OpenChangeCheck};
-    match parse_open_change_page(&serde_json::to_vec(&normalized).unwrap(), spec, LIMIT) {
+    use crate::reconcile_evidence::{parse_open_change_rows, OpenChangeCheck};
+    match parse_open_change_rows(&serde_json::to_vec(&normalized).unwrap(), spec) {
         OpenChangeCheck::Clear => ChangeLookup::NoChange,
         OpenChangeCheck::Open(id) => rows
             .iter()
