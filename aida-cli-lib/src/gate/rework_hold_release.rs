@@ -151,6 +151,10 @@ impl RetainedHistory {
                 .archived
                 .extend(ledger.into_iter().map(Value::Object));
         }
+        // trace:STORY-2698 | ai:codex — delivery state is not a refusal round.
+        history
+            .archived
+            .retain(|round| !rv::delivery_pending(round));
         Ok(history)
     }
 }
@@ -314,6 +318,9 @@ fn eligible_with_coverage(
     let rounds: Vec<&Value> = inline.iter().chain(&history.archived).collect();
     let mut armed = false;
     for round in rounds {
+        if rv::delivery_pending(round) {
+            continue;
+        }
         let kind = round
             .get("verdict")
             .and_then(Value::as_str)
