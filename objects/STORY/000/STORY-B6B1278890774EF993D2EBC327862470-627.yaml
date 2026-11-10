@@ -8,8 +8,16 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-10T03:52:00.571796159Z
-modified_at: 2026-11-10T03:52:00.571796159Z
+modified_at: 2026-11-10T03:56:13.248530138Z
 req_type: Story
+comments:
+- id: 01a1c399-6840-7383-843e-9930f6eaa3f7
+  author: joe
+  content: 'ADVISOR BRIEF (2026-11-10 03:58 UTC): SKETCH ONLY. Deliver docs/plans/2026-11-10-story-2704-porcelain-crate.md as a docs-only PR with (Refs STORY-2704). Ground it in aida-cli-lib/src/external_cmd.rs and aida-cli/tests/story_1641_external_subcommands.rs, ADR-71, the crate-split plan (docs/plans/2026-11-07-aida-cli-lib-crate-split-deep-dive.md) and aida dev build''s install and promote path. Answer: crate placement and dependency direction (porcelain depends on aida-core public APIs, never on aida-cli-lib internals); multi-call install names and how dev build and release install them; nested built-in-parent resolution precedence and help listing; how a porcelain command is kept read-only; and the migration of STORY-2699''s flow report. Under about 200 lines.'
+  created_at: 2026-11-10T03:56:13.248530138Z
+  modified_at: 2026-11-10T03:56:13.248530138Z
+  session_id: 01a1beff-fc3b-78e2-93e2-9b0c283b0339
+  harness_version: 2.1.319 (Claude Code)
 filed_at:
   code_sha: 838f14c3c2811c6b63da5d465700cff773c36190
   branch: main
