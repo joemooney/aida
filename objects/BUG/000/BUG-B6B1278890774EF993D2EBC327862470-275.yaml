@@ -8,7 +8,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-10T03:06:27.088766021Z
-modified_at: 2026-11-10T07:02:39.990253760Z
+modified_at: 2026-11-10T07:02:41.293456655Z
 req_type: Bug
 comments:
 - id: 01a1c3a1-b5e4-7b12-9593-2238c442f4e7
@@ -42,6 +42,20 @@ comments:
   content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: Full-sweep REQUEST CHANGES: vendor-debt ratchet regression; BUG-2510 (bug protocol): met via inline cfg(test) additions; behavioral criteria verified by source and reported targeted tests; LIGHT/PR CI unverified (7 jobs pending).. No triage reason was given.'
   created_at: 2026-11-10T07:02:39.990246649Z
   modified_at: 2026-11-10T07:02:39.990246649Z
+  session_id: 01a1c39a-801a-7bd1-8da9-c955a6707f0b
+  harness_version: 2.1.321 (Claude Code)
+- id: 01a1c444-1ef5-73e0-9d15-cafee179c8f9
+  author: joe
+  content: |-
+    REVIEW FINDINGS TO ADDRESS (BUG-2510):
+    Verdict: CHANGES REQUESTED
+    Reviewed commit: e7e1fd12dfe0
+    Recorded: 2026-11-10T04:27:03.244638162+00:00
+    Findings:
+    1. [P1] aida-cli-lib/src/agent_codex_background.rs:1190: The new load_vendor_env_passthrough(..., "codex") adds a second production literal:codex in build_worker_exec (the existing AIDA_AGENT_TYPE assignment is the first), but story_2539_vendor_literals.tsv allows exactly 1 for that path/item. story_2539_vendor_literal_ratchet compares exact counts and will fail (measured 2, ledger Some(1)). Reuse the existing vendor identity for the lookup and assignment, or route through the established vendor boundary without adding another ratcheted token; do not increase the shrink-only ledger. Validate with cargo test -p aida-cli-lib story_2539_vendor_literal_ratchet.
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
+  created_at: 2026-11-10T07:02:41.141019928Z
+  modified_at: 2026-11-10T07:02:41.141019928Z
   session_id: 01a1c39a-801a-7bd1-8da9-c955a6707f0b
   harness_version: 2.1.321 (Claude Code)
 history:
