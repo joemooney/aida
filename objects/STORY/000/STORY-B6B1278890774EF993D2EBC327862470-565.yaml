@@ -28,7 +28,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-07T19:59:40.192574Z
-modified_at: 2026-11-10T02:38:55.195335228Z
+modified_at: 2026-11-10T02:51:05.841879983Z
 req_type: Story
 relationships:
 - rel_type: Supersedes
@@ -354,6 +354,22 @@ comments:
         thread 'launch::story_2326_launch_ratchet_tests::launch_sites_outside_the_launcher_match_the_ledger' (119445) panicked at aida-cli-lib/src/launch/../tests/story_2326_launch_ratchet_tests.rs:376:5:
   created_at: 2026-11-10T02:37:02.587120404Z
   modified_at: 2026-11-10T02:37:02.587120404Z
+- id: 01a1c35d-c8f1-7721-8fdc-1db3adb2923d
+  author: dirtlab
+  content: |
+    STORY-2642 final native handoff: all three advisor-required diagnostics are already implemented in this branch: release-version freshness, required AGY credential-source presence, and actual lane-job sandbox/cache reachability, each with fix hints and regression tests.
+
+    This turn fixes the latest recorded CI failure at 1ba86f840183. Changed file: aida-cli-lib/src/lane_job.rs. The doctor cache probe and ordinary lane jobs now share lane_command, including environment clearing before explicit environment projection. This removes the added dynamic launch site without widening the STORY-2326 ratchet ledger or ceiling.
+
+    Validation through the launcher: lane_host::tests 25 passed (j20261110T023925769-2-0); launch_sites_outside_the_launcher_match_the_ledger 1 passed (j20261110T024015480-2-0); doctor_cache_probe 2 passed (j20261110T024025362-2-0); agy_requires_nonempty_conventional_oauth_source 1 passed (j20261110T024026529-2-0). make check-ci-fast passed all 46 gates (j20261110T024516060-2-0), including the no-default-features check. rustfmt --check and git diff --check passed. untested=false.
+
+    The initial direct fast-gate attempt was stopped on unexpected Cargo execution; a seat-side retry using a Cargo relay failed six containment fixture setup operations because ~/.aida is read-only. The full launcher fast-gate rerun above passed. The supplied codegraph client path is absent; aida doctor check codegraph reports missing, and source navigation used rg.
+
+    No implementation blockers. Edits remain uncommitted for the host launcher. No commit, push, PR creation, merge, review verdict or queue completion was performed. Existing publication vetoes remain in force.
+  created_at: 2026-11-10T02:51:05.841879983Z
+  modified_at: 2026-11-10T02:51:05.841879983Z
+  session_id: 01a1c3529ce9
+  harness_version: codex-cli 0.167.0
 history:
 - id: 01a1b85d-3f02-70c2-a82d-cefccf97dc04
   author: aida-session-start
