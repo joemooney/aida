@@ -83,10 +83,12 @@ fn parse_recorded_line(findings: &str) -> Option<DateTime<Utc>> {
 /// When the last review verdict landed: the live findings block's
 /// `Recorded:` time. Only when the block has no usable `Recorded:` line does
 /// the newest findings block recorded as a spec comment stand in. That
-/// comment is written by `aida queue rework`, usually after the advisor's
+/// comment uses its own `Recorded:` time when available, otherwise its creation
+/// time. It is written by `aida queue rework`, usually after the advisor's
 /// brief, so it must never push the cut-off past a real `Recorded:` time.
 /// `None` when neither gives a time.
 // trace:BUG-B6B1278890774EF993D2EBC327862470-057 | ai:claude
+// trace:BUG-2509 | ai:codex
 pub(crate) fn last_verdict_at(
     findings: Option<&str>,
     comments: &[aida_core::Comment],
@@ -95,7 +97,7 @@ pub(crate) fn last_verdict_at(
         flatten(comments)
             .into_iter()
             .filter(|c| crate::review_verdict_display::is_findings_block(&c.content))
-            .map(|c| c.created_at)
+            .map(|c| parse_recorded_line(&c.content).unwrap_or(c.created_at))
             .max()
     })
 }
@@ -140,10 +142,12 @@ pub(crate) fn resolve_direction<'a>(
 ) -> AdvisorDirection<'a> {
     let ruling = latest_matching(comments, crate::queue_cmd::is_ruling_comment);
     let brief = latest_matching(comments, is_brief_comment).map(|b| {
-        let standing = if review_findings.is_none() {
+        // trace:BUG-2509 | ai:codex
+        let verdict_at = last_verdict_at(review_findings, comments);
+        let standing = if review_findings.is_none() && verdict_at.is_none() {
             BriefStanding::Binding
         } else {
-            match last_verdict_at(review_findings, comments) {
+            match verdict_at {
                 Some(at) if b.created_at > at => BriefStanding::SupersedesVerdict,
                 _ => BriefStanding::PredatesVerdict,
             }
@@ -379,6 +383,16 @@ pub(crate) struct PickupInputs<'a> {
 /// implementer item pickup.
 // trace:BUG-B6B1278890774EF993D2EBC327862470-057 | ai:claude
 pub(crate) fn assemble_pickup_prompt(inputs: &PickupInputs<'_>) -> String {
+    // Remote lanes may have no host gate ledger. Keep the durable hand-off
+    // visible as well as using it to order advisor direction.
+    // trace:BUG-2509 | ai:codex
+    let review_findings = inputs.review_findings.or_else(|| {
+        latest_matching(
+            inputs.spec_comments,
+            crate::review_verdict_display::is_findings_block,
+        )
+        .map(|comment| comment.content.as_str())
+    });
     let implementer_item = !inputs.role.eq_ignore_ascii_case("reviewer")
         && !inputs.plan_only
         && !inputs.guided
@@ -386,7 +400,7 @@ pub(crate) fn assemble_pickup_prompt(inputs: &PickupInputs<'_>) -> String {
     // Agent gates keep the findings in the base prompt: they get no lead.
     let gate = std::env::var("AIDA_AGENT_GATE_NAME").is_ok();
     let direction = if implementer_item && !gate {
-        resolve_direction(inputs.spec_comments, inputs.review_findings)
+        resolve_direction(inputs.spec_comments, review_findings)
     } else {
         AdvisorDirection::default()
     };
@@ -396,8 +410,8 @@ pub(crate) fn assemble_pickup_prompt(inputs: &PickupInputs<'_>) -> String {
         inputs.role,
         inputs.plan_only,
         inputs.guided,
-        inputs.review_findings.filter(|_| !supersedes),
-        if inputs.review_findings.is_some() {
+        review_findings.filter(|_| !supersedes),
+        if review_findings.is_some() {
             inputs.spec_comments
         } else {
             &[][..]
@@ -412,7 +426,7 @@ pub(crate) fn assemble_pickup_prompt(inputs: &PickupInputs<'_>) -> String {
         lead_rework_prompt(
             prompt,
             &direction,
-            inputs.review_findings.filter(|_| supersedes),
+            review_findings.filter(|_| supersedes),
             inputs.conflict,
         )
     } else {

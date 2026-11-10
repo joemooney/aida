@@ -376,6 +376,61 @@ fn brief_between_recorded_verdict_and_queue_rework_comment_leads() {
     assert!(!prompt.contains("SUPERSEDED CONTEXT"), "{prompt}");
 }
 
+// trace:BUG-2509 | ai:codex
+#[test]
+fn remote_lane_without_ledger_uses_durable_findings_and_recorded_time() {
+    let _g = no_gate();
+    let recorded_at = Utc::now() - chrono::Duration::minutes(30);
+    let findings = format!(
+        "REVIEW FINDINGS TO ADDRESS (PR #3177):\nRecorded: {}\n- fix remote pickup",
+        recorded_at.to_rfc3339()
+    );
+    // The hand-off is posted after both briefs. Its Recorded time, rather
+    // than its creation time, separates stale direction from current direction.
+    for (brief_age, standing) in [
+        (60, BriefStanding::PredatesVerdict),
+        (20, BriefStanding::SupersedesVerdict),
+    ] {
+        let mut parent = comment(120, "Review discussion");
+        parent.replies.push(comment(5, &findings));
+        let comments = vec![comment(brief_age, REWORK_BRIEF), parent];
+        let direction = resolve_direction(&comments, None);
+        assert_eq!(direction.brief.map(|(_, s)| s), Some(standing));
+        let prompt = assemble(&item_plan(), None, &comments, None);
+        assert_eq!(prompt.matches("fix remote pickup").count(), 1, "{prompt}");
+        assert!(!prompt.contains("binding;"), "{prompt}");
+        if standing == BriefStanding::PredatesVerdict {
+            assert!(
+                prompt.contains("ITEMS STILL OPEN (AUTHORITATIVE TASK)"),
+                "{prompt}"
+            );
+            assert!(prompt.contains("OLDER CONTEXT"), "{prompt}");
+            assert!(!prompt.contains("SUPERSEDED CONTEXT"), "{prompt}");
+        } else {
+            assert!(prompt.starts_with("ADVISOR BRIEF ("), "{prompt}");
+            assert!(prompt.contains("SUPERSEDED CONTEXT"), "{prompt}");
+        }
+    }
+}
+
+// trace:BUG-2509 | ai:codex
+#[test]
+fn remote_lane_untimed_findings_use_comment_time_and_ignore_quoted_markers() {
+    let comments = vec![comment(60, REWORK_BRIEF), comment(5, FINDINGS)];
+    assert_eq!(
+        resolve_direction(&comments, None).brief.map(|(_, s)| s),
+        Some(BriefStanding::PredatesVerdict)
+    );
+    let discussion = vec![
+        comment(60, REWORK_BRIEF),
+        comment(5, &format!("Discussion quoting: {FINDINGS}")),
+    ];
+    assert_eq!(
+        resolve_direction(&discussion, None).brief.map(|(_, s)| s),
+        Some(BriefStanding::Binding)
+    );
+}
+
 #[test]
 fn verdict_time_comes_from_the_recorded_line_or_comments() {
     let brief = vec![comment(60, "ADVISOR BRIEF: merge main")];
