@@ -19,7 +19,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-10T11:29:50.373967960Z
-modified_at: 2026-11-10T16:57:06.707465321Z
+modified_at: 2026-11-10T16:57:07.929647703Z
 req_type: Bug
 comments:
 - id: 01a1c63b-ee32-7502-886f-4dbf64e2d225
@@ -65,6 +65,20 @@ comments:
   content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: Round 1 full sweep: incomplete fix; BUG-2519 (bug protocol): met (inline tests). BUG-b6b1278890774ef993d2ebc327862470-284.acfd7976: unverified (primary cause unconfirmed); .ac91bf2f: unverified (no >=50% primary second-job result or production fix); .ac289506: verified by lane-cache-reuse doctor, three-mode fixture and advisory-status test (reported lane runs; no PR CI). Required PR CI: unknown, no checks registered at reviewed SHA.. It was punted on: design-fork: Local sccache 0.19.0 reproduces cwd-dependent Rust misses (A/B/A: two misses, one hit), including with SCCACHE_BASEDIRS. Primary-host >=50% second-job evidence remains unavailable. Corrective stable workspace/target mounts require reviewed Git-protection, Cargo-discovery, artifact-path and isolation design before implementation; see investigation comment and docs/internal/testing/bug-2519-lane-cache-reuse.md. Diagnostic-only edits remain uncommitted; no completion claim.. No triage reason was given.'
   created_at: 2026-11-10T16:57:06.707460054Z
   modified_at: 2026-11-10T16:57:06.707460054Z
+  session_id: 01a1c39a-801a-7bd1-8da9-c955a6707f0b
+  harness_version: 2.1.321 (Claude Code)
+- id: 01a1c664-59cf-7d13-bf06-f16ee4e71cee
+  author: joe
+  content: |-
+    REVIEW FINDINGS TO ADDRESS (BUG-2519):
+    Verdict: CHANGES REQUESTED
+    Reviewed commit: 12a88007041c
+    Recorded: 2026-11-10T16:28:48.978511420+00:00
+    Findings:
+    1. [P2] Complete the primary-lane cache fix before claiming BUG-2519 (docs/internal/testing/bug-2519-lane-cache-reuse.md:40-51; aida-cli-lib/src/lane_job.rs:349). The diff only adds a diagnostic; lane_sccache_env, job cache keys and workspace/target layout remain unchanged, so affected primary lanes still compile cold. The recorded dirtlab experiment explicitly does not confirm the primary root cause, and the >=50% second-primary-job requirement remains unmet. Resolve and record the primary cause (BUG-b6b1278890774ef993d2ebc327862470-284.acfd7976), implement the reviewed correction with regression coverage, then attach comparable primary dependency-build evidence meeting .ac91bf2f. If only the diagnostic is intended for this PR, split it onto an explicitly scoped spec instead of presenting it as completion of this bug.
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
+  created_at: 2026-11-10T16:57:07.791435053Z
+  modified_at: 2026-11-10T16:57:07.791435053Z
   session_id: 01a1c39a-801a-7bd1-8da9-c955a6707f0b
   harness_version: 2.1.321 (Claude Code)
 history:
