@@ -30,7 +30,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-10T01:33:02.719338782Z
-modified_at: 2026-11-10T02:00:32.088742193Z
+modified_at: 2026-11-10T02:00:34.115953237Z
 req_type: Story
 comments:
 - id: 01a1c318-2e6f-7041-93e0-3128dbbb39f7
@@ -54,6 +54,13 @@ comments:
   modified_at: 2026-11-10T01:48:23.318480980Z
   session_id: 01a1c319aa25
   harness_version: codex-cli 0.167.0
+- id: 01a1c32f-8643-70f1-a564-c4d61eb20a34
+  author: joe
+  content: 'ADVISOR RULING (2026-11-10 02:05 UTC) on PR #3753: the ''measured over the next 10 PRs'' criterion cannot be verified before merge; it was mis-specified as a merge criterion. It is now an advisor-owned post-merge check in the description. The reviewer''s only finding is resolved by this ruling; same head 94c52ba34334 released for re-review against the other criteria.'
+  created_at: 2026-11-10T02:00:34.115953237Z
+  modified_at: 2026-11-10T02:00:34.115953237Z
+  session_id: 01a1beff-fc3b-78e2-93e2-9b0c283b0339
+  harness_version: 2.1.319 (Claude Code)
 history:
 - id: 01a1c318-268c-7ed1-aacc-7017cc5cbe36
   author: joe
