@@ -1,0 +1,21 @@
+id: 01a1c42f-7854-7623-ba89-f470dcf0497e
+spec_id: BUG-b6b1278890774ef993d2ebc327862470-282
+agreed_id: BUG-2517
+title: Review verdict for one PR is recorded in another PR's gate ledger when both PRs reference the same spec
+description: 'Observed 2026-11-10: a reviewer of canary PR #3764 (title ''(Refs BUG-2492)'', head f9184b7) recorded its WAITING verdict as PR-3651 ledger seq 53 (change PR-3651, head f9184b7376, spec BUG-2492), and ''aida review verdict PR-3651'' then reported that verdict against a head PR #3651 never had. The reviewer''s change identity was resolved through the spec, which picks one PR when two open PRs name the same spec. Effects: the real PR''s latest verdict is replaced by another PR''s; head-pinned gates still refuse it (head mismatch), but status, waiting-release and auto-train read the wrong verdict. Fix: the verdict''s change key comes from the reviewer''s leased change (PR-N), never from a spec lookup; refuse a record whose head is not the named PR''s head. Test: two open PRs naming one spec, verdict for the second lands only in its own ledger. Evidence: .aida/gate-ledger/PR-3651.jsonl seq 53; PR-3764.jsonl.'
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-11-10T06:40:07.764479561Z
+modified_at: 2026-11-10T06:40:07.764479561Z
+req_type: Bug
+filed_at:
+  code_sha: e682f76092e65c6556f7881fe8a5e0aa48516740
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 47d48b4a7e0
+  vendor: claude
+  session: 01a1c39a-801a-7bd1-8da9-c955a6707f0b
+  harness_version: 2.1.321 (Claude Code)
