@@ -8,7 +8,7 @@ priority: Low
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-05T04:41:25.538710401Z
-modified_at: 2026-11-10T03:08:28.943867497Z
+modified_at: 2026-11-10T03:14:22.950691941Z
 req_type: Story
 relationships:
 - rel_type: Supersedes
@@ -288,6 +288,13 @@ comments:
   content: 'Returned from NeedsAttention to Approved via `aida edit --status`. It was shelved on: reviewer/verdict:request-changes: Slice 1 retains the deny-pattern empty-string defect; required PR CI remains pending. Full-sweep checklist completed.. No triage reason was given.'
   created_at: 2026-11-10T03:05:56.822714281Z
   modified_at: 2026-11-10T03:05:56.822714281Z
+- id: 01a1c373-1a66-7e63-a9a5-92ebbc007a29
+  author: dirtlab
+  content: 'Rework addressed the reported CI failure in gate::ledger::tests::legacy_gate_paths_do_not_gain_new_references. Isolated intent transport folder references are now separately bounded by exact file (intent_intake.rs: 7; review_envelope.rs: 1); the existing legacy gate budget remains unchanged, and other directory checks still cover both files. The deny-pattern fix and its ^$ regression were already present on this checkout and required no further edit. Validation: lane job j20261110T030913078-2-0 executed the previously failing guard (1 passed); j20261110T030918493-2-0 executed review_envelope::tests (3 passed, including nonempty finding/verdict acceptance, empty-body refusal and invalid-regex refusal). rustfmt --check and git diff --check passed. Only aida-cli-lib/src/gate/ledger/tests.rs changed, left uncommitted for host publication. Recorded non-completing Refs STORY-2493 declaration. No commit, push, PR creation, review record or queue completion attempted; advisor-approved slice 1 remains partial, with blocking projection and home-attested approval later slices. Host Codegraph client unavailable at the supplied absolute path; doctor reports missing, used rg instead.'
+  created_at: 2026-11-10T03:14:22.950691941Z
+  modified_at: 2026-11-10T03:14:22.950691941Z
+  session_id: 01a1c36d58dd
+  harness_version: codex-cli 0.167.0
 history:
 - id: 01a1aa0a-8ae7-7523-b84e-68f1c2e158c7
   author: joe
