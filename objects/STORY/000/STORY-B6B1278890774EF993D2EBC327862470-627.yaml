@@ -8,7 +8,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-10T03:52:00.571796159Z
-modified_at: 2026-11-10T18:35:09.434231114Z
+modified_at: 2026-11-10T18:38:49.592073525Z
 req_type: Story
 comments:
 - id: 01a1c399-6840-7383-843e-9930f6eaa3f7
@@ -317,6 +317,13 @@ comments:
   content: 'Round 4 validation complete: shared output-format unit regression passed (1 test); builtin_porcelain_parity passed (1 test, 1.23s); multicall passed (2 tests, 0.01s). git diff --check passed. No delayed-reader test or time-budget exception exists. New uncommitted follow-up tests cover aliases/unknown format values and explicit format precedence on validation and reader failures. Fast gate remains blocked by unrelated Codex mail-wake ownership fixtures.'
   created_at: 2026-11-10T18:35:09.434231114Z
   modified_at: 2026-11-10T18:35:09.434231114Z
+  session_id: 01a1c6ba16ab
+  harness_version: codex-cli 0.167.0
+- id: 01a1c6c1-74f8-7793-819f-ed3a3526530b
+  author: dirtlab
+  content: 'Fast-gate fix: reproduced Help-Golden trailer false refusal with a large git log (grep -q closed early, git log SIGPIPE under pipefail). Changed the guard to consume the complete log and added a large-history regression fixture. Fixture failed before the fix and passes after; full guard fixture suite, guard against origin/main and HEAD~80, bash syntax and git diff --check passed. No help surface change; native edits remain uncommitted for host publication.'
+  created_at: 2026-11-10T18:38:49.592073525Z
+  modified_at: 2026-11-10T18:38:49.592073525Z
   session_id: 01a1c6ba16ab
   harness_version: codex-cli 0.167.0
 history:
