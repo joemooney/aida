@@ -2070,7 +2070,7 @@ pub(crate) struct CompeteArgs {
 // handle. trace:STORY-659 | ai:claude
 fn run_compete(
     matches: &clap::ArgMatches,
-    _ctx: &crate::command_registry::DispatchCtx,
+    _ctx: &crate::cmdkit::DispatchCtx,
 ) -> anyhow::Result<()> {
     let args = <CompeteArgs as clap::FromArgMatches>::from_arg_matches(matches)?;
     let CompeteArgs {
@@ -2092,19 +2092,18 @@ fn run_compete(
 }
 
 // trace:STORY-1728 | ai:claude
-pub(crate) static COMPETE: crate::command_registry::CommandReg =
-    crate::command_registry::CommandReg {
-        name: "compete",
-        help_after: "brief",
-        command: <CompeteArgs as clap::CommandFactory>::command,
-        policy: |_| crate::command_registry::CmdPolicy {
-            stakeholder: crate::stakeholder_role::StakeholderAction::Write,
-            per_write_auto_push: false,
-            skip_role_restore_prompt: false,
-            team_identity_write: false,
-        },
-        run: crate::command_registry::Handler::Early(run_compete),
-    };
+pub(crate) static COMPETE: crate::cmdkit::CommandReg = crate::cmdkit::CommandReg {
+    name: "compete",
+    help_after: "brief",
+    command: <CompeteArgs as clap::CommandFactory>::command,
+    policy: |_| crate::cmdkit::CmdPolicy {
+        stakeholder: crate::stakeholder_role::StakeholderAction::Write,
+        per_write_auto_push: false,
+        skip_role_restore_prompt: false,
+        team_identity_write: false,
+    },
+    run: crate::cmdkit::Handler::Early(run_compete),
+};
 
 #[cfg(test)]
 mod bug2396_judge_vendor_tests {

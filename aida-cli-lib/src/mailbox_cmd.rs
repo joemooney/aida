@@ -3204,16 +3204,14 @@ pub(crate) struct MailboxArgs {
 
 fn run_mailbox(
     matches: &clap::ArgMatches,
-    ctx: &crate::command_registry::DispatchCtx,
-) -> anyhow::Result<crate::command_registry::Flow> {
+    ctx: &crate::cmdkit::DispatchCtx,
+) -> anyhow::Result<crate::cmdkit::Flow> {
     use crate::*;
     let args = <MailboxArgs as clap::FromArgMatches>::from_arg_matches(matches)?;
     match &ctx.store {
-        None => Ok(crate::command_registry::Flow::Continue),
-        Some(crate::command_registry::StoreCtx::Distributed { .. }) => {
-            Ok(crate::command_registry::Flow::Continue)
-        }
-        Some(crate::command_registry::StoreCtx::Git {
+        None => Ok(crate::cmdkit::Flow::Continue),
+        Some(crate::cmdkit::StoreCtx::Distributed { .. }) => Ok(crate::cmdkit::Flow::Continue),
+        Some(crate::cmdkit::StoreCtx::Git {
             store_path,
             backend,
         }) => {
@@ -3223,15 +3221,15 @@ fn run_mailbox(
                 MailboxArgs { inner: mailbox_cmd } => {
                     // trace:STORY-493 | ai:claude — local layer only; git-canonical
                     // digest is a later slice. Needs only the project root.
-                    return crate::command_registry::returned(self::handle_mailbox_command(
+                    return crate::cmdkit::returned(self::handle_mailbox_command(
                         mailbox_cmd,
                         store_path,
                     ));
                 }
             }
-            Ok(crate::command_registry::Flow::Continue)
+            Ok(crate::cmdkit::Flow::Continue)
         }
-        Some(crate::command_registry::StoreCtx::Legacy {
+        Some(crate::cmdkit::StoreCtx::Legacy {
             storage,
             requirements_path,
         }) => {
@@ -3244,31 +3242,30 @@ fn run_mailbox(
                 );
                 }
             }
-            Ok(crate::command_registry::Flow::Continue)
+            Ok(crate::cmdkit::Flow::Continue)
         }
     }
 }
 
 // trace:STORY-1728 | ai:claude
-pub(crate) static MAILBOX: crate::command_registry::CommandReg =
-    crate::command_registry::CommandReg {
-        name: "mailbox",
-        help_after: "sandbox",
-        command: <MailboxArgs as clap::CommandFactory>::command,
-        policy: mailbox_cli_policy,
-        run: crate::command_registry::Handler::Store(run_mailbox),
-    };
+pub(crate) static MAILBOX: crate::cmdkit::CommandReg = crate::cmdkit::CommandReg {
+    name: "mailbox",
+    help_after: "sandbox",
+    command: <MailboxArgs as clap::CommandFactory>::command,
+    policy: mailbox_cli_policy,
+    run: crate::cmdkit::Handler::Store(run_mailbox),
+};
 
 // Per-verb policy, carried over from the legacy stakeholder and per-write
 // auto-push tables. An unparseable invocation gets the fail-closed answer.
 // trace:STORY-1728 | ai:claude
-fn mailbox_cli_policy(matches: &clap::ArgMatches) -> crate::command_registry::CmdPolicy {
+fn mailbox_cli_policy(matches: &clap::ArgMatches) -> crate::cmdkit::CmdPolicy {
     use crate::cli::MailboxCommand;
     use crate::stakeholder_role::StakeholderAction as SA;
     let args = <MailboxArgs as clap::FromArgMatches>::from_arg_matches(matches).ok();
     let inner = args.as_ref().map(|args| &args.inner);
     use self::mailbox_cmd_args::RetentionCommand;
-    crate::command_registry::CmdPolicy {
+    crate::cmdkit::CmdPolicy {
         // A real prune removes Git worktree registrations, so only its dry
         // run is a read.
         // trace:TASK-b6b1278890774ef993d2ebc327862470-118 | ai:claude

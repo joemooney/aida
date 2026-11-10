@@ -1104,7 +1104,7 @@ pub(crate) struct MandateArgs {
 // home (+ a best-effort audit event); no store handle. trace:STORY-1698 | ai:claude
 fn run_mandate(
     matches: &clap::ArgMatches,
-    _ctx: &crate::command_registry::DispatchCtx,
+    _ctx: &crate::cmdkit::DispatchCtx,
 ) -> anyhow::Result<()> {
     use crate::*;
     let args = <MandateArgs as clap::FromArgMatches>::from_arg_matches(matches)?;
@@ -1113,16 +1113,15 @@ fn run_mandate(
 }
 
 // trace:STORY-1728 | ai:claude
-pub(crate) static MANDATE: crate::command_registry::CommandReg =
-    crate::command_registry::CommandReg {
-        name: "mandate",
-        help_after: "merge-hold",
-        command: <MandateArgs as clap::CommandFactory>::command,
-        policy: |_| crate::command_registry::CmdPolicy {
-            stakeholder: crate::stakeholder_role::StakeholderAction::Write,
-            per_write_auto_push: false,
-            skip_role_restore_prompt: false,
-            team_identity_write: false,
-        },
-        run: crate::command_registry::Handler::Early(run_mandate),
-    };
+pub(crate) static MANDATE: crate::cmdkit::CommandReg = crate::cmdkit::CommandReg {
+    name: "mandate",
+    help_after: "merge-hold",
+    command: <MandateArgs as clap::CommandFactory>::command,
+    policy: |_| crate::cmdkit::CmdPolicy {
+        stakeholder: crate::stakeholder_role::StakeholderAction::Write,
+        per_write_auto_push: false,
+        skip_role_restore_prompt: false,
+        team_identity_write: false,
+    },
+    run: crate::cmdkit::Handler::Early(run_mandate),
+};

@@ -1601,7 +1601,7 @@ pub(crate) fn handle_git_backend_command(
     let flow = match command {
         // trace:STORY-1728 | ai:claude
         Command::Registered(invocation) => {
-            let store = crate::command_registry::StoreCtx::Git {
+            let store = crate::cmdkit::StoreCtx::Git {
                 store_path,
                 backend: &backend,
             };
@@ -1617,7 +1617,7 @@ pub(crate) fn handle_git_backend_command(
     let close_phase = crate::usage::phase("close");
     drop(backend);
     drop(close_phase);
-    if flow == crate::command_registry::Flow::Return {
+    if flow == crate::cmdkit::Flow::Return {
         return Ok(());
     }
 

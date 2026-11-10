@@ -654,16 +654,14 @@ pub(crate) struct CacheArgs {
 
 fn run_cache(
     matches: &clap::ArgMatches,
-    ctx: &crate::command_registry::DispatchCtx,
-) -> anyhow::Result<crate::command_registry::Flow> {
+    ctx: &crate::cmdkit::DispatchCtx,
+) -> anyhow::Result<crate::cmdkit::Flow> {
     use crate::*;
     let args = <CacheArgs as clap::FromArgMatches>::from_arg_matches(matches)?;
     match &ctx.store {
-        None => Ok(crate::command_registry::Flow::Continue),
-        Some(crate::command_registry::StoreCtx::Distributed { .. }) => {
-            Ok(crate::command_registry::Flow::Continue)
-        }
-        Some(crate::command_registry::StoreCtx::Git {
+        None => Ok(crate::cmdkit::Flow::Continue),
+        Some(crate::cmdkit::StoreCtx::Distributed { .. }) => Ok(crate::cmdkit::Flow::Continue),
+        Some(crate::cmdkit::StoreCtx::Git {
             store_path,
             backend,
         }) => {
@@ -671,14 +669,12 @@ fn run_cache(
             let (store_path, backend) = (*store_path, *backend);
             match &args {
                 CacheArgs { inner: cache_cmd } => {
-                    return crate::command_registry::returned(self::handle_cache_command(
-                        cache_cmd, backend,
-                    ));
+                    return crate::cmdkit::returned(self::handle_cache_command(cache_cmd, backend));
                 }
             }
-            Ok(crate::command_registry::Flow::Continue)
+            Ok(crate::cmdkit::Flow::Continue)
         }
-        Some(crate::command_registry::StoreCtx::Legacy {
+        Some(crate::cmdkit::StoreCtx::Legacy {
             storage,
             requirements_path,
         }) => {
@@ -691,30 +687,29 @@ fn run_cache(
                 );
                 }
             }
-            Ok(crate::command_registry::Flow::Continue)
+            Ok(crate::cmdkit::Flow::Continue)
         }
     }
 }
 
 // trace:STORY-1728 | ai:claude
-pub(crate) static CACHE: crate::command_registry::CommandReg =
-    crate::command_registry::CommandReg {
-        name: "cache",
-        help_after: "db",
-        command: <CacheArgs as clap::CommandFactory>::command,
-        policy: cache_cli_policy,
-        run: crate::command_registry::Handler::Store(run_cache),
-    };
+pub(crate) static CACHE: crate::cmdkit::CommandReg = crate::cmdkit::CommandReg {
+    name: "cache",
+    help_after: "db",
+    command: <CacheArgs as clap::CommandFactory>::command,
+    policy: cache_cli_policy,
+    run: crate::cmdkit::Handler::Store(run_cache),
+};
 
 // Per-verb policy, carried over from the legacy stakeholder and per-write
 // auto-push tables. An unparseable invocation gets the fail-closed answer.
 // trace:STORY-1728 | ai:claude
-fn cache_cli_policy(matches: &clap::ArgMatches) -> crate::command_registry::CmdPolicy {
+fn cache_cli_policy(matches: &clap::ArgMatches) -> crate::cmdkit::CmdPolicy {
     use crate::cli::CacheCommand;
     use crate::stakeholder_role::StakeholderAction as SA;
     let args = <CacheArgs as clap::FromArgMatches>::from_arg_matches(matches).ok();
     let inner = args.as_ref().map(|args| &args.inner);
-    crate::command_registry::CmdPolicy {
+    crate::cmdkit::CmdPolicy {
         stakeholder: if matches!(inner, Some(CacheCommand::Status)) {
             SA::Read
         } else {

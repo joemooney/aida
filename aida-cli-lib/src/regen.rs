@@ -715,13 +715,13 @@ pub(crate) struct RegenArgs {
 
 fn run_regen(
     matches: &clap::ArgMatches,
-    ctx: &crate::command_registry::DispatchCtx,
-) -> anyhow::Result<crate::command_registry::Flow> {
+    ctx: &crate::cmdkit::DispatchCtx,
+) -> anyhow::Result<crate::cmdkit::Flow> {
     use crate::*;
     let args = <RegenArgs as clap::FromArgMatches>::from_arg_matches(matches)?;
     match &ctx.store {
-        None => Ok(crate::command_registry::Flow::Continue),
-        Some(crate::command_registry::StoreCtx::Distributed {
+        None => Ok(crate::cmdkit::Flow::Continue),
+        Some(crate::cmdkit::StoreCtx::Distributed {
             store_path,
             project_root_hint,
         }) => {
@@ -729,9 +729,9 @@ fn run_regen(
             // Immutable corpus reads bypass cache/dispenser setup.
             // trace:TASK-1729 | ai:codex
             let _ = project_root_hint;
-            crate::command_registry::returned(self::handle_command(store_path, &args.inner))
+            crate::cmdkit::returned(self::handle_command(store_path, &args.inner))
         }
-        Some(crate::command_registry::StoreCtx::Git {
+        Some(crate::cmdkit::StoreCtx::Git {
             store_path,
             backend,
         }) => {
@@ -740,7 +740,7 @@ fn run_regen(
             let _ = (store_path, backend, &args);
             crate::git_backend_cmd::exit_unsupported_on_git_backend()
         }
-        Some(crate::command_registry::StoreCtx::Legacy {
+        Some(crate::cmdkit::StoreCtx::Legacy {
             storage,
             requirements_path,
         }) => {
@@ -753,22 +753,21 @@ fn run_regen(
                 );
                 }
             }
-            Ok(crate::command_registry::Flow::Continue)
+            Ok(crate::cmdkit::Flow::Continue)
         }
     }
 }
 
 // trace:STORY-1728 | ai:claude
-pub(crate) static REGEN: crate::command_registry::CommandReg =
-    crate::command_registry::CommandReg {
-        name: "regen",
-        help_after: "schema",
-        command: <RegenArgs as clap::CommandFactory>::command,
-        policy: |_| crate::command_registry::CmdPolicy {
-            stakeholder: crate::stakeholder_role::StakeholderAction::Write,
-            per_write_auto_push: false,
-            skip_role_restore_prompt: false,
-            team_identity_write: false,
-        },
-        run: crate::command_registry::Handler::Store(run_regen),
-    };
+pub(crate) static REGEN: crate::cmdkit::CommandReg = crate::cmdkit::CommandReg {
+    name: "regen",
+    help_after: "schema",
+    command: <RegenArgs as clap::CommandFactory>::command,
+    policy: |_| crate::cmdkit::CmdPolicy {
+        stakeholder: crate::stakeholder_role::StakeholderAction::Write,
+        per_write_auto_push: false,
+        skip_role_restore_prompt: false,
+        team_identity_write: false,
+    },
+    run: crate::cmdkit::Handler::Store(run_regen),
+};
