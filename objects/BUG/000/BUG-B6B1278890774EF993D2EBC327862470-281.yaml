@@ -8,7 +8,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-10T03:07:46.884496242Z
-modified_at: 2026-11-10T11:46:08.384524602Z
+modified_at: 2026-11-10T11:46:09.741260945Z
 req_type: Bug
 comments:
 - id: 01a1c4af-2f66-7590-be69-dad5e180b9a4
@@ -105,6 +105,20 @@ comments:
   content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: Full sweep: branch-only GitLab MRs are excluded by the search query, allowing premature completion; four CI lanes pending. BUG-2516 (bug protocol): met, two test files touched.. No triage reason was given.'
   created_at: 2026-11-10T11:46:08.384518816Z
   modified_at: 2026-11-10T11:46:08.384518816Z
+  session_id: 01a1c39a-801a-7bd1-8da9-c955a6707f0b
+  harness_version: 2.1.321 (Claude Code)
+- id: 01a1c547-a645-7e01-97fb-8d784ff098f7
+  author: joe
+  content: |-
+    REVIEW FINDINGS TO ADDRESS (BUG-2516):
+    Verdict: CHANGES REQUESTED
+    Reviewed commit: 9a02c9bd4593
+    Recorded: 2026-11-10T11:20:01.764551348+00:00
+    Findings:
+    1. [P2] aida-cli-lib/src/forge.rs:2985-2989: Include branch-only spec ownership before returning NoChange. GitLab search=<spec> searches title/description only (https://docs.gitlab.com/api/merge_requests/#list-project-merge-requests), so an opened MR with title "follow-up", empty description, and source_branch "fix/bug-2516-rework" is omitted. After another completing squash lands, the new reconciliation guard sees [] twice and completes BUG-2516 even though this open deliverable should hold it. The branch-only case at auto_bump_done_tests.rs:5310 masks this by returning a row that the real API filters out. Enumerate open MRs conservatively (preserving unknown for incomplete pages), or add an equivalent complete branch-discovery query, and make the fake glab honor search filtering so a branch-only open MR demonstrably prevents completion.
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
+  created_at: 2026-11-10T11:46:09.605116135Z
+  modified_at: 2026-11-10T11:46:09.605116135Z
   session_id: 01a1c39a-801a-7bd1-8da9-c955a6707f0b
   harness_version: 2.1.321 (Claude Code)
 history:
