@@ -296,6 +296,29 @@ fn inspect(root: &Path, live_store: bool) -> Vec<Check> {
             home.as_deref(),
             &env,
         ));
+        // trace:BUG-2510 | ai:codex
+        match crate::agent_config::load_vendor_env_passthrough(root, vendor.as_str()) {
+            Ok(names) => vendor_checks.extend(names.iter().map(|name| {
+                advisory(check(
+                    &format!("env-passthrough-{name}"),
+                    env.get(name).is_some(),
+                    false,
+                    if env.get(name).is_some() {
+                        format!("configured environment name is set: {name}")
+                    } else {
+                        format!("configured environment name is unset: {name}")
+                    },
+                    &format!("set {name} in the launching host environment"),
+                ))
+            })),
+            Err(error) => vendor_checks.push(check(
+                "env-passthrough-config",
+                false,
+                false,
+                &format!("invalid credential passthrough configuration: {error}"),
+                "fix env_passthrough in agents.toml",
+            )),
+        }
         for check in &mut vendor_checks {
             check.id = format!("{}:{}", vendor.as_str(), check.id);
         }
