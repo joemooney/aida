@@ -3,12 +3,12 @@ spec_id: BUG-b6b1278890774ef993d2ebc327862470-281
 agreed_id: BUG-2516
 title: Merging a GitLab MR and running aida pull does not complete the spec named in the commit trailer
 description: 'Reported from operator''s work machine (Codex, GitLab project hello-work-0x), 2026-11-09. After ''glab mr merge 2 --squash'' and ''aida pull'', the spec stayed InProgress. Merge-time completion appears GitHub-specific (merged-PR lookup or squash-subject handling). Make completion forge-neutral: detect the merged MR through the forge abstraction and apply the trailer rules to the squash commit on the default branch. Test with a fake GitLab forge.'
-status: InProgress
+status: Completed
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-10T03:07:46.884496242Z
-modified_at: 2026-11-10T22:00:50.194478539Z
+modified_at: 2026-11-10T23:31:03.270995018Z
 req_type: Bug
 comments:
 - id: 01a1c4af-2f66-7590-be69-dad5e180b9a4
@@ -416,6 +416,20 @@ history:
   author: joe
   timestamp: 2026-11-10T22:00:57.446959769Z
   changes: []
+- id: 01a1c7cc-ffa2-7e93-92f1-aaccf5193981
+  author: aida-auto-bump
+  timestamp: 2026-11-10T23:31:03.202419565Z
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Completed
+processing_record:
+- id: 01a1c7cc-ffe6-73d2-bac4-5d3e0e0a5f46
+  timestamp: 2026-11-10T23:31:03.270992449Z
+  agent: aida
+  commit_sha: ef9f4f7820598434b9778006ec13da9a14fdd5ac
+  summary: 'Full sweep: all applicable BUG-2516 criteria verified; no actionable defects; required CI green. BUG-2516 (bug protocol): met, two test files touched.'
+  review_verdict: approved
 execution_mode: drain
 filed_at:
   code_sha: 838f14c3c2811c6b63da5d465700cff773c36190
@@ -426,3 +440,7 @@ filed_at:
   vendor: claude
   session: 01a1beff-fc3b-78e2-93e2-9b0c283b0339
   harness_version: 2.1.319 (Claude Code)
+implementation_info:
+  implemented: false
+  completed_at: 2026-11-10T23:31:03.202413944Z
+  completion_sha: ef9f4f7820598434b9778006ec13da9a14fdd5ac
