@@ -374,6 +374,7 @@ pub use models::{
     NumberingStrategy,
     // Multi-repo origin dimension (ADR-12)
     Origin,
+    ParkBinding,
     // Durable processing-record audit trail (STORY-582)
     ProcessingRecord,
     PuntCategory,
