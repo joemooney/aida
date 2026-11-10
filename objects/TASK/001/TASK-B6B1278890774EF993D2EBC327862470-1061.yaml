@@ -3,12 +3,12 @@ spec_id: TASK-b6b1278890774ef993d2ebc327862470-1061
 agreed_id: TASK-3781
 title: 'Crate-split PR9b: split doctor_cmd.rs into a doctor/ directory by concern and relocate its 9 library helpers to their owning modules'
 description: 'SPIKE-713 section 6 row doctor_cmd.rs step 2, after PR9a (TASK-3780). doctor/{store_repair.rs, worktrees.rs, disk.rs, remote.rs, sandbox.rs, vendors.rs, report.rs} per the plan; the 9 library helpers used by 12 external dependents move to db_block/worktree_gc/maintenance_schedule/remote_create/scaffold. Verbatim moves, re-exports only where a path is public. Acceptance: no behavior change; help goldens unchanged; ledgers relocated with scripts/relocate-ledger-paths.py; make check-ci-fast green.'
-status: InProgress
+status: Approved
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-10T07:33:27.149131118Z
-modified_at: 2026-11-10T10:34:37.489810923Z
+modified_at: 2026-11-10T10:40:23.937661377Z
 req_type: Task
 comments:
 - id: 01a1c4d8-63dc-7a10-9752-9da27cb0e52b
@@ -63,6 +63,15 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a1c50b-7200-76f2-977b-1a30eb2f633d
+  author: joe
+  timestamp: 2026-11-10T10:40:24.064929507Z
+  session_id: 01a1c39a-801a-7bd1-8da9-c955a6707f0b
+  harness_version: 2.1.321 (Claude Code)
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Approved
 filed_at:
   code_sha: e682f76092e65c6556f7881fe8a5e0aa48516740
   branch: main
