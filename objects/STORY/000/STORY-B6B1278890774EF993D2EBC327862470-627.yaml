@@ -8,7 +8,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-10T03:52:00.571796159Z
-modified_at: 2026-11-10T17:34:46.554897796Z
+modified_at: 2026-11-10T17:41:31.750700554Z
 req_type: Story
 comments:
 - id: 01a1c399-6840-7383-843e-9930f6eaa3f7
@@ -235,6 +235,50 @@ comments:
   modified_at: 2026-11-10T17:34:38.055804351Z
   session_id: 01a1c39a-801a-7bd1-8da9-c955a6707f0b
   harness_version: 2.1.321 (Claude Code)
+- id: 01a1c68c-ffe6-7da1-bb84-23a3a7e9a722
+  author: joe
+  content: |
+    Review of PR #3777 at 65497a00e2d9bf833c1c738dba1b69e2afe4be42: **WAITING**.
+
+    Inspected all 27 changed files against STORY-2704, resolved through `aida show STORY-2704 --full --comments` despite the generated review prompt reporting it missing. The 08:58 UTC S1 brief and subsequent advisor rulings govern this slice. No actionable S1 defects found; findings array is empty. No local builds/tests were run, per review-watch policy. `git diff --check` passed.
+
+    One status line per acceptance criterion:
+
+    - Multi-call dispatch tested: unverified — current-head CI pending; source coverage in lexical_multicall_and_unknown_names, report_multicall_parity_and_no_writes and report_process_alias_help_and_errors_preserve_fixture.
+    - Install names tested: unverified — current-head CI pending; install_links_creates_missing_links checks canonical binary links and relative aida-flow alias.
+    - Help listing tested: unverified — current-head CI pending; smoke_porcelain and process tests inspect flow/report help.
+    - Nested precedence: not-applicable-because the binding advisor brief assigns nested dispatch to S2.
+    - Nested unknown-name error unchanged: not-applicable-because assigned to S2.
+    - Nested parent help listing: not-applicable-because assigned to S2.
+    - Nested regression tests beside STORY-1641: not-applicable-because assigned to S2; existing top-level discovery fixture is isolated from installed companion binaries.
+    - Porcelain cannot mutate store (test): unverified — current-head CI pending; fixture snapshots cover store/code refs, tracked bytes, cache, queue and leases after report/help/error paths.
+    - Docs in docs/cli: verified by docs/cli/08-reporting.md Flow report section.
+
+    Binding S1 requirements:
+
+    - Workspace crate with public aida-core dependency and no cli-lib dependency: verified by Cargo manifests and source imports.
+    - Lexical argv[0] dispatch for aida-porcelain/aida-flow, unknown names fail with usage: verified by aida-porcelain/src/main.rs::parse.
+    - Flow output/flags/JSON/exit-code parity: unverified — current-head CI pending; aida-cli/tests/story_2704_porcelain_parity.rs invokes tests/test_porcelain_flow_parity.py with current-build binary paths. Covers success formats, invalid bounds and failed-reader channels/status.
+    - Public no-write core gate-ledger reader: verified by aida-core/src/gate_ledger_read.rs and docs/internal/api/aida-core.md; available event reads, presence distinction, train mapping and shared-root resolution perform no persistence.
+    - Dev build staging: verified by stage_incoming source, including companion and relative alias.
+    - Dev build smoke: verified by RealSteps::smoke_porcelain source for canonical version/help and lexical alias help.
+    - Dev build promotion: verified by commit_staged source, including generation inventory.
+    - Dev build rollback/recovery: verified by snapshot_generation/finish_generation_swap source; runtime verification unverified pending CI, with adoption and ready-snapshot regressions present.
+    - Dev build --install-links: verified by preflight/link source; runtime verification unverified pending CI.
+    - Built-in flow remains registered: verified by flow_cmd.rs::FLOW.
+    - Required multicall/unknown-argv0/parity/no-write tests pass: unverified — current-head CI pending.
+    - Nested resolution implementation: not-applicable-because S2.
+    - Release archives/install.sh/upgrade integration: not-applicable-because S3.
+
+    Prior findings checked: no raw gh in porcelain or ratchet exemption; fixed AIDA JSON reader selection follows AIDA_BIN/sibling/PATH; failed reader output/status passes through; no added whole-report timeout; generation membership preserves first-adoption absence and aliases; parity is unignored and wired into CLI CI; the 46-second test is removed per advisor ruling. Known AIDA_OUTPUT_FORMAT table/agent alias divergence is explicitly accepted as non-blocking and deferred to S2 by the 15:59 UTC advisor ruling.
+
+    CI dependency: GitHub Actions run 42866776073 at the reviewed SHA has seven lanes in progress (cli-0, cli-1, lib-0, lib-1, rest, gates, contracts). The gates lane's no-default-features check passed. Responsible actor: PR author/CI maintainers. Resume condition: required CI settles, followed by a fresh attested review at the current head. A red merge-hold-gate alone is not the waiting reason; existing clearance remains with the authorized actor.
+
+    Navigation limitation: /home/joe/ai/aida/.codegraph/proxy-state/bin/codegraph is absent. The host should deploy the reviewed client at that supplied path. `aida doctor check codegraph` returned no useful codegraph diagnostic (total: 0); source and rg were used. No indexing commands were run.
+
+    Verdict recorded first with `aida review record`; no merge or branch update performed.
+  created_at: 2026-11-10T17:41:31.750700554Z
+  modified_at: 2026-11-10T17:41:31.750700554Z
 history:
 - id: 01a1c399-7102-7f81-9bb9-fd37379159d3
   author: joe
