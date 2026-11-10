@@ -8,7 +8,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-07T23:39:41.575597Z
-modified_at: 2026-11-10T08:06:10.700794621Z
+modified_at: 2026-11-10T08:15:08.848832430Z
 req_type: Task
 relationships:
 - rel_type: Child
@@ -536,6 +536,12 @@ comments:
   content: 'Batch 1 per binding 2026-11-10 ruling: exact 38 approved Rust files plus scripts/crate-globs-legacy.json, no files dropped. Removed 50 crate globs, ratchet 180 -> 130 with zero additions; preserved parent imports used by unchanged children/tests. Direct anyhow/aida_core imports, including existing AgentPromptStyle alias; no body/comment/formatting changes, renames or qualified-call rewrites. Launcher cargo check --profile agent -p aida-cli-lib --tests passed (j20261110T080138026-2-0, exit 0). Rustfmt, diff hygiene, exact scope/ledger and import-only audits passed. make check-ci-fast failed at containment fixtures: 6 errors among 65 tests creating temp directories under read-only /home/joe/.aida; host/CI rerun required. No Rust test execution claimed for this compile-only gate. Handoff with full changed-file list: /tmp/task3428-batch1-handoff.md. Edits remain uncommitted for native host publication; approved Refs slice, TASK-3428 remains In Progress.'
   created_at: 2026-11-10T08:06:10.700794621Z
   modified_at: 2026-11-10T08:06:10.700794621Z
+  session_id: 01a1c462f833
+- id: 01a1c486-7630-70b3-aab7-67d23538dd6b
+  author: joe
+  content: 'One host fast-gate fix round: only claim.rs changed. Import leases instead of lease_state_for and qualify its two existing calls, removing the added module-scope probe site without changing the liveness ledger or existing per-function counts. Necessary two-call exception to the initial import-only slice is documented in the publication body. Exact CI git-maintenance/ownership-liveness step passes all 10 tests. Launcher cargo check --profile agent -p aida-cli-lib --tests passed (j20261110T081235507-2723421-0, exit 0, 47.62s). Glob ratchet remains 130 with zero additions; rustfmt, diff hygiene and one-file/two-call scope audit pass. Local make check-ci-fast still stops at the same 6 containment fixtures needing writes under read-only /home/joe/.aida; host rerun required. Fix remains uncommitted. Handoff: /tmp/task3428-fast-gate-fix-handoff.md.'
+  created_at: 2026-11-10T08:15:08.848832430Z
+  modified_at: 2026-11-10T08:15:08.848832430Z
   session_id: 01a1c462f833
 history:
 - id: 01a1b862-2e0b-7a50-a4d0-25097c707b57
