@@ -6,8 +6,8 @@ use crate::OpenPrInfo;
 use crate::{
     approved_to_in_progress_bump, creator_shell_pid, current_branch_at,
     detect_distributed_store_from, detect_open_pr_for_spec, find_project_root, hostname,
-    lease_path, lease_state_for, leases_dir, list_leases, load_store_for_lookup, process_probe,
-    slugify, PrLookup, SessionLease,
+    lease_path, leases, leases_dir, list_leases, load_store_for_lookup, process_probe, slugify,
+    PrLookup, SessionLease,
 };
 use aida_core::liveness::LeaseState;
 use aida_core::{Requirement, RequirementStatus, Storage};
@@ -332,7 +332,7 @@ pub(crate) fn handle_unclaim(spec: &str) -> Result<()> {
     let held = others.iter().any(|l| {
         l.scope.eq_ignore_ascii_case(&scope)
             && matches!(
-                lease_state_for(l, &live_sessions, chrono::Utc::now()),
+                leases::lease_state_for(l, &live_sessions, chrono::Utc::now()),
                 LeaseState::Live
             )
     });
@@ -499,7 +499,7 @@ fn persist_unclaim_status(
                         )
                     }))
                     || matches!(
-                        lease_state_for(lease, &live_sessions, chrono::Utc::now()),
+                        leases::lease_state_for(lease, &live_sessions, chrono::Utc::now()),
                         LeaseState::Live
                     ))
         });
