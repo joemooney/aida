@@ -18,3 +18,24 @@ pub fn parse_output_format(raw: Option<&str>) -> Option<OutputFormat> {
         _ => None,
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::{parse_output_format, OutputFormat};
+
+    #[test]
+    fn output_format_aliases_and_unknown_values() {
+        for (raw, expected) in [
+            ("human", OutputFormat::Human),
+            (" TABLE ", OutputFormat::Human),
+            ("toon", OutputFormat::Toon),
+            (" AgEnT ", OutputFormat::Toon),
+            (" JSON ", OutputFormat::Json),
+        ] {
+            assert_eq!(parse_output_format(Some(raw)), Some(expected), "{raw:?}");
+        }
+        for raw in [None, Some(""), Some("  "), Some("unsupported")] {
+            assert_eq!(parse_output_format(raw), None, "{raw:?}");
+        }
+    }
+}

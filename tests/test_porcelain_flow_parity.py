@@ -80,6 +80,17 @@ esac
                     assert result.returncode == expected.returncode != 0
                     assert result.stdout == expected.stdout, [result.stdout, expected.stdout]
                     assert result.stderr == expected.stderr, [result.stderr, expected.stderr]
+                # An explicit format must override the environment alias for
+                # validation failures and failures returned by the reader.
+                opposite = "toon" if canonical == "human" else "human"
+                explicit_args = [*args, "--format", opposite]
+                expected = invoke(builtin, explicit_args)
+                for exe in [builtin, porcelain]:
+                    result = invoke(exe, explicit_args,
+                                    {"AIDA_OUTPUT_FORMAT": alias, "AIDA_AGENT_OUTPUT": agent})
+                    assert result.returncode == expected.returncode != 0
+                    assert result.stdout == expected.stdout, [result.stdout, expected.stdout]
+                    assert result.stderr == expected.stderr, [result.stderr, expected.stderr]
         check_alias_errors(["--since", "bad"])
         check_alias_errors(["--since", "2026-11-10", "--until", "2026-11-09"])
         # A missing history ref fails inside the reader, after argument parsing.
