@@ -1,0 +1,31 @@
+{
+  "schema_version": 1,
+  "spec": "STORY-2700",
+  "publishes": [
+    {
+      "at": "2026-11-10T21:03:02.920570857Z",
+      "closed_by": "auto-bump"
+    }
+  ],
+  "events": [
+    {
+      "ts": "2026-11-10T21:02:44.937453189Z",
+      "spec": "STORY-2700",
+      "seat": "advisor",
+      "kind": {
+        "event": "PrMerged",
+        "pr": 3807
+      }
+    },
+    {
+      "ts": "2026-11-10T21:03:02.761045251Z",
+      "spec": "STORY-2700",
+      "kind": {
+        "event": "SpecCompleted",
+        "commit": "56c254c974342621b274d2216f4284802760c87a",
+        "pr": 3807,
+        "closed_by": "auto-bump"
+      }
+    }
+  ]
+}
