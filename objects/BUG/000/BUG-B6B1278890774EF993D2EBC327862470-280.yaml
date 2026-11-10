@@ -3,12 +3,12 @@ spec_id: BUG-b6b1278890774ef993d2ebc327862470-280
 agreed_id: BUG-2515
 title: aida pr ship on a GitLab-forge project calls gh directly and detects CI only from .github/workflows
 description: Reported from operator's work machine (Codex, GitLab project hello-work-0x), 2026-11-09. With forge.provider = "gitlab", 'aida pr ship 2' calls 'gh pr view' (aida-cli-lib/src/pr_cmd.rs:6917) and fails with no GitHub host, and CI detection only checks .github/workflows (pr_cmd.rs:6986), so GitLab CI (.gitlab-ci.yml) is skipped. Route MR metadata, CI wait and merge through the forge abstraction (glab for GitLab), detect .gitlab-ci.yml, and add GitLab-forge tests with a fake glab.
-status: NeedsAttention
+status: Approved
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-10T03:07:38.542859262Z
-modified_at: 2026-11-10T04:47:01.958034074Z
+modified_at: 2026-11-10T04:54:46.864515592Z
 req_type: Bug
 comments:
 - id: 01a1c3a1-bccc-7ef0-b6b7-2fdb52e783f5
@@ -32,6 +32,11 @@ comments:
   modified_at: 2026-11-10T04:47:01.958034074Z
   session_id: 01a1c39a-801a-7bd1-8da9-c955a6707f0b
   harness_version: 2.1.321 (Claude Code)
+- id: 01a1c3cf-0550-7cd1-b78c-83fab0dc9f3b
+  author: joe
+  content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: Full sweep: one existing test fixture breaks under forge resolution; required PR CI pending. BUG-2515 bug protocol: met (test file touched).. No triage reason was given.'
+  created_at: 2026-11-10T04:54:46.864509291Z
+  modified_at: 2026-11-10T04:54:46.864509291Z
 history:
 - id: 01a1c3a2-0b0e-7e70-890b-6fe8aaba4acd
   author: joe
@@ -56,6 +61,13 @@ history:
   - field_name: status
     old_value: InProgress
     new_value: NeedsAttention
+- id: 01a1c3cf-0550-7cd1-b78c-83e09834a713
+  author: joe
+  timestamp: 2026-11-10T04:54:46.864488049Z
+  changes:
+  - field_name: status
+    old_value: NeedsAttention
+    new_value: Approved
 filed_at:
   code_sha: 838f14c3c2811c6b63da5d465700cff773c36190
   branch: main
@@ -65,11 +77,3 @@ filed_at:
   vendor: claude
   session: 01a1beff-fc3b-78e2-93e2-9b0c283b0339
   harness_version: 2.1.319 (Claude Code)
-failure_reason:
-  phase: reviewer
-  phase_index: 3
-  kind: verdict:request-changes
-  detail: 'Full sweep: one existing test fixture breaks under forge resolution; required PR CI pending. BUG-2515 bug protocol: met (test file touched).'
-  recovery_hint: address the review findings, move BUG-2515 back to In Progress, and clear the PR hold only after approval
-  shelved_by: reviewer
-  shelved_at: 2026-11-10T04:31:14.672983898Z
