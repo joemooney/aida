@@ -151,9 +151,10 @@ read-only tenants fit STORY-2698's proposed LOW tier without granting exemption.
 
 ## STORY-2699 migration and implementation checks
 
-STORY-2699's comments report a built-in module/registry implementation, but it
-is absent from this lane snapshot. Rebase/inspect the landed or host-published
-version before extracting it; this sketch neither duplicates nor completes it.
+STORY-2699 is present in [flow_cmd.rs](../../aida-cli-lib/src/flow_cmd.rs),
+with its parser in `flow_cmd_args.rs` and `FLOW` in `command_registry.rs`.
+Its early handler declares `StakeholderAction::Read`, but still depends on
+private project-root, gate-ledger, timeout, output-format and forge helpers.
 Move its report parser, aggregation, single classifier table and fixtures into
 `aida-porcelain/src/flow/`, preserving `aida flow report`, human/JSON output,
 window semantics, medians/p90 and existing argument errors. Remove its built-in
@@ -167,7 +168,14 @@ classification/severity. Keep recursive verdict semantics (kind `verdict`,
 record verdict/findings/recorded_at), unknown missing measurements, and refusal
 on unreadable evidence or truncated forge results. Extract ledger reads behind
 public read-only plumbing before moving calculations; do not copy private-file
-walks. Preserve timestamp/evidence limits and fixture/fake-forge coverage for
+walks. Specifically replace `read_ledger` and `train_members` (which directly
+walk `.aida/gate-ledger`) with a documented query for verdict events and train
+coverage. Move the fixed read operations behind `forge::flow_report_read` to
+a public read adapter or documented JSON query; do not export CLI internals
+just to make the move compile. Preserve the bounded Git `origin/main` history
+query, forge timeouts and truncation refusals. Use the existing report JSON as
+a before/after compatibility fixture, not a call back into `aida flow report`
+after its built-in registration is removed. Preserve fixture/fake-forge coverage for
 each metric; no live network requirement for regression tests.
 
 Implementation acceptance should extend STORY-1641 black-box coverage beside
