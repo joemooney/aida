@@ -8,7 +8,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-10T07:33:13.193495787Z
-modified_at: 2026-11-10T08:04:29.514769619Z
+modified_at: 2026-11-10T08:05:14.717051546Z
 req_type: Task
 comments:
 - id: 01a1c47c-b4ca-74a0-9bba-654fe4096533
@@ -16,6 +16,11 @@ comments:
   content: 'Native implementer handoff: extracted all 20 remaining inline cfg(test) modules from current HEAD into aida-cli-lib/src/tests/doctor_cmd_*_tests.rs, preserving module names/parent access and all 226 moved test attributes. Existing external modules and test-only helpers remain; no visibility widening was needed. Exact production-byte audit passes after only replacing the 20 module declarations; formatted-body and ordered-token/literal audits also pass (one include_str path relocation). Relocated ownership-liveness/portability keys with scripts/relocate-ledger-paths.py''s rewriter and the docs fixture exception separately. Updated executable-fixture ratchet with a two-statement allowance for the existing slot-directory permission fixture; regression proves file changes/copies remain flagged (8 tests pass). Final launcher doctor execution j20261110T075919169-2-0: 275 passed, zero failed/ignored. Before/after --list jobs j20261110T074251716-2530111-0 and j20261110T075442950-2565528-0 have identical 275 ordered test names. Formatting, TUI all-targets, CLI no-default-features, working-tree doc paths, store-writer and environment/import ledger checks pass. make check-ci-fast is NOT green here: unchanged containment conformance fixtures ran 65 tests with six errors attempting temporary directories under read-only real ~/.aida; filed draft finding SPEC-b6b1278890774ef993d2ebc327862470-025. Completing other CI source gates in bounded slices. Publication remains Refs pending host validation. All edits uncommitted; host must stage all 25 changed/new files. Handoff /tmp/task3780-handoff.md; publication body /tmp/task3780-commit-body.txt includes Help-Golden: unchanged. Prescribed host codegraph client absent and doctor reports stale index; no index/Git metadata mutation performed.'
   created_at: 2026-11-10T08:04:29.514760677Z
   modified_at: 2026-11-10T08:04:29.514760677Z
+- id: 01a1c47d-655d-7733-abd9-a3db4da0461e
+  author: mcp
+  content: 'Final validation update: all 43 non-compilation CI fast source gates other than the separately failed containment conformance gate passed using original CI runner commands in bounded resumable slices. Both compilation gates passed through launcher jobs. Final doctor run executed 275 passing tests; exact ordered --list comparison remained 275 before/after. Eight executable-fixture ratchet tests pass after the bounded directory-fixture allowance. No cargo jobs remain pending. Recorded native non-completing publication declaration [AI:codex] refactor(doctor): extract inline test modules (Refs TASK-3780), with Help-Golden: unchanged body. Requirement remains In Progress pending host validation of the unchanged containment fixture''s real-home write failure. Handoff /tmp/task3780-handoff.md lists all 25 files and job evidence; no commit/push/PR/queue-done action performed from seat.'
+  created_at: 2026-11-10T08:05:14.717042735Z
+  modified_at: 2026-11-10T08:05:14.717042735Z
 history:
 - id: 01a1c460-7322-7fe0-846d-985aec5dd452
   author: joe
