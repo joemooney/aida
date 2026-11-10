@@ -49,7 +49,7 @@ fn mediated_mcp_committed_success_matches_advertised_output_schema() {
         ),
         (
             "update_requirement",
-            json!({"id":route.origin,"title":"schema accepted title"}),
+            json!({"id":route.origin,"title":"schema accepted title","weight":0.75}),
         ),
     ] {
         let result = mediated_mcp_response(
@@ -96,6 +96,7 @@ fn mediated_mcp_committed_success_matches_advertised_output_schema() {
     }
     let row = route.row();
     assert_eq!(row.title, "schema accepted title");
+    assert_eq!(row.weight, Some(0.75));
     assert_eq!(row.comments.len(), 1);
     assert_eq!(row.comments[0].content, "schema accepted comment");
 }
@@ -125,10 +126,11 @@ fn mediated_mcp_advertises_only_translated_tools_with_existing_profile_and_perso
             if tool["name"] == "update_requirement" {
                 assert_eq!(
                     tool["description"],
-                    "Update an owned requirement's title, description or priority through the mediated store service. At least one edit field is required."
+                    "Update an owned requirement's title, description, priority or weight through the mediated store service. At least one edit field is required."
                 );
                 let properties = tool["inputSchema"]["properties"].as_object().unwrap();
                 assert!(properties.contains_key("priority"));
+                assert_eq!(properties["weight"]["type"], json!(["number", "null"]));
                 assert!(!properties.contains_key("status"));
                 assert_eq!(tool["inputSchema"]["additionalProperties"], false);
             }

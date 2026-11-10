@@ -304,3 +304,94 @@ fn priority_routes_through_client_broker_host_with_bound_history() {
     assert_eq!(changes[0].1.old_value, before.priority.to_string());
     assert_eq!(changes[0].1.new_value, "Low");
 }
+
+// trace:TASK-3223 | ai:codex
+#[test]
+fn weight_set_and_clear_persist_before_reply_replay_and_refuse_stale_bases() {
+    for weight in [Some(0.75_f32), None] {
+        let route = Route::new(true);
+        if weight.is_none() {
+            let mut row = route.row();
+            row.weight = Some(42.0);
+            aida_core::object_store::write_object(&route.root().join("objects"), &row).unwrap();
+        }
+        let op = CanonicalOperation::SpecEdit {
+            spec_id: route.origin.clone(),
+            expected_revision: redo::hash(
+                &redo::object_bytes(&route.root(), &route.origin).unwrap(),
+            ),
+            fields: aida_core::db::canonical_mutation::EditFields {
+                title: None,
+                description: None,
+                priority: None,
+                weight: Some(weight),
+            },
+        };
+        let id = uuid::Uuid::new_v4();
+        let error = route.client().mutate(id, &op).unwrap_err();
+        assert!(format!("{error:#}").contains("OutcomeUnknown"));
+        let after = route.row();
+        assert_eq!(after.weight, weight, "persisted before lost reply");
+        let result = route.client().mutate(id, &op).unwrap();
+        assert_eq!(
+            result["revision"],
+            redo::hash(&redo::object_bytes(&route.root(), &route.origin).unwrap())
+        );
+        assert_eq!(route.client().mutate(id, &op).unwrap(), result);
+        let error = route
+            .client()
+            .mutate(uuid::Uuid::new_v4(), &op)
+            .unwrap_err();
+        assert!(format!("{error:#}").ends_with("Conflict"));
+        assert_eq!(route.row().history.len(), after.history.len());
+        let changes: Vec<_> = after
+            .history
+            .iter()
+            .flat_map(|entry| {
+                entry
+                    .changes
+                    .iter()
+                    .filter(|change| change.field_name == "weight")
+                    .map(move |change| (&entry.author, change))
+            })
+            .collect();
+        assert_eq!(changes.len(), 1);
+        assert_eq!(changes[0].0, "bound author");
+    }
+}
+
+// trace:TASK-3223 | ai:codex
+#[test]
+fn weight_competing_mutations_compare_the_same_preimage() {
+    let route = Route::new(false);
+    let mut row = route.row();
+    row.weight = Some(42.0);
+    aida_core::object_store::write_object(&route.root().join("objects"), &row).unwrap();
+    let revision = redo::hash(&redo::object_bytes(&route.root(), &route.origin).unwrap());
+    let outcomes = std::thread::scope(|scope| {
+        let handles: Vec<_> = [Some(0.75), None]
+            .into_iter()
+            .map(|weight| {
+                let client = route.client();
+                let op = CanonicalOperation::SpecEdit {
+                    spec_id: route.origin.clone(),
+                    expected_revision: revision.clone(),
+                    fields: aida_core::db::canonical_mutation::EditFields {
+                        title: None,
+                        description: None,
+                        priority: None,
+                        weight: Some(weight),
+                    },
+                };
+                scope.spawn(move || client.mutate(uuid::Uuid::new_v4(), &op))
+            })
+            .collect();
+        handles
+            .into_iter()
+            .map(|h| h.join().unwrap())
+            .collect::<Vec<_>>()
+    });
+    assert_eq!(outcomes.iter().filter(|r| r.is_ok()).count(), 1);
+    let error = outcomes.into_iter().find_map(Result::err).unwrap();
+    assert!(format!("{error:#}").ends_with("Conflict"));
+}
