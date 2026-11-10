@@ -2140,6 +2140,13 @@ pub(crate) fn headless_waiting_rule_suffix(role: &str) -> String {
     } else {
         "result"
     };
+    // trace:STORY-2697 | ai:codex
+    let reviewer_ci_contract = if role.eq_ignore_ascii_case("reviewer") {
+        "\n\nReviewer CI contract: approve a defect-free head while CI is pending; \
+         WAITING only for independent evidence or a named test the judgment depends on."
+    } else {
+        ""
+    };
     format!(
         "\n\nHEADLESS WAITING RULE: AIDA_HEADLESS=1 means there is no next \
          conversational turn. Never end your turn waiting for a notification, \
@@ -2148,7 +2155,7 @@ pub(crate) fn headless_waiting_rule_suffix(role: &str) -> String {
          tool call) and print the current state each step so stream-json emits \
          progress for the watchdog. If the wait would exceed the phase's \
          remaining budget, write the {artifact} with the current wait state and \
-         exit instead."
+         exit instead.{reviewer_ci_contract}"
     )
 }
 
@@ -4643,14 +4650,6 @@ pub(crate) fn handle_queue_work(
     }
     if no_human {
         prompt.push_str(&headless_waiting_rule_suffix(&role));
-        if role.eq_ignore_ascii_case("reviewer") {
-            prompt.push_str(
-                "\n\nReviewer CI contract: gate on PR CI, but do not gate on the \
-                 nightly cross-platform workflow unless the spec acceptance \
-                 explicitly names it; when it does, poll by the bounded-step \
-                 rule above.",
-            );
-        }
     }
 
     // STORY-281: reviewer pre-flight stale-base check. Fires whenever the
