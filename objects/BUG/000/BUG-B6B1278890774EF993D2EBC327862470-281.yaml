@@ -8,7 +8,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-10T03:07:46.884496242Z
-modified_at: 2026-11-10T21:08:07.287029466Z
+modified_at: 2026-11-10T21:21:54.998850257Z
 req_type: Bug
 comments:
 - id: 01a1c4af-2f66-7590-be69-dad5e180b9a4
@@ -364,6 +364,10 @@ history:
   - field_name: status
     old_value: InProgress
     new_value: NeedsAttention
+- id: 01a1c756-c5b5-7170-ac0c-fb9d64bff33a
+  author: joe
+  timestamp: 2026-11-10T21:21:55.125629913Z
+  changes: []
 filed_at:
   code_sha: 838f14c3c2811c6b63da5d465700cff773c36190
   branch: main
@@ -377,7 +381,7 @@ failure_reason:
   phase: reviewer
   phase_index: 3
   kind: verdict:request-changes
-  detail: 'Full sweep: incomplete GitLab ownership rows can authorize completion; latest advisor matching prescription differs from implementation. Seven CI lanes queued. BUG-2516 (bug protocol): met (two test files touched).'
+  detail: 'Full sweep: incomplete GitLab ownership fields can grant absence; latest advisor matching prescription remains unresolved. CI pending. BUG-2516 (bug protocol): met, two test files touched.'
   recovery_hint: address the review findings, move BUG-2516 back to In Progress, and clear the PR hold only after approval
   shelved_by: reviewer
-  shelved_at: 2026-11-10T21:03:28.576191794Z
+  shelved_at: 2026-11-10T21:21:54.998850257Z
