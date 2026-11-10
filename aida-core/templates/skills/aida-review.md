@@ -264,7 +264,9 @@ implementer iterates); a wrongly-fix-forwarded logic change is not.
 2. **Push and review the new HEAD.** GitHub re-runs the workflow there.
    Record APPROVED when the head has no actionable defects even while CI is
    pending; state "CI pending at review time". Inspect failures for actionable
-   defects and request changes when found. Merge still waits for required CI.
+   defects and request changes when found. Before landing the fix-forward
+   commit, re-verify `mergeStateStatus: CLEAN` and required CI on that head;
+   this landing check does not delay recording APPROVED.
 3. **Record the fix-forward in the consolidated review comment** (step 7) as
    a dedicated section under the verdict table, naming the commit SHA + a
    one-line summary per fix-forward commit:
