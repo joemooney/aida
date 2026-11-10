@@ -930,6 +930,12 @@ pub trait Forge {
         sink: &mut dyn crate::network_retry::RetrySink,
     ) -> Result<ChangeMetadata>;
 
+    /// Title and description used by ship's trailer and completion-marker checks.
+    // trace:BUG-2515 | ai:codex
+    fn change_title_and_body(&self, _id: u64) -> Result<(String, String)> {
+        anyhow::bail!("change title and body unavailable for this forge")
+    }
+
     /// Login of the account authenticated by this forge CLI. Ownership-sensitive
     /// operations must fail closed when this identity cannot be resolved.
     // trace:TASK-1529 | ai:codex
@@ -2367,6 +2373,24 @@ impl Forge for GitHubForge {
         })
     }
 
+    // trace:BUG-2515 | ai:codex
+    fn change_title_and_body(&self, id: u64) -> Result<(String, String)> {
+        let out = self.gh(&["pr", "view", &id.to_string(), "--json", "title,body"])?;
+        anyhow::ensure!(
+            out.status.success(),
+            "{} metadata read failed: {}",
+            self.cli_name(),
+            String::from_utf8_lossy(&out.stderr).trim()
+        );
+        let json: serde_json::Value =
+            serde_json::from_slice(&out.stdout).context("could not parse change title and body")?;
+        anyhow::ensure!(json.is_object(), "expected a change object");
+        Ok((
+            json["title"].as_str().unwrap_or_default().to_string(),
+            json["body"].as_str().unwrap_or_default().to_string(),
+        ))
+    }
+
     fn change_metadata(
         &self,
         id: u64,
@@ -3045,6 +3069,24 @@ impl Forge for GitLabForge {
             Ok(m)
         })();
         Observed::from_result(result).map(Ok)
+    }
+
+    // trace:BUG-2515 | ai:codex
+    fn change_title_and_body(&self, id: u64) -> Result<(String, String)> {
+        let out = self.glab_api_get(&format!("projects/:id/merge_requests/{id}"), &[])?;
+        anyhow::ensure!(
+            out.status.success(),
+            "{} metadata read failed: {}",
+            self.cli_name(),
+            String::from_utf8_lossy(&out.stderr).trim()
+        );
+        let json: serde_json::Value =
+            serde_json::from_slice(&out.stdout).context("could not parse change title and body")?;
+        anyhow::ensure!(json.is_object(), "expected a change object");
+        Ok((
+            json["title"].as_str().unwrap_or_default().to_string(),
+            json["description"].as_str().unwrap_or_default().to_string(),
+        ))
     }
 
     fn change_metadata(

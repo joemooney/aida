@@ -102,7 +102,7 @@ impl auto_complete::PhaseDriver for RealPhaseDriver {
         else {
             return;
         };
-        let body = fetch_pr_ship_metadata_via_gh(&self.project_root, change.id)
+        let body = fetch_pr_ship_metadata_via_forge(&self.project_root, change.id)
             .map(|meta| meta.body)
             .unwrap_or_default();
         if !queue_cmd::rework_pr_head_matches_spec(

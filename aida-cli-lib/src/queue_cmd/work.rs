@@ -6635,7 +6635,7 @@ pub(crate) fn run_standalone_reviewer(
     // every ship until someone commits by hand. trace:BUG-2180 | ai:claude
     store_commit.commit();
 
-    let pr_spec_ids: Vec<String> = fetch_pr_ship_metadata_via_gh(project_root, pr)
+    let pr_spec_ids: Vec<String> = fetch_pr_ship_metadata_via_forge(project_root, pr)
         .map(|meta| review_calibration_spec_ids(project_root, &meta.title, branch, &meta.body))
         .unwrap_or_default();
 
