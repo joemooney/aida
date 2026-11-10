@@ -8,8 +8,27 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-10T10:24:49.978786902Z
-modified_at: 2026-11-10T11:32:22.881241363Z
+modified_at: 2026-11-10T11:42:48.392007361Z
 req_type: Bug
+comments:
+- id: 01a1c544-9448-77c1-a5a0-c8d1776ee831
+  author: dirtlab
+  content: |
+    Implemented missing-verdict recovery for completed/exited review attempts: durable 60/120-second backoff, at most three attempts per head, new-head reset, and exhaustion rows in advisor loops/review-watch service status. Live or ambiguous descendants still refuse retry; existing setup/fetch policies and durable verdict gates remain intact. Updated CLI guide and regression tests.
+
+    Changed files:
+    - aida-cli-lib/src/review_watch.rs
+    - aida-cli-lib/src/review_watch_service.rs
+    - aida-cli-lib/src/tests/task_1993_review_watch_tests.rs
+    - docs/cli/06-roles-sessions.md
+
+    Validation: aida lane job j20261110T114042949-2-0 ran cargo test --profile agent -p aida-cli-lib --lib -- review_watch: 159 passed, 0 failed. git diff --check passed. Earlier development runs failed and were corrected before the successful rerun.
+
+    Host follow-up: make check-ci-fast remains incomplete; it unexpectedly invoked cargo check in its fast-tier TUI seam guard and was interrupted to honor lane-only Cargo instructions. Attempt to file this mismatch as a draft finding refused because this clone has no node binding. The configured codegraph client at /home/joe/ai/aida/.codegraph/proxy-state/bin/codegraph is absent; host deployment/path repair is needed. Source searches were used. Git metadata is read-only; edits remain uncommitted for host commit/publication and subsequent queue completion.
+  created_at: 2026-11-10T11:42:48.392007361Z
+  modified_at: 2026-11-10T11:42:48.392007361Z
+  session_id: 01a1c53ab29d
+  harness_version: codex-cli 0.167.0
 history:
 - id: 01a1c4fe-25c9-7752-878d-7f4b5f4e9270
   author: joe
