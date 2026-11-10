@@ -486,6 +486,21 @@ fn bug_2469_dead_review_reclaimed_only_when_new_head_covers_recorded_and_actual_
         &fx.main, &retained
     ));
     save(&lease);
+    // Contained writers refuse before touching host ownership evidence.
+    // trace:TASK-3777 | ai:codex
+    let before = crate::ownership::reader::lease_record(&fx.main, &lease)
+        .unwrap()
+        .unwrap();
+    ambient.set_key("AIDA_CONTAINED", "1");
+    assert!(crate::ownership::reader::review_finished(&fx.main, &lease)
+        .unwrap_err()
+        .to_string()
+        .contains("contained seat"));
+    ambient.unset_key("AIDA_CONTAINED");
+    let after = crate::ownership::reader::lease_record(&fx.main, &lease)
+        .unwrap()
+        .unwrap();
+    assert_eq!(after.generation, before.generation);
     std::fs::write(tree.join("pending"), "keep completed review notes").unwrap();
     let ended = crate::queue_cmd::end_finished_review(&fx.main, "PR-2457", &tree, true);
     assert!(ended[0].1.is_err());
@@ -537,6 +552,37 @@ fn bug_2469_dead_review_reclaimed_only_when_new_head_covers_recorded_and_actual_
                 &fx.main,
                 &replacement
             ));
+            // Legacy recorded workers need a positive dead identity; a PID
+            // without its start identity cannot borrow completion authority.
+            // trace:TASK-3777 | ai:codex
+            let mut child = std::process::Command::new("sleep")
+                .arg("30")
+                .spawn()
+                .unwrap();
+            let pid = child.id();
+            let start = crate::process_probe::process_start_identity(pid).unwrap();
+            child.kill().unwrap();
+            child.wait().unwrap();
+            replacement = lease.clone();
+            replacement.holder_record = None;
+            replacement.active_pid = Some(pid);
+            replacement.active_pid_start_time = Some(start);
+            save(&replacement);
+            crate::ownership::reader::review_finished(&fx.main, &replacement).unwrap();
+            assert!(crate::ownership::reader::review_lease_ended(
+                &fx.main,
+                &replacement
+            ));
+            replacement.active_pid = Some(std::process::id());
+            replacement.active_pid_start_time = None;
+            save(&replacement);
+            crate::ownership::reader::review_finished(&fx.main, &replacement).unwrap();
+            assert!(!crate::ownership::reader::review_lease_ended(
+                &fx.main,
+                &replacement
+            ));
+            replacement = lease.clone();
+            replacement.active_pid = Some(std::process::id());
             // Even an otherwise matching receipt cannot override a recorded
             // live worker outside the review cwd.
             replacement.active_pid_start_time =
