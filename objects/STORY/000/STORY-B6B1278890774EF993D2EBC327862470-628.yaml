@@ -8,7 +8,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-10T07:32:20.786755079Z
-modified_at: 2026-11-10T08:48:49.302329118Z
+modified_at: 2026-11-10T09:30:02.285450915Z
 req_type: Story
 comments:
 - id: 01a1c47d-19fb-7373-b169-6a484b05ebcd
@@ -44,6 +44,15 @@ comments:
     Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
   created_at: 2026-11-10T08:42:20.163887428Z
   modified_at: 2026-11-10T08:42:20.163887428Z
+  session_id: 01a1c39a-801a-7bd1-8da9-c955a6707f0b
+  harness_version: 2.1.321 (Claude Code)
+- id: 01a1c4cb-06ad-7163-b4d8-b9b0c4ccae2f
+  author: joe
+  content: |-
+    CI FAILURES at a450e425acf7 (run 42787818464). Fix exactly these before pushing; a push without a code change for them will fail again and must not be made:
+    (no test lines extracted; open run 42787818464)
+  created_at: 2026-11-10T09:30:02.285450915Z
+  modified_at: 2026-11-10T09:30:02.285450915Z
   session_id: 01a1c39a-801a-7bd1-8da9-c955a6707f0b
   harness_version: 2.1.321 (Claude Code)
 history:
