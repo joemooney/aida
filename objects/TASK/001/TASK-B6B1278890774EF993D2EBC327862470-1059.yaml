@@ -8,7 +8,7 @@ priority: Low
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-10T03:07:15.181924192Z
-modified_at: 2026-11-10T17:26:41.647665153Z
+modified_at: 2026-11-10T17:41:46.199009878Z
 req_type: Task
 comments:
 - id: 01a1c674-cd0d-76a2-8159-4728d6fffd38
@@ -25,6 +25,13 @@ comments:
   modified_at: 2026-11-10T17:16:58.845726531Z
   session_id: 01a1c66dfde9
   harness_version: codex-cli 0.167.0
+- id: 01a1c68d-3857-77f1-8da5-d89e9fe7cd9e
+  author: joe
+  content: 'Advisor ruling PR-3803@686bac5b: accept P2; wire tests/test_terminal_glyph_padding.py into the CI gates lane and prove it fails on an unpadded literal.'
+  created_at: 2026-11-10T17:41:46.199009878Z
+  modified_at: 2026-11-10T17:41:46.199009878Z
+  session_id: 01a1c530-c917-7f13-ab81-f6b5e1d1cd30
+  harness_version: 2.1.322 (Claude Code)
 history:
 - id: 01a1c5dc-eeb2-7bf0-b31e-daf1c2b86eee
   author: joe
