@@ -8,7 +8,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-07T23:39:41.575597Z
-modified_at: 2026-11-10T13:33:03.947846342Z
+modified_at: 2026-11-10T14:01:32.311078578Z
 req_type: Task
 relationships:
 - rel_type: Child
@@ -631,6 +631,13 @@ comments:
   content: 'ADVISOR PLAN 2026-11-10 06:35 MST: batch 2 landed (#3780, e6ab146). 22 glob files remain. Batch 3 starts after #3778 (PR9b) lands: the 5 files no open PR touches (doctor_root.rs, findings_gate.rs, init_cmd.rs, pr_merge_gate.rs, requirements_cli.rs) plus #3778''s 6. Batch 4 (final, PR4 complete) takes the remaining 11 after #3651, #3784 and the BUG/STORY PRs that hold them land.'
   created_at: 2026-11-10T13:33:03.947846342Z
   modified_at: 2026-11-10T13:33:03.947846342Z
+  session_id: 01a1c530-c917-7f13-ab81-f6b5e1d1cd30
+  harness_version: 2.1.322 (Claude Code)
+- id: 01a1c5c3-9797-7f30-9385-c6909aa67d59
+  author: joe
+  content: 'ADVISOR BRIEF batch 3 (2026-11-10 06:58 MST, main 179190abf48 after #3778): replace `use crate::*;` with explicit imports in EXACTLY these 9 files: aida-cli-lib/src/{db_block,doctor_cmd,doctor_root,findings_gate,init_cmd,pr_merge_gate,requirements_cli,scaffold_cmd,worktree_gc}.rs. Shrink the glob ledger by exactly those entries; never add any. Imports only: no behaviour changes, no qualified-call rewrites unless the compiler requires one, and if it does, list every such site in the PR body (batch-2 lesson). Do not touch files held by open PRs. Title: [AI:codex] refactor(commands): replace crate globs in batch 3 (Refs TASK-3428). Gate: LIGHT. Run cargo check --profile agent -p aida-cli-lib --tests and make check-ci-fast; no full suite.'
+  created_at: 2026-11-10T14:01:32.311078578Z
+  modified_at: 2026-11-10T14:01:32.311078578Z
   session_id: 01a1c530-c917-7f13-ab81-f6b5e1d1cd30
   harness_version: 2.1.322 (Claude Code)
 history:
