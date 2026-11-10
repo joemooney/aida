@@ -337,6 +337,89 @@ fn cargo_with_cache_lifecycle(
     }
 }
 
+// Exercise the production lane environment, mount policy and server lifecycle.
+// No Cargo build or seat-job submission is needed for this bounded diagnostic.
+// trace:STORY-2642 | ai:codex
+pub(crate) fn probe_cache(root: &Path) -> Result<()> {
+    let parent = aida_core::exec_context::Environment::capture();
+    let lane = LaneJobs {
+        seat: root.into(),
+        inbox: PathBuf::new(),
+        results: PathBuf::new(),
+        lease_id: "doctor-cache".into(),
+        build_env: lane_sccache_env(&parent),
+        host_env: HOST_ENV_ALLOWED
+            .iter()
+            .filter_map(|key| Some(((*key).to_owned(), parent.get(*key)?.to_str()?.to_owned())))
+            .collect(),
+        program: "cargo".into(),
+        sandbox: Sandbox::Bwrap,
+    };
+    let env = lane.job_env(&JobRequest {
+        argv: vec!["cargo".into()],
+        env: BTreeMap::new(),
+    });
+    anyhow::ensure!(
+        env.contains_key("SCCACHE_DIR"),
+        "host Cargo has no supported sccache configuration"
+    );
+    lane.prepare_cache()?;
+    let (program, args) = cargo_with_cache_lifecycle(
+        Path::new("/bin/sh"),
+        vec!["-c".into(), CACHE_PROBE_SCRIPT.into()],
+        &env,
+    );
+    let (program, args) = crate::session::lane_job_wrapped_program_and_args(
+        root,
+        crate::session::os_wrap_explicit(root) != Some(false),
+        &lane.sandbox_rw_paths(&env),
+        &program,
+        args,
+    )?;
+    let mut cmd = std::process::Command::new(program);
+    cmd.args(args).current_dir(root).env_clear().envs(env);
+    let (status, _) = aida_core::transport_policy::bounded(
+        cmd,
+        &[],
+        65536,
+        Instant::now() + Duration::from_secs(25),
+    )?;
+    anyhow::ensure!(
+        status.success(),
+        "sandbox cache transport/write probe exited {status}"
+    );
+    Ok(())
+}
+
+// Refuse the lifecycle's uncached fallback and test disk access from the sandbox.
+const CACHE_PROBE_SCRIPT: &str = r#"
+[ -n "$AIDA_SCCACHE_PIDS" ] || exit 1
+"$RUSTC_WRAPPER" --show-stats >/dev/null || exit 1
+probe=$(mktemp "$SCCACHE_DIR/doctor-XXXXXXXX") || exit 1
+trap 'rm -f -- "$probe"' EXIT
+printf lane-cache-probe >"$probe" && [ "$(cat "$probe")" = lane-cache-probe ]
+"#;
+
+#[cfg(all(test, target_os = "linux"))]
+#[test]
+fn doctor_cache_probe_refuses_uncached_fallback_and_checks_writes() {
+    let dir = tempfile::tempdir().unwrap();
+    let run = |pid: &str, wrapper: &str| {
+        std::process::Command::new("/bin/sh")
+            .args(["-c", CACHE_PROBE_SCRIPT])
+            .env("AIDA_SCCACHE_PIDS", pid)
+            .env("RUSTC_WRAPPER", wrapper)
+            .env("SCCACHE_DIR", dir.path())
+            .status()
+            .unwrap()
+            .success()
+    };
+    assert!(!run("", "/bin/true"));
+    assert!(!run("123", "/bin/false"));
+    assert!(run("123", "/bin/true"));
+    assert_eq!(std::fs::read_dir(dir.path()).unwrap().count(), 0);
+}
+
 /// Whether the launcher's `key` reaches a job.
 pub(crate) fn host_key_allowed(key: &str) -> bool {
     HOST_ENV_ALLOWED.contains(&key) || key.starts_with("LC_")
@@ -926,6 +1009,13 @@ impl LaneJobs {
         }
         std::fs::create_dir_all(&self.inbox)
             .with_context(|| format!("create {}", self.inbox.display()))?;
+        self.prepare_cache()?;
+        std::fs::create_dir_all(&self.results)
+            .with_context(|| format!("create {}", self.results.display()))?;
+        Ok(())
+    }
+
+    fn prepare_cache(&self) -> Result<()> {
         // Only the host-selected lane cache is made writable; cargo home stays read-only.
         // trace:STORY-2641 | ai:codex
         if let Some((_, cache)) = self.build_env.iter().find(|(key, _)| key == "SCCACHE_DIR") {
@@ -944,8 +1034,6 @@ impl LaneJobs {
                 crate::shell_quote(cache)
             );
         }
-        std::fs::create_dir_all(&self.results)
-            .with_context(|| format!("create {}", self.results.display()))?;
         Ok(())
     }
 

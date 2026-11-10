@@ -203,14 +203,64 @@ fn cache_check(home: Option<&Path>, env: &Environment) -> Check {
         "install sccache and configure RUSTC_WRAPPER or [build] rustc-wrapper in CARGO_HOME/config.toml (default ~/.cargo); aida doctor --lane-host --fix configures an installed CARGO_HOME/bin/sccache")
 }
 
-fn cache_reachability_note() -> Check {
-    advisory(check(
-        "lane-cache-reachability",
-        false,
-        false,
-        "unverified: host wrapper configuration does not prove in-sandbox cache reachability",
-        "verify cache transport with a lane job; the doctor has no in-sandbox cache probe yet",
-    ))
+// trace:STORY-2642 | ai:codex
+fn cache_reachability_check(result: Result<()>) -> Check {
+    let (pass, detail) = match result {
+        Ok(()) => (
+            true,
+            "lane-job sandbox reached its private sccache server and writable cache".into(),
+        ),
+        Err(error) => (false, format!("lane-job cache probe failed: {error:#}")),
+    };
+    check("lane-cache-reachability", pass, false, detail,
+        "configure host Cargo build.rustc-wrapper = 'sccache'; enable bubblewrap and repair ~/.cache/aida/lane-sccache ownership/mode (0700), then retry on the host")
+}
+
+// Release evidence is live and independent of the inspected project's Git refs.
+// trace:STORY-2642 | ai:codex
+fn latest_release() -> Option<String> {
+    let mut cmd = Command::new("curl");
+    cmd.args([
+        "--fail",
+        "--silent",
+        "--show-error",
+        "--location",
+        "--max-time",
+        "8",
+        "https://api.github.com/repos/joemooney/aida/releases/latest",
+    ]);
+    let (status, bytes) = aida_core::transport_policy::bounded(
+        cmd,
+        &[],
+        65536,
+        Instant::now() + Duration::from_secs(10),
+    )
+    .ok()?;
+    if !status.success() {
+        return None;
+    }
+    let value: serde_json::Value = serde_json::from_slice(&bytes).ok()?;
+    value.get("tag_name")?.as_str().map(str::to_owned)
+}
+
+fn release_binary_check(installed: &str, latest: Option<&str>, dirty: bool) -> Check {
+    // Require a conventional release version; malformed API evidence never passes.
+    let version = |s: &str| {
+        s.strip_prefix('v')
+            .unwrap_or(s)
+            .split('.')
+            .map(str::parse::<u64>)
+            .collect::<std::result::Result<Vec<_>, _>>()
+            .ok()
+            .filter(|v| v.len() == 3)
+    };
+    let pass = !dirty
+        && version(installed)
+            .zip(latest.and_then(version))
+            .is_some_and(|(installed, latest)| installed == latest);
+    check("binary", pass, false,
+        format!("installed release {installed}; latest published release {}", latest.unwrap_or("unverified (release lookup failed)")),
+        "run `aida upgrade` to install the latest release; check GitHub connectivity if lookup failed")
 }
 
 pub(crate) fn containment_checks(root: &Path, vendor: &str, sandbox: bool) -> Vec<Check> {
@@ -326,13 +376,22 @@ fn inspect(root: &Path, live_store: bool) -> Vec<Check> {
             &["rev-parse", "--path-format=absolute", "--git-common-dir"],
         ))
         .is_some_and(|(project, built)| project == built);
-    checks.push(binary_check(
+    let binary = binary_check(
         dev_build,
         same_project,
         built,
         crate::upgrade_release::build_git_dirty(),
         main.as_deref(),
-    ));
+    );
+    checks.push(if dev_build || !live_store {
+        binary
+    } else {
+        release_binary_check(
+            crate::upgrade_release::current_version(),
+            latest_release().as_deref(),
+            crate::upgrade_release::build_git_dirty(),
+        )
+    });
     let store = root.join(".aida-store");
     let head = git(&store, &["rev-parse", "HEAD"]);
     let remote = live_store
@@ -364,7 +423,9 @@ fn inspect(root: &Path, live_store: bool) -> Vec<Check> {
         crate::session::cargo_home_dir().as_deref(),
         &env,
     ));
-    checks.push(cache_reachability_note());
+    if live_store {
+        checks.push(cache_reachability_check(crate::lane_job::probe_cache(root)));
+    }
     checks
 }
 
@@ -463,11 +524,26 @@ mod tests {
     }
     #[test]
     fn cache_never_claims_host_installation_proves_lane_reachability() {
-        let check = cache_reachability_note();
-        assert!(!check.required);
+        let check = cache_reachability_check(Err(anyhow::anyhow!("unreachable")));
+        assert!(check.required);
         assert!(!check.pass);
         assert!(!check.containment);
-        assert!(check.detail.contains("unverified"));
+        assert!(check.detail.contains("unreachable"));
+        assert!(cache_reachability_check(Ok(())).pass);
+    }
+    #[test]
+    fn release_freshness_requires_current_clean_version_and_live_evidence() {
+        assert!(release_binary_check("1.2.3", Some("v1.2.3"), false).pass);
+        for (latest, dirty) in [
+            (None, false),
+            (Some("v1.2.4"), false),
+            (Some("bad"), false),
+            (Some("v1.2.3"), true),
+        ] {
+            let row = release_binary_check("1.2.3", latest, dirty);
+            assert!(row.required && !row.pass);
+            assert!(row.fix.contains("aida upgrade"));
+        }
     }
     #[test]
     fn explicit_off_refuses_and_unset_uses_lane_default() {
@@ -691,15 +767,24 @@ mod tests {
             !cache_check(Some(home.path()), &env).pass,
             "empty env wrapper disables caching"
         );
-        assert!(!cache_reachability_note().required);
+        assert!(cache_reachability_check(Ok(())).required);
     }
 
     #[test]
     fn unsupported_auth_is_explicitly_advisory() {
-        let check = auth_check("agy", None, &Environment::default());
+        let check = auth_check("unsupported", None, &Environment::default());
         assert!(!check.pass);
         assert!(!check.required);
         assert!(check.detail.contains("unverifiable"));
+    }
+
+    #[test]
+    fn agy_auth_source_is_required_with_a_login_hint() {
+        for vendor in ["agy", "antigravity"] {
+            let row = auth_check(vendor, None, &Environment::default());
+            assert!(row.required && !row.pass);
+            assert!(row.fix.contains("OAuth login"));
+        }
     }
 
     #[test]
