@@ -530,6 +530,7 @@ mod intent;
 mod intent_intake;
 mod internal_cmd;
 mod observation_envelope;
+mod review_envelope;
 // Retire a tree's mail before it is removed or reused. trace:STORY-1843 | ai:claude
 mod mail_retention;
 mod mailbox_cmd;

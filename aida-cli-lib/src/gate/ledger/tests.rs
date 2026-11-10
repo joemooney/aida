@@ -1885,11 +1885,34 @@ fn legacy_gate_paths_do_not_gain_new_references() {
         .join("gate")
         .join("ledger")
         .join("legacy.rs");
+    // The isolated intent transport uses this folder name for pending data,
+    // not .aida gate state. Keep its references separately bounded so it
+    // cannot increase the legacy gate budget or become an unlimited exemption.
+    // trace:STORY-2493 | ai:codex
+    let transport_baselines = [("intent_intake.rs", 7usize), ("review_envelope.rs", 1usize)];
     for (dir, baseline) in BASELINE {
         let needle = format!("\"{dir}\"");
+        let transport_paths: Vec<_> = transport_baselines
+            .iter()
+            .map(|(file, _)| Path::new(env!("CARGO_MANIFEST_DIR")).join("src").join(file))
+            .collect();
+        if *dir == "review-verdicts" {
+            for (path, (_, limit)) in transport_paths.iter().zip(&transport_baselines) {
+                let count = non_test_sources()
+                    .iter()
+                    .find(|(p, _)| p == path)
+                    .map_or(0, |(_, src)| src.matches(&needle).count());
+                assert!(
+                    count <= *limit,
+                    "{count} intent transport references to {needle} in {} (baseline {limit})",
+                    path.display()
+                );
+            }
+        }
         let found: usize = non_test_sources()
             .iter()
             .filter(|(p, _)| *p != sanctioned)
+            .filter(|(p, _)| *dir != "review-verdicts" || !transport_paths.contains(p))
             .map(|(_, src)| src.matches(&needle).count())
             .sum();
         assert!(
