@@ -23,7 +23,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-07T20:45:16.684639Z
-modified_at: 2026-11-10T18:19:17.762604907Z
+modified_at: 2026-11-10T18:22:16.554895826Z
 req_type: Task
 relationships:
 - rel_type: Child
@@ -515,6 +515,13 @@ comments:
   modified_at: 2026-11-10T18:17:21.372732641Z
   session_id: 01a1c530-c917-7f13-ab81-f6b5e1d1cd30
   harness_version: 2.1.322 (Claude Code)
+- id: 01a1c6b2-4dea-7892-9666-4830d3f48a07
+  author: dirtlab
+  content: 'Round 12 addresses finding A1 and the 2026-11-10 17:52 UTC advisor ruling: retirement now requires durable UUID ACK evidence for every local original delivery and handover, resolving queued bindings first. Canonical fixtures copy messages only. Added original relay before/after refusal coverage for run visibility, later-run exclusion, delivery identity and UUID ACK continuity; handover and cohort tests require all local owners to ACK. Validation: lane job j20261110T182155740-2-0, cargo test --profile agent -p aida-core --lib -- mailbox_lifecycle: 180 passed, 0 failed. git diff --check passed. Native host publication declaration recorded; edits left uncommitted for host launcher.'
+  created_at: 2026-11-10T18:22:16.554895826Z
+  modified_at: 2026-11-10T18:22:16.554895826Z
+  session_id: 01a1c6af8da2
+  harness_version: codex-cli 0.167.0
 history:
 - id: 01a1b7c2-6b69-7b02-bd8c-8f40aee2972d
   author: joe
