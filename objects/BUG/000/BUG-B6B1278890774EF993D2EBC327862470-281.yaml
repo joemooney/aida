@@ -8,7 +8,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-10T03:07:46.884496242Z
-modified_at: 2026-11-10T09:36:02.321912373Z
+modified_at: 2026-11-10T09:44:36.603482601Z
 req_type: Bug
 comments:
 - id: 01a1c4af-2f66-7590-be69-dad5e180b9a4
@@ -45,6 +45,13 @@ comments:
   modified_at: 2026-11-10T09:23:56.967973827Z
   session_id: 01a1c4b14855
   harness_version: codex-cli 0.167.0
+- id: 01a1c4d8-5dfb-7c63-9a11-47956935ce3d
+  author: joe
+  content: 'ADVISOR RULING (2026-11-10 09:44 UTC) — binding for PR #3774 rework at head 3dd89327d4. Fix exactly one finding: [P2] reconcile_evidence.rs:143-146 treats any GitLab search hit as an open deliverable for the spec (glab_lookup_from_list_output returns the first MR). Match GitHub''s row_credits_spec / branch_names_spec semantics on GitLab title, description and source_branch; scan the whole result set, not the first hit; keep ''unknown'' when pagination is incomplete. Fake-glab regressions: a prose-only mention (''follow-up from BUG-2516'' crediting another spec) does not count; nonmatching hits before a genuine matching MR still find it. LIGHT gate.'
+  created_at: 2026-11-10T09:44:36.603482601Z
+  modified_at: 2026-11-10T09:44:36.603482601Z
+  session_id: 01a1c39a-801a-7bd1-8da9-c955a6707f0b
+  harness_version: 2.1.321 (Claude Code)
 history:
 - id: 01a1c4af-3ce1-7db1-8f61-609deb96783e
   author: joe
