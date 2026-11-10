@@ -7,7 +7,13 @@
 // trace:SPIKE-78 | ai:claude
 
 use crate::process_retry::RetryEtxtbsy;
-use crate::*;
+use crate::{
+    assemble_ultraplan_prompt, build_reusable_helpers_section, compete, create_agent_brief,
+    find_project_root, glyph, load_store_for_lookup, read_reserved_paths, session,
+    working_tree_is_dirty,
+};
+use anyhow::{Context, Result};
+use colored::Colorize;
 
 /// Assemble the implementer brief a compete arm hands to a vendor: the rich
 /// spec context (reusing the AIDA planning-prompt assembly) wrapped in compete-specific
