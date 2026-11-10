@@ -3,12 +3,12 @@ spec_id: BUG-b6b1278890774ef993d2ebc327862470-274
 agreed_id: BUG-2509
 title: Remote lanes treat a stale advisor brief as binding because they cannot see the gate-ledger review findings
 description: 'On 2026-11-09 the TASK-3777 rework lane on dell1 received a 16:42 UTC advisor brief marked ''binding'' although a CHANGES REQUESTED verdict was recorded at 22:00 UTC; it punted as ambiguous-spec and the rework cycle was lost. rework_direction.rs resolve_direction (around line 143) returns BriefStanding::Binding whenever review_findings is None, and a dell1 lane has no access to the primary host''s .aida/gate-ledger, so the findings are None even though a ''REVIEW FINDINGS TO ADDRESS'' comment with the verdict time is on the spec. Fix: derive the verdict time from that comment, or from the latest verdict in the store, when the ledger is unavailable, so a brief that predates it is classed PredatesVerdict; add a regression for a lane with no ledger.'
-status: Draft
+status: Approved
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-09T23:19:37.402958538Z
-modified_at: 2026-11-10T08:59:15.846079119Z
+modified_at: 2026-11-10T14:28:57.119161007Z
 req_type: Bug
 comments:
 - id: 01a1c4ae-da06-7200-aca3-d82b81889341
@@ -18,6 +18,16 @@ comments:
   modified_at: 2026-11-10T08:59:15.846079119Z
   session_id: 01a1c39a-801a-7bd1-8da9-c955a6707f0b
   harness_version: 2.1.321 (Claude Code)
+history:
+- id: 01a1c5dc-b09f-7163-9c1c-790850bc42af
+  author: joe
+  timestamp: 2026-11-10T14:28:57.119156189Z
+  session_id: 01a1c530-c917-7f13-ab81-f6b5e1d1cd30
+  harness_version: 2.1.322 (Claude Code)
+  changes:
+  - field_name: status
+    old_value: Draft
+    new_value: Approved
 filed_at:
   code_sha: b1331e379c1fd3de1eef43e3d2d99b58b5d59a61
   branch: main
