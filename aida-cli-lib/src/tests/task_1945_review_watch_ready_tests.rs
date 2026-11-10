@@ -1133,3 +1133,73 @@ fn live_approval_composition_refuses_on_the_corpus_after_an_approval() {
         Ok(approval())
     );
 }
+
+// trace:STORY-2694 | ai:codex
+// trace:STORY-b6b1278890774ef993d2ebc327862470-617.ac7f9646 | ai:codex
+#[test]
+fn carried_approval_suppresses_both_dispatch_checks_but_not_ci_readiness() {
+    use crate::gate::review_carryover::tests::{consumer_coverage, fixture as repo_fixture, git};
+    let (repo, approved) = repo_fixture();
+    let merge = crate::test_git::git_command()
+        .arg("-C")
+        .arg(repo.path())
+        .args(["merge", "--quiet", "--no-edit", "main"])
+        .output()
+        .unwrap();
+    assert!(
+        merge.status.success(),
+        "{}",
+        String::from_utf8_lossy(&merge.stderr)
+    );
+    let h = git(repo.path(), &["rev-parse", "HEAD"]);
+    let proof = consumer_coverage(repo.path(), &approved, &h).unwrap();
+    let store = Store::open(repo.path(), "github:github.com/owner/repo").unwrap();
+    let mut c = change(0, false);
+    c.id = 42;
+    c.head = h;
+    let report = crate::gate::merge_hold_core::carried_approval_report(&proof);
+    let description = report["description"].as_str().unwrap().to_string();
+    assert_eq!(report["reviewed_sha"], approved);
+    assert_eq!(report["head_sha"], c.head);
+    assert_eq!(report["proof"]["base_tip"], proof.base_tip);
+    assert_eq!(
+        probe_unneeded_with_coverage(&store, &c, || Some(description.clone())).unwrap(),
+        Some(description.clone())
+    );
+    assert!(
+        matches!(select_with_coverage(&store, &c, None, 2, || Some(description.clone())).unwrap(), Action::Skip(why) if why == description)
+    );
+    assert!(store
+        .load()
+        .unwrap()
+        .entries
+        .get("PR-42")
+        .is_none_or(|entry| entry.attempts.is_empty()));
+    let mut evidence = Fake::ready();
+    evidence.head = Ok(c.head.clone());
+    evidence.approval = Ok(Approval {
+        reviewed: approved,
+        identity: "reviewer".into(),
+        carried: Some(description),
+    });
+    evidence.ci = Ok(CommitChecks {
+        sha: c.head.clone(),
+        checks: vec![],
+    });
+    assert!(not_ready(&evidence, &c).contains("no CI checks"));
+    evidence.ci = Ok(green(&c.head));
+    assert!(matches!(
+        ready::evaluate(&c, &evidence),
+        (Readiness::Ready, Some(_))
+    ));
+    // Failure to prove coverage must leave the ordinary dispatch path available.
+    let (_other, other) = fixture();
+    assert_eq!(
+        probe_unneeded_with_coverage(&other, &c, || None).unwrap(),
+        None
+    );
+    assert!(matches!(
+        select_with_coverage(&other, &c, None, 2, || None).unwrap(),
+        Action::Dispatch(_)
+    ));
+}
