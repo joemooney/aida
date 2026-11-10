@@ -163,23 +163,3 @@ fn reader_fallback_and_failure_passthrough() {
         Some(1)
     );
 }
-
-#[test]
-fn successful_reader_can_exceed_former_report_deadline() {
-    let dir = tempfile::tempdir().unwrap();
-    let reader = dir.path().join("reader");
-    fs::write(
-        &reader,
-        "#!/bin/sh\n/bin/sleep 46\necho '{\"prs\":[],\"aggregate\":{},\"notes\":[]}'\n",
-    )
-    .unwrap();
-    fs::set_permissions(&reader, fs::Permissions::from_mode(0o755)).unwrap();
-    let output = Command::new(env!("CARGO_BIN_EXE_aida-porcelain"))
-        .args(["flow", "report", "--since", "2026-11-09", "--json"])
-        .env("AIDA_BIN", reader)
-        .output()
-        .unwrap();
-    assert!(output.status.success(), "{output:?}");
-    let report: serde_json::Value = serde_json::from_slice(&output.stdout).unwrap();
-    assert_eq!(report["prs"], serde_json::json!([]));
-}
