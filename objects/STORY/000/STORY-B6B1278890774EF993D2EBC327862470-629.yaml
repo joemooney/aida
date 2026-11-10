@@ -1,0 +1,36 @@
+id: 01a1c484-f2d8-7a03-8bc2-ccef5deaf246
+spec_id: STORY-b6b1278890774ef993d2ebc327862470-629
+agreed_id: STORY-2706
+title: 'Review PR-3769: [AI:codex] refactor(doctor): extract inline test modules (Refs TASK-3780)'
+description: |
+  Auto-filed by `aida pr auto-queue-review` (typically from /aida-pr) (session `01a1c468`) for branch `task-b6b1278890774ef993d2ebc327862470-1060`.
+
+  - PR: <https://github.com/joemooney/aida/pull/3769>
+  - Branch: `task-b6b1278890774ef993d2ebc327862470-1060` → `main`
+
+  ## Slice of (Refs only — not completed by this PR)
+
+  Commit subjects carry `(Refs SPEC-ID)`: this PR is one slice of a spec that a later PR completes. Review this slice against that spec's acceptance criteria.
+
+  - TASK-3780
+
+  ## Acceptance
+
+  - Generate a structured review prompt with `aida review prompt --pr 3769` and verify each spec's acceptance criteria.
+  - Approve and merge, or request changes by spec id.
+  - Mark this story `completed` once the PR is merged.
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-11-10T08:13:29.688734385Z
+modified_at: 2026-11-10T08:13:29.688734385Z
+req_type: Story
+filed_at:
+  code_sha: e682f76092e65c6556f7881fe8a5e0aa48516740
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: e682f76092e
+  vendor: claude
+  session: 01a1c4681114
