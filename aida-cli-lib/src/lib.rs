@@ -35,6 +35,10 @@ macro_rules! println {
 
 // trace:STORY-1741 | ai:claude
 mod adoption_cmd;
+// Disabled host-only transport; no command or consumer is registered.
+// trace:TASK-3368 | ai:codex
+#[cfg(target_os = "linux")]
+mod proc_broker;
 mod advisor;
 mod advisor_cmd_root;
 mod advisor_code_gate;
