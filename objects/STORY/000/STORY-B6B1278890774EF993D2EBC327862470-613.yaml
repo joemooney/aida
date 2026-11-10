@@ -8,7 +8,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-09T01:58:39.064485765Z
-modified_at: 2026-11-10T20:59:00.167068181Z
+modified_at: 2026-11-10T21:11:15.382732236Z
 req_type: Story
 tags:
 - area:orchestration
@@ -94,6 +94,18 @@ comments:
     Help-Golden: unchanged
   created_at: 2026-11-10T21:03:42.817043785Z
   modified_at: 2026-11-10T21:03:42.817043785Z
+  session_id: 01a1c73c5e9e
+  harness_version: codex-cli 0.167.0
+- id: 01a1c74d-02b6-7730-a229-129dc3f0f74a
+  author: dirtlab
+  content: |
+    Reconcile the store writer inventory for lane result receipt writers and the run_recorded caller. Receipt-only destinations remain host-owned; the renamed standalone runner wrapper retains its existing B07 blocked policy. Remove the stale run wrapper row without changing existing policy or operation mappings.
+
+    Validation: python3 scripts/check-store-writers.py passed (3494 sites, 294 operation mappings); python3 tests/test_store_writer_inventory.py passed all 54 tests; git diff --check passed. The complete fast-check suite was not rerun in this fix round.
+
+    Help-Golden: unchanged
+  created_at: 2026-11-10T21:11:15.382732236Z
+  modified_at: 2026-11-10T21:11:15.382732236Z
   session_id: 01a1c73c5e9e
   harness_version: codex-cli 0.167.0
 history:
