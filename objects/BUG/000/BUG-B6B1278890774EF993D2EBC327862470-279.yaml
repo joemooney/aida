@@ -8,8 +8,16 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-10T03:07:30.673643751Z
-modified_at: 2026-11-10T15:09:08.223841735Z
+modified_at: 2026-11-10T15:17:04.835226945Z
 req_type: Bug
+comments:
+- id: 01a1c608-c0c3-7e30-ba58-3af0186fcf39
+  author: dirtlab
+  content: 'Implemented session-end Start review hints with the configured project vendor and explicit --no-human --strict on both TTY and piped output. Command rendering stays in vendors/. Regression covers contained Codex configuration with GitLab MR and GitHub PR. Validation: lane job j20261110T151244181-2-0 ran workflow_hints:: plus story_2539_vendor_literal_ratchet: 57 passed, 0 failed; git diff --check clean. Edits left uncommitted for host publication. Codegraph client missing at the configured absolute path; used rg, doctor confirms missing tooling.'
+  created_at: 2026-11-10T15:17:04.835226945Z
+  modified_at: 2026-11-10T15:17:04.835226945Z
+  session_id: 01a1c6012705
+  harness_version: codex-cli 0.167.0
 history:
 - id: 01a1c5dc-cc7b-7832-8e65-bf15ad9aad21
   author: joe
