@@ -2694,7 +2694,7 @@ impl GitBackend {
 
     /// Plan canonical postimages without side effects, then durably decide and
     /// install them. Caller authorization runs inside the bounded writer lock.
-    /// Only title/description/priority edits are admitted in this slice; lifecycle and
+    /// Only title/description/priority/weight edits are admitted in this slice; lifecycle and
     /// multi-root commands require their own policy-preserving typed handlers.
     // trace:TASK-3223 | ai:codex
     pub fn mutate_canonical(
@@ -2780,6 +2780,20 @@ impl GitBackend {
                                 new_value: priority.to_string(),
                             });
                             next.priority = priority;
+                        }
+                    }
+                    // trace:TASK-3223 | ai:codex
+                    if let Some(weight) = fields.weight {
+                        if weight != current.weight {
+                            changes.push(crate::models::FieldChange {
+                                field_name: "weight".into(),
+                                old_value: current
+                                    .weight
+                                    .map(|w| w.to_string())
+                                    .unwrap_or_default(),
+                                new_value: weight.map(|w| w.to_string()).unwrap_or_default(),
+                            });
+                            next.weight = weight;
                         }
                     }
                     next.record_change(author.into(), changes);
