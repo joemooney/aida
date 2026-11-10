@@ -853,14 +853,18 @@ fn body(r: &Receipt) -> Result<String> {
         identity: r.reviewer_identity.clone(),
         ..Default::default()
     };
-    Ok(serde_json::to_string(&serde_json::json!({
+    let mut projected = serde_json::json!({
         "verdict": r.decision, "reviewed_sha": r.head, "reviewed_branch": r.branch,
         "recorded_at": r.recorded_at, "recorded_by": r.reviewer_actor,
         "summary": r.summary, "findings": r.findings,
-        "finding_dispositions": r.finding_dispositions,
         "blocking_finding_origin_ids": r.blocking_finding_origin_ids,
         "recorder_attestation": att,
-    }))?)
+    });
+    // trace:STORY-2698 | ai:codex — absent metadata must stay absent on read-through.
+    if let Some(dispositions) = &r.finding_dispositions {
+        projected["finding_dispositions"] = serde_json::to_value(dispositions)?;
+    }
+    Ok(serde_json::to_string(&projected)?)
 }
 
 /// The change's current head as this node's code checkout knows it: the tip
@@ -1579,6 +1583,24 @@ mod story_2698_tests {
         });
         let mut receipt: Receipt = serde_json::from_value(legacy.clone()).unwrap();
         assert_eq!(serde_json::to_value(&receipt).unwrap(), legacy);
+        let mut clean = legacy.clone();
+        clean["findings"] = serde_json::json!([]);
+        let clean_receipt: Receipt = serde_json::from_value(clean.clone()).unwrap();
+        let encoded = serde_json::to_string(&clean_receipt).unwrap();
+        assert_eq!(
+            serde_json::from_str::<serde_json::Value>(&encoded).unwrap(),
+            clean
+        );
+        let restored: Receipt = serde_json::from_str(&encoded).unwrap();
+        let projected = body(&restored).unwrap();
+        assert!(serde_json::from_str::<serde_json::Value>(&projected)
+            .unwrap()
+            .get("finding_dispositions")
+            .is_none());
+        assert_eq!(
+            rv::parse_recorded_verdict(&projected).unwrap().kind,
+            rv::VerdictKind::Approved
+        );
         assert_eq!(
             rv::parse_recorded_verdict(&body(&receipt).unwrap())
                 .unwrap()
