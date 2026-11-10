@@ -8,7 +8,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-10T03:07:01.660083142Z
-modified_at: 2026-11-10T15:43:25.415901535Z
+modified_at: 2026-11-10T15:50:20.440381674Z
 req_type: Bug
 comments:
 - id: 01a1c60c-adfa-72f3-9f5c-b40df8817ee3
@@ -39,6 +39,13 @@ comments:
   modified_at: 2026-11-10T15:40:43.918126045Z
   session_id: 01a1c39a-801a-7bd1-8da9-c955a6707f0b
   harness_version: 2.1.321 (Claude Code)
+- id: 01a1c627-3418-7463-b93d-835fcd8d1836
+  author: dirtlab
+  content: 'Addressed review finding: run_init resolves the interactive AgentSelection once and passes its explicit allow-list through every storage/scaffolding path; native consent uses that same value rather than saved enabled settings or the default vendor. Added regression covering saved Claude with chosen Codex and saved/default Codex with chosen Claude, including consent-offer assertions. Validation: lane job j20261110T154533235-2-0 executed the regression (1 passed); rustfmt, git diff --check and execution-context ledger guard passed. An initial compile type mismatch was corrected before the passing run. Host codegraph client unavailable (doctor reports missing); source searches used. Changed file: aida-cli-lib/src/init_cmd.rs. Edits left uncommitted for native host publication.'
+  created_at: 2026-11-10T15:50:20.440381674Z
+  modified_at: 2026-11-10T15:50:20.440381674Z
+  session_id: 01a1c6208c4d
+  harness_version: codex-cli 0.167.0
 history:
 - id: 01a1c5dc-c560-7b10-85fe-1df64f0de2cf
   author: joe
