@@ -1097,11 +1097,11 @@ fn metadata_rework_of_a_draft_is_refused_without_advisor_authority() {
 }
 
 /// TASK-1311: a requeue by a NON-TTY advisor (the test process has no
-/// terminal) flips the status and clears the shelve metadata, but must KEEP
-/// the `needs-human` escalation tag: an escalation to a human is undone only
-/// by a human at a terminal. The spec stays parked and the return is recorded.
+/// terminal) must retain human escalation and refuse routing before any
+/// mutation. A human at a terminal must resolve the escalation first.
 /// The TTY-human half is the pure `requeue::may_clear_escalation` test.
 // trace:TASK-1311 | ai:claude
+// trace:STORY-2690 | ai:codex
 #[test]
 fn requeue_by_non_tty_advisor_keeps_the_escalation_tag() {
     let tmp = tempfile::tempdir().unwrap();
@@ -1136,7 +1136,7 @@ fn requeue_by_non_tty_advisor_keeps_the_escalation_tag() {
     // authority off-TTY; the TTY mattered only at issuance).
     // trace:BUG-1618 trace:STORY-1473 | ai:claude
     let _ambient = crate::test_env::AmbientGuard::hermetic_with_seat(tmp.path(), "advisor", &[]);
-    handle_queue_rework(
+    let err = handle_queue_rework(
         &storage,
         "BUG-13110",
         false,
@@ -1151,11 +1151,12 @@ fn requeue_by_non_tty_advisor_keeps_the_escalation_tag() {
         true,
         Some("codex"),
     )
-    .unwrap();
+    .unwrap_err();
+    assert!(err.to_string().contains("reason=needs-human"));
 
     let updated = storage.load().unwrap();
     let after = updated.get_requirement_by_spec_id("BUG-13110").unwrap();
-    assert_eq!(after.status, RequirementStatus::Approved);
+    assert_eq!(after.status, RequirementStatus::NeedsAttention);
     assert!(
         after.tags.contains("needs-human"),
         "a non-TTY advisor must not undo an escalation: {:?}",
@@ -1163,25 +1164,14 @@ fn requeue_by_non_tty_advisor_keeps_the_escalation_tag() {
     );
     assert!(after.tags.contains("batch:keep"), "{:?}", after.tags);
     assert!(
-        after.failure_reason.is_none(),
-        "the shelve's FailureReason must not survive the requeue"
-    );
-    let tags: Vec<String> = after.tags.iter().cloned().collect();
-    assert!(
-        crate::burndown::parking_tag(&tags).is_some(),
-        "still parked for a human"
+        after.failure_reason.is_some(),
+        "refusal retains the shelf evidence"
     );
     assert!(
-        after.comments.iter().any(|c| c
-            .content
-            .contains("Returned from NeedsAttention to Approved via `aida queue rework`")
-            && c.content.contains("ci/ci-red: clippy failed")
-            && c.content.contains("Kept escalation tag(s) needs-human")
-            && c.content.contains("Triage reason: CI fixed on main")),
-        "re-entry must record why the spec came back"
+        after.comments.is_empty(),
+        "refusal adds no success audit note"
     );
-    let entries = storage.queue_list("codex", true).unwrap();
-    assert_eq!(entries.len(), 1, "requeued onto the queue");
+    assert!(storage.queue_list("codex", true).unwrap().is_empty());
 }
 
 // ── STORY-1429: requeue races, lease gate, single reason, triage loop ──
@@ -2346,4 +2336,23 @@ fn task_3777_findings_follow_successful_return_to_flight() {
         returned < findings,
         "findings must follow the successful transition audit"
     );
+}
+
+// trace:STORY-2690 | ai:codex
+#[test]
+fn story_2690_rework_refuses_deferred_before_status_or_queue_mutation() {
+    let mut req = req_for_test("BUG-26900", RequirementStatus::InProgress);
+    req.deferred = true;
+    req.deferred_reason = Some("operator hold".into());
+    let (tmp, storage) = story_1429_fixture(vec![req]);
+    let _ambient = crate::test_env::AmbientGuard::hermetic_with_seat(tmp.path(), "advisor", &[]);
+    let before = storage.load().unwrap();
+    let err = rework_as(&storage, "BUG-26900", Some("retry"), true).unwrap_err();
+    assert!(err.to_string().contains("reason=deferred"), "{err:#}");
+    let after = storage.load().unwrap();
+    assert_eq!(
+        serde_json::to_value(&before.requirements).unwrap(),
+        serde_json::to_value(&after.requirements).unwrap()
+    );
+    assert!(storage.queue_list("codex", true).unwrap().is_empty());
 }

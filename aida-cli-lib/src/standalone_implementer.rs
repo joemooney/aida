@@ -145,6 +145,7 @@ job runner, or refuses the run, say `untested=true` in your final result.";
 /// to completion (BUG-2383 AC3), so whoever launched it knows the push
 /// reached CI untested. A punt's line is left alone: nothing was shipped.
 // trace:BUG-2383 | ai:claude
+#[cfg(test)]
 pub(crate) fn with_untested(line: String, outcome: &Outcome, untested: bool) -> String {
     if untested && !matches!(outcome, Outcome::Punted { .. }) {
         format!("{line} untested=true")
@@ -1167,7 +1168,90 @@ pub(crate) fn classify_seat_no_change(
 
 /// Run the child, wait, classify, print the result line, and return the
 /// outcome's exit code (`Ok` only for an open PR).
-pub(crate) fn run(launch: Launch<'_>) -> Result<()> {
+#[cfg(test)]
+pub(crate) fn run_for_test(launch: Launch<'_>) -> Result<()> {
+    run_recorded(launch, None, None)
+}
+
+// trace:STORY-2690 | ai:codex
+pub(crate) fn run_recorded(
+    launch: Launch<'_>,
+    attempt: Option<&crate::lane_result::Attempt>,
+    on_started: Option<&dyn Fn()>,
+) -> Result<()> {
+    let owned;
+    let attempt = match attempt {
+        Some(attempt) => attempt,
+        None => {
+            owned = crate::lane_result::Attempt::begin(
+                launch.project_root,
+                launch.spec,
+                Some(launch.branch),
+            )?;
+            &owned
+        }
+    };
+    let tree = lease_worktree(launch.project_root, launch.lease_id);
+    let spec = launch.spec;
+    let result = run(launch, attempt, on_started);
+    // Explicit signals outrank later publication/wait failures. Never reuse a
+    // previous attempt's veto when this attempt never spawned.
+    // trace:STORY-2690 | ai:codex
+    if result.is_err() && attempt.is_started() && !attempt.is_finished() {
+        let signals = (
+            crate::punt::read_seat_signal(&tree, spec),
+            crate::punt::read_seat_hold_signal(&tree, spec),
+        );
+        match signals {
+            (Ok(Some(punt)), _) => attempt.finish(
+                crate::lane_result::Kind::Punted,
+                "explicit-punt",
+                &punt.summary(),
+                None,
+                None,
+                true,
+            )?,
+            (Ok(None), Ok(Some(_))) => attempt.finish(
+                crate::lane_result::Kind::Held,
+                "explicit-hold",
+                "manual gate",
+                None,
+                None,
+                true,
+            )?,
+            _ => (),
+        }
+        if attempt.is_finished() {
+            println!("{}", attempt.line()?);
+        }
+    }
+    attempt.finish_result(&result)?;
+    // Signal precedence also governs the launcher exit classification.
+    // trace:STORY-2690 | ai:codex
+    let signal_code = match attempt.kind() {
+        Some(crate::lane_result::Kind::Punted) => Some(PUNTED_EXIT_CODE),
+        Some(crate::lane_result::Kind::Held) => Some(HELD_EXIT_CODE),
+        _ => None,
+    };
+    if let Some(code) = signal_code {
+        return Err(anyhow::Error::new(StandaloneImplementerExit {
+            code,
+            vendor_exit: false,
+            message: result
+                .err()
+                .map(|e| format!("{e:#}"))
+                .unwrap_or_else(|| "lane retained an explicit publication veto".into()),
+        }));
+    }
+    result
+}
+
+// trace:STORY-2690 | ai:codex
+fn run(
+    launch: Launch<'_>,
+    attempt: &crate::lane_result::Attempt,
+    on_started: Option<&dyn Fn()>,
+) -> Result<()> {
     let child_grant_guard = ChildGrantGuard(launch.child_grant);
     let main_root = crate::main_worktree_root_from(launch.project_root);
     claim_spec(launch.project_root, launch.spec);
@@ -1220,7 +1304,7 @@ pub(crate) fn run(launch: Launch<'_>) -> Result<()> {
             .green()
             .bold(),
         format!(
-            "launching {} standalone implementer for {} (waits for the result)",
+            "preparing {} standalone implementer for {} (waits for the result)",
             launch.vendor.as_str(),
             launch.spec
         )
@@ -1245,6 +1329,10 @@ pub(crate) fn run(launch: Launch<'_>) -> Result<()> {
     // vendor, so `aida ps` reads the lane as live (signoff C6), and record
     // it as the lease's worker (BUG-1918).
     let on_spawn = |pid: u32| {
+        attempt.started(pid); // trace:STORY-2690 | ai:codex
+        if let Some(on_started) = on_started {
+            on_started();
+        }
         if let Err(e) =
             crate::session::stamp_lease_active_pid_at(launch.project_root, launch.lease_id, pid)
         {
@@ -1276,6 +1364,12 @@ pub(crate) fn run(launch: Launch<'_>) -> Result<()> {
     // trace:BUG-B6B1278890774EF993D2EBC327862470-050 | ai:claude
     let launch_head = bg::seat_head(&worktree);
     let launch_pr = lookup_pr_with(launch.project_root, launch.branch, 1);
+    attempt.bind(
+        launch.spec,
+        launch.branch,
+        launch_pr.as_ref(),
+        launch_head.as_deref(),
+    )?; // trace:STORY-2690 | ai:codex
     let launch_seat = LaunchSeat {
         pr: launch_pr.as_ref(),
         head: launch_head.as_deref(),
@@ -1344,6 +1438,7 @@ pub(crate) fn run(launch: Launch<'_>) -> Result<()> {
     });
     // trace:STORY-2640 | ai:codex — keep the grant and runner through repair.
     let mut finished = finished?;
+    attempt.check_started()?; // trace:STORY-2690 | ai:codex
     reconcile_signals(&main_root, &worktree, launch.spec)?;
     let host_published = launch.vendor == crate::session::HeadlessVendor::Codex && launch.contained;
     let mut publish_native = host_published;
@@ -1388,6 +1483,7 @@ pub(crate) fn run(launch: Launch<'_>) -> Result<()> {
         branch: &actual_branch,
         ..launch
     };
+    attempt.set_branch(launch.branch)?; // trace:STORY-2690 | ai:codex
     if !host_published
         && !matches!(
             finished.verdict,
@@ -1467,10 +1563,23 @@ pub(crate) fn run(launch: Launch<'_>) -> Result<()> {
             &reason,
         )?;
         let action = if escalated { "punted" } else { "requeued" };
-        println!(
+        eprintln!(
             "implementer: empty-rework pr={pr} head={head} action={action} fast_gate={}",
             crate::lane_fast_gate::marker(&main_root, launch.branch)
         );
+        attempt.finish(
+            if escalated {
+                crate::lane_result::Kind::Punted
+            } else {
+                crate::lane_result::Kind::NoChangeWithReason
+            },
+            "empty-rework",
+            &reason,
+            Some(pr),
+            Some(&head),
+            untested,
+        )?;
+        println!("{}", attempt.line()?);
         return Err(anyhow::Error::new(StandaloneImplementerExit {
             code: if escalated {
                 PUNTED_EXIT_CODE
@@ -1482,7 +1591,13 @@ pub(crate) fn run(launch: Launch<'_>) -> Result<()> {
         }));
     }
     let (outcome, unshipped) = settle_outcome(outcome, &launch_seat, &seat);
-    let (line, mut code) = report(&outcome, status.code(), unshipped.as_ref());
+    let (_, mut code) = report(&outcome, status.code(), unshipped.as_ref());
+    // trace:STORY-2690 | ai:codex
+    let kind = attempt.finish_outcome(&outcome, status.success(), unshipped.is_some(), untested)?;
+    if kind == crate::lane_result::Kind::FailedAfterStart && code == 0 {
+        code = NO_PR_EXIT_CODE;
+    }
+    let line = attempt.line()?;
     if fast_rework {
         code = EMPTY_REWORK_EXIT_CODE;
     }
@@ -1490,7 +1605,11 @@ pub(crate) fn run(launch: Launch<'_>) -> Result<()> {
     // BUG-2436: end the finished lane's lease before the result line goes
     // out, so whoever reads it can launch the review at once.
     // trace:BUG-2436 | ai:claude
-    if finished_lease_ends(&outcome, &seat) {
+    if matches!(
+        kind,
+        crate::lane_result::Kind::Pushed | crate::lane_result::Kind::NoChangeWithReason
+    ) && finished_lease_ends(&outcome, &seat)
+    {
         if let Err(e) = end_finished_lease(launch.project_root, launch.lease_id) {
             eprintln!(
                 "{} the lane finished but lease {} was kept: {e:#}. End it with \
@@ -1506,10 +1625,7 @@ pub(crate) fn run(launch: Launch<'_>) -> Result<()> {
     let os_wrap_off = untested
         && !matches!(outcome, Outcome::Punted { .. })
         && crate::lane_job::lane_ran_without_os_wrap(&main_root, launch.lease_id);
-    println!(
-        "{}",
-        crate::lane_job::with_os_wrap_off(with_untested(line, &outcome, untested), os_wrap_off)
-    );
+    println!("{}", crate::lane_job::with_os_wrap_off(line, os_wrap_off));
     if code == 0 {
         return Ok(());
     }
@@ -1525,10 +1641,10 @@ pub(crate) fn run(launch: Launch<'_>) -> Result<()> {
                 launch.spec, launch.spec
             ),
             Outcome::Held { branch } => {
-                format!("the implementer pushed `{branch}` and is holding the PR for a manual gate")
+                format!("the implementer held `{branch}` for a manual gate")
             }
             _ => format!(
-                "the implementer exited ({}) without opening a PR for {}{}{}; its log is {}",
+                "the implementer exited ({}) without publishing a new head for {}{}{}; its log is {}",
                 status
                     .code()
                     .map(|c| format!("code {c}"))

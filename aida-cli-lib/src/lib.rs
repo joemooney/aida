@@ -285,6 +285,7 @@ mod solo_cmd;
 mod stakeholder_role;
 // trace:STORY-1662 | ai:claude
 mod standalone_implementer;
+mod lane_result; // trace:STORY-2690 | ai:codex
 mod status_awaiting;
 mod status_cmd;
 mod status_prs;

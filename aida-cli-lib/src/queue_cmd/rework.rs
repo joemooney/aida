@@ -738,6 +738,33 @@ pub(crate) fn handle_queue_rework(
         }
     }
 
+    // Refuse predictable routing holds before any status or comment write.
+    // The same owner projects the shelf cleanup; the live check below catches
+    // changes during routing. trace:STORY-2690 | ai:codex
+    if for_role_resolved.as_deref() != Some("reviewer") {
+        let mut projected = req.clone();
+        if let Some(target) = &target_status {
+            if current_status == RequirementStatus::NeedsAttention && target != &current_status {
+                crate::requeue::return_to_flight(
+                    &mut projected,
+                    &current_status,
+                    target,
+                    &crate::requeue::ReturnCtx {
+                        via: "rework routing preflight".into(),
+                        via_slug: "queue-rework",
+                        author: get_default_author(),
+                        clear_escalation: crate::requeue::caller_may_clear_escalation(),
+                        reason: reason.map(str::to_owned),
+                        automated: false,
+                    },
+                );
+            } else {
+                projected.status = target.clone();
+            }
+        }
+        require_rework_pickable(&projected, &store)?;
+    }
+
     // Decide recurrence before return-to-flight clears review evidence and
     // emits its audit/event: a refused blind retry never leaves the shelf.
     // trace:BUG-2502 | ai:codex
@@ -939,6 +966,19 @@ pub(crate) fn handle_queue_rework(
             record_role_activity(&spec_id, "rework");
             update_manifest_for_status(&spec_id, &format!("{:?}", new_status));
         }
+    }
+
+    // A successful status write is not proof that a worker can pick it up.
+    // Validate the live record before moving queue rows or reporting success.
+    // trace:STORY-2690 | ai:codex
+    if for_role_resolved.as_deref() != Some("reviewer") {
+        let live = storage.load()?;
+        let current = live
+            .requirements
+            .iter()
+            .find(|r| r.id == req_id)
+            .context("rework spec disappeared before routing")?;
+        require_rework_pickable(current, &live)?;
     }
 
     // Persist the acceptance delta only after the flip succeeded, so a failed
@@ -1398,4 +1438,97 @@ pub(super) fn handle_queue_command(
         _ => unreachable!("dispatcher selected another queue subcommand"),
     }
     Ok(())
+}
+
+// Preserve human escalation and all shared pickup gates even for open PRs.
+// trace:STORY-2690 | ai:codex
+pub(crate) fn require_rework_pickable(
+    req: &Requirement,
+    store: &aida_core::RequirementsStore,
+) -> Result<()> {
+    if req
+        .tags
+        .iter()
+        .any(|tag| tag.eq_ignore_ascii_case("needs-human"))
+    {
+        anyhow::bail!(
+            "rework-routing-refused reason=needs-human: a human must clear the escalation"
+        );
+    }
+    let policy = super::work::queue_drain_pickup_policy(req, store, false, None);
+    let code = match &policy {
+        super::work::QueueFreshPickup::Pickable => return Ok(()),
+        super::work::QueueFreshPickup::Deferred => "deferred",
+        super::work::QueueFreshPickup::Archived => "archived",
+        super::work::QueueFreshPickup::NeedsGuidedOrOperatorSession(_) => "supervised-mode",
+        super::work::QueueFreshPickup::NeedsReleaseOperatorSession => "release-operator",
+        super::work::QueueFreshPickup::AwaitingMerge => "awaiting-merge",
+        super::work::QueueFreshPickup::AwaitingRework => "awaiting-rework",
+        super::work::QueueFreshPickup::Terminal(_) => "terminal",
+        super::work::QueueFreshPickup::Blocked(reason) => match reason {
+            aida_core::pickability::BlockedReason::NeedsTriage => "needs-triage",
+            aida_core::pickability::BlockedReason::HumanOnly => "human-only",
+            aida_core::pickability::BlockedReason::KnowledgeType { .. } => "knowledge-type",
+            _ => "blocked-by",
+        },
+    };
+    anyhow::bail!(
+        "rework-routing-refused reason={code}: {}",
+        super::work::queue_fresh_pickup_reason_label(&policy).unwrap_or_default()
+    );
+}
+
+#[cfg(test)]
+mod story_2690_tests {
+    use super::*;
+
+    #[test]
+    fn story_2690_routing_preserves_pickup_and_human_gates() {
+        let mut store = aida_core::RequirementsStore::default();
+        let mut req = Requirement::new("rework".into(), String::new());
+        for status in [
+            RequirementStatus::Approved,
+            RequirementStatus::InProgress,
+            RequirementStatus::Planned,
+        ] {
+            req.status = status;
+            assert!(require_rework_pickable(&req, &store).is_ok());
+        }
+        req.status = RequirementStatus::NeedsAttention;
+        assert!(require_rework_pickable(&req, &store)
+            .unwrap_err()
+            .to_string()
+            .contains("reason=needs-triage"));
+        req.status = RequirementStatus::Approved;
+        req.tags.insert("needs-human".into());
+        assert!(require_rework_pickable(&req, &store)
+            .unwrap_err()
+            .to_string()
+            .contains("reason=needs-human"));
+        req.tags.clear();
+        req.deferred = true;
+        assert!(require_rework_pickable(&req, &store)
+            .unwrap_err()
+            .to_string()
+            .contains("reason=deferred"));
+        req.deferred = false;
+        req.human_only = true;
+        assert!(require_rework_pickable(&req, &store)
+            .unwrap_err()
+            .to_string()
+            .contains("reason=human-only"));
+        req.human_only = false;
+        let blocker = Requirement::new("blocker".into(), String::new());
+        req.relationships.push(aida_core::Relationship {
+            rel_type: aida_core::RelationshipType::BlockedBy,
+            target_id: blocker.id,
+            created_at: None,
+            created_by: None,
+        });
+        store.requirements.push(blocker);
+        assert!(require_rework_pickable(&req, &store)
+            .unwrap_err()
+            .to_string()
+            .contains("reason=blocked-by"));
+    }
 }
