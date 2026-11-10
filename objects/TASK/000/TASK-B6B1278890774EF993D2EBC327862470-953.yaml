@@ -23,7 +23,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-07T20:45:16.684639Z
-modified_at: 2026-11-10T18:52:41.906660491Z
+modified_at: 2026-11-10T19:35:19.834250414Z
 req_type: Task
 relationships:
 - rel_type: Child
@@ -538,6 +538,18 @@ comments:
   modified_at: 2026-11-10T18:52:41.906660491Z
   session_id: 01a1c6cc9ddb
   harness_version: codex-cli 0.167.0
+- id: 01a1c6f5-301a-7990-94f3-a33826ad1e55
+  author: joe
+  content: |-
+    CI FAILURES at 351ad0bfb860 (run 42880734867). Fix exactly these before pushing; a push without a code change for them will fail again and must not be made:
+    error: test run failed
+            FAIL  aida-cli-lib status_sections::bug_2149_2150_standalone_reviewer_tests::standalone_reviewer_reaps_its_finished_review_once_the_verdict_is_collected
+        thread 'status_sections::bug_2149_2150_standalone_reviewer_tests::standalone_reviewer_reaps_its_finished_review_once_the_verdict_is_collected' (246519) panicked at aida-cli-lib/src/test_env.rs:109:5:
+        thread 'status_sections::bug_2149_2150_standalone_reviewer_tests::standalone_reviewer_reaps_its_finished_review_once_the_verdict_is_collected' (246523) panicked at aida-cli-lib/src/tests/bug_2149_2150_standalone_reviewer_tests.
+  created_at: 2026-11-10T19:35:19.834250414Z
+  modified_at: 2026-11-10T19:35:19.834250414Z
+  session_id: 01a1c530-c917-7f13-ab81-f6b5e1d1cd30
+  harness_version: 2.1.322 (Claude Code)
 history:
 - id: 01a1b7c2-6b69-7b02-bd8c-8f40aee2972d
   author: joe
