@@ -8,7 +8,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-10T03:07:46.884496242Z
-modified_at: 2026-11-10T20:57:55.241046870Z
+modified_at: 2026-11-10T20:57:56.472595927Z
 req_type: Bug
 comments:
 - id: 01a1c4af-2f66-7590-be69-dad5e180b9a4
@@ -168,6 +168,20 @@ comments:
   content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: Full sweep: required GitLab pagination and three second-page regressions remain absent; seven CI lanes pending. BUG-2516 (bug protocol): met, two test files touched.. No triage reason was given.'
   created_at: 2026-11-10T20:57:55.241043231Z
   modified_at: 2026-11-10T20:57:55.241043231Z
+  session_id: 01a1c530-c917-7f13-ab81-f6b5e1d1cd30
+  harness_version: 2.1.322 (Claude Code)
+- id: 01a1c740-d177-7d62-98a0-234e8a58f454
+  author: joe
+  content: |-
+    REVIEW FINDINGS TO ADDRESS (BUG-2516):
+    Verdict: CHANGES REQUESTED
+    Reviewed commit: c9976dbed720
+    Recorded: 2026-11-10T20:49:12.660704863+00:00
+    Findings:
+    1. [P2] aida-cli-lib/src/forge.rs:2984-2988: Implement complete open-MR pagination required by the exact 11:56 UTC advisor ruling (PR comment 6766672762) and latest rework instruction. Only the first 100 MRs are fetched; a full nonmatching page becomes Unknown forever, so pull/reconcile cannot complete specs in projects with >=100 open MRs even when no open deliverable owns them. Follow pages to exhaustion, preserve Unknown on failed/incomplete pages, and add fake-glab tests for a full nonmatching page followed by an empty final page allowing completion, a branch-only owning MR on page 2 holding completion, and a failed second page yielding Unknown.
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
+  created_at: 2026-11-10T20:57:56.343907599Z
+  modified_at: 2026-11-10T20:57:56.343907599Z
   session_id: 01a1c530-c917-7f13-ab81-f6b5e1d1cd30
   harness_version: 2.1.322 (Claude Code)
 history:
