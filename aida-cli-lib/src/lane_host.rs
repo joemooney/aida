@@ -513,6 +513,27 @@ mod tests {
     use super::*;
     use crate::vendors::host_diagnostics::{auth_check, codex_config_check};
     #[test]
+    // FAQ-151's canonical description is mirrored in this reviewed checklist.
+    // trace:STORY-b6b1278890774ef993d2ebc327862470-565.acbeedc3 | ai:codex
+    fn faq_pointer_retains_manual_steps_and_required_cache_probe() {
+        let faq = include_str!("../../docs/advanced/lane-host-checklist.md");
+        for required in [
+            "aida doctor --lane-host",
+            "aida doctor --lane-host --fix",
+            "docs/cli/07-project-setup.md#lane-host-readiness",
+            "Configure SSH access",
+            "Clone the project",
+            "Log in with the selected vendor CLI",
+            "Fetch dependencies on the host",
+            "required finding with a fix hint",
+        ] {
+            assert!(faq.contains(required), "FAQ-151 missing {required}");
+        }
+        assert!(!faq.contains("in-sandbox cache reachability remains advisory"));
+    }
+
+    #[test]
+    // trace:STORY-b6b1278890774ef993d2ebc327862470-565.ace1a25e | ai:codex
     fn policy_errors_and_uncontained_posture_refuse() {
         use crate::session::ContainmentPosture::*;
         assert!(!posture_check(Ok(None)).pass);
@@ -523,6 +544,7 @@ mod tests {
         assert!(native.detail.contains("not AIDA-contained"));
     }
     #[test]
+    // trace:STORY-b6b1278890774ef993d2ebc327862470-565.ace1a25e | ai:codex
     fn cache_never_claims_host_installation_proves_lane_reachability() {
         let check = cache_reachability_check(Err(anyhow::anyhow!("unreachable")));
         assert!(check.required);
@@ -532,6 +554,7 @@ mod tests {
         assert!(cache_reachability_check(Ok(())).pass);
     }
     #[test]
+    // trace:STORY-b6b1278890774ef993d2ebc327862470-565.ace1a25e | ai:codex
     fn release_freshness_requires_current_clean_version_and_live_evidence() {
         assert!(release_binary_check("1.2.3", Some("v1.2.3"), false).pass);
         for (latest, dirty) in [
@@ -546,12 +569,14 @@ mod tests {
         }
     }
     #[test]
+    // trace:STORY-b6b1278890774ef993d2ebc327862470-565.ace1a25e | ai:codex
     fn explicit_off_refuses_and_unset_uses_lane_default() {
         assert!(!wrap_check(Some(false)).pass);
         assert!(wrap_check(None).pass);
         assert!(wrap_check(Some(true)).pass);
     }
     #[test]
+    // trace:STORY-b6b1278890774ef993d2ebc327862470-565.ace1a25e | ai:codex
     fn missing_or_blocked_bwrap_refuses() {
         use crate::session::BwrapAvailability::*;
         assert!(!bwrap_check(NotInstalled).pass);
@@ -564,6 +589,7 @@ mod tests {
         assert!(bwrap_check(Ok).pass);
     }
     #[test]
+    // trace:STORY-b6b1278890774ef993d2ebc327862470-565.ace1a25e | ai:codex
     fn codex_requires_explicit_current_preset() {
         let valid = "sandbox_mode='workspace-write'\napproval_policy='never'\n[sandbox_workspace_write]\nnetwork_access=true\nwritable_roots=[]\n";
         assert!(codex_config_check(Some(valid)).pass);
@@ -584,6 +610,7 @@ mod tests {
         );
     }
     #[test]
+    // trace:STORY-b6b1278890774ef993d2ebc327862470-565.ace1a25e | ai:codex
     fn credential_presence_is_not_assumed() {
         let env = Environment::default();
         for vendor in ["codex", "claude", "agy"] {
@@ -661,6 +688,7 @@ mod tests {
     }
 
     #[test]
+    // trace:STORY-b6b1278890774ef993d2ebc327862470-565.ace1a25e | ai:codex
     fn store_needs_both_live_and_local_evidence() {
         assert!(!matching_store(None, None));
         assert!(!matching_store(Some("abc"), None));
@@ -668,6 +696,7 @@ mod tests {
         assert!(matching_store(Some("abc"), Some("abc")));
     }
     #[test]
+    // trace:STORY-b6b1278890774ef993d2ebc327862470-565.ac4b8ea3 | ai:codex
     fn relocated_cargo_home_is_used_for_checks_and_fixes() {
         use std::os::unix::fs::PermissionsExt;
         let relocated = tempfile::tempdir().unwrap();
@@ -687,6 +716,7 @@ mod tests {
     }
 
     #[test]
+    // trace:STORY-b6b1278890774ef993d2ebc327862470-565.ac4b8ea3 | ai:codex
     fn cargo_fix_needs_installed_wrapper_and_preserves_custom_config() {
         use std::os::unix::fs::PermissionsExt;
         let home = tempfile::tempdir().unwrap();
@@ -730,6 +760,7 @@ mod tests {
         assert_eq!(args.fix.as_deref(), Some("id-collisions"));
     }
     #[test]
+    // trace:STORY-b6b1278890774ef993d2ebc327862470-565.ace1a25e | ai:codex
     fn configured_cache_can_pass_without_claiming_lane_reachability() {
         use std::os::unix::fs::PermissionsExt;
         let home = tempfile::tempdir().unwrap();
@@ -779,6 +810,7 @@ mod tests {
     }
 
     #[test]
+    // trace:STORY-b6b1278890774ef993d2ebc327862470-565.ace1a25e | ai:codex
     fn agy_auth_source_is_required_with_a_login_hint() {
         for vendor in ["agy", "antigravity"] {
             let row = auth_check(vendor, None, &Environment::default());
@@ -857,6 +889,7 @@ mod tests {
         .is_err());
     }
     #[test]
+    // trace:STORY-b6b1278890774ef993d2ebc327862470-565.ac4b8ea3 | ai:codex
     fn relocated_codex_home_is_checked_and_fixed_consistently() {
         let home = tempfile::tempdir().unwrap();
         let relocated = tempfile::tempdir().unwrap();
@@ -880,6 +913,13 @@ mod tests {
         let once = std::fs::read(relocated.path().join("config.toml")).unwrap();
         // The same predicate used by --fix now sees the effective config.
         assert!(user_preset_matches(home.path()));
+        crate::config_cmd::apply_permission_posture(
+            project.path(),
+            crate::cli::ConfigPermissionTier::Contained,
+            crate::config_cmd::PermissionPostureScope::User,
+        )
+        .unwrap();
+        assert_eq!(std::fs::read_dir(project.path()).unwrap().count(), 0);
         assert_eq!(
             once,
             std::fs::read(relocated.path().join("config.toml")).unwrap()
@@ -921,6 +961,7 @@ mod tests {
         assert!(preflight(root.path(), "claude", false).is_err());
     }
     #[test]
+    // trace:STORY-b6b1278890774ef993d2ebc327862470-565.ac1692c8 | ai:codex
     fn queue_work_no_human_refuses_before_queue_lease_or_worktree_writes() {
         if let Some(output) = crate::test_env::run_path_isolated_test_output() {
             let stdout = String::from_utf8_lossy(&output.stdout);

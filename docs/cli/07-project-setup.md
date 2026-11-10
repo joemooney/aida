@@ -834,6 +834,8 @@ tokens, both unfiltered and under `--category permission-posture`.
 
 <!-- trace:STORY-2642 | ai:codex -->
 Run `aida doctor --lane-host` on a machine before starting automated lanes.
+The [FAQ-151 checklist](../advanced/lane-host-checklist.md) retains the command
+pointer and remaining manual SSH, clone, login and system setup steps.
 It prints PASS/FAIL rows and a fix hint for each failure; `--json` emits the
 same checks as one array. Required failures exit nonzero. Advisory NOTE rows
 carry `required: false` in JSON and do not fail the command.

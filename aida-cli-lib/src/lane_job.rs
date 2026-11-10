@@ -2449,3 +2449,7 @@ mod fast_gate_job_tests {
         );
     }
 }
+
+#[cfg(all(test, target_os = "linux"))]
+#[path = "tests/lane_host/cache_probe.rs"]
+mod doctor_cache_probe_tests;

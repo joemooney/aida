@@ -145,10 +145,17 @@ mod tests {
             .path()
             .join(".gemini/antigravity-cli/antigravity-oauth-token");
         std::fs::create_dir_all(path.parent().unwrap()).unwrap();
+        std::fs::create_dir(&path).unwrap();
+        assert!(!auth_check("antigravity", Some(home.path()), &env).pass);
+        std::fs::remove_dir(&path).unwrap();
         std::fs::write(&path, "").unwrap();
         assert!(!auth_check("agy", Some(home.path()), &env).pass);
         std::fs::write(path, "fixture-token").unwrap();
-        assert!(auth_check("agy", Some(home.path()), &env).pass);
+        let finding = auth_check("agy", Some(home.path()), &env);
+        assert!(finding.pass);
+        let json = serde_json::to_value(&finding).unwrap();
+        assert_eq!(json["required"], true);
+        assert!(json["fix"].as_str().unwrap().contains("OAuth login"));
         assert!(
             auth_check(
                 aida_core::vendors::LaunchVendor::Agy.as_str(),
