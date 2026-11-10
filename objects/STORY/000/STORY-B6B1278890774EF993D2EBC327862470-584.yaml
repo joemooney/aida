@@ -18,7 +18,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-08T02:58:08.667753563Z
-modified_at: 2026-11-10T01:44:31.476195263Z
+modified_at: 2026-11-10T01:44:32.387055498Z
 req_type: Story
 tags:
 - area:human-wait
@@ -528,6 +528,15 @@ comments:
   modified_at: 2026-11-10T01:44:23.060464743Z
   session_id: 01a1beff-fc3b-78e2-93e2-9b0c283b0339
   harness_version: 2.1.319 (Claude Code)
+- id: 01a1c320-d983-71c1-a4c8-090de80f239b
+  author: joe
+  content: |-
+    CI FAILURES at 0e62a236d8a2 (run 42734987065). Fix exactly these before pushing; a push without a code change for them will fail again and must not be made:
+    error: test run failed
+            FAIL  aida-generate-types::bin/aida-generate-types tests::generated_types_match_checked_in_contract
+        thread 'tests::generated_types_match_checked_in_contract' (103846) panicked at aida-generate-types/src/main.rs:181:9:
+  created_at: 2026-11-10T01:44:32.387055498Z
+  modified_at: 2026-11-10T01:44:32.387055498Z
 history:
 - id: 01a1b9c5-1aa6-78e3-9355-9af12a0ce44c
   author: joe
