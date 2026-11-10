@@ -19,7 +19,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-10T03:05:40.778642968Z
-modified_at: 2026-11-10T03:52:36.545668654Z
+modified_at: 2026-11-10T04:24:06.173175599Z
 req_type: Story
 comments:
 - id: 01a1c370-9b5f-7770-a921-e48f45e2aecb
@@ -43,6 +43,32 @@ comments:
   modified_at: 2026-11-10T03:52:36.545668654Z
   session_id: 01a1c371f7a7
   harness_version: codex-cli 0.167.0
+- id: 01a1c3b2-ef1d-76b2-92f9-3088940cdb50
+  author: joe
+  content: |-
+    CI FAILURES at 0d5e2463bc7f (run 42752853121). Fix exactly these before pushing; a push without a code change for them will fail again and must not be made:
+    error: test run failed
+            FAIL  aida-cli-lib gate::ledger::tests::a_ledger_only_spec_record_still_files_its_findings_on_completion
+            FAIL  aida-cli-lib gate::rework_hold_release::bug_2123_tests::a_busy_overlapping_release_keeps_the_winners_clearance
+            FAIL  aida-cli-lib gate::rework_hold_release::bug_2123_tests::a_contended_hold_lock_refuses_placement_and_release
+            FAIL  aida-cli-lib gate::rework_hold_release::bug_2123_tests::an_approval_of_one_spec_does_not_release_an_unanswered_refusal_on_another
+            FAIL  aida-cli-lib gate::rework_hold_release::bug_2123_tests::an_overlapping_release_keeps_the_winners_clearance
+            FAIL  aida-cli-lib gate::rework_hold_release::bug_2123_tests::approvals_answering_every_refusal_release_and_record_each
+            FAIL  aida-cli-lib gate::rework_hold_release::bug_2123_tests::a_refused_second_pass_supersedes_its_clearance
+            FAIL  aida-cli-lib gate::rework_hold_release::bug_2123_tests::a_withdrawn_clearance_keeps_the_hold_armed
+            FAIL  aida-cli-lib gate::rework_hold_release::bug_2186_tests::approval_at_a_new_head_releases_in_place_from_the_archived_refusal
+            FAIL  aida-cli-lib gate::rework_hold_release::bug_2186_tests::a_refusal_recorded_after_the_approval_stays_held
+            FAIL  aida-cli-lib gate::rework_hold_release::bug_2186_tests::auto_release_retry_releases_after_the_in_place_attempt_failed
+            FAIL  aida-cli-lib leases::bug_1774_corpus_merge_gate_tests::a_conflicting_corpus_at_the_head_refuses
+            FAIL  aida-cli-lib leases::bug_1774_corpus_merge_gate_tests::an_approval_at_the_new_head_after_a_move_releases
+            FAIL  aida-cli-lib leases::bug_1774_corpus_merge_gate_tests::bug_2474_newest_same_head_verdict_decides_across_pr_and_spec_keys
+            FAIL  aida-cli-lib leases::bug_1774_corpus_merge_gate_tests::bug_2474_supersession_requires_ordered_same_head_evidence
+            FAIL  aida-cli-lib leases::bug_1774_corpus_merge_gate_tests::merge_change_refuses_a_hand_written_refusal_then_merges_on_release
+            FAIL  aida-cli-lib pr_merge_gate::task_168_pr_verdict_metadata_tests::stamps_pr_verdict_metadata_without_losing_reviewer_fields
+            FAIL  aida-cli-lib status_sections::queue_work_tests::done_spec_with_outstanding_refusal_is_awaiting_rework_not_awaiting_merge
+        thread 'gate::ledger::tests::a_ledger_only_spec_record_still_files_its_findings_on_completion' (70617) panicked at aida-cli-lib/src/gate/ledger/tests.rs:1249:5:
+  created_at: 2026-11-10T04:24:06.173175599Z
+  modified_at: 2026-11-10T04:24:06.173175599Z
 history:
 - id: 01a1c370-a92f-7a21-946e-dd69061fc475
   author: joe
