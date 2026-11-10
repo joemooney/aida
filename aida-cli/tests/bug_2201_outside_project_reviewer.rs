@@ -29,6 +29,9 @@ if [ -n "$BUG2201_FORCE_DENY" ] || ! grep -qF '"Bash(aida *)"' "$BUG2201_ARGV_DU
   printf '%s\n' '{"type":"result","subtype":"success","is_error":false,"permission_denials":[{"tool_name":"Bash","tool_use_id":"t1","tool_input":{"command":"aida review record --pr 7 --verdict approved"}},{"tool_name":"Read","tool_use_id":"t2","tool_input":{"file_path":"/primary/.aida-store/objects/x.yaml"}}]}'
   exit 0
 fi
+# trace:BUG-2517 | ai:codex
+# Fetching used the local origin; recording now needs a pinned forge identity.
+git remote set-url origin https://github.com/test/repo.git
 aida review record "$BUG2201_SPEC" --pr 7 --sha "$BUG2201_SHA" --verdict request-changes --summary "fixture review" --finding "fixture finding" >&2
 rc=$?
 printf '{"type":"result","subtype":"success","is_error":false,"permission_denials":[],"result":"record rc=%s"}\n' "$rc"
@@ -231,6 +234,7 @@ fn fixture_with(reviewer_config: bool) -> Fixture {
     // commit, and `review record --sha` now refuses anything but the head
     // under review — so the reviewer's sha is the HEAD just pushed as PR-7.
     fx.sha = git(&fx.repo, &["rev-parse", "HEAD"]);
+    support::pinned_review_head(&fx.bin, 7, &fx.sha);
     let review = as_advisor(&fx)
         .args([
             "add",
@@ -340,7 +344,7 @@ fn contained_reviewer_in_outside_project_records_its_verdict() {
     let record = fx
         .base
         .join("relay-pr-7/.aida/review-verdicts")
-        .join(format!("{}.json", fx.spec));
+        .join("PR-7.json");
     assert!(record.is_file(), "the reviewer recorded its verdict: {log}");
     // The phase-3 handshake at the launcher's anchor (the fake vendor runs
     // outside Claude Code's OS sandbox, so the write lands in place).
@@ -351,8 +355,8 @@ fn contained_reviewer_in_outside_project_records_its_verdict() {
     );
     let body: serde_json::Value =
         serde_json::from_str(&std::fs::read_to_string(&verdict).unwrap()).unwrap();
-    // A request-changes verdict: an approval would also need forge metadata
-    // for its author gate, which this pure-git fixture has none of.
+    // A request-changes verdict: the pinned fixture supplies the current
+    // head, but no author evidence for an approval.
     assert!(
         body["verdict"]
             .as_str()
@@ -360,8 +364,8 @@ fn contained_reviewer_in_outside_project_records_its_verdict() {
         "{body}"
     );
     // Not the exit status: BUG-2149's collection then checks the verdict
-    // against the PR's live head through a pinned forge read, which a
-    // pure-git fixture cannot answer. What BUG-2201 broke is upstream of it.
+    // against the PR's live head through the launcher's local origin, which
+    // cannot answer a forge read. What BUG-2201 broke is upstream of it.
     assert!(!log.contains("permission layer denied"), "{log}");
     assert!(!log.contains("no agent identity is set"), "{log}");
 }

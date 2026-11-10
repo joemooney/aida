@@ -352,3 +352,21 @@ pub fn contained_lane_project(repo: &Path) {
     )
     .unwrap();
 }
+
+/// Supply the current head for one pinned GitHub change without network access.
+// trace:BUG-2517 | ai:codex
+#[allow(dead_code)]
+pub fn pinned_review_head(bin: &Path, number: u64, head: &str) {
+    use std::os::unix::fs::PermissionsExt;
+    std::fs::create_dir_all(bin).unwrap();
+    let body = serde_json::json!({
+        "url": format!("https://github.com/test/repo/pull/{number}"),
+        "state": "OPEN", "headRefOid": head, "labels": []
+    });
+    let script = format!(
+        "#!/bin/sh\ncase \"$*\" in\n  'pr view {number} -R test/repo --json url,state,headRefOid,labels') printf '%s\\n' '{body}' ;;\n  *) exit 1 ;;\nesac\n"
+    );
+    let path = bin.join("gh");
+    std::fs::write(&path, script).unwrap();
+    std::fs::set_permissions(path, std::fs::Permissions::from_mode(0o755)).unwrap();
+}

@@ -44,6 +44,10 @@ fn git(dir: &Path, args: &[&str]) -> Output {
 fn aida(fixture: &Fixture, args: &[&str]) -> Output {
     let mut cmd = Command::new(env!("CARGO_BIN_EXE_aida"));
     cmd.current_dir(&fixture.repo)
+        .env(
+            "PATH",
+            format!("{}:/usr/bin:/bin", fixture.home.join("bin").display()),
+        )
         .env("HOME", &fixture.home)
         .env("AIDA_TELEMETRY", "0")
         .env("AIDA_SESSION_ROLE", "advisor")
@@ -185,11 +189,23 @@ struct Parked {
 /// selected by a lens token.
 fn parked_fixture(fixture: &Fixture) -> Parked {
     let shelved = add_in_progress(fixture, "BUG-1771 shelved fixture");
-    // A refusing verdict insists on `--pr`, and resolving that PR's head needs
-    // a forge — so the fixture pins the sha to its own HEAD instead.
+    // trace:BUG-2517 | ai:codex
+    // A named change requires a fresh, pinned forge head, even with --sha.
     let head = String::from_utf8_lossy(&git(&fixture.repo, &["rev-parse", "HEAD"]).stdout)
         .trim()
         .to_string();
+    assert!(git(
+        &fixture.repo,
+        &[
+            "remote",
+            "add",
+            "origin",
+            "https://github.com/test/repo.git"
+        ]
+    )
+    .status
+    .success());
+    support::pinned_review_head(&fixture.home.join("bin"), 1, &head);
     ok(
         "aida review record",
         aida(
@@ -209,6 +225,10 @@ fn parked_fixture(fixture: &Fixture) -> Parked {
             ],
         ),
     );
+    // Keep subsequent spec filing offline, as before the review fixture.
+    assert!(git(&fixture.repo, &["remote", "remove", "origin"])
+        .status
+        .success());
     let needs_decision = add_in_progress(fixture, "BUG-1771 needs-decision fixture");
     ok(
         "aida punt",
