@@ -372,16 +372,14 @@ pub(crate) struct TeamArgs {
 
 fn run_team(
     matches: &clap::ArgMatches,
-    ctx: &crate::command_registry::DispatchCtx,
-) -> anyhow::Result<crate::command_registry::Flow> {
+    ctx: &crate::cmdkit::DispatchCtx,
+) -> anyhow::Result<crate::cmdkit::Flow> {
     use crate::*;
     let args = <TeamArgs as clap::FromArgMatches>::from_arg_matches(matches)?;
     match &ctx.store {
-        None => Ok(crate::command_registry::Flow::Continue),
-        Some(crate::command_registry::StoreCtx::Distributed { .. }) => {
-            Ok(crate::command_registry::Flow::Continue)
-        }
-        Some(crate::command_registry::StoreCtx::Git {
+        None => Ok(crate::cmdkit::Flow::Continue),
+        Some(crate::cmdkit::StoreCtx::Distributed { .. }) => Ok(crate::cmdkit::Flow::Continue),
+        Some(crate::cmdkit::StoreCtx::Git {
             store_path,
             backend,
         }) => {
@@ -391,7 +389,7 @@ fn run_team(
                 TeamArgs { json, cmd } => {
                     // trace:STORY-640 | ai:claude
                     // trace:STORY-646 | ai:claude
-                    return crate::command_registry::returned(match cmd {
+                    return crate::cmdkit::returned(match cmd {
                         None => self::handle_team_command(store_path, *json),
                         Some(TeamCommand::SetRole { user, role }) => {
                             self::handle_team_set_role(store_path, user, role)
@@ -411,9 +409,9 @@ fn run_team(
                     });
                 }
             }
-            Ok(crate::command_registry::Flow::Continue)
+            Ok(crate::cmdkit::Flow::Continue)
         }
-        Some(crate::command_registry::StoreCtx::Legacy {
+        Some(crate::cmdkit::StoreCtx::Legacy {
             storage,
             requirements_path,
         }) => {
@@ -430,21 +428,21 @@ fn run_team(
                 );
                 }
             }
-            Ok(crate::command_registry::Flow::Continue)
+            Ok(crate::cmdkit::Flow::Continue)
         }
     }
 }
 
 // trace:STORY-1728 | ai:claude
-pub(crate) static TEAM: crate::command_registry::CommandReg = crate::command_registry::CommandReg {
+pub(crate) static TEAM: crate::cmdkit::CommandReg = crate::cmdkit::CommandReg {
     name: "team",
     help_after: "notify",
     command: <TeamArgs as clap::CommandFactory>::command,
-    policy: |_| crate::command_registry::CmdPolicy {
+    policy: |_| crate::cmdkit::CmdPolicy {
         stakeholder: crate::stakeholder_role::StakeholderAction::Write,
         per_write_auto_push: false,
         skip_role_restore_prompt: false,
         team_identity_write: false,
     },
-    run: crate::command_registry::Handler::Store(run_team),
+    run: crate::cmdkit::Handler::Store(run_team),
 };

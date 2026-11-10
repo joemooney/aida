@@ -472,9 +472,7 @@ pub(crate) fn json_capability_gate(argv: &mut Vec<String>) -> Result<()> {
         // --format json`) names that option, not just `--format human|toon`.
         // trace:BUG-2189 | ai:claude
         if selected.value_source("format") == Some(clap::parser::ValueSource::CommandLine) {
-            if let Some(error) =
-                crate::command_registry::renamed_format_error(&path[1..].join(" "), "json")
-            {
+            if let Some(error) = crate::cmdkit::renamed_format_error(&path[1..].join(" "), "json") {
                 return Err(error);
             }
         }
@@ -2095,7 +2093,7 @@ pub(crate) fn run() -> Result<()> {
     // `_bg-fetch` / `away` / `home` arms they replaced ran.
     // trace:STORY-1728 | ai:claude
     let Command::Registered(invocation) = &cli.command;
-    if invocation.run_early(&cli.globals)? == crate::command_registry::Flow::Return {
+    if invocation.run_early(&cli.globals)? == crate::cmdkit::Flow::Return {
         return Ok(());
     }
     drop(preflight_phase);
@@ -2273,13 +2271,11 @@ pub(crate) fn run() -> Result<()> {
     match &cli.command {
         // trace:STORY-1728 | ai:claude
         Command::Registered(invocation) => {
-            let store = crate::command_registry::StoreCtx::Legacy {
+            let store = crate::cmdkit::StoreCtx::Legacy {
                 storage: &storage,
                 requirements_path: &requirements_path,
             };
-            if invocation.run_store(store, Some(&cli.globals))?
-                == crate::command_registry::Flow::Return
-            {
+            if invocation.run_store(store, Some(&cli.globals))? == crate::cmdkit::Flow::Return {
                 return Ok(());
             }
         }

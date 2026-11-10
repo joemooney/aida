@@ -2031,25 +2031,21 @@ pub(crate) struct FleetArgs {
 
 // STORY-1700: the drive tick reads the AIDA home and the run dirs and
 // opens the store itself only for spec lookups. trace:STORY-1700 | ai:claude
-fn run_fleet(
-    matches: &clap::ArgMatches,
-    _ctx: &crate::command_registry::DispatchCtx,
-) -> anyhow::Result<()> {
+fn run_fleet(matches: &clap::ArgMatches, _ctx: &crate::cmdkit::DispatchCtx) -> anyhow::Result<()> {
     let args = <FleetArgs as clap::FromArgMatches>::from_arg_matches(matches)?;
     handle_fleet(&args.action)
 }
 
 // trace:STORY-1728 | ai:claude
-pub(crate) static FLEET: crate::command_registry::CommandReg =
-    crate::command_registry::CommandReg {
-        name: "fleet",
-        help_after: "mandate",
-        command: <FleetArgs as clap::CommandFactory>::command,
-        policy: |_| crate::command_registry::CmdPolicy {
-            stakeholder: crate::stakeholder_role::StakeholderAction::Write,
-            per_write_auto_push: false,
-            skip_role_restore_prompt: false,
-            team_identity_write: false,
-        },
-        run: crate::command_registry::Handler::Early(run_fleet),
-    };
+pub(crate) static FLEET: crate::cmdkit::CommandReg = crate::cmdkit::CommandReg {
+    name: "fleet",
+    help_after: "mandate",
+    command: <FleetArgs as clap::CommandFactory>::command,
+    policy: |_| crate::cmdkit::CmdPolicy {
+        stakeholder: crate::stakeholder_role::StakeholderAction::Write,
+        per_write_auto_push: false,
+        skip_role_restore_prompt: false,
+        team_identity_write: false,
+    },
+    run: crate::cmdkit::Handler::Early(run_fleet),
+};
