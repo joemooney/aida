@@ -84,7 +84,7 @@ pub(crate) struct ContractArgs {
 
 fn run_contract(
     matches: &clap::ArgMatches,
-    _ctx: &crate::command_registry::DispatchCtx,
+    _ctx: &crate::cmdkit::DispatchCtx,
 ) -> anyhow::Result<()> {
     use crate::*;
     let args = <ContractArgs as clap::FromArgMatches>::from_arg_matches(matches)?;
@@ -93,16 +93,15 @@ fn run_contract(
 }
 
 // trace:STORY-1728 | ai:claude
-pub(crate) static CONTRACT: crate::command_registry::CommandReg =
-    crate::command_registry::CommandReg {
-        name: "contract",
-        help_after: "watch",
-        command: <ContractArgs as clap::CommandFactory>::command,
-        policy: |_| crate::command_registry::CmdPolicy {
-            stakeholder: crate::stakeholder_role::StakeholderAction::Read,
-            per_write_auto_push: false,
-            skip_role_restore_prompt: true,
-            team_identity_write: false,
-        },
-        run: crate::command_registry::Handler::Early(run_contract),
-    };
+pub(crate) static CONTRACT: crate::cmdkit::CommandReg = crate::cmdkit::CommandReg {
+    name: "contract",
+    help_after: "watch",
+    command: <ContractArgs as clap::CommandFactory>::command,
+    policy: |_| crate::cmdkit::CmdPolicy {
+        stakeholder: crate::stakeholder_role::StakeholderAction::Read,
+        per_write_auto_push: false,
+        skip_role_restore_prompt: true,
+        team_identity_write: false,
+    },
+    run: crate::cmdkit::Handler::Early(run_contract),
+};

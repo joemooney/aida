@@ -750,8 +750,8 @@ pub(crate) struct TraceArgs {
 
 fn run_trace(
     matches: &clap::ArgMatches,
-    ctx: &crate::command_registry::DispatchCtx,
-) -> anyhow::Result<crate::command_registry::Flow> {
+    ctx: &crate::cmdkit::DispatchCtx,
+) -> anyhow::Result<crate::cmdkit::Flow> {
     use crate::*;
     let args = <TraceArgs as clap::FromArgMatches>::from_arg_matches(matches)?;
     match &ctx.store {
@@ -766,10 +766,7 @@ fn run_trace(
                 inner: TraceCommand::Gate { range, json },
             } = &args
             {
-                return crate::command_registry::returned(handle_trace_gate(
-                    range.as_deref(),
-                    *json,
-                ));
+                return crate::cmdkit::returned(handle_trace_gate(range.as_deref(), *json));
             }
             // STORY-499: `aida trace coverage` is self-contained the same way `gate` is
             // — it reads git for the diff + range and self-loads the store to resolve
@@ -788,7 +785,7 @@ fn run_trace(
             } = &args
             {
                 // trace:TASK-1783 | ai:claude
-                return crate::command_registry::returned(trace_tree_coverage::dispatch_coverage(
+                return crate::cmdkit::returned(trace_tree_coverage::dispatch_coverage(
                     range.as_deref(),
                     *json,
                     *block,
@@ -797,12 +794,10 @@ fn run_trace(
                     *fail_on,
                 ));
             }
-            Ok(crate::command_registry::Flow::Continue)
+            Ok(crate::cmdkit::Flow::Continue)
         }
-        Some(crate::command_registry::StoreCtx::Distributed { .. }) => {
-            Ok(crate::command_registry::Flow::Continue)
-        }
-        Some(crate::command_registry::StoreCtx::Git {
+        Some(crate::cmdkit::StoreCtx::Distributed { .. }) => Ok(crate::cmdkit::Flow::Continue),
+        Some(crate::cmdkit::StoreCtx::Git {
             store_path,
             backend,
         }) => {
@@ -828,9 +823,9 @@ fn run_trace(
                     self::handle_trace_command(trace_cmd, &storage)?;
                 }
             }
-            Ok(crate::command_registry::Flow::Continue)
+            Ok(crate::cmdkit::Flow::Continue)
         }
-        Some(crate::command_registry::StoreCtx::Legacy {
+        Some(crate::cmdkit::StoreCtx::Legacy {
             storage,
             requirements_path,
         }) => {
@@ -840,30 +835,29 @@ fn run_trace(
                     self::handle_trace_command(trace_cmd, &storage)?;
                 }
             }
-            Ok(crate::command_registry::Flow::Continue)
+            Ok(crate::cmdkit::Flow::Continue)
         }
     }
 }
 
 // trace:STORY-1728 | ai:claude
-pub(crate) static TRACE: crate::command_registry::CommandReg =
-    crate::command_registry::CommandReg {
-        name: "trace",
-        help_after: "server",
-        command: <TraceArgs as clap::CommandFactory>::command,
-        policy: trace_cli_policy,
-        run: crate::command_registry::Handler::Store(run_trace),
-    };
+pub(crate) static TRACE: crate::cmdkit::CommandReg = crate::cmdkit::CommandReg {
+    name: "trace",
+    help_after: "server",
+    command: <TraceArgs as clap::CommandFactory>::command,
+    policy: trace_cli_policy,
+    run: crate::cmdkit::Handler::Store(run_trace),
+};
 
 // Per-verb policy, carried over from the legacy stakeholder and per-write
 // auto-push tables. An unparseable invocation gets the fail-closed answer.
 // trace:STORY-1728 | ai:claude
-fn trace_cli_policy(matches: &clap::ArgMatches) -> crate::command_registry::CmdPolicy {
+fn trace_cli_policy(matches: &clap::ArgMatches) -> crate::cmdkit::CmdPolicy {
     use crate::cli::TraceCommand;
     use crate::stakeholder_role::StakeholderAction as SA;
     let args = <TraceArgs as clap::FromArgMatches>::from_arg_matches(matches).ok();
     let inner = args.as_ref().map(|args| &args.inner);
-    crate::command_registry::CmdPolicy {
+    crate::cmdkit::CmdPolicy {
         stakeholder: SA::Trace,
         per_write_auto_push: matches!(
             inner,

@@ -9,7 +9,7 @@
 use anyhow::Result;
 use colored::Colorize;
 
-use crate::command_registry::{CmdPolicy, CommandReg};
+use crate::cmdkit::{CmdPolicy, CommandReg};
 use crate::stakeholder_role::StakeholderAction;
 // trace:TASK-3428 | ai:codex
 use crate::{
@@ -204,7 +204,7 @@ pub(crate) static BG_FETCH: CommandReg = CommandReg {
         skip_role_restore_prompt: false,
         team_identity_write: false,
     },
-    run: crate::command_registry::Handler::Early(|matches, _| {
+    run: crate::cmdkit::Handler::Early(|matches, _| {
         let args = <BgFetchArgs as clap::FromArgMatches>::from_arg_matches(matches)?;
         handle_bg_fetch_command(&args.store_path)
     }),
@@ -282,25 +282,21 @@ pub(crate) struct WhoamiFlags {
 // TASK-784: a read of local state only (env, registry, leases, mailbox
 // files, queue YAML, read-only cache). No store load, no network.
 // trace:TASK-784
-fn run_whoami(
-    matches: &clap::ArgMatches,
-    _ctx: &crate::command_registry::DispatchCtx,
-) -> anyhow::Result<()> {
+fn run_whoami(matches: &clap::ArgMatches, _ctx: &crate::cmdkit::DispatchCtx) -> anyhow::Result<()> {
     let args = <WhoamiArgs as clap::FromArgMatches>::from_arg_matches(matches)?;
     handle_whoami_command(&args.flags)
 }
 
 // trace:STORY-1728 | ai:claude
-pub(crate) static WHOAMI: crate::command_registry::CommandReg =
-    crate::command_registry::CommandReg {
-        name: "whoami",
-        help_after: "solo",
-        command: <WhoamiArgs as clap::CommandFactory>::command,
-        policy: |_| crate::command_registry::CmdPolicy {
-            stakeholder: crate::stakeholder_role::StakeholderAction::Write,
-            per_write_auto_push: false,
-            skip_role_restore_prompt: false,
-            team_identity_write: false,
-        },
-        run: crate::command_registry::Handler::Early(run_whoami),
-    };
+pub(crate) static WHOAMI: crate::cmdkit::CommandReg = crate::cmdkit::CommandReg {
+    name: "whoami",
+    help_after: "solo",
+    command: <WhoamiArgs as clap::CommandFactory>::command,
+    policy: |_| crate::cmdkit::CmdPolicy {
+        stakeholder: crate::stakeholder_role::StakeholderAction::Write,
+        per_write_auto_push: false,
+        skip_role_restore_prompt: false,
+        team_identity_write: false,
+    },
+    run: crate::cmdkit::Handler::Early(run_whoami),
+};

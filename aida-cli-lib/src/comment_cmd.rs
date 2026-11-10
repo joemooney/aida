@@ -412,16 +412,14 @@ pub(crate) struct CommentArgs {
 
 fn run_comment(
     matches: &clap::ArgMatches,
-    ctx: &crate::command_registry::DispatchCtx,
-) -> anyhow::Result<crate::command_registry::Flow> {
+    ctx: &crate::cmdkit::DispatchCtx,
+) -> anyhow::Result<crate::cmdkit::Flow> {
     use crate::*;
     let args = <CommentArgs as clap::FromArgMatches>::from_arg_matches(matches)?;
     match &ctx.store {
-        None => Ok(crate::command_registry::Flow::Continue),
-        Some(crate::command_registry::StoreCtx::Distributed { .. }) => {
-            Ok(crate::command_registry::Flow::Continue)
-        }
-        Some(crate::command_registry::StoreCtx::Git {
+        None => Ok(crate::cmdkit::Flow::Continue),
+        Some(crate::cmdkit::StoreCtx::Distributed { .. }) => Ok(crate::cmdkit::Flow::Continue),
+        Some(crate::cmdkit::StoreCtx::Git {
             store_path,
             backend,
         }) => {
@@ -627,9 +625,9 @@ fn run_comment(
                     );
                 }
             }
-            Ok(crate::command_registry::Flow::Continue)
+            Ok(crate::cmdkit::Flow::Continue)
         }
-        Some(crate::command_registry::StoreCtx::Legacy {
+        Some(crate::cmdkit::StoreCtx::Legacy {
             storage,
             requirements_path,
         }) => {
@@ -639,30 +637,29 @@ fn run_comment(
                     self::handle_comment_command(comment_cmd, &storage)?;
                 }
             }
-            Ok(crate::command_registry::Flow::Continue)
+            Ok(crate::cmdkit::Flow::Continue)
         }
     }
 }
 
 // trace:STORY-1728 | ai:claude
-pub(crate) static COMMENT: crate::command_registry::CommandReg =
-    crate::command_registry::CommandReg {
-        name: "comment",
-        help_after: "rel-def",
-        command: <CommentArgs as clap::CommandFactory>::command,
-        policy: comment_cli_policy,
-        run: crate::command_registry::Handler::Store(run_comment),
-    };
+pub(crate) static COMMENT: crate::cmdkit::CommandReg = crate::cmdkit::CommandReg {
+    name: "comment",
+    help_after: "rel-def",
+    command: <CommentArgs as clap::CommandFactory>::command,
+    policy: comment_cli_policy,
+    run: crate::cmdkit::Handler::Store(run_comment),
+};
 
 // Per-verb policy, carried over from the legacy stakeholder and per-write
 // auto-push tables. An unparseable invocation gets the fail-closed answer.
 // trace:STORY-1728 | ai:claude
-fn comment_cli_policy(matches: &clap::ArgMatches) -> crate::command_registry::CmdPolicy {
+fn comment_cli_policy(matches: &clap::ArgMatches) -> crate::cmdkit::CmdPolicy {
     use crate::cli::CommentCommand;
     use crate::stakeholder_role::StakeholderAction as SA;
     let args = <CommentArgs as clap::FromArgMatches>::from_arg_matches(matches).ok();
     let inner = args.as_ref().map(|args| &args.inner);
-    crate::command_registry::CmdPolicy {
+    crate::cmdkit::CmdPolicy {
         stakeholder: if matches!(inner, Some(CommentCommand::List { .. })) {
             SA::Read
         } else {

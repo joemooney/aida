@@ -25,7 +25,7 @@ pub(crate) struct LaneArgs {
 /// keeps moving.
 const PROGRESS_EVERY: Duration = Duration::from_secs(15);
 
-fn run_lane(matches: &clap::ArgMatches, _ctx: &crate::command_registry::DispatchCtx) -> Result<()> {
+fn run_lane(matches: &clap::ArgMatches, _ctx: &crate::cmdkit::DispatchCtx) -> Result<()> {
     let args = <LaneArgs as clap::FromArgMatches>::from_arg_matches(matches)?;
     let job = match args.command {
         LaneCommand::Job(job) => job,
@@ -205,15 +205,15 @@ pub(crate) fn wait_in(
 }
 
 // trace:BUG-2383 | ai:claude
-pub(crate) static LANE: crate::command_registry::CommandReg = crate::command_registry::CommandReg {
+pub(crate) static LANE: crate::cmdkit::CommandReg = crate::cmdkit::CommandReg {
     name: "lane",
     help_after: "lint",
     command: <LaneArgs as clap::CommandFactory>::command,
-    policy: |_| crate::command_registry::CmdPolicy {
+    policy: |_| crate::cmdkit::CmdPolicy {
         stakeholder: crate::stakeholder_role::StakeholderAction::BuildLoop,
         per_write_auto_push: false,
         skip_role_restore_prompt: true,
         team_identity_write: false,
     },
-    run: crate::command_registry::Handler::Early(run_lane),
+    run: crate::cmdkit::Handler::Early(run_lane),
 };

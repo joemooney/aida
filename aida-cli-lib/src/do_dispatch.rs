@@ -488,16 +488,14 @@ pub(crate) struct DoArgs {
 
 fn run_do(
     matches: &clap::ArgMatches,
-    ctx: &crate::command_registry::DispatchCtx,
-) -> anyhow::Result<crate::command_registry::Flow> {
+    ctx: &crate::cmdkit::DispatchCtx,
+) -> anyhow::Result<crate::cmdkit::Flow> {
     use crate::*;
     let args = <DoArgs as clap::FromArgMatches>::from_arg_matches(matches)?;
     match &ctx.store {
-        None => Ok(crate::command_registry::Flow::Continue),
-        Some(crate::command_registry::StoreCtx::Distributed { .. }) => {
-            Ok(crate::command_registry::Flow::Continue)
-        }
-        Some(crate::command_registry::StoreCtx::Git {
+        None => Ok(crate::cmdkit::Flow::Continue),
+        Some(crate::cmdkit::StoreCtx::Distributed { .. }) => Ok(crate::cmdkit::Flow::Continue),
+        Some(crate::cmdkit::StoreCtx::Git {
             store_path,
             backend,
         }) => {
@@ -510,7 +508,7 @@ fn run_do(
                 // trace:BUG-735 | ai:claude
                 DoArgs { spec, mode, force } => {
                     let storage = Storage::new(store_path.to_path_buf());
-                    return crate::command_registry::returned(run_do_drive(
+                    return crate::cmdkit::returned(run_do_drive(
                         &storage,
                         spec,
                         mode.as_deref(),
@@ -518,9 +516,9 @@ fn run_do(
                     ));
                 }
             }
-            Ok(crate::command_registry::Flow::Continue)
+            Ok(crate::cmdkit::Flow::Continue)
         }
-        Some(crate::command_registry::StoreCtx::Legacy {
+        Some(crate::cmdkit::StoreCtx::Legacy {
             storage,
             requirements_path,
         }) => {
@@ -530,21 +528,21 @@ fn run_do(
                     run_do_drive(&storage, spec, mode.as_deref(), *force)?;
                 }
             }
-            Ok(crate::command_registry::Flow::Continue)
+            Ok(crate::cmdkit::Flow::Continue)
         }
     }
 }
 
 // trace:STORY-1728 | ai:claude
-pub(crate) static DO: crate::command_registry::CommandReg = crate::command_registry::CommandReg {
+pub(crate) static DO: crate::cmdkit::CommandReg = crate::cmdkit::CommandReg {
     name: "do",
     help_after: "",
     command: <DoArgs as clap::CommandFactory>::command,
-    policy: |_| crate::command_registry::CmdPolicy {
+    policy: |_| crate::cmdkit::CmdPolicy {
         stakeholder: crate::stakeholder_role::StakeholderAction::BuildLoop,
         per_write_auto_push: false,
         skip_role_restore_prompt: false,
         team_identity_write: true,
     },
-    run: crate::command_registry::Handler::Store(run_do),
+    run: crate::cmdkit::Handler::Store(run_do),
 };

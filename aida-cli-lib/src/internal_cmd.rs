@@ -240,7 +240,7 @@ pub(crate) struct InternalArgs {
 // trace:STORY-684
 fn run_internal(
     matches: &clap::ArgMatches,
-    _ctx: &crate::command_registry::DispatchCtx,
+    _ctx: &crate::cmdkit::DispatchCtx,
 ) -> anyhow::Result<()> {
     let args = <InternalArgs as clap::FromArgMatches>::from_arg_matches(matches)?;
     let InternalArgs { command } = &args;
@@ -248,16 +248,15 @@ fn run_internal(
 }
 
 // trace:STORY-1728 | ai:claude
-pub(crate) static INTERNAL: crate::command_registry::CommandReg =
-    crate::command_registry::CommandReg {
-        name: "internal",
-        help_after: "fetch",
-        command: <InternalArgs as clap::CommandFactory>::command,
-        policy: |_| crate::command_registry::CmdPolicy {
-            stakeholder: crate::stakeholder_role::StakeholderAction::Write,
-            per_write_auto_push: false,
-            skip_role_restore_prompt: true,
-            team_identity_write: false,
-        },
-        run: crate::command_registry::Handler::Early(run_internal),
-    };
+pub(crate) static INTERNAL: crate::cmdkit::CommandReg = crate::cmdkit::CommandReg {
+    name: "internal",
+    help_after: "fetch",
+    command: <InternalArgs as clap::CommandFactory>::command,
+    policy: |_| crate::cmdkit::CmdPolicy {
+        stakeholder: crate::stakeholder_role::StakeholderAction::Write,
+        per_write_auto_push: false,
+        skip_role_restore_prompt: true,
+        team_identity_write: false,
+    },
+    run: crate::cmdkit::Handler::Early(run_internal),
+};

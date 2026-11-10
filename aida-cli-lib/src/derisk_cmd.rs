@@ -19,10 +19,7 @@ pub(crate) struct DeriskArgs {
 // `aida derisk` is a thin advisor-session launcher; it uses the shared
 // agent-new machinery and does not need the shared storage handle.
 // trace:TASK-1235 | ai:codex
-fn run_derisk(
-    matches: &clap::ArgMatches,
-    _ctx: &crate::command_registry::DispatchCtx,
-) -> anyhow::Result<()> {
+fn run_derisk(matches: &clap::ArgMatches, _ctx: &crate::cmdkit::DispatchCtx) -> anyhow::Result<()> {
     // trace:TASK-3428 | ai:codex
     use crate::handle_derisk_command;
     let args = <DeriskArgs as clap::FromArgMatches>::from_arg_matches(matches)?;
@@ -31,16 +28,15 @@ fn run_derisk(
 }
 
 // trace:STORY-1728 | ai:claude
-pub(crate) static DERISK: crate::command_registry::CommandReg =
-    crate::command_registry::CommandReg {
-        name: "derisk",
-        help_after: "do",
-        command: <DeriskArgs as clap::CommandFactory>::command,
-        policy: |_| crate::command_registry::CmdPolicy {
-            stakeholder: crate::stakeholder_role::StakeholderAction::Write,
-            per_write_auto_push: false,
-            skip_role_restore_prompt: false,
-            team_identity_write: false,
-        },
-        run: crate::command_registry::Handler::Early(run_derisk),
-    };
+pub(crate) static DERISK: crate::cmdkit::CommandReg = crate::cmdkit::CommandReg {
+    name: "derisk",
+    help_after: "do",
+    command: <DeriskArgs as clap::CommandFactory>::command,
+    policy: |_| crate::cmdkit::CmdPolicy {
+        stakeholder: crate::stakeholder_role::StakeholderAction::Write,
+        per_write_auto_push: false,
+        skip_role_restore_prompt: false,
+        team_identity_write: false,
+    },
+    run: crate::cmdkit::Handler::Early(run_derisk),
+};
