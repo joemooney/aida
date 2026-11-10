@@ -188,6 +188,79 @@ pub(crate) fn record_verdict_at(
     record: &crate::gate::review_verdict::JsonObj,
     spec: Option<&GateSpec>,
 ) -> std::io::Result<Delivered> {
+    // trace:STORY-2698 | ai:codex
+    // Persist the complete retry payload before touching the sweep. A crash or
+    // failed store transaction leaves a delivery-pending barrier (not a review
+    // refusal); repeating the record retries
+    // delivery using the sink's locked source/hash deduplication.
+    let mut normalized = record.clone();
+    if let Some(word) = crate::gate::review_verdict::disposition_verdict(record).canonical() {
+        normalized.insert("verdict".into(), word.into());
+    }
+    let record = &normalized;
+    let parsed = crate::gate::review_verdict::parse_recorded_verdict(
+        &serde_json::Value::Object(record.clone()).to_string(),
+    );
+    if let Some(mut verdict) = parsed.filter(|v| v.kind.approves() && !v.findings.is_empty()) {
+        // Inherited deferred findings still need durable delivery if an earlier
+        // approval attempt failed. Hash deduplication makes retries harmless.
+        verdict.inherited_findings = false;
+        let (root, key) = crate::gate::review_verdict::canonical_verdict_key(path)
+            .ok_or_else(|| std::io::Error::other("approval has no canonical verdict key"))?;
+        let source = spec.map(|s| s.label.as_str()).unwrap_or(&key);
+        let mut pending = record.clone();
+        // Explicit delivery state: readiness blocks, refusal history skips it.
+        pending.insert("sweep_pending".into(), true.into());
+        pending.insert("verdict".into(), "request-changes".into());
+        record_verdict_at_inner(path, &pending, spec, None)?;
+        let store_path = crate::detect_distributed_store_from(&root).ok_or_else(|| {
+            std::io::Error::other(
+                "deferred findings pending: no canonical store; retry review record after recovery",
+            )
+        })?;
+        crate::findings_gate::emit_verdict_findings(&root, &store_path, source, "", None, &verdict)
+            .map_err(|e| {
+                std::io::Error::other(format!(
+                    "deferred findings pending: {e:#}; retry review record after recovery"
+                ))
+            })?;
+        let mut delivered = record.clone();
+        delivered.insert("sweep_pending".into(), false.into());
+        delivered.insert("verdict".into(), "approved".into());
+        return record_verdict_at_inner(path, &delivered, spec, Some(&pending));
+    }
+    record_verdict_at_inner(path, record, spec, None)
+}
+
+// trace:STORY-2698 | ai:codex
+fn append_review_delivery(
+    root: &Path,
+    change: ChangeKey,
+    record: &crate::gate::review_verdict::JsonObj,
+    spec: Option<&GateSpec>,
+    pending: Option<&crate::gate::review_verdict::JsonObj>,
+) -> std::io::Result<Delivered> {
+    let event = event::verdict_event(root, change, record, spec);
+    if let Some(pending) = pending {
+        let pending = event::verdict_event(root, change, pending, spec);
+        let appended = store::append_delivered(root, change, vec![event], &[pending])?;
+        Ok(if appended.is_empty() {
+            Delivered::Unchanged
+        } else {
+            Delivered::Appended
+        })
+    } else {
+        store::append_one(root, event)
+    }
+}
+
+// trace:STORY-2698 | ai:codex
+fn record_verdict_at_inner(
+    path: &Path,
+    record: &crate::gate::review_verdict::JsonObj,
+    spec: Option<&GateSpec>,
+    pending: Option<&crate::gate::review_verdict::JsonObj>,
+) -> std::io::Result<Delivered> {
     let (root, key) =
         crate::gate::review_verdict::canonical_verdict_key(path).ok_or_else(|| {
             std::io::Error::new(
@@ -206,12 +279,13 @@ pub(crate) fn record_verdict_at(
         if let Some(spec) = spec {
             store::bind_unbound(&store, spec, change)?;
         }
-        let delivered =
-            store::append_one(&store, event::verdict_event(&store, change, record, spec))?;
+        let delivered = append_review_delivery(&store, change, record, spec, pending)?;
         // trace:STORY-2492 | ai:codex
         // The verdict is durable: publication failure is a reported pending state.
         let labels = spec.map(|s| vec![s.label.clone()]).unwrap_or_default();
-        super::review_publication::publish_reported(&store, change, record, &labels);
+        if record.get("sweep_pending").and_then(|v| v.as_bool()) != Some(true) {
+            super::review_publication::publish_reported(&store, change, record, &labels);
+        }
         return Ok(delivered);
     }
     let spec = GateSpec::resolve(&root, &key);
@@ -223,19 +297,21 @@ pub(crate) fn record_verdict_at(
     };
     match changes.last() {
         Some(change) => {
-            let result = store::append_one(
-                &store,
-                event::verdict_event(&store, *change, record, Some(&spec)),
-            )?;
-            super::review_publication::publish_reported(
-                &store,
-                *change,
-                record,
-                &[spec.label.clone()],
-            );
+            let result = append_review_delivery(&store, *change, record, Some(&spec), pending)?;
+            if record.get("sweep_pending").and_then(|v| v.as_bool()) != Some(true) {
+                super::review_publication::publish_reported(
+                    &store,
+                    *change,
+                    record,
+                    &[spec.label.clone()],
+                );
+            }
             Ok(result)
         }
-        None => store::append_unbound(&store, &spec, record),
+        None => match pending {
+            Some(pending) => store::append_unbound_expected(&store, &spec, record, Some(pending)),
+            None => store::append_unbound(&store, &spec, record),
+        },
     }
 }
 
@@ -274,6 +350,85 @@ pub(crate) fn record_collected_verdict(
         ));
     }
     let root = store_root(launcher_root)?;
+    // trace:STORY-2698 | ai:codex
+    let normalize = |body: &crate::gate::review_verdict::JsonObj| {
+        let mut body = body.clone();
+        if let Some(word) = super::review_verdict::disposition_verdict(&body).canonical() {
+            body.insert("verdict".into(), word.into());
+        }
+        body
+    };
+    let record = normalize(record);
+    let spec_records: Vec<_> = spec_records
+        .iter()
+        .map(|(spec, body)| (spec.clone(), normalize(body)))
+        .collect();
+    let needs_delivery = |body: &crate::gate::review_verdict::JsonObj| {
+        super::review_verdict::parse_recorded_verdict(
+            &serde_json::Value::Object(body.clone()).to_string(),
+        )
+        .filter(|v| v.kind.approves() && !v.findings.is_empty())
+        .map(|mut v| {
+            v.inherited_findings = false;
+            v
+        })
+    };
+    let mut pending_events = None;
+    if needs_delivery(&record).is_some()
+        || spec_records
+            .iter()
+            .any(|(_, b)| needs_delivery(b).is_some())
+    {
+        let pending = |body: &crate::gate::review_verdict::JsonObj| {
+            let mut body = body.clone();
+            // Explicit delivery state, including the same handoff origin.
+            body.insert("sweep_pending".into(), true.into());
+            body.insert("verdict".into(), "request-changes".into());
+            body
+        };
+        let mut events = vec![event::verdict_event(&root, change, &pending(&record), None)];
+        for (spec, body) in &spec_records {
+            events.push(event::verdict_event(
+                &root,
+                change,
+                &pending(body),
+                Some(spec),
+            ));
+        }
+        store::append(&root, change, events.clone())?;
+        pending_events = Some(events);
+        let store_path = crate::detect_distributed_store_from(launcher_root).ok_or_else(|| {
+            std::io::Error::other(
+                "deferred findings pending: canonical store unavailable; retry collection",
+            )
+        })?;
+        // Change-keyed evidence is retained too: source-specific findings can
+        // differ from the overall PR record.
+        let sources = std::iter::once((change.as_key(), &record)).chain(
+            spec_records
+                .iter()
+                .map(|(spec, body)| (spec.label.clone(), body)),
+        );
+        for (source, body) in sources {
+            if let Some(verdict) = needs_delivery(body) {
+                crate::findings_gate::emit_verdict_findings(
+                    launcher_root,
+                    &store_path,
+                    &source,
+                    "",
+                    None,
+                    &verdict,
+                )
+                .map_err(|e| {
+                    std::io::Error::other(format!(
+                        "deferred findings pending: {e:#}; retry collection"
+                    ))
+                })?;
+            }
+        }
+    }
+    let record = &record;
+    let spec_records = &spec_records;
     for (spec, _) in spec_records {
         store::bind_unbound(&root, spec, change)?;
     }
@@ -281,7 +436,10 @@ pub(crate) fn record_collected_verdict(
     for (spec, body) in spec_records {
         events.push(event::verdict_event(&root, change, body, Some(spec)));
     }
-    let appended = store::append(&root, change, events)?;
+    let appended = match pending_events {
+        Some(pending) => store::append_delivered(&root, change, events, &pending)?,
+        None => store::append(&root, change, events)?,
+    };
     // trace:STORY-2492 | ai:codex — collector publishes only after its local checks;
     // the appended verdict stands even when the publication stays pending.
     super::review_publication::publish_reported(
