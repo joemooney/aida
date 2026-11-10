@@ -8,7 +8,7 @@ priority: Low
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-07T10:46:47.827833836Z
-modified_at: 2026-11-10T02:26:03.641121706Z
+modified_at: 2026-11-10T03:08:53.082659568Z
 req_type: Task
 relationships:
 - rel_type: Child
@@ -211,6 +211,13 @@ comments:
   modified_at: 2026-11-10T02:24:33.935498675Z
   session_id: 01a1beff-fc3b-78e2-93e2-9b0c283b0339
   harness_version: 2.1.319 (Claude Code)
+- id: 01a1c36e-11da-7151-b948-c0916c9e96b3
+  author: joe
+  content: |-
+    CI FAILURES at 4664c8e2a90b (run 42744602790). Fix exactly these before pushing; a push without a code change for them will fail again and must not be made:
+    (no test lines extracted; open run 42744602790)
+  created_at: 2026-11-10T03:08:53.082659568Z
+  modified_at: 2026-11-10T03:08:53.082659568Z
 history:
 - id: 01a1b59e-5972-7d63-967f-d8572322d9d1
   author: joe
