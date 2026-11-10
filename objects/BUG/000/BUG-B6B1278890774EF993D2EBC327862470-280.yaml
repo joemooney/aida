@@ -8,7 +8,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-10T03:07:38.542859262Z
-modified_at: 2026-11-10T07:03:20.354700929Z
+modified_at: 2026-11-10T07:05:08.037929660Z
 req_type: Bug
 comments:
 - id: 01a1c3a1-bccc-7ef0-b6b7-2fdb52e783f5
@@ -72,6 +72,13 @@ comments:
   content: 'Returned from NeedsAttention to Approved via `aida edit --status`. It was shelved on: reviewer/verdict:request-changes: Full sweep: BUG-1957 fixture still breaks under configured-forge resolution; required CI pending. BUG-2515 bug protocol: met (test file touched).. No triage reason was given.'
   created_at: 2026-11-10T07:03:20.354694048Z
   modified_at: 2026-11-10T07:03:20.354694048Z
+  session_id: 01a1c39a-801a-7bd1-8da9-c955a6707f0b
+  harness_version: 2.1.321 (Claude Code)
+- id: 01a1c446-5cc5-74b1-80aa-5d62bff700b1
+  author: joe
+  content: 'ADVISOR RULING (2026-11-10 07:05 UTC) — binding for PR #3762 CI repair at head 50c9ea44e9. Fix: forge_observed::forge_read_ratchet_tests::story_2401_no_new_raw_gh_reads_outside_forge fails (story_2401_forge_read_ratchet_tests.rs:235): the change adds a raw gh read outside the forge module. Route that read through crate::forge (the resolved-forge ChangeLookup path) instead of shelling gh; do not grow the ratchet allowlist. The bug2187_failed_headless_reviewer_keeps_exit_code_and_draft panic at test_env.rs:109 is the known env-sensitive test set (STORY-2695 S1), not this PR''s: leave it alone unless your change touches status_sections. LIGHT gate: cargo test -p aida-cli-lib --lib story_2401_no_new_raw_gh_reads bug_2515 bug_1957, then make check-ci-fast.'
+  created_at: 2026-11-10T07:05:08.037929660Z
+  modified_at: 2026-11-10T07:05:08.037929660Z
   session_id: 01a1c39a-801a-7bd1-8da9-c955a6707f0b
   harness_version: 2.1.321 (Claude Code)
 history:
