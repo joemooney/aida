@@ -19,7 +19,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-10T11:29:50.373967960Z
-modified_at: 2026-11-10T17:32:34.539981207Z
+modified_at: 2026-11-10T17:46:08.079369823Z
 req_type: Bug
 comments:
 - id: 01a1c63b-ee32-7502-886f-4dbf64e2d225
@@ -157,6 +157,10 @@ history:
   - field_name: status
     old_value: InProgress
     new_value: NeedsAttention
+- id: 01a1c691-37cc-7ae1-bf0d-a537e0165f32
+  author: joe
+  timestamp: 2026-11-10T17:46:08.204891807Z
+  changes: []
 filed_at:
   code_sha: 0f2b06b24bdb187b1ba22dec1edf9f883fc540e7
   branch: main
@@ -170,7 +174,7 @@ failure_reason:
   phase: reviewer
   phase_index: 3
   kind: verdict:request-changes
-  detail: 'Full sweep corrected after publication-contract verification: diagnostic source has no actionable defects, but current PR title still claims full BUG-2519 completion contrary to advisor Refs-only ruling. BUG-2519 (bug protocol): met, inline regression tests in both changed Rust files. BUG-b6b1278890774ef993d2ebc327862470-284.acfd7976: unverified, primary cause confirmation deferred by advisor. BUG-b6b1278890774ef993d2ebc327862470-284.ac91bf2f: unverified, >=50% second-primary-job result deferred by advisor. BUG-b6b1278890774ef993d2ebc327862470-284.ac289506: verified by lane-cache-reuse doctor, three-mode fixture, advisory-status test and reported passing lane runs. Required CI lib-0/lib-1/gates/contracts pending; hold retained. No local builds/tests. Codegraph client absent/index unreachable; rg caller checks used.'
-  recovery_hint: address the review findings, move BUG-2519 back to In Progress, and clear the PR hold only after approval
+  detail: 'APPROVED: full five-file sweep; advisor-authorized diagnostic-only Refs slice, not bug completion. BUG-2519 (bug protocol): met, inline regression tests in changed Rust files. BUG-b6b1278890774ef993d2ebc327862470-284.acfd7976: not-applicable-because advisor ruling 2026-11-10 16:39 UTC defers primary root-cause confirmation to next slice. BUG-b6b1278890774ef993d2ebc327862470-284.ac91bf2f: not-applicable-because same ruling defers primary second-job >=50% measurement to next slice; no completion claimed. BUG-b6b1278890774ef993d2ebc327862470-284.ac289506: verified by CACHE_REUSE_PROBE_SCRIPT, doctor_cache_reuse_probe_distinguishes_path_misses_and_uncached_compiles, cache_reuse_is_separate_advisory_performance_evidence, reported lane runs and green current-head PR CI. Required Build (ubuntu-latest) passed; only merge-hold-gate red, clearance left to authorized actor. No actionable defects. Host codegraph client missing; doctor reports unreachable; source searches used. No local build/tests run.'
+  recovery_hint: address the review findings, move BUG-B6B1278890774EF993D2EBC327862470-284 back to In Progress, and clear the PR hold only after approval
   shelved_by: reviewer
-  shelved_at: 2026-11-10T17:32:34.539981207Z
+  shelved_at: 2026-11-10T17:46:08.079369823Z
