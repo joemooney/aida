@@ -8,7 +8,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-07T23:40:15.306412Z
-modified_at: 2026-11-09T17:44:41.163488316Z
+modified_at: 2026-11-10T14:27:46.292679228Z
 req_type: Task
 relationships:
 - rel_type: BlockedBy
@@ -634,6 +634,13 @@ comments:
   content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: Full diff reviewed; writer policy restored and extraction faithful. Host must disclose Refs-only scope in PR body; seven CI lanes still running. AC5 remains advisor-owned after merge.. No triage reason was given.'
   created_at: 2026-11-09T17:42:11.696331637Z
   modified_at: 2026-11-09T17:42:11.696331637Z
+- id: 01a1c5db-9bf4-7053-b074-2c8dcd3e14ab
+  author: joe
+  content: 'ADVISOR AMENDMENT to AC3 (2026-11-10 07:50 MST): ''72 tool names'' was a planning estimate; the parent commit of #3687 (8f02ddc969d^) exposes 58 MCP tools. AC3 now reads: the tools/list surface is byte-identical to the parent commit (58 tool names), verified by the unchanged golden tools/list tests passing in CI at #3687''s merged head, as the round-6+ reviewer recorded. AC3 is MET. AC5 (dell1 clean-build cargo --timings, no slower than the run-to-run spread) stays required and advisor-owed; it runs when dell1 has no lanes, because measurements under lane load are noise. Extraction landed as 8f02ddc969d (#3687).'
+  created_at: 2026-11-10T14:27:46.292679228Z
+  modified_at: 2026-11-10T14:27:46.292679228Z
+  session_id: 01a1c530-c917-7f13-ab81-f6b5e1d1cd30
+  harness_version: 2.1.322 (Claude Code)
 history:
 - id: 01a1b862-7fc0-7e63-899e-5179ac0131ed
   author: joe
