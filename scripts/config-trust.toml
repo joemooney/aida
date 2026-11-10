@@ -117,10 +117,6 @@ sites = 1
 channels = ["probe"]
 sites = 1
 
-[readers."aida-cli-lib/src/db_block.rs"]
-channels = ["worktree", "write"]
-sites = 1
-
 [readers."aida-cli-lib/src/doctor_root.rs"]
 channels = ["worktree"]
 sites = 1
@@ -203,9 +199,10 @@ sites = 1
 channels = ["worktree", "probe"]
 sites = 3
 
+# TASK-3781: include the counter-scope writer relocated from doctor_cmd.
 [readers."aida-cli-lib/src/db_block.rs"]
-channels = ["worktree"]
-sites = 1
+channels = ["worktree", "write"]
+sites = 2
 
 # Distributed-store detection: an existence probe for a project root, the
 # walk-up that reads mode, and the [id_format] reader (policy values only).
