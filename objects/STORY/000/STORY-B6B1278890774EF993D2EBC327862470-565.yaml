@@ -28,7 +28,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-07T19:59:40.192574Z
-modified_at: 2026-11-09T06:51:59.864763226Z
+modified_at: 2026-11-10T00:26:44.878627964Z
 req_type: Story
 relationships:
 - rel_type: Supersedes
@@ -300,6 +300,13 @@ comments:
   created_at: 2026-11-08T23:15:00.243576960Z
   modified_at: 2026-11-08T23:15:00.243576960Z
   session_id: 20abb7c3-8f9b-4a5e-b326-404921f3b450
+- id: 01a1c2d9-a10e-7592-8f03-bbb132ea63ea
+  author: joe
+  content: 'ADVISOR RULING (2026-11-10 00:30 UTC): final slice to complete this story. Extend aida doctor --lane-host (aida-cli-lib/src/lane_host.rs) with: (1) release-version binary freshness (dev comparison exists at lane_host.rs:90); (2) an AGY credential-source check replacing the advisory probe in vendors/host_diagnostics.rs:28; (3) an actual lane-job cache reachability probe (lane_host.rs:201 marks it unverified). Each is a finding with a fix hint and a test. Use (STORY-2642): this completes the story.'
+  created_at: 2026-11-10T00:26:44.878627964Z
+  modified_at: 2026-11-10T00:26:44.878627964Z
+  session_id: 01a1beff-fc3b-78e2-93e2-9b0c283b0339
+  harness_version: 2.1.319 (Claude Code)
 history:
 - id: 01a1b85d-3f02-70c2-a82d-cefccf97dc04
   author: aida-session-start
