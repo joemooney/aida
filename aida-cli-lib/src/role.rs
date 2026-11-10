@@ -2,7 +2,20 @@
 //! Role State and Activities (STORY-1488 slice 1)
 // trace:STORY-1488 | ai:claude
 
-use crate::*;
+#[cfg(test)]
+use crate::{advisor, human_route_is_open, is_human_route, role};
+// trace:TASK-3428 | ai:codex
+use crate::{
+    active_lease_for_cwd, agent_launch_views, agent_output_mode, agent_registry,
+    append_session_activity, canonical_role_name, current_user_id, find_aida_project_root_from,
+    find_main_worktree_root, find_project_root, humanize_relative, is_toml_kv_line,
+    lease_state_for, leases, list_leases, load_session_activity, main_worktree_root_from,
+    orchestrator, permissions, picker_terminal_width, process_probe, prompt_yes_no, queue_cmd,
+    statusline_project_root, team, truncate, write_atomic, Command, LeaseState, ACTIVITY_MAX,
+};
+use anyhow::{Context, Result};
+use colored::Colorize;
+use std::io::IsTerminal;
 
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub(crate) struct RoleState {
