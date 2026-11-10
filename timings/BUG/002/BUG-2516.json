@@ -1,0 +1,91 @@
+{
+  "schema_version": 1,
+  "spec": "BUG-2516",
+  "publishes": [
+    {
+      "at": "2026-11-10T23:31:07.502159254Z",
+      "closed_by": "auto-bump"
+    }
+  ],
+  "events": [
+    {
+      "ts": "2026-11-10T09:59:32.147242475Z",
+      "spec": "BUG-2516",
+      "seat": "advisor",
+      "kind": {
+        "event": "SpecRequeued",
+        "via": "queue-rework",
+        "actor": "joe",
+        "from": "Needs Attention",
+        "to": "Approved"
+      }
+    },
+    {
+      "ts": "2026-11-10T11:46:09.488508764Z",
+      "spec": "BUG-2516",
+      "seat": "advisor",
+      "kind": {
+        "event": "SpecRequeued",
+        "via": "queue-rework",
+        "actor": "joe",
+        "from": "Needs Attention",
+        "to": "Approved"
+      }
+    },
+    {
+      "ts": "2026-11-10T20:40:46.994271326Z",
+      "spec": "BUG-2516",
+      "seat": "advisor",
+      "kind": {
+        "event": "SpecRequeued",
+        "via": "queue-rework",
+        "actor": "joe",
+        "from": "Needs Attention",
+        "to": "Approved"
+      }
+    },
+    {
+      "ts": "2026-11-10T20:57:56.268712540Z",
+      "spec": "BUG-2516",
+      "seat": "advisor",
+      "kind": {
+        "event": "SpecRequeued",
+        "via": "queue-rework",
+        "actor": "joe",
+        "from": "Needs Attention",
+        "to": "Approved"
+      }
+    },
+    {
+      "ts": "2026-11-10T21:24:33.924913808Z",
+      "spec": "BUG-2516",
+      "seat": "advisor",
+      "kind": {
+        "event": "SpecRequeued",
+        "via": "queue-rework",
+        "actor": "joe",
+        "from": "Needs Attention",
+        "to": "Approved"
+      }
+    },
+    {
+      "ts": "2026-11-10T23:30:38.892251779Z",
+      "spec": "BUG-2516",
+      "seat": "advisor",
+      "kind": {
+        "event": "PrMerged",
+        "pr": 3774
+      }
+    },
+    {
+      "ts": "2026-11-10T23:31:07.343124559Z",
+      "spec": "BUG-2516",
+      "kind": {
+        "event": "SpecCompleted",
+        "commit": "ef9f4f7820598434b9778006ec13da9a14fdd5ac",
+        "pr": 3774,
+        "closed_by": "auto-bump"
+      }
+    }
+  ]
+}
