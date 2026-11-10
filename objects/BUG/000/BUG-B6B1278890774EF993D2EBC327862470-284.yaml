@@ -14,12 +14,12 @@ description: |-
   1. Root cause identified and recorded on this bug.
   2. A second primary lane job building the same dependency set shows a Rust hit rate comparable to dell1 (at least 50%).
   3. A regression test or doctor check covers the cause.
-status: InProgress
+status: NeedsAttention
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-10T11:29:50.373967960Z
-modified_at: 2026-11-10T17:04:54.233872965Z
+modified_at: 2026-11-10T17:32:34.539981207Z
 req_type: Bug
 comments:
 - id: 01a1c63b-ee32-7502-886f-4dbf64e2d225
@@ -150,6 +150,13 @@ history:
   author: joe
   timestamp: 2026-11-10T17:02:26.956327911Z
   changes: []
+- id: 01a1c684-cd6b-7600-b4a0-d09a916e8c2c
+  author: aida-orchestrator
+  timestamp: 2026-11-10T17:32:34.540007629Z
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: NeedsAttention
 filed_at:
   code_sha: 0f2b06b24bdb187b1ba22dec1edf9f883fc540e7
   branch: main
@@ -159,3 +166,11 @@ filed_at:
   vendor: claude
   session: 01a1c530-c917-7f13-ab81-f6b5e1d1cd30
   harness_version: 2.1.322 (Claude Code)
+failure_reason:
+  phase: reviewer
+  phase_index: 3
+  kind: verdict:request-changes
+  detail: 'Full sweep corrected after publication-contract verification: diagnostic source has no actionable defects, but current PR title still claims full BUG-2519 completion contrary to advisor Refs-only ruling. BUG-2519 (bug protocol): met, inline regression tests in both changed Rust files. BUG-b6b1278890774ef993d2ebc327862470-284.acfd7976: unverified, primary cause confirmation deferred by advisor. BUG-b6b1278890774ef993d2ebc327862470-284.ac91bf2f: unverified, >=50% second-primary-job result deferred by advisor. BUG-b6b1278890774ef993d2ebc327862470-284.ac289506: verified by lane-cache-reuse doctor, three-mode fixture, advisory-status test and reported passing lane runs. Required CI lib-0/lib-1/gates/contracts pending; hold retained. No local builds/tests. Codegraph client absent/index unreachable; rg caller checks used.'
+  recovery_hint: address the review findings, move BUG-2519 back to In Progress, and clear the PR hold only after approval
+  shelved_by: reviewer
+  shelved_at: 2026-11-10T17:32:34.539981207Z
