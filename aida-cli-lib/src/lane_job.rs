@@ -380,8 +380,8 @@ pub(crate) fn probe_cache(root: &Path) -> Result<()> {
         &program,
         args,
     )?;
-    let mut cmd = std::process::Command::new(program);
-    cmd.args(args).current_dir(root).env_clear().envs(env);
+    let mut cmd = lane_command(&program);
+    cmd.args(args).current_dir(root).envs(env);
     let (status, _) = aida_core::transport_policy::bounded(
         cmd,
         &[],
@@ -403,6 +403,15 @@ probe=$(mktemp "$SCCACHE_DIR/doctor-XXXXXXXX") || exit 1
 trap 'rm -f -- "$probe"' EXIT
 printf lane-cache-probe >"$probe" && [ "$(cat "$probe")" = lane-cache-probe ]
 "#;
+
+// Both the diagnostic and job runner start with an empty environment: no grant,
+// session, launcher-only variable or credential may leak into a build tool.
+// trace:STORY-2642 | ai:codex
+fn lane_command(program: &str) -> std::process::Command {
+    let mut command = std::process::Command::new(program);
+    command.env_clear();
+    command
+}
 
 #[cfg(all(test, target_os = "linux"))]
 #[test]
@@ -1687,15 +1696,12 @@ fn run_one_timed(
         Ok(f) => f,
         Err(e) => return refuse(&format!("open the output: {e}")),
     };
-    let mut cmd = std::process::Command::new(&program);
+    let mut cmd = lane_command(&program);
     cmd.args(&args)
         .current_dir(&lane.seat)
         .stdin(std::process::Stdio::null())
         .stdout(out)
         .stderr(err)
-        // A job never inherits the launcher's environment: no grant, no
-        // session or launcher-only variable, no credential.
-        .env_clear()
         .envs(&env);
     #[cfg(unix)]
     {
