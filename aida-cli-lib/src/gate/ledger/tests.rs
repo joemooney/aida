@@ -2505,3 +2505,92 @@ fn bug_2517_foreign_copy_is_ignored_without_rewriting_history() {
     assert_eq!(distinct_events.len(), 1);
     assert_eq!(std::fs::read(file).unwrap(), before);
 }
+
+// trace:STORY-2698 | ai:codex
+#[test]
+fn review_risk_is_ledger_metadata_not_verdict_authority() {
+    let (_tmp, root) = root();
+    let _env =
+        crate::test_env::AmbientGuard::hermetic_and(&root, None, &[("AIDA_CONTAINED", None)]);
+    git(&root, &["init", "--initial-branch=main", "--quiet"]);
+    git(&root, &["config", "user.email", "test@example.com"]);
+    git(&root, &["config", "user.name", "Test"]);
+    std::fs::create_dir(root.join("docs")).unwrap();
+    std::fs::write(root.join("docs/help.md"), "initial\n").unwrap();
+    git(&root, &["add", "."]);
+    git(&root, &["commit", "-qm", "initial"]);
+    git(&root, &["update-ref", "refs/remotes/origin/main", "HEAD"]);
+    git(
+        &root,
+        &[
+            "symbolic-ref",
+            "refs/remotes/origin/HEAD",
+            "refs/remotes/origin/main",
+        ],
+    );
+    std::fs::write(root.join("docs/help.md"), "updated\n").unwrap();
+    git(&root, &["add", "."]);
+    git(&root, &["commit", "-qm", "docs"]);
+    let head = crate::gate::review_carryover::resolve_commit(&root, "HEAD").unwrap();
+    git(&root, &["remote", "add", "origin", root.to_str().unwrap()]);
+    let change = ChangeKey::pr(999);
+    for verdict in ["approved", "request-changes"] {
+        let mut rec = record(verdict, &ts(0), None);
+        rec.insert("reviewed_sha".into(), head.clone().into());
+        // Untrusted input cannot select the host-computed tier.
+        rec.insert("risk".into(), serde_json::json!({"tier": "STRICT"}));
+        let event = event::verdict_event(&root, change, &rec, None);
+        let risk: crate::review_risk::RiskAssessment =
+            serde_json::from_value(event.risk.clone().unwrap()).unwrap();
+        assert_eq!(risk.tier, crate::review_risk::Tier::Fasttrack);
+        assert!(risk.advisory_only);
+        assert_eq!(risk.head.as_deref(), Some(head.as_str()));
+        assert!(risk.base.is_some());
+        assert_eq!(event.verdict_record(), Some(&rec));
+        store::append(&root, change, vec![event]).unwrap();
+        let (mut parsed, body, _) = crate::review_verdict_show_body_with_coverage(
+            &root,
+            "PR-999",
+            |_| rv::TipRelation::AtReviewedSha,
+            |_| None,
+        )
+        .unwrap();
+        assert_eq!(body["risk"]["tier"], "FASTTRACK");
+        assert!(crate::review_risk::notice(body.get("risk"))
+            .unwrap()
+            .contains("advisory only"));
+        assert_eq!(body["verdict"], verdict);
+        let receipt_source = rv::VerdictSource::File(root.join("synced-receipt.json"));
+        assert_eq!(
+            crate::review_risk::stored_for_display(&root, "PR-999", &receipt_source, &parsed),
+            body.get("risk").cloned()
+        );
+        parsed.recorded_at = Some(ts(10));
+        assert!(
+            crate::review_risk::stored_for_display(&root, "PR-999", &receipt_source, &parsed)
+                .is_none()
+        );
+    }
+    // Next verdict, changed base: refresh advisory evidence, do not reuse a
+    // previous computation. Legacy events still deserialize with no tier.
+    let before = store::read_file(&root, change);
+    let mut record = before.last().unwrap().verdict_record().unwrap().clone();
+    record.insert("recorded_at".into(), ts(1).into());
+    git(&root, &["update-ref", "refs/remotes/origin/main", "HEAD"]);
+    let updated = event::verdict_event(&root, change, &record, None);
+    assert_eq!(updated.risk.as_ref().unwrap()["tier"], "STRICT");
+    store::append(&root, change, vec![updated]).unwrap();
+    assert_eq!(store::read_file(&root, change).len(), before.len() + 1);
+    let mut legacy = serde_json::to_value(before.last().unwrap()).unwrap();
+    legacy["risk"] = serde_json::json!({"tier": "future-or-malformed"});
+    let tolerant: GateEvent = serde_json::from_value(legacy.clone()).unwrap();
+    assert_eq!(
+        tolerant.verdict_record(),
+        before.last().unwrap().verdict_record()
+    );
+    legacy.as_object_mut().unwrap().remove("risk");
+    assert!(serde_json::from_value::<GateEvent>(legacy)
+        .unwrap()
+        .risk
+        .is_none());
+}

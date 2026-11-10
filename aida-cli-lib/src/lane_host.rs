@@ -216,6 +216,25 @@ fn cache_reachability_check(result: Result<()>) -> Check {
         "configure host Cargo build.rustc-wrapper = 'sccache'; enable bubblewrap and repair ~/.cache/aida/lane-sccache ownership/mode (0700), then retry on the host")
 }
 
+// trace:BUG-2519 | ai:codex
+fn cache_reuse_check(result: Result<()>) -> Check {
+    let (pass, detail) = match result {
+        Ok(()) => (
+            true,
+            "Rust cache reused an identical compilation across working directories".into(),
+        ),
+        Err(error) => (
+            false,
+            format!("lane-job cache reuse probe failed: {error:#}"),
+        ),
+    };
+    let mut row = check("lane-cache-reuse", pass, false, detail,
+        "inspect sccache working-directory cache keys; a reachable cache does not prove cross-seat Rust reuse");
+    // Performance evidence is advisory, never launch admission authority.
+    row.required = false;
+    row
+}
+
 // Release evidence is live and independent of the inspected project's Git refs.
 // trace:STORY-2642 | ai:codex
 fn latest_release() -> Option<String> {
@@ -448,6 +467,7 @@ fn inspect(root: &Path, live_store: bool) -> Vec<Check> {
     ));
     if live_store {
         checks.push(cache_reachability_check(crate::lane_job::probe_cache(root)));
+        checks.push(cache_reuse_check(crate::lane_job::probe_cache_reuse(root)));
     }
     checks
 }
@@ -826,6 +846,16 @@ mod tests {
             "empty env wrapper disables caching"
         );
         assert!(cache_reachability_check(Ok(())).required);
+    }
+
+    #[test]
+    // trace:BUG-2519 | ai:codex
+    fn cache_reuse_is_separate_advisory_performance_evidence() {
+        let failed = cache_reuse_check(Err(anyhow::anyhow!("path-sensitive")));
+        assert!(!failed.pass && !failed.required && !failed.containment);
+        assert!(failed.detail.contains("path-sensitive"));
+        let passed = cache_reuse_check(Ok(()));
+        assert!(passed.pass && !passed.required && !passed.containment);
     }
 
     #[test]
