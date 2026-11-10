@@ -8,7 +8,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-10T03:07:38.542859262Z
-modified_at: 2026-11-10T12:05:01.058646041Z
+modified_at: 2026-11-10T13:02:42.253083482Z
 req_type: Bug
 comments:
 - id: 01a1c3a1-bccc-7ef0-b6b7-2fdb52e783f5
@@ -148,6 +148,24 @@ comments:
   modified_at: 2026-11-10T12:05:01.058646041Z
   session_id: 01a1c553e000
   harness_version: codex-cli 0.167.0
+- id: 01a1c58d-ba4d-7423-acfa-a8039aa2711e
+  author: joe
+  content: |-
+    CI FAILURES at 270fa1b66c7f (run 42813595599). Fix exactly these before pushing; a push without a code change for them will fail again and must not be made:
+    error: test run failed
+            FAIL  aida-cli-lib status_sections::bug_2149_2150_standalone_reviewer_tests::bug2187_failed_headless_reviewer_keeps_exit_code_and_draft
+            FAIL  aida-cli-lib status_sections::bug_2149_2150_standalone_reviewer_tests::bug2187_unrecorded_headless_review_surfaces_draft_and_record_command
+            FAIL  aida-cli-lib status_sections::bug_2149_2150_standalone_reviewer_tests::standalone_reviewer_verdict_written_in_worktree_reaches_launcher_checkout
+        thread 'status_sections::bug_2149_2150_standalone_reviewer_tests::bug2187_failed_headless_reviewer_keeps_exit_code_and_draft' (228494) panicked at aida-cli-lib/src/test_env.rs:109:5:
+        thread 'status_sections::bug_2149_2150_standalone_reviewer_tests::bug2187_failed_headless_reviewer_keeps_exit_code_and_draft' (228496) panicked at aida-cli-lib/src/tests/bug_2149_2150_standalone_reviewer_tests.rs:1019:5:
+        thread 'status_sections::bug_2149_2150_standalone_reviewer_tests::bug2187_unrecorded_headless_review_surfaces_draft_and_record_command' (228587) panicked at aida-cli-lib/src/test_env.rs:109:5:
+        thread 'status_sections::bug_2149_2150_standalone_reviewer_tests::bug2187_unrecorded_headless_review_surfaces_draft_and_record_command' (228589) panicked at aida-cli-lib/src/tests/bug_2149_2150_standalone_reviewer_tests.rs:990:
+        thread 'status_sections::bug_2149_2150_standalone_reviewer_tests::standalone_reviewer_verdict_written_in_worktree_reaches_launcher_checkout' (229179) panicked at aida-cli-lib/src/test_env.rs:109:5:
+        thread 'status_sections::bug_2149_2150_standalone_reviewer_tests::standalone_reviewer_verdict_written_in_worktree_reaches_launcher_checkout' (229181) panicked at aida-cli-lib/src/tests/bug_2149_2150_standalone_reviewer_tests.rs
+  created_at: 2026-11-10T13:02:42.253083482Z
+  modified_at: 2026-11-10T13:02:42.253083482Z
+  session_id: 01a1c39a-801a-7bd1-8da9-c955a6707f0b
+  harness_version: 2.1.321 (Claude Code)
 history:
 - id: 01a1c3a2-0b0e-7e70-890b-6fe8aaba4acd
   author: joe
