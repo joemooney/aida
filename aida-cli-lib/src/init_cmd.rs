@@ -4562,6 +4562,8 @@ pub(crate) fn handle_init_distributed_worktree(
     // would then climb UP to this workspace-wide store. Gate on not-yet-init'd
     // so re-running in a set-up project (handled below) keeps its own message;
     // bypass with --force. trace:BUG-446 | ai:claude
+    // Offer the existing positional bootstrap for a new child project.
+    // trace:STORY-2700 | ai:codex
     if !force && !aida_dir.join("config.toml").exists() {
         let nested = unmanaged_nested_projects(&cwd);
         if !nested.is_empty() {
@@ -4583,7 +4585,8 @@ pub(crate) fn handle_init_distributed_worktree(
                  store at the workspace level — every `aida` command from a project \
                  subdirectory would then operate on this workspace-wide store, and every \
                  child would inherit this scaffold's CLAUDE.md via ancestor lookup.\n\n\
-                 Run `aida init` inside an actual project directory instead, \
+                 Create a new project subdirectory with `aida init my-project --git-init`, \
+                 or run `aida init` inside an existing project directory instead, \
                  or pass --force to initialize here anyway.",
                 nested.len(),
                 if nested.len() == 1 {
