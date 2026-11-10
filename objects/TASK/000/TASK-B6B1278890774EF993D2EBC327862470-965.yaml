@@ -17,7 +17,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-08T03:08:54.290380002Z
-modified_at: 2026-11-10T00:40:56.783880743Z
+modified_at: 2026-11-10T00:54:04.706932136Z
 req_type: Task
 tags:
 - area:architecture
@@ -106,6 +106,13 @@ comments:
   modified_at: 2026-11-10T00:25:33.052145329Z
   session_id: 01a1beff-fc3b-78e2-93e2-9b0c283b0339
   harness_version: 2.1.319 (Claude Code)
+- id: 01a1c2f2-a6a2-7510-96f9-a3d423addf37
+  author: dirtlab
+  content: 'Advisor-authorized partial slice prepared: 137 Rust consumers migrated directly to cmdkit, module exposed for the MCP crate, one Python source assertion updated. All files in PRs #3731/#3744/#3651 remain untouched; six skipped framework importers and compatibility re-exports remain. Evidence: docs/internal/testing/task-3448-cmdkit-imports.md. Final registry suite 21 passed including help golden; MCP transport 1 passed; Python hook suite 13 passed; 41 distinct fast gates passed in batches; formatting and scope audit passed. Full fast target not claimed due containment operator-role wait and lane compilation policy. SCC 334 to 334 (595 modules), so deferred completion is not claimed. Native-seat edits uncommitted; host publication must retain Refs TASK-3448 and Help-Golden: unchanged; full excluded-file list is in /tmp/task3448-publication-body.md.'
+  created_at: 2026-11-10T00:54:04.706932136Z
+  modified_at: 2026-11-10T00:54:04.706932136Z
+  session_id: 01a1c2e69b09
+  harness_version: codex-cli 0.167.0
 history:
 - id: 01a1b921-d315-74a0-9c9a-0ca54df44ce6
   author: joe
