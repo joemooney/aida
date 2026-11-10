@@ -3373,6 +3373,76 @@ fn finish_rework_merge(
 #[cfg(test)]
 mod rework_merge_tests {
     use super::*;
+    // A real staged merge, with the index left untouched while the lane edits
+    // files. This exercises the marker gate without requiring bubblewrap.
+    // trace:STORY-2710 | ai:codex
+    #[test]
+    fn story_2710_marker_gate_refuses_unmerged_and_staged_resolutions() {
+        let fx = tests::fixture();
+        let g = |args: &[&str]| tests::git_ok(&fx.main, args);
+        let path = "conflict [literal]\n$(touch sentinel).rs";
+        std::fs::write(fx.main.join(path), "base\n").unwrap();
+        g(&["add", "--", path]);
+        g(&["commit", "-qm", "base"]);
+        g(&["checkout", "-qb", "repair"]);
+        std::fs::write(fx.main.join(path), "lane\n").unwrap();
+        g(&["commit", "-qam", "lane"]);
+        let head = g(&["rev-parse", "HEAD"]);
+        g(&["checkout", "main"]);
+        std::fs::write(fx.main.join(path), "main\n").unwrap();
+        g(&["commit", "-qam", "main"]);
+        g(&["checkout", "repair"]);
+        assert!(!crate::test_git::git_command()
+            .current_dir(&fx.main)
+            .args(["merge", "--no-edit", "main"])
+            .status()
+            .unwrap()
+            .success());
+        let execute = |program: &str, args: &[&std::ffi::OsStr]| -> Result<Vec<u8>> {
+            let mut command = if program == "git" {
+                crate::test_git::git_command()
+            } else {
+                std::process::Command::new(program)
+            };
+            let out = command.current_dir(&fx.main).args(args).output()?;
+            anyhow::ensure!(
+                out.status.success(),
+                "{}",
+                String::from_utf8_lossy(&out.stderr)
+            );
+            Ok(out.stdout)
+        };
+        let index = g(&["ls-files", "--stage"]);
+        let merge_head = g(&["rev-parse", "MERGE_HEAD"]);
+        for contents in [
+            "<<<<<<< HEAD\nlane\n=======\nmain\n>>>>>>> main\n",
+            "resolved except opening\n<<<<<<< HEAD\n",
+            "resolved except closing\n>>>>>>> main\n",
+        ] {
+            std::fs::write(fx.main.join(path), contents).unwrap();
+            let why = refuse_pending_conflict_markers(&execute)
+                .unwrap_err()
+                .to_string();
+            assert!(why.contains("refusing to publish"), "{why}");
+            assert!(why.contains("conflict [literal]"), "{why}");
+            assert_eq!(g(&["ls-files", "--stage"]), index);
+            assert_eq!(g(&["rev-parse", "HEAD"]), head);
+            assert_eq!(g(&["rev-parse", "MERGE_HEAD"]), merge_head);
+        }
+        // A failed prior host commit may have staged the resolution: scan it
+        // on retry as well, rather than trusting absence of unmerged entries.
+        g(&["add", "--", path]);
+        assert!(g(&["ls-files", "--unmerged"]).is_empty());
+        assert!(refuse_pending_conflict_markers(&execute).is_err());
+        std::fs::write(fx.main.join(path), "lane and main\n").unwrap();
+        refuse_pending_conflict_markers(&execute).unwrap();
+        assert!(!fx.main.join("sentinel").exists());
+        // A deletion is also a valid resolution; no file must be opened.
+        std::fs::remove_file(fx.main.join(path)).unwrap();
+        refuse_pending_conflict_markers(&execute).unwrap();
+        assert!(refuse_pending_conflict_markers(&|_, _| anyhow::bail!("read failed")).is_err());
+    }
+
     // trace:BUG-2456 | ai:codex
     #[test]
     fn bug_2456_publication_failure_refuses_launch_and_current_head_skips_push() {
@@ -4005,6 +4075,14 @@ pub(crate) fn commit_pending(
     if status.is_empty() {
         return Ok(None);
     }
+    // The lane cannot update the index: resolved files still have unmerged
+    // entries until this host stages them. Check working-tree bytes first,
+    // including staged resolutions on a retry, before any index mutation.
+    // trace:STORY-2710 | ai:codex
+    refuse_pending_conflict_markers(&|program, args| {
+        run_sandboxed(clone, main, program, args, PROBE_OUTPUT_CAP)
+            .map_err(|why| anyhow::anyhow!("could not inspect conflict markers: {why}"))
+    })?;
     let identity: [(&'static str, std::ffi::OsString); 4] = [
         ("GIT_AUTHOR_NAME", name.clone().into()),
         ("GIT_AUTHOR_EMAIL", email.clone().into()),
@@ -4123,6 +4201,62 @@ pub(crate) fn commit_pending(
             }
         }
     }
+}
+
+/// Inspect changed tracked paths through the existing read-only probe sandbox.
+/// Literal, NUL-delimited pathspecs preserve unusual names and prevent a path
+/// from selecting additional files. Deleted resolutions have no bytes to scan.
+/// Git grep does not follow worktree symlinks or run textconv filters. All
+/// errors, including capped output and timeouts, refuse publication.
+// trace:STORY-2710 | ai:codex
+fn refuse_pending_conflict_markers(
+    execute: &dyn Fn(&str, &[&std::ffi::OsStr]) -> Result<Vec<u8>>,
+) -> Result<()> {
+    use std::ffi::{OsStr, OsString};
+    use std::os::unix::ffi::OsStringExt;
+    let diff: Vec<&OsStr> = [
+        "diff",
+        "--name-only",
+        "--no-ext-diff",
+        "--no-textconv",
+        "--diff-filter=ACMRTUXB",
+        "-z",
+        "HEAD",
+        "--",
+    ]
+    .iter()
+    .map(OsStr::new)
+    .collect();
+    let paths = execute("git", &diff)?;
+    let paths: Vec<OsString> = paths
+        .split(|b| *b == 0)
+        .filter(|p| !p.is_empty())
+        .map(|p| {
+            let mut literal = b":(literal)".to_vec();
+            literal.extend_from_slice(p);
+            OsString::from_vec(literal)
+        })
+        .collect();
+    if paths.is_empty() {
+        return Ok(());
+    }
+    // grep's 1 means no matches; every other failure remains a failure. The
+    // shell program is fixed, with filenames passed only as argv, never code.
+    let mut args: Vec<&OsStr> = [
+        "-c",
+        "git grep --no-textconv -a -l -z -e '^<<<<<<<' -e '^>>>>>>>' -- \"$@\"; result=$?; if [ \"$result\" -eq 1 ]; then exit 0; else exit \"$result\"; fi",
+        "aida-conflict-marker-scan",
+    ].iter().map(OsStr::new).collect();
+    args.extend(paths.iter().map(OsString::as_os_str));
+    let matches = execute("sh", &args)?;
+    anyhow::ensure!(
+        matches.is_empty(),
+        "refusing to publish: unresolved conflict markers in {}; resolve <<<<<<< / >>>>>>> markers before retrying; nothing was staged or committed",
+        matches.split(|b| *b == 0).filter(|p| !p.is_empty())
+            .map(|p| format!("{:?}", String::from_utf8_lossy(p)))
+            .collect::<Vec<_>>().join(", ")
+    );
+    Ok(())
 }
 
 /// [`commit_pending`]'s failure path may roll the index back only when HEAD

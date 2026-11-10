@@ -1,6 +1,7 @@
 # Automatic conflict-resolution lane sketch
 
-Status: proposed; requires master sign-off before production implementation.
+Status: merge mechanics ruled by advisor on 2026-11-10 at 22:22 UTC.
+Shared dispatch-state design still proposed; story implementation is incomplete.
 <!-- trace:STORY-2710 | ai:codex -->
 
 The existing rework pickup already performs a host merge and routes fresh
@@ -11,14 +12,32 @@ the child to resolve, commit and push without an explicit compile gate.
 routes it to the advisor. These are separate entry points; a forge refusal is
 not evidence that a local host merge was attempted.
 
+## Binding host-staged merge boundary
+
+The advisor ruling supersedes the original Claude-only proposal and spec wording.
+The host fetches and merges `origin/main` in the seat clone before launch. A real
+conflict retains `MERGE_HEAD`, unmerged index entries and working-tree markers.
+The host restores registered regenerable outputs from main and regenerates them
+before launch. The configured implementer vendor edits only working-tree files;
+its brief lists conflict paths. In particular, Codex `.git` stays read-only.
+Neither a vendor reroute to Claude nor a writable Codex `.git` is permitted.
+
+After resolution the host publication path scans for opening or closing conflict
+markers, stages and commits the files, completing the pending merge, then pushes
+through existing publication vetoes. AC1 uses the configured implementer vendor.
+AC6 requires an end-to-end Codex fixture with read-only `.git`; AC7 requires
+publication refusal for either remaining marker in a conflicted path. The former
+FAQ-150 step 6 and BUG-2456 Claude routing are retired by the ruling, but their
+production code and documentation still need migration.
+
 ## Proposed control flow
 
 1. Keep live-author and unknown-liveness protections in review-watch. Only a
    positively observed conflict on an open, same-repository PR with an exact
    head, branch, base and unambiguous backing spec may request a conflict lane.
    Network/auth failures retain the existing retry and advisor behavior.
-2. Have the watcher request an ordinary fresh queue-work pickup pinned to Claude
-   and the existing PR branch. Reuse its lease, vendor admission, containment,
+2. Have the watcher request an ordinary fresh queue-work pickup using the
+   configured implementer vendor and the existing PR branch. Reuse its lease, vendor admission, containment,
    host-merge and rollback checks. The watcher must not run a local merge or
    Cargo itself. Revalidate the PR head before admission; a changed head is
    rediscovered rather than repaired using stale evidence.
@@ -28,11 +47,12 @@ not evidence that a local host merge was attempted.
    capacity and cannot trigger another lane. Failed pre-spawn setup can retry
    only after cleanup is confirmed. Use the same reservation for watcher and
    rework requests so concurrent entry points cannot launch duplicate repairs.
-4. In the admitted Claude lane, repeat the host merge against the pinned base.
-   A clean merge uses the ordinary publication path. A real conflict enters the
-   shared repair policy below. Never convert an existing Codex resume thread
-   into a Claude resume: request a fresh admitted lane after releasing its seat.
-5. Before publication, require no unmerged entries or conflict markers and a
+4. The host merges the pinned base before launching the admitted lane. A real
+   conflict stays staged in the seat with `MERGE_HEAD` and the original path
+   list retained; the lane resolves only working-tree files. A clean merge
+   uses the ordinary publication path. Resumes retain their original vendor.
+5. Before host staging, require no remaining conflict markers in the listed
+   paths. Unmerged index entries are expected until host `git add`; require a
    successful `cargo check --profile agent -p aida-cli-lib --tests` on the exact
    merged tree. Any subsequent source change invalidates that check. Push only
    to the same PR branch with expected-head protection; preserve ordinary
@@ -48,9 +68,11 @@ mirror outputs from the existing template sync mechanism using
 the exact output set; do not treat all of `.claude/` as generated. Other ratchet
 ledgers enter this table only with reviewed generators and source dependencies.
 
-Resolve authoritative source conflicts first. Restore only registered generated
-outputs to a parseable starting state, run their generators once in dependency
-order, and stage only validated declared outputs. Refuse generator failures,
+At host preparation, restore registered generated outputs from the pinned main
+commit and regenerate them in dependency order. If a generator needs conflicted
+authoritative sources, refuse with those paths rather than generating a partial
+ledger. Run generators inside the host-owned sandbox; never execute a generator
+from a lane-modified checkout with host privileges. Validate declared outputs. Refuse generator failures,
 unexpected writes or unresolved source dependencies; never accept a ledger by
 unioning conflict sides or enlarging an allowance merely to pass a guard.
 
@@ -86,3 +108,35 @@ published tree. Verify repeated refused passes send one accepted notice per
 head, with conflicting paths, and a new head permits another notice. Preserve
 the watcher no-Cargo/no-local-merge ratchet. Execute targeted Rust tests via the
 lane job runner; no implementation or executed-test evidence is claimed here.
+
+## Round 2 implementation evidence and remaining gate
+
+The independent AC7 safety slice adds a bounded, read-only sandbox probe before
+`commit_pending` can mutate the index. It scans changed tracked working-tree
+paths against HEAD, including unmerged entries and staged resolutions on retry,
+for either opening or closing markers. Deleted resolutions are allowed. Literal
+NUL-delimited pathspecs handle unusual names without shell interpolation. Probe
+errors refuse publication. This deliberately does not make `write-tree` accept
+an unmerged index or enable automatic conflict dispatch.
+
+P1 remains open: AC1-6 need production dispatch, host regeneration, merged-tree
+compile gating, per-head refusal notices and their regression coverage. AC7 has
+a fixture regression, but does not alone establish the full story. No story
+approval or completion is requested for this slice. The remaining master
+decision is approval of the shared versioned repair journal in the state section
+above (reservation identity, ambiguous-spawn retention and watcher/direct-rework
+coordination). The merge-mechanics ruling does not explicitly decide that state
+contract. Implementation of that new orchestrator state remains gated by the
+repository Sketch-First Protocol; the advisor should approve that journal or
+choose the watcher-state alternative before the next production slice.
+
+Validation for this slice: lane job `j20261110T222603765-2-0` ran
+`cargo test --profile agent -p aida-cli-lib --lib -- story_2710_marker_gate`:
+**1 passed, 0 failed, 0 ignored**. The real Git fixture exercises opening-only
+and closing-only markers, unmerged and staged resolutions, index/HEAD/MERGE_HEAD
+preservation, deletion and filenames with newlines, brackets and shell-looking
+text. `rustfmt --edition 2021 --check aida-cli-lib/src/seat_clone.rs` and
+`git diff --check` pass. This test does not exercise an end-to-end read-only
+Codex launch or host publication; AC6 remains unverified. The lane recorded a
+Refs-only native publication declaration and punted P1; the punt remains a
+publication veto pending triage. All checkout edits are left uncommitted.
