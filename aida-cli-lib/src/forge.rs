@@ -2977,14 +2977,13 @@ impl Forge for GitLabForge {
     }
 
     fn change_for_spec(&self, spec: &str) -> Result<ChangeLookup> {
-        // STORY-509: the BUG-223 fallback — find the open MR whose title/body
-        // references `spec` when the branch-keyed lookup misses (branch swapped).
-        // BUG-639: via REST (`…?search=<spec>&state=opened`). The branch label is
-        // unknown from a spec search; the parser fills it from the MR's own
-        // source_branch. trace:STORY-509 trace:BUG-223 trace:BUG-639 | ai:claude
+        // GitLab search covers title/description, not source_branch. Enumerate
+        // open MRs so branch-only ownership also holds completion. A full page
+        // without a match remains unknown in the checked parser.
+        // trace:BUG-2516 | ai:codex
         let out = self.glab_api_get(
             "projects/:id/merge_requests",
-            &[("search", spec), ("state", "opened"), ("per_page", "100")],
+            &[("state", "opened"), ("per_page", "100")],
         );
         Ok(glab_spec_lookup_from_list_output(out, spec))
     }
@@ -3862,7 +3861,7 @@ fn glab_lookup_from_list_output(
     }
 }
 
-/// Search hits are candidates, not completion credit. Reuse the GitHub
+/// Open MRs are candidates, not completion credit. Reuse the GitHub
 /// reconciliation matcher across the entire page, with GitLab's field names.
 /// A full page without credit cannot establish absence beyond that page.
 // trace:BUG-2516 | ai:codex

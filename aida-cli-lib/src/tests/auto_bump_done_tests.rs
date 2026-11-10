@@ -5152,6 +5152,31 @@ fn slice_subject_exclusion_is_scoped_to_rebased_commits() {
     assert!(!has_flip(&flips, "TASK-9304"), "flips: {flips:?}");
 }
 
+// Fake GitLab search deliberately excludes source_branch, as the REST API does.
+// trace:BUG-2516 | ai:codex
+fn bug_2516_write_glab(bin: &std::path::Path, rows: &[serde_json::Value]) {
+    let rows = serde_json::to_string(rows).unwrap();
+    crate::test_exec::write_executable(
+        &bin.join("glab"),
+        format!(
+            r#"#!/usr/bin/python3
+import json, sys
+if sys.argv[1:] == ['--version']:
+    print('glab-test')
+    sys.exit(0)
+if 'state=opened' not in sys.argv or 'per_page=100' not in sys.argv:
+    sys.exit(1)
+rows = json.loads('{rows}')
+for arg in sys.argv[1:]:
+    if arg.startswith('search='):
+        term = arg.split('=', 1)[1].lower()
+        rows = [r for r in rows if term in (r.get('title', '') + ' ' + (r.get('description') or '')).lower()]
+print(json.dumps(rows))
+"#
+        ),
+    );
+}
+
 // trace:BUG-2516 | ai:codex
 #[test]
 fn bug_2516_gitlab_pull_completion_trailers() {
@@ -5181,13 +5206,17 @@ fn bug_2516_gitlab_pull_completion_trailers() {
     .unwrap();
     let bin = root.join("bin");
     std::fs::create_dir(&bin).unwrap();
-    let log = root.join("glab.log");
-    crate::test_exec::write_executable(&bin.join("glab"), format!(
-        "#!/bin/sh\nif [ \"$1\" = --version ]; then echo glab-test; exit 0; fi\necho \"$*\" >> '{}'\ncase \"$*\" in\n*state=opened*) echo '[]';;\n*) exit 1;;\nesac\n", log.display()
-    ));
+    bug_2516_write_glab(
+        &bin,
+        &[serde_json::json!({
+            "iid": 3, "title": "follow-up", "description": "",
+            "source_branch": "fix/bug-2518-rework", "state": "opened"
+        })],
+    );
     let _path = crate::test_env::EnvVarGuard::prepend_path(&bin);
     seed_spec_at(&store_path, "BUG-2516", "InProgress");
     seed_spec_at(&store_path, "BUG-2517", "InProgress");
+    seed_spec_at(&store_path, "BUG-2518", "InProgress");
     let pre = run_git(&root, &["rev-parse", "HEAD"]);
     run_git(
         &root,
@@ -5195,7 +5224,7 @@ fn bug_2516_gitlab_pull_completion_trailers() {
             "commit",
             "--allow-empty",
             "-m",
-            "fix: completing squash (BUG-2516)",
+            "fix: completing squash (BUG-2516, BUG-2518)",
         ],
     );
     let completing_sha = run_git(&root, &["rev-parse", "HEAD"]);
@@ -5229,9 +5258,11 @@ fn bug_2516_gitlab_pull_completion_trailers() {
         store.get_requirement_by_spec_id("BUG-2517").unwrap().status,
         RequirementStatus::InProgress
     );
-    let calls = std::fs::read_to_string(log).unwrap();
-    assert!(calls.contains("search=BUG-2516"), "{calls}");
-    assert!(calls.contains("state=opened"), "{calls}");
+    assert_eq!(
+        store.get_requirement_by_spec_id("BUG-2518").unwrap().status,
+        RequirementStatus::InProgress,
+        "branch-only open MR must prevent completion after pull"
+    );
 }
 
 // trace:BUG-2516 | ai:codex
@@ -5297,10 +5328,7 @@ fn bug_2516_gitlab_search_requires_credit_across_whole_page() {
         "state": "opened"
     });
     let check = |rows: Vec<serde_json::Value>, expected| {
-        let response = serde_json::to_string(&rows).unwrap();
-        crate::test_exec::write_executable(&bin.join("glab"), format!(
-            "#!/bin/sh\nif [ \"$1\" = --version ]; then echo glab-test; exit 0; fi\necho '{response}'\n"
-        ));
+        bug_2516_write_glab(&bin, &rows);
         assert_eq!(specs_with_open_prs(&root, ["BUG-2516".into()]), expected);
     };
     check(vec![miss.clone()], Some(std::collections::BTreeMap::new()));
