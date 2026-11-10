@@ -6668,7 +6668,23 @@ pub(crate) fn run_standalone_reviewer(
     // every ship until someone commits by hand. trace:BUG-2180 | ai:claude
     store_commit.commit();
 
-    let pr_spec_ids: Vec<String> = fetch_pr_ship_metadata_via_gh(project_root, pr)
+    let pr_spec_ids: Vec<String> = fetch_pr_ship_metadata_via_forge(project_root, pr)
+        // trace:BUG-2515 | ai:codex
+        // Standalone PR reviewers can lack local forge configuration (for
+        // example in a scratch launch root). Preserve their GitHub recovery
+        // lookup without redirecting a configured GitLab MR to GitHub.
+        .or_else(|err| {
+            if crate::forge::resolve_forge_kind(project_root) != crate::forge::ForgeKind::None {
+                return Err(err);
+            }
+            crate::forge::forge_for_kind(project_root, crate::forge::ForgeKind::GitHub)
+                .change_title_and_body(pr)
+                .map(|(title, body)| crate::pr_cmd::PrShipMetadata {
+                    title,
+                    body,
+                    number: Some(pr),
+                })
+        })
         .map(|meta| review_calibration_spec_ids(project_root, &meta.title, branch, &meta.body))
         .unwrap_or_default();
 
