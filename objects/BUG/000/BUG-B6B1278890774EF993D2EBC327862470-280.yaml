@@ -8,7 +8,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-10T03:07:38.542859262Z
-modified_at: 2026-11-10T04:59:17.959921389Z
+modified_at: 2026-11-10T05:37:26.081141546Z
 req_type: Bug
 comments:
 - id: 01a1c3a1-bccc-7ef0-b6b7-2fdb52e783f5
@@ -49,6 +49,24 @@ comments:
     Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
   created_at: 2026-11-10T04:54:48.049576548Z
   modified_at: 2026-11-10T04:54:48.049576548Z
+- id: 01a1c3f6-1241-7ec3-9a1c-43b7fc3be23b
+  author: joe
+  content: |-
+    CI FAILURES at 50c9ea44e9d4 (run 42760680659). Fix exactly these before pushing; a push without a code change for them will fail again and must not be made:
+    error: test run failed
+            FAIL  aida-cli-lib forge_observed::forge_read_ratchet_tests::story_2401_no_new_raw_gh_reads_outside_forge
+            FAIL  aida-cli-lib status_sections::bug_2149_2150_standalone_reviewer_tests::bug2187_failed_headless_reviewer_keeps_exit_code_and_draft
+            FAIL  aida-cli-lib status_sections::bug_2149_2150_standalone_reviewer_tests::bug2187_unrecorded_headless_review_surfaces_draft_and_record_command
+            FAIL  aida-cli-lib status_sections::bug_2149_2150_standalone_reviewer_tests::standalone_reviewer_verdict_written_in_worktree_reaches_launcher_checkout
+        thread 'forge_observed::forge_read_ratchet_tests::story_2401_no_new_raw_gh_reads_outside_forge' (49940) panicked at aida-cli-lib/src/tests/story_2401_forge_read_ratchet_tests.rs:235:5:
+        thread 'status_sections::bug_2149_2150_standalone_reviewer_tests::bug2187_failed_headless_reviewer_keeps_exit_code_and_draft' (284100) panicked at aida-cli-lib/src/test_env.rs:109:5:
+        thread 'status_sections::bug_2149_2150_standalone_reviewer_tests::bug2187_failed_headless_reviewer_keeps_exit_code_and_draft' (284102) panicked at aida-cli-lib/src/tests/bug_2149_2150_standalone_reviewer_tests.rs:1019:5:
+        thread 'status_sections::bug_2149_2150_standalone_reviewer_tests::bug2187_unrecorded_headless_review_surfaces_draft_and_record_command' (284186) panicked at aida-cli-lib/src/test_env.rs:109:5:
+        thread 'status_sections::bug_2149_2150_standalone_reviewer_tests::bug2187_unrecorded_headless_review_surfaces_draft_and_record_command' (284192) panicked at aida-cli-lib/src/tests/bug_2149_2150_standalone_reviewer_tests.rs:990:
+        thread 'status_sections::bug_2149_2150_standalone_reviewer_tests::standalone_reviewer_verdict_written_in_worktree_reaches_launcher_checkout' (284785) panicked at aida-cli-lib/src/test_env.rs:109:5:
+        thread 'status_sections::bug_2149_2150_standalone_reviewer_tests::standalone_reviewer_verdict_written_in_worktree_reaches_launcher_checkout' (284787) panicked at aida-cli-lib/src/tests/bug_2149_2150_standalone_reviewer_tests.rs
+  created_at: 2026-11-10T05:37:26.081141546Z
+  modified_at: 2026-11-10T05:37:26.081141546Z
 history:
 - id: 01a1c3a2-0b0e-7e70-890b-6fe8aaba4acd
   author: joe
