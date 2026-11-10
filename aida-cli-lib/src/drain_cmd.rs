@@ -6,8 +6,18 @@
 // trace:STORY-771 | ai:claude
 
 use crate::process_retry::RetryEtxtbsy;
-use crate::*;
+use crate::{
+    agent_output_mode, aida_exe_path, auto_complete, autoprogress, ci_probe_with_forge,
+    collect_git_linkage_opts, drain_lock, drain_resume, drain_state, events,
+    find_main_worktree_root, handle_tail_cli, last_drain, network_retry, output_format_is_json,
+    pr_head_branch, pr_is_merged_with_sink, probe_branch_on_origin, process_probe,
+    release_dead_leases_for_resume, resolve_review_surface_forge_first, run_auto_complete, worker,
+    BranchOriginProbe, CiProbe, DrainCommand, ResumeEntry, ReviewSurface,
+};
+use aida_core::{RequirementStatus, Storage};
 use anyhow::Context;
+use anyhow::Result;
+use colored::Colorize;
 use serde::{Deserialize, Serialize};
 
 // trace:STORY-1728 | ai:claude
