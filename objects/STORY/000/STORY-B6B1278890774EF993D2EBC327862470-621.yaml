@@ -19,7 +19,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-10T03:05:40.778642968Z
-modified_at: 2026-11-10T09:07:37.515993753Z
+modified_at: 2026-11-10T09:07:38.792715799Z
 req_type: Story
 comments:
 - id: 01a1c370-9b5f-7770-a921-e48f45e2aecb
@@ -144,6 +144,22 @@ comments:
   content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: S1 full sweep found pending-delivery hold/retry regressions and stale legacy finding aliases; required CI remains pending.. No triage reason was given.'
   created_at: 2026-11-10T09:07:37.515988042Z
   modified_at: 2026-11-10T09:07:37.515988042Z
+  session_id: 01a1c39a-801a-7bd1-8da9-c955a6707f0b
+  harness_version: 2.1.321 (Claude Code)
+- id: 01a1c4b6-8619-7541-8ed3-b55576547734
+  author: joe
+  content: |-
+    REVIEW FINDINGS TO ADDRESS (STORY-2698):
+    Verdict: CHANGES REQUESTED
+    Reviewed commit: e8ae736fc4f7
+    Recorded: 2026-11-10T08:45:01.509997268+00:00
+    Findings:
+    1. [P2] Do not let sweep-pending transport records become arming refusals (aida-cli-lib/src/gate/ledger/mod.rs:210-228 and 374-389). The pending request-changes record is cloned from the approval and retains the identical recorded_at. RetainedHistory::projected includes it in rework hold history, and eligible_with_coverage at gate/rework_hold_release.rs:315-331 requires approved_at strictly greater than every refusing round. Therefore an otherwise eligible Rework-only hold cannot release after any all-deferred approval, even when delivery succeeds; each repeated all-deferred review creates another same-time refusal. Distinguish delivery state from substantive review refusals in release history while retaining fail-closed pending behavior, and add direct and collected all-deferred approval tests against an existing Rework hold.
+    2. [P2] Make failed contained delivery retryable through the actual collector (aida-cli-lib/src/gate/ledger/mod.rs:374-394). After pending events land and the sweep sink fails, the original approved worktree handoffs remain. Retrying collect_standalone_verdict with the original launch adds the fresh pending RequestChanges ledger candidate at review_verdict.rs:2881-2886 alongside those Approved handoffs; the agreement check at 2914-2924 rejects them before delivery can retry. The new retry test calls record_collected_verdict directly and misses this production path. Recognize a proven same-origin pending delivery during candidate reconciliation without accepting unrelated refusals, and test collection failure, repaired store, same-handoff retry and single sweep delivery.
+    3. [P2] Remove the superseded legacy findings alias when recording replacement findings (aida-cli-lib/src/gate/review_verdict.rs:1930-1951). build_verdict_object loads the existing object, replaces findings and finding_dispositions, but leaves blocking_findings intact unless the caller explicitly clears everything. Starting from a supported legacy refusal with blocking_findings:["old bug"], recording a different all-deferred structured finding leaves two unequal aliases; disposition_verdict returns RequestChanges instead of approving and delivering it. CLI preflight uses only the incoming findings and can report Approved while the spec record is refusing (and a clean PR handshake can disagree). Canonicalize/remove the old alias on explicit replacement, preserve it only in retained history, and add a legacy-record-to-structured-replacement regression.
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
+  created_at: 2026-11-10T09:07:38.649855778Z
+  modified_at: 2026-11-10T09:07:38.649855778Z
   session_id: 01a1c39a-801a-7bd1-8da9-c955a6707f0b
   harness_version: 2.1.321 (Claude Code)
 history:
