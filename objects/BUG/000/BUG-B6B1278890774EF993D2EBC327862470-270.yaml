@@ -8,7 +8,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-09T03:00:45.690194532Z
-modified_at: 2026-11-09T08:26:14.369203025Z
+modified_at: 2026-11-10T00:26:42.108850635Z
 req_type: Bug
 tags:
 - area:cli
@@ -120,6 +120,13 @@ comments:
   modified_at: 2026-11-09T08:21:32.363756305Z
   session_id: 01a1bf62d408
   harness_version: codex-cli 0.167.0
+- id: 01a1c2d9-963c-7e52-899b-3823c35c9dcc
+  author: joe
+  content: 'Advisor disposition 2026-11-10 00:30 UTC: closed as not reproducible. The original six calls'' argv and output are unrecoverable; #3714''s characterization tests (aida-cli/tests/bug_1770_tag_whitespace.rs) guard the exact tag, the comma combination and every candidate refusal shape. Reopen with full argv and unfiltered output if it recurs.'
+  created_at: 2026-11-10T00:26:42.108850635Z
+  modified_at: 2026-11-10T00:26:42.108850635Z
+  session_id: 01a1beff-fc3b-78e2-93e2-9b0c283b0339
+  harness_version: 2.1.319 (Claude Code)
 history:
 - id: 01a1beaa-5541-7fd1-9192-5cf255b115f3
   author: joe
