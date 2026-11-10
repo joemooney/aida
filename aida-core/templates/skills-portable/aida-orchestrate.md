@@ -456,8 +456,9 @@ Put the approved branches into one integration branch based on
   and pulls. In the PR body, end a line with `(SPEC-ID)` **only when this
   merge completes that spec**. For a slice, trailer the child task, never the
   parent.
+<!-- trace:BUG-2492 | ai:codex -->
 - **Never** use `--admin`. Never disable or edit required checks or branch
-  protection. If `merge-hold-gate` is red or a hold is set, stop and report.
+  protection. If `merge-hold-gate` is pending or failing, or a hold is set, stop and report.
 - **Verify MERGED** with `gh pr view N --json state` before touching specs.
   After a network error, re-check instead of assuming.
 - Run `aida pull` and confirm the specs auto-completed. `closure:pending` specs
