@@ -2752,16 +2752,14 @@ pub(crate) struct QuestionsArgs {
 
 fn run_questions(
     matches: &clap::ArgMatches,
-    ctx: &crate::command_registry::DispatchCtx,
-) -> anyhow::Result<crate::command_registry::Flow> {
+    ctx: &crate::cmdkit::DispatchCtx,
+) -> anyhow::Result<crate::cmdkit::Flow> {
     use crate::*;
     let args = <QuestionsArgs as clap::FromArgMatches>::from_arg_matches(matches)?;
     match &ctx.store {
-        None => Ok(crate::command_registry::Flow::Continue),
-        Some(crate::command_registry::StoreCtx::Distributed { .. }) => {
-            Ok(crate::command_registry::Flow::Continue)
-        }
-        Some(crate::command_registry::StoreCtx::Git {
+        None => Ok(crate::cmdkit::Flow::Continue),
+        Some(crate::cmdkit::StoreCtx::Distributed { .. }) => Ok(crate::cmdkit::Flow::Continue),
+        Some(crate::cmdkit::StoreCtx::Git {
             store_path,
             backend,
         }) => {
@@ -2772,9 +2770,9 @@ fn run_questions(
                     handle_questions_command(cmd.as_ref(), backend, store_path)?;
                 }
             }
-            Ok(crate::command_registry::Flow::Continue)
+            Ok(crate::cmdkit::Flow::Continue)
         }
-        Some(crate::command_registry::StoreCtx::Legacy {
+        Some(crate::cmdkit::StoreCtx::Legacy {
             storage,
             requirements_path,
         }) => {
@@ -2791,20 +2789,19 @@ fn run_questions(
                     );
                 }
             }
-            Ok(crate::command_registry::Flow::Continue)
+            Ok(crate::cmdkit::Flow::Continue)
         }
     }
 }
 
 // trace:STORY-1728 | ai:claude
-pub(crate) static QUESTIONS: crate::command_registry::CommandReg =
-    crate::command_registry::CommandReg {
-        name: "questions",
-        help_after: "findings",
-        command: <QuestionsArgs as clap::CommandFactory>::command,
-        policy: questions_cli_policy,
-        run: crate::command_registry::Handler::Store(run_questions),
-    };
+pub(crate) static QUESTIONS: crate::cmdkit::CommandReg = crate::cmdkit::CommandReg {
+    name: "questions",
+    help_after: "findings",
+    command: <QuestionsArgs as clap::CommandFactory>::command,
+    policy: questions_cli_policy,
+    run: crate::cmdkit::Handler::Store(run_questions),
+};
 
 /// Dispatch a SPIKE to a headless research agent: it produces a
 /// source-grounded analysis (attached to the spike) plus a recommendation,
@@ -2831,16 +2828,14 @@ pub(crate) struct ResearchArgs {
 
 fn run_research(
     matches: &clap::ArgMatches,
-    ctx: &crate::command_registry::DispatchCtx,
-) -> anyhow::Result<crate::command_registry::Flow> {
+    ctx: &crate::cmdkit::DispatchCtx,
+) -> anyhow::Result<crate::cmdkit::Flow> {
     use crate::*;
     let args = <ResearchArgs as clap::FromArgMatches>::from_arg_matches(matches)?;
     match &ctx.store {
-        None => Ok(crate::command_registry::Flow::Continue),
-        Some(crate::command_registry::StoreCtx::Distributed { .. }) => {
-            Ok(crate::command_registry::Flow::Continue)
-        }
-        Some(crate::command_registry::StoreCtx::Git {
+        None => Ok(crate::cmdkit::Flow::Continue),
+        Some(crate::cmdkit::StoreCtx::Distributed { .. }) => Ok(crate::cmdkit::Flow::Continue),
+        Some(crate::cmdkit::StoreCtx::Git {
             store_path,
             backend,
         }) => {
@@ -2855,9 +2850,9 @@ fn run_research(
                     handle_research_command(backend, store_path, id, *dry_run, artifact_dir)?;
                 }
             }
-            Ok(crate::command_registry::Flow::Continue)
+            Ok(crate::cmdkit::Flow::Continue)
         }
-        Some(crate::command_registry::StoreCtx::Legacy {
+        Some(crate::cmdkit::StoreCtx::Legacy {
             storage,
             requirements_path,
         }) => {
@@ -2874,35 +2869,34 @@ fn run_research(
                     );
                 }
             }
-            Ok(crate::command_registry::Flow::Continue)
+            Ok(crate::cmdkit::Flow::Continue)
         }
     }
 }
 
 // trace:STORY-1728 | ai:claude
-pub(crate) static RESEARCH: crate::command_registry::CommandReg =
-    crate::command_registry::CommandReg {
-        name: "research",
-        help_after: "decide",
-        command: <ResearchArgs as clap::CommandFactory>::command,
-        policy: |_| crate::command_registry::CmdPolicy {
-            stakeholder: crate::stakeholder_role::StakeholderAction::Write,
-            per_write_auto_push: false,
-            skip_role_restore_prompt: false,
-            team_identity_write: false,
-        },
-        run: crate::command_registry::Handler::Store(run_research),
-    };
+pub(crate) static RESEARCH: crate::cmdkit::CommandReg = crate::cmdkit::CommandReg {
+    name: "research",
+    help_after: "decide",
+    command: <ResearchArgs as clap::CommandFactory>::command,
+    policy: |_| crate::cmdkit::CmdPolicy {
+        stakeholder: crate::stakeholder_role::StakeholderAction::Write,
+        per_write_auto_push: false,
+        skip_role_restore_prompt: false,
+        team_identity_write: false,
+    },
+    run: crate::cmdkit::Handler::Store(run_research),
+};
 
 // Per-verb policy, carried over from the legacy stakeholder and per-write
 // auto-push tables. An unparseable invocation gets the fail-closed answer.
 // trace:STORY-1728 | ai:claude
-fn questions_cli_policy(matches: &clap::ArgMatches) -> crate::command_registry::CmdPolicy {
+fn questions_cli_policy(matches: &clap::ArgMatches) -> crate::cmdkit::CmdPolicy {
     use crate::cli::QuestionsCommand;
     use crate::stakeholder_role::StakeholderAction as SA;
     let args = <QuestionsArgs as clap::FromArgMatches>::from_arg_matches(matches).ok();
     let cmd = args.as_ref().and_then(|args| args.cmd.as_ref());
-    crate::command_registry::CmdPolicy {
+    crate::cmdkit::CmdPolicy {
         stakeholder: SA::Question,
         per_write_auto_push: matches!(
             cmd,

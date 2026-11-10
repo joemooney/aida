@@ -13,10 +13,7 @@ pub(crate) struct SkillArgs {
 }
 
 // Handle skill commands before storage resolution — needs no DB.
-fn run_skill(
-    matches: &clap::ArgMatches,
-    _ctx: &crate::command_registry::DispatchCtx,
-) -> anyhow::Result<()> {
+fn run_skill(matches: &clap::ArgMatches, _ctx: &crate::cmdkit::DispatchCtx) -> anyhow::Result<()> {
     // trace:TASK-3428 | ai:codex
     use crate::{find_project_root, lint_skills, SkillCommand};
     let args = <SkillArgs as clap::FromArgMatches>::from_arg_matches(matches)?;
@@ -44,19 +41,18 @@ fn run_skill(
 }
 
 // trace:STORY-1728 | ai:claude
-pub(crate) static SKILL: crate::command_registry::CommandReg =
-    crate::command_registry::CommandReg {
-        name: "skill",
-        help_after: "commands",
-        command: <SkillArgs as clap::CommandFactory>::command,
-        policy: |_| crate::command_registry::CmdPolicy {
-            stakeholder: crate::stakeholder_role::StakeholderAction::Write,
-            per_write_auto_push: false,
-            skip_role_restore_prompt: false,
-            team_identity_write: false,
-        },
-        run: crate::command_registry::Handler::Early(run_skill),
-    };
+pub(crate) static SKILL: crate::cmdkit::CommandReg = crate::cmdkit::CommandReg {
+    name: "skill",
+    help_after: "commands",
+    command: <SkillArgs as clap::CommandFactory>::command,
+    policy: |_| crate::cmdkit::CmdPolicy {
+        stakeholder: crate::stakeholder_role::StakeholderAction::Write,
+        per_write_auto_push: false,
+        skip_role_restore_prompt: false,
+        team_identity_write: false,
+    },
+    run: crate::cmdkit::Handler::Early(run_skill),
+};
 
 /// Discover prompt files, excluding overlays and folder helper Markdown.
 /// Pack order also defines render precedence; folder form precedes legacy flat.
