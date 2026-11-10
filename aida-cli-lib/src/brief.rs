@@ -2,7 +2,23 @@
 //! Agent brief create/list/read/ack and pending-brief bookkeeping (STORY-1488 slice 1)
 // trace:STORY-1488 | ai:claude
 
-use crate::*;
+use crate::{
+    agent_registry, branch_name_references_spec, change_lookup_for_branch, is_orphan_store_branch,
+    load_store_for_lookup, not_found, plan_rel_path, read_zen_review_brief_agent, seat_trees,
+    SessionLease,
+};
+use crate::{
+    classify_untracked_age, cli, compute_findings_delta, headless_line_permission_stall,
+    headless_log_len, headless_log_permission_stall, launch_authorized_by, notify,
+    read_last_findings, read_last_status_at, reconcile_untracked_map, session,
+    untracked_is_safe_to_remove, write_last_findings, write_last_status_at, BriefCommand,
+    UntrackedAge,
+};
+use aida_core::{Requirement, RequirementsStore};
+use aida_core::{RequirementStatus, RequirementType};
+use anyhow::{Context, Result};
+use colored::Colorize;
+use std::collections::HashSet;
 
 pub(crate) fn create_agent_brief(
     project_root: &std::path::Path,

@@ -2,7 +2,7 @@
 //! Statusline helper logic (STORY-1488 slice 1)
 // trace:STORY-1488 | ai:claude
 
-use crate::*;
+use crate::{strip_toml_inline_comment, BASE_BEHIND_STATUSLINE_THRESHOLD};
 
 pub fn statusline_project_root() -> std::path::PathBuf {
     let cwd = std::env::current_dir().unwrap_or_else(|_| ".".into());

@@ -2,7 +2,11 @@
 //! Stakeholder/requester role capability gates for CLI and MCP actions (STORY-1488 slice 1)
 // trace:STORY-1488 | ai:claude
 
-use crate::*;
+use crate::{
+    canonical_role_name, parse_requirement_type, Command, REQUESTER_INTAKE_FORBIDDEN_FIELDS,
+};
+use aida_core::RequirementType;
+use anyhow::Result;
 
 pub fn active_stakeholder_role() -> Option<String> {
     std::env::var("AIDA_SESSION_ROLE")
