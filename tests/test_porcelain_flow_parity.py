@@ -13,15 +13,19 @@ import tempfile
 
 def main():
     builtin, porcelain = map(lambda s: str(Path(shutil.which(s) or s).resolve()), sys.argv[1:])
-    with tempfile.TemporaryDirectory() as tmp:
+    with tempfile.TemporaryDirectory() as tmp, tempfile.TemporaryDirectory() as home:
         root = Path(tmp)
+        # Inject fixture inputs explicitly; do not inherit agent credentials,
+        # Git configuration or ambient output-format overrides.
+        env = {"PATH": os.defpath, "HOME": home, "GIT_CONFIG_NOSYSTEM": "1"}
         def git(*args, **kwargs):
+            kwargs.setdefault("env", env)
             return subprocess.run(["git", *args], cwd=root, check=True, capture_output=True, **kwargs)
         git("init", "-b", "main")
         (root / "tracked.txt").write_text("fixture\n")
         git("add", "tracked.txt")
         git("-c", "user.name=Fixture", "-c", "user.email=fixture@example.invalid", "commit", "-m", "subject (#42)",
-            env={**os.environ, "GIT_AUTHOR_DATE": "2026-11-09T04:00:00Z", "GIT_COMMITTER_DATE": "2026-11-09T04:00:00Z"})
+            env={**env, "GIT_AUTHOR_DATE": "2026-11-09T04:00:00Z", "GIT_COMMITTER_DATE": "2026-11-09T04:00:00Z"})
         git("update-ref", "refs/remotes/origin/main", "HEAD")
         gh = root / "bin/gh"
         gh.parent.mkdir()
@@ -39,7 +43,7 @@ esac
             path.write_text('{"kind":"verdict","record":{"verdict":"APPROVED","recorded_at":"2026-11-09T02:00:00Z"}}\n' if name.endswith("jsonl") else "fixture")
         git("-C", str(root / ".aida-store"), "init", "-b", "aida-store")
         git("-C", str(root / ".aida-store"), "-c", "user.name=Fixture", "-c", "user.email=fixture@example.invalid", "commit", "--allow-empty", "-m", "store fixture")
-        env = {**os.environ, "PATH": f"{gh.parent}:{os.environ['PATH']}", "AIDA_TEST_GH_BINARY": str(gh), "AIDA_NO_UPDATE_CHECK": "1"}
+        env = {**env, "PATH": f"{gh.parent}:{os.defpath}", "AIDA_TEST_GH_BINARY": str(gh), "AIDA_NO_UPDATE_CHECK": "1"}
         def snapshot():
             return {str(p.relative_to(root)): p.read_bytes() for p in root.rglob("*") if p.is_file()}
         before = snapshot()
