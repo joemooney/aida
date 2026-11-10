@@ -7,14 +7,22 @@ description: |-
   Reviews are dispatched as soon as a head is pushed, so they usually finish before CI. A reviewer who finds no defects records WAITING on CI, and after CI turns green the head needs a second full review. On 2026-11-09 five of six fresh PRs (#3744, #3746, #3748, #3749, #3750) were WAITING purely on CI at once. Each such head costs a second reviewer run (about 20 minutes and its tokens) and adds that time to the PR's latency.
 
   ## Sketch
-  CI is already gated independently: merge readiness (`review_watch_ready.rs`, judge_commit_checks) refuses a head unless every required check succeeded on that exact head, and the train runs CI again on the stacked result. A reviewer's approval therefore never needs to wait for CI.
+  Where CI is enforced today (independent design review 2026-11-09): readiness (`review_watch_ready.rs:129-170`) checks exact-head CI but only REPORTS; train admission (`pr_train.rs:1251-1328`) does not require member-head CI, while the stacked train tip's required CI is enforced before landing (`pr_train_verified.rs:262-275`); ordinary ship waits for CI (`pr_cmd.rs:3281`) except its existing opt-outs. So no code lands without green required CI on what lands, and a reviewer's approval need not wait for CI.
   1. Reviewer contract (reviewer prompt/skill and verdict guidance): when the reviewer finds no actionable defect, record APPROVED at the head even if CI is pending or running. State "CI pending at review time" in the rationale. WAITING stays only for external evidence a reviewer genuinely cannot assess (operator canaries, live evidence), never for CI that the readiness gate already enforces.
   2. A CI failure after an approval at the same head keeps the approval unusable through readiness, and the fix is a new head, which needs a new review (or STORY-2694 carry-over when the change is a clean merge). No change to the CI gates.
   3. If the reviewer's judgment depends on a specific test result (for example a timing or flaky test named in a finding), the reviewer may still record WAITING naming that check; the default is approve.
 
+  ## Advisor rulings on the review's changes (binding)
+  - Train admission of an approved member with CI pending is ACCEPTED: the stacked-tip CI gate covers what lands.
+  - Earlier Rework hold auto-release on an approval made while CI was pending is ACCEPTED: a release merges nothing; landing still needs stacked-tip CI or ship's CI wait.
+  - Existing ship CI opt-outs are out of scope and unchanged.
+  - Remove the unsupported "Approval at ...; CI green." wording in `gate/mandate_ship.rs:599-603` (state CI only from evidence, or drop the claim).
+  - Update every reviewer guidance surface: the review skill (aida-core/templates/skills/aida-review.md around the WAITING rules), `agent_launch_prompt.rs:115`, `role.rs:1191`; then make sync-templates.
+  - Existing CI-only WAITING records are not migrated; they resume by fresh review as today.
+
   ## Acceptance
   - Reviewer guidance states the rule and its exception; a regression test pins the guidance text or verdict classification.
-  - An approval at a head with pending CI does not make the PR ready or trainable until required CI is green at that head (existing readiness test extended to assert this).
+  - Tests: with an approval at a head whose CI is pending, failed, missing or for the wrong head, readiness reports not-ready, the stacked train tip refuses to land on failed required CI, hold auto-release behaves as ruled, and a carried approval (STORY-2694) still requires destination-head CI.
   - waiting-release style re-reviews no longer occur for CI-only waits (measured over the next 10 PRs).
   Safety-gate change: requires independent review and advisor signoff before implementation.
 status: Draft
@@ -22,8 +30,15 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-10T01:33:02.719338782Z
-modified_at: 2026-11-10T01:33:02.719338782Z
+modified_at: 2026-11-10T01:35:02.204686818Z
 req_type: Story
+history:
+- id: 01a1c318-268c-7ed1-aacc-7017cc5cbe36
+  author: joe
+  timestamp: 2026-11-10T01:35:02.284497870Z
+  session_id: 01a1beff-fc3b-78e2-93e2-9b0c283b0339
+  harness_version: 2.1.319 (Claude Code)
+  changes: []
 filed_at:
   code_sha: 8f434152668380b710e1d3ab9dc76d91ad559e1c
   branch: main
