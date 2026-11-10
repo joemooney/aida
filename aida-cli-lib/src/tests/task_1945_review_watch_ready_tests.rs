@@ -444,6 +444,29 @@ mod gate {
             ready::evaluate(&c, &evidence),
             (Readiness::Ready, Some(_))
         ));
+        // trace:STORY-2697 | ai:codex — carry-over never carries source CI.
+        for checks in [
+            CommitChecks {
+                sha: c.head.clone(),
+                checks: vec![],
+            },
+            CommitChecks {
+                sha: c.head.clone(),
+                checks: vec![check(CI_AGGREGATOR_CHECK, CheckOutcome::Pending)],
+            },
+            CommitChecks {
+                sha: c.head.clone(),
+                checks: vec![check(CI_AGGREGATOR_CHECK, CheckOutcome::Failed)],
+            },
+            green(&approved),
+        ] {
+            let blocked = Fake {
+                ci: Ok(checks),
+                approval: evidence.approval.clone(),
+                ..Fake::ready()
+            };
+            assert!(!not_ready(&blocked, &c).is_empty());
+        }
         untouched(repo.path());
     }
 

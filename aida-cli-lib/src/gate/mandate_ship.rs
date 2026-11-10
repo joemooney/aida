@@ -593,10 +593,11 @@ pub(crate) fn release_hold_under_mandate(
         crate::glyph(crate::glyphs::Glyph::Info).cyan(),
         crate::gate::mandate::release_note(&cover.id)
     );
+    // trace:STORY-2697 | ai:codex — release proves approval, not CI.
     let _ = crate::forge::forge_for(hold_root).comment(
         change,
         &format!(
-            "Merge-hold {} (`{}`). Approval at `{}`; CI green.",
+            "Merge-hold {} (`{}`). Approval at `{}`.",
             crate::gate::mandate::release_note(&cover.id),
             cover.principal,
             head_sha.unwrap_or("?"),
