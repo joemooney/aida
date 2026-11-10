@@ -1,0 +1,21 @@
+id: 01a1c77e-1fad-7aa1-8039-5aaae36df683
+spec_id: STORY-b6b1278890774ef993d2ebc327862470-633
+agreed_id: STORY-2710
+title: Conflicted PRs route automatically to a conflict-resolution lane instead of waiting for an advisor hand merge
+description: 'Codex seats cannot merge main (read-only .git, BUG-2456), so when the host-merge of main into a PR branch hits a real conflict, the PR waits for the advisor to hand-merge. On 2026-11-10 this cost #3768 13.6h and #3753 several hours; the advisor hand-merged 3 PRs (#3775, #3753, #3768). Most conflicts were mechanical: both sides appended tests or doc sections, plus regenerable ledgers (scripts/exec-context-legacy.json via check-exec-context.py --write-ledger, template mirrors via make sync-templates). Acceptance: (1) when review-watch or the rework path finds a PR CONFLICTING and its host merge fails, it dispatches a conflict-resolution lane on a vendor that can write .git (Claude) for that branch without advisor action; (2) known generated files (exec-context ledger, template mirrors, other ratchet ledgers registered in one table) are regenerated rather than hand-resolved; (3) the lane compile-checks the merged tree (cargo check -p aida-cli-lib --tests) before pushing; (4) a conflict it cannot resolve mechanically is reported to the advisor with the conflicting paths, one mail per head; (5) tests cover dispatch on conflict, ledger regeneration, and the one-mail-per-head refusal path.'
+status: Approved
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-11-10T22:04:54.061461738Z
+modified_at: 2026-11-10T22:04:54.061461738Z
+req_type: Story
+filed_at:
+  code_sha: a3d2ba258e4015854c6f615c6481beb672b8798c
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: a3d2ba258e4
+  vendor: claude
+  session: 01a1c70f-d731-7b70-acf8-e9ab3d288fca
+  harness_version: 2.1.322 (Claude Code)
