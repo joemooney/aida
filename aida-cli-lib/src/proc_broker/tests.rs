@@ -23,11 +23,7 @@ pub(super) fn kernel() -> bool {
                     )
                 })
             });
-            let text = format!("{e:#}");
-            if unsupported
-                || text.contains("Protocol not available")
-                || text.contains("Operation not supported")
-            {
+            if unsupported {
                 eprintln!("SKIP real-kernel SCM_PIDFD test: {e:#}");
                 false
             } else {
