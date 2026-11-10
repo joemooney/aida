@@ -8,7 +8,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-10T03:52:00.571796159Z
-modified_at: 2026-11-10T03:57:38.876142380Z
+modified_at: 2026-11-10T04:08:04.135421883Z
 req_type: Story
 comments:
 - id: 01a1c399-6840-7383-843e-9930f6eaa3f7
@@ -18,6 +18,13 @@ comments:
   modified_at: 2026-11-10T03:56:13.248530138Z
   session_id: 01a1beff-fc3b-78e2-93e2-9b0c283b0339
   harness_version: 2.1.319 (Claude Code)
+- id: 01a1c3a4-4127-7df2-9c9e-408dd6c3a54c
+  author: joe
+  content: 'ADVISOR SKETCH SIGNOFF WITH CHANGES (2026-11-10 04:08 UTC, sketch PR #3759 docs/plans/2026-11-10-story-2704-porcelain-crate.md). Approved design: aida-porcelain workspace crate -> aida-core public APIs only (no aida-cli-lib dependency), argv[0] multi-call, read-only capability boundary, nested resolution only for one unknown child under a built-in parent, built-in wins during overlap. ADR-71 amendment ruled here: porcelain may link aida-core public read APIs and ships as a workspace companion binary (not only an independent distribution); record it on ADR-71 when it is accepted. Changes: (1) Slice it, one open PR at a time. S1 = crate + multi-call dispatch + aida-flow tenant moved from STORY-2699 + a public no-write aida-core gate-ledger reader + aida dev build staging/smoke/rollback/--install-links for the new binary and alias, plus the no-write fixture test. S2 = nested built-in-parent resolution + parent help listing + STORY-1641-adjacent black-box tests. S3 = release.yml archives, scripts/install.sh, upgrade_cmd tarball path, make install. (2) S1 starts only after STORY-2699 (#3757) lands; extract from the landed code. (3) The built-in flow registration is removed in S1 only if dev build installs aida-flow in the same PR; otherwise keep the built-in until S3. (4) Per STORY-2698, read-only tenants are LOW tier; S1 and S2 touch dispatch and dev build, so they are NORMAL tier. LIGHT local gate per slice.'
+  created_at: 2026-11-10T04:08:04.135421883Z
+  modified_at: 2026-11-10T04:08:04.135421883Z
+  session_id: 01a1c39a-801a-7bd1-8da9-c955a6707f0b
+  harness_version: 2.1.321 (Claude Code)
 history:
 - id: 01a1c399-7102-7f81-9bb9-fd37379159d3
   author: joe
