@@ -1642,6 +1642,8 @@ fn triage_loop_r_keystroke_lands_approved_queued_and_emits_spec_requeued() {
 fn triage_loop_d_decides_then_returns_to_the_same_spec() {
     let mut r = parked("BUG-9113");
     r.decision_request = Some(aida_core::DecisionRequest {
+        question_id: Some(uuid::Uuid::new_v4()),
+        park_binding: None,
         question: "which fork?".into(),
         choices: Vec::new(),
         recommended: None,

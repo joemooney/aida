@@ -350,6 +350,7 @@ pub use models::{
     // Async decision-inbox types (STORY-522)
     DecisionChoice,
     DecisionRequest,
+    ParkBinding,
     // Execution-mode dispatch (STORY-776)
     ExecutionMode,
     FailureReason,

@@ -153,6 +153,8 @@ pub(crate) fn sidecar_to_decision_request(
         }
     });
     Some(aida_core::DecisionRequest {
+        question_id: Some(uuid::Uuid::new_v4()),
+        park_binding: None,
         question,
         choices: s.options.clone(),
         recommended,

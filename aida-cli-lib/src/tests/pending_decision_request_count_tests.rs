@@ -3,6 +3,8 @@ use aida_core::{DecisionChoice, DecisionRequest, Requirement, RequirementsStore}
 
 fn pending_dr() -> DecisionRequest {
     DecisionRequest {
+        question_id: Some(uuid::Uuid::new_v4()),
+        park_binding: None,
         question: "Promote or ship?".to_string(),
         choices: vec![
             DecisionChoice {

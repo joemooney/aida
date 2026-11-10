@@ -1,12 +1,40 @@
 # STORY-2661: park on ask, resume on answer
 
-Status: proposed; advisor signoff required before implementation.
+Status: signed sketch; advisor authorized runtime-record slice 1 on 2026-11-10.
 <!-- trace:STORY-2661 | ai:codex -->
 
 The binding advisor ruling requires a sketch before code. This document is
 that review artifact, not an implementation or authorization to resume.
 
-AC1–4 remain unimplemented; this sketch does not complete the story.
+AC1–4 remain open; this slice does not complete the story.
+
+### Implementation slice 1 (2026-11-10 advisor ruling)
+
+The canonical question schema now has optional stable `question_id` and
+`park_binding` fields. New question constructors assign UUIDs; legacy unbound
+questions deserialize unchanged. `park_runtime.rs` supplies the host runtime
+record, private bounded file I/O, permanent per-wait locks, atomic durable
+replacement, identity hashes and conservative restart reconciliation. Migration
+assigns an ID once; callers must persist it under the canonical store writer
+lock before binding. The lock order for future integration is ownership lock,
+then store writer lock. These primitives do not enable park acceptance.
+
+A binding without a record, a record without its canonical question, conflicting
+identity, or an observed answer that changed is recovery uncertainty. All
+non-released states retain ownership regardless of PID, PR, dirty edits, or grant
+expiry; an answer or delivery acknowledgement never releases ownership. Runtime
+read failures must likewise retain ownership at future consumer boundaries.
+Records reject identity replacement and resurrection after explicit release.
+
+This slice deliberately adds no exit handshake, answer dispatch, vendor adapter,
+watcher, CLI parking surface or mutation/cleanup integration. Before enabling
+parking, the later integration must wire the shared retained-work probe into the
+closed reclaim inventory and serialize those writers with acceptance and checked
+release. The record's `released` state is data for that future checked protocol,
+not a cancellation command or authority grant. Tests in `park_runtime_tests.rs`
+cover record persistence, incomplete canonical/runtime writes, interrupted atomic
+replacement, stable legacy migration, blocked ownership, changed evidence and
+unsafe files. They do not claim the future integrated R19–R23 regressions.
 
 Initial scope decision (R2): parking plus **manual authorized resume only**.
 Answer arrival makes a wait ready and observable, but does not launch a child.
