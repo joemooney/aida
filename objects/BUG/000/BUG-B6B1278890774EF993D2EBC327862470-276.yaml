@@ -8,7 +8,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-10T03:06:34.990229981Z
-modified_at: 2026-11-10T17:06:42.473489066Z
+modified_at: 2026-11-10T17:12:45.896810990Z
 req_type: Bug
 comments:
 - id: 01a1c3a1-af27-7c23-98db-241b05183b77
@@ -25,6 +25,13 @@ comments:
   modified_at: 2026-11-10T14:29:34.962351221Z
   session_id: 01a1c530-c917-7f13-ab81-f6b5e1d1cd30
   harness_version: 2.1.322 (Claude Code)
+- id: 01a1c672-aa48-7de0-bf1a-89659cb1490a
+  author: dirtlab
+  content: Current source already skips unreadable foreign-UID stat/cmdline/cwd while retaining same-UID uncertainty. Added an ownership-injection seam (production still compares proc directory UID to geteuid) and a deterministic unreadable-cwd regression with simulated ownership, plus positive group/session/attempt/cwd controls. Both bug_2511_occupancy_unreadable_foreign_cwd and story_2254_bg_occupancy_scan_unreadable_is_unknown executed and passed through the lane runner; rustfmt checks and git diff --check passed. No production behavior change was needed. Operator should verify the work-machine binary is current; this lane did not reproduce that host report. Reviewed codegraph client path is absent; doctor reports codegraph missing, so navigation used rg. Edits left uncommitted for host publication.
+  created_at: 2026-11-10T17:12:45.896810990Z
+  modified_at: 2026-11-10T17:12:45.896810990Z
+  session_id: 01a1c66cbba3
+  harness_version: codex-cli 0.167.0
 history:
 - id: 01a1c5dc-b79e-77d3-bec0-576fa22f9906
   author: joe
