@@ -8,7 +8,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-10T03:07:01.660083142Z
-modified_at: 2026-11-10T15:59:52.603577870Z
+modified_at: 2026-11-10T16:25:54.933314840Z
 req_type: Bug
 comments:
 - id: 01a1c60c-adfa-72f3-9f5c-b40df8817ee3
@@ -53,6 +53,18 @@ comments:
   modified_at: 2026-11-10T15:59:52.603577870Z
   session_id: 01a1c530-c917-7f13-ab81-f6b5e1d1cd30
   harness_version: 2.1.322 (Claude Code)
+- id: 01a1c647-c5f5-7b82-8c6a-5fc07404e409
+  author: joe
+  content: |-
+    CI FAILURES at d5587d301e89 (run 42849574559). Fix exactly these before pushing; a push without a code change for them will fail again and must not be made:
+    error: test run failed
+            FAIL  aida-cli-lib worktree_gc::task977_stranded_liveness_tests::live_lease_count_excludes_dead_holder_lease
+    FAIL flags — 1 cited --flag token(s) did not resolve to the cited command or its parent/child command subtree:
+        thread 'worktree_gc::task977_stranded_liveness_tests::live_lease_count_excludes_dead_holder_lease' (272648) panicked at aida-cli-lib/src/tests/task977_stranded_liveness_tests.rs:80:5:
+  created_at: 2026-11-10T16:25:54.933314840Z
+  modified_at: 2026-11-10T16:25:54.933314840Z
+  session_id: 01a1c39a-801a-7bd1-8da9-c955a6707f0b
+  harness_version: 2.1.321 (Claude Code)
 history:
 - id: 01a1c5dc-c560-7b10-85fe-1df64f0de2cf
   author: joe
