@@ -625,7 +625,7 @@ mod story_49_store_drift_tests;
 // ----------------------------------------------------------------------------
 // EPIC-19 — shared `aida doctor` diagnostics-collection machinery. The command
 // handlers (`handle_doctor_command`, `doctor_multi_agent`, the heal + migration
-// paths) live in `doctor_cmd.rs`; the collection helpers below stay here because
+// paths) live in `doctor/`; the collection helpers below stay here because
 // `aida status --full`/`--ci` (STORY-707) drive them too.
 // ----------------------------------------------------------------------------
 

@@ -3849,3 +3849,35 @@ mod criterion_suffix_regressions {
         }
     }
 }
+
+/// TASK-878: scan AIDA/Agent-tool managed worktrees and classify each under the
+/// squash-aware safety model. Read-only — performs git ancestry/rev-list probes
+/// and one forge merged-PR lookup per branch, never mutates anything. Returns a
+/// `merged-agent-worktrees` finding for every agent worktree that is either
+/// Removable (verified merged + clean + no unique commits; `safe_heal=false` so
+/// removal stays gated behind --yes --force + the STORY-666 sign-off) or Keep
+/// (flagged for the operator, never auto-removed). The project's own worktree
+// and the `aida-store` worktree are skipped. trace:TASK-878
+// trace:BUG-1719 | ai:codex
+pub(crate) fn scan_merged_agent_worktrees(project_root: &std::path::Path) -> Vec<DoctorFinding> {
+    scan_merged_agent_worktrees_with_count(project_root).findings
+}
+
+// trace:BUG-1718 | ai:codex
+pub(crate) fn run_merged_agent_worktree_gc_quiet() -> Result<()> {
+    doctor_multi_agent(DoctorRunOptions {
+        heal: true,
+        yes: true,
+        category: Some("merged-agent-worktrees".to_string()),
+        json: false,
+        force: true,
+        all: false,
+        since: None,
+        fail_on_findings: false,
+        quiet_output: true,
+    })
+}
+
+use crate::doctor_cmd::{
+    doctor_multi_agent, scan_merged_agent_worktrees_with_count, DoctorRunOptions,
+};
