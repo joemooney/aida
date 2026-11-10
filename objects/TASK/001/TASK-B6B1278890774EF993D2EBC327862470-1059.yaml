@@ -8,8 +8,16 @@ priority: Low
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-10T03:07:15.181924192Z
-modified_at: 2026-11-10T17:08:03.324924224Z
+modified_at: 2026-11-10T17:15:05.869241700Z
 req_type: Task
+comments:
+- id: 01a1c674-cd0d-76a2-8159-4728d6fffd38
+  author: dirtlab
+  content: 'Non-completing native slice: compact permissions rows and --verbose diagnostics implemented, with shared glyphs::terminal_marker helper plus a raw-output spacing ratchet. Remaining acceptance: migrate ten raw-marker occurrences retained in tests/terminal_glyph_padding_baseline.json and inventory dynamically composed registry markers/other terminal writers. Raw registry values intentionally retain their JSON/config/width semantics. Filing a draft follow-up failed because this clone has no node binding (no object written); this comment preserves the flag. Tests are running via the lane job runner. Publish with Refs TASK-3779 only.'
+  created_at: 2026-11-10T17:15:05.869241700Z
+  modified_at: 2026-11-10T17:15:05.869241700Z
+  session_id: 01a1c66dfde9
+  harness_version: codex-cli 0.167.0
 history:
 - id: 01a1c5dc-eeb2-7bf0-b31e-daf1c2b86eee
   author: joe
