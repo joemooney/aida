@@ -30,7 +30,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-10T01:33:02.719338782Z
-modified_at: 2026-11-10T01:40:17.984438557Z
+modified_at: 2026-11-10T01:48:23.318480980Z
 req_type: Story
 comments:
 - id: 01a1c318-2e6f-7041-93e0-3128dbbb39f7
@@ -45,6 +45,13 @@ comments:
   content: 'Implementation follows the recorded advisor rulings: reviewer launch/default-role and review skill/command guidance approve defect-free heads before CI settles; CI gates and existing WAITING records remain unchanged. Removing unsupported CI-green wording from mandate hold-release comment. Targeted lane-runner validation in progress. Post-publication observation still required: inspect the next 10 reviewed PRs for CI-only WAITING and waiting-release re-reviews; distinguish named-test judgment exceptions and operator canaries. Template link checks pass; full sync''s portable skill-pack step is refused by the native read-only .agents boundary, so host must rerun sync-templates.'
   created_at: 2026-11-10T01:40:17.984438557Z
   modified_at: 2026-11-10T01:40:17.984438557Z
+  session_id: 01a1c319aa25
+  harness_version: codex-cli 0.167.0
+- id: 01a1c324-5f96-7201-8442-2fafd9c56807
+  author: dirtlab
+  content: 'Validation complete: lane-runner cargo test --profile agent -p aida-cli-lib --lib executed 2 bug_2508 guidance tests, 29 review_watch::ready_tests (including direct approval CI pending/failed/absent/wrong-head and carried approval destination-CI matrix), 4 bug2406_live_change_refuses_ci tests, and 1 auto_release_current_head_and_unchanged_hold_releases test; all passed. A mistaken filename-based readiness filter executed zero tests and was replaced by the verified module filter; zero-match run is not counted. make check-templates and git diff --check passed. make check-ci-fast stopped at unrelated Codex mail wake fixtures (4 failures, 17 errors, project-directory ownership refusals); full log /tmp/story2697-ci-fast.log. Full sync-templates needs host rerun because portable .agents skill-pack writes are read-only in this seat. Seven files changed, left uncommitted for host publication. Next-10-PR observation remains post-publication work as previously noted.'
+  created_at: 2026-11-10T01:48:23.318480980Z
+  modified_at: 2026-11-10T01:48:23.318480980Z
   session_id: 01a1c319aa25
   harness_version: codex-cli 0.167.0
 history:

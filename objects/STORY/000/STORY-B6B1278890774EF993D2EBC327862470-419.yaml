@@ -8,7 +8,7 @@ priority: Low
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-05T04:41:25.538710401Z
-modified_at: 2026-11-10T01:32:35.719981517Z
+modified_at: 2026-11-10T01:49:24.252665033Z
 req_type: Story
 relationships:
 - rel_type: Supersedes
@@ -229,6 +229,14 @@ comments:
   modified_at: 2026-11-10T01:30:47.724050966Z
   session_id: 01a1beff-fc3b-78e2-93e2-9b0c283b0339
   harness_version: 2.1.319 (Claude Code)
+- id: 01a1c325-4d9c-7761-a0c2-5a42be97c288
+  author: dirtlab
+  content: |
+    Headless triage flag from slice-1 validation: intake enrollment inherits a permissive host umask when creating the independent worktree's .git directory, then Private::open correctly refuses that newly created group-writable directory. All 29 pre-existing/new transport tests and the JSON audit initially failed at this setup boundary. Test child processes now use umask 077 through pre_exec (no process-wide mutation); production checks remain unchanged. Evidence: lane jobs j20261110T013824410-2-0 and j20261110T014019939-2-0. Draft finding filing was attempted with from-implementer:STORY-2493,kind:bug-spotted,severity:minor, but ID allocation refused because this clone has no node binding; no object was written. Host/advisor should file the production enrollment issue for separate triage; do not weaken trust checks or enroll a node implicitly.
+  created_at: 2026-11-10T01:49:24.252665033Z
+  modified_at: 2026-11-10T01:49:24.252665033Z
+  session_id: 01a1c315713e
+  harness_version: codex-cli 0.167.0
 history:
 - id: 01a1aa0a-8ae7-7523-b84e-68f1c2e158c7
   author: joe
