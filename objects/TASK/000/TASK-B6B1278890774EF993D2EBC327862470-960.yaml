@@ -8,7 +8,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-07T23:39:41.575597Z
-modified_at: 2026-11-10T08:15:08.848832430Z
+modified_at: 2026-11-10T09:49:59.672060308Z
 req_type: Task
 relationships:
 - rel_type: Child
@@ -543,6 +543,13 @@ comments:
   created_at: 2026-11-10T08:15:08.848832430Z
   modified_at: 2026-11-10T08:15:08.848832430Z
   session_id: 01a1c462f833
+- id: 01a1c4dd-4bf8-7260-9949-e7eb4334df0a
+  author: joe
+  content: 'ADVISOR RULING (2026-11-10 09:49 UTC) — binding brief for TASK-3428 BATCH 2 (batch 1 landed as #3770; ledger 130 remaining). Same rules as batch 1, which reviewed clean first time: scope = EXACTLY these 37 files under aida-cli-lib/src/ plus scripts/crate-globs-legacy.json: agent_config.rs drain_cmd.rs punt_done.rs show_negative.rs plan_report.rs review_gates.rs git_backend_cmd.rs drain_next_n.rs plan_cmd.rs standalone_implementer.rs phase_gates.rs role_cmd.rs drain_gate.rs status_cmd.rs store_sync.rs session_misc.rs human.rs tracker_cmd.rs compete_cmd.rs rel_cards.rs doctor_root.rs plan_intent.rs drain_batch.rs orchestrator_leases.rs dev_cmd.rs session_reap.rs pr_lookup.rs session_end.rs questions.rs burndown_run.rs phase_driver.rs mailbox_cmd.rs ps_integrate.rs trace.rs status_awaiting.rs store_push_pull.rs leases.rs . Replace ''use crate::*;'' with explicit imports (rustfmt order), import anyhow/aida_core items from their crates, no other edits; ratchet the ledger down for exactly these files. Excluded on purpose: doctor_cmd.rs and the PR9b helper destinations (TASK-3781 is moving them). If a listed file conflicts with main at start, drop it and say so; never add files. Branch fresh from main. Title: [AI:codex] refactor(commands): replace crate globs in batch 2 (Refs TASK-3428). LIGHT gate: cargo check --profile agent -p aida-cli-lib --tests, python3 scripts/check-crate-globs.py, make check-ci-fast.'
+  created_at: 2026-11-10T09:49:59.672060308Z
+  modified_at: 2026-11-10T09:49:59.672060308Z
+  session_id: 01a1c39a-801a-7bd1-8da9-c955a6707f0b
+  harness_version: 2.1.321 (Claude Code)
 history:
 - id: 01a1b862-2e0b-7a50-a4d0-25097c707b57
   author: joe
