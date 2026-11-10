@@ -5022,3 +5022,16 @@ fn prc_rider_refuses_missing_unknown_and_live_train_but_releases_closed_or_dead(
     std::fs::write(store.path_for(&key), "malformed").unwrap();
     assert!(ownership_rider_refusal(p, 9).is_err());
 }
+
+// trace:BUG-2492 | ai:codex
+#[test]
+fn bug2492_train_pending_inspection_waits_instead_of_rebuilding() {
+    let rows = [
+        bug2401_row("Build", "pass"),
+        bug2401_row("merge-hold-gate", "pending"),
+    ];
+    assert!(
+        matches!(train_ci_readiness(&rows, &[], &crate::ci_gate::CiGateConfig::default(), false),
+        TrainCiReadiness::Pending(names) if names == vec!["merge-hold-gate"])
+    );
+}
