@@ -8,7 +8,7 @@ priority: Low
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-07T10:46:47.827833836Z
-modified_at: 2026-11-10T01:15:29.214759913Z
+modified_at: 2026-11-10T01:32:16.985860990Z
 req_type: Task
 relationships:
 - rel_type: Child
@@ -150,6 +150,13 @@ comments:
   modified_at: 2026-11-10T01:10:53.191843014Z
   session_id: 01a1c2ed5318
   harness_version: codex-cli 0.167.0
+- id: 01a1c315-a0d9-7a10-852d-90fac8ac1040
+  author: joe
+  content: 'Advisor: PR #3747 publication findings addressed host-side, which no code change could do: change notes plus the ''aida: no-complete'' body marker added, title already (Refs TASK-3368). Same head d782a710e0 released for re-review.'
+  created_at: 2026-11-10T01:32:16.985860990Z
+  modified_at: 2026-11-10T01:32:16.985860990Z
+  session_id: 01a1beff-fc3b-78e2-93e2-9b0c283b0339
+  harness_version: 2.1.319 (Claude Code)
 history:
 - id: 01a1b59e-5972-7d63-967f-d8572322d9d1
   author: joe
