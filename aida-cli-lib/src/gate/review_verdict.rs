@@ -666,6 +666,30 @@ pub(crate) fn finding_is_deferred(value: &serde_json::Value) -> bool {
 }
 
 // trace:STORY-2698 | ai:codex
+/// A durable delivery barrier, never an act of review refusal.
+pub(crate) fn delivery_pending(record: &serde_json::Value) -> bool {
+    record.get("sweep_pending").and_then(|v| v.as_bool()) == Some(true)
+}
+
+// trace:STORY-2698 | ai:codex
+fn same_pending_delivery(pending: &JsonObj, approval: &JsonObj) -> bool {
+    if !delivery_pending(&serde_json::Value::Object(pending.clone()))
+        || !disposition_verdict(approval).approves()
+    {
+        return false;
+    }
+    // Preserve every origin/launch/attestation field in the comparison. Only
+    // the delivery barrier and its fail-closed verdict differ from the handoff.
+    let clean = |body: &JsonObj| {
+        let mut body = body.clone();
+        body.remove("sweep_pending");
+        body.remove("verdict");
+        body
+    };
+    clean(pending) == clean(approval)
+}
+
+// trace:STORY-2698 | ai:codex
 pub(crate) fn disposition_verdict(obj: &JsonObj) -> VerdictKind {
     let kind = VerdictKind::parse(obj.get("verdict").and_then(|v| v.as_str()).unwrap_or(""));
     if obj.get("sweep_pending").and_then(|v| v.as_bool()) == Some(true) {
@@ -1941,6 +1965,8 @@ pub(crate) fn build_verdict_object(
             obj.remove(key);
         }
     } else if !findings.is_empty() {
+        // trace:STORY-2698 | ai:codex — replaced aliases survive only in rounds.
+        obj.remove("blocking_findings");
         obj.insert("findings".to_string(), serde_json::Value::Array(findings));
         // STORY-1417: `finding_classes` is positional against `findings`, so
         // new findings invalidate the old classes. A caller that has classes
@@ -2904,6 +2930,7 @@ pub fn collect_standalone_verdict(
     let source = candidates
         .iter()
         .filter(|c| !c.recording_grant_ids().is_empty())
+        .filter(|c| !delivery_pending(&serde_json::Value::Object(c.obj.clone())))
         .max_by_key(|c| c.modified)
         .cloned()
         .ok_or_else(|| {
@@ -2916,7 +2943,10 @@ pub fn collect_standalone_verdict(
             (Some(a), Some(b)) => same_reviewed_sha(a, b),
             _ => false,
         };
-        if c.verdict.kind != source.verdict.kind || !same_sha {
+        if !same_sha
+            || (c.verdict.kind != source.verdict.kind
+                && !same_pending_delivery(&c.obj, &source.obj))
+        {
             return Err(format!(
                 "{} disagrees with {} on the verdict or the reviewed commit",
                 c.path.display(),
@@ -3795,6 +3825,61 @@ mod story_2698_tests {
             VerdictKind::RequestChanges
         );
     }
+    // trace:STORY-2698 | ai:codex
+    #[test]
+    fn pending_delivery_reconciliation_requires_same_origin() {
+        let approval = serde_json::json!({"verdict":"approved", "release_grant":{"id":"launch-a"}, "recorded_by":"reviewer", "recorded_at":"2026-11-10T00:00:00Z"});
+        let mut pending = approval.clone();
+        pending["verdict"] = "request-changes".into();
+        pending["sweep_pending"] = true.into();
+        assert!(same_pending_delivery(
+            pending.as_object().unwrap(),
+            approval.as_object().unwrap()
+        ));
+        pending["release_grant"]["id"] = "launch-b".into();
+        assert!(!same_pending_delivery(
+            pending.as_object().unwrap(),
+            approval.as_object().unwrap()
+        ));
+        pending.as_object_mut().unwrap().remove("sweep_pending");
+        assert!(!same_pending_delivery(
+            pending.as_object().unwrap(),
+            approval.as_object().unwrap()
+        ));
+    }
+
+    // trace:STORY-2698 | ai:codex
+    #[test]
+    fn legacy_alias_replacement_agrees_with_preflight() {
+        let tmp = tempfile::tempdir().unwrap();
+        let path = tmp.path().join("verdict.json");
+        std::fs::write(&path, r#"{"verdict":"request-changes","blocking_findings":["old bug"],"reviewed_sha":"1111111111111111111111111111111111111111","recorded_by":"reviewer"}"#).unwrap();
+        let findings = vec![serde_json::json!({"text":"follow-up", "severity":"minor", "disposition":"deferred", "rationale":"safe later"}).to_string()];
+        let obj = build_verdict_object(
+            tmp.path(),
+            &path,
+            Some("approved"),
+            None,
+            None,
+            None,
+            &findings,
+            "reviewer",
+        )
+        .unwrap();
+        assert!(!obj.contains_key("blocking_findings"));
+        assert_eq!(obj["rounds"][0]["blocking_findings"][0], "old bug");
+        assert_eq!(
+            parse_recorded_verdict(&serde_json::Value::Object(obj).to_string())
+                .unwrap()
+                .kind,
+            VerdictKind::Approved
+        );
+        assert_eq!(
+            incoming_disposition("approved", &findings),
+            VerdictKind::Approved
+        );
+    }
+
     #[test]
     fn story_2698_explicit_empty_finding_clears_resolved_evidence() {
         let tmp = tempfile::tempdir().unwrap();

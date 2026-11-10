@@ -190,7 +190,8 @@ pub(crate) fn record_verdict_at(
 ) -> std::io::Result<Delivered> {
     // trace:STORY-2698 | ai:codex
     // Persist the complete retry payload before touching the sweep. A crash or
-    // failed store transaction leaves a refusal; repeating the record retries
+    // failed store transaction leaves a delivery-pending barrier (not a review
+    // refusal); repeating the record retries
     // delivery using the sink's locked source/hash deduplication.
     let mut normalized = record.clone();
     if let Some(word) = crate::gate::review_verdict::disposition_verdict(record).canonical() {
@@ -208,6 +209,7 @@ pub(crate) fn record_verdict_at(
             .ok_or_else(|| std::io::Error::other("approval has no canonical verdict key"))?;
         let source = spec.map(|s| s.label.as_str()).unwrap_or(&key);
         let mut pending = record.clone();
+        // Explicit delivery state: readiness blocks, refusal history skips it.
         pending.insert("sweep_pending".into(), true.into());
         pending.insert("verdict".into(), "request-changes".into());
         record_verdict_at_inner(path, &pending, spec, None)?;
@@ -373,6 +375,7 @@ pub(crate) fn record_collected_verdict(
     {
         let pending = |body: &crate::gate::review_verdict::JsonObj| {
             let mut body = body.clone();
+            // Explicit delivery state, including the same handoff origin.
             body.insert("sweep_pending".into(), true.into());
             body.insert("verdict".into(), "request-changes".into());
             body
