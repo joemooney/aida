@@ -856,12 +856,24 @@ fn resolve_init_agent_selection_for_root(
         return Ok(detected);
     }
 
-    let default = detected.names().join(",");
-    print!("Scaffold agent support for: {default} — Enter to accept, or edit: ");
-    use std::io::Write;
-    let _ = std::io::stdout().flush();
-    let mut line = String::new();
-    std::io::stdin().read_line(&mut line)?;
+    prompt_init_agent_selection(detected, |default| {
+        print!("Scaffold agent support for: {default} — Enter to accept, or edit: ");
+        use std::io::Write;
+        let _ = std::io::stdout().flush();
+        let mut line = String::new();
+        std::io::stdin().read_line(&mut line)?;
+        Ok(line)
+    })
+}
+
+// Keep the actual interactive selection as a value, rather than rereading
+// configuration whose precedence can differ from this invocation's choice.
+// trace:BUG-2513 | ai:codex
+fn prompt_init_agent_selection(
+    detected: AgentSelection,
+    read_choice: impl FnOnce(&str) -> Result<String>,
+) -> Result<AgentSelection> {
+    let line = read_choice(&detected.names().join(","))?;
     let trimmed = line.trim();
     if trimmed.is_empty() {
         Ok(detected)
@@ -3701,6 +3713,42 @@ mod task_631_init_self_commit_tests {
             }
         );
         assert_eq!(resolved.path, dir.path().join(".aida/agents.toml"));
+    }
+
+    // trace:BUG-2513 | ai:codex
+    #[test]
+    fn init_interactive_selection_survives_conflicting_saved_settings() {
+        let dir = tempfile::tempdir().unwrap();
+        std::fs::create_dir_all(dir.path().join(".aida")).unwrap();
+        for (saved, chosen) in [("claude", "codex"), ("codex", "claude")] {
+            std::fs::write(
+                dir.path().join(".aida/agents.toml"),
+                format!("[agents]\nenabled = [\"{saved}\"]\nvendor = \"codex\"\n"),
+            )
+            .unwrap();
+            let selection =
+                prompt_init_agent_selection(AgentSelection::all(), |_| Ok(chosen.to_string()))
+                    .unwrap();
+            // This is the same explicit allow-list passed by run_init into
+            // every storage handler, so scaffolding cannot prompt again.
+            let allow_list = selection.names().join(",");
+            let scaffold_selection =
+                resolve_init_agent_selection_for_root(dir.path(), Some(&allow_list)).unwrap();
+            write_enabled_agent_selection(dir.path(), scaffold_selection).unwrap();
+            assert_eq!(selection, scaffold_selection);
+            assert_eq!(selection.codex, chosen == "codex");
+            let offered = std::cell::Cell::new(false);
+            config_cmd::offer_init_codex_native(dir.path(), selection.codex, true, || {
+                offered.set(true);
+                Ok(false)
+            })
+            .unwrap();
+            assert_eq!(offered.get(), chosen == "codex");
+            assert_eq!(
+                read_enabled_agent_selection(dir.path()).unwrap().codex,
+                saved == "codex"
+            );
+        }
     }
 
     #[test]
@@ -7075,6 +7123,26 @@ fn run_init(matches: &clap::ArgMatches, _ctx: &crate::cmdkit::DispatchCtx) -> an
         }
         None => None,
     };
+    // Resolve the interactive choice once, then pass that exact allow-list to
+    // storage/scaffolding and the native-consent gate. Saved enabled settings
+    // and the default launch vendor must not replace the operator's choice.
+    // trace:BUG-2513 | ai:codex
+    let init_root = statusline_project_root();
+    let init_footprint = self::resolve_init_footprint(
+        &init_root,
+        footprint.or(aida_core::adoption_projection::is_projected(&init_root)
+            .then_some(cli::InitFootprint::Full)),
+    )?;
+    let init_selection = if init_footprint == cli::InitFootprint::Full {
+        Some(resolve_init_agent_selection_for_root(
+            &init_root,
+            agent.as_deref(),
+        )?)
+    } else {
+        None
+    };
+    let resolved_agent = init_selection.map(|selection| selection.names().join(","));
+    let agent = resolved_agent.as_deref().or(agent.as_deref());
     // Default: distributed (git-canonical) mode per EPIC-1-001.
     // --sibling implies distributed-sibling. --centralized opts into
     // the deprecated SQLite-canonical path.
@@ -7089,7 +7157,7 @@ fn run_init(matches: &clap::ArgMatches, _ctx: &crate::cmdkit::DispatchCtx) -> an
             *force,
             *verbose,
             name.as_deref(),
-            *footprint,
+            Some(init_footprint),
         )?;
     } else if *sibling || store_path.is_some() {
         // STORY-676: --store-path implies the sibling storage model at an
@@ -7105,7 +7173,7 @@ fn run_init(matches: &clap::ArgMatches, _ctx: &crate::cmdkit::DispatchCtx) -> an
             *no_hooks,
             *verbose,
             name.as_deref(),
-            *footprint,
+            Some(init_footprint),
         )?;
     } else {
         self::handle_init_distributed_worktree(
@@ -7119,7 +7187,7 @@ fn run_init(matches: &clap::ArgMatches, _ctx: &crate::cmdkit::DispatchCtx) -> an
             *git_init,
             *commit_scaffold,
             node_name.as_deref(),
-            *footprint,
+            Some(init_footprint),
         )?;
     }
     // TASK-638: bootstrap the default GLOBAL role set so a fresh machine is
@@ -7131,12 +7199,6 @@ fn run_init(matches: &clap::ArgMatches, _ctx: &crate::cmdkit::DispatchCtx) -> an
     // init. trace:TASK-638 | ai:claude
     // A projected (adopted) clone was never asked the Setup style question;
     // don't ask it here either. trace:TASK-b6b1278890774ef993d2ebc327862470-036 | ai:claude
-    let init_root = statusline_project_root();
-    let init_footprint = self::resolve_init_footprint(
-        &init_root,
-        footprint.or(aida_core::adoption_projection::is_projected(&init_root)
-            .then_some(cli::InitFootprint::Full)),
-    )?;
     if !*no_roles && init_footprint == cli::InitFootprint::Full {
         match scaffold_starter_roles(&statusline_project_root()) {
             Ok((created, skipped)) => {
@@ -7181,17 +7243,9 @@ fn run_init(matches: &clap::ArgMatches, _ctx: &crate::cmdkit::DispatchCtx) -> an
         }
         // trace:BUG-2513 | ai:codex
         let root = statusline_project_root();
-        let codex_selected = match agent.as_deref() {
-            Some(selection) => parse_agent_selection(selection)?.codex,
-            None => {
-                read_enabled_agent_selection(&root).is_some_and(|s| s.codex)
-                    || aida_core::agents_config::resolve_default_vendor(&root).as_deref()
-                        == Some(crate::vendors::native_setup::KEY)
-            }
-        };
         if let Err(e) = config_cmd::offer_init_codex_native(
             &root,
-            codex_selected,
+            init_selection.is_some_and(|selection| selection.codex),
             std::io::stdin().is_terminal() && std::io::stdout().is_terminal(),
             || crate::prompt_yes_no(crate::vendors::native_setup::PROMPT, false),
         ) {
