@@ -3,12 +3,12 @@ spec_id: STORY-b6b1278890774ef993d2ebc327862470-613
 agreed_id: STORY-2690
 title: 'Spec status invariants and typed lane exits: a spec with an open PR is never unpickable for rework, and every lane exit has a typed result'
 description: 'Problem: on 2026-11-08 STORY-2571 stayed needs-attention so rework lanes died with not-pickable needs-triage, and PR-3640 received no fix across three attempts. The advisor inbox collected many exited-without-changes notices needing manual reading. BUG-2502 fixes one instance. Requirement: enforce that rework routing leaves the spec pickable, or refuses loudly at routing time; each lane exit records a closed-set result such as pushed, no-change-with-reason, refused-before-start or punted. Acceptance: a refused-before-start lane is never reported as a launched rework; repeated identical refusals surface once.'
-status: InProgress
+status: NeedsAttention
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-09T01:58:39.064485765Z
-modified_at: 2026-11-10T20:14:29.162870923Z
+modified_at: 2026-11-10T20:28:25.110870964Z
 req_type: Story
 tags:
 - area:orchestration
@@ -116,6 +116,13 @@ history:
   session_id: 01a1c6f6e635
   harness_version: codex-cli 0.167.0
   changes: []
+- id: 01a1c725-ca96-7e91-9829-71042067c710
+  author: aida-orchestrator
+  timestamp: 2026-11-10T20:28:25.110889629Z
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: NeedsAttention
 filed_at:
   code_sha: a7a14984cec5533987dfeccb70d1f91aaebbf22a
   branch: main
@@ -124,3 +131,11 @@ filed_at:
   aida_build_sha: 8a4a909a967
   vendor: claude
   session: 20abb7c3-8f9b-4a5e-b326-404921f3b450
+failure_reason:
+  phase: reviewer
+  phase_index: 3
+  kind: verdict:request-changes
+  detail: Fresh standalone receipt admission uses the wrong role/scope and loses resolved refusal identity; required CI is still pending.
+  recovery_hint: address the review findings, move STORY-B6B1278890774EF993D2EBC327862470-613 back to In Progress, and clear the PR hold only after approval
+  shelved_by: reviewer
+  shelved_at: 2026-11-10T20:28:25.110870964Z
