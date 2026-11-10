@@ -8,7 +8,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-10T03:07:38.542859262Z
-modified_at: 2026-11-10T20:21:38.825512418Z
+modified_at: 2026-11-10T20:22:51.266105678Z
 req_type: Bug
 comments:
 - id: 01a1c3a1-bccc-7ef0-b6b7-2fdb52e783f5
@@ -255,6 +255,13 @@ comments:
   modified_at: 2026-11-10T20:19:41.200575535Z
   session_id: 01a1c70f-d731-7b70-acf8-e9ab3d288fca
   harness_version: 2.1.322 (Claude Code)
+- id: 01a1c720-b282-7f13-abda-a61c607ea11f
+  author: dirtlab
+  content: 'Round 3: confirmed queue_cmd imports fetch_pr_ship_metadata_via_forge and no removed helper references remain. Restored standalone reviewer spec recovery through a GitHub forge fallback only when no local forge is resolved; configured GitLab stays on its resolved forge. Targeted LIGHT tests submitted to lane runner.'
+  created_at: 2026-11-10T20:22:51.266105678Z
+  modified_at: 2026-11-10T20:22:51.266105678Z
+  session_id: 01a1c71f915d
+  harness_version: codex-cli 0.167.0
 history:
 - id: 01a1c3a2-0b0e-7e70-890b-6fe8aaba4acd
   author: joe
