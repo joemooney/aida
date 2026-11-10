@@ -651,7 +651,7 @@ codex = "native"
 Interactive `aida init` offers this opt-in when Codex is selected (including
 `--agent codex`). The separate consent defaults to no and warns that native
 sandboxing is weaker than AIDA containment. Existing vendor settings are preserved.
-Non-interactive init and `--no-agent-config` do not grant the opt-in.
+Non-interactive init and `aida init --no-agent-config` do not grant the opt-in.
 
 `aida config permissions show` reports each vendor's configured containment-policy
 launch readiness separately from permission consistency: `ready` or `refused`
