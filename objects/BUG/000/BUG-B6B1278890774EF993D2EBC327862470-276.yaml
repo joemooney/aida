@@ -3,12 +3,12 @@ spec_id: BUG-b6b1278890774ef993d2ebc327862470-276
 agreed_id: BUG-2511
 title: Process-occupancy scan reports uncertainty when a process cwd is unreadable, blocking the supervisor's post-exit commit
 description: Reported from operator's work machine (Codex, GitLab project hello-work-0x), 2026-11-09. The occupancy scan (aida-cli-lib/src/codex_bg_receipt.rs:268) returns 'uncertain' when any potentially relevant process's working directory cannot be read (for example another user's process), which prevents the supervisor's post-exit commit and recovery. Decide occupancy from evidence that can be read (process owner, the seat's own process group, lease records) and treat an unreadable cwd of a process owned by another uid as not occupying the seat; keep fail-closed for same-uid unreadable cases. Regression test with an unreadable foreign cwd.
-status: InProgress
+status: Completed
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-10T03:06:34.990229981Z
-modified_at: 2026-11-10T17:12:45.896810990Z
+modified_at: 2026-11-10T18:46:43.707038115Z
 req_type: Bug
 comments:
 - id: 01a1c3a1-af27-7c23-98db-241b05183b77
@@ -55,6 +55,20 @@ history:
   session_id: 01a1c66cbba3
   harness_version: codex-cli 0.167.0
   changes: []
+- id: 01a1c6c8-b0b2-77a0-b36f-59e82878333d
+  author: aida-auto-bump
+  timestamp: 2026-11-10T18:46:43.634991525Z
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Completed
+processing_record:
+- id: 01a1c6c8-b0fa-7660-8cbe-8f1c10562e1d
+  timestamp: 2026-11-10T18:46:43.706985068Z
+  agent: aida
+  commit_sha: 1a6e7452e2cbd196dbef6d503b1049fc1f10743b
+  summary: Full diff reviewed; all BUG-2511 description criteria verified by source and passing CI regressions; BUG-2511 bug protocol met (test file touched); no actionable defects; required CI green.
+  review_verdict: approved
 filed_at:
   code_sha: 838f14c3c2811c6b63da5d465700cff773c36190
   branch: main
@@ -64,3 +78,7 @@ filed_at:
   vendor: claude
   session: 01a1beff-fc3b-78e2-93e2-9b0c283b0339
   harness_version: 2.1.319 (Claude Code)
+implementation_info:
+  implemented: false
+  completed_at: 2026-11-10T18:46:43.634986332Z
+  completion_sha: 1a6e7452e2cbd196dbef6d503b1049fc1f10743b
