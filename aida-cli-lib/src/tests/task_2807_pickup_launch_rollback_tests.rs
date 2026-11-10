@@ -223,3 +223,65 @@ fn a_panic_before_the_agent_started_rolls_back() {
     assert!(panicked.is_err(), "the panic propagates");
     assert_gone(&fx.main, &tree, scope);
 }
+
+// Production no--role session setup must publish the same effective role that
+// the local lease records, even from a reviewer/advisor shell.
+// trace:STORY-2705 | ai:codex
+#[test]
+fn session_start_default_role_claim_defers_cross_host_review_implementer_gate() {
+    use super::tests::git_ok;
+    for inherited in ["", "advisor", "reviewer"] {
+        let fx = fixture();
+        let mut ambient =
+            crate::test_env::AmbientGuard::hermetic_with_seat(&fx.main, "implementer", &[]);
+        ambient.set_key("AIDA_SESSION_ROLE", inherited);
+        let store = fx.main.join(".aida-store");
+        std::fs::create_dir_all(&store).unwrap();
+        git_ok(&store, &["init", "-q", "-b", "aida-store"]);
+        git_ok(&store, &["config", "user.email", "test@example.com"]);
+        git_ok(&store, &["config", "user.name", "AIDA Test"]);
+        git_ok(&store, &["add", "-A"]);
+        git_ok(&store, &["commit", "--allow-empty", "-qm", "seed"]);
+        let origin = fx.root.join("store-origin.git");
+        git_ok(
+            &fx.root,
+            &[
+                "clone",
+                "-q",
+                "--bare",
+                store.to_str().unwrap(),
+                origin.to_str().unwrap(),
+            ],
+        );
+        git_ok(
+            &store,
+            &["remote", "add", "origin", origin.to_str().unwrap()],
+        );
+        let scope = "STORY-928079";
+        let _receipt = launching_setup(scope);
+        let mut claim = crate::coordination::list_claims(&store)
+            .into_iter()
+            .find(|c| c.scope == scope)
+            .expect("production session wrote claim");
+        assert_eq!(claim.agent, "implementer");
+        let lease = crate::list_leases(&fx.main)
+            .into_iter()
+            .find(|l| l.scope == scope)
+            .unwrap();
+        assert_eq!(lease.role.as_deref(), Some(claim.agent.as_str()));
+        // Observe the actual claim from another host, without a local lease.
+        let observer = fx.root.join("observer");
+        claim.host = "remote-fixture-host".into();
+        let path = crate::coordination::claim_path(&observer.join(".aida-store"), scope);
+        std::fs::create_dir_all(path.parent().unwrap()).unwrap();
+        std::fs::write(path, toml::to_string(&claim).unwrap()).unwrap();
+        assert!(
+            crate::review_implementer_gate::deferred_with_metadata(&observer, || Ok((
+                format!("fix (Refs {scope})"),
+                "other-branch".into()
+            )))
+            .unwrap()
+            .is_some()
+        );
+    }
+}

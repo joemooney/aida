@@ -60,7 +60,7 @@ pub(crate) fn deferred(root: &Path, number: u64, gitlab: bool) -> Result<Option<
     })
 }
 
-fn deferred_with_metadata(
+pub(crate) fn deferred_with_metadata(
     root: &Path,
     metadata: impl FnOnce() -> Result<(String, String)>,
 ) -> Result<Option<String>> {
@@ -68,9 +68,14 @@ fn deferred_with_metadata(
     let host = crate::coordination::hostname();
     let now = chrono::Utc::now();
     for claim in crate::coordination::list_claims(&root.join(".aida-store")) {
-        if claim.review_verb
-            || !crate::canonical_role_name(&claim.agent).eq_ignore_ascii_case("implementer")
-        {
+        // Legacy spec claims omitted the scope-derived role. Keep those
+        // conservative until their existing liveness evidence expires.
+        // trace:STORY-2705 | ai:codex
+        let implementation_role = crate::canonical_role_name(&claim.agent)
+            .eq_ignore_ascii_case("implementer")
+            || (claim.agent.trim().is_empty()
+                && aida_core::object_store::valid_spec_id_format(&claim.scope));
+        if claim.review_verb || !implementation_role {
             continue;
         }
         if claim.host == host {
@@ -229,14 +234,26 @@ mod tests {
             deferred_with_metadata(root, metadata).unwrap().as_deref(),
             Some("deferred: implementer lane live (remote-fixture-host, lease-two)")
         );
-        claim.agent = "advisor".into();
+        for role in ["reviewer", "advisor"] {
+            claim.agent = role.into();
+            write(&claim);
+            assert!(
+                deferred_with_metadata(root, || panic!("explicit role must not defer"))
+                    .unwrap()
+                    .is_none()
+            );
+        }
+        claim.agent.clear();
+        write(&claim);
+        assert!(deferred_with_metadata(root, metadata).unwrap().is_some());
+        claim.scope = "workspace".into();
         write(&claim);
         assert!(
-            deferred_with_metadata(root, || panic!("advisor must not defer"))
+            deferred_with_metadata(root, || panic!("non-spec must not defer"))
                 .unwrap()
                 .is_none()
         );
-        claim.agent = "implementer".into();
+        claim.scope = "STORY-1".into();
         claim.heartbeat_at = (now - chrono::Duration::seconds(61)).to_rfc3339();
         write(&claim);
         assert!(
