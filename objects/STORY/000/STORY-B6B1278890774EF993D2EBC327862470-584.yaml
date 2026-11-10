@@ -18,7 +18,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-08T02:58:08.667753563Z
-modified_at: 2026-11-10T07:14:34.715259962Z
+modified_at: 2026-11-10T14:40:02.708970854Z
 req_type: Story
 tags:
 - area:human-wait
@@ -593,6 +593,13 @@ comments:
   modified_at: 2026-11-10T07:02:59.883212588Z
   session_id: 01a1c39a-801a-7bd1-8da9-c955a6707f0b
   harness_version: 2.1.321 (Claude Code)
+- id: 01a1c5e6-d894-7af1-82d4-2d18f1ed1f4b
+  author: joe
+  content: 'ADVISOR BRIEF (slice 2, 2026-11-10): the sketch (#3666) and the runtime record (#3748) are on main. Slice 2 implements AC1 and AC2 from the sketch: a lane that asks the human records the question, exits with a typed parked state and frees its slot; answering the question re-queues the spec with the answer in the brief. AC3 and AC4 are slice 3. Title: [AI:codex] feat(lanes): park on ask and resume on answer (Refs STORY-2661). Gate: LIGHT.'
+  created_at: 2026-11-10T14:40:02.708970854Z
+  modified_at: 2026-11-10T14:40:02.708970854Z
+  session_id: 01a1c530-c917-7f13-ab81-f6b5e1d1cd30
+  harness_version: 2.1.322 (Claude Code)
 history:
 - id: 01a1b9c5-1aa6-78e3-9355-9af12a0ce44c
   author: joe
