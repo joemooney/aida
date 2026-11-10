@@ -33,7 +33,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-09T16:33:51.967266330Z
-modified_at: 2026-11-10T02:01:48.569247082Z
+modified_at: 2026-11-10T02:01:50.604867268Z
 req_type: Story
 tags:
 - area:ci
@@ -51,6 +51,13 @@ comments:
   content: 'ADVISOR SIGNOFF WITH CHANGES (2026-11-10 02:15 UTC) on the sketch in PR #3754 (docs/plans/2026-11-10-story-2695-dell1-parallel-cached-runner.md). Binding changes: (1) AIDA merge trains are pull_request runs on host-created train/ branches (aida pr train), not GitHub merge_group runs. The admission controller classifies a run as TRAIN only by matching the run''s repository, PR, head SHA and train/ branch against the host''s own train record; a branch name alone never grants the train class. (2) v1 classes are TRAIN and MAIN only. Ordinary same-repo and fork PR CI stays on hosted runners; the PR cache class is deferred until v1 is measured. (3) Slices: S1 = repair the seven environment-failing tests per the sketch''s table under the installed unit, no routing or runner changes, no containment test weakened or skipped (Refs STORY-2695). S2 = two slots, distinct uid per slot and class, trusted main generations, disposable train copies, admission controller, memory and CPU budget, runbook (Refs STORY-2695). S3 = operator installation, activation and the matched ten-train measurement with the stated rollback triggers (completes). (4) The memory and CPU budget must account for concurrent Codex lanes building on dell1 (up to 8, cold builds), not only CI units. Everything else in the sketch, including the cache trust table, cross-slot denial tests and rollback triggers, is approved as written.'
   created_at: 2026-11-10T02:01:48.569247082Z
   modified_at: 2026-11-10T02:01:48.569247082Z
+  session_id: 01a1beff-fc3b-78e2-93e2-9b0c283b0339
+  harness_version: 2.1.319 (Claude Code)
+- id: 01a1c330-b10c-7d01-99a9-45a1fc4a21c4
+  author: joe
+  content: 'ADVISOR RULING (2026-11-10 02:15 UTC): next lane = SLICE S1 only. Repair the seven environment-failing tests listed in the description, following the hypothesis table in the signed sketch: first capture each test''s exact failing operation and errno by running it on dell1 under the installed aida-ci unit configuration (scripts/runner/aida-ci.slice and one-job.sh properties; reproduce with systemd-run using the same properties if you cannot use the runner), then fix the test fixture assumptions (hardcoded /home/u and /run/user/1000, compile-time CARGO_MANIFEST_DIR, 04600 chmod under RestrictSUIDSGID) or document a unit change for operator review. Keep AIDA_REQUIRE_BWRAP_LIVE=1 semantics, every positive control and denial assertion; no test removed, skipped or weakened. No routing, workflow or runner changes. Use (Refs STORY-2695).'
+  created_at: 2026-11-10T02:01:50.604867268Z
+  modified_at: 2026-11-10T02:01:50.604867268Z
   session_id: 01a1beff-fc3b-78e2-93e2-9b0c283b0339
   harness_version: 2.1.319 (Claude Code)
 history:
