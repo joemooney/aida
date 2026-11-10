@@ -1153,7 +1153,11 @@ fn task_1790_exclusions_require_private_owned_regular_file() {
     assert!(exclusion_metadata_check(&meta, meta.uid().wrapping_add(1))
         .unwrap_err()
         .contains("owned by uid"));
-    for mode in [0o644, 0o660, 0o400, 0o4600] {
+    // trace:STORY-2695 | ai:codex
+    assert!(exclusion_mode_check(0o4600)
+        .unwrap_err()
+        .contains("not 600"));
+    for mode in [0o644, 0o660, 0o400] {
         std::fs::set_permissions(&path, std::fs::Permissions::from_mode(mode)).unwrap();
         let ledger = read_exclusions(tmp.path());
         assert!(
@@ -1422,17 +1426,19 @@ fn exclusion_writer_refuses_invalid_ledger_without_appending() {
     let seen = vec![("TASK-2".into(), "guided".into(), false)];
     record_exclusions(tmp.path(), &seen, now()).unwrap();
     let before = std::fs::read(&path).unwrap();
-    for mode in [0o644, 0o4600] {
-        std::fs::set_permissions(&path, std::fs::Permissions::from_mode(mode)).unwrap();
-        assert!(private_file_check(&path).is_err());
-        assert!(record_exclusions(
-            tmp.path(),
-            &[("TASK-3".into(), "guided".into(), false)],
-            now()
-        )
-        .is_err());
-        assert_eq!(std::fs::read(&path).unwrap(), before);
-    }
+    // trace:STORY-2695 | ai:codex
+    assert!(exclusion_mode_check(0o4600)
+        .unwrap_err()
+        .contains("not 600"));
+    std::fs::set_permissions(&path, std::fs::Permissions::from_mode(0o644)).unwrap();
+    assert!(private_file_check(&path).is_err());
+    assert!(record_exclusions(
+        tmp.path(),
+        &[("TASK-3".into(), "guided".into(), false)],
+        now()
+    )
+    .is_err());
+    assert_eq!(std::fs::read(&path).unwrap(), before);
     std::fs::set_permissions(&path, std::fs::Permissions::from_mode(0o600)).unwrap();
     std::fs::write(&path, b"malformed\n").unwrap();
     assert!(record_exclusions(tmp.path(), &seen, now()).is_err());
