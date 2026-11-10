@@ -7548,9 +7548,9 @@ fn mediated_mcp_response(
                 } else {
                     // trace:TASK-3223 | ai:codex
                     tool["description"] = json!(
-                        "Update an owned requirement's title, description or priority through the mediated store service. At least one edit field is required."
+                        "Update an owned requirement's title, description, priority or weight through the mediated store service. At least one edit field is required."
                     );
-                    &["id", "title", "description", "priority"]
+                    &["id", "title", "description", "priority", "weight"]
                 };
                 tool["inputSchema"]["properties"]
                     .as_object_mut()

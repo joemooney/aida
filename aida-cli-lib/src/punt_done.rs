@@ -1230,29 +1230,25 @@ pub(crate) struct PuntsArgs {
 // STORY-325: punt ledger CLI command. Dispatched before storage init —
 // it reads only `.aida/punts.jsonl`, no requirement store.
 // trace:STORY-325 | ai:antigravity
-fn run_punts(
-    matches: &clap::ArgMatches,
-    _ctx: &crate::command_registry::DispatchCtx,
-) -> anyhow::Result<()> {
+fn run_punts(matches: &clap::ArgMatches, _ctx: &crate::cmdkit::DispatchCtx) -> anyhow::Result<()> {
     let args = <PuntsArgs as clap::FromArgMatches>::from_arg_matches(matches)?;
     let punts_cmd = &args.inner;
     return handle_punts_command(punts_cmd.clone());
 }
 
 // trace:STORY-1728 | ai:claude
-pub(crate) static PUNTS: crate::command_registry::CommandReg =
-    crate::command_registry::CommandReg {
-        name: "punts",
-        help_after: "punt",
-        command: <PuntsArgs as clap::CommandFactory>::command,
-        policy: punts_cli_policy,
-        run: crate::command_registry::Handler::Early(run_punts),
-    };
+pub(crate) static PUNTS: crate::cmdkit::CommandReg = crate::cmdkit::CommandReg {
+    name: "punts",
+    help_after: "punt",
+    command: <PuntsArgs as clap::CommandFactory>::command,
+    policy: punts_cli_policy,
+    run: crate::cmdkit::Handler::Early(run_punts),
+};
 
 // The read-only verbs stay open to guest stakeholders; every other verb is
 // gated as Write. An unparseable invocation is not treated as a read.
 // trace:STORY-1728 | ai:claude
-fn punts_cli_policy(matches: &clap::ArgMatches) -> crate::command_registry::CmdPolicy {
+fn punts_cli_policy(matches: &clap::ArgMatches) -> crate::cmdkit::CmdPolicy {
     use crate::cli::PuntsCommand;
     use crate::stakeholder_role::StakeholderAction;
     let read = <PuntsArgs as clap::FromArgMatches>::from_arg_matches(matches).is_ok_and(|args| {
@@ -1261,7 +1257,7 @@ fn punts_cli_policy(matches: &clap::ArgMatches) -> crate::command_registry::CmdP
             PuntsCommand::List { .. } | PuntsCommand::Read { .. }
         )
     });
-    crate::command_registry::CmdPolicy {
+    crate::cmdkit::CmdPolicy {
         stakeholder: if read {
             StakeholderAction::Read
         } else {
@@ -1288,16 +1284,14 @@ pub(crate) struct DoneArgs {
 
 fn run_done(
     matches: &clap::ArgMatches,
-    ctx: &crate::command_registry::DispatchCtx,
-) -> anyhow::Result<crate::command_registry::Flow> {
+    ctx: &crate::cmdkit::DispatchCtx,
+) -> anyhow::Result<crate::cmdkit::Flow> {
     use crate::*;
     let args = <DoneArgs as clap::FromArgMatches>::from_arg_matches(matches)?;
     match &ctx.store {
-        None => Ok(crate::command_registry::Flow::Continue),
-        Some(crate::command_registry::StoreCtx::Distributed { .. }) => {
-            Ok(crate::command_registry::Flow::Continue)
-        }
-        Some(crate::command_registry::StoreCtx::Git {
+        None => Ok(crate::cmdkit::Flow::Continue),
+        Some(crate::cmdkit::StoreCtx::Distributed { .. }) => Ok(crate::cmdkit::Flow::Continue),
+        Some(crate::cmdkit::StoreCtx::Git {
             store_path,
             backend,
         }) => {
@@ -1309,9 +1303,9 @@ fn run_done(
                     handle_done_command(spec, backend, store_path)?;
                 }
             }
-            Ok(crate::command_registry::Flow::Continue)
+            Ok(crate::cmdkit::Flow::Continue)
         }
-        Some(crate::command_registry::StoreCtx::Legacy {
+        Some(crate::cmdkit::StoreCtx::Legacy {
             storage,
             requirements_path,
         }) => {
@@ -1326,23 +1320,23 @@ fn run_done(
                     );
                 }
             }
-            Ok(crate::command_registry::Flow::Continue)
+            Ok(crate::cmdkit::Flow::Continue)
         }
     }
 }
 
 // trace:STORY-1728 | ai:claude
-pub(crate) static DONE: crate::command_registry::CommandReg = crate::command_registry::CommandReg {
+pub(crate) static DONE: crate::cmdkit::CommandReg = crate::cmdkit::CommandReg {
     name: "done",
     help_after: "reconstitute",
     command: <DoneArgs as clap::CommandFactory>::command,
-    policy: |_| crate::command_registry::CmdPolicy {
+    policy: |_| crate::cmdkit::CmdPolicy {
         stakeholder: crate::stakeholder_role::StakeholderAction::Write,
         per_write_auto_push: false,
         skip_role_restore_prompt: false,
         team_identity_write: false,
     },
-    run: crate::command_registry::Handler::Store(run_done),
+    run: crate::cmdkit::Handler::Store(run_done),
 };
 
 /// Punt a spec to Needs Attention — pause it with a structured reason
@@ -1374,16 +1368,14 @@ pub(crate) struct PuntArgs {
 
 fn run_punt(
     matches: &clap::ArgMatches,
-    ctx: &crate::command_registry::DispatchCtx,
-) -> anyhow::Result<crate::command_registry::Flow> {
+    ctx: &crate::cmdkit::DispatchCtx,
+) -> anyhow::Result<crate::cmdkit::Flow> {
     use crate::*;
     let args = <PuntArgs as clap::FromArgMatches>::from_arg_matches(matches)?;
     match &ctx.store {
-        None => Ok(crate::command_registry::Flow::Continue),
-        Some(crate::command_registry::StoreCtx::Distributed { .. }) => {
-            Ok(crate::command_registry::Flow::Continue)
-        }
-        Some(crate::command_registry::StoreCtx::Git {
+        None => Ok(crate::cmdkit::Flow::Continue),
+        Some(crate::cmdkit::StoreCtx::Distributed { .. }) => Ok(crate::cmdkit::Flow::Continue),
+        Some(crate::cmdkit::StoreCtx::Git {
             store_path,
             backend,
         }) => {
@@ -1406,9 +1398,9 @@ fn run_punt(
                     )?;
                 }
             }
-            Ok(crate::command_registry::Flow::Continue)
+            Ok(crate::cmdkit::Flow::Continue)
         }
-        Some(crate::command_registry::StoreCtx::Legacy {
+        Some(crate::cmdkit::StoreCtx::Legacy {
             storage,
             requirements_path,
         }) => {
@@ -1425,21 +1417,21 @@ fn run_punt(
                     );
                 }
             }
-            Ok(crate::command_registry::Flow::Continue)
+            Ok(crate::cmdkit::Flow::Continue)
         }
     }
 }
 
 // trace:STORY-1728 | ai:claude
-pub(crate) static PUNT: crate::command_registry::CommandReg = crate::command_registry::CommandReg {
+pub(crate) static PUNT: crate::cmdkit::CommandReg = crate::cmdkit::CommandReg {
     name: "punt",
     help_after: "advisor",
     command: <PuntArgs as clap::CommandFactory>::command,
-    policy: |_| crate::command_registry::CmdPolicy {
+    policy: |_| crate::cmdkit::CmdPolicy {
         stakeholder: crate::stakeholder_role::StakeholderAction::Write,
         per_write_auto_push: true,
         skip_role_restore_prompt: false,
         team_identity_write: false,
     },
-    run: crate::command_registry::Handler::Store(run_punt),
+    run: crate::cmdkit::Handler::Store(run_punt),
 };

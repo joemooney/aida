@@ -149,11 +149,11 @@ pub(crate) fn run_on_distributed_store(
     // finish here; the rest fall through to the git-backend dispatcher.
     // trace:STORY-1728 | ai:claude
     let Command::Registered(invocation) = command;
-    let store = crate::command_registry::StoreCtx::Distributed {
+    let store = crate::cmdkit::StoreCtx::Distributed {
         store_path,
         project_root_hint,
     };
-    if invocation.run_store(store, None)? == crate::command_registry::Flow::Return {
+    if invocation.run_store(store, None)? == crate::cmdkit::Flow::Return {
         return Ok(());
     }
     git_backend_cmd::handle_git_backend_command(store_path, command)

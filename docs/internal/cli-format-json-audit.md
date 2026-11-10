@@ -46,6 +46,8 @@ hermetic audit. `JSON not honoured` means unsupported and explicitly rejected.
 | `aida findings promote` | JSON not honoured | Explicitly rejected before dispatch (no local --json contract) |
 | `aida findings calibration` | COULD NOT VERIFY | Dedicated --json exists; needs command-specific state or external service |
 | `aida findings calibration annotate` | JSON not honoured | Explicitly rejected before dispatch (no local --json contract) |
+| `aida flow` | JSON not honoured | Explicitly rejected before dispatch (no local --json contract) |
+| `aida flow report` | COULD NOT VERIFY | Dedicated --json exists; needs command-specific state or external service |
 | `aida questions` | JSON not honoured | Explicitly rejected before dispatch (no local --json contract) |
 | `aida questions list` | JSON not honoured | Explicitly rejected before dispatch (no local --json contract) |
 | `aida questions sweep` | JSON not honoured | Explicitly rejected before dispatch (no local --json contract) |
@@ -323,6 +325,7 @@ hermetic audit. `JSON not honoured` means unsupported and explicitly rejected.
 | `aida worktree pool adopt` | COULD NOT VERIFY | Dedicated --json exists; needs command-specific state or external service |
 | `aida worktree pool destroy` | COULD NOT VERIFY | Dedicated --json exists; needs command-specific state or external service |
 | `aida intent` | COULD NOT VERIFY | Dedicated --json exists; needs command-specific state or external service |
+| `aida intent review-return` | JSON honoured | intent review-return --file review-input.json (JSON attachment) |
 | `aida intent ci` | COULD NOT VERIFY | Dedicated --json exists; needs command-specific state or external service |
 | `aida intent ci enroll` | COULD NOT VERIFY | Dedicated --json exists; needs command-specific state or external service |
 | `aida intent ci request` | COULD NOT VERIFY | Dedicated --json exists; needs command-specific state or external service |

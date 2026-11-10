@@ -934,10 +934,7 @@ pub(crate) struct TailArgs {
 // Reads only `.aida/burndown/`, `.aida/headless-logs/` and the lease dir —
 // no store, no network — so dispatch early like `aida ps`.
 // trace:TASK-1167 | ai:claude
-fn run_tail(
-    matches: &clap::ArgMatches,
-    _ctx: &crate::command_registry::DispatchCtx,
-) -> anyhow::Result<()> {
+fn run_tail(matches: &clap::ArgMatches, _ctx: &crate::cmdkit::DispatchCtx) -> anyhow::Result<()> {
     use crate::*;
     let args = <TailArgs as clap::FromArgMatches>::from_arg_matches(matches)?;
     let TailArgs {
@@ -965,15 +962,15 @@ fn run_tail(
 }
 
 // trace:STORY-1728 | ai:claude
-pub(crate) static TAIL: crate::command_registry::CommandReg = crate::command_registry::CommandReg {
+pub(crate) static TAIL: crate::cmdkit::CommandReg = crate::cmdkit::CommandReg {
     name: "tail",
     help_after: "mandate",
     command: <TailArgs as clap::CommandFactory>::command,
-    policy: |_| crate::command_registry::CmdPolicy {
+    policy: |_| crate::cmdkit::CmdPolicy {
         stakeholder: crate::stakeholder_role::StakeholderAction::Write,
         per_write_auto_push: false,
         skip_role_restore_prompt: false,
         team_identity_write: false,
     },
-    run: crate::command_registry::Handler::Early(run_tail),
+    run: crate::cmdkit::Handler::Early(run_tail),
 };

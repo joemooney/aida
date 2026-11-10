@@ -1891,28 +1891,25 @@ pub(crate) struct RoleArgs {
 
 // Roles + statusline dispatch before storage init — roles are TOML
 // files at .aida/roles/, statusline reads the cache directly.
-fn run_role(
-    matches: &clap::ArgMatches,
-    _ctx: &crate::command_registry::DispatchCtx,
-) -> anyhow::Result<()> {
+fn run_role(matches: &clap::ArgMatches, _ctx: &crate::cmdkit::DispatchCtx) -> anyhow::Result<()> {
     let args = <RoleArgs as clap::FromArgMatches>::from_arg_matches(matches)?;
     let role_cmd = &args.inner;
     return self::handle_role_command(role_cmd);
 }
 
 // trace:STORY-1728 | ai:claude
-pub(crate) static ROLE: crate::command_registry::CommandReg = crate::command_registry::CommandReg {
+pub(crate) static ROLE: crate::cmdkit::CommandReg = crate::cmdkit::CommandReg {
     name: "role",
     help_after: "schedule",
     command: <RoleArgs as clap::CommandFactory>::command,
     policy: role_cli_policy,
-    run: crate::command_registry::Handler::Early(run_role),
+    run: crate::cmdkit::Handler::Early(run_role),
 };
 
 // The read-only verbs stay open to guest stakeholders; every other verb is
 // gated as Role. An unparseable invocation is not treated as a read.
 // trace:STORY-1728 | ai:claude
-fn role_cli_policy(matches: &clap::ArgMatches) -> crate::command_registry::CmdPolicy {
+fn role_cli_policy(matches: &clap::ArgMatches) -> crate::cmdkit::CmdPolicy {
     use crate::cli::RoleCommand;
     use crate::stakeholder_role::StakeholderAction;
     let read = <RoleArgs as clap::FromArgMatches>::from_arg_matches(matches).is_ok_and(|args| {
@@ -1924,7 +1921,7 @@ fn role_cli_policy(matches: &clap::ArgMatches) -> crate::command_registry::CmdPo
                 | RoleCommand::Current { .. }
         )
     });
-    crate::command_registry::CmdPolicy {
+    crate::cmdkit::CmdPolicy {
         stakeholder: if read {
             StakeholderAction::Read
         } else {

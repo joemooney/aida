@@ -179,7 +179,8 @@ class NoticeHook(unittest.TestCase):
         # `aida role` is registered as an early (store-free) command: its handler
         # runs before storage init and finishes there. trace:STORY-1728 | ai:claude
         role = (ROOT / 'aida-cli-lib/src/role_cmd.rs').read_text()
-        self.assertIn('run: crate::command_registry::Handler::Early(run_role)', role)
+        # trace:TASK-3448 | ai:codex
+        self.assertIn('run: crate::cmdkit::Handler::Early(run_role)', role)
         run_role = role[role.index('fn run_role('):]
         run_role = run_role[: run_role.index('\n}\n')]
         self.assertIn('handle_role_command(', run_role)

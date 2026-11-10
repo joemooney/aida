@@ -2610,10 +2610,10 @@ fn task_2902_native_ship_message_records_only_and_dry_run_does_not_write() {
     std::env::set_current_dir(&clone).unwrap();
     let base = git_ok(&clone, &["rev-parse", "HEAD"]);
     let pending = git_ok(&clone, &["status", "--porcelain"]);
-    let crate::command_registry::Handler::Early(run) = crate::pr_cmd::SHIP.run else {
+    let crate::cmdkit::Handler::Early(run) = crate::pr_cmd::SHIP.run else {
         panic!("ship is an early command");
     };
-    let ctx = crate::command_registry::DispatchCtx {
+    let ctx = crate::cmdkit::DispatchCtx {
         globals: None,
         store: None,
     };

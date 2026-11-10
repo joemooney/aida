@@ -892,29 +892,25 @@ pub(crate) struct StackArgs {
 // STORY-248: stack-graph introspection. Dispatched before storage
 // init — reads only `.aida/stacks.json`, no requirement store.
 // Mirrors the STORY-301 drain dispatch pattern. trace:STORY-248
-fn run_stack(
-    matches: &clap::ArgMatches,
-    _ctx: &crate::command_registry::DispatchCtx,
-) -> anyhow::Result<()> {
+fn run_stack(matches: &clap::ArgMatches, _ctx: &crate::cmdkit::DispatchCtx) -> anyhow::Result<()> {
     let args = <StackArgs as clap::FromArgMatches>::from_arg_matches(matches)?;
     let stack_cmd = &args.inner;
     return handle_stack_command(stack_cmd);
 }
 
 // trace:STORY-1728 | ai:claude
-pub(crate) static STACK: crate::command_registry::CommandReg =
-    crate::command_registry::CommandReg {
-        name: "stack",
-        help_after: "drain",
-        command: <StackArgs as clap::CommandFactory>::command,
-        policy: |_| crate::command_registry::CmdPolicy {
-            stakeholder: crate::stakeholder_role::StakeholderAction::Write,
-            per_write_auto_push: false,
-            skip_role_restore_prompt: false,
-            team_identity_write: false,
-        },
-        run: crate::command_registry::Handler::Early(run_stack),
-    };
+pub(crate) static STACK: crate::cmdkit::CommandReg = crate::cmdkit::CommandReg {
+    name: "stack",
+    help_after: "drain",
+    command: <StackArgs as clap::CommandFactory>::command,
+    policy: |_| crate::cmdkit::CmdPolicy {
+        stakeholder: crate::stakeholder_role::StakeholderAction::Write,
+        per_write_auto_push: false,
+        skip_role_restore_prompt: false,
+        team_identity_write: false,
+    },
+    run: crate::cmdkit::Handler::Early(run_stack),
+};
 
 /// Read `.aida/headless-logs/<spec>-<lease>.jsonl` cleanly — wraps the
 /// non-obvious jq filter (assistant content blocks, text-only by default,
@@ -934,7 +930,7 @@ pub(crate) struct HeadlessArgs {
 // only `.aida/headless-logs/`, no requirement store. trace:TASK-398
 fn run_headless(
     matches: &clap::ArgMatches,
-    _ctx: &crate::command_registry::DispatchCtx,
+    _ctx: &crate::cmdkit::DispatchCtx,
 ) -> anyhow::Result<()> {
     let args = <HeadlessArgs as clap::FromArgMatches>::from_arg_matches(matches)?;
     let headless_cmd = &args.inner;
@@ -942,19 +938,18 @@ fn run_headless(
 }
 
 // trace:STORY-1728 | ai:claude
-pub(crate) static HEADLESS: crate::command_registry::CommandReg =
-    crate::command_registry::CommandReg {
-        name: "headless",
-        help_after: "stack",
-        command: <HeadlessArgs as clap::CommandFactory>::command,
-        policy: |_| crate::command_registry::CmdPolicy {
-            stakeholder: crate::stakeholder_role::StakeholderAction::Write,
-            per_write_auto_push: false,
-            skip_role_restore_prompt: false,
-            team_identity_write: false,
-        },
-        run: crate::command_registry::Handler::Early(run_headless),
-    };
+pub(crate) static HEADLESS: crate::cmdkit::CommandReg = crate::cmdkit::CommandReg {
+    name: "headless",
+    help_after: "stack",
+    command: <HeadlessArgs as clap::CommandFactory>::command,
+    policy: |_| crate::cmdkit::CmdPolicy {
+        stakeholder: crate::stakeholder_role::StakeholderAction::Write,
+        per_write_auto_push: false,
+        skip_role_restore_prompt: false,
+        team_identity_write: false,
+    },
+    run: crate::cmdkit::Handler::Early(run_headless),
+};
 
 /// Inspect the `aida-worker` shell function's directive channel —
 /// `aida worker directives` lists the FIFO of pending directives the
@@ -972,34 +967,30 @@ pub(crate) struct WorkerArgs {
 // TASK-294: worker-directive introspection. Dispatched before storage
 // init — reads only `.aida/worker.cmd`, no requirement store. Mirrors
 // the STORY-301 drain dispatch pattern exactly. trace:TASK-294 | ai:claude
-fn run_worker(
-    matches: &clap::ArgMatches,
-    _ctx: &crate::command_registry::DispatchCtx,
-) -> anyhow::Result<()> {
+fn run_worker(matches: &clap::ArgMatches, _ctx: &crate::cmdkit::DispatchCtx) -> anyhow::Result<()> {
     let args = <WorkerArgs as clap::FromArgMatches>::from_arg_matches(matches)?;
     let worker_cmd = &args.inner;
     return handle_worker_command(worker_cmd);
 }
 
 // trace:STORY-1728 | ai:claude
-pub(crate) static WORKER: crate::command_registry::CommandReg =
-    crate::command_registry::CommandReg {
-        name: "worker",
-        help_after: "headless",
-        command: <WorkerArgs as clap::CommandFactory>::command,
-        policy: worker_cli_policy,
-        run: crate::command_registry::Handler::Early(run_worker),
-    };
+pub(crate) static WORKER: crate::cmdkit::CommandReg = crate::cmdkit::CommandReg {
+    name: "worker",
+    help_after: "headless",
+    command: <WorkerArgs as clap::CommandFactory>::command,
+    policy: worker_cli_policy,
+    run: crate::cmdkit::Handler::Early(run_worker),
+};
 
 // The read-only verbs stay open to guest stakeholders; every other verb is
 // gated as Write. An unparseable invocation is not treated as a read.
 // trace:STORY-1728 | ai:claude
-fn worker_cli_policy(matches: &clap::ArgMatches) -> crate::command_registry::CmdPolicy {
+fn worker_cli_policy(matches: &clap::ArgMatches) -> crate::cmdkit::CmdPolicy {
     use crate::cli::WorkerCommand;
     use crate::stakeholder_role::StakeholderAction;
     let read = <WorkerArgs as clap::FromArgMatches>::from_arg_matches(matches)
         .is_ok_and(|args| matches!(args.inner, WorkerCommand::Directives { .. }));
-    crate::command_registry::CmdPolicy {
+    crate::cmdkit::CmdPolicy {
         stakeholder: if read {
             StakeholderAction::Read
         } else {

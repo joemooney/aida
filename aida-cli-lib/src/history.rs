@@ -5178,16 +5178,14 @@ pub(crate) struct HistoryArgs {
 
 fn run_history(
     matches: &clap::ArgMatches,
-    ctx: &crate::command_registry::DispatchCtx,
-) -> anyhow::Result<crate::command_registry::Flow> {
+    ctx: &crate::cmdkit::DispatchCtx,
+) -> anyhow::Result<crate::cmdkit::Flow> {
     use crate::*;
     let args = <HistoryArgs as clap::FromArgMatches>::from_arg_matches(matches)?;
     match &ctx.store {
-        None => Ok(crate::command_registry::Flow::Continue),
-        Some(crate::command_registry::StoreCtx::Distributed { .. }) => {
-            Ok(crate::command_registry::Flow::Continue)
-        }
-        Some(crate::command_registry::StoreCtx::Git {
+        None => Ok(crate::cmdkit::Flow::Continue),
+        Some(crate::cmdkit::StoreCtx::Distributed { .. }) => Ok(crate::cmdkit::Flow::Continue),
+        Some(crate::cmdkit::StoreCtx::Git {
             store_path,
             backend,
         }) => {
@@ -5264,7 +5262,7 @@ fn run_history(
                             }
                             None => print!("{}", templates.list()),
                         }
-                        return crate::command_registry::returned(Ok(()));
+                        return crate::cmdkit::returned(Ok(()));
                     }
                     // STORY-1664: the list-shaped views share only the window, type,
                     // limit, author and archive flags with the rest of `history`;
@@ -5338,7 +5336,7 @@ fn run_history(
                             },
                         };
                         let json = *json || args.json || crate::output_format_is_json();
-                        return crate::command_registry::returned(crate::history_views::run(
+                        return crate::cmdkit::returned(crate::history_views::run(
                             backend, store_path, view, &query, json,
                         ));
                     }
@@ -5388,7 +5386,7 @@ fn run_history(
                             "`aida history --kind` has no JSON projection; use `--format human` or `--format toon`"
                         );
                         }
-                        return crate::command_registry::returned(crate::history_kind_report(
+                        return crate::cmdkit::returned(crate::history_kind_report(
                             kind,
                             since.as_deref(),
                             until.as_deref(),
@@ -5624,7 +5622,7 @@ fn run_history(
                             .ok()
                             .filter(|v| !v.trim().is_empty() && v != "0")
                             .is_none();
-                        return crate::command_registry::returned(history_timeline::run(
+                        return crate::cmdkit::returned(history_timeline::run(
                             store_path,
                             spec_id,
                             output,
@@ -5704,9 +5702,9 @@ fn run_history(
                     }
                 }
             }
-            Ok(crate::command_registry::Flow::Continue)
+            Ok(crate::cmdkit::Flow::Continue)
         }
-        Some(crate::command_registry::StoreCtx::Legacy {
+        Some(crate::cmdkit::StoreCtx::Legacy {
             storage,
             requirements_path,
         }) => {
@@ -5741,22 +5739,21 @@ fn run_history(
                     );
                 }
             }
-            Ok(crate::command_registry::Flow::Continue)
+            Ok(crate::cmdkit::Flow::Continue)
         }
     }
 }
 
 // trace:STORY-1728 | ai:claude
-pub(crate) static HISTORY: crate::command_registry::CommandReg =
-    crate::command_registry::CommandReg {
-        name: "history",
-        help_after: "search",
-        command: <HistoryArgs as clap::CommandFactory>::command,
-        policy: |_| crate::command_registry::CmdPolicy {
-            stakeholder: crate::stakeholder_role::StakeholderAction::Read,
-            per_write_auto_push: false,
-            skip_role_restore_prompt: false,
-            team_identity_write: false,
-        },
-        run: crate::command_registry::Handler::Store(run_history),
-    };
+pub(crate) static HISTORY: crate::cmdkit::CommandReg = crate::cmdkit::CommandReg {
+    name: "history",
+    help_after: "search",
+    command: <HistoryArgs as clap::CommandFactory>::command,
+    policy: |_| crate::cmdkit::CmdPolicy {
+        stakeholder: crate::stakeholder_role::StakeholderAction::Read,
+        per_write_auto_push: false,
+        skip_role_restore_prompt: false,
+        team_identity_write: false,
+    },
+    run: crate::cmdkit::Handler::Store(run_history),
+};

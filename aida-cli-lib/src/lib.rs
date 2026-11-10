@@ -54,6 +54,10 @@ mod auto_complete_telemetry;
 mod autonomy_cmd;
 mod autopilot;
 mod launch_permission_profile;
+// Disabled host-only transport; no command or consumer is registered.
+// trace:TASK-3368 | ai:codex
+#[cfg(target_os = "linux")]
+mod proc_broker;
 // trace:TASK-1018 | ai:claude — durable execution audit + one-command reversal.
 mod autopilot_audit;
 mod autopilot_intake;
@@ -79,7 +83,9 @@ mod cli;
 #[cfg(feature = "remote")]
 mod client;
 // trace:TASK-3425 | ai:codex
-mod cmdkit;
+// Direct framework imports are also used by the MCP transport crate.
+// trace:TASK-3448 | ai:codex
+pub mod cmdkit;
 pub mod command_registry;
 mod comment_cmd;
 mod commit;
@@ -170,6 +176,8 @@ mod lane_fast_gate;
 mod launch;
 pub mod leases;
 mod live_work;
+#[allow(dead_code)] // Foundation only; launch/ownership integration is a later slice.
+mod park_runtime;
 pub(crate) use live_work::try_auto_queue_pr_review;
 mod agent_handle;
 pub mod mailbox_resolver;
@@ -524,6 +532,7 @@ mod intent;
 mod intent_intake;
 mod internal_cmd;
 mod observation_envelope;
+mod review_envelope;
 // Retire a tree's mail before it is removed or reused. trace:STORY-1843 | ai:claude
 mod mail_retention;
 mod mailbox_cmd;
@@ -862,3 +871,6 @@ pub use cmdkit::StakeholderAction;
 
 // trace:TASK-3429 | ai:codex
 pub use rel_cards::load_dispenser;
+
+// trace:STORY-2699 | ai:codex
+mod flow_cmd;

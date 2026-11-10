@@ -1138,6 +1138,22 @@ attempt. It stays refused while any recorded process is still running. An
 attempt recorded before process groups were kept gets per-process signals
 only, with no group sweep.
 
+An authorized approval at an older head can also suppress review dispatch after
+clean merges of the protected default branch. Both dispatch checks reconcile
+the live verdict corpus and require a durable carry-over proof naming the
+reviewed head, current head and refreshed base tip. Standing non-approvals,
+malformed or missing-SHA evidence, unavailable protected-tip refreshes, and
+unrecordable proofs do not suppress review. This grants no ship readiness:
+CI must pass at the current head, and merge holds still apply.
+
+A refusal hold's release condition can use the same coverage, while preserving
+the original reviewed SHA and every other clearance obligation. The merge
+remains pinned to the current head. `aida review verdict PR-N` reports
+“APPROVED at H, carried to H2” with the protected base tip; `--json` includes
+an optional `coverage` object with `reviewed_sha`, `head_sha` and the full
+`proof`. Reading the verdict does not record a new approval or proof.
+<!-- trace:STORY-2694 | ai:codex -->
+
 ### Ship-readiness report
 <!-- trace:TASK-1945 | ai:claude -->
 

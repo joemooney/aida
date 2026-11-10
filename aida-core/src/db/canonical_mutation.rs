@@ -43,9 +43,19 @@ pub struct EditFields {
         skip_serializing_if = "Option::is_none"
     )]
     pub priority: Option<String>,
+    /// Missing leaves weight unchanged; explicit null clears it.
+    #[serde(
+        default,
+        deserialize_with = "present_weight",
+        skip_serializing_if = "Option::is_none"
+    )]
+    pub weight: Option<Option<f32>>,
 }
-// Missing fields mean unchanged; explicit null is not an edit verb. Match the
-// broker's closed schema when decoding independently in the trusted host.
+fn present_weight<'de, D: serde::Deserializer<'de>>(d: D) -> Result<Option<Option<f32>>, D::Error> {
+    Option::<f32>::deserialize(d).map(Some)
+}
+// Missing text fields mean unchanged; explicit null is not a text edit verb.
+// Match the broker's closed schema independently in the trusted host.
 fn present_text<'de, D: serde::Deserializer<'de>>(d: D) -> Result<Option<String>, D::Error> {
     String::deserialize(d).map(Some)
 }
@@ -106,10 +116,14 @@ impl CanonicalOperation {
                 anyhow::ensure!(
                     fields.title.is_some()
                         || fields.description.is_some()
-                        || fields.priority.is_some(),
+                        || fields.priority.is_some()
+                        || fields.weight.is_some(),
                     "InvalidRequest"
                 );
                 fields.parsed_priority()?;
+                if let Some(Some(weight)) = fields.weight {
+                    anyhow::ensure!(weight.is_finite(), "InvalidRequest");
+                }
                 if let Some(t) = &fields.title {
                     anyhow::ensure!(text(t) && t.len() <= 512, "InvalidRequest");
                 }
@@ -167,12 +181,26 @@ mod tests {
         for fields in [
             serde_json::json!({"priority": null}),
             serde_json::json!({"priority": 1}),
+            serde_json::json!({"weight": "42"}),
+            serde_json::json!({"weight": true}),
             serde_json::json!({"title": null, "description": "text"}),
             serde_json::json!({"description": null, "title": "title"}),
             serde_json::json!({"title": "title", "status": "Completed"}),
         ] {
             assert!(operation(&revision, fields).is_err());
         }
+        for weight in [serde_json::json!(0.75), serde_json::Value::Null] {
+            let decoded = operation(&revision, serde_json::json!({"weight": weight})).unwrap();
+            decoded.validate().unwrap();
+            assert_eq!(
+                serde_json::to_value(decoded).unwrap()["data"]["fields"]["weight"],
+                weight
+            );
+        }
+        assert!(operation(&revision, serde_json::json!({"weight": 1e100}))
+            .unwrap()
+            .validate()
+            .is_err());
         assert!(operation(&revision, serde_json::json!({}))
             .unwrap()
             .validate()

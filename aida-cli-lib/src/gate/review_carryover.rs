@@ -311,10 +311,10 @@ pub(crate) fn protected_base(repo: &Path) -> Result<String, CarryOverRefusal> {
 /// head (no other refusal can carry over). The PR's base must be the
 /// remote's default branch, and the proof runs against that branch.
 ///
-/// The change's gate ledger is read first: a `carry-over-proof` (or
-/// deterministic `carry-over-refused`) event for this approved commit, head,
-/// base branch and [`PROOF_VERSION`], taken at the base tip the clone has
-/// now, is the answer and nothing is recomputed. Otherwise the proof runs
+/// After refreshing the protected branch identity and tip, the change's gate
+/// ledger is read: a `carry-over-proof` (or deterministic `carry-over-refused`)
+/// event for this approved commit, head, base branch and [`PROOF_VERSION`],
+/// taken at the refreshed base tip, is reused. Otherwise the proof runs
 /// once and its result is appended for every later gate (best effort; see
 /// [`carry_over_for_refusal`] for the gate that requires it on the ledger).
 // trace:TASK-1960 | ai:claude
@@ -357,26 +357,34 @@ fn proved_for_refusal(
         .filter(|b| !b.is_empty())
         .map(str::to_string)
         .unwrap_or_else(|| crate::pr_cmd::pr_ship_target_branch(pr));
-    if let Some(stored) = stored_answer(site.repo, pr, &pr_base, reviewed_sha, head_sha) {
-        return Some(stored);
-    }
-    let proved = protected_base(site.repo).and_then(|protected| {
+    // Refresh both the protected branch identity and its tip BEFORE consulting
+    // cached evidence. A local origin ref is not evidence of remote freshness.
+    // trace:STORY-2694 | ai:codex
+    let protected = match protected_base(site.repo).and_then(|protected| {
         if pr_base != protected {
             return Err(CarryOverRefusal::BaseNotProtected {
                 base: pr_base.clone(),
                 protected,
             });
         }
-        prove_carry_over(site.repo, pr, &protected, reviewed_sha, head_sha)
-    });
+        refresh_base(site.repo, &protected)?;
+        Ok(protected)
+    }) {
+        Ok(protected) => protected,
+        Err(why) => return Some(Err(why)),
+    };
+    if let Some(stored) = stored_answer(site.repo, pr, &pr_base, reviewed_sha, head_sha) {
+        return Some(stored);
+    }
+    let proved = prove_at_refreshed_base(site.repo, pr, &protected, reviewed_sha, head_sha);
     let appended =
         site.append && append_answer(site.repo, pr, &pr_base, reviewed_sha, head_sha, &proved);
     Some(proved.map(|proof| (proof, Stored::Proven { appended })))
 }
 
 /// The ledger's answer for `approved` → `head` on `pr`, when one was taken
-/// against `base` at the tip of `origin/<base>` this clone has now (read
-/// without a fetch), under the current [`PROOF_VERSION`].
+/// against `base` at the refreshed tip of `origin/<base>`, under the current
+/// [`PROOF_VERSION`]. The caller must refresh protected identity and tip first.
 // trace:STORY-b6b1278890774ef993d2ebc327862470-080 | ai:claude
 fn stored_answer(repo: &Path, pr: u64, base: &str, approved: &str, head: &str) -> Option<Proved> {
     use crate::gate::ledger::{project, ChangeKey, EventBody};
@@ -531,6 +539,7 @@ pub(crate) fn carry_over_event(now_iso: &str, command: &str, proof: &CarryOver) 
 /// base branch and any missing full sha from `origin` first, best effort: a
 /// stale or missing base fails the proof closed rather than passing it.
 // trace:TASK-1960 | ai:claude
+#[cfg(test)]
 pub(crate) fn prove_carry_over(
     repo: &Path,
     pr: u64,
@@ -538,9 +547,13 @@ pub(crate) fn prove_carry_over(
     approved: &str,
     head: &str,
 ) -> Result<CarryOver, CarryOverRefusal> {
-    #[cfg(test)]
-    tests::PROOFS.with(|n| n.set(n.get() + 1));
     let base_branch = base_branch.trim();
+    refresh_base(repo, base_branch)?;
+    prove_at_refreshed_base(repo, pr, base_branch, approved, head)
+}
+
+// trace:STORY-2694 | ai:codex
+fn refresh_base(repo: &Path, base_branch: &str) -> Result<(), CarryOverRefusal> {
     if base_branch.is_empty()
         || base_branch.starts_with('-')
         || !git_ok(repo, &["check-ref-format", "--branch", base_branch])
@@ -549,10 +562,7 @@ pub(crate) fn prove_carry_over(
             what: format!("the base branch `{base_branch}`"),
         });
     }
-    let base_ref = format!("origin/{base_branch}");
-    // Preserve the ordinary fetch-error fallback, but a train intent failure
-    // cannot use cached refs to continue. trace:STORY-2401 | ai:codex
-    if let Err(error @ CarryOverRefusal::IntentUnavailable { .. }) = origin_git(
+    origin_git(
         repo,
         &[
             "fetch",
@@ -561,9 +571,23 @@ pub(crate) fn prove_carry_over(
             "origin",
             &format!("+refs/heads/{base_branch}:refs/remotes/origin/{base_branch}"),
         ],
-    ) {
-        return Err(error);
-    }
+    )?;
+    Ok(())
+}
+
+// The caller refreshed the remote identity and tip even when a ledger answer
+// exists; avoid a second remote round trip for an uncached answer.
+// trace:STORY-2694 | ai:codex
+fn prove_at_refreshed_base(
+    repo: &Path,
+    pr: u64,
+    base_branch: &str,
+    approved: &str,
+    head: &str,
+) -> Result<CarryOver, CarryOverRefusal> {
+    #[cfg(test)]
+    tests::PROOFS.with(|n| n.set(n.get() + 1));
+    let base_ref = format!("origin/{base_branch}");
     let base_tip =
         resolve_commit(repo, &format!("refs/remotes/origin/{base_branch}")).ok_or_else(|| {
             CarryOverRefusal::Unresolvable {

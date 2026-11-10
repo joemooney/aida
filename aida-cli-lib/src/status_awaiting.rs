@@ -3934,8 +3934,8 @@ pub(crate) struct AwaitingArgs {
 
 fn run_awaiting(
     matches: &clap::ArgMatches,
-    ctx: &crate::command_registry::DispatchCtx,
-) -> anyhow::Result<crate::command_registry::Flow> {
+    ctx: &crate::cmdkit::DispatchCtx,
+) -> anyhow::Result<crate::cmdkit::Flow> {
     use crate::*;
     let args = <AwaitingArgs as clap::FromArgMatches>::from_arg_matches(matches)?;
     match &ctx.store {
@@ -3960,12 +3960,10 @@ fn run_awaiting(
                 arm_notice_deadline();
                 emit_notice_time_line();
             }
-            Ok(crate::command_registry::Flow::Continue)
+            Ok(crate::cmdkit::Flow::Continue)
         }
-        Some(crate::command_registry::StoreCtx::Distributed { .. }) => {
-            Ok(crate::command_registry::Flow::Continue)
-        }
-        Some(crate::command_registry::StoreCtx::Git {
+        Some(crate::cmdkit::StoreCtx::Distributed { .. }) => Ok(crate::cmdkit::Flow::Continue),
+        Some(crate::cmdkit::StoreCtx::Git {
             store_path,
             backend,
         }) => {
@@ -3984,7 +3982,7 @@ fn run_awaiting(
                     no_ci,
                 } => {
                     // trace:BUG-1289 | ai:claude
-                    return crate::command_registry::returned(handle_awaiting_command(
+                    return crate::cmdkit::returned(handle_awaiting_command(
                         *notice,
                         *json || output_format_is_json(),
                         *verbose,
@@ -3993,9 +3991,9 @@ fn run_awaiting(
                     ));
                 }
             }
-            Ok(crate::command_registry::Flow::Continue)
+            Ok(crate::cmdkit::Flow::Continue)
         }
-        Some(crate::command_registry::StoreCtx::Legacy {
+        Some(crate::cmdkit::StoreCtx::Legacy {
             storage,
             requirements_path,
         }) => {
@@ -4010,25 +4008,24 @@ fn run_awaiting(
                     );
                 }
             }
-            Ok(crate::command_registry::Flow::Continue)
+            Ok(crate::cmdkit::Flow::Continue)
         }
     }
 }
 
 // trace:STORY-1728 | ai:claude
-pub(crate) static AWAITING: crate::command_registry::CommandReg =
-    crate::command_registry::CommandReg {
-        name: "awaiting",
-        help_after: "status",
-        command: <AwaitingArgs as clap::CommandFactory>::command,
-        policy: |_| crate::command_registry::CmdPolicy {
-            stakeholder: crate::stakeholder_role::StakeholderAction::Read,
-            per_write_auto_push: false,
-            skip_role_restore_prompt: false,
-            team_identity_write: false,
-        },
-        run: crate::command_registry::Handler::Store(run_awaiting),
-    };
+pub(crate) static AWAITING: crate::cmdkit::CommandReg = crate::cmdkit::CommandReg {
+    name: "awaiting",
+    help_after: "status",
+    command: <AwaitingArgs as clap::CommandFactory>::command,
+    policy: |_| crate::cmdkit::CmdPolicy {
+        stakeholder: crate::stakeholder_role::StakeholderAction::Read,
+        per_write_auto_push: false,
+        skip_role_restore_prompt: false,
+        team_identity_write: false,
+    },
+    run: crate::cmdkit::Handler::Store(run_awaiting),
+};
 
 /// TASK-2253: an Antigravity SessionStart reaches the notice's session-start
 /// branch and ends a dead agy registry row with no manual `aida agent gc`.

@@ -2076,7 +2076,7 @@ pub(crate) fn ship_refusal_release(
     record: &crate::gate::merge_hold_core::MergeHoldRecord,
     head: Option<&str>,
 ) -> crate::gate::merge_hold_core::RefusalRelease {
-    crate::gate::merge_hold_core::refusal_release(
+    let exact = crate::gate::merge_hold_core::refusal_release(
         record,
         head,
         |key| {
@@ -2089,7 +2089,16 @@ pub(crate) fn ship_refusal_release(
                 .iter()
                 .find_map(|root| crate::gate::review_verdict::read_verdict_for_sha(root, key, sha))
         },
-    )
+    );
+    // trace:STORY-2694 | ai:codex
+    crate::gate::merge_hold_core::refusal_release_with_coverage(record, exact, || {
+        let root = roots.first().ok_or("no verdict root is available")?;
+        let head = head.ok_or("the PR head is unavailable")?;
+        let keys = crate::gate::merge_hold_core::refusal_verdict_keys(record);
+        crate::gate::merge_hold_core::live_carried_approval(
+            roots, root, record.pr, head, None, &keys, true,
+        )
+    })
 }
 
 /// BUG-1918: what PR `pr` ships, for the approval gate — `known_ids` (from

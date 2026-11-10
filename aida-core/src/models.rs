@@ -509,6 +509,12 @@ pub struct DecisionChoice {
 // trace:STORY-522 | ai:claude
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, TS)]
 pub struct DecisionRequest {
+    /// Stable identity; absent only on legacy unbound questions.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub question_id: Option<Uuid>,
+    /// Host-owned retained-work binding. An answer does not release it.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub park_binding: Option<ParkBinding>,
     /// The self-contained question (state / deciding factor distilled so the
     /// human needs no spec re-read to answer).
     pub question: String,
@@ -537,6 +543,17 @@ pub struct DecisionRequest {
     /// When the human answered it.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub answered_at: Option<DateTime<Utc>>,
+}
+
+/// Canonical, portable identity of a host-owned wait. No launch authority.
+// trace:STORY-2661 | ai:codex
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, TS)]
+#[serde(deny_unknown_fields)]
+pub struct ParkBinding {
+    pub version: u32,
+    pub wait_id: Uuid,
+    pub generation: u64,
+    pub owner_node_id: String,
 }
 
 impl DecisionRequest {
@@ -9590,6 +9607,8 @@ completion_sha: 0123456789abcdef0123456789abcdef01234567
 
     fn sample_decision_request() -> DecisionRequest {
         DecisionRequest {
+            question_id: Some(uuid::Uuid::new_v4()),
+            park_binding: None,
             question: "Promote STORY-X to an EPIC, or ship as one story?".to_string(),
             choices: vec![
                 DecisionChoice {

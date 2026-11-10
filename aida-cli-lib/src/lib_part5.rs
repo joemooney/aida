@@ -4195,6 +4195,13 @@ pub(crate) fn handle_review_verdict_show(spec: &str, json: bool) -> Result<()> {
                     crate::review_verdict_display::verdict_notice_line(&v)
                 );
                 println!("  {} {}", "actionability:".dimmed(), actionability);
+                if let Some(coverage) = value
+                    .get("coverage")
+                    .and_then(|c| c.get("description"))
+                    .and_then(|d| d.as_str())
+                {
+                    println!("  {} {}", "coverage:".dimmed(), coverage);
+                }
                 let record = if source.is_ledger() {
                     format!("{} (gate ledger)", source.display())
                 } else {
@@ -4236,6 +4243,34 @@ pub(crate) fn review_verdict_show_body(
     project_root: &std::path::Path,
     key: &str,
     relation: impl FnOnce(Option<&str>) -> crate::gate::review_verdict::TipRelation,
+) -> Option<(
+    crate::gate::review_verdict::RecordedVerdict,
+    serde_json::Value,
+    crate::gate::review_verdict::VerdictSource,
+)> {
+    review_verdict_show_body_with_coverage(project_root, key, relation, |pr| {
+        let metadata = crate::forge::forge_for(project_root)
+            .change_metadata(pr, &mut crate::network_retry::NoopSink)
+            .ok()?;
+        crate::gate::merge_hold_core::live_carried_approval(
+            &[project_root],
+            project_root,
+            pr,
+            &metadata.head_sha,
+            Some(&metadata.base_ref),
+            &[],
+            false,
+        )
+        .ok()
+    })
+}
+
+// trace:STORY-2694 | ai:codex
+pub(crate) fn review_verdict_show_body_with_coverage(
+    project_root: &std::path::Path,
+    key: &str,
+    relation: impl FnOnce(Option<&str>) -> crate::gate::review_verdict::TipRelation,
+    coverage: impl FnOnce(u64) -> Option<crate::gate::review_carryover::CarryOver>,
 ) -> Option<(
     crate::gate::review_verdict::RecordedVerdict,
     serde_json::Value,
@@ -4304,6 +4339,25 @@ pub(crate) fn review_verdict_show_body(
                 "location": current.source.display(),
             }),
         );
+    }
+    // The original verdict stays at H. Coverage is a separate, read-only
+    // report with both commit identities and the protected-base evidence.
+    // trace:STORY-2694 | ai:codex
+    if v.kind.approves() {
+        if let Some(pr) = key
+            .to_ascii_uppercase()
+            .strip_prefix("PR-")
+            .and_then(|n| n.parse::<u64>().ok())
+        {
+            if let Some(proof) = coverage(pr).filter(|proof| {
+                v.reviewed_sha.as_deref().is_some_and(|sha| {
+                    crate::gate::review_verdict::same_reviewed_sha(sha, &proof.approved_sha)
+                })
+            }) {
+                let coverage = crate::gate::merge_hold_core::carried_approval_report(&proof);
+                value["coverage"] = coverage;
+            }
+        }
     }
     Some((v, value, current.source))
 }

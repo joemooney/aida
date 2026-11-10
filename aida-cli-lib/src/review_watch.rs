@@ -1370,7 +1370,23 @@ fn select(
     vendor: Option<String>,
     max: u8,
 ) -> Result<Action> {
+    select_with_coverage(store, change, vendor, max, || {
+        dispatch_carried_approval(store, change)
+    })
+}
+
+// trace:STORY-2694 | ai:codex
+fn select_with_coverage(
+    store: &Store,
+    change: &forge::Change,
+    vendor: Option<String>,
+    max: u8,
+    coverage: impl FnOnce() -> Option<String>,
+) -> Result<Action> {
     let key = change.key();
+    // Resolve remote proof evidence before taking the shared runtime lock.
+    // Suppression is review coverage only: readiness still checks CI at H2.
+    let carried = coverage();
     let overlap = change
         .overlap
         .context("base-branch overlap evidence is unknown")?;
@@ -1449,6 +1465,7 @@ fn select(
             // trace:TASK-1945 | ai:claude
             return Ok(Action::Skip(format!("a review of an earlier head still holds this change ({holders}); it is superseded once the change is seen at a new head")));
         }
+        if let Some(reason) = &carried { return Ok(Action::Skip(reason.clone())); }
         if history.contains(&change.head) { return Ok(Action::Skip("head already has a recorded review".into())); }
         if history.blocking() >= 2 { return Ok(Action::Skip("two-round review cap reached; route further work to the advisor".into())); }
         if total >= usize::from(max) { return Ok(Action::Skip(format!("global reviewer capacity ({max}) is held by {holders}; a running review frees its slot when it exits, and an ambiguous one (dispatcher lost) stays reserved until an operator confirms it ended: check its log in .aida/review-watch/logs/ and `aida session leases --all`"))); }
@@ -1474,6 +1491,15 @@ fn select(
 /// one whose review exited unfinished is still probed.
 // trace:TASK-1955 | ai:claude (TASK-2064, TASK-1-411)
 fn probe_unneeded(store: &Store, change: &forge::Change) -> Result<Option<String>> {
+    probe_unneeded_with_coverage(store, change, || dispatch_carried_approval(store, change))
+}
+
+// trace:STORY-2694 | ai:codex
+fn probe_unneeded_with_coverage(
+    store: &Store,
+    change: &forge::Change,
+    coverage: impl FnOnce() -> Option<String>,
+) -> Result<Option<String>> {
     let key = change.key();
     let head = change.head.as_str();
     let recorded = store.transaction(&key, |state| {
@@ -1503,6 +1529,9 @@ fn probe_unneeded(store: &Store, change: &forge::Change) -> Result<Option<String
     if let Some((reason, false)) = &recorded {
         return Ok(Some(reason.clone()));
     }
+    if let Some(reason) = coverage() {
+        return Ok(Some(reason));
+    }
     let history = store.history(&key)?;
     if history.contains(head) {
         return Ok(Some("head already has a recorded review".into()));
@@ -1516,6 +1545,22 @@ fn probe_unneeded(store: &Store, change: &forge::Change) -> Result<Option<String
         ));
     }
     Ok(None)
+}
+
+// trace:STORY-2694 | ai:codex
+fn dispatch_carried_approval(store: &Store, change: &forge::Change) -> Option<String> {
+    let proof = crate::gate::merge_hold_core::live_carried_approval(
+        &[&store.root],
+        &store.root,
+        change.id,
+        &change.head,
+        Some(&change.base),
+        &[],
+        true,
+    )
+    .ok()?;
+    Some(format!("APPROVED at {}, carried to {} (proof base {} at {}); CI at the current head is still required",
+        proof.approved_sha, proof.new_head, proof.base_ref, proof.base_tip))
 }
 
 // trace:TASK-1993 | ai:claude

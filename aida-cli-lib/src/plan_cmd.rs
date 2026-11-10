@@ -1832,28 +1832,25 @@ pub(crate) struct PlanArgs {
 // source files; `helpers` loads the store itself via
 // `load_store_for_lookup`. Neither needs the shared storage handle, so
 // dispatch the whole group early. trace:TASK-93 TASK-94 | ai:claude
-fn run_plan(
-    matches: &clap::ArgMatches,
-    _ctx: &crate::command_registry::DispatchCtx,
-) -> anyhow::Result<()> {
+fn run_plan(matches: &clap::ArgMatches, _ctx: &crate::cmdkit::DispatchCtx) -> anyhow::Result<()> {
     let args = <PlanArgs as clap::FromArgMatches>::from_arg_matches(matches)?;
     let plan_cmd = &args.inner;
     return self::handle_plan_command(plan_cmd);
 }
 
 // trace:STORY-1728 | ai:claude
-pub(crate) static PLAN: crate::command_registry::CommandReg = crate::command_registry::CommandReg {
+pub(crate) static PLAN: crate::cmdkit::CommandReg = crate::cmdkit::CommandReg {
     name: "plan",
     help_after: "lifecycle",
     command: <PlanArgs as clap::CommandFactory>::command,
     policy: plan_cli_policy,
-    run: crate::command_registry::Handler::Early(run_plan),
+    run: crate::cmdkit::Handler::Early(run_plan),
 };
 
 // The read-only verbs stay open to guest stakeholders; every other verb is
 // gated as Write. An unparseable invocation is not treated as a read.
 // trace:STORY-1728 | ai:claude
-fn plan_cli_policy(matches: &clap::ArgMatches) -> crate::command_registry::CmdPolicy {
+fn plan_cli_policy(matches: &clap::ArgMatches) -> crate::cmdkit::CmdPolicy {
     use crate::cli::PlanCommand;
     use crate::stakeholder_role::StakeholderAction;
     let read = <PlanArgs as clap::FromArgMatches>::from_arg_matches(matches).is_ok_and(|args| {
@@ -1862,7 +1859,7 @@ fn plan_cli_policy(matches: &clap::ArgMatches) -> crate::command_registry::CmdPo
             PlanCommand::Verify { fix: false, .. } | PlanCommand::Helpers { append: None, .. }
         )
     });
-    crate::command_registry::CmdPolicy {
+    crate::cmdkit::CmdPolicy {
         stakeholder: if read {
             StakeholderAction::Read
         } else {

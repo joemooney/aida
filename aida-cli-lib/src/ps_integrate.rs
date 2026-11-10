@@ -3736,10 +3736,7 @@ pub(crate) struct PsArgs {
 // session leases + probes pid liveness and self-loads the store read-only
 // (to find orphaned In-Progress specs), so it needs no shared storage
 // handle — dispatch early. trace:STORY-696 | ai:claude
-fn run_ps(
-    matches: &clap::ArgMatches,
-    _ctx: &crate::command_registry::DispatchCtx,
-) -> anyhow::Result<()> {
+fn run_ps(matches: &clap::ArgMatches, _ctx: &crate::cmdkit::DispatchCtx) -> anyhow::Result<()> {
     let args = <PsArgs as clap::FromArgMatches>::from_arg_matches(matches)?;
     let PsArgs { json, all } = &args;
     // trace:BUG-1289 | ai:claude
@@ -3747,17 +3744,17 @@ fn run_ps(
 }
 
 // trace:STORY-1728 | ai:claude
-pub(crate) static PS: crate::command_registry::CommandReg = crate::command_registry::CommandReg {
+pub(crate) static PS: crate::cmdkit::CommandReg = crate::cmdkit::CommandReg {
     name: "ps",
     help_after: "awaiting",
     command: <PsArgs as clap::CommandFactory>::command,
-    policy: |_| crate::command_registry::CmdPolicy {
+    policy: |_| crate::cmdkit::CmdPolicy {
         stakeholder: crate::stakeholder_role::StakeholderAction::Write,
         per_write_auto_push: false,
         skip_role_restore_prompt: false,
         team_identity_write: false,
     },
-    run: crate::command_registry::Handler::Early(run_ps),
+    run: crate::cmdkit::Handler::Early(run_ps),
 };
 
 /// The integrator seat: bare shows the merge queue; --run drains it.
@@ -3845,7 +3842,7 @@ pub(crate) struct IntegrateArgs {
 // queue instead of racing each other stale. trace:STORY-1024 | ai:codex
 fn run_integrate(
     matches: &clap::ArgMatches,
-    _ctx: &crate::command_registry::DispatchCtx,
+    _ctx: &crate::cmdkit::DispatchCtx,
 ) -> anyhow::Result<()> {
     let args = <IntegrateArgs as clap::FromArgMatches>::from_arg_matches(matches)?;
     let IntegrateArgs {
@@ -3883,19 +3880,18 @@ fn run_integrate(
 }
 
 // trace:STORY-1728 | ai:claude
-pub(crate) static INTEGRATE: crate::command_registry::CommandReg =
-    crate::command_registry::CommandReg {
-        name: "integrate",
-        help_after: "tail",
-        command: <IntegrateArgs as clap::CommandFactory>::command,
-        policy: |_| crate::command_registry::CmdPolicy {
-            stakeholder: crate::stakeholder_role::StakeholderAction::BuildLoop,
-            per_write_auto_push: false,
-            skip_role_restore_prompt: false,
-            team_identity_write: false,
-        },
-        run: crate::command_registry::Handler::Early(run_integrate),
-    };
+pub(crate) static INTEGRATE: crate::cmdkit::CommandReg = crate::cmdkit::CommandReg {
+    name: "integrate",
+    help_after: "tail",
+    command: <IntegrateArgs as clap::CommandFactory>::command,
+    policy: |_| crate::cmdkit::CmdPolicy {
+        stakeholder: crate::stakeholder_role::StakeholderAction::BuildLoop,
+        per_write_auto_push: false,
+        skip_role_restore_prompt: false,
+        team_identity_write: false,
+    },
+    run: crate::cmdkit::Handler::Early(run_integrate),
+};
 
 #[cfg(test)]
 #[path = "tests/story_2254_ps_detached_codex_tests.rs"]

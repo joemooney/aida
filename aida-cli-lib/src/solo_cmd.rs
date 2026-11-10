@@ -453,10 +453,7 @@ pub(crate) struct SoloArgs {
 
 // STORY-624: solo-mode flag — machine-global ~/.aida/solo.toml, no
 // requirement store needed (mirrors the away/home early dispatch).
-fn run_solo(
-    matches: &clap::ArgMatches,
-    _ctx: &crate::command_registry::DispatchCtx,
-) -> anyhow::Result<()> {
+fn run_solo(matches: &clap::ArgMatches, _ctx: &crate::cmdkit::DispatchCtx) -> anyhow::Result<()> {
     let SoloArgs {
         action,
         off,
@@ -478,15 +475,15 @@ fn run_solo(
 }
 
 // trace:STORY-1728 | ai:claude
-pub(crate) static SOLO: crate::command_registry::CommandReg = crate::command_registry::CommandReg {
+pub(crate) static SOLO: crate::cmdkit::CommandReg = crate::cmdkit::CommandReg {
     name: "solo",
     help_after: "presence",
     command: <SoloArgs as clap::CommandFactory>::command,
-    policy: |_| crate::command_registry::CmdPolicy {
+    policy: |_| crate::cmdkit::CmdPolicy {
         stakeholder: crate::stakeholder_role::StakeholderAction::Write,
         per_write_auto_push: false,
         skip_role_restore_prompt: false,
         team_identity_write: false,
     },
-    run: crate::command_registry::Handler::Early(run_solo),
+    run: crate::cmdkit::Handler::Early(run_solo),
 };

@@ -695,10 +695,7 @@ pub(crate) struct WikiArgs {
 }
 
 // trace:EPIC-72 trace:TASK-1439 | ai:antigravity
-fn run_wiki(
-    matches: &clap::ArgMatches,
-    _ctx: &crate::command_registry::DispatchCtx,
-) -> anyhow::Result<()> {
+fn run_wiki(matches: &clap::ArgMatches, _ctx: &crate::cmdkit::DispatchCtx) -> anyhow::Result<()> {
     use crate::*;
     let args = <WikiArgs as clap::FromArgMatches>::from_arg_matches(matches)?;
     let command = &args.inner;
@@ -706,15 +703,15 @@ fn run_wiki(
 }
 
 // trace:STORY-1728 | ai:claude
-pub(crate) static WIKI: crate::command_registry::CommandReg = crate::command_registry::CommandReg {
+pub(crate) static WIKI: crate::cmdkit::CommandReg = crate::cmdkit::CommandReg {
     name: "wiki",
     help_after: "explain",
     command: <WikiArgs as clap::CommandFactory>::command,
-    policy: |_| crate::command_registry::CmdPolicy {
+    policy: |_| crate::cmdkit::CmdPolicy {
         stakeholder: crate::stakeholder_role::StakeholderAction::Read,
         per_write_auto_push: false,
         skip_role_restore_prompt: false,
         team_identity_write: false,
     },
-    run: crate::command_registry::Handler::Early(run_wiki),
+    run: crate::cmdkit::Handler::Early(run_wiki),
 };

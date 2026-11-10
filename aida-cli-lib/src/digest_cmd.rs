@@ -160,17 +160,15 @@ pub(crate) struct DigestArgs {
 
 fn run_digest(
     matches: &clap::ArgMatches,
-    ctx: &crate::command_registry::DispatchCtx,
-) -> anyhow::Result<crate::command_registry::Flow> {
+    ctx: &crate::cmdkit::DispatchCtx,
+) -> anyhow::Result<crate::cmdkit::Flow> {
     // trace:TASK-3428 | ai:codex
     use aida_core::DatabaseBackend;
     let args = <DigestArgs as clap::FromArgMatches>::from_arg_matches(matches)?;
     match &ctx.store {
-        None => Ok(crate::command_registry::Flow::Continue),
-        Some(crate::command_registry::StoreCtx::Distributed { .. }) => {
-            Ok(crate::command_registry::Flow::Continue)
-        }
-        Some(crate::command_registry::StoreCtx::Git {
+        None => Ok(crate::cmdkit::Flow::Continue),
+        Some(crate::cmdkit::StoreCtx::Distributed { .. }) => Ok(crate::cmdkit::Flow::Continue),
+        Some(crate::cmdkit::StoreCtx::Git {
             store_path,
             backend,
         }) => {
@@ -188,7 +186,7 @@ fn run_digest(
                     reset,
                 } => {
                     let store = backend.load()?;
-                    return crate::command_registry::returned(self::handle_digest_command(
+                    return crate::cmdkit::returned(self::handle_digest_command(
                         since.as_deref(),
                         *audience,
                         *digest_format,
@@ -201,9 +199,9 @@ fn run_digest(
                     ));
                 }
             }
-            Ok(crate::command_registry::Flow::Continue)
+            Ok(crate::cmdkit::Flow::Continue)
         }
-        Some(crate::command_registry::StoreCtx::Legacy {
+        Some(crate::cmdkit::StoreCtx::Legacy {
             storage,
             requirements_path,
         }) => {
@@ -216,22 +214,21 @@ fn run_digest(
                 );
                 }
             }
-            Ok(crate::command_registry::Flow::Continue)
+            Ok(crate::cmdkit::Flow::Continue)
         }
     }
 }
 
 // trace:STORY-1728 | ai:claude
-pub(crate) static DIGEST: crate::command_registry::CommandReg =
-    crate::command_registry::CommandReg {
-        name: "digest",
-        help_after: "field-study",
-        command: <DigestArgs as clap::CommandFactory>::command,
-        policy: |_| crate::command_registry::CmdPolicy {
-            stakeholder: crate::stakeholder_role::StakeholderAction::Read,
-            per_write_auto_push: false,
-            skip_role_restore_prompt: false,
-            team_identity_write: false,
-        },
-        run: crate::command_registry::Handler::Store(run_digest),
-    };
+pub(crate) static DIGEST: crate::cmdkit::CommandReg = crate::cmdkit::CommandReg {
+    name: "digest",
+    help_after: "field-study",
+    command: <DigestArgs as clap::CommandFactory>::command,
+    policy: |_| crate::cmdkit::CmdPolicy {
+        stakeholder: crate::stakeholder_role::StakeholderAction::Read,
+        per_write_auto_push: false,
+        skip_role_restore_prompt: false,
+        team_identity_write: false,
+    },
+    run: crate::cmdkit::Handler::Store(run_digest),
+};
