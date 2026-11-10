@@ -8,7 +8,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-10T03:07:01.660083142Z
-modified_at: 2026-11-10T15:40:42.581542769Z
+modified_at: 2026-11-10T15:40:44.051974223Z
 req_type: Bug
 comments:
 - id: 01a1c60c-adfa-72f3-9f5c-b40df8817ee3
@@ -23,6 +23,20 @@ comments:
   content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: Selection criterion unverified: init loses the actual interactive vendor selection; consent, weaker-boundary warning, readiness reason/fix and distinct consistency output verified by source and added assertions. Type protocol BUG-2513: met (test file modified). Required CI pending; no local builds/tests run.. No triage reason was given.'
   created_at: 2026-11-10T15:40:42.581540348Z
   modified_at: 2026-11-10T15:40:42.581540348Z
+  session_id: 01a1c39a-801a-7bd1-8da9-c955a6707f0b
+  harness_version: 2.1.321 (Claude Code)
+- id: 01a1c61e-680e-7132-8b66-56f88c1c2cf8
+  author: joe
+  content: |-
+    REVIEW FINDINGS TO ADDRESS (BUG-2513):
+    Verdict: CHANGES REQUESTED
+    Reviewed commit: d0f66de3dbfe
+    Recorded: 2026-11-10T15:39:35.032394309+00:00
+    Findings:
+    1. [P2] aida-cli-lib/src/init_cmd.rs:7184-7189: Preserve the actual resolved init AgentSelection for the native-consent gate. With no --agent, resolve_init_agent_selection_for_root accepts the interactive choice and writes it to .aida/config.toml, but this new gate rereads read_enabled_agent_selection, which prefers an existing .aida/agents.toml. If that file enables only Claude and the user now chooses Codex, the native offer is skipped and the original launch-refusal problem persists. Conversely, a saved default vendor of Codex forces the offer even after an interactive Claude-only selection. Pass the actual selection through instead of reconstructing it from config/default vendor; add regression coverage for conflicting saved enabled settings and an interactive selection that excludes the default vendor.
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
+  created_at: 2026-11-10T15:40:43.918126045Z
+  modified_at: 2026-11-10T15:40:43.918126045Z
   session_id: 01a1c39a-801a-7bd1-8da9-c955a6707f0b
   harness_version: 2.1.321 (Claude Code)
 history:
