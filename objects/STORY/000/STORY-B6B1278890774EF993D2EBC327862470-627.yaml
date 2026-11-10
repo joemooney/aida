@@ -8,7 +8,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-10T03:52:00.571796159Z
-modified_at: 2026-11-10T10:08:12.452629212Z
+modified_at: 2026-11-10T10:42:59.486288737Z
 req_type: Story
 comments:
 - id: 01a1c399-6840-7383-843e-9930f6eaa3f7
@@ -30,6 +30,19 @@ comments:
   content: 'ADVISOR RULING (2026-11-10 08:58 UTC) — binding brief for STORY-2704 SLICE 1 (supersedes the 03:56 UTC sketch-only brief; the sketch is signed off with changes, see the 04:13 UTC signoff comment). Implement S1 now, branching from main after #3772 lands: (1) new workspace crate aida-porcelain (one binary aida-porcelain) depending on aida-core public APIs only, never aida-cli-lib; (2) argv[0] multi-call dispatch by lexical basename: aida-porcelain and aida-flow, unknown names fail with usage; (3) move STORY-2699''s flow report (landed in #3757) into aida-porcelain/src/flow/ unchanged in output, flags, JSON and exit codes; (4) a public no-write aida-core gate-ledger reader replaces any private ledger file walk the flow report does; (5) aida dev build stages, smoke-tests, promotes, rolls back and --install-links the new binary plus the aida-flow relative symlink; (6) keep the built-in ''aida flow'' registration in this slice (built-in wins); removing it waits for S3 install coverage; (7) tests: multi-call dispatch, unknown argv0, flow report parity against the built-in on fixtures, and a no-write fixture test (store refs, tracked bytes and cache/queue/lease state unchanged). Out of scope: nested built-in-parent resolution (S2), release/install.sh/upgrade (S3). Title: [AI:codex] feat(porcelain): add aida-porcelain multi-call crate with flow tenant (Refs STORY-2704). LIGHT gate: cargo test -p aida-porcelain plus one cargo check --profile agent -p aida-cli --tests, then make check-ci-fast.'
   created_at: 2026-11-10T08:58:15.175223815Z
   modified_at: 2026-11-10T08:58:15.175223815Z
+  session_id: 01a1c39a-801a-7bd1-8da9-c955a6707f0b
+  harness_version: 2.1.321 (Claude Code)
+- id: 01a1c50d-d11e-7d43-9576-e6eeed38caf3
+  author: joe
+  content: |-
+    CI FAILURES at f43aa0b3ec38 (run 42796710373). Fix exactly these before pushing; a push without a code change for them will fail again and must not be made:
+    error: test run failed
+            FAIL  aida-cli-lib forge_observed::forge_read_ratchet_tests::story_2401_no_new_raw_gh_reads_outside_forge
+            FAIL  aida-cli-lib gate::mandate_gates::story_1888_gate_paths_tests::no_unprotected_file_reexports_gate_items
+        thread 'forge_observed::forge_read_ratchet_tests::story_2401_no_new_raw_gh_reads_outside_forge' (60008) panicked at aida-cli-lib/src/tests/story_2401_forge_read_ratchet_tests.rs:235:5:
+        thread 'gate::mandate_gates::story_1888_gate_paths_tests::no_unprotected_file_reexports_gate_items' (69579) panicked at aida-cli-lib/src/gate/../tests/story_1888_gate_paths_tests.rs:799:5:
+  created_at: 2026-11-10T10:42:59.486288737Z
+  modified_at: 2026-11-10T10:42:59.486288737Z
   session_id: 01a1c39a-801a-7bd1-8da9-c955a6707f0b
   harness_version: 2.1.321 (Claude Code)
 history:
