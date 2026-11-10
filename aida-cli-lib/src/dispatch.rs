@@ -3220,23 +3220,22 @@ pub(crate) struct DispatchArgs {
 
 fn run_dispatch(
     matches: &clap::ArgMatches,
-    _ctx: &crate::command_registry::DispatchCtx,
+    _ctx: &crate::cmdkit::DispatchCtx,
 ) -> anyhow::Result<()> {
     let args = <DispatchArgs as clap::FromArgMatches>::from_arg_matches(matches)?;
     handle_dispatch(&args.action)
 }
 
 // trace:STORY-1917 | ai:agy
-pub(crate) static DISPATCH: crate::command_registry::CommandReg =
-    crate::command_registry::CommandReg {
-        name: "dispatch",
-        help_after: "fleet",
-        command: <DispatchArgs as clap::CommandFactory>::command,
-        policy: |_| crate::command_registry::CmdPolicy {
-            stakeholder: crate::stakeholder_role::StakeholderAction::Write,
-            per_write_auto_push: false,
-            skip_role_restore_prompt: false,
-            team_identity_write: false,
-        },
-        run: crate::command_registry::Handler::Early(run_dispatch),
-    };
+pub(crate) static DISPATCH: crate::cmdkit::CommandReg = crate::cmdkit::CommandReg {
+    name: "dispatch",
+    help_after: "fleet",
+    command: <DispatchArgs as clap::CommandFactory>::command,
+    policy: |_| crate::cmdkit::CmdPolicy {
+        stakeholder: crate::stakeholder_role::StakeholderAction::Write,
+        per_write_auto_push: false,
+        skip_role_restore_prompt: false,
+        team_identity_write: false,
+    },
+    run: crate::cmdkit::Handler::Early(run_dispatch),
+};

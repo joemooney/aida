@@ -5131,16 +5131,14 @@ pub(crate) struct FasttrackArgs {
 
 fn run_fasttrack(
     matches: &clap::ArgMatches,
-    ctx: &crate::command_registry::DispatchCtx,
-) -> anyhow::Result<crate::command_registry::Flow> {
+    ctx: &crate::cmdkit::DispatchCtx,
+) -> anyhow::Result<crate::cmdkit::Flow> {
     use crate::*;
     let args = <FasttrackArgs as clap::FromArgMatches>::from_arg_matches(matches)?;
     match &ctx.store {
-        None => Ok(crate::command_registry::Flow::Continue),
-        Some(crate::command_registry::StoreCtx::Distributed { .. }) => {
-            Ok(crate::command_registry::Flow::Continue)
-        }
-        Some(crate::command_registry::StoreCtx::Git {
+        None => Ok(crate::cmdkit::Flow::Continue),
+        Some(crate::cmdkit::StoreCtx::Distributed { .. }) => Ok(crate::cmdkit::Flow::Continue),
+        Some(crate::cmdkit::StoreCtx::Git {
             store_path,
             backend,
         }) => {
@@ -5170,7 +5168,7 @@ fn run_fasttrack(
                     // not a filing. Dispatch it before the Add delegation.
                     // trace:TASK-905 | ai:claude
                     if let Some(crate::cli::FasttrackCommand::Status { json }) = command {
-                        return crate::command_registry::returned(handle_fasttrack_status(
+                        return crate::cmdkit::returned(handle_fasttrack_status(
                             store_path, backend, *json,
                         ));
                     }
@@ -5208,7 +5206,7 @@ fn run_fasttrack(
                     let add = crate::command_registry::try_parse_from(argv).map_err(|err| {
                         anyhow::anyhow!("fasttrack could not build its `aida add`: {err}")
                     })?;
-                    return crate::command_registry::returned(
+                    return crate::cmdkit::returned(
                         crate::git_backend_cmd::handle_git_backend_command(
                             store_path,
                             &add.command,
@@ -5216,9 +5214,9 @@ fn run_fasttrack(
                     );
                 }
             }
-            Ok(crate::command_registry::Flow::Continue)
+            Ok(crate::cmdkit::Flow::Continue)
         }
-        Some(crate::command_registry::StoreCtx::Legacy {
+        Some(crate::cmdkit::StoreCtx::Legacy {
             storage,
             requirements_path,
         }) => {
@@ -5234,25 +5232,24 @@ fn run_fasttrack(
                 );
                 }
             }
-            Ok(crate::command_registry::Flow::Continue)
+            Ok(crate::cmdkit::Flow::Continue)
         }
     }
 }
 
 // trace:STORY-1728 | ai:claude
-pub(crate) static FASTTRACK: crate::command_registry::CommandReg =
-    crate::command_registry::CommandReg {
-        name: "fasttrack",
-        help_after: "add",
-        command: <FasttrackArgs as clap::CommandFactory>::command,
-        policy: |_| crate::command_registry::CmdPolicy {
-            stakeholder: crate::stakeholder_role::StakeholderAction::Write,
-            per_write_auto_push: false,
-            skip_role_restore_prompt: false,
-            team_identity_write: false,
-        },
-        run: crate::command_registry::Handler::Store(run_fasttrack),
-    };
+pub(crate) static FASTTRACK: crate::cmdkit::CommandReg = crate::cmdkit::CommandReg {
+    name: "fasttrack",
+    help_after: "add",
+    command: <FasttrackArgs as clap::CommandFactory>::command,
+    policy: |_| crate::cmdkit::CmdPolicy {
+        stakeholder: crate::stakeholder_role::StakeholderAction::Write,
+        per_write_auto_push: false,
+        skip_role_restore_prompt: false,
+        team_identity_write: false,
+    },
+    run: crate::cmdkit::Handler::Store(run_fasttrack),
+};
 
 /// [`aida_core::liveness::lease_owner_process_gone`] for a lease, from this
 /// observer. Pids recorded in another PID namespace are not probed: such an

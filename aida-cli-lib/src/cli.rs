@@ -311,7 +311,7 @@ pub enum Command {
     // `command_registry::parse_from`; clap never derives it.
     // trace:STORY-1728 | ai:claude
     #[clap(skip)]
-    Registered(crate::command_registry::Invocation),
+    Registered(crate::cmdkit::Invocation),
 }
 
 /// Stock and local skill tooling.

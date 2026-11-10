@@ -11,7 +11,7 @@ use anyhow::Result;
 pub(crate) mod presence_cmd_args;
 pub(crate) use presence_cmd_args::*;
 
-use crate::command_registry::{CmdPolicy, CommandReg};
+use crate::cmdkit::{CmdPolicy, CommandReg};
 use crate::stakeholder_role::StakeholderAction;
 
 use colored::Colorize;
@@ -107,7 +107,7 @@ pub(crate) static AWAY: CommandReg = CommandReg {
     help_after: "statusline",
     command: <AwayArgs as clap::CommandFactory>::command,
     policy: |_| PRESENCE_POLICY,
-    run: crate::command_registry::Handler::Early(|_, _| handle_away_command()),
+    run: crate::cmdkit::Handler::Early(|_, _| handle_away_command()),
 };
 
 // trace:STORY-1728 | ai:claude
@@ -116,7 +116,7 @@ pub(crate) static HOME: CommandReg = CommandReg {
     help_after: "away",
     command: <HomeArgs as clap::CommandFactory>::command,
     policy: |_| PRESENCE_POLICY,
-    run: crate::command_registry::Handler::Early(|_, _| handle_home_command()),
+    run: crate::cmdkit::Handler::Early(|_, _| handle_home_command()),
 };
 
 /// `aida presence` — print current effective presence.
@@ -195,7 +195,7 @@ pub(crate) struct PresenceArgs {
 // trace:TASK-851 | ai:claude
 fn run_presence(
     matches: &clap::ArgMatches,
-    _ctx: &crate::command_registry::DispatchCtx,
+    _ctx: &crate::cmdkit::DispatchCtx,
 ) -> anyhow::Result<()> {
     let args = <PresenceArgs as clap::FromArgMatches>::from_arg_matches(matches)?;
     match args.action {
@@ -206,16 +206,15 @@ fn run_presence(
 }
 
 // trace:STORY-1728 | ai:claude
-pub(crate) static PRESENCE: crate::command_registry::CommandReg =
-    crate::command_registry::CommandReg {
-        name: "presence",
-        help_after: "home",
-        command: <PresenceArgs as clap::CommandFactory>::command,
-        policy: |_| crate::command_registry::CmdPolicy {
-            stakeholder: crate::stakeholder_role::StakeholderAction::Write,
-            per_write_auto_push: false,
-            skip_role_restore_prompt: false,
-            team_identity_write: false,
-        },
-        run: crate::command_registry::Handler::Early(run_presence),
-    };
+pub(crate) static PRESENCE: crate::cmdkit::CommandReg = crate::cmdkit::CommandReg {
+    name: "presence",
+    help_after: "home",
+    command: <PresenceArgs as clap::CommandFactory>::command,
+    policy: |_| crate::cmdkit::CmdPolicy {
+        stakeholder: crate::stakeholder_role::StakeholderAction::Write,
+        per_write_auto_push: false,
+        skip_role_restore_prompt: false,
+        team_identity_write: false,
+    },
+    run: crate::cmdkit::Handler::Early(run_presence),
+};

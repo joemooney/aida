@@ -1803,10 +1803,7 @@ pub(crate) struct SchemaArgs {
 // `aida schema` is a pure reflection read — it touches no store, so
 // dispatch it before storage resolution (like `memories`/`dev`).
 // trace:STORY-538 | ai:claude
-fn run_schema(
-    matches: &clap::ArgMatches,
-    _ctx: &crate::command_registry::DispatchCtx,
-) -> anyhow::Result<()> {
+fn run_schema(matches: &clap::ArgMatches, _ctx: &crate::cmdkit::DispatchCtx) -> anyhow::Result<()> {
     use crate::*;
     let args = <SchemaArgs as clap::FromArgMatches>::from_arg_matches(matches)?;
     let SchemaArgs {
@@ -1852,16 +1849,15 @@ fn run_schema(
 }
 
 // trace:STORY-1728 | ai:claude
-pub(crate) static SCHEMA: crate::command_registry::CommandReg =
-    crate::command_registry::CommandReg {
-        name: "schema",
-        help_after: "type",
-        command: <SchemaArgs as clap::CommandFactory>::command,
-        policy: |_| crate::command_registry::CmdPolicy {
-            stakeholder: crate::stakeholder_role::StakeholderAction::Read,
-            per_write_auto_push: false,
-            skip_role_restore_prompt: false,
-            team_identity_write: false,
-        },
-        run: crate::command_registry::Handler::Early(run_schema),
-    };
+pub(crate) static SCHEMA: crate::cmdkit::CommandReg = crate::cmdkit::CommandReg {
+    name: "schema",
+    help_after: "type",
+    command: <SchemaArgs as clap::CommandFactory>::command,
+    policy: |_| crate::cmdkit::CmdPolicy {
+        stakeholder: crate::stakeholder_role::StakeholderAction::Read,
+        per_write_auto_push: false,
+        skip_role_restore_prompt: false,
+        team_identity_write: false,
+    },
+    run: crate::cmdkit::Handler::Early(run_schema),
+};

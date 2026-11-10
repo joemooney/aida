@@ -3903,8 +3903,8 @@ pub(crate) struct PushArgs {
 
 fn run_push(
     matches: &clap::ArgMatches,
-    ctx: &crate::command_registry::DispatchCtx,
-) -> anyhow::Result<crate::command_registry::Flow> {
+    ctx: &crate::cmdkit::DispatchCtx,
+) -> anyhow::Result<crate::cmdkit::Flow> {
     use crate::*;
     let args = <PushArgs as clap::FromArgMatches>::from_arg_matches(matches)?;
     // Inspect local transport policy before storage init or ordinary push scope.
@@ -3915,14 +3915,12 @@ fn run_push(
             ctx.globals.and_then(|globals| globals.file.as_deref()),
         )?
     {
-        return Ok(crate::command_registry::Flow::Return);
+        return Ok(crate::cmdkit::Flow::Return);
     }
     match &ctx.store {
-        None => Ok(crate::command_registry::Flow::Continue),
-        Some(crate::command_registry::StoreCtx::Distributed { .. }) => {
-            Ok(crate::command_registry::Flow::Continue)
-        }
-        Some(crate::command_registry::StoreCtx::Git {
+        None => Ok(crate::cmdkit::Flow::Continue),
+        Some(crate::cmdkit::StoreCtx::Distributed { .. }) => Ok(crate::cmdkit::Flow::Continue),
+        Some(crate::cmdkit::StoreCtx::Git {
             store_path,
             backend,
         }) => {
@@ -3948,11 +3946,11 @@ fn run_push(
                     // TASK-108: --dry-run (or --json, which implies it) prints
                     // the plan and exits without touching origin.
                     if *dry_run || *json {
-                        return crate::command_registry::returned(handle_push_dry_run(
+                        return crate::cmdkit::returned(handle_push_dry_run(
                             store_path, code_only, store_only, *json,
                         ));
                     }
-                    return crate::command_registry::returned(handle_push_command(
+                    return crate::cmdkit::returned(handle_push_command(
                         store_path,
                         code_only,
                         store_only,
@@ -3962,9 +3960,9 @@ fn run_push(
                     ));
                 }
             }
-            Ok(crate::command_registry::Flow::Continue)
+            Ok(crate::cmdkit::Flow::Continue)
         }
-        Some(crate::command_registry::StoreCtx::Legacy {
+        Some(crate::cmdkit::StoreCtx::Legacy {
             storage,
             requirements_path,
         }) => {
@@ -3977,23 +3975,23 @@ fn run_push(
                 );
                 }
             }
-            Ok(crate::command_registry::Flow::Continue)
+            Ok(crate::cmdkit::Flow::Continue)
         }
     }
 }
 
 // trace:STORY-1728 | ai:claude
-pub(crate) static PUSH: crate::command_registry::CommandReg = crate::command_registry::CommandReg {
+pub(crate) static PUSH: crate::cmdkit::CommandReg = crate::cmdkit::CommandReg {
     name: "push",
     help_after: "remote",
     command: <PushArgs as clap::CommandFactory>::command,
-    policy: |_| crate::command_registry::CmdPolicy {
+    policy: |_| crate::cmdkit::CmdPolicy {
         stakeholder: crate::stakeholder_role::StakeholderAction::Write,
         per_write_auto_push: false,
         skip_role_restore_prompt: false,
         team_identity_write: false,
     },
-    run: crate::command_registry::Handler::Store(run_push),
+    run: crate::cmdkit::Handler::Store(run_push),
 };
 
 /// Fetch remote refs for both legs (code + orphan store) without
@@ -4023,16 +4021,14 @@ pub(crate) struct FetchArgs {
 
 fn run_fetch(
     matches: &clap::ArgMatches,
-    ctx: &crate::command_registry::DispatchCtx,
-) -> anyhow::Result<crate::command_registry::Flow> {
+    ctx: &crate::cmdkit::DispatchCtx,
+) -> anyhow::Result<crate::cmdkit::Flow> {
     use crate::*;
     let args = <FetchArgs as clap::FromArgMatches>::from_arg_matches(matches)?;
     match &ctx.store {
-        None => Ok(crate::command_registry::Flow::Continue),
-        Some(crate::command_registry::StoreCtx::Distributed { .. }) => {
-            Ok(crate::command_registry::Flow::Continue)
-        }
-        Some(crate::command_registry::StoreCtx::Git {
+        None => Ok(crate::cmdkit::Flow::Continue),
+        Some(crate::cmdkit::StoreCtx::Distributed { .. }) => Ok(crate::cmdkit::Flow::Continue),
+        Some(crate::cmdkit::StoreCtx::Git {
             store_path,
             backend,
         }) => {
@@ -4044,7 +4040,7 @@ fn run_fetch(
                     store_only,
                     quiet,
                 } => {
-                    return crate::command_registry::returned(handle_fetch_command(
+                    return crate::cmdkit::returned(handle_fetch_command(
                         store_path,
                         *code_only,
                         *store_only,
@@ -4052,9 +4048,9 @@ fn run_fetch(
                     ));
                 }
             }
-            Ok(crate::command_registry::Flow::Continue)
+            Ok(crate::cmdkit::Flow::Continue)
         }
-        Some(crate::command_registry::StoreCtx::Legacy {
+        Some(crate::cmdkit::StoreCtx::Legacy {
             storage,
             requirements_path,
         }) => {
@@ -4067,25 +4063,24 @@ fn run_fetch(
                 );
                 }
             }
-            Ok(crate::command_registry::Flow::Continue)
+            Ok(crate::cmdkit::Flow::Continue)
         }
     }
 }
 
 // trace:STORY-1728 | ai:claude
-pub(crate) static FETCH: crate::command_registry::CommandReg =
-    crate::command_registry::CommandReg {
-        name: "fetch",
-        help_after: "push",
-        command: <FetchArgs as clap::CommandFactory>::command,
-        policy: |_| crate::command_registry::CmdPolicy {
-            stakeholder: crate::stakeholder_role::StakeholderAction::Write,
-            per_write_auto_push: false,
-            skip_role_restore_prompt: false,
-            team_identity_write: false,
-        },
-        run: crate::command_registry::Handler::Store(run_fetch),
-    };
+pub(crate) static FETCH: crate::cmdkit::CommandReg = crate::cmdkit::CommandReg {
+    name: "fetch",
+    help_after: "push",
+    command: <FetchArgs as clap::CommandFactory>::command,
+    policy: |_| crate::cmdkit::CmdPolicy {
+        stakeholder: crate::stakeholder_role::StakeholderAction::Write,
+        per_write_auto_push: false,
+        skip_role_restore_prompt: false,
+        team_identity_write: false,
+    },
+    run: crate::cmdkit::Handler::Store(run_fetch),
+};
 
 /// Pull code branch AND orphan aida-store branch from origin. Use
 /// --code-only or --store-only to scope. Symmetric to `aida push`:
@@ -4146,8 +4141,8 @@ pub(crate) struct PullArgs {
 
 fn run_pull(
     matches: &clap::ArgMatches,
-    ctx: &crate::command_registry::DispatchCtx,
-) -> anyhow::Result<crate::command_registry::Flow> {
+    ctx: &crate::cmdkit::DispatchCtx,
+) -> anyhow::Result<crate::cmdkit::Flow> {
     use crate::*;
     let args = <PullArgs as clap::FromArgMatches>::from_arg_matches(matches)?;
     // A transport plan must never run the ordinary dry-run's fetch/lifecycle path.
@@ -4158,14 +4153,12 @@ fn run_pull(
             ctx.globals.and_then(|globals| globals.file.as_deref()),
         )?
     {
-        return Ok(crate::command_registry::Flow::Return);
+        return Ok(crate::cmdkit::Flow::Return);
     }
     match &ctx.store {
-        None => Ok(crate::command_registry::Flow::Continue),
-        Some(crate::command_registry::StoreCtx::Distributed { .. }) => {
-            Ok(crate::command_registry::Flow::Continue)
-        }
-        Some(crate::command_registry::StoreCtx::Git {
+        None => Ok(crate::cmdkit::Flow::Continue),
+        Some(crate::cmdkit::StoreCtx::Distributed { .. }) => Ok(crate::cmdkit::Flow::Continue),
+        Some(crate::cmdkit::StoreCtx::Git {
             store_path,
             backend,
         }) => {
@@ -4183,14 +4176,14 @@ fn run_pull(
                 } => {
                     // TASK-108: --dry-run fetches, reports, and exits.
                     if *dry_run || *json {
-                        return crate::command_registry::returned(handle_pull_dry_run(
+                        return crate::cmdkit::returned(handle_pull_dry_run(
                             store_path,
                             *code_only,
                             *store_only,
                             *json,
                         ));
                     }
-                    return crate::command_registry::returned(handle_pull_command(
+                    return crate::cmdkit::returned(handle_pull_command(
                         store_path,
                         *code_only,
                         *store_only,
@@ -4200,9 +4193,9 @@ fn run_pull(
                     ));
                 }
             }
-            Ok(crate::command_registry::Flow::Continue)
+            Ok(crate::cmdkit::Flow::Continue)
         }
-        Some(crate::command_registry::StoreCtx::Legacy {
+        Some(crate::cmdkit::StoreCtx::Legacy {
             storage,
             requirements_path,
         }) => {
@@ -4215,21 +4208,21 @@ fn run_pull(
                 );
                 }
             }
-            Ok(crate::command_registry::Flow::Continue)
+            Ok(crate::cmdkit::Flow::Continue)
         }
     }
 }
 
 // trace:STORY-1728 | ai:claude
-pub(crate) static PULL: crate::command_registry::CommandReg = crate::command_registry::CommandReg {
+pub(crate) static PULL: crate::cmdkit::CommandReg = crate::cmdkit::CommandReg {
     name: "pull",
     help_after: "commit",
     command: <PullArgs as clap::CommandFactory>::command,
-    policy: |_| crate::command_registry::CmdPolicy {
+    policy: |_| crate::cmdkit::CmdPolicy {
         stakeholder: crate::stakeholder_role::StakeholderAction::Write,
         per_write_auto_push: false,
         skip_role_restore_prompt: false,
         team_identity_write: false,
     },
-    run: crate::command_registry::Handler::Store(run_pull),
+    run: crate::cmdkit::Handler::Store(run_pull),
 };

@@ -293,8 +293,8 @@ pub(crate) struct ZenArgs {
 
 fn run_zen(
     matches: &clap::ArgMatches,
-    ctx: &crate::command_registry::DispatchCtx,
-) -> anyhow::Result<crate::command_registry::Flow> {
+    ctx: &crate::cmdkit::DispatchCtx,
+) -> anyhow::Result<crate::cmdkit::Flow> {
     use crate::*;
     let args = <ZenArgs as clap::FromArgMatches>::from_arg_matches(matches)?;
     match &ctx.store {
@@ -310,7 +310,7 @@ fn run_zen(
                 ..
             } = &args
             {
-                return crate::command_registry::returned(handle_zen_command(zen_cmd));
+                return crate::cmdkit::returned(handle_zen_command(zen_cmd));
             }
             // STORY-722: `aida zen <spec> --compete` — the 2-agent bake-off. Like
             // `aida compete` it self-loads the store (to resolve the spec + assemble
@@ -330,16 +330,12 @@ fn run_zen(
                         "`aida zen --compete` needs a SPEC id (e.g. `aida zen TASK-123 --compete`)"
                     );
                 };
-                return crate::command_registry::returned(compete_cmd::handle_zen_compete(
-                    spec, *dry_run,
-                ));
+                return crate::cmdkit::returned(compete_cmd::handle_zen_compete(spec, *dry_run));
             }
-            Ok(crate::command_registry::Flow::Continue)
+            Ok(crate::cmdkit::Flow::Continue)
         }
-        Some(crate::command_registry::StoreCtx::Distributed { .. }) => {
-            Ok(crate::command_registry::Flow::Continue)
-        }
-        Some(crate::command_registry::StoreCtx::Git {
+        Some(crate::cmdkit::StoreCtx::Distributed { .. }) => Ok(crate::cmdkit::Flow::Continue),
+        Some(crate::cmdkit::StoreCtx::Git {
             store_path,
             backend,
         }) => {
@@ -372,7 +368,7 @@ fn run_zen(
                     // verdict as JSON so a shell-out consumer (the TUI drive verb) reads
                     // the SAME gate the drive runs instead of parsing human prose.
                     if *json {
-                        return crate::command_registry::returned(run_zen_gate_json(
+                        return crate::cmdkit::returned(run_zen_gate_json(
                             &storage,
                             spec.as_deref(),
                         ));
@@ -383,7 +379,7 @@ fn run_zen(
                     // inherits the choice via `AIDA_HEADLESS_VENDOR`.
                     apply_drive_vendor_override(vendor.as_deref())?;
                     let user_id = current_user_id(None);
-                    return crate::command_registry::returned(run_zen_drive(
+                    return crate::cmdkit::returned(run_zen_drive(
                         &storage,
                         Some(store_path),
                         &user_id,
@@ -398,9 +394,9 @@ fn run_zen(
                     ));
                 }
             }
-            Ok(crate::command_registry::Flow::Continue)
+            Ok(crate::cmdkit::Flow::Continue)
         }
-        Some(crate::command_registry::StoreCtx::Legacy {
+        Some(crate::cmdkit::StoreCtx::Legacy {
             storage,
             requirements_path,
         }) => {
@@ -450,21 +446,21 @@ fn run_zen(
                     }
                 }
             }
-            Ok(crate::command_registry::Flow::Continue)
+            Ok(crate::cmdkit::Flow::Continue)
         }
     }
 }
 
 // trace:STORY-1728 | ai:claude
-pub(crate) static ZEN: crate::command_registry::CommandReg = crate::command_registry::CommandReg {
+pub(crate) static ZEN: crate::cmdkit::CommandReg = crate::cmdkit::CommandReg {
     name: "zen",
     help_after: "orchestrator",
     command: <ZenArgs as clap::CommandFactory>::command,
-    policy: |_| crate::command_registry::CmdPolicy {
+    policy: |_| crate::cmdkit::CmdPolicy {
         stakeholder: crate::stakeholder_role::StakeholderAction::BuildLoop,
         per_write_auto_push: false,
         skip_role_restore_prompt: false,
         team_identity_write: false,
     },
-    run: crate::command_registry::Handler::Store(run_zen),
+    run: crate::cmdkit::Handler::Store(run_zen),
 };

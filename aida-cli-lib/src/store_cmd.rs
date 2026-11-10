@@ -516,29 +516,25 @@ pub(crate) struct StoreArgs {
 
 // Store commands inspect git state, no AIDA storage needed.
 // trace:EPIC-21 | ai:claude
-fn run_store(
-    matches: &clap::ArgMatches,
-    _ctx: &crate::command_registry::DispatchCtx,
-) -> anyhow::Result<()> {
+fn run_store(matches: &clap::ArgMatches, _ctx: &crate::cmdkit::DispatchCtx) -> anyhow::Result<()> {
     let args = <StoreArgs as clap::FromArgMatches>::from_arg_matches(matches)?;
     let store_cmd = &args.inner;
     return self::handle_store_command(store_cmd);
 }
 
 // trace:STORY-1728 | ai:claude
-pub(crate) static STORE: crate::command_registry::CommandReg =
-    crate::command_registry::CommandReg {
-        name: "store",
-        help_after: "doctor",
-        command: <StoreArgs as clap::CommandFactory>::command,
-        policy: |_| crate::command_registry::CmdPolicy {
-            stakeholder: crate::stakeholder_role::StakeholderAction::Write,
-            per_write_auto_push: false,
-            skip_role_restore_prompt: false,
-            team_identity_write: false,
-        },
-        run: crate::command_registry::Handler::Early(run_store),
-    };
+pub(crate) static STORE: crate::cmdkit::CommandReg = crate::cmdkit::CommandReg {
+    name: "store",
+    help_after: "doctor",
+    command: <StoreArgs as clap::CommandFactory>::command,
+    policy: |_| crate::cmdkit::CmdPolicy {
+        stakeholder: crate::stakeholder_role::StakeholderAction::Write,
+        per_write_auto_push: false,
+        skip_role_restore_prompt: false,
+        team_identity_write: false,
+    },
+    run: crate::cmdkit::Handler::Early(run_store),
+};
 
 #[cfg(test)]
 #[path = "tests/task_1981_compact_tests.rs"]

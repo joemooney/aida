@@ -273,25 +273,22 @@ pub(crate) struct GateArgs {
 
 // `aida gate` reads the embedded gate library (and, for `run`, self-loads
 // the store) — no shared storage handle. trace:STORY-1427 | ai:claude
-fn run_gate(
-    matches: &clap::ArgMatches,
-    _ctx: &crate::command_registry::DispatchCtx,
-) -> anyhow::Result<()> {
+fn run_gate(matches: &clap::ArgMatches, _ctx: &crate::cmdkit::DispatchCtx) -> anyhow::Result<()> {
     let args = <GateArgs as clap::FromArgMatches>::from_arg_matches(matches)?;
     let gate_cmd = &args.inner;
     return self::handle_gate_command(gate_cmd);
 }
 
 // trace:STORY-1728 | ai:claude
-pub(crate) static GATE: crate::command_registry::CommandReg = crate::command_registry::CommandReg {
+pub(crate) static GATE: crate::cmdkit::CommandReg = crate::cmdkit::CommandReg {
     name: "gate",
     help_after: "deps",
     command: <GateArgs as clap::CommandFactory>::command,
-    policy: |_| crate::command_registry::CmdPolicy {
+    policy: |_| crate::cmdkit::CmdPolicy {
         stakeholder: crate::stakeholder_role::StakeholderAction::Write,
         per_write_auto_push: false,
         skip_role_restore_prompt: false,
         team_identity_write: false,
     },
-    run: crate::command_registry::Handler::Early(run_gate),
+    run: crate::cmdkit::Handler::Early(run_gate),
 };

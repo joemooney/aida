@@ -492,26 +492,25 @@ pub(crate) struct HelpAllArgs {}
 // Help-all / commands are pure text; no storage needed.
 fn run_help_all(
     _matches: &clap::ArgMatches,
-    _ctx: &crate::command_registry::DispatchCtx,
+    _ctx: &crate::cmdkit::DispatchCtx,
 ) -> anyhow::Result<()> {
     print_help_all();
     return Ok(());
 }
 
 // trace:STORY-1728 | ai:claude
-pub(crate) static HELP_ALL: crate::command_registry::CommandReg =
-    crate::command_registry::CommandReg {
-        name: "help-all",
-        help_after: "human",
-        command: <HelpAllArgs as clap::CommandFactory>::command,
-        policy: |_| crate::command_registry::CmdPolicy {
-            stakeholder: crate::stakeholder_role::StakeholderAction::Read,
-            per_write_auto_push: false,
-            skip_role_restore_prompt: false,
-            team_identity_write: false,
-        },
-        run: crate::command_registry::Handler::Early(run_help_all),
-    };
+pub(crate) static HELP_ALL: crate::cmdkit::CommandReg = crate::cmdkit::CommandReg {
+    name: "help-all",
+    help_after: "human",
+    command: <HelpAllArgs as clap::CommandFactory>::command,
+    policy: |_| crate::cmdkit::CmdPolicy {
+        stakeholder: crate::stakeholder_role::StakeholderAction::Read,
+        per_write_auto_push: false,
+        skip_role_restore_prompt: false,
+        team_identity_write: false,
+    },
+    run: crate::cmdkit::Handler::Early(run_help_all),
+};
 
 /// Open the user guide in the default browser
 #[derive(clap::Parser, Debug)]
@@ -525,16 +524,14 @@ pub(crate) struct UserGuideArgs {
 
 fn run_user_guide(
     matches: &clap::ArgMatches,
-    ctx: &crate::command_registry::DispatchCtx,
-) -> anyhow::Result<crate::command_registry::Flow> {
+    ctx: &crate::cmdkit::DispatchCtx,
+) -> anyhow::Result<crate::cmdkit::Flow> {
     use crate::*;
     let args = <UserGuideArgs as clap::FromArgMatches>::from_arg_matches(matches)?;
     match &ctx.store {
-        None => Ok(crate::command_registry::Flow::Continue),
-        Some(crate::command_registry::StoreCtx::Distributed { .. }) => {
-            Ok(crate::command_registry::Flow::Continue)
-        }
-        Some(crate::command_registry::StoreCtx::Git {
+        None => Ok(crate::cmdkit::Flow::Continue),
+        Some(crate::cmdkit::StoreCtx::Distributed { .. }) => Ok(crate::cmdkit::Flow::Continue),
+        Some(crate::cmdkit::StoreCtx::Git {
             store_path,
             backend,
         }) => {
@@ -543,7 +540,7 @@ fn run_user_guide(
             let _ = (store_path, backend, &args);
             crate::git_backend_cmd::exit_unsupported_on_git_backend()
         }
-        Some(crate::command_registry::StoreCtx::Legacy {
+        Some(crate::cmdkit::StoreCtx::Legacy {
             storage,
             requirements_path,
         }) => {
@@ -553,22 +550,21 @@ fn run_user_guide(
                     open_user_guide(*dark)?;
                 }
             }
-            Ok(crate::command_registry::Flow::Continue)
+            Ok(crate::cmdkit::Flow::Continue)
         }
     }
 }
 
 // trace:STORY-1728 | ai:claude
-pub(crate) static USER_GUIDE: crate::command_registry::CommandReg =
-    crate::command_registry::CommandReg {
-        name: "user-guide",
-        help_after: "import",
-        command: <UserGuideArgs as clap::CommandFactory>::command,
-        policy: |_| crate::command_registry::CmdPolicy {
-            stakeholder: crate::stakeholder_role::StakeholderAction::Write,
-            per_write_auto_push: false,
-            skip_role_restore_prompt: false,
-            team_identity_write: false,
-        },
-        run: crate::command_registry::Handler::Store(run_user_guide),
-    };
+pub(crate) static USER_GUIDE: crate::cmdkit::CommandReg = crate::cmdkit::CommandReg {
+    name: "user-guide",
+    help_after: "import",
+    command: <UserGuideArgs as clap::CommandFactory>::command,
+    policy: |_| crate::cmdkit::CmdPolicy {
+        stakeholder: crate::stakeholder_role::StakeholderAction::Write,
+        per_write_auto_push: false,
+        skip_role_restore_prompt: false,
+        team_identity_write: false,
+    },
+    run: crate::cmdkit::Handler::Store(run_user_guide),
+};
