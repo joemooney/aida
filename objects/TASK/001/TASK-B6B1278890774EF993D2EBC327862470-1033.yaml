@@ -2,228 +2,193 @@ id: 01a1bf11-a3e0-7c82-ba10-6281d1353bd5
 spec_id: TASK-b6b1278890774ef993d2ebc327862470-1033
 agreed_id: TASK-3735
 title: 'Cosmetic sweep 1: dead code, wording and docs findings from approved reviews'
-description: 'Bundled non-blocking review findings, swept together in one PR per operator direction 2026-11-08. Each section is the original finding verbatim; fix it or state in the PR why the code has since changed. One PR, no new follow-up specs.
-
+description: |
+  Bundled non-blocking review findings, swept together in one PR per operator direction 2026-11-08. Each section is the original finding verbatim; fix it or state in the PR why the code has since changed. One PR, no new follow-up specs.
 
   ### TASK-3043
-
-  [cosmetic] Non-blocking: HandoffWriter.snapshot_owner stamps worktree and role into the snapshot log as ''retention metadata'' (seat_rotation.rs:328), but pruning was removed in round 6, so nothing reads them. Drop them or relabel as diagnostics.
-
+  [cosmetic] Non-blocking: HandoffWriter.snapshot_owner stamps worktree and role into the snapshot log as 'retention metadata' (seat_rotation.rs:328), but pruning was removed in round 6, so nothing reads them. Drop them or relabel as diagnostics.
 
   PR: #3669
-
   Reviewed sha: 8a9ddc796a0719d25546fe4a65a42a0fc8bd922a
 
-
   ### TASK-3056
-
   NON-BLOCKING, cosmetic: render_roots (aida-cli-lib/src/launch_permission_profile.rs:188, 209-211) lists the resolved executable and then target/debug and target/release without deduplicating, so a binary run from either target directory appears twice under executable_locations.
 
-
   PR: #3671
-
   Reviewed sha: ad74c5720cbcbae3b3b4f4bf3ca48471829e4a9a
 
-
   ### TASK-3058
-
   COSMETIC (non-blocking): the "--sandbox" | "-s" arms in the denylist after the new sandbox branch in aida-cli-lib/src/launch/contained.rs are unreachable and can be removed.
 
-
   PR: #3689
-
   Reviewed sha: ea14bd1cbb8339b2bc79711207bdc3771d50438f
 
-
   ### TASK-3060
-
-  Non-blocking (minor, narrowed carry-forward): AGENTS.md:34-36 and OVERVIEW.md:1613-1615 still change for this bug. The body-file notes are gone, but the remaining ''(ID)'' completing-form edits are per-change notes that CLAUDE.md reserves for real architecture changes; docs/cli/04-git-lifecycle.md is the home for them.
-
+  Non-blocking (minor, narrowed carry-forward): AGENTS.md:34-36 and OVERVIEW.md:1613-1615 still change for this bug. The body-file notes are gone, but the remaining '(ID)' completing-form edits are per-change notes that CLAUDE.md reserves for real architecture changes; docs/cli/04-git-lifecycle.md is the home for them.
 
   PR: #3667
-
   Reviewed sha: 5f64ea6609498dae663d8c205ce7ae62db056839
-
 
   ### TASK-3061
-
-  NON-BLOCKING, cosmetic: aida-cli-lib/src/review_watch.rs:1332 leaves State.max_concurrent write-only. Admission at :1401 uses the watcher''s own max, and the persisted value is only range-checked at :1173. If two watchers ever run with different limits, each enforces its own and state.json shows the last writer, with no refusal or log. No over-admission beyond the highest configured cap.
-
+  NON-BLOCKING, cosmetic: aida-cli-lib/src/review_watch.rs:1332 leaves State.max_concurrent write-only. Admission at :1401 uses the watcher's own max, and the persisted value is only range-checked at :1173. If two watchers ever run with different limits, each enforces its own and state.json shows the last writer, with no refusal or log. No over-admission beyond the highest configured cap.
 
   PR: #3700
-
   Reviewed sha: 1b0c00f83d7ccb63854fdcdf9506fad56bbf1674
 
-
   ### TASK-3062
-
   Non-blocking (cosmetic): aida-core/templates/commands/aida-pickup.md:29-30 shows the completing-lane declaration with --commit-body-file unconditionally, then says to add the flag for required trailers, so the optional flag reads as mandatory. NATIVE_STOP_CONTRACT got an explicit omit sentence; this template did not. Note bug_2493_native_prompts_name_safe_body_file_surface pins the current string.
 
-
   PR: #3667
-
   Reviewed sha: 5f64ea6609498dae663d8c205ce7ae62db056839
 
-
   ### TASK-3064
-
-  F20 (cosmetic, non-blocking; aida-cli-lib/src/ci_relay.rs:1203 CiCommand::Read): the outer ''if !intake.ci_verified(path)'' duplicates the same guard inside Intake::verify_ci_read (intent_intake.rs:879), so the outer check can be removed with no behavior change.
-
+  F20 (cosmetic, non-blocking; aida-cli-lib/src/ci_relay.rs:1203 CiCommand::Read): the outer 'if !intake.ci_verified(path)' duplicates the same guard inside Intake::verify_ci_read (intent_intake.rs:879), so the outer check can be removed with no behavior change.
 
   PR: #3692
-
   Reviewed sha: 045f1aa47966d51c3f397a4a6fc46643da56f739
 
-
   ### TASK-3067
-
-  COSMETIC, non-blocking: docs/cli/11-dev.md:26 says alternating with plain Cargo or make build-fast ''can recompile the CLI and server build scripts''; the build scripts rerun and the aida-cli-lib and aida-server crates recompile, so the stated cost is understated. Unverified: promotion itself was not run end to end; the test proves the stamp equals short HEAD, which is what check_staged_sha compares.
-
+  COSMETIC, non-blocking: docs/cli/11-dev.md:26 says alternating with plain Cargo or make build-fast 'can recompile the CLI and server build scripts'; the build scripts rerun and the aida-cli-lib and aida-server crates recompile, so the stated cost is understated. Unverified: promotion itself was not run end to end; the test proves the stamp equals short HEAD, which is what check_staged_sha compares.
 
   PR: #3702
-
   Reviewed sha: 89e9aa9191a6fbc7a1e6f59c3b7be138d4fbc9d9
 
-
   ## Acceptance
-
   Every section above is fixed or explicitly answered in the PR body; behavior is unchanged except where a finding requires it.
-
-  '
 status: Completed
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
-created_at: 2026-11-09 06:49:26.752480+00:00
-modified_at: 2026-11-09 08:42:25.710752+00:00
+created_at: 2026-11-09T06:49:26.752480Z
+modified_at: 2026-11-09T08:42:25.710752Z
 req_type: Task
 relationships:
 - rel_type: Supersedes
   target_id: 01a1bc9e-7695-7562-8f0d-d9022e32d9e6
-  created_at: 2026-11-09 06:50:04.762376+00:00
+  created_at: 2026-11-09T06:50:04.762376Z
   created_by: joe
 - rel_type: Supersedes
   target_id: 01a1bd2f-498a-74f1-8550-251d0f51933a
-  created_at: 2026-11-09 06:50:11.372983+00:00
+  created_at: 2026-11-09T06:50:11.372983Z
   created_by: joe
 - rel_type: Supersedes
   target_id: 01a1bd2f-5e65-7760-93fd-fe417bcd8cd0
-  created_at: 2026-11-09 06:50:19.506624+00:00
+  created_at: 2026-11-09T06:50:19.506624Z
   created_by: joe
 - rel_type: Supersedes
   target_id: 01a1bd58-0c77-76c2-9c63-c66aca768bbb
-  created_at: 2026-11-09 06:50:26.160808+00:00
+  created_at: 2026-11-09T06:50:26.160808Z
   created_by: joe
 - rel_type: Supersedes
   target_id: 01a1bd58-215b-7fa1-b3bb-3bc679cba179
-  created_at: 2026-11-09 06:50:32.913939+00:00
+  created_at: 2026-11-09T06:50:32.913939Z
   created_by: joe
 - rel_type: Supersedes
   target_id: 01a1bd58-0265-7af2-827d-d5926d7ce5f0
-  created_at: 2026-11-09 06:50:40.502134+00:00
+  created_at: 2026-11-09T06:50:40.502134Z
   created_by: joe
 - rel_type: Supersedes
   target_id: 01a1bdf3-7d8d-7b80-bfdf-b42d277e4b5f
-  created_at: 2026-11-09 06:50:46.962691+00:00
+  created_at: 2026-11-09T06:50:46.962691Z
   created_by: joe
 - rel_type: Supersedes
   target_id: 01a1bec5-d4f6-7143-badc-760fb05ece54
-  created_at: 2026-11-09 06:50:53.803564+00:00
+  created_at: 2026-11-09T06:50:53.803564Z
   created_by: joe
 comments:
 - id: 01a1bf25-a0da-7c81-9074-1186f17d3a86
   author: dirtlab
   content: 'Implemented all eight bundled findings: TASK-3043 relabels snapshot ownership as log-only diagnostics; TASK-3056 deduplicates executable locations with debug/release regression assertions; TASK-3058 removes unreachable sandbox denylist arms; TASK-3060 removes completing-form notes from AGENTS.md/OVERVIEW.md while retaining lifecycle documentation; TASK-3061 documents persisted max_concurrent as the last selecting watcher diagnostic, preserving per-watcher admission behavior; TASK-3062 makes the body-file flag optional in the pickup master and updates its regression; TASK-3064 delegates the already-verified guard to verify_ci_read; TASK-3067 describes build-script reruns and CLI-library/server recompilation. Native lane edits remain uncommitted for host publication. Targeted lane tests are running; template sync/check hit read-only target errors in their implicit Cargo invocation.'
-  created_at: 2026-11-09 07:11:16.698491+00:00
-  modified_at: 2026-11-09 07:11:16.698491+00:00
+  created_at: 2026-11-09T07:11:16.698491Z
+  modified_at: 2026-11-09T07:11:16.698491Z
   session_id: 01a1bf22ec82
   harness_version: codex-cli 0.167.0
 - id: 01a1bf30-b257-78f2-9da6-90290094f8e2
   author: dirtlab
   content: 'Final validation: lane job j20261109T070949261-2-0 passed debug_release_switch_needs_no_rescaffold (1 executed test); lane job j20261109T071016885-2-0 passed bug_2493_native_prompts_name_safe_body_file_surface (1 executed test). git diff --check and python3 scripts/check-template-hooks.py passed. Full make sync-templates/check-templates hit read-only target-directory errors in their implicit portable-skill Cargo step; template links were synced and hook links validate. Codegraph missing per doctor. All ten changed files remain uncommitted for host publication; queue completion intentionally deferred to host. TASK-3061 disposition for PR body: retain the serialized max_concurrent for compatibility and explicitly document it as last-watcher diagnostic metadata, preserving existing per-watcher admission behavior.'
-  created_at: 2026-11-09 07:23:22.071443+00:00
-  modified_at: 2026-11-09 07:23:22.071443+00:00
+  created_at: 2026-11-09T07:23:22.071443Z
+  modified_at: 2026-11-09T07:23:22.071443Z
   session_id: 01a1bf22ec82
   harness_version: codex-cli 0.167.0
 history:
 - id: 01a1bf12-3d5d-7450-af72-7b705154b22a
   author: joe
-  timestamp: 2026-11-09 06:50:06.045055+00:00
+  timestamp: 2026-11-09T06:50:06.045055Z
   session_id: 01a1beff-fc3b-78e2-93e2-9b0c283b0339
   harness_version: 2.1.319 (Claude Code)
   changes: []
 - id: 01a1bf12-5732-7452-a7e3-ba6abb8959aa
   author: joe
-  timestamp: 2026-11-09 06:50:12.658110+00:00
+  timestamp: 2026-11-09T06:50:12.658110Z
   session_id: 01a1beff-fc3b-78e2-93e2-9b0c283b0339
   harness_version: 2.1.319 (Claude Code)
   changes: []
 - id: 01a1bf12-76f8-7a21-a8df-fe0ebf9b9d33
   author: joe
-  timestamp: 2026-11-09 06:50:20.792973+00:00
+  timestamp: 2026-11-09T06:50:20.792973Z
   session_id: 01a1beff-fc3b-78e2-93e2-9b0c283b0339
   harness_version: 2.1.319 (Claude Code)
   changes: []
 - id: 01a1bf12-90e7-77c2-8a48-680bc34b8509
   author: joe
-  timestamp: 2026-11-09 06:50:27.431171+00:00
+  timestamp: 2026-11-09T06:50:27.431171Z
   session_id: 01a1beff-fc3b-78e2-93e2-9b0c283b0339
   harness_version: 2.1.319 (Claude Code)
   changes: []
 - id: 01a1bf12-ab45-7692-a9da-5078cf5c0fdf
   author: joe
-  timestamp: 2026-11-09 06:50:34.181772+00:00
+  timestamp: 2026-11-09T06:50:34.181772Z
   session_id: 01a1beff-fc3b-78e2-93e2-9b0c283b0339
   harness_version: 2.1.319 (Claude Code)
   changes: []
 - id: 01a1bf12-c8ee-7b51-85ff-39b561b0d0d4
   author: joe
-  timestamp: 2026-11-09 06:50:41.774082+00:00
+  timestamp: 2026-11-09T06:50:41.774082Z
   session_id: 01a1beff-fc3b-78e2-93e2-9b0c283b0339
   harness_version: 2.1.319 (Claude Code)
   changes: []
 - id: 01a1bf12-e235-7373-ab8e-e96c3a2196de
   author: joe
-  timestamp: 2026-11-09 06:50:48.245235+00:00
+  timestamp: 2026-11-09T06:50:48.245235Z
   session_id: 01a1beff-fc3b-78e2-93e2-9b0c283b0339
   harness_version: 2.1.319 (Claude Code)
   changes: []
 - id: 01a1bf12-fcde-7ec3-b74d-321346c7356e
   author: joe
-  timestamp: 2026-11-09 06:50:55.070843+00:00
+  timestamp: 2026-11-09T06:50:55.070843Z
   session_id: 01a1beff-fc3b-78e2-93e2-9b0c283b0339
   harness_version: 2.1.319 (Claude Code)
   changes: []
 - id: 01a1bf22-f8d3-7773-98b9-439006bfc8a4
   author: aida-session-start
-  timestamp: 2026-11-09 07:08:22.611323+00:00
+  timestamp: 2026-11-09T07:08:22.611323Z
   changes:
   - field_name: status
     old_value: Approved
     new_value: InProgress
 - id: 01a1bf23-792c-7823-aac5-3e9a42c78332
   author: dirtlab
-  timestamp: 2026-11-09 07:08:55.468576+00:00
+  timestamp: 2026-11-09T07:08:55.468576Z
   session_id: 01a1bf22ec82
   harness_version: codex-cli 0.167.0
   changes: []
 - id: 01a1bf79-13eb-7f01-9709-1867912544f5
   author: aida-auto-bump
-  timestamp: 2026-11-09 08:42:25.643770+00:00
+  timestamp: 2026-11-09T08:42:25.643770Z
   changes:
   - field_name: status
     old_value: InProgress
     new_value: Completed
 - id: 01a1bf7c-1719-7000-9f42-6710c59d9fcc
   author: aida-auto-bump
-  timestamp: 2026-11-09 08:45:43.065413+00:00
+  timestamp: 2026-11-09T08:45:43.065413Z
   changes:
   - field_name: status
     old_value: InProgress
     new_value: Completed
 processing_record:
 - id: 01a1bf79-142e-7a32-9c7b-54539c656a49
-  timestamp: 2026-11-09 08:42:25.710750+00:00
+  timestamp: 2026-11-09T08:42:25.710750Z
   agent: aida
   commit_sha: ee76515e8cc1ff5f70fa2878c920b509b3974fb5
   summary: 'All eight bundled cosmetic findings are fixed; behavior changes only in the executable_locations dedup the finding required. CI green at head. Non-blocking note: TASK-3061 is resolved by a diagnostic relabel with its rationale on the spec, not in the PR body.'
@@ -239,5 +204,5 @@ filed_at:
   harness_version: 2.1.319 (Claude Code)
 implementation_info:
   implemented: false
-  completed_at: 2026-11-09 08:42:25.643764+00:00
+  completed_at: 2026-11-09T08:42:25.643764Z
   completion_sha: ee76515e8cc1ff5f70fa2878c920b509b3974fb5

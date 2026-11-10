@@ -7,207 +7,179 @@ status: Completed
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
-created_at: 2026-11-08 18:01:54.649358+00:00
-modified_at: 2026-11-09 08:42:23.254111+00:00
+created_at: 2026-11-08T18:01:54.649358Z
+modified_at: 2026-11-09T08:42:23.254111Z
 req_type: Task
 relationships:
 - rel_type: Child
   target_id: 01a1b7a9-fdfc-7391-be7e-4103bd326cb7
-  created_at: 2026-11-08 18:02:01.027412+00:00
+  created_at: 2026-11-08T18:02:01.027412Z
 - rel_type:
     custom: implemented-by
   target_id: 01a1bd71-41e5-7fd3-8f11-f4876993166a
-  created_at: 2026-11-08 23:15:14.658426+00:00
+  created_at: 2026-11-08T23:15:14.658426Z
   created_by: joe
 comments:
 - id: 01a1bcc1-1d5f-7293-bce0-ac5ee9f90068
   author: joe
   content: 'Advisor triage 2026-11-08: approved for a dell1 lane, independent of the open PRs. LIGHT gate: one targeted test plus make check-ci-fast.'
-  created_at: 2026-11-08 20:02:15.007572+00:00
-  modified_at: 2026-11-08 20:02:15.007572+00:00
+  created_at: 2026-11-08T20:02:15.007572Z
+  modified_at: 2026-11-08T20:02:15.007572Z
   session_id: 01a1bc93-77a0-7740-8b03-df4e3e8d1df5
   harness_version: 2.1.319 (Claude Code)
 - id: 01a1bd20-d35b-7da0-b6a2-2451393e44df
   author: dirtlab
   content: 'Implemented explicit NoChange propagation through host queue publication receipts, phase-1 lease discovery, advisor/queue resume, orchestration results, pipelined sidecars and batch/next-N summaries. Successful no-change seats pause with exit 0 and no shipped credit or NeedsAttention shelving; existing open PRs retain ordinary gates, and failed exits plus punt/hold retain precedence. Changed aida-cli-lib/src/{ship_from_seat,phase_driver,phase_driver_trait,auto_complete,drain_batch,drain_next_n}.rs, tests/{auto_complete_tests,bug_1629_phase1_recovery_tests,queue_work_tests}.rs, and docs/cli/04-git-lifecycle.md. Validation through lane jobs: task_3608 filter 4 passed (j20261108T214239870-2-0); queue_exit_tests filter 6 passed (j20261108T214509487-2-0). rustfmt --check for changed Rust files and git diff --check passed. No implementation blockers. Native seat handoff: edits remain uncommitted; host must commit/publish and complete queue after publication.'
-  created_at: 2026-11-08 21:46:47.515744+00:00
-  modified_at: 2026-11-08 21:46:47.515744+00:00
+  created_at: 2026-11-08T21:46:47.515744Z
+  modified_at: 2026-11-08T21:46:47.515744Z
   session_id: 01a1bd16b74e
   harness_version: codex-cli 0.167.0
 - id: 01a1bd53-8069-7581-a2a4-b554373eaea3
   author: joe
   content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: NoChange plumbing is largely correct, but required resumed/existing-PR/precedence tests are missing or mock-only, and two resume-path classification defects need fixing. CI was still pending at review.. No triage reason was given.'
-  created_at: 2026-11-08 22:42:08.617236+00:00
-  modified_at: 2026-11-08 22:42:08.617236+00:00
+  created_at: 2026-11-08T22:42:08.617236Z
+  modified_at: 2026-11-08T22:42:08.617236Z
   session_id: 20abb7c3-8f9b-4a5e-b326-404921f3b450
 - id: 01a1bd53-8a31-7b00-878d-29be78ff3767
   author: joe
-  content: 'REVIEW FINDINGS TO ADDRESS (TASK-3608):
-
+  content: |-
+    REVIEW FINDINGS TO ADDRESS (TASK-3608):
     Verdict: CHANGES REQUESTED
-
     Reviewed commit: 30b86ebdc427
-
     Recorded: 2026-11-08T21:52:06.937396248+00:00
-
     Findings:
-
     1. Required coverage gap: no test drives RealPhaseDriver::resume_implementer with a receipt (phase_driver_trait.rs:3426,3480), and no test covers a fresh no-change seat with an existing open PR (native_pr Found at phase_driver_trait.rs:888,999). task_3608_fresh_and_resumed_no_change_reach_batch_classification only returns a mocked ImplStep::NoChange for the resumed case, and task_3608_resumed_existing_pr_still_ships uses mocked ImplStep::Pr, so it would pass with this PR production code removed. TASK-3608 asks for fresh and resumed tests that reach final classification and keep the existing PR path intact. The new resume routing through run_queue_resume_to_exit, including the contained flag changing from false to self.contained, is also unexercised.
-
     2. Required precedence is untested: no test has a receipt present with a failed exit or watchdog failure, a punt signal, or a hold signal (including the new resume hold branch at phase_driver_trait.rs:3430). publish_queue_exit receipt writing is never exercised either: task_3608_host_no_change_survives_lease_discovery hand-writes the hex path, so clean_exit=false writing no receipt, the writer/reader key agreement, and the new dirty-tree bail (ship_from_seat.rs:597) have no coverage.
-
     3. Resume publication failures are misclassified: run_queue_resume_to_exit now publishes inside the closure whose error is mapped at phase_driver_trait.rs:3369 to FailureKind::Spawn with could not resume the implementer session. A resumed child that ran and then hit a publish or bundle failure reports a false spawn failure and takes the non-shelving hard-fail exit 3 path. On the fresh path the same publish error is a child exit that falls through to substrate classification.
-
     4. Resumed lookup can report NoChange during a forge error: at phase_driver_trait.rs:3445-3453 the branch fallback maps every non-Found ChangeLookup to None, and :3480 now turns None into NoChange. If the spec search returns NoOpenPr and the branch lookup is unreachable or errors, an existing PR is reported as no-change with exit 0. The fresh path keeps transient lookups distinct through Phase1PrResolve. Only a confirmed empty branch lookup should yield NoChange; transient results should stay Inconclusive.
-
     5. Minor: receipts are only consumed by the drain, but standalone_implementer.rs:1170 and queue_cmd.rs:14179 also call publish_queue_exit and discard the outcome. Every standalone or explicit-resume no-change lane therefore leaves a permanent file in .aida/native-no-change/, with no pruning. Write the receipt only for the drain callers, or remove it when the lease ends.
-
     6. Minor: both NoChange returns (phase_driver_trait.rs:894,1122 and :3480) reach finish_no_change without end_implementer_session, so a seat with nothing to preserve keeps its lease and seat clone until a later reap. Whether this blocks an immediate re-drain was not verified. End the session, or document that the lease is deliberately retained as it is for punt and hold.
-
-    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.'
-  created_at: 2026-11-08 22:42:11.121506+00:00
-  modified_at: 2026-11-08 22:42:11.121506+00:00
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
+  created_at: 2026-11-08T22:42:11.121506Z
+  modified_at: 2026-11-08T22:42:11.121506Z
   session_id: 20abb7c3-8f9b-4a5e-b326-404921f3b450
 - id: 01a1bd6c-a828-7cf0-ad4d-f84fed948cc4
   author: joe
-  content: 'Round-2 rework: addressed all six findings in source. RealPhaseDriver resume now preserves a typed post-child publication failure as shelvable Failed instead of Spawn, preserves unknown branch lookup observations as Inconclusive, consumes receipts even on failed child exits, and checks explicit resume punt/hold signals. Confirmed fresh/resumed NoChange ends the implementer session. Only corroborated drain fresh launches and drain resumes request receipts; standalone and explicit resumes do not retain them. Added real Codex-resume subprocess/driver/orchestration coverage (no-change, existing PR, failed child, publication failure, punt, hold, transient and malformed forge lookup), fresh existing-PR orchestration, writer/reader agreement and dirty-probe refusal tests, plus a real watchdog test. Updated lifecycle docs and six host receipt writer inventory sites. Initial lane job j20261108T224834105-4022100-0 executed 7 TASK-3608 tests successfully. Final-source expanded run j20261108T225558416-4055405-0
-    is still compiling; no-default-features check j20261108T225609614-4055551-0 and TUI check j20261108T225727361-4058793-0 are queued. All 43 non-Cargo fast gates passed, changed-file rustfmt and git diff checks passed, TUI manifest dependency seam passed. Native seat edits remain uncommitted for host publication; merge hold remains an authorized-review gate.'
-  created_at: 2026-11-08 23:09:37.192802+00:00
-  modified_at: 2026-11-08 23:09:37.192802+00:00
+  content: 'Round-2 rework: addressed all six findings in source. RealPhaseDriver resume now preserves a typed post-child publication failure as shelvable Failed instead of Spawn, preserves unknown branch lookup observations as Inconclusive, consumes receipts even on failed child exits, and checks explicit resume punt/hold signals. Confirmed fresh/resumed NoChange ends the implementer session. Only corroborated drain fresh launches and drain resumes request receipts; standalone and explicit resumes do not retain them. Added real Codex-resume subprocess/driver/orchestration coverage (no-change, existing PR, failed child, publication failure, punt, hold, transient and malformed forge lookup), fresh existing-PR orchestration, writer/reader agreement and dirty-probe refusal tests, plus a real watchdog test. Updated lifecycle docs and six host receipt writer inventory sites. Initial lane job j20261108T224834105-4022100-0 executed 7 TASK-3608 tests successfully. Final-source expanded run j20261108T225558416-4055405-0 is still compiling; no-default-features check j20261108T225609614-4055551-0 and TUI check j20261108T225727361-4058793-0 are queued. All 43 non-Cargo fast gates passed, changed-file rustfmt and git diff checks passed, TUI manifest dependency seam passed. Native seat edits remain uncommitted for host publication; merge hold remains an authorized-review gate.'
+  created_at: 2026-11-08T23:09:37.192802Z
+  modified_at: 2026-11-08T23:09:37.192802Z
   session_id: 01a1bd558c6d
 - id: 01a1bd70-a93a-7860-90e1-8331ba2f447f
   author: joe
-  content: 'Final round-2 handoff: expanded final-source lane test job j20261108T225558416-4055405-0 executed 15 tests, all passed (including the real watchdog and real Codex resume/driver matrix). No-default-features cargo check passed in j20261108T225609614-4055551-0; aida-tui all-targets cargo check passed in j20261108T225727361-4058793-0. The 43 non-Cargo fast gates passed; changed-file rustfmt, diff whitespace checks and the TUI manifest dependency seam passed. The stock make check-ci-fast cannot be run verbatim under the native seat no-direct-Cargo rule, so its two compile gates were delegated to lane jobs and formatting was checked directly with rustfmt. Changed files: aida-cli-lib/src/phase_driver_trait.rs, queue_cmd.rs, session.rs, ship_from_seat.rs; aida-cli-lib/src/tests/bug_044_headless_background_tests.rs, bug_1629_phase1_recovery_tests.rs, bug_home_038_seat_publish_tests.rs; docs/cli/04-git-lifecycle.md; scripts/store-writers.toml. All six review findings addressed; no implementation
-    blocker or disputed finding. No commit, push, queue completion, PR shipping or verdict recording was performed from this read-only Git seat. Host must create the round-2 commit and publish it; PR #3703 merge hold remains subject to authorized review.'
-  created_at: 2026-11-08 23:13:59.610248+00:00
-  modified_at: 2026-11-08 23:13:59.610248+00:00
+  content: 'Final round-2 handoff: expanded final-source lane test job j20261108T225558416-4055405-0 executed 15 tests, all passed (including the real watchdog and real Codex resume/driver matrix). No-default-features cargo check passed in j20261108T225609614-4055551-0; aida-tui all-targets cargo check passed in j20261108T225727361-4058793-0. The 43 non-Cargo fast gates passed; changed-file rustfmt, diff whitespace checks and the TUI manifest dependency seam passed. The stock make check-ci-fast cannot be run verbatim under the native seat no-direct-Cargo rule, so its two compile gates were delegated to lane jobs and formatting was checked directly with rustfmt. Changed files: aida-cli-lib/src/phase_driver_trait.rs, queue_cmd.rs, session.rs, ship_from_seat.rs; aida-cli-lib/src/tests/bug_044_headless_background_tests.rs, bug_1629_phase1_recovery_tests.rs, bug_home_038_seat_publish_tests.rs; docs/cli/04-git-lifecycle.md; scripts/store-writers.toml. All six review findings addressed; no implementation blocker or disputed finding. No commit, push, queue completion, PR shipping or verdict recording was performed from this read-only Git seat. Host must create the round-2 commit and publish it; PR #3703 merge hold remains subject to authorized review.'
+  created_at: 2026-11-08T23:13:59.610248Z
+  modified_at: 2026-11-08T23:13:59.610248Z
   session_id: 01a1bd558c6d
 - id: 01a1be23-3c54-7450-a730-bfa3b1a3ab08
   author: joe
   content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: Round-2 fixes for the resume path hold, but the fresh path can still give false shipped credit after a transient lookup and can report no-change on a failed spec search; CI still pending at head.. No triage reason was given.'
-  created_at: 2026-11-09 02:29:02.676626+00:00
-  modified_at: 2026-11-09 02:29:02.676626+00:00
+  created_at: 2026-11-09T02:29:02.676626Z
+  modified_at: 2026-11-09T02:29:02.676626Z
   session_id: 20abb7c3-8f9b-4a5e-b326-404921f3b450
 - id: 01a1be23-45f6-7d91-88fb-91faee6104fa
   author: joe
-  content: 'REVIEW FINDINGS TO ADDRESS (TASK-3608):
-
+  content: |-
+    REVIEW FINDINGS TO ADDRESS (TASK-3608):
     Verdict: CHANGES REQUESTED
-
     Reviewed commit: 9e7f9f64c79e
-
     Recorded: 2026-11-09T02:09:24.110201531+00:00
-
     Findings:
-
     1. 1. False shipped credit on retry (blocking). phase_driver_trait.rs:1003 only uses the native_no_change observation once; every Retry re-probes through detect_phase1_pr(&branch), which passes native_no_change=false. So a host-attested no-change seat whose first lookup was transient, on a branch that is on origin with a previously merged PR, resolves AlreadyMerged and returns ImplementerOutcome::AlreadyMerged, reaching finish_success (auto_complete.rs:4215), which credits a ship. TASK-3608 requires no false shipped credit, and the comment at phase_driver_trait.rs:883 says never credit an older merge. Without a merged PR the same retry path ends Inconclusive instead of NoChange, and a Retry first observation also runs preflight, which the block is meant to skip. Fix: carry native_no_change through the retry loop and map AlreadyMerged to NoChange there. Add a test: first lookup transient, then merged PR on origin, asserting no_change and no shipped_spec_id.
-
     2. 2. Fresh path reports no-change on a failed spec search (blocking). phase_driver.rs:2862 guards only PrLookup::NoOpenPr, but the fallthrough arm at :2878 returns Phase1PrResolve::NoPr whenever the branch is absent from origin, including when the spec search returned GhFailed, GhUnreachable or GhMissing. With a receipt, phase_driver_trait.rs:889-894 turns that into NoChange and exit 0, so a transient search failure can hide an existing PR on a swapped branch (the BUG-223 case the spec search exists for). This is round-1 finding 4 on the fresh path and contradicts docs/cli/04-git-lifecycle.md:187 (a failed or unreachable PR lookup cannot confirm no-change). Fix: in native mode a non-NoOpenPr spec lookup must Retry or end Inconclusive. Add a test: empty branch lookup, unreachable spec search, branch absent from origin.
-
     3. 3. Teardown failure shelves a successful no-change (minor). phase_driver_trait.rs:894,1124,3495 use self.end_implementer_session()?, so a failing aida session end returns PhaseFailure::new (FailureKind::Failed, shelvable) after a confirmed no-change, parking the spec in NeedsAttention, which TASK-3608 forbids. The AlreadyMerged path (phase_driver_trait.rs:1005-1030, BUG-711) treats this teardown as best-effort with a warning; do the same here, and clear implementer_lease only if the session actually ended.
-
     4. 4. Resume lookup changes non-native classification (minor). The rewritten lookup at phase_driver_trait.rs:3458-3491 applies to every resume, not only receipts. A CliFailed spec lookup was previously a PhaseFailure and is now Inconclusive (:3486), which pauses the drain instead of shelving and differs from the fresh path, where gh errors are Fail. An empty spec lookup with no recorded branch was previously FailureKind::NoPr and is now Inconclusive (:3464). Keep the Inconclusive mapping for receipt-bearing resumes only, or state the wider change on the spec and align the fresh path.
-
     5. 5. Cosmetic. scripts/store-writers.toml:1304-1305 and :1935-1938 repeat the same trace comment 2 and 4 times. The new NoChange arms at drain_batch.rs:2088,2428 and drain_next_n.rs:1262 were inserted between the BUG-250 comment and its Held arm, so that comment now describes the wrong arm, and they carry no trace comment.
-
-    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.'
-  created_at: 2026-11-09 02:29:05.142077+00:00
-  modified_at: 2026-11-09 02:29:05.142077+00:00
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
+  created_at: 2026-11-09T02:29:05.142077Z
+  modified_at: 2026-11-09T02:29:05.142077Z
   session_id: 20abb7c3-8f9b-4a5e-b326-404921f3b450
 - id: 01a1be31-dd33-78a3-8687-15ce5031682b
   author: dirtlab
-  content: 'Round-3 rework: addressed all five latest review findings. Fresh receipt-bearing PR resolution retains native no-change context across retries before preflight; failed spec searches remain Retry/Inconclusive instead of confirming absence, and old merged PRs cannot grant shipped credit. Confirmed no-change teardown is best-effort and retains the lease on failure. Non-receipt resumes again classify CliFailed as Failed and missing-branch empty results as NoPr. Fixed duplicate inventory traces and Held/NoChange comment placement. Expanded real fresh orchestration coverage for transient-then-empty lookups with an old merged PR on origin, unreachable spec search with branch absent, and failed teardown; expanded real resume matrix for ordinary failure classifications. Validation: lane job j20261109T023349966-2-0 executed 8 TASK-3608 tests, all passed on corrected source; no-default-features check j20261109T023334956-2-0 passed; TUI all-targets check j20261109T023336102-2-0 passed. Store
-    writer inventory 42 tests passed, cargo-timeout fixtures passed, rustfmt and git diff --check passed. Fast guard bodies: 41 passed; Codex mail wake fixtures failed with temporary project ownership/shared-write refusals (4 failures, 17 errors), unrelated to changed files; log /tmp/task3608-fast-gates.log. Earlier two test jobs failed compilation on a diagnostic Debug format, fixed before the passing run. Redundant later test runs remain launcher-managed. Eight changed files: phase_driver.rs, phase_driver_trait.rs, drain_batch.rs, drain_next_n.rs, tests/bug_044_headless_background_tests.rs, tests/bug_1629_phase1_recovery_tests.rs, docs/cli/04-git-lifecycle.md, scripts/store-writers.toml. Native handoff: edits uncommitted; no commit/push/PR/queue-done/ship/review-record performed. Host publication and authorized review remain required.'
-  created_at: 2026-11-09 02:45:01.363249+00:00
-  modified_at: 2026-11-09 02:45:01.363249+00:00
+  content: 'Round-3 rework: addressed all five latest review findings. Fresh receipt-bearing PR resolution retains native no-change context across retries before preflight; failed spec searches remain Retry/Inconclusive instead of confirming absence, and old merged PRs cannot grant shipped credit. Confirmed no-change teardown is best-effort and retains the lease on failure. Non-receipt resumes again classify CliFailed as Failed and missing-branch empty results as NoPr. Fixed duplicate inventory traces and Held/NoChange comment placement. Expanded real fresh orchestration coverage for transient-then-empty lookups with an old merged PR on origin, unreachable spec search with branch absent, and failed teardown; expanded real resume matrix for ordinary failure classifications. Validation: lane job j20261109T023349966-2-0 executed 8 TASK-3608 tests, all passed on corrected source; no-default-features check j20261109T023334956-2-0 passed; TUI all-targets check j20261109T023336102-2-0 passed. Store writer inventory 42 tests passed, cargo-timeout fixtures passed, rustfmt and git diff --check passed. Fast guard bodies: 41 passed; Codex mail wake fixtures failed with temporary project ownership/shared-write refusals (4 failures, 17 errors), unrelated to changed files; log /tmp/task3608-fast-gates.log. Earlier two test jobs failed compilation on a diagnostic Debug format, fixed before the passing run. Redundant later test runs remain launcher-managed. Eight changed files: phase_driver.rs, phase_driver_trait.rs, drain_batch.rs, drain_next_n.rs, tests/bug_044_headless_background_tests.rs, tests/bug_1629_phase1_recovery_tests.rs, docs/cli/04-git-lifecycle.md, scripts/store-writers.toml. Native handoff: edits uncommitted; no commit/push/PR/queue-done/ship/review-record performed. Host publication and authorized review remain required.'
+  created_at: 2026-11-09T02:45:01.363249Z
+  modified_at: 2026-11-09T02:45:01.363249Z
   session_id: 01a1be24ea80
   harness_version: codex-cli 0.167.0
 - id: 01a1be47-689d-7111-8416-9e5814aca358
   author: joe
   content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: Round-3 fixes hold, but a transient GH outage on a never-pushed no-change seat still produces a shelvable NoPr failure on the fresh path; CI still pending at head.. No triage reason was given.'
-  created_at: 2026-11-09 03:08:33.309713+00:00
-  modified_at: 2026-11-09 03:08:33.309713+00:00
+  created_at: 2026-11-09T03:08:33.309713Z
+  modified_at: 2026-11-09T03:08:33.309713Z
   session_id: 7aacb1ed-ebaa-4da4-a195-500864e99e7d
 - id: 01a1be54-10dd-7692-94b5-fbac06e8bfb6
   author: dirtlab
   content: 'Native-seat verification: requested implementation was already present in this branch, including commit dc3cbd4cf5. No additional source edits were needed; working tree is clean. Ran aida lane job run -- cargo test --profile agent -p aida-cli-lib --lib -- task_3608 (job j20261109T031051999-2-0): 8 executed tests passed, 0 failed. Coverage includes fresh/resumed final batch classification, real resume precedence and forge failures, existing PR preservation, watchdog precedence, receipt writer and pipelined sidecar. Codegraph host client is missing, confirmed by aida doctor check codegraph; navigation used rg. No commit, push, PR creation or queue completion performed in this native seat.'
-  created_at: 2026-11-09 03:22:22.813404+00:00
-  modified_at: 2026-11-09 03:22:22.813404+00:00
+  created_at: 2026-11-09T03:22:22.813404Z
+  modified_at: 2026-11-09T03:22:22.813404Z
   session_id: 01a1be48be4f
   harness_version: codex-cli 0.167.0
 - id: 01a1be6b-fd86-7431-b420-32fc5eb0423e
   author: joe
   content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: No source changed since the last request-changes: the round-4 rework was a no-op, so a fresh no-change seat is still shelved on a forge error; 2 acceptance items unmet, CI lib-1 still pending at head.. No triage reason was given.'
-  created_at: 2026-11-09 03:48:30.726564+00:00
-  modified_at: 2026-11-09 03:48:30.726564+00:00
+  created_at: 2026-11-09T03:48:30.726564Z
+  modified_at: 2026-11-09T03:48:30.726564Z
   session_id: 7aacb1ed-ebaa-4da4-a195-500864e99e7d
 - id: 01a1be78-a593-7493-a618-9483bb200ec6
   author: dirtlab
-  content: 'Round-5 rework addresses the remaining fresh-path refusal: receipt-bearing branch Unreachable/CliFailed observations now remain Retry/Inconclusive regardless of origin presence, preserving non-native behavior. Added real empty-origin orchestration cases for persistent unreachable/failed lookups and transient recovery to NoChange; they assert exit 0, no shelving and no shipped credit. Changed only aida-cli-lib/src/phase_driver.rs and aida-cli-lib/src/tests/bug_1629_phase1_recovery_tests.rs. Final-source lane job j20261109T035122764-2-0 executed all 8 TASK-3608 tests successfully. No-default-features check j20261109T035109720-2-0 and TUI all-targets check j20261109T035110899-2-0 passed; TUI manifest graph seam, changed-file rustfmt and git diff --check passed. Initial test run had 7 passes and one call-count assertion failure, corrected before the final passing run. Fast gate bodies: 41 of 43 passed after retries; Codex mail fixtures failed on temporary-directory ownership/shared-write
-    refusals (4 failures, 17 errors), and containment conformance fixtures exceeded the 52-second bounded call timeout. Logs: /tmp/task3608-fast.log and /tmp/task3608-retry.log. Full make check-ci-fast was split because direct Cargo execution is prohibited in this seat. Codegraph host client is unavailable; doctor confirmed missing, navigation used rg. No implementation blocker; broader validation limits remain as listed. Native handoff: edits left uncommitted; host must commit and publish, then complete the queue after publication. No commit, push, PR creation, queue done, PR ship or review record performed.'
-  created_at: 2026-11-09 04:02:20.179405+00:00
-  modified_at: 2026-11-09 04:02:20.179405+00:00
+  content: 'Round-5 rework addresses the remaining fresh-path refusal: receipt-bearing branch Unreachable/CliFailed observations now remain Retry/Inconclusive regardless of origin presence, preserving non-native behavior. Added real empty-origin orchestration cases for persistent unreachable/failed lookups and transient recovery to NoChange; they assert exit 0, no shelving and no shipped credit. Changed only aida-cli-lib/src/phase_driver.rs and aida-cli-lib/src/tests/bug_1629_phase1_recovery_tests.rs. Final-source lane job j20261109T035122764-2-0 executed all 8 TASK-3608 tests successfully. No-default-features check j20261109T035109720-2-0 and TUI all-targets check j20261109T035110899-2-0 passed; TUI manifest graph seam, changed-file rustfmt and git diff --check passed. Initial test run had 7 passes and one call-count assertion failure, corrected before the final passing run. Fast gate bodies: 41 of 43 passed after retries; Codex mail fixtures failed on temporary-directory ownership/shared-write refusals (4 failures, 17 errors), and containment conformance fixtures exceeded the 52-second bounded call timeout. Logs: /tmp/task3608-fast.log and /tmp/task3608-retry.log. Full make check-ci-fast was split because direct Cargo execution is prohibited in this seat. Codegraph host client is unavailable; doctor confirmed missing, navigation used rg. No implementation blocker; broader validation limits remain as listed. Native handoff: edits left uncommitted; host must commit and publish, then complete the queue after publication. No commit, push, PR creation, queue done, PR ship or review record performed.'
+  created_at: 2026-11-09T04:02:20.179405Z
+  modified_at: 2026-11-09T04:02:20.179405Z
   session_id: 01a1be6cf982
   harness_version: codex-cli 0.167.0
 - id: 01a1be92-b99c-7043-b575-cab220831852
   author: joe
   content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: Round-5 fix holds (fresh no-change seats no longer shelve on forge errors), but a no-change member is still credited as completed/merged in drain state, so the no-false-shipped-credit criterion is unmet; CI still pending at head.. No triage reason was given.'
-  created_at: 2026-11-09 04:30:49.244333+00:00
-  modified_at: 2026-11-09 04:30:49.244333+00:00
+  created_at: 2026-11-09T04:30:49.244333Z
+  modified_at: 2026-11-09T04:30:49.244333Z
   session_id: 7aacb1ed-ebaa-4da4-a195-500864e99e7d
 - id: 01a1be9f-89f4-77d3-a37a-22683f906b35
   author: dirtlab
-  content: 'Round-6 rework fixes the remaining false completed/merged credit in drain state. run_auto_complete now persists the semantic orchestration result: clean NoChange becomes a finished no-change member, clears PR/head bindings, and emits no completed-PR wake. Status renders no-change as terminal and excludes it from merged counts and last-ship reporting. Failed exits retain precedence and ordinary completed PRs retain their existing state/event path. Extended real fresh and resumed orchestration tests through drain persistence; added persistence/rendering, stale-binding, failed-exit and ordinary-completion controls. Updated lifecycle docs.
-
+  content: |
+    Round-6 rework fixes the remaining false completed/merged credit in drain state. run_auto_complete now persists the semantic orchestration result: clean NoChange becomes a finished no-change member, clears PR/head bindings, and emits no completed-PR wake. Status renders no-change as terminal and excludes it from merged counts and last-ship reporting. Failed exits retain precedence and ordinary completed PRs retain their existing state/event path. Extended real fresh and resumed orchestration tests through drain persistence; added persistence/rendering, stale-binding, failed-exit and ordinary-completion controls. Updated lifecycle docs.
     Changed files: aida-cli-lib/src/drain_gate.rs; aida-cli-lib/src/drain_state.rs; aida-cli-lib/src/tests/bug_044_headless_background_tests.rs; aida-cli-lib/src/tests/bug_1629_phase1_recovery_tests.rs; docs/cli/04-git-lifecycle.md.
-
     Validation: final-source lane job j20261109T043606992-2-0 executed 9 TASK-3608 tests, all passed. No-default-features check j20261109T043459508-2-0 passed; aida-tui all-targets check j20261109T043500644-2-0 passed. Changed-file rustfmt, git diff --check and TUI manifest dependency seam passed. Fast gates split to respect no-direct-Cargo policy: 42/43 non-Cargo gates passed; Codex mail wake fixtures failed with temporary project ownership/shared-write refusals (4 failures, 17 errors). Full gate diagnostics: /tmp/task3608-gates.log and /tmp/task3608-gate-results.json. A duplicate bounded containment run timed out; the other run passed. Lane jobs warned overlay-stale after a primary seed rewrite, but completed successfully. Codegraph fixed host client is absent; doctor confirmed missing, navigation used rg.
-
     No implementation blockers. Native handoff: five edited files remain uncommitted. Host must commit and publish, then complete queue after publication and required review. No commit, push, PR creation, queue done, PR ship or review record performed. untested=false.
-
-    '
-  created_at: 2026-11-09 04:44:49.012704+00:00
-  modified_at: 2026-11-09 04:44:49.012704+00:00
+  created_at: 2026-11-09T04:44:49.012704Z
+  modified_at: 2026-11-09T04:44:49.012704Z
   session_id: 01a1be9404a0
   harness_version: codex-cli 0.167.0
 - id: 01a1bed5-dd55-7eb1-addb-34490ac02e69
   author: dirtlab
   content: 'Native-seat verification: checkout already contains TASK-3608 implementation (including commit 1daecb0418); no source edits needed. Lane job j20261109T053825004-2-0 ran cargo test --profile agent -p aida-cli-lib --lib -- task_3608: 9 passed, 0 failed. Covers fresh/resumed final batch classification, existing PR, receipt/dirty probe, lease discovery, watchdog precedence, pipelined sidecar, and persisted no-change without merge credit. Working tree remains clean. Codegraph unavailable on this host; doctor reports missing. No commit, push, PR, or queue completion attempted from native seat.'
-  created_at: 2026-11-09 05:44:09.301889+00:00
-  modified_at: 2026-11-09 05:44:09.301889+00:00
+  created_at: 2026-11-09T05:44:09.301889Z
+  modified_at: 2026-11-09T05:44:09.301889Z
   session_id: 01a1becfe003
   harness_version: codex-cli 0.167.0
 - id: 01a1bf06-fae8-7012-bb8e-86b3c2452c10
   author: dirtlab
   content: 'Native-seat verification: checkout already contains TASK-3608 implementation including drain-state no-change persistence from 1daecb0418. No newer review findings or source changes were identified. Lane job j20261109T063201367-2-0 executed cargo test --profile agent -p aida-cli-lib --lib -- task_3608: 9 passed, 0 failed. Coverage includes fresh/resumed final classification, existing PR handling, receipt writer/dirty probe, watchdog precedence, pipelined sidecar and persistence without merged credit. git diff --check passed; working tree remains clean. Codegraph fixed host client is unavailable and doctor reports missing; navigation used rg. No commit, push, PR creation, queue completion, PR ship or review record performed. Host retains publication and queue-completion responsibility. untested=false.'
-  created_at: 2026-11-09 06:37:48.136531+00:00
-  modified_at: 2026-11-09 06:37:48.136531+00:00
+  created_at: 2026-11-09T06:37:48.136531Z
+  modified_at: 2026-11-09T06:37:48.136531Z
   session_id: 01a1bf010a45
   harness_version: codex-cli 0.167.0
 - id: 01a1bf15-d24e-7fe2-8d04-2e4f769efdf5
   author: joe
   content: 'ADVISOR RUBBIN: CI has failed this same check on repeated pushes; pushing again without fixing it will fail again. Do not merge main or push until this exact failure is fixed. #3703: step Test time budget fails, not a test. task_3608_host_no_change_survives_lease_discovery takes 91.2s and task_3608_receipt_cannot_override_watchdog 30.2s against the 10s limit for unbudgeted tests. Make them fast (they are waiting on real timers; inject the clock or shorten the poll/watchdog interval). Do not add budget entries for a 91s test. Local gate: one targeted cargo test --profile agent -p aida-cli-lib <filter> plus make check-ci-fast, then push; run long cargo in background.'
-  created_at: 2026-11-09 06:54:00.782771+00:00
-  modified_at: 2026-11-09 06:54:00.782771+00:00
+  created_at: 2026-11-09T06:54:00.782771Z
+  modified_at: 2026-11-09T06:54:00.782771Z
   session_id: 01a1beff-fc3b-78e2-93e2-9b0c283b0339
   harness_version: 2.1.319 (Claude Code)
 - id: 01a1bf2d-67b8-7423-8a85-6b239487f7dd
   author: dirtlab
-  content: 'Addressed latest advisor timing failure: added per-driver cfg(test) retry-wait and watchdog-poll injection, defaulting to production timing. The receipt/lease-discovery fixture now retries after 1ms; the real watchdog fixture polls at 100ms while retaining actual child launch, termination, receipt consumption and failure classification. Changed aida-cli-lib/src/phase_driver.rs, phase_driver_trait.rs, tests/bug_1629_phase1_recovery_tests.rs. Validation: lane job j20261109T070616506-2-0 executed all 9 task_3608 tests successfully in 2.87s total (previously the two named tests took 91.2s and 30.2s). No-default-features check passed in j20261109T070635215-2-0; TUI all-targets check passed in j20261109T070647106-2-0. Fast gate equivalent: all 44 non-Cargo gates passed using CI runner commands with changed-file rustfmt substituted for cargo fmt; two compile gates delegated to the above lane jobs. TUI direct-dependency manifest seam passed; the full cargo metadata/tree seam was not
-    run under the no-direct-Cargo seat rule. First fast-gate attempt exposed mail-wake fixture directory-mode failures under host umask; rerun with umask 077 passed. git diff --check and changed-file rustfmt passed. Codegraph fixed client unavailable; doctor reports missing, used rg. No implementation blockers; untested=false. Native handoff: edits uncommitted, no push/PR/queue completion/ship/verdict actions; host must commit and publish the fix.'
-  created_at: 2026-11-09 07:19:46.360627+00:00
-  modified_at: 2026-11-09 07:19:46.360627+00:00
+  content: 'Addressed latest advisor timing failure: added per-driver cfg(test) retry-wait and watchdog-poll injection, defaulting to production timing. The receipt/lease-discovery fixture now retries after 1ms; the real watchdog fixture polls at 100ms while retaining actual child launch, termination, receipt consumption and failure classification. Changed aida-cli-lib/src/phase_driver.rs, phase_driver_trait.rs, tests/bug_1629_phase1_recovery_tests.rs. Validation: lane job j20261109T070616506-2-0 executed all 9 task_3608 tests successfully in 2.87s total (previously the two named tests took 91.2s and 30.2s). No-default-features check passed in j20261109T070635215-2-0; TUI all-targets check passed in j20261109T070647106-2-0. Fast gate equivalent: all 44 non-Cargo gates passed using CI runner commands with changed-file rustfmt substituted for cargo fmt; two compile gates delegated to the above lane jobs. TUI direct-dependency manifest seam passed; the full cargo metadata/tree seam was not run under the no-direct-Cargo seat rule. First fast-gate attempt exposed mail-wake fixture directory-mode failures under host umask; rerun with umask 077 passed. git diff --check and changed-file rustfmt passed. Codegraph fixed client unavailable; doctor reports missing, used rg. No implementation blockers; untested=false. Native handoff: edits uncommitted, no push/PR/queue completion/ship/verdict actions; host must commit and publish the fix.'
+  created_at: 2026-11-09T07:19:46.360627Z
+  modified_at: 2026-11-09T07:19:46.360627Z
   session_id: 01a1bf1f80ea
   harness_version: codex-cli 0.167.0
 history:
 - id: 01a1bc53-0ec9-7670-9674-41fd5fd9d861
   author: joe
-  timestamp: 2026-11-08 18:02:02.313582+00:00
+  timestamp: 2026-11-08T18:02:02.313582Z
   session_id: 01a1bc4dcf8e
   changes: []
 - id: 01a1bcc1-28aa-7d53-9b59-f155a39f6e5d
   author: joe
-  timestamp: 2026-11-08 20:02:17.898414+00:00
+  timestamp: 2026-11-08T20:02:17.898414Z
   session_id: 01a1bc93-77a0-7740-8b03-df4e3e8d1df5
   harness_version: 2.1.319 (Claude Code)
   changes:
@@ -216,20 +188,20 @@ history:
     new_value: Approved
 - id: 01a1bd16-bd1b-7380-bafd-f3f596575e82
   author: aida-session-start
-  timestamp: 2026-11-08 21:35:46.459679+00:00
+  timestamp: 2026-11-08T21:35:46.459679Z
   changes:
   - field_name: status
     old_value: Approved
     new_value: InProgress
 - id: 01a1bd17-1522-7942-9463-fe00a857605a
   author: dirtlab
-  timestamp: 2026-11-08 21:36:08.994891+00:00
+  timestamp: 2026-11-08T21:36:08.994891Z
   session_id: 01a1bd16b74e
   harness_version: codex-cli 0.167.0
   changes: []
 - id: 01a1bd25-b55e-7662-8a70-7a34240314b2
   author: aida-orchestrator
-  timestamp: 2026-11-08 21:52:07.518925+00:00
+  timestamp: 2026-11-08T21:52:07.518925Z
   session_id: 01a1bd2296eb
   harness_version: 2.1.319 (Claude Code)
   changes:
@@ -238,7 +210,7 @@ history:
     new_value: NeedsAttention
 - id: 01a1bd53-8069-7581-a2a4-b54b97dd26ea
   author: joe
-  timestamp: 2026-11-08 22:42:08.617222+00:00
+  timestamp: 2026-11-08T22:42:08.617222Z
   session_id: 20abb7c3-8f9b-4a5e-b326-404921f3b450
   changes:
   - field_name: status
@@ -246,19 +218,19 @@ history:
     new_value: Approved
 - id: 01a1bd55-95a5-7980-8787-bca36b7677f9
   author: aida-session-start
-  timestamp: 2026-11-08 22:44:25.125028+00:00
+  timestamp: 2026-11-08T22:44:25.125028Z
   changes:
   - field_name: status
     old_value: Approved
     new_value: InProgress
 - id: 01a1bd71-d311-7181-b476-5029e4082158
   author: joe
-  timestamp: 2026-11-08 23:15:15.857794+00:00
+  timestamp: 2026-11-08T23:15:15.857794Z
   session_id: 01a1bd558c6d
   changes: []
 - id: 01a1be11-4292-76a3-be17-ea036d62a85a
   author: aida-orchestrator
-  timestamp: 2026-11-09 02:09:24.626545+00:00
+  timestamp: 2026-11-09T02:09:24.626545Z
   session_id: 01a1be0ccaae
   harness_version: 2.1.319 (Claude Code)
   changes:
@@ -267,7 +239,7 @@ history:
     new_value: NeedsAttention
 - id: 01a1be23-3c54-7450-a730-bf90c3d68c14
   author: joe
-  timestamp: 2026-11-09 02:29:02.676615+00:00
+  timestamp: 2026-11-09T02:29:02.676615Z
   session_id: 20abb7c3-8f9b-4a5e-b326-404921f3b450
   changes:
   - field_name: status
@@ -275,20 +247,20 @@ history:
     new_value: Approved
 - id: 01a1be24-f0a3-75b0-9d00-d401442bdd66
   author: aida-session-start
-  timestamp: 2026-11-09 02:30:54.371886+00:00
+  timestamp: 2026-11-09T02:30:54.371886Z
   changes:
   - field_name: status
     old_value: Approved
     new_value: InProgress
 - id: 01a1be25-4d17-76b1-811d-2600ef1490b1
   author: dirtlab
-  timestamp: 2026-11-09 02:31:18.039912+00:00
+  timestamp: 2026-11-09T02:31:18.039912Z
   session_id: 01a1be24ea80
   harness_version: codex-cli 0.167.0
   changes: []
 - id: 01a1be36-7ce1-7711-8fed-718ca12e9c10
   author: aida-orchestrator
-  timestamp: 2026-11-09 02:50:04.385122+00:00
+  timestamp: 2026-11-09T02:50:04.385122Z
   session_id: 01a1be3392e1
   harness_version: 2.1.319 (Claude Code)
   changes:
@@ -297,7 +269,7 @@ history:
     new_value: NeedsAttention
 - id: 01a1be47-689d-7111-8416-9e496e79c614
   author: joe
-  timestamp: 2026-11-09 03:08:33.309695+00:00
+  timestamp: 2026-11-09T03:08:33.309695Z
   session_id: 7aacb1ed-ebaa-4da4-a195-500864e99e7d
   changes:
   - field_name: status
@@ -305,20 +277,20 @@ history:
     new_value: Approved
 - id: 01a1be48-c4b3-7691-bc9a-e50e2db4fc55
   author: aida-session-start
-  timestamp: 2026-11-09 03:10:02.419545+00:00
+  timestamp: 2026-11-09T03:10:02.419545Z
   changes:
   - field_name: status
     old_value: Approved
     new_value: InProgress
 - id: 01a1be49-26ac-7790-b6a3-877effba0ece
   author: dirtlab
-  timestamp: 2026-11-09 03:10:27.500355+00:00
+  timestamp: 2026-11-09T03:10:27.500355Z
   session_id: 01a1be48be4f
   harness_version: codex-cli 0.167.0
   changes: []
 - id: 01a1be68-ab02-7792-92f9-47336990014c
   author: aida-orchestrator
-  timestamp: 2026-11-09 03:44:52.994257+00:00
+  timestamp: 2026-11-09T03:44:52.994257Z
   session_id: 01a1be65d2aa
   harness_version: 2.1.319 (Claude Code)
   changes:
@@ -327,7 +299,7 @@ history:
     new_value: NeedsAttention
 - id: 01a1be6b-fd86-7431-b420-32eb9d4906b4
   author: joe
-  timestamp: 2026-11-09 03:48:30.726549+00:00
+  timestamp: 2026-11-09T03:48:30.726549Z
   session_id: 7aacb1ed-ebaa-4da4-a195-500864e99e7d
   changes:
   - field_name: status
@@ -335,26 +307,26 @@ history:
     new_value: Approved
 - id: 01a1be6c-ff87-7230-91b1-4cac08ea0fc2
   author: aida-session-start
-  timestamp: 2026-11-09 03:49:36.775419+00:00
+  timestamp: 2026-11-09T03:49:36.775419Z
   changes:
   - field_name: status
     old_value: Approved
     new_value: InProgress
 - id: 01a1be6d-5962-7160-8d77-16eee0bf32e9
   author: dirtlab
-  timestamp: 2026-11-09 03:49:59.778230+00:00
+  timestamp: 2026-11-09T03:49:59.778230Z
   session_id: 01a1be6cf982
   harness_version: codex-cli 0.167.0
   changes: []
 - id: 01a1be70-7968-7ec3-bcdd-b539d5aaf9df
   author: joe
-  timestamp: 2026-11-09 03:53:24.584050+00:00
+  timestamp: 2026-11-09T03:53:24.584050Z
   session_id: 01a1be6ea64f
   harness_version: 2.1.319 (Claude Code)
   changes: []
 - id: 01a1be79-02e3-7492-bd60-2e7637b3a71d
   author: aida-pr-open
-  timestamp: 2026-11-09 04:02:44.067266+00:00
+  timestamp: 2026-11-09T04:02:44.067266Z
   session_id: 01a1be6cf982
   changes:
   - field_name: status
@@ -362,7 +334,7 @@ history:
     new_value: InProgress
 - id: 01a1be7e-e626-76e3-919c-1ea65d8ef0eb
   author: aida-orchestrator
-  timestamp: 2026-11-09 04:09:09.926692+00:00
+  timestamp: 2026-11-09T04:09:09.926692Z
   session_id: 01a1be7ab853
   harness_version: 2.1.319 (Claude Code)
   changes:
@@ -371,7 +343,7 @@ history:
     new_value: NeedsAttention
 - id: 01a1be92-b99c-7043-b575-caa73311dd03
   author: joe
-  timestamp: 2026-11-09 04:30:49.244319+00:00
+  timestamp: 2026-11-09T04:30:49.244319Z
   session_id: 7aacb1ed-ebaa-4da4-a195-500864e99e7d
   changes:
   - field_name: status
@@ -379,31 +351,31 @@ history:
     new_value: Approved
 - id: 01a1be92-cc93-7152-98a4-6c49e346b8bc
   author: joe
-  timestamp: 2026-11-09 04:30:54.099956+00:00
+  timestamp: 2026-11-09T04:30:54.099956Z
   session_id: 7aacb1ed-ebaa-4da4-a195-500864e99e7d
   changes: []
 - id: 01a1be94-0a75-7d71-98e9-fe4d84cec32d
   author: aida-session-start
-  timestamp: 2026-11-09 04:32:15.477806+00:00
+  timestamp: 2026-11-09T04:32:15.477806Z
   changes:
   - field_name: status
     old_value: Approved
     new_value: InProgress
 - id: 01a1be94-6d0c-71c3-ab08-8f449c380f98
   author: dirtlab
-  timestamp: 2026-11-09 04:32:40.716271+00:00
+  timestamp: 2026-11-09T04:32:40.716271Z
   session_id: 01a1be9404a0
   harness_version: codex-cli 0.167.0
   changes: []
 - id: 01a1be99-5bf9-75d3-b414-070626528644
   author: joe
-  timestamp: 2026-11-09 04:38:04.025468+00:00
+  timestamp: 2026-11-09T04:38:04.025468Z
   session_id: 01a1be9643d7
   harness_version: 2.1.319 (Claude Code)
   changes: []
 - id: 01a1bece-6812-74e0-9027-c4ae494165c9
   author: joe
-  timestamp: 2026-11-09 05:36:00.530053+00:00
+  timestamp: 2026-11-09T05:36:00.530053Z
   session_id: 7aacb1ed-ebaa-4da4-a195-500864e99e7d
   changes:
   - field_name: status
@@ -411,31 +383,31 @@ history:
     new_value: Approved
 - id: 01a1bece-7a85-7242-ae71-502803fd2afb
   author: joe
-  timestamp: 2026-11-09 05:36:05.253760+00:00
+  timestamp: 2026-11-09T05:36:05.253760Z
   session_id: 7aacb1ed-ebaa-4da4-a195-500864e99e7d
   changes: []
 - id: 01a1bed0-3fc1-7722-a78d-168d23645ccc
   author: dirtlab
-  timestamp: 2026-11-09 05:38:01.281534+00:00
+  timestamp: 2026-11-09T05:38:01.281534Z
   session_id: 01a1becfe003
   harness_version: codex-cli 0.167.0
   changes: []
 - id: 01a1bf01-100e-7100-8e87-3715f0521ebc
   author: aida-session-start
-  timestamp: 2026-11-09 06:31:20.334576+00:00
+  timestamp: 2026-11-09T06:31:20.334576Z
   changes:
   - field_name: status
     old_value: Approved
     new_value: InProgress
 - id: 01a1bf01-6d5a-7b73-925f-fd91a9a4e704
   author: dirtlab
-  timestamp: 2026-11-09 06:31:44.218053+00:00
+  timestamp: 2026-11-09T06:31:44.218053Z
   session_id: 01a1bf010a45
   harness_version: codex-cli 0.167.0
   changes: []
 - id: 01a1bf16-5c64-79b0-86a5-3b9af84b97fd
   author: joe
-  timestamp: 2026-11-09 06:54:36.132059+00:00
+  timestamp: 2026-11-09T06:54:36.132059Z
   session_id: 01a1beff-fc3b-78e2-93e2-9b0c283b0339
   harness_version: 2.1.319 (Claude Code)
   changes:
@@ -444,34 +416,34 @@ history:
     new_value: Approved
 - id: 01a1bf1f-8d03-7b30-bcef-5eeca9c5c23f
   author: aida-session-start
-  timestamp: 2026-11-09 07:04:38.403944+00:00
+  timestamp: 2026-11-09T07:04:38.403944Z
   changes:
   - field_name: status
     old_value: Approved
     new_value: InProgress
 - id: 01a1bf1f-fa03-76d3-aa8e-8e87052844d9
   author: dirtlab
-  timestamp: 2026-11-09 07:05:06.307502+00:00
+  timestamp: 2026-11-09T07:05:06.307502Z
   session_id: 01a1bf1f80ea
   harness_version: codex-cli 0.167.0
   changes: []
 - id: 01a1bf79-0a51-7640-be38-cbc7d0f9cbda
   author: aida-auto-bump
-  timestamp: 2026-11-09 08:42:23.185631+00:00
+  timestamp: 2026-11-09T08:42:23.185631Z
   changes:
   - field_name: status
     old_value: InProgress
     new_value: Completed
 - id: 01a1bf7c-0ad6-78d1-b3ad-cad8a9e85747
   author: aida-auto-bump
-  timestamp: 2026-11-09 08:45:39.926725+00:00
+  timestamp: 2026-11-09T08:45:39.926725Z
   changes:
   - field_name: status
     old_value: InProgress
     new_value: Completed
 processing_record:
 - id: 01a1bf79-0a96-7b41-b9ac-595efebe5d82
-  timestamp: 2026-11-09 08:42:23.254109+00:00
+  timestamp: 2026-11-09T08:42:23.254109Z
   agent: aida
   commit_sha: e60e97d0035e92f14a0b60c05e85859019365939
   summary: 'Code review passes at 3c3b0a7a5c0: every TASK-3608 criterion is met by source and tests. CI''s seven test and gate jobs are green at this head, including the test-time-budget fix; Build (ubuntu-latest) was still queued when recorded, so merge must wait for it. merge-hold-gate is red only because the hold is active. No local tests run, per review-watch policy.'
@@ -483,5 +455,5 @@ filed_at:
   session: 01a1bc4dcf8e
 implementation_info:
   implemented: false
-  completed_at: 2026-11-09 08:42:23.185626+00:00
+  completed_at: 2026-11-09T08:42:23.185626Z
   completion_sha: e60e97d0035e92f14a0b60c05e85859019365939

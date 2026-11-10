@@ -2,63 +2,54 @@ id: 01a1bd71-41e5-7fd3-8f11-f4876993166a
 spec_id: STORY-b6b1278890774ef993d2ebc327862470-610
 agreed_id: STORY-2687
 title: 'Review PR-3703: [AI:codex] chore: Propagate native-seat no-change through queue-resume and drain outcomes (TASK-3608)'
-description: 'Auto-filed by `aida pr auto-queue-review` (typically from /aida-pr) (session `01a1bd55`) for branch `task-b6b1278890774ef993d2ebc327862470-1006`.
-
+description: |
+  Auto-filed by `aida pr auto-queue-review` (typically from /aida-pr) (session `01a1bd55`) for branch `task-b6b1278890774ef993d2ebc327862470-1006`.
 
   - PR: <https://github.com/joemooney/aida/pull/3703>
-
   - Branch: `task-b6b1278890774ef993d2ebc327862470-1006` → `main`
-
 
   ## Covers
 
-
   - TASK-3608
-
 
   ## Acceptance
 
-
-  - Generate a structured review prompt with `aida review prompt --pr 3703` and verify each spec''s acceptance criteria.
-
+  - Generate a structured review prompt with `aida review prompt --pr 3703` and verify each spec's acceptance criteria.
   - Approve and merge, or request changes by spec id.
-
   - Mark this story `completed` once the PR is merged.
-
-  '
 status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
-created_at: 2026-11-08 23:14:38.693046+00:00
-modified_at: 2026-11-09 08:42:27.798968+00:00
+created_at: 2026-11-08T23:14:38.693046Z
+modified_at: 2026-11-09T08:42:27.798968Z
 req_type: Story
 relationships:
 - rel_type:
     custom: implements
   target_id: 01a1bc52-f0d9-7512-b8b7-8c44fa27fb36
-  created_at: 2026-11-08 23:15:10.116751+00:00
+  created_at: 2026-11-08T23:15:10.116751Z
   created_by: joe
 comments:
 - id: 01a1bf78-d953-7712-b9ce-830fe69621c8
   author: aida-auto-bump
   content: 'Auto-completed: PR #3703 is merged on the forge (its merge commit was outside the local scan window).'
-  created_at: 2026-11-09 08:42:10.643074+00:00
-  modified_at: 2026-11-09 08:42:10.643074+00:00
+  created_at: 2026-11-09T08:42:10.643074Z
+  modified_at: 2026-11-09T08:42:10.643074Z
 - id: 01a1bf79-1c56-7ac3-a650-1b7828545696
   author: aida-auto-bump
   content: 'Auto-completed: PR #3703 merged without a re-review iteration — the review story was left at In Progress.'
-  created_at: 2026-11-09 08:42:27.798966+00:00
-  modified_at: 2026-11-09 08:42:27.798966+00:00
+  created_at: 2026-11-09T08:42:27.798966Z
+  modified_at: 2026-11-09T08:42:27.798966Z
 history:
 - id: 01a1bd71-c15e-74a2-b8a4-f307ddc67f8c
   author: joe
-  timestamp: 2026-11-08 23:15:11.326473+00:00
+  timestamp: 2026-11-08T23:15:11.326473Z
   session_id: 01a1bd558c6d
   changes: []
 - id: 01a1be99-5557-7dc3-8c96-bcd2ac20eee9
   author: joe
-  timestamp: 2026-11-09 04:38:02.327157+00:00
+  timestamp: 2026-11-09T04:38:02.327157Z
   session_id: 01a1be9643d7
   harness_version: 2.1.319 (Claude Code)
   changes:
@@ -67,7 +58,7 @@ history:
     new_value: InProgress
 - id: 01a1bf79-1c56-7ac3-a650-1b61e12f0ecd
   author: aida-auto-bump
-  timestamp: 2026-11-09 08:42:27.798956+00:00
+  timestamp: 2026-11-09T08:42:27.798956Z
   changes:
   - field_name: status
     old_value: InProgress
@@ -82,5 +73,5 @@ filed_at:
   session: 01a1bd558c6d
 implementation_info:
   implemented: false
-  completed_at: 2026-11-09 08:42:27.798952+00:00
+  completed_at: 2026-11-09T08:42:27.798952Z
   completion_sha: e60e97d0035e92f14a0b60c05e85859019365939
