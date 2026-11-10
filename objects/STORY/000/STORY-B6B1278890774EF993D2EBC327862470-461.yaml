@@ -9,7 +9,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-06T00:17:53.805850465Z
-modified_at: 2026-11-10T11:30:12.793967360Z
+modified_at: 2026-11-10T12:54:04.017144560Z
 req_type: Story
 tags:
 - architecture
@@ -412,6 +412,21 @@ comments:
   modified_at: 2026-11-10T11:30:12.793967360Z
   session_id: 01a1c530-c917-7f13-ab81-f6b5e1d1cd30
   harness_version: 2.1.322 (Claude Code)
+- id: 01a1c585-d1f1-78c2-aee2-6e976f5f804c
+  author: joe
+  content: |-
+    CI FAILURES at 3bab5e96ba5a (run 42812013493). Fix exactly these before pushing; a push without a code change for them will fail again and must not be made:
+    error: test run failed
+            FAIL  aida-cli-lib bug_1723_config_trust_tests::every_config_toml_site_is_inventoried_and_every_worktree_key_is_policy
+            FAIL  aida-cli-lib codex_tool_env::task_2708_codex_fail_closed_tests::task_2708_every_spawn_agent_builder_is_inventoried_and_guarded
+            FAIL  aida-cli-lib story_2539_vendor_literal_ratchet_tests::story_2539_vendor_literal_ratchet
+        thread 'bug_1723_config_trust_tests::every_config_toml_site_is_inventoried_and_every_worktree_key_is_policy' (20952) panicked at aida-cli-lib/src/tests/bug_1723_config_trust_tests.rs:509:5:
+        thread 'codex_tool_env::task_2708_codex_fail_closed_tests::task_2708_every_spawn_agent_builder_is_inventoried_and_guarded' (22935) panicked at aida-cli-lib/src/tests/task_2708_codex_fail_closed_tests.rs:420:9:
+        thread 'story_2539_vendor_literal_ratchet_tests::story_2539_vendor_literal_ratchet' (110763) panicked at aida-cli-lib/src/tests/story_2539_vendor_literal_ratchet_tests.rs:318:5:
+  created_at: 2026-11-10T12:54:04.017144560Z
+  modified_at: 2026-11-10T12:54:04.017144560Z
+  session_id: 01a1c39a-801a-7bd1-8da9-c955a6707f0b
+  harness_version: 2.1.321 (Claude Code)
 history:
 - id: 01a1ae38-af42-7111-8ef3-7b278b3830e7
   author: joe
