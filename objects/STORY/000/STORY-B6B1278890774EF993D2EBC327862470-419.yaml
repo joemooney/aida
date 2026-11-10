@@ -8,7 +8,7 @@ priority: Low
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-05T04:41:25.538710401Z
-modified_at: 2026-11-10T05:26:33.769517749Z
+modified_at: 2026-11-10T05:30:45.938920115Z
 req_type: Story
 relationships:
 - rel_type: Supersedes
@@ -309,6 +309,13 @@ comments:
   content: 'Addressed the latest CI failure from run 42756237816. The full failed log shows Bubblewrap raced a disappearing /run/credentials/systemd-tmpfiles-clean.service mount before the probe command executed. seat_clone.rs now retries only this specific read-only sandbox setup failure, at most three attempts under the original timeout; commit runs and other failures are never retried. Persistent failures still refuse publication. Added deterministic recovery, exhaustion, deadline and non-retry tests. Lane job j20261110T052217808-2-0: 3 tests passed; post-change job j20261110T052233645-2-0: the previously failing bug_2488_other_branch_work_refuses_no_change_publication test passed. Store-writer inventory, rustfmt --check and git diff --check passed. Only aida-cli-lib/src/seat_clone.rs changed, left uncommitted for the host. Recorded non-completing Refs STORY-2493 publication declaration. This is rework for the approved partial slice, not story completion; blocking projection and home-attested approval remain later slices. No commit, push, PR creation, review record or queue completion performed.'
   created_at: 2026-11-10T05:26:33.769517749Z
   modified_at: 2026-11-10T05:26:33.769517749Z
+  session_id: 01a1c3e57949
+  harness_version: codex-cli 0.167.0
+- id: 01a1c3ef-f732-7183-9e4a-57d24ab67de6
+  author: dirtlab
+  content: 'Fast-gate fix round: marked seat_clone::retry_readonly_mount_race as an external-prose-classifier because Bubblewrap reports the specific pre-exec credentials-mount race only through stderr. Regenerated docs/internal/architecture/external-tool-output-classifiers.md with the new site. bash scripts/check-portability.sh passed; rustfmt --check and git diff --check passed. This round changes comments and the generated inventory only; runtime behavior and previously passing targeted tests are unchanged. Edits remain uncommitted for host publication, and all existing punt/hold vetoes remain in force.'
+  created_at: 2026-11-10T05:30:45.938920115Z
+  modified_at: 2026-11-10T05:30:45.938920115Z
   session_id: 01a1c3e57949
   harness_version: codex-cli 0.167.0
 history:
