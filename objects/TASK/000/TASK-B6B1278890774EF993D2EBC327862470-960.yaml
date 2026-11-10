@@ -8,7 +8,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-07T23:39:41.575597Z
-modified_at: 2026-11-10T07:36:26.788922797Z
+modified_at: 2026-11-10T08:06:10.700794621Z
 req_type: Task
 relationships:
 - rel_type: Child
@@ -531,6 +531,12 @@ comments:
   modified_at: 2026-11-10T07:28:13.550747483Z
   session_id: 01a1c39a-801a-7bd1-8da9-c955a6707f0b
   harness_version: 2.1.321 (Claude Code)
+- id: 01a1c47e-400c-76e1-81ab-575f04d18a01
+  author: joe
+  content: 'Batch 1 per binding 2026-11-10 ruling: exact 38 approved Rust files plus scripts/crate-globs-legacy.json, no files dropped. Removed 50 crate globs, ratchet 180 -> 130 with zero additions; preserved parent imports used by unchanged children/tests. Direct anyhow/aida_core imports, including existing AgentPromptStyle alias; no body/comment/formatting changes, renames or qualified-call rewrites. Launcher cargo check --profile agent -p aida-cli-lib --tests passed (j20261110T080138026-2-0, exit 0). Rustfmt, diff hygiene, exact scope/ledger and import-only audits passed. make check-ci-fast failed at containment fixtures: 6 errors among 65 tests creating temp directories under read-only /home/joe/.aida; host/CI rerun required. No Rust test execution claimed for this compile-only gate. Handoff with full changed-file list: /tmp/task3428-batch1-handoff.md. Edits remain uncommitted for native host publication; approved Refs slice, TASK-3428 remains In Progress.'
+  created_at: 2026-11-10T08:06:10.700794621Z
+  modified_at: 2026-11-10T08:06:10.700794621Z
+  session_id: 01a1c462f833
 history:
 - id: 01a1b862-2e0b-7a50-a4d0-25097c707b57
   author: joe
