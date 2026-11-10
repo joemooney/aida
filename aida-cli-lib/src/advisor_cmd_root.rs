@@ -1,7 +1,16 @@
 //! Advisor command handlers (handoff, register, dashboard), AdvisorPass and calibration mode (STORY-1488 slice 1)
 // trace:STORY-1488 | ai:claude
 
-use crate::*;
+use crate::{
+    advisor, advisor_watch, brief_generated_by, collect_decision_requests, current_user_id,
+    find_project_root, findings, handle_advisor_worklist, is_standing_artifact_type, list_leases,
+    locate_for_status, main_worktree_root_from, process_probe, queued_requirement_ids,
+    resolve_burndown_sets, schedule_cmd, yaml_scalar, AdvisorCommand,
+};
+use aida_core::DatabaseBackend;
+use aida_core::{RequirementStatus, Storage};
+use anyhow::{Context, Result};
+use colored::Colorize;
 
 // trace:STORY-1728 | ai:claude
 #[path = "advisor_cmd_root_args.rs"]
@@ -144,7 +153,10 @@ pub(crate) fn render_advisor_handoff(
 ///     trace:STORY-360 | ai:claude
 // trace:STORY-1728 | ai:claude
 pub(crate) fn handle_advisor_command(cmd: &crate::AdvisorCommand) -> anyhow::Result<()> {
-    use crate::*;
+    use crate::{
+        advisor, advisor_watch, find_project_root, handle_advisor_handoff, handle_advisor_register,
+        handle_advisor_registration_status, main_worktree_root_from, AdvisorCommand,
+    };
     match cmd {
         // trace:STORY-2571 | ai:codex
         AdvisorCommand::Loops(action) => crate::review_watch::service::command(action),
@@ -892,7 +904,10 @@ fn run_advisor(
     matches: &clap::ArgMatches,
     ctx: &crate::cmdkit::DispatchCtx,
 ) -> anyhow::Result<crate::cmdkit::Flow> {
-    use crate::*;
+    use crate::{
+        handle_advisor_command, handle_advisor_dashboard, handle_advisor_worklist, schedule_cmd,
+        AdvisorArgs, AdvisorCommand,
+    };
     let args = <AdvisorArgs as clap::FromArgMatches>::from_arg_matches(matches)?;
     match &ctx.store {
         None => {
