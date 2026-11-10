@@ -28,7 +28,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-07T19:59:40.192574Z
-modified_at: 2026-11-10T01:18:44.655981947Z
+modified_at: 2026-11-10T01:51:53.063434619Z
 req_type: Story
 relationships:
 - rel_type: Supersedes
@@ -328,6 +328,15 @@ comments:
   modified_at: 2026-11-10T01:18:44.655981947Z
   session_id: 01a1c2ed73b2
   harness_version: codex-cli 0.167.0
+- id: 01a1c327-92e7-77e1-9fd1-7140342ef85e
+  author: joe
+  content: |-
+    CI FAILURES at f685a2d4bc08 (run 42735477377). Fix exactly these before pushing; a push without a code change for them will fail again and must not be made:
+    error: test run failed
+            FAIL  aida-cli-lib launch::story_2326_launch_ratchet_tests::launch_sites_outside_the_launcher_match_the_ledger
+        thread 'launch::story_2326_launch_ratchet_tests::launch_sites_outside_the_launcher_match_the_ledger' (120257) panicked at aida-cli-lib/src/launch/../tests/story_2326_launch_ratchet_tests.rs:376:5:
+  created_at: 2026-11-10T01:51:53.063434619Z
+  modified_at: 2026-11-10T01:51:53.063434619Z
 history:
 - id: 01a1b85d-3f02-70c2-a82d-cefccf97dc04
   author: aida-session-start
