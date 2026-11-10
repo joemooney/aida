@@ -8,7 +8,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-10T06:40:07.764479561Z
-modified_at: 2026-11-10T22:55:45.802220803Z
+modified_at: 2026-11-10T23:02:39.068123196Z
 req_type: Bug
 comments:
 - id: 01a1c4af-35ea-7243-ac9f-f3b9d11983b0
@@ -76,6 +76,13 @@ comments:
   modified_at: 2026-11-10T22:47:48.321676857Z
   session_id: 01a1c530-c917-7f13-ab81-f6b5e1d1cd30
   harness_version: 2.1.322 (Claude Code)
+- id: 01a1c7b2-fedc-7b83-8f61-04ac9306e2ce
+  author: dirtlab
+  content: 'Fixed CI run 42913820649: merged ExecContext ledger ceiling was 1235 but its 1234 entries exactly match the source scan. Corrected only scripts/exec-context-legacy.json ceiling to 1234. Validation: all 19 exec-context ratchet tests pass; check-exec-context.py against CI base 08c562ec6bb9f936f0e0f8c9bad273de57ccf7b0 passes with zero additions; all 5 BUG-2517 regressions pass in lane job j20261110T225650670-2-0; git diff --check passes. Existing leased-change verdict implementation retained. Native publication declaration recorded; edit left uncommitted for host. No blockers.'
+  created_at: 2026-11-10T23:02:39.068123196Z
+  modified_at: 2026-11-10T23:02:39.068123196Z
+  session_id: 01a1c7acaa4f
+  harness_version: codex-cli 0.167.0
 history:
 - id: 01a1c4af-45a0-7a32-8edf-55980e6f5825
   author: joe
