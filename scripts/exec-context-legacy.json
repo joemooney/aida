@@ -1,5 +1,5 @@
 {
-  "ceiling": 1235,
+  "ceiling": 1234,
   "owner": "STORY-2538",
   "scope": "All Rust workspace members and tests/**/*.rs, tests/**/*.py; reads, all mutations and import bindings. Migration owner: R4 slices B-D.",
   "sites": {
