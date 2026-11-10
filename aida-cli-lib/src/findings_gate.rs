@@ -2,7 +2,28 @@
 //! Findings command: promote, dismiss, add, recur, gate authority and promote-to-gate, reviewer-verdict and non-blocking findings (STORY-1488 slice 1)
 // trace:STORY-1488 | ai:claude
 
-use crate::*;
+use crate::{
+    advisor, auto_complete, auto_complete_telemetry, calibration, cli, completion, current_user_id,
+    detect_distributed_store_from, dispatch, extract_pr_number_from_commit_subject,
+    find_merged_commit_referencing_ids, findings, fnv1a_hex,
+    for_target_requires_dispatch_authority, gate, get_default_author, git_arg_guard,
+    handle_review_classes, load_dispenser, not_found, output_format_is_json, parse_status,
+    parse_tag_list, print_requeue_hint_row, punt, queue_at_filing_refusal,
+    queue_promoted_finding_entry, queue_spec_for_role, record_role_activity, requeue,
+    resolve_current_session_id, role, run, status_write_race_seam, truncate, AgentGateConfig,
+};
+
+use crate::cli::{CalibrationAction, FindingsCommand};
+use crate::requirements_cli::list_requirements;
+use aida_core::{
+    Comment, DatabaseBackend, RelationshipType, Requirement, RequirementStatus, RequirementType,
+    Storage,
+};
+use anyhow::{Context, Result};
+use clap::Parser;
+use colored::Colorize;
+use std::collections::HashSet;
+use uuid::Uuid;
 
 // trace:STORY-1728 | ai:claude
 #[path = "findings_gate_args.rs"]
@@ -2217,7 +2238,6 @@ fn run_findings(
     matches: &clap::ArgMatches,
     ctx: &crate::command_registry::DispatchCtx,
 ) -> anyhow::Result<crate::command_registry::Flow> {
-    use crate::*;
     let args = <FindingsArgs as clap::FromArgMatches>::from_arg_matches(matches)?;
     match &ctx.store {
         None => Ok(crate::command_registry::Flow::Continue),
