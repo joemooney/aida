@@ -8,8 +8,16 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-10T06:40:07.764479561Z
-modified_at: 2026-11-10T06:40:07.764479561Z
+modified_at: 2026-11-10T08:59:39.370821932Z
 req_type: Bug
+comments:
+- id: 01a1c4af-35ea-7243-ac9f-f3b9d11983b0
+  author: joe
+  content: 'ADVISOR RULING (2026-11-10 08:59 UTC): approved. Fix exactly as described: the verdict''s change key comes from the reviewer''s leased change (PR-N/MR-N), never from a spec->PR lookup; refuse to record a verdict whose head is not the named change''s current head. Regression: two open PRs naming one spec; a verdict for the second lands only in its own ledger and ''aida review verdict'' for the first is unchanged. Also tolerate the existing mis-keyed record (PR-3651 seq 53): reading a ledger ignores a verdict whose head was never that PR''s head, without rewriting history. LIGHT gate.'
+  created_at: 2026-11-10T08:59:39.370821932Z
+  modified_at: 2026-11-10T08:59:39.370821932Z
+  session_id: 01a1c39a-801a-7bd1-8da9-c955a6707f0b
+  harness_version: 2.1.321 (Claude Code)
 filed_at:
   code_sha: e682f76092e65c6556f7881fe8a5e0aa48516740
   branch: main
