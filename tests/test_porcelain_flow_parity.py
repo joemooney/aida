@@ -47,12 +47,27 @@ esac
         def snapshot():
             return {str(p.relative_to(root)): p.read_bytes() for p in root.rglob("*") if p.is_file()}
         before = snapshot()
-        for suffix in [[], ["--json"], ["--format", "json"]]:
+        def invoke(exe, args):
+            result = subprocess.run([exe, *args], cwd=root, env=env, capture_output=True)
+            assert before == snapshot(), f"{exe} {args} changed fixture state"
+            return result
+
+        for suffix in [[], ["--json"], ["--format", "json"], ["--format", "human"], ["--format", "toon"]]:
             args = ["flow", "report", "--since", "2026-11-09", "--until", "2026-11-10", *suffix]
-            outputs = [subprocess.run([exe, *args], cwd=root, env=env, capture_output=True) for exe in [builtin, porcelain]]
+            outputs = [invoke(exe, args) for exe in [builtin, porcelain]]
             for result in outputs:
                 assert result.returncode == 0, result.stderr.decode()
             assert outputs[0].stdout == outputs[1].stdout, [p.stdout.decode() for p in outputs]
+        for bounds, message in [
+            (["--since", "bad"], b"expected RFC3339"),
+            (["--since", "2026-11-10", "--until", "2026-11-09"], b"since must not be later than until"),
+        ]:
+            for suffix in [[], ["--format", "human"], ["--format", "toon"], ["--format", "json"]]:
+                outputs = [invoke(exe, ["flow", "report", *bounds, *suffix]) for exe in [builtin, porcelain]]
+                assert [p.returncode for p in outputs] == [1, 1]
+                assert outputs[0].stdout == outputs[1].stdout, [p.stdout for p in outputs]
+                assert outputs[0].stderr == outputs[1].stderr, [p.stderr for p in outputs]
+                assert all(message in p.stdout + p.stderr for p in outputs)
         assert before == snapshot(), "report changed fixture state"
     print("PASS: built-in/porcelain text and JSON parity; fixture state unchanged")
 

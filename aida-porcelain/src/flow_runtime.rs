@@ -67,19 +67,4 @@ pub fn command_output_with_timeout(mut cmd: Command, timeout: Duration) -> Optio
         stderr: err,
     })
 }
-pub fn forge_read(root: &Path, args: &[&str]) -> Result<serde_json::Value> {
-    anyhow::ensure!(
-        matches!(args, ["pr", "view", ..] | ["run", "list", ..]),
-        "unsupported flow read"
-    );
-    let mut cmd = Command::new("gh");
-    cmd.current_dir(root).args(args);
-    let output = command_output_with_timeout(cmd, Duration::from_secs(15))
-        .context("flow forge evidence unavailable")?;
-    anyhow::ensure!(
-        output.status.success(),
-        "flow forge evidence unavailable: {}",
-        String::from_utf8_lossy(&output.stderr)
-    );
-    Ok(serde_json::from_slice(&output.stdout)?)
-}
+pub(crate) use crate::forge::flow_report_read as forge_read;

@@ -105,7 +105,10 @@ fn report_process_alias_help_and_errors_preserve_fixture() {
     let help = run("aida-flow", &["report", "--help"]);
     assert!(help.status.success());
     assert!(String::from_utf8_lossy(&help.stdout).contains("--since"));
-    let invalid = run("aida-flow", &["report", "--since", "bad"]);
+    let invalid = run(
+        "aida-flow",
+        &["report", "--since", "bad", "--format", "human"],
+    );
     assert_eq!(invalid.status.code(), Some(1));
     assert!(String::from_utf8_lossy(&invalid.stderr).contains("expected RFC3339"));
     assert_eq!(run("aida-flow", &["report"]).status.code(), Some(2));

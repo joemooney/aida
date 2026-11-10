@@ -25,6 +25,10 @@ use std::path::Path;
 const BOUNDARY: &[&str] = &[
     "aida-cli-lib/src/forge.rs",
     "aida-cli-lib/src/forge_observed.rs",
+    // Independent read-only binary: cannot depend on cli-lib's forge module.
+    // Its closed report adapter owns the same boundary, not a legacy allowance.
+    // trace:STORY-2704 | ai:codex
+    "aida-porcelain/src/forge.rs",
 ];
 
 /// Raw gh sites per file. Lower a count in the same change that moves a
