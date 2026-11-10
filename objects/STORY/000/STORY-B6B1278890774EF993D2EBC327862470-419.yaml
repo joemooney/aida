@@ -8,7 +8,7 @@ priority: Low
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-05T04:41:25.538710401Z
-modified_at: 2026-11-10T03:14:22.950691941Z
+modified_at: 2026-11-10T05:17:10.819322309Z
 req_type: Story
 relationships:
 - rel_type: Supersedes
@@ -295,6 +295,15 @@ comments:
   modified_at: 2026-11-10T03:14:22.950691941Z
   session_id: 01a1c36d58dd
   harness_version: codex-cli 0.167.0
+- id: 01a1c3e3-8723-7842-8a49-315c694ca709
+  author: joe
+  content: |-
+    CI FAILURES at c7265872cd85 (run 42756237816). Fix exactly these before pushing; a push without a code change for them will fail again and must not be made:
+    error: test run failed
+            FAIL  aida-cli-lib seat_clone::seat_publish_tests::bug_2488_other_branch_work_refuses_no_change_publication
+        thread 'seat_clone::seat_publish_tests::bug_2488_other_branch_work_refuses_no_change_publication' (249981) panicked at aida-cli-lib/src/tests/bug_home_038_seat_publish_tests.rs:4279:5:
+  created_at: 2026-11-10T05:17:10.819322309Z
+  modified_at: 2026-11-10T05:17:10.819322309Z
 history:
 - id: 01a1aa0a-8ae7-7523-b84e-68f1c2e158c7
   author: joe
