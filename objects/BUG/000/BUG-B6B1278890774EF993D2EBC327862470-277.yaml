@@ -3,12 +3,12 @@ spec_id: BUG-b6b1278890774ef993d2ebc327862470-277
 agreed_id: BUG-2512
 title: Lane prompt and host pre-publish gate assume a Rust project with a Makefile
 description: 'Reported from operator''s work machine (Codex, GitLab project hello-work-0x), 2026-11-09. On a four-file Python prototype the launch prompt still tells the seat to run cargo fmt, and the host''s pre-publish make check-ci-fast gate (#3627) assumes a Makefile target exists. Make both project-configured: the prompt names the project''s own format/test commands from config, and the host gate runs the configured fast-check command, or skips with a stated reason when none is configured. Test with a non-Rust fixture.'
-status: InProgress
+status: Completed
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-10T03:06:53.745899716Z
-modified_at: 2026-11-10T16:28:56.428857114Z
+modified_at: 2026-11-10T18:46:46.269333563Z
 req_type: Bug
 comments:
 - id: 01a1c645-3f36-7033-9dcf-0deda18596e3
@@ -48,6 +48,20 @@ history:
   session_id: 01a1c6359c9e
   harness_version: codex-cli 0.167.0
   changes: []
+- id: 01a1c6c8-bab9-7c10-a64c-3a86daf991a6
+  author: aida-auto-bump
+  timestamp: 2026-11-10T18:46:46.201971685Z
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Completed
+processing_record:
+- id: 01a1c6c8-bafd-7810-a1f3-ae577da45a48
+  timestamp: 2026-11-10T18:46:46.269330996Z
+  agent: aida
+  commit_sha: 840dae5e9eccbd4f66b6f5840a8a97e8ebd8ac02
+  summary: 'Full sweep: all four BUG-2512 description criteria verified by source, Python regression fixtures and green required PR CI; BUG-2512 bug protocol met (inline test changes). No actionable defects.'
+  review_verdict: approved
 filed_at:
   code_sha: 838f14c3c2811c6b63da5d465700cff773c36190
   branch: main
@@ -57,3 +71,7 @@ filed_at:
   vendor: claude
   session: 01a1beff-fc3b-78e2-93e2-9b0c283b0339
   harness_version: 2.1.319 (Claude Code)
+implementation_info:
+  implemented: false
+  completed_at: 2026-11-10T18:46:46.201966398Z
+  completion_sha: 840dae5e9eccbd4f66b6f5840a8a97e8ebd8ac02
