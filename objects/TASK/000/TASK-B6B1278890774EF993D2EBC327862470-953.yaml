@@ -23,7 +23,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-07T20:45:16.684639Z
-modified_at: 2026-11-10T17:33:34.626518814Z
+modified_at: 2026-11-10T17:36:51.323791116Z
 req_type: Task
 relationships:
 - rel_type: Child
@@ -471,6 +471,22 @@ comments:
   modified_at: 2026-11-10T17:31:28.553135753Z
   session_id: 01a1c39a-801a-7bd1-8da9-c955a6707f0b
   harness_version: 2.1.321 (Claude Code)
+- id: 01a1c688-b87b-7202-8abd-9be62e087fc7
+  author: dirtlab
+  content: |
+    Round 11 addresses P1/A1 under the binding 2026-11-10 17:01 UTC advisor ruling. retirement_message_state now checks every held handover before the empty-message shortcut. Each handover requires its recipient's bounded, no-follow anchored receipt ledger to explicitly acknowledge the message; missing, corrupt, unreadable or over-budget evidence refuses retirement. No retained-chain read support added. Original canonical-message and queued-delivery checks remain required.
+
+    Changed files: aida-core/src/mailbox_logical.rs; aida-core/src/mailbox_lifecycle/message_state_tests.rs; docs/advanced/mailbox.md.
+    Four new regressions cover handover-only and message-plus-handover sources (visible/unread before and after refused retirement, new recipient ACK works, then retirement succeeds), invalid chains (no visibility/ACK and retirement refuses), and corrupt ACK evidence (retains).
+
+    Validation: lane job j20261110T173528781-2-0 executed cargo test --profile agent -p aida-core --lib -- mailbox_lifecycle: 179 passed, zero failed. rustfmt --check and git diff --check passed. untested=false.
+    make check-ci-fast failed in unrelated Codex mail wake fixtures: 4 failures, 17 errors, 1 skip, with shared-write fixture mode refusals. Log /tmp/task3420-round11-fast.log. Host should rerun that gate with fixture HOME and umask suitable for its trust checks. Initial targeted compile caught a tuple-variant fixture syntax error; fixed before the successful lifecycle run. Codegraph fixed client absent; doctor confirms missing, rg used.
+
+    Native seat: edits left uncommitted as instructed. Host launcher must create the new round-11 commit and publish; no commit, push, PR creation, queue done, review verdict or merge attempted. No implementation blocker or dispute of P1. Fast gate remains unpassed as noted above.
+  created_at: 2026-11-10T17:36:51.323791116Z
+  modified_at: 2026-11-10T17:36:51.323791116Z
+  session_id: 01a1c685b24c
+  harness_version: codex-cli 0.167.0
 history:
 - id: 01a1b7c2-6b69-7b02-bd8c-8f40aee2972d
   author: joe
