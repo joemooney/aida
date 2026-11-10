@@ -8,7 +8,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-10T22:45:07.512110557Z
-modified_at: 2026-11-10T22:52:05.060171112Z
+modified_at: 2026-11-10T22:56:03.936431907Z
 req_type: Task
 tags:
 - batch:fasttrack
@@ -28,6 +28,13 @@ comments:
   modified_at: 2026-11-10T22:52:05.060171112Z
   session_id: 01a1c70f-d731-7b70-acf8-e9ab3d288fca
   harness_version: 2.1.322 (Claude Code)
+- id: 01a1c7ac-f760-7292-b0e8-a970b143b73e
+  author: dirtlab
+  content: 'Implemented forge-layer GitHub run/GitLab pipeline job detail with run IDs, shard pass counts, per-job running/failure states and queued runner age where timestamps exist. Train waiting output explains the deferred Build summary in plain words; readiness gates retain early red detection and registration bounds. Updated operator documentation. Validation: lane job j20261110T224902041-2-0 executed progress fixture test (1 passed); j20261110T225041751-2-0 executed bug2401 readiness regressions (3 passed). rustfmt check and git diff --check passed. Four changed files remain uncommitted for native host publication. Codegraph host client unavailable; source navigation used rg. GitLab train admission remains disabled by existing policy.'
+  created_at: 2026-11-10T22:56:03.936431907Z
+  modified_at: 2026-11-10T22:56:03.936431907Z
+  session_id: 01a1c7a529f1
+  harness_version: codex-cli 0.167.0
 history:
 - id: 01a1c7a5-2ff2-70e0-9325-0f86de361dd1
   author: aida-session-start
