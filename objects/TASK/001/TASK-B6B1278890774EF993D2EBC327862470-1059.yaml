@@ -8,7 +8,7 @@ priority: Low
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-10T03:07:15.181924192Z
-modified_at: 2026-11-10T17:15:05.869241700Z
+modified_at: 2026-11-10T17:16:58.845726531Z
 req_type: Task
 comments:
 - id: 01a1c674-cd0d-76a2-8159-4728d6fffd38
@@ -16,6 +16,13 @@ comments:
   content: 'Non-completing native slice: compact permissions rows and --verbose diagnostics implemented, with shared glyphs::terminal_marker helper plus a raw-output spacing ratchet. Remaining acceptance: migrate ten raw-marker occurrences retained in tests/terminal_glyph_padding_baseline.json and inventory dynamically composed registry markers/other terminal writers. Raw registry values intentionally retain their JSON/config/width semantics. Filing a draft follow-up failed because this clone has no node binding (no object written); this comment preserves the flag. Tests are running via the lane job runner. Publish with Refs TASK-3779 only.'
   created_at: 2026-11-10T17:15:05.869241700Z
   modified_at: 2026-11-10T17:15:05.869241700Z
+  session_id: 01a1c66dfde9
+  harness_version: codex-cli 0.167.0
+- id: 01a1c676-865d-7340-918c-83745ab75597
+  author: dirtlab
+  content: 'Validation complete for this Refs-only slice: lane cargo tests terminal_marker_padding, permission_summary_row_keeps_refusal_compact, and help_surface_matches_golden_snapshot each executed one test and passed. Help snapshot initially failed for the missing verbose JSON flag inventory; corrected and rerun successfully. Python terminal-glyph ratchet: 2 passed. rustfmt check and git diff --check passed. All edits remain uncommitted. Publication declaration recorded with Refs TASK-3779; broad glyph migration remains incomplete as documented in the preceding comment.'
+  created_at: 2026-11-10T17:16:58.845726531Z
+  modified_at: 2026-11-10T17:16:58.845726531Z
   session_id: 01a1c66dfde9
   harness_version: codex-cli 0.167.0
 history:
