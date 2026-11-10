@@ -2,59 +2,38 @@ id: 01a1c128-b15f-7a41-93b8-94877cd89088
 spec_id: STORY-b6b1278890774ef993d2ebc327862470-618
 agreed_id: STORY-2695
 title: 'dell1 CI runner: pass all shards, run parallel slots, and persist per-slot incremental builds with a PR/main cache split'
-description: '## Evidence (smoke run 42650619081, 2026-11-09, one PR routed to dell1, routing then turned off)
-
+description: |
+  ## Evidence (smoke run 42650619081, 2026-11-09, one PR routed to dell1, routing then turned off)
   Dell1 shard wall time versus six recent hosted runs: cli-0 275s (hosted 407-595s), cli-1 236s (375-492s), lib-0 784s (762-1116s), lib-1 459s (731-1158s). Compile is about 4.5 minutes of every lib shard: 36% of lib-0 and 58% of lib-1. Serial execution took 29.5 minutes for four shards.
-
   Baseline hosted queue: median 378s per heavy shard.
 
-
   ## Blockers before routing can stay on
-
   Seven tests pass on hosted and fail under the hardened runner unit, all environmental (for example `Operation not permitted`):
-
   - contained_boundary::bug_2418_task_2772_lane_cargo_tests (2: lane_build_paths_never_reach_cargo_home, lane_build_paths_are_only_the_slot_pair)
-
   - seat_clone::lifecycle_tests::task_2053_bwrap_probe_runs_no_seat_filter_and_reads_only_the_seat_view
-
   - gate::mandate::story_1698_mandate_tests (2: exclusion_writer_refuses_invalid_ledger_without_appending, task_1790_exclusions_require_private_owned_regular_file)
-
   - regen::score::tests::confined_environment_hides_original_source_and_refuses_exposed_system_roots
-
   - launch::contained::tests::task_2708_live_host_udp_named_send_refused
-
   Fix the unit, the test assumptions or both. Do not weaken or skip a containment test to get green.
 
-
   ## Scope, one PR touching scripts/runner/one-job.sh and ci.yml
-
   1. Parallel slots: 2 or 3 concurrent one-job runners, each with its own job directory, lock and rearm loop, inside the shared aida-ci.slice core budget.
-
   2. Persistent per-slot incremental Rust build cache, owned by aida-ci and never holding credentials.
-
   3. Cache trust split: same-repository PR jobs use a PR cache; main pushes and merge-train runs never read it and use a separate cache or build clean. A job must not be able to influence what a main or train build compiles.
-
 
   This deliberately amends the runner rule that no previous job files survive locally. The operator accepted that risk on 2026-11-09 with the separation above. Fork PRs remain on hosted runners.
 
-
   ## Acceptance
-
   - All heavy shards pass on dell1 with AIDA_REQUIRE_BWRAP_LIVE=1, with no containment test removed or skipped.
-
   - Two jobs run concurrently without sharing a job directory or cache slot; the slot cap holds.
-
   - A test proves a PR job cannot write to the main/train cache.
-
   - Runbook updated. After activation, compare queue time and end-to-end run time against this baseline, and roll back the variable if wait increases.
-
-  '
 status: Approved
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
-created_at: 2026-11-09 16:33:51.967266+00:00
-modified_at: 2026-11-10 09:17:18.946425+00:00
+created_at: 2026-11-09T16:33:51.967266Z
+modified_at: 2026-11-10T10:05:01.057399190Z
 req_type: Story
 tags:
 - area:ci
@@ -62,71 +41,67 @@ tags:
 comments:
 - id: 01a1c325-9481-79d1-ba5f-7a7f35a4b8ce
   author: joe
-  content: 'ADVISOR BRIEF (2026-11-10 01:55 UTC): SKETCH ONLY in this lane. Deliver docs/plans/2026-11-10-story-2695-dell1-parallel-cached-runner.md as a docs-only PR titled with (Refs STORY-2695); no code changes. The goal is end-to-end merge-train latency (today 40-50 min of serial hosted CI per train), so the sketch must answer with evidence from scripts/runner/one-job.sh, rearm.sh, the aida-ci.slice unit, .github/workflows/ci.yml and docs/internal/testing/dell1-runner.md: (1) slot model: 2 or 3 concurrent one-job runners, per-slot job dir, lock and rearm loop, the core and memory budget inside aida-ci.slice, and how GitHub labels route heavy shards to dell1 while fork PRs stay hosted. (2) Cache trust: how merge-train and main-push builds get incremental-cache benefit WITHOUT any PR job being able to influence what they compile. State who may write each cache (for example main pushes only write a trusted cache that trains read but never write), and how a train''s own compiles of not-yet-landed
-    code avoid poisoning it. (3) A plan for each of the 7 environment-failing tests listed in the description: root cause hypothesis and fix in the unit or the test assumption; no containment test weakened or skipped. (4) Expected per-shard and per-train wall time against the baseline in the description, the rollout switch (AIDA_DELL1_CI) and the rollback trigger. Registration credentials stay an operator act and never run from the lane. Keep it under about 250 lines.'
-  created_at: 2026-11-10 01:49:42.401488+00:00
-  modified_at: 2026-11-10 01:49:42.401488+00:00
+  content: 'ADVISOR BRIEF (2026-11-10 01:55 UTC): SKETCH ONLY in this lane. Deliver docs/plans/2026-11-10-story-2695-dell1-parallel-cached-runner.md as a docs-only PR titled with (Refs STORY-2695); no code changes. The goal is end-to-end merge-train latency (today 40-50 min of serial hosted CI per train), so the sketch must answer with evidence from scripts/runner/one-job.sh, rearm.sh, the aida-ci.slice unit, .github/workflows/ci.yml and docs/internal/testing/dell1-runner.md: (1) slot model: 2 or 3 concurrent one-job runners, per-slot job dir, lock and rearm loop, the core and memory budget inside aida-ci.slice, and how GitHub labels route heavy shards to dell1 while fork PRs stay hosted. (2) Cache trust: how merge-train and main-push builds get incremental-cache benefit WITHOUT any PR job being able to influence what they compile. State who may write each cache (for example main pushes only write a trusted cache that trains read but never write), and how a train''s own compiles of not-yet-landed code avoid poisoning it. (3) A plan for each of the 7 environment-failing tests listed in the description: root cause hypothesis and fix in the unit or the test assumption; no containment test weakened or skipped. (4) Expected per-shard and per-train wall time against the baseline in the description, the rollout switch (AIDA_DELL1_CI) and the rollback trigger. Registration credentials stay an operator act and never run from the lane. Keep it under about 250 lines.'
+  created_at: 2026-11-10T01:49:42.401488Z
+  modified_at: 2026-11-10T01:49:42.401488Z
   session_id: 01a1beff-fc3b-78e2-93e2-9b0c283b0339
   harness_version: 2.1.319 (Claude Code)
 - id: 01a1c330-a919-72f2-a8be-744ee9984c05
   author: joe
-  content: 'ADVISOR SIGNOFF WITH CHANGES (2026-11-10 02:15 UTC) on the sketch in PR #3754 (docs/plans/2026-11-10-story-2695-dell1-parallel-cached-runner.md). Binding changes: (1) AIDA merge trains are pull_request runs on host-created train/ branches (aida pr train), not GitHub merge_group runs. The admission controller classifies a run as TRAIN only by matching the run''s repository, PR, head SHA and train/ branch against the host''s own train record; a branch name alone never grants the train class. (2) v1 classes are TRAIN and MAIN only. Ordinary same-repo and fork PR CI stays on hosted runners; the PR cache class is deferred until v1 is measured. (3) Slices: S1 = repair the seven environment-failing tests per the sketch''s table under the installed unit, no routing or runner changes, no containment test weakened or skipped (Refs STORY-2695). S2 = two slots, distinct uid per slot and class, trusted main generations, disposable train copies, admission controller, memory and CPU budget,
-    runbook (Refs STORY-2695). S3 = operator installation, activation and the matched ten-train measurement with the stated rollback triggers (completes). (4) The memory and CPU budget must account for concurrent Codex lanes building on dell1 (up to 8, cold builds), not only CI units. Everything else in the sketch, including the cache trust table, cross-slot denial tests and rollback triggers, is approved as written.'
-  created_at: 2026-11-10 02:01:48.569247+00:00
-  modified_at: 2026-11-10 02:01:48.569247+00:00
+  content: 'ADVISOR SIGNOFF WITH CHANGES (2026-11-10 02:15 UTC) on the sketch in PR #3754 (docs/plans/2026-11-10-story-2695-dell1-parallel-cached-runner.md). Binding changes: (1) AIDA merge trains are pull_request runs on host-created train/ branches (aida pr train), not GitHub merge_group runs. The admission controller classifies a run as TRAIN only by matching the run''s repository, PR, head SHA and train/ branch against the host''s own train record; a branch name alone never grants the train class. (2) v1 classes are TRAIN and MAIN only. Ordinary same-repo and fork PR CI stays on hosted runners; the PR cache class is deferred until v1 is measured. (3) Slices: S1 = repair the seven environment-failing tests per the sketch''s table under the installed unit, no routing or runner changes, no containment test weakened or skipped (Refs STORY-2695). S2 = two slots, distinct uid per slot and class, trusted main generations, disposable train copies, admission controller, memory and CPU budget, runbook (Refs STORY-2695). S3 = operator installation, activation and the matched ten-train measurement with the stated rollback triggers (completes). (4) The memory and CPU budget must account for concurrent Codex lanes building on dell1 (up to 8, cold builds), not only CI units. Everything else in the sketch, including the cache trust table, cross-slot denial tests and rollback triggers, is approved as written.'
+  created_at: 2026-11-10T02:01:48.569247Z
+  modified_at: 2026-11-10T02:01:48.569247Z
   session_id: 01a1beff-fc3b-78e2-93e2-9b0c283b0339
   harness_version: 2.1.319 (Claude Code)
 - id: 01a1c330-b10c-7d01-99a9-45a1fc4a21c4
   author: joe
   content: 'ADVISOR RULING (2026-11-10 02:15 UTC): next lane = SLICE S1 only. Repair the seven environment-failing tests listed in the description, following the hypothesis table in the signed sketch: first capture each test''s exact failing operation and errno by running it on dell1 under the installed aida-ci unit configuration (scripts/runner/aida-ci.slice and one-job.sh properties; reproduce with systemd-run using the same properties if you cannot use the runner), then fix the test fixture assumptions (hardcoded /home/u and /run/user/1000, compile-time CARGO_MANIFEST_DIR, 04600 chmod under RestrictSUIDSGID) or document a unit change for operator review. Keep AIDA_REQUIRE_BWRAP_LIVE=1 semantics, every positive control and denial assertion; no test removed, skipped or weakened. No routing, workflow or runner changes. Use (Refs STORY-2695).'
-  created_at: 2026-11-10 02:01:50.604867+00:00
-  modified_at: 2026-11-10 02:01:50.604867+00:00
+  created_at: 2026-11-10T02:01:50.604867Z
+  modified_at: 2026-11-10T02:01:50.604867Z
   session_id: 01a1beff-fc3b-78e2-93e2-9b0c283b0339
   harness_version: 2.1.319 (Claude Code)
 - id: 01a1c4b4-576f-7081-8fef-54d2c1111b1e
   author: joe
-  content: 'ADVISOR RULING (2026-11-10 09:05 UTC) — binding for PR #3754 sketch rework at head a9e8d2ab72 (docs only; edit docs/plans/2026-11-10-story-2695-dell1-parallel-cached-runner.md, nothing else). Apply exactly the four review findings, which restate the advisor signoff: (1) lines 83-100: TRAIN runs are pull_request runs on host-created train/ branches; admission matches repository, PR, exact head SHA and branch against the host train record (no merge_group, no branch-name-only evidence). (2) lines 62-108: v1 = TRAIN and MAIN only; ordinary same-repo and fork PR CI stays hosted; PR cache/class explicitly deferred in routing, uid, cache table and acceptance. (3) lines 143-202: add binding slices: S1 captures exact failures under installed unit properties and repairs the seven env tests with no runner/workflow/routing change; S2 owns two slots, cache, admission, budgets and runbook; S3 owns operator installation, activation and the matched ten-train measurement, and alone completes
-    STORY-2695. (4) lines 69-81: the CPU/memory gate accounts for CI plus up to eight concurrent Codex cold-build lanes; measure that combined load and reserve headroom before accepting CI limits. Title unchanged (Refs STORY-2695). FASTTRACK gate: make check-ci-fast only.'
-  created_at: 2026-11-10 09:05:15.631153+00:00
-  modified_at: 2026-11-10 09:05:15.631153+00:00
+  content: 'ADVISOR RULING (2026-11-10 09:05 UTC) — binding for PR #3754 sketch rework at head a9e8d2ab72 (docs only; edit docs/plans/2026-11-10-story-2695-dell1-parallel-cached-runner.md, nothing else). Apply exactly the four review findings, which restate the advisor signoff: (1) lines 83-100: TRAIN runs are pull_request runs on host-created train/ branches; admission matches repository, PR, exact head SHA and branch against the host train record (no merge_group, no branch-name-only evidence). (2) lines 62-108: v1 = TRAIN and MAIN only; ordinary same-repo and fork PR CI stays hosted; PR cache/class explicitly deferred in routing, uid, cache table and acceptance. (3) lines 143-202: add binding slices: S1 captures exact failures under installed unit properties and repairs the seven env tests with no runner/workflow/routing change; S2 owns two slots, cache, admission, budgets and runbook; S3 owns operator installation, activation and the matched ten-train measurement, and alone completes STORY-2695. (4) lines 69-81: the CPU/memory gate accounts for CI plus up to eight concurrent Codex cold-build lanes; measure that combined load and reserve headroom before accepting CI limits. Title unchanged (Refs STORY-2695). FASTTRACK gate: make check-ci-fast only.'
+  created_at: 2026-11-10T09:05:15.631153Z
+  modified_at: 2026-11-10T09:05:15.631153Z
   session_id: 01a1c39a-801a-7bd1-8da9-c955a6707f0b
   harness_version: 2.1.321 (Claude Code)
 - id: 01a1c4ba-08a0-7160-ba1c-8ed4d9a429eb
   author: joe
   content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: Docs-only sketch misses four binding advisor changes: TRAIN admission, v1 classes, S1-S3 boundaries, and eight-lane resource budgeting; required CI is green.. No triage reason was given.'
-  created_at: 2026-11-10 09:11:28.672378+00:00
-  modified_at: 2026-11-10 09:11:28.672378+00:00
+  created_at: 2026-11-10T09:11:28.672378Z
+  modified_at: 2026-11-10T09:11:28.672378Z
   session_id: 01a1c39a-801a-7bd1-8da9-c955a6707f0b
   harness_version: 2.1.321 (Claude Code)
 - id: 01a1c4ba-1258-7a13-8f07-ee6511c6c770
   author: joe
-  content: 'REVIEW FINDINGS TO ADDRESS (STORY-2695):
-
+  content: |-
+    REVIEW FINDINGS TO ADDRESS (STORY-2695):
     Verdict: CHANGES REQUESTED
-
     Reviewed commit: a9e8d2ab72e5
-
     Recorded: 2026-11-10T09:03:44.303331232+00:00
-
     Findings:
-
     1. [P2] docs/plans/2026-11-10-story-2695-dell1-parallel-cached-runner.md:83-100: Replace merge_group train routing with pull_request runs on host-created train/ branches. TRAIN admission must match repository, PR, exact head SHA and branch against the host train record; branch name or generic forge evidence alone is insufficient under the binding advisor signoff.
-
     2. [P2] docs/plans/2026-11-10-story-2695-dell1-parallel-cached-runner.md:62-108: Restrict v1 to TRAIN and MAIN. Keep ordinary same-repository and fork PR CI hosted and explicitly defer PR cache/class throughout the routing, uid, cache table and acceptance design, as required by the binding advisor signoff.
-
     3. [P2] docs/plans/2026-11-10-story-2695-dell1-parallel-cached-runner.md:143-202: Add binding S1/S2/S3 boundaries: S1 first captures exact failures under installed unit properties and repairs seven tests without runner/workflow/routing changes; S2 owns two slots, cache, admission, budgets and runbook; S3 owns operator installation, activation and matched ten-train measurement and alone completes STORY-2695. Current undivided rollout omits these constraints for the next lane.
-
     4. [P2] docs/plans/2026-11-10-story-2695-dell1-parallel-cached-runner.md:69-81: Account explicitly for CI plus up to eight concurrent Codex cold-build lanes in the CPU/memory capacity gate. Measure that combined workload and reserve host headroom before accepting CI limits; unspecified lane peak usage and later load recording do not satisfy the binding advisor concurrency requirement.
-
-    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.'
-  created_at: 2026-11-10 09:11:31.160839+00:00
-  modified_at: 2026-11-10 09:11:31.160839+00:00
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
+  created_at: 2026-11-10T09:11:31.160839Z
+  modified_at: 2026-11-10T09:11:31.160839Z
+  session_id: 01a1c39a-801a-7bd1-8da9-c955a6707f0b
+  harness_version: 2.1.321 (Claude Code)
+- id: 01a1c4eb-0d01-73d3-b29a-42a9edd0930a
+  author: joe
+  content: 'ADVISOR RULING (2026-11-10 10:05 UTC) — binding brief for STORY-2695 S1 (sketch #3754 landed). Amendment to S1: the runner unit is not installed until S3 and a contained lane cannot run systemd-run, so S1 makes the seven tests independent of host layout and privileges using the plan''s repairs, and the under-the-unit capture moves to S3''s operator acceptance. Do: (1) bug_2418_task_2772 lane_build_paths_* : private temp HOME/runtime dirs instead of /home/u and /run/user/1000, keep every CARGO_HOME refusal; (2) task_2053 bwrap probe: outside_file from a runtime temp path, not compile-time CARGO_MANIFEST_DIR; (3) story_1698 / task_1790 mandate exclusions: factor mode validation so 04600 is checked without creating a setuid file, real-file tests for the allowed modes and uid mismatch; (4) regen::score confined_environment: controlled temp source with .git and a separate trial root; (5) task_2708 UDP: make the positive control explicit (bind UDP, pass SCM_RIGHTS) before asserting EACCES, and report an unmet precondition as a failure with a clear message, never a skip. No production code changes except the factored mode-validation helper; no runner/workflow/routing changes; no test weakened or skipped. Title: [AI:codex] test(ci): make seven containment tests host-independent (Refs STORY-2695). LIGHT gate: one cargo test -p aida-cli-lib --lib run filtered to those modules, then make check-ci-fast.'
+  created_at: 2026-11-10T10:05:01.057399190Z
+  modified_at: 2026-11-10T10:05:01.057399190Z
   session_id: 01a1c39a-801a-7bd1-8da9-c955a6707f0b
   harness_version: 2.1.321 (Claude Code)
 history:
 - id: 01a1c325-9cdb-7b81-a057-a76e1b9c8512
   author: joe
-  timestamp: 2026-11-10 01:49:44.539134+00:00
+  timestamp: 2026-11-10T01:49:44.539134Z
   session_id: 01a1beff-fc3b-78e2-93e2-9b0c283b0339
   harness_version: 2.1.319 (Claude Code)
   changes:
@@ -135,21 +110,21 @@ history:
     new_value: Approved
 - id: 01a1c326-f6dd-76a3-ac99-bc94ec78e4ac
   author: aida-session-start
-  timestamp: 2026-11-10 01:51:13.117424+00:00
+  timestamp: 2026-11-10T01:51:13.117424Z
   changes:
   - field_name: status
     old_value: Approved
     new_value: InProgress
 - id: 01a1c4b3-06c7-7010-ba35-58ed2dd667b7
   author: aida-orchestrator
-  timestamp: 2026-11-10 09:03:49.447905+00:00
+  timestamp: 2026-11-10T09:03:49.447905Z
   changes:
   - field_name: status
     old_value: InProgress
     new_value: NeedsAttention
 - id: 01a1c4ba-08a0-7160-ba1c-8ec2f66a2161
   author: joe
-  timestamp: 2026-11-10 09:11:28.672366+00:00
+  timestamp: 2026-11-10T09:11:28.672366Z
   session_id: 01a1c39a-801a-7bd1-8da9-c955a6707f0b
   harness_version: 2.1.321 (Claude Code)
   changes:
@@ -158,20 +133,20 @@ history:
     new_value: Approved
 - id: 01a1c4ba-31c3-77a1-9770-b737f4093175
   author: joe
-  timestamp: 2026-11-10 09:11:39.203077+00:00
+  timestamp: 2026-11-10T09:11:39.203077Z
   session_id: 01a1c39a-801a-7bd1-8da9-c955a6707f0b
   harness_version: 2.1.321 (Claude Code)
   changes: []
 - id: 01a1c4bb-8505-7b13-a495-beed953d132a
   author: aida-session-start
-  timestamp: 2026-11-10 09:13:06.053501+00:00
+  timestamp: 2026-11-10T09:13:06.053501Z
   changes:
   - field_name: status
     old_value: Approved
     new_value: InProgress
 - id: 01a1c4bf-615c-7a02-b17c-531586761e6d
   author: joe
-  timestamp: 2026-11-10 09:17:19.068754+00:00
+  timestamp: 2026-11-10T09:17:19.068754Z
   changes: []
 filed_at:
   code_sha: e4eee38238fa4cb8e8c85dadaa4ed07894cfbeea
@@ -189,4 +164,4 @@ failure_reason:
   detail: 'Docs-only sketch still misses four binding advisor changes: TRAIN admission, TRAIN/MAIN-only v1, S1-S3 boundaries, and eight-cold-lane CPU/memory budgeting; current-head CI remains queued.'
   recovery_hint: address the review findings, move STORY-2695 back to In Progress, and clear the PR hold only after approval
   shelved_by: reviewer
-  shelved_at: 2026-11-10 09:17:18.946425+00:00
+  shelved_at: 2026-11-10T09:17:18.946425Z
