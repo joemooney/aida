@@ -8,7 +8,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-10T03:52:00.571796159Z
-modified_at: 2026-11-10T13:59:04.344576357Z
+modified_at: 2026-11-10T14:12:43.049056277Z
 req_type: Story
 comments:
 - id: 01a1c399-6840-7383-843e-9930f6eaa3f7
@@ -89,6 +89,13 @@ comments:
   content: 'Advisor ruling PR-3777@a211ec45: porcelain reads forge state only through aida''s JSON CLI surface (no raw gh, no ratchet widening); drop the gate store_root re-export.'
   created_at: 2026-11-10T11:56:49.000043254Z
   modified_at: 2026-11-10T11:56:49.000043254Z
+  session_id: 01a1c530-c917-7f13-ab81-f6b5e1d1cd30
+  harness_version: 2.1.322 (Claude Code)
+- id: 01a1c5cd-d3a9-7763-ada6-83f002222c5a
+  author: joe
+  content: 'Advisor ruling PR-3777@eb7fbc9e round 2: P1 repeated (raw gh moved, ratchet exemption added) — remove both and use AIDA_BIN JSON reads; P2 generation-owned binary/alias inventory for rollback; P2 parity test un-ignored against built binaries.'
+  created_at: 2026-11-10T14:12:43.049056277Z
+  modified_at: 2026-11-10T14:12:43.049056277Z
   session_id: 01a1c530-c917-7f13-ab81-f6b5e1d1cd30
   harness_version: 2.1.322 (Claude Code)
 history:
