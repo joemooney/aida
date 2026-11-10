@@ -28,12 +28,12 @@ description: |
   - Two jobs run concurrently without sharing a job directory or cache slot; the slot cap holds.
   - A test proves a PR job cannot write to the main/train cache.
   - Runbook updated. After activation, compare queue time and end-to-end run time against this baseline, and roll back the variable if wait increases.
-status: Draft
+status: Approved
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-09T16:33:51.967266330Z
-modified_at: 2026-11-10T01:49:42.401488228Z
+modified_at: 2026-11-10T01:49:44.539143767Z
 req_type: Story
 tags:
 - area:ci
@@ -46,6 +46,16 @@ comments:
   modified_at: 2026-11-10T01:49:42.401488228Z
   session_id: 01a1beff-fc3b-78e2-93e2-9b0c283b0339
   harness_version: 2.1.319 (Claude Code)
+history:
+- id: 01a1c325-9cdb-7b81-a057-a76e1b9c8512
+  author: joe
+  timestamp: 2026-11-10T01:49:44.539134712Z
+  session_id: 01a1beff-fc3b-78e2-93e2-9b0c283b0339
+  harness_version: 2.1.319 (Claude Code)
+  changes:
+  - field_name: status
+    old_value: Draft
+    new_value: Approved
 filed_at:
   code_sha: e4eee38238fa4cb8e8c85dadaa4ed07894cfbeea
   branch: main
