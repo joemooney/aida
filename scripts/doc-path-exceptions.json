@@ -102,7 +102,7 @@
     "reason": "Synthetic test fixture or generated output path; not a repository document."
   },
   {
-    "source": "aida-cli-lib/src/doctor_cmd.rs",
+    "source": "aida-cli-lib/src/tests/doctor_cmd_story_462_doctor_tests.rs",
     "target": "docs/scaffold-report.html",
     "count": 1,
     "reason": "Synthetic test fixture or generated output path; not a repository document."

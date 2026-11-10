@@ -3,7 +3,14 @@
 //! The zen drive engine stays in `lib.rs`/`zen_drive.rs`.
 // trace:STORY-771 | ai:claude
 
-use crate::*;
+use crate::{
+    active_lease_for_cwd, apply_drive_vendor_override, compete_cmd, current_user_id,
+    file_zen_review_brief, find_main_worktree_root, presence, punt, run_zen_drive,
+    run_zen_gate_json, zen, zen_pause_always_in_force, ZenCommand,
+};
+use aida_core::Storage;
+use anyhow::Result;
+use colored::Colorize;
 
 // trace:STORY-1728 | ai:claude
 #[path = "zen_cmd_args.rs"]
@@ -295,7 +302,11 @@ fn run_zen(
     matches: &clap::ArgMatches,
     ctx: &crate::cmdkit::DispatchCtx,
 ) -> anyhow::Result<crate::cmdkit::Flow> {
-    use crate::*;
+    use crate::{
+        apply_drive_vendor_override, compete_cmd, current_user_id, handle_zen_command,
+        run_zen_drive, run_zen_gate_json, ZenArgs,
+    };
+    use aida_core::Storage;
     let args = <ZenArgs as clap::FromArgMatches>::from_arg_matches(matches)?;
     match &ctx.store {
         None => {

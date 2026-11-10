@@ -4,7 +4,8 @@
 //! `mcp.rs`.
 // trace:STORY-771 | ai:claude
 
-use crate::*;
+use crate::{find_project_root, lint_skills, resolve_aida_exe, McpCommand, SkillCommand};
+use anyhow::{Context, Result};
 
 // trace:STORY-1728 | ai:claude
 #[path = "mcp_cmd_args.rs"]
@@ -210,7 +211,7 @@ fn run_mcp(
     matches: &clap::ArgMatches,
     ctx: &crate::cmdkit::DispatchCtx,
 ) -> anyhow::Result<crate::cmdkit::Flow> {
-    use crate::*;
+    use crate::{handle_mcp_command, McpArgs};
     let args = <McpArgs as clap::FromArgMatches>::from_arg_matches(matches)?;
     match &ctx.store {
         None => Ok(crate::cmdkit::Flow::Continue),
