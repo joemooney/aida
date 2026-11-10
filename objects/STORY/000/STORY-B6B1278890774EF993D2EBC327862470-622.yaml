@@ -8,7 +8,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-10T03:05:48.772156134Z
-modified_at: 2026-11-10T04:41:56.935804940Z
+modified_at: 2026-11-10T04:47:05.940727660Z
 req_type: Story
 comments:
 - id: 01a1c36e-1e94-7e70-8f74-74786437eaa0
@@ -47,6 +47,13 @@ comments:
         thread 'queue_cmd::time_bound_flags_tests::every_time_bound_flag_is_classified' (87292) panicked at aida-cli-lib/src/queue_cmd/../tests/time_bound_flags_tests.rs:191:5:
   created_at: 2026-11-10T04:10:17.515164030Z
   modified_at: 2026-11-10T04:10:17.515164030Z
+- id: 01a1c3c7-fcd4-7fc1-9107-276c14bf487f
+  author: joe
+  content: 'ADVISOR RULING (2026-11-10 04:47 UTC) — binding for PR #3757 rework at head 2e193bd365. Fix exactly one finding: P2 flow_cmd.rs:145-147 counts one review twice when the ledger has both the spec-verdict record and the PR-handshake copy (PR-3757 ledger seq 2/3: same reviewer, head SHA, recorded_at and verdict). Deduplicate by (head, recorded_at, verdict, reviewer identity); distinct rounds stay distinct. Add a paired-record fixture asserting one verdict and a two-round fixture asserting two. LIGHT gate: cargo test -p aida-cli-lib flow_cmd, then make check-ci-fast.'
+  created_at: 2026-11-10T04:47:05.940727660Z
+  modified_at: 2026-11-10T04:47:05.940727660Z
+  session_id: 01a1c39a-801a-7bd1-8da9-c955a6707f0b
+  harness_version: 2.1.321 (Claude Code)
 history:
 - id: 01a1c36e-2744-73f2-b7c1-ac1444e35832
   author: joe
