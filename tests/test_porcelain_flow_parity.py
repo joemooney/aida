@@ -71,7 +71,14 @@ esac
         # Environment aliases must pin both error channels even when the agent
         # preference would otherwise select the opposite format.
         def check_alias_errors(bounds):
-            for alias, canonical, agent in [(" TABLE ", "human", "1"), (" AgEnT ", "toon", "0")]:
+            for alias, canonical, agent in [
+                ("table", "human", "0"),
+                ("table", "human", "1"),
+                (" TABLE ", "human", "1"),
+                ("agent", "toon", "0"),
+                ("agent", "toon", "1"),
+                (" AgEnT ", "toon", "0"),
+            ]:
                 args = ["flow", "report", *bounds]
                 outputs = [invoke(exe, args, {"AIDA_OUTPUT_FORMAT": alias, "AIDA_AGENT_OUTPUT": agent})
                            for exe in [builtin, porcelain]]
