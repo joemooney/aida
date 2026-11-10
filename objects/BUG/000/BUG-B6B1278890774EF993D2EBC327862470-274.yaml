@@ -8,7 +8,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-09T23:19:37.402958538Z
-modified_at: 2026-11-10T14:31:42.967506285Z
+modified_at: 2026-11-10T14:38:41.721269666Z
 req_type: Bug
 comments:
 - id: 01a1c4ae-da06-7200-aca3-d82b81889341
@@ -18,6 +18,13 @@ comments:
   modified_at: 2026-11-10T08:59:15.846079119Z
   session_id: 01a1c39a-801a-7bd1-8da9-c955a6707f0b
   harness_version: 2.1.321 (Claude Code)
+- id: 01a1c5e5-9c39-7cc2-a5e0-5c9bbc95d798
+  author: dirtlab
+  content: 'Implemented durable review-findings fallback for remote pickups without a host gate ledger. Brief ordering uses Recorded timestamps from findings comments (creation time for legacy untimed comments), and pickup prompts retain the findings task. Added regressions for missing ledger, nested comments, before/after-verdict briefs, and quoted-marker rejection. Validation: lane job j20261110T143228339-2-0 ran 16 rework_direction tests, all passed; touched-file rustfmt check and git diff --check passed. Edits left uncommitted for native host publication.'
+  created_at: 2026-11-10T14:38:41.721269666Z
+  modified_at: 2026-11-10T14:38:41.721269666Z
+  session_id: 01a1c5dede7b
+  harness_version: codex-cli 0.167.0
 history:
 - id: 01a1c5dc-b09f-7163-9c1c-790850bc42af
   author: joe

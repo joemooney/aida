@@ -8,12 +8,20 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-10T07:56:37.576312273Z
-modified_at: 2026-11-10T14:32:02.178597895Z
+modified_at: 2026-11-10T14:33:19.924622878Z
 req_type: Task
 tags:
 - from-implementer:TASK-3780
 - kind:bug-spotted
 - severity:minor
+comments:
+- id: 01a1c5e0-b334-7d11-aba0-17887d890ea1
+  author: dirtlab
+  content: 'Implemented hermetic fixture homes in tests/test_containment_conformance.py. Four setup tests now use a temporary home under the writable checkout, preserving the production /tmp and /run output guard and credential-source separation assertions. Validation: python3 tests/test_containment_conformance.py ran 65 tests in 43.015s, all passed; git diff --check passed. Reviewed host codegraph client unavailable; doctor reports missing. Edits left uncommitted for native host publication.'
+  created_at: 2026-11-10T14:33:19.924622878Z
+  modified_at: 2026-11-10T14:33:19.924622878Z
+  session_id: 01a1c5df3251
+  harness_version: codex-cli 0.167.0
 history:
 - id: 01a1c48d-d633-77a1-867e-9a67eeb43745
   author: joe
