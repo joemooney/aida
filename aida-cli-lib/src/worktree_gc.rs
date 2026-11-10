@@ -5,8 +5,8 @@
 use crate::{
     canonical_role_name, claim, cli, drain_mode_agent_new_guard, effective_role, evaluator,
     extract_acceptance_section, extract_aida_suggestion, find_project_root, findings, focus,
-    git_arg_guard, graded_review, help, home_dir, integrate, lease_path, lease_state_for, leases,
-    list_leases, list_worktrees, mark_lease_manual_enter, parse_session_env, preclaim_branch_state,
+    git_arg_guard, graded_review, help, home_dir, integrate, lease_path, leases, list_leases,
+    list_worktrees, mark_lease_manual_enter, parse_session_env, preclaim_branch_state,
     preclaim_collision_check, process_probe, protocol_cmd, queue_cmd,
     queue_work_plan_wants_pr_head_branch, resolve_aida_exe, resolve_default_branch_ref, role, run,
     session_start, sh_single_quote, shell_single_quote, spec_matches, trusted_session_env,
@@ -147,7 +147,7 @@ pub(crate) fn active_worktree_paths(project_root: &std::path::Path) -> HashSet<s
             continue;
         }
         if matches!(
-            lease_state_for(&lease, &live, now),
+            crate::leases::lease_state_for(&lease, &live, now),
             LeaseState::Live | LeaseState::Unknown
         ) {
             out.insert(canon(&lease.worktree_path));
@@ -1013,7 +1013,7 @@ pub(crate) fn live_lease_count(
 ) -> usize {
     leases
         .iter()
-        .filter(|l| lease_state_for(l, live_sessions, now) == LeaseState::Live)
+        .filter(|l| crate::leases::lease_state_for(l, live_sessions, now) == LeaseState::Live)
         .count()
 }
 

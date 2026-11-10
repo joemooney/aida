@@ -6,8 +6,8 @@ use crate::{
     agent_registry, branch_behind_main, branch_exists_anywhere, brief, cli, collect_agent_briefs,
     collect_cleanup_report, config_lookup, current_user_id, detect_default_branch_ref,
     detect_merged_pr_for_branch_via_forge, distributed_mode_declared_from, external_import_bleed,
-    findings, humanize_duration_secs, init_cmd, is_plan_commit_subject, lease_state_for, leases,
-    list_leases, list_worktrees, maintenance_schedule, parse_trace_id_token, process_probe,
+    findings, humanize_duration_secs, init_cmd, is_plan_commit_subject, leases, list_leases,
+    list_worktrees, maintenance_schedule, parse_trace_id_token, process_probe,
     read_project_config_value, resolve_completed_since_cutoff, resolve_default_branch_ref, role,
     schedule, vendors, PrLookup,
 };
@@ -1080,7 +1080,7 @@ pub(crate) fn collect_doctor_findings_at(
     for lease in &leases {
         let worktree_exists = lease.worktree_path.exists();
         // BUG-511: review-verb leases classify by creator PID, not worktree.
-        let state = lease_state_for(lease, &live_sessions, now);
+        let state = crate::leases::lease_state_for(lease, &live_sessions, now);
         let pid_dead = lease
             .creator_pid
             .is_some_and(|pid| !process_probe::pid_is_alive(pid));
