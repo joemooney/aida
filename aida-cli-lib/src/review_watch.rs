@@ -2140,10 +2140,12 @@ fn finish_admission(
             .all(|p| p.observable() && !p.alive())
     {
         let no_verdict = admission::Hub::load(root)?.is_some()
-            && !review_publication::watcher_history(root, key)?.iter().any(|(body, _)| {
-                crate::gate::review_verdict::parse_recorded_verdict(body)
-                    .is_some_and(|v| v.reviewed_sha.as_deref() == Some(head))
-            });
+            && !review_publication::watcher_history(root, key)?
+                .iter()
+                .any(|(body, _)| {
+                    crate::gate::review_verdict::parse_recorded_verdict(body)
+                        .is_some_and(|v| v.reviewed_sha.as_deref() == Some(head))
+                });
         admission::transition(root, key, head, token, admission::State::Terminal,
             format!("{}owner observed queue exit {status}; all recorded worker/reviewer identities stopped",
                 if no_verdict { admission::NO_VERDICT } else { "" }))?;
@@ -3334,9 +3336,14 @@ pub(crate) fn fixture_admission_exit(
 pub(crate) fn fixture_admission_retry(root: &Path, exhausted: bool) -> Result<()> {
     let store = Store::open(root, "github:github.com/fixture/review")?;
     let change = forge::Change {
-        id: 7, head: "a".repeat(40), base: "main".into(),
-        author: "fixture-author".into(), gitlab: false, overlap: Some(false),
-        behind: Some(0), head_branch: None,
+        id: 7,
+        head: "a".repeat(40),
+        base: "main".into(),
+        author: "fixture-author".into(),
+        gitlab: false,
+        overlap: Some(false),
+        behind: Some(0),
+        head_branch: None,
     };
     // The fixture's dispatcher ran in this test process; model its observed exit.
     store.transaction("PR-7", |state| {
