@@ -25,12 +25,12 @@ description: |-
   - Tests: with an approval at a head whose CI is pending, failed, missing or for the wrong head, readiness reports not-ready, the stacked train tip refuses to land on failed required CI, hold auto-release behaves as ruled, and a carried approval (STORY-2694) still requires destination-head CI.
   - Post-merge (advisor-owned, NOT a merge criterion): over the next 10 PRs after this lands, the advisor confirms CI-only WAITING re-reviews stop and records the result here.
   Safety-gate change: requires independent review and advisor signoff before implementation.
-status: InProgress
+status: NeedsAttention
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-10T01:33:02.719338782Z
-modified_at: 2026-11-10T02:51:04.152496691Z
+modified_at: 2026-11-10T20:17:09.405427041Z
 req_type: Story
 comments:
 - id: 01a1c318-2e6f-7041-93e0-3128dbbb39f7
@@ -223,6 +223,13 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a1c71b-7b1d-74a0-bd8a-be7ba58328b4
+  author: aida-orchestrator
+  timestamp: 2026-11-10T20:17:09.405447204Z
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: NeedsAttention
 filed_at:
   code_sha: 8f434152668380b710e1d3ab9dc76d91ad559e1c
   branch: main
@@ -232,3 +239,11 @@ filed_at:
   vendor: claude
   session: 01a1beff-fc3b-78e2-93e2-9b0c283b0339
   harness_version: 2.1.319 (Claude Code)
+failure_reason:
+  phase: reviewer
+  phase_index: 3
+  kind: verdict:request-changes
+  detail: 'Full nine-file sweep: guidance migration addressed; carried-approval CI regression has an unrelated head-mismatch false positive. Seven CI lanes pending; ten-PR observation is post-merge.'
+  recovery_hint: address the review findings, move STORY-2697 back to In Progress, and clear the PR hold only after approval
+  shelved_by: reviewer
+  shelved_at: 2026-11-10T20:17:09.405427041Z
