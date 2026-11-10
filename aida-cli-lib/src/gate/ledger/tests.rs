@@ -1235,6 +1235,14 @@ fn a_ledger_only_spec_record_still_files_its_findings_on_completion() {
         "findings".into(),
         serde_json::json!(["[minor] rename the helper"]),
     );
+    // trace:STORY-2698 | ai:codex — severity alone does not defer a finding.
+    rec.insert(
+        "finding_dispositions".into(),
+        serde_json::json!([{
+            "severity": "minor", "disposition": "deferred",
+            "rationale": "helper naming can follow in the sweep"
+        }]),
+    );
     store::append(
         &root,
         ChangeKey::pr(45),
