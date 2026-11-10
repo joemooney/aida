@@ -27,7 +27,7 @@ pub(crate) fn codex_config_check(body: Option<&str>) -> Check {
 
 pub(crate) fn auth_check(vendor: &str, home: Option<&Path>, env: &Environment) -> Check {
     // Metadata only. Presence does not establish validity, refreshability or admission.
-    if !matches!(vendor, "codex" | "claude") {
+    if !matches!(vendor, "codex" | "claude" | "agy" | "antigravity") {
         return crate::lane_host::advisory(check(
             &format!("auth-{vendor}"),
             false,
@@ -43,6 +43,11 @@ pub(crate) fn auth_check(vendor: &str, home: Option<&Path>, env: &Environment) -
             ".claude/.credentials.json",
             "claude auth login",
         ),
+        "agy" | "antigravity" => (
+            "",
+            ".gemini/antigravity-cli/antigravity-oauth-token",
+            "agy (complete OAuth login), then retry aida doctor --lane-host",
+        ),
         _ => (
             "",
             "",
@@ -51,6 +56,8 @@ pub(crate) fn auth_check(vendor: &str, home: Option<&Path>, env: &Environment) -
     };
     let (override_key, credential_file) = if vendor == "codex" {
         ("CODEX_HOME", "auth.json")
+    } else if matches!(vendor, "agy" | "antigravity") {
+        ("", "")
     } else {
         ("CLAUDE_CONFIG_DIR", ".credentials.json")
     };
@@ -124,4 +131,38 @@ pub(crate) fn workspace_check(vendor: &str) -> Option<Check> {
         std::fs::read_to_string(codex_home(&h, &Environment::capture()).join("config.toml")).ok()
     });
     Some(codex_config_check(body.as_deref()))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    #[test]
+    fn agy_requires_nonempty_conventional_oauth_source() {
+        let home = tempfile::tempdir().unwrap();
+        let env = Environment::default();
+        assert!(!auth_check("agy", Some(home.path()), &env).pass);
+        let path = home
+            .path()
+            .join(".gemini/antigravity-cli/antigravity-oauth-token");
+        std::fs::create_dir_all(path.parent().unwrap()).unwrap();
+        std::fs::create_dir(&path).unwrap();
+        assert!(!auth_check("antigravity", Some(home.path()), &env).pass);
+        std::fs::remove_dir(&path).unwrap();
+        std::fs::write(&path, "").unwrap();
+        assert!(!auth_check("agy", Some(home.path()), &env).pass);
+        std::fs::write(path, "fixture-token").unwrap();
+        let finding = auth_check("agy", Some(home.path()), &env);
+        assert!(finding.pass);
+        let json = serde_json::to_value(&finding).unwrap();
+        assert_eq!(json["required"], true);
+        assert!(json["fix"].as_str().unwrap().contains("OAuth login"));
+        assert!(
+            auth_check(
+                aida_core::vendors::LaunchVendor::Agy.as_str(),
+                Some(home.path()),
+                &env
+            )
+            .pass
+        );
+    }
 }
