@@ -1,0 +1,18 @@
+{
+  "id": "review-watch-c7bd238319e25ccd657e102a85619c636580a06506230bbbd38e343cc9aa3ac8",
+  "thread_id": "review-watch-c7bd238319e25ccd657e102a85619c636580a06506230bbbd38e343cc9aa3ac8",
+  "from": "review-watch",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1794347555034,
+  "body": "PR-3783 at 217767e7add5beb59a0632255c78a03dc92ebe33 is behind `main` with overlapping paths. Its author has no live session on the branch. The watcher asked the forge to update the branch and it did not: update-branch conflicts: X Cannot update PR branch due to conflicts. Merge `main` into the branch (resolving conflicts) and push, or close the change; the watcher reviews the new head on its next pass.",
+  "subject": "PR-3783 behind `main` with overlap; update-branch conflicts",
+  "urgent": false,
+  "intent": "request",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "explicit"
+}
