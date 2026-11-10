@@ -3,12 +3,12 @@ spec_id: STORY-b6b1278890774ef993d2ebc327862470-613
 agreed_id: STORY-2690
 title: 'Spec status invariants and typed lane exits: a spec with an open PR is never unpickable for rework, and every lane exit has a typed result'
 description: 'Problem: on 2026-11-08 STORY-2571 stayed needs-attention so rework lanes died with not-pickable needs-triage, and PR-3640 received no fix across three attempts. The advisor inbox collected many exited-without-changes notices needing manual reading. BUG-2502 fixes one instance. Requirement: enforce that rework routing leaves the spec pickable, or refuses loudly at routing time; each lane exit records a closed-set result such as pushed, no-change-with-reason, refused-before-start or punted. Acceptance: a refused-before-start lane is never reported as a launched rework; repeated identical refusals surface once.'
-status: NeedsAttention
+status: Approved
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-09T01:58:39.064485765Z
-modified_at: 2026-11-10T19:35:17.142031756Z
+modified_at: 2026-11-10T19:35:25.241615298Z
 req_type: Story
 tags:
 - area:orchestration
@@ -39,6 +39,13 @@ comments:
   content: 'ADVISOR SIGNOFF WITH CHANGES (2026-11-10 12:45 MST) on the codex sketch above. APPROVED: (1) rework routing runs the shared pickability checks against the resulting live spec and refuses with a stable reason code, with return_to_flight as the only status writer; (2) one versioned host-owned lane result receipt from admission to publication, with closed variants pushed / no-change-with-reason / refused-before-start / punted / held / failed-after-start, where ''pushed'' requires an observed new head; (3) the attempt is recorded before admission, and ''started'' only after the spawn succeeds; (4) the child and publication enums stay internal, and all operator output derives from the receipt. AMENDMENTS: (a) refusal dedup does NOT get a new permanent lock: use the existing store writer lock (update_atomically) or an O_EXCL marker file. The identity is spec + PR head + reason code + policy fingerprint, so a new head naturally re-arms it. Markers older than 7 days are pruned. (b) Two slices. S1 = items 1-4 (pickability + receipt), with the tests listed above except dedup; title [AI:codex] feat(lanes): typed lane result receipt and pickability-checked rework routing (Refs STORY-2690). S2 = item 5 (notice dedup), which completes the story. Gate: LIGHT.'
   created_at: 2026-11-10T19:35:17.142031756Z
   modified_at: 2026-11-10T19:35:17.142031756Z
+  session_id: 01a1c530-c917-7f13-ab81-f6b5e1d1cd30
+  harness_version: 2.1.322 (Claude Code)
+- id: 01a1c6f5-4539-72c0-9470-686f8ae800bd
+  author: joe
+  content: 'Returned from NeedsAttention to Approved via `aida edit --status`. It was punted on: design-fork: CLAUDE.md requires advisor signoff before architecture implementation. Recorded a concrete sketch on the spec for a shared admission-through-publication typed result receipt, rework pickability validation and refusal-notice deduplication. Existing child/publication outcome enums cannot represent pre-spawn refusal. Advisor approval of the receipt boundary and deduplication identity/lifetime is required.. No triage reason was given.'
+  created_at: 2026-11-10T19:35:25.241604809Z
+  modified_at: 2026-11-10T19:35:25.241604809Z
   session_id: 01a1c530-c917-7f13-ab81-f6b5e1d1cd30
   harness_version: 2.1.322 (Claude Code)
 history:
@@ -73,6 +80,15 @@ history:
   - field_name: status
     old_value: InProgress
     new_value: NeedsAttention
+- id: 01a1c6f5-4539-72c0-9470-685b1dc43a0b
+  author: joe
+  timestamp: 2026-11-10T19:35:25.241586675Z
+  session_id: 01a1c530-c917-7f13-ab81-f6b5e1d1cd30
+  harness_version: 2.1.322 (Claude Code)
+  changes:
+  - field_name: status
+    old_value: NeedsAttention
+    new_value: Approved
 filed_at:
   code_sha: a7a14984cec5533987dfeccb70d1f91aaebbf22a
   branch: main
@@ -81,9 +97,3 @@ filed_at:
   aida_build_sha: 8a4a909a967
   vendor: claude
   session: 20abb7c3-8f9b-4a5e-b326-404921f3b450
-attention_reason:
-  category: design-fork
-  detail: CLAUDE.md requires advisor signoff before architecture implementation. Recorded a concrete sketch on the spec for a shared admission-through-publication typed result receipt, rework pickability validation and refusal-notice deduplication. Existing child/publication outcome enums cannot represent pre-spawn refusal. Advisor approval of the receipt boundary and deduplication identity/lifetime is required.
-  lean: Approve the proposed shared host-owned result receipt; retain existing authority and deferral gates and derive launched status only from successful child spawn.
-  raised_by: implementer
-  raised_at: 2026-11-10T19:28:10.679935331Z
