@@ -3,12 +3,12 @@ spec_id: BUG-b6b1278890774ef993d2ebc327862470-279
 agreed_id: BUG-2514
 title: Generated 'Start review' hint drops --vendor and --no-human, taking a launch path that containment refuses
 description: Reported from operator's work machine (Codex, GitLab project hello-work-0x), 2026-11-09. A contained advisor session printed a shortened review hint; running it launched with --permission-mode dontAsk and was refused under containment, and setup rolled back. The full working command was 'aida queue work MR-2 --role reviewer --vendor codex --no-human --strict'. Generated next-step hints must preserve the vendor and execution mode the project needs. Regression test for the hint text in a contained Codex project.
-status: Approved
+status: InProgress
 priority: Medium
-owner: ''
+owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-10T03:07:30.673643751Z
-modified_at: 2026-11-10T14:29:04.251868282Z
+modified_at: 2026-11-10T15:08:50.657746704Z
 req_type: Bug
 history:
 - id: 01a1c5dc-cc7b-7832-8e65-bf15ad9aad21
@@ -20,6 +20,13 @@ history:
   - field_name: status
     old_value: Draft
     new_value: Approved
+- id: 01a1c601-3661-7410-9ee8-315aea816065
+  author: aida-session-start
+  timestamp: 2026-11-10T15:08:50.657743954Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: InProgress
 filed_at:
   code_sha: 838f14c3c2811c6b63da5d465700cff773c36190
   branch: main
