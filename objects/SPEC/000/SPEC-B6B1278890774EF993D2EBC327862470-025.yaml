@@ -1,5 +1,6 @@
 id: 01a1c475-8148-74a1-ac8f-82b4076d1872
 spec_id: SPEC-b6b1278890774ef993d2ebc327862470-025
+agreed_id: TASK-3095
 title: Containment conformance Python fixtures require writable real ~/.aida in native lanes
 description: While validating TASK-3780's test-only extraction, the unchanged check-ci-fast Containment conformance evidence tests gate ran 65 tests and failed with six errors. tests/test_containment_conformance.py:267,303,433,937 uses Path.home()/'.aida' as fixture_home and tempfile.TemporaryDirectory(dir=fixture_home); native workspace-write lanes refuse mkdir there with OSError [Errno 30] Read-only file system. test_role_refusal_reports_actual_diagnostic_and_keeps_tty produced three such subtest errors. Use hermetic writable temporary fixture homes rather than the real operator home, preserving production boundary assertions. No containment implementation or fixture changes made in this extraction lane. Local evidence /tmp/task3780-containment.log; relevant gate result 65 tests in 44.2s, errors=6.
 status: Draft
@@ -13,6 +14,11 @@ tags:
 - from-implementer:TASK-3780
 - kind:bug-spotted
 - severity:minor
+history:
+- id: 01a1c48d-d633-77a1-867e-9a67eeb43745
+  author: joe
+  timestamp: 2026-11-10T08:23:12.179928376Z
+  changes: []
 filed_at:
   aida_version: 0.16.0
   aida_build_sha: e682f76092e
