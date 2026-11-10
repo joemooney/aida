@@ -42,7 +42,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-09T15:57:18.371798469Z
-modified_at: 2026-11-10T00:08:59.034577753Z
+modified_at: 2026-11-10T00:21:43.710298961Z
 req_type: Story
 tags:
 - architecture
@@ -151,6 +151,20 @@ comments:
         thread 'gate::mandate_gates::story_1888_gate_paths_tests::gate_orchestrators_reach_outside_only_through_their_frozen_inventory' (55309) panicked at aida-cli-lib/src/gate/../tests/story_1888_gate_paths_tests.rs:3694:5:
   created_at: 2026-11-10T00:07:02.675439215Z
   modified_at: 2026-11-10T00:07:02.675439215Z
+- id: 01a1c2d0-38e6-7d22-9548-e3f0329dc1f5
+  author: dirtlab
+  content: 'Fixed the latest CI failure at 373096895194 without expanding the frozen gate dependency inventory. Changed aida-cli-lib/src/gate/approval.rs and aida-cli-lib/src/gate/merge_hold_core.rs: live carry-over head/base reads now use the approval orchestrator forge adapter, retaining both reads, error refusal, and head/base movement checks. Final launcher job j20261110T001409120-2-0 executed all 52 story_1888_gate_paths_tests successfully; j20261110T001509264-2-0 executed 6 consumer-filter tests successfully, including all four carry-over consumer regressions. rustfmt --check and git diff --check pass. An initial adapter compile error was corrected before these passing runs. No implementation blockers. Reviewed Codegraph client is absent; doctor confirms missing, navigation used rg. Edits remain uncommitted for host publication. No commit, push, queue done, pr ship or review record performed.'
+  created_at: 2026-11-10T00:16:28.390586350Z
+  modified_at: 2026-11-10T00:16:28.390586350Z
+  session_id: 01a1c2c957a5
+  harness_version: codex-cli 0.167.0
+- id: 01a1c2d5-089e-7682-97f5-a25a14dd3fb5
+  author: dirtlab
+  content: 'One fast-gate fix round: updated only the two review_watch transaction writer rows in scripts/store-writers.toml from select/probe_unneeded to select_with_coverage/probe_unneeded_with_coverage. Reviewed the implementation and retained the existing blocked disposition, policy, lock and evidence fields. Avoided unrelated regeneration ordering/comment churn. python3 scripts/check-store-writers.py passes (3465 sink sites, 293 operation mappings); python3 -m unittest tests/test_store_writer_inventory.py passes all 54 tests; git diff --check passes. Edits remain uncommitted for host publication; no blockers. Existing punt/hold vetoes remain applicable.'
+  created_at: 2026-11-10T00:21:43.710298961Z
+  modified_at: 2026-11-10T00:21:43.710298961Z
+  session_id: 01a1c2c957a5
+  harness_version: codex-cli 0.167.0
 history:
 - id: 01a1c233-af48-7011-9e22-fa81c9459065
   author: joe
