@@ -54,6 +54,10 @@ mod auto_complete_telemetry;
 mod autonomy_cmd;
 mod autopilot;
 mod launch_permission_profile;
+// Disabled host-only transport; no command or consumer is registered.
+// trace:TASK-3368 | ai:codex
+#[cfg(target_os = "linux")]
+mod proc_broker;
 // trace:TASK-1018 | ai:claude — durable execution audit + one-command reversal.
 mod autopilot_audit;
 mod autopilot_intake;
