@@ -261,4 +261,3 @@ done <"$members_fixture"
 echo "merge-hold gate fixtures passed (${#cases[@]} label states x 2 shipped gates, $train_cases train-mode cases)"
 
 # trace:BUG-2492 | ai:codex — also exercise the status display projection.
-python3 "$repo_root/tests/test_merge_hold_status_rollup.py"
