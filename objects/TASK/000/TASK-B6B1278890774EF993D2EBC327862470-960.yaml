@@ -8,7 +8,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-07T23:39:41.575597Z
-modified_at: 2026-11-10T11:56:35.505455859Z
+modified_at: 2026-11-10T13:33:03.947846342Z
 req_type: Task
 relationships:
 - rel_type: Child
@@ -626,6 +626,13 @@ comments:
   modified_at: 2026-11-10T11:54:14.281282141Z
   session_id: 01a1c39a-801a-7bd1-8da9-c955a6707f0b
   harness_version: 2.1.321 (Claude Code)
+- id: 01a1c5a9-864b-7993-a806-6738df5a9be0
+  author: joe
+  content: 'ADVISOR PLAN 2026-11-10 06:35 MST: batch 2 landed (#3780, e6ab146). 22 glob files remain. Batch 3 starts after #3778 (PR9b) lands: the 5 files no open PR touches (doctor_root.rs, findings_gate.rs, init_cmd.rs, pr_merge_gate.rs, requirements_cli.rs) plus #3778''s 6. Batch 4 (final, PR4 complete) takes the remaining 11 after #3651, #3784 and the BUG/STORY PRs that hold them land.'
+  created_at: 2026-11-10T13:33:03.947846342Z
+  modified_at: 2026-11-10T13:33:03.947846342Z
+  session_id: 01a1c530-c917-7f13-ab81-f6b5e1d1cd30
+  harness_version: 2.1.322 (Claude Code)
 history:
 - id: 01a1b862-2e0b-7a50-a4d0-25097c707b57
   author: joe
