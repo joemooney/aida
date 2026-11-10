@@ -2986,6 +2986,17 @@ impl Forge for GitLabForge {
             "projects/:id/merge_requests",
             &[("search", spec), ("state", "opened")],
         );
+        // A completion guard needs an explicit empty JSON array as absence
+        // evidence; an empty successful response is still unreadable.
+        // trace:BUG-2516 | ai:codex
+        if out
+            .as_ref()
+            .is_ok_and(|o| o.status.success() && o.stdout.iter().all(u8::is_ascii_whitespace))
+        {
+            return Ok(ChangeLookup::CliFailed(
+                "empty GitLab search response".into(),
+            ));
+        }
         Ok(glab_lookup_from_list_output(out, ""))
     }
 

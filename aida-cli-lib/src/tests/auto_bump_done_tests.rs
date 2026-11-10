@@ -381,17 +381,23 @@ fn open_pr_for_same_spec_defers_auto_bump() {
     assert_eq!(req.status, RequirementStatus::Done);
 }
 
-/// BUG-1454 F1: on a NON-GitHub forge the open-PR lookup cannot be performed.
-/// That is the unknown case, and the unknown case must preserve — the function
-/// previously returned `Some(empty)`, which asserts "the lookup ran and nothing
-/// is open" and auto-bumped every candidate on GitLab and pure-git projects.
-///
-/// This repo's CI runs against GitHub only, so no green build reaches this
-/// path; the regression is only visible from a test that sets the remote.
-// trace:BUG-1454 | ai:claude
+/// An unreadable GitLab query must preserve the candidate, even though its
+/// completion trailer is on the default branch.
+// trace:BUG-1454 BUG-2516 | ai:codex
 #[test]
-fn non_github_forge_defers_rather_than_completing() {
+fn gitlab_unavailable_forge_defers_rather_than_completing() {
+    if crate::test_env::run_path_isolated_test() {
+        return;
+    }
     let (_tmp, project_root, store_path) = init_test_project();
+    let bin = project_root.join("bin");
+    std::fs::create_dir(&bin).unwrap();
+    crate::test_exec::write_executable(
+        &bin.join("glab"),
+        "#!/bin/sh\nif [ \"$1\" = --version ]; then echo glab-test; exit 0; fi\nexit 1\n",
+    );
+    let path = format!("{}:{}", bin.display(), std::env::var("PATH").unwrap());
+    let _path = crate::test_env::EnvVarGuard::set("PATH", &path);
     seed_spec_at(&store_path, "BUG-1456", "Done");
     run_git(
         &project_root,
@@ -5145,4 +5151,129 @@ fn slice_subject_exclusion_is_scoped_to_rebased_commits() {
     assert!(has_flip(&flips, "TASK-9302"), "flips: {flips:?}");
     assert!(!has_flip(&flips, "TASK-9303"), "flips: {flips:?}");
     assert!(!has_flip(&flips, "TASK-9304"), "flips: {flips:?}");
+}
+
+// trace:BUG-2516 | ai:codex
+#[test]
+fn bug_2516_gitlab_pull_completion_trailers() {
+    if crate::test_env::run_path_isolated_test() {
+        return;
+    }
+    let (_tmp, root, store_path) = init_test_project();
+    let remote = root.join("remote.git");
+    run_git(
+        &root,
+        &[
+            "clone",
+            "--bare",
+            root.to_str().unwrap(),
+            remote.to_str().unwrap(),
+        ],
+    );
+    run_git(
+        &root,
+        &["remote", "add", "origin", remote.to_str().unwrap()],
+    );
+    std::fs::create_dir_all(root.join(".aida")).unwrap();
+    std::fs::write(
+        root.join(".aida/config.toml"),
+        "[forge]\nprovider = \"gitlab\"\n",
+    )
+    .unwrap();
+    let bin = root.join("bin");
+    std::fs::create_dir(&bin).unwrap();
+    let log = root.join("glab.log");
+    crate::test_exec::write_executable(&bin.join("glab"), format!(
+        "#!/bin/sh\nif [ \"$1\" = --version ]; then echo glab-test; exit 0; fi\necho \"$*\" >> '{}'\ncase \"$*\" in\n*state=opened*) echo '[]';;\n*) exit 1;;\nesac\n", log.display()
+    ));
+    let path = format!("{}:{}", bin.display(), std::env::var("PATH").unwrap());
+    let _path = crate::test_env::EnvVarGuard::set("PATH", &path);
+    seed_spec_at(&store_path, "BUG-2516", "InProgress");
+    seed_spec_at(&store_path, "BUG-2517", "InProgress");
+    let pre = run_git(&root, &["rev-parse", "HEAD"]);
+    run_git(
+        &root,
+        &[
+            "commit",
+            "--allow-empty",
+            "-m",
+            "fix: completing squash (BUG-2516)",
+        ],
+    );
+    let completing_sha = run_git(&root, &["rev-parse", "HEAD"]);
+    run_git(
+        &root,
+        &[
+            "commit",
+            "--allow-empty",
+            "-m",
+            "fix: partial squash (Refs BUG-2517)",
+        ],
+    );
+    let storage = Storage::new(&store_path);
+    run_git(&root, &["push", "origin", "main"]);
+    run_git(&root, &["reset", "--hard", &pre]);
+    crate::store_push_pull::handle_pull_command(&store_path, false, false, true, true, false)
+        .unwrap();
+    let store = storage.load().unwrap();
+    let completed = store.get_requirement_by_spec_id("BUG-2516").unwrap();
+    assert_eq!(completed.status, RequirementStatus::Completed);
+    assert_eq!(
+        completed
+            .implementation_info
+            .as_ref()
+            .unwrap()
+            .completion_sha
+            .as_deref(),
+        Some(completing_sha.as_str())
+    );
+    assert_eq!(
+        store.get_requirement_by_spec_id("BUG-2517").unwrap().status,
+        RequirementStatus::InProgress
+    );
+    let calls = std::fs::read_to_string(log).unwrap();
+    assert!(calls.contains("search=BUG-2516"), "{calls}");
+    assert!(calls.contains("state=opened"), "{calls}");
+}
+
+// trace:BUG-2516 | ai:codex
+#[test]
+fn bug_2516_gitlab_open_or_unreadable_changes_preserve() {
+    if crate::test_env::run_path_isolated_test() {
+        return;
+    }
+    let (_tmp, root, _store_path) = init_test_project();
+    std::fs::create_dir_all(root.join(".aida")).unwrap();
+    std::fs::write(
+        root.join(".aida/config.toml"),
+        "[forge]\nprovider = \"gitlab\"\n",
+    )
+    .unwrap();
+    let bin = root.join("bin");
+    std::fs::create_dir(&bin).unwrap();
+    let path = format!("{}:{}", bin.display(), std::env::var("PATH").unwrap());
+    let _path = crate::test_env::EnvVarGuard::set("PATH", &path);
+    for response in [
+        "exit 1",
+        "printf ''",
+        "echo garbage",
+        "echo '{}'",
+        "echo '[{}]'",
+        "echo '[{\"iid\":0}]'",
+    ] {
+        crate::test_exec::write_executable(&bin.join("glab"), format!("#!/bin/sh\nif [ \"$1\" = --version ]; then echo glab-test; exit 0; fi\n{response}\n"));
+        assert_eq!(
+            specs_with_open_prs(&root, ["BUG-2516".into()]),
+            None,
+            "{response}"
+        );
+    }
+    crate::test_exec::write_executable(
+        &bin.join("glab"),
+        "#!/bin/sh\nif [ \"$1\" = --version ]; then echo glab-test; exit 0; fi\necho '[{\"iid\":2,\"title\":\"another deliverable (BUG-2516)\"}]'\n",
+    );
+    assert_eq!(
+        specs_with_open_prs(&root, ["BUG-2516".into()]),
+        Some(std::collections::BTreeMap::from([("BUG-2516".into(), 2)]))
+    );
 }
