@@ -19,7 +19,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-10T03:05:40.778642968Z
-modified_at: 2026-11-10T16:25:22.638954435Z
+modified_at: 2026-11-10T16:29:25.871483015Z
 req_type: Story
 comments:
 - id: 01a1c370-9b5f-7770-a921-e48f45e2aecb
@@ -174,6 +174,13 @@ comments:
   content: 'Implemented advisory-only S2: versioned per-verdict risk metadata in the gate ledger and stored tier/reasons in review verdict human/JSON output. No changes to review depth, blocking disposition, fast-track eligibility, holds or train rules; S3 remains outstanding. Final-source lane run j20261110T160836612-2-0 passed 296 tests. TUI all-targets and feature-disabled CLI checks passed via lane runner; rustfmt, whitespace and relevant source ratchets passed. Full check-ci-fast remains host-side: its post-TUI cargo metadata call is unsupported by the runner, and separately exercised containment fixtures require writes to read-only /home/dirtlab/.aida. Mail fixtures pass with umask 0022. Six changed files remain uncommitted. Native Refs publication declaration and Help-Golden: unchanged body recorded. Detailed handoff: /tmp/story2698-s2-handoff.md.'
   created_at: 2026-11-10T16:25:22.638954435Z
   modified_at: 2026-11-10T16:25:22.638954435Z
+  session_id: 01a1c633a83f
+  harness_version: codex-cli 0.167.0
+- id: 01a1c64a-fdef-7c62-a583-ecc28591989f
+  author: dirtlab
+  content: 'One authorized fast-gate fix round: registered three exact, counted synthetic fixture references in scripts/doc-path-exceptions.json (ledger docs/help.md x2; risk classifier docs/usage.md x3 and docs/check.md x1). Rust source is unchanged. The full Documentation audience coverage gate now passes: 10 unit tests, inventory 983 docs/947 rows, 1520 valid local links, zero invalid path references. git diff --check passes. The single-file edit remains uncommitted for host publication; existing Refs scope and punt/hold vetoes retained. Handoff: /tmp/story2698-fast-gate-fix-handoff.md.'
+  created_at: 2026-11-10T16:29:25.871483015Z
+  modified_at: 2026-11-10T16:29:25.871483015Z
   session_id: 01a1c633a83f
   harness_version: codex-cli 0.167.0
 history:

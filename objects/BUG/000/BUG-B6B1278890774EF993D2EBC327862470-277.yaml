@@ -8,7 +8,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-10T03:06:53.745899716Z
-modified_at: 2026-11-10T16:23:09.366029108Z
+modified_at: 2026-11-10T16:28:56.428857114Z
 req_type: Bug
 comments:
 - id: 01a1c645-3f36-7033-9dcf-0deda18596e3
@@ -16,6 +16,13 @@ comments:
   content: 'Implemented project-configured validation via trusted default-branch [validation] format/test/fast_check commands. Launch prompts use project commands; the sandboxed host gate runs the configured shell command or records skipped(unconfigured) with a reason and committed head. Seat-submitted shell jobs remain refused. Added Python fixtures covering rendering, trusted config selection, pass/fail execution without Cargo.toml or Makefile, and unconfigured gate skipping. Validation: lane-run cargo tests passed (BUG-2512: 4; fast_gate: 56 passed, 2 ignored; config-trust inventory: 1). Targeted rustfmt checks and git diff --check passed. Edits remain uncommitted for host publication. Codegraph client unavailable; used rg after doctor confirmation.'
   created_at: 2026-11-10T16:23:09.366029108Z
   modified_at: 2026-11-10T16:23:09.366029108Z
+  session_id: 01a1c6359c9e
+  harness_version: codex-cli 0.167.0
+- id: 01a1c64a-8aec-7303-95c9-6c527e3e1be4
+  author: dirtlab
+  content: 'Fast-gate repair: updated the four scripts/store-writers.toml sink identities and enclosing items from run_one_timed to run_one_authorized after the execution-engine refactor. Existing classifications and evidence are preserved. Validation passed: python3 scripts/check-store-writers.py (3480 sites reconciled), python3 -m unittest discover -s tests -p test_store_writer_inventory.py (54 tests), and git diff --check. Inventory-only repair left uncommitted; host should rerun the full fast gate.'
+  created_at: 2026-11-10T16:28:56.428857114Z
+  modified_at: 2026-11-10T16:28:56.428857114Z
   session_id: 01a1c6359c9e
   harness_version: codex-cli 0.167.0
 history:
