@@ -13,12 +13,12 @@ description: |
   3. The BUG-1693 label rules (recorded vs cleared, train members' labels) behave exactly as today: same pass/block outcome for every label combination (table test over the existing check_labels cases).
   4. A push to a held PR sends no "run failed" notification for this check.
   5. A genuinely malformed label state (clearance with no recorded hold) still FAILS, since that is a real error.
-status: NeedsAttention
+status: InProgress
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-08T02:46:34.549817Z
-modified_at: 2026-11-10T23:05:53.095244137Z
+modified_at: 2026-11-10T23:14:46.187518382Z
 req_type: Bug
 tags:
 - area:ci
@@ -434,6 +434,13 @@ comments:
   content: 'Completed by advisor: #3651 merged as 15b5fe7265c with a non-completing ''Refs'' subject; its approved review at the merged head verified all five acceptance criteria, and pre-merge canary evidence is recorded above.'
   created_at: 2026-11-10T23:05:53.095244137Z
   modified_at: 2026-11-10T23:05:53.095244137Z
+  session_id: 01a1c70f-d731-7b70-acf8-e9ab3d288fca
+  harness_version: 2.1.322 (Claude Code)
+- id: 01a1c7be-172b-7d00-adf1-bd053021cc5e
+  author: joe
+  content: 'Returned from NeedsAttention to In Progress via `aida edit --status`. It was shelved on: reviewer/verdict:request-changes: Exact-head CI is now green and a full-diff sweep found no code defect; the only blocker is the operator canary, because AC1 (raw/web refusal), AC2 and AC4 still have no live evidence.. It was punted on: blocked-dependency: Round 11 findings 1 and 2 remain manual gates: exact-head CI run 42517183273 at 667022894549 is unfinished (one lane in progress, six queued); publisher run 42517183256 succeeded and posted merge-hold-gate=pending. AC1/ac798dd7, AC2/accb2afb and AC4/ac4d9581 still require Joe to run the pre-merge canary in docs/internal/testing/bug-2492-status-cutover.md: raw gh/web refusal with other gates settled, unchanged-SHA label-only pending-to-success and notification observations. Native implementer cannot perform experimental merges or human clearance. Finding 3 is fixed locally: hold_gate_state now requires every same-named row to pass, with both-order regression coverage and updated AGENTS.md/OVERVIEW.md. Edits remain uncommitted for the host; do not mark Completed. Publication declaration is Refs BUG-2492; this manual-gate punt remains a publication veto pending host/operator resolution.. No triage reason was given.'
+  created_at: 2026-11-10T23:14:46.187509649Z
+  modified_at: 2026-11-10T23:14:46.187509649Z
   session_id: 01a1c70f-d731-7b70-acf8-e9ab3d288fca
   harness_version: 2.1.322 (Claude Code)
 history:
@@ -854,6 +861,15 @@ history:
   session_id: 01a1bf63f834
   harness_version: 2.1.319 (Claude Code)
   changes: []
+- id: 01a1c7be-172b-7d00-adf1-bcf22135b515
+  author: joe
+  timestamp: 2026-11-10T23:14:46.187487467Z
+  session_id: 01a1c70f-d731-7b70-acf8-e9ab3d288fca
+  harness_version: 2.1.322 (Claude Code)
+  changes:
+  - field_name: status
+    old_value: NeedsAttention
+    new_value: InProgress
 filed_at:
   code_sha: dc41ee8da2f44f88178936fc1a8e6cb7168a3de7
   branch: main
@@ -863,16 +879,3 @@ filed_at:
   vendor: claude
   session: 01a1b8be-8170-7fb2-89ab-ecb4c6eee98c
   harness_version: 2.1.319 (Claude Code)
-attention_reason:
-  category: blocked-dependency
-  detail: 'Round 11 findings 1 and 2 remain manual gates: exact-head CI run 42517183273 at 667022894549 is unfinished (one lane in progress, six queued); publisher run 42517183256 succeeded and posted merge-hold-gate=pending. AC1/ac798dd7, AC2/accb2afb and AC4/ac4d9581 still require Joe to run the pre-merge canary in docs/internal/testing/bug-2492-status-cutover.md: raw gh/web refusal with other gates settled, unchanged-SHA label-only pending-to-success and notification observations. Native implementer cannot perform experimental merges or human clearance. Finding 3 is fixed locally: hold_gate_state now requires every same-named row to pass, with both-order regression coverage and updated AGENTS.md/OVERVIEW.md. Edits remain uncommitted for the host; do not mark Completed. Publication declaration is Refs BUG-2492; this manual-gate punt remains a publication veto pending host/operator resolution.'
-  raised_by: implementer
-  raised_at: 2026-11-08T20:21:59.348112663Z
-failure_reason:
-  phase: reviewer
-  phase_index: 3
-  kind: verdict:request-changes
-  detail: Exact-head CI is now green and a full-diff sweep found no code defect; the only blocker is the operator canary, because AC1 (raw/web refusal), AC2 and AC4 still have no live evidence.
-  recovery_hint: address the review findings, move BUG-2492 back to In Progress, and clear the PR hold only after approval
-  shelved_by: reviewer
-  shelved_at: 2026-11-09T08:22:08.316648768Z
