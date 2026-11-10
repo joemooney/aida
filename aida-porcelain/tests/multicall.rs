@@ -186,7 +186,12 @@ fn environment_alias_error_parity() {
             .output()
             .unwrap()
     };
-    for (alias, canonical, agent) in [("table", "human", "1"), ("agent", "toon", "0")] {
+    for (alias, canonical, agent) in [
+        ("table", "human", "1"),
+        (" TABLE ", "human", "1"),
+        ("agent", "toon", "0"),
+        (" AgEnT ", "toon", "0"),
+    ] {
         for (since, selected_reader, code) in [
             ("bad", reader.clone(), 1),
             ("2026-11-09", dir.path().join("missing-reader"), 1),
