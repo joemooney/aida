@@ -2,8 +2,8 @@
 
 <!-- trace:STORY-2695 | ai:codex -->
 
-Status: sketch for advisor signoff; docs only. The 2026-11-10 01:55 UTC
-advisor brief supersedes the implementation scope in the story. No runner,
+Status: docs-only sketch rework under the binding 2026-11-10 09:05 UTC
+advisor ruling, which supersedes the earlier brief and conflicting story scope. No runner,
 workflow, credentials or repository settings change in this slice.
 Publication title: `[AI:codex] docs(ci): sketch dell1 parallel cached runner (Refs STORY-2695)`.
 
@@ -59,15 +59,18 @@ Update the exact sudoers argument rules accordingly. Preserve parent mode
 configuration per job. Stop/reconcile only that slot's service before reuse;
 refuse on stop failure. Cleanup kills its entire cgroup before deleting state.
 
-Use a distinct unprivileged uid per slot and trust class (PR, train, main),
+Use a distinct unprivileged uid per slot and v1 trust class (TRAIN, MAIN),
 with no supplementary groups or sudo. Do not merely give parallel jobs the
 same uid and separate directory names: host networking and same-uid access
 would undermine isolation. Hide sibling job/cache roots from each unit and
 exercise cross-slot file, signal and proc access denials. Stop all descendants
 before switching a slot's class. No registration credential enters any unit.
+Ordinary same-repository and fork PRs stay hosted; a PR uid/class is explicitly
+deferred beyond v1.
 
 Keep the shared slice's CPUQuota=800%, AllowedCPUs=0-7; the other twelve cores
-remain outside CI's cpuset. Two active units each get CPUQuota=400% and
+remain outside CI's cpuset for host work, including up to eight concurrent
+Codex cold-build lanes. Two active units each get CPUQuota=400% and
 CARGO_BUILD_JOBS=4, with equal CPUWeight. For three, use 266% and build jobs=2;
 that is a capacity experiment, not a promised speedup. Bound libtest parallelism
 too; record the setting with every timing sample.
@@ -75,19 +78,26 @@ too; record the setting with every timing sample.
 Proposed shared memory budget: MemoryHigh=20G, MemoryMax=24G, MemorySwapMax=0;
 two slots each MemoryHigh=10G/MemoryMax=12G, or three at 6G/8G.
 These are proposed limits, not measured host capacity. Operator must first
-verify physical RAM, lane peak usage and at least 8G remaining host headroom;
-otherwise retain hosted routing and revise the budget. Capture memory.peak,
-memory.events, CPU throttling and disk pressure during concurrent linking.
+measure CI together with up to eight concurrent Codex cold-build lanes,
+including concurrent linking, and verify physical RAM and at least 8G remaining
+host headroom after that combined peak. Reserve CPU and memory headroom for
+those lanes and host services before accepting CI limits; otherwise retain
+hosted routing and revise the budget. Capture memory.peak, memory.events, CPU
+throttling and disk pressure for the combined load, not CI in isolation.
 No memory-limit or OOM failure is accepted as a test failure to suppress.
 
-GitHub routing still uses `[self-hosted, Linux, X64, aida-dell1]` for lib-0,
-lib-1, cli-0 and cli-1, additionally selecting a trust-class label. Add
-`merge_group` explicitly; main pushes must be `refs/heads/main` in the expected
-repository. Same-repository PRs use PR capacity; fork PRs always select
-ubuntu-latest, including after approval. rest/gates/contracts and the aggregate
-stay hosted. Preserve seven-lane success requirements and job timeouts.
-All classes draw from the same two-slot cap; reserve train priority through
-host admission, since labels alone provide no queue priority or trust proof.
+GitHub routing uses `[self-hosted, Linux, X64, aida-dell1]` for lib-0,
+lib-1, cli-0 and cli-1, additionally selecting a TRAIN or MAIN label. V1 admits
+only TRAIN and MAIN: TRAIN runs are `pull_request` runs on host-created
+`train/` branches; MAIN runs are main pushes at `refs/heads/main` in the expected
+repository. TRAIN admission must match repository, PR number, exact head SHA
+and branch against the host train record. Neither `merge_group` nor a branch
+name alone establishes TRAIN eligibility. Ordinary same-repository PRs and
+fork PRs (including approved forks) stay on ubuntu-latest; their PR routing
+class is explicitly deferred. rest/gates/contracts and the aggregate stay
+hosted. Preserve seven-lane success requirements and job timeouts. Both v1
+classes share the two-slot cap; reserve train priority through host admission,
+since labels alone provide no queue priority or trust proof.
 
 ## Cache trust and lifecycle
 
@@ -95,14 +105,17 @@ A job's YAML, environment, cache key and requested label are untrusted inputs
 for deciding cache access. Before trusted dispatch, a host-side controller must
 bind the GitHub run/job identity, event, repository, ref and exact checkout SHA
 to a slot using independently fetched forge evidence. Refuse ambiguous or
-mismatched evidence. Reviewed default-branch policy controls classification;
+mismatched evidence. For TRAIN, independently match the repository, PR number,
+exact head SHA and branch to the host train record before assigning a slot;
+a `train/` prefix alone or a `merge_group` event is insufficient. Reviewed
+default-branch policy controls classification;
 a PR editing its workflow cannot promote itself. This controller/admission
 boundary is required implementation work, not something the existing JIT pipe
 already provides. Registration still runs only in the operator's session.
 
 | Cache | Writer | Readers / persistence |
 | --- | --- | --- |
-| PR per-slot/per-PR target and Cargo downloads | That PR class uid | PR jobs only; never main/train; evict by quota/age |
+| PR cache/class (deferred beyond v1) | No v1 local writer | Ordinary same-repository/fork PR CI remains hosted; no local PR cache |
 | Trusted main snapshot, per slot and shard family | Successful verified main-push job, then host publisher | Main/train receive private copies; root-owned published generations |
 | Main working target | One admitted main job | Private writable copy of trusted generation; publish only after success |
 | Train working target | One admitted train job | Private writable copy of trusted generation; delete after job, never publish |
@@ -133,9 +146,12 @@ A key mismatch starts cold. Record seed main SHA and age; missing seed builds
 clean. Check out the exact admitted main/train SHA independently of cache
 contents; cached Git metadata or config must never choose the source revision.
 
-Acceptance must plant PR artifacts with trusted-looking names, edit routing
-YAML, attempt direct/alias/symlink writes to trusted roots and sibling slots,
-and prove subsequent main/train builds use only the recorded main generation.
+Acceptance must prove ordinary same-repository and fork PR jobs remain hosted,
+including PR-edited routing YAML and forged TRAIN labels. Reject missing or
+mismatched host train records (repository, PR, exact head SHA or branch), and
+branch-name-only or merge-group claims. Local PR class/cache acceptance is
+deferred beyond v1. Attempt direct/alias/symlink writes to trusted roots and
+sibling slots; prove MAIN/TRAIN builds use only the recorded main generation.
 Also mutate a train's target and prove trusted hashes stay unchanged. Verify
 positive private-cache writes, cache misses and clean-build equivalence.
 A workflow `save-if` condition alone cannot satisfy this boundary.
@@ -166,6 +182,23 @@ host exposure, keep routing off pending independent review or use disposable
 VMs. Run each regression, then all four heavy shards concurrently, with executed
 test counts and positive-control output; an availability skip is not green.
 
+## Binding delivery slices
+
+- **S1 — environmental repairs only.** Capture the exact seven failures under
+  the installed unit properties, including operations, errno and positive
+  controls, then repair all seven environment tests using the plan above.
+  No runner, workflow or routing change belongs in S1. Preserve containment
+  assertions and execute the repaired regressions; no weakened or skipped test
+  counts as acceptance. Any required runner-policy change remains for S2.
+- **S2 — runner implementation.** Own two slots, cache trust/lifecycle,
+  host-record-bound TRAIN/MAIN admission, combined CI/eight-lane CPU and memory
+  budgets, and the updated runbook. Supply isolation, cache and admission
+  evidence while routing stays off; PR class/cache remains deferred.
+- **S3 — operator rollout and completion.** Own operator installation,
+  activation and the matched ten-train measurement described below. Only S3
+  completes STORY-2695 after acceptance; this sketch, S1 and S2 retain Refs
+  credit. Registration credentials remain an operator act outside the lane.
+
 ## Latency forecast, rollout and rollback
 
 Optimistic warm lib estimates subtract the entire measured 270s compile:
@@ -192,7 +225,9 @@ Enable AIDA_DELL1_CI=true only after those gates, initially for a bounded window
 Compare at least ten comparable green trains with a matched hosted window:
 record run start through aggregate finish, per-shard created/started/finished,
 queue median/p95, seed SHA/hit, cold/warm state, runner/slot, peak memory and
-concurrent lane load. Report other hosted jobs as possible critical paths.
+concurrent Codex lane count and cold-build load. Include the combined-load
+capacity gate above before accepting limits; report other hosted jobs as
+possible critical paths. S3 owns this measurement and completion decision.
 
 Rollback immediately on any trust-boundary failure, containment skip/failure,
 OOM, cleanup overlap or repeated rearm failure; also roll back if matched median
