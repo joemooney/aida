@@ -8,7 +8,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-10T06:40:07.764479561Z
-modified_at: 2026-11-10T09:01:59.132690565Z
+modified_at: 2026-11-10T10:08:31.485277986Z
 req_type: Bug
 comments:
 - id: 01a1c4af-35ea-7243-ac9f-f3b9d11983b0
@@ -16,6 +16,29 @@ comments:
   content: 'ADVISOR RULING (2026-11-10 08:59 UTC): approved. Fix exactly as described: the verdict''s change key comes from the reviewer''s leased change (PR-N/MR-N), never from a spec->PR lookup; refuse to record a verdict whose head is not the named change''s current head. Regression: two open PRs naming one spec; a verdict for the second lands only in its own ledger and ''aida review verdict'' for the first is unchanged. Also tolerate the existing mis-keyed record (PR-3651 seq 53): reading a ledger ignores a verdict whose head was never that PR''s head, without rewriting history. LIGHT gate.'
   created_at: 2026-11-10T08:59:39.370821932Z
   modified_at: 2026-11-10T08:59:39.370821932Z
+  session_id: 01a1c39a-801a-7bd1-8da9-c955a6707f0b
+  harness_version: 2.1.321 (Claude Code)
+- id: 01a1c4ee-42fd-7313-83d6-8fc37e6a286b
+  author: joe
+  content: |-
+    CI FAILURES at 74fc3457565b (run 42793737045). Fix exactly these before pushing; a push without a code change for them will fail again and must not be made:
+    error: could not compile `aida-cli-lib` (lib test) due to 3 previous errors
+    error[E0425]: cannot find function `handle_review_record_fixture_at` in this scope
+    error[E0425]: cannot find function `resolve_commit_sha` in this scope
+    error: test run failed
+            FAIL  aida-cli::bug_1771_status_lens_filters epic_inherits_child_lens
+            FAIL  aida-cli::bug_1771_status_lens_filters lens_status_tokens_select_their_own_parked_set
+            FAIL  aida-cli::bug_1771_status_lens_filters lens_token_mixed_with_a_stored_status_honours_both
+            FAIL  aida-cli::bug_2201_outside_project_reviewer contained_reviewer_in_outside_project_records_its_verdict
+            FAIL  aida-cli::story_078_node_aliases node_alias_review_record_keys_the_verdict_under_the_canonical_id
+    FAIL flags — 1 cited --flag token(s) did not resolve to the cited command or its parent/child command subtree:
+        thread 'contained_reviewer_in_outside_project_records_its_verdict' (113167) panicked at aida-cli/tests/bug_2201_outside_project_reviewer.rs:344:5:
+        thread 'epic_inherits_child_lens' (23739) panicked at aida-cli/tests/bug_1771_status_lens_filters.rs:61:5:
+        thread 'lens_status_tokens_select_their_own_parked_set' (24042) panicked at aida-cli/tests/bug_1771_status_lens_filters.rs:61:5:
+        thread 'lens_token_mixed_with_a_stored_status_honours_both' (26013) panicked at aida-cli/tests/bug_1771_status_lens_filters.rs:61:5:
+        thread 'node_alias_review_record_keys_the_verdict_under_the_canonical_id' (96028) panicked at aida-cli/tests/story_078_node_aliases.rs:141:9:
+  created_at: 2026-11-10T10:08:31.485277986Z
+  modified_at: 2026-11-10T10:08:31.485277986Z
   session_id: 01a1c39a-801a-7bd1-8da9-c955a6707f0b
   harness_version: 2.1.321 (Claude Code)
 history:
