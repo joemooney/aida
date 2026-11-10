@@ -3,12 +3,12 @@ spec_id: STORY-b6b1278890774ef993d2ebc327862470-611
 agreed_id: STORY-2688
 title: 'PR reconciler: one tested command maps every open PR to one state, next action and owner, and performs the mechanical actions'
 description: 'Problem: on 2026-11-08 the PR control plane was untested bash loops (auto-train, auto-rework, review-watch-loop) plus advisor sweeps. A restart wiped auto-rework''s in-memory seen set and it re-reworked old heads. Requirement: derive each PR''s state from durable facts (open/closed, mergeable, head SHA, verdict at head, CI at head, hold state, lane running) into exactly one of a closed set of states, each with one next action and owner. Mechanical actions run idempotently from durable state; judgment states route to a named seat. Acceptance: table-driven tests cover every state; restart mid-pass repeats no action; the operator scripts can be retired. Architecture change: sketch and advisor signoff first.'
-status: InProgress
+status: NeedsAttention
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-09T01:57:49.197822183Z
-modified_at: 2026-11-10T19:38:21.312060607Z
+modified_at: 2026-11-10T19:40:26.177092127Z
 req_type: Story
 tags:
 - area:orchestration
@@ -26,6 +26,55 @@ comments:
   modified_at: 2026-11-10T19:35:23.153142833Z
   session_id: 01a1c530-c917-7f13-ab81-f6b5e1d1cd30
   harness_version: 2.1.322 (Claude Code)
+- id: 01a1c6f9-b6e3-7601-a89e-2acb603072e6
+  author: dirtlab
+  content: |
+    Architecture sketch for advisor signoff — 2026-11-10. Sketch only; no source edits.
+
+    SOURCE OF TRUTH
+    Propose one CLI-library pr_state module: collect PrFacts, then pure classify(PrFacts) -> PrDecision {state, next_action, owner, reason, evidence_key}. Proposed aida pr state (read-only table/JSON) and pr reconcile --dry-run/--execute share it. State is derived evidence, never a writable status or authorization token. Shell loops must not independently classify PRs.
+
+    PrFacts: forge/project/PR-or-MR identity, confirmed open/closed/merged, pinned head and base SHA, mergeability/behind-base, workflow digest, current-head attested verdict/kind/round, classified required CI at head, effective hold/punt/clearance, and durable queue/lane/reviewer/train reservations and process identities. Reuse forge_observed::Observed (Known/Pending/Transient), trusted verdict readers, existing gate/clearance policy, required-check classification and runtime receipts. Capture observation times; re-read head after collection; moving head invalidates snapshot. Workflow/base/head changes invalidate relevant evidence. A script seen set or bare PID establishes no ownership.
+
+    CLOSED ENUM / NEXT ACTION / OWNER
+    Ordered first-match table; later rows exclude earlier conditions. Other facts remain diagnostics. This extends the earlier nine-state sketch with explicit unknown, hold, in-flight and behind-base states, subject to advisor approval.
+    Gone: confirmed closed/merged -> retire reconciler reservations after confirmation / reconciler.
+    EvidencePending: evidence needed for decision is pending, transient or moving -> bounded re-observation / reconciler. Persistent unsafe/corrupt evidence becomes NeedsRuling, never automatic repair.
+    Held: effective punt or uncleared hold -> request authorized clearance / resolved advisor seat (human-clear policies retain human authority).
+    InFlight: accepted queued/running action or ambiguous dispatch receipt, including prior-head overlap -> observe recorded operation / recorded lane, reviewer or train owner.
+    NeedsRuling: judgment verdict, conflicting evidence, exhausted round policy, draft/unsupported policy or ambiguous ownership -> request decision / resolved advisor seat.
+    Conflict: confirmed merge conflict -> queue conflict resolution / resolved implementer seat.
+    BehindBase: mergeable but base/workflow freshness requires update -> request guarded branch update / author or implementer seat.
+    NeedsRework: current-head findings verdict permits mechanical rework routing -> enqueue findings-bound rework / resolved implementer seat.
+    RedCi: confirmed blocking CI failure without higher-priority findings -> route CI diagnosis / resolved implementer seat; no blind retries.
+    CiPendingThenVerdict: no current-head verdict and CI pending -> dispatch review now / resolved reviewer seat. CI does not delay review.
+    NeedsVerdict: no current-head verdict and CI green -> dispatch review / resolved reviewer seat.
+    ApprovedCiPending: valid current-head approval and CI pending/unregistered -> observe CI / reconciler.
+    ReadyForTrain: valid approval, green CI, fresh base/workflow, mergeable and known eligibility gates -> nominate exact head / train controller.
+
+    Resolve role owners to concrete seat IDs in output, not an assumed live forge author. Missing/ambiguous owner becomes NeedsRuling; missing advisor routing is a visible configuration refusal. Existing rework-only hold clearance may proceed only through its existing validated policy. Unmodeled policies route to judgment. Conflict resolution is never automatic. Update retains existing branch ownership restrictions.
+
+    DURABLE EFFECTS / RESTARTS
+    Under a shared project/change lock, refresh evidence and reserve a versioned durable action before effects. Key: forge/project/change + head + action, with verdict-round/findings identity for review/rework and target base/workflow for updates/train. Same-head legitimate rounds must remain distinguishable. Retain intent, owner, evidence fingerprint, reserved/dispatched/confirmed/ambiguous phase and downstream receipt. Link existing review-watch reservations, queue identities and train journal; do not duplicate their authority.
+
+    On restart inspect destination receipts before replay. Crash after effect but before acknowledgement must not spawn twice: downstream adapters need stable operation-ID deduplication or discoverable durable acceptance receipts. Locks and a seen ledger alone cannot provide exactly-once external effects. Ambiguous acceptance retains reservation/capacity and routes recovery to advisor; timeout alone cannot release it. Revalidate head, hold and owner at existing action-specific locked boundaries. Old-head intent becomes obsolete without erasing live old-head work. No execution until receipt contracts satisfy restart acceptance.
+
+    LOOP CONSUMERS
+    auto-train becomes scheduling for ReadyForTrain nominations. aida pr train retains batching/selection, train CI, fresh gate confirmation, merge authority and its journal. Reconciler never directly merges.
+    auto-rework consumes NeedsRework and invokes existing queue-rework with findings/round identity; accepted work becomes InFlight. Restart uses durable receipts. RedCi and Conflict route to owners.
+    review-watch consumes NeedsVerdict/CiPendingThenVerdict using existing attested admission, concurrency reservations, overlap rules and process receipts. ApprovedCiPending only observes CI. Shared classification replaces competing predicates; effects remain with their existing owners.
+    During rollout enable only one executor; shadow comparison is read-only. After parity and restart validation retire shell classifiers and in-memory seen sets, retaining timer wrappers if useful.
+
+    LATER SLICES / ACCEPTANCE
+    S1 classifier and read-only state command: table-driven tests for every enum state, precedence combinations, unknowns, owners, stale head/workflow and old verdicts.
+    S2 ledger and dry-run: concurrent reconcilers, crash injection at every persistence/effect boundary, same-head new rounds, ambiguous receipts and old-head overlap.
+    S3 guarded effect adapters: receipt/operation-ID contract tests, restarts proving no duplicate review/rework/update/train, shadow comparison, then retire scripts. Existing ship/train/hold/admission gates remain authoritative.
+
+    Inspection: review_watch.rs, review_watch_ready.rs interfaces, forge_observed.rs, queue_cmd/rework.rs and pr_train_journal.rs. Supplied /home/joe/ai/aida/.codegraph/proxy-state/bin/codegraph was unavailable; used rg and file reads, no index mutation. No source edits or Cargo tests. Request advisor signoff on derivation boundary, expanded enum/precedence, owner routing, train-nomination boundary and receipt-based recovery before implementation.
+  created_at: 2026-11-10T19:40:16.483366951Z
+  modified_at: 2026-11-10T19:40:16.483366951Z
+  session_id: 01a1c6f7ed8e
+  harness_version: codex-cli 0.167.0
 history:
 - id: 01a1be07-037f-7533-9b8f-9af4ceb825a2
   author: joe
@@ -48,6 +97,15 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a1c6f9-dcc1-7fe0-92f9-4a077a001b3e
+  author: dirtlab
+  timestamp: 2026-11-10T19:40:26.177109005Z
+  session_id: 01a1c6f7ed8e
+  harness_version: codex-cli 0.167.0
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: NeedsAttention
 filed_at:
   code_sha: a7a14984cec5533987dfeccb70d1f91aaebbf22a
   branch: main
@@ -56,3 +114,9 @@ filed_at:
   aida_build_sha: 8a4a909a967
   vendor: claude
   session: 20abb7c3-8f9b-4a5e-b326-404921f3b450
+attention_reason:
+  category: design-fork
+  detail: 'Architecture sketch posted on this spec per binding 2026-11-10 advisor brief. Advisor signoff required before implementation: shared PR-state derivation, expanded state enum and precedence, concrete owner routing, train nomination boundary, and durable operation receipts for crash recovery. Sketch-only lane complete; no source edits.'
+  lean: Approve the shared pure classifier and existing effect-owner boundaries; require downstream idempotency/receipt contracts before enabling reconciliation effects.
+  raised_by: implementer
+  raised_at: 2026-11-10T19:40:26.177092127Z
