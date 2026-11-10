@@ -33,11 +33,16 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-09T16:33:51.967266Z
-modified_at: 2026-11-10T10:18:24.809214591Z
+modified_at: 2026-11-10T14:28:51.484324713Z
 req_type: Story
 tags:
 - area:ci
 - needs-sketch-signoff
+relationships:
+- rel_type: Supersedes
+  target_id: 01a1bd08-3de9-7321-a3ce-1c3774297e09
+  created_at: 2026-11-10T14:28:51.484317239Z
+  created_by: joe
 comments:
 - id: 01a1c325-9481-79d1-ba5f-7a7f35a4b8ce
   author: joe
@@ -185,6 +190,12 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a1c5dc-9f71-7ee1-953d-832e11dd1d14
+  author: joe
+  timestamp: 2026-11-10T14:28:52.721941203Z
+  session_id: 01a1c530-c917-7f13-ab81-f6b5e1d1cd30
+  harness_version: 2.1.322 (Claude Code)
+  changes: []
 filed_at:
   code_sha: e4eee38238fa4cb8e8c85dadaa4ed07894cfbeea
   branch: main
