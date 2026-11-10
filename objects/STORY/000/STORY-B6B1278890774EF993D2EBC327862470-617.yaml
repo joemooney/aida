@@ -37,12 +37,12 @@ description: |-
 
   ## Advisor ruling 2026-11-09 (resolves the design-fork punt)
   The reviewer-controlled no-carry marker is OUT of scope. It was an optional exclusion, not part of the safety argument (TASK-1960 carry-over runs without it), and authenticating it needs its own receipt design. It is filed separately as a Draft.
-status: InProgress
+status: Approved
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-09T15:57:18.371798469Z
-modified_at: 2026-11-10T00:07:02.675439215Z
+modified_at: 2026-11-10T00:07:09.015800123Z
 req_type: Story
 tags:
 - architecture
@@ -260,6 +260,13 @@ history:
   session_id: 01a1c29e17c0
   harness_version: codex-cli 0.167.0
   changes: []
+- id: 01a1c2c7-b4a8-7e31-a5ab-58a5fd1fe12d
+  author: joe
+  timestamp: 2026-11-10T00:07:10.248216994Z
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Approved
 filed_at:
   code_sha: e4eee38238fa4cb8e8c85dadaa4ed07894cfbeea
   branch: main
