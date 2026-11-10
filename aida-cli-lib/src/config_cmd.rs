@@ -5873,8 +5873,8 @@ pub(crate) struct ConfigArgs {
 
 fn run_config(
     matches: &clap::ArgMatches,
-    ctx: &crate::command_registry::DispatchCtx,
-) -> anyhow::Result<crate::command_registry::Flow> {
+    ctx: &crate::cmdkit::DispatchCtx,
+) -> anyhow::Result<crate::cmdkit::Flow> {
     use crate::*;
     let args = <ConfigArgs as clap::FromArgMatches>::from_arg_matches(matches)?;
     // The closed diagnostic needs no requirement-store/cache write access.
@@ -5885,20 +5885,20 @@ fn run_config(
         | ConfigPermissionsCommand::RuntimePolicy { .. }),
     ) = &args.inner
     {
-        return crate::command_registry::returned(handle_config_permissions_command(command));
+        return crate::cmdkit::returned(handle_config_permissions_command(command));
     }
     // Clone-local configuration must not open or mutate the requirement store.
     // trace:STORY-1742 | ai:codex
     if let ConfigCommand::Transport(command) = &args.inner {
-        return crate::command_registry::returned(crate::transport_profile::configure(command));
+        return crate::cmdkit::returned(crate::transport_profile::configure(command));
     }
     // trace:BUG-2017 | ai:codex — no requirement store or authority inference.
     if let ConfigCommand::Allocation(command) = &args.inner {
-        return crate::command_registry::returned(configure_allocation(command));
+        return crate::cmdkit::returned(configure_allocation(command));
     }
     // trace:BUG-2189 | ai:claude
     if matches!(args.inner, ConfigCommand::Format { .. }) {
-        crate::command_registry::refuse_global_format(ctx, "config format")?;
+        crate::cmdkit::refuse_global_format(ctx, "config format")?;
     }
     match &ctx.store {
         None => {
@@ -5911,14 +5911,12 @@ fn run_config(
                 inner: ConfigCommand::Menu,
             } = &args
             {
-                return crate::command_registry::returned(config_cmd::handle_config_menu_command());
+                return crate::cmdkit::returned(config_cmd::handle_config_menu_command());
             }
-            Ok(crate::command_registry::Flow::Continue)
+            Ok(crate::cmdkit::Flow::Continue)
         }
-        Some(crate::command_registry::StoreCtx::Distributed { .. }) => {
-            Ok(crate::command_registry::Flow::Continue)
-        }
-        Some(crate::command_registry::StoreCtx::Git {
+        Some(crate::cmdkit::StoreCtx::Distributed { .. }) => Ok(crate::cmdkit::Flow::Continue),
+        Some(crate::cmdkit::StoreCtx::Git {
             store_path,
             backend,
         }) => {
@@ -5962,9 +5960,9 @@ fn run_config(
                     self::handle_config_command(config_cmd, &storage)?;
                 }
             }
-            Ok(crate::command_registry::Flow::Continue)
+            Ok(crate::cmdkit::Flow::Continue)
         }
-        Some(crate::command_registry::StoreCtx::Legacy {
+        Some(crate::cmdkit::StoreCtx::Legacy {
             storage,
             requirements_path,
         }) => {
@@ -5981,30 +5979,29 @@ fn run_config(
                     self::handle_config_command(config_cmd, &storage)?;
                 }
             }
-            Ok(crate::command_registry::Flow::Continue)
+            Ok(crate::cmdkit::Flow::Continue)
         }
     }
 }
 
 // trace:STORY-1728 | ai:claude
-pub(crate) static CONFIG: crate::command_registry::CommandReg =
-    crate::command_registry::CommandReg {
-        name: "config",
-        help_after: "comment",
-        command: <ConfigArgs as clap::CommandFactory>::command,
-        policy: config_cli_policy,
-        run: crate::command_registry::Handler::Store(run_config),
-    };
+pub(crate) static CONFIG: crate::cmdkit::CommandReg = crate::cmdkit::CommandReg {
+    name: "config",
+    help_after: "comment",
+    command: <ConfigArgs as clap::CommandFactory>::command,
+    policy: config_cli_policy,
+    run: crate::cmdkit::Handler::Store(run_config),
+};
 
 // Per-verb policy, carried over from the legacy stakeholder and per-write
 // auto-push tables. An unparseable invocation gets the fail-closed answer.
 // trace:STORY-1728 | ai:claude
-fn config_cli_policy(matches: &clap::ArgMatches) -> crate::command_registry::CmdPolicy {
+fn config_cli_policy(matches: &clap::ArgMatches) -> crate::cmdkit::CmdPolicy {
     use crate::cli::ConfigCommand;
     use crate::stakeholder_role::StakeholderAction as SA;
     let args = <ConfigArgs as clap::FromArgMatches>::from_arg_matches(matches).ok();
     let inner = args.as_ref().map(|args| &args.inner);
-    crate::command_registry::CmdPolicy {
+    crate::cmdkit::CmdPolicy {
         // trace:TASK-2705 TASK-3048 | ai:codex — closed diagnostics are read-only.
         stakeholder: if matches!(
             inner,
