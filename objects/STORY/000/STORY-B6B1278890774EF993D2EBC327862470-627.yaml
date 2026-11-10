@@ -8,7 +8,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-10T03:52:00.571796159Z
-modified_at: 2026-11-10T10:50:55.938478835Z
+modified_at: 2026-11-10T10:55:18.187711239Z
 req_type: Story
 comments:
 - id: 01a1c399-6840-7383-843e-9930f6eaa3f7
@@ -52,6 +52,18 @@ comments:
   modified_at: 2026-11-10T10:48:51.473967711Z
   session_id: 01a1c39a-801a-7bd1-8da9-c955a6707f0b
   harness_version: 2.1.321 (Claude Code)
+- id: 01a1c519-16ab-7d90-95ea-ba3dd646060a
+  author: dirtlab
+  content: |
+    S1 verification handoff: this lane inherited the porcelain implementation at 772ce3dc71, with #3772 in its ancestry. Added aida-porcelain/tests/flow_process.rs: real Git fixture with a tracked byte sentinel, relative aida-flow symlink dispatch, canonical/alias JSON parity, help, invalid window syntax, missing required flags and unknown argv0. Snapshot assertions cover all fixture bytes and refs plus cache/queue/lease sentinels after each invocation.
+
+    Validation: cargo test --profile agent -p aida-porcelain passed (9 executed tests; installed parity ignored by default). Explicit installed_builtin_parity --ignored passed (1 test). cargo check --profile agent -p aida-cli --tests passed. After tightening the tracked-file fixture, cargo test --profile agent -p aida-porcelain --test flow_process passed (1 test). git diff --check passed.
+
+    make check-ci-fast failed. Rerun with umask 077 passed classifier inventory and mail-wake fixtures, then containment conformance had six errors creating temporary fixtures in read-only /home/dirtlab/.aida. Runner also reported read-only CARGO_HOME. Host must rerun the fast gate outside this native seat. Log: /tmp/story-2704-check-ci-fast.log. No Git metadata mutations, publication, queue completion or review recording performed. S2/S3 remain outside this slice.
+  created_at: 2026-11-10T10:55:18.187711239Z
+  modified_at: 2026-11-10T10:55:18.187711239Z
+  session_id: 01a1c515100e
+  harness_version: codex-cli 0.167.0
 history:
 - id: 01a1c399-7102-7f81-9bb9-fd37379159d3
   author: joe
