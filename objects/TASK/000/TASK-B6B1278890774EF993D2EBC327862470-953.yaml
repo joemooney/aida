@@ -23,7 +23,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-07T20:45:16.684639Z
-modified_at: 2026-11-10T17:31:27.370403179Z
+modified_at: 2026-11-10T17:31:28.701014786Z
 req_type: Task
 relationships:
 - rel_type: Child
@@ -455,6 +455,20 @@ comments:
   content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: Part A loses relay handover ownership after source retirement, violating post-retirement readability; all 16 changed files and acceptance criteria reviewed. Required CI lanes are queued.. No triage reason was given.'
   created_at: 2026-11-10T17:31:27.370394855Z
   modified_at: 2026-11-10T17:31:27.370394855Z
+  session_id: 01a1c39a-801a-7bd1-8da9-c955a6707f0b
+  harness_version: 2.1.321 (Claude Code)
+- id: 01a1c683-cba9-7131-9521-8593ca5fc65e
+  author: joe
+  content: |-
+    REVIEW FINDINGS TO ADDRESS (TASK-3420):
+    Verdict: CHANGES REQUESTED
+    Reviewed commit: 7acb22206579
+    Recorded: 2026-11-10T16:52:07.494699836+00:00
+    Findings:
+    1. [P1] TASK-3420 A1: aida-core/src/mailbox_logical.rs:2466-2474 retirement_message_state ignores local.handovers and permits handover-only sources to retire. write_handover stores relay ownership in local .deliveries/handover; delivery_gates loads handovers only from live ObservedSource.handovers, while RetainedDeliveries::lookup reads only original sidecars and canonical digest copies only messages. Retiring the only handover source therefore hides delivered unacknowledged canonical mail from its new relay recipient. Preserve and validate retained handover chains in logical reads, or retain the source until equivalent readable ownership exists. Add before/after retirement regressions for handover-only and message-plus-handover sources, checking new recipient visibility and ACK plus rejection of invalid chains. Evidence: existing handover_adds_an_owner_and_keeps_the_old_runs_receipts fixture and production source inspection; no local tests run under review-watch policy.
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
+  created_at: 2026-11-10T17:31:28.553135753Z
+  modified_at: 2026-11-10T17:31:28.553135753Z
   session_id: 01a1c39a-801a-7bd1-8da9-c955a6707f0b
   harness_version: 2.1.321 (Claude Code)
 history:
