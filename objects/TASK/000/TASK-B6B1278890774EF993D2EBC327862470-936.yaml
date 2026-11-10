@@ -3,12 +3,12 @@ spec_id: TASK-b6b1278890774ef993d2ebc327862470-936
 agreed_id: TASK-3368
 title: 'STORY-2537 S6: broker-attested ProcIdentity (separately signed slice)'
 description: 'Per sketch docs/plans/2026-11-05-story-2537-proc-identity.md (~305): the broker slice needs its own sketch and advisor signoff before implementation. Mode guided: write the sketch first.'
-status: NeedsAttention
+status: Approved
 priority: Low
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-07T10:46:47.827833836Z
-modified_at: 2026-11-10T02:24:13.732650100Z
+modified_at: 2026-11-10T02:24:32.351286926Z
 req_type: Task
 relationships:
 - rel_type: Child
@@ -189,6 +189,13 @@ comments:
   modified_at: 2026-11-10T02:24:13.732650100Z
   session_id: 01a1beff-fc3b-78e2-93e2-9b0c283b0339
   harness_version: 2.1.319 (Claude Code)
+- id: 01a1c345-785f-78d3-b818-bb471f78fdc6
+  author: joe
+  content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: Full five-file sweep: disabled slice respects signed scope, but raw executable lookup and lib.rs formatting fail required CI; two fixes needed.. It was punted on: blocked-dependency: Review finding 1 remains host-only: local HEAD d782a710e008 still ends (TASK-3368), contrary to the signed Refs-only slice. Git metadata is read-only in this native seat, so I cannot amend or replace that commit or verify publisher completion semantics. Advisor comment reports PR title/body and no-complete marker corrected host-side; finding 2 therefore needs no source edit. I dispute requiring an artificial code commit for these publication-only findings. Authorized publisher must ensure commit/squash metadata cannot grant completion and use (Refs TASK-3368). Disabled broker code is already present and unchanged. Manual rollout gate stays pending; preserve all punt/hold vetoes.. No triage reason was given.'
+  created_at: 2026-11-10T02:24:32.351280123Z
+  modified_at: 2026-11-10T02:24:32.351280123Z
+  session_id: 01a1beff-fc3b-78e2-93e2-9b0c283b0339
+  harness_version: 2.1.319 (Claude Code)
 history:
 - id: 01a1b59e-5972-7d63-967f-d8572322d9d1
   author: joe
@@ -355,6 +362,15 @@ history:
   - field_name: status
     old_value: InProgress
     new_value: NeedsAttention
+- id: 01a1c345-785f-78d3-b818-bb3f07231454
+  author: joe
+  timestamp: 2026-11-10T02:24:32.351249866Z
+  session_id: 01a1beff-fc3b-78e2-93e2-9b0c283b0339
+  harness_version: 2.1.319 (Claude Code)
+  changes:
+  - field_name: status
+    old_value: NeedsAttention
+    new_value: Approved
 filed_at:
   code_sha: 4803b66ade90fa4f6ccbcfb20f3af84d4aaf7886
   branch: main
@@ -364,16 +380,3 @@ filed_at:
   vendor: claude
   session: 01a1b441-8158-7162-ad75-f7915b45ee33
   harness_version: 2.1.319 (Claude Code)
-attention_reason:
-  category: blocked-dependency
-  detail: 'Review finding 1 remains host-only: local HEAD d782a710e008 still ends (TASK-3368), contrary to the signed Refs-only slice. Git metadata is read-only in this native seat, so I cannot amend or replace that commit or verify publisher completion semantics. Advisor comment reports PR title/body and no-complete marker corrected host-side; finding 2 therefore needs no source edit. I dispute requiring an artificial code commit for these publication-only findings. Authorized publisher must ensure commit/squash metadata cannot grant completion and use (Refs TASK-3368). Disabled broker code is already present and unchanged. Manual rollout gate stays pending; preserve all punt/hold vetoes.'
-  raised_by: implementer
-  raised_at: 2026-11-10T01:40:18.093892818Z
-failure_reason:
-  phase: reviewer
-  phase_index: 3
-  kind: verdict:request-changes
-  detail: 'Full five-file sweep: disabled slice respects signed scope, but raw executable lookup and lib.rs formatting fail required CI; two fixes needed.'
-  recovery_hint: address the review findings, move TASK-3368 back to In Progress, and clear the PR hold only after approval
-  shelved_by: reviewer
-  shelved_at: 2026-11-10T01:37:16.788964407Z
