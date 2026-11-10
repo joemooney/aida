@@ -8,8 +8,16 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-10T22:45:07.512110557Z
-modified_at: 2026-11-10T22:45:07.512110557Z
+modified_at: 2026-11-10T22:45:29.771335047Z
 req_type: Task
+comments:
+- id: 01a1c7a3-4a2b-78c3-a530-1ca2a2aa41d6
+  author: joe
+  content: 'Code pointers: the ''not registered yet'' wait state is produced around aida-cli-lib/src/ci_gate.rs:647 (registration poll) and pr_ship.rs:1149; the train''s wait line is in pr_train.rs. Read check-run state through the forge layer (crate::forge), not raw gh: the story_2401 ratchet forbids new raw gh reads.'
+  created_at: 2026-11-10T22:45:29.771335047Z
+  modified_at: 2026-11-10T22:45:29.771335047Z
+  session_id: 01a1c70f-d731-7b70-acf8-e9ab3d288fca
+  harness_version: 2.1.322 (Claude Code)
 filed_at:
   code_sha: 08c562ec6bb9f936f0e0f8c9bad273de57ccf7b0
   branch: main
