@@ -33,11 +33,19 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-09T16:33:51.967266330Z
-modified_at: 2026-11-09T16:33:51.967266330Z
+modified_at: 2026-11-10T01:49:42.401488228Z
 req_type: Story
 tags:
 - area:ci
 - needs-sketch-signoff
+comments:
+- id: 01a1c325-9481-79d1-ba5f-7a7f35a4b8ce
+  author: joe
+  content: 'ADVISOR BRIEF (2026-11-10 01:55 UTC): SKETCH ONLY in this lane. Deliver docs/plans/2026-11-10-story-2695-dell1-parallel-cached-runner.md as a docs-only PR titled with (Refs STORY-2695); no code changes. The goal is end-to-end merge-train latency (today 40-50 min of serial hosted CI per train), so the sketch must answer with evidence from scripts/runner/one-job.sh, rearm.sh, the aida-ci.slice unit, .github/workflows/ci.yml and docs/internal/testing/dell1-runner.md: (1) slot model: 2 or 3 concurrent one-job runners, per-slot job dir, lock and rearm loop, the core and memory budget inside aida-ci.slice, and how GitHub labels route heavy shards to dell1 while fork PRs stay hosted. (2) Cache trust: how merge-train and main-push builds get incremental-cache benefit WITHOUT any PR job being able to influence what they compile. State who may write each cache (for example main pushes only write a trusted cache that trains read but never write), and how a train''s own compiles of not-yet-landed code avoid poisoning it. (3) A plan for each of the 7 environment-failing tests listed in the description: root cause hypothesis and fix in the unit or the test assumption; no containment test weakened or skipped. (4) Expected per-shard and per-train wall time against the baseline in the description, the rollout switch (AIDA_DELL1_CI) and the rollback trigger. Registration credentials stay an operator act and never run from the lane. Keep it under about 250 lines.'
+  created_at: 2026-11-10T01:49:42.401488228Z
+  modified_at: 2026-11-10T01:49:42.401488228Z
+  session_id: 01a1beff-fc3b-78e2-93e2-9b0c283b0339
+  harness_version: 2.1.319 (Claude Code)
 filed_at:
   code_sha: e4eee38238fa4cb8e8c85dadaa4ed07894cfbeea
   branch: main
