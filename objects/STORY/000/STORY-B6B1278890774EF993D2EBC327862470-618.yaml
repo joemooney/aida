@@ -33,7 +33,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-09T16:33:51.967266Z
-modified_at: 2026-11-10T14:41:40.676872456Z
+modified_at: 2026-11-10T15:04:02.452195536Z
 req_type: Story
 tags:
 - area:ci
@@ -138,6 +138,57 @@ comments:
   modified_at: 2026-11-10T14:41:40.676872456Z
   session_id: 01a1c530-c917-7f13-ab81-f6b5e1d1cd30
   harness_version: 2.1.322 (Claude Code)
+- id: 01a1c5fc-d094-75e2-a9ea-cceb12ef9fe5
+  author: dirtlab
+  content: |
+    S2 handoff — STORY-2695
+
+    Implemented two fixed runner slots with four distinct slot/class identities,
+    root-controlled host admission and job-start gating, TRAIN record matching,
+    MAIN-only cache publication, disposable TRAIN copies, persistent target/incremental
+    and Cargo registry/git downloads, CPU/memory/thread budgets, and the S3 runbook.
+    The hook blocks until the host authorizes the actual runner/job; refusals stop
+    the whole cgroup so if: always() cannot continue a refused job. Compiler output
+    copies retain mtimes/execute bits without future timestamps masking source changes.
+    No workflow/routing, installed service, account, registration or repository setting
+    was changed. All checkout edits remain uncommitted for the host launcher.
+
+    Changed files:
+    - scripts/runner/controller.py (new)
+    - scripts/runner/job-gate.py (new)
+    - scripts/runner/job-gate.sh (new)
+    - scripts/runner/select-job.py (new)
+    - scripts/runner/one-job.sh
+    - scripts/runner/rearm.sh
+    - scripts/runner/aida-ci.slice
+    - scripts/store-writers.toml (reconciled host-only non-store writers)
+    - tests/test_dell1_controller.py (new)
+    - tests/test_self_hosted_runner.py (existing CI entry point includes new fixtures)
+    - docs/internal/testing/dell1-runner.md
+
+    Validation:
+    - python3 -m unittest tests.test_self_hosted_runner: 35 executed tests passed.
+    - bash syntax, actual hook socket and mocked operator rearm exercised by tests.
+    - store-writer inventory reconciliation/check passed (3488 sites).
+    - git diff --check passed.
+    - make check-ci-fast: blocked. Inherited umask 0002 caused unrelated mail-wake
+      fixture failures. With umask 022, mail-wake passed; containment conformance
+      then failed six fixture operations trying to write read-only /home/dirtlab/.aida.
+      Log: /tmp/story-2695-check-ci-fast-022.log. Full fast gate is not green.
+
+    S3 still owns operator install and actual-unit cross-slot file/signal/proc,
+    namespace, cache-mutation/clean-build-equivalence and combined eight-cold-lane
+    capacity acceptance; reviewed workflow integration and activation; ten matched
+    train measurements. The current historical workflow must NOT be activated.
+    The operator must export actual host train journal attestations to protected
+    trains.json, install reviewed policy and the pinned compiler, and use a separate
+    read-only forge token for sustained API throughput. No live isolation or speedup
+    is claimed by the host-independent S2 fixtures. No Rust files changed or Cargo
+    runs required for this LIGHT gate.
+  created_at: 2026-11-10T15:04:02.452195536Z
+  modified_at: 2026-11-10T15:04:02.452195536Z
+  session_id: 01a1c5eafaba
+  harness_version: codex-cli 0.167.0
 history:
 - id: 01a1c325-9cdb-7b81-a057-a76e1b9c8512
   author: joe
