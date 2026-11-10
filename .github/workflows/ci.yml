@@ -1004,6 +1004,11 @@ jobs:
         # Revisit only with a pinned toolchain. trace:TASK-709 trace:TASK-710
         run: cargo clippy --workspace -- -W clippy::all -D clippy::correctness
 
+      # trace:TASK-3779 | ai:codex
+      - name: Terminal glyph padding ratchet
+        if: matrix.shard == 'gates'
+        run: python3 -m unittest tests/test_terminal_glyph_padding.py
+
       # EPIC-45 / TASK-835: the glyph-literal forward-guard (substrate-as-bouncer).
       # Fails the PR when a NEW raw status/marker glyph literal is typed inline
       # outside the registry (aida-cli/src/glyphs.rs) and the explicit allow-list
