@@ -18,7 +18,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-08T02:58:08.667753563Z
-modified_at: 2026-11-10T02:23:49.497224860Z
+modified_at: 2026-11-10T04:00:18.290016912Z
 req_type: Story
 tags:
 - area:human-wait
@@ -558,6 +558,13 @@ comments:
   modified_at: 2026-11-10T02:22:21.486513574Z
   session_id: 01a1beff-fc3b-78e2-93e2-9b0c283b0339
   harness_version: 2.1.319 (Claude Code)
+- id: 01a1c39d-2572-7263-a214-7bd6e4c12b8c
+  author: joe
+  content: 'ADVISOR RULING (2026-11-10 04:00 UTC) — binding for the PR #3748 rework at head c261ce2712; supersedes the 01:44 UTC ruling. Fix exactly one finding: F1 [P2] aida-cli-lib/src/park_runtime.rs:155-169: WaitLock::acquire creates the final runtime directory but never syncs its pinned parent. Sync the pinned parent directory after creating the runtime directory (propagate failure), and add fault-injection or syscall-order test coverage for that directory-creation boundary next to the existing file-replacement tests. Push to the existing PR branch story-2661-park-s1. LIGHT gate: one targeted cargo test -p aida-cli-lib park_runtime plus make check-ci-fast.'
+  created_at: 2026-11-10T04:00:18.290016912Z
+  modified_at: 2026-11-10T04:00:18.290016912Z
+  session_id: 01a1c39a-801a-7bd1-8da9-c955a6707f0b
+  harness_version: 2.1.321 (Claude Code)
 history:
 - id: 01a1b9c5-1aa6-78e3-9355-9af12a0ce44c
   author: joe
