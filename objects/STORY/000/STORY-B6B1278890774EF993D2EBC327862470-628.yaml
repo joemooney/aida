@@ -1,0 +1,21 @@
+id: 01a1c45f-46b2-7990-8bf8-0e8b62eda2a0
+spec_id: STORY-b6b1278890774ef993d2ebc327862470-628
+agreed_id: STORY-2705
+title: Review-watch defers reviewing a PR head while an implementer lane for its spec is live
+description: 'Observed 2026-11-10: when a rework lane starts it merges main into the PR branch and pushes that merge (07:06 UTC on #3748, #3757, #3761, #3762). review-watch reviewed each merge-only head within minutes, found the old finding still present, and recorded CHANGES REQUESTED, costing one reviewer run, one full CI run and a merge-hold failure notice per PR, while the real fix was still being written. Each such round also inflates the review-round metrics. Proposal: review-watch (and aida queue work PR-N --role reviewer) skips a head while a live implementer lease exists for the PR''s spec, on any registered host, and reviews the head the lane finally publishes; a head with no non-merge commit since the last verdict is deferred the same way. Acceptance: (1) with a live implementer lease for the spec, review-watch does not launch a reviewer and shows ''deferred: implementer lane live (host, lease)'' in its status; (2) when the lease ends, the current head is reviewed once; (3) a merge-only head after a CHANGES REQUESTED verdict is not reviewed while a lane is live; (4) no deferral without a live lease, so an abandoned lane cannot block review forever (lease liveness, not presence); (5) tests for each case.'
+status: Draft
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-11-10T07:32:20.786755079Z
+modified_at: 2026-11-10T07:32:20.786755079Z
+req_type: Story
+filed_at:
+  code_sha: e682f76092e65c6556f7881fe8a5e0aa48516740
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: e682f76092e
+  vendor: claude
+  session: 01a1c39a-801a-7bd1-8da9-c955a6707f0b
+  harness_version: 2.1.321 (Claude Code)
