@@ -8,7 +8,7 @@ priority: Low
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-05T04:41:25.538710401Z
-modified_at: 2026-11-10T02:21:59.933956576Z
+modified_at: 2026-11-10T02:22:01.244231351Z
 req_type: Story
 relationships:
 - rel_type: Supersedes
@@ -258,6 +258,20 @@ comments:
   content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: Slice 1 has one deny-pattern validation defect: a synthetic empty string rejects otherwise valid review envelopes; required PR CI remains pending.. No triage reason was given.'
   created_at: 2026-11-10T02:21:59.933949529Z
   modified_at: 2026-11-10T02:21:59.933949529Z
+  session_id: 01a1beff-fc3b-78e2-93e2-9b0c283b0339
+  harness_version: 2.1.319 (Claude Code)
+- id: 01a1c343-2990-7c90-9b2a-8ea51082536a
+  author: joe
+  content: |-
+    REVIEW FINDINGS TO ADDRESS (STORY-2493):
+    Verdict: CHANGES REQUESTED
+    Reviewed commit: 9c49b85e0ae9
+    Recorded: 2026-11-10T02:09:00.690605024+00:00
+    Findings:
+    1. F1 (minor/P2): aida-cli-lib/src/review_envelope.rs:145-146 calls check_patterns(s, "", patterns), whose helper rejects when either argument matches. Thus a valid deny pattern such as ^$ rejects every finding and verdict even when all actual strings are nonempty, blocking generation/publication/quarantine under that policy. Match only actual field strings while preserving regex validation; add regression tests that ^$ accepts fully nonempty findings/verdicts and refuses an empty finding body.
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
+  created_at: 2026-11-10T02:22:01.104320391Z
+  modified_at: 2026-11-10T02:22:01.104320391Z
   session_id: 01a1beff-fc3b-78e2-93e2-9b0c283b0339
   harness_version: 2.1.319 (Claude Code)
 history:
