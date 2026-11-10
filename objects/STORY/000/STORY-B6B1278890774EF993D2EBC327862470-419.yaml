@@ -3,12 +3,12 @@ spec_id: STORY-b6b1278890774ef993d2ebc327862470-419
 agreed_id: STORY-2493
 title: 'Cross-machine review from an untrusted (work) node: verdict and finding envelopes over the aida-intent channel'
 description: 'Deferred (operator 2026-11-04: do the trusted-node case STORY-2492 first). When the reviewing node must not write to the home store, findings come back as content, not IDs. Add kind=review-verdict (fixed fields: PR, head SHA, decision, blocking finding digests, reviewer node; no free text, automatic) and kind=finding (severity, blocking, title, body, home file/line; free text, so it passes the validator and sensitive-pattern check and needs operator sign-off at work) to the STORY-2479 envelope format, carried over the STORY-2480 return channel. Home processes findings into specs and receipts map digest → home ID. Merge stays blocked while a blocking digest is unprocessed or open. Depends on STORY-2479, STORY-2480, STORY-2492.'
-status: NeedsAttention
+status: Approved
 priority: Low
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-05T04:41:25.538710401Z
-modified_at: 2026-11-10T01:30:38.253805339Z
+modified_at: 2026-11-10T01:30:47.724057822Z
 req_type: Story
 relationships:
 - rel_type: Supersedes
@@ -220,6 +220,13 @@ comments:
   content: 'ADVISOR SIGNOFF + RULING (2026-11-10 01:30 UTC) on docs/plans/2026-11-07-story-2493-untrusted-review.md. Decision: imported verdicts NEVER earn positive gate credit through a remote key in this story. Approval credit, when added, goes through the existing home human-review authority path (the sketch''s Alternative): a home operator attests each imported approval. A scoped remote review-return signing key is out of scope and needs its own sketch and signoff. Slicing: SLICE 1 (now) = items 1, 2, 4 and 5: closed versioned finding and verdict payloads with canonical hashing, unknown-field refusal, bounded reads and sensitive-pattern validation on every field; work-side operator review before publishing findings; digest-addressed paths on the isolated aida-intent transport with validation before publication and in pull quarantine, included in checkpoint fingerprints; home processing of findings into canonical finding specs with journal-based retry recovery. Received verdicts are stored as pending data only and no gate reads them. Tests: the Verification section''s two-clone harness for generation, publish, quarantine, processing, retry, tampering, unknown fields, sensitive text and duplicate receipts. SLICE 2 = item 6''s blocking-digest projection (only ever adds blocks). SLICE 3 = operator-attested approval credit plus item 7''s supersession and replay rules. Work credentials never touch aida-store. Use (Refs STORY-2493).'
   created_at: 2026-11-10T01:24:47.931045925Z
   modified_at: 2026-11-10T01:24:47.931045925Z
+  session_id: 01a1beff-fc3b-78e2-93e2-9b0c283b0339
+  harness_version: 2.1.319 (Claude Code)
+- id: 01a1c314-442c-7f02-92b8-3d72b418e218
+  author: joe
+  content: Returned from NeedsAttention to Approved via `aida edit --status`. No triage reason was given.
+  created_at: 2026-11-10T01:30:47.724050966Z
+  modified_at: 2026-11-10T01:30:47.724050966Z
   session_id: 01a1beff-fc3b-78e2-93e2-9b0c283b0339
   harness_version: 2.1.319 (Claude Code)
 history:
@@ -522,6 +529,15 @@ history:
   session_id: 01a1beff-fc3b-78e2-93e2-9b0c283b0339
   harness_version: 2.1.319 (Claude Code)
   changes: []
+- id: 01a1c314-442c-7f02-92b8-3d60deacc1f9
+  author: joe
+  timestamp: 2026-11-10T01:30:47.724047576Z
+  session_id: 01a1beff-fc3b-78e2-93e2-9b0c283b0339
+  harness_version: 2.1.319 (Claude Code)
+  changes:
+  - field_name: status
+    old_value: NeedsAttention
+    new_value: Approved
 filed_at:
   code_sha: d561213a36febec31d45921d3d43d4dc7590135e
   branch: main
