@@ -5274,3 +5274,51 @@ fn bug_2516_gitlab_open_or_unreadable_changes_preserve() {
         Some(std::collections::BTreeMap::from([("BUG-2516".into(), 2)]))
     );
 }
+
+// trace:BUG-2516 | ai:codex
+#[test]
+fn bug_2516_gitlab_search_requires_credit_across_whole_page() {
+    if crate::test_env::run_path_isolated_test() {
+        return;
+    }
+    let (_tmp, root, _store_path) = init_test_project();
+    std::fs::create_dir_all(root.join(".aida")).unwrap();
+    std::fs::write(
+        root.join(".aida/config.toml"),
+        "[forge]\nprovider = \"gitlab\"\n",
+    )
+    .unwrap();
+    let bin = root.join("bin");
+    std::fs::create_dir(&bin).unwrap();
+    let _path = crate::test_env::EnvVarGuard::prepend_path(&bin);
+    let miss = serde_json::json!({
+        "iid": 2, "title": "follow-up from BUG-2516 (TASK-999)",
+        "description": "follow-up from BUG-2516", "source_branch": "task-999",
+        "state": "opened"
+    });
+    let check = |rows: Vec<serde_json::Value>, expected| {
+        let response = serde_json::to_string(&rows).unwrap();
+        crate::test_exec::write_executable(&bin.join("glab"), format!(
+            "#!/bin/sh\nif [ \"$1\" = --version ]; then echo glab-test; exit 0; fi\necho '{response}'\n"
+        ));
+        assert_eq!(specs_with_open_prs(&root, ["BUG-2516".into()]), expected);
+    };
+    check(vec![miss.clone()], Some(std::collections::BTreeMap::new()));
+    for (title, description, branch) in [
+        ("fix (BUG-2516)", "", "other"),
+        ("fix (TASK-999)", "* complete (BUG-2516)", "other"),
+        ("fix (TASK-999)", "", "fix/bug-2516-rework"),
+    ] {
+        check(
+            vec![
+                miss.clone(),
+                serde_json::json!({
+                    "iid": 3, "title": title, "description": description,
+                    "source_branch": branch, "state": "opened"
+                }),
+            ],
+            Some(std::collections::BTreeMap::from([("BUG-2516".into(), 3)])),
+        );
+    }
+    check(vec![miss; 100], None);
+}

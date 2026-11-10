@@ -2984,20 +2984,9 @@ impl Forge for GitLabForge {
         // source_branch. trace:STORY-509 trace:BUG-223 trace:BUG-639 | ai:claude
         let out = self.glab_api_get(
             "projects/:id/merge_requests",
-            &[("search", spec), ("state", "opened")],
+            &[("search", spec), ("state", "opened"), ("per_page", "100")],
         );
-        // A completion guard needs an explicit empty JSON array as absence
-        // evidence; an empty successful response is still unreadable.
-        // trace:BUG-2516 | ai:codex
-        if out
-            .as_ref()
-            .is_ok_and(|o| o.status.success() && o.stdout.iter().all(u8::is_ascii_whitespace))
-        {
-            return Ok(ChangeLookup::CliFailed(
-                "empty GitLab search response".into(),
-            ));
-        }
-        Ok(glab_lookup_from_list_output(out, ""))
+        Ok(glab_spec_lookup_from_list_output(out, spec))
     }
 
     fn merged_change_for_branch(&self, branch: &str) -> Result<ChangeLookup> {
@@ -3870,6 +3859,54 @@ fn glab_lookup_from_list_output(
         },
         Ok(_) => ChangeLookup::CliFailed("glab mr list JSON was not an array".to_string()),
         Err(e) => ChangeLookup::CliFailed(format!("could not parse glab mr list JSON: {e}")),
+    }
+}
+
+/// Search hits are candidates, not completion credit. Reuse the GitHub
+/// reconciliation matcher across the entire page, with GitLab's field names.
+/// A full page without credit cannot establish absence beyond that page.
+// trace:BUG-2516 | ai:codex
+fn glab_spec_lookup_from_list_output(
+    out: Result<std::process::Output>,
+    spec: &str,
+) -> ChangeLookup {
+    const LIMIT: usize = 100;
+    let out = match out {
+        Ok(out) if out.status.success() => out,
+        other => return glab_lookup_from_list_output(other, ""),
+    };
+    let rows = match serde_json::from_slice::<serde_json::Value>(&out.stdout) {
+        Ok(serde_json::Value::Array(rows)) => rows,
+        _ => return ChangeLookup::CliFailed("invalid GitLab search response".into()),
+    };
+    let normalized: Vec<_> = rows
+        .iter()
+        .map(|row| {
+            serde_json::json!({
+                "number": row.get("iid"),
+                "title": row.get("title"),
+                // GitLab permits a null description for an empty MR body.
+                "body": row.get("description").filter(|v| !v.is_null()).cloned().unwrap_or_else(|| serde_json::json!("")),
+                "headRefName": row.get("source_branch"),
+                "state": match row.get("state").and_then(|v| v.as_str()) {
+                    Some("opened") | None => "OPEN",
+                    Some(state) => state,
+                },
+            })
+        })
+        .collect();
+    use crate::reconcile_evidence::{parse_open_change_page, OpenChangeCheck};
+    match parse_open_change_page(&serde_json::to_vec(&normalized).unwrap(), spec, LIMIT) {
+        OpenChangeCheck::Clear => ChangeLookup::NoChange,
+        OpenChangeCheck::Open(id) => rows
+            .iter()
+            .find(|row| row.get("iid").and_then(|v| v.as_u64()) == Some(id))
+            .and_then(|row| change_ref_from_glab_mr(row, ""))
+            .map(ChangeLookup::Found)
+            .expect("validated matching MR"),
+        OpenChangeCheck::Unavailable(why) => ChangeLookup::CliFailed(format!(
+            "GitLab search could not establish open-change evidence: {why}"
+        )),
     }
 }
 
