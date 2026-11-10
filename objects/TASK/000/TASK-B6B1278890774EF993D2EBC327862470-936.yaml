@@ -8,7 +8,7 @@ priority: Low
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-07T10:46:47.827833836Z
-modified_at: 2026-11-09T06:51:27.110586763Z
+modified_at: 2026-11-10T00:06:50.815961973Z
 req_type: Task
 relationships:
 - rel_type: Child
@@ -123,6 +123,13 @@ comments:
   created_at: 2026-11-08T05:01:42.244054225Z
   modified_at: 2026-11-08T05:01:42.244054225Z
   session_id: 01a1b8be-8170-7fb2-89ab-ecb4c6eee98c
+  harness_version: 2.1.319 (Claude Code)
+- id: 01a1c2c7-68bf-7363-8f27-2958ab4b632f
+  author: joe
+  content: 'ADVISOR RULING (2026-11-10 00:15 UTC): implementation slice 1 per the signed sketch docs/plans/2026-11-07-task-3368-proc-identity-broker.md (decisions D1-D10): the broker as a DISABLED service plus protocol tests only. AF_UNIX SOCK_SEQPACKET with SCM_PIDFD and SCM_CREDENTIALS on every message, SO_PEERPIDFD/SO_PASSPIDFD probes with no numeric-PID fallback, exclusive runtime lock, never auto-spawned, host processes only. Enable no consumer adapter. Real-kernel SCM_PIDFD checks are tests that skip with a stated reason where the kernel lacks support. Commit and PR title use (Refs TASK-3368). The manual gate stays pending; never self-clear it.'
+  created_at: 2026-11-10T00:06:50.815961973Z
+  modified_at: 2026-11-10T00:06:50.815961973Z
+  session_id: 01a1beff-fc3b-78e2-93e2-9b0c283b0339
   harness_version: 2.1.319 (Claude Code)
 history:
 - id: 01a1b59e-5972-7d63-967f-d8572322d9d1
