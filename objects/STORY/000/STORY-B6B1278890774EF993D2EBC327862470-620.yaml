@@ -30,7 +30,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-10T01:33:02.719338782Z
-modified_at: 2026-11-10T20:43:26.843985658Z
+modified_at: 2026-11-10T20:43:28.211278621Z
 req_type: Story
 comments:
 - id: 01a1c318-2e6f-7041-93e0-3128dbbb39f7
@@ -129,6 +129,20 @@ comments:
   content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: Full nine-file sweep: guidance migration addressed; carried-approval CI regression has an unrelated head-mismatch false positive. Seven CI lanes pending; ten-PR observation is post-merge.. No triage reason was given.'
   created_at: 2026-11-10T20:43:26.843979794Z
   modified_at: 2026-11-10T20:43:26.843979794Z
+  session_id: 01a1c530-c917-7f13-ab81-f6b5e1d1cd30
+  harness_version: 2.1.322 (Claude Code)
+- id: 01a1c733-91c5-75b0-9805-f3ecf228fbfa
+  author: joe
+  content: |-
+    REVIEW FINDINGS TO ADDRESS (STORY-2697):
+    Verdict: CHANGES REQUESTED
+    Reviewed commit: 1220ca8b60d5
+    Recorded: 2026-11-10T20:17:05.627588798+00:00
+    Findings:
+    1. P2: aida-cli-lib/src/tests/task_1945_review_watch_ready_tests.rs:463-468: the new carried-approval CI matrix sets c.head to the real merge commit but inherits the synthetic Evidence::head from Fake::ready(). Every negative merely asserts a nonempty refusal, so bypassing CI validation still passes via head moved during evaluation. Set head: Ok(c.head.clone()) (or preserve the positive evidence), assert the expected CI-specific refusal per row, and show green destination-head CI on the same fixture is Ready. This leaves STORY-2697 destination-CI regression acceptance incompletely verified; no production CI bypass is claimed.
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
+  created_at: 2026-11-10T20:43:28.069712101Z
+  modified_at: 2026-11-10T20:43:28.069712101Z
   session_id: 01a1c530-c917-7f13-ab81-f6b5e1d1cd30
   harness_version: 2.1.322 (Claude Code)
 history:
