@@ -8,8 +8,16 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-10T03:07:46.884496242Z
-modified_at: 2026-11-10T03:07:46.884496242Z
+modified_at: 2026-11-10T08:59:37.702513797Z
 req_type: Bug
+comments:
+- id: 01a1c4af-2f66-7590-be69-dad5e180b9a4
+  author: joe
+  content: 'ADVISOR RULING (2026-11-10 08:59 UTC): approved. Scope: merge-time completion on aida pull / store sync becomes forge-neutral: find merged changes through crate::forge (GitLab via glab, GitHub via gh, PureGit via the default-branch log), and apply the existing trailer rules (derive_squash_subject_spec_ids / squash subject parsing in pr_ship.rs) to the squash commit on the default branch, so ''(SPEC-ID)'' completes and ''(Refs SPEC-ID)'' does not, on every forge. Tests with a fake glab on PATH (no network): merged MR with a completing trailer completes the spec after aida pull; Refs trailer leaves it open; GitHub path unchanged. Out of scope: aida pr ship on GitLab (BUG-2515). LIGHT gate.'
+  created_at: 2026-11-10T08:59:37.702513797Z
+  modified_at: 2026-11-10T08:59:37.702513797Z
+  session_id: 01a1c39a-801a-7bd1-8da9-c955a6707f0b
+  harness_version: 2.1.321 (Claude Code)
 filed_at:
   code_sha: 838f14c3c2811c6b63da5d465700cff773c36190
   branch: main
