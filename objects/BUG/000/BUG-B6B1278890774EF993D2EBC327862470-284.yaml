@@ -19,7 +19,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-10T11:29:50.373967960Z
-modified_at: 2026-11-10T16:28:51.630155057Z
+modified_at: 2026-11-10T16:39:36.342472689Z
 req_type: Bug
 comments:
 - id: 01a1c63b-ee32-7502-886f-4dbf64e2d225
@@ -53,6 +53,13 @@ comments:
   modified_at: 2026-11-10T16:23:58.643683567Z
   session_id: 01a1c636bdb5
   harness_version: codex-cli 0.167.0
+- id: 01a1c654-4e96-71c2-8845-3d42bb405575
+  author: joe
+  content: 'Advisor ruling PR-3796@12a88007: ship the diagnostic as a Refs slice (claims .ac289506 only). Root cause + fix + >=50% primary second-job evidence is the next slice and must run on the PRIMARY host, blocked until local lanes work again (script-deputy grant refusal, evidence on BUG-2503).'
+  created_at: 2026-11-10T16:39:36.342472689Z
+  modified_at: 2026-11-10T16:39:36.342472689Z
+  session_id: 01a1c530-c917-7f13-ab81-f6b5e1d1cd30
+  harness_version: 2.1.322 (Claude Code)
 history:
 - id: 01a1c5dc-d2fd-7d33-97c4-d2a85d9e4ee5
   author: joe
