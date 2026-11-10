@@ -8,7 +8,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-10T03:07:38.542859262Z
-modified_at: 2026-11-10T13:49:18.234962007Z
+modified_at: 2026-11-10T14:11:34.173893145Z
 req_type: Bug
 comments:
 - id: 01a1c3a1-bccc-7ef0-b6b7-2fdb52e783f5
@@ -189,6 +189,24 @@ comments:
   content: 'Returned from NeedsAttention to Approved via `aida edit --status`. It was punted on: blocked-dependency: Accepted P1 stale queue_cmd import finding is already fixed by 270fa1b66c and retained at current head bf9abfb284; repository-wide Rust search finds no removed helper identifier. Revalidated via lane job j20261110T130442262-2-0: compilation succeeded and all 12 bug_2515, bug_1957, story_2401_no_new_raw_gh_reads tests passed. No new source edits warranted. Latest CI failures are status_sections standalone reviewer tests explicitly excluded by binding 07:05 advisor ruling (STORY-2695 S1); host/advisor must resolve those before publication. Full check-ci-fast remains host validation because its direct Cargo invocation conflicts with lane-only Cargo rules. Do not publish an empty repair.. No triage reason was given.'
   created_at: 2026-11-10T13:42:17.477560532Z
   modified_at: 2026-11-10T13:42:17.477560532Z
+  session_id: 01a1c39a-801a-7bd1-8da9-c955a6707f0b
+  harness_version: 2.1.321 (Claude Code)
+- id: 01a1c5cc-c69d-7992-b961-67704bbf48cc
+  author: joe
+  content: |-
+    CI FAILURES at 1d3861855288 (run 42827318362). Fix exactly these before pushing; a push without a code change for them will fail again and must not be made:
+    error: test run failed
+            FAIL  aida-cli-lib status_sections::bug_2149_2150_standalone_reviewer_tests::bug2187_failed_headless_reviewer_keeps_exit_code_and_draft
+            FAIL  aida-cli-lib status_sections::bug_2149_2150_standalone_reviewer_tests::bug2187_unrecorded_headless_review_surfaces_draft_and_record_command
+            FAIL  aida-cli-lib status_sections::bug_2149_2150_standalone_reviewer_tests::standalone_reviewer_verdict_written_in_worktree_reaches_launcher_checkout
+        thread 'status_sections::bug_2149_2150_standalone_reviewer_tests::bug2187_failed_headless_reviewer_keeps_exit_code_and_draft' (227925) panicked at aida-cli-lib/src/test_env.rs:109:5:
+        thread 'status_sections::bug_2149_2150_standalone_reviewer_tests::bug2187_failed_headless_reviewer_keeps_exit_code_and_draft' (227927) panicked at aida-cli-lib/src/tests/bug_2149_2150_standalone_reviewer_tests.rs:1019:5:
+        thread 'status_sections::bug_2149_2150_standalone_reviewer_tests::bug2187_unrecorded_headless_review_surfaces_draft_and_record_command' (228016) panicked at aida-cli-lib/src/test_env.rs:109:5:
+        thread 'status_sections::bug_2149_2150_standalone_reviewer_tests::bug2187_unrecorded_headless_review_surfaces_draft_and_record_command' (228018) panicked at aida-cli-lib/src/tests/bug_2149_2150_standalone_reviewer_tests.rs:990:
+        thread 'status_sections::bug_2149_2150_standalone_reviewer_tests::standalone_reviewer_verdict_written_in_worktree_reaches_launcher_checkout' (228614) panicked at aida-cli-lib/src/test_env.rs:109:5:
+        thread 'status_sections::bug_2149_2150_standalone_reviewer_tests::standalone_reviewer_verdict_written_in_worktree_reaches_launcher_checkout' (228618) panicked at aida-cli-lib/src/tests/bug_2149_2150_standalone_reviewer_tests.rs
+  created_at: 2026-11-10T14:11:34.173893145Z
+  modified_at: 2026-11-10T14:11:34.173893145Z
   session_id: 01a1c39a-801a-7bd1-8da9-c955a6707f0b
   harness_version: 2.1.321 (Claude Code)
 history:
