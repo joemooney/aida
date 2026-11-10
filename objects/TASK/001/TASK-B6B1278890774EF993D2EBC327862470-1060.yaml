@@ -8,7 +8,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-10T07:33:13.193495787Z
-modified_at: 2026-11-10T08:05:14.717051546Z
+modified_at: 2026-11-10T14:26:46.161118283Z
 req_type: Task
 comments:
 - id: 01a1c47c-b4ca-74a0-9bba-654fe4096533
@@ -21,6 +21,13 @@ comments:
   content: 'Final validation update: all 43 non-compilation CI fast source gates other than the separately failed containment conformance gate passed using original CI runner commands in bounded resumable slices. Both compilation gates passed through launcher jobs. Final doctor run executed 275 passing tests; exact ordered --list comparison remained 275 before/after. Eight executable-fixture ratchet tests pass after the bounded directory-fixture allowance. No cargo jobs remain pending. Recorded native non-completing publication declaration [AI:codex] refactor(doctor): extract inline test modules (Refs TASK-3780), with Help-Golden: unchanged body. Requirement remains In Progress pending host validation of the unchanged containment fixture''s real-home write failure. Handoff /tmp/task3780-handoff.md lists all 25 files and job evidence; no commit/push/PR/queue-done action performed from seat.'
   created_at: 2026-11-10T08:05:14.717042735Z
   modified_at: 2026-11-10T08:05:14.717042735Z
+- id: 01a1c5da-b111-7573-8e4d-8b3473c5b441
+  author: joe
+  content: 'ADVISOR: complete. #3769 (b1d8ef47) moved the inline test blocks out of doctor_cmd.rs, and PR9b #3778 (179190ab) finished the split. All 29 remaining #[cfg(test)] sites in doctor_cmd.rs (now 2504 lines) are path-wired modules (#[path = "tests/..."]), the STORY-770 pattern; no inline test bodies remain.'
+  created_at: 2026-11-10T14:26:46.161118283Z
+  modified_at: 2026-11-10T14:26:46.161118283Z
+  session_id: 01a1c530-c917-7f13-ab81-f6b5e1d1cd30
+  harness_version: 2.1.322 (Claude Code)
 history:
 - id: 01a1c460-7322-7fe0-846d-985aec5dd452
   author: joe
