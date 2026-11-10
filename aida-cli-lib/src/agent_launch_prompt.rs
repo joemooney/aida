@@ -34,7 +34,13 @@ pub(crate) fn role_launch_prompt(
         .filter(|r| !r.trim().is_empty())
         .and_then(|r| load_role(project_root, r).ok())
         .map(|(state, _path)| state);
-    render_role_launch_prompt(agent_type, role, spec, role_file.as_ref(), ship_instruction)
+    let prompt =
+        render_role_launch_prompt(agent_type, role, spec, role_file.as_ref(), ship_instruction);
+    // trace:BUG-2512 | ai:codex
+    match crate::project_checks::load(project_root) {
+        Ok(checks) => format!("{prompt}\n\n{}", checks.prompt()),
+        Err(error) => format!("{prompt}\n\nProject validation config unavailable: {error:#}"),
+    }
 }
 
 /// Pure renderer: the role file (when given) overrides the embedded body.
@@ -87,8 +93,7 @@ fn default_body(agent_type: &str, seat: &str, spec: Option<&str>, ship: &str) ->
         // trace:TASK-2879 | ai:codex
         ("implementer", Some(spec)) => format!(
             "Implement {spec} per its acceptance criteria. Stay in single-spec scope for {spec}. \
-             Standard cadence: inspect context, make bounded changes, run relevant tests, run \
-             cargo fmt --all --check and add trace:{spec}. In a native sandbox \
+             Standard cadence: inspect context, make bounded changes, run relevant tests and project-configured formatting, and add trace:{spec}. In a native sandbox \
              (AIDA_CONTAINMENT_POSTURE=native), leave tested edits uncommitted and exit with a \
              handoff listing files, validation and blockers; the host commits after exit and \
              publishes separately. Do not commit, push, open a PR or run queue done in that \
