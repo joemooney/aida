@@ -8,10 +8,29 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-09T01:59:04.579891982Z
-modified_at: 2026-11-10T22:09:25.605664820Z
+modified_at: 2026-11-10T22:18:25.814148716Z
 req_type: Story
 tags:
 - area:orchestration
+comments:
+- id: 01a1c78a-8296-7db2-b031-348903da2c18
+  author: dirtlab
+  content: |
+    Implemented STORY-2693 in the native lane; edits remain uncommitted for host publication.
+
+    Changed files: aida-cli-lib/src/pr_train.rs; new aida-cli-lib/src/pr_train_overlap.rs; new scripts/check-open-pr-flags.py; new tests/test_open_pr_flags.py; docs/cli/04-git-lifecycle.md.
+
+    The read-only GitHub advisor check compares added clap long-flag names across open PR diffs, including drafts, excluding synthetic trains; it reports potential collisions as JSON. It refuses moving heads and a full inventory limit. Fixture tests reproduce PR-3643/PR-3662 adding --lane-host before either merges. This is a manual advisor command with documented parser limits; same names on distinct subcommands need triage, and macro-generated/unsupported syntax can be missed. No live forge scan was run.
+
+    Train selection now gates all candidates before --max, reads changed-file sets from pinned heads, and repeatedly selects the PR with the lowest shared-file count against remaining approved candidates, with numeric PR ties. Rename sides and arbitrary filename bytes are retained. This is a deterministic greedy heuristic, not a global optimum.
+
+    Validation: python3 tests/test_open_pr_flags.py: 6 passed. Lane job j20261110T221552874-2-0, cargo test --profile agent -p aida-cli-lib --lib -- story2693: 2 executed tests passed on final source. git diff --check passed. untested=false.
+
+    No implementation blockers. Navigation fallback: the operator-supplied /home/joe/ai/aida/.codegraph/proxy-state/bin/codegraph is absent; aida doctor check codegraph reports missing. Host should deploy the reviewed client and supply the working absolute path. No commit, push, PR creation, review recording, shipping merge, or queue completion was attempted. Host publication and subsequent queue completion remain pending.
+  created_at: 2026-11-10T22:18:25.814148716Z
+  modified_at: 2026-11-10T22:18:25.814148716Z
+  session_id: 01a1c781eeab
+  harness_version: codex-cli 0.167.0
 history:
 - id: 01a1c5dd-18a9-7562-af0c-51ddca9fe97e
   author: joe
