@@ -8,7 +8,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-10T03:06:45.552915977Z
-modified_at: 2026-11-10T19:43:08.225060861Z
+modified_at: 2026-11-10T19:55:19.513149146Z
 req_type: Story
 comments:
 - id: 01a1c6fc-55c1-7890-a827-b867a3ee295d
@@ -16,6 +16,13 @@ comments:
   content: 'Implemented GitLab init CI/CD readiness: preserves existing pipeline files, scaffolds Python/Rust/Node test pipelines with configurable runner tags, probes builds_access_level, requires explicit flag or interactive consent to enable disabled CI, rechecks the result, and reports runner/policy/unknown states with bounded API probes. Validation: 48 gitlab_project_create tests passed (including five new tests), help snapshot comparison passed, rustfmt checks and git diff --check passed. Live forge execution unverified; enabling previously disabled CI prints the manual pipeline-start step. Native-seat edits remain uncommitted for host publication. Reviewed codegraph client missing; doctor confirmed missing tool.'
   created_at: 2026-11-10T19:43:08.225060861Z
   modified_at: 2026-11-10T19:43:08.225060861Z
+  session_id: 01a1c6f0484e
+  harness_version: codex-cli 0.167.0
+- id: 01a1c707-7e59-7cb0-951c-1a52e1021b80
+  author: dirtlab
+  content: 'Fast-gate fix round: regenerated and reviewed scripts/store-writers.toml; exactly four additions cover scaffold_ci OpenOptions::new/create_new/write_all and its create_and_scaffold caller. New entries retain blocked cutover policy, consistent with surrounding init scaffolding; no runtime authority changes. Validation: standalone store-writer ratchet passed; all 54 inventory mutation tests passed; full make check-ci-fast passed all 46 gates with umask 0022; git diff --check passed. Initial full-suite run under inherited umask 0002 hit unrelated mail-wake directory-mode fixture refusals; standard umask resolves them without source changes. Inventory edits remain uncommitted for host publication.'
+  created_at: 2026-11-10T19:55:19.513149146Z
+  modified_at: 2026-11-10T19:55:19.513149146Z
   session_id: 01a1c6f0484e
   harness_version: codex-cli 0.167.0
 history:
