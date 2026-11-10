@@ -11,6 +11,20 @@ created_at: 2026-11-08T21:19:43.130807780Z
 modified_at: 2026-11-10T16:15:00.291135606Z
 req_type: Bug
 comments:
+- id: 01a1c638-05a7-7131-9809-d7d1148a56b2
+  author: dirtlab
+  content: 'Implemented the supported-guidance option: role status reports the harness PID as informational and directs managed sessions to save a handoff, renew the parent role/delegation at the operator terminal, and relaunch through their launcher. --bind-pid help and role documentation now state that binding retains the invoking subject and cannot renew a managed child grant. No authority or grant issuance changes. Targeted regression and help-snapshot validation are running through the lane runner.'
+  created_at: 2026-11-10T16:08:42.663499035Z
+  modified_at: 2026-11-10T16:08:42.663499035Z
+  session_id: 01a1c6348847
+  harness_version: codex-cli 0.167.0
+- id: 01a1c63c-1fc2-7ad0-b41f-b839a871a0db
+  author: dirtlab
+  content: 'Validation complete: lane job j20261110T160601189-2-0 executed the new role-status regression (1 passed); j20261110T160648667-2-0 regenerated the help golden, reviewed to contain only intended role help changes; j20261110T161255032-2-0 verified the snapshot without update mode (1 passed). rustfmt --check on both touched Rust files and git diff --check passed. Changed: role_cmd.rs, role_cmd_args.rs, tests/golden/cli_help_snapshot.txt, docs/cli/06-roles-sessions.md. Edits remain uncommitted for host publication. No implementation blockers; configured host codegraph client unavailable, source navigation used rg.'
+  created_at: 2026-11-10T16:13:11.490068909Z
+  modified_at: 2026-11-10T16:13:11.490068909Z
+  session_id: 01a1c6348847
+  harness_version: codex-cli 0.167.0
 - id: 01a1c63d-c8c3-7672-b60d-448c88bf997c
   author: joe
   content: 'Related evidence (advisor, 2026-11-10 09:16 MST), same identity mismatch in the other direction: ''aida deputy shell submit --file F --wait'' from a rotated advisor session (handle claude-advisor-111, grant ebe129d3 minted by ''aida agent new claude --role advisor'') is refused by the operator''s script deputy ''default'': ''refused:grant: Session grant ebe129d3… (advisor) was rejected: it was issued to claude-advisor-111 but this process runs as joe''. The deputy checks the submitter''s grant against ITS OWN process principal (joe), not against the attested submitter (SO_PEERCRED peer and handle). It reproduces after a deputy restart (operator restarted it at 09:14). Impact: rotated advisors cannot launch local lanes or clear merge holds through the deputy, so all lanes go to dell1. If the fix for this bug''s direction (issue the grant to the agent handle) is in the same resolver, cover the deputy path too; otherwise say so in the PR body and the advisor will split it.'
