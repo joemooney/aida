@@ -521,7 +521,18 @@ fn successful_build_promotes_keeps_prev_and_restarts_mcp() {
         .collect();
     names.sort();
     // `.lock` is the persistent live-dir lock file.
-    assert_eq!(names, [".lock", ".promoted", "aida", "aida-server", "prev"]);
+    assert_eq!(
+        names,
+        [
+            ".lock",
+            ".promoted",
+            "aida",
+            "aida-flow",
+            "aida-porcelain",
+            "aida-server",
+            "prev"
+        ]
+    );
 }
 
 /// BUG-2411 ruling C: a promote whose fresh scan finds every mail writer on
@@ -929,8 +940,12 @@ fn install_links_creates_missing_links() {
     for n in LIVE_BINARIES {
         assert_eq!(fs::read_link(f.layout.link(n)).unwrap(), f.layout.live(n));
     }
-    assert!(!steps.called("confirm"));
+    assert_eq!(
+        fs::read_link(f.layout.link("aida-flow")).unwrap(),
+        PathBuf::from("aida-porcelain")
+    );
     // Idempotent.
+    assert!(!steps.called("confirm"));
     install_links(&f.layout, false, &mut steps, &mut Vec::new()).unwrap();
     assert!(!steps.called("confirm"));
 }
@@ -2318,4 +2333,22 @@ fn rustc_wrapper_for_prefers_the_child_override() {
     assert_eq!(rustc_wrapper_for(&cmd).as_deref(), Some("sccache"));
     cmd.env_remove("RUSTC_WRAPPER");
     assert_eq!(rustc_wrapper_for(&cmd), None);
+}
+
+// trace:STORY-2704 | ai:codex
+#[test]
+fn rollback_first_porcelain_adoption_retains_additive_companion() {
+    let f = fixture();
+    put_live(&f.layout, "LIVE");
+    for name in ["aida", "aida-server"] {
+        write(&f.layout.prev(name), &format!("PREV-{name}"));
+    }
+    rollback(&f.layout).unwrap();
+    assert_eq!(read(&f.layout.live("aida")), "PREV-aida");
+    assert_eq!(
+        read(&f.layout.live("aida-porcelain")),
+        "LIVE-aida-porcelain"
+    );
+    rollback(&f.layout).unwrap();
+    assert_eq!(read(&f.layout.live("aida")), "LIVE-aida");
 }

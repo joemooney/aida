@@ -221,3 +221,14 @@ remain in one workspace. The contract is enforced by *convention + this
 document* (the crate-root re-export list is the public set) rather than by the
 compiler. If `aida-core` is ever published or split out, this document is the
 checklist for what must stay `pub` and what can be sealed.
+
+<!-- trace:STORY-2704 | ai:codex -->
+### Observational gate ledger
+
+`gate_ledger_read` is an intended public, no-write report API:
+`store_root(start)` resolves the shared evidence root without subprocesses;
+`read_pr(shared, pr)` returns raw event values plus evidence presence;
+`train_members(shared)` maps member PR numbers to train PRs from coverage.
+Missing ledgers remain unknown, while unreadable/malformed evidence returns
+an error. These functions never create files, locks, cache projections or
+store handles. Raw events preserve additive ledger fields for report readers.

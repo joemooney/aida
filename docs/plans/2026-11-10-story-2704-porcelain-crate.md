@@ -1,9 +1,12 @@
 # STORY-2704: porcelain crate sketch
 <!-- trace:STORY-2704 | ai:codex -->
 
-Date: 2026-11-10. Sketch only; implementation awaits sketch signoff.
-The advisor's 03:58 UTC brief controls this slice: documentation only, published
-with `(Refs STORY-2704)`. No command, crate, installer or authority change here.
+Date: 2026-11-10. Sketch signed off with changes at 04:13 UTC.
+The binding 08:58 UTC ruling authorizes slice 1 implementation: the workspace
+multi-call crate, flow tenant, public no-write ledger API and dev-build support.
+The built-in stays registered and temporarily includes the tenant's report source
+to keep the overlap identical. Nested dispatch is S2; release/install/upgrade is S3.
+The remaining sections retain the broader sketch as future-slice design context.
 
 ## Evidence and boundary
 

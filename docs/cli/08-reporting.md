@@ -791,6 +791,18 @@ current working directory, as they would for a shell lookup.
 
 ## Flow report
 
+<!-- trace:STORY-2704 | ai:codex -->
+Development builds also provide `aida-porcelain flow report ...` and
+`aida-flow report ...`, with the same text/JSON report and window flags.
+`aida dev build --install-links` installs the companion and the relative
+`aida-flow -> aida-porcelain` alias. The built-in `aida flow` retains precedence.
+The companion reads core's public observational gate-ledger API; it does not
+open a mutable store, refresh caches, acquire leases or update the queue.
+Development promotion and rollback include the companion. When rolling back
+to a generation predating porcelain, the additive companion is retained;
+subsequent generations rotate it along with the other binaries.
+Release archives, `install.sh` and upgrade support remain follow-up work.
+
 <!-- trace:STORY-2699 | ai:codex -->
 `aida flow report --since 2026-11-09 --until 2026-11-10 --format json`
 reports GitHub PRs landed in the inclusive UTC window on local `origin/main`.

@@ -153,6 +153,19 @@ dependencies = [
 ]
 
 [[package]]
+name = "aida-porcelain"
+version = "0.16.0"
+dependencies = [
+ "aida-core",
+ "anyhow",
+ "chrono",
+ "clap",
+ "regex",
+ "serde_json",
+ "tempfile",
+]
+
+[[package]]
 name = "aida-server"
 version = "0.16.0"
 dependencies = [

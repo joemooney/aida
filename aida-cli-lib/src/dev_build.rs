@@ -23,7 +23,7 @@ use std::process::{Command, Stdio};
 use std::time::{Duration, Instant};
 
 /// The binaries that make up one live build, promoted and rolled back as a pair.
-pub(crate) const LIVE_BINARIES: [&str; 2] = ["aida", "aida-server"];
+pub(crate) const LIVE_BINARIES: [&str; 3] = ["aida", "aida-server", "aida-porcelain"];
 
 /// Cargo profile `aida dev build` compiles (same as `make build-fast`).
 const PROFILE: &str = "agent";
@@ -405,6 +405,9 @@ pub(crate) trait BuildSteps {
     /// Run `aida` / `server` (in `repo`); `Err` names what failed. When
     /// promoting these are the staged copies that will be renamed live.
     fn smoke(&mut self, repo: &Path, aida: &Path, server: &Path) -> Result<()>;
+    fn smoke_porcelain(&mut self, _binary: &Path) -> Result<()> {
+        Ok(())
+    }
     /// The `sha ...` token of `aida --version` (may end in `+dirty`).
     // trace:STORY-1646 | ai:claude
     fn version_sha(&mut self, aida: &Path) -> Option<String>;
@@ -563,6 +566,9 @@ pub(crate) fn run_dev_build(
                     &layout.built("aida-server"),
                 )
                 .map_err(smoke_failed)?;
+            steps
+                .smoke_porcelain(&layout.built("aida-porcelain"))
+                .map_err(smoke_failed)?;
             writeln!(out, "Smoke test passed: {}", layout.built("aida").display())?;
             match reason {
                 BuildOnlyReason::Worktree => writeln!(
@@ -591,11 +597,13 @@ pub(crate) fn run_dev_build(
                 writeln!(out, "note: {note}")?;
             }
             let incoming = stage_incoming(layout)?;
-            let smoked = steps.smoke(
-                &layout.repo,
-                &incoming.join("aida"),
-                &incoming.join("aida-server"),
-            );
+            let smoked = steps
+                .smoke(
+                    &layout.repo,
+                    &incoming.join("aida"),
+                    &incoming.join("aida-server"),
+                )
+                .and_then(|_| steps.smoke_porcelain(&incoming.join("aida-porcelain")));
             if let Err(e) = smoked {
                 let _ = std::fs::remove_dir_all(&incoming);
                 return Err(smoke_failed(e));
@@ -1118,9 +1126,7 @@ pub(crate) fn recover_live_dir_with_steps(
         // them (forward when swapped, back otherwise) only ever moves files
         // out of `.rollback/` and is a no-op once done.
         let marked = swap.join(ROLLBACK_MARKER).exists();
-        let swapped = LIVE_BINARIES
-            .iter()
-            .any(|n| !layout.prev(n).exists() || (marked && !swap.join(n).is_file()));
+        let swapped = !layout.prev("aida").exists() || (marked && !swap.join("aida").is_file());
         settle_records(layout, &swap, swapped, &mut |_| Ok(()))?;
         for name in LIVE_BINARIES {
             let parked = swap.join(name);
@@ -1165,6 +1171,7 @@ pub(crate) fn stage_incoming(layout: &DevLayout) -> Result<PathBuf> {
             )
         })?;
     }
+    std::os::unix::fs::symlink("aida-porcelain", incoming.join("aida-flow"))?;
     Ok(incoming)
 }
 
@@ -1270,6 +1277,7 @@ pub(crate) fn commit_staged(layout: &DevLayout, meta: &PromotionMeta) -> Result<
         std::fs::rename(incoming.join(name), layout.live(name))
             .with_context(|| format!("promoting {}", layout.live(name).display()))?;
     }
+    std::fs::rename(incoming.join("aida-flow"), live.join("aida-flow"))?;
     std::fs::rename(incoming.join(PROMOTED_FILE), live.join(PROMOTED_FILE))
         .with_context(|| format!("writing {}", live.join(PROMOTED_FILE).display()))?;
     let _ = std::fs::remove_dir(&incoming);
@@ -1329,7 +1337,14 @@ pub(crate) fn rollback_with_steps(
 ) -> Result<Vec<String>> {
     let _lock = lock_live_dir(layout)?;
     let notes = recover_live_dir(layout)?;
-    for name in LIVE_BINARIES {
+    // Pre-porcelain generations have no companion to restore. Keep the
+    // additive companion available; once both generations contain it, rotate it.
+    // trace:STORY-2704 | ai:codex
+    let rollback_names: Vec<_> = LIVE_BINARIES
+        .into_iter()
+        .filter(|name| *name != "aida-porcelain" || layout.prev(name).is_file())
+        .collect();
+    for &name in &rollback_names {
         if !layout.prev(name).is_file() {
             bail!(
                 "no previous build to roll back to ({} does not exist); nothing was changed",
@@ -1351,7 +1366,7 @@ pub(crate) fn rollback_with_steps(
     let swap = layout.live_dir.join(".rollback");
     fresh_dir(&swap)?;
     step("fresh")?;
-    for name in LIVE_BINARIES {
+    for &name in &rollback_names {
         link_or_copy(&layout.live(name), &swap.join(name))?;
         step("parked-binary")?;
     }
@@ -1371,7 +1386,7 @@ pub(crate) fn rollback_with_steps(
     // means it was swapped into `prev/` (see [`recover_live_dir`]).
     std::fs::write(swap.join(ROLLBACK_MARKER), b"")?;
     step("marked")?;
-    for name in LIVE_BINARIES {
+    for &name in &rollback_names {
         std::fs::rename(layout.prev(name), layout.live(name))
             .with_context(|| format!("restoring {}", layout.live(name).display()))?;
         step("restored-binary")?;
@@ -1495,7 +1510,21 @@ pub(crate) fn install_links(
     }
     let plans: Vec<(&str, LinkAction)> = LIVE_BINARIES
         .iter()
-        .map(|n| (*n, plan_link(&layout.link(n), &layout.live(n))))
+        .copied()
+        .chain(std::iter::once("aida-flow"))
+        .map(|n| {
+            (
+                n,
+                plan_link(
+                    &layout.link(n),
+                    &if n == "aida-flow" {
+                        PathBuf::from("aida-porcelain")
+                    } else {
+                        layout.live(n)
+                    },
+                ),
+            )
+        })
         .collect();
     for (name, action) in &plans {
         if let LinkAction::Blocked { why } = action {
@@ -1527,7 +1556,11 @@ pub(crate) fn install_links(
         .with_context(|| format!("creating {}", layout.link_dir.display()))?;
     for (name, action) in &plans {
         let link = layout.link(name);
-        let target = layout.live(name);
+        let target = if *name == "aida-flow" {
+            PathBuf::from("aida-porcelain")
+        } else {
+            layout.live(name)
+        };
         match action {
             LinkAction::AlreadyCorrect => {
                 writeln!(
@@ -1725,6 +1758,30 @@ pub(crate) fn smoke_command(bin: &Path) -> Command {
 pub(crate) struct RealSteps;
 
 impl BuildSteps for RealSteps {
+    fn smoke_porcelain(&mut self, binary: &Path) -> Result<()> {
+        smoke_check(
+            "aida-porcelain --version",
+            smoke_command(binary).arg("--version"),
+            Duration::from_secs(15),
+            |o| o.starts_with("aida-porcelain "),
+        )?;
+        smoke_check(
+            "aida-porcelain flow --help",
+            smoke_command(binary).args(["flow", "--help"]),
+            Duration::from_secs(15),
+            |o| o.contains("report"),
+        )?;
+        let mut alias = smoke_command(binary);
+        use std::os::unix::process::CommandExt;
+        alias.arg0("aida-flow").args(["report", "--help"]);
+        smoke_check(
+            "aida-flow report --help",
+            &mut alias,
+            Duration::from_secs(15),
+            |o| o.contains("--since"),
+        )
+    }
+
     fn probe(&mut self, repo: &Path) -> Result<CheckoutState> {
         probe_checkout(repo)
     }
