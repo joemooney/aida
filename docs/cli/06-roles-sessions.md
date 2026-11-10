@@ -876,6 +876,17 @@ This host step replaces the advisor's manual auto-publish workaround.
 
 ## Watching for new review heads
 
+Review-watch and explicit `aida queue work PR-N --role reviewer` pickups defer
+while a live implementer lane owns the change's branch or a linked spec. The
+watcher prints `deferred: implementer lane live (host, lease)` and records the
+reason for `aida awaiting`, without reserving a review attempt. Local leases
+require positive process liveness; cross-host claims use their existing heartbeat
+expiry. Dormant, dead and expired records do not defer review. This also covers
+merge-only heads after a changes-requested verdict. Once the lane ends, the next
+pass admits the current head through ordinary review deduplication; merge-only
+history alone never blocks review indefinitely.
+<!-- trace:STORY-2705 | ai:codex -->
+
 For an advisor service that follows grant rotation, start the operator's
 `aida deputy shell run` in its ordinary advisor terminal, then launch the
 advisor through `aida agent new ... --role advisor`. The trusted host launcher
