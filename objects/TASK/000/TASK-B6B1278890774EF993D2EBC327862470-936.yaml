@@ -3,12 +3,12 @@ spec_id: TASK-b6b1278890774ef993d2ebc327862470-936
 agreed_id: TASK-3368
 title: 'STORY-2537 S6: broker-attested ProcIdentity (separately signed slice)'
 description: 'Per sketch docs/plans/2026-11-05-story-2537-proc-identity.md (~305): the broker slice needs its own sketch and advisor signoff before implementation. Mode guided: write the sketch first.'
-status: InProgress
+status: NeedsAttention
 priority: Low
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-07T10:46:47.827833836Z
-modified_at: 2026-11-10T01:38:49.971252316Z
+modified_at: 2026-11-10T01:43:59.100281498Z
 req_type: Task
 relationships:
 - rel_type: Child
@@ -175,6 +175,13 @@ comments:
     Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
   created_at: 2026-11-10T01:36:45.087228335Z
   modified_at: 2026-11-10T01:36:45.087228335Z
+- id: 01a1c320-577c-70d0-b93e-a4a942bdd0a6
+  author: dirtlab
+  content: 'Native rework handoff: no changed files; existing disabled broker implementation retained. Latest findings are publication-only. Advisor reports PR title/body/no-complete marker corrected, but verified local HEAD d782a710e008 still has completion-bearing (TASK-3368) subject. Read-only Git metadata prevents correction here; punt filed explicitly naming finding 1 and disputing an artificial source commit for findings 1/2. Authorized publisher must verify Refs-only commit/squash semantics. Manual rollout gate remains pending. Validation: git diff --check PASS; signed sketch aida plan verify PASS. Fresh targeted lane job j20261110T013926817-2-0 remains compiling with no executed-test result as of handoff, untested=true for this rerun; prior executed results remain documented in the earlier handoff. No commit, push, PR, queue done, pr ship or review record performed.'
+  created_at: 2026-11-10T01:43:59.100281498Z
+  modified_at: 2026-11-10T01:43:59.100281498Z
+  session_id: 01a1c31b9986
+  harness_version: codex-cli 0.167.0
 history:
 - id: 01a1b59e-5972-7d63-967f-d8572322d9d1
   author: joe
@@ -332,6 +339,15 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a1c31c-f82d-7380-8ab7-5430f3fdc249
+  author: dirtlab
+  timestamp: 2026-11-10T01:40:18.093903346Z
+  session_id: 01a1c31b9986
+  harness_version: codex-cli 0.167.0
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: NeedsAttention
 filed_at:
   code_sha: 4803b66ade90fa4f6ccbcfb20f3af84d4aaf7886
   branch: main
@@ -341,6 +357,11 @@ filed_at:
   vendor: claude
   session: 01a1b441-8158-7162-ad75-f7915b45ee33
   harness_version: 2.1.319 (Claude Code)
+attention_reason:
+  category: blocked-dependency
+  detail: 'Review finding 1 remains host-only: local HEAD d782a710e008 still ends (TASK-3368), contrary to the signed Refs-only slice. Git metadata is read-only in this native seat, so I cannot amend or replace that commit or verify publisher completion semantics. Advisor comment reports PR title/body and no-complete marker corrected host-side; finding 2 therefore needs no source edit. I dispute requiring an artificial code commit for these publication-only findings. Authorized publisher must ensure commit/squash metadata cannot grant completion and use (Refs TASK-3368). Disabled broker code is already present and unchanged. Manual rollout gate stays pending; preserve all punt/hold vetoes.'
+  raised_by: implementer
+  raised_at: 2026-11-10T01:40:18.093892818Z
 failure_reason:
   phase: reviewer
   phase_index: 3
