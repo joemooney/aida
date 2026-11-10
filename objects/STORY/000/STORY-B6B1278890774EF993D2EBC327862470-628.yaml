@@ -3,12 +3,12 @@ spec_id: STORY-b6b1278890774ef993d2ebc327862470-628
 agreed_id: STORY-2705
 title: Review-watch defers reviewing a PR head while an implementer lane for its spec is live
 description: 'Observed 2026-11-10: when a rework lane starts it merges main into the PR branch and pushes that merge (07:06 UTC on #3748, #3757, #3761, #3762). review-watch reviewed each merge-only head within minutes, found the old finding still present, and recorded CHANGES REQUESTED, costing one reviewer run, one full CI run and a merge-hold failure notice per PR, while the real fix was still being written. Each such round also inflates the review-round metrics. Proposal: review-watch (and aida queue work PR-N --role reviewer) skips a head while a live implementer lease exists for the PR''s spec, on any registered host, and reviews the head the lane finally publishes; a head with no non-merge commit since the last verdict is deferred the same way. Acceptance: (1) with a live implementer lease for the spec, review-watch does not launch a reviewer and shows ''deferred: implementer lane live (host, lease)'' in its status; (2) when the lease ends, the current head is reviewed once; (3) a merge-only head after a CHANGES REQUESTED verdict is not reviewed while a lane is live; (4) no deferral without a live lease, so an abandoned lane cannot block review forever (lease liveness, not presence); (5) tests for each case.'
-status: InProgress
+status: NeedsAttention
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-10T07:32:20.786755079Z
-modified_at: 2026-11-10T13:22:59.322155022Z
+modified_at: 2026-11-10T13:30:45.852636431Z
 req_type: Story
 comments:
 - id: 01a1c47d-19fb-7373-b169-6a484b05ebcd
@@ -206,6 +206,15 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a1c5a7-6adc-7733-ac00-cafb0a992afa
+  author: dirtlab
+  timestamp: 2026-11-10T13:30:45.852645757Z
+  session_id: 01a1c5a04672
+  harness_version: codex-cli 0.167.0
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: NeedsAttention
 filed_at:
   code_sha: e682f76092e65c6556f7881fe8a5e0aa48516740
   branch: main
@@ -215,3 +224,8 @@ filed_at:
   vendor: claude
   session: 01a1c39a-801a-7bd1-8da9-c955a6707f0b
   harness_version: 2.1.321 (Claude Code)
+attention_reason:
+  category: blocked-dependency
+  detail: 'Advisor-ruling P2 fix already exists in bc276b98ac; no additional source edits required. Effective scope-derived role is shared by claim and lease; empty legacy spec claims defer while live, explicit advisor/reviewer claims stay excluded. Combined review_implementer_gate/session_start lane job j20261110T133028118-2-0 passed all 102 tests after matching CLI build j20261110T132758610-2-0. Required make check-ci-fast with umask 022 fails six containment fixture EROFS errors creating /home/dirtlab/.aida/tmp* outside native-seat writable roots. Host must run and resolve this gate before publication. Log: /tmp/story2705-check-ci-fast.log. No commit, push or publication performed; publication veto remains pending host validation.'
+  raised_by: implementer
+  raised_at: 2026-11-10T13:30:45.852636431Z
