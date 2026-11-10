@@ -66,6 +66,10 @@ fn fixture(stubs: &[(&str, &str)]) -> Fx {
     )
     .unwrap();
     std::fs::create_dir_all(outside.join(".git")).unwrap();
+    // Keep discovery independent of companion binaries installed by CI (or
+    // the host). Project discovery still needs Git; shell stubs use /bin/sh.
+    // trace:STORY-2704 | ai:codex
+    std::os::unix::fs::symlink("/usr/bin/git", bin_dir.join("git")).unwrap();
     for (name, body) in stubs {
         write_exec(&bin_dir.join(name), body);
     }
@@ -79,7 +83,7 @@ fn fixture(stubs: &[(&str, &str)]) -> Fx {
 }
 
 fn aida(fx: &Fx, dir: &Path, args: &[&str], env: &[(&str, &str)]) -> Output {
-    let path = format!("{}:/usr/bin:/bin", fx.bin_dir.display());
+    let path = fx.bin_dir.as_os_str();
     // A stub written moments ago can still be held open by a sibling test's
     // fork; retry the rare "Text file busy" exec failure.
     for attempt in 0..5 {
