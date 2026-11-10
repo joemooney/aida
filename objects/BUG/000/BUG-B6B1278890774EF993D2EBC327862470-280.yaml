@@ -8,7 +8,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-10T03:07:38.542859262Z
-modified_at: 2026-11-10T04:08:02.821710207Z
+modified_at: 2026-11-10T04:18:40.738740517Z
 req_type: Bug
 comments:
 - id: 01a1c3a1-bccc-7ef0-b6b7-2fdb52e783f5
@@ -18,6 +18,13 @@ comments:
   modified_at: 2026-11-10T04:05:19.180439375Z
   session_id: 01a1c39a-801a-7bd1-8da9-c955a6707f0b
   harness_version: 2.1.321 (Claude Code)
+- id: 01a1c3ad-f7e2-74a1-9021-f7e9dced5017
+  author: dirtlab
+  content: 'Implemented configured-forge ship metadata reads through Forge::change_title_and_body (GitHub title/body; GitLab title/description REST read), updated shared callers, and detect .gitlab-ci.yml alongside GitHub workflows. Existing ship CI wait and merge already route through Forge; fake-glab regression exercises metadata, terminal red CI and merge refusal, with GitHub preservation and CI-file detection controls. LIGHT validation: aida lane job run -- cargo test --profile agent -p aida-cli-lib --lib -- bug_2515: 3 passed, 0 failed (job j20261110T041657311-2-0). Initial fixture failure corrected by supporting resolver --version probes. git diff --check passes. Merge-time completion logic unchanged (BUG-2516 out of scope). Native seat leaves edits uncommitted for host publication. Codegraph client at supplied /home/joe path was absent; used rg.'
+  created_at: 2026-11-10T04:18:40.738740517Z
+  modified_at: 2026-11-10T04:18:40.738740517Z
+  session_id: 01a1c3a435a5
+  harness_version: codex-cli 0.167.0
 history:
 - id: 01a1c3a2-0b0e-7e70-890b-6fe8aaba4acd
   author: joe
