@@ -1,7 +1,25 @@
 //! next-N drain driver: RealNextNDriver, next-keyword parsing, drain summary and cap stop, auto-complete run records and failure-bug drafting (STORY-1488 slice 1)
 // trace:STORY-1488 | ai:claude
 
-use crate::*;
+use crate::current_branch_head_sha;
+use crate::process_retry::RetryEtxtbsy;
+use crate::read_pipelined_child_result_sidecar;
+use crate::{
+    aida_exe_path, auto_complete, auto_complete_head_candidates_with_blocked,
+    auto_complete_head_candidates_with_roles, auto_complete_head_drivable, auto_complete_telemetry,
+    build_sha_short, canonical_role_name, classify_pipelined_child_outcome, comment_cmd,
+    detect_distributed_store_from, detect_open_pr_for_spec_via_forge, drain_caps,
+    drain_failure_note, drain_state, drain_summary, drive_robustness, effective_auto_complete_role,
+    events, find_main_worktree_root, last_drain, load_dispenser, next_n_rework_idle_message,
+    notify, pick_auto_complete_head_for_role, pipelined_child_common_args, pipelined_child_env,
+    resolve_queue_rework_needed, rule_violation, run_auto_complete, session, usage,
+    AutoCompleteHeadPick, DrainTuning, PrLookup, RealPhaseDriver, ResumeEntry,
+    DEFAULT_MAX_FAILURES,
+};
+use aida_core::DatabaseBackend;
+use aida_core::Storage;
+use anyhow::Result;
+use colored::Colorize;
 
 /// TASK-293 — a parsed `next` / `nextN` keyword positional for `aida queue
 /// work`. trace:TASK-293 | ai:claude

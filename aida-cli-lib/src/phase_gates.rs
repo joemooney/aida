@@ -1,7 +1,36 @@
 //! drain phase-1 scope prep, phase-3 verdicts, tuning, and watchdog (STORY-1488 slice 1)
 // trace:STORY-1488 | ai:claude
 
-use crate::*;
+use crate::classify_branch_swap_attribution;
+use crate::ensure_spec_done_after_pr;
+use crate::headless_log_permission_stall;
+use crate::process_retry::RetryEtxtbsy;
+use crate::resolve_gate_range;
+use crate::EmptyLaunchLog;
+use crate::{
+    agent_gate_matches_req, branch_commits_ahead_main, build_auto_punt_args,
+    build_integrate_rebase_args, build_phase3_auto_rebase_args, decide_shelve_attribution,
+    dispatched_branch_head_sha, docs, ensure_implementer_branch_pushed, gate, head_commit_message,
+    headless_launch_log_evidence, lease_path, list_leases, missing_implementer_worktree_push_gate,
+    orchestrated_lease_receipt_path, orchestrator_phase_child_env, orchestrator_pr_title_and_body,
+    parse_agent_gates_from_config, phase_driver, prepare_orchestrated_lease_receipt,
+    publish_orchestrated_lease_receipt_from_env, pushed_branch_commits_ahead_default,
+    read_commits_in_range, resolve_shelve_gate_range, try_open_orchestrator_pr_for_no_pr_worktree,
+    verified_phase2_branch, watchdog_failure_with_committed_work, worktree, AgentGateOnFail,
+    PrCreditMatch, RealPhaseDriver, SessionLease, ShelveAttribution,
+    ORCHESTRATED_LEASE_RECEIPT_ENV,
+};
+use crate::{
+    aida_exe_path, auto_complete, auto_complete_queue_add_args, ci_gate, complexity_calibration,
+    drain_state, effort_calibration, find_orchestrated_lease, first_run_id_from_gh_json,
+    git_capture, headless_log_path_for_session, parse_boolish, phase1_status_bump, presence,
+    read_drain_config, read_headless_log_for_session, resolve_gh_binary, reviewer_summary, session,
+    spec_matches, vendor_activity,
+};
+use aida_core::{Requirement, RequirementStatus, RequirementType, RequirementsStore, Storage};
+use anyhow::{Context, Result};
+use colored::Colorize;
+use std::io::IsTerminal;
 
 /// Resolve a spec's scope epic: walk its `parent:<ID>` tag chain (bounded) to
 /// the nearest ancestor of type Epic. Returns its display id, or `None` when no

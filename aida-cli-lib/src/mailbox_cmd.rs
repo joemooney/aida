@@ -14,7 +14,11 @@
 //! `digest_mailbox_to_canonical`) stay in `main.rs`; this dispatcher reaches
 //! them via `crate::`.
 
+use crate::process_retry::RetryEtxtbsy;
+use crate::{digest, human};
+use crate::{format_mail_age, format_mail_timestamp};
 use anyhow::{Context as _, Result};
+use clap::Parser;
 use colored::Colorize;
 use std::io::Read;
 
@@ -24,7 +28,13 @@ pub(crate) mod mailbox_cmd_args;
 pub(crate) use mailbox_cmd_args::*;
 
 use crate::cli::MailboxCommand;
-use crate::*;
+use crate::{
+    digest_mailbox_to_canonical, ensure_mailbox_mutation_allowed, humanize_relative,
+    inbox_identities, known_mailbox_identities, list_roles, mailbox_line_body, mailbox_policy,
+    mailbox_store, print_mailbox_line, print_mailbox_line_tagged, render_mailbox_notice,
+    resolve_mailbox_message, Cli, Command,
+};
+use anyhow::Context;
 
 // trace:STORY-1843 | ai:codex
 #[path = "mailbox_migration.rs"]
@@ -3206,7 +3216,6 @@ fn run_mailbox(
     matches: &clap::ArgMatches,
     ctx: &crate::cmdkit::DispatchCtx,
 ) -> anyhow::Result<crate::cmdkit::Flow> {
-    use crate::*;
     let args = <MailboxArgs as clap::FromArgMatches>::from_arg_matches(matches)?;
     match &ctx.store {
         None => Ok(crate::cmdkit::Flow::Continue),
