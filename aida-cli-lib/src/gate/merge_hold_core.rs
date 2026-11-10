@@ -1144,16 +1144,15 @@ pub(crate) fn live_carried_approval(
     hints: &[String],
     record_proof: bool,
 ) -> Result<crate::gate::review_carryover::CarryOver, String> {
-    let forge = crate::forge::forge_for(root);
-    let metadata = forge
-        .change_metadata(pr, &mut crate::network_retry::NoopSink)
-        .map_err(|why| format!("carry-over change unavailable: {why}"))?;
-    if !crate::gate::review_verdict::same_reviewed_sha(head, &metadata.head_sha)
-        || base.is_some_and(|base| base != metadata.base_ref)
+    let (current_head, current_base) =
+        crate::gate::approval::carryover_change_identity(root, pr)
+            .map_err(|why| format!("carry-over change unavailable: {why}"))?;
+    if !crate::gate::review_verdict::same_reviewed_sha(head, &current_head)
+        || base.is_some_and(|base| base != current_base)
     {
         return Err("the PR head or base moved before approval carry-over evaluation".into());
     }
-    let base = Some(metadata.base_ref.as_str());
+    let base = Some(current_base.as_str());
     let (candidates, policy, mut ids) =
         crate::gate::approval::merge_approval_subject(roots, root, pr, hints, None, Some(head));
     ids.extend_from_slice(hints);
@@ -1164,10 +1163,10 @@ pub(crate) fn live_carried_approval(
         crate::gate::review_carryover::CarryOverSite::read_only(root, base)
     };
     let proof = carried_approval(pr, head, &candidates, &policy, &bodies, &site)?;
-    let metadata = crate::forge::forge_for(root)
-        .change_metadata(pr, &mut crate::network_retry::NoopSink)
-        .map_err(|why| format!("carry-over change re-read unavailable: {why}"))?;
-    validate_carried_change(&proof, &metadata.head_sha, &metadata.base_ref)?;
+    let (current_head, current_base) =
+        crate::gate::approval::carryover_change_identity(root, pr)
+            .map_err(|why| format!("carry-over change re-read unavailable: {why}"))?;
+    validate_carried_change(&proof, &current_head, &current_base)?;
     Ok(proof)
 }
 
