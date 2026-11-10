@@ -3,12 +3,12 @@ spec_id: BUG-b6b1278890774ef993d2ebc327862470-281
 agreed_id: BUG-2516
 title: Merging a GitLab MR and running aida pull does not complete the spec named in the commit trailer
 description: 'Reported from operator''s work machine (Codex, GitLab project hello-work-0x), 2026-11-09. After ''glab mr merge 2 --squash'' and ''aida pull'', the spec stayed InProgress. Merge-time completion appears GitHub-specific (merged-PR lookup or squash-subject handling). Make completion forge-neutral: detect the merged MR through the forge abstraction and apply the trailer rules to the squash commit on the default branch. Test with a fake GitLab forge.'
-status: Draft
+status: Approved
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-10T03:07:46.884496242Z
-modified_at: 2026-11-10T08:59:37.702513797Z
+modified_at: 2026-11-10T08:59:41.153521112Z
 req_type: Bug
 comments:
 - id: 01a1c4af-2f66-7590-be69-dad5e180b9a4
@@ -18,6 +18,16 @@ comments:
   modified_at: 2026-11-10T08:59:37.702513797Z
   session_id: 01a1c39a-801a-7bd1-8da9-c955a6707f0b
   harness_version: 2.1.321 (Claude Code)
+history:
+- id: 01a1c4af-3ce1-7db1-8f61-609deb96783e
+  author: joe
+  timestamp: 2026-11-10T08:59:41.153511037Z
+  session_id: 01a1c39a-801a-7bd1-8da9-c955a6707f0b
+  harness_version: 2.1.321 (Claude Code)
+  changes:
+  - field_name: status
+    old_value: Draft
+    new_value: Approved
 filed_at:
   code_sha: 838f14c3c2811c6b63da5d465700cff773c36190
   branch: main
