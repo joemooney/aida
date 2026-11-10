@@ -38,6 +38,7 @@ Commands:
   findings      Triage findings filed by headless drain phases (reviewer + implementer). Bare `aida
                 findings` defaults to `aida findings list` — the command every failure message
                 points the user at, so it must run without a subcommand
+  flow          Measure landed PR flow from forge and gate-ledger evidence
   questions     The async decision inbox — structured questions the advisor distilled from forks it
                 couldn't resolve, which you answer OUTSIDE any agent (plain CLI, no LLM session).
                 Bare `aida questions` lists the inbox and, at a TTY with pending items, offers to
@@ -2082,6 +2083,63 @@ Arguments:
           The annotation text. Trimmed; stored verbatim
 
 Options:
+      --format <FORMAT>
+          Pin the output format regardless of whether stdout is a terminal: human = tables, toon =
+          compact agent output, json = machine JSON. Default (unset) is human at a TTY, toon when
+          piped/captured. Also settable via AIDA_OUTPUT_FORMAT (the flag wins)
+
+          Possible values:
+          - human: Human-readable tables / emoji (the interactive default at a TTY)
+          - toon:  Token-efficient TOON — the compact agent default when piped/captured
+          - json:  Machine JSON, for commands that support a JSON projection
+
+      --canonical-ids
+          Show node-local spec IDs in their canonical form instead of the node's friendly label (for
+          scripts). Also settable via AIDA_CANONICAL_IDS=1
+
+  -h, --help
+          Print help (see a summary with '-h')
+===== aida flow
+Measure landed PR flow from forge and gate-ledger evidence
+
+Usage: aida flow [OPTIONS] <COMMAND>
+
+Commands:
+  report  Report PRs landed on origin/main in a time window (GitHub)
+  help    Print this message or the help of the given subcommand(s)
+
+Options:
+      --format <FORMAT>
+          Pin the output format regardless of whether stdout is a terminal: human = tables, toon =
+          compact agent output, json = machine JSON. Default (unset) is human at a TTY, toon when
+          piped/captured. Also settable via AIDA_OUTPUT_FORMAT (the flag wins)
+
+          Possible values:
+          - human: Human-readable tables / emoji (the interactive default at a TTY)
+          - toon:  Token-efficient TOON — the compact agent default when piped/captured
+          - json:  Machine JSON, for commands that support a JSON projection
+
+      --canonical-ids
+          Show node-local spec IDs in their canonical form instead of the node's friendly label (for
+          scripts). Also settable via AIDA_CANONICAL_IDS=1
+
+  -h, --help
+          Print help (see a summary with '-h')
+===== aida flow report
+Report PRs landed on origin/main in a time window (GitHub)
+
+Usage: aida flow report [OPTIONS] --since <SINCE>
+
+Options:
+      --since <SINCE>
+          Inclusive RFC3339 timestamp or YYYY-MM-DD (UTC)
+
+      --until <UNTIL>
+          Inclusive RFC3339 timestamp or YYYY-MM-DD (UTC); defaults to now
+
+      --json
+          Emit the report as JSON (same as --format json)
+
       --format <FORMAT>
           Pin the output format regardless of whether stdout is a terminal: human = tables, toon =
           compact agent output, json = machine JSON. Default (unset) is human at a TTY, toon when
@@ -33806,6 +33864,72 @@ Working on aida itself
         "name": "help",
         "takes_value": false,
         "help": "Print help (see more with '--help')"
+      }
+    ],
+    "hidden": false
+  },
+  {
+    "path": [
+      "aida",
+      "flow"
+    ],
+    "about": "Measure landed PR flow from forge and gate-ledger evidence",
+    "flags": [
+      {
+        "name": "canonical-ids",
+        "takes_value": false,
+        "help": "Show node-local spec IDs in their canonical form instead of the node's friendly label (for scripts). Also settable via AIDA_CANONICAL_IDS=1"
+      },
+      {
+        "name": "format",
+        "takes_value": true,
+        "help": "Pin the output format regardless of whether stdout is a terminal: human = tables, toon = compact agent output, json = machine JSON. Default (unset) is human at a TTY, toon when piped/captured. Also settable via AIDA_OUTPUT_FORMAT (the flag wins)"
+      },
+      {
+        "name": "help",
+        "takes_value": false,
+        "help": "Print help (see more with '--help')"
+      }
+    ],
+    "hidden": false
+  },
+  {
+    "path": [
+      "aida",
+      "flow",
+      "report"
+    ],
+    "about": "Report PRs landed on origin/main in a time window (GitHub)",
+    "flags": [
+      {
+        "name": "canonical-ids",
+        "takes_value": false,
+        "help": "Show node-local spec IDs in their canonical form instead of the node's friendly label (for scripts). Also settable via AIDA_CANONICAL_IDS=1"
+      },
+      {
+        "name": "format",
+        "takes_value": true,
+        "help": "Pin the output format regardless of whether stdout is a terminal: human = tables, toon = compact agent output, json = machine JSON. Default (unset) is human at a TTY, toon when piped/captured. Also settable via AIDA_OUTPUT_FORMAT (the flag wins)"
+      },
+      {
+        "name": "help",
+        "takes_value": false,
+        "help": "Print help (see more with '--help')"
+      },
+      {
+        "name": "json",
+        "takes_value": false,
+        "help": "Emit the report as JSON (same as --format json)"
+      },
+      {
+        "name": "since",
+        "takes_value": true,
+        "help": "Inclusive RFC3339 timestamp or YYYY-MM-DD (UTC)"
+      },
+      {
+        "name": "until",
+        "takes_value": true,
+        "help": "Inclusive RFC3339 timestamp or YYYY-MM-DD (UTC); defaults to now"
       }
     ],
     "hidden": false
