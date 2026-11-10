@@ -3,12 +3,12 @@ spec_id: BUG-b6b1278890774ef993d2ebc327862470-275
 agreed_id: BUG-2510
 title: Detached Codex workers drop custom credential environment variables (only OPENAI_API_KEY is allowlisted)
 description: Reported from operator's work machine (Codex, GitLab project hello-work-0x), 2026-11-09. The detached-worker environment allowlist (aida-cli-lib/src/agent_codex_background.rs:45) passes OPENAI_API_KEY but not a deployment's custom credential variable (for example XAIAA_API_KEY), so the worker fails authentication. Make the passthrough configurable per vendor in agents.toml (explicit names only, no wildcards), document it, and have doctor --lane-host report a configured credential variable that is unset. Never log values.
-status: NeedsAttention
+status: Completed
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-10T03:06:27.088766021Z
-modified_at: 2026-11-10T07:10:23.549722008Z
+modified_at: 2026-11-10T09:05:02.786604828Z
 req_type: Bug
 comments:
 - id: 01a1c3a1-b5e4-7b12-9593-2238c442f4e7
@@ -111,6 +111,20 @@ history:
   - field_name: status
     old_value: InProgress
     new_value: NeedsAttention
+- id: 01a1c4b4-24fe-74f1-8de9-eb38f85615f1
+  author: aida-auto-bump
+  timestamp: 2026-11-10T09:05:02.718167869Z
+  changes:
+  - field_name: status
+    old_value: NeedsAttention
+    new_value: Completed
+processing_record:
+- id: 01a1c4b4-2542-7f33-84fe-e8f413ce33ff
+  timestamp: 2026-11-10T09:05:02.786602219Z
+  agent: aida
+  commit_sha: b1627a5df08eddc2f08fcba33dd1807ed3dcfa30
+  summary: 'Full-sweep APPROVED: BUG-2510 criteria verified by source, two targeted tests and successful current-head CI; prior vendor-literal finding resolved. BUG-2510 (bug protocol): met via changed inline cfg(test) modules. No actionable defects; Codegraph client absent, rg fallback used.'
+  review_verdict: approved
 filed_at:
   code_sha: 838f14c3c2811c6b63da5d465700cff773c36190
   branch: main
@@ -120,11 +134,7 @@ filed_at:
   vendor: claude
   session: 01a1beff-fc3b-78e2-93e2-9b0c283b0339
   harness_version: 2.1.319 (Claude Code)
-failure_reason:
-  phase: reviewer
-  phase_index: 3
-  kind: verdict:request-changes
-  detail: 'Full-sweep REQUEST CHANGES: unchanged vendor-literal ratchet regression; BUG-2510 (bug protocol): met via changed inline test modules; acceptance checked by source, targeted pass is reported prior-head evidence; LIGHT/current PR CI unverified (7 pending).'
-  recovery_hint: address the review findings, move BUG-2510 back to In Progress, and clear the PR hold only after approval
-  shelved_by: reviewer
-  shelved_at: 2026-11-10T07:10:23.549722008Z
+implementation_info:
+  implemented: false
+  completed_at: 2026-11-10T09:05:02.718162536Z
+  completion_sha: b1627a5df08eddc2f08fcba33dd1807ed3dcfa30
