@@ -8,7 +8,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-10T03:07:01.660083142Z
-modified_at: 2026-11-10T20:57:09.400247252Z
+modified_at: 2026-11-10T21:06:08.530627944Z
 req_type: Bug
 comments:
 - id: 01a1c60c-adfa-72f3-9f5c-b40df8817ee3
@@ -94,6 +94,13 @@ comments:
   modified_at: 2026-11-10T20:55:50.555800866Z
   session_id: 01a1c530-c917-7f13-ab81-f6b5e1d1cd30
   harness_version: 2.1.322 (Claude Code)
+- id: 01a1c748-5412-7b43-b491-74221163e844
+  author: dirtlab
+  content: 'Round 3: addressed both P2 findings in init_cmd.rs. run_init now checks adopted routing before local footprint/vendor resolution and returns through adopted setup; first-time and projected adoption are covered through run_init. Local setup choices now resolve against current_dir after bootstrap, preventing parent AIDA config from controlling a nested repository. Native consent retains the resolved AgentSelection from the advisor ruling. Lane jobs j20261110T205839300-2-0 and j20261110T205858003-2-0 passed: 2 new run_init regressions plus 1 conflicting saved-settings consent regression. git diff --check passed. Codegraph host client at the supplied absolute path is absent; doctor confirms missing. Changes left uncommitted for host publication as required by native-seat instructions.'
+  created_at: 2026-11-10T21:06:08.530627944Z
+  modified_at: 2026-11-10T21:06:08.530627944Z
+  session_id: 01a1c74013b4
+  harness_version: codex-cli 0.167.0
 history:
 - id: 01a1c5dc-c560-7b10-85fe-1df64f0de2cf
   author: joe
