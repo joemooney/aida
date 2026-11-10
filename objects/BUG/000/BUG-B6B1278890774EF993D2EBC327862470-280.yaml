@@ -3,12 +3,12 @@ spec_id: BUG-b6b1278890774ef993d2ebc327862470-280
 agreed_id: BUG-2515
 title: aida pr ship on a GitLab-forge project calls gh directly and detects CI only from .github/workflows
 description: Reported from operator's work machine (Codex, GitLab project hello-work-0x), 2026-11-09. With forge.provider = "gitlab", 'aida pr ship 2' calls 'gh pr view' (aida-cli-lib/src/pr_cmd.rs:6917) and fails with no GitHub host, and CI detection only checks .github/workflows (pr_cmd.rs:6986), so GitLab CI (.gitlab-ci.yml) is skipped. Route MR metadata, CI wait and merge through the forge abstraction (glab for GitLab), detect .gitlab-ci.yml, and add GitLab-forge tests with a fake glab.
-status: InProgress
+status: NeedsAttention
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-10T03:07:38.542859262Z
-modified_at: 2026-11-10T04:18:40.738740517Z
+modified_at: 2026-11-10T04:31:14.672983898Z
 req_type: Bug
 comments:
 - id: 01a1c3a1-bccc-7ef0-b6b7-2fdb52e783f5
@@ -42,6 +42,13 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a1c3b9-78f0-77d3-925b-6d17967413a2
+  author: aida-orchestrator
+  timestamp: 2026-11-10T04:31:14.673009439Z
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: NeedsAttention
 filed_at:
   code_sha: 838f14c3c2811c6b63da5d465700cff773c36190
   branch: main
@@ -51,3 +58,11 @@ filed_at:
   vendor: claude
   session: 01a1beff-fc3b-78e2-93e2-9b0c283b0339
   harness_version: 2.1.319 (Claude Code)
+failure_reason:
+  phase: reviewer
+  phase_index: 3
+  kind: verdict:request-changes
+  detail: 'Full sweep: one existing test fixture breaks under forge resolution; required PR CI pending. BUG-2515 bug protocol: met (test file touched).'
+  recovery_hint: address the review findings, move BUG-2515 back to In Progress, and clear the PR hold only after approval
+  shelved_by: reviewer
+  shelved_at: 2026-11-10T04:31:14.672983898Z
