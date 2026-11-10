@@ -8,7 +8,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-04T17:54:51.353376Z
-modified_at: 2026-11-09T06:51:51.701184525Z
+modified_at: 2026-11-10T13:22:04.913823957Z
 req_type: Task
 tags:
 - area:containment
@@ -873,6 +873,13 @@ comments:
   modified_at: 2026-11-08T23:37:00.366713369Z
   session_id: 01a1bd6f39ad
   harness_version: 2.1.319 (Claude Code)
+- id: 01a1c59f-77f1-7272-81ce-08d41f51e011
+  author: joe
+  content: 'ADVISOR STATUS 2026-11-10 06:30 MST: PR-3641 (the Refs-only slice of the 2026-11-07 16:40 ruling, steps 1-3) LANDED via train #3705 as 824eaab9b9 on 2026-11-08. Remaining blocker is step 4 only, owed by the advisor: a fresh live agy conformance run through the AIDA boundary (via the script deputy, with report.json attached) passing C0-C4. After that, an implementer lane unlocks Adapter::require_conformance in production. Also to check during that run: the 2026-11-08 round-12 minor finding (runtime hooks.json writable). It is deferred behind the current goal (reviews, PR throughput, crate split); no lane work is possible until the live run happens.'
+  created_at: 2026-11-10T13:22:04.913823957Z
+  modified_at: 2026-11-10T13:22:04.913823957Z
+  session_id: 01a1c530-c917-7f13-ab81-f6b5e1d1cd30
+  harness_version: 2.1.322 (Claude Code)
 history:
 - id: 01a1a7b3-3699-7713-8ae7-69568c287956
   author: joe
