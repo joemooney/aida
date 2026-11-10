@@ -176,6 +176,8 @@ mod lane_fast_gate;
 mod launch;
 pub mod leases;
 mod live_work;
+#[allow(dead_code)] // Foundation only; launch/ownership integration is a later slice.
+mod park_runtime;
 pub(crate) use live_work::try_auto_queue_pr_review;
 mod agent_handle;
 pub mod mailbox_resolver;
