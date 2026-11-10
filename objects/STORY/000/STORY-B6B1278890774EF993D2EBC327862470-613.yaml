@@ -8,7 +8,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-09T01:58:39.064485765Z
-modified_at: 2026-11-10T20:50:58.379432980Z
+modified_at: 2026-11-10T20:50:59.680896200Z
 req_type: Story
 tags:
 - area:orchestration
@@ -67,6 +67,21 @@ comments:
   content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: Fresh standalone receipt admission uses the wrong role/scope and loses resolved refusal identity; required CI is still pending.. No triage reason was given.'
   created_at: 2026-11-10T20:50:58.379427404Z
   modified_at: 2026-11-10T20:50:58.379427404Z
+  session_id: 01a1c530-c917-7f13-ab81-f6b5e1d1cd30
+  harness_version: 2.1.322 (Claude Code)
+- id: 01a1c73a-7559-7c30-8f35-89d8ee3eebad
+  author: joe
+  content: |-
+    REVIEW FINDINGS TO ADDRESS (STORY-2690):
+    Verdict: CHANGES REQUESTED
+    Reviewed commit: 5bc2c3a725a7
+    Recorded: 2026-11-10T20:28:21.041676488+00:00
+    Findings:
+    1. [P2] aida-cli-lib/src/queue_cmd/work.rs:3863-3875: Receipt applicability uses role_input.pickup/effective_role and hardcodes spec scope, but actual launch uses infer_queue_work_role and plan.review_target. A default implementer shell launching PR-N or a reviewer-routed item creates a false implementer refused-before-start receipt after the reviewer runs successfully. An advisor/reviewer shell whose spec resolves to implementer suppresses the admission receipt and loses preflight refusals. Use one resolved route/scope decision while retaining early refusal capture; test shell/queue-role mismatches and PR scope.
+    2. [P2] aida-cli-lib/src/queue_cmd/work.rs:3873-3876 and aida-cli-lib/src/standalone_implementer.rs:1367: No-argument pickup seeds spec=queue-head and does not bind the actual spec until deep inside the standalone runner. Operator hold, containment, occupancy or delegation refusals after plan resolution therefore retain an unattributable placeholder, and inferred PR branches are likewise missing. Persist the resolved spec immediately after plan resolution and enrich branch/PR as learned, before subsequent gates; add no-argument refusal and inferred rework-branch regressions.
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
+  created_at: 2026-11-10T20:50:59.545692835Z
+  modified_at: 2026-11-10T20:50:59.545692835Z
   session_id: 01a1c530-c917-7f13-ab81-f6b5e1d1cd30
   harness_version: 2.1.322 (Claude Code)
 history:
