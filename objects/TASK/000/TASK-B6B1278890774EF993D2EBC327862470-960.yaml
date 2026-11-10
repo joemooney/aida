@@ -8,7 +8,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-07T23:39:41.575597Z
-modified_at: 2026-11-10T10:59:36.000905848Z
+modified_at: 2026-11-10T10:59:38.669675009Z
 req_type: Task
 relationships:
 - rel_type: Child
@@ -574,6 +574,21 @@ comments:
   content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: Batch-2 scope and ledger are correct, but removing the session_reap parent binding breaks seven library-test calls; current-head CI is red. PR body also contradicts the 11 qualified-call rewrites.. It was punted on: ambiguous-spec: Batch-2 binding advisor ruling requires exactly 36 files plus ledger and no body/call rewrites except import collisions. Replacing root globs requires explicit lease_state_for imports in burndown_run.rs, plan_intent.rs, ps_integrate.rs, session_reap.rs, status_awaiting.rs and status_cmd.rs; unchanged ownership-liveness ratchet rejects the six new module-scope import sites. The compile-only import diff is preserved with no body changes. Need advisor authorization for the same qualified-call exception used in batch 1, or an explicit alternate scope/policy decision. Do not publish while unresolved.. No triage reason was given.'
   created_at: 2026-11-10T10:59:36.000894905Z
   modified_at: 2026-11-10T10:59:36.000894905Z
+  session_id: 01a1c39a-801a-7bd1-8da9-c955a6707f0b
+  harness_version: 2.1.321 (Claude Code)
+- id: 01a1c51d-0f94-7fd0-856d-56244d407591
+  author: joe
+  content: |-
+    REVIEW FINDINGS TO ADDRESS (TASK-3428):
+    Verdict: CHANGES REQUESTED
+    Reviewed commit: dbc03b051deb
+    Recorded: 2026-11-10T10:53:03.788616976+00:00
+    Findings:
+    1. P1 aida-cli-lib/src/session_reap.rs:51-60: replacing use crate::* removes lease_state_for from the parent scope, but tests/bug_2197_dead_lease_release_tests.rs imports super::* and still calls it unqualified at lines 247, 279, 282, 695, 732, 735 and 741. CI run 42799341150 reports seven E0425 errors in lib-0, lib-1 and the live-bwrap gates step, failing aggregate Build. Restore a cfg(test) parent binding or explicitly import/qualify the function in the test module without increasing production ownership-liveness debt; obtain passing current-head library compilation and required CI.
+    2. P2 PR description: it claims no qualified-call rewrites and describes the ownership-liveness module-site blocker as unresolved, but this head contains 11 leases::lease_state_for rewrites in six files from the recorded host fix round. Update the description to disclose that exception and its technical validation accurately. Keep any still-active advisor punt/publication veto distinct and do not imply it was cleared.
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
+  created_at: 2026-11-10T10:59:38.516159958Z
+  modified_at: 2026-11-10T10:59:38.516159958Z
   session_id: 01a1c39a-801a-7bd1-8da9-c955a6707f0b
   harness_version: 2.1.321 (Claude Code)
 history:
