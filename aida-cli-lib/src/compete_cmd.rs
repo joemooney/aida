@@ -7,7 +7,13 @@
 // trace:SPIKE-78 | ai:claude
 
 use crate::process_retry::RetryEtxtbsy;
-use crate::*;
+use crate::{
+    assemble_ultraplan_prompt, build_reusable_helpers_section, compete, create_agent_brief,
+    find_project_root, glyph, load_store_for_lookup, read_reserved_paths, session,
+    working_tree_is_dirty,
+};
+use anyhow::{Context, Result};
+use colored::Colorize;
 
 /// Assemble the implementer brief a compete arm hands to a vendor: the rich
 /// spec context (reusing the AIDA planning-prompt assembly) wrapped in compete-specific
@@ -1150,17 +1156,22 @@ pub(crate) fn build_compete_arm_command(
             || posture != session::ContainmentPosture::Aida,
         crate::codex_tool_env::UNWIRED_AIDA_POSTURE
     );
-    let ctx = crate::launch::LaunchContext::resolve(crate::launch::LaunchRequest {
-        vendor: vendor_profile,
-        kind: aida_core::launch_policy::LaunchKind::Fresh,
-        program: program.into(),
-        args,
-        tail: Vec::new(),
-        posture,
-        cwd: worktree_dir.to_path_buf(),
-        set_cwd: true,
-        host_main: host_main.map(std::path::Path::to_path_buf),
-    })?;
+    let ctx = {
+        let req = crate::launch::LaunchRequest {
+            vendor: vendor_profile,
+            kind: aida_core::launch_policy::LaunchKind::Fresh,
+            program: program.into(),
+            args,
+            tail: Vec::new(),
+            posture,
+            cwd: worktree_dir.to_path_buf(),
+            set_cwd: true,
+            host_main: host_main.map(std::path::Path::to_path_buf),
+        };
+        // trace:STORY-2538 | ai:codex
+        let exec = crate::session::capture_launch_exec(&req.cwd, req.host_main.as_deref())?;
+        crate::launch::LaunchContext::resolve(&exec, req)
+    }?;
     let mut cmd = crate::launch::spawn_agent(&ctx)?;
     // BUG-050: belt and braces alongside the `--settings` env.
     // trace:BUG-B6B1278890774EF993D2EBC327862470-050 | ai:claude
