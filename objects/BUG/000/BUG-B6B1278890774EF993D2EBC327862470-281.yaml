@@ -8,7 +8,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-10T03:07:46.884496242Z
-modified_at: 2026-11-10T10:53:45.917631557Z
+modified_at: 2026-11-10T11:02:15.632628995Z
 req_type: Bug
 comments:
 - id: 01a1c4af-2f66-7590-be69-dad5e180b9a4
@@ -86,6 +86,13 @@ comments:
   modified_at: 2026-11-10T10:51:38.718517854Z
   session_id: 01a1c39a-801a-7bd1-8da9-c955a6707f0b
   harness_version: 2.1.321 (Claude Code)
+- id: 01a1c51f-7550-79d3-b415-4a1b1a19ca1b
+  author: dirtlab
+  content: 'CI fix round at da97b365a3: updated aida-cli/tests/task_1335_reconcile_unavailable_evidence.rs to reflect the supported GitLab candidate lookup. Both previously failing classification tests install an explicit failing fake glab and assert its query diagnostic while retaining no-mutation checks. The Completed diagnostic-only sweep retains its unsupported-GitLab expectation. No production behavior changes. Validation: lane job j20261110T105441825-2-0 executed all 17 task_1335_reconcile_unavailable_evidence integration tests, all passed; lane job j20261110T105505128-2-0 executed all 3 bug_2516_gitlab regressions, all passed, including prose-only mentions, later genuine matches and incomplete pagination. rustfmt --check and git diff --check passed. untested=false. Only this integration test file is dirty; edits remain uncommitted for host publication. No commit, push, PR, queue done, review record or pr ship performed. Codegraph host client is absent; used rg. No implementation blockers.'
+  created_at: 2026-11-10T11:02:15.632628995Z
+  modified_at: 2026-11-10T11:02:15.632628995Z
+  session_id: 01a1c517a854
+  harness_version: codex-cli 0.167.0
 history:
 - id: 01a1c4af-3ce1-7db1-8f61-609deb96783e
   author: joe

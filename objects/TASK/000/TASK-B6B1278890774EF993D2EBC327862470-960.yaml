@@ -8,7 +8,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-07T23:39:41.575597Z
-modified_at: 2026-11-10T11:01:46.790608452Z
+modified_at: 2026-11-10T11:05:18.214672054Z
 req_type: Task
 relationships:
 - rel_type: Child
@@ -591,6 +591,13 @@ comments:
   modified_at: 2026-11-10T10:59:38.516159958Z
   session_id: 01a1c39a-801a-7bd1-8da9-c955a6707f0b
   harness_version: 2.1.321 (Claude Code)
+- id: 01a1c522-3e86-7c30-a495-f988ff691d92
+  author: dirtlab
+  content: 'Review rework: added explicit crate::leases::lease_state_for import only in tests/bug_2197_dead_lease_release_tests.rs, restoring seven calls without production ownership-liveness debt. Final launcher cargo check --profile agent -p aida-cli-lib --tests PASS (j20261110T110422780-2-0, exit 0); no executed Rust tests claimed. All 10 Git-maintenance/ownership-liveness tests PASS; glob ratchet 78/zero additions; rustfmt/diff hygiene PASS. make check-ci-fast fails in Codex mail-wake fixtures (4 failures, 17 errors, ownership/shared-write refusals), so full fast/required CI remains host validation. Corrected PR body prepared at /tmp/task3428-b2-review-body.md discloses existing 11 qualified calls across six production files and preserves any active punt/hold veto; host must apply it. Handoff /tmp/task3428-b2-review-handoff.md. Only test file remains uncommitted; no push, PR mutation, queue completion or verdict.'
+  created_at: 2026-11-10T11:05:18.214672054Z
+  modified_at: 2026-11-10T11:05:18.214672054Z
+  session_id: 01a1c51ef7e7
+  harness_version: codex-cli 0.167.0
 history:
 - id: 01a1b862-2e0b-7a50-a4d0-25097c707b57
   author: joe
