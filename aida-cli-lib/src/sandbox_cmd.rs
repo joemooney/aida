@@ -644,7 +644,7 @@ pub(crate) struct SandboxArgs {
 // even from a non-AIDA cwd). trace:SPIKE-48 | ai:claude
 fn run_sandbox(
     matches: &clap::ArgMatches,
-    _ctx: &crate::command_registry::DispatchCtx,
+    _ctx: &crate::cmdkit::DispatchCtx,
 ) -> anyhow::Result<()> {
     let args = <SandboxArgs as clap::FromArgMatches>::from_arg_matches(matches)?;
     let sandbox_cmd = &args.inner;
@@ -652,16 +652,15 @@ fn run_sandbox(
 }
 
 // trace:STORY-1728 | ai:claude
-pub(crate) static SANDBOX: crate::command_registry::CommandReg =
-    crate::command_registry::CommandReg {
-        name: "sandbox",
-        help_after: "protocol",
-        command: <SandboxArgs as clap::CommandFactory>::command,
-        policy: |_| crate::command_registry::CmdPolicy {
-            stakeholder: crate::stakeholder_role::StakeholderAction::Write,
-            per_write_auto_push: false,
-            skip_role_restore_prompt: false,
-            team_identity_write: false,
-        },
-        run: crate::command_registry::Handler::Early(run_sandbox),
-    };
+pub(crate) static SANDBOX: crate::cmdkit::CommandReg = crate::cmdkit::CommandReg {
+    name: "sandbox",
+    help_after: "protocol",
+    command: <SandboxArgs as clap::CommandFactory>::command,
+    policy: |_| crate::cmdkit::CmdPolicy {
+        stakeholder: crate::stakeholder_role::StakeholderAction::Write,
+        per_write_auto_push: false,
+        skip_role_restore_prompt: false,
+        team_identity_write: false,
+    },
+    run: crate::cmdkit::Handler::Early(run_sandbox),
+};

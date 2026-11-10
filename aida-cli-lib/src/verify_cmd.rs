@@ -433,10 +433,7 @@ pub(crate) struct VerifyArgs {
 
 // Explicit only: no sync/drain/hook path invokes host probes.
 // trace:STORY-1673 | ai:codex
-fn run_verify(
-    matches: &clap::ArgMatches,
-    ctx: &crate::command_registry::DispatchCtx,
-) -> anyhow::Result<()> {
+fn run_verify(matches: &clap::ArgMatches, ctx: &crate::cmdkit::DispatchCtx) -> anyhow::Result<()> {
     let args = <VerifyArgs as clap::FromArgMatches>::from_arg_matches(matches)?;
     let cmd = &args.inner;
     return self::handle_verify_command(
@@ -446,18 +443,17 @@ fn run_verify(
 }
 
 // trace:STORY-1728 | ai:claude
-pub(crate) static VERIFY: crate::command_registry::CommandReg =
-    crate::command_registry::CommandReg {
-        name: "verify",
-        help_after: "lint",
-        command: <VerifyArgs as clap::CommandFactory>::command,
-        // Main's table had no read arm for top-level `verify` (only `db block
-        // verify`), so it fell through to Write; guests stay refused.
-        policy: |_| crate::command_registry::CmdPolicy {
-            stakeholder: crate::stakeholder_role::StakeholderAction::Write,
-            per_write_auto_push: false,
-            skip_role_restore_prompt: false,
-            team_identity_write: false,
-        },
-        run: crate::command_registry::Handler::Early(run_verify),
-    };
+pub(crate) static VERIFY: crate::cmdkit::CommandReg = crate::cmdkit::CommandReg {
+    name: "verify",
+    help_after: "lint",
+    command: <VerifyArgs as clap::CommandFactory>::command,
+    // Main's table had no read arm for top-level `verify` (only `db block
+    // verify`), so it fell through to Write; guests stay refused.
+    policy: |_| crate::cmdkit::CmdPolicy {
+        stakeholder: crate::stakeholder_role::StakeholderAction::Write,
+        per_write_auto_push: false,
+        skip_role_restore_prompt: false,
+        team_identity_write: false,
+    },
+    run: crate::cmdkit::Handler::Early(run_verify),
+};
