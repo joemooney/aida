@@ -125,6 +125,7 @@ fn release_hooks(
         root,
         &hold,
         AutoReleaseIo {
+            coverage: &|_| Ok(None),
             live_head: &|| {
                 on_read(reads.get());
                 let i = reads.get().min(heads.len() - 1);

@@ -167,6 +167,7 @@ impl Case {
             root.path(),
             &self.hold,
             AutoReleaseIo {
+                coverage: &|_| Ok(None),
                 live_head: &|| {
                     Ok(Some(mh::PinnedChange {
                         merged: false,
@@ -609,6 +610,7 @@ fn bug_2398_actual_ungranted_record_keeps_auto_release_marker_and_labels() {
         root,
         &hold,
         AutoReleaseIo {
+            coverage: &|_| Ok(None),
             live_head: &|| {
                 Ok(Some(mh::PinnedChange {
                     merged: false,

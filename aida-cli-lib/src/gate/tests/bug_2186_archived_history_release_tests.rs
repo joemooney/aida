@@ -121,6 +121,7 @@ fn release_reading(
         root,
         &hold,
         AutoReleaseIo {
+            coverage: &|_| Ok(None),
             live_head: &|| {
                 Ok(Some(mh::PinnedChange {
                     merged: false,
@@ -182,6 +183,7 @@ fn release_after_release(root: &Path) -> (Result<Outcome>, Vec<String>) {
         root,
         &hold,
         &Release {
+            coverage: None,
             verdict: mh::VerdictRef::new(KEY, Some(PR), Some(HEAD.into()), Some(REVIEWER.into())),
             mandate: None,
         },
