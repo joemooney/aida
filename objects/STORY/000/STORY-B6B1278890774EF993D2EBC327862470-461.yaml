@@ -2,15 +2,14 @@ id: 01a1ae38-168d-7190-ba2f-72217d9ef655
 spec_id: STORY-b6b1278890774ef993d2ebc327862470-461
 agreed_id: STORY-2538
 title: One injected ExecContext for production and tests (regroup R4)
-description: 'Regroup R4: one injected ExecContext { env allowlist, home, tool paths, project root, clock } for production and tests, defined ONCE and shared with STORY-2326''s env-clear allowlist. Ratchets: no std::env::var outside the context module, and no set_var in tests. Live-gate tests fail rather than skip when CI declares the capability. Evidence: BUG-2381, BUG-2209, TASK-2349/2345, TASK-2161, TASK-1973, BUG-1618 and 14 AIDA_TEST_* seams (TASK-1751 folds here). Trigger: STORY-2326 PR-B merged (the LaunchContext env type exists). Sketch-first.
-
-  '
+description: |
+  Regroup R4: one injected ExecContext { env allowlist, home, tool paths, project root, clock } for production and tests, defined ONCE and shared with STORY-2326's env-clear allowlist. Ratchets: no std::env::var outside the context module, and no set_var in tests. Live-gate tests fail rather than skip when CI declares the capability. Evidence: BUG-2381, BUG-2209, TASK-2349/2345, TASK-2161, TASK-1973, BUG-1618 and 14 AIDA_TEST_* seams (TASK-1751 folds here). Trigger: STORY-2326 PR-B merged (the LaunchContext env type exists). Sketch-first.
 status: Approved
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
-created_at: 2026-11-06 00:17:53.805850+00:00
-modified_at: 2026-11-10 13:01:01.482982+00:00
+created_at: 2026-11-06T00:17:53.805850Z
+modified_at: 2026-11-10T13:20:00.880865860Z
 req_type: Story
 tags:
 - architecture
@@ -19,531 +18,453 @@ tags:
 relationships:
 - rel_type: BlockedBy
   target_id: 01a19db5-2e75-75f3-a290-1be07eaf1692
-  created_at: 2026-11-07 10:44:34.235400+00:00
+  created_at: 2026-11-07T10:44:34.235400Z
   created_by: joe
 comments:
 - id: 01a1b17b-05d7-77a2-98fb-1e57fc2f7278
   author: joe
   content: 'ADVISOR: undeferred; its condition is met (STORY-2326 PR-B merged as #3501, 1e4ba23). Per the regroup deferral reason, the first lane is SKETCH-ONLY: post a sketch on this spec that builds on the launch/context.rs + launch/spawn.rs types now on main, punt as design-fork for advisor signoff, and open no PR. Note the overlap with STORY-2326 PR-C (vendor profile and prepare_launch): name which parts PR-C owns, so the two do not collide.'
-  created_at: 2026-11-06 15:29:52.087107+00:00
-  modified_at: 2026-11-06 15:29:52.087107+00:00
+  created_at: 2026-11-06T15:29:52.087107Z
+  modified_at: 2026-11-06T15:29:52.087107Z
   session_id: b0a84e34-277c-4df6-b53c-43f4bbe2e84d
 - id: 01a1b197-04c0-7c73-b1c0-8499b5afdd41
   author: joe
-  content: 'SKETCH — STORY-2538, 2026-11-06, Codex. Awaiting advisor/master sign-off; proposal only. This satisfies the advisor''s 15:29Z sketch-only brief, not implementation or publication approval. Inspected checkout 5518bd9d7a9 (PR-B #3501). No source edits, commits, PRs or queue completion.
-
+  content: |
+    SKETCH — STORY-2538, 2026-11-06, Codex. Awaiting advisor/master sign-off; proposal only. This satisfies the advisor's 15:29Z sketch-only brief, not implementation or publication approval. Inspected checkout 5518bd9d7a9 (PR-B #3501). No source edits, commits, PRs or queue completion.
 
     1. Observed baseline and boundary
-
     launch/context.rs already resolves LaunchRequest into private LaunchContext fields: program, argv, posture, cwd, host_main and parent containment. Its resolve wrapper reads ambient containment and AIDA_AGENT_CMD; resolve_with is pure. launch/spawn.rs builds the Command, applies the containment boundary and assigns seats separately. aida-core/src/launch_policy.rs defines OWNED_KEYS, Decided/Forwarded dispositions, background-forbidden and vendor-only keys, plus vendor/kind/posture policy. It explicitly preserves inherited non-owned environment until the later per-vendor allowlist slice. There is not yet a shared EnvPolicy or env-clear environment type on this checkout. Thus the trigger provides a launch-context foundation, not a completed child-environment abstraction.
 
-
-    Test helpers still mutate global environ under RAII locks; PATH/HOME mutation requires an exact isolated subprocess. That prevents some writer races but does not synchronize ordinary production readers. test_env.rs explicitly forwards AIDA_REQUIRE_BWRAP_LIVE across env_clear; CI also declares AIDA_REQUIRE_CODEX_CONTAINMENT_LIVE. These declarations must survive test isolation without reaching ordinary vendor children. The description''s 14 AIDA_TEST seams is historical: a literal source search now finds many more names, including fixture-only keys. Inventory real readers before migration; don''t equate name occurrences with production override sites.
-
+    Test helpers still mutate global environ under RAII locks; PATH/HOME mutation requires an exact isolated subprocess. That prevents some writer races but does not synchronize ordinary production readers. test_env.rs explicitly forwards AIDA_REQUIRE_BWRAP_LIVE across env_clear; CI also declares AIDA_REQUIRE_CODEX_CONTAINMENT_LIVE. These declarations must survive test isolation without reaching ordinary vendor children. The description's 14 AIDA_TEST seams is historical: a literal source search now finds many more names, including fixture-only keys. Inventory real readers before migration; don't equate name occurrences with production override sites.
 
     2. One execution input, distinct from launch authority
-
     Propose aida-core/src/exec_context.rs as the shared dependency-direction-safe owner. ExecContext contains an immutable OsString-keyed environment snapshot, explicit home and project/authority root inputs, tool locators, and an injected clock. Production captures at command/service request entry before worker threads or fixture mutations; nested helpers receive &ExecContext, long-lived workers capture a new context only at an explicit request boundary. No process-global singleton, implicit thread-local override or fallback getenv in an accessor.
-
 
     Keep cwd separate from the pinned main/authority root (TASK-1333/TASK-2032). Home is explicit and absent/invalid home remains an error where required, never an automatic operator-home fallback. Preserve non-Unicode environment values; string conversion remains fallible. Capture environment facts once, but do not freeze time: a Clock interface supplies wall time for timestamps and monotonic time for elapsed budgets. A SystemClock samples when called; a fake clock advances explicitly in tests. Liveness, grant, lease, store trust and filesystem checks remain live at their existing locked boundaries. A captured role/grant selector is only an input to validation, never proof of authority.
 
-
-    ToolPaths records explicit tool selections/search PATH, not a test-controlled replacement authority. Resolving against fixture PATH is possible in tests; executable admission, canonical path checks, host finalization and containment remain the launcher''s responsibility. ExecContext does not imply that a tool is trusted or installed. No Debug/serialization that exposes environment values or secrets.
-
+    ToolPaths records explicit tool selections/search PATH, not a test-controlled replacement authority. Resolving against fixture PATH is possible in tests; executable admission, canonical path checks, host finalization and containment remain the launcher's responsibility. ExecContext does not imply that a tool is trusted or installed. No Debug/serialization that exposes environment values or secrets.
 
     3. Environment ownership defined once
-
     Extend the existing core launch_policy module with the ONE typed EnvPolicy/ChildEnv projection shared by ExecContext and STORY-2326. ExecContext holds the captured inputs; launch_policy decides which inputs can cross a vendor/kind boundary. Do not copy an allowlist into exec_context or maintain separate test/prod lists. Retain OWNED_KEYS and their seat/background/vendor-only semantics as the authoritative owned-key table. A future policy may share its declaration through a single compiled manifest, with closed fields and explicit per-vendor entries; exact format and activation require the existing STORY-2326 compatibility approval.
-
 
     Distinguish parent-readable facts from child-passable keys. ExecContext must represent inputs used by ordinary AIDA commands; the vendor child environment is a restricted projection of those inputs plus explicitly validated launcher decisions. Never pass the whole snapshot to envs(). No blanket AIDA_* forwarding. Test overrides and required-live declarations are fixture/harness inputs, not credential or vendor allowlist entries. Trusted operator additions, if supported, retain config-trust/default-branch provenance. Unknown/unapproved additions cannot expand child authority.
 
-
-    PR-C owns vendor-profile extraction, moving Codex prepare_launch inside that profile, grant-issuer consolidation, control_child/control_env migration, remaining resume/finalization sites and resource renderers. R4 must not move or duplicate prepare_launch, change those grant flows, or activate env_clear in those constructors. R4 first supplies the reusable context/policy input API and migrates readers/tests; PR-C consumes that API after its profile seams settle. STORY-2326''s later compatibility-gated allowlist slice owns behavioral env_clear activation. Coordinate signature changes before touching shared launch files; migrate the small LaunchContext::resolve ambient wrapper only after PR-C ownership is reconciled.
-
+    PR-C owns vendor-profile extraction, moving Codex prepare_launch inside that profile, grant-issuer consolidation, control_child/control_env migration, remaining resume/finalization sites and resource renderers. R4 must not move or duplicate prepare_launch, change those grant flows, or activate env_clear in those constructors. R4 first supplies the reusable context/policy input API and migrates readers/tests; PR-C consumes that API after its profile seams settle. STORY-2326's later compatibility-gated allowlist slice owns behavioral env_clear activation. Coordinate signature changes before touching shared launch files; migrate the small LaunchContext::resolve ambient wrapper only after PR-C ownership is reconciled.
 
     4. Migration and ratchets
-
     A: after sign-off, land the pure context/clock/tool/environment API and a reader/seam inventory, with focused tests; preserve existing launch inheritance. B: migrate bounded functional clusters (launch parent facts/resources first after PR-C, then config/home/tool consumers and remaining core/CLI/TUI readers). Pass context through internal APIs; do not replace every getenv with a hidden global context accessor. C: convert in-process env guards and AIDA_TEST production switches into explicit context/builders or fixture dependencies. External CLI contract tests set Command.env/env_clear before child exec; testing the production capture boundary still needs real subprocess inputs. Retain the existing real-home fences and isolated-process safeguards until their consumers are migrated. No production test bypass becomes a public context knob. D: finish the inventories, remove legacy guards/seams, and close the ratchets.
-
 
     Target end state: no direct env reads outside the capture module and no process-global set_var/remove_var in tests (including wrappers). Cover qualified/unqualified imports, aliases, vars/vars_os enumeration and helper indirection; child Command.env remains allowed. Use repository token-aware guard style and mutant fixtures. During migration maintain an explicit exact-site legacy ledger with scope/owner, zero new sites and a monotonically shrinking ceiling, not a broad directory exemption or a misleading immediately-zero assertion. Any necessary platform/test bootstrap exception must be explicitly approved and itemized. Scan every Rust workspace member plus relevant test harnesses; grep counts are inventory hints, not proof.
 
-
     5. Required-live behavior and acceptance evidence
-
-    TestHarness capabilities are explicit required/optional inputs captured by the runner and carried across isolated subprocesses, separate from vendor environment policy. Unavailable optional capability emits a reason; unavailable required capability fails, as do required probe errors and a required test that never ran. Preserve the two existing bwrap/Codex declarations; don''t accidentally turn fake-context success into live containment evidence.
-
+    TestHarness capabilities are explicit required/optional inputs captured by the runner and carried across isolated subprocesses, separate from vendor environment policy. Unavailable optional capability emits a reason; unavailable required capability fails, as do required probe errors and a required test that never ran. Preserve the two existing bwrap/Codex declarations; don't accidentally turn fake-context success into live containment evidence.
 
     Tests to require per slice: fixture home/PATH/tool/clock contexts coexist concurrently without global mutation; missing/non-Unicode inputs; elapsed deadlines with advancing fake monotonic time; allowlist projection and secret/test-key exclusion; owned-key/background invariants; exact-child capture propagation with required-live unavailable => nonzero; scanner mutant fixtures for aliased reads and mutations. Run targeted filters, fmt/diff checks and LIGHT for code slices. Final acceptance additionally requires the zero-legacy ledger, no global-env test writers, all existing child-launch compatibility matrices, and exact-head required-live CI. No tests were run in this sketch-only lane because no executable behavior changed.
 
-
     6. Decisions requested
-
     Approve the core-owned immutable context plus shared launch_policy projection; approve the staged legacy-ledger ratchet rather than a flag-day repository rewrite; confirm PR-C owns prepare_launch/vendor/control/grant work and the later STORY-2326 slice owns env_clear activation. Resolve those ownership/API decisions before implementation. Lean: approve this separation so R4 does not invent a second allowlist or compete with PR-C. Next lane should implement slice A only under the approved sketch, using a Refs subject unless the entire story is complete.
-
-    '
-  created_at: 2026-11-06 16:00:26.816585+00:00
-  modified_at: 2026-11-06 16:00:26.816585+00:00
+  created_at: 2026-11-06T16:00:26.816585Z
+  modified_at: 2026-11-06T16:00:26.816585Z
   session_id: 01a1b1950b3b
 - id: 01a1b197-ea81-7ae0-a75e-2435b13eaebf
   author: joe
-  content: 'ADVISOR SIGNOFF on the R4 sketch (09:00). APPROVED: (1) a core-owned immutable ExecContext (aida-core/src/exec_context.rs) with an OsString env snapshot, explicit home and authority root, ToolPaths and an injected Clock (wall plus monotonic), and no global singleton or fallback getenv; (2) ONE EnvPolicy/ChildEnv projection extending launch_policy, never a second allowlist; (3) the staged exact-site legacy ledger with zero new sites and a shrinking ceiling, not a flag-day rewrite; (4) ownership: PR-C (STORY-2326) owns the vendor profile, the prepare_launch move, grant-issuer consolidation and control_child/control_env; STORY-2326''s later compatibility-gated slice owns env_clear activation. AMENDMENT (binding): until STORY-2326 PR-C merges, slice A edits NO file under aida-cli-lib/src/launch/ and does not change LaunchContext::resolve. It lands only the new exec_context module, the launch_policy projection types, the reader/seam inventory with its ledger and guard, and focused
-    tests. NEXT: implement slice A. LIGHT gate: cargo test -p aida-core exec_context plus make check-ci-fast. Title (Refs STORY-2538).'
-  created_at: 2026-11-06 16:01:25.633203+00:00
-  modified_at: 2026-11-06 16:01:25.633203+00:00
+  content: 'ADVISOR SIGNOFF on the R4 sketch (09:00). APPROVED: (1) a core-owned immutable ExecContext (aida-core/src/exec_context.rs) with an OsString env snapshot, explicit home and authority root, ToolPaths and an injected Clock (wall plus monotonic), and no global singleton or fallback getenv; (2) ONE EnvPolicy/ChildEnv projection extending launch_policy, never a second allowlist; (3) the staged exact-site legacy ledger with zero new sites and a shrinking ceiling, not a flag-day rewrite; (4) ownership: PR-C (STORY-2326) owns the vendor profile, the prepare_launch move, grant-issuer consolidation and control_child/control_env; STORY-2326''s later compatibility-gated slice owns env_clear activation. AMENDMENT (binding): until STORY-2326 PR-C merges, slice A edits NO file under aida-cli-lib/src/launch/ and does not change LaunchContext::resolve. It lands only the new exec_context module, the launch_policy projection types, the reader/seam inventory with its ledger and guard, and focused tests. NEXT: implement slice A. LIGHT gate: cargo test -p aida-core exec_context plus make check-ci-fast. Title (Refs STORY-2538).'
+  created_at: 2026-11-06T16:01:25.633203Z
+  modified_at: 2026-11-06T16:01:25.633203Z
   session_id: b0a84e34-277c-4df6-b53c-43f4bbe2e84d
 - id: 01a1b197-f59d-7770-a994-75fd189e662f
   author: joe
   content: 'Returned from NeedsAttention to Approved via `aida edit --status`. It was punted on: design-fork: Sketch-only advisor brief fulfilled: posted the ExecContext design on the spec. Await advisor/master sign-off on core context ownership, shared launch_policy environment projection, staged ratchets, and PR-C API boundaries. No source changes or PR; publication must remain vetoed.. No triage reason was given.'
-  created_at: 2026-11-06 16:01:28.477249+00:00
-  modified_at: 2026-11-06 16:01:28.477249+00:00
+  created_at: 2026-11-06T16:01:28.477249Z
+  modified_at: 2026-11-06T16:01:28.477249Z
   session_id: b0a84e34-277c-4df6-b53c-43f4bbe2e84d
 - id: 01a1b1b3-5f57-7e32-ad0f-5c0325fb986d
   author: joe
-  content: 'Native implementer handoff — approved slice A, 2026-11-06, Codex.
-
+  content: |-
+    Native implementer handoff — approved slice A, 2026-11-06, Codex.
 
     Implemented the immutable aida-core::exec_context foundation: OsString Environment snapshot with one explicit capture boundary, explicit home/project/authority roots, ToolPaths and injected wall/monotonic Clock. Environment/context/tool/policy types do not implement Debug/serialization; lookup and projection errors omit names and values. Added EnvPolicy/ChildEnv in the existing launch_policy module, reusing OWNED_KEYS and the background/vendor-only tables. There is no deployed vendor allowlist and no env_clear activation. No production readers migrated; no file under aida-cli-lib/src/launch/ edited, and LaunchContext::resolve unchanged.
 
-
     Added exact-site token-aware Rust and AST-based Python harness inventory/guard, alias/group/glob/raw-identifier/reference mutants and a CI fast gate. Initial legacy ceiling: 1215 sites across all workspace Rust members and tests Rust/Python harnesses. The guard refuses new sites, unpruned removals and ledger growth relative to the CI base; only one exact capture site is exempt. Inventory documents indirect-resolution limitations and production/test seam clusters. This is a staged baseline, not final zero-legacy acceptance.
-
 
     Changed files (12): aida-core/src/exec_context.rs, aida-core/src/launch_policy.rs, aida-core/src/lib.rs; scripts/check-exec-context.py, scripts/exec-context-legacy.json, tests/test_exec_context_ratchet.py; .github/workflows/ci.yml, scripts/ci-gate-tiers.toml; AGENTS.md, OVERVIEW.md, docs/internal/api/aida-core.md, docs/internal/testing/exec-context-migration.md.
 
-
     Validation: final cargo test -p aida-core exec_context passed 8 tests, with one ignored child fixture explicitly executed successfully by the env-cleared exact-child parent test (no parent environment capture). cargo test -p aida-core launch_policy passed all 7 tests. Scanner mutant suite passed all 9 tests; --base origin/main ledger check passed with zero additions. make check-ci-fast passed all 39 gates, including the new guard. cargo fmt --all -- --check, git diff --check, documentation link and path checks passed. Existing fast guards printed read-only FETCH_HEAD refusals and their fallback checks passed; no repository Git metadata was changed from this seat.
 
-
-    Recorded native partial publication subject: [AI:codex] feat(core): add execution context foundation and migration ratchet (Refs STORY-2538). All edits remain uncommitted for host publication. No commit/push/PR creation, queue completion, ship-to-merge, or review record was performed. No slice-A blocker remains. Broader STORY-2538 is incomplete: slices B-D must migrate readers/test writers, retire legacy entries, audit indirect consumers and verify required-live behavior. PR-C owns prepare_launch/vendor/control/grant work; STORY-2326 owns compatibility-gated env_clear activation. Exact-head published CI remains host-side follow-up.'
-  created_at: 2026-11-06 16:31:25.015044+00:00
-  modified_at: 2026-11-06 16:31:25.015044+00:00
+    Recorded native partial publication subject: [AI:codex] feat(core): add execution context foundation and migration ratchet (Refs STORY-2538). All edits remain uncommitted for host publication. No commit/push/PR creation, queue completion, ship-to-merge, or review record was performed. No slice-A blocker remains. Broader STORY-2538 is incomplete: slices B-D must migrate readers/test writers, retire legacy entries, audit indirect consumers and verify required-live behavior. PR-C owns prepare_launch/vendor/control/grant work; STORY-2326 owns compatibility-gated env_clear activation. Exact-head published CI remains host-side follow-up.
+  created_at: 2026-11-06T16:31:25.015044Z
+  modified_at: 2026-11-06T16:31:25.015044Z
   session_id: 01a1b19dc012
 - id: 01a1b1d1-bd5e-7712-88ce-869e9b00420e
   author: joe
   content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: Slice A API (ExecContext, EnvPolicy/ChildEnv) matches the signed-off sketch and amendment; the exact-site ratchet has an evasion gap and a no-relocation trap, and CI at the head was still queued at review time.. No triage reason was given.'
-  created_at: 2026-11-06 17:04:35.166618+00:00
-  modified_at: 2026-11-06 17:04:35.166618+00:00
+  created_at: 2026-11-06T17:04:35.166618Z
+  modified_at: 2026-11-06T17:04:35.166618Z
   session_id: 01a1b1cf-cbd7-7c60-83e1-1c667d128120
   harness_version: 2.1.319 (Claude Code)
 - id: 01a1b1d1-cf00-72a0-9c8d-154551ceab41
   author: joe
-  content: 'REVIEW FINDINGS TO ADDRESS (PR #3515):
-
+  content: |-
+    REVIEW FINDINGS TO ADDRESS (PR #3515):
     Verdict: CHANGES REQUESTED
-
     Reviewed commit: 3403d57daf27
-
     Recorded: 2026-11-06T16:39:38.803881903+00:00
-
     Findings:
-
-    1. check-exec-context.py rust_sites: a leading-:: path after an identifier keyword is skipped as a path continuation (only return/break/yield/in are exempt). ''fn f(){ if ::std::env::var("X").is_ok(){} }'', ''match ::std::env::var("X") {..}'' and ''&mut ::std::env::...'' all produce [] (reproduced against the PR script), so new ambient reads pass the zero-new-sites gate even though the migration doc claims leading-:: coverage. Fix: treat every Rust keyword (if/match/while/mut/else/move/unsafe/as/let, etc.) as a non-path predecessor, and add mutant fixtures for each to tests/test_exec_context_ratchet.py.
-
-    2. check_growth (scripts/check-exec-context.py) refuses every key that is absent from the base ledger. Keys embed the file path and the enclosing fn name, so a pure file move or split-lib slice, or a fn rename, around any of the 1215 legacy sites fails CI with ''ledger may only shrink''. No sanctioned relocation path exists, but exec-context-migration.md says such edits ''can require retiring an old entry''. Fix: allow ceiling-neutral relocation (match the moved entries by op + expression digest multiset, with no growth in the total), or get an explicit advisor ruling that legacy sites must be migrated before any move and document it.
-
+    1. check-exec-context.py rust_sites: a leading-:: path after an identifier keyword is skipped as a path continuation (only return/break/yield/in are exempt). 'fn f(){ if ::std::env::var("X").is_ok(){} }', 'match ::std::env::var("X") {..}' and '&mut ::std::env::...' all produce [] (reproduced against the PR script), so new ambient reads pass the zero-new-sites gate even though the migration doc claims leading-:: coverage. Fix: treat every Rust keyword (if/match/while/mut/else/move/unsafe/as/let, etc.) as a non-path predecessor, and add mutant fixtures for each to tests/test_exec_context_ratchet.py.
+    2. check_growth (scripts/check-exec-context.py) refuses every key that is absent from the base ledger. Keys embed the file path and the enclosing fn name, so a pure file move or split-lib slice, or a fn rename, around any of the 1215 legacy sites fails CI with 'ledger may only shrink'. No sanctioned relocation path exists, but exec-context-migration.md says such edits 'can require retiring an old entry'. Fix: allow ceiling-neutral relocation (match the moved entries by op + expression digest multiset, with no growth in the total), or get an explicit advisor ruling that legacy sites must be migrated before any move and document it.
     3. rust_sites scope tracking never resets after a fn body ends, so a module-level static/const/Lazy after a fn is keyed to that fn. Adding a nested fn above a site renames its scope, which turns into a spurious new site plus a stale site and trips the growth gate. Track brace depth to scope the fn name, or key module-level sites as <module>.
-
-    4. scan() walks the filesystem with rglob (only excluding parts named ''target'') instead of git-tracked files. Untracked or ignored .rs/.py files, such as a tests/.venv or scratch files, produce false ''new sites'' locally, and read_text() crashes on a non-UTF-8 file. Use ''git ls-files'' over the member and tests roots.
-
-    5. ci.yml ExecContext step: EXEC_CONTEXT_BASE is ''github.event.pull_request.base.sha || github.event.before''. Neither field exists on merge_group events, so the growth check silently drops to the no-base path in the merge queue. Add github.event.merge_group.base_sha.
-
+    4. scan() walks the filesystem with rglob (only excluding parts named 'target') instead of git-tracked files. Untracked or ignored .rs/.py files, such as a tests/.venv or scratch files, produce false 'new sites' locally, and read_text() crashes on a non-UTF-8 file. Use 'git ls-files' over the member and tests roots.
+    5. ci.yml ExecContext step: EXEC_CONTEXT_BASE is 'github.event.pull_request.base.sha || github.event.before'. Neither field exists on merge_group events, so the growth check silently drops to the no-base path in the merge queue. Add github.event.merge_group.base_sha.
     6. CI at reviewed head 3403d57 was still queued or in progress at review time (run 42253260412: gates, cli-0/1, lib-0, rest queued), so there is no exact-head green evidence for the new exec_context and launch_policy tests or for the ratchet gate. Re-review must cite a green run.
-
-    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.'
-  created_at: 2026-11-06 17:04:39.680102+00:00
-  modified_at: 2026-11-06 17:04:39.680102+00:00
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
+  created_at: 2026-11-06T17:04:39.680102Z
+  modified_at: 2026-11-06T17:04:39.680102Z
   session_id: 01a1b1cf-cbd7-7c60-83e1-1c667d128120
   harness_version: 2.1.319 (Claude Code)
 - id: 01a1b1f3-e829-7b21-86b0-0507490b9e12
   author: joe
-  content: 'Round 2 rework for PR #3515 (reviewed 3403d57daf27), Codex native seat. Source fixes ready; final library test compilation is still pending at this progress checkpoint.
-
+  content: |
+    Round 2 rework for PR #3515 (reviewed 3403d57daf27), Codex native seat. Source fixes ready; final library test compilation is still pending at this progress checkpoint.
 
     Addressed findings 1-5: Rust keywords no longer hide leading-:: environment paths; independent keyword mutants cover strict/reserved/weak keywords plus if/match/while/&mut examples. Function bodies have delimiter-bounded scopes, restoring enclosing functions after nested functions and <module> after outer functions; static/const/Lazy and trait/extern declaration fixtures cover the boundary. Growth checks allow only navigation relocation backed by retired operation+expression-digest multiplicity, with no ceiling growth or capacity borrowed from retained entries. Git-tracked workspace/tests sources are scanned from working-tree contents; ignored/untracked scratch/virtualenv files are excluded, deliberately tracked target paths remain included, deleted sources retire entries, and tracked non-UTF-8 sources give a path diagnostic. Merge-group base_sha is included in CI base selection.
 
-
     The two CI HOME guard failures came from snapshot .var("HOME") assertions, not process reads. These now assert absence via snapshot get; the typed Missing assertion remains covered with a different key. No existing home guard was weakened. No launch/ files, LaunchContext::resolve, deployed forwarding policy or env_clear activation changed.
-
 
     Ledger navigation corrections preserve operation/expression multiplicity. Initial inventory is 1216 rather than 1215 because this checkout already merged main PR #3493 (5af57cdbc221), including one unchanged forge_confirmation::pause read. Verified that source byte-for-byte against origin/main; all other ledger changes pass the new relocation-only comparison. origin/main has no pre-existing ledger, so this is still the initial inventory bootstrap, not a relaxation of later growth checks.
 
-
     Changed files (6): .github/workflows/ci.yml; aida-core/src/exec_context.rs; scripts/check-exec-context.py; scripts/exec-context-legacy.json; tests/test_exec_context_ratchet.py; docs/internal/testing/exec-context-migration.md.
-
 
     Completed validation: ExecContext 8 passed, with the ignored exact-child capture fixture executed successfully by its parent; core no_direct_home_resolution_outside_this_module passed; all 14 scanner tests passed after the tracked-target correction, plus the final tracked-file fixture passed independently; --base origin/main ledger check passed; make check-ci-fast passed all 39 gates (including the CLI no-default-features and TUI checks); cargo fmt --all -- --check, git diff --check, documentation link/path checks passed. Some fast guards printed read-only FETCH_HEAD refusals and passed their fallback checks.
 
-
     Pending local validation at this checkpoint: aida-cli-lib no_direct_home_resolution_in_crate is compiling its cold agent-profile test binary; the core launch_policy suite is queued on that build lock. They have not yet supplied final results.
 
-
     Finding 6 remains a host publication/re-review obligation: publish a NEW commit for this round and cite a green exact-head CI run. No green published run is claimed from uncommitted edits. Existing merge-hold/manual clearance remains in force. Native publication declaration recorded: [AI:codex] fix(core): close execution-context ratchet review gaps (Refs STORY-2538). Edits are uncommitted for the host; no commit/push/PR creation, queue done, pr ship, review record or hold clearance from this seat. STORY-2538 remains an incomplete staged migration.
-
-    '
-  created_at: 2026-11-06 17:41:54.345892+00:00
-  modified_at: 2026-11-06 17:41:54.345892+00:00
+  created_at: 2026-11-06T17:41:54.345892Z
+  modified_at: 2026-11-06T17:41:54.345892Z
   session_id: 01a1b1d87212
 - id: 01a1b1f6-816f-72c2-b66a-1560325ed13f
   author: joe
   content: 'PR-C coordination: STORY-2326 owns Codex prepare_launch extraction into aida-cli-lib/src/launch/profile.rs (VendorProfile keyed by existing LaunchVendor), one launch::issue_launch_child entry, and selector-only control_env/control_child. No env_clear or alternate ambient context added here; R4 retains input/allowlist injection. Existing Codex TOOL_ENV remains unchanged.'
-  created_at: 2026-11-06 17:44:44.655690+00:00
-  modified_at: 2026-11-06 17:44:44.655690+00:00
+  created_at: 2026-11-06T17:44:44.655690Z
+  modified_at: 2026-11-06T17:44:44.655690Z
   session_id: 01a1b1f00f15
 - id: 01a1b1fe-f7ad-7331-8b9c-bb22dda281d6
   author: joe
-  content: 'Round 2 FINAL validation supplement to the handoff checkpoint: the cold aida-cli-lib build completed successfully, and test_home::tests::no_direct_home_resolution_in_crate PASSED (1 passed, 0 failed). The core launch_policy suite also PASSED all 7 tests. Thus both HOME guard tests reported failing by the CI launcher now pass locally. ExecContext 8 passed (with its isolated child executed by the parent), scanner suite 14 passed plus final tracked-source fixture passed, all 39 fast gates passed, and fmt/diff/documentation checks passed as recorded above.
+  content: |
+    Round 2 FINAL validation supplement to the handoff checkpoint: the cold aida-cli-lib build completed successfully, and test_home::tests::no_direct_home_resolution_in_crate PASSED (1 passed, 0 failed). The core launch_policy suite also PASSED all 7 tests. Thus both HOME guard tests reported failing by the CI launcher now pass locally. ExecContext 8 passed (with its isolated child executed by the parent), scanner suite 14 passed plus final tracked-source fixture passed, all 39 fast gates passed, and fmt/diff/documentation checks passed as recorded above.
 
-
-    All six source files remain uncommitted for host publication. No source edits followed the checkpoint. The partial publication subject remains [AI:codex] fix(core): close execution-context ratchet review gaps (Refs STORY-2538). Host must create this round''s new commit and cite a green exact-head CI run for finding 6 before re-review; this seat cannot supply published CI for uncommitted changes. Existing merge-hold/manual clearance remains active. No queue completion, review recording or merge action was performed; STORY-2538''s broader staged migration remains incomplete.
-
-    '
-  created_at: 2026-11-06 17:53:59.213616+00:00
-  modified_at: 2026-11-06 17:53:59.213616+00:00
+    All six source files remain uncommitted for host publication. No source edits followed the checkpoint. The partial publication subject remains [AI:codex] fix(core): close execution-context ratchet review gaps (Refs STORY-2538). Host must create this round's new commit and cite a green exact-head CI run for finding 6 before re-review; this seat cannot supply published CI for uncommitted changes. Existing merge-hold/manual clearance remains active. No queue completion, review recording or merge action was performed; STORY-2538's broader staged migration remains incomplete.
+  created_at: 2026-11-06T17:53:59.213616Z
+  modified_at: 2026-11-06T17:53:59.213616Z
   session_id: 01a1b1d87212
 - id: 01a1b238-255e-7462-bcaf-4f54fbb965f5
   author: joe
   content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: Round-1 findings 1-5 are fixed in source (keyword mutants, ceiling-neutral relocation, scope reset, git ls-files scan, merge_group base). The slice-A API matches the signed-off sketch and its amendment. Blocking: the new ExecContext ratchet CI step fails at the exact head, so finding 6 (green exact-head CI) is still unmet.. No triage reason was given.'
-  created_at: 2026-11-06 18:56:26.462001+00:00
-  modified_at: 2026-11-06 18:56:26.462001+00:00
+  created_at: 2026-11-06T18:56:26.462001Z
+  modified_at: 2026-11-06T18:56:26.462001Z
   session_id: 3dd100c3-f8c0-44d9-ac4c-f9ff0eb32a27
 - id: 01a1b238-3e4c-7523-80a4-71617a10eeba
   author: joe
-  content: 'REVIEW FINDINGS TO ADDRESS (PR #3515):
-
+  content: |-
+    REVIEW FINDINGS TO ADDRESS (PR #3515):
     Verdict: CHANGES REQUESTED
-
     Reviewed commit: 480010af46f4
-
     Recorded: 2026-11-06T18:15:25.557408094+00:00
-
     Findings:
-
-    1. BLOCKING: the required gate ''CI (gates)'' fails at head 480010af46f4 on the PR''s own new step ''ExecContext environment ratchet'' (run 42266016666, job 128057999417, step 72). The ledger matches locally under Python 3.12.3 (check(scan(), ledger) passes in-process, 1216 sites), and main''s 2 newer commits change no ledger sites, so the failure depends on the environment. Likely root cause: python_sites() in scripts/check-exec-context.py:243 hashes ast.dump(expression_node), and ast.dump output depends on the Python version. Python 3.13+ omits empty lists and None fields (show_empty=False), e.g. ''keywords=[]'' on every Call. ubuntu-latest has migrated to Ubuntu 26 (see the runner annotation), so all 85 tests/*.py ledger digests stop matching. The job log could not be downloaded from the review sandbox, so confirm from the log. Fix: hash a version-stable form (e.g. ast.unparse of the node, or a hand-normalized walk) or pin the interpreter with actions/setup-python. Add a golden-digest
-    test so a Python upgrade cannot silently invalidate the ledger, regenerate the Python entries, and cite a green gates run.
-
-    2. Finding 6 from round 1 is still unmet: no exact-head green CI. At review time ''CI (gates)'' was red, cli-0, lib-1 and contracts were still pending, and only lib-0, rest and cli-1 had passed. The exec_context and launch_policy unit tests and the ratchet gate have no green exact-head evidence. Re-review must cite a fully green run at the new head.
-
+    1. BLOCKING: the required gate 'CI (gates)' fails at head 480010af46f4 on the PR's own new step 'ExecContext environment ratchet' (run 42266016666, job 128057999417, step 72). The ledger matches locally under Python 3.12.3 (check(scan(), ledger) passes in-process, 1216 sites), and main's 2 newer commits change no ledger sites, so the failure depends on the environment. Likely root cause: python_sites() in scripts/check-exec-context.py:243 hashes ast.dump(expression_node), and ast.dump output depends on the Python version. Python 3.13+ omits empty lists and None fields (show_empty=False), e.g. 'keywords=[]' on every Call. ubuntu-latest has migrated to Ubuntu 26 (see the runner annotation), so all 85 tests/*.py ledger digests stop matching. The job log could not be downloaded from the review sandbox, so confirm from the log. Fix: hash a version-stable form (e.g. ast.unparse of the node, or a hand-normalized walk) or pin the interpreter with actions/setup-python. Add a golden-digest test so a Python upgrade cannot silently invalidate the ledger, regenerate the Python entries, and cite a green gates run.
+    2. Finding 6 from round 1 is still unmet: no exact-head green CI. At review time 'CI (gates)' was red, cli-0, lib-1 and contracts were still pending, and only lib-0, rest and cli-1 had passed. The exec_context and launch_policy unit tests and the ratchet gate have no green exact-head evidence. Re-review must cite a fully green run at the new head.
     3. Hardening (non-blocking, same fix): tests/test_exec_context_ratchet.py has no test that pins a known Python or Rust site key to a literal digest. Interpreter or tokenizer drift therefore surfaces only as a whole-ledger mismatch in test_repository_matches_exact_ledger, with no pointer to the cause. Add one golden-key assertion each for rust_sites and python_sites.
-
-    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.'
-  created_at: 2026-11-06 18:56:32.844217+00:00
-  modified_at: 2026-11-06 18:56:32.844217+00:00
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
+  created_at: 2026-11-06T18:56:32.844217Z
+  modified_at: 2026-11-06T18:56:32.844217Z
   session_id: 3dd100c3-f8c0-44d9-ac4c-f9ff0eb32a27
 - id: 01a1b25b-8179-7780-b063-97b81f465834
   author: joe
   content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: Round-2 findings (Python digest stability, golden keys) are fixed in source and the slice-A API still matches the signed-off sketch and amendment, but the head merge of main (28ff4ec, #3504) brought 3 ambient-env sites the ledger does not record, so the PR''s own ratchet gate will fail at 19139c4; CI was still queued at review time.. No triage reason was given.'
-  created_at: 2026-11-06 19:35:03.801536+00:00
-  modified_at: 2026-11-06 19:35:03.801536+00:00
+  created_at: 2026-11-06T19:35:03.801536Z
+  modified_at: 2026-11-06T19:35:03.801536Z
   session_id: 3dd100c3-f8c0-44d9-ac4c-f9ff0eb32a27
 - id: 01a1b25b-9ca3-7a03-93b4-5561f5a9a317
   author: joe
-  content: 'REVIEW FINDINGS TO ADDRESS (PR #3515):
-
+  content: |-
+    REVIEW FINDINGS TO ADDRESS (PR #3515):
     Verdict: CHANGES REQUESTED
-
     Reviewed commit: 19139c41d4b7
-
     Recorded: 2026-11-06T19:32:04.516026622+00:00
-
     Findings:
-
-    1. BLOCKING: the ledger is stale at head 19139c41d4b. Merge 19139c4 pulled in main''s #3504 (28ff4ec), which adds 3 ambient-environment sites that scripts/exec-context-legacy.json does not record. The ledger is byte-identical between 1652c42 and 19139c4. The 3 sites: aida-cli-lib/src/ci_relay.rs:518 ''std::env::var(&e.token_env)''; tests/test_work_ci_relay.py:21 ''os.environ.get("AIDA_TEST_BIN", ...)''; tests/test_work_ci_relay.py:67 ''os.environ.items()''. All 3 files are git-tracked and inside the scan roots, so check(scan(), ledger) raises ''new sites (forbidden)'' and the ''ExecContext environment ratchet'' step in CI (gates) fails at this head. Fix: rescan at the current head and add the 3 entries to the bootstrap ledger. This is legitimate because origin/main still has no ledger, so check_growth is skipped. Update the ceiling, then re-run python3 scripts/check-exec-context.py --base origin/main. Expect this to recur: each main merge before landing can add sites, so regenerate the
-    ledger right after every update-branch or merge from main, before re-requesting review.
-
-    2. Docs carry hard-coded counts that the fix above makes wrong: OVERVIEW.md:4 and docs/internal/testing/exec-context-migration.md (inventory table, which says aida-cli-lib 890, tests 91, total 1,217, plus the ''86 keys, 91 occurrences'' and ''current inventory to 1,217 sites'' prose) must match the regenerated ledger. The doc should name the ledger''s ceiling field as the source of truth rather than restating numbers that every main merge invalidates.
-
-    3. Repo-rule violation (CLAUDE.md: per-change notes go in the PR body and an aida comment, not AGENTS.md or OVERVIEW.md). The paragraph prepended at OVERVIEW.md:1-7 (Python AST encoding, golden keys, ''1,217 exact legacy sites'') and the last 2 sentences of the new AGENTS.md ''Execution inputs'' section (about the ast.dump-independent encoding and golden keys) are round-specific implementation notes. A prepended paragraph conflicts with every open PR. Remove them, and keep only the architecture paragraph at OVERVIEW.md:410-417 and the first part of the AGENTS.md section.
-
-    4. Round-1 F6 / round-2 F2 is still unmet: there is no green exact-head CI. At review time run 42278870466 (head 19139c4) was still queued for all 7 CI jobs and merge-hold-gate. The new python_expression() normalizer and golden-key tests (tests/test_exec_context_ratchet.py: test_python_site_golden_keys, test_python_encoding_ignores_absent_optional_fields, test_rust_site_golden_key) have never passed on the CI runner''s Python, which is the interpreter that broke round 2. Re-review must cite a fully green CI run at the new head, including the gates job''s ExecContext ratchet step.
-
-    5. Hardening (non-blocking): rust_sites does not handle ''extern crate std as s;'', so a site written as ''s::env::var("X")'' evades the zero-new-sites gate. The ''Limits'' paragraph of the migration doc does not list this gap. Either resolve ''extern crate <x> as <alias>'' into the alias table, with a mutant fixture, or document it next to the reexport/macro limits.
-
-    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.'
-  created_at: 2026-11-06 19:35:10.755144+00:00
-  modified_at: 2026-11-06 19:35:10.755144+00:00
+    1. BLOCKING: the ledger is stale at head 19139c41d4b. Merge 19139c4 pulled in main's #3504 (28ff4ec), which adds 3 ambient-environment sites that scripts/exec-context-legacy.json does not record. The ledger is byte-identical between 1652c42 and 19139c4. The 3 sites: aida-cli-lib/src/ci_relay.rs:518 'std::env::var(&e.token_env)'; tests/test_work_ci_relay.py:21 'os.environ.get("AIDA_TEST_BIN", ...)'; tests/test_work_ci_relay.py:67 'os.environ.items()'. All 3 files are git-tracked and inside the scan roots, so check(scan(), ledger) raises 'new sites (forbidden)' and the 'ExecContext environment ratchet' step in CI (gates) fails at this head. Fix: rescan at the current head and add the 3 entries to the bootstrap ledger. This is legitimate because origin/main still has no ledger, so check_growth is skipped. Update the ceiling, then re-run python3 scripts/check-exec-context.py --base origin/main. Expect this to recur: each main merge before landing can add sites, so regenerate the ledger right after every update-branch or merge from main, before re-requesting review.
+    2. Docs carry hard-coded counts that the fix above makes wrong: OVERVIEW.md:4 and docs/internal/testing/exec-context-migration.md (inventory table, which says aida-cli-lib 890, tests 91, total 1,217, plus the '86 keys, 91 occurrences' and 'current inventory to 1,217 sites' prose) must match the regenerated ledger. The doc should name the ledger's ceiling field as the source of truth rather than restating numbers that every main merge invalidates.
+    3. Repo-rule violation (CLAUDE.md: per-change notes go in the PR body and an aida comment, not AGENTS.md or OVERVIEW.md). The paragraph prepended at OVERVIEW.md:1-7 (Python AST encoding, golden keys, '1,217 exact legacy sites') and the last 2 sentences of the new AGENTS.md 'Execution inputs' section (about the ast.dump-independent encoding and golden keys) are round-specific implementation notes. A prepended paragraph conflicts with every open PR. Remove them, and keep only the architecture paragraph at OVERVIEW.md:410-417 and the first part of the AGENTS.md section.
+    4. Round-1 F6 / round-2 F2 is still unmet: there is no green exact-head CI. At review time run 42278870466 (head 19139c4) was still queued for all 7 CI jobs and merge-hold-gate. The new python_expression() normalizer and golden-key tests (tests/test_exec_context_ratchet.py: test_python_site_golden_keys, test_python_encoding_ignores_absent_optional_fields, test_rust_site_golden_key) have never passed on the CI runner's Python, which is the interpreter that broke round 2. Re-review must cite a fully green CI run at the new head, including the gates job's ExecContext ratchet step.
+    5. Hardening (non-blocking): rust_sites does not handle 'extern crate std as s;', so a site written as 's::env::var("X")' evades the zero-new-sites gate. The 'Limits' paragraph of the migration doc does not list this gap. Either resolve 'extern crate <x> as <alias>' into the alias table, with a mutant fixture, or document it next to the reexport/macro limits.
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
+  created_at: 2026-11-06T19:35:10.755144Z
+  modified_at: 2026-11-06T19:35:10.755144Z
   session_id: 3dd100c3-f8c0-44d9-ac4c-f9ff0eb32a27
 - id: 01a1b25d-ab93-7061-9161-d31ff38807a7
   author: joe
   content: 'ADVISOR RULING 12:38 (#3515 round 4, ruled once per the 2026-10-28 order): F1-F4 must be fixed in this round. F5 (extern crate alias) is accepted as documentation only: add it to the migration doc''s Limits paragraph, with no code. To stop main merges from invalidating the ledger every round: (a) the regenerate path must be one command (scripts/check-exec-context.py --write-ledger or similar), run after every main merge and before every push; (b) docs cite the ledger''s ceiling field, never literal counts; (c) remove the OVERVIEW.md:1-7 prepend and the round-specific AGENTS.md sentences. Push only after merging the current origin/main and regenerating. Re-review then needs exact-head green CI including the gates ExecContext step. No further non-blocking findings will be raised on this PR.'
-  created_at: 2026-11-06 19:37:25.651135+00:00
-  modified_at: 2026-11-06 19:37:25.651135+00:00
+  created_at: 2026-11-06T19:37:25.651135Z
+  modified_at: 2026-11-06T19:37:25.651135Z
   session_id: 3dd100c3-f8c0-44d9-ac4c-f9ff0eb32a27
 - id: 01a1b25f-b445-7bb3-b0d7-630544498b81
   author: joe
-  content: 'PR #3515 round 4: refreshed bootstrap ledger at 19139c41d4b7; exactly three inherited main sites added (ci_relay token reader and two test_work_ci_relay environment references), no retirements, ceiling 1220. Removed round-specific OVERVIEW preface and AGENTS implementation notes; migration docs now use ledger ceiling/sites as count source of truth and require bootstrap rescan after every main merge. Added extern crate std alias resolution with direct/imported/raw-alias/mutation regression fixtures. Validation: 18 ratchet tests pass on local Python 3.12.3; python3 scripts/check-exec-context.py --base origin/main passes; cargo fmt --all -- --check and git diff --check pass. Broader make check-ci-fast still running. Finding 4 remains open: run 42278870466 at old head is queued, and native seat cannot commit/push the revised head. Host must publish a new commit, wait for all exact-head CI including gates ExecContext ratchet to pass, and cite the run before re-review. No green runner
-    evidence claimed; story remains incomplete.'
-  created_at: 2026-11-06 19:39:38.949643+00:00
-  modified_at: 2026-11-06 19:39:38.949643+00:00
+  content: 'PR #3515 round 4: refreshed bootstrap ledger at 19139c41d4b7; exactly three inherited main sites added (ci_relay token reader and two test_work_ci_relay environment references), no retirements, ceiling 1220. Removed round-specific OVERVIEW preface and AGENTS implementation notes; migration docs now use ledger ceiling/sites as count source of truth and require bootstrap rescan after every main merge. Added extern crate std alias resolution with direct/imported/raw-alias/mutation regression fixtures. Validation: 18 ratchet tests pass on local Python 3.12.3; python3 scripts/check-exec-context.py --base origin/main passes; cargo fmt --all -- --check and git diff --check pass. Broader make check-ci-fast still running. Finding 4 remains open: run 42278870466 at old head is queued, and native seat cannot commit/push the revised head. Host must publish a new commit, wait for all exact-head CI including gates ExecContext ratchet to pass, and cite the run before re-review. No green runner evidence claimed; story remains incomplete.'
+  created_at: 2026-11-06T19:39:38.949643Z
+  modified_at: 2026-11-06T19:39:38.949643Z
   session_id: 01a1b25cafde
 - id: 01a1b265-9321-7d32-a8fb-2529987d503a
   author: joe
   content: 'Round-4 validation handoff: make check-ci-fast passed Check aida-cli without default features (249.8s), then stalled at TUI seam guard after a shared Cargo build-slot queue notice. Stopped the broader run with Ctrl-C (exit 130); do not treat it as a full fast-gate pass. Targeted ratchet tests (18), ledger check --base origin/main (1220 sites), cargo fmt check and git diff check passed. Six files remain uncommitted for host publication: AGENTS.md, OVERVIEW.md, docs/internal/testing/exec-context-migration.md, scripts/check-exec-context.py, scripts/exec-context-legacy.json, tests/test_exec_context_ratchet.py. Native publication declaration recorded: [AI:codex] fix(exec-context): refresh bootstrap ledger and close alias gap (Refs STORY-2538). Host must commit/publish and obtain fully green exact-head CI (especially gates ExecContext ratchet) before re-review; finding 4 remains open. No finding disputed.'
-  created_at: 2026-11-06 19:46:03.681200+00:00
-  modified_at: 2026-11-06 19:46:03.681200+00:00
+  created_at: 2026-11-06T19:46:03.681200Z
+  modified_at: 2026-11-06T19:46:03.681200Z
   session_id: 01a1b25cafde
 - id: 01a1b299-3a47-7f10-93c3-e91746c8b45a
   author: joe
   content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: Round 4: F1 (ledger refreshed: +3 inherited #3504 sites, sum of multiplicities = ceiling 1220, head contains main 28ff4ec), F2 (docs cite the ceiling field, no literal counts), F3 (OVERVIEW prepend and round-specific AGENTS sentences removed) and F5 (extern crate alias resolved, with mutants, and documented) are fixed. Two blockers remain: the advisor ruling''s one-command ledger regenerate path was never implemented, and exact-head CI is still all queued.. No triage reason was given.'
-  created_at: 2026-11-06 20:42:28.807347+00:00
-  modified_at: 2026-11-06 20:42:28.807347+00:00
+  created_at: 2026-11-06T20:42:28.807347Z
+  modified_at: 2026-11-06T20:42:28.807347Z
   session_id: 3dd100c3-f8c0-44d9-ac4c-f9ff0eb32a27
 - id: 01a1b299-650d-7402-be48-ae7be08488a7
   author: joe
-  content: 'REVIEW FINDINGS TO ADDRESS (PR #3515):
-
+  content: |-
+    REVIEW FINDINGS TO ADDRESS (PR #3515):
     Verdict: CHANGES REQUESTED
-
     Reviewed commit: 4a3175070864
-
     Recorded: 2026-11-06T20:09:43.282478489+00:00
-
     Findings:
-
-    1. BLOCKING (advisor ruling 2026-11-06 12:38, item (a), binding for this round): the ledger regenerate path must be ONE command, e.g. ''scripts/check-exec-context.py --write-ledger''. It is not implemented. main() at scripts/check-exec-context.py:342-355 accepts only ''[--base REF]'' and rejects everything else with ''usage: check-exec-context.py [--base REF]''. docs/internal/testing/exec-context-migration.md:118-125 tells the operator to ''rescan ... include inherited sites ... recompute ceiling'' with no command, so every main merge still means hand-editing JSON (exactly how round 3 went stale). Fix: add a write mode that serializes Counter(scan()) into scripts/exec-context-legacy.json with sorted keys and ceiling=sum(multiplicities). It must keep the growth contract: when --base has a ledger, run check_growth on the candidate and refuse to write additions, so the command can only bootstrap, shrink or relocate. Add a test covering both bootstrap-write and refuse-on-growth. Name the
-    exact command in the migration doc''s maintenance paragraph.
-
-    2. BLOCKING (round-1 F6 / round-2 F2 / round-3 F4, still unmet): there is no green exact-head CI. At review time run 42282607842 (head 4a31750, created 19:46Z) still had all 7 CI jobs queued, including gates with its ExecContext ratchet step, and merge-hold-gate was pending. The extern-crate fixtures, the golden-key tests and the 1220-site ledger have never passed on the runner''s Python. Re-review must cite a fully green run at the new head.
-
-    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.'
-  created_at: 2026-11-06 20:42:39.757376+00:00
-  modified_at: 2026-11-06 20:42:39.757376+00:00
+    1. BLOCKING (advisor ruling 2026-11-06 12:38, item (a), binding for this round): the ledger regenerate path must be ONE command, e.g. 'scripts/check-exec-context.py --write-ledger'. It is not implemented. main() at scripts/check-exec-context.py:342-355 accepts only '[--base REF]' and rejects everything else with 'usage: check-exec-context.py [--base REF]'. docs/internal/testing/exec-context-migration.md:118-125 tells the operator to 'rescan ... include inherited sites ... recompute ceiling' with no command, so every main merge still means hand-editing JSON (exactly how round 3 went stale). Fix: add a write mode that serializes Counter(scan()) into scripts/exec-context-legacy.json with sorted keys and ceiling=sum(multiplicities). It must keep the growth contract: when --base has a ledger, run check_growth on the candidate and refuse to write additions, so the command can only bootstrap, shrink or relocate. Add a test covering both bootstrap-write and refuse-on-growth. Name the exact command in the migration doc's maintenance paragraph.
+    2. BLOCKING (round-1 F6 / round-2 F2 / round-3 F4, still unmet): there is no green exact-head CI. At review time run 42282607842 (head 4a31750, created 19:46Z) still had all 7 CI jobs queued, including gates with its ExecContext ratchet step, and merge-hold-gate was pending. The extern-crate fixtures, the golden-key tests and the 1220-site ledger have never passed on the runner's Python. Re-review must cite a fully green run at the new head.
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
+  created_at: 2026-11-06T20:42:39.757376Z
+  modified_at: 2026-11-06T20:42:39.757376Z
   session_id: 3dd100c3-f8c0-44d9-ac4c-f9ff0eb32a27
 - id: 01a1b29c-f391-7e21-b4ca-7999f3b10c3f
   author: joe
   content: 'Round 5 implementation: added python3 scripts/check-exec-context.py --write-ledger --base origin/main. It generates a sorted exact-site Counter ledger with computed ceiling and checks base growth before writing. Command-level regression tests cover missing-ledger bootstrap, preserved multiplicities, growth/expression refusal without writes, relocation, shrink, and missing base refusal. All 19 ratchet tests pass on Python 3.12.3; regenerated ledger. Native seat leaves edits uncommitted for host. Finding 2 remains pending host publication and fully green exact-head CI including gates ExecContext; existing merge-hold requires authorized clearance. Host must merge then-current origin/main and regenerate before pushing.'
-  created_at: 2026-11-06 20:46:32.849828+00:00
-  modified_at: 2026-11-06 20:46:32.849828+00:00
+  created_at: 2026-11-06T20:46:32.849828Z
+  modified_at: 2026-11-06T20:46:32.849828Z
   session_id: 01a1b29aa16c
 - id: 01a1b2c7-00bd-7581-a167-171c6079ad58
   author: joe
   content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: Round 6: prior finding 1 is fixed: one command, check-exec-context.py --write-ledger --base REF, writes a sorted Counter ledger with a computed ceiling and checks growth before writing. A command-level test covers bootstrap, refusal on growth or a changed expression (ledger unchanged), relocation, shrink and a missing base. The docs name the command, the ledger is 1220 sites = ceiling, and the head contains origin/main df76551. Slice-A scope still matches the advisor amendment (no launch/ edits). No code defects remain. The only blocker is still no green CI at the exact head: run 42291371263 has all 7 jobs queued (runner backlog). merge-hold-gate fails by design (human hold).. No triage reason was given.'
-  created_at: 2026-11-06 21:32:28.733997+00:00
-  modified_at: 2026-11-06 21:32:28.733997+00:00
+  created_at: 2026-11-06T21:32:28.733997Z
+  modified_at: 2026-11-06T21:32:28.733997Z
   session_id: 3dd100c3-f8c0-44d9-ac4c-f9ff0eb32a27
 - id: 01a1b2c7-243d-7c30-911a-810d497c35bb
   author: joe
-  content: 'REVIEW FINDINGS TO ADDRESS (PR #3515):
-
+  content: |-
+    REVIEW FINDINGS TO ADDRESS (PR #3515):
     Verdict: CHANGES REQUESTED
-
     Reviewed commit: ba1a4d1c1006
-
     Recorded: 2026-11-06T21:02:37.484857159+00:00
-
     Findings:
-
-    1. BLOCKING (only remaining item; no code change required): no green CI at the exact head ba1a4d1c1006. Run 42291371263 (created 20:47Z) had all 7 jobs (cli-0, cli-1, contracts, gates, lib-0, lib-1, rest) still queued at 21:02Z because of runner backlog. So the new --write-ledger test, the golden-key and extern-crate fixtures, and the 1220-site ledger have never passed on the runner''s Python. Do NOT push new commits (that restarts CI). Wait for run 42291371263 to go fully green, including the gates ''ExecContext environment ratchet'' step, then re-request review citing that run. If gates fails on the ratchet step, run ''python3 scripts/check-exec-context.py --write-ledger --base origin/main'' after merging main, and push. merge-hold-gate failing is the expected supervised hold (cleared through ''aida merge-hold clear 3515''), not a code defect.
-
-    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.'
-  created_at: 2026-11-06 21:32:37.821981+00:00
-  modified_at: 2026-11-06 21:32:37.821981+00:00
+    1. BLOCKING (only remaining item; no code change required): no green CI at the exact head ba1a4d1c1006. Run 42291371263 (created 20:47Z) had all 7 jobs (cli-0, cli-1, contracts, gates, lib-0, lib-1, rest) still queued at 21:02Z because of runner backlog. So the new --write-ledger test, the golden-key and extern-crate fixtures, and the 1220-site ledger have never passed on the runner's Python. Do NOT push new commits (that restarts CI). Wait for run 42291371263 to go fully green, including the gates 'ExecContext environment ratchet' step, then re-request review citing that run. If gates fails on the ratchet step, run 'python3 scripts/check-exec-context.py --write-ledger --base origin/main' after merging main, and push. merge-hold-gate failing is the expected supervised hold (cleared through 'aida merge-hold clear 3515'), not a code defect.
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
+  created_at: 2026-11-06T21:32:37.821981Z
+  modified_at: 2026-11-06T21:32:37.821981Z
   session_id: 3dd100c3-f8c0-44d9-ac4c-f9ff0eb32a27
 - id: 01a1b325-2bab-70f1-a754-ad130b59f1be
   author: joe
-  content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was punted on: blocked-dependency: Round 6 finding 1 (exact-head green CI) remains blocked. The instruction to wait for run 42291371263 at ba1a4d1c1006 is no longer executable: before this native seat started, the host merged origin/main 0ab91ad23e8 and published head 75fd2d6dd8c1; old-run gates and lib-1 are cancelled. Current-head run 42298061869 still has all seven CI jobs queued. No dispute that exact-head green CI including ExecContext is required. Dispute only the now-impossible resolution of waiting for the superseded run, and the demand for another commit while round 6 explicitly says not to push. Per binding post-main-merge regeneration rule, ran python3 scripts/check-exec-context.py --write-ledger --base origin/main: four inherited STORY-2492 test reads added; only scripts/exec-context-legacy.json is modified and uncommitted. All 19 Python ratchet tests and git diff --check pass. No commit, push, review
-    recording, hold clearance or completion performed. Host/advisor must reconcile the no-push instruction with required ledger publication; preserve this punt publication veto until resolved. No code defect finding disputed.. No triage reason was given.'
-  created_at: 2026-11-06 23:15:20.107533+00:00
-  modified_at: 2026-11-06 23:15:20.107533+00:00
+  content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was punted on: blocked-dependency: Round 6 finding 1 (exact-head green CI) remains blocked. The instruction to wait for run 42291371263 at ba1a4d1c1006 is no longer executable: before this native seat started, the host merged origin/main 0ab91ad23e8 and published head 75fd2d6dd8c1; old-run gates and lib-1 are cancelled. Current-head run 42298061869 still has all seven CI jobs queued. No dispute that exact-head green CI including ExecContext is required. Dispute only the now-impossible resolution of waiting for the superseded run, and the demand for another commit while round 6 explicitly says not to push. Per binding post-main-merge regeneration rule, ran python3 scripts/check-exec-context.py --write-ledger --base origin/main: four inherited STORY-2492 test reads added; only scripts/exec-context-legacy.json is modified and uncommitted. All 19 Python ratchet tests and git diff --check pass. No commit, push, review recording, hold clearance or completion performed. Host/advisor must reconcile the no-push instruction with required ledger publication; preserve this punt publication veto until resolved. No code defect finding disputed.. No triage reason was given.'
+  created_at: 2026-11-06T23:15:20.107533Z
+  modified_at: 2026-11-06T23:15:20.107533Z
   session_id: 3dd100c3-f8c0-44d9-ac4c-f9ff0eb32a27
 - id: 01a1b36d-c3c1-7d03-8868-b3a70db051f5
   author: joe
   content: Returned from NeedsAttention to Approved via `aida queue rework`. No triage reason was given.
-  created_at: 2026-11-07 00:34:37.633608+00:00
-  modified_at: 2026-11-07 00:34:37.633608+00:00
+  created_at: 2026-11-07T00:34:37.633608Z
+  modified_at: 2026-11-07T00:34:37.633608Z
   session_id: 01a1b358-7de9-72a0-b4a1-1a909992fa05
   harness_version: 2.1.319 (Claude Code)
 - id: 01a1b36d-fcba-7ae0-8353-f436dca859c6
   author: joe
   content: '[advisor 17:38] Rework brief for #3515 @7fa530d: CI gates red. (1) docs/internal/architecture/external-tool-output-classifiers.md does not match the markers in the tree; regenerate it. (2) One python gate test fails (errors=1) in the gates job; reproduce it with make check-ci-fast. Scope stays the round-4 ruling (F1-F4 fixed, F5 doc only, no new nits). LIGHT gate: one targeted cargo test plus make check-ci-fast, then push.'
-  created_at: 2026-11-07 00:34:52.218891+00:00
-  modified_at: 2026-11-07 00:34:52.218891+00:00
+  created_at: 2026-11-07T00:34:52.218891Z
+  modified_at: 2026-11-07T00:34:52.218891Z
   session_id: 01a1b358-7de9-72a0-b4a1-1a909992fa05
   harness_version: 2.1.319 (Claude Code)
 - id: 01a1b36e-551d-79e2-8599-7375f6ce4d10
   author: joe
   content: 'Advisor ruling: Round-4 scope stands (F1-F4 fixed, F5 doc only, no new nits). This round fixes only CI at 7fa530d: regenerate docs/internal/architecture/external-tool-output-classifiers.md to match the tree markers, and fix the python gate test that fails in the gates job (reproduce with make check-ci-fast). LIGHT gate, then push.'
-  created_at: 2026-11-07 00:35:14.845137+00:00
-  modified_at: 2026-11-07 00:35:14.845137+00:00
+  created_at: 2026-11-07T00:35:14.845137Z
+  modified_at: 2026-11-07T00:35:14.845137Z
   session_id: 01a1b358-7de9-72a0-b4a1-1a909992fa05
   harness_version: 2.1.319 (Claude Code)
 - id: 01a1b36e-60cc-7912-82af-11684b391851
   author: joe
   content: 'Returned from NeedsAttention to Approved via `aida queue rework`. Triage reason: CI red at 7fa530d (gates job), not the recurring review findings'
-  created_at: 2026-11-07 00:35:17.836402+00:00
-  modified_at: 2026-11-07 00:35:17.836402+00:00
+  created_at: 2026-11-07T00:35:17.836402Z
+  modified_at: 2026-11-07T00:35:17.836402Z
   session_id: 01a1b358-7de9-72a0-b4a1-1a909992fa05
   harness_version: 2.1.319 (Claude Code)
 - id: 01a1b36e-da25-7851-a45f-0e9baa1e0805
   author: joe
   content: Returned from NeedsAttention to Approved via `aida edit --status`. No triage reason was given.
-  created_at: 2026-11-07 00:35:48.901843+00:00
-  modified_at: 2026-11-07 00:35:48.901843+00:00
+  created_at: 2026-11-07T00:35:48.901843Z
+  modified_at: 2026-11-07T00:35:48.901843Z
   session_id: 01a1b358-7de9-72a0-b4a1-1a909992fa05
   harness_version: 2.1.319 (Claude Code)
 - id: 01a1b36e-e277-7aa1-ae3b-366d86cf79fa
   author: joe
   content: 'advisor resolved the recurrence: round-4 scope; this round is CI-only at 7fa530d'
-  created_at: 2026-11-07 00:35:51.031856+00:00
-  modified_at: 2026-11-07 00:35:51.031856+00:00
+  created_at: 2026-11-07T00:35:51.031856Z
+  modified_at: 2026-11-07T00:35:51.031856Z
   session_id: 01a1b358-7de9-72a0-b4a1-1a909992fa05
   harness_version: 2.1.319 (Claude Code)
 - id: 01a1b377-bf81-77c1-90c2-bcc9f8ce3e21
   author: joe
   content: 'CI-only rework per binding advisor ruling (2026-11-07 00:35 UTC): reproduced the ExecContext Python gate error as seven inherited main-branch sites missing from scripts/exec-context-legacy.json. Regenerated with python3 scripts/check-exec-context.py --write-ledger --base origin/main (1231 sites); all 19 ratchet tests and the explicit base check pass. Regenerated the external-prose classifier document; this merged tree already matches the generator, and --check plus all 12 inventory tests pass. make check-ci-fast is in progress. Requested targeted Rust exec_context tests through aida lane job run; refused because this native lease has no lane job runner (untested=true for the targeted Rust run). Changes remain uncommitted for host publication; no merge-hold clearance or completion attempted.'
-  created_at: 2026-11-07 00:45:31.905450+00:00
-  modified_at: 2026-11-07 00:45:31.905450+00:00
+  created_at: 2026-11-07T00:45:31.905450Z
+  modified_at: 2026-11-07T00:45:31.905450Z
   session_id: 01a1b371e8c3
 - id: 01a1b379-5ff7-79b2-a3f1-14453122f523
   author: joe
   content: 'Final validation: make check-ci-fast PASS (exit 0), including ExecContext environment ratchet (19 tests + 1231-site ledger check), classifier inventory, and formatting. Explicit python3 scripts/check-exec-context.py --base origin/main and git diff --check PASS. Only scripts/exec-context-legacy.json is changed. The generated classifier document already matches this merged tree, so regeneration needs no diff. Targeted Rust test remains untested=true: aida lane job run refused because this lease has no lane runner. Ready for host commit/push of this CI-only partial slice with a Refs STORY-2538 trailer. Exact published-head CI and supervised merge-hold clearance remain host/advisor work.'
-  created_at: 2026-11-07 00:47:18.519641+00:00
-  modified_at: 2026-11-07 00:47:18.519641+00:00
+  created_at: 2026-11-07T00:47:18.519641Z
+  modified_at: 2026-11-07T00:47:18.519641Z
   session_id: 01a1b371e8c3
 - id: 01a1b3ca-a906-7993-be36-a39fe25c90df
   author: joe
   content: '[advisor 19:17] #3515 was ejected from train #3557 (its stacked diff changed). Merged main cleanly at b49e7a4 (dell1: cargo check --tests OK). Needs re-review at the new head, then re-train.'
-  created_at: 2026-11-07 02:16:05.638793+00:00
-  modified_at: 2026-11-07 02:16:05.638793+00:00
+  created_at: 2026-11-07T02:16:05.638793Z
+  modified_at: 2026-11-07T02:16:05.638793Z
   session_id: 01a1b358-7de9-72a0-b4a1-1a909992fa05
   harness_version: 2.1.319 (Claude Code)
 - id: 01a1b3d8-2525-7370-9cf5-84d1206fb040
   author: joe
   content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: Slice-A API and scope still match the signed-off sketch and amendment (no launch/ edits), but the advisor''s main merge b49e7a4 left the exact-site ledger stale: check-exec-context.py --base origin/main reports 6 new sites and 1 retired site, so the PR''s own ExecContext ratchet step in CI (gates) will fail at this head; gates/lib-0/lib-1 still pending.. No triage reason was given.'
-  created_at: 2026-11-07 02:30:49.381390+00:00
-  modified_at: 2026-11-07 02:30:49.381390+00:00
+  created_at: 2026-11-07T02:30:49.381390Z
+  modified_at: 2026-11-07T02:30:49.381390Z
 - id: 01a1b3d8-3c14-7513-9406-4bbf8799d57a
   author: joe
-  content: 'REVIEW FINDINGS TO ADDRESS (PR #3515):
-
+  content: |-
+    REVIEW FINDINGS TO ADDRESS (PR #3515):
     Verdict: CHANGES REQUESTED
-
     Reviewed commit: b49e7a4ab700
-
     Recorded: 2026-11-07T02:29:34.090207082+00:00
-
     Findings:
-
-    1. BLOCKING: ledger stale at head b49e7a4. Running ''python3 scripts/check-exec-context.py --base origin/main'' at b49e7a4 prints ''new sites (forbidden)'' for 6 sites inherited from main via merge b49e7a4 (STORY-2326 PR-C #3531 and related): aida-cli-lib/src/gate/seat_authority.rs:current_grant_selector:var_os; aida-cli-lib/src/launch/control.rs:story_2326_control_child_survives_running_image_replacement:var_os; aida-cli-lib/src/seat_occupancy/tests.rs:story_2326_control_child_argv0_preserves_loop_anchor:var_os; aida-tui/src/redesign/mod.rs:apply_control_env:var_os; aida-tui/src/redesign/mod.rs:story_2326_tui_control_argv0_is_aida:var_os; aida-tui/src/redesign/mod.rs:story_2326_tui_control_forwards_selector_without_fabricating_role:var_os. It also reports 1 retired site to prune: aida-cli-lib/src/queue_cmd.rs:handle_queue_work:set_var. The ledger (ceiling 1231) is byte-identical between 8256c88 and b49e7a4, so the merge was pushed without the binding post-merge regeneration step. Fix
-    (no code change): run ''python3 scripts/check-exec-context.py --write-ledger --base origin/main'' at the current head (after merging any newer origin/main), commit only scripts/exec-context-legacy.json (expect ceiling 1236), and push.
-
-    2. BLOCKING (carried over): no green CI at the exact head. Run 42328374537 at b49e7a4 has cli-0, cli-1, contracts and rest passing, but gates, lib-0 and lib-1 are still pending, and gates is expected to fail on the ExecContext ratchet step because of finding 1. Re-review needs a fully green run at the regenerated head, including the gates ''ExecContext environment ratchet'' step and the lib shards that run the exec_context and launch_policy unit tests.
-
-    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.'
-  created_at: 2026-11-07 02:30:55.252528+00:00
-  modified_at: 2026-11-07 02:30:55.252528+00:00
+    1. BLOCKING: ledger stale at head b49e7a4. Running 'python3 scripts/check-exec-context.py --base origin/main' at b49e7a4 prints 'new sites (forbidden)' for 6 sites inherited from main via merge b49e7a4 (STORY-2326 PR-C #3531 and related): aida-cli-lib/src/gate/seat_authority.rs:current_grant_selector:var_os; aida-cli-lib/src/launch/control.rs:story_2326_control_child_survives_running_image_replacement:var_os; aida-cli-lib/src/seat_occupancy/tests.rs:story_2326_control_child_argv0_preserves_loop_anchor:var_os; aida-tui/src/redesign/mod.rs:apply_control_env:var_os; aida-tui/src/redesign/mod.rs:story_2326_tui_control_argv0_is_aida:var_os; aida-tui/src/redesign/mod.rs:story_2326_tui_control_forwards_selector_without_fabricating_role:var_os. It also reports 1 retired site to prune: aida-cli-lib/src/queue_cmd.rs:handle_queue_work:set_var. The ledger (ceiling 1231) is byte-identical between 8256c88 and b49e7a4, so the merge was pushed without the binding post-merge regeneration step. Fix (no code change): run 'python3 scripts/check-exec-context.py --write-ledger --base origin/main' at the current head (after merging any newer origin/main), commit only scripts/exec-context-legacy.json (expect ceiling 1236), and push.
+    2. BLOCKING (carried over): no green CI at the exact head. Run 42328374537 at b49e7a4 has cli-0, cli-1, contracts and rest passing, but gates, lib-0 and lib-1 are still pending, and gates is expected to fail on the ExecContext ratchet step because of finding 1. Re-review needs a fully green run at the regenerated head, including the gates 'ExecContext environment ratchet' step and the lib shards that run the exec_context and launch_policy unit tests.
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
+  created_at: 2026-11-07T02:30:55.252528Z
+  modified_at: 2026-11-07T02:30:55.252528Z
 - id: 01a1b3e1-720d-7a71-ad94-3520c52ae5c3
   author: joe
   content: 'Round 7 native-seat handoff at b49e7a4: regenerated scripts/exec-context-legacy.json against origin/main (remote main confirmed a6e5865acc8, already merged). Only ledger changed: six inherited sites added, one retired queue_cmd mutation pruned; ceiling 1231 -> 1236. Validation: make check-ci-fast passed all 39 gates including ExecContext environment ratchet and classifier inventory; standalone ratchet passed (1236 exact sites, zero additions); Python ratchet suite 19/19 passed; cargo fmt --all -- --check and git diff --check passed. Targeted exec_context Rust test could not start: aida lane job run refused because this standalone lease has no lane job runner (untested=true for that Rust run). Edits left uncommitted for host publication. Finding 2 remains pending host publication and fully green exact-head CI (including lib shards); active merge hold requires eligible advisor/human clearance. No commit/push/queue completion or hold clearance attempted from this native seat.'
-  created_at: 2026-11-07 02:40:58.893397+00:00
-  modified_at: 2026-11-07 02:40:58.893397+00:00
+  created_at: 2026-11-07T02:40:58.893397Z
+  modified_at: 2026-11-07T02:40:58.893397Z
   session_id: 01a1b3d91452
 - id: 01a1b3ea-df58-7ae0-91a1-94d4dba40dfc
   author: joe
   content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: Slice-A API and scope still match the signed-off sketch and amendment (no launch/ edits in the PR diff), but merge 1615536 pulled in main #3516 (TASK-3225) and the exact-site ledger was not regenerated: check-exec-context.py --base origin/main fails with 5 new sites, so the gates ExecContext step will fail; all 7 CI jobs still pending.. No triage reason was given.'
-  created_at: 2026-11-07 02:51:16.696583+00:00
-  modified_at: 2026-11-07 02:51:16.696583+00:00
+  created_at: 2026-11-07T02:51:16.696583Z
+  modified_at: 2026-11-07T02:51:16.696583Z
 - id: 01a1b3eb-1ce9-7911-b8b5-4c52668f366f
   author: joe
-  content: 'REVIEW FINDINGS TO ADDRESS (PR #3515):
-
+  content: |-
+    REVIEW FINDINGS TO ADDRESS (PR #3515):
     Verdict: CHANGES REQUESTED
-
     Reviewed commit: 1615536b48bb
-
     Recorded: 2026-11-07T02:47:16.747264494+00:00
-
     Findings:
-
-    1. BLOCKING: ledger stale at head 1615536. ''python3 scripts/check-exec-context.py --base origin/main'' (origin/main = eaebcf25a0b) exits 1 with 5 new sites (forbidden), all from tests/test_store_mutation.py added by main #3516 (TASK-3225) via merge 1615536: live_helper:os.environ; test_live_broker_preflight_receipt_and_post_exec_probe:os.environ; test_live_post_exec_authority_stall_within_five_seconds_keeps_lane_alive:os.environ; test_live_required_launch_refuses_absence_stale_epoch_empty_grant_and_revocation:os.environ; test_real_sibling_namespace_connect_transfer_and_proc_fd_refuse:os.environ. No retired sites. The ledger (ceiling 1236) is unchanged since ef6e684, so the merge was pushed without the binding post-merge regeneration step. Fix (ledger only, no code): run ''python3 scripts/check-exec-context.py --write-ledger --base origin/main'' at the current head after merging any newer origin/main, commit only scripts/exec-context-legacy.json (expect ceiling 1241), and push. Process
-    note: whoever merges main into this branch (host or advisor) must run that command before pushing; this is the fourth round where a merge without it left the ledger stale.
-
-    2. BLOCKING (carried over): no green CI at the exact head. Run 42330593524 at 1615536 has all 7 CI jobs (cli-0, cli-1, contracts, gates, lib-0, lib-1, rest) pending, and gates is expected to fail on the ExecContext ratchet step because of finding 1. Re-review needs a fully green run at the regenerated head, including the gates ''ExecContext environment ratchet'' step and the lib shards that run the exec_context and launch_policy tests. merge-hold-gate fails by design (supervised hold), not a code defect.
-
-    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.'
-  created_at: 2026-11-07 02:51:32.457918+00:00
-  modified_at: 2026-11-07 02:51:32.457918+00:00
+    1. BLOCKING: ledger stale at head 1615536. 'python3 scripts/check-exec-context.py --base origin/main' (origin/main = eaebcf25a0b) exits 1 with 5 new sites (forbidden), all from tests/test_store_mutation.py added by main #3516 (TASK-3225) via merge 1615536: live_helper:os.environ; test_live_broker_preflight_receipt_and_post_exec_probe:os.environ; test_live_post_exec_authority_stall_within_five_seconds_keeps_lane_alive:os.environ; test_live_required_launch_refuses_absence_stale_epoch_empty_grant_and_revocation:os.environ; test_real_sibling_namespace_connect_transfer_and_proc_fd_refuse:os.environ. No retired sites. The ledger (ceiling 1236) is unchanged since ef6e684, so the merge was pushed without the binding post-merge regeneration step. Fix (ledger only, no code): run 'python3 scripts/check-exec-context.py --write-ledger --base origin/main' at the current head after merging any newer origin/main, commit only scripts/exec-context-legacy.json (expect ceiling 1241), and push. Process note: whoever merges main into this branch (host or advisor) must run that command before pushing; this is the fourth round where a merge without it left the ledger stale.
+    2. BLOCKING (carried over): no green CI at the exact head. Run 42330593524 at 1615536 has all 7 CI jobs (cli-0, cli-1, contracts, gates, lib-0, lib-1, rest) pending, and gates is expected to fail on the ExecContext ratchet step because of finding 1. Re-review needs a fully green run at the regenerated head, including the gates 'ExecContext environment ratchet' step and the lib shards that run the exec_context and launch_policy tests. merge-hold-gate fails by design (supervised hold), not a code defect.
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
+  created_at: 2026-11-07T02:51:32.457918Z
+  modified_at: 2026-11-07T02:51:32.457918Z
 - id: 01a1b407-e8e6-74c0-a315-4ff1b834d526
   author: joe
   content: '[advisor 20:24] #3515 hand-merged after R5 (#3559) landed: kept EnvPolicy/ChildEnv, dropped the old LaunchVendor enum in favour of R5''s re-export from vendors, kept both lib.rs modules and both OVERVIEW paragraphs. dell1: check --tests (aida-core + aida-cli-lib) OK; launch_policy/exec_context/vendors tests 15 pass.'
-  created_at: 2026-11-07 03:22:59.686172+00:00
-  modified_at: 2026-11-07 03:22:59.686172+00:00
+  created_at: 2026-11-07T03:22:59.686172Z
+  modified_at: 2026-11-07T03:22:59.686172Z
   session_id: 01a1b358-7de9-72a0-b4a1-1a909992fa05
   harness_version: 2.1.319 (Claude Code)
 - id: 01a1b431-1cbc-7a81-8892-edef4173bbbd
   author: joe
   content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: Slice-A code and scope still match the signed-off sketch and amendment (no launch/ edits; EnvPolicy/ChildEnv rebased cleanly onto R5''s vendors::LaunchVendor re-export), all prior findings are resolved, and the exec-context ledger is current (1241 sites = ceiling, zero additions vs origin/main 110130a). The ExecContext ratchet step and 6 of 7 CI jobs are green at the exact head. Still blocking: CI (gates) fails on the ''Store writer inventory ratchet'' that main #3511 (TASK-3222) introduced, because this PR''s --write-ledger write is not in scripts/store-writers.toml.. No triage reason was given.'
-  created_at: 2026-11-07 04:07:59.932487+00:00
-  modified_at: 2026-11-07 04:07:59.932487+00:00
+  created_at: 2026-11-07T04:07:59.932487Z
+  modified_at: 2026-11-07T04:07:59.932487Z
 - id: 01a1b56c-f96c-7a50-bb7a-f23e48bfdee5
   author: joe
-  content: 'Native-seat validation at a54530cb6e1: the checkout already contains the prior CI repairs (Slice A landed as 36fc675baec / PR #3515). Regenerated docs/internal/architecture/external-tool-output-classifiers.md: byte-identical, no diff. The reported Python gate error does not reproduce: make check-ci-fast passed all 43 gates, exit 0, including ExecContext environment ratchet and store-writer inventory. Separate checks: ExecContext Python fixtures 19/19; classifier fixtures 12/12; explicit check-exec-context.py --base origin/main passes with 1241 exact sites and zero additions; store writer check reconciles 3324 sites; git diff --check passes. Changed files: none; working tree clean. LIGHT targeted cargo test -p aida-core --lib -- exec_context could not start because this standalone lease has no lane job runner; untested=true for that test. No commit, push, PR, queue-done, review record, or hold clearance attempted. No new nits or changes outside the binding CI-only ruling. Host
-    should treat this as validation of an already-landed repair, not publish an empty implementation commit.'
-  created_at: 2026-11-07 09:53:00.268648+00:00
-  modified_at: 2026-11-07 09:53:00.268648+00:00
+  content: 'Native-seat validation at a54530cb6e1: the checkout already contains the prior CI repairs (Slice A landed as 36fc675baec / PR #3515). Regenerated docs/internal/architecture/external-tool-output-classifiers.md: byte-identical, no diff. The reported Python gate error does not reproduce: make check-ci-fast passed all 43 gates, exit 0, including ExecContext environment ratchet and store-writer inventory. Separate checks: ExecContext Python fixtures 19/19; classifier fixtures 12/12; explicit check-exec-context.py --base origin/main passes with 1241 exact sites and zero additions; store writer check reconciles 3324 sites; git diff --check passes. Changed files: none; working tree clean. LIGHT targeted cargo test -p aida-core --lib -- exec_context could not start because this standalone lease has no lane job runner; untested=true for that test. No commit, push, PR, queue-done, review record, or hold clearance attempted. No new nits or changes outside the binding CI-only ruling. Host should treat this as validation of an already-landed repair, not publish an empty implementation commit.'
+  created_at: 2026-11-07T09:53:00.268648Z
+  modified_at: 2026-11-07T09:53:00.268648Z
   session_id: 01a1b55ed722
 - id: 01a1b59c-61f1-7961-a85f-92617489d46d
   author: joe
   content: '[advisor 03:35] NEXT = slice B per the signed sketch section 4: migrate launch parent facts/resources (launch/context.rs, launch/resources.rs, LaunchContext::resolve), then one config/home/tool cluster; ExecContext passed explicitly, no global accessor; regenerate the ledger with --write-ledger --base origin/main and lower the ceiling. BLOCKED BY STORY-2326 PR-D (same files); dispatch after it lands.'
-  created_at: 2026-11-07 10:44:47.217437+00:00
-  modified_at: 2026-11-07 10:44:47.217437+00:00
+  created_at: 2026-11-07T10:44:47.217437Z
+  modified_at: 2026-11-07T10:44:47.217437Z
   session_id: 01a1b441-8158-7162-ad75-f7915b45ee33
   harness_version: 2.1.319 (Claude Code)
 - id: 01a1b867-20d2-7c51-9577-830e8052429c
   author: joe
   content: 'ADVISOR RULING 2026-11-07 17:20 MST: STORY-2326 PR-D merged (#3603), so slice B (launch/context.rs, launch/resources.rs, LaunchContext::resolve) is no longer blocked by it. SEQUENCED AFTER STORY-2641''s PR merges (it wires SandboxResources through spawn_agent and edits resources.rs). Dispatch slice B as soon as that lands; branch off main then.'
-  created_at: 2026-11-07 23:45:28.786112+00:00
-  modified_at: 2026-11-07 23:45:28.786112+00:00
+  created_at: 2026-11-07T23:45:28.786112Z
+  modified_at: 2026-11-07T23:45:28.786112Z
   session_id: 01a1b848-940b-7bd2-8acd-52e428b182b8
   harness_version: 2.1.319 (Claude Code)
 - id: 01a1c539-0cb9-7531-8c3d-5cdd847f840a
   author: joe
   content: 'ADVISOR BRIEF (slice B, 2026-11-10 04:40 MST): STORY-2641 is complete, so slice B is unblocked. Scope, per signed sketch section 4 and the 03:35 note: migrate the launch parent facts and resources (launch/context.rs, launch/resources.rs, LaunchContext::resolve) onto the core ExecContext from slice A, passing ExecContext explicitly with no global access. Then migrate ONE config/home/tool cluster. Shrink the exact-site ratchet ledger for every site you migrate; never raise it. No unrelated launch/ refactors. Commit title: [AI:codex] refactor(launch): inject ExecContext into launch context and resources (Refs STORY-2538). Gate: LIGHT, meaning one targeted cargo test -p aida-cli-lib launch:: run plus make check-ci-fast, then push and open the PR. No full suite, no make check-ci.'
-  created_at: 2026-11-10 11:30:12.793967+00:00
-  modified_at: 2026-11-10 11:30:12.793967+00:00
+  created_at: 2026-11-10T11:30:12.793967Z
+  modified_at: 2026-11-10T11:30:12.793967Z
   session_id: 01a1c530-c917-7f13-ab81-f6b5e1d1cd30
   harness_version: 2.1.322 (Claude Code)
 - id: 01a1c585-d1f1-78c2-aee2-6e976f5f804c
   author: joe
-  content: "CI FAILURES at 3bab5e96ba5a (run 42812013493). Fix exactly these before pushing; a push without a code change for them will fail again and must not be made:\nerror: test run failed\n        FAIL  aida-cli-lib bug_1723_config_trust_tests::every_config_toml_site_is_inventoried_and_every_worktree_key_is_policy\n        FAIL  aida-cli-lib codex_tool_env::task_2708_codex_fail_closed_tests::task_2708_every_spawn_agent_builder_is_inventoried_and_guarded\n        FAIL  aida-cli-lib story_2539_vendor_literal_ratchet_tests::story_2539_vendor_literal_ratchet\n    thread 'bug_1723_config_trust_tests::every_config_toml_site_is_inventoried_and_every_worktree_key_is_policy' (20952) panicked at aida-cli-lib/src/tests/bug_1723_config_trust_tests.rs:509:5:\n    thread 'codex_tool_env::task_2708_codex_fail_closed_tests::task_2708_every_spawn_agent_builder_is_inventoried_and_guarded' (22935) panicked at aida-cli-lib/src/tests/task_2708_codex_fail_closed_tests.rs:420:9:\n    thread 'story_2539_vendor_literal_ratchet_tests::story_2539_vendor_literal_ratchet'\
-    \ (110763) panicked at aida-cli-lib/src/tests/story_2539_vendor_literal_ratchet_tests.rs:318:5:"
-  created_at: 2026-11-10 12:54:04.017144+00:00
-  modified_at: 2026-11-10 12:54:04.017144+00:00
+  content: |-
+    CI FAILURES at 3bab5e96ba5a (run 42812013493). Fix exactly these before pushing; a push without a code change for them will fail again and must not be made:
+    error: test run failed
+            FAIL  aida-cli-lib bug_1723_config_trust_tests::every_config_toml_site_is_inventoried_and_every_worktree_key_is_policy
+            FAIL  aida-cli-lib codex_tool_env::task_2708_codex_fail_closed_tests::task_2708_every_spawn_agent_builder_is_inventoried_and_guarded
+            FAIL  aida-cli-lib story_2539_vendor_literal_ratchet_tests::story_2539_vendor_literal_ratchet
+        thread 'bug_1723_config_trust_tests::every_config_toml_site_is_inventoried_and_every_worktree_key_is_policy' (20952) panicked at aida-cli-lib/src/tests/bug_1723_config_trust_tests.rs:509:5:
+        thread 'codex_tool_env::task_2708_codex_fail_closed_tests::task_2708_every_spawn_agent_builder_is_inventoried_and_guarded' (22935) panicked at aida-cli-lib/src/tests/task_2708_codex_fail_closed_tests.rs:420:9:
+        thread 'story_2539_vendor_literal_ratchet_tests::story_2539_vendor_literal_ratchet' (110763) panicked at aida-cli-lib/src/tests/story_2539_vendor_literal_ratchet_tests.rs:318:5:
+  created_at: 2026-11-10T12:54:04.017144Z
+  modified_at: 2026-11-10T12:54:04.017144Z
   session_id: 01a1c39a-801a-7bd1-8da9-c955a6707f0b
   harness_version: 2.1.321 (Claude Code)
+- id: 01a1c59d-9370-7472-b9c6-eec6ad766401
+  author: joe
+  content: 'Advisor ruling PR-3784@20856bfc: config-trust sites 2->1; rename ctx.exec() accessor to exec_context(); re-key the 3 vendor-literal TSV entries resolve_with->resolve_inputs without growth. Guards untouched.'
+  created_at: 2026-11-10T13:20:00.880865860Z
+  modified_at: 2026-11-10T13:20:00.880865860Z
+  session_id: 01a1c530-c917-7f13-ab81-f6b5e1d1cd30
+  harness_version: 2.1.322 (Claude Code)
 history:
 - id: 01a1ae38-af42-7111-8ef3-7b278b3830e7
   author: joe
-  timestamp: 2026-11-06 00:18:32.898182+00:00
+  timestamp: 2026-11-06T00:18:32.898182Z
   session_id: 688fbe55-f92b-4b09-a8d1-2ca064cb7e25
   changes: []
 - id: 01a1b17a-ef11-7382-b6e1-b5a0bbcdef3e
   author: joe
-  timestamp: 2026-11-06 15:29:46.257755+00:00
+  timestamp: 2026-11-06T15:29:46.257755Z
   session_id: b0a84e34-277c-4df6-b53c-43f4bbe2e84d
   changes: []
 - id: 01a1b17a-f9a0-7e43-80c5-ef17d1d1a90c
   author: joe
-  timestamp: 2026-11-06 15:29:48.960762+00:00
+  timestamp: 2026-11-06T15:29:48.960762Z
   session_id: b0a84e34-277c-4df6-b53c-43f4bbe2e84d
   changes: []
 - id: 01a1b195-15db-7302-8178-82cc61d19cfd
   author: aida-session-start
-  timestamp: 2026-11-06 15:58:20.123796+00:00
+  timestamp: 2026-11-06T15:58:20.123796Z
   changes:
   - field_name: status
     old_value: Approved
     new_value: InProgress
 - id: 01a1b195-6fe3-71e3-b2aa-c41cb60c1c4c
   author: joe
-  timestamp: 2026-11-06 15:58:43.171690+00:00
+  timestamp: 2026-11-06T15:58:43.171690Z
   session_id: 01a1b1950b3b
   changes: []
 - id: 01a1b197-0a74-79a0-bb90-2e64a65cdaff
   author: joe
-  timestamp: 2026-11-06 16:00:28.276032+00:00
+  timestamp: 2026-11-06T16:00:28.276032Z
   session_id: 01a1b1950b3b
   changes:
   - field_name: status
@@ -551,7 +472,7 @@ history:
     new_value: NeedsAttention
 - id: 01a1b197-f59d-7770-a994-75ea9345c226
   author: joe
-  timestamp: 2026-11-06 16:01:28.477240+00:00
+  timestamp: 2026-11-06T16:01:28.477240Z
   session_id: b0a84e34-277c-4df6-b53c-43f4bbe2e84d
   changes:
   - field_name: status
@@ -559,19 +480,19 @@ history:
     new_value: Approved
 - id: 01a1b19d-c807-73c2-b03b-38797888a990
   author: aida-session-start
-  timestamp: 2026-11-06 16:07:50.023598+00:00
+  timestamp: 2026-11-06T16:07:50.023598Z
   changes:
   - field_name: status
     old_value: Approved
     new_value: InProgress
 - id: 01a1b19f-04f5-7e00-a6ff-131f667a68e5
   author: joe
-  timestamp: 2026-11-06 16:09:11.157195+00:00
+  timestamp: 2026-11-06T16:09:11.157195Z
   session_id: 01a1b19dc012
   changes: []
 - id: 01a1b1ba-ebca-7322-87fc-6c570abe5e2d
   author: aida-orchestrator
-  timestamp: 2026-11-06 16:39:39.722400+00:00
+  timestamp: 2026-11-06T16:39:39.722400Z
   session_id: 01a1b1b6beb7
   harness_version: 2.1.319 (Claude Code)
   changes:
@@ -580,7 +501,7 @@ history:
     new_value: NeedsAttention
 - id: 01a1b1d1-bd5e-7712-88ce-8681b146d9b7
   author: joe
-  timestamp: 2026-11-06 17:04:35.166609+00:00
+  timestamp: 2026-11-06T17:04:35.166609Z
   session_id: 01a1b1cf-cbd7-7c60-83e1-1c667d128120
   harness_version: 2.1.319 (Claude Code)
   changes:
@@ -589,14 +510,14 @@ history:
     new_value: Approved
 - id: 01a1b1d8-7c3b-77c2-80c7-4ed7d603c18e
   author: aida-session-start
-  timestamp: 2026-11-06 17:11:57.243596+00:00
+  timestamp: 2026-11-06T17:11:57.243596Z
   changes:
   - field_name: status
     old_value: Approved
     new_value: InProgress
 - id: 01a1b212-9ca3-7a71-b7a0-13f05f1747b5
   author: aida-orchestrator
-  timestamp: 2026-11-06 18:15:26.628007+00:00
+  timestamp: 2026-11-06T18:15:26.628007Z
   session_id: 01a1b20f14c1
   harness_version: 2.1.319 (Claude Code)
   changes:
@@ -605,7 +526,7 @@ history:
     new_value: NeedsAttention
 - id: 01a1b238-255d-7da0-8297-66d30838a0f4
   author: joe
-  timestamp: 2026-11-06 18:56:26.461992+00:00
+  timestamp: 2026-11-06T18:56:26.461992Z
   session_id: 3dd100c3-f8c0-44d9-ac4c-f9ff0eb32a27
   changes:
   - field_name: status
@@ -613,14 +534,14 @@ history:
     new_value: Approved
 - id: 01a1b23f-4888-77a0-90d0-8452437676af
   author: aida-session-start
-  timestamp: 2026-11-06 19:04:14.216864+00:00
+  timestamp: 2026-11-06T19:04:14.216864Z
   changes:
   - field_name: status
     old_value: Approved
     new_value: InProgress
 - id: 01a1b258-c835-71a3-b960-9a32fe77a759
   author: aida-orchestrator
-  timestamp: 2026-11-06 19:32:05.301500+00:00
+  timestamp: 2026-11-06T19:32:05.301500Z
   session_id: 01a1b25655e6
   harness_version: 2.1.319 (Claude Code)
   changes:
@@ -629,7 +550,7 @@ history:
     new_value: NeedsAttention
 - id: 01a1b25b-8179-7780-b063-97a2dea02cae
   author: joe
-  timestamp: 2026-11-06 19:35:03.801526+00:00
+  timestamp: 2026-11-06T19:35:03.801526Z
   session_id: 3dd100c3-f8c0-44d9-ac4c-f9ff0eb32a27
   changes:
   - field_name: status
@@ -637,14 +558,14 @@ history:
     new_value: Approved
 - id: 01a1b25c-b9b2-77f0-b57a-a98794eded24
   author: aida-session-start
-  timestamp: 2026-11-06 19:36:23.730672+00:00
+  timestamp: 2026-11-06T19:36:23.730672Z
   changes:
   - field_name: status
     old_value: Approved
     new_value: InProgress
 - id: 01a1b27b-401e-7120-b872-426e978bc8d1
   author: aida-orchestrator
-  timestamp: 2026-11-06 20:09:44.222718+00:00
+  timestamp: 2026-11-06T20:09:44.222718Z
   session_id: 01a1b27996f7
   harness_version: 2.1.319 (Claude Code)
   changes:
@@ -653,7 +574,7 @@ history:
     new_value: NeedsAttention
 - id: 01a1b299-3a47-7f10-93c3-e907dee7e558
   author: joe
-  timestamp: 2026-11-06 20:42:28.807336+00:00
+  timestamp: 2026-11-06T20:42:28.807336Z
   session_id: 3dd100c3-f8c0-44d9-ac4c-f9ff0eb32a27
   changes:
   - field_name: status
@@ -661,14 +582,14 @@ history:
     new_value: Approved
 - id: 01a1b29a-ac71-7de2-9452-30c46cf5c6bf
   author: aida-session-start
-  timestamp: 2026-11-06 20:44:03.569239+00:00
+  timestamp: 2026-11-06T20:44:03.569239Z
   changes:
   - field_name: status
     old_value: Approved
     new_value: InProgress
 - id: 01a1b2ab-b15a-7351-a5d2-72b4ee559e56
   author: aida-orchestrator
-  timestamp: 2026-11-06 21:02:38.938141+00:00
+  timestamp: 2026-11-06T21:02:38.938141Z
   session_id: 01a1b2a9652c
   harness_version: 2.1.319 (Claude Code)
   changes:
@@ -677,7 +598,7 @@ history:
     new_value: NeedsAttention
 - id: 01a1b2c7-00bd-7581-a167-1701092ad5ba
   author: joe
-  timestamp: 2026-11-06 21:32:28.733988+00:00
+  timestamp: 2026-11-06T21:32:28.733988Z
   session_id: 3dd100c3-f8c0-44d9-ac4c-f9ff0eb32a27
   changes:
   - field_name: status
@@ -685,14 +606,14 @@ history:
     new_value: Approved
 - id: 01a1b2ca-0d45-7360-af43-0c1a1f247bd3
   author: aida-session-start
-  timestamp: 2026-11-06 21:35:48.549081+00:00
+  timestamp: 2026-11-06T21:35:48.549081Z
   changes:
   - field_name: status
     old_value: Approved
     new_value: InProgress
 - id: 01a1b2cb-85f9-7b53-925f-b4efa86b925b
   author: joe
-  timestamp: 2026-11-06 21:37:24.985568+00:00
+  timestamp: 2026-11-06T21:37:24.985568Z
   session_id: 01a1b2ca03ab
   changes:
   - field_name: status
@@ -700,7 +621,7 @@ history:
     new_value: NeedsAttention
 - id: 01a1b325-2bab-70f1-a754-ad0bad17d6b0
   author: joe
-  timestamp: 2026-11-06 23:15:20.107524+00:00
+  timestamp: 2026-11-06T23:15:20.107524Z
   session_id: 3dd100c3-f8c0-44d9-ac4c-f9ff0eb32a27
   changes:
   - field_name: status
@@ -708,7 +629,7 @@ history:
     new_value: Approved
 - id: 01a1b325-445a-77c1-b97e-d722df708192
   author: aida-loop-guard
-  timestamp: 2026-11-06 23:15:26.426652+00:00
+  timestamp: 2026-11-06T23:15:26.426652Z
   session_id: 3dd100c3-f8c0-44d9-ac4c-f9ff0eb32a27
   changes:
   - field_name: status
@@ -716,7 +637,7 @@ history:
     new_value: NeedsAttention
 - id: 01a1b36d-c3c1-7d03-8868-b39493b93ad7
   author: joe
-  timestamp: 2026-11-07 00:34:37.633602+00:00
+  timestamp: 2026-11-07T00:34:37.633602Z
   session_id: 01a1b358-7de9-72a0-b4a1-1a909992fa05
   harness_version: 2.1.319 (Claude Code)
   changes:
@@ -725,7 +646,7 @@ history:
     new_value: Approved
 - id: 01a1b36d-db4e-71d3-88a2-0ec2ae15c615
   author: aida-loop-guard
-  timestamp: 2026-11-07 00:34:43.662983+00:00
+  timestamp: 2026-11-07T00:34:43.662983Z
   session_id: 01a1b358-7de9-72a0-b4a1-1a909992fa05
   harness_version: 2.1.319 (Claude Code)
   changes:
@@ -734,7 +655,7 @@ history:
     new_value: NeedsAttention
 - id: 01a1b36e-60cc-7912-82af-11519d4e835e
   author: joe
-  timestamp: 2026-11-07 00:35:17.836396+00:00
+  timestamp: 2026-11-07T00:35:17.836396Z
   session_id: 01a1b358-7de9-72a0-b4a1-1a909992fa05
   harness_version: 2.1.319 (Claude Code)
   changes:
@@ -743,7 +664,7 @@ history:
     new_value: Approved
 - id: 01a1b36e-789a-7ec1-85db-fc6bf6bd2101
   author: aida-loop-guard
-  timestamp: 2026-11-07 00:35:23.930349+00:00
+  timestamp: 2026-11-07T00:35:23.930349Z
   session_id: 01a1b358-7de9-72a0-b4a1-1a909992fa05
   harness_version: 2.1.319 (Claude Code)
   changes:
@@ -752,7 +673,7 @@ history:
     new_value: NeedsAttention
 - id: 01a1b36e-da25-7851-a45f-0e8161cad4c5
   author: joe
-  timestamp: 2026-11-07 00:35:48.901838+00:00
+  timestamp: 2026-11-07T00:35:48.901838Z
   session_id: 01a1b358-7de9-72a0-b4a1-1a909992fa05
   harness_version: 2.1.319 (Claude Code)
   changes:
@@ -761,14 +682,14 @@ history:
     new_value: Approved
 - id: 01a1b371-f151-7711-a2d9-d5163bc9a4e7
   author: aida-session-start
-  timestamp: 2026-11-07 00:39:11.441835+00:00
+  timestamp: 2026-11-07T00:39:11.441835Z
   changes:
   - field_name: status
     old_value: Approved
     new_value: InProgress
 - id: 01a1b3d7-0223-7b43-92ab-754c09447a27
   author: aida-orchestrator
-  timestamp: 2026-11-07 02:29:34.883329+00:00
+  timestamp: 2026-11-07T02:29:34.883329Z
   session_id: 01a1b3d55c6b
   harness_version: 2.1.319 (Claude Code)
   changes:
@@ -777,21 +698,21 @@ history:
     new_value: NeedsAttention
 - id: 01a1b3d8-2525-7370-9cf5-84c03e18f57d
   author: joe
-  timestamp: 2026-11-07 02:30:49.381380+00:00
+  timestamp: 2026-11-07T02:30:49.381380Z
   changes:
   - field_name: status
     old_value: NeedsAttention
     new_value: Approved
 - id: 01a1b3d9-1da9-76d3-a515-a1137a92f59f
   author: aida-session-start
-  timestamp: 2026-11-07 02:31:53.001381+00:00
+  timestamp: 2026-11-07T02:31:53.001381Z
   changes:
   - field_name: status
     old_value: Approved
     new_value: InProgress
 - id: 01a1b3e7-3972-7120-8f67-71bb6d1061ea
   author: aida-orchestrator
-  timestamp: 2026-11-07 02:47:17.618787+00:00
+  timestamp: 2026-11-07T02:47:17.618787Z
   session_id: 01a1b3e5a251
   harness_version: 2.1.319 (Claude Code)
   changes:
@@ -800,21 +721,21 @@ history:
     new_value: NeedsAttention
 - id: 01a1b3ea-df58-7ae0-91a1-94c83e73d145
   author: joe
-  timestamp: 2026-11-07 02:51:16.696573+00:00
+  timestamp: 2026-11-07T02:51:16.696573Z
   changes:
   - field_name: status
     old_value: NeedsAttention
     new_value: Approved
 - id: 01a1b3ec-0fda-7f80-8ccb-b7fe90cba737
   author: aida-session-start
-  timestamp: 2026-11-07 02:52:34.650284+00:00
+  timestamp: 2026-11-07T02:52:34.650284Z
   changes:
   - field_name: status
     old_value: Approved
     new_value: InProgress
 - id: 01a1b430-e35c-7a82-9977-b31199d7f2de
   author: aida-orchestrator
-  timestamp: 2026-11-07 04:07:45.244961+00:00
+  timestamp: 2026-11-07T04:07:45.244961Z
   session_id: 01a1b423d595
   harness_version: 2.1.319 (Claude Code)
   changes:
@@ -823,21 +744,21 @@ history:
     new_value: NeedsAttention
 - id: 01a1b431-1cbc-7a81-8892-edde4519f6ef
   author: joe
-  timestamp: 2026-11-07 04:07:59.932479+00:00
+  timestamp: 2026-11-07T04:07:59.932479Z
   changes:
   - field_name: status
     old_value: NeedsAttention
     new_value: Approved
 - id: 01a1b432-53a2-7f33-b302-e32228310600
   author: aida-session-start
-  timestamp: 2026-11-07 04:09:19.522270+00:00
+  timestamp: 2026-11-07T04:09:19.522270Z
   changes:
   - field_name: status
     old_value: Approved
     new_value: InProgress
 - id: 01a1b54e-284e-7d93-8d4b-794786422257
   author: joe
-  timestamp: 2026-11-07 09:19:20.654935+00:00
+  timestamp: 2026-11-07T09:19:20.654935Z
   session_id: 01a1b441-8158-7162-ad75-f7915b45ee33
   harness_version: 2.1.319 (Claude Code)
   changes:
@@ -846,20 +767,20 @@ history:
     new_value: Approved
 - id: 01a1b55e-e1e2-7700-9fb0-2a9a37c9aa09
   author: aida-session-start
-  timestamp: 2026-11-07 09:37:36.738645+00:00
+  timestamp: 2026-11-07T09:37:36.738645Z
   changes:
   - field_name: status
     old_value: Approved
     new_value: InProgress
 - id: 01a1b59c-342d-7921-adf1-d142f7e654fe
   author: joe
-  timestamp: 2026-11-07 10:44:35.501189+00:00
+  timestamp: 2026-11-07T10:44:35.501189Z
   session_id: 01a1b441-8158-7162-ad75-f7915b45ee33
   harness_version: 2.1.319 (Claude Code)
   changes: []
 - id: 01a1c585-f6c7-7553-869b-739ba68aca5b
   author: joe
-  timestamp: 2026-11-10 12:54:13.447172+00:00
+  timestamp: 2026-11-10T12:54:13.447172Z
   session_id: 01a1c39a-801a-7bd1-8da9-c955a6707f0b
   harness_version: 2.1.321 (Claude Code)
   changes:
@@ -868,14 +789,14 @@ history:
     new_value: Approved
 - id: 01a1c587-c78e-7593-9c5d-101172d34105
   author: aida-session-start
-  timestamp: 2026-11-10 12:56:12.430454+00:00
+  timestamp: 2026-11-10T12:56:12.430454Z
   changes:
   - field_name: status
     old_value: Approved
     new_value: InProgress
 - id: 01a1c58c-311f-7bc0-b9b9-8bbb465e914d
   author: joe
-  timestamp: 2026-11-10 13:01:01.599991+00:00
+  timestamp: 2026-11-10T13:01:01.599991Z
   changes: []
 filed_at:
   code_sha: 71c43691a10a62c49185808eb45d25b209f987c2
@@ -892,4 +813,4 @@ failure_reason:
   detail: Slice B matches approved scope, but three unchanged source/inventory regressions still fail CI guards; exact-head CI remains pending.
   recovery_hint: address the review findings, move STORY-2538 back to In Progress, and clear the PR hold only after approval
   shelved_by: reviewer
-  shelved_at: 2026-11-10 13:01:01.482982+00:00
+  shelved_at: 2026-11-10T13:01:01.482982Z
