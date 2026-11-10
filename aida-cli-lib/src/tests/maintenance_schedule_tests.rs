@@ -439,7 +439,7 @@ fn story_2351_session_hygiene_is_scheduled_off_the_hook_path() {
     // The disk guard's floor reclaim runs under the default ceiling; its
     // own budget leaves the re-probe and report room before the kill.
     assert!(
-        crate::doctor_cmd::FLOOR_RECLAIM_BUDGET * 2 <= SCHEDULED_COMMAND_TIMEOUT,
+        crate::maintenance_schedule::FLOOR_RECLAIM_BUDGET * 2 <= SCHEDULED_COMMAND_TIMEOUT,
         "the floor reclaim must stop well before the guard child is killed"
     );
 }
@@ -2596,7 +2596,7 @@ fn story_1916_routed_disk_item_carries_the_stuck_sentence() {
         action: String::new(),
         safe_heal: false,
     };
-    let reason = crate::doctor_cmd::disk_headroom_fail_reason(&[finding]).unwrap();
+    let reason = crate::maintenance_schedule::disk_headroom_fail_reason(&[finding]).unwrap();
     let events = bug_1655_trip_disk_guard(tmp.path(), 1, &format!("warning: noise\n{reason}\n"));
     bug_1655_route(
         tmp.path(),
