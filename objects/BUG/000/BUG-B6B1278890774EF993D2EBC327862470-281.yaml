@@ -8,7 +8,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-10T03:07:46.884496242Z
-modified_at: 2026-11-10T11:20:04.933788752Z
+modified_at: 2026-11-10T11:23:11.551352619Z
 req_type: Bug
 comments:
 - id: 01a1c4af-2f66-7590-be69-dad5e180b9a4
@@ -93,6 +93,13 @@ comments:
   modified_at: 2026-11-10T11:02:15.632628995Z
   session_id: 01a1c517a854
   harness_version: codex-cli 0.167.0
+- id: 01a1c532-9f3f-73c3-982d-05f092432bc6
+  author: joe
+  content: 'Advisor ruling PR-3774@9a02c9bd: accepted the branch-only GitLab MR finding; rework in this PR (branch discovery before completing; fake glab honors search).'
+  created_at: 2026-11-10T11:23:11.551352619Z
+  modified_at: 2026-11-10T11:23:11.551352619Z
+  session_id: 01a1c530-c917-7f13-ab81-f6b5e1d1cd30
+  harness_version: 2.1.322 (Claude Code)
 history:
 - id: 01a1c4af-3ce1-7db1-8f61-609deb96783e
   author: joe
