@@ -3,12 +3,12 @@ spec_id: STORY-b6b1278890774ef993d2ebc327862470-613
 agreed_id: STORY-2690
 title: 'Spec status invariants and typed lane exits: a spec with an open PR is never unpickable for rework, and every lane exit has a typed result'
 description: 'Problem: on 2026-11-08 STORY-2571 stayed needs-attention so rework lanes died with not-pickable needs-triage, and PR-3640 received no fix across three attempts. The advisor inbox collected many exited-without-changes notices needing manual reading. BUG-2502 fixes one instance. Requirement: enforce that rework routing leaves the spec pickable, or refuses loudly at routing time; each lane exit records a closed-set result such as pushed, no-change-with-reason, refused-before-start or punted. Acceptance: a refused-before-start lane is never reported as a launched rework; repeated identical refusals surface once.'
-status: NeedsAttention
+status: Approved
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-09T01:58:39.064485765Z
-modified_at: 2026-11-10T20:28:25.110870964Z
+modified_at: 2026-11-10T20:50:58.379432980Z
 req_type: Story
 tags:
 - area:orchestration
@@ -62,6 +62,13 @@ comments:
   modified_at: 2026-11-10T20:14:29.162870923Z
   session_id: 01a1c6f6e635
   harness_version: codex-cli 0.167.0
+- id: 01a1c73a-70cb-72a1-8aa7-2914722fc0fc
+  author: joe
+  content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: Fresh standalone receipt admission uses the wrong role/scope and loses resolved refusal identity; required CI is still pending.. No triage reason was given.'
+  created_at: 2026-11-10T20:50:58.379427404Z
+  modified_at: 2026-11-10T20:50:58.379427404Z
+  session_id: 01a1c530-c917-7f13-ab81-f6b5e1d1cd30
+  harness_version: 2.1.322 (Claude Code)
 history:
 - id: 01a1c5dd-0795-7ee0-b474-74b907f4c43a
   author: joe
@@ -123,6 +130,15 @@ history:
   - field_name: status
     old_value: InProgress
     new_value: NeedsAttention
+- id: 01a1c73a-70cb-72a1-8aa7-2905c1925c56
+  author: joe
+  timestamp: 2026-11-10T20:50:58.379410023Z
+  session_id: 01a1c530-c917-7f13-ab81-f6b5e1d1cd30
+  harness_version: 2.1.322 (Claude Code)
+  changes:
+  - field_name: status
+    old_value: NeedsAttention
+    new_value: Approved
 filed_at:
   code_sha: a7a14984cec5533987dfeccb70d1f91aaebbf22a
   branch: main
@@ -131,11 +147,3 @@ filed_at:
   aida_build_sha: 8a4a909a967
   vendor: claude
   session: 20abb7c3-8f9b-4a5e-b326-404921f3b450
-failure_reason:
-  phase: reviewer
-  phase_index: 3
-  kind: verdict:request-changes
-  detail: Fresh standalone receipt admission uses the wrong role/scope and loses resolved refusal identity; required CI is still pending.
-  recovery_hint: address the review findings, move STORY-B6B1278890774EF993D2EBC327862470-613 back to In Progress, and clear the PR hold only after approval
-  shelved_by: reviewer
-  shelved_at: 2026-11-10T20:28:25.110870964Z
