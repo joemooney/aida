@@ -18,12 +18,12 @@ description: |
   The ratchet baseline must shrink to zero entries for these paths.
 
   LIGHT gate. Parts A and B may be separate PRs (Refs this task; the last one completes it).
-status: NeedsAttention
+status: Approved
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-07T20:45:16.684639Z
-modified_at: 2026-11-10T19:52:26.717132086Z
+modified_at: 2026-11-10T20:24:08.562824933Z
 req_type: Task
 relationships:
 - rel_type: Child
@@ -550,6 +550,13 @@ comments:
   modified_at: 2026-11-10T19:35:19.834250414Z
   session_id: 01a1c530-c917-7f13-ab81-f6b5e1d1cd30
   harness_version: 2.1.322 (Claude Code)
+- id: 01a1c721-e072-7683-b4c8-9cb9d90e44d6
+  author: joe
+  content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: Standalone reviewer cleanup CI regression remains unfixed; full acceptance sweep complete; current CI pending.. No triage reason was given.'
+  created_at: 2026-11-10T20:24:08.562816412Z
+  modified_at: 2026-11-10T20:24:08.562816412Z
+  session_id: 01a1c530-c917-7f13-ab81-f6b5e1d1cd30
+  harness_version: 2.1.322 (Claude Code)
 history:
 - id: 01a1b7c2-6b69-7b02-bd8c-8f40aee2972d
   author: joe
@@ -1010,6 +1017,15 @@ history:
   author: joe
   timestamp: 2026-11-10T19:52:26.851734588Z
   changes: []
+- id: 01a1c721-e072-7683-b4c8-9ca58f5cde4d
+  author: joe
+  timestamp: 2026-11-10T20:24:08.562803080Z
+  session_id: 01a1c530-c917-7f13-ab81-f6b5e1d1cd30
+  harness_version: 2.1.322 (Claude Code)
+  changes:
+  - field_name: status
+    old_value: NeedsAttention
+    new_value: Approved
 filed_at:
   code_sha: e278eeb1d8f95dadba5f6e9d8bfd41d10eac52c3
   branch: main
@@ -1019,11 +1035,3 @@ filed_at:
   vendor: claude
   session: 01a1b76b-2fe7-7dd2-88d0-356fc8d96d04
   harness_version: 2.1.319 (Claude Code)
-failure_reason:
-  phase: reviewer
-  phase_index: 3
-  kind: verdict:request-changes
-  detail: Standalone reviewer cleanup CI regression remains unfixed; full acceptance sweep complete; current CI pending.
-  recovery_hint: address the review findings, move TASK-3420 back to In Progress, and clear the PR hold only after approval
-  shelved_by: reviewer
-  shelved_at: 2026-11-10T19:52:26.717132086Z
