@@ -8,7 +8,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-09T23:19:37.402958538Z
-modified_at: 2026-11-10T15:12:33.225728078Z
+modified_at: 2026-11-10T15:12:34.484080793Z
 req_type: Bug
 comments:
 - id: 01a1c4ae-da06-7200-aca3-d82b81889341
@@ -37,6 +37,20 @@ comments:
   content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: Full diff reviewed; durable fallback replays cleared findings after approval. BUG-2509 bug protocol: met (test file touched). Acceptance: timestamp fallback, stale-brief classification and no-ledger regression verified by source/test inspection; CI execution unverified (7 lanes pending).. No triage reason was given.'
   created_at: 2026-11-10T15:12:33.225724678Z
   modified_at: 2026-11-10T15:12:33.225724678Z
+  session_id: 01a1c39a-801a-7bd1-8da9-c955a6707f0b
+  harness_version: 2.1.321 (Claude Code)
+- id: 01a1c604-a02b-73b1-b54f-c2d1dbdfe803
+  author: joe
+  content: |-
+    REVIEW FINDINGS TO ADDRESS (BUG-2509):
+    Verdict: CHANGES REQUESTED
+    Reviewed commit: f56dfe6470e9
+    Recorded: 2026-11-10T14:48:40.148231122+00:00
+    Findings:
+    1. [P1] aida-cli-lib/src/rework_direction.rs:389-396: Do not treat every review_findings=None as an unavailable ledger. resolve_rework_review intentionally returns Ok(None) for a newer APPROVED verdict (queue_cmd/work.rs), but this unconditional durable-comment fallback resurrects an older REVIEW FINDINGS TO ADDRESS block. With a refusal comment at T1, a brief at T0, and a later approval at T2, an ordinary implementer pickup now emits the already-cleared refusal as ITEMS STILL OPEN (AUTHORITATIVE TASK). Preserve the distinction between absent review evidence and an authoritative no-open-findings result; only use durable fallback in the former case. Add an end-to-end regression with historical refusal comments plus a newer local approval to ensure cleared findings are not replayed.
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
+  created_at: 2026-11-10T15:12:34.347453222Z
+  modified_at: 2026-11-10T15:12:34.347453222Z
   session_id: 01a1c39a-801a-7bd1-8da9-c955a6707f0b
   harness_version: 2.1.321 (Claude Code)
 history:
