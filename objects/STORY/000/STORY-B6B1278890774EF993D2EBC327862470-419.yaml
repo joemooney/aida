@@ -3,12 +3,12 @@ spec_id: STORY-b6b1278890774ef993d2ebc327862470-419
 agreed_id: STORY-2493
 title: 'Cross-machine review from an untrusted (work) node: verdict and finding envelopes over the aida-intent channel'
 description: 'Deferred (operator 2026-11-04: do the trusted-node case STORY-2492 first). When the reviewing node must not write to the home store, findings come back as content, not IDs. Add kind=review-verdict (fixed fields: PR, head SHA, decision, blocking finding digests, reviewer node; no free text, automatic) and kind=finding (severity, blocking, title, body, home file/line; free text, so it passes the validator and sensitive-pattern check and needs operator sign-off at work) to the STORY-2479 envelope format, carried over the STORY-2480 return channel. Home processes findings into specs and receipts map digest → home ID. Merge stays blocked while a blocking digest is unprocessed or open. Depends on STORY-2479, STORY-2480, STORY-2492.'
-status: InProgress
+status: NeedsAttention
 priority: Low
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-05T04:41:25.538710401Z
-modified_at: 2026-11-10T01:55:57.048917733Z
+modified_at: 2026-11-10T02:09:03.998095956Z
 req_type: Story
 relationships:
 - rel_type: Supersedes
@@ -575,6 +575,13 @@ history:
   session_id: 01a1c315713e
   harness_version: codex-cli 0.167.0
   changes: []
+- id: 01a1c337-4dfe-7803-9ac6-7f78cb480302
+  author: aida-orchestrator
+  timestamp: 2026-11-10T02:09:03.998117228Z
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: NeedsAttention
 filed_at:
   code_sha: d561213a36febec31d45921d3d43d4dc7590135e
   branch: main
@@ -583,3 +590,11 @@ filed_at:
   aida_build_sha: e1fc3f06903
   vendor: claude
   session: 5bf140f7-38b2-4a04-9e8c-ccf69b1258f8
+failure_reason:
+  phase: reviewer
+  phase_index: 3
+  kind: verdict:request-changes
+  detail: 'Slice 1 has one deny-pattern validation defect: a synthetic empty string rejects otherwise valid review envelopes; required PR CI remains pending.'
+  recovery_hint: address the review findings, move STORY-B6B1278890774EF993D2EBC327862470-419 back to In Progress, and clear the PR hold only after approval
+  shelved_by: reviewer
+  shelved_at: 2026-11-10T02:09:03.998095956Z
