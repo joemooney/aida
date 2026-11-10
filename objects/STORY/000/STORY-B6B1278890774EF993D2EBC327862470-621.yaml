@@ -1,0 +1,32 @@
+id: 01a1c36b-22aa-7062-a39c-0f50a5bb99e5
+spec_id: STORY-b6b1278890774ef993d2ebc327862470-621
+agreed_id: STORY-2698
+title: 'Risk-scaled review: a per-PR risk tier decides review depth, what may block, and fast-track eligibility'
+description: |-
+  ## Evidence (23 PRs landed 2026-11-09)
+  PRs approved on first review landed 1.2-1.9h after opening; PRs with many change-request rounds took 10-46h (#3627: 50 pushes, 46h). Median open time 8.9h; approval-to-land only 0.4-1.5h. 592 distinct blocking findings were recorded (about 26 per PR); 29% are self-labelled minor or cosmetic and 58% carry no severity. Review rounds, not CI, dominate cycle time.
+  ## Sketch (needs independent review and advisor signoff)
+  1. Host computes a risk tier from the diff before review: HIGH if it touches gate/, containment/, launch/, store mutation, auth/grant, CI workflow or merge paths, or exceeds a size threshold; LOW for docs, tests-only, scripts outside CI, cosmetic, or small single-module changes; MEDIUM otherwise. Optional input: historical regression signal per path (files later touched by fix commits citing a bug).
+  2. Every finding carries a severity (blocking or non-blocking) as a required verdict field. Non-blocking findings never make a verdict CHANGES REQUESTED; they go to the open sweep spec automatically.
+  3. LOW tier: one review pass; only correctness or security defects block; approval with green CI is fast-track eligible straight to the train.
+  4. HIGH tier keeps today's full review; the two-round cap and advisor triage apply after round 2.
+  ## Acceptance
+  - Tier computed and recorded in the gate ledger with its reasons; overridable by the advisor, never by the implementer.
+  - A verdict with only non-blocking findings is recorded APPROVED with sweep entries.
+  - Tests for tier classification of gate, docs and mixed diffs, and for the severity rule.
+status: Draft
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-11-10T03:05:40.778642968Z
+modified_at: 2026-11-10T03:05:40.778642968Z
+req_type: Story
+filed_at:
+  code_sha: 838f14c3c2811c6b63da5d465700cff773c36190
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 838f14c3c28
+  vendor: claude
+  session: 01a1beff-fc3b-78e2-93e2-9b0c283b0339
+  harness_version: 2.1.319 (Claude Code)
