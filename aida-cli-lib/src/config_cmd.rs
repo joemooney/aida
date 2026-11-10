@@ -5760,7 +5760,19 @@ mod bug_1667_bypass_gate_tests {
             include_str!("lib_part6.rs")
         );
         for (name, source) in [
-            ("doctor_cmd.rs", include_str!("doctor_cmd.rs")),
+            (
+                "doctor/",
+                concat!(
+                    include_str!("doctor_cmd.rs"),
+                    include_str!("doctor/store_repair.rs"),
+                    include_str!("doctor/worktrees.rs"),
+                    include_str!("doctor/disk.rs"),
+                    include_str!("doctor/remote.rs"),
+                    include_str!("doctor/sandbox.rs"),
+                    include_str!("doctor/vendors.rs"),
+                    include_str!("doctor/report.rs"),
+                ),
+            ),
             ("lane_host.rs", include_str!("lane_host.rs")),
             ("lib.rs", lib_src.as_str()),
         ] {
