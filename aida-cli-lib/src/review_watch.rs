@@ -788,6 +788,20 @@ impl Store {
                     process.pid,
                     tail.as_deref().unwrap_or("no log output")
                 ));
+                // A lost supervisor still owes its captured lease completion.
+                // Confirm the whole attempt before publishing that evidence.
+                // trace:TASK-3777 | ai:codex
+                let diagnostic = if attempt.phase == Phase::Running {
+                    match confirm(attempt).map_err(anyhow::Error::msg)
+                        .and_then(|()| finish_confirmed_review(&self.root, attempt)) {
+                        Ok(()) => diagnostic,
+                        Err(error) => bounded_diagnostic(&format!(
+                            "{diagnostic}; review completion receipt refused; retained checkout requires recovery: {error:#}"
+                        )),
+                    }
+                } else {
+                    diagnostic
+                };
                 attempt.phase = Phase::Exited;
                 attempt.diagnostic = Some(diagnostic);
             }
@@ -1781,7 +1795,8 @@ fn advance(store: &Store, key: &str, token: &str) -> Result<Option<String>> {
 // Tree, remote coverage and merge-hold guards remain in the pickup path.
 // trace:BUG-2498 | ai:codex
 fn finish_confirmed_review(root: &Path, attempt: &Attempt) -> Result<()> {
-    confirm(attempt).map_err(anyhow::Error::msg)?;
+    // Callers have already confirmed all recorded processes gone.
+    // trace:TASK-3777 | ai:codex
     if let Some(snapshot) = &attempt.review_lease {
         let lease: crate::SessionLease = toml::from_str(snapshot)?;
         if crate::lease_path(root, &lease.id).exists()
