@@ -23,7 +23,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-07T19:59:26.079479Z
-modified_at: 2026-11-10T08:33:04.457746529Z
+modified_at: 2026-11-10T11:29:32.779019989Z
 req_type: Story
 relationships:
 - rel_type: Supersedes
@@ -618,6 +618,13 @@ comments:
   modified_at: 2026-11-10T08:33:04.457746529Z
   session_id: 01a1c39a-801a-7bd1-8da9-c955a6707f0b
   harness_version: 2.1.321 (Claude Code)
+- id: 01a1c538-706b-7c33-afb7-984da404c45b
+  author: joe
+  content: 'AC1 primary-host half (advisor, 2026-11-10 11:35 UTC): the warm sample from local lane TASK-3428 (later job, log ~/.local/share/aida/ops/advisor-scripts/lane-TASK-3428.log, last ''lane sccache: final job statistics'' block) shows Compile requests 314, Cache hits (Rust) 2, Cache misses (Rust) 218, location /home/joe/.cache/aida/lane-sccache. Under the 08:33 ruling (Rust hits > 0 completes AC1) AC1 is met on both hosts (dell1 56/65). The primary hit rate (<1%) is far below dell1 (86%); that is a separate defect, filed as a bug rather than reopening this story. Completing STORY-2641.'
+  created_at: 2026-11-10T11:29:32.779019989Z
+  modified_at: 2026-11-10T11:29:32.779019989Z
+  session_id: 01a1c530-c917-7f13-ab81-f6b5e1d1cd30
+  harness_version: 2.1.322 (Claude Code)
 history:
 - id: 01a1b929-7921-7980-8202-36c2cc4f3845
   author: aida-session-start
