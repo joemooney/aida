@@ -8,7 +8,7 @@ priority: Low
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-05T04:41:25.538710401Z
-modified_at: 2026-11-10T01:50:24.973390970Z
+modified_at: 2026-11-10T01:55:57.048917733Z
 req_type: Story
 relationships:
 - rel_type: Supersedes
@@ -244,6 +244,13 @@ comments:
     Validation via lane jobs: 29 transport tests and 13 JSON-format audit tests passed (j20261110T014747034-2-0); 11 observation tests passed (j20261110T014151672-2-0); 2 schema tests passed (j20261110T013758976-2-0); updated help snapshot test passed (j20261110T014328043-2-0). rustfmt and git diff --check passed. make check-ci-fast was stopped after it invoked Cargo directly, contrary to this seat's runner-only rule, and is not counted as passed. No commit, push, PR creation, review record or queue completion was performed. Publication intent uses a non-completing Refs subject, with body at /tmp/story-2493-publication-body.txt. Enrollment/umask triage flag and failed draft-finding allocation are recorded in the preceding comment.
   created_at: 2026-11-10T01:50:24.973390970Z
   modified_at: 2026-11-10T01:50:24.973390970Z
+  session_id: 01a1c315713e
+  harness_version: codex-cli 0.167.0
+- id: 01a1c32b-4bf8-7782-bfcd-ab25e783887f
+  author: dirtlab
+  content: 'Fast-gate fix: scripts/store-writers.toml now inventories observation_envelope.rs|run|write_all for review-return generation/export stdout writes, retaining the conservative blocked disposition and all existing operation blockers. Only the new row and trace comment were retained from regeneration. python3 scripts/check-store-writers.py passed (3466 sink sites, 293 operation mappings); all 54 store-writer inventory tests passed; git diff --check passed. Edits remain uncommitted. Non-completing Refs publication intent recorded; existing punt/hold vetoes remain in force.'
+  created_at: 2026-11-10T01:55:57.048917733Z
+  modified_at: 2026-11-10T01:55:57.048917733Z
   session_id: 01a1c315713e
   harness_version: codex-cli 0.167.0
 history:
