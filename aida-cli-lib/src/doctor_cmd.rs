@@ -12,8 +12,18 @@
 
 #![allow(clippy::too_many_arguments)]
 
+use crate::{
+    ack_agent_brief, agent_registry, alias, cli, collect_doctor_findings, commit, contradictions,
+    events, external_import_bleed, find_project_root, findings, git_arg_guard, glyph, history,
+    lane_host, leases, load_store_for_lookup, main_worktree_root_from, manual, nightly_red_status,
+    normalize_doctor_category, orchestrator, permissions, process_probe,
+    resolve_completed_since_cutoff, resolve_default_branch_ref, role, run, runaway_seats,
+    scan_completed_without_commit_with_options, scan_store_mirror_fanout_failures, schedule_ledger,
+    stale_lock_findings, toon, worktree, QueueCommand, RoleCommand,
+};
+
 use aida_core::git_ops::RemoteCredentialsExt as _;
-use anyhow::Result;
+use anyhow::{Context, Result};
 use colored::Colorize;
 
 // trace:STORY-1728 | ai:claude
@@ -21,15 +31,52 @@ use colored::Colorize;
 pub(crate) mod doctor_cmd_args;
 pub(crate) use doctor_cmd_args::*;
 
+use crate::cli::Command;
 use crate::db_block::{
     doctor_migrate_counter_scope_in_store, doctor_repair_dangling_relationships_in_store,
     doctor_tombstone_stale_blocks_in_store, update_config_counter_scope,
 };
+use crate::doctor_root::{
+    completed_without_commit_opted_out, detect_legacy_store_cruft, detect_legacy_store_in_root,
+    detect_store_tracked_runtime, git_config_value, id_collision_findings,
+    is_legacy_store_cruft_path, is_store_tracked_runtime_path, legacy_store_in_root_action,
+    legacy_store_in_root_summary, scan_completed_without_commit, which_binary, LegacyStoreInRoot,
+    DOCTOR_CATEGORY_ALIASES,
+};
+use crate::kernel::current_user_id;
+use crate::leases::{force_cleanup_lease, list_leases};
 use crate::maintenance_schedule::{disk_headroom_fail_reason, FLOOR_RECLAIM_BUDGET};
+use crate::pr_lookup::{detect_merged_pr_for_branch_via_forge, PrLookup};
+use crate::rel_cards::{hostname, load_dispenser, load_node_id};
 use crate::remote_create::same_remote;
+use crate::requirements_cli::{local_twin_note, truncate};
 use crate::scaffold_cmd::{installed_codex_version, parse_codex_semver};
+use crate::status_awaiting::print_status_coordination_section;
+use crate::status_prs::{collect_open_prs, list_worktrees};
+use crate::status_sections::{
+    collect_remote_branch_commits, collect_user_context, print_status_agents_section,
+    print_status_claude_code_section, print_status_codex_section, print_status_open_prs_section,
+    print_status_pr_section, print_status_presence_line, print_status_queue_section,
+    print_status_worktrees_section, worktree_dirty_entries,
+};
+use crate::store_push_pull::commit_count;
+use crate::store_sync::{detect_distributed_store_from, read_id_counter_scope};
+use crate::trace::{parse_trace_id_token, walk_source_for_traces};
+use crate::worktree_gc::{
+    bwrap_status_line, classify_worktree_gc, is_agent_managed_worktree,
+    requirement_missing_acceptance, salvage_worktree_patch, sanitize_salvage_component,
+    worktree_is_active, worktree_pool_global_hooks, WorktreeGcFacts, WorktreeGcVerdict,
+};
 use crate::worktree_gc::{run_merged_agent_worktree_gc_quiet, scan_merged_agent_worktrees};
-use crate::*;
+use crate::zen_drive_root::{extract_spec_ids_from_commit, is_plan_commit_subject};
+use crate::DoctorFinding;
+use aida_core::{
+    check_scaffold_status, RelationshipType, Requirement, RequirementStatus, RequirementType,
+    RequirementsStore, ScaffoldConfig, Storage,
+};
+use clap::Parser;
+use std::collections::HashSet;
+use std::io::IsTerminal;
 
 pub(crate) fn handle_doctor_command(
     heal: bool,
