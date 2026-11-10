@@ -3,12 +3,12 @@ spec_id: BUG-b6b1278890774ef993d2ebc327862470-280
 agreed_id: BUG-2515
 title: aida pr ship on a GitLab-forge project calls gh directly and detects CI only from .github/workflows
 description: Reported from operator's work machine (Codex, GitLab project hello-work-0x), 2026-11-09. With forge.provider = "gitlab", 'aida pr ship 2' calls 'gh pr view' (aida-cli-lib/src/pr_cmd.rs:6917) and fails with no GitHub host, and CI detection only checks .github/workflows (pr_cmd.rs:6986), so GitLab CI (.gitlab-ci.yml) is skipped. Route MR metadata, CI wait and merge through the forge abstraction (glab for GitLab), detect .gitlab-ci.yml, and add GitLab-forge tests with a fake glab.
-status: NeedsAttention
+status: Approved
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-10T03:07:38.542859262Z
-modified_at: 2026-11-10T13:42:10.183791842Z
+modified_at: 2026-11-10T13:42:17.477568810Z
 req_type: Bug
 comments:
 - id: 01a1c3a1-bccc-7ef0-b6b7-2fdb52e783f5
@@ -184,6 +184,13 @@ comments:
   modified_at: 2026-11-10T13:42:10.183791842Z
   session_id: 01a1c39a-801a-7bd1-8da9-c955a6707f0b
   harness_version: 2.1.321 (Claude Code)
+- id: 01a1c5b1-f885-7f02-b442-4584a9c2a34d
+  author: joe
+  content: 'Returned from NeedsAttention to Approved via `aida edit --status`. It was punted on: blocked-dependency: Accepted P1 stale queue_cmd import finding is already fixed by 270fa1b66c and retained at current head bf9abfb284; repository-wide Rust search finds no removed helper identifier. Revalidated via lane job j20261110T130442262-2-0: compilation succeeded and all 12 bug_2515, bug_1957, story_2401_no_new_raw_gh_reads tests passed. No new source edits warranted. Latest CI failures are status_sections standalone reviewer tests explicitly excluded by binding 07:05 advisor ruling (STORY-2695 S1); host/advisor must resolve those before publication. Full check-ci-fast remains host validation because its direct Cargo invocation conflicts with lane-only Cargo rules. Do not publish an empty repair.. No triage reason was given.'
+  created_at: 2026-11-10T13:42:17.477560532Z
+  modified_at: 2026-11-10T13:42:17.477560532Z
+  session_id: 01a1c39a-801a-7bd1-8da9-c955a6707f0b
+  harness_version: 2.1.321 (Claude Code)
 history:
 - id: 01a1c3a2-0b0e-7e70-890b-6fe8aaba4acd
   author: joe
@@ -332,6 +339,15 @@ history:
   - field_name: status
     old_value: InProgress
     new_value: NeedsAttention
+- id: 01a1c5b1-f885-7f02-b442-4572969b84bb
+  author: joe
+  timestamp: 2026-11-10T13:42:17.477538426Z
+  session_id: 01a1c39a-801a-7bd1-8da9-c955a6707f0b
+  harness_version: 2.1.321 (Claude Code)
+  changes:
+  - field_name: status
+    old_value: NeedsAttention
+    new_value: Approved
 filed_at:
   code_sha: 838f14c3c2811c6b63da5d465700cff773c36190
   branch: main
@@ -341,8 +357,3 @@ filed_at:
   vendor: claude
   session: 01a1beff-fc3b-78e2-93e2-9b0c283b0339
   harness_version: 2.1.319 (Claude Code)
-attention_reason:
-  category: blocked-dependency
-  detail: 'Accepted P1 stale queue_cmd import finding is already fixed by 270fa1b66c and retained at current head bf9abfb284; repository-wide Rust search finds no removed helper identifier. Revalidated via lane job j20261110T130442262-2-0: compilation succeeded and all 12 bug_2515, bug_1957, story_2401_no_new_raw_gh_reads tests passed. No new source edits warranted. Latest CI failures are status_sections standalone reviewer tests explicitly excluded by binding 07:05 advisor ruling (STORY-2695 S1); host/advisor must resolve those before publication. Full check-ci-fast remains host validation because its direct Cargo invocation conflicts with lane-only Cargo rules. Do not publish an empty repair.'
-  raised_by: implementer
-  raised_at: 2026-11-10T13:09:18.764844830Z
