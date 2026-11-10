@@ -8,7 +8,7 @@ priority: Low
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-07T10:46:47.827833836Z
-modified_at: 2026-11-10T01:10:53.191843014Z
+modified_at: 2026-11-10T01:15:29.214759913Z
 req_type: Task
 relationships:
 - rel_type: Child
@@ -281,6 +281,10 @@ history:
   - field_name: status
     old_value: InProgress
     new_value: NeedsAttention
+- id: 01a1c306-40b9-71f0-93fb-4e9c4b7f8267
+  author: joe
+  timestamp: 2026-11-10T01:15:29.337575722Z
+  changes: []
 filed_at:
   code_sha: 4803b66ade90fa4f6ccbcfb20f3af84d4aaf7886
   branch: main
@@ -296,3 +300,11 @@ attention_reason:
   lean: Host/advisor reviews the uncommitted slice and pending gate; any authorized publication must use Refs TASK-3368 and must not complete the task.
   raised_by: implementer
   raised_at: 2026-11-10T01:10:36.638104946Z
+failure_reason:
+  phase: reviewer
+  phase_index: 3
+  kind: verdict:request-changes
+  detail: Disabled broker source reviewed; completion-bearing publication violates signed Refs-only slice, PR change notes missing; CI pending.
+  recovery_hint: address the review findings, move TASK-3368 back to In Progress, and clear the PR hold only after approval
+  shelved_by: reviewer
+  shelved_at: 2026-11-10T01:15:29.214759913Z
