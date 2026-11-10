@@ -3,12 +3,12 @@ spec_id: BUG-b6b1278890774ef993d2ebc327862470-278
 agreed_id: BUG-2513
 title: aida init does not configure [contained.vendors] codex = native, and the permissions check's green tick reads as 'ready'
 description: 'Reported from operator''s work machine (Codex, GitLab project hello-work-0x), 2026-11-09. After ''aida init'' a Codex project lacks [contained.vendors] codex = "native" in .aida/config.toml, so Codex launches are refused under containment. Init should offer it when Codex is a chosen vendor (explicit consent, stating that native sandboxing is weaker than AIDA containment). Separately, ''aida config permissions show'' ends with a green ''no dangerous permission-posture inconsistencies detected'' while Codex cannot launch; print a clear per-vendor launch readiness line (ready / refused: reason / fix command) distinct from the consistency check.'
-status: NeedsAttention
+status: Approved
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-10T03:07:01.660083142Z
-modified_at: 2026-11-10T20:53:11.134013716Z
+modified_at: 2026-11-10T20:55:47.021120909Z
 req_type: Bug
 comments:
 - id: 01a1c60c-adfa-72f3-9f5c-b40df8817ee3
@@ -72,6 +72,13 @@ comments:
   modified_at: 2026-11-10T16:34:57.722201351Z
   session_id: 01a1c649e699
   harness_version: codex-cli 0.167.0
+- id: 01a1c73e-d84d-7c43-afe3-c577f197d7da
+  author: joe
+  content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: BUG-2513 acceptance: selected-Codex offer, explicit default-no consent, weaker-boundary warning, per-vendor readiness/reason, fix command and separate consistency output verified by source/assertions and green exact-head CI. BUG-2513 (bug protocol): met (two test files touched). Full sweep found two init-routing regressions.. No triage reason was given.'
+  created_at: 2026-11-10T20:55:47.021114876Z
+  modified_at: 2026-11-10T20:55:47.021114876Z
+  session_id: 01a1c530-c917-7f13-ab81-f6b5e1d1cd30
+  harness_version: 2.1.322 (Claude Code)
 history:
 - id: 01a1c5dc-c560-7b10-85fe-1df64f0de2cf
   author: joe
@@ -159,6 +166,15 @@ history:
   - field_name: status
     old_value: InProgress
     new_value: NeedsAttention
+- id: 01a1c73e-d84d-7c43-afe3-c561db3d2319
+  author: joe
+  timestamp: 2026-11-10T20:55:47.021089990Z
+  session_id: 01a1c530-c917-7f13-ab81-f6b5e1d1cd30
+  harness_version: 2.1.322 (Claude Code)
+  changes:
+  - field_name: status
+    old_value: NeedsAttention
+    new_value: Approved
 filed_at:
   code_sha: 838f14c3c2811c6b63da5d465700cff773c36190
   branch: main
@@ -168,11 +184,3 @@ filed_at:
   vendor: claude
   session: 01a1beff-fc3b-78e2-93e2-9b0c283b0339
   harness_version: 2.1.319 (Claude Code)
-failure_reason:
-  phase: reviewer
-  phase_index: 3
-  kind: verdict:request-changes
-  detail: 'BUG-2513 acceptance: selected-Codex offer, explicit default-no consent, weaker-boundary warning, per-vendor readiness/reason, fix command and separate consistency output verified by source/assertions and green exact-head CI. BUG-2513 (bug protocol): met (two test files touched). Full sweep found two init-routing regressions.'
-  recovery_hint: address the review findings, move BUG-2513 back to In Progress, and clear the PR hold only after approval
-  shelved_by: reviewer
-  shelved_at: 2026-11-10T20:53:11.134013716Z
