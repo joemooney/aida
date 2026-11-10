@@ -1853,8 +1853,8 @@ pub(crate) struct StatusArgs {
 
 fn run_status(
     matches: &clap::ArgMatches,
-    ctx: &crate::command_registry::DispatchCtx,
-) -> anyhow::Result<crate::command_registry::Flow> {
+    ctx: &crate::cmdkit::DispatchCtx,
+) -> anyhow::Result<crate::cmdkit::Flow> {
     use crate::*;
     let args = <StatusArgs as clap::FromArgMatches>::from_arg_matches(matches)?;
     match &ctx.store {
@@ -1873,7 +1873,7 @@ fn run_status(
             } = &args
             {
                 // trace:BUG-1289 | ai:claude
-                return crate::command_registry::returned(handle_status_spec(
+                return crate::cmdkit::returned(handle_status_spec(
                     spec,
                     *idle_minutes,
                     *json || output_format_is_json(),
@@ -1886,12 +1886,10 @@ fn run_status(
             if let StatusArgs { spec: None, .. } = &args {
                 crate::freshness_gate::warn_if_running_binary_stale();
             }
-            Ok(crate::command_registry::Flow::Continue)
+            Ok(crate::cmdkit::Flow::Continue)
         }
-        Some(crate::command_registry::StoreCtx::Distributed { .. }) => {
-            Ok(crate::command_registry::Flow::Continue)
-        }
-        Some(crate::command_registry::StoreCtx::Git {
+        Some(crate::cmdkit::StoreCtx::Distributed { .. }) => Ok(crate::cmdkit::Flow::Continue),
+        Some(crate::cmdkit::StoreCtx::Git {
             store_path,
             backend,
         }) => {
@@ -1956,7 +1954,7 @@ fn run_status(
                             }
                         }
                     }
-                    return crate::command_registry::returned(handle_status_command_distributed(
+                    return crate::cmdkit::returned(handle_status_command_distributed(
                         *no_dev_context,
                         *short,
                         effective_json,
@@ -1977,9 +1975,9 @@ fn run_status(
                     ));
                 }
             }
-            Ok(crate::command_registry::Flow::Continue)
+            Ok(crate::cmdkit::Flow::Continue)
         }
-        Some(crate::command_registry::StoreCtx::Legacy {
+        Some(crate::cmdkit::StoreCtx::Legacy {
             storage,
             requirements_path,
         }) => {
@@ -2008,22 +2006,21 @@ fn run_status(
                     handle_status_command(*no_dev_context, None, &storage)?;
                 }
             }
-            Ok(crate::command_registry::Flow::Continue)
+            Ok(crate::cmdkit::Flow::Continue)
         }
     }
 }
 
 // trace:STORY-1728 | ai:claude
-pub(crate) static STATUS: crate::command_registry::CommandReg =
-    crate::command_registry::CommandReg {
-        name: "status",
-        help_after: "node",
-        command: <StatusArgs as clap::CommandFactory>::command,
-        policy: |_| crate::command_registry::CmdPolicy {
-            stakeholder: crate::stakeholder_role::StakeholderAction::Read,
-            per_write_auto_push: false,
-            skip_role_restore_prompt: false,
-            team_identity_write: false,
-        },
-        run: crate::command_registry::Handler::Store(run_status),
-    };
+pub(crate) static STATUS: crate::cmdkit::CommandReg = crate::cmdkit::CommandReg {
+    name: "status",
+    help_after: "node",
+    command: <StatusArgs as clap::CommandFactory>::command,
+    policy: |_| crate::cmdkit::CmdPolicy {
+        stakeholder: crate::stakeholder_role::StakeholderAction::Read,
+        per_write_auto_push: false,
+        skip_role_restore_prompt: false,
+        team_identity_write: false,
+    },
+    run: crate::cmdkit::Handler::Store(run_status),
+};

@@ -495,10 +495,7 @@ pub(crate) enum AdvisorGoalAction {
 
 // `aida goal` is a pure condition generator — no store needed.
 // trace:TASK-242 | ai:claude
-fn run_goal(
-    matches: &clap::ArgMatches,
-    _ctx: &crate::command_registry::DispatchCtx,
-) -> anyhow::Result<()> {
+fn run_goal(matches: &clap::ArgMatches, _ctx: &crate::cmdkit::DispatchCtx) -> anyhow::Result<()> {
     use crate::*;
     let args = <GoalArgs as clap::FromArgMatches>::from_arg_matches(matches)?;
     // trace:STORY-2243 | ai:claude
@@ -529,15 +526,15 @@ fn run_goal(
 }
 
 // trace:STORY-1728 | ai:claude
-pub(crate) static GOAL: crate::command_registry::CommandReg = crate::command_registry::CommandReg {
+pub(crate) static GOAL: crate::cmdkit::CommandReg = crate::cmdkit::CommandReg {
     name: "goal",
     help_after: "import-plan",
     command: <GoalArgs as clap::CommandFactory>::command,
-    policy: |_| crate::command_registry::CmdPolicy {
+    policy: |_| crate::cmdkit::CmdPolicy {
         stakeholder: crate::stakeholder_role::StakeholderAction::Read,
         per_write_auto_push: false,
         skip_role_restore_prompt: false,
         team_identity_write: false,
     },
-    run: crate::command_registry::Handler::Early(run_goal),
+    run: crate::cmdkit::Handler::Early(run_goal),
 };

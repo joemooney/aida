@@ -4,13 +4,13 @@ use aida_cli_lib::mcp_serve::McpServeArgs;
 
 pub fn run_mcp_serve(
     matches: &clap::ArgMatches,
-    ctx: &aida_cli_lib::command_registry::DispatchCtx,
-) -> anyhow::Result<aida_cli_lib::command_registry::Flow> {
+    ctx: &aida_cli_lib::cmdkit::DispatchCtx,
+) -> anyhow::Result<aida_cli_lib::cmdkit::Flow> {
     use aida_cli_lib::find_project_root;
     let args = <McpServeArgs as clap::FromArgMatches>::from_arg_matches(matches)?;
     match &ctx.store {
-        None => Ok(aida_cli_lib::command_registry::Flow::Continue),
-        Some(aida_cli_lib::command_registry::StoreCtx::Distributed {
+        None => Ok(aida_cli_lib::cmdkit::Flow::Continue),
+        Some(aida_cli_lib::cmdkit::StoreCtx::Distributed {
             store_path,
             project_root_hint,
         }) => {
@@ -32,9 +32,9 @@ pub fn run_mcp_serve(
                 project_root_hint,
                 find_project_root().ok(),
             );
-            aida_cli_lib::command_registry::returned(crate::run_mcp_server(&storage, project_root))
+            aida_cli_lib::cmdkit::returned(crate::run_mcp_server(&storage, project_root))
         }
-        Some(aida_cli_lib::command_registry::StoreCtx::Git {
+        Some(aida_cli_lib::cmdkit::StoreCtx::Git {
             store_path,
             backend,
         }) => {
@@ -42,7 +42,7 @@ pub fn run_mcp_serve(
             let _ = (store_path, backend, &args);
             aida_cli_lib::git_backend_cmd::exit_unsupported_on_git_backend()
         }
-        Some(aida_cli_lib::command_registry::StoreCtx::Legacy {
+        Some(aida_cli_lib::cmdkit::StoreCtx::Legacy {
             storage,
             requirements_path,
         }) => {
@@ -55,7 +55,7 @@ pub fn run_mcp_serve(
                     crate::run_mcp_server(&storage, project_root)?;
                 }
             }
-            Ok(aida_cli_lib::command_registry::Flow::Continue)
+            Ok(aida_cli_lib::cmdkit::Flow::Continue)
         }
     }
 }
@@ -69,13 +69,13 @@ mod tests {
     #[test]
     fn serve_without_store_continues() {
         let matches = McpServeArgs::command().get_matches_from(["mcp-serve"]);
-        let ctx = aida_cli_lib::command_registry::DispatchCtx {
+        let ctx = aida_cli_lib::cmdkit::DispatchCtx {
             globals: None,
             store: None,
         };
         assert!(matches!(
             run_mcp_serve(&matches, &ctx).unwrap(),
-            aida_cli_lib::command_registry::Flow::Continue
+            aida_cli_lib::cmdkit::Flow::Continue
         ));
     }
 }

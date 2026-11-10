@@ -255,8 +255,8 @@ pub(crate) enum DeferCommand {
 
 fn run_defer(
     matches: &clap::ArgMatches,
-    ctx: &crate::command_registry::DispatchCtx,
-) -> anyhow::Result<crate::command_registry::Flow> {
+    ctx: &crate::cmdkit::DispatchCtx,
+) -> anyhow::Result<crate::cmdkit::Flow> {
     use crate::*;
     let args = <DeferArgs as clap::FromArgMatches>::from_arg_matches(matches)?;
     if let Some(DeferCommand::Resurface {
@@ -265,10 +265,10 @@ fn run_defer(
     }) = args.command.as_ref()
     {
         return match &ctx.store {
-            None | Some(crate::command_registry::StoreCtx::Distributed { .. }) => {
-                Ok(crate::command_registry::Flow::Continue)
+            None | Some(crate::cmdkit::StoreCtx::Distributed { .. }) => {
+                Ok(crate::cmdkit::Flow::Continue)
             }
-            Some(crate::command_registry::StoreCtx::Git {
+            Some(crate::cmdkit::StoreCtx::Git {
                 store_path,
                 backend,
             }) => {
@@ -279,19 +279,17 @@ fn run_defer(
                     *dry_run,
                     *manual_age_days,
                 )?;
-                Ok(crate::command_registry::Flow::Continue)
+                Ok(crate::cmdkit::Flow::Continue)
             }
-            Some(crate::command_registry::StoreCtx::Legacy { .. }) => {
+            Some(crate::cmdkit::StoreCtx::Legacy { .. }) => {
                 anyhow::bail!("aida defer resurface requires the distributed git-canonical store")
             }
         };
     }
     match &ctx.store {
-        None => Ok(crate::command_registry::Flow::Continue),
-        Some(crate::command_registry::StoreCtx::Distributed { .. }) => {
-            Ok(crate::command_registry::Flow::Continue)
-        }
-        Some(crate::command_registry::StoreCtx::Git {
+        None => Ok(crate::cmdkit::Flow::Continue),
+        Some(crate::cmdkit::StoreCtx::Distributed { .. }) => Ok(crate::cmdkit::Flow::Continue),
+        Some(crate::cmdkit::StoreCtx::Git {
             store_path,
             backend,
         }) => {
@@ -312,9 +310,9 @@ fn run_defer(
                     )?;
                 }
             }
-            Ok(crate::command_registry::Flow::Continue)
+            Ok(crate::cmdkit::Flow::Continue)
         }
-        Some(crate::command_registry::StoreCtx::Legacy {
+        Some(crate::cmdkit::StoreCtx::Legacy {
             storage,
             requirements_path,
         }) => {
@@ -329,25 +327,24 @@ fn run_defer(
                     );
                 }
             }
-            Ok(crate::command_registry::Flow::Continue)
+            Ok(crate::cmdkit::Flow::Continue)
         }
     }
 }
 
 // trace:STORY-1728 | ai:claude
-pub(crate) static DEFER: crate::command_registry::CommandReg =
-    crate::command_registry::CommandReg {
-        name: "defer",
-        help_after: "unarchive",
-        command: <DeferArgs as clap::CommandFactory>::command,
-        policy: |_| crate::command_registry::CmdPolicy {
-            stakeholder: crate::stakeholder_role::StakeholderAction::Write,
-            per_write_auto_push: true,
-            skip_role_restore_prompt: false,
-            team_identity_write: true,
-        },
-        run: crate::command_registry::Handler::Store(run_defer),
-    };
+pub(crate) static DEFER: crate::cmdkit::CommandReg = crate::cmdkit::CommandReg {
+    name: "defer",
+    help_after: "unarchive",
+    command: <DeferArgs as clap::CommandFactory>::command,
+    policy: |_| crate::cmdkit::CmdPolicy {
+        stakeholder: crate::stakeholder_role::StakeholderAction::Write,
+        per_write_auto_push: true,
+        skip_role_restore_prompt: false,
+        team_identity_write: true,
+    },
+    run: crate::cmdkit::Handler::Store(run_defer),
+};
 
 /// Inverse of `aida defer` — clears the deferred flag (and its revisit
 /// trigger) so the spec reappears in default `aida list` / `aida history`
@@ -362,16 +359,14 @@ pub(crate) struct UndeferArgs {
 
 fn run_undefer(
     matches: &clap::ArgMatches,
-    ctx: &crate::command_registry::DispatchCtx,
-) -> anyhow::Result<crate::command_registry::Flow> {
+    ctx: &crate::cmdkit::DispatchCtx,
+) -> anyhow::Result<crate::cmdkit::Flow> {
     use crate::*;
     let args = <UndeferArgs as clap::FromArgMatches>::from_arg_matches(matches)?;
     match &ctx.store {
-        None => Ok(crate::command_registry::Flow::Continue),
-        Some(crate::command_registry::StoreCtx::Distributed { .. }) => {
-            Ok(crate::command_registry::Flow::Continue)
-        }
-        Some(crate::command_registry::StoreCtx::Git {
+        None => Ok(crate::cmdkit::Flow::Continue),
+        Some(crate::cmdkit::StoreCtx::Distributed { .. }) => Ok(crate::cmdkit::Flow::Continue),
+        Some(crate::cmdkit::StoreCtx::Git {
             store_path,
             backend,
         }) => {
@@ -383,9 +378,9 @@ fn run_undefer(
                     self::handle_undefer_command(id, backend, store_path)?;
                 }
             }
-            Ok(crate::command_registry::Flow::Continue)
+            Ok(crate::cmdkit::Flow::Continue)
         }
-        Some(crate::command_registry::StoreCtx::Legacy {
+        Some(crate::cmdkit::StoreCtx::Legacy {
             storage,
             requirements_path,
         }) => {
@@ -400,25 +395,24 @@ fn run_undefer(
                     );
                 }
             }
-            Ok(crate::command_registry::Flow::Continue)
+            Ok(crate::cmdkit::Flow::Continue)
         }
     }
 }
 
 // trace:STORY-1728 | ai:claude
-pub(crate) static UNDEFER: crate::command_registry::CommandReg =
-    crate::command_registry::CommandReg {
-        name: "undefer",
-        help_after: "defer",
-        command: <UndeferArgs as clap::CommandFactory>::command,
-        policy: |_| crate::command_registry::CmdPolicy {
-            stakeholder: crate::stakeholder_role::StakeholderAction::Write,
-            per_write_auto_push: true,
-            skip_role_restore_prompt: false,
-            team_identity_write: true,
-        },
-        run: crate::command_registry::Handler::Store(run_undefer),
-    };
+pub(crate) static UNDEFER: crate::cmdkit::CommandReg = crate::cmdkit::CommandReg {
+    name: "undefer",
+    help_after: "defer",
+    command: <UndeferArgs as clap::CommandFactory>::command,
+    policy: |_| crate::cmdkit::CmdPolicy {
+        stakeholder: crate::stakeholder_role::StakeholderAction::Write,
+        per_write_auto_push: true,
+        skip_role_restore_prompt: false,
+        team_identity_write: true,
+    },
+    run: crate::cmdkit::Handler::Store(run_undefer),
+};
 
 #[cfg(test)]
 #[path = "tests/story_2402_defer_tests.rs"]
