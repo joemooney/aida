@@ -3,12 +3,12 @@ spec_id: SPEC-b6b1278890774ef993d2ebc327862470-025
 agreed_id: TASK-3095
 title: Containment conformance Python fixtures require writable real ~/.aida in native lanes
 description: While validating TASK-3780's test-only extraction, the unchanged check-ci-fast Containment conformance evidence tests gate ran 65 tests and failed with six errors. tests/test_containment_conformance.py:267,303,433,937 uses Path.home()/'.aida' as fixture_home and tempfile.TemporaryDirectory(dir=fixture_home); native workspace-write lanes refuse mkdir there with OSError [Errno 30] Read-only file system. test_role_refusal_reports_actual_diagnostic_and_keeps_tty produced three such subtest errors. Use hermetic writable temporary fixture homes rather than the real operator home, preserving production boundary assertions. No containment implementation or fixture changes made in this extraction lane. Local evidence /tmp/task3780-containment.log; relevant gate result 65 tests in 44.2s, errors=6.
-status: InProgress
+status: Completed
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-10T07:56:37.576312273Z
-modified_at: 2026-11-10T14:33:19.924622878Z
+modified_at: 2026-11-10T16:06:50.847565081Z
 req_type: Task
 tags:
 - from-implementer:TASK-3780
@@ -49,6 +49,24 @@ history:
   session_id: 01a1c5df3251
   harness_version: codex-cli 0.167.0
   changes: []
+- id: 01a1c636-509b-7582-a384-baa72f3f06d9
+  author: aida-auto-bump
+  timestamp: 2026-11-10T16:06:50.779075052Z
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Completed
+processing_record:
+- id: 01a1c636-50df-76c3-8ba9-f7e3935fda52
+  timestamp: 2026-11-10T16:06:50.847562421Z
+  agent: aida
+  commit_sha: 780ce93a7f73cc1254c0a3fdd7b8cdb5dd15fa3c
+  summary: 'Full diff reviewed: hermetic writable fixture homes replace real-home writes, production boundary assertions preserved; 65 conformance tests and required PR CI pass. No actionable findings.'
+  review_verdict: approved
 filed_at:
   aida_version: 0.16.0
   aida_build_sha: e682f76092e
+implementation_info:
+  implemented: false
+  completed_at: 2026-11-10T16:06:50.779069884Z
+  completion_sha: 780ce93a7f73cc1254c0a3fdd7b8cdb5dd15fa3c
