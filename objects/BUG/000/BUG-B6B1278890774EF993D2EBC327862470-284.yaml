@@ -14,12 +14,12 @@ description: |-
   1. Root cause identified and recorded on this bug.
   2. A second primary lane job building the same dependency set shows a Rust hit rate comparable to dell1 (at least 50%).
   3. A regression test or doctor check covers the cause.
-status: Approved
+status: InProgress
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-10T11:29:50.373967960Z
-modified_at: 2026-11-10T16:57:12.216655140Z
+modified_at: 2026-11-10T16:59:08.913055528Z
 req_type: Bug
 comments:
 - id: 01a1c63b-ee32-7502-886f-4dbf64e2d225
@@ -132,6 +132,13 @@ history:
   session_id: 01a1c39a-801a-7bd1-8da9-c955a6707f0b
   harness_version: 2.1.321 (Claude Code)
   changes: []
+- id: 01a1c666-32f1-7131-ad89-057eea391023
+  author: aida-session-start
+  timestamp: 2026-11-10T16:59:08.913053795Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: InProgress
 filed_at:
   code_sha: 0f2b06b24bdb187b1ba22dec1edf9f883fc540e7
   branch: main
