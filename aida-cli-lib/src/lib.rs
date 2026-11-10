@@ -273,6 +273,7 @@ mod review_gates;
 #[cfg(unix)]
 mod sanitized_intake;
 // trace:TASK-1993 | ai:codex
+mod review_implementer_gate;
 mod review_watch;
 mod role;
 mod runaway_seats;
