@@ -133,6 +133,7 @@ fn measure(
     let mut sequence = vec![];
     let mut findings = vec![];
     let mut seen = BTreeSet::new();
+    let mut seen_verdicts = BTreeSet::new();
     for event in verdicts {
         let r = &event["record"];
         let kind = r["verdict"]
@@ -143,6 +144,23 @@ fn measure(
             .to_uppercase();
         let at = timestamp(&r["recorded_at"]).or_else(|| timestamp(&event["at"]));
         if let Some(at) = at.filter(|at| *at <= landed) {
+            // Spec recording and PR handshake can ledger the same review twice.
+            // Keep separate rounds, heads, verdicts and reviewers distinct.
+            let field = |keys: &[&str]| {
+                keys.iter()
+                    .find_map(|key| r[*key].as_str())
+                    .unwrap_or_default()
+                    .to_owned()
+            };
+            let key = (
+                field(&["reviewed_sha", "head_sha", "head", "sha"]),
+                at,
+                kind.clone(),
+                field(&["recorded_by", "reviewer"]),
+            );
+            if !seen_verdicts.insert(key) {
+                continue;
+            }
             *counts.entry(kind.clone()).or_default() += 1;
             sequence.push((at, kind.clone()));
             if kind.contains("REQUEST") {
@@ -568,6 +586,48 @@ mod tests {
         assert_eq!(std::fs::read_to_string(path).unwrap(), body);
         assert_eq!(std::fs::read_dir(ledger_dir).unwrap().count(), 2);
     }
+    fn paired_verdict_fixture(rounds: usize) -> Vec<Value> {
+        (1..=rounds)
+            .flat_map(|round| {
+                let record = json!({
+                    "head": "2e193bd365",
+                    "recorded_at": format!("2026-11-09T0{round}:00:00Z"),
+                    "verdict": "CHANGES REQUESTED",
+                    "recorded_by": "reviewer-seat",
+                    "findings": ["P2 wrong result"]
+                });
+                [
+                    json!({"seq": round * 2, "kind": "verdict", "spec": "STORY-2699", "record": record}),
+                    json!({"seq": round * 2 + 1, "kind": "verdict", "pr": 3757, "record": record}),
+                ]
+            })
+            .collect()
+    }
+
+    #[test]
+    fn flow_paired_spec_and_handshake_records_count_once() {
+        assert_verdict_fixture_count(1);
+    }
+
+    #[test]
+    fn flow_two_paired_review_rounds_count_twice() {
+        assert_verdict_fixture_count(2);
+    }
+
+    fn assert_verdict_fixture_count(rounds: usize) {
+        let row = measure(
+            3757,
+            "x",
+            bound("2026-11-10").unwrap(),
+            &json!({"createdAt":"2026-11-09T00:00:00Z", "commits":[]}),
+            &paired_verdict_fixture(rounds),
+            &[],
+            true,
+        )
+        .unwrap();
+        assert_eq!(row["verdict_counts"]["CHANGES REQUESTED"], json!(rounds));
+    }
+
     #[test]
     fn flow_refusal_dedup_and_unknown_ci() {
         let meta = json!({"createdAt":"2026-11-09T00:00:00Z", "commits":[]});
