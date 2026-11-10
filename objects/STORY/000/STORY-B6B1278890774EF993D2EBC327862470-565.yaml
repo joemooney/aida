@@ -28,7 +28,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-07T19:59:40.192574Z
-modified_at: 2026-11-10T00:48:25.623169355Z
+modified_at: 2026-11-10T01:18:44.655981947Z
 req_type: Story
 relationships:
 - rel_type: Supersedes
@@ -314,6 +314,20 @@ comments:
   modified_at: 2026-11-10T00:32:54.177573141Z
   session_id: 01a1beff-fc3b-78e2-93e2-9b0c283b0339
   harness_version: 2.1.319 (Claude Code)
+- id: 01a1c309-3baf-7150-b5ba-1072ced61140
+  author: dirtlab
+  content: |
+    Implemented the final advisor ruling: release installs compare their version against a bounded live latest-release lookup; AGY credential-source diagnostics recognize both agy and the production antigravity vendor name and check the conventional nonempty OAuth token file; lane-cache reachability uses the production lane-job sandbox, environment projection, cache directory checks and private sccache lifecycle, refusing the uncached fallback and checking server transport plus cache read/write access. All findings include fix hints, with tests and updated setup documentation.
+
+    Changed files: aida-cli-lib/src/lane_host.rs, aida-cli-lib/src/lane_job.rs, aida-cli-lib/src/vendors/host_diagnostics.rs, docs/cli/07-project-setup.md.
+
+    Validation: 25 lane-host tests, one cache regression and one AGY regression passed. make check-ci-fast passed all 46 fast-tier gates in lane job j20261110T010638949-2-0, including no-default-features checking. Standalone portability guard and git diff --check passed. The initial obsolete AGY-advisory assertion and missing Linux test cfg were corrected before the successful reruns.
+
+    No implementation blockers. Edits remain uncommitted for native host publication; no commit, push, PR creation, review verdict, merge or queue completion was performed from this seat.
+  created_at: 2026-11-10T01:18:44.655981947Z
+  modified_at: 2026-11-10T01:18:44.655981947Z
+  session_id: 01a1c2ed73b2
+  harness_version: codex-cli 0.167.0
 history:
 - id: 01a1b85d-3f02-70c2-a82d-cefccf97dc04
   author: aida-session-start
