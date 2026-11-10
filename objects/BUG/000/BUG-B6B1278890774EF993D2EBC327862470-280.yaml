@@ -8,7 +8,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-10T03:07:38.542859262Z
-modified_at: 2026-11-10T14:45:18.274221374Z
+modified_at: 2026-11-10T20:14:28.355999844Z
 req_type: Bug
 comments:
 - id: 01a1c3a1-bccc-7ef0-b6b7-2fdb52e783f5
@@ -241,6 +241,13 @@ comments:
   modified_at: 2026-11-10T14:38:17.004227692Z
   session_id: 01a1c39a-801a-7bd1-8da9-c955a6707f0b
   harness_version: 2.1.321 (Claude Code)
+- id: 01a1c719-0604-7a31-898d-399d0953dd77
+  author: joe
+  content: 'ADVISOR RULING (2026-11-10 13:25 MST) — SUPERSEDES the 07:05 UTC exclusion, which was wrong. main is green on the status_sections bug2187/standalone_reviewer tests (main CI f86be69177 success); they fail deterministically on every #3762 head, so THIS PR causes them. Inner failure (bug_2149_2150_standalone_reviewer_tests.rs:990/1019): the unrecorded-review recovery text now prints ''aida review record PR-59 --pr 59'' instead of ''aida review record STORY-77 --pr 59''. The PR''s move of PR ship-metadata lookup to fetch_pr_ship_metadata_via_forge stopped resolving PR-59 -> STORY-77 in the headless reviewer launch path under the test''s fake forge. Fix the code (not the test): the reviewer recovery hint must still resolve the PR''s spec via the resolved forge (and fall back to the GitHub lookup the test fixture provides). LIGHT gate: cargo test -p aida-cli-lib --lib bug_2149_2150_standalone_reviewer bug_2515 bug_1957 story_2401_no_new_raw_gh_reads, then push. Do not punt citing the 07:05 ruling.'
+  created_at: 2026-11-10T20:14:28.355999844Z
+  modified_at: 2026-11-10T20:14:28.355999844Z
+  session_id: 01a1c70f-d731-7b70-acf8-e9ab3d288fca
+  harness_version: 2.1.322 (Claude Code)
 history:
 - id: 01a1c3a2-0b0e-7e70-890b-6fe8aaba4acd
   author: joe
