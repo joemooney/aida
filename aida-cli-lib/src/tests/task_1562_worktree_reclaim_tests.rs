@@ -596,9 +596,9 @@ fn task_1562_disk_headroom_remediation_names_the_command_that_reclaims() {
     let src = std::fs::read_to_string(
         Path::new(env!("CARGO_MANIFEST_DIR"))
             .join("src")
-            .join("doctor_cmd.rs"),
+            .join("doctor/disk.rs"),
     )
-    .expect("doctor_cmd.rs is readable");
+    .expect("doctor/disk.rs is readable");
     let start = src
         .find("category: \"disk-headroom\"")
         .expect("the disk-headroom finding exists");

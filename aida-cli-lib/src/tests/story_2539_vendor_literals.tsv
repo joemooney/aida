@@ -291,7 +291,7 @@ aida-cli-lib/src/dispatch_args.rs|impl(DispatchVendor:)::as_str|literal:codex	1
 aida-cli-lib/src/dispatch_args.rs|impl(DispatchVendor:)::as_str|typed:Agy	1
 aida-cli-lib/src/dispatch_args.rs|impl(DispatchVendor:)::as_str|typed:Claude	1
 aida-cli-lib/src/dispatch_args.rs|impl(DispatchVendor:)::as_str|typed:Codex	1
-aida-cli-lib/src/doctor_cmd.rs|installed_codex_version|literal:codex	1
+aida-cli-lib/src/scaffold_cmd.rs|installed_codex_version|literal:codex	1
 aida-cli-lib/src/doctor_root.rs|collect_doctor_findings_at|literal:claude	2
 aida-cli-lib/src/doctor_root.rs|collect_doctor_findings_at|literal:codex	1
 aida-cli-lib/src/drain_next_n.rs|finalize_drain_summary|typed:Claude	1
