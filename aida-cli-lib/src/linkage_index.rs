@@ -37,7 +37,12 @@
 //! never canonical spec content.
 // trace:BUG-2221 | ai:claude
 
-use crate::*;
+use crate::{
+    command_output_with_timeout_detail, extract_referenced_spec_ids_from_commit,
+    extract_spec_ids_from_commit, extract_trace_line_spec_ids, git_arg_guard, BoundedCommandOutput,
+};
+use crate::{pr_lookup, zen};
+use anyhow::Result;
 use std::collections::{HashMap, HashSet};
 use std::io::{Read as _, Seek as _, Write as _};
 use std::path::{Path, PathBuf};
