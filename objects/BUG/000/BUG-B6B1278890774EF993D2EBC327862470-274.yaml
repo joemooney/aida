@@ -8,7 +8,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-09T23:19:37.402958538Z
-modified_at: 2026-11-10T14:48:43.877569090Z
+modified_at: 2026-11-10T14:59:57.555420705Z
 req_type: Bug
 comments:
 - id: 01a1c4ae-da06-7200-aca3-d82b81889341
@@ -25,6 +25,13 @@ comments:
   modified_at: 2026-11-10T14:38:41.721269666Z
   session_id: 01a1c5dede7b
   harness_version: codex-cli 0.167.0
+- id: 01a1c5f9-13f3-7e42-9921-995fd88c6f1c
+  author: joe
+  content: 'Advisor ruling PR-3789@f56dfe64: accept P1; three-state review result (Available/ClearedByApproval/Unavailable), durable fallback only when Unavailable; e2e regression for refusal+brief+newer approval.'
+  created_at: 2026-11-10T14:59:57.555420705Z
+  modified_at: 2026-11-10T14:59:57.555420705Z
+  session_id: 01a1c530-c917-7f13-ab81-f6b5e1d1cd30
+  harness_version: 2.1.322 (Claude Code)
 history:
 - id: 01a1c5dc-b09f-7163-9c1c-790850bc42af
   author: joe
