@@ -505,7 +505,7 @@ const REFUSED_OPTIONS: &[&str] = &[
 pub(crate) fn validate(job: &JobRequest) -> std::result::Result<(), String> {
     let argv = &job.argv;
     // trace:STORY-2640 | ai:codex — one exact additional job kind.
-    if fast_gate_job(job) {
+    if job.argv == ["make", "check-ci-fast"] {
         return if job.env.is_empty() {
             Ok(())
         } else {
@@ -1614,6 +1614,22 @@ fn run_one_timed(
     seed: &SeedNote,
     timeout: impl FnOnce(&JobRequest, bool) -> Duration,
 ) {
+    run_one_authorized(lane, id, job, stop, tally, seed, timeout, false)
+}
+
+// Only the host calls this with a trusted command; seat submissions retain validate().
+// trace:BUG-2512 | ai:codex
+#[allow(clippy::too_many_arguments)]
+fn run_one_authorized(
+    lane: &LaneJobs,
+    id: &str,
+    job: std::result::Result<JobRequest, String>,
+    stop: &AtomicBool,
+    tally: &Tally,
+    seed: &SeedNote,
+    timeout: impl FnOnce(&JobRequest, bool) -> Duration,
+    host_gate: bool,
+) {
     let seed_note = seed.note.as_str();
     let out_file = out_path(&lane.results, id);
     let refuse = |why: &str| {
@@ -1622,14 +1638,20 @@ fn run_one_timed(
         tally.incomplete.fetch_add(1, Ordering::Relaxed);
         lane.log(&format!("{id} refused: {why}"));
     };
-    let job = match job.and_then(|j| validate(&j).map(|()| j)) {
+    let job = match job.and_then(|j| {
+        if host_gate && fast_gate_job(&j) && j.env.is_empty() {
+            Ok(j)
+        } else {
+            validate(&j).map(|()| j)
+        }
+    }) {
         Ok(job) => job,
         Err(why) => return refuse(&why),
     };
     let env = lane.job_env(&job);
     let Some(cargo) = resolve_program(
         if fast_gate_job(&job) {
-            "make"
+            &job.argv[0]
         } else {
             &lane.program
         },
@@ -2024,6 +2046,7 @@ pub(crate) fn tail(text: &str, n: usize) -> String {
 // trace:STORY-2640 | ai:codex
 pub(crate) fn fast_gate_job(job: &JobRequest) -> bool {
     job.argv == ["make", "check-ci-fast"]
+        || (job.argv.len() == 3 && job.argv[0] == "/bin/sh" && job.argv[1] == "-c")
 }
 
 /// Host-created id and host-only result, never a receipt supplied by the seat.
@@ -2032,6 +2055,7 @@ pub(crate) fn run_fast_gate(
     main: &Path,
     seat: &Path,
     lease: &str,
+    command: String,
 ) -> Result<Option<(i32, String)>> {
     if crate::session::bwrap_availability() != crate::session::BwrapAvailability::Ok {
         return Ok(None);
@@ -2043,7 +2067,7 @@ pub(crate) fn run_fast_gate(
     check_fast_gate_results(&lane)?;
     let id = format!("fast-{}", uuid::Uuid::new_v4());
     let job = JobRequest {
-        argv: vec!["make".into(), "check-ci-fast".into()],
+        argv: vec!["/bin/sh".into(), "-c".into(), command],
         env: BTreeMap::new(),
     };
     run_seeded_fast_gate(&lane, &id, job);
@@ -2068,13 +2092,15 @@ fn fast_gate_output_tail(path: &Path) -> Result<String> {
 // trace:STORY-2640 | ai:codex
 fn run_seeded_fast_gate(lane: &LaneJobs, id: &str, job: JobRequest) {
     let seed = seed_lane_target(lane);
-    run_one(
+    run_one_authorized(
         lane,
         id,
         Ok(job),
         &AtomicBool::new(false),
         &Tally::default(),
         &seed,
+        timeout_for,
+        true,
     );
 }
 
@@ -2453,3 +2479,53 @@ mod fast_gate_job_tests {
 #[cfg(all(test, target_os = "linux"))]
 #[path = "tests/lane_host/cache_probe.rs"]
 mod doctor_cache_probe_tests;
+
+// trace:BUG-2512 | ai:codex
+#[cfg(test)]
+mod bug_2512_tests {
+    use super::*;
+
+    #[test]
+    fn bug_2512_python_fast_check_runs_without_makefile_and_seat_shell_is_refused() {
+        let tmp = tempfile::tempdir().unwrap();
+        let seat = tmp.path().join("python-seat");
+        std::fs::create_dir_all(&seat).unwrap();
+        std::fs::write(seat.join("test_example.py"),
+            "import unittest\nclass Example(unittest.TestCase):\n    def test_ok(self):\n        self.assertEqual(2 + 2, 4)\n").unwrap();
+        let lane = LaneJobs {
+            inbox: seat.join(INBOX_RELATIVE),
+            seat,
+            results: tmp.path().join("host-results"),
+            lease_id: "python".into(),
+            build_env: Vec::new(),
+            host_env: vec![("PATH".into(), "/usr/bin:/bin".into())],
+            program: "cargo".into(),
+            sandbox: Sandbox::TestUnwrapped,
+        };
+        lane.prepare().unwrap();
+        let job = JobRequest {
+            argv: vec![
+                "/bin/sh".into(),
+                "-c".into(),
+                "python3 -m unittest discover".into(),
+            ],
+            env: BTreeMap::new(),
+        };
+        assert!(
+            validate(&job).is_err(),
+            "seat shell submissions must remain refused"
+        );
+        run_seeded_fast_gate(&lane, "python-pass", job.clone());
+        let output = fast_gate_output_tail(&out_path(&lane.results, "python-pass")).unwrap();
+        assert_eq!(read_rc(&lane.results, "python-pass"), Some(0), "{output}");
+        assert!(output.contains("Ran 1 test"), "{output}");
+        std::fs::write(lane.seat.join("test_example.py"),
+            "import unittest\nclass Example(unittest.TestCase):\n    def test_bad(self):\n        self.fail('expected regression failure')\n").unwrap();
+        run_seeded_fast_gate(&lane, "python-fail", job);
+        let output = fast_gate_output_tail(&out_path(&lane.results, "python-fail")).unwrap();
+        assert_eq!(read_rc(&lane.results, "python-fail"), Some(1), "{output}");
+        assert!(output.contains("expected regression failure"), "{output}");
+        assert!(!lane.seat.join("Makefile").exists());
+        assert!(!lane.seat.join("Cargo.toml").exists());
+    }
+}
