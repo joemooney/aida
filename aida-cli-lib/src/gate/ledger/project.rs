@@ -91,14 +91,20 @@ pub(crate) fn all_verdict_events(start: &Path) -> Vec<GateEvent> {
     let Ok(root) = store_root(start) else {
         return Vec::new();
     };
-    recorded_keys(&root)
+    let mut events: Vec<_> = recorded_keys(&root)
         .into_iter()
         .flat_map(|k| match ChangeKey::parse(&k) {
-            Some(change) => events(&root, change),
+            Some(change) => store::read_file(&root, change),
             None => store::read_unbound(&root, &k),
         })
         .filter(|e| e.verdict_record().is_some())
-        .collect()
+        .collect();
+    // trace:BUG-2517 | ai:codex
+    // Corpus scans already have all witnesses: avoid rediscovering the full
+    // ledger separately for every change.
+    let witnesses = events.clone();
+    filter_miskeyed_events(&mut events, &witnesses);
+    events
 }
 
 /// The ledger file `event` was read from under the store root `root`: its
@@ -152,7 +158,9 @@ pub(crate) fn index_spec(root: &Path, spec: &str, change: ChangeKey) -> std::io:
 
 /// The change's events, in ledger order.
 pub(crate) fn events(root: &Path, change: ChangeKey) -> Vec<GateEvent> {
-    store::read_file(root, change)
+    let events = store::read_file(root, change);
+    // trace:BUG-2517 | ai:codex
+    super::checked::filter_miskeyed(root, events.clone(), &mut Default::default()).unwrap_or(events)
 }
 
 /// Ledger verdict events for `key` — a change key, or a spec ID through the
@@ -354,4 +362,71 @@ pub(crate) fn carry_over_at(
         };
         same_reviewed_sha(a, approved) && same_reviewed_sha(h, head)
     })
+}
+
+/// Fingerprint the act of review, omitting only the documented handshake
+/// overlay fields. Missing provenance never proves a misplaced copy.
+// trace:BUG-2517 | ai:codex
+fn review_fingerprint(event: &GateEvent) -> Option<String> {
+    let record = event.verdict_record()?;
+    // Matching numbers or payloads on different forges are not one change.
+    let forge = match ChangeKey::parse(&event.change)?.forge {
+        super::ChangeForge::Pr => "PR",
+        super::ChangeForge::Mr => "MR",
+    };
+    let spec = event.spec.as_deref()?;
+    let head = event.head.as_deref()?;
+    if !REQUIRED_FIELDS
+        .iter()
+        .all(|k| record.get(*k).is_some_and(|v| !v.is_null()))
+    {
+        return None;
+    }
+    let semantic: JsonObj = record
+        .iter()
+        .filter(|(k, _)| !OVERLAY_ONLY_FIELDS.contains(&k.as_str()))
+        .map(|(k, v)| (k.clone(), v.clone()))
+        .collect();
+    serde_json::to_string(&(forge, spec, head, semantic)).ok()
+}
+
+// trace:BUG-2517 | ai:codex
+pub(crate) fn filter_miskeyed_events(events: &mut Vec<GateEvent>, witnesses: &[GateEvent]) {
+    let mut owners: std::collections::HashMap<String, std::collections::HashSet<String>> =
+        Default::default();
+    for witness in witnesses {
+        if ChangeKey::parse(&witness.change).is_none() {
+            continue;
+        }
+        if witness
+            .verdict_record()
+            .and_then(|r| r.get("mode"))
+            .and_then(|v| v.as_str())
+            != Some(PHASE3_MODE)
+        {
+            continue;
+        }
+        if let Some(key) = review_fingerprint(witness) {
+            owners
+                .entry(key)
+                .or_default()
+                .insert(witness.change.clone());
+        }
+    }
+    events.retain(|event| {
+        if ChangeKey::parse(&event.change).is_none() {
+            return true;
+        }
+        if event
+            .verdict_record()
+            .and_then(|r| r.get("mode"))
+            .and_then(|v| v.as_str())
+            == Some(PHASE3_MODE)
+        {
+            return true;
+        }
+        !review_fingerprint(event)
+            .and_then(|key| owners.get(&key))
+            .is_some_and(|changes| changes.iter().any(|change| change != &event.change))
+    });
 }

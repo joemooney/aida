@@ -114,8 +114,8 @@ pub enum ReviewCommand {
         #[clap(long, value_name = "VERDICT")]
         verdict: String,
 
-        /// Commit the review examined. Defaults to the branch tip
-        /// (current HEAD) at the time of recording.
+        /// Commit reviewed. Defaults to the current forge head; a supplied SHA must match.
+        // trace:BUG-2517 | ai:codex
         #[clap(long, value_name = "SHA")]
         sha: Option<String>,
 
@@ -150,9 +150,8 @@ pub enum ReviewCommand {
         #[clap(long, value_name = "CLASS")]
         finding_class: Vec<String>,
 
-        /// Also write the orchestrator's phase-3 handshake file
-        /// (`.aida/review-verdicts/PR-<N>.json`) for this PR number, at the
-        /// drive root. This is what lets a headless drain's phase 4 proceed.
+        /// Change number. Must match the reviewer lease; otherwise the review stays spec-only.
+        // trace:BUG-2517 | ai:codex
         // trace:BUG-802 | ai:claude
         #[arg(long)]
         pr: Option<u64>,

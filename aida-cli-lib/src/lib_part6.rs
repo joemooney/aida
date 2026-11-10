@@ -349,3 +349,8 @@ mod bug_1807_handoff_tests {
 #[cfg(test)]
 #[path = "tests/task_1737_authority_trailers_tests.rs"]
 mod task_1737_authority_trailers_tests;
+
+// trace:BUG-2517 | ai:codex
+#[cfg(test)]
+#[path = "tests/bug_2517_review_change_tests.rs"]
+mod bug_2517_review_change_tests;

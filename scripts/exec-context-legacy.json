@@ -1,5 +1,5 @@
 {
-  "ceiling": 1239,
+  "ceiling": 1238,
   "owner": "STORY-2538",
   "scope": "All Rust workspace members and tests/**/*.rs, tests/**/*.py; reads, all mutations and import bindings. Migration owner: R4 slices B-D.",
   "sites": {
@@ -312,7 +312,6 @@
     "aida-cli-lib/src/lib_part5.rs:acquire_review_lease_with_mode:var:b2f19d32c23343449272": 1,
     "aida-cli-lib/src/lib_part5.rs:drive_root_or_project_root:var_os:a211addfeb8c7b888433": 1,
     "aida-cli-lib/src/lib_part5.rs:handle_review_claim:var:d53689a6806edfa41314": 1,
-    "aida-cli-lib/src/lib_part5.rs:handle_review_record_at:var:d53689a6806edfa41314": 1,
     "aida-cli-lib/src/lib_part5.rs:handle_review_spec:set_var:e6de79e67341001e4f95": 1,
     "aida-cli-lib/src/lib_part5.rs:review_pr_handshake_path:var_os:2beba956dc4146b12a41": 1,
     "aida-cli-lib/src/lib_part5.rs:review_pr_handshake_path:var_os:a211addfeb8c7b888433": 1,

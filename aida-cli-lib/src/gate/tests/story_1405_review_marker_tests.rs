@@ -55,7 +55,7 @@ fn recording_the_verdict_clears_the_marker_and_unblocks_merge() {
     };
     with_review_pr_subject(subject, || {
         crate::gate::review_authority::with_identity_source(reviewer, || {
-            handle_review_record_at(
+            handle_review_record_fixture_at(
                 root.path().to_path_buf(),
                 "BUG-14051",
                 "approved",
@@ -110,7 +110,7 @@ fn record_with_anchor(
     };
     with_review_pr_subject(subject, || {
         crate::gate::review_authority::with_identity_source(reviewer, || {
-            handle_review_record_at(
+            handle_review_record_fixture_at(
                 worktree.to_path_buf(),
                 "BUG-14053",
                 "approved",

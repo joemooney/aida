@@ -22088,8 +22088,7 @@ Options:
           The verdict: approved, request-changes, rejected, or waiting
 
       --sha <SHA>
-          Commit the review examined. Defaults to the branch tip (current HEAD) at the time of
-          recording
+          Commit reviewed. Defaults to the current forge head; a supplied SHA must match
 
       --branch <BRANCH>
           Branch the review examined. Defaults to the checked-out branch
@@ -22110,9 +22109,7 @@ Options:
           the verdict
 
       --pr <PR>
-          Also write the orchestrator's phase-3 handshake file (`.aida/review-verdicts/PR-<N>.json`)
-          for this PR number, at the drive root. This is what lets a headless drain's phase 4
-          proceed
+          Change number. Must match the reviewer lease; otherwise the review stays spec-only
 
       --format <FORMAT>
           Pin the output format regardless of whether stdout is a terminal: human = tables, toon =
@@ -54260,12 +54257,12 @@ Working on aida itself
       {
         "name": "pr",
         "takes_value": true,
-        "help": "Also write the orchestrator's phase-3 handshake file (`.aida/review-verdicts/PR-<N>.json`) for this PR number, at the drive root. This is what lets a headless drain's phase 4 proceed"
+        "help": "Change number. Must match the reviewer lease; otherwise the review stays spec-only"
       },
       {
         "name": "sha",
         "takes_value": true,
-        "help": "Commit the review examined. Defaults to the branch tip (current HEAD) at the time of recording"
+        "help": "Commit reviewed. Defaults to the current forge head; a supplied SHA must match"
       },
       {
         "name": "summary",

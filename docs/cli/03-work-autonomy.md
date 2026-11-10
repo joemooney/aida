@@ -84,6 +84,17 @@ artifacts before running the command from an attested reviewer session. The
 launcher never records or accepts a verdict from log text.
 <!-- trace:BUG-2187 | ai:codex -->
 
+Review verdicts are keyed by the reviewer's leased `PR-N` or `MR-N`, never
+by looking up an open change for the spec. An explicit `--pr N` must agree
+with that lease. Without a change lease or explicit change number, a local
+spec-only review stays unbound. Recording for a change requires the pinned
+forge to report its current head, and a supplied `--sha` must resolve to that head. An old launch envelope
+or checkout cannot substitute for unavailable forge evidence. Ledger reads
+ignore a misplaced spec-routed copy when its matching change-keyed handshake
+proves that the same review belongs to another change; the original events
+remain untouched.
+<!-- trace:BUG-2517 | ai:codex -->
+
 **A standalone implementer reports one result line and an exit code.**
 An orchestrator, relay or advisor session launches an implementer as a
 separate process with Bash, not an in-session subagent:

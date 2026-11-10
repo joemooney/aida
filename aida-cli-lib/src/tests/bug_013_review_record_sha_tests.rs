@@ -24,8 +24,27 @@ fn record(root: &std::path::Path, sha: &str) -> Result<()> {
 /// [`record`] with an optional `--sha` and an optional launch-envelope PR
 /// head (`AIDA_FROM_PR_HEAD_SHA`).
 fn record_with(root: &std::path::Path, sha: Option<&str>, envelope: Option<&str>) -> Result<()> {
+    // trace:BUG-2517 | ai:codex
+    let bin = root.join("bin");
+    std::fs::create_dir_all(&bin).unwrap();
+    let head = resolve_commit_sha(root, "HEAD").unwrap();
+    crate::test_exec::write_executable(&bin.join("gh"), &format!(
+        "#!/bin/sh\nprintf '%s\\n' '{{\"url\":\"https://github.com/test/repo/pull/1301\",\"state\":\"OPEN\",\"headRefOid\":\"{head}\",\"labels\":[]}}'\n"));
+    let _ = crate::test_git::git_command()
+        .arg("-C")
+        .arg(root)
+        .args([
+            "remote",
+            "add",
+            "origin",
+            "https://github.com/test/repo.git",
+        ])
+        .output()
+        .unwrap();
+    let path = format!("{}:/usr/bin:/bin", bin.display());
     let root_str = root.to_str().expect("tempdir path is utf-8");
     let _pinned = crate::test_env::EnvVarsGuard::apply(&[
+        ("PATH", Some(path.as_str())),
         ("AIDA_PROJECT_ROOT", Some(root_str)),
         ("AIDA_DRIVE_ROOT", Some(root_str)),
         ("AIDA_REVIEW_VERDICT_FILE", None),
@@ -59,6 +78,9 @@ fn record_with(root: &std::path::Path, sha: Option<&str>, envelope: Option<&str>
 
 #[test]
 fn a_prefix_of_head_records_the_full_sha() {
+    if crate::test_env::run_path_isolated_test() {
+        return;
+    }
     let (root, head) = project();
     record(root.path(), &head[..8]).expect("a prefix of HEAD must record");
     let recorded = crate::gate::review_verdict::read_recorded_verdict(root.path(), "BUG-1301")
@@ -69,6 +91,9 @@ fn a_prefix_of_head_records_the_full_sha() {
 
 #[test]
 fn a_mistyped_sha_is_refused_and_nothing_is_written() {
+    if crate::test_env::run_path_isolated_test() {
+        return;
+    }
     let (root, head) = project();
     // The incident's shape: the right first seven characters, a wrong eighth.
     let mut typo = head[..8].to_string();
@@ -91,6 +116,9 @@ fn a_mistyped_sha_is_refused_and_nothing_is_written() {
 
 #[test]
 fn a_real_commit_that_is_not_the_head_under_review_is_refused() {
+    if crate::test_env::run_path_isolated_test() {
+        return;
+    }
     let (root, old) = project();
     let new = crate::test_git::commit_fixture(root.path());
     assert_ne!(old, new);
@@ -111,12 +139,13 @@ fn recorded_sha(root: &std::path::Path) -> Option<String> {
         .and_then(|v| v.reviewed_sha)
 }
 
-/// Advisor ruling: a `--pr` whose forge cannot report the head falls back to
-/// the checkout's HEAD. The typed sha is checked against it, and the refusal
-/// does not send the caller to omit `--sha` (that would fail on the same
-/// forge read).
+/// A checkout commit must still match the current pinned forge head.
+// trace:BUG-2517 | ai:codex
 #[test]
-fn an_unreachable_forge_checks_against_the_checkout_head() {
+fn a_checkout_commit_must_match_the_current_forge_head() {
+    if crate::test_env::run_path_isolated_test() {
+        return;
+    }
     let (root, old) = project();
     let new = crate::test_git::commit_fixture(root.path());
     let err = format!(
@@ -127,7 +156,10 @@ fn an_unreachable_forge_checks_against_the_checkout_head() {
         err.contains(&format!("the head under review is {new}")),
         "{err}"
     );
-    assert!(err.contains("checkout's HEAD stands in"), "{err}");
+    assert!(
+        err.contains("current head") || err.contains("head under review"),
+        "{err}"
+    );
     assert!(!err.contains("omit `--sha`"), "{err}");
     assert!(recorded_sha(root.path()).is_none());
 
@@ -135,35 +167,26 @@ fn an_unreachable_forge_checks_against_the_checkout_head() {
     assert_eq!(recorded_sha(root.path()), Some(new));
 }
 
-/// The launch envelope's PR head outranks the checkout: `--sha` must match
-/// the envelope, even when the checkout has moved past it.
+/// trace:BUG-2517 | ai:codex
 #[test]
-fn an_envelope_head_is_the_head_a_typed_sha_must_match() {
-    let (root, pr_head) = project();
-    let checkout = crate::test_git::commit_fixture(root.path());
-    let err = format!(
-        "{:#}",
-        record_with(root.path(), Some(&checkout), Some(&pr_head))
-            .expect_err("the checkout's HEAD is not the PR head")
-    );
-    assert!(
-        err.contains(&format!("the head under review is {pr_head}")),
-        "{err}"
-    );
-    assert!(err.contains("omit `--sha`"), "{err}");
+fn bug_2517_stale_envelope_cannot_override_the_current_forge_head() {
+    if crate::test_env::run_path_isolated_test() {
+        return;
+    }
+    let (root, old) = project();
+    let current = crate::test_git::commit_fixture(root.path());
+    assert!(record_with(root.path(), Some(&old), Some(&old)).is_err());
     assert!(recorded_sha(root.path()).is_none());
-
-    record_with(root.path(), Some(&pr_head[..8]), Some(&pr_head))
-        .expect("a prefix of the envelope head records");
-    assert_eq!(recorded_sha(root.path()), Some(pr_head));
+    record_with(root.path(), Some(&current[..8]), Some(&old)).unwrap();
+    assert_eq!(recorded_sha(root.path()), Some(current));
 }
 
-/// Without `--sha` the head under review is recorded as git's full sha, even
-/// when the envelope carries an abbreviated one.
 #[test]
 fn the_default_path_records_the_full_sha() {
-    let (root, pr_head) = project();
-    crate::test_git::commit_fixture(root.path());
-    record_with(root.path(), None, Some(&pr_head[..10])).expect("the default path records");
-    assert_eq!(recorded_sha(root.path()), Some(pr_head));
+    if crate::test_env::run_path_isolated_test() {
+        return;
+    }
+    let (root, head) = project();
+    record_with(root.path(), None, Some(&head[..10])).unwrap();
+    assert_eq!(recorded_sha(root.path()), Some(head));
 }

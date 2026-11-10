@@ -2415,3 +2415,52 @@ fn bug_2451_publication_refuses_two_found_changes_even_from_original_head() {
     }
     assert!(forge.opened.lock().unwrap().is_empty());
 }
+
+// trace:BUG-2517 | ai:codex
+#[test]
+fn bug_2517_foreign_copy_is_ignored_without_rewriting_history() {
+    let (_tmp, root) = root();
+    let _env = uncontained();
+    let spec = GateSpec::resolve(&root, "BUG-2492");
+    let first = ChangeKey::pr(3651);
+    let second = ChangeKey::pr(3764);
+    let old = record("approved", &ts(1), Some(&attestation("reviewer")));
+    store::append_one(&root, event::verdict_event(&root, first, &old, Some(&spec))).unwrap();
+    let mut foreign = record("waiting", &ts(2), Some(&attestation("reviewer")));
+    foreign.insert("reviewed_sha".into(), serde_json::json!(OTHER_HEAD));
+    store::append_one(
+        &root,
+        event::verdict_event(&root, first, &foreign, Some(&spec)),
+    )
+    .unwrap();
+    foreign.insert("mode".into(), serde_json::json!(project::PHASE3_MODE));
+    store::append_one(
+        &root,
+        event::verdict_event(&root, second, &foreign, Some(&spec)),
+    )
+    .unwrap();
+    // A failed derived-index write must not hide the correct PR's witness.
+    std::fs::remove_file(ledger_dir(&root).join("by-spec/BUG-2492.json")).unwrap();
+    let file = store::ledger_file(&root, first);
+    let before = std::fs::read(&file).unwrap();
+    assert_eq!(
+        project::newest_verdict_event(&root, "PR-3651")
+            .unwrap()
+            .verdict_record(),
+        Some(&old)
+    );
+    let events = checked::read_change_events(&root, first, &mut Default::default()).unwrap();
+    assert_eq!(
+        project::newest_of(events).unwrap().verdict_record(),
+        Some(&old)
+    );
+    let mut distinct = foreign.clone();
+    distinct.remove("mode");
+    distinct.insert("summary".into(), serde_json::json!("a distinct review"));
+    let a = event::verdict_event(&root, first, &distinct, Some(&spec));
+    let b = event::verdict_event(&root, second, &foreign, Some(&spec));
+    let mut distinct_events = vec![a];
+    project::filter_miskeyed_events(&mut distinct_events, &[b]);
+    assert_eq!(distinct_events.len(), 1);
+    assert_eq!(std::fs::read(file).unwrap(), before);
+}

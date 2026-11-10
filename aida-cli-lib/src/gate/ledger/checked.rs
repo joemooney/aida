@@ -360,6 +360,11 @@ pub(crate) fn discover(root: &Path, budget: &mut Budget) -> Result<Option<Discov
             }
         }
     }
+    // trace:BUG-2517 | ai:codex
+    let witnesses: Vec<_> = bound.values().flatten().cloned().collect();
+    for events in bound.values_mut() {
+        super::project::filter_miskeyed_events(events, &witnesses);
+    }
     Ok(Some(Discovery {
         by_spec,
         discovered,
@@ -430,6 +435,27 @@ impl Discovery {
     }
 }
 
+/// Ignore an old spec-routed copy when the PR-keyed handshake proves that
+/// the very same act of review belongs to another change. Current heads
+/// alone cannot disqualify historical reviews (including force-pushed heads).
+/// This is read-only: neither ledger nor sequence history is repaired.
+// trace:BUG-2517 | ai:codex
+pub(crate) fn filter_miskeyed(
+    root: &Path,
+    events: Vec<GateEvent>,
+    budget: &mut Budget,
+) -> Result<Vec<GateEvent>, Unsafe> {
+    // The by-spec files are hints, not completeness evidence: an earlier
+    // append may have succeeded while indexing failed. Use pinned discovery.
+    let Some(discovery) = discover(root, budget)? else {
+        return Ok(events);
+    };
+    let witnesses: Vec<_> = discovery.bound.into_values().flatten().collect();
+    let mut events = events;
+    super::project::filter_miskeyed_events(&mut events, &witnesses);
+    Ok(events)
+}
+
 /// STORY-2324: every event on `change`'s ledger under `root`, read strictly
 /// (all kinds, not just verdicts); empty when the ledger or the file does
 /// not exist.
@@ -443,7 +469,8 @@ pub(crate) fn read_change_events(
         return Ok(Vec::new());
     };
     let key = change.as_key();
-    Ok(read_change(&ledger, &format!("{key}.jsonl"), &key, budget)?.unwrap_or_default())
+    let events = read_change(&ledger, &format!("{key}.jsonl"), &key, budget)?.unwrap_or_default();
+    filter_miskeyed(root, events, budget)
 }
 
 /// STORY-2324: the `by-spec` entries for one spec `label` under `root`, read

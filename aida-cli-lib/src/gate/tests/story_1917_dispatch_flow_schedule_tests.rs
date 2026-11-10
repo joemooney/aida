@@ -2968,7 +2968,7 @@ fn ungranted_artifact_requires_fresh_authorized_review_in_namespace() {
         ..Default::default()
     };
     ra::with_identity_source(identity, || {
-        crate::handle_review_record_at(
+        crate::handle_review_record_fixture_at(
             f.root.clone(),
             "TASK-100",
             "approved",
