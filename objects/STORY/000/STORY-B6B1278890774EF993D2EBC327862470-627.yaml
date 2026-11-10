@@ -8,7 +8,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-10T03:52:00.571796159Z
-modified_at: 2026-11-10T17:02:44.253765126Z
+modified_at: 2026-11-10T17:34:38.055804351Z
 req_type: Story
 comments:
 - id: 01a1c399-6840-7383-843e-9930f6eaa3f7
@@ -220,6 +220,19 @@ comments:
         thread 'help_and_alias_list_show_externals' (163193) panicked at aida-cli/tests/story_1641_external_subcommands.rs:311:9:
   created_at: 2026-11-10T17:00:07.522906932Z
   modified_at: 2026-11-10T17:00:07.522906932Z
+  session_id: 01a1c39a-801a-7bd1-8da9-c955a6707f0b
+  harness_version: 2.1.321 (Claude Code)
+- id: 01a1c686-afe7-7bb1-be3a-3c6be4c55967
+  author: joe
+  content: |-
+    CI FAILURES at 48c6302ec8b7 (run 42862826193). Fix exactly these before pushing; a push without a code change for them will fail again and must not be made:
+    error: test run failed
+            FAIL  aida-cli::story_1641_external_subcommands builtin_shadows_external
+            FAIL  aida-cli::story_1641_external_subcommands help_and_alias_list_show_externals
+        thread 'builtin_shadows_external' (161645) panicked at aida-cli/tests/story_1641_external_subcommands.rs:170:5:
+        thread 'help_and_alias_list_show_externals' (161729) panicked at aida-cli/tests/story_1641_external_subcommands.rs:315:9:
+  created_at: 2026-11-10T17:34:38.055804351Z
+  modified_at: 2026-11-10T17:34:38.055804351Z
   session_id: 01a1c39a-801a-7bd1-8da9-c955a6707f0b
   harness_version: 2.1.321 (Claude Code)
 history:
