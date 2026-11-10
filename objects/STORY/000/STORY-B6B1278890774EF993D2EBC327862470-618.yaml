@@ -33,7 +33,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-09T16:33:51.967266330Z
-modified_at: 2026-11-10T09:03:49.447884023Z
+modified_at: 2026-11-10T09:05:15.631153225Z
 req_type: Story
 tags:
 - area:ci
@@ -60,6 +60,13 @@ comments:
   modified_at: 2026-11-10T02:01:50.604867268Z
   session_id: 01a1beff-fc3b-78e2-93e2-9b0c283b0339
   harness_version: 2.1.319 (Claude Code)
+- id: 01a1c4b4-576f-7081-8fef-54d2c1111b1e
+  author: joe
+  content: 'ADVISOR RULING (2026-11-10 09:05 UTC) — binding for PR #3754 sketch rework at head a9e8d2ab72 (docs only; edit docs/plans/2026-11-10-story-2695-dell1-parallel-cached-runner.md, nothing else). Apply exactly the four review findings, which restate the advisor signoff: (1) lines 83-100: TRAIN runs are pull_request runs on host-created train/ branches; admission matches repository, PR, exact head SHA and branch against the host train record (no merge_group, no branch-name-only evidence). (2) lines 62-108: v1 = TRAIN and MAIN only; ordinary same-repo and fork PR CI stays hosted; PR cache/class explicitly deferred in routing, uid, cache table and acceptance. (3) lines 143-202: add binding slices: S1 captures exact failures under installed unit properties and repairs the seven env tests with no runner/workflow/routing change; S2 owns two slots, cache, admission, budgets and runbook; S3 owns operator installation, activation and the matched ten-train measurement, and alone completes STORY-2695. (4) lines 69-81: the CPU/memory gate accounts for CI plus up to eight concurrent Codex cold-build lanes; measure that combined load and reserve headroom before accepting CI limits. Title unchanged (Refs STORY-2695). FASTTRACK gate: make check-ci-fast only.'
+  created_at: 2026-11-10T09:05:15.631153225Z
+  modified_at: 2026-11-10T09:05:15.631153225Z
+  session_id: 01a1c39a-801a-7bd1-8da9-c955a6707f0b
+  harness_version: 2.1.321 (Claude Code)
 history:
 - id: 01a1c325-9cdb-7b81-a057-a76e1b9c8512
   author: joe
