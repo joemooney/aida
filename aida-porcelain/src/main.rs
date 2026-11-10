@@ -34,15 +34,17 @@ fn parse(argv: Vec<OsString>) -> Result<clap::ArgMatches, clap::Error> {
 fn main() {
     let matches = parse(std::env::args_os().collect()).unwrap_or_else(|e| e.exit());
     let environment = aida_core::exec_context::Environment::capture();
-    let format = matches
-        .get_one::<String>("format")
-        .map(String::as_str)
-        .or_else(|| environment.var("AIDA_OUTPUT_FORMAT").ok())
-        .map(|value| value.trim().to_ascii_lowercase());
-    let output_json = format.as_deref() == Some("json");
-    let agent = match format.as_deref() {
-        Some("human") => false,
-        Some("toon" | "json") => true,
+    use aida_core::output_format::{parse_output_format, OutputFormat};
+    let format = parse_output_format(
+        matches
+            .get_one::<String>("format")
+            .map(String::as_str)
+            .or_else(|| environment.var("AIDA_OUTPUT_FORMAT").ok()),
+    );
+    let output_json = format == Some(OutputFormat::Json);
+    let agent = match format {
+        Some(OutputFormat::Human) => false,
+        Some(OutputFormat::Toon | OutputFormat::Json) => true,
         _ => environment.var("AIDA_AGENT_OUTPUT").map_or_else(
             |_| !std::io::stdout().is_terminal(),
             |value| {

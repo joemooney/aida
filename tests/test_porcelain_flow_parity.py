@@ -47,8 +47,8 @@ esac
         def snapshot():
             return {str(p.relative_to(root)): p.read_bytes() for p in root.rglob("*") if p.is_file()}
         before = snapshot()
-        def invoke(exe, args):
-            result = subprocess.run([exe, *args], cwd=root, env=env, capture_output=True)
+        def invoke(exe, args, overrides=None):
+            result = subprocess.run([exe, *args], cwd=root, env={**env, **(overrides or {})}, capture_output=True)
             assert before == snapshot(), f"{exe} {args} changed fixture state"
             return result
 
@@ -68,6 +68,20 @@ esac
                 assert outputs[0].stdout == outputs[1].stdout, [p.stdout for p in outputs]
                 assert outputs[0].stderr == outputs[1].stderr, [p.stderr for p in outputs]
                 assert all(message in p.stdout + p.stderr for p in outputs)
+        # Environment aliases must pin both error channels even when the agent
+        # preference would otherwise select the opposite format.
+        def check_alias_errors(bounds):
+            for alias, canonical, agent in [(" TABLE ", "human", "1"), (" AgEnT ", "toon", "0")]:
+                args = ["flow", "report", *bounds]
+                outputs = [invoke(exe, args, {"AIDA_OUTPUT_FORMAT": alias, "AIDA_AGENT_OUTPUT": agent})
+                           for exe in [builtin, porcelain]]
+                expected = invoke(builtin, [*args, "--format", canonical])
+                for result in outputs:
+                    assert result.returncode == expected.returncode != 0
+                    assert result.stdout == expected.stdout, [result.stdout, expected.stdout]
+                    assert result.stderr == expected.stderr, [result.stderr, expected.stderr]
+        check_alias_errors(["--since", "bad"])
+        check_alias_errors(["--since", "2026-11-10", "--until", "2026-11-09"])
         # A missing history ref fails inside the reader, after argument parsing.
         git("update-ref", "-d", "refs/remotes/origin/main")
         before = snapshot()
@@ -78,6 +92,7 @@ esac
             assert outputs[0].returncode == outputs[1].returncode
             assert outputs[0].stdout == outputs[1].stdout, [p.stdout for p in outputs]
             assert outputs[0].stderr == outputs[1].stderr, [p.stderr for p in outputs]
+        check_alias_errors(["--since", "2026-11-09"])
         assert before == snapshot(), "report changed fixture state"
     print("PASS: built-in/porcelain text and JSON parity; fixture state unchanged")
 
