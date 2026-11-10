@@ -335,6 +335,13 @@ history:
   session_id: 01a1beff-fc3b-78e2-93e2-9b0c283b0339
   harness_version: 2.1.319 (Claude Code)
   changes: []
+- id: 01a1c2ee-186b-75a1-b903-660bb789041c
+  author: aida-session-start
+  timestamp: 2026-11-10T00:49:06.155718458Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: InProgress
 - id: 01a1c2f1-33a0-7110-a761-34c5cafefe6b
   author: joe
   timestamp: 2026-11-10T00:52:29.728588361Z
