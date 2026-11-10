@@ -8,7 +8,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-10T03:07:38.542859262Z
-modified_at: 2026-11-10T11:57:32.470093161Z
+modified_at: 2026-11-10T11:57:37.257743182Z
 req_type: Bug
 comments:
 - id: 01a1c3a1-bccc-7ef0-b6b7-2fdb52e783f5
@@ -125,6 +125,20 @@ comments:
   content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: Full sweep: stale queue_cmd import breaks compilation after metadata-helper rename; required CI queued. BUG-2515 (bug protocol): met (three test files touched).. It was punted on: blocked-dependency: Current head 9905896784 already contains the forge metadata migration and exact-count ratchet correction; all 12 requested targeted tests pass. No source edits warranted under binding ruling excluding status_sections failures (STORY-2695 S1). Required make check-ci-fast cannot finish in this lane: TUI seam invokes cargo check directly, but local Cargo must use lane job runner; wrapper delegation is rejected by fast-gate nested-aida guard. Host validation/manual gate needed; do not publish an empty repair or change excluded tests.. No triage reason was given.'
   created_at: 2026-11-10T11:57:32.470088816Z
   modified_at: 2026-11-10T11:57:32.470088816Z
+  session_id: 01a1c39a-801a-7bd1-8da9-c955a6707f0b
+  harness_version: 2.1.321 (Claude Code)
+- id: 01a1c552-224e-7f01-8987-26f2039a4877
+  author: joe
+  content: |-
+    REVIEW FINDINGS TO ADDRESS (BUG-2515):
+    Verdict: CHANGES REQUESTED
+    Reviewed commit: bdb1f6f8a1a9
+    Recorded: 2026-11-10T11:28:24.690879350+00:00
+    Findings:
+    1. P1 aida-cli-lib/src/queue_cmd/mod.rs:29: Update the explicit crate import from fetch_pr_ship_metadata_via_gh to fetch_pr_ship_metadata_via_forge. This PR deletes the old helper in pr_cmd.rs:6926 but leaves queue_cmd/mod.rs importing it, causing an unresolved import (E0432); queue_cmd/work.rs:6638 now calls the new helper through use super::* without importing it in the parent, also leaving that call unresolved. The library cannot compile. Search for the removed identifier repository-wide and validate the corrected imports in PR CI. Source-proven; local builds/tests prohibited by review-watch policy.
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
+  created_at: 2026-11-10T11:57:36.718490409Z
+  modified_at: 2026-11-10T11:57:36.718490409Z
   session_id: 01a1c39a-801a-7bd1-8da9-c955a6707f0b
   harness_version: 2.1.321 (Claude Code)
 history:
