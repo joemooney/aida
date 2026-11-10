@@ -65,13 +65,16 @@ fn removing_an_empty_worktree_retires_then_forgets_its_source() {
 }
 
 #[test]
-fn a_mail_bearing_worktree_is_kept_and_the_refusal_names_activation() {
+fn an_unpreserved_mail_bearing_worktree_is_kept() {
     let (dir, wt) = repo_with_worktree();
     seed_mail(&wt);
     let err = remove_worktree_retained(dir.path(), &wt, true, "test").unwrap_err();
     let refusal = refusal_of(&err);
-    assert!(refusal.needs_activation, "{refusal}");
-    assert!(refusal.reason.contains(ACTIVATION_COMMAND), "{refusal}");
+    assert!(!refusal.needs_activation, "{refusal}");
+    assert!(
+        refusal.reason.contains("canonical preservation"),
+        "{refusal}"
+    );
     assert!(wt.exists(), "the tree is kept");
     assert_eq!(files_under(&mailbox(&wt)), SEEDED);
     assert_open(&wt);
@@ -233,7 +236,8 @@ fn a_clone_retires_under_its_main_anchor_and_refuses_without_a_binding() {
     let clones = tempfile::tempdir().unwrap();
     let clone = clones.path().join("aida-seat-x");
     std::fs::create_dir_all(mailbox(&clone)).unwrap();
-    std::fs::write(mailbox(&clone).join("m.json"), "{}").unwrap();
+    write_local_message(&clone, &message("m")).unwrap();
+    super::message_state_tests::preserve_mail_at(main.path(), &mailbox(&clone));
 
     // No verified binding: a mail-bearing clone is kept.
     let refusal = retire_clone_checkout(None, &clone, "test").unwrap_err();
@@ -298,7 +302,7 @@ fn a_pool_return_with_unretirable_mail_keeps_the_tree_leased() {
     let path = acquire(root, &pool_opts()).unwrap();
     write_local_message(&path, &message("old")).unwrap();
     let err = return_to_pool(root, &path).unwrap_err();
-    assert!(refusal_of(&err).needs_activation, "{err:#}");
+    assert!(!refusal_of(&err).needs_activation, "{err:#}");
     let entry = read_state(root).unwrap().entries[0].clone();
     assert!(entry.owner_pid.is_some(), "still owned");
     assert!(entry.retiring.is_none(), "the staged mark is cleared");
@@ -315,6 +319,7 @@ fn a_pool_reuse_never_shows_the_previous_occupants_mail() {
     let path = acquire(root, &pool_opts()).unwrap();
     activate(&path);
     write_local_message(&path, &message("old")).unwrap();
+    super::message_state_tests::preserve_canonical(&path);
     let old = source(&path);
     return_to_pool(root, &path).unwrap();
     assert!(!mailbox(&path).exists(), "the return retired the old mail");
@@ -437,6 +442,7 @@ fn a_failed_pool_removal_reopens_its_mail_and_stops_later_targets() {
     let (first, second) = two_idle_trees(root);
     activate(&first);
     write_local_message(&first, &message("back")).unwrap();
+    super::message_state_tests::preserve_canonical(&first);
     std::fs::create_dir_all(second.join(".aida")).unwrap();
     // A locked worktree refuses `git worktree remove --force`.
     git(root, &["worktree", "lock", first.to_str().unwrap()]);
@@ -470,7 +476,7 @@ fn a_teardown_refusal_keeps_the_tree_and_runs_no_hook() {
     let hook = format!("touch {}", marker.display());
     let err =
         crate::worktree_pool_destroy::teardown_worktree_path(dir.path(), &wt, &[hook]).unwrap_err();
-    assert!(refusal_of(&err).needs_activation, "{err:#}");
+    assert!(!refusal_of(&err).needs_activation, "{err:#}");
     assert!(wt.exists(), "the tree is kept");
     assert!(
         !marker.exists(),
@@ -551,6 +557,7 @@ fn a_pre_destroy_hook_that_writes_mail_keeps_the_torn_down_tree() {
     let (dir, wt) = repo_with_worktree();
     activate(&wt);
     write_local_message(&wt, &message("old")).unwrap();
+    super::message_state_tests::preserve_canonical(&wt);
     let hook = "printf '{}' > .aida/mailbox/late.json".to_string();
     let err =
         crate::worktree_pool_destroy::teardown_worktree_path(dir.path(), &wt, &[hook]).unwrap_err();
@@ -572,6 +579,7 @@ fn a_pre_destroy_hook_that_writes_mail_keeps_the_pool_tree() {
     let (first, second) = two_idle_trees(root);
     activate(&first);
     write_local_message(&first, &message("old")).unwrap();
+    super::message_state_tests::preserve_canonical(&first);
     std::fs::create_dir_all(second.join(".aida")).unwrap();
     // The hook runs in every tree; it writes into `first`'s mailbox only.
     let late = mailbox(&first).join("late.json");
@@ -699,7 +707,8 @@ fn a_writer_inside_a_bound_clone_is_admitted_and_fenced_under_mains_anchor() {
     assert_eq!(record.permits.len(), 1, "the permit is under main's anchor");
     permit.complete().unwrap();
 
-    std::fs::write(mailbox(&clone).join("m.json"), "{}").unwrap();
+    write_local_message(&clone, &message("m")).unwrap();
+    super::message_state_tests::preserve_mail_at(main.path(), &mailbox(&clone));
     let retirement = retire_clone_checkout(Some(main.path()), &clone, "test")
         .unwrap()
         .expect("retired");
@@ -717,14 +726,15 @@ fn a_writer_inside_a_bound_clone_is_admitted_and_fenced_under_mains_anchor() {
     assert!(admit_local_write(&clone).unwrap().is_none());
 }
 
-/// Only the build that recorded the activation honours it: a record from any
-/// other build, or one with no build, reads as not activated.
+/// An old build's activation is informational; message preservation and
+/// the fresh writer scan decide retirement.
+// trace:TASK-3420 | ai:codex
 #[test]
-fn r3_f4_a_mail_bearing_retirement_names_the_other_build_that_recorded() {
+fn another_builds_activation_does_not_gate_preserved_mail() {
     let dir = repo();
     seed_mail(dir.path());
+    super::message_state_tests::preserve_canonical(dir.path());
     let anchor = source(dir.path()).anchor;
-    let this = test_source_build();
     write_json(
         &anchor.join(ACTIVATION_FILE),
         &Activation {
@@ -735,17 +745,10 @@ fn r3_f4_a_mail_bearing_retirement_names_the_other_build_that_recorded() {
         },
     )
     .unwrap();
-    let refusal = retire_checkout(dir.path(), "test").unwrap_err();
-    assert!(refusal.needs_activation);
-    assert!(
-        refusal
-            .reason
-            .contains("different build (0.0.0+other; this is ")
-            && refusal.reason.contains(&this)
-            && refusal.reason.contains(ACTIVATION_COMMAND),
-        "{}",
-        refusal.reason
-    );
+    let retirement = retire_checkout(dir.path(), "test")
+        .unwrap()
+        .expect("retired");
+    retirement.reopen().unwrap();
 }
 
 /// BUG-2411: a dev rebuild changes the source build, so the recorded
@@ -772,6 +775,7 @@ fn bug_2411_another_builds_activation_is_revalidated_by_a_fresh_scan() {
     )
     .unwrap();
     let before = std::fs::read(&record_file).unwrap();
+    super::message_state_tests::preserve_canonical(dir.path());
 
     // Another build's writer is running: refused, nothing moved.
     super::activation::FRESH_SCAN.with(|f| f.set(false));
@@ -1167,6 +1171,7 @@ fn a_retired_source_keeps_its_cohort_gate_from_the_retained_copy() {
     .unwrap();
     let sidecar = DeliverySidecar::cohort("cohort", "reviewer", 5, &[member.clone()]);
     crate::mailbox::write_local_message_with_deliveries(&wt, &msg, Some(&sidecar)).unwrap();
+    super::message_state_tests::preserve_canonical(&wt);
     // The replica elsewhere carries no sidecar.
     write_local_message(dir.path(), &msg).unwrap();
 

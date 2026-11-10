@@ -306,6 +306,17 @@ sees only the canonical copy of a role message therefore treats it as
 ordinary role mail: every reader of the role there sees it and the role
 inbox acknowledges it.
 
+Mailbox source retirement checks message state. Delivered mail, including
+unacknowledged mail, must have a matching readable copy in the canonical store
+before its source can retire; use `aida mailbox sync` to preserve it. A private
+retained copy alone does not meet that condition. Queued mail keeps its source
+until delivery is bound, even when a canonical copy exists. Retirement preserves
+the delivery sidecars and does not acknowledge messages. After fencing and
+quiescing writers, a fresh writer-admission scan under the lifecycle lock must
+succeed before retirement commits. An activation record's build identity no
+longer decides whether a source can retire.
+<!-- trace:TASK-3420 | ai:codex -->
+
 ## Cross-vendor: MCP equivalents
 
 Any MCP-speaking agent (Codex, Cursor, etc.) participates through two MCP tools:
