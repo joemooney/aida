@@ -18,7 +18,7 @@ fn bound(s: &str) -> Result<DateTime<Utc>> {
         .or_else(|| timestamp(&json!(format!("{s}T00:00:00Z"))))
         .context("expected RFC3339 timestamp or YYYY-MM-DD")
 }
-pub(crate) fn run(matches: &clap::ArgMatches, output_json: bool) -> Result<()> {
+pub(crate) fn run(matches: &clap::ArgMatches, output_json: bool, error_format: &str) -> Result<()> {
     let FlowCommand::Report { since, until, json } = FlowArgs::from_arg_matches(matches)?.command;
     let since = bound(&since)?;
     let until = until
@@ -27,7 +27,7 @@ pub(crate) fn run(matches: &clap::ArgMatches, output_json: bool) -> Result<()> {
         .transpose()?
         .unwrap_or_else(Utc::now);
     anyhow::ensure!(since <= until, "since must not be later than until");
-    let report = crate::flow_runtime::report(since, until)?;
+    let report = crate::flow_runtime::report(since, until, error_format)?;
     let rows = report["prs"]
         .as_array()
         .context("AIDA report missing prs")?;

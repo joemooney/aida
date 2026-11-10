@@ -796,11 +796,16 @@ Development builds also provide `aida-porcelain flow report ...` and
 `aida-flow report ...`, with the same text/JSON report and window flags.
 `aida dev build --install-links` installs the companion and the relative
 `aida-flow -> aida-porcelain` alias. The built-in `aida flow` retains precedence.
-The companion reads core's public observational gate-ledger API; it does not
-open a mutable store, refresh caches, acquire leases or update the queue.
-Development promotion and rollback include the companion. When rolling back
-to a generation predating porcelain, the additive companion is retained;
-subsequent generations rotate it along with the other binaries.
+The companion renders the built-in's public JSON report. It selects the reader
+from `AIDA_BIN`, then `aida` beside the running companion, then `aida` on `PATH`.
+An explicit selection is authoritative: execution failures do not try another
+reader. There is no additional report timeout; the built-in owns query budgets.
+Child failures preserve stdout, stderr and exit code (signals use 128 + signal).
+The companion does not open a mutable store, refresh caches, acquire leases or
+update the queue.
+Development promotion and rollback restore each generation’s binary and alias
+inventory. Rolling back to a generation predating porcelain removes the
+companion and its alias; rolling forward restores them.
 Release archives, `install.sh` and upgrade support remain follow-up work.
 
 <!-- trace:STORY-2699 | ai:codex -->

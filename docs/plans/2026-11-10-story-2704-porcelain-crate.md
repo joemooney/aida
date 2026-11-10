@@ -194,7 +194,10 @@ runtime tests or completion credit for STORY-2704 or STORY-2699.
 
 The advisor ruling supersedes the migration sketch during built-in overlap.
 The built-in owns flow evidence collection. Porcelain reads its public
-`AIDA_BIN flow report --json` output and renders it; it never spawns `gh`.
+`aida flow report --json` output and renders it; it never spawns `gh`.
+The final round-3 ruling selects `AIDA_BIN`, then the running binary’s sibling
+`aida`, then PATH. It adds no report timeout and preserves child failure output
+and exit code instead of rendering the failure again.
 No porcelain exemption is added to the forge-read ratchet. The parity test
 runs without `ignore` against checkout-built binaries, with fixture forge
 responses and filesystem snapshots.

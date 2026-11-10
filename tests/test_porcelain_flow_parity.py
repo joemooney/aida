@@ -68,6 +68,16 @@ esac
                 assert outputs[0].stdout == outputs[1].stdout, [p.stdout for p in outputs]
                 assert outputs[0].stderr == outputs[1].stderr, [p.stderr for p in outputs]
                 assert all(message in p.stdout + p.stderr for p in outputs)
+        # A missing history ref fails inside the reader, after argument parsing.
+        git("update-ref", "-d", "refs/remotes/origin/main")
+        before = snapshot()
+        for suffix in [[], ["--format", "human"], ["--format", "toon"], ["--format", "json"]]:
+            args = ["flow", "report", "--since", "2026-11-09", *suffix]
+            outputs = [invoke(exe, args) for exe in [builtin, porcelain]]
+            assert outputs[0].returncode != 0
+            assert outputs[0].returncode == outputs[1].returncode
+            assert outputs[0].stdout == outputs[1].stdout, [p.stdout for p in outputs]
+            assert outputs[0].stderr == outputs[1].stderr, [p.stderr for p in outputs]
         assert before == snapshot(), "report changed fixture state"
     print("PASS: built-in/porcelain text and JSON parity; fixture state unchanged")
 

@@ -40,25 +40,39 @@ fn main() {
         .or_else(|| environment.var("AIDA_OUTPUT_FORMAT").ok())
         .map(|value| value.trim().to_ascii_lowercase());
     let output_json = format.as_deref() == Some("json");
+    let agent = match format.as_deref() {
+        Some("human") => false,
+        Some("toon" | "json") => true,
+        _ => environment.var("AIDA_AGENT_OUTPUT").map_or_else(
+            |_| !std::io::stdout().is_terminal(),
+            |value| {
+                !matches!(
+                    value.trim().to_ascii_lowercase().as_str(),
+                    "" | "0" | "false" | "no" | "off"
+                )
+            },
+        ),
+    };
     if let Err(e) = flow::run(
         matches.subcommand_matches("flow").expect("required tenant"),
         output_json,
+        if agent { "toon" } else { "human" },
     ) {
+        if let Some(failure) = e.downcast_ref::<flow_runtime::ReaderFailure>() {
+            use std::io::Write;
+            use std::os::unix::process::ExitStatusExt;
+            let _ = std::io::stdout().write_all(&failure.0.stdout);
+            let _ = std::io::stderr().write_all(&failure.0.stderr);
+            std::process::exit(
+                failure
+                    .0
+                    .status
+                    .code()
+                    .unwrap_or_else(|| 128 + failure.0.status.signal().unwrap_or(1)),
+            );
+        }
         // Preserve the built-in's runtime-error channel and TOON scalar even
         // for --format json. Report JSON itself remains unchanged.
-        let agent = match format.as_deref() {
-            Some("human") => false,
-            Some("toon" | "json") => true,
-            _ => environment.var("AIDA_AGENT_OUTPUT").map_or_else(
-                |_| !std::io::stdout().is_terminal(),
-                |value| {
-                    !matches!(
-                        value.trim().to_ascii_lowercase().as_str(),
-                        "" | "0" | "false" | "no" | "off"
-                    )
-                },
-            ),
-        };
         let message = format!("{e:?}");
         if agent {
             let summary = message.lines().next().unwrap_or("").trim();

@@ -89,14 +89,97 @@ fn report_multicall_parity_and_no_writes() {
             .code(),
         Some(1)
     );
-    let missing_reader = Command::new(env!("CARGO_BIN_EXE_aida-porcelain"))
-        .args(["flow", "report", "--since", "2026-11-09"])
+    assert_eq!(before, snapshot(dir.path()));
+}
+
+#[test]
+fn reader_fallback_and_failure_passthrough() {
+    let dir = tempfile::tempdir().unwrap();
+    let installed = dir.path().join("installed");
+    let path_bin = dir.path().join("path");
+    fs::create_dir(&installed).unwrap();
+    fs::create_dir(&path_bin).unwrap();
+    let companion = installed.join("aida-porcelain");
+    fs::copy(env!("CARGO_BIN_EXE_aida-porcelain"), &companion).unwrap();
+    let write_reader = |path: &Path, body: &str| {
+        fs::write(path, format!("#!/bin/sh\n{body}\n")).unwrap();
+        fs::set_permissions(path, fs::Permissions::from_mode(0o755)).unwrap();
+    };
+    let path_reader = path_bin.join("aida");
+    let sibling = installed.join("aida");
+    let explicit = dir.path().join("explicit");
+    write_reader(
+        &path_reader,
+        "printf 'path-out'; printf 'path-err' >&2; exit 23",
+    );
+    write_reader(
+        &sibling,
+        "printf 'sibling-out'; printf 'sibling-err' >&2; exit 24",
+    );
+    write_reader(
+        &explicit,
+        "printf 'explicit-out'; printf 'explicit-err' >&2; exit 25",
+    );
+    let run = |selection: Option<&Path>, format: &str| {
+        let mut cmd = Command::new(&companion);
+        cmd.args([
+            "flow",
+            "report",
+            "--since",
+            "2026-11-09",
+            "--format",
+            format,
+        ])
         .env_remove("AIDA_BIN")
-        .env_remove("AIDA_OUTPUT_FORMAT")
-        .env("AIDA_AGENT_OUTPUT", "1")
+        .env("PATH", &path_bin);
+        if let Some(selection) = selection {
+            cmd.env("AIDA_BIN", selection);
+        }
+        cmd.output().unwrap()
+    };
+    for (selection, label, code) in [
+        (Some(explicit.as_path()), "explicit", 25),
+        (None, "sibling", 24),
+    ] {
+        let output = run(selection, "json");
+        assert_eq!(output.status.code(), Some(code));
+        assert_eq!(output.stdout, format!("{label}-out").as_bytes());
+        assert_eq!(output.stderr, format!("{label}-err").as_bytes());
+    }
+    for format in ["human", "toon", "json"] {
+        let output = run(Some(&explicit), format);
+        assert_eq!(output.status.code(), Some(25));
+        assert_eq!(output.stdout, b"explicit-out");
+        assert_eq!(output.stderr, b"explicit-err");
+    }
+    fs::remove_file(sibling).unwrap();
+    let output = run(None, "json");
+    assert_eq!(output.status.code(), Some(23));
+    assert_eq!(output.stdout, b"path-out");
+    assert_eq!(output.stderr, b"path-err");
+    // An explicit missing binary must not silently select the PATH reader.
+    assert_eq!(
+        run(Some(&dir.path().join("missing")), "json").status.code(),
+        Some(1)
+    );
+}
+
+#[test]
+fn successful_reader_can_exceed_former_report_deadline() {
+    let dir = tempfile::tempdir().unwrap();
+    let reader = dir.path().join("reader");
+    fs::write(
+        &reader,
+        "#!/bin/sh\n/bin/sleep 46\necho '{\"prs\":[],\"aggregate\":{},\"notes\":[]}'\n",
+    )
+    .unwrap();
+    fs::set_permissions(&reader, fs::Permissions::from_mode(0o755)).unwrap();
+    let output = Command::new(env!("CARGO_BIN_EXE_aida-porcelain"))
+        .args(["flow", "report", "--since", "2026-11-09", "--json"])
+        .env("AIDA_BIN", reader)
         .output()
         .unwrap();
-    assert_eq!(missing_reader.status.code(), Some(1));
-    assert!(String::from_utf8_lossy(&missing_reader.stdout).contains("AIDA_BIN is required"));
-    assert_eq!(before, snapshot(dir.path()));
+    assert!(output.status.success(), "{output:?}");
+    let report: serde_json::Value = serde_json::from_slice(&output.stdout).unwrap();
+    assert_eq!(report["prs"], serde_json::json!([]));
 }
