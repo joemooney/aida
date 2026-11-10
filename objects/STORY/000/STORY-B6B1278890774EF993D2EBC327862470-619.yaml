@@ -8,8 +8,16 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-09T23:18:35.052711129Z
-modified_at: 2026-11-09T23:18:35.052711129Z
+modified_at: 2026-11-10T14:28:43.448067604Z
 req_type: Story
+comments:
+- id: 01a1c5dc-7b38-79a0-b14b-a53401fc1b6e
+  author: joe
+  content: 'ADVISOR RULING (design fork, 2026-11-10): extend the EXISTING signed publication schema with a reviewer-set field carry_eligible: bool. A missing field means true, so existing approvals stay valid with no migration. No new receipt type: one authority surface (verified_authority_keys) is simpler to audit than two. The local recording receipt mirrors the field. The cached carry-over proof key must include carry_eligible, so changing the marker after a proof was cached invalidates that proof. Removal: none needed; the field is permanent schema. Still sketch-first: post a sketch naming the schema version bump and the proof-cache key change before code.'
+  created_at: 2026-11-10T14:28:43.448067604Z
+  modified_at: 2026-11-10T14:28:43.448067604Z
+  session_id: 01a1c530-c917-7f13-ab81-f6b5e1d1cd30
+  harness_version: 2.1.322 (Claude Code)
 filed_at:
   code_sha: b1331e379c1fd3de1eef43e3d2d99b58b5d59a61
   branch: main
