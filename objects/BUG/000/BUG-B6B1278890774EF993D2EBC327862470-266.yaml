@@ -15,7 +15,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-08T19:27:28.525198886Z
-modified_at: 2026-11-09T08:58:02.480000439Z
+modified_at: 2026-11-10T14:40:00.836993329Z
 req_type: Bug
 comments:
 - id: 01a1bcd8-beaf-7582-aa0b-006077ac5867
@@ -292,6 +292,13 @@ comments:
   modified_at: 2026-11-09T08:44:04.632132906Z
   session_id: 01a1beff-fc3b-78e2-93e2-9b0c283b0339
   harness_version: 2.1.319 (Claude Code)
+- id: 01a1c5e6-d144-7d11-9a99-545901674826
+  author: joe
+  content: 'ADVISOR BRIEF (completion slice, 2026-11-10): #3717 landed the core. This lane must (1) verify AC1-AC3 on main with a targeted test per AC, naming the test in the PR body; (2) implement any gap that the verification finds; (3) do AC4: remove the BUG-2490 stopgaps (the dell1 lane-run.sh ''aida db sync --pull'' stopgap stays operator-side; remove only in-repo stopgaps listed on BUG-2490). Title: [AI:codex] fix(store): complete semantic pull and fail-closed writes (BUG-2501). Gate: LIGHT (one cargo test -p aida-cli-lib store_sync filter + make check-ci-fast).'
+  created_at: 2026-11-10T14:40:00.836993329Z
+  modified_at: 2026-11-10T14:40:00.836993329Z
+  session_id: 01a1c530-c917-7f13-ab81-f6b5e1d1cd30
+  harness_version: 2.1.322 (Claude Code)
 history:
 - id: 01a1bcc3-bd29-7692-a764-d1e8c8dbaa00
   author: aida-session-start
