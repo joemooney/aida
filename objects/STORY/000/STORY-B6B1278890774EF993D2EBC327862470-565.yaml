@@ -28,7 +28,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-07T19:59:40.192574Z
-modified_at: 2026-11-10T03:19:06.139486914Z
+modified_at: 2026-11-10T03:33:29.014380919Z
 req_type: Story
 relationships:
 - rel_type: Supersedes
@@ -389,6 +389,13 @@ comments:
     Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
   created_at: 2026-11-10T03:16:48.000873213Z
   modified_at: 2026-11-10T03:16:48.000873213Z
+- id: 01a1c384-9736-77a3-ab7c-118b01918cff
+  author: joe
+  content: 'ADVISOR RULING (2026-11-10 03:35 UTC), PR #3750 rework at ce4c53c5f1ea: fix exactly the three latest findings. (1) Add a real probe_cache regression (aida-cli-lib/src/lane_job.rs:343-444) with a passing transport and a denied or failed transport, using isolated fixtures; skip with a stated reason only where bubblewrap is unavailable, as other live tests do. (2) Link the existing per-finding, user-only/idempotent --fix and no-human refusal tests to criterion IDs ace1a25e, ac4b8ea3, ac1692c8 and acbeedc3 with trace comments, and add a test that FAQ-151 points at the command and keeps the manual steps. (3) FAQ-151 is a store object: the seat cannot write the store, so put the corrected FAQ text in the PR body under ''FAQ-151 update'' and the host will apply it; do not punt on it. Keep (STORY-2642).'
+  created_at: 2026-11-10T03:33:29.014380919Z
+  modified_at: 2026-11-10T03:33:29.014380919Z
+  session_id: 01a1beff-fc3b-78e2-93e2-9b0c283b0339
+  harness_version: 2.1.319 (Claude Code)
 history:
 - id: 01a1b85d-3f02-70c2-a82d-cefccf97dc04
   author: aida-session-start
