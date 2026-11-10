@@ -3,12 +3,12 @@ spec_id: BUG-b6b1278890774ef993d2ebc327862470-281
 agreed_id: BUG-2516
 title: Merging a GitLab MR and running aida pull does not complete the spec named in the commit trailer
 description: 'Reported from operator''s work machine (Codex, GitLab project hello-work-0x), 2026-11-09. After ''glab mr merge 2 --squash'' and ''aida pull'', the spec stayed InProgress. Merge-time completion appears GitHub-specific (merged-PR lookup or squash-subject handling). Make completion forge-neutral: detect the merged MR through the forge abstraction and apply the trailer rules to the squash commit on the default branch. Test with a fake GitLab forge.'
-status: NeedsAttention
+status: Approved
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-10T03:07:46.884496242Z
-modified_at: 2026-11-10T21:21:54.998850257Z
+modified_at: 2026-11-10T21:24:32.910766092Z
 req_type: Bug
 comments:
 - id: 01a1c4af-2f66-7590-be69-dad5e180b9a4
@@ -198,6 +198,13 @@ comments:
   modified_at: 2026-11-10T21:08:07.287029466Z
   session_id: 01a1c742cc43
   harness_version: codex-cli 0.167.0
+- id: 01a1c759-2e0e-7382-8e20-70bf1f31613f
+  author: joe
+  content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: Full sweep: incomplete GitLab ownership fields can grant absence; latest advisor matching prescription remains unresolved. CI pending. BUG-2516 (bug protocol): met, two test files touched.. No triage reason was given.'
+  created_at: 2026-11-10T21:24:32.910760270Z
+  modified_at: 2026-11-10T21:24:32.910760270Z
+  session_id: 01a1c530-c917-7f13-ab81-f6b5e1d1cd30
+  harness_version: 2.1.322 (Claude Code)
 history:
 - id: 01a1c4af-3ce1-7db1-8f61-609deb96783e
   author: joe
@@ -368,6 +375,15 @@ history:
   author: joe
   timestamp: 2026-11-10T21:21:55.125629913Z
   changes: []
+- id: 01a1c759-2e0e-7382-8e20-70a60593509a
+  author: joe
+  timestamp: 2026-11-10T21:24:32.910745748Z
+  session_id: 01a1c530-c917-7f13-ab81-f6b5e1d1cd30
+  harness_version: 2.1.322 (Claude Code)
+  changes:
+  - field_name: status
+    old_value: NeedsAttention
+    new_value: Approved
 filed_at:
   code_sha: 838f14c3c2811c6b63da5d465700cff773c36190
   branch: main
@@ -377,11 +393,3 @@ filed_at:
   vendor: claude
   session: 01a1beff-fc3b-78e2-93e2-9b0c283b0339
   harness_version: 2.1.319 (Claude Code)
-failure_reason:
-  phase: reviewer
-  phase_index: 3
-  kind: verdict:request-changes
-  detail: 'Full sweep: incomplete GitLab ownership fields can grant absence; latest advisor matching prescription remains unresolved. CI pending. BUG-2516 (bug protocol): met, two test files touched.'
-  recovery_hint: address the review findings, move BUG-2516 back to In Progress, and clear the PR hold only after approval
-  shelved_by: reviewer
-  shelved_at: 2026-11-10T21:21:54.998850257Z
