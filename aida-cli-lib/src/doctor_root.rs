@@ -1,7 +1,21 @@
 //! `aida doctor` findings collection, completed-without-commit scan and GC headers (STORY-1488 slice 1)
 // trace:STORY-1488 | ai:claude
 
-use crate::*;
+use crate::LeaseState;
+use crate::{
+    agent_registry, branch_behind_main, branch_exists_anywhere, brief, cli, collect_agent_briefs,
+    collect_cleanup_report, config_lookup, current_user_id, detect_default_branch_ref,
+    detect_merged_pr_for_branch_via_forge, distributed_mode_declared_from, external_import_bleed,
+    findings, humanize_duration_secs, init_cmd, is_plan_commit_subject, lease_state_for, leases,
+    list_leases, list_worktrees, maintenance_schedule, parse_trace_id_token, process_probe,
+    read_project_config_value, resolve_completed_since_cutoff, resolve_default_branch_ref, role,
+    schedule, vendors, PrLookup,
+};
+
+use crate::cli::{Cli, Command};
+use aida_core::{RequirementStatus, RequirementType, Storage};
+use anyhow::Result;
+use colored::Colorize;
 
 /// How long an uncommitted new spec (one a contained session filed, or a host
 /// add whose commit did not run) may wait for a host commit before `aida doctor` reports it (`store-queued-specs`).

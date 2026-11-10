@@ -2,7 +2,53 @@
 //! requirement add/list/show/edit/delete handlers, status/priority/type parsing and `aida grep` (STORY-1488 slice 1)
 // trace:STORY-1488 | ai:claude
 
-use crate::*;
+use crate::{
+    active_lease_for_cwd, active_role_scope, add_blocked_by_edge, add_queue_route_role,
+    agent_list_default_cap, agent_output_mode, agent_registry, alias, all_queued_requirement_ids,
+    apply_carve_out, approval_forbidden_for_type, auto_complete, backlog, brief,
+    carve_out_description, cleanup_escalated_leases_for_spec, cli, collect_ancestor_store,
+    completion, complexity_calibration, context_prompt, current_user_id, derive_parent_epic_label,
+    detect_distributed_store, docs, doctor_cmd, edit_buffer, edit_completion_render,
+    effort_calibration, empty_list_hint_line, enforce_protected_spec_gate, enforce_session_lease,
+    ensure_block_capacity, ensure_parent_edge_from_tag, extract_plan_followups, find_project_root,
+    findings, first_run, focus_scope_guard, format_queue_membership, format_review_story_display,
+    format_tag_chip, get_default_author, glyph, grep_requirements, handle_list_human,
+    handle_review_list, help, history, human, in_flight_lease_scopes, is_into_completed_transition,
+    is_standing_artifact_type, is_terminal_status, list_count_denom_label, list_default_open_lens,
+    list_hidden_hint_lines, list_human_count_footer, list_leases, load_node_id, looks_like_spec_id,
+    main_worktree_root_from, manual_epic_status_edit_forbidden, maybe_hint_advisor_seat,
+    maybe_hint_after_queue_drain, maybe_print_whats_left_tip, maybe_sync_pull,
+    normalize_batch_name, not_found, output_format_is_json, parse_pr_arg, parse_requirement_id,
+    permissions, pr_list_handler, print_comment, print_deferred_triggers,
+    print_empty_human_list_truncation_footer, print_git_linkage, pull_store_before_id_allocation,
+    punt, push_store_after_id_allocation, queue_at_filing_refusal, queue_cmd,
+    queue_memberships_for, read_id_format_policy, read_list_show_hidden_hints, record_edit_changes,
+    record_role_activity, rel_type_label, relationship_phrase, remove_blocked_by_edge,
+    render_completion_crescendo, render_list_fields_table, render_search_fields, render_spec_card,
+    render_tree, resolve_human_only, resolve_list_user_filter, resolve_pr_to_spec, role,
+    roleless_recovery_sentence, run, short_sha, status_advance_requires_advisor_authority,
+    status_display, status_requires_advisor_authority, suspicious_title_signal,
+    team_role_refusal_clause, toon_list_cell, toon_list_fields, tree_group_header,
+    update_manifest_for_status, validate_priority_input, validate_status_input,
+    validate_status_input_for_type, verify_cmd, warn_pending_briefs_for_running_agent, worktree,
+    CardDensity, CardRel, EditCompletionRender, HashSet, QueueAtFilingRefusal,
+};
+
+#[cfg(test)]
+use crate::mcp;
+
+use crate::doctor_root::collect_doctor_findings;
+use crate::output_format::{toon_local_id_cell, with_local_id_column};
+use crate::rel_cards::hostname;
+use crate::upgrade_release::confirm;
+use aida_core::{
+    forbidden_attention_transition, DatabaseBackend, FieldChange, RelationshipType, Requirement,
+    RequirementPriority, RequirementStatus, RequirementType, RequirementsStore, Storage,
+};
+use anyhow::{Context, Result};
+use colored::Colorize;
+use serde::Serialize;
+use uuid::Uuid;
 
 /// True for a scaffold artifact that must be executable: a git or Claude
 /// Code hook, or a shell script.
@@ -2702,7 +2748,6 @@ fn run_add(
     matches: &clap::ArgMatches,
     ctx: &crate::cmdkit::DispatchCtx,
 ) -> anyhow::Result<crate::cmdkit::Flow> {
-    use crate::*;
     let args = self::add_args_for_dispatch(matches)?;
     // trace:STORY-1468 | ai:codex — refuse unsupported storage before any mutation.
     let origin_prompt = if let Some(path) = &args.origin_prompt_file {
@@ -4424,7 +4469,6 @@ fn run_list(
     matches: &clap::ArgMatches,
     ctx: &crate::cmdkit::DispatchCtx,
 ) -> anyhow::Result<crate::cmdkit::Flow> {
-    use crate::*;
     let args = <ListArgs as clap::FromArgMatches>::from_arg_matches(matches)?;
     match &ctx.store {
         None => {
@@ -6380,7 +6424,6 @@ fn run_show(
     matches: &clap::ArgMatches,
     ctx: &crate::cmdkit::DispatchCtx,
 ) -> anyhow::Result<crate::cmdkit::Flow> {
-    use crate::*;
     let args = <ShowArgs as clap::FromArgMatches>::from_arg_matches(matches)?;
     match &ctx.store {
         None => Ok(crate::cmdkit::Flow::Continue),
@@ -8232,7 +8275,6 @@ fn run_edit(
     matches: &clap::ArgMatches,
     ctx: &crate::cmdkit::DispatchCtx,
 ) -> anyhow::Result<crate::cmdkit::Flow> {
-    use crate::*;
     let args = <EditArgs as clap::FromArgMatches>::from_arg_matches(matches)?;
     match &ctx.store {
         None => Ok(crate::cmdkit::Flow::Continue),
@@ -9651,7 +9693,6 @@ fn run_del(
     matches: &clap::ArgMatches,
     ctx: &crate::cmdkit::DispatchCtx,
 ) -> anyhow::Result<crate::cmdkit::Flow> {
-    use crate::*;
     let args = <DelArgs as clap::FromArgMatches>::from_arg_matches(matches)?;
     match &ctx.store {
         None => Ok(crate::cmdkit::Flow::Continue),
@@ -9777,7 +9818,6 @@ fn run_grep(
     matches: &clap::ArgMatches,
     ctx: &crate::cmdkit::DispatchCtx,
 ) -> anyhow::Result<crate::cmdkit::Flow> {
-    use crate::*;
     let args = <GrepArgs as clap::FromArgMatches>::from_arg_matches(matches)?;
     match &ctx.store {
         None => Ok(crate::cmdkit::Flow::Continue),
@@ -9941,7 +9981,6 @@ fn run_search(
     matches: &clap::ArgMatches,
     ctx: &crate::cmdkit::DispatchCtx,
 ) -> anyhow::Result<crate::cmdkit::Flow> {
-    use crate::*;
     let args = <SearchArgs as clap::FromArgMatches>::from_arg_matches(matches)?;
     match &ctx.store {
         None => Ok(crate::cmdkit::Flow::Continue),
