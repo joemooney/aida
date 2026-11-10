@@ -18,12 +18,12 @@ description: |
   2. Without sccache configured, behaviour is unchanged.
   3. Test: the job profile's env/bind set includes the cache dir and wrapper only when configured.
   4. The trust decision (shared or lane-only cache) is recorded on this spec before implementation.
-status: InProgress
+status: Done
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-07T19:59:26.079479Z
-modified_at: 2026-11-10T11:29:32.779019989Z
+modified_at: 2026-11-10T11:29:37.024576816Z
 req_type: Story
 relationships:
 - rel_type: Supersedes
@@ -1212,6 +1212,15 @@ history:
   session_id: 01a1beff-fc3b-78e2-93e2-9b0c283b0339
   harness_version: 2.1.319 (Claude Code)
   changes: []
+- id: 01a1c538-8171-7da0-8529-3a243deb5076
+  author: joe
+  timestamp: 2026-11-10T11:29:37.137232423Z
+  session_id: 01a1c530-c917-7f13-ab81-f6b5e1d1cd30
+  harness_version: 2.1.322 (Claude Code)
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Done
 filed_at:
   code_sha: 7a18c0d52a6a4e0822befd4c810cfed16b04b74c
   branch: main
@@ -1221,3 +1230,7 @@ filed_at:
   vendor: claude
   session: 01a1b76b-2fe7-7dd2-88d0-356fc8d96d04
   harness_version: 2.1.319 (Claude Code)
+implementation_info:
+  implemented: true
+  implemented_at: 2026-11-10T11:29:37.024576816Z
+  implemented_by: joe
