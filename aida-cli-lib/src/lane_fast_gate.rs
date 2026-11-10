@@ -519,12 +519,19 @@ fn attempt(
     lease: &str,
     branch: &str,
 ) -> Result<(String, String, String)> {
+    // A skipped check still needs the committed head for native publication.
+    // trace:BUG-2512 | ai:codex
+    let head = snapshot(main, tree, branch)?;
+    let Some(command) = crate::project_checks::load(main)?.fast_check else {
+        let reason = "No trusted [validation].fast_check command configured";
+        eprintln!("fast_gate=skipped(unconfigured): {reason}");
+        return Ok((head, "skipped(unconfigured)".into(), reason.into()));
+    };
     if crate::session::bwrap_availability() != crate::session::BwrapAvailability::Ok {
         eprintln!("fast_gate=skipped(no-sandbox)");
         return Ok((String::new(), "skipped(no-sandbox)".into(), String::new()));
     }
-    let head = snapshot(main, tree, branch)?;
-    let (marker, output) = gate_result(crate::lane_job::run_fast_gate(main, tree, lease)?);
+    let (marker, output) = gate_result(crate::lane_job::run_fast_gate(main, tree, lease, command)?);
     anyhow::ensure!(
         snapshot(main, tree, branch)? == head,
         "seat changed during fast gate; refusing stale evidence"
@@ -697,7 +704,7 @@ fn repair_prompt(output: &str) -> String {
         start += 1;
     }
     let output = &output[start..];
-    format!("The host's sandboxed make check-ci-fast failed. This is your ONE fast-gate fix round. Fix the failing gates below and finish. Native seats must leave edits uncommitted for host publication; retain all punt/hold instructions.\n{output}")
+    format!("The host's sandboxed configured fast-check command failed. This is your ONE fast-gate fix round. Fix the failing gates below and finish. Native seats must leave edits uncommitted for host publication; retain all punt/hold instructions.\n{output}")
 }
 
 /// A self-published lane queues its one repair before review admission. The
@@ -1998,5 +2005,54 @@ mod tests {
         )
         .unwrap();
         assert_eq!(marker(tmp.path(), "lane"), "skipped(no-sandbox)");
+    }
+}
+
+// trace:BUG-2512 | ai:codex
+#[cfg(test)]
+mod bug_2512_tests {
+    use super::*;
+
+    #[test]
+    fn bug_2512_unconfigured_gate_skips_with_reason_and_committed_head() {
+        let root = tempfile::tempdir().unwrap();
+        let git = |args: &[&str]| {
+            let output = crate::test_git::git_command()
+                .arg("-C")
+                .arg(root.path())
+                .args(args)
+                .output()
+                .unwrap();
+            assert!(
+                output.status.success(),
+                "{}",
+                String::from_utf8_lossy(&output.stderr)
+            );
+            String::from_utf8(output.stdout).unwrap().trim().to_owned()
+        };
+        git(&["init", "-q", "-b", "main"]);
+        git(&["config", "user.email", "fixture@example.invalid"]);
+        git(&["config", "user.name", "Fixture"]);
+        std::fs::write(root.path().join("example.py"), "print('hello')\n").unwrap();
+        git(&["add", "."]);
+        git(&[
+            "-c",
+            "core.hooksPath=/dev/null",
+            "commit",
+            "-qm",
+            "Python project without validation config",
+        ]);
+        git(&["update-ref", "refs/remotes/origin/main", "HEAD"]);
+        git(&[
+            "symbolic-ref",
+            "refs/remotes/origin/HEAD",
+            "refs/remotes/origin/main",
+        ]);
+        let head = git(&["rev-parse", "HEAD"]);
+        let (checked_head, marker, reason) =
+            attempt(root.path(), root.path(), "fixture", "main").unwrap();
+        assert_eq!(checked_head, head);
+        assert_eq!(marker, "skipped(unconfigured)");
+        assert!(reason.contains("No trusted [validation].fast_check command configured"));
     }
 }
