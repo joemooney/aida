@@ -8,7 +8,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-06T13:39:53.442026Z
-modified_at: 2026-11-10T00:48:29.649916338Z
+modified_at: 2026-11-10T01:09:36.768757029Z
 req_type: Task
 tags:
 - architecture
@@ -1476,6 +1476,13 @@ comments:
   modified_at: 2026-11-10T00:38:53.076601654Z
   session_id: 01a1beff-fc3b-78e2-93e2-9b0c283b0339
   harness_version: 2.1.319 (Claude Code)
+- id: 01a1c300-df80-7f50-9371-e588cfc38dd4
+  author: dirtlab
+  content: 'Partial numeric-ranking slice implemented: CLI edit --weight and MCP update_requirement.weight now use mediated spec_edit with finite f32 validation, missing/null distinction, clear semantics and bound-author redo history. Weight set/clear routed tests cover stale bases, competing mutations, persistence before lost reply and idempotent replay. Validation: 47 mediation tests pass serially, 32 core tests pass, closed-gate regression passes, 30 Python tests pass and inventory reconciles. A parallel rerun had one intermittent existing ancillary-FD EOF assertion failure; serial rerun passes it. Production gate remains CLOSED. Other edit fields and writer families remain unresolved; host publication body lists them. Uncommitted native-seat handoff; Refs TASK-3223.'
+  created_at: 2026-11-10T01:09:36.768757029Z
+  modified_at: 2026-11-10T01:09:36.768757029Z
+  session_id: 01a1c2ed8312
+  harness_version: codex-cli 0.167.0
 history:
 - id: 01a1b116-742d-73c0-9064-1933f11e4c38
   author: joe

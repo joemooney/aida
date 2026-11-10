@@ -3,12 +3,12 @@ spec_id: TASK-b6b1278890774ef993d2ebc327862470-936
 agreed_id: TASK-3368
 title: 'STORY-2537 S6: broker-attested ProcIdentity (separately signed slice)'
 description: 'Per sketch docs/plans/2026-11-05-story-2537-proc-identity.md (~305): the broker slice needs its own sketch and advisor signoff before implementation. Mode guided: write the sketch first.'
-status: InProgress
+status: NeedsAttention
 priority: Low
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-07T10:46:47.827833836Z
-modified_at: 2026-11-10T00:48:18.880107171Z
+modified_at: 2026-11-10T01:10:53.191843014Z
 req_type: Task
 relationships:
 - rel_type: Child
@@ -138,6 +138,18 @@ comments:
   modified_at: 2026-11-10T00:13:44.855608785Z
   session_id: 01a1beff-fc3b-78e2-93e2-9b0c283b0339
   harness_version: 2.1.319 (Claude Code)
+- id: 01a1c302-0a07-79e0-aa02-3e1222cd5098
+  author: dirtlab
+  content: |
+    Implementation slice 1 is ready as uncommitted native-seat edits on task-3368-broker-s1. Changed aida-cli-lib/src/lib.rs; added aida-cli-lib/src/proc_broker/{mod.rs,transport.rs,tests.rs} and docs/internal/testing/task-3368-disabled-broker.md. No command, enable switch, startup hook, sandbox route or consumer adapter is registered. The staged host-only SOCK_SEQPACKET listener probes SO_PEERPIDFD/SO_PASSPIDFD, authenticates each message from its own SCM_PIDFD plus SCM_CREDENTIALS without numeric-PID pin fallback, and retains a private pinned runtime and exclusive lock. Even valid self requests receive Disabled; no observation receipt, handle, holder/role authority or persistent schema is introduced. Grant/handle/receipt and consumer rollout remain separately gated.
+
+    Validation: lane job j20261110T010401502-2-0 ran cargo test --profile agent -p aida-cli-lib --lib proc_broker:: -- --nocapture: 12 passed, 0 failed, 1 standalone child fixture ignored; the parent invoked and passed that exact child separately. Real-kernel SCM_PIDFD checks executed with no support skips, including actual sender over an inherited connection and sender exit. Other tests cover credential mismatches/absence, extra rights/control truncation, frame/deadline recovery, schema/scope/replay refusals, runtime/lock/socket replacement and restart. New modules pass rustfmt --check; git diff --check and signed-plan aida plan verify pass. Full CI/pre-publication checks remain host work.
+
+    Manual rollout gate remains PENDING. Punt retains advisor routing and publication/merge-hold vetoes. Proposed host commit/PR subject: [AI:codex] feat(proc-identity): stage disabled host broker transport (Refs TASK-3368). No commit, push, PR, queue done, pr ship or review record was performed. Host codegraph client is absent; doctor reports missing and navigation used rg. No implementer findings filed: remaining rollout work is already in the signed sketch.
+  created_at: 2026-11-10T01:10:53.191843014Z
+  modified_at: 2026-11-10T01:10:53.191843014Z
+  session_id: 01a1c2ed5318
+  harness_version: codex-cli 0.167.0
 history:
 - id: 01a1b59e-5972-7d63-967f-d8572322d9d1
   author: joe
@@ -260,6 +272,15 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a1c301-c95e-7510-b845-46a5d0e0bcb1
+  author: dirtlab
+  timestamp: 2026-11-10T01:10:36.638699203Z
+  session_id: 01a1c2ed5318
+  harness_version: codex-cli 0.167.0
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: NeedsAttention
 filed_at:
   code_sha: 4803b66ade90fa4f6ccbcfb20f3af84d4aaf7886
   branch: main
@@ -269,3 +290,9 @@ filed_at:
   vendor: claude
   session: 01a1b441-8158-7162-ad75-f7915b45ee33
   harness_version: 2.1.319 (Claude Code)
+attention_reason:
+  category: other
+  detail: Disabled broker slice 1 and protocol tests are ready; the signed manual rollout gate remains pending. Retain advisor routing and all publication/merge-hold vetoes. No consumer adapter or service enablement is authorized by these transport tests.
+  lean: Host/advisor reviews the uncommitted slice and pending gate; any authorized publication must use Refs TASK-3368 and must not complete the task.
+  raised_by: implementer
+  raised_at: 2026-11-10T01:10:36.638104946Z

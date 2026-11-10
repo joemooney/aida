@@ -42,7 +42,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-09T15:57:18.371798469Z
-modified_at: 2026-11-10T00:52:29.607479244Z
+modified_at: 2026-11-10T01:10:09.110772285Z
 req_type: Story
 tags:
 - architecture
@@ -186,6 +186,13 @@ comments:
   modified_at: 2026-11-10T00:47:43.317383055Z
   session_id: 01a1beff-fc3b-78e2-93e2-9b0c283b0339
   harness_version: 2.1.319 (Claude Code)
+- id: 01a1c301-5dd6-7bd1-808e-ed83b14c53b2
+  author: dirtlab
+  content: 'Latest review finding 1 addressed: actual Rework auto-release validates durable H-to-H2 coverage during eligibility and both release passes; grant/authority checks and verdict references retain H while clearance binds H2 and includes proof/base-tip evidence. Existing sensitive-spec, mandate and absorbed-refusal checks remain. Added actual transaction ledger assertions and refusal regressions for proof refresh failure, corpus blocker and head movement. Final lane validation: j20261110T005116011-2-0 executed 103 rework_hold_release tests successfully; j20261110T005134876-2-0 executed 52 gate-boundary tests successfully. Store-writer inventory, changed-file rustfmt check and git diff --check pass. Six files changed: gate/rework_hold_release.rs and gate/tests/story_1687_rework_release_tests.rs, story_1697_attested_release_tests.rs, bug_2123_composed_rework_release_tests.rs, bug_2186_archived_history_release_tests.rs, bug_2403_alias_release_tests.rs. No implementation blockers; Codegraph client missing, used rg. Edits uncommitted for host publication. No commit, push, PR creation, queue done, pr ship or review record performed. MCP comment unavailable because tool approval is disabled; recorded through CLI.'
+  created_at: 2026-11-10T01:10:09.110772285Z
+  modified_at: 2026-11-10T01:10:09.110772285Z
+  session_id: 01a1c2ee11e7
+  harness_version: codex-cli 0.167.0
 history:
 - id: 01a1c233-af48-7011-9e22-fa81c9459065
   author: joe
