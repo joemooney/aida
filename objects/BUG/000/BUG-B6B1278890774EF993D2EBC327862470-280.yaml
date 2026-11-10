@@ -8,7 +8,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-10T03:07:38.542859262Z
-modified_at: 2026-11-10T04:31:14.672983898Z
+modified_at: 2026-11-10T04:47:01.958034074Z
 req_type: Bug
 comments:
 - id: 01a1c3a1-bccc-7ef0-b6b7-2fdb52e783f5
@@ -25,6 +25,13 @@ comments:
   modified_at: 2026-11-10T04:18:40.738740517Z
   session_id: 01a1c3a435a5
   harness_version: codex-cli 0.167.0
+- id: 01a1c3c7-ed46-7a01-942a-60f91ed70731
+  author: joe
+  content: 'ADVISOR RULING (2026-11-10 04:47 UTC) — binding for PR #3762 rework at head 5db9405f3f. Fix exactly one finding: P2 pr_cmd.rs:6931-6933: the configured-forge lookup now resolves PureGitForge in the existing fixture pr_cmd::task_140_squash_subject_tests::bug_1957_pr_ship_squash_subject_returns_completion_trailer (no [forge] provider, no origin), so tests/task_140_squash_subject_tests.rs:100 panics. Update that fixture to configure GitHub explicitly ([forge] provider = "github" or a GitHub origin) and keep its completion/trailer assertions. Do not change production fallback behavior. LIGHT gate: cargo test -p aida-cli-lib --lib bug_1957_pr_ship_squash_subject bug_2515 (one run), then make check-ci-fast.'
+  created_at: 2026-11-10T04:47:01.958034074Z
+  modified_at: 2026-11-10T04:47:01.958034074Z
+  session_id: 01a1c39a-801a-7bd1-8da9-c955a6707f0b
+  harness_version: 2.1.321 (Claude Code)
 history:
 - id: 01a1c3a2-0b0e-7e70-890b-6fe8aaba4acd
   author: joe
