@@ -8,8 +8,16 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-09T23:19:37.402958538Z
-modified_at: 2026-11-09T23:19:37.402958538Z
+modified_at: 2026-11-10T08:59:15.846079119Z
 req_type: Bug
+comments:
+- id: 01a1c4ae-da06-7200-aca3-d82b81889341
+  author: joe
+  content: 'Related evidence 2026-11-10 (advisor): the STORY-2704 lane loaded the older 03:56 UTC ''ADVISOR BRIEF'' comment as binding and ignored the newer 04:13 UTC ''ADVISOR SKETCH SIGNOFF WITH CHANGES'' comment, so it produced a second sketch PR (#3772) instead of slice 1. The brief loader appears to key on the header text (''ADVISOR BRIEF'' / ''ADVISOR RULING''). Fix scope candidate: the newest advisor-authored ruling-class comment wins regardless of header wording, or advisor commands write a typed brief record instead of free-text headers.'
+  created_at: 2026-11-10T08:59:15.846079119Z
+  modified_at: 2026-11-10T08:59:15.846079119Z
+  session_id: 01a1c39a-801a-7bd1-8da9-c955a6707f0b
+  harness_version: 2.1.321 (Claude Code)
 filed_at:
   code_sha: b1331e379c1fd3de1eef43e3d2d99b58b5d59a61
   branch: main
