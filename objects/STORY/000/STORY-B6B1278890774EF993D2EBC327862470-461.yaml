@@ -9,7 +9,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-06T00:17:53.805850465Z
-modified_at: 2026-11-07T23:45:28.786112690Z
+modified_at: 2026-11-10T11:30:12.793967360Z
 req_type: Story
 tags:
 - architecture
@@ -405,6 +405,13 @@ comments:
   modified_at: 2026-11-07T23:45:28.786112690Z
   session_id: 01a1b848-940b-7bd2-8acd-52e428b182b8
   harness_version: 2.1.319 (Claude Code)
+- id: 01a1c539-0cb9-7531-8c3d-5cdd847f840a
+  author: joe
+  content: 'ADVISOR BRIEF (slice B, 2026-11-10 04:40 MST): STORY-2641 is complete, so slice B is unblocked. Scope, per signed sketch section 4 and the 03:35 note: migrate the launch parent facts and resources (launch/context.rs, launch/resources.rs, LaunchContext::resolve) onto the core ExecContext from slice A, passing ExecContext explicitly with no global access. Then migrate ONE config/home/tool cluster. Shrink the exact-site ratchet ledger for every site you migrate; never raise it. No unrelated launch/ refactors. Commit title: [AI:codex] refactor(launch): inject ExecContext into launch context and resources (Refs STORY-2538). Gate: LIGHT, meaning one targeted cargo test -p aida-cli-lib launch:: run plus make check-ci-fast, then push and open the PR. No full suite, no make check-ci.'
+  created_at: 2026-11-10T11:30:12.793967360Z
+  modified_at: 2026-11-10T11:30:12.793967360Z
+  session_id: 01a1c530-c917-7f13-ab81-f6b5e1d1cd30
+  harness_version: 2.1.322 (Claude Code)
 history:
 - id: 01a1ae38-af42-7111-8ef3-7b278b3830e7
   author: joe
