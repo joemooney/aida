@@ -1,0 +1,14 @@
+pid_namespace = 4026531836
+claim_id = "ffea35ff-9eb5-4956-ba0c-29c4e7c9ba7d"
+scope = "STORY-b6b1278890774ef993d2ebc327862470-627"
+node_id = "1"
+clone_path = "/home/dirtlab/ai/aida"
+host = "disrad-dvp98b3puw"
+pid = 1152572
+pid_start_time = "linux-starttime:15870934"
+agent = "implementer"
+started_at = "2026-11-10T11:45:17.511544587+00:00"
+heartbeat_at = "2026-11-10T11:45:17.511544587+00:00"
+ttl_secs = 1800
+process_backed = false
+review_verb = false
