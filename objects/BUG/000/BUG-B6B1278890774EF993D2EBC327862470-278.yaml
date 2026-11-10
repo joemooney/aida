@@ -8,7 +8,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-10T03:07:01.660083142Z
-modified_at: 2026-11-10T20:55:47.021120909Z
+modified_at: 2026-11-10T20:55:50.712171976Z
 req_type: Bug
 comments:
 - id: 01a1c60c-adfa-72f3-9f5c-b40df8817ee3
@@ -77,6 +77,21 @@ comments:
   content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: BUG-2513 acceptance: selected-Codex offer, explicit default-no consent, weaker-boundary warning, per-vendor readiness/reason, fix command and separate consistency output verified by source/assertions and green exact-head CI. BUG-2513 (bug protocol): met (two test files touched). Full sweep found two init-routing regressions.. No triage reason was given.'
   created_at: 2026-11-10T20:55:47.021114876Z
   modified_at: 2026-11-10T20:55:47.021114876Z
+  session_id: 01a1c530-c917-7f13-ab81-f6b5e1d1cd30
+  harness_version: 2.1.322 (Claude Code)
+- id: 01a1c73e-e61b-7381-ad0c-eb7acf13e3a2
+  author: joe
+  content: |-
+    REVIEW FINDINGS TO ADDRESS (BUG-2513):
+    Verdict: CHANGES REQUESTED
+    Reviewed commit: 80ccab00ac9d
+    Recorded: 2026-11-10T20:53:04.988085162+00:00
+    Findings:
+    1. [P2] aida-cli-lib/src/init_cmd.rs:7131-7140: Preserve adopted-clone routing before resolving setup choices. run_init now invokes resolve_init_footprint and agent selection before handle_init_distributed_worktree reaches distributed_init_footprint/adopted_init_route. A first-time adopted clone has no projection manifest yet, so is_projected is false and interactive init asks Setup style even though the adopted handler ignores the answer; even an already projected clone now gets the agent-selection prompt despite doing no local scaffolding. Previously adoption routing ran before either prompt. Determine adoption before these prompts and skip local footprint/vendor selection for that route; add coverage through run_init, since an_adopted_clone_never_reaches_the_setup_style_prompt only exercises the inner helper and misses this new outer call.
+    2. [P2] aida-cli-lib/src/init_cmd.rs:7130-7135: Resolve initialization choices against the target cwd, not statusline_project_root. That helper walks up to any ancestor .aida/config.toml without stopping at a nested Git repository. For a new child repository under an AIDA parent with scaffold.footprint=minimal (or memory-lane), init now reads the parent footprint and passes it as an explicit choice into every storage handler, silently suppressing full scaffolding and the Codex consent offer in the child. Previously those handlers resolved the footprint against their own cwd. Use the actual init target for this early resolution and add a nested-repository regression with conflicting parent footprint/default vendor.
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
+  created_at: 2026-11-10T20:55:50.555800866Z
+  modified_at: 2026-11-10T20:55:50.555800866Z
   session_id: 01a1c530-c917-7f13-ab81-f6b5e1d1cd30
   harness_version: 2.1.322 (Claude Code)
 history:
