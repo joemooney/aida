@@ -639,6 +639,13 @@ live hub hook or automatic forwarding is provided.
 
 #### Per-vendor containment posture
 
+`aida config permissions show` prints one row per vendor with its tier,
+configured/refused launch state, and net effect. This is a configuration view,
+not a live launch probe. Use `--verbose` (or `-v`) for launch flags, scope,
+sandbox details, findings, and full refusal explanations. `--json` retains the
+complete structured report regardless of verbosity.
+<!-- trace:TASK-3779 | ai:codex -->
+
 With containment enabled, opt Codex into its native sandbox in the trusted
 default-branch `.aida/config.toml` (the committed `origin/<default>` copy read
 through `trusted_config`; local default branch only when no remote ref exists):
