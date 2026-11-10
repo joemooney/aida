@@ -3,12 +3,12 @@ spec_id: BUG-b6b1278890774ef993d2ebc327862470-274
 agreed_id: BUG-2509
 title: Remote lanes treat a stale advisor brief as binding because they cannot see the gate-ledger review findings
 description: 'On 2026-11-09 the TASK-3777 rework lane on dell1 received a 16:42 UTC advisor brief marked ''binding'' although a CHANGES REQUESTED verdict was recorded at 22:00 UTC; it punted as ambiguous-spec and the rework cycle was lost. rework_direction.rs resolve_direction (around line 143) returns BriefStanding::Binding whenever review_findings is None, and a dell1 lane has no access to the primary host''s .aida/gate-ledger, so the findings are None even though a ''REVIEW FINDINGS TO ADDRESS'' comment with the verdict time is on the spec. Fix: derive the verdict time from that comment, or from the latest verdict in the store, when the ledger is unavailable, so a brief that predates it is classed PredatesVerdict; add a regression for a lane with no ledger.'
-status: InProgress
+status: Completed
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-09T23:19:37.402958538Z
-modified_at: 2026-11-10T15:25:09.435356944Z
+modified_at: 2026-11-10T17:17:46.660166296Z
 req_type: Bug
 comments:
 - id: 01a1c4ae-da06-7200-aca3-d82b81889341
@@ -112,6 +112,20 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a1c677-40dd-7cb3-8ad2-4e4adc14b3f1
+  author: aida-auto-bump
+  timestamp: 2026-11-10T17:17:46.589829769Z
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Completed
+processing_record:
+- id: 01a1c677-4124-7a83-a19f-c133c6b0174f
+  timestamp: 2026-11-10T17:17:46.660162095Z
+  agent: aida
+  commit_sha: be6a13ac98efc29922ec4f0ae34bba410daf96d6
+  summary: 'Full five-file sweep: durable timestamp fallback, stale-brief ordering, no-ledger findings and regression, three-state clearance, and newer-approval regression verified by source and green CI lib-0; BUG-2509 bug protocol met (test file touched). No actionable defects. Build green; merge-hold requires authorized clearance. Codegraph client unavailable; callers checked with rg.'
+  review_verdict: approved
 filed_at:
   code_sha: b1331e379c1fd3de1eef43e3d2d99b58b5d59a61
   branch: main
@@ -121,3 +135,7 @@ filed_at:
   vendor: claude
   session: 01a1beff-fc3b-78e2-93e2-9b0c283b0339
   harness_version: 2.1.319 (Claude Code)
+implementation_info:
+  implemented: false
+  completed_at: 2026-11-10T17:17:46.589825119Z
+  completion_sha: be6a13ac98efc29922ec4f0ae34bba410daf96d6
