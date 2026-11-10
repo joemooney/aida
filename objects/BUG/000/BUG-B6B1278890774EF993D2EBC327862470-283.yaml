@@ -8,7 +8,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-10T10:24:49.978786902Z
-modified_at: 2026-11-10T11:54:03.345187429Z
+modified_at: 2026-11-10T11:56:50.729416465Z
 req_type: Bug
 comments:
 - id: 01a1c544-9448-77c1-a5a0-c8d1776ee831
@@ -29,6 +29,13 @@ comments:
   modified_at: 2026-11-10T11:42:48.392007361Z
   session_id: 01a1c53ab29d
   harness_version: codex-cli 0.167.0
+- id: 01a1c551-6ea9-7f23-98fb-e730806ec716
+  author: joe
+  content: 'Advisor ruling PR-3783@2c3e599e: Terminal(NoVerdict) + new Retry transition legal only when attempt<3, no live claim and no durable verdict; chain validation accepts only that edge.'
+  created_at: 2026-11-10T11:56:50.729416465Z
+  modified_at: 2026-11-10T11:56:50.729416465Z
+  session_id: 01a1c530-c917-7f13-ab81-f6b5e1d1cd30
+  harness_version: 2.1.322 (Claude Code)
 history:
 - id: 01a1c4fe-25c9-7752-878d-7f4b5f4e9270
   author: joe
