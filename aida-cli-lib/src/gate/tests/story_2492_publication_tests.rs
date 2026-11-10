@@ -407,6 +407,8 @@ fn two_clones_collect_sync_and_gate_approval_refusal_and_revocation() {
         b"concurrent store work"
     );
     let verdict = f.selected();
+    // trace:STORY-2698 | ai:codex — clean signed publication survives remote projection.
+    assert_eq!(verdict.kind, rv::VerdictKind::Approved);
     let stale = f.candidates(&f.a, &"b".repeat(40));
     assert!(stale.iter().all(|v| !v.kind.approves()));
     let uncovered = ship::merge_gate_verdict_candidates(

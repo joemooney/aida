@@ -2057,6 +2057,19 @@ pub(crate) fn try_emit_nonblocking_findings_on_completion(
     let Some(verdict) = completion_verdict(project_root, spec_id) else {
         return Ok(0);
     };
+    emit_verdict_findings(project_root, store_path, spec_id, sha, pr_hint, &verdict)
+}
+
+// trace:STORY-2698 | ai:codex
+/// Explicit verdict input also supports approval-time delivery before publication.
+pub(crate) fn emit_verdict_findings(
+    project_root: &std::path::Path,
+    store_path: &std::path::Path,
+    spec_id: &str,
+    sha: &str,
+    pr_hint: Option<u64>,
+    verdict: &crate::gate::review_verdict::RecordedVerdict,
+) -> anyhow::Result<usize> {
     // Cheap pre-check against an empty history: if nothing would ever be filed
     // regardless of what's already on record (not approved, or no findings),
     // skip opening the store entirely.
