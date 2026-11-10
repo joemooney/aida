@@ -1224,17 +1224,19 @@ fn handle_role_status(project_root: &std::path::Path, json: bool) -> Result<()> 
             }
         }
     }
-    // TASK-2159: only the harness is offered for --bind-pid, never the
-    // transient shell this command runs in. trace:TASK-2159 | ai:claude
-    match status.harness_pid {
-        Some(pid) => println!(
-            "this session: harness pid {pid} (for `aida role enter <seat> --bind-pid {pid}`)"
-        ),
-        None => println!(
-            "this session: no stable harness pid (no agent harness above this command, or it runs in a sandbox); start the agent from a role shell instead of using --bind-pid"
-        ),
-    }
+    println!("{}", role_status_session_guidance(status.harness_pid));
     Ok(())
+}
+
+// A PID binding does not change the issuing subject or replace a managed
+// child's grant. Offer the supported recovery instead of an unusable renewal.
+// trace:BUG-2503 | ai:codex
+fn role_status_session_guidance(harness_pid: Option<u32>) -> String {
+    let session = match harness_pid {
+        Some(pid) => format!("this session: harness pid {pid} (informational only)"),
+        None => "this session: no stable harness pid (no agent harness above this command, or it runs in a sandbox)".to_string(),
+    };
+    format!("{session}\nmanaged agent renewal: save a handoff; at the operator's terminal, re-enter the parent role with the required --delegate-seat options, then relaunch the agent through its launcher. In-place grant renewal is not supported for managed agents.")
 }
 
 fn handle_role_end() -> Result<()> {
@@ -1602,6 +1604,25 @@ fn handle_role_scaffold() -> Result<()> {
 
 #[cfg(test)]
 mod tests {
+    // trace:BUG-2503 | ai:codex
+    #[test]
+    fn role_status_guides_managed_renewal_with_or_without_visible_harness() {
+        for pid in [Some(2907980), None] {
+            let text = super::role_status_session_guidance(pid);
+            assert!(!text.contains("--bind-pid"));
+            assert!(text.contains("save a handoff"));
+            assert!(text.contains("operator's terminal"));
+            assert!(text.contains("--delegate-seat"));
+            assert!(text.contains("relaunch the agent through its launcher"));
+            assert!(text.contains("In-place grant renewal is not supported"));
+            if pid.is_some() {
+                assert!(text.contains("harness pid 2907980 (informational only)"));
+            } else {
+                assert!(text.contains("no stable harness pid"));
+            }
+        }
+    }
+
     // trace:BUG-2386 | ai:claude
     #[test]
     fn role_resume_line_names_the_recording_vendor() {
