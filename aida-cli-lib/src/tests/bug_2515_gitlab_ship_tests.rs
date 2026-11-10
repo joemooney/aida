@@ -46,11 +46,7 @@ esac
         &bin.join("gh"),
         "#!/bin/sh\n[ \"$1\" = --version ] && exit 0\nexit 92\n",
     );
-    let mut paths = vec![bin];
-    paths.extend(std::env::split_paths(
-        &std::env::var_os("PATH").unwrap_or_default(),
-    ));
-    let _path = crate::test_env::EnvVarGuard::set("PATH", std::env::join_paths(paths).unwrap());
+    let _path = crate::test_env::EnvVarGuard::prepend_path(&bin);
     let meta = fetch_pr_ship_metadata_via_forge(root, 2).unwrap();
     assert_eq!(meta.title, "Ship title");
     assert_eq!(meta.body, "aida: no-complete");
@@ -117,11 +113,7 @@ fn bug_2515_github_title_and_body_preserved() {
 echo '{"title":"GitHub title","body":"GitHub body"}'
 "#,
     );
-    let mut paths = vec![root.to_path_buf()];
-    paths.extend(std::env::split_paths(
-        &std::env::var_os("PATH").unwrap_or_default(),
-    ));
-    let _path = crate::test_env::EnvVarGuard::set("PATH", std::env::join_paths(paths).unwrap());
+    let _path = crate::test_env::EnvVarGuard::prepend_path(root);
     let meta = fetch_pr_ship_metadata_via_forge(root, 7).unwrap();
     assert_eq!(meta.title, "GitHub title");
     assert_eq!(meta.body, "GitHub body");
