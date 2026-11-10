@@ -616,6 +616,84 @@ pub(crate) const RECORDER_KEYS: &[&str] = &["recorded_by", "reviewer"];
 pub(crate) const RECORDED_AT_KEYS: &[&str] = &["recorded_at", "reviewed_at", "date"];
 pub(crate) const FINDINGS_KEYS: &[&str] = &["findings", "blocking_findings"];
 
+// trace:STORY-2698 | ai:codex
+pub(crate) fn finding_values(
+    findings: &[String],
+) -> (Vec<serde_json::Value>, Vec<serde_json::Value>) {
+    findings
+        .iter()
+        .map(|s| s.trim())
+        .filter(|s| !s.is_empty())
+        .map(|s| {
+            let detail = serde_json::from_str::<serde_json::Value>(s).ok();
+            if let Some(detail) = detail.filter(|v| {
+                v.is_object()
+                    && v.get("text")
+                        .and_then(|t| t.as_str())
+                        .is_some_and(|s| !s.trim().is_empty())
+            }) {
+                (detail["text"].clone(), detail)
+            } else {
+                (s.into(), serde_json::Value::Null)
+            }
+        })
+        .unzip()
+}
+
+// trace:STORY-2698 | ai:codex
+pub(crate) fn incoming_disposition(verdict: &str, findings: &[String]) -> VerdictKind {
+    let (texts, metadata) = finding_values(findings);
+    let obj = serde_json::json!({"verdict": verdict, "findings": texts, "finding_dispositions": metadata});
+    disposition_verdict(obj.as_object().unwrap())
+}
+
+// trace:STORY-2698 | ai:codex
+/// Disposition is independent of impact severity. Unknown and legacy evidence blocks.
+pub(crate) fn finding_is_deferred(value: &serde_json::Value) -> bool {
+    let nonempty = |key: &str| {
+        value
+            .get(key)
+            .and_then(|v| v.as_str())
+            .is_some_and(|s| !s.trim().is_empty())
+    };
+    nonempty("severity")
+        && nonempty("rationale")
+        && value
+            .get("rationale")
+            .and_then(|v| v.as_str())
+            .is_some_and(|s| !s.contains(['\n', '\r']))
+        && value.get("disposition").and_then(|v| v.as_str()) == Some("deferred")
+}
+
+// trace:STORY-2698 | ai:codex
+pub(crate) fn disposition_verdict(obj: &JsonObj) -> VerdictKind {
+    let kind = VerdictKind::parse(obj.get("verdict").and_then(|v| v.as_str()).unwrap_or(""));
+    if obj.get("sweep_pending").and_then(|v| v.as_bool()) == Some(true) {
+        return VerdictKind::RequestChanges;
+    }
+    if !matches!(kind, VerdictKind::Approved | VerdictKind::RequestChanges) {
+        return kind;
+    }
+    let items = FINDINGS_KEYS
+        .iter()
+        .find_map(|k| obj.get(*k).and_then(|v| v.as_array()));
+    let Some(items) = items.filter(|items| !items.is_empty()) else {
+        return kind;
+    };
+    let metadata = obj.get("finding_dispositions").and_then(|v| v.as_array());
+    if items.iter().enumerate().all(|(i, item)| {
+        let text = item.as_str().is_some_and(|s| !s.trim().is_empty());
+        text && metadata
+            .and_then(|m| m.get(i))
+            .is_some_and(finding_is_deferred)
+    }) && metadata.is_some_and(|m| m.len() == items.len())
+    {
+        VerdictKind::Approved
+    } else {
+        VerdictKind::RequestChanges
+    }
+}
+
 /// Parse a verdict file body. `None` when it is not a JSON object or carries
 /// no `verdict` field (an incomplete artifact is not a verdict).
 ///
@@ -661,7 +739,7 @@ pub fn parse_recorded_verdict(body: &str) -> Option<RecordedVerdict> {
         .and_then(|v| v.as_bool())
         .unwrap_or(false);
     Some(RecordedVerdict {
-        kind: VerdictKind::parse(&raw),
+        kind: disposition_verdict(obj),
         raw,
         reviewed_sha,
         reviewed_branch: str_field("reviewed_branch"),
@@ -749,7 +827,24 @@ pub(crate) fn recording_key(m: &JsonObj) -> RecordingKey {
         field("recorded_by"),
         // BUG-1505: a re-spelling of the same verdict is the same recording.
         canonical_verdict_word(&field("verdict")),
-        round_findings(m),
+        // trace:STORY-2698 | ai:codex — changing a disposition is review signal.
+        round_findings(m)
+            .into_iter()
+            .enumerate()
+            .map(|(i, text)| {
+                match m
+                    .get("finding_dispositions")
+                    .and_then(|v| v.as_array())
+                    .and_then(|v| v.get(i))
+                    .filter(|v| !v.is_null())
+                {
+                    Some(detail) => {
+                        serde_json::json!({"text":text,"disposition":detail}).to_string()
+                    }
+                    None => text,
+                }
+            })
+            .collect(),
     )
 }
 
@@ -899,7 +994,7 @@ pub(crate) fn effective_recordings_for_sha<'a>(
                 .map(str::trim)
                 .filter(|v| !v.is_empty())
                 .ok_or_else(|| "review recording has no verdict".to_string())?;
-            let kind = VerdictKind::parse(raw);
+            let kind = disposition_verdict(recording);
             if kind == VerdictKind::Unknown {
                 return Err(format!("review recording has unrecognised verdict `{raw}`"));
             }
@@ -1013,7 +1108,7 @@ pub fn reconcile_artifacts_for_sha<'a>(
     let mut waiting = false;
     let mut changes = false;
     for recording in effective {
-        let kind = VerdictKind::parse(recording["verdict"].as_str().unwrap());
+        let kind = disposition_verdict(&recording);
         let reviewer = recording
             .get("recorded_by")
             .and_then(|v| v.as_str())
@@ -1728,19 +1823,24 @@ pub(crate) fn build_verdict_object(
     // the comparison is possible at all. Append-only; the current round stays
     // at the top level so every existing reader is untouched.
     // trace:STORY-1391 | ai:claude
-    let incoming_key: RecordingKey = (
-        reviewed_sha
-            .map(str::trim)
-            .filter(|s| !s.is_empty())
-            .map(str::to_string),
-        recorded_by.trim().to_string(),
-        canonical_verdict_word(verdict.unwrap_or_default()),
-        findings
-            .iter()
-            .map(|s| s.trim().to_string())
-            .filter(|s| !s.is_empty())
-            .collect(),
-    );
+    // trace:STORY-2698 | ai:codex
+    let (incoming_texts, incoming_metadata) = finding_values(findings);
+    let mut incoming = serde_json::json!({
+        "reviewed_sha": reviewed_sha, "recorded_by": recorded_by.trim(),
+        "verdict": verdict.unwrap_or_default(), "findings": incoming_texts,
+        "finding_dispositions": incoming_metadata,
+    });
+    if findings.is_empty() {
+        for key in ["findings", "finding_dispositions"] {
+            if let Some(value) = obj.get(key) {
+                incoming[key] = value.clone();
+            }
+        }
+    }
+    if let Some(word) = disposition_verdict(incoming.as_object().unwrap()).canonical() {
+        incoming["verdict"] = word.into();
+    }
+    let incoming_key = recording_key(incoming.as_object().unwrap());
     archive_current_round(&mut obj, &incoming_key);
     // BUG-1918: a new verdict word is a new act of review; it must not
     // inherit the previous recorder's attestation. Only `aida review record`
@@ -1793,17 +1893,33 @@ pub(crate) fn build_verdict_object(
         "recorded_at",
         Some(chrono::Utc::now().to_rfc3339().as_str()),
     );
-    let findings: Vec<_> = findings
-        .iter()
-        .map(|s| s.trim())
-        .filter(|s| !s.is_empty())
-        .map(|s| serde_json::Value::String(s.to_string()))
-        .collect();
+    // trace:STORY-2698 | ai:codex
+    let clear_findings = !findings.is_empty() && findings.iter().all(|s| s.trim().is_empty());
+    let (findings, metadata) = finding_values(findings);
+    if clear_findings {
+        for key in [
+            "findings",
+            "blocking_findings",
+            "finding_dispositions",
+            "finding_classes",
+            "inherited_findings",
+        ] {
+            obj.remove(key);
+        }
+    }
+    // A fresh reviewer act retries a pending delivery rather than inheriting it.
+    if verdict.is_some() {
+        obj.remove("sweep_pending");
+    }
+    if !findings.is_empty() {
+        obj.insert("finding_dispositions".into(), metadata.into());
+    }
     if verdict_word.as_deref() == Some("waiting") {
         for key in [
             "findings",
             "blocking_findings",
             "finding_classes",
+            "finding_dispositions",
             "inherited_findings",
         ] {
             obj.remove(key);
@@ -1823,6 +1939,13 @@ pub(crate) fn build_verdict_object(
             "inherited_findings".to_string(),
             serde_json::Value::Bool(true),
         );
+    }
+    let effective = disposition_verdict(&obj);
+    if matches!(
+        effective,
+        VerdictKind::Approved | VerdictKind::RequestChanges
+    ) {
+        obj.insert("verdict".into(), effective.canonical().unwrap().into());
     }
     Ok(obj)
 }
@@ -2039,7 +2162,7 @@ pub fn verdict_archive_dir(path: &Path) -> Option<PathBuf> {
 /// instead of replacing history it could not read. Unparseable content is
 /// treated as empty, as before.
 // trace:TASK-1801 trace:STORY-b6b1278890774ef993d2ebc327862470-080 | ai:claude
-fn read_current_verdict_object(path: &Path) -> std::io::Result<JsonObj> {
+pub(crate) fn read_current_verdict_object(path: &Path) -> std::io::Result<JsonObj> {
     if verdict_file_refused(path) {
         let e = read_verdict_body(path)
             .err()
@@ -2886,11 +3009,7 @@ pub fn close_verdict_on_merge(
     let Ok(serde_json::Value::Object(mut obj)) = serde_json::from_str(&current.body) else {
         return Ok(false);
     };
-    let Some(raw_verdict) = obj.get("verdict").and_then(|v| v.as_str()) else {
-        return Ok(false);
-    };
-    // trace:BUG-2500 | ai:codex — merge closure includes external waits.
-    if !VerdictKind::parse(raw_verdict).blocks_done() {
+    if !disposition_verdict(&obj).blocks_done() {
         return Ok(false);
     }
     let already_closed = obj
@@ -3527,3 +3646,129 @@ mod review_verdict_tests;
 #[cfg(test)]
 #[path = "tests/bug_2403_same_origin_receipt_tests.rs"]
 mod bug_2403_same_origin_receipt_tests;
+
+// trace:STORY-2698 | ai:codex
+#[cfg(test)]
+mod story_2698_tests {
+    use super::*;
+
+    fn record(metadata: serde_json::Value) -> serde_json::Value {
+        serde_json::json!({"verdict":"approved", "findings":["a small real bug"],
+            "finding_dispositions":metadata})
+    }
+
+    #[test]
+    fn story_2698_disposition_is_independent_of_severity_and_fails_closed() {
+        for severity in ["cosmetic", "minor", "major"] {
+            let detail = serde_json::json!({"severity":severity, "disposition":"deferred", "rationale":"follow-up is acceptable"});
+            let obj = record(serde_json::json!([detail]));
+            assert!(parse_recorded_verdict(&obj.to_string())
+                .unwrap()
+                .kind
+                .approves());
+        }
+        for detail in [
+            serde_json::Value::Null,
+            serde_json::json!({"severity":"minor"}),
+            serde_json::json!({"severity":"minor", "disposition":"blocking"}),
+            serde_json::json!({"severity":"minor", "disposition":"deferred", "rationale":" "}),
+            serde_json::json!({"disposition":"deferred", "rationale":"later"}),
+            serde_json::json!({"severity":"minor", "disposition":"typo", "rationale":"later"}),
+        ] {
+            let obj = record(serde_json::json!([detail]));
+            assert_eq!(
+                parse_recorded_verdict(&obj.to_string()).unwrap().kind,
+                VerdictKind::RequestChanges
+            );
+        }
+        for metadata in [
+            serde_json::Value::Null,
+            serde_json::json!([]),
+            serde_json::json!([null, null]),
+        ] {
+            assert_eq!(
+                disposition_verdict(record(metadata).as_object().unwrap()),
+                VerdictKind::RequestChanges
+            );
+        }
+    }
+
+    #[test]
+    fn story_2698_pending_and_mixed_findings_never_approve() {
+        let mut obj = record(
+            serde_json::json!([{"severity":"minor","disposition":"deferred","rationale":"later"}]),
+        );
+        obj["sweep_pending"] = true.into();
+        assert_eq!(
+            disposition_verdict(obj.as_object().unwrap()),
+            VerdictKind::RequestChanges
+        );
+        obj.as_object_mut().unwrap().remove("sweep_pending");
+        obj["findings"]
+            .as_array_mut()
+            .unwrap()
+            .push("blocker".into());
+        assert_eq!(
+            disposition_verdict(obj.as_object().unwrap()),
+            VerdictKind::RequestChanges
+        );
+    }
+
+    #[test]
+    fn story_2698_structured_cli_preserves_text_and_normalizes_verdict() {
+        let tmp = tempfile::tempdir().unwrap();
+        let path = tmp.path().join("verdict.json");
+        let findings = vec![serde_json::json!({"text":"small bug", "severity":"minor", "disposition":"deferred", "rationale":"bounded follow-up"}).to_string()];
+        let obj = build_verdict_object(
+            tmp.path(),
+            &path,
+            Some("request-changes"),
+            None,
+            None,
+            None,
+            &findings,
+            "reviewer",
+        )
+        .unwrap();
+        assert_eq!(obj["verdict"], "approved");
+        assert_eq!(obj["findings"], serde_json::json!(["small bug"]));
+        assert_eq!(obj["finding_dispositions"][0]["severity"], "minor");
+        assert!(incoming_disposition("request-changes", &findings).approves());
+        assert_eq!(
+            incoming_disposition("approved", &["legacy cosmetic".into()]),
+            VerdictKind::RequestChanges
+        );
+    }
+    #[test]
+    fn story_2698_explicit_empty_finding_clears_resolved_evidence() {
+        let tmp = tempfile::tempdir().unwrap();
+        let path = tmp.path().join("verdict.json");
+        std::fs::write(&path, r#"{"verdict":"request-changes","findings":["fixed bug"],"reviewed_sha":"1111111111111111111111111111111111111111","recorded_by":"reviewer"}"#).unwrap();
+        let inherited = build_verdict_object(
+            tmp.path(),
+            &path,
+            Some("approved"),
+            None,
+            None,
+            None,
+            &[],
+            "reviewer",
+        )
+        .unwrap();
+        assert_eq!(inherited["verdict"], "request-changes");
+        let cleared = build_verdict_object(
+            tmp.path(),
+            &path,
+            Some("approved"),
+            None,
+            None,
+            None,
+            &[String::new()],
+            "reviewer",
+        )
+        .unwrap();
+        assert_eq!(cleared["verdict"], "approved");
+        assert!(!cleared.contains_key("findings"));
+        assert_eq!(cleared["rounds"][0]["findings"][0], "fixed bug");
+    }
+}

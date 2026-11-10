@@ -157,6 +157,36 @@ pub(crate) fn append(
     .map_err(|e| named(&ledger_file(root, change), e))
 }
 
+// trace:STORY-2698 | ai:codex
+/// Finish a delivery only while its pending records are still current. Store
+/// delivery must not turn an older review into the newest review after a race.
+pub(crate) fn append_delivered(
+    root: &Path,
+    change: ChangeKey,
+    events: Vec<GateEvent>,
+    pending: &[GateEvent],
+) -> std::io::Result<Vec<GateEvent>> {
+    if events.len() != pending.len() || events.is_empty() {
+        return Err(std::io::Error::other(
+            "delivery must match its pending verdict batch",
+        ));
+    }
+    with_lock(root, &lock_file(root, change), || {
+        let existing = read_file(root, change);
+        for (expected, delivered) in pending.iter().zip(&events) {
+            let current = existing
+                .iter()
+                .rev()
+                .find(|e| e.spec == expected.spec && e.verdict_record().is_some())
+                .and_then(|e| e.verdict_record());
+            if current != expected.verdict_record() && current != delivered.verdict_record() {
+                return Err(std::io::Error::other("review changed during sweep delivery; refusing stale approval; record a fresh review"));
+            }
+        }
+        append_locked(root, change, events, false)
+    })
+}
+
 /// `e`, naming the ledger file that did not take the write (BUG-1571: a
 /// failed write names the artefact that did not land).
 fn named(file: &Path, e: std::io::Error) -> std::io::Error {
@@ -298,6 +328,16 @@ pub(crate) fn append_unbound(
     gate_spec: &GateSpec,
     record: &crate::gate::review_verdict::JsonObj,
 ) -> std::io::Result<Delivered> {
+    append_unbound_expected(root, gate_spec, record, None)
+}
+
+// trace:STORY-2698 | ai:codex
+pub(crate) fn append_unbound_expected(
+    root: &Path,
+    gate_spec: &GateSpec,
+    record: &crate::gate::review_verdict::JsonObj,
+    pending: Option<&crate::gate::review_verdict::JsonObj>,
+) -> std::io::Result<Delivered> {
     let spec = gate_spec.label.clone();
     let safe = !spec.is_empty()
         && !spec.starts_with('.')
@@ -313,6 +353,12 @@ pub(crate) fn append_unbound(
     let file = unbound_file(root, &spec);
     with_lock(root, &file.with_extension("lock"), || {
         let existing = read_unbound(root, &spec);
+        if let Some(pending) = pending {
+            let current = existing.iter().rev().find_map(|e| e.verdict_record());
+            if current != Some(pending) && current != Some(record) {
+                return Err(std::io::Error::other("review changed during sweep delivery; refusing stale approval; record a fresh review"));
+            }
+        }
         if existing.iter().any(|e| e.verdict_record() == Some(record)) {
             return Ok(Delivered::Unchanged);
         }

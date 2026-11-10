@@ -49,7 +49,8 @@ fn bug_1799_carry_forward_sweep_skips_inherited_findings() {
         "inherited findings should not carry forward"
     );
 
-    // 3. Explicitly re-record at sha C
+    // trace:STORY-2698 | ai:codex
+    // 3. Explicitly re-record a deferred finding at sha C
     let obj3 = build_verdict_object(
         root,
         &file, // read from the same file which has the `request-changes` state in `obj1` + `obj2` changes if we wrote it, but we didn't write obj2
@@ -57,7 +58,7 @@ fn bug_1799_carry_forward_sweep_skips_inherited_findings() {
         Some("cccccccccccccccccccccccccccccccccccccccc"),
         None,
         None,
-        &["F".to_string()],
+        &[serde_json::json!({"text":"F","severity":"minor","disposition":"deferred","rationale":"safe follow-up"}).to_string()],
         "me",
     )
     .unwrap();

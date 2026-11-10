@@ -3015,7 +3015,18 @@ pub(crate) fn handle_review_record_at(
             crate::glyph(crate::glyphs::Glyph::Warning).yellow()
         );
     }
-    let kind = crate::gate::review_verdict::VerdictKind::parse(verdict);
+    // trace:STORY-2698 | ai:codex — decide hold/authority routing using the
+    // same inherited evidence the builder will retain, before any mutation.
+    let kind = if findings.is_empty() {
+        let path = crate::gate::review_verdict::verdict_path(&project_root, spec);
+        let mut obj = crate::gate::review_verdict::read_current_verdict_object(&path)?;
+        obj.insert("verdict".into(), verdict.into());
+        obj.remove("sweep_pending");
+        crate::gate::review_verdict::disposition_verdict(&obj)
+    } else {
+        crate::gate::review_verdict::incoming_disposition(verdict, findings)
+    };
+    let verdict = kind.canonical().unwrap_or(verdict);
     if kind == crate::gate::review_verdict::VerdictKind::Unknown {
         anyhow::bail!(
             "unrecognised verdict `{verdict}` — use one of: approved, request-changes, rejected, waiting"

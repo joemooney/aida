@@ -174,6 +174,9 @@ struct Receipt {
     branch: Option<String>,
     summary: Option<String>,
     findings: Vec<String>,
+    // trace:STORY-2698 | ai:codex — absent preserves existing canonical signed bytes.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    finding_dispositions: Option<Vec<serde_json::Value>>,
 }
 #[derive(Clone, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -740,6 +743,9 @@ pub(crate) fn publish(
         branch: verdict.reviewed_branch.clone(),
         summary: verdict.summary.clone(),
         findings: verdict.findings.clone(),
+        finding_dispositions: record
+            .get("finding_dispositions")
+            .and_then(|v| serde_json::from_value(v.clone()).ok()),
     };
     ensure!(
         receipt
@@ -851,6 +857,7 @@ fn body(r: &Receipt) -> Result<String> {
         "verdict": r.decision, "reviewed_sha": r.head, "reviewed_branch": r.branch,
         "recorded_at": r.recorded_at, "recorded_by": r.reviewer_actor,
         "summary": r.summary, "findings": r.findings,
+        "finding_dispositions": r.finding_dispositions,
         "blocking_finding_origin_ids": r.blocking_finding_origin_ids,
         "recorder_attestation": att,
     }))?)
@@ -1554,4 +1561,39 @@ pub(crate) fn overlay_view(
         view.change_events.push(event);
     }
     Ok(())
+}
+
+// trace:STORY-2698 | ai:codex
+#[cfg(test)]
+mod story_2698_tests {
+    use super::*;
+
+    #[test]
+    fn story_2698_signed_payload_keeps_disposition_and_old_encoding() {
+        let legacy = serde_json::json!({
+            "version":1,"node":"test-node","publication":Uuid::nil(),"supersedes":[],
+            "repository":"repo","change":"PR-7","head":"1111111111111111111111111111111111111111",
+            "specs":[],"blocking_finding_origin_ids":[],"authors":[],"reviewer_actor":"reviewer",
+            "reviewer_identity":[],"decision":"approved","recorded_at":"2026-11-09T00:00:00Z",
+            "branch":null,"summary":null,"findings":["small bug"]
+        });
+        let mut receipt: Receipt = serde_json::from_value(legacy.clone()).unwrap();
+        assert_eq!(serde_json::to_value(&receipt).unwrap(), legacy);
+        assert_eq!(
+            rv::parse_recorded_verdict(&body(&receipt).unwrap())
+                .unwrap()
+                .kind,
+            rv::VerdictKind::RequestChanges
+        );
+        receipt.finding_dispositions = Some(vec![
+            serde_json::json!({"severity":"minor","disposition":"deferred","rationale":"safe follow-up"}),
+        ]);
+        let encoded = serde_json::to_string(&receipt).unwrap();
+        let restored: Receipt = serde_json::from_str(&encoded).unwrap();
+        assert_eq!(restored, receipt);
+        assert!(rv::parse_recorded_verdict(&body(&restored).unwrap())
+            .unwrap()
+            .kind
+            .approves());
+    }
 }
