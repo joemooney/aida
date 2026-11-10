@@ -8,7 +8,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-10T07:32:20.786755079Z
-modified_at: 2026-11-10T09:42:31.382780054Z
+modified_at: 2026-11-10T12:16:19.774141601Z
 req_type: Story
 comments:
 - id: 01a1c47d-19fb-7373-b169-6a484b05ebcd
@@ -53,6 +53,15 @@ comments:
     (no test lines extracted; open run 42787818464)
   created_at: 2026-11-10T09:30:02.285450915Z
   modified_at: 2026-11-10T09:30:02.285450915Z
+  session_id: 01a1c39a-801a-7bd1-8da9-c955a6707f0b
+  harness_version: 2.1.321 (Claude Code)
+- id: 01a1c563-453e-7ac0-91bb-f58190de6b46
+  author: joe
+  content: |-
+    CI FAILURES at 798369bad357 (run 42807375048). Fix exactly these before pushing; a push without a code change for them will fail again and must not be made:
+    (no test lines extracted; open run 42807375048)
+  created_at: 2026-11-10T12:16:19.774141601Z
+  modified_at: 2026-11-10T12:16:19.774141601Z
   session_id: 01a1c39a-801a-7bd1-8da9-c955a6707f0b
   harness_version: 2.1.321 (Claude Code)
 history:
