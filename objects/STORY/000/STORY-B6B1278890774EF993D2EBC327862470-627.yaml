@@ -8,7 +8,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-10T03:52:00.571796159Z
-modified_at: 2026-11-10T15:23:51.888572786Z
+modified_at: 2026-11-10T15:31:41.173213473Z
 req_type: Story
 comments:
 - id: 01a1c399-6840-7383-843e-9930f6eaa3f7
@@ -152,6 +152,22 @@ comments:
   modified_at: 2026-11-10T15:21:30.677858674Z
   session_id: 01a1c39a-801a-7bd1-8da9-c955a6707f0b
   harness_version: 2.1.321 (Claude Code)
+- id: 01a1c616-1ff5-7710-983d-624eef21b954
+  author: dirtlab
+  content: |
+    Final advisor ruling round 3 implemented: select fixed AIDA JSON reader through AIDA_BIN, running-executable sibling aida, then PATH; explicit selections do not silently fall back. Removed the 45-second whole-report timeout. Preserve failed reader stdout/stderr bytes and exit code, forwarding the selected error format so human/TOON/JSON failures match the built-in. Updated reporting docs and the implementation correction in the plan, including generation-owned rollback behavior.
+
+    Changed files: aida-porcelain/src/flow_runtime.rs, aida-porcelain/src/main.rs, aida-porcelain/src/flow/mod.rs, aida-porcelain/tests/multicall.rs, tests/test_porcelain_flow_parity.py, docs/cli/08-reporting.md, docs/plans/2026-11-10-story-2704-porcelain-crate.md.
+
+    Validation passed through launcher: cargo test --profile agent -p aida-porcelain (5 executed tests, including 46-second delayed success, installed fallback precedence and raw failure channels/status across formats); cargo check --profile agent -p aida-cli --tests; cargo test --profile agent -p aida-cli --test story_2704_porcelain_parity (1 executed test, including real failed-reader parity). rustfmt --check, Python AST syntax and git diff --check passed. untested=false.
+
+    make check-ci-fast failed in containment conformance: six fixture errors attempting to create temporary directories under read-only /home/dirtlab/.aida; runner also reports read-only CARGO_HOME. Host must rerun the gate. Full log: /tmp/story-2704-round3-fast.log.
+
+    Edits remain uncommitted for host publication. No commit, push, PR creation, merge, queue completion or review recording performed. S2/S3 remain outside this slice.
+  created_at: 2026-11-10T15:31:41.173213473Z
+  modified_at: 2026-11-10T15:31:41.173213473Z
+  session_id: 01a1c60ee993
+  harness_version: codex-cli 0.167.0
 history:
 - id: 01a1c399-7102-7f81-9bb9-fd37379159d3
   author: joe
