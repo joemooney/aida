@@ -1,7 +1,20 @@
 //! Drafted-thought preview, `aida do`/zen drive loop and zen auto-approve (STORY-1488 slice 1)
 // trace:STORY-1488 | ai:claude
 
-use crate::*;
+use crate::process_retry::RetryEtxtbsy;
+use crate::{
+    autopilot_audit, carved_out_targets, classify_worktree_arg, create_agent_brief,
+    current_user_id, do_dispatch, ensure_epic_worktree, ensure_spec_worktree, find_project_root,
+    get_default_author, load_dispenser, looks_like_spec_id, pending_brief_exists, prompt_yes_no,
+    protocol_cmd, push_paren_spec_ids_from_line, resolve_spec_scope, scope_has_in_flight_work,
+    session, spec_matches, zen_approve_flip, zen_auto_approve_authorized, zen_drive,
+    WorktreeTarget, ACCEPTANCE_SECTION_HEADINGS,
+};
+use aida_core::DatabaseBackend;
+use aida_core::{Requirement, RequirementStatus, RequirementType, RequirementsStore, Storage};
+use anyhow::{Context, Result};
+use colored::Colorize;
+use std::io::IsTerminal;
 
 /// Extract the acceptance-criteria body from a requirement description.
 /// Returns the body text (without the heading line) when one of the

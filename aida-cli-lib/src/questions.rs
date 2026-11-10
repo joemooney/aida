@@ -284,6 +284,8 @@ pub(crate) fn formulate_sweep_decision_request(
         // recommended default: a disposition must be an explicit human call,
         // not an Enter-through. trace:STORY-555 | ai:claude
         SweepKind::Disposition(tag) => aida_core::DecisionRequest {
+            question_id: Some(uuid::Uuid::new_v4()),
+            park_binding: None,
             question: format!(
                 "{} is parked by `{tag}` with no recorded question — what's the disposition?",
                 req.display_id(),
@@ -317,6 +319,8 @@ pub(crate) fn formulate_sweep_decision_request(
             answered_at: None,
         },
         SweepKind::Clarify => aida_core::DecisionRequest {
+            question_id: Some(uuid::Uuid::new_v4()),
+            park_binding: None,
             question: format!(
                 "{} appears to need a human decision before implementation ({}) - should it proceed as written or be parked for clarification?",
                 req.display_id(),
@@ -1923,6 +1927,8 @@ pub(crate) fn questions_ask(
 
     let now = chrono::Utc::now();
     let request = aida_core::DecisionRequest {
+        question_id: Some(uuid::Uuid::new_v4()),
+        park_binding: None,
         question: question.to_string(),
         choices,
         recommended,

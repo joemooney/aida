@@ -1,7 +1,12 @@
 //! Plan-file follow-up extraction, interface/test-plan capture and follow-up task filing (STORY-1488 slice 1)
 // trace:STORY-1488 | ai:claude
 
-use crate::*;
+use crate::process_retry::RetryEtxtbsy;
+use crate::{aida_exe_path, get_default_author, parse_spec_id_from_add_output, session_manifest};
+use aida_core::{Comment, RelationshipType, RequirementStatus, RequirementsStore, Storage};
+use anyhow::Result;
+use colored::Colorize;
+use std::io::IsTerminal;
 
 /// Comment prefix written to a spec once its plan followups have been
 /// processed. Both extraction paths check for it first, so whichever runs

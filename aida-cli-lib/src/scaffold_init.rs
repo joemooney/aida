@@ -1,7 +1,15 @@
 //! Init scaffolding: gitignore entries, user AIDA instructions block, OBE scaffold prune (STORY-1488 slice 1)
 // trace:STORY-1488 | ai:claude
 
-use crate::*;
+use crate::resolve_spec_from_markdown;
+use crate::{
+    aida_home_dir, config_cmd, current_user_id, detect_obe_aida_scaffold_files, prompt_yes_no,
+};
+use aida_core::Storage;
+use anyhow::{Context, Result};
+use colored::Colorize;
+use std::io::IsTerminal;
+use uuid::Uuid;
 
 /// `queue_promoted_finding`, returning the entry it wrote so a failed
 /// promote can tell whether the queue still holds it (BUG-1651).

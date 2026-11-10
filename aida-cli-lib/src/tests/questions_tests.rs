@@ -11,6 +11,8 @@ fn sample_requirement(spec: &str, description: &str) -> Requirement {
 
 fn sample_request() -> aida_core::DecisionRequest {
     aida_core::DecisionRequest {
+        question_id: Some(uuid::Uuid::new_v4()),
+        park_binding: None,
         question: "Promote or ship?".to_string(),
         choices: vec![
             aida_core::DecisionChoice {
