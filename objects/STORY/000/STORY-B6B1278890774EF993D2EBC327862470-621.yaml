@@ -19,7 +19,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-10T03:05:40.778642968Z
-modified_at: 2026-11-10T03:13:34.595708780Z
+modified_at: 2026-11-10T03:52:36.545668654Z
 req_type: Story
 comments:
 - id: 01a1c370-9b5f-7770-a921-e48f45e2aecb
@@ -29,6 +29,20 @@ comments:
   modified_at: 2026-11-10T03:11:39.359464221Z
   session_id: 01a1beff-fc3b-78e2-93e2-9b0c283b0339
   harness_version: 2.1.319 (Claude Code)
+- id: 01a1c390-bb9f-7e23-bbca-08518537f483
+  author: dirtlab
+  content: 'Implemented advisor-approved S1 only: explicit finding severity/disposition evidence with fail-closed legacy handling, all-deferred approval, durable pending sweep delivery and retry, locked stale-finalization refusal, signed receipt metadata, and reviewer guidance. Targeted lane runs passed: story_2698 9, review_verdict_tests 90, carry_forward 13, publication integration 10. Rustfmt, diff whitespace and template checks passed. Full CI remains host-side; check-ci-fast was interrupted because its TUI guard invokes cargo directly. Native edits remain uncommitted. S2/S3 remain outstanding; publication subject will use Refs. Detailed handoff: /tmp/story2698-handoff.txt.'
+  created_at: 2026-11-10T03:46:44.767985818Z
+  modified_at: 2026-11-10T03:46:44.767985818Z
+  session_id: 01a1c371f7a7
+  harness_version: codex-cli 0.167.0
+- id: 01a1c396-19c1-7721-9a65-1a65c5863131
+  author: dirtlab
+  content: 'Host fast-gate fix round: reconciled scripts/store-writers.toml for seven current sink/caller sites and four stale rows. Preserved existing reviewed policies/comments; moved sweep sinks retain B08 and new rows remain blocked for mediated routing with explicit host/lock evidence. Inventory checker passes at 3468 sites / 293 operations; all 54 inventory tests and diff whitespace checks pass. No runtime code changed; fix remains uncommitted for native host publication. Refs scope and all punt/hold vetoes retained.'
+  created_at: 2026-11-10T03:52:36.545668654Z
+  modified_at: 2026-11-10T03:52:36.545668654Z
+  session_id: 01a1c371f7a7
+  harness_version: codex-cli 0.167.0
 history:
 - id: 01a1c370-a92f-7a21-946e-dd69061fc475
   author: joe
