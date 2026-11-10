@@ -9,7 +9,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-06T00:17:53.805850Z
-modified_at: 2026-11-10T13:36:25.389789862Z
+modified_at: 2026-11-10T13:48:56.990252659Z
 req_type: Story
 tags:
 - architecture
@@ -450,6 +450,12 @@ comments:
   modified_at: 2026-11-10T13:28:47.058577510Z
   session_id: 01a1c39a-801a-7bd1-8da9-c955a6707f0b
   harness_version: 2.1.321 (Claude Code)
+- id: 01a1c5b8-111e-7d40-80a9-c36d114cea5b
+  author: joe
+  content: 'Round 9: implemented binding advisor ruling PR-3784@20856bfc. glyph_config config-trust sites 2->1; LaunchContext accessor and all uses exec()->exec_context(); exactly three vendor-literal TSV keys moved resolve_with->resolve_inputs with unchanged counts. Guard source files untouched. Lane-run regression results: task_2708_every_spawn_agent_builder_is_inventoried_and_guarded 1 passed (j20261110T133732006-942014-0); story_2539_vendor_literal_ratchet filter 3 passed including mutation controls (j20261110T133733167-942206-0); config trust inventory 1 passed (j20261110T133734334-942309-0). Rustfmt and diff whitespace checks pass; ExecContext ratchet zero additions, 19 Python fixtures pass. Requested launch:: run executed 319 passed, 54 failed, 4 ignored (j20261110T133703820-937821-0); includes agent_launch::, process-cwd Permission denied failures, missing fixture path, and weaker-parent assertion failure. ExecContext coexistence test passed. make check-ci-fast stopped at containment conformance: six errors creating temp dirs in read-only /home/joe/.aida. Host must rerun broader gates. Codegraph client missing and doctor unreachable; accessor uses audited via rg. Native seat leaves four edited files uncommitted for host publication; no merge-hold clearance attempted.'
+  created_at: 2026-11-10T13:48:56.990252659Z
+  modified_at: 2026-11-10T13:48:56.990252659Z
+  session_id: 01a1c5ac900c
 history:
 - id: 01a1ae38-af42-7111-8ef3-7b278b3830e7
   author: joe
