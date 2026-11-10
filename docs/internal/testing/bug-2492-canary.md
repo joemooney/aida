@@ -1,4 +1,4 @@
 # BUG-2492 canary (disposable)
 
-Throwaway PR for the merge-hold status cutover canary
-(docs/internal/testing/bug-2492-status-cutover.md). Never merged; closed after evidence.
+Throwaway PR for the BUG-2492 merge-hold status cutover canary
+(see PR #3651). Never merged; closed after evidence.
