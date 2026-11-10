@@ -4375,3 +4375,34 @@ pub(crate) static SCHEDULE: crate::cmdkit::CommandReg = crate::cmdkit::CommandRe
     },
     run: crate::cmdkit::Handler::Store(run_schedule),
 };
+
+/// The floor reclaim's wall-clock budget: half the guard child's kill
+/// ceiling, leaving the re-probe, the stuck scan and the report time to run.
+// trace:STORY-2351 | ai:claude
+pub(crate) const FLOOR_RECLAIM_BUDGET: std::time::Duration = std::time::Duration::from_secs(60);
+
+/// The disk-headroom `--fail-on-findings` reason: one line, and it leads
+/// with the STUCK sentence (reclaim cannot restore the floor, plus the top
+/// consumers) when there is one, so the routed item carries it. `None` when
+/// there are no findings.
+// trace:STORY-1916.ac641c6e | ai:claude
+pub(crate) fn disk_headroom_fail_reason(findings: &[DoctorFinding]) -> Option<String> {
+    if findings.is_empty() {
+        return None;
+    }
+    let tail = format!(
+        "{} finding(s) in {DISK_HEADROOM_CATEGORY} — failing because --fail-on-findings was requested",
+        findings.len()
+    );
+    let stuck = findings
+        .iter()
+        .find_map(|f| f.summary.find("STUCK:").map(|i| &f.summary[i..]));
+    let reason = match stuck {
+        Some(stuck) => format!("{stuck} — {tail}"),
+        None => tail,
+    };
+    Some(reason.replace(['\n', '\r'], " "))
+}
+
+use crate::doctor_cmd::DISK_HEADROOM_CATEGORY;
+use crate::doctor_root::DoctorFinding;

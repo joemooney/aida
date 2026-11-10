@@ -515,7 +515,7 @@ pub(crate) fn handle_scaffold_command(
             // launches use render_codex_command_prompt instead.
             // trace:BUG-1095 | ai:codex
             // trace:BUG-1118 | ai:codex
-            if let Some(version) = crate::doctor_cmd::installed_codex_version() {
+            if let Some(version) = crate::scaffold_cmd::installed_codex_version() {
                 if aida_core::scaffolding::codex_prompts::codex_prompt_dir_is_undiscoverable(
                     version,
                 ) {
@@ -2268,3 +2268,30 @@ pub(crate) static SCAFFOLD: crate::cmdkit::CommandReg = crate::cmdkit::CommandRe
     },
     run: crate::cmdkit::Handler::Store(run_scaffold),
 };
+
+pub(crate) fn installed_codex_version() -> Option<(u64, u64, u64)> {
+    let out = std::process::Command::new("codex")
+        .arg("--version")
+        .output()
+        .ok()?;
+    if !out.status.success() {
+        return None;
+    }
+    let banner = format!(
+        "{}{}",
+        String::from_utf8_lossy(&out.stdout),
+        String::from_utf8_lossy(&out.stderr)
+    );
+    parse_codex_semver(&banner)
+}
+
+pub(crate) fn parse_codex_semver(raw: &str) -> Option<(u64, u64, u64)> {
+    raw.split(|c: char| !c.is_ascii_digit() && c != '.')
+        .find_map(|token| {
+            let mut parts = token.split('.');
+            let major = parts.next()?.parse().ok()?;
+            let minor = parts.next()?.parse().ok()?;
+            let patch = parts.next()?.parse().ok()?;
+            Some((major, minor, patch))
+        })
+}

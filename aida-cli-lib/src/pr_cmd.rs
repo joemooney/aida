@@ -4682,7 +4682,7 @@ fn post_ship_cleanup_worker(args: PostShipCleanupArgs<'_>) -> Result<()> {
                 release_protected: false,
             })
         },
-        doctor_cmd::run_merged_agent_worktree_gc_quiet,
+        worktree_gc::run_merged_agent_worktree_gc_quiet,
         &mut std::io::stderr(),
     );
     if let Some(failure) = end_failure {
