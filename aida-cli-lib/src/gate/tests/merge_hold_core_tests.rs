@@ -38,7 +38,10 @@ fn task_1582_release_met_next_action_names_clear_before_ship() {
     assert!(clear < ship, "clear must come first: {line}");
     assert!(line.contains("APPROVED for TASK-1 at abc1234"), "{line}");
     assert!(line.contains("still armed"), "{line}");
-    assert!(line.contains("pins the merge to abc1234"), "{line}");
+    assert!(
+        line.contains("pins the merge to the covered current head"),
+        "{line}"
+    );
     assert!(!line.contains("may now `aida pr ship"), "{line}");
 }
 
