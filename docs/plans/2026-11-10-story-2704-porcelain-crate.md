@@ -8,6 +8,14 @@ The built-in stays registered and temporarily includes the tenant's report sourc
 to keep the overlap identical. Nested dispatch is S2; release/install/upgrade is S3.
 The remaining sections retain the broader sketch as future-slice design context.
 
+Round-4 ruling (2026-11-10 15:59 UTC): remove
+`successful_reader_can_exceed_former_report_deadline`; do not add a test-time
+budget exception for its unconditional 46-second sleep. The test is removed.
+The accepted non-blocking environment-alias finding was assigned to S2; the
+current implementation already reuses core `output_format::parse_output_format`.
+`environment_alias_error_parity` covers `table`/`human` and `agent`/`toon` for
+invalid windows, missing readers and failed readers, including stream parity.
+
 ## Evidence and boundary
 
 - [external_cmd.rs](../../aida-cli-lib/src/external_cmd.rs) resolves only
