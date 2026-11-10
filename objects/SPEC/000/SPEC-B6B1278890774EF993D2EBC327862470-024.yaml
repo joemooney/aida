@@ -8,12 +8,20 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-08T19:48:57.053077318Z
-modified_at: 2026-11-08T19:48:57.053077318Z
+modified_at: 2026-11-10T14:27:48.729591344Z
 req_type: Task
 tags:
 - from-implementer:TASK-3429
 - kind:deviation
 - severity:major
+comments:
+- id: 01a1c5db-a579-7392-bde7-d42cea877c90
+  author: joe
+  content: 'ADVISOR: the AC3 tool-count ruling is recorded on TASK-3429 (amended to 58, met). AC5 dell1 timing evidence is tracked on TASK-3429 itself. Closing this draft as a duplicate tracker.'
+  created_at: 2026-11-10T14:27:48.729591344Z
+  modified_at: 2026-11-10T14:27:48.729591344Z
+  session_id: 01a1c530-c917-7f13-ab81-f6b5e1d1cd30
+  harness_version: 2.1.322 (Claude Code)
 history:
 - id: 01a1bce1-5982-79c1-bbab-4a08bd8dd6f7
   author: joe
