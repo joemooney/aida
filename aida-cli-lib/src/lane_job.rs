@@ -341,6 +341,16 @@ fn cargo_with_cache_lifecycle(
 // No Cargo build or seat-job submission is needed for this bounded diagnostic.
 // trace:STORY-2642 | ai:codex
 pub(crate) fn probe_cache(root: &Path) -> Result<()> {
+    probe_cache_script(root, CACHE_PROBE_SCRIPT)
+}
+
+// Connectivity alone cannot establish reuse between independent lane targets.
+// trace:BUG-2519 | ai:codex
+pub(crate) fn probe_cache_reuse(root: &Path) -> Result<()> {
+    probe_cache_script(root, CACHE_REUSE_PROBE_SCRIPT)
+}
+
+fn probe_cache_script(root: &Path, script: &str) -> Result<()> {
     anyhow::ensure!(
         crate::session::os_wrap_explicit(root) != Some(false),
         "OS wrapping is disabled; enable the lane sandbox before probing cache reachability"
@@ -368,11 +378,8 @@ pub(crate) fn probe_cache(root: &Path) -> Result<()> {
         "host Cargo has no supported sccache configuration"
     );
     lane.prepare_cache()?;
-    let (program, args) = cargo_with_cache_lifecycle(
-        Path::new("/bin/sh"),
-        vec!["-c".into(), CACHE_PROBE_SCRIPT.into()],
-        &env,
-    );
+    let (program, args) =
+        cargo_with_cache_lifecycle(Path::new("/bin/sh"), vec!["-c".into(), script.into()], &env);
     let (program, args) = crate::session::lane_job_wrapped_program_and_args(
         root,
         true,
@@ -382,7 +389,7 @@ pub(crate) fn probe_cache(root: &Path) -> Result<()> {
     )?;
     let mut cmd = lane_command(&program);
     cmd.args(args).current_dir(root).envs(env);
-    let (status, _) = aida_core::transport_policy::bounded(
+    let (status, _, stderr) = aida_core::transport_policy::bounded_with_stderr(
         cmd,
         &[],
         65536,
@@ -390,7 +397,8 @@ pub(crate) fn probe_cache(root: &Path) -> Result<()> {
     )?;
     anyhow::ensure!(
         status.success(),
-        "sandbox cache transport/write probe exited {status}"
+        "sandbox cache transport/write probe exited {status}: {}",
+        String::from_utf8_lossy(&stderr).trim()
     );
     Ok(())
 }
@@ -402,6 +410,45 @@ const CACHE_PROBE_SCRIPT: &str = r#"
 probe=$(mktemp "$SCCACHE_DIR/doctor-XXXXXXXX") || exit 1
 trap 'rm -f -- "$probe"' EXIT
 printf lane-cache-probe >"$probe" && [ "$(cat "$probe")" = lane-cache-probe ]
+"#;
+
+// Hold source, output, compiler and flags constant: only the working directory
+// changes. The final same-directory control distinguishes path-key misses from
+// an unavailable or non-caching compiler. A fresh crate name and source path
+// prevent older doctor probes from supplying a false hit. Each sandbox has its own server statistics.
+// trace:BUG-2519 | ai:codex
+const CACHE_REUSE_PROBE_SCRIPT: &str = r#"
+set -eu
+[ -n "$AIDA_SCCACHE_PIDS" ] || exit 1
+probe=$(mktemp -d /tmp/aida-cache-reuse-XXXXXXXX)
+trap 'rm -rf -- "$probe"' EXIT
+mkdir "$probe/a" "$probe/b" "$probe/out"
+printf 'pub fn answer() -> u32 { 42 }\n' >"$probe/lib.rs"
+# The server already owns its cache configuration, so isolate the key with a
+# fresh crate name rather than attempting to change SCCACHE_DIR on the client.
+crate_name=$(basename "$probe" | tr 'A-Z-' 'a-z_')
+compile() {
+    (cd "$probe/$1" && "$RUSTC_WRAPPER" rustc --crate-name "$crate_name" \
+        --crate-type rlib --emit=dep-info,link "$probe/lib.rs" --out-dir "$probe/out")
+}
+hits() {
+    "$RUSTC_WRAPPER" --show-stats | awk '/^Cache hits / { valid=1 } /^Cache hits \(Rust\)/ { hits=$NF } END { if (!valid) exit 1; print hits+0 }'
+}
+before=$(hits)
+compile a
+compile b
+after=$(hits)
+if [ "$after" -gt "$before" ]; then
+    exit 0
+fi
+compile a
+control=$(hits)
+if [ "$control" -gt "$after" ]; then
+    echo 'Rust cache reuses the same working directory but misses across lane directories' >&2
+else
+    echo 'Rust cache did not reuse even the same-directory positive control' >&2
+fi
+exit 1
 "#;
 
 // Both the diagnostic and job runner start with an empty environment: no grant,
@@ -442,6 +489,57 @@ fn doctor_cache_probe_refuses_disabled_sandbox_before_cache_setup() {
     let error = probe_cache(root.path()).unwrap_err();
     assert!(error.to_string().contains("OS wrapping is disabled"));
     assert_eq!(std::fs::read_dir(root.path()).unwrap().count(), 0);
+}
+
+#[cfg(all(test, target_os = "linux"))]
+#[test]
+// trace:BUG-2519 | ai:codex
+fn doctor_cache_reuse_probe_distinguishes_path_misses_and_uncached_compiles() {
+    use std::os::unix::fs::PermissionsExt;
+    for (mode, expected, diagnostic) in [
+        ("cross", true, ""),
+        ("same", false, "misses across lane directories"),
+        ("none", false, "same-directory positive control"),
+    ] {
+        let dir = tempfile::tempdir().unwrap();
+        let wrapper = dir.path().join("sccache");
+        std::fs::write(dir.path().join("mode"), mode).unwrap();
+        std::fs::write(
+            &wrapper,
+            r#"#!/bin/sh
+set -eu
+state=$(dirname "$0")
+hits=0
+[ ! -f "$state/hits" ] || hits=$(cat "$state/hits")
+if [ "$1" = --show-stats ]; then
+    if [ ! -f "$state/hits" ]; then
+        printf 'Cache hits  0\n'
+        exit 0
+    fi
+    printf 'Cache hits (Rust)  %s\n' "$hits"
+    exit 0
+fi
+mode=$(cat "$state/mode")
+key=$PWD
+[ "$mode" != cross ] || key=shared
+if [ "$mode" != none ] && [ -f "$state/keys" ] && grep -Fxq "$key" "$state/keys"; then
+    hits=$((hits + 1))
+fi
+printf '%s\n' "$key" >>"$state/keys"
+printf '%s\n' "$hits" >"$state/hits"
+"#,
+        )
+        .unwrap();
+        std::fs::set_permissions(&wrapper, std::fs::Permissions::from_mode(0o700)).unwrap();
+        let output = std::process::Command::new("/bin/sh")
+            .args(["-c", CACHE_REUSE_PROBE_SCRIPT])
+            .env("AIDA_SCCACHE_PIDS", "123")
+            .env("RUSTC_WRAPPER", &wrapper)
+            .output()
+            .unwrap();
+        assert_eq!(output.status.success(), expected, "{mode}: {output:?}");
+        assert!(String::from_utf8_lossy(&output.stderr).contains(diagnostic));
+    }
 }
 
 /// Whether the launcher's `key` reaches a job.
