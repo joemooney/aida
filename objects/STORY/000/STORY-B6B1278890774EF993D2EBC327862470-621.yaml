@@ -19,8 +19,16 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-10T03:05:40.778642968Z
-modified_at: 2026-11-10T03:05:40.778642968Z
+modified_at: 2026-11-10T03:11:39.359464221Z
 req_type: Story
+comments:
+- id: 01a1c370-9b5f-7770-a921-e48f45e2aecb
+  author: joe
+  content: 'ADVISOR SIGNOFF WITH CHANGES (2026-11-10 03:25 UTC) after independent Codex design review. Binding changes: (1) Separate impact severity from blocking disposition: every finding records severity AND an explicit reviewer decision blocking/deferred with a one-line deferral rationale; ''minor'' (a real small bug per aida-review.md:1007) is NOT automatically deferred. A verdict whose findings are all deferred is APPROVED. Missing or malformed disposition fails closed as blocking, including legacy findings. (2) Deferred findings reach the open sweep durably at approval time: reuse the findings_gate.rs sink (around 1984/2047) but with a durable pending record and retry or reconciliation, not completion-time best effort with swallowed errors (2014). (3) Risk tier: HIGH takes precedence over the whole diff (any HIGH path makes the PR HIGH), and review templates, agent policy, vendor execution composition (vendors/headless.rs), phase gates and lifecycle routing (phase_gates.rs), schema or config trust, dependencies and build hooks, and test-oracle weakening are HIGH. Inspect both rename paths, mode and symlink changes; unreadable or unsupported evidence never yields LOW. Historical regression signal may only raise a tier. Align names with fire-mode FASTTRACK/STANDARD/STRICT (.aida/discipline/fire-mode.md:84) and reuse aida-fasttrack eligibility and punt-out rules. (4) The tier is recorded in the gate ledger bound to repository, base, head, classifier version and reasons, and recomputed when any changes; only the advisor may override it. (5) LOW grants no hold-clear authority and skips no train admission rule or stacked-tip CI. Slices: S1 = items 1 and 2 (disposition field, verdict rule, durable sweep) with reviewer guidance updated (Refs STORY-2698). S2 = classifier recorded in the ledger, advisory only (Refs). S3 = tier drives review depth and fast-track eligibility, plus the adversarial tests in the review (completes). Next lane: S1.'
+  created_at: 2026-11-10T03:11:39.359464221Z
+  modified_at: 2026-11-10T03:11:39.359464221Z
+  session_id: 01a1beff-fc3b-78e2-93e2-9b0c283b0339
+  harness_version: 2.1.319 (Claude Code)
 filed_at:
   code_sha: 838f14c3c2811c6b63da5d465700cff773c36190
   branch: main
