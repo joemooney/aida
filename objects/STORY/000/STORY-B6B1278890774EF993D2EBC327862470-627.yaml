@@ -8,7 +8,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-10T03:52:00.571796159Z
-modified_at: 2026-11-10T15:21:29.564629654Z
+modified_at: 2026-11-10T15:21:30.811458258Z
 req_type: Story
 comments:
 - id: 01a1c399-6840-7383-843e-9930f6eaa3f7
@@ -133,6 +133,23 @@ comments:
   content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: Full sweep: installed invocation context, report timeout/error parity and obsolete docs remain; required CI is still running.. No triage reason was given.'
   created_at: 2026-11-10T15:21:29.564623955Z
   modified_at: 2026-11-10T15:21:29.564623955Z
+  session_id: 01a1c39a-801a-7bd1-8da9-c955a6707f0b
+  harness_version: 2.1.321 (Claude Code)
+- id: 01a1c60c-cf35-7350-ba6d-5ed1747e4ebc
+  author: joe
+  content: |-
+    REVIEW FINDINGS TO ADDRESS (STORY-2704):
+    Verdict: CHANGES REQUESTED
+    Reviewed commit: 1815256dddf9
+    Recorded: 2026-11-10T14:55:26.639738925+00:00
+    Findings:
+    1. [P2] aida-porcelain/src/flow_runtime.rs:67-69 and docs/cli/08-reporting.md:795: installed direct aida-flow/aida-porcelain commands require AIDA_BIN but installation does not supply it and docs omit it. Keep fixed AIDA JSON reads; supply supported context or document explicit AIDA_BIN setup/context-injecting aida porcelain invocation, and cover the documented installed path.
+    2. [P2] aida-porcelain/src/flow_runtime.rs:80: the new 45-second whole-report timeout breaks parity for valid windows whose sequential PR/commit/train reads exceed 45 seconds, although each built-in read succeeds within its 15-second budget. Align report timeout semantics and add delayed-success parity coverage.
+    3. [P2] aida-porcelain/src/flow_runtime.rs:82-86: failed child stdout/stderr is wrapped in a new error, changing builtin runtime failure output and nesting agent error encoding for missing gh, invalid history or bad ledgers. Preserve failure channels/status and add cross-binary failed-reader parity fixtures across output modes.
+    4. [P3] docs/cli/08-reporting.md:799-803: replace obsolete claims that porcelain reads core ledger APIs directly and retains the companion when rolling back before first adoption. It delegates to AIDA_BIN JSON and generation rollback removes absent companion/alias members.
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
+  created_at: 2026-11-10T15:21:30.677858674Z
+  modified_at: 2026-11-10T15:21:30.677858674Z
   session_id: 01a1c39a-801a-7bd1-8da9-c955a6707f0b
   harness_version: 2.1.321 (Claude Code)
 history:
