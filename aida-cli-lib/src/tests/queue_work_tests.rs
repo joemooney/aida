@@ -3601,7 +3601,7 @@ fn done_spec_with_outstanding_refusal_is_awaiting_rework_not_awaiting_merge() {
         Some(&approved_head),
         Some("claude/bug-1515"),
         Some("looks good"),
-        &[],
+        &[String::new()], // trace:STORY-2698 | ai:codex — clear the prior refusal.
         "reviewer",
     )
     .unwrap();

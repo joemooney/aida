@@ -4,7 +4,8 @@
 //! mistyped sha is refused at record time and nothing is written.
 // trace:BUG-b6b1278890774ef993d2ebc327862470-013 | ai:claude
 
-use crate::*;
+use crate::{handle_review_record_at, with_review_pr_subject, ReviewPrSubject};
+use anyhow::Result;
 
 /// A tempdir project whose root holds one commit; returns it and that sha.
 fn project() -> (tempfile::TempDir, String) {

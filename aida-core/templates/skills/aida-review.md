@@ -1365,3 +1365,37 @@ Review decision fixtures (same current head, no actionable defects):
 | Green except merge-hold-gate | This review’s fresh APPROVED verdict, then authorized clearance | Operator-only canary result | WAITING |
 | Pending or running | Fresh APPROVED verdict may release Rework hold | None | APPROVED |
 | Pending or running | Any | Specific named test result needed for judgment | WAITING |
+
+<!-- trace:STORY-2698 | ai:codex -->
+### Finding disposition and approval-time sweep
+
+Every finding records impact severity separately from the reviewer's explicit
+`blocking` or `deferred` disposition. A minor finding can be a real blocking bug;
+severity alone never justifies deferral. A deferred finding requires a one-line
+rationale explaining why follow-up is acceptable.
+
+Record structured findings with repeated `--finding` JSON arguments, for example:
+
+```bash
+aida review record <SPEC> --verdict request-changes \
+  --finding '{"text":"Document the fallback","severity":"cosmetic","disposition":"deferred","rationale":"The implemented behavior is correct and tested"}'
+```
+
+The record retains `findings` as a text array and adds a positional
+`finding_dispositions` array containing the structured evidence. Direct verdict
+JSON must supply both arrays. Missing, malformed or legacy disposition evidence
+blocks, including an ostensibly approved verdict. Once prior findings are fixed,
+explicitly clear them with `--finding ''`; omitting the flag preserves their
+blocking evidence. The prior round stays in history. An all-deferred verdict becomes
+APPROVED. Mixed findings remain CHANGES REQUESTED; rejected and waiting retain
+their existing semantics.
+
+Before publishing approval, the host persists the complete record with
+`sweep_pending: true`, files its deferred findings into the open sweep under the
+store writer lock, then records approval. Contained reviewers hand this work to
+the collecting launcher. Failed delivery leaves a blocking pending record and
+returns an error. After repairing the reported store problem, repeat the review
+record command (or retry launcher collection with the original handoff); delivery
+is deduplicated by source and finding hash. Completion-time carry-forward remains
+a retry fallback. This slice changes no risk tier, review depth, hold-clearance
+or train eligibility policy.

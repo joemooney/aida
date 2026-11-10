@@ -965,12 +965,18 @@ fn exclusion_metadata_check(meta: &std::fs::Metadata, uid: u32) -> std::result::
     if !meta.is_file() {
         return Err("is not a regular file".into());
     }
-    let mode = meta.mode() & 0o7777;
-    if mode != 0o600 {
-        return Err(format!("has mode {mode:o}, not 600"));
-    }
+    exclusion_mode_check(meta.mode())?;
     if meta.uid() != uid {
         return Err(format!("is owned by uid {}, not {uid}", meta.uid()));
+    }
+    Ok(())
+}
+
+// trace:STORY-2695 | ai:codex
+fn exclusion_mode_check(mode: u32) -> std::result::Result<(), String> {
+    let mode = mode & 0o7777;
+    if mode != 0o600 {
+        return Err(format!("has mode {mode:o}, not 600"));
     }
     Ok(())
 }

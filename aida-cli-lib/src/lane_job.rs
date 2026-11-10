@@ -337,6 +337,211 @@ fn cargo_with_cache_lifecycle(
     }
 }
 
+// Exercise the production lane environment, mount policy and server lifecycle.
+// No Cargo build or seat-job submission is needed for this bounded diagnostic.
+// trace:STORY-2642 | ai:codex
+pub(crate) fn probe_cache(root: &Path) -> Result<()> {
+    probe_cache_script(root, CACHE_PROBE_SCRIPT)
+}
+
+// Connectivity alone cannot establish reuse between independent lane targets.
+// trace:BUG-2519 | ai:codex
+pub(crate) fn probe_cache_reuse(root: &Path) -> Result<()> {
+    probe_cache_script(root, CACHE_REUSE_PROBE_SCRIPT)
+}
+
+fn probe_cache_script(root: &Path, script: &str) -> Result<()> {
+    anyhow::ensure!(
+        crate::session::os_wrap_explicit(root) != Some(false),
+        "OS wrapping is disabled; enable the lane sandbox before probing cache reachability"
+    );
+    let parent = aida_core::exec_context::Environment::capture();
+    let lane = LaneJobs {
+        seat: root.into(),
+        inbox: PathBuf::new(),
+        results: PathBuf::new(),
+        lease_id: "doctor-cache".into(),
+        build_env: lane_sccache_env(&parent),
+        host_env: HOST_ENV_ALLOWED
+            .iter()
+            .filter_map(|key| Some(((*key).to_owned(), parent.get(*key)?.to_str()?.to_owned())))
+            .collect(),
+        program: "cargo".into(),
+        sandbox: Sandbox::Bwrap,
+    };
+    let env = lane.job_env(&JobRequest {
+        argv: vec!["cargo".into()],
+        env: BTreeMap::new(),
+    });
+    anyhow::ensure!(
+        env.contains_key("SCCACHE_DIR"),
+        "host Cargo has no supported sccache configuration"
+    );
+    lane.prepare_cache()?;
+    let (program, args) =
+        cargo_with_cache_lifecycle(Path::new("/bin/sh"), vec!["-c".into(), script.into()], &env);
+    let (program, args) = crate::session::lane_job_wrapped_program_and_args(
+        root,
+        true,
+        &lane.sandbox_rw_paths(&env),
+        &program,
+        args,
+    )?;
+    let mut cmd = lane_command(&program);
+    cmd.args(args).current_dir(root).envs(env);
+    let (status, _, stderr) = aida_core::transport_policy::bounded_with_stderr(
+        cmd,
+        &[],
+        65536,
+        Instant::now() + Duration::from_secs(25),
+    )?;
+    anyhow::ensure!(
+        status.success(),
+        "sandbox cache transport/write probe exited {status}: {}",
+        String::from_utf8_lossy(&stderr).trim()
+    );
+    Ok(())
+}
+
+// Refuse the lifecycle's uncached fallback and test disk access from the sandbox.
+const CACHE_PROBE_SCRIPT: &str = r#"
+[ -n "$AIDA_SCCACHE_PIDS" ] || exit 1
+"$RUSTC_WRAPPER" --show-stats >/dev/null || exit 1
+probe=$(mktemp "$SCCACHE_DIR/doctor-XXXXXXXX") || exit 1
+trap 'rm -f -- "$probe"' EXIT
+printf lane-cache-probe >"$probe" && [ "$(cat "$probe")" = lane-cache-probe ]
+"#;
+
+// Hold source, output, compiler and flags constant: only the working directory
+// changes. The final same-directory control distinguishes path-key misses from
+// an unavailable or non-caching compiler. A fresh crate name and source path
+// prevent older doctor probes from supplying a false hit. Each sandbox has its own server statistics.
+// trace:BUG-2519 | ai:codex
+const CACHE_REUSE_PROBE_SCRIPT: &str = r#"
+set -eu
+[ -n "$AIDA_SCCACHE_PIDS" ] || exit 1
+probe=$(mktemp -d /tmp/aida-cache-reuse-XXXXXXXX)
+trap 'rm -rf -- "$probe"' EXIT
+mkdir "$probe/a" "$probe/b" "$probe/out"
+printf 'pub fn answer() -> u32 { 42 }\n' >"$probe/lib.rs"
+# The server already owns its cache configuration, so isolate the key with a
+# fresh crate name rather than attempting to change SCCACHE_DIR on the client.
+crate_name=$(basename "$probe" | tr 'A-Z-' 'a-z_')
+compile() {
+    (cd "$probe/$1" && "$RUSTC_WRAPPER" rustc --crate-name "$crate_name" \
+        --crate-type rlib --emit=dep-info,link "$probe/lib.rs" --out-dir "$probe/out")
+}
+hits() {
+    "$RUSTC_WRAPPER" --show-stats | awk '/^Cache hits / { valid=1 } /^Cache hits \(Rust\)/ { hits=$NF } END { if (!valid) exit 1; print hits+0 }'
+}
+before=$(hits)
+compile a
+compile b
+after=$(hits)
+if [ "$after" -gt "$before" ]; then
+    exit 0
+fi
+compile a
+control=$(hits)
+if [ "$control" -gt "$after" ]; then
+    echo 'Rust cache reuses the same working directory but misses across lane directories' >&2
+else
+    echo 'Rust cache did not reuse even the same-directory positive control' >&2
+fi
+exit 1
+"#;
+
+// Both the diagnostic and job runner start with an empty environment: no grant,
+// session, launcher-only variable or credential may leak into a build tool.
+// trace:STORY-2642 | ai:codex
+fn lane_command(program: &str) -> std::process::Command {
+    let mut command = std::process::Command::new(program);
+    command.env_clear();
+    command
+}
+
+#[cfg(all(test, target_os = "linux"))]
+#[test]
+fn doctor_cache_probe_refuses_uncached_fallback_and_checks_writes() {
+    let dir = tempfile::tempdir().unwrap();
+    let run = |pid: &str, wrapper: &str| {
+        std::process::Command::new("/bin/sh")
+            .args(["-c", CACHE_PROBE_SCRIPT])
+            .env("AIDA_SCCACHE_PIDS", pid)
+            .env("RUSTC_WRAPPER", wrapper)
+            .env("SCCACHE_DIR", dir.path())
+            .status()
+            .unwrap()
+            .success()
+    };
+    assert!(!run("", "/bin/true"));
+    assert!(!run("123", "/bin/false"));
+    assert!(run("123", "/bin/true"));
+    assert_eq!(std::fs::read_dir(dir.path()).unwrap().count(), 0);
+}
+
+#[cfg(all(test, target_os = "linux"))]
+#[test]
+// trace:STORY-2642 | ai:codex
+fn doctor_cache_probe_refuses_disabled_sandbox_before_cache_setup() {
+    let root = tempfile::tempdir().unwrap();
+    let _env = crate::test_env::EnvVarsGuard::set(&[("AIDA_OS_WRAP", "0")]);
+    let error = probe_cache(root.path()).unwrap_err();
+    assert!(error.to_string().contains("OS wrapping is disabled"));
+    assert_eq!(std::fs::read_dir(root.path()).unwrap().count(), 0);
+}
+
+#[cfg(all(test, target_os = "linux"))]
+#[test]
+// trace:BUG-2519 | ai:codex
+fn doctor_cache_reuse_probe_distinguishes_path_misses_and_uncached_compiles() {
+    use std::os::unix::fs::PermissionsExt;
+    for (mode, expected, diagnostic) in [
+        ("cross", true, ""),
+        ("same", false, "misses across lane directories"),
+        ("none", false, "same-directory positive control"),
+    ] {
+        let dir = tempfile::tempdir().unwrap();
+        let wrapper = dir.path().join("sccache");
+        std::fs::write(dir.path().join("mode"), mode).unwrap();
+        std::fs::write(
+            &wrapper,
+            r#"#!/bin/sh
+set -eu
+state=$(dirname "$0")
+hits=0
+[ ! -f "$state/hits" ] || hits=$(cat "$state/hits")
+if [ "$1" = --show-stats ]; then
+    if [ ! -f "$state/hits" ]; then
+        printf 'Cache hits  0\n'
+        exit 0
+    fi
+    printf 'Cache hits (Rust)  %s\n' "$hits"
+    exit 0
+fi
+mode=$(cat "$state/mode")
+key=$PWD
+[ "$mode" != cross ] || key=shared
+if [ "$mode" != none ] && [ -f "$state/keys" ] && grep -Fxq "$key" "$state/keys"; then
+    hits=$((hits + 1))
+fi
+printf '%s\n' "$key" >>"$state/keys"
+printf '%s\n' "$hits" >"$state/hits"
+"#,
+        )
+        .unwrap();
+        std::fs::set_permissions(&wrapper, std::fs::Permissions::from_mode(0o700)).unwrap();
+        let output = std::process::Command::new("/bin/sh")
+            .args(["-c", CACHE_REUSE_PROBE_SCRIPT])
+            .env("AIDA_SCCACHE_PIDS", "123")
+            .env("RUSTC_WRAPPER", &wrapper)
+            .output()
+            .unwrap();
+        assert_eq!(output.status.success(), expected, "{mode}: {output:?}");
+        assert!(String::from_utf8_lossy(&output.stderr).contains(diagnostic));
+    }
+}
+
 /// Whether the launcher's `key` reaches a job.
 pub(crate) fn host_key_allowed(key: &str) -> bool {
     HOST_ENV_ALLOWED.contains(&key) || key.starts_with("LC_")
@@ -398,7 +603,7 @@ const REFUSED_OPTIONS: &[&str] = &[
 pub(crate) fn validate(job: &JobRequest) -> std::result::Result<(), String> {
     let argv = &job.argv;
     // trace:STORY-2640 | ai:codex — one exact additional job kind.
-    if fast_gate_job(job) {
+    if job.argv == ["make", "check-ci-fast"] {
         return if job.env.is_empty() {
             Ok(())
         } else {
@@ -926,6 +1131,13 @@ impl LaneJobs {
         }
         std::fs::create_dir_all(&self.inbox)
             .with_context(|| format!("create {}", self.inbox.display()))?;
+        self.prepare_cache()?;
+        std::fs::create_dir_all(&self.results)
+            .with_context(|| format!("create {}", self.results.display()))?;
+        Ok(())
+    }
+
+    fn prepare_cache(&self) -> Result<()> {
         // Only the host-selected lane cache is made writable; cargo home stays read-only.
         // trace:STORY-2641 | ai:codex
         if let Some((_, cache)) = self.build_env.iter().find(|(key, _)| key == "SCCACHE_DIR") {
@@ -944,8 +1156,6 @@ impl LaneJobs {
                 crate::shell_quote(cache)
             );
         }
-        std::fs::create_dir_all(&self.results)
-            .with_context(|| format!("create {}", self.results.display()))?;
         Ok(())
     }
 
@@ -1502,6 +1712,22 @@ fn run_one_timed(
     seed: &SeedNote,
     timeout: impl FnOnce(&JobRequest, bool) -> Duration,
 ) {
+    run_one_authorized(lane, id, job, stop, tally, seed, timeout, false)
+}
+
+// Only the host calls this with a trusted command; seat submissions retain validate().
+// trace:BUG-2512 | ai:codex
+#[allow(clippy::too_many_arguments)]
+fn run_one_authorized(
+    lane: &LaneJobs,
+    id: &str,
+    job: std::result::Result<JobRequest, String>,
+    stop: &AtomicBool,
+    tally: &Tally,
+    seed: &SeedNote,
+    timeout: impl FnOnce(&JobRequest, bool) -> Duration,
+    host_gate: bool,
+) {
     let seed_note = seed.note.as_str();
     let out_file = out_path(&lane.results, id);
     let refuse = |why: &str| {
@@ -1510,14 +1736,20 @@ fn run_one_timed(
         tally.incomplete.fetch_add(1, Ordering::Relaxed);
         lane.log(&format!("{id} refused: {why}"));
     };
-    let job = match job.and_then(|j| validate(&j).map(|()| j)) {
+    let job = match job.and_then(|j| {
+        if host_gate && fast_gate_job(&j) && j.env.is_empty() {
+            Ok(j)
+        } else {
+            validate(&j).map(|()| j)
+        }
+    }) {
         Ok(job) => job,
         Err(why) => return refuse(&why),
     };
     let env = lane.job_env(&job);
     let Some(cargo) = resolve_program(
         if fast_gate_job(&job) {
-            "make"
+            &job.argv[0]
         } else {
             &lane.program
         },
@@ -1584,15 +1816,12 @@ fn run_one_timed(
         Ok(f) => f,
         Err(e) => return refuse(&format!("open the output: {e}")),
     };
-    let mut cmd = std::process::Command::new(&program);
+    let mut cmd = lane_command(&program);
     cmd.args(&args)
         .current_dir(&lane.seat)
         .stdin(std::process::Stdio::null())
         .stdout(out)
         .stderr(err)
-        // A job never inherits the launcher's environment: no grant, no
-        // session or launcher-only variable, no credential.
-        .env_clear()
         .envs(&env);
     #[cfg(unix)]
     {
@@ -1915,6 +2144,7 @@ pub(crate) fn tail(text: &str, n: usize) -> String {
 // trace:STORY-2640 | ai:codex
 pub(crate) fn fast_gate_job(job: &JobRequest) -> bool {
     job.argv == ["make", "check-ci-fast"]
+        || (job.argv.len() == 3 && job.argv[0] == "/bin/sh" && job.argv[1] == "-c")
 }
 
 /// Host-created id and host-only result, never a receipt supplied by the seat.
@@ -1923,6 +2153,7 @@ pub(crate) fn run_fast_gate(
     main: &Path,
     seat: &Path,
     lease: &str,
+    command: String,
 ) -> Result<Option<(i32, String)>> {
     if crate::session::bwrap_availability() != crate::session::BwrapAvailability::Ok {
         return Ok(None);
@@ -1934,7 +2165,7 @@ pub(crate) fn run_fast_gate(
     check_fast_gate_results(&lane)?;
     let id = format!("fast-{}", uuid::Uuid::new_v4());
     let job = JobRequest {
-        argv: vec!["make".into(), "check-ci-fast".into()],
+        argv: vec!["/bin/sh".into(), "-c".into(), command],
         env: BTreeMap::new(),
     };
     run_seeded_fast_gate(&lane, &id, job);
@@ -1959,13 +2190,15 @@ fn fast_gate_output_tail(path: &Path) -> Result<String> {
 // trace:STORY-2640 | ai:codex
 fn run_seeded_fast_gate(lane: &LaneJobs, id: &str, job: JobRequest) {
     let seed = seed_lane_target(lane);
-    run_one(
+    run_one_authorized(
         lane,
         id,
         Ok(job),
         &AtomicBool::new(false),
         &Tally::default(),
         &seed,
+        timeout_for,
+        true,
     );
 }
 
@@ -2338,5 +2571,59 @@ mod fast_gate_job_tests {
             crate::lane_fast_gate::marker(tmp.path(), "lane"),
             "skipped(timeout)"
         );
+    }
+}
+
+#[cfg(all(test, target_os = "linux"))]
+#[path = "tests/lane_host/cache_probe.rs"]
+mod doctor_cache_probe_tests;
+
+// trace:BUG-2512 | ai:codex
+#[cfg(test)]
+mod bug_2512_tests {
+    use super::*;
+
+    #[test]
+    fn bug_2512_python_fast_check_runs_without_makefile_and_seat_shell_is_refused() {
+        let tmp = tempfile::tempdir().unwrap();
+        let seat = tmp.path().join("python-seat");
+        std::fs::create_dir_all(&seat).unwrap();
+        std::fs::write(seat.join("test_example.py"),
+            "import unittest\nclass Example(unittest.TestCase):\n    def test_ok(self):\n        self.assertEqual(2 + 2, 4)\n").unwrap();
+        let lane = LaneJobs {
+            inbox: seat.join(INBOX_RELATIVE),
+            seat,
+            results: tmp.path().join("host-results"),
+            lease_id: "python".into(),
+            build_env: Vec::new(),
+            host_env: vec![("PATH".into(), "/usr/bin:/bin".into())],
+            program: "cargo".into(),
+            sandbox: Sandbox::TestUnwrapped,
+        };
+        lane.prepare().unwrap();
+        let job = JobRequest {
+            argv: vec![
+                "/bin/sh".into(),
+                "-c".into(),
+                "python3 -m unittest discover".into(),
+            ],
+            env: BTreeMap::new(),
+        };
+        assert!(
+            validate(&job).is_err(),
+            "seat shell submissions must remain refused"
+        );
+        run_seeded_fast_gate(&lane, "python-pass", job.clone());
+        let output = fast_gate_output_tail(&out_path(&lane.results, "python-pass")).unwrap();
+        assert_eq!(read_rc(&lane.results, "python-pass"), Some(0), "{output}");
+        assert!(output.contains("Ran 1 test"), "{output}");
+        std::fs::write(lane.seat.join("test_example.py"),
+            "import unittest\nclass Example(unittest.TestCase):\n    def test_bad(self):\n        self.fail('expected regression failure')\n").unwrap();
+        run_seeded_fast_gate(&lane, "python-fail", job);
+        let output = fast_gate_output_tail(&out_path(&lane.results, "python-fail")).unwrap();
+        assert_eq!(read_rc(&lane.results, "python-fail"), Some(1), "{output}");
+        assert!(output.contains("expected regression failure"), "{output}");
+        assert!(!lane.seat.join("Makefile").exists());
+        assert!(!lane.seat.join("Cargo.toml").exists());
     }
 }

@@ -12,6 +12,27 @@
 // reaches all of it via `crate::`.
 // trace:SPIKE-78 | ai:claude
 
+use crate::{
+    add_aida_gitignore_entries, attached_store_present, auto_allocate_initial_blocks,
+    auto_allocate_initial_blocks_with_scope, branch_exists_anywhere, bwrap_status_line,
+    bypass_confirm, cli, commit, config_cmd, config_commit, config_lookup, config_path_for_project,
+    confirm_destructive_reset, count_requirements_in_sqlite, count_requirements_in_store,
+    current_user_id, decide_init_push_plan, detect_distributed_store, dispatch,
+    ensure_discipline_pack_scaffold, ensure_ecosystem_watch_scaffold,
+    ensure_project_manifest_scaffold, first_run, focus, forge, git_init_decision,
+    gitlab_project_create, glyph, handle_init_minimal, history, hostname,
+    init_autopilot_config_section, init_bootstrap, init_capture_config_section, init_cmd,
+    init_contained_config_section, init_intake_config_section, init_store_mirror_config_section,
+    init_ultraplan_config_section, init_worktree_config_section, init_worktree_pool_config_section,
+    maintenance_schedule, maybe_offer_user_aida_instructions, maybe_prompt_agent_posture,
+    maybe_prompt_confirm_bypass, maybe_prompt_init_config, permissions, project_capabilities,
+    prompt_yes_no, protocol_cmd, read_project_config_value, refresh_seed_target,
+    register_project_in_global_registry, resolve_node_name, run, scaffold_memory_pack,
+    scaffold_refresh, scaffold_starter_roles, statusline_project_root, try_attach_store_worktree,
+    unattached_distributed_root, unmanaged_nested_projects, write_scaffold_artifact,
+    GitInitDecision, InitPushPlan, RefreshSeedTarget,
+};
+
 use crate::process_retry::RetryEtxtbsy;
 use anyhow::Result;
 use colored::Colorize;
@@ -21,7 +42,14 @@ use colored::Colorize;
 pub(crate) mod init_cmd_args;
 pub(crate) use init_cmd_args::*;
 
-use crate::*;
+use aida_core::{
+    determine_requirements_path, merge_agents_md_aida_block, seed_meta_requirements,
+    AgentsMdBlockMerge, DatabaseBackend, Requirement, RequirementPriority, RequirementStatus,
+    RequirementType, RequirementsStore, ScaffoldConfig, Scaffolder, Storage,
+};
+use anyhow::Context;
+use clap::Parser;
+use std::io::IsTerminal;
 
 #[derive(Debug, Clone)]
 pub(crate) struct PostInitHookContext {

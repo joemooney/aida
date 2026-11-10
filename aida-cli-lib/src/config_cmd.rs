@@ -3674,7 +3674,9 @@ fn cli_edit_config_knob(
     } else {
         crate::glyph_config::Scope::Project
     };
-    let path = match crate::glyph_config::config_path_for(scope) {
+    let path = match capture_glyph_exec(scope)
+        .and_then(|exec| crate::glyph_config::config_path_for(scope, &exec))
+    {
         Ok(p) => p,
         Err(e) => return EditOutcome::Blocked(format!("cannot resolve config path: {e}")),
     };
@@ -4069,6 +4071,34 @@ fn rendered_toml_value(v: &toml_edit::Value) -> String {
     }
 }
 
+// Capture at the config command boundary; the path resolver has no ambient inputs.
+// trace:STORY-2538 | ai:codex
+fn capture_glyph_exec(
+    scope: crate::glyph_config::Scope,
+) -> Result<aida_core::exec_context::ExecContext> {
+    use aida_core::exec_context::{Environment, ExecContext, SystemClock, ToolPaths};
+    let environment = Environment::capture();
+    let home = crate::home_dir();
+    #[cfg(test)]
+    let home = environment
+        .get("AIDA_TEST_HOME")
+        .map(|path| std::path::PathBuf::from(path).join("home"))
+        .or(home);
+    let root = match scope {
+        crate::glyph_config::Scope::Project => crate::find_project_root()
+            .context("not inside an AIDA project — run `aida init`, or use `--user`")?,
+        crate::glyph_config::Scope::User => std::path::PathBuf::new(),
+    };
+    Ok(ExecContext::new(
+        environment,
+        home,
+        root.clone(),
+        root,
+        ToolPaths::default(),
+        std::sync::Arc::new(SystemClock::default()),
+    ))
+}
+
 /// Handle `aida config glyph ...` — the CLI surface over the glyph registry,
 /// themes, and per-symbol override table (EPIC-45 phase 4). Pure ergonomics +
 /// theme presets + a format-preserving TOML writer on top of the tested
@@ -4159,7 +4189,7 @@ pub(crate) fn handle_config_glyph(cmd: &GlyphCommand) -> Result<()> {
 
             // "unicode" = clear any theme (return to the implicit default).
             if raw.eq_ignore_ascii_case("unicode") {
-                let path = glyph_config::config_path_for(scope)?;
+                let path = glyph_config::config_path_for(scope, &capture_glyph_exec(scope)?)?;
                 // Clearing = unset the [ui] theme key by setting nothing; we
                 // model it via expand-free path: just drop the reference.
                 clear_theme_reference(&path)?;
@@ -4179,7 +4209,7 @@ pub(crate) fn handle_config_glyph(cmd: &GlyphCommand) -> Result<()> {
                 )
             })?;
 
-            let path = glyph_config::config_path_for(scope)?;
+            let path = glyph_config::config_path_for(scope, &capture_glyph_exec(scope)?)?;
             if *expand {
                 let base = match theme.base {
                     glyphs::GlyphProfile::Unicode => "unicode",
@@ -4214,7 +4244,7 @@ pub(crate) fn handle_config_glyph(cmd: &GlyphCommand) -> Result<()> {
                 )
             })?;
             let scope = if *user { Scope::User } else { Scope::Project };
-            let path = glyph_config::config_path_for(scope)?;
+            let path = glyph_config::config_path_for(scope, &capture_glyph_exec(scope)?)?;
             glyph_config::set_override(&path, glyph.name(), value)?;
             println!(
                 "{} {} = {} ({})",
@@ -4234,7 +4264,7 @@ pub(crate) fn handle_config_glyph(cmd: &GlyphCommand) -> Result<()> {
                 )
             })?;
             let scope = if *user { Scope::User } else { Scope::Project };
-            let path = glyph_config::config_path_for(scope)?;
+            let path = glyph_config::config_path_for(scope, &capture_glyph_exec(scope)?)?;
             let removed = glyph_config::unset_override(&path, glyph.name())?;
             if removed {
                 println!(
@@ -4255,7 +4285,7 @@ pub(crate) fn handle_config_glyph(cmd: &GlyphCommand) -> Result<()> {
 
         GlyphCommand::Reset { user } => {
             let scope = if *user { Scope::User } else { Scope::Project };
-            let path = glyph_config::config_path_for(scope)?;
+            let path = glyph_config::config_path_for(scope, &capture_glyph_exec(scope)?)?;
             let removed = glyph_config::reset_overrides(&path)?;
             if removed {
                 println!(
@@ -5730,7 +5760,19 @@ mod bug_1667_bypass_gate_tests {
             include_str!("lib_part6.rs")
         );
         for (name, source) in [
-            ("doctor_cmd.rs", include_str!("doctor_cmd.rs")),
+            (
+                "doctor/",
+                concat!(
+                    include_str!("doctor_cmd.rs"),
+                    include_str!("doctor/store_repair.rs"),
+                    include_str!("doctor/worktrees.rs"),
+                    include_str!("doctor/disk.rs"),
+                    include_str!("doctor/remote.rs"),
+                    include_str!("doctor/sandbox.rs"),
+                    include_str!("doctor/vendors.rs"),
+                    include_str!("doctor/report.rs"),
+                ),
+            ),
             ("lane_host.rs", include_str!("lane_host.rs")),
             ("lib.rs", lib_src.as_str()),
         ] {

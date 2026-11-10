@@ -1,7 +1,23 @@
 //! Questions command: decision-request sweep, answer/clarify/remedy flows, research, headless-log question and outage detection (STORY-1488 slice 1)
 // trace:STORY-1488 | ai:claude
 
-use crate::*;
+use crate::all_queued_requirement_ids;
+use crate::{
+    backlog, burndown, current_user_id, find_project_root, in_flight_lease_scopes, not_found,
+    parse_status, record_caller_status_transition, resolve_current_session_id, reviewer_summary,
+    session, QuestionsCommand,
+};
+use crate::{cli, leases};
+use aida_core::DatabaseBackend;
+use aida_core::{
+    Comment, RelationshipType, Requirement, RequirementPriority, RequirementStatus,
+    RequirementType, Storage,
+};
+use anyhow::{Context, Result};
+use colored::Colorize;
+use std::collections::HashSet;
+use std::io::IsTerminal;
+use uuid::Uuid;
 
 // trace:STORY-1728 | ai:claude
 #[path = "questions_args.rs"]
@@ -284,6 +300,8 @@ pub(crate) fn formulate_sweep_decision_request(
         // recommended default: a disposition must be an explicit human call,
         // not an Enter-through. trace:STORY-555 | ai:claude
         SweepKind::Disposition(tag) => aida_core::DecisionRequest {
+            question_id: Some(uuid::Uuid::new_v4()),
+            park_binding: None,
             question: format!(
                 "{} is parked by `{tag}` with no recorded question — what's the disposition?",
                 req.display_id(),
@@ -317,6 +335,8 @@ pub(crate) fn formulate_sweep_decision_request(
             answered_at: None,
         },
         SweepKind::Clarify => aida_core::DecisionRequest {
+            question_id: Some(uuid::Uuid::new_v4()),
+            park_binding: None,
             question: format!(
                 "{} appears to need a human decision before implementation ({}) - should it proceed as written or be parked for clarification?",
                 req.display_id(),
@@ -1923,6 +1943,8 @@ pub(crate) fn questions_ask(
 
     let now = chrono::Utc::now();
     let request = aida_core::DecisionRequest {
+        question_id: Some(uuid::Uuid::new_v4()),
+        park_binding: None,
         question: question.to_string(),
         choices,
         recommended,
@@ -2754,7 +2776,7 @@ fn run_questions(
     matches: &clap::ArgMatches,
     ctx: &crate::cmdkit::DispatchCtx,
 ) -> anyhow::Result<crate::cmdkit::Flow> {
-    use crate::*;
+    use crate::{handle_questions_command, QuestionsArgs};
     let args = <QuestionsArgs as clap::FromArgMatches>::from_arg_matches(matches)?;
     match &ctx.store {
         None => Ok(crate::cmdkit::Flow::Continue),
@@ -2830,7 +2852,7 @@ fn run_research(
     matches: &clap::ArgMatches,
     ctx: &crate::cmdkit::DispatchCtx,
 ) -> anyhow::Result<crate::cmdkit::Flow> {
-    use crate::*;
+    use crate::{handle_research_command, ResearchArgs};
     let args = <ResearchArgs as clap::FromArgMatches>::from_arg_matches(matches)?;
     match &ctx.store {
         None => Ok(crate::cmdkit::Flow::Continue),

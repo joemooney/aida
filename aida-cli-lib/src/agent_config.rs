@@ -1,7 +1,14 @@
 //! agents.toml posture readers and writers (STORY-1488 slice 1)
 // trace:STORY-1488 | ai:claude
 
-use crate::*;
+use crate::{
+    aida_home_dir, authority_stdin_is_terminal, authority_stdout_is_terminal, bypass_confirm, cli,
+    config_cmd, config_edit, config_lookup, config_path_for_project, read_project_config_value,
+    session,
+};
+use anyhow::{Context, Result};
+use colored::Colorize;
+use std::io::IsTerminal;
 
 pub(crate) fn load_agent_default_flags(
     project_root: &std::path::Path,
@@ -31,6 +38,7 @@ pub(crate) fn parse_agents_toml(path: &std::path::Path) -> Result<Option<toml::V
         .with_context(|| format!("reading agent defaults config {}", path.display()))?;
     let value: toml::Value = toml::from_str(&body)
         .with_context(|| format!("parsing agent defaults config {}", path.display()))?;
+    validate_env_passthrough(&value)?;
     Ok(Some(value))
 }
 
@@ -661,4 +669,94 @@ pub(crate) fn contained_vendor_in_trusted_body(
             ),
         })
         .transpose()
+}
+
+// trace:BUG-2510 | ai:codex
+fn validate_env_passthrough(value: &toml::Value) -> Result<()> {
+    let Some(vendors) = value.get("vendors") else {
+        return Ok(());
+    };
+    let vendors = vendors.as_table().context("[vendors] must be a table")?;
+    for (vendor, config) in vendors {
+        let Some(raw) = config.get("env_passthrough") else {
+            continue;
+        };
+        let names = raw.as_array().with_context(|| {
+            format!(
+                "[vendors.{vendor}] env_passthrough must be an array of exact environment names"
+            )
+        })?;
+        for name in names {
+            let name = name
+                .as_str()
+                .context("env_passthrough entries must be strings")?;
+            let mut bytes = name.bytes();
+            let valid = bytes
+                .next()
+                .is_some_and(|c| c.is_ascii_alphabetic() || c == b'_')
+                && bytes.all(|c| c.is_ascii_alphanumeric() || c == b'_')
+                && !name.starts_with("AIDA_");
+            anyhow::ensure!(valid, "[vendors.{vendor}] env_passthrough requires exact environment names and forbids AIDA_* names");
+        }
+    }
+    Ok(())
+}
+
+/// User defaults followed by a project replacement, including an explicit empty list.
+// trace:BUG-2510 | ai:codex
+pub(crate) fn load_vendor_env_passthrough(
+    root: &std::path::Path,
+    vendor: &str,
+) -> Result<Vec<String>> {
+    let mut names = Vec::new();
+    for path in aida_home_dir()
+        .map(|home| home.join(".aida/agents.toml"))
+        .into_iter()
+        .chain([root.join(".aida/agents.toml")])
+    {
+        let Some(value) = parse_agents_toml(&path)? else {
+            continue;
+        };
+        if let Some(raw) = value
+            .get("vendors")
+            .and_then(|v| v.get(vendor))
+            .and_then(|v| v.get("env_passthrough"))
+        {
+            names = raw
+                .as_array()
+                .expect("validated array")
+                .iter()
+                .map(|v| v.as_str().expect("validated name").to_owned())
+                .collect();
+        }
+    }
+    Ok(names)
+}
+
+#[cfg(test)]
+mod env_passthrough_tests {
+    // trace:BUG-2510 | ai:codex
+    #[test]
+    fn env_passthrough_config_parse() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("agents.toml");
+        for raw in [
+            r#"["XAIAA_*"]"#,
+            r#"["AIDA_ROLE"]"#,
+            r#"["AIDA_*"]"#,
+            r#"[""]"#,
+            r#"["BAD-NAME"]"#,
+            "[42]",
+            "true",
+        ] {
+            std::fs::write(&path, format!("[vendors.codex]\nenv_passthrough = {raw}\n")).unwrap();
+            assert!(super::parse_agents_toml(&path).is_err(), "{raw}");
+        }
+        std::fs::write(
+            &path,
+            "[vendors.codex]\nenv_passthrough = ['XAIAA_API_KEY']\n",
+        )
+        .unwrap();
+        assert!(super::parse_agents_toml(&path).unwrap().is_some());
+    }
 }

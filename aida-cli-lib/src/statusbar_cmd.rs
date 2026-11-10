@@ -16,7 +16,12 @@
 
 use anyhow::Result;
 
-use crate::*;
+use crate::{
+    advance_backend, awaiting_you, collect_awaiting_report_inner, detect_distributed_store,
+    find_main_worktree_root, find_project_root, gather_running_work, read_queue_depth,
+    resolve_effective_role, statusline_cmd, UserStatusContext,
+};
+use aida_core::liveness::LeaseState;
 
 /// Save the current terminal title (XTerm title-stack push). Paired with
 /// [`RESTORE_TITLE`]; opt-in because not every terminal implements the stack.

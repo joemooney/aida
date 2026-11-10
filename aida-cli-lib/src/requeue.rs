@@ -661,6 +661,8 @@ mod tests {
     fn pending_decision_is_left_in_place() {
         let mut r = shelved_req();
         r.decision_request = Some(aida_core::DecisionRequest {
+            question_id: Some(uuid::Uuid::new_v4()),
+            park_binding: None,
             question: "which fork?".into(),
             choices: Vec::new(),
             recommended: None,
@@ -756,6 +758,8 @@ mod tests {
 
     fn pending_decision() -> aida_core::DecisionRequest {
         aida_core::DecisionRequest {
+            question_id: Some(uuid::Uuid::new_v4()),
+            park_binding: None,
             question: "which fork?".into(),
             choices: Vec::new(),
             recommended: None,

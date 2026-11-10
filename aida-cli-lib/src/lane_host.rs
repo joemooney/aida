@@ -203,14 +203,83 @@ fn cache_check(home: Option<&Path>, env: &Environment) -> Check {
         "install sccache and configure RUSTC_WRAPPER or [build] rustc-wrapper in CARGO_HOME/config.toml (default ~/.cargo); aida doctor --lane-host --fix configures an installed CARGO_HOME/bin/sccache")
 }
 
-fn cache_reachability_note() -> Check {
-    advisory(check(
-        "lane-cache-reachability",
-        false,
-        false,
-        "unverified: host wrapper configuration does not prove in-sandbox cache reachability",
-        "verify cache transport with a lane job; the doctor has no in-sandbox cache probe yet",
-    ))
+// trace:STORY-2642 | ai:codex
+fn cache_reachability_check(result: Result<()>) -> Check {
+    let (pass, detail) = match result {
+        Ok(()) => (
+            true,
+            "lane-job sandbox reached its private sccache server and writable cache".into(),
+        ),
+        Err(error) => (false, format!("lane-job cache probe failed: {error:#}")),
+    };
+    check("lane-cache-reachability", pass, false, detail,
+        "configure host Cargo build.rustc-wrapper = 'sccache'; enable bubblewrap and repair ~/.cache/aida/lane-sccache ownership/mode (0700), then retry on the host")
+}
+
+// trace:BUG-2519 | ai:codex
+fn cache_reuse_check(result: Result<()>) -> Check {
+    let (pass, detail) = match result {
+        Ok(()) => (
+            true,
+            "Rust cache reused an identical compilation across working directories".into(),
+        ),
+        Err(error) => (
+            false,
+            format!("lane-job cache reuse probe failed: {error:#}"),
+        ),
+    };
+    let mut row = check("lane-cache-reuse", pass, false, detail,
+        "inspect sccache working-directory cache keys; a reachable cache does not prove cross-seat Rust reuse");
+    // Performance evidence is advisory, never launch admission authority.
+    row.required = false;
+    row
+}
+
+// Release evidence is live and independent of the inspected project's Git refs.
+// trace:STORY-2642 | ai:codex
+fn latest_release() -> Option<String> {
+    let mut cmd = Command::new("curl");
+    cmd.args([
+        "--fail",
+        "--silent",
+        "--show-error",
+        "--location",
+        "--max-time",
+        "8",
+        "https://api.github.com/repos/joemooney/aida/releases/latest",
+    ]);
+    let (status, bytes) = aida_core::transport_policy::bounded(
+        cmd,
+        &[],
+        65536,
+        Instant::now() + Duration::from_secs(10),
+    )
+    .ok()?;
+    if !status.success() {
+        return None;
+    }
+    let value: serde_json::Value = serde_json::from_slice(&bytes).ok()?;
+    value.get("tag_name")?.as_str().map(str::to_owned)
+}
+
+fn release_binary_check(installed: &str, latest: Option<&str>, dirty: bool) -> Check {
+    // Require a conventional release version; malformed API evidence never passes.
+    let version = |s: &str| {
+        s.strip_prefix('v')
+            .unwrap_or(s)
+            .split('.')
+            .map(str::parse::<u64>)
+            .collect::<std::result::Result<Vec<_>, _>>()
+            .ok()
+            .filter(|v| v.len() == 3)
+    };
+    let pass = !dirty
+        && version(installed)
+            .zip(latest.and_then(version))
+            .is_some_and(|(installed, latest)| installed == latest);
+    check("binary", pass, false,
+        format!("installed release {installed}; latest published release {}", latest.unwrap_or("unverified (release lookup failed)")),
+        "run `aida upgrade` to install the latest release; check GitHub connectivity if lookup failed")
 }
 
 pub(crate) fn containment_checks(root: &Path, vendor: &str, sandbox: bool) -> Vec<Check> {
@@ -296,6 +365,29 @@ fn inspect(root: &Path, live_store: bool) -> Vec<Check> {
             home.as_deref(),
             &env,
         ));
+        // trace:BUG-2510 | ai:codex
+        match crate::agent_config::load_vendor_env_passthrough(root, vendor.as_str()) {
+            Ok(names) => vendor_checks.extend(names.iter().map(|name| {
+                advisory(check(
+                    &format!("env-passthrough-{name}"),
+                    env.get(name).is_some(),
+                    false,
+                    if env.get(name).is_some() {
+                        format!("configured environment name is set: {name}")
+                    } else {
+                        format!("configured environment name is unset: {name}")
+                    },
+                    &format!("set {name} in the launching host environment"),
+                ))
+            })),
+            Err(error) => vendor_checks.push(check(
+                "env-passthrough-config",
+                false,
+                false,
+                &format!("invalid credential passthrough configuration: {error}"),
+                "fix env_passthrough in agents.toml",
+            )),
+        }
         for check in &mut vendor_checks {
             check.id = format!("{}:{}", vendor.as_str(), check.id);
         }
@@ -326,13 +418,22 @@ fn inspect(root: &Path, live_store: bool) -> Vec<Check> {
             &["rev-parse", "--path-format=absolute", "--git-common-dir"],
         ))
         .is_some_and(|(project, built)| project == built);
-    checks.push(binary_check(
+    let binary = binary_check(
         dev_build,
         same_project,
         built,
         crate::upgrade_release::build_git_dirty(),
         main.as_deref(),
-    ));
+    );
+    checks.push(if dev_build || !live_store {
+        binary
+    } else {
+        release_binary_check(
+            crate::upgrade_release::current_version(),
+            latest_release().as_deref(),
+            crate::upgrade_release::build_git_dirty(),
+        )
+    });
     let store = root.join(".aida-store");
     let head = git(&store, &["rev-parse", "HEAD"]);
     let remote = live_store
@@ -364,7 +465,10 @@ fn inspect(root: &Path, live_store: bool) -> Vec<Check> {
         crate::session::cargo_home_dir().as_deref(),
         &env,
     ));
-    checks.push(cache_reachability_note());
+    if live_store {
+        checks.push(cache_reachability_check(crate::lane_job::probe_cache(root)));
+        checks.push(cache_reuse_check(crate::lane_job::probe_cache_reuse(root)));
+    }
     checks
 }
 
@@ -452,6 +556,31 @@ mod tests {
     use super::*;
     use crate::vendors::host_diagnostics::{auth_check, codex_config_check};
     #[test]
+    // The host applies this reviewed FAQ-151 text from the PR body to the store.
+    // trace:STORY-b6b1278890774ef993d2ebc327862470-565.acbeedc3 | ai:codex
+    fn faq_pointer_retains_manual_steps_and_required_cache_probe() {
+        let faq = include_str!("../../docs/advanced/lane-host-checklist.md");
+        for required in [
+            "aida doctor --lane-host",
+            "aida doctor --lane-host --fix",
+            "docs/cli/07-project-setup.md#lane-host-readiness",
+            "Configure SSH access",
+            "192.168.179.100",
+            "127.0.0.1 on dell1",
+            "~/.local/bin",
+            "aida doctor --fix-sandbox",
+            "Clone the project",
+            "Log in with the selected vendor CLI",
+            "Fetch dependencies on the host",
+            "required finding with a fix hint",
+        ] {
+            assert!(faq.contains(required), "FAQ-151 missing {required}");
+        }
+        assert!(!faq.contains("in-sandbox cache reachability remains advisory"));
+    }
+
+    #[test]
+    // trace:STORY-b6b1278890774ef993d2ebc327862470-565.ace1a25e | ai:codex
     fn policy_errors_and_uncontained_posture_refuse() {
         use crate::session::ContainmentPosture::*;
         assert!(!posture_check(Ok(None)).pass);
@@ -462,20 +591,39 @@ mod tests {
         assert!(native.detail.contains("not AIDA-contained"));
     }
     #[test]
+    // trace:STORY-b6b1278890774ef993d2ebc327862470-565.ace1a25e | ai:codex
     fn cache_never_claims_host_installation_proves_lane_reachability() {
-        let check = cache_reachability_note();
-        assert!(!check.required);
+        let check = cache_reachability_check(Err(anyhow::anyhow!("unreachable")));
+        assert!(check.required);
         assert!(!check.pass);
         assert!(!check.containment);
-        assert!(check.detail.contains("unverified"));
+        assert!(check.detail.contains("unreachable"));
+        assert!(cache_reachability_check(Ok(())).pass);
     }
     #[test]
+    // trace:STORY-b6b1278890774ef993d2ebc327862470-565.ace1a25e | ai:codex
+    fn release_freshness_requires_current_clean_version_and_live_evidence() {
+        assert!(release_binary_check("1.2.3", Some("v1.2.3"), false).pass);
+        for (latest, dirty) in [
+            (None, false),
+            (Some("v1.2.4"), false),
+            (Some("bad"), false),
+            (Some("v1.2.3"), true),
+        ] {
+            let row = release_binary_check("1.2.3", latest, dirty);
+            assert!(row.required && !row.pass);
+            assert!(row.fix.contains("aida upgrade"));
+        }
+    }
+    #[test]
+    // trace:STORY-b6b1278890774ef993d2ebc327862470-565.ace1a25e | ai:codex
     fn explicit_off_refuses_and_unset_uses_lane_default() {
         assert!(!wrap_check(Some(false)).pass);
         assert!(wrap_check(None).pass);
         assert!(wrap_check(Some(true)).pass);
     }
     #[test]
+    // trace:STORY-b6b1278890774ef993d2ebc327862470-565.ace1a25e | ai:codex
     fn missing_or_blocked_bwrap_refuses() {
         use crate::session::BwrapAvailability::*;
         assert!(!bwrap_check(NotInstalled).pass);
@@ -488,6 +636,7 @@ mod tests {
         assert!(bwrap_check(Ok).pass);
     }
     #[test]
+    // trace:STORY-b6b1278890774ef993d2ebc327862470-565.ace1a25e | ai:codex
     fn codex_requires_explicit_current_preset() {
         let valid = "sandbox_mode='workspace-write'\napproval_policy='never'\n[sandbox_workspace_write]\nnetwork_access=true\nwritable_roots=[]\n";
         assert!(codex_config_check(Some(valid)).pass);
@@ -508,6 +657,7 @@ mod tests {
         );
     }
     #[test]
+    // trace:STORY-b6b1278890774ef993d2ebc327862470-565.ace1a25e | ai:codex
     fn credential_presence_is_not_assumed() {
         let env = Environment::default();
         for vendor in ["codex", "claude", "agy"] {
@@ -585,6 +735,7 @@ mod tests {
     }
 
     #[test]
+    // trace:STORY-b6b1278890774ef993d2ebc327862470-565.ace1a25e | ai:codex
     fn store_needs_both_live_and_local_evidence() {
         assert!(!matching_store(None, None));
         assert!(!matching_store(Some("abc"), None));
@@ -592,6 +743,7 @@ mod tests {
         assert!(matching_store(Some("abc"), Some("abc")));
     }
     #[test]
+    // trace:STORY-b6b1278890774ef993d2ebc327862470-565.ac4b8ea3 | ai:codex
     fn relocated_cargo_home_is_used_for_checks_and_fixes() {
         use std::os::unix::fs::PermissionsExt;
         let relocated = tempfile::tempdir().unwrap();
@@ -611,6 +763,7 @@ mod tests {
     }
 
     #[test]
+    // trace:STORY-b6b1278890774ef993d2ebc327862470-565.ac4b8ea3 | ai:codex
     fn cargo_fix_needs_installed_wrapper_and_preserves_custom_config() {
         use std::os::unix::fs::PermissionsExt;
         let home = tempfile::tempdir().unwrap();
@@ -654,6 +807,7 @@ mod tests {
         assert_eq!(args.fix.as_deref(), Some("id-collisions"));
     }
     #[test]
+    // trace:STORY-b6b1278890774ef993d2ebc327862470-565.ace1a25e | ai:codex
     fn configured_cache_can_pass_without_claiming_lane_reachability() {
         use std::os::unix::fs::PermissionsExt;
         let home = tempfile::tempdir().unwrap();
@@ -691,18 +845,39 @@ mod tests {
             !cache_check(Some(home.path()), &env).pass,
             "empty env wrapper disables caching"
         );
-        assert!(!cache_reachability_note().required);
+        assert!(cache_reachability_check(Ok(())).required);
+    }
+
+    #[test]
+    // trace:BUG-2519 | ai:codex
+    fn cache_reuse_is_separate_advisory_performance_evidence() {
+        let failed = cache_reuse_check(Err(anyhow::anyhow!("path-sensitive")));
+        assert!(!failed.pass && !failed.required && !failed.containment);
+        assert!(failed.detail.contains("path-sensitive"));
+        let passed = cache_reuse_check(Ok(()));
+        assert!(passed.pass && !passed.required && !passed.containment);
     }
 
     #[test]
     fn unsupported_auth_is_explicitly_advisory() {
-        let check = auth_check("agy", None, &Environment::default());
+        let check = auth_check("unsupported", None, &Environment::default());
         assert!(!check.pass);
         assert!(!check.required);
         assert!(check.detail.contains("unverifiable"));
     }
 
     #[test]
+    // trace:STORY-b6b1278890774ef993d2ebc327862470-565.ace1a25e | ai:codex
+    fn agy_auth_source_is_required_with_a_login_hint() {
+        for vendor in ["agy", "antigravity"] {
+            let row = auth_check(vendor, None, &Environment::default());
+            assert!(row.required && !row.pass);
+            assert!(row.fix.contains("OAuth login"));
+        }
+    }
+
+    #[test]
+    // trace:STORY-b6b1278890774ef993d2ebc327862470-565.ac1692c8 | ai:codex
     fn containment_refusals_stop_before_following_mutation() {
         use crate::session::{BwrapAvailability, ContainmentPosture};
         for failed in [
@@ -772,6 +947,7 @@ mod tests {
         .is_err());
     }
     #[test]
+    // trace:STORY-b6b1278890774ef993d2ebc327862470-565.ac4b8ea3 | ai:codex
     fn relocated_codex_home_is_checked_and_fixed_consistently() {
         let home = tempfile::tempdir().unwrap();
         let relocated = tempfile::tempdir().unwrap();
@@ -795,6 +971,13 @@ mod tests {
         let once = std::fs::read(relocated.path().join("config.toml")).unwrap();
         // The same predicate used by --fix now sees the effective config.
         assert!(user_preset_matches(home.path()));
+        crate::config_cmd::apply_permission_posture(
+            project.path(),
+            crate::cli::ConfigPermissionTier::Contained,
+            crate::config_cmd::PermissionPostureScope::User,
+        )
+        .unwrap();
+        assert_eq!(std::fs::read_dir(project.path()).unwrap().count(), 0);
         assert_eq!(
             once,
             std::fs::read(relocated.path().join("config.toml")).unwrap()
@@ -836,6 +1019,7 @@ mod tests {
         assert!(preflight(root.path(), "claude", false).is_err());
     }
     #[test]
+    // trace:STORY-b6b1278890774ef993d2ebc327862470-565.ac1692c8 | ai:codex
     fn queue_work_no_human_refuses_before_queue_lease_or_worktree_writes() {
         if let Some(output) = crate::test_env::run_path_isolated_test_output() {
             let stdout = String::from_utf8_lossy(&output.stdout);

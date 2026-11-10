@@ -36,7 +36,7 @@ unattributed	aida-cli-lib/src/dispatch_health_ps.rs:Path::new("/tmp/wt-noscope")
 unattributed	aida-cli-lib/src/dispatch_health_ps.rs:Path::new("/tmp/wt-salvage"),
 unattributed	aida-cli-lib/src/dispatch_health_ps.rs:Path::new("/tmp/wt-stalled"),
 unattributed	aida-cli-lib/src/dispatch_health_ps.rs:salvageable.contains("git -C /tmp/wt-entered add -A"),
-unattributed	aida-cli-lib/src/doctor_cmd.rs:Path::new("/tmp/scratch"),
+unattributed	aida-cli-lib/src/tests/doctor_cmd_story_462_doctor_tests.rs:Path::new("/tmp/scratch"),
 unattributed	aida-cli-lib/src/headless_tee.rs:assert!(o.lines[0].contains("/tmp/work"));
 unattributed	aida-cli-lib/src/headless_tee.rs:let line = r#"{"type":"system","subtype":"init","model":"claude-opus","cwd":"/tmp/work","session_id":"abc"}"#;
 unattributed	aida-cli-lib/src/headless_tee.rs:r#"{{"type":"system","subtype":"init","model":"x","cwd":"/tmp"}}"#

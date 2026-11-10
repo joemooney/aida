@@ -3015,7 +3015,18 @@ pub(crate) fn handle_review_record_at(
             crate::glyph(crate::glyphs::Glyph::Warning).yellow()
         );
     }
-    let kind = crate::gate::review_verdict::VerdictKind::parse(verdict);
+    // trace:STORY-2698 | ai:codex — decide hold/authority routing using the
+    // same inherited evidence the builder will retain, before any mutation.
+    let kind = if findings.is_empty() {
+        let path = crate::gate::review_verdict::verdict_path(&project_root, spec);
+        let mut obj = crate::gate::review_verdict::read_current_verdict_object(&path)?;
+        obj.insert("verdict".into(), verdict.into());
+        obj.remove("sweep_pending");
+        crate::gate::review_verdict::disposition_verdict(&obj)
+    } else {
+        crate::gate::review_verdict::incoming_disposition(verdict, findings)
+    };
+    let verdict = kind.canonical().unwrap_or(verdict);
     if kind == crate::gate::review_verdict::VerdictKind::Unknown {
         anyhow::bail!(
             "unrecognised verdict `{verdict}` — use one of: approved, request-changes, rejected, waiting"
@@ -4195,6 +4206,10 @@ pub(crate) fn handle_review_verdict_show(spec: &str, json: bool) -> Result<()> {
                     crate::review_verdict_display::verdict_notice_line(&v)
                 );
                 println!("  {} {}", "actionability:".dimmed(), actionability);
+                // trace:STORY-2698 | ai:codex
+                if let Some(line) = crate::review_risk::notice(value.get("risk")) {
+                    println!("  {line}");
+                }
                 if let Some(coverage) = value
                     .get("coverage")
                     .and_then(|c| c.get("description"))
@@ -4339,6 +4354,17 @@ pub(crate) fn review_verdict_show_body_with_coverage(
                 "location": current.source.display(),
             }),
         );
+    }
+    // Read the assessment from the selected event, never recompute a historic
+    // verdict against today's tree or trust a reviewer-supplied risk field.
+    // trace:STORY-2698 | ai:codex
+    if let Some(obj) = value.as_object_mut() {
+        obj.remove("risk");
+        if let Some(risk) =
+            crate::review_risk::stored_for_display(project_root, key, &current.source, &v)
+        {
+            obj.insert("risk".into(), risk);
+        }
     }
     // The original verdict stays at H. Coverage is a separate, read-only
     // report with both commit identities and the protected-base evidence.

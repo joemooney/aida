@@ -834,10 +834,20 @@ tokens, both unfiltered and under `--category permission-posture`.
 
 <!-- trace:STORY-2642 | ai:codex -->
 Run `aida doctor --lane-host` on a machine before starting automated lanes.
+The [FAQ-151 checklist](../advanced/lane-host-checklist.md) retains the command
+pointer and remaining manual SSH, clone, login and system setup steps.
 It prints PASS/FAIL rows and a fix hint for each failure; `--json` emits the
 same checks as one array. Required failures exit nonzero. Advisory NOTE rows
 carry `required: false` in JSON and do not fail the command.
 `aida init` prints local checks without a live store-network probe or blocking setup.
+
+<!-- trace:BUG-2519 | ai:codex -->
+The advisory `lane-cache-reuse` check compiles a tiny Rust library in two working
+directories, then retries in the first directory if reuse fails. It distinguishes
+path-sensitive misses from failure to cache the same compilation at all. This
+performance evidence is separate from required cache transport/write checks;
+a passing transport check alone does not prove cross-seat Rust reuse. See the
+[cache reuse investigation](../internal/testing/bug-2519-lane-cache-reuse.md).
 
 `aida doctor --lane-host --fix` applies the existing contained permission
 preset to the **user** agents and Codex config files, honoring `CODEX_HOME`
@@ -861,22 +871,25 @@ vendor, not every future orchestrator phase; those phases retain their ordinary
 launch admission checks. The existing vendor admission checks still apply. A trusted
 native Codex opt-in is reported as “native sandbox, not AIDA-contained”.
 
-The report checks every enabled lane vendor (or the selected headless vendor
-when no enabled list is configured). Auth rows establish
-credential-source presence only, including Claude’s `CLAUDE_CONFIG_DIR` and
-`CLAUDE_CODE_OAUTH_TOKEN` overrides. Vendors without a supported credential probe
-(including AGY) emit an explicit advisory unverifiable note; log in manually. Binary comparison uses the locally known
-origin default-branch SHA only for development binaries built from this project,
-including the promoted live binary (`~/.local/share/aida/live/aida` by default,
-or the directory selected by `AIDA_DEV_LIVE_DIR`).
-Release installs and other projects receive an advisory unverified binary row.
-Store connectivity uses a bounded read-only probe against origin's `aida-store`
-branch, preserving `GIT_SSH_COMMAND` or `core.sshCommand` with batch-mode options.
-The cache check requires an executable `RUSTC_WRAPPER` or user Cargo
-`build.rustc-wrapper`; legacy `CARGO_HOME/config` takes precedence over
-`config.toml`. Lane-job cache reachability is a separate advisory note until an in-sandbox probe is available.
-A passing host report does not certify cache transport, token validity or every
-future orchestrator phase.
+The report checks every enabled lane vendor (or the selected headless vendor when no
+enabled list is configured). Auth rows establish credential-source presence only,
+including Claude’s `CLAUDE_CONFIG_DIR` and `CLAUDE_CODE_OAUTH_TOKEN` overrides. AGY
+checks its nonempty `~/.gemini/antigravity-cli/antigravity-oauth-token` file; this does
+not verify token validity or refresh. Other vendors without a supported probe emit an
+advisory note. Binary comparison uses the locally known origin default-branch SHA only
+for development binaries built from this project, including the promoted live binary
+(`~/.local/share/aida/live/aida` by default, or the directory selected by
+`AIDA_DEV_LIVE_DIR`). Release installs compare their version with a bounded GitHub
+latest-release lookup; stale, dirty or unavailable evidence fails with an upgrade hint.
+Development binaries used with other projects retain an advisory row. Store connectivity
+uses a bounded read-only probe against origin's `aida-store` branch, preserving
+`GIT_SSH_COMMAND` or `core.sshCommand` with batch-mode options. The cache check requires
+an executable `RUSTC_WRAPPER` or user Cargo `build.rustc-wrapper`; legacy
+`CARGO_HOME/config` takes precedence over `config.toml`. Lane-job cache reachability
+starts a private sccache server through the lane-job sandbox and lifecycle, queries it
+and writes/reads a temporary cache file. Missing configuration, sandbox denial, uncached
+fallback and failed transport fail the check. A passing host report does not certify
+token validity or every future orchestrator phase.
 
 Manual setup remains: configure SSH access and any required host/DNS entries,
 clone the project, put AIDA on the login-shell PATH, and log in to the selected
@@ -922,3 +935,24 @@ The advisor-approved legacy `[lane_host] allow_ungranted = true` opt-in is
 reported as a warning. It grants no new authority in this slice: host placement,
 SSH dispatch, a remote grant issuer, unified remote leases/ps, and script
 retirement remain follow-up work.
+
+### Project validation commands
+
+Set project-specific commands in the default branch's `.aida/config.toml`:
+
+```toml
+[validation]
+format = "ruff format ."
+test = "python3 -m unittest discover"
+fast_check = "python3 -m unittest discover"
+```
+
+Lane launch prompts name `format` and `test`. The host runs `fast_check` via
+`/bin/sh -c` in the lane's existing fast-gate sandbox before publication, with
+network and host IPC isolated and a ten-minute timeout. Commands run from the
+seat checkout. A failing check retains the existing single repair round.
+Missing or blank `fast_check` skips the gate with `skipped(unconfigured)` and a
+stated reason; no Makefile or Rust toolchain is assumed. Malformed configuration
+reports an infrastructure error instead of executing a command. These commands come only from trusted default-branch
+configuration; edits in a lane cannot select host gate commands.
+<!-- trace:BUG-2512 | ai:codex -->

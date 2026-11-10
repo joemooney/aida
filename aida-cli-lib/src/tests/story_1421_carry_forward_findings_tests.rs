@@ -121,9 +121,22 @@ fn init_git_canonical_test_store() -> (tempfile::TempDir, std::path::PathBuf, st
     );
     run_git(&store_dir, &["config", "user.email", "test@example.com"]);
     run_git(&store_dir, &["config", "user.name", "Test"]);
+    // Configured store readers require a committed snapshot, even when empty.
+    // trace:STORY-2698 | ai:codex
+    run_git(
+        &store_dir,
+        &["commit", "--allow-empty", "-m", "fixture: empty store"],
+    );
     // trace:BUG-2017 | ai:codex — enroll before constructing the live dispenser.
     crate::test_env::enroll_synthetic_home(&store_dir).unwrap();
 
+    // trace:STORY-2698 | ai:codex — host approval discovers the configured store.
+    std::fs::create_dir_all(project_root.join(".aida")).unwrap();
+    std::fs::write(
+        project_root.join(".aida/config.toml"),
+        "[deployment]\nmode = \"distributed\"\nstore_path = \".aida-store\"\n",
+    )
+    .unwrap();
     (tmp, project_root, store_dir)
 }
 
@@ -135,6 +148,11 @@ fn emit_writes_targeted_commits_and_preserves_concurrent_spec() {
     use aida_core::db::DatabaseBackend;
 
     let (_tmp, project_root, store_dir) = init_git_canonical_test_store();
+    let _guard = crate::test_env::AmbientGuard::hermetic_and(
+        &project_root,
+        None,
+        &[("AIDA_CONTAINED", None)],
+    );
 
     // Simulate a concurrent write: another session's `aida add` lands a
     // brand-new spec in the store that this call never loads a full
@@ -158,7 +176,7 @@ fn emit_writes_targeted_commits_and_preserves_concurrent_spec() {
     std::fs::create_dir_all(verdict_path.parent().unwrap()).unwrap();
     std::fs::write(
         &verdict_path,
-        r#"{"verdict":"approved","findings":["F1: finding text","F2: finding text"],"reviewed_sha":"deadbeefcafe"}"#,
+        r#"{"verdict":"approved","findings":["F1: finding text","F2: finding text"],"finding_dispositions":[{"severity":"minor","disposition":"deferred","rationale":"follow-up"},{"severity":"minor","disposition":"deferred","rationale":"follow-up"}],"reviewed_sha":"deadbeefcafe"}"#,
     )
     .unwrap();
 
@@ -238,11 +256,25 @@ fn emit_writes_targeted_commits_and_preserves_concurrent_spec() {
     );
 }
 
+// trace:STORY-2698 | ai:codex
+fn deferred_record_json(findings: serde_json::Value, sha: Option<&str>) -> String {
+    let metadata: Vec<_> = findings.as_array().unwrap().iter().map(|_| {
+        serde_json::json!({"severity":"minor","disposition":"deferred","rationale":"safe follow-up"})
+    }).collect();
+    let mut record = serde_json::json!({"verdict":"approved","findings":findings,"finding_dispositions":metadata});
+    if let Some(sha) = sha {
+        record["reviewed_sha"] = sha.into();
+    }
+    record.to_string()
+}
+
 // trace:TASK-3749 | ai:codex
 #[test]
 fn task_3749_existing_sweep_appends_and_deduplicates() {
     use aida_core::db::DatabaseBackend;
     let (_tmp, root, store) = init_git_canonical_test_store();
+    let _guard =
+        crate::test_env::AmbientGuard::hermetic_and(&root, None, &[("AIDA_CONTAINED", None)]);
     let backend = crate::test_env::home_fixture_backend(&store)
         .unwrap()
         .with_dispenser(load_dispenser(&store).unwrap());
@@ -258,9 +290,7 @@ fn task_3749_existing_sweep_appends_and_deduplicates() {
     ] {
         std::fs::write(
             &path,
-            format!(
-                r#"{{"verdict":"approved","findings":{findings},"reviewed_sha":"review-head"}}"#
-            ),
+            deferred_record_json(serde_json::from_str(findings).unwrap(), Some("review-head")),
         )
         .unwrap();
         assert_eq!(
@@ -288,6 +318,8 @@ fn task_3749_sweep_keys_preserve_source_scope_and_closed_sweeps_roll_over() {
         aida_core::RequirementStatus::Done,
     ] {
         let (_tmp, root, store) = init_git_canonical_test_store();
+        let _guard =
+            crate::test_env::AmbientGuard::hermetic_and(&root, None, &[("AIDA_CONTAINED", None)]);
         let backend = crate::test_env::home_fixture_backend(&store)
             .unwrap()
             .with_dispenser(load_dispenser(&store).unwrap());
@@ -298,11 +330,7 @@ fn task_3749_sweep_keys_preserve_source_scope_and_closed_sweeps_roll_over() {
         ] {
             let path = crate::gate::review_verdict::verdict_path(&root, source);
             std::fs::create_dir_all(path.parent().unwrap()).unwrap();
-            std::fs::write(
-                path,
-                format!(r#"{{"verdict":"approved","findings":["{text}"]}}"#),
-            )
-            .unwrap();
+            std::fs::write(path, deferred_record_json(serde_json::json!([text]), None)).unwrap();
             assert_eq!(
                 try_emit_nonblocking_findings_on_completion(&root, &store, source, "", Some(42))
                     .unwrap(),
@@ -322,7 +350,11 @@ fn task_3749_sweep_keys_preserve_source_scope_and_closed_sweeps_roll_over() {
             0
         );
         let path = crate::gate::review_verdict::verdict_path(&root, "TASK-9822");
-        std::fs::write(path, r#"{"verdict":"approved","findings":["third"]}"#).unwrap();
+        std::fs::write(
+            path,
+            deferred_record_json(serde_json::json!(["third"]), None),
+        )
+        .unwrap();
         assert_eq!(
             try_emit_nonblocking_findings_on_completion(&root, &store, "TASK-9822", "", Some(42))
                 .unwrap(),
@@ -330,4 +362,141 @@ fn task_3749_sweep_keys_preserve_source_scope_and_closed_sweeps_roll_over() {
         );
         assert_eq!(backend.list_requirements(true).unwrap().len(), 2);
     }
+}
+
+// trace:STORY-2698 | ai:codex
+#[test]
+fn story_2698_approval_delivery_is_durable_and_retry_deduplicates() {
+    use crate::gate::{ledger, review_verdict as rv};
+    use aida_core::db::DatabaseBackend;
+    let (_tmp, project, store) = init_git_canonical_test_store();
+    let _guard =
+        crate::test_env::AmbientGuard::hermetic_and(&project, None, &[("AIDA_CONTAINED", None)]);
+    let backend = crate::test_env::home_fixture_backend(&store)
+        .unwrap()
+        .with_dispenser(load_dispenser(&store).unwrap());
+    backend
+        .add_requirement(aida_core::Requirement::new("seed".into(), String::new()))
+        .unwrap();
+    let path = rv::verdict_path(&project, "STORY-9821");
+    let record = serde_json::json!({"verdict":"request-changes", "findings":["deferred bug"],
+        "finding_dispositions":[{"severity":"minor", "disposition":"deferred", "rationale":"safe follow-up"}],
+        "recorded_by":"reviewer", "recorded_at":"2026-11-09T00:00:00Z"});
+    ledger::record_verdict_at(&path, record.as_object().unwrap(), None).unwrap();
+    assert!(rv::read_recorded_verdict(&project, "STORY-9821")
+        .unwrap()
+        .kind
+        .approves());
+    ledger::record_verdict_at(&path, record.as_object().unwrap(), None).unwrap();
+    let all = backend.list_requirements(true).unwrap();
+    let sweep: Vec<_> = all
+        .iter()
+        .filter(|r| r.tags.contains("kind:finding-sweep"))
+        .collect();
+    assert_eq!(sweep.len(), 1);
+    assert_eq!(sweep[0].description.matches("deferred bug").count(), 1);
+}
+
+// trace:STORY-2698 | ai:codex
+#[test]
+fn story_2698_failed_delivery_leaves_pending_refusal() {
+    use crate::gate::{ledger, review_verdict as rv};
+    let tmp = tempfile::tempdir().unwrap();
+    let project = tmp.path();
+    let _guard =
+        crate::test_env::AmbientGuard::hermetic_and(project, None, &[("AIDA_CONTAINED", None)]);
+    let path = rv::verdict_path(project, "STORY-9821");
+    let record = serde_json::json!({"verdict":"approved", "findings":["deferred bug"],
+        "finding_dispositions":[{"severity":"minor", "disposition":"deferred", "rationale":"safe follow-up"}],
+        "recorded_by":"reviewer", "recorded_at":"2026-11-09T00:00:00Z"});
+    assert!(ledger::record_verdict_at(&path, record.as_object().unwrap(), None).is_err());
+    let current = rv::current_verdict_at(&path).expect("pending payload is durable");
+    assert!(current.body.contains("sweep_pending"));
+    assert_eq!(
+        rv::parse_recorded_verdict(&current.body).unwrap().kind,
+        VerdictKind::RequestChanges
+    );
+}
+
+// trace:STORY-2698 | ai:codex
+#[test]
+fn story_2698_collected_approval_delivers_and_retries() {
+    use crate::gate::{ledger, review_verdict as rv};
+    use aida_core::db::DatabaseBackend;
+    let (_tmp, project, store) = init_git_canonical_test_store();
+    let _guard =
+        crate::test_env::AmbientGuard::hermetic_and(&project, None, &[("AIDA_CONTAINED", None)]);
+    let backend = crate::test_env::home_fixture_backend(&store)
+        .unwrap()
+        .with_dispenser(load_dispenser(&store).unwrap());
+    backend
+        .add_requirement(aida_core::Requirement::new("seed".into(), String::new()))
+        .unwrap();
+    let record = serde_json::json!({"verdict":"request-changes", "findings":["collected follow-up"],
+        "finding_dispositions":[{"severity":"major", "disposition":"deferred", "rationale":"advisor accepts follow-up"}],
+        "inherited_findings":true, "recorded_by":"reviewer", "recorded_at":"2026-11-09T00:00:00Z"});
+    for _ in 0..2 {
+        ledger::record_collected_verdict(
+            &project,
+            ledger::ChangeKey::pr(7),
+            record.as_object().unwrap(),
+            &[],
+        )
+        .unwrap();
+    }
+    assert!(rv::read_recorded_verdict(&project, "PR-7")
+        .unwrap()
+        .kind
+        .approves());
+    let all = backend.list_requirements(true).unwrap();
+    let sweep: Vec<_> = all
+        .iter()
+        .filter(|r| r.tags.contains("kind:finding-sweep"))
+        .collect();
+    assert_eq!(sweep.len(), 1);
+    assert_eq!(
+        sweep[0].description.matches("collected follow-up").count(),
+        1
+    );
+}
+
+// trace:STORY-2698 | ai:codex
+#[test]
+fn story_2698_delivery_cannot_overwrite_a_newer_review() {
+    use crate::gate::ledger::{self, event, store};
+    let tmp = tempfile::tempdir().unwrap();
+    let root = tmp.path();
+    let _guard =
+        crate::test_env::AmbientGuard::hermetic_and(root, None, &[("AIDA_CONTAINED", None)]);
+    let change = ledger::ChangeKey::pr(7);
+    let pending = serde_json::json!({"verdict":"request-changes","sweep_pending":true,"recorded_by":"reviewer-a"});
+    let delivered = serde_json::json!({"verdict":"approved","recorded_by":"reviewer-a"});
+    let newer = serde_json::json!({"verdict":"rejected","recorded_by":"reviewer-b"});
+    let evt = |body: &serde_json::Value| {
+        event::verdict_event(root, change, body.as_object().unwrap(), None)
+    };
+    store::append(root, change, vec![evt(&pending)]).unwrap();
+    store::append(root, change, vec![evt(&newer)]).unwrap();
+    assert!(
+        store::append_delivered(root, change, vec![evt(&delivered)], &[evt(&pending)]).is_err()
+    );
+    assert_eq!(
+        ledger::project::newest_verdict(root, "PR-7").unwrap()["verdict"],
+        "rejected"
+    );
+
+    let spec = ledger::GateSpec::resolve(root, "STORY-9821");
+    store::append_unbound(root, &spec, pending.as_object().unwrap()).unwrap();
+    store::append_unbound(root, &spec, newer.as_object().unwrap()).unwrap();
+    assert!(store::append_unbound_expected(
+        root,
+        &spec,
+        delivered.as_object().unwrap(),
+        Some(pending.as_object().unwrap())
+    )
+    .is_err());
+    assert_eq!(
+        ledger::project::newest_verdict(root, "STORY-9821").unwrap()["verdict"],
+        "rejected"
+    );
 }

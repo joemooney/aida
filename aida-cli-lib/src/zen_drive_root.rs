@@ -1,7 +1,20 @@
 //! Drafted-thought preview, `aida do`/zen drive loop and zen auto-approve (STORY-1488 slice 1)
 // trace:STORY-1488 | ai:claude
 
-use crate::*;
+use crate::process_retry::RetryEtxtbsy;
+use crate::{
+    autopilot_audit, carved_out_targets, classify_worktree_arg, create_agent_brief,
+    current_user_id, do_dispatch, ensure_epic_worktree, ensure_spec_worktree, find_project_root,
+    get_default_author, load_dispenser, looks_like_spec_id, pending_brief_exists, prompt_yes_no,
+    protocol_cmd, push_paren_spec_ids_from_line, resolve_spec_scope, scope_has_in_flight_work,
+    session, spec_matches, zen_approve_flip, zen_auto_approve_authorized, zen_drive,
+    WorktreeTarget, ACCEPTANCE_SECTION_HEADINGS,
+};
+use aida_core::DatabaseBackend;
+use aida_core::{Requirement, RequirementStatus, RequirementType, RequirementsStore, Storage};
+use anyhow::{Context, Result};
+use colored::Colorize;
+use std::io::IsTerminal;
 
 /// Extract the acceptance-criteria body from a requirement description.
 /// Returns the body text (without the heading line) when one of the
@@ -638,17 +651,22 @@ pub(crate) fn guided_launch_command(
         posture != session::ContainmentPosture::Aida,
         "guided launch requires the supervised agent launcher for AIDA containment"
     );
-    let ctx = crate::launch::LaunchContext::resolve(crate::launch::LaunchRequest {
-        vendor,
-        kind: aida_core::launch_policy::LaunchKind::Fresh,
-        program: launch.program.into(),
-        args: vec![launch.prompt.clone()],
-        tail: Vec::new(),
-        posture,
-        cwd: worktree.to_path_buf(),
-        set_cwd: true,
-        host_main: None,
-    })?;
+    let ctx = {
+        let req = crate::launch::LaunchRequest {
+            vendor,
+            kind: aida_core::launch_policy::LaunchKind::Fresh,
+            program: launch.program.into(),
+            args: vec![launch.prompt.clone()],
+            tail: Vec::new(),
+            posture,
+            cwd: worktree.to_path_buf(),
+            set_cwd: true,
+            host_main: None,
+        };
+        // trace:STORY-2538 | ai:codex
+        let exec = crate::session::capture_launch_exec(&req.cwd, req.host_main.as_deref())?;
+        crate::launch::LaunchContext::resolve(&exec, req)
+    }?;
     let mut cmd = crate::launch::spawn_agent(&ctx)?;
     crate::launch::assign_seat(
         &mut cmd,

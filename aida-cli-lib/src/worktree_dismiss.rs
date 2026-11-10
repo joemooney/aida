@@ -24,7 +24,7 @@ pub fn handle_dismiss(path: Option<&str>, category: Option<&str>) -> Result<()> 
         targets.push(canon);
     } else if let Some(_) = category {
         // Run the scan
-        let scan = crate::doctor_cmd::scan_merged_agent_worktrees(&project_root);
+        let scan = crate::worktree_gc::scan_merged_agent_worktrees(&project_root);
         for finding in scan {
             if finding.action.contains("batched content is undecidable")
                 || finding.summary.contains("batched content is undecidable")

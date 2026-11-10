@@ -17,7 +17,17 @@ use colored::Colorize;
 pub(crate) mod statusline_cmd_args;
 pub(crate) use statusline_cmd_args::*;
 
-use crate::*;
+use crate::{
+    active_lease_for_cwd, apply_color_mode, base_behind_indicator, cache_freshness_threshold_secs,
+    classify_cache_freshness, cli, commits_behind_origin_main, find_main_worktree_root, load_role,
+    load_session_activity, local_lags_origin, main_worktree_root_from, maybe_spawn_bg_fetch,
+    orchestrator, presence, read_draft_backlog_depth, read_last_fetch_age_secs, read_queue_depth,
+    read_urgent_unread_count, resolve_effective_role, rev_parse_origin_aida_store,
+    role_segment_text, session, slugify, statusline_agy_adapter, statusline_base_freshness_config,
+    statusline_claude_adapter, statusline_contract, statusline_project_root,
+    statusline_role_mismatch_enabled, truncate, CacheFreshness, OrchestratorBadge, RoleActivity,
+    SessionLease, SCOPE_LABEL_MAX, SESS_LABEL_MAX,
+};
 
 pub(crate) fn handle_statusline_command(
     color: &str,
