@@ -9,7 +9,12 @@
 //! stay in main.rs and are reached via `crate::`.
 
 use crate::process_retry::RetryEtxtbsy;
-use crate::*;
+use crate::{
+    binary_embedded_sha, build_git_sha, classify_sha_match, current_branch_head_sha,
+    detect_distributed_store, eval_subcommand_hint, find_aida_repo_above, handle_dev_release,
+    is_aida_repo, locate_aida_server_binary, parse_embedded_sha, spawn_log_pump, DevCommand,
+    ShaMatch,
+};
 use anyhow::{Context, Result};
 use colored::Colorize;
 

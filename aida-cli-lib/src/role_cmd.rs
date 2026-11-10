@@ -10,7 +10,16 @@
 //! `format_role_picker_option`, `RolePickerRow`), and `sh_single_quote` /
 //! `eval_subcommand_hint` — stay in main.rs and are reached via `crate::`.
 
-use crate::*;
+use crate::{
+    build_display_id_lookup, canonical_role_name, current_user_id, eval_subcommand_hint,
+    global_role_file, human_audit, humanize_relative, list_roles, load_role,
+    load_role_with_warnings, non_interactive_confirm, parse_role_lenient, pick_role_with_header,
+    project_role_file, resolve_role_name, role_save_path, save_role_at, scaffold_starter_roles,
+    session, sh_single_quote, statusline_project_root, truncate, RoleCommand, RolePromptCommand,
+    RoleScopeCommand, RoleState, StakeholderAction, STARTER_ROLES,
+};
+use aida_core::Storage;
+use anyhow::Context;
 use anyhow::Result;
 use colored::Colorize;
 use std::io::IsTerminal;
