@@ -8,7 +8,7 @@ priority: Low
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-10T03:07:15.181924192Z
-modified_at: 2026-11-10T18:45:43.226271338Z
+modified_at: 2026-11-10T19:31:18.984295038Z
 req_type: Task
 comments:
 - id: 01a1c674-cd0d-76a2-8159-4728d6fffd38
@@ -69,6 +69,15 @@ comments:
     FAIL flags — 2 cited --flag token(s) did not resolve to the cited command or its parent/child command subtree:
   created_at: 2026-11-10T18:45:20.831072408Z
   modified_at: 2026-11-10T18:45:20.831072408Z
+  session_id: 01a1c530-c917-7f13-ab81-f6b5e1d1cd30
+  harness_version: 2.1.322 (Claude Code)
+- id: 01a1c6f1-8348-7f82-b249-5e49b188cb16
+  author: joe
+  content: |-
+    CI FAILURES at 525df95774f4 (run 42879895432). Fix exactly these before pushing; a push without a code change for them will fail again and must not be made:
+    FAIL flags — 2 cited --flag token(s) did not resolve to the cited command or its parent/child command subtree:
+  created_at: 2026-11-10T19:31:18.984295038Z
+  modified_at: 2026-11-10T19:31:18.984295038Z
   session_id: 01a1c530-c917-7f13-ab81-f6b5e1d1cd30
   harness_version: 2.1.322 (Claude Code)
 history:
