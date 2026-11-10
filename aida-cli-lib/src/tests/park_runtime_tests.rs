@@ -189,11 +189,41 @@ fn runtime_directory_creation_syncs_pinned_parent_before_lock_creation() {
     assert_eq!(error.to_string(), "injected parent sync failure");
     assert_eq!(std::fs::read_dir(&runtime).unwrap().count(), 0);
 
-    // An existing runtime directory creates no new parent entry to sync.
-    let lock = WaitLock::acquire_with_parent_sync(&runtime, id, |_| {
-        panic!("existing directory must not take the creation sync path")
+    // Retry must make the entry durable even though the directory now exists.
+    let mut retry_synced = false;
+    let lock = WaitLock::acquire_with_parent_sync(&runtime, id, |parent| {
+        retry_synced = true;
+        let actual_parent = parent.metadata()?;
+        assert_eq!(actual_parent.dev(), expected_parent.dev());
+        assert_eq!(actual_parent.ino(), expected_parent.ino());
+        assert_eq!(std::fs::read_dir(&runtime)?.count(), 0);
+        parent.sync_all()
     })
     .unwrap();
+    assert!(retry_synced);
+    assert!(lock.read().unwrap().is_none());
+}
+
+#[test]
+fn existing_runtime_directory_syncs_pinned_parent_before_lock_creation() {
+    let dir = tempfile::tempdir().unwrap();
+    let runtime = dir.path().join("waits");
+    std::fs::DirBuilder::new()
+        .mode(0o700)
+        .create(&runtime)
+        .unwrap();
+    let expected_parent = dir.path().metadata().unwrap();
+    let mut synced = false;
+    let lock = WaitLock::acquire_with_parent_sync(&runtime, Uuid::new_v4(), |parent| {
+        synced = true;
+        let actual_parent = parent.metadata()?;
+        assert_eq!(actual_parent.dev(), expected_parent.dev());
+        assert_eq!(actual_parent.ino(), expected_parent.ino());
+        assert_eq!(std::fs::read_dir(&runtime)?.count(), 0);
+        parent.sync_all()
+    })
+    .unwrap();
+    assert!(synced);
     assert!(lock.read().unwrap().is_none());
 }
 

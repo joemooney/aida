@@ -172,11 +172,13 @@ impl WaitLock {
             let path = PathBuf::from(format!("/proc/self/fd/{}", parent.as_raw_fd())).join(name);
             if index + 1 == components.len() {
                 match std::fs::DirBuilder::new().mode(0o700).create(&path) {
-                    // Persist the new directory entry before writing runtime evidence.
-                    Ok(()) => sync_parent.take().unwrap()(&parent)?,
+                    Ok(()) => (),
                     Err(e) if e.kind() == std::io::ErrorKind::AlreadyExists => (),
                     Err(e) => return Err(e.into()),
                 }
+                // Every acquirer must persist the entry: an earlier creator may
+                // have failed before syncing this pinned parent.
+                sync_parent.take().unwrap()(&parent)?;
             }
             parent = OpenOptions::new()
                 .read(true)
