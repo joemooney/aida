@@ -8,7 +8,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-09T01:58:39.064485765Z
-modified_at: 2026-11-10T19:37:45.034524496Z
+modified_at: 2026-11-10T20:14:29.162870923Z
 req_type: Story
 tags:
 - area:orchestration
@@ -48,6 +48,20 @@ comments:
   modified_at: 2026-11-10T19:35:25.241604809Z
   session_id: 01a1c530-c917-7f13-ab81-f6b5e1d1cd30
   harness_version: 2.1.322 (Claude Code)
+- id: 01a1c719-092a-7d83-9dc7-9de6a8523336
+  author: dirtlab
+  content: |
+    Partial S1 implementation handoff (ai:codex). Rework routing now checks projected and live pickability before reporting queue success, preserving escalation, deferral, dependency and supervised-mode holds. Fresh standalone headless implementers have host-owned v1 admission-through-publication receipts, successful-spawn tracking, new-head proof for pushed, and explicit punt/hold precedence. Standalone setup rollback is marked only after successful spawn.
+
+    Validation through lane jobs: 59 rework, 86 standalone, 29 background-resume, 13 preclaim, 6 rollback, 5 new-regression, 3 vendor-ratchet and 1 refused-start tests passed. The actual refused-start fixture checks started=false and exact preserved diagnostics; a real stub child checks started=true and punted. Matching CLI binary build, changed-file rustfmt and git diff --check passed. Initial broad process-fixture failures were resolved by building the matching CLI; outdated source-fixture assumptions were corrected.
+
+    S1 REMAINS PARTIAL: drain and explicit-resume receipt integration is outstanding. S2 refusal-notice deduplication is also outstanding. Preserve Refs publication credit; this lane does not complete the story. Edits are uncommitted for host publication. Full local handoff: /tmp/story-2690-handoff.txt; body: /tmp/story-2690-commit-body.txt.
+
+    Headless operational observations: the supplied /home/joe/ai/aida/.codegraph/proxy-state/bin/codegraph is absent; doctor reports missing, so navigation used rg. One lane job reported overlay-stale after primary in-place seed modification; later builds/tests passed. Filing that observation as a finding was refused because this clone has no node binding for ID allocation (no metadata/object was written). Host can file /tmp/story-2690-seed-observation.txt. No seed repair or node acquisition was attempted. MCP requires approval unavailable in this session, so CLI coordination was used.
+  created_at: 2026-11-10T20:14:29.162870923Z
+  modified_at: 2026-11-10T20:14:29.162870923Z
+  session_id: 01a1c6f6e635
+  harness_version: codex-cli 0.167.0
 history:
 - id: 01a1c5dd-0795-7ee0-b474-74b907f4c43a
   author: joe
