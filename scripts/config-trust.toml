@@ -1005,3 +1005,9 @@ sites = 2
 [readers."aida-cli-lib/src/vendors/host_diagnostics.rs"]
 channels = ["home"]
 sites = 2
+
+# trace:BUG-2512 | ai:codex
+[keys.trusted.validation]
+format = "command"
+test = "command"
+fast_check = "command"

@@ -10,8 +10,14 @@
 //! and are reached via `crate::`. Extracted verbatim from `main.rs` (SPIKE-78);
 //! no behavior change.
 
-use crate::*;
+use crate::{cli, manual, permissions, prompts, report_and_prune_obe_scaffold, run, scaffold_cmd};
+
+use crate::cli::ScaffoldCommand;
+use aida_core::{
+    check_scaffold_status, FileStatus, RequirementsStore, ScaffoldConfig, Scaffolder, Storage,
+};
 use anyhow::{Context, Result};
+use clap::Parser;
 use colored::Colorize;
 
 // trace:STORY-1728 | ai:claude
@@ -2195,7 +2201,6 @@ fn run_scaffold(
     matches: &clap::ArgMatches,
     ctx: &crate::cmdkit::DispatchCtx,
 ) -> anyhow::Result<crate::cmdkit::Flow> {
-    use crate::*;
     let args = <ScaffoldArgs as clap::FromArgMatches>::from_arg_matches(matches)?;
     match &ctx.store {
         None => {
