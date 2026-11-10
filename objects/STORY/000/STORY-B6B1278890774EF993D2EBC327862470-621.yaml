@@ -19,7 +19,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-10T03:05:40.778642968Z
-modified_at: 2026-11-10T04:32:58.680723323Z
+modified_at: 2026-11-10T04:40:18.302648631Z
 req_type: Story
 comments:
 - id: 01a1c370-9b5f-7770-a921-e48f45e2aecb
@@ -69,6 +69,13 @@ comments:
         thread 'gate::ledger::tests::a_ledger_only_spec_record_still_files_its_findings_on_completion' (70617) panicked at aida-cli-lib/src/gate/ledger/tests.rs:1249:5:
   created_at: 2026-11-10T04:24:06.173175599Z
   modified_at: 2026-11-10T04:24:06.173175599Z
+- id: 01a1c3c1-c47e-7d43-8abd-681a6fff0528
+  author: dirtlab
+  content: 'Fixed the latest CI failure list within approved S1: six test files now explicitly clear resolved findings, represent clean approvals without legacy unresolved findings, supply deferred disposition evidence, and expect metadata stamping to fail closed on legacy findings. No production behavior changed. All 51 targeted tests passed via lane runner (12 composed hold, 8 archived hold, 18 corpus gate, 2 metadata, 1 queue classification, 9 S1, 1 ledger); rustfmt and diff checks passed. Initial pre-edit ledger failure reproduced and repaired-source rerun passed. Handoff: /tmp/story2698-ci-repair-handoff.txt. Full CI host-side; S2/S3 remain outstanding. Native edits uncommitted; publication remains Refs.'
+  created_at: 2026-11-10T04:40:18.302648631Z
+  modified_at: 2026-11-10T04:40:18.302648631Z
+  session_id: 01a1c3babc8a
+  harness_version: codex-cli 0.167.0
 history:
 - id: 01a1c370-a92f-7a21-946e-dd69061fc475
   author: joe
