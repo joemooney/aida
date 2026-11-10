@@ -674,13 +674,29 @@ pub(crate) fn disposition_verdict(obj: &JsonObj) -> VerdictKind {
     if !matches!(kind, VerdictKind::Approved | VerdictKind::RequestChanges) {
         return kind;
     }
-    let items = FINDINGS_KEYS
-        .iter()
-        .find_map(|k| obj.get(*k).and_then(|v| v.as_array()));
-    let Some(items) = items.filter(|items| !items.is_empty()) else {
-        return kind;
+    // trace:STORY-2698 | ai:codex — present aliases must be valid and agree;
+    // neither a malformed container nor dangling metadata is a clean review.
+    let mut items = None;
+    for value in FINDINGS_KEYS.iter().filter_map(|k| obj.get(*k)) {
+        let Some(array) = value.as_array() else {
+            return VerdictKind::RequestChanges;
+        };
+        if items.is_some_and(|previous| previous != array) {
+            return VerdictKind::RequestChanges;
+        }
+        items = Some(array);
+    }
+    let items = items.map(Vec::as_slice).unwrap_or_default();
+    let metadata = match obj.get("finding_dispositions") {
+        Some(value) => match value.as_array() {
+            Some(array) if array.len() == items.len() => Some(array),
+            _ => return VerdictKind::RequestChanges,
+        },
+        None => None,
     };
-    let metadata = obj.get("finding_dispositions").and_then(|v| v.as_array());
+    if items.is_empty() {
+        return kind;
+    }
     if items.iter().enumerate().all(|(i, item)| {
         let text = item.as_str().is_some_and(|s| !s.trim().is_empty());
         text && metadata
@@ -3651,6 +3667,46 @@ mod bug_2403_same_origin_receipt_tests;
 #[cfg(test)]
 mod story_2698_tests {
     use super::*;
+
+    #[test]
+    fn story_2698_malformed_containers_and_dangling_metadata_fail_closed() {
+        for evidence in [
+            serde_json::json!({"findings":"unresolved bug"}),
+            serde_json::json!({"blocking_findings":"unresolved bug"}),
+            serde_json::json!({"findings":null}),
+            serde_json::json!({"blocking_findings":{}}),
+            serde_json::json!({"findings":[],"blocking_findings":false}),
+            serde_json::json!({"findings":[],"blocking_findings":["hidden bug"]}),
+            serde_json::json!({"findings":[],"finding_dispositions":[{"severity":"minor","disposition":"deferred","rationale":"later"}]}),
+            serde_json::json!({"finding_dispositions":[null]}),
+            serde_json::json!({"findings":[],"finding_dispositions":null}),
+            serde_json::json!({"findings":[],"finding_dispositions":{}}),
+            serde_json::json!({"findings":[null],"finding_dispositions":[null]}),
+        ] {
+            let mut obj = evidence.as_object().unwrap().clone();
+            obj.insert("verdict".into(), "approved".into());
+            assert_eq!(
+                parse_recorded_verdict(&serde_json::Value::Object(obj).to_string())
+                    .unwrap()
+                    .kind,
+                VerdictKind::RequestChanges,
+                "{evidence}"
+            );
+        }
+        for evidence in [
+            serde_json::json!({}),
+            serde_json::json!({"findings":[]}),
+            serde_json::json!({"blocking_findings":[]}),
+            serde_json::json!({"finding_dispositions":[]}),
+            serde_json::json!({"findings":[],"finding_dispositions":[]}),
+        ] {
+            for word in ["approved", "request-changes"] {
+                let mut obj = evidence.as_object().unwrap().clone();
+                obj.insert("verdict".into(), word.into());
+                assert_eq!(disposition_verdict(&obj), VerdictKind::parse(word));
+            }
+        }
+    }
 
     fn record(metadata: serde_json::Value) -> serde_json::Value {
         serde_json::json!({"verdict":"approved", "findings":["a small real bug"],

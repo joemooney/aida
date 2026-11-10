@@ -798,6 +798,39 @@ fn since() -> std::time::SystemTime {
     std::time::SystemTime::now() - std::time::Duration::from_secs(5)
 }
 
+// trace:STORY-2698 | ai:codex
+#[test]
+fn story_2698_collected_malformed_findings_cannot_approve() {
+    let (_tmp, root) = root();
+    let launcher = root.join("primary");
+    let worktree = root.join("seat");
+    std::fs::create_dir_all(&launcher).unwrap();
+    let (_guard, actor) = granted_reviewer(&launcher);
+    let child = actor.grant_id.clone().unwrap();
+    for (index, evidence) in [
+        serde_json::json!({"findings":"unresolved bug"}),
+        serde_json::json!({"blocking_findings":"unresolved bug"}),
+        serde_json::json!({"findings":[],"finding_dispositions":[{"severity":"minor","disposition":"deferred","rationale":"later"}]}),
+        serde_json::json!({"finding_dispositions":[null]}),
+        serde_json::json!({"findings":[],"finding_dispositions":{}}),
+    ].into_iter().enumerate() {
+        let pr = 300 + index as u64;
+        let mut rec = record("approved", &ts(0), Some(&actor));
+        rec.extend(evidence.as_object().unwrap().clone());
+        reviewer_wrote(&worktree, "STORY-1", &rec);
+        let got = rv::collect_standalone_verdict(
+            &launcher, &worktree, &rv::verdict_path(&launcher, &format!("PR-{pr}")),
+            &["STORY-1".to_string()], since(), &checks(&launcher, pr, &child),
+        ).unwrap();
+        assert_eq!(got.verdict.kind, rv::VerdictKind::RequestChanges, "{evidence}");
+        assert_eq!(
+            rv::read_recorded_verdict(&launcher, &format!("PR-{pr}")).unwrap().kind,
+            rv::VerdictKind::RequestChanges,
+            "the collected ledger record must remain blocking: {evidence}"
+        );
+    }
+}
+
 /// Round 2, item 2: collection is a contained reviewer's one route to the
 /// ledger. It appends the verdict (and the credited spec's record) from the
 /// launcher's side, writes no legacy file, and every gate reader sees it.
