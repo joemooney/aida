@@ -17,7 +17,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-08T03:08:54.290380002Z
-modified_at: 2026-11-10T00:54:04.706932136Z
+modified_at: 2026-11-10T23:04:30.868523572Z
 req_type: Task
 tags:
 - area:architecture
@@ -113,6 +113,13 @@ comments:
   modified_at: 2026-11-10T00:54:04.706932136Z
   session_id: 01a1c2e69b09
   harness_version: codex-cli 0.167.0
+- id: 01a1c7b4-b394-76e3-abdd-7f38783ff74a
+  author: joe
+  content: 'ADVISOR BRIEF (2026-11-10 16:00 MST): next slice of the cmdkit import migration (same rules as the 00:15 UTC ruling). Migrate EXACTLY these 4 files, which no open PR touches now that #3651/#3762 landed: aida-cli-lib/src/burndown_run.rs, findings_gate.rs, upgrade_release.rs, merge_hold_cmd.rs. Do NOT touch pr_cmd.rs (held by #3818) or queue_cmd/rework (held by #3809); they are the final slice. Keep the command_registry re-exports until that final slice. LIGHT gate: cargo check --profile agent -p aida-cli-lib --tests via the lane runner + make check-ci-fast. Subject: [AI:codex] refactor(crate-split): cmdkit imports for 4 more files (Refs TASK-3448).'
+  created_at: 2026-11-10T23:04:30.868523572Z
+  modified_at: 2026-11-10T23:04:30.868523572Z
+  session_id: 01a1c70f-d731-7b70-acf8-e9ab3d288fca
+  harness_version: 2.1.322 (Claude Code)
 history:
 - id: 01a1b921-d315-74a0-9c9a-0ca54df44ce6
   author: joe
