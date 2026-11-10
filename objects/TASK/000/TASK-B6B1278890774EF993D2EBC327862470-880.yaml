@@ -8,7 +8,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-06T13:39:53.442026Z
-modified_at: 2026-11-09T06:52:13.767480190Z
+modified_at: 2026-11-10T00:26:46.490890264Z
 req_type: Task
 tags:
 - architecture
@@ -1443,6 +1443,13 @@ comments:
   created_at: 2026-11-09T01:50:40.369938910Z
   modified_at: 2026-11-09T01:50:40.369938910Z
   session_id: 20abb7c3-8f9b-4a5e-b326-404921f3b450
+- id: 01a1c2d9-a75a-7980-8c74-09ea9a2fb235
+  author: joe
+  content: 'ADVISOR RULING (2026-11-10 00:30 UTC): next slice. Route the remaining inventoried CLI/MCP writers through the mediation service operation by operation (today only comment-add and title/description/priority edits route: store_mutation_entry.rs:163; inventory in docs/internal/security/store-mutation-writers.md). Each routed operation gets stale-base, concurrent-mutation and persist-before-reply tests like routed_tests.rs. The launch gate stays CLOSED (selected_store_profile keeps refusing the mediated profile), so this grants no runtime authority. If the full inventory is too large for one reviewable PR, take a coherent group and list what remains in the PR body. Use (Refs TASK-3223).'
+  created_at: 2026-11-10T00:26:46.490890264Z
+  modified_at: 2026-11-10T00:26:46.490890264Z
+  session_id: 01a1beff-fc3b-78e2-93e2-9b0c283b0339
+  harness_version: 2.1.319 (Claude Code)
 history:
 - id: 01a1b116-742d-73c0-9064-1933f11e4c38
   author: joe
