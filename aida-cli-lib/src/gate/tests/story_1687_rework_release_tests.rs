@@ -671,6 +671,7 @@ fn auto_release_fixture(change: ReleaseChange) {
         root.path(),
         &f.hold,
         AutoReleaseIo {
+            coverage: &|_| Ok(None),
             live_head: &|| {
                 head_reads.set(head_reads.get() + 1);
                 if head_reads.get() >= change_at && change.failed_read == Some("head") {
@@ -1637,4 +1638,121 @@ fn auto_release_resolves_a_friendly_spec_label_like_show() {
             ..Default::default()
         });
     }
+}
+
+// trace:STORY-2694 | ai:codex
+#[test]
+fn carried_auto_release_keeps_review_and_binds_clearance_to_live_head() {
+    carried_auto_release_case(None);
+}
+
+// trace:STORY-2694 | ai:codex
+#[test]
+fn carried_auto_release_revalidates_proof_before_removing_hold() {
+    carried_auto_release_case(Some("proof"));
+}
+
+// trace:STORY-2694 | ai:codex
+#[test]
+fn carried_auto_release_refuses_new_corpus_blocker() {
+    carried_auto_release_case(Some("corpus"));
+}
+
+// trace:STORY-2694 | ai:codex
+#[test]
+fn carried_auto_release_refuses_head_movement() {
+    carried_auto_release_case(Some("head"));
+}
+
+fn carried_auto_release_case(failure: Option<&str>) {
+    let mut f = Fixture::new();
+    f.req.spec_id = Some("TASK-37".into());
+    let root = tempfile::tempdir().unwrap();
+    mh::place_hold(root.path(), &f.hold).unwrap();
+    let merged = "cccccccccccccccccccccccccccccccccccccccc";
+    let proof = crate::gate::review_carryover::CarryOver {
+        pr: 37,
+        approved_sha: HEAD.into(),
+        new_head: merged.into(),
+        base_ref: "origin/main".into(),
+        base_tip: "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb".into(),
+        approved_range: "base..approved".into(),
+        head_range: "base..merged".into(),
+        approved_patch_id: "same".into(),
+        head_patch_id: "same".into(),
+        merge_commits: vec![merged.into()],
+        recorded_at: Utc::now().to_rfc3339(),
+    };
+    let passes = Cell::new(0);
+    let mut store = aida_core::RequirementsStore::default();
+    store.requirements.push(f.req.clone());
+    let outcome = auto_release_with(
+        root.path(),
+        &f.hold,
+        AutoReleaseIo {
+            live_head: &|| {
+                Ok(Some(mh::PinnedChange {
+                    state: mh::ChangeState::Open,
+                    head_sha: Some(if failure == Some("head") && passes.get() >= 2 {
+                        HEAD.into()
+                    } else {
+                        merged.into()
+                    }),
+                    merged: false,
+                    hold_label: true,
+                    recorded_label: true,
+                    cleared_label: false,
+                }))
+            },
+            read_hold: &|| mh::read_hold_record(root.path(), 37),
+            covered_specs: &|| Ok((vec!["TASK-37".into()], store.clone())),
+            read_body: &|_| Ok(f.body.clone()),
+            read_history: &|_| Ok(RetainedHistory::default()),
+            read_corpus: &|_| {
+                let mut body = f.body.clone();
+                if failure == Some("corpus") && passes.get() >= 3 {
+                    body["verdict"] = Value::String("request-changes".into());
+                }
+                Ok(vec![("TASK-37".into(), body.to_string())])
+            },
+            grant_check: &|_, _| sa::GrantCheck::Valid(f.grant.clone()),
+            approval_authority: &|sha| {
+                assert_eq!(sha, HEAD);
+                Ok(())
+            },
+            coverage: &|head| {
+                assert_eq!(head, merged);
+                passes.set(passes.get() + 1);
+                if failure == Some("proof") && passes.get() >= 3 {
+                    bail!("protected base unavailable");
+                }
+                Ok(Some(proof.clone()))
+            },
+            mandate: &no_mandate,
+            refusal_release: &|hold, _| mh::carried_refusal_release(hold, &proof),
+            comment: &|_| Ok(()),
+            labels: &|| Ok(()),
+        },
+    );
+    if let Some(failure) = failure {
+        assert!(outcome.is_err(), "{failure}: {outcome:?}");
+        assert!(mh::read_hold_record(root.path(), 37).is_some());
+        assert!(mh::recorded_clearance(root.path(), 37).is_none());
+        assert!(!authorized(root.path()));
+        return;
+    }
+    assert_eq!(outcome.unwrap(), Outcome::Released { mandate: None });
+    assert!(
+        passes.get() >= 3,
+        "coverage must be revalidated on both release passes"
+    );
+    assert!(mh::read_hold_record(root.path(), 37).is_none());
+    let clearance = mh::recorded_clearance(root.path(), 37).unwrap();
+    let value = serde_json::to_value(clearance).unwrap();
+    assert_eq!(value["target_head_sha"], merged);
+    assert_eq!(value["released_by_verdict"]["reviewed_sha"], HEAD);
+    assert_eq!(
+        value["approval_coverage"]["proof"]["base_tip"],
+        proof.base_tip
+    );
 }
